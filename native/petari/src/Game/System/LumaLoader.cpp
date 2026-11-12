@@ -586,6 +586,21 @@ namespace luma {
             return luma::modlog::add(entry, known ? id : nullptr);
         }
 
+        // The arguments' part of a report's key (mod-log 2): the same mistake again is a repeat; another mistake at the
+        // same place ("wrong flags" after "wrong path", both from assets.find) is a report of its own.
+        bool sameArgs(const Report& rReport, const char* const* ppArgs, u32 argCount) {
+            if ((argCount < kReportArgs ? argCount : kReportArgs) != rReport.argCount || (argCount > kReportArgs) != rReport.cut) {
+                return false;
+            }
+            for (u32 i = 0; i < rReport.argCount; i++) {
+                const char* const pGiven = ppArgs != nullptr && ppArgs[i] != nullptr ? ppArgs[i] : "";
+                if (!sameText(rReport.args[i] != nullptr ? rReport.args[i] : "", pGiven)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
         bool powerOfTen(u64 n) {
             while (n >= 10u && n % 10u == 0) {
                 n /= 10u;
@@ -601,7 +616,8 @@ namespace luma {
                 lockMod(pMod);
                 for (u32 i = 0; i < pMod->reportCount; i++) {
                     Report& rReport = pMod->reports[i];
-                    if (rReport.code == code && rReport.line == line && sameText(rReport.file, pPlace)) {
+                    if (rReport.code == code && rReport.line == line && sameText(rReport.file, pPlace) &&
+                        sameArgs(rReport, ppArgs, argCount)) {
                         const u64 seen = ++rReport.count;
                         const luma::modlog::Entry* const pEntry = rReport.entry;
                         unlockMod(pMod);
@@ -642,7 +658,8 @@ namespace luma {
                 bool kept = false;
                 for (u32 i = 0; i < pMod->reportCount && !kept; i++) {
                     Report& rReport = pMod->reports[i];
-                    if (rReport.code == code && rReport.line == line && sameText(rReport.file, pPlace)) {
+                    if (rReport.code == code && rReport.line == line && sameText(rReport.file, pPlace) &&
+                        sameArgs(rReport, ppArgs, argCount)) {
                         rReport.count++;
                         luma::modlog::counted(rReport.entry, rReport.count < 0xFFFFFFFFull ? static_cast<u32>(rReport.count) : 0xFFFFFFFFu);
                         kept = true;

@@ -2641,6 +2641,8 @@ void forget_save(std::string_view id) {
 std::atomic<int> gSavesPending{0};
 // The facts file of the mods' store attached this run (cook_mod_files), read into the mod log at the mods' start.
 fs::path gCookFacts;
+// Each planned file's store path and its mod: the cook's facts name the mod by it (mod-log 9).
+std::vector<std::pair<std::string, std::string>> gCookOwners;
 // The exit waits here for the saves still on the worker.
 std::mutex gSavesMutex;
 std::condition_variable gSavesDone;
@@ -3562,7 +3564,7 @@ void svc_mods_start(void*) {
     // Each placed package through the validator, its findings in the mod log (kept: nothing runs when nothing changed).
     galaxy::modlog::add_start_findings();
     // The cooker's facts for the store attached this run: its refusals and notes, and in a harness run what it cooked.
-    galaxy::modlog::add_cook_facts(gCookFacts);
+    galaxy::modlog::add_cook_facts(gCookFacts, gCookOwners);
 }
 
 void svc_app_restart(void*) {
@@ -3694,6 +3696,9 @@ void cook_failed(const fs::path& overlay) {
     while (!why.empty() && (why.back() == '\n' || why.back() == '\r')) why.pop_back();
     log_line("mods:", why.empty() ? "the mods' files could not be cooked: the game runs without them"
                                   : ("the mods' files could not be cooked: the game runs without them: " + why).c_str());
+    // Its refusals are why: they reach the mod log as an attached cook's do (the cooker writes the file either way).
+    gCookFacts = overlay;
+    gCookFacts.replace_extension("facts");
 }
 
 // The cooker this build runs, by its file's size and time: another cooker (a new build, with its own applier and
@@ -3720,6 +3725,10 @@ std::string cooker_identity() {
 void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_folder, const std::string& game_id) {
     if (plan.files.empty() && plan.merges.empty() && plan.patches.empty()) {
         return;
+    }
+    gCookOwners.clear();
+    for (const galaxy::mods::ModPlan::File& file : plan.files) {
+        if (!file.mod_id.empty()) gCookOwners.emplace_back(file.disc, file.mod_id);
     }
     const fs::path folder = settings_folder / "mods" / ".cooked";
     const fs::path overlay = folder / "mods.pak";

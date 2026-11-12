@@ -931,8 +931,24 @@ std::string facts_field(std::string_view text) {
 }
 
 // A cook fact's mod when the line names none (a mod's own file): the <id> of "Luma/<id>/..." (a "+" before it).
-std::string cook_fact_mod(const std::vector<std::string>& f) {
+std::string cook_fact_mod(const std::vector<std::string>& f, const std::vector<std::pair<std::string, std::string>>& owners) {
     if (!f[2].empty()) return f[2];
+    // The mod's file (column 3, as the plan names it) or the store file it made (column 1): the plan's owner.
+    const auto same_path = [](std::string_view a, std::string_view b) {
+        while (!a.empty() && (a.front() == '/' || a.front() == '+')) a.remove_prefix(1);
+        while (!b.empty() && (b.front() == '/' || b.front() == '+')) b.remove_prefix(1);
+        if (a.size() != b.size()) return false;
+        for (std::size_t i = 0; i < a.size(); ++i) {
+            const auto low = [](char c) { return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c; };
+            if (low(a[i]) != low(b[i])) return false;
+        }
+        return true;
+    };
+    for (const std::size_t at : {std::size_t{3}, std::size_t{1}}) {
+        for (const auto& [path, mod] : owners) {
+            if (!f[at].empty() && same_path(f[at], path)) return mod;
+        }
+    }
     for (const std::size_t at : {std::size_t{1}, std::size_t{3}}) {
         std::string_view path = f[at];
         if (!path.empty() && path.front() == '+') path.remove_prefix(1);
@@ -972,7 +988,7 @@ void append_param_json(std::string& out, std::string_view name, std::string_view
 
 }  // namespace
 
-void add_cook_facts(const std::filesystem::path& facts_file) {
+void add_cook_facts(const std::filesystem::path& facts_file, const std::vector<std::pair<std::string, std::string>>& owners) {
     if (facts_file.empty()) return;
     std::istringstream in(read_file(facts_file));
     std::string line;
@@ -990,7 +1006,7 @@ void add_cook_facts(const std::filesystem::path& facts_file) {
         }
         if (f.size() < 11) continue;
         const std::string& kind = f[0];
-        const std::string mod = cook_fact_mod(f);
+        const std::string mod = cook_fact_mod(f, owners);
         if (kind == "failed" || kind == "noted") {
             std::uint32_t code = 0;
             for (const char c : f[9]) {
@@ -1009,7 +1025,7 @@ void add_cook_facts(const std::filesystem::path& facts_file) {
             }
             add_finding(LUMA_MODLOG_COOK, kind == "failed" ? LUMA_MODLOG_ERROR : LUMA_MODLOG_NOTE, mod, code,
                         f[3].empty() ? f[1] : f[3], 0, 0, values);
-        } else if (kind == "cook.effect" || kind == "cook.model") {
+        } else if (kind.size() > 5 && kind.compare(0, 5, "cook.") == 0) {
             std::string json = "{\"table\":";
             append_json(json, f[1]);
             json += ",\"file\":";

@@ -863,12 +863,27 @@ def permission_digest(declared):
     return "%016x" % h
 
 
-def install(settings, mod_folder, code_allowed, order, kept=False, permissions="allow"):
+def install(settings, mod_folder, code_allowed, order, kept=False, permissions="allow", broken_ok=False):
     """A mod folder holding luma.json (the base's form, as examples/luma-hello) into the run's mods, on, in order.
     kept: the mods an earlier test left (continue_from) stay as they are, with their data; only new ids are added.
     permissions: "allow", "deny" or {name: "allow"|"deny"}: each declared permission's answer, as the consent screen
-    records a player's (consent.md 1.2; a name the object leaves out is allowed)."""
-    manifest = load_json(mod_folder / "luma.json")
+    records a player's (consent.md 1.2; a name the object leaves out is allowed).
+    broken_ok: a mod the test expects not to load (loads false) may have a luma.json that is not JSON on purpose: it is
+    placed as it is, under its folder's name, as the game names a mod whose manifest cannot be read (mod-log 1)."""
+    try:
+        manifest = load_json(mod_folder / "luma.json")
+    except HarnessError:
+        if not broken_ok:
+            raise
+        target = settings / "mods" / mod_folder.name
+        if target.exists():
+            if kept:
+                return mod_folder.name
+            raise HarnessError("two mods have the id %s" % mod_folder.name)
+        shutil.copytree(mod_folder, target)
+        with (settings / "mods.ini").open("a", encoding="utf-8") as out:
+            out.write("[%s]\nenabled=1\norder=%d\n" % (mod_folder.name, order))
+        return mod_folder.name
     mod_id = manifest.get("id")
     if not isinstance(mod_id, str) or not mod_id:
         raise HarnessError("%s/luma.json has no id" % mod_folder)
@@ -1044,7 +1059,7 @@ def run_one(test, renderer, args, run_folder, previous):
             imports += ["--import", str(m["path"].resolve())]
             continue
         mod_id = install(settings, m["path"], m["code"] == "allow", i + 1, kept=previous is not None,
-                         permissions="ask" if m["code"] == "ask" else m["permissions"])
+                         permissions="ask" if m["code"] == "ask" else m["permissions"], broken_ok=not m["loads"])
         mod_ids.append((mod_id, m))
         for lib in sorted((settings / "mods" / mod_id).rglob("*" + HOST["ending"])):
             frozen["mods/%s/%s" % (mod_id, lib.relative_to(settings / "mods" / mod_id).as_posix())] = sha256(lib)

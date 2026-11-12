@@ -33,6 +33,8 @@ namespace luma {
             Entry* next;             // in added order; atomic
             Entry* nextOfMod;        // the same mod's next entry, for the repeat lookup; under the store's lock
             u32 factCount;           // the highest count a fact was written at (one fact a count); atomic
+            u64 argsKey;             // FNV-1a of the entry's values and given words: part of the key (contract 2), so
+                                     // another mistake at the same place is its own line, not a repeat of the first
         };
 
         // A mod the log has entries of, in the order its first entry came.

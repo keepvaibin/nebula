@@ -2224,7 +2224,7 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                 saves_for_galaxy = true;
                 note("it adds a galaxy, so it keeps its own saves");
             }
-            chosen[lower(galaxy::assets::store_path(p.disc))] = {p.disc, p.host};
+            chosen[lower(galaxy::assets::store_path(p.disc))] = {p.disc, p.host, mod.id};
         }
     }
     for (auto& [key, file] : chosen) plan.files.push_back(std::move(file));

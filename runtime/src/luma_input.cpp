@@ -1410,7 +1410,8 @@ void game_read(std::uint32_t player, NebulaInputSample* sample, std::uint32_t de
         injection.set = false;  // the next read is at rest unless the mod sets it again
     }
     read.game = game_of(*sample, device, injection.mod != nullptr);
-    if (device != before) {
+    // A change of device is one after an earlier read: the session's first read names the device, it changes nothing.
+    if (device != before && read.reads > 1u) {
         for (ModRecord* record : g_records) {
             if (record->watch == nullptr) {
                 continue;

@@ -84,11 +84,14 @@ void add_start_findings();
 
 // The device cooker's facts file (`<overlay>.facts`, cook/overlay.rs; mod-log 9's request to G, read by the host's
 // half): each `failed` line a COOK Error and each `noted` line a COOK Note, by its code, mod, file and parameters
-// (`name=T:<text>` or `name=P:<phrase>`); each `cook.effect` and `cook.model` line (effects 7, models 9) a harness fact
-// of that key: {"table", "file", "mod", "other", then each `name=value` parameter, a number as a number and
-// `particles` as a list}. A conflict is left out: the start's check says each overlap (L305, L404). After
-// add_start_findings, the overlay attached; no file, nothing.
-void add_cook_facts(const std::filesystem::path& facts_file);
+// (`name=T:<text>` or `name=P:<phrase>`); each `cook.<kind>` line (model, effect, layout, sound, events, movie, font:
+// effects 7, models 9, layout, sound, animation 5, movies, fonts) a harness fact of that key: {"table", "file", "mod",
+// "other", then each `name=value` parameter, a number as a number and `particles` as a list}. A conflict is left out:
+// the start's check says each overlap (L305, L404). After add_start_findings, the overlay attached or the cook failed
+// (its refusals are why); no file, nothing. `owners`: each planned file's store path (as the plan has it) and its mod,
+// for a line whose mod the cooker leaves empty and whose path is not under Luma/<id>/.
+void add_cook_facts(const std::filesystem::path& facts_file,
+                    const std::vector<std::pair<std::string, std::string>>& owners = {});
 
 // The start's check found an Error in the package `id`: it is refused (the validator's errors refuse, as at import).
 [[nodiscard]] bool package_refused(std::string_view id);

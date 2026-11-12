@@ -73,10 +73,12 @@ typedef struct LumaAssetFile {
 #define LUMA_ASSETS_COOKS_MOST 8u
 
 /* 1.1. Event kinds (LumaEvent.kind). */
-#define LUMA_ASSETS_EVENT_COOKED 1u /* cook's answer, handle the request: status LUMA_OK (provided; value the bytes
-                                       it holds now); LUMA_E_FORMAT with data the cooker's words (English UTF-8, not
-                                       terminated): the cooker refused the file; LUMA_E_EXISTS, LUMA_E_FORMAT (data
-                                       null), LUMA_E_LIMIT: as provide answers them for the cooked files */
+typedef enum LumaAssetsEvent {
+    LUMA_ASSETS_EVENT_COOKED = 1 /* cook's answer, handle the request: status LUMA_OK (provided; value the bytes it
+                                    holds now); LUMA_E_FORMAT with data the cooker's words (English UTF-8, not
+                                    terminated): the cooker refused the file; LUMA_E_EXISTS, LUMA_E_FORMAT (data null),
+                                    LUMA_E_LIMIT: as provide answers them for the cooked files */
+} LumaAssetsEvent;
 
 typedef struct LumaAssetsService {
     LumaServiceTable base;
@@ -118,8 +120,8 @@ typedef struct LumaAssetsService {
     int32_t (*withdraw)(const LumaMod* mod, const char* path);
     /* 1.1. A file as the disc has it (a model, a texture, an archive, compressed or not; the name `path` ends with
        decides how it is read, as at install) cooked by the game's cooker on its own thread, then provided at `path` as
-       provide does. The bytes are copied. LUMA_PENDING and *request (not null): the answer comes as
-       LUMA_ASSETS_EVENT_COOKED to fn(user, event) on a later frame, with handle *request. Answers: LUMA_E_ABSENT this
+       provide does. The bytes are copied. LUMA_PENDING and *request (not null): a COOKED event follows, to
+       fn(user, event) on a later frame, with handle *request; the request is closed after its event. Answers: LUMA_E_ABSENT this
        game's cooker cannot cook at run time; LUMA_E_BUSY LUMA_ASSETS_COOKS_MOST cooks wait or run. Reported:
        LUMA_E_ARGUMENT a null or too long path, null fn or request, null data or 0 bytes; LUMA_E_TOO_LARGE over
        LUMA_ASSETS_PROVIDE_MOST bytes. A mod's stop cancels its cooks (no event). */

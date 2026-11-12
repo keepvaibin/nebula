@@ -478,6 +478,26 @@ namespace luma {
                 return false;
             }
 
+            // The values' part of the key: FNV-1a over the count, each value and the given words (host entries), each
+            // ended by a 0 byte so ("ab","c") and ("a","bc") differ. Computed before the lock.
+            u64 argsKeyOf(const LumaModLogEntry& rEntry) {
+                u64 h = 0xCBF29CE484222325ull;
+                const auto mix = [&h](const char* pText) {
+                    for (const char* p = pText != nullptr ? pText : ""; *p != 0; p++) {
+                        h = (h ^ static_cast< unsigned char >(*p)) * 0x100000001B3ull;
+                    }
+                    h = (h ^ 0xFFu) * 0x100000001B3ull;
+                };
+                const u32 count = rEntry.count < LUMA_MODLOG_ARGS ? rEntry.count : LUMA_MODLOG_ARGS;
+                h = (h ^ count) * 0x100000001B3ull;
+                for (u32 i = 0; i < count; i++) {
+                    mix(rEntry.values[i]);
+                }
+                mix(rEntry.text);
+                mix(rEntry.english);
+                return h;
+            }
+
             Entry* make(const LumaModLogEntry& rEntry, const char* pFile, const Words& rWords, const char* pRowId) {
                 char codeName[64];
                 codeNameOf(rEntry, pRowId, codeName, sizeof(codeName));
@@ -522,6 +542,7 @@ namespace luma {
                 pEntry->line = rEntry.line;
                 pEntry->column = rEntry.column;
                 pEntry->count = 1;
+                pEntry->argsKey = argsKeyOf(rEntry);
                 pEntry->shown = rEntry.level == LUMA_MODLOG_ERROR || shownNote(pRowId) ? 1u : 0u;
                 pEntry->mod = pMod;
                 pEntry->file = pPlace;
@@ -557,13 +578,14 @@ namespace luma {
                 return nullptr;
             }
 
-            // Under the lock. The key is the mod, source, code, file, line and column; only that mod's entries are walked
-            // (at most cPerMod), so a repeat from a busy thread holds the lock briefly.
-            Entry* findEntry(Store* pStore, const LumaModLogEntry& rEntry, const char* pFile) {
+            // Under the lock. The key is the mod, source, code, file, line, column and the values (argsKey): the same
+            // mistake again is a repeat, another mistake at the same place is a line of its own. Only that mod's entries
+            // are walked (at most cPerMod), so a repeat from a busy thread holds the lock briefly.
+            Entry* findEntry(Store* pStore, const LumaModLogEntry& rEntry, const char* pFile, u64 argsKey) {
                 const Mod* const pMod = findMod(pStore, rEntry.mod);
                 for (Entry* pEntry = pMod != nullptr ? pMod->entries : nullptr; pEntry != nullptr; pEntry = pEntry->nextOfMod) {
                     if (pEntry->code == rEntry.code && pEntry->source == rEntry.source && pEntry->line == rEntry.line &&
-                        pEntry->column == rEntry.column && same(pEntry->file, pFile)) {
+                        pEntry->column == rEntry.column && pEntry->argsKey == argsKey && same(pEntry->file, pFile)) {
                         return pEntry;
                     }
                 }
@@ -723,10 +745,11 @@ namespace luma {
             }
             const char* const pFile = rEntry.file != nullptr ? rEntry.file : "";
             Store* const pStore = store();
+            const u64 argsKey = argsKeyOf(rEntry);
 
             // A repeat, or past the limits: counted, nothing made.
             lockStore(pStore);
-            if (Entry* pFound = findEntry(pStore, rEntry, pFile)) {
+            if (Entry* pFound = findEntry(pStore, rEntry, pFile, argsKey)) {
                 const u32 count = __atomic_add_fetch(&pFound->count, 1u, __ATOMIC_RELAXED);
                 bump(pStore);
                 unlockStore(pStore);
@@ -752,7 +775,7 @@ namespace luma {
             ::free(words.english);
 
             lockStore(pStore);
-            if (Entry* pFound = findEntry(pStore, rEntry, pFile)) {
+            if (Entry* pFound = findEntry(pStore, rEntry, pFile, argsKey)) {
                 const u32 count = __atomic_add_fetch(&pFound->count, 1u, __ATOMIC_RELAXED);
                 bump(pStore);
                 unlockStore(pStore);
