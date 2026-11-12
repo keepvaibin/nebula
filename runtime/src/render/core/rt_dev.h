@@ -23,7 +23,6 @@ enum class RtDev : std::uint8_t {
     AmbientGain,    // the stage's ambient gain, over its row's (rt_stages.tsv ambient_gain)
     SunGain,        // the stage's sun gain, over its row's (sun_gain)
     FullFacing,     // g_look.z: the n.l from which a painted surface keeps its authored brightness
-    BounceAmbient,  // the shading frame's ambient gain (rt_bounce.cpp kAmbientGain)
     Wrap,           // a local light's facing wrap (kWrap)
     SkyGain,        // the dome as light (kSkyGain)
     AreaEmission,   // kAreaEmission
@@ -65,7 +64,7 @@ static_assert(kRtDevProgramSlots <= 4u && kRtDevTracerSlots <= 32u);
 
 inline constexpr std::string_view kRtDevNames[kRtDevCount] = {
     "rate",           "form",          "art_facing",     "debake",        "ambient_look",  "shadow_tint",
-    "ambient_gain",   "sun_gain",      "full_facing",    "bounce_ambient", "wrap",         "sky_gain",
+    "ambient_gain",   "sun_gain",      "full_facing",    "wrap",          "sky_gain",
     "area_emission",  "hit_sky",       "bounce",         "bounce_max",    "sky_min",       "hit_dark",
     "sun_glint",      "hit_gain",      "air_scale",      "sky_in_shadow", "light_srgb",    "sun_size",      "base_floor",
     "sun_strength",   "sky_chroma",    "stage_light",    "glass_shine",   "water_shine",   "painted_glass",

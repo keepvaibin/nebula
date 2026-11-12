@@ -2,10 +2,10 @@
 # runtime/src/render/rt_materials.cpp (RtStageTable), whose header says each column. A row exists only where a
 # picture showed a default wrong; its note says what. Empty fields keep the defaults. air: the extinction of the air
 # that scatters light toward the eye, per unit, by Koschmieder (3.912 / visual range; LIGHT-MODEL.md 8): 0.000001 a
-# day sky's (39 km), 0.0000015 a hazy one's (26 km); empty or no row: none (space).
+# day sky's (39 km), 0.0000015 a sandy one's (26 km); empty or no row: none (space).
 stage	sun	sun gain	sun size	ambient gain	sky gain	exposure low	exposure high	air	water clear	shadow sets	note
 LibraryRoom	none										a closed room whose key moves with the camera: as a sun, the ceiling shadowed the whole room (c8c hubs, stop 2)
-HoneyBeeKingdomGalaxy								0.0000015			air: Honeyhive: sun shafts between the trees under its day sky (Koschmieder: 26 km)
+HoneyBeeKingdomGalaxy								0.000001			air: Honeyhive: sun shafts between the trees under its day sky (Koschmieder: 39 km)
 HoneyBeeExGalaxy								0.000001			air: Honeyclimb: Honeyhive's day sky (Koschmieder: 39 km)
 SurfingLv1Galaxy								0.000001			air: Loopdeeloop: a sea under a day sky (Koschmieder: 39 km)
 SurfingLv2Galaxy								0.000001			air: Loopdeeswoop: a sea under a day sky (Koschmieder: 39 km)

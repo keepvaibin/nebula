@@ -13,14 +13,14 @@
 
 // The shading frame (rt_bounce.cpp RtShadeFrame, field for field), at the head of t4.
 struct RtShadeFrame {
-    float4 ambient;   // rgb A: the stage's ambient colour times kAmbientGain; w free
+    float4 ambient;   // rgb A: the stage's ambient colour as the programs take it (rt_stage_a_; FB b71); w free
     float4 key;       // rgb K: the stage key's colour; w kShadowTint
     float4 fill;      // rgb Fl: the stage's fill colour; w kWrap
     float4 sky;       // rgb what a ray that meets nothing at all shows; w kSkyGain
     float4 gains;     // x kAreaEmission, y kHitSky, z kBounce, w kBounceMax
     float4 axis[3];   // the world light grid: cell k along axis i = floor(dot(at, axis[i].xyz) + axis[i].w)
     float4 look;      // x kSkyMin, y kHitDark, z 1 / the dome's mean luminance (0: not known yet), w kSunGlint
-    float4 authored;  // rgb the stage's ambient as authored (A without kAmbientGain): what the indirect ratio is a ratio to;
+    float4 authored;  // rgb the stage's ambient as the programs take it (rt_stage_a_; FB b71): the indirect ratio's base;
                       // w the gain of a surface met (1 / the running mean of such hits, at most 1: rt_count_hit; FB b46)
     uint4 grid;       // x the grid's cells' first byte in t4, y its entries', z 1 when it holds any, w the frame's number
     float4 dome;      // rgb 1 / the dome's mean colour as the bounce rays see it, w 1 when known (rt_sky_ratio; FB b48)
@@ -419,7 +419,7 @@ float3 rt_toward_light(float4 place, float3 from, float2 u, out float reach) {
 }
 
 // ---- October's light model (DIRECTOR.md 12, M1..M3, M6; FB b59): linear light in the stage's own units.
-static const float kSunStrength = 1.25f;  // the sun at a third of a stop over the stage's key (October, 25 October)
+static const float kSunStrength = 1.0f;  // the sun at the stage's key: the anchor exact (the director's D3; FB b71)
 static const float kSkyChroma = 0.4f;     // the sky's colour in shade at this share of its chroma (M8; c39's sky_chroma)
 // The relight's share of the model: 0 the art's share (Painted), 1 the model.
 float rt_form() {

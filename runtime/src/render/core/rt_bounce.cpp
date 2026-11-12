@@ -21,7 +21,6 @@ namespace galaxy::render {
 namespace {
 
 // The light model's tunables (the master plan's appendix G).
-constexpr float kAmbientGain = 1.10f;  // the owner's "10 % light back"
 constexpr float kShadowTint = 0.2f;    // how much of the per-channel ratio a painted surface's P takes
 constexpr float kWrap = 0.25f;         // the wrap of a local light's facing
 constexpr float kSkyGain = 1.0f;       // the dome as light
@@ -81,28 +80,19 @@ void RenderCore::rt_shade_frame(RtShadeFrame& frame) const {
     static_assert(sizeof(RtShadeFrame) == 256u);
     const NebulaFrameList& list = *walk_.now->list;
     frame = RtShadeFrame{};
-    // The stage: its ambient, its key and fill (the world lights stage_light and stage_light + 1); a stage that names
-    // none an even grey, as the light pass takes it.
-    float ambient[3] = {0.5f, 0.5f, 0.5f}, key[3] = {0.5f, 0.5f, 0.5f}, fill[3] = {0.0f, 0.0f, 0.0f};
+    // The stage: its ambient and key as the programs take them (rt_stage_a_, rt_stage_k_ from rt_tables: the row's
+    // gains, an even grey where the stage names no light; one stage light, FB b71), its fill the world light
+    // stage_light + 1.
+    float fill[3] = {0.0f, 0.0f, 0.0f};
     if (list.stage_light_known != 0u) {
-        if (const NebulaFrameWorldLight* light = core::find_world_light(list, list.stage_light); light != nullptr) {
-            std::copy_n(list.stage_ambient, 3u, ambient);
-            std::copy_n(light->color, 3u, key);
-        }
         if (const NebulaFrameWorldLight* light = core::find_world_light(list, list.stage_light + 1u); light != nullptr) {
             std::copy_n(light->color, 3u, fill);
         }
     }
-    const float ambient_lum = 0.2126f * ambient[0] + 0.7152f * ambient[1] + 0.0722f * ambient[2];
-    const float key_lum = 0.2126f * key[0] + 0.7152f * key[1] + 0.0722f * key[2];
-    if (!(ambient_lum > 0.02f) || !(key_lum > 0.02f)) {
-        std::fill_n(ambient, 3u, 0.5f);
-        std::fill_n(key, 3u, 0.5f);
-    }
     for (unsigned c = 0; c < 3u; ++c) {
-        frame.ambient[c] = ambient[c] * rt_dev(RtDev::BounceAmbient, kAmbientGain);
-        frame.authored[c] = ambient[c];
-        frame.key[c] = key[c];
+        frame.ambient[c] = rt_stage_a_[c];
+        frame.authored[c] = rt_stage_a_[c];
+        frame.key[c] = rt_stage_k_[c];
         frame.fill[c] = fill[c];
     }
     frame.key[3] = rt_dev(RtDev::ShadowTint, kShadowTint);  // rt_dev.h: one key with the programs' view_stage_a.w
