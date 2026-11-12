@@ -69,11 +69,13 @@ namespace luma {
             u32 sSettingCount = 0;
             u32 sSettingRoom = 0;
 
-            // What mods wrote in tables: each table one has written, with the game's bytes from before the first write;
-            // and each write, in order, with its own copy of the bytes.
+            // What mods wrote in tables: each table a write of a mod still here is in, with each byte's value from
+            // before the first write that covered it (the game's, taken byte by byte as writes come, so what the game
+            // itself changes in the table meanwhile is never put back); and each write, in order, with its own copy.
             struct TableTouched {
                 const Table* table;
-                u8* game;
+                u8* game;     // pTable->size bytes; game[b] is meaningful while covered[b] is 1
+                u8* covered;  // pTable->size bytes: 1 where a write of a mod still here lies
             };
             struct TableWrite {
                 u32 touched;
@@ -418,23 +420,39 @@ namespace luma {
             while (touched < sTablesTouchedCount && sTablesTouched[touched].table != pTable) {
                 touched++;
             }
-            if (touched == sTablesTouchedCount) {
+            const bool added = touched == sTablesTouchedCount;
+            if (added) {
                 u8* const pGame = static_cast<u8*>(::malloc(pTable->size));
-                if (pGame == nullptr || !grow(&sTablesTouched, &sTablesTouchedRoom, sTablesTouchedCount)) {
+                u8* const pCovered = static_cast<u8*>(::calloc(pTable->size, 1));
+                if (pGame == nullptr || pCovered == nullptr || !grow(&sTablesTouched, &sTablesTouchedRoom, sTablesTouchedCount)) {
                     ::free(pGame);
+                    ::free(pCovered);
                     say(pMod, "set_table %s: no memory to remember the game's table", pTable->name);
                     return -1;
                 }
-                __builtin_memcpy(pGame, pTable->address, pTable->size);
-                sTablesTouched[sTablesTouchedCount++] = {pTable, pGame};
+                sTablesTouched[sTablesTouchedCount++] = {pTable, pGame, pCovered};
             }
             u8* const pCopy = static_cast<u8*>(::malloc(size));
             if (pCopy == nullptr || !grow(&sTableWrites, &sTableWriteRoom, sTableWriteCount)) {
                 ::free(pCopy);
+                if (added) {
+                    sTablesTouchedCount--;
+                    ::free(sTablesTouched[sTablesTouchedCount].game);
+                    ::free(sTablesTouched[sTablesTouchedCount].covered);
+                }
                 say(pMod, "set_table %s: no memory to remember the write", pTable->name);
                 return -1;
             }
             __builtin_memcpy(pCopy, pBytes, size);
+            // The game's value of each byte this write is the first to cover, as the game has it now.
+            const TableTouched& rTouched = sTablesTouched[touched];
+            const u8* const pNow = static_cast<const u8*>(pTable->address);
+            for (u32 b = offset; b < offset + size; b++) {
+                if (rTouched.covered[b] == 0) {
+                    rTouched.game[b] = pNow[b];
+                    rTouched.covered[b] = 1;
+                }
+            }
             sTableWrites[sTableWriteCount++] = {touched, pMod, offset, size, pCopy};
             __builtin_memcpy(static_cast<u8*>(pTable->address) + offset, pCopy, size);
             return 0;
@@ -468,7 +486,8 @@ namespace luma {
             if (undone != 0) {
                 say(pMod, "its %u numbers are the game's again (or another mod's)", undone);
             }
-            // Tables: each one the mod wrote is the game's again, then the writes of the mods still here, in order.
+            // Tables: only the bytes the mod wrote change. Each is the last write of a mod still here that covers it,
+            // in order, else the game's value from before the first write that covered it (and no longer covered).
             u32 tables = 0;
             for (u32 touched = 0; touched < sTablesTouchedCount; touched++) {
                 bool wrote = false;
@@ -479,12 +498,28 @@ namespace luma {
                     continue;
                 }
                 tables++;
-                const Table* const pTable = sTablesTouched[touched].table;
-                __builtin_memcpy(pTable->address, sTablesTouched[touched].game, pTable->size);
+                const TableTouched& rTouched = sTablesTouched[touched];
+                u8* const pNow = static_cast<u8*>(rTouched.table->address);
                 for (u32 i = 0; i < sTableWriteCount; i++) {
-                    const TableWrite& rWrite = sTableWrites[i];
-                    if (rWrite.touched == touched && rWrite.mod != pMod) {
-                        __builtin_memcpy(static_cast<u8*>(pTable->address) + rWrite.offset, rWrite.bytes, rWrite.size);
+                    const TableWrite& rGone = sTableWrites[i];
+                    if (rGone.touched != touched || rGone.mod != pMod) {
+                        continue;
+                    }
+                    for (u32 b = rGone.offset; b < rGone.offset + rGone.size; b++) {
+                        const TableWrite* pLast = nullptr;
+                        for (u32 j = 0; j < sTableWriteCount; j++) {
+                            const TableWrite& rOther = sTableWrites[j];
+                            if (rOther.touched == touched && rOther.mod != pMod && b >= rOther.offset &&
+                                b - rOther.offset < rOther.size) {
+                                pLast = &rOther;
+                            }
+                        }
+                        if (pLast != nullptr) {
+                            pNow[b] = pLast->bytes[b - pLast->offset];
+                        } else {
+                            pNow[b] = rTouched.game[b];
+                            rTouched.covered[b] = 0;
+                        }
                     }
                 }
             }
@@ -497,8 +532,28 @@ namespace luma {
                 }
             }
             sTableWriteCount = kept;
+            // A table no write is left in lets its copies go; the writes' indexes follow the tables kept.
+            u32 tablesKept = 0;
+            for (u32 touched = 0; touched < sTablesTouchedCount; touched++) {
+                bool used = false;
+                for (u32 i = 0; i < sTableWriteCount && !used; i++) {
+                    used = sTableWrites[i].touched == touched;
+                }
+                if (!used) {
+                    ::free(sTablesTouched[touched].game);
+                    ::free(sTablesTouched[touched].covered);
+                    continue;
+                }
+                for (u32 i = 0; i < sTableWriteCount; i++) {
+                    if (sTableWrites[i].touched == touched) {
+                        sTableWrites[i].touched = tablesKept;
+                    }
+                }
+                sTablesTouched[tablesKept++] = sTablesTouched[touched];
+            }
+            sTablesTouchedCount = tablesKept;
             if (tables != 0) {
-                say(pMod, "the tables it wrote (%u) are the game's again, with the other mods' writes", tables);
+                say(pMod, "the bytes it wrote are the game's again, or another mod's (%u tables)", tables);
             }
         }
     }
