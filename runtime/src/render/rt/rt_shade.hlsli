@@ -515,7 +515,18 @@ float3 rt_toward_light(float4 place, float3 from, float2 u, out float reach) {
 }
 
 // ---- October's light model (DIRECTOR.md 12, M1..M3, M6; FB b59): linear light in the stage's own units.
-static const float kSunStrength = 1.0f;  // the sun at the stage's key: the anchor exact (the director's D3; FB b71)
+static const float kSunStrength = 1.25f;  // October's 1.25 (the director's decision 2, 11-12; FB b106; was 1, D3, b71)
+// O as the model takes it (the director's decision 1; FB b106): its luminance and kShadowTint of its hue,
+// (1 - t) lum(O) + t O; linear in O (rt_o_prime_m is its matrix).
+float3 rt_o_prime(float3 o) {
+    const float t = g_shade.key.w;
+    return (1.0f - t) * rt_lum(o) + t * o;
+}
+float3x3 rt_o_prime_m() {
+    const float t = g_shade.key.w;
+    const float3 l = (1.0f - t) * float3(0.2126f, 0.7152f, 0.0722f);
+    return float3x3(l.x + t, l.y, l.z, l.x, l.y + t, l.z, l.x, l.y, l.z + t);
+}
 // The relight's share of the model: 0 the art's share (Painted), 1 the model.
 float rt_form() {
     return saturate(g_shade.form.x);
@@ -538,12 +549,13 @@ RtStageLight rt_stage_light() {
     // up.s as the programs take it: view_look.y (the shading frame's form.y, the same rt_look_; FC c39/c40).
     const float up = g_shade.form.y;
     const float e = rt_lum(full) / max(rt_lum(sky) + rt_lum(rest) * up, 1e-4f);
-    // The sky in shade by kAmbientLook, its luminance only: its hue is in O (rt_sky_ratio; FB b87); a channel with
-    // no full light: share 1. The run's keys where it gives them, as the programs' (FB b66): sun_strength,
+    // The sky in shade by kAmbientLook, a channel at a time at kSkyChroma of its chroma (FB b106, the director's
+    // decision 1: the shade's hue is the authored ambient's; O enters as O', rt_o_prime); a channel with no full
+    // light: share 1. The run's keys where it gives them, as the programs' (FB b66): sun_strength, sky_chroma,
     // stage_light (1: the stage's light as it is, 0: divided by the full light).
     const float sun_strength = rt_dev_or(kDevSunStrength, kSunStrength);
     const float3 held = lerp(full, float3(1.0f, 1.0f, 1.0f), rt_dev_or(kDevStageLight, 0.0f));
-    const float3 sky_look = g_shade.form.w * rt_lum(sky).xxx;
+    const float3 sky_look = g_shade.form.w * lerp(rt_lum(sky).xxx, sky, rt_dev_or(kDevSkyChroma, 0.4f));
     const float3 ok = float3(held >= 1e-4f);
     RtStageLight s;
     s.sky = ok * (sky_look * e / max(held, 1e-4f)) + (1.0f - ok);
@@ -643,7 +655,7 @@ void rt_share_terms(bool lit, float nl, float3 v, out float3 s0, out float3x3 mo
     if (t > 0.0f) {
         const RtStageLight st = rt_stage_light();
         s0 = lerp(s0, st.sun * max(nl, 0.0f) * v, t);
-        mo = mo * (1.0f - t) + float3x3(st.sky.x, 0.0f, 0.0f, 0.0f, st.sky.y, 0.0f, 0.0f, 0.0f, st.sky.z) * t;
+        mo = mo * (1.0f - t) + mul(float3x3(st.sky.x, 0.0f, 0.0f, 0.0f, st.sky.y, 0.0f, 0.0f, 0.0f, st.sky.z), rt_o_prime_m()) * t;
     }
 }
 
@@ -665,7 +677,7 @@ float3 rt_air_share(float s, float3 v) {
     float3 sky_part = ok * sky / max(full, 1e-4f);
     const float t = rt_form();
     if (t > 0.0f) {
-        sky_part = lerp(sky_part, rt_stage_light().sky * rt_open_o(), t);  // the open sky's O (FB b87)
+        sky_part = lerp(sky_part, rt_stage_light().sky * rt_o_prime(rt_open_o()), t);  // the open sky's O (FB b87, b106)
     }
     return sky_part * s + rt_air_sun() * v;
 }
@@ -682,7 +694,7 @@ float3 rt_share(bool lit, float nl, float3 v, float3 o) {
         return art;
     }
     const RtStageLight st = rt_stage_light();
-    return lerp(art, st.sky * o + st.sun * max(nl, 0.0f) * v, t);
+    return lerp(art, st.sky * rt_o_prime(o) + st.sun * max(nl, 0.0f) * v, t);
 }
 
 // From just off a surface: along its geometric normal, more the farther from the eye (depth's steps grow).
@@ -850,7 +862,8 @@ float3 rt_hit_radiance_with(RtHit h, uint options, float3 o, bool d_known, float
         const float3 art = rt_return_albedo(h, lighting) * g_shade.look.y *
                            ((h.item_flags & kItemLit) != 0u ? rt_lin(saturate(g_shade.ambient.rgb + 0.5f * g_shade.fill.rgb))
                                                             : float3(1.0f, 1.0f, 1.0f));
-        return t > 0.0f ? lerp(art, rt_return_albedo(h, lighting) * g_shade.look.y * rt_stage_light().sky * rt_open_o(), t) : art;
+        return t > 0.0f ? lerp(art, rt_return_albedo(h, lighting) * g_shade.look.y * rt_stage_light().sky * rt_o_prime(rt_open_o()), t)
+                        : art;
     }
     const bool lit = (h.item_flags & kItemLit) != 0u;
     const float nl = rt_hit_facing(h);
