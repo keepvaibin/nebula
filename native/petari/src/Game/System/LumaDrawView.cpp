@@ -10,6 +10,7 @@
 #include "Game/System/LumaModLog.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
+#include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include <luma_draw_view.h>
 #include <luma_modlog.h>
@@ -50,8 +51,11 @@ namespace luma {
                     bool hasCamera;
                     Mtx view;            // eye from world
                     f32 fovY;
-                    LiveActor* follow;   // null: a fixed camera
-                    Vec3f offset;        // the eye from the followed actor, in its axes (x side, y up, z front)
+                    LiveActor* follow;   // the rig's actor; null: a fixed camera
+                    u32 rig;             // with an actor: LUMA_DRAW_VIEW_RIG_FOLLOW, _JOINT or _WORLD
+                    Vec3f offset;        // FOLLOW: the eye from the actor in its axes (x side, y up, z front); WORLD: world axes
+                    char joint[32];      // JOINT: the joint's name
+                    f32 nearZ;           // the near plane; 0: the game's (MR::getRenderNearZ)
                     u32 drawn;           // frames drawn
                     u32 facts;
                 };
@@ -147,6 +151,39 @@ namespace luma {
                     return true;
                 }
 
+                // Whether `pName` is a joint of the actor's model (a model it has).
+                bool hasJoint(const LiveActor* pActor, const char* pName) {
+                    return pActor->mModelManager != nullptr && MR::isExistJoint(pActor, pName);
+                }
+
+                // A rig's eye on an actor this frame (FOLLOW, JOINT, WORLD): false for a joint the model lacks.
+                bool actorEye(const LiveActor* pActor, u32 rig, const Vec3f& rOffset, const char* pJoint, Vec3f* pEye,
+                              Vec3f* pAt, Vec3f* pUp) {
+                    Vec3f side, front;
+                    MR::calcSideVec(&side, pActor);
+                    MR::calcUpVec(pUp, pActor);
+                    MR::calcFrontVec(&front, pActor);
+                    const Vec3f& rPlace = pActor->mPosition;
+                    if (rig == LUMA_DRAW_VIEW_RIG_JOINT) {
+                        if (!hasJoint(pActor, pJoint)) {
+                            return false;
+                        }
+                        const MtxPtr pJointMtx = MR::getJointMtx(pActor, pJoint);
+                        pEye->set(pJointMtx[0][3], pJointMtx[1][3], pJointMtx[2][3]);
+                        pAt->set(pEye->x + front.x * 100.0f, pEye->y + front.y * 100.0f, pEye->z + front.z * 100.0f);
+                        return true;
+                    }
+                    if (rig == LUMA_DRAW_VIEW_RIG_WORLD) {
+                        pEye->set(rPlace.x + rOffset.x, rPlace.y + rOffset.y, rPlace.z + rOffset.z);
+                    } else {
+                        pEye->set(rPlace.x + side.x * rOffset.x + pUp->x * rOffset.y + front.x * rOffset.z,
+                                  rPlace.y + side.y * rOffset.x + pUp->y * rOffset.y + front.y * rOffset.z,
+                                  rPlace.z + side.z * rOffset.x + pUp->z * rOffset.y + front.z * rOffset.z);
+                    }
+                    pAt->set(rPlace);
+                    return true;
+                }
+
                 // A followed actor's camera this frame: false once it is dead (the camera stays as it was).
                 bool followNow(View& rView) {
                     LiveActor* const pActor = rView.follow;
@@ -154,16 +191,12 @@ namespace luma {
                         rView.follow = nullptr;
                         return false;
                     }
-                    Vec3f side, up, front;
-                    MR::calcSideVec(&side, pActor);
-                    MR::calcUpVec(&up, pActor);
-                    MR::calcFrontVec(&front, pActor);
-                    const Vec3f& rAt = pActor->mPosition;
-                    const Vec3f eye(rAt.x + side.x * rView.offset.x + up.x * rView.offset.y + front.x * rView.offset.z,
-                                    rAt.y + side.y * rView.offset.x + up.y * rView.offset.y + front.y * rView.offset.z,
-                                    rAt.z + side.z * rView.offset.x + up.z * rView.offset.y + front.z * rView.offset.z);
+                    Vec3f eye, at, up;
+                    if (!actorEye(pActor, rView.rig, rView.offset, rView.joint, &eye, &at, &up)) {
+                        return rView.hasCamera;  // the joint gone with a changed model: last frame's camera
+                    }
                     Mtx view;
-                    if (!lookAt(view, eye, rAt, up)) {
+                    if (!lookAt(view, eye, at, up)) {
                         return rView.hasCamera;  // the eye straight over its up this frame: last frame's camera
                     }
                     NebulaMtxCopy(view, rView.view);
@@ -219,7 +252,7 @@ namespace luma {
                     Mtx44 perspective;
                     NebulaMtxPerspective(perspective, rView.fovY,
                                          static_cast< f32 >(rView.width) / static_cast< f32 >(rView.height),
-                                         MR::getRenderNearZ(), MR::getFarZ());
+                                         rView.nearZ > 0.0f ? rView.nearZ : MR::getRenderNearZ(), MR::getFarZ());
                     Frame::setPerspective(perspective);
                     NebulaMtxCopy(rView.view, ModelSys::mViewMtx);
                     ModelSys::mViewRole = NEBULA_CAMERA_OTHER;
@@ -323,6 +356,7 @@ namespace luma {
                     NebulaMtxCopy(camera, pView->view);
                     pView->fovY = fovY;
                     pView->follow = nullptr;
+                    pView->nearZ = 0.0f;
                     pView->hasCamera = true;
                     return LUMA_OK;
                 }
@@ -346,9 +380,139 @@ namespace luma {
                         return badArgument(pMod, pWhere, "fov_y");
                     }
                     pView->follow = pActor;
+                    pView->rig = LUMA_DRAW_VIEW_RIG_FOLLOW;
                     pView->offset = Vec3f(pOffset->x, pOffset->y, pOffset->z);
+                    pView->joint[0] = '\0';
+                    pView->nearZ = 0.0f;
                     pView->fovY = fovY;
                     (void)followNow(*pView);  // the camera from now (an eye over its up: the next frame's)
+                    return LUMA_OK;
+                }
+
+                bool finiteArray(const float* pValues) {
+                    return finite(pValues[0]) && finite(pValues[1]) && finite(pValues[2]);
+                }
+
+                // A rig checked: null, or the name of the field out of range (reported by the caller). A dead actor is
+                // `*pDead` (not a mistake: it ended), checked last.
+                const char* rigFault(const LumaDrawViewCamera* pCamera, bool* pDead) {
+                    *pDead = false;
+                    if (pCamera == nullptr) {
+                        return "camera";
+                    }
+                    if (pCamera->rig < LUMA_DRAW_VIEW_RIG_FIXED || pCamera->rig > LUMA_DRAW_VIEW_RIG_WORLD) {
+                        return "rig";
+                    }
+                    if (!fovOk(pCamera->fov_y)) {
+                        return "fov_y";
+                    }
+                    if (pCamera->rig == LUMA_DRAW_VIEW_RIG_FIXED) {
+                        if (!finiteArray(pCamera->eye) || !finiteArray(pCamera->at) || !finiteArray(pCamera->up)) {
+                            return !finiteArray(pCamera->eye) ? "eye" : !finiteArray(pCamera->at) ? "at" : "up";
+                        }
+                        Mtx camera;
+                        if (!lookAt(camera, Vec3f(pCamera->eye[0], pCamera->eye[1], pCamera->eye[2]),
+                                    Vec3f(pCamera->at[0], pCamera->at[1], pCamera->at[2]),
+                                    Vec3f(pCamera->up[0], pCamera->up[1], pCamera->up[2]))) {
+                            return "up";
+                        }
+                        return nullptr;
+                    }
+                    LiveActor* const pActor = static_cast< LiveActor* >(pCamera->actor);
+                    if (pActor == nullptr || !lumacore::isA(lumacore::classOf(pActor), lumacore::kClassId< LiveActor >)) {
+                        return "actor";
+                    }
+                    if (pCamera->rig == LUMA_DRAW_VIEW_RIG_JOINT) {
+                        if (memchr(pCamera->joint, '\0', sizeof(pCamera->joint)) == nullptr || pCamera->joint[0] == '\0') {
+                            return "joint";
+                        }
+                        if (!finite(pCamera->near_z) || !(pCamera->near_z > 0.0f)) {
+                            return "near_z";
+                        }
+                    } else {
+                        const float* const pOffset = pCamera->offset;
+                        if (!finiteArray(pOffset) ||
+                            !(pOffset[0] * pOffset[0] + pOffset[1] * pOffset[1] + pOffset[2] * pOffset[2] > 1e-6f)) {
+                            return "offset";
+                        }
+                    }
+                    if (MR::isDead(pActor)) {
+                        *pDead = true;
+                        return nullptr;
+                    }
+                    if (pCamera->rig == LUMA_DRAW_VIEW_RIG_JOINT && !hasJoint(pActor, pCamera->joint)) {
+                        return "joint";
+                    }
+                    return nullptr;
+                }
+
+                int32_t svcRig(const LumaMod* pMod, LumaDrawView view, const LumaDrawViewCamera* pCamera) {
+                    const char* const pWhere = "draw.view.rig";
+                    View* pView = nullptr;
+                    if (const s32 status = enterView(pMod, pWhere, view, &pView); status != LUMA_OK) {
+                        return status;
+                    }
+                    bool dead = false;
+                    if (const char* const pFault = rigFault(pCamera, &dead); pFault != nullptr) {
+                        return badArgument(pMod, pWhere, pFault);
+                    }
+                    if (dead) {
+                        return badArgument(pMod, pWhere, "actor");  // as follow: a view never starts on a dead actor
+                    }
+                    pView->fovY = pCamera->fov_y;
+                    if (pCamera->rig == LUMA_DRAW_VIEW_RIG_FIXED) {
+                        (void)lookAt(pView->view, Vec3f(pCamera->eye[0], pCamera->eye[1], pCamera->eye[2]),
+                                     Vec3f(pCamera->at[0], pCamera->at[1], pCamera->at[2]),
+                                     Vec3f(pCamera->up[0], pCamera->up[1], pCamera->up[2]));  // checked in rigFault
+                        pView->follow = nullptr;
+                        pView->nearZ = 0.0f;
+                        pView->hasCamera = true;
+                        return LUMA_OK;
+                    }
+                    pView->follow = static_cast< LiveActor* >(pCamera->actor);
+                    pView->rig = static_cast< u32 >(pCamera->rig);
+                    pView->offset = Vec3f(pCamera->offset[0], pCamera->offset[1], pCamera->offset[2]);
+                    memcpy(pView->joint, pCamera->joint, sizeof(pView->joint));  // NUL inside, checked
+                    pView->nearZ = pCamera->rig == LUMA_DRAW_VIEW_RIG_JOINT ? pCamera->near_z : 0.0f;
+                    (void)followNow(*pView);
+                    return LUMA_OK;
+                }
+
+                int32_t svcEyeOf(const LumaMod* pMod, const LumaDrawViewCamera* pCamera, LumaDrawViewEye* pOut) {
+                    const char* const pWhere = "draw.view.eye_of";
+                    if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
+                        return status;
+                    }
+                    if (pOut == nullptr) {
+                        return badArgument(pMod, pWhere, "out");
+                    }
+                    bool dead = false;
+                    if (const char* const pFault = rigFault(pCamera, &dead); pFault != nullptr) {
+                        return badArgument(pMod, pWhere, pFault);
+                    }
+                    if (dead) {
+                        return LUMA_E_STATE;
+                    }
+                    Vec3f eye, at, up;
+                    if (pCamera->rig == LUMA_DRAW_VIEW_RIG_FIXED) {
+                        eye.set(pCamera->eye[0], pCamera->eye[1], pCamera->eye[2]);
+                        at.set(pCamera->at[0], pCamera->at[1], pCamera->at[2]);
+                        up.set(pCamera->up[0], pCamera->up[1], pCamera->up[2]);
+                    } else {
+                        (void)actorEye(static_cast< LiveActor* >(pCamera->actor), static_cast< u32 >(pCamera->rig),
+                                       Vec3f(pCamera->offset[0], pCamera->offset[1], pCamera->offset[2]), pCamera->joint, &eye,
+                                       &at, &up);  // the joint checked in rigFault
+                    }
+                    pOut->eye[0] = eye.x;
+                    pOut->eye[1] = eye.y;
+                    pOut->eye[2] = eye.z;
+                    pOut->at[0] = at.x;
+                    pOut->at[1] = at.y;
+                    pOut->at[2] = at.z;
+                    pOut->up[0] = up.x;
+                    pOut->up[1] = up.y;
+                    pOut->up[2] = up.z;
+                    pOut->fov_y = pCamera->fov_y;
                     return LUMA_OK;
                 }
 
@@ -391,6 +555,8 @@ namespace luma {
                     svcTexture,
                     svcSetOn,
                     svcRelease,
+                    svcRig,
+                    svcEyeOf,
                 };
 
                 // ---- The provider ----

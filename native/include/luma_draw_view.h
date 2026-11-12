@@ -38,6 +38,39 @@ extern "C" {
 /* A view: owned by the mod until release or its end. */
 typedef LumaHandle LumaDrawView;
 
+/* Where a camera is and how it looks (a script's view.Eye): world units and axes. */
+typedef struct LumaDrawViewEye {
+    float eye[3];
+    float at[3];  /* the point looked at; not at the eye */
+    float up[3];  /* not along the look, not zero */
+    float fov_y;  /* degrees high, above LUMA_DRAW_VIEW_FOV_LEAST, under LUMA_DRAW_VIEW_FOV_MOST */
+} LumaDrawViewEye;
+
+/* What a rig's eye follows. */
+typedef enum LumaDrawViewRig {
+    LUMA_DRAW_VIEW_RIG_FIXED = 0,  /* eye, at, up as given */
+    LUMA_DRAW_VIEW_RIG_FOLLOW = 1, /* the eye at `offset` from `actor` in its own axes (x side, y its gravity's up, z front),
+                                      looking at its place, its up as up */
+    LUMA_DRAW_VIEW_RIG_JOINT = 2,  /* the eye at `actor`'s joint `joint`, looking along the actor's front, its up as up
+                                      (first person); `near` the near plane */
+    LUMA_DRAW_VIEW_RIG_WORLD = 3   /* the eye at `offset` from `actor` in world axes, looking at its place, its up as up
+                                      (side cameras) */
+} LumaDrawViewRig;
+
+/* A camera rig (a script's view.Camera): the same rig drives a view (rig) or, through eye_of, the main camera
+   (LumaKit camera). */
+typedef struct LumaDrawViewCamera {
+    int32_t rig;        /* LumaDrawViewRig */
+    float eye[3];       /* FIXED */
+    float at[3];        /* FIXED */
+    float up[3];        /* FIXED */
+    float fov_y;        /* every rig, as LumaDrawViewEye's */
+    LumaActor actor;    /* FOLLOW, JOINT, WORLD: a live actor */
+    float offset[3];    /* FOLLOW, WORLD: not of length 0 */
+    char joint[32];     /* JOINT: a joint of the actor's model, NUL-terminated */
+    float near_z;       /* JOINT: the near plane in game units, above 0; 0 elsewhere: the game's */
+} LumaDrawViewCamera;
+
 typedef struct LumaDrawViewService {
     LumaServiceTable base;
     /* 1.0. Game thread. A view of w x h pixels (1 to LUMA_DRAW_VIEW_SIDE_MOST) with no camera yet, cleared to
@@ -68,6 +101,15 @@ typedef struct LumaDrawViewService {
     /* 1.0. Game thread. The view ended and its texture freed (a draw of it after: the checker and LUMA_E_HANDLE).
        LUMA_OK; an ended view or another mod's: LUMA_E_HANDLE, reported. */
     int32_t (*release)(const LumaMod* mod, LumaDrawView view);
+    /* 1.0. Game thread. The view's camera follows `camera` each frame from now on (a FIXED rig is `camera` once), until
+       camera, follow, another rig, or the rig's actor's death (the camera stays where it was last). LUMA_OK. A null
+       camera, an unknown rig, a rig's field out of its range (named): LUMA_E_ARGUMENT, reported; a joint the actor's
+       model lacks: LUMA_E_ARGUMENT naming "joint". Handle as camera. */
+    int32_t (*rig)(const LumaMod* mod, LumaDrawView view, const LumaDrawViewCamera* camera);
+    /* 1.0. Game thread. Where `camera`'s eye is this frame (the main camera's for LumaKit camera): LUMA_OK and *out.
+       Arguments as rig, a null out: LUMA_E_ARGUMENT, reported. The rig's actor dead: LUMA_E_STATE, not reported (the
+       caller keeps its last eye). Never needs a view. */
+    int32_t (*eye_of)(const LumaMod* mod, const LumaDrawViewCamera* camera, LumaDrawViewEye* out);
 } LumaDrawViewService;
 
 #ifdef __cplusplus
