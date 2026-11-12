@@ -633,7 +633,7 @@ namespace luma {
                     if (pFile == nullptr || memcmp(pFile, "NTBL", 4) != 0) {
                         return -1;
                     }
-                    Table table;
+                    ::Table table;
                     table.attach(pFile);
                     const s32 materialColumn = table.searchItemInfo("material");
                     const s32 paramColumn = table.searchItemInfo("param");
