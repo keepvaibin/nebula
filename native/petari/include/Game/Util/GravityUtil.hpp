@@ -12,8 +12,8 @@ class PlanetGravity;
 // pHost: gravities with this host are skipped; nullptr means the asking object.
 namespace MR {
     void registerGravity(PlanetGravity* pGravity);
-    bool calcGravityVector(const LiveActor* pActor, LUMA_OUT Vec3f* pDest, GravityInfo* pInfo, const void* pHost);
-    bool calcGravityVector(const NameObj* pObj, const Vec3f& rPosition, LUMA_OUT Vec3f* pDest, GravityInfo* pInfo, const void* pHost);
+    bool calcGravityVector(const LiveActor* pActor, LUMA_OUT LUMA_NULLABLE Vec3f* pDest, GravityInfo* pInfo, const void* pHost);
+    bool calcGravityVector(const NameObj* pObj, const Vec3f& rPosition, LUMA_OUT LUMA_NULLABLE Vec3f* pDest, GravityInfo* pInfo, const void* pHost);
     bool calcDropShadowVector(const LiveActor* pActor, Vec3f* pDest, GravityInfo* pInfo, const void* pHost);
     bool calcDropShadowVector(const NameObj* pObj, const Vec3f& rPosition, Vec3f* pDest, GravityInfo* pInfo, const void* pHost);
     bool calcGravityAndDropShadowVector(const LiveActor* pActor, Vec3f* pDest, GravityInfo* pInfo, const void* pHost);

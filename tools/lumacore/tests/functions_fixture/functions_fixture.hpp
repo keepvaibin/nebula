@@ -58,3 +58,6 @@ void fnDefined(FnVec* out);
 struct FnMarked {
     void get(LUMA_OUT FnVec* out) const;  // a method: its `this` is not in the list
 };
+// A mark in a macro's argument is recorded where it is written, and binds.
+#define FN_DECLARE(type) void fnByMacro(type v)
+FN_DECLARE(LUMA_OUT float*);

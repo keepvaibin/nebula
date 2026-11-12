@@ -73,14 +73,23 @@ T_VOID, T_LVALUE, T_RVALUE = 2, 103, 104
 T_UNEXPOSED, T_POINTER, T_BLOCK_POINTER, T_RECORD, T_ENUM, T_TYPEDEF = 1, 101, 102, 105, 106, 107
 T_FUNCTION_NO_PROTO, T_FUNCTION_PROTO, T_CONSTANT_ARRAY, T_INCOMPLETE_ARRAY, T_VARIABLE_ARRAY = 110, 111, 112, 114, 115
 T_DEPENDENT_ARRAY, T_MEMBER_POINTER, T_ELABORATED, T_ATTRIBUTED = 116, 117, 119, 163
-T_BOOL, T_FLOAT, T_LONG_DOUBLE = 3, 21, 23
-# Char_U, UChar, UShort, UInt, ULong, ULongLong, UInt128, Char_S, SChar, Short, Int, Long, LongLong, Int128
-T_INTEGERS = (4, 5, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20)
+T_FLOAT = 21
+# C-6 (audit A18M-1): the numbers LumaScript crosses with one width on every system. A count: UChar, Char16, Char32,
+# UShort, UInt, ULongLong, SChar, Short, Int, LongLong. A pointee: those, Bool, Float and Double. Never plain char (a
+# buffer, or text when const), long, unsigned long, wchar_t (4 bytes on Windows, 8 or 4 elsewhere), long double,
+# __int128 or a half.
+T_INTEGERS = (5, 6, 7, 8, 9, 11, 14, 16, 17, 19)
+T_NUMBERS = T_INTEGERS + (3, 21, 22)
 # C-6's marks (Game/LumaMarks.hpp); a way is one of the first four
 WAYS = ('LUMA_IN', 'LUMA_OUT', 'LUMA_INOUT', 'LUMA_KEPT')
 MARKS = WAYS + ('LUMA_COUNT', 'LUMA_COUNT_FIXED', 'LUMA_NULLABLE')
 # CXTranslationUnit_DetailedPreprocessingRecord: the macro expansions, where C-6's marks are
 PARSE_OPTIONS = 0x01
+# A #define whose own text names a mark (A18M-4): the record keeps only the outermost expansion, so such a mark would
+# mark nothing.
+DEFINE = re.compile(rb'^[ \t]*#[ \t]*define[ \t]+(\w+)((?:\\\r?\n|[^\n])*)', re.M)
+COMMENT = re.compile(rb'//[^\n]*|/\*.*?\*/', re.S)
+MARK_WORD = re.compile(rb'\bLUMA_(?:OUT|IN|INOUT|KEPT|COUNT|COUNT_FIXED|NULLABLE)\b')
 LINKAGE_INTERNAL, LINKAGE_EXTERNAL = 2, 4
 
 
@@ -151,6 +160,7 @@ def load(path):
     api.referenced = fn('clang_getCursorReferenced', CXCursor, CXCursor)
     api.hashCursor = fn('clang_hashCursor', c_uint, CXCursor)
     api.equalCursors = fn('clang_equalCursors', c_uint, CXCursor, CXCursor)
+    api.fileContents = fn('clang_getFileContents', c_void_p, c_void_p, c_void_p, POINTER(ctypes.c_size_t))
     return api
 
 
@@ -505,6 +515,7 @@ class Unit:
         parameter, a mark of the wrong form, or two declarations marking one parameter differently."""
         api = self.api
         self.marks = {}
+        self.marks_in_macros()
         found = {}  # file -> [(start, end, line, name, argument)], in the order written
         texts = {}
         for c in self.children(api.cursor(self.tu)):
@@ -603,6 +614,28 @@ class Unit:
                 sys.exit(f'instrument.py: {where}: {name} marks no parameter (a mark is written before a parameter\'s '
                          'type in a function\'s declaration)')
 
+    def marks_in_macros(self):
+        """Stops on a #define whose own text names a mark (`#define OUT_VEC LUMA_OUT Vec3f*`): the preprocessing record
+        keeps only the outermost expansion, so that mark would mark nothing, with no word. A mark in a macro's argument
+        (`DECLARE(LUMA_OUT Vec3f*)`) is recorded and binds as written."""
+        api = self.api
+        files = []
+        api.inclusions(self.tu, INCLUSION(lambda file, _stack, _depth, _data: files.append(file)), None)
+        for file in files:
+            size = ctypes.c_size_t()
+            data = api.fileContents(self.tu, file, byref(size))
+            if not data:
+                continue
+            text = ctypes.string_at(data, size.value)
+            if b'LUMA_' not in text or self.file_name(file).endswith('/Game/LumaMarks.hpp'):
+                continue
+            for define in DEFINE.finditer(text):
+                mark = MARK_WORD.search(COMMENT.sub(b' ', define.group(2)))
+                if mark is not None:
+                    line = text.count(b'\n', 0, define.start()) + 1
+                    sys.exit(f'instrument.py: {self.file_name(file)}:{line}: {mark.group(0).decode()} is written inside a '
+                             f'macro ({define.group(1).decode()}): a mark is written in the declaration itself')
+
     def mark_entry(self, d, i, names, file):
         """One parameter's marks as the functions file has them (C-6): None, or {"way", "count", "fixed", "nullable"}."""
         if not names:
@@ -635,7 +668,7 @@ class Unit:
         pointer = api.canonical(declared)
         if pointer.kind != T_POINTER or not self.markable(api.canonical(api.pointeeType(pointer))):
             stop(f'{way} on a parameter of type {self.string(api.typeSpelling(declared))}: a mark takes a pointer to a '
-                 'number, a vector or an enum')
+                 'number of one width on every system (not char, long, wchar_t or long double), a vector or an enum')
         index = None
         if count:
             target = arguments['LUMA_COUNT']
@@ -648,7 +681,7 @@ class Unit:
             counted = api.argument(d, index)
             if api.canonical(api.type(counted)).kind not in T_INTEGERS:
                 stop(f'LUMA_COUNT({target}) names a parameter of type '
-                     f'{self.string(api.typeSpelling(api.type(counted)))}, not an integer')
+                     f'{self.string(api.typeSpelling(api.type(counted)))}, not an integer of one width on every system')
         size = None
         if fixed:
             text = arguments['LUMA_COUNT_FIXED']
@@ -658,9 +691,9 @@ class Unit:
         return {'way': way[len('LUMA_'):].lower(), 'count': index, 'fixed': size, 'nullable': 'LUMA_NULLABLE' in arguments}
 
     def markable(self, t):
-        """A number, an enum, or a vector: a record of 2 to 4 floats named x, y(, z(, w)), its bases' first (the
-        lumascript-abi table's vec2, vec3, vec4 and quat)."""
-        if T_BOOL <= t.kind <= T_LONG_DOUBLE or t.kind == T_ENUM:
+        """A number LumaScript crosses (T_NUMBERS), an enum, or a vector: a record of 2 to 4 floats named x, y(, z(, w)),
+        its bases' first (the lumascript-abi table's vec2, vec3, vec4 and quat)."""
+        if t.kind in T_NUMBERS or t.kind == T_ENUM:
             return True
         if t.kind != T_RECORD:
             return False
