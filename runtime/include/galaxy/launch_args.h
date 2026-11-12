@@ -38,6 +38,7 @@ enum Diagnostic : unsigned {
     kDiagnoseRtNoGeometry = 1u << 24u,   // rt-no-geometry: a test: the Vulkan device is made as one without geometry shaders
     kDiagnoseRtToggle = 1u << 23u,       // rt-toggle: ray tracing switched off and on every 90 frames (the setting changed while the game runs)
     kDiagnoseRtNoMicromaps = 1u << 25u,  // rt-no-micromaps: a test: no opacity micromaps (alpha-tested surfaces asked at every hit)
+    kDiagnoseProgramsDrawn = 1u << 26u,  // programs-drawn: each program pair a draw asks for, once (a stage compiles only those)
 };
 
 // The names --diagnostics takes, each one item or a set. "1" is the launcher's recording.
@@ -74,6 +75,7 @@ inline constexpr DiagnosticName kDiagnosticNames[] = {
     {"rt-no-geometry", kDiagnoseRtNoGeometry},
     {"rt-toggle", kDiagnoseRtToggle},
     {"rt-no-micromaps", kDiagnoseRtNoMicromaps},
+    {"programs-drawn", kDiagnoseProgramsDrawn},
     {"frames", kDiagnoseFrames},
     {"gpu", kDiagnoseGpuPasses},
     {"threads", kDiagnoseThreadCpu | kDiagnoseProfile},

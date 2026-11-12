@@ -15,6 +15,25 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <mutex>
+#include <set>
+#include <utility>
+
+namespace {
+
+// --diagnostics programs-drawn (l92): the program pairs draws asked for, each logged once.
+std::mutex g_drawn_lock;
+std::set<std::pair<std::uint64_t, std::uint64_t>> g_drawn;
+
+void note_program_drawn(std::uint64_t vertex, std::uint64_t pixel) {
+    const std::lock_guard guard(g_drawn_lock);
+    if (g_drawn.emplace(vertex, pixel).second) {
+        std::fprintf(stderr, "[programs-drawn] %llx %llx\n", static_cast<unsigned long long>(vertex),
+                     static_cast<unsigned long long>(pixel));
+    }
+}
+
+}  // namespace
 
 namespace galaxy::render {
 
@@ -1139,6 +1158,9 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
         const bool exchange = aux >= kAuxTraced && rt_prepassed_[i] == 2u && core::added_prepass_draws(state);
         if (exchange) {
             aux = static_cast<std::uint8_t>(aux | kAuxExchange);
+        }
+        if (::galaxy::diagnosing(::galaxy::kDiagnoseProgramsDrawn)) [[unlikely]] {
+            note_program_drawn(entry.desc.vertex, entry.desc.pixel);
         }
         gpu::Pipeline* pipeline = pipelines_.get(item.pipeline, entry, target_variant, aux);
         if (pipeline == nullptr) {  // the driver refused it: the player misses this draw
