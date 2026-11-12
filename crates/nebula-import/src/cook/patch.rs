@@ -265,6 +265,9 @@ impl Applier<'_> {
             Some(v) if v.as_u64() != Some(1) => return Err(shape("Patch.Version", v.to_string())),
             Some(_) => {}
         }
+        // A stage's placement rows may give their objects' arguments by name (stages contract 1).
+        let expanded = self.placement_rows(root)?;
+        let root = expanded.as_ref().unwrap_or(root);
         if let Some(rows) = root.get("rows") {
             self.whole(p, rows.as_array().ok_or_else(|| shape("Patch.NotArray", "rows"))?)?;
         }
@@ -283,10 +286,21 @@ impl Applier<'_> {
             self.table.rows.remove(at);
             self.owners.removed.insert(id, p.mod_id.to_string());
         }
-        for s in list(root, "set")? {
+        for (i, s) in list(root, "set")?.iter().enumerate() {
             let set_shape = || shape("Patch.SetShape", "");
             let w = s.get("where").ok_or_else(set_shape)?;
             let values = object(s.get("values").ok_or_else(set_shape)?, set_shape)?;
+            if values.contains_key("args") && self.is_placement() {
+                // Arguments by name for the row's own object; only the arguments named change.
+                let Some(at) = self.find(p, w)? else { continue };
+                let mut named = values.clone();
+                let object = self.text_of(at, "name");
+                let facts = super::placement_args::objects()?;
+                super::placement_args::expand_fields(&mut named, &format!("/set/{i}/values"), &object, Some(&facts), false)?;
+                let cells = self.cells(&named)?;
+                self.write(at, &cells, &named, p.mod_id);
+                continue;
+            }
             let cells = self.cells(values)?;
             if let Some(at) = self.find(p, w)? {
                 self.write(at, &cells, values, p.mod_id);
@@ -360,6 +374,35 @@ impl Applier<'_> {
     }
 
     /// `rows`: the whole of a `#` table.
+    /// A stage's placement table (`StageData/<Stage>/jmp/...`), whose rows may give arguments by name.
+    fn is_placement(&self) -> bool {
+        self.path.to_ascii_lowercase().contains("/jmp/")
+    }
+
+    /// The patch with its `rows` and `add` rows' `args` as `Obj_arg<n>` (placement_args), None when it has none.
+    fn placement_rows(&self, root: &Value) -> Result<Option<Value>> {
+        let has = |k: &str| root.get(k).and_then(Value::as_array).is_some_and(|rows| super::placement_args::any_args(rows));
+        if !self.is_placement() || !(has("rows") || has("add")) {
+            return Ok(None);
+        }
+        let facts = super::placement_args::objects()?;
+        let mut copy = root.clone();
+        for k in ["rows", "add"] {
+            if let Some(rows) = copy.get_mut(k).and_then(Value::as_array_mut) {
+                super::placement_args::expand_rows(rows, &format!("/{k}"), Some(&facts), false)?;
+            }
+        }
+        Ok(Some(copy))
+    }
+
+    /// A row's word in the column `name` as text ("" when the table has no such column).
+    fn text_of(&self, row: usize, name: &str) -> String {
+        match self.table.column_of(name).ok().flatten().and_then(|c| self.table.rows.get(row)?.get(c)) {
+            Some(Cell::Text(bytes)) => String::from_utf8_lossy(bytes).into_owned(),
+            _ => String::new(),
+        }
+    }
+
     fn whole(&mut self, p: &ModPatch, rows: &[Value]) -> Result<()> {
         if !self.positional {
             return Err(refuse(402, vec![("why", Arg::Phrase("Patch.RowsNotByPlace")), ("row", text("")), ("count", text(""))]));
@@ -617,6 +660,38 @@ mod tests {
         let selected: Vec<usize> = facts.iter().filter_map(|f| if let Fact::Selected { rows, .. } = f { Some(*rows) } else { None }).collect();
         assert_eq!(selected, vec![2, 0]);
         assert!(!facts.iter().any(|f| matches!(f, Fact::Conflict { .. } | Fact::Missing { .. })), "{facts:?}");
+    }
+
+    /// Stages contract 1: `args` by name in a placement table's `add` and `set`; a wrong name fails that patch alone.
+    #[test]
+    fn placement_rows_take_arguments_by_name() {
+        let _file = super::super::placement_args::TEST_FILE.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = tempfile::tempdir().unwrap();
+        let description = json!({"factory": [{"name": "Kuribo", "class": "Kuribo"}],
+            "placement_args": {"Kuribo": [{"arg": 0, "target": "mSpeed", "type": "f32"}, {"arg": 2, "target": "mIsSleep", "type": "bool"}]}});
+        std::fs::write(dir.path().join(super::super::placement_args::FILE_NAME), description.to_string()).unwrap();
+        super::super::placement_args::use_file(dir.path());
+        let col = |name: &str| Column { hash: column_hash(name), mask: u32::MAX, kind: if name == "name" { Kind::Text } else { Kind::Int }, width: 32 };
+        let mut t = TableIr { columns: ["l_id", "name", "Obj_arg0", "Obj_arg1", "Obj_arg2"].iter().map(|n| col(n)).collect(), rows: vec![] };
+        t.add_rows(&[json!({"l_id": 1, "name": "Kuribo", "Obj_arg0": 5, "Obj_arg1": 7, "Obj_arg2": -1})]).unwrap();
+        let args = |t: &TableIr, r: usize| -> Vec<i32> {
+            (2..5).map(|c| match t.rows[r][c] { Cell::Bits(b) => b as i32, _ => panic!() }).collect()
+        };
+        let good = json!({"patch": 1,
+            "set": [{"where": {"l_id": 1}, "values": {"args": {"IsSleep": true}}}],
+            "add": [{"l_id": 9, "name": "Kuribo", "args": {"Speed": 3}}]});
+        let facts = apply(OBJINFO, &mut t, &[ModPatch { mod_id: "a", file: "pa", patch: &good }]).unwrap();
+        assert!(facts.is_empty(), "{facts:?}");
+        assert_eq!(args(&t, 0), vec![5, 7, 1], "set: only IsSleep changes");
+        assert_eq!(args(&t, 1), vec![3, -1, -1], "add: the rest not given");
+        let before = t.clone();
+        let bad = json!({"patch": 1, "add": [{"l_id": 10, "name": "Kuribo", "args": {"Sleepy": 1}}]});
+        let facts = apply(OBJINFO, &mut t, &[ModPatch { mod_id: "b", file: "pb", patch: &bad }]).unwrap();
+        assert_eq!(t, before);
+        let [Fact::Failed { mod_id, refusal, why, .. }] = facts.as_slice() else { panic!("{facts:?}") };
+        assert_eq!(mod_id, "b");
+        assert_eq!(refusal.code, 804);
+        assert!(why.contains("Kuribo has no argument \"Sleepy\"; its arguments are Speed, IsSleep, Arg0-Arg7"), "{why}");
     }
 
     #[test]
