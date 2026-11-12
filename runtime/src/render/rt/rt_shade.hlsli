@@ -218,8 +218,9 @@ struct RtHit {
     float3 emission;       // what it shows with no light
     float roughness, metal, share, ior, thickness;
     float far;             // the ray's length to it
-    bool glows;            // it shows itself and takes no light: an emissive surface, an area light, a glowing mesh
-    bool listed;           // and its light is one of the frame's emitter list: a ray that lights something shades it instead
+    bool glows;            // it shows itself and takes no light: an emissive-class surface alone (a ray sees what the
+                           // screen shows; FB b77)
+    bool listed;           // its light is one of the frame's emitter list: a ray that lights something shades it instead
 };
 
 float3 rt_bytes3(uint w) {
@@ -328,13 +329,14 @@ void rt_hit_read(uint item, uint triangle_, float2 where_, float far_, float3 or
         }
     }
     h.base = h.base * map * h.vertex;
-    // One light, one way: a glowing mesh of the emitter list (word 14 bit 24) lights the others through the list alone;
-    // an area light (word 1: 32) and an emissive surface that is no light of the list show their own emission to every
-    // ray; a listed glow shows it to a ray that only looks at it (a mirror's).
+    // A ray sees what the screen shows (FB b77): an emissive-class surface its emission (a ray that lights something
+    // shades it where it is a light of the list: word 14 bit 24), any other class its material, shaded, whatever glow
+    // row it has. One light, one way: a listed glow lights the others through the list alone; an area glow (word 1: 32,
+    // never listed) by the rays that light something and meet it (rt_hit_area_glow).
     const bool area = (w0.y & kRtItemArea) != 0u;
     h.listed = (w3.z >> 24u & 1u) != 0u && !area;
-    h.glows = h.klass == kRtEmissive || area || h.listed;
-    if (h.glows) {
+    h.glows = h.klass == kRtEmissive;
+    if (h.glows || area) {
         // The record's emission was read with its maps mid grey (hit_record.rs): twice it under the map is what it shows.
         const float3 own = rt_bytes3(w3.z);
         h.emission = (max(own.r, max(own.g, own.b)) > 0.02f ? min(own * 2.0f, 1.0f) * map : h.base);
@@ -699,8 +701,16 @@ bool rt_screen_lights(Texture2D<float4> guide, Texture2D<float4> added, Texture2
     return true;
 }
 
+// What an area glow of a class other than emissive (item word 1: 32; never a light of the list) gives a ray that
+// lights something, over its shaded body: its emission as it is, in the picture's units (FB b77). 0 for any other hit
+// and for a ray that only looks (a mirror's sees the body, as the screen shows it).
+float3 rt_hit_area_glow(RtHit h, bool lighting) {
+    return lighting && !h.glows && (h.item_flags & kRtItemArea) != 0u ? rt_shown(h.emission) * g_shade.gains.x
+                                                                        : float3(0.0f, 0.0f, 0.0f);
+}
+
 // What a hit sends back toward the ray (10.2), in the picture's units (a share of white). `o`: the hit's own indirect
-// ratio (kHitSky, or what the screen knows of it).
+// ratio (kHitSky, or what the screen knows of it). An area glow's emission is not in it (rt_hit_area_glow).
 float3 rt_hit_radiance_with(RtHit h, uint options, float3 o, bool d_known, float3 d_seen, inout uint seed);
 float3 rt_hit_radiance(RtHit h, uint options, float3 o, inout uint seed) {
     return rt_hit_radiance_with(h, options, o, false, float3(0.0f, 0.0f, 0.0f), seed);

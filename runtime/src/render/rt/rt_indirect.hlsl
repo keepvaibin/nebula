@@ -210,11 +210,12 @@ void main(uint3 id : SV_DispatchThreadID) {
                 if (h.glows && !h.listed) {
                     fresh.light = bounce;  // it shines of itself: its light as it is
                 } else {
-                    // A surface lit by the scene: against the mean of such hits (FB b46), as the sky against its own.
+                    // A surface lit by the scene: against the mean of such hits (FB b46), as the sky against its own;
+                    // an area glow's emission over it as it is (FB b77).
                     if (((id.x | id.y) & 3u) == 0u) {
                         rt_count_hit(bounce);
                     }
-                    fresh.light = bounce * g_shade.authored.w;
+                    fresh.light = bounce * g_shade.authored.w + g_shade.gains.z * rt_hit_area_glow(h, true) / rt_o_unit();
                 }
             }
         }

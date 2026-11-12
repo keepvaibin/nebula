@@ -36,8 +36,11 @@ static bool s_count_dome = false;
 
 // What a surface shows by path tracing, as an affine function of its own sky ratio O (which the caller traces on):
 // out = c + M * O. A thing that shows itself has M = 0. `lighting`: the path lights something (the emitter list
-// stands for a listed glow; only a mirror's ray sees it shine).
-void ref_surface(RtHit h, bool lighting, inout uint seed, out float3 c, out float3x3 m) {
+// stands for a listed glow). An emissive-class surface shows itself; any other class is shaded, whatever its glow
+// row (a ray sees what the screen shows; FB b77). `e`: an area glow's emission over its body, for a path that lights
+// something (rt_hit_area_glow: as it is, not against the scene-lit mean).
+void ref_surface(RtHit h, bool lighting, inout uint seed, out float3 c, out float3x3 m, out float3 e) {
+    e = rt_hit_area_glow(h, lighting);
     if (h.glows && !(lighting && h.listed)) {
         c = rt_shown(h.emission) * g_shade.gains.x;  // linear, as the real-time hit's (M1; FB b65b)
         m = (float3x3)0;
@@ -83,9 +86,9 @@ float3 ref_ratio(float3 origin, float3 n, inout uint seed) {
             result += mul(through, rt_sky_ratio(dome));
             break;
         }
-        float3 c;
+        float3 c, e;
         float3x3 m;
-        ref_surface(h, true, seed, c, m);
+        ref_surface(h, true, seed, c, m, e);
         if (h.klass == kRtMetal || h.klass == kRtGlass) {
             c += rt_hit_mirror_stand_in(h);
         }
@@ -96,7 +99,7 @@ float3 ref_ratio(float3 origin, float3 n, inout uint seed) {
             rt_count_hit(k * (c + mul(m, float3(g_shade.gains.y, g_shade.gains.y, g_shade.gains.y))));
         }
         const float3 kh = shines ? k : k * g_shade.authored.w;
-        result += mul(through, kh * c);
+        result += mul(through, kh * c + k * e);  // an area glow's emission as it is (b77)
         through = mul(through, float3x3(kh.x * m[0], kh.y * m[1], kh.z * m[2]));
         if (h.glows && !h.listed) {
             break;
@@ -137,9 +140,9 @@ float3 ref_mirror(float3 from, float3 dir, float roughness, inout uint seed) {
             result += weight * seen;
             break;
         }
-        float3 c;
+        float3 c, e;  // e 0: a mirror's ray sees an area glow's body alone (b77)
         float3x3 m;
-        ref_surface(h, false, seed, c, m);
+        ref_surface(h, false, seed, c, m, e);
         float3 seen = c;
         if (!h.glows) {
             seen += mul(m, ref_ratio(rt_off(h.at, h.ng), h.ns, seed));
