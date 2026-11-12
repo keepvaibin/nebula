@@ -40,6 +40,7 @@ pub mod overlay_patches;
 pub mod particle_json;
 pub mod particles;
 pub mod placement_args;
+pub mod clip_events;
 pub mod ui_layout;
 pub mod sound;
 pub mod sound_effect;

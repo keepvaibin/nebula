@@ -78,6 +78,8 @@ pub enum CookFact {
     Layout { path: String, source: String, facts: super::layout_json::LayoutFacts },
     /// A sound effect of a mod cooked (sound contract's `cook.sound`).
     Sound { path: String, source: String, facts: super::sound_effect::SoundFacts },
+    /// A clip's frame events cooked (animation contract's `cook.events`).
+    Events { path: String, source: String, facts: super::clip_events::EventFacts },
 }
 
 /// What `cook.effect` says of one effect (`<id>:<name>`) or one replaced game particle (its name).
@@ -118,7 +120,8 @@ fn field(text: &str) -> String {
 /// replaced game model in `other`, then `name=<number>` for joints, extra_joints, meshes, vertices, materials,
 /// textures and clips; `cook.effect` carries the effect (`<id>:<name>`, or the replaced game particle) in `other`, then
 /// `particles=<numbers, comma between>`, `group`, `sprite`, `textures` and `replaced` (0 or 1); `cook.layout` carries the
-/// layout file it made in `other`, then `panes`, `pictures`, `texts`, `textures` and `groups`. `table` is the file's
+/// layout file it made in `other`, then `panes`, `pictures`, `texts`, `textures` and `groups`; `cook.events` carries the
+/// clip in `other`, then `rows` and `frames` (the game clip's frame count, `none` when the game has no such clip). `table` is the file's
 /// place in the game, `file` the mod's file it came from.
 pub fn cook_facts_text(facts: &[CookFact]) -> String {
     let mut out = String::new();
@@ -180,6 +183,11 @@ pub fn cook_facts_text(facts: &[CookFact]) -> String {
                         format!("replaces={}", facts.replaces),
                     ])
                     .collect()
+            }
+            CookFact::Events { path, source, facts } => {
+                let fixed = ["cook.events", path, "", source, &facts.clip, "", "", "", "", "", ""].map(str::to_string);
+                let frames = facts.frames.map_or_else(|| "none".to_string(), |n| n.to_string());
+                fixed.into_iter().chain([format!("rows={}", facts.rows), format!("frames={frames}")]).collect()
             }
         };
         out.push_str(&line.iter().map(|f| field(f)).collect::<Vec<_>>().join("\t"));
