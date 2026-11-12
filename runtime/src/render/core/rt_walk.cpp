@@ -576,6 +576,10 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
                 ++count.flat;
                 continue;
             }
+            // An opaque draw whose material's row says translucent (steam, a cloud's body; FB b101, EVERYTHING
+            // 1.15): it dims the sun by its alpha (let_through, as a blended translucent thing), it stops no light.
+            const bool dims = (item.flags & (NEBULA_ITEM_RING | NEBULA_ITEM_INSTANCES)) == 0u &&
+                              registries_.mesh(item.mesh).hit_class == NEBULA_HIT_TRANSLUCENT;
             const std::uint32_t mask =
                 sky ? rt::kMaskSky
                 // Seen by no view, mirror, bounce or probe: the sun's and the local lights' shadow rays alone meet it.
@@ -584,8 +588,9 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
                     // What stops light is a surface of the scene's opaque phases; an opaque draw made after them (a
                     // fill, a silhouette, a helper shape) is seen by the views and casts nothing.
                     ? rt::kMaskOpaque | (early ? rt::kMaskEarly : 0u) |
-                          (kind == 0u && early && !turned ? rt::kMaskSolid | (lit_program ? rt::kMaskLit : 0u) : 0u) |
-                          (kind != 0u && early && !turned ? rt::kMaskCutout : 0u)
+                          (dims && early && !turned ? rt::kMaskBlended : 0u) |
+                          (kind == 0u && early && !turned && !dims ? rt::kMaskSolid | (lit_program ? rt::kMaskLit : 0u) : 0u) |
+                          (kind != 0u && early && !turned && !dims ? rt::kMaskCutout : 0u)
                     // A blended one would tint the sun's rays (let_through) as the camera turns it: no ray meets it.
                     : turned ? 0u : rt::kMaskBlended;
             if ((item.flags & (NEBULA_ITEM_INSTANCES | NEBULA_ITEM_PARTICLE | NEBULA_ITEM_WIDE)) != 0u) {

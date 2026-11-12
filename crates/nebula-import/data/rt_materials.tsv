@@ -546,3 +546,5 @@ twinfalllakeplanet	kori_v	glass	0.05	0	1.31						ice (FB water verdict, FC c89):
 twinfalllakeplanetlow	kori_v	glass	0.05	0	1.31						ice (FB water verdict, FC c89): a frozen lake read as metal; glass, ior 1.31 (F0 0.018); picture owed
 mirrormodeltwinfalllake	kori_v	glass	0.05	0	1.31						ice (FB water verdict, FC c89): a frozen lake read as metal; glass, ior 1.31 (F0 0.018); picture owed
 twinfalllakeplanetlow	mizu_shita_v_x	dielectric		0							bed (FB water verdict, FC c89): the far stand-in is opaque; its near's water row would make it water by the twin rule (c83)
+lavasteam	lambert5_v	translucent	1	0							the lava stages' steam column: dims the sun, no hard shadow (EVERYTHING 1.15; FB b101)
+raincloudvolume	VolumeMat	translucent	1	0							a rain volume: dims the sun, no hard shadow (EVERYTHING 1.15; FB b101)
