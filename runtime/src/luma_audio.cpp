@@ -22,6 +22,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace galaxy::luma_audio {
@@ -62,14 +63,20 @@ struct Item {
     LumaEventFn fn = nullptr;
     void* user = nullptr;
     bool stream = false;
+    bool music = false;   // a voice that is the game's music (music): one at a time, not among the 32
+    bool tap = false;     // a tap (tap_open): not mixed, fed
     bool posted = false;  // the node is queued with the kernel
     bool closed = false;  // the handle is closed (stop, close, the last event given): no event from now on
     bool silent = false;  // the mix is done with it: freed once neither queued nor being delivered
     std::uint32_t bus = 0;
     float volume = 1.0f;  // the mod's: the sound's times play's (or voice_set's), or the stream's
-    // The audio thread's: the gain heard now, ramped to its target over kRampMs.
+    // The audio thread's: the gain heard now, ramped to its target over ramp_ms (linear: a step set when the target
+    // changes).
     float gain = 0.0f;
     bool gain_started = false;
+    std::uint32_t ramp_ms = kRampMs;
+    float ramp_target = -1.0f;
+    float ramp_step = 0.0f;
     // Stopping: fading over fade_ms (fade_total and fade_left set by the mix at its rate).
     bool fading = false;
     std::uint32_t fade_ms = 0;
@@ -103,7 +110,19 @@ struct Item {
     bool need = false;           // NEED to give
     bool need_armed = false;     // a push since the last NEED
     bool draining = false;       // closed with drain: silent once empty
+    // A tap's: the block the mix fills, and up to kTapBlocks finished ones waiting for the game thread.
+    std::uint32_t source = 0;
+    std::vector<float> filling;  // LUMA_AUDIO_TAP_FRAMES × 2
+    std::size_t filled = 0;      // frames
+    std::vector<float> blocks;   // kTapBlocks × LUMA_AUDIO_TAP_FRAMES × 2
+    std::size_t ready_first = 0;
+    std::size_t ready_count = 0;
+    bool lost = false;           // a block found no room
+    std::uint32_t tap_rate = 0;
+    std::vector<float> handing;  // the game thread's copy given in SAMPLES
 };
+
+constexpr std::size_t kTapBlocks = 8u;  // 170 ms at 48 kHz: a frame of the game's late is not a loss
 
 std::mutex g_lock;
 std::vector<Item*> g_items;                     // g_lock
@@ -113,6 +132,14 @@ std::atomic<std::size_t> g_live{0};             // g_items' size: the mix's test
 std::atomic<const LumaServiceKernel*> g_kernel{nullptr};
 std::atomic<const assets::AssetStore*> g_store{nullptr};
 std::atomic<LumaHandle> g_next_handle{1};
+std::atomic<std::size_t> g_taps{0};             // taps of the output: the frame's test with no lock
+// The game's own music: its share (1 heard, 0 replaced), ramped by the mix to g_music_target over g_music_ms; read by
+// the audio frame for the music volume it gives the game's mixer.
+std::atomic<float> g_music_share{1.0f};
+std::atomic<float> g_music_target{1.0f};
+std::atomic<std::uint32_t> g_music_ms{kRampMs};
+float g_music_step = 0.0f;  // the audio thread's
+float g_music_step_target = -1.0f;
 std::uint64_t g_order = 0;                // game thread
 std::uint64_t g_random = 0x9E3779B97F4A7C15ull;  // game thread: a play's pick in its pitch range
 
@@ -203,9 +230,10 @@ void reap_locked() {
 
 // With g_lock: the mod's open item of that handle and kind, or null. A voice that ended this frame, its ENDED not yet
 // given, is still open: voice_set changes nothing, voice_stop closes it and its ENDED is not given.
-Item* find_locked(const ModState* state, LumaHandle handle, bool stream) noexcept {
+Item* find_locked(const ModState* state, LumaHandle handle, bool stream, bool tap = false) noexcept {
     for (Item* item : g_items) {
-        if (item->owner == state && item->handle == handle && item->stream == stream && !item->closed) {
+        if (item->owner == state && item->handle == handle && item->stream == stream && item->tap == tap &&
+            !item->music && !item->closed) {
             return item;
         }
     }
@@ -216,7 +244,7 @@ Item* find_locked(const ModState* state, LumaHandle handle, bool stream) noexcep
 // function and no stop gets its ENDED.
 void finish_locked(Item* item) noexcept {
     item->silent = true;
-    if (!item->stream && item->ended && !item->closed) {
+    if (!item->stream && !item->music && !item->tap && item->ended && !item->closed) {
         if (item->fn != nullptr) {
             post_locked(item);
         } else {
@@ -235,7 +263,7 @@ struct Ramp {
 
 Ramp ramp_for(Item* item, float target, std::uint32_t rate) noexcept {
     if (!item->gain_started) {
-        item->gain = target;
+        item->gain = item->music ? 0.0f : target;  // music fades in over its ramp
         item->gain_started = true;
     }
     if (item->fading && item->fade_total == 0u) {
@@ -243,8 +271,13 @@ Ramp ramp_for(Item* item, float target, std::uint32_t rate) noexcept {
         item->fade_total = static_cast<std::uint32_t>(std::max<std::uint64_t>(total, 1u));
         item->fade_left = item->fade_total;
     }
-    const float ramp = static_cast<float>(std::max<std::uint32_t>(rate * kRampMs / 1000u, 1u));
-    return {std::fabs(target - item->gain) / ramp, target};
+    if (target != item->ramp_target) {
+        const std::uint64_t samples = static_cast<std::uint64_t>(rate) * item->ramp_ms / 1000u;
+        const float ramp = static_cast<float>(std::max<std::uint64_t>(samples, 1u));
+        item->ramp_target = target;
+        item->ramp_step = std::fabs(target - item->gain) / ramp;
+    }
+    return {item->ramp_step, target};
 }
 
 // One frame's gain, the ramp and the fade moved on; negative: the fade is over (silence from here).
@@ -356,6 +389,49 @@ bool mix_stream(Item* item, float* stereo, std::size_t frames, std::uint32_t rat
     return true;
 }
 
+// With g_lock: `frames` stereo frames into a tap's block; each full block waits for the game thread (posted), or is
+// lost when kTapBlocks wait already (the next SAMPLES says so).
+void feed_tap(Item* item, const float* stereo, std::size_t frames, std::uint32_t rate) noexcept {
+    item->tap_rate = rate;
+    std::size_t at = 0;
+    while (at < frames) {
+        const std::size_t take = std::min(frames - at, LUMA_AUDIO_TAP_FRAMES - item->filled);
+        std::copy(stereo + at * 2u, stereo + (at + take) * 2u, item->filling.begin() + item->filled * 2u);
+        item->filled += take;
+        at += take;
+        if (item->filled == LUMA_AUDIO_TAP_FRAMES) {
+            item->filled = 0;
+            if (item->ready_count == kTapBlocks) {
+                item->lost = true;
+                continue;
+            }
+            const std::size_t slot = (item->ready_first + item->ready_count) % kTapBlocks;
+            std::copy(item->filling.begin(), item->filling.end(),
+                      item->blocks.begin() + static_cast<std::ptrdiff_t>(slot * LUMA_AUDIO_TAP_FRAMES * 2u));
+            item->ready_count++;
+            post_locked(item);
+        }
+    }
+}
+
+// The game's music share one frame on: toward g_music_target over g_music_ms (audio thread).
+void move_music_share(std::size_t frames, std::uint32_t rate) noexcept {
+    const float target = g_music_target.load(std::memory_order_relaxed);
+    float share = g_music_share.load(std::memory_order_relaxed);
+    if (share == target) {
+        return;
+    }
+    if (target != g_music_step_target) {
+        const std::uint64_t samples =
+            static_cast<std::uint64_t>(rate) * g_music_ms.load(std::memory_order_relaxed) / 1000u;
+        g_music_step = std::fabs(target - share) / static_cast<float>(std::max<std::uint64_t>(samples, 1u));
+        g_music_step_target = target;
+    }
+    const float move = g_music_step * static_cast<float>(frames);
+    share = share < target ? std::min(share + move, target) : std::max(share - move, target);
+    g_music_share.store(share, std::memory_order_relaxed);
+}
+
 // ---- Deliveries (game thread) --------------------------------------------------------------------------------------
 
 void deliver(LumaEventNode* node) {
@@ -371,7 +447,11 @@ void deliver(LumaEventNode* node) {
             reap_locked();
             return;
         }
-        if (!item->stream && item->ended) {
+        if (item->tap) {
+            g_delivering = item;
+            fn = item->fn;
+            user = item->user;
+        } else if (!item->stream && item->ended) {
             event.kind = LUMA_AUDIO_EVENT_ENDED;
             event.status = item->ended_status;
             item->closed = true;  // its last event: the handle is closed after it
@@ -388,7 +468,34 @@ void deliver(LumaEventNode* node) {
         user = item->user;
         g_delivering = item;
     }
-    if (const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire); kernel != nullptr && fn != nullptr) {
+    const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
+    if (item->tap) {
+        // Every block waiting, each in its own SAMPLES, copied out under the lock (the mix goes on filling).
+        for (;;) {
+            {
+                const std::lock_guard<std::mutex> lock(g_lock);
+                if (item->closed || item->owner == nullptr || item->ready_count == 0u) {
+                    break;
+                }
+                const float* from = item->blocks.data() + item->ready_first * LUMA_AUDIO_TAP_FRAMES * 2u;
+                std::copy(from, from + LUMA_AUDIO_TAP_FRAMES * 2u, item->handing.begin());
+                item->ready_first = (item->ready_first + 1u) % kTapBlocks;
+                item->ready_count--;
+                event = LumaEvent{};
+                event.size = sizeof(event);
+                event.kind = LUMA_AUDIO_EVENT_SAMPLES;
+                event.status = std::exchange(item->lost, false) ? LUMA_E_BUSY : LUMA_OK;
+                event.handle = item->handle;
+                event.data = item->handing.data();
+                event.data_size = LUMA_AUDIO_TAP_FRAMES * 2u * sizeof(float);
+                event.value = LUMA_AUDIO_TAP_FRAMES;
+                event.flags = item->tap_rate;
+            }
+            if (kernel == nullptr || kernel->call(node->mod, LUMA_AUDIO_NAME, fn, user, &event) != LUMA_OK) {
+                break;
+            }
+        }
+    } else if (kernel != nullptr && fn != nullptr) {
         kernel->call(node->mod, LUMA_AUDIO_NAME, fn, user, &event);
     }
     const std::lock_guard<std::mutex> lock(g_lock);
@@ -589,7 +696,8 @@ std::int32_t audio_play(const LumaMod* mod, const char* name, const LumaAudioPla
         Item* lowest = nullptr;
         std::uint32_t playing = 0;
         for (Item* other : g_items) {
-            if (other->owner == state && !other->stream && !other->closed && !other->ended) {
+            if (other->owner == state && !other->stream && !other->music && !other->tap && !other->closed &&
+                !other->ended) {
                 playing++;
                 if (lowest == nullptr || other->priority < lowest->priority ||
                     (other->priority == lowest->priority && other->order < lowest->order)) {
@@ -833,6 +941,194 @@ std::int32_t audio_stream_close(const LumaMod* mod, LumaHandle stream, std::uint
     return LUMA_OK;
 }
 
+// Game thread, with g_lock: the music playing (any mod's) fades out over fade_ms and ends.
+void end_music_locked(std::uint32_t fade_ms) noexcept {
+    for (Item* item : g_items) {
+        if (item->music && !item->closed) {
+            item->closed = true;
+            if (!item->fading) {
+                item->fading = true;
+                item->fade_ms = fade_ms;
+                item->fade_total = 0;
+            }
+        }
+    }
+}
+
+std::int32_t audio_music(const LumaMod* mod, const char* name, std::uint32_t fade_ms) noexcept {
+    static constexpr const char* where = "audio.music";
+    ModState* state = nullptr;
+    if (const std::int32_t status = begin(mod, where, &state); status != LUMA_OK) {
+        return status;
+    }
+    if (name == nullptr) {
+        return argument(mod, where, "name");
+    }
+    const std::size_t length = ::strnlen(name, LUMA_AUDIO_NAME_MOST + 1u);
+    if (length == 0u || length > LUMA_AUDIO_NAME_MOST) {
+        return argument(mod, where, "name");
+    }
+    if (fade_ms > LUMA_AUDIO_FADE_MOST_MS) {
+        return argument(mod, where, "fade_ms");
+    }
+    const std::uint32_t fade = fade_ms == 0u ? kRampMs : fade_ms;
+    const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
+    const assets::AssetStore* store = g_store.load(std::memory_order_acquire);
+    try {
+        std::string path;
+        if (!store_path(kernel->mod_id(mod), std::string_view(name, length), path)) {
+            return argument(mod, where, "name");
+        }
+        const std::optional<assets::Entry> found = store != nullptr ? store->find(path) : std::nullopt;
+        if (!found) {
+            return LUMA_E_NOT_FOUND;
+        }
+        Sound sound;
+        const std::uint8_t* bytes = nullptr;
+        if (!found->folder && found->length >= kNsfxHeader) {
+            bytes = store->map(found->position, static_cast<std::size_t>(found->length));
+            if (bytes == nullptr) {
+                return LUMA_E_IO;
+            }
+        }
+        if (bytes == nullptr || !read_sound(bytes, found->length, sound) || sound.frames == 0u) {
+            report(mod, where, kRowNotASound, name);  // Audio.NotASound
+            return LUMA_E_FORMAT;
+        }
+        auto item = std::make_unique<Item>();
+        item->node.event.mod = mod;
+        item->node.event.deliver = deliver;
+        item->node.event.drop = drop;
+        item->node.item = item.get();
+        item->owner = state;
+        item->music = true;
+        item->name.assign(name, length);
+        item->samples = sound.samples;
+        item->channels = sound.channels;
+        item->frames = sound.frames;
+        item->bus = LUMA_AUDIO_BUS_MUSIC;
+        item->sound_volume = sound.volume;
+        item->volume = sound.volume;
+        item->pitch_pick = 1.0f;
+        item->pitch = 1.0f;
+        item->ramp_ms = fade;
+        item->looping = true;
+        item->loop_start = sound.loop_start != kNoLoop ? sound.loop_start : 0u;
+        item->loop_end = sound.loop_start != kNoLoop ? sound.loop_end : sound.frames;
+        const std::lock_guard<std::mutex> lock(g_lock);
+        end_music_locked(fade);
+        g_items.reserve(g_items.size() + 1u);
+        item->handle = g_next_handle.fetch_add(1, std::memory_order_relaxed);
+        g_items.push_back(item.release());
+        g_music_ms.store(fade, std::memory_order_relaxed);
+        g_music_target.store(0.0f, std::memory_order_relaxed);
+        reap_locked();
+    } catch (...) {
+        return LUMA_E_MEMORY;
+    }
+    return LUMA_OK;
+}
+
+std::int32_t audio_music_restore(const LumaMod* mod, std::uint32_t fade_ms) noexcept {
+    static constexpr const char* where = "audio.music_restore";
+    ModState* state = nullptr;
+    if (const std::int32_t status = begin(mod, where, &state); status != LUMA_OK) {
+        return status;
+    }
+    if (fade_ms > LUMA_AUDIO_FADE_MOST_MS) {
+        return argument(mod, where, "fade_ms");
+    }
+    const std::uint32_t fade = fade_ms == 0u ? kRampMs : fade_ms;
+    const std::lock_guard<std::mutex> lock(g_lock);
+    bool mine = false;
+    for (const Item* item : g_items) {
+        mine |= item->music && !item->closed && item->owner == state;
+    }
+    if (mine) {
+        end_music_locked(fade);
+        g_music_ms.store(fade, std::memory_order_relaxed);
+        g_music_target.store(1.0f, std::memory_order_relaxed);
+    }
+    reap_locked();
+    return LUMA_OK;
+}
+
+std::int32_t audio_tap_open(const LumaMod* mod, std::uint32_t source, LumaEventFn fn, void* user,
+                            LumaHandle* out) noexcept {
+    static constexpr const char* where = "audio.tap_open";
+    ModState* state = nullptr;
+    if (const std::int32_t status = begin(mod, where, &state); status != LUMA_OK) {
+        return status;
+    }
+    if (source > LUMA_AUDIO_TAP_MODS) {
+        return argument(mod, where, "source");
+    }
+    if (fn == nullptr) {
+        return argument(mod, where, "fn");
+    }
+    if (out == nullptr) {
+        return argument(mod, where, "out");
+    }
+    try {
+        {
+            const std::lock_guard<std::mutex> lock(g_lock);
+            std::uint32_t open = 0;
+            for (const Item* other : g_items) {
+                open += other->owner == state && other->tap && !other->closed ? 1u : 0u;
+            }
+            if (open >= LUMA_AUDIO_TAPS_MOST) {
+                report(mod, where, 104u, "2");  // Service.Limit
+                return LUMA_E_LIMIT;
+            }
+        }
+        auto item = std::make_unique<Item>();
+        item->node.event.mod = mod;
+        item->node.event.deliver = deliver;
+        item->node.event.drop = drop;
+        item->node.item = item.get();
+        item->owner = state;
+        item->fn = fn;
+        item->user = user;
+        item->tap = true;
+        item->silent = true;  // never mixed
+        item->source = source;
+        item->filling.assign(LUMA_AUDIO_TAP_FRAMES * 2u, 0.0f);  // made here: the mix never allocates
+        item->blocks.assign(kTapBlocks * LUMA_AUDIO_TAP_FRAMES * 2u, 0.0f);
+        item->handing.assign(LUMA_AUDIO_TAP_FRAMES * 2u, 0.0f);
+        const std::lock_guard<std::mutex> lock(g_lock);
+        g_items.reserve(g_items.size() + 1u);
+        item->handle = g_next_handle.fetch_add(1, std::memory_order_relaxed);
+        *out = item->handle;
+        if (source == LUMA_AUDIO_TAP_OUTPUT) {
+            g_taps.fetch_add(1, std::memory_order_relaxed);
+        }
+        g_items.push_back(item.release());
+        reap_locked();
+    } catch (...) {
+        return LUMA_E_MEMORY;
+    }
+    return LUMA_OK;
+}
+
+std::int32_t audio_tap_close(const LumaMod* mod, LumaHandle tap) noexcept {
+    static constexpr const char* where = "audio.tap_close";
+    ModState* state = nullptr;
+    if (const std::int32_t status = begin(mod, where, &state); status != LUMA_OK) {
+        return status;
+    }
+    const std::lock_guard<std::mutex> lock(g_lock);
+    Item* item = find_locked(state, tap, false, true);
+    if (item == nullptr) {
+        return bad_handle(mod, where);
+    }
+    item->closed = true;
+    if (item->source == LUMA_AUDIO_TAP_OUTPUT) {
+        g_taps.fetch_sub(1, std::memory_order_relaxed);
+    }
+    reap_locked();
+    return LUMA_OK;
+}
+
 // ---- The provider --------------------------------------------------------------------------------------------------
 
 void mod_begin(void*, const LumaMod* mod) {
@@ -858,6 +1154,9 @@ void mod_gone(void*, const LumaMod* mod) {
     const std::lock_guard<std::mutex> lock(g_lock);
     for (Item* item : g_items) {
         if (item->owner == state) {
+            if (item->tap && !item->closed && item->source == LUMA_AUDIO_TAP_OUTPUT) {
+                g_taps.fetch_sub(1, std::memory_order_relaxed);
+            }
             item->owner = nullptr;
             item->silent = true;
             item->closed = true;
@@ -892,6 +1191,10 @@ const LumaAudioService kAudio = {
     audio_stream_open,
     audio_stream_push,
     audio_stream_close,
+    audio_music,
+    audio_music_restore,
+    audio_tap_open,
+    audio_tap_close,
 };
 
 const LumaServiceRow kRows[] = {
@@ -916,7 +1219,15 @@ std::span<const LumaServiceProvider* const> providers(void (*)(const char*)) noe
 }
 
 bool mix(float* stereo, std::size_t frames, std::uint32_t rate, const float player[4]) noexcept {
-    if (g_live.load(std::memory_order_acquire) == 0u || stereo == nullptr || frames == 0u || rate == 0u) {
+    if (stereo == nullptr || frames == 0u || rate == 0u) {
+        return false;
+    }
+    move_music_share(frames, rate);
+    if (g_live.load(std::memory_order_acquire) == 0u) {
+        if (g_music_target.load(std::memory_order_relaxed) == 0.0f) {  // no music left: the game's own back
+            g_music_ms.store(1000u, std::memory_order_relaxed);
+            g_music_target.store(1.0f, std::memory_order_relaxed);
+        }
         return false;
     }
     float heard[4];
@@ -924,6 +1235,7 @@ bool mix(float* stereo, std::size_t frames, std::uint32_t rate, const float play
         heard[b] = finite_in(player[b], 0.0f, 4.0f) ? player[b] : (player[b] > 4.0f ? 4.0f : 0.0f);
     }
     bool any = false;
+    bool music = false;
     const std::lock_guard<std::mutex> lock(g_lock);
     for (Item* item : g_items) {
         if (item->owner == nullptr || item->silent) {
@@ -932,8 +1244,35 @@ bool mix(float* stereo, std::size_t frames, std::uint32_t rate, const float play
         const float target = item->volume * item->owner->bus[item->bus] * heard[item->bus];
         any |= item->stream ? mix_stream(item, stereo, frames, rate, target)
                             : mix_voice(item, stereo, frames, rate, target);
+        music |= item->music && !item->closed;
+    }
+    // A music whose mod is gone or that ended: the game's own back (its restore set the target already).
+    if (!music && g_music_target.load(std::memory_order_relaxed) == 0.0f) {
+        g_music_ms.store(1000u, std::memory_order_relaxed);
+        g_music_target.store(1.0f, std::memory_order_relaxed);
+    }
+    for (Item* item : g_items) {
+        if (item->tap && item->source == LUMA_AUDIO_TAP_MODS && item->owner != nullptr && !item->closed) {
+            feed_tap(item, stereo, frames, rate);
+        }
     }
     return any;
+}
+
+void tap_output(const float* stereo, std::size_t frames, std::uint32_t rate) noexcept {
+    if (g_taps.load(std::memory_order_relaxed) == 0u || stereo == nullptr || frames == 0u) {
+        return;
+    }
+    const std::lock_guard<std::mutex> lock(g_lock);
+    for (Item* item : g_items) {
+        if (item->tap && item->source == LUMA_AUDIO_TAP_OUTPUT && item->owner != nullptr && !item->closed) {
+            feed_tap(item, stereo, frames, rate);
+        }
+    }
+}
+
+float game_music_share() noexcept {
+    return g_music_share.load(std::memory_order_relaxed);
 }
 
 }  // namespace galaxy::luma_audio
