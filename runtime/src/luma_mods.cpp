@@ -1002,8 +1002,105 @@ std::int32_t mods_watch_options(const LumaMod* mod, LumaEventFn fn, void* user) 
     return LUMA_OK;
 }
 
-// Game thread, after the mod's stop: no event for it from now on (a node already queued is dropped by the kernel).
+// ---- mods: other mods stopping (watch_mods; director 08:2x, LumaKit rule 4) ---------------------------------------
+
+struct StopWatch;
+struct StopNode {
+    LumaEventNode event;  // first, and both plain members: the kernel's node is the StopNode
+    StopWatch* owner;     // its entry in g_stop_watches (never erased, so it stays put)
+};
+
+// A running mod watching others stop: the ids stopped since its last delivery, in order.
+struct StopWatch {
+    const LumaMod* watcher = nullptr;
+    LumaEventFn fn = nullptr;
+    void* user = nullptr;
+    std::vector<std::string> stopped;
+    StopNode node{};
+};
+
+std::vector<std::unique_ptr<StopWatch>> g_stop_watches;  // g_options_lock
+
+void deliver_stopped(LumaEventNode* node) {
+    StopWatch* const owner = reinterpret_cast<StopNode*>(node)->owner;
+    const LumaMod* mod = nullptr;
+    LumaEventFn fn = nullptr;
+    void* user = nullptr;
+    std::vector<std::string> stopped;
+    {
+        const std::lock_guard<std::mutex> lock(g_options_lock);
+        if (owner->fn == nullptr) {
+            return;
+        }
+        mod = owner->watcher;
+        fn = owner->fn;
+        user = owner->user;
+        stopped.swap(owner->stopped);
+    }
+    const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
+    for (const std::string& id : stopped) {
+        LumaEvent event{};
+        event.size = sizeof(event);
+        event.kind = LUMA_MODS_EVENT_STOPPED;
+        event.status = LUMA_OK;
+        event.data = id.c_str();
+        event.data_size = id.size();
+        if (kernel == nullptr || kernel->call(mod, LUMA_MODS_NAME, fn, user, &event) != LUMA_OK) {
+            return;  // the watcher is gone
+        }
+    }
+}
+
+void drop_stopped(LumaEventNode*) {}  // the node is the StopWatch's
+
+std::int32_t mods_watch_mods(const LumaMod* mod, LumaEventFn fn, void* user) {
+    if (const std::int32_t status = enter(mod, "mods.watch_mods"); status != LUMA_OK) {
+        return status;
+    }
+    try {
+        const std::lock_guard<std::mutex> lock(g_options_lock);
+        StopWatch* watch = nullptr;
+        StopWatch* free_one = nullptr;
+        for (const std::unique_ptr<StopWatch>& one : g_stop_watches) {
+            if (one->watcher == mod) {
+                watch = one.get();
+            } else if (one->watcher == nullptr && one->node.event.state == 0u && free_one == nullptr) {
+                free_one = one.get();  // a gone mod's, not queued: used again
+            }
+        }
+        if (watch == nullptr && fn == nullptr) {
+            return LUMA_OK;
+        }
+        if (watch == nullptr) {
+            if (free_one == nullptr) {
+                g_stop_watches.push_back(std::make_unique<StopWatch>());
+                free_one = g_stop_watches.back().get();
+                free_one->node.owner = free_one;
+                free_one->node.event.deliver = deliver_stopped;
+                free_one->node.event.drop = drop_stopped;
+            }
+            watch = free_one;
+            watch->watcher = mod;
+            watch->node.event.mod = mod;
+            watch->stopped.clear();
+        }
+        watch->fn = fn;
+        watch->user = fn != nullptr ? user : nullptr;
+        if (fn == nullptr) {
+            watch->watcher = nullptr;
+            watch->stopped.clear();
+        }
+    } catch (...) {
+        return LUMA_E_MEMORY;
+    }
+    return LUMA_OK;
+}
+
+// Game thread, after the mod's stop: no event for it from now on (a node already queued is dropped by the kernel); every
+// other running mod watching (watch_mods) is told its id.
 void options_mod_gone(void*, const LumaMod* mod) {
+    const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
+    const char* const gone_id = kernel != nullptr ? kernel->mod_id(mod) : nullptr;
     const std::lock_guard<std::mutex> lock(g_options_lock);
     for (auto& [id, options] : g_options) {
         if (options.watcher == mod) {
@@ -1012,6 +1109,28 @@ void options_mod_gone(void*, const LumaMod* mod) {
             options.user = nullptr;
             options.changed.clear();
         }
+    }
+    for (const std::unique_ptr<StopWatch>& watch : g_stop_watches) {
+        if (watch->watcher == mod) {
+            watch->watcher = nullptr;
+            watch->fn = nullptr;
+            watch->user = nullptr;
+            watch->stopped.clear();
+        }
+    }
+    if (gone_id == nullptr) {
+        return;
+    }
+    for (const std::unique_ptr<StopWatch>& watch : g_stop_watches) {
+        if (watch->fn == nullptr || watch->watcher == nullptr || kernel->mod_live(watch->watcher) == 0) {
+            continue;
+        }
+        try {
+            watch->stopped.emplace_back(gone_id);
+        } catch (...) {
+            continue;  // no memory: this watcher misses the event
+        }
+        (void)kernel->post(&watch->node.event);  // queued already: the new id goes with it
     }
 }
 
@@ -1033,6 +1152,7 @@ const LumaModsService kMods = {
     mods_find,
     mods_option,
     mods_watch_options,
+    mods_watch_mods,
 };
 
 // mods' report rows (section 5): {where} first, then the row's own.
