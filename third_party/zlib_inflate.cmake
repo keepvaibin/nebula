@@ -11,7 +11,10 @@ add_library(nebula_zinflate STATIC
     "${nebula_zlib_dir}/adler32.c" "${nebula_zlib_dir}/crc32.c" "${nebula_zlib_dir}/inffast.c"
     "${nebula_zlib_dir}/inflate.c" "${nebula_zlib_dir}/inftrees.c" "${nebula_zlib_dir}/zutil.c")
 target_include_directories(nebula_zinflate SYSTEM PUBLIC "${CMAKE_BINARY_DIR}/nebula-zinflate" "${nebula_zlib_dir}")
-target_compile_definitions(nebula_zinflate PRIVATE Z_PREFIX)
+# Z_PREFIX renames zlib's functions and types, but not its one data symbol: zutil.c's z_errmsg (zconf.h has no line
+# for it), which then met the importer's zlibstatic.lib in the host's link (int0400: LNK2005 z_errmsg already
+# defined). Renamed here for this library's own sources; no user of zlib.h names it (zutil.h is zlib's own).
+target_compile_definitions(nebula_zinflate PRIVATE Z_PREFIX z_errmsg=nebula_zinflate_errmsg)
 set_target_properties(nebula_zinflate PROPERTIES C_STANDARD 11 POSITION_INDEPENDENT_CODE ON)
 if(MSVC)
     target_compile_options(nebula_zinflate PRIVATE /w)
