@@ -564,7 +564,11 @@ float3 rt_o_unit() {
 static const float kAlbedoMost = 0.9f;  // CHOSEN: fresh snow's albedo
 float3 rt_hit_albedo(RtHit h) {
     const float t = rt_form();
-    const float3 base = min(rt_lin(h.base), kAlbedoMost);  // linear always (M1, b59b)
+    float3 base = min(rt_lin(h.base), kAlbedoMost);  // linear always (M1, b59b)
+    // c84 (V-A2 step 2): a non-metal's purity bound, as program.hlsli traced_pure.
+    if (h.klass != kRtMetal) {
+        base = max(base, 0.04f * max(max(base.r, base.g), base.b));
+    }
     return t > 0.0f ? base * (1.0f - t * h.metal) : base;
 }
 // A metal or glass hit's reflection, which hits do not trace again: the stage's ambient by its painted share (the

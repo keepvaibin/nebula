@@ -1041,6 +1041,8 @@ pub fn finish_reading(ir: &ModelIr, stem: &str, material: usize, thickness: f32,
         }
     }
     super::hit_record::finish(stem, &m.name, thickness, r);
+    // c83 (3.5): a far twin looks as its near model does.
+    super::hit_record::follow_twin(stem, &m.name, r);
     // c77 (7.6): a character's face part (a skinned mesh's, by its name) is a plain surface and never a sheen body.
     let face = super::programs::mesh_skinned(ir, m) && super::hit_record::face_kind(&m.name) != 0;
     // c49: the body under a painted sheen mirrors for real (the sheen is not drawn while tracing).

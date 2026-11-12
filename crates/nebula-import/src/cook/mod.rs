@@ -433,6 +433,7 @@ pub fn write_cooked_pak(
     impl Drop for Collecting {
         fn drop(&mut self) {
             *texture::NAMES.lock().unwrap_or_else(|e| e.into_inner()) = None;
+            hit_record::twins_clear();  // c83
         }
     }
     let _collecting = Collecting;

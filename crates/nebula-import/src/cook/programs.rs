@@ -1271,9 +1271,13 @@ pub fn written_or_unknown() -> Written {
 /// Every animation that can write a register, for the store's whole cook.
 pub fn prepare_written_files(files: &[super::PakFile], read: &mut dyn FnMut(&super::PakFile) -> Result<Vec<u8>>) -> Result<()> {
     let mut written = Written::default();
+    // c83: every model read once before the cook (hit_record.rs TWINS: the near and far twins, the bloom twins).
+    super::hit_record::twins_begin();
     walk_partition_files(files, read, &mut |name, bytes| {
         if name.to_ascii_lowercase().ends_with(".brk") {
             written.add(&clip::read(&bytes).with_context(|| name.to_string())?);
+        } else if super::native_data::is_model_file(&bytes) {
+            super::hit_record::twins_add(name, &bytes);
         }
         Ok(())
     })?;

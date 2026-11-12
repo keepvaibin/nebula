@@ -165,6 +165,101 @@ impl Drop for PackTablesInUse {
     }
 }
 
+/// c83 (3.5, L1.2): every model of the pak read before the cook: each model's materials (lower-case name, as read
+/// and finished) by its stem, and the materials of the game's bloom twins (`<model>bloom`, by `<model>`). Set by
+/// programs::prepare_written_files; None outside a game's cook.
+pub struct Twins {
+    near: std::collections::HashMap<String, Vec<(String, Reading)>>,
+    bloom: std::collections::HashMap<String, std::collections::HashSet<String>>,
+}
+
+static TWINS: std::sync::RwLock<Option<Twins>> = std::sync::RwLock::new(None);
+
+/// c83: the cook begins: the twins' table is empty and filling.
+pub fn twins_begin() {
+    *TWINS.write().unwrap_or_else(|e| e.into_inner()) =
+        Some(Twins { near: std::collections::HashMap::new(), bloom: std::collections::HashMap::new() });
+}
+
+/// c83: the cook ends.
+pub fn twins_clear() {
+    *TWINS.write().unwrap_or_else(|e| e.into_inner()) = None;
+}
+
+/// c83: one model file read before the cook (its path in the pak, archives' members included). A file that does not
+/// read is left out here (its cook says why).
+pub fn twins_add(name: &str, bytes: &[u8]) {
+    let stem = name.rsplit('/').next().unwrap_or(name);
+    let stem = stem.split('.').next().unwrap_or(stem).to_ascii_lowercase();
+    let mut stats = Stats::default();
+    let Ok(ir) = read_file(bytes, Source::of(bytes), &mut stats) else { return };
+    let materials: Vec<(String, Reading)> = ir
+        .materials
+        .iter()
+        .enumerate()
+        .map(|(i, m)| {
+            let mut r = read(m);
+            super::model_write::finish_reading(&ir, &stem, i, 0.0, &mut r);
+            (m.name.to_ascii_lowercase(), r)
+        })
+        .collect();
+    let mut twins = TWINS.write().unwrap_or_else(|e| e.into_inner());
+    let Some(twins) = twins.as_mut() else { return };
+    if let Some(base) = stem.strip_suffix("bloom") {
+        twins.bloom.entry(base.to_string()).or_default().extend(materials.iter().map(|(n, _)| n.clone()));
+    }
+    twins.near.entry(stem).or_insert(materials);
+}
+
+/// c83: for a far twin's material (`stem` ends "low", "middle" or "break" (a breaking piece: PLANS-UNBUILT 3.5) and its
+/// near model is in the pak), the near model's
+/// stem, the near material's name and its reading: the one of the same name, else (`by_name` false) the first of the
+/// near model's most common class.
+pub fn twin_of(stem: &str, material: &str, by_name: bool) -> Option<(String, String, Reading)> {
+    let stem = stem.split('.').next().unwrap_or(stem).to_ascii_lowercase();
+    let base = stem.strip_suffix("low").or_else(|| stem.strip_suffix("middle")).or_else(|| stem.strip_suffix("break"))?;
+    let twins = TWINS.read().unwrap_or_else(|e| e.into_inner());
+    let near = twins.as_ref()?.near.get(base)?;
+    let name = material.to_ascii_lowercase();
+    if let Some((n, r)) = near.iter().find(|(n, _)| *n == name) {
+        return Some((base.to_string(), n.clone(), r.clone()));
+    }
+    if by_name {
+        return None;
+    }
+    let mut count: BTreeMap<Class, usize> = BTreeMap::new();
+    for (_, r) in near {
+        *count.entry(r.class).or_default() += 1;
+    }
+    let (&most, _) = count.iter().max_by_key(|(c, n)| (**n, std::cmp::Reverse(**c)))?;
+    near.iter().find(|(_, r)| r.class == most).map(|(n, r)| (base.to_string(), n.clone(), r.clone()))
+}
+
+/// c83 (3.5): a far twin's material takes its near model's class and numbers (twin_of), unless a review row chose
+/// its own. Its colour, maps, emission and de-light stay its own.
+pub fn follow_twin(stem: &str, material: &str, r: &mut Reading) {
+    if r.rule == "the review (rt_materials.tsv)" {
+        return;
+    }
+    let Some((_, _, near)) = twin_of(stem, material, false) else { return };
+    r.class = near.class;
+    r.roughness = near.roughness;
+    r.metal = near.metal;
+    r.ior = near.ior;
+    r.transmission = near.transmission;
+    r.tint_keep = near.tint_keep;
+    r.body = near.body;
+    r.shine = near.shine;
+    r.rule = "its near twin's (c83)";
+}
+
+/// c83 (L1.2): whether the game draws a material of the model `stem` again in its bloom pass (a `<stem>bloom` model
+/// with a material of the same name).
+fn in_bloom(stem: &str, material: &str) -> bool {
+    let twins = TWINS.read().unwrap_or_else(|e| e.into_inner());
+    twins.as_ref().and_then(|t| t.bloom.get(stem)).is_some_and(|names| names.contains(&material.to_ascii_lowercase()))
+}
+
 /// Why a pack's table (`kind` 0 RtMaterials, 1 RtGlow, 2 RtWater) cannot be used; None: it can.
 pub fn pack_table_problem(kind: usize, text: &str) -> Option<String> {
     match kind {
@@ -464,8 +559,7 @@ pub const GLOW_NONE: u8 = 0;
 pub const GLOW_ROW: u8 = 1;
 pub const GLOW_NAME: u8 = 2;
 pub const GLOW_CLASS: u8 = 3;
-/// The game's own bloom pass (L1.2): not yet (the `*bloom` twins need a lookup over the whole pak).
-#[allow(dead_code)]
+/// The game's own bloom pass (L1.2, c83): a material its `*bloom` twin draws again.
 pub const GLOW_BLOOM: u8 = 4;
 
 /// c81 (L1, L3): the kind of light a glowing material is, by its own name, else its model's, and its luminance
@@ -552,6 +646,10 @@ pub fn glow_with_rule(stem: &str, material: &str, r: &Reading) -> ([f32; 4], u8)
         let c = if parts.len() == 3 { [parts[0], parts[1], parts[2]] } else { own() };
         return ([c[0], c[1], c[2], strength], GLOW_ROW);
     }
+    // c83 (3.5): a far twin's material glows as its near model's of the same name.
+    if let Some((near_stem, near_name, near)) = twin_of(&stem, material, true) {
+        return glow_with_rule(&near_stem, &near_name, &near);
+    }
     // Not a light by data (L1.3): the sky, a bloom pass's twin (the game's second draw of a glow, L1.2), an
     // Observatory miniature, a painted sheen that is not drawn while tracing (c49), what light passes through.
     if stem.ends_with("sky")
@@ -567,6 +665,8 @@ pub fn glow_with_rule(stem: &str, material: &str, r: &Reading) -> ([f32; 4], u8)
         GLOW_NAME
     } else if r.class == Class::Emissive {
         GLOW_CLASS
+    } else if in_bloom(&stem, &name) {
+        GLOW_BLOOM
     } else {
         return NONE;
     };
@@ -1913,6 +2013,36 @@ mod tests {
         assert!(g.1 == GLOW_CLASS && g.0[3] < 0.0 && g.0[0] == 1.0, "{g:?}");
         let flat = read(&painted());
         assert_eq!(glow_with_rule("testmodel", "CableMat_v", &flat).1, GLOW_NONE);
+    }
+
+    #[test]
+    fn a_far_twin_follows_its_near_model() {
+        // c83 (3.5, L1.2): a far twin's material takes the near one's class by name, else the near model's most
+        // common class; a material its bloom twin draws again glows.
+        let mut gloss = read(&painted());
+        gloss.class = Class::Gloss;
+        gloss.roughness = 0.1;
+        let plain = read(&painted());
+        let mut twins = Twins { near: std::collections::HashMap::new(), bloom: std::collections::HashMap::new() };
+        twins.near.insert("testtwin".into(), vec![("road_v".into(), gloss.clone()), ("grass_v".into(), plain.clone()),
+                                                  ("rock_v".into(), plain.clone())]);
+        twins.bloom.insert("testtwin".into(), ["grass_v".to_string()].into_iter().collect());
+        *TWINS.write().unwrap() = Some(twins);
+        let mut far = read(&painted());
+        follow_twin("testtwinlow", "Road_v", &mut far);
+        assert!(far.class == Class::Gloss && far.roughness == 0.1 && far.rule == "its near twin's (c83)");
+        let mut other = read(&painted());
+        other.class = Class::Metal;
+        follow_twin("testtwinmiddle", "Lod_v", &mut other);
+        assert_eq!(other.class, plain.class, "the near model's most common class");
+        let mut none = read(&painted());
+        none.class = Class::Metal;
+        follow_twin("othermodellow", "Road_v", &mut none);
+        assert_eq!(none.class, Class::Metal);
+        assert_eq!(glow_with_rule("testtwin", "Grass_v", &plain).1, GLOW_BLOOM);
+        assert_eq!(glow_with_rule("testtwinlow", "Grass_v", &plain).1, GLOW_BLOOM, "the near one's glow");
+        assert_eq!(glow_with_rule("testtwin", "Rock_v", &plain).1, GLOW_NONE);
+        twins_clear();
     }
 
     #[test]

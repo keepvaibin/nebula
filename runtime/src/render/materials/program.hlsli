@@ -333,6 +333,12 @@ float3 traced_lin(float3 c) {
     c = max(c, 0.0);
     return lerp(pow((c + 0.055) / 1.055, 2.4), c / 12.92, step(c, 0.04045));
 }
+// c84 (V-A2 step 2): no pigment is purer than this: no channel of a non-metal's colour under kPurity of its largest,
+// in linear light (the 0.002 blue of Good Egg's grass is paint, not a surface). rt_shade.hlsli rt_hit_albedo alike.
+static const float kPurity = 0.04;
+float3 traced_pure(float3 l, bool metal) {
+    return metal ? l : max(l, kPurity * max(max(l.r, l.g), l.b));
+}
 float3 traced_srgb(float3 l) {
     l = max(l, 0.0);
     return lerp(1.055 * pow(l, 1.0 / 2.4) - 0.055, l * 12.92, step(l, 0.0031308));
@@ -525,8 +531,8 @@ float4 traced_colour(float4 c, float4 pixel) {
     // them (the tracer's pictures are linear), the result encoded. What the local lights add, rho x D, is at most
     // kAddedMost a channel in linear light (plan s5's guard on the product, A2-05; counted by the tracer, l82).
     const float kAddedMost = 1.5;
-    const float3 lamps = metal ? float3(0.0, 0.0, 0.0) : min(traced_lin(base) * added, kAddedMost);
-    const float4 seen = traced_mirror((traced_lin(c.rgb) * share * sheen.a + sheen.rgb) + lamps, c.a, pixel);
+    const float3 lamps = metal ? float3(0.0, 0.0, 0.0) : min(traced_pure(traced_lin(base), metal) * added, kAddedMost);
+    const float4 seen = traced_mirror((traced_pure(traced_lin(c.rgb), metal) * share * sheen.a + sheen.rgb) + lamps, c.a, pixel);
     // c81 (L4): a glowing body (draw flag 256: its mesh a light this frame) is never duller than its own colour unlit.
     const float3 shown = (draw_flags & 256u) != 0u ? max(seen.rgb, traced_lin(base)) : seen.rgb;
     return float4(traced_srgb(shown), seen.a);
