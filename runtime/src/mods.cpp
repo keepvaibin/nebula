@@ -1192,6 +1192,14 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                 for (const std::string& author : manifest->authors) {
                     mod.pack_author += (mod.pack_author.empty() ? "" : ", ") + author;
                 }
+                // Code for other devices only: not started here, and the Mods page says why. This is the device's own
+                // answer, not a check of the mod: the validator checks a mod once for every device (one form removed
+                // the old refusal() with this line in it; test 2282).
+                if (!manifest->plugins.empty() &&
+                    !manifest->plugins.front().binaries.contains(std::string(luma::plugin_target()))) {
+                    mod.problem = "THIS MOD HAS NO VERSION FOR THIS DEVICE";
+                    std::fprintf(stderr, "[mods] %s: %s\n", mod.id.c_str(), mod.problem.c_str());
+                }
                 mod.code_token = plugin_token(dir, *manifest);
                 mod.code_allowed = !mod.code_token.empty() && s != nullptr && s->code_ok == mod.code_token;
                 mod.code_declined = !mod.code_token.empty() && !mod.code_allowed && s != nullptr && s->code_no == mod.code_token;
