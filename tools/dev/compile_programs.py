@@ -15,7 +15,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 MATERIALS = os.path.join(ROOT, "runtime", "src", "render", "materials")
 PROGRAMS = os.path.join(ROOT, "runtime", "src", "render", "programs")
 DXC = os.environ.get("GALAXY_DXC", "dxc")
-JOBS = int(os.environ.get("JOBS", "4"))
+JOBS = int(os.environ.get("JOBS", "24"))
 SITE = 1 << 63
 
 WRITTEN = """whirlpool ocean_bowl screen_blur flat_color clip_fill big_bubble whirlpool_accelerator spin_driver_path spider_thread
@@ -214,6 +214,7 @@ def main():
         os.replace(temp, target)
         return None
 
+    print(f"programs {backend}: {len(jobs)} stages, {JOBS} jobs", flush=True)
     with ThreadPoolExecutor(JOBS) as pool:
         failed = [r for r in pool.map(compile_job, jobs.items()) if r]
     for f in failed[:40]:
