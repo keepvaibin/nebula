@@ -107,6 +107,17 @@ if(NEBULA_LUMA_HOOKS)
             VERBATIM)
         add_custom_target(luma_types_check ALL DEPENDS "${luma_types}/luma_types_described.json")
     endif()
+    # The reference a modder reads (plan 10.1), generated from the same description: every row on exactly one page
+    # (--check fails the build otherwise). The folder is written whole each time, so a name the game no longer has
+    # leaves no page behind. Output under the build, never committed.
+    set(luma_reference "${CMAKE_CURRENT_BINARY_DIR}/luma_docs/reference")
+    set(luma_reference_tool "${CMAKE_CURRENT_SOURCE_DIR}/../tools/lumacore/docs/gen_reference.py")
+    add_custom_command(OUTPUT "${luma_reference}/search.json"
+        COMMAND "${CMAKE_COMMAND}" -E rm -rf "${luma_reference}"
+        COMMAND "${Python3_EXECUTABLE}" -X utf8 -I "${luma_reference_tool}" --types "${luma_types}/luma_types.json"
+                --functions "${luma_types}/luma_functions.json" --out "${luma_reference}" --check
+        DEPENDS "${luma_types}/luma_types_table.cpp" "${luma_reference_tool}" VERBATIM)
+    add_custom_target(luma_reference ALL DEPENDS "${luma_reference}/search.json")
 endif()
 
 add_library(smg_game SHARED
