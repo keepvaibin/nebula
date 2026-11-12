@@ -11,12 +11,14 @@ test and renderer; exit 0 only when every verdict is `pass`.
 
 `refs` writes a run's pictures as the references a test names, after the person running it has looked at them.
 
-The bin folder holds NebulaNative.exe (and NebulaNativeVk.exe for Vulkan), smg_game.dll, nebula_test_extension.dll,
-luma-test.dll (the game half), nebula_import.dll (a refusal's words; without it the game gives codes) and
-nebula-import.exe, pak.path, and dxc/. Nothing outside the work folder is written but the run's own files.
+The bin folder holds NebulaNative.exe (and NebulaNativeVk.exe for Vulkan), smg_game.dll (and smg_game_plain.dll, which
+the game loads when no mod has code: contract modules), nebula_test_extension.dll, luma-test.dll (the game half),
+nebula_import.dll (a refusal's words; without it the game gives codes) and nebula-import.exe, pak.path, and dxc/.
+Nothing outside the work folder is written but the run's own files.
 On Linux (plan 8.1, the container suite) the same with the platform's names: nebula (Vulkan only: give --renderer
-vulkan), libsmg_game.so, libnebula_test_extension.so, luma-test.so, libnebula_import.so and nebula-import; the mods'
-code is code/linux-x64/mod.so, and the game runs on whatever X display DISPLAY names (a virtual one in the container).
+vulkan), libsmg_game.so (and libsmg_game_plain.so), libnebula_test_extension.so, luma-test.so, libnebula_import.so and
+nebula-import; the mods' code is code/linux-x64/mod.so, and the game runs on whatever X display DISPLAY names (a
+virtual one in the container).
 """
 import argparse
 import datetime
@@ -43,9 +45,9 @@ GAME_HALF_ID = "luma-test"
 # and game half by file name, and where a mod's code lies (luma-format 6: code/<platform>/mod.<ending>).
 HOSTS = {
     "Windows": {"platform": "windows-x64", "exes": {"d3d12": "NebulaNative.exe", "vulkan": "NebulaNativeVk.exe"},
-                "game": "smg_game.dll", "extension": "nebula_test_extension.dll", "importer": "nebula_import.dll",
+                "game": "smg_game.dll", "plain": "smg_game_plain.dll", "extension": "nebula_test_extension.dll", "importer": "nebula_import.dll",
                 "importer_exe": "nebula-import.exe", "half": "luma-test.dll", "ending": ".dll"},
-    "Linux": {"platform": "linux-x64", "exes": {"vulkan": "nebula"}, "game": "libsmg_game.so",
+    "Linux": {"platform": "linux-x64", "exes": {"vulkan": "nebula"}, "game": "libsmg_game.so", "plain": "libsmg_game_plain.so",
               "extension": "libnebula_test_extension.so", "importer": "libnebula_import.so",
               "importer_exe": "nebula-import", "half": "luma-test.so", "ending": ".so"},
 }
@@ -999,7 +1001,9 @@ def run_one(test, renderer, args, run_folder, previous):
             shutil.rmtree(run_folder / sub)
             shutil.copytree(previous / sub, run_folder / sub)
     frozen = {}
-    for name in (exe.name, HOST["game"], HOST["extension"]):
+    # The plain module when the bin folder has it (plan 1.7): without it the game loads the rows module and says so.
+    plain = (HOST["plain"],) if (bin_folder / HOST["plain"]).is_file() else ()
+    for name in (exe.name, HOST["game"]) + plain + (HOST["extension"],):
         shutil.copy2(bin_folder / name, run_folder / "bin" / name)  # copy2: the program keeps its mode on Linux
         frozen[name] = sha256(run_folder / "bin" / name)
     if (bin_folder / "dxc").is_dir():

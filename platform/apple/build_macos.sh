@@ -58,7 +58,8 @@ for arch in $ordered; do
     # shellcheck disable=SC2086
     cmake -S "$root/native" -B "$work/macos-$arch/game" $common
     # shellcheck disable=SC2086
-    cmake --build "$work/macos-$arch/game" --target smg_game $jobs
+    # Both game modules (plan 1.7): the host loads libsmg_game_plain.dylib unless a mod's code needs the rows.
+    cmake --build "$work/macos-$arch/game" --target smg_game smg_game_plain $jobs
     tree="$work/macos-$arch/host"
     if [ "$arch" = "$host_arch" ]; then
         # shellcheck disable=SC2086
@@ -91,17 +92,22 @@ set -- $ordered
 if [ $# -gt 1 ]; then
     programs=
     modules=
+    plains=
     for arch in $ordered; do
         programs="$programs $work/macos-$arch/host/Nebula"
         modules="$modules $work/macos-$arch/game/libsmg_game.dylib"
+        plains="$plains $work/macos-$arch/game/libsmg_game_plain.dylib"
     done
     # shellcheck disable=SC2086
     lipo -create $programs -output "$app/Contents/MacOS/Nebula"
     # shellcheck disable=SC2086
     lipo -create $modules -output "$app/Contents/Frameworks/libsmg_game.dylib"
+    # shellcheck disable=SC2086
+    lipo -create $plains -output "$app/Contents/Frameworks/libsmg_game_plain.dylib"
 else
     cp "$work/macos-$1/host/Nebula" "$app/Contents/MacOS/Nebula"
     cp "$work/macos-$1/game/libsmg_game.dylib" "$app/Contents/Frameworks/libsmg_game.dylib"
+    cp "$work/macos-$1/game/libsmg_game_plain.dylib" "$app/Contents/Frameworks/libsmg_game_plain.dylib"
 fi
 
 # The programs' Metal libraries, when the build machine had Apple's compiler to make them (the same for every
@@ -139,6 +145,7 @@ fi
 # name there, without the player being asked (the microphone above all, which macOS otherwise asks for whenever the
 # sound goes to a device that also has inputs).
 codesign --force --options runtime --sign - "$app/Contents/Frameworks/libsmg_game.dylib"
+codesign --force --options runtime --sign - "$app/Contents/Frameworks/libsmg_game_plain.dylib"
 codesign --force --options runtime --entitlements "$here/Nebula.entitlements" --sign - "$app"
 # A signature that does not hold over every file is what makes macOS call a downloaded app "damaged".
 codesign --verify --deep --strict "$app"

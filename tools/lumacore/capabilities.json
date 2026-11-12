@@ -48,6 +48,8 @@
     "kernel.classes.refusals": "define_class refuses each kind of wrong definition with its number and words, leaving nothing of it (1.4)",
     "kernel.classes.taken_out": "A mod taken out ends its classes; their objects are the game's own again and the game goes on (1.4, 1.11)",
     "kernel.classes.scene": "A new scene makes a mod class's objects again; the old scene's are forgotten with it (1.4)",
+    "kernel.modules.plain": "No mod with code: the game loads its module without rows (no hook test, no row, no RTTI data, no export), and says so (1.7)",
+    "kernel.modules.rows": "A mod with code on: the game loads its module with rows, naming the mod, and the mod's code runs (1.7)",
     "kernel.reload.take_out": "A mod taken out while the game runs: its hooks go, its stop runs, dependents first, what it held counted and freed (1.11)",
     "kernel.numbers.by_name": "Every number the game reads in a function's code, by the function's name, signature and place, and every file's number constant by its name: address and kind (1.5)",
     "kernel.numbers.set": "A mod sets one by name and the game's code reads the new value (1.5)",

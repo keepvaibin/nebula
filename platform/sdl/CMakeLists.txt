@@ -167,6 +167,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/mod_screens.cpp
     ${rt}/mod_start_check.cpp
     ${rt}/mod_plugins.cpp
+    ${rt}/game_module.cpp
     ${rt}/mods.cpp
     ${rt}/mod_consent.cpp
     ${rt}/texture_categories.cpp
