@@ -550,8 +550,143 @@ pub fn evaluate(m: &MaterialIr, map: &dyn Fn(u8) -> [f32; 4], raster: &dyn Fn(u8
     reg[0]
 }
 
-/// The maps a material reads through a coordinate made from the normal: its painted reflections.
+/// The maps a material reads through a coordinate made from the normal that are its painted reflections: not those
+/// that hold a colour ramp (c56).
 fn environment_maps(m: &MaterialIr) -> Vec<u8> {
+    normal_maps(m).into_iter().filter(|map| !m.ramp_maps.contains(map)).collect()
+}
+
+/// c56 (the director 11-11, Surfing's rainbow arches): what a map read through a normal-made coordinate holds. Each
+/// texel's colour against the means of its row, its column and its ring (16 rings about the centre): the share of the
+/// map's colour variance each explains; the texels' mean saturation; the span of their hues (360 less the widest run of
+/// empty tens of degrees among the saturated texels, a ten under 2 % of them empty); the share that is dark.
+#[derive(Clone, Copy, Default, Debug)]
+pub struct MapShape {
+    pub rows: f64,
+    pub columns: f64,
+    pub rings: f64,
+    pub saturation: f64,
+    pub hue_span: f64,
+    pub dark: f64,
+    pub spread: f64,
+}
+
+pub fn map_shape(width: u32, height: u32, texels: &[[u8; 4]]) -> Option<MapShape> {
+    let (w, h) = (width as usize, height as usize);
+    if w == 0 || h == 0 || texels.len() < w * h {
+        return None;
+    }
+    const RINGS: usize = 16;
+    let rgb = |t: [u8; 4]| [f64::from(t[0]) / 255.0, f64::from(t[1]) / 255.0, f64::from(t[2]) / 255.0];
+    let ring = |x: usize, y: usize| {
+        let (dx, dy) = ((x as f64 + 0.5) / w as f64 - 0.5, (y as f64 + 0.5) / h as f64 - 0.5);
+        (((dx * dx + dy * dy).sqrt() / 0.7072) * RINGS as f64).min(RINGS as f64 - 1.0) as usize
+    };
+    let mut all = [0.0f64; 3];
+    let mut row = vec![[0.0f64; 3]; h];
+    let mut column = vec![[0.0f64; 3]; w];
+    let mut rings = vec![[0.0f64; 4]; RINGS];
+    for y in 0..h {
+        for x in 0..w {
+            let c = rgb(texels[y * w + x]);
+            let r = ring(x, y);
+            for k in 0..3 {
+                all[k] += c[k];
+                row[y][k] += c[k];
+                column[x][k] += c[k];
+                rings[r][k] += c[k];
+            }
+            rings[r][3] += 1.0;
+        }
+    }
+    let n = (w * h) as f64;
+    let mean = all.map(|v| v / n);
+    let (mut total, mut by_row, mut by_column, mut by_ring) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
+    let mut hues = [0.0f64; 36];
+    let (mut saturation, mut saturated, mut dark) = (0.0f64, 0.0f64, 0.0f64);
+    for y in 0..h {
+        for x in 0..w {
+            let c = rgb(texels[y * w + x]);
+            let r = ring(x, y);
+            for k in 0..3 {
+                total += (c[k] - mean[k]).powi(2);
+                by_row += (c[k] - row[y][k] / w as f64).powi(2);
+                by_column += (c[k] - column[x][k] / h as f64).powi(2);
+                by_ring += (c[k] - rings[r][k] / rings[r][3]).powi(2);
+            }
+            let cf = [c[0] as f32, c[1] as f32, c[2] as f32];
+            let (hue, sat) = hue_saturation(cf);
+            saturation += f64::from(sat);
+            if sat > 0.3 {
+                hues[(hue as usize / 10).min(35)] += 1.0;
+                saturated += 1.0;
+            }
+            if luminance(cf) < 0.1 {
+                dark += 1.0;
+            }
+        }
+    }
+    let explained = |rest: f64| if total > 1e-9 { 1.0 - rest / total } else { 1.0 };
+    let hue_span = if saturated < 1.0 {
+        0.0
+    } else {
+        let full: Vec<bool> = hues.iter().map(|&c| c >= 0.02 * saturated).collect();
+        let (mut widest, mut run) = (0usize, 0usize);
+        for i in 0..72 {
+            if full[i % 36] {
+                run = 0;
+            } else {
+                run += 1;
+                widest = widest.max(run.min(36));
+            }
+        }
+        f64::from(360 - 10 * widest as u32)
+    };
+    Some(MapShape {
+        rows: explained(by_row),
+        columns: explained(by_column),
+        rings: explained(by_ring),
+        saturation: saturation / n,
+        hue_span,
+        dark: dark / n,
+        spread: (total / (3.0 * n)).sqrt(),
+    })
+}
+
+/// c56's rule: a colour ramp, not a picture. One axis or the radius explains kRampExplained of its colour, its hues
+/// span kRampHues degrees, under kRampDark of it is dark, and it varies at all (a flat map is neither).
+pub fn is_ramp(s: &MapShape) -> bool {
+    const RAMP_EXPLAINED: f64 = 0.9;
+    const RAMP_HUES: f64 = 60.0;
+    const RAMP_DARK: f64 = 0.2;
+    s.rows.max(s.columns).max(s.rings) >= RAMP_EXPLAINED && s.hue_span >= RAMP_HUES && s.dark < RAMP_DARK && s.spread > 0.02
+}
+
+/// A normal-indexed map's texels: level 0 of the record of the material's map `map`.
+fn map_texels(ir: &ModelIr, m: &MaterialIr, map: u8) -> Option<(u32, u32, Vec<[u8; 4]>)> {
+    let t = ir.textures.get(*m.textures.get(usize::from(map))? as usize)?;
+    super::texture::record_level0(ir.records.get(t.record)?)
+}
+
+/// c56: each material's normal-indexed maps that hold a colour ramp (MaterialIr ramp_maps).
+pub fn mark_ramps(ir: &mut ModelIr) {
+    let found: Vec<Vec<u8>> = ir
+        .materials
+        .iter()
+        .map(|m| {
+            normal_maps(m)
+                .into_iter()
+                .filter(|&map| map_texels(ir, m, map).and_then(|(w, h, t)| map_shape(w, h, &t)).is_some_and(|s| is_ramp(&s)))
+                .collect()
+        })
+        .collect();
+    for (m, ramps) in ir.materials.iter_mut().zip(found) {
+        m.ramp_maps = ramps;
+    }
+}
+
+/// The maps a material reads through a coordinate made from the normal.
+fn normal_maps(m: &MaterialIr) -> Vec<u8> {
     let mut maps = Vec::new();
     let count = (m.pixel_stage_count as usize).min(m.stages.len());
     for s in &m.stages[..count] {
@@ -569,7 +704,7 @@ fn environment_maps(m: &MaterialIr) -> Vec<u8> {
 
 fn ramp_maps(m: &MaterialIr) -> bool {
     let count = (m.pixel_stage_count as usize).min(m.stages.len());
-    m.stages[..count].iter().any(|s: &StageIr| s.map != 0xFF && m.coords.get(s.coord as usize).is_some_and(|c| c.kind == 10 || c.source == 32 || c.source == 33))
+    !m.ramp_maps.is_empty() || m.stages[..count].iter().any(|s: &StageIr| s.map != 0xFF && m.coords.get(s.coord as usize).is_some_and(|c| c.kind == 10 || c.source == 32 || c.source == 33))
 }
 
 fn luminance(c: [f32; 3]) -> f32 {
@@ -1023,6 +1158,15 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
          ramp\tbump\twarp\talpha test\tblend\ttwo-sided\tdepth write\tanimated coordinates\tunlit\tlit gain\tbase\temission\troughness\tmetal\ttransmission\tstages\tmaps\tglow\t\
          ior\tthickness\tglow source\tenvironment map\tenvironment tint\tbody\tshine\ttint keep"
     )?;
+    // c56: every normal-indexed map, its numbers and whether it is a colour ramp or a painted reflection.
+    let mut ramps = std::io::BufWriter::new(std::fs::File::create(output.with_file_name("env_or_ramp.tsv"))?);
+    writeln!(
+        ramps,
+        "# Written by nebula-import rt-materials (c56). rows/columns/rings: the share of the map's colour variance its rows', columns',\n\
+         # rings' means explain; hue span in degrees among saturated texels; dark: share under luminance 0.1; spread: colour sd.\n\
+         verdict\tmodel\tmaterial\tmap\ttexture\tsize\trows\tcolumns\trings\tsaturation\thue span\tdark\tspread"
+    )?;
+    let (mut ramp_count, mut picture_count) = (0u32, 0u32);
     // c55 (d07's census): each model's de-light with c37 alone and with the first map's light (M5).
     let mut debake = std::io::BufWriter::new(std::fs::File::create(output.with_file_name("debake_maps.tsv"))?);
     writeln!(debake, "model\tde-lit meshes\twith a map ratio\tvertices\tmean gain c37\tmean gain d07")?;
@@ -1048,6 +1192,29 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
         let stem = name.rsplit('/').next().unwrap_or(name);
         let measured = super::model_write::material_measures(&ir, stem);
         let roles = sheen_roles(&ir, stem);
+        for m in &ir.materials {
+            for map in normal_maps(m) {
+                let Some((w, h, texels)) = map_texels(&ir, m, map) else { continue };
+                let Some(s) = map_shape(w, h, &texels) else { continue };
+                let ramp = m.ramp_maps.contains(&map);
+                ramp_count += u32::from(ramp);
+                picture_count += u32::from(!ramp);
+                let texture = m.textures.get(usize::from(map)).and_then(|&t| ir.textures.get(t as usize)).map_or("", |t| t.name.as_str());
+                writeln!(
+                    ramps,
+                    "{}\t{name}\t{}\t{map}\t{texture}\t{w} x {h}\t{:.3}\t{:.3}\t{:.3}\t{:.2}\t{:.0}\t{:.2}\t{:.3}",
+                    if ramp { "ramp" } else { "picture" },
+                    m.name,
+                    s.rows,
+                    s.columns,
+                    s.rings,
+                    s.saturation,
+                    s.hue_span,
+                    s.dark,
+                    s.spread
+                )?;
+            }
+        }
         if let Some(d) = super::model_write::debake_report(&ir, stem) {
             writeln!(debake, "{name}\t{}\t{}\t{}\t{:.3}\t{:.3}", d.debaked, d.mapped, d.vertices, d.gain_c37, d.gain_d07)?;
             debaked_meshes += d.debaked;
@@ -1198,6 +1365,8 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
     sheens.flush()?;
     by_rule.flush()?;
     debake.flush()?;
+    ramps.flush()?;
+    println!("normal-indexed maps (c56): {ramp_count} colour ramps, {picture_count} painted reflections");
     println!("de-light (c55): {debaked_meshes} meshes in {debaked_models} models; {mapped_meshes} meshes in {mapped_models} models with a map ratio (d07)");
     println!("{models} models, {materials} materials, {glowing} of them glow; {unread} files not read");
     for (class, (count, _)) in &classes {

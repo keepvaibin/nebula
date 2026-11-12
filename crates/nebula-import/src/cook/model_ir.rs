@@ -194,6 +194,9 @@ pub struct MaterialIr {
     pub pixel_stage_count: u32,
     /// The map each coordinate's scale comes from (255 none), by coordinate number.
     pub coordinate_maps: Vec<u8>,
+    /// The maps read through a normal-made coordinate that hold a colour ramp, not a reflection (c56,
+    /// hit_record.rs mark_ramps): they keep their own fetch.
+    pub ramp_maps: Vec<u8>,
 }
 
 impl GroupIr {
@@ -1296,6 +1299,8 @@ pub fn read_file(bytes: &[u8], source: Source, stats: &mut Stats) -> Result<Mode
             ir.materials.push(read_material(&m, i, &label, source).with_context(|| format!("material {i}"))?);
         }
     }
+    // c56: a normal-indexed map that holds a colour ramp, not a reflection, by its content.
+    super::hit_record::mark_ramps(&mut ir);
     if source == Source::Table {
         return Ok(ir);
     }
