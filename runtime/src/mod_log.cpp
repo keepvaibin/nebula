@@ -291,6 +291,10 @@ struct Validator {
     const LumaFinding* (*at)(const LumaReport*, std::uint32_t, const char*) = nullptr;
     const std::uint8_t* (*kept)(const LumaReport*, std::uint64_t*) = nullptr;
     void (*release)(LumaReport*) = nullptr;
+    // A kept report read as it is, and the id it names (null: the package was refused). Optional: without them every
+    // kept report counts as naming its id.
+    LumaReport* (*read_kept)(const std::uint8_t*, std::uint64_t) = nullptr;
+    const char* (*id)(const LumaReport*) = nullptr;
 };
 
 const Validator* validator() {
@@ -301,7 +305,7 @@ const Validator* validator() {
     looked = true;
 #if defined(__APPLE__)
     found = {&luma_validate, &luma_report_state, &luma_report_invalid, &luma_report_count, &luma_report_at,
-             &luma_report_kept, &luma_report_free};
+             &luma_report_kept, &luma_report_free, &luma_report_read_kept, &luma_report_id};
 #else
 #if defined(_WIN32)
     void* const library =
@@ -324,6 +328,8 @@ const Validator* validator() {
     found.at = reinterpret_cast<decltype(found.at)>(symbol("luma_report_at"));
     found.kept = reinterpret_cast<decltype(found.kept)>(symbol("luma_report_kept"));
     found.release = reinterpret_cast<decltype(found.release)>(symbol("luma_report_free"));
+    found.read_kept = reinterpret_cast<decltype(found.read_kept)>(symbol("luma_report_read_kept"));
+    found.id = reinterpret_cast<decltype(found.id)>(symbol("luma_report_id"));
 #endif
     ok = found.validate != nullptr && found.state != nullptr && found.invalid != nullptr && found.count != nullptr &&
          found.at != nullptr && found.kept != nullptr && found.release != nullptr;
@@ -641,6 +647,20 @@ void check_packages(const std::vector<StartPackage>& packages, std::string_view 
         placed.push_back(std::move(one));
     }
 
+    // A package whose kept report names no id was refused (its luma.json gives none): it never starts, so the others
+    // see it off, as the validator takes it ("it can only be off").
+    std::vector<bool> named(placed.size(), true);
+    if (const Validator* const found = validator(); found != nullptr && found->read_kept != nullptr && found->id != nullptr) {
+        for (std::size_t j = 0; j < placed.size(); ++j) {
+            if (placed[j].kept.empty()) continue;
+            LumaReport* const read = found->read_kept(reinterpret_cast<const std::uint8_t*>(placed[j].kept.data()),
+                                                      placed[j].kept.size());
+            const char* const id = found->state(read) == 2 ? found->id(read) : "";
+            named[j] = id != nullptr && id[0] != 0;
+            found->release(read);
+        }
+    }
+
     // Pass 2: each against the others (L8xx), from its kept report; again only when its key changed.
     for (std::size_t i = 0; i < placed.size(); ++i) {
         Placed& one = placed[i];
@@ -660,11 +680,12 @@ void check_packages(const std::vector<StartPackage>& packages, std::string_view 
             if (j < i) position++;
             LumaInstalledMod m{};
             m.file = files[at++].c_str();
-            m.on = placed[j].package->on ? 1u : 0u;
+            const bool on = placed[j].package->on && named[j];
+            m.on = on ? 1u : 0u;
             m.kept = reinterpret_cast<const std::uint8_t*>(placed[j].kept.data());
             m.kept_size = placed[j].kept.size();
             installed.push_back(m);
-            h = fnv(fnv(fnv(h, placed[j].content), placed[j].package->on ? "1" : "0"), placed[j].package->id);
+            h = fnv(fnv(fnv(h, placed[j].content), on ? "1" : "0"), placed[j].package->id);
         }
         const std::string key = hex(fnv(h, std::to_string(position)));
         if (one.check.key != key) {
