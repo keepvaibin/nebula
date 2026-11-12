@@ -62,7 +62,7 @@ LINE_WORDS = 16
 VEC_TYPES = {"const Vec3f &", "const TVec3f &", "Vec3f *", "const Vec3f *", "Vec3f", "TVec3f"}
 OBJECT_TYPES = {"LiveActor *", "const LiveActor *", "NameObj *", "const NameObj *", "MarioActor *"}
 READ_TYPES = {"f32", "s32", "u32", "u16", "s16", "u8", "bool", "TVec3f", "Vec3f", "const char *"}
-FACT_OPS = {"is", "is_not", "less", "at_most", "more", "at_least", "near", "exists", "absent"}
+FACT_OPS = {"is", "is_not", "less", "at_most", "more", "at_least", "near", "exists", "absent", "has", "count"}
 # Revision 6 (R6-3, G-H6-3): the host's Settings pages by name, lower case, as the Settings screen's own list keeps
 # them (runtime/src/ui/native_settings.cpp kNativeSettingsTabNames), and the number the host opens each by.
 SETTINGS_PAGES = {"display": 0, "graphics": 1, "controls": 2, "audio": 3, "general": 4, "mods": 5, "system": 6,
@@ -390,6 +390,17 @@ def read_check(c, path, keys):
     within = None
     if op in ("exists", "absent") and value is not True:
         raise HarnessError("%s.%s takes true" % (path, op))
+    # Revision 7 (J's R-6): `has` an object whose every key the fact's value holds with that value (an object inside
+    # is checked the same way, any other value with `is`); `count` the number of times the key was written.
+    if op == "has" and not isinstance(value, dict):
+        raise HarnessError("%s.has takes an object" % path)
+    if op == "count":
+        if "count" not in keys:
+            raise HarnessError("%s: count is a check of the whole run (expect), not of one fact" % path)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise HarnessError("%s.count must be a whole number of at least 0" % path)
+        if "when" in c:
+            raise HarnessError("%s: count counts every write; when does not go with it" % path)
     if op in ("less", "at_most", "more", "at_least"):
         number(c, op, path)
     if op == "near":
@@ -431,7 +442,7 @@ def read_steps(t, bare, classes):
         else:
             a = s["after"]
             keys_known(a, path + ".after", {"fact", "log", "is", "is_not", "less", "at_most", "more", "at_least",
-                                            "near", "within", "exists", "absent"})
+                                            "near", "within", "exists", "absent", "has"})
             if ("fact" in a) == ("log" in a):
                 raise HarnessError("%s.after needs fact or log" % path)
             if "log" in a:
@@ -597,7 +608,7 @@ def read_expect(t, bare, steps):
             keys_known(c, path, {"fact", "when", "frames", "within"} | FACT_OPS)
             if bare:
                 raise HarnessError("%s: a bare test checks only the log, pictures and sound" % path)
-            op, value, within = read_check(c, path, {"within"})
+            op, value, within = read_check(c, path, {"within", "count"})
             when = text(c, "when", path) if "when" in c else "last"
             if when not in ("last", "first", "any", "all"):
                 raise HarnessError("%s.when must be last, first, any or all" % path)
@@ -1023,9 +1034,26 @@ def same_value(a, b):
     return a == b
 
 
+def has_value(actual, value):
+    """Revision 7's `has`: every key of `value` is in `actual` with the same value (an object, recursively)."""
+    if not isinstance(actual, dict):
+        return False
+    for key, want in value.items():
+        if key not in actual:
+            return False
+        if isinstance(want, dict):
+            if not has_value(actual[key], want):
+                return False
+        elif not same_value(actual[key], want):
+            return False
+    return True
+
+
 def check_value(actual, op, value, within):
     if op == "is":
         return same_value(actual, value)
+    if op == "has":
+        return has_value(actual, value)
     if op == "is_not":
         return not same_value(actual, value)
     if op == "near":
@@ -1114,6 +1142,9 @@ def evaluate(test, renderer, run_folder, ran):
                 continue
             if c["op"] == "exists":
                 add(name, bool(got), got[-1]["value"] if got else None)
+                continue
+            if c["op"] == "count":
+                add(name, len(got) == c["value"], len(got))
                 continue
             if not got:
                 add(name, False, None)
