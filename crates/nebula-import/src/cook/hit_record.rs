@@ -1428,6 +1428,32 @@ pub fn pbr_reading(p: &PbrMaterial, means: &PbrMeans) -> Reading {
     }
 }
 
+/// A surface shader's `ray` rows (contract materials 3.4 layer 3) over what the cook read of its material's factors:
+/// each row given replaces its number; a class named sets the rule that says so. Colours are clamped as the reading's.
+pub fn apply_ray_rows(r: &mut Reading, rows: &super::model_ir::RayRows) {
+    if let Some(class) = rows.class.as_deref().and_then(Class::by_name) {
+        r.class = class;
+        r.rule = "shader.json ray: class";
+    }
+    if let Some(base) = rows.base {
+        r.base = base.map(|v| v.clamp(0.0, 1.0));
+        r.signals.lit_gain = if r.signals.lit { r.base } else { [0.0; 3] };
+    }
+    if let Some(e) = rows.emission {
+        r.emission = e.map(|v| v.max(0.0));
+        r.signals.unlit = r.emission;
+    }
+    if let Some(v) = rows.roughness {
+        r.roughness = v.clamp(0.0, 1.0);
+    }
+    if let Some(v) = rows.metal {
+        r.metal = v.clamp(0.0, 1.0);
+    }
+    if let Some(v) = rows.through {
+        r.transmission = v.clamp(0.0, 1.0);
+    }
+}
+
 fn falling_water(name: &str) -> bool {
     let name = name.to_ascii_lowercase();
     name.contains("fallmat") || name.contains("fallback") || name.starts_with("taki")

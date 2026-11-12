@@ -1935,6 +1935,7 @@ pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) 
                     uv: [0, 1].map(|k| coordinate_present.get(k).copied().unwrap_or(false)),
                     reads: shader.reads,
                     emission,
+                    ray: shader.ray.clone(),
                 });
             }
             // Its base texture's transform: texture matrix 0 on its first coordinates.
@@ -2347,7 +2348,28 @@ pub fn to_files_for(bytes: &[u8], folder: Option<&Path>, stem: &str, game: Optio
     if let Some(table) = params_table(&ir)? {
         files.push((format!("{stem}.params"), table));
     }
+    if let Some(table) = ray_hit_table(&ir)? {
+        files.push((format!("{stem}.rayhit"), table));
+    }
     Ok((model, files, facts))
+}
+
+/// `<model>.rayhit` (contract materials 3.4 layer 3; the tracer reads it): a row for each material with a surface
+/// shader: material (its name) and text (its ray-hit form, programs::ray_hit_form). None without one.
+pub fn ray_hit_table(ir: &ModelIr) -> Result<Option<Vec<u8>>> {
+    let mut rows: Vec<Value> = Vec::new();
+    let mut seen = BTreeSet::new();
+    for m in &ir.materials {
+        let Some(sf) = &m.surface else { continue };
+        if seen.insert(m.name.clone()) {
+            rows.push(serde_json::json!({ "material": m.name, "text": super::programs::ray_hit_form(sf) }));
+        }
+    }
+    if rows.is_empty() {
+        return Ok(None);
+    }
+    let json = serde_json::json!({ "columns": { "material": "string", "text": "string" }, "rows": rows });
+    Ok(Some(super::table::TableIr::from_json(json.to_string().as_bytes())?.to_ntbl()))
 }
 
 /// `<model>.params` (contract materials 3.4; content.model set_param reads it): a row for each parameter of each

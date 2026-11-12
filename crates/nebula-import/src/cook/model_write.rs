@@ -2120,6 +2120,10 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
             Some(p) => (super::hit_record::pbr_reading(p, &pbr_means(ir, m, p)), 0),
             None => (super::hit_record::read(m), (m.pixel_stage_count as usize).min(m.stages.len())),
         };
+        // A hand-written shader's `ray` rows (materials 3.4 layer 3) in place of what its factors say.
+        if let Some(sf) = &m.surface {
+            super::hit_record::apply_ray_rows(&mut r, &sf.ray);
+        }
         finish_reading(ir, stem, i, measures[i].thickness(), &mut r);
         let s = &r.signals;
         let flags = u8::from(s.lit)

@@ -235,6 +235,22 @@ pub struct SurfaceIr {
     pub reads: u8,
     /// The emission it starts from: the glTF emissive factor, display-encoded.
     pub emission: [f32; 3],
+    /// What its shader.json `ray` gives a ray in place of the reading of its factors (contract materials 3.4 layer 3).
+    pub ray: RayRows,
+}
+
+/// A surface shader's rows for a ray (shader.json `ray`): each one given replaces what the cook reads of the material's
+/// factors in its hit record (nebula_model.h NebulaModelHit). Colours display-encoded, 0 to 1; emission 0 or more.
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct RayRows {
+    /// hit_record::Class by name: dielectric, gloss, metal, glass, cutout, translucent, emissive or painted.
+    pub class: Option<String>,
+    pub base: Option<[f32; 3]>,
+    pub roughness: Option<f32>,
+    pub metal: Option<f32>,
+    pub emission: Option<[f32; 3]>,
+    /// The share of light that goes through it (the record's transmission).
+    pub through: Option<f32>,
 }
 
 /// What a glTF material's lit template reads beyond its stages (MaterialIr pbr). Its maps are slots of their own (map n

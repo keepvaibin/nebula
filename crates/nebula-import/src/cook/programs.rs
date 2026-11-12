@@ -864,6 +864,90 @@ fn surface_globals(p: &mut Pixel, sf: &SurfaceIr) -> String {
     out
 }
 
+/// A surface shader's ray-hit form (contract materials 3.4 layer 3): the same `surface` run at a ray's hit, in a
+/// namespace of its own (`RT_MOD_SURFACE_NS`, `rt_mod` unless the includer names another), so the tracer can include
+/// every mod material's form in one program. The includer gives, before it:
+/// - `struct RtModHit { float2 uv; float4 color; float3 normal; float3 world_position; float3 view; float time; float lod; }`:
+///   the hit's first coordinate (the tracer's vertices carry no second: uv1 is uv0), its vertex colour (1 without),
+///   its smooth normal and the way back to the ray's start (world space, unit), its place (game units), the frame's
+///   time (view_scale.y) and the ray cone's map level;
+/// - `struct RtModSurface { float3 base; float alpha; float3 normal; float roughness; float metal; float3 emission; }`:
+///   in, what the hit record says (base x the vertex colour where the record says so, not x a map; display-encoded);
+///   out, what the shader made of it;
+/// - `float4 rt_mod_place(uint place)`: the material's place on this hit's item (0 to 2 registers, -4 to 4; 3 to 6
+///   constant colours, 0 to 1), as content.model set_param leaves it;
+/// - `float4 rt_mod_map(uint slot, float2 uv, float lod)`: the material's map `slot` at `uv`, level `lod`.
+/// It calls `RT_MOD_SURFACE_NS::surface_hit(RtModHit h, inout RtModSurface o)`. A texture function samples at the
+/// cone's level; `ddx`, `ddy` and `fwidth` are 0 (a hit has no neighbours); `discard` and `clip` leave alpha 0, which the
+/// tracer reads as no surface there. Class and through stay the record's (shader.json `ray`).
+pub fn ray_hit_form(sf: &SurfaceIr) -> String {
+    use super::surface_shader::{READ_NORMAL, READ_TIME, READ_VIEW, READ_WORLD};
+    let mut out = String::from("#ifndef RT_MOD_SURFACE_NS\n#define RT_MOD_SURFACE_NS rt_mod\n#endif\nnamespace RT_MOD_SURFACE_NS {\n");
+    out.push_str("struct SurfaceIn {\n    float2 uv0;\n    float2 uv1;\n    float4 color;\n");
+    for (bit, field) in [(READ_NORMAL, "float3 normal"), (READ_WORLD, "float3 world_position"), (READ_VIEW, "float3 view"), (READ_TIME, "float time")] {
+        if sf.reads & bit != 0 {
+            let _ = writeln!(out, "    {field};");
+        }
+    }
+    out.push_str("};\nstruct Surface {\n    float3 base;\n    float alpha;\n    float3 normal;\n    float roughness;\n    float metal;\n    float3 emission;\n};\n");
+    for (name, four, _) in &sf.params {
+        let _ = writeln!(out, "static {} {name};", if *four { "float4" } else { "float" });
+    }
+    out.push_str("static float rt_mod_lod_;\nstatic bool rt_mod_cut_;\n");
+    for (name, slot) in &sf.textures {
+        let _ = writeln!(out, "float4 {name}(float2 uv) {{ return rt_mod_map({slot}u, uv, rt_mod_lod_); }}");
+        let _ = writeln!(out, "float4 {name}_level(float2 uv, float lod) {{ return rt_mod_map({slot}u, uv, lod); }}");
+    }
+    // What a pixel has and a hit does not: neighbours (ddx, ddy, fwidth: 0) and an end that drops it (no surface there).
+    out.push_str(concat!(
+        "#define ddx(v) ((v) - (v))\n#define ddy(v) ((v) - (v))\n#define ddx_coarse(v) ((v) - (v))\n#define ddy_coarse(v) ((v) - (v))\n",
+        "#define ddx_fine(v) ((v) - (v))\n#define ddy_fine(v) ((v) - (v))\n#define fwidth(v) ((v) - (v))\n",
+        "#define discard rt_mod_cut_ = true\n#define clip(v) (rt_mod_cut_ = rt_mod_cut_ || any((v) < 0))\n",
+    ));
+    let file = sf.file.replace(['"', '\\'], "_");
+    let _ = writeln!(out, "#line 1 \"{file}\"");
+    out.push_str(&sf.code);
+    if !sf.code.ends_with('\n') {
+        out.push('\n');
+    }
+    out.push_str("#line 1 \"program\"\n");
+    out.push_str("#undef ddx\n#undef ddy\n#undef ddx_coarse\n#undef ddy_coarse\n#undef ddx_fine\n#undef ddy_fine\n#undef fwidth\n#undef discard\n#undef clip\n");
+    out.push_str("void surface_hit(RtModHit h, inout RtModSurface o) {\n");
+    for (name, four, place) in &sf.params {
+        let _ = writeln!(out, "    {name} = rt_mod_place({place}u){};", if *four { "" } else { ".x" });
+    }
+    out.push_str("    rt_mod_lod_ = h.lod;\n    rt_mod_cut_ = false;\n");
+    out.push_str("    const float3 rt_n_ = dot(h.normal, h.normal) > 0.0 ? normalize(h.normal) : float3(0.0, 0.0, 1.0);\n");
+    out.push_str("    SurfaceIn si = (SurfaceIn)0;\n");
+    for k in 0..2 {
+        if sf.uv[k] {
+            let _ = writeln!(out, "    si.uv{k} = h.uv;");
+        }
+    }
+    out.push_str("    si.color = h.color;\n");
+    if sf.reads & READ_NORMAL != 0 {
+        out.push_str("    si.normal = rt_n_;\n");
+    }
+    if sf.reads & READ_WORLD != 0 {
+        out.push_str("    si.world_position = h.world_position;\n");
+    }
+    if sf.reads & READ_VIEW != 0 {
+        out.push_str("    si.view = dot(h.view, h.view) > 0.0 ? normalize(h.view) : rt_n_;\n");
+    }
+    if sf.reads & READ_TIME != 0 {
+        out.push_str("    si.time = h.time;\n");
+    }
+    out.push_str(concat!(
+        "    Surface s;\n    s.base = o.base;\n    s.alpha = o.alpha;\n    s.normal = rt_n_;\n    s.roughness = o.roughness;\n",
+        "    s.metal = o.metal;\n    s.emission = o.emission;\n    surface(si, s);\n",
+        "    o.base = saturate(s.base);\n    o.alpha = rt_mod_cut_ ? 0.0 : saturate(s.alpha);\n",
+        "    o.normal = dot(s.normal, s.normal) > 0.0 ? normalize(s.normal) : rt_n_;\n",
+        "    o.roughness = saturate(s.roughness);\n    o.metal = saturate(s.metal);\n    o.emission = max(s.emission, 0.0);\n",
+        "}\n}\n",
+    ));
+    out
+}
+
 /// A surface shader's call, before the material's light (it may turn the normal): its parameters from their places,
 /// the factors, SurfaceIn, Surface from the material's colour, metal, roughness and glow, `surface`, its normal.
 fn surface_head_lines(p: &mut Pixel, sf: &SurfaceIr, shade: &PbrShading) -> Vec<String> {

@@ -15,6 +15,12 @@
 //! - Surface: base (display-encoded colour, 0 to 1), alpha, normal (eye space), roughness, metal, emission
 //!   (display-encoded, added after the light; above 1 feeds bloom).
 //!
+//! - ray (layer 3): shader.json `ray` {class, base, roughness, metal, emission, through}, each optional: what a ray
+//!   reads of the material in place of its factors (the hit record). The ray-hit form (programs::ray_hit_form) runs the
+//!   same `surface` at a ray's hit: SurfaceIn from the hit (normal and view in world space there, eye space in the
+//!   raster: only their relations are the shader's), a texture sampled at the ray cone's level, `ddx`/`ddy`/`fwidth`
+//!   0, and `discard`/`clip` mark the hit as not there (alpha 0) instead of ending it.
+//!
 //! Refused, each by name with the file (and the line where there is one), L804 `Cook.Shader.<Kind>`: no source, a
 //! JSON outside the interface, HLSL that binds anything of its own (`register`, a texture, sampler or buffer type,
 //! `cbuffer`, `#include`, `#pragma`, `groupshared`, a Vulkan attribute) or has no `surface`, a parameter or texture the
@@ -59,12 +65,15 @@ const FORBIDDEN: [&str; 14] = [
     "AppendStructuredBuffer",
 ];
 /// Names the generated program uses around the shader's code: a parameter or texture may not take them.
-const RESERVED: [&str; 41] = [
-    "m", "i", "o", "s", "si", "p", "prev", "tex", "samp", "surface", "Surface", "SurfaceIn", "Varyings", "VertexIn", "Place",
+const RESERVED: [&str; 42] = [
+    "m", "i", "o", "s", "si", "p", "h", "prev", "tex", "samp", "surface", "Surface", "SurfaceIn", "Varyings", "VertexIn", "Place",
     "NativeOut", "program_ps", "program_vs", "if", "else", "for", "while", "do", "return", "true", "false", "struct",
     "static", "const", "in", "out", "inout", "void", "bool", "int", "uint", "float", "half", "double", "discard", "switch",
 ];
-const RESERVED_PREFIXES: [&str; 12] = ["g_", "pbr_", "enh_", "traced_", "native_", "program_", "lit", "nm_", "NEBULA_", "NATIVE_", "float", "int"];
+const RESERVED_PREFIXES: [&str; 15] =
+    ["g_", "pbr_", "enh_", "traced_", "native_", "program_", "lit", "nm_", "NEBULA_", "NATIVE_", "float", "int", "rt_", "Rt", "RT_"];
+/// The classes a shader's `ray` may name: what its rows alone make (ramp needs a ramp map, water the pack's row).
+pub const RAY_CLASSES: [&str; 8] = ["dielectric", "gloss", "metal", "glass", "cutout", "translucent", "emissive", "painted"];
 
 /// A shader as its files say, checked.
 #[derive(Clone, Debug, PartialEq)]
@@ -78,6 +87,8 @@ pub struct Source {
     /// Declared textures: (slot 0 to 7, name).
     pub textures: Vec<(u8, String)>,
     pub reads: u8,
+    /// shader.json `ray`: the rows a ray reads in place of the material's factors.
+    pub ray: super::model_ir::RayRows,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -155,7 +166,7 @@ pub fn read(name: &str, file: &str, json: &[u8], hlsl: &[u8]) -> Result<Source> 
     let bad = |key: &str| refuse("Cook.Shader.Json", &[("file", json_file.clone()), ("key", key.to_string())]);
     let root: Value = serde_json::from_slice(json).map_err(|_| bad("/"))?;
     let object = root.as_object().ok_or_else(|| bad("/"))?;
-    if let Some(key) = object.keys().find(|k| !matches!(k.as_str(), "stage" | "params" | "textures" | "reads")) {
+    if let Some(key) = object.keys().find(|k| !matches!(k.as_str(), "stage" | "params" | "textures" | "reads" | "ray")) {
         return Err(bad(&format!("/{key}")));
     }
     if root["stage"].as_str() != Some("material") {
@@ -206,12 +217,55 @@ pub fn read(name: &str, file: &str, json: &[u8], hlsl: &[u8]) -> Result<Source> 
     if !root["reads"].is_null() && !root["reads"].is_array() {
         return Err(bad("/reads"));
     }
+    let ray = ray_rows(&root["ray"]).map_err(|key| bad(&format!("/ray{key}")))?;
     if hlsl.len() > MOST_BYTES {
         return Err(refuse("Cook.Shader.TooLarge", &[("file", file.to_string()), ("value", hlsl.len().to_string()), ("max", MOST_BYTES.to_string())]));
     }
     let code = std::str::from_utf8(hlsl).map_err(|_| refuse("Cook.Shader.Text", &[("file", file.to_string())]))?.replace("\r\n", "\n");
     check_code(file, &code)?;
-    Ok(Source { name: name.to_string(), file: file.to_string(), code, params, textures, reads })
+    Ok(Source { name: name.to_string(), file: file.to_string(), code, params, textures, reads, ray })
+}
+
+/// shader.json `ray`, or the key (under `/ray`) that is outside it: a class of RAY_CLASSES, colours of three numbers 0
+/// to 1 (emission 0 or more), roughness, metal and through 0 to 1.
+fn ray_rows(v: &Value) -> std::result::Result<super::model_ir::RayRows, String> {
+    let mut rows = super::model_ir::RayRows::default();
+    if v.is_null() {
+        return Ok(rows);
+    }
+    let object = v.as_object().ok_or_else(String::new)?;
+    if let Some(key) = object.keys().find(|k| !matches!(k.as_str(), "class" | "base" | "roughness" | "metal" | "emission" | "through")) {
+        return Err(format!("/{key}"));
+    }
+    let share = |key: &str| -> std::result::Result<Option<f32>, String> {
+        match &v[key] {
+            Value::Null => Ok(None),
+            x => x.as_f64().filter(|x| (0.0..=1.0).contains(x)).map(|x| Some(x as f32)).ok_or_else(|| format!("/{key}")),
+        }
+    };
+    let colour = |key: &str, top: f64| -> std::result::Result<Option<[f32; 3]>, String> {
+        match &v[key] {
+            Value::Null => Ok(None),
+            x => {
+                let a = x.as_array().filter(|a| a.len() == 3).ok_or_else(|| format!("/{key}"))?;
+                let mut out = [0.0f32; 3];
+                for (k, c) in a.iter().enumerate() {
+                    out[k] = c.as_f64().filter(|c| c.is_finite() && *c >= 0.0 && *c <= top).ok_or_else(|| format!("/{key}/{k}"))? as f32;
+                }
+                Ok(Some(out))
+            }
+        }
+    };
+    rows.class = match &v["class"] {
+        Value::Null => None,
+        c => Some(c.as_str().filter(|c| RAY_CLASSES.contains(c)).ok_or_else(|| "/class".to_string())?.to_string()),
+    };
+    rows.base = colour("base", 1.0)?;
+    rows.emission = colour("emission", f64::from(f32::MAX))?;
+    rows.roughness = share("roughness")?;
+    rows.metal = share("metal")?;
+    rows.through = share("through")?;
+    Ok(rows)
 }
 
 /// The HLSL's words outside comments and strings, each with its line: what it may not write, and its `surface`.
@@ -413,14 +467,82 @@ pub fn check_compile(ir: &super::model_ir::ModelIr) -> Result<()> {
             continue;
         }
         let said = String::from_utf8_lossy(&output.stderr).to_string() + &String::from_utf8_lossy(&output.stdout);
-        let (line, detail) = first_error(&said, &sf.file);
-        return Err(match line {
-            Some(line) => refuse("Cook.Shader.Compile", &[("file", sf.file.clone()), ("line", line.to_string()), ("detail", detail)]),
-            None => refuse("Cook.Shader.CompileProgram", &[("material", m.name.clone()), ("file", sf.file.clone()), ("detail", detail)]),
-        });
+        return Err(compile_refusal(&said, m, sf));
+    }
+    // The ray-hit form (layer 3) over a stand-in of the tracer's side, as a compute program: what cannot run at a
+    // ray's hit is refused at its line too.
+    seen.clear();
+    for m in &ir.materials {
+        let (Some(sf), Some(dxc)) = (&m.surface, &compiler) else { continue };
+        if !seen.insert(m.name.clone()) {
+            continue;
+        }
+        let dir = Scratch::new()?;
+        let source = dir.0.join("surface.ray.hlsl");
+        std::fs::write(&source, format!("{RAY_HIT_STAND_IN}{}{RAY_HIT_ENTRY}", super::programs::ray_hit_form(sf)))?;
+        let output = std::process::Command::new(dxc)
+            .args(["-nologo", "-T", "cs_6_0", "-E", "ray_hit_check", "-O3", "-Fo"])
+            .arg(dir.0.join("surface.ray.bin"))
+            .arg(&source)
+            .output()
+            .map_err(|e| refuse("Cook.Shader.Compiler", &[("file", dxc.display().to_string()), ("detail", e.to_string())]))?;
+        if !output.status.success() {
+            let said = String::from_utf8_lossy(&output.stderr).to_string() + &String::from_utf8_lossy(&output.stdout);
+            return Err(compile_refusal(&said, m, sf));
+        }
     }
     Ok(())
 }
+
+/// The compiler's first error as the shader's (its file and line) or the generated part's (the material).
+fn compile_refusal(said: &str, m: &super::model_ir::MaterialIr, sf: &super::model_ir::SurfaceIr) -> anyhow::Error {
+    let (line, detail) = first_error(said, &sf.file);
+    match line {
+        Some(line) => refuse("Cook.Shader.Compile", &[("file", sf.file.clone()), ("line", line.to_string()), ("detail", detail)]),
+        None => refuse("Cook.Shader.CompileProgram", &[("material", m.name.clone()), ("file", sf.file.clone()), ("detail", detail)]),
+    }
+}
+
+/// What the tracer gives a ray-hit form (programs::ray_hit_form), as the check stands it in: the hit, the record it
+/// fills, a place's value and a map's texel. The tracer's own is the same three names with its tables behind them.
+pub const RAY_HIT_STAND_IN: &str = "\
+struct RtModHit {
+    float2 uv;
+    float4 color;
+    float3 normal;
+    float3 world_position;
+    float3 view;
+    float time;
+    float lod;
+};
+struct RtModSurface {
+    float3 base;
+    float alpha;
+    float3 normal;
+    float roughness;
+    float metal;
+    float3 emission;
+};
+RWStructuredBuffer<float4> rt_check_out : register(u0);
+float4 rt_mod_place(uint place) { return float4(0.5, 0.5, 0.5, 0.5) * float(place + 1u); }
+float4 rt_mod_map(uint slot, float2 uv, float lod) { return float4(uv, lod, float(slot)); }
+#line 1 \"program\"
+";
+
+/// The check's entry: one hit through the form, its outputs kept so nothing is optimized away.
+const RAY_HIT_ENTRY: &str = "\
+[numthreads(1, 1, 1)]
+void ray_hit_check(uint3 id : SV_DispatchThreadID) {
+    RtModHit h = (RtModHit)0;
+    h.uv = float2(id.xy);
+    h.normal = float3(0.0, 0.0, 1.0);
+    h.view = float3(0.0, 0.0, 1.0);
+    h.color = float4(1.0, 1.0, 1.0, 1.0);
+    RtModSurface o = (RtModSurface)0;
+    RT_MOD_SURFACE_NS::surface_hit(h, o);
+    rt_check_out[0] = float4(o.base, o.alpha) + float4(o.normal, o.roughness) + float4(o.emission, o.metal);
+}
+";
 
 /// A folder of its own under the system's temporary folder for one compile, removed when dropped.
 struct Scratch(std::path::PathBuf);

@@ -296,6 +296,83 @@ fn a_check_without_a_compiler_says_the_shader_was_not_compiled() {
 }
 
 #[test]
+fn a_shaders_ray_rows_are_checked_and_replace_its_factors() {
+    let with_ray = |ray: Value| {
+        let mut j = stripes_json();
+        j["ray"] = ray;
+        read_json(&j, STRIPES)
+    };
+    let s = with_ray(serde_json::json!({"class": "metal", "base": [0.9, 0.8, 0.2], "roughness": 0.1, "through": 0.0})).unwrap();
+    assert_eq!(s.ray.class.as_deref(), Some("metal"));
+    assert_eq!(s.ray.base, Some([0.9, 0.8, 0.2]));
+    assert_eq!((s.ray.roughness, s.ray.metal, s.ray.emission, s.ray.through), (Some(0.1), None, None, Some(0.0)));
+    assert_eq!(read_json(&stripes_json(), STRIPES).unwrap().ray, crate::cook::model_ir::RayRows::default());
+    for (ray, key) in [
+        (serde_json::json!({"class": "water"}), "/ray/class"),
+        (serde_json::json!({"class": "ramp"}), "/ray/class"),
+        (serde_json::json!({"base": [1.0, 0.5]}), "/ray/base"),
+        (serde_json::json!({"base": [1.0, 0.5, 2.0]}), "/ray/base/2"),
+        (serde_json::json!({"emission": [-1.0, 0.0, 0.0]}), "/ray/emission/0"),
+        (serde_json::json!({"roughness": 1.5}), "/ray/roughness"),
+        (serde_json::json!({"shine": 1.0}), "/ray/shine"),
+        (serde_json::json!(3), "/ray"),
+    ] {
+        let (why, args) = refusal(with_ray(ray.clone()));
+        assert_eq!(why, "Cook.Shader.Json", "{ray}");
+        assert!(args.contains(&("key", key.to_string())), "{ray}: {args:?}");
+    }
+    // Over the reading of a rough white glTF material: the rows given, the rest as read.
+    use crate::cook::hit_record::{apply_ray_rows, pbr_reading, Class, PbrMeans};
+    let p = crate::cook::model_ir::PbrMaterial { base_color: [1.0, 1.0, 1.0, 1.0], metal: 0.0, roughness: 0.8, ..Default::default() };
+    let mut r = pbr_reading(&p, &PbrMeans::default());
+    assert_eq!(r.class, Class::Dielectric);
+    apply_ray_rows(&mut r, &s.ray);
+    assert_eq!((r.class, r.base, r.roughness, r.metal, r.transmission), (Class::Metal, [0.9, 0.8, 0.2], 0.1, 0.0, 0.0));
+}
+
+#[test]
+fn a_shader_material_has_a_ray_hit_form_beside_its_model() {
+    let mut json = stripes_json();
+    json["reads"] = serde_json::json!(["time", "normal", "view"]);
+    json["ray"] = serde_json::json!({"class": "gloss"});
+    let code = "void surface(in SurfaceIn i, inout Surface s) {\n    if (paint(i.uv0).a < 0.5) discard;\n    s.base = tint.rgb * speed + fwidth(i.uv0).x;\n    s.emission = glow * s.base * (1.0 - dot(i.normal, i.view));\n}\n";
+    let (_dir, folder) = shader_mod(&json, code);
+    let doc = shader_document(serde_json::json!({"shader": "shaders/Stripes", "textures": {"paint": 0}}));
+    let bytes = serde_json::to_vec(&doc).unwrap();
+    let (ir, _, _) = crate::cook::gltf::to_ir_for(&bytes, Some(&folder), None).unwrap();
+    let sf = ir.materials[0].surface.as_ref().unwrap();
+    assert_eq!(sf.ray.class.as_deref(), Some("gloss"));
+    let text = crate::cook::programs::ray_hit_form(sf);
+    // Its own namespace, the shader under its own lines, every parameter from its place, a texture at the cone's level.
+    assert!(text.starts_with("#ifndef RT_MOD_SURFACE_NS"), "{text}");
+    assert!(text.contains("namespace RT_MOD_SURFACE_NS {"));
+    assert!(text.contains("#line 1 \"assets/shaders/Stripes.hlsl\""));
+    assert!(text.contains("    speed = rt_mod_place(0u).x;") && text.contains("    tint = rt_mod_place(1u);") && text.contains("    glow = rt_mod_place(2u).x;"), "{text}");
+    let slot = sf.textures[0].1;
+    assert!(text.contains(&format!("float4 paint(float2 uv) {{ return rt_mod_map({slot}u, uv, rt_mod_lod_); }}")), "{text}");
+    // What the shader reads, from the hit; no uv1 (the mesh has none); the ends a hit lacks are defined, then undone.
+    let surface_in = &text[text.find("struct SurfaceIn").unwrap()..];
+    let surface_in = &surface_in[..surface_in.find("};").unwrap()];
+    assert!(surface_in.contains("float3 normal;") && surface_in.contains("float3 view;") && !surface_in.contains("world_position"));
+    assert!(text.contains("    si.uv0 = h.uv;") && !text.contains("si.uv1 ="));
+    assert!(text.contains("#define discard rt_mod_cut_ = true") && text.contains("#undef discard"));
+    assert!(text.find("#define fwidth").unwrap() < text.find("#line 1 \"assets").unwrap());
+    assert!(text.contains("    surface(si, s);") && text.contains("o.alpha = rt_mod_cut_ ? 0.0 : saturate(s.alpha);"));
+    assert!(text.trim_end().ends_with("}\n}") || text.ends_with("}\n}\n"));
+    // `<model>.rayhit` beside the model: one row, the material and its text.
+    let (_, files, _) = crate::cook::gltf::to_files_for(&bytes, Some(&folder), "Cube", None).unwrap();
+    let (name, table) = files.iter().find(|(n, _)| n.ends_with(".rayhit")).expect("Cube.rayhit");
+    assert_eq!(name, "Cube.rayhit");
+    let t = crate::cook::table::TableIr::from_ntbl(table).unwrap();
+    assert_eq!(t.rows.len(), 1);
+    // A parameter may not take a name the form uses.
+    let mut taken = stripes_json();
+    taken["params"][0]["name"] = serde_json::json!("rt_speed");
+    let (why, _) = refusal(read_json(&taken, STRIPES));
+    assert_eq!(why, "Cook.Shader.Json");
+}
+
+#[test]
 fn a_compilers_first_error_names_the_shaders_line() {
     let said = "C:/t/surface.ps.hlsl:40:5: warning: x\nassets/shaders/Stripes.hlsl:3:22: error: use of undeclared identifier 'spee'\n";
     assert_eq!(first_error(said, "assets/shaders/Stripes.hlsl"), (Some(3), "use of undeclared identifier 'spee'".to_string()));
@@ -327,6 +404,9 @@ fn a_shader_compiles_or_names_its_line() {
     let (why, args) = refusal(cook(&undeclared));
     assert_eq!(why, "Cook.Shader.Compile", "{args:?}");
     assert!(args.contains(&("line", "5".to_string())), "{args:?}");
+    // The ray-hit form compiles too: a pixel's discard and derivatives are the form's own words there.
+    let pixel_only = STRIPES.replace("s.roughness = 0.3;", "if (fwidth(i.uv0.x) > 1.0) discard; s.roughness = ddx(i.uv0.y);");
+    cook(&pixel_only).unwrap();
 }
 
 /// program_table's flags for a mod's texts (flags.tsv): the stripes cube's plain pixel program is lit and sums the key
