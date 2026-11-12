@@ -84,7 +84,31 @@ typedef struct LumaModsService {
        code is unloaded. A library mod removes what it made for that mod (LumaKit rule 4). A later call replaces fn
        and user; a null fn stops the events. LUMA_OK. */
     int32_t (*watch_mods)(const LumaMod* mod, LumaEventFn fn, void* user);
+    /* Kit data (contract section 9, lumakit rule 11): the files `kit/<module>/<name>.json` a .luma ships, which a library
+       mod reads for each mod that needs it. `of` is a mod as LumaScript's caller() gives it (its LumaMod pointer as a
+       number); `mod` may read the kit data of `of` when `of` is running and is `mod` itself or names `mod` in its
+       luma.json `needs`; any other `of` (not running, not a mod, not needing it): LUMA_E_DENIED, reported
+       (Mods.KitNotNeeded). `module` and `name`: 1 to 64 of a-z 0-9 _ - ., not starting with a dot, no ".." (no path
+       part can be in them); another: LUMA_E_ARGUMENT, reported. A null length, or a null buf with size above 0:
+       LUMA_E_ARGUMENT, reported. A null buf with size 0 asks the length only.
+       kit_names: 1.0. Game thread. The names (file stems) of the `kit/<module>/<name>.json` files in `of`, sorted byte for byte, each
+       followed by a 0 byte, into buf; *length the bytes they take (0: none, or a mod that is not a .luma). LUMA_OK;
+       LUMA_E_TOO_LARGE when size is below *length (an answer, not reported; nothing written). */
+    int32_t (*kit_names)(const LumaMod* mod, uint64_t of, const char* module, char* buf, uint64_t size, uint64_t* length);
+    /* 1.0. Game thread. The bytes of `kit/<module>/<name>.json` in `of` into buf, as the installed .luma has them (read
+       once, kept until `of` stops); *length their count. LUMA_OK; LUMA_E_NOT_FOUND when there is no such file (an
+       answer, not reported); LUMA_E_TOO_LARGE when size is below *length (an answer; nothing written); a file past
+       LUMA_MODS_KIT_FILE_MOST: LUMA_E_FORMAT, reported (Mods.KitTooLarge); LUMA_E_IO when it could not be read. */
+    int32_t (*kit_read)(const LumaMod* mod, uint64_t of, const char* module, const char* name, void* buf, uint64_t size,
+                        uint64_t* length);
+    /* 1.0. Game thread. The running mods (with code) whose luma.json `needs` names `mod`, in the Mods list's order, as
+       caller() numbers into out[] (up to capacity), and how many there are into *count (may exceed capacity).
+       LUMA_OK; a null count, or a null out with capacity above 0: LUMA_E_ARGUMENT, reported. */
+    int32_t (*needing)(const LumaMod* mod, uint64_t* out, uint32_t capacity, uint32_t* count);
 } LumaModsService;
+
+/* The largest kit file kit_read gives: 4 MiB. */
+#define LUMA_MODS_KIT_FILE_MOST (4u * 1024u * 1024u)
 
 /* Events of mods (LumaEvent.kind) to watch_options' fn; `handle` is 0. */
 typedef enum LumaModsEvent {

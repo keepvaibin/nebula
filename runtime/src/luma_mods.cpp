@@ -1134,6 +1134,253 @@ void options_mod_gone(void*, const LumaMod* mod) {
     }
 }
 
+// ---- mods: kit data (section 9, lumakit R-6) ------------------------------------------------------------------------
+
+// What the kit calls read of a mod in the session's list: its folder (a .luma's) and the ids its luma.json needs.
+struct KitMod {
+    std::filesystem::path folder;  // empty: not a .luma
+    std::vector<std::string> needs;
+};
+
+// Game thread. The index by mod id, made at the first kit call and again after any mod stops (a reload may replace a
+// mod's files); the mods with code that began, in begin order (mod_begin), each live until its mod_gone; the bytes read,
+// by mod and "<module>/<name>", dropped at that mod's mod_gone.
+std::unordered_map<std::string, KitMod> g_kit_index;
+bool g_kit_index_made = false;
+std::vector<const LumaMod*> g_kit_running;
+std::map<const LumaMod*, std::map<std::string, std::vector<unsigned char>>> g_kit_bytes;
+
+void make_kit_index() {
+    if (g_kit_index_made) {
+        return;
+    }
+    g_kit_index_made = true;
+    for (const galaxy::mods::ModInfo& mod : galaxy::mods::session_mods().started_with) {
+        KitMod entry;
+        if (mod.package) {
+            entry.folder = mod.path;
+        }
+        if (mod.luma) {
+            for (const galaxy::luma::Dependency& need : mod.luma->needs) {
+                entry.needs.push_back(need.id);
+            }
+        }
+        g_kit_index[mod.id] = std::move(entry);
+    }
+}
+
+// A module or a file's name: 1 to 64 of a-z 0-9 _ - ., not starting with a dot, no "..": no path part can be in it.
+bool valid_kit_part(const char* part) noexcept {
+    if (part == nullptr) {
+        return false;
+    }
+    const std::string_view text(part);
+    if (text.empty() || text.size() > 64u || text.front() == '.' || text.find("..") != std::string_view::npos) {
+        return false;
+    }
+    return std::all_of(text.begin(), text.end(), [](char c) {
+        return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.';
+    });
+}
+
+// The mod `of` names when `mod` may read its kit data: `of` is live, and it is `mod` itself or needs it. Otherwise null,
+// and Mods.KitNotNeeded is reported (once, the kernel counting repeats).
+const KitMod* kit_mod_for(const LumaMod* mod, const char* where, std::uint64_t of, const LumaMod** of_mod) {
+    const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
+    const auto* const other = reinterpret_cast<const LumaMod*>(static_cast<std::uintptr_t>(of));
+    const char* const own_id = kernel->mod_id(mod);
+    // mod_id only compares the pointer with the kernel's records: a number that is no mod is simply unknown.
+    const char* const other_id = of != 0u ? kernel->mod_id(other) : nullptr;
+    if (other_id != nullptr && kernel->mod_live(other) != 0) {
+        make_kit_index();
+        if (const auto it = g_kit_index.find(other_id); it != g_kit_index.end()) {
+            const KitMod& entry = it->second;
+            if (other == mod || std::find(entry.needs.begin(), entry.needs.end(), own_id) != entry.needs.end()) {
+                *of_mod = other;
+                return &entry;
+            }
+        }
+    }
+    report(mod, where, 168u, other_id != nullptr ? other_id : "(no running mod)");  // Mods.KitNotNeeded
+    return nullptr;
+}
+
+std::int32_t kit_names(const LumaMod* mod, std::uint64_t of, const char* module, char* buf, std::uint64_t size,
+                       std::uint64_t* length) {
+    static constexpr const char* where = "mods.kit_names";
+    if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
+        return status;
+    }
+    if (!valid_kit_part(module)) {
+        return argument(mod, where, "module");
+    }
+    if (length == nullptr) {
+        return argument(mod, where, "length");
+    }
+    if (buf == nullptr && size != 0u) {
+        return argument(mod, where, "buf");
+    }
+    *length = 0u;
+    const LumaMod* other = nullptr;
+    const KitMod* const entry = kit_mod_for(mod, where, of, &other);
+    if (entry == nullptr) {
+        return LUMA_E_DENIED;
+    }
+    std::vector<std::string> names;
+    if (!entry->folder.empty()) {
+        std::error_code error;
+        const std::filesystem::path folder = entry->folder / "kit" / module;
+        for (std::filesystem::directory_iterator it(folder, error), end; !error && it != end; it.increment(error)) {
+            const std::filesystem::path& file = it->path();
+            if (!it->is_regular_file(error) || file.extension() != ".json") {
+                continue;
+            }
+            const std::string stem = file.stem().string();
+            if (valid_kit_part(stem.c_str())) {
+                names.push_back(stem);  // a name kit_read cannot take is not listed
+            }
+        }
+    }
+    std::sort(names.begin(), names.end());
+    std::uint64_t total = 0u;
+    for (const std::string& name : names) {
+        total += name.size() + 1u;
+    }
+    *length = total;
+    if (buf == nullptr) {
+        return LUMA_OK;  // the length asked
+    }
+    if (size < total) {
+        return LUMA_E_TOO_LARGE;  // an answer: nothing written, *length is what it needs
+    }
+    for (const std::string& name : names) {
+        std::memcpy(buf, name.c_str(), name.size() + 1u);
+        buf += name.size() + 1u;
+    }
+    return LUMA_OK;
+}
+
+std::int32_t kit_read(const LumaMod* mod, std::uint64_t of, const char* module, const char* name, void* buf,
+                      std::uint64_t size, std::uint64_t* length) {
+    static constexpr const char* where = "mods.kit_read";
+    if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
+        return status;
+    }
+    if (!valid_kit_part(module)) {
+        return argument(mod, where, "module");
+    }
+    if (!valid_kit_part(name)) {
+        return argument(mod, where, "name");
+    }
+    if (length == nullptr) {
+        return argument(mod, where, "length");
+    }
+    if (buf == nullptr && size != 0u) {
+        return argument(mod, where, "buf");
+    }
+    *length = 0u;
+    const LumaMod* other = nullptr;
+    const KitMod* const entry = kit_mod_for(mod, where, of, &other);
+    if (entry == nullptr) {
+        return LUMA_E_DENIED;
+    }
+    const std::string key = std::string(module) + "/" + name;
+    std::map<std::string, std::vector<unsigned char>>& kept = g_kit_bytes[other];
+    auto it = kept.find(key);
+    if (it == kept.end()) {
+        if (entry->folder.empty()) {
+            return LUMA_E_NOT_FOUND;
+        }
+        const std::filesystem::path file = entry->folder / "kit" / module / (std::string(name) + ".json");
+        std::error_code error;
+        if (!std::filesystem::is_regular_file(file, error)) {
+            return LUMA_E_NOT_FOUND;  // an answer, not reported
+        }
+        const std::uintmax_t bytes = std::filesystem::file_size(file, error);
+        if (error) {
+            return LUMA_E_NOT_FOUND;
+        }
+        if (bytes > LUMA_MODS_KIT_FILE_MOST) {
+            char found[24];
+            std::snprintf(found, sizeof(found), "%llu", static_cast<unsigned long long>(bytes));
+            report(mod, where, 169u, key.c_str(), found);  // Mods.KitTooLarge
+            return LUMA_E_FORMAT;
+        }
+        std::vector<unsigned char> data(static_cast<std::size_t>(bytes));
+        std::ifstream in(file, std::ios::binary);
+        if (!in || (bytes != 0u && !in.read(reinterpret_cast<char*>(data.data()), static_cast<std::streamsize>(bytes)))) {
+            return LUMA_E_IO;
+        }
+        it = kept.emplace(key, std::move(data)).first;
+    }
+    const std::vector<unsigned char>& data = it->second;
+    *length = data.size();
+    if (buf == nullptr) {
+        return LUMA_OK;  // the length asked
+    }
+    if (size < data.size()) {
+        return LUMA_E_TOO_LARGE;  // an answer: nothing written, *length is what it needs
+    }
+    if (!data.empty()) {
+        std::memcpy(buf, data.data(), data.size());
+    }
+    return LUMA_OK;
+}
+
+std::int32_t kit_needing(const LumaMod* mod, std::uint64_t* out, std::uint32_t capacity, std::uint32_t* count) {
+    static constexpr const char* where = "mods.needing";
+    if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
+        return status;
+    }
+    if (count == nullptr) {
+        return argument(mod, where, "count");
+    }
+    if (out == nullptr && capacity != 0u) {
+        return argument(mod, where, "out");
+    }
+    const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
+    const char* const own_id = kernel->mod_id(mod);
+    make_kit_index();
+    std::vector<std::pair<std::int32_t, const LumaMod*>> found;
+    for (const LumaMod* other : g_kit_running) {
+        const char* const other_id = kernel->mod_id(other);
+        if (other == mod || other_id == nullptr || kernel->mod_live(other) == 0) {
+            continue;
+        }
+        const auto it = g_kit_index.find(other_id);
+        if (it != g_kit_index.end() &&
+            std::find(it->second.needs.begin(), it->second.needs.end(), own_id) != it->second.needs.end()) {
+            found.emplace_back(kernel->mod_order(other), other);
+        }
+    }
+    std::stable_sort(found.begin(), found.end(),
+                     [](const auto& a, const auto& b) { return a.first < b.first; });  // the Mods list's order
+    *count = static_cast<std::uint32_t>(found.size());
+    for (std::uint32_t i = 0; i < capacity && i < found.size(); i++) {
+        out[i] = static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(found[i].second));
+    }
+    return LUMA_OK;
+}
+
+// Game thread, before the mod's begin: a mod that may need another (every mod with code begins here).
+void kit_mod_begin(void*, const LumaMod* mod) {
+    g_kit_running.push_back(mod);
+}
+
+// Game thread, after the mod's stop: it is no longer running, its bytes go, and the index is made again at the next
+// kit call (a reload may have replaced its files).
+void kit_mod_gone(const LumaMod* mod) {
+    g_kit_running.erase(std::remove(g_kit_running.begin(), g_kit_running.end(), mod), g_kit_running.end());
+    g_kit_bytes.erase(mod);
+    g_kit_index.clear();
+    g_kit_index_made = false;
+}
+
+void mods_mod_gone(void* user, const LumaMod* mod) {
+    options_mod_gone(user, mod);
+    kit_mod_gone(mod);
+}
+
 // ---- The providers -------------------------------------------------------------------------------------------------
 
 // Set once at the host's start, before any mod or page asks (set_save_half, set_chunk_half).
@@ -1153,6 +1400,9 @@ const LumaModsService kMods = {
     mods_option,
     mods_watch_options,
     mods_watch_mods,
+    kit_names,
+    kit_read,
+    kit_needing,
 };
 
 // mods' report rows (section 5): {where} first, then the row's own.
@@ -1160,6 +1410,8 @@ const LumaServiceRow kModsRows[] = {
     {165u, "Mods.OptionUnknown", {"where", "key", nullptr, nullptr}},
     {166u, "Mods.OptionNotOwn", {"where", "key", nullptr, nullptr}},
     {167u, "Mods.OptionBufferShort", {"where", "size", "key", "needed"}},
+    {168u, "Mods.KitNotNeeded", {"where", "other", nullptr, nullptr}},
+    {169u, "Mods.KitTooLarge", {"where", "file", "size", nullptr}},
 };
 
 const LumaModsIdsService kIds = {
@@ -1174,11 +1426,12 @@ const LumaModsInstallService kInstall = {
     install_cancel,
 };
 
-// mods keeps a watcher per mod (section 8), dropped at its stop; the list is the session's, the record everyone's.
+// mods keeps a watcher per mod (section 8) and the kit bytes read of it (section 9), dropped at its stop, and which mods
+// with code run (section 9's needing); the list is the session's, the record everyone's.
 const LumaServiceProvider kModsProvider = {
     sizeof(LumaServiceProvider), LUMA_MODS_NAME, &kMods.base, nullptr, kModsRows,
     static_cast<std::uint32_t>(sizeof(kModsRows) / sizeof(kModsRows[0])), nullptr,
-    nullptr, options_mod_gone, nullptr, registered,
+    kit_mod_begin, mods_mod_gone, nullptr, registered,
 };
 const LumaServiceProvider kIdsProvider = {
     sizeof(LumaServiceProvider), LUMA_MODS_IDS_NAME, &kIds.base, nullptr, nullptr, 0u, nullptr,
