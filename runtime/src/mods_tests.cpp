@@ -580,6 +580,27 @@ bool luma_rules() {
     ok &= expect(problem("A").empty() && problem("A copy").empty(), "another copy is the validator's (L802)");
     ok &= expect(problem("C2").empty() && problem("C1").empty(), "what a mod needs is the validator's (L800)");
     ok &= expect(problem("X").empty() && problem("Y").empty(), "what a mod can't run with is the validator's (L801)");
+    // The Mods page's draft says them as the player changes the list (mark_needs, plan 6.3): the chain loses its end
+    // and its start with it; the mod naming the conflict is the one off; another copy stays the validator's.
+    {
+        std::vector<galaxy::mods::ModInfo> draft = mods;
+        galaxy::mods::mark_needs(draft);
+        const auto drafted = [&](const char* id) {
+            const auto it = std::find_if(draft.begin(), draft.end(), [&](const galaxy::mods::ModInfo& m) { return m.id == id; });
+            return it == draft.end() ? std::string("(missing)") : it->problem;
+        };
+        ok &= expect(drafted("C2") == "THIS MOD NEEDS: chain-3", "the draft: a need not in the list");
+        ok &= expect(drafted("C1").starts_with("THIS MOD NEEDS: "), "the draft: a need that is not working");
+        ok &= expect(drafted("X").empty() && drafted("Y").starts_with("THIS MOD CAN'T RUN WITH: "),
+                     "the draft: the mod naming a conflict is off");
+        ok &= expect(drafted("A").empty() && drafted("A copy").empty() && drafted("P").empty(), "the draft: the rest run");
+        for (galaxy::mods::ModInfo& m : draft) {
+            if (m.id == "X") m.enabled = false;
+            m.problem = m.own_problem;
+        }
+        galaxy::mods::mark_needs(draft);
+        ok &= expect(drafted("Y").empty(), "the draft: a conflict turned off lets the mod run");
+    }
     ok &= expect(problem("Cut") == "THIS FILE IS DAMAGED", "a cut-off luma.json is damaged");
     ok &= expect(problem("Later") != "THIS FILE IS DAMAGED", "a later format is not called damaged (L205 refuses it)");
     ok &= expect(problem("Hollow") == "THIS FILE IS DAMAGED", "a layer folder missing is damaged");

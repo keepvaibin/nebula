@@ -198,6 +198,11 @@ bool save_mod_settings(std::span<const ModInfo> mods);
 // Recomputes how the mods relate after a change to the list: order, duplicates, requirements, saves, conflicts (each
 // mod's problem) and overlaps. scan_mods calls this last.
 void settle_mods(std::vector<ModInfo>& mods);
+// The Mods page's draft after settle_mods (plan 6.3): a .luma mod on whose need is not in the list, off or not working,
+// or outside its range ("THIS MOD NEEDS: ...", "... A NEWER VERSION OF: ..."), or with a conflict on and working
+// ("THIS MOD CAN'T RUN WITH: ...") shows it as the player changes the list, before Apply. Not part of scan_mods: at
+// a start the validator says these (L801, L802) in the mod log and leaves the mods out.
+void mark_needs(std::vector<ModInfo>& mods);
 // Turns a mod on (moved to the top of the enabled mods) or off (placed among the disabled mods by name), then
 // renumbers the order.
 void set_mod_enabled(std::vector<ModInfo>& mods, std::size_t index, bool enabled);
