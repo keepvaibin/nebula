@@ -782,6 +782,50 @@ namespace luma {
         return nullptr;
     }
 
+    u32 classCount() {
+        prepareTypes();
+        return sTypes.count;
+    }
+
+    const void* ownTypeInfo(const void* pObject, const void** ppComplete) {
+        *ppComplete = nullptr;
+        return pObject != nullptr ? readOwnClass(pObject, ppComplete) : nullptr;
+    }
+
+    const MethodRow* overriderOfClass(const TypeRow* pClass, const MethodRow* pTarget, bool* pAmbiguous) {
+        *pAmbiguous = false;
+        if (pClass == nullptr || pTarget == nullptr) {
+            return nullptr;
+        }
+        const TypeRow* const pDeclaring = typeNamed(pTarget->record, textLength(pTarget->record));
+        if (pDeclaring == nullptr) {
+            return nullptr;
+        }
+        // An object pointer at the whole object: its own declaring subobject is the one at offset 0, if any.
+        Overriders found = {};
+        found.want = 0;
+        overridersIn(pClass, pDeclaring, pTarget, 0, nullptr, &found, 0);
+        if (found.atCount == 1) {
+            return found.pAt;
+        }
+        if (found.anyCount == 1) {
+            return found.pAny;
+        }
+        *pAmbiguous = found.anyCount > 1;
+        return nullptr;
+    }
+
+    bool baseOffset(const TypeRow* pType, const TypeRow* pBase, u32* pOffset) {
+        if (pType == nullptr || pBase == nullptr) {
+            return false;
+        }
+        u32 count = 0;
+        u32 first = 0;
+        findBase(pType, pBase, 0, &count, &first, 0);
+        *pOffset = first;
+        return count == 1;
+    }
+
     OwnClass ownClass(const void* pObject) {
         OwnClass out = {};
         prepareTypes();

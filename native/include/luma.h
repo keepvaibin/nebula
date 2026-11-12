@@ -88,6 +88,33 @@ typedef struct LumaImport {
 
 typedef struct LumaMod LumaMod;
 
+/* A mod's own class (classes contract, plan 1.4): derived from a game class, made by the game's own factory, its
+   overrides hooks that run for its objects only, with data of its own per object. */
+typedef struct LumaOverride {
+    const char* name;      /* a virtual of the base class as `method` names it: "JetTurtle::control" or the class that
+                              declares it first, "LiveActor::control" */
+    const char* signature; /* as `method`'s: "void()" */
+    LumaHook hook;         /* a wrap, run only when the object is one of this class's; core->proceed(call) runs the
+                              base class's own */
+    void* user;
+} LumaOverride;
+
+typedef struct LumaClassDef {
+    uint32_t size;            /* sizeof(LumaClassDef) */
+    const char* name;         /* the class's name (1 to 63 bytes): a stage places its objects by it. No game class,
+                                 factory row or other mod's class may have it */
+    const char* base;         /* the game class it derives from ("JetTurtle"): polymorphic, with a row */
+    const char* maker;        /* the factory row that makes the base ("JetTurtle"); null: the one named as the base */
+    const char* replaces;     /* null, or a name the game's stages place: its objects are made as this class instead */
+    uint32_t data_size;       /* its own data per object, zeroed before `made`; 0: none */
+    uint32_t data_align;      /* a power of two up to 4096; 0: 16 */
+    /* After the maker made the object and before its init, on the thread that makes the stage's objects. May be null. */
+    void (*made)(void* object, void* data, void* user);
+    void* user;
+    const LumaOverride* overrides;
+    uint32_t override_count;
+} LumaClassDef;
+
 typedef struct LumaCore {
     uint32_t size;
     uint32_t api;
@@ -173,6 +200,18 @@ typedef struct LumaCore {
     /* In `start` only: the bytes the mod's previous load kept this session, their count in *size, or null (none kept,
        or not in start; *size 0). Valid until start returns; once read, they are gone. */
     const void* (*kept)(const LumaMod* mod, uint32_t* size);
+
+    /* Classes (classes contract, plan 1.4). Defines a mod's class: its number (>= 0; class_of, own_class, as_class and
+       is_a know it), or -1 the definition is not whole (null, size, empty or long name, base not a polymorphic class
+       with a row, data_align), -2 the name (or `replaces`) is taken, -3 not on the game thread, -4 an override names
+       no virtual of the base, or one the base runs with no row (inline, implicit), or one whose hook is refused, -5 no
+       factory row of the maker's name, or `replaces` is no name the factory makes. Every refusal is said in the log
+       with the name it is about, and nothing of the class is left. Its hooks are the mod's: they go when it goes, and
+       its objects are then plain objects of the base. */
+    int32_t (*define_class)(const LumaMod* mod, const LumaClassDef* def);
+    /* The object's data when it is one of the class's (from the object or any of its subobjects), else null. Any
+       thread. */
+    void* (*class_data)(const LumaMod* mod, const void* object, int32_t class_number);
 } LumaCore;
 
 /* report's own codes (D3-1). */

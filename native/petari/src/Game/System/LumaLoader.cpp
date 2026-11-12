@@ -6,6 +6,7 @@
 #include "Game/System/LumaModLog.hpp"
 #include "Game/System/LumaServices.hpp"
 #include "Game/System/LumaTypes.hpp"
+#include "Game/System/LumaClasses.hpp"
 #include "Game/System/NebulaText.hpp"
 #include <luma_host.h>
 #include <nebula_format.h>
@@ -285,7 +286,11 @@ namespace luma {
         void apiProceed(LumaCall* pCall) { proceed(reinterpret_cast<Call*>(pCall)); }
 
         // A class's number (objects 10, O-3): its record's index among the record rows sorted by name; -1 when none.
-        s32 apiClassOf(const char* pClass) { return classNumber(findType(pClass)); }
+        // A mod's class (classes contract) by its name when no record has it.
+        s32 apiClassOf(const char* pClass) {
+            const s32 number = classNumber(findType(pClass));
+            return number >= 0 ? number : luma::classes::numberOf(pClass);
+        }
 
         // Any record the game defines (contract types), by its name or an alias's.
         s32 apiSizeOf(const char* pType) {
@@ -302,6 +307,9 @@ namespace luma {
         // as_class's answer without a report (it has no mod): 1 when the object's own class is that class or derives
         // from it by one path.
         s32 apiIsA(const void* pObject, s32 number) {
+            if (luma::classes::isModNumber(number)) {
+                return luma::classes::asModClass(pObject, number) != nullptr ? 1 : 0;
+            }
             bool ambiguous = false;
             return asClass(pObject, classAt(number), &ambiguous) != nullptr ? 1 : 0;
         }
@@ -675,10 +683,18 @@ namespace luma {
         s32 apiOwnClass(const LumaMod* pMod, const void* pObject) {
             OwnClass own;
             const s32 state = readObject(pMod, pObject, "own_class", &own);
-            return state != 0 ? state : classNumber(own.type);
+            if (state != 0) {
+                return state;
+            }
+            // One of a mod's classes (classes contract): that class is the most derived.
+            const s32 modClass = luma::classes::classOfObject(pObject);
+            return modClass >= 0 ? modClass : classNumber(own.type);
         }
 
         const void* apiAsClass(const LumaMod* pMod, const void* pObject, s32 number) {
+            if (luma::classes::isModNumber(number)) {
+                return luma::classes::asModClass(pObject, number);
+            }
             const TypeRow* const pTarget = classAt(number);
             OwnClass own;
             if (pTarget == nullptr || readObject(pMod, pObject, "as_class", &own) != 0) {
@@ -982,10 +998,15 @@ namespace luma {
 
         void noResult(const Function* pFunction, const void* pOwner) { mended(pFunction, pOwner, kCodeNoResult); }
 
+        // Classes (classes contract, plan 1.4).
+        s32 apiDefineClass(const LumaMod* pMod, const LumaClassDef* pDef) { return luma::classes::define(pMod, pDef); }
+
+        void* apiClassData(const LumaMod*, const void* pObject, s32 number) { return luma::classes::data(pObject, number); }
+
         const LumaCore sCore = {
             sizeof(LumaCore), LUMA_API, apiLog, apiFunction, apiFunctionAt, apiHook, apiProceed, apiField, apiSizeOf, apiClassOf, apiIsA, apiService,
             apiGameThread, apiUnhook, apiAlloc, apiFree, apiReport, apiOwnClass, apiAsClass, apiMethod, apiOverrider, apiCallMethod,
-            apiKeep, apiKept,
+            apiKeep, apiKept, apiDefineClass, apiClassData,
         };
 
         // One import: its function (functions and hooks) or number (fields, sizes, classes). False: the game has none,
@@ -1580,6 +1601,7 @@ namespace luma {
                 // Hooks its start added itself go; the mods it imported from are told; it ends after the grace when any
                 // was published.
                 removeHooks(pMod);
+                luma::classes::modGone(pMod);
                 tellDependentGone(pMod);
                 luma::services::modGone(pMod);
                 endMod(pMod);
@@ -1628,6 +1650,7 @@ namespace luma {
             // Unbind, its stop, the mods it imported from told, then after the grace its destructors, memory and
             // library (LR-5, D3-3).
             removeHooks(pMod);
+            luma::classes::modGone(pMod);
             if (pInfo->stop != nullptr) {
                 pMod->inStop = true;
                 pInfo->stop();
