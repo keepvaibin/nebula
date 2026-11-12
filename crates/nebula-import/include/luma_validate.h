@@ -5,7 +5,7 @@
    At import: luma_validate with `kept` null runs every rule; keep luma_report_kept's bytes beside the mod.
    At each start, and each change of the mod list or options: luma_validate with the mod's kept bytes. When they are for
    the same .luma and the same game (release, region, platform, languages, LumaCore version, names, services,
-   renderer, device features, store_key), the rules that read the whole .luma are taken from them and every other rule runs; otherwise every rule
+   renderer, store_key; not the device's features, which the rules read at every start), the rules that read the whole .luma are taken from them and every other rule runs; otherwise every rule
    runs. Keep the new kept bytes either way.
 
    Every pointer in the input is read only during the call. A report is used from one thread at a time. */

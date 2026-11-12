@@ -344,9 +344,11 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
     }
     let store = (!input.store.is_null()).then(|| CStore(input.store));
     let store_key = text(input.store_key).unwrap_or_default();
-    // What identifies the game for a kept report: a change in any of it checks every rule again.
+    // What identifies the game for a kept report: a change in any of it checks every rule again. The device's
+    // features are not in it (F's AR-1): L806 is a manifest rule, run at every start, and a laptop that switches GPUs
+    // keeps its kept reports.
     let game_key = format!(
-        "nebula {nebula}; region {}; platform {platform}; languages {}; api {}; names {}; types {}; services {}; renderer {}; device {}; store {}",
+        "nebula {nebula}; region {}; platform {platform}; languages {}; api {}; names {}; types {}; services {}; renderer {}; store {}",
         region.as_deref().unwrap_or("-"),
         languages.join(","),
         input.luma_api,
@@ -354,7 +356,6 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
         types_bytes.map_or_else(|| "-".to_string(), hex_sha1),
         services_bytes.map_or_else(|| "-".to_string(), hex_sha1),
         renderer_bytes.map_or_else(|| "-".to_string(), hex_sha1),
-        device_features.as_ref().map_or_else(|| "-".to_string(), |d| d.join(",")),
         if store.is_some() { store_key.as_str() } else { "-" },
     );
     // Every other mod is given by its kept report; one that does not read is the caller's fault, never skipped.

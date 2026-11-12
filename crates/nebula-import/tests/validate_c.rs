@@ -522,7 +522,8 @@ fn renderer_features_and_the_device_s_reach_l806() {
     let f = &got.findings[0];
     assert_eq!((f.0, f.1, f.3.as_str(), f.6.as_deref()), (806, 0, "luma.json", Some("/renderer/features/0")));
     assert_eq!(f.7, "test.mod needs ray_tracing, which this device's graphics do not have.");
-    // A device that has it: nothing; the device is part of the game's key, so the kept report is not reused as is.
+    // A device that has it: nothing. The device is not part of the game's key (F's AR-1): another GPU takes the kept
+    // report (state 1) and L806 is said from the manifest's rules, which run at every start.
     let mut has = Call::new(&path, "windows-x64");
     has.renderer = call.renderer.clone();
     has.set_device(&["ray_tracing", "mesh_shaders", "ray_tracing"]);
@@ -530,7 +531,7 @@ fn renderer_features_and_the_device_s_reach_l806() {
     assert_eq!((full.state, full.findings.len()), (0, 0));
     assert_eq!(c_call(Some(&has.input(Some(&full.kept)))).state, 1);
     let again = c_call(Some(&call.input(Some(&full.kept))));
-    assert_eq!((again.state, again.findings.iter().map(|f| f.0).collect::<Vec<_>>()), (0, vec![806]));
+    assert_eq!((again.state, again.findings.iter().map(|f| f.0).collect::<Vec<_>>()), (1, vec![806]));
     // The list too.
     let mut other = Call::new(&path, "windows-x64");
     other.renderer = br#"{"renderer": {"features": ["ray_tracing"]}}"#.to_vec();
