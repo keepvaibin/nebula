@@ -589,14 +589,14 @@ fn fill_by(template: &str, look: &dyn Fn(&str) -> Option<Val>, lang: usize, dept
 /// The level of each code (validator contract 5): the Notes, everything else an Error.
 pub fn level_of(code: u16) -> Level {
     match code {
-        208 | 218 | 219 | 221 | 305 | 404 | 407 | 507 | 510 => Level::Note,
+        108 | 208 | 218 | 219 | 221 | 305 | 404 | 407 | 507 | 510 => Level::Note,
         _ => Level::Error,
     }
 }
 
 /// Every code this validator can report, for the suite's "one broken mod per code" check.
 pub const CODES: &[u16] = &[
-    100, 101, 102, 103, 104, 105, 106, 107, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213,
+    100, 101, 102, 103, 104, 105, 106, 107, 108, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213,
     214, 215, 216, 217, 218, 219, 220, 221, 300, 301, 302, 303, 304, 305, 306, 307, 400, 401, 402, 403, 404, 405, 406, 407, 500, 501,
     502, 503, 504, 505, 506, 507, 508, 509, 510, 511, 512, 700, 701, 702, 800, 801, 802, 803, 804, 805, 806,
 ];

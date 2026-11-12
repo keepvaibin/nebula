@@ -395,6 +395,7 @@ fn every_rule_has_a_broken_mod() {
         (102, luma(&[], &[file("media/CON.png", b"x")]), NO_GAME),
         (102, luma(&[], &[file("media/a\\b.png", b"x")]), NO_GAME),
         (102, luma(&[], &[local]), NO_GAME),
+        (108, luma(&[], &[file("media\\a.png", b"x")]), NO_GAME),
         (103, luma(&[], &[file("media/A.png", b"x"), file("media/a.png", b"x")]), NO_GAME),
         (104, luma(&[], &[link]), NO_GAME),
         (105, luma(&[], &[big]), NO_GAME),
@@ -841,4 +842,29 @@ fn text_and_key_options_are_whole_and_choose_no_layer() {
         assert!(got[0].2.contains("a text or key option") && got[0].2.contains(&format!("\"{named}\"")), "{}", got[0].2);
     }
     assert!(said(both, Some(r#"[{"name": "base", "when": {"option": {"on": true}}}]"#)).is_empty());
+}
+
+/// The director's decision of 2026-11-12: an archive with "\" between folders throughout (.NET Framework's ZipFile,
+/// Compress-Archive) is read with "/", said in a note (L108), and every name rule runs on the names as read.
+#[test]
+fn an_archive_with_backslashes_throughout_is_read_with_slashes_and_said() {
+    let layers = [("layers", r#"[{"name": "base"}]"#)];
+    let codes = |entries: &[E]| -> Vec<u16> { check(&luma(&layers, entries), &NO_GAME).findings.iter().map(|f| f.code).collect() };
+    // Clean but for the note, which is a Note: the mod passes, and its files are where "/" would put them.
+    let bytes = luma(&layers, &[file(r"layers\base\assets\x.bin", b"x"), file("layers\\base\\assets\\", b"")]);
+    let report = check(&bytes, &NO_GAME);
+    assert_eq!(report.findings.iter().map(|f| (f.code, f.level)).collect::<Vec<_>>(), vec![(108, luma_validate::Level::Note)]);
+    assert!(report.passed(), "{:?}", report.findings);
+    // Nothing "/" would refuse gets in: climbing, a device name, a clash, an unknown top level, each with the note.
+    let said = |entries: &[E], code: u16| {
+        let got = codes(entries);
+        assert!(got.contains(&108) && got.contains(&code), "L{code} and the note: {got:?}");
+    };
+    said(&[file(r"layers\..\..\evil.txt", b"x")], 102);
+    said(&[file(r"media\CON.png", b"x")], 102);
+    said(&[file(r"media\A.png", b"x"), file(r"media\a.png", b"x")], 103);
+    said(&[file(r"other\a.png", b"x")], 107);
+    // A mix of the two is read as written: the backslash is refused, no note.
+    let got = codes(&[file(r"layers\base\assets\x.bin", b"x"), file("media/a.png", b"x")]);
+    assert!(got.contains(&102) && !got.contains(&108), "{got:?}");
 }
