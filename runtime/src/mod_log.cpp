@@ -9,6 +9,8 @@
 #include <luma_harness.h>
 #include <luma_modlog.h>
 
+#include <functional>
+#include <vector>
 #include <atomic>
 #include <cstddef>
 #include <algorithm>
@@ -76,10 +78,40 @@ void add(const LumaModLogEntry& entry) {
     if (const LumaModLogAdd give = g_add.load(std::memory_order_acquire)) give(&entry);
 }
 
+// after_begin's queue: what waits for begin, and whether it has run. Under g_after_mutex.
+std::mutex g_after_mutex;
+bool g_begun = false;
+std::vector<std::function<void()>> g_after;
+
+// begin's end, whatever the module has: what waited runs now, in order.
+void begun() {
+    std::vector<std::function<void()>> waiting;
+    {
+        const std::lock_guard<std::mutex> lock(g_after_mutex);
+        g_begun = true;
+        waiting.swap(g_after);
+    }
+    for (std::function<void()>& then : waiting) then();
+}
+
 }  // namespace
 
+void after_begin(std::function<void()> then) {
+    {
+        const std::lock_guard<std::mutex> lock(g_after_mutex);
+        if (!g_begun) {
+            g_after.push_back(std::move(then));
+            return;
+        }
+    }
+    then();
+}
+
 void begin(void* (*find_symbol)(const char*), std::uint32_t mods_on) {
-    if (find_symbol == nullptr) return;
+    if (find_symbol == nullptr) {
+        begun();
+        return;
+    }
     const auto session = reinterpret_cast<LumaModLogSession>(find_symbol("luma_modlog_session"));
     g_next.store(reinterpret_cast<LumaModLogNext>(find_symbol("luma_modlog_next")), std::memory_order_release);
     g_next_mod.store(reinterpret_cast<LumaModLogNextMod>(find_symbol("luma_modlog_next_mod")), std::memory_order_release);
@@ -89,6 +121,7 @@ void begin(void* (*find_symbol)(const char*), std::uint32_t mods_on) {
     g_clock_of.store(reinterpret_cast<LumaTimeClockOf>(find_symbol("luma_time_clock_of")), std::memory_order_release);
     g_let_go.store(reinterpret_cast<LumaTimeLetGo>(find_symbol("luma_time_let_go")), std::memory_order_release);
     if (session != nullptr) session(mods_on, harness_fact());
+    begun();
 }
 
 void add_finding(std::uint32_t source, std::uint32_t level, std::string_view mod, std::uint32_t code, std::string_view file,

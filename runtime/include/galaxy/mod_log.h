@@ -4,6 +4,7 @@
 // and English. The module keeps them, shows them and writes the harness's facts (luma_modlog.h).
 #pragma once
 
+#include <functional>
 #include <cstdint>
 #include <filesystem>
 #include <optional>
@@ -18,6 +19,10 @@ namespace galaxy::modlog {
 // and tells the log how many mods are on (0: none; then the log costs nothing) and, in a harness run, the harness's
 // fact writer. Nothing happens when the module has no log.
 void begin(void* (*find_symbol)(const char*), std::uint32_t mods_on);
+
+// Runs `then` once begin has run (at once when it has; else at begin's end, on its thread): for what needs the module's
+// words, as an import's facts do when Open with or --import imports before the game module's log is found. Any thread.
+void after_begin(std::function<void()> then);
 
 // After start_plugins: each mod whose code did not start (galaxy::mods::plugins_not_started, Z-10) as a LOADER Error:
 // a refusal in the validator's words, a host sentence as the Mods page translates it.

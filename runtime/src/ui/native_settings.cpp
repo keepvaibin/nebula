@@ -2472,7 +2472,9 @@ void run_mod_imports(std::vector<std::filesystem::path> sources) {
             s_mod_import_message = added != 0u ? message + ". MODS APPLY WHEN NEBULA RESTARTS" : message;
             s_import_outcomes = std::move(outcomes);
         }
-        write_import_facts();
+        // Its facts once the module's words are there (a takes_over line is a row of its table): an import at the
+        // start (Open with, --import) runs before the game module's log is found.
+        galaxy::modlog::after_begin(write_import_facts);
         s_import_page_open.store(true, std::memory_order_release);
         {
             const std::lock_guard<std::mutex> lock(s_mods_mutex);
