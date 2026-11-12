@@ -76,7 +76,8 @@ typedef enum LumaSaveGameEvent {
                                         status: LUMA_OK, LUMA_E_NOT_FOUND (that user file is empty) */
     LUMA_SAVE_GAME_EVENT_OFFER = 2   /* data: none; value: the user file replaced (1 to 6), else 0; status: LUMA_OK,
                                         LUMA_E_DENIED (no, or the screen closed), LUMA_E_FORMAT (not a game file of
-                                        this disc's form) */
+                                        this disc's form: no screen), LUMA_E_IO (the old file could not be kept, or
+                                        saves are off: nothing replaced), LUMA_E_MEMORY */
 } LumaSaveGameEvent;
 
 typedef struct LumaSaveGameService {
@@ -90,14 +91,16 @@ typedef struct LumaSaveGameService {
        and returns value (the file's whole length). Outside the call, another handle or a second time: LUMA_E_HANDLE,
        reported; a null buf with size above 0: LUMA_E_ARGUMENT, reported. */
     int64_t (*take)(const LumaMod* mod, LumaHandle handle, void* buf, uint64_t size);
-    /* 1.0. Game thread. Offers the file at `path` (in the mod's data folder) to replace a user file: the player picks
-       one on Nebula's offer screen and confirms. LUMA_PENDING with the request in *out; an OFFER event follows,
-       closed after its event. Another offer open (any mod's), a screen waiting on the player, a time hold or an
-       unskippable cutscene: LUMA_E_BUSY; a path naming no file: LUMA_E_NOT_FOUND; both answers, not reported;
-       LUMA_E_ABSENT: no fs yet; a path outside the data folder, a null fn or out: LUMA_E_ARGUMENT, reported. */
+    /* 1.0. Game thread. Offers the file at `path` (in the mod's data folder; an export_file's bytes) to replace a
+       user file: the player picks one on Nebula's offer screen and confirms. LUMA_PENDING with the request in *out;
+       an OFFER event follows, closed after its event; the old file's bytes are kept in the save folder first. Another
+       offer open (any mod's), a screen waiting on the player, a time hold or a cutscene: LUMA_E_BUSY; a path naming
+       no file: LUMA_E_NOT_FOUND; both answers, not reported; LUMA_E_IO: the file could not be read; LUMA_E_ABSENT: a
+       host without the offer screen; a path outside the data folder, a null fn or out: LUMA_E_ARGUMENT, reported. */
     int32_t (*offer)(const LumaMod* mod, const char* path, LumaEventFn fn, void* user, LumaHandle* out);
     /* 1.0. Game thread. Ends a request: no event for it after this returns; an open question closes as no, nothing
-       replaced. LUMA_OK; a handle that is not this mod's open request: LUMA_E_HANDLE, reported. */
+       replaced (a REPLACE the player already gave still goes through). LUMA_OK; a handle that is not this mod's open
+       request: LUMA_E_HANDLE, reported. */
     int32_t (*cancel)(const LumaMod* mod, LumaHandle handle);
 } LumaSaveGameService;
 

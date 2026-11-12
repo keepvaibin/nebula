@@ -26,6 +26,10 @@ public:
     // LumaCore's FORGET (services-save 5): the stored files written as they are in memory, no window, no sound, no
     // question. False, nothing started: a sequence is running, the save was not read yet, or saves are off.
     bool startQuietSave();
+    // True when startQuietSave never writes: the start read nothing usable, saves are off, or the save is damaged.
+    bool isQuietSaveOff() const {
+        return mPreLoadState == 2 || mIsNoSaveMode || mIsCorrupted;
+    }
     void exeQuietSave();
     // A save was read at the start (1), or the start read none (2: no file, damaged, or saves off); 0 before.
     int getPreLoadState() const {

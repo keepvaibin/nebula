@@ -21,6 +21,17 @@ std::string_view mod_file_name(std::string_view request_name) noexcept {
     return is_plain_name(name) ? name : std::string_view{};
 }
 
+std::string_view replaced_file_name(std::string_view request_name) noexcept {
+    const std::size_t head = kModFolder.size() + 1u + kReplacedFolder.size() + 1u;
+    if (request_name.size() <= head || !request_name.starts_with(kModFolder) || request_name[kModFolder.size()] != '/' ||
+        request_name.substr(kModFolder.size() + 1u, kReplacedFolder.size()) != kReplacedFolder ||
+        request_name[head - 1u] != '/') {
+        return {};
+    }
+    const std::string_view name = request_name.substr(head);
+    return is_plain_name(name) ? name : std::string_view{};
+}
+
 SaveFolders save_folders(std::string_view code) {
     std::string hex;
     for (const char c : code) {

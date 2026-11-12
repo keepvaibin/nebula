@@ -80,6 +80,15 @@ int main() {
                              "GameData.bin", "luma/.."}) {
         passed &= expect(mod_file_name(name).empty(), name);
     }
+    // save.game's offer (services-save 8): the replaced file's copy, "luma/replaced/<plain name>" only.
+    passed &= expect(replaced_file_name("luma/replaced/2026-11-12-031500-file2.bin") == "2026-11-12-031500-file2.bin",
+                     "a replaced file's name is its plain name");
+    passed &= expect(mod_file_name("luma/replaced/a.bin").empty(), "a replaced file is not a mod's global file");
+    for (const char* name : {"luma/replaced/", "luma/replaced", "luma/replaced/../a.bin", "luma/replaced/a/b.bin",
+                             "luma/replacedx/a.bin", "luma/Replaced/a.bin", "luma/a.bin", "replaced/a.bin",
+                             "luma/replaced/.."}) {
+        passed &= expect(replaced_file_name(name).empty(), name);
+    }
     const fs::path mods = folder / std::string(kModFolder);
     fs::create_directories(mods);
     passed &= expect(write(mods, "m.bin", save.data(), 16, Backups::kNone) == kDone &&

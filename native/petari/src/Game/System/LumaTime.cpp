@@ -6,6 +6,7 @@
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemRestartProcess.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
+#include "Game/System/LumaSave.hpp"
 #include "Game/System/LumaServices.hpp"
 #include "Game/System/NebulaCutsceneSkip.hpp"
 #include "Game/Util/SceneUtil.hpp"
@@ -1074,6 +1075,8 @@ namespace luma {
 
         u32 soundRate() { return __atomic_load_n(&sSoundRate, __ATOMIC_RELAXED); }
 
+        bool isWorldHeld() { return sHolders != 0; }
+
         void framePost() {
             for (u32 c = 0; c < sClockHigh; c++) {
                 Clock& rClock = sClocks[c];
@@ -1146,11 +1149,13 @@ NEBULA_GAME_API int32_t luma_time_clock_of(const char* id, uint32_t* rate, int32
     return 0;
 }
 
-// The host's facts (luma_services_facts.h), once before the first mod: the UTC clock for time.wall.
+// The host's facts (luma_services_facts.h), once before the first mod: the UTC clock for time.wall; the offered file
+// and the offer screen for save.game (services-save 8).
 NEBULA_GAME_API void luma_services_facts(const LumaServicesFacts* facts) {
     if (facts != nullptr && facts->size >= offsetof(LumaServicesFacts, utc_ns) + sizeof(facts->utc_ns)) {
         luma::time::setUtcClock(facts->utc_ns);
     }
+    luma::save::setFacts(facts);
 }
 
 // The game's steady clock for the host's services (luma_services_facts.h), any thread.

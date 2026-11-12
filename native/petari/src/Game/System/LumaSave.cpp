@@ -5,21 +5,26 @@
 #include "Game/System/LumaModLog.hpp"
 #include "Game/System/LumaSaveChunk.hpp"
 #include "Game/System/LumaServices.hpp"
+#include "Game/System/LumaTime.hpp"
 #include "Game/System/GameSequenceDirector.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/SaveDataHandleSequence.hpp"
 #include "Game/System/SaveDataHandler.hpp"
 #include "Game/System/SaveRequest.hpp"
 #include "Game/System/UserFile.hpp"
+#include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include <luma_modlog.h>
 #include <luma_save.h>
 #include <luma_service_provider.h>
+#include <luma_services_facts.h>
 #include <nebula_game_api.h>
 #include <luma_services.h>
 #include <nebula_format.h>
 #include <nebula_module.h>
+#include <stddef.h>
 
 // The save service (contract services-save). Game thread only: the values live in the loaded file's GameDataHolder,
 // which the game's save sequence reads on the same thread. No mod, no cost: nothing here runs; the chunk is 16 bytes
@@ -436,13 +441,15 @@ namespace luma {
             }
 
             bool forgetWork();
+            bool offerWork();
 
-            // The save hook (LumaServices::setSaveHook, wakeSaveHook): save.global's stores and a FORGET's files.
-            // Unhooked when neither has work.
+            // The save hook (LumaServices::setSaveHook, wakeSaveHook): save.global's stores, a FORGET's files and
+            // save.game's replacement. Unhooked when none has work.
             void saveFrame() {
                 const bool globals = globalsWork();
                 const bool forgets = forgetWork();
-                if (!globals && !forgets) {
+                const bool offers = offerWork();
+                if (!globals && !forgets && !offers) {
                     luma::services::setSaveHook(nullptr);
                 }
             }
@@ -983,9 +990,267 @@ namespace luma {
                 }
             }
 
+            // ---- offer: one at a time across mods. Asked (the screen is up), then on REPLACE kept (the old file's bytes
+            // to luma/replaced), then replaced (in memory, written by a quiet save), then its event. ----
+            const u32 cOfferMost = 4u << 20;  // two game data files of 1 MiB of mods' values each, and room
+            const u32 cCodeOffered = 182;     // Save.Offered
+            const u32 cCodeReplaced = 183;    // Save.Replaced
+            const LumaServicesFacts* sFacts = nullptr;  // the host's, once before the first mod; game thread
+
+            enum OfferStage {
+                Offer_None,      // free
+                Offer_Asked,     // the screen is up: the answer comes through offerAnswer
+                Offer_Keeping,   // REPLACE: the old file's copy is being written
+                Offer_Replacing, // waiting for the game's save sequence to be free
+                Offer_Posted,    // the event is with the kernel: freed by deliver or drop
+            };
+
+            struct OfferRequest {
+                LumaEventNode mNode;  // first: deliver and drop are given the request through it
+                LumaHandle mHandle;
+                OfferStage mStage;
+                bool mClosed;  // cancelled, or the mod stopped: no event; a REPLACE already given still goes through
+                LumaEventFn mFn;
+                void* mUser;
+                char mAsker[LumaSaveChunk::cIdMost + 1];
+                u8* mBytes;  // the offered file, whole; the parts point into it
+                const u8* mParts[SaveFileId::Kind_Num];
+                u32 mSizes[SaveFileId::Kind_Num];
+                u32 mFile;    // the user file picked
+                s32 mStatus;  // the event's
+                u8* mOld;     // the replaced file's bytes while their copy is written
+                char mKeepName[48];  // "luma/replaced/<date>-file<n>.bin", held by mKeep while it runs
+                SaveRequest mKeep;
+            };
+            OfferRequest* sOffer = nullptr;  // made at the first offer; never freed (mKeep may be the host's)
+            UserFile* sOfferRead = nullptr;  // the files' reading for the screen; made at the first offer
+
+            void sayFileNote(const LumaMod* pMod, const char* pId, u32 code, const char* pRow, u32 file) {
+                char text[4];
+                nebula_snprintf(text, sizeof(text), "%u", file);
+                LumaModLogEntry entry = {};
+                entry.size = sizeof(entry);
+                entry.source = LUMA_MODLOG_CODE;
+                entry.level = LUMA_MODLOG_NOTE;
+                entry.code = code;
+                entry.mod = pMod != nullptr ? sKernel->mod_id(pMod) : nullptr;
+                if (entry.mod == nullptr) {
+                    entry.mod = pId;  // the mod stopped since: its id as the request kept it
+                }
+                entry.file = "";
+                entry.names[0] = "file";
+                entry.values[0] = text;
+                entry.count = 1;
+                entry.row = pRow;
+                luma::modlog::add(entry, pRow);
+            }
+
+            void offerFree() {
+                delete[] sOffer->mBytes;
+                delete[] sOffer->mOld;
+                sOffer->mBytes = nullptr;
+                sOffer->mOld = nullptr;
+                sOffer->mHandle = 0;
+                sOffer->mStage = Offer_None;
+                sOffer->mClosed = false;
+                sOffer->mFn = nullptr;
+                sOffer->mUser = nullptr;
+            }
+
+            void offerDeliver(LumaEventNode* pNode) {
+                OfferRequest* const pRequest = reinterpret_cast< OfferRequest* >(pNode);
+                if (!pRequest->mClosed) {
+                    LumaEvent event = {};
+                    event.size = sizeof(event);
+                    event.kind = LUMA_SAVE_GAME_EVENT_OFFER;
+                    event.handle = pRequest->mHandle;
+                    event.status = pRequest->mStatus;
+                    event.value = pRequest->mStatus == LUMA_OK ? pRequest->mFile : 0u;
+                    (void)sKernel->call(pNode->mod, LUMA_SAVE_GAME_NAME, pRequest->mFn, pRequest->mUser, &event);
+                }
+                offerFree();
+            }
+
+            void offerDrop(LumaEventNode*) {
+                offerFree();
+            }
+
+            // The request's end: its event at the next frame's start, or nothing when it was closed.
+            void offerPost(s32 status) {
+                sOffer->mStatus = status;
+                if (sOffer->mClosed || sKernel->post(&sOffer->mNode) != LUMA_OK) {
+                    offerFree();
+                    return;
+                }
+                sOffer->mStage = Offer_Posted;
+            }
+
+            // One file as the screen shows it, from its parts as Nebula.sav holds them (user `user`, 1 to 6). False:
+            // the config or the last character's game data does not load (a broken file).
+            bool readFile(int user, const u8* const ppParts[], const u32 pSizes[], LumaOfferFile* pOut) {
+                *pOut = {};
+                sOfferRead->resetAllData();
+                if (pSizes[SaveFileId::Kind_Config] == 0) {
+                    return true;  // never created
+                }
+                sOfferRead->loadFromConfigDataBinary({SaveFileId::Kind_Config, user}, ppParts[SaveFileId::Kind_Config],
+                                                     pSizes[SaveFileId::Kind_Config]);
+                if (sOfferRead->mIsConfigDataCorrupted) {
+                    return false;
+                }
+                if (!sOfferRead->isCreated()) {
+                    return true;
+                }
+                const bool luigi = !sOfferRead->isLastLoadedMario();
+                const SaveFileId::Kind kind = luigi ? SaveFileId::Kind_Luigi : SaveFileId::Kind_Mario;
+                if (pSizes[kind] == 0) {
+                    return false;
+                }
+                sOfferRead->loadFromGameDataBinary({kind, user}, ppParts[kind], pSizes[kind]);
+                if (sOfferRead->mIsGameDataCorrupted) {
+                    return false;
+                }
+                pOut->exists = 1;
+                pOut->luigi = luigi ? 1u : 0u;
+                pOut->stars = static_cast< u32 >(sOfferRead->getPowerStarNum());
+                return true;
+            }
+
+            // The loaded user file (1 to 6) and its game data, or 0 at the title and the file select.
+            int loadedUser(GameDataHolder** ppHolder) {
+                GameDataHolder* const pHolder = loadedHolder();
+                *ppHolder = pHolder;
+                return pHolder != nullptr ? pHolder->getFileId().mUser : 0;
+            }
+
+            // The screen's facts: the offered file (false: broken) and the six in memory, the loaded one as played now.
+            bool offerFacts(SaveDataHandler* pHandler, LumaOfferFacts* pFacts) {
+                *pFacts = {};
+                if (!readFile(1, sOffer->mParts, sOffer->mSizes, &pFacts->offered) || pFacts->offered.exists == 0) {
+                    return false;  // an empty file offered is not a game file either
+                }
+                // The other character's game data, when it has some, must load too: it is written whole.
+                const SaveFileId::Kind other =
+                    pFacts->offered.luigi != 0 ? SaveFileId::Kind_Mario : SaveFileId::Kind_Luigi;
+                if (sOffer->mSizes[other] != 0) {
+                    sOfferRead->resetAllData();
+                    sOfferRead->loadFromGameDataBinary({other, 1}, sOffer->mParts[other], sOffer->mSizes[other]);
+                    if (sOfferRead->mIsGameDataCorrupted) {
+                        return false;
+                    }
+                }
+                GameDataHolder* pLoaded = nullptr;
+                const int loaded = loadedUser(&pLoaded);
+                for (u32 n = 1; n <= cUserFiles; n++) {
+                    LumaOfferFile& rFile = pFacts->files[n - 1];
+                    if (static_cast< int >(n) == loaded) {
+                        rFile.exists = 1;
+                        rFile.in_play = 1;
+                        rFile.luigi = pLoaded->isDataMario() ? 0u : 1u;
+                        rFile.stars = static_cast< u32 >(pLoaded->calcCurrentPowerStarNum());
+                        continue;
+                    }
+                    const u8* parts[SaveFileId::Kind_Num];
+                    u32 sizes[SaveFileId::Kind_Num];
+                    for (u32 kind = 0; kind < SaveFileId::Kind_Num; kind++) {
+                        parts[kind] = pHandler->getFile({static_cast< SaveFileId::Kind >(kind), static_cast< s32 >(n)},
+                                                        &sizes[kind]);
+                    }
+                    if (!readFile(static_cast< int >(n), parts, sizes, &rFile)) {
+                        rFile = {};  // a file in memory that does not load shows as empty (the game's own file
+                        rFile.exists = 1;  // select shows it as broken): pickable, nothing summed
+                    }
+                }
+                return true;
+            }
+
+            // The offer screen's answer (the host's, at a frame's start). `pContext` is the request's handle: an answer
+            // to a request closed since (cancel, the mod gone) finds another handle or none, and is dropped.
+            void offerAnswer(void* pContext, int32_t status, uint32_t file) {
+                if (sOffer == nullptr || sOffer->mStage != Offer_Asked ||
+                    sOffer->mHandle != static_cast< LumaHandle >(reinterpret_cast< uintptr_t >(pContext))) {
+                    return;
+                }
+                if (status != LUMA_OK || file < 1 || file > cUserFiles) {
+                    offerPost(LUMA_E_DENIED);
+                    return;
+                }
+                sOffer->mFile = file;
+                sayFileNote(sOffer->mNode.mod, sOffer->mAsker, cCodeOffered, "Save.Offered", file);
+                // The old file's bytes first (J-SV5): as an export of it reads them (it is not the loaded one).
+                SaveDataHandler* const pHandler =
+                    SingletonHolder< GameSystem >::get()->mSequenceDirector->mSaveDataHandleSequence->mSaveDataHandler;
+                u32 length = 0;
+                const SaveDataHandler::ExportResult made = pHandler->makeExport(static_cast< int >(file), nullptr, &sOffer->mOld, &length);
+                if (made == SaveDataHandler::Export_Memory) {
+                    offerPost(LUMA_E_MEMORY);
+                    return;
+                }
+                if (made == SaveDataHandler::Export_Ok) {
+                    const NebulaCalendar::Date date = NebulaCalendar::toDate(NebulaCalendar::now());
+                    nebula_snprintf(sOffer->mKeepName, sizeof(sOffer->mKeepName),
+                                    "luma/replaced/%04d-%02d-%02d-%02d%02d%02d-file%u.bin", date.mYear, date.mMonth,
+                                    date.mDay, date.mHour, date.mMinute, date.mSecond, file);
+                    sOffer->mKeep.setWriteSeq(sOffer->mKeepName, sOffer->mOld, length);
+                    sOffer->mKeep.start();
+                    sOffer->mStage = Offer_Keeping;
+                } else {
+                    sOffer->mStage = Offer_Replacing;  // an empty file: nothing to keep
+                }
+                luma::services::setSaveHook(saveFrame);
+            }
+
+            // The save hook's part: the kept copy waited for, then the replacement once the game's save sequence is
+            // free. True while there is work.
+            bool offerWork() {
+                if (sOffer == nullptr) {
+                    return false;
+                }
+                if (sOffer->mStage == Offer_Keeping) {
+                    if (!sOffer->mKeep.isDone()) {
+                        return true;
+                    }
+                    delete[] sOffer->mOld;
+                    sOffer->mOld = nullptr;
+                    if (sOffer->mKeep.getResult() != SaveRequest::Result_Done) {
+                        nebula_log("LumaCore save: the old file %u could not be kept (%d); it was not replaced\n",
+                                   sOffer->mFile, static_cast< int >(sOffer->mKeep.getResult()));
+                        offerPost(LUMA_E_IO);
+                        return false;
+                    }
+                    nebula_log("LumaCore save: file %u kept as %s before %s's file replaces it\n", sOffer->mFile,
+                               sOffer->mKeepName, sOffer->mAsker);
+                    sOffer->mStage = Offer_Replacing;
+                }
+                if (sOffer->mStage != Offer_Replacing) {
+                    return false;
+                }
+                // As a FORGET's save waits (forgetWork): the sequence made, its start's read over, no sequence running,
+                // no request with the host. requestSaveSaveData init()s the one SaveRequest: never under the sequence.
+                SaveDataHandleSequence* const pSequence =
+                    SingletonHolder< GameSystem >::get()->mSequenceDirector->mSaveDataHandleSequence;
+                SaveDataHandler* const pHandler = pSequence->mSaveDataHandler;
+                if (pSequence->getPreLoadState() == 0 || pSequence->isActive() || !pHandler->isDone()) {
+                    return true;
+                }
+                if (pSequence->isQuietSaveOff()) {
+                    offerPost(LUMA_E_IO);  // saves are off: a file replaced now would never be written
+                    return false;
+                }
+                GameDataHolder* pLoaded = nullptr;
+                if (loadedUser(&pLoaded) == static_cast< int >(sOffer->mFile)) {
+                    offerPost(LUMA_E_DENIED);  // loaded since the answer: never replaced under the player
+                    return false;
+                }
+                pHandler->replaceUserFile(static_cast< int >(sOffer->mFile), sOffer->mParts, sOffer->mSizes);
+                (void)pSequence->startQuietSave();  // checked above: it starts
+                sayFileNote(sOffer->mNode.mod, sOffer->mAsker, cCodeReplaced, "Save.Replaced", sOffer->mFile);
+                offerPost(LUMA_OK);
+                return false;
+            }
+
             int32_t svcOffer(const LumaMod* pMod, const char* pPath, LumaEventFn fn, void* pUser, LumaHandle* pOut) {
                 const char* const pWhere = "save.game.offer";
-                (void)pUser;
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
                 }
@@ -997,14 +1262,113 @@ namespace luma {
                     report(pMod, pWhere, 101u, fn == nullptr ? "fn" : "out");
                     return LUMA_E_ARGUMENT;
                 }
-                // The mod's data folder is the fs service's (plan 2.3), not built yet: no file can be named (item 8).
-                return LUMA_E_ABSENT;
+                const LumaServicesFacts* const pFacts = sFacts;
+                if (pFacts == nullptr || pFacts->size < offsetof(LumaServicesFacts, close_offer) + sizeof(pFacts->close_offer) ||
+                    pFacts->data_file == nullptr || pFacts->ask_offer == nullptr || pFacts->close_offer == nullptr) {
+                    return LUMA_E_ABSENT;  // a host without the offer's half
+                }
+                GameSystem* const pSystem = SingletonHolder< GameSystem >::get();
+                if (pSystem == nullptr || pSystem->mSequenceDirector == nullptr ||
+                    pSystem->mSequenceDirector->mSaveDataHandleSequence == nullptr ||
+                    pSystem->mSequenceDirector->mSaveDataHandleSequence->mSaveDataHandler == nullptr) {
+                    return LUMA_E_ABSENT;
+                }
+                SaveDataHandler* const pHandler = pSystem->mSequenceDirector->mSaveDataHandleSequence->mSaveDataHandler;
+                if ((sOffer != nullptr && sOffer->mStage != Offer_None) || luma::time::isWorldHeld() ||
+                    (MR::isExistSceneObj(SceneObj_DemoDirector) && MR::isDemoActive())) {
+                    return LUMA_E_BUSY;
+                }
+                const char* const pId = sKernel->mod_id(pMod);
+                u32 length = 0;
+                s32 found = pFacts->data_file(pId, pPath, nullptr, 0, &length);
+                if (found == LUMA_E_IO) {
+                    return LUMA_E_IO;
+                }
+                if (found != LUMA_OK) {
+                    return LUMA_E_NOT_FOUND;  // none, a folder, or through a link: no file there for the mod
+                }
+                if (sOffer == nullptr) {
+                    sOffer = new OfferRequest();
+                    sOfferRead = sOffer != nullptr ? new UserFile() : nullptr;
+                    if (sOffer == nullptr || sOfferRead == nullptr) {
+                        delete sOffer;
+                        sOffer = nullptr;
+                        return LUMA_E_MEMORY;
+                    }
+                    sOffer->mBytes = nullptr;
+                    sOffer->mOld = nullptr;
+                    sOffer->mStage = Offer_None;
+                }
+                if (++sLastExport == 0) {  // one count for both kinds of request: a handle names one
+                    ++sLastExport;
+                }
+                OfferRequest& rOffer = *sOffer;
+                rOffer.mNode = {};
+                rOffer.mNode.mod = pMod;
+                rOffer.mNode.deliver = offerDeliver;
+                rOffer.mNode.drop = offerDrop;
+                rOffer.mHandle = sLastExport;
+                rOffer.mClosed = false;
+                rOffer.mFn = fn;
+                rOffer.mUser = pUser;
+                rOffer.mFile = 0;
+                rOffer.mStatus = LUMA_OK;
+                nebula_snprintf(rOffer.mAsker, sizeof(rOffer.mAsker), "%s", pId);
+                // A file past the room is not a game file: its event says so, as a broken one's does.
+                bool good = length <= cOfferMost;
+                if (good) {
+                    rOffer.mBytes = new u8[length != 0 ? length : 1];
+                    if (rOffer.mBytes == nullptr) {
+                        rOffer.mHandle = 0;
+                        return LUMA_E_MEMORY;
+                    }
+                    u32 read = 0;
+                    found = pFacts->data_file(pId, pPath, rOffer.mBytes, length, &read);
+                    if (found != LUMA_OK || read != length) {
+                        offerFree();
+                        return found == LUMA_E_NOT_FOUND ? LUMA_E_NOT_FOUND : LUMA_E_IO;  // gone or changed meanwhile
+                    }
+                    good = SaveDataHandler::splitExport(rOffer.mBytes, length, rOffer.mParts, rOffer.mSizes);
+                }
+                LumaOfferFacts facts;
+                good = good && offerFacts(pHandler, &facts);
+                rOffer.mStage = Offer_Asked;
+                *pOut = rOffer.mHandle;
+                if (!good) {
+                    offerPost(LUMA_E_FORMAT);  // never shown (item 8)
+                    return LUMA_PENDING;
+                }
+                const s32 asked = pFacts->ask_offer(&facts, pId, offerAnswer,
+                                                    reinterpret_cast< void* >(static_cast< uintptr_t >(rOffer.mHandle)));
+                if (asked != LUMA_PENDING) {
+                    offerFree();
+                    *pOut = 0;
+                    return asked == LUMA_E_BUSY ? LUMA_E_BUSY : LUMA_E_ABSENT;  // a screen is up; no menu in this host
+                }
+                return LUMA_PENDING;
+            }
+
+            // Cancel or the mod's stop: the screen closes as no; after REPLACE the replacement still goes; no event.
+            void offerClose(const LumaMod* pMod) {
+                if (sOffer == nullptr || sOffer->mStage == Offer_None || sOffer->mNode.mod != pMod || sOffer->mClosed) {
+                    return;
+                }
+                sOffer->mClosed = true;
+                if (sOffer->mStage == Offer_Asked) {
+                    sFacts->close_offer(sOffer->mAsker);
+                    offerFree();
+                }
             }
 
             int32_t svcCancel(const LumaMod* pMod, LumaHandle handle) {
                 const char* const pWhere = "save.game.cancel";
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
+                }
+                if (handle != 0 && sOffer != nullptr && sOffer->mStage != Offer_None && sOffer->mHandle == handle &&
+                    sOffer->mNode.mod == pMod && !sOffer->mClosed) {
+                    offerClose(pMod);
+                    return LUMA_OK;
                 }
                 ExportRequest* const pRequest = openExport(pMod, handle);
                 if (pRequest == nullptr) {
@@ -1032,6 +1396,7 @@ namespace luma {
                         rRequest.mCancelled = true;
                     }
                 }
+                offerClose(pMod);
             }
 
             const LumaServiceRow cGameRows[] = {
@@ -1057,6 +1422,10 @@ namespace luma {
 
         void fileLoaded() {
             sLoaded = true;
+        }
+
+        void setFacts(const LumaServicesFacts* pFacts) {
+            sFacts = pFacts;
         }
 
         const LumaServiceProvider* provider() {

@@ -26,6 +26,8 @@ namespace luma {
         // The rate the game's sound follows now, in thousandths (1000 real time; 0 the world's sound held). Any thread
         // (the sound engine's tick reads it on the audio clock's thread).
         u32 soundRate();
+        // Game thread: some mod holds the world clock (services-time 4). One load.
+        bool isWorldHeld();
 
         // LumaServices' frame start: before the events, the due timers' events are posted; after them, the frame
         // handlers run (services-registry 6.1, services-time 3 step 3).
