@@ -2433,7 +2433,7 @@ void RenderCore::rt_reactive() {
 void RenderCore::rt_light_end() noexcept {
     if (rt_light_on_) {
         rt_light_on_ = false;
-        view_flags_ &= ~248u;  // bits 3 to 7
+        view_flags_ &= ~504u;  // bits 3 to 8 (the light, motion, own lamp, S, A, F)
     }
 }
 
