@@ -30,12 +30,16 @@ float4 material_color(NativeVaryings i) {
         discard;
     }
     float3 c8 = TEX(0).Sample(SAMP(0), i.uv[0].xy).rgb * TEX(0).Sample(SAMP(0), i.uv[0].zw).rgb * 127.5;
+    const float3 pattern8 = c8;
     c8 += material.highlight.rgb * 255.0 * level_line(c8.r, material.highlight.a * 255.0);
     float2 screen = i.uv[2].z != 0.0 ? i.uv[2].xy / i.uv[2].z : i.uv[2].xy;
+    float2 move = float2(0.0, 0.0);  // the wobble in screen texture coordinates
     if (material.warp.y != 0.0) {
         const float2 step = round(TEX(2).Sample(SAMP(2), i.uv[1].xy).ab * 255.0) - 128.0;
-        screen += step * material.warp.x / material.warp.zw;
+        move = step * material.warp.x / material.warp.zw;
+        screen += move;
     }
     const float3 behind = TEX(1).Sample(SAMP(1), screen).rgb * material.tint.rgb;
-    return float4(saturate(c8 / 255.0 + behind), i.color.a);
+    // Under the traced light the wobble moves what the tracer shows (program.hlsli traced_sea; d09).
+    return traced_sea(pattern8 / 255.0, c8 / 255.0 - pattern8 / 255.0, behind, i.color.a, move * line_point_raster.xy, i.pos);
 }

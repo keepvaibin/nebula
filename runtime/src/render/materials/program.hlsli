@@ -527,6 +527,87 @@ float4 traced_sheen_here(float4 pixel, bool metal) {
     const float k = saturate(view_look.x);
     return float4(g_traced_sheen.rgb * k, lerp(1.0, g_traced_sheen.a, k));
 }
+// The sea's own waves under the traced light (the director's d09; ocean_bowl, ocean_ring, water_road). The game adds
+// three things: `pattern` (its water texture at two scrolls, multiplied), `ring` (the highlight where that meets a
+// level) and `behind` (the screen behind looked up moved by its indirect texture, tinted; a painted reflection), and
+// blends by `alpha`. Where the pixel's mirror is a clear surface's own, R and T are read moved by the same wobble
+// (`warp`: the game's move in pixels) and the pattern and the ring are the surface's light, by the alpha and 1 - F;
+// g_sea_done then, and traced_colour returns g_sea_out. Elsewhere the game's colour, by the old path.
+static bool g_sea_done = false;
+static float4 g_sea_out = float4(0.0, 0.0, 0.0, 0.0);
+static const float kSeaPattern = 0.5;  // of the pattern's haze; the rest stood for the sky's reflection (R)
+#if !NATIVE_PREPASS
+// Picture `place` about `at` (pixels): four taps by their bilinear weights, a tap whose a is not over `least` left out
+// (another surface's pixel); `unmoved` where less than a quarter is left.
+float4 traced_moved(uint place, float2 at, float least, float4 unmoved) {
+    uint wide, high;
+    gTextures[place].GetDimensions(wide, high);
+    const float2 corner = floor(at - 0.5);
+    const float2 part = at - 0.5 - corner;
+    float4 sum = float4(0.0, 0.0, 0.0, 0.0);
+    float weight = 0.0;
+    [unroll] for (uint k = 0u; k < 4u; ++k) {
+        const bool right = (k & 1u) != 0u, low = (k & 2u) != 0u;
+        const int2 tap = clamp(int2(corner) + int2(right ? 1 : 0, low ? 1 : 0), int2(0, 0), int2(wide, high) - 1);
+        const float4 t = gTextures[place].Load(int3(tap, 0));
+        const float w = (right ? part.x : 1.0 - part.x) * (low ? part.y : 1.0 - part.y);
+        if (t.a > least) {
+            sum += t * w;
+            weight += w;
+        }
+    }
+    return weight > 0.25 ? sum / weight : unmoved;
+}
+float4 traced_sea(float3 pattern, float3 ring, float3 behind, float alpha, float2 warp, float4 pixel) {
+    const float4 game = float4(pattern + ring + behind, alpha);
+    if ((view_flags & 8u) == 0u || (view_flags & (16u | 64u)) != 0u || (draw_flags & (32u | 64u | 128u | 256u | 1024u)) != 0u ||
+        traced_by_air(pixel) || !traced_mirror_own(pixel)) {
+        return game;
+    }
+    const uint mirror_at = uint(view_traced.z);
+    const float4 mirror_here = gTextures[mirror_at].Load(int3(pixel.xy, 0));
+    if (mirror_here.a <= 3.5) {
+        return game;  // not a clear surface's mirror (F R, 4 + F): the old path
+    }
+    const float2 moved = pixel.xy + warp * saturate(alpha);
+    const float4 mirror = traced_moved(mirror_at, moved, 3.5, mirror_here);
+    const float f = saturate(mirror.a - 4.0);
+    // The light on the surface's own colours, as a painted colour takes it (traced_colour).
+    const float4 light = gTextures[uint(view_traced.x)].Load(int3(pixel.xy, 0));
+    const float4 added = gTextures[uint(view_traced.y)].Load(int3(pixel.xy, 0));
+    const float nl = saturate(gTextures[uint(view_traced.w)].Load(int3(pixel.xy, 0)).r);
+    bool coloured = false;
+    const float3 o3 = traced_o(light, pixel, coloured);
+    const float3 share = traced_painted(light, nl, o3, coloured);
+    const float kAddedMost = 1.5;  // as traced_colour
+    const float3 waves = traced_lin(saturate(pattern * kSeaPattern + ring));
+    const float3 waves_lit = waves * share + min(waves * added.rgb, kAddedMost);
+    if (view_transmit.y > 0.5) {
+        const float4 seen_here = gTextures[uint(view_transmit.x)].Load(int3(pixel.xy, 0));
+        if (seen_here.a > 0.5) {
+            // High: what lies under it traced bent (rt_transmit.hlsl), wobbled as the game wobbles its screen.
+            const float4 seen = traced_moved(uint(view_transmit.x), moved, 0.5, seen_here);
+            g_sea_out = float4(traced_srgb(mirror.rgb + (1.0 - f) * (seen.rgb + saturate(alpha) * waves_lit)), 1.0);
+            g_sea_done = true;
+            return g_sea_out;
+        }
+    }
+    // No T: the body as traced_mirror weighs it, the waves on what the body leaves; the alpha by what they add.
+    const float3 whole = traced_lin(saturate(game.rgb));
+    const float3 whole_lit = whole * share + min(whole * added.rgb, kAddedMost);
+    const float body = (1.0 - f) * saturate(added.a) * alpha;
+    const float covered = f + body;
+    const float3 extra = (1.0 - covered) * saturate(alpha) * waves_lit;
+    const float cover = saturate(covered + max(extra.r, max(extra.g, extra.b)));
+    g_sea_out = float4(traced_srgb((body * whole_lit + mirror.rgb + extra) / max(cover, 1e-4)), cover);
+    g_sea_done = true;
+    return g_sea_out;
+}
+#else
+float4 traced_sea(float3 pattern, float3 ring, float3 behind, float alpha, float2 warp, float4 pixel) {
+    return float4(pattern + ring + behind, alpha);  // the prepass: its alpha alone is read
+}
+#endif
 // Set where traced_colour gave an exchange's premultiplied mirror (FB b94): the fog over it in the same form.
 static bool g_exchanged = false;
 // An exchange's draw where it shows no mirror (FB b94): the game's added colour, alpha 0 (premultiplied: an add).
@@ -546,6 +627,9 @@ float4 traced_untinted(float4 c) {
 float4 traced_colour(float4 c, float4 pixel) {
     if ((view_flags & 8u) == 0u) {
         return (draw_flags & 256u) != 0u ? traced_added(c) : c;
+    }
+    if (g_sea_done) {
+        return g_sea_out;  // a sea's composite, made whole by traced_sea (d09)
     }
     c = traced_untinted(c);
     const float4 light = gTextures[uint(view_traced.x)].Load(int3(pixel.xy, 0));
@@ -717,6 +801,10 @@ float4 program_fogged_at(float4 c, float4 pixel) {
 float3 program_fog(float3 c, float3 colour, float amount) { return lerp(c, colour, amount); }
 float3 program_fog_curve(float3 c, float3 colour, float amount, float4 curve) { return lerp(c, colour, amount); }
 #define PROGRAM_LIGHT(c) (c)
+// No traced light in this form: a sea's colour is the game's (d09).
+float4 traced_sea(float3 pattern, float3 ring, float3 behind, float alpha, float2 warp, float4 pixel) {
+    return float4(pattern + ring + behind, alpha);
+}
 #endif
 
 #ifndef ENV_FETCH

@@ -40,15 +40,19 @@ float4 material_color(NativeVaryings i) {
     }
     const bool high = material.params.x != 0.0;
     float3 c8 = TEX(0).Sample(SAMP(0), i.uv[0].xy).rgb * TEX(0).Sample(SAMP(0), i.uv[0].zw).rgb * 127.5;
+    const float3 pattern8 = c8;
     if (high) {
         c8 += material.highlight.rgb * 255.0 * level_line(c8.r, material.highlight.a * 255.0);
     }
     float2 screen = i.uv[2].z != 0.0 ? i.uv[2].xy / i.uv[2].z : i.uv[2].xy;
+    float2 move = float2(0.0, 0.0);  // the wobble in screen texture coordinates
     if (high) {
         const float2 step = round(TEX(1).Sample(SAMP(1), i.uv[1].xy).ab * 255.0) - 128.0;
-        screen += step * material.params.y / material.screen.xy;
+        move = step * material.params.y / material.screen.xy;
+        screen += move;
     }
-    float3 c = saturate(c8 / 255.0 + TEX(2).Sample(SAMP(2), screen).rgb * material.tint.rgb);
-    c = saturate(c + TEX(3).Sample(SAMP(3), i.uv[1].zw).rgb);
-    return float4(c, i.color.a);
+    // The screen behind and the painted environment: what the tracer shows in their place under the traced light
+    // (program.hlsli traced_sea; d09). Each sum is clamped as the game's stages clamp it; the pixel stage clamps the whole.
+    const float3 behind = TEX(2).Sample(SAMP(2), screen).rgb * material.tint.rgb + TEX(3).Sample(SAMP(3), i.uv[1].zw).rgb;
+    return traced_sea(pattern8 / 255.0, c8 / 255.0 - pattern8 / 255.0, behind, i.color.a, move * line_point_raster.xy, i.pos);
 }
