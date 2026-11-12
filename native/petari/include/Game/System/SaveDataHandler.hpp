@@ -24,6 +24,8 @@ public:
     void copyUserFile(UserFile* pDst, const UserFile* pSrc);
     bool isDone();
     SaveRequest::Result getLastResult() const;
+    // FORGET (services-save 5): `pId`'s values out of each game-data file in memory (written by the next save).
+    void forgetLumaMod(const char* pId);
 
 private:
     // Indexed by user, then kind.

@@ -215,6 +215,35 @@ void LumaSaveChunk::initializeData() {
     mMods = 0;
 }
 
+bool LumaSaveChunk::findInFile(const u8* pFile, u32 size, u32* pAt, u32* pChunkSize) {
+    if (pFile == nullptr || size < 4) {
+        return false;
+    }
+    u32 at = 4;
+    for (u32 i = 0; i < pFile[1]; i++) {
+        if (size - at < BinaryDataChunk::cDataOffset) {
+            return false;
+        }
+        const u32 chunkSize = MR::loadSaveU32(pFile + at + BinaryDataChunk::cSize);
+        if (chunkSize < BinaryDataChunk::cDataOffset || chunkSize > size - at) {
+            return false;
+        }
+        if (MR::loadSaveU32(pFile + at + BinaryDataChunk::cSignature) == cSignature) {
+            *pAt = at;
+            *pChunkSize = chunkSize;
+            return true;
+        }
+        at += chunkSize;
+    }
+    return false;
+}
+
+void LumaSaveChunk::forEachMod(void (*pFn)(void* pUser, const char* pId, u32 idLength, u32 bytes), void* pUser) const {
+    for (u32 at = 0; at < mSize; at += 1 + mData[at] + 4 + modBytes(at)) {
+        pFn(pUser, reinterpret_cast< const char* >(mData + at + 1), mData[at], modBytes(at));
+    }
+}
+
 bool LumaSaveChunk::isValidKey(const char* pKey) {
     return pKey != nullptr && validKeyBytes(reinterpret_cast< const u8* >(pKey), textLength(pKey));
 }

@@ -42,5 +42,8 @@ struct SaveHalf {
     void (*forget)(std::string_view id) = nullptr;
 };
 void set_save_half(const SaveHalf& half) noexcept;
+// The game module's half (luma_service_provider.h luma_save_kept, luma_save_forget): values in the user files in
+// memory. Given by luma_services_host at the services' start; null until then (or with a module without them).
+void set_chunk_half(LumaSaveKept kept_ids, LumaSaveForget forget) noexcept;
 
 }  // namespace galaxy::luma_mods

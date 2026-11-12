@@ -669,8 +669,10 @@ std::int32_t install_cancel(const LumaMod* mod, LumaHandle) {
 
 // ---- The providers -------------------------------------------------------------------------------------------------
 
-// Set once at the host's start, before any mod or page asks (set_save_half).
+// Set once at the host's start, before any mod or page asks (set_save_half, set_chunk_half).
 SaveHalf g_save;
+LumaSaveKept g_chunk_kept = nullptr;
+LumaSaveForget g_chunk_forget = nullptr;
 
 void registered(void*, const LumaServiceKernel* kernel) {
     g_kernel.store(kernel, std::memory_order_release);
@@ -734,7 +736,18 @@ void kept(std::vector<KeptMod>& out) {
     if (unreadable) {
         unreadable_error();
     }
-    // Everything a removed mod keeps (services-mods 8): ids with numbers, and ids the save half keeps values for.
+    // Everything a removed mod keeps (services-mods 8): ids with numbers, and ids the save halves keep values for.
+    std::map<std::string, std::uint64_t> chunk_bytes;
+    if (g_chunk_kept != nullptr) {
+        g_chunk_kept([](void* user, const char* id, std::uint64_t bytes) {
+            (*static_cast<std::map<std::string, std::uint64_t>*>(user))[id] += bytes;
+        }, &chunk_bytes);
+        for (const auto& [id, bytes] : chunk_bytes) {
+            if (valid_mod_id(id)) {
+                numbers.emplace(id, 0u);
+            }
+        }
+    }
     if (g_save.ids != nullptr) {
         std::vector<std::string> saved;
         g_save.ids(saved);
@@ -753,7 +766,9 @@ void kept(std::vector<KeptMod>& out) {
         if (listed || (!folder.empty() && std::filesystem::exists(folder / id, error))) {
             continue;
         }
-        const std::uint64_t bytes = g_save.bytes != nullptr ? g_save.bytes(id) : 0u;
+        const auto in_chunks = chunk_bytes.find(id);
+        const std::uint64_t bytes = (g_save.bytes != nullptr ? g_save.bytes(id) : 0u) +
+                                    (in_chunks != chunk_bytes.end() ? in_chunks->second : 0u);
         if (count != 0u || bytes != 0u) {
             out.push_back({id, count, bytes});
         }
@@ -785,8 +800,13 @@ void forget(std::string_view id) {
     if (unreadable) {
         unreadable_error();
     }
-    if (g_save.forget != nullptr && valid_mod_id(id)) {
-        g_save.forget(id);
+    if (valid_mod_id(id)) {
+        if (g_save.forget != nullptr) {
+            g_save.forget(id);
+        }
+        if (g_chunk_forget != nullptr) {
+            g_chunk_forget(std::string(id).c_str());
+        }
     }
     galaxy::modlog::add_row(LUMA_MODLOG_CODE, LUMA_MODLOG_NOTE, id, 162u, "", "Mods.Forgotten", {});
 }
@@ -834,6 +854,11 @@ std::uint32_t take_over_ids(std::string_view old_id, std::string_view new_id) {
 
 void set_save_half(const SaveHalf& half) noexcept {
     g_save = half;
+}
+
+void set_chunk_half(LumaSaveKept kept_ids, LumaSaveForget forget) noexcept {
+    g_chunk_kept = kept_ids;
+    g_chunk_forget = forget;
 }
 
 }  // namespace galaxy::luma_mods

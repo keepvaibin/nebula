@@ -67,6 +67,12 @@ public:
 
     static bool isValidKey(const char* pKey);
 
+    // The LUMA chunk in a game-data file binary (BinaryDataChunkHolder::makeFileBinary's form): its offset and whole
+    // size, header included. False when the file has none or its chunk list runs past its end.
+    static bool findInFile(const u8* pFile, u32 size, u32* pAt, u32* pChunkSize);
+    // Each mod's block in order: its id (not terminated) and length, and its entries' bytes.
+    void forEachMod(void (*pFn)(void* pUser, const char* pId, u32 idLength, u32 bytes), void* pUser) const;
+
 private:
     // The offset of the mod's block (its id length byte) in mData, or -1.
     s32 findMod(const char* pModId) const;

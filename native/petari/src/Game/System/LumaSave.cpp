@@ -5,11 +5,13 @@
 #include "Game/System/LumaModLog.hpp"
 #include "Game/System/LumaSaveChunk.hpp"
 #include "Game/System/LumaServices.hpp"
+#include "Game/System/SaveDataHandler.hpp"
 #include "Game/System/SaveRequest.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include <luma_modlog.h>
 #include <luma_save.h>
 #include <luma_service_provider.h>
+#include <nebula_game_api.h>
 #include <luma_services.h>
 #include <nebula_format.h>
 
@@ -507,6 +509,133 @@ namespace luma {
             };
         }  // namespace
 
+        // ---- The REMOVED MODS line's half (item 5; luma_service_provider.h luma_save_kept, luma_save_forget) ----
+        namespace {
+            // Per game-data file in memory (6 users, Mario and Luigi): the mods with values in its chunk. Written on
+            // the game thread, read by the host from any thread, both under sKeptLock.
+            const u32 cKeptFiles = 12;
+            const u32 cForgetMost = 64;  // ids forgotten in one session
+            struct KeptRow {
+                char mId[LumaSaveChunk::cIdMost + 1];
+                u32 mBytes;
+            };
+            struct KeptFile {
+                KeptRow* mRows;
+                u32 mCount;
+            };
+            KeptFile sKeptFiles[cKeptFiles] = {};
+            char sForgetting[cForgetMost][LumaSaveChunk::cIdMost + 1];
+            u32 sForgettingCount = 0;
+            char sKeptLock = 0;
+
+            void lockKept() {
+                while (__atomic_test_and_set(&sKeptLock, __ATOMIC_ACQUIRE)) {
+                }
+            }
+
+            void unlockKept() {
+                __atomic_clear(&sKeptLock, __ATOMIC_RELEASE);
+            }
+
+            bool sameId(const char* pA, const char* pB) {
+                for (u32 i = 0;; i++) {
+                    if (pA[i] != pB[i]) {
+                        return false;
+                    }
+                    if (pA[i] == '\0') {
+                        return true;
+                    }
+                }
+            }
+
+            // Under sKeptLock.
+            bool isForgotten(const char* pId) {
+                for (u32 i = 0; i < sForgettingCount; i++) {
+                    if (sameId(sForgetting[i], pId)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            // A mod id's characters and length as the chunk keeps them (a-z 0-9 - ., 1 to 64).
+            bool isIdText(const char* pId) {
+                if (pId == nullptr) {
+                    return false;
+                }
+                u32 length = 0;
+                for (; pId[length] != '\0'; length++) {
+                    const char c = pId[length];
+                    if (length >= LumaSaveChunk::cIdMost || !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '.')) {
+                        return false;
+                    }
+                }
+                return length != 0;
+            }
+
+            struct RowsFill {
+                KeptRow* mRows;
+                u32 mCount;
+            };
+        }  // namespace
+
+        void fileStored(u32 index, const u8* pFile, u32 size) {
+            if (index >= cKeptFiles) {
+                return;
+            }
+            KeptRow* pRows = nullptr;
+            u32 count = 0;
+            u32 at = 0;
+            u32 chunkSize = 0;
+            if (LumaSaveChunk::findInFile(pFile, size, &at, &chunkSize)) {
+                LumaSaveChunk values(nullptr);
+                if (values.parse(pFile + at + BinaryDataChunk::cDataOffset, chunkSize - BinaryDataChunk::cDataOffset) ==
+                    LumaSaveChunk::Result_Ok) {
+                    values.forEachMod([](void* pUser, const char*, u32, u32) { (*static_cast< u32* >(pUser))++; }, &count);
+                    pRows = count != 0 ? new KeptRow[count] : nullptr;
+                    if (pRows != nullptr) {
+                        RowsFill fill = {pRows, 0};
+                        values.forEachMod(
+                            [](void* pUser, const char* pId, u32 idLength, u32 bytes) {
+                                RowsFill& rFill = *static_cast< RowsFill* >(pUser);
+                                KeptRow& rRow = rFill.mRows[rFill.mCount++];
+                                for (u32 i = 0; i < idLength; i++) {
+                                    rRow.mId[i] = pId[i];
+                                }
+                                rRow.mId[idLength] = '\0';
+                                rRow.mBytes = bytes;
+                            },
+                            &fill);
+                    } else {
+                        count = 0;  // no memory: this file's mods are not counted until it is stored again
+                    }
+                }
+            }
+            lockKept();
+            KeptRow* const pOld = sKeptFiles[index].mRows;
+            sKeptFiles[index].mRows = pRows;
+            sKeptFiles[index].mCount = count;
+            unlockKept();
+            delete[] pOld;
+        }
+
+        void applyForgets(SaveDataHandler* pHandler, GameDataHolder* pHolder) {
+            char ids[cForgetMost][LumaSaveChunk::cIdMost + 1];
+            lockKept();
+            const u32 count = sForgettingCount;
+            for (u32 i = 0; i < count; i++) {
+                nebula_snprintf(ids[i], sizeof(ids[i]), "%s", sForgetting[i]);
+            }
+            unlockKept();
+            // A forgotten mod is a removed one: it cannot come back this session, so its id stays forgotten to the end.
+            for (u32 i = 0; i < count; i++) {
+                pHandler->forgetLumaMod(ids[i]);
+                if (pHolder != nullptr) {
+                    pHolder->getLumaChunk()->forgetMod(ids[i]);
+                }
+            }
+        }
+
         void fileLoaded() {
             sLoaded = true;
         }
@@ -519,4 +648,55 @@ namespace luma {
             return &cGlobalProvider;
         }
     }
+}
+
+extern "C" {
+NEBULA_GAME_API void luma_save_kept(LumaSaveKeptFn fn, void* user) {
+    using namespace luma::save;
+    if (fn == nullptr) {
+        return;
+    }
+    lockKept();
+    for (u32 f = 0; f < cKeptFiles; f++) {
+        for (u32 r = 0; r < sKeptFiles[f].mCount; r++) {
+            const char* const pId = sKeptFiles[f].mRows[r].mId;
+            // Each id once, at its first file, with its bytes over every file.
+            bool earlier = false;
+            for (u32 g = 0; g <= f && !earlier; g++) {
+                for (u32 s = 0; s < (g < f ? sKeptFiles[g].mCount : r); s++) {
+                    if (sameId(sKeptFiles[g].mRows[s].mId, pId)) {
+                        earlier = true;
+                        break;
+                    }
+                }
+            }
+            if (earlier || isForgotten(pId)) {
+                continue;
+            }
+            uint64_t bytes = 0;
+            for (u32 g = f; g < cKeptFiles; g++) {
+                for (u32 s = 0; s < sKeptFiles[g].mCount; s++) {
+                    if (sameId(sKeptFiles[g].mRows[s].mId, pId)) {
+                        bytes += sKeptFiles[g].mRows[s].mBytes;
+                    }
+                }
+            }
+            fn(user, pId, bytes);
+        }
+    }
+    unlockKept();
+}
+
+NEBULA_GAME_API void luma_save_forget(const char* id) {
+    using namespace luma::save;
+    if (!isIdText(id)) {
+        return;
+    }
+    lockKept();
+    if (!isForgotten(id) && sForgettingCount < cForgetMost) {
+        nebula_snprintf(sForgetting[sForgettingCount], sizeof(sForgetting[0]), "%s", id);
+        sForgettingCount++;
+    }
+    unlockKept();
+}
 }

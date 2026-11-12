@@ -1,5 +1,8 @@
 #include "Game/System/SaveDataHandler.hpp"
 #include "Game/System/GameDataHolder.hpp"
+#include "Game/System/LumaSave.hpp"
+#include "Game/System/LumaSaveChunk.hpp"
+#include "Game/System/SaveBinary.hpp"
 #include "Game/System/SaveDataFileAccessor.hpp"
 #include "Game/System/SaveFileFormat.hpp"
 #include "Game/System/SaveRequest.hpp"
@@ -250,6 +253,47 @@ void SaveDataHandler::setFile(SaveFileId file, const u8* pData, u32 size) {
 
     memcpy(pFile->mData, pData, size);
     pFile->mSize = size;
+    // The REMOVED MODS line's count of mods' values in memory (services-save 5).
+    if (file.mKind != SaveFileId::Kind_Config) {
+        luma::save::fileStored(static_cast< u32 >(file.mUser - 1) * 2 + file.mKind, pFile->mData, pFile->mSize);
+    }
+}
+
+void SaveDataHandler::forgetLumaMod(const char* pId) {
+    for (u32 user = 1; user <= cUserFiles; user++) {
+        for (u32 kind = 0; kind < SaveFileId::Kind_Config; kind++) {
+            const SaveFileId id = {static_cast< SaveFileId::Kind >(kind), static_cast< s32 >(user)};
+            const File* const pFile = findFile(id);
+            u32 at = 0;
+            u32 chunkSize = 0;
+            if (pFile == nullptr || !LumaSaveChunk::findInFile(pFile->mData, pFile->mSize, &at, &chunkSize)) {
+                continue;
+            }
+            LumaSaveChunk values(nullptr);
+            if (values.parse(pFile->mData + at + BinaryDataChunk::cDataOffset, chunkSize - BinaryDataChunk::cDataOffset) !=
+                    LumaSaveChunk::Result_Ok ||
+                values.getModBytes(pId) == 0) {
+                continue;
+            }
+            values.forgetMod(pId);
+            // The file again with the chunk's data shorter: the part before it, its header with the new size, the data,
+            // and the chunks after it as they were.
+            const u32 dataSize = values.getDataSize();
+            const u32 newChunk = BinaryDataChunk::cDataOffset + dataSize;
+            const u32 tail = pFile->mSize - at - chunkSize;
+            const u32 newSize = at + newChunk + tail;
+            u8* const pNew = new u8[newSize];
+            if (pNew == nullptr) {
+                continue;  // no memory now: the next save tries again (the id stays forgotten)
+            }
+            memcpy(pNew, pFile->mData, at + BinaryDataChunk::cDataOffset);
+            MR::storeSaveU32(pNew + at + BinaryDataChunk::cSize, newChunk);
+            (void)values.serialize(pNew + at + BinaryDataChunk::cDataOffset, dataSize);
+            memcpy(pNew + at + newChunk, pFile->mData + at + chunkSize, tail);
+            setFile(id, pNew, newSize);
+            delete[] pNew;
+        }
+    }
 }
 
 const u8* SaveDataHandler::getFile(SaveFileId file, u32* pSize) const {
@@ -276,6 +320,7 @@ void SaveDataHandler::copyUserFileMemory(int indexDst, int indexSrc) {
 }
 
 void SaveDataHandler::storeUserFile(const UserFile* pUserFile) {
+    luma::save::applyForgets(this, pUserFile->mGameDataHolder);
     fitMake(pUserFile);
     u32 size = pUserFile->makeGameDataBinary(mMake, mMakeRoom);
     setFile(pUserFile->getGameDataFile(), mMake, size);
@@ -302,6 +347,7 @@ void SaveDataHandler::fitMake(const UserFile* pUserFile) {
 }
 
 void SaveDataHandler::requestSaveSaveData() {
+    luma::save::applyForgets(this, nullptr);
     const u32 count = cUserFiles * cKindNum;
     u32 total = cHeaderSize + count * cRowSize;
     for (u32 i = 0; i < count; i++) {
