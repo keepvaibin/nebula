@@ -386,6 +386,11 @@ float4 traced_mirror(float3 colour, float alpha, float4 pixel) {
         return float4(colour, alpha);  // another surface's mirror, or a glow (traced_mirror_own)
     }
     const float4 mirror = gTextures[uint(view_traced.z)].Load(int3(pixel.xy, 0));
+    if (mirror.a < -10.0) {
+        // d19: a painted gloss or metal, its traced mirror added by its Fresnel: rgb F R, a -(12 + what stays of the
+        // base); the painted map itself was fetched black (env_fetch), so the colour is the base alone, lit.
+        return float4(colour * saturate(-mirror.a - 12.0) + mirror.rgb, alpha);
+    }
     if (mirror.a < -0.5) {
         return float4(colour, alpha);  // a substitute: the environment fetch took the mirror in (env_fetch)
     }
@@ -425,6 +430,9 @@ float4 env_fetch(float4 painted, float4 pixel) {
     }
     const float4 mirror = gTextures[uint(view_traced.z)].Load(int3(pixel.xy, 0));
     // R is linear (the tracer's pictures); the program's stages are display-encoded: R encoded here, once.
+    if (mirror.a < -10.0) {
+        return float4(0.0, 0.0, 0.0, painted.a);  // d19: the traced mirror is added by traced_mirror; no painted one
+    }
     return mirror.a < -0.5 ? float4(traced_srgb(mirror.rgb) + painted.rgb * (-mirror.a - 1.0), painted.a) : painted;
 }
 // The program's fetch of a painted environment map (the generator wraps it); `i` holds the pixel.

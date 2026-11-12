@@ -34,6 +34,14 @@ uint mirror_ior_bits(int3 here, uint klass) {
     return item != 0u ? g_items.Load(g_at.x + (item - 1u) * kItemBytes + 60u) >> 12u & 255u : 0u;
 }
 
+// The pixel's item word 15 for its mirror (d19): bits 0-11 what the art's material returns of a white environment
+// (4 bits a channel; 0: no painted map), bits 12-19 its index or a metal's kind; 0 for a class that mirrors nothing.
+uint mirror_word(int3 here, uint klass) {
+    const bool mirrors = klass == kMirrorGlass || klass == kMirrorWater || klass == kMirrorMetal || klass == kMirrorGloss;
+    const uint item = mirrors ? g_item_map.Load(here).x : 0u;
+    return item != 0u ? g_items.Load(g_at.x + (item - 1u) * kItemBytes + 60u) : 0u;
+}
+
 float3 unoct(float2 o) {
     float3 n = float3(o, 1.0f - abs(o.x) - abs(o.y));
     const float t = saturate(-n.z);
@@ -84,12 +92,15 @@ void main(uint3 id : SV_DispatchThreadID) {
     const uint bits = uint(material.b * 255.0f + 0.5f);
     const uint klass = bits & 15u;
     const uint ior_bits = mirror_ior_bits(here, klass);
+    const uint word15 = mirror_word(here, klass);  // d19
     if ((g_pass.w & 1u) != 0u) {
-        const float4 weight = mirror_weight(bits, material.r, material.a, g_base.Load(here).rgb, 1.0f - saturate(-dot(n, look)),
-                                            ior_bits);
+        const float4 weight = mirror_weight_word(bits, material.r, material.a, g_base.Load(here).rgb,
+                                                 1.0f - saturate(-dot(n, look)), word15);
         r.rgb += g_lights_spec.Load(here).rgb / max(weight.rgb, 0.02f);
     }
-    if ((bits & kMirrorPainted) != 0u && klass != kMirrorWater) {
+    // d19: a painted gloss or metal is ADDED by its Fresnel (below); painted glass keeps the SUBSTITUTE.
+    const bool added = mirror_painted_added(bits);
+    if ((bits & kMirrorPainted) != 0u && klass != kMirrorWater && !added) {
         const uint item = g_item_map.Load(here).x;
         const uint at = g_at.x + (item != 0u ? item - 1u : 0u) * kItemBytes;
         const uint word = item != 0u ? g_items.Load(at + 60u) : 0u;
@@ -105,7 +116,9 @@ void main(uint3 id : SV_DispatchThreadID) {
         g_mirror[id.xy] = float4(r.rgb * tint * gain, -(1.0f + keep * (1.0f - saturate(seen / 0.25f))));
         return;
     }
-    const float4 w = mirror_weight(uint(material.b * 255.0f + 0.5f), material.r, material.a, g_base.Load(here).rgb,
-                                   1.0f - saturate(-dot(n, look)), ior_bits);
-    g_mirror[id.xy] = float4(r.rgb * w.rgb, w.a);
+    const float4 w = mirror_weight_word(uint(material.b * 255.0f + 0.5f), material.r, material.a, g_base.Load(here).rgb,
+                                        1.0f - saturate(-dot(n, look)), word15);
+    // A painted one added: a = -(12 + what stays of the base), so the program's fetch of the painted map gives black
+    // there (program.hlsli env_fetch) and traced_mirror adds F R over (1 - F) of the base.
+    g_mirror[id.xy] = float4(r.rgb * w.rgb, added ? -(12.0f + w.a) : w.a);
 }

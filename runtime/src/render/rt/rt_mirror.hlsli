@@ -102,4 +102,48 @@ float4 mirror_weight(uint bits, float rough, float share, float3 colour, float g
     return float4(f, klass == kMirrorMetal ? 0.0f : 1.0f - dot(f, float3(0.2126f, 0.7152f, 0.0722f)));
 }
 
+// d19: mirror_weight for a pixel with its item's word 15 (mirror_word). A gloss or a metal the art painted with an
+// environment map is ADDED like an unpainted one, its F0 from the art: the painted share in linear light, in the
+// response's hue: a gloss max(that, 0.04); a metal its kind's where it has one, else the hue at no less than 0.5,
+// and no base. Painted glass, every unpainted surface and a run with rt_dev painted_mirror: mirror_weight.
+bool mirror_painted_added(uint bits) {
+    const uint klass = bits & 15u;
+    return (bits & kMirrorPainted) != 0u && (klass == kMirrorGloss || klass == kMirrorMetal) &&
+           rt_dev_or(kDevPaintedMirror, -1.0f) < 0.0f;
+}
+float4 mirror_weight_word(uint bits, float rough, float share, float3 colour, float glance, uint word) {
+    const uint klass = bits & 15u;
+    const uint ior_bits = word >> 12u & 255u;
+    if (!mirror_painted_added(bits)) {
+        return mirror_weight(bits, rough, share, colour, glance, ior_bits);
+    }
+    const float2 terms = mirror_terms(saturate(rough), saturate(1.0f - glance));
+    // The strength: the painted share (how much of the pixel the art's reflection is, S.material.a), in linear light.
+    // The hue: the response's (word bits 0-11; the cook softens its strength by the tint keep, so only its hue is
+    // read), white where none.
+    const float3 tint = (word & 0xFFFu) != 0u
+                            ? mirror_lin(float3(float(word & 15u), float(word >> 4u & 15u), float(word >> 8u & 15u)) / 15.0f)
+                            : float3(1.0f, 1.0f, 1.0f);
+    const float top = max(tint.r, max(tint.g, tint.b));
+    const float3 hue = top > 1e-4f ? tint / top : float3(1.0f, 1.0f, 1.0f);
+    const float strength = mirror_lin(float3(share, share, share)).x;
+    float3 f0;
+    if (klass == kMirrorMetal) {
+        if (ior_bits >= 1u && ior_bits <= 7u) {
+            f0 = mirror_f0(klass, colour, ior_bits);
+        } else if (ior_bits == 255u) {
+            // A row's kind `art`: the metal in its own colour (a blue metal mirrors blue): the base's hue.
+            const float3 art = mirror_lin(colour);
+            const float art_top = max(art.r, max(art.g, art.b));
+            f0 = (art_top > 0.05f ? art / art_top : float3(1.0f, 1.0f, 1.0f)) * max(strength, 0.5f);
+        } else {
+            f0 = hue * max(strength, 0.5f);
+        }
+    } else {
+        f0 = max(hue * strength, 0.04f);
+    }
+    const float3 f = saturate(f0 * terms.x + terms.y);
+    return float4(f, klass == kMirrorMetal ? 0.0f : 1.0f - dot(f, float3(0.2126f, 0.7152f, 0.0722f)));
+}
+
 #endif

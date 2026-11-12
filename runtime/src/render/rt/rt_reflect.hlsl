@@ -37,6 +37,14 @@ uint mirror_ior_bits(int3 here, uint klass) {
     return item != 0u ? g_items.Load(g_at.x + (item - 1u) * kItemBytes + 60u) >> 12u & 255u : 0u;
 }
 
+// The pixel's item word 15 for its mirror (d19): bits 0-11 what the art's material returns of a white environment
+// (4 bits a channel; 0: no painted map), bits 12-19 its index or a metal's kind; 0 for a class that mirrors nothing.
+uint mirror_word(int3 here, uint klass) {
+    const bool mirrors = klass == kRtGlass || klass == kRtWater || klass == kRtMetal || klass == kRtGloss;
+    const uint item = mirrors ? g_item_map.Load(here).x : 0u;
+    return item != 0u ? g_items.Load(g_at.x + (item - 1u) * kItemBytes + 60u) : 0u;
+}
+
 // Whether a surface of class `klass` reflects under the preset (12.1, 19.1).
 bool reflects(uint klass, float roughness, float share, bool high) {
     if (klass == kRtGlass || klass == kRtWater) {
@@ -116,8 +124,8 @@ void main(uint3 id : SV_DispatchThreadID) {
     if (open_sky && rt_sees_sun(dir)) {
         seen += rt_sun_glint();  // linear, the model's by kForm (A4 W8; FB b75)
     }
-    const float4 weight = mirror_weight(uint(material.b * 255.0f + 0.5f), material.r, material.a, g_base.Load(here).rgb,
-                                        1.0f - saturate(-dot(n, look)), mirror_ior_bits(here, klass));
+    const float4 weight = mirror_weight_word(uint(material.b * 255.0f + 0.5f), material.r, material.a, g_base.Load(here).rgb,
+                                             1.0f - saturate(-dot(n, look)), mirror_word(here, klass));  // d19
     seen += g_lights_spec.Load(here).rgb / max(weight.rgb, 0.02f);
     g_raw[id.xy] = float4(min(seen, 64.0f), max(far_, 1.0f));
 }
