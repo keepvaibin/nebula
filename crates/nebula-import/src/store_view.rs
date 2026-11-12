@@ -146,6 +146,12 @@ impl PakStore {
         let bytes = self.read(entry, entry.size)?;
         TableIr::from_ntbl(&bytes).with_context(|| format!("the game's {} is damaged", entry.path)).map(Some)
     }
+
+    /// A file of the game whole, by disc or store path in any case; None when the store has no such file.
+    pub fn file(&self, path: &str) -> Result<Option<Vec<u8>>> {
+        let Some(entry) = self.entry(path).filter(|e| !e.folder) else { return Ok(None) };
+        self.read(entry, entry.size).map(Some)
+    }
 }
 
 /// A column's type for the validator: an int by its width, a field by its mask.

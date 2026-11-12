@@ -15,7 +15,7 @@ use serde_json::{Map, Value};
 /// The game's fonts a text pane can name (every font the game's layouts use).
 pub const FONTS: [&str; 5] = ["MessageFont26", "NumberFont", "MenuFont64", "PictureFont", "CinemaFont26"];
 /// Pane kinds, in this layer.
-pub const KINDS: [&str; 4] = ["pane", "picture", "text", "bounding"];
+pub const KINDS: [&str; 5] = ["pane", "picture", "text", "bounding", "window"];
 /// A pane's anchor (which of its points stands at its position) and a text's place in its pane; the number is the
 /// game's (column + 3 * row).
 pub const ANCHORS: [&str; 9] = ["top_left", "top", "top_right", "left", "center", "right", "bottom_left", "bottom", "bottom_right"];
@@ -34,6 +34,14 @@ const ROOT: &str = "RootPane";
 const PANE_PARTS: [&str; 12] = ["name", "type", "position", "size", "scale", "rotation", "anchor", "alpha", "visible", "alpha_to_children", "widen", "children"];
 const PICTURE_PARTS: [&str; 3] = ["texture", "colour", "corners"];
 const TEXT_PARTS: [&str; 10] = ["text", "length", "font", "font_size", "place", "align", "colour", "colours", "char_space", "line_space"];
+/// A window (layer 4): a 9-slice frame from one corner texture (the game mirrors it into the other three corners and
+/// stretches its edges), the content inside in vertex colours, `inflation` [left, right, top, bottom] how far the
+/// content reaches past the frame's inner edge.
+const WINDOW_PARTS: [&str; 4] = ["frame", "inflation", "colour", "corners"];
+/// The least width of a character, in its font's width (`font_size`), for the overflow check: a full-width
+/// character (CJK, kana, Hangul, full-width forms) is one; any other is at least a quarter (the narrowest Latin
+/// letters of the game's fonts are wider). A line refused as too wide is too wide in every font.
+const NARROWEST: f32 = 0.25;
 
 /// What `cook.layout` says of a layout.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -44,6 +52,9 @@ pub struct LayoutFacts {
     pub texts: usize,
     pub textures: usize,
     pub groups: usize,
+    pub windows: usize,
+    /// Animation files made (layer 3).
+    pub animations: usize,
 }
 
 enum Body {
@@ -51,6 +62,7 @@ enum Body {
     Bounding,
     Picture { corners: [[u8; 4]; 4], texture: Option<u16> },
     Text { text: Vec<u16>, length: u16, font: u16, place: u8, align: u8, colours: [[u8; 4]; 2], font_size: [f32; 2], char_space: f32, line_space: f32 },
+    Window { corners: [[u8; 4]; 4], inflation: [f32; 4], frame: u16 },
 }
 
 struct Pane {
@@ -110,7 +122,7 @@ const MOD_FONT: &str = "Luma/<id>/<path>";
 /// The longest font name the game's font loader takes (LumaFont's kMostName, 200 with its end).
 const MOST_FONT_NAME: usize = 199;
 
-fn name_ok(name: &str) -> bool {
+pub(crate) fn name_ok(name: &str) -> bool {
     !name.is_empty() && name.len() <= NAME_MAX && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
 }
 
@@ -161,6 +173,7 @@ impl Reader<'_> {
         match kind {
             1 => parts.extend(PICTURE_PARTS),
             2 => parts.extend(TEXT_PARTS),
+            4 => parts.extend(WINDOW_PARTS),
             _ => {}
         }
         only(map, at, &parts)?;
@@ -218,13 +231,14 @@ impl Reader<'_> {
         let flag = u8::from(flag_of("visible", true)?) | u8::from(flag_of("alpha_to_children", true)?) << 1 | u8::from(flag_of("widen", false)?) << 2;
         let body = match kind {
             1 => self.picture(map, at)?,
-            2 => self.text(map, at)?,
+            2 => self.text(map, at, size)?,
             3 => Body::Bounding,
+            4 => self.window(&name, map, at)?,
             _ => Body::Pane,
         };
         let material = match &body {
             Body::Picture { texture, .. } => Some((name.clone(), *texture)),
-            Body::Text { .. } => Some((name.clone(), None)),
+            Body::Text { .. } | Body::Window { .. } => Some((name.clone(), None)),
             _ => None,
         }
         .map(|m| {
@@ -251,7 +265,24 @@ impl Reader<'_> {
         Ok(Body::Picture { corners: [corners[0], corners[1], corners[2], corners[3]], texture })
     }
 
-    fn text(&mut self, map: &Map<String, Value>, at: &str) -> Result<Body> {
+    /// A window: its frame's material (`<name>_F`, the corner texture) made here; its content's is the pane's.
+    fn window(&mut self, name: &str, map: &Map<String, Value>, at: &str) -> Result<Body> {
+        self.facts.windows += 1;
+        let frame = self.texture(map.get("frame").ok_or_else(|| missing(at, "frame"))?, &at_key(at, "frame"))?;
+        self.materials.push((format!("{name}_F"), Some(frame)));
+        let frame = (self.materials.len() - 1) as u16;
+        let inflation = match map.get("inflation") {
+            Some(v) => {
+                let f = floats_of(v, 4, &at_key(at, "inflation"))?;
+                [f[0], f[1], f[2], f[3]]
+            }
+            None => [0.0; 4],
+        };
+        let corners = corners(map, at, "corners", 4)?;
+        Ok(Body::Window { corners: [corners[0], corners[1], corners[2], corners[3]], inflation, frame })
+    }
+
+    fn text(&mut self, map: &Map<String, Value>, at: &str, size: [f32; 2]) -> Result<Body> {
         self.facts.texts += 1;
         let words = match map.get("text") {
             Some(v) => text(v, &at_key(at, "text"))?,
@@ -298,6 +329,24 @@ impl Reader<'_> {
         };
         let colours = corners(map, at, "colours", 2)?;
         let number = |key: &str| map.get(key).map_or(Ok(0.0), |v| as_f32(v, &at_key(at, key)));
+        // Layer 6, overflow: the text in the file must fit its pane, as the game draws it (lines of the font's
+        // height and the line space; a line's least width from NARROWEST). The pane's size is where the text is
+        // placed: text past it is drawn over its neighbours.
+        let (char_space, line_space) = (number("char_space")?, number("line_space")?);
+        if !words.is_empty() {
+            let lines: Vec<&str> = words.split('\n').collect();
+            let height = lines.len() as f32 * font_size[1] + (lines.len() - 1) as f32 * line_space;
+            if height > size[1] + 0.5 {
+                return Err(refuse("Cook.Layout.TextTall", &[("where", at_key(at, "text")), ("lines", lines.len().to_string()), ("height", format!("{height:.1}")), ("max", format!("{:.1}", size[1]))]));
+            }
+            for line in &lines {
+                let count = line.chars().count();
+                let least: f32 = line.chars().map(|c| if full_width(c) { 1.0 } else { NARROWEST }).sum::<f32>() * font_size[0] + count.saturating_sub(1) as f32 * char_space;
+                if least > size[0] + 0.5 {
+                    return Err(refuse("Cook.Layout.TextWide", &[("where", at_key(at, "text")), ("line", line.to_string()), ("width", format!("{least:.1}")), ("max", format!("{:.1}", size[0]))]));
+                }
+            }
+        }
         let mut text = units;
         text.push(0);
         Ok(Body::Text {
@@ -308,10 +357,15 @@ impl Reader<'_> {
             align,
             colours: [colours[0], colours[1]],
             font_size,
-            char_space: number("char_space")?,
-            line_space: number("line_space")?,
+            char_space,
+            line_space,
         })
     }
+}
+
+/// Whether a character is full width in the game's fonts: CJK, kana, Hangul and the full-width forms.
+fn full_width(c: char) -> bool {
+    matches!(c as u32, 0x1100..=0x115F | 0x2E80..=0xA4CF | 0xAC00..=0xD7A3 | 0xF900..=0xFAFF | 0xFE30..=0xFE4F | 0xFF00..=0xFF60 | 0xFFE0..=0xFFE6)
 }
 
 /// A list of exactly two numbers.
@@ -428,6 +482,23 @@ impl Blocks {
                 }
                 b"txt1"
             }
+            Body::Window { corners, inflation, frame } => {
+                // After the pane (0x4C from the block's start): inflation, the frame count, the content's and the
+                // frame table's offsets; the content (colours, material, no coordinates), the table, the one frame.
+                bef(&mut b, inflation);
+                b.extend_from_slice(&[1, 0, 0, 0]);
+                be32(&mut b, 0x68);
+                be32(&mut b, 0x7C);
+                for c in corners {
+                    b.extend_from_slice(c);
+                }
+                be16(&mut b, material);
+                b.extend_from_slice(&[0, 0]);
+                be32(&mut b, 0x80);
+                be16(&mut b, *frame);
+                b.extend_from_slice(&[0, 0]);
+                b"wnd1"
+            }
         };
         self.add(kind, &b);
         if !p.children.is_empty() {
@@ -474,9 +545,19 @@ pub fn to_brlyt(bytes: &[u8], missing_texture: &dyn Fn(&str) -> Option<String>) 
 /// As `to_brlyt`; `missing_font` answers for a mod font a text names (`Luma/<id>/<path>`) with the source the mod
 /// lacks (`layers/<l>/assets/<path>.font.json`), None when it has it or this cannot be looked at here.
 pub fn to_brlyt_with(bytes: &[u8], missing_texture: &dyn Fn(&str) -> Option<String>, missing_font: &dyn Fn(&str) -> Option<String>) -> Result<(Vec<u8>, LayoutFacts)> {
+    to_files(bytes, "", missing_texture, missing_font).map(|(brlyt, _, facts)| (brlyt, facts))
+}
+
+/// As `to_brlyt_with`, with the layout's animations (layer 3): each `anim/<stem>_<animation>.brlan` and its bytes,
+/// `stem` the layout's name.
+pub fn to_files(bytes: &[u8], stem: &str, missing_texture: &dyn Fn(&str) -> Option<String>, missing_font: &dyn Fn(&str) -> Option<String>) -> Result<(Vec<u8>, Vec<(String, Vec<u8>)>, LayoutFacts)> {
     let root: Value = serde_json::from_slice(bytes).map_err(|e| refuse("Cook.Model.Json", &[("line", e.line().to_string()), ("column", e.column().to_string())]))?;
     let map = object(&root, "/")?;
-    only(map, "/", &["size", "panes", "groups"])?;
+    if map.contains_key("patch") {
+        // A patch of a game layout by pane name is a merge (layer 5): layers/<l>/merge/<archive>/<Name>.layout.json.
+        return Err(refuse("Cook.Layout.PatchPlace", &[("where", "/patch".to_string())]));
+    }
+    only(map, "/", &["size", "panes", "groups", "animations"])?;
     let size = match map.get("size") {
         Some(v) => {
             let s = pair_list(v, "/size")?;
@@ -515,8 +596,14 @@ pub fn to_brlyt_with(bytes: &[u8], missing_texture: &dyn Fn(&str) -> Option<Stri
             groups.push((name, members));
         }
     }
+    let animations = match map.get("animations") {
+        Some(v) => super::layout_anim::read(v, &reader.names[1..])?,
+        None => Vec::new(),
+    };
     reader.facts.textures = reader.textures.len();
     reader.facts.groups = groups.len();
+    reader.facts.animations = animations.len();
+    let anim_files: Vec<(String, Vec<u8>)> = animations.iter().map(|a| (format!("anim/{stem}_{}.brlan", a.name), super::layout_anim::to_brlan(a))).collect();
     let root_pane = Pane {
         name: ROOT.to_string(),
         flag: 1,
@@ -584,7 +671,7 @@ pub fn to_brlyt_with(bytes: &[u8], missing_texture: &dyn Fn(&str) -> Option<Stri
     be16(&mut out, 16);
     be16(&mut out, blocks.count);
     out.extend_from_slice(&blocks.out);
-    Ok((out, reader.facts))
+    Ok((out, anim_files, reader.facts))
 }
 
 #[cfg(test)]

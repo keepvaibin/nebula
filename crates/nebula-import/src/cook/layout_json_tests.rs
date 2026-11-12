@@ -11,7 +11,7 @@ const HUD: &str = r#"{
     { "name": "Hud", "type": "pane", "position": [276, -156], "widen": true, "children": [
       { "name": "Icon", "type": "picture", "texture": "Star.png", "size": [32, 40], "anchor": "left",
         "corners": ["ffffffff", "ffffffff", "808080ff", "808080ff"] },
-      { "name": "Count", "type": "text", "size": [100, 40], "position": [-3, 3], "text": "×07 ルイージ", "length": 16,
+      { "name": "Count", "type": "text", "size": [200, 40], "position": [-3, 3], "text": "×07 ルイージ", "length": 16,
         "font": "NumberFont", "font_size": 32, "place": "right", "colour": "ffd700ff", "char_space": -1 },
       { "name": "Hit", "type": "bounding", "size": [30, 40], "visible": false }
     ]},
@@ -35,7 +35,7 @@ fn a_text_names_a_mods_font_by_its_path_in_the_store() {
 #[test]
 fn a_layout_reads_as_the_games_layouts_read() {
     let (brlyt, facts) = to_brlyt(HUD.as_bytes(), &none).unwrap();
-    assert_eq!(facts, LayoutFacts { panes: 5, pictures: 2, texts: 1, textures: 1, groups: 1 });
+    assert_eq!(facts, LayoutFacts { panes: 5, pictures: 2, texts: 1, textures: 1, groups: 1, windows: 0, animations: 0 });
     // The game's own reader takes it, and the store's writer writes it.
     let ir = read_layout(&brlyt).unwrap();
     write_layout(&ir).unwrap();
@@ -103,7 +103,9 @@ fn a_layout_says_what_it_cannot_make() {
         (r#"{"panes":[],"pane":[]}"#.into(), "Cook.Effect.UnknownPart", "/"),
         (r#"{"size":[0,4],"panes":[]}"#.into(), "Cook.Effect.Range", "/size"),
         ("{}".into(), "Cook.Effect.Missing", "/"),
-        (r#"{"panes":[{"name":"A","type":"window","size":[1,1]}]}"#.into(), "Cook.Effect.Choice", "/panes/0/type"),
+        (r#"{"panes":[{"name":"A","type":"window","size":[1,1]}]}"#.into(), "Cook.Effect.Missing", "/panes/0"),
+        (r#"{"panes":[{"name":"A","type":"button","size":[1,1]}]}"#.into(), "Cook.Effect.Choice", "/panes/0/type"),
+        (r#"{"patch":1,"panes":{}}"#.into(), "Cook.Layout.PatchPlace", "/patch"),
         (r#"{"panes":[{"type":"pane"}]}"#.into(), "Cook.Effect.Missing", "/panes/0"),
         (r#"{"panes":[{"name":"A very long pane name","type":"pane"}]}"#.into(), "Cook.Layout.Name", "/panes/0/name"),
         (r#"{"panes":[{"name":"Bad name","type":"pane"}]}"#.into(), "Cook.Layout.Name", "/panes/0/name"),
@@ -130,6 +132,9 @@ fn a_layout_says_what_it_cannot_make() {
         (pane(r#","length":0"#), "Cook.Effect.Range", "/panes/0/length"),
         (pane(r#","text":"a\u001ab""#), "Cook.Layout.Control", "/panes/0/text"),
         (pane(r#","align":"justify""#), "Cook.Effect.Choice", "/panes/0/align"),
+        (pane(r#","text":"a
+b","font_size":1"#), "Cook.Layout.TextTall", "/panes/0/text"),
+        (pane(r#","text":"abcdefgh","font_size":1"#), "Cook.Layout.TextWide", "/panes/0/text"),
         (r#"{"panes":[],"groups":[{"name":"G","panes":["Nope"]}]}"#.into(), "Cook.Layout.NoPane", "/groups/0/panes/0"),
         (r#"{"panes":[],"groups":[{"name":"G","panes":[]},{"name":"g","panes":[]}]}"#.into(), "Cook.Layout.Twice", "/groups/1/name"),
         (r#"{"panes":[],"groups":[{"name":"RootGroup","panes":[]}]}"#.into(), "Cook.Layout.Twice", "/groups/0/name"),
@@ -159,4 +164,25 @@ fn too_many_panes_are_refused_before_the_file_is_written() {
     let source = format!(r#"{{"panes":[{}]}}"#, panes[..PANES_MAX].join(","));
     let ir = read_layout(&to_brlyt(source.as_bytes(), &none).unwrap().0).unwrap();
     assert_eq!(ir.panes.len(), PANES_MAX + 1);
+}
+
+#[test]
+fn a_window_and_an_animation_are_the_games_files() {
+    use super::super::ui_layout::{read_animation, read_layout, UiPayload};
+    let source = br#"{"panes":[{"name":"Box","type":"window","size":[200,100],"frame":"Corner","inflation":[2,2,3,3],"colour":"102030ff",
+        "children":[{"name":"Label","type":"text","size":[180,40],"text":"Hi"}]}],
+        "animations":[{"name":"Open","frames":20,"tracks":[{"pane":"Box","what":"scale_y","keys":[[0,0],[20,1]]},{"pane":"Label","what":"alpha","keys":[[0,0],[20,255]]}]}]}"#;
+    let (brlyt, anims, facts) = to_files(source, "Menu", &none, &|_| None).unwrap();
+    assert_eq!((facts.windows, facts.animations), (1, 1));
+    let ir = read_layout(&brlyt).unwrap();
+    let window = ir.panes.iter().find(|p| p.name == "Box").unwrap();
+    let UiPayload::Window(w) = &window.payload else { panic!("a window") };
+    assert_eq!(w.inflation, [2.0, 2.0, 3.0, 3.0]);
+    assert_eq!(w.content.vertex_colors, [[0x10, 0x20, 0x30, 0xFF]; 4]);
+    // The frame's material is the corner texture's, named after the pane.
+    assert_eq!(w.frames.len(), 1);
+    assert_eq!(ir.materials[w.frames[0].0 as usize].name, "Box_F");
+    assert_eq!(anims[0].0, "anim/Menu_Open.brlan");
+    let a = read_animation(&anims[0].1).unwrap();
+    assert_eq!((a.frame_size, a.contents.len()), (20, 2));
 }

@@ -288,10 +288,13 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
             let found = fs::read_dir(root.join("layers")).ok()?.flatten().any(|layer| layer.path().join("assets").join(&file).is_file());
             (!found).then(|| format!("assets/{file}"))
         };
-        let (brlyt, facts) = super::layout_json::to_brlyt_with(bytes, &missing_texture, &missing_font)?;
+        let (brlyt, animations, facts) = super::layout_json::to_files(bytes, stem, &missing_texture, &missing_font)?;
         let path = format!("{archive}/blyt/{stem}.brlyt");
         super::refuse::record(super::refuse::CookFact::Layout { path: path.clone(), source: change.path.clone(), facts });
-        return Ok(vec![(path, brlyt, false)]);
+        // Its animations beside it in the archive's anim/, as the game's (layer 3).
+        let mut out = vec![(path, brlyt, false)];
+        out.extend(animations.into_iter().map(|(file, bytes)| (format!("{archive}/{file}"), bytes, false)));
+        return Ok(out);
     }
     // Name.sound.json in a mod's assets (Luma/<id>/...): a sound effect or voice line, Name.nsfx, played by its path
     // without the ending (sound contract 1, 9); a stream, Name.ast (8); a sequence, Name.nseq (10). With `replace` a

@@ -169,7 +169,7 @@ pub fn cook_facts_text(facts: &[CookFact]) -> String {
             }
             CookFact::Layout { path, source, facts } => {
                 let fixed = ["cook.layout", path, "", source, path, "", "", "", "", "", ""].map(str::to_string);
-                let counts = [("panes", facts.panes), ("pictures", facts.pictures), ("texts", facts.texts), ("textures", facts.textures), ("groups", facts.groups)];
+                let counts = [("panes", facts.panes), ("pictures", facts.pictures), ("texts", facts.texts), ("textures", facts.textures), ("groups", facts.groups), ("windows", facts.windows), ("animations", facts.animations)];
                 fixed.into_iter().chain(counts.iter().map(|(name, n)| format!("{name}={n}"))).collect()
             }
             CookFact::Sound { path, source, facts } => {
