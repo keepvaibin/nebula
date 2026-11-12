@@ -30,14 +30,23 @@ struct StartPackage {
     bool on = true;
 };
 
-// Each start, after add_not_started (validator 2 "each start", mod-log 7): every placed package through the
-// validator (luma_validate, the importer's library), each finding a VALIDATOR entry worded in the played language
-// (`language`, a language folder) and in English. The other packages are its `installed`, in list order; `program` is
-// the player's disc ("RMGE01"). Kept per package in <mods>/.cooked/validate/: a package is validated again only when
-// its files (names, sizes, times), the game (release, program, platform, language) or the other packages changed;
-// otherwise its findings are read back. Nothing at all with no package. Findings do not refuse here: mods.cpp still
-// decides (director, 21:00 integration of 11-11); the validator's errors refuse once every test mod has one form.
-void add_start_findings(const std::vector<StartPackage>& packages, std::string_view program, std::string_view language);
+// Each start, before the mods' plan (validator 2 "each start", mod-log 7): every placed package through the validator
+// (luma_validate, the importer's library), its findings worded in the played language (`language`, a language folder)
+// and in English and kept for add_start_findings and package_refused. The other packages are its `installed`, in list
+// order; `program` is the player's disc ("RMGE01"). Kept per package in <mods>/.cooked/validate/: a package is
+// validated again only when its bytes (names, sizes and times first, then the content's hash), the game (release,
+// program, platform, language) or the other packages changed; otherwise its findings are read back. Nothing at all
+// with no package.
+void check_packages(const std::vector<StartPackage>& packages, std::string_view program, std::string_view language);
+
+// After add_not_started: the start's check's findings, each a VALIDATOR entry (Error or Note as the validator's).
+void add_start_findings();
+
+// The start's check found an Error in the package `id`: it is refused (the validator's errors refuse, as at import).
+[[nodiscard]] bool package_refused(std::string_view id);
+
+// The Mods page's sentence for a package refused by the start's check (a host sentence: S. row in 14 languages).
+[[nodiscard]] const char* refused_sentence();
 
 // One host entry (sources 0 VALIDATOR, 1 LOADER, 2 COOK; levels 0 Error, 1 Note): the validator's code and its
 // parameters, worded by the validator in the played language and in English. `file` the entry inside the mod, `line`

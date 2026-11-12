@@ -508,6 +508,13 @@ std::string check_text(const Check& check) {
     return out;
 }
 
+// The start's check's findings by package, in list order (check_packages; the game's start thread only).
+struct StartResult {
+    std::string id;
+    std::vector<Kept> findings;
+};
+std::vector<StartResult> g_start_results;
+
 void add_kept(std::string_view mod, const Kept& k) {
     const std::string mod_id(mod);
     LumaModLogEntry entry{};
@@ -526,8 +533,9 @@ void add_kept(std::string_view mod, const Kept& k) {
 
 }  // namespace
 
-void add_start_findings(const std::vector<StartPackage>& packages, std::string_view program, std::string_view language) {
-    if (packages.empty() || g_add.load(std::memory_order_acquire) == nullptr) return;
+void check_packages(const std::vector<StartPackage>& packages, std::string_view program, std::string_view language) {
+    g_start_results.clear();
+    if (packages.empty()) return;
     const std::filesystem::path folder = galaxy::mods::mods_folder() / ".cooked" / "validate";
     const std::string platform(galaxy::luma::this_platform());
     const std::string region(program);
@@ -668,8 +676,29 @@ void add_start_findings(const std::vector<StartPackage>& packages, std::string_v
             one.check.findings = std::move(findings);
             (void)write_file(folder / (one.package->id + ".check"), check_text(one.check));
         }
-        for (const Kept& k : one.check.findings) add_kept(one.package->id, k);
+        g_start_results.push_back({one.package->id, one.check.findings});
     }
+}
+
+void add_start_findings() {
+    if (g_add.load(std::memory_order_acquire) == nullptr) return;
+    for (const StartResult& result : g_start_results) {
+        for (const Kept& k : result.findings) add_kept(result.id, k);
+    }
+}
+
+bool package_refused(std::string_view id) {
+    for (const StartResult& result : g_start_results) {
+        if (result.id != id) continue;
+        for (const Kept& k : result.findings) {
+            if (k.level == 0) return true;
+        }
+    }
+    return false;
+}
+
+const char* refused_sentence() {
+    return "THIS MOD HAS ERRORS. ITS LOG SAYS WHY";
 }
 
 }  // namespace galaxy::modlog

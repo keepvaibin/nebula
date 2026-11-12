@@ -523,7 +523,7 @@ galaxy::mods::ModRows gModRows;
 bool gModsChangeGame = false;
 // The mods on this session (the scan's enabled ones): the mod log is made only when there are any.
 std::uint32_t gModsOn = 0;
-// The placed packages of this start, for the mod log's check after the mods' code starts (modlog::add_start_findings).
+// The placed packages of this start, for the start's check (modlog::check_packages).
 std::vector<galaxy::modlog::StartPackage> gStartPackages;
 
 void load_module(const fs::path& path) {
@@ -3348,13 +3348,7 @@ void svc_mods_start(void*) {
     // Each mod whose code did not start, in the mod log as the Mods page says it.
     galaxy::modlog::add_not_started();
     // Each placed package through the validator, its findings in the mod log (kept: nothing runs when nothing changed).
-#if defined(NEBULA_HOST_RENDERER)
-    galaxy::modlog::add_start_findings(gStartPackages, gPak.store.game_id(), galaxy::mods::language_folder(
-        std::string(gPak.store.game_id()),
-        static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language))));
-#else
-    galaxy::modlog::add_start_findings(gStartPackages, gPak.store.game_id(), {});  // no language setting: English
-#endif
+    galaxy::modlog::add_start_findings();
 }
 
 void svc_app_restart(void*) {
@@ -3406,6 +3400,14 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
     gStartPackages.clear();
     for (const galaxy::mods::ModInfo& mod : mods) {
         if (mod.package) gStartPackages.push_back({mod.id, mod.path, mod.enabled});
+    }
+    // The validator's errors refuse a package at each start as at import (one reading, validator 2); its findings go
+    // to the mod log once the log exists (add_start_findings).
+    galaxy::modlog::check_packages(gStartPackages, game_id, language);
+    for (galaxy::mods::ModInfo& mod : mods) {
+        if (mod.package && mod.problem.empty() && galaxy::modlog::package_refused(mod.id)) {
+            mod.problem = galaxy::modlog::refused_sentence();
+        }
     }
     gModsOn = static_cast<std::uint32_t>(
         std::count_if(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) { return mod.enabled; }));
