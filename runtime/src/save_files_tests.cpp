@@ -74,6 +74,22 @@ int main() {
                          read(folder, "GameData.bin", buffer.data(), kBufferSize, &length) == kNoFile,
                      "a deleted save is gone");
 
+    // Mods' global files (services-save 7): "luma/<plain name>" only, and written without backups.
+    passed &= expect(mod_file_name("luma/gold-flower.bin") == "gold-flower.bin", "a mod's file name is its plain name");
+    for (const char* name : {"luma/", "luma", "luma/../Nebula.sav", "luma/a/b.bin", "Luma/a.bin", "lumax/a.bin",
+                             "GameData.bin", "luma/.."}) {
+        passed &= expect(mod_file_name(name).empty(), name);
+    }
+    const fs::path mods = folder / std::string(kModFolder);
+    fs::create_directories(mods);
+    passed &= expect(write(mods, "m.bin", save.data(), 16, Backups::kNone) == kDone &&
+                         write(mods, "m.bin", save.data() + 16, 8, Backups::kNone) == kDone,
+                     "a mod's file is written twice");
+    passed &= expect(read(mods, "m.bin", buffer.data(), kBufferSize, &length) == kDone && length == 8 &&
+                         std::memcmp(buffer.data(), save.data() + 16, 8) == 0,
+                     "the second write is read back whole");
+    passed &= expect(!fs::exists(mods / "m.bin.1") && !fs::exists(mods / "m.bin.2"), "no backups beside a mod's file");
+
     std::error_code error;
     fs::remove_all(root, error);
     if (!passed) {

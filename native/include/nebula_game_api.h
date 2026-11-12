@@ -415,7 +415,8 @@ enum {
 };
 typedef struct NebulaSaveRequest {
     uint32_t op;
-    const char* name;
+    const char* name;          /* a plain file name in the save folder, or "luma/<plain name>": a mod's global file
+                                  (services-save 7) in its luma folder, made at the first write, kept without backups */
     void* buffer;
     uint32_t size;
     uint32_t* length;          /* read: the file's length (may be NULL) */

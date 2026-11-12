@@ -102,6 +102,21 @@ typedef struct LumaServiceProvider {
 typedef const LumaServiceKernel* (*LumaServicesOpen)(void);
 typedef int32_t (*LumaProvideService)(const LumaServiceProvider* provider);
 
+/* The save half of the Mods page's REMOVED MODS line (services-save 5, services-mods 8): the game module's exports,
+   found by name.
+   luma_save_kept: any thread. fn(user, id, bytes) once for each mod id with values in the user files in memory (their
+   LUMA chunks as last read, copied, started or saved), `bytes` its entries' bytes over all of them; an id being
+   forgotten is not given. fn is called after the module's lock is let go (the pairs copied first): it may call the
+   module.
+   luma_save_forget: any thread. At the next frame's start the id's values leave the user files in memory (the stored
+   ones and the loaded file's), and when a stored file held some, the save file is written at once without a window
+   (waiting while a save or load runs, and for the start's read); every later save this session leaves them out too.
+   From the call on luma_save_kept no longer gives the id. An id outside the id rule is ignored; past 256 ids in one
+   session an id is logged and not forgotten. */
+typedef void (*LumaSaveKeptFn)(void* user, const char* id, uint64_t bytes);
+typedef void (*LumaSaveKept)(LumaSaveKeptFn fn, void* user);
+typedef void (*LumaSaveForget)(const char* id);
+
 #ifdef __cplusplus
 }
 #endif
