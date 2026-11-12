@@ -1368,7 +1368,7 @@ struct RtFrameConstants {
     float before[3][4];         // the frame before's eye space from this frame's
     std::uint32_t kept[4];      // the reservoirs' way from the frame before's emitters to this frame's
     std::uint32_t clip[4];      // the clip areas' volumes: first byte in the items' buffer, how many, the rule
-    float dev[8][4];            // the tracer's development tunables (rt_dev.h from GlassShine; rt_frame.hlsli rt_dev_or)
+    float dev[8][4];            // the tracer's development tunables (rt_dev.h from PaintedGlass; rt_frame.hlsli rt_dev_or)
     std::uint32_t dev_set[4];   // [0]: a bit a dev slot the run gave
 };
 // A pass's own (rt_frame.hlsli PassConstants): b1.
@@ -2303,7 +2303,7 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
             constants.dev_set[0] |= 1u << i;
         }
     }
-    // The programs' sun_strength, sky_chroma and stage_light again in the tracer's tail (g_dev 9, 10, 11): hits light a
+    // The programs' sun_strength, sky_chroma and stage_light again in the tracer's tail (g_dev 6, 7, 8): hits light a
     // surface as the programs do under the same keys (FB b66).
     constexpr RtDev kShared[3] = {RtDev::SunStrength, RtDev::SkyChroma, RtDev::StageLight};
     for (unsigned j = 0; j < 3u; ++j) {
@@ -2315,7 +2315,7 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
         }
     }
     static_assert(kRtDevTracerSlots + 3u <= 32u, "g_dev holds 32 slots");
-    static_assert(kRtDevTracerSlots == 9u, "rt_frame.hlsli names each tracer slot (kDev*)");
+    static_assert(kRtDevTracerSlots == 6u, "rt_frame.hlsli names each tracer slot (kDev*)");
     static_assert(offsetof(RtFrameConstants, dev) == 336u && offsetof(RtFrameConstants, dev_set) == 464u);
     static_assert(sizeof(RtFrameConstants) <= 512u && offsetof(RtFrameConstants, more) == 64u);
     static_assert(offsetof(RtFrameConstants, kept) == 304u);  // rt_pass_indirect.cpp HalfFrameConstants

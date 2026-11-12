@@ -47,16 +47,15 @@ cbuffer FrameConstants : register(b0) {
     uint4 g_clip;          // the clip areas' volumes (plan 26 M10, clip_shows): x their first byte in the items' buffer
                            // (after the items; 64 each: the rows from the eye to the unit shape, then the shape), y how
                            // many, z where the clipped map parts show: 1 inside a volume, 2 outside every one, 0 whole
-    float4 g_dev[8];       // the tracer's development tunables (rt_dev.h from glass_shine, kDev* below; rt_dev_or)
+    float4 g_dev[8];       // the tracer's development tunables (rt_dev.h from painted_glass, kDev* below; rt_dev_or)
     uint4 g_dev_set;       // x: a bit a g_dev slot, set where the run gave it
 };
 
 // A development tunable (rt_dev.h; FA l63): the run's value where it gave one, else the code's own number.
-static const uint kDevGlassShine = 0u, kDevWaterShine = 1u, kDevPaintedGlass = 2u, kDevPaintedMetal = 3u,
-                  kDevPaintedGloss = 4u, kDevPaintedMirror = 5u, kDevSubstituteGlass = 6u, kDevKeepMetal = 7u,
-                  kDevKeepGloss = 8u;
+static const uint kDevPaintedGlass = 0u, kDevPaintedMetal = 1u, kDevPaintedGloss = 2u, kDevPaintedMirror = 3u,
+                  kDevKeepMetal = 4u, kDevKeepGloss = 5u;
 // The programs' keys, copied into the tail by the host (rt_walk.cpp; FB b66): sun_strength, sky_chroma, stage_light.
-static const uint kDevSunStrength = 9u, kDevSkyChroma = 10u, kDevStageLight = 11u;
+static const uint kDevSunStrength = 6u, kDevSkyChroma = 7u, kDevStageLight = 8u;
 float rt_dev_or(uint slot, float otherwise) {
     return ((g_dev_set.x >> slot) & 1u) != 0u ? g_dev[slot >> 2u][slot & 3u] : otherwise;
 }

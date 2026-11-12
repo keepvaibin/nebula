@@ -43,14 +43,11 @@ enum class RtDev : std::uint8_t {
     SunStrength,    // traced_painted: the relight's sun over the stage's key (M2; 1.0, D3: October's was 1.25)
     SkyChroma,      // traced_painted: the share of the sky's chroma its light keeps in shade (M8, October's 0.4)
     StageLight,     // traced_painted: 1 the relight lit by the stage's light as it is (October's), 0 divided by it
-    // The tracer's (rt_frame.hlsli g_dev): from GlassShine, in this order.
-    GlassShine,       // rt_mirror.hlsli: glass's F0 over ((ior - 1) / (ior + 1))^2 (kShine 2.0)
-    WaterShine,       // water's (1.5)
+    // The tracer's (rt_frame.hlsli g_dev): from PaintedGlass, in this order.
     PaintedGlass,     // a painted reflection's head-on share: glass 0.1
     PaintedMetal,     // metal 0.55
     PaintedGloss,     // gloss 0.05
     PaintedMirror,    // what a painted reflection takes of the colour under it: 1 - this x its share (0.6)
-    SubstituteGlass,  // rt_reflect_out.hlsl: what a painted glass reflection's R is taken at (1.3)
     KeepMetal,        // what a painted metal reflection keeps where R is dark (0.5)
     KeepGloss,        // gloss (0.25)
     Count,
@@ -58,7 +55,7 @@ enum class RtDev : std::uint8_t {
 inline constexpr unsigned kRtDevCount = static_cast<unsigned>(RtDev::Count);
 static_assert(kRtDevCount <= 64u, "one bit a tunable (RenderCore::rt_dev_set_)");
 inline constexpr unsigned kRtDevProgramFirst = static_cast<unsigned>(RtDev::BaseFloor);
-inline constexpr unsigned kRtDevTracerFirst = static_cast<unsigned>(RtDev::GlassShine);
+inline constexpr unsigned kRtDevTracerFirst = static_cast<unsigned>(RtDev::PaintedGlass);
 inline constexpr unsigned kRtDevProgramSlots = kRtDevTracerFirst - kRtDevProgramFirst;  // view_dev[0]: 4 at most
 inline constexpr unsigned kRtDevTracerSlots = kRtDevCount - kRtDevTracerFirst;          // g_dev: 32 at most
 static_assert(kRtDevProgramSlots <= 4u && kRtDevTracerSlots <= 32u);
@@ -68,8 +65,8 @@ inline constexpr std::string_view kRtDevNames[kRtDevCount] = {
     "ambient_gain",   "sun_gain",      "full_facing",    "sky_gain",
     "area_emission",  "hit_sky",       "bounce",         "bounce_max",    "sky_min",       "hit_dark",
     "sun_glint",      "hit_gain",      "air_scale",      "sky_in_shadow", "light_srgb",    "sun_size",      "near_field",    "landing_all",   "base_floor",
-    "sun_strength",   "sky_chroma",    "stage_light",    "glass_shine",   "water_shine",   "painted_glass",
-    "painted_metal",  "painted_gloss", "painted_mirror", "substitute_glass", "keep_metal", "keep_gloss",
+    "sun_strength",   "sky_chroma",    "stage_light",    "painted_glass",
+    "painted_metal",  "painted_gloss", "painted_mirror", "keep_metal", "keep_gloss",
 };
 
 }  // namespace galaxy::render
