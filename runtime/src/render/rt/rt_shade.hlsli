@@ -895,9 +895,11 @@ float3 rt_hit_radiance_with(RtHit h, uint options, float3 o, bool d_known, float
     if (h.klass == kRtMetal || h.klass == kRtGlass) {
         out_ += rt_hit_mirror_stand_in(h);
     }
-    // c81 (L4): a glowing body seen (a mirror's ray, not one that lights: that light comes through the list once).
+    // c81, c97 (L4; the director 11-12): a glowing body seen (a mirror's ray, not one that lights: that light comes
+    // through the list once) shows its own colour lit from inside: at least 0.6 and at most 1.2 of its albedo at full
+    // light, a channel.
     if (h.glow_body && (options & kRtShadeLighting) == 0u) {
-        out_ = max(out_, rt_shown(h.emission) * g_shade.gains.x);
+        out_ = clamp(out_, 0.6f * h.base, 1.2f * h.base);
     }
     return out_;
 }
