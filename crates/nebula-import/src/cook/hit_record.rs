@@ -132,6 +132,8 @@ pub struct Reading {
     pub traced_hidden: bool,
     /// c88: a metal's kind (METAL_KINDS' place + 1), 0 not yet chosen, 255 the review's `art` (its colour as it is).
     pub metal_kind: u8,
+    /// c90: the share of the sun its far side takes (a crown of leaves, a cloud), 0 none.
+    pub through: f32,
 }
 
 /// The models that glow (data/rt_glow.tsv): a model's file stem to its light's colour (None: the material's own) and
@@ -1344,6 +1346,7 @@ pub fn read(m: &MaterialIr) -> Reading {
         tint_keep: -1.0,
         traced_hidden: false,
         metal_kind: 0,
+        through: 0.0,
     };
     let metal_hue = s.environment_saturation < 0.15 || (8.0..=60.0).contains(&s.environment_hue);
     if s.blend == 2 {
@@ -1554,6 +1557,7 @@ pub fn finish(stem: &str, name: &str, measured: f32, r: &mut Reading) {
             r.env_tint = [1.0, 1.0, 1.0];
         }
     }
+    r.through = foliage_through(&stem, &name.to_ascii_lowercase(), r);
     review(MATERIALS_TABLE, &stem, name, r);
     for table in &packs.materials {
         review(table, &stem, name, r);
@@ -1605,6 +1609,9 @@ fn review(table: &str, stem: &str, name: &str, r: &mut Reading) {
         if let Some(v) = field("traced") {
             r.traced_hidden = v.eq_ignore_ascii_case("hidden");
         }
+        if let Some(v) = number("through") {
+            r.through = v.clamp(0.0, 1.0);
+        }
         if let Some(v) = field("kind").map(|v| v.to_ascii_lowercase()) {
             if v == "art" {
                 r.metal_kind = 255;
@@ -1626,6 +1633,34 @@ pub const METAL_KINDS: [(&str, [f32; 3]); 7] = [
     ("brass", [0.910, 0.778, 0.423]),
     ("platinum", [0.673, 0.637, 0.585]),
 ];
+/// c90 (PLANS-UNBUILT "Foliage", V-E2): the share of the sun a crown of leaves' far side takes (light through the
+/// leaves; rt_frame.hlsli kCardThrough, a card's), and a cloud's.
+pub const FOLIAGE_THROUGH: f32 = 0.6;
+pub const CLOUD_THROUGH: f32 = 0.5;
+pub const FALL_THROUGH: f32 = 0.3;
+
+/// c90: a material's through-light by its name (lower case): a fall or foam FALL_THROUGH (whatever its class: FB's
+/// ask, the plan's 0.3); leaves FOLIAGE_THROUGH, a cloud CLOUD_THROUGH, only on a class that takes light on its body
+/// (dielectric, gloss, painted, ramp), never a sky's.
+pub fn foliage_through(stem: &str, name: &str, r: &Reading) -> f32 {
+    if stem.ends_with("sky") || stem.starts_with("vr") {
+        return 0.0;
+    }
+    if falling_water(name) || name.contains("foam") {
+        return FALL_THROUGH;
+    }
+    if !matches!(r.class, Class::Dielectric | Class::Gloss | Class::Painted | Class::Ramp) || stem.ends_with("sky") || stem.starts_with("vr") {
+        return 0.0;
+    }
+    if ["leaf", "leaves", "happa", "bush"].iter().any(|w| name.contains(w)) {
+        FOLIAGE_THROUGH
+    } else if name.contains("cloud") {
+        CLOUD_THROUGH
+    } else {
+        0.0
+    }
+}
+
 /// How far a metal's art colour tints its kind's F0 (rt_mirror.hlsli kMetalTint).
 pub const METAL_TINT: f32 = 0.25;
 
@@ -2065,6 +2100,24 @@ mod tests {
         m.swaps = [[0, 1, 2, 3]; 4];
         m.material_color = [[255; 4]; 2];
         m
+    }
+
+    #[test]
+    fn a_crown_of_leaves_and_a_cloud_let_the_sun_through() {
+        // c90: Good Egg's crown (a closed, lit mesh) by its name; a cloud; the trunk, a sky's cloud card and glass none;
+        // the review's column over the name.
+        let mut r = read(&painted());
+        r.class = Class::Dielectric;
+        assert_eq!(foliage_through("diskgardenplanet", "leafmat_v", &r), FOLIAGE_THROUGH);
+        assert_eq!(foliage_through("raincloud", "cloudmat", &r), CLOUD_THROUGH);
+        assert_eq!(foliage_through("cocotwina", "coconuttree_v", &r), 0.0);
+        assert_eq!(foliage_through("cloudsky", "cloudmat", &r), 0.0);
+        let mut glass = read(&painted());
+        glass.class = Class::Glass;
+        assert_eq!(foliage_through("anything", "leaf_v", &glass), 0.0);
+        assert_eq!(foliage_through("heavenlybeachplanetwater", "dxfallmat_v_x", &glass), FALL_THROUGH);
+        review("model\tmaterial\tthrough\nanything\tLeaf_v\t0.3\n", "anything", "Leaf_v", &mut r);
+        assert!((r.through - 0.3).abs() < 1e-6);
     }
 
     #[test]

@@ -130,7 +130,10 @@ void main(uint3 id : SV_DispatchThreadID) {
             // Drawn from both sides: lit from either; a two-sided cutout's far side by kCardThrough (D5).
             const bool two_sided = (flags & kSurfaceTwoSided) != 0u;
             const bool card = two_sided && item != 0u && (g_items.Load(g_at.x + (item - 1u) * kItemBytes + 4u) & kItemAlphaTested) != 0u;
-            const float lambert = saturate(!two_sided ? turned : card && turned < 0.0f ? -kCardThrough * turned : abs(turned));
+            // c90: a crown of leaves or a cloud (item word 14 bits 26-31) by its own share, before a card's.
+            const float cooked = item != 0u ? float(g_items.Load(g_at.x + (item - 1u) * kItemBytes + 56u) >> 26u) / 63.0f : 0.0f;
+            const float through = cooked > 0.0f ? cooked : card ? kCardThrough : 0.0f;
+            const float lambert = saturate(turned >= 0.0f ? turned : through > 0.0f ? -through * turned : two_sided ? -turned : 0.0f);
             facing = lit ? lambert : saturate(lambert / g_look.z);
         }
         facing_out.r = facing;

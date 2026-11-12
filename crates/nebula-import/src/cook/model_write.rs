@@ -1913,7 +1913,8 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
         b.u8(r.env_map);
         b.u8(0);
         b.u8(0);
-        b.u8(0);
+        // c90: NebulaModelHit.through, the share of the sun its far side takes x 255.
+        b.u8((r.through.clamp(0.0, 1.0) * 255.0).round() as u8);
         b.f32(r.body);
         b.f32(r.shine);
         b.f32(r.tint_keep);

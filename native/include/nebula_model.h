@@ -354,7 +354,9 @@ typedef struct NebulaModelHit {
                            zero: a luminance, candela a square metre of the mesh; 0: it lights nothing */
     float env_tint[3];  /* its painted reflection's colour: the map's mean times what multiplies it, largest channel 1 */
     uint8_t env_map;    /* the material's map read through the normal (its painted reflection), 255 none */
-    uint8_t reserved[3];
+    uint8_t reserved[2];
+    uint8_t through;    /* c90: the share of the sun its far side takes x 255 (a crown of leaves, a cloud), its sun ray
+                           passing its own mesh; 0 none */
     float body, shine, tint_keep; /* the review's (rt_materials.tsv): a see-through body's coverage, the reflection's
                                      gain, how much of its tint stays; below 0: the class's own */
     float reserved2;

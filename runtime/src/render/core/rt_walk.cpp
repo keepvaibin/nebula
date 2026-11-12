@@ -1922,10 +1922,12 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
             if (glow_now[3] != 0.0f && i < rt_glow_bodies_.size()) {
                 rt_glow_bodies_[i] = 1u;
             }
-            words[14] = glow_off ? 0u
-                                 : byte_of(mesh.hit_emission[0]) | byte_of(mesh.hit_emission[1]) << 8u |
-                                       byte_of(mesh.hit_emission[2]) << 16u | (glow_listed ? 1u << 24u : 0u) |
-                                       (glow_now[3] != 0.0f ? 1u << 25u : 0u);
+            // c90: bits 26-31 the share of the sun its far side takes x 63 (a crown of leaves, a cloud), whatever its glow.
+            words[14] = (glow_off ? 0u
+                                  : byte_of(mesh.hit_emission[0]) | byte_of(mesh.hit_emission[1]) << 8u |
+                                        byte_of(mesh.hit_emission[2]) << 16u | (glow_listed ? 1u << 24u : 0u) |
+                                        (glow_now[3] != 0.0f ? 1u << 25u : 0u)) |
+                        static_cast<std::uint32_t>(std::clamp(mesh.hit_through, 0.0f, 1.0f) * 63.0f + 0.5f) << 26u;
             // Its paint as one light (the Physical style, FB 22.19): the share in bits 0-7, the direction in the
             // model's space as two signed 12-bit octahedral numbers (8-19, 20-31). 0: it stays painted.
             if (mesh.paint_share > 0.0f) {

@@ -81,6 +81,10 @@ static const uint kItemClipped = 64u, kItemAlphaTested = 128u;
 // A two-sided cutout (a leaf, a petal, a flower card; D5): its sun ray starts this far out, so the cards of one clump do
 // not black each other out, and its far side takes this share of the sun (light through a petal or a leaf).
 static const float kCardClear = 30.0f, kCardThrough = 0.6f;
+// c90: a crown of leaves or a cloud (item word 14 bits 26-31: its share of the sun on its far side x 63) is lit from
+// both sides by that share; its sun ray, and a card's, passes every triangle of its own item (occluder_at_but's `own`
+// with kOwnWhole).
+static const uint kOwnWhole = 0x80000000u;
 // Material classes (nebula_model.h NEBULA_HIT_*).
 static const uint kClassGloss = 1u, kClassMetal = 2u, kClassGlass = 3u, kClassEmissive = 6u, kClassTranslucent = 8u,
                   kClassWater = 9u;

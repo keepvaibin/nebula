@@ -375,6 +375,7 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes)
             gpu_mesh.hit_body = hit.body;
             gpu_mesh.hit_shine = hit.shine;
             gpu_mesh.hit_tint_keep = hit.tint_keep;
+            gpu_mesh.hit_through = static_cast<float>(hit.through) / 255.0f;
             // Where glow_source's colour sits among the rows of the material's own stages (the first form that
             // replaces nothing), and its cooked value: registers r (code r) are signed, the others bytes, all /255
             // as Material::fillRow fills them.

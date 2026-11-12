@@ -268,6 +268,8 @@ struct RtHit {
     bool listed;           // its light is one of the frame's emitter list: a ray that lights something shades it instead
     bool glow_body;        // c81 (L4): a glowing mesh that is a light this frame (word 14 bit 25): never duller than
                            // its emission to a ray that only looks
+    float through;         // c90: the sun's share on its far side (a crown, a cloud: word 14 bits 26-31; a card's
+                           // kCardThrough); its sun ray passes its own item
 };
 
 float3 rt_bytes3(uint w) {
@@ -385,6 +387,9 @@ void rt_hit_read(uint item, uint triangle_, float2 where_, float far_, float3 or
     h.listed = (w3.z >> 24u & 1u) != 0u && !area;
     h.glows = h.klass == kRtEmissive;
     h.glow_body = (w3.z >> 25u & 1u) != 0u;
+    const float cooked_through = float(w3.z >> 26u) / 63.0f;
+    h.through = cooked_through > 0.0f ? cooked_through
+                                      : (w0.y & kItemThin) != 0u && (w0.y & kItemAlphaTested) != 0u ? kCardThrough : 0.0f;
     if (h.glows || area || h.glow_body) {
         // The record's emission was read with its maps mid grey (hit_record.rs): twice it under the map is what it shows.
         const float3 own = rt_bytes3(w3.z);
@@ -692,9 +697,10 @@ float3 rt_hit_sun(RtHit h, bool disc, float2 u) {
     }
     const float3 toward = disc ? rt_within(g_sun.xyz, g_sun.w, u) : g_sun.xyz;
     const bool thin = (h.item_flags & kItemThin) != 0u;
-    const float3 n = thin && dot(h.ng, g_sun.xyz) < 0.0f ? -h.ng : h.ng;
+    const bool clump = h.through > 0.0f;  // c90: a crown's, a cloud's, a card's ray passes its own item
+    const float3 n = (thin || clump) && dot(h.ng, g_sun.xyz) < 0.0f ? -h.ng : h.ng;
     const float3 from = rt_off(h.at, n);
-    float3 v = rt_through_of(from, toward, kRtFarAway, 0xFFFFFFFFu, rt_sun_mask((h.item_flags & kItemLit) != 0u));
+    float3 v = rt_through_of(from, toward, kRtFarAway, clump ? h.slot : 0xFFFFFFFFu, rt_sun_mask((h.item_flags & kItemLit) != 0u));
     // What the blended things let through, at High as the sun pass (a hit under water takes the sun through it: A4
     // W4; FB b78).
     if (rt_part(kPartSun) >= 3u && any(v > 0.0f)) {
@@ -706,6 +712,9 @@ float3 rt_hit_sun(RtHit h, bool disc, float2 u) {
 
 float rt_hit_facing(RtHit h) {
     const float turned = dot(h.ns, g_sun.xyz);
+    if (turned < 0.0f && h.through > 0.0f) {
+        return -h.through * turned;  // c90: the far side of a crown, a cloud, a card by its share
+    }
     return max((h.item_flags & kItemThin) != 0u ? abs(turned) : turned, 0.0f);
 }
 

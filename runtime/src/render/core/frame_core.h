@@ -89,6 +89,7 @@ struct GpuMesh {
     float hit_ior = 1.5f, hit_thickness = 0.0f;
     float hit_env_tint[3]{};
     float hit_body = -1.0f, hit_shine = -1.0f, hit_tint_keep = -1.0f;  // the review's; below 0: the class's own
+    float hit_through = 0.0f;  // c90: the share of the sun its far side takes (NebulaModelHit.through / 255)
     // The live colour of glow_source (L-1): its row among the material's form 0 rows (vertex rows first; 0xFFFF
     // none), how many rows that form has, and the row's cooked colour, which the live one is measured against.
     std::uint16_t glow_row = 0xFFFFu;

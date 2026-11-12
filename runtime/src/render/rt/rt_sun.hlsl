@@ -41,7 +41,10 @@ void main(uint3 id : SV_DispatchThreadID) {
     InterlockedAdd(g_counters[16], 1u);
     // A sheet drawn from both sides (a leaf) is lit from either; its ray leaves from the side the sun is on.
     const float turned = dot(s.smooth_, g_sun.xyz);
-    const float facing = thin ? abs(turned) : turned;
+    // c90: a crown of leaves or a cloud (item word 14 bits 26-31) is lit from its far side too.
+    const uint own_item = g_item_map.Load(int3(pixel, 0)).x;
+    const float through = own_item != 0u ? float(g_items.Load(g_at.x + (own_item - 1u) * kItemBytes + 56u) >> 26u) / 63.0f : 0.0f;
+    const float facing = thin || through > 0.0f ? abs(turned) : turned;
     if (facing > 0.0f) {
         const float3 toward = within(g_sun.xyz, g_sun.w, rt_sample(id.xy, g_more.y, kSampleSun));
         // From a place within the pixel: where the eye's ray through that place meets the surface's own plane, no
@@ -72,11 +75,11 @@ void main(uint3 id : SV_DispatchThreadID) {
             paint_holds = item != 0u && (g_items.Load(g_at.x + (item - 1u) * kItemBytes + 44u) >> 8u & kHitPaintedShadow) != 0u;
         }
         uint met;
-        // A billboard's own sun card is no shadow on it (l83).
-        const uint own_item = g_item_map.Load(int3(pixel, 0)).x;
+        // A billboard's own sun card is no shadow on it (l83); a card's or a crown's own clump none either (c90).
+        const bool clump = through > 0.0f || clear > 0.0f;
         const float occluder = occluder_at_but(from, toward, 200000.0f,
                                                (paint_holds ? kMaskLit : kMaskSolid | kMaskCutout) | kMaskShadowOnly, true,
-                                               own_item != 0u ? own_item - 1u : 0xFFFFFFFFu, met);
+                                               own_item != 0u ? (own_item - 1u) | (clump ? kOwnWhole : 0u) : 0xFFFFFFFFu, met);
         if (occluder >= 0.0f) {
             v = float4(0.0f, 0.0f, 0.0f, min(occluder + clear, kNoOccluder - 1.0f));
             InterlockedAdd(g_counters[18], 1u);
