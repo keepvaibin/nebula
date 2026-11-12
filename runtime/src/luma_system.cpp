@@ -846,8 +846,8 @@ std::int32_t clipboard_set_text(const LumaMod* mod, const char* text, std::uint6
     return LUMA_PENDING;
 }
 
-std::int32_t clipboard_set_image(const LumaMod* mod, const std::uint8_t* rgba, std::uint32_t width, std::uint32_t height,
-                                 LumaEventFn fn, void* user, LumaHandle* out) {
+std::int32_t clipboard_set_image(const LumaMod* mod, const std::uint8_t* rgba, std::uint64_t size, std::uint32_t width,
+                                 std::uint32_t height, LumaEventFn fn, void* user, LumaHandle* out) {
     const char* const where = "system.clipboard.set_image";
     if (const std::int32_t status = enter(mod, where, false); status != LUMA_OK) {
         return status;
@@ -864,6 +864,10 @@ std::int32_t clipboard_set_image(const LumaMod* mod, const std::uint8_t* rgba, s
     const std::uint64_t bytes = std::uint64_t{width} * height * 4u;
     if (height == 0u || height > kSideMost || bytes > kPixelsMost) {
         return argument(mod, where, "height");
+    }
+    // The buffer's own length (registry 3, G R-5d): a script passes bytes, and the pixels are never read past it.
+    if (size != bytes) {
+        return argument(mod, where, "size");
     }
     std::int32_t status = LUMA_OK;
     ModState* state = clipboard_enter(mod, where, fn, out, &status);

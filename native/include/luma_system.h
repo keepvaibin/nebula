@@ -108,12 +108,13 @@ typedef struct LumaSystemClipboardService {
        LUMA_E_TOO_LARGE; null fn/out/text: LUMA_E_ARGUMENT; a 5th open request: LUMA_E_LIMIT; all reported. */
     int32_t (*set_text)(const LumaMod* mod, const char* text, uint64_t bytes, LumaEventFn fn, void* user,
                         LumaHandle* out);
-    /* 1.0. Game thread. Puts width x height RGBA pixels on the clipboard (copied before this returns). LUMA_PENDING;
-       a SET event follows, closed after its event. width: 1 to 8192, height: 1 to 8192, at most 64 MiB: else
-       LUMA_E_ARGUMENT "width"/"height"; null fn/out/rgba: LUMA_E_ARGUMENT; a 5th open request: LUMA_E_LIMIT; all
-       reported. Where clipboard_images is 0: LUMA_E_ABSENT, not reported. */
-    int32_t (*set_image)(const LumaMod* mod, const uint8_t* rgba, uint32_t width, uint32_t height, LumaEventFn fn,
-                         void* user, LumaHandle* out);
+    /* 1.0. Game thread. Puts width x height RGBA pixels on the clipboard (`size` bytes at rgba, copied before this
+       returns). LUMA_PENDING; a SET event follows, closed after its event. width: 1 to 8192, height: 1 to 8192, at
+       most 64 MiB: else LUMA_E_ARGUMENT "width"/"height"; a size other than width x height x 4: LUMA_E_ARGUMENT
+       "size"; null fn/out/rgba: LUMA_E_ARGUMENT; a 5th open request: LUMA_E_LIMIT; all reported. Where
+       clipboard_images is 0: LUMA_E_ABSENT, not reported. */
+    int32_t (*set_image)(const LumaMod* mod, const uint8_t* rgba, uint64_t size, uint32_t width, uint32_t height,
+                         LumaEventFn fn, void* user, LumaHandle* out);
     /* 1.0. Game thread. Ends a request: no event for it is given after this returns (registry 4.8). LUMA_OK; a
        handle that is not this mod's open request: LUMA_E_HANDLE, reported. A set already handed to the system may
        still land on the clipboard. */
