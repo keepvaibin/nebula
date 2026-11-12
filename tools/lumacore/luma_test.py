@@ -819,7 +819,8 @@ def install(settings, mod_folder, code_allowed, order, kept=False, permissions="
     # luma-format 6: code/<platform>/mod.<ending> by `code.platforms` alone. A mod whose code is for other platforms
     # only has no library here: the game says it has no version for this device.
     code = manifest.get("code")
-    if isinstance(code, dict) and "windows-x64" in code.get("platforms", []):
+    platforms = code.get("platforms") if isinstance(code, dict) else None
+    if isinstance(platforms, list) and "windows-x64" in platforms:
         rel = "code/windows-x64/mod.dll"
         if not (mod_folder / rel).is_file():
             raise HarnessError("%s: the code %s is missing (building is not the runner's job)" % (mod_folder, rel))
