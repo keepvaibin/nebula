@@ -53,7 +53,7 @@ void ref_surface(RtHit h, bool lighting, inout uint seed, out float3 c, out floa
     float3 s0;
     float3x3 mo;
     rt_share_terms(lit, nl, v, s0, mo);
-    const float3 base = rt_hit_albedo(h);  // the art's colour, or the model's linear one (b59)
+    const float3 base = rt_return_albedo(h, lighting);  // the art's colour, or the model's linear one (b59); FB b97
     c = base * (s0 + d);
     m = float3x3(base.x * mo[0], base.y * mo[1], base.z * mo[2]);
 }

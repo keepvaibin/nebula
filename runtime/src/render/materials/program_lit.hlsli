@@ -352,6 +352,18 @@ float4 traced_sheen(EnhShade e) {
 // A lit program begins with enh_begin(i.lit_eye, i.lit_nrm) in its entry, whose input `i` holds the pixel (i.pos): the
 // traced form reads the pixel's light there, and every light_term after it is taken by its share (when its colour
 // sums the key: else TRACED_UNKEYED came first, and traced_colour shares its colour as a painted one's).
+// A lit program's O held at 1 in luminance, its hue kept, and O's alpha likewise, by kForm (FB b96, the director's
+// look2 item 1): the game's ambient and fill, both by O here, hold the sky and the mean bounce already; O over 1 is
+// sunlit ground's bounce counted again (brighter, flatter characters). O under 1 (occlusion) stays.
+void traced_o_held() {
+    if (!(view_look.x > 0.0)) {
+        return;
+    }
+    const float t = saturate(view_look.x);
+    const float l = dot(g_traced_o, float3(0.2126, 0.7152, 0.0722));
+    g_traced_o = lerp(g_traced_o, g_traced_o / max(l, 1.0), t);
+    g_traced.a = lerp(g_traced.a, min(g_traced.a, 1.0), t);
+}
 EnhShade enh_begin_traced(float3 P, float3 n, float4 pixel) {
     g_traced = traced_at(pixel);
     // c78 (7.6): a face part's shadows (the cap brim's, the nose's) at most half deep: V to 0.5 + 0.5 V, by kForm.
@@ -372,6 +384,7 @@ EnhShade enh_begin_traced(float3 P, float3 n, float4 pixel) {
         const float3 o_sky = traced_bounded(g_traced_o, 1.0, float3(1.0, 1.0, 1.0), kTintBoundCharacter);
         g_traced_o = lerp(g_traced_o, o_sky, saturate(view_look.x));
     }
+    traced_o_held();  // FB b96
     g_traced_lit = g_traced_keyed;
     // c52: the traced facing for light 0 where the relight is on and the pixel's traced light is its own.
     g_traced_facing = -1.0;

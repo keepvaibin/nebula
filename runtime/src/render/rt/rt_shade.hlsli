@@ -571,6 +571,14 @@ float3 rt_hit_albedo(RtHit h) {
     }
     return t > 0.0f ? base * (1.0f - t * h.metal) : base;
 }
+// What a hit RETURNS to a ray that lights something (the gather; FB b97, the director's DECIDED B): under the model
+// its colour at kBounceAlbedo, real ground's range (sand 0.35-0.45, grass 0.2-0.25, white paint 0.8: the art's 0.9
+// white at 0.45); on screen, in a mirror, through water: rt_hit_albedo, the display's anchor. The art's form keeps
+// its own (by kForm).
+static const float kBounceAlbedo = 0.5f;  // CHOSEN (the director 11-12): the art's white at 0.45, its grass at 0.3
+float3 rt_return_albedo(RtHit h, bool lighting) {
+    return lighting ? rt_hit_albedo(h) * lerp(1.0f, kBounceAlbedo, rt_form()) : rt_hit_albedo(h);
+}
 // A metal or glass hit's reflection, which hits do not trace again: the stage's ambient by its painted share (the
 // art's), or the sky's light by its F0 (the model: lerp(0.04, lin(base), metallic); glass by its index).
 float3 rt_hit_mirror_stand_in(RtHit h) {
@@ -825,14 +833,15 @@ float3 rt_hit_radiance_with(RtHit h, uint options, float3 o, bool d_known, float
     if (h.glows && !(h.listed && (options & kRtShadeLighting) != 0u)) {
         return rt_shown(h.emission) * g_shade.gains.x;
     }
+    const bool lighting = (options & kRtShadeLighting) != 0u;  // FB b97: what it returns at kBounceAlbedo
     if ((options & kRtShadeSkyOnly) != 0u) {
         const float t = rt_form();
         // What the sky gives it (b69, b69c): the art's, a painted hit 1 (O = 1 of its own look), a lit one its share's
         // lin(D); the model's sky' by kForm, both alike.
-        const float3 art = rt_hit_albedo(h) * g_shade.look.y *
+        const float3 art = rt_return_albedo(h, lighting) * g_shade.look.y *
                            ((h.item_flags & kItemLit) != 0u ? rt_lin(saturate(g_shade.ambient.rgb + 0.5f * g_shade.fill.rgb))
                                                             : float3(1.0f, 1.0f, 1.0f));
-        return t > 0.0f ? lerp(art, rt_hit_albedo(h) * g_shade.look.y * rt_stage_light().sky * rt_open_o(), t) : art;
+        return t > 0.0f ? lerp(art, rt_return_albedo(h, lighting) * g_shade.look.y * rt_stage_light().sky * rt_open_o(), t) : art;
     }
     const bool lit = (h.item_flags & kItemLit) != 0u;
     const float nl = rt_hit_facing(h);
@@ -841,7 +850,7 @@ float3 rt_hit_radiance_with(RtHit h, uint options, float3 o, bool d_known, float
         v = rt_hit_sun(h, false, float2(0.0f, 0.0f));
     }
     const float3 d = d_known ? d_seen : rt_grid_light(h.at, h.ns, h.slot, (options & kRtShadeLightRay) != 0u, seed);
-    float3 out_ = rt_hit_albedo(h) * (rt_share(lit, nl, v, o) + d);
+    float3 out_ = rt_return_albedo(h, lighting) * (rt_share(lit, nl, v, o) + d);
     // Mirror-like hits do not trace again: the stage's ambient stands for their reflection (10.2 item 6; the model:
     // the sky's light by F0, b59).
     if (h.klass == kRtMetal || h.klass == kRtGlass) {

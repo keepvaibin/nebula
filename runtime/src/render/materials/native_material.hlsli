@@ -258,6 +258,7 @@ NativeOut native_ps(NativeVaryings i) {
         g_traced = traced_at(i.pos);
         bool coloured = false;
         g_traced_o = traced_o(g_traced, i.pos, coloured);  // O a channel at a time (FB 22.10), as enh_begin_traced
+        traced_o_held();  // FB b96
         g_traced_lit = material_relight(i, dot(i.lit_nrm, i.lit_nrm) > 0.0 ? normalize(i.lit_nrm) : i.lit_nrm);
     }
 #endif
