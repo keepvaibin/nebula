@@ -283,6 +283,36 @@ float4 enh_env(float4 t) {
 }
 
 #if NATIVE_TRACED
+// c74 (A2): a matte dielectric's own reflection under the relight, F0 0.04 at kSheenRough: F over the view's lobe
+// (Karis' split sum, as enh_sky_reflection), the sky's light on a white surface here (sky' E O over the held light,
+// O with the sky's hue) by F, and the traced sun's GGX lobe by its light (key kSun E over the held light) and V. In the
+// eye's space (g_enh's N and V; the sun's direction view_relight[1..3].w). rgb that light, a 1 - F; none (0, 1) where
+// the relight, the traced light or the normal is missing.
+static const float kSheenRough = 0.7;
+float4 traced_sheen(EnhShade e) {
+    const float held_l = view_relight[0].w;
+    if (!e.valid || !g_traced_keyed || !(view_look.x > 0.0) || (view_flags & 8u) == 0u || (view_flags & 16u) != 0u ||
+        (draw_flags & 128u) != 0u || !(held_l > 1e-4)) {
+        return float4(0.0, 0.0, 0.0, 1.0);
+    }
+    const float4 r = kSheenRough * float4(-1.0, -0.0275, -0.572, 0.022) + float4(1.0, 0.0425, 1.04, -0.04);
+    const float a004 = min(r.x * r.x, exp2(-9.28 * e.NoV)) * r.x + r.y;
+    const float2 ab = float2(-1.04, 1.04) * a004 + r.zw;
+    const float f = saturate(0.04 * ab.x + ab.y);
+    float3 sheen = (dot(view_relight[1].rgb, float3(0.2126, 0.7152, 0.0722)) / held_l) * g_traced_o * f;
+    const float3 sun = float3(view_relight[1].w, view_relight[2].w, view_relight[3].w);
+    if (g_traced_facing >= 0.0 && dot(sun, sun) > 0.5) {
+        const float NoL = saturate(dot(e.Nv, sun));
+        if (NoL > 0.0) {
+            const float a2 = min(kSheenRough * kSheenRough * kSheenRough * kSheenRough + e.a2_filter, 1.0);
+            const float3 H = normalize(sun + e.V);
+            const float fw = pow(1.0 - saturate(dot(e.V, H)), 5.0);
+            const float lobe = NoL * enh_ggx(saturate(dot(e.Nv, H)), a2) * enh_vis(NoL, e.NoV, sqrt(a2)) * 3.14159265;
+            sheen += (view_relight[2].rgb / held_l) * g_traced.rgb * (lobe * (0.04 + 0.96 * fw));
+        }
+    }
+    return float4(sheen, 1.0 - f);
+}
 // A lit program begins with enh_begin(i.lit_eye, i.lit_nrm) in its entry, whose input `i` holds the pixel (i.pos): the
 // traced form reads the pixel's light there, and every light_term after it is taken by its share (when its colour
 // sums the key: else TRACED_UNKEYED came first, and traced_colour shares its colour as a painted one's).
@@ -305,7 +335,9 @@ EnhShade enh_begin_traced(float3 P, float3 n, float4 pixel) {
         !traced_by_air(pixel)) {
         g_traced_facing = saturate(gTextures[uint(view_traced.w)].Load(int3(pixel.xy, 0)).r);
     }
-    return enh_begin(P, n);
+    const EnhShade e = enh_begin(P, n);
+    g_traced_sheen = traced_sheen(e);  // c74 (A2)
+    return e;
 }
 #define enh_begin(P, n) enh_begin_traced(P, n, i.pos)
 // Light n by its traced share; light 0's diffuse factor the traced sun's (c52): the light set's colour and

@@ -276,6 +276,9 @@ static bool g_traced_lit = false;
 // A lit program's channel 0 light level (the generator's TRACED_LEVEL), so the added light takes its colour before
 // lighting: c / level.
 static float3 g_traced_level = float3(1.0, 1.0, 1.0);
+// c74 (A2): a lit matte dielectric's own reflection (program_lit.hlsli traced_sheen): rgb the light it mirrors on a
+// white surface, a 1 - F (what its colour keeps).
+static float4 g_traced_sheen = float4(0.0, 0.0, 0.0, 1.0);
 float3 traced_level(float3 level) {
     g_traced_level = level;
     return level;
@@ -458,6 +461,19 @@ float3 traced_painted(float4 light, float nl, float3 o3, bool coloured) {
     const float3 relit = traced_bounded(lit, view_relight[0].w, view_relight[3].rgb);  // c50, c69: one bound
     return lerp(painted, relit, view_look.x);
 }
+// c74: the sheen where the pixel mirrors nothing else (its mirror picture a in [0.999, 1.5]: no class's own F), not a
+// metal, under the relight, by kForm; else none (rgb 0, a 1).
+float4 traced_sheen_here(float4 pixel, bool metal) {
+    if (!g_traced_lit || metal || !(view_look.x > 0.0) || !traced_mirror_own(pixel)) {
+        return float4(0.0, 0.0, 0.0, 1.0);
+    }
+    const float a = gTextures[uint(view_traced.z)].Load(int3(pixel.xy, 0)).a;
+    if (a < 0.999 || a > 1.5) {
+        return float4(0.0, 0.0, 0.0, 1.0);
+    }
+    const float k = saturate(view_look.x);
+    return float4(g_traced_sheen.rgb * k, lerp(1.0, g_traced_sheen.a, k));
+}
 float4 traced_colour(float4 c, float4 pixel) {
     if ((view_flags & 8u) == 0u) {
         return c;
@@ -479,6 +495,7 @@ float4 traced_colour(float4 c, float4 pixel) {
     }
     // The added light by the surface's colour before lighting (a painted program's colour is that already).
     const float kBaseFloor = view_dev[1].x > 0.5 ? view_dev[0].x : 0.2;  // rt_dev.h base_floor
+    const float4 sheen = traced_sheen_here(pixel, metal);  // c74 (A2)
     // An albedo: at most 1 a channel (A3-F7: a highlight in c over a small level is no colour).
     const float3 base = g_traced_lit ? min(c.rgb / max(g_traced_level, kBaseFloor), 1.0) : c.rgb;
     // In linear light (M1): the colour and its base decoded, the share, the added light and the mirror's exchange on
@@ -486,7 +503,7 @@ float4 traced_colour(float4 c, float4 pixel) {
     // kAddedMost a channel in linear light (plan s5's guard on the product, A2-05; counted by the tracer, l82).
     const float kAddedMost = 1.5;
     const float3 lamps = metal ? float3(0.0, 0.0, 0.0) : min(traced_lin(base) * added, kAddedMost);
-    const float4 seen = traced_mirror(traced_lin(c.rgb) * share + lamps, c.a, pixel);
+    const float4 seen = traced_mirror((traced_lin(c.rgb) * share * sheen.a + sheen.rgb) + lamps, c.a, pixel);
     return float4(traced_srgb(seen.rgb), seen.a);
 }
 // The light in the air (rt/rt_volume.hlsl, the master plan's 15.2), for a draw that is lit and not a light (draw flag
