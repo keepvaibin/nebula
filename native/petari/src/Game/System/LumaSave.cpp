@@ -1085,6 +1085,20 @@ namespace luma {
                 sOffer->mStage = Offer_Posted;
             }
 
+            // A file's last save (the config's, local seconds from 2000) as Unix seconds UTC: the local clock's offset
+            // from the host's UTC clock now, to the quarter hour (a save made across a summer-time change is an hour
+            // off). 0: never saved, or no UTC clock.
+            int64_t unixSaved(NebulaCalendar::SaveTime saved) {
+                if (saved <= 0 || sFacts == nullptr || sFacts->utc_ns == nullptr) {
+                    return 0;
+                }
+                const int64_t cFrom1970 = 946684800;  // 2000-01-01 00:00 in Unix seconds
+                const int64_t utc = sFacts->utc_ns() / 1000000000;
+                int64_t offset = NebulaCalendar::now() + cFrom1970 - utc;
+                offset = (offset >= 0 ? offset + 450 : offset - 450) / 900 * 900;
+                return saved + cFrom1970 - offset;
+            }
+
             // One file as the screen shows it, from its parts as Nebula.sav holds them (user `user`, 1 to 6). False:
             // the config or the last character's game data does not load (a broken file).
             bool readFile(int user, const u8* const ppParts[], const u32 pSizes[], LumaOfferFile* pOut) {
@@ -1111,6 +1125,7 @@ namespace luma {
                     return false;
                 }
                 pOut->exists = 1;
+                pOut->saved = unixSaved(sOfferRead->getLastModified());
                 pOut->luigi = luigi ? 1u : 0u;
                 pOut->stars = static_cast< u32 >(sOfferRead->getPowerStarNum());
                 return true;
@@ -1148,6 +1163,9 @@ namespace luma {
                         rFile.in_play = 1;
                         rFile.luigi = pLoaded->isDataMario() ? 0u : 1u;
                         rFile.stars = static_cast< u32 >(pLoaded->calcCurrentPowerStarNum());
+                        rFile.saved = unixSaved(SingletonHolder< GameSystem >::get()
+                                                    ->mSequenceDirector->mSaveDataHandleSequence->getCurrentUserFile()
+                                                    ->getLastModified());
                         continue;
                     }
                     const u8* parts[SaveFileId::Kind_Num];

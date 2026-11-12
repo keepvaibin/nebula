@@ -71,6 +71,7 @@ galaxy::mods::OfferFile offer_file(const LumaOfferFile& file) noexcept {
     out.in_play = file.in_play != 0u;
     out.luigi = file.luigi != 0u;
     out.stars = file.stars;
+    out.saved = file.saved;
     return out;
 }
 

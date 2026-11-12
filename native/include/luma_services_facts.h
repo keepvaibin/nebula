@@ -16,6 +16,7 @@ typedef struct LumaOfferFile {
     uint32_t in_play;  /* 1: the file loaded now (shown, not pickable) */
     uint32_t luigi;    /* 1: its last character Luigi */
     uint32_t stars;    /* that character's power stars */
+    int64_t saved;     /* its last save, Unix seconds (UTC); 0: not known */
 } LumaOfferFile;
 
 typedef struct LumaOfferFacts {
