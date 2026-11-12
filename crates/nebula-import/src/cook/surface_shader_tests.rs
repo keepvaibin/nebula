@@ -286,13 +286,19 @@ fn a_check_without_a_compiler_says_the_shader_was_not_compiled() {
     check_compile(&ir).unwrap();
     assert!(crate::cook::refuse::said_notes().is_empty());
     let was = CHECK_COMPILER.lock().unwrap().replace(None);
+    let was_glslang = CHECK_GLSLANG.lock().unwrap().replace(None);
     let got = check_compile(&ir);
     *CHECK_COMPILER.lock().unwrap() = was;
+    *CHECK_GLSLANG.lock().unwrap() = was_glslang;
     got.unwrap();
+    // One note for each renderer's compiler that is not there, naming it.
     let notes = crate::cook::refuse::said_notes();
-    assert_eq!(notes.len(), 1, "{notes:?}");
-    assert_eq!(notes[0].0, "Cook.Shader.NotCompiled");
-    assert!(notes[0].1.contains(&("file", "assets/shaders/Stripes.hlsl".to_string())));
+    assert_eq!(notes.len(), 2, "{notes:?}");
+    for (note, backend, tool) in [(&notes[0], D3D12, "dxc"), (&notes[1], VULKAN, "glslang")] {
+        assert_eq!(note.0, "Cook.Shader.NotCompiled");
+        assert!(note.1.contains(&("file", "assets/shaders/Stripes.hlsl".to_string())), "{note:?}");
+        assert!(note.1.contains(&("target", backend.to_string())) && note.1.contains(&("name", tool.to_string())), "{note:?}");
+    }
 }
 
 #[test]
@@ -378,6 +384,48 @@ fn a_compilers_first_error_names_the_shaders_line() {
     assert_eq!(first_error(said, "assets/shaders/Stripes.hlsl"), (Some(3), "use of undeclared identifier 'spee'".to_string()));
     let generated = "program:12:1: error: redefinition of 'm'\n";
     assert_eq!(first_error(generated, "assets/shaders/Stripes.hlsl"), (None, "redefinition of 'm'".to_string()));
+    // glslang's: the file it compiled first, then its errors; a header's path with a drive's colon.
+    let vulkan = "C:/t/surface.vk.hlsl\nERROR: assets/shaders/Stripes.hlsl:1: 'template' : Reserved word. \nERROR: 1 compilation errors.  No code generated.\n";
+    assert_eq!(first_error(vulkan, "assets/shaders/Stripes.hlsl"), (Some(1), "'template' : Reserved word.".to_string()));
+    let header = "C:/t/surface.vk.hlsl\nERROR: D:/t/program.hlsli:81: '#error' : NEBULA_BOUND_TABLES needs NEBULA_TABLE_SLOTS\n";
+    assert_eq!(
+        first_error(header, "assets/shaders/Stripes.hlsl"),
+        (None, "'#error' : NEBULA_BOUND_TABLES needs NEBULA_TABLE_SLOTS".to_string())
+    );
+    let linked = "C:/t/surface.vk.hlsl\nERROR: Linking fragment stage: Missing entry point\n";
+    assert_eq!(first_error(linked, "x"), (None, "ERROR: Linking fragment stage: Missing entry point".to_string()));
+}
+
+/// The stripes shader through glslang, the front end of the game's Vulkan and Metal renderers, in both table forms; an
+/// HLSL 2021 template dxc takes is refused for them at its line:
+/// NEBULA_GLSLANG=<glslang.exe> [NEBULA_DXC=<dxc.exe>] cargo test -p nebula-import --lib -- --ignored a_shader_compiles_for_vulkan
+#[test]
+#[ignore]
+fn a_shader_compiles_for_vulkan_and_metal_or_names_its_line() {
+    let Some(glslang) = std::env::var_os("NEBULA_GLSLANG").map(std::path::PathBuf::from) else { return };
+    let dxc = std::env::var_os("NEBULA_DXC").map(std::path::PathBuf::from);
+    let cook = |code: &str| {
+        let (_dir, folder) = shader_mod(&stripes_json(), code);
+        let bytes = serde_json::to_vec(&shader_document(serde_json::json!({"shader": "shaders/Stripes", "textures": {"paint": 0}}))).unwrap();
+        let was = CHECK_COMPILER.lock().unwrap().replace(dxc.clone());
+        let was_glslang = CHECK_GLSLANG.lock().unwrap().replace(Some(glslang.clone()));
+        let got = crate::cook::gltf::to_files_for(&bytes, Some(&folder), "Cube", None).map(|_| ());
+        *CHECK_COMPILER.lock().unwrap() = was;
+        *CHECK_GLSLANG.lock().unwrap() = was_glslang;
+        got
+    };
+    cook(STRIPES).unwrap();
+    let broken = STRIPES.replace("i.time * speed", "i.time * sped");
+    let (why, args) = refusal(cook(&broken));
+    assert_eq!(why, "Cook.Shader.Compile", "{args:?}");
+    assert!(args.contains(&("line", "3".to_string())) && args.contains(&("file", "assets/shaders/Stripes.hlsl".to_string())), "{args:?}");
+    // A template: dxc's HLSL 2021 takes it, glslang's front end does not, so the refusal names Vulkan and Metal.
+    let template = STRIPES
+        .replace("// Animated stripes (plan 3.4's test shader).", "template<typename T> T twice(T x) { return x + x; }")
+        .replace("s.roughness = 0.3;", "s.roughness = twice(0.15);");
+    let (why, args) = refusal(cook(&template));
+    assert_eq!(why, "Cook.Shader.Compile", "{args:?}");
+    assert!(args.contains(&("target", VULKAN.to_string())) && args.contains(&("line", "1".to_string())), "{args:?}");
 }
 
 /// The stripes shader compiled by dxc, and one with a mistake on its third line refused at that line:

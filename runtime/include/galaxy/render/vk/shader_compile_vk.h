@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <initializer_list>
 #include <span>
 #include <string>
@@ -72,5 +73,13 @@ inline constexpr std::uint32_t kCompilerRevision = 9;
 [[nodiscard]] std::vector<std::uint32_t> compile_hlsl(std::string_view hlsl, ShaderStage stage, const char* entry,
                                                       std::initializer_list<const char*> defines, std::string& error,
                                                       CompileOptions options = {});
+
+// One stage of a mod's program (mod_shaders.h compile_mod_shader_stage) as SPIR-V: the cooker's text with its
+// `#include "x"` lines replaced by `includes`/x (each header once), `defines` as NAME 1, the entry `program_ps` or
+// `program_vs` named main, the draw bindings; the bound-table form when `bound_tables`. Vulkan uses it as it is;
+// Metal turns it to MSL (mod_shader_compile_mtl.cpp). Empty with `problem` set when it cannot be made.
+[[nodiscard]] std::vector<std::uint32_t> compile_mod_stage(const std::string& source, const std::filesystem::path& includes,
+                                                           bool pixel, const std::vector<const char*>& defines,
+                                                           std::string& problem, bool bound_tables);
 
 }  // namespace galaxy::render::vk

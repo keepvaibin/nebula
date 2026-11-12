@@ -432,42 +432,106 @@ pub fn find_compiler(beside: &[&Path]) -> Option<std::path::PathBuf> {
     beside.iter().map(|b| b.join("dxc").join(name)).find(|p| p.is_file())
 }
 
-/// Each surface material's plain form compiled as LumaLink's check asks (CHECK_COMPILER): the first error is refused
-/// with the shader's file and line (Cook.Shader.Compile), or the material when the error is in the generated part.
+/// The renderers a check compiles a shader material for, as a refusal names them. Metal makes its program from the
+/// Vulkan front end's SPIR-V on the player's machine (mtl/mod_shader_compile_mtl.cpp), so Vulkan's compile stands for it.
+pub const D3D12: &str = "Direct3D 12";
+pub const VULKAN: &str = "Vulkan/Metal";
+
+/// LumaLink's check for Vulkan and Metal: None, glslang as find_glslang finds it; Some(None), none (a note says the
+/// shader was not compiled for them); Some(Some(glslang)), that one.
+pub static CHECK_GLSLANG: std::sync::Mutex<Option<Option<std::path::PathBuf>>> = std::sync::Mutex::new(None);
+
+/// glslang, the HLSL front end the game's Vulkan and Metal renderers build a mod's programs with: `NEBULA_GLSLANG`, else
+/// `glslang/glslang.exe` (`glslang/glslang` elsewhere) in the folder that holds the check's `dxc` folder.
+pub fn find_glslang(dxc: Option<&Path>) -> Option<std::path::PathBuf> {
+    if let Some(path) = std::env::var_os("NEBULA_GLSLANG").map(std::path::PathBuf::from).filter(|p| p.is_file()) {
+        return Some(path);
+    }
+    let name = if cfg!(windows) { "glslang.exe" } else { "glslang" };
+    let base = dxc?.parent()?.parent()?;
+    Some(base.join("glslang").join(name)).filter(|p| p.is_file())
+}
+
+/// A pixel text as shader_compile_vk.cpp compiles a mod's stage (compile_mod_stage, compile_hlsl): its preamble, the
+/// bound-table form's two defines (vk::kBoundTableSlots maps), the entry named main.
+fn vulkan_text(pixel: &str, bound: bool) -> String {
+    let mut head = String::from("#define NEBULA_VULKAN 1\n#pragma pack_matrix(row_major)\n");
+    if bound {
+        head.push_str("#define NEBULA_BOUND_TABLES 1\n#define NEBULA_TABLE_SLOTS 16\n");
+    }
+    head + "#define program_ps main\n" + pixel
+}
+
+/// Each surface material's plain form compiled as LumaLink's check asks (CHECK_COMPILER, CHECK_GLSLANG), with dxc for
+/// Direct3D 12 and with glslang for Vulkan and Metal: the first error is refused with the renderer and the shader's file
+/// and line (Cook.Shader.Compile), or the material when the error is in the generated part.
 pub fn check_compile(ir: &super::model_ir::ModelIr) -> Result<()> {
     let wanted = CHECK_COMPILER.lock().unwrap_or_else(|e| e.into_inner()).clone();
     let Some(compiler) = wanted else { return Ok(()) };
+    let glslang = CHECK_GLSLANG.lock().unwrap_or_else(|e| e.into_inner()).clone().unwrap_or_else(|| find_glslang(compiler.as_deref()));
     let mut seen = std::collections::BTreeSet::new();
     for m in &ir.materials {
         let Some(sf) = &m.surface else { continue };
         if !seen.insert(m.name.clone()) {
             continue;
         }
-        let Some(dxc) = &compiler else {
-            super::refuse::note("Cook.Shader.NotCompiled", &[("material", m.name.clone()), ("file", sf.file.clone())]);
-            continue;
+        let not_compiled = |backend: &str, tool: &str, env: &str| {
+            super::refuse::note(
+                "Cook.Shader.NotCompiled",
+                &[("material", m.name.clone()), ("file", sf.file.clone()), ("target", backend.to_string()), ("name", tool.to_string()), ("key", env.to_string())],
+            )
         };
+        if compiler.is_none() {
+            not_compiled(D3D12, "dxc", "NEBULA_DXC");
+        }
+        if glslang.is_none() {
+            not_compiled(VULKAN, "glslang", "NEBULA_GLSLANG");
+        }
+        if compiler.is_none() && glslang.is_none() {
+            continue;
+        }
         let form = super::programs::Form { lit: true, ..super::programs::Form::default() };
         let text = super::programs::generate(m, form, false, &super::programs::Registers::of(m))?;
         let dir = Scratch::new()?;
         for (name, header) in super::programs::HEADERS {
             std::fs::write(dir.0.join(name), header)?;
         }
-        let source = dir.0.join("surface.ps.hlsl");
-        std::fs::write(&source, &text.pixel)?;
-        let output = std::process::Command::new(dxc)
-            .args(["-nologo", "-T", "ps_6_0", "-E", "program_ps", "-O3", "-I"])
-            .arg(&dir.0)
-            .arg("-Fo")
-            .arg(dir.0.join("surface.bin"))
-            .arg(&source)
-            .output()
-            .map_err(|e| refuse("Cook.Shader.Compiler", &[("file", dxc.display().to_string()), ("detail", e.to_string())]))?;
-        if output.status.success() {
-            continue;
+        if let Some(dxc) = &compiler {
+            let source = dir.0.join("surface.ps.hlsl");
+            std::fs::write(&source, &text.pixel)?;
+            let output = std::process::Command::new(dxc)
+                .args(["-nologo", "-T", "ps_6_0", "-E", "program_ps", "-O3", "-I"])
+                .arg(&dir.0)
+                .arg("-Fo")
+                .arg(dir.0.join("surface.bin"))
+                .arg(&source)
+                .output()
+                .map_err(|e| refuse("Cook.Shader.Compiler", &[("file", dxc.display().to_string()), ("detail", e.to_string())]))?;
+            if !output.status.success() {
+                let said = String::from_utf8_lossy(&output.stderr).to_string() + &String::from_utf8_lossy(&output.stdout);
+                return Err(compile_refusal(&said, m, sf, D3D12));
+            }
         }
-        let said = String::from_utf8_lossy(&output.stderr).to_string() + &String::from_utf8_lossy(&output.stdout);
-        return Err(compile_refusal(&said, m, sf));
+        if let Some(glslang) = &glslang {
+            // Both forms the player's machine builds of a pixel program: the arrays and the bound table.
+            for bound in [false, true] {
+                let source = dir.0.join(if bound { "surface.vk-bound.hlsl" } else { "surface.vk.hlsl" });
+                std::fs::write(&source, vulkan_text(&text.pixel, bound))?;
+                let output = std::process::Command::new(glslang)
+                    .args(["-D", "-V", "--target-env", "vulkan1.1", "-S", "frag", "-e", "main", "--hlsl-offsets"])
+                    .args(["--hlsl-dx-position-w", "-fhlsl_functionality1", "--auto-map-locations", "--spirv-val"])
+                    .arg(format!("-I{}", dir.0.display()))
+                    .arg("-o")
+                    .arg(dir.0.join("surface.spv"))
+                    .arg(&source)
+                    .output()
+                    .map_err(|e| refuse("Cook.Shader.Compiler", &[("file", glslang.display().to_string()), ("detail", e.to_string())]))?;
+                if !output.status.success() {
+                    let said = String::from_utf8_lossy(&output.stdout).to_string() + &String::from_utf8_lossy(&output.stderr);
+                    return Err(compile_refusal(&said, m, sf, VULKAN));
+                }
+            }
+        }
     }
     // The ray-hit form (layer 3) over a stand-in of the tracer's side, as a compute program: what cannot run at a
     // ray's hit is refused at its line too.
@@ -488,18 +552,24 @@ pub fn check_compile(ir: &super::model_ir::ModelIr) -> Result<()> {
             .map_err(|e| refuse("Cook.Shader.Compiler", &[("file", dxc.display().to_string()), ("detail", e.to_string())]))?;
         if !output.status.success() {
             let said = String::from_utf8_lossy(&output.stderr).to_string() + &String::from_utf8_lossy(&output.stdout);
-            return Err(compile_refusal(&said, m, sf));
+            return Err(compile_refusal(&said, m, sf, D3D12));
         }
     }
     Ok(())
 }
 
-/// The compiler's first error as the shader's (its file and line) or the generated part's (the material).
-fn compile_refusal(said: &str, m: &super::model_ir::MaterialIr, sf: &super::model_ir::SurfaceIr) -> anyhow::Error {
+/// The compiler's first error as the shader's (its file and line) or the generated part's (the material), for `backend`.
+fn compile_refusal(said: &str, m: &super::model_ir::MaterialIr, sf: &super::model_ir::SurfaceIr, backend: &str) -> anyhow::Error {
     let (line, detail) = first_error(said, &sf.file);
     match line {
-        Some(line) => refuse("Cook.Shader.Compile", &[("file", sf.file.clone()), ("line", line.to_string()), ("detail", detail)]),
-        None => refuse("Cook.Shader.CompileProgram", &[("material", m.name.clone()), ("file", sf.file.clone()), ("detail", detail)]),
+        Some(line) => refuse(
+            "Cook.Shader.Compile",
+            &[("target", backend.to_string()), ("file", sf.file.clone()), ("line", line.to_string()), ("detail", detail)],
+        ),
+        None => refuse(
+            "Cook.Shader.CompileProgram",
+            &[("target", backend.to_string()), ("material", m.name.clone()), ("file", sf.file.clone()), ("detail", detail)],
+        ),
     }
 }
 
@@ -564,9 +634,16 @@ impl Drop for Scratch {
     }
 }
 
-/// The compiler's first error (`<file>:<line>:<column>: error: <words>`): its line when it is in `file`, and its words.
+/// The compiler's first error, dxc's (`<file>:<line>:<column>: error: <words>`) or glslang's (`ERROR: <file>:<line>:
+/// <words>`): its line when it is in `file`, and its words.
 fn first_error(said: &str, file: &str) -> (Option<u32>, String) {
     for l in said.lines() {
+        if let Some(rest) = l.strip_prefix("ERROR: ") {
+            let Some((path, line, words)) = glslang_place(rest) else { continue };
+            let words = words.trim().chars().take(300).collect::<String>();
+            let ours = path.replace('\\', "/").ends_with(file);
+            return (Some(line).filter(|_| ours), words);
+        }
         let Some(at) = l.find(": error: ") else { continue };
         let words = l[at + ": error: ".len()..].trim().chars().take(300).collect::<String>();
         let place = &l[..at];
@@ -576,7 +653,24 @@ fn first_error(said: &str, file: &str) -> (Option<u32>, String) {
         let ours = path.is_some_and(|p| p.replace('\\', "/").ends_with(file));
         return (line.filter(|_| ours), words);
     }
-    (None, said.lines().find(|l| !l.trim().is_empty()).unwrap_or("").chars().take(300).collect())
+    let shown = said.lines().find(|l| l.contains("ERROR") || l.contains("error")).or_else(|| said.lines().find(|l| !l.trim().is_empty()));
+    (None, shown.unwrap_or("").trim().chars().take(300).collect())
+}
+
+/// `<file>:<line>: <words>` of a glslang ERROR line (a file may hold `:`, as `D:/x.hlsli`): None for its summary lines.
+fn glslang_place(rest: &str) -> Option<(&str, u32, &str)> {
+    let mut from = 0;
+    while let Some(i) = rest[from..].find(": ") {
+        let at = from + i;
+        let before = &rest[..at];
+        if let Some(c) = before.rfind(':') {
+            if let Ok(n) = before[c + 1..].parse::<u32>() {
+                return Some((&before[..c], n, &rest[at + 2..]));
+            }
+        }
+        from = at + 2;
+    }
+    None
 }
 
 #[cfg(test)]
