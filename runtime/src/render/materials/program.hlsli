@@ -419,7 +419,9 @@ float4 env_fetch(float4 painted, float4 pixel) {
 // that pass ran; else O as it is. `coloured` says which.
 float3 traced_o(float4 light, float4 pixel, out bool coloured) {
     coloured = false;
-    if (view_volume[2].z == 0.0 || (draw_flags & (8u | 64u)) != 0u || traced_by_air(pixel)) {
+    // Not draw flag 8: that is the air in front (traced_scatter), set on every opaque draw at High (FB b104: it took
+    // O's hue from every surface there). Flag 64: a draw shown as it is (c42).
+    if (view_volume[2].z == 0.0 || (draw_flags & 64u) != 0u || traced_by_air(pixel)) {
         return light.aaa;
     }
     const float3 ratio = gTextures[uint(view_volume[2].z) - 1u].Load(int3(pixel.xy, 0)).rgb;
