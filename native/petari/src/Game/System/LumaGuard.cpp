@@ -678,8 +678,8 @@ namespace luma {
                 // In a harness run, once per load: the first full ring as luma_guard_cost gives it (contract guard 4).
                 if (rSlot.filled == cCostFrames && rSlot.told == 0 && luma::modlog::facts()) {
                     rSlot.told = 1;
-                    u64 avgNs = 0;
-                    u64 worstNs = 0;
+                    uint64_t avgNs = 0;  // luma_guard_cost's type (unsigned long on Android, not u64's long long)
+                    uint64_t worstNs = 0;
                     const int32_t found = luma_guard_cost(rSlot.id, &avgNs, &worstNs);
                     char json[200];
                     nebula_snprintf(json, sizeof(json), "{\"mod\": \"%s\", \"found\": %d, \"avg_ns\": %llu, \"worst_ns\": %llu}", rSlot.id,
