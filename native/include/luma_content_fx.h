@@ -46,11 +46,11 @@ typedef struct LumaContentFxService {
        (true). The handle ends. LUMA_OK; an ended handle: LUMA_E_HANDLE, reported; off the game thread: LUMA_E_THREAD,
        reported; while the game takes the mod out: LUMA_E_CANCELLED. */
     int32_t (*stop)(const LumaMod* mod, LumaContentFxEffect effect, bool now);
-    /* 1.0. Game thread. Scale and colour on top of the effect's own (1 and 0xFFFFFFFF: none; colour as 0xRRGGBBAA), as
+    /* 1.0. Game thread. Scale and colour on top of the effect's own (1 and 0xFFFFFFFF: none), as
        the game's setEffectBaseScale and setEffectPrmColor. LUMA_OK; a scale not above 0 or not finite:
        LUMA_E_ARGUMENT, reported; an ended handle: LUMA_E_HANDLE, reported; off the game thread: LUMA_E_THREAD,
        reported; while the game takes the mod out: LUMA_E_CANCELLED. */
-    int32_t (*tint)(const LumaMod* mod, LumaContentFxEffect effect, float scale, uint32_t rgba);
+    int32_t (*tint)(const LumaMod* mod, LumaContentFxEffect effect, float scale, LumaColor rgba);
 } LumaContentFxService;
 
 #ifdef __cplusplus

@@ -786,7 +786,7 @@ namespace luma {
                     return LUMA_OK;
                 }
 
-                int32_t svcTint(const LumaMod* pMod, LumaContentFxEffect effect, float scale, uint32_t rgba) {
+                int32_t svcTint(const LumaMod* pMod, LumaContentFxEffect effect, float scale, LumaColor rgba) {
                     const char* const pWhere = "content.fx.tint";
                     if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                         return status;
