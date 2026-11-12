@@ -1146,6 +1146,11 @@ NEBULA_GAME_API void luma_services_facts(const LumaServicesFacts* facts) {
     }
 }
 
+// The game's steady clock for the host's services (luma_services_facts.h), any thread.
+NEBULA_GAME_API uint64_t luma_services_monotonic_ns(void) {
+    return static_cast<uint64_t>(luma::time::monotonic());
+}
+
 // The player's "Let go" (services-time 1 item 10), any thread (J22-6): the mod's rate, hold and owed steps cleared at
 // the next frame's start. The page writes the mod log's Note Time.LetGo. 1: asked; 0: time does not know the mod (or
 // eight requests already wait for the next frame).

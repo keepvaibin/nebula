@@ -1038,6 +1038,10 @@ void set_played_language(unsigned language) noexcept {
     s_played_language.store(language, std::memory_order_relaxed);
 }
 
+unsigned played_language() noexcept {
+    return s_played_language.load(std::memory_order_relaxed);
+}
+
 std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
     // (The packs' categories wait for start_texture_sorting's index and are counted again when it is ready.)
     fs::path folder;

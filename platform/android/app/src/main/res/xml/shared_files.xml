@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- What the launcher may share (the game's log, on the player's request). -->
+<!-- What the app may share: the game's log (the launcher, on the player's request) and the picture a mod puts on the
+     clipboard (LumaCore's system.clipboard, ClipboardBridge.java). -->
 <paths>
     <files-path name="logs" path="logs/" />
+    <cache-path name="clipboard" path="clipboard/" />
 </paths>

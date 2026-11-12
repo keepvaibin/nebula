@@ -131,6 +131,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/runtime_settings.cpp
     ${rt}/host_extension.cpp
     ${rt}/luma_services_host.cpp
+    ${rt}/luma_system.cpp
     ${rt}/achievements.cpp
     ${rt}/stats.cpp
     ${rt}/input_bindings.cpp
@@ -221,6 +222,7 @@ add_subdirectory("${NEBULA_SDL_DIR}" SDL3 EXCLUDE_FROM_ALL)
 set(host_sources
     "${nebula_root}/native/host/host_main.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/host_window_sdl.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/luma_system_sdl.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/audio_device_sdl.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/display_clock.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/thread_sampler.cpp"

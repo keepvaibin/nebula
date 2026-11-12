@@ -26,6 +26,9 @@ namespace luma {
             // service when that service's contract is signed; none is yet.
             const CatalogRow cCatalog[] = {
                 {"time", 1, 0, nullptr, "services-time"},
+                {"system", 1, 0, nullptr, "services-system"},
+                {"system.clipboard", 1, 0, "system.clipboard", "services-system"},
+                {"system.links", 1, 0, "system.links", "services-system"},
                 {nullptr, 0, 0, nullptr, nullptr},
             };
 

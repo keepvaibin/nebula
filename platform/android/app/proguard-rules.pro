@@ -18,6 +18,12 @@
 -keep class dev.nebula.galaxy.Importer {
     native <methods>;
 }
+# LumaCore's clipboard pictures (platform/sdl/luma_system_sdl.cpp) calls these by name.
+-keep class dev.nebula.galaxy.ClipboardBridge {
+    static boolean hasImage(android.app.Activity);
+    static byte[] readImage(android.app.Activity, int);
+    static boolean writeImage(android.app.Activity, byte[]);
+}
 -keep interface dev.nebula.galaxy.Importer$Progress { *; }
 -keep class * implements dev.nebula.galaxy.Importer$Progress {
     public boolean update(long, long);
