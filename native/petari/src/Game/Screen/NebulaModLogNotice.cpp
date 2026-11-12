@@ -203,23 +203,29 @@ namespace {
         withCount(pDst, room, row.c_str(), rSlot.count);
     }
 
+    // noticeFact's text, its JSON form and the fact: over a page together, so not on the stack (the module has no stack
+    // probe: nebula_runtime_win.c). The notice runs on the game thread only.
+    char sFactShown[4 * cTextRoom];
+    char sFactText[6 * sizeof(sFactShown) + 3];
+    char sFactJson[sizeof(sFactText) + 256 + 96];
+
     // As the screen shows it: modlog.notice {"mod", "code", "text"} (contract 4.3), the text as cut.
     void noticeFact(const Slot& rSlot, const char16_t* pShown) {
         if (!luma::modlog::facts()) {
             return;
         }
-        char shown[4 * cTextRoom];
-        luma::modlog::toUtf8(shown, sizeof(shown), pShown);
-        char text[6 * sizeof(shown) + 3];
-        luma::modlog::jsonString(text, sizeof(text), shown);
+        char* const shown = sFactShown;
+        luma::modlog::toUtf8(shown, sizeof(sFactShown), pShown);
+        char* const text = sFactText;
+        luma::modlog::jsonString(text, sizeof(sFactText), shown);
         char mod[256];
         const bool entry = rSlot.kind == KindEntry && rSlot.entry != nullptr;
         luma::modlog::jsonString(mod, sizeof(mod), entry ? rSlot.entry->mod : "");
-        char json[sizeof(text) + sizeof(mod) + 96];
+        char* const json = sFactJson;
         if (entry) {
-            nebula_snprintf(json, sizeof(json), "{\"mod\":%s,\"code\":%u,\"text\":%s}", mod, rSlot.entry->code, text);
+            nebula_snprintf(json, sizeof(sFactJson), "{\"mod\":%s,\"code\":%u,\"text\":%s}", mod, rSlot.entry->code, text);
         } else {
-            nebula_snprintf(json, sizeof(json), "{\"mod\":%s,\"row\":\"%s\",\"count\":%u,\"text\":%s}", mod,
+            nebula_snprintf(json, sizeof(sFactJson), "{\"mod\":%s,\"row\":\"%s\",\"count\":%u,\"text\":%s}", mod,
                             rSlot.kind == KindSummary ? "ModLog.Summary" : "ModLog.More", rSlot.count, text);
         }
         luma::modlog::fact("modlog.notice", json);
