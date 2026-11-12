@@ -1,6 +1,8 @@
 #include "Game/System/LumaServices.hpp"
 
 #include "Game/System/LumaHook.hpp"
+#include "Game/System/LumaContentFx.hpp"
+#include "Game/System/LumaContentModel.hpp"
 #include "Game/System/LumaLoader.hpp"
 #include "Game/System/LumaTime.hpp"
 #include <luma.h>
@@ -32,6 +34,8 @@ namespace luma {
                 {"mods", 1, 0, nullptr, "services-mods"},
                 {"mods.ids", 1, 0, nullptr, "services-mods"},
                 {"mods.install", 1, 0, nullptr, "services-mods"},
+                {"content.fx", 1, 0, nullptr, "effects"},
+                {"content.model", 1, 0, nullptr, "models"},
                 {nullptr, 0, 0, nullptr, nullptr},
             };
 
@@ -588,8 +592,11 @@ namespace luma {
                     }
                 }
             }
-            // The module's own services, each when its contract is signed: time (services-time).
+            // The module's own services, each when its contract is signed: time (services-time), content.fx (effects),
+            // content.model (models).
             (void)provide(luma::time::provider());
+            (void)provide(luma::content::fx::provider());
+            (void)provide(luma::content::model::provider());
         }
 
         const void* find(const char* pName, u32 major, u32 minor, const char** ppPermission) {

@@ -751,7 +751,7 @@ namespace luma {
                 }
 
                 // On the actor that draws the mod's model (content.model): its joints are the sockets.
-                int32_t svcStartOnModel(const LumaMod* pMod, LumaHandle model, LumaEffectName name, const char* pSocket,
+                int32_t svcStartOnModel(const LumaMod* pMod, LumaContentModel model, LumaEffectName name, const char* pSocket,
                                         const LumaPlace* pPlace, bool follow, LumaContentFxEffect* pOut) {
                     const char* const pWhere = "content.fx.start_on_model";
                     if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
@@ -786,7 +786,7 @@ namespace luma {
                     return LUMA_OK;
                 }
 
-                int32_t svcTint(const LumaMod* pMod, LumaContentFxEffect effect, float scale, uint32_t rgba) {
+                int32_t svcTint(const LumaMod* pMod, LumaContentFxEffect effect, float scale, LumaColor rgba) {
                     const char* const pWhere = "content.fx.tint";
                     if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                         return status;
