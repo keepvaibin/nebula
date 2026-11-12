@@ -372,6 +372,10 @@ private:
     // traced when the scene holds its caster's draws; its volume's draws are then left out of the walk.
     struct RtCaster {
         float low[3], high[3];  // the eye-space box of a slot's instances
+        // The landing cue's (l80): the body itself (a skinned mesh's joints and a skin, a one-matrix mesh's box), and
+        // whether the slot is the player's.
+        float body_low[3]{}, body_high[3]{};
+        bool body = false, player = false;
     };
     struct RtDrop {
         float base[3], radius;
@@ -387,6 +391,7 @@ private:
     std::vector<std::uint32_t> rt_tile_counts_;
     std::uint32_t rt_tiles_across_ = 0u, rt_tiles_down_ = 0u;
     void rt_caster(std::uint32_t slot, const float centre[3], float radius);
+    void rt_caster_body(std::uint32_t slot, const float low[3], const float high[3], float skin, bool player);
     void rt_drops_collect(const NebulaFramePass& begin);
     // The drops by the 16-pixel screen tiles their reach covers: rt_tiles_ (two words a tile: its first entry, how
     // many) and rt_tile_entries_ (a drop each).

@@ -136,6 +136,9 @@ struct RenderConfig {
     unsigned rt_style            = 1;
     // Light the lens scatters around every bright surface.
     bool     rt_lens_bloom       = true;
+    // A soft shadow under the player while ray tracing, to judge a landing (the game's own drop shadow is left out
+    // then; l80).
+    bool     rt_landing_shadow   = true;
 
     // Texture packs (texture_pack.h): replacements from the mods'
     // textures/ folders. preload loads the whole pack at start instead of each texture at its first

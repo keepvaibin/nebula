@@ -100,6 +100,16 @@ constexpr std::uint32_t item_category(const NebulaFrameItem& item) noexcept {
     return (item.flags & NEBULA_ITEM_CATEGORY_MASK) >> NEBULA_ITEM_CATEGORY_SHIFT;
 }
 
+// The player's body and what he wears (the landing cue's caster, l80).
+constexpr bool item_is_player(const NebulaFrameItem& item) noexcept {
+    const std::uint32_t category = item_category(item);
+    return category == NEBULA_CATEGORY_PLAYER || category == NEBULA_CATEGORY_PLAYER_DECORATION ||
+           category == NEBULA_CATEGORY_PLAYER_PARTS;
+}
+
+// What a skinned body reaches past its joints (a hand's or a sole's thickness, in game units): the landing cue's body.
+constexpr float kBodySkin = 10.0f;
+
 // The sky and what is drawn with it: around the scene, not in it. It stops no light and takes none of the scene's.
 constexpr bool item_is_sky(const NebulaFrameItem& item) noexcept {
     const std::uint32_t category = item_category(item);
@@ -610,6 +620,7 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
                                                         (high[2] - low[2]) * (high[2] - low[2]));
                     if (item.slot != 0u && list.shadow_drop_count != 0u) {
                         rt_caster(item.slot, centre, half * 2.0f + 30.0f);
+                        rt_caster_body(item.slot, low, high, kBodySkin, item_is_player(item));
                     }
                     if (mesh.glow[3] != 0.0f) {
                         rt_emitter(item, mesh, centre, half + 30.0f);
@@ -658,18 +669,21 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
             count.outside += item_culled(item, pass, state, &mesh) ? 1u : 0u;
             if ((item.slot != 0u && list.shadow_drop_count != 0u) || mesh.glow[3] != 0.0f) {
                 // The mesh's box through its matrix: for the drop shadow its object may cast and the light it may give.
-                float centre[3], radius = 0.0f;
+                float centre[3], extent[3], radius = 0.0f;
                 for (unsigned r = 0; r < 3u; ++r) {
-                    float extent = 0.0f;
+                    extent[r] = 0.0f;
                     centre[r] = place[r][3];
                     for (unsigned c = 0; c < 3u; ++c) {
                         centre[r] += place[r][c] * (mesh.min[c] + mesh.max[c]) * 0.5f;
-                        extent += std::fabs(place[r][c]) * (mesh.max[c] - mesh.min[c]) * 0.5f;
+                        extent[r] += std::fabs(place[r][c]) * (mesh.max[c] - mesh.min[c]) * 0.5f;
                     }
-                    radius += extent * extent;
+                    radius += extent[r] * extent[r];
                 }
                 if (item.slot != 0u && list.shadow_drop_count != 0u) {
                     rt_caster(item.slot, centre, std::sqrt(radius));
+                    const float low[3] = {centre[0] - extent[0], centre[1] - extent[1], centre[2] - extent[2]};
+                    const float high[3] = {centre[0] + extent[0], centre[1] + extent[1], centre[2] + extent[2]};
+                    rt_caster_body(item.slot, low, high, 0.0f, item_is_player(item));
                 }
                 if (mesh.glow[3] != 0.0f) {
                     rt_emitter(item, mesh, centre, std::sqrt(radius), place);
@@ -1527,6 +1541,8 @@ void RenderCore::rt_filters() {
     compose.reads[3] = motion;  // for --diagnostics rt-motion
     compose.reads[4] = rt_pass_indirect_on() ? rt_image(RtImage::Indirect) : rt::kNoImage;  // the sky's share
     compose.reads[5] = rt_image(RtImage::SunOut);  // V (rgb)
+    compose.buffers[2] = frame.binds.buffers[2];   // the drops and their tiles: the landing cue (l80)
+    compose.buffers[3] = frame.binds.buffers[3];
     compose.writes[0] = light;
     rt_backend_.dispatch(RtShader::LightSpace, compose, frame.across, frame.down);
     // The local lights' share: over time (its averages and the moments of its noise), then three steps over space
@@ -1811,7 +1827,7 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     // 1.5 degrees (the real sun's is 0.27): a shadow's edge 2 tan d wide, d its caster's distance, soft and grounded
     // (l77, the owner's "softer shadows"); a stage row's sun_size over it (rt_materials.h, the same default).
     constexpr float kSunTan = 0.026f;
-    constexpr float kDropTan = 0.035f;   // the drop light's 2 degrees (decision D1)
+    constexpr float kDropTan = 0.035f;   // the drop light's 2 degrees (decision D1): the landing cue's edge (l80)
     constexpr float kSkyInShadow = 0.5f;  // what the sun's shadow keeps of the sky's light: the sky turned down (the
                                           // view's tint gives back up to 0.3 of the rest in the sky's colour)
     constexpr float kFullFacing = 0.6f;  // a painted surface keeps its authored brightness from this n.l up
@@ -2105,6 +2121,8 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
                         (rt_part(render, RtPart::Reflect) >= 2u ? 32u : 0u) | 64u;  // low: the painted maps stay, as off
     // Bit 12: the camera under water, as the game reports it: water is seen from inside (rt_light.hlsl clear_surface).
     constants.more[2] |= camera_water_depth() >= 0.0f ? 4096u : 0u;
+    // Bit 13: the landing cue under the player (the setting; l80, rt_light_space.hlsl).
+    constants.more[2] |= render.rt_landing_shadow ? 8192u : 0u;
     std::memcpy(constants.up, sky_up_, sizeof(sky_up_));
     if (rt_pass_indirect_on()) {
         // The sky and bounce light pass gives the sky's share (bit 8; the light pass traces none: 22.10). A painted
@@ -3125,6 +3143,21 @@ void RenderCore::rt_caster(std::uint32_t slot, const float centre[3], float radi
     }
 }
 
+// A slot's body (the landing cue's, l80): its meshes' boxes as one, `skin` wider; its reach (rt_caster) comes first.
+void RenderCore::rt_caster_body(std::uint32_t slot, const float low[3], const float high[3], float skin, bool player) {
+    const auto found = rt_casters_.find(slot);
+    if (found == rt_casters_.end() || !std::isfinite(low[0] + low[1] + low[2] + high[0] + high[1] + high[2])) {
+        return;
+    }
+    RtCaster& box = found->second;
+    for (unsigned r = 0; r < 3u; ++r) {
+        box.body_low[r] = box.body ? std::min(box.body_low[r], low[r] - skin) : low[r] - skin;
+        box.body_high[r] = box.body ? std::max(box.body_high[r], high[r] + skin) : high[r] + skin;
+    }
+    box.body = true;
+    box.player = box.player || player;
+}
+
 // The frame's drop shadows the tracer takes: those whose caster's draws the scene holds. Each becomes a line in the
 // eye's space, from the game's base along the drop, as wide as the caster reaches about it; its volume's draws are
 // left out of this walk.
@@ -3171,6 +3204,30 @@ void RenderCore::rt_drops_collect(const NebulaFramePass& begin) {
         out.length = drop.length + back;
         out.radius = std::sqrt(aside) + half;
         out.caster = drop.caster;
+        // The landing cue (l80; rt_light_space.hlsl): the player's drop (every one with landing_all) as a line from the
+        // body's centre along the drop to the game's far end; reserved[0] bit 0 the cue, [1] the body's half reach
+        // along the drop, [2] its radius across it (for a square cross-section its half side); radius covers the cue's
+        // widest edge (the drop light's 2 degrees at the far end, g_stage.w), for the tiles.
+        if (box.body && (box.player || rt_dev(RtDev::LandingAll, 0.0f) > 0.5f)) {
+            constexpr float kCueTan = 0.035f;  // rt_tables kDropTan
+            float body[3], half_along = 0.0f, across = 0.0f, ends = out.length;
+            for (unsigned r = 0; r < 3u; ++r) {
+                body[r] = (box.body_low[r] + box.body_high[r]) * 0.5f;
+                const float reach = (box.body_high[r] - box.body_low[r]) * 0.5f;
+                half_along += std::fabs(out.direction[r]) * reach;
+                across += reach * reach * (1.0f - out.direction[r] * out.direction[r]);
+                ends += (out.base[r] - body[r]) * out.direction[r];
+            }
+            if (std::isfinite(ends) && ends > half_along) {
+                const float wide = std::sqrt(std::max(across * 0.5f, 0.0f));
+                std::memcpy(out.base, body, sizeof(body));
+                out.length = ends;
+                out.radius = wide + ends * kCueTan + 1.0f;
+                out.reserved[0] = 1u;
+                out.reserved[1] = std::bit_cast<std::uint32_t>(half_along);
+                out.reserved[2] = std::bit_cast<std::uint32_t>(wide);
+            }
+        }
         if (drop.volume != 0u) {
             rt_drop_volumes_.insert(drop.volume);
         }
@@ -3212,6 +3269,10 @@ void RenderCore::rt_drop_bins(unsigned width, unsigned height, const float ray[4
     std::vector<Reach> reaches(rt_drops_.size());
     for (std::size_t d = 0; d < rt_drops_.size(); ++d) {
         const RtDrop& drop = rt_drops_[d];
+        if ((drop.reserved[0] & 1u) == 0u) {
+            reaches[d] = {1u, 1u, 0u, 0u};  // the landing cue's alone are read (l80): no tile
+            continue;
+        }
         float low_x = 1e30f, low_y = 1e30f, high_x = -1e30f, high_y = -1e30f;
         bool behind = false;
         for (unsigned end = 0; end < 2u; ++end) {

@@ -14,14 +14,16 @@ cbuffer FrameConstants : register(b0) {
                         // glass, metal and gloss show of the scene), bit 6 the actors' point lights are emitters (the
                         // light set's own lamp is put out), bit 7 the emitters alone (--diagnostics rt-added: no sun, no
                         // sky), bit 9 the point's motion shown (--diagnostics rt-motion), bit 12 the camera under water
-                        // (the game's report: water is seen from inside). Bits 1, 2 and 4 are retired
+                        // (the game's report: water is seen from inside), bit 13 the landing cue under the player
+                        // (rt_light_space.hlsl, l80). Bits 1, 2 and 4 are retired
                         // (the set's lamp, the drops, the second layer: g_pass.x). w: ray tracing's parts as the
                         // player set them (rt_part), bit 12 the reference preset.
     uint4 g_grid;       // tiles across, tiles down, pixels a tile
     float4 g_sun;       // xyz: the direction to the shadow sun; w: the tangent of its half angle
     float4 g_stage;     // x: the stage's ambient, y: its key light, as brightness: a painted surface in the key's
                         // shadow keeps x / (x + y * n.l) of its colour; z: the game's time at the frame in seconds,
-                        // wrapped at an hour (the caustics' drift); w: retired (the drops)
+                        // wrapped at an hour (the caustics' drift); w: the drop light's tangent (kDropTan 0.035,
+                        // 2 degrees): the landing cue's edge (l80)
     float4 g_look;      // x: what a surface in the sun's shadow keeps of the sky's light (the sky turned down so the
                         // sun's shadows read); y 1: a painted surface whose model's paint holds its shadows (hit
                         // flag NEBULA_HIT_PAINTED_SHADOW) is shadowed by lit things only (the painted style, 14.6),

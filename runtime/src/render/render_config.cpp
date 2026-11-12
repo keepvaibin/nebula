@@ -211,6 +211,7 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
             static_cast<std::uint8_t>(parse_choice(val, kLevels, cfg.rt_parts[static_cast<std::size_t>(part)]));
     }
     else if (std::strcmp(key, "rt_lens_bloom") == 0) cfg.rt_lens_bloom = parse_bool(val, cfg.rt_lens_bloom);
+    else if (std::strcmp(key, "rt_landing_shadow") == 0) cfg.rt_landing_shadow = parse_bool(val, cfg.rt_landing_shadow);
     else if (std::strcmp(key, "rt_probe_ms") == 0) cfg.rt_probe_ms = parse_milliseconds(val, cfg.rt_probe_ms);
     else if (std::strcmp(key, "rt_chosen") == 0) cfg.rt_chosen = parse_bool(val, cfg.rt_chosen);
     else if (std::strcmp(key, "rt_light_style") == 0) {  // rt_style before the relight was the default: left behind
@@ -641,6 +642,7 @@ bool save_render_config_to_file() {
              << "rt_transmit=" << kRtLevelNames[cfg.rt_parts[4]] << '\n'
              << "rt_volume=" << kRtLevelNames[cfg.rt_parts[5]] << '\n'
              << "rt_lens_bloom=" << (cfg.rt_lens_bloom ? 1u : 0u) << '\n'
+             << "rt_landing_shadow=" << (cfg.rt_landing_shadow ? 1u : 0u) << '\n'
              << "rt_probe_ms=" << cfg.rt_probe_ms << '\n'
              << "rt_chosen=" << (cfg.rt_chosen ? 1u : 0u) << '\n'
              << "rt_light_style=" << (cfg.rt_style == 1u ? "physical" : "painted") << '\n'

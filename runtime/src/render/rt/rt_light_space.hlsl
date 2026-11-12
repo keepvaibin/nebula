@@ -25,6 +25,51 @@ RT_FORMAT(rgba16f) RWTexture2D<float4> g_out : register(u0);
 Texture2D<float4> g_motion_map : register(t12);  // the last step's, for --diagnostics rt-motion
 Texture2D<float4> g_sun_out : register(t14);     // the last step's: the sun's V, filtered (rgb)
 Texture2D<float4> g_indirect : register(t13);    // the last step's: I (rt_indirect_up.hlsl), when bit 8 of g_more.z says
+// The last step's landing cue (l80): the drops (48 bytes each from g_at.z: base, length; direction, radius; caster, the
+// cue bit, the body's half reach along, its radius across) by 16-pixel tiles (from g_at.w; entries from g_more.x).
+ByteAddressBuffer g_drops : register(t3);
+ByteAddressBuffer g_tiles : register(t4);
+
+// What the cue takes at most of the light under the player: it reads in sun and in shade and is never a black blot.
+static const float kLandingCue = 0.30f;
+
+// The landing cue (l80): a soft disc on what faces up under the player, as wide as the body across the drop, its edge
+// widening with the height as under a light 2 degrees across (g_stage.w), fading out to the drop's end. 1: none.
+float landing_cue(int2 pixel, float4 guide) {
+    const uint2 tile = uint2(pixel) / max(g_grid.z, 1u);
+    if (tile.x >= g_grid.x || tile.y >= g_grid.y) {
+        return 1.0f;
+    }
+    const float3 place = rt_eye_ray(g_ray, float2(pixel) + 0.5f) * guide.r;
+    const float3 normal = rt_unpack_normal(guide.a);
+    const uint2 run = g_tiles.Load2(g_at.w + (tile.y * g_grid.x + tile.x) * 8u);
+    float v = 1.0f;
+    for (uint k = 0u; k < min(run.y, 8u); ++k) {
+        const uint at = g_at.z + g_tiles.Load(g_more.x + (run.x + k) * 4u) * 48u;
+        const uint4 rest = g_drops.Load4(at + 32u);
+        if ((rest.y & 1u) == 0u) {
+            continue;
+        }
+        const float4 base = asfloat(g_drops.Load4(at));
+        const float4 way = asfloat(g_drops.Load4(at + 16u));
+        const float3 off = place - base.xyz;
+        const float along = dot(off, way.xyz);
+        // From halfway down the body (its own upward faces below that: the ground under the feet) to the drop's end,
+        // on what faces up against the drop.
+        const float start = 0.5f * asfloat(rest.z);
+        if (along <= start || along > base.w || dot(normal, way.xyz) >= 0.0f) {
+            continue;
+        }
+        const float height = along - start;
+        const float aside = length(off - along * way.xyz);
+        const float radius = asfloat(rest.w);
+        const float wide = max(height * g_stage.w, 1.0f);
+        const float under = 1.0f - smoothstep(radius - wide, radius + wide, aside);
+        const float fade = 1.0f - saturate(height / max(base.w - start, 1.0f));
+        v = min(v, 1.0f - under * fade);
+    }
+    return lerp(1.0f, v, kLandingCue);
+}
 #endif
 #ifdef RT_LIGHTS
 Texture2D<float4> g_moments : register(t10);  // b: the variance of the average's luminance
@@ -59,6 +104,9 @@ void main(uint3 id : SV_DispatchThreadID) {
             sky = (ratio.r + ratio.g + ratio.b) * (1.0f / 3.0f);
         }
         float4 shares = float4(g_sun_out.Load(int3(pixel, 0)).rgb, sky);
+        if ((g_more.z & 8192u) != 0u) {
+            shares *= landing_cue(pixel, guide);  // the landing cue under the player (l80)
+        }
         if ((g_more.z & 128u) != 0u) {
             shares = float4(0.0f, 0.0f, 0.0f, 0.0f);  // the emitters alone (--diagnostics rt-added)
         }
