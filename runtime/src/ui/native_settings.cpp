@@ -3164,6 +3164,21 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
         rows.push_back(button_row("TIME: " + (clock->held ? std::string("HELD") : clock_rate_text(clock->rate)), {"LET GO"},
                                   [id](RenderConfig&, unsigned) { galaxy::modlog::let_go(id); }, {}));
     }
+    // What its code costs (guard 3b, plan 6.7): the time per frame its hooks, events and calls took over the last 2
+    // seconds, average and worst, against the 16.7 ms a frame has at 60 a second. Shown once its code ran.
+    if (const std::optional<galaxy::modlog::CodeTime> time = galaxy::modlog::code_time(id); time.has_value()) {
+        const auto ms = [](std::uint64_t ns) {
+            char text[32];
+            std::snprintf(text, sizeof(text), "%.2f", static_cast<double>(ns) / 1.0e6);
+            return std::string(text);
+        };
+        SettingsRow cost{"CODE TIME",
+                         galaxy::modlog::row_words("Mods.CodeTime", id,
+                                                   {{"average", ms(time->average_ns)}, {"worst", ms(time->worst_ns)}}),
+                         nullptr, galaxy::modlog::row_words("Mods.CodeTimeHelp", id, {})};
+        cost.names = 2u | 4u;
+        rows.push_back(std::move(cost));
+    }
     // The player's DON'T ASK AGAIN to its install requests (services-mods 9, J-SM4), undone here at once.
     if (mod.install_ask_never) {
         SettingsRow may{galaxy::modlog::row_words("Mods.InstallMayAsk", id, {}),
