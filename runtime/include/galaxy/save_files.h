@@ -24,6 +24,10 @@ enum Result : std::int32_t {
 // whole). The plain name of such a request, or empty for any other name.
 inline constexpr std::string_view kModFolder = "luma";
 [[nodiscard]] std::string_view mod_file_name(std::string_view request_name) noexcept;
+// A user file save.game's offer replaced (services-save 8) goes by "luma/replaced/<plain name>": kept in the luma
+// folder's `replaced` folder, written once, without backups. The plain name of such a request, or empty.
+inline constexpr std::string_view kReplacedFolder = "replaced";
+[[nodiscard]] std::string_view replaced_file_name(std::string_view request_name) noexcept;
 
 // Whether a write keeps the two files it replaced last beside it (<name>.1, <name>.2).
 enum class Backups { kKeep, kNone };

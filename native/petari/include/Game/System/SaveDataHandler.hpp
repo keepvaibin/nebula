@@ -41,6 +41,13 @@ public:
     static const u32 cExportHead = 8;
     static const char cExportMagic[5];
     ExportResult makeExport(int user, const UserFile* pLoaded, u8** ppBytes, u32* pLength);
+    // save.game's offer (services-save 8): the export form's parts (Mario's game data, Luigi's, the config) in
+    // ppParts and pSizes, each pointing into pBytes (never null). False: not the form (the magic, version 1, 3 parts,
+    // the lengths framing exactly `length` bytes).
+    static bool splitExport(const u8* pBytes, u32 length, const u8* ppParts[], u32 pSizes[]);
+    // User file `user` (1 to 6) in memory replaced by the parts, kind by kind, as copyUserFileMemory copies a file;
+    // the next save writes it.
+    void replaceUserFile(int user, const u8* const ppParts[], const u32 pSizes[]);
 
 private:
     // Indexed by user, then kind.

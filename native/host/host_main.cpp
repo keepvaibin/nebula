@@ -2594,11 +2594,18 @@ void svc_save_request(void*, const NebulaSaveRequest* request) {
         galaxy::saves::Result result = galaxy::saves::kFailed;
         if (save_folder_path(name.starts_with("GameData.bin") ? gOldSaveDataPath.c_str() : gSaveDataPath.c_str(), &folder)) {
             // A mod's global file (services-save 7): "luma/<id>.bin" in the luma folder, made at its first write, kept
-            // without backups. Any other name is the game's own file, a plain name in the save folder.
+            // without backups; a file save.game's offer replaced (services-save 8): "luma/replaced/<name>", written
+            // only. Any other name is the game's own file, a plain name in the save folder.
             std::string_view file = name;
             galaxy::saves::Backups backups = galaxy::saves::Backups::kKeep;
             bool placed = true;
-            if (name.starts_with(std::string(galaxy::saves::kModFolder) + "/")) {
+            if (const std::string_view replaced = galaxy::saves::replaced_file_name(name); !replaced.empty()) {
+                file = replaced;
+                folder /= fs::path(galaxy::saves::kModFolder) / fs::path(galaxy::saves::kReplacedFolder);
+                backups = galaxy::saves::Backups::kNone;
+                std::error_code made;
+                placed = r.op == NEBULA_SAVE_WRITE && (fs::create_directories(folder, made) || !made);
+            } else if (name.starts_with(std::string(galaxy::saves::kModFolder) + "/")) {
                 file = galaxy::saves::mod_file_name(name);
                 folder /= fs::path(galaxy::saves::kModFolder);
                 backups = galaxy::saves::Backups::kNone;

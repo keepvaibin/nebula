@@ -6,6 +6,7 @@
 #include <luma_service_provider.h>
 #include <nebula_types.h>
 
+struct LumaServicesFacts;
 class GameDataHolder;
 class SaveDataHandler;
 
@@ -27,5 +28,9 @@ namespace luma {
         // `pHolder`'s chunk (the file being stored; null when none).
         void fileStored(u32 index, const u8* pFile, u32 size);
         void applyForgets(SaveDataHandler* pHandler, GameDataHolder* pHolder);
+
+        // The host's facts (luma_services_facts.h, the export in LumaTime.cpp), once before the first mod: save.game's
+        // offer reads the offered file and opens the offer screen through them (null or older: offer is LUMA_E_ABSENT).
+        void setFacts(const LumaServicesFacts* pFacts);
     }
 }

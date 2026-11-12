@@ -356,6 +356,35 @@ namespace {
     ConfigDataHolder* sExportConfig = nullptr;
 }  // namespace
 
+bool SaveDataHandler::splitExport(const u8* pBytes, u32 length, const u8* ppParts[], u32 pSizes[]) {
+    if (pBytes == nullptr || length < cExportHead + 4 * cKindNum || memcmp(pBytes, cExportMagic, 4) != 0 ||
+        pBytes[4] != 1 || pBytes[5] != 0 || pBytes[6] != cKindNum || pBytes[7] != 0) {
+        return false;
+    }
+    u32 at = cExportHead;
+    for (u32 kind = 0; kind < cKindNum; kind++) {
+        if (length - at < 4) {
+            return false;
+        }
+        const u32 size = static_cast< u32 >(pBytes[at]) | static_cast< u32 >(pBytes[at + 1]) << 8 |
+                         static_cast< u32 >(pBytes[at + 2]) << 16 | static_cast< u32 >(pBytes[at + 3]) << 24;
+        at += 4;
+        if (size > length - at) {
+            return false;
+        }
+        ppParts[kind] = pBytes + at;
+        pSizes[kind] = size;
+        at += size;
+    }
+    return at == length;
+}
+
+void SaveDataHandler::replaceUserFile(int user, const u8* const ppParts[], const u32 pSizes[]) {
+    for (u32 kind = 0; kind < cKindNum; kind++) {
+        setFile({static_cast< SaveFileId::Kind >(kind), user}, ppParts[kind], pSizes[kind]);
+    }
+}
+
 SaveDataHandler::ExportResult SaveDataHandler::makeExport(int user, const UserFile* pLoaded, u8** ppBytes, u32* pLength) {
     *ppBytes = nullptr;
     *pLength = 0;

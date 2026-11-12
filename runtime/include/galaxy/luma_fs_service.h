@@ -26,9 +26,10 @@ namespace galaxy::luma_fs {
 // Any thread. `path` keeps the path rule (contract 4); "" only when `empty_ok`.
 [[nodiscard]] bool path_in_rule(std::string_view path, bool empty_ok) noexcept;
 
-// Any thread, off the game thread (it touches the disk). The file at `path` (in the rule) in id's data folder:
-// LUMA_OK and its place in *out; LUMA_E_NOT_FOUND (none, or a folder); LUMA_E_DENIED (through a link or junction).
-// For save.game's offer and mods.install, which read a file the mod names in its data folder.
+// Any thread; it touches the disk (a few metadata reads), so on the game thread only for a request the player
+// answers on a screen that pauses the game: mods.install and save.game's offer, which take a file the mod names in
+// its data folder at the call. The file at `path` (in the rule) in id's data folder: LUMA_OK and its place in *out;
+// LUMA_E_NOT_FOUND (none, or a folder); LUMA_E_DENIED (through a link or junction).
 [[nodiscard]] std::int32_t find_data_file(std::string_view id, std::string_view path, std::filesystem::path* out);
 
 // Any thread, off the game thread. The bytes of the files in id's data folder (0 when there is none), for the Mods

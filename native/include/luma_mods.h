@@ -113,7 +113,7 @@ typedef struct LumaModsInstallService {
     /* 1.0. Game thread. Asks the player, on the import screen, to install the .luma at `path` in the mod's data
        folder (contract section 1 item 9; an installed mod starts the next time Nebula starts). LUMA_PENDING and *out:
        a DONE event follows (to fn), closed after its event, never inside this call; LUMA_E_BUSY, LUMA_E_NOT_FOUND, LUMA_E_DENIED (don't ask again):
-       answers, not reported; LUMA_E_ABSENT: no fs yet; a path outside the mod's data folder or not ending ".luma",
+       answers, not reported; LUMA_E_ABSENT: a host without the install screen; a path outside the mod's data folder or not ending ".luma",
        a null fn or out: LUMA_E_ARGUMENT, reported. */
     int32_t (*request)(const LumaMod* mod, const char* path, LumaEventFn fn, void* user, LumaHandle* out);
     /* 1.0. Game thread. Ends a request: the screen closes as Not now when still open; no event after this returns.
