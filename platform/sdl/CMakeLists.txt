@@ -190,6 +190,10 @@ if(NOT IOS)
     # The host's stand-in importer (host_window_sdl.cpp) is for the systems without this one.
     target_compile_definitions(galaxy_render_vk PUBLIC NEBULA_MOD_IMPORT=1)
 endif()
+# TLS (BoringSSL) and gzip answers for the net services (luma_net.cpp, net 1.3), on every platform this builds.
+include("${nebula_root}/third_party/boringssl.cmake")
+include("${nebula_root}/third_party/zlib_inflate.cmake")
+target_link_libraries(galaxy_render_vk PRIVATE nebula_bssl_ssl nebula_zinflate)
 target_include_directories(galaxy_render_vk PUBLIC "${nebula_root}/runtime/src")
 target_include_directories(galaxy_render_vk PUBLIC "${nebula_root}/runtime/include")
 target_include_directories(galaxy_render_vk PRIVATE "${nebula_root}/third_party/smaa" "${nebula_root}/native/include" "${galaxy_utility_spirv_dir}")

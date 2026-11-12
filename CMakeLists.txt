@@ -24,6 +24,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # The mods importer's archive libraries (zlib, liblzma, libarchive), built once per build tree.
 include(cmake/archive_deps.cmake)
+# TLS (BoringSSL) and gzip answers for the net services (runtime/src/luma_net.cpp, net 1.3).
+include(third_party/boringssl.cmake)
+include(third_party/zlib_inflate.cmake)
 
 # NVIDIA's runtime binaries (Streamline, DLSS) never enter the source tree: players install them themselves.
 file(GLOB_RECURSE GALAXY_VENDOR_BINARIES "${CMAKE_SOURCE_DIR}/runtime/*nvngx*.dll"
@@ -221,6 +224,8 @@ target_link_libraries(galaxy_native_host
         galaxy_audio_mixer
         galaxy_atomic_file
         nebula_archive
+        nebula_bssl_ssl
+        nebula_zinflate
         shell32
         bcrypt
         runtimeobject

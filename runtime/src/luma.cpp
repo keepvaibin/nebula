@@ -1030,7 +1030,8 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
     // The validator has refused a bad list (L211); a permission without its name here is not read, never half-read.
     if (const Value* permissions = root->get("permissions"); permissions != nullptr && permissions->array() != nullptr) {
         for (const Value& entry : *permissions->array()) {
-            Permission permission{text_field(entry, "name"), text_field(entry, "why"), string_list(entry.get("hosts"))};
+            Permission permission{text_field(entry, "name"), text_field(entry, "why"), string_list(entry.get("hosts")),
+                                  string_list(entry.get("roots"))};
             if (permission.name.empty()) return std::nullopt;
             out.permissions.push_back(std::move(permission));
         }
