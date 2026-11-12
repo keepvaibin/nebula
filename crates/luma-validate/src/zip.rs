@@ -339,9 +339,10 @@ pub fn unpack(bytes: &mut dyn Bytes, entry: &Entry, keep: bool, limit: u64) -> U
             let mut state = InflateState::new_boxed(DataFormat::Raw);
             let mut output = vec![0u8; 1 << 16];
             let mut pending: Vec<u8> = Vec::new();
-            let mut finished = false;
-            while !finished {
-                if pending.is_empty() && read < entry.packed {
+            // Set when a call made no progress: give it more packed bytes, never the same ones again.
+            let mut starved = false;
+            loop {
+                if (pending.is_empty() || starved) && read < entry.packed {
                     let n = (entry.packed - read).min(CHUNK) as usize;
                     if !bytes.read_at(data_at + read, &mut input[..n]) {
                         return Unpacked::Broken;
@@ -349,21 +350,21 @@ pub fn unpack(bytes: &mut dyn Bytes, entry: &Entry, keep: bool, limit: u64) -> U
                     read += n as u64;
                     pending.extend_from_slice(&input[..n]);
                 }
-                let flush = if read >= entry.packed { MZFlush::Finish } else { MZFlush::None };
-                let result = inflate(&mut state, &pending, &mut output, flush);
+                // Never MZFlush::Finish: on a first call it makes miniz_oxide inflate into `output` alone, with no
+                // window to wrap, so an entry over 64 KiB whose packed bytes came in one read failed as damaged. The
+                // stream's own end (StreamEnd) ends it.
+                let result = inflate(&mut state, &pending, &mut output, MZFlush::None);
                 pending.drain(..result.bytes_consumed);
                 if !emit(&output[..result.bytes_written], &mut size) {
                     return Unpacked::OverLimit;
                 }
+                let progress = result.bytes_consumed > 0 || result.bytes_written > 0;
+                starved = !progress;
                 match result.status {
-                    Ok(MZStatus::StreamEnd) => finished = true,
-                    Ok(_) => {
-                        if result.bytes_consumed == 0 && result.bytes_written == 0 && pending.is_empty() && read >= entry.packed {
-                            return Unpacked::Broken;
-                        }
-                    }
-                    Err(miniz_oxide::MZError::Buf) if result.bytes_written > 0 || result.bytes_consumed > 0 => {}
-                    Err(_) => return Unpacked::Broken,
+                    Ok(MZStatus::StreamEnd) => break,
+                    // No progress with every packed byte given: the stream ends before its end mark.
+                    Ok(_) | Err(miniz_oxide::MZError::Buf) if progress || read < entry.packed => {}
+                    _ => return Unpacked::Broken,
                 }
             }
         }
@@ -371,3 +372,7 @@ pub fn unpack(bytes: &mut dyn Bytes, entry: &Entry, keep: bool, limit: u64) -> U
     let crc_ok = hasher.finalize() == entry.crc;
     Unpacked::Done { bytes: keep.then_some(kept), size, crc_ok }
 }
+
+#[cfg(test)]
+#[path = "zip_inflate_tests.rs"]
+mod inflate_tests;
