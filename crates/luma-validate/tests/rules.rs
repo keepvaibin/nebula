@@ -374,6 +374,13 @@ fn every_rule_has_a_broken_mod() {
     bzip.method = 12;
     let mut link = file("media/a.png", b"/etc/passwd");
     link.unix_mode = Some(0o120777);
+    // A link whose record says MS-DOS made it, with a Unix link mode all the same (director's fuzz, 53 cases).
+    let mut dos_link = file("media/a.png", b"../../../../luma.json");
+    dos_link.unix_mode = Some(0o120777);
+    dos_link.made_by = Some(20);
+    let mut dos_device = file("media/a.png", b"");
+    dos_device.unix_mode = Some(0o020666);
+    dos_device.made_by = Some(20);
     let mut local = file("media/a.png", b"abc");
     local.local_name = Some("media/b.png".into());
 
@@ -397,6 +404,8 @@ fn every_rule_has_a_broken_mod() {
         (102, luma(&[], &[local]), NO_GAME),
         (103, luma(&[], &[file("media/A.png", b"x"), file("media/a.png", b"x")]), NO_GAME),
         (104, luma(&[], &[link]), NO_GAME),
+        (104, luma(&[], &[dos_link]), NO_GAME),
+        (104, luma(&[], &[dos_device]), NO_GAME),
         (105, luma(&[], &[big]), NO_GAME),
         (106, luma(&[], &[bad_crc]), NO_GAME),
         (107, luma(&[], &[file("readme.txt", b"x")]), NO_GAME),

@@ -1,6 +1,7 @@
 {
   "about": "Every capability a harness test may prove (contract harness, 3.1 `proves`). The status page is generated from this list and the results that name each id (plan rule 8). An id is added with the task that builds it; it is never renamed or reused.",
   "capabilities": {
+    "layout.cook": "A screen layout (<Name>.arc/<Name>.layout.json: panes, pictures with the archive's timg/ textures and corner colours, text in the game's fonts, bounding panes, groups) becomes the archive's blyt/<Name>.brlyt, which the store cooks and the game's layout loader reads as its own; a texture the mod lacks, a name twice, text past its length and every wrong value are refused by name (3.8 layer 1)",
     "anim.replace": "An animation file (<archive>.arc/<any>.anim.glb, joints only) makes clips of the archive's game model by name, replacing the game's clip of that name; a channel on no joint, a joint hung elsewhere than in the game's model, a key that is no number or a clip past 65,535 frames is refused by name (3.6 layer 2)",
     "harness.self": "A check of the harness itself, or a fixture: proves nothing about LumaCore",
     "kernel.bind": "A mod's library is bound by name before its first line runs: every import or none, a missing name refused with a message naming it (0.2, 1.1)",

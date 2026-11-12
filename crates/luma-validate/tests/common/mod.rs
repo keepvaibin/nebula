@@ -16,10 +16,12 @@ pub struct E {
     pub crc: Option<u32>,
     pub size: Option<u64>,
     pub local_name: Option<String>,
+    /// The central record's "made by" word; None: Unix (0x031e) with a mode, else MS-DOS 2.0 (20).
+    pub made_by: Option<u16>,
 }
 
 pub fn file(name: &str, data: &[u8]) -> E {
-    E { name: name.into(), data: data.to_vec(), method: 0, flags: 0, unix_mode: None, crc: None, size: None, local_name: None }
+    E { name: name.into(), data: data.to_vec(), method: 0, flags: 0, unix_mode: None, crc: None, size: None, local_name: None, made_by: None }
 }
 
 pub fn deflated(name: &str, data: &[u8]) -> E {
@@ -58,7 +60,7 @@ pub fn zip(entries: &[E]) -> Vec<u8> {
 
         let zip64 = size >= 0xffff_ffff;
         put32(&mut central, 0x0201_4b50);
-        put16(&mut central, if e.unix_mode.is_some() { 0x031e } else { 20 });
+        put16(&mut central, e.made_by.unwrap_or(if e.unix_mode.is_some() { 0x031e } else { 20 }));
         put16(&mut central, if zip64 { 45 } else { 20 });
         put16(&mut central, e.flags);
         put16(&mut central, e.method);
