@@ -150,6 +150,7 @@
     "services.fs": "A mod's data folder and its own installed files: read, written whole, removed, moved, listed, the same path rule everywhere (2.3)",
     "services.fs.exchange": "The Exchange folder shared by the player and mods granted it (2.3)",
     "services.net.local": "TCP on this machine and the local network: connect, listen, send, take, close (2.7 layer 1)",
+    "services.net.internet": "TCP to the hosts luma.json names, by name or address, public addresses only: connect, send, take, close (2.7 layer 2)",
     "services.assets": "The game's files by path as the game reads them, mods' over the game's or the game's own: find, bytes, a folder's entries (2.8 layer 1)"
   }
 }

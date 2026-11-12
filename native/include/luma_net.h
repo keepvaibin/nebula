@@ -1,7 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* LumaCore's net services (contract services-net; plan 2.7). Layer 1: `net.local` TCP on this machine and the local
-   network. One permission: "net.local" (consent 2.x). Every call is the game thread's, never blocks, and what waits
-   is an event at a frame's start (services-registry 6). */
+   network, permission "net.local". Layer 2: `net.internet` TCP to the hosts the mod's luma.json names, by name or
+   address, permission "net.internet" (the player sees the hosts). Every call is the game thread's, never blocks, and
+   what waits is an event at a frame's start (services-registry 6). Both share the events, the limits and the
+   socket calls' rules; a handle belongs to the service that made it. */
 #ifndef LUMA_NET_H
 #define LUMA_NET_H
 
@@ -14,8 +16,11 @@ extern "C" {
 #define LUMA_NET_LOCAL_NAME "net.local"
 #define LUMA_NET_LOCAL_MAJOR 1u
 #define LUMA_NET_LOCAL_MINOR 0u
+#define LUMA_NET_INTERNET_NAME "net.internet"
+#define LUMA_NET_INTERNET_MAJOR 1u
+#define LUMA_NET_INTERNET_MINOR 0u
 
-#define LUMA_NET_SOCKETS_MOST 16u            /* sockets and listeners a mod holds at once */
+#define LUMA_NET_SOCKETS_MOST 16u            /* sockets and listeners a mod holds at once, both services together */
 #define LUMA_NET_SEND_QUEUED_MOST (4u << 20u) /* bytes a mod's sockets hold queued, not yet sent */
 #define LUMA_NET_RECEIVED_MOST (1u << 20u)    /* bytes a socket holds received and not taken; reading pauses past it */
 
@@ -30,7 +35,10 @@ typedef enum LumaNetEvent {
     LUMA_NET_EVENT_CLOSED = 5,    /* the other side closed (status LUMA_OK) or the connection broke (LUMA_E_IO); the
                                      handle is closed after this event (bytes still waiting came first as DATA) */
     LUMA_NET_EVENT_ERROR = 6      /* a connect that failed: LUMA_E_UNREACHABLE (nobody listens, no route),
-                                     LUMA_E_TIMEOUT (10 s), LUMA_E_IO; the handle is closed after it */
+                                     LUMA_E_TIMEOUT (10 s, the name's lookup included), LUMA_E_IO; net.internet
+                                     also LUMA_E_NOT_FOUND (the name has no address) and LUMA_E_DENIED (its every
+                                     address is this machine's, the local network's or not one a host has); the
+                                     handle is closed after it */
 } LumaNetEvent;
 
 typedef struct LumaNetLocalService {
@@ -64,6 +72,26 @@ typedef struct LumaNetLocalService {
        reported. */
     int32_t (*close)(const LumaMod* mod, LumaHandle handle);
 } LumaNetLocalService;
+
+/* A host name or address in text: at most this many bytes. */
+#define LUMA_NET_HOST_MOST 253u
+
+typedef struct LumaNetInternetService {
+    LumaServiceTable base;
+    /* 1.0. Connects to `host`:`port` by TCP. `host` is a name (looked up off the game thread) or an address in text;
+       luma.json's net.internet permission must name it: the same name in any letter case, a "*.<name>" entry for any
+       name under <name>, or "*" for every host. Only public addresses are reached (never this machine's or the local
+       network's, whatever a name resolves to: that is net.local's). LUMA_PENDING and *out: CONNECTED or ERROR
+       follows. A host luma.json does not name: LUMA_E_DENIED, reported (Net.HostNotNamed); a host not a name or an
+       address (or past LUMA_NET_HOST_MOST), port 0, a null host, fn or out: LUMA_E_ARGUMENT, reported; a 17th socket:
+       LUMA_E_LIMIT, reported. */
+    int32_t (*tcp_connect)(const LumaMod* mod, const char* host, uint16_t port, LumaEventFn fn, void* user,
+                           LumaHandle* out);
+    /* 1.0. As net.local's send, take and close, for this service's sockets. */
+    int32_t (*send)(const LumaMod* mod, LumaHandle socket, const void* data, uint64_t bytes);
+    int64_t (*take)(const LumaMod* mod, LumaHandle socket, void* buf, uint64_t size);
+    int32_t (*close)(const LumaMod* mod, LumaHandle handle);
+} LumaNetInternetService;
 
 #ifdef __cplusplus
 }
