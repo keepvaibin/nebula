@@ -298,6 +298,27 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         super::refuse::record(super::refuse::CookFact::Sound { path: files[0].0.clone(), source: change.path.clone(), facts });
         return Ok(files);
     }
+    // Name.movie.json in a mod's assets: a movie, Name.nmov (AV1), its subtitles Name.subs beside it, and with `replace`
+    // the same movie at the game's MovieData/<name>.thp (movies contract). The files it names are read beside it.
+    if super::movie_cook::is_movie_source(&lower) {
+        if !lower.starts_with("luma/") {
+            return Err(super::refuse::refuse("Cook.Movie.NotAsset", &[("file", change.path.clone())]));
+        }
+        let folder = change.source.parent().map(Path::to_path_buf);
+        let file = |name: &str| -> Option<Vec<u8>> { fs::read(folder.as_ref()?.join(name)).ok() };
+        let game_movie = |name: &str| base.and_then(|b| store::has_file(b, &format!("MovieData/{name}.thp")).ok());
+        let (made, facts) = super::movie_cook::cook(bytes, &super::movie_cook::Around { file: &file, game_movie: &game_movie })?;
+        let stem = &change.path[..change.path.len() - ".movie.json".len()];
+        let files: Vec<(String, Vec<u8>, bool)> = made
+            .into_iter()
+            .map(|(place, bytes)| match place {
+                super::movie_cook::Made::Own(ending) => (format!("{stem}{ending}"), bytes, true),
+                super::movie_cook::Made::Game(path) => (path, bytes, true),
+            })
+            .collect();
+        super::refuse::record(super::refuse::CookFact::Movie { path: files[0].0.clone(), source: change.path.clone(), facts });
+        return Ok(files);
+    }
     // Name.font.json in a mod's assets: a font, Luma/<id>/<path>.brfnt (the store cooks it as the game's fonts) with
     // its kerning (.kern) and fallback (.fallback) beside it (layout contract 2a). The font file it names is read beside it.
     if super::font_cook::is_font_source(&lower) {
@@ -419,7 +440,10 @@ pub fn write_overlay(game_id: &str, changes: &[Change], patches: &PlanPatches, b
                 stats.bytes_in += bytes.len() as u64;
                 level_alone(change, changes)?;
                 // A sound or font file in a mod's assets is what a .sound.json or .font.json reads; not a file of the game.
-                if super::sound_effect::is_asset_source(&change.path) || super::font_cook::is_asset_source(&change.path) {
+                if super::sound_effect::is_asset_source(&change.path)
+                    || super::font_cook::is_asset_source(&change.path)
+                    || super::movie_cook::is_asset_source(&change.path)
+                {
                     return Ok(Vec::new());
                 }
                 let modern = modern_files(change, &bytes, base)?;

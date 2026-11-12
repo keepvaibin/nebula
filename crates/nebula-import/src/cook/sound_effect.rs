@@ -212,12 +212,17 @@ pub(super) fn resample_to_rate(pcm: &Pcm, loop_points: Option<(u64, u64)>) -> (V
 }
 
 fn resample(pcm: &Pcm, loop_points: Option<(u64, u64)>) -> (Vec<f32>, Option<(u64, u64)>) {
+    resample_at(pcm, loop_points, RATE)
+}
+
+/// The same to any rate (a movie's sound is 32 kHz).
+pub(super) fn resample_at(pcm: &Pcm, loop_points: Option<(u64, u64)>, rate: u32) -> (Vec<f32>, Option<(u64, u64)>) {
     let ch = pcm.channels;
     let frames = pcm.samples.len() / ch;
-    if pcm.rate == RATE {
+    if pcm.rate == rate {
         return (pcm.samples.clone(), loop_points);
     }
-    let ratio = f64::from(RATE) / f64::from(pcm.rate);
+    let ratio = f64::from(rate) / f64::from(pcm.rate);
     let out_frames = ((frames as f64) * ratio).round() as usize;
     let out_loop = loop_points.map(|(s, e)| ((s as f64 * ratio).round() as u64, ((e as f64 * ratio).round() as u64).min(out_frames as u64)));
     let cutoff = ratio.min(1.0);

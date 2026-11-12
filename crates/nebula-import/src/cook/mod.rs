@@ -44,6 +44,7 @@ pub mod clip_events;
 pub mod font_cook;
 pub mod ui_layout;
 pub mod sound;
+pub mod movie_cook;
 pub mod sound_effect;
 pub mod sound_sequence;
 pub mod sound_stream;
