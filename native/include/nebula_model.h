@@ -11,7 +11,7 @@ extern "C" {
 #endif
 
 #define NEBULA_MODEL_MAGIC 0x4C444D4Eu /* "NMDL" */
-#define NEBULA_MODEL_VERSION 4u
+#define NEBULA_MODEL_VERSION 5u
 #define NEBULA_MODEL_NONE NEBULA_NONE32
 
 enum { NEBULA_SCALE_BASIC = 0, NEBULA_SCALE_SOFTIMAGE = 1, NEBULA_SCALE_MAYA = 2 };
@@ -20,6 +20,7 @@ enum { NEBULA_SCALE_BASIC = 0, NEBULA_SCALE_SOFTIMAGE = 1, NEBULA_SCALE_MAYA = 2
 enum {
     NEBULA_MODEL_HAS_BILLBOARD = 1u << 4,
     NEBULA_MODEL_MATERIALS_ONLY = 1u << 5, /* a material table for another model: no joints or meshes */
+    NEBULA_MODEL_HAS_LIT = 1u << 6,        /* lit_count == material_count: each material has its NebulaModelLit */
 };
 
 /* A pipeline's fixed state as one word, in one canonical form: what does nothing is zero. NEBULA_BLEND_*, NEBULA_FACTOR_*,
@@ -56,6 +57,7 @@ typedef struct NebulaModelHeader {
     uint32_t draw_matrices_at, envelopes_at, mixes_at, inverse_binds_at, important_at;
     uint32_t meshes_at, materials_at, textures_at;
     uint32_t geometry_at, geometry_size; /* every stream, for one copy to the GPU */
+    uint32_t lit_count, lits_at;         /* version 5: 0, or material_count NebulaModelLit (material n's at n) */
 } NebulaModelHeader;
 
 /* Joints by number, the number animation tracks and the game use. */
@@ -260,6 +262,32 @@ typedef struct NebulaModelMaterial {
     uint32_t coords_at, slots_at, matrices_at, warps_at, forms_at;
 } NebulaModelMaterial;
 
+/* A material's lit part (plan 3.3, contracts/materials.md): glTF 2.0's metallic-roughness material as the cook read it,
+   for the lit program. A model without NEBULA_MODEL_HAS_LIT draws as the game's materials do. The material's own
+   record (NebulaModelMaterial) still holds its pipeline state, cull and blend; this record holds what lighting reads.
+   Colours are linear. Maps are model texture numbers (NEBULA_MODEL_NONE none) read through coordinate set *_coord;
+   base_map and emissive_map hold sRGB-encoded texels, the others linear. metal_rough_map is glTF's: roughness in G,
+   metal in B. */
+enum { NEBULA_LIT_OPAQUE = 0, NEBULA_LIT_MASK = 1, NEBULA_LIT_BLEND = 2 };
+enum {
+    NEBULA_LIT_DOUBLE_SIDED = 1u << 0,
+    NEBULA_LIT_UNLIT = 1u << 1, /* KHR_materials_unlit: base colour only, no light */
+};
+typedef struct NebulaModelLit {
+    float base_color[4];      /* baseColorFactor, RGBA; multiplies base_map */
+    float emissive[3];        /* glow: emissiveFactor x KHR_materials_emissive_strength, RGB, may exceed 1 */
+    float metal;              /* metallicFactor, 0..1; multiplies metal_rough_map.B */
+    float roughness;          /* roughnessFactor, 0..1; multiplies metal_rough_map.G */
+    float normal_scale;       /* normalTexture.scale */
+    float occlusion_strength; /* occlusionTexture.strength, 0..1 */
+    float alpha_cutoff;       /* NEBULA_LIT_MASK: a pixel below it is dropped; 0 otherwise */
+    uint32_t base_map, metal_rough_map, normal_map, emissive_map, occlusion_map;
+    uint8_t base_coord, metal_rough_coord, normal_coord, emissive_coord, occlusion_coord;
+    uint8_t alpha_mode; /* NEBULA_LIT_* */
+    uint8_t flags;      /* NEBULA_LIT_DOUBLE_SIDED, NEBULA_LIT_UNLIT */
+    uint8_t reserved[5];
+} NebulaModelLit;
+
 typedef struct NebulaModelTexture {
     uint32_t name_at, record_at;
     uint32_t width, height;
@@ -276,7 +304,8 @@ static_assert(sizeof(NebulaModelMeshCoord) == 4);
 static_assert(sizeof(NebulaModelSlot) == 8);
 static_assert(sizeof(NebulaModelStep) == 8);
 static_assert(sizeof(NebulaModelDrawMatrix) == 8);
-static_assert(sizeof(NebulaModelHeader) == 28 * 4);
+static_assert(sizeof(NebulaModelHeader) == 30 * 4);
+static_assert(sizeof(NebulaModelLit) == 80);
 static_assert(sizeof(NebulaModelJoint) == 96);
 static_assert(sizeof(NebulaModelMesh) == 100);
 static_assert(sizeof(NebulaModelForm) == 64);

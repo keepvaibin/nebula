@@ -599,6 +599,9 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
             reinterpret_cast<std::uintptr_t>(opened.window), std::memory_order_release);
         // LumaCore's clipboard and links on Windows (services-system 5, 6).
         galaxy::luma_system::set_platform(galaxy::luma_system::win32_platform());
+        // The display's first snapshot (services-system 4) from the window as made: a window made hidden (a test run,
+        // a start behind another window) gets no WM_SIZE until it is shown, and changes 0 would read as no window.
+        galaxy::luma_system::win32_window_changed(opened.window, -1, true);
         if (const std::uint64_t key = s_instance_key.load(std::memory_order_relaxed); key != 0u) {
             (void)SetPropW(opened.window, kInstanceProperty, reinterpret_cast<HANDLE>(static_cast<std::uintptr_t>(key)));
         }

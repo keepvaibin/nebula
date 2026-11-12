@@ -195,6 +195,8 @@ add_library(galaxy_native_host STATIC
     runtime/src/mod_start_check.cpp
     runtime/src/luma_system.cpp
     runtime/src/luma_system_win32.cpp
+    runtime/src/luma_mods.cpp
+    runtime/src/luma_fs.cpp
     runtime/src/mod_plugins.cpp
     runtime/src/game_module.cpp
     runtime/src/mods.cpp
@@ -561,7 +563,8 @@ galaxy_test(galaxy_save_files_tests SOURCES ${rt}/save_files_tests.cpp LIBS gala
 galaxy_test(galaxy_save_format_tests SOURCES ${rt}/save_format_tests.cpp)
 galaxy_test(galaxy_launch_args_tests SOURCES ${rt}/launch_args_tests.cpp)
 target_include_directories(galaxy_save_format_tests PRIVATE native/petari/include)
-galaxy_test(galaxy_asset_store_tests SOURCES ${rt}/asset_store_tests.cpp LIBS galaxy_asset_store)
+galaxy_test(galaxy_asset_store_tests SOURCES ${rt}/asset_store_tests.cpp ${rt}/luma_game_store.cpp LIBS galaxy_asset_store)
+target_include_directories(galaxy_asset_store_tests PRIVATE crates/nebula-import/include)
 # D-07: an older install's store and saves under the current layout.
 galaxy_test(galaxy_install_migration_tests SOURCES ${rt}/install_migration_tests.cpp LIBS galaxy_save_files galaxy_asset_store)
 # The game's calendar (native/petari), compiled against a host the test provides.
@@ -756,6 +759,7 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/mod_shaders.cpp
         runtime/src/render/mod_shader_build.cpp
         runtime/src/render/vk/mod_shader_compile_vk.cpp
+        runtime/src/render/vk/mod_shader_present_vk.cpp
         runtime/src/render/vk/shader_compile_vk.cpp
         runtime/src/render/vk/compile_journal.cpp
         runtime/src/render/vk/renderer_vk.cpp

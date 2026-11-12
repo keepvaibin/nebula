@@ -115,6 +115,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/mod_shaders.cpp
     ${rt}/render/mod_shader_build.cpp
     ${rt}/render/vk/mod_shader_compile_vk.cpp
+    ${rt}/render/vk/mod_shader_present_vk.cpp
     ${rt}/render/vk/shader_compile_vk.cpp
     ${rt}/render/vk/compile_journal.cpp
     ${rt}/render/vk/renderer_vk.cpp
@@ -132,6 +133,8 @@ add_library(galaxy_render_vk STATIC
     ${rt}/host_extension.cpp
     ${rt}/luma_services_host.cpp
     ${rt}/luma_system.cpp
+    ${rt}/luma_mods.cpp
+    ${rt}/luma_fs.cpp
     ${rt}/achievements.cpp
     ${rt}/stats.cpp
     ${rt}/input_bindings.cpp

@@ -107,6 +107,17 @@ if(NEBULA_LUMA_HOOKS)
             VERBATIM)
         add_custom_target(luma_types_check ALL DEPENDS "${luma_types}/luma_types_described.json")
     endif()
+    # The reference a modder reads (plan 10.1), generated from the same description: every row on exactly one page
+    # (--check fails the build otherwise). The folder is written whole each time, so a name the game no longer has
+    # leaves no page behind. Output under the build, never committed.
+    set(luma_reference "${CMAKE_CURRENT_BINARY_DIR}/luma_docs/reference")
+    set(luma_reference_tool "${CMAKE_CURRENT_SOURCE_DIR}/../tools/lumacore/docs/gen_reference.py")
+    add_custom_command(OUTPUT "${luma_reference}/search.json"
+        COMMAND "${CMAKE_COMMAND}" -E rm -rf "${luma_reference}"
+        COMMAND "${Python3_EXECUTABLE}" -X utf8 -I "${luma_reference_tool}" --types "${luma_types}/luma_types.json"
+                --functions "${luma_types}/luma_functions.json" --out "${luma_reference}" --check
+        DEPENDS "${luma_types}/luma_types_table.cpp" "${luma_reference_tool}" VERBATIM)
+    add_custom_target(luma_reference ALL DEPENDS "${luma_reference}/search.json")
 endif()
 
 # Two modules (plan 1.7, contract modules): smg_game with every row (the instrumented copies above, the type table,
@@ -319,15 +330,17 @@ if(WIN32)
     set(nebula_minhook_dir "${CMAKE_CURRENT_LIST_DIR}/../third_party/minhook")
     set(nebula_minhook_sources "${nebula_minhook_dir}/src/buffer.c" "${nebula_minhook_dir}/src/hook.c" "${nebula_minhook_dir}/src/trampoline.c" "${nebula_minhook_dir}/src/hde/hde64.c")
 endif()
-add_executable(nebula_native_host host/host_main.cpp ../runtime/src/host_extension.cpp ../runtime/src/luma_services_host.cpp ../runtime/src/luma_system.cpp
+add_executable(nebula_native_host host/host_main.cpp ../runtime/src/host_extension.cpp ../runtime/src/luma_services_host.cpp ../runtime/src/luma_system.cpp ../runtime/src/luma_mods.cpp ../runtime/src/luma_fs.cpp
     ../runtime/src/mod_log.cpp ../runtime/src/mod_start_check.cpp ../runtime/src/mod_plugins.cpp ../runtime/src/game_module.cpp ${nebula_minhook_sources}
     ../runtime/src/luma.cpp ../runtime/src/mods.cpp ../runtime/src/mod_consent.cpp ../runtime/src/texture_categories.cpp ../runtime/src/dolphin_pack.cpp ../runtime/src/mod_xml.cpp ../runtime/src/atomic_file.cpp ../runtime/src/save_files.cpp ../runtime/src/asset_store.cpp
     ../runtime/src/crash_report.cpp ../runtime/src/discord_presence.cpp ../runtime/src/mii_import.cpp
     ../runtime/src/mii_formats.cpp ../runtime/src/pointer_control.cpp
     # The start check asks whether the compiler of mods' programs is there (mod_start_check.cpp): the same answer as
-    # the windowed host's on Windows (dxc beside the program) and Apple (none yet).
+    # the windowed host's on Windows (dxc beside the program) and Apple (none yet); elsewhere Vulkan's, whose HLSL
+    # front end is part of the program (mod_shader_present_vk.cpp, without the front end itself).
     $<$<PLATFORM_ID:Windows>:../runtime/src/render/mod_shader_compile_d3d12.cpp>
-    $<$<PLATFORM_ID:Darwin,iOS>:../runtime/src/render/mtl/mod_shader_compile_mtl.cpp>)
+    $<$<PLATFORM_ID:Darwin,iOS>:../runtime/src/render/mtl/mod_shader_compile_mtl.cpp>
+    $<$<NOT:$<PLATFORM_ID:Windows,Darwin,iOS>>:../runtime/src/render/vk/mod_shader_present_vk.cpp>)
 target_include_directories(nebula_native_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/minhook/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/../runtime/include")
 target_compile_features(nebula_native_host PRIVATE cxx_std_20)

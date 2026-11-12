@@ -223,8 +223,8 @@ def read_test(folder, types=None):
             raise HarnessError("proves names %s, which is not in tools/lumacore/capabilities.json" % capability)
     bare = boolean(t, "bare", "") if "bare" in t else False
     code = text(t, "code", "") if "code" in t else "allow"
-    if code not in ("allow", "deny"):
-        raise HarnessError("code must be allow or deny")
+    if code not in ("allow", "deny", "ask"):
+        raise HarnessError("code must be allow, deny or ask")
     mods = []
     if "mods" in t:
         if not isinstance(t["mods"], list):
@@ -240,8 +240,9 @@ def read_test(folder, types=None):
                    "install": "placed", "permissions": "allow", "options": {}}
             if "code" in entry:
                 mod["code"] = text(entry, "code", path)
-                if mod["code"] not in ("allow", "deny"):
-                    raise HarnessError("%s.code must be allow or deny" % path)
+                # "ask" (J, consent tests): nothing answered, so the game asks (the consent question shows).
+                if mod["code"] not in ("allow", "deny", "ask"):
+                    raise HarnessError("%s.code must be allow, deny or ask" % path)
             if "loads" in entry:
                 mod["loads"] = boolean(entry, "loads", path)
             if "install" in entry:
@@ -619,10 +620,26 @@ def read_expect(t, bare, steps):
         if not isinstance(c, dict):
             raise HarnessError("%s is not an object" % path)
         if "fact" in c:
-            keys_known(c, path, {"fact", "when", "frames", "within"} | FACT_OPS)
+            keys_known(c, path, {"fact", "when", "frames", "within", "matching", "field"} | FACT_OPS)
             if bare:
                 raise HarnessError("%s: a bare test checks only the log, pictures and sound" % path)
             op, value, within = read_check(c, path, {"within", "count"})
+            # `matching` (J): only the writes whose value has it (as `has` reads) are checked, so `count`, `absent`
+            # and the rest speak of one mod's or one word's writes of a key many write ("modlog", "fx.*").
+            matching = None
+            if "matching" in c:
+                matching = c["matching"]
+                if not isinstance(matching, dict) or not matching:
+                    raise HarnessError("%s.matching takes an object with at least one key" % path)
+            # `field` (J): the check reads one member of each write's object value, a dotted path ("particles",
+            # "at.x"); a write without it reads as no value, which no comparison takes.
+            field = None
+            if "field" in c:
+                field = c["field"]
+                if not isinstance(field, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*", field):
+                    raise HarnessError("%s.field is a dotted path of names" % path)
+                if op in ("absent", "exists", "count"):
+                    raise HarnessError("%s.field goes with a comparison, not %s" % (path, op))
             when = text(c, "when", path) if "when" in c else "last"
             if when not in ("last", "first", "any", "all"):
                 raise HarnessError("%s.when must be last, first, any or all" % path)
@@ -632,7 +649,8 @@ def read_expect(t, bare, steps):
                 if not (isinstance(frames, list) and len(frames) == 2 and all(isinstance(f, int) and not isinstance(f, bool) for f in frames)):
                     raise HarnessError("%s.frames must be [first, last]" % path)
             out.append({"kind": "fact", "key": fact_key(c["fact"], path + ".fact"), "op": op, "value": value,
-                        "within": within, "when": when, "frames": frames, "source": c})
+                        "within": within, "when": when, "frames": frames, "matching": matching, "field": field,
+                        "source": c})
         elif "log" in c or "no_log" in c:
             keys_known(c, path, {"log", "no_log", "times"})
             if ("log" in c) == ("no_log" in c):
@@ -822,11 +840,20 @@ def install(settings, mod_folder, code_allowed, order, kept=False, permissions="
     mod_id = manifest.get("id")
     if not isinstance(mod_id, str) or not mod_id:
         raise HarnessError("%s/luma.json has no id" % mod_folder)
+    # The previous runtime's form would install with no code and fail far from here: named at once instead.
+    if "plugins" in manifest:
+        raise HarnessError("%s/luma.json has \"plugins\": a mod's code is code/<platform>/mod.<ending> with "
+                           "\"code\": {\"platforms\": [...]} (board/contracts/manifest-one-form.md)" % mod_folder)
+    if not isinstance(manifest.get("format"), str):
+        raise HarnessError("%s/luma.json: format must be \"1.0\", a string (board/contracts/manifest-one-form.md)"
+                           % mod_folder)
     libraries = []
-    for plugin in manifest.get("plugins", []):
-        rel = plugin.get("binaries", {}).get("windows-x64")
-        if rel is None:
-            raise HarnessError("%s/luma.json names no code for windows-x64" % mod_folder)
+    # luma-format 6: code/<platform>/mod.<ending> by `code.platforms` alone. A mod whose code is for other platforms
+    # only has no library here: the game says it has no version for this device.
+    code = manifest.get("code")
+    platforms = code.get("platforms") if isinstance(code, dict) else None
+    if isinstance(platforms, list) and "windows-x64" in platforms:
+        rel = "code/windows-x64/mod.dll"
         if not (mod_folder / rel).is_file():
             raise HarnessError("%s: the code %s is missing (building is not the runner's job)" % (mod_folder, rel))
         libraries.append(rel)
@@ -849,7 +876,7 @@ def install(settings, mod_folder, code_allowed, order, kept=False, permissions="
                 raise HarnessError("%s: permissions names %s, which the mod does not ask for" % (mod_folder, name))
             if answer not in ("allow", "deny"):
                 raise HarnessError("%s: the answer for %s must be allow or deny" % (mod_folder, name))
-    for p in declared:
+    for p in declared if permissions != "ask" else []:
         wanted = permissions if isinstance(permissions, str) else permissions.get(p["name"], "allow")
         lines += "permission.%s=%s %s\n" % (p["name"], "yes" if wanted == "allow" else "no", permission_digest(p))
     with ini.open("a", encoding="utf-8") as out:
@@ -864,11 +891,12 @@ def install_game_half(settings, bin_folder):
     if (settings / "mods" / GAME_HALF_ID).exists():
         return  # kept from the test this one continues
     folder = settings / "staging-game-half"
-    (folder / "plugins").mkdir(parents=True)
-    shutil.copyfile(library, folder / "plugins" / "luma-test.dll")
+    (folder / "code" / "windows-x64").mkdir(parents=True)
+    shutil.copyfile(library, folder / "code" / "windows-x64" / "mod.dll")
     (folder / "luma.json").write_text(json.dumps({
-        "format": 1, "id": GAME_HALF_ID, "name": GAME_HALF_ID, "version": RUNNER_VERSION, "game": "RMG", "layers": [],
-        "plugins": [{"binaries": {"windows-x64": "plugins/luma-test.dll"}}]}, indent=2), encoding="utf-8")
+        "format": "1.0", "id": GAME_HALF_ID, "name": GAME_HALF_ID, "summary": "The test runner's game half.",
+        "authors": ["keepvaibin"], "version": RUNNER_VERSION + ".0", "game": {"id": "RMG"},
+        "code": {"platforms": ["windows-x64"]}}, indent=2), encoding="utf-8")
     install(settings, folder, True, 0)
     shutil.rmtree(folder)
 
@@ -977,7 +1005,7 @@ def run_one(test, renderer, args, run_folder, previous):
         if not (m["path"] / "luma.json").is_file():
             raise HarnessError("the mod %s has no luma.json" % m["path"])
         mod_id = install(settings, m["path"], m["code"] == "allow", i + 1, kept=previous is not None,
-                         permissions=m["permissions"])
+                         permissions="ask" if m["code"] == "ask" else m["permissions"])
         mod_ids.append((mod_id, m))
         for lib in sorted((settings / "mods" / mod_id).rglob("*.dll")):
             frozen["mods/%s/%s" % (mod_id, lib.relative_to(settings / "mods" / mod_id).as_posix())] = sha256(lib)
@@ -1063,6 +1091,18 @@ def has_value(actual, value):
         elif not same_value(actual[key], want):
             return False
     return True
+
+
+NO_MEMBER = object()
+
+
+def member(value, field):
+    """The member a dotted `field` names in an object value, or NO_MEMBER."""
+    for name in field.split("."):
+        if not isinstance(value, dict) or name not in value:
+            return NO_MEMBER
+        value = value[name]
+    return value
 
 
 def check_value(actual, op, value, within):
@@ -1153,6 +1193,9 @@ def evaluate(test, renderer, run_folder, ran):
         if c["kind"] == "fact":
             got = [f for f in by_key.get(c["key"], []) if c["frames"] is None or c["frames"][0] <= f["frame"] <= c["frames"][1]]
             name = "fact %s %s %s" % (c["key"], c["op"], json.dumps(c["value"]))
+            if c["matching"] is not None:
+                got = [f for f in got if has_value(f["value"], c["matching"])]
+                name += " matching %s" % json.dumps(c["matching"], ensure_ascii=False)
             if c["op"] == "absent":
                 add(name, not got, [f["value"] for f in got])
                 continue
@@ -1166,7 +1209,11 @@ def evaluate(test, renderer, run_folder, ran):
                 add(name, False, None)
                 continue
             values = [f["value"] for f in got]
-            results = [check_value(v, c["op"], c["value"], c["within"]) for v in values]
+            if c.get("field") is not None:
+                values = [member(v, c["field"]) for v in values]
+                name += " field %s" % c["field"]
+            results = [v is not NO_MEMBER and check_value(v, c["op"], c["value"], c["within"]) for v in values]
+            values = [None if v is NO_MEMBER else v for v in values]
             pick = {"last": results[-1:], "first": results[:1], "any": [any(results)], "all": [all(results)]}[c["when"]]
             add(name + " (" + c["when"] + ")", all(pick), values[-1] if c["when"] == "last" else values[0] if c["when"] == "first" else values)
         elif c["kind"] in ("log", "no_log"):

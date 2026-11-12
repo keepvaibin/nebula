@@ -100,8 +100,9 @@ std::uint64_t number(std::string_view text, std::uint64_t otherwise) {
 }
 
 // --- The extension's instance ----------------------------------------------------------------------------------------
-// The mods load a copy of this library (Windows runs a plugin from a copy of its folder), so the extension the host
-// attached is another instance of the same file: found by its name among the loaded libraries, not this one.
+// The mods load a copy of this library as code/<platform>/mod.<ending> (Windows runs a plugin from a copy of its
+// folder), so the extension the host attached is another instance under another name: found among the loaded
+// libraries, not this one, as the one exporting both of the extension's entry points.
 
 using SceneFrameFn = void (*)(std::uint64_t, std::uint64_t, std::uint64_t);
 using DoneFn = void (*)();
@@ -115,22 +116,14 @@ void find_extension() {
                            reinterpret_cast<LPCWSTR>(&find_extension), &mine) == 0) {
         return;
     }
-    const auto base_name = [](HMODULE module) {
-        std::wstring path(1024u, L'\0');
-        const DWORD length = GetModuleFileNameW(module, path.data(), static_cast<DWORD>(path.size()));
-        path.resize(length < path.size() ? length : 0u);
-        const std::size_t slash = path.find_last_of(L"\\/");
-        return slash == std::wstring::npos ? path : path.substr(slash + 1u);
-    };
-    const std::wstring name = base_name(mine);
     std::vector<HMODULE> modules(1024u);
     DWORD bytes = 0u;
-    if (name.empty() || EnumProcessModules(GetCurrentProcess(), modules.data(), static_cast<DWORD>(modules.size() * sizeof(HMODULE)), &bytes) == 0) {
+    if (EnumProcessModules(GetCurrentProcess(), modules.data(), static_cast<DWORD>(modules.size() * sizeof(HMODULE)), &bytes) == 0) {
         return;
     }
     modules.resize(std::min<std::size_t>(modules.size(), bytes / sizeof(HMODULE)));
     for (const HMODULE module : modules) {
-        if (module == mine || _wcsicmp(base_name(module).c_str(), name.c_str()) != 0) {
+        if (module == mine) {
             continue;
         }
         const FARPROC scene_frame = GetProcAddress(module, "nebula_test_scene_frame");
@@ -144,46 +137,43 @@ void find_extension() {
 }
 #else
 struct Search {
-    std::string name;
     const void* mine;
-    std::string found;
+    void* scene_frame;
+    void* done;
 };
-
-std::string base_of(const char* path) {
-    const std::string_view text = path != nullptr ? path : "";
-    const std::size_t slash = text.find_last_of('/');
-    return std::string(slash == std::string_view::npos ? text : text.substr(slash + 1u));
-}
 
 void find_extension() {
     Dl_info info{};
     if (dladdr(reinterpret_cast<void*>(&find_extension), &info) == 0 || info.dli_fname == nullptr) {
         return;
     }
-    Search search{base_of(info.dli_fname), info.dli_fbase, {}};
+    Search search{info.dli_fbase, nullptr, nullptr};
     dl_iterate_phdr(
         [](dl_phdr_info* object, std::size_t, void* user) {
             Search& s = *static_cast<Search*>(user);
-            if (object->dlpi_name != nullptr && base_of(object->dlpi_name) == s.name &&
-                reinterpret_cast<const void*>(object->dlpi_addr) != s.mine) {
-                s.found = object->dlpi_name;
-                return 1;
+            if (object->dlpi_name == nullptr || object->dlpi_name[0] == '\0' ||
+                reinterpret_cast<const void*>(object->dlpi_addr) == s.mine) {
+                return 0;
             }
-            return 0;
+            // Already loaded (NOLOAD); the one kept stays open as long as the process, as the host's does.
+            void* const library = dlopen(object->dlpi_name, RTLD_NOW | RTLD_NOLOAD);
+            if (library == nullptr) {
+                return 0;
+            }
+            void* const scene_frame = dlsym(library, "nebula_test_scene_frame");
+            void* const done = dlsym(library, "nebula_test_done");
+            if (scene_frame == nullptr || done == nullptr) {
+                dlclose(library);
+                return 0;
+            }
+            s.scene_frame = scene_frame;
+            s.done = done;
+            return 1;
         },
         &search);
-    if (search.found.empty()) {
-        return;
-    }
-    void* const library = dlopen(search.found.c_str(), RTLD_NOW | RTLD_NOLOAD);
-    if (library == nullptr) {
-        return;
-    }
-    void* const scene_frame = dlsym(library, "nebula_test_scene_frame");
-    void* const done = dlsym(library, "nebula_test_done");
-    if (scene_frame != nullptr && done != nullptr) {
-        g_scene_frame = reinterpret_cast<SceneFrameFn>(scene_frame);
-        g_done = reinterpret_cast<DoneFn>(done);
+    if (search.scene_frame != nullptr) {
+        g_scene_frame = reinterpret_cast<SceneFrameFn>(search.scene_frame);
+        g_done = reinterpret_cast<DoneFn>(search.done);
     }
 }
 #endif
