@@ -160,8 +160,14 @@ void main(uint3 id : SV_DispatchThreadID) {
         share.b = 0.0f;
         share.r = v;
 
-        // The sky's share: the sky and bounce light pass's (22.10; rt_light_space.hlsl's last step), else 1.
-        const float seen = 1.0f;
+        // The sky's share: the sky and bounce light pass's (22.10; rt_light_space.hlsl's last step), else 1. The second
+        // layer in a room (FB b112; PLAN-ROOMS R1: a glass case, a water surface, the same treatment): the point's O as
+        // the opaque layer has it at this pixel (the point's O, b108); under open sky 1 as before.
+        float seen = 1.0f;
+        if (second && g_pass.z != 0u && rt_room_point(s, s.smooth_)) {
+            const float3 o_behind = max(g_point_o.Load(int3(pixel, 0)).rgb, 0.0f);
+            seen = (o_behind.r + o_behind.g + o_behind.b) * (1.0f / 3.0f);
+        }
         if (second) {
             share = float4(v3, seen);  // as the programs read it: no filter after this layer's
         } else {

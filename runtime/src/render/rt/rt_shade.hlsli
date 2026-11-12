@@ -219,6 +219,35 @@ uint rt_gather(float3 origin, float3 direction, out uint item, out uint triangle
     return rt_closest(origin, direction, kDomeReach, kMaskSky, item, triangle_, where_, far_) ? 1u : 0u;
 }
 
+// Rooms (FB b112, b112b; PLAN-ROOMS R1): a place the sun and the sky do not reach, decided by the point. No sun traced
+// this frame: every point. Else an enclosed one (b112b: not merely something overhead; a crown, an arch, a bridge stay
+// today's): three rays from kRoomNear out (what stands nearer, a body, a pot, a chair, is the near hits' and not a
+// wall) each meet a solid or a cutout within kIndirectReach: along `n`, along the player's up (where the sky is) and
+// toward the sun.
+static const float kRoomNear = 250.0f;       // a gathered hit nearer than this stands over the point
+static const float kRoomNearShare = 0.25f;   // what such a hit sends of its light in a room; full again by 2 kRoomNear
+bool rt_room_point(RtSurface s, float3 n) {
+    if (!rt_sun_traced()) {
+        return true;
+    }
+    const float3 way[3] = {n, dot(g_up.xyz, g_up.xyz) > 0.25f ? normalize(g_up.xyz) : n, g_sun.xyz};
+    [unroll] for (uint k = 0u; k < 3u; ++k) {
+        uint met;
+        if (!blocked(rt_ray_origin(s, way[k]) + way[k] * kRoomNear, way[k], kIndirectReach - kRoomNear, kMaskSolid | kMaskCutout,
+                     true, met)) {
+            return false;  // the sky that way: not a room (b112b)
+        }
+    }
+    return true;
+}
+// The share a gathered hit at `away` from the point sends in a room (1 past 2 kRoomNear or under open sky).
+float rt_room_near(RtSurface s, float3 n, float away) {
+    if (!(away < 2.0f * kRoomNear) || !rt_room_point(s, n)) {
+        return 1.0f;
+    }
+    return lerp(kRoomNearShare, 1.0f, smoothstep(kRoomNear, 2.0f * kRoomNear, away));
+}
+
 // The water a gathered ray crosses within `reach` (A4 W4; FB b78): sheets within kWaterLayer are one layer (b58b),
 // absorbed by the way under water (kWaterAbsorb, the stage's clear: b58c), 1 - F head on once. Two layers or more:
 // the ray crosses a body, the way between the outer two; one: it starts under it going up (the player's up: out, the

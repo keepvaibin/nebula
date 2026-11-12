@@ -225,7 +225,14 @@ void main(uint3 id : SV_DispatchThreadID) {
                     if (((id.x | id.y) & 3u) == 0u) {
                         rt_count_hit(bounce);
                     }
-                    fresh.light = bounce * g_shade.authored.w + g_shade.gains.z * rt_hit_area_glow(h, true) / rt_o_unit();
+                    const float3 glow = g_shade.gains.z * rt_hit_area_glow(h, true) / rt_o_unit();
+                    fresh.light = bounce * g_shade.authored.w + glow;
+                    // In a room a near hit stands over the point: kRoomNearShare of its light (FB b112; PLAN-ROOMS R1).
+                    // Under open sky the line above's light, bit for bit.
+                    const float near_ = rt_room_near(s, n, skip + far_);
+                    if (near_ < 1.0f) {
+                        fresh.light = bounce * (g_shade.authored.w * near_) + glow;
+                    }
                 }
             }
         }
