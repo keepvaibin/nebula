@@ -35,7 +35,7 @@ enum class RtDev : std::uint8_t {
     AirScale,       // the stage row's air (rt_stages.tsv air) times this
     SkyInShadow,    // g_look.x: what the sun's shadow keeps of the sky's light (1 under the relight, 0.5 Painted)
     LightSrgb,      // 1: the lights' colours (display values) taken as linear light of the same luminance; 0 as given
-    SunSize,        // the tangent of the sun disc's half angle, over the stage row's (sun_size; kSunTan 0.026)
+    SunSize,        // the tangent of the sun disc's half angle, over the stage row's (sun_size; kSunTan 0.0131, FB b99)
     NearField,      // 1: the sky and bounce light's near field at High (rt_near.hlsl, FB b76); 0 the gather alone
     LandingAll,     // 1: every drop shadow the tracer takes gives the landing cue, not the player's alone (l80)
     IndirectDrawn,  // 1: the game's indirect draws that read a picture of the scene are drawn under the traced

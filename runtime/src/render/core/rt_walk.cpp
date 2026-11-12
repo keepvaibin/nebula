@@ -1965,9 +1965,10 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
         }
     }
     // The sun, the stage's ambient and key as brightness, and the drops by tile.
-    // 1.5 degrees (the real sun's is 0.27): a shadow's edge 2 tan d wide, d its caster's distance, soft and grounded
-    // (l77, the owner's "softer shadows"); a stage row's sun_size over it (rt_materials.h, the same default).
-    constexpr float kSunTan = 0.026f;
+    // 0.75 degrees (the real sun's is 0.27; l77's 1.5 halved: the target's edge is 5 px where 1.5 gave 10; FB b99,
+    // EVERYTHING 1.3): a shadow's edge 2 tan d wide, d its caster's distance, crisp at contact and soft far off; a
+    // stage row's sun_size over it.
+    constexpr float kSunTan = 0.0131f;
     constexpr float kDropTan = 0.035f;   // the drop light's 2 degrees (decision D1): the landing cue's edge (l80)
     constexpr float kSkyInShadow = 0.5f;  // what the sun's shadow keeps of the sky's light: the sky turned down (the
                                           // view's tint gives back up to 0.3 of the rest in the sky's colour)
