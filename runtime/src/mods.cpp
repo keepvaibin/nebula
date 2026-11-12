@@ -1275,6 +1275,11 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                     if (std::optional<fs::path> files = child_any_case(place, "files", true)) {
                         mod.luma_changes_game = true;
                         list_files(*files, std::string(), changed_paths[mod.id]);
+                        // A movie is a file at its game path (G's decision 3 of the one form, luma-format 5): the
+                        // movie player looks in files/MovieData for <name>.<video kind> (movie_playback.cpp find).
+                        if (std::optional<fs::path> movie_data = child_any_case(*files, "MovieData", true)) {
+                            mod.luma_movies.push_back(*movie_data);
+                        }
                         for (const char* language : kLanguageFolders) {
                             if (child_any_case(*files, language, true)) languages.insert(language);
                         }
@@ -1286,7 +1291,6 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                         mod.luma_textures.push_back(*textures);
                         list_textures(*textures, changed_textures[mod.id]);
                     }
-                    if (std::optional<fs::path> movies = child_any_case(place, "movies", true)) mod.luma_movies.push_back(*movies);
                 }
                 mod.luma_changes_game = mod.luma_changes_game || luma::manifest_sets_game(*manifest);
                 if (!mod.luma_textures.empty()) {
@@ -1603,7 +1607,7 @@ std::vector<std::filesystem::path> movie_folders(std::span<const ModInfo> mods) 
     std::vector<std::filesystem::path> out;
     for (auto it = mods.rbegin(); it != mods.rend(); ++it) {
         if (!in_use(*it) || !it->movies) continue;
-        // A .luma's layers' movies/ in its order (the last wins), then a folder's own.
+        // A .luma's layers' files/MovieData in its order (the last wins), then a folder's own movies/.
         out.insert(out.end(), it->luma_movies.begin(), it->luma_movies.end());
         const ModLayout layout = layout_of(it->path);
         if (!layout.movies.empty()) out.push_back(layout.movies);

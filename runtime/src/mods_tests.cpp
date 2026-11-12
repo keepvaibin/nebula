@@ -479,7 +479,7 @@ bool luma_rules() {
     mod("X", "mod-x", "");
     mod("Y", "mod-y", R"("conflicts":[{"id":"mod-x","why":"Both change the lives."}],)");
     mod("M", "mod-m", "");
-    write(root / "mods" / "M" / "layers" / "layer" / "movies" / "opening.mp4", "movie");
+    write(root / "mods" / "M" / "layers" / "layer" / "files" / "MovieData" / "opening.mp4", "movie");
     // What the reader refuses in its own words: a cut-off luma.json, a layer folder missing. A later format reads its
     // format and id only, and the second game reads: both are the validator's to refuse (L205, L207).
     write(root / "mods" / "Cut" / "luma.json", R"({"format":"1.0","id":"cut","na)");
@@ -513,8 +513,8 @@ bool luma_rules() {
     };
     ok &= expect(place("Q after P") < place("P") && place("0 before P") > place("P"), "load_after and load_before place a new mod");
     const std::vector<fs::path> movies = galaxy::mods::movie_folders(mods);
-    ok &= expect(movies.size() == 1u && movies[0].filename() == "movies" && movies[0].parent_path().filename() == "layer",
-                 "a .luma's movies are used");
+    ok &= expect(movies.size() == 1u && movies[0].filename() == "MovieData" && movies[0].parent_path().filename() == "files",
+                 "a .luma's movies at their game path are used");
     fs::remove_all(root, ec);
     return ok;
 }
