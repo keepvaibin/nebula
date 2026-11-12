@@ -40,14 +40,15 @@ namespace {
         return true;
     }
 
-    // A mod id as the record keeps it (luma.cpp valid_id): 1 to 64 of a-z 0-9 -.
+    // A mod id's characters (luma-format, the validator's id_ok: a-z 0-9 - .), 1 to 64 of them. The full id rule is the
+    // validator's; this only keeps a chunk from naming what no mod can be.
     bool validIdBytes(const u8* pId, u32 length) {
         if (length == 0 || length > LumaSaveChunk::cIdMost) {
             return false;
         }
         for (u32 i = 0; i < length; i++) {
             const u8 c = pId[i];
-            if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-')) {
+            if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '.')) {
                 return false;
             }
         }
