@@ -97,6 +97,34 @@ fn model_place(change: &Change, base: Option<&Path>) -> Result<(String, Option<s
     }
 }
 
+/// The model an animation file in game archive `folder` moves: its one model, else the one named as the archive
+/// (`Kuribo.arc/Kuribo.bdl`).
+fn archive_model(folder: &str, base: &Path) -> Result<super::gltf::GameModel> {
+    use super::refuse::refuse;
+    let models: Vec<(String, Vec<u8>)> = store::read_folder(base, folder)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|(name, _)| {
+            let name = name.to_ascii_lowercase();
+            !name.contains('/') && (name.ends_with(".bdl") || name.ends_with(".bmd"))
+        })
+        .collect();
+    let archive = folder.rsplit('/').next().unwrap_or(folder);
+    let archive = &archive[..archive.len() - ".arc".len()];
+    let named: Vec<&(String, Vec<u8>)> = models.iter().filter(|(n, _)| n.split('.').next().unwrap_or(n).eq_ignore_ascii_case(archive)).collect();
+    let (name, block) = match (models.as_slice(), named.as_slice()) {
+        ([], _) => return Err(refuse("Cook.Model.NoGameModel", &[("archive", folder.to_string()), ("models", String::new())])),
+        ([one], _) => one,
+        (_, [one]) => *one,
+        _ => {
+            let names: Vec<&str> = models.iter().map(|(n, _)| n.as_str()).collect();
+            return Err(refuse("Cook.Anim.WhichModel", &[("archive", folder.to_string()), ("models", names.join(", "))]));
+        }
+    };
+    let path = format!("{folder}/{name}");
+    super::gltf::GameModel::read(&path, block).ok_or_else(|| refuse("Cook.Model.NoGameModel", &[("archive", folder.to_string()), ("models", name.clone())]))
+}
+
 /// A new model's level of detail (models contract 6: `<path>Middle.glb` or `<path>Low.glb` outside an archive, the
 /// endings with their capitals as LodCtrl names them) whose base model `<path>` is none of the mod's files: refused
 /// as `Cook.Model.LevelAlone` {file, model}. The store compares paths without case, so the base is found so.
@@ -141,6 +169,18 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         let stem = &change.path[..lower.rfind(".canm.").unwrap_or(change.path.len())];
         return Ok(vec![(format!("{stem}.canm"), super::gltf::to_camera(bytes, change.source.parent())?, false)]);
     }
+    // Name.anim.glb in a game archive: clips of the archive's model (animation contract 2).
+    if lower.ends_with(".anim.glb") || lower.ends_with(".anim.gltf") {
+        let folder = change.path.rsplit_once('/').map_or("", |(f, _)| f);
+        if !folder.to_ascii_lowercase().ends_with(".arc") {
+            return Err(super::refuse::refuse("Cook.Anim.NotInArchive", &[("file", change.path.clone())]));
+        }
+        let base = base.ok_or_else(|| super::refuse::refuse("Cook.Anim.NoGame", &[("file", change.path.clone())]))?;
+        let game = archive_model(folder, base)?;
+        let (clips, made) = super::gltf::to_clip_files(bytes, change.source.parent(), &change.path, &game)?;
+        super::refuse::record(super::refuse::CookFact::Model { path: game.path.clone(), source: change.path.clone(), facts: made });
+        return Ok(clips.into_iter().map(|(file, clip)| (format!("{folder}/{file}"), clip, true)).collect());
+    }
     if lower.ends_with(".gltf") || lower.ends_with(".glb") {
         let file = change.path.rsplit('/').next().unwrap_or(&change.path);
         let stem = file.split('.').next().unwrap_or(file);
@@ -169,6 +209,14 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         return Ok(vec![(renamed(".ast"), super::modern_audio::to_stream(&change.path, bytes)?, true)]);
     }
     Ok(Vec::new())
+}
+
+/// A mod's source file at game path `path` (`source`: where it is read from, for the files it names), cooked alone
+/// against the game's store `base` as the overlay cooks it: how many game files it makes; 0 when its kind is none the
+/// cook makes (luma_validate's `cooked_source` lists those), an error (a refusal, L804) when the cook refuses it.
+pub fn cook_source(path: &str, source: &Path, bytes: &[u8], base: Option<&Path>) -> Result<usize> {
+    let change = Change { path: path.trim_start_matches('/').to_string(), source: source.to_path_buf(), merge: false };
+    modern_files(&change, bytes, base).map(|made| made.len())
 }
 
 /// One file of a mod as store items, cooked as the game's own are: by its name (`cooks`) or, whatever its name, by
@@ -698,6 +746,77 @@ mod tests {
         let end = pak.stream_position().unwrap();
         store::write_index(&mut pak, end, &placed, b"RMGE01\0\0").unwrap();
         base
+    }
+
+    #[test]
+    fn every_kind_the_validator_hands_the_cook_is_cooked() {
+        // luma_validate::cooked_source passes these to the cook (L304): each is cooked or refused by name, none ignored.
+        let cooked = [
+            "ObjectData/Kuribo.arc/Kuribo.glb",
+            "ObjectData/Kuribo.arc/Kuribo.gltf",
+            "ObjectData/Kuribo.arc/Kuribo.anim.glb",
+            "ObjectData/Kuribo.arc/Kuribo.anim.gltf",
+            "ObjectData/Kuribo.arc/Ground.kcl.glb",
+            "DemoData/Intro.arc/Shot.canm.gltf",
+            "LuigiData/New.glb",
+            "ObjectData/Kuribo.arc/Kuribo.png",
+            "AudioRes/Stream/Song.wav",
+            "AudioRes/Stream/Song.ogg",
+            "ObjectData/Kuribo.arc/ActorAnimCtrl.bcsv.json",
+            "ObjectData/Kuribo.arc/Kuribo.bcam.json",
+            "StageData/MyGalaxy.arc/jmp/placement/common/objinfo.json",
+        ];
+        let dir = tempfile::tempdir().unwrap();
+        for path in cooked {
+            assert!(luma_validate::cooked_source(&path.to_lowercase()), "{path}");
+            match cook_source(path, &dir.path().join("x"), b"not this", None) {
+                Ok(made) => assert!(made > 0, "{path}: made nothing"),
+                Err(error) => assert!(super::super::refuse::refusal_of(&error).is_some() || !format!("{error:#}").is_empty(), "{path}"),
+            }
+        }
+        // Kinds the cook does not make stay the validator's (L304 not yet defined) and the cook's answer is nothing.
+        for path in ["Fonts/Title.ttf", "MovieData/Intro.webm", "ObjectData/Kuribo.arc/Notes.json"] {
+            assert!(!luma_validate::cooked_source(&path.to_lowercase()), "{path}");
+            assert_eq!(cook_source(path, &dir.path().join("x"), b"not this", None).unwrap(), 0, "{path}");
+        }
+    }
+
+    #[test]
+    fn an_animation_file_makes_clips_of_its_archives_model() {
+        use super::super::refuse::refusal_of;
+        let dir = tempfile::tempdir().unwrap();
+        // The game's Kuribo: body with head under it.
+        let model = br#"{"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[0]}],"nodes":[{"name":"body","mesh":0,"children":[1]},{"name":"head","translation":[0,1,0]}],
+            "meshes":[{"primitives":[{"attributes":{"POSITION":0},"indices":1}]}],
+            "accessors":[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3"},{"bufferView":1,"componentType":5123,"count":3,"type":"SCALAR"}],
+            "bufferViews":[{"buffer":0,"byteLength":36},{"buffer":0,"byteOffset":36,"byteLength":6}],
+            "buffers":[{"byteLength":42,"uri":"data:application/octet-stream;base64,AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAABAAIA"}]}"#;
+        let (block, _) = super::super::gltf::to_files(model, None, "Kuribo").unwrap();
+        // An animation file: the skeleton, and Walk moving the head up over a second (two keys: 0 and 1 s, 1 m and 2 m).
+        let data = "AAAAAAAAgD8AAAAAAACAPwAAAAAAAAAAAAAAQAAAAAA="; // times 0, 1; positions (0, 1, 0), (0, 2, 0) as little-endian floats
+        let anim = format!(
+            r#"{{"asset":{{"version":"2.0"}},"scene":0,"scenes":[{{"nodes":[0]}}],"nodes":[{{"name":"body","children":[1]}},{{"name":"head","translation":[0,1,0]}}],
+            "animations":[{{"name":"Walk","samplers":[{{"input":0,"output":1}}],"channels":[{{"sampler":0,"target":{{"node":1,"path":"translation"}}}}]}}],
+            "accessors":[{{"bufferView":0,"componentType":5126,"count":2,"type":"SCALAR"}},{{"bufferView":1,"componentType":5126,"count":2,"type":"VEC3"}}],
+            "bufferViews":[{{"buffer":0,"byteLength":8}},{{"buffer":0,"byteOffset":8,"byteLength":24}}],
+            "buffers":[{{"byteLength":32,"uri":"data:application/octet-stream;base64,{data}"}}]}}"#
+        );
+        let source = dir.path().join("Kuribo.anim.gltf");
+        let one = game_store(dir.path(), &[("ObjectData/Kuribo.arc/kuribo.bdl", &block)]);
+        assert_eq!(cook_source("ObjectData/Kuribo.arc/Kuribo.anim.gltf", &source, anim.as_bytes(), Some(&one)).unwrap(), 1);
+        // Two models, neither named as the archive: which one is not guessed.
+        let two_dir = tempfile::tempdir().unwrap();
+        let two = game_store(two_dir.path(), &[("ObjectData/Kuribo.arc/a.bdl", &block), ("ObjectData/Kuribo.arc/b.bdl", &block)]);
+        let error = cook_source("ObjectData/Kuribo.arc/Kuribo.anim.gltf", &source, anim.as_bytes(), Some(&two)).unwrap_err();
+        assert_eq!(refusal_of(&error).map(|f| f.args.iter().any(|(n, v)| *n == "why" && *v == luma_validate::Arg::Phrase("Cook.Anim.WhichModel"))), Some(true), "{error:#}");
+        // Not in a game archive, and no game to read the model from.
+        for (path, base, why) in [
+            ("ObjectData/Walk.anim.gltf", Some(one.as_path()), "Cook.Anim.NotInArchive"),
+            ("ObjectData/Kuribo.arc/Kuribo.anim.gltf", None, "Cook.Anim.NoGame"),
+        ] {
+            let error = cook_source(path, &source, anim.as_bytes(), base).unwrap_err();
+            assert_eq!(refusal_of(&error).map(|f| f.args.iter().any(|(n, v)| *n == "why" && *v == luma_validate::Arg::Phrase(why))), Some(true), "{why}: {error:#}");
+        }
     }
 
     #[test]

@@ -863,6 +863,8 @@ fn widen(low: &mut [f32; 3], high: &mut [f32; 3], at: [f32; 3]) {
 pub struct GameModel {
     pub path: String,
     pub joints: Vec<String>,
+    /// Each joint's parent joint (None for the root); empty when not known (then nothing is checked against it).
+    pub parents: Vec<Option<usize>>,
 }
 
 impl GameModel {
@@ -877,13 +879,18 @@ impl GameModel {
             return None;
         }
         let mut joints = Vec::with_capacity(count);
+        let mut parents = Vec::with_capacity(count);
         for j in 0..count {
-            let name_at = word(joints_at.checked_add(j * super::model_write::JOINT_BYTES + 88)?)?;
+            let record = joints_at.checked_add(j * super::model_write::JOINT_BYTES)?;
+            let name_at = word(record.checked_add(88)?)?;
             let rest = block.get(name_at..)?;
             let end = rest.iter().position(|b| *b == 0)?;
             joints.push(rest[..end].iter().map(|&b| char::from(b)).collect());
+            // NebulaModelJoint.parent (nebula_model.h), NEBULA_MODEL_NONE for the root.
+            let parent = word(record.checked_add(24)?)?;
+            parents.push((parent != NONE as usize).then_some(parent).filter(|p| *p < count));
         }
-        Some(GameModel { path: path.to_string(), joints })
+        Some(GameModel { path: path.to_string(), joints, parents })
     }
 }
 
@@ -1005,17 +1012,14 @@ pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(Strin
     to_ir_for(bytes, folder, None).map(|(ir, clips, _)| (ir, clips))
 }
 
-/// A glTF document as the model that stands in for `game` (None: a new model), its clips and what was made.
-pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) -> Result<(ModelIr, Clips, ModelFacts)> {
-    let document = Document::parse(bytes, folder)?;
-    let root = &document.root;
-    required_extensions(root)?;
-    let scene_number = root["scene"].as_u64().unwrap_or(0) as usize;
-    let scene = &root["scenes"][scene_number];
-    let nodes = root["nodes"].as_array().map(Vec::as_slice).unwrap_or_default();
-    let mesh_name = |m: usize| named(&root["meshes"][m], m);
+/// The nodes of a scene parents first, each node's transform in the scene, each node's parent.
+type SceneTree = (Vec<usize>, Vec<Matrix>, Vec<Option<usize>>);
 
-    // Every node in the scene with its whole transform, parents first.
+/// Every node of scene `scene_number` with its whole transform, parents first: (the nodes in that order, each node's
+/// transform in the scene, each node's parent).
+fn scene_tree(root: &Value, scene_number: usize) -> Result<SceneTree> {
+    let nodes = root["nodes"].as_array().map(Vec::as_slice).unwrap_or_default();
+    let scene = &root["scenes"][scene_number];
     let mut world = vec![IDENTITY; nodes.len()];
     let mut parents: Vec<Option<usize>> = vec![None; nodes.len()];
     let mut seen = vec![false; nodes.len()];
@@ -1042,6 +1046,18 @@ pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) 
             stack.push((child, matrix));
         }
     }
+    Ok((order, world, parents))
+}
+
+/// A glTF document as the model that stands in for `game` (None: a new model), its clips and what was made.
+pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) -> Result<(ModelIr, Clips, ModelFacts)> {
+    let document = Document::parse(bytes, folder)?;
+    let root = &document.root;
+    required_extensions(root)?;
+    let scene_number = root["scene"].as_u64().unwrap_or(0) as usize;
+    let nodes = root["nodes"].as_array().map(Vec::as_slice).unwrap_or_default();
+    let mesh_name = |m: usize| named(&root["meshes"][m], m);
+    let (order, world, parents) = scene_tree(root, scene_number)?;
     if order.is_empty() {
         return Err(refuse("Cook.Model.NoTriangles", &[]));
     }
@@ -1821,7 +1837,19 @@ impl Timing {
         let mut length = 0.0f32;
         for channel in animation["channels"].as_array().map(Vec::as_slice).unwrap_or_default() {
             let sampler = samplers.get(channel["sampler"].as_u64().unwrap_or(0) as usize).or_invalid(|| format!("{}/samplers", animation_at(document, animation)))?;
-            let times = document.floats(sampler["input"].as_u64().or_invalid(|| "/animations".to_string())? as usize, 1)?;
+            let input = sampler["input"].as_u64().or_invalid(|| "/animations".to_string())? as usize;
+            let times = document.floats(input, 1)?;
+            // A key that is no number (NaN, infinite) would play as nothing the modder made.
+            let output = sampler["output"].as_u64().or_invalid(|| "/animations".to_string())? as usize;
+            let width = match document.root["accessors"][output]["type"].as_str() {
+                Some("VEC2") => 2,
+                Some("VEC3") => 3,
+                Some("VEC4") => 4,
+                _ => 1,
+            };
+            if !times.iter().chain(document.floats(output, width)?.iter()).all(|v| v.is_finite()) {
+                return Err(refuse("Cook.Anim.NotANumber", &[("animation", animation_name(document, animation))]));
+            }
             length = length.max(times.last().copied().unwrap_or(0.0));
         }
         for swap in animation["extras"]["nebula"]["texture_swaps"].as_array().map(Vec::as_slice).unwrap_or_default() {
@@ -1840,6 +1868,11 @@ impl Timing {
             Some("loop_there_and_back") => 4,
             Some(other) => return Err(refuse("Cook.Clip.Plays", &[("animation", animation_name(document, animation)), ("found", other.to_string())])),
         };
+        if length * FRAMES_PER_SECOND > MAX_CLIP_FRAMES as f32 {
+            let seconds = format!("{length:.1}");
+            let max = format!("{:.1}", MAX_CLIP_FRAMES as f32 / FRAMES_PER_SECOND);
+            return Err(refuse("Cook.Anim.TooLong", &[("animation", animation_name(document, animation)), ("seconds", seconds), ("max", max)]));
+        }
         let frames = ((length * FRAMES_PER_SECOND).ceil() as usize).max(1);
         let samples = (0..=frames).step_by(2).chain(std::iter::once(frames)).collect::<BTreeSet<_>>().into_iter().collect();
         Ok(Timing { frames, samples, loop_mode })
@@ -2024,8 +2057,100 @@ pub fn to_files_for(bytes: &[u8], folder: Option<&Path>, stem: &str, game: Optio
     Ok((model, clips.iter().map(|(name, c)| (format!("{name}.{}", clip_extension(c.kind)), super::clip::write(c))).collect(), facts))
 }
 
+/// An animation file (`<archive>.arc/<any>.anim.glb`, animation contract 2): animations only, each a clip of `game`
+/// (the archive's model) by its name, which replaces the game's clip of that name. Its nodes carry the model's skeleton:
+/// each game joint is the node of its name, under the node of the joint's game parent; a joint no channel moves keeps
+/// its node's place at rest. Channels move joints only (`file` names the file in refusals).
+pub fn to_clip_files(bytes: &[u8], folder: Option<&Path>, file: &str, game: &GameModel) -> Result<(ClipFiles, ModelFacts)> {
+    let document = Document::parse(bytes, folder)?;
+    let root = &document.root;
+    required_extensions(root)?;
+    let (order, world, parents) = scene_tree(root, root["scene"].as_u64().unwrap_or(0) as usize)?;
+    let nodes = root["nodes"].as_array().map(Vec::as_slice).unwrap_or_default();
+    let mut node_of: Vec<usize> = Vec::with_capacity(game.joints.len());
+    for name in &game.joints {
+        let node = order
+            .iter()
+            .copied()
+            .find(|&n| nodes[n]["name"].as_str() == Some(name.as_str()))
+            .ok_or_else(|| refuse("Cook.Model.MissingJoint", &[("joint", name.clone()), ("model", game.path.clone())]))?;
+        node_of.push(node);
+    }
+    let joint_of_node: BTreeMap<usize, usize> = node_of.iter().enumerate().map(|(j, &n)| (n, j)).collect();
+    let parent_joint = |node: usize| -> Option<usize> {
+        let mut at = parents[node];
+        while let Some(p) = at {
+            if let Some(&j) = joint_of_node.get(&p) {
+                return Some(j);
+            }
+            at = parents[p];
+        }
+        None
+    };
+    let mut joints = Vec::with_capacity(node_of.len());
+    for (j, &node) in node_of.iter().enumerate() {
+        let parent = parent_joint(node);
+        if let Some(&wanted) = game.parents.get(j) {
+            let name = |p: usize| game.joints[p].clone();
+            match (wanted, parent) {
+                (Some(w), Some(p)) if w != p => {
+                    return Err(refuse("Cook.Anim.ParentDiffers", &[("joint", name(j)), ("parent", name(w)), ("found", name(p))]));
+                }
+                (Some(w), None) => return Err(refuse("Cook.Anim.ParentMissing", &[("joint", name(j)), ("parent", name(w))])),
+                (None, Some(p)) => return Err(refuse("Cook.Anim.RootDiffers", &[("joint", name(j)), ("found", name(p))])),
+                _ => {}
+            }
+        }
+        // Its place at rest from its parent joint's, as a model's joint (to_ir_for's `local`).
+        let parent_node = parent.map(|p| node_of[p]);
+        let (trs, between) = if parents[node] == parent_node {
+            (node_trs(&nodes[node]), None)
+        } else {
+            let above = parent_node.map_or(IDENTITY, |p| affine_inverse(&world[p]));
+            let between = multiply(&above, &parents[node].map_or(IDENTITY, |p| world[p]));
+            (decompose(&multiply(&above, &world[node])), Some(between))
+        };
+        joints.push(Joint { name: game.joints[j].clone(), node: Some(node), parent, trs, between, inverse: IDENTITY, socket: false });
+    }
+    let animations = root["animations"].as_array().map(Vec::as_slice).unwrap_or_default();
+    if animations.is_empty() {
+        return Err(refuse("Cook.Anim.None", &[("file", file.to_string())]));
+    }
+    let mut names = BTreeSet::new();
+    let mut files: ClipFiles = Vec::new();
+    for (i, animation) in animations.iter().enumerate() {
+        let name = animation["name"].as_str().filter(|s| !s.is_empty()).ok_or_else(|| refuse("Cook.Anim.NoName", &[("animation", format!("#{i}"))]))?.to_string();
+        if !names.insert(name.clone()) {
+            return Err(refuse("Cook.Anim.Twice", &[("name", name)]));
+        }
+        for channel in animation["channels"].as_array().map(Vec::as_slice).unwrap_or_default() {
+            let path = channel["target"]["path"].as_str().unwrap_or("");
+            match (channel["target"]["node"].as_u64(), path) {
+                (Some(node), "translation" | "rotation" | "scale") => {
+                    if !joint_of_node.contains_key(&(node as usize)) {
+                        let shown = named(nodes.get(node as usize).unwrap_or(&Value::Null), node as usize);
+                        return Err(refuse("Cook.Anim.NotAJoint", &[("animation", name.clone()), ("node", shown), ("model", game.path.clone())]));
+                    }
+                }
+                _ => {
+                    let pointer = channel["target"]["extensions"]["KHR_animation_pointer"]["pointer"].as_str().unwrap_or(path);
+                    return Err(refuse("Cook.Anim.OnlyJoints", &[("animation", name.clone()), ("path", pointer.to_string())]));
+                }
+            }
+        }
+        let timing = Timing::of(&document, animation)?;
+        let clip = clip_of(&document, animation, &joints, &joint_of_node, &timing)?;
+        files.push((format!("{name}.{}", clip_extension(clip.kind)), super::clip::write(&clip)));
+    }
+    let facts = ModelFacts { replaced: game.path.clone(), joints: joints.len(), clips: files.len(), ..ModelFacts::default() };
+    Ok((files, facts))
+}
+
 /// The game counts animation frames at 60 a second.
 const FRAMES_PER_SECOND: f32 = 60.0;
+
+/// The longest clip: the game's clip files count frames in 16 bits (J3D's .bck), 18 minutes at 60 a second.
+const MAX_CLIP_FRAMES: usize = 65_535;
 
 /// A sampled curve of one joint's value.
 struct Curve {
@@ -2861,7 +2986,7 @@ mod tests {
     }
 
     fn game(joints: &[&str]) -> GameModel {
-        GameModel { path: "ObjectData/Kuribo.arc/Kuribo.bdl".into(), joints: joints.iter().map(|j| j.to_string()).collect() }
+        GameModel { path: "ObjectData/Kuribo.arc/Kuribo.bdl".into(), joints: joints.iter().map(|j| j.to_string()).collect(), parents: vec![] }
     }
 
     #[test]
@@ -2884,11 +3009,110 @@ mod tests {
         assert_eq!(refused(&clash), ("Cook.Model.JointTwice", vec![own(("joint", "head"))]));
     }
 
+    /// A three-joint arm (body, upper hanging 1 m up from it, lower 1 m up from upper) whose `Wave` turns `upper` a
+    /// quarter about Z in a second; `mesh`: the body draws the triangle (a model), else the file is animations only.
+    fn arm(mesh: bool, times: [f32; 2], last_z: f32) -> Value {
+        let mut document = document_of(&triangle(1));
+        document["nodes"] = serde_json::json!([
+            { "name": "body", "mesh": 0, "children": [1] },
+            { "name": "upper", "translation": [0.0, 1.0, 0.0], "children": [2] },
+            { "name": "lower", "translation": [0.0, 1.0, 0.0] },
+        ]);
+        if !mesh {
+            document["nodes"][0].as_object_mut().unwrap().remove("mesh");
+            document.as_object_mut().unwrap().remove("meshes");
+        }
+        let half = std::f32::consts::FRAC_PI_4.sin();
+        let views = add_floats(&mut document, &[(2, "SCALAR", times.to_vec()), (2, "VEC4", vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, last_z, half])]);
+        document["animations"] = serde_json::json!([{ "name": "Wave", "samplers": [{ "input": views[0], "output": views[1] }],
+            "channels": [{ "sampler": 0, "target": { "node": 1, "path": "rotation" } }] }]);
+        document
+    }
+
+    fn arm_model(parents: &[Option<usize>]) -> GameModel {
+        GameModel { parents: parents.to_vec(), ..game(&["body", "upper", "lower"]) }
+    }
+
+    fn clip_files(document: &Value, game: &GameModel) -> Result<(ClipFiles, ModelFacts)> {
+        to_clip_files(&serde_json::to_vec(document).unwrap(), None, "ObjectData/Kuribo.arc/Arm.anim.glb", game)
+    }
+
+    #[test]
+    fn an_animation_file_makes_the_clips_its_model_would() {
+        let half = std::f32::consts::FRAC_PI_4.sin();
+        let game = arm_model(&[None, Some(0), Some(1)]);
+        // The same skeleton and animation cooked inside a model standing in for the game's: the clip is the same bytes.
+        let (_, from_model, _) = to_files_for(&serde_json::to_vec(&arm(true, [0.0, 1.0], half)).unwrap(), None, "Kuribo", Some(&game)).unwrap();
+        let (files, facts) = clip_files(&arm(false, [0.0, 1.0], half), &game).unwrap();
+        assert_eq!(files.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(), ["Wave.bck"]);
+        assert_eq!(files, from_model);
+        assert_eq!((facts.replaced.as_str(), facts.joints, facts.clips, facts.meshes), ("ObjectData/Kuribo.arc/Kuribo.bdl", 3, 1, 0));
+        // Without the game's parents (an older reader) nothing is checked against them.
+        assert_eq!(clip_files(&arm(false, [0.0, 1.0], half), &arm_model(&[])).unwrap().0, from_model);
+    }
+
+    #[test]
+    fn an_animation_file_says_what_it_cannot_make() {
+        let half = std::f32::consts::FRAC_PI_4.sin();
+        let game = arm_model(&[None, Some(0), Some(1)]);
+        let model = "ObjectData/Kuribo.arc/Kuribo.bdl";
+        let fails = |document: &Value, game: &GameModel| refused(&clip_files(document, game).expect_err("refused"));
+        let document = arm(false, [0.0, 1.0], half);
+        let hand = GameModel { joints: vec!["body".into(), "upper".into(), "hand".into()], ..game.clone() };
+        assert_eq!(fails(&document, &hand), ("Cook.Model.MissingJoint", vec![own(("joint", "hand")), own(("model", model))]));
+        assert_eq!(fails(&document, &arm_model(&[None, Some(0), Some(0)])), ("Cook.Anim.ParentDiffers", vec![own(("joint", "lower")), own(("parent", "body")), own(("found", "upper"))]));
+        assert_eq!(fails(&document, &arm_model(&[Some(1), None, Some(1)])), ("Cook.Anim.ParentMissing", vec![own(("joint", "body")), own(("parent", "upper"))]));
+        assert_eq!(fails(&document, &arm_model(&[None, None, Some(1)])), ("Cook.Anim.RootDiffers", vec![own(("joint", "upper")), own(("found", "body"))]));
+        let mut prop = document.clone();
+        prop["nodes"].as_array_mut().unwrap().push(serde_json::json!({ "name": "prop" }));
+        prop["nodes"][0]["children"] = serde_json::json!([1, 3]);
+        prop["animations"][0]["channels"][0]["target"]["node"] = 3.into();
+        assert_eq!(fails(&prop, &game), ("Cook.Anim.NotAJoint", vec![own(("animation", "Wave")), own(("node", "prop")), own(("model", model))]));
+        let mut weights = document.clone();
+        weights["animations"][0]["channels"][0]["target"]["path"] = "weights".into();
+        assert_eq!(fails(&weights, &game), ("Cook.Anim.OnlyJoints", vec![own(("animation", "Wave")), own(("path", "weights"))]));
+        let mut pointer = document.clone();
+        pointer["animations"][0]["channels"][0]["target"] = serde_json::json!({ "path": "pointer",
+            "extensions": { "KHR_animation_pointer": { "pointer": "/materials/0/pbrMetallicRoughness/baseColorFactor" } } });
+        assert_eq!(fails(&pointer, &game), ("Cook.Anim.OnlyJoints", vec![own(("animation", "Wave")), own(("path", "/materials/0/pbrMetallicRoughness/baseColorFactor"))]));
+        let mut unnamed = document.clone();
+        unnamed["animations"][0].as_object_mut().unwrap().remove("name");
+        assert_eq!(fails(&unnamed, &game), ("Cook.Anim.NoName", vec![own(("animation", "#0"))]));
+        let mut twice = document.clone();
+        let wave = twice["animations"][0].clone();
+        twice["animations"].as_array_mut().unwrap().push(wave);
+        assert_eq!(fails(&twice, &game), ("Cook.Anim.Twice", vec![own(("name", "Wave"))]));
+        let mut none = document.clone();
+        none.as_object_mut().unwrap().remove("animations");
+        assert_eq!(fails(&none, &game), ("Cook.Anim.None", vec![own(("file", "ObjectData/Kuribo.arc/Arm.anim.glb"))]));
+    }
+
+    #[test]
+    fn a_clip_that_is_no_number_or_too_long_is_refused() {
+        let half = std::f32::consts::FRAC_PI_4.sin();
+        let game = arm_model(&[None, Some(0), Some(1)]);
+        // A key that is NaN, in an animation file and in a model alike.
+        let nan = arm(false, [0.0, 1.0], f32::NAN);
+        assert_eq!(refused(&clip_files(&nan, &game).err().unwrap()), ("Cook.Anim.NotANumber", vec![own(("animation", "Wave"))]));
+        let nan_model = arm(true, [0.0, 1.0], f32::NAN);
+        assert_eq!(refused(&cook(&nan_model, Some(&game)).err().unwrap()), ("Cook.Anim.NotANumber", vec![own(("animation", "Wave"))]));
+        let infinite_time = arm(false, [0.0, f32::INFINITY], half);
+        assert_eq!(refused(&clip_files(&infinite_time, &game).err().unwrap()), ("Cook.Anim.NotANumber", vec![own(("animation", "Wave"))]));
+        // 2000 seconds: past the 65,535 frames a clip counts (refused before a sample is taken).
+        let long = arm(false, [0.0, 2000.0], half);
+        assert_eq!(refused(&clip_files(&long, &game).err().unwrap()), ("Cook.Anim.TooLong", vec![own(("animation", "Wave")), own(("seconds", "2000.0")), own(("max", "1092.2"))]));
+        // A clip of no length is one frame.
+        let (files, _) = clip_files(&arm(false, [0.0, 0.0], half), &game).unwrap();
+        // The block's fifth word is its frame count (clip::write).
+        assert_eq!(u32::from_le_bytes(files[0].1[16..20].try_into().unwrap()), 1);
+    }
+
     #[test]
     fn a_cooked_model_reads_back_as_a_game_model() {
         let (model, _) = to_files(&serde_json::to_vec(&with_nodes(&[("head", Value::Null)])).unwrap(), None, "Kuribo").unwrap();
         let read = GameModel::read("ObjectData/Kuribo.arc/Kuribo.bdl", &model).unwrap();
         assert_eq!(read.joints, ["body", "head"]);
+        assert_eq!(read.parents, [None, Some(0)]);
         assert!(GameModel::read("x", &model[..40]).is_none());
         assert!(GameModel::read("x", b"not a model").is_none());
     }

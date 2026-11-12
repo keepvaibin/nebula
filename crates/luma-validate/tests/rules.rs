@@ -842,3 +842,27 @@ fn text_and_key_options_are_whole_and_choose_no_layer() {
     }
     assert!(said(both, Some(r#"[{"name": "base", "when": {"option": {"on": true}}}]"#)).is_empty());
 }
+
+/// A cook's refusal (L804, its reason a `why` phrase) is said whole: the phrase is the message's text, never `{text}`.
+#[test]
+fn a_cook_refusal_says_its_reason_as_its_text() {
+    use luma_validate::{message, message_of, Arg, Finding, Level};
+    let finding = Finding {
+        code: 804,
+        level: Level::Error,
+        mod_id: Some("ga-walk".into()),
+        file: "layers/base/files/ObjectData/Walk.anim.gltf".into(),
+        line: None,
+        column: None,
+        pointer: None,
+        args: vec![("why", Arg::Phrase("Cook.Anim.NotInArchive")), ("file", Arg::Text("ObjectData/Walk.anim.gltf".into()))],
+    };
+    for language in ["UsEnglish", "JpJapanese"] {
+        let said = message(&finding, language);
+        assert!(!said.contains('{'), "{language}: {said}");
+        assert!(said.contains("ObjectData/Walk.anim.gltf") && said.starts_with("ga-walk"), "{said}");
+    }
+    assert!(message(&finding, "UsEnglish").contains("archive"));
+    let kept = message_of(804, &[("mod", "ga-walk"), ("file", "x.gltf"), ("why", "P:Cook.Anim.NotInArchive")], "UsEnglish");
+    assert!(!kept.contains('{') && kept.contains("archive"), "{kept}");
+}

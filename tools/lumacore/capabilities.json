@@ -1,6 +1,7 @@
 {
   "about": "Every capability a harness test may prove (contract harness, 3.1 `proves`). The status page is generated from this list and the results that name each id (plan rule 8). An id is added with the task that builds it; it is never renamed or reused.",
   "capabilities": {
+    "anim.replace": "An animation file (<archive>.arc/<any>.anim.glb, joints only) makes clips of the archive's game model by name, replacing the game's clip of that name; a channel on no joint, a joint hung elsewhere than in the game's model, a key that is no number or a clip past 65,535 frames is refused by name (3.6 layer 2)",
     "harness.self": "A check of the harness itself, or a fixture: proves nothing about LumaCore",
     "kernel.bind": "A mod's library is bound by name before its first line runs: every import or none, a missing name refused with a message naming it (0.2, 1.1)",
     "kernel.call": "A mod calls any function of the game by name and signature (0.2, 1.1)",
