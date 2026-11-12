@@ -907,6 +907,8 @@ pub fn signals(m: &MaterialIr) -> Signals {
         alpha_test: !alpha_test_always(m),
         blend: match (m.blend_type, m.blend_src, m.blend_dst) {
             (0, _, _) => 0,
+            // c61: drawn blended for a fade of the whole material (mark_fades): opaque to the class rules.
+            (1, 4, 5) if m.fade_opaque => 0,
             (1, 4, 5) => 1,
             (1, _, 1) => 2,
             _ => 3,
@@ -920,6 +922,69 @@ pub fn signals(m: &MaterialIr) -> Signals {
         environment_tint: tint.map(|v| v.clamp(0.0, 1.0)),
         environment_hue: hue,
         environment_saturation: saturation,
+    }
+}
+
+/// c61: each material drawn blended by alpha whose alpha stays at 0.9 or more (MaterialIr fade_opaque): its stages run
+/// with every map's alpha at the low or high end of its texels' and the vertices' alpha at the low or high end of the
+/// model's colour arrays (four ways: maps low or high by vertices low or high); the least of them. A map whose texels
+/// cannot be read counts 0 to 1. A lit alpha channel is taken at full light (the game's lights carry alpha 255).
+pub fn mark_fades(ir: &mut ModelIr) {
+    let range = |colours: &[u32]| {
+        if colours.is_empty() {
+            return [1.0f32, 1.0];
+        }
+        colours.iter().fold([1.0f32, 0.0], |[lo, hi], &c| {
+            let a = (c & 0xFF) as f32 / 255.0;
+            [lo.min(a), hi.max(a)]
+        })
+    };
+    let vertex = [range(&ir.arrays.colors[0]), range(&ir.arrays.colors[1])];
+    let found: Vec<Option<[f32; 2]>> = ir
+        .materials
+        .iter()
+        .map(|m| {
+            if (m.blend_type, m.blend_src, m.blend_dst) != (1, 4, 5) {
+                return None;
+            }
+            let channels = 2 * (m.channel_count as usize).min(2);
+            let maps: Vec<[f32; 2]> = (0..m.textures.len())
+                .map(|map| {
+                    map_texels(ir, m, map as u8).map_or([0.0, 1.0], |(_, _, t)| {
+                        t.iter().fold([1.0f32, 0.0], |[lo, hi], p| {
+                            let a = f32::from(p[3]) / 255.0;
+                            [lo.min(a), hi.max(a)]
+                        })
+                    })
+                })
+                .collect();
+            let at = |map_end: usize, vertex_end: usize| {
+                let raster = move |code: u8| -> [f32; 4] {
+                    let n = match code {
+                        0 | 4 => 0usize,
+                        1 | 5 => 1usize,
+                        _ => return [0.0; 4],
+                    };
+                    if n * 2 >= channels {
+                        return [1.0; 4];
+                    }
+                    let alpha = if m.channels[n * 2 + 1].material_source != 0 {
+                        vertex[n][vertex_end]
+                    } else {
+                        f32::from(m.material_color[n][3]) / 255.0
+                    };
+                    [0.5, 0.5, 0.5, alpha]
+                };
+                let map = |n: u8| [0.5, 0.5, 0.5, maps.get(usize::from(n)).map_or(1.0, |r| r[map_end])];
+                evaluate(m, &map, &raster)[3]
+            };
+            let ends: Vec<f32> = [(0, 0), (0, 1), (1, 0), (1, 1)].iter().map(|&(a, b)| at(a, b)).collect();
+            Some([ends.iter().copied().fold(f32::MAX, f32::min), ends.iter().copied().fold(f32::MIN, f32::max)])
+        })
+        .collect();
+    for (m, fade) in ir.materials.iter_mut().zip(found) {
+        m.fade_opaque = fade.is_some_and(|[low, _]| low >= 0.9);
+        m.fade_alpha = fade.unwrap_or([-1.0, -1.0]);
     }
 }
 
@@ -1286,7 +1351,7 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
         out,
         "model\tmaterial\tname\tclass\trule\tlit\tspecular\tvertex colour\tenvironment\tenvironment share\tenvironment hue\tenvironment saturation\t\
          ramp\tbump\twarp\talpha test\tblend\ttwo-sided\tdepth write\tanimated coordinates\tunlit\tlit gain\tbase\temission\troughness\tmetal\ttransmission\tstages\tmaps\tglow\t\
-         ior\tthickness\tglow source\tenvironment map\tenvironment tint\tbody\tshine\ttint keep"
+         ior\tthickness\tglow source\tenvironment map\tenvironment tint\tbody\tshine\ttint keep\tfade opaque"
     )?;
     // c56: every normal-indexed map, its numbers and whether it is a colour ramp or a painted reflection.
     let mut ramps = std::io::BufWriter::new(std::fs::File::create(output.with_file_name("env_or_ramp.tsv"))?);
@@ -1369,7 +1434,7 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
             let flag = |b: bool| u8::from(b);
             writeln!(
                 out,
-                "{name}\t{i}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:.2}\t{:.0}\t{:.2}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:.2}\t{:.0}\t{:.2}\t{}\t{}\t{}\t{:.2}\t{:.0}\t{}\t{}\t{}\t{:.2}\t{:.2}\t{:.2}",
+                "{name}\t{i}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:.2}\t{:.0}\t{:.2}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:.2}\t{:.0}\t{:.2}\t{}\t{}\t{}\t{:.2}\t{:.0}\t{}\t{}\t{}\t{:.2}\t{:.2}\t{:.2}\t{}",
                 m.name,
                 r.class.name(),
                 r.rule,
@@ -1411,7 +1476,8 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
                 if r.env_map == 0xFF { String::new() } else { triple(r.env_tint) },
                 r.body,
                 r.shine,
-                r.tint_keep
+                r.tint_keep,
+                format!("{} {:.2} {:.2}", flag(m.fade_opaque), m.fade_alpha[0], m.fade_alpha[1])
             )?;
             glowing += u32::from(glow[3] != 0.0);
             if let Some(SheenRole::Sheen { body }) = roles.get(i).copied() {

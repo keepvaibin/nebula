@@ -202,6 +202,11 @@ pub struct MaterialIr {
     pub highlight_maps: Vec<u8>,
     pub highlight_rough: f32,
     pub highlight_gain: f32,
+    /// Drawn blended by alpha for a fade of the whole material: its alpha 0.9 or more over its maps' texels and its
+    /// vertices (c61, hit_record.rs mark_fades). The class rules take it as opaque.
+    pub fade_opaque: bool,
+    /// The alpha's low and high ends over those (c61, the census); -1 for a material not blended by alpha.
+    pub fade_alpha: [f32; 2],
 }
 
 impl GroupIr {
@@ -1370,5 +1375,7 @@ pub fn read_file(bytes: &[u8], source: Source, stats: &mut Stats) -> Result<Mode
             }
         }
     }
+    // c61: a material blended only for a fade (its alpha high over its texels and vertices) is opaque to the classes.
+    super::hit_record::mark_fades(&mut ir);
     Ok(ir)
 }
