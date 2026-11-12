@@ -49,13 +49,20 @@ namespace {
 
 // --- A small JSON reader: what facts and conditions hold ----------------------------------------------------------
 
+struct JsonMember;
 struct Json {
     enum Kind { Null, Bool, Number, String, Array, Object } kind = Null;
     bool boolean = false;
     double number = 0.0;
-    std::string text;                                  // a string's value, UTF-8 (escapes decoded)
-    std::vector<Json> items;                           // an array's
-    std::vector<std::pair<std::string, Json>> members; // an object's, as written
+    std::string text;                 // a string's value, UTF-8 (escapes decoded)
+    std::vector<Json> items;          // an array's
+    std::vector<JsonMember> members;  // an object's, as written
+};
+// A member by name. Not std::pair<std::string, Json>: a pair needs Json whole where Json declares its members, which
+// libstdc++ refuses (Linux, plan 8.1); a vector of a type declared here only is allowed (C++17).
+struct JsonMember {
+    std::string first;
+    Json second;
 };
 
 class JsonReader {
@@ -241,7 +248,7 @@ private:
                     if (!member) {
                         return std::nullopt;
                     }
-                    v.members.emplace_back(std::move(*name), std::move(*member));
+                    v.members.push_back(JsonMember{std::move(*name), std::move(*member)});
                     space();
                     if (at_ < text_.size() && text_[at_] == ',') {
                         ++at_;
