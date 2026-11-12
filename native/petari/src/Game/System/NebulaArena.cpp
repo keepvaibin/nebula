@@ -12,6 +12,7 @@ extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/System/GameAssets.hpp"
 #include "Game/System/LumaContentFx.hpp"
 #include "Game/System/LumaContentModel.hpp"
+#include "Game/System/LumaDraw.hpp"
 #include "Game/System/LumaDrawInst.hpp"
 #include "Game/System/LumaDrawView.hpp"
 #include "Game/System/LumaAnim.hpp"
@@ -170,6 +171,7 @@ void NebulaArena::destroy(NebulaArena* pArena) {
     luma::content::model::released(pArena->mStart, pArena->mEnd);
     // The mods' overrides of actors in it (draw.inst): ended, never touched again.
     luma::draw::inst::released(pArena->mStart, pArena->mEnd);
+    luma::draw::released(pArena->mStart, pArena->mEnd);  // draw.mesh's models made in it
     luma::draw::view::released(pArena->mStart, pArena->mEnd);  // views stop following actors in it
     // The mods' screens made in it (ui): ended, never touched again.
     luma::ui::released(pArena->mStart, pArena->mEnd);

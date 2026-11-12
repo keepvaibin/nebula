@@ -22,6 +22,8 @@ namespace luma {
         // GameSystem::update, after the services' frame start: textures freed last frame leave the renderer. One load
         // while none was freed.
         void frame();
+        // NebulaArena::destroy: draw.mesh's models made in [pStart, pEnd) (the scene's) are forgotten.
+        void released(const void* pStart, const void* pEnd);
         // For the 3-D calls (FB): the mod drawing now at a world point; null outside a world point's call.
         const LumaMod* inWorld();
         // The primitives `count` more for the mod drawing now: false past LUMA_DRAW_PRIMITIVES_MOST this frame (said
