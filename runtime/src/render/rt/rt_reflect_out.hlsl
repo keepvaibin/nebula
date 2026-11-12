@@ -71,7 +71,9 @@ void main(uint3 id : SV_DispatchThreadID) {
                 taps += 1.0f;
             }
         }
-        g_mirror[id.xy] = float4(sum / taps, 1.0f);
+        // Over what the light pass wrote here (a dielectric's sheen, FB b107; else 0, 0, 0, 1).
+        const float4 kept = g_mirror[id.xy];
+        g_mirror[id.xy] = float4(kept.rgb + sum / taps, kept.a);
         return;
     }
     const float4 material = g_material.Load(here);

@@ -226,6 +226,38 @@ void main(uint3 id : SV_DispatchThreadID) {
                 }
             }
         }
+        // A dielectric's sheen (FB b107, the director's item 2): the sun's GGX lobe and the sky's, F0 0.04, by the
+        // model, on what no class mirrors; a = 1 - F_env. The sky's part by V (the point's sky is not bound here).
+        if (!second && item != 0u && g_pass.y != 0u && (g_more.z & (1u | 32u)) == (1u | 32u) && (g_more.z & (128u | 512u)) == 0u &&
+            mirror.a == 1.0f && !any(mirror.rgb != 0.0f)) {
+            const uint sheen_look = g_items.Load(g_at.x + (item - 1u) * kItemBytes + 44u);
+            const uint sheen_class = sheen_look & 255u;
+            if (sheen_class != kClassGlass && sheen_class != kClassWater && sheen_class != kClassMetal) {
+                rt_shade_begin(g_pass.w);
+                const float t = rt_form();
+                if (t > 0.0f) {
+                    const float kSheenF0 = 0.04f, kSheenPi = 3.14159265f;
+                    const float rough_ = max(float(sheen_look >> 16u & 255u) / 255.0f, 0.05f);
+                    const float3 to_eye = -normalize(s.at);
+                    const float3 n = dot(s.smooth_, to_eye) > 0.0f ? s.smooth_ : s.normal;
+                    const float nv = max(dot(n, to_eye), 1e-3f);
+                    const float nl = saturate(dot(n, g_sun.xyz));
+                    const float a2 = max(rough_ * rough_ * rough_ * rough_, 1e-6f);  // GGX alpha = roughness^2
+                    const float3 h = normalize(g_sun.xyz + to_eye);
+                    const float nh = saturate(dot(n, h)), vh = saturate(dot(to_eye, h));
+                    const float dd = nh * nh * (a2 - 1.0f) + 1.0f;
+                    const float d = a2 / (kSheenPi * dd * dd);
+                    const float vis = 0.5f / max(nl * sqrt(nv * nv * (1.0f - a2) + a2) + nv * sqrt(nl * nl * (1.0f - a2) + a2), 1e-5f);
+                    const float g5 = 1.0f - vh;
+                    const float f = kSheenF0 + (1.0f - kSheenF0) * g5 * g5 * g5 * g5 * g5;
+                    const RtStageLight st = rt_stage_light();
+                    const float2 terms = mirror_terms(rough_, nv);
+                    const float f_env = saturate(kSheenF0 * terms.x + terms.y) * v;
+                    const float3 lobe = st.sun * (v * kSheenPi * d * vis * f * nl) + st.sky * rt_o_prime(rt_open_o()) * f_env;
+                    mirror = float4(t * min(lobe, 16.0f), 1.0f - t * f_env);
+                }
+            }
+        }
     }
     if (guide.a != 0.0f && (second || (g_more.z & 1024u) == 0u)) {  // under bit 10 R carries the highlights
         mirror.rgb += highlight_near(pixel, guide);
