@@ -865,6 +865,10 @@ pub struct GameModel {
     pub joints: Vec<String>,
     /// Each joint's parent joint (None for the root); empty when not known (then nothing is checked against it).
     pub parents: Vec<Option<usize>>,
+    /// Its materials' and textures' names, in its order (what an animation file's material tracks and texture swaps
+    /// stand for, animation contract 2); empty when not known.
+    pub materials: Vec<String>,
+    pub textures: Vec<String>,
 }
 
 impl GameModel {
@@ -890,7 +894,9 @@ impl GameModel {
             let parent = word(record.checked_add(24)?)?;
             parents.push((parent != NONE as usize).then_some(parent).filter(|p| *p < count));
         }
-        Some(GameModel { path: path.to_string(), joints, parents })
+        let names = super::model_write::names(block).ok();
+        let (materials, textures) = names.map_or_else(Default::default, |n| (n.materials, n.textures));
+        Some(GameModel { path: path.to_string(), joints, parents, materials, textures })
     }
 }
 
@@ -2116,6 +2122,7 @@ pub fn to_clip_files(bytes: &[u8], folder: Option<&Path>, file: &str, game: &Gam
     if animations.is_empty() {
         return Err(refuse("Cook.Anim.None", &[("file", file.to_string())]));
     }
+    let game_materials = game_materials(root, game)?;
     let mut names = BTreeSet::new();
     let mut files: ClipFiles = Vec::new();
     for (i, animation) in animations.iter().enumerate() {
@@ -2132,6 +2139,8 @@ pub fn to_clip_files(bytes: &[u8], folder: Option<&Path>, file: &str, game: &Gam
                         return Err(refuse("Cook.Anim.NotAJoint", &[("animation", name.clone()), ("node", shown), ("model", game.path.clone())]));
                     }
                 }
+                // A material's track (layer 4): checked with the others in material_clips.
+                (_, "pointer") if pointer_of(channel).and_then(material_pointer).is_some() => {}
                 _ => {
                     let pointer = channel["target"]["extensions"]["KHR_animation_pointer"]["pointer"].as_str().unwrap_or(path);
                     return Err(refuse("Cook.Anim.OnlyJoints", &[("animation", name.clone()), ("path", pointer.to_string())]));
@@ -2139,11 +2148,131 @@ pub fn to_clip_files(bytes: &[u8], folder: Option<&Path>, file: &str, game: &Gam
             }
         }
         let timing = Timing::of(&document, animation)?;
-        let clip = clip_of(&document, animation, &joints, &joint_of_node, &timing)?;
-        files.push((format!("{name}.{}", clip_extension(clip.kind)), super::clip::write(&clip)));
+        let of_materials = material_clips(&document, animation, &game_materials.materials, &game_materials.number, &game_materials.texture, &timing)?;
+        let moves_joints = animation["channels"]
+            .as_array()
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+            .iter()
+            .any(|c| matches!(c["target"]["path"].as_str(), Some("translation" | "rotation" | "scale")));
+        // A clip of materials only leaves the game's joint clip of that name as it is; one moving nothing is a still .bck.
+        if moves_joints || of_materials.is_empty() {
+            let clip = clip_of(&document, animation, &joints, &joint_of_node, &timing)?;
+            files.push((format!("{name}.{}", clip_extension(clip.kind)), super::clip::write(&clip)));
+        }
+        files.extend(of_materials.iter().map(|clip| (format!("{name}.{}", clip_extension(clip.kind)), super::clip::write(clip))));
     }
-    let facts = ModelFacts { replaced: game.path.clone(), joints: joints.len(), clips: files.len(), ..ModelFacts::default() };
+    let facts = ModelFacts {
+        replaced: game.path.clone(),
+        joints: joints.len(),
+        materials: game_materials.number.len(),
+        clips: files.len(),
+        ..ModelFacts::default()
+    };
     Ok((files, facts))
+}
+
+/// An animation file's materials as the game model's (layer 4): each material the file's animations move or swap
+/// stands for the game model's material of the same name, each image they swap in for its texture of that name (the
+/// image's `name`, else its file name without the ending).
+struct GameMaterials {
+    /// The file's materials by its numbers, named as the game's (a material no animation names keeps its own name),
+    /// and one more at the end (material_clips' list has the default material last).
+    materials: Vec<SourceMaterial>,
+    /// The game material's number of each file material an animation names.
+    number: BTreeMap<usize, u32>,
+    /// The game texture's number of each image an animation swaps in.
+    texture: BTreeMap<usize, u32>,
+}
+
+fn standing_material(name: String, images: Vec<(usize, u8)>, transform: Option<[f32; 5]>) -> SourceMaterial {
+    SourceMaterial {
+        name,
+        color: [255; 4],
+        images,
+        blend: false,
+        cutoff: None,
+        two_sided: false,
+        transform,
+        lit: LitIr::default(),
+        lit_maps: [None; 5],
+    }
+}
+
+fn game_materials(root: &Value, game: &GameModel) -> Result<GameMaterials> {
+    let file_materials = root["materials"].as_array().map(Vec::as_slice).unwrap_or_default();
+    let mut named_by_animation: BTreeSet<usize> = BTreeSet::new();
+    let mut swapped_textures: BTreeSet<usize> = BTreeSet::new();
+    for animation in root["animations"].as_array().map(Vec::as_slice).unwrap_or_default() {
+        for channel in animation["channels"].as_array().map(Vec::as_slice).unwrap_or_default() {
+            if let Some((material, _)) = pointer_of(channel).and_then(material_pointer) {
+                named_by_animation.insert(material);
+            }
+        }
+        for swap in animation["extras"]["nebula"]["texture_swaps"].as_array().map(Vec::as_slice).unwrap_or_default() {
+            if let Some(material) = swap["material"].as_u64() {
+                named_by_animation.insert(material as usize);
+            }
+            for key in swap["keys"].as_array().map(Vec::as_slice).unwrap_or_default() {
+                if let Some(texture) = key[1].as_u64() {
+                    swapped_textures.insert(texture as usize);
+                }
+            }
+        }
+    }
+    // A store from before the model kept its names (an older import) has none to match: said so, not "no such name".
+    let unread = || refuse("Cook.Anim.ModelUnread", &[("model", game.path.clone())]);
+    let find = |list: &[String], name: &str| -> Option<u32> {
+        list.iter().position(|n| n == name).or_else(|| list.iter().position(|n| n.eq_ignore_ascii_case(name))).map(|n| n as u32)
+    };
+    let mut materials = Vec::with_capacity(file_materials.len() + 1);
+    let mut number = BTreeMap::new();
+    for (i, material) in file_materials.iter().enumerate() {
+        let own = named(material, i);
+        let still = &material["pbrMetallicRoughness"]["baseColorTexture"]["extensions"]["KHR_texture_transform"];
+        let mut name = own.clone();
+        if named_by_animation.contains(&i) {
+            if game.materials.is_empty() {
+                return Err(unread());
+            }
+            let n = find(&game.materials, &own).ok_or_else(|| {
+                refuse("Cook.Anim.NoGameMaterial", &[("material", own.clone()), ("model", game.path.clone()), ("materials", game.materials.join(", "))])
+            })?;
+            name = game.materials[n as usize].clone();
+            number.insert(i, n);
+        }
+        let [sx, sy]: [f32; 2] = numbers(&still["scale"], [1.0; 2]);
+        let [ox, oy]: [f32; 2] = numbers(&still["offset"], [0.0; 2]);
+        // The game material's own texture is what moves and what a swap replaces: the file's material needs none (the
+        // image number is never read for it). Parts no channel moves keep the file material's still transform (glTF's
+        // default when it has none), not the game material's.
+        let transform = [sx, sy, still["rotation"].as_f64().unwrap_or(0.0) as f32, ox, oy];
+        materials.push(standing_material(name, vec![(usize::MAX, 0)], Some(transform)));
+    }
+    materials.push(standing_material("material".to_string(), Vec::new(), None));
+    let mut texture = BTreeMap::new();
+    for t in swapped_textures {
+        // A texture with no source: material_clips says where.
+        let Some(image) = root["textures"][t]["source"].as_u64() else { continue };
+        let image = image as usize;
+        let shown = &root["images"][image];
+        let own = shown["name"].as_str().filter(|s| !s.is_empty()).map(str::to_string).or_else(|| {
+            let uri = shown["uri"].as_str().filter(|u| !u.starts_with("data:"))?;
+            let file = uri.rsplit('/').next().unwrap_or(uri);
+            // Only the last ending goes: the game's texture names have dots of their own (KuriboAll.2).
+            Some(file.rsplit_once('.').map_or(file, |(stem, _)| stem).to_string()).filter(|s| !s.is_empty())
+        });
+        let Some(own) = own else {
+            return Err(refuse("Cook.Anim.TextureUnnamed", &[("texture", format!("/textures/{t}")), ("model", game.path.clone())]));
+        };
+        if game.textures.is_empty() {
+            return Err(unread());
+        }
+        let n = find(&game.textures, &own)
+            .ok_or_else(|| refuse("Cook.Anim.NoGameTexture", &[("texture", own.clone()), ("model", game.path.clone()), ("textures", game.textures.join(", "))]))?;
+        texture.insert(image, n);
+    }
+    Ok(GameMaterials { materials, number, texture })
 }
 
 /// The game counts animation frames at 60 a second.
@@ -2986,7 +3115,13 @@ mod tests {
     }
 
     fn game(joints: &[&str]) -> GameModel {
-        GameModel { path: "ObjectData/Kuribo.arc/Kuribo.bdl".into(), joints: joints.iter().map(|j| j.to_string()).collect(), parents: vec![] }
+        GameModel {
+            path: "ObjectData/Kuribo.arc/Kuribo.bdl".into(),
+            joints: joints.iter().map(|j| j.to_string()).collect(),
+            parents: vec![],
+            materials: vec!["body_v".into(), "eye_v".into()],
+            textures: vec!["kuribo_body".into(), "kuribo_eye".into(), "kuribo_eye.closed".into()],
+        }
     }
 
     #[test]
@@ -3073,8 +3208,8 @@ mod tests {
         assert_eq!(fails(&weights, &game), ("Cook.Anim.OnlyJoints", vec![own(("animation", "Wave")), own(("path", "weights"))]));
         let mut pointer = document.clone();
         pointer["animations"][0]["channels"][0]["target"] = serde_json::json!({ "path": "pointer",
-            "extensions": { "KHR_animation_pointer": { "pointer": "/materials/0/pbrMetallicRoughness/baseColorFactor" } } });
-        assert_eq!(fails(&pointer, &game), ("Cook.Anim.OnlyJoints", vec![own(("animation", "Wave")), own(("path", "/materials/0/pbrMetallicRoughness/baseColorFactor"))]));
+            "extensions": { "KHR_animation_pointer": { "pointer": "/nodes/1/translation" } } });
+        assert_eq!(fails(&pointer, &game), ("Cook.Anim.OnlyJoints", vec![own(("animation", "Wave")), own(("path", "/nodes/1/translation"))]));
         let mut unnamed = document.clone();
         unnamed["animations"][0].as_object_mut().unwrap().remove("name");
         assert_eq!(fails(&unnamed, &game), ("Cook.Anim.NoName", vec![own(("animation", "#0"))]));
@@ -3085,6 +3220,84 @@ mod tests {
         let mut none = document.clone();
         none.as_object_mut().unwrap().remove("animations");
         assert_eq!(fails(&none, &game), ("Cook.Anim.None", vec![own(("file", "ObjectData/Kuribo.arc/Arm.anim.glb"))]));
+    }
+
+    /// The arm with a material `name`, an image `image` named so, and a clip `Glow` moving that material's colour and
+    /// texture offset and swapping its texture (layer 4).
+    fn glowing_arm(name: &str, image: Value) -> Value {
+        let mut document = arm(false, [0.0, 1.0], std::f32::consts::FRAC_PI_4.sin());
+        document["materials"] = serde_json::json!([{ "name": "unused" }, { "name": name }]);
+        document["images"] = serde_json::json!([image]);
+        document["textures"] = serde_json::json!([{ "source": 0 }]);
+        let views = add_floats(&mut document, &[(2, "SCALAR", vec![0.0, 0.5]), (2, "VEC4", vec![1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0]), (2, "VEC2", vec![0.0, 0.0, 0.5, 0.0])]);
+        let pointer = |p: &str| serde_json::json!({ "path": "pointer", "extensions": { "KHR_animation_pointer": { "pointer": p } } });
+        document["animations"].as_array_mut().unwrap().push(serde_json::json!({ "name": "Glow",
+            "samplers": [{ "input": views[0], "output": views[1] }, { "input": views[0], "output": views[2] }],
+            "channels": [
+                { "sampler": 0, "target": pointer("/materials/1/pbrMetallicRoughness/baseColorFactor") },
+                { "sampler": 1, "target": pointer("/materials/1/pbrMetallicRoughness/baseColorTexture/extensions/KHR_texture_transform/offset") },
+            ],
+            "extras": { "nebula": { "texture_swaps": [{ "material": 1, "keys": [[0.0, 0], [0.25, 0]] }] } } }));
+        document
+    }
+
+    /// A cooked clip's first target's material number (clip.rs: the targets' place is word 8; a target's material is
+    /// its third word), and for a pattern clip its first index.
+    fn first_target(clip: &[u8]) -> (u32, Option<u32>) {
+        let word = |at: usize| u32::from_le_bytes(clip[at..at + 4].try_into().unwrap());
+        let pattern = clip[12] == super::super::clip::KIND_PATTERN;
+        (word(word(32) as usize + 8), pattern.then(|| word(word(36) as usize)))
+    }
+
+    #[test]
+    fn an_animation_file_moves_the_game_models_materials_by_name() {
+        let game = arm_model(&[None, Some(0), Some(1)]);
+        let (files, facts) = clip_files(&glowing_arm("EYE_V", serde_json::json!({ "uri": "tex/kuribo_eye.closed.png" })), &game).unwrap();
+        // Wave moves joints; Glow only materials, so the game's joint clip Glow (if any) stays.
+        let names: Vec<&str> = files.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, ["Wave.bck", "Glow.bpk", "Glow.btk", "Glow.btp"]);
+        assert_eq!((facts.materials, facts.clips), (1, 4));
+        // Each material clip names the game's material eye_v (its number 1, its name as the game writes it), and the swap
+        // the game's texture kuribo_eye.closed (number 2), found by the image's file name less its last ending.
+        for (name, clip) in &files[1..] {
+            let (material, index) = first_target(clip);
+            assert_eq!(material, 1, "{name}");
+            assert!(clip.windows(5).any(|w| w == b"eye_v"), "{name}");
+            if name.ends_with(".btp") {
+                assert_eq!(index, Some(2));
+            }
+        }
+        // The image's own name wins over its file's.
+        let named = clip_files(&glowing_arm("eye_v", serde_json::json!({ "name": "kuribo_eye", "uri": "x.png" })), &game).unwrap().0;
+        assert_eq!(first_target(&named[3].1).1, Some(1));
+        let fails = |document: &Value| refused(&clip_files(document, &game).expect_err("refused"));
+        assert_eq!(
+            fails(&glowing_arm("lid", serde_json::json!({ "name": "kuribo_eye" }))),
+            ("Cook.Anim.NoGameMaterial", vec![own(("material", "lid")), own(("model", "ObjectData/Kuribo.arc/Kuribo.bdl")), own(("materials", "body_v, eye_v"))])
+        );
+        assert_eq!(
+            fails(&glowing_arm("eye_v", serde_json::json!({ "name": "kuribo_wink" }))),
+            (
+                "Cook.Anim.NoGameTexture",
+                vec![own(("texture", "kuribo_wink")), own(("model", "ObjectData/Kuribo.arc/Kuribo.bdl")), own(("textures", "kuribo_body, kuribo_eye, kuribo_eye.closed"))]
+            )
+        );
+        assert_eq!(
+            fails(&glowing_arm("eye_v", serde_json::json!({ "uri": "data:image/png;base64,AAAA" }))),
+            ("Cook.Anim.TextureUnnamed", vec![own(("texture", "/textures/0")), own(("model", "ObjectData/Kuribo.arc/Kuribo.bdl"))])
+        );
+        // A pointer to a material part no clip moves is the model's own refusal.
+        let mut other = glowing_arm("eye_v", serde_json::json!({ "name": "kuribo_eye" }));
+        other["animations"][1]["channels"][0]["target"]["extensions"]["KHR_animation_pointer"]["pointer"] = "/materials/1/emissiveStrength".into();
+        // A game model read without its names (a store from an older import).
+        let old = GameModel { materials: vec![], textures: vec![], ..game.clone() };
+        let old_store = refused(&clip_files(&glowing_arm("eye_v", serde_json::json!({ "name": "kuribo_eye" })), &old).expect_err("refused"));
+        assert_eq!(old_store, ("Cook.Anim.ModelUnread", vec![own(("model", "ObjectData/Kuribo.arc/Kuribo.bdl"))]));
+        assert_eq!(fails(&other).0, "Cook.Clip.Pointer");
+        // The material an animation names must be in the file.
+        let mut missing = glowing_arm("eye_v", serde_json::json!({ "name": "kuribo_eye" }));
+        missing["animations"][1]["channels"][0]["target"]["extensions"]["KHR_animation_pointer"]["pointer"] = "/materials/5/pbrMetallicRoughness/baseColorFactor".into();
+        assert_eq!(fails(&missing).0, "Cook.Model.Invalid");
     }
 
     #[test]
