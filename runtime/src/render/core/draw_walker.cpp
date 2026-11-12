@@ -1145,7 +1145,16 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
             encoder.bind_textures(lists);
         }
         root.first_instance = i;
+        // Shown as it is (program.hlsli draw flag 64; the director's D2): the sky and what is drawn with it, and a
+        // surface the cooker classed glowing: no share, no added light, no mirror. The sky takes no air in front (8).
+        const std::uint32_t category = (item.flags & NEBULA_ITEM_CATEGORY_MASK) >> NEBULA_ITEM_CATEGORY_SHIFT;
+        const bool sky_draw = category == NEBULA_CATEGORY_SKY || category == NEBULA_CATEGORY_AIR || category == NEBULA_CATEGORY_SUN ||
+                              category == NEBULA_CATEGORY_ASTRO_DOME_SKY;
+        const bool shown = rt_light_on_ && scene_layer &&
+                           (sky_draw || ((item.flags & (NEBULA_ITEM_RING | NEBULA_ITEM_INSTANCES)) == 0u &&
+                                         registries_.mesh(item.mesh).hit_class == NEBULA_HIT_EMISSIVE));
         root.flags = ((item.flags & NEBULA_ITEM_SPREAD_LINES) != 0u ? 1u : 0u) |
+                     (shown ? 64u : 0u) |
                      ((item.flags & NEBULA_ITEM_SPREAD_POINTS) != 0u ? 2u : 0u) |
                      (rt_light_on_ && rt_volume_drawn_ && scene_layer && rt_volume_reads(item, state) ? 4u : 0u) |
                      // A blended surface off the one the light pass saw (program.hlsli traced_by_air; FB 15.2).
@@ -1161,7 +1170,7 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
                           : 0u) |
                      // The air in front (traced_scatter): a draw that covers what is behind it or blends over it by
                      // its alpha (an added one would add the air twice).
-                     (rt_light_on_ && rt_scatter_drawn_ && scene_layer && state_color_write(state) &&
+                     (rt_light_on_ && rt_scatter_drawn_ && scene_layer && !sky_draw && state_color_write(state) &&
                               ((state & 3u) == NEBULA_BLEND_REPLACE ||
                                ((state & 3u) == NEBULA_BLEND_ADD && ((state >> 2u) & 15u) == NEBULA_FACTOR_SRC_ALPHA &&
                                 ((state >> 6u) & 15u) == NEBULA_FACTOR_INV_SRC_ALPHA))

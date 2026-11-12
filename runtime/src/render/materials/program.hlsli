@@ -304,8 +304,8 @@ bool traced_by_air(float4 pixel) {
 // (draw flag 32: a glow shows no reflection of its own); where the second layer's guide names a surface here, only for
 // the draw at that surface's depth; else it is the opaque layer's (opaque draws, decals on them): yes.
 bool traced_mirror_own(float4 pixel) {
-    if ((draw_flags & 32u) != 0u) {
-        return false;
+    if ((draw_flags & (32u | 64u)) != 0u) {
+        return false;  // a glow, or a draw shown as it is (flag 64)
     }
     if (view_blend_guide.y < 0.5 || view_blend_guide.y > 1.5) {
         return true;
@@ -329,8 +329,10 @@ float3 traced_srgb(float3 l) {
     return lerp(1.055 * pow(l, 1.0 / 2.4) - 0.055, l * 12.92, step(l, 0.0031308));
 }
 float4 traced_at(float4 pixel) {
-    if ((view_flags & 8u) == 0u || traced_by_air(pixel)) {
-        return float4(1.0, 1.0, 1.0, 1.0);  // the volume's share is all of its light (PROGRAM_LIGHT)
+    if ((view_flags & 8u) == 0u || (draw_flags & 64u) != 0u || traced_by_air(pixel)) {
+        // The volume's share is all of its light (PROGRAM_LIGHT); a draw shown as it is (flag 64: the sky, a glow)
+        // takes all of every light: a lit program's sums are its own.
+        return float4(1.0, 1.0, 1.0, 1.0);
     }
     return gTextures[uint(view_traced.x)].Load(int3(pixel.xy, 0));
 }
@@ -399,7 +401,7 @@ float4 env_fetch(float4 painted, float4 pixel) {
 // that pass ran; else O as it is. `coloured` says which.
 float3 traced_o(float4 light, float4 pixel, out bool coloured) {
     coloured = false;
-    if (view_volume[2].z == 0.0 || (draw_flags & 8u) != 0u || traced_by_air(pixel)) {
+    if (view_volume[2].z == 0.0 || (draw_flags & (8u | 64u)) != 0u || traced_by_air(pixel)) {
         return light.aaa;
     }
     const float3 ratio = gTextures[uint(view_volume[2].z) - 1u].Load(int3(pixel.xy, 0)).rgb;
@@ -576,7 +578,10 @@ float4 program_fogged_at(float4 c, float4 pixel) {
 #endif
 // A program returns inside its entry, whose input `i` holds the pixel. The light on the surface, the game's fog, the
 // light in the air between the eye and the surface.
-#define PROGRAM_LIGHT(c) traced_scatter(program_fogged_at(traced_by_air(i.pos) ? traced_air(c, i.pos) : traced_colour(c, i.pos), i.pos), i.pos)
+// A draw shown as it is (draw flag 64: the sky and what is drawn with it, a glowing surface; D2): its colour and the
+// game's fog as authored, and the air in front where the host asks (flag 8: never on the sky).
+#define PROGRAM_LIGHT(c) ((draw_flags & 64u) != 0u ? traced_scatter(program_fogged(c), i.pos) \
+                                                   : traced_scatter(program_fogged_at(traced_by_air(i.pos) ? traced_air(c, i.pos) : traced_colour(c, i.pos), i.pos), i.pos))
 #else
 // Fog at once (the same math as the fog step had in place).
 float3 program_fog(float3 c, float3 colour, float amount) { return lerp(c, colour, amount); }
