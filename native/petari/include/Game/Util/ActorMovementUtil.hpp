@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
+#include "Game/LumaMarks.hpp"
 #include <nebula_geometry.hpp>
 
 
@@ -31,10 +32,10 @@ namespace MR {
     bool isNearPlayer(const Vec3f&, f32);
     bool isNearPlayerPose(const LiveActor*, f32, f32);
     bool isNearPlayerHorizontal(const LiveActor*, f32);
-    void calcFrontVec(Vec3f*, const LiveActor*);
-    void calcUpVec(Vec3f*, const LiveActor*);
-    void calcSideVec(Vec3f*, const LiveActor*);
-    void calcPositionUpOffset(Vec3f*, const LiveActor*, f32);
+    void calcFrontVec(LUMA_OUT Vec3f*, const LiveActor*);
+    void calcUpVec(LUMA_OUT Vec3f*, const LiveActor*);
+    void calcSideVec(LUMA_OUT Vec3f*, const LiveActor*);
+    void calcPositionUpOffset(LUMA_OUT Vec3f*, const LiveActor*, f32);
     void calcVecToPlayerH(Vec3f*, const LiveActor*, const Vec3f*);
     void calcVecFromPlayerH(Vec3f*, const LiveActor*);
     void calcVecToTargetPosH(Vec3f*, const LiveActor*, const Vec3f&, const Vec3f*);
@@ -78,11 +79,11 @@ namespace MR {
     void resetPosition(LiveActor*, const Vec3f&);
     void resetPosition(LiveActor*, const char*);
     bool makeMtxOnMapCollision(Pos3f*, LiveActor*, f32);
-    void calcVelocityMoveToDirectionHorizon(Vec3f*, const LiveActor*, const Vec3f&, f32);
-    void calcVelocityMoveToDirectionHorizon(Vec3f*, const LiveActor*, const Vec3f&, f32, f32, f32, f32);
-    void calcVelocityMoveToDirection(Vec3f*, const LiveActor*, const Vec3f&, f32);
-    void calcVelocityMoveToDirection(Vec3f*, const LiveActor*, const Vec3f&, f32, f32, f32, f32);
-    void calcVelocityMoveToTarget(Vec3f*, const LiveActor*, const Vec3f&, f32);
+    void calcVelocityMoveToDirectionHorizon(LUMA_OUT Vec3f*, const LiveActor*, const Vec3f&, f32);
+    void calcVelocityMoveToDirectionHorizon(LUMA_OUT Vec3f*, const LiveActor*, const Vec3f&, f32, f32, f32, f32);
+    void calcVelocityMoveToDirection(LUMA_OUT Vec3f*, const LiveActor*, const Vec3f&, f32);
+    void calcVelocityMoveToDirection(LUMA_OUT Vec3f*, const LiveActor*, const Vec3f&, f32, f32, f32, f32);
+    void calcVelocityMoveToTarget(LUMA_OUT Vec3f*, const LiveActor*, const Vec3f&, f32);
     void addVelocityMoveToDirection(LiveActor*, const Vec3f&, f32);
     void addVelocityMoveToTarget(LiveActor*, const Vec3f&, f32);
     void addVelocityMoveToTarget(LiveActor*, const Vec3f&, f32, f32, f32, f32);
@@ -131,18 +132,18 @@ namespace MR {
     bool calcVelocityRailMoveOnGround(Vec3f*, const LiveActor*);
     bool calcVelocityAreaOrRailMoveOnGround(Vec3f*, const LiveActor*);
     void rotateDirectionGravityDegree(const LiveActor*, Vec3f*, f32);
-    void turnDirection(const LiveActor*, Vec3f*, const Vec3f&, f32);
-    void turnDirectionDegree(const LiveActor*, Vec3f*, const Vec3f&, f32);
-    void turnDirectionToTarget(const LiveActor*, Vec3f*, const Vec3f&, f32);
-    void turnDirectionToTargetDegree(const LiveActor*, Vec3f*, const Vec3f&, f32);
-    void turnDirectionToTargetDegreeHorizon(const LiveActor*, Vec3f*, const Vec3f&, f32);
+    void turnDirection(const LiveActor*, LUMA_INOUT Vec3f*, const Vec3f&, f32);
+    void turnDirectionDegree(const LiveActor*, LUMA_INOUT Vec3f*, const Vec3f&, f32);
+    void turnDirectionToTarget(const LiveActor*, LUMA_INOUT Vec3f*, const Vec3f&, f32);
+    void turnDirectionToTargetDegree(const LiveActor*, LUMA_INOUT Vec3f*, const Vec3f&, f32);
+    void turnDirectionToTargetDegreeHorizon(const LiveActor*, LUMA_INOUT Vec3f*, const Vec3f&, f32);
     bool turnDirectionToTargetUseGroundNormalDegree(const LiveActor*, Vec3f*, const Vec3f&, f32);
-    void turnDirectionToPlayerDegree(const LiveActor*, Vec3f*, f32);
-    void turnDirectionToPlayerDegreeHorizon(const LiveActor*, Vec3f*, f32);
-    void turnDirectionFromTargetDegree(const LiveActor*, Vec3f*, const Vec3f&, f32);
-    void turnDirectionFromTargetDegreeHorizon(const LiveActor*, Vec3f*, const Vec3f&, f32);
-    void turnDirectionFromPlayerDegree(const LiveActor*, Vec3f*, f32);
-    void turnDirectionFromPlayerDegreeHorizon(const LiveActor*, Vec3f*, f32);
+    void turnDirectionToPlayerDegree(const LiveActor*, LUMA_INOUT Vec3f*, f32);
+    void turnDirectionToPlayerDegreeHorizon(const LiveActor*, LUMA_INOUT Vec3f*, f32);
+    void turnDirectionFromTargetDegree(const LiveActor*, LUMA_INOUT Vec3f*, const Vec3f&, f32);
+    void turnDirectionFromTargetDegreeHorizon(const LiveActor*, LUMA_INOUT Vec3f*, const Vec3f&, f32);
+    void turnDirectionFromPlayerDegree(const LiveActor*, LUMA_INOUT Vec3f*, f32);
+    void turnDirectionFromPlayerDegreeHorizon(const LiveActor*, LUMA_INOUT Vec3f*, f32);
     void turnDirectionAndGravityH(Quat4f*, const LiveActor*, const Vec3f&, f32, f32);
     void turnDirectionAndGravityH(LiveActor*, const Vec3f&, f32, f32);
     void turnDirectionToGround(const LiveActor*, Vec3f*);
