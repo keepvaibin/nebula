@@ -81,6 +81,11 @@ public:
     void silenceSeForCutsceneSkip(bool silent);
     void fadeOutForQuit();
     void holdForSettingsMenu(bool hold, bool stayFaded);
+    // LumaCore's world clock (services-time 7): the world's sound held (a mod holds the world, or its rate is beyond
+    // what the sound follows) or given back.
+    void holdForWorld(bool hold);
+    void updateWorldHold();
+    void keepWorldHold();
     void exitPauseMenu();
     void updatePauseMenu();
     bool isPauseMenuActive() const;
@@ -146,6 +151,12 @@ public:
     s32 mPauseMenuState;
     s32 mPauseMenuToggleTime;
     bool mIsErrorWindowOpen;
+    // The world's hold (holdForWorld): held now; the settings menu holds too; the music was paused by it; frames left of
+    // the fade before the pause (-1 none).
+    bool mWorldHeld = false;
+    bool mSettingsHeld = false;
+    bool mPausedByWorld = false;
+    s32 mWorldHoldTime = -1;
     AudLimitedSoundInfo* mLimitedSoundInfo;
     SpkSystem* mSpkSystem;
 };

@@ -130,6 +130,7 @@ add_library(galaxy_render_vk STATIC
     "${galaxy_utility_spirv_dir}/utility_spirv_data.h"
     ${rt}/runtime_settings.cpp
     ${rt}/host_extension.cpp
+    ${rt}/luma_services_host.cpp
     ${rt}/achievements.cpp
     ${rt}/stats.cpp
     ${rt}/input_bindings.cpp
@@ -156,6 +157,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/mod_start_check.cpp
     ${rt}/mod_plugins.cpp
     ${rt}/mods.cpp
+    ${rt}/mod_consent.cpp
     ${rt}/texture_categories.cpp
     ${rt}/dolphin_pack.cpp
     ${rt}/crash_report.cpp
@@ -252,6 +254,7 @@ if(ANDROID)
         ${rt}/mii_formats.cpp
         ${rt}/mod_import.cpp
         ${rt}/mods.cpp
+        ${rt}/mod_consent.cpp
         ${rt}/mod_xml.cpp
         ${rt}/luma.cpp
         ${rt}/texture_categories.cpp

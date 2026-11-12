@@ -4,6 +4,7 @@
 // defaults and patch order are Riivolution's as Dolphin reproduces them.
 
 #include "galaxy/mods.h"
+#include "galaxy/mod_consent.h"
 
 #include <atomic>
 #if defined(__APPLE__)
@@ -724,6 +725,8 @@ struct SavedMod {
     std::map<std::string, unsigned> options;
     std::map<std::string, std::string> choice_ids;  // a .luma's choices, by option
     std::string code_ok;  // the libraries the player allowed
+    std::string code_no;  // the libraries the player said Not now to
+    std::map<std::string, PermissionAnswer> permissions;  // permission.<name>=yes|no <digest>
 };
 
 std::string escape_key(std::string_view s) {
@@ -838,6 +841,15 @@ std::map<std::string, SavedMod> read_saved(const fs::path& file) {
             current->categories_off = static_cast<std::uint32_t>(std::strtoul(value.c_str(), nullptr, 10));
         } else if (key == "code_ok") {
             current->code_ok = value;
+        } else if (key == "code_no") {
+            current->code_no = value;
+        } else if (key.starts_with("permission.")) {
+            // "yes <digest>" or "no <digest>"; anything else is not an answer, so the player is asked again.
+            const std::size_t space = value.find(' ');
+            const std::string said = value.substr(0, space);
+            if (space != std::string::npos && (said == "yes" || said == "no") && space + 1u < value.size()) {
+                current->permissions[unescape_key(std::string_view(key).substr(11))] = {said == "yes", value.substr(space + 1u)};
+            }
         } else if (key.starts_with("choice.")) {
             current->choice_ids[unescape_key(std::string_view(key).substr(7))] = value;
         } else if (key.starts_with("option.")) {
@@ -1158,6 +1170,8 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
             }
         }
         if (mod.package) {
+            // The answers as read, whatever the manifest does this start: one not read keeps them (consent 1.2).
+            if (s != nullptr) mod.permission_answers = s->permissions;
             std::optional<luma::Manifest> manifest = luma::read_manifest(dir);
             if (!manifest) {
                 mod.problem = "THIS FILE IS DAMAGED";
@@ -1178,6 +1192,9 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                 }
                 mod.code_token = plugin_token(dir, *manifest);
                 mod.code_allowed = !mod.code_token.empty() && s != nullptr && s->code_ok == mod.code_token;
+                mod.code_declined = !mod.code_token.empty() && !mod.code_allowed && s != nullptr && s->code_no == mod.code_token;
+                mod.code_changed = !mod.code_token.empty() && !mod.code_allowed && !mod.code_declined && s != nullptr &&
+                                   (!s->code_ok.empty() || !s->code_no.empty());
                 if (mod.problem.empty() && !mod.code_token.empty() && s_code_off_after_crash.load(std::memory_order_relaxed)) {
                     mod.problem = "THIS MOD'S CODE IS OFF AFTER A CRASH. RESTART TO TRY IT AGAIN";
                 }
@@ -1496,6 +1513,24 @@ bool save_mod_settings(std::span<const ModInfo> mods) {
         if (!mod.own_text) out << "text=game\n";
         if (mod.categories_off != 0u) out << "textures_off=" << mod.categories_off << '\n';
         if (mod.code_allowed) out << "code_ok=" << mod.code_token << '\n';
+        if (mod.code_declined) out << "code_no=" << mod.code_token << '\n';
+        // Answers for the permissions it declares now, with the digest each was given for (a stale one is asked again);
+        // an answer for a permission it no longer declares is dropped here. A mod whose manifest was not read this start
+        // keeps every answer as read (consent 1.2).
+        const auto write_answer = [&out](const std::string& name, const PermissionAnswer& answer) {
+            out << "permission." << escape_key(name) << '=' << (answer.granted ? "yes " : "no ") << answer.digest << '\n';
+        };
+        if (mod.luma != nullptr) {
+            for (const luma::Permission& permission : mod.luma->permissions) {
+                const auto answer = mod.permission_answers.find(permission.name);
+                if (answer == mod.permission_answers.end()) continue;
+                write_answer(permission.name, answer->second);
+            }
+        } else {
+            for (const auto& [name, answer] : mod.permission_answers) {
+                write_answer(name, answer);
+            }
+        }
         for (const ModOption& o : mod.options) {
             out << "option." << escape_key(o.key) << '=' << o.selected << '\n';
             if (!o.choice_ids.empty()) {
@@ -1704,7 +1739,7 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                     break;
                 }
                 const fs::path library = mod.path / fs::path(from_utf8(binary->second));
-                plan.plugins.push_back({library, mod.id, mod.luma->version, situation.options, code_hash(library), {}});
+                plan.plugins.push_back({library, mod.id, mod.luma->version, situation.options, code_hash(library), {}, granted_permissions(mod)});
                 for (const luma::Dependency& need : mod.luma->needs) plan.plugins.back().needs.push_back(need.id);
             }
             std::rotate(plan.plugins.begin(), plan.plugins.begin() + static_cast<std::ptrdiff_t>(lower_mods), plan.plugins.end());

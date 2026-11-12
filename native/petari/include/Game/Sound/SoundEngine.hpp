@@ -262,6 +262,8 @@ private:
     void apply(const SoundCommand& rCommand);
     void applyPlayer(SoundPlayer* pPlayer, const SoundCommand& rCommand);
     void runTracks();
+    // The jobs by place (the tracks, the streams; with `speaker` the remote speaker's mix too).
+    void runJobs(bool speaker);
     void setOutputLevel(f32 level);
     void setEffectLine(const EffectLineCommand& rLine);
     void resetStep();
@@ -283,6 +285,10 @@ private:
     f32 mMixerGain = 4.0f;
     u32 mOutputMode = 1;
     u32 mFramesAsked = 0;
+    // The world clock's tape (services-time 7): the rate followed now (thousandths) and the thousandths of a logic tick
+    // carried to the next output tick. The audio clock's thread only.
+    u32 mTapeRate = 1000;
+    u32 mTapeAcc = 0;
 
     // The banks by number, their oscillators, and the wave banks with their tables.
     SoundBank mBanks[cBankNumbers];

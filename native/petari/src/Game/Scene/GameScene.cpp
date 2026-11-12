@@ -389,6 +389,10 @@ bool GameScene::isExecScenarioStarter() const {
     return isNerve(GET_NERVE(GameScene, GameSceneScenarioStarter));
 }
 
+bool GameScene::isExecPauseMenuOrGalaxyMap() const {
+    return isNerve(GET_NERVE(GameScene, GameScenePauseMenu)) || isNerve(GET_NERVE(GameScene, GameSceneGalaxyMap));
+}
+
 bool GameScene::isExecStageClearDemo() const {
     return isNerve(GET_NERVE(GameScene, GameScenePowerStarGet)) || isNerve(GET_NERVE(GameScene, GameSceneGrandStarGet));
 }

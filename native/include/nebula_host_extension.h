@@ -138,6 +138,11 @@ typedef struct NebulaHostExtension {
     /* Game thread: a service the extension offers to mods (LumaCore.service), or null. The first extension that gives
        one is used. */
     const void* (*service)(void* user, const char* name, uint32_t major, uint32_t minor);
+    /* Services the extension provides through LumaCore's registry (luma_service_provider.h; services-registry 14), each
+       named "test." something, registered by the host before the first mod loads: a test's own services, with versions
+       and permissions it controls. Any other name refuses the extension at attach. They stay valid for the run. */
+    const struct LumaServiceProvider* const* luma_providers;
+    uint32_t luma_provider_count;
 } NebulaHostExtension;
 
 typedef const NebulaHostExtension* (*NebulaExtensionAttach)(const NebulaHostForExtension* host);

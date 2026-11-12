@@ -22,6 +22,9 @@ struct PluginFile {
     std::map<std::string, std::string> options;  // option id -> choice id
     std::string code;  // code_hash taken at start; a library that changed before it loads is not run
     std::vector<std::string> needs;  // the ids of the mods its manifest needs (loader D3-3: those start before it)
+    // The permissions the player granted it, for its declarations as they are now (mod_consent.h granted_permissions):
+    // what luma_load_mod is given. Filled once when the start's plan is made.
+    std::vector<std::string> granted;
 };
 
 // A hex hash of every file in a plugin library's folder (names and contents), so the files it ships with count too.
