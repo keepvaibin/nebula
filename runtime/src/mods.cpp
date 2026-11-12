@@ -728,6 +728,7 @@ struct SavedMod {
     bool own_text = true;
     std::map<std::string, unsigned> options;
     std::map<std::string, std::string> choice_ids;  // a .luma's choices, by option
+    std::map<std::string, std::string> texts;       // a .luma's text options, by option (text.<key>=<value>)
     std::string code_ok;  // the libraries the player allowed
     std::string code_no;  // the libraries the player said Not now to
     bool install_ask_never = false;  // install.ask=no
@@ -859,6 +860,8 @@ std::map<std::string, SavedMod> read_saved(const fs::path& file) {
             }
         } else if (key.starts_with("choice.")) {
             current->choice_ids[unescape_key(std::string_view(key).substr(7))] = value;
+        } else if (key.starts_with("text.")) {
+            current->texts[unescape_key(std::string_view(key).substr(5))] = unescape_key(value);
         } else if (key.starts_with("option.")) {
             current->options[unescape_key(std::string_view(key).substr(7))] =
                 static_cast<unsigned>(std::strtoul(value.c_str(), nullptr, 10));
@@ -1315,6 +1318,17 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                     }
                     mod.options.push_back(std::move(option));
                 }
+                // Text options' typed values (mods.ini text.<key>, services-mods 8.4). One that no longer fits (an
+                // update shortened max_length) is dropped: the manifest's default stands.
+                if (s != nullptr && !s->texts.empty()) {
+                    for (const luma::Option& entry : manifest->options) {
+                        const auto it = s->texts.find(entry.id);
+                        if (entry.kind != "text" || it == s->texts.end() || !text_option_fits(it->second, entry.max_length)) continue;
+                        for (ModOption& option : mod.options) {
+                            if (option.key == entry.id && option.kind == "text") option.text = it->second;
+                        }
+                    }
+                }
                 if (manifest->save_player_can_change && manifest->save_mode != luma::SaveMode::Shared) {
                     ModOption option;
                     option.key = kSavesOption;
@@ -1548,6 +1562,42 @@ void set_mod_enabled(std::vector<ModInfo>& mods, std::size_t index, bool enabled
     for (std::size_t i = 0; i < mods.size(); ++i) mods[i].order = static_cast<unsigned>(i + 1u);
 }
 
+bool text_option_fits(std::string_view text, std::uint32_t max_length) noexcept {
+    std::uint32_t points = 0u;
+    for (std::size_t i = 0; i < text.size();) {
+        const auto b = static_cast<unsigned char>(text[i]);
+        std::size_t more = 0u;
+        std::uint32_t point = 0u;
+        if (b < 0x80u) {
+            point = b;
+        } else if ((b & 0xE0u) == 0xC0u) {
+            more = 1u;
+            point = b & 0x1Fu;
+        } else if ((b & 0xF0u) == 0xE0u) {
+            more = 2u;
+            point = b & 0x0Fu;
+        } else if ((b & 0xF8u) == 0xF0u) {
+            more = 3u;
+            point = b & 0x07u;
+        } else {
+            return false;
+        }
+        if (i + more >= text.size()) return false;  // cut short
+        for (std::size_t k = 1; k <= more; ++k) {
+            const auto c = static_cast<unsigned char>(text[i + k]);
+            if ((c & 0xC0u) != 0x80u) return false;
+            point = (point << 6u) | (c & 0x3Fu);
+        }
+        // Shortest form only, no surrogates, nothing past U+10FFFF; no control characters (C0, DEL, C1).
+        static constexpr std::uint32_t kLeast[4] = {0u, 0x80u, 0x800u, 0x10000u};
+        if (point < kLeast[more] || (point >= 0xD800u && point <= 0xDFFFu) || point > 0x10FFFFu) return false;
+        if (point < 0x20u || (point >= 0x7Fu && point <= 0x9Fu)) return false;
+        if (++points > max_length) return false;
+        i += more + 1u;
+    }
+    return true;
+}
+
 bool save_mod_settings(std::span<const ModInfo> mods) {
     fs::path file;
     {
@@ -1585,6 +1635,11 @@ bool save_mod_settings(std::span<const ModInfo> mods) {
             }
         }
         for (const ModOption& o : mod.options) {
+            if (o.kind == "text" || o.kind == "key") {
+                // A key option is bound in input's store (plan 2.5), not here; an empty text is the default's.
+                if (o.kind == "text" && !o.text.empty()) out << "text." << escape_key(o.key) << '=' << escape_key(o.text) << '\n';
+                continue;
+            }
             out << "option." << escape_key(o.key) << '=' << o.selected << '\n';
             if (!o.choice_ids.empty()) {
                 out << "choice." << escape_key(o.key) << '=' << (o.selected != 0u && o.selected <= o.choice_ids.size() ? o.choice_ids[o.selected - 1u] : std::string("off")) << '\n';

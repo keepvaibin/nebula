@@ -183,6 +183,10 @@ bool native_settings_pad_key(std::uintptr_t virtual_key);
 [[nodiscard]] bool native_settings_capture_mouse(galaxy::input::MouseButton button);
 // The wheel's turn in 120ths of a notch; false while the menu is closed.
 [[nodiscard]] bool native_settings_wheel(int delta);
+// Text typed while a mod's text option is being typed in (UTF-8: WM_CHAR, SDL's text input). False: none is.
+[[nodiscard]] bool native_settings_handle_window_text(std::string_view utf8);
+// A text option is being typed in: the host shows its on-screen keyboard (SDL_StartTextInput).
+[[nodiscard]] bool native_settings_text_wanted() noexcept;
 void native_settings_files_dropped(std::vector<std::filesystem::path> files);
 void native_settings_window_resized(unsigned width, unsigned height);
 // The graphics device lost at the renderer's next frame, as a driver reset loses it (an extension's lose_gpu_device).

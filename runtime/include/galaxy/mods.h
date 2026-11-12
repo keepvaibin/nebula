@@ -181,6 +181,9 @@ bool set_mod_blocked(const std::string& id, bool blocked);
 [[nodiscard]] std::vector<ModInfo> scan_mods(const std::string& game_id = {});
 // Saves order, on/off state and choices for the next start. Returns false when the file could not be written.
 bool save_mod_settings(std::span<const ModInfo> mods);
+// A text option's value as it may be kept (services-mods 8.4): UTF-8, no control character, at most `max_length` code
+// points.
+[[nodiscard]] bool text_option_fits(std::string_view text, std::uint32_t max_length) noexcept;
 // Recomputes how the mods relate after a change to the list: order, duplicates, requirements, saves, conflicts (each
 // mod's problem) and overlaps. scan_mods calls this last.
 void settle_mods(std::vector<ModInfo>& mods);

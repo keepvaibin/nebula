@@ -666,11 +666,35 @@ bool texture_names() {
     return ok;
 }
 
+namespace {
+
+// A text option's value as mods.ini keeps it (services-mods 8.4): UTF-8, no control character, at most max_length
+// code points.
+bool text_options() {
+    using galaxy::mods::text_option_fits;
+    bool ok = true;
+    ok &= expect(text_option_fits("", 1u), "empty text fits");
+    ok &= expect(text_option_fits("Mario 64", 8u), "8 ASCII characters fit 8");
+    ok &= expect(!text_option_fits("Mario 64!", 8u), "9 characters do not fit 8");
+    ok &= expect(text_option_fits("\xE3\x83\x9E\xE3\x83\xAA\xE3\x82\xAA", 3u), "3 Japanese characters fit 3");
+    ok &= expect(text_option_fits("\xF0\x9F\x8D\x84", 1u), "one 4-byte character fits 1");
+    ok &= expect(!text_option_fits("a\nb", 8u), "a newline is refused");
+    ok &= expect(!text_option_fits("a\x7F", 8u), "DEL is refused");
+    ok &= expect(!text_option_fits("\xC2\x85", 8u), "a C1 control is refused");
+    ok &= expect(!text_option_fits("\xE3\x83", 8u), "a character cut short is refused");
+    ok &= expect(!text_option_fits("\xC0\xAF", 8u), "an overlong form is refused");
+    ok &= expect(!text_option_fits("\xED\xA0\x80", 8u), "a surrogate is refused");
+    ok &= expect(!text_option_fits("\x80", 8u), "a lone continuation byte is refused");
+    return ok;
+}
+
+}  // namespace
+
 int main() {
     test_texture_categories();
     // Every test runs, whichever fail.
     const bool results[] = {texture_names(), xml(), importing(), code_patch_notes(), setting_overlaps(), layer_only_mods(), galaxy_saves(),
-                            luma_rules(), luma_import()};
+                            luma_rules(), luma_import(), text_options()};
     bool ok = true;
     for (const bool passed : results) ok = ok && passed;
     std::cout << (ok ? "mods tests passed" : "mods tests FAILED") << '\n';

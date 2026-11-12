@@ -1063,6 +1063,13 @@ void run_requests() {
 
 void pump_events(int timeout_ms) noexcept {
     SDL_Event event;
+    // A mod's text option being typed in: SDL's text events, and the system's on-screen keyboard where there is one.
+    if (g_window != nullptr) {
+        const bool wanted = galaxy::render::native_settings_text_wanted();
+        if (wanted != SDL_TextInputActive(g_window)) {
+            (void)(wanted ? SDL_StartTextInput(g_window) : SDL_StopTextInput(g_window));
+        }
+    }
     // Every 10 s: this thread's CPU time and how much SDL's event wait took (a wait that polls rather than sleeps).
     static std::int64_t report_cpu = 0;
     static std::int64_t wait_cpu = 0;
@@ -1194,6 +1201,9 @@ void pump_events(int timeout_ms) noexcept {
             g_input.mouse_inside = true;
             break;
         }
+        case SDL_EVENT_TEXT_INPUT:
+            if (event.text.text != nullptr) (void)galaxy::render::native_settings_handle_window_text(event.text.text);
+            break;
         case SDL_EVENT_KEY_DOWN:
         case SDL_EVENT_KEY_UP:
             if (event.key.scancode == SDL_SCANCODE_AC_BACK) {
