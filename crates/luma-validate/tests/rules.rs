@@ -88,7 +88,7 @@ fn a_correct_mod_passes_with_nothing_to_say() {
     assert!(report.findings.is_empty(), "{:?}", report.findings);
 
     let store = FakeStore { case_insensitive: false };
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: Some(&store) };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: None, store: Some(&store) };
     let patch = br#"{"patch": 1, "key": ["name"], "set": [{"where": {"name": "Alpha"}, "values": {"count": 3}}]}"#;
     let bytes = luma(
         &[("layers", r#"[{"name": "base"}]"#), ("nebula", r#"">=2.0.0""#)],
@@ -103,7 +103,7 @@ fn a_correct_mod_passes_with_nothing_to_say() {
 #[test]
 fn a_link_key_is_new_to_the_whole_zone() {
     let store = FakeStore { case_insensitive: false };
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: Some(&store) };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: None, store: Some(&store) };
     let layer = [("layers", r#"[{"name": "base"}]"#)];
     let common = "layers/base/patches/StageData/Zone/jmp/Placement/Common/ObjInfo.json";
     let layer_a = "layers/base/patches/StageData/Zone/jmp/Placement/LayerA/ObjInfo.json";
@@ -200,7 +200,7 @@ impl Store for ScenarioStore {
 #[test]
 fn a_new_galaxy_s_table_and_other_mods_cells_say_which_layers_are_on_together() {
     let store = ScenarioStore { listed: true };
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: Some(&store) };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: None, store: Some(&store) };
     let layer = [("layers", r#"[{"name": "base"}]"#)];
     let at = |l: &str| format!("layers/base/patches/{}.json", START.replace("{}", l));
     let add = |n: u32| format!(r#"{{"patch": 1, "key": ["MarioNo"], "add": [{{"MarioNo": {n}}}]}}"#).into_bytes();
@@ -284,7 +284,7 @@ fn a_new_galaxy_s_table_and_other_mods_cells_say_which_layers_are_on_together() 
 #[test]
 fn a_start_key_is_new_among_the_layers_on_together() {
     let store = ScenarioStore { listed: true };
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: Some(&store) };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: None, store: Some(&store) };
     let layer = [("layers", r#"[{"name": "base"}]"#)];
     let at = |l: &str| format!("layers/base/patches/{}.json", START.replace("{}", l));
     let add = |n: u32| format!(r#"{{"patch": 1, "key": ["MarioNo"], "add": [{{"MarioNo": {n}}}]}}"#).into_bytes();
@@ -333,7 +333,7 @@ fn a_start_key_is_new_among_the_layers_on_together() {
 
     // A store that cannot list its galaxies: only Common and the same layer are checked, and the report says so.
     let unlisted = ScenarioStore { listed: false };
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: Some(&unlisted) };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: None, store: Some(&unlisted) };
     let r = check(&luma(&layer, &[file(&at("LayerA"), &add(0))]), &Setup { game: Some(&game), ..NO_GAME });
     assert_eq!(in_group(&r), 0, "{:?}", r.findings);
     assert!(r.not_checked.iter().any(|n| n.code == 402 && n.because == "Missing.Scenarios"), "{:?}", r.not_checked);
@@ -342,7 +342,7 @@ fn a_start_key_is_new_among_the_layers_on_together() {
 #[test]
 fn every_rule_has_a_broken_mod() {
     let store = FakeStore { case_insensitive: false };
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: Some(&store) };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: None, store: Some(&store) };
     let layer = [("layers", r#"[{"name": "base"}]"#)];
     let patch_file = "layers/base/patches/stage/table.bcsv.json";
 
@@ -505,7 +505,7 @@ fn every_rule_has_a_broken_mod() {
         }
     }
     // The rules no broken mod here can reach yet, each with why (`libraries.rs` covers the code rules on libraries).
-    let elsewhere: [(u16, &str); 12] = [
+    let elsewhere: [(u16, &str); 13] = [
         (304, "what a source may stand in for is each content kind's contract (3.2 to 3.10)"),
         (407, "table_keys.rs"),
         (503, "libraries.rs"),
@@ -517,6 +517,7 @@ fn every_rule_has_a_broken_mod() {
         (511, "the iOS signing rules (8.3)"),
         (512, "libraries.rs"),
         (805, "libraries.rs"),
+        (806, "renderer.rs"),
         (701, "the LumaKit schemas (5.x); 702 likewise, and 804 is the cooker's (3.x)"),
     ];
     for code in luma_validate::CODES {
@@ -535,7 +536,7 @@ fn with_game_ref<'a>(game: &'a Game<'a>) -> Setup<'a> {
 #[test]
 fn a_table_matched_without_case_finds_its_rows() {
     let store = FakeStore { case_insensitive: true };
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: Some(&store) };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: None, store: Some(&store) };
     let patch = br#"{"patch": 1, "key": ["name"], "set": [{"where": {"name": "ALPHA"}, "values": {"count": 3}}]}"#;
     let bytes = luma(&[("layers", r#"[{"name": "base"}]"#)], &[file("layers/base/patches/stage/table.bcsv.json", patch)]);
     let report = check(&bytes, &with_game_ref(&game));
@@ -564,7 +565,7 @@ fn no_damaged_byte_makes_it_panic() {
         &[file("layers/base/patches/stage/table.bcsv.json", patch), deflated("layers/base/files/ObjectData/Kuribo.arc", &[7; 512])],
     );
     let store = FakeStore { case_insensitive: false };
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: Some(&store) };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: None, store: Some(&store) };
     // Every byte set to three values, and every length cut: none may panic, and every message stays filled.
     for at in 0..good.len() {
         for value in [0x00u8, 0xff, good[at] ^ 0x5a] {
@@ -583,7 +584,7 @@ fn no_damaged_byte_makes_it_panic() {
 #[test]
 fn a_start_takes_the_whole_file_findings_from_the_kept_report_and_runs_the_rest() {
     let store = FakeStore { case_insensitive: false };
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: Some(&store) };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: None, store: Some(&store) };
     let bad_row = br#"{"patch": 1, "key": ["name"], "set": [{"where": {"name": "Omega"}, "values": {"count": 3}}]}"#;
     let no_file = br#"{"patch": 1, "key": ["name"], "set": [{"where": {"name": "Alpha"}, "values": {"count": 3}}]}"#;
     let mut broken = file("layers/base/files/ObjectData/Kuribo.arc", &[7; 64]);
@@ -689,7 +690,7 @@ fn a_cycle_of_needs_through_the_mod_is_refused_and_named() {
 #[test]
 fn the_mod_higher_in_the_list_wins() {
     let store = FakeStore { case_insensitive: false };
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: Some(&store) };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: None, store: Some(&store) };
     let layer = [("layers", r#"[{"name": "base"}]"#)];
     let mut replacing = other("other.mod");
     replacing.touches.replaces = vec!["objectdata/kuribo.arc".into()];

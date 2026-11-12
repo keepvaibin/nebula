@@ -72,6 +72,12 @@ pub struct LumaValidateInput {
     /// The game's luma_types.json; null: kinds 1, 2 and 7 are not checked.
     pub types: *const c_char,
     pub types_size: u64,
+    /// The renderer's feature names (JSON with a `renderer` key, luma-format revision 4); null: L806 is not checked.
+    pub renderer: *const c_char,
+    pub renderer_size: u64,
+    /// The features this device's graphics have (start-check 3); null: L806 is not checked.
+    pub device_features: *const *const c_char,
+    pub device_feature_count: u32,
 }
 
 #[repr(C)]
@@ -291,12 +297,33 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
     if services_bytes.is_some() && names_text.is_none() {
         return Err("services given without names".to_string());
     }
+    let renderer_bytes = (!input.renderer.is_null()).then(|| std::slice::from_raw_parts(input.renderer.cast::<u8>(), input.renderer_size as usize));
+    if renderer_bytes.is_some() && names_text.is_none() {
+        return Err("renderer given without names".to_string());
+    }
+    // Each device feature is a name; one that is not, or a null in the list, is the caller's fault.
+    let device_features: Option<Vec<String>> = if input.device_features.is_null() {
+        None
+    } else {
+        let mut out = Vec::new();
+        for (i, &f) in list(input.device_features, input.device_feature_count).iter().enumerate() {
+            let name = text(f).ok_or_else(|| format!("device_features[{i}] is null"))?;
+            if !luma_validate::names::feature_name_ok(&name) {
+                return Err(format!("device_features[{i}] \"{name}\" is not a feature name"));
+            }
+            out.push(name);
+        }
+        out.sort();
+        out.dedup();
+        Some(out)
+    };
     let names = match &names_text {
         Some(t) => {
             let mut n = Names { api: input.luma_api, ..Names::default() };
             n.add_rows(t).map_err(|line| format!("names line {line}: not name, signature, kind, line"))?;
             n.types = types_bytes.map(luma_validate::names::Types::from_json).transpose().map_err(|e| format!("types: {e}"))?;
             n.services = services_bytes.map(luma_validate::names::Services::from_json).transpose().map_err(|e| format!("services: {e}"))?;
+            n.renderer_features = renderer_bytes.map(luma_validate::names::renderer_features_from_json).transpose().map_err(|e| format!("renderer: {e}"))?;
             Some(n)
         }
         None => None,
@@ -313,13 +340,15 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
     let store_key = text(input.store_key).unwrap_or_default();
     // What identifies the game for a kept report: a change in any of it checks every rule again.
     let game_key = format!(
-        "nebula {nebula}; region {}; platform {platform}; languages {}; api {}; names {}; types {}; services {}; store {}",
+        "nebula {nebula}; region {}; platform {platform}; languages {}; api {}; names {}; types {}; services {}; renderer {}; device {}; store {}",
         region.as_deref().unwrap_or("-"),
         languages.join(","),
         input.luma_api,
         names_text.as_deref().map_or_else(|| "-".to_string(), |t| hex_sha1(t.as_bytes())),
         types_bytes.map_or_else(|| "-".to_string(), hex_sha1),
         services_bytes.map_or_else(|| "-".to_string(), hex_sha1),
+        renderer_bytes.map_or_else(|| "-".to_string(), hex_sha1),
+        device_features.as_ref().map_or_else(|| "-".to_string(), |d| d.join(",")),
         if store.is_some() { store_key.as_str() } else { "-" },
     );
     // Every other mod is given by its kept report; one that does not read is the caller's fault, never skipped.
@@ -346,6 +375,7 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
         region: region.as_deref(),
         extra_languages: &languages,
         names: names.as_ref(),
+        device_features: device_features.as_deref(),
         store: store.as_ref().map(|s| s as &dyn Store),
     };
     let platforms = [platform.as_str()];

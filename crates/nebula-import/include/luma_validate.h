@@ -5,7 +5,7 @@
    At import: luma_validate with `kept` null runs every rule; keep luma_report_kept's bytes beside the mod.
    At each start, and each change of the mod list or options: luma_validate with the mod's kept bytes. When they are for
    the same .luma and the same game (release, region, platform, languages, LumaCore version, names, services,
-   store_key), the rules that read the whole .luma are taken from them and every other rule runs; otherwise every rule
+   renderer, device features, store_key), the rules that read the whole .luma are taken from them and every other rule runs; otherwise every rule
    runs. Keep the new kept bytes either way.
 
    Every pointer in the input is read only during the call. A report is used from one thread at a time. */
@@ -79,6 +79,12 @@ typedef struct LumaValidateInput {
     uint64_t kept_size;
     const char* types;      /* the game's luma_types.json (types contract); null: kinds 1, 2 and 7 are not checked */
     uint64_t types_size;
+    const char* renderer;   /* the renderer's feature names: JSON with the self-description's "renderer" key, as
+                               luma_renderer.json (luma-format revision 4); null: L806 is not checked */
+    uint64_t renderer_size;
+    const char* const* device_features; /* the features this device's graphics have (draw.native's capability query,
+                               start-check 3), each a name of `renderer`; null: L806 is not checked */
+    uint32_t device_feature_count;
 } LumaValidateInput;
 
 typedef struct LumaFinding {

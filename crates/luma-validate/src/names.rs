@@ -47,6 +47,53 @@ pub const FUNCTIONS_FILE: &str = "luma_functions.json";
 /// (services-registry 9), so the same reader takes either.
 pub const SERVICES_FILE: &str = "luma_services.json";
 
+/// The renderer's feature list's file name in a folder of names: an object whose `renderer` key is the
+/// self-description's (luma-format revision 4), so the same reader takes either.
+pub const RENDERER_FILE: &str = "luma_renderer.json";
+
+/// At most this many names in the renderer's list and in a mod's `renderer.features`.
+pub const MAX_FEATURES: usize = 64;
+
+/// A renderer feature name (luma-format revision 4): `[a-z][a-z0-9_]*`, at most 32 bytes, no `__`, not ending in `_`.
+pub fn feature_name_ok(name: &str) -> bool {
+    let b = name.as_bytes();
+    b.len() <= 32
+        && b.first().is_some_and(u8::is_ascii_lowercase)
+        && b.iter().all(|&c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'_')
+        && !name.contains("__")
+        && !name.ends_with('_')
+}
+
+/// Reads an object with a `renderer` key holding `features` (the self-description, or luma_renderer.json): the names
+/// every device of this build may have, in byte order, each once, at most MAX_FEATURES. Anything else is an error
+/// naming the place.
+pub fn renderer_features_from_json(bytes: &[u8]) -> Result<std::collections::BTreeSet<String>, TypesError> {
+    use crate::json::Value;
+    let root = crate::json::parse(bytes)
+        .map_err(|e| TypesError::Json { line: e.pos.line, column: e.pos.column, what: e.what, detail: e.detail })?;
+    let bad = |at: String, why: &str| TypesError::Row { at, why: why.to_string() };
+    let renderer = root.get("renderer").filter(|v| v.is_object()).ok_or_else(|| bad("renderer".into(), "missing, or not an object"))?;
+    if let Some(m) = renderer.members().iter().find(|m| m.key != "features") {
+        return Err(bad(format!("renderer.{}", m.key), "not a key of renderer (only features)"));
+    }
+    let list = renderer.get("features").filter(|v| v.is_array()).map(Value::items).ok_or_else(|| bad("renderer.features".into(), "missing, or not a list"))?;
+    if list.len() > MAX_FEATURES {
+        return Err(bad("renderer.features".into(), "more than 64 names"));
+    }
+    let mut out = std::collections::BTreeSet::new();
+    let mut last: Option<&str> = None;
+    for (i, v) in list.iter().enumerate() {
+        let at = format!("renderer.features[{i}]");
+        let name = v.as_str().filter(|n| feature_name_ok(n)).ok_or_else(|| bad(at.clone(), "not a feature name"))?;
+        if last.is_some_and(|l| l.as_bytes() >= name.as_bytes()) {
+            return Err(bad(at, "not after the name before it (in byte order), or given twice"));
+        }
+        last = Some(name);
+        out.insert(name.to_string());
+    }
+    Ok(out)
+}
+
 /// A service name (services-registry 2): parts `[a-z][a-z0-9]*` joined by `.`, at most 31 bytes.
 pub fn service_name_ok(name: &str) -> bool {
     name.len() <= 31 && name.split('.').all(|part| part.as_bytes().first().is_some_and(u8::is_ascii_lowercase) && part.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()))
@@ -134,6 +181,9 @@ pub struct Names {
     /// The game's services catalog (services-registry 9, the self-description's `services`); None when not given:
     /// kind 5 imports are not checked.
     pub services: Option<Services>,
+    /// The renderer's feature names (the self-description's `renderer.features`, luma-format revision 4); None when
+    /// not given: a mod's `renderer.features` is read for its form only, and L806 is not checked.
+    pub renderer_features: Option<std::collections::BTreeSet<String>>,
     /// The LumaCore version mods are checked against (`LUMA_API`).
     pub api: u32,
 }
@@ -174,6 +224,13 @@ impl Names {
                     }
                     let bytes = std::fs::read(&path).map_err(|error| RowsError::Read { path: path.clone(), error })?;
                     names.services = Some(Services::from_json(&bytes).map_err(|error| RowsError::Types { path: path.clone(), error })?);
+                } else if path.file_name().is_some_and(|n| n == RENDERER_FILE) {
+                    if names.renderer_features.is_some() {
+                        let why = format!("a second {RENDERER_FILE} under {}", folder.display());
+                        return Err(RowsError::Types { path, error: TypesError::Row { at: String::new(), why } });
+                    }
+                    let bytes = std::fs::read(&path).map_err(|error| RowsError::Read { path: path.clone(), error })?;
+                    names.renderer_features = Some(renderer_features_from_json(&bytes).map_err(|error| RowsError::Types { path: path.clone(), error })?);
                 }
             }
         }

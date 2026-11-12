@@ -58,7 +58,7 @@ fn check(bytes: &[u8], platform: &str, with_names: bool) -> Report {
 }
 
 fn check_with(bytes: &[u8], platform: &str, names: Option<&Names>) -> Report {
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names, store: None };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names, store: None };
     let platforms = [platform];
     let input = Input { source: Source::Bytes(bytes, "test.luma"), game: Some(&game), installed: &[], platforms: &platforms, options: None, position: None };
     let report = validate(&input);
@@ -397,7 +397,7 @@ fn two_mods_replacing_one_function_refuse_the_later() {
     assert_eq!(alone.touches.functions, vec!["GameSystem::update\u{1f}void()".to_string()]);
 
     let names = names();
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: Some(&names), store: None };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: Some(&names), store: None };
     let other = luma_validate::Installed {
         id: "other.mod".into(),
         version: Version::parse("1.0.0").unwrap(),

@@ -122,6 +122,11 @@ struct Call {
     types: Vec<u8>,
     /// The services catalog given; empty: none.
     services: Vec<u8>,
+    /// The renderer's feature list given; empty: none.
+    renderer: Vec<u8>,
+    /// This device's features; None: not given.
+    device: Option<Vec<CString>>,
+    device_ptrs: Vec<*const c_char>,
 }
 
 impl Call {
@@ -138,9 +143,17 @@ impl Call {
             files: Vec::new(),
             types: Vec::new(),
             services: Vec::new(),
+            renderer: Vec::new(),
+            device: None,
+            device_ptrs: Vec::new(),
         });
         c.store.context = (&*c.table as *const CTable).cast_mut().cast();
         c
+    }
+    fn set_device(&mut self, features: &[&str]) {
+        let list: Vec<CString> = features.iter().map(|f| CString::new(*f).unwrap()).collect();
+        self.device_ptrs = list.iter().map(|c| c.as_ptr()).collect();
+        self.device = Some(list);
     }
     fn input(&self, kept: Option<&[u8]>) -> LumaValidateInput {
         LumaValidateInput {
@@ -167,6 +180,10 @@ impl Call {
             kept_size: kept.map_or(0, |k| k.len() as u64),
             types: if self.types.is_empty() { null() } else { self.types.as_ptr().cast() },
             types_size: self.types.len() as u64,
+            renderer: if self.renderer.is_empty() { null() } else { self.renderer.as_ptr().cast() },
+            renderer_size: self.renderer.len() as u64,
+            device_features: if self.device.is_some() { self.device_ptrs.as_ptr() } else { null() },
+            device_feature_count: self.device_ptrs.len() as u32,
         }
     }
 }
@@ -210,7 +227,7 @@ fn c_call(input: Option<&LumaValidateInput>) -> Got {
 fn rust_call(path: &std::path::Path, platform: &str) -> Vec<(u32, u32, Option<String>, String, u32, u32, Option<String>, String, String)> {
     let mut names = Names { api: 1, ..Names::default() };
     names.add_rows(ROWS).unwrap();
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: Some(&names), store: Some(&RustStore) };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: Some(&names), store: Some(&RustStore) };
     let platforms = [platform];
     let r = validate(&Input { source: Source::File(path), game: Some(&game), installed: &[], platforms: &platforms, options: None, position: None });
     r.findings
@@ -382,12 +399,12 @@ fn the_layout_is_the_header_s() {
     assert_eq!((size_of::<LumaGameStore>(), offset_of!(LumaGameStore, context), offset_of!(LumaGameStore, folder)), (40, 8, 32));
     assert_eq!(size_of::<LumaInstalledMod>(), 32);
     assert_eq!(size_of::<LumaOption>(), 16);
-    assert_eq!(size_of::<LumaValidateInput>(), 176);
+    assert_eq!(size_of::<LumaValidateInput>(), 208);
     assert_eq!(
         (offset_of!(LumaValidateInput, names_size), offset_of!(LumaValidateInput, store), offset_of!(LumaValidateInput, position), offset_of!(LumaValidateInput, kept_size)),
         (64, 96, 124, 152)
     );
-    assert_eq!(offset_of!(LumaValidateInput, types_size), 168);
+    assert_eq!((offset_of!(LumaValidateInput, types_size), offset_of!(LumaValidateInput, renderer_size), offset_of!(LumaValidateInput, device_feature_count)), (168, 184, 200));
     assert_eq!((size_of::<LumaFinding>(), offset_of!(LumaFinding, text)), (48, 40));
 }
 
@@ -487,4 +504,54 @@ fn the_required_services_are_read_per_platform_and_after_a_start_s_check() {
     i.names = null();
     let got = c_call(Some(&i));
     assert!(got.invalid.unwrap().contains("services given without names"));
+}
+
+/// luma-format revision 4 through the C input: the renderer's list and the device's features give L806 (an error, the
+/// mod off), both are part of the game's key, and a list or device name not in form is the caller's fault.
+#[test]
+fn renderer_features_and_the_device_s_reach_l806() {
+    let dir = tempfile::tempdir().unwrap();
+    let bytes = luma(&[("renderer", r#"{"features": ["ray_tracing"]}"#)], &[]);
+    let path = write(dir.path(), "r.luma", &bytes);
+    let mut call = Call::new(&path, "windows-x64");
+    call.renderer = br#"{"renderer": {"features": ["mesh_shaders", "ray_tracing"]}}"#.to_vec();
+    call.set_device(&["mesh_shaders"]);
+    let got = c_call(Some(&call.input(None)));
+    assert_eq!(got.state, 0);
+    assert_eq!(got.errors, 1);
+    let f = &got.findings[0];
+    assert_eq!((f.0, f.1, f.3.as_str(), f.6.as_deref()), (806, 0, "luma.json", Some("/renderer/features/0")));
+    assert_eq!(f.7, "test.mod needs ray_tracing, which this device's graphics do not have.");
+    // A device that has it: nothing; the device is part of the game's key, so the kept report is not reused as is.
+    let mut has = Call::new(&path, "windows-x64");
+    has.renderer = call.renderer.clone();
+    has.set_device(&["ray_tracing", "mesh_shaders", "ray_tracing"]);
+    let full = c_call(Some(&has.input(None)));
+    assert_eq!((full.state, full.findings.len()), (0, 0));
+    assert_eq!(c_call(Some(&has.input(Some(&full.kept)))).state, 1);
+    let again = c_call(Some(&call.input(Some(&full.kept))));
+    assert_eq!((again.state, again.findings.iter().map(|f| f.0).collect::<Vec<_>>()), (0, vec![806]));
+    // The list too.
+    let mut other = Call::new(&path, "windows-x64");
+    other.renderer = br#"{"renderer": {"features": ["ray_tracing"]}}"#.to_vec();
+    other.set_device(&["ray_tracing", "mesh_shaders"]);
+    assert_eq!(c_call(Some(&other.input(Some(&full.kept)))).state, 0);
+    // Not given: not checked, no finding.
+    let none = Call::new(&path, "windows-x64");
+    assert_eq!(c_call(Some(&none.input(None))).findings.len(), 0);
+    // The caller's faults, said.
+    let mut bad = Call::new(&path, "windows-x64");
+    bad.renderer = br#"{"renderer": {"features": ["b", "a"]}}"#.to_vec();
+    assert!(c_call(Some(&bad.input(None))).invalid.unwrap().contains("renderer: renderer.features[1]"));
+    let mut bad = Call::new(&path, "windows-x64");
+    bad.set_device(&["Ray Tracing"]);
+    assert!(c_call(Some(&bad.input(None))).invalid.unwrap().contains("device_features[0] \"Ray Tracing\" is not a feature name"));
+    let mut i = call.input(None);
+    i.names = null();
+    i.services = null();
+    assert!(c_call(Some(&i)).invalid.unwrap().contains("renderer given without names"));
+    let mut nulls = Call::new(&path, "windows-x64");
+    nulls.set_device(&["ray_tracing"]);
+    nulls.device_ptrs[0] = null();
+    assert!(c_call(Some(&nulls.input(None))).invalid.unwrap().contains("device_features[0] is null"));
 }

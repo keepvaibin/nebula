@@ -1,4 +1,4 @@
-//! L200-L217: `luma.json` (luma-format 4), `media/` (3, 4) and `saves/` (6.1).
+//! L200-L219 and L806: `luma.json` (luma-format 4), `media/` (3, 4) and `saves/` (6.1).
 
 use super::{p, seg, t, Ctx};
 use crate::json::{self, Kind, Value};
@@ -10,10 +10,10 @@ use std::collections::BTreeSet;
 
 const FILE: &str = "luma.json";
 pub const MAX_MANIFEST: u64 = 1 << 20;
-const TOP_KEYS: [&str; 24] = [
+const TOP_KEYS: [&str; 25] = [
     "format", "id", "version", "name", "summary", "text", "authors", "license", "links", "icon", "pictures", "game",
-    "nebula", "needs", "conflicts", "load", "takes_over", "options", "permissions", "layers", "code", "saves", "kit",
-    "build",
+    "nebula", "needs", "conflicts", "load", "takes_over", "options", "permissions", "renderer", "layers", "code",
+    "saves", "kit", "build",
 ];
 const REQUIRED: [&str; 7] = ["format", "id", "version", "name", "summary", "authors", "game"];
 const OPTION_KINDS: [&str; 5] = ["choice", "number", "toggle", "text", "key"];
@@ -359,6 +359,7 @@ pub(crate) fn check(ctx: &mut Ctx) {
     options(&mut m, &root, &mut facts);
     text(&mut m, &root, &facts);
     permissions(&mut m, &root, &mut facts);
+    renderer(&mut m, &root);
     layers(&mut m, &root, &mut facts);
     code_key(&mut m, &root, &mut facts);
     media(&mut m, &root);
@@ -817,6 +818,51 @@ fn permissions(m: &mut M, root: &Value, facts: &mut Facts) {
             facts.permission_at.push((name.clone(), obj.pos, ptr.clone()));
         }
         facts.permissions.insert(name);
+    }
+}
+
+/// `renderer` (luma-format revision 4): `{"features": [...]}`, the renderer features the mod cannot do without, 1 to 64
+/// names, each once. With the game's list (the self-description's `renderer.features`) a name not on it is L204; with
+/// it and this device's features (start-check 3), a feature the device lacks is L806 and the mod is off. Without the
+/// list L806 is not checked; without the device's features (LumaLink) it is not checked either: the game checks it
+/// at every start.
+fn renderer(m: &mut M, root: &Value) {
+    let Some(v) = root.get("renderer") else { return };
+    let Some(obj) = m.object(v, "/renderer", "renderer") else { return };
+    m.keys(obj, "/renderer", &["features"]);
+    m.required(obj, "/renderer", &["features"]);
+    let Some(list) = obj.get("features") else { return };
+    let Some(items) = m.array(list, "/renderer/features", "renderer/features", 1, crate::names::MAX_FEATURES) else { return };
+    let known = m.ctx.game().and_then(|g| g.names).and_then(|n| n.renderer_features.clone());
+    let device: Option<Vec<String>> = m.ctx.game().and_then(|g| g.device_features).map(<[String]>::to_vec);
+    let mut seen: BTreeSet<&str> = BTreeSet::new();
+    let mut wanted: Vec<(&Value, String, &str)> = Vec::new();
+    for (i, item) in items.iter().enumerate() {
+        let ip = format!("/renderer/features/{i}");
+        let Some(s) = m.string(item, &ip, "renderer/features") else { continue };
+        if !crate::names::feature_name_ok(s) {
+            m.wrong(item, &ip, "renderer/features", "Expect.FeatureName");
+        } else if !seen.insert(s) {
+            m.at(204, item, &ip, vec![("key", t("renderer/features")), ("found", t(format!("\"{s}\""))), ("expected", p("Expect.Once"))]);
+        } else if known.as_ref().is_some_and(|k| !k.contains(s)) {
+            m.wrong(item, &ip, "renderer/features", "Expect.Feature");
+        } else {
+            wanted.push((item, ip, s));
+        }
+    }
+    if wanted.is_empty() {
+        return;
+    }
+    match (&known, &device) {
+        (None, _) => m.ctx.not_checked(806, "Missing.RendererFeatures"),
+        (Some(_), None) => m.ctx.not_checked(806, "Missing.Device"),
+        (Some(_), Some(have)) => {
+            for (item, ip, s) in wanted {
+                if !have.iter().any(|h| h == s) {
+                    m.at(806, item, &ip, vec![("feature", t(s))]);
+                }
+            }
+        }
     }
 }
 

@@ -51,7 +51,7 @@ fn real_libraries_against_real_rows() {
         .lines()
         .filter_map(|l| l.split_once(' ').map(|(a, b)| (a.to_string(), b.trim().to_string())))
         .collect();
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: Some(&names), store: None };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: Some(&names), store: None };
     let mut entries: Vec<_> = std::fs::read_dir(&libs).expect("LUMA_LIBRARIES").filter_map(|e| e.ok()).map(|e| e.path()).collect();
     entries.sort();
     let mut wrong = Vec::new();
@@ -93,7 +93,7 @@ fn speed_of_a_large_luma() {
         return;
     };
     let path = std::path::Path::new(&path);
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: None };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: None, store: None };
     let platforms = ["windows-x64"];
     let input = Input { source: Source::File(path), game: Some(&game), installed: &[], platforms: &platforms, options: None, position: None };
     for round in 0..3 {

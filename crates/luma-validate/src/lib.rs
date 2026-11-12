@@ -196,6 +196,9 @@ pub struct Game<'a> {
     pub extra_languages: &'a [String],
     /// The self-description: rows, fields, classes, services and their permissions, the LumaCore version.
     pub names: Option<&'a Names>,
+    /// The renderer features this device's graphics have (`draw.native`'s capability query, start-check 3), absent in
+    /// LumaLink: L806 reads them against a mod's `renderer.features`.
+    pub device_features: Option<&'a [String]>,
     pub store: Option<&'a dyn Store>,
 }
 
@@ -591,5 +594,5 @@ pub fn level_of(code: u16) -> Level {
 pub const CODES: &[u16] = &[
     100, 101, 102, 103, 104, 105, 106, 107, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213,
     214, 215, 216, 217, 218, 219, 300, 301, 302, 303, 304, 305, 306, 307, 400, 401, 402, 403, 404, 405, 406, 407, 500, 501,
-    502, 503, 504, 505, 506, 507, 508, 509, 510, 511, 512, 700, 701, 702, 800, 801, 802, 803, 804, 805,
+    502, 503, 504, 505, 506, 507, 508, 509, 510, 511, 512, 700, 701, 702, 800, 801, 802, 803, 804, 805, 806,
 ];
