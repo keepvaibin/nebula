@@ -151,7 +151,7 @@ namespace luma {
             const Number* lookUp(const char* pName, const char* pSignature, u32 place, u32* pSeveral) {
                 *pSeveral = 0;
                 const Number* pFound = nullptr;
-                const char* const pWanted = pSignature != nullptr ? pSignature : nullptr;
+                const char* const pWanted = pSignature;
                 for (u32 at = hashOf(pName, place) & (sSlotCount - 1); sSlots[at] != nullptr; at = (at + 1) & (sSlotCount - 1)) {
                     const Number* const pNumber = sSlots[at];
                     if (pNumber->place != place || !same(pNumber->name, pName)) {
@@ -205,13 +205,12 @@ namespace luma {
                     __builtin_memcpy(pBits, &value, 8);
                     return true;
                 }
-                if (value != static_cast<f64>(static_cast<s64>(value)) && !(value >= 9223372036854775808.0 && value < 18446744073709551616.0)) {
-                    return false;
-                }
+                // Whole kinds: the range first (low included, high excluded: both exact as doubles), so no cast is out of
+                // range; then whole.
                 static const f64 kLow[11] = {0, 0, 0, -128.0, 0, -32768.0, 0, -2147483648.0, 0, -9223372036854775808.0, 0};
-                static const f64 kHigh[11] = {0, 0, 0, 127.0, 255.0, 32767.0, 65535.0, 2147483647.0, 4294967295.0,
-                                              9223372036854775807.0, 18446744073709551615.0};
-                if (kind < 3 || kind > 10 || value < kLow[kind] || value > kHigh[kind]) {
+                static const f64 kHigh[11] = {0, 0, 0, 128.0, 256.0, 32768.0, 65536.0, 2147483648.0, 4294967296.0,
+                                              9223372036854775808.0, 18446744073709551616.0};
+                if (kind < 3 || kind > 10 || value < kLow[kind] || value >= kHigh[kind] || __builtin_trunc(value) != value) {
                     return false;
                 }
                 // Even kinds are unsigned (4, 6, 8, 10).
@@ -289,7 +288,14 @@ namespace luma {
                 static const char* const kKinds[11] = {"?", "f32", "f64", "s8", "u8", "s16", "u16", "s32", "u32", "s64", "u64"};
                 char name[320];
                 nameOf(name, sizeof(name), pNumber->name, pNumber->signature, pNumber->place);
-                say(pMod, "set_number %s: %g is no %s", name, value, kKinds[pNumber->kind < 11 ? pNumber->kind : 0]);
+                const char* const pKind = kKinds[pNumber->kind < 11 ? pNumber->kind : 0];
+                if (!(value == value)) {
+                    say(pMod, "set_number %s: NaN is no %s", name, pKind);
+                } else if (pNumber->kind >= 3 && value > -1e15 && value < 1e15 && __builtin_trunc(value) != value) {
+                    say(pMod, "set_number %s: %.6f is no whole number (%s)", name, value, pKind);
+                } else {
+                    say(pMod, "set_number %s: the value is out of %s's range", name, pKind);
+                }
                 return -2;
             }
             u32 touched = 0;
