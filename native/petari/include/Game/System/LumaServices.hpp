@@ -37,13 +37,13 @@ namespace luma {
         // names of its args (4 entries, unused ones null). False: no row has the code.
         bool rowOf(u32 code, char* pId, u32 size, const char* const** pppNames);
 
-        // The frame's start, on the game thread, right after luma::frame(): each mod's events in list order, then time's
-        // frame handlers. With nothing posted and no handler, one atomic load.
+        // The frame's start, on the game thread, right after luma::frame(): time's timers posted, each mod's events in
+        // list order, then time's frame handlers. With nothing posted and no time hook, one atomic load and two plain.
         void frameStart();
 
-        // The time service's frame handlers (contract services-time), run by frameStart after the events; null when none
-        // is subscribed, so a frame with no mod pays nothing for it.
-        void setFrameHandler(void (*pHandler)());
+        // The time service's two passes (contract services-time 3): `post` before the events (due timers), `after` once
+        // they are given (frame handlers). Each null while no mod needs it, so a frame with no mod pays nothing for them.
+        void setTimeHooks(void (*pPost)(), void (*pAfter)());
 
         // The kernel's half of luma_service_provider.h, for the module's own providers.
         const LumaServiceKernel* kernel();

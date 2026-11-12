@@ -188,8 +188,13 @@ namespace {
         }
     }
 
+    // The tape's factor (Voices::setRateScale): 1 at real time.
+    f32 sRateScale = 1.0f;
+
+    // A constant oscillator's `rate` is its value, not a speed: the tape leaves it.
     void setVoiceRate(NebulaVoice* pVoice, f32 samples) {
-        pVoice->rate = pVoice->format == NEBULA_AUDIO_OSCILLATOR && pVoice->oscillator == NEBULA_AUDIO_CONSTANT ? samples / cNum_setVoiceRate_f1 : samples;
+        pVoice->rate = pVoice->format == NEBULA_AUDIO_OSCILLATOR && pVoice->oscillator == NEBULA_AUDIO_CONSTANT ? samples / cNum_setVoiceRate_f1
+                                                                                                                 : samples * sRateScale;
     }
 }  // namespace
 
@@ -532,10 +537,22 @@ void Voices::forgetOwners(const void* pBegin, const void* pEnd) {
 }
 
 void Voices::updateAll() {
+    updateSlots();
+    mix();
+}
+
+void Voices::updateSlots() {
     for (u32 i = 0; i < mUsed; i++) {
         updateSlot(static_cast< s32 >(i));
     }
+}
+
+void Voices::mix() {
     mEngine->mixVoices(mUsed);
+}
+
+void Voices::setRateScale(f32 scale) {
+    sRateScale = scale;
 }
 
 void Voices::nameSound(s32 slot) {

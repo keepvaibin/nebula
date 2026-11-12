@@ -3,7 +3,10 @@
 
 #include "galaxy/host_extension.h"
 
+#include <luma_services_facts.h>
+
 #include <atomic>
+#include <chrono>
 
 namespace galaxy::luma_services {
 namespace {
@@ -15,6 +18,14 @@ bool g_provided = false;  // game thread
 struct Giving {
     LumaProvideService provide;
 };
+
+// The system's wall clock for the module's time service (services-time 11). std::chrono::system_clock counts from
+// 1970-01-01 UTC on every platform since C++20.
+int64_t utc_ns() noexcept {
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
+const LumaServicesFacts kFacts{sizeof(LumaServicesFacts), utc_ns};
 
 }  // namespace
 
@@ -34,6 +45,11 @@ bool provide_all(void* (*find_symbol)(const char*), void (*log)(const char*),
     g_provided = true;
     // The module's own services first (the catalog checked), then the host's, then the extensions' test services.
     g_kernel.store(open(), std::memory_order_release);
+    if (const auto give = reinterpret_cast<LumaServicesGiveFacts>(find_symbol("luma_services_facts")); give != nullptr) {
+        give(&kFacts);
+    } else if (log != nullptr) {
+        log("LumaCore services: the game module has no luma_services_facts; time's wall clock is the local calendar");
+    }
     // A bad provider stops the game in the module (luma_service_provider.h), naming it; 0 is the only other answer.
     for (const LumaServiceProvider* const provider : own) {
         provide(provider);

@@ -2,6 +2,7 @@
 
 #include "Game/System/LumaHook.hpp"
 #include "Game/System/LumaLoader.hpp"
+#include "Game/System/LumaTime.hpp"
 #include <luma.h>
 #include <luma_service_provider.h>
 #include <luma_services.h>
@@ -24,6 +25,7 @@ namespace luma {
             // The catalog: every service the game defines (services-registry 9). A row is added with the code of its
             // service when that service's contract is signed; none is yet.
             const CatalogRow cCatalog[] = {
+                {"time", 1, 0, nullptr, "services-time"},
                 {nullptr, 0, 0, nullptr, nullptr},
             };
 
@@ -69,7 +71,8 @@ namespace luma {
 
             u32 sPosted = 0;   // 1 when a node was posted since the frame's start took the stacks, or nodes are carried; atomic
             u32 sCarried = 0;  // nodes taken but kept for a later frame, all mods (game thread)
-            void (*sFrameHandler)() = nullptr;
+            void (*sTimePost)() = nullptr;     // time's due timers, before the events; null while no mod has a timer
+            void (*sFrameHandler)() = nullptr;  // time's frame handlers, after them; null while no mod has one
 
             bool sameText(const char* pA, const char* pB) {
                 if (pA == nullptr || pB == nullptr) {
@@ -568,8 +571,8 @@ namespace luma {
                     }
                 }
             }
-            // The module's own services (time, mods, save: services-time.md and the others of 2.2) register here, each
-            // when its contract is signed. None yet.
+            // The module's own services, each when its contract is signed: time (services-time).
+            (void)provide(luma::time::provider());
         }
 
         const void* find(const char* pName, u32 major, u32 minor, const char** ppPermission) {
@@ -731,6 +734,9 @@ namespace luma {
         }
 
         void frameStart() {
+            if (sTimePost != nullptr) {
+                sTimePost();
+            }
             // sPosted alone: it stays 1 while nodes are carried to a later frame (set again below).
             if (__atomic_load_n(&sPosted, __ATOMIC_ACQUIRE) != 0) {
                 (void)__atomic_exchange_n(&sPosted, 0u, __ATOMIC_ACQ_REL);
@@ -754,11 +760,12 @@ namespace luma {
             }
         }
 
-        void setFrameHandler(void (*pHandler)()) {
+        void setTimeHooks(void (*pPost)(), void (*pAfter)()) {
             if (!onGameThread()) {
-                NEBULA_PANIC("LumaCore: the frame handler was set off the game thread");
+                NEBULA_PANIC("LumaCore: the time hooks were set off the game thread");
             }
-            sFrameHandler = pHandler;
+            sTimePost = pPost;
+            sFrameHandler = pAfter;
         }
 
         const LumaServiceKernel* kernel() { return &sKernel; }
