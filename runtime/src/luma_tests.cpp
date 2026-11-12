@@ -61,7 +61,8 @@ constexpr const char* kGood = R"({
     { "key": "lives", "kind": "choice", "name": "Lives", "default": "one", "values": ["off", "one"], "value_names": { "off": "Off", "one": "One" } },
     { "key": "bad", "kind": "choice", "name": "Falls back", "default": "nope", "values": ["first"], "value_names": { "first": "F" } },
     { "key": "hard", "kind": "toggle", "name": "Hard", "default": true },
-    { "key": "label", "kind": "text", "name": "Label", "default": "x", "max_length": 8 }
+    { "key": "label", "kind": "text", "name": "Label", "default": "x", "max_length": 8 },
+    { "key": "jump", "kind": "key", "name": "Jump", "default": "A" }
   ],
   "layers": [
     { "name": "base" },
@@ -110,8 +111,14 @@ int main() {
     check(m.needs.size() == 1u && m.needs[0].id == "base-mod" && m.needs[0].version == ">=1.2", "needs");
     check(m.conflicts.size() == 2u && m.conflicts[0].id == "old-mod" && m.conflicts[0].version.empty(), "conflicts by id");
     check(m.load_after == std::vector<std::string>{"base-mod"} && m.load_before.empty(), "load.after");
-    check(m.options.size() == 3u, "choice, choice and toggle read; a text option is not (plan 6.3)");
-    if (m.options.size() == 3u) {
+    check(m.options.size() == 5u, "choice, choice, toggle, text and key read (services-mods 8)");
+    if (m.options.size() == 5u) {
+        check(m.options[3].kind == "text" && m.options[3].fallback == "x" && m.options[3].max_length == 8u &&
+                  m.options[3].choices.empty(),
+              "a text option: its default text and max_length, no choices");
+        check(m.options[4].kind == "key" && m.options[4].fallback == "A" && m.options[4].choices.empty(),
+              "a key option: its default control");
+        check(m.options[0].kind == "choice" && m.options[2].kind == "toggle", "the kinds kept");
         const Option& lives = m.options[0];
         check(lives.id == "lives" && lives.fallback == "one" && lives.choices.size() == 2u && lives.choices[1].name.fallback == "One" &&
                   lives.choices[1].name.in("ja") == "一" && lives.name.in("ja") == "残機",

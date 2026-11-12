@@ -51,6 +51,10 @@ struct ModOption {
     // For a .luma option: the choice ids, and whether the option has no Off.
     std::vector<std::string> choice_ids;
     bool must_choose = false;
+    // A .luma option's kind (luma::Option::kind; empty for Riivolution), and a text option's typed text (mods.ini
+    // text.<key>; empty: the manifest's default). Filled by the Mods page's side (J, 6.3).
+    std::string kind;
+    std::string text;
 };
 
 // What two enabled mods both change: game files, textures, and settings (tunables, table cells, lines, constants;

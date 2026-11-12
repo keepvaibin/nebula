@@ -863,8 +863,9 @@ When read_form_when(const Value* value) {
     return when;
 }
 
-// The form's options: choice (values, value_names), number (min..max by step, each a choice) and toggle (on, off).
-// text and key options have no place on the Mods page yet (plan 6.3) and are not read.
+// The form's options: choice (values, value_names), number (min..max by step, each a choice) and toggle (on, off);
+// text (max_length, its default text) and key (its default control) have no choices: the player types or binds them
+// (J's 6.3 page, F's 2.5 input), and a mod reads each as text (services-mods 8).
 void read_options(const Value& root, Manifest& out) {
     const Value* options = root.get("options");
     const Value* text = root.get("text");
@@ -873,6 +874,7 @@ void read_options(const Value& root, Manifest& out) {
         Option option;
         option.id = text_field(entry, "key");
         const std::string kind = text_field(entry, "kind");
+        option.kind = kind;
         option.name = form_text(entry.get("name"), text, {"options", option.id, "name"});
         const Value* start = entry.get("default");
         if (kind == "choice") {
@@ -908,6 +910,16 @@ void read_options(const Value& root, Manifest& out) {
             option.choices.push_back({"off", {}});
             option.choices.push_back({"on", {}});
             option.fallback = start != nullptr ? when_value(*start) : std::string("off");
+        } else if (kind == "text" || kind == "key") {
+            // The validator refuses a text default over max_length or a key default that is not a control (G, L210).
+            option.fallback = text_field(entry, "default");
+            if (kind == "text") {
+                const Value* most = entry.get("max_length");
+                const double length = most != nullptr && most->number() != nullptr ? *most->number() : 256.0;
+                option.max_length = length >= 1.0 && length <= 256.0 ? static_cast<std::uint32_t>(length) : 256u;
+            }
+            if (!option.id.empty()) out.options.push_back(std::move(option));
+            continue;
         } else {
             continue;
         }

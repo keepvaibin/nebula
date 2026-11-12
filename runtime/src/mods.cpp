@@ -1217,6 +1217,14 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                 for (const luma::Option& entry : manifest->options) {
                     ModOption option;
                     option.key = entry.id;
+                    option.kind = entry.kind;
+                    if (entry.kind == "text" || entry.kind == "key") {
+                        // Typed or bound, not chosen: no choices, nothing selected (the page's side fills .text, J 6.3).
+                        option.name = entry.name.in(words);
+                        option.section = entry.description.in(words);
+                        mod.options.push_back(std::move(option));
+                        continue;
+                    }
                     option.name = entry.name.in(words);
                     option.section = entry.description.in(words);
                     unsigned start = 0u;

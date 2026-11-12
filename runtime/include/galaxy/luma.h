@@ -32,8 +32,12 @@ struct Option {
     std::string id;
     Text name;
     Text description;
-    std::string fallback;  // the choice it starts on
-    std::vector<Choice> choices;
+    std::string kind = "choice";  // luma-format: choice, number, toggle, text or key
+    // choice, number, toggle: the choice it starts on; text: the default text; key: the default control's id
+    // (input_bindings kTargetIds).
+    std::string fallback;
+    std::vector<Choice> choices;  // none for text and key
+    std::uint32_t max_length = 0;  // text: at most this many code points (1 to 256)
 };
 
 // A mod's own achievement. It appears on the Mods tab of the achievement board and is saved in achievements.ini as

@@ -11,7 +11,16 @@
 #include <string_view>
 #include <vector>
 
+namespace galaxy::mods {
+struct ModInfo;
+}
+
 namespace galaxy::luma_mods {
+
+// A mod's options after the Mods page applied them (services-mods 8; J's 6.3 calls it for each mod whose options
+// changed, with the page's line for it). Any thread. When the mod is in this session's list, each option whose text
+// changed is the new value at once and, when the mod watches, one OPTION event at the next frame's start.
+void options_applied(const galaxy::mods::ModInfo& mod);
 
 // The three providers, in catalog order, for luma_services::provide_all (game thread, once, before the first mod).
 // `log` says what goes wrong with the record outside any mod's call.
