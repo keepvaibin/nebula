@@ -10,6 +10,7 @@
 extern "C" const NebulaHostServices* nebula_host(void);
 
 #include "Game/System/GameAssets.hpp"
+#include "Game/System/LumaContentFx.hpp"
 #include "Game/System/LumaCore.hpp"
 
 #ifdef NEBULA_ASAN_HEAPS
@@ -158,6 +159,8 @@ NebulaArena* NebulaArena::create(NebulaArena* pParent) {
 void NebulaArena::destroy(NebulaArena* pArena) {
     // Mods that keep objects forget those in it, before any of them or its memory goes.
     lumacore::released(pArena->mStart, pArena->mEnd);
+    // The mods' effects on actors in it (content.fx): ended, never touched again.
+    luma::content::fx::released(pArena->mStart, pArena->mEnd);
 
     // Its objects first: one that owns a child arena destroys it itself.
     pArena->destroyOwned();
