@@ -57,5 +57,8 @@ struct PageMod {
 [[nodiscard]] std::uint32_t kept();
 // In a harness run, one row of the log page as the fact `modlog.page {"row", "label", "value"}` (contract 4.3).
 void page_fact(std::uint32_t row, std::string_view label, std::string_view value);
+// In a harness run, an entry opened whole (A or Space on its row) as `modlog.entry {"mod", "pages", "text"}`: the
+// window's pages and the text they hold, all of it.
+void entry_fact(std::string_view mod, std::uint32_t pages, std::string_view text);
 
 }  // namespace galaxy::modlog

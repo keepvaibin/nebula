@@ -97,6 +97,8 @@ bool restart_ask_key(std::uintptr_t key, bool was_down);
 bool mod_question_key(std::uintptr_t key, bool was_down);
 bool mod_question_up();
 bool mods_page_key(std::uintptr_t key, bool accept, bool was_down);
+std::vector<std::string> license_pages(const std::string& text);
+void open_log_entry(std::size_t at);
 unsigned mods_draft_changes();
 void commit_mods_draft();
 void revert_mods_draft();
@@ -2358,12 +2360,21 @@ std::string log_place(const galaxy::modlog::PageEntry& entry) {
     return place;
 }
 
+// Who wrote an entry and its code's name, in the played language: "Loader (Validator.SignatureMismatch)".
+std::string log_source(const galaxy::modlog::PageEntry& entry) {
+    static constexpr const char* kSourceRows[] = {"ModLog.Source.Validator", "ModLog.Source.Loader", "ModLog.Source.Cook",
+                                                  "ModLog.Source.Code",      "ModLog.Source.Content", "ModLog.Source.Guard"};
+    std::string source = entry.source < sizeof(kSourceRows) / sizeof(kSourceRows[0])
+                             ? galaxy::modlog::words(kSourceRows[entry.source], entry.mod, 0u)
+                             : std::string();
+    if (!entry.code_name.empty()) source += (source.empty() ? "" : " (") + entry.code_name + (source.empty() ? "" : ")");
+    return source;
+}
+
 // The rows of one mod's entries, then its ModLog.TooMany line. The line under the page (the source in words, the
 // code, the whole text) is made for the row `selected` only: it is the one shown.
 void add_log_rows(std::vector<SettingsRow>& rows, const std::vector<galaxy::modlog::PageEntry>& entries,
                   const galaxy::modlog::PageMod& mod, unsigned selected) {
-    static constexpr const char* kSourceRows[] = {"ModLog.Source.Validator", "ModLog.Source.Loader", "ModLog.Source.Cook",
-                                                  "ModLog.Source.Code",      "ModLog.Source.Content", "ModLog.Source.Guard"};
     for (std::size_t e = 0; e < entries.size(); ++e) {
         const galaxy::modlog::PageEntry& entry = entries[e];
         if (entry.mod != mod.id) continue;
@@ -2371,10 +2382,8 @@ void add_log_rows(std::vector<SettingsRow>& rows, const std::vector<galaxy::modl
         row.names = 1u | 2u;
         row.key = "log:" + std::to_string(e);
         if (rows.size() == selected) {
-            std::string help = entry.source < sizeof(kSourceRows) / sizeof(kSourceRows[0])
-                                   ? galaxy::modlog::words(kSourceRows[entry.source], mod.id, 0u)
-                                   : std::string();
-            if (!entry.code_name.empty()) help += (help.empty() ? "" : " (") + entry.code_name + (help.empty() ? "" : ")");
+            // One line under the page, cut where it does not fit; A or Space opens the entry whole (open_log_entry).
+            std::string help = log_source(entry);
             if (!help.empty()) help += ": ";
             help += entry.text;
             row.help = std::move(help);
@@ -2769,6 +2778,14 @@ bool mods_page_key(std::uintptr_t key, bool accept, bool was_down) {
     bool lists = false;
     for (const SettingsRow& row : rows) lists = lists || row.list != 0u;
     if (!lists) {
+        // A log entry (the log page, a mod's page): A or Space opens it whole, a page at a time, in ABOUT's window; the
+        // line under the page holds one line of it, and a refusal listing the game's signatures runs longer.
+        const unsigned at = std::min(s_native_settings_row.load(std::memory_order_relaxed),
+                                     static_cast<unsigned>(rows.size()) - 1u);
+        if ((accept || key == VK_SPACE) && !rows.empty() && rows[at].key.rfind("log:", 0) == 0) {
+            if (!was_down) open_log_entry(static_cast<std::size_t>(std::strtoul(rows[at].key.c_str() + 4, nullptr, 10)));
+            return true;
+        }
         if (key != VK_ESCAPE) return false;
         if (!was_down) close_mod_options(s_settings_draft);
         return true;
@@ -3476,6 +3493,23 @@ void open_mod_about() {
         if (!it->luma->icon.empty()) about.pictures.push_back(it->path / galaxy::text_path(it->luma->icon));
         for (const std::string& picture : it->luma->pictures) about.pictures.push_back(it->path / galaxy::text_path(picture));
     }
+    s_mod_about = std::move(about);
+}
+
+// One mod-log entry in ABOUT's window: who wrote it, its place, then its whole text, in pages. The entry is the one at
+// `at` in the log as it is now (a row's key keeps the number; the log only grows while the menu is up).
+void open_log_entry(std::size_t at) {
+    const std::vector<galaxy::modlog::PageEntry> entries = galaxy::modlog::entries();
+    if (at >= entries.size()) return;
+    const galaxy::modlog::PageEntry& entry = entries[at];
+    std::string head = log_source(entry);
+    const std::string place = log_place(entry);
+    if (!place.empty()) head += (head.empty() ? "" : "  ") + place;
+    ModAbout about;
+    about.id = entry.mod;
+    about.pages = license_pages(head.empty() ? entry.text : head + "\n\n" + entry.text);
+    galaxy::modlog::entry_fact(entry.mod, static_cast<std::uint32_t>(about.pages.size()), entry.text);
+    const std::lock_guard<std::mutex> lock(s_mods_mutex);
     s_mod_about = std::move(about);
 }
 
