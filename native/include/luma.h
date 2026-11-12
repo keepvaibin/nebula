@@ -51,10 +51,16 @@ typedef int32_t (*LumaHook)(LumaCall* call, void* user);
        va_list mine; LUMA_VA_COPY(mine, call->args[2]); ... va_arg(mine, int) ...; va_end(mine); */
 #if defined(__x86_64__) && !defined(_WIN32)
 typedef struct __va_list_tag* luma_va_arg;
+#define LUMA_VA_COPY(mine, arg) __builtin_va_copy(mine, *(luma_va_arg*)(arg))
+#elif defined(_MSC_VER) && !defined(__clang__)
+/* MSVC (the Windows host): its va_list is a char pointer, copied with va_copy. */
+#include <stdarg.h>
+typedef va_list luma_va_arg;
+#define LUMA_VA_COPY(mine, arg) va_copy(mine, *(luma_va_arg*)(arg))
 #else
 typedef __builtin_va_list luma_va_arg;
-#endif
 #define LUMA_VA_COPY(mine, arg) __builtin_va_copy(mine, *(luma_va_arg*)(arg))
+#endif
 
 enum {
     LUMA_BEFORE = 0, /* runs first; returning non-zero skips the function (write the result first) */
