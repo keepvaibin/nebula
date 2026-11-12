@@ -535,6 +535,68 @@ struct StartResult {
 std::mutex g_start_lock;
 std::vector<StartResult> g_start_results;
 
+// What a check's findings and kept reports depend on beyond the package: the platform with its processor
+// ("windows-x64", luma-format 6), the disc ("RMGE01"; empty: none) and the played language folder.
+struct CheckGame {
+    std::string platform;
+    std::string region;
+    std::string played;
+};
+CheckGame g_check_game;  // the last start's check's, for check_import; under g_start_lock
+
+// One luma_validate call on the package in `folder`: `installed` the other packages (with `kept_in` empty: every rule,
+// alone), `position` its place among them (UINT32_MAX alone). Its kept report into `kept_out`, its findings (when
+// asked) in English and the played language. False: the validator did not run (no library, or the package unreadable).
+bool validate_package(const Validator* v, std::string_view id, const std::filesystem::path& folder, const CheckGame& game,
+                      const std::vector<LumaInstalledMod>& installed, std::uint32_t position, const std::string& kept_in,
+                      std::string& kept_out, std::vector<Kept>* findings) {
+    if (v == nullptr) return false;
+    const std::string path = folder.string();
+    LumaValidateInput input{};
+    input.size = sizeof(input);
+    input.path = path.c_str();
+    input.platform = game.platform.c_str();
+    input.nebula = NEBULA_VERSION;
+    input.region = game.region.empty() ? nullptr : game.region.c_str();
+    input.luma_api = LUMA_API;
+    input.installed = installed.empty() ? nullptr : installed.data();
+    input.installed_count = static_cast<std::uint32_t>(installed.size());
+    input.position = position;
+    input.kept = kept_in.empty() ? nullptr : reinterpret_cast<const std::uint8_t*>(kept_in.data());
+    input.kept_size = kept_in.size();
+    LumaReport* const report = v->validate(&input);
+    if (v->state(report) < 0) {
+        const char* why = v->invalid(report);
+        std::fprintf(stderr, "[modlog] %.*s: the check did not run: %s\n", static_cast<int>(id.size()), id.data(),
+                     why != nullptr ? why : "?");
+        v->release(report);
+        return false;
+    }
+    std::uint64_t size = 0;
+    const std::uint8_t* bytes = v->kept(report, &size);
+    kept_out.assign(reinterpret_cast<const char*>(bytes), bytes != nullptr ? static_cast<std::size_t>(size) : 0u);
+    if (findings != nullptr) {
+        findings->clear();
+        const std::uint32_t count = v->count(report);
+        for (std::uint32_t i = 0; i < count; ++i) {
+            Kept k;
+            const LumaFinding* f = v->at(report, i, "UsEnglish");
+            if (f == nullptr) break;
+            k.code = f->code;
+            k.level = f->level;
+            k.line = f->line;
+            k.column = f->column;
+            k.file = f->file != nullptr ? f->file : "";
+            k.english = f->text != nullptr ? f->text : "";
+            f = v->at(report, i, game.played.c_str());
+            k.played = f != nullptr && f->text != nullptr ? f->text : k.english;
+            findings->push_back(std::move(k));
+        }
+    }
+    v->release(report);
+    return true;
+}
+
 void add_kept(std::string_view mod, const Kept& k) {
     const std::string mod_id(mod);
     LumaModLogEntry entry{};
@@ -554,16 +616,19 @@ void add_kept(std::string_view mod, const Kept& k) {
 }  // namespace
 
 void check_packages(const std::vector<StartPackage>& packages, std::string_view program, std::string_view language) {
+    // luma-format's platform names carry the processor ("windows-x64"), as a package's code does.
+    const CheckGame side{std::string(galaxy::luma::plugin_target()), std::string(program),
+                         language.empty() ? std::string("UsEnglish") : std::string(language)};
     {
         const std::lock_guard<std::mutex> lock(g_start_lock);
         g_start_results.clear();
+        g_check_game = side;
     }
     if (packages.empty()) return;
     const std::filesystem::path folder = galaxy::mods::mods_folder() / ".cooked" / "validate";
-    // luma-format's platform names carry the processor ("windows-x64"), as a package's code does.
-    const std::string platform(galaxy::luma::plugin_target());
-    const std::string region(program);
-    const std::string played = language.empty() ? std::string("UsEnglish") : std::string(language);
+    const std::string& platform = side.platform;
+    const std::string& region = side.region;
+    const std::string& played = side.played;
     // What a kept report and a finding's words depend on beyond the package's own files.
     const std::string game = std::string(NEBULA_VERSION) + "\t" + region + "\t" + platform + "\t" + played + "\t" +
                              std::to_string(LUMA_API);
@@ -587,50 +652,7 @@ void check_packages(const std::vector<StartPackage>& packages, std::string_view 
             looked = true;
             v = validator();
         }
-        if (v == nullptr) return false;
-        const std::string path = p.folder.string();
-        LumaValidateInput input{};
-        input.size = sizeof(input);
-        input.path = path.c_str();
-        input.platform = platform.c_str();
-        input.nebula = NEBULA_VERSION;
-        input.region = region.empty() ? nullptr : region.c_str();
-        input.luma_api = LUMA_API;
-        input.installed = installed.empty() ? nullptr : installed.data();
-        input.installed_count = static_cast<std::uint32_t>(installed.size());
-        input.position = position;
-        input.kept = kept_in.empty() ? nullptr : reinterpret_cast<const std::uint8_t*>(kept_in.data());
-        input.kept_size = kept_in.size();
-        LumaReport* const report = v->validate(&input);
-        if (v->state(report) < 0) {
-            const char* why = v->invalid(report);
-            std::fprintf(stderr, "[modlog] %s: the start's check did not run: %s\n", p.id.c_str(), why != nullptr ? why : "?");
-            v->release(report);
-            return false;
-        }
-        std::uint64_t size = 0;
-        const std::uint8_t* bytes = v->kept(report, &size);
-        kept_out.assign(reinterpret_cast<const char*>(bytes), bytes != nullptr ? static_cast<std::size_t>(size) : 0u);
-        if (findings != nullptr) {
-            findings->clear();
-            const std::uint32_t count = v->count(report);
-            for (std::uint32_t i = 0; i < count; ++i) {
-                Kept k;
-                const LumaFinding* f = v->at(report, i, "UsEnglish");
-                if (f == nullptr) break;
-                k.code = f->code;
-                k.level = f->level;
-                k.line = f->line;
-                k.column = f->column;
-                k.file = f->file != nullptr ? f->file : "";
-                k.english = f->text != nullptr ? f->text : "";
-                f = v->at(report, i, played.c_str());
-                k.played = f != nullptr && f->text != nullptr ? f->text : k.english;
-                findings->push_back(std::move(k));
-            }
-        }
-        v->release(report);
-        return true;
+        return validate_package(v, p.id, p.folder, side, installed, position, kept_in, kept_out, findings);
     };
     for (const StartPackage& p : packages) {
         Placed one{&p, files_stamp(p.folder), read_check(folder / (p.id + ".check")), read_file(folder / (p.id + ".kept")), {}};
@@ -769,6 +791,55 @@ bool package_refused(std::string_view id) {
         }
     }
     return false;
+}
+
+ImportCheck check_import(const std::filesystem::path& folder, const std::vector<StartPackage>& others) {
+    ImportCheck out;
+    const Validator* const v = validator();
+    if (v == nullptr) return out;
+    CheckGame side;
+    {
+        const std::lock_guard<std::mutex> lock(g_start_lock);
+        side = g_check_game;
+    }
+    if (side.platform.empty()) side = CheckGame{std::string(galaxy::luma::plugin_target()), {}, "UsEnglish"};
+    // Alone, every rule (validator 2 "at import": kept null), as the start's pass 1 does for a changed package.
+    std::string kept;
+    std::vector<Kept> findings;
+    if (!validate_package(v, "import", folder, side, {}, UINT32_MAX, {}, kept, &findings)) return out;
+    out.ran = true;
+    // Against the packages placed now, as the start's pass 2: their kept reports from the last start's check.
+    const std::filesystem::path validate = galaxy::mods::mods_folder() / ".cooked" / "validate";
+    std::vector<std::string> ids;
+    std::vector<std::string> reports;
+    std::vector<bool> on;
+    for (const StartPackage& p : others) {
+        std::string report = read_file(validate / (p.id + ".kept"));
+        if (report.empty()) continue;
+        ids.push_back(p.id);
+        reports.push_back(std::move(report));
+        on.push_back(p.on);
+    }
+    if (!ids.empty() && !kept.empty()) {
+        std::vector<LumaInstalledMod> installed(ids.size());
+        for (std::size_t i = 0; i < ids.size(); ++i) {
+            installed[i].file = ids[i].c_str();
+            installed[i].on = on[i] ? 1u : 0u;
+            installed[i].kept = reinterpret_cast<const std::uint8_t*>(reports[i].data());
+            installed[i].kept_size = reports[i].size();
+        }
+        std::string again;
+        std::vector<Kept> with_others;
+        if (validate_package(v, "import", folder, side, installed, static_cast<std::uint32_t>(installed.size()), kept, again,
+                             &with_others)) {
+            findings = std::move(with_others);
+        }
+    }
+    for (const Kept& k : findings) {
+        out.findings.push_back({k.code, k.level == 0, k.file, k.played});
+        out.refused = out.refused || k.level == 0;
+    }
+    return out;
 }
 
 const char* refused_sentence() {

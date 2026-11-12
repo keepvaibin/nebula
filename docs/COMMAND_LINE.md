@@ -18,6 +18,7 @@ and a value. The launcher passes `--pak` and `--saves`; the Android app also pas
 | `--luma-describe <file> [--module <file>]` | First argument only, for the build, not for players: loads the game module (default as `--module`), writes its type rows as JSON (contract types) to the file and exits: 0, or 2 when the file cannot be written. tools/lumacore/compare_types.py checks them against `luma_types.json`. Needs no `--pak`. |
 | `--timeline <file>` | Where the recorded timeline goes; default `diagnostics/timeline-<process id>.bin` in the data folder. |
 | `--seconds <n>` | End the game after n seconds. |
+| `--import <file or folder>` | Import this mod as a drop on the window does, then show the result (the validator's findings; nothing is added when it finds an error). Given again for each. "Open with" and the `.luma` association start the game with it; a game already running for the same settings folder takes the files and comes forward. |
 | `--gpu-start-retry <n>` | Set by the game itself when it starts again because no graphics memory was free: the tries so far (5 at most). |
 
 The GPU is a setting: `gpu=` in `config.ini`, chosen in Nebula Settings (empty: the high-performance GPU).
@@ -26,7 +27,7 @@ The GPU is a setting: `gpu=` in `config.ini`, chosen in Nebula Settings (empty: 
 
 | Command | |
 |---|---|
-| `--import-mod <folder or archive>...` | Import mods into the settings folder's `mods`; prints the result as JSON. |
+| `--import-mod <folder or archive>...` | Import mods into the settings folder's `mods`, each package through the validator first (nothing is added when it finds an error); prints the result as JSON, each with `checked`, `refused` and `findings` (`code`, `error`, `file`, `text`). |
 | `--remove-mod <id>` | Remove an imported mod. |
 | `--list-mods` | The imported mods as JSON. |
 

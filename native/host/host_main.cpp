@@ -3208,7 +3208,8 @@ bool one_game_at_a_time() {
     }
     log_line("host:", "the game is already running");
     // Up to 3 s: the first start may be opening its window still.
-    if (!galaxy::render::host_window::show_existing_instance(key != 0u ? key : 1u, 3000u)) {
+    // Files it was started to import (Open with, --import) go to the running game, which imports them.
+    if (!galaxy::render::host_window::show_existing_instance(key != 0u ? key : 1u, 3000u, galaxy::launch_args().imports)) {
         log_line("host:", "the running game has no window to bring forward");
     }
     return true;
@@ -3712,14 +3713,32 @@ int run_mods_tool() {
     }
     int failed = 0;
     std::string out = "{\"results\":[";
+    // The same check as the game's own imports (task 6.1, validator 2 "at import"): against the packages placed now.
+    const galaxy::mods::ImportCheck check = [](const fs::path& staged, const std::string& id, galaxy::mods::ImportResult& result) {
+        std::vector<galaxy::modlog::StartPackage> others;
+        for (const galaxy::mods::ModInfo& mod : galaxy::mods::scan_mods()) {
+            if (mod.package && mod.id != id) others.push_back({mod.id, mod.path, mod.enabled});
+        }
+        const galaxy::modlog::ImportCheck found = galaxy::modlog::check_import(staged, others);
+        result.checked = found.ran;
+        result.refused = found.refused;
+        for (const galaxy::modlog::ImportFinding& f : found.findings) result.findings.push_back({f.error, f.code, f.file, f.text});
+        return !found.refused;
+    };
     for (std::size_t i = 0; i < sources.size(); ++i) {
-        const galaxy::mods::ImportResult result = galaxy::mods::import_mod(sources[i], settings_folder / "mods");
+        const galaxy::mods::ImportResult result = galaxy::mods::import_mod(sources[i], settings_folder / "mods", {}, nullptr, check);
         failed += result.ok ? 0 : 1;
+        std::string findings;
+        for (const galaxy::mods::ImportResult::Finding& f : result.findings) {
+            findings += std::string(findings.empty() ? "" : ",") + "{\"code\":" + std::to_string(f.code) + ",\"error\":" +
+                        (f.error ? "true" : "false") + ",\"file\":" + json_text(f.file) + ",\"text\":" + json_text(f.text) + "}";
+        }
         out += std::string(i ? "," : "") + "{\"ok\":" + (result.ok ? "true" : "false") + ",\"id\":" + json_text(result.id) +
                ",\"replaced\":" + (result.replaced ? "true" : "false") +
                ",\"already\":" + (result.already ? "true" : "false") + ",\"title\":" + json_text(result.title) + ",\"files\":" + std::to_string(result.files) +
                ",\"bytes\":" + std::to_string(result.bytes) + ",\"kinds\":" + json_text(result.kinds) +
-               ",\"message\":" + json_text(result.message) + "}";
+               ",\"message\":" + json_text(result.message) + ",\"checked\":" + (result.checked ? "true" : "false") +
+               ",\"refused\":" + (result.refused ? "true" : "false") + ",\"findings\":[" + findings + "]}";
     }
     out += "],\"ok\":" + std::string(failed == 0 && !sources.empty() ? "true" : "false") + "}";
     std::printf("%s\n", out.c_str());
@@ -3767,6 +3786,8 @@ void read_launch_args(int argc, char** argv) {
             args.dump_tunables = path_at(i + 1);
         } else if (key == "--extension") {
             args.extensions.push_back(path_at(i + 1));
+        } else if (key == "--import") {
+            args.imports.push_back(path_at(i + 1));
         } else if (key == "--diagnostics") {
             std::string_view unknown;
             unsigned what = 0u;
@@ -3949,7 +3970,7 @@ int main(int argc, char** argv) {
             module = arg_path(i + 1);
         } else if (key == "--diagnostics" || key == "--timeline" || key == "--data" || key == "--settings" ||
                    key == "--crash-dumps" || key == "--gpu-validation" || key == "--console-log" ||
-                   key == "--gpu-start-retry" || key == "--dump-tunables" || key == "--extension") {
+                   key == "--gpu-start-retry" || key == "--dump-tunables" || key == "--extension" || key == "--import") {
             // Read above, before anything uses them.
         } else if (key == "--seconds") {
             seconds = std::atof(argv[i + 1]);

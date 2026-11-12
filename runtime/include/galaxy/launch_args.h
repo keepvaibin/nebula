@@ -109,6 +109,10 @@ struct LaunchArgs {
     bool started_hidden = false;
     unsigned gpu_start_retry = 0u;      // --gpu-start-retry: starts so far that found no graphics memory free
     std::vector<std::filesystem::path> extensions;  // --extension, each time given: host extensions (host_extension.h)
+    // --import, each time given: mod files or folders imported as a drop on the window imports them, the result page
+    // after (task 6.1). "Open with" and the .luma association start the game with it; a game already running for the
+    // same folder takes them (show_existing_instance).
+    std::vector<std::filesystem::path> imports;
 };
 
 inline LaunchArgs g_launch_args;

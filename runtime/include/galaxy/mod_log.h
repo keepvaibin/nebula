@@ -39,6 +39,28 @@ struct StartPackage {
 // with no package.
 void check_packages(const std::vector<StartPackage>& packages, std::string_view program, std::string_view language);
 
+// One finding of an import's check, worded in the played language.
+struct ImportFinding {
+    std::uint32_t code = 0;  // 509 is L509
+    bool error = false;      // an Error refuses the import; else a Note
+    std::string file;        // the entry inside the mod ("" for the whole mod)
+    std::string text;
+};
+
+// An import's check (validator 2 "at import", task 6.1): `ran` false when the validator did not run (the importer's
+// library is missing; nothing is refused then, as at the start); `refused` when it found an Error.
+struct ImportCheck {
+    bool ran = false;
+    bool refused = false;
+    std::vector<ImportFinding> findings;
+};
+
+// The validator on a package staged for import (`folder`, laid out as a placed mod): every rule (no kept report), then
+// against `others`, the packages placed now in list order with their kept reports from the last start's check (L800 to
+// L802; the import goes last, a package without a kept report is left out). The disc and language are the last start's
+// check's (before any: no disc, English). Any thread; it reads only the validator's library and the kept reports.
+ImportCheck check_import(const std::filesystem::path& folder, const std::vector<StartPackage>& others);
+
 // After add_not_started: the start's check's findings, each a VALIDATOR entry (Error or Note as the validator's).
 void add_start_findings();
 

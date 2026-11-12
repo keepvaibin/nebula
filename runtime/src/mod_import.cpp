@@ -465,7 +465,8 @@ bool is_mod_archive(const fs::path& path) {
 }
 
 ImportResult import_mod(const fs::path& source, const fs::path& mods_folder,
-                        const std::function<void(const ImportProgress&)>& progress, const std::atomic<bool>* cancel) {
+                        const std::function<void(const ImportProgress&)>& progress, const std::atomic<bool>* cancel,
+                        const ImportCheck& check) {
     ImportResult result;
     std::error_code error;
     const bool folder = fs::is_directory(source, error);
@@ -505,7 +506,8 @@ ImportResult import_mod(const fs::path& source, const fs::path& mods_folder,
         return result;
     }
     if (!folder) lift_top_folder(writer.staging);
-    if (const std::optional<galaxy::luma::Manifest> manifest = galaxy::luma::read_manifest(writer.staging); manifest && !manifest->id.empty()) {
+    const std::optional<galaxy::luma::Manifest> manifest = galaxy::luma::read_manifest(writer.staging);
+    if (manifest && !manifest->id.empty()) {
         // A .luma is its id: the folder holding that id is the one updated, whatever its name (copied in by hand, or
         // renamed). A folder of its name holding another mod is left alone: this one takes a name of its own.
         result.new_version = manifest->version;
@@ -548,6 +550,15 @@ ImportResult import_mod(const fs::path& source, const fs::path& mods_folder,
         result.ok = true;
         describe(result);
         result.message = "ALREADY IN YOUR MODS: " + result.title;
+        return result;
+    }
+    // A package passes the check before anything is placed (validator 2 "at import"): refused, nothing is added.
+    if (manifest && check && !check(writer.staging, result.id, result) && result.refused) {
+        fs::remove_all(writer.staging, error);
+        result.ok = false;
+        const std::string name = manifest->name.fallback.empty() ? manifest->id : manifest->name.fallback;
+        result.title = name;
+        result.message = "NOT IMPORTED: " + name;  // the result page lists the findings under it
         return result;
     }
     // In place: an existing mod of that name is replaced (its settings, kept by name, stay).

@@ -2268,6 +2268,78 @@ std::string s_mod_import_message;  // the outcome, the row's help
 std::atomic<bool> s_mod_import_busy{false};
 std::atomic<bool> s_mod_dialog_open{false};
 
+// The last batch's outcomes for the result page (task 6.1): the same page after a drop, the picker, Open with or a
+// link. Under s_mod_import_mutex; the page shows from the batch's end until Done.
+struct ImportOutcome {
+    std::string source;   // the file or folder's name
+    std::string outcome;  // IMPORTED, UPDATED, ALREADY IN YOUR MODS, NOT IMPORTED or FAILED
+    std::string title;    // the mod's name (else the source's)
+    std::string id;       // its folder in the mods folder ("" when nothing was added)
+    std::string message;  // the importer's line (its words before ": " translated)
+    bool checked = false;
+    bool refused = false;
+    std::vector<galaxy::mods::ImportResult::Finding> findings;
+};
+std::vector<ImportOutcome> s_import_outcomes;
+std::atomic<bool> s_import_page_open{false};
+
+const char* import_outcome_word(const galaxy::mods::ImportResult& result) {
+    if (result.refused) return "NOT IMPORTED";
+    if (!result.ok) return "FAILED";
+    if (result.already) return "ALREADY IN YOUR MODS";
+    return result.replaced ? "UPDATED" : "IMPORTED";
+}
+
+// In a harness run, each outcome of the batch as the fact import.result.<n> (n from 1 in the batch's order):
+// {"source", "outcome", "title", "id", "checked", "refused", "findings": [{"code", "error", "file", "text"}]}.
+void write_import_facts() {
+    std::vector<ImportOutcome> outcomes;
+    {
+        const std::lock_guard<std::mutex> lock(s_mod_import_mutex);
+        outcomes = s_import_outcomes;
+    }
+    for (std::size_t n = 0; n < outcomes.size(); ++n) {
+        const ImportOutcome& o = outcomes[n];
+        std::string json = "{\"source\":";
+        galaxy::modlog::append_json_text(json, o.source);
+        json += ",\"outcome\":";
+        galaxy::modlog::append_json_text(json, o.outcome);
+        json += ",\"title\":";
+        galaxy::modlog::append_json_text(json, o.title);
+        json += ",\"id\":";
+        galaxy::modlog::append_json_text(json, o.id);
+        json += std::string(",\"checked\":") + (o.checked ? "true" : "false") + ",\"refused\":" + (o.refused ? "true" : "false") +
+                ",\"findings\":[";
+        for (std::size_t f = 0; f < o.findings.size(); ++f) {
+            json += (f == 0u ? "{\"code\":" : ",{\"code\":") + std::to_string(o.findings[f].code) +
+                    ",\"error\":" + (o.findings[f].error ? "true" : "false") + ",\"file\":";
+            galaxy::modlog::append_json_text(json, o.findings[f].file);
+            json += ",\"text\":";
+            galaxy::modlog::append_json_text(json, o.findings[f].text);
+            json += '}';
+        }
+        json += "]}";
+        galaxy::modlog::fact("import.result." + std::to_string(n + 1u), json);
+    }
+}
+
+// The validator on a package before it is placed (validator 2 "at import"), against the packages placed now but the
+// one it replaces. Off the UI thread: takes s_mods_mutex only to copy the list.
+bool check_import_package(const std::filesystem::path& staged, const std::string& id, galaxy::mods::ImportResult& result) {
+    std::vector<galaxy::modlog::StartPackage> others;
+    {
+        const std::lock_guard<std::mutex> lock(s_mods_mutex);
+        for (const galaxy::mods::ModInfo& mod : mods_list()) {
+            if (mod.package && mod.id != id) others.push_back({mod.id, mod.path, mod.enabled});
+        }
+    }
+    const galaxy::modlog::ImportCheck found = galaxy::modlog::check_import(staged, others);
+    result.checked = found.ran;
+    result.refused = found.refused;
+    for (const galaxy::modlog::ImportFinding& f : found.findings) result.findings.push_back({f.error, f.code, f.file, f.text});
+    return !found.refused;
+}
+
 void run_mod_imports(std::vector<std::filesystem::path> sources) {
     if (sources.empty()) return;
     if (s_mod_import_busy.exchange(true, std::memory_order_acq_rel)) {
@@ -2281,6 +2353,7 @@ void run_mod_imports(std::vector<std::filesystem::path> sources) {
         unsigned imported = 0;
         unsigned failed = 0;
         unsigned added = 0;
+        std::vector<ImportOutcome> outcomes;
         for (std::size_t i = 0; i < sources.size(); ++i) {
             const auto progress = [&](const galaxy::mods::ImportProgress& p) {
                 char text[32]{};
@@ -2300,7 +2373,7 @@ void run_mod_imports(std::vector<std::filesystem::path> sources) {
             } else {
                 // An exception out of this thread ends the process: a failed import is a result.
                 try {
-                    result = galaxy::mods::import_mod(sources[i], folder, progress);
+                    result = galaxy::mods::import_mod(sources[i], folder, progress, nullptr, check_import_package);
                 } catch (const std::exception&) {
                     result = galaxy::mods::ImportResult{};
                     result.message = "THE IMPORT FAILED";
@@ -2311,13 +2384,26 @@ void run_mod_imports(std::vector<std::filesystem::path> sources) {
             (result.ok ? imported : failed) += 1u;
             added += result.ok && !result.already ? 1u : 0u;
             message = message.empty() ? result.message : message + "; " + result.message;
+            ImportOutcome one;
+            one.source = galaxy::path_text(sources[i].filename());
+            one.outcome = import_outcome_word(result);
+            one.title = result.title.empty() ? one.source : result.title;
+            one.id = result.ok ? result.id : std::string();
+            one.message = result.message;
+            one.checked = result.checked;
+            one.refused = result.refused;
+            one.findings = std::move(result.findings);
+            outcomes.push_back(std::move(one));
         }
         {
             const std::lock_guard<std::mutex> lock(s_mod_import_mutex);
             s_mod_import_value = failed == 0u ? "DONE" : imported == 0u ? "FAILED" : "SOME FAILED";
             // The restart note only when a mod was added or updated: one already there changes nothing.
             s_mod_import_message = added != 0u ? message + ". MODS APPLY WHEN NEBULA RESTARTS" : message;
+            s_import_outcomes = std::move(outcomes);
         }
+        write_import_facts();
+        s_import_page_open.store(true, std::memory_order_release);
         {
             const std::lock_guard<std::mutex> lock(s_mods_mutex);
             reread_mods_locked();
@@ -2407,6 +2493,7 @@ std::string mod_details(const galaxy::mods::ModInfo& mod) {
 }
 
 void close_mod_options(const RenderConfig& render);
+void close_import_page(const RenderConfig& render);
 
 void open_mod_about();
 void ask_mod_remove();
@@ -2512,6 +2599,36 @@ std::vector<SettingsRow> log_page(const std::vector<galaxy::mods::ModInfo>& mods
             galaxy::modlog::page_fact(static_cast<std::uint32_t>(r), rows[r].label, rows[r].value);
         }
     }
+    return rows;
+}
+
+// The imports' result (task 6.1), one page whatever started them: under each source's mod (its name, as is) what
+// happened, its file or folder as the value and the importer's line as the help; then each of the validator's
+// findings in the played language (as is), the entry inside the mod as the value; Done goes back to the lists.
+// With s_mods_mutex held.
+std::vector<SettingsRow> import_page() {
+    std::vector<ImportOutcome> outcomes;
+    {
+        const std::lock_guard<std::mutex> lock(s_mod_import_mutex);
+        outcomes = s_import_outcomes;
+    }
+    std::vector<SettingsRow> rows;
+    for (const ImportOutcome& o : outcomes) {
+        SettingsRow heading{mods_ui_text(o.title, 40u), {}, nullptr, {}, true};
+        heading.names = 1u;
+        rows.push_back(std::move(heading));
+        SettingsRow what{o.outcome, mods_ui_text(o.source, 40u), nullptr, mods_ui_text(o.message, 120u)};
+        what.names = 2u;
+        rows.push_back(std::move(what));
+        for (const galaxy::mods::ImportResult::Finding& f : o.findings) {
+            SettingsRow found{f.text, f.file, nullptr, f.text};
+            found.names = 1u | 2u | 4u;
+            rows.push_back(std::move(found));
+        }
+    }
+    SettingsRow done = button_row({}, {"DONE"}, [](RenderConfig& draft, unsigned) { close_import_page(draft); }, {});
+    done.key = "import-buttons";
+    rows.push_back(std::move(done));
     return rows;
 }
 
@@ -2979,6 +3096,10 @@ std::vector<SettingsRow> mods_page(const RenderConfig&) {
     for (galaxy::mods::ModInfo& mod : mods) {
         (void)galaxy::mods::update_pack_categories(mod);
     }
+    // An import's result first: a mod it added that runs code is asked about after it.
+    if (s_import_page_open.load(std::memory_order_acquire)) {
+        return import_page();
+    }
     if (s_consent_open) {
         if (galaxy::mods::ModInfo* asked = first_code_to_allow_locked()) return consent_page(*asked);
         s_consent_open = false;  // answered elsewhere (turned off, removed)
@@ -3027,6 +3148,22 @@ std::vector<SettingsRow> mods_page(const RenderConfig&) {
 #endif
 }
 
+// Back from an import's result to the lists, on the first mod it added, else the buttons.
+void close_import_page(const RenderConfig& render) {
+    std::string id;
+    {
+        const std::lock_guard<std::mutex> lock(s_mod_import_mutex);
+        for (const ImportOutcome& o : s_import_outcomes) {
+            if (!o.id.empty() && o.outcome != "ALREADY IN YOUR MODS") {
+                id = o.id;
+                break;
+            }
+        }
+    }
+    s_import_page_open.store(false, std::memory_order_release);
+    select_mods_row(render, id.empty() ? std::string("buttons") : "mod:" + id);
+}
+
 // Back from a mod's options, or the log, to the lists, on that mod or the LOG row.
 void close_mod_options(const RenderConfig& render) {
     std::string id;
@@ -3063,6 +3200,12 @@ bool mods_page_key(std::uintptr_t key, bool accept, bool was_down) {
                                      static_cast<unsigned>(rows.size()) - 1u);
         if ((accept || key == VK_SPACE) && !rows.empty() && rows[at].key.rfind("log:", 0) == 0) {
             if (!was_down) open_log_entry(static_cast<std::size_t>(std::strtoul(rows[at].key.c_str() + 4, nullptr, 10)));
+            return true;
+        }
+        if (s_import_page_open.load(std::memory_order_acquire)) {
+            // An import's result: Escape, Backspace or B is Done.
+            if (key != VK_ESCAPE && key != VK_BACK) return false;
+            if (!was_down) close_import_page(s_settings_draft);
             return true;
         }
         bool asking = false;
