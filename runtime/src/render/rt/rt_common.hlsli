@@ -279,6 +279,9 @@ float rt_water_clear() {
     return g_look.w > 0.0f ? g_look.w : 600.0f;
 }
 static const float kWaterLayer = 2.0f;  // water hits this near one another are one sheet of it drawn twice (b58b)
+// Pure water's absorption against green's (Pope and Fry 1997: 0.340, 0.0565, 0.0092 per metre at 650, 550, 450 nm;
+// LIGHT-MODEL.md 7; FB b58c): the way is in units of the stage's water clear, green's 1/e way.
+static const float3 kWaterAbsorb = float3(0.340f, 0.0565f, 0.0092f) / 0.0565f;
 
 // What the blended things on a ray let through (plan 13.4), rgb; `first`: how far along the first of them stands (-1:
 // none). Every candidate is weighed and none committed (the product does not care for order), at most four: glass and
@@ -340,7 +343,7 @@ float3 let_through(float3 origin, float3 direction, float reach, out float first
     // One layer: the point is under that water, the way is to it; two or more: the ray crosses a body of water.
     if (waters != 0u) {
         const float way = waters == 1u ? water_near : water_far - water_near;
-        tint *= exp(-way / rt_water_clear() * float3(1.6f, 1.0f, 0.7f));
+        tint *= exp(-way / rt_water_clear() * kWaterAbsorb);
     }
     return tint;
 }
