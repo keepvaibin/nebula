@@ -5,8 +5,9 @@
 // Hillaire 2015: the froxel integration of Frostbite and Unreal's volumetric fog), so each pixel takes the air in
 // front of it with one trilinear fetch at its own depth (program.hlsli traced_scatter), blended things at theirs.
 // Each thread one column of froxels; through the slices, from the eye to each slice's middle:
-//   source = Vol.rgb + K / (A + K) V (hg(cos) - 1)   (Vol.rgb holds the sun's light as if it went every way:
-//            (A s + K V) / (A + K) + local; the sun's part is put back by Henyey-Greenstein, g = kForward)
+//   source = Vol.rgb + K / (A + K) V (hg(cos) / 4 - 1)   (Vol.rgb holds the sun's light as a surface square to it
+//            takes it: (A s + K V) / (A + K) + local; the air scatters pi p of it, p Henyey-Greenstein's normalised
+//            over the sphere (g = kForward): hg4pi / 4; LIGHT-MODEL.md 8, FB b72)
 //   L += T source (1 - e^(-sigma d)),  T *= e^(-sigma d)
 // Stored (Rgba16f 3D, as the volume) rgb L in C1's unit, the one traced_scatter adds it to (white air under the
 // stage's full light, every way alike: 1; FB b55), a T. sigma: g_pass_value[0].x (the stage's air, per unit), A and K
@@ -44,6 +45,9 @@ void main(uint3 id : SV_DispatchThreadID) {
     const float3 look = normalize(rt_eye_ray(g_ray, pixel));
     const float phase = hg4pi(dot(look, g_sun.xyz), kForward);
     const bool sun = rt_sun_traced() && (g_more.z & 128u) == 0u;  // the emitters alone: no sun (b60)
+    // The volume's sun part (rt_air_share) is there unless the emitters alone (b60): without a traced sun it goes every
+    // way alike (hg4pi 1), still a quarter of it scattered (b72).
+    const bool sun_held = (g_more.z & 128u) == 0u;
     const float3 sun_share = rt_air_sun();  // the sun's part of the air's share, as the light volume's (b64)
     float3 light = float3(0.0f, 0.0f, 0.0f);
     float through = 1.0f, from = 0.0f;
@@ -53,8 +57,8 @@ void main(uint3 id : SV_DispatchThreadID) {
         const float d = max(to - from, 0.0f) / max(-look.z, 0.05f);
         const float4 air = g_air.Load(int4(id.xy, z, 0));
         float3 source = air.rgb;
-        if (sun) {
-            source += sun_share * air.a * (phase - 1.0f);
+        if (sun_held) {
+            source += sun_share * air.a * (0.25f * (sun ? phase : 1.0f) - 1.0f);  // pi p = hg4pi / 4 (b72)
         }
         const float kept = exp(-sigma * d);
         light += through * max(source, 0.0f) * (1.0f - kept);

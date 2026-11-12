@@ -542,16 +542,16 @@ void rt_share_terms(bool lit, float nl, float3 v, out float3 s0, out float3x3 mo
     }
 }
 
-// The air's share of the stage's light (FB b64): the sun's part a unit of V gives (rt_air_sun) and the whole with the
-// sky's part by s (rt_air_share). The art's a channel at a time in linear light (M1), the model's under the relight:
-// the sun as the open ground facing up takes it (up.s = form.y).
+// The air's share of the stage's light (FB b64, b72): the sun's part a unit of V gives (rt_air_sun) and the whole with
+// the sky's part by s (rt_air_share). The art's a channel at a time in linear light (M1), the model's under the
+// relight: the sun on a white surface square to it (E_perp / pi; LIGHT-MODEL.md 8: no n.s, no u).
 float3 rt_air_sun() {
     const float3 sky = rt_lin(g_shade.authored.rgb);
     const float3 full = rt_lin(saturate(g_shade.authored.rgb + g_shade.key.rgb));
     const float3 ok = float3(full >= 1e-4f);
     const float3 art = ok * max(full - sky, 0.0f) / max(full, 1e-4f);
     const float t = rt_form();
-    return t > 0.0f ? lerp(art, rt_stage_light().sun * g_shade.form.y, t) : art;
+    return t > 0.0f ? lerp(art, rt_stage_light().sun, t) : art;
 }
 float3 rt_air_share(float s, float3 v) {
     const float3 sky = rt_lin(g_shade.authored.rgb);
