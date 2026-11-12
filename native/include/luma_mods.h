@@ -79,11 +79,18 @@ typedef struct LumaModsService {
        the Mods page applied it (Apply, or leaving the page). The value read by `option` in that call is the new one.
        A later call replaces fn and user; a null fn stops the events. LUMA_OK. */
     int32_t (*watch_options)(const LumaMod* mod, LumaEventFn fn, void* user);
+    /* 1.0. Game thread. `fn` gets a STOPPED event (at the start of a frame) each time another mod stops while this
+       one runs: switched off on the Mods page, removed, reloaded, or stopped by the guard; after its stop, before its
+       code is unloaded. A library mod removes what it made for that mod (LumaKit rule 4). A later call replaces fn
+       and user; a null fn stops the events. LUMA_OK. */
+    int32_t (*watch_mods)(const LumaMod* mod, LumaEventFn fn, void* user);
 } LumaModsService;
 
 /* Events of mods (LumaEvent.kind) to watch_options' fn; `handle` is 0. */
 typedef enum LumaModsEvent {
-    LUMA_MODS_EVENT_OPTION = 1 /* data: none; value: the option's place in luma.json `options` (0 the first); status: LUMA_OK */
+    LUMA_MODS_EVENT_OPTION = 1, /* data: none; value: the option's place in luma.json `options` (0 the first); status: LUMA_OK */
+    LUMA_MODS_EVENT_STOPPED = 2 /* to watch_mods' fn: data: the stopped mod's id, UTF-8 with a NUL (valid during the
+                                   call); data_size: its length without the NUL; value: 0; status: LUMA_OK */
 } LumaModsEvent;
 
 /* The spaces of 1.0 (contract section 3): numbers 0x01000000 to 0x01FFFFFF in each. */
