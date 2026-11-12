@@ -44,9 +44,11 @@ pub fn read_plan(text: &str) -> Result<(String, Vec<Change>)> {
 }
 
 /// Where a mod's model file goes and the game model it stands in for (models contract 2, G-M1): `X.bdl.glb` and
-/// `X.bmd.glb` that file; a plain `X.glb` in an archive whichever of `X.bdl` and `X.bmd` the game's archive has; a model
-/// outside an archive (a new model) `X.bmd`, standing in for nothing. Without the game's store the place is the one
-/// its name gives and its joints are not numbered by the game's (a Note says so).
+/// `X.bmd.glb` that file; a plain `X.glb` in an archive whichever of `X.bdl` and `X.bmd` the game's archive has. A model
+/// outside an archive is a new model, standing in for nothing (a mod's `assets/<path>.glb`, the store's
+/// `Luma/<id>/<path>.glb`): it becomes an object archive of its own laid out as the game's, `<path>.arc/X.bmd` (or
+/// `X.bdl` when named so), its clips inside, which the game loads as it loads its own. Without the game's store the
+/// place is the one its name gives and its joints are not numbered by the game's (a Note says so).
 fn model_place(change: &Change, base: Option<&Path>) -> Result<(String, Option<super::gltf::GameModel>)> {
     use super::refuse::{note, refuse};
     let lower = change.path.to_ascii_lowercase();
@@ -56,7 +58,9 @@ fn model_place(change: &Change, base: Option<&Path>) -> Result<(String, Option<s
     let stem = file.split('.').next().unwrap_or(file);
     let written = if explicit { without_modern.to_string() } else { format!("{}.bmd", &change.path[..change.path.len() - file.len() + stem.len()]) };
     if !folder.to_ascii_lowercase().ends_with(".arc") {
-        return Ok((written, None));
+        let ending = if lower.ends_with(".bdl.gltf") || lower.ends_with(".bdl.glb") { "bdl" } else { "bmd" };
+        let archive = &change.path[..change.path.len() - file.len() + stem.len()];
+        return Ok((format!("{archive}.arc/{stem}.{ending}"), None));
     }
     let Some(base) = base else {
         note("Cook.Model.GameUnknown", &[("file", change.path.clone())]);
@@ -93,6 +97,31 @@ fn model_place(change: &Change, base: Option<&Path>) -> Result<(String, Option<s
     }
 }
 
+/// A new model's level of detail (models contract 6: `<path>Middle.glb` or `<path>Low.glb` outside an archive, the
+/// endings with their capitals as LodCtrl names them) whose base model `<path>` is none of the mod's files: refused
+/// as `Cook.Model.LevelAlone` {file, model}. The store compares paths without case, so the base is found so.
+fn level_alone(change: &Change, changes: &[Change]) -> Result<()> {
+    let lower = change.path.to_ascii_lowercase();
+    let (folder, file) = change.path.rsplit_once('/').map_or(("", change.path.as_str()), |(f, n)| (f, n));
+    if folder.to_ascii_lowercase().ends_with(".arc") || !(lower.ends_with(".glb") || lower.ends_with(".gltf")) {
+        return Ok(());
+    }
+    let stem = file.split('.').next().unwrap_or(file);
+    let Some(base) = ["Middle", "Low"].iter().find_map(|level| stem.strip_suffix(level).filter(|b| !b.is_empty())) else {
+        return Ok(());
+    };
+    let prefix = if folder.is_empty() { String::new() } else { format!("{folder}/") };
+    let wanted = format!("{prefix}{base}").to_ascii_lowercase();
+    let is_base = |c: &Change| {
+        let path = c.path.to_ascii_lowercase();
+        !c.merge && [".glb", ".gltf", ".bmd.glb", ".bmd.gltf", ".bdl.glb", ".bdl.gltf"].iter().any(|e| path == format!("{wanted}{e}"))
+    };
+    if changes.iter().any(is_base) {
+        return Ok(());
+    }
+    Err(super::refuse::refuse("Cook.Model.LevelAlone", &[("file", change.path.clone()), ("model", format!("{prefix}{base}.glb"))]))
+}
+
 /// What a modern file of a mod becomes: each file's place in the game, with the game's ending, its bytes, and whether
 /// they are the store's already (else the cooker reads them). Empty: it isn't one. A model's animations go beside it.
 fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Vec<(String, Vec<u8>, bool)>> {
@@ -118,7 +147,8 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         let (native_path, game) = model_place(change, base)?;
         let (model, animations, made) = super::gltf::to_files_for(bytes, change.source.parent(), stem, game.as_ref())?;
         super::refuse::record(super::refuse::CookFact::Model { path: native_path.clone(), source: change.path.clone(), facts: made });
-        let folder = change.path.rfind('/').map_or("", |at| &change.path[..at + 1]);
+        // Clips go beside the model in its archive.
+        let folder = native_path.rfind('/').map_or(String::new(), |at| native_path[..at + 1].to_string());
         let mut out = vec![(native_path, model, true)];
         out.extend(animations.into_iter().map(|(file, clip)| (format!("{folder}{file}"), clip, true)));
         return Ok(out);
@@ -176,6 +206,10 @@ fn cook_change(change: &Change, bytes: Vec<u8>, waves: &BTreeMap<String, Vec<aud
 /// paths and reasons are returned. The patches by key apply after the files and merges, and their facts go in `facts`.
 pub fn write_overlay(game_id: &str, changes: &[Change], patches: &PlanPatches, base: Option<&Path>, output: &Path, facts: &mut Vec<Fact>,
                      stats: &mut Stats) -> Result<Vec<(String, String)>> {
+    // The store's header holds a disc id of six letters (RMGE01): checked before anything is written.
+    if game_id.len() != 6 || !game_id.bytes().all(|b| b.is_ascii_alphanumeric()) {
+        bail!("{game_id:?} is not a game's disc id (six letters and digits, as RMGE01)");
+    }
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent).with_context(|| format!("{} cannot be created", parent.display()))?;
     }
@@ -215,6 +249,7 @@ pub fn write_overlay(game_id: &str, changes: &[Change], patches: &PlanPatches, b
             .with_context(|| format!("{} cannot be read", change.source.display()))
             .and_then(|bytes| {
                 stats.bytes_in += bytes.len() as u64;
+                level_alone(change, changes)?;
                 let modern = modern_files(change, &bytes, base)?;
                 if modern.is_empty() {
                     return Ok(vec![(change.path.clone(), cook_change(change, bytes, &waves, stats)?)]);
@@ -249,7 +284,8 @@ pub fn write_overlay(game_id: &str, changes: &[Change], patches: &PlanPatches, b
         }
     }
     apply_merges(changes, base, &mut pak, &temporary, &mut at, &mut placed, &mut failed, stats)?;
-    apply_patches(patches, base, &mut pak, &temporary, &mut at, &mut placed, &mut failed, facts, stats)?;
+    let patches = effect_table_patches(patches, base, &mut pak, &temporary, &placed, &mut failed)?;
+    apply_patches(&patches, base, &mut pak, &temporary, &mut at, &mut placed, &mut failed, facts, stats)?;
     complete_archives(changes, base, &mut pak, &mut at, &mut placed, &mut failed, stats)?;
     if placed.is_empty() {
         let _ = fs::remove_file(&temporary);
@@ -316,7 +352,8 @@ fn message_languages(path: &str, base: Option<&Path>, placed: &[store::Placed]) 
 #[allow(clippy::too_many_arguments)]
 fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, temporary: &Path, at: &mut u64, placed: &mut Vec<store::Placed>,
                 failed: &mut Vec<(String, String)>, stats: &mut Stats) -> Result<()> {
-    let mut merges: Vec<&Change> = changes.iter().filter(|c| c.merge).collect();
+    // A mod's effects are cooked after every other merge (apply_effects).
+    let mut merges: Vec<&Change> = changes.iter().filter(|c| c.merge && super::effects::source_of(&c.path).is_none()).collect();
     merges.sort_by_key(|c| {
         let path = c.path.to_ascii_lowercase();
         path.ends_with(".jpc") || path.ends_with(".jpc.json")
@@ -330,11 +367,6 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
     let place_of = |text: &str| store::store_path(text.trim_start_matches('/')).to_ascii_lowercase();
     for change in merges {
         let result = (|| -> Result<()> {
-            // A picture beside particles written as JSON is one of their textures: their cook reads it.
-            let path = lower(&change.path);
-            if [".png", ".jpg", ".jpeg"].iter().any(|ending| path.ends_with(ending)) {
-                return Ok(());
-            }
             let bytes = fs::read(&change.source).with_context(|| format!("{} cannot be read", change.source.display()))?;
             if let Some(languages) = message_languages(&change.path, base, placed)? {
                 // Every language or none: a merge that fails in one is left out of all.
@@ -356,24 +388,8 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
                     cased.insert(place_of(&path), path);
                 }
             } else if lower(&change.path).ends_with(".jpc.json") {
-                // Particles written as JSON: cooked over the game's particles (`like`, its textures by name), then added as a
-                // disc file's are.
-                let folder = change.source.parent().map(Path::to_path_buf).unwrap_or_default();
-                let first = *first_particle.get(&folder).context("new particles need their names: ParticleNames.bcsv.json beside them")?;
-                let jpc_path = change.path[..change.path.len() - ".json".len()].to_string();
-                let key = place_of(&jpc_path);
-                let current = match merged.get(&key) {
-                    Some(current) => current.clone(),
-                    None => merge_start(&jpc_path, base, temporary, pak, placed)?,
-                };
-                let names_path = format!("{}/ParticleNames.bcsv", jpc_path.rsplit_once('/').map_or("", |(folder, _)| folder));
-                let names = match merged.get(&place_of(&names_path)) {
-                    Some(names) => names.clone(),
-                    None => merge_start(&names_path, base, temporary, pak, placed)?,
-                };
-                let game = super::particles::read_nptc(&current)?;
-                let mine = super::particle_json::read(&bytes, &folder, &game, &super::particle_json::names_index(&names)?)?;
-                merged.insert(key, super::merge::add_particles(&current, &super::particles::write(&mine), first)?);
+                // Particles as JSON are a layer's assets/effects.json (effects contract 7).
+                return Err(super::refuse::refuse("Cook.Effect.OldForm", &[]));
             } else if let Some(table) = lower(&change.path).strip_suffix(".json") {
                 let path = change.path[..table.len()].to_string();
                 let table_key = place_of(&path);
@@ -414,7 +430,7 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
                 let cooked = super::cook_file(&change.path, bytes, stats)?.context("not a particle file")?;
                 merged.insert(key, super::merge::add_particles(&current, &cooked, first)?);
             } else {
-                bail!("only tables (.json), messages (message.bmg.json, messages.json) and particles (.jpc, .jpc.json) can be added to");
+                bail!("only tables (.json), messages (message.bmg.json, messages.json) and particles (.jpc) can be added to");
             }
             Ok(())
         })();
@@ -422,6 +438,7 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
             failed.push((format!("merge/{}", change.path), format!("{error:#}")));
         }
     }
+    apply_effects(changes, base, pak, temporary, placed, &mut merged, &mut cased, failed)?;
     // The cased path a mod's file or the first merge used.
     for (key, bytes) in merged {
         let path = placed
@@ -433,6 +450,118 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
             .unwrap_or(key);
         placed.retain(|p| !store::same_path(&p.path, &path));
         placed.extend(place(pak, at, &path, vec![StoreItem { path: String::new(), order: 0, bytes: Some(bytes) }], stats)?);
+    }
+    Ok(())
+}
+
+/// The patches with every patch of the effect table left out that names a particle nobody has (effects contract 7,
+/// G-E6): the game's names and the mods' (after their effects) are known by now. A left-out patch is refused by its
+/// phrase, naming the mod's patch file.
+fn effect_table_patches(patches: &PlanPatches, base: Option<&Path>, pak: &mut File, temporary: &Path, placed: &[store::Placed],
+                        failed: &mut Vec<(String, String)>) -> Result<PlanPatches> {
+    use super::effects::{table_unknown, EFFECT_TABLE, PARTICLE_NAMES};
+    let of_table = |p: &super::overlay_patches::PatchLine| store::same_path(&store::store_path(p.path.trim_start_matches('/')), &store::store_path(EFFECT_TABLE));
+    if !patches.patches.iter().any(of_table) {
+        return Ok(patches.clone());
+    }
+    // Without the names (no game known) the patches go on as they are, and the table's own check says the rest.
+    let Ok(names) = merge_start(PARTICLE_NAMES, base, temporary, pak, placed) else { return Ok(patches.clone()) };
+    let names = super::particle_json::names_index(&names)?;
+    let mut kept = patches.clone();
+    kept.patches.retain(|p| {
+        if !of_table(p) {
+            return true;
+        }
+        let Some(json) = fs::read(&p.source).ok().and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok()) else { return true };
+        let Some((at, word, numbered)) = table_unknown(&json, &|name| names.contains_key(name)) else { return true };
+        let why = if numbered { "Cook.Effect.TableNoFirst" } else { "Cook.Effect.TableUnknown" };
+        let error = super::refuse::refuse(why, &[("where", at), ("word", word)]);
+        let path = format!("patch/{}/{}", p.mod_id, p.entry);
+        if let Some(finding) = super::refuse::refusal_of(&error) {
+            super::refuse::record(super::refuse::CookFact::Refused { path: path.clone(), source: p.entry.clone(), finding: finding.clone() });
+        }
+        failed.push((path, format!("{error:#}")));
+        false
+    });
+    Ok(kept)
+}
+
+/// Each mod's effects (effects.rs), in the plan's order of mods: its `+Luma/<id>/effects.json` changes (one a layer)
+/// cooked over the game's particles, their particles added after every merged one, its list of effects written. A mod
+/// whose effects are refused adds nothing and is named; the other mods' still apply.
+#[allow(clippy::too_many_arguments)]
+fn apply_effects(changes: &[Change], base: Option<&Path>, pak: &mut File, temporary: &Path, placed: &[store::Placed],
+                 merged: &mut BTreeMap<String, Vec<u8>>, cased: &mut BTreeMap<String, String>, failed: &mut Vec<(String, String)>) -> Result<()> {
+    use super::effects::{self, PARTICLES, PARTICLE_NAMES};
+    let mut mods: Vec<(String, Vec<&Change>)> = Vec::new();
+    for change in changes.iter().filter(|c| c.merge) {
+        if let Some(id) = effects::source_of(&change.path) {
+            match mods.iter_mut().find(|(known, _)| known == id) {
+                Some((_, files)) => files.push(change),
+                None => mods.push((id.to_string(), vec![change])),
+            }
+        }
+    }
+    if mods.is_empty() {
+        return Ok(());
+    }
+    let place_of = |text: &str| store::store_path(text.trim_start_matches('/')).to_ascii_lowercase();
+    // `like` and `replace` start from the game's own particles, whatever an earlier mod did to them.
+    let game_read = || -> Result<(super::particles::ParticleIr, std::collections::HashMap<String, u32>)> {
+        let Some(base) = base else { return Ok(Default::default()) };
+        let particles = store::read_file(base, PARTICLES).context("the game's particles")?;
+        let names = store::read_file(base, PARTICLE_NAMES).context("the game's particle names")?;
+        Ok((super::particles::read_nptc(&particles)?, super::particle_json::names_index(&names)?))
+    };
+    // Read once; a game without them refuses each mod's effects, not the store.
+    let game_read = game_read().map_err(|e| format!("{e:#}"));
+    let mut replaced_by: BTreeMap<String, String> = BTreeMap::new();
+    for (id, files) in mods {
+        let path = effects::asset_path(&id, "effects.json");
+        let source = files.iter().map(|c| c.source.display().to_string()).collect::<Vec<_>>().join(" ");
+        let result = (|| -> Result<()> {
+            let bytes = files.iter().map(|c| fs::read(&c.source).with_context(|| format!("{} cannot be read", c.source.display()))).collect::<Result<Vec<_>>>()?;
+            let mut image = |file: &str| {
+                let at = effects::asset_path(&id, file);
+                changes.iter().rev().find(|c| !c.merge && store::same_path(c.path.trim_start_matches('/'), &at)).and_then(|c| fs::read(&c.source).ok())
+            };
+            let (game, game_names) = game_read.as_ref().map_err(|e| anyhow::anyhow!("{e}"))?;
+            let game = super::particle_json::Game { particles: game, names: game_names, any_name: false };
+            let cooked = effects::cook(&bytes, &mut image, &game)?;
+            let mut current = |at: &str| match merged.get(&place_of(at)) {
+                Some(bytes) => Ok(bytes.clone()),
+                None => merge_start(at, base, temporary, pak, placed),
+            };
+            let (particles, names) = (current(PARTICLES)?, current(PARTICLE_NAMES)?);
+            let applied = effects::apply(&id, &cooked, &particles, &names)?;
+            let mut written = vec![(PARTICLES.to_string(), applied.particles), (PARTICLE_NAMES.to_string(), applied.names)];
+            // A mod that only replaces has no list (J's reader: no list, no effects of its own).
+            if !cooked.effects.is_empty() {
+                written.push((effects::list_path(&id), effects::list_text(&cooked)));
+            }
+            for (at, bytes) in written {
+                cased.entry(place_of(&at)).or_insert_with(|| at.clone());
+                merged.insert(place_of(&at), bytes);
+            }
+            for r in &cooked.replaced {
+                if let Some(lower) = replaced_by.insert(r.name.clone(), id.clone()) {
+                    super::refuse::note("Cook.Effect.Overlap", &[("name", r.name.clone()), ("other", lower), ("winner", id.clone())]);
+                }
+            }
+            for facts in applied.facts {
+                super::refuse::record(super::refuse::CookFact::Effect { path: path.clone(), source: source.clone(), facts });
+            }
+            Ok(())
+        })();
+        if let Err(error) = result {
+            if let Some(finding) = super::refuse::refusal_of(&error) {
+                super::refuse::record(super::refuse::CookFact::Refused { path: path.clone(), source: source.clone(), finding: finding.clone() });
+            }
+            failed.push((path.clone(), format!("{error:#}")));
+        }
+        for finding in super::refuse::take_notes() {
+            super::refuse::record(super::refuse::CookFact::Noted { path: path.clone(), source: source.clone(), finding });
+        }
     }
     Ok(())
 }
@@ -605,9 +734,23 @@ mod tests {
         let (path, game) = model_place(&change("ObjectData/Kuribo.arc/Kuribo.glb"), None).unwrap();
         assert_eq!((path.as_str(), game.is_none()), ("ObjectData/Kuribo.arc/Kuribo.bmd", true));
         assert_eq!(take_notes().len(), 1);
-        // Outside an archive: a new model, standing in for nothing.
+        // Outside an archive: a new model, standing in for nothing, in an archive of its own as the game's are.
         let (path, game) = model_place(&change("ObjectData/Thing.glb"), Some(&one)).unwrap();
-        assert_eq!((path.as_str(), game.is_none()), ("ObjectData/Thing.bmd", true));
+        assert_eq!((path.as_str(), game.is_none()), ("ObjectData/Thing.arc/Thing.bmd", true));
+        let (path, _) = model_place(&change("Luma/gold.mario/hats/top.bdl.glb"), Some(&one)).unwrap();
+        assert_eq!(path, "Luma/gold.mario/hats/top.arc/top.bdl");
+        let (path, _) = model_place(&change("Luma/gold.mario/hats/topLow.glb"), None).unwrap();
+        assert_eq!(path, "Luma/gold.mario/hats/topLow.arc/topLow.bmd");
+        // A level needs its base model among the mod's files (contract 6); the endings keep their capitals.
+        let low = change("Luma/gold.mario/hats/topLow.glb");
+        let (phrase, args) = why(level_alone(&low, std::slice::from_ref(&low)).unwrap_err());
+        assert_eq!(phrase, luma_validate::Arg::Phrase("Cook.Model.LevelAlone"));
+        assert!(args.contains(&"model=T:Luma/gold.mario/hats/top.glb".to_string()), "{args:?}");
+        let both = [change("Luma/gold.mario/hats/topLow.glb"), change("Luma/gold.mario/hats/TOP.gltf")];
+        assert!(level_alone(&both[0], &both).is_ok());
+        let yellow = change("Luma/gold.mario/yellow.glb");
+        assert!(level_alone(&yellow, std::slice::from_ref(&yellow)).is_ok());
+        assert!(level_alone(&change("ObjectData/KuriboLow.arc/KuriboLow.glb"), &[]).is_ok());
         // The cook numbers the joints by the game's; one it lacks is refused by name.
         let swapped = String::from_utf8_lossy(source).replace("\"head\"", "\"neck\"");
         let (_, game) = model_place(&change("ObjectData/Kuribo.arc/Kuribo.glb"), Some(&one)).unwrap();
@@ -867,5 +1010,96 @@ mod tests {
             assert_eq!(&cooked[..4], super::super::table::MAGIC, "{path}");
         }
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_mods_effects_join_the_games_particles_and_its_list_is_beside_them() {
+        use super::super::effects::{tests as fx, PARTICLES, PARTICLE_NAMES};
+        let dir = tempfile::tempdir().unwrap();
+        let (ir, _) = fx::game();
+        let jpc = super::super::particles::write(&ir);
+        let names = fx::names_table(&[("Glow", 0), ("Spark", 1)]);
+        let base = game_store(dir.path(), &[(PARTICLES, &jpc), (PARTICLE_NAMES, &names)]);
+        let file = |name: &str, bytes: &[u8]| {
+            let path = dir.path().join(name);
+            fs::write(&path, bytes).unwrap();
+            path
+        };
+        let layer_one = br#"{"textures":{"Gold":"textures/gold.png"},"replace":{"Glow":{"emitter":{"rate":9}}},
+            "effects":{"aura":{"draw":"BLOOM_EFFECT","particles":[{"like":"Glow","textures":{"sprite":"Gold"}}]}}}"#;
+        let changes = vec![
+            Change { path: "Luma/gold.mario/textures/gold.png".into(), source: file("gold.png", &fx::png()), merge: false },
+            Change { path: "Luma/gold.mario/effects.json".into(), source: file("a1.json", layer_one), merge: true },
+            Change { path: "Luma/gold.mario/effects.json".into(), source: file("a2.json", br#"{"effects":{"spark":{"particles":[{"like":"Spark"},{}]}}}"#), merge: true },
+            Change { path: "Luma/other.mod/effects.json".into(), source: file("b.json", br#"{"replace":{"Glow":{"emitter":{"rate":7}}}}"#), merge: true },
+            Change { path: "Luma/bad.mod/effects.json".into(), source: file("c.json", br#"{"effects":{"x01":{"particles":[{}]}}}"#), merge: true },
+        ];
+        super::super::refuse::take_facts();
+        let output = dir.path().join("mods.pak");
+        let failed = write_overlay("RMGE01", &changes, &PlanPatches::default(), Some(&base), &output, &mut Vec::new(), &mut Stats::default()).unwrap();
+        // The bad mod's effects are refused whole; the others' stand.
+        assert_eq!(failed.len(), 1, "{failed:?}");
+        assert!(failed[0].0 == "Luma/bad.mod/effects.json" && failed[0].1.contains("x01"), "{failed:?}");
+        assert_eq!(store::read_file(&output, "Luma/gold.mario/effects.txt").unwrap(), b"aura\t4\t1\nspark\t0\t2\n");
+        assert!(store::read_file(&output, "Luma/other.mod/effects.txt").is_err());
+        let after = super::super::particles::read_nptc(&store::read_file(&output, PARTICLES).unwrap()).unwrap();
+        let index = super::super::particle_json::names_index(&store::read_file(&output, PARTICLE_NAMES).unwrap()).unwrap();
+        assert_eq!((index["Glow"], index["gold.mario:aura00"], index["gold.mario:spark00"], index["gold.mario:spark01"]), (0, 2, 3, 4));
+        assert_eq!(after.resources.len(), 5);
+        let find = |n: u32| after.resources.iter().find(|r| r.user_index == n).unwrap();
+        let rate = |n: u32| f32::from_le_bytes(find(n).dynamics[0x44..0x48].try_into().unwrap());
+        // The later mod's Glow, made from the game's own: its rate, the game's sprite.
+        assert_eq!((rate(0), rate(2)), (7.0, 4.0));
+        let sprite = |n: u32| super::super::particle_json::Roles::of(&after, find(n)).sprite;
+        assert_eq!((sprite(0).as_deref(), sprite(2).as_deref()), (Some("Ring"), Some("Gold")));
+        let facts = super::super::refuse::take_facts();
+        let lines = super::super::refuse::cook_facts_text(&facts);
+        assert!(lines.contains("cook.effect\tLuma/gold.mario/effects.json\t\t"), "{lines}");
+        assert!(lines.contains("\tgold.mario:aura\t\t\t\t\t\t\tparticles=2\tgroup=4\tsprite=Gold\t"), "{lines}");
+        assert!(lines.contains("\tGlow\t\t\t\t\t\t\tparticles=0\tgroup=0\tsprite=Ring\ttextures=1\treplaced=1"), "{lines}");
+        assert!(lines.contains("noted\tLuma/other.mod/effects.json") && lines.contains("why=P:Cook.Effect.Overlap"), "{lines}");
+        assert!(lines.contains("failed\tLuma/bad.mod/effects.json") && lines.contains("why=P:Cook.Effect.NameBad"), "{lines}");
+    }
+
+    #[test]
+    fn an_effect_table_patch_naming_no_particle_is_left_out() {
+        use super::super::effects::{tests as fx, EFFECT_TABLE, PARTICLES, PARTICLE_NAMES};
+        use super::super::overlay_patches::PatchLine;
+        let dir = tempfile::tempdir().unwrap();
+        let (ir, _) = fx::game();
+        let jpc = super::super::particles::write(&ir);
+        let names = fx::names_table(&[("Glow00", 0), ("Spark", 1)]);
+        let table = super::super::table::TableIr::from_json(br#"{"rows":[{"UniqueName":"Base","EffectName":"Glow"}]}"#).unwrap().to_ntbl();
+        let base = game_store(dir.path(), &[(PARTICLES, &jpc), (PARTICLE_NAMES, &names), (EFFECT_TABLE, &table)]);
+        let file = |name: &str, bytes: &[u8]| {
+            let path = dir.path().join(name);
+            fs::write(&path, bytes).unwrap();
+            path
+        };
+        let patch = |mod_id: &str, name: &str, text: &str| PatchLine {
+            mod_id: mod_id.into(),
+            entry: format!("layers/base/patches/{EFFECT_TABLE}.json"),
+            path: EFFECT_TABLE.into(),
+            source: file(name, text.as_bytes()),
+        };
+        let patches = PlanPatches {
+            mods: vec!["good.mod".into(), "bad.mod".into()],
+            patches: vec![
+                patch("good.mod", "g.json", r#"{"patch":1,"key":["UniqueName"],"add":[{"UniqueName":"Mine","EffectName":"good.mod:aura"}]}"#),
+                patch("bad.mod", "b.json", r#"{"patch":1,"key":["UniqueName"],"add":[{"UniqueName":"Nope","EffectName":"Nope"}]}"#),
+            ],
+        };
+        let changes = vec![Change { path: "Luma/good.mod/effects.json".into(), source: file("fx.json", br#"{"effects":{"aura":{"particles":[{}]}}}"#), merge: true }];
+        super::super::refuse::take_facts();
+        let output = dir.path().join("mods.pak");
+        let mut facts = Vec::new();
+        let failed = write_overlay("RMGE01", &changes, &patches, Some(&base), &output, &mut facts, &mut Stats::default()).unwrap();
+        // The bad mod's patch names no particle: it is left out; the good mod's names its own effect, cooked before it.
+        assert_eq!(failed.len(), 1, "{failed:?}");
+        assert!(failed[0].0.starts_with("patch/bad.mod/") && failed[0].1.contains("Nope00"), "{failed:?}");
+        let lines = super::super::refuse::cook_facts_text(&super::super::refuse::take_facts());
+        assert!(lines.contains("why=P:Cook.Effect.TableNoFirst") && lines.contains("where=T:/add/0/EffectName"), "{lines}");
+        let after = super::super::table::TableIr::from_ntbl(&store::read_file(&output, EFFECT_TABLE).unwrap()).unwrap();
+        assert_eq!(after.rows.len(), 2);
     }
 }
