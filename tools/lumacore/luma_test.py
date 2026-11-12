@@ -778,9 +778,21 @@ def code_token(library):
     return "%016x" % fnv(OFFSET, ("%016x" % h).encode())
 
 
-def install(settings, mod_folder, code_allowed, order, kept=False):
+def permission_digest(declared):
+    """consent.md 1.2 (runtime mod_consent.cpp permission_digest): FNV-1a 64 over the name and each host, lowercased
+    (A-Z), sorted in byte order, each followed by a 0 byte; `why` is not in it."""
+    h = fnv(OFFSET, declared["name"].encode("utf-8") + b"\0")
+    hosts = ["".join(chr(ord(c) + 32) if "A" <= c <= "Z" else c for c in host) for host in declared.get("hosts", [])]
+    for host in sorted(hosts, key=lambda text: text.encode("utf-8")):
+        h = fnv(h, host.encode("utf-8") + b"\0")
+    return "%016x" % h
+
+
+def install(settings, mod_folder, code_allowed, order, kept=False, permissions="allow"):
     """A mod folder holding luma.json (the base's form, as examples/luma-hello) into the run's mods, on, in order.
-    kept: the mods an earlier test left (continue_from) stay as they are, with their data; only new ids are added."""
+    kept: the mods an earlier test left (continue_from) stay as they are, with their data; only new ids are added.
+    permissions: "allow", "deny" or {name: "allow"|"deny"}: each declared permission's answer, as the consent screen
+    records a player's (consent.md 1.2; a name the object leaves out is allowed)."""
     manifest = load_json(mod_folder / "luma.json")
     mod_id = manifest.get("id")
     if not isinstance(mod_id, str) or not mod_id:
@@ -803,6 +815,18 @@ def install(settings, mod_folder, code_allowed, order, kept=False):
     lines = "[%s]\nenabled=1\norder=%d\n" % (mod_id, order)
     if code_allowed and libraries:
         lines += "code_ok=%s\n" % code_token(target / libraries[0])
+    # The player's answers as the consent screen records them (consent.md 1.2): every declared permission answered.
+    declared = [p for p in manifest.get("permissions", []) if isinstance(p, dict) and isinstance(p.get("name"), str)]
+    names = {p["name"] for p in declared}
+    if isinstance(permissions, dict):
+        for name, answer in permissions.items():
+            if name not in names:
+                raise HarnessError("%s: permissions names %s, which the mod does not ask for" % (mod_folder, name))
+            if answer not in ("allow", "deny"):
+                raise HarnessError("%s: the answer for %s must be allow or deny" % (mod_folder, name))
+    for p in declared:
+        wanted = permissions if isinstance(permissions, str) else permissions.get(p["name"], "allow")
+        lines += "permission.%s=%s %s\n" % (p["name"], "yes" if wanted == "allow" else "no", permission_digest(p))
     with ini.open("a", encoding="utf-8") as out:
         out.write(lines)
     return mod_id
@@ -878,8 +902,6 @@ def run_one(test, renderer, args, run_folder, previous):
             raise HarnessError("install import: no such fact source yet (the import screen, task 6.1)")
         if m["options"]:
             raise HarnessError("mod options: not built yet (the Mods screen's options, task 6.3)")
-        if m["permissions"] != "allow":
-            raise HarnessError("permissions other than allow: not built yet (permissions, task 2.1)")
         if m["path"].suffix == ".luma":
             raise HarnessError("a .luma file: not readable before the luma-format reader (task 3.1); give the mod's folder")
     if test["language"] is not None and LANGUAGES[test["language"]] is None:
@@ -927,7 +949,8 @@ def run_one(test, renderer, args, run_folder, previous):
     for i, m in enumerate(test["mods"]):
         if not (m["path"] / "luma.json").is_file():
             raise HarnessError("the mod %s has no luma.json" % m["path"])
-        mod_id = install(settings, m["path"], m["code"] == "allow", i + 1, kept=previous is not None)
+        mod_id = install(settings, m["path"], m["code"] == "allow", i + 1, kept=previous is not None,
+                         permissions=m["permissions"])
         mod_ids.append((mod_id, m))
         for lib in sorted((settings / "mods" / mod_id).rglob("*.dll")):
             frozen["mods/%s/%s" % (mod_id, lib.relative_to(settings / "mods" / mod_id).as_posix())] = sha256(lib)
