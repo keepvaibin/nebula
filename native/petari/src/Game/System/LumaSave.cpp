@@ -801,6 +801,7 @@ namespace luma {
                 entry.names[0] = "file";
                 entry.values[0] = text;
                 entry.count = 1;
+                entry.row = "Save.Exported";  // a Note from the module's code names its row (else kept as an Error)
                 if (entry.mod != nullptr) {
                     luma::modlog::add(entry, "Save.Exported");
                 }
