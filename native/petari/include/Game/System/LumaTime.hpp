@@ -17,6 +17,9 @@ namespace luma {
         // changed what the game is doing (it holds the scene, a scene change or reset is asked, a movie or the skip
         // began): the rest of the frame's steps are dropped, as the clock is suspended there (services-time 4).
         bool canStepAgain();
+        // PlayerInputs and InputStick, each read: true in a frame the world clock gives no step because of a rate below
+        // real time (not a hold, not the game's own hold): its presses are carried to the next step (J22-3). One load.
+        bool isStepWithheld();
         // GameSystem::updateSceneController, right before the scene's update: counts the world step and runs the mods'
         // step handlers.
         void beginStep();
@@ -29,11 +32,8 @@ namespace luma {
         void framePost();
         void frameHandlers();
 
-        // The Mods page (J, plan 6.2; services-time 1 item 10), game thread: the mod's own rate and hold (false: time
-        // does not know it), and the player's "Let go": its rate, hold and owed steps cleared from the next frame, with
-        // the page writing the mod log's Note Time.LetGo.
-        bool clockOf(const LumaMod* pMod, u32* pRate, bool* pHolds);
-        void letGo(const LumaMod* pMod);
+        // The Mods page (J, plan 6.2; services-time 1 item 10) reaches the clocks by mod id through the exports
+        // luma_time_clock_of and luma_time_let_go (any thread; the page writes the mod log's Note Time.LetGo).
 
         // The service's provider, registered by luma::services::provideOwn.
         const LumaServiceProvider* provider();

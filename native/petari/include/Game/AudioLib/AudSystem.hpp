@@ -85,6 +85,7 @@ public:
     // what the sound follows) or given back.
     void holdForWorld(bool hold);
     void updateWorldHold();
+    void keepWorldHold();
     void exitPauseMenu();
     void updatePauseMenu();
     bool isPauseMenuActive() const;

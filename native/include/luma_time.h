@@ -89,8 +89,8 @@ typedef struct LumaTimeService {
     /* 1.0. Game thread. Fills `out` (out->size bytes, whole fields). LUMA_OK. A null out: LUMA_E_ARGUMENT; a size below
        1.0's struct (64): LUMA_E_ARGUMENT (Service.StructSize). Both reported. */
     int32_t (*now)(const LumaMod* mod, LumaTimeNow* out);
-    /* 1.0. Any thread. The monotonic clock in nanoseconds (at least 1), or LUMA_E_ARGUMENT for a null or unknown mod.
-       Deterministic mode: the frames' clock. */
+    /* 1.0. Any thread. The monotonic clock in nanoseconds (at least 1), or LUMA_E_ARGUMENT for a null or unknown mod,
+       LUMA_E_CANCELLED for a mod being taken out. Deterministic mode: the frames' clock. */
     int64_t (*monotonic_ns)(const LumaMod* mod);
     /* 1.0. Any thread. The wall clock now. LUMA_OK. A null out, or a size below 1.0's struct (32): as `now`. */
     int32_t (*wall)(const LumaMod* mod, LumaTimeWall* out);
