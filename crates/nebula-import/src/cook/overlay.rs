@@ -270,8 +270,9 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         super::refuse::record(super::refuse::CookFact::Layout { path: path.clone(), source: change.path.clone(), facts });
         return Ok(vec![(path, brlyt, false)]);
     }
-    // Name.sound.json in a mod's assets (Luma/<id>/...): a sound effect, Name.nsfx, played by its path without the
-    // ending (sound contract 1). The sound file it names is read beside it.
+    // Name.sound.json in a mod's assets (Luma/<id>/...): a sound effect or voice line, Name.nsfx, played by its path
+    // without the ending (sound contract 1, 9); a stream, Name.ast (8); a sequence, Name.nseq (10). With `replace` a
+    // stream or sequence also takes the game's file's place. The sound file it names is read beside it.
     if lower.ends_with(".sound.json") {
         if !lower.starts_with("luma/") {
             return Err(super::refuse::refuse("Cook.Sound.NotAsset", &[("file", change.path.clone())]));
@@ -281,10 +282,21 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         // The game's sound names, for `replace` (layer 2): from the store's cooked sound archive, when there is one.
         let names = base.and_then(game_sound_names);
         let game_sound = |name: &str| -> Option<bool> { names.as_ref().map(|n| n.contains(name)) };
-        let (nsfx, facts) = super::sound_effect::cook(bytes, &super::sound_effect::Around { file: &file, game_sound: &game_sound })?;
-        let path = super::sound_effect::cooked_path(&change.path).unwrap_or_else(|| renamed(".nsfx"));
-        super::refuse::record(super::refuse::CookFact::Sound { path: path.clone(), source: change.path.clone(), facts });
-        return Ok(vec![(path, nsfx, true)]);
+        let game_file = |path: String| -> Option<bool> { base.and_then(|b| store::has_file(b, &path).ok()) };
+        let game_stream = |name: &str| game_file(format!("AudioRes/Stream/{name}.ast"));
+        let game_sequence = |name: &str| game_file(format!("AudioRes/Seqs/JaiSeq.arc/{name}"));
+        let around = super::sound_effect::Around { file: &file, game_sound: &game_sound, game_stream: &game_stream, game_sequence: &game_sequence };
+        let (made, facts) = super::sound_effect::cook_sound(bytes, &around)?;
+        let stem = &change.path[..change.path.len() - ".sound.json".len()];
+        let files: Vec<(String, Vec<u8>, bool)> = made
+            .into_iter()
+            .map(|(place, bytes)| match place {
+                super::sound_effect::Made::Own(ending) => (format!("{stem}{ending}"), bytes, true),
+                super::sound_effect::Made::Game(path) => (path, bytes, true),
+            })
+            .collect();
+        super::refuse::record(super::refuse::CookFact::Sound { path: files[0].0.clone(), source: change.path.clone(), facts });
+        return Ok(files);
     }
     // Name.font.json in a mod's assets: a font, Luma/<id>/<path>.brfnt (the store cooks it as the game's fonts) with
     // its kerning (.kern) and fallback (.fallback) beside it (layout contract 2a). The font file it names is read beside it.

@@ -269,6 +269,25 @@ pub fn read_file(pak_path: &std::path::Path, path: &str) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
+/// Whether a store on disk has a file at `path` (by its path's hash, as the game finds it).
+pub fn has_file(pak_path: &std::path::Path, path: &str) -> Result<bool> {
+    use anyhow::Context;
+    use std::io::Read;
+    let mut pak = File::open(pak_path).with_context(|| format!("{} cannot be read", pak_path.display()))?;
+    let mut header = [0u8; HEADER as usize];
+    pak.read_exact(&mut header)?;
+    if &header[..8] != MAGIC {
+        bail!("{} is not an asset store", pak_path.display());
+    }
+    let count = u64::from(u32::from_le_bytes(header[12..16].try_into().unwrap()));
+    let hashes_at = u64::from_le_bytes(header[24..32].try_into().unwrap());
+    let wanted = path_hash(&store_path(path));
+    let mut hashes = room(&pak, count * 16)?;
+    pak.seek(SeekFrom::Start(hashes_at))?;
+    pak.read_exact(&mut hashes)?;
+    Ok(hashes.chunks_exact(16).any(|e| u64::from_le_bytes(e[..8].try_into().unwrap()) == wanted))
+}
+
 /// Every file under a folder of a store on disk, by its path from the folder.
 pub fn read_folder(pak_path: &std::path::Path, path: &str) -> Result<Vec<(String, Vec<u8>)>> {
     let mut out = Vec::new();

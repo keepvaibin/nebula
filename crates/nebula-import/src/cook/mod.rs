@@ -45,6 +45,8 @@ pub mod font_cook;
 pub mod ui_layout;
 pub mod sound;
 pub mod sound_effect;
+pub mod sound_sequence;
+pub mod sound_stream;
 pub mod store;
 pub mod table;
 pub mod table_keys;

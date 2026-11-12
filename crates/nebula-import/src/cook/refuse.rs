@@ -183,6 +183,9 @@ pub fn cook_facts_text(facts: &[CookFact]) -> String {
                         format!("loudness={}", level(facts.loudness)),
                         format!("peak={}", level(facts.peak)),
                         format!("replaces={}", facts.replaces),
+                        format!("kind={}", facts.kind),
+                        format!("notes={}", facts.notes),
+                        format!("dropped={}", facts.dropped),
                     ])
                     .collect()
             }

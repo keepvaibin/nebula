@@ -52,7 +52,7 @@ fn sine(frames: usize, channels: usize, rate: f64, hz: f64, peak: f64) -> Vec<f6
 fn cook_with(json: &str, files: &[(&str, Vec<u8>)]) -> Result<(Vec<u8>, SoundFacts)> {
     let file = |name: &str| files.iter().find(|(n, _)| *n == name).map(|(_, b)| b.clone());
     let game = |name: &str| Some(name == "SE_SM_JUMP");
-    cook(json.as_bytes(), &Around { file: &file, game_sound: &game })
+    cook(json.as_bytes(), &Around { file: &file, game_sound: &game, game_stream: &|_| None, game_sequence: &|_| None })
 }
 
 fn word(b: &[u8], at: usize) -> u32 {
@@ -243,7 +243,7 @@ fn flac_from_a_real_encoder_decodes_to_its_exact_samples() {
     assert!(f.samples == mono, "m24: first difference at {:?}", f.samples.iter().zip(&mono).position(|(a, b)| a != b));
     // Cooked: a 48 kHz 24-bit file keeps every sample to the nearest 16-bit step.
     let file = |_: &str| Some(include_bytes!("../../data/sound/m24.flac").to_vec());
-    let (out, facts) = cook(br#"{"kind":"effect","file":"m24.flac"}"#, &Around { file: &file, game_sound: &|_| None }).unwrap();
+    let (out, facts) = cook(br#"{"kind":"effect","file":"m24.flac"}"#, &Around { file: &file, game_sound: &|_| None, game_stream: &|_| None, game_sequence: &|_| None }).unwrap();
     assert_eq!((facts.frames, facts.rate_in), (8192, 48000));
     let want: Vec<i16> = mono.iter().map(|&v| (f64::from(v) / 256.0).round().clamp(-32768.0, 32767.0) as i16).collect();
     assert_eq!(samples(&out), want);
