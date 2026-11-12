@@ -3195,7 +3195,16 @@ void RenderCore::rt_emitter(const NebulaFrameItem& item, const core::GpuMesh& me
     const auto shown_m2 = [](float a, float b, float c) {
         return 2.0f * (a * b + b * c + c * a) / (kUnitsPerMetre * kUnitsPerMetre);
     };
-    const auto candela_of = [&](float area_m2) { return glow[3] > 0.0f ? glow[3] : -glow[3] * area_m2; };
+    // d20: a mesh that glows by its class alone (glow_by_data, or a hot body by name: rule 2) lights its neighbours as
+    // the surface it is drawn as: no brighter than a white one in the stage's full light, E / pi (a hot body 2.5 times
+    // that, as c99 shows it); its cooked 150 to 600 cd/m2 made a 12 m sheet a lamp of 77,000 cd. A row that names it
+    // keeps its value.
+    const bool by_class = glow_by_data(mesh) || mesh.glow_rule == 2u;
+    const float luminance_most =
+        by_class && rt_exposure_ > 0.0f ? (mesh.glow_rule == 2u ? 2.5f : 1.0f) * rt_exposure_ / 3.14159265f : 1.0e9f;
+    const auto candela_of = [&](float area_m2) {
+        return glow[3] > 0.0f ? glow[3] : std::min(-glow[3], luminance_most) * area_m2;
+    };
     // One lamp: each half no wider than 6 m (a glowing plain is not one lamp).
     const float lamp_candela =
         candela_of(shown_m2(std::min(half[0], 600.0f), std::min(half[1], 600.0f), std::min(half[2], 600.0f)));
@@ -3305,7 +3314,7 @@ void RenderCore::rt_emitters_finish(float exposure_lux) {
         const float metres = e.radius / kUnitsPerMetre;
         // c81 (L3): a glowing mesh's light at three times its radius adds at least half a lit surface's colour at the
         // stage's exposure, I >= 0.5 E (3 r)^2: raised so (up to the 5,000 candela cap), never lowered.
-        if (e.kind == 1u) {
+        if (e.kind == 1u && metres <= 1.0f) {  // d20: a small lamp's floor; a larger glowing thing lights by its luminance
             const float was = std::max({e.colour[0], e.colour[1], e.colour[2]});
             const float least = std::min(0.5f * exposure_lux * 9.0f * metres * metres, 5000.0f);
             if (was > 0.0f && was < least) {
