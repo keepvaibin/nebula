@@ -7,6 +7,7 @@
 #include "Game/System/LumaServices.hpp"
 #include "Game/System/LumaTypes.hpp"
 #include "Game/System/LumaClasses.hpp"
+#include "Game/System/LumaMake.hpp"
 #include "Game/System/LumaNumbers.hpp"
 #include "Game/System/NebulaText.hpp"
 #include <luma_host.h>
@@ -1052,10 +1053,15 @@ namespace luma {
             return luma::numbers::setTable(pMod, pName, offset, pBytes, size);
         }
 
+        // Objects made by name (classes contract, "make").
+        s32 apiMake(const LumaMod* pMod, const char* pName, u32 count, const LumaPlace* pPlace, u32 flags, void** ppObjects) {
+            return luma::make::make(pMod, pName, count, pPlace, flags, ppObjects);
+        }
+
         const LumaCore sCore = {
             sizeof(LumaCore), LUMA_API, apiLog, apiFunction, apiFunctionAt, apiHook, apiProceed, apiField, apiSizeOf, apiClassOf, apiIsA, apiService,
             apiGameThread, apiUnhook, apiAlloc, apiFree, apiReport, apiOwnClass, apiAsClass, apiMethod, apiOverrider, apiCallMethod,
-            apiKeep, apiKept, apiDefineClass, apiClassData, apiNumber, apiSetNumber, apiTable, apiSetTable,
+            apiKeep, apiKept, apiDefineClass, apiClassData, apiNumber, apiSetNumber, apiTable, apiSetTable, apiMake,
         };
 
         // One import: its function (functions and hooks) or number (fields, sizes, classes). False: the game has none,

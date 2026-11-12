@@ -5,6 +5,7 @@ extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/Scene/PlacementInfoOrdered.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/System/GalaxyStatusAccessor.hpp"
+#include "Game/System/LumaMake.hpp"
 #include "Game/System/ScenarioDataParser.hpp"
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/PlacementId.hpp"
@@ -302,6 +303,11 @@ const StageDataHolder* StageDataHolder::findPlacedStageDataHolder(const TableIte
         if (pHolder != nullptr) {
             return pHolder;
         }
+    }
+
+    // A row LumaCore.make wrote (LumaMake.cpp): its objects stand in the main stage.
+    if (mZoneID == 0 && luma::make::isMadeTable(pData)) {
+        return this;
     }
 
     return nullptr;
