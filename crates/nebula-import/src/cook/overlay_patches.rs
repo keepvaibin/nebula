@@ -399,6 +399,27 @@ pub fn facts_text(facts: &[Fact]) -> String {
     out
 }
 
+/// A mod's patch of a stage's placement table (`<game path>` as the mod writes it) whose rows give arguments by name,
+/// applied alone to the game's table in `store` as the game's start applies it (LumaLink's check, stages contract 1):
+/// the refusal of a name the object lacks (L804), None when the patch gives no `args` or they all read. Every other
+/// fault of a patch is the validator's (L400-L407), so it is not said twice.
+pub fn placement_args_finding(store: &PakStore, path: &str, mod_id: &str, file: &str, patch: &serde_json::Value) -> Result<Option<luma_validate::Finding>> {
+    let cased = store::store_path(path);
+    let lower = cased.to_ascii_lowercase();
+    let named = |rows: Option<&serde_json::Value>| rows.and_then(serde_json::Value::as_array).is_some_and(|r| super::placement_args::any_args(r));
+    let in_set = patch.get("set").and_then(serde_json::Value::as_array).is_some_and(|s| s.iter().any(|e| e.get("values").and_then(|v| v.get("args")).is_some()));
+    if !lower.contains("/jmp/") || !(named(patch.get("add")) || named(patch.get("rows")) || in_set) {
+        return Ok(None);
+    }
+    let Some(game_path) = store.path(&lower) else { return Ok(None) };
+    let Some(mut table) = store.table_ir(&game_path)? else { return Ok(None) };
+    let facts = apply_linked(&game_path, &mut table, &[ModPatch { mod_id, file, patch }], &[], &[])?;
+    Ok(facts.into_iter().find_map(|f| match f {
+        Fact::Failed { refusal, .. } if refusal.code == super::refuse::COOK_FAILED => Some(refusal),
+        _ => None,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::overlay::cook_plan;

@@ -400,8 +400,17 @@ fn one(pc: &mut P, root: &Value, target: &str) {
     // Touches compare paths in lower case; messages show the path as the mod writes it.
     let target_shown = target.to_lowercase();
     // Values against the column types (L403), every column named existing.
+    // A stage's placement row may give its object's arguments by name, an object (stages contract 1): the cook turns
+    // them into Obj_arg0-7 from the game's placement facts and refuses a name the object lacks (L804).
+    let placement = target.to_ascii_lowercase().contains("/jmp/");
     let check_value = |pc: &mut P, m: &json::Member, vp: &str| {
         if table.is_none() {
+            return;
+        }
+        if placement && m.key == "args" {
+            if !m.value.is_object() {
+                pc.bad(&m.value, vp, "Patch.ArgsShape", "");
+            }
             return;
         }
         {

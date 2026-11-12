@@ -255,7 +255,10 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
     // A table as JSON: X.bcsv.json, a camera table X.bcam.json, or a stage's placement table (its name has no ending:
     // StageData/MyGalaxy.arc/jmp/placement/common/objinfo.json), as `lumalink extract` writes them.
     if lower.ends_with(".bcsv.json") || lower.ends_with(".bcam.json") || (lower.ends_with(".json") && lower.contains(".arc/jmp/")) {
-        return Ok(vec![(change.path[..change.path.len() - ".json".len()].to_string(), super::table::TableIr::from_json(bytes)?.to_ntbl(), true)]);
+        // A stage's placement rows may give their objects' arguments by name (stages contract 1).
+        let expanded = if lower.contains(".arc/jmp/") { super::placement_args::expand_table(bytes)? } else { None };
+        let table = super::table::TableIr::from_json(expanded.as_deref().unwrap_or(bytes))?;
+        return Ok(vec![(change.path[..change.path.len() - ".json".len()].to_string(), table.to_ntbl(), true)]);
     }
     if lower.ends_with(".png") {
         // The game's interface keeps its pictures in another form, in a folder of that name.
@@ -509,6 +512,11 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
                     None => merge_start(&path, base, temporary, pak, placed)?,
                 };
                 let mut rows = super::table::read_rows(&bytes)?;
+                // A stage's placement rows may give their objects' arguments by name (stages contract 1).
+                if lower(&change.path).contains(".arc/jmp/") && super::placement_args::any_args(&rows) {
+                    let facts = super::placement_args::objects()?;
+                    super::placement_args::expand_rows(&mut rows, "/rows", Some(&facts), true)?;
+                }
                 // New particles' names: the particles beside them start after the game's (and other mods') last name.
                 let mut names_start = None;
                 if table_key.ends_with("particlenames.bcsv") {
