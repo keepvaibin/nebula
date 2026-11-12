@@ -302,7 +302,13 @@ add_executable(nebula_native_host host/host_main.cpp ../runtime/src/host_extensi
     ../runtime/src/mod_log.cpp ../runtime/src/mod_start_check.cpp ../runtime/src/mod_plugins.cpp ${nebula_minhook_sources}
     ../runtime/src/luma.cpp ../runtime/src/mods.cpp ../runtime/src/mod_consent.cpp ../runtime/src/texture_categories.cpp ../runtime/src/dolphin_pack.cpp ../runtime/src/mod_xml.cpp ../runtime/src/atomic_file.cpp ../runtime/src/save_files.cpp ../runtime/src/asset_store.cpp
     ../runtime/src/crash_report.cpp ../runtime/src/discord_presence.cpp ../runtime/src/mii_import.cpp
-    ../runtime/src/mii_formats.cpp ../runtime/src/pointer_control.cpp)
+    ../runtime/src/mii_formats.cpp ../runtime/src/pointer_control.cpp
+    # The start check asks whether the compiler of mods' programs is there (mod_start_check.cpp): the same answer as
+    # the windowed host's on Windows (dxc beside the program) and Apple (none yet); elsewhere Vulkan's, whose HLSL
+    # front end is part of the program (mod_shader_present_vk.cpp, without the front end itself).
+    $<$<PLATFORM_ID:Windows>:../runtime/src/render/mod_shader_compile_d3d12.cpp>
+    $<$<PLATFORM_ID:Darwin,iOS>:../runtime/src/render/mtl/mod_shader_compile_mtl.cpp>
+    $<$<NOT:$<PLATFORM_ID:Windows,Darwin,iOS>>:../runtime/src/render/vk/mod_shader_present_vk.cpp>)
 target_include_directories(nebula_native_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/minhook/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/../runtime/include")
 target_compile_features(nebula_native_host PRIVATE cxx_std_20)
