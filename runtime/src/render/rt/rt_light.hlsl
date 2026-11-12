@@ -227,7 +227,8 @@ void main(uint3 id : SV_DispatchThreadID) {
             }
         }
         // A dielectric's sheen (FB b107, the director's item 2): the sun's GGX lobe and the sky's, F0 0.04, by the
-        // model, on what no class mirrors; a = 1 - F_env. The sky's part by V (the point's sky is not bound here).
+        // model, on what no class mirrors; a = 1 - F_env. The sky's part whole by the open O' (b107b: by V it cut
+        // c74 out at a shadow's edge; the point's O is not bound here).
         if (!second && item != 0u && g_pass.y != 0u && (g_more.z & (1u | 32u)) == (1u | 32u) && (g_more.z & (128u | 512u)) == 0u &&
             mirror.a == 1.0f && !any(mirror.rgb != 0.0f)) {
             const uint sheen_look = g_items.Load(g_at.x + (item - 1u) * kItemBytes + 44u);
@@ -252,7 +253,7 @@ void main(uint3 id : SV_DispatchThreadID) {
                     const float f = kSheenF0 + (1.0f - kSheenF0) * g5 * g5 * g5 * g5 * g5;
                     const RtStageLight st = rt_stage_light();
                     const float2 terms = mirror_terms(rough_, nv);
-                    const float f_env = saturate(kSheenF0 * terms.x + terms.y) * v;
+                    const float f_env = saturate(kSheenF0 * terms.x + terms.y);
                     const float3 lobe = st.sun * (v * kSheenPi * d * vis * f * nl) + st.sky * rt_o_prime(rt_open_o()) * f_env;
                     mirror = float4(t * min(lobe, 16.0f), 1.0f - t * f_env);
                 }
