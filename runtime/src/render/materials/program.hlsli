@@ -383,15 +383,17 @@ float4 env_fetch(float4 painted, float4 pixel) {
 }
 // The program's fetch of a painted environment map (the generator wraps it); `i` holds the pixel.
 #define ENV_FETCH(t) env_fetch(t, i.pos)
-// The light under a painted surface (RT-MASTER-PLAN 3.4): its art holds the stage's light, ambient A and key K by how
-// it faces the key (nl); the traced light keeps the key's part by V and the ambient's by O, a channel at a time
-// (a shadow takes the sky's colour, and a coloured thing's shadow its colour) and in luminance, mixed by
-// kShadowTint. In open sun with nothing near: 1.
+// The light under a painted surface (LIGHT-MODEL.md section 3): its art holds the stage's light, ambient A and key K by
+// how it faces the key (nl), in linear light lin(A + K nl); the traced light keeps the key's part by V and the
+// ambient's by O, a channel at a time (a shadow takes the sky's colour, and a coloured thing's shadow its colour)
+// and in luminance, mixed by kShadowTint: (lin(A) O + (lin(A + K nl) - lin(A)) V) / lin(A + K nl), affine in O and
+// V. In open sun with nothing near: 1.
 // The relight (DIRECTOR.md section 12, October's engine v2): the stage's light in linear units from the game's own
 // lights (M2: sky = lin(A), full = lin(A + K), sun = (full - sky) kSunStrength), exposed so that a surface facing the
 // player's up in open sun shows the full light (M3: E = luma(full) / (luma(sky) + luma(full - sky) max(up.s, 0.5))):
-// share = (sky' O + sun n.s V) E / full a channel at a time, sky' the sky at kSkyChroma of its chroma (M8) by
-// kAmbientLook (D4). kForm blends from the Painted form above to it.
+// lit = (sky' O + sun n.s V) E, sky' the sky at kSkyChroma of its chroma (M8) by kAmbientLook (D4); the share is lit
+// over the full light in luminance, its colour over the full light's within a stop either way (A3-F8): a channel of
+// the stage's light near 0 does not blow up. kForm blends from the Painted form above to it.
 // O a channel at a time (FB 22.10, plan 11): the sky and bounce light's ratio (picture view_volume[2].z - 1, rt_indirect_up)
 // scaled to the light's O (the ratio itself where O is its mean; 0 with O), for an opaque draw of the scene view where
 // that pass ran; else O as it is. `coloured` says which.
@@ -409,34 +411,36 @@ float3 traced_painted(float4 light, float nl, float3 o3, bool coloured) {
     const float3 v = light.rgb, a = view_stage_a.rgb, k = view_stage_k.rgb;
     const float o = light.a;
     const float3 luminance = float3(0.2126, 0.7152, 0.0722);
-    // Painted: the art's A + K nl divided out, the traced light's put back.
-    const float3 whole = a + k * nl;
-    const float3 channel = float3(whole.r > 1e-4 ? (a.r * o3.r + k.r * nl * v.r) / whole.r : 1.0,
-                                  whole.g > 1e-4 ? (a.g * o3.g + k.g * nl * v.g) / whole.g : 1.0,
-                                  whole.b > 1e-4 ? (a.b * o3.b + k.b * nl * v.b) / whole.b : 1.0);
-    const float al = dot(a, luminance), kl = dot(k, luminance) * nl;
-    const float ao = coloured ? dot(a * o3, luminance) : al * o;
-    const float mean = al + kl > 1e-4 ? (ao + kl * dot(v, luminance)) / (al + kl) : 1.0;
-    // The Painted share is a ratio of display values; on linear colour its look holds by the power law's 2.2.
-    const float3 painted = pow(max(lerp(float3(mean, mean, mean), channel, view_stage_a.w), 0.0), 2.2);
+    // Painted (section 3): the art's light lin(A + K nl) divided out, the traced light's put back, in linear light.
+    const float3 sk = traced_lin(a), whole = traced_lin(saturate(a + k * nl));
+    const float3 keyed = max(whole - sk, 0.0);
+    const float3 channel = float3(whole.r > 1e-4 ? (sk.r * o3.r + keyed.r * v.r) / whole.r : 1.0,
+                                  whole.g > 1e-4 ? (sk.g * o3.g + keyed.g * v.g) / whole.g : 1.0,
+                                  whole.b > 1e-4 ? (sk.b * o3.b + keyed.b * v.b) / whole.b : 1.0);
+    const float al = dot(sk, luminance), kl = dot(keyed, luminance);
+    const float ao = coloured ? dot(sk * o3, luminance) : al * o;
+    const float mean = al + kl > 1e-4 ? (ao + dot(keyed * v, luminance)) / (al + kl) : 1.0;
+    const float3 painted = lerp(float3(mean, mean, mean), channel, view_stage_a.w);
     if (view_look.x <= 0.0) {
         return painted;
     }
-    // The relight (M2, M3, M8): rt_dev.h sun_strength and sky_chroma over October's 1.25 and 0.4; stage_light 1
+    // The relight (M2, M3, M8): rt_dev.h sun_strength and sky_chroma over 1.0 (D3) and October's 0.4; stage_light 1
     // October's own (the stage's light as it is: a dim or coloured stage dims and tints the art), 0 the art's own
     // brightness kept (divided by the full light).
-    const float sun_strength = view_dev[1].y > 0.5 ? view_dev[0].y : 1.25;
+    const float sun_strength = view_dev[1].y > 0.5 ? view_dev[0].y : 1.0;
     const float sky_chroma = view_dev[1].z > 0.5 ? view_dev[0].z : 0.4;
     const float stage_light = view_dev[1].w > 0.5 ? view_dev[0].w : 0.0;
-    const float3 sky = traced_lin(a), full = traced_lin(saturate(a + k));
+    const float3 sky = sk, full = traced_lin(saturate(a + k));
     const float3 key = max(full - sky, 0.0);
     const float exposure = dot(full, luminance) / max(dot(sky, luminance) + dot(key, luminance) * view_look.y, 1e-4);
     const float sky_l = dot(sky, luminance);
     const float3 sky_seen = view_look.w * lerp(float3(sky_l, sky_l, sky_l), sky, sky_chroma);
     const float3 lit = (sky_seen * o3 + key * (sun_strength * nl) * v) * exposure;
     const float3 held = lerp(full, float3(1.0, 1.0, 1.0), stage_light);
-    const float3 relit = float3(held.r > 1e-4 ? lit.r / held.r : 1.0, held.g > 1e-4 ? lit.g / held.g : 1.0,
-                                held.b > 1e-4 ? lit.b / held.b : 1.0);
+    // A3-F8: lit over held in luminance, its colour over held's limited to a stop either way.
+    const float lit_l = dot(lit, luminance), held_l = dot(held, luminance);
+    const float3 tint = lit_l > 1e-6 && held_l > 1e-4 ? (lit / lit_l) / max(held / held_l, 1e-4) : float3(1.0, 1.0, 1.0);
+    const float3 relit = held_l > 1e-4 ? (lit_l / held_l) * clamp(tint, 0.5, 2.0) : float3(1.0, 1.0, 1.0);
     return lerp(painted, relit, view_look.x);
 }
 float4 traced_colour(float4 c, float4 pixel) {

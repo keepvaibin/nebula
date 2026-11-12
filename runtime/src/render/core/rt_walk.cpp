@@ -2037,7 +2037,7 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
                 rest[c] = std::max(full[c] - sky[c], 0.0f);
             }
             const float e = luma(full) / std::max(luma(sky) + luma(rest) * rt_look_[1], 1e-4f);
-            const float strength = rt_dev(RtDev::SunStrength, 1.25f);
+            const float strength = rt_dev(RtDev::SunStrength, 1.0f);  // D3: the sun at the stage's key
             std::fprintf(stderr, "[rt-stage] %08x E %.3f sky %.3f %.3f %.3f sun %.3f %.3f %.3f up %.3f\n", list.stage_hash,
                          static_cast<double>(e), static_cast<double>(sky[0] * e / full[0]), static_cast<double>(sky[1] * e / full[1]),
                          static_cast<double>(sky[2] * e / full[2]), static_cast<double>(rest[0] * strength * e / full[0]),
