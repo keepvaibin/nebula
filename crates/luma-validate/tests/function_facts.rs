@@ -138,7 +138,7 @@ fn every_marks_fault_is_named() {
     assert_eq!(refused(&[free("void(f32 *)", &mark("out", "null", "0", false))]), "functions[0].marks[0].fixed: not null or a whole number from 1 to 4096");
     assert_eq!(refused(&[free("void(f32 *)", &mark("out", "null", "4097", false))]), "functions[0].marks[0].fixed: not null or a whole number from 1 to 4096");
     assert_eq!(refused(&[free("void(f32 *, s32)", &format!("{}, null", mark("in", "1", "3", false)))]), "functions[0].marks[0]: count and fixed both set");
-    assert_eq!(refused(&[free("void(f32 *)", &mark("kept", "null", "null", true))]), "functions[0].marks[0]: kept with a count, a fixed count or nullable");
+    assert_eq!(refused(&[free("void(f32 *)", &mark("kept", "null", "2", false))]), "functions[0].marks[0]: kept with a count or a fixed count");
     assert_eq!(refused(&[free("void(f32 *)", r#"{"way": "out", "count": null, "fixed": null, "nullable": 1}"#)]), "functions[0].marks[0].nullable: not true or false");
     assert_eq!(refused(&[free("void(f32 *, s32 *)", &format!("{}, {out}", mark("in", "1", "null", false)))]), "functions[0].marks[0].count: names a parameter that is itself marked");
     assert_eq!(refused(&[marked("f", "void", "free", "null", (false, false, false), "", "")]), "functions[0].marks: the row's signature has no parameter list");
