@@ -98,6 +98,69 @@ constexpr bool category_is_water(std::uint32_t category) noexcept {
     return category >= NEBULA_CATEGORY_DRAW + 6u && category <= NEBULA_CATEGORY_DRAW + 12u;
 }
 
+// A billboard mesh's rows turned to face the sun (l83): `rows` as drawn (turned to the eye), `kind` 1 a full
+// billboard, 2 a Y billboard; `sun` and `up` unit, in the same eye space. The place and each axis's size stay; a full
+// billboard's face (+z) goes to the sun, its up the player's across it; a Y billboard keeps its up axis and turns
+// about it. False: no turn (no size, or the sun along the axis it would turn about).
+bool sun_card(const float (*rows)[4], std::uint8_t kind, const float sun[3], const float up[3], float out[3][4]) noexcept {
+    float axis[3][3], size[3];
+    for (unsigned c = 0; c < 3u; ++c) {
+        for (unsigned r = 0; r < 3u; ++r) {
+            axis[c][r] = rows[r][c];
+        }
+        size[c] = std::sqrt(axis[c][0] * axis[c][0] + axis[c][1] * axis[c][1] + axis[c][2] * axis[c][2]);
+        if (!(size[c] > 1e-6f) || !std::isfinite(size[c])) {
+            return false;
+        }
+    }
+    const auto across = [](const float a[3], const float b[3], float out_[3]) {
+        out_[0] = a[1] * b[2] - a[2] * b[1];
+        out_[1] = a[2] * b[0] - a[0] * b[2];
+        out_[2] = a[0] * b[1] - a[1] * b[0];
+    };
+    // A mirrored matrix stays mirrored.
+    float xy[3];
+    across(axis[0], axis[1], xy);
+    const float hand = xy[0] * axis[2][0] + xy[1] * axis[2][1] + xy[2] * axis[2][2] < 0.0f ? -1.0f : 1.0f;
+    float y[3], z[3];
+    if (kind == 2u) {
+        // The Y billboard's own up; its face the sun across it.
+        for (unsigned r = 0; r < 3u; ++r) {
+            y[r] = axis[1][r] / size[1];
+        }
+        const float along = sun[0] * y[0] + sun[1] * y[1] + sun[2] * y[2];
+        for (unsigned r = 0; r < 3u; ++r) {
+            z[r] = sun[r] - y[r] * along;
+        }
+    } else {
+        // The face the sun; its up the player's across it.
+        for (unsigned r = 0; r < 3u; ++r) {
+            z[r] = sun[r];
+        }
+        const float along = up[0] * sun[0] + up[1] * sun[1] + up[2] * sun[2];
+        for (unsigned r = 0; r < 3u; ++r) {
+            y[r] = up[r] - sun[r] * along;
+        }
+    }
+    float* const turn = kind == 2u ? z : y;
+    const float length = std::sqrt(turn[0] * turn[0] + turn[1] * turn[1] + turn[2] * turn[2]);
+    if (!(length > 0.05f)) {
+        return false;  // within 3 degrees of the axis: no card
+    }
+    for (unsigned r = 0; r < 3u; ++r) {
+        turn[r] /= length;
+    }
+    float x[3];
+    across(y, z, x);
+    for (unsigned r = 0; r < 3u; ++r) {
+        out[r][0] = x[r] * size[0] * hand;
+        out[r][1] = y[r] * size[1];
+        out[r][2] = z[r] * size[2];
+        out[r][3] = rows[r][3];
+    }
+    return true;
+}
+
 // What the game drew the item as (NEBULA_CATEGORY_*).
 constexpr std::uint32_t item_category(const NebulaFrameItem& item) noexcept {
     return (item.flags & NEBULA_ITEM_CATEGORY_MASK) >> NEBULA_ITEM_CATEGORY_SHIFT;
@@ -414,6 +477,35 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
     rt::SceneCount count{};
     rt_seen_.clear();
     rt_skins_.clear();
+    // The sun in this walk's eye space, for the billboards' sun cards (l83): the stage's fixed sun (d05) through the
+    // scene camera, and the player's up; none before the stage has its sun.
+    float card_sun[3]{}, card_up[3] = {0.0f, 1.0f, 0.0f};
+    bool cards = false;
+    if (rt_sun_fixed_known_ && rt_sun_fixed_stage_ == list.stage_hash && begin.scene_camera < walk_cameras_.size()) {
+        const Affine34& eye = walk_cameras_[begin.scene_camera];
+        float size = 0.0f;
+        for (unsigned r = 0; r < 3u; ++r) {
+            card_sun[r] = eye[r * 4u] * rt_sun_world_[0] + eye[r * 4u + 1u] * rt_sun_world_[1] + eye[r * 4u + 2u] * rt_sun_world_[2];
+            size += card_sun[r] * card_sun[r];
+        }
+        size = std::sqrt(size);
+        cards = size > 1e-6f && std::isfinite(size);
+        for (unsigned r = 0; cards && r < 3u; ++r) {
+            card_sun[r] /= size;
+        }
+        if (list.sky_up_known != 0u) {
+            std::memcpy(card_up, list.sky_up, sizeof(card_up));
+        }
+    }
+    // A billboard's second instance, turned to the sun and met by the shadow rays alone (l83).
+    const auto add_card = [&](const float (*rows)[4], std::uint32_t item_index, std::uint8_t billboard, std::uint64_t structure,
+                              rt::Faces faces, std::uint32_t kind) {
+        float card[3][4];
+        if (cards && sun_card(rows, billboard, card_sun, card_up, card)) {
+            rt_scene_.add(card, item_index, rt::kMaskShadowOnly, structure, faces, kind | rt::kKindCard,
+                          rt::Micromapped::Other);  // every hit asked: a micromap's opaque states would pass no own card
+        }
+    };
     std::uint64_t skin_bytes = 0u;
     const auto first = static_cast<std::uint32_t>(&begin - list.passes) + 1u;
     bool early = true;  // before the scene's opaque end
@@ -567,6 +659,10 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
                 }
                 rt_scene_.add(walk_rows_cpu_ + walk_block_rows_[item.block] + matrix * kRowsPerMatrix, i, mask, structure, faces, kind,
                               micromapped);
+                if (turned && mask != 0u) {
+                    add_card(walk_rows_cpu_ + walk_block_rows_[item.block] + matrix * kRowsPerMatrix, i, registries_.mesh(item.mesh).billboard,
+                             structure, faces, kind);
+                }
                 count.triangles += (mesh.indices != 0u ? mesh.index_count : mesh.vertex_count) / 3u;
                 continue;
             }
@@ -665,6 +761,9 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
             }
             const float (*place)[4] = walk_rows_cpu_ + walk_block_rows_[item.block] + matrix * kRowsPerMatrix;
             rt_scene_.add(place, i, mask, structure, faces, kind, micromapped);
+            if (turned && mask != 0u) {
+                add_card(place, i, mesh.billboard, structure, faces, kind);
+            }
             count.triangles += triangles;
             // Off screen (the game keeps it drawn for the tracer while it traces, 5.3 G-1): the raster passes leave it out.
             count.outside += item_culled(item, pass, state, &mesh) ? 1u : 0u;

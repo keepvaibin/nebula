@@ -72,8 +72,11 @@ void main(uint3 id : SV_DispatchThreadID) {
             paint_holds = item != 0u && (g_items.Load(g_at.x + (item - 1u) * kItemBytes + 44u) >> 8u & kHitPaintedShadow) != 0u;
         }
         uint met;
-        const float occluder = occluder_at(from, toward, 200000.0f,
-                                           (paint_holds ? kMaskLit : kMaskSolid | kMaskCutout) | kMaskShadowOnly, true, met);
+        // A billboard's own sun card is no shadow on it (l83).
+        const uint own_item = g_item_map.Load(int3(pixel, 0)).x;
+        const float occluder = occluder_at_but(from, toward, 200000.0f,
+                                               (paint_holds ? kMaskLit : kMaskSolid | kMaskCutout) | kMaskShadowOnly, true,
+                                               own_item != 0u ? own_item - 1u : 0xFFFFFFFFu, met);
         if (occluder >= 0.0f) {
             v = float4(0.0f, 0.0f, 0.0f, min(occluder + clear, kNoOccluder - 1.0f));
             InterlockedAdd(g_counters[18], 1u);

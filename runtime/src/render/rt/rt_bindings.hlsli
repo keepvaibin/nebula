@@ -31,6 +31,7 @@ static const uint kMaskShadowOnly = 128u;  // a draw only the tracer sees: the s
 // What an instance is (rt_scene.h), read back at a hit: CommittedInstanceContributionToHitGroupIndex.
 static const uint kKindCutout = 1u;
 static const uint kKindClipped = 2u;  // a map part its clip areas show (rt_scene.h)
+static const uint kKindCard = 4u;     // a billboard's sun card (l83): the sun pass's ray from that billboard passes it
 
 // The scene camera as a pass reads it (RtView, the occlusion's constants): `ray` gives a pixel's eye ray at distance 1
 // (x = px * ray.x + ray.y, y = py * ray.z + ray.w, z = -1), `depth` turns the depth target's value into eye z

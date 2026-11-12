@@ -33,6 +33,7 @@ inline constexpr std::uint32_t kMaskCutout = 32u;  // opaque where its texture's
 inline constexpr std::uint32_t kMaskShadowOnly = 128u;  // drawn for the tracer alone (a traced draw): only shadow rays meet it
 // What an instance is, read back at a hit (the instance's contribution field, which inline rays do not use).
 inline constexpr std::uint32_t kKindCutout = 1u;   // its pixel program may discard (an alpha test): a hit is not yet a surface
+inline constexpr std::uint32_t kKindCard = 4u;     // a billboard's sun card (l83): never opaque, so a ray can pass its own
 inline constexpr std::uint32_t kKindClipped = 2u;  // with kKindCutout: a map part its clip areas show (c27), every hit asked
 // Instance flags (the same bits in both APIs).
 inline constexpr std::uint32_t kInstanceNoCull = 1u;  // a ray that culls back faces meets both of this instance's

@@ -222,18 +222,26 @@ bool cutout_there(uint item, uint triangle_, float2 where_, float3 at_eye) {
 // How far along the ray something of `mask` stands, or -1 where nothing does; `met`: the item of what does (the
 // nearest, unless `any` takes the first the walk meets). With kMaskCutout in the mask, alpha-tested surfaces stand
 // there where their map says they are.
-float occluder_at(float3 origin, float3 direction, float reach, uint mask, bool any, out uint met) {
+// `own`: the item whose sun card (kKindCard, l83) the ray passes over, the billboard it starts from (0xFFFFFFFF none).
+float occluder_at_but(float3 origin, float3 direction, float reach, uint mask, bool any, uint own, out uint met) {
     RayDesc ray;
     ray.Origin = origin;
     ray.Direction = direction;
     ray.TMin = 0.0f;
     ray.TMax = reach;
-    const uint flags = ((mask & kMaskCutout) != 0u ? RAY_FLAG_NONE : RAY_FLAG_FORCE_OPAQUE) |
+    const uint flags = ((mask & kMaskCutout) != 0u || own != 0xFFFFFFFFu ? RAY_FLAG_NONE : RAY_FLAG_FORCE_OPAQUE) |
                        (any ? RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH : RAY_FLAG_NONE);
     RayQuery<RAY_FLAG_NONE> query;
     query.TraceRayInline(g_scene, flags, mask, ray);
     while (query.Proceed()) {
-        if (query.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE &&
+        if (query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE) {
+            continue;
+        }
+        const uint kind = query.CandidateInstanceContributionToHitGroupIndex();
+        if ((kind & kKindCard) != 0u && query.CandidateInstanceID() == own) {
+            continue;  // the billboard's own sun card
+        }
+        if ((kind & kKindCutout) == 0u ||
             cutout_there(query.CandidateInstanceID(), query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics(),
                          ray.Origin + ray.Direction * query.CandidateTriangleRayT())) {
             query.CommitNonOpaqueTriangleHit();
@@ -246,6 +254,10 @@ float occluder_at(float3 origin, float3 direction, float reach, uint mask, bool 
     }
     met = query.CommittedInstanceID();
     return query.CommittedRayT();
+}
+
+float occluder_at(float3 origin, float3 direction, float reach, uint mask, bool any, out uint met) {
+    return occluder_at_but(origin, direction, reach, mask, any, 0xFFFFFFFFu, met);
 }
 
 // The light a water surface gathers under it (plan 13.3 High: caustics): at the place item `item`'s triangle
