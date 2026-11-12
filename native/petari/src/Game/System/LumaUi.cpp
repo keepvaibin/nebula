@@ -3,11 +3,14 @@
 #include "Game/Screen/LayoutActor.hpp"
 #include "Game/Screen/LayoutManager.hpp"
 #include "Game/Render/Clip.hpp"
+#include "Game/Screen/NebulaSettingsMenu.hpp"
 #include "Game/System/Arenas.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/System/LumaModLog.hpp"
 #include "Game/System/NebulaArena.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
+#include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Ui/Font.hpp"
 #include "Game/Ui/Pane.hpp"
 #include "Game/Ui/TextBox.hpp"
@@ -73,6 +76,18 @@ namespace luma {
                 bool busy;            // an open handle uses it
             };
 
+            // A screen's menu (ui 1.2): its rows' panes, which are on, the look each had, the focus, the row taken at the
+            // last reading (-1 none).
+            struct Menu {
+                u32 count;
+                Ui::Pane* panes[LUMA_UI_MENU_ROWS_MOST];
+                bool on[LUMA_UI_MENU_ROWS_MOST];
+                Vec2f scale[LUMA_UI_MENU_ROWS_MOST];
+                u8 alpha[LUMA_UI_MENU_ROWS_MOST];
+                s32 focus;
+                s32 chosen;
+            };
+
             struct Screen {
                 LumaHandle handle;  // 0: a free slot
                 const LumaMod* mod;
@@ -84,6 +99,7 @@ namespace luma {
                 bool loop;
                 LumaEventFn fn;
                 void* user;
+                Menu menu;
             };
 
             // A LUMA_UI_EVENT_ANIMATION_END on its way: its own copy of what it says (its screen may end or be used
@@ -424,7 +440,40 @@ namespace luma {
             }
 
             // `stop`: the actor is still the scene's (close, the mod's end); else its memory is going (the scene's end).
+            // The menu's rows given back their own look; the menu gone.
+            void clearMenu(Menu& rMenu) {
+                for (u32 i = 0; i < rMenu.count; i++) {
+                    rMenu.panes[i]->mScale = rMenu.scale[i];
+                    rMenu.panes[i]->mAlpha = rMenu.alpha[i];
+                }
+                rMenu.count = 0;
+                rMenu.focus = -1;
+                rMenu.chosen = -1;
+            }
+
+            // The rows drawn as the focus and on/off say.
+            void lookMenu(const Menu& rMenu) {
+                for (u32 i = 0; i < rMenu.count; i++) {
+                    const f32 grow = static_cast< s32 >(i) == rMenu.focus ? 1.1f : 1.0f;
+                    rMenu.panes[i]->mScale = Vec2f(rMenu.scale[i].x * grow, rMenu.scale[i].y * grow);
+                    rMenu.panes[i]->mAlpha = rMenu.on[i] ? rMenu.alpha[i] : static_cast< u8 >(rMenu.alpha[i] / 2u);
+                }
+            }
+
+            // The next row that is on from `from` stepping `step` (wrapping); -1 when none is.
+            s32 nextOn(const Menu& rMenu, s32 from, s32 step) {
+                const s32 count = static_cast< s32 >(rMenu.count);
+                for (s32 k = 1; k <= count; k++) {
+                    const s32 i = ((from + step * k) % count + count) % count;
+                    if (rMenu.on[i]) {
+                        return i;
+                    }
+                }
+                return -1;
+            }
+
             void end(Screen& rScreen, const char* pWhy, bool stop) {
+                clearMenu(rScreen.menu);
                 if (luma::modlog::facts()) {
                     char key[48];
                     nebula_snprintf(key, sizeof(key), "ui.end.%llu", static_cast< unsigned long long >(rScreen.handle));
@@ -876,6 +925,66 @@ namespace luma {
                 return LUMA_OK;
             }
 
+            int32_t svcMenuRows(const LumaMod* pMod, LumaUiScreen screen, const LumaUiPane* pPanes, const bool* pOn, uint32_t count) {
+                const char* const pWhere = "ui.menu_rows";
+                if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
+                    return status;
+                }
+                if (count > LUMA_UI_MENU_ROWS_MOST || (count != 0u && pPanes == nullptr)) {
+                    report(pMod, pWhere, 101u, count > LUMA_UI_MENU_ROWS_MOST ? "count" : "panes", nullptr);
+                    return LUMA_E_ARGUMENT;
+                }
+                Screen* const pScreen = screenOf(pMod, screen);
+                if (pScreen == nullptr) {
+                    report(pMod, pWhere, 102u, nullptr, nullptr);
+                    return LUMA_E_HANDLE;
+                }
+                Ui::Pane* found[LUMA_UI_MENU_ROWS_MOST];
+                for (u32 i = 0; i < count; i++) {
+                    const Pane* const pPane = paneOf(pMod, pPanes[i]);
+                    if (pPane == nullptr || pPane->screen != screen) {
+                        report(pMod, pWhere, 102u, nullptr, nullptr);
+                        return LUMA_E_HANDLE;
+                    }
+                    found[i] = pPane->pane;
+                }
+                Menu& rMenu = pScreen->menu;
+                const s32 kept = rMenu.focus;
+                clearMenu(rMenu);
+                rMenu.count = count;
+                for (u32 i = 0; i < count; i++) {
+                    rMenu.panes[i] = found[i];
+                    rMenu.on[i] = pOn == nullptr || pOn[i];
+                    rMenu.scale[i] = found[i]->mScale;
+                    rMenu.alpha[i] = found[i]->mAlpha;
+                }
+                // The focus stays on its row while that row is still on (rule 4), else the first row that is on.
+                rMenu.focus = kept >= 0 && kept < static_cast< s32 >(count) && rMenu.on[kept] ? kept
+                              : count != 0u                                                    ? nextOn(rMenu, -1, 1)
+                                                                                               : -1;
+                lookMenu(rMenu);
+                return LUMA_OK;
+            }
+
+            int32_t svcMenuChosen(const LumaMod* pMod, LumaUiScreen screen, int32_t* pRow) {
+                const char* const pWhere = "ui.menu_chosen";
+                if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
+                    return status;
+                }
+                if (pRow == nullptr) {
+                    report(pMod, pWhere, 101u, "row", nullptr);
+                    return LUMA_E_ARGUMENT;
+                }
+                const Screen* const pScreen = screenOf(pMod, screen);
+                if (pScreen == nullptr) {
+                    report(pMod, pWhere, 102u, nullptr, nullptr);
+                    return LUMA_E_HANDLE;
+                }
+                const Menu& rMenu = pScreen->menu;
+                *pRow = rMenu.count != 0u ? rMenu.chosen : -1;
+                return LUMA_OK;
+            }
+
             const LumaUiService cTable = {
                 {sizeof(LumaUiService), LUMA_UI_MAJOR, LUMA_UI_MINOR},
                 svcOpen,
@@ -888,6 +997,8 @@ namespace luma {
                 svcStop,
                 svcAlive,
                 svcSetScale,
+                svcMenuRows,
+                svcMenuChosen,
             };
 
             // The service's rows (services-registry 11: ui's block, 570-619).
@@ -933,12 +1044,65 @@ namespace luma {
                 nullptr,
                 registered,
             };
+            // The newest shown screen with a menu takes the player's controls this frame (F's rules, 2026-11-12): the
+            // game's own reading after the bindings (its pad's press edges, its pointer and touch). Nothing while a
+            // host menu is open. A row taken stays menu_chosen's until the next reading: this runs after the mods'
+            // frame handlers (GameSystem: services::frameStart, then ui::frame), so the next frame's handlers, the
+            // step's hooks between and the mods' tasks each see it once.
+            void menuFrame() {
+                Screen* pTop = nullptr;
+                for (u32 i = 0; i < sHigh; i++) {
+                    Screen& rScreen = sScreens[i];
+                    rScreen.menu.chosen = -1;
+                    if (rScreen.handle == 0 || rScreen.menu.count == 0u || rScreen.made == nullptr) {
+                        continue;
+                    }
+                    const LayoutActor* const pActor = rScreen.made->actor;
+                    if (MR::isDead(pActor) || MR::isHiddenLayout(pActor)) {
+                        continue;
+                    }
+                    if (pTop == nullptr || rScreen.handle > pTop->handle) {
+                        pTop = &rScreen;
+                    }
+                }
+                if (pTop == nullptr || NebulaSettingsMenu::isShown()) {
+                    return;
+                }
+                Menu& rMenu = pTop->menu;
+                const s32 was = rMenu.focus;
+                if (MR::isPressedUp(PLAYER_1)) {
+                    rMenu.focus = nextOn(rMenu, rMenu.focus < 0 ? 0 : rMenu.focus, -1);
+                } else if (MR::isPressedDown(PLAYER_1)) {
+                    rMenu.focus = nextOn(rMenu, rMenu.focus < 0 ? -1 : rMenu.focus, 1);
+                }
+                // The pointer on a row that is on focuses it; on a row that is off it does nothing (rule 2).
+                bool pointedOff = false;
+                for (u32 i = 0; i < rMenu.count; i++) {
+                    if (rMenu.panes[i]->IsVisible() &&
+                        MR::isStarPointerPointingPane(pTop->made->actor, rMenu.panes[i], rMenu.panes[i]->mName, PLAYER_1, true, "弱")) {
+                        if (rMenu.on[i]) {
+                            rMenu.focus = static_cast< s32 >(i);
+                        } else {
+                            pointedOff = true;
+                        }
+                        break;
+                    }
+                }
+                if (rMenu.focus != was) {
+                    lookMenu(rMenu);
+                }
+                // A on the focused row, once a press (rule 5); never while the pointer is on a row that is off (rule 2).
+                if (MR::isPressedJump(PLAYER_1) && !pointedOff && rMenu.focus >= 0 && rMenu.on[rMenu.focus]) {
+                    rMenu.chosen = rMenu.focus;
+                }
+            }
         }  // namespace
 
         void frame() {
             if (sLive == 0) {
                 return;
             }
+            menuFrame();
             // Animations played to their end (a loop never ends).
             for (u32 i = 0; i < sHigh; i++) {
                 Screen& rScreen = sScreens[i];
