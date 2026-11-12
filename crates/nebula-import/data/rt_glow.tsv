@@ -14,11 +14,11 @@ starpiececluster	own	60
 starpiecemother	own	120
 kinopiogoodsstarpiece	own	40
 ticofatgoodsstarpiece	own	40
-coin	1.0 0.80 0.25	12
-coinflower	1.0 0.80 0.25	8
-purplecoin	0.72 0.35 1.0	15
+coin	1.0 0.80 0.25	40
+coinflower	1.0 0.80 0.25	40
+purplecoin	0.72 0.35 1.0	40
 questioncoin	1.0 0.82 0.28	60
-koopaplatecoin	1.0 0.80 0.25	12
+koopaplatecoin	1.0 0.80 0.25	40
 bluechip	0.30 0.62 1.0	40
 yellowchip	1.0 0.85 0.30	40
 powerstar	1.0 0.90 0.40	900
@@ -75,9 +75,9 @@ teresamansioncandlestand	1.0 0.60 0.25	150
 gravitylighta	own	500
 spotmarklight	own	300
 torpedolight	1.0 0.90 0.70	600
-skeletalfishbosslight	0.70 0.90 1.0	1500
+skeletalfishbosslight/lightcone_eyea_v_x	0.70 0.90 1.0	1500
 tripodbosseyelight	1.0 0.60 0.40	1500
-tripodbossheadlight	1.0 0.90 0.70	3000
+tripodbossheadlight/redlamp_v_x	1.0 0.90 0.70	3000
 teresaroomglaringlight	1.0 0.95 0.80	1200
 dashring	own	100
 prizering	own	120

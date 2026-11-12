@@ -57,6 +57,7 @@ static const uint kRtDielectric = 0u, kRtGloss = 1u, kRtMetal = 2u, kRtGlass = 3
 static const uint kRtHitVertexColour = 8u, kRtHitEnvironment = 16u;
 // Item word 1: an area light (FC's c07: a glowing mesh too big to be a point of the emitter list).
 static const uint kRtItemArea = 32u;
+static const uint kRtItemBeing = 1u << 30u;  // c101: a being's glowing body (rt_walk.cpp)
 static const float kRtPi = 3.14159265f;
 static const float kRtFarAway = 200000.0f;
 
@@ -268,6 +269,7 @@ struct RtHit {
     bool listed;           // its light is one of the frame's emitter list: a ray that lights something shades it instead
     bool glow_body;        // c81 (L4): a glowing mesh that is a light this frame (word 14 bit 25): never duller than
                            // its emission to a ray that only looks
+    bool being;            // c101: a glowing body that is a being (item word 1 bit 30): less of its own colour
     float through;         // c90: the sun's share on its far side (a crown, a cloud: word 14 bits 26-31; a card's
                            // kCardThrough); its sun ray passes its own item
 };
@@ -404,6 +406,7 @@ void rt_hit_read(uint item, uint triangle_, float2 where_, float far_, float3 or
     h.listed = (w3.z >> 24u & 1u) != 0u && !area;
     h.glows = h.klass == kRtEmissive;
     h.glow_body = (w3.z >> 25u & 1u) != 0u;
+    h.being = h.glow_body && (w0.y & kRtItemBeing) != 0u;
     const float cooked_through = float(w3.z >> 26u) / 63.0f;
     h.through = cooked_through > 0.0f ? cooked_through
                                       : (w0.y & kItemThin) != 0u && (w0.y & kItemAlphaTested) != 0u ? kCardThrough : 0.0f;
@@ -898,11 +901,11 @@ float3 rt_hit_radiance_with(RtHit h, uint options, float3 o, bool d_known, float
     if (h.klass == kRtMetal || h.klass == kRtGlass) {
         out_ += rt_hit_mirror_stand_in(h);
     }
-    // c81, c97 (L4; the director 11-12): a glowing body seen (a mirror's ray, not one that lights: that light comes
-    // through the list once) shows its own colour lit from inside: at least 0.6 and at most 1.2 of its albedo at full
-    // light, a channel.
+    // c81, c97, c101 (the owner 11-12: no pop-ups): a glowing body seen (a mirror's ray, not one that lights: that light
+    // comes through the list once) is shaded as any surface and adds a share of its own colour, a being 0.35 and an
+    // object 0.6 of its albedo, at most 1.2 of it a channel (program.hlsli traced_colour's rule).
     if (h.glow_body && (options & kRtShadeLighting) == 0u) {
-        out_ = clamp(out_, 0.6f * h.base, 1.2f * h.base);
+        out_ = min(out_ + (h.being ? 0.35f : 0.6f) * h.base, 1.2f * h.base);
     }
     return out_;
 }

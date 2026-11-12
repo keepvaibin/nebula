@@ -669,22 +669,28 @@ float4 traced_colour(float4 c, float4 pixel) {
     // An albedo: at most 1 a channel (A3-F7: a highlight in c over a small level is no colour).
     const float3 base = g_traced_lit ? min(c.rgb / max(g_traced_level, kBaseFloor), 1.0) : c.rgb;
     // In linear light (M1): the colour and its base decoded, the share, the added light and the mirror's exchange on
-    // them (the tracer's pictures are linear), the result encoded. What the local lights add, rho x D, is at most
-    // kAddedMost a channel in linear light (plan s5's guard on the product, A2-05; counted by the tracer, l82).
-    const float kAddedMost = 1.5;
-    const float3 lamps = metal ? float3(0.0, 0.0, 0.0) : min(traced_pure(traced_lin(base), metal) * added, kAddedMost);
+    // them (the tracer's pictures are linear), the result encoded. What the local lights add, rho x D, is held so its
+    // largest channel is at most kAddedMost in linear light, its hue kept (c101: was each channel at 1.5, so a blue
+    // thing by a lamp went white; plan s5's guard on the product, A2-05; counted by the tracer, l82). A glowing body
+    // (draw flag 16384, c101) takes none: its own light would flood it.
+    const float kAddedMost = 1.0;
+    const bool body = (draw_flags & 16384u) != 0u;
+    const float3 added_lit = traced_pure(traced_lin(base), metal) * added;
+    const float added_top = max(added_lit.r, max(added_lit.g, added_lit.b));
+    const float3 lamps = metal || body ? float3(0.0, 0.0, 0.0) : added_lit * min(1.0, kAddedMost / max(added_top, 1e-6));
     g_traced_lamps = lamps;
     const float4 seen = traced_mirror((traced_pure(traced_lin(c.rgb), metal) * share * sheen.a + sheen.rgb) + lamps, c.a, pixel);
-    // c81, c97 (L4; the director 11-12): a glowing body (draw flag 256: its mesh a light this frame) shows its own
-    // drawn colour lit from inside: at least 0.6 and at most 1.2 of its lit value, a channel (hue and pattern kept;
-    // its own light at the range of its size no longer washes it white).
+    // c101 (the owner 11-12: "bright and look like popups ... on any entity or object"): a glowing body (draw flag
+    // 16384: its mesh a light this frame) is shaded as any surface (its lit side and its shade differ) and adds a share
+    // of its own colour, a being (32768) 0.35 and an object 0.6 of its lit value, at most 1.2 of it a channel.
     // c99 (the owner 11-12: the lava is flat): a hot body (draw flag 8192: lava, a sun) at 2 to 2.5 of it, over a
     // sunlit surface's 1.25, so it burns.
     const float3 lit_value = traced_lin(base);
     const bool hot = (draw_flags & 8192u) != 0u;
-    const float3 shown = (draw_flags & 256u) == 0u ? seen.rgb
+    const float self_lit = (draw_flags & 32768u) != 0u ? 0.35 : 0.6;
+    const float3 shown = !body ? seen.rgb
                          : hot ? clamp(seen.rgb, 2.0 * lit_value, 2.5 * lit_value)
-                               : clamp(seen.rgb, 0.6 * lit_value, 1.2 * lit_value);
+                               : min(seen.rgb + self_lit * lit_value, 1.2 * lit_value);
     return float4(traced_srgb(shown), seen.a);
 }
 // The light in the air (rt/rt_volume.hlsl, the master plan's 15.2), for a draw that is lit and not a light (draw flag

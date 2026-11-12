@@ -1250,8 +1250,11 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
                      (shown ? 64u : 0u) |
                      (character ? 2048u : 0u) | (environment ? 4096u : 0u) |
                      (metal ? 128u : 0u) |
-                     // c81 (L4): a glowing mesh that is a light this frame: never duller than its own colour.
-                     (rt_light_on_ && scene_layer && i < rt_glow_bodies_.size() && rt_glow_bodies_[i] != 0u ? 256u : 0u) |
+                     // c81 (L4), c101: a glowing mesh that is a light this frame: 16384, a being's 32768 too
+                     // (program.hlsli traced_colour). Not 256: that is the added shells' exchange (FB b94), and c81's
+                     // 256 drew every glowing body flat.
+                     (rt_light_on_ && scene_layer && i < rt_glow_bodies_.size() && rt_glow_bodies_[i] != 0u ? 16384u : 0u) |
+                     (rt_light_on_ && scene_layer && i < rt_glow_bodies_.size() && rt_glow_bodies_[i] == 3u ? 32768u : 0u) |
                      // c99: a hot body (lava, a sun) burns brighter than a lit surface (program.hlsli traced_colour).
                      (rt_light_on_ && scene_layer && i < rt_glow_bodies_.size() && rt_glow_bodies_[i] == 2u ? 8192u : 0u) |
                      ((item.flags & NEBULA_ITEM_SPREAD_POINTS) != 0u ? 2u : 0u) |

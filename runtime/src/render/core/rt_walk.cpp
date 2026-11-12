@@ -70,6 +70,11 @@ constexpr float kUnitsPerMetre = 100.0f;
 
 // The glow a draw gives now (defined with rt_emitter): the item words read it too (c60, A2-12).
 void live_glow(const NebulaFrameList& list, const NebulaFrameItem& item, const core::GpuMesh& mesh, float out[4]);
+// c101 (the owner 11-12: no pop-ups on any entity): a glow by data (the emissive class's row, a bloom twin's:
+// hit_record.rs GLOW_CLASS 3, GLOW_BLOOM 4), not a row of rt_glow.tsv that names the model. A being's never lights.
+inline bool glow_by_data(const core::GpuMesh& mesh) {
+    return mesh.glow_rule == 3u || mesh.glow_rule == 4u;
+}
 bool live_tint(const NebulaFrameList& list, const NebulaFrameItem& item, const core::GpuMesh& mesh, float out[3]);
 
 // What an emitter is from one frame to the next (its kind, whose it is, which of them): a pixel's reservoir finds its
@@ -1929,16 +1934,26 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
             // only where rt_emitter kept its block's light (not a glowing surface too large to be one light, not one
             // past the list's room; a point light the game asked at its place stands for it too); its glow turned
             // off by the game, it shows none and is not listed (c60, A2-12).
+            // c101: a being (its model's vertices weighted to a skeleton: an enemy, an NPC, the player) glows only by a
+            // row that names it; its marks that glow by data (an eye of the emissive class) are drawn as they are, shown
+            // by their emission to a ray, and are no light and no glowing body.
+            const std::uint32_t glow_model = list.blocks[item.block].model;
+            const bool being = mesh.glow[3] != 0.0f && glow_model != 0u && !registries_.model(glow_model).envelopes.empty();
+            const bool mark_only = being && glow_by_data(mesh);
             float glow_now[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-            if (mesh.glow[3] != 0.0f) {
+            if (mesh.glow[3] != 0.0f && !mark_only) {
                 live_glow(list, item, mesh, glow_now);
             }
-            const bool glow_off = mesh.glow[3] != 0.0f && glow_now[3] == 0.0f;
+            const bool glow_off = mesh.glow[3] != 0.0f && glow_now[3] == 0.0f && !mark_only;
             const bool glow_listed = glow_now[3] != 0.0f && rt_emitter_blocks_.contains(item.block);
             // c81 (L4): bit 25, and the raster's draw flag 256: a light this frame, never duller than its colour.
             // c99: 2 a hot body (lava, a sun: glowing by its name), raster draw flag 8192 too.
             if (glow_now[3] != 0.0f && i < rt_glow_bodies_.size()) {
-                rt_glow_bodies_[i] = mesh.glow_rule == 2u ? 2u : 1u;
+                rt_glow_bodies_[i] = mesh.glow_rule == 2u ? 2u : being ? 3u : 1u;
+            }
+            // c101: word 1 bit 30, a being's glowing body (rt_shade.hlsli kRtItemBeing: less of its own colour).
+            if (glow_now[3] != 0.0f && being) {
+                words[1] |= 1u << 30u;
             }
             // c90: bits 26-31 the share of the sun its far side takes x 63 (a crown of leaves, a cloud), whatever its glow.
             words[14] = (glow_off ? 0u
@@ -2614,7 +2629,7 @@ void RenderCore::rt_report() {
                  kinds[1], kinds[2]);
     std::fprintf(stderr, "[rt-inputs]   refracted pixels %.0f a frame (glass and water bodies, High)\n",
                  static_cast<double>(rt_light_sum_[9]) / n);
-    std::fprintf(stderr, "[rt-inputs]   added light over the guard (kAddedMost 1.5 of the base) %.0f pixels a frame\n",
+    std::fprintf(stderr, "[rt-inputs]   added light over the guard (kAddedMost 1.0 of the base) %.0f pixels a frame\n",
                  static_cast<double>(rt_light_sum_[10]) / n);
     // c70's check: the materials whose live colour is off their cooked one (m<name hash>: cooked base -> live base).
     if (!rt_live_tints_.empty()) {
@@ -3091,6 +3106,13 @@ void RenderCore::rt_emitter(const NebulaFrameItem& item, const core::GpuMesh& me
         return;
     }
     constexpr std::size_t kMost = 4608u;  // past the particles' own 4096: a mesh's light is not crowded out by sparks
+    // c101: a being is a light only by a row that names it (glow_by_data).
+    if (glow_by_data(mesh)) {
+        const std::uint32_t model = walk_.now->list->blocks[item.block].model;
+        if (model != 0u && !registries_.model(model).envelopes.empty()) {
+            return;
+        }
+    }
     float glow[4];
     live_glow(*walk_.now->list, item, mesh, glow);
     light_colour(glow, glow, rt_dev(RtDev::LightSrgb, 1.0f) > 0.5f);  // its rgb as linear light (l65); glow[3] stays
