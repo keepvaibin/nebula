@@ -416,6 +416,18 @@ float3 traced_o(float4 light, float4 pixel, out bool coloured) {
     coloured = mean > 1e-4;
     return coloured ? ratio * (light.a / mean) : light.aaa;
 }
+// The sky's chroma kept in shade (M8): the run's sky_chroma where it gives one, else October's 0.4 (the host's sky' in
+// view_relight[1], rt_shade.hlsli kSkyChroma).
+float traced_sky_chroma() { return view_dev[1].z > 0.5 ? view_dev[0].z : 0.4; }
+// A light over a reference light (A3-F8; c50): their luminances' ratio, the light's colour over the reference's colour
+// (`held`: the reference over its luminance) held within [0.8, 1.25] a channel, so that a channel of either near 0 does
+// not blow up. 1 where the reference has no light. The one bound for the environment (traced_painted) and a lit
+// program's sky light (program_lit.hlsli, c69).
+float3 traced_bounded(float3 lit, float held_l, float3 held) {
+    const float lit_l = dot(lit, float3(0.2126, 0.7152, 0.0722));
+    const float3 tint = lit_l > 1e-6 && held_l > 1e-4 ? (lit / lit_l) / max(held, 1e-4) : float3(1.0, 1.0, 1.0);
+    return held_l > 1e-4 ? (lit_l / held_l) * clamp(tint, 0.8, 1.25) : float3(1.0, 1.0, 1.0);
+}
 float3 traced_painted(float4 light, float nl, float3 o3, bool coloured) {
     const float3 v = light.rgb, a = view_stage_a.rgb, k = view_stage_k.rgb;
     const float o = light.a;
@@ -439,9 +451,7 @@ float3 traced_painted(float4 light, float nl, float3 o3, bool coloured) {
     // (sky' O + key sun_strength nl V) E, held = lerp(full, 1, stage_light).
     const float3 lit = view_relight[1].rgb * o3 + view_relight[2].rgb * (nl * v);
     // A3-F8: lit over held in luminance, its colour over held's limited to a stop either way.
-    const float lit_l = dot(lit, luminance), held_l = view_relight[0].w;
-    const float3 tint = lit_l > 1e-6 && held_l > 1e-4 ? (lit / lit_l) / max(view_relight[3].rgb, 1e-4) : float3(1.0, 1.0, 1.0);
-    const float3 relit = held_l > 1e-4 ? (lit_l / held_l) * clamp(tint, 0.8, 1.25) : float3(1.0, 1.0, 1.0);  // c50: a quarter stop
+    const float3 relit = traced_bounded(lit, view_relight[0].w, view_relight[3].rgb);  // c50, c69: one bound
     return lerp(painted, relit, view_look.x);
 }
 float4 traced_colour(float4 c, float4 pixel) {

@@ -41,8 +41,11 @@ static float g_traced_facing = -1.0;
 float traced_sun_strength() { return view_dev[1].y > 0.5 ? view_dev[0].y : 1.0; }
 // Light 1's diffuse factor under the relight (c53): the sky's hemisphere about the player's up, by kForm from the
 // game's (a fill in the camera's space on most light sets).
+// c69 (the director 23:05): at half the hemisphere's 0.5 + 0.5 n.up: a directional light's facing max(n.l, 0) averages
+// 1/4 over a sphere of normals, the hemisphere 1/2, so the game's fill keeps its energy over all normals (c53 gave it
+// twice, flattening every character).
 float traced_sky_facing(float3 nrm) {
-    return saturate(0.5 + 0.5 * dot(nrm * rsqrt(max(dot(nrm, nrm), 1e-12)), view_sky_up));
+    return 0.5 * saturate(0.5 + 0.5 * dot(nrm * rsqrt(max(dot(nrm, nrm), 1e-12)), view_sky_up));
 }
 float traced_fill_facing(uint n, uint diffuse, float facing, float3 nrm) {
     if (n != 1u || diffuse == 0u || !g_traced_keyed || g_traced_facing < 0.0 || (view_flags & 1u) == 0u) {
@@ -287,6 +290,13 @@ EnhShade enh_begin_traced(float3 P, float3 n, float4 pixel) {
     g_traced = traced_at(pixel);
     bool coloured = false;
     g_traced_o = traced_o(g_traced, pixel, coloured);
+    // c69: under the relight, the sky light as the environment takes it (traced_painted's sky'): O at kSkyChroma of its
+    // chroma, its colour bounded against white by the environment's own bound; Painted keeps FB's coloured O.
+    if (view_look.x > 0.0) {
+        const float o_l = dot(g_traced_o, float3(0.2126, 0.7152, 0.0722));
+        const float3 o_sky = traced_bounded(lerp(float3(o_l, o_l, o_l), g_traced_o, traced_sky_chroma()), 1.0, float3(1.0, 1.0, 1.0));
+        g_traced_o = lerp(g_traced_o, o_sky, saturate(view_look.x));
+    }
     g_traced_lit = g_traced_keyed;
     // c52: the traced facing for light 0 where the relight is on and the pixel's traced light is its own.
     g_traced_facing = -1.0;
