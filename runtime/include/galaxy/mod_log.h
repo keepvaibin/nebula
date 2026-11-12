@@ -27,4 +27,26 @@ void add_not_started();
 void add_finding(std::uint32_t source, std::uint32_t level, std::string_view mod, std::uint32_t code, std::string_view file,
                  std::uint32_t line, std::uint32_t column, const std::vector<std::pair<std::string, std::string>>& values);
 
+// What the log holds, for the Mods > Log page and a mod's own page (contract 4.2); any thread. Empty when the module
+// has no log or nothing was kept.
+struct PageEntry {
+    std::uint32_t source = 0, level = 0, code = 0, line = 0, column = 0, count = 0;
+    std::string mod;
+    std::string file;       // "" when none
+    std::string text;       // the played language
+    std::string code_name;  // "L203", "Hook.NoResult", "S0904"; "" for none
+};
+struct PageMod {
+    std::string id;
+    std::uint32_t past = 0;  // entries not kept (ModLog.TooMany)
+};
+[[nodiscard]] std::vector<PageEntry> entries();  // in added order
+[[nodiscard]] std::vector<PageMod> mods();       // in the order each mod's first entry came
+// The module's row `row` (ModLog.*) in the played language, {mod} and {count} filled; "" when there is none.
+[[nodiscard]] std::string words(const char* row, std::string_view mod, std::uint32_t count);
+// How many entries the log keeps (a walk, nothing copied).
+[[nodiscard]] std::uint32_t kept();
+// In a harness run, one row of the log page as the fact `modscreen.log {"row", "label", "value"}` (contract 4.3).
+void page_fact(std::uint32_t row, std::string_view label, std::string_view value);
+
 }  // namespace galaxy::modlog

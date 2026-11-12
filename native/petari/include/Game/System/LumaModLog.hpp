@@ -27,6 +27,7 @@ namespace luma {
             const char16_t* text;    // the played language, for the screen
             const char* textUtf8;    // the same, for the facts
             const char* english;     // for the game's log and the facts
+            const char* codeName;    // the code as the page names it: "L203", "Hook.NoResult", "S0901"; "" for none
             Entry* next;             // in added order; atomic
         };
 
@@ -81,6 +82,9 @@ namespace luma {
         bool facts();
         // `pText` as a JSON string with its quotes, into pDst (cut at a character when it would not fit).
         void jsonString(char* pDst, u32 size, const char* pText);
+        // The module's row `pRow` in the played language as UTF-8 into pDst (`size` bytes, cut at a character), {mod} and
+        // {count} filled; the bytes written, 0 when the row is unknown (luma_modlog_words).
+        u32 words(const char* pRow, const char* pMod, u32 count, char* pDst, u32 size);
         // UTF-16 to UTF-8 within `size`.
         void toUtf8(char* pDst, u32 size, const char16_t* pText);
     }  // namespace modlog

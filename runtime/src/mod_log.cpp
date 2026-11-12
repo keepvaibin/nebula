@@ -11,17 +11,40 @@
 
 #include <atomic>
 #include <cstddef>
+#include <cstdio>
 
 namespace galaxy::modlog {
 namespace {
 
 std::atomic<LumaModLogAdd> g_add{nullptr};
+// The page's reads (luma_modlog.h), found with g_add.
+std::atomic<LumaModLogNext> g_next{nullptr};
+std::atomic<LumaModLogNextMod> g_next_mod{nullptr};
+std::atomic<LumaModLogWords> g_words{nullptr};
 
 // The harness's fact writer, when this run has the harness (its service exists only then).
 LumaModLogFact harness_fact() {
     const auto* harness = static_cast<const LumaHarness*>(galaxy::extensions::service(LUMA_HARNESS_NAME, LUMA_HARNESS_MAJOR, 0));
     if (harness == nullptr || harness->size < offsetof(LumaHarness, fact) + sizeof(harness->fact)) return nullptr;
     return harness->fact;
+}
+
+// `text` as a JSON string, quotes included.
+void append_json(std::string& out, std::string_view text) {
+    out += '"';
+    for (const char c : text) {
+        if (c == '"' || c == '\\') {
+            out += '\\';
+            out += c;
+        } else if (static_cast<unsigned char>(c) < 0x20u) {
+            char escaped[8];
+            std::snprintf(escaped, sizeof(escaped), "\\u%04x", static_cast<unsigned>(static_cast<unsigned char>(c)));
+            out += escaped;
+        } else {
+            out += c;
+        }
+    }
+    out += '"';
 }
 
 void add(const LumaModLogEntry& entry) {
@@ -33,6 +56,9 @@ void add(const LumaModLogEntry& entry) {
 void begin(void* (*find_symbol)(const char*), std::uint32_t mods_on) {
     if (find_symbol == nullptr) return;
     const auto session = reinterpret_cast<LumaModLogSession>(find_symbol("luma_modlog_session"));
+    g_next.store(reinterpret_cast<LumaModLogNext>(find_symbol("luma_modlog_next")), std::memory_order_release);
+    g_next_mod.store(reinterpret_cast<LumaModLogNextMod>(find_symbol("luma_modlog_next_mod")), std::memory_order_release);
+    g_words.store(reinterpret_cast<LumaModLogWords>(find_symbol("luma_modlog_words")), std::memory_order_release);
     g_add.store(reinterpret_cast<LumaModLogAdd>(find_symbol("luma_modlog_add")), std::memory_order_release);
     if (session != nullptr) session(mods_on, harness_fact());
 }
@@ -85,6 +111,60 @@ void add_not_started() {
         entry.host = record.sentence.c_str();
         add(entry);
     }
+}
+
+std::vector<PageEntry> entries() {
+    std::vector<PageEntry> out;
+    const LumaModLogNext next = g_next.load(std::memory_order_acquire);
+    if (next == nullptr) return out;
+    LumaModLogView view{};
+    view.size = sizeof(view);
+    for (const void* at = next(nullptr, &view); at != nullptr; at = next(at, &view)) {
+        out.push_back({view.source, view.level, view.code, view.line, view.column, view.count, view.mod != nullptr ? view.mod : "",
+                       view.file != nullptr ? view.file : "", view.text != nullptr ? view.text : "",
+                       view.code_name != nullptr ? view.code_name : ""});
+    }
+    return out;
+}
+
+std::vector<PageMod> mods() {
+    std::vector<PageMod> out;
+    const LumaModLogNextMod next = g_next_mod.load(std::memory_order_acquire);
+    if (next == nullptr) return out;
+    const char* id = nullptr;
+    std::uint32_t past = 0;
+    for (const void* at = next(nullptr, &id, &past); at != nullptr; at = next(at, &id, &past)) {
+        out.push_back({id != nullptr ? id : "", past});
+    }
+    return out;
+}
+
+std::string words(const char* row, std::string_view mod, std::uint32_t count) {
+    const LumaModLogWords give = g_words.load(std::memory_order_acquire);
+    if (give == nullptr) return {};
+    const std::string mod_id(mod);
+    char text[512];
+    const std::uint32_t bytes = give(row, mod_id.c_str(), count, text, sizeof(text));
+    return std::string(text, bytes);
+}
+
+std::uint32_t kept() {
+    const LumaModLogNext next = g_next.load(std::memory_order_acquire);
+    std::uint32_t count = 0;
+    if (next == nullptr) return count;
+    for (const void* at = next(nullptr, nullptr); at != nullptr; at = next(at, nullptr)) ++count;
+    return count;
+}
+
+void page_fact(std::uint32_t row, std::string_view label, std::string_view value) {
+    const LumaModLogFact write = harness_fact();
+    if (write == nullptr) return;
+    std::string json = "{\"row\":" + std::to_string(row) + ",\"label\":";
+    append_json(json, label);
+    json += ",\"value\":";
+    append_json(json, value);
+    json += '}';
+    write("modscreen.log", json.c_str());
 }
 
 }  // namespace galaxy::modlog

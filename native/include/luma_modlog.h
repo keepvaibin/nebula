@@ -72,6 +72,35 @@ typedef void (*LumaModLogFact)(const char* key, const char* json);
 typedef void (*LumaModLogSession)(uint32_t mods_on, LumaModLogFact fact);
 typedef void (*LumaModLogAdd)(const LumaModLogEntry* entry);
 
+/* One kept entry as the host's Mods > Log page reads it (contract 4.2). Every pointer lives for the session. */
+typedef struct LumaModLogView {
+    uint32_t size; /* sizeof(LumaModLogView) as the caller knows it: the module writes whole fields, none past it */
+    uint32_t source;
+    uint32_t level;
+    uint32_t code;
+    uint32_t line, column;
+    uint32_t count;        /* repeats included, as it is now */
+    uint32_t reload;       /* the mod's reload number when it was added (plan 1.11); 0 before any */
+    const char* mod;
+    const char* file;      /* "" when none */
+    const char* text;      /* the played language, UTF-8 */
+    const char* english;
+    const char* code_name; /* the code as the page shows it: "L203", "Hook.NoResult", "S0904"; "" for none */
+} LumaModLogView;
+
+/* The game module's exports for the page, found by name ("luma_modlog_next", "luma_modlog_next_mod",
+   "luma_modlog_words"). Any thread: kept entries never change or go in a session, only their counts grow.
+
+   luma_modlog_next: the kept entry after `after` (null: the first), in added order, into *view; returns it, for the
+   next call; null past the last (view untouched).
+   luma_modlog_next_mod: the mod after `after` (null: the first) that has entries, in the order its first came: its id
+   and how many of its entries were not kept (ModLog.TooMany's count); null past the last.
+   luma_modlog_words: the module's text row `row` (ModLog.*) in the played language as UTF-8 into `out` (`size` bytes,
+   cut at a character), {mod} and {count} filled; the bytes written, 0 when there is no such row. */
+typedef const void* (*LumaModLogNext)(const void* after, LumaModLogView* view);
+typedef const void* (*LumaModLogNextMod)(const void* after, const char** id, uint32_t* past);
+typedef uint32_t (*LumaModLogWords)(const char* row, const char* mod, uint32_t count, char* out, uint32_t size);
+
 #ifdef __cplusplus
 }
 #endif

@@ -8,6 +8,7 @@
 #include <nebula_module.h>
 #include <stddef.h>
 #include <stdlib.h>
+#include <string.h>
 
 // Contract mod-log. The store is made by the first add (one compare-and-swap of sStore, section 2) and lives until the
 // module unloads. Entries and mods are lists that only grow: each is made whole outside the lock and published by one
@@ -400,13 +401,41 @@ namespace luma {
                 pWords->played[pWords->playedUnits] = 0;
             }
 
-            // One block: the entry, its played text (UTF-16), then its mod, file, played text (UTF-8) and English.
-            Entry* make(const LumaModLogEntry& rEntry, const char* pFile, const Words& rWords) {
+            // The code as the page names it (contract 4.2): the host's sources "L<code>"; the module's their row id
+            // ("Hook.NoResult"; a script's "S0901" without "Script."), or the number when there is no row; "" for code 0
+            // (the log's own lines, a host sentence).
+            void codeNameOf(const LumaModLogEntry& rEntry, const char* pRowId, char* pDst, u32 size) {
+                pDst[0] = 0;
+                if (rEntry.code == 0) {
+                    return;
+                }
+                if (rEntry.source <= LUMA_MODLOG_COOK) {
+                    nebula_snprintf(pDst, size, "L%u", rEntry.code);
+                    return;
+                }
+                if (pRowId == nullptr || pRowId[0] == 0) {
+                    nebula_snprintf(pDst, size, "%u", rEntry.code);
+                    return;
+                }
+                static const char cScript[] = "Script.";
+                u32 n = 0;
+                while (cScript[n] != 0 && pRowId[n] == cScript[n]) {
+                    n++;
+                }
+                nebula_snprintf(pDst, size, "%s", cScript[n] == 0 ? pRowId + n : pRowId);
+            }
+
+            // One block: the entry, its played text (UTF-16), then its mod, file, played text (UTF-8), English and code
+            // name.
+            Entry* make(const LumaModLogEntry& rEntry, const char* pFile, const Words& rWords, const char* pRowId) {
+                char codeName[64];
+                codeNameOf(rEntry, pRowId, codeName, sizeof(codeName));
                 const u32 modBytes = lengthOf(rEntry.mod) + 1;
                 const u32 fileBytes = lengthOf(pFile) + 1;
                 const u32 playedBytes = utf8Length(rWords.played, rWords.playedUnits) + 1;
+                const u32 codeBytes = lengthOf(codeName) + 1;
                 const size_t size = sizeof(Entry) + (rWords.playedUnits + 1) * sizeof(char16_t) + modBytes + fileBytes + playedBytes +
-                                    rWords.englishBytes + 1;
+                                    rWords.englishBytes + 1 + codeBytes;
                 unsigned char* const pBlock = static_cast< unsigned char* >(zeroed(size));
                 if (pBlock == nullptr) {
                     NEBULA_PANIC("LumaCore: no memory for %s's mod-log line %u", rEntry.mod, rEntry.code);
@@ -428,6 +457,9 @@ namespace luma {
                 pAt += playedBytes;
                 char* const pEnglish = pAt;
                 copy(pEnglish, rWords.english);
+                pAt += rWords.englishBytes + 1;
+                char* const pCodeName = pAt;
+                copy(pCodeName, codeName);
 
                 pEntry->source = rEntry.source;
                 pEntry->level = rEntry.level;
@@ -440,6 +472,7 @@ namespace luma {
                 pEntry->text = pText;
                 pEntry->textUtf8 = pPlayed8;
                 pEntry->english = pEnglish;
+                pEntry->codeName = pCodeName;
                 pEntry->next = nullptr;
                 return pEntry;
             }
@@ -634,7 +667,7 @@ namespace luma {
             // Made outside the lock; another thread may keep the same key meanwhile (looked up again below).
             Words words;
             wordsOf(rEntry, pRowId, own, &words);
-            Entry* pMade = make(rEntry, pFile, words);
+            Entry* pMade = make(rEntry, pFile, words, pRowId);
             Mod* pNewMod = pMod == nullptr ? makeMod(rEntry.mod) : nullptr;
             ::free(words.played);
             ::free(words.english);
@@ -875,6 +908,41 @@ namespace luma {
             }
             write8(pDst, pText, units);
         }
+
+        u32 words(const char* pRow, const char* pMod, u32 count, char* pDst, u32 size) {
+            if (pDst == nullptr || size == 0) {
+                return 0;
+            }
+            pDst[0] = 0;
+            if (pRow == nullptr || !NebulaText::has(pRow)) {
+                return 0;
+            }
+            const s32 length = NebulaText::length(pRow);
+            char16_t* const pTemplate = static_cast< char16_t* >(::malloc((length + 1) * sizeof(char16_t)));
+            if (pTemplate == nullptr) {
+                NEBULA_PANIC("LumaCore: no memory for the mod log's row %s", pRow);
+            }
+            NebulaText::get(pTemplate, length + 1, pRow);
+            char number[16];
+            nebula_snprintf(number, sizeof(number), "%u", count);
+            LumaModLogEntry values = {};
+            values.size = sizeof(values);
+            values.mod = pMod != nullptr ? pMod : "";
+            values.names[0] = "count";
+            values.values[0] = number;
+            values.count = 1;
+            const u32 units = fill(nullptr, pTemplate, values);
+            char16_t* const pText = static_cast< char16_t* >(::malloc((units + 1) * sizeof(char16_t)));
+            if (pText == nullptr) {
+                NEBULA_PANIC("LumaCore: no memory for the mod log's row %s", pRow);
+            }
+            fill(pText, pTemplate, values);
+            pText[units] = 0;
+            toUtf8(pDst, size, pText);
+            ::free(pText);
+            ::free(pTemplate);
+            return lengthOf(pDst);
+        }
     }  // namespace modlog
 }  // namespace luma
 
@@ -889,5 +957,54 @@ NEBULA_GAME_API void luma_modlog_add(const LumaModLogEntry* entry) {
         return;
     }
     luma::modlog::add(*entry, nullptr);
+}
+
+NEBULA_GAME_API const void* luma_modlog_next(const void* after, LumaModLogView* view) {
+    const luma::modlog::Entry* const pEntry =
+        after == nullptr ? luma::modlog::first() : luma::modlog::nextOf(static_cast< const luma::modlog::Entry* >(after));
+    if (pEntry == nullptr || view == nullptr) {
+        return pEntry;
+    }
+    // As much as the caller's struct holds, whole fields only: a host built against an earlier view reads only what it
+    // knows.
+    LumaModLogView whole = {};
+    whole.size = sizeof(whole);
+    whole.source = pEntry->source;
+    whole.level = pEntry->level;
+    whole.code = pEntry->code;
+    whole.line = pEntry->line;
+    whole.column = pEntry->column;
+    whole.count = luma::modlog::countOf(pEntry);
+    whole.reload = pEntry->reload;
+    whole.mod = pEntry->mod;
+    whole.file = pEntry->file;
+    whole.text = pEntry->textUtf8;
+    whole.english = pEntry->english;
+    whole.code_name = pEntry->codeName;
+    const u32 numbers = static_cast< u32 >(offsetof(LumaModLogView, mod));  // the uint32_t fields
+    u32 size = view->size < sizeof(whole) ? view->size : static_cast< u32 >(sizeof(whole));
+    size = size <= numbers ? size & ~3u : numbers + ((size - numbers) & ~static_cast< u32 >(sizeof(const char*) - 1));
+    const u32 given = view->size;
+    memcpy(view, &whole, size);
+    view->size = given;
+    return pEntry;
+}
+
+NEBULA_GAME_API const void* luma_modlog_next_mod(const void* after, const char** id, uint32_t* past) {
+    const luma::modlog::Mod* const pMod =
+        after == nullptr ? luma::modlog::firstMod() : luma::modlog::nextOf(static_cast< const luma::modlog::Mod* >(after));
+    if (pMod != nullptr) {
+        if (id != nullptr) {
+            *id = pMod->id;
+        }
+        if (past != nullptr) {
+            *past = luma::modlog::pastOf(pMod);
+        }
+    }
+    return pMod;
+}
+
+NEBULA_GAME_API uint32_t luma_modlog_words(const char* row, const char* mod, uint32_t count, char* out, uint32_t size) {
+    return luma::modlog::words(row, mod, count, out, size);
 }
 }
