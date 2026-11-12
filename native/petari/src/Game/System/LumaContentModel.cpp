@@ -17,6 +17,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/Table.hpp"
 #include <luma.h>
 #include <luma_content_model.h>
 #include <luma_modlog.h>
@@ -52,6 +53,7 @@ namespace luma {
                 const char cPlaceholder[] = "NebulaPlaceholder";
                 const u32 cMissingModelCode = 621;
                 const u32 cMissingJointCode = 626;
+                const u32 cMissingParamCode = 671;
 
                 struct Part {
                     Part* next;        // every part, for reuse and release
@@ -600,12 +602,147 @@ namespace luma {
                     return LUMA_OK;
                 }
 
+                // Content.MissingParam (references 6): the model, the parameter and its material.
+                void sayMissingParam(const LumaMod* pMod, const char* pModel, const char* pMaterial, const char* pParam) {
+                    char column[300];
+                    nebula_snprintf(column, sizeof(column), "%s/%s/%s", pModel, pMaterial, pParam);
+                    LumaModLogEntry entry = {};
+                    entry.size = sizeof(entry);
+                    entry.source = LUMA_MODLOG_CONTENT;
+                    entry.level = LUMA_MODLOG_ERROR;
+                    entry.code = cMissingParamCode;
+                    entry.mod = sKernel->mod_id(pMod);
+                    entry.file = "";
+                    entry.column = MR::getHashCode(column);
+                    entry.names[0] = "model";
+                    entry.values[0] = pModel;
+                    entry.names[1] = "found";
+                    entry.values[1] = pParam;
+                    entry.names[2] = "material";
+                    entry.values[2] = pMaterial;
+                    entry.count = 3;
+                    (void)luma::modlog::add(entry, "Content.MissingParam");
+                }
+
+                // The place (0 to 6, the material's rows: NEBULA_ROW_REGISTER 0-2, NEBULA_ROW_CONSTANT 3-6) the cook's
+                // <model>.params gives the material's parameter; -1: none (no file, not the cook's table, no row).
+                s32 paramPlace(const ResourceHolder* pHolder, const char* pModel, const char* pMaterial, const char* pParam) {
+                    char file[300];
+                    nebula_snprintf(file, sizeof(file), "%s.params", pModel);
+                    const void* const pFile = pHolder->findFile(file);
+                    if (pFile == nullptr || memcmp(pFile, "NTBL", 4) != 0) {
+                        return -1;
+                    }
+                    Table table;
+                    table.attach(pFile);
+                    const s32 materialColumn = table.searchItemInfo("material");
+                    const s32 paramColumn = table.searchItemInfo("param");
+                    const s32 placeColumn = table.searchItemInfo("register");
+                    if (materialColumn < 0 || paramColumn < 0 || placeColumn < 0 || table.getColumnKind("material") != TableKind_Text ||
+                        table.getColumnKind("param") != TableKind_Text || table.getColumnKind("register") != TableKind_Int) {
+                        return -1;
+                    }
+                    const int rows = table.getNumEntries();
+                    for (int r = 0; r < rows; r++) {
+                        const char* pRowMaterial = nullptr;
+                        const char* pRowParam = nullptr;
+                        s32 place = -1;
+                        if (table.getValueFast(r, materialColumn, &pRowMaterial) && table.getValueFast(r, paramColumn, &pRowParam) &&
+                            strcmp(pRowMaterial, pMaterial) == 0 && strcmp(pRowParam, pParam) == 0 &&
+                            table.getValueFast(r, placeColumn, &place)) {
+                            return place >= 0 && place <= 6 ? place : -1;
+                        }
+                    }
+                    return -1;
+                }
+
+                int32_t svcSetParam(const LumaMod* pMod, LumaContentModel model, const char* pMaterial, const char* pParam,
+                                    const float* pRgba) {
+                    const char* const pWhere = "content.model.set_param";
+                    if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
+                        return status;
+                    }
+                    Attached* const pAttached = attachedOf(pMod, model);
+                    if (pAttached == nullptr) {
+                        report(pMod, pWhere, 102u, nullptr, nullptr, nullptr);
+                        return LUMA_E_HANDLE;
+                    }
+                    const char* pWrong = pMaterial == nullptr ? "material" : pParam == nullptr ? "param" : pRgba == nullptr ? "rgba" : nullptr;
+                    for (u32 i = 0; pWrong == nullptr && i < 4; i++) {
+                        if (!std::isfinite(pRgba[i])) {
+                            pWrong = "rgba";
+                        }
+                    }
+                    if (pWrong != nullptr) {
+                        report(pMod, pWhere, 101u, pWrong, nullptr, nullptr);
+                        return LUMA_E_ARGUMENT;
+                    }
+                    // The part's model and its archive (a model that shows nothing has neither).
+                    LiveActor* const pActor = pAttached->part != nullptr ? pAttached->part->actor : nullptr;
+                    const ResourceHolder* const pHolder = pActor != nullptr ? MR::getModelResourceHolder(pActor) : nullptr;
+                    Model* const pModel = pActor != nullptr ? MR::getModel(pActor) : nullptr;
+                    const char* const pName = pHolder != nullptr ? pHolder->getModelName() : nullptr;
+                    if (pModel == nullptr || pName == nullptr) {
+                        sayMissingParam(pMod, "-", pMaterial, pParam);
+                        return LUMA_E_NOT_FOUND;
+                    }
+                    const s32 place = paramPlace(pHolder, pName, pMaterial, pParam);
+                    const ModelData* const pData = pModel->getModelData();
+                    u32 index = pData->getMaterialCount();
+                    for (u32 i = 0; i < pData->getMaterialCount(); i++) {
+                        if (strcmp(pData->getMaterialName(i), pMaterial) == 0) {
+                            index = i;
+                            break;
+                        }
+                    }
+                    if (place < 0 || index == pData->getMaterialCount()) {
+                        sayMissingParam(pMod, pName, pMaterial, pParam);
+                        return LUMA_E_NOT_FOUND;
+                    }
+                    // The model's own copy of the material (Model::ownMaterial): the same model file's others keep theirs.
+                    Material* const pOwn = pModel->ownMaterial(index);
+                    const auto held = [](f32 value, f32 low, f32 high) {
+                        const f32 steps = std::round(value * 255.0f);
+                        return steps < low ? low : steps > high ? high : steps;
+                    };
+                    if (place < 3) {
+                        NebulaColor16* const pColor = pOwn->getRegisterColor(static_cast< u32 >(place));
+                        pColor->r = static_cast< s16 >(held(pRgba[0], -1024.0f, 1023.0f));
+                        pColor->g = static_cast< s16 >(held(pRgba[1], -1024.0f, 1023.0f));
+                        pColor->b = static_cast< s16 >(held(pRgba[2], -1024.0f, 1023.0f));
+                        pColor->a = static_cast< s16 >(held(pRgba[3], -1024.0f, 1023.0f));
+                    } else {
+                        NebulaColor8* const pColor = pOwn->getConstantColor(static_cast< u32 >(place - 3));
+                        pColor->r = static_cast< u8 >(held(pRgba[0], 0.0f, 255.0f));
+                        pColor->g = static_cast< u8 >(held(pRgba[1], 0.0f, 255.0f));
+                        pColor->b = static_cast< u8 >(held(pRgba[2], 0.0f, 255.0f));
+                        pColor->a = static_cast< u8 >(held(pRgba[3], 0.0f, 255.0f));
+                    }
+                    if (luma::modlog::facts()) {
+                        char material[160];
+                        char param[160];
+                        luma::modlog::jsonString(material, sizeof(material), pMaterial);
+                        luma::modlog::jsonString(param, sizeof(param), pParam);
+                        char json[512];
+                        nebula_snprintf(json, sizeof(json),
+                                        "{\"material\":%s,\"param\":%s,\"register\":%d,\"rgba\":[%.4f,%.4f,%.4f,%.4f]}",
+                                        material, param, place, static_cast< double >(pRgba[0]), static_cast< double >(pRgba[1]),
+                                        static_cast< double >(pRgba[2]), static_cast< double >(pRgba[3]));
+                        char key[64];
+                        nebula_snprintf(key, sizeof(key), "content.model.param.%llu",
+                                        static_cast< unsigned long long >(pAttached->handle));
+                        luma::modlog::fact(key, json);
+                    }
+                    return LUMA_OK;
+                }
+
                 const LumaContentModelService cTable = {
                     {sizeof(LumaContentModelService), LUMA_CONTENT_MODEL_MAJOR, LUMA_CONTENT_MODEL_MINOR},
                     svcAttach,
                     svcDetach,
                     svcShow,
                     svcPlayerParts,
+                    svcSetParam,
                 };
 
                 // ---- The provider ----
