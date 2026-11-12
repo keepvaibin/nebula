@@ -20,8 +20,8 @@ public:
     const u8* getFile(SaveFileId, u32* pSize) const;
     void storeUserFile(const UserFile*);
     void requestSaveSaveData();
-    // Room for any one file the game makes.
-    u32 getFileRoom() const { return mMakeRoom; }
+    // pSrc's game data and config into pDst, as a save and a load of them would (the backup the sequence keeps).
+    void copyUserFile(UserFile* pDst, const UserFile* pSrc);
     bool isDone();
     SaveRequest::Result getLastResult() const;
 
@@ -38,6 +38,8 @@ private:
     // Null for a user past the last.
     File* findFile(SaveFileId) const;
     void setFile(SaveFileId, const u8*, u32);
+    // mMake made big enough for pUserFile's game data: the fixed part's room and its mods' values (services-save).
+    void fitMake(const UserFile* pUserFile);
 
     SaveRequest* mSaveRequest;
     int mReadIndex;
@@ -47,4 +49,6 @@ private:
     File* mFiles;
     u8* mMake;
     u32 mMakeRoom;
+    // The room a file takes without mods' values, and room beside it.
+    u32 mBaseRoom;
 };

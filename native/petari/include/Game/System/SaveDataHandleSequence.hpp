@@ -81,7 +81,6 @@ public:
     bool mIsNoSaveMode;
     UserFile* mWorkUserFile;
     const Nerve* mNerveForError;
-    u8* mTempBuffer;
     SaveIcon* mSaveIcon;
     bool mWindowFollows;
     int mSaveCopyLoading = 0;

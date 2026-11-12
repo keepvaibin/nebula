@@ -2,6 +2,7 @@
 
 #include "Game/System/LumaHook.hpp"
 #include "Game/System/LumaLoader.hpp"
+#include "Game/System/LumaSave.hpp"
 #include "Game/System/LumaTime.hpp"
 #include <luma.h>
 #include <luma_service_provider.h>
@@ -32,6 +33,7 @@ namespace luma {
                 {"mods", 1, 0, nullptr, "services-mods"},
                 {"mods.ids", 1, 0, nullptr, "services-mods"},
                 {"mods.install", 1, 0, nullptr, "services-mods"},
+                {"save", 1, 0, nullptr, "services-save"},
                 {nullptr, 0, 0, nullptr, nullptr},
             };
 
@@ -590,6 +592,7 @@ namespace luma {
             }
             // The module's own services, each when its contract is signed: time (services-time).
             (void)provide(luma::time::provider());
+            (void)provide(luma::save::provider());
         }
 
         const void* find(const char* pName, u32 major, u32 minor, const char** ppPermission) {

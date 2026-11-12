@@ -84,7 +84,7 @@ namespace {
 
 SaveDataHandler::SaveDataHandler(const UserFile* pUserFile)
     : mSaveRequest(new SaveRequest()), mReadIndex(0), mReadLength(0), mBuffer(nullptr), mBufferRoom(0), mFiles(nullptr),
-      mMake(nullptr), mMakeRoom(0) {
+      mMake(nullptr), mMakeRoom(0), mBaseRoom(0) {
     initCrcTable();
 
     // What a file takes in this game with its mods, and room beside it.
@@ -92,7 +92,8 @@ SaveDataHandler::SaveDataHandler(const UserFile* pUserFile)
     u8* pProbe = new u8[cProbeRoom];
     const u32 needed = pUserFile->makeGameDataBinary(pProbe, cProbeRoom);
     delete[] pProbe;
-    mMakeRoom = needed * 2 + 0x1000;
+    mBaseRoom = needed * 2 + 0x1000;
+    mMakeRoom = mBaseRoom;
     mMake = new (Arenas::permanent(), 0) u8[mMakeRoom];
     mBufferRoom = (mMakeRoom + cRowSize) * cUserFiles * cKindNum + cHeaderSize;
     mBuffer = new (Arenas::permanent(), 0) u8[mBufferRoom];
@@ -202,6 +203,7 @@ bool SaveDataHandler::readOld() {
             pUserFile->loadFromGameDataBinary(id, info.mData, info.mDataSize);
             gOldSaveOrder = false;
             if (!pUserFile->mIsGameDataCorrupted) {
+                fitMake(pUserFile);
                 size = pUserFile->makeGameDataBinary(mMake, mMakeRoom);
             }
         } else {
@@ -257,6 +259,7 @@ const u8* SaveDataHandler::getFile(SaveFileId file, u32* pSize) const {
 }
 
 void SaveDataHandler::initializeUserFileMemory(int index, const UserFile* pUserFile) {
+    fitMake(pUserFile);
     for (u32 kind = 0; kind < cKindNum; kind++) {
         const u32 size = kind != SaveFileId::Kind_Config ? pUserFile->makeGameDataBinary(mMake, mMakeRoom)
                                                          : pUserFile->makeConfigDataBinary(mMake, mMakeRoom);
@@ -273,10 +276,29 @@ void SaveDataHandler::copyUserFileMemory(int indexDst, int indexSrc) {
 }
 
 void SaveDataHandler::storeUserFile(const UserFile* pUserFile) {
+    fitMake(pUserFile);
     u32 size = pUserFile->makeGameDataBinary(mMake, mMakeRoom);
     setFile(pUserFile->getGameDataFile(), mMake, size);
     size = pUserFile->makeConfigDataBinary(mMake, mMakeRoom);
     setFile(pUserFile->getConfigDataFile(), mMake, size);
+}
+
+void SaveDataHandler::copyUserFile(UserFile* pDst, const UserFile* pSrc) {
+    fitMake(pSrc);
+    u32 size = pSrc->makeGameDataBinary(mMake, mMakeRoom);
+    pDst->loadFromGameDataBinary(pSrc->getGameDataFile(), mMake, size);
+    size = pSrc->makeConfigDataBinary(mMake, mMakeRoom);
+    pDst->loadFromConfigDataBinary(pSrc->getConfigDataFile(), mMake, size);
+}
+
+void SaveDataHandler::fitMake(const UserFile* pUserFile) {
+    const u32 room = mBaseRoom + pUserFile->mGameDataHolder->getLumaChunkRoom();
+    if (room <= mMakeRoom) {
+        return;
+    }
+    delete[] mMake;
+    mMake = new (Arenas::permanent(), 0) u8[room];
+    mMakeRoom = room;
 }
 
 void SaveDataHandler::requestSaveSaveData() {

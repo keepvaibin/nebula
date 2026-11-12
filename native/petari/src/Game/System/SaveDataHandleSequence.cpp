@@ -1,4 +1,5 @@
 #include "Game/System/SaveDataHandleSequence.hpp"
+#include "Game/System/LumaSave.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/SaveIcon.hpp"
 #include "Game/Screen/SysInfoWindow.hpp"
@@ -35,7 +36,7 @@ namespace {
 SaveDataHandleSequence::SaveDataHandleSequence()
     : NerveExecutor("セーブ/ロード"), mCurrentUserFile(), mBackupUserFile(), mSaveDataHandler(), mSaveErrorSequence(),
       mSysInfoWindowConfirm(), mSysInfoWindowSave(), mSucceeded(), mIsConfirmRemind(), mIsSaveAndQuitMsg(), mIsCorrupted(), mIsNoSaveMode(), mWorkUserFile(),
-      mNerveForError(), mTempBuffer(), mSaveIcon(), mWindowFollows(false) {
+      mNerveForError(), mSaveIcon(), mWindowFollows(false) {
     initNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
 }
 
@@ -43,8 +44,6 @@ void SaveDataHandleSequence::initAfterResourceLoaded() {
     mCurrentUserFile = new UserFile();
     mBackupUserFile = new UserFile();
     mSaveDataHandler = new SaveDataHandler(mCurrentUserFile);
-    // Its size follows what the handler found a game file takes.
-    mTempBuffer = new u8[mSaveDataHandler->getFileRoom()];
 
     mSysInfoWindowConfirm = MR::createSysInfoWindowExecuteWithChildren();
     mSysInfoWindowConfirm->kill();
@@ -133,6 +132,7 @@ void SaveDataHandleSequence::startSaveAll() {
 
 void SaveDataHandleSequence::startLoad(int userFileIndex, bool isPlayerMario) {
     restoreUserFile(mCurrentUserFile, userFileIndex, isPlayerMario);
+    luma::save::fileLoaded();
 
     mSucceeded = true;
 
@@ -203,10 +203,7 @@ void SaveDataHandleSequence::restoreUserFile(UserFile* pUserFile, int index, boo
 }
 
 void SaveDataHandleSequence::backupCurrentUserFile() {
-    mCurrentUserFile->makeGameDataBinary(mTempBuffer, mSaveDataHandler->getFileRoom());
-    mBackupUserFile->loadFromGameDataBinary(mCurrentUserFile->getGameDataFile(), mTempBuffer, mSaveDataHandler->getFileRoom());
-    mCurrentUserFile->makeConfigDataBinary(mTempBuffer, mSaveDataHandler->getFileRoom());
-    mBackupUserFile->loadFromConfigDataBinary(mCurrentUserFile->getConfigDataFile(), mTempBuffer, mSaveDataHandler->getFileRoom());
+    mSaveDataHandler->copyUserFile(mBackupUserFile, mCurrentUserFile);
 }
 
 void SaveDataHandleSequence::exeNoOperation() {
