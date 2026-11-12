@@ -38,7 +38,13 @@ pub(crate) fn check(ctx: &mut Ctx) {
         folders.insert(layer.to_string());
         let Some(part) = part else { continue };
         let rest = parts.next();
-        if !matches!(part, "files" | "patches" | "assets") || (rest.is_none() && !is_folder_entry) {
+        // textures/: the game's textures replaced by their names (`<model>/<texture>.png` or `.dds`, or Dolphin's
+        // `tex1_` names, which the game names at install), as a texture pack (luma-format 5, decision 3 of the one form).
+        let texture_ok = rest.is_some_and(|r| {
+            let lower = r.to_ascii_lowercase();
+            is_folder_entry || lower.ends_with(".png") || lower.ends_with(".dds")
+        });
+        if !matches!(part, "files" | "patches" | "assets" | "textures") || (rest.is_none() && !is_folder_entry) || (part == "textures" && rest.is_some() && !texture_ok) {
             ctx.add(306, &item.name, None, None, vec![("entry", t(item.name.clone()))]);
         }
     }

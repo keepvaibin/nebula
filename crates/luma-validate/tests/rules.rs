@@ -92,7 +92,13 @@ fn a_correct_mod_passes_with_nothing_to_say() {
     let patch = br#"{"patch": 1, "key": ["name"], "set": [{"where": {"name": "Alpha"}, "values": {"count": 3}}]}"#;
     let bytes = luma(
         &[("layers", r#"[{"name": "base"}]"#), ("nebula", r#"">=2.0.0""#)],
-        &[file("layers/base/patches/stage/table.bcsv.json", patch), deflated("layers/base/files/ObjectData/Kuribo.arc", &[7; 4096])],
+        &[
+            file("layers/base/patches/stage/table.bcsv.json", patch),
+            deflated("layers/base/files/ObjectData/Kuribo.arc", &[7; 4096]),
+            // A texture pack's texture, by the game's name or Dolphin's (decision 3 of the one form).
+            file("layers/base/textures/Kuribo/KuriboBody.png", b"p"),
+            file("layers/base/textures/tex1_32x32_0000000000001111_14.dds", b"d"),
+        ],
     );
     let report = check(&bytes, &Setup { game: Some(&game), ..NO_GAME });
     assert!(report.findings.is_empty(), "{:?}", report.findings);
@@ -425,6 +431,7 @@ fn every_rule_has_a_broken_mod() {
         (303, luma(&layer, &[file("layers/base/files/Stage/Table.bcsv.json", b"{}")]), Setup { game: Some(&game), ..NO_GAME }),
         (305, luma(&layer, &[file("layers/base/files/ObjectData/Kuribo.arc", b"x")]), Setup { game: Some(&game), installed: std::slice::from_ref(&replacing), ..NO_GAME }),
         (306, luma(&layer, &[file("layers/base/other/a.wav", b"x")]), NO_GAME),
+        (306, luma(&layer, &[file("layers/base/textures/Kuribo/notes.txt", b"x")]), NO_GAME),
         (307, luma(&[("layers", r#"[{"name": "base", "when": {"code": true}}]"#)], &[file("layers/base/files/a.wav", b"x")]), NO_GAME),
         (400, luma(&layer, &[file(patch_file, b"{}")]), with_game_ref(&game)),
         (400, luma(&layer, &[file(patch_file, b"{\"patch\": 1, \"key\": [\"name\"], \"colour\": 1}")]), with_game_ref(&game)),
