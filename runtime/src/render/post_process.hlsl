@@ -62,14 +62,21 @@ int2 ViewportPixel(float4 pos) {
 
 // The last write to the window, 8 bits a channel from the scene's 10: a pixel between two levels takes one of them by a
 // triangular noise of a level either way, so a gradient has no steps. Pixels on a level stay. g_origin.z: this is that write.
+// PCG's hash (Jarzynski and Olano, "Hash Functions for GPU Rendering", 2020): one word to another, no two alike.
 uint NoiseHash(uint v) {
     const uint state = v * 747796405u + 2891336453u;
     const uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
     return (word >> 22u) ^ word;
 }
-float NoiseRandom(inout uint seed) {
-    seed = NoiseHash(seed);
-    return float(seed >> 8u) * (1.0 / 16777216.0);
+// The pixel's three noises, one a channel: each the sum of two uniform values less one (triangular, -1 to 1, mean 0).
+// The six values are 10-bit fields of two hashes (the pixel's place, a word each way, then that hash again), where
+// eight hashes once gave 24 bits each: a level split 1024 ways is far finer than the noise needs.
+float3 TriangularNoise(int2 p) {
+    const uint first = NoiseHash(uint(p.x) | (uint(p.y) << 16u));
+    const uint second = NoiseHash(first);
+    const float3 a = float3(uint3(first >> 22u, (first >> 12u) & 1023u, (first >> 2u) & 1023u));
+    const float3 b = float3(uint3(second >> 22u, (second >> 12u) & 1023u, (second >> 2u) & 1023u));
+    return (a + b + 1.0) * (1.0 / 1024.0) - 1.0;
 }
 // HDR10 (SMPTE ST 2084 PQ, BT.2020) for a display in HDR mode; the CPU twin is hdr10_encode in post_process_settings.cpp.
 float PqEncode(float nits) {
@@ -121,10 +128,7 @@ float3 FinalWriteHdr(float3 color, int2 p) {
     }
     const float3 code = float3(PqEncode(nits.r), PqEncode(nits.g), PqEncode(nits.b));
     const float3 level = code * 1023.0;
-    uint seed = NoiseHash(uint(p.x) ^ NoiseHash(uint(p.y) + 0x9E3779B9u));
-    const float3 noise = float3(NoiseRandom(seed) + NoiseRandom(seed), NoiseRandom(seed) + NoiseRandom(seed),
-                                NoiseRandom(seed) + NoiseRandom(seed)) - 1.0;
-    return saturate((level + noise) / 1023.0);
+    return saturate((level + TriangularNoise(p)) / 1023.0);
 }
 float3 FinalWrite(float3 color, int2 p) {
     if (g_origin.z == 0) {
@@ -138,10 +142,7 @@ float3 FinalWrite(float3 color, int2 p) {
     if (max(between.r, max(between.g, between.b)) == 0.0) {
         return color;
     }
-    uint seed = NoiseHash(uint(p.x) ^ NoiseHash(uint(p.y) + 0x9E3779B9u));
-    const float3 noise = float3(NoiseRandom(seed) + NoiseRandom(seed), NoiseRandom(seed) + NoiseRandom(seed),
-                                NoiseRandom(seed) + NoiseRandom(seed)) - 1.0;
-    return saturate((level + noise * between) / 255.0);
+    return saturate((level + TriangularNoise(p) * between) / 255.0);
 }
 
 #if defined(PASS_SMAA_EDGES) || defined(PASS_SMAA_WEIGHTS) || defined(PASS_SMAA_BLEND) || defined(PASS_SMAA_BLEND_KEEP)
