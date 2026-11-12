@@ -12,6 +12,7 @@ extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/System/GameAssets.hpp"
 #include "Game/System/LumaContentFx.hpp"
 #include "Game/System/LumaContentModel.hpp"
+#include "Game/System/LumaUi.hpp"
 #include "Game/System/LumaCore.hpp"
 
 #ifdef NEBULA_ASAN_HEAPS
@@ -164,6 +165,8 @@ void NebulaArena::destroy(NebulaArena* pArena) {
     luma::content::fx::released(pArena->mStart, pArena->mEnd);
     // The mods' attached models made in it or on actors in it (content.model): ended, never touched again.
     luma::content::model::released(pArena->mStart, pArena->mEnd);
+    // The mods' screens made in it (ui): ended, never touched again.
+    luma::ui::released(pArena->mStart, pArena->mEnd);
 
     // Its objects first: one that owns a child arena destroys it itself.
     pArena->destroyOwned();

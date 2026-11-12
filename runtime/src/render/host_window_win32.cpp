@@ -810,6 +810,29 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                                     std::memory_order_release);
         seed_pointer_from_client(hwnd, false);
     }
+    if (msg == WM_CHAR) {
+        // A mod's text option being typed in (services-mods 8.4): UTF-16 units, a surrogate pair in two messages.
+        static wchar_t high = 0;
+        const auto unit = static_cast<wchar_t>(wp);
+        if (unit >= 0xD800 && unit <= 0xDBFF) {
+            high = unit;
+            return 0;
+        }
+        wchar_t units[2] = {unit, 0};
+        int count = 1;
+        if (unit >= 0xDC00 && unit <= 0xDFFF) {
+            if (high == 0) return 0;
+            units[0] = high;
+            units[1] = unit;
+            count = 2;
+        }
+        high = 0;
+        char utf8[8]{};
+        const int bytes = WideCharToMultiByte(CP_UTF8, 0, units, count, utf8, sizeof(utf8), nullptr, nullptr);
+        if (bytes > 0 && native_settings_handle_window_text(std::string_view(utf8, static_cast<std::size_t>(bytes)))) {
+            return 0;
+        }
+    }
     if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN) {
         // Alt+Space belongs to the native system menu, not the game's A key.
         if (msg == WM_SYSKEYDOWN && wp == VK_SPACE) {

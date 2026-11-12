@@ -23,6 +23,7 @@
 #include "galaxy/luma_mods_service.h"
 #include "galaxy/mod_log.h"
 #include "galaxy/mod_screens.h"
+#include "galaxy/luma_mods_service.h"
 #include "galaxy/mods.h"
 #include "galaxy/game_paths.h"
 #include "galaxy/native_settings_pad.h"
@@ -1349,6 +1350,10 @@ void cycle_native_settings_tab(int delta) {
 }
 
 void deny_asks();
+void end_text_edit(bool keep);
+bool text_edit_key(std::uintptr_t key, bool was_down, bool accept, bool from_pad);
+extern std::atomic<bool> s_text_editing;
+std::atomic<bool> s_last_key_from_pad{false};  // the menu's last key came from a pad
 
 void set_native_settings_visible(bool visible) {
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
@@ -1365,6 +1370,7 @@ void set_native_settings_visible(bool visible) {
     if (!visible) {
         // A mod's request screen left unanswered is the player's no (services-mods 9, services-save 8).
         deny_asks();
+        end_text_edit(false);
         // Closing discards an unapplied draft, an unconfirmed display, an
         // unanswered DLSS question and controls being arranged.
         close_joycon_pairing();
@@ -1635,6 +1641,10 @@ bool handle_native_settings_key(std::uintptr_t key, bool was_down, bool from_pad
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
     if (!from_pad) {
         galaxy::host::note_keyboard_input();
+    }
+    s_last_key_from_pad.store(from_pad, std::memory_order_relaxed);
+    if (s_text_editing.load(std::memory_order_acquire) && s_native_settings_visible.load(std::memory_order_relaxed)) {
+        return text_edit_key(key, was_down, accept, from_pad);
     }
     if (key == galaxy::host::kBindingCaptureKey && !s_native_settings_visible.load(std::memory_order_relaxed)) {
         (void)galaxy::host::take_controller_binding_capture();
@@ -2090,7 +2100,8 @@ void apply_live_mods() {
     set_movie_mod_folders(galaxy::mods::movie_folders(s_mods_saved));
 }
 
-// With s_mods_mutex held: the list's order, then mods.ini.
+// With s_mods_mutex held: the list's order, then mods.ini. A mod whose options changed is told (services-mods 8.2:
+// options_applied takes the new values and posts its OPTION events for the next frame's start).
 void save_mods() {
     for (std::size_t i = 0; i < s_mods.size(); ++i) {
         s_mods[i].order = static_cast<unsigned>(i + 1u);
@@ -2098,6 +2109,19 @@ void save_mods() {
     if (!galaxy::mods::save_mod_settings(s_mods)) {
         std::cerr << "[settings] mods.ini could not be written\n";
     }
+    std::vector<const galaxy::mods::ModInfo*> changed;
+    for (const galaxy::mods::ModInfo& mod : s_mods) {
+        const auto was = std::find_if(s_mods_saved.begin(), s_mods_saved.end(),
+                                      [&](const galaxy::mods::ModInfo& m) { return m.id == mod.id; });
+        if (was == s_mods_saved.end() || was->options.size() != mod.options.size()) continue;
+        for (std::size_t o = 0; o < mod.options.size(); ++o) {
+            if (mod.options[o].selected != was->options[o].selected || mod.options[o].text != was->options[o].text) {
+                changed.push_back(&mod);
+                break;
+            }
+        }
+    }
+    for (const galaxy::mods::ModInfo* mod : changed) galaxy::luma_mods::options_applied(*mod);
     s_mods_saved = s_mods;
     apply_live_mods();
 }
@@ -2123,6 +2147,7 @@ void reread_mods_locked() {
         mod.own_text = drafted.own_text;
         for (std::size_t o = 0; o < mod.options.size() && mod.options.size() == drafted.options.size(); ++o) {
             mod.options[o].selected = drafted.options[o].selected;
+            if (mod.options[o].key == drafted.options[o].key) mod.options[o].text = drafted.options[o].text;
         }
         merged.push_back(std::move(mod));
     }
@@ -2167,7 +2192,7 @@ unsigned mods_draft_changes_locked() {
                    was->second.digest == answer->second.digest;
         }
         for (std::size_t o = 0; same && o < mod.options.size(); ++o) {
-            same = mod.options[o].selected == saved->options[o].selected;
+            same = mod.options[o].selected == saved->options[o].selected && mod.options[o].text == saved->options[o].text;
         }
         changes += same ? 0u : 1u;
         if (mod.enabled && saved->enabled) order.push_back(mod.id);
@@ -2421,6 +2446,121 @@ void finish_install_ask(const std::vector<ImportOutcome>& outcomes) {
         }
     }
     answer_install_locked(status);
+}
+
+// ---- A text option typed in (services-mods 8.4) ----
+// The row being typed in: keys and typed text go to it until Enter (kept in the draft, applied as any option) or
+// Escape (dropped). A pad edits the last character: up and down change it, right adds one, left or X deletes one,
+// A or Y keeps, B drops. Under s_text_mutex, taken last: nothing else is locked while it is held.
+struct TextEdit {
+    std::string mod;
+    std::string key;
+    std::string text;
+    std::uint32_t max_length = 0;
+    bool pad = false;  // the last key was a pad's: its help says the pad's keys
+};
+std::mutex s_text_mutex;
+std::optional<TextEdit> s_text_edit;
+std::atomic<bool> s_text_editing{false};
+
+// The characters a pad steps through (the overlay's font draws capitals).
+constexpr std::string_view kPadCharacters = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,!?-_'";
+
+std::uint32_t code_points(std::string_view text) {
+    std::uint32_t n = 0u;
+    for (const char c : text) n += (static_cast<unsigned char>(c) & 0xC0u) != 0x80u ? 1u : 0u;
+    return n;
+}
+
+void drop_last_point(std::string& text) {
+    while (!text.empty()) {
+        const bool lead = (static_cast<unsigned char>(text.back()) & 0xC0u) != 0x80u;
+        text.pop_back();
+        if (lead) return;
+    }
+}
+
+void begin_text_edit(std::string mod, std::string key, std::string text, std::uint32_t max_length, bool pad) {
+    const std::lock_guard<std::mutex> lock(s_text_mutex);
+    s_text_edit = TextEdit{std::move(mod), std::move(key), std::move(text), max_length, pad};
+    s_text_editing.store(true, std::memory_order_release);
+}
+
+// Enter keeps the typed text in the draft (an empty one is the mod's default); Escape, closing the menu or the mod's
+// page drops it.
+void end_text_edit(bool keep) {
+    std::optional<TextEdit> edit;
+    {
+        const std::lock_guard<std::mutex> lock(s_text_mutex);
+        edit.swap(s_text_edit);
+        s_text_editing.store(false, std::memory_order_release);
+    }
+    if (!keep || !edit) return;
+    const std::lock_guard<std::mutex> lock(s_mods_mutex);
+    for (galaxy::mods::ModInfo& mod : s_mods) {
+        if (mod.id != edit->mod) continue;
+        for (galaxy::mods::ModOption& option : mod.options) {
+            if (option.key == edit->key && option.kind == "text") option.text = edit->text;
+        }
+    }
+}
+
+// Typed text (WM_CHAR, SDL's text input): each character that fits is added; controls are not text.
+bool type_text(std::string_view utf8) {
+    const std::lock_guard<std::mutex> lock(s_text_mutex);
+    if (!s_text_edit) return false;
+    for (std::size_t i = 0; i < utf8.size();) {
+        std::size_t length = 1u;
+        const auto b = static_cast<unsigned char>(utf8[i]);
+        if (b >= 0xF0u) length = 4u; else if (b >= 0xE0u) length = 3u; else if (b >= 0xC0u) length = 2u;
+        const std::string_view point = utf8.substr(i, length);
+        i += length;
+        s_text_edit->pad = false;
+        std::string next = s_text_edit->text;
+        next.append(point);
+        if (galaxy::mods::text_option_fits(next, s_text_edit->max_length)) s_text_edit->text = std::move(next);
+    }
+    return true;
+}
+
+// A key while a text is typed in: every key is the editor's (the game and the menu see none). A keyboard's arrows do
+// nothing (the text is typed); a pad's edit the last character.
+bool text_edit_key(std::uintptr_t key, bool was_down, bool accept, bool from_pad) {
+    if (accept || key == VK_RETURN) {
+        if (!was_down) end_text_edit(true);
+        return true;
+    }
+    if (key == VK_ESCAPE || key == VK_F1) {
+        if (!was_down) end_text_edit(false);
+        return true;
+    }
+    const std::lock_guard<std::mutex> lock(s_text_mutex);
+    if (!s_text_edit) return true;
+    std::string& text = s_text_edit->text;
+    s_text_edit->pad = from_pad;
+    if (!from_pad && key != VK_BACK) return true;
+    if (key == VK_BACK || key == VK_LEFT) {
+        drop_last_point(text);
+    } else if (key == VK_RIGHT) {
+        std::string next = text + (text.empty() ? 'A' : text.back() & 0x80 ? 'A' : text.back());
+        if (galaxy::mods::text_option_fits(next, s_text_edit->max_length)) text = std::move(next);
+    } else if (key == VK_UP || key == VK_DOWN) {
+        if (text.empty()) {
+            if (galaxy::mods::text_option_fits("A", s_text_edit->max_length)) text = "A";
+            return true;
+        }
+        std::size_t at = kPadCharacters.find(text.back());
+        if ((text.back() & 0x80) != 0 || at == std::string_view::npos) {
+            drop_last_point(text);
+            at = 0u;
+        } else {
+            text.pop_back();
+        }
+        const std::size_t count = kPadCharacters.size();
+        at = key == VK_UP ? (at + 1u) % count : (at + count - 1u) % count;
+        text.push_back(kPadCharacters[at]);
+    }
+    return true;
 }
 
 // With s_mods_mutex held: the player's DON'T ASK AGAIN for `id` (never true) or its undoing, kept in mods.ini at once
@@ -3104,6 +3244,62 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
     }
     for (std::size_t o = 0; o < mod.options.size(); ++o) {
         const galaxy::mods::ModOption& option = mod.options[o];
+        if (option.kind == "text" || option.kind == "key") {
+            const galaxy::luma::Option* entry = nullptr;
+            if (mod.luma != nullptr) {
+                for (const galaxy::luma::Option& e : mod.luma->options) {
+                    if (e.id == option.key) entry = &e;
+                }
+            }
+            std::string_view name = option.name;
+            while (!name.empty() && (name.back() == ':' || name.back() == ' ')) name.remove_suffix(1);
+            if (option.kind == "key") {
+                // A bindable action (plan 2.5): its control, the manifest's default until input's store binds it.
+                SettingsRow key{mods_ui_text(name, 24u), entry != nullptr ? mods_ui_text(entry->fallback, 22u) : std::string(),
+                                nullptr, mods_ui_text(option.section, 30u)};
+                key.names = 1u | 2u | 4u;
+                rows.push_back(std::move(key));
+                continue;
+            }
+            std::string value = option.text.empty() && entry != nullptr ? entry->fallback : option.text;
+            std::string help = mods_ui_text(option.section, 30u);
+            {
+                const std::lock_guard<std::mutex> text_lock(s_text_mutex);
+                if (s_text_edit && s_text_edit->mod == id && s_text_edit->key == option.key) {
+                    // The end of what is typed, and the place the next character goes.
+                    value = s_text_edit->text;
+                    while (code_points(value) > 21u) {
+                        std::size_t cut = 1u;
+                        while (cut < value.size() && (static_cast<unsigned char>(value[cut]) & 0xC0u) == 0x80u) ++cut;
+                        value.erase(0, cut);
+                    }
+                    value += '_';
+                    help = galaxy::modlog::row_words(s_text_edit->pad ? "Mods.OptionTypingPad" : "Mods.OptionTyping", id, {});
+                } else {
+                    value = mods_ui_text(value, 22u);
+                }
+            }
+            const std::uint32_t max_length = entry != nullptr ? entry->max_length : 0u;
+            SettingsRow text{mods_ui_text(name, 24u), std::move(value),
+                             [id, key = option.key, max_length](RenderConfig&, int delta) {
+                                 if (delta == 0) return;
+                                 std::string now;
+                                 {
+                                     const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
+                                     galaxy::mods::ModInfo* const found = mod_by_id_locked(id);
+                                     if (found == nullptr) return;
+                                     for (const galaxy::mods::ModOption& o : found->options) {
+                                         if (o.key == key) now = o.text;
+                                     }
+                                 }
+                                 begin_text_edit(id, key, std::move(now), max_length,
+                                                 s_last_key_from_pad.load(std::memory_order_relaxed));
+                             },
+                             std::move(help)};
+            text.names = 1u | 2u | 4u;
+            rows.push_back(std::move(text));
+            continue;
+        }
         const std::string value = option.selected == 0u || option.selected > option.choices.size()
                                       ? std::string("OFF")
                                       : mods_ui_text(option.choices[option.selected - 1u], 22u);
@@ -3666,6 +3862,7 @@ void close_import_page(const RenderConfig& render) {
 
 // Back from a mod's options, or the log, to the lists, on that mod or the LOG row.
 void close_mod_options(const RenderConfig& render) {
+    end_text_edit(false);
     std::string id;
     bool log = false;
     {
@@ -4925,6 +5122,14 @@ bool native_settings_handle_window_key(
         s_handled_key_normalized = normalized;
     }
     return handle_native_settings_key(virtual_key, was_down);
+}
+
+bool native_settings_handle_window_text(std::string_view utf8) {
+    return s_text_editing.load(std::memory_order_acquire) && type_text(utf8);
+}
+
+bool native_settings_text_wanted() noexcept {
+    return s_text_editing.load(std::memory_order_acquire) && s_native_settings_visible.load(std::memory_order_relaxed);
 }
 
 bool native_settings_pad_key(std::uintptr_t virtual_key) {
