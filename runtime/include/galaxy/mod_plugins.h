@@ -212,6 +212,10 @@ void set_message_language(std::string folder);
 std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows& rows, const NebulaModApi* game_api,
                           void* (*find_symbol)(const char*),
                           void (*log)(const char*));
+// Takes a running LumaCore mod out while the game runs (reload.md 2), from any thread: the game module takes out the
+// mods that use it, then it, at the next frame's start; each one's Mods page then reads on and not running, "Taken out
+// while the game runs". False: not queued (no game module with the call, or it refused the id; said in the log).
+bool take_out(std::string_view mod_id);
 // Writes every tunable mods can set to `list_file` (--dump-tunables), one "<key>\t<kind>\t<default>" line each (list
 // entries as <key>[i]). Returns false when the game module has no list or the file can't be written.
 bool dump_tunables(const NebulaModApi* game_api, const std::filesystem::path& list_file);

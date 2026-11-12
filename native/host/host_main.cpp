@@ -3127,6 +3127,12 @@ void extension_resize_window(void*, uint32_t width, uint32_t height) {
 }
 #endif
 
+void extension_take_out_mod(void*, const char* mod_id) {
+    if (mod_id != nullptr) {
+        galaxy::mods::take_out(mod_id);
+    }
+}
+
 void attach_extensions() {
     const std::vector<fs::path>& files = ::galaxy::launch_args().extensions;
     if (files.empty()) {
@@ -3137,6 +3143,7 @@ void attach_extensions() {
     host.size = sizeof(host);
     host.log = extension_log;
     host.quit = extension_quit;
+    host.take_out_mod = extension_take_out_mod;
 #if defined(NEBULA_HOST_RENDERER)
     host.menu_key = extension_menu_key;
     host.menu_open = extension_menu_open;

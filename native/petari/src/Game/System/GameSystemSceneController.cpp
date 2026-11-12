@@ -25,6 +25,7 @@
 #include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include "Game/System/NebulaMods.hpp"
+#include "Game/System/LumaClasses.hpp"
 
 
 namespace {
@@ -181,6 +182,8 @@ void GameSystemSceneController::destroyScene() {
     } else {
         Arenas::destroyScene();
     }
+    // Mods' objects went with the scene (contract classes): forgotten, their data freed. Nothing when there are none.
+    luma::classes::sceneGone();
 }
 
 bool GameSystemSceneController::isStopSound() const {
