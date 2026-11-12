@@ -247,6 +247,7 @@ void GameSystem::update() {
     NebulaMenuFocus::update();
     NebulaPrepare::update();
     lumascript::beginFrame();  // the scripts' step budgets; nothing when no mod has a script
+    luma::takeOutRequested();  // mods asked to be taken out (reload.md 2); one load when none is
     luma::frame();             // replaced hook lists and taken-out mods no call holds; nothing when there are none
     luma::services::frameStart();  // the services' events, then time's frame handlers; one load when nothing waits
     luma::content::fx::frame();    // the mods' open effects: their actors' ends and clipping; one load when none is open

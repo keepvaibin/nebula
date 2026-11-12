@@ -185,6 +185,39 @@ int main() {
     later.plugins[0].api = 0u;
     check(refusal_detail(later).empty(), "no detail when no field is at fault");
 
+    // luma-format 6: code/<platform>/mod.<ending>, by `code.platforms` alone.
+    {
+        const std::string head = R"({"format":1,"id":"c","name":"C","version":"1","game":"RMGE01","layers":[],)";
+        const std::string here(plugin_target());
+        const std::optional<Manifest> coded = parse_manifest(
+            head + R"("code":{"platforms":[")" + here + R"(","linux-arm64"],"libraries":{"linux-arm64":["libphysics.so"]}}})");
+        check(coded && coded->plugins.size() == 1u && coded->plugins[0].api == 0u, "code: one entry, a LumaCore library");
+        if (coded && coded->plugins.size() == 1u) {
+            check(coded->plugins[0].binaries.at(here) == code_entry(here) &&
+                      coded->plugins[0].binaries.at("linux-arm64") == "code/linux-arm64/mod.so",
+                  "code: each platform's entry library by its path");
+            check(coded->code_libraries.at("linux-arm64") == std::vector<std::string>{"libphysics.so"}, "code: extra libraries in order");
+            check(refusal(*coded, "RMGE01", "2.1.0", here).empty() && manifest_sets_game(*coded), "code for this device: usable, sets the game");
+        }
+        check(code_entry("windows-x64") == "code/windows-x64/mod.dll" && code_entry("macos-arm64") == "code/macos-arm64/mod.dylib" &&
+                  code_entry("ios-arm64") == "code/ios-arm64/mod.dylib" && code_entry("android-x64") == "code/android-x64/mod.so" &&
+                  code_entry("windows").empty(),
+              "code_entry: the format's endings; none for an unknown platform");
+        const std::optional<Manifest> elsewhere = parse_manifest(head + R"("code":{"platforms":["somewhere-else"]}})");
+        check(!elsewhere, "code: a platform the format does not name: not read");
+        const std::optional<Manifest> other = parse_manifest(
+            head + R"("code":{"platforms":[")" + std::string(here == "linux-arm64" ? "linux-x64" : "linux-arm64") + R"("]}})");
+        check(other && refusal(*other, "RMGE01", "2.1.0", here) == "THIS MOD HAS NO VERSION FOR THIS DEVICE", "code for another device only");
+        for (const char* bad : {R"("code":{"platforms":["linux-x64"]},"plugins":[])", R"("code":[])",
+                                R"("code":{"platforms":["linux-x64","linux-x64"]})",
+                                R"("code":{"platforms":["linux-x64"],"libraries":{"linux-arm64":["a.so"]}})",
+                                R"("code":{"platforms":["linux-x64"],"libraries":{"linux-x64":["sub/a.so"]}})",
+                                R"("code":{"platforms":["linux-x64"],"libraries":{"linux-x64":[".."]}})",
+                                R"("code":{"platforms":["linux-x64"],"libraries":{"linux-x64":["mod.so"]}})"}) {
+            check(!parse_manifest(head + bad + "}"), (std::string("code not read: ") + bad).c_str());
+        }
+    }
+
     // Objects a script runs.
     {
         const std::optional<Manifest> scripted = parse_manifest(R"({"format":1,"id":"s","name":"S","version":"1","game":"RMGE01","layers":[{"objects":[{"name":"GlideBlock","script":"blocks/glide","archive":"Kinopio","kind":"map","radius":120,"collision":true,"clip_radius":2000}]}]})");

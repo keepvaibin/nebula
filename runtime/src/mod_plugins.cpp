@@ -42,6 +42,7 @@ namespace {
 struct Loaded {
     NebulaPlugin self{};
     std::string mod_id;
+    std::string library;  // the code's file name (a LumaCore mod's; its Mods page names it once taken out)
     std::string version;
     std::map<std::string, std::string> options;
     void* module = nullptr;
@@ -254,6 +255,23 @@ void keep_not_started(NotStarted record) {
         if (kept.mod_id == record.mod_id) return;
     }
     g_not_started.push_back(std::move(record));
+}
+
+// A LumaCore mod the game module took out while the game runs (reload.md 2; luma_set_taken_out, on the game thread):
+// no longer started, so its Mods page reads on and not running, with why. The module closes its library.
+void taken_out(const char* mod_id) {
+    NotStarted record;
+    record.mod_id = mod_id;
+    record.sentence = "TAKEN OUT WHILE THE GAME RUNS";
+    for (auto it = g_loaded.begin(); it != g_loaded.end(); ++it) {
+        if ((*it)->mod_id == record.mod_id) {
+            record.library = (*it)->library;
+            g_loaded.erase(it);
+            break;
+        }
+    }
+    say(record.mod_id + " taken out while the game runs");
+    keep_not_started(std::move(record));
 }
 
 // A mod's code did not start for a reason the host words: `logged` to the log as before, `sentence` (host capitals,
@@ -529,6 +547,10 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
             if (permission != nullptr) *permission = nullptr;
             return galaxy::extensions::service(name, major, minor);
         });
+    }
+    // A mod taken out while the game runs (reload.md 2) is told to the host, which forgets it as started.
+    if (const auto told = reinterpret_cast<LumaSetTakenOut>(find_symbol != nullptr ? find_symbol("luma_set_taken_out") : nullptr)) {
+        told([](const char* mod_id) { taken_out(mod_id); });
     }
     // LumaCore's services: the module's own, the host's, then the extensions' test ones (services-registry 13).
     if (!plugins.empty()) {
@@ -935,6 +957,7 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
             }
             auto loaded = std::make_unique<Loaded>();
             loaded->mod_id = file.mod_id;
+            loaded->library = library;
             loaded->version = file.version;
             loaded->options = file.options;
             loaded->module = module;
@@ -991,6 +1014,16 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
     }
     g_starting = false;
     return g_loaded.size();
+}
+
+bool take_out(std::string_view mod_id) {
+    const auto request = reinterpret_cast<LumaTakeOutRequest>(g_find_symbol != nullptr ? g_find_symbol("luma_take_out_request") : nullptr);
+    if (request == nullptr) {
+        say(std::string(mod_id) + " not taken out: the game module has no luma_take_out_request");
+        return false;
+    }
+    const std::string id(mod_id);
+    return request(id.c_str()) != 0;
 }
 
 std::vector<NotStarted> plugins_not_started() {

@@ -387,8 +387,11 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
     };
     let platforms = [platform.as_str()];
     let position = (input.position != u32::MAX).then_some(input.position as usize);
+    // A placed mod is a folder laid out as the .luma is (luma-format 1); its kept report never stands for it (no
+    // fingerprint), so every rule runs.
+    let source = if path.is_dir() { Source::Folder(&path) } else { Source::File(&path) };
     let report = recheck(
-        &Input { source: Source::File(&path), game: Some(&game), installed: &installed, platforms: &platforms, options: options.as_ref(), position },
+        &Input { source, game: Some(&game), installed: &installed, platforms: &platforms, options: options.as_ref(), position },
         kept.as_ref(),
         &game_key,
     );

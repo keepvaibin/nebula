@@ -91,6 +91,24 @@ namespace luma {
         void take() {}
     };
 
+    // A number written in a function's code, or a file's number constant (1.5; instrument.py names them): the
+    // function's row name and signature and the number's place in its code (from 1), or the constant's name, "" and 0.
+    // kind: 1 f32, 2 f64, 3 s8, 4 u8, 5 s16, 6 u16, 7 s32, 8 u32, 9 s64, 10 u64.
+    struct Number {
+        const char* name;
+        const char* signature;
+        unsigned place;
+        unsigned kind;
+        void* address;
+    };
+    // One unit's numbers, in the "lumanum" section. 32 bytes aligned to 32, so a linker's pad between objects is whole
+    // records (with a null unit).
+    struct alignas(32) Numbers {
+        const char* unit;  // the source's path from the game's source root
+        const Number* numbers;
+        unsigned count;
+    };
+
     template <class R> inline R dispatch(const Function* fn, void** args) {
         Result<R> result;
         run(fn, args, &result);
@@ -101,12 +119,15 @@ namespace luma {
 #if defined(_WIN32)
 #define LUMA_FLAG_SECTION __attribute__((section("lumaflg$m")))
 #define LUMA_ROW_SECTION __attribute__((section("lumafn$m"), used))
+#define LUMA_NUMBERS_SECTION __attribute__((section("lumanum$m"), used))
 #elif defined(__APPLE__)
 #define LUMA_FLAG_SECTION __attribute__((section("__DATA,lumaflg")))
 #define LUMA_ROW_SECTION __attribute__((section("__DATA,lumafn"), used))
+#define LUMA_NUMBERS_SECTION __attribute__((section("__DATA,lumanum"), used))
 #else
 #define LUMA_FLAG_SECTION __attribute__((section("lumaflg")))
 #define LUMA_ROW_SECTION __attribute__((section("lumafn"), used, retain))
+#define LUMA_NUMBERS_SECTION __attribute__((section("lumanum"), used, retain))
 #endif
 
 #define LUMA_LIST(...) {__VA_ARGS__}

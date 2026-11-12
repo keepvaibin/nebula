@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include "luma_content.h"
+#include "luma_content_model.h"
 #include "luma_services.h"
 
 #ifdef __cplusplus
@@ -39,7 +40,7 @@ typedef struct LumaContentFxService {
        model's root), offset and turned by `place` (null: none): LUMA_OK and *out, LUMA_E_ARGUMENT, LUMA_E_LIMIT,
        LUMA_E_THREAD and LUMA_E_CANCELLED as start; an unknown socket: the root, LUMA_OK, and Content.MissingJoint; an
        ended model handle: LUMA_E_HANDLE, reported. The effect ends ("model") when the model's handle ends. */
-    int32_t (*start_on_model)(const LumaMod* mod, LumaHandle model, LumaEffectName name, const char* socket,
+    int32_t (*start_on_model)(const LumaMod* mod, LumaContentModel model, LumaEffectName name, const char* socket,
                               const LumaPlace* place, bool follow, LumaContentFxEffect* out);
     /* 1.0. Game thread. Stops making particles: those alive fade as the effect says (`now` false), or all go at once
        (true). The handle ends. LUMA_OK; an ended handle: LUMA_E_HANDLE, reported; off the game thread: LUMA_E_THREAD,
