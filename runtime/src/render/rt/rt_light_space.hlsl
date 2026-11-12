@@ -29,6 +29,7 @@ Texture2D<float4> g_indirect : register(t13);    // the last step's: I (rt_indir
 // cue bit, the body's half reach along, its radius across) by 16-pixel tiles (from g_at.w; entries from g_more.x).
 ByteAddressBuffer g_drops : register(t3);
 ByteAddressBuffer g_tiles : register(t4);
+RWStructuredBuffer<uint> g_counters : register(u8);  // 19: the pixels the landing cue darkens (l80b)
 
 // What the cue takes at most of the light under the player: it reads in sun and in shade and is never a black blot.
 static const float kLandingCue = 0.30f;
@@ -105,7 +106,11 @@ void main(uint3 id : SV_DispatchThreadID) {
         }
         float4 shares = float4(g_sun_out.Load(int3(pixel, 0)).rgb, sky);
         if ((g_more.z & 8192u) != 0u) {
-            shares *= landing_cue(pixel, guide);  // the landing cue under the player (l80)
+            const float cue = landing_cue(pixel, guide);  // the landing cue under the player (l80)
+            if (cue < 1.0f) {
+                InterlockedAdd(g_counters[19], 1u);
+            }
+            shares *= cue;
         }
         if ((g_more.z & 128u) != 0u) {
             shares = float4(0.0f, 0.0f, 0.0f, 0.0f);  // the emitters alone (--diagnostics rt-added)

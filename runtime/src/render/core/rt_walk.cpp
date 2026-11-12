@@ -1542,7 +1542,9 @@ void RenderCore::rt_filters() {
     compose.buffers[2] = frame.binds.buffers[2];   // the drops and their tiles: the landing cue (l80)
     compose.buffers[3] = frame.binds.buffers[3];
     compose.writes[0] = light;
+    compose.counters = true;  // 19: the pixels under the landing cue (l80b)
     rt_backend_.dispatch(RtShader::LightSpace, compose, frame.across, frame.down);
+    rt_backend_.end_counters();
     // The local lights' share: over time (its averages and the moments of its noise), then three steps over space
     // weighed by that noise, the last into the added light the programs read.
     const std::uint32_t lights = rt_image(RtImage::Lights), added = rt_image(RtImage::Added);
@@ -2416,7 +2418,7 @@ void RenderCore::rt_report() {
     const double n = static_cast<double>(rt_light_frames_);
     std::fprintf(stderr,
                  "[rt-inputs] light pass over %u frames, a frame: items in the prepass %.1f, surface pixels %.0f, rays %.0f, "
-                 "in the sun's shadow %.0f, under a drop %.0f, in a lamp's shadow %.0f; emitters %zu now; cutout tests %.0f, "
+                 "in the sun's shadow %.0f, under the landing cue %.0f, in a lamp's shadow %.0f; emitters %zu now; cutout tests %.0f, "
                  "cutouts unread %.0f, mirror rays %.0f; mesh arenas %u, items without %u, items of many matrices %u; "
                  "clip volumes left out (most a frame) %u\n",
                  rt_light_frames_, static_cast<double>(rt_light_sum_[5]) / n, static_cast<double>(rt_light_sum_[0]) / n,
