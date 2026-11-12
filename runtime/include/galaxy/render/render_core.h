@@ -567,7 +567,8 @@ private:
         float centre[3], radius;  // in the scene camera's eye space; the source's own radius
         float colour[3], reach;   // collected: colour x candela; finished: the share of a surface's colour at the source. Where its light ends
         std::uint32_t slot, kind, reserved[2];  // kind: 0 a point light the game asked, 1 a glowing mesh, 2 a particle;
-                                                // reserved[1]: what it is from one frame to the next (rt_emitter_id)
+                                                // reserved[1]: what it is from one frame to the next (rt_emitter_id);
+                                                // a particle's reserved[0]: what it was the frame before (l84)
     };
     bool rt_emitters_finished_ = false;
     float rt_exposure_ = 150.0f;  // the stage's exposure the emitters were finished by (lux)

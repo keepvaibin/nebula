@@ -73,7 +73,7 @@ void live_glow(const NebulaFrameList& list, const NebulaFrameItem& item, const c
 
 // What an emitter is from one frame to the next (its kind, whose it is, which of them): a pixel's reservoir finds its
 // light again by it. Two emitters with one number are taken for each other. Never 0: kNoEmitterId is an emitter no
-// reservoir finds again (a particle: A2-09).
+// reservoir finds again.
 constexpr std::uint32_t kNoEmitterId = 0u;
 constexpr std::uint32_t rt_emitter_id(std::uint32_t kind, std::uint32_t whose, std::uint32_t which) {
     std::uint32_t h = (whose * 0x9E3779B1u) ^ (which * 0x85EBCA6Bu) ^ (kind * 0xC2B2AE35u);
@@ -81,6 +81,14 @@ constexpr std::uint32_t rt_emitter_id(std::uint32_t kind, std::uint32_t whose, s
     h *= 0x2C1B3C6Du;
     h ^= h >> 12u;
     return h != kNoEmitterId ? h : 1u;
+}
+
+// A particle's number by a place of it (its matrix's column 3, or its first corner), bit for bit: the place a frame ago
+// the game hands on is a copy of what it wrote then (ParticleDraw.cpp startFrame), so hashing it finds the number the
+// frame before gave (l84, A2-09).
+inline std::uint32_t rt_particle_id(float x, float y, float z) {
+    return rt_emitter_id(2u, std::bit_cast<std::uint32_t>(x) ^ (std::bit_cast<std::uint32_t>(y) * 0x27D4EB2Fu),
+                         std::bit_cast<std::uint32_t>(z));
 }
 
 // The words of an item in the light pass's table (rt_light).
@@ -2073,11 +2081,14 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     }
     {
         // Where each emitter of the frame before is in this frame's list (by what it is), or nowhere: a pixel's
-        // reservoir names its light by the list of the frame it was written in.
+        // reservoir names its light by the list of the frame it was written in. A particle is found by the number
+        // its place a frame ago gives (reserved[0], l84), the others by their own.
         rt_emitter_now_.clear();
         for (std::size_t e = 0; e < rt_emitters_.size(); ++e) {
-            if (rt_emitters_[e].reserved[1] != kNoEmitterId) {
-                rt_emitter_now_.try_emplace(rt_emitters_[e].reserved[1], static_cast<std::uint32_t>(e));
+            const RtEmitter& emitter = rt_emitters_[e];
+            const std::uint32_t was = emitter.kind == 2u ? emitter.reserved[0] : emitter.reserved[1];
+            if (was != kNoEmitterId) {
+                rt_emitter_now_.try_emplace(was, static_cast<std::uint32_t>(e));
             }
         }
         rt_emitter_remap_.assign(rt_emitter_ids_before_.size(), ~0u);
@@ -3030,7 +3041,8 @@ void RenderCore::rt_particle_emitter(const NebulaFrameItem& item, std::uint32_t 
     const std::uint32_t particles = item.ring_count / ((item.flags & NEBULA_ITEM_INSTANCES) != 0u ? 1u : 4u);
     const std::uint32_t every = std::max<std::uint32_t>((particles + kEach - 1u) / kEach, 1u);
     std::uint32_t ordinal = 0u;
-    const auto take = [&](const float eye[3], double size, const float colour[4]) {
+    // `id`: the particle's number by its place now; `was`: by its place a frame ago (l84).
+    const auto take = [&](const float eye[3], double size, const float colour[4], std::uint32_t id, std::uint32_t was) {
         const double shown = size * static_cast<double>(colour[3]) * 0.33;
         if (ordinal++ % every != 0u || !(shown > 0.0) || !std::isfinite(shown + eye[0] + eye[1] + eye[2]) || rt_emitters_.size() >= kMost) {
             return;
@@ -3048,9 +3060,10 @@ void RenderCore::rt_particle_emitter(const NebulaFrameItem& item, std::uint32_t 
         emitter.reach = 0.0f;
         emitter.slot = item.slot;
         emitter.kind = 2u;
-        // No lasting number: a particle's place in its draw shifts as others are born and die, so a reservoir would
-        // find another particle by it (A2-09). Its light is found again by this frame's candidates alone.
-        emitter.reserved[1] = kNoEmitterId;
+        // Its number by its place, not by its order in the draw (which shifts as others are born and die, A2-09):
+        // the next frame finds it by the place this frame gives it (l84).
+        emitter.reserved[0] = was;
+        emitter.reserved[1] = id;
     };
     if ((item.flags & NEBULA_ITEM_INSTANCES) != 0u) {
         // Instanced particles: each a matrix in the world, its quad as wide and tall as the matrix's first two columns.
@@ -3076,7 +3089,8 @@ void RenderCore::rt_particle_emitter(const NebulaFrameItem& item, std::uint32_t 
             tint_of(p.prm, p.env, colour);
             // Its corners stand 25 units each way from its middle along each column (the particle library's unit:
             // ParticleDraw.cpp builds the frame's own corners with the same 25).
-            take(eye, 4.0 * 625.0 * across * up, colour);
+            take(eye, 4.0 * 625.0 * across * up, colour, rt_particle_id(p.now[0][3], p.now[1][3], p.now[2][3]),
+                 rt_particle_id(p.before[0][3], p.before[1][3], p.before[2][3]));
         }
     } else {
         // The frame's own particle corners, four a particle: place, place before, two colours, coordinate.
@@ -3102,6 +3116,9 @@ void RenderCore::rt_particle_emitter(const NebulaFrameItem& item, std::uint32_t 
             }
             std::uint32_t words[2];
             std::memcpy(words, vertices + std::size_t{v} * stride + 24u, sizeof(words));
+            // The first corner's place now and a frame ago, as the game wrote them (x, y, z, bx, by, bz).
+            float first[6];
+            std::memcpy(first, vertices + std::size_t{v} * stride, sizeof(first));
             const float e1[3] = {corner[1][0] - corner[0][0], corner[1][1] - corner[0][1], corner[1][2] - corner[0][2]};
             const float e2[3] = {corner[3][0] - corner[0][0], corner[3][1] - corner[0][1], corner[3][2] - corner[0][2]};
             const double cross[3] = {static_cast<double>(e1[1]) * e2[2] - static_cast<double>(e1[2]) * e2[1],
@@ -3112,7 +3129,8 @@ void RenderCore::rt_particle_emitter(const NebulaFrameItem& item, std::uint32_t 
                                   0.25f * (corner[0][2] + corner[1][2] + corner[2][2] + corner[3][2])};
             float colour[4];
             tint_of(words[0], words[1], colour);
-            take(eye, std::sqrt(cross[0] * cross[0] + cross[1] * cross[1] + cross[2] * cross[2]), colour);
+            take(eye, std::sqrt(cross[0] * cross[0] + cross[1] * cross[1] + cross[2] * cross[2]), colour,
+                 rt_particle_id(first[0], first[1], first[2]), rt_particle_id(first[3], first[4], first[5]));
         }
     }
 }
