@@ -459,7 +459,7 @@ namespace luma {
                 // ---- The service ----
 
                 int32_t svcStart(const LumaMod* pMod, LumaActor actor, LumaEffectName name, const char* pJoint, const LumaPlace* pPlace,
-                                 int32_t follow, LumaHandle* pOut) {
+                                 bool follow, LumaContentFxEffect* pOut) {
                     const char* const pWhere = "content.fx.start";
                     if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                         return status;
@@ -468,7 +468,6 @@ namespace luma {
                     const char* pWrong = pActor == nullptr                                            ? "actor"
                                          : name == nullptr || name[0] == 0                           ? "name"
                                          : pOut == nullptr                                            ? "out"
-                                         : follow != 0 && follow != 1                                 ? "follow"
                                                                                                       : nullptr;
                     if (pWrong == nullptr &&
                         (!lumacore::isA(lumacore::classOf(pActor), lumacore::kClassId< LiveActor >) || MR::isDead(pActor))) {
@@ -555,7 +554,7 @@ namespace luma {
                     rEffect.actor = pActor;
                     rEffect.name = pName != nullptr ? pName : cPlaceholder;
                     if (pName != nullptr) {
-                        Shell* const pShell = shellFor(pActor, pName, pSource, pHostScale, composed, follow == 1);
+                        Shell* const pShell = shellFor(pActor, pName, pSource, pHostScale, composed, follow);
                         pShell->busy = true;
                         if (composed) {
                             MR::makeMtxRotate(pShell->turn, turn.x, turn.y, turn.z);
@@ -581,7 +580,7 @@ namespace luma {
                     }
                     sLive++;
                     if (luma::modlog::facts()) {
-                        startFact(rEffect, pJoint, follow == 1, placeholder);
+                        startFact(rEffect, pJoint, follow, placeholder);
                     }
                     *pOut = rEffect.handle;
                     return LUMA_OK;
@@ -589,7 +588,7 @@ namespace luma {
 
                 // No model handle exists until content.model (models 7) gives them, so each is an ended one.
                 int32_t svcStartOnModel(const LumaMod* pMod, LumaHandle model, LumaEffectName name, const char* pSocket,
-                                        const LumaPlace* pPlace, int32_t follow, LumaHandle* pOut) {
+                                        const LumaPlace* pPlace, bool follow, LumaContentFxEffect* pOut) {
                     (void)model;
                     (void)name;
                     (void)pSocket;
@@ -604,7 +603,7 @@ namespace luma {
                     return LUMA_E_HANDLE;
                 }
 
-                int32_t svcStop(const LumaMod* pMod, LumaHandle effect, int32_t now) {
+                int32_t svcStop(const LumaMod* pMod, LumaContentFxEffect effect, bool now) {
                     const char* const pWhere = "content.fx.stop";
                     if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                         return status;
@@ -614,12 +613,8 @@ namespace luma {
                         report(pMod, pWhere, 102u, nullptr, nullptr, nullptr);
                         return LUMA_E_HANDLE;
                     }
-                    if (now != 0 && now != 1) {
-                        report(pMod, pWhere, 101u, "now", nullptr, nullptr);
-                        return LUMA_E_ARGUMENT;
-                    }
                     if (pEffect->shell != nullptr) {
-                        if (now == 1) {
+                        if (now) {
                             pEffect->shell->emitter->forceDeleteEmitter();
                         } else {
                             pEffect->shell->emitter->deleteEmitter();
@@ -629,7 +624,7 @@ namespace luma {
                     return LUMA_OK;
                 }
 
-                int32_t svcTint(const LumaMod* pMod, LumaHandle effect, float scale, uint32_t rgba) {
+                int32_t svcTint(const LumaMod* pMod, LumaContentFxEffect effect, float scale, uint32_t rgba) {
                     const char* const pWhere = "content.fx.tint";
                     if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                         return status;
