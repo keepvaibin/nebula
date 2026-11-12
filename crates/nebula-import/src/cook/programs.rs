@@ -1157,7 +1157,9 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
         }
     }
     if gained {
-        vertex_in.push_str("    uint gain : BLENDWEIGHT;\n");
+        // Read by the traced forms alone (above): declared there alone, so no other form's module has an input it
+        // never reads (l89; compile_programs.py refuses one).
+        vertex_in.push_str("#if NATIVE_TRACED\n    uint gain : BLENDWEIGHT;\n#endif\n");
         final_inputs.push(Input::Gain);
     }
     let mut uv = 0;

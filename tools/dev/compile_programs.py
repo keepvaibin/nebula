@@ -71,6 +71,37 @@ def native_coords(path):
     return None
 
 
+def vertex_unused_inputs(data):
+    """A SPIR-V vertex module's input variables no instruction names (only their names, their decorations and the entry
+    point's list), as their locations (-1 a built-in): every one is fetched for every draw all the same (l89). None for
+    a module that is not a vertex stage or not SPIR-V."""
+    count = len(data) // 4
+    words = struct.unpack("<%dI" % count, data[:count * 4])
+    if count < 5 or words[0] != 0x07230203:
+        return None
+    vertex = False
+    inputs, location, used = set(), {}, set()
+    at = 5
+    while at < count:
+        n, op = words[at] >> 16, words[at] & 0xFFFF
+        if n == 0 or at + n > count:
+            break
+        if op == 15:  # OpEntryPoint: execution model (0 vertex), id, name, interface ids
+            vertex = vertex or words[at + 1] == 0
+        elif op == 59 and n >= 4:  # OpVariable: type, id, storage class (1 input), initializer
+            if words[at + 3] == 1:
+                inputs.add(words[at + 2])
+            used.update(words[at + 4:at + n])
+        elif op == 71 and n >= 4 and words[at + 2] == 30:  # OpDecorate id Location n
+            location[words[at + 1]] = words[at + 3]
+        elif op not in (5, 6, 71, 72):  # OpName, OpMemberName, OpDecorate, OpMemberDecorate
+            used.update(words[at + 1:at + n])
+        at += n
+    if not vertex:
+        return None
+    return sorted(location.get(v, -1) for v in inputs - used)
+
+
 def read(path):
     with open(path, encoding="utf-8", errors="replace", newline="") as f:
         return f.read().replace("\r\n", "\n")
@@ -190,6 +221,23 @@ def main():
     if failed:
         print(len(failed), "of", len(jobs), "failed")
         return 1
+
+    # No form without ray tracing fetches what only a traced form reads (l89): a SPIR-V vertex module's every input is
+    # read. DXIL keeps its signature as declared; its drivers fetch only what a shader reads.
+    if backend == "spirv":
+        unread = []
+        for key, (source, stage, entry, defines) in sorted(jobs.items()):
+            if stage != "vs" or "NATIVE_TRACED" in defines:
+                continue
+            with open(os.path.join(cache, key), "rb") as f:
+                locations = vertex_unused_inputs(f.read())
+            if locations:
+                unread.append(f"{os.path.basename(source)} {' '.join(defines) or 'base'}: input locations {locations}")
+        for u in unread[:40]:
+            print("UNREAD INPUT", u)
+        if unread:
+            print(len(unread), "vertex modules declare an input they never read")
+            return 1
 
     # Two programs compiling the same mean the set's dedupe missed: the build fails.
     seen = {}
