@@ -148,7 +148,7 @@ Setup's game importer, `nebula-import.exe` (`crates/nebula-import`), reads disc 
 `nod` crate 1.4.4 by Luke Street (<https://github.com/encounter/nod>, MIT OR Apache-2.0). `nod`
 contains the Wii common keys needed to read a Wii disc partition.
 
-`nebula-import.exe` links 64 crates (`Cargo.lock`) under MIT, Apache-2.0, BSD-2-Clause,
+`nebula-import.exe` links 66 crates (`Cargo.lock`) under MIT, Apache-2.0, BSD-2-Clause,
 BSD-3-Clause, Zlib or 0BSD terms, and the C libraries zstd (BSD-3-Clause), liblzma (0BSD) and
 bzip2 (bzip2 license). Their license texts are in
 [docs/licenses/rust-dependencies.txt](docs/licenses/rust-dependencies.txt). The `nod` crate ships

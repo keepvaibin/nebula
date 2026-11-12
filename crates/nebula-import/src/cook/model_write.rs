@@ -713,6 +713,24 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
         b.u32(t.levels);
         b.fs(&[t.min_lod, t.max_lod, t.lod_bias]);
     }
+    // Version 5's lit table (materials.md): one NebulaModelLit per material, or none.
+    if !ir.lits.is_empty() && ir.lits.len() != ir.materials.len() {
+        anyhow::bail!("{} lit records for {} materials", ir.lits.len(), ir.materials.len());
+    }
+    b.align(4);
+    let lits_at = if ir.lits.is_empty() { 0 } else { b.at() };
+    for lit in &ir.lits {
+        let start = b.0.len();
+        b.fs(&lit.base_color);
+        b.fs(&lit.emissive);
+        b.fs(&[lit.metal, lit.roughness, lit.normal_scale, lit.occlusion_strength, lit.alpha_cutoff]);
+        for &map in &lit.maps {
+            b.u32(map);
+        }
+        b.0.extend_from_slice(&lit.coords);
+        b.0.extend_from_slice(&[lit.alpha_mode, lit.flags, 0, 0, 0, 0, 0]);
+        debug_assert_eq!(b.0.len() - start, super::model_ir::LIT_BYTES);
+    }
     // Names.
     let mut placed: HashMap<String, u32> = HashMap::new();
     for (slot, text) in &strings {
@@ -851,6 +869,9 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
     if ir.materials_only {
         flags |= 1 << 5;
     }
+    if !ir.lits.is_empty() {
+        flags |= 1 << 6;
+    }
     let header: [u32; HEADER_WORDS] = [
         MAGIC,
         VERSION,
@@ -880,9 +901,9 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
         textures_at,
         geometry_at,
         geometry_size,
-        // Version 5's lit table (materials.md): none until the cook reads glTF's metallic-roughness (plan 3.3).
-        0,
-        0,
+        // Version 5's lit table (materials.md).
+        ir.lits.len() as u32,
+        lits_at,
     ];
     for (i, &v) in header.iter().enumerate() {
         b.patch32(i * 4, v);

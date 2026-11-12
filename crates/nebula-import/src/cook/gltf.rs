@@ -5,7 +5,8 @@
 
 use super::clip::{ClipIr, Target, Track, KIND_COLORS, KIND_JOINTS, KIND_PATTERN, KIND_TEXTURE_MATRICES, STEP};
 use super::model_ir::{CoordIr, CoordMatrixIr};
-use super::model_ir::{important_joints, plain_material, plain_texture, ArraysIr, Corner, GroupIr, JointIr, ModelIr, ShapeIr, ATTR_COLOR0, ATTR_MATRIX, ATTR_NORMAL, NONE};
+use super::model_ir::{important_joints, plain_material, plain_texture, ArraysIr, Corner, GroupIr, JointIr, LitIr, ModelIr, ShapeIr, ATTR_COLOR0, ATTR_MATRIX, ATTR_NORMAL, NONE};
+use super::model_ir::{ATTR_NBT, ATTR_NBT_THREE, LIT_BASE, LIT_BLEND, LIT_DOUBLE_SIDED, LIT_MASK, LIT_NORMAL, LIT_UNLIT};
 use super::refuse::{invalid, note, refuse, OrInvalid};
 use anyhow::{bail, Context, Result};
 use serde_json::Value;
@@ -249,7 +250,8 @@ impl Document {
 }
 
 /// The extensions a file can require and still be read as made: anything else would cook into something it isn't.
-const EXTENSIONS_READ: [&str; 3] = ["KHR_texture_transform", "KHR_animation_pointer", "KHR_mesh_quantization"];
+const EXTENSIONS_READ: [&str; 5] =
+    ["KHR_texture_transform", "KHR_animation_pointer", "KHR_mesh_quantization", "KHR_materials_emissive_strength", "KHR_materials_unlit"];
 
 fn required_extensions(root: &Value) -> Result<()> {
     for name in root["extensionsRequired"].as_array().map(Vec::as_slice).unwrap_or_default() {
@@ -462,6 +464,88 @@ pub type ClipFiles = Vec<(String, Vec<u8>)>;
 
 const IDENTITY: Matrix = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
 
+fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+}
+
+fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+/// The rows of a matrix's turning part.
+fn rows(m: &Matrix) -> [[f32; 3]; 3] {
+    [0, 1, 2].map(|r| [m[r], m[4 + r], m[8 + r]])
+}
+
+/// The determinant of a matrix's turning part: below zero, it mirrors (glTF 2.0: the faces wind the other way).
+fn determinant(m: &Matrix) -> f32 {
+    let [a0, a1, a2] = rows(m);
+    dot(a0, cross(a1, a2))
+}
+
+/// A normal through `m`: by its inverse transpose (the cofactors, signed by the determinant), so a surface scaled on
+/// one axis keeps its normals square to it and a mirrored one keeps them outward. Its length is not kept.
+fn normal_through(m: &Matrix, n: [f32; 3]) -> [f32; 3] {
+    let [a0, a1, a2] = rows(m);
+    let cofactors = [cross(a1, a2), cross(a2, a0), cross(a0, a1)];
+    let sign = if dot(a0, cofactors[0]) < 0.0 { -1.0 } else { 1.0 };
+    cofactors.map(|c| sign * dot(c, n))
+}
+
+/// `along` made square to the unit normal `n` and of length 1 (Gram-Schmidt); any square direction when it lies along
+/// `n` or has no length.
+fn square_to(n: [f32; 3], along: [f32; 3]) -> [f32; 3] {
+    let d = dot(n, along);
+    let t = [along[0] - n[0] * d, along[1] - n[1] * d, along[2] - n[2] * d];
+    let length = dot(t, t).sqrt();
+    if length > 1e-6 {
+        return t.map(|v| v / length);
+    }
+    let other = if n[0].abs() < 0.9 { [1.0, 0.0, 0.0] } else { [0.0, 1.0, 0.0] };
+    let t = cross(n, other);
+    let length = dot(t, t).sqrt().max(1e-12);
+    t.map(|v| v / length)
+}
+
+/// A primitive as MikkTSpace reads it (glTF 2.0: the tangents a file without them has; materials.md): its triangles,
+/// its normals (one a triangle when flat) and the coordinate set its normal map reads. Out: each corner's tangent and
+/// handedness.
+struct TangentInput<'a> {
+    indices: &'a [u32],
+    positions: &'a [f32],
+    normals: &'a [f32],
+    flat: bool,
+    coords: &'a [f32],
+    out: Vec<[f32; 4]>,
+}
+
+impl TangentInput<'_> {
+    fn of<const N: usize>(values: &[f32], at: usize) -> [f32; N] {
+        values.get(at * N..at * N + N).and_then(|v| v.try_into().ok()).unwrap_or([0.0; N])
+    }
+}
+
+impl mikktspace::Geometry for TangentInput<'_> {
+    fn num_faces(&self) -> usize {
+        self.indices.len() / 3
+    }
+    fn num_vertices_of_face(&self, _face: usize) -> usize {
+        3
+    }
+    fn position(&self, face: usize, vert: usize) -> [f32; 3] {
+        Self::of(self.positions, self.indices[face * 3 + vert] as usize)
+    }
+    fn normal(&self, face: usize, vert: usize) -> [f32; 3] {
+        Self::of(self.normals, if self.flat { face } else { self.indices[face * 3 + vert] as usize })
+    }
+    fn tex_coord(&self, face: usize, vert: usize) -> [f32; 2] {
+        Self::of(self.coords, self.indices[face * 3 + vert] as usize)
+    }
+    fn set_tangent_encoded(&mut self, tangent: [f32; 4], face: usize, vert: usize) {
+        self.out[face * 3 + vert] = tangent;
+    }
+}
+
 fn multiply(a: &Matrix, b: &Matrix) -> Matrix {
     let mut out = [0.0; 16];
     for c in 0..4 {
@@ -593,6 +677,109 @@ struct SourceMaterial {
     two_sided: bool,
     /// Its base colour texture's KHR_texture_transform, still or animated: scale x, y, rotation, offset x, y.
     transform: Option<[f32; 5]>,
+    /// Its lit part (materials.md): the record with no maps yet, and each map as the file names it.
+    lit: LitIr,
+    lit_maps: [Option<LitMap>; 5],
+}
+
+/// A map of a lit material as the file names it: its image, its coordinate set, and a KHR_texture_transform to bake
+/// into that set's coordinates (every map but the base colour's, whose transform is the material's texture matrix 0).
+#[derive(Clone, Copy, Debug)]
+struct LitMap {
+    image: usize,
+    coord: u64,
+    bake: Option<[f32; 5]>,
+}
+
+/// The maps of a glTF material, in NebulaModelLit's order: where each is, and its name for a refusal.
+const LIT_MAPS: [(&str, &str); 5] = [
+    ("pbrMetallicRoughness", "baseColorTexture"),
+    ("pbrMetallicRoughness", "metallicRoughnessTexture"),
+    ("", "normalTexture"),
+    ("", "emissiveTexture"),
+    ("", "occlusionTexture"),
+];
+
+/// A glTF material's lit part (materials.md): its factors, clamped where glTF bounds them (a Note each), and its maps.
+fn lit_of(root: &Value, material: &Value, number: usize, name: &str) -> Result<(LitIr, [Option<LitMap>; 5])> {
+    let pbr = &material["pbrMetallicRoughness"];
+    let clamp = |factor: &str, value: f32, low: f32, high: f32| -> f32 {
+        if value.is_nan() || value < low || value > high {
+            note("Cook.Material.Clamped", &[("material", name.to_string()), ("factor", factor.to_string()), ("found", value.to_string())]);
+        }
+        if value.is_nan() { low } else { value.clamp(low, high) }
+    };
+    let base = numbers(&pbr["baseColorFactor"], [1.0f32; 4]);
+    let emissive = numbers(&material["emissiveFactor"], [0.0f32; 3]);
+    let strength = material["extensions"]["KHR_materials_emissive_strength"]["emissiveStrength"].as_f64().unwrap_or(1.0) as f32;
+    let strength = clamp("emissiveStrength", strength, 0.0, f32::MAX);
+    let mut lit = LitIr {
+        base_color: base.map(|v| clamp("baseColorFactor", v, 0.0, 1.0)),
+        emissive: emissive.map(|v| clamp("emissiveFactor", v, 0.0, 1.0) * strength),
+        metal: clamp("metallicFactor", pbr["metallicFactor"].as_f64().unwrap_or(1.0) as f32, 0.0, 1.0),
+        roughness: clamp("roughnessFactor", pbr["roughnessFactor"].as_f64().unwrap_or(1.0) as f32, 0.0, 1.0),
+        normal_scale: material["normalTexture"]["scale"].as_f64().unwrap_or(1.0) as f32,
+        occlusion_strength: clamp("occlusionTexture.strength", material["occlusionTexture"]["strength"].as_f64().unwrap_or(1.0) as f32, 0.0, 1.0),
+        ..LitIr::default()
+    };
+    match material["alphaMode"].as_str() {
+        Some("MASK") => {
+            lit.alpha_mode = LIT_MASK;
+            lit.alpha_cutoff = clamp("alphaCutoff", material["alphaCutoff"].as_f64().unwrap_or(0.5) as f32, 0.0, f32::MAX);
+        }
+        Some("BLEND") => lit.alpha_mode = LIT_BLEND,
+        _ => {}
+    }
+    if material["doubleSided"].as_bool() == Some(true) {
+        lit.flags |= LIT_DOUBLE_SIDED;
+    }
+    if material["extensions"]["KHR_materials_unlit"].is_object() {
+        lit.flags |= LIT_UNLIT;
+    }
+    let mut maps: [Option<LitMap>; 5] = [None; 5];
+    for (k, (group, map)) in LIT_MAPS.iter().enumerate() {
+        let info = if group.is_empty() { &material[*map] } else { &material[*group][*map] };
+        if info.is_null() {
+            continue;
+        }
+        let at = if group.is_empty() { format!("/materials/{number}/{map}") } else { format!("/materials/{number}/{group}/{map}") };
+        let texture = info["index"].as_u64().or_invalid(|| format!("{at}/index"))?;
+        let image = root["textures"][texture as usize]["source"]
+            .as_u64()
+            .filter(|i| root["images"].as_array().is_some_and(|images| (*i as usize) < images.len()))
+            .ok_or_else(|| refuse("Cook.Material.MissingTexture", &[("material", name.to_string()), ("map", map.to_string()), ("texture", texture.to_string())]))?;
+        let mut coord = info["texCoord"].as_u64().unwrap_or(0);
+        let transform = &info["extensions"]["KHR_texture_transform"];
+        let mut bake = None;
+        if transform.is_object() {
+            coord = transform["texCoord"].as_u64().unwrap_or(coord);
+            if k != LIT_BASE {
+                let [sx, sy]: [f32; 2] = numbers(&transform["scale"], [1.0; 2]);
+                let [ox, oy]: [f32; 2] = numbers(&transform["offset"], [0.0; 2]);
+                bake = Some([sx, sy, transform["rotation"].as_f64().unwrap_or(0.0) as f32, ox, oy]);
+                note("Cook.Material.TextureTransform", &[("material", name.to_string()), ("map", map.to_string())]);
+            }
+        }
+        maps[k] = Some(LitMap { image: image as usize, coord, bake });
+    }
+    // A transform is baked into a coordinate set's numbers: no other map of the material may read that set.
+    let mut sets: Vec<u64> = material["extras"]["nebula"]["textures"].as_array().map(Vec::as_slice).unwrap_or_default().iter().map(|l| l["texCoord"].as_u64().unwrap_or(0)).collect();
+    sets.extend(maps.iter().flatten().map(|m| m.coord));
+    for (k, m) in maps.iter().enumerate() {
+        if let Some(LitMap { coord, bake: Some(_), .. }) = m {
+            if sets.iter().filter(|s| *s == coord).count() > 1 {
+                return Err(refuse("Cook.Material.TransformShared", &[("material", name.to_string()), ("map", LIT_MAPS[k].1.to_string()), ("set", coord.to_string())]));
+            }
+        }
+    }
+    Ok((lit, maps))
+}
+
+/// glTF's KHR_texture_transform of coordinates (u, v): offset x rotation x scale, as the extension's matrix is.
+fn transformed_coordinate(t: &[f32; 5], uv: [f32; 2]) -> [f32; 2] {
+    let [sx, sy, rotation, ox, oy] = *t;
+    let (sin, cos) = rotation.sin_cos();
+    [cos * sx * uv[0] + sin * sy * uv[1] + ox, -sin * sx * uv[0] + cos * sy * uv[1] + oy]
 }
 
 /// The texture transform no KHR_texture_transform gives.
@@ -1035,6 +1222,7 @@ pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) 
         let image_of_texture = |t: u64| -> Result<usize> {
             root["textures"][t as usize]["source"].as_u64().map(|s| s as usize).or_invalid(|| format!("/textures/{t}/source"))
         };
+        let (lit, lit_maps) = lit_of(root, material, i, &material_name)?;
         let image = match pbr["baseColorTexture"]["index"].as_u64() {
             Some(t) => Some(image_of_texture(t)?),
             None => None,
@@ -1072,10 +1260,25 @@ pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) 
             cutoff: (material["alphaMode"].as_str() == Some("MASK")).then(|| (material["alphaCutoff"].as_f64().unwrap_or(0.5).clamp(0.0, 1.0) * 255.0) as u8),
             two_sided: material["doubleSided"].as_bool().unwrap_or(false),
             transform,
+            lit,
+            lit_maps,
         });
     }
     let default_material = materials.len();
-    materials.push(SourceMaterial { name: "material".to_string(), color: [255; 4], images: Vec::new(), blend: false, cutoff: None, two_sided: false, transform: None });
+    materials.push(SourceMaterial {
+        name: "material".to_string(),
+        color: [255; 4],
+        images: Vec::new(),
+        blend: false,
+        cutoff: None,
+        two_sided: false,
+        transform: None,
+        lit: LitIr::default(),
+        lit_maps: [None; 5],
+    });
+    // A lit record for each material when the file has any material (materials.md); a mesh with none has glTF's default.
+    let has_materials = root["materials"].as_array().is_some_and(|m| !m.is_empty());
+    let mut lits: Vec<LitIr> = Vec::new();
 
     let mut ir = ModelIr::default();
     let mut positions = Pool::<3>::new();
@@ -1178,6 +1381,17 @@ pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) 
             let named_sets = attributes.as_object().map_or(0, |a| {
                 a.keys().filter_map(|k| k.strip_prefix("TEXCOORD_")?.parse::<usize>().ok()).map(|k| k + 1).max().unwrap_or(0)
             });
+            // Each lit map reads a coordinate set the mesh has (materials.md: Cook.Material.CoordSet).
+            for (k, m) in source.lit_maps.iter().enumerate() {
+                if let Some(m) = m {
+                    if !attributes[format!("TEXCOORD_{}", m.coord)].is_u64() {
+                        return Err(refuse(
+                            "Cook.Material.CoordSet",
+                            &[("material", source.name.clone()), ("map", LIT_MAPS[k].1.to_string()), ("set", m.coord.to_string()), ("mesh", name.clone())],
+                        ));
+                    }
+                }
+            }
             let read = source.images.iter().map(|&(_, uv)| usize::from(uv) + 1).max().unwrap_or(0);
             let room = named_sets.max(read);
             if room > super::limits::MATERIAL_SLOTS {
@@ -1198,6 +1412,37 @@ pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) 
             for &(_, uv) in &source.images {
                 coordinate_present[usize::from(uv)] = true;
             }
+            // A map's own transform, baked into the set it alone reads.
+            for m in source.lit_maps.iter().flatten() {
+                if let Some(t) = &m.bake {
+                    for uv in coordinate_values[m.coord as usize].chunks_exact_mut(2) {
+                        let [u, v] = transformed_coordinate(t, [uv[0], uv[1]]);
+                        uv[0] = u;
+                        uv[1] = v;
+                    }
+                }
+            }
+            // A normal-mapped material's tangents (materials.md): the file's TANGENT by vertex, or MikkTSpace's by
+            // corner over the normal map's (baked) coordinates when it has none or its normals are made flat (glTF 2.0
+            // then ignores the file's).
+            let tangents: Option<(Vec<f32>, bool)> = match &source.lit_maps[LIT_NORMAL] {
+                None => None,
+                Some(map) => match attributes["TANGENT"].as_u64() {
+                    Some(index) if !flat => Some((document.floats(index as usize, 4)?, false)),
+                    _ => {
+                        let mut input = TangentInput {
+                            indices: &source_indices,
+                            positions: &position_values,
+                            normals: &normal_values,
+                            flat,
+                            coords: &coordinate_values[map.coord as usize],
+                            out: vec![[1.0, 0.0, 0.0, 1.0]; source_indices.len()],
+                        };
+                        mikktspace::generate_tangents(&mut input);
+                        Some((input.out.concat(), true))
+                    }
+                },
+            };
             if coordinates.len() < room {
                 coordinates.resize_with(room, Pool::new);
             }
@@ -1207,8 +1452,9 @@ pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) 
             let mut corner_of: BTreeMap<u32, u32> = BTreeMap::new();
             let (mut low, mut high) = ([f32::MAX; 3], [f32::MIN; 3]);
             for (k, index) in source_indices.iter().enumerate() {
-                // Flat normals make each corner its own vertex; shared ones share it.
-                let key = if flat { k as u32 } else { *index };
+                // Flat normals and MikkTSpace's tangents make each corner its own vertex; shared ones share it (the
+                // writer joins the corners alike).
+                let key = if flat || tangents.as_ref().is_some_and(|(_, by_corner)| *by_corner) { k as u32 } else { *index };
                 if let Some(found) = corner_of.get(&key) {
                     indices.push(*found);
                     continue;
@@ -1269,18 +1515,32 @@ pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) 
                 }
                 let draw = draw as u32;
                 // One joint's vertex is in that joint's space; a blended one stays in the model's.
-                let (place, turned) = match &weights {
-                    Some(_) if set.len() == 1 => {
-                        let inverse = &joints[draw as usize].inverse;
-                        (transform(inverse, position, 1.0), transform(inverse, normal, 0.0))
-                    }
-                    Some(_) => (position, normal),
-                    None => (transform(&to_joint, position, 1.0), transform(&to_joint, normal, 0.0)),
+                let through: Option<&Matrix> = match &weights {
+                    Some(_) if set.len() == 1 => Some(&joints[draw as usize].inverse),
+                    Some(_) => None,
+                    None => Some(&to_joint),
                 };
-                let place = place.map(|v| v * UNITS_PER_METRE);
+                let place = through.map_or(position, |m| transform(m, position, 1.0)).map(|v| v * UNITS_PER_METRE);
+                let turned = through.map_or(normal, |m| normal_through(m, normal));
                 widen(&mut low, &mut high, place);
-                let length = (turned[0] * turned[0] + turned[1] * turned[1] + turned[2] * turned[2]).sqrt().max(1e-6);
-                let normal_number = normals.add(turned.map(|v| v / length));
+                let length = dot(turned, turned).sqrt().max(1e-6);
+                let unit = turned.map(|v| v / length);
+                let normal_number = normals.add(unit);
+                // Tangent and bitangent (glTF 2.0: cross(normal, tangent) x w), turned as the surface is; a mirror
+                // turns the bitangent's side.
+                let (tangent_number, binormal_number) = match &tangents {
+                    Some((values, by_corner)) => {
+                        let n4 = if *by_corner { k } else { i } * 4;
+                        let t: [f32; 4] = values.get(n4..n4 + 4).or_invalid(|| at("attributes/TANGENT"))?.try_into()?;
+                        let along = through.map_or([t[0], t[1], t[2]], |m| transform(m, [t[0], t[1], t[2]], 0.0));
+                        let mirrored = through.is_some_and(|m| determinant(m) < 0.0);
+                        let side = if (t[3] < 0.0) != mirrored { -1.0 } else { 1.0 };
+                        let tangent = square_to(unit, along);
+                        let binormal = cross(unit, tangent).map(|v| v * side);
+                        (normals.add(tangent), normals.add(binormal))
+                    }
+                    None => (normal_number, normal_number),
+                };
                 let mut coord = vec![0u32; room];
                 for (c, slot) in coord.iter_mut().enumerate() {
                     let uv = coordinate_values[c].get(i * 2..i * 2 + 2).or_invalid(|| at(&format!("attributes/TEXCOORD_{c}")))?;
@@ -1301,8 +1561,8 @@ pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) 
                 corners.push(Corner {
                     position: positions.add(place),
                     normal: normal_number,
-                    tangent: normal_number,
-                    binormal: normal_number,
+                    tangent: tangent_number,
+                    binormal: binormal_number,
                     color,
                     coord,
                     matrix: 0,
@@ -1316,8 +1576,12 @@ pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) 
             if indices.is_empty() {
                 continue;
             }
-            for triangle in indices.chunks_exact_mut(3) {
-                triangle.swap(1, 2);
+            // glTF's front faces wind counter-clockwise, the game's clockwise; under a mirroring node glTF's wind the other
+            // way already (glTF 2.0: the determinant of the node's global transform; a skinned mesh's node is not used).
+            if skinned || determinant(&world[*node]) >= 0.0 {
+                for triangle in indices.chunks_exact_mut(3) {
+                    triangle.swap(1, 2);
+                }
             }
 
             // The draw matrices this mesh's corners name, by first use.
@@ -1404,8 +1668,21 @@ pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) 
             made.mesh = shape;
             made.joint = attached as u32;
             ir.materials.push(made);
+            if has_materials {
+                let mut lit = source.lit.clone();
+                for (k, m) in source.lit_maps.iter().enumerate() {
+                    if let Some(m) = m {
+                        lit.maps[k] = texture_number(&document, &mut ir, &mut image_of, m.image)?;
+                        lit.coords[k] = m.coord as u8;
+                    }
+                }
+                lits.push(lit);
+            }
             meshes_of_joint[attached].push(shape);
             let mut attributes_used = ATTR_NORMAL | if blended { ATTR_MATRIX } else { 0 };
+            if tangents.is_some() {
+                attributes_used |= ATTR_NBT | ATTR_NBT_THREE;
+            }
             for (c, values) in colour_values.iter().enumerate() {
                 if values.is_some() {
                     attributes_used |= ATTR_COLOR0 << c;
@@ -1434,6 +1711,7 @@ pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) 
         texture_number(&document, &mut ir, &mut image_of, image as usize)?;
     }
 
+    ir.lits = lits;
     ir.arrays = ArraysIr { normal_floats: 3, ..Default::default() };
     ir.arrays.positions = positions.values;
     ir.arrays.normals = normals.values;
@@ -2262,6 +2540,8 @@ mod tests {
     /// The triangle with a texture of two images to choose from, and a texture transform.
     fn textured(transform: Value) -> Value {
         let mut document: Value = serde_json::from_slice(&triangle(1)).unwrap();
+        let a = add_floats(&mut document, &[(3, "VEC2", vec![0.0, 0.0, 1.0, 0.0, 0.0, 1.0])]);
+        document["meshes"][0]["primitives"][0]["attributes"]["TEXCOORD_0"] = a[0].into();
         document["images"] = serde_json::json!([{ "uri": PIXEL }, { "uri": PIXEL }]);
         document["textures"] = serde_json::json!([{ "source": 0 }, { "source": 1 }]);
         document["materials"] = serde_json::json!([{ "name": "Face", "pbrMetallicRoughness": {
@@ -2593,6 +2873,196 @@ mod tests {
         document["nodes"][1]["mesh"] = 1.into();
         document["nodes"][1]["skin"] = 1.into();
         assert_eq!(refused(&cook(&document, None).err().unwrap()), ("Cook.Model.TwoSkins", vec![own(("mesh", "#0")), own(("other", "#1"))]));
+    }
+
+    /// The triangle with a full lit material: every factor, every map (metal-rough and occlusion on set 1, the normal
+    /// map on set 2), glow strength 4.
+    fn lit_document() -> Value {
+        let mut document = document_of(&triangle(1));
+        let a = add_floats(&mut document, &[
+            (3, "VEC2", vec![0.0, 0.0, 1.0, 0.0, 0.0, 1.0]),
+            (3, "VEC2", vec![0.5; 6]),
+            (3, "VEC2", vec![0.25; 6]),
+        ]);
+        for (set, accessor) in a.iter().enumerate() {
+            document["meshes"][0]["primitives"][0]["attributes"][format!("TEXCOORD_{set}")] = (*accessor).into();
+        }
+        document["images"] = serde_json::json!([{ "uri": PIXEL }, { "uri": PIXEL }, { "uri": PIXEL }]);
+        document["textures"] = serde_json::json!([{ "source": 0 }, { "source": 1 }, { "source": 2 }]);
+        document["materials"] = serde_json::json!([{ "name": "Shell",
+            "pbrMetallicRoughness": { "baseColorFactor": [1.0, 0.5, 0.25, 1.0], "baseColorTexture": { "index": 0 },
+                "metallicFactor": 0.2, "roughnessFactor": 0.6, "metallicRoughnessTexture": { "index": 1, "texCoord": 1 } },
+            "normalTexture": { "index": 2, "texCoord": 2, "scale": 0.5 },
+            "emissiveTexture": { "index": 0 }, "emissiveFactor": [0.5, 0.25, 0.0],
+            "occlusionTexture": { "index": 1, "texCoord": 1, "strength": 0.7 },
+            "alphaMode": "MASK", "alphaCutoff": 0.3, "doubleSided": true,
+            "extensions": { "KHR_materials_emissive_strength": { "emissiveStrength": 4.0 } } }]);
+        document
+    }
+
+    #[test]
+    fn a_lit_material_keeps_every_factor_and_map() {
+        let (ir, _, _) = cook(&lit_document(), None).unwrap();
+        assert_eq!(ir.lits.len(), ir.materials.len());
+        let lit = &ir.lits[0];
+        assert_eq!(lit.base_color, [1.0, 0.5, 0.25, 1.0]);
+        assert_eq!(lit.emissive, [2.0, 1.0, 0.0]);
+        assert_eq!((lit.metal, lit.roughness, lit.normal_scale, lit.occlusion_strength, lit.alpha_cutoff), (0.2, 0.6, 0.5, 0.7, 0.3));
+        assert_eq!((lit.alpha_mode, lit.flags), (LIT_MASK, LIT_DOUBLE_SIDED));
+        assert_eq!(lit.coords, [0, 1, 2, 0, 1]);
+        // One texture per image, whichever maps read it.
+        assert_eq!((lit.maps[0], lit.maps[1]), (lit.maps[3], lit.maps[4]));
+        let mut numbers = vec![lit.maps[0], lit.maps[1], lit.maps[2]];
+        numbers.sort_unstable();
+        numbers.dedup();
+        assert_eq!(numbers.len(), 3);
+        assert!(numbers.iter().all(|n| (*n as usize) < ir.textures.len()), "{numbers:?} of {}", ir.textures.len());
+
+        // The model block: flag 6, then material_count records of 80 bytes at lits_at (nebula_model.h).
+        let (model, _) = to_files(&serde_json::to_vec(&lit_document()).unwrap(), None, "Shell").unwrap();
+        let word = |at: usize| u32::from_le_bytes(model[at..at + 4].try_into().unwrap());
+        let float = |at: usize| f32::from_le_bytes(model[at..at + 4].try_into().unwrap());
+        assert_eq!(word(4), 5);
+        assert_ne!(word(12) & (1 << 6), 0);
+        let (count, at) = (word(28 * 4) as usize, word(29 * 4) as usize);
+        assert_eq!(count, word(12 * 4) as usize);
+        assert_eq!((count, at % 4), (1, 0));
+        assert_eq!([float(at), float(at + 4), float(at + 8), float(at + 12)], lit.base_color);
+        assert_eq!([float(at + 16), float(at + 20), float(at + 24)], lit.emissive);
+        assert_eq!([float(at + 28), float(at + 32), float(at + 36), float(at + 40), float(at + 44)], [0.2, 0.6, 0.5, 0.7, 0.3]);
+        assert_eq!([word(at + 48), word(at + 52), word(at + 56), word(at + 60), word(at + 64)], lit.maps);
+        assert_eq!(model[at + 68..at + 80], [0, 1, 2, 0, 1, LIT_MASK, LIT_DOUBLE_SIDED, 0, 0, 0, 0, 0]);
+        assert!(at + count * super::super::model_ir::LIT_BYTES <= model.len());
+
+        // A material with nothing said is glTF's default; a file with no material has no lit table.
+        let (plain, _, _) = cook(&document_of(&triangle(1)), None).unwrap();
+        assert_eq!(plain.lits, [LitIr::default()]);
+        let (none, _, _) = cook(&document_of(&many_triangles(1)), None).unwrap();
+        assert!(none.lits.is_empty());
+        let (model, _) = to_files(&many_triangles(1), None, "None").unwrap();
+        let word = |at: usize| u32::from_le_bytes(model[at..at + 4].try_into().unwrap());
+        assert_eq!((word(12) & (1 << 6), word(28 * 4), word(29 * 4)), (0, 0, 0));
+    }
+
+    fn material_notes() -> Vec<(&'static str, Vec<(&'static str, String)>)> {
+        notes().into_iter().filter(|(why, _)| why.starts_with("Cook.Material.")).collect()
+    }
+
+    #[test]
+    fn a_lit_material_says_what_it_cannot_be() {
+        let shell = || own(("material", "Shell"));
+        let mut missing = lit_document();
+        missing["textures"][1]["source"] = 9.into();
+        assert_eq!(
+            refused(&cook(&missing, None).err().unwrap()),
+            ("Cook.Material.MissingTexture", vec![shell(), own(("map", "metallicRoughnessTexture")), own(("texture", "1"))])
+        );
+        let mut no_set = lit_document();
+        no_set["meshes"][0]["primitives"][0]["attributes"].as_object_mut().unwrap().remove("TEXCOORD_1");
+        assert_eq!(
+            refused(&cook(&no_set, None).err().unwrap()),
+            ("Cook.Material.CoordSet", vec![shell(), own(("map", "metallicRoughnessTexture")), own(("set", "1")), own(("mesh", "#0"))])
+        );
+        // A transform of a map on a set another map reads can't be baked into it.
+        let mut shared = lit_document();
+        shared["materials"][0]["occlusionTexture"]["extensions"] = serde_json::json!({ "KHR_texture_transform": { "offset": [0.5, 0.0] } });
+        assert_eq!(
+            refused(&cook(&shared, None).err().unwrap()),
+            ("Cook.Material.TransformShared", vec![shell(), own(("map", "occlusionTexture")), own(("set", "1"))])
+        );
+
+        // Notes: the normal map's own transform is baked, factors past glTF's bounds are brought in.
+        material_notes();
+        let mut noted = lit_document();
+        noted["materials"][0]["normalTexture"]["extensions"] = serde_json::json!({ "KHR_texture_transform": { "scale": [2.0, 2.0], "offset": [0.5, 0.0] } });
+        noted["materials"][0]["pbrMetallicRoughness"]["metallicFactor"] = 1.5.into();
+        noted["materials"][0]["occlusionTexture"]["strength"] = (-1.0).into();
+        let (ir, _, _) = cook(&noted, None).unwrap();
+        assert_eq!((ir.lits[0].metal, ir.lits[0].occlusion_strength), (1.0, 0.0));
+        assert_eq!(material_notes(), [
+            ("Cook.Material.Clamped", vec![shell(), own(("factor", "metallicFactor")), own(("found", "1.5"))]),
+            ("Cook.Material.Clamped", vec![shell(), own(("factor", "occlusionTexture.strength")), own(("found", "-1"))]),
+            ("Cook.Material.TextureTransform", vec![shell(), own(("map", "normalTexture"))]),
+        ]);
+        // Set 2 was 0.25 everywhere: scaled by 2 and moved by 0.5 in u.
+        let (plain, _, _) = cook(&lit_document(), None).unwrap();
+        assert_eq!((plain.arrays.coords[2].as_slice(), ir.arrays.coords[2].as_slice()), ([[0.25, 0.25]].as_slice(), [[1.0, 0.5]].as_slice()));
+        assert_eq!(plain.arrays.coords[1], ir.arrays.coords[1]);
+        assert_eq!(transformed_coordinate(&[2.0, 2.0, 0.0, 0.5, 0.0], [0.25, 0.25]), [1.0, 0.5]);
+        let [u, v] = transformed_coordinate(&[1.0, 1.0, std::f32::consts::FRAC_PI_2, 0.0, 0.0], [1.0, 0.0]);
+        assert!(u.abs() < 1e-6 && (v + 1.0).abs() < 1e-6, "{u} {v}");
+
+        // KHR_materials_unlit, and both material extensions may be required.
+        let mut unlit = lit_document();
+        unlit["materials"][0]["extensions"]["KHR_materials_unlit"] = serde_json::json!({});
+        unlit["extensionsRequired"] = serde_json::json!(["KHR_materials_unlit", "KHR_materials_emissive_strength"]);
+        let (ir, _, _) = cook(&unlit, None).unwrap();
+        assert_eq!(ir.lits[0].flags, LIT_DOUBLE_SIDED | LIT_UNLIT);
+    }
+
+    /// The triangle (0,0,0) (1,0,0) (0,1,0) with a normal map read through coordinates `uv` (by vertex).
+    fn normal_mapped(uv: [f32; 6]) -> Value {
+        let mut document = document_of(&triangle(1));
+        let a = add_floats(&mut document, &[(3, "VEC2", uv.to_vec())]);
+        document["meshes"][0]["primitives"][0]["attributes"]["TEXCOORD_0"] = a[0].into();
+        document["images"] = serde_json::json!([{ "uri": PIXEL }]);
+        document["textures"] = serde_json::json!([{ "source": 0 }]);
+        document["materials"] = serde_json::json!([{ "name": "Bumps", "normalTexture": { "index": 0 } }]);
+        document
+    }
+
+    /// Each corner's normal, tangent and bitangent as cooked, rounded to thousandths.
+    fn frames(ir: &ModelIr) -> Vec<[[f32; 3]; 3]> {
+        let group = &ir.shapes[0].groups[0];
+        assert_eq!(group.attributes & (ATTR_NBT | ATTR_NBT_THREE), ATTR_NBT | ATTR_NBT_THREE);
+        let at = |n: u32| ir.arrays.normals[n as usize].map(|v| (v * 1000.0).round() / 1000.0 + 0.0);
+        group.corners.iter().map(|c| [at(c.normal), at(c.tangent), at(c.binormal)]).collect()
+    }
+
+    #[test]
+    fn a_normal_map_has_tangents_from_the_file_or_mikktspace() {
+        // No normals, no tangents: flat normals and MikkTSpace's frame, u along x. A v that runs down y turns the
+        // bitangent (glTF 2.0: bitangent = cross(normal, tangent) x w).
+        let (ir, _, _) = cook(&normal_mapped([0.0, 0.0, 1.0, 0.0, 0.0, 1.0]), None).unwrap();
+        assert_eq!(frames(&ir), [[[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]; 3]);
+        let (ir, _, _) = cook(&normal_mapped([0.0, 0.0, 1.0, 0.0, 0.0, -1.0]), None).unwrap();
+        assert_eq!(frames(&ir), [[[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, -1.0, 0.0]]; 3]);
+        // u along y: the tangent follows it.
+        let (ir, _, _) = cook(&normal_mapped([0.0, 0.0, 0.0, 1.0, 1.0, 0.0]), None).unwrap();
+        assert_eq!(frames(&ir)[0][1], [0.0, 1.0, 0.0]);
+
+        // The file's own, w -1: bitangent = -(z x y) = x. Made square to the normal.
+        let mut own_frame = normal_mapped([0.0, 0.0, 1.0, 0.0, 0.0, 1.0]);
+        let a = add_floats(&mut own_frame, &[(3, "VEC3", [0.0, 0.0, 1.0].repeat(3)), (3, "VEC4", [0.0, 1.0, 0.5, -1.0].repeat(3))]);
+        own_frame["meshes"][0]["primitives"][0]["attributes"]["NORMAL"] = a[0].into();
+        own_frame["meshes"][0]["primitives"][0]["attributes"]["TANGENT"] = a[1].into();
+        let (ir, _, _) = cook(&own_frame, None).unwrap();
+        assert_eq!(frames(&ir), [[[0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]; 3]);
+
+        // No normal map: no tangents, the stream stays as it was.
+        let (ir, _, _) = cook(&document_of(&triangle(1)), None).unwrap();
+        assert_eq!(ir.shapes[0].groups[0].attributes & ATTR_NBT, 0);
+    }
+
+    #[test]
+    fn a_mirroring_node_keeps_its_faces_and_normals_outward() {
+        let (plain, _, _) = cook(&document_of(&triangle(1)), None).unwrap();
+        let mut mirrored = document_of(&triangle(1));
+        mirrored["nodes"][0]["scale"] = serde_json::json!([-1.0, 1.0, 1.0]);
+        let (ir, _, _) = cook(&mirrored, None).unwrap();
+        // The game draws clockwise: glTF's counter-clockwise triangle turned, its mirrored one (already clockwise) not.
+        assert_eq!((plain.shapes[0].groups[0].indices.as_slice(), ir.shapes[0].groups[0].indices.as_slice()), ([0, 2, 1].as_slice(), [0, 1, 2].as_slice()));
+
+        // Normals by the inverse transpose; a mirror keeps them outward and turns the bitangent's side.
+        let mirror: Matrix = [-1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
+        assert!(determinant(&mirror) < 0.0);
+        assert_eq!(normal_through(&mirror, [1.0, 0.0, 0.0]), [-1.0, 0.0, 0.0]);
+        assert_eq!(normal_through(&mirror, [0.0, 0.0, 1.0]), [0.0, 0.0, 1.0]);
+        // Stretched 2 along x: the normal of the plane x + y = 1 leans away from x (inverse transpose), not toward it.
+        let stretch: Matrix = [2.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
+        let n = normal_through(&stretch, [1.0, 1.0, 0.0]);
+        assert!(n[1] > n[0], "{n:?}");
+        assert_eq!(square_to([0.0, 0.0, 1.0], [0.0, 0.0, 3.0]), [0.0, 1.0, 0.0]);
     }
 
 }
