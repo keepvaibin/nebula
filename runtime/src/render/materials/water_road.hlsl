@@ -53,6 +53,8 @@ float4 material_color(NativeVaryings i) {
     }
     // The screen behind and the painted environment: what the tracer shows in their place under the traced light
     // (program.hlsli traced_sea; d09). Each sum is clamped as the game's stages clamp it; the pixel stage clamps the whole.
-    const float3 behind = TEX(2).Sample(SAMP(2), screen).rgb * material.tint.rgb + TEX(3).Sample(SAMP(3), i.uv[1].zw).rgb;
-    return traced_sea(pattern8 / 255.0, c8 / 255.0 - pattern8 / 255.0, behind, i.color.a, move * line_point_raster.xy, i.pos);
+    const float3 behind = TEX(2).Sample(SAMP(2), screen).rgb;  // the scene behind, moved; its tint apart (d14)
+    const float3 painted = TEX(3).Sample(SAMP(3), i.uv[1].zw).rgb;  // the painted environment: the traced mirror's place
+    return traced_sea(pattern8 / 255.0, c8 / 255.0 - pattern8 / 255.0, behind, material.tint.rgb, painted, i.color.a,
+                      move * line_point_raster.xy, i.pos);
 }
