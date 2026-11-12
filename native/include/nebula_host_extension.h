@@ -106,6 +106,9 @@ typedef struct NebulaHostForExtension {
     /* The graphics device lost at the renderer's next frame, as a driver reset loses it; the renderer recovers as from
        any loss. */
     void (*lose_gpu_device)(void* host);
+    /* A running mod taken out at the next frame's start, with the mods that use it (reload.md 2; the game writes the
+       harness fact takeout.<id> once each one's library is closed). Null in a host without mods. */
+    void (*take_out_mod)(void* host, const char* mod_id);
 } NebulaHostForExtension;
 
 /* What the extension offers. Each function may be null. */

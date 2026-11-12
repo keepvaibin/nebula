@@ -355,7 +355,7 @@ std::string quoted(std::string_view text) {
 
 // --- The plan ------------------------------------------------------------------------------------------------------
 
-enum class Action { Hold, Stick, Shake, Pointer, Key, Settings, Picture, Wait, End, Game };
+enum class Action { Hold, Stick, Shake, Pointer, Key, Settings, Picture, Wait, End, Game, TakeOut };
 
 struct Cond {
     bool log = false;
@@ -377,9 +377,13 @@ struct Step {
     std::int64_t frames = 0;
     std::vector<Cond> conds;
     std::int64_t timeout = 600;
+    std::string mod;          // take_out's mod id
+    bool wait_fact = false;   // take_out waits for takeout.<id> (reload.md G-RL4)
     // While running.
     bool done = false;
-    bool waiting = false;     // a game line given, its answer not yet back
+    bool waiting = false;     // a game line given, its answer not yet back; or take_out's fact not yet written
+    std::uint64_t writes_before = 0u;  // take_out: takeout.<id>'s writes when the step ran
+    std::int64_t wait_from = 0;        // take_out: the frame the step ran
     std::optional<std::int64_t> armed;  // an after step: the frame its wait began
 };
 
@@ -421,6 +425,8 @@ struct State {
     std::deque<Picture> pictures;
     std::string picture_file;
     std::map<std::string, std::string> latest;  // each fact's newest value, as JSON text
+    std::map<std::string, std::uint64_t> writes;  // how often each fact was written
+    std::string last_log;                         // the game's last log line, for a step that waits in vain
     std::vector<std::regex*> log_watch;
     bool finished = false;
 } g;
@@ -445,6 +451,7 @@ void write_fact(const std::string& key, const std::string& json, std::optional<s
     }
     g.facts << "{\"frame\":" << at << ",\"key\":" << quoted(key) << ",\"value\":" << json << "}\n" << std::flush;
     g.latest[key] = json;
+    ++g.writes[key];
 }
 
 // Frame 0 of the test clock is this game frame.
@@ -638,6 +645,11 @@ bool read_line(const std::string& line, std::string& why) {
             s.action = Action::End;
         } else if (a == "game" && !args.empty()) {
             s.action = Action::Game;
+        } else if (a == "take_out" && args.size() == 2u && (args[1] == "1" || args[1] == "0")) {
+            // Revision 7 (reload.md 2, G-RL4): a running mod taken out; 1: the next step waits for takeout.<id>.
+            s.action = Action::TakeOut;
+            s.mod = args[0];
+            s.wait_fact = args[1] == "1";
         } else {
             why = "step " + std::to_string(s.number) + ": not an action this host half knows: " + a;
             return false;
@@ -783,6 +795,22 @@ void run_step(Step& s, std::int64_t now) {
         s.waiting = true;
         g.game_queue.push_back(s.number);
         return;  // done when the game half answers
+    case Action::TakeOut: {
+        if (g.host == nullptr || g.host->size < offsetof(NebulaHostForExtension, take_out_mod) + sizeof(g.host->take_out_mod) ||
+            g.host->take_out_mod == nullptr) {
+            finish("harness-error", "step " + std::to_string(s.number) + ": this host cannot take a mod out");
+            return;
+        }
+        const auto seen = g.writes.find("takeout." + s.mod);
+        s.writes_before = seen != g.writes.end() ? seen->second : 0u;
+        g.host->take_out_mod(g.host->host, s.mod.c_str());
+        if (s.wait_fact) {
+            s.waiting = true;
+            s.wait_from = now;
+            return;  // done when takeout.<id> is written again
+        }
+        break;
+    }
     }
     s.done = true;
 }
@@ -978,6 +1006,18 @@ void frame(std::uint64_t game_frames) {
         if (g.finished) {
             return;
         }
+        if (s.waiting && s.action == Action::TakeOut) {
+            // G-RL4: the next step runs once the mod's library is closed (takeout.<id> written), within 600 frames.
+            const auto seen = g.writes.find("takeout." + s.mod);
+            if (seen != g.writes.end() && seen->second > s.writes_before) {
+                s.waiting = false;
+                s.done = true;
+            } else if (now - s.wait_from > 600) {
+                finish("setup-failed", "step " + std::to_string(s.number) + " (take_out " + s.mod + "): takeout." + s.mod +
+                                           " was not written within 600 frames; the log's last line: " + g.last_log);
+                return;
+            }
+        }
         if (!s.done && !s.waiting) {
             if (s.at) {
                 if (*s.at <= now) {
@@ -1063,6 +1103,7 @@ void log_line(const char* tag, const char* line) {
         return;
     }
     const std::string text = std::string(tag) + " " + line;
+    g.last_log = text;
     if (text.compare(0, 18u, "boot: title screen") == 0) {
         g.title_seen = true;
     }

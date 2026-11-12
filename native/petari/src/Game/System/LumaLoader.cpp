@@ -3,6 +3,7 @@
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/System/LumaCore.hpp"
 #include "Game/System/LumaHook.hpp"
+#include "Game/System/LumaModLog.hpp"
 #include "Game/System/LumaServices.hpp"
 #include "Game/System/LumaTypes.hpp"
 #include "Game/System/NebulaText.hpp"
@@ -140,6 +141,13 @@ struct LumaMod {
     // The mods it imported functions from (kind 6, D3-3), each once, in bind order: told `dependent_gone` when it goes.
     LumaMod** uses;
     u32 useCount;
+    // How it ended (reload.md 3, the takeout.<id> fact) and where its code is now (keep and kept, reload.md 4).
+    bool takenOut;      // taken out while the game runs (luma_take_out_request)
+    bool startRefused;  // its start answered non-zero
+    bool stopped;       // its stop ran
+    bool inStop;        // inside its stop: keep answers
+    bool inStart;       // inside its start: kept answers
+    u32 startedAt;      // its place in the start order, from 1 (a mod starts after every mod it uses)
 };
 
 namespace luma {
@@ -157,6 +165,28 @@ namespace luma {
         u32 sModCount = 0;
         // Mods taken out (or refused after their code ran) whose grace has not ended.
         LumaMod* sGone = nullptr;
+        u32 sStartedCount = 0;
+
+        // Take-out requests (reload.md 2): any thread queues a mod's id under sTakeLock; the game thread takes them all
+        // at a frame's start. No request, no cost: sTakeCount is 0 and the frame's check is one load.
+        const u32 cTakeQueue = 16;
+        const u32 cIdBytes = 64;  // LumaMod::name's size: an id is at most 63 bytes
+        char sTakeQueue[cTakeQueue][cIdBytes];
+        u32 sTakeCount = 0;
+        u32 sTakeLock = 0;
+        // The host, told each mod's id as it is taken out (luma_set_taken_out); null: nobody.
+        LumaTakenOut sTakenOut = nullptr;
+
+        // What a mod's stop kept for its next load this session (keep and kept, reload.md 4): one entry a mod id, the
+        // bytes copied. An entry goes when its bytes are read (after the start that read them) or kept as nothing.
+        struct Kept {
+            char id[cIdBytes];  // empty: a free entry
+            unsigned char* pBytes;
+            u32 size;
+            bool read;  // given by kept during the start under way
+        };
+        Kept sKept[cMaxMods];
+        const u32 cKeepMost = 1u << 20;
 
         const LumaFunction* asPublic(const Function* pFunction) { return reinterpret_cast<const LumaFunction*>(pFunction); }
         const Function* asRow(const LumaFunction* pFunction) { return reinterpret_cast<const Function*>(pFunction); }
@@ -307,6 +337,19 @@ namespace luma {
         }
 
         void unlockMod(LumaMod* pMod) { __atomic_store_n(&pMod->lock, 0u, __ATOMIC_RELEASE); }
+
+        // The take-out queue's lock (any thread; held for a few copies only).
+        void lockTakes() {
+            while (__atomic_exchange_n(&sTakeLock, 1u, __ATOMIC_ACQUIRE) != 0u) {
+#if defined(__x86_64__) || defined(__i386__)
+                __builtin_ia32_pause();
+#elif defined(__aarch64__) || defined(__arm__)
+                __asm__ volatile("yield");
+#endif
+            }
+        }
+
+        void unlockTakes() { __atomic_store_n(&sTakeLock, 0u, __ATOMIC_RELEASE); }
 
         bool sameText(const char* pA, const char* pB) {
             if (pA == nullptr || pB == nullptr) {
@@ -779,9 +822,33 @@ namespace luma {
             ::free(pBlock->start);
         }
 
-        // Everything a mod still holds, after its grace.
-        void freeAll(LumaMod* pMod) {
+        // What freeAll found and freed.
+        struct Held {
+            u32 blocks;
+            u64 bytes;
+        };
+
+        // Everything a mod still holds, after its grace, counted (reload.md 3): every block is checked and counted
+        // before any is freed, and the count must be the mod's own; a broken set would free the wrong memory.
+        Held freeAll(LumaMod* pMod) {
             BlockSet& rSet = pMod->blocks;
+            Held held = {0, 0};
+            for (u32 i = 0; i < rSet.capacity; i++) {
+                if (rSet.slots[i] > 1) {
+                    const Block* const pBlock = reinterpret_cast<const Block*>(rSet.slots[i]) - 1;
+                    if (pBlock->check != (reinterpret_cast<uintptr_t>(pBlock) ^ kBlockCheck) || pBlock->owner != pMod) {
+                        NEBULA_PANIC("LumaCore: %s's block at %p was written over in front of its bytes", pMod->name,
+                                     reinterpret_cast<void*>(rSet.slots[i]));
+                    }
+                    held.blocks++;
+                    held.bytes += pBlock->size;
+                }
+            }
+            if (held.blocks != pMod->blockCount || held.bytes != pMod->bytes) {
+                NEBULA_PANIC("LumaCore: %s's memory count is wrong: %u blocks and %llu bytes kept, %u and %llu found", pMod->name,
+                             pMod->blockCount, static_cast<unsigned long long>(pMod->bytes), held.blocks,
+                             static_cast<unsigned long long>(held.bytes));
+            }
             for (u32 i = 0; i < rSet.capacity; i++) {
                 if (rSet.slots[i] > 1) {
                     Block* const pBlock = reinterpret_cast<Block*>(rSet.slots[i]) - 1;
@@ -793,6 +860,87 @@ namespace luma {
             rSet = BlockSet{};
             pMod->bytes = 0;
             pMod->blockCount = 0;
+            return held;
+        }
+
+        // The kept entry for a mod id, or null.
+        Kept* keptOf(const char* pId) {
+            for (u32 i = 0; i < cMaxMods; i++) {
+                if (sKept[i].id[0] != 0 && sameText(sKept[i].id, pId)) {
+                    return &sKept[i];
+                }
+            }
+            return nullptr;
+        }
+
+        void dropKept(Kept* pEntry) {
+            ::free(pEntry->pBytes);
+            pEntry->pBytes = nullptr;
+            pEntry->size = 0;
+            pEntry->read = false;
+            pEntry->id[0] = 0;
+        }
+
+        // In stop only (reload.md 4): a copy of the bytes for the mod's next load this session; the last call wins.
+        int32_t apiKeep(const LumaMod* pConstMod, const void* pBytes, uint32_t size) {
+            if (!onGameThread()) {
+                return -3;
+            }
+            if (pConstMod == nullptr || !pConstMod->inStop || size > cKeepMost || (pBytes == nullptr && size != 0)) {
+                return -1;
+            }
+            Kept* pEntry = keptOf(pConstMod->name);
+            if (pEntry == nullptr) {
+                for (u32 i = 0; i < cMaxMods && pEntry == nullptr; i++) {
+                    if (sKept[i].id[0] == 0) {
+                        pEntry = &sKept[i];
+                    }
+                }
+                if (pEntry == nullptr) {
+                    // Every entry is a mod's that kept bytes and was not loaded again; said, never silent.
+                    nebula_log("[mod %s] keep: the game already holds kept bytes for %u mods; nothing was kept\n", pConstMod->name, cMaxMods);
+                    return -1;
+                }
+            }
+            unsigned char* pCopy = nullptr;
+            if (size != 0) {
+                pCopy = static_cast<unsigned char*>(::malloc(size));
+                if (pCopy == nullptr) {
+                    nebula_log("[mod %s] keep: no memory for %u bytes; nothing was kept\n", pConstMod->name, size);
+                    return -1;
+                }
+                const unsigned char* const pFrom = static_cast<const unsigned char*>(pBytes);
+                for (u32 i = 0; i < size; i++) {
+                    pCopy[i] = pFrom[i];
+                }
+            }
+            dropKept(pEntry);
+            if (size == 0) {
+                return 0;  // kept as nothing: the next start's kept gives null
+            }
+            copyText(pEntry->id, sizeof(pEntry->id), pConstMod->name);
+            pEntry->pBytes = pCopy;
+            pEntry->size = size;
+            return 0;
+        }
+
+        // In start only: what the mod's previous load kept, valid until start returns.
+        const void* apiKept(const LumaMod* pConstMod, uint32_t* pSize) {
+            if (pSize != nullptr) {
+                *pSize = 0;
+            }
+            if (pConstMod == nullptr || !pConstMod->inStart || !onGameThread()) {
+                return nullptr;
+            }
+            Kept* const pEntry = keptOf(pConstMod->name);
+            if (pEntry == nullptr) {
+                return nullptr;
+            }
+            pEntry->read = true;
+            if (pSize != nullptr) {
+                *pSize = pEntry->size;
+            }
+            return pEntry->pBytes;
         }
 
         const void* apiService(const LumaMod* pConstMod, const char* pName, u32 major, u32 minor) {
@@ -833,6 +981,7 @@ namespace luma {
         const LumaCore sCore = {
             sizeof(LumaCore), LUMA_API, apiLog, apiFunction, apiFunctionAt, apiHook, apiProceed, apiField, apiSizeOf, apiClassOf, apiIsA, apiService,
             apiGameThread, apiUnhook, apiAlloc, apiFree, apiReport, apiOwnClass, apiAsClass, apiMethod, apiOverrider, apiCallMethod,
+            apiKeep, apiKept,
         };
 
         // One import: its function (functions and hooks) or number (fields, sizes, classes). False: the game has none,
@@ -1052,16 +1201,30 @@ namespace luma {
             return length != 0 && !partStart;
         }
 
-        // After the grace: the mod's destructors, its memory, its library.
+        // After the grace: the mod's destructors, its memory, its library. A mod taken out or ended after a refused
+        // start says what it still held, and the harness gets takeout.<id> once its library is closed (reload.md 3).
         void finishMod(LumaMod* pMod) {
             const LumaModInfo* const pInfo = pMod->info;
-            if (pMod->begun && covers(pInfo, offsetof(LumaModInfo, finish) + sizeof(pInfo->finish)) && pInfo->finish != nullptr) {
+            const bool finished = pMod->begun && covers(pInfo, offsetof(LumaModInfo, finish) + sizeof(pInfo->finish)) && pInfo->finish != nullptr;
+            if (finished) {
                 pInfo->finish();
             }
             luma::services::modEnd(pMod);
-            freeAll(pMod);
+            const Held held = freeAll(pMod);
             if (pMod->library != nullptr && pMod->close != nullptr) {
                 pMod->close(pMod->library);
+            }
+            if (pMod->takenOut || pMod->startRefused) {
+                if (held.blocks != 0) {
+                    nebula_log("[mod %s] held %u blocks (%llu bytes) when it ended; the game freed them\n", pMod->name, held.blocks,
+                               static_cast<unsigned long long>(held.bytes));
+                }
+                char key[cIdBytes + 16];
+                nebula_snprintf(key, sizeof(key), "takeout.%s", pMod->name);
+                char value[128];
+                nebula_snprintf(value, sizeof(value), "{\"blocks\": %u, \"bytes\": %llu, \"stopped\": %s, \"finished\": %s}", held.blocks,
+                                static_cast<unsigned long long>(held.bytes), pMod->stopped ? "true" : "false", finished ? "true" : "false");
+                luma::modlog::fact(key, value);
             }
             for (u32 i = 0; i < pMod->reportCount; i++) {
                 dropReport(&pMod->reports[i]);
@@ -1396,8 +1559,17 @@ namespace luma {
             pInfo->begin(&sCore, pMod);
         }
         if (pInfo->start != nullptr) {
+            pMod->inStart = true;
             const int32_t answer = pInfo->start(&sCore, pMod);
+            pMod->inStart = false;
+            // Kept bytes it read are gone now (reload.md 4).
+            if (Kept* const pKept = keptOf(pMod->name)) {
+                if (pKept->read) {
+                    dropKept(pKept);
+                }
+            }
             if (answer != 0) {
+                pMod->startRefused = true;
                 refuse.start(512);
                 refuse.put("why", 'P', "Lib.StartRefused");
                 refuse.number("found", answer);
@@ -1428,6 +1600,7 @@ namespace luma {
             }
             pMod->published = true;
         }
+        pMod->startedAt = ++sStartedCount;
         sMods[sModCount++] = pMod;
         return true;
     }
@@ -1452,13 +1625,124 @@ namespace luma {
             // library (LR-5, D3-3).
             removeHooks(pMod);
             if (pInfo->stop != nullptr) {
+                pMod->inStop = true;
                 pInfo->stop();
+                pMod->inStop = false;
+                pMod->stopped = true;
             }
             tellDependentGone(pMod);
             luma::services::modGone(pMod);
             endMod(pMod);
             frame();
             return;
+        }
+    }
+
+    bool requestTakeOut(const char* pId) {
+        u32 length = 0;
+        while (pId != nullptr && length < cIdBytes && pId[length] != 0) {
+            length++;
+        }
+        if (length == 0 || length >= cIdBytes) {
+            nebula_log("LumaCore: a take-out request for %s, which is no mod's id; nothing was queued\n", pId == nullptr ? "no mod" : "an id over 63 bytes");
+            return false;
+        }
+        lockTakes();
+        const u32 count = __atomic_load_n(&sTakeCount, __ATOMIC_RELAXED);
+        for (u32 i = 0; i < count; i++) {
+            if (sameText(sTakeQueue[i], pId)) {
+                unlockTakes();
+                return true;  // one request
+            }
+        }
+        if (count == cTakeQueue) {
+            unlockTakes();
+            nebula_log("[mod %s] take-out not queued: %u requests already wait for the next frame\n", pId, cTakeQueue);
+            return false;
+        }
+        copyText(sTakeQueue[count], cIdBytes, pId);
+        __atomic_store_n(&sTakeCount, count + 1u, __ATOMIC_RELEASE);
+        unlockTakes();
+        return true;
+    }
+
+    void takeOutRequested() {
+        if (__atomic_load_n(&sTakeCount, __ATOMIC_ACQUIRE) == 0u) {
+            return;
+        }
+        if (!onGameThread()) {
+            NEBULA_PANIC("LumaCore: take-out requests were taken off the game thread");
+        }
+        char ids[cTakeQueue][cIdBytes];
+        lockTakes();
+        const u32 count = __atomic_load_n(&sTakeCount, __ATOMIC_RELAXED);
+        for (u32 i = 0; i < count; i++) {
+            copyText(ids[i], cIdBytes, sTakeQueue[i]);
+        }
+        __atomic_store_n(&sTakeCount, 0u, __ATOMIC_RELEASE);
+        unlockTakes();
+
+        for (u32 r = 0; r < count; r++) {
+            LumaMod* pMod = nullptr;
+            for (u32 i = 0; i < sModCount && pMod == nullptr; i++) {
+                if (sameText(sMods[i]->name, ids[r])) {
+                    pMod = sMods[i];
+                }
+            }
+            if (pMod == nullptr) {
+                nebula_log("[mod %s] take-out asked while it is not running (refused, never started, or taken out already); nothing "
+                           "was done\n",
+                           ids[r]);
+                continue;
+            }
+            // It and every mod that uses it, through `uses`, transitively (reload.md 2).
+            LumaMod* out[cMaxMods];
+            u32 outCount = 0;
+            out[outCount++] = pMod;
+            for (bool grew = true; grew;) {
+                grew = false;
+                for (u32 j = 0; j < sModCount; j++) {
+                    LumaMod* const pOther = sMods[j];
+                    bool listed = false;
+                    for (u32 k = 0; k < outCount && !listed; k++) {
+                        listed = out[k] == pOther;
+                    }
+                    if (listed) {
+                        continue;
+                    }
+                    bool uses = false;
+                    for (u32 u = 0; u < pOther->useCount && !uses; u++) {
+                        for (u32 k = 0; k < outCount && !uses; k++) {
+                            uses = pOther->uses[u] == out[k];
+                        }
+                    }
+                    if (uses) {
+                        out[outCount++] = pOther;
+                        grew = true;
+                    }
+                }
+            }
+            // The last started first: a mod starts after every mod it uses, so each goes before what it uses.
+            for (u32 i = 1; i < outCount; i++) {
+                LumaMod* const pAt = out[i];
+                u32 j = i;
+                for (; j > 0 && out[j - 1]->startedAt < pAt->startedAt; j--) {
+                    out[j] = out[j - 1];
+                }
+                out[j] = pAt;
+            }
+            for (u32 i = 0; i < outCount; i++) {
+                // unloadMod may end it at once (no hook of it was ever published): nothing of it is read after.
+                char name[cIdBytes];
+                copyText(name, sizeof(name), out[i]->name);
+                const LumaModInfo* const pInfo = out[i]->info;
+                out[i]->takenOut = true;
+                nebula_log("[mod %s] taken out while the game runs%s\n", name, out[i] == pMod ? "" : " (it uses a mod taken out)");
+                unloadMod(pInfo);
+                if (sTakenOut != nullptr) {
+                    sTakenOut(name);
+                }
+            }
         }
     }
 }
@@ -1479,5 +1763,13 @@ NEBULA_GAME_API const LumaCore* luma_core(void) {
 
 NEBULA_GAME_API void luma_set_service_finder(LumaServiceFinder finder) {
     luma::sServiceFinder = finder;
+}
+
+NEBULA_GAME_API int32_t luma_take_out_request(const char* mod_id) {
+    return luma::requestTakeOut(mod_id) ? 1 : 0;
+}
+
+NEBULA_GAME_API void luma_set_taken_out(LumaTakenOut taken_out) {
+    luma::sTakenOut = taken_out;
 }
 }
