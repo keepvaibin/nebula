@@ -66,38 +66,44 @@ typedef struct LumaAnimHow {
     uint32_t size;        /* sizeof(LumaAnimHow) as the mod was built */
     float rate;           /* frames of the clip per frame of the game; 0: 1. Above 0, at most LUMA_ANIM_MOST_RATE */
     int32_t blend;        /* joint clips: frames from the pose it had to the clip's; LUMA_ANIM_BLEND_CLIP or _NONE */
-    uint32_t loop;        /* a LumaAnimLoop */
+    uint32_t loop;        /* a LumaAnimLoop: 0 to 2 */
     float start;          /* the frame it starts from: 0 to the clip's last */
     uint32_t mark_count;  /* at most LUMA_ANIM_MOST_MARKS */
     const float* marks;   /* frames (copied) that each give LUMA_ANIM_EVENT_MARK as the clip passes them, every time it
                              does (each loop; either way on a clip that goes there and back) */
-} LumaAnimHow; /* 1.0: 32 bytes */
+} LumaAnimHow; /* 1.0: 32 bytes with 8-byte pointers, 28 with 4-byte */
 
 typedef struct LumaAnimService {
     LumaServiceTable base;
     /* 1.0. Game thread. The clip `clip` of `actor`'s model played: every kind of clip of that name its model has (joints
        .bck, texture moves .btk, colours .brk and .bpk, texture swaps .btp, visibility .bva), the first of them in that
        order leading (its frame is the play's; its end, its marks). An earlier play on the actor of a kind this one
-       plays ends (LUMA_ANIM_REPLACED). With `fn`, the play's events come to fn(user, event) at a frame's start. LUMA_OK
-       and *out. No clip of that name: LUMA_E_NOT_FOUND, Content.MissingAnimation in the mod log. A null or dead actor,
-       one that is not one or has no model, an empty name, a rate below 0, not a number or above LUMA_ANIM_MOST_RATE, a
-       blend below -1, a loop outside the enum, a start outside the clip, more than LUMA_ANIM_MOST_MARKS marks, null
-       marks with a count, a null out: LUMA_E_ARGUMENT, reported; `how` of an unknown size: LUMA_E_ARGUMENT, reported;
-       LUMA_ANIM_MOST_PLAYS going: LUMA_E_LIMIT, reported. Off the game thread: LUMA_E_THREAD, reported; while the game
-       takes the mod out: LUMA_E_CANCELLED. */
+       plays ends (LUMA_ANIM_REPLACED). Played as `how` says (null: the clip as the game plays it, from its first
+       frame). The play's events come to fn(user, event) at a frame's start (`fn` null: none; `user` null: given back
+       null). LUMA_OK and *out. No clip of that name: LUMA_E_NOT_FOUND, Content.MissingAnimation in the mod log. A null
+       or dead actor, one that is not one or has no model, an empty name, a rate below 0, not a number or above
+       LUMA_ANIM_MOST_RATE, a blend below -1, a loop outside the enum, a start outside the clip, more than
+       LUMA_ANIM_MOST_MARKS marks, null marks with a count, a null out: LUMA_E_ARGUMENT, reported; a how below 1.0's
+       size: LUMA_E_ARGUMENT, reported (Service.StructSize); LUMA_ANIM_MOST_PLAYS going: LUMA_E_LIMIT, reported. Off
+       the game thread: LUMA_E_THREAD, reported; while the game takes the mod out: LUMA_E_CANCELLED. */
     int32_t (*play)(const LumaMod* mod, LumaActor actor, const char* clip, const LumaAnimHow* how, LumaEventFn fn,
                     void* user, LumaAnimPlay* out);
-    /* 1.0. As play, on the model the mod attached (content.model): its own clips. A skeleton-follow model's joints
-       stay its actor's; its other kinds play. An ended model: LUMA_E_HANDLE, reported; a model that shows nothing
-       (neither it nor the placeholder in a store): LUMA_E_NOT_FOUND, Content.MissingAnimation. */
+    /* 1.0. Game thread. As play, on the model `model` the mod attached (content.model, models 7): its own clips. A
+       skeleton-follow model's joints stay its actor's; its other kinds play. `how`, `fn` and `user` as play. LUMA_OK and
+       *out. No clip of that name, or a model that shows nothing (neither it nor the placeholder in a store):
+       LUMA_E_NOT_FOUND, Content.MissingAnimation in the mod log. An ended model: LUMA_E_HANDLE, reported. A clip, how
+       or out play refuses: LUMA_E_ARGUMENT, reported; LUMA_ANIM_MOST_PLAYS going: LUMA_E_LIMIT, reported. Off the game
+       thread: LUMA_E_THREAD, reported; while the game takes the mod out: LUMA_E_CANCELLED. */
     int32_t (*play_on_model)(const LumaMod* mod, LumaContentModel model, const char* clip, const LumaAnimHow* how,
                              LumaEventFn fn, void* user, LumaAnimPlay* out);
     /* 1.0. Game thread. The play stops where it is: every kind of it stays on its frame until its actor's code or
        another play starts a clip. Its end: LUMA_E_CANCELLED, LUMA_ANIM_STOPPED. LUMA_OK; an ended play:
-       LUMA_E_HANDLE, reported. Thread and taking out as play. */
+       LUMA_E_HANDLE, reported; off the game thread: LUMA_E_THREAD, reported; while the game takes the mod out:
+       LUMA_E_CANCELLED. */
     int32_t (*stop)(const LumaMod* mod, LumaAnimPlay play);
-    /* 1.0. Game thread. The play's frame now (*frame) and its clip's last frame (*last); either may be null. LUMA_OK;
-       an ended play: LUMA_E_HANDLE, reported. Thread and taking out as play. */
+    /* 1.0. Game thread. The play's frame now into *frame (null: not wanted) and its clip's last frame into *last
+       (null: not wanted). LUMA_OK; an ended play: LUMA_E_HANDLE, reported; off the game thread: LUMA_E_THREAD,
+       reported; while the game takes the mod out: LUMA_E_CANCELLED. */
     int32_t (*frame)(const LumaMod* mod, LumaAnimPlay play, float* frame, float* last);
 } LumaAnimService;
 
