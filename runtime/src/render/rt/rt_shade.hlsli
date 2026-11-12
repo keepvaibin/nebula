@@ -467,10 +467,13 @@ float3 rt_o_unit() {
     const float3 art = float3(1.0f, 1.0f, 1.0f);
     return t > 0.0f ? lerp(art, rt_stage_light().unit, t) : art;
 }
-// A hit's colour as it takes light: the art's, or (the model) its linear colour, a metal's diffuse gone (M6).
+// A hit's colour as it takes light: the art's, or (the model) its linear colour, a metal's diffuse gone (M6). It is
+// rho * full, the reflectance against the stage's full light (LIGHT-MODEL.md 1), at most kAlbedoMost a channel: the
+// bounce's loop gain per trip is under it (LIGHT-MODEL.md 4; FB b69b).
+static const float kAlbedoMost = 0.9f;  // CHOSEN: fresh snow's albedo
 float3 rt_hit_albedo(RtHit h) {
     const float t = rt_form();
-    const float3 base = rt_lin(h.base);  // linear always (M1, b59b)
+    const float3 base = min(rt_lin(h.base), kAlbedoMost);  // linear always (M1, b59b)
     return t > 0.0f ? base * (1.0f - t * h.metal) : base;
 }
 // A metal or glass hit's reflection, which hits do not trace again: the stage's ambient by its painted share (the
