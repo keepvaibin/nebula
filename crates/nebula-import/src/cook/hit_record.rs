@@ -221,6 +221,147 @@ fn lava_or_sun(stem: &str, material: &str) -> bool {
     lava || ["magma", "yougan", "sunmat", "sun_mat"].iter().any(|p| material.starts_with(p))
 }
 
+/// What the sheen's name and model say its body is (c49).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum SheenKind {
+    Crystal,
+    Ice,
+    Glass,
+    Unknown,
+}
+
+pub fn sheen_kind(stem: &str, material: &str) -> SheenKind {
+    let stem = stem.split('.').next().unwrap_or(stem).to_ascii_lowercase();
+    let name = material.to_ascii_lowercase();
+    let has = |w: &str| name.contains(w) || stem.contains(w);
+    if has("ice") {
+        SheenKind::Ice
+    } else if has("glass") {
+        SheenKind::Glass
+    } else if has("crystal") || has("jewel") || name.starts_with("cry") || name.contains("hilight") {
+        SheenKind::Crystal
+    } else {
+        SheenKind::Unknown
+    }
+}
+
+/// A painted sheen drawn as an added layer (c49; the owner's "baked reflections"): added to what is behind it (blend
+/// 2), half or more of its look a painted environment map, no glow by the tables nor by its name. While tracing it is
+/// not drawn: the body it covers mirrors for real (sheen_roles).
+pub fn sheen_layer(stem: &str, material: &str, r: &Reading) -> bool {
+    let s = &r.signals;
+    if r.class != Class::Emissive || s.blend != 2 || !s.environment || s.environment_share < 0.5 {
+        return false;
+    }
+    let stem = stem.split('.').next().unwrap_or(stem).to_ascii_lowercase();
+    let name = material.to_ascii_lowercase();
+    if ["glow", "bloom", "starlight", "beam", "fire", "flash"].iter().any(|w| name.contains(w)) {
+        return false;
+    }
+    let one = format!("{stem}/{name}");
+    let packs = PACK_TABLES.read().unwrap_or_else(|e| e.into_inner());
+    let listed = |table: &str| glow_row(table, &one).or_else(|| glow_row(table, &stem)).is_some();
+    !(packs.glow.iter().any(|table| listed(table)) || listed(GLOW_TABLE))
+}
+
+/// What a material is to its model's painted sheens (c49).
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum SheenRole {
+    None,
+    /// A sheen layer and the body it covers (none found: it stays drawn).
+    Sheen { body: Option<usize> },
+    /// The body under the sheen `sheen`.
+    Body { sheen: usize, kind: SheenKind },
+}
+
+/// Every material's role (c49): the sheens by data, each one's body the other material whose corners' places (a
+/// quarter unit) hold 80 % or more of the sheen's, the most shared.
+pub fn sheen_roles(ir: &ModelIr, stem: &str) -> Vec<SheenRole> {
+    let n = ir.materials.len();
+    let mut roles = vec![SheenRole::None; n];
+    let sheens: Vec<usize> = (0..n)
+        .filter(|&i| {
+            let m = &ir.materials[i];
+            let mut r = read(m);
+            finish(stem, &m.name, 0.0, &mut r);
+            sheen_layer(stem, &m.name, &r)
+        })
+        .collect();
+    if sheens.is_empty() {
+        return roles;
+    }
+    let key = |p: [f32; 3]| [(p[0] * 4.0).round() as i32, (p[1] * 4.0).round() as i32, (p[2] * 4.0).round() as i32];
+    let mut places: Vec<std::collections::HashSet<[i32; 3]>> = vec![std::collections::HashSet::new(); n];
+    for shape in &ir.shapes {
+        let Some(set) = places.get_mut(shape.material as usize) else { continue };
+        for group in &shape.groups {
+            for corner in &group.corners {
+                if let Some(&p) = ir.arrays.positions.get(corner.position as usize) {
+                    set.insert(key(p));
+                }
+            }
+        }
+    }
+    for &s in &sheens {
+        let own = &places[s];
+        let mut best: Option<(usize, f32)> = None;
+        if !own.is_empty() {
+            for b in (0..n).filter(|b| !sheens.contains(b)) {
+                let shared = own.iter().filter(|p| places[b].contains(*p)).count() as f32 / own.len() as f32;
+                if shared >= 0.8 && best.map_or(true, |(_, most)| shared > most) {
+                    best = Some((b, shared));
+                }
+            }
+        }
+        roles[s] = SheenRole::Sheen { body: best.map(|(b, _)| b) };
+        if let Some((b, _)) = best {
+            if roles[b] == SheenRole::None {
+                roles[b] = SheenRole::Body { sheen: s, kind: sheen_kind(stem, &ir.materials[s].name) };
+            }
+        }
+    }
+    roles
+}
+
+thread_local! {
+    // The last model's roles (finish_reading asks once a material): its address, sizes and stem.
+    static SHEEN_ROLES: std::cell::RefCell<((usize, usize, usize, usize), String, Vec<SheenRole>)> = Default::default();
+}
+
+/// sheen_roles of `ir`, kept for the model's materials' turns.
+pub fn sheen_roles_kept(ir: &ModelIr, stem: &str) -> Vec<SheenRole> {
+    let id = (ir as *const ModelIr as usize, ir.materials.len(), ir.shapes.len(), ir.arrays.positions.len());
+    SHEEN_ROLES.with(|cell| {
+        let mut kept = cell.borrow_mut();
+        if kept.0 != id || kept.1 != stem {
+            *kept = (id, stem.to_string(), sheen_roles(ir, stem));
+        }
+        kept.2.clone()
+    })
+}
+
+/// The body under a painted sheen mirrors for real (c49): a mirroring class unless it has one.
+pub fn promote_sheen_body(kind: SheenKind, r: &mut Reading) {
+    if matches!(r.class, Class::Glass | Class::Metal | Class::Gloss | Class::Water) {
+        return;
+    }
+    let (class, ior, roughness) = match kind {
+        SheenKind::Crystal => (Class::Glass, 1.8, 0.02),
+        SheenKind::Ice => (Class::Glass, 1.31, 0.08),
+        SheenKind::Glass => (Class::Glass, 1.5, 0.02),
+        SheenKind::Unknown => (Class::Gloss, 1.5, 0.1),
+    };
+    r.class = class;
+    r.ior = ior;
+    r.roughness = roughness;
+    r.metal = 0.0;
+    if class == Class::Glass {
+        r.transmission = 1.0;
+        r.tint_keep = 0.0;
+    }
+    r.rule = "the body under a painted sheen (c49)";
+}
+
 pub fn glow_of(stem: &str, material: &str, r: &Reading) -> [f32; 4] {
     // Water is never a light, whatever its brightness.
     if r.class == Class::Water {
@@ -857,6 +998,14 @@ pub fn mean_colour(texels: &[[u8; 4]]) -> Option<[f32; 3]> {
 /// Every material of every model under CONTENT, one row each, and the classes' counts.
 pub fn audit(input: &Path, output: &Path) -> Result<()> {
     let mut out = std::io::BufWriter::new(std::fs::File::create(output)?);
+    // c49: every painted sheen drawn as an added layer, the body found under it and the body's class before and after.
+    let mut sheens = std::io::BufWriter::new(std::fs::File::create(output.with_file_name("sheen_layers.tsv"))?);
+    writeln!(
+        sheens,
+        "# Written by nebula-import rt-materials (c49). A sheen is not drawn while tracing; its body mirrors. none: no body\n\
+         # found, the sheen stays drawn. unknown kind: the body is a gloss coat; give it a row.\n\
+         model\tsheen\tkind\tenvironment share\tbody\tbody class before\tbody class after"
+    )?;
     // G8: what the lava-and-sun rule took, and what it did not take that looks like it by its data (unlit, opaque, and
     // bright and warm, or a moving texture): each of the second read once and settled by a row.
     let mut by_rule = std::io::BufWriter::new(std::fs::File::create(output.with_file_name("glow_by_rule.tsv"))?);
@@ -894,6 +1043,7 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
         models += 1;
         let stem = name.rsplit('/').next().unwrap_or(name);
         let measured = super::model_write::material_measures(&ir, stem);
+        let roles = sheen_roles(&ir, stem);
         for (i, m) in ir.materials.iter().enumerate() {
             let mut r = read(m);
             super::model_write::finish_reading(&ir, stem, i, measured.get(i).copied().unwrap_or(0.0), &mut r);
@@ -948,6 +1098,26 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
                 r.tint_keep
             )?;
             glowing += u32::from(glow[3] != 0.0);
+            if let Some(SheenRole::Sheen { body }) = roles.get(i).copied() {
+                let class_of = |j: usize, promoted: bool| {
+                    let mut b = read(&ir.materials[j]);
+                    finish(stem, &ir.materials[j].name, 0.0, &mut b);
+                    if promoted {
+                        promote_sheen_body(sheen_kind(stem, &m.name), &mut b);
+                    }
+                    b.class.name()
+                };
+                writeln!(
+                    sheens,
+                    "{name}\t{}\t{:?}\t{:.2}\t{}\t{}\t{}",
+                    m.name,
+                    sheen_kind(stem, &m.name),
+                    s.environment_share,
+                    body.map_or_else(|| "none".to_string(), |j| ir.materials[j].name.clone()),
+                    body.map_or("", |j| class_of(j, false)),
+                    body.map_or("", |j| class_of(j, true))
+                )?;
+            }
             let short = stem.split('.').next().unwrap_or(stem).to_ascii_lowercase();
             let taken = lava_or_sun(&short, &m.name.to_ascii_lowercase());
             let map = m
@@ -1014,6 +1184,7 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
         Ok(())
     })?;
     out.flush()?;
+    sheens.flush()?;
     by_rule.flush()?;
     println!("{models} models, {materials} materials, {glowing} of them glow; {unread} files not read");
     for (class, (count, _)) in &classes {
@@ -1129,6 +1300,17 @@ mod tests {
                              ("lavahomeplanet", "meltmountain_v")] {
             assert!(!lava_or_sun(stem, name), "{stem}/{name}");
         }
+    }
+
+    #[test]
+    fn sheens_say_their_body() {
+        assert_eq!(sheen_kind("crystalcages.bdl", "HiLightMat"), SheenKind::Crystal);
+        assert_eq!(sheen_kind("capsulecage", "CrystalFaceMat(2)"), SheenKind::Crystal);
+        assert_eq!(sheen_kind("bosskameck", "StickJewelHiLightMat_v"), SheenKind::Crystal);
+        assert_eq!(sheen_kind("koopavs3dryiceplanet", "DIceFace01_v"), SheenKind::Ice);
+        assert_eq!(sheen_kind("mariofreezeice", "Break_HiLightMat(3)"), SheenKind::Ice);
+        assert_eq!(sheen_kind("someplanet", "glass_omote_v"), SheenKind::Glass);
+        assert_eq!(sheen_kind("starpiececluster", "StarPieceClusterMat_v"), SheenKind::Unknown);
     }
 
     #[test]

@@ -303,6 +303,8 @@ enum {
     NEBULA_HIT_PAINTED_SHADOW = 1u << 6, /* painted (vertex colour, not lit) on a model whose paint holds the shadows
                                             things cast on it (the cooker's study of its vertex light): a renderer that
                                             traces shadows lets only lit things shadow it (RT-MASTER-PLAN 14.6) */
+    NEBULA_HIT_DRAWN_SHEEN = 1u << 7,  /* a painted sheen drawn as an added layer over a body that mirrors (c49): a
+                                          renderer that traces reflections neither draws it nor lets a ray meet it */
 };
 
 /* One combiner stage as the game's file orders it (the cooker's StageIr). */

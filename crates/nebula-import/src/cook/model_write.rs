@@ -795,6 +795,10 @@ pub fn finish_reading(ir: &ModelIr, stem: &str, material: usize, thickness: f32,
         }
     }
     super::hit_record::finish(stem, &m.name, thickness, r);
+    // c49: the body under a painted sheen mirrors for real (the sheen is not drawn while tracing).
+    if let Some(super::hit_record::SheenRole::Body { kind, .. }) = super::hit_record::sheen_roles_kept(ir, stem).get(material).copied() {
+        super::hit_record::promote_sheen_body(kind, r);
+    }
 }
 
 /// Which mesh corners the program reads comes with the generator; here a mesh holds what its source held.
@@ -1327,7 +1331,9 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
             | u8::from(s.vertex_colour) << 3
             | u8::from(s.environment) << 4
             | u8::from(super::hit_record::drawn_shadow(stem, &m.name, r.class)) << 5
-            | u8::from(paint_holds_shadows && s.vertex_colour && !s.lit) << 6);
+            | u8::from(paint_holds_shadows && s.vertex_colour && !s.lit) << 6
+            | u8::from(matches!(super::hit_record::sheen_roles_kept(ir, stem).get(i),
+                                Some(super::hit_record::SheenRole::Sheen { body: Some(_) }))) << 7);
         b.u8(r.glow_source);
         b.f32(r.roughness);
         b.f32(r.metal);

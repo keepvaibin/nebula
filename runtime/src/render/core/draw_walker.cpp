@@ -1080,7 +1080,7 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
         // The prepass leaves them out too (they are no surfaces).
         if ((rt_light_on_ || rt_prepass_walk_) && scene_layer &&
             (((item.flags & NEBULA_ITEM_CATEGORY_MASK) >> NEBULA_ITEM_CATEGORY_SHIFT) == NEBULA_CATEGORY_GAME_SHADOW ||
-             (mesh != nullptr && (mesh->hit_flags & NEBULA_HIT_DRAWN_SHADOW) != 0u))) {
+             (mesh != nullptr && (mesh->hit_flags & (NEBULA_HIT_DRAWN_SHADOW | NEBULA_HIT_DRAWN_SHEEN)) != 0u))) {
             ++i;
             continue;
         }

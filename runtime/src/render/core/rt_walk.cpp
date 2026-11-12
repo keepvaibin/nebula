@@ -426,7 +426,7 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
             // A shadow drawn by hand is no thing of the scene: it stops no ray (draw_walker.cpp leaves its draw out).
             if (item_category(item) == NEBULA_CATEGORY_GAME_SHADOW ||
                 ((item.flags & (NEBULA_ITEM_RING | NEBULA_ITEM_INSTANCES)) == 0u &&
-                 (registries_.mesh(item.mesh).hit_flags & NEBULA_HIT_DRAWN_SHADOW) != 0u)) {
+                 (registries_.mesh(item.mesh).hit_flags & (NEBULA_HIT_DRAWN_SHADOW | NEBULA_HIT_DRAWN_SHEEN)) != 0u)) {
                 ++count.flat;
                 continue;
             }
@@ -1737,7 +1737,7 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
                     captured = TextureStore::is_target(maps.list[k].texture) ? 128u : 0u;
                 }
             }
-            words[11] = std::uint32_t{mesh.hit_class} | (std::uint32_t{mesh.hit_flags} | captured) << 8u |
+            words[11] = std::uint32_t{mesh.hit_class} | ((std::uint32_t{mesh.hit_flags} & 127u) | captured) << 8u |
                         byte_of(mesh.hit_roughness) << 16u | byte_of(mesh.hit_metal) << 24u;
             words[12] = byte_of(mesh.hit_base[0]) | byte_of(mesh.hit_base[1]) << 8u | byte_of(mesh.hit_base[2]) << 16u |
                         byte_of(mesh.hit_environment) << 24u;
