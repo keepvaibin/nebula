@@ -2,6 +2,7 @@
 #include "galaxy/luma_services_host.h"
 
 #include "galaxy/host_extension.h"
+#include "galaxy/luma_assets_service.h"
 #include "galaxy/luma_fs_service.h"
 #include "galaxy/luma_net_service.h"
 #include "galaxy/luma_mods_service.h"
@@ -82,6 +83,10 @@ bool provide_all(void* (*find_symbol)(const char*), void (*log)(const char*),
     }
     // The net services (services-net; layer 1: net.local).
     for (const LumaServiceProvider* const provider : galaxy::luma_net::providers(log)) {
+        provide(provider);
+    }
+    // The assets service (services-assets; layer 1: the game's files by path).
+    for (const LumaServiceProvider* const provider : galaxy::luma_assets::providers(log)) {
         provide(provider);
     }
     Giving giving{provide};

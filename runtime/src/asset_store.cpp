@@ -357,6 +357,7 @@ std::optional<Entry> AssetStore::entry(std::int32_t index) const {
         if (found) {
             found->index += static_cast<std::int32_t>(count_);
             found->position += kOverlayPosition;
+            found->from_overlay = true;
         }
         return found;
     }
@@ -382,6 +383,7 @@ std::optional<Entry> AssetStore::child(std::int32_t folder, std::uint32_t index)
         if (found) {
             found->index += static_cast<std::int32_t>(count_);
             found->position += kOverlayPosition;
+            found->from_overlay = true;
         }
         return found;
     }
@@ -409,6 +411,7 @@ std::optional<Entry> AssetStore::added_child(std::string_view path, std::uint32_
         if (added++ == index) {
             found->index += static_cast<std::int32_t>(count_);
             found->position += kOverlayPosition;
+            found->from_overlay = true;
             return found;
         }
     }
@@ -439,6 +442,7 @@ std::optional<Entry> AssetStore::find_merged(std::string_view path) const {
             if (!found->folder || found->archive || !find_own(path)) {
                 found->index += static_cast<std::int32_t>(count_);
                 found->position += kOverlayPosition;
+                found->from_overlay = true;
                 return found;
             }
         }

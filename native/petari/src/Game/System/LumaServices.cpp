@@ -43,6 +43,7 @@ namespace luma {
                 {"fs", 1, 0, nullptr, "services-fs"},
                 {"fs.exchange", 1, 0, "fs.exchange", "services-fs"},
                 {"net.local", 1, 0, "net.local", "services-net"},
+                {"assets", 1, 0, nullptr, "services-assets"},
                 {nullptr, 0, 0, nullptr, nullptr},
             };
 

@@ -20,6 +20,7 @@
 #include <nebula_game_api.h>
 
 #include "galaxy/atomic_file.h"
+#include "galaxy/luma_assets_service.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/host_extension.h"
 #include "galaxy/path_text.h"
@@ -4098,6 +4099,7 @@ int main(int argc, char** argv) {
     gSaveRoot = saves;
     std::error_code error;
     if (!open_pak(pak)) return 2;
+    galaxy::luma_assets::set_store(&gPak.store);  // the assets service reads it (services-assets)
     boot_mark("disc opened");
     load_module(module);
     boot_mark("game module loaded");
