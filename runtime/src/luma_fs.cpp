@@ -469,9 +469,13 @@ void queue(Request* request) {
         answer(request);
         return;
     }
-    {
+    try {
         const std::lock_guard<std::mutex> lock(w->lock);
         w->jobs.push_back(request);
+    } catch (...) {
+        request->status = LUMA_E_MEMORY;  // linked and counted already: answered, so its event closes it
+        answer(request);
+        return;
     }
     w->ready.notify_one();
 }
@@ -900,9 +904,9 @@ stdfs::path root_folder(ModState& state, Root root) {
     return {};
 }
 
-std::int32_t ask(const LumaMod* mod, const char* where, Root root, Op op, const char* path, const char* to,
-                 const void* data, std::uint64_t bytes, std::uint32_t recursive, LumaEventFn fn, void* user,
-                 LumaHandle* out) {
+std::int32_t ask_checked(const LumaMod* mod, const char* where, Root root, Op op, const char* path, const char* to,
+                         const void* data, std::uint64_t bytes, std::uint32_t recursive, LumaEventFn fn, void* user,
+                         LumaHandle* out) {
     std::int32_t status = LUMA_OK;
     ModState* state = request_enter(mod, where, fn, out, &status);
     if (state == nullptr) {
@@ -983,6 +987,17 @@ std::int32_t ask(const LumaMod* mod, const char* where, Root root, Op op, const 
         return LUMA_E_ABSENT;  // no data folder on this platform, or a mod with no installed folder: an answer
     }
     return start(*state, mod, request.release(), fn, user, out);
+}
+
+// Every request function: nothing thrown reaches the mod (a path's parts and a write's copy allocate).
+std::int32_t ask(const LumaMod* mod, const char* where, Root root, Op op, const char* path, const char* to,
+                 const void* data, std::uint64_t bytes, std::uint32_t recursive, LumaEventFn fn, void* user,
+                 LumaHandle* out) noexcept {
+    try {
+        return ask_checked(mod, where, root, op, path, to, data, bytes, recursive, fn, user, out);
+    } catch (...) {
+        return LUMA_E_MEMORY;
+    }
 }
 
 // The take of a READ or LIST event's call.
