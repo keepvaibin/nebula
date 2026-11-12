@@ -410,7 +410,10 @@ void rt_hit_read(uint item, uint triangle_, float2 where_, float far_, float3 or
     if (h.glows || area || h.glow_body) {
         // The record's emission was read with its maps mid grey (hit_record.rs): twice it under the map is what it shows.
         const float3 own = rt_bytes3(w3.z);
-        h.emission = (max(own.r, max(own.g, own.b)) > 0.02f ? min(own * 2.0f, 1.0f) * map : h.base);
+        // d13 (the owner 11-12: a glowing star seen through glass went white): the doubling held by the largest
+        // channel, not each: the glow's hue stays.
+        const float own_most = max(own.r, max(own.g, own.b));
+        h.emission = (own_most > 0.02f ? own * min(2.0f, 1.0f / own_most) * map : h.base);
     }
 }
 
