@@ -198,6 +198,7 @@ add_library(galaxy_native_host STATIC
     runtime/src/luma_system_win32.cpp
     runtime/src/luma_mods.cpp
     runtime/src/luma_fs.cpp
+    runtime/src/luma_net.cpp
     runtime/src/mod_plugins.cpp
     runtime/src/mods.cpp
     runtime/src/mod_consent.cpp
