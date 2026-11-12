@@ -44,6 +44,7 @@ namespace luma {
                 u32 dataSize;
                 u32 dataAlign;
                 void (*made)(void* object, void* data, void* user);
+                void (*gone)(void* object, void* data, void* user);  // null: none (or a definition from before it)
                 void* user;
                 Override* overrides;
                 u32 overrideCount;
@@ -208,6 +209,18 @@ namespace luma {
                 sInstanceCount--;
             }
 
+            // The mod's `gone` for one object of row pRow's class, before the kernel frees its data (contract classes,
+            // "gone"): once for every object the class kept, whose `made` ran just after. `pObject` is the object's
+            // address while its NameObj part is still whole (its own parts' destructors have run); null when the scene's
+            // memory went with it.
+            void callGone(const ClassRow* pRow, const void* pObject, void* pData) {
+                if (pRow->gone != nullptr) {
+                    guard::run(const_cast<LumaMod*>(pRow->mod), LUMA_GUARD_CLASS, pRow->name, reinterpret_cast<const void*>(pRow->gone),
+                               reinterpret_cast<uintptr_t>(pObject), reinterpret_cast<uintptr_t>(pData),
+                               reinterpret_cast<uintptr_t>(pRow->user), 0, nullptr);
+                }
+            }
+
             // A live row by the name the factory is asked for: its own name, or the name it replaces. -1: none.
             s32 rowForPlacement(const char* pName) {
                 if (pName == nullptr) {
@@ -288,8 +301,13 @@ namespace luma {
                             say(pRow->mod, "class %s: no memory to keep one more object; this one is a plain %s", pRow->name, pRow->base->name);
                             core()->free(pRow->mod, pData);
                         } else {
-                            if (replaced.object != nullptr && replaced.data != nullptr) {
-                                core()->free(sRows[replaced.row]->mod, replaced.data);
+                            if (replaced.object != nullptr) {
+                                // The object at this address went without its destructor seen: its class's gone, then
+                                // its data.
+                                callGone(sRows[replaced.row], nullptr, replaced.data);
+                                if (replaced.data != nullptr) {
+                                    core()->free(sRows[replaced.row]->mod, replaced.data);
+                                }
                             }
                             if (pRow->made != nullptr) {
                                 pRow->made(const_cast<void*>(pComplete), pData, pRow->user);
@@ -339,8 +357,11 @@ namespace luma {
                     removeAtLocked(static_cast<u32>(at));
                 }
                 unlock();
-                if (gone.data != nullptr) {
-                    core()->free(sRows[gone.row]->mod, gone.data);
+                if (gone.object != nullptr) {
+                    callGone(sRows[gone.row], gone.object, gone.data);
+                    if (gone.data != nullptr) {
+                        core()->free(sRows[gone.row]->mod, gone.data);
+                    }
                 }
                 return 0;
             }
@@ -412,7 +433,9 @@ namespace luma {
             if (!onGameThread()) {
                 return -3;
             }
-            if (pMod == nullptr || pDef == nullptr || pDef->size < sizeof(LumaClassDef)) {
+            // A definition from before `gone` (contract classes, "gone") ends at override_count: taken, with no gone.
+            constexpr u32 cBeforeGone = __builtin_offsetof(LumaClassDef, gone);
+            if (pMod == nullptr || pDef == nullptr || pDef->size < cBeforeGone) {
                 say(pMod, "define_class: %s", pDef == nullptr ? "no definition" : "the definition is smaller than luma.h's LumaClassDef");
                 return -1;
             }
@@ -522,6 +545,7 @@ namespace luma {
             pRow->dataSize = pDef->data_size;
             pRow->dataAlign = align;
             pRow->made = pDef->made;
+            pRow->gone = pDef->size >= cBeforeGone + sizeof(pDef->gone) ? pDef->gone : nullptr;
             pRow->user = pDef->user;
             pRow->overrides = pOverrides;
             pRow->overrideCount = pDef->override_count;
@@ -653,8 +677,11 @@ namespace luma {
             sInstanceCount = 0;
             unlock();
             for (u32 i = 0; i < count; i++) {
-                if (pOld[i].object != nullptr && pOld[i].data != nullptr) {
-                    core()->free(sRows[pOld[i].row]->mod, pOld[i].data);
+                if (pOld[i].object != nullptr) {
+                    callGone(sRows[pOld[i].row], nullptr, pOld[i].data);
+                    if (pOld[i].data != nullptr) {
+                        core()->free(sRows[pOld[i].row]->mod, pOld[i].data);
+                    }
                 }
             }
             ::free(pOld);

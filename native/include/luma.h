@@ -130,6 +130,12 @@ typedef struct LumaClassDef {
     void* user;
     const LumaOverride* overrides;
     uint32_t override_count;
+    /* Once for each object whose `made` ran, before its data is freed: when it is destroyed (`object` is its address,
+       its own parts' destructors already run: read `data`, not the object), or with `object` null when the scene's
+       memory went with it, or when an object is made again at its address. On the thread that destroys it. Not called
+       when the mod is taken out (its memory goes whole). May be null; a definition whose `size` ends before it has
+       none. */
+    void (*gone)(void* object, void* data, void* user);
 } LumaClassDef;
 
 /* A table of the game's data as LumaCore.table gives it (numbers contract, plan 1.5). */
