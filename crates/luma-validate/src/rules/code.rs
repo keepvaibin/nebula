@@ -8,7 +8,7 @@ use super::patches::SEP;
 use std::collections::BTreeMap;
 
 pub const MAX_LIBRARY: u64 = 1 << 30;
-const IMPORT_KINDS: u32 = 8; // LUMA_IMPORT_FUNCTION..LUMA_IMPORT_HOOK, LUMA_IMPORT_SERVICE, LUMA_IMPORT_MOD_FUNCTION, LUMA_IMPORT_GLOBAL
+const IMPORT_KINDS: u32 = 9; // LUMA_IMPORT_FUNCTION..LUMA_IMPORT_HOOK, LUMA_IMPORT_SERVICE, LUMA_IMPORT_MOD_FUNCTION, LUMA_IMPORT_GLOBAL, LUMA_IMPORT_METHOD
 const HOOK_KINDS: u32 = 4; // LUMA_BEFORE..LUMA_REPLACE
 const LUMA_OPTIONAL: u32 = 1;
 
@@ -357,11 +357,28 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
                     }
                 }
             }
-            // A NameObj class's number (kind 3, for is_a; types 4 and plan 1.3).
-            _ => match &n.classes {
-                Some(classes) => ("Name.Class", classes.contains(&row.name)),
+            // A class's number (kind 3, objects 10 O-3): any record, by its name or an alias's, as the kernel's
+            // class_of finds it.
+            3 => match &n.types {
+                Some(types) => ("Name.Class", types.records.contains_key(&row.name) || types.aliases.contains_key(&row.name)),
                 None => {
-                    ctx.not_checked(505, "Missing.Classes");
+                    ctx.not_checked(505, "Missing.Types");
+                    continue;
+                }
+            },
+            // A virtual call (kind 8, objects 10): a virtual a record declares, by its name and signature, that has a
+            // row ("row": true). Bound whole or not at all, as kind 0.
+            _ => match n.types.as_ref().map(|t| t.methods.as_ref()) {
+                Some(Some(methods)) => {
+                    let found = row.signature.as_ref().and_then(|sig| methods.get(&(row.name.clone(), sig.clone())));
+                    ("Name.Method", found == Some(&true))
+                }
+                Some(None) => {
+                    ctx.not_checked(505, "Missing.Virtuals");
+                    continue;
+                }
+                None => {
+                    ctx.not_checked(505, "Missing.Types");
                     continue;
                 }
             },

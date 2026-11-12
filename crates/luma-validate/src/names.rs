@@ -3,7 +3,7 @@
 //! source line; `tell` rows are constructors and destructors, which take `before` and `after` only), and the records,
 //! fields and globals from the types file `luma_types.json` (plan 1.2, contract types draft 2).
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// Why a folder of `.rows` files does not read: what a tool says in its own language.
@@ -176,8 +176,6 @@ pub struct Names {
     /// Each function row's facts (types TY-11): what it is, its record, virtual and const; None when the folder has
     /// no facts file.
     pub function_facts: Option<FunctionFacts>,
-    /// The NameObj class names (kind 3); None until the self-description lists classes (1.3, 1.8).
-    pub classes: Option<HashSet<String>>,
     /// The game's services catalog (services-registry 9, the self-description's `services`); None when not given:
     /// kind 5 imports are not checked.
     pub services: Option<Services>,
@@ -281,6 +279,10 @@ pub struct Types {
     pub typedefs: HashMap<String, String>,
     /// Every global row, defined or not, with what the compiler needs beside the type text (types draft 2).
     pub global_facts: HashMap<String, Global>,
+    /// Each virtual function a record declares (its `virtuals`, objects 7a), by name and signature, to whether it has a
+    /// row the kernel binds (import kind 8, LumaCore.method). None when no record carries `virtuals` (a file of before
+    /// objects 7a): kind 8 is not checked then.
+    pub methods: Option<HashMap<(String, String), bool>>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -550,6 +552,20 @@ impl Types {
                         no_copy: flag(row, "no_copy", &at)?,
                         ..Record::default()
                     };
+                    // Its virtual declarations (objects 7a): name, signature, pure, and whether a mod can bind it.
+                    if let Some(list) = row.get("virtuals") {
+                        let list = list.is_array().then(|| list.items()).ok_or_else(|| bad(format!("{at}.virtuals"), "not a list"))?;
+                        let methods = types.methods.get_or_insert_with(HashMap::new);
+                        for (k, v) in list.iter().enumerate() {
+                            let at = format!("{at}.virtuals[{k}]");
+                            let (vname, sig) = (text(v, "name", &at)?, text(v, "signature", &at)?);
+                            flag(v, "pure", &at)?;
+                            let has_row = flag(v, "row", &at)?;
+                            if methods.insert((vname.clone(), sig.clone()), has_row).is_some() {
+                                return Err(bad(at, &format!("a second virtual \"{vname}\" \"{sig}\"")));
+                            }
+                        }
+                    }
                     for (k, b) in items(row, "bases", &at)?.iter().enumerate() {
                         let at = format!("{at}.bases[{k}]");
                         record.bases.push(Base { name: text(b, "name", &at)?, offset: number(b, "offset", &at)?, is_virtual: flag(b, "virtual", &at)? });

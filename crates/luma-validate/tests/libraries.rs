@@ -424,3 +424,71 @@ fn two_mods_replacing_one_function_refuse_the_later() {
     assert!(run(Some(0), true).is_empty());
     assert!(run(None, false).is_empty());
 }
+
+/// Objects 10: a virtual call (kind 8) binds a virtual a record declares with a row, by name and signature; a class's
+/// number (kind 3) is any record, by its name or an alias's (the kernel's class_of). pe-x64/method.dll asks
+/// "LiveActor::calcAndSetBaseMtx" "void()" and the class LiveActor; method_bad.dll a plain function, the virtual with
+/// another signature, one with no row, an optional one not there, and the class NoSuchClass.
+#[test]
+fn a_virtual_call_and_a_class_number_are_checked_against_the_types_file() {
+    use luma_validate::names::Types;
+    let record = |name: &str, virtuals: Option<&str>| {
+        let v = virtuals.map_or(String::new(), |v| format!(r#", "virtuals": {v}"#));
+        format!(r#"{{"kind": "class", "name": "{name}", "size": 8, "align": 4, "polymorphic": true, "abstract": false, "trivial_copy": false, "trivial_destroy": false, "no_copy": false, "bases": [], "fields": [], "reachable": []{v}}}"#)
+    };
+    let virtuals = r#"[{"name": "LiveActor::calcAndSetBaseMtx", "signature": "void()", "pure": false, "row": true},
+                       {"name": "LiveActor::noRow", "signature": "void()", "pure": false, "row": false}]"#;
+    let file = |types: &[String]| format!(r#"{{"types": [{}], "globals": [], "left_out": []}}"#, types.join(", "));
+    let with = |json: String| {
+        let mut n = names();
+        n.types = Some(Types::from_json(json.as_bytes()).unwrap_or_else(|e| panic!("{e}")));
+        n
+    };
+    let full = with(file(&[record("LiveActor", Some(virtuals)), record("NameObj", Some("[]"))]));
+    let w = "windows-x64";
+    let good = code_mod(w, &lib("pe-x64/method.dll"), &[], false);
+    let bad = code_mod(w, &lib("pe-x64/method_bad.dll"), &[], false);
+
+    let r = check_with(&good, w, Some(&full));
+    assert!(r.findings.is_empty() && r.not_checked.is_empty(), "{:?} {:?}", r.findings, r.not_checked);
+    let r = check_with(&bad, w, Some(&full));
+    assert_eq!(codes(&r), vec![505, 505, 505, 505], "{:?}", r.findings);
+    // Findings come sorted (by place, then text); each is looked for by its text.
+    let texts: Vec<String> = r.findings.iter().map(|f| message(f, "UsEnglish")).collect();
+    let head = "test.mod: code/windows-x64/mod.dll: the game has no ";
+    for want in [
+        "virtual function \"MR::getPlayerPos\" with the signature \"Vec3f *()\".",
+        "virtual function \"LiveActor::calcAndSetBaseMtx\" with the signature \"int()\".",
+        "virtual function \"LiveActor::noRow\" with the signature \"void()\".",
+        "class \"NoSuchClass\".",
+    ] {
+        assert!(texts.contains(&format!("{head}{want}")), "{want}: {texts:?}");
+    }
+    let jp: Vec<String> = r.findings.iter().map(|f| message(f, "JpJapanese")).collect();
+    assert!(jp.contains(&"test.mod：code/windows-x64/mod.dll：ゲームにシグネチャ \"Vec3f *()\" のバーチャル関数 \"MR::getPlayerPos\"はありません。".to_string()), "{jp:?}");
+
+    // An alias names the record for kind 3, as class_of finds it.
+    let aliased = with(file(&[record("LiveActorBase", Some(virtuals)), r#"{"kind": "alias", "name": "LiveActor", "of": "LiveActorBase", "record": "LiveActorBase"}"#.to_string()]));
+    let r = check_with(&good, w, Some(&aliased));
+    assert!(r.findings.is_empty(), "{:?}", r.findings);
+
+    // A types file of before objects 7a (no record has `virtuals`): kind 8 is not checked, kind 3 is.
+    let old = with(file(&[record("LiveActor", None)]));
+    let r = check_with(&good, w, Some(&old));
+    assert!(r.findings.is_empty(), "{:?}", r.findings);
+    assert_eq!(r.not_checked.iter().map(|n| (n.code, n.because)).collect::<Vec<_>>(), vec![(505, "Missing.Virtuals")]);
+    let r = check_with(&bad, w, Some(&old));
+    assert_eq!(codes(&r), vec![505]);
+    // No types file: neither is checked.
+    let r = check(&good, w, true);
+    assert!(r.findings.is_empty(), "{:?}", r.findings);
+    assert_eq!(r.not_checked.iter().map(|n| (n.code, n.because, n.places)).collect::<Vec<_>>(), vec![(505, "Missing.Types", 2)]);
+
+    // The reader: `virtuals` in its form, each name and signature once in the file.
+    let refused = |v: &str| Types::from_json(file(&[record("LiveActor", Some(v))]).as_bytes()).unwrap_err().to_string();
+    assert_eq!(refused("{}"), "types[0].virtuals: not a list");
+    assert_eq!(refused(r#"[{"name": "A::f", "signature": "void()", "pure": false}]"#), "types[0].virtuals[0].row: missing, or not true or false");
+    assert_eq!(refused(r#"[{"name": "A::f", "pure": false, "row": true}]"#), "types[0].virtuals[0].signature: missing, or not text");
+    let twice = file(&[record("A", Some(r#"[{"name": "A::f", "signature": "void()", "pure": false, "row": true}]"#)), record("B", Some(r#"[{"name": "A::f", "signature": "void()", "pure": true, "row": false}]"#))]);
+    assert_eq!(Types::from_json(twice.as_bytes()).unwrap_err().to_string(), "types[1].virtuals[0]: a second virtual \"A::f\" \"void()\"");
+}
