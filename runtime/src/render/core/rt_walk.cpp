@@ -1570,8 +1570,14 @@ void RenderCore::rt_filters() {
         over_space.reads[1] = moments;
         over_space.reads[2] = guide;
         over_space.writes[0] = step == 1u ? lights : added;
+        if (step == 2u) {
+            // The added light's guard, counted (l82, A2-05): the pixel's base colour, counter 51.
+            over_space.reads[4] = rt_image(RtImage::Base);
+            over_space.counters = true;
+        }
         rt_backend_.dispatch(RtShader::LightsSpace, over_space, frame.across, frame.down);
     }
+    rt_backend_.end_counters();
 }
 
 // The frame's tables and constants: each item's words and each light set's lamp, the sun, the stage's ambient and key,
@@ -2407,6 +2413,7 @@ void RenderCore::rt_report() {
     rt_light_sum_[7] += counted[22];
     rt_light_sum_[8] += counted[23];
     rt_light_sum_[9] += counted[24];
+    rt_light_sum_[10] += counted[51];
     std::uint32_t prepassed = 0u;
     for (const std::uint8_t drawn : rt_prepassed_) {
         prepassed += drawn;
@@ -2436,6 +2443,8 @@ void RenderCore::rt_report() {
                  kinds[1], kinds[2]);
     std::fprintf(stderr, "[rt-inputs]   refracted pixels %.0f a frame (glass and water bodies, High)\n",
                  static_cast<double>(rt_light_sum_[9]) / n);
+    std::fprintf(stderr, "[rt-inputs]   added light over the guard (kAddedMost 1.5 of the base) %.0f pixels a frame\n",
+                 static_cast<double>(rt_light_sum_[10]) / n);
     // What they are, over the report's frames (emitter_census.py names them): most lights first.
     if (!rt_emitter_sources_.empty()) {
         std::vector<std::pair<std::uint64_t, std::uint32_t>> sources(rt_emitter_sources_.begin(), rt_emitter_sources_.end());

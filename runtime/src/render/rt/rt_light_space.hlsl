@@ -76,6 +76,15 @@ float landing_cue(int2 pixel, float4 guide) {
 Texture2D<float4> g_moments : register(t10);  // b: the variance of the average's luminance
 Texture2D<float4> g_body : register(t12);     // the second layer's last step: glass's and water's body, in a (FC's c16)
 static const float3 kLuminance = float3(0.2126f, 0.7152f, 0.0722f);
+// The opaque layer's last step: the pixel's base colour (rt_surface's, display-encoded) and the counters, for the
+// added light's guard (plan s5 kAddedMost, the programs' traced_colour; A2-05, l82): counter 51 the pixels past it.
+Texture2D<float4> g_base_map : register(t13);
+RWStructuredBuffer<uint> g_counters : register(u8);
+static const float kAddedMost = 1.5f;
+float3 base_lin(float3 c) {
+    c = saturate(c);
+    return lerp(pow((c + 0.055f) / 1.055f, 2.4f), c / 12.92f, step(c, 0.04045f));
+}
 #endif
 
 // The step (b1, rt_frame.hlsli): g_pass.y pixels between taps; g_pass.z 1 the last step.
@@ -202,6 +211,12 @@ void main(uint3 id : SV_DispatchThreadID) {
     const float3 now = sum / weight;
 #ifdef RT_LIGHTS
     const float body = g_pass.z != 0u && rt_second_layer() ? g_body.Load(int3(pixel, 0)).r : 1.0f;
+    if (g_pass.z != 0u && !rt_second_layer()) {
+        const float3 lit = now * base_lin(g_base_map.Load(int3(pixel, 0)).rgb);
+        if (max(lit.r, max(lit.g, lit.b)) > kAddedMost) {
+            InterlockedAdd(g_counters[51], 1u);  // past the programs' guard (l82)
+        }
+    }
     g_out[id.xy] = g_pass.z != 0u ? float4(now.x, now.y, now.z, body) : float4(now.x, frames, now.y, now.z);
 #else
     g_out[id.xy] = float4(centre.r, frames, centre.b, now.z);  // a step before the last (none runs: l70)

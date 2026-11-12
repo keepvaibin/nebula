@@ -468,8 +468,11 @@ float4 traced_colour(float4 c, float4 pixel) {
     // An albedo: at most 1 a channel (A3-F7: a highlight in c over a small level is no colour).
     const float3 base = g_traced_lit ? min(c.rgb / max(g_traced_level, kBaseFloor), 1.0) : c.rgb;
     // In linear light (M1): the colour and its base decoded, the share, the added light and the mirror's exchange on
-    // them (the tracer's pictures are linear), the result encoded.
-    const float4 seen = traced_mirror(traced_lin(c.rgb) * share + (metal ? float3(0.0, 0.0, 0.0) : traced_lin(base) * added), c.a, pixel);
+    // them (the tracer's pictures are linear), the result encoded. What the local lights add, rho x D, is at most
+    // kAddedMost a channel in linear light (plan s5's guard on the product, A2-05; counted by the tracer, l82).
+    const float kAddedMost = 1.5;
+    const float3 lamps = metal ? float3(0.0, 0.0, 0.0) : min(traced_lin(base) * added, kAddedMost);
+    const float4 seen = traced_mirror(traced_lin(c.rgb) * share + lamps, c.a, pixel);
     return float4(traced_srgb(seen.rgb), seen.a);
 }
 // The light in the air (rt/rt_volume.hlsl, the master plan's 15.2), for a draw that is lit and not a light (draw flag

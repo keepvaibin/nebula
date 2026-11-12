@@ -612,8 +612,8 @@ private:
     std::vector<std::uint32_t> rt_item_words_;
     std::vector<std::uint32_t> rt_item_coords_;  // l54: water's first map's coordinate rows, uploaded after the items
     std::vector<float> rt_set_words_;
-    std::uint64_t rt_light_sum_[10]{};  // [6] cutout tests, [7] cutouts the pass could not read, [8] mirror rays,
-                                        // [9] refracted pixels
+    std::uint64_t rt_light_sum_[11]{};  // [6] cutout tests, [7] cutouts the pass could not read, [8] mirror rays,
+                                        // [9] refracted pixels, [10] added light over the guard (l82)
     std::uint32_t rt_light_arenas_ = 0u, rt_light_unplaced_ = 0u;  // this walk: mesh arenas bound, items left without
     std::uint32_t rt_light_skinned_ = 0u;  // this walk: mesh items whose vertices name their own matrices (no mesh words)
     std::uint32_t rt_clip_dropped_ = 0u;   // the most clip volumes a frame left out since the last report (c38)
