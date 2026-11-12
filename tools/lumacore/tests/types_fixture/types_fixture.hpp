@@ -153,6 +153,20 @@ struct FxHoldsOwner {  // a field that frees: neither
 struct FxPoly {  // a vtable: destructible only
     virtual void f() {}
 };
+// Self-description (plan 1.8): what a virtual's body calls, once each in the order written, as a nerve's execute calls
+// its owner's exe function.
+struct FcOwner {
+    void exeGo() { g = 1; }
+    s32 helper(s32 x) const { return x + g; }
+    s32 g = 0;
+};
+struct FcNerve {
+    virtual void execute(FcOwner* pOwner) const {
+        pOwner->exeGo();
+        pOwner->exeGo();
+        (void)pOwner->helper(2);
+    }
+};
 
 // Contract objects (plan 1.3): an object's own class from its vtable, through primary and secondary bases.
 struct FoA {

@@ -44,6 +44,12 @@ def mark(way, count=None, fixed=None, nullable=False):
 
 
 EXPECTED = [
+    # 1.9 (contract varargs)
+    fact("fnVaList", "int(const char *, va_list)", "free", None),
+    fact("fnVariadic", "int(const char *, ...)", "free", None, marks=[None]),
+    fact("fnVariadicAgain", "int(int, const char *, ...)", "free", None, marks=[None, None]),
+    fact("fnConstexpr", "int(int)", "free", None),
+    fact("fnExported", "int(int)", "free", None),
     fact("FnBase::~FnBase", "()", "destructor", "FnBase", virtual=True),
     fact("FnBase::f", "void(int)", "method", "FnBase", virtual=True),
     fact("FnBase::g", "int() const", "method", "FnBase", virtual=True, pure=True, const=True),
@@ -166,6 +172,16 @@ def main():
     extra = [(f["name"], f["signature"]) for f in have if f not in EXPECTED]
     if extra or len(have) != len(EXPECTED):
         failed.append("rows not in the expected list, or counted twice: %s (%d rows)" % (extra, len(have)))
+
+    # Self-description (plan 1.8): table keys
+    tables = {t["name"].rpartition("#")[2]: t for t in
+              json.loads((out / "gen" / "luma_numbers.json").read_text(encoding="utf-8"))["tables"]}
+    for name, want in (("sFnKeyed", ["Alpha", "Beta"]), ("sFnNames", ["One", "Two", "Three"]), ("sFnUnkeyed", None),
+                       ("sFnShort", None)):
+        if name not in tables:
+            failed.append("self-description: the table %s has no row" % name)
+        elif tables[name].get("keys") != want:
+            failed.append("self-description: the table %s's keys are %s, not %s" % (name, tables[name].get("keys"), want))
 
     # 3. planted faults, each named
     good = facts_file.read_text(encoding="utf-8")

@@ -63,6 +63,20 @@ namespace luma {
     unsigned resultKind(const Function* pFunction);
     // A constructor or destructor: its hooks are told (before and after only).
     inline bool isTell(const Function* pFunction) { return pFunction->invoke == nullptr; }
+    // A function with `...` (contract varargs 3): a tell whose signature ends in "...)" (" const" after it for a method).
+    inline bool isVariadic(const Function* pFunction) {
+        const char* const pSignature = pFunction->signature;
+        const char* pEnd = pSignature;
+        while (*pEnd != 0) {
+            pEnd++;
+        }
+        if (pEnd - pSignature >= 6 && __builtin_memcmp(pEnd - 6, " const", 6) == 0) {
+            pEnd -= 6;
+        }
+        return isTell(pFunction) && pEnd - pSignature >= 4 && __builtin_memcmp(pEnd - 4, "...)", 4) == 0;
+    }
+    // A function with no flag (contract varargs 4: constexpr): called by name, never hooked.
+    inline bool isUnhookable(const Function* pFunction) { return pFunction->hooked == nullptr; }
     // The hook lists replaced so far that no call can be inside any more, freed; the rest wait for a later call. On the
     // game thread, once a frame (GameSystem::update) and when a mod is taken out. A list is freed when the game
     // thread has no call in it and two flips of the other threads' counters (SRCU), each made once the calls counted

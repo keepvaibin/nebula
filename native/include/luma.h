@@ -45,6 +45,17 @@ typedef struct LumaCall {
 
 typedef int32_t (*LumaHook)(LumaCall* call, void* user);
 
+/* A va_list as a function receives it (contract varargs 2, 3): what args[i] points at for a `va_list` parameter, and
+   for the rest of a function with `...`. On x86-64 outside Windows the va_list is an array, received as a pointer to
+   its element; elsewhere it is itself. A hook reads a copy, never the one it is given:
+       va_list mine; LUMA_VA_COPY(mine, call->args[2]); ... va_arg(mine, int) ...; va_end(mine); */
+#if defined(__x86_64__) && !defined(_WIN32)
+typedef struct __va_list_tag* luma_va_arg;
+#else
+typedef __builtin_va_list luma_va_arg;
+#endif
+#define LUMA_VA_COPY(mine, arg) __builtin_va_copy(mine, *(luma_va_arg*)(arg))
+
 enum {
     LUMA_BEFORE = 0, /* runs first; returning non-zero skips the function (write the result first) */
     LUMA_AFTER = 1,  /* runs last, the last added first; may change the result */

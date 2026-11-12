@@ -170,6 +170,32 @@ namespace luma {
         }                                                                                                            \
     }
 
+// A constexpr function's row (contract varargs 4), written after the function at namespace scope: called by name, no
+// flag, so never hooked (the compiler evaluates some calls while compiling; a hook would see only the others).
+#define LUMA_CALL_ROW(ID, NAME, SIGNATURE, RESULT, CALL)                                                       \
+    LUMA_ROW_SECTION static const ::luma::Function ID = {NAME, SIGNATURE, [](void** luma_a, void* luma_r) {   \
+        if (__builtin_expect(luma_a == ::luma::kAskKind, 0)) {                                                 \
+            *static_cast<unsigned*>(luma_r) = ::luma::Result<::luma::Type<RESULT>>::kKind;                     \
+            return;                                                                                            \
+        }                                                                                                      \
+        ::luma::Result<::luma::Type<RESULT>>::put(luma_r, [&]() -> ::luma::Type<RESULT> { return CALL; });     \
+    }, nullptr}
+
+// A function with `...` (contract varargs 3): its hooks are told, before its body, the fixed parameters and a va_list
+// of the rest, as a va_list parameter is received (luma.h luma_va_arg; args[n+1] points at it; a hook reads a
+// LUMA_VA_COPY), which ends before the body starts its own.
+#define LUMA_TELL_VA(NAME, SIGNATURE, LAST, POINTERS)    \
+    LUMA_ROW(NAME, SIGNATURE, nullptr);                  \
+    if (__builtin_expect(luma_hooked, 0)) {              \
+        __builtin_va_list luma_va;                       \
+        __builtin_va_start(luma_va, LAST);               \
+        ::luma::Param<__builtin_va_list> luma_vp = luma_va; \
+        void* luma_args[] = {LUMA_ARGS_OF POINTERS, (void*)&luma_vp}; \
+        ::luma::tell(&luma_fn, luma_args);               \
+        __builtin_va_end(luma_va);                       \
+    }
+#define LUMA_ARGS_OF(...) __VA_ARGS__
+
 #define LUMA_TELL(NAME, SIGNATURE, POINTERS)       \
     LUMA_ROW(NAME, SIGNATURE, nullptr);            \
     if (__builtin_expect(luma_hooked, 0)) {        \

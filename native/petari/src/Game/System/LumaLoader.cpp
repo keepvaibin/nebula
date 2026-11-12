@@ -1539,6 +1539,29 @@ namespace luma {
                 refused = true;
                 break;
             }
+            if (rImport.kind == LUMA_IMPORT_FUNCTION && isTell(pFunction)) {
+                // Contract varargs 3: a call goes through the row's invoke, which a constructor, a destructor or a
+                // function with `...` has none of.
+                refuse.start(512);
+                refuse.put("why", 'P', "Lib.CallTell");
+                refuse.put("found", 'T', rImport.name);
+                refused = true;
+                break;
+            }
+            if (rImport.kind == LUMA_IMPORT_HOOK && isUnhookable(pFunction)) {
+                refuse.start(512);
+                refuse.put("why", 'P', "Hook.Constexpr");
+                refuse.put("found", 'T', rImport.name);
+                refused = true;
+                break;
+            }
+            if (rImport.kind == LUMA_IMPORT_HOOK && rImport.hook_kind != LUMA_BEFORE && isVariadic(pFunction)) {
+                refuse.start(512);
+                refuse.put("why", 'P', "Hook.Variadic");
+                refuse.put("found", 'T', rImport.name);
+                refused = true;
+                break;
+            }
             if (rImport.kind != LUMA_IMPORT_HOOK || !wraps(rImport.hook_kind)) {
                 continue;
             }
