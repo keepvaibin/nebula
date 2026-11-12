@@ -282,8 +282,11 @@ void main(uint3 id : SV_DispatchThreadID) {
             if (was.a == 0.0f) {
                 continue;
             }
-            // The neighbour's receiver, moved into this frame: in the receiver's plane and facing as it does.
-            const float3 q = mul(now_from_before, float4(rt_eye_ray(g_ray_before, float2(at) * 2.0f + 1.0f) * was.r, 1.0f));
+            // The neighbour's receiver, moved into this frame: in the receiver's plane and facing as it does. Its
+            // place is the pixel that drew it (FB b81): the block's visit the frame before (the turn counts one a
+            // frame), not the block's corner (a Jacobian off by that much fed itself through the reservoirs).
+            const int2 drew = at * 2 + int2(kVisit[(g_more.y - 1u) & 3u]);
+            const float3 q = mul(now_from_before, float4(rt_eye_ray(g_ray_before, float2(drew) + 0.5f) * was.r, 1.0f));
             const float3 nq = normalize(mul((float3x3)now_from_before, rt_unpack_normal(was.a)));
             if (dot(n, nq) < 0.906f || abs(dot(n, q - x)) > 0.05f * s.away + 2.0f) {
                 continue;
