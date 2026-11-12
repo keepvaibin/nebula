@@ -1395,55 +1395,20 @@ void settle_mods(std::vector<ModInfo>& mods) {
         mod.overlaps.clear();
     }
     const auto title = [](const ModInfo& other) { return other.pack_title.empty() ? other.id : other.pack_title; };
-    // The same mod twice (two folders holding one id, as a copy made by hand): the one higher on the list is used.
-    for (auto it = mods.begin(); it != mods.end(); ++it) {
-        if (!it->luma || !it->enabled || !it->problem.empty()) continue;
-        const auto twin = std::find_if(mods.begin(), it, [&](const ModInfo& m) {
-            return m.luma && m.enabled && m.problem.empty() && m.luma->id == it->luma->id;
-        });
-        if (twin != it) it->problem = "ANOTHER COPY OF THIS MOD IS ON: " + twin->id;
-    }
-    // What a mod needs of the others on the list, again until nothing changes: a mod that loses what it needs takes
-    // with it the mods that need it.
-    const auto problems = [&mods] { return std::count_if(mods.begin(), mods.end(), [](const ModInfo& m) { return !m.problem.empty(); }); };
-    for (auto before = problems() - 1; before != problems();) {
-        before = problems();
-        for (ModInfo& mod : mods) {
-            if (!mod.luma || !mod.problem.empty()) continue;
-            for (const luma::Dependency& need : mod.luma->needs) {
-                const auto any = std::find_if(mods.begin(), mods.end(), [&](const ModInfo& m) { return m.luma && m.luma->id == need.id; });
-                const auto them = std::find_if(mods.begin(), mods.end(), [&](const ModInfo& m) {
-                    return m.luma && m.luma->id == need.id && m.enabled && m.problem.empty();
-                });
-                if (them == mods.end()) {
-                    mod.problem = "THIS MOD NEEDS: " + (any == mods.end() ? need.id : title(*any));
-                    break;
-                }
-            }
-            if (!mod.problem.empty()) continue;
-            // One family of saves at a time: the higher on the list has them.
-            if (const std::string tag = own_saves_tag(mod); !tag.empty() && mod.enabled) {
-                for (const ModInfo& above : mods) {
-                    if (&above == &mod) break;
-                    const std::string theirs = above.enabled && above.problem.empty() ? own_saves_tag(above) : std::string();
-                    if (!theirs.empty() && theirs != tag) {
-                        mod.problem = "THIS MOD CAN'T RUN WITH: " + title(above);
-                        break;
-                    }
-                }
-            }
-            if (!mod.problem.empty()) continue;
-            for (const luma::Dependency& conflict : mod.luma->conflicts) {
-                // A mod refused for its own reason is no conflict. Of two that can't run together the lower on the list is
-                // left off, whichever of them says so: the top of the list wins.
-                const auto them = std::find_if(mods.begin(), mods.end(), [&](const ModInfo& m) {
-                    return &m != &mod && m.luma && m.luma->id == conflict.id && m.enabled && m.problem.empty();
-                });
-                if (mod.enabled && them != mods.end()) {
-                    ModInfo& lower = &*them > &mod ? *them : mod;
-                    lower.problem = "THIS MOD CAN'T RUN WITH: " + title(&lower == &mod ? *them : mod);
-                    if (&lower == &mod) break;
-                }
+    // Another copy of a mod on, what a mod needs and what it can't run with are the validator's (L800 to L802, each
+    // start: modlog::check_packages, which leaves out every mod refused, and the mods needing it, as the host's
+    // own pass did). Here only what the validator does not know: one family of saves at a time, the higher on the list
+    // has them.
+    for (ModInfo& mod : mods) {
+        if (!mod.luma || !mod.problem.empty() || !mod.enabled) continue;
+        const std::string tag = own_saves_tag(mod);
+        if (tag.empty()) continue;
+        for (const ModInfo& above : mods) {
+            if (&above == &mod) break;
+            const std::string theirs = above.enabled && above.problem.empty() ? own_saves_tag(above) : std::string();
+            if (!theirs.empty() && theirs != tag) {
+                mod.problem = "THIS MOD CAN'T RUN WITH: " + title(above);
+                break;
             }
         }
     }

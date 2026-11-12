@@ -2002,9 +2002,20 @@ std::shared_ptr<const NativeSettingsPicture> read_menu_picture(const std::filesy
 }
 
 // With s_mods_mutex held.
+// The packages this start's check refused (modlog::check_packages, validator 2) say so on their rows, as the start did:
+// the list's own pass leaves the validator's findings to it. The check ran before the game started; read only after.
+void mark_refused(std::vector<galaxy::mods::ModInfo>& mods) {
+    for (galaxy::mods::ModInfo& mod : mods) {
+        if (mod.package && mod.problem.empty() && galaxy::modlog::package_refused(mod.id)) {
+            mod.problem = galaxy::modlog::refused_sentence();
+        }
+    }
+}
+
 std::vector<galaxy::mods::ModInfo>& mods_list() {
     if (!s_mods_scanned) {
         s_mods = galaxy::mods::scan_mods();
+        mark_refused(s_mods);
         s_mods_saved = s_mods;
         s_mods_scanned = true;
     }
@@ -2042,6 +2053,7 @@ void refresh_overlaps_locked();
 // there in the draft's order; mods new to the list as the read has them, the ones on at the top.
 void reread_mods_locked() {
     std::vector<galaxy::mods::ModInfo> fresh = galaxy::mods::scan_mods();
+    mark_refused(fresh);
     std::vector<galaxy::mods::ModInfo> merged;
     for (const galaxy::mods::ModInfo& drafted : s_mods) {
         const auto it = std::find_if(fresh.begin(), fresh.end(), [&](const galaxy::mods::ModInfo& m) { return m.id == drafted.id; });
@@ -2212,10 +2224,11 @@ void revert_mods_draft() {
     s_mod_held.clear();
 }
 
-// With s_mods_mutex held: the draft's list settled again (copies, needs, conflicts, overlaps and who wins them) by the
-// draft's order and on/off state.
+// With s_mods_mutex held: the draft's list settled again (the families of saves, overlaps and who wins them) by the
+// draft's order and on/off state; another copy, needs and conflicts are the start's check's (mark_refused).
 void refresh_overlaps_locked() {
     galaxy::mods::settle_mods(s_mods);
+    mark_refused(s_mods);
 }
 
 // With s_mods_mutex held: mod `id` into the list of mods on at `index` (0 the top), or off (`on` false: among the

@@ -457,8 +457,9 @@ bool luma_import() {
     return ok;
 }
 
-// Which .luma mods run: one copy of a mod, a chain of needs that loses its end, two mods that can't run together (the
-// higher on the list runs, whichever says so), and a .luma's movies used while it runs.
+// What the list decides of .luma mods: another copy, a chain of needs that loses its end and two mods that can't run
+// together are left to the validator (L800 to L802, each start); damaged manifests, where new mods go, a folder named
+// in any script, and a .luma's movies used while it runs.
 bool luma_rules() {
     bool ok = true;
     const fs::path root = galaxy::test_temp_path("nebula_mods_luma_rules");
@@ -499,11 +500,11 @@ bool luma_rules() {
         const auto it = std::find_if(mods.begin(), mods.end(), [&](const galaxy::mods::ModInfo& m) { return m.id == id; });
         return it == mods.end() ? std::string("(missing)") : it->problem;
     };
-    ok &= expect(problem("A").empty() && problem("A copy") == "ANOTHER COPY OF THIS MOD IS ON: A", "one copy of a mod runs");
-    ok &= expect(problem("C2") == "THIS MOD NEEDS: chain-3" && problem("C1").starts_with("THIS MOD NEEDS: "),
-                 "a mod that loses what it needs takes the mods needing it along");
-    ok &= expect(problem("X").empty() && problem("Y").starts_with("THIS MOD CAN'T RUN WITH: "),
-                 "of two that can't run together, the higher runs");
+    // Another copy, needs and conflicts are the validator's at each start (L800 to L802, modlog::check_packages): the
+    // list itself leaves them alone.
+    ok &= expect(problem("A").empty() && problem("A copy").empty(), "another copy is the validator's (L802)");
+    ok &= expect(problem("C2").empty() && problem("C1").empty(), "what a mod needs is the validator's (L800)");
+    ok &= expect(problem("X").empty() && problem("Y").empty(), "what a mod can't run with is the validator's (L801)");
     ok &= expect(problem("Cut") == "THIS FILE IS DAMAGED", "a cut-off luma.json is damaged");
     ok &= expect(problem("Later") != "THIS FILE IS DAMAGED", "a later format is not called damaged (L205 refuses it)");
     ok &= expect(problem("Hollow") == "THIS FILE IS DAMAGED", "a layer folder missing is damaged");
