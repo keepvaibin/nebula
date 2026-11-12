@@ -25,8 +25,8 @@ struct KeptMod {
     std::uint64_t save_bytes = 0; // its saved values (services-save 5), from the save half's counter
     std::uint64_t data_bytes = 0; // the files in its fs data folder (services-fs 3)
 };
-// Any thread but the game thread (it reads the fs data folders' sizes from the disk). The record is read first when
-// this session has not read it yet.
+// Any thread. It reads the fs data folders' sizes from the disk (a short walk of the removed mods' folders), so the
+// Mods page reads it once a visit, not each frame. The record is read first when this session has not read it yet.
 void kept(std::vector<KeptMod>& out);
 // Any thread: the player's FORGET. Drops `id`'s keys from the record (written at once on the record's writer thread),
 // asks the save half to drop its values and fs to remove its data folder; one Note Mods.Forgotten.
