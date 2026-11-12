@@ -523,6 +523,8 @@ galaxy::mods::ModRows gModRows;
 bool gModsChangeGame = false;
 // The mods on this session (the scan's enabled ones): the mod log is made only when there are any.
 std::uint32_t gModsOn = 0;
+// The placed packages of this start, for the mod log's check after the mods' code starts (modlog::add_start_findings).
+std::vector<galaxy::modlog::StartPackage> gStartPackages;
 
 void load_module(const fs::path& path) {
 #if defined(_WIN32)
@@ -3345,6 +3347,14 @@ void svc_mods_start(void*) {
                                 [](const char* text) { log_line("mods:", text); });
     // Each mod whose code did not start, in the mod log as the Mods page says it.
     galaxy::modlog::add_not_started();
+    // Each placed package through the validator, its findings in the mod log (kept: nothing runs when nothing changed).
+#if defined(NEBULA_HOST_RENDERER)
+    galaxy::modlog::add_start_findings(gStartPackages, gPak.store.game_id(), galaxy::mods::language_folder(
+        std::string(gPak.store.game_id()),
+        static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language))));
+#else
+    galaxy::modlog::add_start_findings(gStartPackages, gPak.store.game_id(), {});  // no language setting: English
+#endif
 }
 
 void svc_app_restart(void*) {
@@ -3393,6 +3403,10 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
 void prepare_mod_files(const fs::path& settings_folder, const std::string& game_id, std::vector<galaxy::mods::ModInfo> mods) {
     const std::string language = galaxy::mods::language_folder(
         game_id, static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language)));
+    gStartPackages.clear();
+    for (const galaxy::mods::ModInfo& mod : mods) {
+        if (mod.package) gStartPackages.push_back({mod.id, mod.path, mod.enabled});
+    }
     gModsOn = static_cast<std::uint32_t>(
         std::count_if(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) { return mod.enabled; }));
     const galaxy::mods::ModPlan plan = galaxy::mods::plan_mod_changes(gPak.store, game_id, language, std::move(mods));
