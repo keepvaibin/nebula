@@ -84,6 +84,7 @@ namespace luma {
             // beginStep's copy of sStepOrder (game thread; a step never begins inside a step handler). Not on the
             // stack: 4 KiB there needs __chkstk, which the module (no C runtime) does not have.
             Clock* sStepPass[kMostClocks];
+            Clock* sFramePass[kMostClocks];  // frameHandlers' copy of sFrameOrder, the same way
             u32 sStepOrderCount = 0;
             u32 sTimerClocks = 0;  // clocks with an open timer or a timer whose node is queued
 
@@ -1103,13 +1104,12 @@ namespace luma {
             }
             LumaTimeNow now;
             fill(&now, sStepsThisFrame);
-            Clock* order[kMostClocks];
             const u32 count = sFrameOrderCount;
             for (u32 i = 0; i < count; i++) {
-                order[i] = sFrameOrder[i];
+                sFramePass[i] = sFrameOrder[i];
             }
             for (u32 i = 0; i < count; i++) {
-                Clock* const pClock = order[i];
+                Clock* const pClock = sFramePass[i];
                 if (!pClock->gone && pClock->frameFn != nullptr) {
                     callHandler(pClock, pClock->frameFn, pClock->frameUser, &now, 2u);
                 }
