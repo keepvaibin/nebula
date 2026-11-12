@@ -47,18 +47,6 @@ float3 rt_lin(float3 c) {
     return lerp(pow((c + 0.055f) / 1.055f, 2.4f), c / 12.92f, step(c, 0.04045f));
 }
 
-// Two numbers in 0-1 for a pixel, a frame and a use: interleaved gradient noise (Jimenez 2014), turned each frame,
-// and a hash of the same. The second layer has no filter after it: straight at the light.
-float2 light_noise(uint2 pixel, uint frame, uint light) {
-    if (rt_second_layer()) {
-        return float2(0.0f, 0.0f);
-    }
-    const float2 at = float2(pixel) + 5.588238f * float((frame + light * 17u) & 63u);
-    const float a = frac(52.9829189f * frac(0.06711056f * at.x + 0.00583715f * at.y));
-    const float b = float(rt_hash(pixel.x + pixel.y * 8192u + frame * 9781u + light * 6271u) & 0xFFFFu) / 65536.0f;
-    return float2(a, b);
-}
-
 float rt_unit(uint seed) {
     return float(seed & 0xFFFFFFu) / 16777216.0f;
 }

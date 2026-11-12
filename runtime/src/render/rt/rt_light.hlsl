@@ -10,7 +10,7 @@
 //   Facing  r how the surface faces the sun as a painted surface takes it (from g_look.z of full facing up: all of
 //           it); a lit program takes n.l itself. For the Physical style (FB 22.19, plan 14.6): g max(n.s, 0), b
 //           max(n.d, 0) with d the light the mesh's paint holds (item word 16), a its share (0: it stays painted).
-// For the opaque layer this pass writes, for the filter (rt_light_time, rt_light_space), r V (one number), b the facing
+// For the opaque layer this pass writes, for the compose step (rt_light_space, l70), r V (one number), b the facing
 // code (0 to 1 painted; -1 to -2 lit, -1 - n.l) and a 1; the filter's last step writes V (rgb, from the sun's filter)
 // with the sky's share. The second layer's are written here (O 1).
 #include "rt_shade.hlsli"   // rt_mirror_seen: what a mirror shows by the shared hit shading (FB b75)

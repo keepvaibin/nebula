@@ -925,7 +925,6 @@ namespace {
 // The walker's draws as the renderer takes them at once: the encoder, and the renderer's own draw targets and texture arrays.
 class DirectDraws {
 public:
-    static constexpr bool kDirect = true;
     DirectDraws(gpu::Encoder& encoder, Renderer& renderer) noexcept : encoder_(encoder), renderer_(renderer) {}
     [[nodiscard]] gpu::Encoder& raw() noexcept { return encoder_; }
     void set_rows(gpu::Address rows, gpu::Address instances) noexcept { encoder_.set_rows(rows, instances); }
@@ -960,7 +959,6 @@ private:
 // The same calls recorded (draw_record.h) for a pass replayed in chunks. What the renderer's own state answers is asked now.
 class RecordedDraws {
 public:
-    static constexpr bool kDirect = false;
     RecordedDraws(gpu::DrawRecorder& recorder, Renderer& renderer) noexcept : recorder_(recorder), renderer_(renderer) {}
     void set_rows(gpu::Address rows, gpu::Address instances) noexcept { recorder_.set_rows(rows, instances); }
     void set_draw_aux(unsigned aux) { recorder_.set_draw_aux(aux); }

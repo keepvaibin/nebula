@@ -834,24 +834,4 @@ float3 rt_mirror_seen(float3 from, float3 dir, float cone, uint options, inout u
     return rt_hit_radiance(h, options, o, seed);
 }
 
-// ---- A pixel's surface as the surface pass left it (rt_common.hlsli's images), with what hit shading wants of it.
-struct RtPixel {
-    RtSurface s;
-    uint klass, flags;  // its class; kSurface* (lit, emissive, environment, two-sided)
-    float roughness, metal, share;
-    float3 base;
-};
-
-bool rt_pixel_read(int2 pixel, float4 guide, float4 normals, float4 motion, float4 material, float4 base, out RtPixel p) {
-    p.s = rt_surface(pixel, guide, normals, motion.w);
-    const uint bits = uint(material.b * 255.0f + 0.5f);
-    p.klass = bits & 15u;
-    p.flags = bits & 240u;
-    p.roughness = material.r;
-    p.metal = material.g;
-    p.share = material.a;
-    p.base = base.rgb;
-    return guide.a != 0.0f;
-}
-
 #endif
