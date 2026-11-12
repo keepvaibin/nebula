@@ -6,7 +6,8 @@
    (Voices), music (Music); the master volume and the output device are the game's. Every call is the game thread's,
    never blocks, and what waits is an event at a frame's start (services-registry 6). No mod code ever runs on the
    audio thread: a stream is a ring the mod fills, never a callback. A mod that stops is silent the same audio frame.
-   Later layers (plan 2.6): the game's own sounds by name, positioned voices, music replaced, the mix tapped, capture. */
+   A voice can be heard from a place in the world (play_at); the game's own sounds start by name (game_play); the
+   game's music can be replaced (music); the mix can be listened to (tap_open). Capture is luma_capture.h. */
 #ifndef LUMA_AUDIO_H
 #define LUMA_AUDIO_H
 
@@ -31,6 +32,8 @@ extern "C" {
 #define LUMA_AUDIO_FADE_MOST_MS 10000u  /* voice_stop's, music's and music_restore's longest fade */
 #define LUMA_AUDIO_TAPS_MOST 2u         /* taps a mod holds at once */
 #define LUMA_AUDIO_TAP_FRAMES 1024u     /* frames in a SAMPLES block (stereo, float) */
+#define LUMA_AUDIO_GAME_SOUNDS_MOST 16u /* the game's own sounds a mod holds at once (game_play) */
+#define LUMA_AUDIO_PLACE_MOST 1.0e7f    /* a place's coordinates, game units, either way */
 
 /* The buses a voice or stream plays on (an NSFX names its own; LUMA_AUDIO_BUS_SOUND keeps it). */
 typedef enum LumaAudioBus {
@@ -58,6 +61,21 @@ typedef enum LumaAudioTapSource {
     LUMA_AUDIO_TAP_OUTPUT = 0, /* the game's output: the game's sound and every mod's, after the player's volumes */
     LUMA_AUDIO_TAP_MODS = 1    /* every mod's voices and streams, before the master volume (the game's own not in it) */
 } LumaAudioTapSource;
+
+/* What a place is from (LumaAudioPlace.follow). */
+typedef enum LumaAudioFollow {
+    LUMA_AUDIO_AT_POINT = 0,  /* pos is a point in the world */
+    LUMA_AUDIO_AT_PLAYER = 1, /* pos is from the player's place (world axes) and moves with the player */
+    LUMA_AUDIO_AT_CAMERA = 2  /* pos is from the camera's place (world axes) and moves with the camera */
+} LumaAudioFollow;
+
+/* Where a sound is heard from: the camera hears it (distance and side), as the game hears its own. */
+typedef struct LumaAudioPlace {
+    uint32_t size;   /* sizeof(LumaAudioPlace) */
+    uint32_t follow; /* LumaAudioFollow */
+    float pos[3];    /* game units, each within LUMA_AUDIO_PLACE_MOST */
+    uint32_t reserved;
+} LumaAudioPlace;
 
 /* How play plays a sound (null: as cooked). */
 typedef struct LumaAudioPlay {
@@ -127,6 +145,30 @@ typedef struct LumaAudioService {
     int32_t (*tap_open)(const LumaMod* mod, uint32_t source, LumaEventFn fn, void* user, LumaHandle* out);
     /* Ends a tap; no event after. A handle not the mod's tap: LUMA_E_HANDLE, reported. */
     int32_t (*tap_close)(const LumaMod* mod, LumaHandle tap);
+    /* play, heard from `at` (null: as play, everywhere): the sound's near and far (sound.md 3: full volume within
+       near, silent beyond far, linear between) and its side from the camera (constant power). A place that is not
+       there (no camera, no player) keeps the last one heard (none yet: heard as with no place). Answers as play; a place of the wrong size, a follow
+       past LUMA_AUDIO_AT_CAMERA or a pos not finite or past LUMA_AUDIO_PLACE_MOST: LUMA_E_ARGUMENT, reported. */
+    int32_t (*play_at)(const LumaMod* mod, const char* name, const LumaAudioPlay* how, const LumaAudioPlace* at,
+                       LumaEventFn fn, void* user, LumaHandle* out);
+    /* A playing voice's place (null: heard everywhere again), from the next audio block, the change ramped over it.
+       A handle not the mod's playing voice: LUMA_E_HANDLE, reported; a bad place: LUMA_E_ARGUMENT, reported. */
+    int32_t (*voice_place)(const LumaMod* mod, LumaHandle voice, const LumaAudioPlace* at);
+    /* Starts the game's own sound `name`, of its sound table (SE_PM_JUMP_M, SE_SY_STAR_GET, as sound.md 6 names
+       them), through the game's sound engine: `at` null, heard everywhere (as the game's menu sounds); otherwise
+       from that place with the game's own distances and pan. LUMA_OK and *out. Answers: LUMA_E_NOT_FOUND, no sound
+       of that name; LUMA_E_BUSY, the game does not start one now (its effects are held, as in the pause menu; its
+       voices are full; a place that follows what is not there). A 17th sound of the mod's: LUMA_E_LIMIT, reported
+       (a sound that ended is no longer counted). No event. A null name or out, a name past LUMA_AUDIO_NAME_MOST, a
+       bad place: LUMA_E_ARGUMENT, reported. */
+    int32_t (*game_play)(const LumaMod* mod, const char* name, const LumaAudioPlace* at, LumaHandle* out);
+    /* Moves a game sound started with a place. LUMA_OK also when it has ended. A handle not the mod's game sound:
+       LUMA_E_HANDLE, reported; one started with no place, a bad place: LUMA_E_ARGUMENT, reported. */
+    int32_t (*game_place)(const LumaMod* mod, LumaHandle sound, const LumaAudioPlace* at);
+    /* Stops a game sound over `fade_ms` (0: at once; at most LUMA_AUDIO_FADE_MOST_MS), rounded up to the game's
+       frames. LUMA_OK also when it has ended; the handle is closed. A handle not the mod's game sound: LUMA_E_HANDLE,
+       reported. */
+    int32_t (*game_stop)(const LumaMod* mod, LumaHandle sound, uint32_t fade_ms);
 } LumaAudioService;
 
 #ifdef __cplusplus

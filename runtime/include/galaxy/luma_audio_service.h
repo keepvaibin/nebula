@@ -19,6 +19,11 @@ namespace galaxy::luma_audio {
 // are read in place from it. Until it is given, play answers LUMA_E_NOT_FOUND.
 void set_store(const galaxy::assets::AssetStore* store) noexcept;
 
+// The game module's half of the game's own sounds and of where the camera hears from (LumaGameSound.cpp), looked up
+// by name (luma_services::provide_all, game thread, before the first mod). Without all of it, game_play answers
+// LUMA_E_ABSENT and a placed voice is heard as one with no place.
+void set_game(void* (*find_symbol)(const char*)) noexcept;
+
 // The providers, in catalog order, for luma_services::provide_all (game thread, once, before the first mod).
 [[nodiscard]] std::span<const LumaServiceProvider* const> providers(void (*log)(const char*)) noexcept;
 
