@@ -1404,4 +1404,15 @@ mod tests {
         let jpeg = [0xff, 0xd8, 0xff, 0xe0, 0, 4, 0, 0, 0xff, 0xc0, 0, 11, 8, 0, 100, 0, 200, 3];
         assert_eq!(image_size(&jpeg), Some(("jpeg", 200, 100)));
     }
+
+    /// GAME_CONTROLS is the input bindings' kTargetIds, in order (F's note on luma-format revision 5).
+    #[test]
+    fn the_controls_are_the_input_bindings_own() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../runtime/src/input_bindings.cpp");
+        let source = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        let start = source.find("kTargetIds{").expect("kTargetIds in input_bindings.cpp");
+        let list = &source[start..start + source[start..].find("};").unwrap()];
+        let ids: Vec<&str> = list.split('"').skip(1).step_by(2).collect();
+        assert_eq!(ids, GAME_CONTROLS);
+    }
 }
