@@ -579,8 +579,10 @@ float4 traced_sea(float3 pattern, float3 ring, float3 screen, float3 tint, float
         return game;  // not a clear surface's mirror (F R, 4 + F): the old path
     }
     const float a = saturate(alpha);
-    const float4 mirror = traced_moved(mirror_at, pixel.xy + warp * a, 3.5, mirror_here);
-    const float f = saturate(mirror.a - 4.0);
+    const float4 mirror_moved = traced_moved(mirror_at, pixel.xy + warp * a, 3.5, mirror_here);
+    // d14b (FB's review): the mirror fades with the game's alpha as the veil and the waves do (the shore's edge).
+    const float f = saturate(mirror_moved.a - 4.0) * a;
+    const float4 mirror = float4(mirror_moved.rgb * a, mirror_moved.a);
     // The light on the surface's own colours, as a painted colour takes it (traced_colour).
     const float4 light = gTextures[uint(view_traced.x)].Load(int3(pixel.xy, 0));
     const float3 added = gTextures[uint(view_traced.y)].Load(int3(pixel.xy, 0)).rgb;
