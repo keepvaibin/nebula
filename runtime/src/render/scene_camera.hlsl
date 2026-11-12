@@ -174,11 +174,21 @@ float4 CameraVS(uint vertex : SV_VertexID) : SV_Position {
     return float4(uv * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f), 0.0f, 1.0f);
 }
 
-// Khronos PBR Neutral's shoulder on each channel alone (no toe: the game's darks stay as drawn), as October's
-// shoulder_curve: unchanged below kShoulderStart, then 1 - d^2 / (x + d - start), which meets the line there with its slope.
+// Khronos PBR Neutral's shoulder (no toe: the game's darks stay as drawn; FB b100, EVERYTHING 8.2): on the peak
+// channel, unchanged below kShoulderStart, then 1 - d^2 / (peak + d - start), which meets the line there with its
+// slope; every channel by the same factor, so the hue holds (a yellow planet stays yellow); then toward white by what
+// the shoulder took away, kNeutralDesaturation (Khronos's 0.15).
+static const float kNeutralDesaturation = 0.15f;
 float3 traced_shoulder(float3 c) {
+    const float peak = max(c.r, max(c.g, c.b));
+    if (peak < kShoulderStart) {
+        return c;
+    }
     const float d = 1.0f - kShoulderStart;
-    return min(c, kShoulderStart) + (1.0f - d * d / (max(c, kShoulderStart) + d - kShoulderStart)) - kShoulderStart;
+    const float bent = 1.0f - d * d / (peak + d - kShoulderStart);
+    const float3 held = c * (bent / peak);
+    const float g = 1.0f - 1.0f / (kNeutralDesaturation * (peak - bent) + 1.0f);
+    return lerp(held, float3(bent, bent, bent), g);
 }
 
 // The traced relight's picture: the eye's exposure, the shoulder, the display's levels with a dither (interleaved
