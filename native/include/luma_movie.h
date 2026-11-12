@@ -39,6 +39,7 @@ typedef struct LumaMovieService {
        scene running, or a scene without the movie player: LUMA_E_BUSY, reported. A null or empty name or a null out:
        LUMA_E_ARGUMENT, reported. Off the game thread: LUMA_E_THREAD, reported; while the game takes the mod out:
        LUMA_E_CANCELLED. */
+    /* events: ENDED(socket, status) */
     int32_t (*play)(const LumaMod* mod, const char* name, LumaEventFn fn, void* user, LumaMovie* out);
     /* 1.0. Game thread. The movie stops; the game goes on (its end: LUMA_E_CANCELLED). LUMA_OK; a movie that ended or
        is not this mod's: LUMA_E_HANDLE, reported. Thread and taking out as play. */

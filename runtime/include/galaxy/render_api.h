@@ -193,6 +193,11 @@ void native_settings_window_resized(unsigned width, unsigned height);
 void lose_gpu_device() noexcept;
 // Delivers an overlay key to the window thread (controller navigation).
 void native_settings_post_key(std::uintptr_t virtual_key) noexcept;
+// Delivers a keyboard key to the window thread, as the keyboard gives it (a harness's `key` step): a keyboard binding
+// waiting for its key takes it, which a controller's key never does.
+void native_settings_post_keyboard_key(std::uintptr_t virtual_key) noexcept;
+// The bit the SDL and Apple hosts' menu-key queues mark a keyboard key with (above every key code).
+inline constexpr std::uintptr_t kMenuKeyKeyboard = std::uintptr_t{1} << 30;
 // The mods saved differ from the ones this run started with.
 [[nodiscard]] bool native_settings_mods_changed();
 

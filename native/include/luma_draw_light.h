@@ -67,8 +67,8 @@ typedef struct LumaDrawLightService {
        frame drawn. LUMA_OK; an ended light or another mod's: LUMA_E_HANDLE, reported; null, not finite or farther:
        LUMA_E_ARGUMENT, reported. Thread and taking out as add. */
     int32_t (*move)(const LumaMod* mod, LumaDrawLight light, const float position[3]);
-    /* 1.0. Game thread. Everything of the light as `desc` says (its handle stays). Answers as add, and as move for
-       the handle. */
+    /* 1.0. Game thread. Everything of the light as `desc` says (its handle stays). LUMA_OK; answers as add, and as
+       move for the handle. */
     int32_t (*set)(const LumaMod* mod, LumaDrawLight light, const LumaDrawLightDesc* desc);
     /* 1.0. Game thread. The light is gone from the next frame drawn (not traced, the game's lamp fades out from it as
        from any lamp that goes). LUMA_OK; an ended light or another mod's: LUMA_E_HANDLE, reported. Thread and taking

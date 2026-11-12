@@ -1614,12 +1614,16 @@ class Unit:
 
     def markable(self, t):
         """A number LumaScript crosses (T_NUMBERS), an enum, or a vector: a record of 2 to 4 floats named x, y(, z(, w)),
-        its bases' first (the lumascript-abi table's vec2, vec3, vec4 and quat)."""
+        its bases' first (the lumascript-abi table's vec2, vec3, vec4 and quat), or a matrix row: f32[4], the pointee of
+        MtxPtr, which LumaScript crosses as a mat34 (three rows)."""
         if t.kind in T_NUMBERS or t.kind == T_ENUM:
             return True
+        api = self.api
+        if t.kind == T_CONSTANT_ARRAY:
+            element = api.canonical(api.elementType(t))
+            return element.kind == T_FLOAT and api.sizeOf(t) == 4 * api.sizeOf(element)
         if t.kind != T_RECORD:
             return False
-        api = self.api
         names = []
 
         def flat(record):

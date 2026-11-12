@@ -4772,6 +4772,27 @@ namespace {
             "FileSelector",
             createNameObj< FileSelector >,
         },
+        // LumaCore's row: a plain LiveActor for a mod's own class (`class X : LiveActor made by LumaObj`), so no mod
+        // depends on a game object's name. LiveActor's init does nothing; the mod's class overrides it.
+        {
+            "LumaObj",
+            createNameObj< LiveActor >,
+        },
+        // And plain areas of each shape for a mod's own area class (`class X : AreaObj made by LumaAreaCube`): their
+        // manager is AreaObjContainer's LumaArea, which no game code reads, unlike a game area's maker (PullBackCube's
+        // objects pull Mario back).
+        {
+            "LumaAreaCube",
+            createBaseOriginCube< AreaObj >,
+        },
+        {
+            "LumaAreaSphere",
+            createSphere< AreaObj >,
+        },
+        {
+            "LumaAreaCylinder",
+            createBaseOriginCylinder< AreaObj >,
+        },
     };
 
     const char* const cPlayerArchiveLoaderObjTable[] = {

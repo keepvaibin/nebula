@@ -1025,7 +1025,12 @@ void run_requests() {
             key = g_menu_keys.front();
             g_menu_keys.pop_front();
         }
-        (void)galaxy::render::native_settings_pad_key(key);
+        if ((key & galaxy::render::kMenuKeyKeyboard) != 0u) {
+            const std::uintptr_t vk = key & ~galaxy::render::kMenuKeyKeyboard;
+            (void)galaxy::render::native_settings_handle_window_key(vk, false, static_cast<std::uint32_t>(vk));
+        } else {
+            (void)galaxy::render::native_settings_pad_key(key);
+        }
     }
 #if defined(__ANDROID__)
     run_activity_calls();
@@ -1948,6 +1953,11 @@ host::HostPointerTransitionPoll poll_host_pointer_transition(std::uint64_t) noex
 void native_settings_post_key(std::uintptr_t virtual_key) noexcept {
     const std::lock_guard<std::mutex> lock(galaxy::sdl::g_menu_keys_mutex);
     galaxy::sdl::g_menu_keys.push_back(virtual_key);
+}
+
+void native_settings_post_keyboard_key(std::uintptr_t virtual_key) noexcept {
+    const std::lock_guard<std::mutex> lock(galaxy::sdl::g_menu_keys_mutex);
+    galaxy::sdl::g_menu_keys.push_back(virtual_key | kMenuKeyKeyboard);
 }
 
 }  // namespace galaxy::render

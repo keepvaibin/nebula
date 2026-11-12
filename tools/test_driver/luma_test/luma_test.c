@@ -51,6 +51,8 @@ static const LumaFunction* load_file;       /* void GameSequenceFunction::startG
 static const LumaFunction* create_file;     /* void GameSequenceFunction::startCreateUserFileSequence(int) */
 static const LumaFunction* save_busy;       /* bool GameSequenceFunction::isActiveSaveDataHandleSequence() */
 static const LumaFunction* arena_of;        /* NebulaArena *NebulaArena::findFromRoot(void *) */
+static const LumaFunction* set_seed;        /* void MR::setFixedRandomSeed(u32) */
+static const LumaFunction* get_seed;        /* u32 MR::getFixedRandomSeed() */
 
 /* The longest plan line, argument list or fact the game half takes, in bytes with its end, and the most words of a
    line: the runner refuses a plan over them (luma_test.py LINE_BYTES, LINE_WORDS), and anything over them here is a
@@ -1214,9 +1216,25 @@ static void do_line(const char* line) {
         } else if (item[0] == 'p' && item[1] == 'l' && item[2] == 'a' && item[3] == 'y' && item[4] == 'e' && item[5] == 'r' && item[6] == '.') {
             setup_player(&w);
         } else if (same(item, "seed") && w.count == 3u) {
-            /* The game seeds its generator from the stage's name as each stage starts: seed 0 is that. */
-            fact_int("setup.seed", 0);
-            finish(same(w.word[2], "0"), "not built yet: a seed other than 0 needs the game's globals by name (task 1.2)");
+            /* 0: the game's own, from the stage's name as each stage starts. Another number seeds the generator now
+               and at every stage start after (the setup stage's comes next), read back as the game holds it. */
+            int good = 0;
+            const int64_t n = to_int(w.word[2], &good);
+            if (!good || n < 0 || n > 4294967295ll) {
+                finish(0, "seed: a whole number from 0 to 4294967295");
+                return;
+            }
+            uint32_t seed = (uint32_t)n;
+            if (set_seed == 0 || get_seed == 0) {
+                fact_int("setup.seed", 0);
+                finish(seed == 0u, "seed: the game has no MR::setFixedRandomSeed and MR::getFixedRandomSeed");
+                return;
+            }
+            call1(set_seed, &seed, 0);
+            uint32_t held = 0;
+            call0(get_seed, &held);
+            fact_int("setup.seed", (int64_t)held);
+            finish(held == seed, "seed did not take");
         } else if (same(item, "language") && w.count == 3u) {
             /* The runner set the language as the setting is set; the game's own name for the language it took. */
             const char* name = 0;
@@ -1337,6 +1355,9 @@ static const LumaImport imports[] = {
     LUMA_CLASS(class_mario_actor, "MarioActor"),
     LUMA_HOOK_ON("NameObj::~NameObj", "()", LUMA_AFTER, on_object_gone),
     LUMA_FUNCTION(arena_of, "NebulaArena::findFromRoot", "NebulaArena *(void *)"),
+    /* Optional: only `seed` other than 0 needs them; without them that item fails, naming them. */
+    {LUMA_IMPORT_FUNCTION, LUMA_OPTIONAL, "MR::setFixedRandomSeed", "void(u32)", &set_seed, 0, 0, 0},
+    {LUMA_IMPORT_FUNCTION, LUMA_OPTIONAL, "MR::getFixedRandomSeed", "u32()", &get_seed, 0, 0, 0},
     LUMA_HOOK_ON("NebulaArena::destroy", "void(NebulaArena *)", LUMA_BEFORE, on_arena_gone),
     LUMA_FUNCTION(input_disabled, "MarioModule::isInputDisable", "bool() const"),
     LUMA_HOOK_ON("Mario::checkKeyLock", "void()", LUMA_AFTER, on_key_lock),

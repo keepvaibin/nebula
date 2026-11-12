@@ -598,6 +598,9 @@ bool SaveDataHandleSequence::executeSaveFinish(bool* pIsErr, const Nerve* pNerve
 
         *pIsErr = false;
         mIsCorrupted = false;
+        // A save is on the disk now as the memory holds it, whatever the start read (a new NAND reads none): quiet
+        // saves (a mod's FORGET, a file offered) may write from here on.
+        mPreLoadState = 1;
 
         return true;
     }

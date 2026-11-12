@@ -27,6 +27,10 @@ namespace MR {
     void resumeAllSceneNameObj();
     void syncWithFlagsAllSceneNameObj();
     void setRandomSeedFromStageName();
+    // A seed every stage start takes from now instead of its name's (a harness run's `seed`), and the generator seeded
+    // with it now; 0: each stage's name again. getFixedRandomSeed: the one set (0: none).
+    void setFixedRandomSeed(u32 seed);
+    u32 getFixedRandomSeed();
     // Scene init waits here for the scenario select; false while it has not got here.
     void holdSceneInitialize();
     bool tryResumeSceneInitialize();

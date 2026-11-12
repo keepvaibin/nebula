@@ -88,6 +88,7 @@ typedef struct LumaUiService {
        frame (never for a loop), or LUMA_E_CANCELLED when it is stopped first. LUMA_OK; no animation of that name:
        LUMA_E_NOT_FOUND, Ui.MissingAnimation in the mod log; an ended screen: LUMA_E_HANDLE, reported; a null or empty
        name: LUMA_E_ARGUMENT, reported. Thread and taking out as open. */
+    /* events: ANIMATION_END(status) */
     int32_t (*play)(const LumaMod* mod, LumaUiScreen screen, const char* animation, bool loop, LumaEventFn fn,
                     void* user);
     /* 1.0. Game thread. The playing animation stops where it is (its end event: LUMA_E_CANCELLED). LUMA_OK, also with

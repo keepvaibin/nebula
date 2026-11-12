@@ -78,7 +78,8 @@ namespace luma {
                     bool coloured;             // colours were written and are to be kept up or put back
                     u32 scaledStamp;           // the draw pose's stamp once scaled: a pose not captured again is not
                                                // scaled twice (a model the game did not view this frame)
-                    u32 facts;
+                    u32 facts;     // frames told as a fact (harness), to kFactFrames
+                    u32 factHash;  // the last fact's words: after kFactFrames a fact again only when they change
                 };
 
                 const LumaServiceKernel* sKernel = nullptr;
@@ -350,7 +351,7 @@ namespace luma {
 
                 // ---- Facts (harness) ----
 
-                void instFact(const Inst& rInst) {
+                void instFact(Inst& rInst) {
                     char key[48];
                     nebula_snprintf(key, sizeof(key), "draw.inst.%llu", static_cast< unsigned long long >(rInst.handle));
                     char mod[80];
@@ -366,6 +367,17 @@ namespace luma {
                                     mod, static_cast< unsigned >(rInst.colour), rInst.paramCount, rInst.materialCount, hidden,
                                     static_cast< double >(rInst.scale[0]), static_cast< double >(rInst.scale[1]),
                                     static_cast< double >(rInst.scale[2]));
+                    u32 hash = 2166136261u;
+                    for (const char* p = json; *p != 0; p++) {
+                        hash = (hash ^ static_cast< u8 >(*p)) * 16777619u;
+                    }
+                    if (rInst.facts >= kFactFrames && hash == rInst.factHash) {
+                        return;
+                    }
+                    if (rInst.facts < kFactFrames) {
+                        rInst.facts++;
+                    }
+                    rInst.factHash = hash;
                     luma::modlog::fact(key, json);
                 }
 
@@ -552,7 +564,9 @@ namespace luma {
                     }
                     Joint* pJoint = nullptr;
                     if (pPart != nullptr) {
-                        pJoint = MR::getJoint(pInst->model, pPart);
+                        // By its own lookup: MR::getJoint gives the root for a name the model lacks (the game's tables).
+                        const s32 index = pInst->model->mModelData->findJoint(pPart);
+                        pJoint = index >= 0 ? pInst->model->mModelData->getJointAt(static_cast< u32 >(index)) : nullptr;
                         if (pJoint == nullptr) {
                             report(pMod, pWhere, 101u, "part", nullptr);
                             return LUMA_E_NOT_FOUND;
@@ -676,9 +690,8 @@ namespace luma {
                     if (scaled(rInst)) {
                         scalePose(rInst);
                     }
-                    if (facts && rInst.facts < kFactFrames) {
-                        rInst.facts++;
-                        instFact(rInst);
+                    if (facts) {
+                        instFact(rInst);  // each frame to kFactFrames, then at each change (a scale set later: 2452)
                     }
                 }
             }

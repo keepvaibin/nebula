@@ -22,7 +22,7 @@ namespace galaxy::render::host_window {
 
 inline constexpr wchar_t kWindowClass[] = L"NebulaRuntimeWndR";
 inline constexpr DWORD kWindowStyle = WS_OVERLAPPEDWINDOW;
-// An overlay key from the controller (wParam: virtual-key code).
+// An overlay key from the controller (wParam: virtual-key code; lParam 1: a keyboard key, native_settings_post_keyboard_key).
 inline constexpr UINT kSettingsKeyMessage = WM_USER + 0x43;
 // Render-thread display change (lParam: const WindowPlacement*), sent and completed on the window thread.
 inline constexpr UINT kPlaceWindowMessage = WM_USER + 0x44;

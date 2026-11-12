@@ -3301,7 +3301,7 @@ void extension_menu_key(void*, uint32_t key) {
     static constexpr int kKeys[] = {0,         VK_UP,  VK_DOWN, VK_LEFT, VK_RIGHT, VK_RETURN,
                                     VK_ESCAPE, VK_TAB, VK_BACK, VK_SPACE, VK_F1};
     if (key != 0u && key < std::size(kKeys)) {
-        galaxy::render::native_settings_post_key(static_cast<std::uintptr_t>(kKeys[key]));
+        galaxy::render::native_settings_post_keyboard_key(static_cast<std::uintptr_t>(kKeys[key]));
     }
 }
 uint32_t extension_menu_open(void*) {

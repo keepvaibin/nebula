@@ -97,7 +97,7 @@ typedef struct LumaDrawViewService {
        LUMA_E_ARGUMENT. */
     int32_t (*texture)(const LumaMod* mod, LumaDrawViewRegion view, LumaDrawTexture* out);
     /* 1.0. Game thread. The view drawn each frame (`on` 1, as made) or not (0: no cost; its texture keeps its last
-       picture). Handle as camera. */
+       picture). LUMA_OK; handle as camera. */
     int32_t (*set_on)(const LumaMod* mod, LumaDrawViewRegion view, int32_t on);
     /* 1.0. Game thread. The view ended and its texture freed (a draw of it after: the checker and LUMA_E_HANDLE).
        LUMA_OK; an ended view or another mod's: LUMA_E_HANDLE, reported. */

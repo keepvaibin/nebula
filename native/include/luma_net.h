@@ -281,8 +281,8 @@ typedef struct LumaNetInternetService {
     /* events: DATAGRAM(socket, data, from), SENT(socket, value) */
     int32_t (*udp_open)(const LumaMod* mod, uint16_t port, uint32_t local_network, LumaEventFn fn, void* user,
                         LumaHandle* out);
-    /* 1.1. A UDP socket tied to `host`:`port`, the hosts and the rules of this service's tcp_connect (its name looked
-       up, public addresses only, the first one taken: UDP cannot tell which answers). It hears only from there. */
+    /* 1.1. As tcp_connect, a UDP socket tied to `host`:`port` (its name looked up, public addresses only, the first
+       one taken: UDP cannot tell which answers). It hears only from there. */
     /* events: CONNECTED(socket, data), ERROR(socket, status, value), DATAGRAM(socket, data, from), SENT(socket, value)
        */
     int32_t (*udp_connect)(const LumaMod* mod, const char* host, uint16_t port, LumaEventFn fn, void* user,
@@ -296,6 +296,7 @@ typedef struct LumaNetInternetService {
     /* events: CONNECTED(socket, data), ERROR(socket, status, value), DATA(socket, data), SENT(socket, value),
        CLOSED(socket, status, value, data) */
     int32_t (*ipc_connect)(const LumaMod* mod, const char* name, LumaEventFn fn, void* user, LumaHandle* out);
+    /* 1.2. As ipc_connect. */
     /* events: ACCEPTED(socket), DATA(socket, data), SENT(socket, value), CLOSED(socket, status, value, data) */
     int32_t (*ipc_listen)(const LumaMod* mod, const char* name, LumaEventFn fn, void* user, LumaHandle* out);
     /* 1.3. As net.local's tls_connect, to the hosts and by the rules of this service's tcp_connect. */
@@ -315,6 +316,7 @@ typedef struct LumaNetInternetService {
        value, data), ERROR(socket, status, value) */
     int32_t (*ws_connect)(const LumaMod* mod, const char* url, const char* protocol, LumaEventFn fn, void* user,
                           LumaHandle* out);
+    /* 1.4. As net.local's. */
     int32_t (*ws_send)(const LumaMod* mod, LumaHandle socket, const void* data, uint64_t bytes, uint32_t binary);
 } LumaNetInternetService;
 

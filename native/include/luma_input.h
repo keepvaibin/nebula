@@ -145,14 +145,15 @@ typedef struct LumaInputService {
     /* 1.1. Game thread. fn(user, event) at a frame's start each time a player's device kind changes
        (LUMA_INPUT_EVENT_DEVICE, the latest kind when it changed twice between frames); a null fn stops it. One watch a
        mod: a second replaces the first. LUMA_OK. */
+    /* events: DEVICE(value, flags) */
     int32_t (*watch_device)(const LumaMod* mod, LumaEventFn fn, void* user);
     /* 1.1. Game thread. Opens the system keyboard (and its input method: composition, candidates) for the player to
        type; the game's controls are held while it is open (the game reads a controller at rest, every action reads
        up). The text arrives as LUMA_INPUT_EVENT_TEXT through fn when the player confirms (Enter) or cancels (Escape).
-       *out: the request. LUMA_PENDING. One request open at once in the game: a new one ends the open one CANCELLED.
-       LUMA_E_ABSENT where the host has no text entry (see the contract); a null request, fn or out, a size below
-       1.1's, a bad kind, max_length 0 or past LUMA_INPUT_TEXT_MOST, or an initial that is not UTF-8:
-       LUMA_E_ARGUMENT, reported. */
+       *out: the request. LUMA_PENDING; a TEXT event follows (to fn), closed after its event. One request open at
+       once in the game: a new one ends the open one CANCELLED. LUMA_E_ABSENT where the host has no text entry (see
+       the contract); a null request, fn or out, a size below 1.1's, a bad kind, max_length 0 or past
+       LUMA_INPUT_TEXT_MOST, or an initial that is not UTF-8: LUMA_E_ARGUMENT, reported. */
     int32_t (*text_request)(const LumaMod* mod, const LumaInputTextRequest* request, LumaEventFn fn, void* user,
                             LumaHandle* out);
     /* 1.1. Game thread. The open request's text so far (for the mod to draw the field): up to size - 1 bytes of UTF-8
@@ -232,6 +233,7 @@ typedef struct LumaInputDevService {
        counted on the next event). *out the device. LUMA_OK; LUMA_E_NOT_FOUND (unplugged, or not a HID path),
        LUMA_E_BUSY (another program holds it); LUMA_E_LIMIT (LUMA_INPUT_DEV_OPEN_MOST open), reported; LUMA_E_ABSENT
        as list; a null or empty path, fn or out: LUMA_E_ARGUMENT, reported. */
+    /* events: REPORT(socket, status, data, value, flags) */
     int32_t (*open)(const LumaMod* mod, const char* path, LumaEventFn fn, void* user, LumaHandle* out);
     /* Game thread. Sends an output report (its report id first, 0 when the device numbers none). LUMA_OK; LUMA_E_IO
        when the device refused it; LUMA_E_HANDLE (not this mod's open device), a null data, size 0 or past

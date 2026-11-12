@@ -1058,17 +1058,22 @@ namespace luma {
             }
 
             void offerDeliver(LumaEventNode* pNode) {
+                // The request is closed before its event is given: the mod may make its next offer from the event.
                 OfferRequest* const pRequest = reinterpret_cast< OfferRequest* >(pNode);
-                if (!pRequest->mClosed) {
-                    LumaEvent event = {};
-                    event.size = sizeof(event);
-                    event.kind = LUMA_SAVE_GAME_EVENT_OFFER;
-                    event.handle = pRequest->mHandle;
-                    event.status = pRequest->mStatus;
-                    event.value = pRequest->mStatus == LUMA_OK ? pRequest->mFile : 0u;
-                    (void)sKernel->call(pNode->mod, LUMA_SAVE_GAME_NAME, pRequest->mFn, pRequest->mUser, &event);
-                }
+                const bool closed = pRequest->mClosed;
+                const LumaMod* const pMod = pNode->mod;
+                const LumaEventFn fn = pRequest->mFn;
+                void* const pUser = pRequest->mUser;
+                LumaEvent event = {};
+                event.size = sizeof(event);
+                event.kind = LUMA_SAVE_GAME_EVENT_OFFER;
+                event.handle = pRequest->mHandle;
+                event.status = pRequest->mStatus;
+                event.value = pRequest->mStatus == LUMA_OK ? pRequest->mFile : 0u;
                 offerFree();
+                if (!closed) {
+                    (void)sKernel->call(pMod, LUMA_SAVE_GAME_NAME, fn, pUser, &event);
+                }
             }
 
             void offerDrop(LumaEventNode*) {

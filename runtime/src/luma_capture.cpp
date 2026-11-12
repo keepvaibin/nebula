@@ -61,8 +61,8 @@
 namespace galaxy::luma_capture {
 namespace {
 
-static_assert(sizeof(LumaMicrophoneDesc) == 16u, "LumaMicrophoneDesc 1.0 is 16 bytes");
-static_assert(sizeof(LumaCameraDesc) == 16u, "LumaCameraDesc 1.0 is 16 bytes");
+static_assert(sizeof(LumaAudioMicrophoneDesc) == 16u, "LumaAudioMicrophoneDesc 1.0 is 16 bytes");
+static_assert(sizeof(LumaCaptureCameraDesc) == 16u, "LumaCaptureCameraDesc 1.0 is 16 bytes");
 
 constexpr std::size_t kBlocks = 8u;  // microphone blocks waiting: 170 ms at 48 kHz
 
@@ -84,7 +84,7 @@ struct Item {
     bool closed = false;            // g_lock: no event from now on
     bool posted = false;            // g_lock
     std::int32_t ended = LUMA_OK;   // g_lock: ENDED to give (its status), not LUMA_OK
-    // Microphone (g_lock): blocks of LUMA_MICROPHONE_BLOCK_FRAMES × channels.
+    // Microphone (g_lock): blocks of LUMA_AUDIO_MICROPHONE_BLOCK_FRAMES × channels.
     std::uint32_t rate = 48000u;
     std::uint32_t channels = 1u;
     std::vector<float> blocks;
@@ -195,8 +195,8 @@ struct Converter {
     void push(Item& item, const float* in, std::size_t frames, std::uint32_t in_channels, std::uint32_t in_rate) {
         const double step = static_cast<double>(in_rate) / static_cast<double>(item.rate);
         const std::size_t out_channels = item.channels;
-        if (filling.size() != LUMA_MICROPHONE_BLOCK_FRAMES * out_channels) {
-            filling.assign(LUMA_MICROPHONE_BLOCK_FRAMES * out_channels, 0.0f);
+        if (filling.size() != LUMA_AUDIO_MICROPHONE_BLOCK_FRAMES * out_channels) {
+            filling.assign(LUMA_AUDIO_MICROPHONE_BLOCK_FRAMES * out_channels, 0.0f);
             filled = 0;
         }
         for (std::size_t f = 0; f < frames; ++f) {
@@ -221,7 +221,7 @@ struct Converter {
                     to[0] = l;
                     to[1] = r;
                 }
-                if (++filled == LUMA_MICROPHONE_BLOCK_FRAMES) {
+                if (++filled == LUMA_AUDIO_MICROPHONE_BLOCK_FRAMES) {
                     filled = 0;
                     hand(item);
                 }
@@ -242,7 +242,7 @@ struct Converter {
             item.lost = true;
             return;
         }
-        const std::size_t block = LUMA_MICROPHONE_BLOCK_FRAMES * item.channels;
+        const std::size_t block = LUMA_AUDIO_MICROPHONE_BLOCK_FRAMES * item.channels;
         const std::size_t slot = (item.ready_first + item.ready_count) % kBlocks;
         std::copy(filling.begin(), filling.end(), item.blocks.begin() + static_cast<std::ptrdiff_t>(slot * block));
         item.ready_count++;
@@ -810,7 +810,7 @@ void camera_thread(std::shared_ptr<Item>) {}
 void deliver(LumaEventNode* node) {
     Item* const item = reinterpret_cast<Node*>(node)->item;
     const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
-    const char* const service = item->camera ? LUMA_CAMERA_NAME : LUMA_MICROPHONE_NAME;
+    const char* const service = item->camera ? LUMA_CAPTURE_CAMERA_NAME : LUMA_AUDIO_MICROPHONE_NAME;
     {
         const std::lock_guard<std::mutex> lock(g_lock);
         item->posted = false;
@@ -825,7 +825,7 @@ void deliver(LumaEventNode* node) {
         LumaEvent event{};
         event.size = sizeof(event);
         event.handle = item->handle;
-        LumaCameraFrame frame{};
+        LumaCaptureCameraFrame frame{};
         {
             const std::lock_guard<std::mutex> lock(g_lock);
             if (item->closed) {
@@ -840,26 +840,26 @@ void deliver(LumaEventNode* node) {
                 frame.stride = item->ready_width * 4u;
                 frame.time_ns = item->ready_time;
                 frame.pixels = item->shown.data();
-                event.kind = LUMA_CAPTURE_EVENT_FRAME;
+                event.kind = LUMA_CAPTURE_CAMERA_EVENT_FRAME;
                 event.status = std::exchange(item->skipped, false) ? LUMA_E_BUSY : LUMA_OK;
                 event.data = &frame;
                 event.data_size = sizeof(frame);
             } else if (!item->camera && item->ready_count > 0u) {
-                const std::size_t block = LUMA_MICROPHONE_BLOCK_FRAMES * item->channels;
+                const std::size_t block = LUMA_AUDIO_MICROPHONE_BLOCK_FRAMES * item->channels;
                 const float* from = item->blocks.data() + item->ready_first * block;
                 std::copy(from, from + block, item->handing.begin());
                 item->ready_first = (item->ready_first + 1u) % kBlocks;
                 item->ready_count--;
-                event.kind = LUMA_CAPTURE_EVENT_SAMPLES;
+                event.kind = LUMA_AUDIO_MICROPHONE_EVENT_SAMPLES;
                 event.status = std::exchange(item->lost, false) ? LUMA_E_BUSY : LUMA_OK;
                 event.data = item->handing.data();
                 event.data_size = block * sizeof(float);
-                event.value = LUMA_MICROPHONE_BLOCK_FRAMES;
+                event.value = LUMA_AUDIO_MICROPHONE_BLOCK_FRAMES;
                 event.flags = item->rate;
             } else if (item->ended != LUMA_OK) {
                 ended = item->ended;
                 item->closed = true;  // its last event
-                event.kind = LUMA_CAPTURE_EVENT_ENDED;
+                event.kind = item->camera ? LUMA_CAPTURE_CAMERA_EVENT_ENDED : LUMA_AUDIO_MICROPHONE_EVENT_ENDED;
                 event.status = ended;
             } else {
                 break;
@@ -937,7 +937,7 @@ std::int32_t close_item(const LumaMod* mod, const char* where, bool camera, Luma
     return LUMA_E_HANDLE;
 }
 
-std::int32_t microphone_open(const LumaMod* mod, const LumaMicrophoneDesc* desc, LumaEventFn fn, void* user,
+std::int32_t microphone_open(const LumaMod* mod, const LumaAudioMicrophoneDesc* desc, LumaEventFn fn, void* user,
                              LumaHandle* out) noexcept {
     static constexpr const char* where = "audio.microphone.open";
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
@@ -946,8 +946,8 @@ std::int32_t microphone_open(const LumaMod* mod, const LumaMicrophoneDesc* desc,
     if (desc == nullptr) {
         return argument(mod, where, "desc");
     }
-    if (desc->size < sizeof(LumaMicrophoneDesc)) {
-        return struct_size(mod, where, "LumaMicrophoneDesc", desc->size, sizeof(LumaMicrophoneDesc));
+    if (desc->size < sizeof(LumaAudioMicrophoneDesc)) {
+        return struct_size(mod, where, "LumaAudioMicrophoneDesc", desc->size, sizeof(LumaAudioMicrophoneDesc));
     }
     const std::uint32_t rate = desc->rate == 0u ? 48000u : desc->rate;
     if (rate < 8000u || rate > 192000u) {
@@ -966,8 +966,8 @@ std::int32_t microphone_open(const LumaMod* mod, const LumaMicrophoneDesc* desc,
         auto item = std::make_shared<Item>();
         item->rate = rate;
         item->channels = desc->channels;
-        item->blocks.assign(kBlocks * LUMA_MICROPHONE_BLOCK_FRAMES * desc->channels, 0.0f);
-        item->handing.assign(LUMA_MICROPHONE_BLOCK_FRAMES * desc->channels, 0.0f);
+        item->blocks.assign(kBlocks * LUMA_AUDIO_MICROPHONE_BLOCK_FRAMES * desc->channels, 0.0f);
+        item->handing.assign(LUMA_AUDIO_MICROPHONE_BLOCK_FRAMES * desc->channels, 0.0f);
         return open_item(mod, where, false, fn, user, out, item);
     } catch (...) {
         return LUMA_E_MEMORY;
@@ -982,7 +982,7 @@ std::int32_t microphone_close(const LumaMod* mod, LumaHandle microphone) noexcep
     }
 }
 
-std::int32_t camera_open(const LumaMod* mod, const LumaCameraDesc* desc, LumaEventFn fn, void* user,
+std::int32_t camera_open(const LumaMod* mod, const LumaCaptureCameraDesc* desc, LumaEventFn fn, void* user,
                          LumaHandle* out) noexcept {
     static constexpr const char* where = "capture.camera.open";
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
@@ -991,14 +991,14 @@ std::int32_t camera_open(const LumaMod* mod, const LumaCameraDesc* desc, LumaEve
     if (desc == nullptr) {
         return argument(mod, where, "desc");
     }
-    if (desc->size < sizeof(LumaCameraDesc)) {
-        return struct_size(mod, where, "LumaCameraDesc", desc->size, sizeof(LumaCameraDesc));
+    if (desc->size < sizeof(LumaCaptureCameraDesc)) {
+        return struct_size(mod, where, "LumaCaptureCameraDesc", desc->size, sizeof(LumaCaptureCameraDesc));
     }
-    if (desc->width > LUMA_CAMERA_WIDTH_MOST || desc->height > LUMA_CAMERA_HEIGHT_MOST ||
+    if (desc->width > LUMA_CAPTURE_CAMERA_WIDTH_MOST || desc->height > LUMA_CAPTURE_CAMERA_HEIGHT_MOST ||
         (desc->width == 0u) != (desc->height == 0u)) {
         return argument(mod, where, "desc.width");
     }
-    if (desc->fps > LUMA_CAMERA_FPS_MOST) {
+    if (desc->fps > LUMA_CAPTURE_CAMERA_FPS_MOST) {
         return argument(mod, where, "desc.fps");
     }
     if (fn == nullptr) {
@@ -1049,24 +1049,24 @@ void registered(void*, const LumaServiceKernel* kernel) {
     g_kernel.store(kernel, std::memory_order_release);
 }
 
-const LumaMicrophoneService kMicrophone = {
-    {sizeof(LumaMicrophoneService), LUMA_MICROPHONE_MAJOR, LUMA_MICROPHONE_MINOR},
+const LumaAudioMicrophoneService kMicrophone = {
+    {sizeof(LumaAudioMicrophoneService), LUMA_AUDIO_MICROPHONE_MAJOR, LUMA_AUDIO_MICROPHONE_MINOR},
     microphone_open,
     microphone_close,
 };
-const LumaCameraService kCamera = {
-    {sizeof(LumaCameraService), LUMA_CAMERA_MAJOR, LUMA_CAMERA_MINOR},
+const LumaCaptureCameraService kCamera = {
+    {sizeof(LumaCaptureCameraService), LUMA_CAPTURE_CAMERA_MAJOR, LUMA_CAPTURE_CAMERA_MINOR},
     camera_open,
     camera_close,
 };
 
 // Both report only the registry's rows (100-104); the permission is checked when the mod binds.
 const LumaServiceProvider kMicrophoneProvider = {
-    sizeof(LumaServiceProvider), LUMA_MICROPHONE_NAME, &kMicrophone.base, nullptr, nullptr, 0u, nullptr,
+    sizeof(LumaServiceProvider), LUMA_AUDIO_MICROPHONE_NAME, &kMicrophone.base, nullptr, nullptr, 0u, nullptr,
     nullptr, mod_gone, mod_end, registered,
 };
 const LumaServiceProvider kCameraProvider = {
-    sizeof(LumaServiceProvider), LUMA_CAMERA_NAME, &kCamera.base, nullptr, nullptr, 0u, nullptr,
+    sizeof(LumaServiceProvider), LUMA_CAPTURE_CAMERA_NAME, &kCamera.base, nullptr, nullptr, 0u, nullptr,
     nullptr, mod_gone, mod_end, registered,
 };
 const LumaServiceProvider* const kProviders[] = {&kMicrophoneProvider, &kCameraProvider};

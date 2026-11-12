@@ -29,7 +29,7 @@ namespace MR {
     bool getFirstPolyOnLineToMap(LUMA_OUT LUMA_NULLABLE Vec3f*, Triangle*, const Vec3f&, const Vec3f&, const CollisionPartsFilterBase*, const TriangleFilterBase*);
     bool getFirstPolyOnLineToWaterSurface(Vec3f*, Triangle*, const Vec3f&, const Vec3f&, const CollisionPartsFilterBase*,
                                           const TriangleFilterBase*);
-    bool getFirstPolyNormalOnLineToMap(Vec3f*, const Vec3f&, const Vec3f&, Vec3f*, const HitSensor*);
+    bool getFirstPolyNormalOnLineToMap(LUMA_OUT Vec3f*, const Vec3f&, const Vec3f&, LUMA_OUT Vec3f*, const HitSensor*);
     u32 getNearPolyOnLineSort(const Vec3f&, const Vec3f&, const Vec3f&, const HitSensor*);
     bool getSortedPoly(Vec3f*, Triangle*, u32);
     bool isExistMapCollision(const Vec3f&, const Vec3f&);

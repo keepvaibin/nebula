@@ -1037,7 +1037,8 @@ void frame(std::uint64_t game_frames) {
         return;
     }
     const std::int64_t now = test_frame();
-    bool before_done = true;  // every step written before this one has run
+    bool before_done = true;      // every step written before this one has run
+    bool game_waiting = false;    // a game step written before this one is not answered yet
     for (Step& s : g.steps) {
         if (g.finished) {
             return;
@@ -1056,7 +1057,9 @@ void frame(std::uint64_t game_frames) {
         }
         if (!s.done && !s.waiting) {
             if (s.at) {
-                if (*s.at <= now) {
+                // A take-out waits for the game steps written before it: the mod does what they ask before it goes,
+                // and is out before the next frame's events (reload.md 2; 2114, 2234 at one frame).
+                if (*s.at <= now && (s.action != Action::TakeOut || !game_waiting)) {
                     run_step(s, now);
                 }
             } else if (before_done) {
@@ -1087,6 +1090,7 @@ void frame(std::uint64_t game_frames) {
             }
         }
         before_done = before_done && s.done;
+        game_waiting = game_waiting || (s.waiting && s.action == Action::Game);
     }
 }
 

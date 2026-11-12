@@ -41,8 +41,9 @@ enum {
                                 value: a LumaAnimWhy. Last of its play's events. */
     LUMA_ANIM_EVENT_MARK = 2 /* status LUMA_OK; value: below LumaAnimHow.mark_count the mark's index in its marks;
                                 1.1: from mark_count up, mark_count + the row of the clip's own events (the cooked
-                                <clip>.events beside it, animation 7.3), data the row's name (data_size bytes, no NUL,
-                                valid during the call). A clip without events gives only the mod's marks. */
+                                <clip>.events beside it, animation 7.3), data the row's name (UTF-8 text;
+                                data_size bytes, no NUL, valid during the call). A clip without events gives only the
+                                mod's marks. */
 };
 
 /* Why a play ended (LUMA_ANIM_EVENT_END value). */
@@ -93,6 +94,7 @@ typedef struct LumaAnimService {
        LUMA_ANIM_MOST_MARKS marks, null marks with a count, a null out: LUMA_E_ARGUMENT, reported; a how below 1.0's
        size: LUMA_E_ARGUMENT, reported (Service.StructSize); LUMA_ANIM_MOST_PLAYS going: LUMA_E_LIMIT, reported. Off
        the game thread: LUMA_E_THREAD, reported; while the game takes the mod out: LUMA_E_CANCELLED. */
+    /* events: END(socket, status, value), MARK(socket, value, data) */
     int32_t (*play)(const LumaMod* mod, LumaActor actor, const char* clip, const LumaAnimHow* how, LumaEventFn fn,
                     void* user, LumaAnimPlay* out);
     /* 1.0. Game thread. As play, on the model `model` the mod attached (content.model, models 7): its own clips. A
@@ -101,6 +103,7 @@ typedef struct LumaAnimService {
        LUMA_E_NOT_FOUND, Content.MissingAnimation in the mod log. An ended model: LUMA_E_HANDLE, reported. A clip, how
        or out play refuses: LUMA_E_ARGUMENT, reported; LUMA_ANIM_MOST_PLAYS going: LUMA_E_LIMIT, reported. Off the game
        thread: LUMA_E_THREAD, reported; while the game takes the mod out: LUMA_E_CANCELLED. */
+    /* events: END(socket, status, value), MARK(socket, value, data) */
     int32_t (*play_on_model)(const LumaMod* mod, LumaContentModel model, const char* clip, const LumaAnimHow* how,
                              LumaEventFn fn, void* user, LumaAnimPlay* out);
     /* 1.0. Game thread. The play stops where it is: every kind of it stays on its frame until its actor's code or

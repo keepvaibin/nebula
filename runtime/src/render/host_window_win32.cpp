@@ -735,7 +735,11 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     }
     if (msg == kSettingsKeyMessage) {
-        (void)native_settings_pad_key(wp);
+        if (lp != 0) {
+            (void)native_settings_handle_window_key(wp, false, static_cast<std::uint32_t>(wp));
+        } else {
+            (void)native_settings_pad_key(wp);
+        }
         return 0;
     }
     if (msg == WM_DISPLAYCHANGE) {
@@ -1474,6 +1478,14 @@ void native_settings_post_key(std::uintptr_t virtual_key) noexcept {
     if (window != nullptr) {
         (void)PostMessageW(window, kSettingsKeyMessage,
                            static_cast<WPARAM>(virtual_key), 0);
+    }
+}
+
+void native_settings_post_keyboard_key(std::uintptr_t virtual_key) noexcept {
+    const HWND window = reinterpret_cast<HWND>(
+        host_window::settings_window.load(std::memory_order_acquire));
+    if (window != nullptr) {
+        (void)PostMessageW(window, kSettingsKeyMessage, static_cast<WPARAM>(virtual_key), 1);
     }
 }
 

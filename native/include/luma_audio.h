@@ -104,7 +104,9 @@ typedef struct LumaAudioService {
        not there: LUMA_E_NOT_FOUND (an answer); a file that is not a cooked sound: LUMA_E_FORMAT, reported
        (Audio.NotASound); a 33rd voice: the mod's voice of the lowest priority (the new one's included; the oldest
        of equals) ends, ENDED LUMA_E_LIMIT, reported; when that is the new one, LUMA_E_LIMIT, reported. A null name or
-       out, a name past LUMA_AUDIO_NAME_MOST, a `how` of the wrong size or out of range: LUMA_E_ARGUMENT, reported. */
+       out, a name past LUMA_AUDIO_NAME_MOST, a `how` of the wrong size or out of range: LUMA_E_ARGUMENT, reported.
+       `how` (null: the sound as cooked) sets its volume, pitch, bus and loop. */
+    /* events: ENDED(socket, status) */
     int32_t (*play)(const LumaMod* mod, const char* name, const LumaAudioPlay* how, LumaEventFn fn, void* user,
                     LumaHandle* out);
     /* A playing voice's volume and pitch (as LumaAudioPlay's), ramped over 10 ms. A handle not the mod's playing
@@ -114,11 +116,13 @@ typedef struct LumaAudioService {
        the handle is closed at once. A handle not the mod's voice: LUMA_E_HANDLE, reported. */
     int32_t (*voice_stop)(const LumaMod* mod, LumaHandle voice, uint32_t fade_ms);
     /* The mod's own share of a bus (0 to 1; 1 at its start), on top of the player's setting for it: every voice and
-       stream of the mod on that bus, ramped over 10 ms. */
+       stream of the mod on that bus, ramped over 10 ms. LUMA_OK; a bus past LUMA_AUDIO_BUS_MUSIC, a volume not a
+       number or outside 0 to 1: LUMA_E_ARGUMENT, reported. */
     int32_t (*bus_volume)(const LumaMod* mod, uint32_t bus, float volume);
     /* A stream the mod fills with stream_push. LUMA_OK and *out; NEED follows at once (it is empty). A 5th stream:
        LUMA_E_LIMIT, reported; a desc of the wrong size or out of range, a null desc or out: LUMA_E_ARGUMENT,
        reported. */
+    /* events: NEED(socket, value) */
     int32_t (*stream_open)(const LumaMod* mod, const LumaAudioStreamDesc* desc, LumaEventFn fn, void* user,
                            LumaHandle* out);
     /* Queues `frames` frames of float samples (channels each, interleaved; -1 to 1, louder is clipped at the
@@ -142,13 +146,15 @@ typedef struct LumaAudioService {
     /* Listens to `source` (LumaAudioTapSource): SAMPLES to fn (not null) once every LUMA_AUDIO_TAP_FRAMES frames,
        for visualisers, recorders, beat detection. A 3rd tap: LUMA_E_LIMIT, reported. It hears only the game's
        sound and the mods', nothing of the player's (the microphone is the audio.microphone service). */
+    /* events: SAMPLES(socket, status, data, value, flags) */
     int32_t (*tap_open)(const LumaMod* mod, uint32_t source, LumaEventFn fn, void* user, LumaHandle* out);
     /* Ends a tap; no event after. A handle not the mod's tap: LUMA_E_HANDLE, reported. */
     int32_t (*tap_close)(const LumaMod* mod, LumaHandle tap);
-    /* play, heard from `at` (null: as play, everywhere): the sound's near and far (sound.md 3: full volume within
+    /* As play, heard from `at` (null: as play, everywhere): the sound's near and far (sound.md 3: full volume within
        near, silent beyond far, linear between) and its side from the camera (constant power). A place that is not
        there (no camera, no player) keeps the last one heard (none yet: heard as with no place). Answers as play; a place of the wrong size, a follow
        past LUMA_AUDIO_AT_CAMERA or a pos not finite or past LUMA_AUDIO_PLACE_MOST: LUMA_E_ARGUMENT, reported. */
+    /* events: ENDED(socket, status) */
     int32_t (*play_at)(const LumaMod* mod, const char* name, const LumaAudioPlay* how, const LumaAudioPlace* at,
                        LumaEventFn fn, void* user, LumaHandle* out);
     /* A playing voice's place (null: heard everywhere again), from the next audio block, the change ramped over it.

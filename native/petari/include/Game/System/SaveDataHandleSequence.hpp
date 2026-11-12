@@ -31,7 +31,8 @@ public:
         return mPreLoadState == 2 || mIsNoSaveMode || mIsCorrupted;
     }
     void exeQuietSave();
-    // A save was read at the start (1), or the start read none (2: no file, damaged, or saves off); 0 before.
+    // A save was read at the start or written since (1), or the start read none (2: no file, damaged, or saves off);
+    // 0 before.
     int getPreLoadState() const {
         return mPreLoadState;
     }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/LumaMarks.hpp"
+
 #include "Game/Map/LightZoneDataHolder.hpp"
 #include <nebula_geometry.hpp>
 
@@ -31,7 +33,7 @@ namespace MR {
     void calcCubeAxisZ(const AreaObj*, Vec3f*);
     void calcCubeLocalPos(Vec3f*, const AreaObj*, const Vec3f&);
 
-    void calcCubeRotate(const AreaObj*, Vec3f*);
+    void calcCubeRotate(const AreaObj*, LUMA_OUT Vec3f*);
 
     bool calcWhirlPoolAccelInfo(const Vec3f&, Vec3f*);
 

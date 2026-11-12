@@ -359,6 +359,13 @@ namespace {
             0x20,
             createManager< AreaObjMgr >,
         },
+        // LumaCore's manager for mods' own areas (the factory's LumaAreaCube, LumaAreaSphere, LumaAreaCylinder): no game
+        // code asks for it, so a mod's area does nothing a game area of its maker's name would (pull back, move, ...).
+        {
+            "LumaArea",
+            0x40,
+            createManager< AreaObjMgr >,
+        },
     };
 };  // namespace
 

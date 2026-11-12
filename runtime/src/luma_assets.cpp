@@ -464,6 +464,16 @@ std::int32_t commit(Table& t, const LumaMod* mod, const std::string& key, Built&
             }
         }
     }
+    // What the game has at the path decides its form first: a plain folder, or a file where this is an archive (or
+    // the other way), is never provided, whoever provides what under it (2804).
+    const bool folder = built.nodes[0].folder;
+    if (store != nullptr) {
+        if (const std::optional<assets::Entry> game = store->find(key)) {
+            if ((game->folder && !game->archive) || game->folder != folder) {
+                return LUMA_E_FORMAT;
+            }
+        }
+    }
     // A path under this one provided already would be hidden by it.
     const std::string under = key + '/';
     for (const auto& [other, top] : t.tops) {
@@ -474,14 +484,6 @@ std::int32_t commit(Table& t, const LumaMod* mod, const std::string& key, Built&
     const auto same = t.tops.find(key);
     if (same != t.tops.end() && same->second.mod != mod) {
         return LUMA_E_EXISTS;
-    }
-    const bool folder = built.nodes[0].folder;
-    if (store != nullptr) {
-        if (const std::optional<assets::Entry> game = store->find(key)) {
-            if ((game->folder && !game->archive) || game->folder != folder) {
-                return LUMA_E_FORMAT;
-            }
-        }
     }
     std::uint64_t& spent = t.spent[mod];
     if (spent + built.size > LUMA_ASSETS_PROVIDE_MOST ||

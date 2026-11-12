@@ -1023,6 +1023,16 @@ void add_cook_facts(const std::filesystem::path& facts_file, const std::vector<s
                 if (eq == std::string::npos || eq == 0) continue;
                 values.emplace_back(f[i].substr(0, eq), f[i].substr(eq + 1));
             }
+            // The cook's row words name the mod and the file ("{mod}: {file}: ..."); its line gives neither as a value.
+            const std::string& place = f[3].empty() ? f[1] : f[3];
+            const auto given = [&values](std::string_view name) {
+                for (const auto& [n, v] : values) {
+                    if (n == name) return true;
+                }
+                return false;
+            };
+            if (!given("mod")) values.emplace_back("mod", "T:" + mod);
+            if (!given("file")) values.emplace_back("file", "T:" + place);
             add_finding(LUMA_MODLOG_COOK, kind == "failed" ? LUMA_MODLOG_ERROR : LUMA_MODLOG_NOTE, mod, code,
                         f[3].empty() ? f[1] : f[3], 0, 0, values);
         } else if (kind.size() > 5 && kind.compare(0, 5, "cook.") == 0) {

@@ -182,7 +182,7 @@ namespace MR {
     void unlockPlayerAnimation();
     void resetPlayerStatus();
     void resetPlayerEffect();
-    void setPlayerBaseMtx(MtxPtr);
+    void setPlayerBaseMtx(LUMA_IN MtxPtr);
     MtxPtr getPlayerBaseMtx();
     LiveActor* getPlayerDemoActor();
     void initPlayerAfterOpeningDemo();
