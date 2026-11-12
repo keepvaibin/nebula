@@ -461,7 +461,9 @@ float4 traced_scatter(float4 c, float4 pixel) {
 }
 #if NATIVE_PREPASS
 float3 program_fog(float3 c, float3 colour, float amount) { return lerp(c, colour, amount); }
+float3 program_fog_curve(float3 c, float3 colour, float amount, float4 curve) { return lerp(c, colour, amount); }
 float4 program_fogged(float4 c) { return c; }
+float4 program_fogged_at(float4 c, float4 pixel) { return c; }
 #else
 // The game's fog over the traced light (15.3; FB): a program's fog step (the generated fog line, native_fog) keeps its
 // colour and amount, and PROGRAM_LIGHT puts the light on the surface's colour first and the fog over it.
@@ -474,13 +476,52 @@ float3 program_fog(float3 c, float3 colour, float amount) {
     return c;
 }
 float4 program_fogged(float4 c) { return g_fog_amount > 0.0 ? float4(lerp(c.rgb, g_fog_colour, g_fog_amount), c.a) : c; }
+// The fog step with its curve (the cooker's fog line, native_fog): x its start, y its end, z the pixel's eye depth, w
+// its type (GX: 2 linear, 4 exp, 5 exp2, 6 reverse exp, 7 reverse exp2; bit 3 orthographic); 0 none known.
+static float4 g_fog_curve = float4(0.0, 0.0, 0.0, 0.0);
+float3 program_fog_curve(float3 c, float3 colour, float amount, float4 curve) {
+    g_fog_curve = curve;
+    return program_fog(c, colour, amount);
+}
+// Where (0 at the start, 1 at the end) the fog's curve reaches `f`: the inverse of fog_exp and the others.
+float fog_x_of(float f, uint type) {
+    switch (type & 7u) {
+    case 4u: return -log2(max(1.0 - f, 1.0e-6)) / 8.0;
+    case 5u: return sqrt(-log2(max(1.0 - f, 1.0e-6)) / 8.0);
+    case 6u: return 1.0 + log2(max(f, 1.0e-6)) / 8.0;
+    case 7u: return 1.0 - sqrt(max(-log2(max(f, 1.0e-6)), 0.0) / 8.0);
+    default: return f;
+    }
+}
+// What of the fog is lit (DIRECTOR.md, one medium; FB b57): the light volume's share (view_volume[2].x) over the fog's
+// eye way, each step by the fog it adds. 1 in open sun under the whole sky.
+float3 fog_share(float4 pixel) {
+    const uint type = uint(g_fog_curve.w + 0.5);
+    if (type == 0u || (type & 8u) != 0u || (view_flags & 8u) == 0u || view_volume[2].x == 0.0 || (view_flags & 16u) != 0u) {
+        return float3(1.0, 1.0, 1.0);
+    }
+    const float3 cells = float3(96.0, 54.0, 48.0);
+    const float2 across = (pixel.xy - view_volume[1].xy) / view_volume[1].zw;
+    float3 sum = float3(0.0, 0.0, 0.0);
+    for (uint j = 0u; j < 8u; ++j) {
+        const float x = saturate(fog_x_of((float(j) + 0.5) / 8.0 * g_fog_amount, type));
+        const float z = min(lerp(g_fog_curve.x, g_fog_curve.y, x), g_fog_curve.z);
+        const float3 at = clamp(float3(across, log(max(z, 1.0) / 50.0) / log(400.0)), 0.5 / cells, 1.0 - 0.5 / cells);
+        sum += gVolumes[uint(view_volume[2].x) - 1u].SampleLevel(gSamplers[uint(view_volume[2].y)], at, 0.0).rgb;
+    }
+    return sum * 0.125;
+}
+float4 program_fogged_at(float4 c, float4 pixel) {
+    return g_fog_amount > 0.0 ? float4(lerp(c.rgb, g_fog_colour * fog_share(pixel), g_fog_amount), c.a) : c;
+}
 #endif
 // A program returns inside its entry, whose input `i` holds the pixel. The light on the surface, the game's fog, the
 // light in the air between the eye and the surface.
-#define PROGRAM_LIGHT(c) traced_scatter(program_fogged(traced_by_air(i.pos) ? traced_air(c, i.pos) : traced_colour(c, i.pos)), i.pos)
+#define PROGRAM_LIGHT(c) traced_scatter(program_fogged_at(traced_by_air(i.pos) ? traced_air(c, i.pos) : traced_colour(c, i.pos), i.pos), i.pos)
 #else
 // Fog at once (the same math as the fog step had in place).
 float3 program_fog(float3 c, float3 colour, float amount) { return lerp(c, colour, amount); }
+float3 program_fog_curve(float3 c, float3 colour, float amount, float4 curve) { return lerp(c, colour, amount); }
 #define PROGRAM_LIGHT(c) (c)
 #endif
 

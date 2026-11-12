@@ -90,7 +90,8 @@ float3 native_fog(float3 c, float4 pos, float4 fog, float4 fog_color) {
     case 7u: f = 1.0 - f; f = exp2(-8.0 * f * f); break;
     default: break;
     }
-    return program_fog(c, fog_color.rgb, f);  // a traced form fogs after its light (program.hlsli, 15.3)
+    // A traced form fogs after its light, the fog lit by the traced share (program.hlsli, 15.3; FB b57).
+    return program_fog_curve(c, fog_color.rgb, f, float4(fog.x, fog.y, ze, float(type)));
 }
 
 #if NATIVE_LIT && NATIVE_TRACED

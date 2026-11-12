@@ -534,8 +534,9 @@ fn fog_lines(fog_type: u8, rows: &mut Rows) -> Vec<String> {
         7 => format!("fog_rev_exp2({amount})"),
         _ => amount,
     };
-    // program.hlsli program_fog: fogs at once, or in a traced form after the traced light (RT-MASTER-PLAN 15.3).
-    vec![format!("    prev.rgb = program_fog(prev.rgb, {color}.rgb, {curved});")]
+    // program.hlsli program_fog_curve: fogs at once, or in a traced form after the traced light, the fog lit by the
+    // traced share along its curve (RT-MASTER-PLAN 15.3; FB b57): start, end, the pixel's depth, the type.
+    vec![format!("    prev.rgb = program_fog_curve(prev.rgb, {color}.rgb, {curved}, float4({fog}.x, {fog}.y, {ze}, {fog_type}.0));")]
 }
 
 fn replace_lines(p: &mut Pixel, fog_type: u8) -> Result<()> {
