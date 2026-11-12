@@ -53,5 +53,7 @@ void record_code_answer(ModInfo& mod, bool granted);
 bool record_answer(ModInfo& mod, std::string_view permission, bool granted);
 // The names to pass to luma_load_mod: Granted answers for the declarations as they are now, in the manifest's order.
 [[nodiscard]] std::vector<std::string> granted_permissions(const ModInfo& mod);
+// The names the player declined, for the declarations as they are now, in the manifest's order.
+[[nodiscard]] std::vector<std::string> declined_permissions(const ModInfo& mod);
 
 }  // namespace galaxy::mods

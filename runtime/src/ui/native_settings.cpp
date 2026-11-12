@@ -2241,6 +2241,14 @@ void refresh_overlaps_locked() {
 
 // With s_mods_mutex held: mod `id` into the list of mods on at `index` (0 the top), or off (`on` false: among the
 // others by name). The draft only.
+// Why the mod's code did not start this run, as its rows say it: a required permission the player declined is their
+// choice, Consent.OffDeclined as the mod log says it (consent 2.3), not the loader's L506.
+galaxy::mods::NotStartedText mod_not_started_text(const std::string& id) {
+    const std::string declined = galaxy::modlog::declined_at_start(id);
+    if (declined.empty()) return galaxy::mods::plugin_not_started_text(id);
+    return {galaxy::modlog::row_words("Consent.OffDeclined", id, {{"permission", declined}}), true};
+}
+
 void place_mod_locked(const std::string& id, bool on, std::size_t index) {
     const auto find = [&] {
         return std::find_if(s_mods.begin(), s_mods.end(), [&](const galaxy::mods::ModInfo& m) { return m.id == id; });
@@ -2695,7 +2703,7 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
     // Why its code did not start this run (Z-10): a refusal is already in the played language, shown as is. On the list
     // but its code not running says so in the value (Z-13): "On, not running (2 of 2)".
     const galaxy::mods::NotStartedText not_started =
-        mod.problem.empty() ? galaxy::mods::plugin_not_started_text(mod.id) : galaxy::mods::NotStartedText{};
+        mod.problem.empty() ? mod_not_started_text(mod.id) : galaxy::mods::NotStartedText{};
     const std::string place = " (" + std::to_string(mod.order) + " OF " + std::to_string(on) + ")";
     SettingsRow status{"STATUS", !mod.enabled ? std::string("OFF") : not_started.text.empty() ? "ON" + place : "ON, NOT RUNNING" + place,
                        [id](RenderConfig&, int delta) {
@@ -2894,7 +2902,7 @@ SettingsRow mod_row(const galaxy::mods::ModInfo& mod) {
     row.key = "mod:" + mod.id;
     row.names = 1u;
     if (mod.problem.empty()) {
-        const galaxy::mods::NotStartedText not_started = galaxy::mods::plugin_not_started_text(mod.id);
+        const galaxy::mods::NotStartedText not_started = mod_not_started_text(mod.id);
         if (!not_started.text.empty()) {
             row.help = mods_ui_text(not_started.text, 160u);
             if (not_started.as_is) row.names |= 4u;

@@ -12,6 +12,10 @@
 #include <utility>
 #include <vector>
 
+namespace galaxy::mods {
+struct ModInfo;
+}
+
 namespace galaxy::modlog {
 
 // Once a session, before the mods' code starts: finds the module's exports (`find_symbol`, as start_plugins takes it)
@@ -19,8 +23,14 @@ namespace galaxy::modlog {
 // fact writer. Nothing happens when the module has no log.
 void begin(void* (*find_symbol)(const char*), std::uint32_t mods_on);
 
+// Before the start's plan: each mod's stored permission answers, from the ModInfo list its granted lists come from
+// (consent 1.4: the two never differ within one start). add_not_started and declined_at_start read them.
+void keep_permission_answers(const std::vector<galaxy::mods::ModInfo>& mods);
+
 // After start_plugins: each mod whose code did not start (galaxy::mods::plugins_not_started, Z-10) as a LOADER Error:
-// a refusal in the validator's words, a host sentence as the Mods page translates it.
+// a refusal in the validator's words, a host sentence as the Mods page translates it. An L506 (a required service's
+// permission not granted) whose kept answer is Declined is the player's choice, a Note `Consent.OffDeclined`; one whose
+// answer is Granted or not asked is the store and the facts disagreeing, an Error `Consent.RefusedAnyway` (consent 2.3).
 void add_not_started();
 
 // A placed package for the start's check: its folder name, its folder, whether the player has it on.
@@ -47,6 +57,10 @@ void add_start_findings();
 
 // The Mods page's sentence for a package refused by the start's check (a host sentence: S. row in 14 languages).
 [[nodiscard]] const char* refused_sentence();
+
+// The permission as the player reads it when the mod's code did not start for an L506 and its answer kept at the start
+// is Declined (the Mods page then says Consent.OffDeclined, as the log does); "" otherwise. Any thread.
+[[nodiscard]] std::string declined_at_start(std::string_view mod_id);
 
 // One host entry (sources 0 VALIDATOR, 1 LOADER, 2 COOK; levels 0 Error, 1 Note): the validator's code and its
 // parameters, worded by the validator in the played language and in English. `file` the entry inside the mod, `line`
