@@ -301,7 +301,7 @@ namespace luma {
                 u32 seq;           // even: steady; odd: being written (game thread only writes)
                 u32 live;          // rolled each frame (0 once its mod ended)
                 LumaMod* pOwner;   // the mod loaded last with this id (only its end stops the rolling)
-                u32 told;          // its fact kernel.guard_time written (harness runs)
+                u32 told;          // its fact guard.time written (harness runs)
                 char id[72];       // the mod's id (at most 64 bytes)
                 u64 frameTicks;    // this frame's, added to from any thread
                 u64 ring[cCostFrames];
@@ -499,16 +499,18 @@ namespace luma {
                 return;
             }
             sMeasured = true;
-            // In ticks, the boundaries' own clock: the host's is the frames' in a deterministic (harness) run, and does
-            // not move within this call.
+            const NebulaHostServices* const pHost = nebula_host();
+            if (pHost == nullptr || pHost->clock_ns == nullptr) {
+                return;
+            }
             const u32 cCount = 100000;
             u64 (*volatile plain)(uintptr_t, uintptr_t) = nothing;
             u64 sink = 0;
-            const u64 t0 = ticks();
+            const u64 t0 = pHost->clock_ns(pHost->user);
             for (u32 i = 0; i < cCount; i++) {
                 sink += plain(i, 0);
             }
-            const u64 t1 = ticks();
+            const u64 t1 = pHost->clock_ns(pHost->user);
             LumaGuardThread* const pThread = &tThread;
             u64 measured = 0;  // stands for a mod's slot: the charge is an add to memory, as in run()
             for (u32 i = 0; i < cCount; i++) {
@@ -544,31 +546,26 @@ namespace luma {
                 tNestedTicks = outerNested + total;
                 pThread->top = frame.outer;
             }
-            const u64 t2 = ticks();
+            const u64 t2 = pHost->clock_ns(pHost->user);
             // The clock's pair of reads alone, as each boundary makes it.
             u64 pairs = 0;
             for (u32 i = 0; i < cCount; i++) {
                 const u64 a = ticks();
                 pairs += ticks() - a;
             }
-            const u64 t3 = ticks();
+            const u64 t3 = pHost->clock_ns(pHost->user);
             sink += measured + pairs;
-            // Picoseconds per tick when the clock is scaled (arm64 at install; x64 a quarter second after it), else 0.
-            const unsigned long long psPerTick = static_cast<unsigned long long>(nsPerTick() * 1000.0);
-            // The kernel's fact (not guard.<mod id>: a mod's guard event).
-            char json[240];
+            char json[200];
             nebula_snprintf(json, sizeof(json),
-                            "{\"count\": %u, \"plain_ticks\": %llu, \"guarded_ticks\": %llu, \"clock_pairs_ticks\": %llu, "
-                            "\"ps_per_tick\": %llu, \"sink\": %llu}",
+                            "{\"count\": %u, \"plain_ns\": %llu, \"guarded_ns\": %llu, \"clock_pairs_ns\": %llu, \"sink\": %llu}",
                             cCount, static_cast<unsigned long long>(t1 - t0), static_cast<unsigned long long>(t2 - t1),
-                            static_cast<unsigned long long>(t3 - t2), psPerTick, static_cast<unsigned long long>(sink));
-            luma::modlog::fact("kernel.guard_cost", json);
-            nebula_log("LumaCore: the guard's boundary costs %llu ticks per call more than a plain call, its clock's pair of reads "
-                       "%llu ticks of that (%u calls: %llu ticks against %llu; %u pairs: %llu ticks; %llu ps per tick, 0: not "
-                       "scaled yet)\n",
+                            static_cast<unsigned long long>(t3 - t2), static_cast<unsigned long long>(sink));
+            luma::modlog::fact("guard.cost", json);
+            nebula_log("LumaCore: the guard's boundary costs %llu ns per call more than a plain call, its clock's pair of reads "
+                       "%llu ns of that (%u calls: %llu ns against %llu ns; %u pairs: %llu ns)\n",
                        static_cast<unsigned long long>(t2 - t1 > t1 - t0 ? (t2 - t1 - (t1 - t0)) / cCount : 0),
                        static_cast<unsigned long long>((t3 - t2) / cCount), cCount, static_cast<unsigned long long>(t2 - t1),
-                       static_cast<unsigned long long>(t1 - t0), cCount, static_cast<unsigned long long>(t3 - t2), psPerTick);
+                       static_cast<unsigned long long>(t1 - t0), cCount, static_cast<unsigned long long>(t3 - t2));
         }
 
         bool install(const LumaGuardHost* pHost) {
@@ -688,7 +685,7 @@ namespace luma {
                     nebula_snprintf(json, sizeof(json), "{\"mod\": \"%s\", \"found\": %d, \"avg_ns\": %llu, \"worst_ns\": %llu}", rSlot.id,
                                     static_cast<int>(found), static_cast<unsigned long long>(avgNs),
                                     static_cast<unsigned long long>(worstNs));
-                    luma::modlog::fact("kernel.guard_time", json);
+                    luma::modlog::fact("guard.time", json);
                 }
             }
         }
