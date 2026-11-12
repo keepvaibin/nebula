@@ -91,6 +91,7 @@ namespace luma {
             u32 sMaking = 0;  // makes between the maker and `made` (modGone waits for none)
 
             // The kernel's own hooks (the factory, NameObj's destructor): an owner no mod is.
+            // The kernel's own hooks (the factory, NameObj's destructor): an owner no mod is.
             const char sKernelOwner = 0;
             bool sHooked = false;
             // The factory asked by the kernel itself: the game's own answer, never a mod class's.
@@ -234,9 +235,7 @@ namespace luma {
             // memory went with it.
             void callGone(const ClassRow* pRow, const void* pObject, void* pData) {
                 if (pRow->gone != nullptr) {
-                    guard::run(const_cast<LumaMod*>(pRow->mod), LUMA_GUARD_CLASS, pRow->name, reinterpret_cast<const void*>(pRow->gone),
-                               reinterpret_cast<uintptr_t>(pObject), reinterpret_cast<uintptr_t>(pData),
-                               reinterpret_cast<uintptr_t>(pRow->user), 0, nullptr);
+                    pRow->gone(const_cast<void*>(pObject), pData, pRow->user);
                 }
             }
 
@@ -330,8 +329,6 @@ namespace luma {
                                     core()->free(sRows[replaced.row]->mod, replaced.data);
                                 }
                             }
-                            if (pRow->made != nullptr) {
-                                pRow->made(const_cast<void*>(pComplete), pData, pRow->user);
                             if (pRow->overrideCount != 0 && !takeTable(pRow, const_cast<void*>(pComplete))) {
                                 // No table of its own (said): the object is not the class's; it stays a plain base.
                                 lock();
@@ -342,8 +339,7 @@ namespace luma {
                                 unlock();
                                 core()->free(pRow->mod, pData);
                             } else if (pRow->made != nullptr) {
-                                           reinterpret_cast<const void*>(pRow->made), reinterpret_cast<uintptr_t>(pComplete),
-                                           reinterpret_cast<uintptr_t>(pData), reinterpret_cast<uintptr_t>(pRow->user), 0, nullptr);
+                                pRow->made(const_cast<void*>(pComplete), pData, pRow->user);
                             }
                         }
                     }
@@ -399,26 +395,6 @@ namespace luma {
                 return 0;
             }
 
-            // The wrap on a row the base runs: the mod's override for its own objects, the rest of the chain for others.
-            int32_t overrideHook(LumaCall* pCall, void* pUser) {
-                const Override* const pOverride = static_cast<const Override*>(pUser);
-                const void* const pSelf = pCall->args[0];
-                const void* pComplete = nullptr;
-                bool own = false;
-                // Most calls of a shared row are other classes': one vtable read sends them on with no lock.
-                if (pSelf != nullptr && ownTypeInfo(pSelf, &pComplete) == pOverride->baseTypeInfo) {
-                    lock();
-                    const s32 at = findLocked(pComplete);
-                    own = at >= 0 && sSlots[at].row == pOverride->row;
-                    unlock();
-                }
-                if (own) {
-                    pOverride->hook(pCall, pOverride->user);
-                } else {
-                    core()->proceed(pCall);
-                }
-                return 0;
-            }
 
             bool installKernelHooks() {
                 if (sHooked) {
@@ -856,13 +832,12 @@ namespace luma {
                 NEBULA_PANIC("LumaCore: the entry of %s ran on an object whose table has no override of it", pOriginal->name);
             }
             Call call = {pOriginal, args, result, 0, 0, nullptr};
-            // A class that ended (its mod gone) runs the base's code; so does a hook that failed (or whose mod is off)
-            // before it proceeded, as a wrap's does (LumaHook proceed).
-            if (!pRow->live || (!guard::run(const_cast<LumaMod*>(pRow->mod), LUMA_GUARD_CLASS, pOriginal->name,
-                                            reinterpret_cast<const void*>(pOverride->hook), reinterpret_cast<uintptr_t>(&call),
-                                            reinterpret_cast<uintptr_t>(pOverride->user), 0, 0, nullptr) &&
-                                call.ran == 0)) {
+            // A class that ended (its mod gone) runs the base's code; a live class's override runs and proceeds itself, as a
+            // wrap does (LumaHook proceed).
+            if (!pRow->live) {
                 proceed(&call);
+            } else {
+                (void)pOverride->hook(reinterpret_cast<LumaCall*>(&call), pOverride->user);
             }
         }
 

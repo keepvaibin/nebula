@@ -12,7 +12,6 @@
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/NameObj/NameObjFactory.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
-#include "Game/System/LumaClass.hpp"
 #include "Game/System/LumaCore.hpp"
 #include "Game/System/LumaHook.hpp"
 #include "Game/System/LumaLoader.hpp"
@@ -206,9 +205,9 @@ namespace luma {
             // ours are taken as given one with none (the table has no view group), not left to the next placement.
             AllLiveActorGroup* const pActors = MR::getAllLiveActorGroup();
             const bool pending = pActors->mActorNum < pActors->getObjNum();
-            // A mod's object is made by its own name; the game's by their Japanese names (as PlacementInfoOrdered).
-            const char* const pModObject = NebulaMods::modObjectName(pName);
-            const char* const pArgument = pModObject != nullptr ? pModObject : MR::getJapaneseObjectName(pName);
+            // The game's objects are made by their Japanese names (as PlacementInfoOrdered); a mod's class by its own (the
+            // factory's hook, LumaClasses, makes it the class's object).
+            const char* const pArgument = MR::getJapaneseObjectName(pName);
             const bool dead = (flags & LUMA_MAKE_DEAD) != 0;
             u32 made = 0;
             {
@@ -221,9 +220,6 @@ namespace luma {
                     }
                     const TableIter iter(pTable, static_cast<s32>(made));
                     while (!pObject->initStep(iter, UINT64_MAX)) {
-                    }
-                    if (lumacore::sClassRowCount != 0) [[unlikely]] {
-                        lumacore::attachClass(pObject, pName);
                     }
                     if (dead) {
                         if (lumacore::isA(lumacore::classOf(pObject), lumacore::kClassId< LiveActor >)) {
