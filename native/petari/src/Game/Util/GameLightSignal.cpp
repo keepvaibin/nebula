@@ -11,6 +11,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include <nebula_frame_list.h>
 #include "Game/System/NebulaHost.hpp"
+#include "Game/System/LumaDrawLight.hpp"
 
 namespace {
     // An actor that asked for the point light, with its last request as a world light.
@@ -112,6 +113,7 @@ namespace GameLightSignal {
             Frame::worldLight(r.mLight);
             i++;
         }
+        luma::draw::light::frame();  // the mods' lights (draw.light); one load while no mod has one
     }
 
     void sun(const Vec3f& rPosition) {

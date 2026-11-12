@@ -10,8 +10,8 @@ namespace {
 };  // namespace
 
 LightPointCtrl::LightPointCtrl()
-    : mStep(-1), mBlendTime(::sDefaultBlendTime), mCurrentActor(), mPreviousActor(), mCandidateActor(), mCurrentInfo(), mTargetInfo(),
-      mPreviousInfo() {
+    : mStep(-1), mBlendTime(::sDefaultBlendTime), mCurrentActor(), mPreviousActor(), mCandidateActor(), mCandidateDistance(0.0f),
+      mCurrentInfo(), mTargetInfo(), mPreviousInfo() {
     mCurrentInfo = new PointLightInfo();
     mTargetInfo = new PointLightInfo();
     mPreviousInfo = new PointLightInfo();
@@ -41,8 +41,17 @@ void LightPointCtrl::update() {
 }
 
 void LightPointCtrl::requestPointLight(const LiveActor* pActor, Vec3f pos, Color8 color, f32 intensity, s32 duration) {
-    if (mStep == -1 && isUpdateCandidateActor(pActor)) {
-        mCandidateActor = pActor;
+    if (mStep == -1) {
+        requestPointLightBy(pActor, MR::calcDistanceToPlayer(pActor), pos, color, intensity, duration);
+    }
+}
+
+// The nearest to the player of those asking since the last choice (the distance each had when it asked: an actor's
+// from its place, a mod's light's from its centre).
+void LightPointCtrl::requestPointLightBy(const void* pKey, f32 distance, Vec3f pos, Color8 color, f32 intensity, s32 duration) {
+    if (mStep == -1 && (mCandidateActor == nullptr || distance < mCandidateDistance)) {
+        mCandidateActor = pKey;
+        mCandidateDistance = distance;
         mTargetInfo->mPos = pos;
         mTargetInfo->mColor = color.mRGBA;
         mTargetInfo->mRefBrightness = MR::clamp(intensity, 0.95f, 0.999999f);
@@ -123,11 +132,3 @@ bool LightPointCtrl::tryBlendStart() {
     return true;
 }
 
-bool LightPointCtrl::isUpdateCandidateActor(const LiveActor* pActor) const {
-    if (mCandidateActor == nullptr) {
-        return true;
-    }
-
-    f32 dist = MR::calcDistanceToPlayer(mCandidateActor);
-    return MR::calcDistanceToPlayer(pActor) < dist;
-}
