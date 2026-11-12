@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/input/live_controls_engine.h"
+#include "galaxy/input/mod_actions.h"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <iostream>
 
@@ -472,6 +474,41 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
     s_previous_shake = shake_pressed;
     snapshot.shake = shake_pressed;
     snapshot.nunchuk_shake = held(GameInput::NunchukShake) || motion_shake_nunchuk;
+
+    // The mods' actions (services-input): their own bindings on the keyboard and the pads, else the game control each
+    // follows as the game gets it this sample (the player's bindings and the extensions' buttons). Nothing with none.
+    if (galaxy::input::mod_actions::any()) {
+        std::uint32_t game_held = logic.pressed;
+        const auto also = [&game_held](bool on, GameInput target) {
+            if (on) game_held |= galaxy::input::game_input_bit(target);
+        };
+        also(snapshot.buttons.a, GameInput::A);
+        also(snapshot.buttons.b, GameInput::B);
+        also(snapshot.buttons.one, GameInput::One);
+        also(snapshot.buttons.two, GameInput::Two);
+        also(snapshot.buttons.plus, GameInput::Plus);
+        also(snapshot.buttons.minus, GameInput::Minus);
+        also(snapshot.buttons.home, GameInput::Home);
+        also(snapshot.buttons.up, GameInput::DpadUp);
+        also(snapshot.buttons.down, GameInput::DpadDown);
+        also(snapshot.buttons.left, GameInput::DpadLeft);
+        also(snapshot.buttons.right, GameInput::DpadRight);
+        also(snapshot.buttons.c, GameInput::C);
+        also(snapshot.buttons.z, GameInput::Z);
+        also(shake_pressed, GameInput::Shake);
+        also(snapshot.nunchuk_shake, GameInput::NunchukShake);
+        std::array<galaxy::input::mod_actions::PadLevels, 8> pad_levels{};
+        std::size_t pad_count = 0;
+        if (use_pads) {
+            for (const LivePad& pad : live_pads) {
+                if (!pad.sample.connected || pad_count == pad_levels.size()) continue;
+                pad_levels[pad_count++] = {pad.sample.scheme, pad.sample};
+            }
+        }
+        galaxy::input::mod_actions::sample(frame.host_menu, use_keyboard, keyboard_levels,
+                                           std::span<const galaxy::input::mod_actions::PadLevels>(pad_levels.data(), pad_count),
+                                           game_held);
+    }
     return result;
 }
 }  // namespace galaxy::host::controls

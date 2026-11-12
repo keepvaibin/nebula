@@ -1296,6 +1296,9 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                 if (mod.problem.empty() && !mod.code_token.empty() && s_code_off_after_crash.load(std::memory_order_relaxed)) {
                     mod.problem = "THIS MOD'S CODE IS OFF AFTER A CRASH. RESTART TO TRY IT AGAIN";
                 }
+                for (const luma::KeyOption& key : manifest->keys) {
+                    mod.actions.push_back({key.id, key.name.in(words), key.fallback});
+                }
                 for (const luma::Option& entry : manifest->options) {
                     ModOption option;
                     option.key = entry.id;

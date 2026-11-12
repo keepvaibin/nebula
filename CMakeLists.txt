@@ -141,6 +141,7 @@ endif()
 add_library(galaxy_runtime_settings STATIC
     runtime/src/runtime_settings.cpp
     runtime/src/input_bindings.cpp
+    runtime/src/input/mod_actions.cpp
     runtime/src/achievements.cpp
     runtime/src/stats.cpp)
 target_link_libraries(galaxy_runtime_settings PUBLIC galaxy_runtime_abi galaxy_atomic_file galaxy_host_extension)
@@ -198,6 +199,7 @@ add_library(galaxy_native_host STATIC
     runtime/src/luma_system_win32.cpp
     runtime/src/luma_mods.cpp
     runtime/src/luma_fs.cpp
+    runtime/src/luma_input.cpp
     runtime/src/mod_plugins.cpp
     runtime/src/mods.cpp
     runtime/src/mod_consent.cpp

@@ -135,9 +135,11 @@ add_library(galaxy_render_vk STATIC
     ${rt}/luma_system.cpp
     ${rt}/luma_mods.cpp
     ${rt}/luma_fs.cpp
+    ${rt}/luma_input.cpp
     ${rt}/achievements.cpp
     ${rt}/stats.cpp
     ${rt}/input_bindings.cpp
+    ${rt}/input/mod_actions.cpp
     ${rt}/host_pointer_events.cpp
     ${rt}/input/wiimote_motion.cpp
     ${rt}/input/controls_engine.cpp

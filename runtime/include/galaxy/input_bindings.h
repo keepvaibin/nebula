@@ -325,6 +325,10 @@ unsigned migrate_legacy_controls(ControlsConfig& config, unsigned version) noexc
     ControlScheme scheme, GameInput target, InputSource source) noexcept;
 // Appends `source` unless already present; a full list drops its last slot.
 void add_binding(TargetBindings& bindings, InputSource source) noexcept;
+// One source's level, 0 to 1: a key, letter position or mouse button on the keyboard; a button or axis of a pad
+// (the mods' actions read their bindings with these, mod_actions.cpp).
+[[nodiscard]] float keyboard_source_value(InputSource source, const KeyboardMouseLevels& levels) noexcept;
+[[nodiscard]] float pad_source_value(InputSource source, const PadSample& sample) noexcept;
 
 // `key` is the full ini key (e.g. "bind.xbox.a", "tune.switch_pro.motion").
 // Returns false for keys this model does not own. Malformed values keep the

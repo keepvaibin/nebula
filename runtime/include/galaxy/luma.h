@@ -28,6 +28,14 @@ struct Choice {
     Text name;
 };
 
+// A `key` option (luma-format revision 5): one of the mod's input actions, following the game control `fallback`
+// (input_bindings.cpp kTargetIds, lower case) until the player binds it in Controls.
+struct KeyOption {
+    std::string id;
+    Text name;
+    std::string fallback;
+};
+
 struct Option {
     std::string id;
     Text name;
@@ -273,7 +281,8 @@ struct Manifest : Rows {
     std::vector<std::string> load_after;    // load.after
     std::vector<std::string> load_before;   // load.before
     std::vector<std::string> takes_over;    // earlier ids of this mod: what they kept moves to it (services-save 6)
-    std::vector<Option> options;            // choice, number and toggle options (text and key: not yet, plan 6.3)
+    std::vector<Option> options;            // choice, number, toggle, text and key options (mods.option reads each)
+    std::vector<KeyOption> keys;            // key options: the mod's input actions (services-input), in Controls
     std::vector<Layer> layers;              // layer.path is layers/<name>
     // False when luma.json has no "layers": read_manifest then uses layers/base when the folder exists (luma-format 4).
     bool layers_listed = false;
