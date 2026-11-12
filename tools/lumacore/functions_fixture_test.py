@@ -73,6 +73,7 @@ EXPECTED = [
     fact("fnInside", "void(const FnV2<float> *, FnVec4 *)", "free", None, marks=[mark("in"), mark("inout")]),
     fact("fnDefined", "void(FnVec *)", "free", None, marks=[mark("out")]),
     fact("FnMarked::get", "void(FnVec *) const", "method", "FnMarked", const=True, marks=[mark("out")]),
+    fact("fnByMacro", "void(float *)", "free", None, marks=[mark("out")]),
 ]
 
 # C-6's refusals: (what, the unit's text after its first line `#include "Game/LumaMarks.hpp"`, what the stop names
@@ -85,7 +86,7 @@ REFUSED = [
     ("a mark on a pointer to a pointer", "void f(LUMA_OUT float** p);",
      "{f}:2: f parameter 1 (p): LUMA_OUT on a parameter of type float **"),
     ("a COUNT naming a float", "void f(LUMA_IN LUMA_COUNT(n) const float* p, float n);",
-     "{f}:2: f parameter 1 (p): LUMA_COUNT(n) names a parameter of type float, not an integer"),
+     "{f}:2: f parameter 1 (p): LUMA_COUNT(n) names a parameter of type float, not an integer of one width"),
     ("a COUNT naming no parameter", "void f(LUMA_IN LUMA_COUNT(m) const float* p, int n);",
      "{f}:2: f parameter 1 (p): LUMA_COUNT(m) names no parameter of this declaration"),
     ("a COUNT naming its own parameter", "void f(LUMA_IN LUMA_COUNT(p) const float* p);",
@@ -118,6 +119,14 @@ REFUSED = [
      "{f}:2: LUMA_OUT is on a function in a template or an unnamed class"),
     ("a mark defined elsewhere", "#undef LUMA_OUT\n#define LUMA_OUT\nvoid f(LUMA_OUT float* p);",
      "{f}:4: LUMA_OUT is not the mark native/petari/include/Game/LumaMarks.hpp defines"),
+    # A18M-1: numbers LumaScript does not cross (a buffer, a width that differs per system)
+    ("a mark on a char pointer", "void f(LUMA_OUT char* p);", "{f}:2: f parameter 1 (p): LUMA_OUT on a parameter of type char *"),
+    ("a mark on a long pointer", "void f(LUMA_OUT long* p);", "{f}:2: f parameter 1 (p): LUMA_OUT on a parameter of type long *"),
+    ("a COUNT naming a long", "void f(LUMA_IN LUMA_COUNT(n) const float* p, long n);",
+     "{f}:2: f parameter 1 (p): LUMA_COUNT(n) names a parameter of type long, not an integer of one width"),
+    # A18M-4: a mark inside a macro's own text
+    ("a mark inside a macro's text", "#define OUT_VEC LUMA_OUT float*\nvoid f(OUT_VEC p);",
+     "{f}:2: LUMA_OUT is written inside a macro (OUT_VEC)"),
 ]
 
 
