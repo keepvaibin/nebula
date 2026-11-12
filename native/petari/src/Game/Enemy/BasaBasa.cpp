@@ -23,73 +23,32 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_math.h>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 90.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 110.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 600.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 800.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f10, "init.f10", 25.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f11, "init.f11", 25.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeChaseStart_f1, "exeChaseStart.f1", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAttackStart_f1, "exeAttackStart.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAttackStart_f2, "exeAttackStart.f2", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAttackEnd_f1, "exeAttackEnd.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAttackEndRecover_f1, "exeAttackEndRecover.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAttackEndRecover_f2, "exeAttackEndRecover.f2", 116.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAttackEndRecover_f3, "exeAttackEndRecover.f3", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f2, "initAfterPlacement.f2", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_controlVelocity_f1, "controlVelocity.f1", 0.95f);
-NEBULA_TUNABLE_NAMED(f32, cNum_controlVelocity_f2, "controlVelocity.f2", 0.96f);
-NEBULA_TUNABLE_NAMED(f32, cNum_controlVelocity_f3, "controlVelocity.f3", 0.45f);
-NEBULA_TUNABLE_NAMED(f32, cNum_controlVelocity_f4, "controlVelocity.f4", 8.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_controlVelocity_f5, "controlVelocity.f5", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_controlVelocity_f6, "controlVelocity.f6", 23.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHitBack_turnDirectionToPlayerDegree_1, "exeHitBack.turnDirectionToPlayerDegree.1", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRailType_moveCoord_1, "updateRailType.moveCoord.1", 1.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeChaseStart_1, "exeChaseStart.1", 50);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeChaseStart_2, "exeChaseStart.2", 15);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeChaseStart_3, "exeChaseStart.3", 34);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeQuickTurnStart_1, "exeQuickTurnStart.1", 45);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeAttackEnd_1, "exeAttackEnd.1", 50);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeHitBack_1, "exeHitBack.1", 5);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeAttachCelling_1, "exeAttachCelling.1", 42);
-
 namespace {
-    NEBULA_TUNABLE(f32, cFlyAccel, 2.0f);
-    NEBULA_TUNABLE(f32, cTurnDegree, 2.55f);
-    NEBULA_TUNABLE(f32, cChaseTurnDegree, 1.7f);
-    NEBULA_TUNABLE(f32, cChaseFaceDegree, 60.0f);
-    NEBULA_TUNABLE(f32, cHomeDistanceMargin, 1000.0f);  // over the chase distance when Obj_arg1 is unset
-    NEBULA_TUNABLE(f32, cHomeArriveDistance, 300.0f);
+    const f32 cFlyAccel = 2.0f;
+    const f32 cTurnDegree = 2.55f;
+    const f32 cChaseTurnDegree = 1.7f;
+    const f32 cChaseFaceDegree = 60.0f;
+    const f32 cHomeDistanceMargin = 1000.0f;  // over the chase distance when Obj_arg1 is unset
+    const f32 cHomeArriveDistance = 300.0f;
     const s32 cComeHomeChaseSteps = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE(f32, cAttachDistance, 10.0f);
-    NEBULA_TUNABLE(f32, cAttachSpeedRate, 5.0f);
-    NEBULA_TUNABLE(f32, cAttackRise, 100.0f);  // above the player's feet
-    NEBULA_TUNABLE(f32, cAttackSpeed, 10.0f);
-    NEBULA_TUNABLE(f32, cAttackHitDistance, 40.0f);
+    const f32 cAttachDistance = 10.0f;
+    const f32 cAttachSpeedRate = 5.0f;
+    const f32 cAttackRise = 100.0f;  // above the player's feet
+    const f32 cAttackSpeed = 10.0f;
+    const f32 cAttackHitDistance = 40.0f;
     const s32 cAttackSteps = NebulaFrameClock::stepsOfSeconds(3);
-    NEBULA_TUNABLE(f32, cIceAttackUpRate, 5.0f);
-    NEBULA_TUNABLE(f32, cAttackEndEffectHeight, 200.0f);
-    NEBULA_TUNABLE(f32, cHitBackSpeed, 15.0f);
-    NEBULA_TUNABLE(f32, cPushSpeed, 1.5f);
-    NEBULA_TUNABLE(f32, cSpinStormDistance, 500.0f);
-    NEBULA_TUNABLE(f32, cClipNearPlayerDistance, 2500.0f);
+    const f32 cIceAttackUpRate = 5.0f;
+    const f32 cAttackEndEffectHeight = 200.0f;
+    const f32 cHitBackSpeed = 15.0f;
+    const f32 cPushSpeed = 1.5f;
+    const f32 cSpinStormDistance = 500.0f;
+    const f32 cClipNearPlayerDistance = 2500.0f;
     const s32 cClipResetSteps = NebulaFrameClock::stepsOfSeconds(3);
-    NEBULA_TUNABLE(f32, cSideDamping, 0.5f);
-    NEBULA_TUNABLE(f32, cHoverBelowAttack, 350.0f);  // hover height is the attack distance minus this
-    NEBULA_TUNABLE(f32, cTuneMinOffset, 2.0f);
+    const f32 cSideDamping = 0.5f;
+    const f32 cHoverBelowAttack = 350.0f;  // hover height is the attack distance minus this
+    const f32 cTuneMinOffset = 2.0f;
 
     inline bool isPointerHolding(const LiveActor* pActor) {
         return MR::isStarPointerPointing2POnPressButton(pActor, "弱", true, false);
@@ -131,14 +90,14 @@ void BasaBasa::init(const TableIter& rIter) {
     initModelManagerWithAnm(objName, nullptr, false);
     MR::connectToSceneEnemy(this);
     initHitSensor(2);
-    MR::addHitSensorAtJointEnemy(this, "body", "JointRoot", 8, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointEnemyAttack(this, "attack", "JointRoot", 8, cNum_init_f2, Vec3f(0.0f, 0.0f, 0.0f));
-    initBinder(cNum_init_f3, 0.0f, 0);
+    MR::addHitSensorAtJointEnemy(this, "body", "JointRoot", 8, 90.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemyAttack(this, "attack", "JointRoot", 8, 60.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    initBinder(110.0f, 0.0f, 0);
     MR::initLightCtrl(this);
     initEffectKeeper(1, nullptr);
     MR::addEffectHitNormal(this, nullptr);
     initSound(4, false);
-    MR::initShadowVolumeSphere(this, cNum_init_f4);
+    MR::initShadowVolumeSphere(this, 100.0f);
     MR::validateClipping(this);
     if (MR::isConnectedWithRail(rIter)) {
         initRailRider(rIter);
@@ -150,10 +109,10 @@ void BasaBasa::init(const TableIter& rIter) {
     MR::declareStarPiece(this, 3);
     MR::declareCoin(this, 1);
     MR::onCalcGravity(this);
-    MR::initStarPointerTarget(this, cNum_init_f5, Vec3f(0.0f));
+    MR::initStarPointerTarget(this, 100.0f, Vec3f(0.0f));
     mScaleController = new AnimScaleController(nullptr);
     mStampController = new AnimStampController();
-    mSpinHitController = new SpinHitController(this, 20, 20, 5, 0.0f, cNum_init_f6, cNum_init_f7, 3, false);
+    mSpinHitController = new SpinHitController(this, 20, 20, 5, 0.0f, 20.0f, 10.0f, 3, false);
     initHangModel();
     MR::getPlacementArg0NoInit(rIter, &mChaseDistance);
     MR::getPlacementArg1NoInit(rIter, &mHomeDistance);
@@ -162,8 +121,8 @@ void BasaBasa::init(const TableIter& rIter) {
     }
 
     MR::calcFrontVec(&mFront, this);
-    mAttackDistance = MR::getRandom(cNum_init_f8, cNum_init_f9);
-    mChaseTurnAngle = MR::getRandom(-cNum_init_f10, cNum_init_f11);
+    mAttackDistance = MR::getRandom(600.0f, 800.0f);
+    mChaseTurnAngle = MR::getRandom(-25.0f, 25.0f);
     MR::useStageSwitchSleep(this, rIter);
     makeActorAppeared();
 }
@@ -212,15 +171,15 @@ void BasaBasa::exeChaseStart() {
         MR::startSound(this, "SE_EV_BASABASA_FIND");
     }
 
-    if (MR::isLessStep(this, cStep_exeChaseStart_1)) {
-        mVelocity.scaleAdd(cNum_exeChaseStart_f1, mGravity, mVelocity);
+    if (MR::isLessStep(this, 50)) {
+        mVelocity.scaleAdd(15.0f, mGravity, mVelocity);
     }
 
-    if (MR::isStep(this, cStep_exeChaseStart_2)) {
+    if (MR::isStep(this, 15)) {
         MR::onBind(this);
     }
 
-    if (MR::isStep(this, cStep_exeChaseStart_3)) {
+    if (MR::isStep(this, 34)) {
         mHangModel->kill();
     }
 
@@ -260,7 +219,7 @@ void BasaBasa::exeChase() {
 
 void BasaBasa::exeQuickTurnStart() {
     mVelocity.scaleAdd(cFlyAccel, mFront, mVelocity);
-    if (MR::isStep(this, cStep_exeQuickTurnStart_1)) {
+    if (MR::isStep(this, 45)) {
         setNerve(GET_NERVE(BasaBasa, BasaBasaNrvQuickTurn));
     } else {
         trySetNervePointerSwoon();
@@ -315,14 +274,14 @@ void BasaBasa::exeAttackStart() {
 
     MR::turnDirectionToTargetDegree(this, &mFront, *mTarget, cTurnDegree);
     Vec3f backUp;
-    backUp.scaleAdd(cNum_exeAttackStart_f1, mFront, mGravity);
+    backUp.scaleAdd(2.0f, mFront, mGravity);
     backUp.negate();
     MR::normalizeOrZero(&backUp);
     if (MR::isNearZero(backUp)) {
         backUp.set(-mGravity);
     }
 
-    mVelocity.scaleAdd(cNum_exeAttackStart_f2, backUp, mVelocity);
+    mVelocity.scaleAdd(0.2f, backUp, mVelocity);
     if (MR::isBckStopped(this)) {
         setNerve(GET_NERVE(BasaBasa, BasaBasaNrvAttack));
     } else {
@@ -369,8 +328,8 @@ void BasaBasa::exeAttackEnd() {
         }
     }
 
-    mVelocity.scaleAdd(cNum_exeAttackEnd_f1, mFront, mVelocity);
-    if (MR::isStep(this, cStep_exeAttackEnd_1)) {
+    mVelocity.scaleAdd(0.1f, mFront, mVelocity);
+    if (MR::isStep(this, 50)) {
         setNerve(GET_NERVE(BasaBasa, BasaBasaNrvAttackEndRecover));
     } else {
         trySetNervePointerSwoon();
@@ -383,11 +342,11 @@ void BasaBasa::exeAttackEndRecover() {
     }
 
     Vec3f riseDir;
-    riseDir.scaleAdd(-cNum_exeAttackEndRecover_f1, mFront, mGravity);
+    riseDir.scaleAdd(-0.5f, mFront, mGravity);
     riseDir.negate();
     MR::normalize(&riseDir);
-    if (MR::getBckFrame(this) >= cNum_exeAttackEndRecover_f2) {
-        mVelocity.scaleAdd(cNum_exeAttackEndRecover_f3, riseDir, mVelocity);
+    if (MR::getBckFrame(this) >= 116.0f) {
+        mVelocity.scaleAdd(0.3f, riseDir, mVelocity);
     }
 
     if (MR::isBckStopped(this)) {
@@ -401,11 +360,11 @@ void BasaBasa::exeHitBack() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Reaction");
         MR::onBind(this);
-        MR::turnDirectionToPlayerDegree(this, &mFront, cNum_exeHitBack_turnDirectionToPlayerDegree_1);
+        MR::turnDirectionToPlayerDegree(this, &mFront, 180.0f);
         MR::startSound(this, "SE_EM_ICEBASA_SPIN_BLOW");
     }
 
-    if (MR::isLessEqualStep(this, cStep_exeHitBack_1)) {
+    if (MR::isLessEqualStep(this, 5)) {
         Vec3f backUp;
         backUp.add(mFront, mGravity);
         backUp.negate();
@@ -475,7 +434,7 @@ void BasaBasa::exeAttachCelling() {
         mVelocity.scale(cAttachSpeedRate, toHome);
     }
 
-    if (MR::isStep(this, cStep_exeAttachCelling_1)) {
+    if (MR::isStep(this, 42)) {
         mHangModel->appear();
     }
 
@@ -521,9 +480,9 @@ void BasaBasa::exeStun() {
 void BasaBasa::initAfterPlacement() {
     MR::trySetMoveLimitCollision(this);
     Vec3f lineStart;
-    lineStart.scaleAdd(cNum_initAfterPlacement_f1, mGravity, mPosition);
+    lineStart.scaleAdd(20.0f, mGravity, mPosition);
     Vec3f lineDir;
-    lineDir.scale(-cNum_initAfterPlacement_f2, mGravity);
+    lineDir.scale(-30.0f, mGravity);
     mIsOnCeiling = MR::getFirstPolyOnLineToMap(&mPosition, nullptr, lineStart, lineDir);
     if (mIsOnCeiling) {
         initNerve(GET_NERVE(BasaBasa, BasaBasaNrvWait));
@@ -745,7 +704,7 @@ bool BasaBasa::tryComeHome() {
 
 void BasaBasa::updateRailType() {
     if (MR::isExistRail(this) && mTarget == &MR::getRailPos(this)) {
-        MR::moveCoord(this, cNum_updateRailType_moveCoord_1);
+        MR::moveCoord(this, 1.0f);
         if (MR::isNearPlayer(mHomePos, mChaseDistance)) {
             mTarget = MR::getPlayerPos();
         }
@@ -766,20 +725,20 @@ void BasaBasa::controlVelocity() {
     mVelocity.scaleAdd(-side.dot(mVelocity), side, mVelocity);
     mVelocity.add(sideVel);
 
-    f32 damping = cNum_controlVelocity_f1;
+    f32 damping = 0.95f;
     if (isNerve(GET_NERVE(BasaBasa, BasaBasaNrvAttackEnd))) {
-        damping = cNum_controlVelocity_f2;
+        damping = 0.96f;
     } else if (isNerve(GET_NERVE(BasaBasa, BasaBasaNrvChaseStart))) {
-        damping = cNum_controlVelocity_f3;
+        damping = 0.45f;
     }
 
     mVelocity.scale(damping);
 
-    f32 maxSpeed = cNum_controlVelocity_f4;
+    f32 maxSpeed = 8.0f;
     if (isNerve(GET_NERVE(BasaBasa, BasaBasaNrvChaseStart)) || isNerve(GET_NERVE(BasaBasa, BasaBasaNrvHitBack))) {
-        maxSpeed = cNum_controlVelocity_f5;
+        maxSpeed = 15.0f;
     } else if (isNerve(GET_NERVE(BasaBasa, BasaBasaNrvAttack))) {
-        maxSpeed = cNum_controlVelocity_f6;
+        maxSpeed = 23.0f;
     }
 
     if (mVelocity.length() > maxSpeed) {

@@ -18,28 +18,21 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <cstdio>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeOpen_setAnimRate_1, "exeOpen.setAnimRate.1", 1.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeOpen_1, "exeOpen.1", 140);
 
 namespace {
     inline void advanceBookIndex(s32& rIndex, const s32& rDirection) {
         rIndex += rDirection;
     }
 
-    NEBULA_TUNABLE(s32, cBookOpenFrame, 60);
+    const s32 cBookOpenFrame = 60;
     // const s32 cBookCloseFrame
-    NEBULA_TUNABLE(s32, cFadeFrame, 60);
+    const s32 cFadeFrame = 60;
     const s32 cWaitNoTextFrame = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(s32, cFadeTextFrame, 30);
+    const s32 cFadeTextFrame = 30;
     // const s32 cReadedSpeedRate
-    NEBULA_TUNABLE(s32, cPageNextEndNormalSeStep, 81);
-    NEBULA_TUNABLE(s32, cPageNextEndFastSeStep, 27);
+    const s32 cPageNextEndNormalSeStep = 81;
+    const s32 cPageNextEndFastSeStep = 27;
     const char* const cContentsPaneName[] = {
         "Chapter1", "Chapter2", "Chapter3", "Chapter4", "Chapter5", "Chapter6", "Chapter7", "Chapter8", "Chapter9",
     };
@@ -471,10 +464,10 @@ void PictureBookLayout::exeOpen() {
     }
 
     if (MR::isStep(this, ::cBookOpenFrame)) {
-        MR::setAnimRate(this, cNum_exeOpen_setAnimRate_1, 0);
+        MR::setAnimRate(this, 1.0f, 0);
     }
 
-    if (MR::isStep(this, cStep_exeOpen_1)) {
+    if (MR::isStep(this, 140)) {
         MR::startSystemSE("SE_SY_PICTUREBOOK_NEXT_ST");
     }
 

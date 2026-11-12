@@ -8,7 +8,6 @@
 #include "Game/System/LumaModLog.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaText.hpp"
-#include "Game/Util/Tunable.hpp"
 #include <Game/Ui/Layout.hpp>
 #include <cstring>
 #include <nebula_format.h>
@@ -22,22 +21,22 @@ namespace {
     // Screen units (NebulaUi::readScreen): the text's size, the window's padding around it, the space between lines,
     // the distance from the screen's left edge and from its bottom (above the game's bottom row of HUD), and the
     // widest a line may be, as a share of the screen's width.
-    NEBULA_TUNABLE(f32, cSize, 17.0f);
-    NEBULA_TUNABLE(f32, cPadX, 12.0f);
-    NEBULA_TUNABLE(f32, cPadY, 7.0f);
-    NEBULA_TUNABLE(f32, cGap, 6.0f);
-    NEBULA_TUNABLE(f32, cLeft, 18.0f);
-    NEBULA_TUNABLE(f32, cBottom, 64.0f);
-    NEBULA_TUNABLE(f32, cMaxShare, 0.55f);
-    NEBULA_TUNABLE(u32, cFill, 0x141A2CD8);
-    NEBULA_TUNABLE(u32, cRing, 0xD9534FFF);
-    NEBULA_TUNABLE(u32, cText, 0xFFFFFFFF);
+    const f32 cSize = 17.0f;
+    const f32 cPadX = 12.0f;
+    const f32 cPadY = 7.0f;
+    const f32 cGap = 6.0f;
+    const f32 cLeft = 18.0f;
+    const f32 cBottom = 64.0f;
+    const f32 cMaxShare = 0.55f;
+    const u32 cFill = 0x141A2CD8;
+    const u32 cRing = 0xD9534FFF;
+    const u32 cText = 0xFFFFFFFF;
     // Frames at 60 a second: in, held (6 s, contract 4.1), out (0.3 s); and the share of the way a line moves to its
     // place each frame when the lines below it go.
-    NEBULA_TUNABLE(s32, cInFrames, 8);
-    NEBULA_TUNABLE(s32, cHoldFrames, 360);
-    NEBULA_TUNABLE(s32, cOutFrames, 18);
-    NEBULA_TUNABLE(f32, cFollow, 0.25f);
+    const s32 cInFrames = 8;
+    const s32 cHoldFrames = 360;
+    const s32 cOutFrames = 18;
+    const f32 cFollow = 0.25f;
 
     const s32 cLines = 3;
     const char16_t cEllipsis = 0x2026;  // the line cut short

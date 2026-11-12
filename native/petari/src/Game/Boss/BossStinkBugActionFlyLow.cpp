@@ -12,17 +12,6 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_BossStinkBugActionFlyLow_f1, "BossStinkBugActionFlyLow.f1", 14.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_BossStinkBugActionFlyLow_f2, "BossStinkBugActionFlyLow.f2", 900.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_BossStinkBugActionFlyLow_f3, "BossStinkBugActionFlyLow.f3", 400.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_appear_f1, "appear.f1", 900.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeFly_f1, "exeFly.f1", 0.05235988f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeFly_f2, "exeFly.f2", 900.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeFly_f3, "exeFly.f3", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeFly_f4, "exeFly.f4", 2000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDash_f1, "exeDash.f1", 15.0f);
 
 namespace NrvBossStinkBugActionFlyLow {
     NEW_NERVE(BossStinkBugActionFlyLowNrvFly, BossStinkBugActionFlyLow, Fly);
@@ -38,9 +27,9 @@ namespace NrvBossStinkBugActionFlyLow {
 };  // namespace NrvBossStinkBugActionFlyLow
 
 BossStinkBugActionFlyLow::BossStinkBugActionFlyLow(BossStinkBug* pStinkBug) : BossStinkBugActionBase("ボスカメムシ低空戦", pStinkBug), mHeightAngle(0.0f) {
-    mFlySpeed = cNum_BossStinkBugActionFlyLow_f1;
-    mHeightOffset = cNum_BossStinkBugActionFlyLow_f2;
-    mLocalHeightOffset = -cNum_BossStinkBugActionFlyLow_f3;
+    mFlySpeed = 14.0f;
+    mHeightOffset = 900.0f;
+    mLocalHeightOffset = -400.0f;
     initNerve(GET_NERVE(BossStinkBugActionFlyLow, BossStinkBugActionFlyLowNrvFly));
 }
 
@@ -52,7 +41,7 @@ void BossStinkBugActionFlyLow::appear() {
     }
 
     mHeightAngle = 0.0f;
-    mHeightOffset = cNum_appear_f1;
+    mHeightOffset = 900.0f;
     BossStinkBugActionBase::appear();
     setNerve(GET_NERVE(BossStinkBugActionFlyLow, BossStinkBugActionFlyLowNrvDash));
     MR::offBind(getHost());
@@ -101,12 +90,12 @@ bool BossStinkBugActionFlyLow::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, 
 }
 
 void BossStinkBugActionFlyLow::exeFly() {
-    mHeightAngle += cNum_exeFly_f1;
+    mHeightAngle += 0.05235988f;
     MR::repeatDegree(&mHeightAngle);
-    mHeightOffset = cNum_exeFly_f2 + MR::sin(mHeightAngle) * cNum_exeFly_f3;
+    mHeightOffset = 900.0f + MR::sin(mHeightAngle) * 100.0f;
     throwBomb(60);
     updateFly();
-    if (BossStinkBugFunction::isExistPlayerBack(getHost(), cNum_exeFly_f4)) {
+    if (BossStinkBugFunction::isExistPlayerBack(getHost(), 2000.0f)) {
         setNerve(GET_NERVE(BossStinkBugActionFlyLow, BossStinkBugActionFlyLowNrvTurnSign));
     }
 }
@@ -148,7 +137,7 @@ void BossStinkBugActionFlyLow::exeDamage() {
 }
 
 void BossStinkBugActionFlyLow::exeDash() {
-    if (updateFlyDash(cNum_exeDash_f1)) {
+    if (updateFlyDash(15.0f)) {
         setNerve(GET_NERVE(BossStinkBugActionFlyLow, BossStinkBugActionFlyLowNrvFly));
     }
 }

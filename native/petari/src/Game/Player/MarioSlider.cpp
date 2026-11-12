@@ -5,19 +5,6 @@
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Player/MarioConst.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_postureCtrl_f1, "postureCtrl.f1", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_postureCtrl_f2, "postureCtrl.f2", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcWallHit_f1, "calcWallHit.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcWallHit_f2, "calcWallHit.f2", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcWallHit_f3, "calcWallHit.f3", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcWallHit_f4, "calcWallHit.f4", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcWallHit_f5, "calcWallHit.f5", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f2, "update.f2", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f3, "update.f3", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f4, "update.f4", 15.0f);
 
 bool Mario::isSliderFloor() const {
     return mFloorCode == 9;
@@ -52,7 +39,7 @@ void MarioSlider::calcGroundAccel() {
 bool MarioSlider::postureCtrl(MtxPtr) {
     Mtx rotMtx;
     Vec3f& frontVec = getFrontVec();
-    NebulaMtxRotAxisRad(rotMtx, &frontVec, cNum_postureCtrl_f1 * (MR::pi() * mLean / cNum_postureCtrl_f2));
+    NebulaMtxRotAxisRad(rotMtx, &frontVec, 0.2f * (MR::pi() * mLean / 2.0f));
 
     Vec3f newHeadVec;
     NebulaMtxMultVec(rotMtx, &getPlayer()->mGroundNorm, &newHeadVec);
@@ -69,8 +56,8 @@ void MarioSlider::calcWallHit() {
         f32 sideDot = MR::vecKillElement(alongSideWall, *getPlayer()->mSideWallTriangle->getNormal(0), &alongSideWall);
 
         if (sideDot < 0.0f) {
-            if (-sideDot < cNum_calcWallHit_f1) {
-                sideDot = -cNum_calcWallHit_f2;
+            if (-sideDot < 10.0f) {
+                sideDot = -10.0f;
             }
 
             mVelocity = alongSideWall - *getPlayer()->mSideWallTriangle->getNormal(0) * sideDot;
@@ -82,11 +69,11 @@ void MarioSlider::calcWallHit() {
         f32 frontDot = MR::vecKillElement(alongFrontWall, *getPlayer()->mFrontWallTriangle->getNormal(0), &alongFrontWall);
 
         if (frontDot < 0.0f) {
-            if (-frontDot < cNum_calcWallHit_f3) {
-                frontDot = -cNum_calcWallHit_f4;
+            if (-frontDot < 10.0f) {
+                frontDot = -10.0f;
             }
 
-            f32 frontScale = cNum_calcWallHit_f5 * frontDot;
+            f32 frontScale = 0.5f * frontDot;
             mVelocity = alongFrontWall - *getPlayer()->mFrontWallTriangle->getNormal(0) * frontScale;
 
             Vec3f newFront(mVelocity);
@@ -133,7 +120,7 @@ bool MarioSlider::update() {
             if (isSlipPolygon(getGroundPolygon())) {
                 Mario* player = getPlayer();
                 player->mSlopeMoveVec = mVelocity;
-                player->mSlipPower = cNum_update_f1;
+                player->mSlipPower = 10.0f;
                 return false;
             }
         }
@@ -163,8 +150,8 @@ bool MarioSlider::update() {
         f32 v18 = mVelocity.length();
         v18 -= mActor->mConst->getTable()->mSliderBrakePow;
 
-        if (v18 > cNum_update_f2) {
-            v18 = (v18 * (1.0f - (cNum_update_f3 * mBrake)));
+        if (v18 > 20.0f) {
+            v18 = (v18 * (1.0f - (0.1f * mBrake)));
         }
 
         Vec3f v48(mVelocity);
@@ -192,7 +179,7 @@ bool MarioSlider::update() {
 
             addVelocity(mVelocity);
 
-            Vec3f v45(-getPlayer()->mGroundNorm * cNum_update_f4);
+            Vec3f v45(-getPlayer()->mGroundNorm * 15.0f);
 
             MR::vecKillElement(v45, getFrontVec(), &v45);
             addVelocity(v45);

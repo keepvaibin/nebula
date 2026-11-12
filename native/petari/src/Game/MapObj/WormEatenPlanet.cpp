@@ -6,10 +6,7 @@
 #include "Game/Map/CollisionParts.hpp"
 #include "Game/MapObj/GreenCaterpillarBig.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1000.0f);
 
 namespace {
     static const s32 sNumWormEatenHill = 5;
@@ -44,7 +41,7 @@ void WormEatenPlanet::init(const TableIter& rIter) {
     initEffectKeeper(0, nullptr);
     f32 radius;
     MR::calcModelBoundingRadius(&radius, this);
-    radius += cNum_init_f1;
+    radius += 1000.0f;
     MR::setClippingTypeSphere(this, radius);
     MR::setClippingFarMax(this);
     MR::needStageSwitchReadA(this, rIter);

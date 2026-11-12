@@ -2,11 +2,10 @@
 #include "Game/MapObj/ArrowSwitchMulti.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/PlacementId.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, sMaxArrowSwitchMulti, 16);
+    const s32 sMaxArrowSwitchMulti = 16;
 
     ArrowSwitchMultiHolder* getArrowSwitchMultiHolder() {
         return MR::getSceneObj< ArrowSwitchMultiHolder >(SceneObj_ArrowSwitchMultiHolder);

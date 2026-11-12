@@ -5,27 +5,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include <nebula_math.h>
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calcMoveDir2D_f1, "calcMoveDir2D.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_stick2Dadjust_f1, "stick2Dadjust.f1", 3.0415928f);
-NEBULA_TUNABLE_NAMED(f32, cNum_stick2Dadjust_f2, "stick2Dadjust.f2", 3.0415928f);
-NEBULA_TUNABLE_NAMED(f32, cNum_stick2Dadjust_f3, "stick2Dadjust.f3", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_stick2Dadjust_f4, "stick2Dadjust.f4", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_stick2Dadjust_f5, "stick2Dadjust.f5", 1.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_stick2Dadjust_f6, "stick2Dadjust.f6", 3.1415927f);
-NEBULA_TUNABLE_NAMED(f32, cNum_stick2Dadjust_f7, "stick2Dadjust.f7", 0.5235988f);
-NEBULA_TUNABLE_NAMED(f32, cNum_stick2Dadjust_f8, "stick2Dadjust.f8", 2.617994f);
-NEBULA_TUNABLE_NAMED(f32, cNum_stick2Dadjust_f9, "stick2Dadjust.f9", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_stick2Dadjust_f10, "stick2Dadjust.f10", 1.3962635f);
-NEBULA_TUNABLE_NAMED(f32, cNum_stick2Dadjust_f11, "stick2Dadjust.f11", 1.7453294f);
-NEBULA_TUNABLE_NAMED(f32, cNum_stick2Dadjust_f12, "stick2Dadjust.f12", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_stick2Dadjust_f13, "stick2Dadjust.f13", 0.19634955f);
-NEBULA_TUNABLE_NAMED(f32, cNum_stick2Dadjust_f14, "stick2Dadjust.f14", 1.5707964f);
-NEBULA_TUNABLE_NAMED(f32, cNum_stick2Dadjust_f15, "stick2Dadjust.f15", 1.5707964f);
-NEBULA_TUNABLE_NAMED(f32, cNum_stick2Dadjust_f16, "stick2Dadjust.f16", 2.9452431f);
-NEBULA_TUNABLE_NAMED(f32, cNum_stick2Dadjust_f17, "stick2Dadjust.f17", 1.5707964f);
-NEBULA_TUNABLE_NAMED(f32, cNum_stick2Dadjust_f18, "stick2Dadjust.f18", 0.0001f);
 
 void Mario::check2DMode() {
     mMovementStates.mode2D = false;
@@ -94,7 +73,7 @@ void Mario::calcMoveDir2D(f32 stickX, f32 stickY, Vec3f* pOut) {
     if (mMoveUpVec.dot(groundNorm) <= 0.0f) {
         mMoveUpVec = groundNorm;
     } else {
-        MR::vecBlendSphere(mMoveUpVec, groundNorm, &mMoveUpVec, cNum_calcMoveDir2D_f1);
+        MR::vecBlendSphere(mMoveUpVec, groundNorm, &mMoveUpVec, 0.1f);
     }
 
     if (MR::isNearZero(mMoveUpVec)) {
@@ -135,7 +114,7 @@ void Mario::stick2Dadjust(f32& rStickX, f32& rStickY) {
     Vec3f worldX(1.0f, 0.0f, 0.0f);
     camDirZ = &getCamDirZ();
     const f32 absHorizontal = MR::diffAngleAbsHorizontal(getCamDirX(), worldX, *camDirZ);
-    if (absHorizontal >= cNum_stick2Dadjust_f1 && MR::abs(angle) >= cNum_stick2Dadjust_f2) {
+    if (absHorizontal >= 3.0415928f && MR::abs(angle) >= 3.0415928f) {
         angle = 0.0f;
         rStickX = -rStickX;
     }
@@ -166,7 +145,7 @@ void Mario::stick2Dadjust(f32& rStickX, f32& rStickY) {
                 m2DStickHold = false;
             } else if (m2DPrevStick.y * rStickY < 0.0f) {
                 m2DStickHold = false;
-            } else if (diff < cNum_stick2Dadjust_f3) {
+            } else if (diff < 0.3f) {
                 rStickX = m2DHeldStick.x;
                 rStickY = m2DHeldStick.y;
             } else {
@@ -184,12 +163,12 @@ void Mario::stick2Dadjust(f32& rStickX, f32& rStickY) {
         const f32 diff = MR::diffAngleAbs(invMove, stickVec);
         f32 clamp = MR::clamp(1.0f - (mStickPos.z * mStickPos.z), 0.0f, 1.0f);
 
-        const f32 threshold = MR::getInterpolateValue(clamp, cNum_stick2Dadjust_f4, cNum_stick2Dadjust_f5);
+        const f32 threshold = MR::getInterpolateValue(clamp, 0.5f, 1.5f);
         if (diff < threshold) {
             rStickX = 0.0f;
             rStickY = 0.0f;
             mStickPos.z = 0.0f;
-        } else if (diff > (cNum_stick2Dadjust_f6 - threshold)) {
+        } else if (diff > (3.1415927f - threshold)) {
             rStickX = 0.0f;
             rStickY = 0.0f;
             mStickPos.z = 0.0f;
@@ -227,10 +206,10 @@ void Mario::stick2Dadjust(f32& rStickX, f32& rStickY) {
 
     if (!((m2DStickLockMode != 0 || m2DStickLocked != 0) && m2DLockX == 0 && m2DLockY == 0)) {
 
-        if ((angleMove < cNum_stick2Dadjust_f7 || angleMove > cNum_stick2Dadjust_f8 || m2DLockX != 0) && m2DLockY == 0) {
+        if ((angleMove < 0.5235988f || angleMove > 2.617994f || m2DLockX != 0) && m2DLockY == 0) {
             if (m2DLockStickY == 0.0f) {
                 rStickY = 0.0f;
-                if (isMainY && MR::abs(stickXInput) > cNum_stick2Dadjust_f9) {
+                if (isMainY && MR::abs(stickXInput) > 0.3f) {
                     rStickX = mStickPos.z;
                     if (stickXInput < 0.0f) {
                         rStickX = -rStickX;
@@ -240,10 +219,10 @@ void Mario::stick2Dadjust(f32& rStickX, f32& rStickY) {
             }
 
         } else {
-            if (((angleMove > cNum_stick2Dadjust_f10 && angleMove < cNum_stick2Dadjust_f11) || m2DLockY != 0) && m2DLockX == 0 &&
+            if (((angleMove > 1.3962635f && angleMove < 1.7453294f) || m2DLockY != 0) && m2DLockX == 0 &&
                 m2DLockStickX == 0.0f) {
                 rStickX = 0.0f;
-                if (isMainX && MR::abs(stickYInput) > cNum_stick2Dadjust_f12) {
+                if (isMainX && MR::abs(stickYInput) > 0.3f) {
                     rStickY = mStickPos.z;
                     if (stickYInput < 0.0f) {
                         rStickY = -rStickY;
@@ -260,13 +239,13 @@ void Mario::stick2Dadjust(f32& rStickX, f32& rStickY) {
     m2DLockY = lockY;
 
     if (!m2DStickLockMode && !m2DStickLocked && rStickY != 0.0f) {
-        if (MR::isInRange(angleMove, cNum_stick2Dadjust_f13, cNum_stick2Dadjust_f14)) {
+        if (MR::isInRange(angleMove, 0.19634955f, 1.5707964f)) {
             if (m2DGroundNorm.dot(mSide2D) < 0.0f) {
                 m2DStickLocked = 1;
             } else {
                 m2DStickLocked = 2;
             }
-        } else if (MR::isInRange(angleMove, cNum_stick2Dadjust_f15, cNum_stick2Dadjust_f16)) {
+        } else if (MR::isInRange(angleMove, 1.5707964f, 2.9452431f)) {
             if (m2DGroundNorm.dot(mSide2D) < 0.0f) {
                 m2DStickLocked = 2;
             } else {
@@ -318,7 +297,7 @@ void Mario::stick2Dadjust(f32& rStickX, f32& rStickY) {
 
     m2DStickX = rStickX;
 
-    if (MR::isNearZero(angleMove - cNum_stick2Dadjust_f17, cNum_stick2Dadjust_f18)) {
+    if (MR::isNearZero(angleMove - 1.5707964f, 0.0001f)) {
         isNearHalfPi = true;
     }
 

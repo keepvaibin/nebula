@@ -17,14 +17,7 @@
 #include "Game/Util/FurMulti.hpp"
 
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_tryEmitWaitEffect_f1, "tryEmitWaitEffect.f1", 4000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryDeleteWaitEffect_f1, "tryDeleteWaitEffect.f1", 4000.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_tryDeleteWaitEffect_isNearPlayer_1, "tryDeleteWaitEffect.isNearPlayer.1", 4000.0f);
 
 namespace NrvMapObjActor {
     NEW_NERVE(HostTypeWait, MapObjActor, Wait);
@@ -595,7 +588,7 @@ bool MapObjActor::tryEmitWaitEffect() {
         return false;
     }
 
-    if (MR::calcCameraDistanceZ(mPosition) > cNum_tryEmitWaitEffect_f1) {
+    if (MR::calcCameraDistanceZ(mPosition) > 4000.0f) {
         return false;
     }
 
@@ -616,11 +609,11 @@ bool MapObjActor::tryDeleteWaitEffect() {
         return false;
     }
 
-    if (MR::calcCameraDistanceZ(mPosition) <= cNum_tryDeleteWaitEffect_f1) {
+    if (MR::calcCameraDistanceZ(mPosition) <= 4000.0f) {
         return false;
     }
 
-    if (MR::isNearPlayer(this, cNum_tryDeleteWaitEffect_isNearPlayer_1)) {
+    if (MR::isNearPlayer(this, 4000.0f)) {
         return false;
     }
 

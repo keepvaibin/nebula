@@ -1,26 +1,7 @@
 #include "Game/MapObj/MagicBell.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 70.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 0.60f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 0.99f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f10, "init.f10", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f11, "init.f11", 0.95f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRing_f1, "exeRing.f1", 0.99f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRing_f2, "exeRing.f2", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRing_f3, "exeRing.f3", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_f1, "receiveMsgPlayerAttack.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_f2, "receiveMsgPlayerAttack.f2", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startRing_f1, "startRing.f1", 5.0f);
 
 namespace NrvMagicBell {
     NEW_NERVE(MagicBellNrvWait, MagicBell, Wait);
@@ -29,11 +10,11 @@ namespace NrvMagicBell {
 
 namespace {
     // A ringing bell takes a new hit after this many steps.
-    NEBULA_TUNABLE(s32, sRehitStep, 10);
+    const s32 sRehitStep = 10;
     // The pointer must move faster than 8 screen units a frame to ring.
-    NEBULA_TUNABLE(f32, sPointerFlickSpeedSq, 64.0f);
+    const f32 sPointerFlickSpeedSq = 64.0f;
     // The bell and its clapper touch when their swing directions part this far.
-    NEBULA_TUNABLE(f32, sClapperTouchCos, 0.95f);
+    const f32 sClapperTouchCos = 0.95f;
 };  // namespace
 
 MagicBell::MagicBell(const char* pName)
@@ -49,21 +30,21 @@ void MagicBell::init(const TableIter& rIter) {
     mSurface1Mtx = MR::getJointMtx(this, "polySurface1");
     MR::connectToSceneMapObjNoCalcAnim(this);
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "body", 8, cNum_init_f1, Vec3f(0.0f, -cNum_init_f2, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 8, 70.0f, Vec3f(0.0f, -80.0f, 0.0f));
     initEffectKeeper(1, nullptr);
     MR::addEffect(this, "StarWandHitMark");
     MR::setEffectHostSRT(this, "StarWandHitMark", &mHitMarkPosition, nullptr, nullptr);
     initSound(4, false);
     initNerve(GET_NERVE(MagicBell, MagicBellNrvWait));
-    MR::initShadowVolumeSphere(this, cNum_init_f3);
+    MR::initShadowVolumeSphere(this, 100.0f);
     MR::useStageSwitchWriteA(this, rIter);
-    MR::initStarPointerTarget(this, cNum_init_f4, Vec3f(0.0f, -cNum_init_f5, 0.0f));
+    MR::initStarPointerTarget(this, 100.0f, Vec3f(0.0f, -80.0f, 0.0f));
     Mtx34f mtx;
     mtx.identity();
     MR::makeMtxTR(mtx.toMtxPtr(), this);
     MR::calcGravity(this);
-    mBellSwinger = new Swinger(&mPosition, mtx.toMtxPtr(), cNum_init_f6, cNum_init_f7, cNum_init_f8, &mGravity);
-    mBellRodSwinger = new Swinger(&mPosition, mtx.toMtxPtr(), cNum_init_f9, cNum_init_f10, cNum_init_f11, &mGravity);
+    mBellSwinger = new Swinger(&mPosition, mtx.toMtxPtr(), 100.0f, 0.60f, 0.99f, &mGravity);
+    mBellRodSwinger = new Swinger(&mPosition, mtx.toMtxPtr(), 50.0f, 0.3f, 0.95f, &mGravity);
     makeActorAppeared();
 }
 
@@ -126,7 +107,7 @@ void MagicBell::exeRing() {
     }
 
     // Rings until it hangs straight down and nearly still.
-    if (mBellSwinger->mSwingDir.y < -cNum_exeRing_f1 && mBellSwinger->mAcceleration.squared() < cNum_exeRing_f2 * cNum_exeRing_f3) {
+    if (mBellSwinger->mSwingDir.y < -0.99f && mBellSwinger->mAcceleration.squared() < 0.1f * 0.1f) {
         MR::deleteEffect(this, "Ring");
         setNerve(GET_NERVE(MagicBell, MagicBellNrvWait));
     }
@@ -148,9 +129,9 @@ bool MagicBell::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSenso
         // Struck from the player's side, a little from below.
         Vec3f hitDir(mPosition);
         hitDir.sub(*MR::getPlayerPos());
-        hitDir.y += cNum_receiveMsgPlayerAttack_f1;
+        hitDir.y += 100.0f;
         MR::normalizeOrZero(&hitDir);
-        Vec3f hitPos(hitDir * -cNum_receiveMsgPlayerAttack_f2);
+        Vec3f hitPos(hitDir * -200.0f);
         hitPos.add(mPosition);
         startRing(hitDir, hitPos);
         return true;
@@ -190,7 +171,7 @@ bool MagicBell::tryRing() {
 void MagicBell::startRing(const Vec3f& rHitDir, const Vec3f& rHitPos) {
     f32 speed = mBellSwinger->mAcceleration.length();
     mBellSwinger->accel(mBellSwinger->mAcceleration * -1.0f);
-    mBellSwinger->accel(rHitDir * (cNum_startRing_f1 + speed));
+    mBellSwinger->accel(rHitDir * (5.0f + speed));
     mHitMarkPosition.set(rHitPos);
     MR::emitEffect(this, "StarWandHitMark");
     MR::emitEffect(this, "Ring");

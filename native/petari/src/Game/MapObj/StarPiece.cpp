@@ -27,14 +27,7 @@
 
 #include <NebulaGpuTypes.h>
 #include <nebula_math.h>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_goToPlayer_f1, "goToPlayer.f1", 2.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_reboundVelocityFromCollision_1, "exeFall.reboundVelocityFromCollision.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_reboundVelocityFromCollision_2, "exeFall.reboundVelocityFromCollision.2", 1.0f);
 
 namespace {
     // Indexed by the star pointer port that pulled the piece.
@@ -42,64 +35,64 @@ namespace {
     const NebulaColor8 cPieceColors[] = {{0x80, 0x00, 0x99, 0xFF}, {0xE6, 0xA0, 0x00, 0xFF}, {0x46, 0xA1, 0x08, 0xFF},
                                          {0x37, 0x5A, 0xA0, 0xFF}, {0xBE, 0x33, 0x0B, 0xFF}, {0x80, 0x80, 0x80, 0xFF}};
 
-    NEBULA_TUNABLE(f32, cBinderRadius, 40.0f);
-    NEBULA_TUNABLE(f32, cThrowBinderRadius, 20.0f);
-    NEBULA_TUNABLE(f32, cSensorRadius, 30.0f);
-    NEBULA_TUNABLE(f32, cShadowRadius, 30.0f);
-    NEBULA_TUNABLE(f32, cPointerRadius, 28.0f);
-    NEBULA_TUNABLE(u16, cSensorGroupSize, 16);
-    NEBULA_TUNABLE(f32, cGiftBtkFrame, 5.0f);
-    NEBULA_TUNABLE(f32, cSpinSpeed, 15.0f);
-    NEBULA_TUNABLE(f32, cScaleMin, 0.1f);
-    NEBULA_TUNABLE(f32, cScaleMax, 2.0f);
-    NEBULA_TUNABLE(f32, cScaleRange, 1.9f);
+    const f32 cBinderRadius = 40.0f;
+    const f32 cThrowBinderRadius = 20.0f;
+    const f32 cSensorRadius = 30.0f;
+    const f32 cShadowRadius = 30.0f;
+    const f32 cPointerRadius = 28.0f;
+    const u16 cSensorGroupSize = 16;
+    const f32 cGiftBtkFrame = 5.0f;
+    const f32 cSpinSpeed = 15.0f;
+    const f32 cScaleMin = 0.1f;
+    const f32 cScaleMax = 2.0f;
+    const f32 cScaleRange = 1.9f;
     // Effects are skipped when the piece is this close to the camera.
-    NEBULA_TUNABLE(f32, cEffectCameraDistance, 200.0f);
-    NEBULA_TUNABLE(f32, cHopSpeed, 30.0f);
+    const f32 cEffectCameraDistance = 200.0f;
+    const f32 cHopSpeed = 30.0f;
     const s32 cHopSteps = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, cFallDamp, 0.97f);
-    NEBULA_TUNABLE(f32, cFallGravity, 1.0f);
-    NEBULA_TUNABLE(f32, cWaterFallGravity, 0.1f);
-    NEBULA_TUNABLE(f32, cReboundBounce, 0.99f);
-    NEBULA_TUNABLE(f32, cLandSpeedMin, 20.0f);
-    NEBULA_TUNABLE(f32, cWaterLandSpeedMin, 10.0f);
+    const f32 cFallDamp = 0.97f;
+    const f32 cFallGravity = 1.0f;
+    const f32 cWaterFallGravity = 0.1f;
+    const f32 cReboundBounce = 0.99f;
+    const f32 cLandSpeedMin = 20.0f;
+    const f32 cWaterLandSpeedMin = 10.0f;
     const s32 cFallKillSteps = NebulaFrameClock::stepsOfSeconds(10);
-    NEBULA_TUNABLE(s32, cReflectFallSteps, 9);
-    NEBULA_TUNABLE(f32, cPlayerTouchDistance, 160.0f);
+    const s32 cReflectFallSteps = 9;
+    const f32 cPlayerTouchDistance = 160.0f;
     // More launched pieces than this use the small effects.
-    NEBULA_TUNABLE(s32, cEffectFullLaunchedMax, 10);
-    NEBULA_TUNABLE(f32, cTurnRateStart, 0.02f);
-    NEBULA_TUNABLE(f32, cTurnRateStep, 0.01f);
-    NEBULA_TUNABLE(f32, cChaseRateStep, 0.03f);
-    NEBULA_TUNABLE(f32, cChaseSpeed, 85.0f);
-    NEBULA_TUNABLE(f32, cTargetScale, 0.5f);
-    NEBULA_TUNABLE(f32, cTargetScaleRate, 0.05f);
-    NEBULA_TUNABLE(f32, cTouchEffectSize, 10.0f);
-    NEBULA_TUNABLE(s32, cToPlayerEndShrinkSteps, 10);
+    const s32 cEffectFullLaunchedMax = 10;
+    const f32 cTurnRateStart = 0.02f;
+    const f32 cTurnRateStep = 0.01f;
+    const f32 cChaseRateStep = 0.03f;
+    const f32 cChaseSpeed = 85.0f;
+    const f32 cTargetScale = 0.5f;
+    const f32 cTargetScaleRate = 0.05f;
+    const f32 cTouchEffectSize = 10.0f;
+    const s32 cToPlayerEndShrinkSteps = 10;
     const s32 cToPlayerEndSteps = NebulaFrameClock::stepsOfMilliseconds(500);
     const s32 cThrowSteps = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(s32, cThrowBindStep, 28);
+    const s32 cThrowBindStep = 28;
     const s32 cThrowFallSteps = NebulaFrameClock::stepsOfSeconds(1);
     // The throw path is a straight line from start to end.
-    NEBULA_TUNABLE(f32, cThrowArcHeight, 0.0f);
-    NEBULA_TUNABLE(f32, cThrowBindCameraDistance, 1500.0f);
-    NEBULA_TUNABLE(f32, cGiftManyScale, 2.0f);
-    NEBULA_TUNABLE(s32, cGoToPlayerDelay, 15);
-    NEBULA_TUNABLE(s32, cLaunchGettableDelay, 25);
-    NEBULA_TUNABLE(f32, cWaterLaunchScale, 0.5f);
-    NEBULA_TUNABLE(f32, cPointRadius, 30.0f);
-    NEBULA_TUNABLE(f32, cNearCameraScreenRadius, 30.0f);
-    NEBULA_TUNABLE(f32, cGettableDistance, 15000.0f);
-    NEBULA_TUNABLE(s32, cGettableEffectPeriod, 90);
-    NEBULA_TUNABLE(s32, cGettableEffectStep, 20);
-    NEBULA_TUNABLE(f32, cGettableEffectSize, 4.0f);
-    NEBULA_TUNABLE(f32, cGettableEffectScale, 0.8f);
-    NEBULA_TUNABLE(f32, cTouchEffectScale, 1.0f);
+    const f32 cThrowArcHeight = 0.0f;
+    const f32 cThrowBindCameraDistance = 1500.0f;
+    const f32 cGiftManyScale = 2.0f;
+    const s32 cGoToPlayerDelay = 15;
+    const s32 cLaunchGettableDelay = 25;
+    const f32 cWaterLaunchScale = 0.5f;
+    const f32 cPointRadius = 30.0f;
+    const f32 cNearCameraScreenRadius = 30.0f;
+    const f32 cGettableDistance = 15000.0f;
+    const s32 cGettableEffectPeriod = 90;
+    const s32 cGettableEffectStep = 20;
+    const f32 cGettableEffectSize = 4.0f;
+    const f32 cGettableEffectScale = 0.8f;
+    const f32 cTouchEffectScale = 1.0f;
     // The piece color plus 255 always clamped to white.
-    NEBULA_TUNABLE(u8, cGettablePrimary, 0xFF);
-    NEBULA_TUNABLE(s32, cGettableLighten, 0x20);
-    NEBULA_TUNABLE(f32, cReflectElasticity, 0.5f);
-    NEBULA_TUNABLE(f32, cReflectBounceSpeed, 35.0f);
+    const u8 cGettablePrimary = 0xFF;
+    const s32 cGettableLighten = 0x20;
+    const f32 cReflectElasticity = 0.5f;
+    const f32 cReflectBounceSpeed = 35.0f;
 
     f32 approachOne(f32 rate, f32 step) {
         if (rate + step >= 1.0f) {
@@ -427,7 +420,7 @@ void StarPiece::exeFall() {
     mVelocity += mGravity * (mFlags.InWater ? cWaterFallGravity : cFallGravity);
     spin();
 
-    if (MR::reboundVelocityFromCollision(this, cReboundBounce, cNum_exeFall_reboundVelocityFromCollision_1, cNum_exeFall_reboundVelocityFromCollision_2)) {
+    if (MR::reboundVelocityFromCollision(this, cReboundBounce, 0.0f, 1.0f)) {
         if (MR::isBindedGround(this) && !MR::isBindedWall(this) && !MR::isBindedRoof(this)) {
             mVelocity.scale(mGravity.dot(mVelocity), mGravity);
         }
@@ -825,7 +818,7 @@ void StarPiece::goToPlayer(Vec3f velocity) {
         f32 dot = mFront.dot(mGravity);
 
         if (0.0f < dot) {
-            mFront -= mGravity * dot * cNum_goToPlayer_f1;
+            mFront -= mGravity * dot * 2.0f;
         }
     }
 

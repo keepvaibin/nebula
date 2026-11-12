@@ -2,14 +2,9 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_setShadowAndClipping_f1, "setShadowAndClipping.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setShadowAndClipping_f2, "setShadowAndClipping.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setShadowAndClipping_f3, "setShadowAndClipping.f3", 0.5f);
 
 namespace {
-    NEBULA_TUNABLE(f32, sSearchLength, 1500.0f);
+    const f32 sSearchLength = 1500.0f;
 };  // namespace
 
 void SpinDriverUtil::setShadowAndClipping(LiveActor* pActor, Vec3f* pClippingCenter, f32 dropLength, f32 heightMargin, f32* pClippingRadius) {
@@ -25,17 +20,17 @@ void SpinDriverUtil::setShadowAndClipping(LiveActor* pActor, Vec3f* pClippingCen
         if (MR::getFirstPolyOnLineToMap(&dropEnd, nullptr, dropPosition, gravity * (::sSearchLength + heightMargin))) {
             dropLength = dropEnd.distance(position);
             dropLength += heightMargin;
-            clippingRadius = cNum_setShadowAndClipping_f1 * dropLength + heightMargin;
+            clippingRadius = 0.5f * dropLength + heightMargin;
         } else {
             dropEnd.set(position);
             dropLength = 0.0f;
         }
     } else {
         dropEnd.set(position + gravity * dropLength);
-        clippingRadius = cNum_setShadowAndClipping_f2 * dropLength + heightMargin;
+        clippingRadius = 0.5f * dropLength + heightMargin;
     }
 
-    pClippingCenter->set((dropEnd + position) * cNum_setShadowAndClipping_f3);
+    pClippingCenter->set((dropEnd + position) * 0.5f);
     MR::setClippingTypeSphere(pActor, clippingRadius, pClippingCenter);
 
     if (pClippingRadius != nullptr) {

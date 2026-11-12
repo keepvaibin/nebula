@@ -12,12 +12,11 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, cOverlayStartStep, 122);
-    NEBULA_TUNABLE(s32, cOverlayFrame, 1);
+    const s32 cOverlayStartStep = 122;
+    const s32 cOverlayFrame = 1;
 
     s32 getChapterNumberMin() {
         return MR::getPictureBookChapterAlreadyRead() + 1;

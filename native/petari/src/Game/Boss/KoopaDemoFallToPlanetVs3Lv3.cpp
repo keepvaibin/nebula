@@ -13,13 +13,12 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, sFallOutsideChangeSun, 266);
-    NEBULA_TUNABLE(s32, sFinalBgmStartStepSub, 250);
-    NEBULA_TUNABLE(s32, sFallDownSeStep2, 214);
-    NEBULA_TUNABLE(s32, sFallDownSeStep3, 328);
+    const s32 sFallOutsideChangeSun = 266;
+    const s32 sFinalBgmStartStepSub = 250;
+    const s32 sFallDownSeStep2 = 214;
+    const s32 sFallDownSeStep3 = 328;
 };  // namespace
 
 namespace NrvKoopaDemoFallToPlanetVs3Lv3 {

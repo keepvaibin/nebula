@@ -14,18 +14,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 3600.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDisappearDemo_f1, "exeDisappearDemo.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDisappearDemo_f2, "exeDisappearDemo.f2", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDisappearDemo_f3, "exeDisappearDemo.f3", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcMoveVelocity_f1, "calcMoveVelocity.f1", 3.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMoveStart_shakeCameraInfinity_1, "exeMoveStart.shakeCameraInfinity.1", 0.15f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMoveStart_shakeCameraInfinity_2, "exeMoveStart.shakeCameraInfinity.2", 1.5f);
 
 namespace {
     static const s32 sStepForMove = NebulaFrameClock::stepsOfSeconds(20);
@@ -69,7 +58,7 @@ void SandCapsulePressGround::init(const TableIter& rIter) {
     mLowerPos.set(mPosition);
     Vec3f up;
     MR::calcUpVec(&up, this);
-    mUpperPos.scaleAdd(cNum_init_f1, up, mLowerPos);
+    mUpperPos.scaleAdd(3600.0f, up, mLowerPos);
 }
 
 void SandCapsulePressGround::exeWait() {
@@ -85,7 +74,7 @@ void SandCapsulePressGround::exeWait() {
 void SandCapsulePressGround::exeMoveStart() {
     if (MR::isFirstStep(this)) {
         MR::onSwitchA(this);
-        MR::shakeCameraInfinity(this, cNum_exeMoveStart_shakeCameraInfinity_1, cNum_exeMoveStart_shakeCameraInfinity_2);
+        MR::shakeCameraInfinity(this, 0.15f, 1.5f);
         MR::makeMtxUpNoSupport(&mEffectMtx, -mGravity);
         MR::emitEffect(this, "FallSand");
     }
@@ -154,9 +143,9 @@ void SandCapsulePressGround::exeDisappearDemo() {
 
         Vec3f center;
         center.add(mLowerPos, mUpperPos);
-        center.x /= cNum_exeDisappearDemo_f1;
-        center.y /= cNum_exeDisappearDemo_f2;
-        center.z /= cNum_exeDisappearDemo_f3;
+        center.x /= 2.0f;
+        center.y /= 2.0f;
+        center.z /= 2.0f;
         MR::resetPosition(this, center);
         MR::startBck(this, "MoveAway");
         MR::stopShakingCamera(this);
@@ -191,7 +180,7 @@ void SandCapsulePressGround::calcMoveVelocity() {
         up.negate();
     }
 
-    mVelocity.scale(cNum_calcMoveVelocity_f1, up);
+    mVelocity.scale(3.0f, up);
 }
 
 bool SandCapsulePressGround::tryStop() {

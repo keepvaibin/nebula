@@ -3,48 +3,6 @@
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Player/MarioConst.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f1, "slopeMove.f1", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f2, "slopeMove.f2", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f3, "slopeMove.f3", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f4, "slopeMove.f4", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f5, "slopeMove.f5", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f6, "slopeMove.f6", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f7, "slopeMove.f7", 0.4f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f8, "slopeMove.f8", 0.8f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f9, "slopeMove.f9", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f10, "slopeMove.f10", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f11, "slopeMove.f11", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f12, "slopeMove.f12", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f13, "slopeMove.f13", 25.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f14, "slopeMove.f14", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f15, "slopeMove.f15", 90.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f16, "slopeMove.f16", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f17, "slopeMove.f17", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f18, "slopeMove.f18", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f19, "slopeMove.f19", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f20, "slopeMove.f20", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f21, "slopeMove.f21", 0.05f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f22, "slopeMove.f22", 1.0471976f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f23, "slopeMove.f23", 1.4959966f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f24, "slopeMove.f24", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f25, "slopeMove.f25", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f26, "slopeMove.f26", 0.5235988f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f27, "slopeMove.f27", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f28, "slopeMove.f28", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f29, "slopeMove.f29", 0.5235988f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f30, "slopeMove.f30", 0.15f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f31, "slopeMove.f31", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f32, "slopeMove.f32", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f33, "slopeMove.f33", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f34, "slopeMove.f34", 0.8f);
-NEBULA_TUNABLE_NAMED(f32, cNum_slopeMove_f35, "slopeMove.f35", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_moveSlopeSlide_f1, "moveSlopeSlide.f1", 5.8f);
-NEBULA_TUNABLE_NAMED(f32, cNum_moveSlopeSlide_f2, "moveSlopeSlide.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_moveSlopeSlide_f3, "moveSlopeSlide.f3", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_moveSlopeSlide_f4, "moveSlopeSlide.f4", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_moveSlopeSlide_f5, "moveSlopeSlide.f5", 0.2f);
 
 void Mario::clearSlope() {
     mSlipPower = 0.0f;
@@ -118,28 +76,28 @@ void Mario::slopeMove() {
 
     f32 slopeAngle = calcAngleD(mGroundNorm);
 
-    if (mDrawStates.wallSlope && slopeAngle >= cNum_slopeMove_f1) {
+    if (mDrawStates.wallSlope && slopeAngle >= 30.0f) {
         if (!mMovementStates.slopeSlide) {
-            mSlopeMoveVec = -mWallSlope * cNum_slopeMove_f2;
+            mSlopeMoveVec = -mWallSlope * 2.0f;
             mMovementStates.slopeSlide = true;
             mSlopeSteerInhibitTimer = 30;
-            mSlipPower = cNum_slopeMove_f3;
+            mSlipPower = 10.0f;
         } else if (!mMovementStates.slopeSlide) {
-            mSlipPower = cNum_slopeMove_f4;
+            mSlipPower = 10.0f;
         }
     }
 
     if (mSlopeSteerInhibitTimer > 0xF) {
-        mSlopeMoveVec += -mWallSlope * cNum_slopeMove_f5;
+        mSlopeMoveVec += -mWallSlope * 0.5f;
     }
 
     if (!mDrawStates.onSlipFloor || !isSlipPolygon(mShadowPolygon)) {
         blendRate = 1.0f;
         if (mMovementStates.slopeSlide) {
-            if (slopeAngle >= cNum_slopeMove_f6) {
-                mSlipPower -= cNum_slopeMove_f7;
+            if (slopeAngle >= 15.0f) {
+                mSlipPower -= 0.4f;
             } else {
-                mSlipPower -= cNum_slopeMove_f8;
+                mSlipPower -= 0.8f;
             }
 
             if (mSlipPower < 0.0f) {
@@ -163,22 +121,22 @@ void Mario::slopeMove() {
 
                 mVelocity.zero();
                 mMovementStates.slopeSlide = true;
-                mSlipPower = cNum_slopeMove_f9;
+                mSlipPower = 10.0f;
                 return;
             }
 
             Vec3f acrossSlope;
             const f32 sideSpeed = MR::vecKillElement(mVelocity, slopeDown, &acrossSlope);
 
-            if (mWalkSpeed < cNum_slopeMove_f10) {
-                mSlipPower = cNum_slopeMove_f11;
+            if (mWalkSpeed < 0.1f) {
+                mSlipPower = 10.0f;
             }
 
             if (mTargetWalkSpeedIndex == 0 && !isAnimationRun("すべり着地")) {
-                mSlipPower = cNum_slopeMove_f12;
+                mSlipPower = 10.0f;
             }
 
-            if (slopeAngle >= cNum_slopeMove_f13 && isStickOn()) {
+            if (slopeAngle >= 25.0f && isStickOn()) {
                 const Vec3f& worldPadDir = getWorldPadDir();
 
                 Vec3f slopeDownOnScreen;
@@ -194,10 +152,10 @@ void Mario::slopeMove() {
             }
 
             if (!mDrawStates.slopeRunUp) {
-                mSlipPower += cNum_slopeMove_f14 * (slopeAngle / cNum_slopeMove_f15);
+                mSlipPower += 0.3f * (slopeAngle / 90.0f);
             }
 
-            if (mSlipPower >= cNum_slopeMove_f16) {
+            if (mSlipPower >= 10.0f) {
                 if (MR::vecKillElement(mActor->getLastMove(), slopeDown, &acrossSlope) < 0.0f) {
                     mSlopeMoveVec = mActor->getLastMove();
                 } else {
@@ -205,17 +163,17 @@ void Mario::slopeMove() {
                 }
 
                 mMovementStates.slopeSlide = true;
-                mSlipPower = cNum_slopeMove_f17;
+                mSlipPower = 10.0f;
                 mVelocity.zero();
                 mDrawStates.slopeRunUp = false;
             } else if (!mDrawStates.slopeRunUp && sideSpeed > 0.0f) {
-                const f32 t = mSlipPower / cNum_slopeMove_f18;
+                const f32 t = mSlipPower / 10.0f;
                 const f32 remain = 1.0f - t;
 
                 mVelocity = acrossSlope + slopeDown * sideSpeed * remain;
             }
 
-            blendRate *= 1.0f - (mSlipPower / cNum_slopeMove_f19);
+            blendRate *= 1.0f - (mSlipPower / 10.0f);
 
             if (mDrawStates.slopeRunUp) {
                 mSlopeDashTimer++;
@@ -281,7 +239,7 @@ void Mario::slopeMove() {
             const f32 speed = mSlopeMoveVec.length();
             MR::normalizeOrZero(&mSlopeMoveVec);
 
-            const f32 ratio = MR::clamp(moveAngle / cNum_slopeMove_f20, 0.0f, 1.0f);
+            const f32 ratio = MR::clamp(moveAngle / 30.0f, 0.0f, 1.0f);
             blend = ratio * getActor()->getConst().getTable()->mSlopeCurveAssist;
 
             MR::vecBlendSphere(mSlopeMoveVec, -slopeDown, &mSlopeMoveVec, blend);
@@ -295,7 +253,7 @@ void Mario::slopeMove() {
         }
 
         if (!(mSlopeMoveVec.dot(slopeDown) > 0.0f)) {
-            if (slopeDown.dot(-*getGravityVec()) > cNum_slopeMove_f21) {
+            if (slopeDown.dot(-*getGravityVec()) > 0.05f) {
                 Vec3f frontOnGround;
                 MR::vecKillElement(mFrontVec, mGroundNorm, &frontOnGround);
                 MR::normalize(&frontOnGround);
@@ -303,13 +261,13 @@ void Mario::slopeMove() {
                 Vec3f moveDir(mSlopeMoveVec);
                 MR::normalize(&moveDir);
 
-                f32 turnDot = MR::cos(cNum_slopeMove_f22);
+                f32 turnDot = MR::cos(1.0471976f);
                 if (isAnimationRun("坂すべり上向きうつぶせ", MarioIndexedAnime_SlideUpFaceDown)) {
-                    turnDot = MR::cos(cNum_slopeMove_f23);
+                    turnDot = MR::cos(1.4959966f);
                 }
 
                 if (isAnimationRun("スケーティング") && mSlopeSlideVec.dot(slopeDown) > 0.0f) {
-                    if (mSlopeSlideVec.length() > cNum_slopeMove_f24) {
+                    if (mSlopeSlideVec.length() > 2.0f) {
                         mSlopeMoveVec = mSlopeSlideVec;
                     }
 
@@ -317,13 +275,13 @@ void Mario::slopeMove() {
                 }
 
                 if (frontOnGround.dot(slopeDown) < turnDot) {
-                    setFrontVecKeepUp(moveDir, cNum_slopeMove_f25);
+                    setFrontVecKeepUp(moveDir, 0.1f);
                     if (!isAnimationRun("坂すべり上向きうつぶせ", MarioIndexedAnime_SlideUpFaceDown)) {
                         changeAnimation("坂すべり下向きあおむけ", MarioIndexedAnime_SlideDownFaceUp);
                     }
 
                     if (isStickOn() && mPrevVelocity.dot(moveDir) > 0.0f &&
-                        MR::diffAngleAbsHorizontal(moveDir, mFrontVec, *getGravityVec()) < cNum_slopeMove_f26) {
+                        MR::diffAngleAbsHorizontal(moveDir, mFrontVec, *getGravityVec()) < 0.5235988f) {
                         setFrontVecKeepUpAngle(mPrevVelocity, getActor()->getConst().getTable()->mSlipMoveTurnAngleRad);
                     }
                 } else {
@@ -332,14 +290,14 @@ void Mario::slopeMove() {
                     }
 
                     if (mSlopeTimer < 5) {
-                        setFrontVecKeepUp(-moveDir, cNum_slopeMove_f27);
+                        setFrontVecKeepUp(-moveDir, 0.5f);
                     } else {
-                        setFrontVecKeepUp(-moveDir, cNum_slopeMove_f28);
+                        setFrontVecKeepUp(-moveDir, 0.1f);
                     }
 
                     if (mSlopeTimer > 10 && isStickOn() && mPrevVelocity.dot(moveDir) > 0.0f) {
                         const Vec3f& gravityVec = *getGravityVec();
-                        if (MR::diffAngleAbsHorizontal(-moveDir, mFrontVec, gravityVec) < cNum_slopeMove_f29) {
+                        if (MR::diffAngleAbsHorizontal(-moveDir, mFrontVec, gravityVec) < 0.5235988f) {
                             setFrontVecKeepUpAngle(-mPrevVelocity, getActor()->getConst().getTable()->mSlipMoveTurnAngleRad);
                         }
                     }
@@ -364,15 +322,15 @@ void Mario::slopeMove() {
             }
 
             MR::normalize(&slopeDown);
-            if (slopeDown.dot(worldPadDir) > cNum_slopeMove_f30) {
+            if (slopeDown.dot(worldPadDir) > 0.15f) {
                 playEffect("共通スリップ坂制動");
                 mTurnSlipTimer = getActor()->getConst().getTable()->mTurnSlipTime;
             }
         }
 
-        mPreSlopeVelocity.x *= cNum_slopeMove_f31;
-        mPreSlopeVelocity.y *= cNum_slopeMove_f32;
-        mPreSlopeVelocity.z *= cNum_slopeMove_f33;
+        mPreSlopeVelocity.x *= 0.9f;
+        mPreSlopeVelocity.y *= 0.9f;
+        mPreSlopeVelocity.z *= 0.9f;
 
         Vec3f preSlopePush;
         if (MR::vecKillElement(mPreSlopeVelocity, slopeDown, &preSlopePush) >= 0.0f) {
@@ -421,7 +379,7 @@ void Mario::slopeMove() {
 
     const f32 slopeSpeed = mSlopeMoveVec.length();
     if (slopeSpeed > slopeSpeedMax) {
-        mSlopeMoveVec.setLength((cNum_slopeMove_f34 * slopeSpeed) + (cNum_slopeMove_f35 * slopeSpeedMax));
+        mSlopeMoveVec.setLength((0.8f * slopeSpeed) + (0.2f * slopeSpeedMax));
     }
 
     if (!MR::vecBlendSphere(*getGravityVec(), -mGroundNorm, &blendedDown, blendRate)) {
@@ -441,7 +399,7 @@ void Mario::slopeMove() {
 }
 
 void Mario::moveSlopeSlide() {
-    if (calcAngleD(mGroundNorm) < cNum_moveSlopeSlide_f1) {
+    if (calcAngleD(mGroundNorm) < 5.8f) {
         if (mDrawStates.onSlipFloor) {
             const Vec3f* pWorldPadDir = &getWorldPadDir();
             f32 speed = mPrevVelocity.length();
@@ -449,10 +407,10 @@ void Mario::moveSlopeSlide() {
                 mSlopeSlideVec = mPrevVelocity;
             }
 
-            mSlopeSlideVec += *pWorldPadDir * cNum_moveSlopeSlide_f2;
+            mSlopeSlideVec += *pWorldPadDir * 0.5f;
 
-            if (mSlopeSlideVec.length() > cNum_moveSlopeSlide_f3) {
-                mSlopeSlideVec.setLength(cNum_moveSlopeSlide_f4);
+            if (mSlopeSlideVec.length() > 15.0f) {
+                mSlopeSlideVec.setLength(15.0f);
             }
 
             addVelocity(mSlopeSlideVec);
@@ -469,7 +427,7 @@ void Mario::moveSlopeSlide() {
 
         if (isStickOn() && mSlopeSteerInhibitTimer == 0) {
             f32 dot = mSlopeSideDir.dot(*pWorldPadDir);
-            if (MR::abs(dot) > cNum_moveSlopeSlide_f5) {
+            if (MR::abs(dot) > 0.2f) {
                 mSlopeSideSpeed = (mSlopeSideSpeed * mActor->getConst().getTable()->mSlopeSideMoveInertia) +
                        (dot * (1.0f - mActor->getConst().getTable()->mSlopeSideMoveInertia));
             } else {

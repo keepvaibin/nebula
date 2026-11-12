@@ -16,9 +16,6 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
 #include "Game/Render/Model.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1000.0f);
 
 namespace NrvScenarioSelectScene {
     NEW_NERVE(ScenarioSelectSceneNrvDeactive, ScenarioSelectScene, Deactive);
@@ -54,7 +51,7 @@ void ScenarioSelectScene::init() {
     mCameraContext = new CameraContext();
 
     Pos3f view;
-    view.setPositionFromLookAt(Vec3f(0.0f, 0.0f, cNum_init_f1), Vec3f(0.0f, 1.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+    view.setPositionFromLookAt(Vec3f(0.0f, 0.0f, 1000.0f), Vec3f(0.0f, 1.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
     mCameraContext->setViewMtx(view);
 
     mScenarioLayout = new ScenarioSelectLayout(mEffectSystem, mCameraContext);

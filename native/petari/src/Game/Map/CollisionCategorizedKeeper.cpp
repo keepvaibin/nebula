@@ -4,11 +4,7 @@
 #include "Game/Util/CollisionPartsFilter.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calcMinMaxAndRadius_f1, "calcMinMaxAndRadius.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addAndUpdateMinMax_f1, "addAndUpdateMinMax.f1", 0.1f);
 
 CollisionCategorizedKeeper::CollisionCategorizedKeeper(s32 category)
     : NameObj("地形コリジョンカテゴリキーパー"), mHitInfoArray(), mNumHits(), mPartsCount(), mCategory(category), mZonesInitialized(),
@@ -572,7 +568,7 @@ void CollisionZone::calcMinMaxAndRadius() {
         addAndUpdateMinMax(min, max);
     }
 
-    mCenter = (mMax + mMin) / cNum_calcMinMaxAndRadius_f1;
+    mCenter = (mMax + mMin) / 2.0f;
     f32 radius = 0.0f;
 
     for (pCurrent = mParts.begin(); pCurrent != mParts.end(); pCurrent++) {
@@ -608,7 +604,7 @@ void CollisionZone::calcMinMaxAndRadiusIfMoveOuter(CollisionParts* pParts) {
 
 void CollisionZone::addAndUpdateMinMax(Vec3f min, Vec3f max) {
     if (mRadius == 0.0f) {
-        mRadius = cNum_addAndUpdateMinMax_f1;
+        mRadius = 0.1f;
         mMin.set(min);
         mMax.set(max);
     } else {

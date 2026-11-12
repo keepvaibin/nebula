@@ -3,10 +3,9 @@
 
 #include "Game/System/PlayerInputs.hpp"
 #include "Game/System/NebulaInput.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, cSwingFrames, 6);
+    const s32 cSwingFrames = 6;
 };  // namespace
 
 InputSwing::InputSwing(const PlayerInput* pPad, u32 hand)

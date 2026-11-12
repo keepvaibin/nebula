@@ -5,22 +5,11 @@
 #include "Game/Util/Table.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <algorithm>
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_checkArrow_f1, "checkArrow.f1", 1.0e9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkArrow_f2, "checkArrow.f2", 1.0e9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkArrow_f3, "checkArrow.f3", 1.0e9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_KCHitArrow_f1, "KCHitArrow.f1", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_KCHitArrow_f2, "KCHitArrow.f2", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_KCHitArrow_f3, "KCHitArrow.f3", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_KCHitArrow_f4, "KCHitArrow.f4", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_KCHitArrow_f5, "KCHitArrow.f5", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_KCHitArrow_f6, "KCHitArrow.f6", 0.01f);
 
 namespace {
     // An arrow's hit part by which edge planes it lies on (bit 0-2 for plane 0-2): one, its edge; two, their vertex; else
     // the face.
-    NEBULA_TUNABLE_LIST(u8, cHitPartByEdges, 8, {1, 2, 3, 5, 4, 7, 6, 1});
+    const u8 cHitPartByEdges[8] = {1, 2, 3, 5, 4, 7, 6, 1};
 }  // namespace
 
 KCollisionServer::KCollisionServer() : mFile(), mapInfo(new Table()), mMaxVertexDistance(1.0f), mModel() {
@@ -535,9 +524,9 @@ KC_PrismData* KCollisionServer::checkArrow(const Vec3f& rOrigin, const Vec3f& rD
             break;
         }
 
-        f32 tX = MR::isNearZero(dir.x) ? cNum_checkArrow_f1 : (f32)*pDeltaX / dir.x;
-        f32 tY = MR::isNearZero(dir.y) ? cNum_checkArrow_f2 : (f32)*pDeltaY / dir.y;
-        f32 tZ = MR::isNearZero(dir.z) ? cNum_checkArrow_f3 : (f32)*pDeltaZ / dir.z;
+        f32 tX = MR::isNearZero(dir.x) ? 1.0e9f : (f32)*pDeltaX / dir.x;
+        f32 tY = MR::isNearZero(dir.y) ? 1.0e9f : (f32)*pDeltaY / dir.y;
+        f32 tZ = MR::isNearZero(dir.z) ? 1.0e9f : (f32)*pDeltaZ / dir.z;
 
         f32 tMin = tX;
 
@@ -734,34 +723,34 @@ bool KCollisionServer::KCHitArrow(KC_PrismData* pPrism, const Vec3f& rOrigin, co
 
     f32 e0 = NebulaVecDotProduct(hit, mFile->mNorms[pPrism->mEdgeIndices[0]]);
 
-    if (cNum_KCHitArrow_f1 < e0) {
+    if (0.01f < e0) {
         *pHitPart = 0;
         return false;
     }
 
-    if (0.0f <= e0 && e0 <= cNum_KCHitArrow_f2) {
+    if (0.0f <= e0 && e0 <= 0.01f) {
         onEdge0 = true;
     }
 
     f32 e1 = NebulaVecDotProduct(hit, mFile->mNorms[pPrism->mEdgeIndices[1]]);
 
-    if (cNum_KCHitArrow_f3 < e1) {
+    if (0.01f < e1) {
         *pHitPart = 0;
         return false;
     }
 
-    if (0.0f <= e1 && e1 <= cNum_KCHitArrow_f4) {
+    if (0.0f <= e1 && e1 <= 0.01f) {
         onEdge1 = true;
     }
 
     f32 e2 = NebulaVecDotProduct(hit, mFile->mNorms[pPrism->mEdgeIndices[2]]);
 
-    if (cNum_KCHitArrow_f5 + pPrism->mHeight < e2) {
+    if (0.01f + pPrism->mHeight < e2) {
         *pHitPart = 0;
         return false;
     }
 
-    if (0.0f <= e2 && e2 <= cNum_KCHitArrow_f6) {
+    if (0.0f <= e2 && e2 <= 0.01f) {
         onEdge2 = true;
     }
 

@@ -14,17 +14,10 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeItch_f1, "exeItch.f1", 0.2f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeReady_isNearPlayer_1, "exeReady.isNearPlayer.1", -1.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sTalkBalloonOffset, 950.0f);
+    const f32 sTalkBalloonOffset = 950.0f;
 
     struct CollisionPartInfo {
         const char* mCollisionName;
@@ -100,7 +93,7 @@ void HoneyQueen::init(const TableIter& rIter) {
     }
 
     mLodCtrl->setFarClipping(-1.0f);
-    mLodCtrl->setClippingTypeSphereContainsModelBoundingBox(cNum_init_f1);
+    mLodCtrl->setClippingTypeSphereContainsModelBoundingBox(100.0f);
 
     MR::setDistanceToTalk(mMsgCtrl, 0.0f);
 
@@ -171,7 +164,7 @@ void HoneyQueen::exeWait() {
 }
 
 void HoneyQueen::exeReady() {
-    if (!MR::isNearPlayer(mMsgCtrl, cNum_exeReady_isNearPlayer_1)) {
+    if (!MR::isNearPlayer(mMsgCtrl, -1.0f)) {
         setNerve(GET_NERVE(HoneyQueen, HoneyQueenNrvWait));
     }
 }
@@ -203,7 +196,7 @@ void HoneyQueen::exeItch() {
 
     Vec3f vec;
     mInitPoseQuat.getZDir(vec);
-    MR::faceToVector(&mPoseQuat, vec, cNum_exeItch_f1);
+    MR::faceToVector(&mPoseQuat, vec, 0.2f);
     MR::tryTalkNearPlayer(mMsgCtrl);
 }
 

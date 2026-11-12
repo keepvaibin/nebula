@@ -3,22 +3,7 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 77.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 77.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 77.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f1, "initSensor.f1", 77.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f2, "initSensor.f2", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRotate_f1, "exeRotate.f1", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f1, "updateHitSensor.f1", 90.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f2, "updateHitSensor.f2", 700.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f3, "updateHitSensor.f3", 90.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f4, "updateHitSensor.f4", 610.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f5, "updateHitSensor.f5", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f6, "updateHitSensor.f6", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f7, "updateHitSensor.f7", 55.0f);
 
 namespace NrvFlameGun {
     NEW_NERVE(HostTypeNrvSwitchWait, FlameGun, SwitchWait);
@@ -64,10 +49,10 @@ void FlameGun::init(const TableIter& rIter) {
     initModelManagerWithAnm("FlameGun", nullptr, false);
     MR::connectToSceneEnemy(this);
     initSound(4, false);
-    initBinder(cNum_init_f1 * mScale.y, cNum_init_f2 * mScale.y, 0);
+    initBinder(77.0f * mScale.y, 77.0f * mScale.y, 0);
     initEffectKeeper(3, nullptr);
     initSensor();
-    MR::initShadowVolumeSphere(this, cNum_init_f3);
+    MR::initShadowVolumeSphere(this, 77.0f);
     appear();
     MR::invalidateHitSensor(this, "attack");
 }
@@ -77,10 +62,10 @@ void FlameGun::initSensor() {
     initHitSensor(2);
     Vec3f offs;
     offs.x = 0.0f;
-    offs.y = cNum_initSensor_f1 * scale;
+    offs.y = 77.0f * scale;
     offs.z = 0.0f;
     MR::addHitSensorEnemy(this, "body", 32, offs.y, offs);
-    MR::addHitSensorCallbackEnemy(this, "attack", 16, cNum_initSensor_f2 * scale);
+    MR::addHitSensorCallbackEnemy(this, "attack", 16, 80.0f * scale);
 }
 
 void FlameGun::initAfterPlacement() {
@@ -158,7 +143,7 @@ void FlameGun::exeRotate() {
         MR::validateHitSensor(this, "attack");
     }
 
-    mRotation.y += cNum_exeRotate_f1;
+    mRotation.y += 0.9f;
     MR::startLevelSound(this, "SE_EM_LV_FLAMEGUN_FIRE");
 
     if (!MR::isValidHitSensor(this, "attack")) {
@@ -189,13 +174,13 @@ void FlameGun::updateHitSensor(HitSensor* pSensor) {
 
     f32 distance = direction.dot(playerOffset);
     pSensor->mPosition.set(mPosition);
-    distance = MR::clamp(distance, scale * (cNum_updateHitSensor_f1 * scale), scale * (cNum_updateHitSensor_f2 * scale));
-    f32 rate = (distance - cNum_updateHitSensor_f3 * scale) / (cNum_updateHitSensor_f4 * scale);
-    f32 radius = (1.0f - rate) * (cNum_updateHitSensor_f5 * scale) + rate * (cNum_updateHitSensor_f6 * scale);
+    distance = MR::clamp(distance, scale * (90.0f * scale), scale * (700.0f * scale));
+    f32 rate = (distance - 90.0f * scale) / (610.0f * scale);
+    f32 radius = (1.0f - rate) * (40.0f * scale) + rate * (100.0f * scale);
 
     pSensor->mPosition.add(direction * distance);
     pSensor->mPosition.add(side * 0.0f);
-    pSensor->mPosition.add(up * cNum_updateHitSensor_f7);
+    pSensor->mPosition.add(up * 55.0f);
     pSensor->mPosition.add(front * 0.0f);
 
     pSensor->mRadius = radius;

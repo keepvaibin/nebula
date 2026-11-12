@@ -22,26 +22,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "math_types.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 160.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 55.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 13.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 67.38f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHitBlow_f1, "exeHitBlow.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHitBlow_f2, "exeHitBlow.f2", 40.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHitBlow_applyVelocityDampAndGravity_1, "exeHitBlow.applyVelocityDampAndGravity.1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHitBlow_applyVelocityDampAndGravity_2, "exeHitBlow.applyVelocityDampAndGravity.2", 0.8f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHitBlow_applyVelocityDampAndGravity_3, "exeHitBlow.applyVelocityDampAndGravity.3", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHitBlow_applyVelocityDampAndGravity_4, "exeHitBlow.applyVelocityDampAndGravity.4", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHitBlow_applyVelocityDampAndGravity_5, "exeHitBlow.applyVelocityDampAndGravity.5", 1.0f);
 
 namespace {
     struct SightParam {
@@ -50,29 +31,29 @@ namespace {
         f32 mAngleV;
     };
 
-    NEBULA_TUNABLE_RECORD(SightParam, sThrowableSightParam, {900.0f, 10.0f, 90.0f});
-    NEBULA_TUNABLE_RECORD(SightParam, sCannonFleetSightParam, {1500.0f, 10.0f, 90.0f});
+    const SightParam sThrowableSightParam = {900.0f, 10.0f, 90.0f};
+    const SightParam sCannonFleetSightParam = {1500.0f, 10.0f, 90.0f};
 
-    NEBULA_TUNABLE(f32, sHideNearDistance, 400.0f);
-    NEBULA_TUNABLE(f32, sHideFarDistance, 2000.0f);
-    NEBULA_TUNABLE(f32, sPlayerAboveDot, -0.75f);
+    const f32 sHideNearDistance = 400.0f;
+    const f32 sHideFarDistance = 2000.0f;
+    const f32 sPlayerAboveDot = -0.75f;
     const s32 sHideWaitSteps = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE(f32, sFastHidePlayerSpeed, 8.0f);
-    NEBULA_TUNABLE(f32, sFastHideDistance, 200.0f);
-    NEBULA_TUNABLE(f32, sFastHideRate, 1.5f);
+    const f32 sFastHidePlayerSpeed = 8.0f;
+    const f32 sFastHideDistance = 200.0f;
+    const f32 sFastHideRate = 1.5f;
     const s32 sAppearHipDropSteps = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, sTurnSpeed, 0.03f);
-    NEBULA_TUNABLE(s32, sThrowAfterSteps, 45);
-    NEBULA_TUNABLE(s32, sThrowReleaseStep, 47);
-    NEBULA_TUNABLE(f32, sThrowSpeed, 15.0f);
+    const f32 sTurnSpeed = 0.03f;
+    const s32 sThrowAfterSteps = 45;
+    const s32 sThrowReleaseStep = 47;
+    const f32 sThrowSpeed = 15.0f;
     const s32 sSwoonSteps = NebulaFrameClock::stepsOfSeconds(2);
     const s32 sStampDeathSteps = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(s32, sHitBlowSteps, 20);
-    NEBULA_TUNABLE(f32, sHipDropNearDistance, 130.0f);
-    NEBULA_TUNABLE(f32, sHipDropFarDistance, 1500.0f);
-    NEBULA_TUNABLE(f32, sPunchSpeedH, 30.0f);
-    NEBULA_TUNABLE(f32, sPunchSpeedUp, 50.0f);
-    NEBULA_TUNABLE(f32, sPunchLift, 5.0f);
+    const s32 sHitBlowSteps = 20;
+    const f32 sHipDropNearDistance = 130.0f;
+    const f32 sHipDropFarDistance = 1500.0f;
+    const f32 sPunchSpeedH = 30.0f;
+    const f32 sPunchSpeedUp = 50.0f;
+    const f32 sPunchLift = 5.0f;
 };  // namespace
 
 namespace NrvMogu {
@@ -120,26 +101,26 @@ void Mogu::init(const TableIter& rIter) {
     MR::declareCoin(this, 1);
 
     f32 scaleY = mScale.y;
-    f32 binderRadius = scaleY * cNum_init_f1;
+    f32 binderRadius = scaleY * 160.0f;
     initBinder(binderRadius, binderRadius, 0);
     initHitSensor(2);
 
-    Vec3f sensorOffset(-cNum_init_f2, 0.0f, cNum_init_f3);
+    Vec3f sensorOffset(-55.0f, 0.0f, 13.0f);
     sensorOffset *= scaleY;
 
-    MR::addHitSensorAtJointEnemy(this, "body", "Head", 32, cNum_init_f4 * scaleY, sensorOffset);
+    MR::addHitSensorAtJointEnemy(this, "body", "Head", 32, 150.0f * scaleY, sensorOffset);
     initEffectKeeper(0, nullptr);
-    MR::initStarPointerTarget(this, cNum_init_f5, Vec3f(0.0f, cNum_init_f6, 0.0f));
+    MR::initStarPointerTarget(this, 100.0f, Vec3f(0.0f, 50.0f, 0.0f));
     initSound(4, false);
     initNerve(GET_NERVE(Mogu, HostTypeNrvSearch));
     mGravity.set(-mUp);
-    MR::initShadowVolumeSphere(this, cNum_init_f7 * mScale.y);
+    MR::initShadowVolumeSphere(this, 60.0f * mScale.y);
     MR::invalidateShadow(this, nullptr);
     MR::initLightCtrl(this);
     mAnimScaleController = new AnimScaleController(nullptr);
     makeActorAppeared();
 
-    mStoneHoldPos = new FixedPosition(this, "ArmR2", Vec3f(cNum_init_f8, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+    mStoneHoldPos = new FixedPosition(this, "ArmR2", Vec3f(67.38f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
 
     mStone = new MoguStone("投石用の石", "MoguStone");
     mStone->initWithoutIter();
@@ -461,13 +442,13 @@ void Mogu::exeHitBlow() {
         MR::turnVecToVecRadian(&mSight, mSight, toPlayerH, PI, mUp);
     }
 
-    MR::applyVelocityDampAndGravity(this, cNum_exeHitBlow_applyVelocityDampAndGravity_1, cNum_exeHitBlow_applyVelocityDampAndGravity_2, cNum_exeHitBlow_applyVelocityDampAndGravity_3, cNum_exeHitBlow_applyVelocityDampAndGravity_4, cNum_exeHitBlow_applyVelocityDampAndGravity_5);
+    MR::applyVelocityDampAndGravity(this, 2.0f, 0.8f, 0.98f, 0.98f, 1.0f);
 
     if (MR::isGreaterStep(this, sHitBlowSteps)) {
         MR::startSound(this, "SE_EM_EXPLODE_S");
         kill();
         MR::startAction(mHole, "Down");
-        MR::appearStarPiece(this, mPosition, 3, cNum_exeHitBlow_f1, cNum_exeHitBlow_f2, false);
+        MR::appearStarPiece(this, mPosition, 3, 10.0f, 40.0f, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
     }
 }

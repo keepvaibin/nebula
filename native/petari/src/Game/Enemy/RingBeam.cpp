@@ -18,31 +18,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_drawShape_f1, "drawShape.f1", 0.2026834f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawShape_f2, "drawShape.f2", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawShape_f3, "drawShape.f3", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawShape_f4, "drawShape.f4", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawShape_f5, "drawShape.f5", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawShape_f6, "drawShape.f6", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawShape_f7, "drawShape.f7", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawShape_f8, "drawShape.f8", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawShape_f9, "drawShape.f9", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawShape_f10, "drawShape.f10", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_RingBeam_f1, "RingBeam.f1", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setRadius_f1, "setRadius.f1", 2000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setRadius_f2, "setRadius.f2", 2000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setRadius_f3, "setRadius.f3", 2000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setRadius_f4, "setRadius.f4", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setRadius_f5, "setRadius.f5", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setRadius_f6, "setRadius.f6", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setRadius_f7, "setRadius.f7", 2000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setRadius_f8, "setRadius.f8", 2000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initPos_f1, "initPos.f1", 75.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeSpread_f1, "exeSpread.f1", 75.0f);
 
 namespace NrvRingBeam {
     NEW_NERVE(RingBeamNrvSpread, RingBeam, Spread);
@@ -71,7 +47,7 @@ void RingBeamShadowDrawer::drawShape(TypedDraw& rDraw) const {
     Vec3f pointXDir;
     Vec3f pointYDir;
     // 2 pi / 31: point 31 lands on point 0 and closes the strips.
-    f32 stepAngle = cNum_drawShape_f1;
+    f32 stepAngle = 0.2026834f;
 
     baseMtx.setInline(mHost->getBaseMtx());
     baseMtx.getXDir(xDir);
@@ -105,8 +81,8 @@ void RingBeamShadowDrawer::drawShape(TypedDraw& rDraw) const {
     for (int i = 0; i < 32; i++) {
         pointMtx[i].getXDir(pointXDir);
         pointMtx[i].getTrans(pointPos);
-        edgeOffsetNeg.scale(-cNum_drawShape_f2, pointXDir);
-        edgeOffsetPos.scale(cNum_drawShape_f3, pointXDir);
+        edgeOffsetNeg.scale(-5.0f, pointXDir);
+        edgeOffsetPos.scale(5.0f, pointXDir);
         edgeNeg.add(pointPos, edgeOffsetNeg);
         edgePos.add(pointPos, edgeOffsetPos);
         *vtx++ = {edgePos.x, edgePos.y, edgePos.z};
@@ -119,9 +95,9 @@ void RingBeamShadowDrawer::drawShape(TypedDraw& rDraw) const {
         pointMtx[i].getYDir(pointYDir);
         pointMtx[i].getTrans(pointPos);
 
-        edgeOffsetNeg.scale(-cNum_drawShape_f4, pointXDir);
-        edgeOffsetPos.scale(cNum_drawShape_f5, pointXDir);
-        down.scale(cNum_drawShape_f6, -pointYDir);
+        edgeOffsetNeg.scale(-5.0f, pointXDir);
+        edgeOffsetPos.scale(5.0f, pointXDir);
+        down.scale(500.0f, -pointYDir);
         edgeNeg.add(pointPos, edgeOffsetNeg);
         edgePos.add(pointPos, edgeOffsetPos);
         edgeNeg.add(down);
@@ -138,8 +114,8 @@ void RingBeamShadowDrawer::drawShape(TypedDraw& rDraw) const {
         pointMtx[i].getYDir(pointYDir);
         pointMtx[i].getTrans(pointPos);
 
-        edgeOffsetNeg.scale(-cNum_drawShape_f7, pointXDir);
-        down.scale(cNum_drawShape_f8, -pointYDir);
+        edgeOffsetNeg.scale(-5.0f, pointXDir);
+        down.scale(500.0f, -pointYDir);
         edgeTop.add(pointPos, edgeOffsetNeg);
         edgeBottom.add(pointPos, edgeOffsetNeg);
         edgeBottom.add(down);
@@ -153,8 +129,8 @@ void RingBeamShadowDrawer::drawShape(TypedDraw& rDraw) const {
         pointMtx[i].getYDir(pointYDir);
         pointMtx[i].getTrans(pointPos);
 
-        edgeOffsetPos.scale(cNum_drawShape_f9, pointXDir);
-        down.scale(cNum_drawShape_f10, -pointYDir);
+        edgeOffsetPos.scale(5.0f, pointXDir);
+        down.scale(500.0f, -pointYDir);
         edgeTop.add(pointPos, edgeOffsetPos);
         edgeBottom.add(pointPos, edgeOffsetPos);
         edgeBottom.add(down);
@@ -183,7 +159,7 @@ u32 RingBeamShadowDrawer::calcDrawLives() const {
 RingBeam::RingBeam(const char* pName, LiveActor* pHost, bool isFollowGravity, bool hasShadow) : LiveActor(pName) {
     lumacore::setClass(this, lumacore::kClassId< RingBeam >);
     mHost = pHost;
-    mSpeed = cNum_RingBeam_f1;
+    mSpeed = 20.0f;
     mLife = 100;
     mIsFollowGravity = isFollowGravity;
     mHasShadow = hasShadow;
@@ -257,8 +233,8 @@ void RingBeam::setRadius(f32 radius) {
     Vec3f groundPos;
     Vec3f axisFoot;
 
-    if (radius >= cNum_setRadius_f1) {
-        radius = cNum_setRadius_f2;
+    if (radius >= 2000.0f) {
+        radius = 2000.0f;
     }
     if (mShadowDrawer) {
         mShadowDrawer->mRadius = radius;
@@ -267,24 +243,24 @@ void RingBeam::setRadius(f32 radius) {
     const char* pAnimName = "Spread";
     MR::startBckNoInterpole(this, pAnimName);
     MR::startBckNoInterpole(mBloomModel, pAnimName);
-    f32 frame = (radius / cNum_setRadius_f3) * MR::getBckFrameMax(this);
+    f32 frame = (radius / 2000.0f) * MR::getBckFrameMax(this);
     MR::setBckFrameAndStop(this, frame);
     MR::setBckFrameAndStop(mBloomModel, frame);
     if (mShadowModel) {
         // The shadow ring sits on the host's axis, sized by where the edge meets the ground.
         Triangle triangle;
         MR::extractMtxYDir(mHost->getBaseMtx(), &hostAxis);
-        hostAxis.scale(cNum_setRadius_f4);
+        hostAxis.scale(1000.0f);
 
-        MR::getFirstPolyOnLineToMap(&groundPos, &triangle, mEdgePos, mBeamGravity * cNum_setRadius_f5);
+        MR::getFirstPolyOnLineToMap(&groundPos, &triangle, mEdgePos, mBeamGravity * 500.0f);
 
-        groundPos -= mBeamGravity * cNum_setRadius_f6;
+        groundPos -= mBeamGravity * 10.0f;
         MR::calcPerpendicFootToLine(&axisFoot, groundPos, mHost->mPosition + hostAxis, mHost->mPosition - hostAxis);
         mShadowModel->mPosition.set(axisFoot);
         MR::startBckNoInterpole(mShadowModel, pAnimName);
         f32 length = (groundPos - axisFoot).length();
-        if (0.0f <= length && length < cNum_setRadius_f7) {
-            MR::setBckFrameAndStop(mShadowModel, (length / cNum_setRadius_f8) * MR::getBckFrameMax(mShadowModel));
+        if (0.0f <= length && length < 2000.0f) {
+            MR::setBckFrameAndStop(mShadowModel, (length / 2000.0f) * MR::getBckFrameMax(mShadowModel));
         }
     }
 }
@@ -294,7 +270,7 @@ void RingBeam::initPos(const LiveActor* pActor) {
     Vec3f up;
     baseMtx.setInline(pActor->getBaseMtx());
     baseMtx.getYDir(up);
-    mPosition.set(pActor->mPosition + up * cNum_initPos_f1);
+    mPosition.set(pActor->mPosition + up * 75.0f);
 }
 
 void RingBeam::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
@@ -317,7 +293,7 @@ void RingBeam::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     f32 length = receiverToRing.length();
     f32 receiverRadius = pReceiver->mRadius;
 
-    if (!(length > cNum_attackSensor_f1 + receiverRadius) && MR::isSensorPlayerOrRide(pReceiver)) {
+    if (!(length > 5.0f + receiverRadius) && MR::isSensorPlayerOrRide(pReceiver)) {
         MR::sendMsgEnemyAttackElectric(pReceiver, pSender);
     }
 }
@@ -344,7 +320,7 @@ void RingBeam::exeSpread() {
         Vec3f hostUp;
         MR::extractMtxZDir(mHost->getBaseMtx(), &mFront);
         MR::extractMtxYDir(mHost->getBaseMtx(), &hostUp);
-        mEdgePos.set(mHost->mPosition + hostUp * cNum_exeSpread_f1);
+        mEdgePos.set(mHost->mPosition + hostUp * 75.0f);
         MR::calcGravityVector(this, mEdgePos, &mBeamGravity, nullptr, 0);
     }
 

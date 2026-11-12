@@ -8,12 +8,9 @@
 #include <cstring>
 #include <nebula_game_api.h>
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_createFarModel_f1, "createFarModel.f1", 100.0f);
 
 namespace {
-    NEBULA_TUNABLE(bool, sOff, false);
+    const bool sOff = false;
 
     // The levels place view cubes for the actors that ship distance models, and only those follow them.
     bool hasDistanceModels(const LiveActor* pActor) {
@@ -74,7 +71,7 @@ void LodCtrl::createFarModel(int drawBufferType, int movementType, int calcAnimT
     mFarModel = new ModelObj(pObjName, pObjName, mActor->getBaseMtx(), drawBufferType, movementType, calcAnimType, false);
     mFarModel->initWithoutIter();
     mFarModel->makeActorDead();
-    MR::setClippingTypeSphereContainsModelBoundingBox(mFarModel, cNum_createFarModel_f1);
+    MR::setClippingTypeSphereContainsModelBoundingBox(mFarModel, 100.0f);
     MR::copyTransRotateScale(mActor, mFarModel);
 }
 

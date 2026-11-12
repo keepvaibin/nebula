@@ -11,24 +11,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 160.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 130.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 110.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 120.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 20.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_enableGroupAttack_1, "exeWait.enableGroupAttack.1", 3000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_enableGroupAttack_2, "exeWait.enableGroupAttack.2", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAttack_enableGroupAttack_1, "exeAttack.enableGroupAttack.1", 3200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAttack_enableGroupAttack_2, "exeAttack.enableGroupAttack.2", 500.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeInter_1, "exeInter.1", 80);
 
 namespace {
     // One beam per interval of the attack.
@@ -52,9 +35,9 @@ void RingBeamer::init(const TableIter& rIter) {
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
     initHitSensor(2);
-    MR::addHitSensorPush(this, "Body", 8, cNum_init_f1, Vec3f(0.0f, cNum_init_f2, 0.0f));
-    MR::addHitSensorMtxEnemyAttack(this, "Head", 8, cNum_init_f3, MR::getJointMtx(this, "Top"), Vec3f(0.0f, cNum_init_f4, 0.0f));
-    MR::initShadowVolumeSphere(this, cNum_init_f5);
+    MR::addHitSensorPush(this, "Body", 8, 160.0f, Vec3f(0.0f, 80.0f, 0.0f));
+    MR::addHitSensorMtxEnemyAttack(this, "Head", 8, 130.0f, MR::getJointMtx(this, "Top"), Vec3f(0.0f, 110.0f, 0.0f));
+    MR::initShadowVolumeSphere(this, 120.0f);
     initEffectKeeper(1, nullptr);
     initSound(8, false);
     initNerve(GET_NERVE(RingBeamer, RingBeamerNrvWait));
@@ -65,7 +48,7 @@ void RingBeamer::init(const TableIter& rIter) {
     }
     MR::joinToGroupArray(this, rIter, nullptr, 32);
     mBeams = new RingBeam*[::sBeamNum];
-    f32 beamSpeed = cNum_init_f6;
+    f32 beamSpeed = 20.0f;
     s32 beamLife = 100;
     MR::getPlacementArg0NoInit(rIter, &beamSpeed);
     MR::getPlacementArg1NoInit(rIter, &beamLife);
@@ -93,7 +76,7 @@ void RingBeamer::exeWait() {
         MR::validateClipping(this);
     }
 
-    if (MR::enableGroupAttack(this, cNum_exeWait_enableGroupAttack_1, cNum_exeWait_enableGroupAttack_2)) {
+    if (MR::enableGroupAttack(this, 3000.0f, 500.0f)) {
         MR::sendMsgToGroupMember(ACTMES_GROUP_ATTACK, this, getSensor("Body"), "Body");
     }
 }
@@ -119,7 +102,7 @@ void RingBeamer::exeAttack() {
     if (getNerveStep() % ::sBeamInterval == ::sBeamInterval - 1) {
         MR::deleteEffect(this, "Charge");
 
-        if (!MR::enableGroupAttack(this, cNum_exeAttack_enableGroupAttack_1, cNum_exeAttack_enableGroupAttack_2)) {
+        if (!MR::enableGroupAttack(this, 3200.0f, 500.0f)) {
             MR::sendMsgToGroupMember(ACTMES_GROUP_HIDE, this, getSensor("Body"), "Body");
         } else {
             mBeams[getNerveStep() / ::sBeamInterval]->appear();
@@ -128,7 +111,7 @@ void RingBeamer::exeAttack() {
 }
 
 void RingBeamer::exeInter() {
-    if (MR::isGreaterEqualStep(this, cStep_exeInter_1)) {
+    if (MR::isGreaterEqualStep(this, 80)) {
         for (s32 i = 0; i < ::sBeamNum; i++) {
             if (!MR::isDead(mBeams[i])) {
                 return;

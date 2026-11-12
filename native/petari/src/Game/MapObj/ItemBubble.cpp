@@ -6,33 +6,12 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 67.379997f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 55.66f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 92.290001f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 55.66f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 43.950001f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 19.040001f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 55.66f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 130.37f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f10, "init.f10", 67.379997f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f11, "init.f11", 130.37f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f12, "init.f12", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f13, "init.f13", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f14, "init.f14", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f15, "init.f15", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f2, "exeWait.f2", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f3, "exeWait.f3", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f4, "exeWait.f4", 8.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, cHitSensorRadius, 120.f);
-    NEBULA_TUNABLE(f32, cSwingRange, 120.0f);
-    NEBULA_TUNABLE(f32, cShootStarSpeed, 24.0f);
+    const f32 cHitSensorRadius = 120.f;
+    const f32 cSwingRange = 120.0f;
+    const f32 cShootStarSpeed = 24.0f;
 };  // namespace
 
 namespace NrvItemBubble {
@@ -54,7 +33,7 @@ void ItemBubble::init(const TableIter& rIter) {
     }
     initModelManagerWithAnm("ItemBubble", nullptr, false);
     MR::connectToSceneMapObj(this);
-    mScale.mult(cNum_init_f1);
+    mScale.mult(1.2f);
     NebulaMtxScale(mTargetMtx, mScale.x, mScale.y, mScale.z);
     MR::setMtxTrans(mTargetMtx, mPosition.x, mPosition.y, mPosition.z);
     NebulaMtxCopy(mTargetMtx, mItemMtx);
@@ -91,16 +70,16 @@ void ItemBubble::init(const TableIter& rIter) {
 
             switch (itemCount) {
             case 1:
-                mCoins[i]->initFixedPosition(mItemMtx, Vec3f(0.0f, -cNum_init_f2, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+                mCoins[i]->initFixedPosition(mItemMtx, Vec3f(0.0f, -67.379997f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
                 continue;
             case 2:
 
                 switch (i) {
                 case 0:
-                    mCoins[i]->initFixedPosition(mItemMtx, Vec3f(-cNum_init_f3, -cNum_init_f4, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+                    mCoins[i]->initFixedPosition(mItemMtx, Vec3f(-55.66f, -92.290001f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
                     continue;
                 case 1:
-                    mCoins[i]->initFixedPosition(mItemMtx, Vec3f(cNum_init_f5, -cNum_init_f6, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+                    mCoins[i]->initFixedPosition(mItemMtx, Vec3f(55.66f, -43.950001f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
                     continue;
                 }
 
@@ -109,13 +88,13 @@ void ItemBubble::init(const TableIter& rIter) {
 
                 switch (i) {
                 case 0:
-                    mCoins[i]->initFixedPosition(mItemMtx, Vec3f(0.0f, -cNum_init_f7, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+                    mCoins[i]->initFixedPosition(mItemMtx, Vec3f(0.0f, -19.040001f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
                     continue;
                 case 1:
-                    mCoins[i]->initFixedPosition(mItemMtx, Vec3f(-cNum_init_f8, -cNum_init_f9, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+                    mCoins[i]->initFixedPosition(mItemMtx, Vec3f(-55.66f, -130.37f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
                     continue;
                 case 2:
-                    mCoins[i]->initFixedPosition(mItemMtx, Vec3f(cNum_init_f10, -cNum_init_f11, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+                    mCoins[i]->initFixedPosition(mItemMtx, Vec3f(67.379997f, -130.37f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
                     continue;
                 }
 
@@ -152,7 +131,7 @@ void ItemBubble::init(const TableIter& rIter) {
 
     if ((itemType == 0 && itemCount > 3) || (itemType == 1 && itemCount > 1)) {
         Vec3f ringOffset;
-        Vec3f ringPos(0.0f, cNum_init_f12, 0.0f);
+        Vec3f ringPos(0.0f, 60.0f, 0.0f);
         Vec3f zeroVelocity;
         zeroVelocity.zero();
 
@@ -160,7 +139,7 @@ void ItemBubble::init(const TableIter& rIter) {
         NebulaMtxRotRad(ringStep, (char)90, TWO_PI / static_cast< f32 >(itemCount));
 
         if (itemType == 0) {
-            ringOffset.set< f32 >(0.0f, -cNum_init_f13, 0.0f);
+            ringOffset.set< f32 >(0.0f, -60.0f, 0.0f);
         } else {
             ringOffset.zero();
         }
@@ -182,7 +161,7 @@ void ItemBubble::init(const TableIter& rIter) {
 
         if (mUseRail) {
             initRailRider(rIter);
-            MR::initAndSetRailClipping(&mClipCenter, this, cNum_init_f14, cNum_init_f15);
+            MR::initAndSetRailClipping(&mClipCenter, this, 100.0f, 500.0f);
         }
     }
 
@@ -265,7 +244,7 @@ void ItemBubble::exeWait() {
         // Useless...
     }
 
-    mSwing = MR::sin(cNum_exeWait_f1 * ((static_cast< f32 >(getNerveStep()) / ::cSwingRange) * MR::pi()));
+    mSwing = MR::sin(2.0f * ((static_cast< f32 >(getNerveStep()) / ::cSwingRange) * MR::pi()));
 
     if (mUseRail) {
         if (MR::isRailReachedGoal(this)) {
@@ -285,14 +264,14 @@ void ItemBubble::exeWait() {
     MtxPtr pMtx = MR::tmpMtxRotZDeg(mRotation.z);
     MR::multMtx(mTargetMtx, pMtx, mTargetMtx);
 
-    mPosition = mBasePos + Vec3f(0.0f, 1.0f, 0.0f).multInLine2(mSwing).multInLine2(cNum_exeWait_f2);
+    mPosition = mBasePos + Vec3f(0.0f, 1.0f, 0.0f).multInLine2(mSwing).multInLine2(30.0f);
 
     MR::setMtxTrans(mTargetMtx, mPosition.x, mPosition.y, mPosition.z);
 
     if (mUseRail) {
         NebulaMtxCopy(mTargetMtx, mItemMtx);
     } else {
-        MR::blendMtx(mItemMtx, mTargetMtx, cNum_exeWait_f3, mItemMtx);
+        MR::blendMtx(mItemMtx, mTargetMtx, 0.1f, mItemMtx);
     }
 
     for (u32 i = 0; i < mItemCount; i++) {
@@ -302,7 +281,7 @@ void ItemBubble::exeWait() {
 
         mCoins[i]->mRotation.x = 0.0f;
         mCoins[i]->mRotation.z = 0.0f;
-        mCoins[i]->mRotation.y += cNum_exeWait_f4;
+        mCoins[i]->mRotation.y += 8.0f;
     }
 }
 

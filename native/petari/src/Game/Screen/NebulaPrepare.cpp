@@ -13,31 +13,30 @@
 #include <nebula_game_api.h>
 #include <Game/Ui/Layout.hpp>
 #include "Game/System/NebulaHost.hpp"
-#include "Game/Util/Tunable.hpp"
 
 using namespace NebulaUi;
 
 namespace {
     // Screen units (NebulaUi::readScreen), the settings menu's question window and look (NebulaSettingsMenu.cpp).
-    NEBULA_TUNABLE(f32, cWidth, 360.0f);
-    NEBULA_TUNABLE(f32, cPad, 26.0f);
-    NEBULA_TUNABLE(f32, cTitleSize, 21.0f);
-    NEBULA_TUNABLE(f32, cPercentSize, 15.5f);
-    NEBULA_TUNABLE(f32, cBarGap, 22.0f);      // the title's letters to the bar
-    NEBULA_TUNABLE(f32, cPercentGap, 12.0f);  // the bar to the percentage
-    NEBULA_TUNABLE(f32, cBarHeight, 8.0f);
-    NEBULA_TUNABLE(f32, cBarInset, 36.0f);    // the bar from the window's sides
-    NEBULA_TUNABLE(u32, cText, 0x4A5274FF);
+    const f32 cWidth = 360.0f;
+    const f32 cPad = 26.0f;
+    const f32 cTitleSize = 21.0f;
+    const f32 cPercentSize = 15.5f;
+    const f32 cBarGap = 22.0f;      // the title's letters to the bar
+    const f32 cPercentGap = 12.0f;  // the bar to the percentage
+    const f32 cBarHeight = 8.0f;
+    const f32 cBarInset = 36.0f;    // the bar from the window's sides
+    const u32 cText = 0x4A5274FF;
     const u32 cTrack = NEBULA_RGBA(0xCB, 0xD6, 0xEB, 0xFF);
-    NEBULA_TUNABLE(u32, cFill, 0x6FA6EAFF);
+    const u32 cFill = 0x6FA6EAFF;
 
-    NEBULA_TUNABLE(s32, cShowAfter, 30);     // what finishes sooner (a filled cache) shows nothing
-    NEBULA_TUNABLE(s32, cAppearFrames, 18);
-    NEBULA_TUNABLE(s32, cHoldFrames, 15);    // at 100 % before it goes
-    NEBULA_TUNABLE(s32, cOutroFrames, 30);   // shrinking and fading to black
-    NEBULA_TUNABLE(f32, cOutroScale, 0.9f);
+    const s32 cShowAfter = 30;     // what finishes sooner (a filled cache) shows nothing
+    const s32 cAppearFrames = 18;
+    const s32 cHoldFrames = 15;    // at 100 % before it goes
+    const s32 cOutroFrames = 30;   // shrinking and fading to black
+    const f32 cOutroScale = 0.9f;
     // The shown progress moves this share of the way to the host's each frame.
-    NEBULA_TUNABLE(f32, cFollow, 0.12f);
+    const f32 cFollow = 0.12f;
 
     enum { PhaseNone = 0, PhaseCompiling = 2 };
 };  // namespace

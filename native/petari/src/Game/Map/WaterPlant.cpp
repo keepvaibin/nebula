@@ -11,12 +11,7 @@
 #include "Game/Render/Clip.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Render/GameTexture.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_movement_f1, "movement.f1", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initPlantAfterPlacement_f1, "initPlantAfterPlacement.f1", 2.0f);
 
 namespace {
     // runtime/src/render/materials/water_plant.hlsl: the plant texture where its alpha is above 50, blended by it,
@@ -35,40 +30,40 @@ namespace {
 }  // namespace
 namespace {
     // Texture coordinates of the strip's eight vertices, top pair first.
-    NEBULA_TUNABLE_LIST(f32, cTexCoords, , {0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.2f, 1.0f, 0.2f, 0.0f, 0.5f, 1.0f, 0.5f, 0.0f, 1.0f, 1.0f, 1.0f});
+    const f32 cTexCoords[] = {0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.2f, 1.0f, 0.2f, 0.0f, 0.5f, 1.0f, 0.5f, 0.0f, 1.0f, 1.0f, 1.0f};
     // Base height by placement arg 3 (the texture).
-    NEBULA_TUNABLE_LIST(f32, cHeightTable, , {150.0f, 200.0f, 300.0f, 250.0f});
+    const f32 cHeightTable[] = {150.0f, 200.0f, 300.0f, 250.0f};
     const Vec3f cInitialCameraSide(1.0f, 0.0f, 0.0f);
 
     // Phase step per frame and amplitude of the shared sway. The ramp toward them never ran (start == target).
-    NEBULA_TUNABLE(f32, cSwingSpeed, 0.03f);
-    NEBULA_TUNABLE(f32, cSwingWidth, 20.0f);
+    const f32 cSwingSpeed = 0.03f;
+    const f32 cSwingWidth = 20.0f;
     // Phase between consecutive entries of the sway table.
-    NEBULA_TUNABLE(f32, cSwingPosPhaseStep, 0.2f);
+    const f32 cSwingPosPhaseStep = 0.2f;
 
-    NEBULA_TUNABLE(s32, cDefaultPlantNum, 16);
-    NEBULA_TUNABLE(f32, cDefaultAreaRadius, 500.0f);
+    const s32 cDefaultPlantNum = 16;
+    const f32 cDefaultAreaRadius = 500.0f;
     const s32 cSwingPosTableSize = 64;
     // Placement tries per plant before keeping the last random spot.
-    NEBULA_TUNABLE(s32, cPlantAddTime, 10);
-    NEBULA_TUNABLE(f32, cGroundProbeHeight, 500.0f);
-    NEBULA_TUNABLE(f32, cGroundProbeLength, 1000.0f);
+    const s32 cPlantAddTime = 10;
+    const f32 cGroundProbeHeight = 500.0f;
+    const f32 cGroundProbeLength = 1000.0f;
     // Plants rotate their face by this many degrees each.
-    NEBULA_TUNABLE(f32, cPlantTurnDegree, 15.0f);
-    NEBULA_TUNABLE(f32, cSpinWaveDistanceMax, 1500.0f);
+    const f32 cPlantTurnDegree = 15.0f;
+    const f32 cSpinWaveDistanceMax = 1500.0f;
     const s32 cSpinWaveSwingTimeMax = NebulaFrameClock::stepsOfMilliseconds(1500);
-    NEBULA_TUNABLE(f32, cSpinWaveSwingTimeMaxF, 90.0f);
-    NEBULA_TUNABLE(s32, cSpinWaveValidTime, 20);
+    const f32 cSpinWaveSwingTimeMaxF = 90.0f;
+    const s32 cSpinWaveValidTime = 20;
     // Frames of delay per unit of distance before the spin wave reaches a plant.
-    NEBULA_TUNABLE(f32, cSpinWaveDelayRate, 0.1f);
-    NEBULA_TUNABLE(f32, cSpinWaveSwingRate, 400.0f);
-    NEBULA_TUNABLE(f32, cDefaultHalfWidth, 20.0f);
-    NEBULA_TUNABLE(f32, cHeightRate0, 0.5f);
-    NEBULA_TUNABLE(f32, cHeightRate1, 0.8f);
-    NEBULA_TUNABLE(f32, cSpinSwingRate0, 0.3f);
-    NEBULA_TUNABLE(f32, cSpinSwingRate1, 0.6f);
-    NEBULA_TUNABLE(f32, cFogStartZ, 2000.0f);
-    NEBULA_TUNABLE(f32, cFogEndZ, 10000.0f);
+    const f32 cSpinWaveDelayRate = 0.1f;
+    const f32 cSpinWaveSwingRate = 400.0f;
+    const f32 cDefaultHalfWidth = 20.0f;
+    const f32 cHeightRate0 = 0.5f;
+    const f32 cHeightRate1 = 0.8f;
+    const f32 cSpinSwingRate0 = 0.3f;
+    const f32 cSpinSwingRate1 = 0.6f;
+    const f32 cFogStartZ = 2000.0f;
+    const f32 cFogEndZ = 10000.0f;
 
     // Sway table offsets of a plant's low and middle joints from its tip's entry.
     const s32 cSwingIndexLow = 6;
@@ -104,7 +99,7 @@ void WaterPlant::init(const TableIter& rIter) {
     mHeight = ::cHeightTable[mType];
     initPlant();
 
-    MR::setClippingTypeSphere(this, Vec2f(mAreaRadius, cNum_init_f1 * mHeight).length());
+    MR::setClippingTypeSphere(this, Vec2f(mAreaRadius, 2.0f * mHeight).length());
 
     makeActorAppeared();
 }
@@ -138,7 +133,7 @@ void WaterPlant::movement() {
                 rPlant.mSpinWaveSwingVec2.set(rPlant.mSpinSwingDir);
                 rPlant.mSpinWaveSwingVec3.set(rPlant.mSpinSwingDir);
 
-                f32 spinSwingRate = rPlant.mSpinSwingStrength * (::cSpinWaveSwingRate * (rate * MR::sinDegree(cNum_movement_f1 * (1.0f - rate))));
+                f32 spinSwingRate = rPlant.mSpinSwingStrength * (::cSpinWaveSwingRate * (rate * MR::sinDegree(180.0f * (1.0f - rate))));
                 rPlant.mSpinWaveSwingVec1.scale(::cSpinSwingRate0 * spinSwingRate);
                 rPlant.mSpinWaveSwingVec2.scale(::cSpinSwingRate1 * spinSwingRate);
                 rPlant.mSpinWaveSwingVec3.scale(spinSwingRate);
@@ -239,7 +234,7 @@ void WaterPlant::initPlantAfterPlacement() {
         rPlant.mSpinWaveSwingTimer = 0;
         rPlant.mSpinSwingStrength = 0.0f;
 
-        f32 height = MR::getRandom(mHeight, cNum_initPlantAfterPlacement_f1 * mHeight);
+        f32 height = MR::getRandom(mHeight, 2.0f * mHeight);
         rPlant.mHeight1 = height * ::cHeightRate0;
         rPlant.mHeight2 = height * ::cHeightRate1;
         rPlant.mHeight3 = height;

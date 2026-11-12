@@ -2,10 +2,9 @@
 #include "Game/Util/GravityUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(f32, cDefaultSpeed, 20.0f);
+    const f32 cDefaultSpeed = 20.0f;
 };  // namespace
 
 SkeletalFishRailControl::SkeletalFishRailControl() {

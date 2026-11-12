@@ -18,45 +18,25 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_OceanRing_f1, "OceanRing.f1", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_OceanRing_f2, "OceanRing.f2", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcWaterInfo_f1, "calcWaterInfo.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcStreamVec_f1, "calcStreamVec.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcCurrentWidthRate_f1, "calcCurrentWidthRate.f1", 12.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcCurrentWidthRate_f2, "calcCurrentWidthRate.f2", 12.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcCurrentWidthRate_f3, "calcCurrentWidthRate.f3", 12.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcCurrentFlowSpeedRate_f1, "calcCurrentFlowSpeedRate.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcCurrentFlowSpeedRate_f2, "calcCurrentFlowSpeedRate.f2", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcCurrentFlowSpeedRate_f3, "calcCurrentFlowSpeedRate.f3", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcClippingBox_f1, "calcClippingBox.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcClippingBox_f2, "calcClippingBox.f2", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcClippingBox_f3, "calcClippingBox.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcClippingBox_f4, "calcClippingBox.f4", 100.0f);
 
 // The water is a grid along the rail: one cross-section of cPointsAcross points every sPointIntervalLine,
 // cPointSpacing apart at width rate 1 (sDefaultWidth either side of the center point).
 namespace {
-    NEBULA_TUNABLE(f32, sPointIntervalLine, 200.0f);
-    NEBULA_TUNABLE(f32, sDefaultWidth, 1200.0f);
-    NEBULA_TUNABLE(f32, sEdgePointNum, 2.0f);
-    NEBULA_TUNABLE(f32, sUpdateDistanceMax, 5000.0f);
-    NEBULA_TUNABLE(f32, sWaveSpeed0, -0.04f);
-    NEBULA_TUNABLE(f32, sWaveSpeed1, -0.06f);
+    const f32 sPointIntervalLine = 200.0f;
+    const f32 sDefaultWidth = 1200.0f;
+    const f32 sEdgePointNum = 2.0f;
+    const f32 sUpdateDistanceMax = 5000.0f;
+    const f32 sWaveSpeed0 = -0.04f;
+    const f32 sWaveSpeed1 = -0.06f;
 
-    NEBULA_TUNABLE(s32, cPointsAcross, 15);
-    NEBULA_TUNABLE(s32, cCenterPoint, 7);
-    NEBULA_TUNABLE(f32, cPointSpacing, 171.42857f);  // sDefaultWidth / cCenterPoint
+    const s32 cPointsAcross = 15;
+    const s32 cCenterPoint = 7;
+    const f32 cPointSpacing = 171.42857f;  // sDefaultWidth / cCenterPoint
     // Segments kept updating behind the player; mUpdateSegsAhead are ahead.
-    NEBULA_TUNABLE(s32, cUpdateSegsBehind, 8);
-    NEBULA_TUNABLE(s32, cFadeSegs, 3);
-    NEBULA_TUNABLE(f32, cNormalSampleOffset, 10.0f);
+    const s32 cUpdateSegsBehind = 8;
+    const s32 cFadeSegs = 3;
+    const f32 cNormalSampleOffset = 10.0f;
 };  // namespace
 
 OceanRing::OceanRing(const char* pName) : LiveActor(pName) {
@@ -69,8 +49,8 @@ OceanRing::OceanRing(const char* pName) : LiveActor(pName) {
     mUpdateSegsAhead = 30;
     mWaveTheta0 = 0.0f;
     mWaveTheta1 = 0.0f;
-    mWaveHeight1 = cNum_OceanRing_f1;
-    mWaveHeight2 = cNum_OceanRing_f2;
+    mWaveHeight1 = 80.0f;
+    mWaveHeight2 = 100.0f;
     mIsClipped = false;
     mPlayerCoord = 0.0f;
     mNearestPos.zero();
@@ -107,11 +87,11 @@ void OceanRing::init(const TableIter& rIter) {
         mOceanRingPipe->init(rIter);
     } else {
         if (shape == 2) {
-            mWaveHeight1 = cNum_init_f1;
-            mWaveHeight2 = cNum_init_f2;
+            mWaveHeight1 = 20.0f;
+            mWaveHeight2 = 30.0f;
         } else {
-            mWaveHeight1 = cNum_init_f3;
-            mWaveHeight2 = cNum_init_f4;
+            mWaveHeight1 = 50.0f;
+            mWaveHeight2 = 80.0f;
         }
 
         MR::loadTexFromArc("OceanRing", "WaterPipeInside.bti");
@@ -169,7 +149,7 @@ bool OceanRing::calcWaterInfo(const Vec3f& rPos, const Vec3f& rGravity, WaterInf
     // A rail point with width 0 makes a tube with no depth, not a division by 0.
     f32 angle = width > 0.0f ? side.length() / width : 1.0f;
     angle *= PI;
-    angle *= cNum_calcWaterInfo_f1;
+    angle *= 0.5f;
 
     pInfo->mDepth = MR::cos(angle) * width;
     pInfo->mDepth += height;
@@ -306,7 +286,7 @@ f32 OceanRing::calcWaveHeight(const Vec3f& rPos, f32 coord, Vec3f* pNormal) cons
 void OceanRing::calcStreamVec(const Vec3f& rPos, f32 coord, Vec3f* pStreamVec) const {
     pStreamVec->zero();
     f32 width = (mWidthMax * calcCurrentWidthRate(coord));
-    f32 speed = (cNum_calcStreamVec_f1 * calcCurrentFlowSpeedRate(coord));
+    f32 speed = (10.0f * calcCurrentFlowSpeedRate(coord));
     Vec3f toNearest(mNearestPos);
     toNearest.sub(rPos);
     if (toNearest.length() < width) {
@@ -478,11 +458,11 @@ f32 OceanRing::calcCurrentWidthRate(f32 coord) const {
         return 1.0f;
     }
 
-    f32 currentWidth = cNum_calcCurrentWidthRate_f1;
-    f32 nextWidth = cNum_calcCurrentWidthRate_f2;
+    f32 currentWidth = 12.0f;
+    f32 nextWidth = 12.0f;
     MR::getCurrentRailPointArg1NoInit(this, &currentWidth);
     MR::getNextRailPointArg1NoInit(this, &nextWidth);
-    return ((((currentWidth * toNext) + (nextWidth * toCurrent)) / total) / cNum_calcCurrentWidthRate_f3);
+    return ((((currentWidth * toNext) + (nextWidth * toCurrent)) / total) / 12.0f);
 }
 
 // Rail point arg 0 between the two rail points around coord, by distance; 100 is rate 1.
@@ -497,11 +477,11 @@ f32 OceanRing::calcCurrentFlowSpeedRate(f32 coord) const {
         return 1.0f;
     }
 
-    f32 currentSpeed = cNum_calcCurrentFlowSpeedRate_f1;
-    f32 nextSpeed = cNum_calcCurrentFlowSpeedRate_f2;
+    f32 currentSpeed = 100.0f;
+    f32 nextSpeed = 100.0f;
     MR::getCurrentRailPointArg0NoInit(this, &currentSpeed);
     MR::getNextRailPointArg0NoInit(this, &nextSpeed);
-    return ((((currentSpeed * toNext) + (nextSpeed * toCurrent)) / total) / cNum_calcCurrentFlowSpeedRate_f3);
+    return ((((currentSpeed * toNext) + (nextSpeed * toCurrent)) / total) / 100.0f);
 }
 
 // mClippingBox: the rail's box grown by the widest point and mWidthMax; mUpdateBox grows it by
@@ -511,14 +491,14 @@ void OceanRing::calcClippingBox() {
     for (s32 i = 0; i < MR::getRailPointNum(this); i++) {
         f32 widthArg = 0.0f;
         MR::getRailPointArg1NoInit(this, i, &widthArg);
-        f32 width = (cNum_calcClippingBox_f1 * widthArg);
+        f32 width = (100.0f * widthArg);
 
         if (width >= widest) {
             widest = width;
         }
     }
 
-    MR::calcBoundingBox(this, &mClippingBox, cNum_calcClippingBox_f2);
+    MR::calcBoundingBox(this, &mClippingBox, 200.0f);
     Vec3f widestGrow(widest);
     mClippingBox.i.sub(widestGrow);
     mClippingBox.f.add(widestGrow);
@@ -530,9 +510,9 @@ void OceanRing::calcClippingBox() {
     Vec3f widthGrow(mWidthMax);
     mClippingBox.i.sub(widthGrow);
     mClippingBox.f.add(widthGrow);
-    mClippingCenter.lerp(mClippingBox.f, mClippingBox.i, cNum_calcClippingBox_f3);
+    mClippingCenter.lerp(mClippingBox.f, mClippingBox.i, 0.5f);
     f32 radius = mClippingCenter.distance(mClippingBox.i);
-    MR::setClippingTypeSphere(this, (cNum_calcClippingBox_f4 + radius), &mClippingCenter);
+    MR::setClippingTypeSphere(this, (100.0f + radius), &mClippingCenter);
     MR::setClippingFarMax(this);
 }
 

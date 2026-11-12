@@ -11,26 +11,14 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 250.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 250.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRotate_f1, "exeRotate.f1", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRotate_f2, "exeRotate.f2", 360.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRotate_f3, "exeRotate.f3", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRotate_f4, "exeRotate.f4", 360.0f);
-
 namespace {
-    NEBULA_TUNABLE_LIST(f32, sRotYTargetList, , {0.0f, 90.0f, 180.0f, -90.0f});
+    const f32 sRotYTargetList[] = {0.0f, 90.0f, 180.0f, -90.0f};
 
-    NEBULA_TUNABLE(f32, sScale, 1.0f);
-    NEBULA_TUNABLE(f32, sPunchSpeed, 6.0f);
-    NEBULA_TUNABLE(s32, sRotYTargetNum, 4);
+    const f32 sScale = 1.0f;
+    const f32 sPunchSpeed = 6.0f;
+    const s32 sRotYTargetNum = 4;
 };  // namespace
 
 namespace NrvArrowSwitch {
@@ -60,10 +48,10 @@ void ArrowSwitch::init(const TableIter& rIter) {
 
     if (MR::isInAreaObj("PlaneModeCube", mPosition)) {
         initHitSensor(1);
-        MR::addHitSensorMapObj(this, "body", 8, cNum_init_f1, Vec3f(0.0f, cNum_init_f2, cNum_init_f3));
+        MR::addHitSensorMapObj(this, "body", 8, 100.0f, Vec3f(0.0f, 50.0f, 250.0f));
     } else {
         initHitSensor(2);
-        MR::addHitSensorMapObj(this, "body", 8, cNum_init_f4, Vec3f(0.0f, cNum_init_f5, cNum_init_f6));
+        MR::addHitSensorMapObj(this, "body", 8, 100.0f, Vec3f(0.0f, 50.0f, 250.0f));
         MR::addHitSensorMapObjMoveCollision(this, "collision", 8, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
         MR::initCollisionParts(this, "ArrowSwitch", getSensor("collision"), nullptr);
     }
@@ -248,8 +236,8 @@ void ArrowSwitch::exeRotate() {
 
     MR::startLevelSound(this, "SE_OJ_LV_ARROW_SWITCH_MOVE");
     mRotAngle += mRotSpeed;
-    mRotAngle = MR::repeat(mRotAngle, -cNum_exeRotate_f1, cNum_exeRotate_f2);
-    f32 diff = MR::repeat(::sRotYTargetList[mRotYTargetIndex] - mRotAngle, -cNum_exeRotate_f3, cNum_exeRotate_f4);
+    mRotAngle = MR::repeat(mRotAngle, -180.0f, 360.0f);
+    f32 diff = MR::repeat(::sRotYTargetList[mRotYTargetIndex] - mRotAngle, -180.0f, 360.0f);
 
     if ((mIsRotPlus && diff < 0.0f) || (!mIsRotPlus && diff > 0.0f)) {
         mRotAngle = ::sRotYTargetList[mRotYTargetIndex];

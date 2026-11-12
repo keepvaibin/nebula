@@ -9,46 +9,18 @@
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 230.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 2000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 450.0f);
-NEBULA_TUNABLE_NAMED(f64, cNum_exeSwim_f1, "exeSwim.f1", 0.5);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHideOnShore_f1, "exeHideOnShore.f1", 700.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initTalking_f1, "initTalking.f1", 2500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateSwimCommon_f1, "updateSwimCommon.f1", 5000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updatePoseByRail_f1, "updatePoseByRail.f1", 600.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updatePoseByRail_f2, "updatePoseByRail.f2", 0.04f);
-NEBULA_TUNABLE_NAMED(f64, cNum_updatePoseByRail_f3, "updatePoseByRail.f3", 0.04);
-NEBULA_TUNABLE_NAMED(f32, cNum_isReadyToEmitRing_f1, "isReadyToEmitRing.f1", 600.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_emitRing_f1, "emitRing.f1", 600.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_emitRing_f2, "emitRing.f2", 57.29578f);
-NEBULA_TUNABLE_NAMED(f32, cNum_emitRing_f3, "emitRing.f3", 57.29578f);
-NEBULA_TUNABLE_NAMED(f32, cNum_emitRing_f4, "emitRing.f4", 57.29578f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeCountDown_setBckRate_1, "exeCountDown.setBckRate.1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWaitTalkNormal_isNearPlayer_1, "exeWaitTalkNormal.isNearPlayer.1", -1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTalkNormal_isNearPlayer_1, "exeTalkNormal.isNearPlayer.1", -1.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeWaitStarAppeared_1, "exeWaitStarAppeared.1", 1);
 
 namespace {
     const char* const cBckForRipple[] = {"WaitReverse", "Talk", "StartWait", "StartTalk", "Delight", nullptr};
 
-    NEBULA_TUNABLE_RECORD(Vec, sMarioMoveLocalOffsetRing, {6.0f, -33.0f, -776.0f});
-    NEBULA_TUNABLE_RECORD(Vec, sMarioMoveLocalOffsetDeepSea, {6.0f, -176.0f, -590.0f});
+    const Vec sMarioMoveLocalOffsetRing = {6.0f, -33.0f, -776.0f};
+    const Vec sMarioMoveLocalOffsetDeepSea = {6.0f, -176.0f, -590.0f};
 
-    NEBULA_TUNABLE_RECORD(Vec, sTalkOffset, {16.0f, 192.0f, -300.0f});
-    NEBULA_TUNABLE_RECORD(Vec, sTalkOffsetOnShore, {61.0f, 384.0f, 250.0f});
-    NEBULA_TUNABLE_RECORD(Vec, sTalkOffsetDeepSea, {47.0f, 179.0f, -300.0f});
-    NEBULA_TUNABLE_RECORD(Vec, sTalkOffsetDelightDeepSea, {152.0f, 240.0f, 250.0f});
+    const Vec sTalkOffset = {16.0f, 192.0f, -300.0f};
+    const Vec sTalkOffsetOnShore = {61.0f, 384.0f, 250.0f};
+    const Vec sTalkOffsetDeepSea = {47.0f, 179.0f, -300.0f};
+    const Vec sTalkOffsetDelightDeepSea = {152.0f, 240.0f, 250.0f};
 
     const char* const cBckForTurnSplash[] = {"Turn", "TurnReverse", nullptr};
     const char* const cBckForTurn[] = {"Turn", "TurnReverse", nullptr};
@@ -112,9 +84,9 @@ void Syati::init(const TableIter& rIter) {
     initTalking(rIter);
     MR::connectToSceneNoSilhouettedMapObj(this);
     initHitSensor(3);
-    MR::addHitSensorAtJointEnemySimple(this, "head", "Jaw", 4, cNum_init_f1, Vec3f(0.0f, -cNum_init_f2, 0.0f));
-    MR::addHitSensorEnemySimple(this, "body", 4, cNum_init_f3, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointEnemySimple(this, "tail", "Spin2", 4, cNum_init_f4, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemySimple(this, "head", "Jaw", 4, 200.0f, Vec3f(0.0f, -60.0f, 0.0f));
+    MR::addHitSensorEnemySimple(this, "body", 4, 230.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemySimple(this, "tail", "Spin2", 4, 150.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::calcModelBoundingRadius(&mClippingRange, this);
     MR::setClippingTypeSphere(this, mClippingRange);
     MR::validateClipping(this);
@@ -128,7 +100,7 @@ void Syati::init(const TableIter& rIter) {
     }
 
     MR::initShadowVolumeFlatModel(this, "ShadowVolumeOval");
-    MR::setShadowDropLength(this, nullptr, cNum_init_f5);
+    MR::setShadowDropLength(this, nullptr, 2000.0f);
     MR::onCalcShadowOneTime(this, nullptr);
     MR::calcGravity(this);
     initSound(8, false);
@@ -211,7 +183,7 @@ void PlayerPoseSetterInWater::update() {
     Vec3f forward = mSyatiPos;
     Vec3f syatiUp;
     syatiMtx.getYDir(syatiUp);
-    syatiUp.scale(cNum_update_f1);
+    syatiUp.scale(450.0f);
     forward.add(syatiUp);
     forward.sub(offsetPos);
 
@@ -296,7 +268,7 @@ void Syati::exeCountDown() {
         MR::startSystemSE("SE_SY_RACE_COUNT_DOWN");
     }
 
-    MR::setBckRate(this, cNum_exeCountDown_setBckRate_1);
+    MR::setBckRate(this, 0.5f);
     updateSwimCommon();
     mPlayerPoseSetterInWater->update();
 
@@ -313,7 +285,7 @@ void Syati::exeSwim() {
         MR::startBck(this, "Swim");
     }
 
-    MR::setBckRate(this, cNum_exeSwim_f1);
+    MR::setBckRate(this, 0.5);
     updateSwimCommon();
 
     if (isReadyToEmitRing()) {
@@ -351,7 +323,7 @@ void Syati::exeWaitStarAppeared() {
         MR::requestAppearPowerStar(this, mStarSpawnType, starPosition);
     }
 
-    if (MR::isGreaterStep(this, cStep_exeWaitStarAppeared_1) && MR::isStageStatePowerStarAppeared()) {
+    if (MR::isGreaterStep(this, 1) && MR::isStageStatePowerStarAppeared()) {
         kill();
     }
 }
@@ -412,7 +384,7 @@ void Syati::exeHideOnShore() {
     if (MR::isFirstStep(this)) {
         MR::hideModel(this);
         MR::invalidateHitSensors(this);
-        MR::setDistanceToTalk(mTalkMessageCtrl, cNum_exeHideOnShore_f1);
+        MR::setDistanceToTalk(mTalkMessageCtrl, 700.0f);
 
         const Vec* pVec = mSwimMode == 0 ? &::sTalkOffsetDelightDeepSea : &::sTalkOffsetOnShore;
 
@@ -459,7 +431,7 @@ void Syati::exeWaitTalkNormal() {
     updateBlink();
     MR::tryTalkNearPlayer(mTalkMessageCtrl);
 
-    if (MR::isNearPlayer(mTalkMessageCtrl, cNum_exeWaitTalkNormal_isNearPlayer_1)) {
+    if (MR::isNearPlayer(mTalkMessageCtrl, -1.0f)) {
         setNerve(GET_NERVE(Syati, SyatiTalkNormal));
     }
 }
@@ -473,7 +445,7 @@ void Syati::exeTalkNormal() {
     updateBlink();
     MR::tryTalkNearPlayer(mTalkMessageCtrl);
 
-    if (!MR::isNearPlayer(mTalkMessageCtrl, cNum_exeTalkNormal_isNearPlayer_1)) {
+    if (!MR::isNearPlayer(mTalkMessageCtrl, -1.0f)) {
         setNerve(GET_NERVE(Syati, SyatiWaitTalkNormal));
     }
 }
@@ -503,7 +475,7 @@ void Syati::initPose() {
 
 void Syati::initTalking(const TableIter& rIter) {
     mTalkMessageCtrl = MR::createTalkCtrl(this, rIter, "SyatiRing", Vec3f(0.0f, 0.0f, 0.0f), mBalloonFollowMtx);
-    MR::setDistanceToTalk(mTalkMessageCtrl, cNum_initTalking_f1);
+    MR::setDistanceToTalk(mTalkMessageCtrl, 2500.0f);
     mActorCameraInfo = MR::createActorCameraInfo(rIter);
     MR::initMultiActorCamera(this, rIter, &mActorCameraInfo, "会話");
     MR::initMultiActorCamera(this, rIter, &mActorCameraInfo, "開始デモ");
@@ -520,7 +492,7 @@ void Syati::updateSwimCommon() {
     s32 speed = -1;
     MR::getRailPointArg1NoInit(this, MR::getCurrentRailPointNo(this), &speed);
 
-    if (cNum_updateSwimCommon_f1 <= MR::calcDistanceToPlayer(mPosition)) {
+    if (5000.0f <= MR::calcDistanceToPlayer(mPosition)) {
         speed = 3;
     }
 
@@ -536,7 +508,7 @@ void Syati::updateSwimCommon() {
 
 void Syati::updatePoseByRail() {
     Vec3f direction;
-    MR::calcRailPosAtCoord(&direction, this, cNum_updatePoseByRail_f1 + MR::getRailCoord(this));
+    MR::calcRailPosAtCoord(&direction, this, 600.0f + MR::getRailCoord(this));
     Vec3f railPosition;
     MR::calcRailPosAtCoord(&railPosition, this, MR::getRailCoord(this));
     direction.sub(railPosition);
@@ -553,7 +525,7 @@ void Syati::updatePoseByRail() {
         directionOnPlane.set(railDirectionOnPlane);
     }
 
-    MR::vecBlend(mRailDirBlend, directionOnPlane, &mRailDirBlend, cNum_updatePoseByRail_f2);
+    MR::vecBlend(mRailDirBlend, directionOnPlane, &mRailDirBlend, 0.04f);
     Vec3f turnAxis = railDirectionOnPlane.cross(mRailDirBlend);
     MR::normalizeOrZero(&turnAxis);
     Quat4f roll;
@@ -575,7 +547,7 @@ void Syati::updatePoseByRail() {
         Quat4f rotation;
         MR::makeQuatFromVec(&rotation, direction, up);
         rotation.mult(rotation, roll);
-        mPoseQuat.slerp(rotation, cNum_updatePoseByRail_f3);
+        mPoseQuat.slerp(rotation, 0.04);
     }
 }
 
@@ -643,7 +615,7 @@ bool Syati::isReadyToEmitRing() const {
     f32 dist = 0.0f;
     MR::calcDistanceToNextRailPoint(this, &dist);
 
-    if (cNum_isReadyToEmitRing_f1 < dist) {
+    if (600.0f < dist) {
         return false;
     }
 
@@ -692,7 +664,7 @@ void Syati::emitRing() {
     PrizeRing* pPrizeRing = static_cast< PrizeRing* >(mPrizeRingGroup->getDeadActor());
     Vec3f position;
     f32 coord = MR::getRailCoord(this);
-    coord += cNum_emitRing_f1;
+    coord += 600.0f;
     MR::calcRailPosAtCoord(&position, this, coord);
     pPrizeRing->mPosition.set(position);
     Vec3f direction;
@@ -702,7 +674,7 @@ void Syati::emitRing() {
 
     Vec3f rotation;
     mtx.getEuler(rotation);
-    pPrizeRing->mRotation.set< f32 >(rotation.x * cNum_emitRing_f2, rotation.y * cNum_emitRing_f3, rotation.z * cNum_emitRing_f4);
+    pPrizeRing->mRotation.set< f32 >(rotation.x * 57.29578f, rotation.y * 57.29578f, rotation.z * 57.29578f);
     pPrizeRing->appear();
     pPrizeRing->setNumber(mNumRings - mPrizeRingCount);
 

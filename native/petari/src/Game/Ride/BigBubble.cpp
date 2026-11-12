@@ -16,92 +16,64 @@
 #include "Game/Util/OctahedronBezierSurface.hpp"
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.8f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 1.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setShapeType_f1, "setShapeType.f1", 0.6f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setShapeType_f2, "setShapeType.f2", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setShapeType_f3, "setShapeType.f3", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setScale_f1, "setScale.f1", 0.8f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setScale_f2, "setScale.f2", 0.95f);
-NEBULA_TUNABLE_NAMED(f32, cNum_requestAssimilate_f1, "requestAssimilate.f1", 8.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAppear_f1, "exeAppear.f1", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addDeformVelocityInternalPressure_f1, "addDeformVelocityInternalPressure.f1", 0.125f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addDeformVelocityInternalPressure_f2, "addDeformVelocityInternalPressure.f2", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addAccelPointing_f1, "addAccelPointing.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateCaptureReduceVolume_f1, "updateCaptureReduceVolume.f1", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateCaptureReduceVolume_f2, "updateCaptureReduceVolume.f2", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateCaptureWarningColor_f1, "updateCaptureWarningColor.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateCaptureWarningColor_f2, "updateCaptureWarningColor.f2", 128.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_control_setBinderRadius_1, "control.setBinderRadius.1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_setBinderRadius_2, "control.setBinderRadius.2", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_generate_setBinderRadius_1, "generate.setBinderRadius.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setScale_setBinderRadius_1, "setScale.setBinderRadius.1", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromEachCollision_1, "updateNormalVelocity.reboundVelocityFromEachCollision.1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromEachCollision_2, "updateNormalVelocity.reboundVelocityFromEachCollision.2", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromEachCollision_3, "updateNormalVelocity.reboundVelocityFromEachCollision.3", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromEachCollision_4, "updateNormalVelocity.reboundVelocityFromEachCollision.4", 0.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sNormalFric, 0.992f);
-    NEBULA_TUNABLE(f32, sBuoyancyAccel, 0.03f);
-    NEBULA_TUNABLE(f32, sPushedAccel, 0.18f);
-    NEBULA_TUNABLE(f32, sPushDeformAccel, 1.1f);
-    NEBULA_TUNABLE(f32, sNeedPushMoveMinRate, 0.9f);
-    NEBULA_TUNABLE(f32, sNeedPushDeformMinRate, 0.9f);
-    NEBULA_TUNABLE(f32, sBaseRadiusSphere, 150.0f);
-    NEBULA_TUNABLE(f32, sBaseRadiusCube, 180.0f);
-    NEBULA_TUNABLE(f32, sBaseRadiusOctahedron, 120.0f);
-    NEBULA_TUNABLE(f32, sPointAccelMin, 0.0f);
-    NEBULA_TUNABLE(f32, sPointAccelMax, 1.0f);
-    NEBULA_TUNABLE(f32, sPointAccelDistanceMin, 50.0f);
-    NEBULA_TUNABLE(f32, sPointAccelDistanceMax, 1000.0f);
-    NEBULA_TUNABLE(f32, sPointAccelDeformPowerRate, 1.5f);
-    NEBULA_TUNABLE(f32, sStarPieceDeformPower, 15.0f);
-    NEBULA_TUNABLE(f32, sMeshScaleFreq, 0.93f);
-    NEBULA_TUNABLE(f32, sPushMeshPower, 0.02f);
-    NEBULA_TUNABLE(f32, sPressPower, 10.0f);
-    NEBULA_TUNABLE(f32, sAccelDeformPower, 0.8f);
-    NEBULA_TUNABLE(f32, sMaxDeformSpeed, 10.0f);
-    NEBULA_TUNABLE(f32, sSpinStartScreenSpeed, 0.03f);
-    NEBULA_TUNABLE(f32, sSpinMaxScreenSpeed, 0.2f);
-    NEBULA_TUNABLE(f32, sSpinPower, 0.03f);
-    NEBULA_TUNABLE(f32, sSpinFreq, 0.99f);
-    NEBULA_TUNABLE(f32, sMaxSpinSpeed, 0.2f);
-    NEBULA_TUNABLE(f32, sCaptureStartVolume, 0.75f);
-    NEBULA_TUNABLE(f32, sCaptureEndVolume, 0.25f);
-    NEBULA_TUNABLE(f32, sWindMinDistance, 0.0f);
-    NEBULA_TUNABLE(f32, sWindMaxDistance, 0.5f);
-    NEBULA_TUNABLE(f32, sWindAccel, 0.25f);
-    NEBULA_TUNABLE(f32, sCorioriRotSpeed, 3.0f);
-    NEBULA_TUNABLE(f32, sCoriolisAccelPower, 0.1f);
+    const f32 sNormalFric = 0.992f;
+    const f32 sBuoyancyAccel = 0.03f;
+    const f32 sPushedAccel = 0.18f;
+    const f32 sPushDeformAccel = 1.1f;
+    const f32 sNeedPushMoveMinRate = 0.9f;
+    const f32 sNeedPushDeformMinRate = 0.9f;
+    const f32 sBaseRadiusSphere = 150.0f;
+    const f32 sBaseRadiusCube = 180.0f;
+    const f32 sBaseRadiusOctahedron = 120.0f;
+    const f32 sPointAccelMin = 0.0f;
+    const f32 sPointAccelMax = 1.0f;
+    const f32 sPointAccelDistanceMin = 50.0f;
+    const f32 sPointAccelDistanceMax = 1000.0f;
+    const f32 sPointAccelDeformPowerRate = 1.5f;
+    const f32 sStarPieceDeformPower = 15.0f;
+    const f32 sMeshScaleFreq = 0.93f;
+    const f32 sPushMeshPower = 0.02f;
+    const f32 sPressPower = 10.0f;
+    const f32 sAccelDeformPower = 0.8f;
+    const f32 sMaxDeformSpeed = 10.0f;
+    const f32 sSpinStartScreenSpeed = 0.03f;
+    const f32 sSpinMaxScreenSpeed = 0.2f;
+    const f32 sSpinPower = 0.03f;
+    const f32 sSpinFreq = 0.99f;
+    const f32 sMaxSpinSpeed = 0.2f;
+    const f32 sCaptureStartVolume = 0.75f;
+    const f32 sCaptureEndVolume = 0.25f;
+    const f32 sWindMinDistance = 0.0f;
+    const f32 sWindMaxDistance = 0.5f;
+    const f32 sWindAccel = 0.25f;
+    const f32 sCorioriRotSpeed = 3.0f;
+    const f32 sCoriolisAccelPower = 0.1f;
     static const s32 sReduceSizeInterval = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE(f32, sReduceVolume, 0.5f);
-    NEBULA_TUNABLE(f32, sMaxVolume, 5.0f);
+    const f32 sReduceVolume = 0.5f;
+    const f32 sMaxVolume = 5.0f;
     static const s32 sAppearTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, sAppearAddMoment, 0.03f);
-    NEBULA_TUNABLE(s32, sWarningCycle, 40);
+    const f32 sAppearAddMoment = 0.03f;
+    const s32 sWarningCycle = 40;
     static const s32 sAutoBreakTime = NebulaFrameClock::stepsOfSeconds(20);
-    NEBULA_TUNABLE(s32, sBreakTime, 20);
+    const s32 sBreakTime = 20;
     static const s32 sEscapeTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, sEscapeVelocity, 30.0f);
-    NEBULA_TUNABLE(f32, sMargeableRate, 0.9f);
+    const f32 sEscapeVelocity = 30.0f;
+    const f32 sMargeableRate = 0.9f;
     static const f32 sMergeDeformAccel = 0.75f;
-    NEBULA_TUNABLE(s32, sMergedTime, 45);
-    NEBULA_TUNABLE(f32, sMergeRotateRate, 0.2f);
-    NEBULA_TUNABLE(f32, sMergeDirCorrection, 0.95f);
-    NEBULA_TUNABLE(s32, sTurchDeformTime, 25);
+    const s32 sMergedTime = 45;
+    const f32 sMergeRotateRate = 0.2f;
+    const f32 sMergeDirCorrection = 0.95f;
+    const s32 sTurchDeformTime = 25;
     static const f32 sTurchDeformAccel = sMergeDeformAccel / 100.0f;
-    NEBULA_TUNABLE(f32, sRadiusSubLevel2, 3.0f);
-    NEBULA_TUNABLE(f32, sRadiusSubLevel3, 7.0f);
-    NEBULA_TUNABLE(f32, sRadiusSubLevel4, 15.0f);
-    NEBULA_TUNABLE(f32, sRadiusSubLevel5, 30.0f);
-    NEBULA_TUNABLE(f32, sRadiusSubLevel6, 50.0f);
-    NEBULA_TUNABLE(f32, sRadiusSubLevel1, 0.0f);
+    const f32 sRadiusSubLevel2 = 3.0f;
+    const f32 sRadiusSubLevel3 = 7.0f;
+    const f32 sRadiusSubLevel4 = 15.0f;
+    const f32 sRadiusSubLevel5 = 30.0f;
+    const f32 sRadiusSubLevel6 = 50.0f;
+    const f32 sRadiusSubLevel1 = 0.0f;
 };  // namespace
 
 enum Side { Side_Top = 0, Side_Right = 1, Side_Back = 2, Side_Left = 3, Side_Front = 4, Side_Bottom = 5 };
@@ -146,7 +118,7 @@ void BigBubble::init(const TableIter& rIter) {
     MR::setEffectHostMtx(this, "PushWind", mEffectMtx);
     initSound(6, false);
     MR::onCalcGravity(this);
-    MR::initShadowVolumeSphere(this, getBaseRadius() * cNum_init_f1);
+    MR::initShadowVolumeSphere(this, getBaseRadius() * 0.8f);
     MR::initStarPointerTarget(this, getBaseRadius(), Vec3f(0.0f, 0.0f, 0.0f));
     if (MR::isValidInfo(rIter))
         makeActorAppeared();
@@ -195,7 +167,7 @@ void BigBubble::makeActorDead() {
 }
 
 void BigBubble::control() {
-    mIsHidden = MR::isJudgedToClipFrustum(mPosition, getSize() * cNum_control_f1);
+    mIsHidden = MR::isJudgedToClipFrustum(mPosition, getSize() * 1.2f);
 
     if (!isNerve(GET_NERVE(BigBubble, BigBubbleNrvMerged))) {
         doMoveLimit();
@@ -210,7 +182,7 @@ void BigBubble::control() {
     }
 
     f32 radius = MR::getBinderRadius(this);
-    MR::setBinderRadius(this, cNum_control_setBinderRadius_1 * mBinderRadius + cNum_control_setBinderRadius_2 * radius);
+    MR::setBinderRadius(this, 0.1f * mBinderRadius + 0.9f * radius);
 }
 
 void BigBubble::calcAnim() {
@@ -265,7 +237,7 @@ void BigBubble::generate(const Vec3f& rPos, const Vec3f& rUp, f32 volume, bool i
 
     resetDeformVelocity();
     setScale(0.0f);
-    MR::setBinderRadius(this, cNum_generate_setBinderRadius_1);
+    MR::setBinderRadius(this, 0.0f);
     mVolume = volume;
 
     MR::invalidateHitSensors(this);
@@ -299,13 +271,13 @@ void BigBubble::setShapeType(s32 shapeType) {
     mShapeType = shapeType;
     switch (mShapeType) {
     case ShapeType_Sphere:
-        mSurface->setDiagonalRate(cNum_setShapeType_f1);
+        mSurface->setDiagonalRate(0.6f);
         break;
     case ShapeType_Cube:
-        mSurface->setDiagonalRate(cNum_setShapeType_f2);
+        mSurface->setDiagonalRate(0.9f);
         break;
     case ShapeType_Octahedron:
-        mSurface->setDiagonalRate(cNum_setShapeType_f3);
+        mSurface->setDiagonalRate(0.1f);
         break;
     default:
         break;
@@ -333,9 +305,9 @@ void BigBubble::setScale(f32 scale) {
     f32 radius = getBaseRadius();
     mScale.set(Vec3f(scale, scale, scale));
     MR::setStarPointerTargetRadius3d(this, radius * scale);
-    MR::setShadowVolumeSphereRadius(this, nullptr, cNum_setScale_f1 * radius * scale);
-    mBinderRadius = radius * scale * cNum_setScale_f2;
-    MR::setBinderRadius(this, radius * scale * cNum_setScale_setBinderRadius_1);
+    MR::setShadowVolumeSphereRadius(this, nullptr, 0.8f * radius * scale);
+    mBinderRadius = radius * scale * 0.95f;
+    MR::setBinderRadius(this, radius * scale * 0.9f);
     MR::setSensorRadius(this, "body", radius * scale);
     MR::setSensorRadius(this, "bind", radius * scale);
     MR::setSensorRadius(this, "ride", radius * scale);
@@ -508,7 +480,7 @@ bool BigBubble::requestAssimilate(HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     setScale(getRadius(mVolume));
-    addDeformVelocityOuter(dir * scale * cNum_requestAssimilate_f1, true);
+    addDeformVelocityOuter(dir * scale * 8.0f, true);
 
     for (s32 idx = 0; idx < 6; idx++) {
         if (mMergeBubbles[idx] == pReceiver->mHost) {
@@ -671,7 +643,7 @@ void BigBubble::exeAppear() {
         MR::startSound(this, "SE_OJ_BIG_BUBBLE_APPEAR");
     }
 
-    f32 scale = MR::calcNerveValue(this, ::sAppearTime, cNum_exeAppear_f1, mAppearRadius);
+    f32 scale = MR::calcNerveValue(this, ::sAppearTime, 0.01f, mAppearRadius);
     setScale(scale);
 
     mPosition.set(mSpawnPosition + mGravity * (-scale * getBaseRadius()));
@@ -891,12 +863,12 @@ void BigBubble::addDeformVelocityInternalPressure() {
     f32 size = getSize();
     // BUG: pressure should be from opposing faces.
     f32 pressure = (mDeformCoeff[Side_Top] + mDeformCoeff[Side_Left]) * (mDeformCoeff[Side_Back] + mDeformCoeff[Side_Front]) *
-                   (mDeformCoeff[Side_Right] + mDeformCoeff[Side_Bottom]) * cNum_addDeformVelocityInternalPressure_f1;
+                   (mDeformCoeff[Side_Right] + mDeformCoeff[Side_Bottom]) * 0.125f;
     if (pressure < 0.0f) {
         pressure = 0.0f;
     }
 
-    if (size > cNum_addDeformVelocityInternalPressure_f2) {
+    if (size > 0.01f) {
         for (s32 idx = 0; idx < 6; idx++) {
             mDeformSpeed[idx] += (1.0f - pressure / (size * size * size)) * ::sPressPower;
         }
@@ -958,7 +930,7 @@ bool BigBubble::addAccelPointing(s32 padChannel) {
 
     mPointAccel = 1.0f - (pointerDist - ::sPointAccelDistanceMin) / (::sPointAccelDistanceMax - ::sPointAccelDistanceMin);
     mPointAccel = mPointAccel * (::sPointAccelMax - ::sPointAccelMin) + ::sPointAccelMin;
-    MR::startSystemLevelSE("SE_SY_LV_BIG_BUBBLE_WIND", mPointAccel * cNum_addAccelPointing_f1);
+    MR::startSystemLevelSE("SE_SY_LV_BIG_BUBBLE_WIND", mPointAccel * 100.0f);
 
     Vec3f accelDir;
     MR::normalizeOrZero(mPosition - mPointerPos, &accelDir);
@@ -1016,7 +988,7 @@ void BigBubble::updateNormalVelocity() {
     windDistance = MR::normalize(windDistance, ::sWindMinDistance, ::sWindMaxDistance);
     mVelocity.add(windDir * ::sWindAccel * windDistance);
     mMoment.mult(::sSpinFreq);
-    MR::reboundVelocityFromEachCollision(this, cNum_updateNormalVelocity_reboundVelocityFromEachCollision_1, cNum_updateNormalVelocity_reboundVelocityFromEachCollision_2, cNum_updateNormalVelocity_reboundVelocityFromEachCollision_3, cNum_updateNormalVelocity_reboundVelocityFromEachCollision_4);
+    MR::reboundVelocityFromEachCollision(this, 0.1f, 0.1f, 0.1f, 0.0f);
 }
 
 void BigBubble::resetDeformVelocity() {
@@ -1056,8 +1028,8 @@ void BigBubble::updateCaptureReduceVolume() {
     if (mReduceVolumeTimer >= ::sReduceSizeInterval * 3) {
         mVolume -= ::sReduceVolume;
 
-        if (::sCaptureEndVolume <= mVolume && mVolume < ::sCaptureStartVolume * cNum_updateCaptureReduceVolume_f1) {
-            mVolume = ::sCaptureStartVolume * cNum_updateCaptureReduceVolume_f2;
+        if (::sCaptureEndVolume <= mVolume && mVolume < ::sCaptureStartVolume * 0.98f) {
+            mVolume = ::sCaptureStartVolume * 0.98f;
         }
 
         if (mVolume < 0.0f) {
@@ -1087,9 +1059,9 @@ void BigBubble::updateCaptureWarningColor() {
         s32 warningCycle = getCycle();
 
         f32 flashPhase = static_cast< f32 >(mReduceVolumeTimer % warningCycle) / static_cast< f32 >(warningCycle - 1);
-        f32 color = (MR::cos(TWO_PI * flashPhase) + 1.0f) * cNum_updateCaptureWarningColor_f1;
+        f32 color = (MR::cos(TWO_PI * flashPhase) + 1.0f) * 0.5f;
 
-        mWarningColor.a = (s32)(color * cNum_updateCaptureWarningColor_f2);
+        mWarningColor.a = (s32)(color * 128.0f);
     } else {
         mWarningColor.a = 0;
     }

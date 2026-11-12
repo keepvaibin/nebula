@@ -14,42 +14,25 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 250.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 160.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 300.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 300.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 1200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeBack_f1, "exeBack.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoAnger_f1, "exeDemoAnger.f1", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoAnger_f2, "exeDemoAnger.f2", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoAnger_f3, "exeDemoAnger.f3", 25.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoAnger_f4, "exeDemoAnger.f4", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 2.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sTurnRateSearch, 1.0f);
-    NEBULA_TUNABLE(f32, sTurnRateDashSign, 3.0f);
-    NEBULA_TUNABLE(s32, sStepForWait, 1);
-    NEBULA_TUNABLE(s32, sStepForDashSignEnd, 10);
-    NEBULA_TUNABLE(s32, sStepForShakeStart, 40);
-    NEBULA_TUNABLE(s32, sStepForEnableShake, 25);
+    const f32 sTurnRateSearch = 1.0f;
+    const f32 sTurnRateDashSign = 3.0f;
+    const s32 sStepForWait = 1;
+    const s32 sStepForDashSignEnd = 10;
+    const s32 sStepForShakeStart = 40;
+    const s32 sStepForEnableShake = 25;
     const s32 sStepForRecover = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(s32, sStepToJumpBackPlayer, 22);
-    NEBULA_TUNABLE(s32, sStepForChildDeathSound, 48);
-    NEBULA_TUNABLE(s32, sStepForSurpriseSound, 65);
-    NEBULA_TUNABLE(f32, sTerritoryReachMargin, 400.0f);
-    NEBULA_TUNABLE(f32, sTerritorySideHalfSize, 200.0f);
-    NEBULA_TUNABLE(f32, sTerritoryUpHalfSize, 600.0f);
-    NEBULA_TUNABLE(f32, sTerritoryBackOffset, 200.0f);
-    NEBULA_TUNABLE(f32, sChildRadius, 150.0f);
-    NEBULA_TUNABLE(f32, sHornMargin, 25.0f);
+    const s32 sStepToJumpBackPlayer = 22;
+    const s32 sStepForChildDeathSound = 48;
+    const s32 sStepForSurpriseSound = 65;
+    const f32 sTerritoryReachMargin = 400.0f;
+    const f32 sTerritorySideHalfSize = 200.0f;
+    const f32 sTerritoryUpHalfSize = 600.0f;
+    const f32 sTerritoryBackOffset = 200.0f;
+    const f32 sChildRadius = 150.0f;
+    const f32 sHornMargin = 25.0f;
     const char* const cDemoEndPointName = "子連れカメムシデモ後ポイント";
 
     struct Param {
@@ -93,12 +76,12 @@ StinkBugParent::StinkBugParent(const char* pName) : StinkBugBase(pName), mParent
 void StinkBugParent::init(const TableIter& rIter) {
     StinkBugBase::init(rIter);
     initHitSensor(2);
-    MR::addHitSensorEye(this, "body", 4, cNum_init_f1, Vec3f(0.0f, cNum_init_f2, 0.0f));
-    MR::addHitSensorAtJointEnemyAttack(this, "head", "Face", 8, cNum_init_f3, Vec3f(0.0f, -cNum_init_f4, cNum_init_f5));
+    MR::addHitSensorEye(this, "body", 4, 250.0f, Vec3f(0.0f, 150.0f, 0.0f));
+    MR::addHitSensorAtJointEnemyAttack(this, "head", "Face", 8, 160.0f, Vec3f(0.0f, -50.0f, 80.0f));
     // With the child on its back first; its own collision takes over when the child is gone.
     MR::initCollisionParts(this, "SwitchChildJ", getSensor("body"), nullptr);
     mParentOnlyParts = MR::createCollisionPartsFromLiveActor(this, "Switch", getSensor("body"), getBaseMtx(), MR::CollisionScaleType_Default);
-    initBinder(cNum_init_f6, cNum_init_f7, 0);
+    initBinder(300.0f, 300.0f, 0);
     MR::setBinderExceptActor(this, this);
     MR::setBinderIgnoreMovingCollision(this);
     MR::declarePowerStar(this);
@@ -108,8 +91,8 @@ void StinkBugParent::init(const TableIter& rIter) {
         MR::registerDemoActionNerve(this, GET_NERVE(StinkBugParent, StinkBugParentNrvDemoAnger), "ダメージ中");
     }
 
-    mTerritoryAngle = cNum_init_f8;
-    mRadius = cNum_init_f9;
+    mTerritoryAngle = 50.0f;
+    mRadius = 1200.0f;
     MR::startBrk(this, "Anger");
     MR::setBrkFrameAndStop(this, 0.0f);
     initNerve(GET_NERVE(StinkBugParent, StinkBugParentNrvWait));
@@ -208,7 +191,7 @@ void StinkBugParent::exeBack() {
     MR::startLevelSound(this, "SE_EM_LV_STINKBUG_L_BACK");
 
     const Param& rParam = getParam(mIsChildAlive);
-    if (MR::isNear(this, mInitPos, (cNum_exeBack_f1 * rParam.mBackSpeed))) {
+    if (MR::isNear(this, mInitPos, (2.0f * rParam.mBackSpeed))) {
         setNerve(GET_NERVE(StinkBugParent, StinkBugParentNrvWait));
         return;
     }
@@ -347,7 +330,7 @@ void StinkBugParent::exeDemoAnger() {
         // Without the point the bug turns to its home.
         Vec3f demoEndPos(mInitPos);
         MR::findNamePos(cDemoEndPointName, &demoEndPos, nullptr);
-        MR::turnDirectionToTargetUseGroundNormalDegree(this, &mFront, demoEndPos, cNum_exeDemoAnger_f1);
+        MR::turnDirectionToTargetUseGroundNormalDegree(this, &mFront, demoEndPos, 180.0f);
     }
 
     MR::startLevelSound(this, "SE_EV_LV_STINKBUG_L_ANGRY");
@@ -356,11 +339,11 @@ void StinkBugParent::exeDemoAnger() {
     if (MR::isBckStopped(this)) {
         // Star pieces burst ahead and up.
         Vec3f piecePos;
-        piecePos.scaleAdd(cNum_exeDemoAnger_f2, mFront, mPosition);
+        piecePos.scaleAdd(200.0f, mFront, mPosition);
         Vec3f pieceDir;
         pieceDir.scaleAdd(-1.0f, mGravity, mFront);
         MR::normalize(&pieceDir);
-        MR::appearStarPieceToDirection(this, piecePos, pieceDir, 8, cNum_exeDemoAnger_f3, cNum_exeDemoAnger_f4, false);
+        MR::appearStarPieceToDirection(this, piecePos, pieceDir, 8, 25.0f, 40.0f, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST_F");
         MR::validateHitSensors(this);
         setNerve(GET_NERVE(StinkBugParent, StinkBugParentNrvWait));
@@ -387,7 +370,7 @@ void StinkBugParent::control() {
     // Moves along the ground and falls.
     MR::onBind(this);
     mVelocity.scaleAdd(-mGravity.dot(mVelocity), mGravity, mVelocity);
-    mVelocity.scaleAdd(cNum_control_f1, mGravity, mVelocity);
+    mVelocity.scaleAdd(2.0f, mGravity, mVelocity);
 }
 
 void StinkBugParent::calcAndSetBaseMtx() {

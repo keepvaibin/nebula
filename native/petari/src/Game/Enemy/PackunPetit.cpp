@@ -22,46 +22,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_initStarPointer_f1, "initStarPointer.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 90.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeThreat_f1, "exeThreat.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeThreat_f2, "exeThreat.f2", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTurn_f1, "exeTurn.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTurn_f2, "exeTurn.f2", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTurn_f3, "exeTurn.f3", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePunchDown_f1, "exePunchDown.f1", 2.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePunchDown_f2, "exePunchDown.f2", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePunchDown_f3, "exePunchDown.f3", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePunchDown_f4, "exePunchDown.f4", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_kill_f1, "kill.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_kill_f2, "kill.f2", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initBlowModel_f1, "initBlowModel.f1", 70.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_punchDown_f1, "punchDown.f1", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_punchDown_f2, "punchDown.f2", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryTurn_f1, "tryTurn.f1", 90.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeNonActive_isNearPlayerAnyTime_1, "exeNonActive.isNearPlayerAnyTime.1", 5000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_isNearPlayer_1, "exeWait.isNearPlayer.1", 1700.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeThreat_isNearPlayer_1, "exeThreat.isNearPlayer.1", 1100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeThreat_isNearPlayer_2, "exeThreat.isNearPlayer.2", 2000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_selectNrvWait_isNearPlayer_1, "selectNrvWait.isNearPlayer.1", 1700.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryNonActive_isNearPlayerAnyTime_1, "tryNonActive.isNearPlayerAnyTime.1", 5000.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeThreat_1, "exeThreat.1", 50);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeAttackStart_1, "exeAttackStart.1", 70);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeAttack_1, "exeAttack.1", 12);
-NEBULA_TUNABLE_NAMED(s32, cStep_exePunchDown_1, "exePunchDown.1", 20);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeSwoon_1, "exeSwoon.1", 250);
-
 
 namespace NrvPackunPetit {
     NEW_NERVE_ONEND(PackunPetitNrvNonActive, PackunPetit, NonActive, NonActive);
@@ -91,7 +52,7 @@ PackunPetit::PackunPetit(const char* pName)
 inline void PackunPetit::initStarPointer(const char* hitSensor) {
     Vec3f offs;
     offs.set(0.0f);
-    MR::initStarPointerTargetAtJoint(this, hitSensor, cNum_initStarPointer_f1, offs);
+    MR::initStarPointerTargetAtJoint(this, hitSensor, 100.0f, offs);
 }
 
 void PackunPetit::init(const TableIter& rIter) {
@@ -99,9 +60,9 @@ void PackunPetit::init(const TableIter& rIter) {
     initModelManagerWithAnm("PackunPetit", nullptr, false);
     MR::connectToSceneEnemy(this);
     initHitSensor(3);
-    MR::addHitSensorAtJointMapObj(this, "body", "Head", 8, cNum_init_f1, Vec3f(cNum_init_f2, 0.0f, 0.0f));
-    MR::addHitSensorAtJointEnemyAttack(this, "attack", "Head", 8, cNum_init_f3, Vec3f(cNum_init_f4, 0.0f, 0.0f));
-    MR::addHitSensorMapObj(this, "stalk", 8, cNum_init_f5, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointMapObj(this, "body", "Head", 8, 90.0f, Vec3f(50.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemyAttack(this, "attack", "Head", 8, 50.0f, Vec3f(50.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "stalk", 8, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
     initEffectKeeper(2, nullptr);
     MR::addEffectHitNormal(this, nullptr);
     initSound(4, false);
@@ -132,7 +93,7 @@ void PackunPetit::exeNonActive() {
         MR::offCalcShadow(this, "JawA");
     }
 
-    if (MR::isNearPlayerAnyTime(this, cNum_exeNonActive_isNearPlayerAnyTime_1)) {
+    if (MR::isNearPlayerAnyTime(this, 5000.0f)) {
         setNerve(GET_NERVE(PackunPetit, PackunPetitNrvWait));
     }
 }
@@ -148,7 +109,7 @@ void PackunPetit::exeWait() {
         MR::startBckWithInterpole(this, "Wait", 60);
     }
 
-    if (MR::isNearPlayer(this, cNum_exeWait_isNearPlayer_1)) {
+    if (MR::isNearPlayer(this, 1700.0f)) {
         setNerve(GET_NERVE(PackunPetit, PackunPetitNrvFind));
     } else {
         tryNonActive();
@@ -178,12 +139,12 @@ void PackunPetit::exeThreat() {
         }
 
         Vec3f* pos = MR::getPlayerPos();
-        MR::turnDirectionToTargetUseGroundNormalDegree(this, &mFront, *pos, cNum_exeThreat_f1);
+        MR::turnDirectionToTargetUseGroundNormalDegree(this, &mFront, *pos, 2.0f);
     }
 
-    if (MR::isGreaterStep(this, cStep_exeThreat_1) && MR::isNearPlayer(this, cNum_exeThreat_isNearPlayer_1) && (MR::isFaceToPlayerHorizontalDegree(this, mFront, cNum_exeThreat_f2) || mDontTurn)) {
+    if (MR::isGreaterStep(this, 50) && MR::isNearPlayer(this, 1100.0f) && (MR::isFaceToPlayerHorizontalDegree(this, mFront, 10.0f) || mDontTurn)) {
         setNerve(GET_NERVE(PackunPetit, PackunPetitNrvAttackStart));
-    } else if (!MR::isNearPlayer(this, cNum_exeThreat_isNearPlayer_2)) {
+    } else if (!MR::isNearPlayer(this, 2000.0f)) {
         setNerve(GET_NERVE(PackunPetit, PackunPetitNrvWait));
     }
 }
@@ -197,10 +158,10 @@ void PackunPetit::exeTurn() {
         }
     }
 
-    f32 step = (cNum_exeTurn_f1 - getNerveStep());
+    f32 step = (10.0f - getNerveStep());
 
-    if (step < cNum_exeTurn_f2) {
-        step = cNum_exeTurn_f3;
+    if (step < 2.0f) {
+        step = 2.0f;
     }
     Vec3f* pos = MR::getPlayerPos();
     MR::turnDirectionToTargetUseGroundNormalDegree(this, &mFront, *pos, step);
@@ -214,13 +175,13 @@ void PackunPetit::exeAttackStart() {
         MR::startBck(this, "Attack");
     }
 
-    if (MR::isStep(this, cStep_exeAttackStart_1)) {
+    if (MR::isStep(this, 70)) {
         setNerve(GET_NERVE(PackunPetit, PackunPetitNrvAttack));
     }
 }
 
 void PackunPetit::exeAttack() {
-    if (MR::isStep(this, cStep_exeAttack_1)) {
+    if (MR::isStep(this, 12)) {
         setNerve(GET_NERVE(PackunPetit, PackunPetitNrvAttackBack));
     }
 }
@@ -276,11 +237,11 @@ void PackunPetit::exePunchDown() {
         MR::startBlowHitSound(this);
     }
 
-    mBlownModel->mVelocity.scaleAdd(cNum_exePunchDown_f1, mGravity, mBlownModel->mVelocity);
+    mBlownModel->mVelocity.scaleAdd(2.5f, mGravity, mBlownModel->mVelocity);
 
-    if (!MR::isHiddenModel(mBlownModel) && (MR::isStep(this, cStep_exePunchDown_1) || MR::checkStrikeBallToMap(mBlownModel->mPosition, cNum_exePunchDown_f2))) {
+    if (!MR::isHiddenModel(mBlownModel) && (MR::isStep(this, 20) || MR::checkStrikeBallToMap(mBlownModel->mPosition, 50.0f))) {
         MR::emitEffect(mBlownModel, "Death");
-        MR::appearStarPiece(this, mBlownModel->mPosition, 3, cNum_exePunchDown_f3, cNum_exePunchDown_f4, false);
+        MR::appearStarPiece(this, mBlownModel->mPosition, 3, 10.0f, 40.0f, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
         MR::hideModel(mBlownModel);
     }
@@ -307,7 +268,7 @@ void PackunPetit::exeSwoon() {
 
     MR::startLevelSound(this, "SE_EM_LV_SWOON_S");
 
-    if (MR::isStep(this, cStep_exeSwoon_1)) {
+    if (MR::isStep(this, 250)) {
         selectNrvWait();
     }
 }
@@ -336,7 +297,7 @@ void PackunPetit::kill() {
     if (!MR::isDead(mBlownModel)) {
         if (!MR::isHiddenModel(mBlownModel)) {
             MR::emitEffect(mBlownModel, "Death");
-            MR::appearStarPiece(this, mBlownModel->mPosition, 3, cNum_kill_f1, cNum_kill_f2, false);
+            MR::appearStarPiece(this, mBlownModel->mPosition, 3, 10.0f, 40.0f, false);
             MR::startSound(mBlownModel, "SE_OJ_STAR_PIECE_BURST");
         }
 
@@ -495,7 +456,7 @@ bool PackunPetit::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRecei
 void PackunPetit::initBlowModel() {
     mBlownModel = MR::createModelObjMapObjStrongLight("吹っ飛びモデル", "PackunPetitHead", nullptr);
     mBlownModel->initWithoutIter();
-    MR::initShadowVolumeSphere(mBlownModel, cNum_initBlowModel_f1);
+    MR::initShadowVolumeSphere(mBlownModel, 70.0f);
     MR::invalidateClipping(mBlownModel);
     MR::initLightCtrl(mBlownModel);
     mBlownModel->makeActorDead();
@@ -509,14 +470,14 @@ void PackunPetit::punchDown(HitSensor* pSender, HitSensor* pReceiver) {
     MR::normalize(&away);
 
     Vec3f velocity;
-    velocity.scale(cNum_punchDown_f1, away);
-    velocity.scaleAdd(-cNum_punchDown_f2, mGravity, velocity);
+    velocity.scale(20.0f, away);
+    velocity.scaleAdd(-40.0f, mGravity, velocity);
     mBlownModel->mVelocity.set(velocity);
     setNerve(GET_NERVE(PackunPetit, PackunPetitNrvPunchDown));
 }
 
 void PackunPetit::selectNrvWait() {
-    if (!MR::isNearPlayer(this, cNum_selectNrvWait_isNearPlayer_1)) {
+    if (!MR::isNearPlayer(this, 1700.0f)) {
         setNerve(GET_NERVE(PackunPetit, PackunPetitNrvWait));
     } else if (isNerve(GET_NERVE(PackunPetit, PackunPetitNrvSwoon))) {
         setNerve(GET_NERVE(PackunPetit, PackunPetitNrvSwoonToThreat));
@@ -526,7 +487,7 @@ void PackunPetit::selectNrvWait() {
 }
 
 bool PackunPetit::tryNonActive() {
-    if (MR::isNearPlayerAnyTime(this, cNum_tryNonActive_isNearPlayerAnyTime_1)) {
+    if (MR::isNearPlayerAnyTime(this, 5000.0f)) {
         return false;
     }
 
@@ -539,7 +500,7 @@ bool PackunPetit::tryTurn() {
         return false;
     }
 
-    if (MR::isFaceToPlayerHorizontalDegree(this, mFront, cNum_tryTurn_f1)) {
+    if (MR::isFaceToPlayerHorizontalDegree(this, mFront, 90.0f)) {
         return false;
     }
     Vec3f playerDist;

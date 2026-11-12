@@ -11,41 +11,33 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_exeApproach_f1, "exeApproach.f1", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f3, "control.f3", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 500.0f);
-
 namespace {
-    NEBULA_TUNABLE(s32, sDefaultFishNum, 10);
-    NEBULA_TUNABLE(f32, sDefaultGroupSpeed, 5.0f);
-    NEBULA_TUNABLE(f32, sFriction, 0.95f);
-    NEBULA_TUNABLE(f32, sWanderAccel, 1.0f);
+    const s32 sDefaultFishNum = 10;
+    const f32 sDefaultGroupSpeed = 5.0f;
+    const f32 sFriction = 0.95f;
+    const f32 sWanderAccel = 1.0f;
     const s32 sStepToWanderMoveMin = NebulaFrameClock::stepsOfSeconds(1);
     const s32 sStepToWanderMoveMax = NebulaFrameClock::stepsOfSeconds(3);
-    NEBULA_TUNABLE(f32, sApproachAccel, 5.0f);
-    NEBULA_TUNABLE(s32, sStepToApproachMin, 5);
+    const f32 sApproachAccel = 5.0f;
+    const s32 sStepToApproachMin = 5;
     const s32 sStepToApproachMax = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, sDistanceToApproachMin, 100.0f);
-    NEBULA_TUNABLE(f32, sDistanceToApproachMax, 500.0f);
-    NEBULA_TUNABLE(f32, sEscapeAccel, 5.0f);
-    NEBULA_TUNABLE(s32, sStepToEscapeMin, 5);
-    NEBULA_TUNABLE(s32, sStepToEscapeMax, 20);
-    NEBULA_TUNABLE(f32, sDistanceSafe, 600.0f);
-    NEBULA_TUNABLE(f32, sDistanceToSpinEscape, 500.0f);
-    NEBULA_TUNABLE(s32, sTimeToSearchPlayerMin, 5);
-    NEBULA_TUNABLE(s32, sTimeToSearchPlayerMax, 10);
-    NEBULA_TUNABLE(f32, sDistanceToEscapeFromPlayer, 150.0f);
-    NEBULA_TUNABLE(f32, sRotateDotMax, 0.9f);
-    NEBULA_TUNABLE(f32, sRotateRate, 0.2f);
-    NEBULA_TUNABLE(f32, sDirectionMaxY, 0.99f);
-    NEBULA_TUNABLE(f32, sAnimFrameRate, 0.2f);
-    NEBULA_TUNABLE(f32, sFollowPosOffsetMax, 150.0f);
+    const f32 sDistanceToApproachMin = 100.0f;
+    const f32 sDistanceToApproachMax = 500.0f;
+    const f32 sEscapeAccel = 5.0f;
+    const s32 sStepToEscapeMin = 5;
+    const s32 sStepToEscapeMax = 20;
+    const f32 sDistanceSafe = 600.0f;
+    const f32 sDistanceToSpinEscape = 500.0f;
+    const s32 sTimeToSearchPlayerMin = 5;
+    const s32 sTimeToSearchPlayerMax = 10;
+    const f32 sDistanceToEscapeFromPlayer = 150.0f;
+    const f32 sRotateDotMax = 0.9f;
+    const f32 sRotateRate = 0.2f;
+    const f32 sDirectionMaxY = 0.99f;
+    const f32 sAnimFrameRate = 0.2f;
+    const f32 sFollowPosOffsetMax = 150.0f;
 
     // Indexed by Fish::mFishType; an unlisted group object name is kind 0.
     struct FishKind {
@@ -130,7 +122,7 @@ void Fish::exeApproach() {
             mFront.y = currFront.y * (1.0f - ::sRotateRate) + front.y * ::sRotateRate;
             mFront.z = currFront.z * (1.0f - ::sRotateRate) + front.z * ::sRotateRate;
 
-            if (MR::isNearZero(mFront, cNum_exeApproach_f1)) {
+            if (MR::isNearZero(mFront, 0.01f)) {
                 mFront.set(front);
             } else {
                 MR::normalize(&mFront);
@@ -196,16 +188,16 @@ void Fish::control() {
 
     if (MR::abs(mFront.y) > ::sDirectionMaxY) {
         if (mFront.x > 0.0f) {
-            mFront.x += cNum_control_f1;
+            mFront.x += 0.1f;
         } else {
-            mFront.x -= cNum_control_f2;
+            mFront.x -= 0.1f;
         }
         MR::normalize(&mFront);
     }
 
     updateFollowPointPos();
 
-    if (MR::isJudgedToClipFrustum300m(mPosition, cNum_control_f3)) {
+    if (MR::isJudgedToClipFrustum300m(mPosition, 100.0f)) {
         if (!MR::isHiddenModel(this)) {
             MR::hideModel(this);
         }
@@ -287,7 +279,7 @@ void FishGroup::init(const TableIter& rIter) {
         mFish[i]->initWithoutIter();
     }
 
-    MR::initAndSetRailClipping(&mClippingCenter, this, cNum_init_f1, cNum_init_f2);
+    MR::initAndSetRailClipping(&mClippingCenter, this, 100.0f, 500.0f);
     makeActorAppeared();
 }
 

@@ -7,15 +7,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_updateBounceFall_reboundVelocityFromCollision_1, "updateBounceFall.reboundVelocityFromCollision.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateBounceFall_reboundVelocityFromCollision_2, "updateBounceFall.reboundVelocityFromCollision.2", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateBounceFall_reboundVelocityFromCollision_3, "updateBounceFall.reboundVelocityFromCollision.3", 1.0f);
 
 namespace NrvSamboHead {
     NEW_NERVE(HostTypeNrvWaitUnderGround, SamboHead, WaitUnderGround);
@@ -37,39 +29,39 @@ namespace NrvSamboHead {
 };  // namespace NrvSamboHead
 
 namespace {
-    NEBULA_TUNABLE(f32, cAppearDistance, 800.0f);
-    NEBULA_TUNABLE(f32, cTurnDistance, 500.0f);
-    NEBULA_TUNABLE(f32, cGiveUpDistance, 1000.0f);
+    const f32 cAppearDistance = 800.0f;
+    const f32 cTurnDistance = 500.0f;
+    const f32 cGiveUpDistance = 1000.0f;
     const s32 cUnderGroundSteps = NebulaFrameClock::stepsOfSeconds(2);
     const s32 cHideSteps = NebulaFrameClock::stepsOfSeconds(2);
     const s32 cWaitHideSteps = NebulaFrameClock::stepsOfSeconds(2);
     const s32 cShadowHideStep = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(s32, cShadowShowStep, 63);
-    NEBULA_TUNABLE(f32, cAppearImmediatelyFrame, 45.0f);
+    const s32 cShadowShowStep = 63;
+    const f32 cAppearImmediatelyFrame = 45.0f;
     // Appear's rise hits the player only after this step.
-    NEBULA_TUNABLE(s32, cAppearAttackStep, 45);
-    NEBULA_TUNABLE(s32, cHitTurnStep, 58);
-    NEBULA_TUNABLE(s32, cStampDeathSteps, 35);
-    NEBULA_TUNABLE(f32, cTurnRadian, 0.05f);
+    const s32 cAppearAttackStep = 45;
+    const s32 cHitTurnStep = 58;
+    const s32 cStampDeathSteps = 35;
+    const f32 cTurnRadian = 0.05f;
     // Pursue starts once a turn step is below this.
-    NEBULA_TUNABLE(f32, cFacingRadian, 0.015f);
-    NEBULA_TUNABLE(f32, cRunSpeed, 7.0f);
-    NEBULA_TUNABLE(f32, cJumpSpeed, 25.0f);
-    NEBULA_TUNABLE(f32, cStampFallSpeed, 30.0f);
-    NEBULA_TUNABLE(f32, cGravity, 1.5f);
-    NEBULA_TUNABLE(f32, cGroundDampH, 0.80f);
-    NEBULA_TUNABLE(f32, cAirDampH, 0.98f);
-    NEBULA_TUNABLE(f32, cDampVUp, 0.98f);
-    NEBULA_TUNABLE(f32, cVelHMin, 1.0f);
-    NEBULA_TUNABLE(f32, cPushScale, 2.0f);
-    NEBULA_TUNABLE(f32, cPlayerExistRatio, 0.25f);
-    NEBULA_TUNABLE(f32, cRadius, 100.0f);
-    NEBULA_TUNABLE(f32, cPointerRadius, 100.0f);
-    NEBULA_TUNABLE(f32, cShadowRadius, 60.0f);
-    NEBULA_TUNABLE(s32, cSensorCount, 32);
-    NEBULA_TUNABLE(s32, cStarPieceCount, 3);
-    NEBULA_TUNABLE(s32, cCoinCount, 1);
-    NEBULA_TUNABLE(s32, cSpinItemCount, 3);
+    const f32 cFacingRadian = 0.015f;
+    const f32 cRunSpeed = 7.0f;
+    const f32 cJumpSpeed = 25.0f;
+    const f32 cStampFallSpeed = 30.0f;
+    const f32 cGravity = 1.5f;
+    const f32 cGroundDampH = 0.80f;
+    const f32 cAirDampH = 0.98f;
+    const f32 cDampVUp = 0.98f;
+    const f32 cVelHMin = 1.0f;
+    const f32 cPushScale = 2.0f;
+    const f32 cPlayerExistRatio = 0.25f;
+    const f32 cRadius = 100.0f;
+    const f32 cPointerRadius = 100.0f;
+    const f32 cShadowRadius = 60.0f;
+    const s32 cSensorCount = 32;
+    const s32 cStarPieceCount = 3;
+    const s32 cCoinCount = 1;
+    const s32 cSpinItemCount = 3;
 }  // namespace
 
 SamboHead::SamboHead(const char* pName)
@@ -99,7 +91,7 @@ void SamboHead::init(const TableIter& rIter) {
     MR::initLightCtrl(this);
     f32 scaleY = mScale.y;
     initBinder((cRadius * scaleY), (cRadius * scaleY), 0);
-    MR::initStarPointerTarget(this, cPointerRadius,Vec3f(0.0f, cNum_init_f1, 0.0f));
+    MR::initStarPointerTarget(this, cPointerRadius,Vec3f(0.0f, 50.0f, 0.0f));
     initHitSensor(1);
     MR::addHitSensorEnemy(this, "body", cSensorCount, cRadius * scaleY, Vec3f(0.0f, cRadius * scaleY, 0.0f));
     initEffectKeeper(1, nullptr);
@@ -530,7 +522,7 @@ void SamboHead::updateFall() {
 }
 
 void SamboHead::updateBounceFall() {
-    MR::reboundVelocityFromCollision(this, cNum_updateBounceFall_reboundVelocityFromCollision_1, cNum_updateBounceFall_reboundVelocityFromCollision_2, cNum_updateBounceFall_reboundVelocityFromCollision_3);
+    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
     updateFall();
 }
 

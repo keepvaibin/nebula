@@ -26,24 +26,10 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include "Game/System/NebulaInput.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calcPointRadius2D_f1, "calcPointRadius2D.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcPointRadius2D_f2, "calcPointRadius2D.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcStarPointerStrokeRotateMoment_f1, "calcStarPointerStrokeRotateMoment.f1", 0.00726f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcStarPointerStrokeRotateMoment_f2, "calcStarPointerStrokeRotateMoment.f2", 0.726f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcStarPointerStrokeRotateMoment_f3, "calcStarPointerStrokeRotateMoment.f3", 0.726f);
-NEBULA_TUNABLE_NAMED(f32, cNum_reportStarPointerGrabTarget_f1, "reportStarPointerGrabTarget.f1", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_reportStarPointerGrabTarget_f2, "reportStarPointerGrabTarget.f2", 4095.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_reportStarPointerGrabTarget_f3, "reportStarPointerGrabTarget.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_reportStarPointerGrabTarget_f4, "reportStarPointerGrabTarget.f4", 4095.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_reportStarPointerGrabTarget_f5, "reportStarPointerGrabTarget.f5", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_reportStarPointerGrabTarget_f6, "reportStarPointerGrabTarget.f6", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_reportStarPointerGrabTarget_f7, "reportStarPointerGrabTarget.f7", 0.5f);
 
 namespace {
 
-    NEBULA_TUNABLE(f32, hPointColRayLength, 99999.0f);
+    const f32 hPointColRayLength = 99999.0f;
 
     class StarPointerTargetInfo {
     public:
@@ -668,8 +654,8 @@ namespace MR {
 
     f32 calcPointRadius2D(const Vec3f& rPosition, f32 radius) {
         f32 fovyRad = MR::toRadian(MR::getRenderFovy());
-        f32 tan = MR::tan(fovyRad * cNum_calcPointRadius2D_f1);
-        f32 focalDist = (static_cast< s32 >(NebulaFrameClock::cScreenLines) * cNum_calcPointRadius2D_f2) / tan;
+        f32 tan = MR::tan(fovyRad * 0.5f);
+        f32 focalDist = (static_cast< s32 >(NebulaFrameClock::cScreenLines) * 0.5f) / tan;
 
         Vec3f viewPos;
         MR::getCameraViewMtx().mult(rPosition, viewPos);
@@ -689,12 +675,12 @@ namespace MR {
         screenVel.scale(1.0f / rad2D);
 
         f32 speed = screenVel.length();
-        if (speed < cNum_calcStarPointerStrokeRotateMoment_f1) {
+        if (speed < 0.00726f) {
             pMoment->zero();
             return false;
         }
-        if (speed > cNum_calcStarPointerStrokeRotateMoment_f2) {
-            screenVel.scale(cNum_calcStarPointerStrokeRotateMoment_f3 / speed);
+        if (speed > 0.726f) {
+            screenVel.scale(0.726f / speed);
         }
 
         Vec2f screenPos;
@@ -887,10 +873,10 @@ namespace MR {
             return;
         }
         const f32 height = static_cast< f32 >(MR::getScreenHeight());
-        const f32 across = radius / height * cNum_reportStarPointerGrabTarget_f1;
-        const u32 x = static_cast< u32 >(position.x / MR::getScreenWidth() * cNum_reportStarPointerGrabTarget_f2 + cNum_reportStarPointerGrabTarget_f3);
-        const u32 y = static_cast< u32 >(position.y / height * cNum_reportStarPointerGrabTarget_f4 + cNum_reportStarPointerGrabTarget_f5);
-        const u32 r = across >= cNum_reportStarPointerGrabTarget_f6 ? 255u : static_cast< u32 >(across + cNum_reportStarPointerGrabTarget_f7);
+        const f32 across = radius / height * 255.0f;
+        const u32 x = static_cast< u32 >(position.x / MR::getScreenWidth() * 4095.0f + 0.5f);
+        const u32 y = static_cast< u32 >(position.y / height * 4095.0f + 0.5f);
+        const u32 r = across >= 255.0f ? 255u : static_cast< u32 >(across + 0.5f);
         NebulaHost::gameContext(NEBULA_CONTEXT_TOUCH_TARGET, static_cast< s32 >(x | (y << 12) | (r << 24)));
     }
 

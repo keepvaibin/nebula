@@ -5,14 +5,10 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sRate, 0.02f);
+    const f32 sRate = 0.02f;
 };  // namespace
 
 CameraCharmedVecReg::CameraCharmedVecReg(const char* pName)
@@ -30,7 +26,7 @@ CameraTargetObj* CameraCharmedVecReg::calc() {
     CameraTargetObj* target = CameraLocalUtil::getTarget(this);
 
     Vec3f watchPoint;
-    CameraLocalUtil::makeWatchPoint(&watchPoint, this, target, cNum_calc_f1 / cNum_calc_f2);
+    CameraLocalUtil::makeWatchPoint(&watchPoint, this, target, 0.1f / 15.0f);
 
     Vec3f watchOffs = watchPoint - target->getPosition();
 

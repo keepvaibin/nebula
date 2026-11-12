@@ -2,18 +2,17 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(f32, cShellBaseScale, 1.3f);
-    NEBULA_TUNABLE(s32, cShellNum, 3);
+    const f32 cShellBaseScale = 1.3f;
+    const s32 cShellNum = 3;
     const s32 cDefaultShotInterval = NebulaFrameClock::stepsOfSeconds(5);
-    NEBULA_TUNABLE(f32, cDefaultBulletSpeed, 30.0f);
+    const f32 cDefaultBulletSpeed = 30.0f;
     // Shells start this far along the front; the launcher model's muzzle is cGunPointModelOffset further.
-    NEBULA_TUNABLE(f32, cGunPointOffset, 75.0f);
-    NEBULA_TUNABLE(f32, cGunPointModelOffset, 100.0f);
-    NEBULA_TUNABLE(s32, cGroupClippingNum, 32);
+    const f32 cGunPointOffset = 75.0f;
+    const f32 cGunPointModelOffset = 100.0f;
+    const s32 cGroupClippingNum = 32;
 }  // namespace
 
 namespace NrvIronCannonLauncherPoint {

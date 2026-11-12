@@ -6,15 +6,14 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 #define INPUT_BATTERY_EMPTY -1
 
 namespace {
-    NEBULA_TUNABLE(s32, sDisplayFrameBatteryLow, 120);
+    const s32 sDisplayFrameBatteryLow = 120;
     static const s32 sLowIntervalFrame = NebulaFrameClock::stepsOfSeconds(300);
-    NEBULA_TUNABLE(s32, sDisplayFrameBatteryNone, 450);
+    const s32 sDisplayFrameBatteryNone = 450;
 };  // namespace
 
 namespace {

@@ -11,11 +11,6 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_exeGameOverBlackHole2_f1, "exeGameOverBlackHole2.f1", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeGameOverBlackHole2_f2, "exeGameOverBlackHole2.f2", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeGameOverBlackHole2_f3, "exeGameOverBlackHole2.f3", 0.01f);
 
 void MarioActor::initBlackHoleOut() {
     mPosRelativeToBlackHole = mPosition - mBlackHolePosition;
@@ -85,8 +80,8 @@ void MarioActor::exeGameOverBlackHole2() {
     f32 nervestepfloat = getNerveStep();
     f32 flt = 1.0f;
 
-    if (nervestepfloat < cNum_exeGameOverBlackHole2_f1) {
-        flt = MR::sqrt(nervestepfloat / cNum_exeGameOverBlackHole2_f2);
+    if (nervestepfloat < 180.0f) {
+        flt = MR::sqrt(nervestepfloat / 180.0f);
     }
 
     f32 angle = mConst->getTable()->mBlackHoleRotateSpeed;
@@ -101,7 +96,7 @@ void MarioActor::exeGameOverBlackHole2() {
     NebulaMtxRotAxisRad(rotationMatrix, &mBlackHoleRotateAxis, angle);
     NebulaMtxMultVec(rotationMatrix, &mPosRelativeToBlackHole, &mPosRelativeToBlackHole);
 
-    MR::vecBlendSphere(mBlackHoleRotateAxis, -mCamDirZ, &mBlackHoleRotateAxis, cNum_exeGameOverBlackHole2_f3);
+    MR::vecBlendSphere(mBlackHoleRotateAxis, -mCamDirZ, &mBlackHoleRotateAxis, 0.01f);
 
     f32 distChangeFactor = 180 - getNerveStep();
 

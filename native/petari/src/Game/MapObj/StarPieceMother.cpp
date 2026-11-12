@@ -2,16 +2,12 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/StarPiece.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
 
 namespace {
     // const f32 hMoveSpeed = _;
-    NEBULA_TUNABLE(f32, hAddRandomVectorValue, 0.5f);
-    NEBULA_TUNABLE(f32, hAddRotateY, 10.0f);
+    const f32 hAddRandomVectorValue = 0.5f;
+    const f32 hAddRotateY = 10.0f;
 };  // namespace
 
 namespace NrvStarPieceMother {
@@ -50,7 +46,7 @@ void StarPieceMother::init(const TableIter& rIter) {
     initModelManagerWithAnm("StarPieceMother", nullptr, false);
     MR::connectToSceneNoSilhouettedMapObj(this);
     MR::onCalcGravity(this);
-    MR::initShadowVolumeSphere(this, cNum_init_f1);
+    MR::initShadowVolumeSphere(this, 60.0f);
     initSound(6, false);
     MR::invalidateClipping(this);
     MR::tryRegisterDemoCast(this, rIter);
@@ -78,7 +74,7 @@ void StarPieceMother::init(const TableIter& rIter) {
     if (isRailNotConnected) {
         initNerve(GET_NERVE(StarPieceMother, HostTypeNrvWait));
         initHitSensor(1);
-        MR::addHitSensorMapObj(this, "body", 8, cNum_init_f2, Vec3f(0.0f, 0.0f, 0.0f));
+        MR::addHitSensorMapObj(this, "body", 8, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
         makeActorAppeared();
     } else {
         initNerve(GET_NERVE(StarPieceMother, HostTypeNrvMoveOnRail));

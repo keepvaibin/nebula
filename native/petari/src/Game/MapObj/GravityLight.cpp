@@ -14,14 +14,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 2500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 0.5f);
 
 namespace {
     // const f32 sBaseInterpoleRate = 0.0f;
@@ -46,7 +39,7 @@ void GravityLight::init(const TableIter& rIter) {
 
     MR::makeMtxTR(mBaseMtx, mPosition, mRotation);
 
-    mRadius = cNum_init_f1 * mScale.y;
+    mRadius = 2500.0f * mScale.y;
 
     MR::connectToSceneMapObjMovementCalcAnim(this);
 
@@ -87,12 +80,12 @@ void GravityLight::init(const TableIter& rIter) {
     f32 boundingRadius;
     MR::calcModelBoundingRadius(&boundingRadius, mLightCylinder);
 
-    boundingRadius += cNum_init_f2 * mRadius;
+    boundingRadius += 0.5f * mRadius;
 
     Vec3f center(mPosition);
     if (isRailConnected) {
         f32 radius;
-        MR::calcRailClippingInfo(&center, &radius, this, cNum_init_f3, cNum_init_f4);
+        MR::calcRailClippingInfo(&center, &radius, this, 100.0f, 500.0f);
 
         boundingRadius += radius;
     }
@@ -101,7 +94,7 @@ void GravityLight::init(const TableIter& rIter) {
     MR::calcUpVec(&upVec, this);
     upVec.negate();
 
-    mCenter.scaleAdd(cNum_init_f5 * mRadius, upVec, mPosition);
+    mCenter.scaleAdd(0.5f * mRadius, upVec, mPosition);
 
     MR::setClippingTypeSphere(this, boundingRadius, &mCenter);
     MR::setGroupClipping(this, rIter, 16);

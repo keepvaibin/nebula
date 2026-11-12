@@ -10,7 +10,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
@@ -20,23 +19,23 @@ namespace {
     };
 
     const s32 cDefaultTimeToBreak = NebulaFrameClock::stepsOfSeconds(5);
-    NEBULA_TUNABLE(f32, cNormalHalfWidthX, 200.0f);
-    NEBULA_TUNABLE(f32, cNormalHalfWidthZ, 300.0f);
-    NEBULA_TUNABLE(f32, cHalfHeight, 100.0f);
-    NEBULA_TUNABLE(f32, cBigHalfWidthX, 600.0f);
-    NEBULA_TUNABLE(f32, cBigHalfWidthZ, 400.0f);
-    NEBULA_TUNABLE(f32, cTurnHalfWidthX, 140.0f);
-    NEBULA_TUNABLE(f32, cTurnHalfWidthZ, 300.0f);
+    const f32 cNormalHalfWidthX = 200.0f;
+    const f32 cNormalHalfWidthZ = 300.0f;
+    const f32 cHalfHeight = 100.0f;
+    const f32 cBigHalfWidthX = 600.0f;
+    const f32 cBigHalfWidthZ = 400.0f;
+    const f32 cTurnHalfWidthX = 140.0f;
+    const f32 cTurnHalfWidthZ = 300.0f;
     const s32 cDefaultStepWaitFall = NebulaFrameClock::stepsOfSeconds(1);
     const s32 cDefaultStepFall = NebulaFrameClock::stepsOfSeconds(4);
-    NEBULA_TUNABLE(f32, cFallGravity, 0.03f);
-    NEBULA_TUNABLE(f32, cFallSpeedMax, 1.5f);
-    NEBULA_TUNABLE(f32, cClippingRadius, 500.0f);
-    NEBULA_TUNABLE(f32, cBigClippingRadius, 800.0f);
-    NEBULA_TUNABLE(f32, cDisappearBrkRate, 0.25f);
+    const f32 cFallGravity = 0.03f;
+    const f32 cFallSpeedMax = 1.5f;
+    const f32 cClippingRadius = 500.0f;
+    const f32 cBigClippingRadius = 800.0f;
+    const f32 cDisappearBrkRate = 0.25f;
     // The eight edge and corner points round the stair top, in units of the half widths.
-    NEBULA_TUNABLE_RECORDS(EdgeOffset, cEdgeOffset, , {{0.0f, -1.0f}, {1.0f, -1.0f}, {1.0f, 0.0f},  {1.0f, 1.0f},
-                                      {0.0f, 1.0f},  {-1.0f, 1.0f}, {-1.0f, 0.0f}, {-1.0f, -1.0f}});
+    const EdgeOffset cEdgeOffset[] = {{0.0f, -1.0f}, {1.0f, -1.0f}, {1.0f, 0.0f},  {1.0f, 1.0f},
+                                      {0.0f, 1.0f},  {-1.0f, 1.0f}, {-1.0f, 0.0f}, {-1.0f, -1.0f}};
 }  // namespace
 
 namespace NrvKoopaBattleMapStair {

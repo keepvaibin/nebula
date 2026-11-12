@@ -22,12 +22,11 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, sKoopaHitBlowStopSceneStep, 10);
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, sDemoFallParam, {0.0f, 1.0f, 0.98f, 0.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, sDemoWaitParam, {0.0f, 1.0f, 0.9f, 1.0f});
+    const s32 sKoopaHitBlowStopSceneStep = 10;
+    const MR::ActorMoveParam sDemoFallParam = {0.0f, 1.0f, 0.98f, 0.0f};
+    const MR::ActorMoveParam sDemoWaitParam = {0.0f, 1.0f, 0.9f, 1.0f};
 };  // namespace
 
 NameObj* KoopaFunction::createKoopaVs1(const char* pName) {

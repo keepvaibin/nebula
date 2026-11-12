@@ -16,22 +16,21 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
     const s32 sOpeningBgmStep = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(s32, sOpeningBlurStart, 300);
-    NEBULA_TUNABLE(s32, sOpeningBlurTime, 70);
-    NEBULA_TUNABLE(f32, sOpeningBlurOffset, 18.0f);
-    NEBULA_TUNABLE(u8, sOpeningBlurAlpha, 80);
-    NEBULA_TUNABLE(s32, sOpeningBlurFadeIn, 5);
-    NEBULA_TUNABLE(s32, sOpeningBlurFadeOut, 30);
-    NEBULA_TUNABLE(s32, sPowerUpBlurStart, 530);
-    NEBULA_TUNABLE(s32, sPowerUpBlurTime, 80);
-    NEBULA_TUNABLE(f32, sPowerUpBlurOffset, 20.0f);
-    NEBULA_TUNABLE(u8, sPowerUpBlurAlpha, 80);
-    NEBULA_TUNABLE(s32, sPowerUpBlurFadeIn, 5);
-    NEBULA_TUNABLE(s32, sPowerUpBlurFadeOut, 40);
+    const s32 sOpeningBlurStart = 300;
+    const s32 sOpeningBlurTime = 70;
+    const f32 sOpeningBlurOffset = 18.0f;
+    const u8 sOpeningBlurAlpha = 80;
+    const s32 sOpeningBlurFadeIn = 5;
+    const s32 sOpeningBlurFadeOut = 30;
+    const s32 sPowerUpBlurStart = 530;
+    const s32 sPowerUpBlurTime = 80;
+    const f32 sPowerUpBlurOffset = 20.0f;
+    const u8 sPowerUpBlurAlpha = 80;
+    const s32 sPowerUpBlurFadeIn = 5;
+    const s32 sPowerUpBlurFadeOut = 40;
 };  // namespace
 
 namespace NrvPoltaDemo {

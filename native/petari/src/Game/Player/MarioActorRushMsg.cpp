@@ -5,11 +5,6 @@
 #include "Game/Player/RushEndInfo.hpp"
 #include "Game/Screen/GameSceneLayoutHolder.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_getNearestRushTarget_f1, "getNearestRushTarget.f1", 100000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getNearestRushTarget_f2, "getNearestRushTarget.f2", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getNearestJumpTarget_f1, "getNearestJumpTarget.f1", 100000.0f);
 
 void MarioActor::addRushSensor(HitSensor* pSensor, bool isNear) {
     if (!MR::isSensorAutoRush(pSensor) && !MR::isSensorRush(pSensor)) {
@@ -82,7 +77,7 @@ HitSensor* MarioActor::getNearestRushTarget(bool autoOnly) const {
         return nullptr;
     }
 
-    f32 maxRadius = cNum_getNearestRushTarget_f1;
+    f32 maxRadius = 100000.0f;
     HitSensor* out = nullptr;
 
     if (!isEnableNerveChange()) {
@@ -155,7 +150,7 @@ HitSensor* MarioActor::getNearestRushTarget(bool autoOnly) const {
             size1 = size3;
         }
 
-        if ((mRushSensorNear[idx] || !autoOnly || !(mRushSensors[idx]->mRadius + cNum_getNearestRushTarget_f2 < size1)) && size1 < maxRadius) {
+        if ((mRushSensorNear[idx] || !autoOnly || !(mRushSensors[idx]->mRadius + 20.0f < size1)) && size1 < maxRadius) {
             out = mRushSensors[idx];
             maxRadius = size1;
         }
@@ -173,7 +168,7 @@ HitSensor* MarioActor::getNearestJumpTarget() const {
         return nullptr;
     }
 
-    f32 nearestDistance = cNum_getNearestJumpTarget_f1;
+    f32 nearestDistance = 100000.0f;
     HitSensor* nearest = nullptr;
     for (u32 i = 0; i < mRushSensorCount; i++) {
         if (!isFixJumpRushSensor(mRushSensors[i])) {

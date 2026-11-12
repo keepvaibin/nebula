@@ -7,22 +7,18 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 30.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sFallHeight, 2000.0f);
-    NEBULA_TUNABLE(f32, sFallRotateYAngle, 10.0f);
-    NEBULA_TUNABLE(f32, sFallVelScale, 25.0f);
+    const f32 sFallHeight = 2000.0f;
+    const f32 sFallRotateYAngle = 10.0f;
+    const f32 sFallVelScale = 25.0f;
     const s32 sShootingLimitTime = NebulaFrameClock::stepsOfSeconds(6);
-    NEBULA_TUNABLE(s32, sPreShootingTime, 20);
+    const s32 sPreShootingTime = 20;
     const s32 sWaitForNextShootTime = NebulaFrameClock::stepsOfSeconds(4);
-    NEBULA_TUNABLE(f32, sLaunchYVel, 40.0f);
-    NEBULA_TUNABLE(f32, sLaunchHVel, 15.0f);
-    NEBULA_TUNABLE(s32, sDefaultStarPieceNum, 5);
+    const f32 sLaunchYVel = 40.0f;
+    const f32 sLaunchHVel = 15.0f;
+    const s32 sDefaultStarPieceNum = 5;
 };  // namespace
 
 namespace NrvShootingStar {
@@ -63,14 +59,14 @@ void ShootingStar::init(const TableIter& rIter) {
     MR::getPlacementArg3NoInit(rIter, &totalNum);
     MR::declareStarPiece(this, totalNum);
 
-    initBinder(cNum_init_f1, 0.0f, 0);
+    initBinder(100.0f, 0.0f, 0);
     MR::setBindTriangleFilter(this, MR::createTriangleFilterFunc(MR::isWallCodeNoAction));
     initNerve(GET_NERVE(ShootingStar, HostTypeNrvPreShooting));
     initEffectKeeper(0, "ShootingStar");
     initSound(4, false);
     initHitSensor(1);
     MR::addHitSensorMapObj(this, "message", 1, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::initShadowVolumeSphere(this, cNum_init_f2);
+    MR::initShadowVolumeSphere(this, 30.0f);
 
     if (MR::useStageSwitchReadAppear(this, rIter)) {
         MR::listenStageSwitchOnOffAppear(this, MR::Functor(this, &ShootingStar::appearPreShooting), MR::Functor< LiveActor >(this, &LiveActor::kill));

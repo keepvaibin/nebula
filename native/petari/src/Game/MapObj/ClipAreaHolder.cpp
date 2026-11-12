@@ -5,10 +5,9 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, sClipAreaMax, 64);
+    const s32 sClipAreaMax = 64;
 };  // namespace
 
 namespace {

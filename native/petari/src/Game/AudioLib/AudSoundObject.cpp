@@ -6,20 +6,19 @@
 #include "Game/AudioLib/AudSoundObjHolder.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Sound/Sound.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
     // Sequence ports the player foot and land sounds and the low-pass filter read.
-    NEBULA_TUNABLE(u32, cPortLpfCutoff, 10);
-    NEBULA_TUNABLE(u32, cPortMapCodeOffset, 11);
-    NEBULA_TUNABLE(u32, cPortMapCodeBank, 12);
+    const u32 cPortLpfCutoff = 10;
+    const u32 cPortMapCodeOffset = 11;
+    const u32 cPortMapCodeBank = 12;
     // Map codes come in banks of seven; each code within a bank is twelve steps apart.
-    NEBULA_TUNABLE(s32, cMapCodeBankSize, 7);
-    NEBULA_TUNABLE(s32, cMapCodeStep, 12);
-    NEBULA_TUNABLE(s32, cLpfOpen, 0x7F);
+    const s32 cMapCodeBankSize = 7;
+    const s32 cMapCodeStep = 12;
+    const s32 cLpfOpen = 0x7F;
     // Special effect cutoffs: waterfalls and gulls under effect 2, fountains and the maze wind under effect 1.
-    NEBULA_TUNABLE(s32, cLpfCutoffSpecialFx2, 10);
-    NEBULA_TUNABLE(s32, cLpfCutoffSpecialFx1, 20);
+    const s32 cLpfCutoffSpecialFx2 = 10;
+    const s32 cLpfCutoffSpecialFx1 = 20;
 }  // namespace
 
 AudSoundObject::AudSoundObject(Vec3f* pPos, u8 numHandles, NebulaArena* pArena)

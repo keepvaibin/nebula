@@ -13,11 +13,6 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_exeGameOverAbyss_f1, "exeGameOverAbyss.f1", 0.99f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeGameOverAbyss_f2, "exeGameOverAbyss.f2", 35.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeGameOverAbyss_f3, "exeGameOverAbyss.f3", 0.01f);
 
 void MarioActor::forceKill(u32 type) {
     if (mMario->getMovementStates().invincible) {
@@ -146,7 +141,7 @@ void MarioActor::exeGameOver() {
 }
 
 void MarioActor::exeGameOverAbyss() {
-    mVelocity = getLastMove() * cNum_exeGameOverAbyss_f1 + mCamDirZ * cNum_exeGameOverAbyss_f2 * cNum_exeGameOverAbyss_f3;
+    mVelocity = getLastMove() * 0.99f + mCamDirZ * 35.0f * 0.01f;
     mLastMove = mVelocity;
 
     if (!MR::isFirstStep(this)) {

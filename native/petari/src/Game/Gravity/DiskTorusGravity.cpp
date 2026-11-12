@@ -1,14 +1,10 @@
 #include "Game/Gravity.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_DiskTorusGravity_f1, "DiskTorusGravity.f1", 2000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_DiskTorusGravity_f2, "DiskTorusGravity.f2", 2000.0f);
 
 DiskTorusGravity::DiskTorusGravity()
     : PlanetGravity(), mLocalPosition(0.0f, 50.0f, 0.0f), mTranslation(0.0f, 50.0f, 0.0f), mLocalDirection(0, 1, 0), mRotation(0, 1, 0) {
-    mRadius = cNum_DiskTorusGravity_f1;
-    mWorldRadius = cNum_DiskTorusGravity_f2;
+    mRadius = 2000.0f;
+    mWorldRadius = 2000.0f;
     mDiskRadius = 0.0f;
     mEdgeType = 3;
     mEnableBothSide = true;

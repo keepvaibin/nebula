@@ -13,10 +13,6 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 0.4f);
 
 namespace NrvPoltaBattleLv1 {
     NEW_NERVE(PoltaBattleLv1NrvWait, PoltaBattleLv1, Wait);
@@ -53,7 +49,7 @@ void PoltaBattleLv1::appear() {
 }
 
 void PoltaBattleLv1::control() {
-    getHost()->updatePose(cNum_control_f1, cNum_control_f2);
+    getHost()->updatePose(0.2f, 0.4f);
     if (isNerve(GET_NERVE(PoltaBattleLv1, PoltaBattleLv1NrvWait)) || isNerve(GET_NERVE(PoltaBattleLv1, PoltaBattleLv1NrvGenerateGroundRock)) ||
         isNerve(GET_NERVE(PoltaBattleLv1, PoltaBattleLv1NrvGenerateRock)) || isNerve(GET_NERVE(PoltaBattleLv1, PoltaBattleLv1NrvDamageBody)) ||
         isNerve(GET_NERVE(PoltaBattleLv1, PoltaBattleLv1NrvBreakBody))) {

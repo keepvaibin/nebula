@@ -12,10 +12,6 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
-#include "Game/Util/Tunable.hpp"
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_trySave_1, "trySave.1", 20);
 
 namespace {
     NEW_NERVE(SaveDataHandleSequenceNoOperation, SaveDataHandleSequence, NoOperation);
@@ -476,7 +472,7 @@ bool SaveDataHandleSequence::trySave() {
         mSaveIcon->appear();
     }
 
-    if (MR::isGreaterStep(this, cStep_trySave_1)) {
+    if (MR::isGreaterStep(this, 20)) {
         MR::startSystemLevelSE("SE_SY_LV_SAVING");
     }
 

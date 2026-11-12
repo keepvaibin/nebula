@@ -25,10 +25,9 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, sTimingPlayingTicoSE, 180);
+    const s32 sTimingPlayingTicoSE = 180;
 };  // namespace
 
 namespace {

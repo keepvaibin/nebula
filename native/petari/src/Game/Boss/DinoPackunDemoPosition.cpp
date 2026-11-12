@@ -3,12 +3,11 @@
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, sLandMotionStartTime, 28);
-    NEBULA_TUNABLE(s32, sJumpBackTime, 56);
+    const s32 sLandMotionStartTime = 28;
+    const s32 sJumpBackTime = 56;
 };  // namespace
 
 namespace NrvDinoPackunDemoPosition {

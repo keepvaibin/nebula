@@ -14,20 +14,15 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_initShadow_f1, "initShadow.f1", 2000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 100.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sBubbleHitRadius, 150.0f);
-    NEBULA_TUNABLE(f32, sBodyHitRadius, 80.0f);
-    NEBULA_TUNABLE(f32, sShadowRadius, 50.0f);
-    NEBULA_TUNABLE(f32, sBaseScale, 1.0f);
-    NEBULA_TUNABLE(s32, sCannotGetTime, 40);
-    NEBULA_TUNABLE(f32, sBodyHitYOffset, 0.0f);
+    const f32 sBubbleHitRadius = 150.0f;
+    const f32 sBodyHitRadius = 80.0f;
+    const f32 sShadowRadius = 50.0f;
+    const f32 sBaseScale = 1.0f;
+    const s32 sCannotGetTime = 40;
+    const f32 sBodyHitYOffset = 0.0f;
 };  // namespace
 
 namespace NrvChipBase {
@@ -123,7 +118,7 @@ void ChipBase::initShadow(const TableIter& rIter) {
         break;
     }
 
-    f32 dropLength = cNum_initShadow_f1;
+    f32 dropLength = 2000.0f;
     if (MR::isValidInfo(rIter)) {
         MR::getPlacementArg4NoInit(rIter, &dropLength);
     }
@@ -153,7 +148,7 @@ void ChipBase::initPlacementParam(const TableIter& rIter) {
 
 void ChipBase::initAfterPlacement() {
     MR::registerChip(mChipType, this, mGroupID);
-    MR::setClippingRangeIncludeShadow(this, &mClippingRange, cNum_initAfterPlacement_f1);
+    MR::setClippingRangeIncludeShadow(this, &mClippingRange, 100.0f);
 }
 
 void ChipBase::deactive() {
@@ -193,7 +188,7 @@ void ChipBase::control() {
     if (mRailMover != nullptr) {
         mRailMover->movement();
         mPosition.set(mRailMover->mStartPos);
-        MR::setClippingRangeIncludeShadow(this, &mClippingRange, cNum_control_f1);
+        MR::setClippingRangeIncludeShadow(this, &mClippingRange, 100.0f);
     }
 }
 

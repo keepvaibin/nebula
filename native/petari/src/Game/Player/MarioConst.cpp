@@ -1017,8 +1017,7 @@ namespace {
         return character == 1 ? &gMarioConstDefault2 : &gMarioConstDefault;
     }
 
-    // A whole number of the field's kind: held at its ends (a cast past them is undefined), halves away from zero, as
-    // tunables store (Tunable.cpp).
+    // A whole number of the field's kind: held at its ends (a cast past them is undefined), halves away from zero.
     template < typename T >
     T clampTo(f32 value, f64 low, f64 high) {
         const f64 wide = value;

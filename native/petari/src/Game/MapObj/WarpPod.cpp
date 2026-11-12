@@ -24,17 +24,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_initDraw_f1, "initDraw.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initDraw_f2, "initDraw.f2", 4.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initDraw_f3, "initDraw.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initDraw_f4, "initDraw.f4", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initDraw_f5, "initDraw.f5", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initDraw_f6, "initDraw.f6", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initDraw_f7, "initDraw.f7", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawCylinder_f1, "drawCylinder.f1", 2.0f);
 
 namespace {
     // By arg 6.
@@ -42,17 +32,17 @@ namespace {
         {0, 100, 200}, {44, 255, 42}, {255, 60, 60}, {196, 166, 0}, {0, 255, 0}, {255, 0, 255}, {255, 255, 0}, {255, 255, 255},
     };
 
-    NEBULA_TUNABLE(f32, cSensorRadiusHidden, 120.0f);
-    NEBULA_TUNABLE(f32, cSensorRadiusVisible, 15.0f);
+    const f32 cSensorRadiusHidden = 120.0f;
+    const f32 cSensorRadiusVisible = 15.0f;
     const s32 cDefaultCameraTime = NebulaFrameClock::stepsOfSeconds(2);
     const u16 cRestDelay = NebulaFrameClock::stepsOfSeconds(1);
     const u16 cRestDelayAfterTouch = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, cStandOnDistance, 200.0f);
-    NEBULA_TUNABLE(u16, cPathPointCount, 60);
-    NEBULA_TUNABLE(f32, cPathLift, 200.0f);
+    const f32 cStandOnDistance = 200.0f;
+    const u16 cPathPointCount = 60;
+    const f32 cPathLift = 200.0f;
     // Draw numbers a pod's tube owns (a segment for each of cPathPointCount points).
-    NEBULA_TUNABLE(u32, cPartsPerPod, 256);
-    NEBULA_TUNABLE(f32, cPathTubeRadius, 30.0f);
+    const u32 cPartsPerPod = 256;
+    const f32 cPathTubeRadius = 30.0f;
 
     // After a warp the far pod rests (closed) for a while before it takes the player back.
     void startRest(WarpPod* pPod) {
@@ -495,13 +485,13 @@ void WarpPod::initDraw() {
     MR::calcUpVec(&up, this);
     side.cross(direction, -up);
     MR::normalizeOrZero(&side);
-    Vec3f center(mPosition + direction * cNum_initDraw_f1);
+    Vec3f center(mPosition + direction * 0.5f);
     normal.cross(side, direction);
     MR::normalizeOrZero(&normal);
 
-    f32 halfAngle = PI / cNum_initDraw_f2;
-    f32 radius = (cNum_initDraw_f3 * distance) / MR::sin(halfAngle);
-    f32 height = MR::sqrt(radius * radius - cNum_initDraw_f4 * (cNum_initDraw_f5 * distance * distance));
+    f32 halfAngle = PI / 4.0f;
+    f32 radius = (0.5f * distance) / MR::sin(halfAngle);
+    f32 height = MR::sqrt(radius * radius - 0.5f * (0.5f * distance * distance));
     Vec3f axis(side);
     Vec3f arcCenter(center + normal * height);
     Vec3f arcStart = -normal * radius;
@@ -513,7 +503,7 @@ void WarpPod::initDraw() {
 
     for (s32 i = 0; i < count; i++) {
         s32 remaining = count - i;
-        f32 blend = (MR::sin(((count - remaining - cNum_initDraw_f6 * count) / count) * MR::pi()) + 1.0f) / cNum_initDraw_f7;
+        f32 blend = (MR::sin(((count - remaining - 0.5f * count) / count) * MR::pi()) + 1.0f) / 2.0f;
 
         if (mVisibilityState == 2) {
             blend = 1.0f - (remaining - 1) / static_cast< f32 >(count);
@@ -594,7 +584,7 @@ void WarpPod::drawCylinder(u32 firstPart) const {
             continue;
         }
 
-        f32 v = cNum_drawCylinder_f1 * (static_cast< f32 >(i + 1) / pointCount) - 1.0f;
+        f32 v = 2.0f * (static_cast< f32 >(i + 1) / pointCount) - 1.0f;
 
         if (v < 0.0f) {
             v = -v;

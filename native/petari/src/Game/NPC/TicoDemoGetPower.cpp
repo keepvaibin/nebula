@@ -6,18 +6,17 @@
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, sTicoAppearFrame, 110);
-    NEBULA_TUNABLE(s32, sTicoAppearEndFrame, 140);
-    NEBULA_TUNABLE(s32, sTicoAppearVoiceFrame, 180);
-    NEBULA_TUNABLE(s32, sFanfareFrame, 10);
-    NEBULA_TUNABLE(s32, sWaitSeStopFrame, 65);
-    NEBULA_TUNABLE(s32, sFlashSpinSeFrame, 72);
-    NEBULA_TUNABLE(s32, sFlashLightSeFrame, 170);
-    NEBULA_TUNABLE(s32, sFusionSeFrame, 255);
-    NEBULA_TUNABLE(s32, sMarioJumpFrame, 420);
+    const s32 sTicoAppearFrame = 110;
+    const s32 sTicoAppearEndFrame = 140;
+    const s32 sTicoAppearVoiceFrame = 180;
+    const s32 sFanfareFrame = 10;
+    const s32 sWaitSeStopFrame = 65;
+    const s32 sFlashSpinSeFrame = 72;
+    const s32 sFlashLightSeFrame = 170;
+    const s32 sFusionSeFrame = 255;
+    const s32 sMarioJumpFrame = 420;
 };  // namespace
 
 namespace NrvTicoDemoGetPower {

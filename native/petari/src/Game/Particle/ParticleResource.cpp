@@ -14,18 +14,6 @@
 #include "Game/Particle/ParticleKey.hpp"
 #include "Game/Particle/ParticleCore.hpp"
 #include "Game/Particle/ParticleResources.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_drawP_f1, "drawP.f1", 1.02f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawP_f2, "drawP.f2", 1.02f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawP_f3, "drawP.f3", 0.4f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawC_f1, "drawC.f1", 1.02f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawC_f2, "drawC.f2", 1.02f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawC_f3, "drawC.f3", 0.4f);
-NEBULA_TUNABLE_NAMED(f32, cNum_sendParticle_f1, "sendParticle.f1", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_sendParticle_f2, "sendParticle.f2", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setIndirect_f1, "setIndirect.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setIndirect_f2, "setIndirect.f2", 0.5f);
 
 ParticleResource::ParticleResource() {
     mpBaseShape = NULL;
@@ -466,10 +454,10 @@ void ParticleResource::drawP(EmitterWork* work) {
     work->mGlobalPtclScl.y = work->mpEmtr->mGlobalPScl.y * mpBaseShape->getBaseSizeY();
 
     if (mpBaseShape->getType() == 0) {
-        work->mGlobalPtclScl.x *= cNum_drawP_f1;
+        work->mGlobalPtclScl.x *= 1.02f;
     } else if (mpBaseShape->getType() == 1) {
-        work->mGlobalPtclScl.x *= cNum_drawP_f2;
-        work->mGlobalPtclScl.y *= cNum_drawP_f3;
+        work->mGlobalPtclScl.x *= 1.02f;
+        work->mGlobalPtclScl.y *= 0.4f;
     }
 
     if (mpExtraShape != NULL && mpExtraShape->isEnableScaleAnm()) {
@@ -569,10 +557,10 @@ void ParticleResource::drawC(EmitterWork* work) {
     }
 
     if (mpChildShape->getType() == 0) {
-        work->mGlobalPtclScl.x *= cNum_drawC_f1;
+        work->mGlobalPtclScl.x *= 1.02f;
     } else if (mpChildShape->getType() == 1) {
-        work->mGlobalPtclScl.x *= cNum_drawC_f2;
-        work->mGlobalPtclScl.y *= cNum_drawC_f3;
+        work->mGlobalPtclScl.x *= 1.02f;
+        work->mGlobalPtclScl.y *= 0.4f;
     }
 
     work->mPivot.x = work->mPivot.y = 0.0f;
@@ -645,8 +633,8 @@ namespace {
                 rMaterial.constants[48 + row * 4 + c] = sIndirect[row][c];
             }
         }
-        rMaterial.constants[80] = rMaterial.constants[88 + 4] / cNum_sendParticle_f1;
-        rMaterial.constants[81] = rMaterial.constants[88 + 5] / cNum_sendParticle_f2;
+        rMaterial.constants[80] = rMaterial.constants[88 + 4] / 255.0f;
+        rMaterial.constants[81] = rMaterial.constants[88 + 5] / 255.0f;
     }
 
     // runtime/src/render/materials/particle.hlsl for the emitter's draws: the base shape's modes and alpha test, the
@@ -689,10 +677,10 @@ namespace {
     void setIndirect(const f32 (*pMtx)[3], s8 scaleExp) {
         f32 scale = 1.0f;
         for (s32 e = scaleExp; e > 0; e--) {
-            scale *= cNum_setIndirect_f1;
+            scale *= 2.0f;
         }
         for (s32 e = scaleExp; e < 0; e++) {
-            scale *= cNum_setIndirect_f2;
+            scale *= 0.5f;
         }
         for (u32 row = 0; row < 2; row++) {
             for (u32 c = 0; c < 3; c++) {

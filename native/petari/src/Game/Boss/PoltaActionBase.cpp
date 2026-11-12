@@ -11,9 +11,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_updateScreamSensor_f1, "updateScreamSensor.f1", 3200.0f);
 
 PoltaActionBase::PoltaActionBase(const char* pName, Polta* pPolta) : ActorStateBase< Polta >(pName, pPolta) {
     MR::createCenterScreenBlur();
@@ -21,7 +18,7 @@ PoltaActionBase::PoltaActionBase(const char* pName, Polta* pPolta) : ActorStateB
 
 void PoltaActionBase::updateScreamSensor() {
     if (MR::isLessStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
-        f32 size = MR::calcNerveValue(this, NebulaFrameClock::stepsOfMilliseconds(500), 0.0f, cNum_updateScreamSensor_f1);
+        f32 size = MR::calcNerveValue(this, NebulaFrameClock::stepsOfMilliseconds(500), 0.0f, 3200.0f);
         PoltaFunction::setScreamSensorSize(getHost(), size);
     } else {
         PoltaFunction::setScreamSensorSize(getHost(), 0.0f);

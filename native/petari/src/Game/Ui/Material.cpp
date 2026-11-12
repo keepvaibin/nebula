@@ -14,24 +14,6 @@
 #include <nebula_geometry.hpp>
 #include "Game/Ui/UiInlines.hpp"
 #include <cstdio>
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_CalcTextureMtx_f1, "CalcTextureMtx.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_CalcTextureMtx_f2, "CalcTextureMtx.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_Setup_f1, "Setup.f1", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_Setup_f2, "Setup.f2", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_Setup_f3, "Setup.f3", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_Setup_f4, "Setup.f4", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_Setup_f5, "Setup.f5", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_Setup_f6, "Setup.f6", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_Setup_f7, "Setup.f7", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_Setup_f8, "Setup.f8", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_Setup_f9, "Setup.f9", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_Setup_f10, "Setup.f10", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_Setup_f11, "Setup.f11", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_Setup_f12, "Setup.f12", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_Setup_f13, "Setup.f13", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_Setup_f14, "Setup.f14", 255.0f);
 
 const NebulaColor16 DefaultBlackColor = {0, 0, 0, 0};
 
@@ -113,7 +95,7 @@ namespace Ui {
         }
 
         void CalcTextureMtx(Mtx34f* pMtx, const TexSRT& rSrt) {
-            Vec2f center(cNum_CalcTextureMtx_f1, cNum_CalcTextureMtx_f2);
+            Vec2f center(0.5f, 0.5f);
 
             f32 cr = detail::CosDeg(rSrt.rotate);
             f32 sr = detail::SinDeg(rSrt.rotate);
@@ -602,10 +584,10 @@ namespace Ui {
             }
 
             matColor = detail::MultipleAlpha(matColor, alpha);
-            values.material_color[0] = matColor.r / cNum_Setup_f1;
-            values.material_color[1] = matColor.g / cNum_Setup_f2;
-            values.material_color[2] = matColor.b / cNum_Setup_f3;
-            values.material_color[3] = matColor.a / cNum_Setup_f4;
+            values.material_color[0] = matColor.r / 255.0f;
+            values.material_color[1] = matColor.g / 255.0f;
+            values.material_color[2] = matColor.b / 255.0f;
+            values.material_color[3] = matColor.a / 255.0f;
 
             useRasStage = useRasStage || matColor != 0xFFFFFFFFu;
         } else {
@@ -675,16 +657,16 @@ namespace Ui {
         }
 
         for (u32 r = 0; r < 3; r++) {
-            values.registers[r][0] = mRegisterColors[r].r / cNum_Setup_f5;
-            values.registers[r][1] = mRegisterColors[r].g / cNum_Setup_f6;
-            values.registers[r][2] = mRegisterColors[r].b / cNum_Setup_f7;
-            values.registers[r][3] = mRegisterColors[r].a / cNum_Setup_f8;
+            values.registers[r][0] = mRegisterColors[r].r / 255.0f;
+            values.registers[r][1] = mRegisterColors[r].g / 255.0f;
+            values.registers[r][2] = mRegisterColors[r].b / 255.0f;
+            values.registers[r][3] = mRegisterColors[r].a / 255.0f;
         }
         for (u32 k = 0; k < 4; k++) {
-            values.constants[k][0] = mConstantColors[k].r / cNum_Setup_f9;
-            values.constants[k][1] = mConstantColors[k].g / cNum_Setup_f10;
-            values.constants[k][2] = mConstantColors[k].b / cNum_Setup_f11;
-            values.constants[k][3] = mConstantColors[k].a / cNum_Setup_f12;
+            values.constants[k][0] = mConstantColors[k].r / 255.0f;
+            values.constants[k][1] = mConstantColors[k].g / 255.0f;
+            values.constants[k][2] = mConstantColors[k].b / 255.0f;
+            values.constants[k][3] = mConstantColors[k].a / 255.0f;
         }
 
         // Each map's size, and each coordinate's scale: the size of the map the cook found it samples.
@@ -711,8 +693,8 @@ namespace Ui {
 
         if (IsAlphaCompareCap()) {
             const AlphaCompare* const pAlphaComp = GetAlphaComparePtr();
-            values.alpha_ref[0] = pAlphaComp->GetRef0() / cNum_Setup_f13;
-            values.alpha_ref[1] = pAlphaComp->GetRef1() / cNum_Setup_f14;
+            values.alpha_ref[0] = pAlphaComp->GetRef0() / 255.0f;
+            values.alpha_ref[1] = pAlphaComp->GetRef1() / 255.0f;
         }
 
         PassState state = PassStates::plain();

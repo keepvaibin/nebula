@@ -6,16 +6,9 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calcPastPointingPosOnScreen_f1, "calcPastPointingPosOnScreen.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcPastPointingPosOnScreen_f2, "calcPastPointingPosOnScreen.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updatePointerInfo_f1, "updatePointerInfo.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_forcePointerOut_f1, "forcePointerOut.f1", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_forcePointerOut_f2, "forcePointerOut.f2", 20.0f);
 
 namespace {
-    NEBULA_TUNABLE(s32, hIsOutScreenCounter, 5);
+    const s32 hIsOutScreenCounter = 5;
 };  // namespace
 
 PointerInfo::PointerInfo() : mPos(0.0f, 0.0f), mInScreen(), mDrawReady(), mZDepth(), mViewDistZ() {
@@ -72,8 +65,8 @@ void StarPointerController::calcPastPointingPosOnScreen(Vec2f* pPos, s32 idx) co
     MR::getPointerPastPos(pPos, idx, mPadChannel);
     pPos->x += 1.0f;
     pPos->y += 1.0f;
-    pPos->x *= MR::getScreenWidth() * cNum_calcPastPointingPosOnScreen_f1;
-    pPos->y *= static_cast< s32 >(NebulaFrameClock::cScreenLines) * cNum_calcPastPointingPosOnScreen_f2;
+    pPos->x *= MR::getScreenWidth() * 0.5f;
+    pPos->y *= static_cast< s32 >(NebulaFrameClock::cScreenLines) * 0.5f;
 }
 
 void StarPointerController::updatePointerInfo() {
@@ -82,7 +75,7 @@ void StarPointerController::updatePointerInfo() {
         vec.x = mInfo.mPos.x;
         vec.y = mInfo.mPos.y;
 
-        if (mInfo.mInScreen && cNum_updatePointerInfo_f1 < mScreenVel.length()) {
+        if (mInfo.mInScreen && 10.0f < mScreenVel.length()) {
             forcePointerOut();
         }
 
@@ -119,7 +112,7 @@ void StarPointerController::forcePointerOut() {
     Vec2f vec;
     vec.set(mInfo.mPos);
     vec.sub(mScreenPos);
-    StarPointerFunction::forceOutsideScreenEdge(&mInfo.mPos, mInfo.mPos, vec, -cNum_forcePointerOut_f1, -cNum_forcePointerOut_f2);
+    StarPointerFunction::forceOutsideScreenEdge(&mInfo.mPos, mInfo.mPos, vec, -20.0f, -20.0f);
 }
 
 f32 StarPointerController::calcViewDistanceZ(const Vec3f& rPos, MtxPtr pMtx) {

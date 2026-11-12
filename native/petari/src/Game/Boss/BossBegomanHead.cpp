@@ -3,12 +3,11 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(f32, hSpikeRotate, 0.23f);
-    NEBULA_TUNABLE(f32, hSpikeRotateTurn, 0.2f);
+    const f32 hSpikeRotate = 0.23f;
+    const f32 hSpikeRotateTurn = 0.2f;
 };  // namespace
 
 namespace NrvBossBegomanHead {

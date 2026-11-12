@@ -23,14 +23,7 @@
 #include "Game/Render/GameTexture.hpp"
 #include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHangUp_f1, "updateHangUp.f1", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHangUp_f2, "updateHangUp.f2", 0.4f);
 
 namespace NrvCreeper {
     NEW_NERVE(CreeperNrvFree, Creeper, Free);
@@ -41,29 +34,29 @@ namespace NrvCreeper {
 };  // namespace NrvCreeper
 
 namespace {
-    NEBULA_TUNABLE(f32, sInterval, 50.0f);
-    NEBULA_TUNABLE(s32, sHeadPointNo, 1);
-    NEBULA_TUNABLE(f32, sDefaultBendRate, 100.0f);
-    NEBULA_TUNABLE(f32, sDefaultJumpSpeedFront, 25.0f);
-    NEBULA_TUNABLE(f32, sDefaultJumpSpeedUp, 40.0f);
-    NEBULA_TUNABLE(f32, sFreeBackAccelRate, 0.05f);
-    NEBULA_TUNABLE(f32, sPointFrictionFree, 0.9f);
-    NEBULA_TUNABLE(f32, sPointFrictionHang, 0.7f);
-    NEBULA_TUNABLE(f32, sHangStartRotateSpeed, 15.0f);
-    NEBULA_TUNABLE(f32, sHangUpAccel, 5.0f);
-    NEBULA_TUNABLE(f32, sHangUpSpeedMin, 5.0f);
-    NEBULA_TUNABLE(f32, sHangUpSpeedMax, 15.0f);
-    NEBULA_TUNABLE(f32, sHangDownGravity, 0.4f);
-    NEBULA_TUNABLE(f32, sHangDownSpeedMax, 20.0f);
-    NEBULA_TUNABLE(f32, sHangRotateSpeedRate, 1.5f);
-    NEBULA_TUNABLE(f32, sHangStartCoordMin, 100.0f);
-    NEBULA_TUNABLE(f32, sHangEndCoord, 80.0f);
-    NEBULA_TUNABLE(s32, sAnimInterpoleFrame, 15);
+    const f32 sInterval = 50.0f;
+    const s32 sHeadPointNo = 1;
+    const f32 sDefaultBendRate = 100.0f;
+    const f32 sDefaultJumpSpeedFront = 25.0f;
+    const f32 sDefaultJumpSpeedUp = 40.0f;
+    const f32 sFreeBackAccelRate = 0.05f;
+    const f32 sPointFrictionFree = 0.9f;
+    const f32 sPointFrictionHang = 0.7f;
+    const f32 sHangStartRotateSpeed = 15.0f;
+    const f32 sHangUpAccel = 5.0f;
+    const f32 sHangUpSpeedMin = 5.0f;
+    const f32 sHangUpSpeedMax = 15.0f;
+    const f32 sHangDownGravity = 0.4f;
+    const f32 sHangDownSpeedMax = 20.0f;
+    const f32 sHangRotateSpeedRate = 1.5f;
+    const f32 sHangStartCoordMin = 100.0f;
+    const f32 sHangEndCoord = 80.0f;
+    const s32 sAnimInterpoleFrame = 15;
     static const s32 sStepInvalidSpin = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(s32, sStepInvalid, 20);
-    NEBULA_TUNABLE(f32, sDistanceNear, 200.0f);
-    NEBULA_TUNABLE(f32, sDrawWidthX, 10.0f);
-    NEBULA_TUNABLE(f32, sDrawWidthZ, 10.0f);
+    const s32 sStepInvalid = 20;
+    const f32 sDistanceNear = 200.0f;
+    const f32 sDrawWidthX = 10.0f;
+    const f32 sDrawWidthZ = 10.0f;
 
     static Color8 sColorPlusZ(0xFF, 0xFF, 0xFF, 0xFF);
     static Color8 sColorPlusX(0x96, 0x96, 0x96, 0xFF);
@@ -161,7 +154,7 @@ void Creeper::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_Ride, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_Creeper);
 
     initHitSensor(3);
-    MR::addHitSensorBinder(this, "bind", 8, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorBinder(this, "bind", 8, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
     initRailRider(rIter);
 
     mPosition.set(MR::getRailPos(this));
@@ -171,7 +164,7 @@ void Creeper::init(const TableIter& rIter) {
 
     MR::initMultiActorCamera(this, rIter, &mCameraInfo, "掴まり");
 
-    MR::initAndSetRailClipping(&mClippingCenter, this, cNum_init_f2, cNum_init_f3);
+    MR::initAndSetRailClipping(&mClippingCenter, this, 100.0f, 500.0f);
 
     initSound(4, false);
 
@@ -422,11 +415,11 @@ bool Creeper::updateHangUp(f32 rotateSpeed) {
         MR::tryRumblePadMiddle(this, PLAYER_1);
     }
 
-    if (MR::isFirstStep(this) && mHangSpeed >= cNum_updateHangUp_f1) {
+    if (MR::isFirstStep(this) && mHangSpeed >= 5.0f) {
         MR::startSound(mRider, "SE_OJ_CREEPER_UP_START");
     }
 
-    mHangSpeed -= cNum_updateHangUp_f2;
+    mHangSpeed -= 0.4f;
 
     mHangSpeed = mHangSpeed >= ::sHangUpSpeedMax ? ::sHangUpSpeedMax : mHangSpeed;
 

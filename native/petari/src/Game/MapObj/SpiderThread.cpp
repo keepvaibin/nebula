@@ -20,27 +20,24 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Render/GameTexture.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_initMainThreads_f1, "initMainThreads.f1", 360.0f);
 
 namespace {
     const CutPointEntry sCutPointNoTable[] = {{0, 3}, {1, 1}, {2, 0}, {4, 3}, {6, 1}, {6, 4}};
 
     static const s32 sMainRadialLinePointNum = 8;
-    NEBULA_TUNABLE(f32, sMainRadialLineInterval, 175.0f);
-    NEBULA_TUNABLE(f32, sMainRadialLineLength, 1800.0f);
-    NEBULA_TUNABLE(f32, sMainPointRadius, 100.0f);
-    NEBULA_TUNABLE(f32, sPartPointRadius, 100.0f);
-    NEBULA_TUNABLE(f32, sTouchPointerSpeedMin, 5.0f);
-    NEBULA_TUNABLE(f32, sTouchPointerSpeedAccelRate, 2.0f);
-    NEBULA_TUNABLE(f32, sTouchSpeedMax, 50.0f);
+    const f32 sMainRadialLineInterval = 175.0f;
+    const f32 sMainRadialLineLength = 1800.0f;
+    const f32 sMainPointRadius = 100.0f;
+    const f32 sPartPointRadius = 100.0f;
+    const f32 sTouchPointerSpeedMin = 5.0f;
+    const f32 sTouchPointerSpeedAccelRate = 2.0f;
+    const f32 sTouchSpeedMax = 50.0f;
     static const s32 sHangActorNumMax = 8 * sMainRadialLinePointNum;
-    NEBULA_TUNABLE(f32, sIndirectScaleX, 0.035f);
-    NEBULA_TUNABLE(f32, sIndirectScaleY, 0.03f);
+    const f32 sIndirectScaleX = 0.035f;
+    const f32 sIndirectScaleY = 0.03f;
     // The strips SpiderThreadPart::draw writes for one part (drawLine and drawPoints each write three).
-    NEBULA_TUNABLE(s32, sStripsPerPart, 3);
+    const s32 sStripsPerPart = 3;
 };  // namespace
 
 inline SpiderThreadPart* connectPoints(SpiderThreadPoint* pPointA, SpiderThreadPoint* pPointB) {
@@ -206,7 +203,7 @@ void SpiderThread::cutSpiderThread() {
 
 void SpiderThread::initMainThreads() {
     Rot3f rotMtx;
-    MR::makeMtxRotate(rotMtx.toMtxPtr(), 0.0f, 0.0f, cNum_initMainThreads_f1 / mNumRadialLines);
+    MR::makeMtxRotate(rotMtx.toMtxPtr(), 0.0f, 0.0f, 360.0f / mNumRadialLines);
     Vec3f down(0.0f, -1.0f, 0.0f);
 
     mMainPoint = new SpiderThreadMainPoint(mPosition, mNumRadialLines + 1);

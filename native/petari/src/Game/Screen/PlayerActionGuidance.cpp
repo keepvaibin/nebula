@@ -9,12 +9,11 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Screen/NebulaIcons.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, sSuspendFrame, 60);
-    NEBULA_TUNABLE(s32, sChangeSoundFrame, 40);
+    const s32 sSuspendFrame = 60;
+    const s32 sChangeSoundFrame = 40;
 };  // namespace
 
 namespace {

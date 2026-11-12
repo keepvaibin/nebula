@@ -17,25 +17,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 110.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 130.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeForceFall_f1, "exeForceFall.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_kill_f1, "kill.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_kill_f2, "kill.f2", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f2, "initAfterPlacement.f2", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcAndSetBaseMtx_f1, "calcAndSetBaseMtx.f1", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 20.0f);
 
 namespace NrvStinkBugSmall {
     NEW_NERVE(StinkBugSmallNrvWait, StinkBugSmall, Wait);
@@ -57,20 +39,20 @@ namespace NrvStinkBugSmall {
 };  // namespace NrvStinkBugSmall
 
 namespace {
-    NEBULA_TUNABLE(f32, sTurnRateSearch, 1.0f);
-    NEBULA_TUNABLE(f32, sTurnRateDashSign, 3.0f);
-    NEBULA_TUNABLE(s32, sStepForWait, 1);
-    NEBULA_TUNABLE(s32, sStepForDashSignEnd, 10);
-    NEBULA_TUNABLE(s32, sStepForShakeStart, 40);
+    const f32 sTurnRateSearch = 1.0f;
+    const f32 sTurnRateDashSign = 3.0f;
+    const s32 sStepForWait = 1;
+    const s32 sStepForDashSignEnd = 10;
+    const s32 sStepForShakeStart = 40;
     const s32 sStepForRecover = NebulaFrameClock::stepsOfSeconds(1);
     const s32 sStepForPanic = NebulaFrameClock::stepsOfMilliseconds(1500);
-    NEBULA_TUNABLE(f32, sDashSpeed, 20.0f);
-    NEBULA_TUNABLE(f32, sBackSpeed, 5.0f);
-    NEBULA_TUNABLE(f32, sHomeDistance, 10.0f);
-    NEBULA_TUNABLE(f32, sTerritoryReachMargin, 400.0f);
-    NEBULA_TUNABLE(f32, sTerritorySideHalfSize, 600.0f);
-    NEBULA_TUNABLE(f32, sTerritoryUpHalfSize, 200.0f);
-    NEBULA_TUNABLE(f32, sTerritoryBackOffset, 200.0f);
+    const f32 sDashSpeed = 20.0f;
+    const f32 sBackSpeed = 5.0f;
+    const f32 sHomeDistance = 10.0f;
+    const f32 sTerritoryReachMargin = 400.0f;
+    const f32 sTerritorySideHalfSize = 600.0f;
+    const f32 sTerritoryUpHalfSize = 200.0f;
+    const f32 sTerritoryBackOffset = 200.0f;
 };  // namespace
 
 StinkBugSmall::StinkBugSmall(const char* pName) : StinkBugBase(pName), mScaleController(nullptr), mBindStarPointer(nullptr), mIsBodyAttack(false) {
@@ -85,24 +67,24 @@ void StinkBugSmall::init(const TableIter& rIter) {
     MR::getPlacementArg7NoInit(rIter, &mIsBodyAttack);
     initHitSensor(3);
     if (mIsBodyAttack) {
-        MR::addHitSensorEnemy(this, "body", 8, cNum_init_f1 * mScale.x, Vec3f(0.0f, cNum_init_f2 * mScale.x, 0.0f));
+        MR::addHitSensorEnemy(this, "body", 8, 110.0f * mScale.x, Vec3f(0.0f, 10.0f * mScale.x, 0.0f));
     } else {
         MR::addBodyMessageSensorEnemy(this);
     }
 
-    MR::addHitSensorAtJointEnemyAttack(this, "head", "Face", 8, cNum_init_f3 * mScale.x, Vec3f(0.0f, -cNum_init_f4 * mScale.x, 0.0f));
+    MR::addHitSensorAtJointEnemyAttack(this, "head", "Face", 8, 100.0f * mScale.x, Vec3f(0.0f, -30.0f * mScale.x, 0.0f));
     if (!mIsBodyAttack) {
         MR::initCollisionParts(this, "Switch", getSensor("body"), nullptr);
     }
 
-    initBinder(cNum_init_f5 * mScale.x, cNum_init_f6 * mScale.x, 0);
+    initBinder(200.0f * mScale.x, 200.0f * mScale.x, 0);
     MR::setBinderExceptActor(this, this);
     MR::setBinderIgnoreMovingCollision(this);
     if (!MR::isValidSwitchDead(this)) {
         MR::declareStarPiece(this, 3);
     }
 
-    MR::initStarPointerTarget(this, cNum_init_f7 * mScale.x, Vec3f(0.0f, cNum_init_f8 * mScale.x, 0.0f));
+    MR::initStarPointerTarget(this, 130.0f * mScale.x, Vec3f(0.0f, 50.0f * mScale.x, 0.0f));
     mScaleController = new AnimScaleController(nullptr);
     mBindStarPointer = new WalkerStateBindStarPointer(this, mScaleController);
     MR::useStageSwitchReadA(this, rIter);
@@ -316,7 +298,7 @@ void StinkBugSmall::exeForceFall() {
         MR::onBind(this);
     }
 
-    mVelocity.scaleAdd(cNum_exeForceFall_f1, mGravity, mVelocity);
+    mVelocity.scaleAdd(2.0f, mGravity, mVelocity);
 }
 
 // With a dead switch the switch is the reward; without, three star pieces.
@@ -324,7 +306,7 @@ void StinkBugSmall::kill() {
     if (MR::isValidSwitchDead(this)) {
         MR::onSwitchDead(this);
     } else {
-        MR::appearStarPiece(this, mPosition, 3, cNum_kill_f1, cNum_kill_f2, false);
+        MR::appearStarPiece(this, mPosition, 3, 10.0f, 40.0f, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
     }
 
@@ -338,9 +320,9 @@ void StinkBugSmall::initAfterPlacement() {
     Vec3f up;
     MR::calcUpVec(&up, this);
     Vec3f rayStart;
-    rayStart.scaleAdd(cNum_initAfterPlacement_f1, up, mPosition);
+    rayStart.scaleAdd(50.0f, up, mPosition);
     Vec3f ray(up);
-    ray.scale(-cNum_initAfterPlacement_f2);
+    ray.scale(-200.0f);
     MR::getFirstPolyOnLineToMapExceptSensor(&mInitPos, nullptr, rayStart, ray, getSensor("body"));
     MR::resetPosition(this, mInitPos);
 }
@@ -368,7 +350,7 @@ void StinkBugSmall::control() {
     }
 
     mVelocity.killElement(mVelocity, mGravity);
-    mVelocity.scaleAdd(cNum_control_f1, mGravity, mVelocity);
+    mVelocity.scaleAdd(2.0f, mGravity, mVelocity);
     Vec3f front(mFront);
     MR::turnVecToPlane(&mFront, front, mGravity);
 }
@@ -376,7 +358,7 @@ void StinkBugSmall::control() {
 void StinkBugSmall::calcAndSetBaseMtx() {
     Pos3f mtx;
     MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, mFront);
-    MR::blendMtx(getBaseMtx(), mtx, cNum_calcAndSetBaseMtx_f1, mtx);
+    MR::blendMtx(getBaseMtx(), mtx, 0.3f, mtx);
     MR::setBaseTRMtx(this, mtx);
     Vec3f scale = mScaleController->mScale * mScale;
     MR::setBaseScale(this, scale);
@@ -402,7 +384,7 @@ void StinkBugSmall::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         return;
     }
 
-    if (isHitHorn(pSender, pReceiver, mScale.x * cNum_attackSensor_f1) && MR::sendMsgEnemyAttackStrong(pReceiver, pSender)) {
+    if (isHitHorn(pSender, pReceiver, mScale.x * 20.0f) && MR::sendMsgEnemyAttackStrong(pReceiver, pSender)) {
         MR::emitEffectHitBetweenSensors(this, pSender, pReceiver, 0.0f, nullptr);
         if (!isNerve(GET_NERVE(StinkBugSmall, StinkBugSmallNrvDash))) {
             setNerve(GET_NERVE(StinkBugSmall, StinkBugSmallNrvAttack));

@@ -35,11 +35,6 @@
 #include "Game/Util/CollisionPartsFilter.hpp"
 #include "Game/Util/FurMulti.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_initDefaultPos_f1, "initDefaultPos.f1", 360.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initDefaultPos_f2, "initDefaultPos.f2", 360.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initDefaultPos_f3, "initDefaultPos.f3", 360.0f);
 
 namespace {
     CollisionParts* createCollisionParts(ResourceHolder* pResHolder, const char* pName, HitSensor* pSensor, const Pos3f& rMtx,
@@ -581,9 +576,9 @@ namespace MR {
         MR::getPlacementRotate(rIter, &pActor->mRotation);
         MR::getPlacementScale(rIter, &pActor->mScale);
 
-        pActor->mRotation.x = MR::repeat(pActor->mRotation.x, 0.0f, cNum_initDefaultPos_f1);
-        pActor->mRotation.y = MR::repeat(pActor->mRotation.y, 0.0f, cNum_initDefaultPos_f2);
-        pActor->mRotation.z = MR::repeat(pActor->mRotation.z, 0.0f, cNum_initDefaultPos_f3);
+        pActor->mRotation.x = MR::repeat(pActor->mRotation.x, 0.0f, 360.0f);
+        pActor->mRotation.y = MR::repeat(pActor->mRotation.y, 0.0f, 360.0f);
+        pActor->mRotation.z = MR::repeat(pActor->mRotation.z, 0.0f, 360.0f);
     }
 
     void initDefaultPosNoRepeat(LiveActor* pActor, const TableIter& rIter) {

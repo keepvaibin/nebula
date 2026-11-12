@@ -6,10 +6,6 @@
 #include "Game/Util/JointUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/System/NebulaArena.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f1, "initSensor.f1", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f2, "initSensor.f2", 50.0f);
 
 namespace {
     const PoltaSensorListEntry sCoreSensorList[] = {
@@ -279,7 +275,7 @@ void PoltaSensorCtrl::initSensor() {
     ::addArmSensors(mRightArmSensors, mPoltaPtr, mPoltaPtr->mRightArm, ::sRightArmSensorList);
 
     mScreamSensor = MR::addHitSensorAtJointEnemy(mPoltaPtr, "Scream", "Tongue3", 64, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    mHeadSensor = MR::addHitSensorAtJointEnemy(mPoltaPtr, "Head", "Head5", 32, cNum_initSensor_f1, Vec3f(-cNum_initSensor_f2, 0.0f, 0.0f));
+    mHeadSensor = MR::addHitSensorAtJointEnemy(mPoltaPtr, "Head", "Head5", 32, 200.0f, Vec3f(-50.0f, 0.0f, 0.0f));
 }
 
 bool PoltaSensorCtrl::isCoreSensor(const HitSensor* pSensor) const {

@@ -9,13 +9,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Render/GameTexture.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calcLineWidth_f1, "calcLineWidth.f1", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcLineWidth_f2, "calcLineWidth.f2", 2000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcLineWidth_f3, "calcLineWidth.f3", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcLineWidth_f4, "calcLineWidth.f4", 90.0f);
 
 namespace {
     // One quad from start to end, `rOffset` to each side; s runs across the ribbon and t along it.
@@ -73,8 +67,8 @@ void GCaptureRibbon::setLine(const Vec3f& rStart, const Vec3f& rEnd) {
 
 // 90 wide up to 500 long, narrowing to 20 at 2000.
 f32 GCaptureRibbon::calcLineWidth() const {
-    f32 rate = MR::normalize(mStart.distance(mEnd), cNum_calcLineWidth_f1, cNum_calcLineWidth_f2);
-    return (cNum_calcLineWidth_f3 * rate) + (cNum_calcLineWidth_f4 * (1.0f - rate));
+    f32 rate = MR::normalize(mStart.distance(mEnd), 500.0f, 2000.0f);
+    return (20.0f * rate) + (90.0f * (1.0f - rate));
 }
 
 void GCaptureRibbon::init(const TableIter& /*rIter*/) {

@@ -3,23 +3,22 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(f32, sOperateAccel, 0.5f);
-    NEBULA_TUNABLE(f32, sToPlaneRate, 0.05f);
-    NEBULA_TUNABLE(f32, sDirectionRate, 0.1f);
+    const f32 sOperateAccel = 0.5f;
+    const f32 sToPlaneRate = 0.05f;
+    const f32 sDirectionRate = 0.1f;
     // Offset at radius rate 1.
-    NEBULA_TUNABLE(f32, sMaxOffset, 500.0f);
-    NEBULA_TUNABLE(f32, sOperatePowerScale, 2.0f);
+    const f32 sMaxOffset = 500.0f;
+    const f32 sOperatePowerScale = 2.0f;
     // Pointer distance below which the pull weakens linearly.
-    NEBULA_TUNABLE(f32, sOperateFullPowerDist, 50.0f);
+    const f32 sOperateFullPowerDist = 50.0f;
     // Past this offset rate, pull away from the centre fades out.
-    NEBULA_TUNABLE(f32, sOperateLimitStartRate, 0.5f);
-    NEBULA_TUNABLE(f32, sToCenterStartRate, 0.1f);
-    NEBULA_TUNABLE(f32, sToCenterMinRate, 0.0001f);
-    NEBULA_TUNABLE(f32, sAttenuate, 0.94f);
+    const f32 sOperateLimitStartRate = 0.5f;
+    const f32 sToCenterStartRate = 0.1f;
+    const f32 sToCenterMinRate = 0.0001f;
+    const f32 sAttenuate = 0.94f;
 
     // SpinDriverOperateRing::mOperateState.
     enum OperateState {

@@ -21,39 +21,25 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 210.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAim_f1, "exeAim.f1", 100.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeAttackSuccess_1, "exeAttackSuccess.1", 2);
 
 namespace {
     static const s32 sStepFreeInvalid = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, sNpcSensorPosOffsetZ, 200.0f);
-    NEBULA_TUNABLE(f32, sAimFollowRate, 0.1f);
-    NEBULA_TUNABLE(f32, sAimDistanceMin, 100.0f);
-    NEBULA_TUNABLE(f32, sAimDistanceMax, 300.0f);
-    NEBULA_TUNABLE(s32, sAimAnimInterpole, 10);
-    NEBULA_TUNABLE(f32, sAimDistanceToStretch, 300.0f);
-    NEBULA_TUNABLE(f32, sAimDistanceToWait, 200.0f);
-    NEBULA_TUNABLE(f32, sBindAttackSpeed, 45.0f);
-    NEBULA_TUNABLE(f32, sBindAttackFrictionRate, 1.0f);
+    const f32 sNpcSensorPosOffsetZ = 200.0f;
+    const f32 sAimFollowRate = 0.1f;
+    const f32 sAimDistanceMin = 100.0f;
+    const f32 sAimDistanceMax = 300.0f;
+    const s32 sAimAnimInterpole = 10;
+    const f32 sAimDistanceToStretch = 300.0f;
+    const f32 sAimDistanceToWait = 200.0f;
+    const f32 sBindAttackSpeed = 45.0f;
+    const f32 sBindAttackFrictionRate = 1.0f;
     static const s32 sStepBindAttack = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE(s32, sBindAttackInvalidTime, 10);
-    NEBULA_TUNABLE(s32, sStepToStopScene, 1);
-    NEBULA_TUNABLE(s32, sStepStopSceneAttackSuccess, 15);
+    const s32 sBindAttackInvalidTime = 10;
+    const s32 sStepToStopScene = 1;
+    const s32 sStepStopSceneAttackSuccess = 15;
     static const s32 sStepStopSceneLastDamage = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(s32, sStepToEnableBindCancel, 10);
+    const s32 sStepToEnableBindCancel = 10;
 
     void endBindAndPlayerNoJump(LiveActor* pActor) {
         MR::endBindAndPlayerJump(pActor, Vec3f(0.0f, 0.0f, 0.0f), 0);
@@ -88,11 +74,11 @@ void SlingShooter::init(const TableIter& rIter) {
     MR::connectToSceneRide(this);
 
     initHitSensor(3);
-    MR::addHitSensorCallbackBinder(this, "bind", 8, cNum_init_f1);
-    MR::addHitSensorCallback(this, "npc", ATYPE_SPRING_ATTACKER_KINOPIO_BIND, 8, cNum_init_f2);
-    MR::addHitSensor(this, "attack", ATYPE_SPRING_ATTACKER, 8, cNum_init_f3, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorCallbackBinder(this, "bind", 8, 80.0f);
+    MR::addHitSensorCallback(this, "npc", ATYPE_SPRING_ATTACKER_KINOPIO_BIND, 8, 150.0f);
+    MR::addHitSensor(this, "attack", ATYPE_SPRING_ATTACKER, 8, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
-    initBinder(cNum_init_f4, cNum_init_f5, 8);
+    initBinder(50.0f, 50.0f, 8);
     MR::offBind(this);
 
     initEffectKeeper(2, nullptr);
@@ -105,9 +91,9 @@ void SlingShooter::init(const TableIter& rIter) {
     }
 
     MR::calcGravity(this);
-    MR::initShadowVolumeSphere(this, cNum_init_f6);
+    MR::initShadowVolumeSphere(this, 100.0f);
 
-    MR::initStarPointerTarget(this, cNum_init_f7, Vec3f(0.0f, cNum_init_f8, 0.0f));
+    MR::initStarPointerTarget(this, 210.0f, Vec3f(0.0f, 50.0f, 0.0f));
 
     initNerve(GET_NERVE(SlingShooter, SlingShooterNrvFree));
 
@@ -218,7 +204,7 @@ void SlingShooter::exeAim() {
 
     f32 dist = mPosition.distance(*mNeutralPos);
     if (dist >= ::sAimDistanceMin) {
-        MR::startLevelSound(this, "SE_OJ_LV_SPACE_COCOON_DRAG", ((dist - ::sAimDistanceMin) / (::sAimDistanceMax - ::sAimDistanceMin)) * cNum_exeAim_f1);
+        MR::startLevelSound(this, "SE_OJ_LV_SPACE_COCOON_DRAG", ((dist - ::sAimDistanceMin) / (::sAimDistanceMax - ::sAimDistanceMin)) * 100.0f);
     }
 
     if (tryRelease()) {
@@ -272,7 +258,7 @@ void SlingShooter::exeAttackSuccess() {
         mIsLastDamage = false;
     }
 
-    if (MR::isStep(this, cStep_exeAttackSuccess_1)) {
+    if (MR::isStep(this, 2)) {
         if (mPassThroughEnable) {
             mVelocity.set(mAttackVelocity);
             mPassThroughEnable = false;
