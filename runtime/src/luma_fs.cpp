@@ -160,16 +160,59 @@ Kind kind_of(const stdfs::path& path) noexcept {
     }
 }
 
+// A root (the data folder, the Exchange folder, the installed folder) as the player made it: a link or junction there
+// is followed, once (contract 5: a player may point the Exchange folder elsewhere). Below a root, kind_of.
+Kind root_kind_of(const stdfs::path& path) noexcept {
+    std::error_code error;
+    const stdfs::file_status status = stdfs::status(path, error);
+    if (error || status.type() == stdfs::file_type::not_found) {
+        return Kind::Missing;
+    }
+    switch (status.type()) {
+    case stdfs::file_type::regular:
+        return Kind::File;
+    case stdfs::file_type::directory:
+        return Kind::Folder;
+    default:
+        return Kind::Other;
+    }
+}
+
 // The folder's entry named `name` up to letter case, as the folder spells it; empty when there is none. Names in the
-// rule are ASCII, so folding ASCII letters is the whole comparison.
+// rule are ASCII, so folding ASCII letters is the whole comparison. Two entries equal up to case (made outside Nebula
+// where names keep case): the exact spelling, else the first in byte order, so the answer does not hang on the
+// folder's order.
 stdfs::path scan_child(const stdfs::path& folder, const std::string& name) {
+    stdfs::path found;
+    std::string found_name;
     std::error_code error;
     for (stdfs::directory_iterator it(folder, error), end; !error && it != end; it.increment(error)) {
-        if (same_name(name_of(it->path()), name)) {
+        std::string entry = name_of(it->path());
+        if (!same_name(entry, name)) {
+            continue;
+        }
+        if (entry == name) {
             return it->path();
         }
+        if (found.empty() || entry < found_name) {
+            found = it->path();
+            found_name = std::move(entry);
+        }
     }
-    return {};
+    return found;
+}
+
+// Whether `folder` has an entry spelled exactly `name` (byte for byte) other than `self`.
+bool other_spelled(const stdfs::path& folder, const std::string& name, const stdfs::path& self) {
+    const std::string own = name_of(self);
+    std::error_code error;
+    for (stdfs::directory_iterator it(folder, error), end; !error && it != end; it.increment(error)) {
+        const std::string entry = name_of(it->path());
+        if (entry == name && entry != own) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // The child of `folder` named `name` up to letter case (contract 4): the exact name first, else, where the system's
@@ -206,11 +249,11 @@ struct Place {
 Place resolve(const stdfs::path& root, const std::vector<std::string>& parts, bool make) {
     Place place;
     place.path = root;
-    place.kind = kind_of(root);
+    place.kind = root_kind_of(root);
     if (place.kind == Kind::Missing && make) {
         std::error_code error;
         stdfs::create_directories(root, error);
-        place.kind = kind_of(root);
+        place.kind = root_kind_of(root);
     }
     if (place.kind != Kind::Folder) {
         place.status = place.kind == Kind::Missing ? LUMA_E_NOT_FOUND : LUMA_E_DENIED;
@@ -270,7 +313,7 @@ std::uint64_t folder_bytes(const stdfs::path& folder) {
 }
 
 // Removes `path` and, for a plain folder, everything in it; a link or junction inside is removed as itself, never
-// followed. Counts the files removed into *files. False when anything stayed.
+// followed. Counts the files removed into *files. False when anything stayed. (A root that is a link: remove_root.)
 bool remove_tree(const stdfs::path& path, Kind kind, std::uint64_t* files) {
     bool ok = true;
     if (kind == Kind::Folder) {
@@ -296,6 +339,24 @@ bool remove_tree(const stdfs::path& path, Kind kind, std::uint64_t* files) {
         (*files)++;
     }
     return ok;
+}
+
+// FORGET of a data folder: everything in it goes, then the folder; when the folder is a link or junction, the target's
+// contents go (FORGET means the data goes) and then the link itself, never the target folder.
+void remove_root(const stdfs::path& root) {
+    if (root_kind_of(root) != Kind::Folder) {
+        return;
+    }
+    std::vector<stdfs::path> children;
+    std::error_code error;
+    for (stdfs::directory_iterator it(root, error), end; !error && it != end; it.increment(error)) {
+        children.push_back(it->path());
+    }
+    std::uint64_t files = 0;
+    for (const stdfs::path& child : children) {
+        remove_tree(child, kind_of(child), &files);
+    }
+    stdfs::remove(root, error);
 }
 
 std::int32_t read_file(const stdfs::path& path, std::string* out) {
@@ -538,6 +599,13 @@ void unlink(Request* request) noexcept {  // g_lock
 void deliver(LumaEventNode* node);
 void drop(LumaEventNode* node);
 
+// A cancelled read or list gives its place back at the cancel (the worker skips it; it holds no bytes); a cancelled
+// write, remove or move still happens, holding its bytes, so its place is given back when the worker is done with it:
+// the 32 bound memory too.
+bool freed_at_cancel(const Request& request) noexcept {
+    return request.cancelled && (request.op == Op::Read || request.op == Op::List);
+}
+
 // The worker's answer (once): the event for the frame's start, or the request freed when its mod is gone.
 void answer(Request* request) {
     const std::lock_guard<std::mutex> lock(g_lock);
@@ -547,7 +615,7 @@ void answer(Request* request) {
     }
     const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
     if (kernel == nullptr || kernel->post(&request->node.event) != LUMA_OK) {
-        if (!request->cancelled && request->owner->open > 0u) {
+        if (!freed_at_cancel(*request) && request->owner->open > 0u) {
             request->owner->open--;
         }
         unlink(request);
@@ -565,7 +633,7 @@ void deliver(LumaEventNode* node) {
         if (request->owner != nullptr) {
             owner = request->owner;
             call = !request->cancelled;
-            if (call && owner->open > 0u) {
+            if (!freed_at_cancel(*request) && owner->open > 0u) {
                 owner->open--;
             }
             unlink(request);
@@ -625,7 +693,7 @@ std::int32_t do_write(Request& request) {
     // The folder's bytes now, the file's own old bytes not counted (it is replaced): the player may change the
     // folder between two writes, so it is measured each time.
     Place place = resolve(request.folder, request.parts, false);
-    std::uint64_t used = kind_of(request.folder) == Kind::Folder ? folder_bytes(request.folder) : 0u;
+    std::uint64_t used = root_kind_of(request.folder) == Kind::Folder ? folder_bytes(request.folder) : 0u;
     if (place.status == LUMA_OK && place.kind == Kind::File) {
         std::error_code error;
         const std::uint64_t old = stdfs::file_size(place.path, error);
@@ -694,9 +762,18 @@ std::int32_t do_move(Request& request) {
     }
     stdfs::path target;
     if (same) {
-        target = from.path.parent_path() / galaxy::text_path(request.to_parts.back());
+        // Where names keep case, a different file may already be spelled as the target: never replaced.
+        const stdfs::path folder = from.path.parent_path();
+        if (other_spelled(folder, request.to_parts.back(), from.path)) {
+            return LUMA_E_EXISTS;
+        }
+        target = folder / galaxy::text_path(request.to_parts.back());
     } else {
-        const Place to = resolve(request.folder, request.to_parts, true);
+        // The target's folders are made only for a move that goes ahead (not for one onto an existing `to`).
+        Place to = resolve(request.folder, request.to_parts, false);
+        if (to.status == LUMA_E_NOT_FOUND) {
+            to = resolve(request.folder, request.to_parts, true);
+        }
         if (to.status != LUMA_OK) {
             return to.status;
         }
@@ -753,11 +830,7 @@ std::int32_t do_list(Request& request) {
 void work(Request* request) {
     if (request->op == Op::Forget) {
         // The player's FORGET (no mod, no event): the folder goes after every request queued before.
-        std::uint64_t files = 0;
-        const Kind kind = kind_of(request->folder);
-        if (kind == Kind::Folder) {
-            remove_tree(request->folder, kind, &files);
-        }
+        remove_root(request->folder);
         delete request;
         return;
     }
@@ -1041,7 +1114,7 @@ std::int32_t cancel_request(const LumaMod* mod, LumaHandle handle, bool exchange
                 // It stays linked until the worker answers and the node is delivered: then it is freed, no call.
                 request->cancelled = true;
                 found = true;
-                if (state->open > 0u) {
+                if (freed_at_cancel(*request) && state->open > 0u) {
                     state->open--;
                 }
                 break;
@@ -1250,7 +1323,7 @@ std::int32_t find_data_file(std::string_view id, std::string_view path, std::fil
 std::uint64_t data_bytes(std::string_view id) {
     try {
         const stdfs::path folder = data_folder(id);
-        return !folder.empty() && kind_of(folder) == Kind::Folder ? folder_bytes(folder) : 0u;
+        return !folder.empty() && root_kind_of(folder) == Kind::Folder ? folder_bytes(folder) : 0u;
     } catch (...) {
         return 0u;
     }
@@ -1259,7 +1332,7 @@ std::uint64_t data_bytes(std::string_view id) {
 bool has_data_folder(std::string_view id) {
     try {
         const stdfs::path folder = data_folder(id);
-        return !folder.empty() && kind_of(folder) == Kind::Folder;
+        return !folder.empty() && root_kind_of(folder) == Kind::Folder;
     } catch (...) {
         return false;
     }
@@ -1275,7 +1348,7 @@ void data_ids(std::vector<std::string>& out) {
         std::error_code error;
         for (stdfs::directory_iterator it(base, error), end; !error && it != end; it.increment(error)) {
             std::string name = name_of(it->path());
-            if (valid_id(name) && kind_of(it->path()) == Kind::Folder) {
+            if (valid_id(name) && root_kind_of(it->path()) == Kind::Folder) {
                 out.push_back(std::move(name));
             }
         }
