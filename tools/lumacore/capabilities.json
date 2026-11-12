@@ -27,6 +27,16 @@
     "kernel.objects.method": "A mod finds a virtual by name and signature and calls it on any object, the object's own override running with its hooks (1.3)",
     "kernel.objects.overrider": "A mod asks which function overrides a virtual for an object, as that function's row (1.3)",
     "kernel.objects.call_method": "A mod calls a virtual on an object by name and signature in one call, the object adjusted to the declaring class (1.3)",
-    "kernel.objects.unit": "Classes a .cpp file defines (nerves, screens) have numbers and answer as the headers' classes do (1.3)"
+    "kernel.objects.unit": "Classes a .cpp file defines (nerves, screens) have numbers and answer as the headers' classes do (1.3)",
+    "services.registry": "Services by name and version: bound at import, the minor rule, optional imports, a table's size, mistakes reported once a place and counted (2.1)",
+    "services.events": "Events posted from any thread, given on the game thread at the frame's start in list order, 256 a frame, none after a mod's stop (2.1)",
+    "services.permissions": "A permissioned service bound only when the player granted its permission; asked for by name, refused and said (2.1)",
+    "services.time": "The world clock: frames and world steps, a rate from 1 to 16000 thousandths, hold and single steps, the game's sound following (2.2)",
+    "services.time.timers": "Timers on frames, world steps or real nanoseconds, given as events, cancelled exactly (2.2)",
+    "services.time.handlers": "Frame and step handlers in list order, every world step its own call (2.2)",
+    "services.time.real": "The monotonic clock from any thread and the wall clock with the player's offset (2.2)",
+    "services.system": "Facts of the platform, the game and the player's locale; the game window's display (2.2)",
+    "services.system.clipboard": "The system clipboard, text and RGBA images, read and written as requests, the window in front (2.2)",
+    "services.system.links": "A https link opened in the browser, one at a time, 10 s apart, a Note naming its site (2.2)"
   }
 }
