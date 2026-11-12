@@ -2828,19 +2828,6 @@ bool RenderCore::rt_sun(float eye_direction[3]) {
             }
         }
     }
-    // EVERYTHING 1.7: where the sky shows the sun, how far the key light the game shades by stands from it (the bench
-    // reads where they disagree, PLANS-UNBUILT: over 10 degrees is decided by picture).
-    if (report && source == 1u && list.stage_light_known != 0u) {
-        if (const NebulaFrameWorldLight* key = core::find_world_light(list, list.stage_light); key != nullptr) {
-            float toward[3];
-            if (key_toward(*key, toward)) {
-                const float cosine = std::clamp(dot(target, toward), -1.0f, 1.0f);
-                std::fprintf(stderr, "[rt-inputs] sun: the visible sun %.1f degrees from the key (stage %08x, key %.3f)\n",
-                             static_cast<double>(std::acos(cosine) * 57.29578f), list.stage_hash,
-                             static_cast<double>(0.2126f * key->color[0] + 0.7152f * key->color[1] + 0.0722f * key->color[2]));
-            }
-        }
-    }
     // Else, for a stage that says nothing of its light, straight overhead.
     if (source == 0u && mode == RtStage::Sun::Auto && list.stage_light_known == 0u && up_known) {
         std::memcpy(target, up, sizeof(target));
@@ -2864,14 +2851,16 @@ bool RenderCore::rt_sun(float eye_direction[3]) {
     // degrees over the horizon of the player as he stands then, so the place a stage starts in has the sun (taken once
     // more when his up first becomes known, for that lift); a stage row's own direction is taken as written. Ray
     // tracing switched off and on again keeps it; a frame with no sun (an interior zone) leaves it waiting.
-    // EVERYTHING 1.7 (PLANS-UNBUILT): the sun the sky shows is the sun that casts. Its direction is taken as it is, with
-    // no lift (a low sun in the sky casts long shadows: his dusk target), and where it first shows after another
-    // source was taken for the stage (a sun that appears on a switch), it is taken once more, then held.
+    // EVERYTHING 1.7 (PLANS-UNBUILT), rt_dev sun_visible 1 only (the director 08:29: measure first, decided stage by
+    // stage): the sun the sky shows is the sun that casts. Its direction is taken as it is, with no lift (a low sun in
+    // the sky casts long shadows: his dusk target), and where it first shows after another source was taken for the
+    // stage (a sun that appears on a switch), it is taken once more, then held.
+    const bool sky_sun_casts = source == 1u && rt_dev(RtDev::SunVisible, 0.0f) >= 0.5f;
     bool lifted = false;
     if (!rt_sun_fixed_known_ || rt_sun_fixed_stage_ != list.stage_hash || (!rt_sun_fixed_final_ && up_known) ||
-        (source == 1u && rt_sun_fixed_source_ != 1u)) {
+        (sky_sun_casts && rt_sun_fixed_source_ != 1u)) {
         float taken[3] = {target[0], target[1], target[2]};
-        if (source != 3u && source != 1u && up_known) {
+        if (source != 3u && !sky_sun_casts && up_known) {
             constexpr float kLeastRise = 0.5f, kFlat = 0.8660254f;  // 30 degrees above the player's horizon
             const float rise = dot(taken, up);
             if (rise < kLeastRise) {
@@ -2892,7 +2881,7 @@ bool RenderCore::rt_sun(float eye_direction[3]) {
         }
         std::memcpy(rt_sun_world_, taken, sizeof(taken));
         rt_sun_fixed_known_ = true;
-        rt_sun_fixed_final_ = up_known || source == 3u || source == 1u;
+        rt_sun_fixed_final_ = up_known || source == 3u || sky_sun_casts;
         rt_sun_fixed_stage_ = list.stage_hash;
         rt_sun_fixed_source_ = source;
     }
@@ -2906,6 +2895,38 @@ bool RenderCore::rt_sun(float eye_direction[3]) {
                      follows ? " (latched)" : "", static_cast<double>(sun[0]), static_cast<double>(sun[1]), static_cast<double>(sun[2]),
                      lifted ? " lifted" : "", list.stage_hash, row != nullptr ? "row" : "default",
                      static_cast<double>(key_brightness));
+        // EVERYTHING 1.7, measured: where the stage has a sun in its sky (BrightSun), the angle from the traced sun to
+        // it and from the key to it, so the bench's table shows where they disagree (over 10 degrees: by picture).
+        for (std::uint32_t i = 0; i < list.world_light_count; ++i) {
+            const NebulaFrameWorldLight& light = list.world_lights[i];
+            if (light.kind != NEBULA_WORLD_LIGHT_SUN) {
+                continue;
+            }
+            float seen[3];
+            if ((light.flags & NEBULA_WORLD_LIGHT_FOLLOWS_CAMERA) != 0u) {
+                to_world(light.position, seen);
+            } else {
+                std::memcpy(seen, light.position, sizeof(seen));
+            }
+            if (!unit(seen)) {
+                break;
+            }
+            const auto degrees = [&](const float a[3]) {
+                return static_cast<double>(std::acos(std::clamp(dot(a, seen), -1.0f, 1.0f)) * 57.29578f);
+            };
+            double key_degrees = -1.0;
+            if (list.stage_light_known != 0u) {
+                if (const NebulaFrameWorldLight* key = core::find_world_light(list, list.stage_light); key != nullptr) {
+                    float toward[3];
+                    if (key_toward(*key, toward)) {
+                        key_degrees = degrees(toward);
+                    }
+                }
+            }
+            std::fprintf(stderr, "[rt-inputs] sun 1.7: the sky's sun %.1f degrees from the traced sun, %.1f from the key (stage %08x)\n",
+                         degrees(sun), key_degrees, list.stage_hash);
+            break;
+        }
     }
     for (unsigned r = 0; r < 3u; ++r) {
         eye_direction[r] = view[r * 4u] * sun[0] + view[r * 4u + 1u] * sun[1] + view[r * 4u + 2u] * sun[2];
