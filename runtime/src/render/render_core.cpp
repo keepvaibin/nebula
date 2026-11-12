@@ -2051,6 +2051,7 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
     }
     display_pictures_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
     texture_store_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
+    texture_store_.follow_settings(render);
     enforce_video_memory();
     // New textures upload through this frame's command list.
     renderer_.attach_texture_uploads(texture_store_);

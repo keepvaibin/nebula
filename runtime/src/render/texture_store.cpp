@@ -117,11 +117,39 @@ bool TextureStore::samples_generated(const TextureSampler& mode, const TextureHa
     return get_render_config().enhanced_mipmaps;
 }
 
+bool TextureStore::wants_generated_levels(const RenderConfig& render) noexcept {
+    return render.enhanced_mipmaps || render.ray_tracing_enabled;
+}
+
+void TextureStore::follow_settings(const RenderConfig& render) {
+    const bool wanted = wants_generated_levels(render);
+    if (wanted == generated_levels_) {
+        return;
+    }
+    generated_levels_ = wanted;
+    generated_levels_wanted_.store(wanted, std::memory_order_relaxed);
+    for (std::uint32_t id = 0; id < entries_.size(); ++id) {
+        if (Entry* const entry = entries_[id].get(); entry != nullptr && entry->texture) {
+            follow_generated_levels(id, *entry);
+        }
+    }
+}
+
+void TextureStore::follow_generated_levels(std::uint32_t id, Entry& entry) {
+    // A reduced texture is made from the record's lower levels as it is; its whole one follows the setting when it comes back.
+    if (entry.own.generated_mips && entry.dropped == 0u && entry.full_levels > 1u && entry.trimmed == generated_levels_) {
+        request_resize(id, entry, 0u);
+    }
+}
+
 bool TextureStore::initialize(gpu::Device* device, DeviceGate& gate) {
     gate_ = &gate;
     next_srv_index_ = 0u;
     free_srv_indices_.clear();
     queued_ = std::make_shared<Ops>();
+    // Images staged before the first frame follow the settings as they are now.
+    generated_levels_ = wants_generated_levels(get_render_config());
+    generated_levels_wanted_.store(generated_levels_, std::memory_order_relaxed);
     return backend_.initialize(device, kViewPageSize);
 }
 
@@ -294,7 +322,11 @@ bool TextureStore::stage_image(Op& op, const void* bytes, std::uint32_t size, st
         op.staged = stage(kept, level_width, level_height, record->levels - drop, record->layout);
         return true;
     }
-    op.staged = stage(texels, record->width, record->height, record->levels, record->layout);
+    // Levels the cook generated are staged only when something can read them (wants_generated_levels): a quarter of such an
+    // image's memory and upload, on a GPU without BC1 a quarter of its texels expanded to RGBA8.
+    op.trimmed = op.generated && record->levels > 1u && !generated_levels_wanted_.load(std::memory_order_relaxed);
+    op.full_levels = record->levels;
+    op.staged = stage(texels, record->width, record->height, op.trimmed ? 1u : record->levels, record->layout);
     if (record->source_format != NEBULA_TEXTURE_MADE && record->name_hash != 0u) {
         op.name.format = record->source_format;
         op.name.hash = record->name_hash;
@@ -565,9 +597,11 @@ void TextureStore::make_own(Entry& entry, const Op& op, bool once) {
     entry.bytes = allocation;
     // A whole texture is what the budget measures a reduced one against.
     entry.dropped = op.drop;
+    entry.trimmed = op.trimmed;
     if (op.drop == 0u) {
         entry.full_bytes = allocation;
-        entry.full_levels = op.staged.levels;
+        // The record's levels, generated ones too: the budget leaves top levels out of those.
+        entry.full_levels = std::max(op.full_levels, op.staged.levels);
     }
     backend_.record_upload(gpu::raw(entry.texture), false, *op.staged.chunk, op.staged.offset, op.staged.width, op.staged.height,
                            op.staged.levels, op.staged.offsets.data(), op.staged.pitches.data());
@@ -598,6 +632,7 @@ void TextureStore::create_entry(Op& op) {
         }
     }
     look_up(op.id, *entry);
+    follow_generated_levels(op.id, *entry);
     entries_[op.id] = std::move(entry);
 }
 
@@ -628,6 +663,7 @@ void TextureStore::update_entry(Op& op) {
             entry.current = own;
         }
         ++revision_;
+        follow_generated_levels(op.id, entry);
     }
     // New texels have a new name: what stood in for the old ones goes.
     entry.name = op.name;
@@ -640,12 +676,14 @@ void TextureStore::update_entry(Op& op) {
 // The budget's resize: the texture of a live id made again from the game's image with `op.drop` top levels left out (0: whole).
 // The old texture goes to the retired list, so frames in flight and this frame's draws read it until they finish: a texture is
 // never blank. The game's size stays in `own` (packs are matched by it, and the samplers take the smaller texture's own levels).
+// A whole one is also made again with or without its generated levels (follow_generated_levels).
 void TextureStore::resize_entry(Op& op) {
     Entry* const found = op.id < entries_.size() ? entries_[op.id].get() : nullptr;
-    if (found == nullptr || !found->texture || found->dropped == op.drop) {
+    if (found == nullptr || !found->texture || (found->dropped == op.drop && found->trimmed == op.trimmed)) {
         return;
     }
     Entry& entry = *found;
+    const bool budget = entry.dropped != op.drop;
     const std::uint32_t game_width = entry.own.width;
     const std::uint32_t game_height = entry.own.height;
     const std::uint32_t previous_view = entry.own.srv_index;
@@ -668,16 +706,19 @@ void TextureStore::resize_entry(Op& op) {
     entry.own.height = game_height;
     const std::uint64_t freed = held > entry.bytes ? held - entry.bytes : 0u;
     retire(std::move(previous), previous_view, freed);
-    if (freed != 0u) {
-        ++reductions_;
-        freed_bytes_total_ += freed;
-    } else {
-        ++restores_;
+    if (budget) {
+        if (freed != 0u) {
+            ++reductions_;
+            freed_bytes_total_ += freed;
+        } else {
+            ++restores_;
+        }
     }
     if (showing_own) {
         entry.current = entry.own;
     }
     ++revision_;  // the tables naming it read the new texture
+    follow_generated_levels(op.id, entry);
 }
 
 void TextureStore::free_entry(std::uint32_t id) {
