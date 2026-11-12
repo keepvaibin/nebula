@@ -822,7 +822,7 @@ void append_param_json(std::string& out, std::string_view name, std::string_view
         bool first = true;
         std::size_t at = 0;
         while (at < value.size()) {
-            const std::size_t end = std::min(value.find(',', at), value.size());
+            const std::size_t end = (std::min)(value.find(',', at), value.size());
             const std::string_view one = value.substr(at, end - at);
             if (whole(one)) {
                 out += first ? "" : ",";
