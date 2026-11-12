@@ -562,7 +562,8 @@ galaxy_test(galaxy_save_files_tests SOURCES ${rt}/save_files_tests.cpp LIBS gala
 galaxy_test(galaxy_save_format_tests SOURCES ${rt}/save_format_tests.cpp)
 galaxy_test(galaxy_launch_args_tests SOURCES ${rt}/launch_args_tests.cpp)
 target_include_directories(galaxy_save_format_tests PRIVATE native/petari/include)
-galaxy_test(galaxy_asset_store_tests SOURCES ${rt}/asset_store_tests.cpp LIBS galaxy_asset_store)
+galaxy_test(galaxy_asset_store_tests SOURCES ${rt}/asset_store_tests.cpp ${rt}/luma_game_store.cpp LIBS galaxy_asset_store)
+target_include_directories(galaxy_asset_store_tests PRIVATE crates/nebula-import/include)
 # D-07: an older install's store and saves under the current layout.
 galaxy_test(galaxy_install_migration_tests SOURCES ${rt}/install_migration_tests.cpp LIBS galaxy_save_files galaxy_asset_store)
 # The game's calendar (native/petari), compiled against a host the test provides.

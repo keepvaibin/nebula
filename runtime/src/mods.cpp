@@ -1286,6 +1286,8 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                     // assets/ is the mod's own store (Luma/<id>/...): it changes what the cook writes, never another
                     // mod's paths.
                     if (child_any_case(place, "assets", true)) mod.luma_changes_game = true;
+                    // Patches by key change the game's tables; what two mods' patches share the applier names at the cook.
+                    if (child_any_case(place, "patches", true)) mod.luma_changes_game = true;
                     if (std::optional<fs::path> files = child_any_case(place, "files", true)) {
                         mod.luma_changes_game = true;
                         list_files(*files, std::string(), changed_paths[mod.id]);
@@ -1691,6 +1693,7 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
             plan.notes.push_back(mod.id + ": " + mod.problem);
             continue;
         }
+        plan.used.push_back(mod.id);
         bool own_saves = false;
         if (const std::string tag = own_saves_tag(mod); !tag.empty()) {
             own_saves = true;
@@ -1896,6 +1899,28 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                         }
                     }
                 }
+                // Patches by key: the cooker applies them to the game's tables (contract table-keys).
+                if (const std::optional<fs::path> patches = child_any_case(mod.path / fs::path(from_utf8(layer.path)), "patches", true)) {
+                    std::error_code walk_error;
+                    std::error_code status_error;
+                    std::vector<fs::path> found;
+                    for (auto walk = fs::recursive_directory_iterator(*patches, walk_error);
+                         !walk_error && walk != fs::recursive_directory_iterator(); walk.increment(walk_error)) {
+                        if (walk->is_regular_file(status_error)) found.push_back(walk->path());
+                    }
+                    if (walk_error) note(layer.path + "/patches: the folder could not be read in full");
+                    std::sort(found.begin(), found.end());
+                    for (const fs::path& file : found) {
+                        const std::string relative = galaxy::path_text(file.lexically_relative(*patches).generic_string());
+                        const std::string entry = layer.path + "/" + utf8_name(*patches) + "/" + relative;
+                        if (relative.size() <= 5u || lower(relative.substr(relative.size() - 5u)) != ".json") {
+                            // The validator refuses it (L306's place); a mod that got here anyway is named, not misread.
+                            note(entry + ": a patch is <game path>.json; this file is not used");
+                            continue;
+                        }
+                        plan.patches.push_back({mod.id, entry, relative.substr(0, relative.size() - 5u), file});
+                    }
+                }
                 const std::optional<fs::path> files = child_any_case(mod.path / fs::path(from_utf8(layer.path)), "files", true);
                 if (!files) continue;
                 const Loader loader{*files, *files};
@@ -2013,6 +2038,24 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
         }
     }
     for (auto& [key, file] : chosen) plan.files.push_back(std::move(file));
+    // The plan is lines of tab-separated fields: a name holding a tab or a line end would be read as other fields or
+    // another line by the cooker, so such a file is left out and named.
+    const auto plain = [](const std::string& text) { return text.find_first_of("\t\r\n") == std::string::npos; };
+    const auto keep_files = [&](std::vector<ModPlan::File>& list, const char* what) {
+        std::erase_if(list, [&](const ModPlan::File& file) {
+            if (plain(file.disc) && plain(galaxy::path_text(file.host))) return false;
+            plan.notes.push_back(std::string(what) + " " + galaxy::path_text(file.host) + " is not used: its name holds a tab or a line end");
+            return true;
+        });
+    };
+    keep_files(plan.files, "the file");
+    keep_files(plan.merges, "the merge file");
+    keep_files(plan.materials, "the material file");
+    std::erase_if(plan.patches, [&](const ModPlan::Patch& patch) {
+        if (plain(patch.entry) && plain(patch.disc) && plain(galaxy::path_text(patch.host))) return false;
+        plan.notes.push_back(patch.mod_id + ": " + galaxy::path_text(patch.host) + " is not used: its name holds a tab or a line end");
+        return true;
+    });
     {
         Session& s = session();
         const std::lock_guard<std::mutex> lock(s.mutex);
@@ -2036,6 +2079,15 @@ std::string plan_text(const ModPlan& plan, const std::string& game_id) {
     }
     for (const ModPlan::File& file : plan.materials) {
         text += "=material\t" + file.disc + "\t" + galaxy::path_text(file.host) + "\n";
+    }
+    // Patches by key and the mod order they apply in (the cooker gives both to the applier).
+    if (!plan.patches.empty()) {
+        text += "%mods";
+        for (const std::string& id : plan.used) text += "\t" + id;
+        text += "\n";
+    }
+    for (const ModPlan::Patch& patch : plan.patches) {
+        text += "%patch\t" + patch.mod_id + "\t" + patch.entry + "\t" + patch.disc + "\t" + galaxy::path_text(patch.host) + "\n";
     }
     return text;
 }
@@ -2063,6 +2115,19 @@ std::string plan_signature(const ModPlan& plan, const std::string& game_id) {
         const auto time = fs::last_write_time(file.host, ec).time_since_epoch().count();
         text += "+" + file.disc + "\t" + galaxy::path_text(file.host) + "\t" + std::to_string(size) + "\t" +
                 std::to_string(static_cast<long long>(time)) + "\n";
+    }
+    // A patch's mod order matters too: the same files in another order cook another store.
+    if (!plan.patches.empty()) {
+        text += "%mods";
+        for (const std::string& id : plan.used) text += "\t" + id;
+        text += "\n";
+    }
+    for (const ModPlan::Patch& patch : plan.patches) {
+        std::error_code ec;
+        const auto size = fs::file_size(patch.host, ec);
+        const auto time = fs::last_write_time(patch.host, ec).time_since_epoch().count();
+        text += "%patch\t" + patch.mod_id + "\t" + patch.entry + "\t" + patch.disc + "\t" + galaxy::path_text(patch.host) + "\t" +
+                std::to_string(size) + "\t" + std::to_string(static_cast<long long>(time)) + "\n";
     }
     return text;
 }

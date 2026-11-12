@@ -194,6 +194,17 @@ struct ModPlan {
     std::vector<File> merges;
     // Materials that have a shader written for them. `disc` is the material name.
     std::vector<File> materials;
+    // A .luma's patches by key (luma-format 5.1, `layers/<layer>/patches/<game path>.json`): bottom of the list first,
+    // then layer order, then file order, as the applier takes them (contract table-keys 12: the last given wins).
+    struct Patch {
+        std::string mod_id;
+        std::string entry;  // the file in the mod, "layers/<layer>/patches/<game path>.json", to name it
+        std::string disc;   // the game path as written ("StageData/AstroGalaxy/jmp/Placement/Common/ObjInfo")
+        std::filesystem::path host;
+    };
+    std::vector<Patch> patches;
+    // Every mod whose content is used, by id, bottom of the list first (the applier's mod order).
+    std::vector<std::string> used;
     // The .luma mods in use, bottom of the list first, for their shaders.
     std::vector<std::filesystem::path> luma_folders;
     std::vector<PluginFile> plugins;  // code of the .luma mods, top of the list first (the order they bind in)
