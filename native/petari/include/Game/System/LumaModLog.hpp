@@ -29,6 +29,7 @@ namespace luma {
             const char* textUtf8;    // the same, for the facts
             const char* english;     // for the game's log and the facts
             const char* codeName;    // the code as the page names it: "L203", "Hook.NoResult", "S0901"; "" for none
+            const char* row;         // the NebulaText row its words came from ("Consent.OffDeclined"); "" for none
             Entry* next;             // in added order; atomic
             Entry* nextOfMod;        // the same mod's next entry, for the repeat lookup; under the store's lock
             u32 factCount;           // the highest count a fact was written at (one fact a count); atomic
@@ -92,6 +93,8 @@ namespace luma {
         // The module's row `pRow` in the played language as UTF-8 into pDst (`size` bytes, cut at a character), {mod} and
         // {count} filled; the bytes written, 0 when the row is unknown (luma_modlog_words).
         u32 words(const char* pRow, const char* pMod, u32 count, char* pDst, u32 size);
+        // Any row with {mod} and the entry's {names} filled (luma_modlog_row_words); 0 when the row is unknown.
+        u32 rowWords(const char* pRow, const LumaModLogEntry& rValues, char* pDst, u32 size);
         // UTF-16 to UTF-8 within `size`.
         void toUtf8(char* pDst, u32 size, const char16_t* pText);
     }  // namespace modlog

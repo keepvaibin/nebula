@@ -3,10 +3,12 @@
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/System/LumaCore.hpp"
 #include "Game/System/LumaHook.hpp"
+#include "Game/System/LumaModLog.hpp"
 #include "Game/System/LumaServices.hpp"
 #include "Game/System/LumaTypes.hpp"
 #include "Game/System/NebulaText.hpp"
 #include <luma_host.h>
+#include <luma_modlog.h>
 #include <nebula_format.h>
 #include <nebula_game_api.h>
 #include <nebula_module.h>
@@ -51,6 +53,7 @@ namespace luma {
         u32 argCount;
         bool cut;
         u64 count;
+        const luma::modlog::Entry* entry;  // its entry in the mod log (contract mod-log 2), counted with it; null: not kept
     };
 
     // The addresses alloc gave one mod: open addressing, kept at most half full. 0 is an empty slot, 1 a taken-out one.
@@ -503,6 +506,30 @@ namespace luma {
             }
         }
 
+        // The report as an entry of the mod log (contract mod-log 2, the kernel's step 1): source CODE, an error, its
+        // row's words; the log keeps its own limits. Returns the entry kept for this key, or null. Any thread.
+        const luma::modlog::Entry* toModLog(const LumaMod* pMod, const char* pFile, u32 line, u32 code, const char* const* ppArgs,
+                                            u32 argCount) {
+            static const char* const cPositional[LUMA_MODLOG_ARGS] = {"0", "1", "2", "3", "4", "5", "6", "7"};
+            char id[32];
+            const char* const* pNames = nullptr;
+            const bool known = rowOf(code, id, sizeof(id), &pNames);
+            LumaModLogEntry entry = {};
+            entry.size = sizeof(entry);
+            entry.source = LUMA_MODLOG_CODE;
+            entry.level = LUMA_MODLOG_ERROR;
+            entry.code = code;
+            entry.mod = pMod->name;
+            entry.file = pFile;
+            entry.line = line;
+            entry.count = argCount < LUMA_MODLOG_ARGS ? argCount : LUMA_MODLOG_ARGS;
+            for (u32 i = 0; i < entry.count; i++) {
+                entry.names[i] = pNames != nullptr ? (i < 4 ? pNames[i] : nullptr) : cPositional[i];
+                entry.values[i] = ppArgs != nullptr && ppArgs[i] != nullptr ? ppArgs[i] : "";
+            }
+            return luma::modlog::add(entry, known ? id : nullptr);
+        }
+
         bool powerOfTen(u64 n) {
             while (n >= 10u && n % 10u == 0) {
                 n /= 10u;
@@ -520,7 +547,9 @@ namespace luma {
                     Report& rReport = pMod->reports[i];
                     if (rReport.code == code && rReport.line == line && sameText(rReport.file, pPlace)) {
                         const u64 seen = ++rReport.count;
+                        const luma::modlog::Entry* const pEntry = rReport.entry;
                         unlockMod(pMod);
+                        luma::modlog::counted(pEntry, seen < 0xFFFFFFFFull ? static_cast<u32>(seen) : 0xFFFFFFFFu);
                         if (powerOfTen(seen)) {
                             logReport(pMod, rReport, seen);
                         }
@@ -530,6 +559,7 @@ namespace luma {
                 if (pMod->reportCount == kReportsKept) {
                     const u64 past = ++pMod->reportsPast;
                     unlockMod(pMod);
+                    (void)toModLog(pMod, pPlace, line, code, ppArgs, argCount);  // the log counts what it keeps itself
                     if (powerOfTen(past)) {
                         nebula_log("[mod %s] %llu reports more than the Mods page keeps (%u); counted, not kept\n", pMod->name,
                                    static_cast<unsigned long long>(past), kReportsKept);
@@ -551,12 +581,14 @@ namespace luma {
                     made.args[i] = keepText(ppArgs != nullptr ? ppArgs[i] : nullptr);
                 }
                 made.count = 1;
+                made.entry = toModLog(pMod, pPlace, line, code, ppArgs, argCount);
                 lockMod(pMod);
                 bool kept = false;
                 for (u32 i = 0; i < pMod->reportCount && !kept; i++) {
                     Report& rReport = pMod->reports[i];
                     if (rReport.code == code && rReport.line == line && sameText(rReport.file, pPlace)) {
                         rReport.count++;
+                        luma::modlog::counted(rReport.entry, rReport.count < 0xFFFFFFFFull ? static_cast<u32>(rReport.count) : 0xFFFFFFFFu);
                         kept = true;
                     }
                 }

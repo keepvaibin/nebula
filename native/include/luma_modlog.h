@@ -100,10 +100,15 @@ typedef struct LumaModLogView {
    luma_modlog_next_mod: the mod after `after` (null: the first) that has entries, in the order its first came: its id
    and how many of its entries were not kept (ModLog.TooMany's count); null past the last.
    luma_modlog_words: the module's text row `row` (ModLog.*) in the played language as UTF-8 into `out` (`size` bytes,
-   cut at a character), {mod} and {count} filled; the bytes written, 0 when there is no such row. */
+   cut at a character), {mod} and {count} filled; the bytes written, 0 when there is no such row.
+   luma_modlog_row_words ("luma_modlog_row_words"): any text row in the played language, {mod} from values->mod and
+   its other {names} from values' names and values (a value "R:<row>" is that row's words, as `row` above); only mod,
+   names, values and count of `values` are read. The host's screens' rows with values (consent's Permission.*.Text
+   with {hosts}). */
 typedef const void* (*LumaModLogNext)(const void* after, LumaModLogView* view);
 typedef const void* (*LumaModLogNextMod)(const void* after, const char** id, uint32_t* past);
 typedef uint32_t (*LumaModLogWords)(const char* row, const char* mod, uint32_t count, char* out, uint32_t size);
+typedef uint32_t (*LumaModLogRowWords)(const LumaModLogEntry* values, const char* row, char* out, uint32_t size);
 
 #ifdef __cplusplus
 }
