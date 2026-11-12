@@ -205,7 +205,7 @@ def read_test(folder, types=None):
     t = load_json(folder / "test.json")
     keys_known(t, "", {"harness", "name", "about", "proves", "mods", "code", "language", "seed", "continue_from",
                        "renderers", "region", "limit_seconds", "bare", "save", "stage", "player", "steps", "expect",
-                       "faults", "hide_game_files"})
+                       "faults", "hide_game_files", "safe_start"})
     for key in ("harness", "name", "about", "proves", "steps", "expect"):
         if key not in t:
             raise HarnessError("the test has no %s" % key)
@@ -286,6 +286,11 @@ def read_test(folder, types=None):
         for i, f in enumerate(t["faults"]):
             keys_known(f, "faults[%d]" % i, {"mod"})
             faults.append(text(f, "mod", "faults[%d]" % i))
+    # A safe start (task 6.6): "asked" starts with --safe-start 1; "crash" leaves mods/.safe_start empty, as a crash
+    # with mods on does, before the start.
+    safe_start = t.get("safe_start")
+    if safe_start not in (None, "asked", "crash"):
+        raise HarnessError("safe_start must be \"asked\" or \"crash\"")
     hidden = []
     if "hide_game_files" in t:
         if not isinstance(t["hide_game_files"], list):
@@ -297,7 +302,7 @@ def read_test(folder, types=None):
     return {"folder": folder, "raw": t, "name": t["name"], "proves": t["proves"], "bare": bare, "mods": mods,
             "language": language, "seed": seed, "renderers": renderers, "region": t.get("region"), "limit": limit,
             "continue_from": continue_from, "faults": faults, "setup": setup, "steps": steps, "expect": expect,
-            "has_stage": "stage" in t, "hidden": hidden}
+            "has_stage": "stage" in t, "hidden": hidden, "safe_start": safe_start}
 
 
 def read_setup(t, bare, seed, language, classes):
@@ -1013,6 +1018,11 @@ def run_one(test, renderer, args, run_folder, previous):
         mod_ids.append((mod_id, m))
         for lib in sorted((settings / "mods" / mod_id).rglob("*.dll")):
             frozen["mods/%s/%s" % (mod_id, lib.relative_to(settings / "mods" / mod_id).as_posix())] = sha256(lib)
+    if test["safe_start"] == "asked":
+        imports += ["--safe-start", "1"]
+    elif test["safe_start"] == "crash":
+        (settings / "mods").mkdir(parents=True, exist_ok=True)
+        (settings / "mods" / ".safe_start").write_bytes(b"")
     assignments = ["GALAXY_WINDOW_WIDTH=1280", "GALAXY_WINDOW_HEIGHT=720"]
     if test["language"] is not None:
         assignments.append("GALAXY_LANGUAGE=%s" % LANGUAGES[test["language"]])
