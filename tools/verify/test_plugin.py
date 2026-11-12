@@ -47,7 +47,7 @@ def main():
         "version": "1.0.0",
         "game": {"id": "RMG"},
         "authors": ["Nebula tests"],
-        "description": "The test runs' tours and events (tools/test_driver/extension/test_plugin.cpp).",
+        "summary": "The test runs' tours and events (tools/test_driver/extension/test_plugin.cpp).",
         "code": {"platforms": ["windows-x64"]},
     }, indent=2), encoding="utf-8")
     token = "%016x" % fnv(OFFSET, code_hash(mod / rel).encode())

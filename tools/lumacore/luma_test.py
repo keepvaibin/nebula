@@ -808,6 +808,13 @@ def install(settings, mod_folder, code_allowed, order, kept=False, permissions="
     mod_id = manifest.get("id")
     if not isinstance(mod_id, str) or not mod_id:
         raise HarnessError("%s/luma.json has no id" % mod_folder)
+    # The previous runtime's form would install with no code and fail far from here: named at once instead.
+    if "plugins" in manifest:
+        raise HarnessError("%s/luma.json has \"plugins\": a mod's code is code/<platform>/mod.<ending> with "
+                           "\"code\": {\"platforms\": [...]} (board/contracts/manifest-one-form.md)" % mod_folder)
+    if not isinstance(manifest.get("format"), str):
+        raise HarnessError("%s/luma.json: format must be \"1.0\", a string (board/contracts/manifest-one-form.md)"
+                           % mod_folder)
     libraries = []
     # luma-format 6: code/<platform>/mod.<ending> by `code.platforms` alone. A mod whose code is for other platforms
     # only has no library here: the game says it has no version for this device.
@@ -855,7 +862,8 @@ def install_game_half(settings, bin_folder):
     (folder / "code" / "windows-x64").mkdir(parents=True)
     shutil.copyfile(library, folder / "code" / "windows-x64" / "mod.dll")
     (folder / "luma.json").write_text(json.dumps({
-        "format": "1.0", "id": GAME_HALF_ID, "name": GAME_HALF_ID, "version": RUNNER_VERSION, "game": {"id": "RMG"},
+        "format": "1.0", "id": GAME_HALF_ID, "name": GAME_HALF_ID, "summary": "The test runner's game half.",
+        "authors": ["keepvaibin"], "version": RUNNER_VERSION + ".0", "game": {"id": "RMG"},
         "code": {"platforms": ["windows-x64"]}}, indent=2), encoding="utf-8")
     install(settings, folder, True, 0)
     shutil.rmtree(folder)
