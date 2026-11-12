@@ -13,6 +13,12 @@
 #include "Game/System/NebulaHost.hpp"
 #include "Game/Util/Tunable.hpp"
 #include "Game/Util/SceneUtil.hpp"
+#include "Game/AreaObj/AreaForm.hpp"
+#include "Game/AreaObj/LightArea.hpp"
+#include "Game/AreaObj/LightAreaHolder.hpp"
+#include "Game/Map/LightFunction.hpp"
+#include "Game/Map/LightZoneDataHolder.hpp"
+#include <nebula_module.h>
 
 NEBULA_TUNABLE_NAMED(f32, cNum_channel_f1, "channel.f1", 255.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_pointLight_f1, "pointLight.f1", 0.5f);
@@ -79,12 +85,113 @@ namespace {
         light.position[2] = z;
         return light;
     }
+
+    // The stage's light for the tracer, held for the stage (c54; the director 11-11: no light follows the player).
+    // sHeldPlanet is what the list carries: the held planet light, or where a scripted change's ease has got to.
+    NEBULA_TUNABLE(s32, cScriptedSteps, 30);  // the game's own step for a change of light (getDefaultStepInterpolate)
+    ActorLightInfo sHeldPlanet;
+    ActorLightInfo sEaseFrom;
+    const AreaLightInfo* sHeldArea;  // the area light held, or eased to
+    bool sStageHeld;                 // sHeldPlanet was taken for this scene
+    s32 sEaseStep;                   // the ease's step, -1 none
+    s32 sLastZone;                   // the player's area id the frame before (-1 -1 no area)
+    s32 sLastLight;
+    Vec3f sLastPos;
+    // His last places, newest at sPathAt - 1: an area id changes up to cLeaveSteps (8) frames after he crossed a box.
+    const s32 cPathLength = 16;
+    NEBULA_TUNABLE(s32, cPathLooked, 12);  // the places looked at for a crossing
+    Vec3f sPath[cPathLength];
+    s32 sPathAt;
+    s32 sPathCount;
+
+    // Whether a box of the area (zone, light) holds the place: its form alone, switched on or not.
+    bool areaHolds(const LightDirector& rDirector, s32 zone, s32 light, const Vec3f& rPos) {
+        LightAreaHolder* holder = rDirector.mAreaHolder;
+        if (holder == nullptr || light < 0) {
+            return false;
+        }
+        for (s32 i = 0; i < holder->getNumAreaObj(); i++) {
+            const LightArea* area = static_cast< const LightArea* >(holder->getAreaObj(i));
+            if (area != nullptr && area->mPlacedZoneID == zone && area->mObjArg0 == light && area->mForm != nullptr &&
+                area->mForm->isInVolume(rPos)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void logStageLight(const char* pWhat, const AreaLightInfo* pArea) {
+        if (NebulaHost::option(NEBULA_OPTION_RAY_TRACING) != 0) {
+            nebula_log("[rt-inputs] stage light: %s %s (%s)\n", pWhat,
+                       pArea != nullptr && pArea->mAreaLightName != nullptr ? pArea->mAreaLightName : "-", MR::getCurrentStageName());
+        }
+    }
+
+    void holdStageLight(const LightDirector& rDirector, const AreaLightInfo& rArea) {
+        const ActorLightCtrl* ctrl = rDirector.mPlayerLightCtrl;
+        const bool placed = ctrl != nullptr && ctrl->mActor != nullptr;
+        const s32 zone = placed ? ctrl->mLightID.mZoneId : -1;
+        const s32 light = placed ? ctrl->mLightID.mLightID : -1;
+        const Vec3f pos = placed ? ctrl->mActor->mPosition : sLastPos;
+        if (!sStageHeld) {
+            // The stage's default light: outside every area box of the start zone.
+            sHeldArea = rDirector.mDefaultAreaLight != nullptr ? rDirector.mDefaultAreaLight : &rArea;
+            sHeldPlanet = sHeldArea->mPlanetLight;
+            sEaseStep = -1;
+            sStageHeld = true;
+            logStageLight("held, the stage's default", sHeldArea);
+        } else if (placed && (zone != sLastZone || light != sLastLight)) {
+            // Walked: over his last places he crossed the old area's box or the new one's (the change comes up to 8
+            // frames after the crossing, and areas nest); scripted: he stayed on the same side of both, so an area was
+            // switched on or off under him or a zone loaded around him.
+            const bool inOld = areaHolds(rDirector, sLastZone, sLastLight, pos);
+            const bool inNew = areaHolds(rDirector, zone, light, pos);
+            bool scripted = true;
+            for (s32 k = 1; k <= sPathCount && k <= cPathLooked && scripted; k++) {
+                const Vec3f& rThen = sPath[(sPathAt - k + cPathLength) % cPathLength];
+                scripted = areaHolds(rDirector, sLastZone, sLastLight, rThen) == inOld && areaHolds(rDirector, zone, light, rThen) == inNew;
+            }
+            if (scripted && &rArea != sHeldArea) {
+                sEaseFrom = sHeldPlanet;
+                sHeldArea = &rArea;
+                sEaseStep = 0;
+                logStageLight("scripted, easing to", sHeldArea);
+            } else if (!scripted) {
+                logStageLight("walked into another area, held", sHeldArea);
+            }
+        }
+        if (sEaseStep >= 0) {
+            const ActorLightInfo& rTo = sHeldArea->mPlanetLight;
+            sEaseStep++;
+            if (sEaseStep >= cScriptedSteps) {
+                sHeldPlanet = rTo;
+                sEaseStep = -1;
+            } else {
+                sHeldPlanet.mInfo0.mIsFollowCamera = rTo.mInfo0.mIsFollowCamera;
+                sHeldPlanet.mInfo1.mIsFollowCamera = rTo.mInfo1.mIsFollowCamera;
+                LightFunction::blendActorLightInfo(&sHeldPlanet, sEaseFrom, rTo, static_cast< f32 >(sEaseStep) / cScriptedSteps);
+            }
+        }
+        if (placed) {
+            sLastZone = zone;
+            sLastLight = light;
+            sLastPos = pos;
+            sPath[sPathAt] = pos;
+            sPathAt = (sPathAt + 1) % cPathLength;
+            sPathCount = sPathCount < cPathLength ? sPathCount + 1 : cPathLength;
+        }
+    }
 };  // namespace
 
 namespace GameLightSignal {
     void sceneStart() {
         sRequesterCount = 0;
         sStarCore = nullptr;
+        sStageHeld = false;  // the new stage's light is taken again (c54)
+        sLastZone = -1;
+        sLastLight = -1;
+        sPathAt = 0;
+        sPathCount = 0;
         // The scene before this one owned the lights loaded last: no set of the new scene is theirs.
         noLight();
     }
@@ -101,7 +208,9 @@ namespace GameLightSignal {
                                             ? director->mPlayerLightCtrl->mAreaLightInf
                                             : director->mDefaultAreaLight;
             if (area != nullptr) {
-                const ActorLightInfo& rPlanet = area->mPlanetLight;
+                // Held for the stage, not the area he stands in (c54).
+                holdStageLight(*director, *area);
+                const ActorLightInfo& rPlanet = sHeldPlanet;
                 const u64 id = NebulaHost::objectId(&rPlanet);
                 Frame::worldLight(lightOf(id, NEBULA_WORLD_LIGHT_KEY, rPlanet.mInfo0));
                 Frame::worldLight(lightOf(id + 1, NEBULA_WORLD_LIGHT_FILL, rPlanet.mInfo1));
