@@ -143,6 +143,7 @@ namespace Ui {
         f32 yCursorAdj = 0.0f;
         f32 textWidth = 0;
         bool bCharSpace = false;
+        CharCode prevCode = 0;  // the character before on this line, for the font's kerning (0: none)
         StreamType prevStreamPos = str;
         StreamType prevNewLinePos = str;
 
@@ -170,6 +171,7 @@ namespace Ui {
                 context.str = reinterpret_cast< StreamType >(reader.GetCurrentPos());
                 context.flags = 0;
                 context.flags |= bCharSpace ? 0 : CONTEXT_NO_CHAR_SPACE;
+                prevCode = 0;
 
                 if (bUseLimit && (code != '\n') && (prevStreamPos != prevNewLinePos)) {
                     PrintContext< CharType > context2 = context;
@@ -237,10 +239,13 @@ namespace Ui {
                     continue;
                 }
 
+                // The font's kerning before this character (CalcLineRectImpl measures it the same).
+                const f32 kern = IsWidthFixed() || prevCode == 0 ? 0.0f : GetFont()->GetKerning(prevCode, code) * GetScaleH();
+
                 if (bUseLimit && (prevStreamPos != prevNewLinePos)) {
                     f32 baseX = GetCursorX();
                     f32 charSpace = bCharSpace ? GetCharSpace() : 0.0f;
-                    f32 charWidth = IsWidthFixed() ? GetFixedWidth() : GetFont()->GetCharWidth(code) * GetScaleH();
+                    f32 charWidth = IsWidthFixed() ? GetFixedWidth() : GetFont()->GetCharWidth(code) * GetScaleH() + kern;
 
                     if (baseX - xOrigin + charSpace + charWidth > mWidthLimit) {
                         code = '\n';
@@ -253,6 +258,7 @@ namespace Ui {
                     MoveCursorX(GetCharSpace());
                 }
                 bCharSpace = true;
+                MoveCursorX(kern);
 
                 {
                     const Font* pFont = GetFont();
@@ -261,6 +267,7 @@ namespace Ui {
                 }
 
                 CharWriter::Print(code);
+                prevCode = code;
 
 
                 SetCursorY(baseY);

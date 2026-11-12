@@ -130,6 +130,7 @@
     "ui.pane": "ui finds a pane of an open screen by its exact name; the same pane is the same handle (2.4, 3.8)",
     "ui.text": "ui sets a text pane's text from UTF-8, kept as given in every script (2.4, 3.8)",
     "ui.no_glyph": "A text holding a character its pane's font cannot draw is set, LUMA_OK, and Ui.NoGlyph names the character and its code (3.8)",
+    "ui.mod_font": "A text pane of a mod's layout draws in the mod's own font (Luma/<id>/<path>.brfnt): its kerning between pairs, its fallback game font for a character it lacks at its height on its baseline; a font the store lacks is said (Content.MissingFont) and the message font stands in (3.8 layer 2)",
     "ui.text_cut": "A text longer than its pane holds is cut there, LUMA_OK, Ui.TextCut said (2.4, 3.8)",
     "ui.visible": "ui shows and hides a pane and a whole screen (2.4, 3.8)",
     "ui.refusals": "ui's refusals answer their status and write no handle; close ends a screen and its panes (2.4, 3.8)",

@@ -57,6 +57,7 @@ namespace Ui {
         f32 x = 0;
         bool bCharSpace = false;
         bool bOverLimit = false;
+        CharCode prevCode = 0;  // the character before on this line, for the font's kerning (0: none)
         StreamType prevStreamPos = NULL;
         Rect prevRect;
         CharStrmReader reader = GetFont()->GetCharStrmReader();
@@ -74,6 +75,7 @@ namespace Ui {
             if (code < ' ') {
                 typename TagProcessor::Operation operation;
                 Rect rect(x, 0, 0, 0);
+                prevCode = 0;
 
                 context.str = reinterpret_cast< StreamType >(reader.GetCurrentPos());
                 context.flags = 0;
@@ -132,7 +134,8 @@ namespace Ui {
                 if (IsWidthFixed()) {
                     dx += GetFixedWidth();
                 } else {
-                    dx += GetFont()->GetCharWidth(code) * GetScaleH();
+                    const int kern = prevCode != 0 ? GetFont()->GetKerning(prevCode, code) : 0;
+                    dx += (GetFont()->GetCharWidth(code) + kern) * GetScaleH();
                 }
 
                 if (bUseLimit && (prevStreamPos != NULL)) {
@@ -148,6 +151,7 @@ namespace Ui {
                 pRect->left = Min(pRect->left, x);
                 pRect->right = Max(pRect->right, x);
                 bCharSpace = true;
+                prevCode = code;
             }
 
             if (bUseLimit) {
@@ -165,9 +169,12 @@ namespace Ui {
     template < typename CharType >
     f32 TextWriterBase< CharType >::CalcWordWidth(CharStrmReader reader, StreamType end) const {
         f32 width = 0.0f;
+        CharCode prevCode = 0;
         for (CharCode code = reader.Next(); reinterpret_cast< StreamType >(reader.GetCurrentPos()) <= end && code > ' ';
              code = reader.Next()) {
-            width += GetCharSpace() + (IsWidthFixed() ? GetFixedWidth() : GetFont()->GetCharWidth(code) * GetScaleH());
+            const int kern = prevCode != 0 ? GetFont()->GetKerning(prevCode, code) : 0;
+            width += GetCharSpace() + (IsWidthFixed() ? GetFixedWidth() : (GetFont()->GetCharWidth(code) + kern) * GetScaleH());
+            prevCode = code;
         }
         return width;
     }

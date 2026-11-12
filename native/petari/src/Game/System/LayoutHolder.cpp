@@ -1,6 +1,7 @@
 #include "Game/System/LayoutHolder.hpp"
 #include "Game/Util/SystemUtil.hpp"
 #include "Game/System/AssetFolder.hpp"
+#include "Game/System/LumaFont.hpp"
 #include <nebula_game_api.h>
 
 #include "Game/Util/StringUtil.hpp"
@@ -40,6 +41,11 @@ void* LayoutHolder::GetResource(u32 resourceKind, const char* pName, u32* pResou
 }
 
 Ui::Font* LayoutHolder::GetFont(const char* pName) {
+    // A mod's own font (Luma/<id>/<path>.brfnt, plan 3.8 layer 2).
+    if (Ui::Font* pModFont = luma::font::find(pName)) {
+        return pModFont;
+    }
+
     if (!MR::strcasecmp(pName, "MessageFont26.brfnt")) {
         return MR::getFontOnCurrentLanguage();
     }
