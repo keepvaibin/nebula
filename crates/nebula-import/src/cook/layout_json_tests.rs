@@ -21,6 +21,18 @@ const HUD: &str = r#"{
 }"#;
 
 #[test]
+fn a_text_names_a_mods_font_by_its_path_in_the_store() {
+    let source = |font: &str| {
+        format!(r#"{{"panes":[{{"name":"A","type":"text","size":[10,10],"font":"{font}"}},{{"name":"B","type":"text","size":[10,10]}}]}}"#)
+    };
+    for written in ["Luma/my.mod/fonts/Title", "Luma/my.mod/fonts/Title.font.json", "luma/my.mod/fonts/Title.brfnt"] {
+        let (brlyt, _) = to_brlyt(source(written).as_bytes(), &none).unwrap();
+        let ir = read_layout(&brlyt).unwrap();
+        assert_eq!(ir.fonts, ["Luma/my.mod/fonts/Title.brfnt", "MessageFont26.brfnt"], "{written}");
+    }
+}
+
+#[test]
 fn a_layout_reads_as_the_games_layouts_read() {
     let (brlyt, facts) = to_brlyt(HUD.as_bytes(), &none).unwrap();
     assert_eq!(facts, LayoutFacts { panes: 5, pictures: 2, texts: 1, textures: 1, groups: 1 });
@@ -110,6 +122,9 @@ fn a_layout_says_what_it_cannot_make() {
         (r#"{"panes":[{"name":"A","type":"picture","size":[1,1],"corners":["ffffffff"]}]}"#.into(), "Cook.Effect.Length", "/panes/0/corners"),
         (r#"{"panes":[{"name":"A","type":"picture","size":[1,1],"colour":"red"}]}"#.into(), "Cook.Effect.Color", "/panes/0/colour"),
         (pane(r#","font":"Arial""#), "Cook.Effect.Choice", "/panes/0/font"),
+        (pane(r#","font":"Luma/my.mod""#), "Cook.Effect.Choice", "/panes/0/font"),
+        (pane(r#","font":"Luma/my.mod/../x""#), "Cook.Effect.Choice", "/panes/0/font"),
+        (pane(r#","font":"Luma/<id>/<path>""#), "Cook.Effect.Choice", "/panes/0/font"),
         (pane(r#","text":"abc","length":2"#), "Cook.Layout.TextLong", "/panes/0/text"),
         (pane(&format!(r#","text":"{}""#, "x".repeat(256))), "Cook.Layout.TextLong", "/panes/0/text"),
         (pane(r#","length":0"#), "Cook.Effect.Range", "/panes/0/length"),

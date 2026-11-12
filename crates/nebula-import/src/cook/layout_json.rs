@@ -71,11 +71,43 @@ struct Reader<'a> {
     /// Every pane's name, in tree order (the root first).
     names: Vec<String>,
     textures: Vec<String>,
-    fonts: Vec<usize>,
+    /// The fonts' names as the layout file lists them (`MessageFont26.brfnt`, `Luma/<id>/<path>.brfnt`).
+    fonts: Vec<String>,
     materials: Vec<(String, Option<u16>)>,
     facts: LayoutFacts,
     missing_texture: &'a dyn Fn(&str) -> Option<String>,
 }
+
+/// A text's font as the layout file names it: one of the game's (`FONTS`), or a mod's own, `Luma/<id>/<path>` (its
+/// `assets/<path>.font.json`; a `.font.json` or `.brfnt` ending may be written), whose cooked font the game finds in
+/// the store by that name (layout contract 2a).
+fn font_name(v: &Value, at: &str) -> Result<String> {
+    if let Some(text) = v.as_str().filter(|t| t.len() > 5 && t[..5].eq_ignore_ascii_case("luma/")) {
+        let lower = text.to_ascii_lowercase();
+        let stem = [".font.json", ".brfnt"].iter().find(|e| lower.ends_with(*e)).map_or(text, |e| &text[..text.len() - e.len()]);
+        let parts: Vec<&str> = stem.split('/').collect();
+        // A path a store holds: folders and a name, none empty, `.` or `..`, of no character a path cannot hold.
+        let fits = parts.len() >= 3
+            && parts.iter().all(|p| !p.is_empty() && *p != "." && *p != "..")
+            && !stem.chars().any(|c| c.is_control() || matches!(c, '\\' | ':' | '<' | '>' | '"' | '|' | '?' | '*'));
+        if fits && stem.len() + ".brfnt".len() <= MOST_FONT_NAME {
+            return Ok(format!("Luma/{}.brfnt", &stem[5..]));
+        }
+    }
+    let mut named: Vec<&str> = FONTS.to_vec();
+    named.push(MOD_FONT);
+    let n = choice(&named, v, at, FONTS.len() as i64 - 1)? as usize;
+    // The pattern itself names no font.
+    if n >= FONTS.len() {
+        return Err(refuse("Cook.Effect.Choice", &[("where", at.to_string()), ("value", MOD_FONT.to_string()), ("expected", named.join(", "))]));
+    }
+    Ok(format!("{}.brfnt", FONTS[n]))
+}
+
+/// How a mod's font is named, in the words of a refusal.
+const MOD_FONT: &str = "Luma/<id>/<path>";
+/// The longest font name the game's font loader takes (LumaFont's kMostName, 200 with its end).
+const MOST_FONT_NAME: usize = 199;
 
 fn name_ok(name: &str) -> bool {
     !name.is_empty() && name.len() <= NAME_MAX && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
@@ -236,8 +268,8 @@ impl Reader<'_> {
             return Err(refuse("Cook.Layout.TextLong", &[("where", at_key(at, "text")), ("count", units.len().to_string()), ("max", length.to_string())]));
         }
         let font = match map.get("font") {
-            Some(v) => choice(&FONTS, v, &at_key(at, "font"), FONTS.len() as i64 - 1)? as usize,
-            None => 0,
+            Some(v) => font_name(v, &at_key(at, "font"))?,
+            None => format!("{}.brfnt", FONTS[0]),
         };
         let font = match self.fonts.iter().position(|f| *f == font) {
             Some(i) => i,
@@ -495,8 +527,7 @@ pub fn to_brlyt(bytes: &[u8], missing_texture: &dyn Fn(&str) -> Option<String>) 
         blocks.names(b"txl1", &reader.textures);
     }
     if !reader.fonts.is_empty() {
-        let fonts: Vec<String> = reader.fonts.iter().map(|f| format!("{}.brfnt", FONTS[*f])).collect();
-        blocks.names(b"fnl1", &fonts);
+        blocks.names(b"fnl1", &reader.fonts);
     }
     if !reader.materials.is_empty() {
         let made: Vec<Vec<u8>> = reader.materials.iter().map(|(name, texture)| material(name, *texture)).collect();
