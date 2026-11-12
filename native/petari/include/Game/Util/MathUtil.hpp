@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/LumaMarks.hpp"
 #include <nebula_geometry.hpp>
 
 
@@ -153,8 +154,8 @@ namespace MR {
     void calcParabolicFunctionParam(f32* pAccel, f32* pVel, f32 max, f32 end);
 
     void makeQuatRotateRadian(Quat4f* pQuat, const Vec3f& rRot);
-    void makeQuatRotateDegree(Quat4f* pQuat, const Vec3f& rRot);
-    void makeQuatFromVec(Quat4f* pQuat, const Vec3f& rFront, const Vec3f& rUp);
+    void makeQuatRotateDegree(LUMA_OUT Quat4f* pQuat, const Vec3f& rRot);
+    void makeQuatFromVec(LUMA_OUT Quat4f* pQuat, const Vec3f& rFront, const Vec3f& rUp);
     void makeQuatSideUp(Quat4f* pDst, const Vec3f& rSide, const Vec3f& rUp);
     void makeQuatUpFront(Quat4f* pQuat, const Vec3f& rUp, const Vec3f& rFront);
     void makeQuatUpNoSupport(Quat4f* pQuat, const Vec3f& rUp);

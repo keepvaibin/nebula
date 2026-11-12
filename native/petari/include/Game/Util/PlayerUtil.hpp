@@ -55,7 +55,7 @@ namespace MR {
     bool checkPlayerActionTrigger();
     bool checkPlayerSwingTrigger();
     f32 calcDistanceToPlayer(const Vec3f&);
-    void getPlayerUpVec(Vec3f*);
+    void getPlayerUpVec(LUMA_OUT Vec3f*);
     void getPlayerFrontVec(LUMA_OUT Vec3f*);
     void getPlayerSideVec(Vec3f*);
     void getPlayerThrowVec(Vec3f*);

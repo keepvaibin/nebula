@@ -71,7 +71,7 @@ namespace MR {
     bool faceToVector(Quat4f*, Vec3f, f32);
     bool faceToVector(MtxPtr, Vec3f, f32);
     bool faceToPoint(MtxPtr, Vec3f, f32);
-    void makeQuatFromRotate(Quat4f*, const LiveActor*);
+    void makeQuatFromRotate(LUMA_OUT Quat4f*, const LiveActor*);
     void makeQuatAndFrontFromRotate(Quat4f*, Vec3f*, const LiveActor*);
     void turnQuatUpToGravity(Quat4f*, const Quat4f&, const LiveActor*);
     void blendQuatFromGroundAndFront(Quat4f*, const LiveActor*, const Vec3f&, f32, f32);
