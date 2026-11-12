@@ -7,9 +7,9 @@
 
 static const float kRefReach = 4000000.0f;
 
-// The stage's authored ambient: what the indirect ratio is a ratio to.
+// What the indirect ratio is a ratio to: O's unit, as the real-time pass divides (rt_o_unit; b59).
 float3 ref_ambient() {
-    return max(g_shade.authored.rgb, 0.02f);
+    return rt_o_unit();
 }
 
 // One local light, chosen uniformly from all of the frame's, with its shadow: on average the sum of every light.
@@ -39,7 +39,7 @@ static bool s_count_dome = false;
 // stands for a listed glow; only a mirror's ray sees it shine).
 void ref_surface(RtHit h, bool lighting, inout uint seed, out float3 c, out float3x3 m) {
     if (h.glows && !(lighting && h.listed)) {
-        c = h.emission * g_shade.gains.x;
+        c = rt_shown(h.emission) * g_shade.gains.x;  // linear, as the real-time hit's (M1; FB b65b)
         m = (float3x3)0;
         return;
     }
@@ -50,8 +50,9 @@ void ref_surface(RtHit h, bool lighting, inout uint seed, out float3 c, out floa
     float3 s0;
     float3x3 mo;
     rt_share_terms(lit, nl, v, s0, mo);
-    c = h.base * (s0 + d);
-    m = float3x3(h.base.x * mo[0], h.base.y * mo[1], h.base.z * mo[2]);
+    const float3 base = rt_hit_albedo(h);  // the art's colour, or the model's linear one (b59)
+    c = base * (s0 + d);
+    m = float3x3(base.x * mo[0], base.y * mo[1], base.z * mo[2]);
 }
 
 // The indirect ratio I at a surface point (11.1), by path tracing: ratio = S(dir) where the ray meets the sky,
@@ -75,7 +76,7 @@ float3 ref_ratio(float3 origin, float3 n, inout uint seed) {
         RtHit h;
         rt_hit_read(item, triangle_, where_, far_, from, dir, 0.05f, h);
         if (met == 1u || (h.item_flags & kItemSky) != 0u) {
-            const float3 dome = rt_dome(h);
+            const float3 dome = rt_lin(rt_dome(h));  // linear, as the mean it is a ratio to (b65)
             if (s_count_dome) {
                 rt_count_dome(dome);
             }
@@ -86,7 +87,7 @@ float3 ref_ratio(float3 origin, float3 n, inout uint seed) {
         float3x3 m;
         ref_surface(h, true, seed, c, m);
         if (h.klass == kRtMetal || h.klass == kRtGlass) {
-            c += g_shade.ambient.rgb * h.share;
+            c += rt_hit_mirror_stand_in(h);
         }
         // What shines of itself counts as it is; a surface lit by the scene against the mean of such hits, counted at
         // the first as the real-time pass shades it (its own ratio kHitSky) (FB b46).
@@ -122,16 +123,16 @@ float3 ref_mirror(float3 from, float3 dir, float roughness, inout uint seed) {
         float2 where_;
         float far_;
         if (!rt_closest(from, dir, kRefReach, kMaskSolid | kMaskCutout | kMaskSky, item, triangle_, where_, far_)) {
-            result += weight * g_sky.rgb;
+            result += weight * rt_shown(g_sky.rgb);
             break;
         }
         RtHit h;
         rt_hit_read(item, triangle_, where_, far_, from, dir, abs(g_ray.x) + 0.35f * roughness, h);
         if ((h.item_flags & kItemSky) != 0u) {
-            float3 seen = rt_dome(h);
-            // The sun itself on the reflected ray, where nothing hides it (12.2 item 4).
+            float3 seen = rt_shown(rt_dome(h));
+            // The sun itself on the reflected ray, where nothing hides it (12.2 item 4; the model's sun: b59).
             if (rt_sun_traced() && dot(dir, g_sun.xyz) > cos(atan(3.0f * g_sun.w))) {
-                seen += g_shade.key.rgb * g_shade.look.w;
+                seen += lerp(rt_lin(g_shade.key.rgb), rt_stage_light().sun, rt_form()) * g_shade.look.w;
             }
             result += weight * seen;
             break;
@@ -149,7 +150,7 @@ float3 ref_mirror(float3 from, float3 dir, float roughness, inout uint seed) {
         }
         // On: a metal in its own colour, glass by its Fresnel share seen head on, times kShine (12.4).
         const float f0 = ((h.ior - 1.0f) / (h.ior + 1.0f)) * ((h.ior - 1.0f) / (h.ior + 1.0f)) * 2.0f;
-        weight *= h.klass == kRtMetal ? h.base : float3(f0, f0, f0);
+        weight *= h.klass == kRtMetal ? rt_shown(h.base) : float3(f0, f0, f0);
         if (!(rt_lum(weight) > 0.002f)) {
             break;
         }

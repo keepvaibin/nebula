@@ -47,7 +47,9 @@ ClearSurface clear_surface(uint item, uint class_, float facing_eye, float depth
     const uint ior_bits = word >> 12u & 255u, shine_bits = word >> 20u & 63u, body_bits = word >> 26u;
     const bool written = ior_bits != 0u;
     const float ior = written ? 1.0f + float(ior_bits) / 100.0f : (water ? 1.33f : 1.5f);
-    const float shine = written && shine_bits != 63u ? float(shine_bits) / 4.0f : (water ? 1.5f : 2.0f);
+    // Schlick's share of the index (R2; FB b61): glass 1, water the owner's 1.2 (dev keys glass_shine, water_shine).
+    const float shine = written && shine_bits != 63u ? float(shine_bits) / 4.0f
+                                                     : (water ? rt_dev_or(kDevWaterShine, 1.2f) : rt_dev_or(kDevGlassShine, 1.0f));
     const float f0 = (ior - 1.0f) * (ior - 1.0f) / ((ior + 1.0f) * (ior + 1.0f));
     const float cos_in = saturate(facing_eye);
     ClearSurface c;
@@ -60,10 +62,16 @@ ClearSurface clear_surface(uint item, uint class_, float facing_eye, float depth
     }
     const float away = 1.0f - cos_in;
     c.f = min(shine * (f0 + (1.0f - f0) * away * away * away * away * away), 1.0f);
-    if (water) {
-        c.body = depth > 0.0f ? 1.0f - exp(-depth / 600.0f) : 1.0f;  // kWaterClear: 6 m (rt_stages.tsv may say)
+    // A clear thing's colour is light it takes away (R1; FB b61): where the transmit pass gives T (High; not the
+    // emitters-alone or motion pictures) no body at all, the way through it is in T; else water by its depth, glass
+    // none unless its hit record writes one.
+    const bool traced_t = rt_part(kPartTransmit) >= 3u && (g_more.z & (128u | 512u)) == 0u;
+    if (traced_t) {
+        c.body = 0.0f;
+    } else if (water) {
+        c.body = depth > 0.0f ? 1.0f - exp(-depth / rt_water_clear()) : 1.0f;  // the stage's water clear (b58)
     } else {
-        c.body = written && body_bits != 63u ? float(body_bits) / 62.0f : 0.35f;  // kGlassBody
+        c.body = written && body_bits != 63u ? float(body_bits) / 62.0f : 0.0f;
     }
     return c;
 }
@@ -90,7 +98,7 @@ float3 seen_along(float3 origin, float3 direction, float wide, float widens) {
     }
     InterlockedAdd(g_counters[23], 1u);
     if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
-        return g_sky.rgb;
+        return rt_lin(g_sky.rgb);  // linear, as the programs read the mirror picture (M1; FB b59b)
     }
     const uint at = g_at.x + query.CommittedInstanceID() * kItemBytes;
     const uint4 first = g_items.Load4(at), second = g_items.Load4(at + 16u), third = g_items.Load4(at + 32u);
@@ -132,7 +140,7 @@ float3 seen_along(float3 origin, float3 direction, float wide, float widens) {
         }
     }
     if (sky || class_ == kClassEmissive) {
-        return colour;
+        return rt_lin(colour);
     }
     // Its light: the sun where it reaches the place met, as a painted surface takes it (rt_sun.hlsl).
     float sunlit = 1.0f;
@@ -148,7 +156,7 @@ float3 seen_along(float3 origin, float3 direction, float wide, float widens) {
             }
         }
     }
-    return colour * lerp(g_look.x, 1.0f, sunlit);
+    return rt_lin(colour) * lerp(g_look.x, 1.0f, sunlit);
 }
 
 // The local lights' highlight at the pixel, over it and its four neighbours on the same object (one light a pixel is
@@ -254,7 +262,7 @@ void main(uint3 id : SV_DispatchThreadID) {
                 head_on = second ? 0.02f : 0.0f;  // the opaque layer's water is the painted floor under it
             } else if (class_ == kClassMetal) {
                 head_on = 0.55f;
-                tint = lerp(float3(1.0f, 1.0f, 1.0f), float3(float(tint_word & 255u), float(tint_word >> 8u & 255u), float(tint_word >> 16u & 255u)) / 255.0f, 0.5f);
+                tint = lerp(float3(1.0f, 1.0f, 1.0f), rt_lin(float3(float(tint_word & 255u), float(tint_word >> 8u & 255u), float(tint_word >> 16u & 255u)) / 255.0f), 0.5f);
             } else if (class_ == kClassGloss) {
                 head_on = 0.05f * (1.0f - rough);
             }

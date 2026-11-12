@@ -41,6 +41,11 @@ SamplerState g_wrap : register(s0);
 RWStructuredBuffer<uint> g_counters : register(u8);
 
 static const float3 kLuminance = float3(0.2126f, 0.7152f, 0.0722f);
+// sRGB's decode (M1: the pictures the programs read are linear; FB b59b). Unclamped above 1, as c39's traced_lin.
+float3 rt_lin(float3 c) {
+    c = max(c, 0.0f);
+    return lerp(pow((c + 0.055f) / 1.055f, 2.4f), c / 12.92f, step(c, 0.04045f));
+}
 
 // Two numbers in 0-1 for a pixel, a frame and a use: interleaved gradient noise (Jimenez 2014), turned each frame,
 // and a hash of the same. The second layer has no filter after it: straight at the light.
@@ -269,6 +274,12 @@ float caustic_there(uint item, uint triangle_, float2 where_) {
     return clamp(1.0f + kCaustic * (a * b / (mean * mean) - 1.0f), 0.5f, 1.8f);
 }
 
+// The stage's water clear (g_look.w, b58): bins whose host does not fill it (0) keep 600 units (b58b).
+float rt_water_clear() {
+    return g_look.w > 0.0f ? g_look.w : 600.0f;
+}
+static const float kWaterLayer = 2.0f;  // water hits this near one another are one sheet of it drawn twice (b58b)
+
 // What the blended things on a ray let through (plan 13.4), rgb; `first`: how far along the first of them stands (-1:
 // none). Every candidate is weighed and none committed (the product does not care for order), at most four: glass and
 // crystal their colour's square root (the absorption exp(-sigma t) with kGlassTint 0.5: the thickness cancels) by
@@ -287,6 +298,10 @@ float3 let_through(float3 origin, float3 direction, float reach, out float first
     uint weighed = 0u;
     bool watered = false;
     first = -1.0f;
+    // The way the ray runs inside water (R4; FB b58): its water layers' count (hits within kWaterLayer of a layer met
+    // are that layer: b58b) and the nearest and farthest.
+    uint waters = 0u;
+    float water_near = 3.0e38f, water_far = 0.0f;
     while (query.Proceed()) {
         const uint item = query.CandidateInstanceID();
         const uint at = g_at.x + item * kItemBytes;
@@ -298,6 +313,12 @@ float3 let_through(float3 origin, float3 direction, float reach, out float first
             const float3 base = float3(float(colour & 255u), float(colour >> 8u & 255u), float(colour >> 16u & 255u)) / 255.0f;
             passes = sqrt(max(base, 0.02f)) * 0.96f;
         } else if (class_ == kClassWater) {
+            const float t_water = query.CandidateTriangleRayT();
+            if (waters == 0u || (abs(t_water - water_near) > kWaterLayer && abs(t_water - water_far) > kWaterLayer)) {
+                ++waters;
+                water_near = min(water_near, t_water);
+                water_far = max(water_far, t_water);
+            }
             counts = !watered;
             passes = !counts ? float3(1.0f, 1.0f, 1.0f)
                              : 0.9f * (rt_part(kPartTransmit) >= 3u
@@ -315,6 +336,11 @@ float3 let_through(float3 origin, float3 direction, float reach, out float first
         if (counts && ++weighed == 4u) {
             query.Abort();
         }
+    }
+    // One layer: the point is under that water, the way is to it; two or more: the ray crosses a body of water.
+    if (waters != 0u) {
+        const float way = waters == 1u ? water_near : water_far - water_near;
+        tint *= exp(-way / rt_water_clear() * float3(1.6f, 1.0f, 0.7f));
     }
     return tint;
 }

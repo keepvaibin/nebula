@@ -26,7 +26,8 @@ cbuffer FrameConstants : register(b0) {
                         // sun's shadows read); y 1: a painted surface whose model's paint holds its shadows (hit
                         // flag NEBULA_HIT_PAINTED_SHADOW) is shadowed by lit things only (the painted style, 14.6),
                         // 0: every painted surface by everything solid; z: the facing (n.l) from which a painted surface keeps
-                        // its authored brightness; w: retired (the sky rays' reach: 22.10)
+                        // its authored brightness; w: the stage's water clear (units of water to mostly its colour; rt_stages.tsv,
+                        // 600 by default; FB b58)
     uint4 g_glow;       // the emitters (48 bytes each: centre, radius; colour, reach; slot): x their first byte in the
                         // drops' buffer, y their tiles' and z their entries' first byte in the tiles' buffer, w how many
     uint4 g_mesh_at[3]; // where each arena's first byte is in its buffer (eight of them), then the rows'

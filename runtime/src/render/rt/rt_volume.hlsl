@@ -124,8 +124,9 @@ void main(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID) {
             s = kSkyHidden;
         }
     }
-    const float3 a = g_shade.authored.rgb, k = g_shade.key.rgb;
-    float3 share = (a * s + k * v) / max(a + k, 1e-4f);
+    // The emitters alone (--diagnostics rt-added, g_more.z bit 7): no sun, no sky in the air either (FB b60). Else the
+    // stage's light's share in linear light, the model's under the relight (b64).
+    float3 share = (g_more.z & 128u) != 0u ? float3(0.0f, 0.0f, 0.0f) : rt_air_share(s, v);
     if (g_pass.y != 2u) {
         share += air_lights(at, high, seed);  // Low: the sun and the sky alone (19.1)
     }

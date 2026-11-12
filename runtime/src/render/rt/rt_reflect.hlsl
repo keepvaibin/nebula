@@ -84,13 +84,13 @@ void main(uint3 id : SV_DispatchThreadID) {
     float3 seen;
     bool open_sky = true;  // the ray meets the sky (the dome or nothing)
     if (!rt_closest(from, dir, kReflectReach, kMaskSolid | kMaskCutout | kMaskSky, item, triangle_, where_, far_)) {
-        seen = g_sky.rgb;
+        seen = rt_lin(g_sky.rgb);  // linear (M1; FB b59b)
         far_ = kReflectReach;
     } else {
         RtHit h;
         rt_hit_read(item, triangle_, where_, far_, from, dir, abs(g_ray.x) + 0.5f * roughness, h);
         if ((h.item_flags & kItemSky) != 0u) {
-            seen = rt_dome(h);
+            seen = rt_shown(rt_dome(h));  // linear (M1; FB b65)
         } else {
             open_sky = false;
             float3 o = float3(g_shade.gains.y, g_shade.gains.y, g_shade.gains.y);

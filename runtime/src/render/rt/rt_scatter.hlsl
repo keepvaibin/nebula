@@ -43,8 +43,8 @@ void main(uint3 id : SV_DispatchThreadID) {
     const float2 pixel = g_viewport.xy + (float2(id.xy) + 0.5f) / float2(kCells.xy) * g_viewport.zw;
     const float3 look = normalize(rt_eye_ray(g_ray, pixel));
     const float phase = hg4pi(dot(look, g_sun.xyz), kForward);
-    const float3 a = g_shade.authored.rgb, k = g_shade.key.rgb;
-    const bool sun = rt_sun_traced();
+    const bool sun = rt_sun_traced() && (g_more.z & 128u) == 0u;  // the emitters alone: no sun (b60)
+    const float3 sun_share = rt_air_sun();  // the sun's part of the air's share, as the light volume's (b64)
     float3 light = float3(0.0f, 0.0f, 0.0f);
     float through = 1.0f, from = 0.0f;
     for (uint z = 0u; z < kCells.z; ++z) {
@@ -54,7 +54,7 @@ void main(uint3 id : SV_DispatchThreadID) {
         const float4 air = g_air.Load(int4(id.xy, z, 0));
         float3 source = air.rgb;
         if (sun) {
-            source += k / max(a + k, 1e-4f) * air.a * (phase - 1.0f);
+            source += sun_share * air.a * (phase - 1.0f);
         }
         const float kept = exp(-sigma * d);
         light += through * max(source, 0.0f) * (1.0f - kept);

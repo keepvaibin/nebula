@@ -10,8 +10,8 @@
 //     sigma = -ln(colour) / thickness * kGlassTint. A glass ball shows the scene upside down (row R3). Crystal (index
 //     1.7 and over) traces each colour's own index (ior - 0.02, ior, ior + 0.02 for r, g, b): rainbow edges (row R4),
 //     three paths, no noise, no filter (crystals are small on the screen).
-//   A shell (thinner than kThinGlass: bubbles, domes, windows) bends nothing that shows: it keeps the blend of Medium
-//     (what lies behind, the blended things there too); no T.
+//   A shell (thinner than kThinGlass: bubbles, domes, capsules, windows, and glass with no thickness cooked) bends
+//     nothing that shows: traced straight on, T = colour ^ (1 / cos), its own thickness over the slant (R1, R3; FB b61).
 // Writes T: rgb what comes through (the absorption in it, no Fresnel: the programs weigh it, program.hlsli
 // traced_mirror), a 1 where traced, 0 elsewhere (the programs blend as on Medium there).
 // Pass constants: g_pass.x 1 (the second layer), g_pass.w the shading frame's first byte in t4.
@@ -30,8 +30,8 @@ RT_FORMAT(rgba32f) RWTexture2D<float4> g_t_mean : register(u1);  // this walk's:
 #endif
 
 static const float kThinGlass = 4.0f;      // units: thinner is a shell (a soap film, a dome's pane)
-static const float kGlassTint = 0.5f;      // 13.2: 1 the art's whole tint at the thickness, 0 colourless
-static const float kWaterClear = 600.0f;   // 13.3: 6 m to mostly the water's colour
+static const float kGlassTint = 1.0f;      // 13.2: the art's whole tint at the thickness (R1; FB b61: was 0.5)
+// 13.3: the way to mostly the water's colour is the stage's water clear (g_look.w; 600 units by default; FB b58)
 static const float kSeenReach = 4000000.0f;
 static const uint kInsideSegments = 2u;
 
@@ -56,12 +56,12 @@ float3 seen_along(float3 from, float3 dir, float cone, inout uint seed, out floa
     float2 where_;
     if (!rt_closest(from, dir, kSeenReach, kMaskSolid | kMaskCutout | kMaskSky, item, triangle_, where_, far_)) {
         far_ = kSeenReach;
-        return g_sky.rgb;
+        return rt_lin(g_sky.rgb);  // linear (M1; FB b59b)
     }
     RtHit h;
     rt_hit_read(item, triangle_, where_, far_, from, dir, cone, h);
     if ((h.item_flags & kItemSky) != 0u) {
-        return rt_dome(h);
+        return rt_shown(rt_dome(h));  // linear (M1; FB b65)
     }
     const float3 o = float3(g_shade.gains.y, g_shade.gains.y, g_shade.gains.y);
     return rt_hit_radiance(h, kRtShadeSunRay | kRtShadeLightRay, o, seed);
@@ -148,7 +148,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     const uint klass = look_word & 255u;
     const bool water = klass == kClassWater;
     const float thickness = asfloat(g_items.Load(at + 68u));
-    if (!(water || (klass == kClassGlass && thickness >= kThinGlass))) {
+    if (!(water || klass == kClassGlass)) {
         g_out[id.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);
         return;
     }
@@ -156,7 +156,8 @@ void main(uint3 id : SV_DispatchThreadID) {
     const RtSurface s = rt_surface(int2(id.xy), guide, g_normals.Load(here), g_motion.Load(here).w);
     const float3 look = normalize(s.at);
     const float3 n = dot(s.smooth_, look) < 0.0f ? s.smooth_ : s.normal;
-    const float3 colour = max(rt_bytes3(g_items.Load(at + 48u)), 0.02f);
+    // The filter's colour in linear light: white seen through it turns the art's colour (M1; FB b59b).
+    const float3 colour = max(rt_lin(rt_bytes3(g_items.Load(at + 48u))), 0.002f);
     // The index (item word 15, FC's c15: bits 12-19 as (ior - 1) x 100; 0: the class's own).
     const uint ior_bits = g_items.Load(at + 60u) >> 12u & 255u;
     const float ior = ior_bits != 0u ? 1.0f + float(ior_bits) / 100.0f : (water ? 1.33f : 1.5f);
@@ -167,7 +168,13 @@ void main(uint3 id : SV_DispatchThreadID) {
         const float3 dir = refract(look, n, 1.0f / ior);
         float far_;
         const float3 floor_ = seen_along(s.at - n * s.skin, dot(dir, dir) > 0.0f ? dir : look, cone, seed, far_);
-        t = floor_ * exp(log(colour) * (min(far_, 8.0f * kWaterClear) / kWaterClear));
+        const float clear = rt_water_clear();
+        t = floor_ * exp(log(colour) * (min(far_, 8.0f * clear) / clear));
+    } else if (thickness < kThinGlass) {
+        // A shell: straight on, its colour by the slant (R1, R3; FB b61).
+        float far_;
+        const float cos_in = max(-dot(n, look), 0.2f);
+        t = seen_along(s.at - n * s.skin, look, cone, seed, far_) * pow(colour, kGlassTint / cos_in);
     } else {
         const float3 sigma = -log(colour) / thickness * kGlassTint;
         if (ior >= 1.7f) {

@@ -1970,7 +1970,7 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     constants.look[0] = kSkyInShadow;
     constants.look[1] = kPaintedStyle;
     constants.look[2] = rt_dev(RtDev::FullFacing, kFullFacing);
-    constants.look[3] = 0.0f;  // retired: the sky rays' reach (22.10)
+    constants.look[3] = stage_row.water_clear;  // the water's clear way (rt_stages.tsv; R4: FB b58)
     // The mesh memory: the arenas the items named, and the frame's rows. A slot no arena fills reads the
     // first (a bound buffer the pass never indexes).
     for (unsigned a = 0; a < rt::kPassMeshArenas; ++a) {

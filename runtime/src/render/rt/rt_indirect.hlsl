@@ -191,7 +191,7 @@ void main(uint3 id : SV_DispatchThreadID) {
             rt_hit_read(item, triangle_, where_, far_, s.origin, dir, 0.05f, h);
             fresh.at = h.at;
             if (met == 1u || (h.item_flags & kItemSky) != 0u) {
-                fresh.light = rt_sky_ratio(rt_dome(h));  // the dome's mean: rt_count_dome_directions (b51)
+                fresh.light = rt_sky_ratio(rt_lin(rt_dome(h)));  // the dome's mean: rt_count_dome_directions (b51; linear b65)
             } else {
                 fresh.n = h.ng;
                 const uint options = kRtShadeSunRay | kRtShadeLighting | (mode == kModeHigh ? kRtShadeLightRay : 0u);
@@ -206,7 +206,7 @@ void main(uint3 id : SV_DispatchThreadID) {
                 float3 d_seen;
                 const bool d_known = (g_pass.z & 1u) != 0u && rt_screen_lights(g_guide, g_added_before, g_blended_before, h.at, d_seen);
                 const float3 bounce = g_shade.gains.z * rt_hit_radiance_with(h, options, o, d_known, d_seen, seed) /
-                                      max(g_shade.authored.rgb, 0.02f);
+                                      rt_o_unit();  // O's unit (C4; the model's under the relight: b59)
                 if (h.glows && !h.listed) {
                     fresh.light = bounce;  // it shines of itself: its light as it is
                 } else {
