@@ -318,6 +318,20 @@ int main() {
     check(compare_versions("2.10", "2.9") > 0, "2.10 is above 2.9");
     check(compare_versions("2.1", "2.1.0") == 0, "2.1 equals 2.1.0");
     check(compare_versions("1", "1.0.1") < 0, "1 is below 1.0.1");
+    // needs' ranges (plan 6.3: the Mods page says a need outside its range as the player changes the list).
+    check(version_in_range("1.2.0", ">=1.2") == 0, ">=1.2 holds 1.2.0");
+    check(version_in_range("1.1.9", ">=1.2") < 0, ">=1.2 is above 1.1.9");
+    check(version_in_range("2.0.0", ">=1.2 <2.0") > 0, "<2.0 is below 2.0.0");
+    check(version_in_range("1.9.3", ">= 1.2, < 2") == 0, "spaced comparators and a comma");
+    check(version_in_range("1.4.0", "^1.2") == 0 && version_in_range("2.0", "^1.2") > 0, "^1.2 is 1.2 up to 2");
+    check(version_in_range("0.3.1", "^0.3") == 0 && version_in_range("0.4.0", "^0.3") > 0, "^0.3 is 0.3 up to 0.4");
+    check(version_in_range("1.2.9", "~1.2.3") == 0 && version_in_range("1.3.0", "~1.2.3") > 0, "~1.2.3 up to 1.3");
+    check(version_in_range("1.5", "1.x") == 0 && version_in_range("2.1", "1.x") > 0, "1.x is a ^1");
+    check(version_in_range("3.0", "1.0 || >=3") == 0 && version_in_range("2.0", "1.0 || >=3") > 0, "alternatives");
+    check(version_in_range("1.0", "1.0.0") == 0 && version_in_range("1.0.1", "=1.0.0") > 0, "an exact version");
+    check(version_in_range("1.0", "") == 0 && version_in_range("1.0", "*") == 0, "no range and * hold any");
+    check(version_in_range("1.0", "latest") == 0, "a range this cannot read is the validator's");
+    check(version_in_range("1.2.0-beta", ">=1.2") == 0, "a prerelease tag is not compared");
     check(language_code("EuFrench") == "fr" && language_code("JpJapanese") == "ja" && language_code("?") == "en", "language codes");
     {
         // A language an installed language mod adds keys its own text by its folder name, never as English.

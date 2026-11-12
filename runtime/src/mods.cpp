@@ -1498,6 +1498,44 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
     return mods;
 }
 
+void mark_needs(std::vector<ModInfo>& mods) {
+    const auto title = [](const ModInfo& other) { return other.pack_title.empty() ? other.id : other.pack_title; };
+    // Again until nothing changes: a mod off for its need takes the mods needing it along.
+    const auto find_luma = [&mods](const std::string& luma_id) -> const ModInfo* {
+        for (const ModInfo& other : mods) {
+            if (other.luma && other.luma->id == luma_id) return &other;
+        }
+        return nullptr;
+    };
+    for (bool changed = true; changed;) {
+        changed = false;
+        for (ModInfo& mod : mods) {
+            if (!mod.luma || !mod.problem.empty() || !mod.enabled) continue;
+            for (const luma::Dependency& need : mod.luma->needs) {
+                const ModInfo* const them = find_luma(need.id);
+                if (them == nullptr || !them->enabled || !them->problem.empty()) {
+                    mod.problem = "THIS MOD NEEDS: " + (them != nullptr ? title(*them) : need.id);
+                } else if (const int where = luma::version_in_range(them->luma->version, need.version); where < 0) {
+                    mod.problem = "THIS MOD NEEDS A NEWER VERSION OF: " + title(*them);
+                } else if (where > 0) {
+                    mod.problem = "THIS MOD NEEDS: " + title(*them) + " " + need.version;
+                }
+                if (!mod.problem.empty()) break;
+            }
+            if (mod.problem.empty()) {
+                for (const luma::Dependency& conflict : mod.luma->conflicts) {
+                    const ModInfo* const them = find_luma(conflict.id);
+                    if (them != nullptr && them != &mod && them->enabled && them->problem.empty()) {
+                        mod.problem = "THIS MOD CAN'T RUN WITH: " + title(*them);
+                        break;
+                    }
+                }
+            }
+            changed = changed || !mod.problem.empty();
+        }
+    }
+}
+
 void settle_mods(std::vector<ModInfo>& mods) {
     static const ModChanges kNone;
     const auto changes_of = [](const ModInfo& mod) -> const ModChanges& { return mod.changes ? *mod.changes : kNone; };

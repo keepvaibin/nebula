@@ -316,6 +316,12 @@ inline constexpr std::size_t kMaxAchievements = 64;
 // Compares dotted versions part by part: 2.10 > 2.9, and 2.1 == 2.1.0 (the import's update message).
 [[nodiscard]] int compare_versions(std::string_view a, std::string_view b);
 
+// Whether `version` is inside a semver range as luma-format's `needs` writes it: comparators (>=, >, <=, <, =, a bare
+// version, ^ and ~, *, x) joined by spaces or commas, alternatives by ||; prerelease tags are not compared. 0 inside
+// (and for an empty range or one this cannot read: the validator's L800 judges those), -1 below the first
+// alternative's floor, 1 otherwise.
+[[nodiscard]] int version_in_range(std::string_view version, std::string_view range);
+
 // The current game, used to decide whether a layer applies.
 struct Situation {
     std::string region;    // the disc: RMGE01

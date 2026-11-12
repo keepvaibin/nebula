@@ -1086,6 +1086,107 @@ int compare_versions(std::string_view a, std::string_view b) {
     return 0;
 }
 
+namespace {
+
+// The dotted version `text` bumped at part `part` (0 major, 1 minor), the later parts dropped: "1.4.2", 1 -> "1.5".
+std::string bumped(std::string_view text, std::size_t part) {
+    std::vector<unsigned long> parts;
+    while (!text.empty()) {
+        unsigned long value = 0;
+        std::size_t i = 0;
+        for (; i < text.size() && text[i] >= '0' && text[i] <= '9'; ++i) value = value * 10u + static_cast<unsigned long>(text[i] - '0');
+        parts.push_back(value);
+        while (i < text.size() && text[i] != '.') ++i;
+        text.remove_prefix(i < text.size() ? i + 1u : i);
+    }
+    parts.resize(part + 1u, 0u);
+    ++parts[part];
+    std::string out;
+    for (std::size_t i = 0; i < parts.size(); ++i) out += (i == 0 ? "" : ".") + std::to_string(parts[i]);
+    return out;
+}
+
+}  // namespace
+
+int version_in_range(std::string_view version, std::string_view range) {
+    // One alternative: 0 inside, -1 below a floor, 1 above a ceiling or off an exact version; 2 when it cannot be read.
+    const auto alternative = [version](std::string_view text) {
+        int result = 0;
+        bool read = false;
+        while (!text.empty()) {
+            const std::size_t start = text.find_first_not_of(" ,\t");
+            if (start == std::string_view::npos) break;
+            text.remove_prefix(start);
+            std::size_t end = text.find_first_of(" ,\t");
+            std::string_view item = text.substr(0, end);
+            text.remove_prefix(end == std::string_view::npos ? text.size() : end);
+            std::string_view op;
+            for (std::string_view candidate : {">=", "<=", ">", "<", "=", "^", "~"}) {
+                if (item.starts_with(candidate)) {
+                    op = candidate;
+                    item.remove_prefix(candidate.size());
+                    break;
+                }
+            }
+            // A comparator written with a space after it (">= 1.2") takes the next word.
+            if (item.empty() && !op.empty()) {
+                const std::size_t next = text.find_first_not_of(" ,\t");
+                if (next == std::string_view::npos) return 2;
+                text.remove_prefix(next);
+                end = text.find_first_of(" ,\t");
+                item = text.substr(0, end);
+                text.remove_prefix(end == std::string_view::npos ? text.size() : end);
+            }
+            if (item.starts_with('v')) item.remove_prefix(1u);
+            if (const std::size_t tag = item.find_first_of("-+"); tag != std::string_view::npos) item = item.substr(0, tag);
+            if (item == "*" || item == "x" || item == "X") {
+                read = true;
+                continue;
+            }
+            if (item.empty() || item[0] < '0' || item[0] > '9') return 2;
+            // A part written x or * ("1.x") is a ~ or ^ on what comes before it.
+            std::string bound(item);
+            std::size_t wild = bound.find_first_of("xX*");
+            if (wild != std::string::npos && (op.empty() || op == "=")) {
+                bound = bound.substr(0, wild > 0 ? wild - 1u : 0u);
+                op = std::count(bound.begin(), bound.end(), '.') == 0 ? "^" : "~";
+            } else if (wild != std::string::npos) {
+                return 2;
+            }
+            read = true;
+            const int against = compare_versions(version, bound);
+            if (op == ">=") {
+                if (against < 0 && result == 0) result = -1;
+            } else if (op == ">") {
+                if (against <= 0 && result == 0) result = -1;
+            } else if (op == "<=") {
+                if (against > 0 && result == 0) result = 1;
+            } else if (op == "<") {
+                if (against >= 0 && result == 0) result = 1;
+            } else if (op == "^" || op == "~") {
+                // ^: up to the next major (the next minor for 0.x); ~: up to the next minor.
+                const bool zero_major = compare_versions(bound, "1") < 0;
+                const std::string ceiling = bumped(bound, op == "~" || zero_major ? 1u : 0u);
+                if (against < 0 && result == 0) result = -1;
+                if (compare_versions(version, ceiling) >= 0 && result == 0) result = 1;
+            } else if (against != 0 && result == 0) {
+                result = against;
+            }
+        }
+        return read ? result : 2;
+    };
+    int first = 2;
+    while (true) {
+        const std::size_t bar = range.find("||");
+        const int result = alternative(range.substr(0, bar));
+        if (result == 0) return 0;
+        if (first == 2) first = result;
+        if (bar == std::string_view::npos) break;
+        range.remove_prefix(bar + 2u);
+    }
+    return first == 2 ? 0 : first;
+}
+
 bool when_holds(const When& when, const Situation& situation) {
     if (when.unknown) return false;
     if (!when.regions.empty() && !contains(when.regions, situation.region)) return false;

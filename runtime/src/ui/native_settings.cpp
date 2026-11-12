@@ -2438,9 +2438,11 @@ void revert_mods_draft() {
 }
 
 // With s_mods_mutex held: the draft's list settled again (the families of saves, overlaps and who wins them) by the
-// draft's order and on/off state; another copy, needs and conflicts are the start's check's (mark_refused).
+// draft's order and on/off state; needs and conflicts by the draft as it stands (mark_needs: said before Apply),
+// another copy and the rest of the start's check by its results (mark_refused).
 void refresh_overlaps_locked() {
     galaxy::mods::settle_mods(s_mods);
+    galaxy::mods::mark_needs(s_mods);
     mark_refused(s_mods);
 }
 
