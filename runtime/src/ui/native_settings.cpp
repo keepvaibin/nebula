@@ -2725,7 +2725,11 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
             const std::string hosts = permission.hosts == "*" ? galaxy::modlog::row_words("Permission.net.internet.Any", id, {})
                                                               : permission.hosts;
             std::string help = galaxy::modlog::row_words(permission.text_row.c_str(), id, {{"hosts", hosts}});
-            if (permission.required) help += ' ' + galaxy::modlog::row_words("Consent.Required", id, {});
+            // A required one turned to Not allowed says so before the restart does (H64-3): off from the next start.
+            if (permission.required) {
+                help += ' ' + (granted ? galaxy::modlog::row_words("Consent.Required", id, {})
+                                         : galaxy::modlog::row_words("Consent.OffDeclined", id, {{"permission", name}}));
+            }
             const std::string permission_name = permission.name;
             SettingsRow row{name, answer_words(granted),
                             [id, permission_name, granted](RenderConfig&, int delta) {
