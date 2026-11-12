@@ -755,6 +755,7 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/mod_shaders.cpp
         runtime/src/render/mod_shader_build.cpp
         runtime/src/render/vk/mod_shader_compile_vk.cpp
+        runtime/src/render/vk/mod_shader_present_vk.cpp
         runtime/src/render/vk/shader_compile_vk.cpp
         runtime/src/render/vk/compile_journal.cpp
         runtime/src/render/vk/renderer_vk.cpp
