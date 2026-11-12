@@ -3186,6 +3186,9 @@ std::vector<SettingsRow> mods_page_rows(const RenderConfig&) {
             rows.push_back(std::move(part));
         }
     }
+    // Nebula's own lines above the lists (a safe start, a missing part) as the facts modscreen.nebula, as the log
+    // names Nebula's own entries.
+    if (!rows.empty()) modscreen_facts_locked("nebula", "list", rows.data(), rows.size());
     SettingsRow off{"DISABLED", {}, nullptr, {}, true};
     off.list = 1u;
     rows.push_back(std::move(off));
