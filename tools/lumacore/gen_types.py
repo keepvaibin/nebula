@@ -10,6 +10,8 @@ are the build's. Writes:
   DIR/luma_types.json       the self-description's `types` (each record with `reachable`), `globals` and
                             `left_out` (libclang's numbers: the build compares them with the module's --luma-describe)
   DIR/luma_types.left       what has no row, and why
+  DIR/luma_vtables_unit.cpp the unit whose compile (-fdump-vtable-layouts) gives the table at the start of each record
+                            the factory makes (contract classes, overrides by slot): rewritten each run
   DIR/luma_functions.json   with --defined: every function row's facts (kind, owner, virtual, pure, const, what it
                             overrides), the units' .functions merged (merge_functions); a row without facts, facts
                             without a row, an owner that is no record of the types file or an override with no name
@@ -27,6 +29,7 @@ import json
 import os
 import pathlib
 import re
+import subprocess
 import sys
 from ctypes import byref, c_char_p, c_int, c_longlong, c_uint, c_void_p
 
@@ -244,6 +247,9 @@ def main():
         tu = parse(api, index, args)
         reader = Reader(api, tu, headers)
         reader.collect()
+    reader.vtables = vtable_layouts(raw, reader.records, unit)
+    for name, (prefix, count) in reader.vtables.items():
+        reader.records[name]["vtable"] = {"prefix": prefix, "count": count}
     reader.write()
     if DEPFILE is not None:
         included = []
@@ -939,6 +945,9 @@ class Reader:
             else:
                 lines.append("%sconst luma::%s %s%s = %s;" % (section, kind, name, array, text))
 
+        # Contract classes, overrides by slot: the header pass's virtuals of the records the factory makes get the code a
+        # mod class's table takes in their slot (slot_code).
+        slot_records = descends_from_nameobj(self.records) if not unit and getattr(self, "vtables", None) is not None else set()
         n = 0
         for name in sorted(self.records):
             r = self.records[name]
@@ -1014,10 +1023,11 @@ class Reader:
                 member("", "TypeBase", "kB%d" % n, "{%s}" % ", ".join(base_rows), "[]")
             # Contract objects: a polymorphic record's type_info (the RTTI data, -frtti), which the kernel finds from an
             # object's vtable. typeid of a type is a constant address, never a call into the C++ runtime.
-            member("LUMA_TYPE_SECTION ", "TypeRow", "kT%d" % n, '{"%s", sizeof(::%s), alignof(::%s), %s, %du, %s, %du, %s}' % (
+            vtable = r.get("vtable") or {"prefix": 0, "count": 0}
+            member("LUMA_TYPE_SECTION ", "TypeRow", "kT%d" % n, '{"%s", sizeof(::%s), alignof(::%s), %s, %du, %s, %du, %s, %du, %du}' % (
                 cstr(name), name, name, "kF%d" % n if field_rows else "nullptr", len(field_rows),
                 "kB%d" % n if base_rows else "nullptr", len(base_rows),
-                "&typeid(R%d)" % n if r["polymorphic"] else "nullptr"))
+                "&typeid(R%d)" % n if r["polymorphic"] else "nullptr", vtable["prefix"], vtable["count"]))
             (held if unit else lines).append(claim % (("R%d" % n,) * claim.count("%s")))
             for k, v in calls:
                 if unit:
@@ -1028,8 +1038,12 @@ class Reader:
                 scope = "LumaUnitRows::" if unit else ""
                 member("", "Function", "kF%d_%d" % (n, k), '{"%s", "%s", %skV%d_%d, nullptr}' % (
                     cstr(v["name"]), cstr(v["signature"]), scope, n, k))
-                member("LUMA_METHOD_SECTION ", "MethodRow", "kM%d_%d" % (n, k), "{&%skF%d_%d, %s}" % (
-                    scope, n, k, method_names(name, v)))
+                slot = ""
+                if name in slot_records and "..." not in v["signature"]:
+                    lines.extend(slot_code(n, k, v))
+                    slot = ", kSp%d_%d, &kSg%d_%d" % (n, k, n, k)
+                member("LUMA_METHOD_SECTION ", "MethodRow", "kM%d_%d" % (n, k), "{&%skF%d_%d, %s%s}" % (
+                    scope, n, k, method_names(name, v), slot))
             n += 1
         # Aliases and other spellings of a record (TY-2): kind 1 and kind 2 find the record through them. The header
         # pass's alone, the units' merged (merge_units): a row names its record by name, wherever its row is.
@@ -1317,6 +1331,150 @@ def thunk(v, self_type):
             "*static_cast<unsigned*>(luma_r) = ::luma::Result<luma_result>::kKind; return; } "
             "::luma::Result<luma_result>::put(luma_r, [&]() -> luma_result { "
             "return static_cast<%s*>(luma_a[0])->%s(%s); });" % (c["result"], self_type, c["spelling"], passed))
+
+
+def slot_code(n, k, v):
+    """Contract classes, overrides by slot: for the virtual v of record row n (alias R<n>), the code a mod class's table
+    takes in its slot and what its proceed calls.
+      kSe<n>_<k>::call  the entry: a member function with the virtual's parameters and result (so its calling convention
+                        is the slot's), handing the call to luma::slotCall with the arguments as an invoke takes them
+      kSo<n>_<k>        the invoke of kSg: calls the code the slot held in the table of the object's class before (the
+                        base's own), as a member function of the entry's type, so the convention is the same again
+      kSg<n>_<k>        the Function the call carries: the virtual's name and signature, kSo as its invoke
+      kSp<n>_<k>        writes &R<n>::name (the kernel reads its slot per ABI) and &kSe<n>_<k>::call (the entry's code)"""
+    c = v["call"]
+    q = " const" if c["const"] else ""
+    res = "::luma::Type<%s>" % c["result"]
+    params = ", ".join("::luma::Type<%s> p%d" % (p, i) for i, p in enumerate(c["params"]))
+    types = ", ".join("::luma::Type<%s>" % p for p in c["params"])
+    pointers = "".join(", const_cast<void*>(static_cast<const volatile void*>(&p%d))" % i for i in range(len(c["params"])))
+    passed = ", ".join("::luma::arg<%s>(luma_a[%d])" % (p, i + 1) for i, p in enumerate(c["params"]))
+    e, o, g, s = "kSe%d_%d" % (n, k), "kSo%d_%d" % (n, k), "kSg%d_%d" % (n, k), "kSp%d_%d" % (n, k)
+    return [
+        "struct %s { %s call(%s)%s; };" % (e, res, params, q),
+        "void %s(void** luma_a, void* luma_r);" % o,
+        'const luma::Function %s = {"%s", "%s", %s, nullptr};' % (g, cstr(v["name"]), cstr(v["signature"]), o),
+        "%s %s::call(%s)%s { void* luma_a[] = {const_cast<void*>(static_cast<const volatile void*>(this))%s}; "
+        "return ::luma::slotRun<%s>(&%s, luma_a); }" % (res, e, params, q, pointers, res, g),
+        "void %s(void** luma_a, void* luma_r) { using luma_result = %s; "
+        "if (__builtin_expect(luma_a == ::luma::kAskKind, 0)) { "
+        "*static_cast<unsigned*>(luma_r) = ::luma::Result<luma_result>::kKind; return; } "
+        "::luma::tBody = nullptr; "
+        "const auto luma_f = ::luma::memberAt<luma_result (%s::*)(%s)%s>(::luma::slotOriginal(luma_a[0], &%s)); "
+        "::luma::Result<luma_result>::put(luma_r, [&]() -> luma_result { "
+        "return (static_cast<%s%s*>(luma_a[0])->*luma_f)(%s); }); }" % (o, res, e, types, q, g, "const " if q else "", e, passed),
+        "void %s(::luma::MemberBytes* pV, ::luma::MemberBytes* pE) { "
+        "const auto v = static_cast<%s (R%d::*)(%s)%s>(&R%d::%s); const auto e = &%s::call; "
+        'static_assert(sizeof(v) <= sizeof(pV->bytes) && sizeof(e) <= sizeof(pE->bytes), "a member pointer fits"); '
+        "__builtin_memcpy(pV->bytes, &v, sizeof(v)); pV->size = sizeof(v); "
+        "__builtin_memcpy(pE->bytes, &e, sizeof(e)); pE->size = sizeof(e); }" % (s, res, n, types, q, n, c["spelling"], e),
+    ]
+
+
+def descends_from_nameobj(records):
+    """Contract classes: NameObj and each record whose base at offset 0 (not virtual) is one; a mod class's base is one
+    of them, so its table copy and its overrides by slot stand on this chain."""
+    memo = {}
+
+    def walk(name, depth):
+        if name in memo:
+            return memo[name]
+        memo[name] = False  # a malformed walk ends here; a record is never its own base
+        r = records.get(name)
+        memo[name] = name == "NameObj" or (r is not None and depth < 64 and any(
+            b["offset"] == 0 and not b["virtual"] and walk(b["name"], depth + 1) for b in r["bases"]))
+        return memo[name]
+
+    return {name for name in records if walk(name, 0)}
+
+
+def primary_root(records, name):
+    """The record that brings the table at `name`'s start: down its polymorphic bases at offset 0 (not virtual)."""
+    for _ in range(64):
+        r = records.get(name)
+        below = next((b["name"] for b in (r["bases"] if r else ()) if b["offset"] == 0 and not b["virtual"] and
+                      records.get(b["name"], {}).get("polymorphic")), None)
+        if below is None:
+            return name
+        name = below
+    return None
+
+
+MS_TABLE = re.compile(r"^VFTable for '(.*)' \((\d+) entr(?:y|ies)\)\.$")
+IT_TABLE = re.compile(r"^Vtable for '(.*)' \((\d+) entr(?:y|ies)\)\.$")
+ENTRY = re.compile(r"^\s*(\d+) \| (.*)$")
+
+
+def read_vtable_dump(dump, records, names):
+    """The compiler's -fdump-vtable-layouts text, per ABI. Microsoft's: one table per vfptr, "VFTable for 'A' in ... 'X'
+    (N entries)." (A brought the vfptr, X is the record), its first entry the RTTI locator: the table at X's start is the
+    one A = primary_root(X) brought, prefix 1. Itanium's: one group per record, "Vtable for 'X' (N entries).", whose
+    entries before "-- (X, 0) vtable address --" are offset_to_top and the RTTI (prefix 2; a vcall or vbase offset there,
+    a virtual base, is no layout this takes), and whose table at the start ends at the next offset_to_top. A name the dump
+    gives two layouts is none. Returns {record: (prefix, count)}."""
+    microsoft = {}
+    itanium = {}
+    lines = dump.splitlines()
+    i = 0
+    while i < len(lines):
+        m = MS_TABLE.match(lines[i])
+        if m:
+            path = m.group(1).split("' in '")
+            microsoft.setdefault(path[-1], set()).add((path[0], int(m.group(2))))
+            i += 1
+            continue
+        m = IT_TABLE.match(lines[i])
+        if not m:
+            i += 1
+            continue
+        name, total = m.group(1), int(m.group(2))
+        entries, prefix = [], None
+        i += 1
+        while i < len(lines) and lines[i].strip():
+            e = ENTRY.match(lines[i])
+            if e:
+                entries.append(e.group(2).strip())
+            elif lines[i].strip() == "-- (%s, 0) vtable address --" % name and prefix is None:
+                prefix = len(entries)
+            i += 1
+        ok = prefix == 2 and entries[:1] == ["offset_to_top (0)"] and len(entries) == total
+        end = next((j for j in range(2, len(entries)) if entries[j].startswith("offset_to_top")), len(entries))
+        layout = (2, end) if ok else None
+        itanium[name] = layout if itanium.get(name, layout) == layout else None
+    out = {}
+    for name in names:
+        if name in itanium:
+            if itanium[name] is not None:
+                out[name] = itanium[name]
+            continue
+        root = primary_root(records, name)
+        tables = [count for intro, count in microsoft.get(name, ()) if intro == root]
+        if len(tables) == 1:
+            out[name] = (1, tables[0])
+    return out
+
+
+def vtable_layouts(raw, records, unit):
+    """Contract classes, overrides by slot: the table at the start of each polymorphic record the factory makes, as the
+    compiler lays it out. A unit of the headers calls each one's destructor through a pointer (a virtual call: the
+    compiler lays out the record's tables) and is compiled with the build's own command and -fdump-vtable-layouts (the
+    code is thrown away). A unit that does not compile stops the build. Returns {record: (prefix, count)}; a record not
+    there has no layout the dump gives, and no mod class takes it as its base (said at define)."""
+    names = sorted(n for n in descends_from_nameobj(records) if records[n].get("polymorphic"))
+    path = OUT / "luma_vtables_unit.cpp"
+    text = unit.read_text(encoding="utf-8") + "".join(
+        "using V%d = ::%s;\nvoid lumaVt%d(V%d* p) { p->~V%d(); }\n" % (i, n, i, i, i) for i, n in enumerate(names))
+    path.write_text(text, encoding="utf-8")
+    args = [a for a in I.parse_arguments(raw, path) if a != "-fsyntax-only"][:-1]
+    args += ["-Xclang", "-fno-access-control", "-Xclang", "-fdump-vtable-layouts", "-c", str(path), "-o", os.devnull]
+    done = subprocess.run(args, capture_output=True)
+    if done.returncode != 0:
+        sys.exit("gen_types.py: the vtable layout unit %s does not compile:\n%s" % (
+            path, done.stderr.decode("utf-8", "replace")[:6000]))
+    dump = done.stdout.decode("utf-8", "replace") + "\n" + done.stderr.decode("utf-8", "replace")
+    found = read_vtable_dump(dump, records, names)
+    print(json.dumps({"vtables": len(found), "of": len(names)}))
+    return found
 
 
 def method_names(record, v):

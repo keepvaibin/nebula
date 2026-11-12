@@ -6,10 +6,10 @@
 // plan 1.3 (contract objects): a polymorphic record's row holds its type_info, the RTTI data the module with rows is
 // built with (typeid of a type is a constant address). Nothing here calls into the C++ runtime, which the module has
 // none of on Windows: the kernel compares addresses.
+#include <luma_hook.h>
 #include <typeinfo>
 
 namespace luma {
-    struct Function;  // luma_hook.h
 
     struct TypeField {
         const char* name;   // "mVelocity"; an anonymous member's field "outer.inner"
@@ -33,6 +33,13 @@ namespace luma {
         const TypeBase* bases;
         unsigned baseCount;
         const void* typeInfo;  // &typeid(the record) when it is polymorphic, else null (contract objects)
+        // Contract classes (overrides by slot): the record's table of virtual functions at its start, as the compiler's
+        // own layout dump says (gen_types.py, -fdump-vtable-layouts): the entries before the address an object holds
+        // (Microsoft's: 1, the RTTI locator; Itanium's: 2, offset to top and the type_info) and all of its entries. 0 and
+        // 0: not known (no layout in the dump, a record only a .cpp defines, a virtual base), and no class takes it as
+        // its base.
+        unsigned vtablePrefix;
+        unsigned vtableCount;
     };
     struct AliasRow {
         const char* name;   // a typedef or another spelling of a record ("TVec3f", "JGeometry::TVec3<float>")
@@ -47,12 +54,47 @@ namespace luma {
     // Contract objects: a virtual function a record row declares (not a destructor). `function` is its virtual call:
     // invoke takes args[0] as the object seen as `record` and runs what the object's own class runs. An override has
     // the same name and params (its result may be covariant): overrider finds the one the own class runs.
-    struct MethodRow {
+    // A member function pointer's bytes as this compiler holds one (its ABI's layout: one to three words).
+    struct MemberBytes {
+        unsigned char bytes[24];
+        unsigned size;
+    };
+    // 64 bytes aligned to 32: a linker's pad between the files' rows is whole rows (null, skipped).
+    struct alignas(32) MethodRow {
         const Function* function;  // name and signature as the function rows have them (identity()); hooked null
         const char* record;        // the declaring record's row name
         const char* name;          // its own name: "control", "operator==", "operator bool"
         const char* params;        // "(s32, const Vec3f &) const": the parameters and qualifiers, no result
+        // Contract classes, overrides by slot: set for a record the factory makes (NameObj at its start), else null.
+        // members: &record::name (its slot, read by the kernel per ABI) and &entry, the code a mod class's table takes in
+        // that slot (it hands the call to slotCall). original: its invoke calls what the object's class ran in the slot
+        // before the mod's class took it (the base's own), through slotOriginal.
+        void (*members)(MemberBytes* pVirtual, MemberBytes* pEntry);
+        const Function* original;
     };
+    static_assert(sizeof(MethodRow) == 64, "a method row is one 64-byte step");
+
+    // Overrides by slot (LumaClasses.cpp). The entry's call: the mod's hook runs with it, and its proceed runs
+    // `pOriginal` (the slot's code before). args and result as an invoke takes them.
+    void slotCall(const Function* pOriginal, void** args, void* result);
+    template <class R> inline R slotRun(const Function* pOriginal, void** args) {
+        Result<R> result;
+        slotCall(pOriginal, args, &result);
+        return result.take();
+    }
+    // The code the slot `pOriginal` stands for held in the table of the object's class before the mod's class took it.
+    const void* slotOriginal(const void* pObject, const Function* pOriginal);
+    // A member function pointer of type P to `code`: a function that takes the object as its `this` with no adjustment,
+    // not called through a table (Microsoft's: the address, one word for a class with no base; Itanium's: the address and
+    // an adjustment of 0, which on x86-64 and arm64 both say a function that is not virtual).
+    template <class P> inline P memberAt(const void* code) {
+        static_assert(sizeof(P) == sizeof(void*) || sizeof(P) == 2 * sizeof(void*), "a member pointer of one or two words");
+        unsigned char bytes[sizeof(P)] = {};
+        __builtin_memcpy(bytes, &code, sizeof(code));
+        P p;
+        __builtin_memcpy(&p, bytes, sizeof(P));
+        return p;
+    }
     // A name the generator left out (luma_types.json's left_out), so the kernel refuses it with the validator's words.
     enum : unsigned { kLeftType = 0, kLeftField = 1, kLeftGlobal = 2, kLeftTemplate = 3, kLeftGroups = 4 };
     struct LeftRow {
