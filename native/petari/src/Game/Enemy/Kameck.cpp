@@ -8,35 +8,21 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 70.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 120.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 70.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryAttackWait_f1, "tryAttackWait.f1", 0.6f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryAttackWait_f2, "tryAttackWait.f2", 110.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f1, "exeMove.f1", 20.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeAttack_1, "exeAttack.1", 9);
-
 namespace {
-    NEBULA_TUNABLE(f32, sDefaultActiveDistance, 3000.0f);
-    NEBULA_TUNABLE(f32, sFrontVecBlendRate, 0.2f);
-    NEBULA_TUNABLE(f32, sUpVecBlendRate, 0.04f);
-    NEBULA_TUNABLE(f32, sTurnPlayerLimit, 0.98f);
-    NEBULA_TUNABLE(s32, sGuardTime, 50);
-    NEBULA_TUNABLE(f32, sAttackRange, 2000.0f);
+    const f32 sDefaultActiveDistance = 3000.0f;
+    const f32 sFrontVecBlendRate = 0.2f;
+    const f32 sUpVecBlendRate = 0.04f;
+    const f32 sTurnPlayerLimit = 0.98f;
+    const s32 sGuardTime = 50;
+    const f32 sAttackRange = 2000.0f;
     static const s32 sAttackWaitTime = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(f32, sBeamSpeed, 12.0f);
-    NEBULA_TUNABLE(f32, sHitHorizontalPower, 25.0f);
-    NEBULA_TUNABLE(f32, sHitVerticalPower, 25.0f);
-    NEBULA_TUNABLE(f32, sDownGravityAccel, 1.0f);
-    NEBULA_TUNABLE(f32, sDownFreq, 0.99f);
+    const f32 sBeamSpeed = 12.0f;
+    const f32 sHitHorizontalPower = 25.0f;
+    const f32 sHitVerticalPower = 25.0f;
+    const f32 sDownGravityAccel = 1.0f;
+    const f32 sDownFreq = 0.99f;
 };  // namespace
 
 namespace NrvKameck {
@@ -72,16 +58,16 @@ void Kameck::init(const TableIter& rIter) {
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
     MR::onCalcGravity(this);
-    MR::initShadowVolumeSphere(this, cNum_init_f1);
+    MR::initShadowVolumeSphere(this, 70.0f);
     MR::makeQuatAndFrontFromRotate(&mRotateQuat, &mFrontVec, this);
     initHitSensor(2);
-    MR::addHitSensorEnemy(this, "body", 8, cNum_init_f2, Vec3f(0.0f, cNum_init_f3, 0.0f));
-    MR::addHitSensorEnemyAttack(this, "attack", 8, cNum_init_f4, Vec3f(0.0f, 0.0f, 0.0f));
-    initBinder(cNum_init_f5, 0.0f, 0);
+    MR::addHitSensorEnemy(this, "body", 8, 120.0f, Vec3f(0.0f, 40.0f, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "attack", 8, 80.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    initBinder(70.0f, 0.0f, 0);
     MR::offBind(this);
     initBeam();
     initEffectKeeper(1, nullptr);
-    MR::initStarPointerTarget(this, cNum_init_f6, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTarget(this, 80.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     mAnimScaleController = new AnimScaleController(nullptr);
     mAnimScaleController->setParamTight();
@@ -409,7 +395,7 @@ bool Kameck::tryAppearEnd() {
 
 bool Kameck::tryAttackWait() {
     if (MR::isNearPlayer(this, ::sAttackRange) && !mActiveActorList->isFull()) {
-        mBeam = MR::startFollowKameckBeam(mBeamType, MR::getJointMtx(this, "Wand"), cNum_tryAttackWait_f1, Vec3f(0.0f, cNum_tryAttackWait_f2, 0.0f), mBeamEventListener);
+        mBeam = MR::startFollowKameckBeam(mBeamType, MR::getJointMtx(this, "Wand"), 0.6f, Vec3f(0.0f, 110.0f, 0.0f), mBeamEventListener);
 
         if (mBeam != nullptr) {
             setNerve(GET_NERVE(Kameck, KameckNrvAttackWait));
@@ -581,7 +567,7 @@ void Kameck::exeAttack() {
         MR::startSound(this, "SE_EV_KAMECK_STAFF_SWING");
     }
 
-    if (MR::isStep(this, cStep_exeAttack_1)) {
+    if (MR::isStep(this, 9)) {
         mBeam->requestShootToPlayerCenter(::sBeamSpeed);
         mActiveActorList->addActor(mBeam);
         mBeam = nullptr;
@@ -629,7 +615,7 @@ void Kameck::exeMove() {
 
             mRailCoord = MR::getRailCoord(this);
             mRailNextPointCoord = MR::getRailPointCoord(this, MR::getNextRailPointNo(this));
-            mMoveStep = MR::abs(mRailNextPointCoord - mRailCoord) / cNum_exeMove_f1;
+            mMoveStep = MR::abs(mRailNextPointCoord - mRailCoord) / 20.0f;
         }
     }
 

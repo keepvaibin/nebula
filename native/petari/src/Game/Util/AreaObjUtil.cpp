@@ -11,11 +11,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_getWaterAreaInfo_f1, "getWaterAreaInfo.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getWaterAreaInfo_f2, "getWaterAreaInfo.f2", 0.707f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getWaterAreaInfo_f3, "getWaterAreaInfo.f3", 5.0f);
 
 namespace MR {
     inline AreaObj* getAreaIn(const char* pName, const Vec3f& rPos) {
@@ -117,7 +112,7 @@ namespace MR {
             f32 angle = distanceRate;
             angle *= PI;
             f32 theta = angle;
-            theta *= cNum_getWaterAreaInfo_f1;
+            theta *= 0.5f;
             f32 surfaceHeight = radius * MR::cos(theta);
             pInfo->mCamWaterDepth = surfaceHeight - height;
             pInfo->mDepth = surfaceHeight + height;
@@ -137,7 +132,7 @@ namespace MR {
             pArea->getForm< AreaFormCylinder >()->calcPos(&center);
             pArea->getForm< AreaFormCylinder >()->calcUpVec(&up);
 
-            if (MR::abs(up.dot(rGravity)) > cNum_getWaterAreaInfo_f2) {
+            if (MR::abs(up.dot(rGravity)) > 0.707f) {
                 Vec3f radial;
                 f32 height = MR::vecKillElement(rPos - center, up, &radial);
                 depth = pArea->getForm< AreaFormCylinder >()->mHeight - height;
@@ -169,7 +164,7 @@ namespace MR {
         }
 
         if (!skipConnectedArea) {
-            Vec3f checkPos(pInfo->getSurfacePos() - rGravity * cNum_getWaterAreaInfo_f3);
+            Vec3f checkPos(pInfo->getSurfacePos() - rGravity * 5.0f);
             WaterInfo nextInfo;
             MR::getWaterAreaObj(&nextInfo, checkPos);
 

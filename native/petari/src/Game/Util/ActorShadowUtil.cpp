@@ -14,10 +14,6 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calcClippingRangeIncludeShadow_f1, "calcClippingRangeIncludeShadow.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcClippingRangeIncludeShadow_f2, "calcClippingRangeIncludeShadow.f2", 0.5f);
 
 namespace MR {
     void initShadowFromCSV(LiveActor* pActor, const char* pName) {
@@ -439,8 +435,8 @@ namespace MR {
 
         if (ActorShadow::getShadowController(pActor, static_cast< const char* >(nullptr))->isProjected()) {
             getShadowProjectionPos(pActor, nullptr, &projectionPos);
-            pCenter->set((pActor->mPosition + projectionPos) * cNum_calcClippingRangeIncludeShadow_f1);
-            *pRadius = projectionPos.distance(pActor->mPosition) * cNum_calcClippingRangeIncludeShadow_f2 + radius;
+            pCenter->set((pActor->mPosition + projectionPos) * 0.5f);
+            *pRadius = projectionPos.distance(pActor->mPosition) * 0.5f + radius;
             return true;
         } else {
             pCenter->set(pActor->mPosition);

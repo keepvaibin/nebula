@@ -1,9 +1,8 @@
 #include "Game/Camera/CameraTargetHolder.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(f32, sMovingThreshold, 1.0f);
+    const f32 sMovingThreshold = 1.0f;
 };  // namespace
 
 CameraTargetHolder::CameraTargetHolder()

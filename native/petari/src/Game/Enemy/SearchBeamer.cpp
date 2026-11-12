@@ -8,29 +8,7 @@
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f10, "init.f10", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateBeamShadow_f1, "updateBeamShadow.f1", 2.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeCloseSearch_1, "exeCloseSearch.1", 50);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeBeamPrepare_1, "exeBeamPrepare.1", 10);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeBeamStart_1, "exeBeamStart.1", 15);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeBeamStart_2, "exeBeamStart.2", 1);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeCloseMouth_1, "exeCloseMouth.1", 5);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeCloseMouth_2, "exeCloseMouth.2", 5);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeStopForPlayerOff_1, "exeStopForPlayerOff.1", 5);
 
 namespace NrvSearchBeamer {
     NEW_NERVE_ONEND(SearchBeamerNrvNonActive, SearchBeamer, NonActive, NonActive);
@@ -50,19 +28,19 @@ namespace NrvSearchBeamer {
 };  // namespace NrvSearchBeamer
 
 namespace {
-    NEBULA_TUNABLE(f32, cActiveDistance, 4000.0f);
-    NEBULA_TUNABLE(f32, cNearDistance, 2500.0f);
-    NEBULA_TUNABLE(f32, cFarDistance, 3000.0f);
-    NEBULA_TUNABLE(f32, cTurnDegree, 3.0f);
-    NEBULA_TUNABLE(f32, cStopTurnDegree, 15.0f);
-    NEBULA_TUNABLE(f32, cPitchLimitDegree, 35.0f);
-    NEBULA_TUNABLE(f32, cTerritoryFaceDegree, 45.0f);
-    NEBULA_TUNABLE(f32, cBeamOverTerritory, 300.0f);
-    NEBULA_TUNABLE(f32, cBeamWidth, 15.0f);
-    NEBULA_TUNABLE(f32, cPropellerAccel, 0.30f);
-    NEBULA_TUNABLE(f32, cPropellerMinSpeed, 10.0f);
-    NEBULA_TUNABLE(f32, cPropellerMaxSpeed, 40.0f);
-    NEBULA_TUNABLE(f32, cAimBelowCenter, 20.0f);
+    const f32 cActiveDistance = 4000.0f;
+    const f32 cNearDistance = 2500.0f;
+    const f32 cFarDistance = 3000.0f;
+    const f32 cTurnDegree = 3.0f;
+    const f32 cStopTurnDegree = 15.0f;
+    const f32 cPitchLimitDegree = 35.0f;
+    const f32 cTerritoryFaceDegree = 45.0f;
+    const f32 cBeamOverTerritory = 300.0f;
+    const f32 cBeamWidth = 15.0f;
+    const f32 cPropellerAccel = 0.30f;
+    const f32 cPropellerMinSpeed = 10.0f;
+    const f32 cPropellerMaxSpeed = 40.0f;
+    const f32 cAimBelowCenter = 20.0f;
 
     // A little below the player's center.
     inline void calcPlayerAimPos(Vec3f* pPos) {
@@ -86,25 +64,25 @@ void SearchBeamer::init(const TableIter& rIter) {
     MR::connectToSceneCollisionMapObjStrongLight(this);
     MR::initLightCtrl(this);
     initHitSensor(2);
-    MR::addHitSensorEnemy(this, "body", 8, cNum_init_f1, Vec3f(0.0f, -cNum_init_f2, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, 60.0f, Vec3f(0.0f, -80.0f, 0.0f));
     MR::addHitSensorCallbackEnemyAttack(this, "beam", 8, cBeamWidth);
     MR::invalidateHitSensor(this, "beam");
     mCollisionMtx.setInline(getBaseMtx());
     MR::initCollisionParts(this, "Face", getSensor("body"), mCollisionMtx);
     initEffectKeeper(1, nullptr);
     initSound(4, false);
-    MR::initStarPointerTarget(this, cNum_init_f3, Vec3f(0, 0, 0));
+    MR::initStarPointerTarget(this, 80.0f, Vec3f(0, 0, 0));
     mScaleController = new AnimScaleController(nullptr);
     mScaleController->setParamTight();
     mBindStarPointer = new WalkerStateBindStarPointer(this, mScaleController);
 
     MR::initShadowController(this, 2);
-    MR::addShadowVolumeCylinder(this, "body", cNum_init_f4);
-    MR::addShadowVolumeBox(this, "beam", Vec3f(cNum_init_f5, cNum_init_f6, cNum_init_f7), MR::getJointMtx(this, "BeamStart"));
-    MR::setShadowVolumeStartDropOffset(this, "body", cNum_init_f8);
+    MR::addShadowVolumeCylinder(this, "body", 80.0f);
+    MR::addShadowVolumeBox(this, "beam", Vec3f(10.0f, 10.0f, 100.0f), MR::getJointMtx(this, "BeamStart"));
+    MR::setShadowVolumeStartDropOffset(this, "body", 100.0f);
     MR::invalidateShadow(this, "beam");
-    MR::setShadowDropLength(this, "body", cNum_init_f9);
-    MR::setShadowDropLength(this, "beam", cNum_init_f10);
+    MR::setShadowDropLength(this, "body", 200.0f);
+    MR::setShadowDropLength(this, "beam", 200.0f);
     MR::useStageSwitchSleep(this, rIter);
     MR::useStageSwitchReadA(this, rIter);
 
@@ -156,7 +134,7 @@ void SearchBeamer::exeCloseSearch() {
     reformDirection(false);
     MR::rotateVecDegree(&mFront, mUp, cTurnDegree);
 
-    if (MR::isStep(this, cStep_exeCloseSearch_1)) {
+    if (MR::isStep(this, 50)) {
         setNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvCloseWaitFar));
     }
 }
@@ -195,7 +173,7 @@ void SearchBeamer::exeBeamPrepare() {
         MR::startBck(this, "Attack");
     }
 
-    if (MR::isStep(this, cStep_exeBeamPrepare_1)) {
+    if (MR::isStep(this, 10)) {
         setNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvBeamStart));
     }
 }
@@ -217,10 +195,10 @@ void SearchBeamer::exeBeamStart() {
     Vec3f corePos;
     MR::copyJointPos(this, "Core", &corePos);
     MR::vecBlend(corePos, beamHit, &mBeamEnd, MR::calcNerveRate(this, 15));
-    updateBeamEffect(MR::isGreaterStep(this, cStep_exeBeamStart_1));
+    updateBeamEffect(MR::isGreaterStep(this, 15));
     updateBeamShadow();
 
-    if (MR::isStep(this, cStep_exeBeamStart_2)) {
+    if (MR::isStep(this, 1)) {
         setNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvBeamAim));
     }
 }
@@ -266,13 +244,13 @@ void SearchBeamer::exeCloseMouth() {
 
     reformDirection(false);
 
-    if (MR::isLessStep(this, cStep_exeCloseMouth_1)) {
+    if (MR::isLessStep(this, 5)) {
         Vec3f corePos;
         MR::copyJointPos(this, "Core", &corePos);
         MR::vecBlend(corePos, mBeamEnd, &mBeamStart, MR::calcNerveRate(this, 5));
     }
 
-    if (MR::isStep(this, cStep_exeCloseMouth_2)) {
+    if (MR::isStep(this, 5)) {
         initBeamPos();
     }
 
@@ -436,7 +414,7 @@ void SearchBeamer::updateBeamShadow() {
     f32 dist = mPosition.distance(mBeamEnd);
     Vec3f boxSize(cBeamWidth, cBeamWidth, dist);
     MR::setShadowVolumeBoxSize(this, "beam", boxSize);
-    Vec3f dropOffset(0.0f, 0.0f, dist / cNum_updateBeamShadow_f1);
+    Vec3f dropOffset(0.0f, 0.0f, dist / 2.0f);
     MR::setShadowDropPositionMtxPtr(this, "beam", MR::getJointMtx(this, "BeamStart"), dropOffset);
 }
 
@@ -557,7 +535,7 @@ void SearchBeamer::endPointerSwoon() {
 
 void SearchBeamer::exeStopForPlayerOff() {
     reformDirection(true);
-    if (MR::isStep(this, cStep_exeStopForPlayerOff_1)) {
+    if (MR::isStep(this, 5)) {
         setNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvRecover));
     }
 }

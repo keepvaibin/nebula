@@ -14,24 +14,21 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_updateAttackLoop_f1, "updateAttackLoop.f1", 360.0f);
 
 namespace {
-    NEBULA_TUNABLE(s32, cEnergyMax, 3);
-    NEBULA_TUNABLE(s32, cStepAttackLoopSensorValidate, 20);
+    const s32 cEnergyMax = 3;
+    const s32 cStepAttackLoopSensorValidate = 20;
     // After a hit the acid keeps going this long.
     const s32 cStepAttackLoopMin = NebulaFrameClock::stepsOfMilliseconds(500);
     // Steps before the chance ends at which the end-sign animation starts, then doubles in speed.
-    NEBULA_TUNABLE(s32, cStepChanceEndSign1, -480);
-    NEBULA_TUNABLE(s32, cStepChanceEndSign2, -240);
-    NEBULA_TUNABLE(f32, cChanceEndSignAnimRate1, 1.0f);
-    NEBULA_TUNABLE(f32, cChanceEndSignAnimRate2, 2.0f);
+    const s32 cStepChanceEndSign1 = -480;
+    const s32 cStepChanceEndSign2 = -240;
+    const f32 cChanceEndSignAnimRate1 = 1.0f;
+    const f32 cChanceEndSignAnimRate2 = 2.0f;
     const s32 cStepChanceEndDemo = NebulaFrameClock::stepsOfSeconds(2);
     const s32 cStepChanceEndAnim = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(s32, cGlandNum, 4);
-    NEBULA_TUNABLE(s32, cVitalSpotNum, 3);
+    const s32 cGlandNum = 4;
+    const s32 cVitalSpotNum = 3;
 
     TombSpiderGland* getGland(const TombSpider* pParent, s32 index) {
         switch (index) {
@@ -187,7 +184,7 @@ bool TombSpiderActionBase::updateAttackLoop(s32 minAttackTime, s32 maxAttackTime
     mRotateSpeed += mRotateAccel;
     mRotateSpeed = MR::clamp(mRotateSpeed, -maxRotateSpeed, maxRotateSpeed);
     mParent->mRotation.z += mRotateSpeed;
-    mParent->mRotation.z = MR::repeat(mParent->mRotation.z, 0.0f, cNum_updateAttackLoop_f1);
+    mParent->mRotation.z = MR::repeat(mParent->mRotation.z, 0.0f, 360.0f);
 
     MR::startLevelSound(mParent, "SE_BM_LV_TSPIDER_ACID");
 

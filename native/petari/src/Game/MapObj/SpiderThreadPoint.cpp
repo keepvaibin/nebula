@@ -6,19 +6,15 @@
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_math.h>
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_startThreadLevelSound_f1, "startThreadLevelSound.f1", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startThreadLevelSound_f2, "startThreadLevelSound.f2", 100.0f);
 
 namespace {
     SpiderThreadWindCtrl* getWindCtrl() {
         return MR::getSceneObj< SpiderThread >(SceneObj_SpiderThread)->mWindCtrl;
     }
 
-    NEBULA_TUNABLE(f32, sAccelRate, 0.02f);
-    NEBULA_TUNABLE(f32, sSpeedMinToStop, 0.1f);
-    NEBULA_TUNABLE(f32, sDistanceToStop, 1.0f);
+    const f32 sAccelRate = 0.02f;
+    const f32 sSpeedMinToStop = 0.1f;
+    const f32 sDistanceToStop = 1.0f;
 };  // namespace
 
 SpiderThreadPoint::SpiderThreadPoint(const Vec3f& rPos, f32 friction)
@@ -124,10 +120,10 @@ bool SpiderThreadPoint::tryPush(const Vec3f& rPos, f32 radius) {
 
 void SpiderThreadPoint::startThreadLevelSound() {
     f32 stretchDist = mBasePos.distance(mPosition);
-    if (mPrevStretchDist > 0.0f && stretchDist > cNum_startThreadLevelSound_f1) {
+    if (mPrevStretchDist > 0.0f && stretchDist > 50.0f) {
         f32 diff = MR::abs(mPrevStretchDist - stretchDist);
         if (diff > 1.0f) {
-            MR::startSystemLevelSE("SE_OJ_LV_SPIDER_THREAD_PULL", systemLevelParam(stretchDist, diff * cNum_startThreadLevelSound_f2));
+            MR::startSystemLevelSE("SE_OJ_LV_SPIDER_THREAD_PULL", systemLevelParam(stretchDist, diff * 100.0f));
         }
     }
     mPrevStretchDist = stretchDist;

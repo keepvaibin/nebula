@@ -11,14 +11,11 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 30.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, hThrowVel, 35.0f);
-    NEBULA_TUNABLE(f32, hThrowFrontVel, 1.0f);
+    const f32 hThrowVel = 35.0f;
+    const f32 hThrowFrontVel = 1.0f;
     static const s32 hCountTimer = NebulaFrameClock::stepsOfSeconds(1);
 };  // namespace
 
@@ -95,7 +92,7 @@ void BombHeiLauncher::init(const TableIter& rIter) {
 void BombHeiLauncher::initAfterPlacement() {
     Vec3f up;
     MR::calcUpVec(&up, this);
-    MR::resetPosition(mBomb, mPosition + up * cNum_initAfterPlacement_f1);
+    MR::resetPosition(mBomb, mPosition + up * 30.0f);
     mBomb->mGravity.set(-up);
     mBomb->initAfterPlacement();
     mConnector->attachToUnder();

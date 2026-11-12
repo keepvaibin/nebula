@@ -5,16 +5,6 @@
 #include "Game/Player/MarioShadow.hpp"
 #include "Game/Player/MarioState.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_beeMarioOnAir_f1, "beeMarioOnAir.f1", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_beeMarioOnAir_f2, "beeMarioOnAir.f2", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_beeMarioOnAir_f3, "beeMarioOnAir.f3", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_beeMarioOnAir_f4, "beeMarioOnAir.f4", 1.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_beeMarioOnAir_f5, "beeMarioOnAir.f5", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_beeMarioOnAir_f6, "beeMarioOnAir.f6", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_beeMarioOnAir_f7, "beeMarioOnAir.f7", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_beeMarioOnAir_f8, "beeMarioOnAir.f8", 0.5f);
 
 void Mario::beeMarioOnGround() {
     if (getPlayerMode() == PlayerMode_Bee && !mDrawStates.onSlipFloor && mMovementStates.onGround && !mMovementStates.slopeSlide && !isStatusActive(MarioStatus_Slider)) {
@@ -76,14 +66,14 @@ bool Mario::beeMarioOnAir() {
 
     if (getPlayerMode() == PlayerMode_Bee) {
         Vec3f horizontal;
-        if (MR::vecKillElement(mJumpVec, getAirGravityVec(), &horizontal) > -cNum_beeMarioOnAir_f1 || mBeeGravityReviveTimer) {
+        if (MR::vecKillElement(mJumpVec, getAirGravityVec(), &horizontal) > -5.0f || mBeeGravityReviveTimer) {
             if (!mBeeFlyInhibitTimer) {
                 f32 verticalSpeed = cutGravityElementFromJumpVec(true);
                 f32 speed = mJumpVec.length();
                 MR::normalizeOrZero(&mJumpVec);
                 if (!MR::vecBlendSphere(mJumpVec, mFrontVec, &mJumpVec, mActor->getConst().getTable()->mBeeSpeedRotateRatio)) {
                     Mtx rotation;
-                    NebulaMtxRotAxisRad(rotation, &mHeadVec, cNum_beeMarioOnAir_f2);
+                    NebulaMtxRotAxisRad(rotation, &mHeadVec, 0.1f);
                     NebulaMtxMultVecSR(rotation, &mJumpVec, &mJumpVec);
                 }
 
@@ -105,7 +95,7 @@ bool Mario::beeMarioOnAir() {
             s16 powerTime = mActor->getConst().getTable()->mBeeGravityPowerTime;
             Vec3f horizontalVelocity;
             MR::vecKillElement(mJumpVec, getAirGravityVec(), &horizontalVelocity);
-            if (horizontalVelocity.length() < cNum_beeMarioOnAir_f3) {
+            if (horizontalVelocity.length() < 5.0f) {
                 inhibitTime = mActor->getConst().getTable()->mBeeAirWalkInhibitTimeV;
                 powerTime = mActor->getConst().getTable()->mBeeGravityPowerTimeV;
             }
@@ -141,7 +131,7 @@ bool Mario::beeMarioOnAir() {
                         cancelSquatMode();
                         playSound("空中ふんばり");
                         if (mAirWalkTimer < mActor->getConst().getTable()->mAirWalkTime / 2) {
-                            getAnimator()->setSpeed(cNum_beeMarioOnAir_f4);
+                            getAnimator()->setSpeed(1.5f);
                         }
 
                         if (mJumpKind == 4) {
@@ -160,8 +150,8 @@ bool Mario::beeMarioOnAir() {
                     }
 
                     f32 ratio = static_cast< f32 >(time) / powerTime;
-                    ratio = cNum_beeMarioOnAir_f5 * (ratio * ratio);
-                    f32 acceleration = cNum_beeMarioOnAir_f6 * (MR::getRandom() - ratio);
+                    ratio = 0.9f * (ratio * ratio);
+                    f32 acceleration = 15.0f * (MR::getRandom() - ratio);
                     acceleration =
                         acceleration * mActor->getConst().getTable()->mBeeFlyRandomFactor - mActor->getConst().getTable()->mBeeFlyConstantFactor;
                     f32 verticalSpeed = cutGravityElementFromJumpVec(true);
@@ -185,8 +175,8 @@ bool Mario::beeMarioOnAir() {
                             if (mBeeUpDownSpeed < -mActor->getConst().getTable()->mBeeUpSpeedMax) {
                                 mBeeUpDownSpeed = -mActor->getConst().getTable()->mBeeUpSpeedMax;
                             }
-                        } else if (mBeeUpDownSpeed < -cNum_beeMarioOnAir_f7) {
-                            mBeeUpDownSpeed = -cNum_beeMarioOnAir_f8;
+                        } else if (mBeeUpDownSpeed < -0.5f) {
+                            mBeeUpDownSpeed = -0.5f;
                         }
                     }
 

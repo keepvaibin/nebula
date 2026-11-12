@@ -5,25 +5,21 @@
 #include "Game/Util.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/CollisionShapeUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 0.7f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 0.001f);
 
 namespace {
     static const s32 sSteamTime = NebulaFrameClock::stepsOfMilliseconds(1500);
-    NEBULA_TUNABLE(s32, sAppearTime, 82);
+    const s32 sAppearTime = 82;
     static const s32 sDisappearTime = NebulaFrameClock::stepsOfMilliseconds(1500);
     static const s32 sSteamWaitTime = NebulaFrameClock::stepsOfSeconds(2);
     static const s32 sSteamEndTime = NebulaFrameClock::stepsOfMilliseconds(1500);
-    NEBULA_TUNABLE(f32, sSensorRadius, 250.0f);
-    NEBULA_TUNABLE(f32, sSensorOffsetY, 250.0f);
-    NEBULA_TUNABLE(f32, sHitCylinderRange, 10.0f);
-    NEBULA_TUNABLE(f32, sHitSphereRadius, 70.0f);
-    NEBULA_TUNABLE(f32, sHitSphereOffsetY, 400.0f);
-    NEBULA_TUNABLE(s32, sMaxNumGroupClipping, 16);
-    NEBULA_TUNABLE(f32, sHitCylinderHeight, 330.0f);
+    const f32 sSensorRadius = 250.0f;
+    const f32 sSensorOffsetY = 250.0f;
+    const f32 sHitCylinderRange = 10.0f;
+    const f32 sHitSphereRadius = 70.0f;
+    const f32 sHitSphereOffsetY = 400.0f;
+    const s32 sMaxNumGroupClipping = 16;
+    const f32 sHitCylinderHeight = 330.0f;
 };  // namespace
 
 namespace NrvLavaSteam {
@@ -84,7 +80,7 @@ void LavaSteam::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     if (MR::isSensorPlayerOrRide(pReceiver)) {
-        f32 playerRadius = pReceiver->getRadius() * cNum_attackSensor_f1;
+        f32 playerRadius = pReceiver->getRadius() * 0.7f;
 
         if (isNerve(GET_NERVE(LavaSteam, HostTypeSteam))) {
             HitSphere sphere(mPosition + mUp * ::sHitSphereOffsetY, ::sHitSphereRadius);
@@ -137,7 +133,7 @@ void LavaSteam::exeWait() {
 
     if (MR::isGreaterStep(this, ::sAppearTime)) {
         mEffectScale.setAll< f32 >(
-            MR::getEaseInValue(static_cast< f32 >(::sDisappearTime - getNerveStep()) / (::sDisappearTime - ::sAppearTime), cNum_exeWait_f1, 1.0f, 1.0f));
+            MR::getEaseInValue(static_cast< f32 >(::sDisappearTime - getNerveStep()) / (::sDisappearTime - ::sAppearTime), 0.001f, 1.0f, 1.0f));
     }
 
     if (MR::isStep(this, ::sDisappearTime)) {

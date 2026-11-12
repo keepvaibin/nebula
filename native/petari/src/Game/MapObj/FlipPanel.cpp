@@ -7,19 +7,13 @@
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calcJointMove_f1, "calcJointMove.f1", 25.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeEndPrepare_1, "exeEndPrepare.1", 20);
 
 namespace {
     // The most panels in a FlipPanel group (0x20).
-    NEBULA_TUNABLE(s32, cPanelGroupSize, 0x20);
+    const s32 cPanelGroupSize = 0x20;
     // The same for the group the observer reads.
-    NEBULA_TUNABLE(s32, cObserverGroupSize, 0x20);
+    const s32 cObserverGroupSize = 0x20;
 };  // namespace
 
 namespace NrvFlipPanel {
@@ -156,7 +150,7 @@ void FlipPanel::exeWait() {
 }
 
 void FlipPanel::exeEndPrepare() {
-    if (MR::isStep(this, cStep_exeEndPrepare_1)) {
+    if (MR::isStep(this, 20)) {
         setNerve(GET_NERVE(FlipPanel, FlipPanelNrvEnd));
     }
 }
@@ -231,7 +225,7 @@ bool FlipPanel::calcJointMove(Pos3f* pPos, const JointControllerInfo& /*rInfo*/)
     MR::copyJointPos(this, "Panel", &jointPos);
     Vec3f upVec;
     MR::calcUpVec(&upVec, this);
-    jointPos.scaleAdd(-cNum_calcJointMove_f1, upVec, jointPos);
+    jointPos.scaleAdd(-25.0f, upVec, jointPos);
     pPos->setTrans(jointPos);
     return true;
 }

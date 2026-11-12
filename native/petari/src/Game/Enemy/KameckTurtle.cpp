@@ -5,29 +5,20 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/JetTurtle.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 0.8f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRun_f1, "exeRun.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRun_f2, "exeRun.f2", 0.5f);
 
 namespace {
     // const f32 sBeamRadius =
-    NEBULA_TUNABLE(f32, sUpVecBlendRate, 0.2f);
-    NEBULA_TUNABLE(f32, sFrontVecBlendRate, 0.2f);
+    const f32 sUpVecBlendRate = 0.2f;
+    const f32 sFrontVecBlendRate = 0.2f;
     const s32 sRunTime = NebulaFrameClock::stepsOfSeconds(10);
     const s32 sEnableAttackTime = NebulaFrameClock::stepsOfSeconds(5);
-    NEBULA_TUNABLE(s32, sDeccelStartTime, 200);
-    NEBULA_TUNABLE(s32, sDeccelEndTime, 400);
-    NEBULA_TUNABLE(f32, sRunSpeed, 15.0f);
-    NEBULA_TUNABLE(f32, sRunGravity, 0.7f);
-    NEBULA_TUNABLE(f32, sRunFric, 0.98f);
-    NEBULA_TUNABLE(f32, sRunSpinDegree, -25.0f);
+    const s32 sDeccelStartTime = 200;
+    const s32 sDeccelEndTime = 400;
+    const f32 sRunSpeed = 15.0f;
+    const f32 sRunGravity = 0.7f;
+    const f32 sRunFric = 0.98f;
+    const f32 sRunSpinDegree = -25.0f;
     // const s32 sMorphTime =
 };  // namespace
 
@@ -50,12 +41,12 @@ void KameckTurtle::init(const TableIter& rIter) {
     initJetTurtle();
     initSound(4, false);
     MR::onCalcGravity(this);
-    initBinder(cNum_init_f1, cNum_init_f2, 0);
+    initBinder(40.0f, 10.0f, 0);
     MR::setKameckBeamCollisionFilter(this);
     initHitSensor(1);
-    MR::initShadowVolumeSphere(this, cNum_init_f3);
+    MR::initShadowVolumeSphere(this, 60.0f);
     MR::invalidateClipping(this);
-    MR::addHitSensorEnemyAttack(this, "attack", 8, cNum_init_f4, Vec3f(0.0f));
+    MR::addHitSensorEnemyAttack(this, "attack", 8, 50.0f, Vec3f(0.0f));
     initEffectKeeper(0, "BossKameckBeam");
     initNerve(GET_NERVE(KameckTurtle, KameckTurtleNrvWait));
     makeActorAppeared();
@@ -97,7 +88,7 @@ void KameckTurtle::calcAndSetBaseMtx() {
 void KameckTurtle::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (isEnableAttack()) {
         if (MR::isSensorPlayer(pReceiver) && MR::sendMsgEnemyAttackFlipJump(pReceiver, pSender)) {
-            MR::reflectVelocityH(this, pSender, pReceiver, cNum_attackSensor_f1);
+            MR::reflectVelocityH(this, pSender, pReceiver, 0.8f);
 
             if (!MR::isNearZero(mVelocity)) {
                 MR::normalize(mVelocity, &mRunDir);
@@ -177,12 +168,12 @@ void KameckTurtle::exeRun() {
         easeInOut = 1.0f - MR::calcNerveEaseInOutRate(this, ::sDeccelStartTime, ::sDeccelEndTime);
     }
 
-    MR::addVelocityMoveToDirection(this, mRunDir, easeInOut * cNum_exeRun_f1);
+    MR::addVelocityMoveToDirection(this, mRunDir, easeInOut * 0.5f);
     MR::rotateDirectionGravityDegree(this, &mFront, ::sRunSpinDegree * easeInOut);
     MR::turnDirectionToGround(this, &mFront);
     MR::attenuateVelocity(this, ::sRunFric);
 
-    if (MR::isBindedWall(this) && MR::calcReboundVelocity(&mVelocity, *MR::getWallNormal(this), cNum_exeRun_f2)) {
+    if (MR::isBindedWall(this) && MR::calcReboundVelocity(&mVelocity, *MR::getWallNormal(this), 0.5f)) {
         Vec3f dir = MR::getVelocityHorizon(this);
 
         if (!MR::normalizeOrZero(&dir)) {

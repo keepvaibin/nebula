@@ -272,6 +272,70 @@ bool setting_overlaps() {
     return ok;
 }
 
+// Patches by key (luma-format 5.1) go to the cooker with their mod, file and game path, bottom of the list first, then
+// layer and file order, with the mod order; a file that is not <game path>.json is named, not used. A mod of patches
+// only changes the game.
+bool patches_by_key_in_the_plan() {
+    bool ok = true;
+    const fs::path root = galaxy::test_temp_path("nebula_mods_patches_by_key");
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    const auto manifest = [](const char* id, const char* layers) {
+        return std::string(R"({"format":1,"id":")") + id + R"(","name":"n","version":"1.0.0","game":"RMG","layers":[)" + layers + "]}";
+    };
+    write(root / "mods" / "top" / "luma.json", manifest("top", R"({"path":"layers/base"})"));
+    write(root / "mods" / "top" / "layers" / "base" / "patches" / "StageData" / "AstroGalaxy" / "jmp" / "Placement" / "Common" /
+              "ObjInfo.json",
+          R"({"patch":1,"key":["l_id"],"remove":[{"l_id":3}]})");
+    write(root / "mods" / "low" / "luma.json", manifest("low", R"({"path":"layers/one"},{"path":"layers/two"})"));
+    write(root / "mods" / "low" / "layers" / "one" / "patches" / "ObjectData" / "Things.bcsv.json", R"({"patch":1,"key":["name"]})");
+    write(root / "mods" / "low" / "layers" / "one" / "patches" / "ObjectData" / "Notes.txt", "not a patch");
+    write(root / "mods" / "low" / "layers" / "two" / "patches" / "ObjectData" / "Things.bcsv.json", R"({"patch":1,"key":["name"]})");
+    write(root / "mods" / "low" / "layers" / "two" / "patches" / "Effect" / "Particles.json", R"({"patch":1,"key":["name"]})");
+#if !defined(_WIN32)
+    // A name with a tab would be other fields of the cooker's line (Windows has no such names).
+    write(root / "mods" / "low" / "layers" / "two" / "patches" / "ObjectData" / "Tab\tName.bcsv.json", R"({"patch":1,"key":["name"]})");
+#endif
+    write(root / "mods.ini", "[top]\nenabled=1\norder=1\n[low]\nenabled=1\norder=2\n");
+    galaxy::mods::set_mods_folder(root / "mods", root / "mods.ini", "RMGE01");
+    const std::vector<galaxy::mods::ModInfo> mods = galaxy::mods::scan_mods();
+    const auto changes = [&](const char* id) {
+        const auto it = std::find_if(mods.begin(), mods.end(), [&](const galaxy::mods::ModInfo& m) { return m.id == id; });
+        return it != mods.end() && it->enabled && it->problem.empty() && galaxy::mods::changes_game_files(*it);
+    };
+    ok &= expect(changes("top") && changes("low"), "a .luma of patches only changes the game");
+    const galaxy::assets::AssetStore store;
+    const galaxy::mods::ModPlan plan = galaxy::mods::plan_mod_changes(store, "RMGE01", "UsEnglish", mods);
+    std::vector<std::string> got;
+    for (const galaxy::mods::ModPlan::Patch& p : plan.patches) got.push_back(p.mod_id + " " + p.entry + " " + p.disc);
+    ok &= expect(got == std::vector<std::string>{
+                            "low layers/one/patches/ObjectData/Things.bcsv.json ObjectData/Things.bcsv",
+                            "low layers/two/patches/Effect/Particles.json Effect/Particles",
+                            "low layers/two/patches/ObjectData/Things.bcsv.json ObjectData/Things.bcsv",
+                            "top layers/base/patches/StageData/AstroGalaxy/jmp/Placement/Common/ObjInfo.json "
+                            "StageData/AstroGalaxy/jmp/Placement/Common/ObjInfo"},
+                 "the patches, bottom of the list first, then layer and file order");
+    ok &= expect(plan.used == std::vector<std::string>{"low", "top"}, "the mod order, bottom of the list first");
+    ok &= expect(std::any_of(plan.notes.begin(), plan.notes.end(),
+                             [](const std::string& n) { return n.find("layers/one/patches/ObjectData/Notes.txt") != std::string::npos; }),
+                 "a file that is not a patch is named");
+#if !defined(_WIN32)
+    ok &= expect(std::any_of(plan.notes.begin(), plan.notes.end(),
+                             [](const std::string& n) { return n.find("Tab\tName.bcsv.json is not used: its name holds a tab") != std::string::npos; }),
+                 "a patch whose name holds a tab is left out and named");
+#endif
+    const std::string text = galaxy::mods::plan_text(plan, "RMGE01");
+    ok &= expect(text.find("\n%mods\tlow\ttop\n") != std::string::npos &&
+                     text.find("\n%patch\ttop\tlayers/base/patches/StageData/AstroGalaxy/jmp/Placement/Common/ObjInfo.json\t"
+                               "StageData/AstroGalaxy/jmp/Placement/Common/ObjInfo\t") != std::string::npos,
+                 "the cooker's plan has the mod order and each patch");
+    const std::string signature = galaxy::mods::plan_signature(plan, "RMGE01");
+    ok &= expect(signature.find("\n%mods\tlow\ttop\n") != std::string::npos && signature.find("%patch\tlow\t") != std::string::npos,
+                 "the signature has the order and the patches");
+    fs::remove_all(root, ec);
+    return ok;
+}
+
 // A .luma that only sets the player's numbers, or only adds an object, is in the plan and asks for a restart; one with an
 // empty layer folder sets nothing.
 bool layer_only_mods() {
@@ -300,6 +364,47 @@ bool layer_only_mods() {
     const galaxy::mods::ModPlan plan = galaxy::mods::plan_mod_changes(store, "RMGE01", "UsEnglish", mods);
     ok &= expect(plan.rows.player_constants.size() == 2u && plan.rows.object_classes.size() == 1u,
                  "the plan has the number for Mario and Luigi, and the object");
+    fs::remove_all(root, ec);
+    return ok;
+}
+
+// A layer's assets/ is the mod's own store: each file a plan line at /Luma/<id>/<path>, the later layer's same path
+// winning; each layer's assets/effects.json a change for the cook, in layer order.
+bool layer_assets() {
+    bool ok = true;
+    const fs::path root = galaxy::test_temp_path("nebula_mods_layer_assets");
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    const fs::path mod = root / "mods" / "fx-mod";  // an installed mod's folder is named by its id
+    write(mod / "luma.json",
+          R"({"format":"1.0","id":"fx-mod","name":"n","version":"1.0.0","game":{"id":"RMG"},"layers":[{"name":"base"},{"name":"night"}]})");
+    write(mod / "layers" / "base" / "assets" / "spark.png", "base");
+    write(mod / "layers" / "base" / "assets" / "effects.json", R"({"effects":[]})");
+    write(mod / "layers" / "night" / "assets" / "spark.png", "night");
+    write(mod / "layers" / "night" / "assets" / "sub" / "glow.bti", "glow");
+    write(mod / "layers" / "night" / "assets" / "effects.json", R"({"effects":[]})");
+    write(root / "mods.ini", "[fx-mod]\nenabled=1\norder=1\n");
+    galaxy::mods::set_mods_folder(root / "mods", root / "mods.ini", "RMGE01");
+    const std::vector<galaxy::mods::ModInfo> mods = galaxy::mods::scan_mods();
+    const auto it = std::find_if(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& m) { return m.id == "fx-mod"; });
+    ok &= expect(it != mods.end() && it->problem.empty() && galaxy::mods::changes_game_files(*it), "assets set the game");
+    const galaxy::assets::AssetStore store;
+    const galaxy::mods::ModPlan plan = galaxy::mods::plan_mod_changes(store, "RMGE01", "UsEnglish", mods);
+    const auto host_of = [&](const char* disc) {
+        for (const galaxy::mods::ModPlan::File& f : plan.files) {
+            if (f.disc == disc) return f.host;
+        }
+        return fs::path();
+    };
+    ok &= expect(host_of("/Luma/fx-mod/spark.png") == mod / "layers" / "night" / "assets" / "spark.png",
+                 "the later layer's file wins its path");
+    ok &= expect(host_of("/Luma/fx-mod/sub/glow.bti") == mod / "layers" / "night" / "assets" / "sub" / "glow.bti",
+                 "a file in a sub-folder keeps its path");
+    ok &= expect(host_of("/Luma/fx-mod/effects.json").empty() && plan.files.size() == 2u, "effects.json is not a file line");
+    ok &= expect(plan.merges.size() == 2u && plan.merges[0].disc == "Luma/fx-mod/effects.json" &&
+                     plan.merges[0].host == mod / "layers" / "base" / "assets" / "effects.json" &&
+                     plan.merges[1].host == mod / "layers" / "night" / "assets" / "effects.json",
+                 "each layer's effects.json is a change, in layer order");
     fs::remove_all(root, ec);
     return ok;
 }
@@ -439,7 +544,7 @@ bool luma_rules() {
     mod("X", "mod-x", "");
     mod("Y", "mod-y", R"("conflicts":[{"id":"mod-x","why":"Both change the lives."}],)");
     mod("M", "mod-m", "");
-    write(root / "mods" / "M" / "layers" / "layer" / "movies" / "opening.mp4", "movie");
+    write(root / "mods" / "M" / "layers" / "layer" / "files" / "MovieData" / "opening.mp4", "movie");
     // What the reader refuses in its own words: a cut-off luma.json, a layer folder missing. A later format reads its
     // format and id only, and the second game reads: both are the validator's to refuse (L205, L207).
     write(root / "mods" / "Cut" / "luma.json", R"({"format":"1.0","id":"cut","na)");
@@ -473,8 +578,8 @@ bool luma_rules() {
     };
     ok &= expect(place("Q after P") < place("P") && place("0 before P") > place("P"), "load_after and load_before place a new mod");
     const std::vector<fs::path> movies = galaxy::mods::movie_folders(mods);
-    ok &= expect(movies.size() == 1u && movies[0].filename() == "movies" && movies[0].parent_path().filename() == "layer",
-                 "a .luma's movies are used");
+    ok &= expect(movies.size() == 1u && movies[0].filename() == "MovieData" && movies[0].parent_path().filename() == "files",
+                 "a .luma's movies at their game path are used");
     fs::remove_all(root, ec);
     return ok;
 }
@@ -693,7 +798,7 @@ bool text_options() {
 int main() {
     test_texture_categories();
     // Every test runs, whichever fail.
-    const bool results[] = {texture_names(), xml(), importing(), code_patch_notes(), setting_overlaps(), layer_only_mods(), galaxy_saves(),
+    const bool results[] = {texture_names(), xml(), importing(), code_patch_notes(), setting_overlaps(), patches_by_key_in_the_plan(), layer_only_mods(), layer_assets(), galaxy_saves(),
                             luma_rules(), luma_import(), text_options()};
     bool ok = true;
     for (const bool passed : results) ok = ok && passed;

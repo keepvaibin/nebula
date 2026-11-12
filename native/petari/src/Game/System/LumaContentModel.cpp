@@ -17,7 +17,6 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include <luma.h>
 #include <luma_content_model.h>
 #include <luma_modlog.h>
@@ -42,7 +41,7 @@
 //
 // No cost with no mod: frame() and released() are one load each while no model was attached.
 
-NEBULA_TUNABLE_NAMED(s32, cFrames_pose_1, "pose.1", 120);  // model.pose facts a handle writes, from its attach (harness only)
+  // model.pose facts a handle writes, from its attach (harness only)
 
 namespace luma {
     namespace content {
@@ -655,7 +654,7 @@ namespace luma {
                         end(rAttached, "actor", true);
                         continue;
                     }
-                    if (facts && rAttached.part != nullptr && rAttached.frame < static_cast< u32 >(cFrames_pose_1)) {
+                    if (facts && rAttached.part != nullptr && rAttached.frame < static_cast< u32 >(120)) {
                         poseFact(rAttached);
                     }
                     rAttached.frame++;

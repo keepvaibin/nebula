@@ -13,22 +13,7 @@
 #include <Game/Ui/TextBox.hpp>
 #include "Game/System/NebulaClock.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_getOwnDim_f1, "getOwnDim.f1", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getOwnDim_f2, "getOwnDim.f2", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_shapeFade_f1, "shapeFade.f1", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_shapeFade_f2, "shapeFade.f2", 1.6f);
-NEBULA_TUNABLE_NAMED(f32, cNum_shapeFade_f3, "shapeFade.f3", 1.6f);
-NEBULA_TUNABLE_NAMED(f32, cNum_shapeFade_f4, "shapeFade.f4", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_shapeFade_f5, "shapeFade.f5", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_shapeFade_f6, "shapeFade.f6", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_shapeFade_f7, "shapeFade.f7", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_shapeFade_f8, "shapeFade.f8", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_shapeFade_f9, "shapeFade.f9", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawDim_f1, "drawDim.f1", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawDim_f2, "drawDim.f2", 0.5f);
 
 namespace {
     const MessageChangeFuncTableEntry cMessageChangeFuncTable[] = {
@@ -41,10 +26,10 @@ namespace {
     u32 sDimEpoch = 0;
     // A closed window's dim holds this many frames for the next window (the pause menu's question opens 9 frames
     // after the save's last window closes), then lifts over 10, as the windows' own end animations do.
-    NEBULA_TUNABLE(s32, cDimLinger, 12);
-    NEBULA_TUNABLE(f32, cDimStep, 0.1f);
+    const s32 cDimLinger = 12;
+    const f32 cDimStep = 0.1f;
     // A dim left longer ago than this belongs to an earlier screen.
-    NEBULA_TUNABLE(s32, cDimHandOverMs, 100);
+    const s32 cDimHandOverMs = 100;
 };  // namespace
 
 namespace NrvSysInfoWindow {
@@ -298,12 +283,12 @@ void SysInfoWindow::decideNo() {
 // The BG pane's alpha as the layout would draw it: its own times its influencing parents', and for the question
 // window shaped as its drop shadow is (shapeFade).
 f32 SysInfoWindow::getOwnDim() const {
-    f32 level = mDimPane->IsVisible() ? mDimPane->mAlpha / cNum_getOwnDim_f1 : 0.0f;
+    f32 level = mDimPane->IsVisible() ? mDimPane->mAlpha / 255.0f : 0.0f;
     for (const Ui::Pane* pPane = mDimPane->GetParent(); pPane != nullptr && level > 0.0f; pPane = pPane->GetParent()) {
         if (!pPane->IsVisible()) {
             level = 0.0f;
         } else if (pPane->IsInfluencedAlpha()) {
-            level *= pPane->mAlpha / cNum_getOwnDim_f2;
+            level *= pPane->mAlpha / 255.0f;
         }
     }
     return mFadePane != nullptr ? level * level * level : level;
@@ -318,11 +303,11 @@ void SysInfoWindow::shapeFade() {
     if (mFadePane == nullptr || mPanelPane == nullptr || mShadowPane == nullptr) {
         return;
     }
-    const f32 fade = mFadePane->mGlbAlpha / cNum_shapeFade_f1;
-    const f32 panel = fade * cNum_shapeFade_f2 < 1.0f ? fade * cNum_shapeFade_f3 : 1.0f;
+    const f32 fade = mFadePane->mGlbAlpha / 255.0f;
+    const f32 panel = fade * 1.6f < 1.0f ? fade * 1.6f : 1.0f;
     const f32 shadow = fade * fade * fade;
-    mPanelPane->mGlbAlpha = static_cast< u8 >(panel * (mPanelPane->mAlpha / cNum_shapeFade_f4) * cNum_shapeFade_f5 + cNum_shapeFade_f6);
-    mShadowPane->mGlbAlpha = static_cast< u8 >(shadow * (mShadowPane->mAlpha / cNum_shapeFade_f7) * cNum_shapeFade_f8 + cNum_shapeFade_f9);
+    mPanelPane->mGlbAlpha = static_cast< u8 >(panel * (mPanelPane->mAlpha / 255.0f) * 255.0f + 0.5f);
+    mShadowPane->mGlbAlpha = static_cast< u8 >(shadow * (mShadowPane->mAlpha / 255.0f) * 255.0f + 0.5f);
 }
 
 void SysInfoWindow::setDimHandOver(u8 when) {
@@ -369,7 +354,7 @@ void SysInfoWindow::drawDim() const {
     }
     MR::setupDrawForLayout();
     const u8 alpha = mDimPane->mGlbAlpha;
-    mDimPane->mGlbAlpha = static_cast< u8 >(mDim * cNum_drawDim_f1 + cNum_drawDim_f2);
+    mDimPane->mGlbAlpha = static_cast< u8 >(mDim * 255.0f + 0.5f);
     mDimPane->Draw(pManager->mDrawInfo);
     mDimPane->mGlbAlpha = alpha;
 }

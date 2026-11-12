@@ -5,12 +5,6 @@
 #include "Game/Player/MarioConst.hpp"
 #include "Game/Player/MarioState.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 0.95f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f2, "update.f2", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f3, "update.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f4, "update.f4", 40.0f);
 
 bool Mario::blown(const Vec3f& rVec) {
     if (getCurrentStatus() == MarioStatus_Blown) {
@@ -117,7 +111,7 @@ bool MarioBlown::update() {
         }
 
         addVelocity(mVelocity);
-        mVelocity.mult(cNum_update_f1);
+        mVelocity.mult(0.95f);
 
         if (!isAnimationRun("壁ヒット着地")) {
             return false;
@@ -135,11 +129,11 @@ bool MarioBlown::update() {
 
     f32 dot = setVelocityOffGravity(mVelocity);
 
-    if (mVelocity.length() > cNum_update_f2) {
-        mVelocity.mult(cNum_update_f3);
+    if (mVelocity.length() > 10.0f) {
+        mVelocity.mult(0.5f);
     }
 
-    mVelocity += mActor->mGravityVec * MR::clamp(dot, 0.0f, cNum_update_f4);
+    mVelocity += mActor->mGravityVec * MR::clamp(dot, 0.0f, 40.0f);
     getPlayer()->setJumpVec(mVelocity);
     return true;
 }

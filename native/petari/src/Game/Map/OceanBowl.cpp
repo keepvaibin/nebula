@@ -15,13 +15,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Render/GameTexture.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcWaterInfo_f1, "calcWaterInfo.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_loadMaterial_f1, "loadMaterial.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_loadMaterial_f2, "loadMaterial.f2", 2.0f);
 
 namespace {
     const s32 cPointNum = OceanBowl::cPointNum;
@@ -29,26 +23,26 @@ namespace {
     const f32 sPointInterval = 200.0f;
     const f32 sPointIntervalHalf = sPointInterval / 2.0f;
     const f32 sGridHalfExtent = cPointNum * sPointInterval / 2.0f;
-    NEBULA_TUNABLE(f32, sPointWaveRateDistMax, 500.0f);
-    NEBULA_TUNABLE(f32, sTexRate0, 0.05f);
-    NEBULA_TUNABLE(f32, sTexRate1, 0.05f);
-    NEBULA_TUNABLE(f32, sTexRate2, 0.1f);
-    NEBULA_TUNABLE(f32, sWaveSpeed0, -0.04f);
-    NEBULA_TUNABLE(f32, sWaveSpeed1, -0.04f);
-    NEBULA_TUNABLE(f32, sTexSpeedU0, -0.0008f);
-    NEBULA_TUNABLE(f32, sTexSpeedV0, -0.0008f);
-    NEBULA_TUNABLE(f32, sTexSpeedU1, -0.001f);
-    NEBULA_TUNABLE(f32, sTexSpeedV1, 0.0008f);
-    NEBULA_TUNABLE(f32, sTexSpeedU2, -0.003f);
-    NEBULA_TUNABLE(f32, sTexSpeedV2, -0.001f);
-    NEBULA_TUNABLE(f32, sIndirectScale, 0.1f);
-    NEBULA_TUNABLE(f32, sClippingDistance, 1000.0f);
-    NEBULA_TUNABLE(f32, sMaskExtent, 4800.0f);  // the shore mask covers the grid's point span
+    const f32 sPointWaveRateDistMax = 500.0f;
+    const f32 sTexRate0 = 0.05f;
+    const f32 sTexRate1 = 0.05f;
+    const f32 sTexRate2 = 0.1f;
+    const f32 sWaveSpeed0 = -0.04f;
+    const f32 sWaveSpeed1 = -0.04f;
+    const f32 sTexSpeedU0 = -0.0008f;
+    const f32 sTexSpeedV0 = -0.0008f;
+    const f32 sTexSpeedU1 = -0.001f;
+    const f32 sTexSpeedV1 = 0.0008f;
+    const f32 sTexSpeedU2 = -0.003f;
+    const f32 sTexSpeedV2 = -0.001f;
+    const f32 sIndirectScale = 0.1f;
+    const f32 sClippingDistance = 1000.0f;
+    const f32 sMaskExtent = 4800.0f;  // the shore mask covers the grid's point span
 
     const NebulaColor8 sOceanBowlStageColor0 = {40, 40, 40, 20};
     const NebulaColor8 sOceanBowlStageColor1 = {200, 230, 210, 255};
-    NEBULA_TUNABLE(u8, sOceanBowlBloomStageColor0V, 95);
-    NEBULA_TUNABLE(u8, sOceanBowlBloomStageColor1V, 50);
+    const u8 sOceanBowlBloomStageColor0V = 95;
+    const u8 sOceanBowlBloomStageColor1V = 50;
 
     // One strip per row pair, two vertices per column: (u of row x + 1, v) then (u of row x, v).
     void fillStripTexCoords(f32* pArray, f32 rate) {
@@ -92,7 +86,7 @@ void OceanBowl::init(const TableIter& rIter) {
 
     MR::calcActorAxis(&mSide, &mUp, &mFront, this);
 
-    mRadius = cNum_init_f1 * mScale.x;
+    mRadius = 100.0f * mScale.x;
     initPoints();
     WaterAreaFunction::entryOceanBowl(this);
 
@@ -124,7 +118,7 @@ bool OceanBowl::calcWaterInfo(const Vec3f& rPos, const Vec3f& rGravity, WaterInf
     // A bowl placed with no scale (radius 0) has no depth, not a division by 0.
     f32 angle = mRadius > 0.0f ? horizontal.length() / mRadius : 1.0f;
     angle *= PI;
-    angle *= cNum_calcWaterInfo_f1;
+    angle *= 0.5f;
 
     pInfo->mDepth = MR::cos(angle) * mRadius;
     pInfo->mDepth += height;
@@ -371,8 +365,8 @@ SiteMaterial OceanBowl::loadMaterial() const {
     material.constants[12] = mTexU2;
     material.constants[13] = mTexV2;
     // The shore mask follows the player: its offset from the bowl's first point, over the mask's extent.
-    material.constants[14] = ((getPoint(0, 0)->mVertexPosition.z - MR::getPlayerPos()->z) + sMaskExtent / cNum_loadMaterial_f1) / sMaskExtent;
-    material.constants[15] = ((getPoint(0, 0)->mVertexPosition.x - MR::getPlayerPos()->x) + sMaskExtent / cNum_loadMaterial_f2) / sMaskExtent;
+    material.constants[14] = ((getPoint(0, 0)->mVertexPosition.z - MR::getPlayerPos()->z) + sMaskExtent / 2.0f) / sMaskExtent;
+    material.constants[15] = ((getPoint(0, 0)->mVertexPosition.x - MR::getPlayerPos()->x) + sMaskExtent / 2.0f) / sMaskExtent;
     Pos3f screen;
     MR::calcTexProjectionMtx(&screen);
     for (u32 row = 0; row < 3; row++) {

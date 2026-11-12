@@ -4,10 +4,6 @@
 #include "Game/Particle/ParticleCore.hpp"
 #include "Game/Particle/ParticleResources.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_setTexCoordAnimation_f1, "setTexCoordAnimation.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setTexCoordAnimation_f2, "setTexCoordAnimation.f2", 0.5f);
 
 // A particle of scale 1 as a point or line.
 static const f32 cParticleSizePixels = 25.0f / 6.0f;
@@ -239,8 +235,8 @@ void ParticleGenTexCrdMtxPrj(EmitterWork*) {
 namespace {
     // The shape's texture-coordinate animation at `frame`: scale and rotation about the tile centre, then translation.
     void setTexCoordAnimation(const ParticleShape* pShape, f32 frame) {
-        f32 centerS = cNum_setTexCoordAnimation_f1 * (1.0f + pShape->getTilingS());
-        f32 centerT = cNum_setTexCoordAnimation_f2 * (1.0f + pShape->getTilingT());
+        f32 centerS = 0.5f * (1.0f + pShape->getTilingS());
+        f32 centerT = 0.5f * (1.0f + pShape->getTilingT());
         f32 transS = (frame * pShape->getIncTransX()) + pShape->getInitTransX();
         f32 transT = (frame * pShape->getIncTransY()) + pShape->getInitTransY();
         f32 scaleS = (frame * pShape->getIncScaleX()) + pShape->getInitScaleX();

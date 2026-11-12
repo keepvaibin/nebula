@@ -30,7 +30,6 @@
 #include "Game/System/NebulaInput.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaHost.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/Render/RenderTexture.hpp"
 #include <nebula_cooked_texture.h>
 
@@ -38,101 +37,101 @@ using namespace NebulaUi;
 
 namespace {
     // Screen units (NebulaUi::readScreen): 456 high, 810 wide at 16:9.
-    NEBULA_TUNABLE(f32, cMargin, 16.0f);     // the window from the screen's edges
-    NEBULA_TUNABLE(f32, cMaxWidth, 900.0f);  // a wide screen keeps a window that reads as one
-    NEBULA_TUNABLE(f32, cMinWindowWidth, 480.0f);  // the tabs and the footer keep their shape down to this
-    NEBULA_TUNABLE(f32, cReadableTextDp, 14.0f);  // a row's text on the screen, at the least, unless the player chooses otherwise
-    NEBULA_TUNABLE(f32, cZoomMax, 1.8f);
-    NEBULA_TUNABLE(f32, cPad, 26.0f);        // the window's inside
-    NEBULA_TUNABLE(f32, cTitleSize, 21.0f);
-    NEBULA_TUNABLE(f32, cTabHeight, 30.0f);
-    NEBULA_TUNABLE(f32, cTabSize, 12.5f);
-    NEBULA_TUNABLE(f32, cTabGap, 5.0f);
-    NEBULA_TUNABLE(f32, cRowHeight, 52.0f);
-    NEBULA_TUNABLE(s32, cSwipeHoverFrames, 12);
-    NEBULA_TUNABLE(f32, cRowGap, 3.0f);  // between two rows' frames
-    NEBULA_TUNABLE(f32, cModHeight, 40.0f);  // a mod in the MODS page's lists
-    NEBULA_TUNABLE(f32, cTextSize, 15.5f);
-    NEBULA_TUNABLE(f32, cHeadingSize, 13.5f);
-    NEBULA_TUNABLE(f32, cFooterSize, 12.0f);
-    NEBULA_TUNABLE(f32, cFooterLine, 19.0f);
-    NEBULA_TUNABLE(f32, cButtonHeight, 30.0f);
-    NEBULA_TUNABLE(f32, cButtonSize, 12.5f);
-    NEBULA_TUNABLE(f32, cButtonGap, 10.0f);
-    NEBULA_TUNABLE(f32, cRowButtonHeight, 36.0f);  // a row's own buttons (IMPORT, OPEN) and a setting's arrows
-    NEBULA_TUNABLE(f32, cRowButtonSize, 14.0f);
-    NEBULA_TUNABLE(f32, cRowButtonGap, 8.0f);
-    NEBULA_TUNABLE(f32, cRowButtonMin, 76.0f);
-    NEBULA_TUNABLE(f32, cArrowWidth, 58.0f);
-    NEBULA_TUNABLE(f32, cArrowSize, 20.0f);
-    NEBULA_TUNABLE(f32, cValueMin, 120.0f);  // a setting's value between its arrows, the same on every row
-    NEBULA_TUNABLE(f32, cValueMax, 250.0f);
-    NEBULA_TUNABLE(f32, cSliderHeight, 8.0f);  // a slider's track; its knob is the game's round button
-    NEBULA_TUNABLE(f32, cKnobSize, 32.0f);
-    NEBULA_TUNABLE(f32, cSliderValue, 64.0f);  // its value after it
-    NEBULA_TUNABLE(s32, cRepeatDelay, 18);     // an arrow held down: the frames before it steps again, then between steps
-    NEBULA_TUNABLE(s32, cRepeatEvery, 5);
-    NEBULA_TUNABLE(f32, cEdgeDrop, 2.0f);  // a row's own button's darker edge under it; the two centred together on the row
-    NEBULA_TUNABLE(f32, cRowButtonRadius, 11.0f);  // a row's own buttons have the rows' corners, near enough (the rows': 12)
-    NEBULA_TUNABLE(f32, cReach, 8.0f);  // how far past a button's edge above and below the pointer still has it
-    NEBULA_TUNABLE(f32, cMinSqueeze, 0.6f);  // the narrowest a line of text is drawn
-    NEBULA_TUNABLE(f32, cKeyGap, 6.0f);  // a key from its word
-    NEBULA_TUNABLE(f32, cBadgeScale, 1.35f);  // a controller's button: its height for the text's size
-    NEBULA_TUNABLE(f32, cBadgeGap, 3.0f);
+    const f32 cMargin = 16.0f;     // the window from the screen's edges
+    const f32 cMaxWidth = 900.0f;  // a wide screen keeps a window that reads as one
+    const f32 cMinWindowWidth = 480.0f;  // the tabs and the footer keep their shape down to this
+    const f32 cReadableTextDp = 14.0f;  // a row's text on the screen, at the least, unless the player chooses otherwise
+    const f32 cZoomMax = 1.8f;
+    const f32 cPad = 26.0f;        // the window's inside
+    const f32 cTitleSize = 21.0f;
+    const f32 cTabHeight = 30.0f;
+    const f32 cTabSize = 12.5f;
+    const f32 cTabGap = 5.0f;
+    const f32 cRowHeight = 52.0f;
+    const s32 cSwipeHoverFrames = 12;
+    const f32 cRowGap = 3.0f;  // between two rows' frames
+    const f32 cModHeight = 40.0f;  // a mod in the MODS page's lists
+    const f32 cTextSize = 15.5f;
+    const f32 cHeadingSize = 13.5f;
+    const f32 cFooterSize = 12.0f;
+    const f32 cFooterLine = 19.0f;
+    const f32 cButtonHeight = 30.0f;
+    const f32 cButtonSize = 12.5f;
+    const f32 cButtonGap = 10.0f;
+    const f32 cRowButtonHeight = 36.0f;  // a row's own buttons (IMPORT, OPEN) and a setting's arrows
+    const f32 cRowButtonSize = 14.0f;
+    const f32 cRowButtonGap = 8.0f;
+    const f32 cRowButtonMin = 76.0f;
+    const f32 cArrowWidth = 58.0f;
+    const f32 cArrowSize = 20.0f;
+    const f32 cValueMin = 120.0f;  // a setting's value between its arrows, the same on every row
+    const f32 cValueMax = 250.0f;
+    const f32 cSliderHeight = 8.0f;  // a slider's track; its knob is the game's round button
+    const f32 cKnobSize = 32.0f;
+    const f32 cSliderValue = 64.0f;  // its value after it
+    const s32 cRepeatDelay = 18;     // an arrow held down: the frames before it steps again, then between steps
+    const s32 cRepeatEvery = 5;
+    const f32 cEdgeDrop = 2.0f;  // a row's own button's darker edge under it; the two centred together on the row
+    const f32 cRowButtonRadius = 11.0f;  // a row's own buttons have the rows' corners, near enough (the rows': 12)
+    const f32 cReach = 8.0f;  // how far past a button's edge above and below the pointer still has it
+    const f32 cMinSqueeze = 0.6f;  // the narrowest a line of text is drawn
+    const f32 cKeyGap = 6.0f;  // a key from its word
+    const f32 cBadgeScale = 1.35f;  // a controller's button: its height for the text's size
+    const f32 cBadgeGap = 3.0f;
     const s32 cGlyphPad = 'C';  // the picture font's +Control Pad
-    NEBULA_TUNABLE(f32, cHintGap, 18.0f);
-    NEBULA_TUNABLE(f32, cQuestionWidth, 470.0f);
-    NEBULA_TUNABLE(f32, cLicenseTextSize, 12.0f);
-    NEBULA_TUNABLE(f32, cLicenseInset, 12.0f);  // the license's window inside the menu's
-    NEBULA_TUNABLE(f32, cQuestionHeight, 180.0f);
-    NEBULA_TUNABLE(f32, cQuestionMargin, 22.0f);  // the answers from the window's sides and foot
-    NEBULA_TUNABLE(f32, cQuestionRing, 6.4f);     // the window's white ring (measured), inside its edges
+    const f32 cHintGap = 18.0f;
+    const f32 cQuestionWidth = 470.0f;
+    const f32 cLicenseTextSize = 12.0f;
+    const f32 cLicenseInset = 12.0f;  // the license's window inside the menu's
+    const f32 cQuestionHeight = 180.0f;
+    const f32 cQuestionMargin = 22.0f;  // the answers from the window's sides and foot
+    const f32 cQuestionRing = 6.4f;     // the window's white ring (measured), inside its edges
     // The Pair Joy-Con question: the letters L and R, the halves (the owner's drawing, cJoyConUnit of the menu's units
     // to its each; NebulaIcons paints them), its text and its answer, as far from each other as the answer is from the
     // window's ring.
-    NEBULA_TUNABLE(f32, cJoyConUnit, 3.4f);
+    const f32 cJoyConUnit = 3.4f;
     const f32 cJoyConGap = 5.36f;  // between the rails
     const f32 cJoyConCentre = cJoyConGap * 0.5f + NebulaIcons::cJoyConRail + NebulaIcons::cJoyConBody[0] * 0.5f;  // a body's middle
-    NEBULA_TUNABLE(f32, cJoyConLetter, 1.0f);             // a letter toward its half's outer side
-    NEBULA_TUNABLE(f32, cJoyConLetterGap, 6.0f);          // the letters' feet to the shoulders' tops, menu units
-    NEBULA_TUNABLE(u32, cJoyConPaintAhead, 1500);         // painting the pictures a frame, us: on the Controls page
-    NEBULA_TUNABLE(u32, cJoyConPaintShown, 6000);         // and on the Pair Joy-Con screen
-    NEBULA_TUNABLE(f32, cHomeWidth, 340.0f);  // the HOME Menu's window: its title over its buttons, one above the other
-    NEBULA_TUNABLE(f32, cHomeButtonWidth, 250.0f);
-    NEBULA_TUNABLE(f32, cHomeGap, 12.0f);
-    NEBULA_TUNABLE(s32, cDropFrames, 16);  // the window's drop from above, and its rise away
-    NEBULA_TUNABLE(s32, cRowsFirst, 96);  // the rows made with the screen; more when a page has more
-    NEBULA_TUNABLE(s32, cTabsFirst, 8);   // the page buttons made with the screen; more when there are more pages
+    const f32 cJoyConLetter = 1.0f;             // a letter toward its half's outer side
+    const f32 cJoyConLetterGap = 6.0f;          // the letters' feet to the shoulders' tops, menu units
+    const u32 cJoyConPaintAhead = 1500;         // painting the pictures a frame, us: on the Controls page
+    const u32 cJoyConPaintShown = 6000;         // and on the Pair Joy-Con screen
+    const f32 cHomeWidth = 340.0f;  // the HOME Menu's window: its title over its buttons, one above the other
+    const f32 cHomeButtonWidth = 250.0f;
+    const f32 cHomeGap = 12.0f;
+    const s32 cDropFrames = 16;  // the window's drop from above, and its rise away
+    const s32 cRowsFirst = 96;  // the rows made with the screen; more when a page has more
+    const s32 cTabsFirst = 8;   // the page buttons made with the screen; more when there are more pages
     const s32 cHintsMax = 3;
-    NEBULA_TUNABLE(s32, cRowButtonsFirst, 6);  // the launcher's buttons made with the screen; more when a row has more
-    NEBULA_TUNABLE(f32, cModsGap, 26.0f);      // the MODS page: between its two lists
-    NEBULA_TUNABLE(f32, cDragStart, 5.0f);     // how far the pointer moves something held down before it is dragged
-    NEBULA_TUNABLE(f32, cEdgeScrollRows, 8.0f);  // a list under a dragged mod at its edge scrolls this many rows a second at most
-    NEBULA_TUNABLE(s32, cRowChipsFirst, 48);   // the rows' buttons made with the screen; more when the rows in sight need them
+    const s32 cRowButtonsFirst = 6;  // the launcher's buttons made with the screen; more when a row has more
+    const f32 cModsGap = 26.0f;      // the MODS page: between its two lists
+    const f32 cDragStart = 5.0f;     // how far the pointer moves something held down before it is dragged
+    const f32 cEdgeScrollRows = 8.0f;  // a list under a dragged mod at its edge scrolls this many rows a second at most
+    const s32 cRowChipsFirst = 48;   // the rows' buttons made with the screen; more when the rows in sight need them
 
     // The quit question's window and text; the game's blue for what is chosen.
     const u32 cText = 0x4A5274FF;
-    NEBULA_TUNABLE(u32, cSubText, 0x737B9AFF);
-    NEBULA_TUNABLE(u32, cAccent, 0x2F6FD0FF);
+    const u32 cSubText = 0x737B9AFF;
+    const u32 cAccent = 0x2F6FD0FF;
     const u32 cDisabled = NEBULA_RGBA(0x9A, 0xA2, 0xBC, 0xFF);
     const u32 cWarning = NEBULA_RGBA(0xC8, 0x40, 0x2E, 0xFF);
-    NEBULA_TUNABLE(u32, cHighlightFill, 0xFFFFFFFF);
-    NEBULA_TUNABLE(u32, cFrameFill, 0xFFFFFFB4);   // a row's frame
-    NEBULA_TUNABLE(u32, cFrameFixed, 0xFFFFFF5A);  // a row that only shows something
+    const u32 cHighlightFill = 0xFFFFFFFF;
+    const u32 cFrameFill = 0xFFFFFFB4;   // a row's frame
+    const u32 cFrameFixed = 0xFFFFFF5A;  // a row that only shows something
     const u32 cFrameRing = NEBULA_RGBA(0xC6, 0xD3, 0xEB, 0xFF);
-    NEBULA_TUNABLE(u32, cHighlightRing, 0x7EC8F4FF);
-    NEBULA_TUNABLE(u32, cRule, 0xB4C2DEFF);
-    NEBULA_TUNABLE(u32, cTrack, 0x4A527428);
+    const u32 cHighlightRing = 0x7EC8F4FF;
+    const u32 cRule = 0xB4C2DEFF;
+    const u32 cTrack = 0x4A527428;
     const u32 cSliderTrack = NEBULA_RGBA(0xCB, 0xD6, 0xEB, 0xFF);
-    NEBULA_TUNABLE(u32, cSliderFill, 0x6FA6EAFF);
-    NEBULA_TUNABLE(u32, cRowButtonFill, 0xE4F6FFFF);  // a row's own button: its face, its ring, the edge under it
-    NEBULA_TUNABLE(u32, cRowButtonRing, 0x5CC4F0FF);
-    NEBULA_TUNABLE(u32, cRowButtonLit, 0xFFFFFFFF);  // focused
-    NEBULA_TUNABLE(u32, cRowButtonLitRing, 0x2F9AEEFF);
-    NEBULA_TUNABLE(u32, cRowButtonEdge, 0x3E86C8FF);
-    NEBULA_TUNABLE(u32, cRowButtonOff, 0xEEF1F6FF);  // unavailable
-    NEBULA_TUNABLE(u32, cThumb, 0x7EA8E8FF);
-    NEBULA_TUNABLE(u32, cButtonText, 0x505050FF);
+    const u32 cSliderFill = 0x6FA6EAFF;
+    const u32 cRowButtonFill = 0xE4F6FFFF;  // a row's own button: its face, its ring, the edge under it
+    const u32 cRowButtonRing = 0x5CC4F0FF;
+    const u32 cRowButtonLit = 0xFFFFFFFF;  // focused
+    const u32 cRowButtonLitRing = 0x2F9AEEFF;
+    const u32 cRowButtonEdge = 0x3E86C8FF;
+    const u32 cRowButtonOff = 0xEEF1F6FF;  // unavailable
+    const u32 cThumb = 0x7EA8E8FF;
+    const u32 cButtonText = 0x505050FF;
 
     enum { FooterApply, FooterBack, FooterNum };
     enum { ChoiceNum = 3 };
@@ -225,6 +224,11 @@ namespace {
         // To the recycle bin (1) or deleted (0).
         {NEBULA_SETTINGS_STATUS_MOD_REMOVE_ASK, "SettingsModRemoveAsk", "SettingsModRemoveAskBin", 2,
          {"SettingsChoiceRemove", "SettingsChoiceKeep", nullptr},
+         {NEBULA_SETTINGS_APPLY, NEBULA_SETTINGS_CLOSE, 0},
+         {KeyApply, KeyBack, 0}},
+        // A removed mod's kept numbers and saved data (services-mods 8): its id above the question (fillTexts).
+        {NEBULA_SETTINGS_STATUS_MOD_FORGET_ASK, "SettingsModForgetAsk", "SettingsModForgetAsk", 2,
+         {"SettingsChoiceForget", "SettingsChoiceKeep", nullptr},
          {NEBULA_SETTINGS_APPLY, NEBULA_SETTINGS_CLOSE, 0},
          {KeyApply, KeyBack, 0}},
     };
@@ -340,7 +344,7 @@ namespace {
     };
     const char16_t* const cPadShoulders[3][2] = {{u"LB", u"RB"}, {u"L", u"R"}, {u"L1", u"R1"}};
     const PadButton cShoulders[3] = {{nullptr, 0x45474EFF, 0xFFFFFFFF}, {nullptr, 0xFFFFFFFF, cText}, {nullptr, 0xFFFFFFFF, cText}};
-    NEBULA_TUNABLE(u32, cBadgeRing, 0xB4C2DEFF);  // round a white badge, as the window's rules
+    const u32 cBadgeRing = 0xB4C2DEFF;  // round a white badge, as the window's rules
 
     // A button in the game's art with its key before its word ("Enter  Apply").
     struct Button {
@@ -1933,8 +1937,9 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
                                                                : "SettingsJoyConConnect";
     }
     getNumbered(text, pText, rView.status_number);
-    if (rView.status == NEBULA_SETTINGS_STATUS_MODS_CODE_ASK && rView.status_text != nullptr && rView.status_text[0] != 0) {
-        // The mod's name above the question: more than one can wait for an answer.
+    if ((rView.status == NEBULA_SETTINGS_STATUS_MODS_CODE_ASK || rView.status == NEBULA_SETTINGS_STATUS_MOD_FORGET_ASK) &&
+        rView.status_text != nullptr && rView.status_text[0] != 0) {
+        // The mod's name above the question: more than one can wait for an answer (a removed mod's: its id).
         MR::Text16 asked;
         getNumbered(asked, pText, rView.status_number);
         fromUtf8(text, 0, rView.status_text);

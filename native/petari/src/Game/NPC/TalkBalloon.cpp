@@ -21,18 +21,7 @@
 #include "Game/System/NebulaMods.hpp"
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/Ui/Pane.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_updateBalloon_f1, "updateBalloon.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateBalloon_f2, "updateBalloon.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateBalloon_f3, "updateBalloon.f3", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateBalloon_f4, "updateBalloon.f4", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_placeByPlugin_f1, "placeByPlugin.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_placeByPlugin_f2, "placeByPlugin.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateBeak_f1, "updateBeak.f1", 120.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeOpen_f1, "exeOpen.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeOpen_f2, "exeOpen.f2", 0.5f);
 
 namespace NrvTalkBalloonShort {
     NEW_NERVE(TalkBalloonShortNrvOpen, TalkBalloonShort, Open);
@@ -124,15 +113,15 @@ void TalkBalloon::updateBalloon() {
 
         if (v2.x * v3.y - v2.y * v3.x > 0.0f) {
             f32 halfMax = paneAnimFrameMax;
-            halfMax *= cNum_updateBalloon_f1;
+            halfMax *= 0.5f;
             paneAnimFrameMax = smaller(paneAnimFrameMax, halfMax + cosine);
         } else {
-            f32 half = cNum_updateBalloon_f2;
+            f32 half = 0.5f;
             paneAnimFrameMax = larger(0.0f, paneAnimFrameMax * half - cosine);
         }
 
         if (!mIsBeakMoving) {
-            if (MR::fabs(paneAnimFrame - paneAnimFrameMax) < cNum_updateBalloon_f3) {
+            if (MR::fabs(paneAnimFrame - paneAnimFrameMax) < 10.0f) {
                 return;
             }
 
@@ -145,7 +134,7 @@ void TalkBalloon::updateBalloon() {
             paneAnimFrameMax -= 1.0f;
         }
 
-        if (MR::abs(paneAnimFrame - paneAnimFrameMax) < cNum_updateBalloon_f4) {
+        if (MR::abs(paneAnimFrame - paneAnimFrameMax) < 2.0f) {
             mIsBeakMoving = false;
         }
 
@@ -340,7 +329,7 @@ void TalkBalloonEvent::placeByPlugin() {
     f32 halfHeight = 0.0f;
     if (pText != nullptr) {
         Vec2f corner;
-        MR::convertPaneLocalPosToScreenPos(&corner, pText, Vec2f(pText->mSize.width * cNum_placeByPlugin_f1, pText->mSize.height * cNum_placeByPlugin_f2));
+        MR::convertPaneLocalPosToScreenPos(&corner, pText, Vec2f(pText->mSize.width * 0.5f, pText->mSize.height * 0.5f));
         halfWidth = corner.x > text.x ? corner.x - text.x : text.x - corner.x;
         halfHeight = corner.y > text.y ? corner.y - text.y : text.y - corner.y;
     }
@@ -360,7 +349,7 @@ void TalkBalloonEvent::updateBeak() {
     TalkMessageCtrl* messageCtrl = mMessageCtrl;
     Vec2f v1(messageCtrl->mBalloonPos.x, messageCtrl->mBalloonPos.y);
 
-    if (0.0f <= v1.x && v1.x < MR::getScreenWidth() && cNum_updateBeak_f1 <= v1.y &&
+    if (0.0f <= v1.x && v1.x < MR::getScreenWidth() && 120.0f <= v1.y &&
         v1.y < static_cast< s32 >(NebulaFrameClock::cScreenLines)) {
         MR::showPane(this, "ShaBeak");
         MR::showPane(this, "PicBeak");
@@ -409,8 +398,8 @@ void TalkBalloonEvent::exeOpen() {
         MR::setSoundVolumeSetting(AudSystemVolumeController::VolumeSet_Talk, 30);
 
         if (!MR::isPlayingStageBgmName("STM_KINOPIO_TANKEN_B")) {
-            MR::moveVolumeStageBGM(cNum_exeOpen_f1, 30);
-            MR::moveVolumeSubBGM(cNum_exeOpen_f2, 30);
+            MR::moveVolumeStageBGM(0.5f, 30);
+            MR::moveVolumeSubBGM(0.5f, 30);
         }
     }
 

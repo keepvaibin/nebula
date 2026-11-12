@@ -16,82 +16,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/System/GameRules.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 45.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 45.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 35.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_killWithGenItem_f1, "killWithGenItem.f1", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_killWithGenItem_f2, "killWithGenItem.f2", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_killWithGenItem_f3, "killWithGenItem.f3", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_killWithGenItem_f4, "killWithGenItem.f4", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_killWithGenItem_f5, "killWithGenItem.f5", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeNoCalcWait_f1, "exeNoCalcWait.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 0.15f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f2, "exeWait.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeSignAttack_f1, "exeSignAttack.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeSignAttack_f2, "exeSignAttack.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePursue_f1, "exePursue.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePursue_f2, "exePursue.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTurn_f1, "exeTurn.f1", 0.4f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTurn_f2, "exeTurn.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeBrake_f1, "exeBrake.f1", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeBrake_f2, "exeBrake.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeStepBack_f1, "exeStepBack.f1", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeStepBack_f2, "exeStepBack.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeReturn_f1, "exeReturn.f1", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeReturn_f2, "exeReturn.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeProvoke_f1, "exeProvoke.f1", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeProvoke_f2, "exeProvoke.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTrample_f1, "exeTrample.f1", 0.25f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTrample_f2, "exeTrample.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHitReaction_f1, "exeHitReaction.f1", 0.25f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHitReaction_f2, "exeHitReaction.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTired_f1, "exeTired.f1", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTired_f2, "exeTired.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeBlow_f1, "exeBlow.f1", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeBlow_f2, "exeBlow.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAfterLaunch_f1, "exeAfterLaunch.f1", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAfterLaunch_f2, "exeAfterLaunch.f2", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAfterLaunch_f3, "exeAfterLaunch.f3", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeLaunchTurn_f1, "exeLaunchTurn.f1", 0.4f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeLaunchTurn_f2, "exeLaunchTurn.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeInWater_f1, "exeInWater.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeKeepDistance_f1, "exeKeepDistance.f1", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeKeepDistance_f2, "exeKeepDistance.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeKeepDistance_f3, "exeKeepDistance.f3", 600.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeKeepDistance_f4, "exeKeepDistance.f4", 400.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgEnemyAttack_f1, "receiveMsgEnemyAttack.f1", 35.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgEnemyAttack_f2, "receiveMsgEnemyAttack.f2", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgEnemyAttack_f3, "receiveMsgEnemyAttack.f3", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgEnemyAttack_f4, "receiveMsgEnemyAttack.f4", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_f1, "receiveMsgPlayerAttack.f1", 35.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_f2, "receiveMsgPlayerAttack.f2", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_f3, "receiveMsgPlayerAttack.f3", 35.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_f4, "receiveMsgPlayerAttack.f4", 15.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAfterLaunch_applyVelocityDampAndGravity_1, "exeAfterLaunch.applyVelocityDampAndGravity.1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAfterLaunch_applyVelocityDampAndGravity_2, "exeAfterLaunch.applyVelocityDampAndGravity.2", 0.8f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAfterLaunch_applyVelocityDampAndGravity_3, "exeAfterLaunch.applyVelocityDampAndGravity.3", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAfterLaunch_applyVelocityDampAndGravity_4, "exeAfterLaunch.applyVelocityDampAndGravity.4", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAfterLaunch_applyVelocityDampAndGravity_5, "exeAfterLaunch.applyVelocityDampAndGravity.5", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAfterLaunchOnGround_applyVelocityDampAndGravity_1, "exeAfterLaunchOnGround.applyVelocityDampAndGravity.1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAfterLaunchOnGround_applyVelocityDampAndGravity_2, "exeAfterLaunchOnGround.applyVelocityDampAndGravity.2", 0.8f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAfterLaunchOnGround_applyVelocityDampAndGravity_3, "exeAfterLaunchOnGround.applyVelocityDampAndGravity.3", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAfterLaunchOnGround_applyVelocityDampAndGravity_4, "exeAfterLaunchOnGround.applyVelocityDampAndGravity.4", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAfterLaunchOnGround_applyVelocityDampAndGravity_5, "exeAfterLaunchOnGround.applyVelocityDampAndGravity.5", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgEnemyAttack_addVelocityLimit_1, "receiveMsgEnemyAttack.addVelocityLimit.1", 4.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_control_1, "control.1", 1);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeBlow_1, "exeBlow.1", 20);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeAfterLaunch_1, "exeAfterLaunch.1", 80);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeAfterLaunch_2, "exeAfterLaunch.2", 85);
 
 namespace NrvBegomanBaby {
     NEW_NERVE_ONEND(HostTypeNrvNoCalcWait, BegomanBaby, NoCalcWait, NoCalcWait);
@@ -117,13 +42,13 @@ namespace NrvBegomanBaby {
 };  // namespace NrvBegomanBaby
 
 namespace {
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hWaitParam, {0.0f, 3.0f, 0.95f, 1.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hSignAttackParam, {0.0f, 3.0f, 0.8f, 3.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hPursueParam, {0.4f, 3.0f, 0.97f, 3.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hTurnParam, {0.4f, 3.0f, 0.95f, 0.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hStopParam, {0.0f, 3.0f, 0.95f, 0.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hHitReactionParam, {0.0f, 3.0f, 0.95f, 0.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hTiredParam, {0.2f, 1.0f, 0.95f, 3.0f});
+    const MR::ActorMoveParam hWaitParam = {0.0f, 3.0f, 0.95f, 1.0f};
+    const MR::ActorMoveParam hSignAttackParam = {0.0f, 3.0f, 0.8f, 3.0f};
+    const MR::ActorMoveParam hPursueParam = {0.4f, 3.0f, 0.97f, 3.0f};
+    const MR::ActorMoveParam hTurnParam = {0.4f, 3.0f, 0.95f, 0.0f};
+    const MR::ActorMoveParam hStopParam = {0.0f, 3.0f, 0.95f, 0.0f};
+    const MR::ActorMoveParam hHitReactionParam = {0.0f, 3.0f, 0.95f, 0.0f};
+    const MR::ActorMoveParam hTiredParam = {0.2f, 1.0f, 0.95f, 3.0f};
 
 };  // namespace
 
@@ -145,16 +70,16 @@ void BegomanBaby::init(const TableIter& rIter) {
         mHost = this;
     }
 
-    initBinder(cNum_init_f1, cNum_init_f2, 0);
+    initBinder(45.0f, 45.0f, 0);
     initNerve(GET_NERVE(BegomanBaby, HostTypeNrvWait));
-    initSensor(0, cNum_init_f3, cNum_init_f4, "Locator1");
+    initSensor(0, 40.0f, 80.0f, "Locator1");
 
     mBabyDelegator = MR::createJointDelegatorWithNullChildFunc(this, &BegomanBaby::calcHeadJoint, "BabyBegomanFace");
 
     initEffectAndStarPointerBind();
     MR::setEffectHostMtx(this, "WaterColumn", mWaterColumnMatrix);
     initSound(8, false);
-    initShadow(cNum_init_f5, "Locator1");
+    initShadow(35.0f, "Locator1");
 
     MR::tryRegisterDemoCast(this, rIter);
     if (MR::isDemoCast(this, nullptr) && MR::isRegisteredDemoActionAppear(this)) {
@@ -200,14 +125,14 @@ void BegomanBaby::kill() {
 
 void BegomanBaby::killWithGenItem() {
     Vec3f minusGravity(-mGravity);
-    Vec3f starPieceAppearPos(minusGravity * cNum_killWithGenItem_f1);
+    Vec3f starPieceAppearPos(minusGravity * 80.0f);
     starPieceAppearPos += mPosition;
 
     bool appearedStarPiece;
     if (mAppearThreeStarPiece) {
-        appearedStarPiece = MR::appearStarPiece(this, starPieceAppearPos, 3, cNum_killWithGenItem_f2, cNum_killWithGenItem_f3, false);
+        appearedStarPiece = MR::appearStarPiece(this, starPieceAppearPos, 3, 10.0f, 40.0f, false);
     } else {
-        appearedStarPiece = MR::appearStarPiece(this, starPieceAppearPos, 1, cNum_killWithGenItem_f4, cNum_killWithGenItem_f5, false);
+        appearedStarPiece = MR::appearStarPiece(this, starPieceAppearPos, 1, 10.0f, 40.0f, false);
     }
 
     if (appearedStarPiece) {
@@ -230,7 +155,7 @@ void BegomanBaby::control() {
     isNerve(GET_NERVE(BegomanBaby, HostTypeNrvBlow));
     checkTouchElectricRail(true);
 
-    if (MR::isStep(this, cStep_control_1)) {
+    if (MR::isStep(this, 1)) {
         if (isNerve(GET_NERVE(BegomanBaby, HostTypeNrvWait)) || isNerve(GET_NERVE(BegomanBaby, HostTypeNrvNoCalcWait))) {
             MR::validateClipping(this);
         } else {
@@ -275,7 +200,7 @@ void BegomanBaby::control() {
 }
 
 void BegomanBaby::exeNoCalcWait() {
-    exeNoCalcWaitCore(cNum_exeNoCalcWait_f1, GET_NERVE(BegomanBaby, HostTypeNrvWait));
+    exeNoCalcWaitCore(0.5f, GET_NERVE(BegomanBaby, HostTypeNrvWait));
 }
 
 void BegomanBaby::endNoCalcWait() {
@@ -283,7 +208,7 @@ void BegomanBaby::endNoCalcWait() {
 }
 
 void BegomanBaby::exeWait() {
-    updateRotateY(cNum_exeWait_f1, cNum_exeWait_f2);
+    updateRotateY(0.15f, 0.5f);
     MR::startLevelSound(this, "SE_EM_LV_BABYBEGO_ROT_SLOW");
     exeWaitCore(::hWaitParam, GET_NERVE(BegomanBaby, HostTypeNrvSignAttack), GET_NERVE(BegomanBaby, HostTypeNrvKeepDistance),
                 GET_NERVE(BegomanBaby, HostTypeNrvNoCalcWait));
@@ -295,7 +220,7 @@ void BegomanBaby::exeSignAttack() {
         MR::startSound(this, "SE_EM_BABYBEGO_PRE_PURSUE");
     }
 
-    updateRotateY(cNum_exeSignAttack_f1, cNum_exeSignAttack_f2);
+    updateRotateY(0.5f, 0.5f);
     MR::startLevelSound(this, "SE_EM_LV_BABYBEGO_ROT_MIDDLE");
     return exeSignAttackCore(::hSignAttackParam, GET_NERVE(BegomanBaby, HostTypeNrvPursue));
 }
@@ -305,37 +230,37 @@ void BegomanBaby::exePursue() {
         MR::startSound(this, "SE_EM_BABYBEGO_PURSUE_START");
     }
 
-    updateRotateY(cNum_exePursue_f1, cNum_exePursue_f2);
+    updateRotateY(0.5f, 0.5f);
     MR::startLevelSound(this, "SE_EM_LV_BEGOMAN_PURSUE");
     exePursueCore(::hPursueParam, GET_NERVE(BegomanBaby, HostTypeNrvBrake), GET_NERVE(BegomanBaby, HostTypeNrvTurn), *getSoundNormal(), 1.0f);
 }
 
 void BegomanBaby::exeTurn() {
-    updateRotateY(cNum_exeTurn_f1, cNum_exeTurn_f2);
+    updateRotateY(0.4f, 0.5f);
     MR::startLevelSound(this, "SE_EM_LV_BABYBEGO_TURN");
     MR::startLevelSound(this, "SE_EM_LV_BABYBEGO_ROT_MIDDLE");
     exeTurnCore(::hTurnParam, GET_NERVE(BegomanBaby, HostTypeNrvBrake), GET_NERVE(BegomanBaby, HostTypeNrvPursue), false);
 }
 
 void BegomanBaby::exeBrake() {
-    updateRotateY(cNum_exeBrake_f1, cNum_exeBrake_f2);
+    updateRotateY(0.2f, 0.5f);
     MR::startLevelSound(this, "SE_EM_LV_BEGOMAN_SPARK");
     MR::startLevelSound(this, "SE_EM_LV_BABYBEGO_ROT_MIDDLE");
     exeBrakeCore(GET_NERVE(BegomanBaby, HostTypeNrvTurn));
 }
 
 void BegomanBaby::exeStepBack() {
-    updateRotateY(cNum_exeStepBack_f1, cNum_exeStepBack_f2);
+    updateRotateY(0.2f, 0.5f);
     exeStepBackCore(::hWaitParam, GET_NERVE(BegomanBaby, HostTypeNrvWait));
 }
 
 void BegomanBaby::exeReturn() {
-    updateRotateY(cNum_exeReturn_f1, cNum_exeReturn_f2);
+    updateRotateY(0.2f, 0.5f);
     exeReturnCore(GET_NERVE(BegomanBaby, HostTypeNrvWait));
 }
 
 void BegomanBaby::exeProvoke() {
-    updateRotateY(cNum_exeProvoke_f1, cNum_exeProvoke_f2);
+    updateRotateY(0.3f, 0.5f);
     MR::startLevelSound(this, "SE_EM_LV_BABYBEGO_ROT_MIDDLE");
     exeProvokeCore(::hWaitParam, GET_NERVE(BegomanBaby, HostTypeNrvSignAttack));
 }
@@ -346,7 +271,7 @@ void BegomanBaby::exeTrample() {
         MR::startSound(this, "SE_EM_BABYBEGO_STOMPED");
     }
 
-    updateRotateY(cNum_exeTrample_f1, cNum_exeTrample_f2);
+    updateRotateY(0.25f, 0.5f);
     MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hStopParam);
     reboundWallAndGround(&mFaceVec, false);
     if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(3))) {
@@ -355,13 +280,13 @@ void BegomanBaby::exeTrample() {
 }
 
 void BegomanBaby::exeHitReaction() {
-    updateRotateY(cNum_exeHitReaction_f1, cNum_exeHitReaction_f2);
+    updateRotateY(0.25f, 0.5f);
     exeHitReactionCore(::hHitReactionParam, GET_NERVE(BegomanBaby, HostTypeNrvProvoke));
 }
 
 void BegomanBaby::exeTired() {
 
-    updateRotateY(cNum_exeTired_f1, cNum_exeTired_f2);
+    updateRotateY(0.2f, 0.5f);
     MR::startLevelSound(this, "SE_EM_LV_BEGOMAN_TURN");
     exeTiredCore(::hTiredParam, GET_NERVE(BegomanBaby, HostTypeNrvWait));
 }
@@ -374,13 +299,13 @@ void BegomanBaby::exeBlow() {
         MR::invalidateExCollisionParts(this);
     }
 
-    updateRotateY(cNum_exeBlow_f1, cNum_exeBlow_f2);
+    updateRotateY(0.3f, 0.5f);
     MR::startLevelSound(this, "SE_EM_LV_BEGOMAN_SPARK");
     MR::startLevelSound(this, "SE_EM_LV_BABYBEGO_ROT_MIDDLE");
     MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hHitReactionParam);
     reboundWallAndGround(&mFaceVec, false);
 
-    if (MR::isGreaterStep(this, cStep_exeBlow_1)) {
+    if (MR::isGreaterStep(this, 20)) {
         killWithGenItem();
     }
 }
@@ -390,14 +315,14 @@ void BegomanBaby::exeAfterLaunch() {
         MR::startBck(this, "Fly");
     }
 
-    if (MR::isLessStep(this, cStep_exeAfterLaunch_1)) {
+    if (MR::isLessStep(this, 80)) {
         // Eight bobs over the 80 steps.
-        f32 bob = cNum_exeAfterLaunch_f1 * MR::cos(getNerveStep() * (16 * PI) / cNum_exeAfterLaunch_f2);
-        mVelocity.set(mFaceVec * cNum_exeAfterLaunch_f3 - mGravity * bob);
-    } else if (MR::isLessStep(this, cStep_exeAfterLaunch_2)) {
+        f32 bob = 5.0f * MR::cos(getNerveStep() * (16 * PI) / 80.0f);
+        mVelocity.set(mFaceVec * 5.0f - mGravity * bob);
+    } else if (MR::isLessStep(this, 85)) {
         mVelocity.zero();
     } else {
-        MR::applyVelocityDampAndGravity(this, cNum_exeAfterLaunch_applyVelocityDampAndGravity_1, cNum_exeAfterLaunch_applyVelocityDampAndGravity_2, cNum_exeAfterLaunch_applyVelocityDampAndGravity_3, cNum_exeAfterLaunch_applyVelocityDampAndGravity_4, cNum_exeAfterLaunch_applyVelocityDampAndGravity_5);
+        MR::applyVelocityDampAndGravity(this, 3.0f, 0.8f, 0.98f, 0.98f, 1.0f);
     }
 
     if (MR::isOnGround(this)) {
@@ -411,7 +336,7 @@ void BegomanBaby::exeAfterLaunchOnGround() {
     }
 
     reboundWallAndGround(&mFaceVec, false);
-    MR::applyVelocityDampAndGravity(this, cNum_exeAfterLaunchOnGround_applyVelocityDampAndGravity_1, cNum_exeAfterLaunchOnGround_applyVelocityDampAndGravity_2, cNum_exeAfterLaunchOnGround_applyVelocityDampAndGravity_3, cNum_exeAfterLaunchOnGround_applyVelocityDampAndGravity_4, cNum_exeAfterLaunchOnGround_applyVelocityDampAndGravity_5);
+    MR::applyVelocityDampAndGravity(this, 3.0f, 0.8f, 0.98f, 0.98f, 1.0f);
 
     if (MR::isBckStopped(this)) {
         setNerve(GET_NERVE(BegomanBaby, HostTypeNrvWait));
@@ -428,7 +353,7 @@ void BegomanBaby::exeLaunchTurn() {
         mFaceVec.set(mTargetVec);
     }
 
-    updateRotateY(cNum_exeLaunchTurn_f1, cNum_exeLaunchTurn_f2);
+    updateRotateY(0.4f, 0.5f);
     MR::startLevelSound(this, "SE_EM_LV_BABYBEGO_ROT_MIDDLE");
     exeTurnCore(::hTurnParam, GET_NERVE(BegomanBaby, HostTypeNrvBrake), GET_NERVE(BegomanBaby, HostTypeNrvPursue), false);
 }
@@ -436,7 +361,7 @@ void BegomanBaby::exeLaunchTurn() {
 void BegomanBaby::exeInWater() {
     if (MR::isFirstStep(this)) {
         mVelocity += mGravity;
-        mVelocity.setLength(cNum_exeInWater_f1);
+        mVelocity.setLength(10.0f);
         MR::startSound(this, "SE_EM_FALL_INTO_WATER_S");
     }
 
@@ -448,9 +373,9 @@ void BegomanBaby::exeInWater() {
 }
 
 void BegomanBaby::exeKeepDistance() {
-    updateRotateY(cNum_exeKeepDistance_f1, cNum_exeKeepDistance_f2);
+    updateRotateY(0.2f, 0.5f);
     exeKeepDistanceCore(GET_NERVE(BegomanBaby, HostTypeNrvWait), GET_NERVE(BegomanBaby, HostTypeNrvSignAttack),
-                        GET_NERVE(BegomanBaby, HostTypeNrvBrake), cNum_exeKeepDistance_f3, cNum_exeKeepDistance_f4);
+                        GET_NERVE(BegomanBaby, HostTypeNrvBrake), 600.0f, 400.0f);
 }
 
 void BegomanBaby::exeBindStarPointer() {
@@ -485,7 +410,7 @@ void BegomanBaby::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 
         if (!MR::isNearZero(dirFromSenderToReceiver)) {
             bool reflected = reboundPlaneWithEffect(dirFromSenderToReceiver, 0.0f, 0.0f, "Spark");
-            mVelocity += dirFromSenderToReceiver * cNum_attackSensor_f1;
+            mVelocity += dirFromSenderToReceiver * 2.0f;
 
             if (reflected) {
                 MR::startSound(this, "SE_EM_BABYBEGO_COLLI");
@@ -516,7 +441,7 @@ bool BegomanBaby::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* 
     if (MR::isMsgExplosionAttack(msg)) {
         if (!isNerve(GET_NERVE(BegomanBaby, HostTypeNrvBlow))) {
             mAppearThreeStarPiece = false;
-            calcBlowReaction(pSender->mPosition, pReceiver->mPosition, cNum_receiveMsgEnemyAttack_f1, cNum_receiveMsgEnemyAttack_f2);
+            calcBlowReaction(pSender->mPosition, pReceiver->mPosition, 35.0f, 15.0f);
             setNerve(GET_NERVE(BegomanBaby, HostTypeNrvBlow));
             return true;
         } else {
@@ -541,7 +466,7 @@ bool BegomanBaby::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* 
 
         bool reflected = reboundPlaneWithEffect(dirFromReceiverToSender, 0.0f, 0.0f, "Spark");
 
-        if (isFallNextMove(cNum_receiveMsgEnemyAttack_f3, cNum_receiveMsgEnemyAttack_f4)) {
+        if (isFallNextMove(150.0f, 150.0f)) {
             setNerve(GET_NERVE(BegomanBaby, HostTypeNrvBrake));
             return true;
         }
@@ -550,7 +475,7 @@ bool BegomanBaby::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* 
         const f32 senderRadius = pSender->mRadius;
         f32 sizeRatio = senderRadius / bodyRadius;
 
-        MR::addVelocityLimit(this, dirFromReceiverToSender * cNum_receiveMsgEnemyAttack_addVelocityLimit_1 * sizeRatio);
+        MR::addVelocityLimit(this, dirFromReceiverToSender * 4.0f * sizeRatio);
 
         if (reflected) {
             MR::startSound(this, "SE_EM_BABYBEGO_COLLI_BEGOMAN");
@@ -592,14 +517,14 @@ bool BegomanBaby::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor*
 
     if (MR::isMsgStarPieceAttack(msg)) {
         mAppearThreeStarPiece = true;
-        calcBlowReaction(pSender->mPosition, pReceiver->mPosition, cNum_receiveMsgPlayerAttack_f1, cNum_receiveMsgPlayerAttack_f2);
+        calcBlowReaction(pSender->mPosition, pReceiver->mPosition, 35.0f, 15.0f);
         setNerve(GET_NERVE(BegomanBaby, HostTypeNrvBlow));
         return true;
     }
 
     if (MR::isMsgPlayerHitAll(msg)) {
         mAppearThreeStarPiece = false;
-        calcBlowReaction(pSender->mPosition, pReceiver->mPosition, cNum_receiveMsgPlayerAttack_f3, cNum_receiveMsgPlayerAttack_f4);
+        calcBlowReaction(pSender->mPosition, pReceiver->mPosition, 35.0f, 15.0f);
         setNerve(GET_NERVE(BegomanBaby, HostTypeNrvBlow));
         return true;
     }

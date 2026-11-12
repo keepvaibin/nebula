@@ -101,6 +101,11 @@ K_CASE, K_IF, K_ASM, K_MS_ASM, K_STATIC_ASSERT = 203, 205, 215, 229, 602
 # last (the operand) is that type's; and new.
 K_CASTS = (117, 124, 125, 126, 127, 128)
 K_NEW = 134
+# 1.5's tables: the canonical types of an array with a size and of a record
+T_CONSTANT_ARRAY, T_RECORD = 112, 105
+K_MEMBER_REF_EXPR = 102
+# The kernel's own units: their numbers and tables are not the game's data.
+KERNEL_PREFIX = 'Game/System/Luma'
 SC_STATIC = 3
 T_ENUM_KIND = 106
 # Whole numbers (bool and the character types too: a const one may be a constant expression)
@@ -186,6 +191,15 @@ def load(path):
     api.sizeOf = fn('clang_Type_getSizeOf', ctypes.c_longlong, CXType)
     api.usr = fn('clang_getCursorUSR', CXString, CXCursor)
     api.access = fn('clang_getCXXAccessSpecifier', c_int, CXCursor)
+    api.isPOD = fn('clang_isPODType', c_uint, CXType)
+    api.evaluate = fn('clang_Cursor_Evaluate', c_void_p, CXCursor)
+    api.evalKind = fn('clang_EvalResult_getKind', c_int, c_void_p)
+    api.evalDouble = fn('clang_EvalResult_getAsDouble', ctypes.c_double, c_void_p)
+    api.evalLongLong = fn('clang_EvalResult_getAsLongLong', ctypes.c_longlong, c_void_p)
+    api.evalIsUnsigned = fn('clang_EvalResult_isUnsignedInt', c_uint, c_void_p)
+    api.evalUnsigned = fn('clang_EvalResult_getAsUnsigned', ctypes.c_ulonglong, c_void_p)
+    api.evalDispose = fn('clang_EvalResult_dispose', None, c_void_p)
+    api.canonicalCursor = fn('clang_getCanonicalCursor', CXCursor, CXCursor)
     return api
 
 
@@ -244,6 +258,12 @@ class Unit:
         self.constants = {}
         self.unused_marked = set()
         self.replaces = []
+        # 1.5's tables: the candidates (table_candidate), the variables a file-scope initializer reads (a table read
+        # there stays as it is: made writable, its reader would be initialized at run time), the rows, the reasons
+        self.table_candidates = []
+        self.init_reads = set()
+        self.tables = []
+        self.table_skips = {}
 
     def string(self, cx):
         raw = self.api.cstring(cx)
@@ -326,6 +346,8 @@ class Unit:
             elif child.kind == K_VAR:
                 if self.api.isDefinition(child) and self.api.linkage(child) == LINKAGE_EXTERNAL and self.expanded_in_main(child):
                     self.defines.add(self.string(self.api.mangling(child)))
+                if self.api.isDefinition(child) and self.in_main(child):
+                    self.table_candidate(child)
             elif child.kind in SCOPES and self.in_main(child):
                 self.walk(child)
 
@@ -566,6 +588,9 @@ class Unit:
             head = self.head_text(cursor)
             vtype = api.canonicalType(api.type(cursor))
             if api.storageClass(cursor) == SC_STATIC or api.tlsKind(cursor) != 0:
+                # A table it reads stays as it is too: made writable, the static's start would be a guarded one.
+                if not api.isNull(initializer):
+                    self.reads_in(initializer)
                 return self.count_numbers(cursor, "a local static's initializer (lifting it would make the static's start a guarded one)")
             if re.search(r'\bconstexpr\b', head):
                 return self.count_numbers(cursor, 'a constexpr')
@@ -765,8 +790,12 @@ class Unit:
         literal = self.literal_cursor(initializer)
         text = (self.text_of(initializer) or b'').decode('ascii', 'replace').strip()
         if literal is None or not text:
-            self.skip_number("a file's constant whose value is not a number written out")
-            return None
+            # An expression (`1.0f / 60.0f`, `cOther * 2`): the compiler's own value of it, written so that it reads
+            # back to the same bits as the constant's type.
+            text = self.evaluated(initializer, kind)
+            if text is None:
+                self.skip_number("a file's constant whose value the compiler does not give (not a constant expression)")
+                return None
         scope = self.scope(definition)
         if scope is None:
             return None
@@ -783,6 +812,170 @@ class Unit:
                 self.edits.append((start, b'[[maybe_unused]] '))
         return usr
 
+    def evaluated(self, expression, kind):
+        """A constant expression's value as a number to write in the record (exact: a float's double reads back to the
+        same float, a whole number as itself), or None when the compiler gives none."""
+        api = self.api
+        result = api.evaluate(expression)
+        if not result:
+            return None
+        try:
+            ekind = api.evalKind(result)
+            if kind in (1, 2):
+                if ekind == 2:
+                    value = api.evalDouble(result)
+                elif ekind == 1:
+                    value = float(api.evalLongLong(result))
+                else:
+                    return None
+                if value != value or value in (float('inf'), float('-inf')):
+                    return None
+                return repr(value)
+            if ekind != 1:
+                return None
+            if api.evalIsUnsigned(result):
+                return '%dull' % api.evalUnsigned(result)
+            return '%dll' % api.evalLongLong(result)
+        finally:
+            api.evalDispose(result)
+
+    def skip_table(self, why):
+        self.table_skips[why] = self.table_skips.get(why, 0) + 1
+
+    def reads_in(self, cursor, parents=()):
+        """Every variable an initializer reads, into init_reads (by USR). Taking an address is no read (`&t[2]`, an
+        array that becomes a pointer): an address stays a constant whether the table is const or not."""
+        api = self.api
+        if cursor.kind == K_DECL_REF_EXPR:
+            target = api.referenced(cursor)
+            if not api.isNull(target) and target.kind == K_VAR:
+                address = any(p.kind == K_UNARY_OPERATOR and (self.text_of(p) or b'').lstrip().startswith(b'&')
+                              for p in parents)
+                if not address and api.canonicalType(api.type(target)).kind == T_CONSTANT_ARRAY:
+                    # An array named alone becomes its address; subscripted, or a member of it, it is read.
+                    up = [p for p in parents if p.kind not in (K_UNEXPOSED_EXPR, K_PAREN)]
+                    address = not up or up[-1].kind not in (K_ARRAY_SUBSCRIPT, K_MEMBER_REF_EXPR)
+                if not address:
+                    self.init_reads.add(self.string(api.usr(target)))
+        for child in self.children(cursor):
+            self.reads_in(child, parents + (cursor,))
+
+    def table_candidate(self, var):
+        """A file-scope or class-static variable defined in this file: what its initializer reads, and, when it is a
+        table of the game's data (an array with a size, or a plain record, with an initializer), a candidate row."""
+        api = self.api
+        initializer = api.varInitializer(var)
+        if not api.isNull(initializer):
+            self.reads_in(initializer)
+        vtype = api.canonicalType(api.type(var))
+        if vtype.kind not in (T_CONSTANT_ARRAY, T_RECORD):
+            return
+        if self.label.startswith(KERNEL_PREFIX):
+            return self.skip_table("the kernel's own code")
+        if api.isNull(initializer):
+            return self.skip_table('no initializer (the game\'s state, not its data)')
+        start = self.offset(api.rangeStart(api.extent(var)))
+        at = self.offset(api.location(var))
+        if start is None or at is None or at < start:
+            return self.skip_table('a table a macro writes')
+        head = self.text[start:at].decode('utf-8', 'replace')
+        if re.search(r'\bconstexpr\b', head):
+            return self.skip_table('a constexpr table (the language may use it as a constant)')
+        if re.search(r'\b(allocate|section)\s*\(', head):
+            # A record in a section the linker gathers (a marker, a registry's row): its place is its meaning.
+            return self.skip_table('a record placed in a section')
+        # What is written after the name (an implicit start, `T t;`, has an initializer cursor too, spanning the name).
+        end = self.offset(api.rangeEnd(api.extent(var)))
+        after = self.text[at:end] if end is not None else b''
+        after = re.sub(rb'^\w+\s*(\[[^\]]*\]\s*)*', b'', after).strip()
+        written = re.sub(rb'^=\s*', b'', after).strip()
+        if not written or re.fullmatch(rb'\{\s*(0\s*)?\}|0|\(\s*\)', written):
+            # Nothing written (a default member initializer's start, `{}`, `{0}`): the game's state, not its data.
+            return self.skip_table('no values written (the game\'s state, not its data)')
+        if api.tlsKind(var) != 0:
+            return self.skip_table('a thread_local table')
+        parent = api.semanticParent(var)
+        element = vtype
+        count = 1
+        # The const of `const char* const t[]` may sit on the array type rather than on its element: any level.
+        constant = bool(api.isConstType(vtype))
+        while element.kind == T_CONSTANT_ARRAY:
+            inner = api.canonicalType(api.elementType(element))
+            size, inner_size = api.sizeOf(element), api.sizeOf(inner)
+            if size <= 0 or inner_size <= 0:
+                return self.skip_table('a table of no size')
+            count *= size // inner_size
+            element = inner
+            constant = constant or bool(api.isConstType(element))
+        if not api.isPOD(element):
+            return self.skip_table('a table that is not plain data (a constructor, a virtual function)')
+        constant = constant or bool(api.isConstType(element))
+        if parent.kind in (K_STRUCT, K_UNION, K_CLASS):
+            if api.access(var) in (2, 3):
+                return self.skip_table("a class's private table")
+            if constant:
+                return self.skip_table("a class's const table (its header declares it const)")
+        elif constant and not api.equalCursors(api.canonicalCursor(var), var):
+            # Declared before (`extern const T t[];` in a header): those declarations say const too.
+            return self.skip_table('a const table declared before its definition')
+        scope = self.scope(var)
+        if scope is None:
+            return self.skip_table('a table in a template')
+        named = [n for n, _, _ in scope if n]
+        spelled = self.string(api.spelling(var))
+        qualified = '::'.join(named + [spelled])
+        local = api.linkage(var) == LINKAGE_INTERNAL or any(kind == K_CLASS and self.defined_here(c) for _, kind, c in scope)
+        anonymous = any(n == '' and kind == K_NAMESPACE for n, kind, _ in scope)
+        consts = []
+        if constant:
+            # The object's own const: after the last * at the top level (`const char* const t[]`), else every const
+            # written before the name (`const T t[]`, `T const t[]`). One that comes through a typedef is not written.
+            depth, last_star = 0, -1
+            for i, c in enumerate(head):
+                if c in '<(':
+                    depth += 1
+                elif c in '>)':
+                    depth -= 1
+                elif c == '*' and depth == 0:
+                    last_star = i
+            for m in re.finditer(r'\bconst\b[ \t]*', head):
+                if m.start() > last_star and not head[:m.start()].count('<') > head[:m.start()].count('>'):
+                    consts.append((start + len(head[:m.start()].encode('utf-8')), start + len(head[:m.end()].encode('utf-8'))))
+            if not consts:
+                return self.skip_table('a const table whose const comes through a typedef')
+        self.table_candidates.append({
+            'usr': self.string(api.usr(var)), 'name': f'{self.label}#{qualified}' if local else qualified,
+            'expr': '::' + qualified, 'type': self.string(api.typeSpelling(api.unqualified(element))),
+            'count': count, 'size': api.sizeOf(vtype), 'line': self.line(var), 'const': constant, 'consts': consts,
+            'start': start,
+            'static': (constant and parent.kind not in (K_STRUCT, K_UNION, K_CLASS) and not anonymous
+                       and not re.search(r'\b(static|extern)\b', head))})
+
+    def table_rows(self):
+        """The candidates no file-scope initializer reads, as rows; each const one writable in the copy."""
+        # Two declarators of one declaration (`const T a[] = ..., b[] = ...;`) share its const: when an initializer
+        # reads either, both stay as they are; else the const goes once.
+        kept_spans = {span for t in self.table_candidates if t['usr'] in self.init_reads for span in t['consts']}
+        done = set()
+        for t in self.table_candidates:
+            if t['usr'] in self.init_reads:
+                self.skip_table('a table a static\'s initializer reads (it would start at run time)')
+                continue
+            if any(span in kept_spans for span in t['consts']):
+                self.skip_table('a table declared together with one a static\'s initializer reads')
+                continue
+            for a, b in t['consts']:
+                if (a, b) in done:
+                    continue
+                done.add((a, b))
+                self.replaces.append((a, b, b''))
+            # Namespace-scope const meant internal linkage: `static`, at the declaration's head, keeps it so (once for
+            # a declaration of several declarators).
+            if t['static'] and ('static', t['start']) not in done:
+                done.add(('static', t['start']))
+                self.replaces.append((t['start'], t['start'], b'static '))
+            self.tables.append({k: t[k] for k in ('name', 'type', 'count', 'size', 'line', 'const', 'expr')})
+
     def literal_cursor(self, cursor):
         """The number an initializer is, through implicit conversions and parentheses, a minus allowed; None when it
         is anything else."""
@@ -797,22 +990,32 @@ class Unit:
         return cursor if cursor.kind in (K_INTEGER_LITERAL, K_FLOATING_LITERAL) else None
 
     def number_code(self):
-        """The copy's numbers: the record before the source, each number's uses replaced, the table after it."""
-        if not self.numbers:
+        """The copy's numbers and tables: the numbers' record before the source, each number's uses replaced, each
+        const table made writable, the rows after it."""
+        self.table_rows()
+        if not self.numbers and not self.tables:
             return b'', b''
-        members = ' '.join(f'{n["type"]} v{i};' for i, n in enumerate(self.numbers))
-        values = ', '.join(f'({n["type"]})({n["value"]})' for n in self.numbers)
-        head = (f'namespace {{ struct LumaNumbers {{ {members} }} luma_numbers = {{ {values} }}; }}\n').encode()
-        for start, end, number in self.number_uses:
-            i = self.number_index[number]
-            self.replaces.append((start, end, f'(({self.numbers[i]["type"]})luma_numbers.v{i})'.encode()))
-        rows = ',\n'.join(f'    {{{quote(n["name"])}, {quote(n["signature"])}, {n["place"]}u, {n["kind"]}u, '
-                          f'&luma_numbers.v{i}}}' for i, n in enumerate(self.numbers))
-        tail = ('\n// The numbers of this unit\'s code by name (tools/lumacore/instrument.py, 1.5).\nnamespace {\n'
-                f'const ::luma::Number luma_number_rows[] = {{\n{rows}\n}};\n'
-                f'LUMA_NUMBERS_SECTION const ::luma::Numbers luma_numbers_unit = {{{quote(self.label)}, luma_number_rows, '
-                f'{len(self.numbers)}u}};\n}}\n').encode()
-        return head, tail
+        head = b''
+        lines = ['', "// The numbers and tables of this unit by name (tools/lumacore/instrument.py, 1.5).", 'namespace {']
+        if self.numbers:
+            members = ' '.join(f'{n["type"]} v{i};' for i, n in enumerate(self.numbers))
+            values = ', '.join(f'({n["type"]})({n["value"]})' for n in self.numbers)
+            head = (f'namespace {{ struct LumaNumbers {{ {members} }} luma_numbers = {{ {values} }}; }}\n').encode()
+            for start, end, number in self.number_uses:
+                i = self.number_index[number]
+                self.replaces.append((start, end, f'(({self.numbers[i]["type"]})luma_numbers.v{i})'.encode()))
+            rows = ',\n'.join(f'    {{{quote(n["name"])}, {quote(n["signature"])}, {n["place"]}u, {n["kind"]}u, '
+                              f'&luma_numbers.v{i}}}' for i, n in enumerate(self.numbers))
+            lines.append(f'const ::luma::Number luma_number_rows[] = {{\n{rows}\n}};')
+        if self.tables:
+            rows = ',\n'.join(f'    {{{quote(t["name"])}, {quote(t["type"])}, (void*)&{t["expr"]}, '
+                              f'(unsigned)sizeof({t["expr"]}), {t["count"]}u}}' for t in self.tables)
+            lines.append(f'const ::luma::Table luma_table_rows[] = {{\n{rows}\n}};')
+        lines.append(f'LUMA_NUMBERS_SECTION const ::luma::Numbers luma_numbers_unit = {{{quote(self.label)}, '
+                     f'{"luma_number_rows" if self.numbers else "nullptr"}, {"luma_table_rows" if self.tables else "nullptr"}, '
+                     f'{len(self.numbers)}u, {len(self.tables)}u}};')
+        lines.append('}')
+        return head, ('\n'.join(lines) + '\n').encode()
 
     def identity(self, cursor):
         """The row name and signature function() gives a function, whether this unit defines it or not (an overridden
@@ -1195,8 +1398,11 @@ class Unit:
         if (self.types_tail or numbers_tail) and not text.endswith(b'\n'):
             text += b'\n'
         write_if_changed(output, self.types_head + numbers_head + marker + text + self.types_tail + numbers_tail)
+        tables = [{k: v for k, v in t.items() if k != 'expr'} for t in self.tables]
         write_if_changed(output + '.numbers', (json.dumps({'numbers': self.numbers, 'uses': len(self.number_uses),
-                                                           'skipped': self.number_skips}, ensure_ascii=False) + '\n').encode('utf-8'))
+                                                           'skipped': self.number_skips, 'tables': tables,
+                                                           'tables_skipped': self.table_skips},
+                                                          ensure_ascii=False) + '\n').encode('utf-8'))
         write_if_changed(output + '.types', (json.dumps(self.types_part, ensure_ascii=False) + '\n').encode('utf-8'))
         write_if_changed(output + '.rows', ('\n'.join(self.rows) + '\n' if self.rows else '').encode())
         write_if_changed(output + '.functions', (json.dumps(self.functions, ensure_ascii=False) + '\n').encode('utf-8'))

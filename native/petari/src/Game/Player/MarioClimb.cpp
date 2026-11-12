@@ -1,8 +1,5 @@
 #include "Game/Player/MarioClimb.hpp"
 #include "Game/Player/MarioActor.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 6.0f);
 
 void Mario::connectToClimb() {
     mBumpGravityVec = -getShadowNorm();
@@ -22,7 +19,7 @@ bool MarioClimb::update() {
         mTimer--;
     }
 
-    addVelocity(getFrontVec(), cNum_update_f1);
+    addVelocity(getFrontVec(), 6.0f);
 
     if (mTimer == 0) {
         return false;

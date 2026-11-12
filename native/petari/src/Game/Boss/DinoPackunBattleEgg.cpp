@@ -7,16 +7,15 @@
 #include "Game/Util.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 
 namespace {
     // Where the tail leaves the egg, in the boss's frame.
     const Vec3f cEggOutPosition(0.0f, 60.0f, -320.0f);
     const s32 cTurnSteps = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE(f32, cTurnDegree, 0.3f);
+    const f32 cTurnDegree = 0.3f;
     const s32 cWalkSteps = NebulaFrameClock::stepsOfSeconds(5);
-    NEBULA_TUNABLE(f32, cWalkSpeed, 0.5f);
-    NEBULA_TUNABLE(s32, cWalkFootPrintPeriod, 91);
+    const f32 cWalkSpeed = 0.5f;
+    const s32 cWalkFootPrintPeriod = 91;
 
     // Drops the part of the velocity along `rDir`.
     void removeVelocity(DinoPackun* pHost, const Vec3f& rDir) {

@@ -13,13 +13,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_ClipAreaDropLaser_f1, "ClipAreaDropLaser.f1", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw_f1, "draw.f1", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw_f2, "draw.f2", 6.0f);
 
 namespace NrvClipAreaDropLaser {
     NEW_NERVE(ClipAreaDropLaserNrvWait, ClipAreaDropLaser, Wait);
@@ -31,7 +25,7 @@ ClipAreaDropLaser::ClipAreaDropLaser(const char* pName) : LiveActor(pName) {
     mNumPointsToDraw = 0.0f;
     mPointIndexToSkipDraw = -1;
     mDrawCount = -1;
-    mSpeed = cNum_ClipAreaDropLaser_f1;
+    mSpeed = 20.0f;
     MR::createClipAreaDropHolder();
 }
 
@@ -40,7 +34,7 @@ void ClipAreaDropLaser::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_ClipAreaDropLaser);
     initRailRider(rIter);
     MR::moveCoordAndTransToRailStartPoint(this);
-    mSpeed = cNum_init_f1;
+    mSpeed = 20.0f;
     MR::getPlacementArg0NoInit(rIter, &mSpeed);
     initEffectKeeper(0, "ClipAreaDropLaser");
     initSound(4, false);
@@ -58,7 +52,7 @@ void ClipAreaDropLaser::draw() const {
     TDDraw::cameraInit3D();
     SiteMaterial material;
     TDDraw::setupNative(&material, 0, 2, 0);
-    material.mState.line_width = cNum_draw_f1 / cNum_draw_f2;
+    material.mState.line_width = 20.0f / 6.0f;
     material.setDepth(true, NEBULA_COMPARE_LEQUAL, false);
 
     // Back from the newest point through the ring.

@@ -26,43 +26,7 @@
 
 
 #include <nebula_math.h>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 169.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 120.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 8.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 0.06f);
-NEBULA_TUNABLE_NAMED(f32, cNum_kill_f1, "kill.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_kill_f2, "kill.f2", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeNumb_f1, "exeNumb.f1", 1.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f1, "initSensor.f1", 130.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f2, "initSensor.f2", 120.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f3, "initSensor.f3", 120.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f4, "initSensor.f4", 45.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f5, "initSensor.f5", 45.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f6, "initSensor.f6", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f7, "initSensor.f7", 45.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f8, "initSensor.f8", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f9, "initSensor.f9", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initLeaf_f1, "initLeaf.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initLeaf_f2, "initLeaf.f2", 90.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initLeaf_f3, "initLeaf.f3", 90.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initLeaf_f4, "initLeaf.f4", 90.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initLeaf_f5, "initLeaf.f5", 90.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isTargetInRange_f1, "isTargetInRange.f1", 800.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isInFieldOfView_f1, "isInFieldOfView.f1", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isInFieldOfView_f2, "isInFieldOfView.f2", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isInFieldOfView_f3, "isInFieldOfView.f3", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_turnTo_f1, "turnTo.f1", 180.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeAttack_1, "exeAttack.1", 156);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeDamage_1, "exeDamage.1", 76);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeRise_1, "exeRise.1", 56);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeCrow_1, "exeCrow.1", 45);
-NEBULA_TUNABLE_NAMED(s32, cStep_isAttackSensorValid_1, "isAttackSensorValid.1", 40);
-NEBULA_TUNABLE_NAMED(s32, cStep_isChance_1, "isChance.1", 50);
 
 HammerHeadPackun::HammerHeadPackun(const char* pName) : LiveActor(pName) {
     lumacore::setClass(this, lumacore::kClassId< HammerHeadPackun >);
@@ -111,9 +75,9 @@ void HammerHeadPackun::init(const TableIter& rIter) {
     MR::useStageSwitchWriteDead(this, rIter);
     initShadow();
     initLeaf(rIter);
-    MR::initStarPointerTargetAtJoint(this, "Head", cNum_init_f1, Vec3f(cNum_init_f2, 0.0f, 0.0f));
+    MR::initStarPointerTargetAtJoint(this, "Head", 169.0f, Vec3f(120.0f, 0.0f, 0.0f));
     MR::declareStarPiece(this, 9);
-    mJointRumbler = new JointRumbler(this, "AllRoot", cNum_init_f3, cNum_init_f4, 60, true, 0);
+    mJointRumbler = new JointRumbler(this, "AllRoot", 8.0f, 0.06f, 60, true, 0);
     makeActorAppeared();
 }
 
@@ -130,7 +94,7 @@ void HammerHeadPackun::kill() {
     MR::startSound(this, "SE_EM_HHPACKUN_DEAD");
     Vec3f pos;
     MR::copyJointPos(this, "Head", &pos);
-    MR::appearStarPiece(this, pos, 9, cNum_kill_f1, cNum_kill_f2, false);
+    MR::appearStarPiece(this, pos, 9, 10.0f, 40.0f, false);
     MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
     LiveActor::kill();
 }
@@ -170,7 +134,7 @@ void HammerHeadPackun::exeAttack() {
 
     Vec3f dir;
     if (!tryShiftNumb()) {
-        if (MR::isStep(this, cStep_exeAttack_1)) {
+        if (MR::isStep(this, 156)) {
             MR::shakeCameraNormalStrong();
             MR::tryRumblePadStrong(this, PLAYER_1);
         }
@@ -221,7 +185,7 @@ void HammerHeadPackun::exeDamage() {
         mImmunityTime++;
     }
 
-    if (MR::isStep(this, cStep_exeDamage_1)) {
+    if (MR::isStep(this, 76)) {
         MR::shakeCameraNormal();
         MR::tryRumblePadMiddle(this, PLAYER_1);
     }
@@ -246,7 +210,7 @@ void HammerHeadPackun::exeRise() {
     }
 
     if (!tryShiftNumb()) {
-        if (MR::isStep(this, cStep_exeRise_1)) {
+        if (MR::isStep(this, 56)) {
             MR::shakeCameraNormalWeak();
             MR::tryRumblePadWeak(this, PLAYER_1);
         }
@@ -278,7 +242,7 @@ void HammerHeadPackun::exeCrow() {
     }
 
     if (!tryShiftNumb()) {
-        if (MR::isStep(this, cStep_exeCrow_1)) {
+        if (MR::isStep(this, 45)) {
             MR::shakeCameraNormalWeak();
             MR::tryRumblePadWeak(this, PLAYER_1);
         }
@@ -321,7 +285,7 @@ void HammerHeadPackun::exeNumb() {
         mEffectKeeper->forceDeleteEmitterAll();
         MR::stopBck(this);
         MR::stopBck(mLeafModel);
-        MR::emitEffectWithScale(this, "PointerTouchManual", cNum_exeNumb_f1, -1);
+        MR::emitEffectWithScale(this, "PointerTouchManual", 1.5f, -1);
         mNumbTime = 0;
     }
 
@@ -468,12 +432,12 @@ void HammerHeadPackun::initPosture() {
 
 void HammerHeadPackun::initSensor() {
     initHitSensor(6);
-    MR::addHitSensorAtJointMapObj(this, "body", "Head", 32, cNum_initSensor_f1, Vec3f(cNum_initSensor_f2, 0.0f, 0.0f));
-    MR::addHitSensorAtJointMapObj(this, "blow", "Spin1", 32, cNum_initSensor_f3, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointMapObj(this, "push1", "Spin2", 8, cNum_initSensor_f4, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointMapObj(this, "push2", "Spin2", 8, cNum_initSensor_f5, Vec3f(cNum_initSensor_f6, 0.0f, 0.0f));
-    MR::addHitSensorAtJointMapObj(this, "push3", "Spin3", 8, cNum_initSensor_f7, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointMapObj(this, "push4", "Spin3", 8, cNum_initSensor_f8, Vec3f(cNum_initSensor_f9, 0.0f, 0.0f));
+    MR::addHitSensorAtJointMapObj(this, "body", "Head", 32, 130.0f, Vec3f(120.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointMapObj(this, "blow", "Spin1", 32, 120.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointMapObj(this, "push1", "Spin2", 8, 45.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointMapObj(this, "push2", "Spin2", 8, 45.0f, Vec3f(50.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointMapObj(this, "push3", "Spin3", 8, 45.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointMapObj(this, "push4", "Spin3", 8, 60.0f, Vec3f(80.0f, 0.0f, 0.0f));
 }
 
 void HammerHeadPackun::initShadow() {
@@ -498,9 +462,9 @@ void HammerHeadPackun::initLeaf(const TableIter& rIter) {
     }
 
     if (arg > 0) {
-        mLeafModel->initFixedPosition(Vec3f(cNum_initLeaf_f1, 0.0f, 0.0f), Vec3f(0.0f, -cNum_initLeaf_f2, -cNum_initLeaf_f3), "Spin1");
+        mLeafModel->initFixedPosition(Vec3f(100.0f, 0.0f, 0.0f), Vec3f(0.0f, -90.0f, -90.0f), "Spin1");
     } else {
-        mLeafModel->initFixedPosition(Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, -cNum_initLeaf_f4, -cNum_initLeaf_f5), "Spin1");
+        mLeafModel->initFixedPosition(Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, -90.0f, -90.0f), "Spin1");
     }
 
     mLeafModel->initWithoutIter();
@@ -516,7 +480,7 @@ bool HammerHeadPackun::isTargetInRange() const {
 
     if (vec.dot(up) <= 0.0f) {
         return false;
-    } else if (MR::calcDistanceToPlayer(mPosition) < cNum_isTargetInRange_f1) {
+    } else if (MR::calcDistanceToPlayer(mPosition) < 800.0f) {
         return true;
     }
 
@@ -524,9 +488,9 @@ bool HammerHeadPackun::isTargetInRange() const {
 }
 
 bool HammerHeadPackun::isInFieldOfView(const Vec3f& rPos) const {
-    f32 deg = cNum_isInFieldOfView_f1;
-    if (cNum_isInFieldOfView_f2 < 0.0f) {
-        deg = -cNum_isInFieldOfView_f3;
+    f32 deg = 30.0f;
+    if (30.0f < 0.0f) {
+        deg = -30.0f;
     }
 
     return rPos.dot(mFront) >= MR::cosDegree(deg);
@@ -535,7 +499,7 @@ bool HammerHeadPackun::isInFieldOfView(const Vec3f& rPos) const {
 bool HammerHeadPackun::isAttackSensorValid() const {
     bool isValid = false;
     if ((!isNerve(GET_NERVE_ANON(HammerHeadPackunNrvAttack)) || !MR::isNewNerve(this)) && !isNerve(GET_NERVE_ANON(HammerHeadPackunNrvRest)) &&
-        (!isNerve(GET_NERVE_ANON(HammerHeadPackunNrvRecover)) || !MR::isLessEqualStep(this, cStep_isAttackSensorValid_1)) &&
+        (!isNerve(GET_NERVE_ANON(HammerHeadPackunNrvRecover)) || !MR::isLessEqualStep(this, 40)) &&
         !isNerve(GET_NERVE_ANON(HammerHeadPackunNrvDamage)) && (!isNerve(GET_NERVE_ANON(HammerHeadPackunNrvRise)) || !MR::isLessStep(this, NebulaFrameClock::stepsOfSeconds(1))) &&
         !isNerve(GET_NERVE_ANON(HammerHeadPackunNrvNumb)) && !isNerve(GET_NERVE_ANON(HammerHeadPackunNrvSmashKill)) &&
         !isNerve(GET_NERVE_ANON(HammerHeadPackunNrvBlowKill))) {
@@ -547,7 +511,7 @@ bool HammerHeadPackun::isAttackSensorValid() const {
 bool HammerHeadPackun::isChance() const {
     bool isChance = false;
     if ((isNerve(GET_NERVE_ANON(HammerHeadPackunNrvRest)) && !MR::isNewNerve(this)) || isNerve(GET_NERVE_ANON(HammerHeadPackunNrvDamage)) ||
-        (isNerve(GET_NERVE_ANON(HammerHeadPackunNrvRecover)) && MR::isLessEqualStep(this, cStep_isChance_1)) ||
+        (isNerve(GET_NERVE_ANON(HammerHeadPackunNrvRecover)) && MR::isLessEqualStep(this, 50)) ||
         (isNerve(GET_NERVE_ANON(HammerHeadPackunNrvRise)) && MR::isLessEqualStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) || isNerve(GET_NERVE_ANON(HammerHeadPackunNrvNumb))) {
         isChance = true;
     }
@@ -568,7 +532,7 @@ bool HammerHeadPackun::calcPlayerDir(Vec3f* pPos) const {
 void HammerHeadPackun::turnTo(const Vec3f& rFrom, f32 rate) {
     f32 absAngle = mFront.angle(rFrom);
     f32 ratio = 1.0f;
-    f32 maxAngle = rate * MR::pi() / cNum_turnTo_f1;
+    f32 maxAngle = rate * MR::pi() / 180.0f;
     if (absAngle > maxAngle) {
         ratio = maxAngle / absAngle;
     }

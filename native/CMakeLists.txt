@@ -107,6 +107,17 @@ if(NEBULA_LUMA_HOOKS)
             VERBATIM)
         add_custom_target(luma_types_check ALL DEPENDS "${luma_types}/luma_types_described.json")
     endif()
+    # The reference a modder reads (plan 10.1), generated from the same description: every row on exactly one page
+    # (--check fails the build otherwise). The folder is written whole each time, so a name the game no longer has
+    # leaves no page behind. Output under the build, never committed.
+    set(luma_reference "${CMAKE_CURRENT_BINARY_DIR}/luma_docs/reference")
+    set(luma_reference_tool "${CMAKE_CURRENT_SOURCE_DIR}/../tools/lumacore/docs/gen_reference.py")
+    add_custom_command(OUTPUT "${luma_reference}/search.json"
+        COMMAND "${CMAKE_COMMAND}" -E rm -rf "${luma_reference}"
+        COMMAND "${Python3_EXECUTABLE}" -X utf8 -I "${luma_reference_tool}" --types "${luma_types}/luma_types.json"
+                --functions "${luma_types}/luma_functions.json" --out "${luma_reference}" --check
+        DEPENDS "${luma_types}/luma_types_table.cpp" "${luma_reference_tool}" VERBATIM)
+    add_custom_target(luma_reference ALL DEPENDS "${luma_reference}/search.json")
 endif()
 
 add_library(smg_game SHARED
@@ -299,7 +310,7 @@ if(WIN32)
     set(nebula_minhook_dir "${CMAKE_CURRENT_LIST_DIR}/../third_party/minhook")
     set(nebula_minhook_sources "${nebula_minhook_dir}/src/buffer.c" "${nebula_minhook_dir}/src/hook.c" "${nebula_minhook_dir}/src/trampoline.c" "${nebula_minhook_dir}/src/hde/hde64.c")
 endif()
-add_executable(nebula_native_host host/host_main.cpp ../runtime/src/host_extension.cpp ../runtime/src/luma_services_host.cpp ../runtime/src/luma_system.cpp ../runtime/src/luma_mods.cpp
+add_executable(nebula_native_host host/host_main.cpp ../runtime/src/host_extension.cpp ../runtime/src/luma_services_host.cpp ../runtime/src/luma_system.cpp ../runtime/src/luma_mods.cpp ../runtime/src/luma_fs.cpp
     ../runtime/src/mod_log.cpp ../runtime/src/mod_screens.cpp ../runtime/src/mod_start_check.cpp ../runtime/src/mod_plugins.cpp ${nebula_minhook_sources}
     ../runtime/src/luma.cpp ../runtime/src/mods.cpp ../runtime/src/mod_consent.cpp ../runtime/src/texture_categories.cpp ../runtime/src/dolphin_pack.cpp ../runtime/src/mod_xml.cpp ../runtime/src/atomic_file.cpp ../runtime/src/save_files.cpp ../runtime/src/asset_store.cpp
     ../runtime/src/crash_report.cpp ../runtime/src/discord_presence.cpp ../runtime/src/mii_import.cpp

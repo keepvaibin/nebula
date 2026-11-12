@@ -129,4 +129,13 @@ std::vector<std::string> granted_permissions(const ModInfo& mod) {
     return out;
 }
 
+std::vector<std::string> declined_permissions(const ModInfo& mod) {
+    std::vector<std::string> out;
+    if (mod.luma == nullptr) return out;
+    for (const galaxy::luma::Permission& permission : mod.luma->permissions) {
+        if (answer_of(mod, permission, nullptr) == Answer::Declined) out.push_back(permission.name);
+    }
+    return out;
+}
+
 }  // namespace galaxy::mods

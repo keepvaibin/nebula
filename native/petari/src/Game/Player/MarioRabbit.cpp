@@ -5,20 +5,6 @@
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_start_f1, "start.f1", 0.25f);
-NEBULA_TUNABLE_NAMED(f32, cNum_start_f2, "start.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_hop_f1, "hop.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_hop_f2, "hop.f2", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_impact_f1, "impact.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_impact_f2, "impact.f2", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_impact_f3, "impact.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f2, "update.f2", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f3, "update.f3", 1.0471976f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f4, "update.f4", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f5, "update.f5", 0.05f);
 
 void Mario::startRabbitMode() {
     if (!isStatusActive(MarioStatus_Rabbit)) {
@@ -64,8 +50,8 @@ bool MarioRabbit::start() {
     mForcedJump = 0;
     mTurnLockTimer = 0;
     if (getPlayer()->mDrawStates.wallDamageCheck) {
-        mVerticalSpeed *= cNum_start_f1;
-        mMoveVelocity = getPlayer()->getWallNorm() * mActor->getConst().getTable()->mRabbitFirstJump * cNum_start_f2;
+        mVerticalSpeed *= 0.25f;
+        mMoveVelocity = getPlayer()->getWallNorm() * mActor->getConst().getTable()->mRabbitFirstJump * 0.5f;
         getPlayer()->setFrontVecKeepUp(getPlayer()->getWallNorm());
         mWallStart = 1;
         mTurnLockTimer = 60;
@@ -77,9 +63,9 @@ bool MarioRabbit::start() {
 
 void MarioRabbit::hop() {
     if (mVerticalSpeed < 0.0f) {
-        mVerticalSpeed = cNum_hop_f1 * -mActor->getConst().getTable()->mRabbitFirstJump;
+        mVerticalSpeed = 0.5f * -mActor->getConst().getTable()->mRabbitFirstJump;
     } else {
-        mVerticalSpeed = cNum_hop_f2 * -mActor->getConst().getTable()->mRabbitFirstJump;
+        mVerticalSpeed = 0.3f * -mActor->getConst().getTable()->mRabbitFirstJump;
     }
 
     mJumpSide = 0;
@@ -94,11 +80,11 @@ void MarioRabbit::forceJump() {
 
 void MarioRabbit::impact() {
     if (!getPlayer()->mDrawStates.wallDamageCheck) {
-        if (mMoveVelocity.length() > cNum_impact_f1 * mActor->getConst().getTable()->mRabbitMoveSpeed) {
-            mMoveVelocity.setLength(cNum_impact_f2 * mActor->getConst().getTable()->mRabbitMoveSpeed);
+        if (mMoveVelocity.length() > 2.0f * mActor->getConst().getTable()->mRabbitMoveSpeed) {
+            mMoveVelocity.setLength(2.0f * mActor->getConst().getTable()->mRabbitMoveSpeed);
         }
 
-        mMoveVelocity.setLength(cNum_impact_f3 * mMoveVelocity.length());
+        mMoveVelocity.setLength(0.5f * mMoveVelocity.length());
     }
 
     getPlayer()->stopJump();
@@ -257,8 +243,8 @@ bool MarioRabbit::update() {
         }
     }
 
-    if (mVerticalSpeed > cNum_update_f1) {
-        mVerticalSpeed = cNum_update_f2;
+    if (mVerticalSpeed > 50.0f) {
+        mVerticalSpeed = 50.0f;
     }
 
     if (getStickP() != 0.0f) {
@@ -294,10 +280,10 @@ bool MarioRabbit::update() {
     }
 
     NebulaMtxCopy(MR::tmpMtxRotXRad(angle), mBodyTiltMtx);
-    if (MR::abs(angle) >= cNum_update_f3) {
-        MR::vecBlendSphere(mBodyFront, getFrontVec(), &mBodyFront, cNum_update_f4);
+    if (MR::abs(angle) >= 1.0471976f) {
+        MR::vecBlendSphere(mBodyFront, getFrontVec(), &mBodyFront, 0.2f);
     } else {
-        MR::vecBlendSphere(mBodyFront, getFrontVec(), &mBodyFront, cNum_update_f5);
+        MR::vecBlendSphere(mBodyFront, getFrontVec(), &mBodyFront, 0.05f);
     }
 
     MR::normalizeOrZero(&mBodyFront);

@@ -10,35 +10,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_geometry.hpp>
 #include <cstring>
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_checkWallStick_f1, "checkWallStick.f1", 0.25f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkStickWallSide_f1, "checkStickWallSide.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkStickWallSide_f2, "checkStickWallSide.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkStickFrontBack_f1, "checkStickFrontBack.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkStickFrontBack_f2, "checkStickFrontBack.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_fixWallingDir_f1, "fixWallingDir.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_fixWallingDir_f2, "fixWallingDir.f2", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_keepDistFrontWall_f1, "keepDistFrontWall.f1", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_keepDistFrontWall_f2, "keepDistFrontWall.f2", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isEnableStickWall_f1, "isEnableStickWall.f1", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isEnableStickWall_f2, "isEnableStickWall.f2", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isEnableStickWall_f3, "isEnableStickWall.f3", 120.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isEnableStickWall_f4, "isEnableStickWall.f4", 120.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_start_f1, "start.f1", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_start_f2, "start.f2", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f2, "update.f2", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f3, "update.f3", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f4, "update.f4", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f5, "update.f5", 0.7f);
-NEBULA_TUNABLE_NAMED(f32, cNum_fixWallingDist_f1, "fixWallingDist.f1", 79.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_fixWallingDist_f2, "fixWallingDist.f2", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_fixWallingDist_f3, "fixWallingDist.f3", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_fixWallingDist_f4, "fixWallingDist.f4", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_fixWallingDist_f5, "fixWallingDist.f5", 0.999f);
-NEBULA_TUNABLE_NAMED(f32, cNum_fixWallingDist_f6, "fixWallingDist.f6", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_fixWallingDist_f7, "fixWallingDist.f7", 80.0f);
 
 bool Mario::isWalling() const {
     return getCurrentStatus() == MarioStatus_Wall;
@@ -54,7 +25,7 @@ void Mario::checkWallStick() {
         if (mActor->mGravityJumpTimer) {
             Vec3f horizontal;
             f32 vertical = MR::vecKillElement(mJumpVec, mActor->mGravityVec, &horizontal);
-            horizontal.setLength(-cNum_checkWallStick_f1);
+            horizontal.setLength(-0.25f);
             mJumpVec = mActor->mGravityVec * vertical + horizontal;
             return;
         }
@@ -73,11 +44,11 @@ void Mario::checkWallStick() {
 u8 Mario::checkStickWallSide() {
     if (isStickOn()) {
         const Vec3f& direction = getWorldPadDir();
-        if (direction.dot(getWallNorm()) < -cNum_checkStickWallSide_f1) {
+        if (direction.dot(getWallNorm()) < -0.5f) {
             return 1;
         }
 
-        if (direction.dot(getWallNorm()) > cNum_checkStickWallSide_f2 && !mMovementStates.waitStickNeutral) {
+        if (direction.dot(getWallNorm()) > 0.5f && !mMovementStates.waitStickNeutral) {
             return 2;
         }
     }
@@ -88,11 +59,11 @@ u8 Mario::checkStickWallSide() {
 s32 Mario::checkStickFrontBack() {
     if (isStickOn()) {
         const Vec3f& direction = getWorldPadDir();
-        if (direction.dot(-mFrontVec) < -cNum_checkStickFrontBack_f1) {
+        if (direction.dot(-mFrontVec) < -0.5f) {
             return 1;
         }
 
-        if (direction.dot(-mFrontVec) > cNum_checkStickFrontBack_f2 && !mMovementStates.waitStickNeutral) {
+        if (direction.dot(-mFrontVec) > 0.5f && !mMovementStates.waitStickNeutral) {
             return 2;
         }
     }
@@ -153,7 +124,7 @@ void Mario::fixWallingDir(bool immediate) {
             return;
         }
 
-        setFrontVecKeepUp(-*mBackWallTriangle->getNormal(0), cNum_fixWallingDir_f1);
+        setFrontVecKeepUp(-*mBackWallTriangle->getNormal(0), 0.1f);
         return;
     }
 
@@ -163,7 +134,7 @@ void Mario::fixWallingDir(bool immediate) {
             return;
         }
 
-        setFrontVecKeepUp(-*mFrontWallTriangle->getNormal(0), cNum_fixWallingDir_f2);
+        setFrontVecKeepUp(-*mFrontWallTriangle->getNormal(0), 0.1f);
     }
 }
 
@@ -267,8 +238,8 @@ void Mario::keepDistFrontWall() {
     if (mMovementStates.frontWall) {
         Vec3f horizontal;
         MR::vecKillElement(mFrontWallPos - mGroundPos, *getGravityVec(), &horizontal);
-        if (horizontal.length() < cNum_keepDistFrontWall_f1) {
-            push(*mFrontWallTriangle->getNormal(0) * (cNum_keepDistFrontWall_f2 - horizontal.length()));
+        if (horizontal.length() < 80.0f) {
+            push(*mFrontWallTriangle->getNormal(0) * (80.0f - horizontal.length()));
         }
     }
 }
@@ -343,11 +314,11 @@ bool Mario::isEnableStickWall() {
         return false;
     }
 
-    if (mMovementStates.frontWall && calcPolygonAngleD(mFrontWallTriangle) < cNum_isEnableStickWall_f1) {
+    if (mMovementStates.frontWall && calcPolygonAngleD(mFrontWallTriangle) < 80.0f) {
         return false;
     }
 
-    if (mMovementStates.backWall && calcPolygonAngleD(mBackWallTriangle) < cNum_isEnableStickWall_f2) {
+    if (mMovementStates.backWall && calcPolygonAngleD(mBackWallTriangle) < 80.0f) {
         return false;
     }
 
@@ -387,9 +358,9 @@ bool Mario::isEnableStickWall() {
     }
 
     Vec3f position(mActor->mHeadPos);
-    f32 distance = cNum_isEnableStickWall_f3;
+    f32 distance = 120.0f;
     if (mMovementStates.backWall) {
-        distance = -cNum_isEnableStickWall_f4;
+        distance = -120.0f;
     }
 
     if (!MR::isExistMapCollision(position, mFrontVec * distance)) {
@@ -410,8 +381,8 @@ bool MarioWall::start() {
 
     if (getPlayerMode() == PlayerMode_Ice && getPlayer()->getWallPolygon()->mSensor->isType(0x57)) {
         MarioActor* actor = mActor;
-        actor->createIceWall(getPlayer()->getWallPos() - getPlayer()->getWallNorm() * cNum_start_f1, getPlayer()->getWallNorm());
-        playEffectRT("氷壁ジャンプ", getPlayer()->getWallNorm(), getPlayer()->getWallPos() - getPlayer()->getWallNorm() * cNum_start_f2);
+        actor->createIceWall(getPlayer()->getWallPos() - getPlayer()->getWallNorm() * 30.0f, getPlayer()->getWallNorm());
+        playEffectRT("氷壁ジャンプ", getPlayer()->getWallNorm(), getPlayer()->getWallPos() - getPlayer()->getWallNorm() * 15.0f);
         playSound("スケート着地");
         mIceWall = 1;
     }
@@ -450,7 +421,7 @@ bool MarioWall::update() {
 
     mStickTimer++;
     if (getPlayer()->mMovementStates.onGround && !release) {
-        if (getPlayer()->mVerticalSpeed < cNum_update_f1) {
+        if (getPlayer()->mVerticalSpeed < 80.0f) {
             if (!isOnSlipGround()) {
                 getPlayer()->setFrontVecKeepUp(getPlayer()->getWallNorm());
                 changeAnimation("着地");
@@ -481,9 +452,9 @@ bool MarioWall::update() {
         }
 
         if (isOnSlipGround()) {
-            addVelocityAfter(getPlayer()->getWallNorm() * cNum_update_f2);
+            addVelocityAfter(getPlayer()->getWallNorm() * 10.0f);
         } else {
-            addVelocityAfter(getPlayer()->getWallNorm() * cNum_update_f3);
+            addVelocityAfter(getPlayer()->getWallNorm() * 30.0f);
         }
 
         return false;
@@ -510,7 +481,7 @@ bool MarioWall::update() {
         return false;
     }
 
-    f32 blend = cNum_update_f4;
+    f32 blend = 0.9f;
     f32 speed = getActor()->getConst().getTable()->mWallDropSpeedNormal;
     u8 side = getPlayer()->checkStickWallSide();
     if (side == 1) {
@@ -519,7 +490,7 @@ bool MarioWall::update() {
 
     switch (side) {
     case 1:
-        blend = cNum_update_f5;
+        blend = 0.7f;
         if (mStickTimer > getActor()->getConst().getTable()->mWallStickTime) {
             mStickTimer = getActor()->getConst().getTable()->mWallStickTime;
         }
@@ -679,21 +650,21 @@ bool Mario::fixWallingDist() {
     }
 
     if (mMovementStates.backWall) {
-        Vec3f position(mBackWallPos + *mBackWallTriangle->getNormal(0) * cNum_fixWallingDist_f1);
+        Vec3f position(mBackWallPos + *mBackWallTriangle->getNormal(0) * 79.0f);
         f32 distance = MR::vecKillElement(position - mPosition, *mBackWallTriangle->getNormal(0), &position);
         mPosition += *mBackWallTriangle->getNormal(0) * distance;
         if (!fixWallingTop()) {
             return false;
         }
 
-        mPosition = mBackWallPos + *mBackWallTriangle->getNormal(0) * cNum_fixWallingDist_f2 - mWallTopHead * cNum_fixWallingDist_f3;
+        mPosition = mBackWallPos + *mBackWallTriangle->getNormal(0) * 60.0f - mWallTopHead * 80.0f;
     } else if (mMovementStates.frontWall) {
         if (!fixWallingTop()) {
             return false;
         }
 
-        if (MR::isExistMapCollision(mPosition, mFrontVec * cNum_fixWallingDist_f4) && mFrontVec.dot(*mFrontWallTriangle->getNormal(0)) < -cNum_fixWallingDist_f5) {
-            Vec3f position(mFrontWallPos + *mFrontWallTriangle->getNormal(0) * cNum_fixWallingDist_f6 - mWallTopHead * cNum_fixWallingDist_f7);
+        if (MR::isExistMapCollision(mPosition, mFrontVec * 100.0f) && mFrontVec.dot(*mFrontWallTriangle->getNormal(0)) < -0.999f) {
+            Vec3f position(mFrontWallPos + *mFrontWallTriangle->getNormal(0) * 60.0f - mWallTopHead * 80.0f);
             Vec3f correction;
             MR::vecKillElement(position - mPosition, *getGravityVec(), &correction);
             if (!MR::isNearZero(correction)) {

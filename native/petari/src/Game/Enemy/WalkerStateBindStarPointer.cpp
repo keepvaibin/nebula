@@ -7,10 +7,9 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, sPointCanceBindTime, 5);
+    const s32 sPointCanceBindTime = 5;
 };  // namespace
 
 namespace NrvWalkerStateBindStarPointer {

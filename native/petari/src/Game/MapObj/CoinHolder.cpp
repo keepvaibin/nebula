@@ -5,16 +5,13 @@
 #include "Game/MapObj/Coin.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_appearCoinCircle_f1, "appearCoinCircle.f1", 360.0f);
 
 namespace {
-    NEBULA_TUNABLE(s32, sCreateCoinNum, 32);
-    NEBULA_TUNABLE(f32, sRandomizeVel, 4.0f);
-    NEBULA_TUNABLE(f32, sCoinVelVertical, 25.0f);
-    NEBULA_TUNABLE(f32, sCircleVelHRatio, 0.25f);
-    NEBULA_TUNABLE(f32, sCircleVelLength, 30.0f);
+    const s32 sCreateCoinNum = 32;
+    const f32 sRandomizeVel = 4.0f;
+    const f32 sCoinVelVertical = 25.0f;
+    const f32 sCircleVelHRatio = 0.25f;
+    const f32 sCircleVelLength = 30.0f;
 };  // namespace
 
 CoinHolder::CoinHolder(const char* pName) : DeriveActorGroup< Coin >(pName, ::sCreateCoinNum) {
@@ -77,7 +74,7 @@ bool CoinHolder::appearCoinCircle(const NameObj* pObj, const Vec3f& rPosition, s
     MR::makeAxisVerticalZX(&axis, gravity);
 
     for (s32 i = 0; i < count; i++) {
-        f32 angle = cNum_appearCoinCircle_f1 / count;
+        f32 angle = 360.0f / count;
 
         Vec3f horizontal;
         MR::rotateVecDegree(&horizontal, axis, gravity, i * angle);

@@ -13,33 +13,24 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/System/GameRules.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_start_f1, "start.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startPop_f1, "startPop.f1", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updatePop_f1, "updatePop.f1", 2.5f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHide_shakeCameraInfinity_1, "exeHide.shakeCameraInfinity.1", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHide_shakeCameraInfinity_2, "exeHide.shakeCameraInfinity.2", 2.0f);
-
 namespace {
-    NEBULA_TUNABLE(s32, sStopSceneFrame, 10);
-    NEBULA_TUNABLE(f32, sKnockSpeed, 10.0f);
-    NEBULA_TUNABLE(f32, sSpeed, 8.0f);
-    NEBULA_TUNABLE(f32, sAppearSpeed, 4.0f);
-    NEBULA_TUNABLE(f32, sRailAccel, 0.1f);
-    NEBULA_TUNABLE(s32, sHideTermMin, 150);
-    NEBULA_TUNABLE(s32, sHideTermMax, 200);
-    NEBULA_TUNABLE(s32, sAppearStartAttackFrame, 16);
-    NEBULA_TUNABLE(s32, sAppearTermMin, 15);
-    NEBULA_TUNABLE(s32, sAppearTermMax, 30);
-    NEBULA_TUNABLE(s32, sSwoonTerm, 180);
-    NEBULA_TUNABLE(s32, sDiveShadowOffFrame, 50);
-    NEBULA_TUNABLE(s32, sSpinOutEndFrame, 80);
-    NEBULA_TUNABLE(s32, sAppearSignFrame, 30);
-    NEBULA_TUNABLE(s32, sDiveAttackInvalidFrame, 20);
+    const s32 sStopSceneFrame = 10;
+    const f32 sKnockSpeed = 10.0f;
+    const f32 sSpeed = 8.0f;
+    const f32 sAppearSpeed = 4.0f;
+    const f32 sRailAccel = 0.1f;
+    const s32 sHideTermMin = 150;
+    const s32 sHideTermMax = 200;
+    const s32 sAppearStartAttackFrame = 16;
+    const s32 sAppearTermMin = 15;
+    const s32 sAppearTermMax = 30;
+    const s32 sSwoonTerm = 180;
+    const s32 sDiveShadowOffFrame = 50;
+    const s32 sSpinOutEndFrame = 80;
+    const s32 sAppearSignFrame = 30;
+    const s32 sDiveAttackInvalidFrame = 20;
 };  // namespace
 
 namespace {
@@ -92,7 +83,7 @@ void DodoryuStateLv1::exeHide() {
 
         mHideStep = MR::getRandom(::sHideTermMin, ::sHideTermMax);
 
-        MR::shakeCameraInfinity(this, cNum_exeHide_shakeCameraInfinity_1, cNum_exeHide_shakeCameraInfinity_2);
+        MR::shakeCameraInfinity(this, 0.2f, 2.0f);
         MR::startBva(mHost, "Normal");
     }
 
@@ -265,7 +256,7 @@ void DodoryuStateLv1::exeSpinOut() {
 }
 
 void DodoryuStateLv1::start() {
-    mHost->shiftMoveStateRail(cNum_start_f1);
+    mHost->shiftMoveStateRail(10.0f);
     mHost->endPlayerCenterCamera();
     setNerve(GET_NERVE_ANON(DodoryuStateLv1NrvHide));
     mHost->invalidateStarPieceSensor();
@@ -393,7 +384,7 @@ void DodoryuStateLv1::executeHideJump() {
 
 void DodoryuStateLv1::startPop() {
     mIsValidPop = true;
-    mPopAccel = cNum_startPop_f1;
+    mPopAccel = 30.0f;
     mPopSpeed = 0.0f;
 }
 
@@ -408,7 +399,7 @@ void DodoryuStateLv1::updatePop() {
     trans.add(-mHost->mGravity * mPopAccel);
 
     mPopSpeed += mPopAccel;
-    mPopAccel -= cNum_updatePop_f1;
+    mPopAccel -= 2.5f;
 
     if (mPopSpeed < 0.0f) {
         trans.add(mHost->mGravity * mPopSpeed);

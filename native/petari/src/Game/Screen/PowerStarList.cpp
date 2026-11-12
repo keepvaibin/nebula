@@ -20,7 +20,6 @@
 #include "Game/Util/StringUtil.hpp"
 #include <Game/Ui/DrawInfo.hpp>
 #include <Game/Ui/Pane.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 
@@ -86,8 +85,8 @@ namespace {
         "WinBelt4",
     };
 
-    NEBULA_TUNABLE(f32, cSeparatorOffset, 20.0f);
-    NEBULA_TUNABLE(f32, cTimePaneDefaultHeight, 72.0f);
+    const f32 cSeparatorOffset = 20.0f;
+    const f32 cTimePaneDefaultHeight = 72.0f;
 
     s32 getSortPriority(const GalaxyStatusAccessor* pAccessor) {
         const char* pName = pAccessor->getName();

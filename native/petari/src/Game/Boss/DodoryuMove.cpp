@@ -4,13 +4,10 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_execute_f1, "execute.f1", 1.8f);
 
 namespace {
-    NEBULA_TUNABLE(f32, sRailAccel, 0.05f);
-    NEBULA_TUNABLE(f32, sEscapeAccel, 0.05f);
+    const f32 sRailAccel = 0.05f;
+    const f32 sEscapeAccel = 0.05f;
 };  // namespace
 
 namespace DodoryuSub {
@@ -157,7 +154,7 @@ namespace DodoryuSub {
 
         if (!MR::isNearZero(accelDir)) {
             MR::normalize(&accelDir);
-            DodoryuUtil::turnToward(mHost, accelDir, cNum_execute_f1);
+            DodoryuUtil::turnToward(mHost, accelDir, 1.8f);
         } else {
             Vec3f yDir;
             mHost->mBaseMtx.getYDir(yDir);

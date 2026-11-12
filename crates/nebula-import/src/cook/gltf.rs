@@ -2812,6 +2812,36 @@ mod tests {
     }
 
     #[test]
+    fn a_gltf_metre_is_a_hundred_units() {
+        // J's 3208 model: one node a metre up, a metre cube hanging from it to the origin.
+        let (ir, _, facts) = to_ir_for(include_bytes!("../../data/metre.gltf"), None, None).unwrap();
+        assert_eq!((facts.joints, ir.joints.len(), ir.joints[0].name.as_str()), (1, 1, "metre"));
+        assert_eq!(ir.joints[0].translation, [0.0, 100.0, 0.0]);
+        // The cube in its joint's space hangs 100 down; at rest in the model it stands from 0 to 100.
+        let low = ir.arrays.positions.iter().fold([f32::MAX; 3], |m, p| [m[0].min(p[0]), m[1].min(p[1]), m[2].min(p[2])]);
+        let high = ir.arrays.positions.iter().fold([f32::MIN; 3], |m, p| [m[0].max(p[0]), m[1].max(p[1]), m[2].max(p[2])]);
+        assert_eq!((low, high), ([-50.0, -100.0, -50.0], [50.0, 0.0, 50.0]));
+        assert_eq!((ir.joints[0].min[1], ir.joints[0].max[1]), (0.0, 100.0));
+    }
+
+    #[test]
+    fn the_metal_smooth_sphere_is_lit_metal() {
+        // The conformance model metal-smooth (materials contract): a 1 m sphere, metal 1, roughness 0.05.
+        let source = include_bytes!("../../data/metal-smooth.gltf");
+        let (ir, _, facts) = to_ir_for(source, None, None).unwrap();
+        assert_eq!((facts.joints, ir.joints[0].translation), (1, [0.0, 50.0, 0.0]));
+        assert_eq!((ir.lits.len(), ir.lits[0].metal, ir.lits[0].roughness, ir.lits[0].base_color), (1, 1.0, 0.05, [0.95, 0.95, 0.95, 1.0]));
+        // A metre across: every vertex 50 units from the joint, and the joint's bounds from 0 to 100 up.
+        assert!(ir.arrays.positions.iter().all(|p| ((p[0] * p[0] + p[1] * p[1] + p[2] * p[2]).sqrt() - 50.0).abs() < 1e-3));
+        assert!((ir.joints[0].min[1] - 0.0).abs() < 1e-3 && (ir.joints[0].max[1] - 100.0).abs() < 1e-3, "{:?} {:?}", ir.joints[0].min, ir.joints[0].max);
+        let (model, _) = to_files(source, None, "metal-smooth").unwrap();
+        let word = |at: usize| u32::from_le_bytes(model[at..at + 4].try_into().unwrap());
+        assert_ne!(word(12) & (1 << 6), 0, "HAS_LIT");
+        let at = word(29 * 4) as usize;
+        assert_eq!(f32::from_le_bytes(model[at + 28..at + 32].try_into().unwrap()), 1.0);
+    }
+
+    #[test]
     fn sockets_billboards_and_joint_names() {
         let (ir, _, facts) = cook(&with_nodes(&[("head", Value::Null), ("socket:hand", Value::Null)]), None).unwrap();
         let names: Vec<&str> = ir.joints.iter().map(|j| j.name.as_str()).collect();

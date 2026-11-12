@@ -7,6 +7,7 @@
 
 #include "galaxy/atomic_file.h"
 #include "galaxy/luma.h"
+#include "galaxy/luma_fs_service.h"
 #include "galaxy/mod_log.h"
 #include "galaxy/mod_plugins.h"
 #include "galaxy/mods.h"
@@ -22,6 +23,7 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <sstream>
@@ -619,24 +621,9 @@ std::int32_t ids_of(const LumaMod* mod, const char* space, const char* mod_id, c
 
 // ---- mods.install (item 9) -----------------------------------------------------------------------------------------
 
-// A relative path inside the mod's data folder ending ".luma": no root, no drive, no "..", no empty part, "/" only.
+// A path of fs's rule (services-fs 4: inside the mod's data folder, the same on every platform) ending ".luma".
 bool valid_install_path(std::string_view path) noexcept {
-    if (path.size() <= 5u || path.size() > 1024u || path.substr(path.size() - 5u) != ".luma" || path.front() == '/') {
-        return false;
-    }
-    std::size_t start = 0;
-    while (start <= path.size()) {
-        std::size_t end = path.find('/', start);
-        if (end == std::string_view::npos) {
-            end = path.size();
-        }
-        const std::string_view part = path.substr(start, end - start);
-        if (part.empty() || part == "." || part == ".." || part.find_first_of("\\:") != std::string_view::npos) {
-            return false;
-        }
-        start = end + 1u;
-    }
-    return true;
+    return path.size() > 5u && path.substr(path.size() - 5u) == ".luma" && galaxy::luma_fs::path_in_rule(path, false);
 }
 
 std::int32_t install_request(const LumaMod* mod, const char* path, LumaEventFn fn, void*, LumaHandle* out) {
@@ -667,10 +654,243 @@ std::int32_t install_cancel(const LumaMod* mod, LumaHandle) {
     return LUMA_E_HANDLE;
 }
 
+// ---- mods: a mod's own options (section 8) -------------------------------------------------------------------------
+
+struct ModOptions;
+struct WatchNode {
+    LumaEventNode event;  // first, and both plain members: the kernel's node is the WatchNode
+    ModOptions* owner;    // its entry in g_options (never erased, so it stays put)
+};
+
+// One mod of the session's list that has options: their texts now, in luma.json order, and its watcher.
+struct ModOptions {
+    std::vector<std::pair<std::string, std::string>> values;  // key, text
+    const LumaMod* watcher = nullptr;  // the running mod watching (watch_options with a fn)
+    LumaEventFn fn = nullptr;
+    void* user = nullptr;
+    std::vector<std::uint32_t> changed;  // places changed since the last delivery, in order, each once
+    std::unique_ptr<WatchNode> node;
+};
+
+std::mutex g_options_lock;  // g_options and every ModOptions; any thread (the Mods page applies on its own)
+std::map<std::string, ModOptions, std::less<>> g_options;
+bool g_options_made = false;
+
+// Code points of valid UTF-8, or -1 when it is not UTF-8.
+std::int64_t code_points(std::string_view text) noexcept {
+    std::int64_t count = 0;
+    for (std::size_t i = 0; i < text.size();) {
+        const unsigned char lead = static_cast<unsigned char>(text[i]);
+        const std::size_t length = lead < 0x80u ? 1u : (lead & 0xE0u) == 0xC0u ? 2u : (lead & 0xF0u) == 0xE0u ? 3u
+                                   : (lead & 0xF8u) == 0xF0u ? 4u : 0u;
+        if (length == 0u || i + length > text.size() || (length == 2u && lead < 0xC2u)) {
+            return -1;
+        }
+        std::uint32_t point = length == 1u ? lead : lead & (0x7Fu >> length);
+        for (std::size_t k = 1; k < length; k++) {
+            const unsigned char next = static_cast<unsigned char>(text[i + k]);
+            if ((next & 0xC0u) != 0x80u) {
+                return -1;
+            }
+            point = (point << 6u) | (next & 0x3Fu);
+        }
+        if ((length == 3u && point < 0x800u) || (length == 4u && (point < 0x10000u || point > 0x10FFFFu)) ||
+            (point >= 0xD800u && point <= 0xDFFFu)) {
+            return -1;  // overlong, past Unicode, or a surrogate
+        }
+        i += length;
+        count++;
+    }
+    return count;
+}
+
+// An option as the mod reads it (header): `chosen` is the Mods page's line for it (null: none, the default).
+std::string option_text(const galaxy::luma::Option& entry, const galaxy::mods::ModOption* chosen, std::string_view mod_id) {
+    if (entry.kind == "text") {
+        if (chosen == nullptr || chosen->text.empty()) {
+            return entry.fallback;
+        }
+        const std::int64_t points = code_points(chosen->text);
+        if (points < 0 || points > static_cast<std::int64_t>(entry.max_length) ||
+            chosen->text.find('\0') != std::string::npos) {
+            if (g_log != nullptr) {
+                const std::string line = "[mods] " + std::string(mod_id) + ": the text kept for its option " + entry.id +
+                                         " is not UTF-8 of at most " + std::to_string(entry.max_length) +
+                                         " characters; it reads the default";
+                g_log(line.c_str());
+            }
+            return entry.fallback;
+        }
+        return chosen->text;
+    }
+    if (entry.kind == "key") {
+        return entry.fallback;  // input's store (plan 2.5, F): its binding_name once it exists
+    }
+    std::string id = entry.fallback;
+    if (chosen != nullptr) {
+        id = chosen->selected != 0u && chosen->selected <= chosen->choice_ids.size() ? chosen->choice_ids[chosen->selected - 1u]
+                                                                                     : std::string("off");
+    }
+    if (entry.kind == "toggle") {
+        return id == "on" ? "1" : "0";
+    }
+    return id;  // a choice's value id; a number's "%g" text, as the Mods page lists it
+}
+
+// The texts of `mod`'s options in luma.json order (empty for a mod without a manifest).
+std::vector<std::pair<std::string, std::string>> texts_of(const galaxy::mods::ModInfo& mod) {
+    std::vector<std::pair<std::string, std::string>> out;
+    if (!mod.luma) {
+        return out;
+    }
+    for (const galaxy::luma::Option& entry : mod.luma->options) {
+        const galaxy::mods::ModOption* chosen = nullptr;
+        for (const galaxy::mods::ModOption& line : mod.options) {
+            if (line.key == entry.id) {
+                chosen = &line;
+                break;
+            }
+        }
+        out.emplace_back(entry.id, option_text(entry, chosen, mod.id));
+    }
+    return out;
+}
+
+// With g_options_lock: the session's values, once (the list the session started with, item 3).
+void make_options_locked() {
+    if (g_options_made) {
+        return;
+    }
+    g_options_made = true;
+    for (const galaxy::mods::ModInfo& mod : galaxy::mods::session_mods().started_with) {
+        if (mod.luma && !mod.luma->options.empty()) {
+            g_options[mod.id].values = texts_of(mod);
+        }
+    }
+}
+
+void deliver_options(LumaEventNode* node) {
+    ModOptions* const owner = reinterpret_cast<WatchNode*>(node)->owner;
+    const LumaMod* mod = nullptr;
+    LumaEventFn fn = nullptr;
+    void* user = nullptr;
+    std::vector<std::uint32_t> changed;
+    {
+        const std::lock_guard<std::mutex> lock(g_options_lock);
+        if (owner->fn == nullptr) {
+            return;
+        }
+        mod = owner->watcher;
+        fn = owner->fn;
+        user = owner->user;
+        changed.swap(owner->changed);
+    }
+    const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
+    for (const std::uint32_t place : changed) {
+        LumaEvent event{};
+        event.size = sizeof(event);
+        event.kind = LUMA_MODS_EVENT_OPTION;
+        event.status = LUMA_OK;
+        event.value = place;
+        if (kernel == nullptr || kernel->call(mod, LUMA_MODS_NAME, fn, user, &event) != LUMA_OK) {
+            return;  // the mod is gone: the rest are not its business
+        }
+    }
+}
+
+void drop_options(LumaEventNode*) {}  // the node is the ModOptions'; nothing was taken for it
+
+std::int64_t mods_option(const LumaMod* mod, const char* key, char* buf, std::uint64_t size) {
+    static constexpr const char* where = "mods.option";
+    if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
+        return status;
+    }
+    if (key == nullptr) {
+        report(mod, where, 165u, "(null)");  // Mods.OptionUnknown
+        return LUMA_E_NOT_FOUND;
+    }
+    if (std::strchr(key, '/') != nullptr) {
+        report(mod, where, 166u, key);  // Mods.OptionNotOwn
+        return LUMA_E_DENIED;
+    }
+    if (buf == nullptr && size != 0u) {
+        return argument(mod, where, "buf");
+    }
+    const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
+    const char* const id = kernel->mod_id(mod);
+    std::string text;
+    bool found = false;
+    {
+        const std::lock_guard<std::mutex> lock(g_options_lock);
+        make_options_locked();
+        if (const auto it = g_options.find(std::string_view(id)); it != g_options.end()) {
+            for (const auto& [option, value] : it->second.values) {
+                if (option == key) {
+                    text = value;
+                    found = true;
+                    break;
+                }
+            }
+        }
+    }
+    if (!found) {
+        report(mod, where, 165u, key);  // Mods.OptionUnknown
+        return LUMA_E_NOT_FOUND;
+    }
+    const std::uint64_t length = text.size();
+    if (buf == nullptr) {
+        return static_cast<std::int64_t>(length);  // the length asked (size 0)
+    }
+    if (size < length + 1u) {
+        char given[24];
+        char needed[24];
+        std::snprintf(given, sizeof(given), "%llu", static_cast<unsigned long long>(size));
+        std::snprintf(needed, sizeof(needed), "%llu", static_cast<unsigned long long>(length + 1u));
+        report(mod, where, 167u, given, key, needed);  // Mods.OptionBufferShort
+        return LUMA_E_TOO_LARGE;
+    }
+    std::memcpy(buf, text.data(), static_cast<std::size_t>(length));
+    buf[length] = '\0';
+    return static_cast<std::int64_t>(length);
+}
+
+std::int32_t mods_watch_options(const LumaMod* mod, LumaEventFn fn, void* user) {
+    if (const std::int32_t status = enter(mod, "mods.watch_options"); status != LUMA_OK) {
+        return status;
+    }
+    const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
+    const std::string id = kernel->mod_id(mod);
+    const std::lock_guard<std::mutex> lock(g_options_lock);
+    make_options_locked();
+    ModOptions& options = g_options[id];
+    options.watcher = fn != nullptr ? mod : nullptr;
+    options.fn = fn;
+    options.user = fn != nullptr ? user : nullptr;
+    if (fn == nullptr) {
+        options.changed.clear();
+    }
+    return LUMA_OK;
+}
+
+// Game thread, after the mod's stop: no event for it from now on (a node already queued is dropped by the kernel).
+void options_mod_gone(void*, const LumaMod* mod) {
+    const std::lock_guard<std::mutex> lock(g_options_lock);
+    for (auto& [id, options] : g_options) {
+        if (options.watcher == mod) {
+            options.watcher = nullptr;
+            options.fn = nullptr;
+            options.user = nullptr;
+            options.changed.clear();
+        }
+    }
+}
+
 // ---- The providers -------------------------------------------------------------------------------------------------
 
-std::uint64_t (*g_save_bytes)(std::string_view) = nullptr;
-void (*g_save_forget)(std::string_view) = nullptr;
+// Set once at the host's start, before any mod or page asks (set_save_half, set_chunk_half).
+SaveHalf g_save;
+LumaSaveKept g_chunk_kept = nullptr;
+LumaSaveForget g_chunk_forget = nullptr;
 
 void registered(void*, const LumaServiceKernel* kernel) {
     g_kernel.store(kernel, std::memory_order_release);
@@ -681,6 +901,15 @@ const LumaModsService kMods = {
     mods_count,
     mods_at,
     mods_find,
+    mods_option,
+    mods_watch_options,
+};
+
+// mods' report rows (section 5): {where} first, then the row's own.
+const LumaServiceRow kModsRows[] = {
+    {165u, "Mods.OptionUnknown", {"where", "key", nullptr, nullptr}},
+    {166u, "Mods.OptionNotOwn", {"where", "key", nullptr, nullptr}},
+    {167u, "Mods.OptionBufferShort", {"where", "size", "key", "needed"}},
 };
 
 const LumaModsIdsService kIds = {
@@ -695,10 +924,11 @@ const LumaModsInstallService kInstall = {
     install_cancel,
 };
 
-// No per-mod state: the list is the session's, the record everyone's, and no request is open before fs.
+// mods keeps a watcher per mod (section 8), dropped at its stop; the list is the session's, the record everyone's.
 const LumaServiceProvider kModsProvider = {
-    sizeof(LumaServiceProvider), LUMA_MODS_NAME, &kMods.base, nullptr, nullptr, 0u, nullptr,
-    nullptr, nullptr, nullptr, registered,
+    sizeof(LumaServiceProvider), LUMA_MODS_NAME, &kMods.base, nullptr, kModsRows,
+    static_cast<std::uint32_t>(sizeof(kModsRows) / sizeof(kModsRows[0])), nullptr,
+    nullptr, options_mod_gone, nullptr, registered,
 };
 const LumaServiceProvider kIdsProvider = {
     sizeof(LumaServiceProvider), LUMA_MODS_IDS_NAME, &kIds.base, nullptr, nullptr, 0u, nullptr,
@@ -715,6 +945,48 @@ const LumaServiceProvider* const kProviders[] = {&kModsProvider, &kIdsProvider, 
 std::span<const LumaServiceProvider* const> providers(void (*log)(const char*)) noexcept {
     g_log = log;
     return kProviders;
+}
+
+void options_applied(const galaxy::mods::ModInfo& mod) {
+    try {
+        std::vector<std::pair<std::string, std::string>> now = texts_of(mod);
+        const std::lock_guard<std::mutex> lock(g_options_lock);
+        make_options_locked();
+        const auto it = g_options.find(std::string_view(mod.id));
+        if (it == g_options.end()) {
+            return;  // not in this session's list (or no options): it reads them at its next start
+        }
+        ModOptions& options = it->second;
+        bool any = false;
+        for (std::size_t place = 0; place < options.values.size() && place < now.size(); place++) {
+            if (options.values[place].first != now[place].first || options.values[place].second == now[place].second) {
+                continue;  // the same key in the same place; an update that moved options waits for the next start
+            }
+            options.values[place].second = std::move(now[place].second);
+            const std::uint32_t at = static_cast<std::uint32_t>(place);
+            if (options.fn != nullptr &&
+                std::find(options.changed.begin(), options.changed.end(), at) == options.changed.end()) {
+                options.changed.push_back(at);
+                any = true;
+            }
+        }
+        if (!any) {
+            return;
+        }
+        std::sort(options.changed.begin(), options.changed.end());  // luma.json order (header)
+        if (!options.node) {
+            options.node = std::make_unique<WatchNode>();
+            options.node->owner = &options;
+            options.node->event.deliver = deliver_options;
+            options.node->event.drop = drop_options;
+        }
+        options.node->event.mod = options.watcher;
+        if (const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire)) {
+            (void)kernel->post(&options.node->event);  // CANCELLED: the mod is going; mod_gone clears it
+        }
+    } catch (...) {
+        // Memory: the values stay as they were; the next Apply compares again.
+    }
 }
 
 void kept(std::vector<KeptMod>& out) {
@@ -734,6 +1006,37 @@ void kept(std::vector<KeptMod>& out) {
     if (unreadable) {
         unreadable_error();
     }
+    // Everything a removed mod keeps (services-mods 8): ids with numbers, and ids the save halves keep values for.
+    std::map<std::string, std::uint64_t> chunk_bytes;
+    if (g_chunk_kept != nullptr) {
+        g_chunk_kept([](void* user, const char* id, std::uint64_t bytes) {
+            (*static_cast<std::map<std::string, std::uint64_t>*>(user))[id] += bytes;
+        }, &chunk_bytes);
+        for (const auto& [id, bytes] : chunk_bytes) {
+            if (valid_mod_id(id)) {
+                numbers.emplace(id, 0u);
+            }
+        }
+    }
+    if (g_save.ids != nullptr) {
+        std::vector<std::string> saved;
+        g_save.ids(saved);
+        for (std::string& id : saved) {
+            if (valid_mod_id(id)) {
+                numbers.emplace(std::move(id), 0u);
+            }
+        }
+    }
+    // And ids with a data folder of fs (services-fs 3).
+    {
+        std::vector<std::string> data;
+        galaxy::luma_fs::data_ids(data);
+        for (std::string& id : data) {
+            if (valid_mod_id(id)) {
+                numbers.emplace(std::move(id), 0u);
+            }
+        }
+    }
     const galaxy::mods::SessionMods session = galaxy::mods::session_mods();
     const std::filesystem::path folder = galaxy::mods::mods_folder();
     for (const auto& [id, count] : numbers) {
@@ -743,7 +1046,15 @@ void kept(std::vector<KeptMod>& out) {
         if (listed || (!folder.empty() && std::filesystem::exists(folder / id, error))) {
             continue;
         }
-        out.push_back({id, count, g_save_bytes != nullptr ? g_save_bytes(id) : 0u});
+        const auto in_chunks = chunk_bytes.find(id);
+        const std::uint64_t bytes = (g_save.bytes != nullptr ? g_save.bytes(id) : 0u) +
+                                    (in_chunks != chunk_bytes.end() ? in_chunks->second : 0u);
+        const std::uint64_t data_bytes = galaxy::luma_fs::data_bytes(id);
+        // A data folder with no file in it still holds the id's place: FORGET removes it too.
+        const bool data_folder = data_bytes != 0u || galaxy::luma_fs::has_data_folder(id);
+        if (count != 0u || bytes != 0u || data_folder) {
+            out.push_back({id, count, bytes, data_bytes});
+        }
     }
 }
 
@@ -772,8 +1083,14 @@ void forget(std::string_view id) {
     if (unreadable) {
         unreadable_error();
     }
-    if (g_save_forget != nullptr) {
-        g_save_forget(id);
+    if (valid_mod_id(id)) {
+        if (g_save.forget != nullptr) {
+            g_save.forget(id);
+        }
+        if (g_chunk_forget != nullptr) {
+            g_chunk_forget(std::string(id).c_str());
+        }
+        galaxy::luma_fs::forget_data(id);  // its data folder, after every fs request queued before
     }
     galaxy::modlog::add_row(LUMA_MODLOG_CODE, LUMA_MODLOG_NOTE, id, 162u, "", "Mods.Forgotten", {});
 }
@@ -819,9 +1136,13 @@ std::uint32_t take_over_ids(std::string_view old_id, std::string_view new_id) {
     return moved;
 }
 
-void set_save_half(std::uint64_t (*bytes)(std::string_view id), void (*forget_values)(std::string_view id)) noexcept {
-    g_save_bytes = bytes;
-    g_save_forget = forget_values;
+void set_save_half(const SaveHalf& half) noexcept {
+    g_save = half;
+}
+
+void set_chunk_half(LumaSaveKept kept_ids, LumaSaveForget forget) noexcept {
+    g_chunk_kept = kept_ids;
+    g_chunk_forget = forget;
 }
 
 }  // namespace galaxy::luma_mods

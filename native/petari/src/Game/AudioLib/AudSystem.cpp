@@ -32,7 +32,6 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaSystemSettings.hpp"
 #include "Game/System/GameAssets.hpp"
-#include "Game/Util/Tunable.hpp"
 
 const char cSoundDataPath[] = "/AudioRes/SMR";
 const char cSeqArchivePath[] = "/AudioRes/Seqs/JaiSeq";
@@ -43,7 +42,7 @@ const char cRemixArchivePath[] = "/AudioRes/Info/JaiRemixSeq";
 AudSystem* AudSystem::msBasic;
 
 // The beat readers: the game side and the audio thread's must have the same count.
-NEBULA_TUNABLE(u32, cRhythmParsers, 3);
+const u32 cRhythmParsers = 3;
 
 AudSystem* AudNewAudSystem_(SoundArchive* pSoundArchive, AssetFolder* pChordArchive, AssetFolder* pMeArchive, AssetFolder* pRemixArchive, int maxChannels) {
     AudSystem* system = new AudSystem(pSoundArchive, pChordArchive, pMeArchive, pRemixArchive);

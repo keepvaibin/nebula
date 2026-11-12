@@ -6,24 +6,6 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_moveRail_f1, "moveRail.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_turnRailGround_f1, "turnRailGround.f1", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_turnRail_f1, "turnRail.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_turnRail_f2, "turnRail.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_turnRail_f3, "turnRail.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_turnRail_f4, "turnRail.f4", 4.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_turnRail_f5, "turnRail.f5", 90.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_turnRail_f6, "turnRail.f6", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_turnRail_f7, "turnRail.f7", 360.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_turnRail_f8, "turnRail.f8", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_regainToRail_f1, "regainToRail.f1", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_regainToRail_f2, "regainToRail.f2", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_regainToRail_f3, "regainToRail.f3", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_throwBomb_f1, "throwBomb.f1", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_throwBomb_f2, "throwBomb.f2", 10.0f);
-
 
 void BossStinkBugFunction::addHeightOffset(Vec3f* pOut, const BossStinkBug* pStinkBug, f32 height) {
     pOut->add(pStinkBug->mGravity * -height);
@@ -50,7 +32,7 @@ void BossStinkBugFunction::moveRail(BossStinkBug* pStinkBug, f32 speed, f32 heig
     MR::moveCoord(pStinkBug, speed);
     Vec3f railPos(MR::getRailPos(pStinkBug));
     addHeightOffset(&railPos, pStinkBug, heightOffset);
-    MR::turnDirectionDegree(pStinkBug, &pStinkBug->mFront, MR::getRailDirection(pStinkBug), cNum_moveRail_f1);
+    MR::turnDirectionDegree(pStinkBug, &pStinkBug->mFront, MR::getRailDirection(pStinkBug), 10.0f);
     addLocalHeightOffset(&railPos, pStinkBug, localHeightOffset);
     pStinkBug->mPosition.set(railPos);
 }
@@ -60,7 +42,7 @@ void BossStinkBugFunction::turnRailGround(BossStinkBug* pStinkBug, const Vec3f& 
         MR::reverseRailDirection(pStinkBug);
     }
     MR::rotateVecDegree(&pStinkBug->mFront, rTurnFront, pStinkBug->mGravity,
-                        MR::getEaseInOutValue(rate, 0.0f, 1.0f, 1.0f) * cNum_turnRailGround_f1 * -(isRailToEnd ? 1.0f : -1.0f));
+                        MR::getEaseInOutValue(rate, 0.0f, 1.0f, 1.0f) * 180.0f * -(isRailToEnd ? 1.0f : -1.0f));
 }
 
 void BossStinkBugFunction::turnRail(BossStinkBug* pStinkBug, const Vec3f& rTurnFront, f32 baseRoll, f32 rate, f32 speed, f32 heightOffset,
@@ -68,13 +50,13 @@ void BossStinkBugFunction::turnRail(BossStinkBug* pStinkBug, const Vec3f& rTurnF
     f32 moveCoordParameter;
 
     // Slow to a stop over the first half, turn back on the rail, speed up over the second.
-    if (rate <= cNum_turnRail_f1) {
-        moveCoordParameter = speed * MR::getEaseInOutValue(1.0f - MR::normalize(rate, 0.0f, cNum_turnRail_f2), 0.0f, 1.0f, 1.0f);
+    if (rate <= 0.5f) {
+        moveCoordParameter = speed * MR::getEaseInOutValue(1.0f - MR::normalize(rate, 0.0f, 0.5f), 0.0f, 1.0f, 1.0f);
     } else {
         if (MR::isRailGoingToEnd(pStinkBug) == isRailToEnd) {
             MR::reverseRailDirection(pStinkBug);
         }
-        moveCoordParameter = speed * MR::getEaseInOutValue(MR::normalize(rate, cNum_turnRail_f3, 1.0f), 0.0f, 1.0f, 1.0f);
+        moveCoordParameter = speed * MR::getEaseInOutValue(MR::normalize(rate, 0.5f, 1.0f), 0.0f, 1.0f, 1.0f);
     }
 
     MR::moveCoord(pStinkBug, moveCoordParameter);
@@ -82,28 +64,28 @@ void BossStinkBugFunction::turnRail(BossStinkBug* pStinkBug, const Vec3f& rTurnF
     addHeightOffset(&railPos, pStinkBug, heightOffset);
 
     f32 turnSign = (isRailToEnd ? 1.0f : -1.0f);
-    f32 bend = cNum_turnRail_f4 * rate * (rate - 1.0f);
+    f32 bend = 4.0f * rate * (rate - 1.0f);
     f32 bendSq = bend * bend;
-    f32 rollAngle = baseRoll * (1.0f - bendSq) + (cNum_turnRail_f5 * turnSign) * bendSq;
-    pStinkBug->mRotation.z = MR::repeat(rollAngle, -cNum_turnRail_f6, cNum_turnRail_f7);
+    f32 rollAngle = baseRoll * (1.0f - bendSq) + (90.0f * turnSign) * bendSq;
+    pStinkBug->mRotation.z = MR::repeat(rollAngle, -180.0f, 360.0f);
 
-    MR::rotateVecDegree(&pStinkBug->mFront, rTurnFront, pStinkBug->mGravity, MR::getEaseInOutValue(rate, 0.0f, 1.0f, 1.0f) * cNum_turnRail_f8 * -turnSign);
+    MR::rotateVecDegree(&pStinkBug->mFront, rTurnFront, pStinkBug->mGravity, MR::getEaseInOutValue(rate, 0.0f, 1.0f, 1.0f) * 180.0f * -turnSign);
     addLocalHeightOffset(&railPos, pStinkBug, localHeightOffset);
     pStinkBug->mPosition.set(railPos);
 }
 
 void BossStinkBugFunction::regainToRail(BossStinkBug* pStinkBug, const Vec3f& rRailDiff, f32 rate, f32 speed, f32 heightOffset,
                                         f32 localHeightOffset) {
-    pStinkBug->mRotation.z *= cNum_regainToRail_f1;
+    pStinkBug->mRotation.z *= 0.9f;
     MR::moveCoord(pStinkBug, speed);
     Vec3f railPos(MR::getRailPos(pStinkBug));
     addHeightOffset(&railPos, pStinkBug, heightOffset);
     addLocalHeightOffset(&railPos, pStinkBug, localHeightOffset);
     Vec3f dif = railPos - pStinkBug->mPosition;
     if (MR::isNearZero(dif)) {
-        MR::turnDirectionDegree(pStinkBug, &pStinkBug->mFront, dif, cNum_regainToRail_f2);
+        MR::turnDirectionDegree(pStinkBug, &pStinkBug->mFront, dif, 2.0f);
     } else {
-        MR::turnDirectionDegree(pStinkBug, &pStinkBug->mFront, MR::getRailDirection(pStinkBug), cNum_regainToRail_f3);
+        MR::turnDirectionDegree(pStinkBug, &pStinkBug->mFront, MR::getRailDirection(pStinkBug), 10.0f);
     }
     pStinkBug->mPosition.scaleAdd(1.0f - rate, rRailDiff, railPos);
 }
@@ -127,7 +109,7 @@ void BossStinkBugFunction::setFallVelocity(BossStinkBug* pStinkBug, const Vec3f&
 }
 
 void BossStinkBugFunction::throwBomb(BossStinkBug* pStinkBug) {
-    pStinkBug->throwBomb(cNum_throwBomb_f1, cNum_throwBomb_f2);
+    pStinkBug->throwBomb(20.0f, 10.0f);
 }
 
 void BossStinkBugFunction::invalidateAttack(BossStinkBug* pStinkBug) {

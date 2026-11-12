@@ -90,7 +90,6 @@
 #include "Game/Util/TextString.hpp"
 #include "Game/Util/TriangleFilter.hpp"
 #include "Game/Util/TriggerChecker.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/Util/ValueControl.hpp"
 #include "Game/Util/VectorUtil.hpp"
 #include "Game/AreaObj/AreaObj.hpp"

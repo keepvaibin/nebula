@@ -14,24 +14,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calcScreenPosition_f1, "calcScreenPosition.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcScreenPosition_f2, "calcScreenPosition.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcScreenPosition_f3, "calcScreenPosition.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcScreenPosition_f4, "calcScreenPosition.f4", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkVisibilityOfSphere_f1, "checkVisibilityOfSphere.f1", 4.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkVisibilityOfSphere_f2, "checkVisibilityOfSphere.f2", 0.4f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkVisibilityOfSphere_f3, "checkVisibilityOfSphere.f3", 0.9165f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkVisibilityOfSphere_f4, "checkVisibilityOfSphere.f4", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkVisibilityOfSphere_f5, "checkVisibilityOfSphere.f5", 4.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkVisibilityOfSphere_f6, "checkVisibilityOfSphere.f6", 0.7f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkVisibilityOfSphere_f7, "checkVisibilityOfSphere.f7", 0.7141f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 100000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_controlSunModel_f1, "controlSunModel.f1", 0.999f);
-NEBULA_TUNABLE_NAMED(f32, cNum_controlSunModel_f2, "controlSunModel.f2", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_controlSunModel_f3, "controlSunModel.f3", 57.295776f);
 
 namespace {
     const static f32 sSunRadius = 3000.0f;
@@ -73,7 +56,7 @@ namespace {
 
         f32 width = MR::getScreenWidth();
         f32 height = static_cast< s32 >(NebulaFrameClock::cScreenLines);
-        screenPos.set< f32 >(cNum_calcScreenPosition_f1 * width + cNum_calcScreenPosition_f2 * (newPos.x * width), cNum_calcScreenPosition_f3 * height + cNum_calcScreenPosition_f4 * (-newPos.y * height), newPos.z);
+        screenPos.set< f32 >(0.5f * width + 0.5f * (newPos.x * width), 0.5f * height + 0.5f * (-newPos.y * height), newPos.z);
 
         pDst->x = screenPos.x;
         pDst->y = screenPos.y;
@@ -141,25 +124,25 @@ void BrightObjBase::checkVisibilityOfSphere(NebulaScreenProbe* pProbes) {
     pProbes[0].user_z = ::calcDepth(drawPos + drawDir * (mDrawRadius * (1.0f + ::sSurfaceMargin)), rView, rProj);
 
     for (u32 idx = 0; idx < 8; idx++) {
-        f32 angle = idx * MR::pi() / cNum_checkVisibilityOfSphere_f1;
+        f32 angle = idx * MR::pi() / 4.0f;
         Vec3f innerProbe(MR::cos(angle), MR::sin(angle), 0.0f);
-        innerProbe.scale(mDrawRadius * cNum_checkVisibilityOfSphere_f2);
+        innerProbe.scale(mDrawRadius * 0.4f);
 
         mtx.mult(innerProbe, innerProbe);
 
         checkVisible(&pProbes[1 + idx], innerProbe, rView, rProj);
-        pProbes[1 + idx].user_z = ::calcDepth(innerProbe + drawDir * (mDrawRadius * (cNum_checkVisibilityOfSphere_f3 + ::sSurfaceMargin)), rView, rProj);
+        pProbes[1 + idx].user_z = ::calcDepth(innerProbe + drawDir * (mDrawRadius * (0.9165f + ::sSurfaceMargin)), rView, rProj);
     }
 
     for (u32 idx = 0; idx < 8; idx++) {
-        f32 angle = (idx + cNum_checkVisibilityOfSphere_f4) * MR::pi() / cNum_checkVisibilityOfSphere_f5;
+        f32 angle = (idx + 0.5f) * MR::pi() / 4.0f;
         Vec3f outerProbe(MR::cos(angle), MR::sin(angle), 0.0f);
-        outerProbe.scale(mDrawRadius * cNum_checkVisibilityOfSphere_f6);
+        outerProbe.scale(mDrawRadius * 0.7f);
 
         mtx.mult(outerProbe, outerProbe);
 
         checkVisible(&pProbes[9 + idx], outerProbe, rView, rProj);
-        pProbes[9 + idx].user_z = ::calcDepth(outerProbe + drawDir * (mDrawRadius * (cNum_checkVisibilityOfSphere_f7 + ::sSurfaceMargin)), rView, rProj);
+        pProbes[9 + idx].user_z = ::calcDepth(outerProbe + drawDir * (mDrawRadius * (0.7141f + ::sSurfaceMargin)), rView, rProj);
     }
 }
 
@@ -240,7 +223,7 @@ void BrightSun::control() {
 
     Pos3f mtx;
     mtx.identity33();
-    mtx.setTrans(0.0f, 0.0f, cNum_control_f1);
+    mtx.setTrans(0.0f, 0.0f, 100000.0f);
 
     Pos3f mtxTR;
     MR::makeMtxTR(mtxTR, camPos.x, camPos.y, camPos.z, mRotation.x, mRotation.y, mRotation.z);
@@ -285,11 +268,11 @@ void BrightSun::controlSunModel() {
 
     Vec3f rotation;
 
-    if (fwdVec.dot(camDir) < -cNum_controlSunModel_f1) {
-        rotation.set< f32 >(0.0f, cNum_controlSunModel_f2, 0.0f);
+    if (fwdVec.dot(camDir) < -0.999f) {
+        rotation.set< f32 >(0.0f, 180.0f, 0.0f);
     } else {
         rotateMtx.getEulerXYZ(rotation);
-        rotation.scale(cNum_controlSunModel_f3);
+        rotation.scale(57.295776f);
     }
 
     mSun->mRotation.set(rotation);

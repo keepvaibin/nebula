@@ -6,7 +6,6 @@
 #include <cstring>
 
 #include <nebula_game_api.h>
-#include "Game/Util/Tunable.hpp"
 
 extern "C" {
 const NebulaHostServices* nebula_host(void);
@@ -85,7 +84,7 @@ namespace GameAssets {
     // A file loaded whole is a view of the store from cMappedFrom bytes up: nearly all its pages stay as they are (a model's few
     // fixed-up pointers aside), so they cost no memory of the game's. The arena it was asked for decides when it goes.
     namespace {
-        NEBULA_TUNABLE(u32, cMappedFrom, 0x2000);
+        const u32 cMappedFrom = 0x2000;
 
         struct Mapped {
             void* mData;

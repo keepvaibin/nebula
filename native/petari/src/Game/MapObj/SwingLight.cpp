@@ -4,10 +4,7 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 2000.0f);
 
 namespace {
     const char* getGlaringLightModelName(const char* pName) {
@@ -101,7 +98,7 @@ void SwingLight::init(const TableIter& rIter) {
     info.setupBaseMtxFollowTarget();
     info.setupRotator();
     info.setupRailMover();
-    info.setupClippingRadius(cNum_init_f1);
+    info.setupClippingRadius(2000.0f);
     info.setupNoAppearRiddleSE();
     initialize(rIter, info);
 }

@@ -48,33 +48,22 @@
 #include "Game/System/GameSystemFunction.hpp"
 #include "Game/System/NebulaCalendar.hpp"
 #include "Game/System/NebulaHost.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_initStep_f1, "initStep.f1", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.05f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 0.95f);
-NEBULA_TUNABLE_NAMED(f32, cNum_offerFilesToMenuFocus_f1, "offerFilesToMenuFocus.f1", 900.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_createSelectEffect_f1, "createSelectEffect.f1", 0.4f);
-NEBULA_TUNABLE_NAMED(f32, cNum_goToNearPoint_f1, "goToNearPoint.f1", 16000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcBasePos_f1, "calcBasePos.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcBasePos_f2, "calcBasePos.f2", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcBasePos_f3, "calcBasePos.f3", 180.0f);
 
 namespace {
     // The save's user files (SaveDataHandler's cUserFiles).
     const s32 cUserFileNum = 6;
-    NEBULA_TUNABLE(f32, cSlopeDegree, 20.0f);
-    NEBULA_TUNABLE(f32, cItemPosRadius, 5000.0f);
-    NEBULA_TUNABLE(f32, cSelectEffectOffset, 1000.0f);
+    const f32 cSlopeDegree = 20.0f;
+    const f32 cItemPosRadius = 5000.0f;
+    const f32 cSelectEffectOffset = 1000.0f;
     const char* const cLuigiNameMessageID = "System_FileSelect_Icon001";
     const char* const cMarioNameMessageID = "System_FileSelect_Icon000";
-    NEBULA_TUNABLE(s32, cBgmFarState, 5);
-    NEBULA_TUNABLE(u32, cBgmFarStateChangeFrames, 60);
-    NEBULA_TUNABLE(s32, cBgmNearState, 6);
-    NEBULA_TUNABLE(u32, cBgmNearStateChangeFrames, 60);
-    NEBULA_TUNABLE_LIST(f32, cItemThetaOffset, cUserFileNum, {10.0f, -10.0f, 0.0f, 0.0f, 0.0f, 0.0f});
-    NEBULA_TUNABLE_LIST(s32, cIndexOrder, cUserFileNum, {1, 2, 4, 6, 5, 3});
+    const s32 cBgmFarState = 5;
+    const u32 cBgmFarStateChangeFrames = 60;
+    const s32 cBgmNearState = 6;
+    const u32 cBgmNearStateChangeFrames = 60;
+    const f32 cItemThetaOffset[cUserFileNum] = {10.0f, -10.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    const s32 cIndexOrder[cUserFileNum] = {1, 2, 4, 6, 5, 3};
 };  // namespace
 
 namespace {
@@ -165,7 +154,7 @@ bool FileSelector::initStep(const TableIter& rIter, uint64_t deadline) {
         case 0:
             MR::connectToScene(this, MR::MovementType_Environment, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
             initHitSensor(1);
-            MR::addHitSensorPriorBinder(this, "body", 8, cNum_initStep_f1, Vec3f(0.0f, 0.0f, 0.0f));
+            MR::addHitSensorPriorBinder(this, "body", 8, 500.0f, Vec3f(0.0f, 0.0f, 0.0f));
             initUserFileArray();
             MR::invalidateClipping(this);
             break;
@@ -261,7 +250,7 @@ void FileSelector::control() {
     for (int i = 0; i < mItems->getObjNum(); i++) {
         LiveActor* pActor = mItems->getActor(i);
         Vec3f& rPosition = pActor->mPosition;
-        rPosition = mItemPositions[i] * cNum_control_f1 + rPosition * cNum_control_f2;
+        rPosition = mItemPositions[i] * 0.05f + rPosition * 0.95f;
     }
 
     Vec3f* pEffectPosition;
@@ -402,7 +391,7 @@ void FileSelector::offerFilesToMenuFocus() {
     for (int i = 0; i < mItems->getObjNum(); i++) {
         FileSelectItem* pItem = static_cast< FileSelectItem* >(mItems->getActor(i));
         Vec2f screen;
-        if (!pItem->mIsInvalidateSelect && MR::calcScreenPosition(&screen, pItem->mPosition + Vec3f(0.0f, cNum_offerFilesToMenuFocus_f1, 0.0f))) {
+        if (!pItem->mIsInvalidateSelect && MR::calcScreenPosition(&screen, pItem->mPosition + Vec3f(0.0f, 900.0f, 0.0f))) {
             NebulaMenuFocus::offerTarget(pItem, screen);
         }
     }
@@ -559,7 +548,7 @@ void FileSelector::createSelectEffect() {
     for (int i = 0; i < ::cUserFileNum; i++) {
         mSelectEffect[i].initWithoutIter();
         mSelectEffect[i].mPosition.set(mItemPositions[i]);
-        mSelectEffect[i].mScale.set(cNum_createSelectEffect_f1);
+        mSelectEffect[i].mScale.set(0.4f);
     }
 }
 
@@ -806,7 +795,7 @@ bool FileSelector::checkSelectedBackButton() {
 }
 
 void FileSelector::goToNearPoint() {
-    calcBasePos(-cNum_goToNearPoint_f1);
+    calcBasePos(-16000.0f);
     mCameraController->goToNearPoint(mItemPositions[::getItemArrayIndex(mSelectedItem->mFileNo)]);
 }
 
@@ -866,13 +855,13 @@ namespace {
 };  // namespace
 
 void FileSelector::calcBasePos(f32 offset) {
-    f32 thetaStep = cNum_calcBasePos_f1 * PI / ::cUserFileNum;
+    f32 thetaStep = 2.0f * PI / ::cUserFileNum;
     Pos3f translationMtx;
     Pos3f& translation = translationMtx;
     translation.makeTrans(0.0f, offset, 0.0f);
 
     RotateMtx rotation;
-    rotation.makeRotate(Vec3f(1.0f, 0.0f, 0.0f), ::cSlopeDegree * PI / cNum_calcBasePos_f2);
+    rotation.makeRotate(Vec3f(1.0f, 0.0f, 0.0f), ::cSlopeDegree * PI / 180.0f);
 
     Pos3f transform;
     transform.concat(translation, rotation);
@@ -882,7 +871,7 @@ void FileSelector::calcBasePos(f32 offset) {
             continue;
         }
 
-        f32 theta = static_cast< f32 >(-(i + 4)) * thetaStep - ::cItemThetaOffset[i] * MR::pi() / cNum_calcBasePos_f3;
+        f32 theta = static_cast< f32 >(-(i + 4)) * thetaStep - ::cItemThetaOffset[i] * MR::pi() / 180.0f;
         f32 cosTheta = MR::cos(theta);
         f32 sinTheta = MR::sin(theta);
         mItemPositions[i].set(::cItemPosRadius * cosTheta, 0.0f, ::cItemPosRadius * sinTheta);

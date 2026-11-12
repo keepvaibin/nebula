@@ -18,32 +18,18 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcTargetPose_f1, "calcTargetPose.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcTargetPose_f2, "calcTargetPose.f2", 0.001f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcTurnDirection_f1, "calcTurnDirection.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcTurnDirection_f2, "calcTurnDirection.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateStompVelocity_f1, "updateStompVelocity.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_emitEffectLand_f1, "emitEffectLand.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getPolygonOnRailPoint_f1, "getPolygonOnRailPoint.f1", 2000.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeMove_1, "exeMove.1", 1);
 
 namespace {
     static const s32 sWaitTime = NebulaFrameClock::stepsOfMilliseconds(1500);
     static const s32 sTimeToNextPoint = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, sGravityScalar, 1.6f);
-    NEBULA_TUNABLE(s32, sWaitTimeQuick, 45);
-    NEBULA_TUNABLE(s32, sTimeToNextPointQuick, 15);
-    NEBULA_TUNABLE(f32, sGravityScalarQuick, 6.4f);
-    NEBULA_TUNABLE(f32, sCamShakeDistanceStrong, 2000.0f);
-    NEBULA_TUNABLE(f32, sCamShakeDistanceWeak, 3500.0f);
-    NEBULA_TUNABLE(f32, sSensorRadius, 800.0f);
+    const f32 sGravityScalar = 1.6f;
+    const s32 sWaitTimeQuick = 45;
+    const s32 sTimeToNextPointQuick = 15;
+    const f32 sGravityScalarQuick = 6.4f;
+    const f32 sCamShakeDistanceStrong = 2000.0f;
+    const f32 sCamShakeDistanceWeak = 3500.0f;
+    const f32 sSensorRadius = 800.0f;
 };  // namespace
 
 namespace NrvOnimasu {
@@ -81,7 +67,7 @@ void Onimasu::init(const TableIter& rIter) {
     MR::initCollisionParts(this, "Onimasu", MR::addHitSensor(this, "body", ATYPE_MAP_OBJ_PRESS, 8, ::sSensorRadius, Vec3f(0.0f, 0.0f, 0.0f)),
                            nullptr);
 
-    MR::initAndSetRailClipping(&mClipCenter, this, cNum_init_f1, cNum_init_f2);
+    MR::initAndSetRailClipping(&mClipCenter, this, 100.0f, 500.0f);
 
     MR::setGroupClipping(this, rIter, 16);
 
@@ -169,7 +155,7 @@ void Onimasu::calcTargetPose() {
 
     Quat4f quarterTurn;
     quarterTurn.set(0.0f, 0.0f, 0.0f, 1.0f);
-    quarterTurn.setRotate(mRotateAxis, MR::pi() / cNum_calcTargetPose_f1);
+    quarterTurn.setRotate(mRotateAxis, MR::pi() / 2.0f);
     rotationChange.mult(quarterTurn);
     mTargetQuat.mult(rotationChange);
 
@@ -181,7 +167,7 @@ void Onimasu::calcTargetPose() {
 
     if (MR::isSameDirection(startFront, targetFront)) {
         Quat4f adjustment;
-        adjustment.setRotate(mRotateAxis, MR::pi() * cNum_calcTargetPose_f2);
+        adjustment.setRotate(mRotateAxis, MR::pi() * 0.001f);
         mStartQuat.mult(adjustment);
     }
 }
@@ -227,12 +213,12 @@ bool Onimasu::calcTurnDirection(f32* pTurnDir) const {
     }
 
     if (turnType == 0) {
-        *pTurnDir = cNum_calcTurnDirection_f1;
+        *pTurnDir = 0.5f;
         return true;
     }
 
     if (turnType == 1) {
-        *pTurnDir = -cNum_calcTurnDirection_f2;
+        *pTurnDir = -0.5f;
         return true;
     }
 
@@ -245,7 +231,7 @@ bool Onimasu::calcTurnDirection(f32* pTurnDir) const {
 }
 
 void Onimasu::updateStompVelocity() {
-    f32 speed = getGravityScalar() * getTimeToNextPoint() * cNum_updateStompVelocity_f1;
+    f32 speed = getGravityScalar() * getTimeToNextPoint() * 0.5f;
 
     Vec3f gravityDir;
     gravityDir.set(-getNextPointNormal());
@@ -274,7 +260,7 @@ void Onimasu::emitEffectLand() {
     Vec3f railPointPos;
     MR::calcRailPointPos(&railPointPos, this, getNextPointNo());
 
-    railPointPos.add((-getNextPointNormal() * ::sSensorRadius) * cNum_emitEffectLand_f1);
+    railPointPos.add((-getNextPointNormal() * ::sSensorRadius) * 0.5f);
 
     if (MR::isSameDirection(mRotateAxis, getNextPointNormal())) {
         MR::makeMtxUpNoSupportPos(&mMoveEffectMtx, getNextPointNormal(), railPointPos);
@@ -316,7 +302,7 @@ void Onimasu::exeMove() {
         startMoveInner();
     }
 
-    if (MR::isStep(this, cStep_exeMove_1)) {
+    if (MR::isStep(this, 1)) {
         MR::offCalcGravity(this);
     }
 
@@ -361,7 +347,7 @@ namespace OnimasuFunction {
         Vec3f gravity(0.0f, 1.0f, 0.0f);
         MR::calcGravityVector(pActor, railPosition, &gravity, nullptr, 0);
         Vec3f direction(gravity);
-        gravity.setLength(cNum_getPolygonOnRailPoint_f1);
+        gravity.setLength(2000.0f);
 
         Triangle triangle;
         if (!MR::getFirstPolyOnLineToMapExceptSensor(pPosition, &triangle, railPosition, gravity, pActor->getSensor("body"))) {

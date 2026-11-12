@@ -5,20 +5,6 @@
 #include "Game/Player/MarioConst.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_controlWaitAnimation_f1, "controlWaitAnimation.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_controlWaitAnimation_f2, "controlWaitAnimation.f2", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_controlWaitAnimation_f3, "controlWaitAnimation.f3", 1.5707964f);
-NEBULA_TUNABLE_NAMED(f32, cNum_controlWaitAnimation_f4, "controlWaitAnimation.f4", 0.7853982f);
-NEBULA_TUNABLE_NAMED(f32, cNum_controlWaitAnimation_f5, "controlWaitAnimation.f5", 0.7853982f);
-NEBULA_TUNABLE_NAMED(f32, cNum_controlWaitAnimation_f6, "controlWaitAnimation.f6", 0.7853982f);
-NEBULA_TUNABLE_NAMED(f32, cNum_controlWaitAnimation_f7, "controlWaitAnimation.f7", 1.5707964f);
-NEBULA_TUNABLE_NAMED(f32, cNum_controlWaitAnimation_f8, "controlWaitAnimation.f8", 0.7853982f);
-NEBULA_TUNABLE_NAMED(f32, cNum_controlWaitAnimation_f9, "controlWaitAnimation.f9", 0.7853982f);
-NEBULA_TUNABLE_NAMED(f32, cNum_controlWaitAnimation_f10, "controlWaitAnimation.f10", 0.7853982f);
-NEBULA_TUNABLE_NAMED(f32, cNum_stopWaitAnimation_f1, "stopWaitAnimation.f1", 1.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isBlendWaitGround_f1, "isBlendWaitGround.f1", 8.0f);
 
 void MarioAnimator::controlWaitAnimation() {
     if (mWaitHoldTimer) {
@@ -44,20 +30,20 @@ void MarioAnimator::controlWaitAnimation() {
     f32 sideBias = 0.0f;
     f32 frontBias = 0.0f;
     if (mWaitPhase == 1) {
-        sideBias = cNum_controlWaitAnimation_f1;
+        sideBias = 0.1f;
     } else if (mWaitPhase == 2) {
-        frontBias = cNum_controlWaitAnimation_f2;
+        frontBias = 0.1f;
     }
 
     f32 frontMagnitude = MR::abs(frontSlope);
     f32 sideMagnitude = MR::abs(sideSlope);
     if (sideBias + sideMagnitude > frontBias + frontMagnitude) {
-        f32 angle = cNum_controlWaitAnimation_f3 - marioAcos(sideMagnitude);
-        if (angle >= cNum_controlWaitAnimation_f4) {
-            angle = cNum_controlWaitAnimation_f5;
+        f32 angle = 1.5707964f - marioAcos(sideMagnitude);
+        if (angle >= 0.7853982f) {
+            angle = 0.7853982f;
         }
 
-        weights[2] = angle / cNum_controlWaitAnimation_f6;
+        weights[2] = angle / 0.7853982f;
         weights[3] = 1.0f - weights[2];
         if (sideSlope < 0.0f) {
             mXanimePlayer->changeTrackAnimation(2, "坂右ウエイト");
@@ -74,12 +60,12 @@ void MarioAnimator::controlWaitAnimation() {
 
         mWaitPhase = 1;
     } else {
-        f32 angle = cNum_controlWaitAnimation_f7 - marioAcos(frontMagnitude);
-        if (angle >= cNum_controlWaitAnimation_f8) {
-            angle = cNum_controlWaitAnimation_f9;
+        f32 angle = 1.5707964f - marioAcos(frontMagnitude);
+        if (angle >= 0.7853982f) {
+            angle = 0.7853982f;
         }
 
-        weights[2] = angle / cNum_controlWaitAnimation_f10;
+        weights[2] = angle / 0.7853982f;
         weights[3] = 1.0f - weights[2];
         if (frontSlope < 0.0f) {
             mXanimePlayer->changeTrackAnimation(2, "坂前ウエイト");
@@ -101,7 +87,7 @@ void MarioAnimator::controlWaitAnimation() {
 }
 
 void MarioAnimator::stopWaitAnimation() {
-    if (getPlayerMode() == PlayerMode_Invincible && getPlayer()->mWalkSpeed >= cNum_stopWaitAnimation_f1) {
+    if (getPlayerMode() == PlayerMode_Invincible && getPlayer()->mWalkSpeed >= 1.5f) {
         return;
     }
 
@@ -298,7 +284,7 @@ bool MarioWait::close() {
 }
 
 bool Mario::isBlendWaitGround() const {
-    return calcAngleD(mGroundNorm) > cNum_isBlendWaitGround_f1;
+    return calcAngleD(mGroundNorm) > 8.0f;
 }
 
 void Mario::checkSpecialWaitAnimation() {

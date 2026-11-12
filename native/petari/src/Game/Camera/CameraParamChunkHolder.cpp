@@ -9,21 +9,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_arrangeChunk_f1, "arrangeChunk.f1", 0.17453294f);
-NEBULA_TUNABLE_NAMED(f32, cNum_arrangeChunk_f2, "arrangeChunk.f2", 0.34906587f);
-NEBULA_TUNABLE_NAMED(f32, cNum_arrangeChunk_f3, "arrangeChunk.f3", 0.15f);
-NEBULA_TUNABLE_NAMED(f32, cNum_arrangeChunk_f4, "arrangeChunk.f4", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_arrangeChunk_f5, "arrangeChunk.f5", 0.35f);
-NEBULA_TUNABLE_NAMED(f32, cNum_arrangeChunk_f6, "arrangeChunk.f6", 0.35f);
-NEBULA_TUNABLE_NAMED(f32, cNum_arrangeChunk_f7, "arrangeChunk.f7", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_arrangeChunk_f8, "arrangeChunk.f8", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_arrangeChunk_f9, "arrangeChunk.f9", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_arrangeChunk_f10, "arrangeChunk.f10", 0.02f);
-NEBULA_TUNABLE_NAMED(f32, cNum_arrangeChunk_f11, "arrangeChunk.f11", 0.992f);
-NEBULA_TUNABLE_NAMED(f32, cNum_arrangeChunk_f12, "arrangeChunk.f12", 0.5f);
 
 CameraParamChunkHolder::CameraParamChunkHolder(CameraHolder* pCameraHolder, const char* pName)
     : NameObj(pName), mCameraHolder(pCameraHolder), mChunkCapacity(cInitialCapacity), mNrChunks(),
@@ -177,12 +163,12 @@ void CameraParamChunkHolder::arrangeChunk(CameraParamChunk* pChunk) {
         if (mCameraVersion < 0x30001) {
             CameraGeneralParam* param = pChunk->mGeneralParam;
 
-            param->mAngleA = cNum_arrangeChunk_f1;  // 10 degrees
-            param->mAngleB = cNum_arrangeChunk_f2;  // 20 degrees
+            param->mAngleA = 0.17453294f;  // 10 degrees
+            param->mAngleB = 0.34906587f;  // 20 degrees
         }
 
         if (mCameraVersion < 0x30002) {
-            pChunk->mGeneralParam->mDist = cNum_arrangeChunk_f3;
+            pChunk->mGeneralParam->mDist = 0.15f;
         }
     }
 
@@ -201,8 +187,8 @@ void CameraParamChunkHolder::arrangeChunk(CameraParamChunk* pChunk) {
         if (mCameraVersion < 0x30007) {
             CameraGeneralParam* param = pChunk->mGeneralParam;
 
-            param->mWPoint.x = cNum_arrangeChunk_f4;
-            param->mWPoint.y = cNum_arrangeChunk_f5;
+            param->mWPoint.x = 30.0f;
+            param->mWPoint.y = 0.35f;
             param->mWPoint.z = 0.0f;
         }
     }
@@ -215,7 +201,7 @@ void CameraParamChunkHolder::arrangeChunk(CameraParamChunk* pChunk) {
         index = pChunk->mCameraTypeIndex;
 
         if (mCameraHolder->getIndexOf("CAM_TYPE_CUBE_PLANET") == index) {
-            pChunk->mGeneralParam->mAngleB = cNum_arrangeChunk_f6;
+            pChunk->mGeneralParam->mAngleB = 0.35f;
         }
     }
 
@@ -223,7 +209,7 @@ void CameraParamChunkHolder::arrangeChunk(CameraParamChunk* pChunk) {
         index = pChunk->mCameraTypeIndex;
 
         if (mCameraHolder->getIndexOf("CAM_TYPE_WATER_FOLLOW") == index) {
-            pChunk->mGeneralParam->mDist = cNum_arrangeChunk_f7;
+            pChunk->mGeneralParam->mDist = 0.01f;
         }
     }
 
@@ -248,7 +234,7 @@ void CameraParamChunkHolder::arrangeChunk(CameraParamChunk* pChunk) {
         index = pChunk->mCameraTypeIndex;
 
         if (mCameraHolder->getIndexOf("CAM_TYPE_CHARMED_VECREG") == index) {
-            pChunk->mGeneralParam->mAngleA = cNum_arrangeChunk_f8;
+            pChunk->mGeneralParam->mAngleA = 0.5f;
         }
     }
 
@@ -264,7 +250,7 @@ void CameraParamChunkHolder::arrangeChunk(CameraParamChunk* pChunk) {
         index = pChunk->mCameraTypeIndex;
 
         if (mCameraHolder->getIndexOf("CAM_TYPE_MEDIAN_TOWER") == index) {
-            pChunk->mGeneralParam->mUp.y = cNum_arrangeChunk_f9;
+            pChunk->mGeneralParam->mUp.y = 0.5f;
         }
     }
 
@@ -272,7 +258,7 @@ void CameraParamChunkHolder::arrangeChunk(CameraParamChunk* pChunk) {
         index = pChunk->mCameraTypeIndex;
 
         if (mCameraHolder->getIndexOf("CAM_TYPE_CHARMED_VECREG") == index) {
-            pChunk->mGeneralParam->mAngleB = cNum_arrangeChunk_f10;
+            pChunk->mGeneralParam->mAngleB = 0.02f;
         }
     }
 
@@ -280,7 +266,7 @@ void CameraParamChunkHolder::arrangeChunk(CameraParamChunk* pChunk) {
         index = pChunk->mCameraTypeIndex;
 
         if (mCameraHolder->getIndexOf("CAM_TYPE_MEDIAN_TOWER") == index) {
-            pChunk->mGeneralParam->mUp.z = cNum_arrangeChunk_f11;
+            pChunk->mGeneralParam->mUp.z = 0.992f;
         }
     }
 
@@ -296,7 +282,7 @@ void CameraParamChunkHolder::arrangeChunk(CameraParamChunk* pChunk) {
         index = pChunk->mCameraTypeIndex;
 
         if (mCameraHolder->getIndexOf("CAM_TYPE_MEDIAN_PLANET") == index) {
-            pChunk->mGeneralParam->mWPoint.x = cNum_arrangeChunk_f12;
+            pChunk->mGeneralParam->mWPoint.x = 0.5f;
         }
     }
 

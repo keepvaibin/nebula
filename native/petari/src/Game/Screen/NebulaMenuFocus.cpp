@@ -9,16 +9,15 @@
 #include <Game/Ui/Pane.hpp>
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Array.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
     using NebulaMenuFocus::Direction;
 
-    NEBULA_TUNABLE(s32, cRepeatDelay, 18);         // frames a direction is held before it repeats
-    NEBULA_TUNABLE(s32, cRepeatInterval, 5);       // then a step every this many frames
-    NEBULA_TUNABLE(f32, cStickHold, 0.6f);         // the stick's deflection that counts as a press
-    NEBULA_TUNABLE(f32, cPointerHandBack, 12.0f);  // screen units the pointer moves to take the menu back
-    NEBULA_TUNABLE(s32, cGapFrames, 90);           // frames without a menu that the pad keeps the menus (a question closing)
+    const s32 cRepeatDelay = 18;         // frames a direction is held before it repeats
+    const s32 cRepeatInterval = 5;       // then a step every this many frames
+    const f32 cStickHold = 0.6f;         // the stick's deflection that counts as a press
+    const f32 cPointerHandBack = 12.0f;  // screen units the pointer moves to take the menu back
+    const s32 cGapFrames = 90;           // frames without a menu that the pad keeps the menus (a question closing)
 
     // A place the highlight can rest: a game button, or another target (a key) at a centre given with it.
     struct Entry {

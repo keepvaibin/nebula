@@ -7,33 +7,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/JointRumbler.hpp"
 #include "Game/System/NebulaInput.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_getRunAwayBreakTimeRandom_f1, "getRunAwayBreakTimeRandom.f1", 0.25f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getRunAwayBreakTimeRandom_f2, "getRunAwayBreakTimeRandom.f2", 0.25f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getRunAwayBreakTimeRandom_f3, "getRunAwayBreakTimeRandom.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getRunAwayBreakTimeRandom_f4, "getRunAwayBreakTimeRandom.f4", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getRunAwayBreakTimeRandom_f5, "getRunAwayBreakTimeRandom.f5", 0.75f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getRunAwayTimeRandom_f1, "getRunAwayTimeRandom.f1", 0.25f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getRunAwayTimeRandom_f2, "getRunAwayTimeRandom.f2", 0.25f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getRunAwayTimeRandom_f3, "getRunAwayTimeRandom.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getRunAwayTimeRandom_f4, "getRunAwayTimeRandom.f4", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getRunAwayTimeRandom_f5, "getRunAwayTimeRandom.f5", 0.75f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.25f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 6.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_appearItemPunch_f1, "appearItemPunch.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_appearItemPunch_f2, "appearItemPunch.f2", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isPlayerBackward_f1, "isPlayerBackward.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isPlayerBackward_f2, "isPlayerBackward.f2", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryFindPlayer_f1, "tryFindPlayer.f1", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryFindPlayer_f2, "tryFindPlayer.f2", 30.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_tryHitWall_reboundVelocityFromCollision_1, "tryHitWall.reboundVelocityFromCollision.1", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryHitWall_reboundVelocityFromCollision_2, "tryHitWall.reboundVelocityFromCollision.2", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryHitWall_reboundVelocityFromCollision_3, "tryHitWall.reboundVelocityFromCollision.3", 1.0f);
 
 namespace NrvKanina {
     NEW_NERVE(HostTypeAppear, Kanina, Appear);
@@ -62,77 +36,77 @@ namespace NrvKanina {
 };  // namespace NrvKanina
 
 namespace {
-    NEBULA_TUNABLE(f32, sSensorRadius, 100.0f);
-    NEBULA_TUNABLE(f32, sBinderRadius, 100.0f);
-    NEBULA_TUNABLE(f32, sBinderOffsetY, 100.0f);
-    NEBULA_TUNABLE(f32, sShadowRadius, 80.0f);
-    NEBULA_TUNABLE(f32, sTerritoryRadius, 2000.0f);
-    NEBULA_TUNABLE(s32, sStarPieceNum, 3);
-    NEBULA_TUNABLE(s32, sCoinNum, 1);
-    NEBULA_TUNABLE(f32, sPoseLerpRate, 0.3f);
+    const f32 sSensorRadius = 100.0f;
+    const f32 sBinderRadius = 100.0f;
+    const f32 sBinderOffsetY = 100.0f;
+    const f32 sShadowRadius = 80.0f;
+    const f32 sTerritoryRadius = 2000.0f;
+    const s32 sStarPieceNum = 3;
+    const s32 sCoinNum = 1;
+    const f32 sPoseLerpRate = 0.3f;
     static const s32 sAnimIntervalBlink = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE(f32, sSensorRadiusAttack, 80.0f);
-    NEBULA_TUNABLE(f32, sWalkSpeed, 3.0f);
+    const f32 sSensorRadiusAttack = 80.0f;
+    const f32 sWalkSpeed = 3.0f;
     static const s32 sWalkTime = NebulaFrameClock::stepsOfSeconds(3);
     static const s32 sWaitTime = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE(s32, sPunchDamageTime, 15);
-    NEBULA_TUNABLE(f32, sPunchDamageVelocity, 25.0f);
-    NEBULA_TUNABLE(f32, sPunchUpperVec, 25.0f);
-    NEBULA_TUNABLE(f32, sGravityAccel, 1.5f);
-    NEBULA_TUNABLE(s32, sStopSceneTimePunchBackword, 8);
-    NEBULA_TUNABLE(s32, sWaitUnderGroundTime, 120.0f);
-    NEBULA_TUNABLE(f32, sKeepUnderGroundDistance, 500.0f);
-    NEBULA_TUNABLE(f32, sSearchRadius, 1000.0f);
-    NEBULA_TUNABLE(f32, sWalkSpeedRunAway, 13.0f);
-    NEBULA_TUNABLE(f32, sAnimRateRunAway, 1.0f);
-    NEBULA_TUNABLE(f32, sSafetyDistance, 800.0f);
-    NEBULA_TUNABLE(s32, sRunAwayRunningTime1, 15);
+    const s32 sPunchDamageTime = 15;
+    const f32 sPunchDamageVelocity = 25.0f;
+    const f32 sPunchUpperVec = 25.0f;
+    const f32 sGravityAccel = 1.5f;
+    const s32 sStopSceneTimePunchBackword = 8;
+    const s32 sWaitUnderGroundTime = 120.0f;
+    const f32 sKeepUnderGroundDistance = 500.0f;
+    const f32 sSearchRadius = 1000.0f;
+    const f32 sWalkSpeedRunAway = 13.0f;
+    const f32 sAnimRateRunAway = 1.0f;
+    const f32 sSafetyDistance = 800.0f;
+    const s32 sRunAwayRunningTime1 = 15;
     static const s32 sRunAwayRunningTime2 = NebulaFrameClock::stepsOfMilliseconds(500);
     static const s32 sRunAwayRunningTime3 = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(s32, sRunAwayRunningTime4, 75);
-    NEBULA_TUNABLE(s32, sRunAwayIntervalTime1, 10);
+    const s32 sRunAwayRunningTime4 = 75;
+    const s32 sRunAwayIntervalTime1 = 10;
     static const s32 sRunAwayIntervalTime2 = NebulaFrameClock::stepsOfMilliseconds(500);
     static const s32 sRunAwayIntervalTime3 = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(s32, sRunAwayIntervalTime4, 75);
-    NEBULA_TUNABLE(f32, sRunAwayDirectionAngle, 60.0f);
-    NEBULA_TUNABLE(f32, sRunAwayFaceAngle, 15.0f);
-    NEBULA_TUNABLE(s32, sHitWallTime, 10);
-    NEBULA_TUNABLE(f32, sWallHitReboundAcc, 6.0f);
-    NEBULA_TUNABLE(f32, sWallHitReboundAccY, 20.0f);
-    NEBULA_TUNABLE(f32, sGravityAccelHitWall, 2.2f);
+    const s32 sRunAwayIntervalTime4 = 75;
+    const f32 sRunAwayDirectionAngle = 60.0f;
+    const f32 sRunAwayFaceAngle = 15.0f;
+    const s32 sHitWallTime = 10;
+    const f32 sWallHitReboundAcc = 6.0f;
+    const f32 sWallHitReboundAccY = 20.0f;
+    const f32 sGravityAccelHitWall = 2.2f;
     static const s32 sGuardTime = NebulaFrameClock::stepsOfMilliseconds(1500);
-    NEBULA_TUNABLE(f32, sPunchAccel, 30.0f);
-    NEBULA_TUNABLE(f32, sGuardFrec, 0.88f);
-    NEBULA_TUNABLE(f32, sBackwardAngle, 30.0f);
-    NEBULA_TUNABLE(f32, sTurnSpeed, 1.7f);
+    const f32 sPunchAccel = 30.0f;
+    const f32 sGuardFrec = 0.88f;
+    const f32 sBackwardAngle = 30.0f;
+    const f32 sTurnSpeed = 1.7f;
     static const s32 sTurnEndTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, sBackwardAngleTurn, 120.0f);
-    NEBULA_TUNABLE(s32, sHipDropDownTime, 70);
-    NEBULA_TUNABLE(f32, sKinokoOneUpShootSpeed, 15.0f);
-    NEBULA_TUNABLE(f32, sWalkSpeedRunAwayRed, 7.0f);
-    NEBULA_TUNABLE(f32, sRunAwayDirectionAngleRed, 30.0f);
-    NEBULA_TUNABLE(f32, sRunAwayFaceAngleRed, 45.0f);
-    NEBULA_TUNABLE(s32, sWalkCount, 3);
-    NEBULA_TUNABLE(f32, sUpVecBlendRate, 0.05f);
-    NEBULA_TUNABLE(f32, sFrontVecBlendRate, 0.5f);
-    NEBULA_TUNABLE(f32, sGroundFrec, 0.93f);
-    NEBULA_TUNABLE(f32, sAirFrec, 0.99f);
-    NEBULA_TUNABLE(f32, sPushAccel, 1.5f);
-    NEBULA_TUNABLE(f32, sDownGravityAccel, 1.0f);
+    const f32 sBackwardAngleTurn = 120.0f;
+    const s32 sHipDropDownTime = 70;
+    const f32 sKinokoOneUpShootSpeed = 15.0f;
+    const f32 sWalkSpeedRunAwayRed = 7.0f;
+    const f32 sRunAwayDirectionAngleRed = 30.0f;
+    const f32 sRunAwayFaceAngleRed = 45.0f;
+    const s32 sWalkCount = 3;
+    const f32 sUpVecBlendRate = 0.05f;
+    const f32 sFrontVecBlendRate = 0.5f;
+    const f32 sGroundFrec = 0.93f;
+    const f32 sAirFrec = 0.99f;
+    const f32 sPushAccel = 1.5f;
+    const f32 sDownGravityAccel = 1.0f;
 };  // namespace
 
 namespace {
     u32 getRunAwayBreakTimeRandom() {
         f32 random = MR::getRandom();
-        if (0.0f <= random && random < cNum_getRunAwayBreakTimeRandom_f1) {
+        if (0.0f <= random && random < 0.25f) {
             return ::sRunAwayIntervalTime1;
         }
 
-        if (cNum_getRunAwayBreakTimeRandom_f2 <= random && random < cNum_getRunAwayBreakTimeRandom_f3) {
+        if (0.25f <= random && random < 0.5f) {
             return ::sRunAwayIntervalTime2;
         }
 
-        if (cNum_getRunAwayBreakTimeRandom_f4 <= random && random < cNum_getRunAwayBreakTimeRandom_f5) {
+        if (0.5f <= random && random < 0.75f) {
             return ::sRunAwayIntervalTime3;
         }
 
@@ -141,15 +115,15 @@ namespace {
 
     u32 getRunAwayTimeRandom() {
         f32 random = MR::getRandom();
-        if (0.0f <= random && random < cNum_getRunAwayTimeRandom_f1) {
+        if (0.0f <= random && random < 0.25f) {
             return ::sRunAwayRunningTime1;
         }
 
-        if (cNum_getRunAwayTimeRandom_f2 <= random && random < cNum_getRunAwayTimeRandom_f3) {
+        if (0.25f <= random && random < 0.5f) {
             return ::sRunAwayRunningTime2;
         }
 
-        if (cNum_getRunAwayTimeRandom_f4 <= random && random < cNum_getRunAwayTimeRandom_f5) {
+        if (0.5f <= random && random < 0.75f) {
             return ::sRunAwayRunningTime3;
         }
 
@@ -173,7 +147,7 @@ void Kanina::init(const TableIter& rIter) {
 
     MR::getObjectName(&objectName, rIter);
     initModelManagerWithAnm(objectName, nullptr, false);
-    mAnimationRandomPlayer = new AnimationRandomPlayer(this, "Blink", "Normal", ::sAnimIntervalBlink, cNum_init_f1);
+    mAnimationRandomPlayer = new AnimationRandomPlayer(this, "Blink", "Normal", ::sAnimIntervalBlink, 0.25f);
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
     initSound(4, false);
@@ -186,7 +160,7 @@ void Kanina::init(const TableIter& rIter) {
     MR::onCalcGravity(this);
     MR::initShadowVolumeSphere(this, ::sShadowRadius);
     MR::addToAttributeGroupSearchTurtle(this);
-    mJointRumbler = new JointRumbler(this, "Root", cNum_init_f2, cNum_init_f3, 45, true, 0);
+    mJointRumbler = new JointRumbler(this, "Root", 6.0f, 0.1f, 45, true, 0);
 
     if (MR::isEqualString(objectName, "KaninaRed")) {
         initForType(rIter, KaninaType_Red);
@@ -213,7 +187,7 @@ void Kanina::kill() {
 
 void Kanina::appearItemPunch() {
     if (mType == KaninaType_Red) {
-        MR::appearStarPiece(this, mPosition, ::sStarPieceNum, cNum_appearItemPunch_f1, cNum_appearItemPunch_f2, false);
+        MR::appearStarPiece(this, mPosition, ::sStarPieceNum, 10.0f, 40.0f, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
     } else if (mType == KaninaType_Blue) {
         MR::appearKinokoOneUpPop(mKinokoOneUp, getBaseMtx(), ::sKinokoOneUpShootSpeed);
@@ -552,8 +526,8 @@ void Kanina::initForType(const TableIter& /*rIter*/, KaninaType type) {
 bool Kanina::isPlayerBackward(f32 angle) const {
     Vec3f frontVec;
     MR::calcFrontVec(&frontVec, this);
-    angle = angle * cNum_isPlayerBackward_f1;
-    return MR::isInSightFanPlayer(this, -frontVec, ::sSafetyDistance, angle, cNum_isPlayerBackward_f2);
+    angle = angle * 2.0f;
+    return MR::isInSightFanPlayer(this, -frontVec, ::sSafetyDistance, angle, 30.0f);
 }
 
 bool Kanina::isStatePossibleToAttack() const {
@@ -630,7 +604,7 @@ bool Kanina::tryFindPlayer() {
 
     Vec3f front;
     MR::calcFrontVec(&front, this);
-    if (!MR::isInSightFanPlayer(this, front, ::sSearchRadius, cNum_tryFindPlayer_f1, cNum_tryFindPlayer_f2)) {
+    if (!MR::isInSightFanPlayer(this, front, ::sSearchRadius, 180.0f, 30.0f)) {
         return false;
     }
 
@@ -647,7 +621,7 @@ bool Kanina::tryHitWall() {
         return false;
     }
 
-    if (!MR::reboundVelocityFromCollision(this, cNum_tryHitWall_reboundVelocityFromCollision_1, cNum_tryHitWall_reboundVelocityFromCollision_2, cNum_tryHitWall_reboundVelocityFromCollision_3)) {
+    if (!MR::reboundVelocityFromCollision(this, 1.0f, 0.0f, 1.0f)) {
         return false;
     }
 

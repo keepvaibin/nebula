@@ -20,21 +20,10 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 2000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initMapToolInfo_f1, "initMapToolInfo.f1", 0.0001f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isChaseStart_f1, "isChaseStart.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isValidShowModel_f1, "isValidShowModel.f1", 300.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isValidShowModel_f2, "isValidShowModel.f2", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startMoveLevelSound_f1, "startMoveLevelSound.f1", 100.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeFreeze_setBckRate_1, "exeFreeze.setBckRate.1", 0.0f);
-
 namespace {
-    NEBULA_TUNABLE_RECORD(Vec, cBodyHitSensorOffset, {0.0f, 0.0f, -10.0f});
+    const Vec cBodyHitSensorOffset = {0.0f, 0.0f, -10.0f};
 
     const u32 cSensorTableTarget[] = {
         ATYPE_KILLER_TARGET_ENEMY, ATYPE_KILLER_TARGET_MAPOBJ, ATYPE_BREAKABLE_CAGE, ATYPE_ROCK, ATYPE_WANWAN, ATYPE_PUNCH_BOX};
@@ -42,46 +31,46 @@ namespace {
                                               ATYPE_TRIPODBOSS_GUARD_WALL, ATYPE_TRIPODBOSS_KILLER_GENERATER, ATYPE_MAP_OBJ};
     const u32 cSensorTableTryExplosion[] = {ATYPE_KILLER_TARGET_ENEMY, ATYPE_KILLER_TARGET_MAPOBJ, ATYPE_ROCK, ATYPE_WANWAN, ATYPE_KARIKARI};
 
-    NEBULA_TUNABLE(f32, cBodyHitSensorRadius, 70.0f);
-    NEBULA_TUNABLE(f32, cEyeHitSensorRadius, 750.0f);
-    NEBULA_TUNABLE(f32, cBinderRadius, 70.0f);
-    NEBULA_TUNABLE(f32, cExplosionDistance, 250.0f);
-    NEBULA_TUNABLE(f32, cShadowRadiusXY, 60.0f);
-    NEBULA_TUNABLE(f32, cShadowRadiusZ, 100.0f);
-    NEBULA_TUNABLE(f32, cStarWandRadius3d, 150.0f);
-    NEBULA_TUNABLE(f32, cSandColumnEmitDot, -0.75f);
+    const f32 cBodyHitSensorRadius = 70.0f;
+    const f32 cEyeHitSensorRadius = 750.0f;
+    const f32 cBinderRadius = 70.0f;
+    const f32 cExplosionDistance = 250.0f;
+    const f32 cShadowRadiusXY = 60.0f;
+    const f32 cShadowRadiusZ = 100.0f;
+    const f32 cStarWandRadius3d = 150.0f;
+    const f32 cSandColumnEmitDot = -0.75f;
     static const s32 cAppearIntervalFrame = NebulaFrameClock::stepsOfSeconds(3);
-    NEBULA_TUNABLE(s32, cForceKillFrame, 600);
-    NEBULA_TUNABLE(f32, cCameraShakeDistance, 1000.0f);
-    NEBULA_TUNABLE(f32, cChaseStartAngle, 360.0f);
-    NEBULA_TUNABLE(f32, cChaseSpeed, 12.0f);
-    NEBULA_TUNABLE(f32, cChaseTargetHeight, 200.0f);
-    NEBULA_TUNABLE(f32, cChaseEndDistance, 3000.0f);
-    NEBULA_TUNABLE(f32, cChaseInvalidFrame, 35);  // BUG: typo, should be an s32 :)
-    NEBULA_TUNABLE(f32, cChaseRotateZSpeed, 1.0f);
-    NEBULA_TUNABLE(f32, cChaseRotateZMax, 60.0f);
-    NEBULA_TUNABLE(f32, cChaseRotateZDot, 0.95f);
-    NEBULA_TUNABLE(f32, cChaseHeightMin, 150.0f);
-    NEBULA_TUNABLE(f32, cUpVecRotateSpeed, 2.0f);
-    NEBULA_TUNABLE(f32, cMoveRotateCosineMax, 0.9995f);  // ~cos(1.8)
-    NEBULA_TUNABLE(s32, cFreezeFrame, 20);
-    NEBULA_TUNABLE(f32, cFreezeRumbleSpeed, 75.0f);
-    NEBULA_TUNABLE(f32, cFreezeRumbleWidth, 5.0f);
-    NEBULA_TUNABLE(f32, cFreezeRotateCosineMax, 0.9997f);  // ~cos(1.4)
-    NEBULA_TUNABLE(s32, cAppearMoveFrame, 20);
-    NEBULA_TUNABLE(s32, cAppearRumbleFrame, 22);
-    NEBULA_TUNABLE(s32, cAppearStopFrame, 30);
-    NEBULA_TUNABLE(f32, cAppearMoveDistance, 200.0f);
-    NEBULA_TUNABLE(f32, cAppearRumbleSpeed, 100.0f);
-    NEBULA_TUNABLE(f32, cAppearRumbleWidth, 18.0f);
-    NEBULA_TUNABLE(f32, cChaseSpeedTorpedo, 5.0f);
-    NEBULA_TUNABLE(f32, cChaseTargetHeightTorpedo, 75.0f);
-    NEBULA_TUNABLE(f32, cTorpedoLightClippingRadius, 1000.0f);
-    NEBULA_TUNABLE(f32, cNearClipDistanceMagnum, 400.0f);
-    NEBULA_TUNABLE(f32, cMagnamFlySeDistMin, 500.0f);
-    NEBULA_TUNABLE(f32, cMagnamFlySeDistMax, 1400.0f);
-    NEBULA_TUNABLE(f32, cMagnamFlySePitchMin, 0.9f);
-    NEBULA_TUNABLE(f32, cMagnamFlySePitchMax, 1.8f);
+    const s32 cForceKillFrame = 600;
+    const f32 cCameraShakeDistance = 1000.0f;
+    const f32 cChaseStartAngle = 360.0f;
+    const f32 cChaseSpeed = 12.0f;
+    const f32 cChaseTargetHeight = 200.0f;
+    const f32 cChaseEndDistance = 3000.0f;
+    const f32 cChaseInvalidFrame = 35;  // BUG: typo, should be an s32 :)
+    const f32 cChaseRotateZSpeed = 1.0f;
+    const f32 cChaseRotateZMax = 60.0f;
+    const f32 cChaseRotateZDot = 0.95f;
+    const f32 cChaseHeightMin = 150.0f;
+    const f32 cUpVecRotateSpeed = 2.0f;
+    const f32 cMoveRotateCosineMax = 0.9995f;  // ~cos(1.8)
+    const s32 cFreezeFrame = 20;
+    const f32 cFreezeRumbleSpeed = 75.0f;
+    const f32 cFreezeRumbleWidth = 5.0f;
+    const f32 cFreezeRotateCosineMax = 0.9997f;  // ~cos(1.4)
+    const s32 cAppearMoveFrame = 20;
+    const s32 cAppearRumbleFrame = 22;
+    const s32 cAppearStopFrame = 30;
+    const f32 cAppearMoveDistance = 200.0f;
+    const f32 cAppearRumbleSpeed = 100.0f;
+    const f32 cAppearRumbleWidth = 18.0f;
+    const f32 cChaseSpeedTorpedo = 5.0f;
+    const f32 cChaseTargetHeightTorpedo = 75.0f;
+    const f32 cTorpedoLightClippingRadius = 1000.0f;
+    const f32 cNearClipDistanceMagnum = 400.0f;
+    const f32 cMagnamFlySeDistMin = 500.0f;
+    const f32 cMagnamFlySeDistMax = 1400.0f;
+    const f32 cMagnamFlySePitchMin = 0.9f;
+    const f32 cMagnamFlySePitchMax = 1.8f;
 };  // namespace
 
 namespace NrvHomingKiller {
@@ -186,7 +175,7 @@ void HomingKiller::init(const TableIter& rIter) {
     } else {
         f32 scale = getScale();
         MR::initShadowVolumeOval(this, Vec3f(::cShadowRadiusXY, ::cShadowRadiusXY, ::cShadowRadiusZ) * scale);
-        MR::setShadowDropLength(this, nullptr, cNum_init_f1);
+        MR::setShadowDropLength(this, nullptr, 2000.0f);
     }
 
     MR::addToAttributeGroupSearchTurtle(this);
@@ -381,7 +370,7 @@ void HomingKiller::initMapToolInfo(const TableIter& rIter) {
     } else if (turnRadius > 20000) {
         turnRadius = 20000;
     }
-    mChaseRotateSpeed = 1.0f - turnRadius * cNum_initMapToolInfo_f1;
+    mChaseRotateSpeed = 1.0f - turnRadius * 0.0001f;
 
     MR::getPlacementArg2NoInit(rIter, &mIsLinearShot);
     if (mType == Type_MagnumKiller) {
@@ -526,7 +515,7 @@ bool HomingKiller::isChaseStart() const {
         return false;
     }
 
-    return MR::cosDegree(mChaseStartAngle * cNum_isChaseStart_f1) < target.dot(mFront);
+    return MR::cosDegree(mChaseStartAngle * 0.5f) < target.dot(mFront);
 }
 
 bool HomingKiller::tryChaseStart() {
@@ -647,11 +636,11 @@ void HomingKiller::calcFrontVecToTarget(Vec3f* pFront) const {
 }
 
 bool HomingKiller::isValidShowModel() const {
-    if (MR::isJudgedToClipFrustum(mPosition, cNum_isValidShowModel_f1)) {
+    if (MR::isJudgedToClipFrustum(mPosition, 300.0f)) {
         return false;
     }
 
-    if (MR::isJudgedToNearClip(mPosition, mType == Type_MagnumKiller ? ::cNearClipDistanceMagnum : cNum_isValidShowModel_f2)) {
+    if (MR::isJudgedToNearClip(mPosition, mType == Type_MagnumKiller ? ::cNearClipDistanceMagnum : 200.0f)) {
         return false;
     }
 
@@ -683,7 +672,7 @@ void HomingKiller::startMoveLevelSound(bool playAlarm) {
     } else if (mType == Type_MagnumKiller) {
         f32 pitch = MR::getLinerValueFromMinMax(MR::calcDistanceToPlayer(this), ::cMagnamFlySeDistMin, ::cMagnamFlySeDistMax, ::cMagnamFlySePitchMax,
                                                 ::cMagnamFlySePitchMin);
-        MR::startLevelSound(this, "SE_EM_LV_MAGKILLER_FLY", pitch * cNum_startMoveLevelSound_f1);
+        MR::startLevelSound(this, "SE_EM_LV_MAGKILLER_FLY", pitch * 100.0f);
     } else {
         MR::startLevelSound(this, "SE_EM_LV_KILLER_FLY");
     }
@@ -817,7 +806,7 @@ void HomingKiller::exeFreeze() {
         }
 
         if (mType != Type_MagnumKiller) {
-            MR::setBckRate(this, cNum_exeFreeze_setBckRate_1);
+            MR::setBckRate(this, 0.0f);
         }
     }
 

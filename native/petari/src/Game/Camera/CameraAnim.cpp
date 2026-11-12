@@ -4,16 +4,12 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MotionSignal.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 180.0f);
 
 namespace {
     // The cooked camera tracks store a key's slopes per authored frame of 30 a second (the cooker reads them the same way);
     // key times are in those frames.
-    NEBULA_TUNABLE(f32, cKeySlopeUnit, 30.0f);
+    const f32 cKeySlopeUnit = 30.0f;
 
     // The first key at or before the key (a binary search; one before the first when the key is before it).
     u32 searchKey(const f32* pValues, f32 key, u32 count, u32 stride) {
@@ -129,7 +125,7 @@ CameraTargetObj* CameraAnim::calc() {
         CameraLocalUtil::setUpVec(this, up);
         CameraLocalUtil::setWatchUpVec(this, up);
 
-        CameraLocalUtil::setRoll(this, getTrack(CamAnmTrack_Twist, mCurrentFrame) * MR::pi() / cNum_calc_f1);
+        CameraLocalUtil::setRoll(this, getTrack(CamAnmTrack_Twist, mCurrentFrame) * MR::pi() / 180.0f);
         CameraLocalUtil::setFovy(this, getTrack(CamAnmTrack_Fovy, mCurrentFrame));
 
         if (isCutTo(mCurrentFrame)) {
@@ -142,7 +138,7 @@ CameraTargetObj* CameraAnim::calc() {
         }
     } else {
         const f32 frame = mNrFrames - 1;
-        CameraLocalUtil::setRoll(this, getTrack(CamAnmTrack_Twist, frame) * MR::pi() / cNum_calc_f2);
+        CameraLocalUtil::setRoll(this, getTrack(CamAnmTrack_Twist, frame) * MR::pi() / 180.0f);
         CameraLocalUtil::setFovy(this, getTrack(CamAnmTrack_Fovy, mNrFrames - 1));
     }
 

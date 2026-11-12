@@ -41,6 +41,10 @@
     "kernel.numbers.set": "A mod sets one by name and the game's code reads the new value (1.5)",
     "kernel.numbers.refusals": "No such number, several, a value not of its kind: refused with its number and words (1.5)",
     "kernel.numbers.taken_out": "A mod taken out: every number it set is the game's again, or what the mods still here set last (1.5, 1.11)",
+    "kernel.tables.by_name": "Every file-scope or class-static table of the game's data (an array or plain record with an initializer) by its name: data, element type, size, count (1.5)",
+    "kernel.tables.set": "A mod writes bytes in a table by name and the game reads them (1.5)",
+    "kernel.tables.refusals": "No such table, bytes outside it, off the game thread: refused with the table's name and words (1.5)",
+    "kernel.tables.taken_out": "A mod taken out: every table it wrote is the game's again with the writes of the mods still here, in order (1.5, 1.11)",
     "kernel.objects.unit": "Classes a .cpp file defines (nerves, screens) have numbers and answer as the headers' classes do (1.3)",
     "services.registry": "Services by name and version: bound at import, the minor rule, optional imports, a table's size, mistakes reported once a place and counted (2.1)",
     "services.events": "Events posted from any thread, given on the game thread at the frame's start in list order, 256 a frame, none after a mod's stop (2.1)",
@@ -117,6 +121,11 @@
     "model.player_parts": "content.model lists the player's parts and the joints they are drawn at (3.2)",
     "services.mods": "The session's list of mods: order, id, name, version, kind, code, and state as the player and the check left it (2.2)",
     "services.mods.ids": "Numbers in the game's message and sensor spaces by <mod id>/<name>, derived alike on every machine, kept and never reused (2.2)",
-    "services.mods.install": "A mod's request to install a .luma through the import screen and the player's answer (2.2)"
+    "services.mods.install": "A mod's request to install a .luma through the import screen and the player's answer (2.2)",
+    "services.save": "A mod's own values in the player's game file: written when the game saves, copied and erased with the file, per character (2.2)",
+    "services.save.global": "A mod's values across files, written at once (2.2)",
+    "services.save.game": "The game's own file handed to a mod, or offered back through the game's screen with the player's answer (2.2)",
+    "services.fs": "A mod's data folder and its own installed files: read, written whole, removed, moved, listed, the same path rule everywhere (2.3)",
+    "services.fs.exchange": "The Exchange folder shared by the player and mods granted it (2.3)"
   }
 }

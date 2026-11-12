@@ -6,16 +6,11 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_createChainParts_f1, "createChainParts.f1", 90.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_createChainParts_f2, "createChainParts.f2", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_createChainParts_f3, "createChainParts.f3", 200.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sPartsLength, 200.0f);
-    NEBULA_TUNABLE(s32, sBreakInterval, 5);
+    const f32 sPartsLength = 200.0f;
+    const s32 sBreakInterval = 5;
 };  // namespace
 
 namespace NrvLargeChain {
@@ -125,9 +120,9 @@ void LargeChain::createChainParts() {
             mBottomFixParts->initChainParts(&pos, &mRotation, &mScale, true);
         } else if (i == mChainCount - 1) {
             Vec3f rot(mRotation);
-            rot.y += cNum_createChainParts_f1;
-            rot.x += cNum_createChainParts_f2;
-            pos.y += cNum_createChainParts_f3;
+            rot.y += 90.0f;
+            rot.x += 180.0f;
+            pos.y += 200.0f;
             mTopFixParts->initChainParts(&pos, &rot, &mScale, true);
         }
     }

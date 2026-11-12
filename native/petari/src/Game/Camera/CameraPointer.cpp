@@ -6,23 +6,11 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/System/NebulaInput.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_reset_f1, "reset.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f3, "calc.f3", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f4, "calc.f4", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f5, "calc.f5", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f6, "calc.f6", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f7, "calc.f7", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f8, "calc.f8", 38.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f9, "calc.f9", 1000.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sMaxDistance, 0.15f);
-    NEBULA_TUNABLE(f32, sFovyBlendRate, 0.05f);
+    const f32 sMaxDistance = 0.15f;
+    const f32 sFovyBlendRate = 0.05f;
 };  // namespace
 
 CameraPointer::CameraPointer(const char* pName)
@@ -36,7 +24,7 @@ CameraPointer::CameraPointer(const char* pName)
 void CameraPointer::reset() {
     if (mCameraType == CameraType_FixedPos) {
         CameraLocalUtil::setPos(this, CameraLocalUtil::getPos(mCameraMan));
-        Vec3f pos = (CameraLocalUtil::getTarget(this)->getPosition() + Vec3f(0.0f, cNum_reset_f1, 0.0f));
+        Vec3f pos = (CameraLocalUtil::getTarget(this)->getPosition() + Vec3f(0.0f, 100.0f, 0.0f));
         Vec3f front = pos - CameraLocalUtil::getPos(this);
         MR::normalize(&front);
         Vec3f up = CameraLocalUtil::getTarget(this)->getUpVec();
@@ -99,13 +87,13 @@ CameraTargetObj* CameraPointer::calc() {
 
     if (mResetPointingPos) {
         pointPos.set(0.0f, 0.0f);
-        if (MR::abs(mRealPointPos.x) < cNum_calc_f1 && MR::abs(mRealPointPos.y) < cNum_calc_f2) {
+        if (MR::abs(mRealPointPos.x) < 0.5f && MR::abs(mRealPointPos.y) < 0.5f) {
             mResetPointingPos = false;
         }
     }
 
     if (MR::isPointerInScreen(PLAYER_1)) {
-        mRealPointPos = mRealPointPos * cNum_calc_f3 + pointPos * cNum_calc_f4;
+        mRealPointPos = mRealPointPos * 0.9f + pointPos * 0.1f;
         if (mCameraType != CameraType_FollowWorldPos) {
             if (MR::isPressedCrouch(PLAYER_1)) {
                 mPointerDistance = MR::getPointerDistance(PLAYER_1);
@@ -113,7 +101,7 @@ CameraTargetObj* CameraPointer::calc() {
             if (MR::isHeldCrouch(PLAYER_1)) {
                 f32 updateDist = MR::clamp(mPointerDistance - MR::getPointerDistance(PLAYER_1), -::sMaxDistance, ::sMaxDistance);
                 mFovy =
-                    (cNum_calc_f5 - ((updateDist * cNum_calc_f6) / ::sMaxDistance)) * (1.0f - ::sFovyBlendRate) + CameraLocalUtil::getFovy(this) * ::sFovyBlendRate;
+                    (40.0f - ((updateDist * 30.0f) / ::sMaxDistance)) * (1.0f - ::sFovyBlendRate) + CameraLocalUtil::getFovy(this) * ::sFovyBlendRate;
             }
         }
     }
@@ -121,7 +109,7 @@ CameraTargetObj* CameraPointer::calc() {
     pointPos.x = MR::clamp(mRealPointPos.x, -1.0f, 1.0f);
     pointPos.y = MR::clamp(mRealPointPos.y, -1.0f, 1.0f);
 
-    f32 moveSpeed = MR::clamp01((pointPos - mBlendPointPos).length() / MR::sqrt(cNum_calc_f7));
+    f32 moveSpeed = MR::clamp01((pointPos - mBlendPointPos).length() / MR::sqrt(2.0f));
 
     f32 t = 1.0f - moveSpeed * mSpeedBlendRate;
     t *= mBlendFriction;
@@ -129,7 +117,7 @@ CameraTargetObj* CameraPointer::calc() {
 
     if (mCameraType != CameraType_FollowWorldPos) {
         if (!MR::isHeldCrouch(PLAYER_1)) {
-            mFovy = CameraLocalUtil::getFovy(this) * ::sFovyBlendRate + cNum_calc_f8;
+            mFovy = CameraLocalUtil::getFovy(this) * ::sFovyBlendRate + 38.0f;
         }
         CameraLocalUtil::setFovy(this, mFovy);
     }
@@ -152,7 +140,7 @@ CameraTargetObj* CameraPointer::calc() {
     rotMtx.concat(mMtx, rotMtx);
     Vec3f front;
     rotMtx.getZDir(front);
-    CameraLocalUtil::setWatchPos(this, CameraLocalUtil::getPos(this) + front * cNum_calc_f9);
+    CameraLocalUtil::setWatchPos(this, CameraLocalUtil::getPos(this) + front * 1000.0f);
     Vec3f up;
     rotMtx.getYDir(up);
     CameraLocalUtil::setUpVecAndWatchUpVec(this, up);

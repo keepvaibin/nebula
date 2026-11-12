@@ -415,7 +415,8 @@ enum {
 };
 typedef struct NebulaSaveRequest {
     uint32_t op;
-    const char* name;
+    const char* name;          /* a plain file name in the save folder, or "luma/<plain name>": a mod's global file
+                                  (services-save 7) in its luma folder, made at the first write, kept without backups */
     void* buffer;
     uint32_t size;
     uint32_t* length;          /* read: the file's length (may be NULL) */
@@ -593,6 +594,8 @@ enum {
                                                 next: APPLY, before: REVERT, back: CLOSE */
     NEBULA_SETTINGS_STATUS_MOD_REMOVE_ASK,   /* remove the mod whose page is open? `status_number` 1: it goes to the
                                                 recycle bin, 0: it is deleted. yes: APPLY, no: CLOSE */
+    NEBULA_SETTINGS_STATUS_MOD_FORGET_ASK,   /* forget what a removed mod kept (its numbers and saved data)?
+                                                `status_text` its id. yes: APPLY, no: CLOSE */
 };
 /* The Pair Joy-Con screen's halves (NEBULA_SETTINGS_STATUS_JOYCON). */
 enum {

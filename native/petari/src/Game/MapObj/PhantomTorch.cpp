@@ -12,18 +12,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 70.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_kill_f1, "kill.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_kill_f2, "kill.f2", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f1, "receiveOtherMsg.f1", 350.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeExtinguish_1, "exeExtinguish.1", 15);
 
 namespace NrvPhantomTorch {
     NEW_NERVE(HostTypeWait, PhantomTorch, Wait);
@@ -64,10 +53,10 @@ void PhantomTorch::init(const TableIter& rIter) {
     initHitSensor(1);
     Vec3f vec;
     vec.x = 0.0f;
-    vec.y = cNum_init_f1 * x;
+    vec.y = 70.0f * x;
     vec.z = 0.0f;
-    MR::addHitSensorMapObj(this, "body", 8, cNum_init_f2 * x, vec);
-    MR::setClippingTypeSphere(this, cNum_init_f3 * x);
+    MR::addHitSensorMapObj(this, "body", 8, 50.0f * x, vec);
+    MR::setClippingTypeSphere(this, 500.0f * x);
     MR::joinToGroupArray(this, rIter, nullptr, 32);
     initNerve(GET_NERVE(PhantomTorch, HostTypeWait));
     MR::connectToSceneMapObjMovement(this);
@@ -106,7 +95,7 @@ void PhantomTorch::kill() {
     case 2:
         break;
     case 0:
-        if (MR::appearStarPiece(this, mPosition, 1, cNum_kill_f1, cNum_kill_f2, false)) {
+        if (MR::appearStarPiece(this, mPosition, 1, 10.0f, 40.0f, false)) {
             MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
         }
         break;
@@ -136,7 +125,7 @@ bool PhantomTorch::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRece
         return false;
     }
 
-    if (MR::isInSpinStormRange(msg, pSender, pReceiver, cNum_receiveOtherMsg_f1) && isNerve(GET_NERVE(PhantomTorch, HostTypeWait))) {
+    if (MR::isInSpinStormRange(msg, pSender, pReceiver, 350.0f) && isNerve(GET_NERVE(PhantomTorch, HostTypeWait))) {
         setNerve(GET_NERVE(PhantomTorch, HostTypeExtinguish));
         return true;
     }
@@ -196,7 +185,7 @@ void PhantomTorch::exeExtinguish() {
         MR::startSound(this, "SE_OJ_PHANTOM_TOACH_OFF");
     }
 
-    if (MR::isStep(this, cStep_exeExtinguish_1)) {
+    if (MR::isStep(this, 15)) {
         kill();
     }
 }

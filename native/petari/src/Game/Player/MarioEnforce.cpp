@@ -13,16 +13,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_checkEnforceMoveInner_f1, "checkEnforceMoveInner.f1", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkEnforceMoveInner_f2, "checkEnforceMoveInner.f2", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_recordRelativePosition_f1, "recordRelativePosition.f1", 85.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_recordRelativePosition_f2, "recordRelativePosition.f2", 81.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_recordRelativePosition_f3, "recordRelativePosition.f3", 51.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_recordRelativePosition_f4, "recordRelativePosition.f4", 0.707f);
-NEBULA_TUNABLE_NAMED(f32, cNum_recordRelativePosition_f5, "recordRelativePosition.f5", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getLastGroundEdgeIndex_f1, "getLastGroundEdgeIndex.f1", 3.0f);
 
 void Mario::checkEnforceMove() {
     checkEnforceMoveInner();
@@ -67,7 +57,7 @@ void Mario::checkEnforceMoveInner() {
             Vec3f v14(mPosition);
 
             if (mMovementStates.squat == 0) {
-                if (cNum_checkEnforceMoveInner_f1 == mCeilDist) {
+                if (200.0f == mCeilDist) {
                     v11 = true;
                 }
             }
@@ -75,7 +65,7 @@ void Mario::checkEnforceMoveInner() {
             addTrans(mVelocity);
 
             if (v11) {
-                if (calcDistToCeil(false) < cNum_checkEnforceMoveInner_f2) {
+                if (calcDistToCeil(false) < 200.0f) {
                     mPosition = v14;
                     mHitStates.enforcedMove = 1;
                 }
@@ -98,13 +88,13 @@ void Mario::recordRelativePosition() {
     mRelativeWallPolygons[0]->mIdx = -1;
     mRelativeWallPolygons[1]->mIdx = -1;
 
-    f32 strikeRadius = cNum_recordRelativePosition_f1;
+    f32 strikeRadius = 85.0f;
     if (mMovementStates.onGround && mShadowPolygon->isValid() && MR::isSameMtx(*mShadowPolygon->getBaseMtx(), *mShadowPolygon->getPrevBaseMtx())) {
-        strikeRadius = cNum_recordRelativePosition_f2;
+        strikeRadius = 81.0f;
     }
 
     if (mMovementStates.squat) {
-        strikeRadius = cNum_recordRelativePosition_f3;
+        strikeRadius = 51.0f;
     }
 
     if (mActor->isJumpRising()) {
@@ -113,8 +103,8 @@ void Mario::recordRelativePosition() {
     }
 
     const u32 strikeNum = static_cast< u32 >(Collision::checkStrikeBallToMap(strikeCenter, strikeRadius, nullptr, nullptr));
-    const f32 floorDotThreshold = cNum_recordRelativePosition_f4;
-    const f32 wallNormalDotThreshold = cNum_recordRelativePosition_f5;
+    const f32 floorDotThreshold = 0.707f;
+    const f32 wallNormalDotThreshold = 0.9f;
 
     for (u32 i = 0; i < strikeNum; i++) {
         const HitInfo* hitInfo = Collision::getStrikeInfoMap(i);
@@ -359,7 +349,7 @@ u32 Mario::getLastGroundEdgeIndex(const Vec3f& rPos, const Vec3f& rDir) const {
 
     Vec3f centerAvg(*mLastGroundPolygon->calcAndGetPos(0) + *mLastGroundPolygon->calcAndGetPos(1) + *mLastGroundPolygon->calcAndGetPos(2));
 
-    centerAvg *= 1.0f / cNum_getLastGroundEdgeIndex_f1;
+    centerAvg *= 1.0f / 3.0f;
 
     Vec3f outDir(centerAvg - rPos);
     MR::normalizeOrZero(&outDir);

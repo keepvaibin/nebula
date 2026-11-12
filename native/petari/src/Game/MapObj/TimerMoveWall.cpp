@@ -10,12 +10,11 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
     const s32 sDefaultTimer = NebulaFrameClock::stepsOfSeconds(5);
-    NEBULA_TUNABLE(f32, sDefaultMoveLength, 1000.0f);
+    const f32 sDefaultMoveLength = 1000.0f;
 };  // namespace
 
 namespace NrvTimerMoveWall {

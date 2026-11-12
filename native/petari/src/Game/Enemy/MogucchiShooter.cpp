@@ -15,21 +15,17 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exePanic_setBckRate_1, "exePanic.setBckRate.1", 2.0f);
 
 namespace {
     static const s32 sStepForLaugh = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE(s32, sStepToAngerBlur, 40);
+    const s32 sStepToAngerBlur = 40;
     static const s32 sAngerBlurTime = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(f32, sAngerBlurOffset, 100.0f);
-    NEBULA_TUNABLE(s32, sExplosionBlurTime, 50);
-    NEBULA_TUNABLE(f32, sExplosionBlurOffset, 100.0f);
-    NEBULA_TUNABLE(f32, sTurnRate, 1.0f);
-    NEBULA_TUNABLE(f32, sLimitAngleOfTurn, 30.0f);
+    const f32 sAngerBlurOffset = 100.0f;
+    const s32 sExplosionBlurTime = 50;
+    const f32 sExplosionBlurOffset = 100.0f;
+    const f32 sTurnRate = 1.0f;
+    const f32 sLimitAngleOfTurn = 30.0f;
 };  // namespace
 
 namespace NrvMogucchiShooter {
@@ -204,7 +200,7 @@ void MogucchiShooter::exePanic() {
         MR::startAction(this, "Panic");
 
         if (bazooka->isBazookaLifeOut()) {
-            MR::setBckRate(this, cNum_exePanic_setBckRate_1);
+            MR::setBckRate(this, 2.0f);
         }
     }
 

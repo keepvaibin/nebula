@@ -4,14 +4,14 @@
 #include <cstring>
 
 // Every nerve's record (NEW_NERVE), for mods: a name per nerve, and the nerves plugins hook. The records lie between two
-// markers as the tunables' do (Tunable.cpp): on Windows "nebnrv$a" < "nebnrv$m" < "nebnrv$z", with zeros the linker may
+// markers: on Windows "nebnrv$a" < "nebnrv$m" < "nebnrv$z", with zeros the linker may
 // pad between object files (a record whose name is null); on ELF the linker names the section's ends.
 namespace {
 #if defined(_WIN32)
 #pragma section("nebnrv$a", read)
 #pragma section("nebnrv$z", read)
-    __declspec(allocate("nebnrv$a")) NEBULA_TUNABLE_KEEP const nebula::NerveRecord sFirst = {};
-    __declspec(allocate("nebnrv$z")) NEBULA_TUNABLE_KEEP const nebula::NerveRecord sLast = {};
+    __declspec(allocate("nebnrv$a")) NEBULA_NERVE_KEEP const nebula::NerveRecord sFirst = {};
+    __declspec(allocate("nebnrv$z")) NEBULA_NERVE_KEEP const nebula::NerveRecord sLast = {};
     const nebula::NerveRecord* hidden(const nebula::NerveRecord* pRecord) {
         __asm__("" : "+r"(pRecord));
         return pRecord;

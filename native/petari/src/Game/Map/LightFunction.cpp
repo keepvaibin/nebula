@@ -11,11 +11,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_loadLightInfoCoin_f1, "loadLightInfoCoin.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_loadLightInfoCoin_f2, "loadLightInfoCoin.f2", 2.0f);
-
 
 void LightFunction::initLightRegisterAll() {
     Color8 c(255, 255, 255, 255);
@@ -206,7 +201,7 @@ void LightFunction::loadLightInfoCoin(const LightInfoCoin* pInfo) {
     f32 shininess = pInfo->mShininess;
     LightValues::color(&obj, NebulaColor8(pInfo->mSpecularColor));
     LightValues::specularDir(&obj, 0.0f, 0.0f, -1.0f);
-    LightValues::attn(&obj, 0.0f, 0.0f, 1.0f, (shininess / cNum_loadLightInfoCoin_f1), 0.0f, (1.0f - (shininess / cNum_loadLightInfoCoin_f2)));
+    LightValues::attn(&obj, 0.0f, 0.0f, 1.0f, (shininess / 2.0f), 0.0f, (1.0f - (shininess / 2.0f)));
     Frame::setLight(3, obj);
 }
 

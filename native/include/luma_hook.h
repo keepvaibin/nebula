@@ -101,13 +101,26 @@ namespace luma {
         unsigned kind;
         void* address;
     };
-    // One unit's numbers, in the "lumanum" section. 32 bytes aligned to 32, so a linker's pad between objects is whole
-    // records (with a null unit).
+    // A table of the game's data (1.5; instrument.py names it): a file-scope or class-static array or plain record with
+    // an initializer, by its name (`File.cpp#name` when only its file sees it). type: its element's type in the compiler's
+    // spelling (an array's innermost element; the record's own); count: how many (1 for a record); size: all of it, in bytes.
+    struct Table {
+        const char* name;
+        const char* type;
+        void* address;
+        unsigned size;
+        unsigned count;
+    };
+    // One unit's numbers and tables, in the "lumanum" section. 32 bytes aligned to 32, so a linker's pad between
+    // objects is whole records (with a null unit).
     struct alignas(32) Numbers {
         const char* unit;  // the source's path from the game's source root
         const Number* numbers;
+        const Table* tables;
         unsigned count;
+        unsigned tableCount;
     };
+    static_assert(sizeof(Numbers) == 32, "a unit's record is one 32-byte step");
 
     template <class R> inline R dispatch(const Function* fn, void** args) {
         Result<R> result;

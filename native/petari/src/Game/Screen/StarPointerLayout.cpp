@@ -25,18 +25,7 @@
 
 #include "Game/Render/GameTexture.hpp"
 #include "Game/System/NebulaInput.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_rotateTest_f1, "rotateTest.f1", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startAnimHandPaa_f1, "startAnimHandPaa.f1", 2.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_tearDownHide_setAnimRate_1, "tearDownHide.setAnimRate.1", 1.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_isChanceToRumble_1, "isChanceToRumble.1", 1);
-NEBULA_TUNABLE_NAMED(s32, cStep_isChanceToRumble_2, "isChanceToRumble.2", 1);
 
 namespace {
     // Two colours for each of the four pad channels (setPortAndColor): the blur takes both, the command stream the first.
@@ -54,19 +43,19 @@ namespace {
         {0x7F, 0x7F, 0x00, 0xFF},
     };
 
-    NEBULA_TUNABLE(s32, sTouchCount, 1);
-    NEBULA_TUNABLE(f32, sNormalRadius, 15);
-    NEBULA_TUNABLE(f32, sHoldRadius, 45);
-    NEBULA_TUNABLE(f32, sHandRadius, 20);
+    const s32 sTouchCount = 1;
+    const f32 sNormalRadius = 15;
+    const f32 sHoldRadius = 45;
+    const f32 sHandRadius = 20;
 
-    NEBULA_TUNABLE(s32, hGripTime, 20);
+    const s32 hGripTime = 20;
     static const s32 hReleaseTime = NebulaFrameClock::stepsOfMilliseconds(500);
     static const s32 hHideRumbleTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, sRotateMult, 900.0f);
+    const f32 sRotateMult = 900.0f;
     // static const f32 sRotateHandMult =
-    NEBULA_TUNABLE(f32, hEndAnimRate, 2.0f);
-    NEBULA_TUNABLE(s32, sBeginHideTime, 0);
-    NEBULA_TUNABLE(f32, sDegreeMin, 0.0f);
+    const f32 hEndAnimRate = 2.0f;
+    const s32 sBeginHideTime = 0;
+    const f32 sDegreeMin = 0.0f;
 
     // A layout a mod changed may lack one of these panes (null): no pane, nothing to show, hide or turn.
     static void setPaneVisible(Ui::Pane* pPane, bool visible) {
@@ -537,7 +526,7 @@ void StarPointerLayout::endHide() {
 
 void StarPointerLayout::tearDownHide() {
     if (mPointerKind == StarPointerKind_StarPointer || mPointerKind == StarPointerKind_5 || mPointerKind == StarPointerKind_StarPointerNozzle) {
-        MR::setAnimRate(this, cNum_tearDownHide_setAnimRate_1, 0);
+        MR::setAnimRate(this, 1.0f, 0);
     } else if (mPointerKind == StarPointerKind_HandPointer || mPointerKind == StarPointerKind_2 || mPointerKind == StarPointerKind_FingerPointer) {
         ::setPaneVisible(mHandPointerPane, true);
     }
@@ -697,7 +686,7 @@ void StarPointerLayout::setPosition() {
 void StarPointerLayout::rotateTest() {
     Vec2f horiz;
     MR::getPlayerInput(mPadChannel)->mPointer->getHorizonVec(&horiz);
-    f32 angle = MR::normalizeAbs(MR::toDegree(MR::atan2(horiz.y, horiz.x)), ::sDegreeMin, cNum_rotateTest_f1);
+    f32 angle = MR::normalizeAbs(MR::toDegree(MR::atan2(horiz.y, horiz.x)), ::sDegreeMin, 180.0f);
 
     if (mPointerKind == StarPointerKind_StarPointer) {
         angle *= ::sRotateMult;
@@ -784,11 +773,11 @@ bool StarPointerLayout::isChanceToRumble() const {
         return true;
     }
 
-    if (isNerve(GET_NERVE(StarPointerLayout, HostTypeNrvOnReaction)) && MR::isStep(this, cStep_isChanceToRumble_1)) {
+    if (isNerve(GET_NERVE(StarPointerLayout, HostTypeNrvOnReaction)) && MR::isStep(this, 1)) {
         return true;
     }
 
-    if (isNerve(GET_NERVE(StarPointerLayout, HostTypeNrvGrip)) && MR::isStep(this, cStep_isChanceToRumble_2)) {
+    if (isNerve(GET_NERVE(StarPointerLayout, HostTypeNrvGrip)) && MR::isStep(this, 1)) {
         return true;
     }
 
@@ -883,7 +872,7 @@ void StarPointerLayout::startAnimStarPointer(const char* pAnimName) {
 void StarPointerLayout::startAnimHandPaa() {
     changeToHandPointer();
     MR::startPaneAnim(this, "HandPointer", "HandType", 0);
-    MR::setPaneAnimFrameAndStop(this, "HandPointer", cNum_startAnimHandPaa_f1, 0);
+    MR::setPaneAnimFrameAndStop(this, "HandPointer", 2.0f, 0);
     mAnimType = AnimType_HandPaa;
 }
 

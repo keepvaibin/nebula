@@ -1,10 +1,9 @@
 #include "Game/Boss/BossStinkBugBombHolder.hpp"
 #include "Game/Boss/BossStinkBugBomb.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, sMaxBossStinkBugBomb, 16);
+    const s32 sMaxBossStinkBugBomb = 16;
 };  // namespace
 
 BossStinkBugBombHolder::BossStinkBugBombHolder(LiveActor* pHost)

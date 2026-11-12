@@ -84,16 +84,38 @@ fn old_key(ptr: &str, key: &str, layer: Option<&str>) -> Option<String> {
 }
 const REQUIRED: [&str; 7] = ["format", "id", "version", "name", "summary", "authors", "game"];
 const OPTION_KINDS: [&str; 5] = ["choice", "number", "toggle", "text", "key"];
+
+/// The game's controls by the names its input bindings use (`runtime/src/input_bindings.cpp` kTargetIds, compared as
+/// `parse_game_input` does, without case): what a key option's default binds (director's decision 23:0x, key options
+/// are input actions).
+const GAME_CONTROLS: [&str; 25] = [
+    "a", "b", "one", "two", "plus", "minus", "home", "dpad_up", "dpad_down", "dpad_left", "dpad_right", "stick_up",
+    "stick_down", "stick_left", "stick_right", "c", "z", "shake", "nunchuk_shake", "pointer_up", "pointer_down",
+    "pointer_left", "pointer_right", "pointer_recenter", "jump_back",
+];
 pub const MAX_OPTIONS: usize = 64;
 pub const MAX_PICTURES: usize = 8;
 
-/// An id: 3 to 64 of lowercase letters, digits, `-` and `.`, starting with a letter, without `..` (luma-format 4).
+/// An id: 3 to 64 of lowercase letters, digits, `-` and `.`, starting with a letter, without `..` (luma-format 4),
+/// whose part before the first `.` is no name Windows keeps (con, prn, aux, nul, com1-9, lpt1-9: a folder of that
+/// name cannot be made there; the host's valid_id refuses the same, director 2026-11-11).
 pub fn id_ok(id: &str) -> bool {
     (3..=64).contains(&id.len())
         && id.starts_with(|c: char| c.is_ascii_lowercase())
         && id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b'.')
         && !id.contains("..")
         && !id.ends_with('.')
+        && !windows_keeps(id.split('.').next().unwrap_or(id))
+}
+
+/// A device name Windows keeps in every folder, in any case.
+fn windows_keeps(part: &str) -> bool {
+    let part = part.to_ascii_lowercase();
+    match part.as_bytes() {
+        b"con" | b"prn" | b"aux" | b"nul" => true,
+        [b'c', b'o', b'm', d] | [b'l', b'p', b't', d] => (b'1'..=b'9').contains(d),
+        _ => false,
+    }
 }
 
 /// An option or layer key: as an id's characters, 1 to 64 long.
@@ -595,10 +617,8 @@ fn options(m: &mut M, root: &Value, facts: &mut Facts) {
         };
         let allowed: Vec<&str> = ["key", "kind", "default", "name"].iter().chain(by_kind).copied().collect();
         m.keys(obj, &ptr, &allowed);
-        let mut required = vec!["key", "kind", "name"];
-        if kind != "key" {
-            required.push("default");
-        }
+        // Every kind has a default: a text option's within max_length, a key option's a control the game names.
+        let mut required = vec!["key", "kind", "name", "default"];
         required.extend_from_slice(by_kind);
         m.required(obj, &ptr, &required);
         let key = obj.get("key").and_then(|k| {
@@ -720,7 +740,8 @@ fn options(m: &mut M, root: &Value, facts: &mut Facts) {
                 });
                 if let (Some(d), Some(max)) = (default, max) {
                     if let Some(s) = m.string(d, &format!("{ptr}/default"), "options/default") {
-                        if !line_ok(s, 0, max) {
+                        // Code points, and one line: no newline or other control character (spaces are the mod's).
+                        if s.chars().count() > max || s.chars().any(char::is_control) {
                             m.at(210, d, &format!("{ptr}/default"), vec![("key", t(shown.clone())), ("why", p("Option.DefaultTooLong"))]);
                         }
                     }
@@ -728,7 +749,11 @@ fn options(m: &mut M, root: &Value, facts: &mut Facts) {
             }
             "key" => {
                 if let Some(d) = default {
-                    m.line(d, &format!("{ptr}/default"), "options/default", 1, 64);
+                    if let Some(s) = m.string(d, &format!("{ptr}/default"), "options/default") {
+                        if !GAME_CONTROLS.iter().any(|c| c.eq_ignore_ascii_case(s)) {
+                            m.at(210, d, &format!("{ptr}/default"), vec![("key", t(shown.clone())), ("why", p("Option.KeyDefaultUnknown")), ("value", t(s))]);
+                        }
+                    }
                 }
             }
             _ => {}
@@ -1038,6 +1063,11 @@ fn layers(m: &mut M, root: &Value, facts: &mut Facts) {
                         m.ctx.add(301, FILE, Some(member.key_pos), Some(&mp), vec![("layer", t(name.clone())), ("why", p("Layer.NoSuchOption")), ("value", t(member.key.clone()))]);
                         continue;
                     };
+                    // The mod reads its text and key options itself (services-mods); they choose no layer.
+                    if option.kind == "text" || option.kind == "key" {
+                        m.ctx.add(301, FILE, Some(member.key_pos), Some(&mp), vec![("layer", t(name.clone())), ("why", p("Layer.OptionNotChoosing")), ("value", t(member.key.clone()))]);
+                        continue;
+                    }
                     let wanted: Vec<&Value> = match &member.value.kind {
                         Kind::Array(list) => list.iter().collect(),
                         _ => vec![&member.value],
@@ -1050,7 +1080,6 @@ fn layers(m: &mut M, root: &Value, facts: &mut Facts) {
                             "choice" => w.as_str().is_some_and(|s| option.values.iter().any(|v| v == s)),
                             "toggle" => w.as_bool().is_some(),
                             "number" => w.as_f64().is_some(),
-                            "text" => w.as_str().is_some(),
                             _ => false,
                         };
                         if !ok {
@@ -1349,6 +1378,13 @@ mod tests {
     #[test]
     fn small_checks() {
         assert!(id_ok("gold-flower") && id_ok("a.b-c") && !id_ok("ab") && !id_ok("Gold") && !id_ok("1abc") && !id_ok("a..b") && !id_ok("abc."));
+        // Windows' device names, alone or before the first dot; the same letters inside a longer part are fine.
+        for kept in ["con", "prn", "aux", "nul", "com1", "com9", "lpt1", "lpt9", "con.mod", "nul.x.y", "lpt3.gold"] {
+            assert!(!id_ok(kept), "{kept}");
+        }
+        for fine in ["com0", "lpt0", "com10", "console", "con-mod", "mod.con", "auxiliary", "nul2"] {
+            assert!(id_ok(fine), "{fine}");
+        }
         assert!(host_ok("api.example.org") && host_ok("*.example.org") && host_ok("127.0.0.1:8080") && !host_ok("a b") && !host_ok("x:0") && !host_ok("-a.org"));
         assert!(["*", "api.example.org", "API.Example.org", "*.example.org", "localhost", "10.0.0.1", "255.255.255.255", "0.0.0.0"].iter().all(|h| permission_host_ok(h)));
         assert!(!["", "*.", "**", "*.*.org", "a.org:80", "10.0.0.1:80", "::1", "[::1]", "1.2.3", "256.0.0.1", "01.2.3.4", "*.10.0.0.1", "-a.org", "a b", "a..org", "a.org."]
@@ -1367,5 +1403,16 @@ mod tests {
         assert_eq!(image_size(&png), Some(("png", 256, 128)));
         let jpeg = [0xff, 0xd8, 0xff, 0xe0, 0, 4, 0, 0, 0xff, 0xc0, 0, 11, 8, 0, 100, 0, 200, 3];
         assert_eq!(image_size(&jpeg), Some(("jpeg", 200, 100)));
+    }
+
+    /// GAME_CONTROLS is the input bindings' kTargetIds, in order (F's note on luma-format revision 5).
+    #[test]
+    fn the_controls_are_the_input_bindings_own() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../runtime/src/input_bindings.cpp");
+        let source = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        let start = source.find("kTargetIds{").expect("kTargetIds in input_bindings.cpp");
+        let list = &source[start..start + source[start..].find("};").unwrap()];
+        let ids: Vec<&str> = list.split('"').skip(1).step_by(2).collect();
+        assert_eq!(ids, GAME_CONTROLS);
     }
 }

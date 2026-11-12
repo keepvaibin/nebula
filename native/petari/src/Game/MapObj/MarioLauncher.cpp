@@ -28,48 +28,41 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TriangleFilter.hpp"
 #include "Game/System/NebulaInput.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_doAim_f1, "doAim.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_doAim_f2, "doAim.f2", 0.5f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_doFlight_reboundVelocityFromEachCollision_1, "doFlight.reboundVelocityFromEachCollision.1", 0.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sEjectSpeed, 40.0f);
-    NEBULA_TUNABLE(f32, sGravityScale, 0.8f);
-    NEBULA_TUNABLE(f32, sGravityRatio, 0.95f);
-    NEBULA_TUNABLE(f32, sShellRadius, 80.0f);
-    NEBULA_TUNABLE(f32, sShellOffset, 180.0f);
-    NEBULA_TUNABLE(f32, sGravityRoll, 0.01f);
-    NEBULA_TUNABLE(f32, sLandingSpeedRatio, 0.4f);
-    NEBULA_TUNABLE(s32, sLoopStart, 65);
-    NEBULA_TUNABLE(s32, sDieStart, 300);
-    NEBULA_TUNABLE(s32, sDispLaunch, 90);
-    NEBULA_TUNABLE(f32, sPointerCameraYRot, 0.3f);
-    NEBULA_TUNABLE(f32, sPointerCameraXRot, 0.3f);
-    NEBULA_TUNABLE(f32, sPointerCameraElevation, 0.62f);
-    NEBULA_TUNABLE(s32, sKillFrame, 360);
-    NEBULA_TUNABLE(s32, sStartActiveFrame, 10);
-    NEBULA_TUNABLE(s32, sInterpolateTest1, 15);
-    NEBULA_TUNABLE(f32, sSensorRadius, 80.0f);
-    NEBULA_TUNABLE(f32, sSensorOffsetY, 20.0f);
-    NEBULA_TUNABLE(s32, sPrepFrame, 26);
-    NEBULA_TUNABLE(s32, sRejectFrame, 20);
+    const f32 sEjectSpeed = 40.0f;
+    const f32 sGravityScale = 0.8f;
+    const f32 sGravityRatio = 0.95f;
+    const f32 sShellRadius = 80.0f;
+    const f32 sShellOffset = 180.0f;
+    const f32 sGravityRoll = 0.01f;
+    const f32 sLandingSpeedRatio = 0.4f;
+    const s32 sLoopStart = 65;
+    const s32 sDieStart = 300;
+    const s32 sDispLaunch = 90;
+    const f32 sPointerCameraYRot = 0.3f;
+    const f32 sPointerCameraXRot = 0.3f;
+    const f32 sPointerCameraElevation = 0.62f;
+    const s32 sKillFrame = 360;
+    const s32 sStartActiveFrame = 10;
+    const s32 sInterpolateTest1 = 15;
+    const f32 sSensorRadius = 80.0f;
+    const f32 sSensorOffsetY = 20.0f;
+    const s32 sPrepFrame = 26;
+    const s32 sRejectFrame = 20;
     static const s32 sWaitFrame = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(s32, sLandFrame, 1);
-    NEBULA_TUNABLE(f32, sEarthenPipeInScale, 4.0f);
-    NEBULA_TUNABLE(f32, sCameraYOffset, 150.0f);
-    NEBULA_TUNABLE(f32, sCameraZOffset, 200.0f);
-    NEBULA_TUNABLE(f32, sRejectJumpY, 10.0f);
-    NEBULA_TUNABLE(f32, sRejectJumpZ, 10.0f);
-    NEBULA_TUNABLE(s32, sInvalidCollideFrame, 0);
-    NEBULA_TUNABLE(s32, sFrontVecFrame, 1);
-    NEBULA_TUNABLE(f32, sReboundScale0, 0.0f);
-    NEBULA_TUNABLE(f32, sReboundScale1, 0.0f);
-    NEBULA_TUNABLE(f32, sReboundScale2, 0.0f);
+    const s32 sLandFrame = 1;
+    const f32 sEarthenPipeInScale = 4.0f;
+    const f32 sCameraYOffset = 150.0f;
+    const f32 sCameraZOffset = 200.0f;
+    const f32 sRejectJumpY = 10.0f;
+    const f32 sRejectJumpZ = 10.0f;
+    const s32 sInvalidCollideFrame = 0;
+    const s32 sFrontVecFrame = 1;
+    const f32 sReboundScale0 = 0.0f;
+    const f32 sReboundScale1 = 0.0f;
+    const f32 sReboundScale2 = 0.0f;
 };  // namespace
 
 namespace NrvMarioLauncher {
@@ -463,9 +456,9 @@ bool MarioLauncher::doAim() {
     mPlayerMtx.set(mCameraTargetMtx.mMatrix);
 
     if (mLauncherType == LauncherType_Up) {
-        MR::setLauncherCameraAngle(::sPointerCameraYRot, ::sPointerCameraXRot, MR::pi() / cNum_doAim_f1, -1.0f);
+        MR::setLauncherCameraAngle(::sPointerCameraYRot, ::sPointerCameraXRot, MR::pi() / 2.0f, -1.0f);
     } else {
-        MR::setLauncherCameraAngle(::sPointerCameraYRot, ::sPointerCameraXRot + cNum_doAim_f2, ::sPointerCameraElevation, -1.0f);
+        MR::setLauncherCameraAngle(::sPointerCameraYRot, ::sPointerCameraXRot + 0.5f, ::sPointerCameraElevation, -1.0f);
     }
 
     if (MR::isValidSwitchB(this)) {
@@ -600,7 +593,7 @@ bool MarioLauncher::doFlight() {
     }
 
     if (testHitCollision()) {
-        MR::reboundVelocityFromEachCollision(mShell, ::sReboundScale0, ::sReboundScale1, ::sReboundScale2, cNum_doFlight_reboundVelocityFromEachCollision_1);
+        MR::reboundVelocityFromEachCollision(mShell, ::sReboundScale0, ::sReboundScale1, ::sReboundScale2, 0.0f);
         return MR::isGreaterEqualStep(this, ::sInvalidCollideFrame);
     }
 

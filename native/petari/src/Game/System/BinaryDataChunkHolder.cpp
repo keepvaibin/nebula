@@ -1,10 +1,9 @@
 #include "Game/System/BinaryDataChunkHolder.hpp"
 #include "Game/Util/Array.hpp"
 #include "Game/Util/MemoryUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, cFirstChunkRoom, 8);
+    const s32 cFirstChunkRoom = 8;
 }  // namespace
 
 BinaryDataChunkHolder::BinaryDataChunkHolder()

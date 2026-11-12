@@ -2,20 +2,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/FloaterFunction.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f1, "updateVelocity.f1", 0.05f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f2, "updateVelocity.f2", 0.0001f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f3, "updateVelocity.f3", 0.05f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f4, "updateVelocity.f4", 0.0001f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f5, "updateVelocity.f5", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f6, "updateVelocity.f6", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f7, "updateVelocity.f7", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f8, "updateVelocity.f8", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f9, "updateVelocity.f9", 0.8f);
-NEBULA_TUNABLE_NAMED(f32, cNum_soundMoveSE_f1, "soundMoveSE.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_soundMoveSE_f2, "soundMoveSE.f2", 0.1f);
 
 namespace NrvFloaterFloatingForceTypeNormal {
     NEW_NERVE(HostTypeWait, FloaterFloatingForceTypeNormal, Wait);
@@ -49,25 +36,25 @@ void FloaterFloatingForceTypeNormal::updateHostTrans(Vec3f* pDst) const {
 void FloaterFloatingForceTypeNormal::updateVelocity(bool isOnPlayer) {
     if (isOnPlayer && !(MR::isValidSwitchA(mHost) && MR::isOnSwitchA(mHost))) {
         if (mMaxSinkDepth <= mSinkDepth) {
-            mSinkSpeed = MR::converge< f32 >(mSinkSpeed, 0.0f, cNum_updateVelocity_f1);
+            mSinkSpeed = MR::converge< f32 >(mSinkSpeed, 0.0f, 0.05f);
         } else {
-            mSinkSpeed += mSinkAccel * cNum_updateVelocity_f2;
+            mSinkSpeed += mSinkAccel * 0.0001f;
         }
     } else if (mSinkDepth <= 0.0f) {
-        mSinkSpeed = MR::converge< f32 >(mSinkSpeed, 0.0f, cNum_updateVelocity_f3);
+        mSinkSpeed = MR::converge< f32 >(mSinkSpeed, 0.0f, 0.05f);
     } else {
-        mSinkSpeed -= mRiseAccel * cNum_updateVelocity_f4;
+        mSinkSpeed -= mRiseAccel * 0.0001f;
     }
 
-    mSinkSpeed *= cNum_updateVelocity_f5;
-    mSinkSpeed = MR::clamp(mSinkSpeed, -cNum_updateVelocity_f6, cNum_updateVelocity_f7);
+    mSinkSpeed *= 0.98f;
+    mSinkSpeed = MR::clamp(mSinkSpeed, -50.0f, 50.0f);
 
     f32 sinkStep = mSinkSpeed;
 
     // The landing jolt: 6 steps down, then up.
     if (FloaterFunction::isExistImpactOnRide(mObjName)) {
         if (isNerve(GET_NERVE(FloaterFloatingForceTypeNormal, HostTypeMoveFirst))) {
-            sinkStep = cNum_updateVelocity_f8;
+            sinkStep = 10.0f;
 
             if (getStep() > 5) {
                 sinkStep *= -1.0f;
@@ -79,7 +66,7 @@ void FloaterFloatingForceTypeNormal::updateVelocity(bool isOnPlayer) {
         bool isValidAndOnSwitchA = MR::isValidSwitchA(mHost) && MR::isOnSwitchA(mHost);
 
         if (!isValidAndOnSwitchA && isNerve(GET_NERVE(FloaterFloatingForceTypeNormal, HostTypeMoveOnPlayer)) && getStep() < 7) {
-            sinkStep += (7 - getStep()) * cNum_updateVelocity_f9;
+            sinkStep += (7 - getStep()) * 0.8f;
         }
     }
 
@@ -94,13 +81,13 @@ void FloaterFloatingForceTypeNormal::soundMoveSE() {
         return;
     }
 
-    if (mSinkSpeed > cNum_soundMoveSE_f1) {
+    if (mSinkSpeed > 0.1f) {
         const char* seMoveDown = FloaterFunction::getSeMoveDown(mObjName);
 
         if (seMoveDown != nullptr) {
             MR::startLevelSound(mHost, seMoveDown);
         }
-    } else if (mSinkSpeed < -cNum_soundMoveSE_f2) {
+    } else if (mSinkSpeed < -0.1f) {
         const char* seMoveUp = FloaterFunction::getSeMoveUp(mObjName);
 
         if (seMoveUp != nullptr) {

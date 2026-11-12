@@ -22,32 +22,31 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE_RECORD(Vec, cNamePlateOffset, {0.0f, 1500.0f, 0.0f});
-    NEBULA_TUNABLE(f32, cPointingRadius, 2500.0f);
-    NEBULA_TUNABLE(f32, cZoomInScale, 1.0f);
-    NEBULA_TUNABLE(f32, cZoomOutScale, 0.65f);
-    NEBULA_TUNABLE(s32, cZoomFrame, 20);
-    NEBULA_TUNABLE(f32, cZoomInReactionFreq, 1.5f);
-    NEBULA_TUNABLE(f32, cZoomInReactionAmplitude, -0.08f);
-    NEBULA_TUNABLE(f32, cRotateSpeedY, 0.4f);
+    const Vec cNamePlateOffset = {0.0f, 1500.0f, 0.0f};
+    const f32 cPointingRadius = 2500.0f;
+    const f32 cZoomInScale = 1.0f;
+    const f32 cZoomOutScale = 0.65f;
+    const s32 cZoomFrame = 20;
+    const f32 cZoomInReactionFreq = 1.5f;
+    const f32 cZoomInReactionAmplitude = -0.08f;
+    const f32 cRotateSpeedY = 0.4f;
     // Below the dome centre along the selector's up axis.
-    NEBULA_TUNABLE(f32, cShadowDepth, 7000.0f);
-    NEBULA_TUNABLE(s32, cOpenDisappearStep, 75);
-    NEBULA_TUNABLE(s32, cOpenMiniatureAppearStep, 45);
-    NEBULA_TUNABLE(s32, cOpenTotalFrame, 150);
-    NEBULA_TUNABLE(u32, cOpenBgmFadeFrame, 30);
+    const f32 cShadowDepth = 7000.0f;
+    const s32 cOpenDisappearStep = 75;
+    const s32 cOpenMiniatureAppearStep = 45;
+    const s32 cOpenTotalFrame = 150;
+    const u32 cOpenBgmFadeFrame = 30;
     // The star plate's digit textures hold 0..9 in tenths of the V range.
-    NEBULA_TUNABLE(s32, cDigitBase, 10);
-    NEBULA_TUNABLE(f32, cDigitTexStep, 0.1f);
+    const s32 cDigitBase = 10;
+    const f32 cDigitTexStep = 0.1f;
     const char* const cDemoNameDomeLecture2 = "ドームレクチャー２";
     const char* const cEyeLightEffect = "EyeLight";
 
     // Indexed by MiniatureGalaxyFunction::calcMiniatureGalaxyIndex.
-    NEBULA_TUNABLE_LIST(f32, cInitialRotateY, , {0.0f, 210.0f, 80.0f, 330.0f, 130.0f});
+    const f32 cInitialRotateY[] = {0.0f, 210.0f, 80.0f, 330.0f, 130.0f};
 
     const char* const cPointedME[] = {
         "ME_ASTRO_DOME_HIT_GALAXY1", "ME_ASTRO_DOME_HIT_GALAXY2", "ME_ASTRO_DOME_HIT_GALAXY3",

@@ -3,15 +3,14 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(f32, sRotateSpeedNormal, 1.0f);
-    NEBULA_TUNABLE(f32, sRotateSpeedFast, 1.0f);
-    NEBULA_TUNABLE(f32, sSensorRadius, 100.0f);
-    NEBULA_TUNABLE(f32, sDistanceNear, 1500.0f);
-    NEBULA_TUNABLE(f32, sDistanceFar, 1450.0f);
+    const f32 sRotateSpeedNormal = 1.0f;
+    const f32 sRotateSpeedFast = 1.0f;
+    const f32 sSensorRadius = 100.0f;
+    const f32 sDistanceNear = 1500.0f;
+    const f32 sDistanceFar = 1450.0f;
     const s32 sAppearEffectTime = NebulaFrameClock::stepsOfSeconds(2);
 };  // namespace
 

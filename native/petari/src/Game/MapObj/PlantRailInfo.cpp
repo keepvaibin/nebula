@@ -4,9 +4,6 @@
 #include "Game/MapObj/PlantPoint.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calcNearestPointPos_f1, "calcNearestPointPos.f1", 10000000000.0f);
 
 PlantRailInfo::PlantRailInfo(const TableIter& rIter, f32 speed) : mNumPlantPoints(), mPlantPoints(), mRailRider(), mRailSpeed(speed) {
     mRailRider = new RailRider(rIter);
@@ -72,7 +69,7 @@ void PlantRailInfo::calcPosAndAxisY(Vec3f* pPos, Vec3f* pAxisY, f32 coord) const
 
 void PlantRailInfo::calcNearestPointPos(Vec3f* pPointPos, const Vec3f& rPos, s32 cutoff) const {
     s32 nearestIdx = 0;
-    f32 closestMag = cNum_calcNearestPointPos_f1;
+    f32 closestMag = 10000000000.0f;
 
     for (s32 idx = cutoff; idx < mNumPlantPoints - cutoff; idx++) {
         f32 mag = mPlantPoints[idx]->mPosition.squared(rPos);

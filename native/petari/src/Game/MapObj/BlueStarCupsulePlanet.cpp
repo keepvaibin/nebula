@@ -18,20 +18,10 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 600.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_isReleaseForce_isNearPlayer_1, "isReleaseForce.isNearPlayer.1", 0.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeHitPointer_1, "exeHitPointer.1", 3);
-
-
 namespace {
-    NEBULA_TUNABLE(f32, sPointableRange, 3400.0f);
+    const f32 sPointableRange = 3400.0f;
 
     static const BlueStarCupsulePlanetParam sParams[] = {{"BlueStarCupsulePlanet", 500.0f}, {"UFOBlueStarCupsule", 200.0f}};
 
@@ -79,7 +69,7 @@ void BlueStarCupsulePlanet::init(const TableIter& rIter) {
     // A model name outside the table takes the first entry's radius.
     const BlueStarCupsulePlanetParam* pParam = ::getParam(mName);
     MR::initStarPointerTarget(this, pParam != nullptr ? pParam->mRadius : ::sParams[0].mRadius, offset);
-    MR::setClippingTypeSphere(this, cNum_init_f1);
+    MR::setClippingTypeSphere(this, 600.0f);
 
     if (MR::isConnectedWithRail(rIter)) {
         initRailRider(rIter);
@@ -169,7 +159,7 @@ void BlueStarCupsulePlanet::getTargetPosition(Vec3f* pPos) {
 }
 
 bool BlueStarCupsulePlanet::isReleaseForce() const {
-    return MR::isNearPlayer(this, cNum_isReleaseForce_isNearPlayer_1);
+    return MR::isNearPlayer(this, 0.0f);
 }
 
 f32 BlueStarCupsulePlanet::getPointableRange() const {
@@ -215,7 +205,7 @@ void BlueStarCupsulePlanet::exeHitPointer() {
         emitNerveEffect();
     }
 
-    if (MR::isStep(this, cStep_exeHitPointer_1)) {
+    if (MR::isStep(this, 3)) {
         MR::startCSSound("CS_STAR_POWER", nullptr, PLAYER_1);
     }
 

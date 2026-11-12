@@ -6,14 +6,13 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
     static Color8 sShapeColor(0xC0, 0xC0, 0, 4);
     // Room for the draws of one pass of one shape (a model file's meshes); the front pass, the back pass and each variant
     // start a range of their own.
-    NEBULA_TUNABLE(u32, cPartsPerPass, 256);
+    const u32 cPartsPerPass = 256;
 };  // namespace
 
 ShadowVolumeDrawInit::ShadowVolumeDrawInit() : NameObj("シャドウボリューム描画初期化") {

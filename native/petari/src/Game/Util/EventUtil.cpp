@@ -17,11 +17,10 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/NebulaAchievements.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
     // Daredevil comets keep their rules (one health, no Life Up).
-    NEBULA_TUNABLE(bool, cDarkCometRules, true);
+    const bool cDarkCometRules = true;
     ScenePlayingResult* getScenePlayingResult() {
         return MR::getSceneObj< ScenePlayingResult >(SceneObj_ScenePlayingResult);
     }

@@ -11,46 +11,12 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Color.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 35.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 35.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initRail_f1, "initRail.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initRail_f2, "initRail.f2", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initMesh_f1, "initMesh.f1", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initMesh_f2, "initMesh.f2", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initMesh_f3, "initMesh.f3", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initMesh_f4, "initMesh.f4", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initMesh_f5, "initMesh.f5", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initMesh_f6, "initMesh.f6", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initMesh_f7, "initMesh.f7", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initMesh_f8, "initMesh.f8", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setVertexAttribute_f1, "setVertexAttribute.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setVertexAttribute_f2, "setVertexAttribute.f2", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setVertexAttribute_f3, "setVertexAttribute.f3", 0.25f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setVertexAttribute_f4, "setVertexAttribute.f4", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setVertexAttribute_f5, "setVertexAttribute.f5", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updatePointPos_f1, "updatePointPos.f1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcPointPos_f1, "calcPointPos.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcPointPos_f2, "calcPointPos.f2", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcPointPos_f3, "calcPointPos.f3", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcPointPos_f4, "calcPointPos.f4", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_move_f1, "move.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_move_f2, "move.f2", 0.25f);
-NEBULA_TUNABLE_NAMED(f32, cNum_move_f3, "move.f3", 0.25f);
-NEBULA_TUNABLE_NAMED(f32, cNum_move_f4, "move.f4", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_move_f5, "move.f5", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_move_f6, "move.f6", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDisappear_f1, "exeDisappear.f1", 30.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeDisappear_1, "exeDisappear.1", 20);
 
 namespace {
     // One sensor per stacked rail (obj_arg3).
     const char* const cSensorNameTable[] = {"body0", "body1", "body2", "body3", "body4", "body5", "body6", "body7"};
-    NEBULA_TUNABLE(f32, sRailStep, 100.0f);  // between kept rail positions, and between stacked rails
+    const f32 sRailStep = 100.0f;  // between kept rail positions, and between stacked rails
 };  // namespace
 
 namespace NrvElectricRailMoving {
@@ -68,12 +34,12 @@ void ElectricRailMovingPoint::init(const TableIter& /*rIter*/) {
     MR::connectToSceneMapObjDecoration(this);
 
     if (mHasShadow) {
-        MR::initShadowVolumeSphere(this, cNum_init_f1);
+        MR::initShadowVolumeSphere(this, 35.0f);
         MR::onCalcGravity(this);
     }
 
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "body", 8, cNum_init_f2, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 8, 35.0f, Vec3f(0.0f, 0.0f, 0.0f));
     makeActorAppeared();
 }
 
@@ -201,7 +167,7 @@ void ElectricRailMoving::initSensor() {
 void ElectricRailMoving::initRail(const TableIter& rIter) {
     initRailRider(rIter);
     f32 clipRadius;
-    MR::calcRailClippingInfo(&mPosition, &clipRadius, this, cNum_initRail_f1, cNum_initRail_f2);
+    MR::calcRailClippingInfo(&mPosition, &clipRadius, this, 100.0f, 500.0f);
     MR::setClippingTypeSphere(this, clipRadius, &mPosition);
 
     if (!MR::getPlacementArg2NoInit(rIter, &mSegmentLength)) {
@@ -277,8 +243,8 @@ void ElectricRailMoving::initPoints() {
 
 void ElectricRailMoving::initMesh() {
     mMesh.init(mRailPosNum * 4 * mStackHeight);
-    drawPlane(cNum_initMesh_f1, cNum_initMesh_f2, -cNum_initMesh_f3, -cNum_initMesh_f4);
-    drawPlane(-cNum_initMesh_f5, cNum_initMesh_f6, cNum_initMesh_f7, -cNum_initMesh_f8);
+    drawPlane(30.0f, 30.0f, -30.0f, -30.0f);
+    drawPlane(-30.0f, 30.0f, 30.0f, -30.0f);
     mMesh.send();
 }
 
@@ -312,11 +278,11 @@ void ElectricRailMoving::drawPlaneQuad(TypedDraw& rDraw, f32 side0, f32 up0, f32
 void ElectricRailMoving::setVertexAttribute(int pointIndex, int level, f32 side0, f32 up0, f32 side1, f32 up1, VertexPT*& rVtx) const {
     f32 railLength = MR::getRailTotalLength(this);
 
-    if (cNum_setVertexAttribute_f1 * pointIndex < railLength) {
-        railLength = cNum_setVertexAttribute_f2 * pointIndex;
+    if (100.0f * pointIndex < railLength) {
+        railLength = 100.0f * pointIndex;
     }
 
-    f32 texCoord = cNum_setVertexAttribute_f3 * railLength / cNum_setVertexAttribute_f4;
+    f32 texCoord = 0.25f * railLength / 100.0f;
     Vec3f position;
     position.set(mRailPositions[pointIndex]);
     Vec3f railDirection;
@@ -328,7 +294,7 @@ void ElectricRailMoving::setVertexAttribute(int pointIndex, int level, f32 side0
     gravity.negate();
 
     if (level > 0) {
-        f32 height = cNum_setVertexAttribute_f5 * level;
+        f32 height = 100.0f * level;
         position += gravity * height;
     }
 
@@ -424,7 +390,7 @@ bool ElectricRailMoving::updatePointPos() {
             }
         }
 
-        if (!MR::isLoopRail(this) && (getRepeatedCoord(railCoord + mMovementSpeed) - (mSegmentLength + (cNum_updatePointPos_f1 * mMovementSpeed))) < 0.0f) {
+        if (!MR::isLoopRail(this) && (getRepeatedCoord(railCoord + mMovementSpeed) - (mSegmentLength + (3.0f * mMovementSpeed))) < 0.0f) {
             reachedEnd = true;
         }
 
@@ -472,7 +438,7 @@ f32 ElectricRailMoving::getRepeatedCoord(f32 coord) const {
 // Between the kept positions around coord; the last stretch is the rail's remainder.
 void ElectricRailMoving::calcPointPos(Vec3f* pOutPos, f32 coord) const {
     // The pair of kept positions stays inside the table (a speed past the rail's length can leave coord outside it).
-    f32 indexValue = coord / cNum_calcPointPos_f1;
+    f32 indexValue = coord / 100.0f;
     if (!(indexValue >= 0.0f)) {
         indexValue = 0.0f;
     } else if (indexValue > static_cast< f32 >(mRailPosNum - 2)) {
@@ -480,11 +446,11 @@ void ElectricRailMoving::calcPointPos(Vec3f* pOutPos, f32 coord) const {
     }
 
     s32 index = static_cast< s32 >(indexValue);
-    f32 within = MR::mod(coord, cNum_calcPointPos_f2);
-    f32 stretch = cNum_calcPointPos_f3;
+    f32 within = MR::mod(coord, 100.0f);
+    f32 stretch = 100.0f;
 
     if ((mRailPosNum - 3) < index) {
-        stretch = (MR::getRailTotalLength(this) - (cNum_calcPointPos_f4 * index));
+        stretch = (MR::getRailTotalLength(this) - (100.0f * index));
     }
 
     pOutPos->lerp(mRailPositions[index], mRailPositions[index + 1], stretch > 0.0f ? (within / stretch) : 0.0f);
@@ -499,17 +465,17 @@ void ElectricRailMoving::move() {
         return;
     }
 
-    f32 scale = (cNum_move_f1 * mSegmentNum) / (cNum_move_f2 * MR::getRailTotalLength(this));
+    f32 scale = (100.0f * mSegmentNum) / (0.25f * MR::getRailTotalLength(this));
 
     mTexMtx.identity();
 
     mTexMtx.mMtx[0][0] = scale;
-    mTexMtx.mMtx[0][3] = -((cNum_move_f3 * (scale * mCoord)) / cNum_move_f4);
+    mTexMtx.mMtx[0][3] = -((0.25f * (scale * mCoord)) / 100.0f);
     f32 railTotalLength = MR::getRailTotalLength(this);
     f32 segmentInterval = railTotalLength / mSegmentNum;
     f32 angle = (-TWO_PI * mSegmentLength) / segmentInterval;
     f32 sinValue = Angle::sinRadian(angle);
-    f32 value = (cNum_move_f5 * sinValue) + ((cNum_move_f6 * mSegmentLength) / segmentInterval);
+    f32 value = (15.0f * sinValue) + ((255.0f * mSegmentLength) / segmentInterval);
 
     s32 alpha = static_cast< s32 >(value);
     if (alpha < 0) {
@@ -534,9 +500,9 @@ void ElectricRailMoving::exeDisappear() {
     }
 
     move();
-    mRailWidth = MR::calcNerveEaseInValue(this, 20, cNum_exeDisappear_f1, 0.0f);
+    mRailWidth = MR::calcNerveEaseInValue(this, 20, 30.0f, 0.0f);
 
-    if (MR::isStep(this, cStep_exeDisappear_1)) {
+    if (MR::isStep(this, 20)) {
         setNerve(GET_NERVE(ElectricRailMoving, ElectricRailMovingNrvDisappeared));
     }
 }

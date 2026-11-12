@@ -22,47 +22,7 @@
 #include <cmath>
 #include <cstring>
 #include <nebula_format.h>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_updateLightMtx_f1, "updateLightMtx.f1", 100000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateLightMtx_f2, "updateLightMtx.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateLightMtx_f3, "updateLightMtx.f3", 1.0077f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateLightMtx_f4, "updateLightMtx.f4", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateLightMtx_f5, "updateLightMtx.f5", 1.0077f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateLightMtx_f6, "updateLightMtx.f6", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateLightMtx_f7, "updateLightMtx.f7", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateLightMtx_f8, "updateLightMtx.f8", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateLightMtx_f9, "updateLightMtx.f9", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateLightMtx_f10, "updateLightMtx.f10", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateLightMtx_f11, "updateLightMtx.f11", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawMaterialSetting_f1, "drawMaterialSetting.f1", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawMaterialSetting_f2, "drawMaterialSetting.f2", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawMaterialSetting_f3, "drawMaterialSetting.f3", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawMaterialSetting_f4, "drawMaterialSetting.f4", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawMaterialSetting_f5, "drawMaterialSetting.f5", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawMaterialSetting_f6, "drawMaterialSetting.f6", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawMaterialSetting_f7, "drawMaterialSetting.f7", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawMaterialSetting_f8, "drawMaterialSetting.f8", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawSetting_f1, "drawSetting.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawSetting_f2, "drawSetting.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setStageForObject_f1, "setStageForObject.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setStageForObject_f2, "setStageForObject.f2", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_gradLevel_f1, "gradLevel.f1", 256.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_gradLevel_f2, "gradLevel.f2", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_gradLevel_f3, "gradLevel.f3", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_gradLevel_f4, "gradLevel.f4", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_createGradTexture_f1, "createGradTexture.f1", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_createGradTexture_f2, "createGradTexture.f2", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_swapColorGB_f1, "swapColorGB.f1", 128.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_swapColorGB_f2, "swapColorGB.f2", 128.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_swapColorGB_f3, "swapColorGB.f3", 128.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_swapColorGB_f4, "swapColorGB.f4", 128.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_swapColorGB_f5, "swapColorGB.f5", 127.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_swapColorGB_f6, "swapColorGB.f6", 128.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_swapColorGB_f7, "swapColorGB.f7", 127.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_swapColorGB_f8, "swapColorGB.f8", 128.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_swapColorGB_f9, "swapColorGB.f9", 127.0f);
 
 namespace {
     // The gradient texture's size in texels.
@@ -213,7 +173,7 @@ void NormalMapBase::updateLightMtx(MtxPtr pMtx) const {
         MR::calcLightPos1(&lightB, this);
         break;
     case 2:
-        lightB = mPosition - MR::getCamZdir() * cNum_updateLightMtx_f1;
+        lightB = mPosition - MR::getCamZdir() * 100000.0f;
         break;
     default:
         lightB.zero();
@@ -228,23 +188,23 @@ void NormalMapBase::updateLightMtx(MtxPtr pMtx) const {
     NebulaMtxMultVecSR(inverse, &localA, &localA);
     NebulaMtxMultVecSR(inverse, &localB, &localB);
     if (pMtx) {
-        Vec3f light(localA * cNum_updateLightMtx_f2);
-        light *= cNum_updateLightMtx_f3;
+        Vec3f light(localA * 0.5f);
+        light *= 1.0077f;
         indMtx[0][0] = light.x * pMtx[0][0] + light.y * pMtx[1][0] + light.z * pMtx[2][0];
         indMtx[0][1] = light.x * pMtx[0][1] + light.y * pMtx[1][1] + light.z * pMtx[2][1];
         indMtx[0][2] = light.x * pMtx[0][2] + light.y * pMtx[1][2] + light.z * pMtx[2][2];
-        light = localB * cNum_updateLightMtx_f4;
-        light *= cNum_updateLightMtx_f5;
+        light = localB * 0.5f;
+        light *= 1.0077f;
         indMtx[1][0] = light.x * pMtx[0][0] + light.y * pMtx[1][0] + light.z * pMtx[2][0];
         indMtx[1][1] = light.x * pMtx[0][1] + light.y * pMtx[1][1] + light.z * pMtx[2][1];
         indMtx[1][2] = light.x * pMtx[0][2] + light.y * pMtx[1][2] + light.z * pMtx[2][2];
     } else {
-        indMtx[0][0] = cNum_updateLightMtx_f6 * -localA.x;
-        indMtx[0][1] = cNum_updateLightMtx_f7 * -localA.y;
-        indMtx[0][2] = cNum_updateLightMtx_f8 * -localA.z;
-        indMtx[1][0] = cNum_updateLightMtx_f9 * -localB.x;
-        indMtx[1][1] = cNum_updateLightMtx_f10 * -localB.y;
-        indMtx[1][2] = cNum_updateLightMtx_f11 * -localB.z;
+        indMtx[0][0] = 0.5f * -localA.x;
+        indMtx[0][1] = 0.5f * -localA.y;
+        indMtx[0][2] = 0.5f * -localA.z;
+        indMtx[1][0] = 0.5f * -localB.x;
+        indMtx[1][1] = 0.5f * -localB.y;
+        indMtx[1][2] = 0.5f * -localB.z;
     }
 
     // The indirect matrix (scale exponent 0) as the material's rows.
@@ -425,14 +385,14 @@ void NormalMapBase::drawMaterialSetting(Material* pMaterial) const {
     const NebulaColor16& rColor1 = mUseModelStageColor ? static_cast< const NebulaColor16& >(*pMaterial->getRegisterColor(1))
                                                 : static_cast< const NebulaColor16& >(mStageColor1);
     // The two stage colours as the shader reads them: the low 8 bits of each channel, 0 to 1.
-    sNormalMap.constants[8] = static_cast< u8 >(rColor0.r) / cNum_drawMaterialSetting_f1;
-    sNormalMap.constants[9] = static_cast< u8 >(rColor0.g) / cNum_drawMaterialSetting_f2;
-    sNormalMap.constants[10] = static_cast< u8 >(rColor0.b) / cNum_drawMaterialSetting_f3;
-    sNormalMap.constants[11] = static_cast< u8 >(rColor0.a) / cNum_drawMaterialSetting_f4;
-    sNormalMap.constants[12] = static_cast< u8 >(rColor1.r) / cNum_drawMaterialSetting_f5;
-    sNormalMap.constants[13] = static_cast< u8 >(rColor1.g) / cNum_drawMaterialSetting_f6;
-    sNormalMap.constants[14] = static_cast< u8 >(rColor1.b) / cNum_drawMaterialSetting_f7;
-    sNormalMap.constants[15] = static_cast< u8 >(rColor1.a) / cNum_drawMaterialSetting_f8;
+    sNormalMap.constants[8] = static_cast< u8 >(rColor0.r) / 255.0f;
+    sNormalMap.constants[9] = static_cast< u8 >(rColor0.g) / 255.0f;
+    sNormalMap.constants[10] = static_cast< u8 >(rColor0.b) / 255.0f;
+    sNormalMap.constants[11] = static_cast< u8 >(rColor0.a) / 255.0f;
+    sNormalMap.constants[12] = static_cast< u8 >(rColor1.r) / 255.0f;
+    sNormalMap.constants[13] = static_cast< u8 >(rColor1.g) / 255.0f;
+    sNormalMap.constants[14] = static_cast< u8 >(rColor1.b) / 255.0f;
+    sNormalMap.constants[15] = static_cast< u8 >(rColor1.a) / 255.0f;
 }
 
 void NormalMapBase::drawSetting(MtxPtr pMtx) const {
@@ -443,7 +403,7 @@ void NormalMapBase::drawSetting(MtxPtr pMtx) const {
     updateLightMtx(pMtx);
     Mtx scale_mtx;
     NebulaMtxScale(scale_mtx, 0.0f, 0.0f, 0.0f);
-    MR::setMtxTrans(scale_mtx, cNum_drawSetting_f1, cNum_drawSetting_f2, 0.0f);
+    MR::setMtxTrans(scale_mtx, 0.5f, 0.5f, 0.0f);
     sNormalMap.setMatrix(9, 1, scale_mtx);
 
     // Channel 0: lit by the hard light mask with the ambient colour from the material and the material colour from
@@ -471,10 +431,10 @@ void NormalMapBase::setStageForObject() const {
     f32 lightA = (mHardLightColorMask & 0x1) == 0 ? 0.0f : 1.0f;
     f32 lightB = (mHardLightColorMask & 0x2) == 0 ? 0.0f : 1.0f;
     if (mLightAMode <= 1) {
-        lightA = cNum_setStageForObject_f1;
+        lightA = 2.0f;
     }
     if (mLightBMode == 1) {
-        lightB = cNum_setStageForObject_f2;
+        lightB = 2.0f;
     }
     sNormalMap.constants[27] = mBackLightMode;
     sNormalMap.constants[28] = lightA;
@@ -489,7 +449,7 @@ void NormalMapBase::setStageForObject() const {
 namespace {
     // The gradient's level at `index` of `count` steps (the light's ramp between the low and high levels).
     s32 gradLevel(u32 index, u32 count, s32 low, s32 high, s32 mode) {
-        s32 value = index * (cNum_gradLevel_f1 / count);
+        s32 value = index * (256.0f / count);
         if (value < low) {
             return 0;
         }
@@ -499,13 +459,13 @@ namespace {
         f32 rate = 1.0f - static_cast< f32 >(high - value) / (high - low);
         switch (mode) {
         case 0:
-            value = cNum_gradLevel_f2 * rate;
+            value = 255.0f * rate;
             break;
         case 1:
-            value = cNum_gradLevel_f3 * (rate * rate);
+            value = 255.0f * (rate * rate);
             break;
         case 2:
-            value = cNum_gradLevel_f4 * MR::sqrt(rate);
+            value = 255.0f * MR::sqrt(rate);
             break;
         }
         return value;
@@ -522,7 +482,7 @@ namespace {
 // rows' bytes read as 4x4 tiles: texel (x, y) here is what those tiles showed there.
 void NormalMapBase::createGradTexture() {
     for (u32 x = 0; x < ::cGradTexWidth; x++) {
-        const f32 ratio = gradLevel(x, ::cGradTexWidth, mLightingLowLevel, mLightingHighLevel, mGradTexMode) / cNum_createGradTexture_f1;
+        const f32 ratio = gradLevel(x, ::cGradTexWidth, mLightingLowLevel, mLightingHighLevel, mGradTexMode) / 255.0f;
         sGradIntensity[x] = static_cast< u8 >(static_cast< s32 >(mAmbColor + ratio * (mMatColor - mAmbColor)));
     }
     for (u32 y = 0; y < ::cGradTexHeight; y++) {
@@ -530,7 +490,7 @@ void NormalMapBase::createGradTexture() {
             sGradAlpha[y] = 0;
             continue;
         }
-        const f32 ratio = gradLevel(y, ::cGradTexHeight, mLightingLowLevel, mLightingHighLevel, mGradTexMode) / cNum_createGradTexture_f2;
+        const f32 ratio = gradLevel(y, ::cGradTexHeight, mLightingLowLevel, mLightingHighLevel, mGradTexMode) / 255.0f;
         sGradAlpha[y] = static_cast< u8 >(static_cast< s32 >(mAmbColor + ratio * (mMatColor - mAmbColor)));
     }
 
@@ -577,11 +537,11 @@ void NormalMapBase::swapColorGB(GameTexture* pTexture) {
         for (u32 at = 0; at < levelWidth * levelHeight; at++, pTexel += 4) {
             const u32 color = pTexel[0] << 24 | pTexel[1] << 16 | pTexel[2] << 8 | pTexel[3];
                 Vec3f normal;
-                normal.set(static_cast< s8 >((color & 0xFF) - 128) / cNum_swapColorGB_f1, static_cast< s8 >(((color >> 8) & 0xFF) - 128) / cNum_swapColorGB_f2,
-                           static_cast< s8 >(((color >> 16) & 0xFF) - 128) / cNum_swapColorGB_f3);
-                u8 r = (s32)(cNum_swapColorGB_f4 + cNum_swapColorGB_f5 * normal.x);
-                u8 g = (s32)(cNum_swapColorGB_f6 + cNum_swapColorGB_f7 * normal.y);
-                u8 b = (s32)(cNum_swapColorGB_f8 + cNum_swapColorGB_f9 * normal.z);
+                normal.set(static_cast< s8 >((color & 0xFF) - 128) / 128.0f, static_cast< s8 >(((color >> 8) & 0xFF) - 128) / 128.0f,
+                           static_cast< s8 >(((color >> 16) & 0xFF) - 128) / 128.0f);
+                u8 r = (s32)(128.0f + 127.0f * normal.x);
+                u8 g = (s32)(128.0f + 127.0f * normal.y);
+                u8 b = (s32)(128.0f + 127.0f * normal.z);
             pTexel[0] = 0;
             pTexel[1] = g;
             pTexel[2] = b;

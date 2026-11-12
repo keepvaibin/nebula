@@ -4,10 +4,6 @@
 #include "Game/Boss/DinoPackunTail.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_exeFind_f1, "exeFind.f1", 0.015f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeFind_f2, "exeFind.f2", 4.0f);
 
 namespace NrvDinoPackunStateAwake {
     NEW_NERVE(DinoPackunStateAwakeNrvFind, DinoPackunStateAwake, Find);
@@ -35,8 +31,8 @@ void DinoPackunStateAwake::exeFind() {
     }
 
     f32 rate = MR::calcNerveEaseOutRate(this, NebulaFrameClock::stepsOfMilliseconds(500));
-    getHost()->mTail->mHostVelocityRate = cNum_exeFind_f1 * rate;
-    MR::turnDirectionToPlayerDegree(getHost(), &getHost()->mFront, cNum_exeFind_f2);
+    getHost()->mTail->mHostVelocityRate = 0.015f * rate;
+    MR::turnDirectionToPlayerDegree(getHost(), &getHost()->mFront, 4.0f);
     getHost()->updateNormalVelocity();
 
     if (MR::isBckStopped(getHost())) {

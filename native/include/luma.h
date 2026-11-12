@@ -115,6 +115,14 @@ typedef struct LumaClassDef {
     uint32_t override_count;
 } LumaClassDef;
 
+/* A table of the game's data as LumaCore.table gives it (numbers contract, plan 1.5). */
+typedef struct LumaTable {
+    const void* data;  /* as the game reads it now; written only through set_table */
+    const char* type;  /* its element's type, the compiler's spelling ("unsigned int", "const char *", "MR::ActorMoveParam") */
+    uint32_t size;     /* all of it, in bytes */
+    uint32_t count;    /* its elements (an array's innermost), 1 for a record */
+} LumaTable;
+
 typedef struct LumaCore {
     uint32_t size;
     uint32_t api;
@@ -225,6 +233,17 @@ typedef struct LumaCore {
        or no memory (said); -2: the value is not one of its kind (a fraction for a whole number, out of range; said);
        -3: not on the game thread. */
     int32_t (*set_number)(const LumaMod* mod, const char* name, const char* signature, uint32_t place, double value);
+
+    /* Tables of the game's data (numbers contract, plan 1.5): every file-scope or class-static array or plain record
+       with an initializer, by its name (`File.cpp#name` when only its file sees it; luma_numbers.json "tables" lists
+       them with their types). table: 0 and *out filled (data as the game reads it now, its element type,
+       the size in bytes, the count of elements, 1 for a record), or -1: no such table, or no memory (said). Any
+       thread. */
+    int32_t (*table)(const LumaMod* mod, const char* name, LumaTable* out);
+    /* Writes `size` bytes at `offset` in the table for the mod. When the mod goes, the table is the game's again with
+       the writes of the mods still here, in their order. 0: written; -1: no such table, or no memory (said); -2: the
+       bytes are not inside the table, or none (said); -3: not on the game thread. */
+    int32_t (*set_table)(const LumaMod* mod, const char* name, uint32_t offset, const void* bytes, uint32_t size);
 } LumaCore;
 
 /* report's own codes (D3-1). */

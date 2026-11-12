@@ -11,15 +11,14 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Render/GameTexture.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(f32, sTexRateU, 0.08f);
-    NEBULA_TUNABLE(f32, sTexRateV, 1.0f);
-    NEBULA_TUNABLE(f32, sTexSpeedU, -0.004f);
-    NEBULA_TUNABLE(f32, sIndirectScale, 0.15f);
-    NEBULA_TUNABLE(f32, sEnvMapScale, 0.6f);
+    const f32 sTexRateU = 0.08f;
+    const f32 sTexRateV = 1.0f;
+    const f32 sTexSpeedU = -0.004f;
+    const f32 sIndirectScale = 0.15f;
+    const f32 sEnvMapScale = 0.6f;
 
     static NebulaColor8 sStageColor0 = {0x14, 0x65, 0xFF, 0xB9};
 };  // namespace

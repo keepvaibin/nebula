@@ -21,7 +21,6 @@
 #include "Game/System/NebulaClock.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 
 // Nebula's icons are textures of its own, never the game's: the picture font gains sheets after its own (each
 // controller family's icons, one to a cell) and a code map before its own that sends each icon's code to the glyph the
@@ -38,8 +37,8 @@ namespace {
     const u16 cMapLast = 0x49;
     // The A bubble's largest picture at the game's size (48 pixels), and a pack's size of ours.
     const s32 cPictureMax = 48;
-    NEBULA_TUNABLE(s32, cHdScale, 8);
-    NEBULA_TUNABLE(s32, cHdSheetMax, 1024);
+    const s32 cHdScale = 8;
+    const s32 cHdSheetMax = 1024;
 
     struct Rgba {
         f32 r, g, b, a;
@@ -219,8 +218,8 @@ namespace {
         s32 mFirst;
         s32 mCount;
     };
-    NEBULA_TUNABLE(f32, cStrokeHalf, 0.095f);
-    NEBULA_TUNABLE(f32, cLetterGap, 0.14f);
+    const f32 cStrokeHalf = 0.095f;
+    const f32 cLetterGap = 0.14f;
     const Stroke cStrokes[] = {
         {0, 0.42f, 0.095f, 0.095f, 0.905f, 0.0f, 0.0f, 0.0f},
         {0, 0.42f, 0.095f, 0.745f, 0.905f, 0.0f, 0.0f, 0.0f},
@@ -687,18 +686,18 @@ namespace {
 
     // The colours: Xbox's face buttons in theirs, its other buttons dark; the other styles' white with the window ink.
     const u32 cXboxFaces[4] = {0x5FA83CFF, NEBULA_RGBA(0xD8, 0x44, 0x3A, 0xFF), 0x3C78D8FF, 0xE6B422FF};
-    NEBULA_TUNABLE(u32, cRing, 0x262A33FF);
-    NEBULA_TUNABLE(u32, cDarkTop, 0x52555EFF);
-    NEBULA_TUNABLE(u32, cDarkBottom, 0x2E3036FF);
-    NEBULA_TUNABLE(u32, cWhiteTop, 0xFFFFFFFF);
+    const u32 cRing = 0x262A33FF;
+    const u32 cDarkTop = 0x52555EFF;
+    const u32 cDarkBottom = 0x2E3036FF;
+    const u32 cWhiteTop = 0xFFFFFFFF;
     const u32 cWhiteBottom = NEBULA_RGBA(0xD3, 0xD9, 0xE6, 0xFF);
-    NEBULA_TUNABLE(u32, cInk, 0x2B3045FF);
-    NEBULA_TUNABLE(u32, cWhite, 0xFFFFFFFF);
+    const u32 cInk = 0x2B3045FF;
+    const u32 cWhite = 0xFFFFFFFF;
     // The GameCube pad's face buttons: A green, B red, X and Y silver grey.
-    NEBULA_TUNABLE(u32, cGameCubeA, 0x2EA65CFF);
-    NEBULA_TUNABLE(u32, cGameCubeB, NEBULA_RGBA(0xCC, 0x33, 0x33, 0xFF));
-    NEBULA_TUNABLE(u32, cGameCubeXY, NEBULA_RGBA(0xC4, 0xC9, 0xD1, 0xFF));
-    NEBULA_TUNABLE(u32, cPadRim, 0x6A6E78FF);  // an inner ring on a dark button
+    const u32 cGameCubeA = 0x2EA65CFF;
+    const u32 cGameCubeB = NEBULA_RGBA(0xCC, 0x33, 0x33, 0xFF);
+    const u32 cGameCubeXY = NEBULA_RGBA(0xC4, 0xC9, 0xD1, 0xFF);
+    const u32 cPadRim = 0x6A6E78FF;  // an inner ring on a dark button
 
     Rgba darkened(const Rgba& rColor) {
         const Rgba c = {rColor.r * 0.9f, rColor.g * 0.9f, rColor.b * 0.9f, rColor.a};
@@ -1008,12 +1007,12 @@ namespace {
     // on it: two such keys at once each show theirs.
     const s32 cKeyNamed = NEBULA_KEYS + 1;
     const s32 cKeyCells = cKeyNamed + NEBULA_BUTTON_ICONS;
-    NEBULA_TUNABLE(u32, cKeySideTop, 0xBDC6D6FF);
+    const u32 cKeySideTop = 0xBDC6D6FF;
     const u32 cKeySideBottom = NEBULA_RGBA(0x8F, 0x9A, 0xB0, 0xFF);
-    NEBULA_TUNABLE(u32, cKeyEdge, 0xB4BDCDFF);
-    NEBULA_TUNABLE(u32, cKeyAccentTop, 0x5D9CF2FF);
-    NEBULA_TUNABLE(u32, cKeyAccentBottom, 0x2F6FD0FF);  // the menu's blue (NebulaSettingsMenu cAccent)
-    NEBULA_TUNABLE(f32, cSpaceAdvance, 0.32f);
+    const u32 cKeyEdge = 0xB4BDCDFF;
+    const u32 cKeyAccentTop = 0x5D9CF2FF;
+    const u32 cKeyAccentBottom = 0x2F6FD0FF;  // the menu's blue (NebulaSettingsMenu cAccent)
+    const f32 cSpaceAdvance = 0.32f;
 
     // A line of a legend: codes of cLetters (' ' a space), its capitals' size against the legend's.
     struct KeyLine {
@@ -1731,8 +1730,8 @@ namespace {
     // Each of our sheets once it has been drawn from, painted eight times larger, a band of rows per update and with
     // mip levels for a small window, and handed over to stand in for it (NebulaHostServices::texture_hd). A sheet painted
     // again loses its large one until it is drawn from again.
-    NEBULA_TUNABLE(s32, cHdBandRows, 32);
-    NEBULA_TUNABLE(s32, cHdLevels, 4);
+    const s32 cHdBandRows = 32;
+    const s32 cHdLevels = 4;
     struct HdPainting {
         u8* mRecord;
         Rgba* mBand;
@@ -1953,7 +1952,7 @@ namespace {
     struct Picture {
         u8 mRecord[NEBULA_TEXTURE_HEADER + cPictureMax * cPictureMax * 4];
     };
-    NEBULA_TUNABLE_LIST(s32, cPictureSizes, 2, {48, 40});
+    const s32 cPictureSizes[2] = {48, 40};
     const s32 cPictureLooks[2] = {LookUp, LookPressed};
     Picture sPictures[2];
     bool sPicturesShown = false;
@@ -2071,13 +2070,13 @@ namespace {
     // so drawn without scaling and without mipmaps, a band of rows at a time.
     const f32 cJcBodyWidth = NebulaIcons::cJoyConBody[0];
     const f32 cJcBodyHeight = NebulaIcons::cJoyConBody[1];
-    NEBULA_TUNABLE(f32, cJcOutline, 0.12f);
-    NEBULA_TUNABLE(s32, cJcMaxSide, 65532);  // the largest texture (TexMap's sizes are 16-bit, whole tiles): past it, a picture is a little magnified
-    NEBULA_TUNABLE(s32, cJcBand, 16);  // rows painted at once (whole 4 x 4 tiles)
+    const f32 cJcOutline = 0.12f;
+    const s32 cJcMaxSide = 65532;  // the largest texture (TexMap's sizes are 16-bit, whole tiles): past it, a picture is a little magnified
+    const s32 cJcBand = 16;  // rows painted at once (whole 4 x 4 tiles)
     const s32 cJcPictures = 2 * NebulaIcons::JoyConLooks;
     const s32 cJcOrder[NebulaIcons::JoyConLooks] = {NebulaIcons::JoyConShown, NebulaIcons::JoyConAway, NebulaIcons::JoyConHeld};
     const s64 cJcRetireMs = 250;  // a set no longer shown keeps its memory this long (frames still drawing it)
-    NEBULA_TUNABLE(s32, cJcSteady, 3);         // a density asked for this many frames running before a set is painted for it
+    const s32 cJcSteady = 3;         // a density asked for this many frames running before a set is painted for it
 
     // One density's pictures, every half in every look (painted in cJcOrder, both halves of a look in turn), in the
     // game's image.

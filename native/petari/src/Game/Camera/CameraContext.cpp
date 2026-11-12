@@ -5,21 +5,7 @@
 #include "Game/Util/SystemUtil.hpp"
 
 #include <cmath>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_initParams_f1, "initParams.f1", 3000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initParams_f2, "initParams.f2", 45.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initParams_f3, "initParams.f3", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initParams_f4, "initParams.f4", 800000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getRenderFovy_f1, "getRenderFovy.f1", 4.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getRenderFovy_f2, "getRenderFovy.f2", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getRenderFovy_f3, "getRenderFovy.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getRenderFovy_f4, "getRenderFovy.f4", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getRenderFovy_f5, "getRenderFovy.f5", 4.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getRenderFovy_f6, "getRenderFovy.f6", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getRenderFovy_f7, "getRenderFovy.f7", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getRenderFovy_f8, "getRenderFovy.f8", 180.0f);
 
 CameraContext::CameraContext() : NameObj("カメラコンテキスト") {
     lumacore::setClass(this, lumacore::kClassId< CameraContext >);
@@ -27,14 +13,14 @@ CameraContext::CameraContext() : NameObj("カメラコンテキスト") {
 }
 
 void CameraContext::initParams() {
-    mView.setPositionFromLookAt(Vec3f(0.0f, 0.0f, cNum_initParams_f1), Vec3f(0.0f, 1.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+    mView.setPositionFromLookAt(Vec3f(0.0f, 0.0f, 3000.0f), Vec3f(0.0f, 1.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
 
     mViewInv.set(mView);
     mViewInv.invert(mViewInv);
 
-    mFovy = cNum_initParams_f2;
-    mNearZ = cNum_initParams_f3;
-    mFarZ = cNum_initParams_f4;
+    mFovy = 45.0f;
+    mNearZ = 100.0f;
+    mFarZ = 800000.0f;
 
     mShakeOffset.zero();
 
@@ -59,9 +45,9 @@ f32 CameraContext::getAspect() const {
 f32 CameraContext::getRenderFovy() const {
     if (MR::isScreen16Per9() && MR::getDisplay().wide) {
         const f32 aspect = MR::getDisplay().content_aspect;
-        if (aspect < cNum_getRenderFovy_f1 / cNum_getRenderFovy_f2 - 1e-4f) {
-            const f32 halfTan = tanf(mFovy * (cNum_getRenderFovy_f3 * PI / cNum_getRenderFovy_f4)) * (cNum_getRenderFovy_f5 / cNum_getRenderFovy_f6) / aspect;
-            return cNum_getRenderFovy_f7 * atanf(halfTan) * (cNum_getRenderFovy_f8 / PI);
+        if (aspect < 4.0f / 3.0f - 1e-4f) {
+            const f32 halfTan = tanf(mFovy * (0.5f * PI / 180.0f)) * (4.0f / 3.0f) / aspect;
+            return 2.0f * atanf(halfTan) * (180.0f / PI);
         }
     }
     return mFovy;

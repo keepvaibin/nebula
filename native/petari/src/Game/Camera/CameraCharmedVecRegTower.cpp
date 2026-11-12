@@ -4,12 +4,7 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f3, "calc.f3", 200.0f);
 
 CameraCharmedVecRegTower::CameraCharmedVecRegTower(const char* pName)
     : Camera(pName), mWPoint(0.0f, 0.0f, 0.0f), mAxis(0.0f, 0.0f, 0.0f), mAngleX(), mAngleYMax(), mDist(), mArrange(), mName(nullptr) {
@@ -26,7 +21,7 @@ CameraTargetObj* CameraCharmedVecRegTower::calc() {
     CameraTargetObj* target = CameraLocalUtil::getTarget(this);
 
     Vec3f watchOffset;
-    CameraLocalUtil::makeWatchOffset(&watchOffset, this, target, cNum_calc_f1 / cNum_calc_f2);
+    CameraLocalUtil::makeWatchOffset(&watchOffset, this, target, 0.1f / 15.0f);
 
     Vec3f wPoint = mWPoint;
     Vec3f axis = mAxis;
@@ -91,7 +86,7 @@ CameraTargetObj* CameraCharmedVecRegTower::calc() {
     CameraLocalUtil::setUpVecAndWatchUpVec(this, axis);
 
     if (mArrange) {
-        CameraLocalUtil::arrangeDistanceByFovy(this, CameraLocalUtil::getVecReg(mName), cNum_calc_f3);
+        CameraLocalUtil::arrangeDistanceByFovy(this, CameraLocalUtil::getVecReg(mName), 200.0f);
     }
 
     return target;

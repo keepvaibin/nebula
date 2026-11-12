@@ -5,14 +5,13 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, sQuakeInterval, 400);
-    NEBULA_TUNABLE(f32, sCamShakeIntensity, 0.05f);
-    NEBULA_TUNABLE(f32, sCamShakeSpeed, 1.5f);
-    NEBULA_TUNABLE(s32, sCamShakeFrame, 120);
+    const s32 sQuakeInterval = 400;
+    const f32 sCamShakeIntensity = 0.05f;
+    const f32 sCamShakeSpeed = 1.5f;
+    const s32 sCamShakeFrame = 120;
 };  // namespace
 
 namespace NrvQuakeEffectGenerator {

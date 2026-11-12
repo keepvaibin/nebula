@@ -2,17 +2,10 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/FloaterFunction.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.001f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 0.001f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f1, "updateVelocity.f1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMoveReturn_f1, "exeMoveReturn.f1", 0.1f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sSpeedMin, 0.1f);
+    const f32 sSpeedMin = 0.1f;
 };  // namespace
 
 namespace NrvFloaterFloatingForceTypeSpring {
@@ -49,15 +42,15 @@ void FloaterFloatingForceTypeSpring::init(const TableIter& rIter) {
     // The rotate arguments carry the spring constants and the ride kick.
     f32 spring = 0.0f;
     MR::getMapPartsArgRotateSpeed(&spring, rIter);
-    spring *= cNum_init_f1;
+    spring *= 0.001f;
 
     f32 damp = 0.0f;
     MR::getMapPartsArgRotateAngle(&damp, rIter);
-    damp *= cNum_init_f2;
+    damp *= 0.001f;
 
     s32 rideSinkSpeed = 0;
     MR::getMapPartsArgRotateAxis(&rideSinkSpeed, rIter);
-    mRideSinkSpeed = rideSinkSpeed * cNum_init_f3;
+    mRideSinkSpeed = rideSinkSpeed * 0.1f;
 
     mSpringForce = new FloaterSpringForce(-mMaxSinkDepth, spring, damp);
 
@@ -75,7 +68,7 @@ void FloaterFloatingForceTypeSpring::updateVelocity() {
     bool isValidAndOnSwitchA = MR::isValidSwitchA(mHost) && MR::isOnSwitchA(mHost);
 
     if (isValidAndOnSwitchA) {
-        sinkSpeed *= cNum_updateVelocity_f1;
+        sinkSpeed *= 3.0f;
     }
 
     mVelocity.set(mUp * sinkSpeed);
@@ -174,7 +167,7 @@ void FloaterFloatingForceTypeSpring::exeMoveReturn() {
     }
 
     if (MR::isNearZero(mBasePos - mHost->mPosition)) {
-        if (MR::isNearZero(getCurrentSinkSpeed(), cNum_exeMoveReturn_f1)) {
+        if (MR::isNearZero(getCurrentSinkSpeed(), 0.1f)) {
             mHost->mPosition.set(mBasePos);
             setNerve(GET_NERVE(FloaterFloatingForceTypeSpring, HostTypeWait));
             return;

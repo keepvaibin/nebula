@@ -3,13 +3,12 @@
 #include <nebula_game_api.h>
 #include "Game/System/NebulaClock.hpp"
 #include "Game/System/NebulaHost.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
     // When a full-screen menu, page or window was last up (NebulaClock; 0 never).
     s64 sFullscreenUiTime = 0;
     // A menu noted within this many milliseconds holds generation off (its notes come every frame).
-    NEBULA_TUNABLE(s32, cFullscreenUiHoldMs, 50);
+    const s32 cFullscreenUiHoldMs = 50;
 };  // namespace
 
 namespace NebulaFrameGen {

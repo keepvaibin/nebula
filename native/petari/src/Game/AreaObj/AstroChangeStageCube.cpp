@@ -8,13 +8,12 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, cChangeStageWaitFrame, 5);
-    NEBULA_TUNABLE(s32, cHeavensDoorScenarioNo, 2);
-    NEBULA_TUNABLE(s32, cWipeFrame, 110);
+    const s32 cChangeStageWaitFrame = 5;
+    const s32 cHeavensDoorScenarioNo = 2;
+    const s32 cWipeFrame = 110;
 };  // namespace
 
 AstroChangeStageCube::AstroChangeStageCube(int formType, const char* pName) : AreaObj(formType, pName), mDestNo(1), mWaitFrame() {

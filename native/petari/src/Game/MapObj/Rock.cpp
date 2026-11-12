@@ -21,69 +21,48 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "math_types.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 0.25f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initMapToolInfo_f1, "initMapToolInfo.f1", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f1, "initSensor.f1", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f2, "initSensor.f2", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f3, "initSensor.f3", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isInClippingRange_f1, "isInClippingRange.f1", 300.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isInClippingRange_f2, "isInClippingRange.f2", 250.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setBtkForEnvironmentMap_f1, "setBtkForEnvironmentMap.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setBtkForEnvironmentMap_f2, "setBtkForEnvironmentMap.f2", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setBtkForEnvironmentMap_f3, "setBtkForEnvironmentMap.f3", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setBtkForEnvironmentMap_f4, "setBtkForEnvironmentMap.f4", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setBtkForEnvironmentMap_f5, "setBtkForEnvironmentMap.f5", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setBtkForEnvironmentMap_f6, "setBtkForEnvironmentMap.f6", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_appearStarPiece_f1, "appearStarPiece.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_appearStarPiece_f2, "appearStarPiece.f2", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_moveOnRail_f1, "moveOnRail.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAppear_f1, "exeAppear.f1", 180.0f);
 
 namespace {
     inline f32 toDegree(f32 angle) {
         return _180_PI * angle;
     }
 
-    NEBULA_TUNABLE_RECORD(Vec, cWeakSensorOffset, {0.0f, 0.0f, -150.0f});
-    NEBULA_TUNABLE(f32, cBinderRadius, 225.0f);
-    NEBULA_TUNABLE(f32, cSensorRadius, 225.0f);
-    NEBULA_TUNABLE(f32, cGravity, 1.5f);
-    NEBULA_TUNABLE(f32, cWeakGravity, 0.2f);
-    NEBULA_TUNABLE(f32, cWallBreakDot, -0.5f);
-    NEBULA_TUNABLE(f32, cRotateSpeedRate, 1.1f);
-    NEBULA_TUNABLE(f32, cRotateCosineMax, 0.999f);
-    NEBULA_TUNABLE(f32, cRumbleDistance, 1000.0f);
-    NEBULA_TUNABLE(s32, cNoBindJudgeFrame, 20);
-    NEBULA_TUNABLE(f32, cStarWandRadius3d, 275.0f);
-    NEBULA_TUNABLE(s32, cAppearMoveFrame, 45);
-    NEBULA_TUNABLE(s32, cAppearRumbleFrame, 15);
-    NEBULA_TUNABLE(s32, cAppearStopFrame, 25);
-    NEBULA_TUNABLE(s32, cAppearMoveFrameRock, 8);
-    NEBULA_TUNABLE(s32, cAppearStopFrameRock, 4);
-    NEBULA_TUNABLE(s32, cAppearInvalidBindFrame, 45);
-    NEBULA_TUNABLE(f32, cAppearMoveSpeed, 7.0f);
-    NEBULA_TUNABLE(f32, cAppearRumbleSpeed, 100.0f);
-    NEBULA_TUNABLE(f32, cAppearRumbleAngle, 5.0f);
-    NEBULA_TUNABLE(s32, cStarPieceNum, 9);
-    NEBULA_TUNABLE(s32, cStarPieceNumWanwanMini, 1);
-    NEBULA_TUNABLE(f32, cWeakSensorRadius, 125.0f);
+    const Vec cWeakSensorOffset = {0.0f, 0.0f, -150.0f};
+    const f32 cBinderRadius = 225.0f;
+    const f32 cSensorRadius = 225.0f;
+    const f32 cGravity = 1.5f;
+    const f32 cWeakGravity = 0.2f;
+    const f32 cWallBreakDot = -0.5f;
+    const f32 cRotateSpeedRate = 1.1f;
+    const f32 cRotateCosineMax = 0.999f;
+    const f32 cRumbleDistance = 1000.0f;
+    const s32 cNoBindJudgeFrame = 20;
+    const f32 cStarWandRadius3d = 275.0f;
+    const s32 cAppearMoveFrame = 45;
+    const s32 cAppearRumbleFrame = 15;
+    const s32 cAppearStopFrame = 25;
+    const s32 cAppearMoveFrameRock = 8;
+    const s32 cAppearStopFrameRock = 4;
+    const s32 cAppearInvalidBindFrame = 45;
+    const f32 cAppearMoveSpeed = 7.0f;
+    const f32 cAppearRumbleSpeed = 100.0f;
+    const f32 cAppearRumbleAngle = 5.0f;
+    const s32 cStarPieceNum = 9;
+    const s32 cStarPieceNumWanwanMini = 1;
+    const f32 cWeakSensorRadius = 125.0f;
     static const s32 cSeWanwanVoiceInterval = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE(f32, cSeWanwanVoiceDistance, 600.0f);
-    NEBULA_TUNABLE(s32, cRollSoundTime, 20);
-    NEBULA_TUNABLE(s32, cFreezeFrame, 20);
-    NEBULA_TUNABLE(f32, cFreezeRumbleSpeed, 75.0f);
-    NEBULA_TUNABLE(f32, cFreezeRumbleWidth, 5.0f);
-    NEBULA_TUNABLE(f32, cNearClipDistance, 400.0f);
-    NEBULA_TUNABLE(s32, cSlowMoveFrame, 150);
-    NEBULA_TUNABLE(s32, cSlowMoveRumbleFrame, 20);
-    NEBULA_TUNABLE(s32, cBreakStopStep, 2);
-    NEBULA_TUNABLE(s32, cBreakStopFrame, 12);
-    NEBULA_TUNABLE(s32, cAppearPowerStarStep, 2);
+    const f32 cSeWanwanVoiceDistance = 600.0f;
+    const s32 cRollSoundTime = 20;
+    const s32 cFreezeFrame = 20;
+    const f32 cFreezeRumbleSpeed = 75.0f;
+    const f32 cFreezeRumbleWidth = 5.0f;
+    const f32 cNearClipDistance = 400.0f;
+    const s32 cSlowMoveFrame = 150;
+    const s32 cSlowMoveRumbleFrame = 20;
+    const s32 cBreakStopStep = 2;
+    const s32 cBreakStopFrame = 12;
+    const s32 cAppearPowerStarStep = 2;
 };  // namespace
 
 namespace NrvRock {
@@ -286,8 +265,8 @@ void Rock::control() {
     mFallVelocity.add(grav);
     mVelocity.add(mFallVelocity);
 
-    if (cNum_control_f1 < mVelocity.length()) {
-        mVelocity.setLength(cNum_control_f2);
+    if (30.0f < mVelocity.length()) {
+        mVelocity.setLength(30.0f);
     }
 }
 
@@ -353,7 +332,7 @@ void Rock::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     if (!isNerve(GET_NERVE(Rock, RockNrvFreeze))) {
-        MR::sendMsgToEnemyAttackBlowOrTrample(pReceiver, pSender, cNum_attackSensor_f1);
+        MR::sendMsgToEnemyAttackBlowOrTrample(pReceiver, pSender, 0.25f);
     } else {
         MR::sendMsgPush(pReceiver, pSender);
     }
@@ -405,7 +384,7 @@ void Rock::initMapToolInfo(const TableIter& rIter) {
     mAppearPos.set(mPosition);
 
     mRadius = getRadius() * ::cBinderRadius;
-    mRotateSpeed = (mMoveSpeed * cNum_initMapToolInfo_f1 * ::cRotateSpeedRate) / (MR::pi() * mRadius);
+    mRotateSpeed = (mMoveSpeed * 180.0f * ::cRotateSpeedRate) / (MR::pi() * mRadius);
 
     MR::getPlacementArg3NoInit(rIter, &mAppearTime);
 
@@ -467,11 +446,11 @@ void Rock::initSensor() {
         sensorType = ATYPE_WANWAN;
     }
 
-    MR::addHitSensor(this, "body", sensorType, 16, ::cSensorRadius * (mRockType == WanwanRollingMini ? cNum_initSensor_f1 : mScale.x), Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "body", sensorType, 16, ::cSensorRadius * (mRockType == WanwanRollingMini ? 0.3f : mScale.x), Vec3f(0.0f, 0.0f, 0.0f));
 
     if (mRockType == NormalRock) {
-        MR::addHitSensor(this, "weak", sensorType, 16, ::cWeakSensorRadius * (mRockType == WanwanRollingMini ? cNum_initSensor_f2 : mScale.x),
-                         static_cast< Vec3f >(::cWeakSensorOffset) * (mRockType == WanwanRollingMini ? cNum_initSensor_f3 : mScale.x));
+        MR::addHitSensor(this, "weak", sensorType, 16, ::cWeakSensorRadius * (mRockType == WanwanRollingMini ? 0.3f : mScale.x),
+                         static_cast< Vec3f >(::cWeakSensorOffset) * (mRockType == WanwanRollingMini ? 0.3f : mScale.x));
     }
 }
 
@@ -539,7 +518,7 @@ void Rock::calcBaseMtx(Pos3f* pMtx) const {
 }
 
 bool Rock::isInClippingRange() const {
-    if (MR::isJudgedToClipFrustum(mPosition, (cNum_isInClippingRange_f1 + (cNum_isInClippingRange_f2 * getRadius())))) {
+    if (MR::isJudgedToClipFrustum(mPosition, (300.0f + (250.0f * getRadius())))) {
         return true;
     }
 
@@ -610,18 +589,18 @@ void Rock::setBtkForEnvironmentMap(LiveActor* pActor, const char* pBtkName) {
     f32 frame = 0.0f;
 
     if (mRockType == NormalRock) {
-        if (MR::isNearZero(mScale.x - cNum_setBtkForEnvironmentMap_f1)) {
+        if (MR::isNearZero(mScale.x - 0.5f)) {
             frame = 0.0f;
-        } else if (MR::isNearZero(mScale.x - cNum_setBtkForEnvironmentMap_f2)) {
-            frame = cNum_setBtkForEnvironmentMap_f3;
+        } else if (MR::isNearZero(mScale.x - 2.0f)) {
+            frame = 2.0f;
         } else {
             frame = 1.0f;
         }
     } else if (mRockType == WanwanRolling) {
-        if (MR::isNearZero(mScale.x - cNum_setBtkForEnvironmentMap_f4)) {
+        if (MR::isNearZero(mScale.x - 0.9f)) {
             frame = 1.0f;
-        } else if (MR::isNearZero(mScale.x - cNum_setBtkForEnvironmentMap_f5)) {
-            frame = cNum_setBtkForEnvironmentMap_f6;
+        } else if (MR::isNearZero(mScale.x - 0.5f)) {
+            frame = 2.0f;
         } else {
             frame = 0.0f;
         }
@@ -658,7 +637,7 @@ void Rock::appearStarPiece() {
     Vec3f pieceDir = mGravity;
     pieceDir.negate();
 
-    if (MR::appearStarPieceToDirection(mCreator, mPosition, pieceDir, getAppearStarPieceNum(mRockType), cNum_appearStarPiece_f1, cNum_appearStarPiece_f2, false)) {
+    if (MR::appearStarPieceToDirection(mCreator, mPosition, pieceDir, getAppearStarPieceNum(mRockType), 10.0f, 40.0f, false)) {
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
     }
 }
@@ -670,7 +649,7 @@ void Rock::moveOnRail(f32 speed, f32 rotateSpeed, bool isValidBind) {
     if (isValidBind) {
         Vec3f pos;
 
-        if (MR::getFirstPolyOnLineToMap(&pos, nullptr, mPosition, mGravity * (mRadius * cNum_moveOnRail_f1))) {
+        if (MR::getFirstPolyOnLineToMap(&pos, nullptr, mPosition, mGravity * (mRadius * 2.0f))) {
             mPosition.add(pos, mGravity * (-mRadius));
         }
     }
@@ -704,7 +683,7 @@ bool Rock::tryBreakReachedGoal() {
 }
 
 void Rock::exeAppear() {
-    f32 rotateSpeed = (::cAppearMoveSpeed * cNum_exeAppear_f1 * ::cRotateSpeedRate) / (mRadius * MR::pi());
+    f32 rotateSpeed = (::cAppearMoveSpeed * 180.0f * ::cRotateSpeedRate) / (mRadius * MR::pi());
     s32 spawnDelay = mRockType == NormalRock ? ::cAppearStopFrameRock : ::cAppearStopFrame;
 
     if (MR::isFirstStep(this)) {
