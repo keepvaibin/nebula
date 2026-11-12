@@ -2545,7 +2545,8 @@ std::vector<SettingsRow> consent_page(const galaxy::mods::ModInfo& mod) {
                            (permission.answer == galaxy::mods::Answer::NotAsked && facts.code_answer == galaxy::mods::Answer::Granted);
         std::string label = words(permission.row.c_str());
         if (label.empty()) label = permission.name;
-        if (fresh) label += " (" + words("Consent.New") + ")";
+        // The aside as the language writes one (full-width brackets in Japanese and Chinese; F-C27-3).
+        if (fresh) label = words("SettingsJoinAside", {{"0", label}, {"1", words("Consent.New")}});
         const std::string hosts = permission.hosts == "*" ? words("Permission.net.internet.Any") : permission.hosts;
         std::string help = words(permission.text_row.c_str(), {{"hosts", hosts}});
         if (!permission.why.empty()) {
@@ -2624,7 +2625,7 @@ std::vector<SettingsRow> consent_page(const galaxy::mods::ModInfo& mod) {
                            "],\"focus\":";
         galaxy::modlog::append_json_text(json, buttons.back());
         json += '}';
-        galaxy::modlog::fact("consent." + id, json);
+        galaxy::modlog::fact("consent.shown." + id, json);
     }
     return rows;
 }
