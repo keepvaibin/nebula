@@ -1023,6 +1023,10 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
          ramp\tbump\twarp\talpha test\tblend\ttwo-sided\tdepth write\tanimated coordinates\tunlit\tlit gain\tbase\temission\troughness\tmetal\ttransmission\tstages\tmaps\tglow\t\
          ior\tthickness\tglow source\tenvironment map\tenvironment tint\tbody\tshine\ttint keep"
     )?;
+    // c55 (d07's census): each model's de-light with c37 alone and with the first map's light (M5).
+    let mut debake = std::io::BufWriter::new(std::fs::File::create(output.with_file_name("debake_maps.tsv"))?);
+    writeln!(debake, "model\tde-lit meshes\twith a map ratio\tvertices\tmean gain c37\tmean gain d07")?;
+    let (mut debaked_meshes, mut mapped_meshes, mut debaked_models, mut mapped_models) = (0usize, 0usize, 0usize, 0usize);
     let mut classes: BTreeMap<Class, (u32, u32)> = BTreeMap::new();
     let mut stats = Stats::default();
     let (mut models, mut materials, mut unread, mut glowing) = (0u32, 0u32, 0u32, 0u32);
@@ -1044,6 +1048,13 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
         let stem = name.rsplit('/').next().unwrap_or(name);
         let measured = super::model_write::material_measures(&ir, stem);
         let roles = sheen_roles(&ir, stem);
+        if let Some(d) = super::model_write::debake_report(&ir, stem) {
+            writeln!(debake, "{name}\t{}\t{}\t{}\t{:.3}\t{:.3}", d.debaked, d.mapped, d.vertices, d.gain_c37, d.gain_d07)?;
+            debaked_meshes += d.debaked;
+            mapped_meshes += d.mapped;
+            debaked_models += 1;
+            mapped_models += usize::from(d.mapped > 0);
+        }
         for (i, m) in ir.materials.iter().enumerate() {
             let mut r = read(m);
             super::model_write::finish_reading(&ir, stem, i, measured.get(i).copied().unwrap_or(0.0), &mut r);
@@ -1186,6 +1197,8 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
     out.flush()?;
     sheens.flush()?;
     by_rule.flush()?;
+    debake.flush()?;
+    println!("de-light (c55): {debaked_meshes} meshes in {debaked_models} models; {mapped_meshes} meshes in {mapped_models} models with a map ratio (d07)");
     println!("{models} models, {materials} materials, {glowing} of them glow; {unread} files not read");
     for (class, (count, _)) in &classes {
         println!("{:<12} {count:>6}  {:.1} %", class.name(), 100.0 * f64::from(*count) / f64::from(materials.max(1)));

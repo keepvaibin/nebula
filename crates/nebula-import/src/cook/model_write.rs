@@ -610,6 +610,77 @@ fn unit_normals(s: &MeshStreams) -> Vec<Option<[f64; 3]>> {
         .collect()
 }
 
+/// c55 (census; d07's question 3): a model's de-light with c37 alone and with d07's map ratios.
+pub struct DebakeReport {
+    pub debaked: usize,
+    pub mapped: usize,
+    pub vertices: usize,
+    pub gain_c37: f64,
+    pub gain_d07: f64,
+}
+
+/// The de-light of a model as write() makes it (the same meshes chosen), with and without the maps: None for a sky
+/// model, one with no painted mesh, or one whose meshes do not flatten.
+pub fn debake_report(ir: &ModelIr, stem: &str) -> Option<DebakeReport> {
+    let lower = stem.split('.').next().unwrap_or(stem).to_ascii_lowercase();
+    if lower.ends_with("sky") || lower.starts_with("vrorbit") {
+        return None;
+    }
+    let debake_material: Vec<bool> = ir
+        .materials
+        .iter()
+        .map(|m| {
+            let rgb_lit = (0..(m.channel_count as usize).min(2)).any(|ch| m.channels[2 * ch].enable != 0 && m.channels[2 * ch].light_mask != 0);
+            let r = super::hit_record::read(m);
+            r.signals.vertex_colour && !rgb_lit && r.signals.blend == 0 && r.class != super::hit_record::Class::Emissive
+        })
+        .collect();
+    let which: Vec<bool> = ir.shapes.iter().map(|s| debake_material.get(s.material as usize).copied().unwrap_or(false)).collect();
+    if !which.iter().any(|&w| w) {
+        return None;
+    }
+    let curved = model_curves(ir);
+    let mut meshes = Vec::with_capacity(ir.shapes.len());
+    for shape in &ir.shapes {
+        meshes.push(flatten(&ir.arrays, shape, curved.as_ref()).ok()?);
+    }
+    let maps: Vec<Option<Vec<f64>>> = ir
+        .shapes
+        .iter()
+        .zip(&meshes)
+        .zip(&which)
+        .map(|((shape, streams), &w)| if w { first_map_at_vertices(ir, shape.material as usize, streams) } else { None })
+        .collect();
+    let mut plain = meshes.clone();
+    let no_maps: Vec<Option<Vec<f64>>> = vec![None; meshes.len()];
+    debake_gains(&mut plain, &which, &no_maps);
+    debake_gains(&mut meshes, &which, &maps);
+    let mean = |ms: &[MeshStreams]| -> (f64, usize) {
+        let (mut sum, mut count) = (0.0f64, 0usize);
+        for (s, &w) in ms.iter().zip(&which) {
+            if !w {
+                continue;
+            }
+            for i in 0..s.positions.len() {
+                let g = s.gains.get(i).copied().unwrap_or(0);
+                let channel = |shift: u32| 2f64.powf(f64::from((g >> shift & 255) as u8 as i8) / 64.0);
+                sum += (channel(0) + channel(8) + channel(16)) / 3.0;
+                count += 1;
+            }
+        }
+        (if count > 0 { sum / count as f64 } else { 1.0 }, count)
+    };
+    let (gain_c37, vertices) = mean(&plain);
+    let (gain_d07, _) = mean(&meshes);
+    Some(DebakeReport {
+        debaked: which.iter().filter(|&&w| w).count(),
+        mapped: maps.iter().filter(|m| m.is_some()).count(),
+        vertices,
+        gain_c37,
+        gain_d07,
+    })
+}
+
 /// M5 (director d07; LIGHT-MODEL.md 10): the first map's brightness at each vertex against the mesh's own mean, read
 /// from a coarse copy of the map (at most 16 texels a side, box-filtered by alpha: its broad shading, not its detail),
 /// where the material's first stage with a map takes one of the mesh's own coordinates through no matrix. None where
