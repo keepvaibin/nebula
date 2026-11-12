@@ -194,6 +194,19 @@ bool rt_sun_traced() {
     return (g_more.z & 1u) != 0u;
 }
 
+// Where a ray from a pixel's surface starts (FB b76, b76b): on the lit side s.origin, the smooth surface's point
+// (Hanika 2021: rt_surface.hlsl's lift along the geometric normal) off it by the skin; into the far side (through a
+// sheet, a body) the skin under the geometric surface, as rt_sun where n.s < 0.
+float3 rt_ray_origin(RtSurface s, float3 dir) {
+    return dot(dir, s.normal) >= 0.0f ? s.origin : s.at - s.normal * s.skin;
+}
+
+// The near field's reach (FB b76; COMPLETENESS 1): 1 % of the eye distance, 20 to 60 units. rt_near.hlsl sees 0..r at
+// full size, the half-size gather (High) from r on.
+float rt_near_reach(float away) {
+    return clamp(0.01f * away, 20.0f, 60.0f);
+}
+
 // A ray that gathers light (11.1, 11.2): the nearest solid or cut-out thing within kIndirectReach; past that the sky's
 // dome (a ray of its own over the dome alone); 2 a thing, 1 the dome, 0 nothing at all (the stage's ambient itself).
 // Blended things (smoke, glows, glass) do not stop it: what light passes them is section 13.4's.

@@ -30,3 +30,5 @@ rr_guides	rt_rr_guides.hlsl	cs_6_5	main
 transmit	rt_transmit.hlsl	cs_6_5	main
 transmit_ref	rt_transmit_ref.hlsl	cs_6_5	main
 omm	rt_omm.hlsl	cs_6_5	main
+near	rt_near.hlsl	cs_6_5	main
+near_time	rt_near_time.hlsl	cs_6_0	main

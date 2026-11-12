@@ -100,13 +100,18 @@ void gi_take(inout GiReservoir r, GiReservoir other, float weight, inout uint se
     }
 }
 
-// Whether something solid stands between the ray's origin and a sample (short of the sample itself).
-bool gi_hidden(float3 origin, float3 sample_at) {
+// Whether something solid stands between the ray's origin and a sample (short of the sample itself), tested from
+// `skip` on (High: the near field's reach; FB b76). A sample nearer than `skip` is the near field's: hidden here.
+bool gi_hidden(float3 origin, float3 sample_at, float skip) {
     const float3 to = sample_at - origin;
     const float far_ = length(to);
-    const float reach = min(far_, kIndirectReach) - max(0.002f * far_, 1.0f);
+    if (far_ < skip) {
+        return true;
+    }
+    const float3 way = to / max(far_, 1e-4f);
+    const float reach = min(far_, kIndirectReach) - max(0.002f * far_, 1.0f) - skip;
     uint met;
-    return reach > 1.0f && blocked(origin, to / far_, reach, kMaskSolid | kMaskCutout, true, met);
+    return reach > 1.0f && blocked(origin + way * skip, way, reach, kMaskSolid | kMaskCutout, true, met);
 }
 
 void write_nothing(uint2 half_pixel, float4 guide) {
@@ -154,6 +159,9 @@ void main(uint3 id : SV_DispatchThreadID) {
     const uint mode = g_pass.y;
     // The ray's direction from the frame's blue noise (rt_sample.hlsli); the reservoirs' picks from the hash.
     const float3 dir = rt_cosine(n, rt_sample(id.xy, g_more.y, kSampleIndirect));
+    // High: the far field only, from the near field's reach on (rt_near.hlsl sees 0..r at full size; FB b76).
+    const float skip = mode == kModeHigh ? rt_near_reach(s.away) : 0.0f;
+    const float3 origin = rt_ray_origin(s, dir);
 
     if (mode == kModeSky) {
         // Traced ambient occlusion in the sky's colour: what stands within kSkyReach hides the sky.
@@ -177,18 +185,19 @@ void main(uint3 id : SV_DispatchThreadID) {
         uint item, triangle_;
         float2 where_;
         float far_;
-        const uint met = rt_gather(s.origin, dir, item, triangle_, where_, far_);
+        const float3 from = origin + dir * skip;  // TMin r (b76)
+        const uint met = rt_gather(from, dir, item, triangle_, where_, far_);
         GiReservoir fresh;
         fresh.m = 1.0f;
         fresh.sum = 0.0f;
         fresh.w = 0.0f;
         fresh.n = -dir;
         if (met == 0u) {
-            fresh.at = s.origin + dir * kIndirectReach;
+            fresh.at = from + dir * kIndirectReach;
             fresh.light = float3(1.0f, 1.0f, 1.0f);  // nothing at all: the stage's ambient itself
         } else {
             RtHit h;
-            rt_hit_read(item, triangle_, where_, far_, s.origin, dir, 0.05f, h);
+            rt_hit_read(item, triangle_, where_, far_, from, dir, 0.05f, h);
             fresh.at = h.at;
             if (met == 1u || (h.item_flags & kItemSky) != 0u) {
                 fresh.light = rt_sky_ratio(rt_lin(rt_dome(h)));  // the dome's mean: rt_count_dome_directions (b51; linear b65)
@@ -285,7 +294,7 @@ void main(uint3 id : SV_DispatchThreadID) {
                 continue;
             }
             const float jacobian = clamp(cos_r / cos_q * far_q / far_r, 0.0f, kMostJacobian);
-            if (gi_hidden(s.origin, other.at)) {
+            if (gi_hidden(s.origin, other.at, skip)) {
                 continue;  // hidden from here: neither its light nor its count
             }
             gi_take(r, other, gi_target(other.light, other.at, x, n) * other.w * other.m * jacobian, seed);
@@ -298,7 +307,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     float target = gi_target(r.light, r.at, x, n);
     r.w = target > 0.0f && r.m > 0.0f ? min(r.sum / (r.m * target), kMostWeight) : 0.0f;
     const bool own_earlier = reused && all(r.at == own_at) && any(r.at != fresh_only.at);
-    if (mode == kModeHigh && own_earlier && r.w > 0.0f && gi_hidden(s.origin, r.at)) {
+    if (mode == kModeHigh && own_earlier && r.w > 0.0f && gi_hidden(s.origin, r.at, skip)) {
         r = fresh_only;
         target = gi_target(r.light, r.at, x, n);
         r.w = target > 0.0f && r.m > 0.0f ? min(r.sum / (r.m * target), kMostWeight) : 0.0f;

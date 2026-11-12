@@ -1155,7 +1155,8 @@ struct RtImageKind {
     std::uint8_t size;
     std::uint8_t passes;
 };
-constexpr std::uint8_t kForLight = 1u, kForIndirect = 2u, kForReflect = 4u, kForVolume = 8u, kForTransmit = 16u, kForBlend = 32u, kForGuides = 64u;
+constexpr std::uint8_t kForLight = 1u, kForIndirect = 2u, kForReflect = 4u, kForVolume = 8u, kForTransmit = 16u, kForBlend = 32u, kForGuides = 64u,
+                       kForNear = 128u;
 constexpr rt::ImageFormat kHalf4 = rt::ImageFormat::Rgba16f;  // shares as fractions: an average over time in bytes stalls
 constexpr RtImageKind kRtImageKinds[] = {
     {"Nebula RT Guide A", kHalf4, kRtFull, kForLight},
@@ -1228,6 +1229,9 @@ constexpr RtImageKind kRtImageKinds[] = {
     {"Nebula RT Guide Specular", rt::ImageFormat::Rgba8, kRtFull, kForGuides},
     {"Nebula RT Guide Normal Roughness", kHalf4, kRtFull, kForGuides},
     {"Nebula RT Guide Hit", rt::ImageFormat::R16f, kRtFull, kForGuides},
+    {"Nebula RT Near Raw", rt::ImageFormat::R16f, kRtFull, kForNear},  // FB b76: the near field (rt_near.hlsl)
+    {"Nebula RT Near A", rt::ImageFormat::Rg16f, kRtFull, kForNear},
+    {"Nebula RT Near B", rt::ImageFormat::Rg16f, kRtFull, kForNear},
 };
 // The light volume's cells: across, down and deep over the scene camera's view.
 constexpr std::uint32_t kRtVolumeCells[3] = {96u, 54u, 48u};
@@ -1261,7 +1265,8 @@ struct RtPassConstants {
 bool RenderCore::rt_images(unsigned width, unsigned height, std::uint32_t wanted) {
     static_assert(std::size(kRtImageKinds) == kRtImages);
     static_assert(kRtPassLight == kForLight && kRtPassIndirect == kForIndirect && kRtPassReflect == kForReflect && kRtPassVolume == kForVolume &&
-                  kRtPassTransmit == kForTransmit && kRtPassBlend == kForBlend && kRtPassGuides == kForGuides);
+                  kRtPassTransmit == kForTransmit && kRtPassBlend == kForBlend && kRtPassGuides == kForGuides &&
+                  kRtPassNear == kForNear);
     std::erase_if(rt_light_retired_, [&](const std::pair<std::uint64_t, std::uint32_t>& retired) {
         if (retired.first + rt::kFramesToRelease > frame_index_) {
             return false;
@@ -1280,6 +1285,9 @@ bool RenderCore::rt_images(unsigned width, unsigned height, std::uint32_t wanted
             image = rt::kNoImage;
         }
         if (needed && image == rt::kNoImage) {
+            if ((kind.passes & kForNear) != 0u) {
+                rt_near_before_ = false;  // made fresh: no history in it (FB b76d)
+            }
             if (kind.size == kRtVolume) {
                 image = rt_backend_.make_image(kind.format, kRtVolumeCells[0], kRtVolumeCells[1], kind.name, kRtVolumeCells[2]);
             } else if (kind.size == kRtNoise) {
@@ -2176,6 +2184,7 @@ void RenderCore::rt_light() {
         const rt::Denoiser* const denoiser = renderer_.rt_denoiser();
         rt_raw_ = denoiser != nullptr && denoiser->raw_signals() == rt::kSignalAll;
         const std::uint32_t wanted = (rt_raw_ ? kRtPassGuides : 0u) | kRtPassLight | (rt_pass_indirect_on() ? kRtPassIndirect : 0u) |
+                                     (rt_pass_near_on() ? kRtPassNear : 0u) |
                                      (rt_pass_reflect_on() ? kRtPassReflect : 0u) | (rt_pass_volume_on() ? kRtPassVolume : 0u) |
                                      (rt_blend_seen_ ? kRtPassBlend : 0u) | (rt_blend_seen_ && rt_transmit_wanted() ? kRtPassTransmit : 0u);
         rt_light_wanted_ = wanted & ~kRtPassBlend;

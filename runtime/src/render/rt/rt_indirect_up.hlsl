@@ -3,15 +3,35 @@
 // half-res values (the filter's last step: rgb in r, g, b), weighed by where they lie and by how surely they are its
 // own surface: the same object, the same distance, facing the same way (joint bilateral upsampling, Kopf et al.
 // 2007), so I stays inside the edges the picture has. Where none of the four is its surface, the nearest of any.
-// Written clamped to [kSkyMin, kBounceMax]: what the light pass and, from 22.13, the programs read.
-// Pass constants: g_pass_value[0].x kSkyMin, .y kBounceMax.
+// Written clamped to [kSkyMin, kBounceMax]: what the light pass and, from 22.13, the programs read. Where the near
+// field ran (High; g_pass_value[0].z 1), times V_near over three by three pixels of the same object at the same
+// depth (rt_near_time.hlsl): O = O_far * V_near, the contact under the clamp (FB b76).
+// Pass constants: g_pass_value[0].x kSkyMin, .y kBounceMax, .z 1: the near field ran.
 #include "rt_bindings.hlsli"
 #include "rt_frame.hlsli"
 
 Texture2D<float4> g_half : register(t9);         // the filtered I (half res)
 Texture2D<float4> g_half_guide : register(t10);  // its receivers' guide (half res)
 Texture2D<float4> g_guide : register(t11);       // the pixel's own
+Texture2D<float2> g_near : register(t12);        // V_near over time (rt_near_time.hlsl), x
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_out : register(u0);
+
+// V_near over three by three pixels of the pixel's object at its depth (FB b76).
+float near_seen(int2 pixel, float4 guide, uint width, uint height) {
+    float sum = 0.0f, weight = 0.0f;
+    for (int y = -1; y <= 1; ++y) {
+        for (int x = -1; x <= 1; ++x) {
+            const int2 at = clamp(pixel + int2(x, y), int2(0, 0), int2(width, height) - 1);
+            const float4 near = g_guide.Load(int3(at, 0));
+            if (near.a != 0.0f && near.g == guide.g && near.b == guide.b && abs(near.r - guide.r) < 0.02f * guide.r + 1.0f) {
+                const float w = (x == 0 ? 2.0f : 1.0f) * (y == 0 ? 2.0f : 1.0f);  // the 1 2 1 tent
+                sum += g_near.Load(int3(at, 0)).x * w;
+                weight += w;
+            }
+        }
+    }
+    return weight > 0.0f ? sum / weight : 1.0f;
+}
 
 [numthreads(8, 8, 1)]
 void main(uint3 id : SV_DispatchThreadID) {
@@ -53,5 +73,8 @@ void main(uint3 id : SV_DispatchThreadID) {
     }
     float3 ratio = weight > 1e-4f ? sum / weight : any_weight > 0.0f ? any_sum / any_weight : float3(1.0f, 1.0f, 1.0f);
     ratio = clamp(ratio, g_pass_value[0].x, g_pass_value[0].y);
+    if (g_pass_value[0].z > 0.5f) {
+        ratio *= saturate(near_seen(int2(id.xy), guide, width, height));  // O = O_far * V_near (b76)
+    }
     g_out[id.xy] = float4(ratio, 1.0f);
 }

@@ -478,6 +478,8 @@ private:
     // The passes of their own files (rt_pass_indirect.cpp, rt_pass_reflect.cpp, rt_pass_volume.cpp): whether each runs
     // this frame (its images are made while it does), and the pass.
     [[nodiscard]] bool rt_pass_indirect_on() const;
+    [[nodiscard]] bool rt_pass_near_on() const;  // FB b76: the near field of the sky and bounce light (High)
+    bool rt_near_before_ = false;                // it ran the frame before: its history images hold it (b76c)
     void rt_pass_indirect();
     [[nodiscard]] bool rt_pass_reflect_on() const;
     void rt_pass_reflect();
@@ -505,11 +507,12 @@ private:
         BlendLightsA, BlendLightsB, BlendMomentsA, BlendMomentsB, Facing, BlendBody,
         IndirectRaw, IndirectAverageA, IndirectAverageB, IndirectMomentsA, IndirectMomentsB, Indirect, GiReservoirsA,
         GiReservoirsB, GiWeightsA, GiWeightsB, IndirectGuideA, IndirectGuideB, IndirectMotion, IndirectStep, ReflectRaw, ReflectAverageA, ReflectAverageB, Reflect, Transmit, VolumeA,
-        VolumeB, Scatter, ReflectMoved, RrDiffuse, RrSpecular, RrNormalRoughness, RrHit, Count
+        VolumeB, Scatter, ReflectMoved, RrDiffuse, RrSpecular, RrNormalRoughness, RrHit, NearRaw, NearA, NearB, Count
     };
     // The passes an image is made for.
     static constexpr std::uint32_t kRtPassLight = 1u, kRtPassIndirect = 2u, kRtPassReflect = 4u, kRtPassVolume = 8u,
-                                   kRtPassTransmit = 16u, kRtPassBlend = 32u, kRtPassGuides = 64u;
+                                   kRtPassTransmit = 16u, kRtPassBlend = 32u, kRtPassGuides = 64u,
+                                   kRtPassNear = 128u;  // FB b76: the near field (High)
     // The second layer's history images are made once a frame has had blended things to trace (rt_blended).
     std::uint32_t rt_light_wanted_ = 0u;
     bool rt_blend_seen_ = false;

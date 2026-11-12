@@ -23,6 +23,7 @@ static const uint kSampleIndirect = 6u;     // the sky and bounce light's direct
 static const uint kSampleReflect = 7u;      // a reflection's lobe
 static const uint kSampleVolume = 8u;       // the light volume's place along a ray
 static const uint kSampleLightDisc = 9u;    // the point of a large light's disc its shadow ray aims at
+static const uint kSampleNear = 10u;        // the near field's directions (rt_near.hlsl; FB b76)
 static const uint kSampleSecond = 16u;      // added to a use: the second pair
 static const uint2 kSampleOffsets[16] = {
     uint2(0u, 0u), uint2(61u, 37u), uint2(23u, 101u), uint2(89u, 13u), uint2(47u, 71u), uint2(113u, 59u),
