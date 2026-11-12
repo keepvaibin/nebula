@@ -19,6 +19,7 @@
 #include "galaxy/render_api.h"
 #include "galaxy/mii_import.h"
 #include "galaxy/mod_import.h"
+#include "galaxy/mod_consent.h"
 #include "galaxy/mod_log.h"
 #include "galaxy/mods.h"
 #include "galaxy/game_paths.h"
@@ -205,8 +206,6 @@ std::atomic<bool> s_settings_drawn_by_game{false};
 bool s_settings_leave_asking = false;
 // Apply saved mod changes this session did not start with: the menu asks whether to restart now.
 std::atomic<bool> s_mods_restart_ask{false};
-// A mod turned on brings code the player hasn't allowed: the menu asks first, one mod at a time.
-std::atomic<bool> s_mods_code_ask{false};
 // RAY TRACING turned on (applied) before its shaders are prepared: the menu asks to restart, which prepares them.
 std::atomic<bool> s_rt_restart_ask{false};
 // SYSTEM > DIAGNOSTICS > RECORD: the menu asks to restart into a recorded session (the launcher's recording).
@@ -214,7 +213,7 @@ std::atomic<bool> s_diagnostics_ask{false};
 
 // A restart question is up (the mods', ray tracing's, the diagnostics run's).
 bool restart_asking() {
-    return s_mods_code_ask.load(std::memory_order_acquire) || s_mods_restart_ask.load(std::memory_order_acquire) || s_rt_restart_ask.load(std::memory_order_acquire) ||
+    return s_mods_restart_ask.load(std::memory_order_acquire) || s_rt_restart_ask.load(std::memory_order_acquire) ||
            s_diagnostics_ask.load(std::memory_order_acquire);
 }
 // The pages, in order.
@@ -1924,6 +1923,15 @@ std::string s_mod_held;     // a mod picked up to move with the arrows (empty: n
 std::string s_mod_options;  // the mod whose page shows instead of the lists (empty: none)
 bool s_mod_log_open = false;  // the log page shows instead of the lists (mod-log 4.2)
 bool s_mod_log_facts = false; // its rows were written as harness facts since it opened
+// The consent question (contract consent 2): a page of rows shown instead of the lists while a mod on waits for an
+// answer (first_code_to_allow_locked), so the menu's own rows, scrolling and input drive it. `choosing`: permission by
+// permission (Choose), `chosen` the answers so far by name; `focus`: put the focus on Not now when it next builds
+// (2.2 item 5); `facts_for`: the mod whose question was written as a harness fact. Under s_mods_mutex.
+bool s_consent_open = false;
+bool s_consent_choosing = false;
+bool s_consent_focus = false;
+std::map<std::string, bool> s_consent_chosen;
+std::string s_consent_facts_for;
 
 // The mod page's ABOUT window: the mod's name and description in pages, then its pictures (its icon first), a page at a
 // time. A picture is read on its own thread when its page first shows (a large one takes a moment). Under s_mods_mutex.
@@ -2093,28 +2101,78 @@ unsigned mods_draft_changes() {
     return mods_draft_changes_locked();
 }
 
-// With s_mods_mutex held: the first mod on with code the player hasn't answered for.
+// With s_mods_mutex held: the first mod on that waits for the player's answer about its code or a permission
+// (consent_needed: never a mod without code, never code the player said Not now to).
 galaxy::mods::ModInfo* first_code_to_allow_locked() {
     for (galaxy::mods::ModInfo& mod : s_mods) {
-        if (mod.enabled && mod.problem.empty() && !mod.code_token.empty() && !mod.code_allowed) return &mod;
+        if (mod.enabled && mod.problem.empty() && galaxy::mods::consent_needed(mod)) return &mod;
     }
     return nullptr;
 }
 
-// The player's answer about the mod's code: yes keeps it on, allowed; no turns it off. Then the next one, or the restart.
-void answer_mod_code(bool allow) {
-    const std::lock_guard<std::mutex> lock(s_mods_mutex);
-    if (galaxy::mods::ModInfo* mod = first_code_to_allow_locked()) {
-        mod->code_allowed = allow;
-        mod->enabled = allow;
-        save_mods();
+// With s_mods_mutex held: the question shows (or stays), its focus on Not now.
+void open_consent_locked() {
+    if (!s_consent_open) {
+        s_consent_choosing = false;
+        s_consent_chosen.clear();
+        s_consent_facts_for.clear();
+        s_consent_focus = true;
     }
-    if (first_code_to_allow_locked() != nullptr) return;
-    s_mods_code_ask.store(false, std::memory_order_release);
-    if (galaxy::mods::mods_differ_from_session(s_mods)) {
-        s_mods_restart_ask.store(true, std::memory_order_release);
+    s_consent_open = true;
+    s_mod_options.clear();
+    s_mod_log_open = false;
+}
+
+enum class ConsentAnswer { Allow, Chosen, NotNow };
+
+// The player's answer for the mod the question shows (consent 2.3): Allow grants its code and every permission and
+// keeps it on; Chosen grants its code, the required permissions and the ones chosen; Not now records the code's no for
+// this token, leaves the permissions not asked and turns it off. Then the next mod's question, or the restart.
+void answer_consent(ConsentAnswer answer) {
+    std::string fact_key;
+    std::string fact_json;
+    {
+        const std::lock_guard<std::mutex> lock(s_mods_mutex);
+        if (galaxy::mods::ModInfo* mod = first_code_to_allow_locked()) {
+            const galaxy::mods::ModConsent facts = galaxy::mods::consent_facts(*mod);
+            const bool yes = answer != ConsentAnswer::NotNow;
+            if (facts.code) galaxy::mods::record_code_answer(*mod, yes);
+            fact_key = "consent.answer." + mod->id;
+            fact_json = std::string("{\"code\":\"") + (yes ? "yes" : "no") + "\",\"permissions\":{";
+            bool first = true;
+            for (const galaxy::mods::PermissionFacts& permission : facts.permissions) {
+                std::string said = "not asked";
+                if (yes) {
+                    const auto chosen = s_consent_chosen.find(permission.name);
+                    const bool granted = answer == ConsentAnswer::Allow || permission.required ||
+                                         chosen == s_consent_chosen.end() || chosen->second;
+                    (void)galaxy::mods::record_answer(*mod, permission.name, granted);
+                    said = granted ? "yes" : "no";
+                }
+                if (!first) fact_json += ',';
+                first = false;
+                galaxy::modlog::append_json_text(fact_json, permission.name);
+                fact_json += ':';
+                galaxy::modlog::append_json_text(fact_json, said);
+            }
+            fact_json += "}}";
+            mod->enabled = yes;
+            save_mods();
+        }
+        s_consent_choosing = false;
+        s_consent_chosen.clear();
+        s_consent_facts_for.clear();
+        if (first_code_to_allow_locked() != nullptr) {
+            s_consent_focus = true;
+        } else {
+            s_consent_open = false;
+            if (galaxy::mods::mods_differ_from_session(s_mods)) {
+                s_mods_restart_ask.store(true, std::memory_order_release);
+            }
+            s_mods_scanned = false;
+        }
     }
-    s_mods_scanned = false;
+    if (!fact_key.empty()) galaxy::modlog::fact(fact_key, fact_json);
 }
 
 // With s_mods_mutex held: the draft to mods.ini; `ask`: the menu asks to restart when this session started otherwise.
@@ -2123,7 +2181,7 @@ void commit_mods_locked(bool ask) {
     if (mods_draft_changes_locked() == 0u) return;
     save_mods();
     if (ask && first_code_to_allow_locked() != nullptr) {
-        s_mods_code_ask.store(true, std::memory_order_release);
+        open_consent_locked();
         s_mods_scanned = false;
         return;
     }
@@ -2447,6 +2505,123 @@ SettingsRow mod_log_row() {
     return row;
 }
 
+// The consent question for `mod` as rows (consent 2.2): its name and version; the code's warning (and that this version
+// changes the code); each declared permission in the manifest's order (`native` first): its short name (new when
+// asked again), whether the mod needs it to start, and as the help line what it does with the hosts and the mod's own
+// words; then Allow, Choose (with an optional permission) and Not now, the focus on Not now. Choosing, each optional
+// permission turns between allowed and not allowed, and Done records them. Every word is in the played language
+// (row_words), shown as it is. With s_mods_mutex held.
+std::vector<SettingsRow> consent_page(const galaxy::mods::ModInfo& mod) {
+    std::vector<SettingsRow> rows;
+    const galaxy::mods::ModConsent facts = galaxy::mods::consent_facts(mod);
+    const std::string id = mod.id;
+    const auto words = [&id](const char* row, std::vector<std::pair<std::string, std::string>> values = {}) {
+        return galaxy::modlog::row_words(row, id, values);
+    };
+    const auto line = [&rows](std::string text) {
+        SettingsRow row{std::move(text), {}, nullptr, {}, true};
+        row.names = 1u;
+        rows.push_back(std::move(row));
+    };
+    std::string title = mod_title(mod);
+    if (mod.luma != nullptr && !mod.luma->version.empty()) title += "  " + mods_ui_text(mod.luma->version, 24u);
+    line(std::move(title));
+    if (facts.code) {
+        if (facts.code_changed) line(words("Consent.CodeChanged"));
+        line(words("SettingsModsCodeAsk"));
+    }
+    bool optional = false;
+    std::string fact_rows;
+    for (const galaxy::mods::PermissionFacts& permission : facts.permissions) {
+        optional = optional || !permission.required;
+        const bool fresh = permission.changed ||
+                           (permission.answer == galaxy::mods::Answer::NotAsked && facts.code_answer == galaxy::mods::Answer::Granted);
+        std::string label = words(permission.row.c_str());
+        if (label.empty()) label = permission.name;
+        if (fresh) label += " (" + words("Consent.New") + ")";
+        const std::string hosts = permission.hosts == "*" ? words("Permission.net.internet.Any") : permission.hosts;
+        std::string help = words(permission.text_row.c_str(), {{"hosts", hosts}});
+        if (!permission.why.empty()) {
+            help += ' ' + words("Consent.Why") + " \u201C" + mods_ui_text(permission.why, 200u) + "\u201D";
+        }
+        const auto chosen = s_consent_chosen.find(permission.name);
+        const bool allowed = chosen == s_consent_chosen.end() || chosen->second;
+        std::string value;
+        std::function<void(RenderConfig&, int)> change;
+        if (permission.required) {
+            value = words("Consent.Required");
+        } else if (s_consent_choosing) {
+            value = words(allowed ? "Consent.Allowed" : "Consent.Denied");
+            const std::string name = permission.name;
+            change = [name](RenderConfig&, int delta) {
+                if (delta == 0) return;
+                const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
+                const auto at = s_consent_chosen.find(name);
+                s_consent_chosen[name] = at != s_consent_chosen.end() && !at->second;
+            };
+        } else {
+            value = words("Consent.Optional");
+        }
+        SettingsRow row{label, value, std::move(change), help};
+        row.names = 1u | 2u | 4u;
+        rows.push_back(std::move(row));
+        // The harness's view of the row (consent 2.6).
+        if (!fact_rows.empty()) fact_rows += ',';
+        fact_rows += "{\"name\":";
+        galaxy::modlog::append_json_text(fact_rows, permission.name);
+        fact_rows += ",\"label\":";
+        galaxy::modlog::append_json_text(fact_rows, label);
+        fact_rows += ",\"text\":";
+        galaxy::modlog::append_json_text(fact_rows, words(permission.text_row.c_str(), {{"hosts", hosts}}));
+        fact_rows += ",\"why\":";
+        galaxy::modlog::append_json_text(fact_rows, permission.why);
+        fact_rows += std::string(",\"required\":") + (permission.required ? "true" : "false") +
+                     ",\"new\":" + (fresh ? "true" : "false") + '}';
+    }
+    std::vector<std::string> buttons;
+    std::vector<ConsentAnswer> answers;
+    if (s_consent_choosing) {
+        buttons = {"DONE", "NOT NOW"};
+        answers = {ConsentAnswer::Chosen, ConsentAnswer::NotNow};
+    } else if (optional) {
+        buttons = {"ALLOW", "CHOOSE", "NOT NOW"};
+        answers = {ConsentAnswer::Allow, ConsentAnswer::Chosen, ConsentAnswer::NotNow};
+    } else {
+        buttons = {"ALLOW", "NOT NOW"};
+        answers = {ConsentAnswer::Allow, ConsentAnswer::NotNow};
+    }
+    const bool choose_button = !s_consent_choosing && optional;
+    SettingsRow choice = button_row({}, buttons,
+                                    [answers, choose_button](RenderConfig&, unsigned pressed) {
+                                        if (pressed >= answers.size()) return;
+                                        if (choose_button && pressed == 1u) {
+                                            // Choose: the permissions turn one by one; Done records them.
+                                            const std::lock_guard<std::mutex> lock(s_mods_mutex);
+                                            s_consent_choosing = true;
+                                            return;
+                                        }
+                                        answer_consent(answers[pressed]);
+                                    },
+                                    {});
+    choice.key = "consent-buttons";
+    rows.push_back(std::move(choice));
+    if (s_consent_focus) {
+        s_consent_focus = false;
+        s_native_settings_row.store(static_cast<unsigned>(rows.size() - 1u), std::memory_order_relaxed);
+        select_settings_button(static_cast<unsigned>(buttons.size() - 1u));
+    }
+    if (s_consent_facts_for != id) {
+        s_consent_facts_for = id;
+        std::string json = std::string("{\"code\":") + (facts.code ? "true" : "false") +
+                           ",\"code_changed\":" + (facts.code_changed ? "true" : "false") + ",\"rows\":[" + fact_rows +
+                           "],\"focus\":";
+        galaxy::modlog::append_json_text(json, buttons.back());
+        json += '}';
+        galaxy::modlog::fact("consent." + id, json);
+    }
+    return rows;
+}
+
 // A world clock's rate as the page writes it, in thousandths: "2X", "0.5X", "1.25X" (S.#X words it in each language).
 std::string clock_rate_text(std::uint32_t rate) {
     std::string text = std::to_string(rate / 1000u);
@@ -2709,11 +2884,15 @@ std::vector<SettingsRow> mods_page(const RenderConfig&) {
     if (s_native_settings_visible.load(std::memory_order_relaxed) &&
         s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount == kModsTab && !restart_asking() &&
         mods_draft_changes_locked() == 0u && first_code_to_allow_locked() != nullptr) {
-        s_mods_code_ask.store(true, std::memory_order_release);
+        open_consent_locked();
     }
     // The packs' categories, once the game's textures are sorted.
     for (galaxy::mods::ModInfo& mod : mods) {
         (void)galaxy::mods::update_pack_categories(mod);
+    }
+    if (s_consent_open) {
+        if (galaxy::mods::ModInfo* asked = first_code_to_allow_locked()) return consent_page(*asked);
+        s_consent_open = false;  // answered elsewhere (turned off, removed)
     }
     if (s_mod_log_open) {
         return log_page(mods);
@@ -2789,6 +2968,17 @@ bool mods_page_key(std::uintptr_t key, bool accept, bool was_down) {
     bool lists = false;
     for (const SettingsRow& row : rows) lists = lists || row.list != 0u;
     if (!lists) {
+        bool asking = false;
+        {
+            const std::lock_guard<std::mutex> lock(s_mods_mutex);
+            asking = s_consent_open;
+        }
+        if (asking) {
+            // The consent question: Escape, Backspace or B is Not now (consent 2.4); the rest are the rows' own.
+            if (key != VK_ESCAPE && key != VK_BACK) return false;
+            if (!was_down) answer_consent(ConsentAnswer::NotNow);
+            return true;
+        }
         if (key != VK_ESCAPE) return false;
         if (!was_down) close_mod_options(s_settings_draft);
         return true;
@@ -3355,14 +3545,6 @@ bool dlss_prompt_key(std::uintptr_t key, bool was_down) {
 bool restart_ask_key(std::uintptr_t key, bool was_down) {
     if (!restart_asking()) return false;
     if (was_down) return true;
-    if (s_mods_code_ask.load(std::memory_order_acquire)) {
-        if (key == VK_RETURN || key == VK_SPACE) {
-            answer_mod_code(true);
-        } else if (key == VK_ESCAPE || key == VK_BACK || key == VK_F1) {
-            answer_mod_code(false);
-        }
-        return true;
-    }
     if (key == VK_RETURN || key == VK_SPACE) {
         s_mods_restart_ask.store(false, std::memory_order_release);
         s_rt_restart_ask.store(false, std::memory_order_release);
@@ -3858,11 +4040,6 @@ NativeSettingsView build_native_settings_view() {
     } else if (s_settings_leave_asking) {
         view.status = NativeSettingsStatus::Leave;
         view.status_number = static_cast<int>(pending_settings_changes());
-    } else if (s_mods_code_ask.load(std::memory_order_acquire)) {
-        view.status = NativeSettingsStatus::ModsCodeAsk;
-        // The mod it asks about by name: more than one can wait for an answer.
-        const std::lock_guard<std::mutex> lock(s_mods_mutex);
-        if (const galaxy::mods::ModInfo* mod = first_code_to_allow_locked()) view.status_text = mod_title(*mod);
     } else if (s_mods_restart_ask.load(std::memory_order_acquire)) {
         view.status = NativeSettingsStatus::ModsRestartAsk;
     } else if (s_rt_restart_ask.load(std::memory_order_acquire)) {

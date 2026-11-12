@@ -1455,6 +1455,9 @@ S.LOG	Log		Journal	Journal	Registro	Registro	Protokoll	Registro	Logboek	Registro
 S.TIME	Time		Temps	Temps	Tiempo	Tiempo	Zeit	Tempo	Tijd	Tempo	じかん	시간	时间	時間
 S.HELD	Held		Arrêté	Arrêté	Detenido	Detenido	Angehalten	Fermo	Stilgezet	Parado	とまっている	멈춤	已停止	已停止
 S.LET_GO	Let go		Libérer	Libérer	Soltar	Soltar	Freigeben	Rilascia	Vrijgeven	Soltar	もとにもどす	되돌리기	恢复	恢復
+S.ALLOW	Allow		Autoriser	Autoriser	Permitir	Permitir	Erlauben	Consenti	Toestaan	Permitir	きょか	허용	允许	允許
+S.CHOOSE	Choose		Choisir	Choisir	Elegir	Elegir	Auswählen	Scegli	Kiezen	Escolher	えらぶ	선택	选择	選擇
+S.NOT_NOW	Not now		Pas maintenant	Pas maintenant	Ahora no	Ahora no	Nicht jetzt	Non ora	Niet nu	Agora não	あとで	나중에	暂不	暫不
 ModLog.Empty	Nothing to report.		Rien à signaler.	Rien à signaler.	Nada que informar.	Nada que informar.	Nichts zu melden.	Niente da segnalare.	Niets te melden.	Nada a relatar.	とくにありません。	알릴 것이 없습니다.	没有要报告的。	沒有要回報的。
 ModLog.Source.Validator	Found when checking the mod		Trouvé en vérifiant le mod	Trouvé en vérifiant le mod	Encontrado al comprobar el mod	Encontrado al comprobar el mod	Beim Prüfen der Mod gefunden	Trovato controllando la mod	Gevonden bij het controleren van de mod	Encontrado ao verificar o mod	MODのチェックで見つかりました	모드를 확인할 때 발견됨	检查模组时发现	檢查模組時發現
 ModLog.Source.Loader	Found when starting the mod's code		Trouvé en lançant le code du mod	Trouvé en lançant le code du mod	Encontrado al iniciar el código del mod	Encontrado al iniciar el código del mod	Beim Starten des Mod-Codes gefunden	Trovato avviando il codice della mod	Gevonden bij het starten van de code van de mod	Encontrado ao iniciar o código do mod	MODのコードを始めるときに見つかりました	모드 코드를 시작할 때 발견됨	启动模组代码时发现	啟動模組程式碼時發現

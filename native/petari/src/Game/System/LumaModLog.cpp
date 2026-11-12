@@ -984,6 +984,18 @@ namespace luma {
         }
 
         u32 words(const char* pRow, const char* pMod, u32 count, char* pDst, u32 size) {
+            char number[16];
+            nebula_snprintf(number, sizeof(number), "%u", count);
+            LumaModLogEntry values = {};
+            values.size = sizeof(values);
+            values.mod = pMod != nullptr ? pMod : "";
+            values.names[0] = "count";
+            values.values[0] = number;
+            values.count = 1;
+            return rowWords(pRow, values, pDst, size);
+        }
+
+        u32 rowWords(const char* pRow, const LumaModLogEntry& rValues, char* pDst, u32 size) {
             if (pDst == nullptr || size == 0) {
                 return 0;
             }
@@ -994,17 +1006,18 @@ namespace luma {
             const s32 length = NebulaText::length(pRow);
             char16_t* const pTemplate = static_cast< char16_t* >(::malloc((length + 1) * sizeof(char16_t)));
             if (pTemplate == nullptr) {
-                NEBULA_PANIC("LumaCore: no memory for the mod log's row %s", pRow);
+                NEBULA_PANIC("LumaCore: no memory for the row %s", pRow);
             }
             NebulaText::get(pTemplate, length + 1, pRow);
-            char number[16];
-            nebula_snprintf(number, sizeof(number), "%u", count);
+            // Only the fields fill reads; the caller's size is not trusted beyond them.
             LumaModLogEntry values = {};
             values.size = sizeof(values);
-            values.mod = pMod != nullptr ? pMod : "";
-            values.names[0] = "count";
-            values.values[0] = number;
-            values.count = 1;
+            values.mod = rValues.mod != nullptr ? rValues.mod : "";
+            values.count = rValues.count < LUMA_MODLOG_ARGS ? rValues.count : LUMA_MODLOG_ARGS;
+            for (u32 i = 0; i < values.count; i++) {
+                values.names[i] = rValues.names[i] != nullptr ? rValues.names[i] : "";
+                values.values[i] = rValues.values[i] != nullptr ? rValues.values[i] : "";
+            }
             const u32 units = fill(nullptr, pTemplate, values, false, 0);
             char16_t* const pText = static_cast< char16_t* >(::malloc((units + 1) * sizeof(char16_t)));
             if (pText == nullptr) {
@@ -1081,5 +1094,13 @@ NEBULA_GAME_API const void* luma_modlog_next_mod(const void* after, const char**
 
 NEBULA_GAME_API uint32_t luma_modlog_words(const char* row, const char* mod, uint32_t count, char* out, uint32_t size) {
     return luma::modlog::words(row, mod, count, out, size);
+}
+
+NEBULA_GAME_API uint32_t luma_modlog_row_words(const LumaModLogEntry* values, const char* row, char* out, uint32_t size) {
+    if (values == nullptr) {
+        LumaModLogEntry none = {};
+        return luma::modlog::rowWords(row, none, out, size);
+    }
+    return luma::modlog::rowWords(row, *values, out, size);
 }
 }

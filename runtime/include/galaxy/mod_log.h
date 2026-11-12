@@ -54,10 +54,18 @@ struct PageMod {
 [[nodiscard]] std::vector<PageMod> mods();       // in the order each mod's first entry came
 // The module's row `row` (ModLog.*) in the played language, {mod} and {count} filled; "" when there is none.
 [[nodiscard]] std::string words(const char* row, std::string_view mod, std::uint32_t count);
+// Any row of the module's text table in the played language, {mod} and `values`' {names} filled (a value "R:<row>"
+// is that row's words); "" when there is none. For the host's screens' rows with values (consent 2.2).
+[[nodiscard]] std::string row_words(const char* row, std::string_view mod,
+                                    const std::vector<std::pair<std::string, std::string>>& values);
 // How many entries the log keeps (a walk, nothing copied).
 [[nodiscard]] std::uint32_t kept();
 // In a harness run, one row of the log page as the fact `modlog.page {"row", "label", "value"}` (contract 4.3).
 void page_fact(std::uint32_t row, std::string_view label, std::string_view value);
+// In a harness run, a fact `key` with `json` as its value (the host's screens: consent 2.6); nothing otherwise.
+void fact(const std::string& key, const std::string& json);
+// `text` as a JSON string, quoted and escaped, appended to `out`.
+void append_json_text(std::string& out, std::string_view text);
 
 // A mod's world clock as the Mods page shows it (contract services-time 10 and 11; the module's luma_time_clock_of,
 // found by `begin`); any thread. Empty when the module lacks the export or the mod never asked for time.
