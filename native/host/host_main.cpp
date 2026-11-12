@@ -37,6 +37,7 @@
 #include "galaxy/mods.h"
 #include "galaxy/render/host_window.h"
 #include "galaxy/mod_log.h"
+#include "galaxy/mod_screens.h"
 #include "galaxy/mod_plugins.h"
 #include "galaxy/render/mod_shaders.h"
 #include "galaxy/render/program_table.h"
@@ -2362,6 +2363,8 @@ void svc_frame_begun(void*, int black, uint32_t frame) {
     }
 #endif
     galaxy::extensions::frame({frame});
+    // The Mods screens' answers to mods' requests (galaxy/mod_screens.h), on the game thread at the frame's start.
+    galaxy::mods::run_screen_answers();
 #if defined(NEBULA_HOST_RENDERER)
     {
         // While the start runs ahead, one frame a display period goes to the screen.
@@ -4177,6 +4180,8 @@ int main(int argc, char** argv) {
     services.galaxy_select_names_wanted = svc_galaxy_select_names_wanted;
     services.galaxy_select_name = svc_galaxy_select_name;
     services.take_pause_request = svc_take_pause_request;
+    // A mod's request screen pauses the game as Start does (services-mods 9, services-save 8).
+    galaxy::mods::set_screen_pause([] { gPauseRequest.store(true, std::memory_order_release); });
     services.test_frame_step = deterministic_mode() ? svc_test_frame_step : nullptr;
     services.texture_hd = svc_texture_hd;
     services.model_register = svc_model_register;

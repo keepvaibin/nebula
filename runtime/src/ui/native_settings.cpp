@@ -21,6 +21,7 @@
 #include "galaxy/mod_import.h"
 #include "galaxy/mod_consent.h"
 #include "galaxy/mod_log.h"
+#include "galaxy/mod_screens.h"
 #include "galaxy/mods.h"
 #include "galaxy/game_paths.h"
 #include "galaxy/native_settings_pad.h"
@@ -33,6 +34,8 @@
 #include "galaxy/ui/settings_display_page.h"
 #include "galaxy/ui/settings_advanced_page.h"
 #include "galaxy/ui/settings_system_page.h"
+
+#include <luma_services.h>
 
 #include <algorithm>
 #include <array>
@@ -1344,6 +1347,8 @@ void cycle_native_settings_tab(int delta) {
     s_native_settings_row.store(first, std::memory_order_relaxed);
 }
 
+void deny_asks();
+
 void set_native_settings_visible(bool visible) {
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
     s_settings_leave_asking = false;
@@ -1357,6 +1362,8 @@ void set_native_settings_visible(bool visible) {
         settle_native_settings_row();
     }
     if (!visible) {
+        // A mod's request screen left unanswered is the player's no (services-mods 9, services-save 8).
+        deny_asks();
         // Closing discards an unapplied draft, an unconfirmed display, an
         // unanswered DLSS question and controls being arranged.
         close_joycon_pairing();
@@ -2333,6 +2340,91 @@ struct ImportOutcome {
 std::vector<ImportOutcome> s_import_outcomes;
 std::atomic<bool> s_import_page_open{false};
 
+// A mod's request screens (galaxy/mod_screens.h: mods.install, save.game's offer): at most one up, over the game on
+// MODS, answered once through post_screen_answer (the game thread runs it at a frame's start). Under s_ask_mutex, which
+// is taken after s_mods_mutex when both are (never the other way) and never with s_mod_import_mutex.
+std::mutex s_ask_mutex;
+struct InstallAsk {
+    std::filesystem::path file;
+    std::string asker;
+    std::function<void(std::int32_t)> done;
+    bool importing = false;  // INSTALL pressed: the import runs, its result page shows, and its outcome answers
+};
+std::optional<InstallAsk> s_install_ask;
+struct OfferAsk {
+    galaxy::mods::OfferFacts facts;
+    std::string asker;
+    std::function<void(std::int32_t, std::uint32_t)> done;
+    std::uint32_t picked = 0;  // 1-6: the file the confirm asks about; 0: the files to pick from
+};
+std::optional<OfferAsk> s_offer_ask;
+
+// With s_ask_mutex held: the install request's answer, its screen closed.
+void answer_install_locked(std::int32_t status) {
+    if (!s_install_ask) return;
+    galaxy::mods::post_screen_answer([done = std::move(s_install_ask->done), status] {
+        if (done) done(status);
+    });
+    s_install_ask.reset();
+}
+
+// With s_ask_mutex held: the offer's answer, its screen closed.
+void answer_offer_locked(std::int32_t status, std::uint32_t file) {
+    if (!s_offer_ask) return;
+    galaxy::mods::post_screen_answer([done = std::move(s_offer_ask->done), status, file] {
+        if (done) done(status, file);
+    });
+    s_offer_ask.reset();
+}
+
+// A request's screen showing (an install whose import runs shows the lists, then the import's result).
+bool request_screen_up() {
+    const std::lock_guard<std::mutex> lock(s_ask_mutex);
+    return s_offer_ask.has_value() || (s_install_ask && !s_install_ask->importing);
+}
+
+// Escape, B, NO or the menu closed: an unanswered request is the player's no. An import already running answers by
+// its outcome.
+void deny_asks() {
+    const std::lock_guard<std::mutex> lock(s_ask_mutex);
+    if (s_install_ask && !s_install_ask->importing) answer_install_locked(LUMA_E_DENIED);
+    answer_offer_locked(LUMA_E_DENIED, 0u);
+}
+
+// The import thread's end: an install request's import answers it by its outcome (J-SM2: it starts at the next start).
+void finish_install_ask(const std::vector<ImportOutcome>& outcomes) {
+    const std::lock_guard<std::mutex> lock(s_ask_mutex);
+    if (!s_install_ask || !s_install_ask->importing) return;
+    std::int32_t status = LUMA_E_FORMAT;  // refused by the validator, or failed (the file changed or went)
+    if (!outcomes.empty()) {
+        const std::string& outcome = outcomes.front().outcome;
+        if (outcome == "IMPORTED" || outcome == "UPDATED") {
+            status = LUMA_OK;
+        } else if (outcome == "ALREADY IN YOUR MODS") {
+            status = LUMA_E_EXISTS;
+        }
+    }
+    answer_install_locked(status);
+}
+
+// With s_mods_mutex held: the player's DON'T ASK AGAIN for `id` (never true) or its undoing, kept in mods.ini at once
+// as saved; the draft keeps it too, and nothing else of the draft is written.
+void set_install_ask_never_locked(const std::string& id, bool never) {
+    (void)mods_list();
+    for (galaxy::mods::ModInfo& mod : s_mods) {
+        if (mod.id == id) mod.install_ask_never = never;
+    }
+    bool found = false;
+    for (galaxy::mods::ModInfo& mod : s_mods_saved) {
+        if (mod.id != id) continue;
+        mod.install_ask_never = never;
+        found = true;
+    }
+    if (found && !galaxy::mods::save_mod_settings(s_mods_saved)) {
+        std::cerr << "[settings] mods.ini could not be written\n";
+    }
+}
+
 const char* import_outcome_word(const galaxy::mods::ImportResult& result) {
     if (result.refused) return "NOT IMPORTED";
     if (!result.ok) return "FAILED";
@@ -2402,12 +2494,13 @@ bool check_import_package(const std::filesystem::path& staged, const std::string
     return !found.refused;
 }
 
-void run_mod_imports(std::vector<std::filesystem::path> sources) {
-    if (sources.empty()) return;
+// False when it did not begin (nothing to import, or an import running).
+bool run_mod_imports(std::vector<std::filesystem::path> sources) {
+    if (sources.empty()) return false;
     if (s_mod_import_busy.exchange(true, std::memory_order_acq_rel)) {
         const std::lock_guard<std::mutex> lock(s_mod_import_mutex);
         s_mod_import_message = "AN IMPORT IS RUNNING: TRY AGAIN WHEN IT ENDS";
-        return;
+        return false;
     }
     std::thread([sources = std::move(sources)] {
         const std::filesystem::path folder = galaxy::mods::mods_folder();
@@ -2465,6 +2558,7 @@ void run_mod_imports(std::vector<std::filesystem::path> sources) {
             }
             outcomes.push_back(std::move(one));
         }
+        finish_install_ask(outcomes);
         {
             const std::lock_guard<std::mutex> lock(s_mod_import_mutex);
             s_mod_import_value = failed == 0u ? "DONE" : imported == 0u ? "FAILED" : "SOME FAILED";
@@ -2482,6 +2576,7 @@ void run_mod_imports(std::vector<std::filesystem::path> sources) {
         }
         s_mod_import_busy.store(false, std::memory_order_release);
     }).detach();
+    return true;
 }
 
 // The picker for archives or folders (the game keeps running).
@@ -2912,6 +3007,19 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
         rows.push_back(button_row("TIME: " + (clock->held ? std::string("HELD") : clock_rate_text(clock->rate)), {"LET GO"},
                                   [id](RenderConfig&, unsigned) { galaxy::modlog::let_go(id); }, {}));
     }
+    // The player's DON'T ASK AGAIN to its install requests (services-mods 9, J-SM4), undone here at once.
+    if (mod.install_ask_never) {
+        SettingsRow may{galaxy::modlog::row_words("Mods.InstallMayAsk", id, {}),
+                        galaxy::modlog::row_words("Consent.Denied", id, {}),
+                        [id](RenderConfig&, int delta) {
+                            if (delta == 0) return;
+                            const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
+                            set_install_ask_never_locked(id, false);
+                        },
+                        {}};
+        may.names = 1u | 2u;
+        rows.push_back(std::move(may));
+    }
     // The player's answers for its code and permissions, each turned with left and right; a draft like any setting,
     // applied at the next start (consent 2.3). Code not allowed turns the mod off. Shown once the question was answered.
     const galaxy::mods::ModConsent consent = galaxy::mods::consent_facts(mod);
@@ -3173,6 +3281,194 @@ SettingsRow mods_buttons_row() {
 
 // The MODS page as the launcher's Mods tab: the mods off, then the mods on (the higher one wins a conflict), each list
 // under its title, then the buttons. A mod's options show instead while they are open.
+// A user file on the offer screen: "Mario, 12 stars, 3:04" (Save.OfferSummary), or Save.OfferEmpty.
+std::string offer_file_words(const galaxy::mods::OfferFile& file, const std::string& asker) {
+    if (!file.exists) return galaxy::modlog::row_words("Save.OfferEmpty", asker, {});
+    const std::uint32_t minutes = file.play_seconds / 60u;
+    char time[24];
+    std::snprintf(time, sizeof(time), "%u:%02u", minutes / 60u, minutes % 60u);
+    return galaxy::modlog::row_words(
+        "Save.OfferSummary", asker,
+        {{"character", galaxy::modlog::row_words(file.luigi ? "Save.Luigi" : "Save.Mario", asker, {})},
+         {"stars", std::to_string(file.stars)},
+         {"time", time}});
+}
+
+// mods.install's screen (services-mods 9): who asks, the file's name (never its path), and the answers; the line under
+// the buttons says an installed mod starts at the next start (J-SM2). With s_ask_mutex held.
+std::vector<SettingsRow> install_page_locked() {
+    const InstallAsk& ask = *s_install_ask;
+    std::vector<SettingsRow> rows;
+    SettingsRow who{galaxy::modlog::row_words("Mods.InstallAsks", ask.asker, {}), {}, nullptr, {}, true};
+    who.names = 1u;
+    rows.push_back(std::move(who));
+    SettingsRow file{"FILE", galaxy::path_text(ask.file.filename()), nullptr, {}};
+    file.names = 2u;
+    rows.push_back(std::move(file));
+    SettingsRow buttons = button_row(
+        {}, {"INSTALL", "NOT NOW", "DON'T ASK AGAIN"},
+        [](RenderConfig&, unsigned button) {
+            if (button == 0u) {
+                std::filesystem::path file;
+                {
+                    const std::lock_guard<std::mutex> lock(s_ask_mutex);
+                    if (!s_install_ask || s_install_ask->importing) return;
+                    s_install_ask->importing = true;
+                    file = s_install_ask->file;
+                }
+                if (!run_mod_imports({file})) {
+                    const std::lock_guard<std::mutex> lock(s_ask_mutex);
+                    if (s_install_ask && s_install_ask->importing) answer_install_locked(LUMA_E_BUSY);
+                }
+                return;
+            }
+            std::string asker;
+            {
+                const std::lock_guard<std::mutex> lock(s_ask_mutex);
+                if (!s_install_ask || s_install_ask->importing) return;
+                asker = s_install_ask->asker;
+            }
+            if (button == 2u) {
+                const std::lock_guard<std::mutex> lock(s_mods_mutex);
+                set_install_ask_never_locked(asker, true);
+            }
+            const std::lock_guard<std::mutex> lock(s_ask_mutex);
+            if (s_install_ask && !s_install_ask->importing) answer_install_locked(LUMA_E_DENIED);
+        },
+        galaxy::modlog::row_words("Mods.InstallStartsNext", ask.asker, {}));
+    buttons.names |= 4u;
+    rows.push_back(std::move(buttons));
+    return rows;
+}
+
+// save.game's offer screen (services-save 8): the offered file, then the six to pick from, then the confirm for the
+// one picked. With s_ask_mutex held.
+std::vector<SettingsRow> offer_page_locked() {
+    const OfferAsk& ask = *s_offer_ask;
+    std::vector<SettingsRow> rows;
+    SettingsRow title{galaxy::modlog::row_words("Save.OfferTitle", ask.asker, {}), {}, nullptr, {}, true};
+    title.names = 1u;
+    rows.push_back(std::move(title));
+    SettingsRow offered{offer_file_words(ask.facts.offered, ask.asker), {}, nullptr, {}, true};
+    offered.names = 1u;
+    rows.push_back(std::move(offered));
+    if (ask.picked == 0u) {
+        SettingsRow pick{galaxy::modlog::row_words("Save.OfferPick", ask.asker, {}), {}, nullptr, {}, true};
+        pick.names = 1u;
+        rows.push_back(std::move(pick));
+        for (std::uint32_t n = 1u; n <= 6u; ++n) {
+            const galaxy::mods::OfferFile& file = ask.facts.files[n - 1u];
+            std::string label = galaxy::modlog::row_words("Save.OfferFile", ask.asker, {{"file", std::to_string(n)}}) + ": ";
+            if (file.in_play) label += galaxy::modlog::row_words("Save.OfferInPlay", ask.asker, {}) + ", ";
+            label += offer_file_words(file, ask.asker);
+            SettingsRow row = button_row(std::move(label), {file.in_play ? "-PICK" : "PICK"},
+                                         [n](RenderConfig&, unsigned) {
+                                             const std::lock_guard<std::mutex> lock(s_ask_mutex);
+                                             if (!s_offer_ask || s_offer_ask->facts.files[n - 1u].in_play) return;
+                                             s_offer_ask->picked = n;
+                                             // The confirm's buttons (title, file, question, buttons).
+                                             s_native_settings_row.store(3u, std::memory_order_relaxed);
+                                             s_native_settings_button_row.store(~0u, std::memory_order_relaxed);
+                                         },
+                                         {});
+            row.names |= 1u;
+            rows.push_back(std::move(row));
+        }
+        rows.push_back(button_row({}, {"NO"}, [](RenderConfig&, unsigned) { deny_asks(); }, {}));
+        return rows;
+    }
+    SettingsRow confirm{galaxy::modlog::row_words("Save.OfferConfirm", ask.asker, {{"file", std::to_string(ask.picked)}}),
+                        {}, nullptr, {}, true};
+    confirm.names = 1u;
+    rows.push_back(std::move(confirm));
+    SettingsRow buttons = button_row(
+        {}, {"REPLACE", "KEEP"},
+        [](RenderConfig&, unsigned button) {
+            const std::lock_guard<std::mutex> lock(s_ask_mutex);
+            if (!s_offer_ask || s_offer_ask->picked == 0u) return;
+            const std::uint32_t picked = s_offer_ask->picked;
+            if (button == 0u) {
+                answer_offer_locked(LUMA_OK, picked);
+                return;
+            }
+            // KEEP: back to the files, on the one picked (title, file, heading, then files 1-6).
+            s_offer_ask->picked = 0u;
+            s_native_settings_row.store(2u + picked, std::memory_order_relaxed);
+            s_native_settings_button_row.store(~0u, std::memory_order_relaxed);
+        },
+        galaxy::modlog::row_words("Save.OfferKept", ask.asker, {}));
+    buttons.names |= 4u;
+    rows.push_back(std::move(buttons));
+    return rows;
+}
+
+// ---- The hooks the services call (galaxy/mod_screens.h) ----
+
+bool screens_screen_up() {
+    if (s_import_page_open.load(std::memory_order_acquire) || s_mod_import_busy.load(std::memory_order_acquire) ||
+        s_mod_dialog_open.load(std::memory_order_acquire)) {
+        return true;
+    }
+    {
+        const std::lock_guard<std::mutex> lock(s_ask_mutex);
+        if (s_install_ask || s_offer_ask) return true;
+    }
+    const std::lock_guard<std::mutex> lock(s_mods_mutex);
+    return s_consent_open;
+}
+
+// The menu on MODS over the paused game, on `row` of the request's page.
+void open_request_screen(unsigned row) {
+    galaxy::mods::pause_for_screen();
+    host_window::open_native_settings(kModsTab);
+    s_native_settings_row.store(row, std::memory_order_relaxed);
+    s_native_settings_button_row.store(~0u, std::memory_order_relaxed);
+}
+
+std::int32_t screens_ask_install(const std::filesystem::path& file, std::string_view asker,
+                                 std::function<void(std::int32_t)> done) {
+    if (screens_screen_up()) return LUMA_E_BUSY;
+    {
+        const std::lock_guard<std::mutex> lock(s_ask_mutex);
+        if (s_install_ask || s_offer_ask) return LUMA_E_BUSY;
+        s_install_ask = InstallAsk{file, std::string(asker), std::move(done), false};
+    }
+    open_request_screen(2u);  // the buttons (who, file, buttons)
+    return LUMA_PENDING;
+}
+
+bool screens_install_ask_allowed(std::string_view id) {
+    const std::lock_guard<std::mutex> lock(s_mods_mutex);
+    (void)mods_list();
+    for (const galaxy::mods::ModInfo& mod : s_mods_saved) {
+        if (mod.id == id) return !mod.install_ask_never;
+    }
+    return true;
+}
+
+std::int32_t screens_ask_offer(const galaxy::mods::OfferFacts& facts, std::string_view asker,
+                               std::function<void(std::int32_t, std::uint32_t)> done) {
+    if (screens_screen_up()) return LUMA_E_BUSY;
+    {
+        const std::lock_guard<std::mutex> lock(s_ask_mutex);
+        if (s_install_ask || s_offer_ask) return LUMA_E_BUSY;
+        s_offer_ask = OfferAsk{facts, std::string(asker), std::move(done), 0u};
+    }
+    open_request_screen(3u);  // file 1 (title, offered, heading, files)
+    return LUMA_PENDING;
+}
+
+void screens_close_asks(std::string_view asker) {
+    const std::lock_guard<std::mutex> lock(s_ask_mutex);
+    if (s_install_ask && !s_install_ask->importing && s_install_ask->asker == asker) s_install_ask.reset();
+    if (s_offer_ask && s_offer_ask->asker == asker) s_offer_ask.reset();
+}
+
+const galaxy::mods::ScreenHooks kScreenHooks = {screens_screen_up, screens_ask_install, screens_install_ask_allowed,
+                                                screens_ask_offer, screens_close_asks};
+// Given before main: the services ask only once mods start.
+[[maybe_unused]] const bool s_screen_hooks_given = (galaxy::mods::set_screen_hooks(&kScreenHooks), true);
+
 std::vector<SettingsRow> mods_page_rows(const RenderConfig&) {
 #if defined(__APPLE__)
     // Mods are not on Apple's systems yet (docs/APPLE.md): the page says so, and nothing on it is chosen.
@@ -3185,12 +3481,26 @@ std::vector<SettingsRow> mods_page_rows(const RenderConfig&) {
     // start): the question comes as the page shows, before anything is drafted.
     if (s_native_settings_visible.load(std::memory_order_relaxed) &&
         s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount == kModsTab && !restart_asking() &&
-        mods_draft_changes_locked() == 0u && first_code_to_allow_locked() != nullptr) {
+        mods_draft_changes_locked() == 0u && !request_screen_up() && first_code_to_allow_locked() != nullptr) {
         open_consent_locked();
     }
     // The packs' categories, once the game's textures are sorted.
     for (galaxy::mods::ModInfo& mod : mods) {
         (void)galaxy::mods::update_pack_categories(mod);
+    }
+    // A mod's request first (services-mods 9, services-save 8): the game waits on the player's answer.
+    {
+        const std::lock_guard<std::mutex> ask_lock(s_ask_mutex);
+        if (s_offer_ask) {
+            rows = offer_page_locked();
+            modscreen_facts_locked(s_offer_ask->asker, "offer", rows.data(), rows.size());
+            return rows;
+        }
+        if (s_install_ask && !s_install_ask->importing) {
+            rows = install_page_locked();
+            modscreen_facts_locked(s_install_ask->asker, "install", rows.data(), rows.size());
+            return rows;
+        }
     }
     // An import's result first: a mod it added that runs code is asked about after it.
     if (s_import_page_open.load(std::memory_order_acquire)) {
@@ -3331,6 +3641,12 @@ bool mods_page_key(std::uintptr_t key, bool accept, bool was_down) {
                                      static_cast<unsigned>(rows.size()) - 1u);
         if ((accept || key == VK_SPACE) && !rows.empty() && rows[at].key.rfind("log:", 0) == 0) {
             if (!was_down) open_log_entry(static_cast<std::size_t>(std::strtoul(rows[at].key.c_str() + 4, nullptr, 10)));
+            return true;
+        }
+        if (request_screen_up()) {
+            // A mod's request: Escape, Backspace or B is the player's no; the rest are its rows' own.
+            if (key != VK_ESCAPE && key != VK_BACK) return false;
+            if (!was_down) deny_asks();
             return true;
         }
         if (s_import_page_open.load(std::memory_order_acquire)) {

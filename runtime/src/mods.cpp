@@ -730,6 +730,7 @@ struct SavedMod {
     std::map<std::string, std::string> choice_ids;  // a .luma's choices, by option
     std::string code_ok;  // the libraries the player allowed
     std::string code_no;  // the libraries the player said Not now to
+    bool install_ask_never = false;  // install.ask=no
     std::map<std::string, PermissionAnswer> permissions;  // permission.<name>=yes|no <digest>
 };
 
@@ -847,6 +848,8 @@ std::map<std::string, SavedMod> read_saved(const fs::path& file) {
             current->code_ok = value;
         } else if (key == "code_no") {
             current->code_no = value;
+        } else if (key == "install.ask") {
+            current->install_ask_never = value == "no";
         } else if (key.starts_with("permission.")) {
             // "yes <digest>" or "no <digest>"; anything else is not an answer, so the player is asked again.
             const std::size_t space = value.find(' ');
@@ -1176,6 +1179,7 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
         mod.enabled = s == nullptr || s->enabled;
         mod.own_text = s == nullptr || s->own_text;
         mod.categories_off = s != nullptr ? s->categories_off : 0u;
+        mod.install_ask_never = s != nullptr && s->install_ask_never;
         if (mod.textures) {
             // The game's names, read once from the store: a pack's files are named by them.
             start_texture_sorting();
@@ -1562,6 +1566,7 @@ bool save_mod_settings(std::span<const ModInfo> mods) {
         if (mod.categories_off != 0u) out << "textures_off=" << mod.categories_off << '\n';
         if (mod.code_allowed) out << "code_ok=" << mod.code_token << '\n';
         if (mod.code_declined) out << "code_no=" << mod.code_token << '\n';
+        if (mod.install_ask_never) out << "install.ask=no\n";
         // Answers for the permissions it declares now, with the digest each was given for (a stale one is asked again);
         // an answer for a permission it no longer declares is dropped here. A mod whose manifest was not read this start
         // keeps every answer as read (consent 1.2).

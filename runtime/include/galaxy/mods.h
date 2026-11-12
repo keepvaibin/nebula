@@ -112,6 +112,7 @@ struct ModInfo {
     bool code_allowed = false;  // the player allowed exactly these libraries
     bool code_declined = false; // the player said Not now to exactly these libraries (code_no)
     bool code_changed = false;  // an answer is stored for other libraries than these (asked again)
+    bool install_ask_never = false;  // install.ask=no: the player's DON'T ASK AGAIN to its install requests (J-SM4)
     // The player's answers by permission name, as stored (mod_consent.h reads them against the manifest's declarations).
     std::map<std::string, PermissionAnswer> permission_answers;
     // The permissions whose services the mod's entry library imports without LUMA_OPTIONAL, from the validator's kept

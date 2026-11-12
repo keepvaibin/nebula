@@ -157,6 +157,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/mod_xml.cpp
     ${rt}/luma.cpp
     ${rt}/mod_log.cpp
+    ${rt}/mod_screens.cpp
     ${rt}/mod_start_check.cpp
     ${rt}/mod_plugins.cpp
     ${rt}/mods.cpp
