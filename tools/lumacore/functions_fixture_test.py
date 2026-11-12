@@ -44,6 +44,12 @@ def mark(way, count=None, fixed=None, nullable=False):
 
 
 EXPECTED = [
+    # 1.9 (contract varargs)
+    fact("fnVaList", "int(const char *, va_list)", "free", None),
+    fact("fnVariadic", "int(const char *, ...)", "free", None, marks=[None]),
+    fact("fnVariadicAgain", "int(int, const char *, ...)", "free", None, marks=[None, None]),
+    fact("fnConstexpr", "int(int)", "free", None),
+    fact("fnExported", "int(int)", "free", None),
     fact("FnBase::~FnBase", "()", "destructor", "FnBase", virtual=True),
     fact("FnBase::f", "void(int)", "method", "FnBase", virtual=True),
     fact("FnBase::g", "int() const", "method", "FnBase", virtual=True, pure=True, const=True),

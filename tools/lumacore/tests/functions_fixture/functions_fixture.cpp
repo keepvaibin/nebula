@@ -49,3 +49,28 @@ struct FnKeyRow {
 [[maybe_unused]] static const char* sFnNames[] = {"One", "Two", "Three"};
 [[maybe_unused]] static FnKeyRow sFnUnkeyed[] = {{"A", 1}, {nullptr, 2}};
 [[maybe_unused]] static FnKeyRow sFnShort[3] = {{"A", 1}, {"B", 2}};
+
+// 1.9 (contract varargs): a va_list function, a variadic one handing its rest to it, one handing them to another
+// variadic one, a constexpr one (a call row after it), a head that begins with a macro.
+#include <cstdarg>
+int fnVaList(const char* pFormat, va_list args) {
+    int n = 0;
+    while (*pFormat++ != 0) {
+        n += va_arg(args, int);
+    }
+    return n;
+}
+int fnVariadic(const char* pFormat, ...) {
+    va_list args;
+    va_start(args, pFormat);
+    const int n = fnVaList(pFormat, args);
+    va_end(args);
+    return n;
+}
+int fnVariadicAgain(int x, const char* pFormat, ...) { return x + fnVariadic(pFormat, 1, 2); }
+constexpr int fnConstexpr(int x) { return x * 3 + 1; }
+static_assert(fnConstexpr(2) == 7, "evaluated while compiling");
+#define FN_EXPORT __attribute__((used))
+extern "C" {
+FN_EXPORT int fnExported(int x) { return x + 1; }
+}

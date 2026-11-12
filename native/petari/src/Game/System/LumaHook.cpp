@@ -121,7 +121,9 @@ namespace luma {
                 if (pRow->name == nullptr) {
                     continue;
                 }
-                if (pRow->signature == nullptr || pRow->hooked < flagsBegin() || pRow->hooked >= flagsEnd()) {
+                // A row with no flag is a call row (contract varargs 4: constexpr): found and called, never hooked.
+                if (pRow->signature == nullptr ||
+                    (pRow->hooked != nullptr && (pRow->hooked < flagsBegin() || pRow->hooked >= flagsEnd()))) {
                     nebula_log("[luma] the function rows are not as the build wrote them; no function can be hooked\n");
                     sCount = 0;
                     return;
@@ -331,7 +333,8 @@ namespace luma {
         // A virtual call (objects 10: LumaCore.method, import kind 8) has no flag: it is not one function. Its rows'
         // own functions are hooked instead.
         if (pFunction == nullptr || pFunction->hooked == nullptr || pCallback == nullptr || kind >= Hook_KindCount ||
-            (wraps(kind) && (isTell(pFunction) || resultKind(pFunction) == kFixed))) {
+            (wraps(kind) && (isTell(pFunction) || resultKind(pFunction) == kFixed)) ||
+            (kind != Hook_Before && isVariadic(pFunction))) {
             return HookResult_Refused;
         }
         if (kind == Hook_Replace) {
@@ -390,7 +393,7 @@ namespace luma {
     void removeHooks(const void* pOwner) {
         prepare();
         for (u32 f = 0; f < sCount; f++) {
-            const Chain* const pChain = chainOf(sSorted[f]);
+            const Chain* const pChain = sSorted[f]->hooked != nullptr ? chainOf(sSorted[f]) : nullptr;
             if (pChain == nullptr) {
                 continue;
             }

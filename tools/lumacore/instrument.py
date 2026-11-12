@@ -106,6 +106,8 @@ T_CONSTANT_ARRAY, T_RECORD = 112, 105
 K_MEMBER_REF_EXPR = 102
 # The self-description's table keys (plan 1.8): a row that begins with a string literal
 K_STRING_LITERAL, K_INIT_LIST = 109, 119
+# 1.9's variadic check: a call
+K_CALL_EXPR = 103
 # The kernel's own units: their numbers and tables are not the game's data.
 KERNEL_PREFIX = 'Game/System/Luma'
 SC_STATIC = 3
@@ -266,6 +268,7 @@ class Unit:
         self.init_reads = set()
         self.tables = []
         self.table_skips = {}
+        self.constexpr_rows = 0  # contract varargs 4: luma_cx_<n>, one per constexpr function's call row
 
     def string(self, cx):
         raw = self.api.cstring(cx)
@@ -291,6 +294,19 @@ class Unit:
         self.api.expansion(location, byref(file), byref(line), byref(column), byref(expanded))
         self.api.spellingLocation(location, byref(file), byref(line), byref(column), byref(spelled))
         return expanded.value if expanded.value == spelled.value else None
+
+    def expansion_offset(self, location):
+        """A location's place in the main file where it is written, a macro's name for a place inside its expansion; None
+        when it is elsewhere."""
+        file, line, column, expanded = c_void_p(), c_uint(), c_uint(), c_uint()
+        self.api.expansion(location, byref(file), byref(line), byref(column), byref(expanded))
+        if not file.value:
+            return None
+        if self.main_file is None:
+            self.main_file = os.path.normcase(os.path.abspath(self.source))
+        if os.path.normcase(os.path.abspath(self.string(self.api.fileName(file)))) != self.main_file:
+            return None
+        return expanded.value
 
     def line(self, cursor):
         file, line, column, offset = c_void_p(), c_uint(), c_uint(), c_uint()
@@ -350,10 +366,17 @@ class Unit:
                     self.defines.add(self.string(self.api.mangling(child)))
                 if self.api.isDefinition(child) and self.in_main(child):
                     self.table_candidate(child)
-            elif child.kind in SCOPES and self.in_main(child):
+            elif child.kind in SCOPES and (self.in_main(child) or self.expanded_in_main(child)):
+                # A scope a macro opens in this file (`extern "C"` in one) holds this file's functions too.
                 self.walk(child)
 
+    # Contract varargs 1: what may have no row. Any other reason stops the build, naming the function.
+    LEFT_OUT_REASONS = ('in a template or an unnamed class', 'a template specialization', 'an allocation function')
+
     def leave(self, name, line, why):
+        if why not in self.LEFT_OUT_REASONS:
+            sys.exit(f'instrument.py: {self.label}:{line}: {name} would have no row ({why}); every function but a '
+                     "template's and an allocation function has one (contract varargs 1)")
         self.left.append(f'{name}\t{line}\t{why}')
 
     def type_text(self, cxtype):
@@ -374,6 +397,11 @@ class Unit:
                 qualified = named[written]
                 text = re.sub(r'(?<![\w:])' + re.escape(written) + r'(?![\w])', lambda _: qualified, text)
         text = text.replace('(anonymous namespace)::', '')
+        # 1.9 (contract varargs 2): a va_list, whole, is `va_list` on every platform, whatever the compiler's type is (a
+        # char*, a one-element array that a parameter decays to a pointer to, a struct); any other use of it is not
+        # a type a mod writes.
+        if re.fullmatch(r'(std::)?va_list|__builtin_va_list|(struct )?__va_list_tag \*|std::__va_list', text):
+            return 'va_list'
         return None if re.search(r'\(unnamed|\(anonymous|\(lambda|type-parameter-|decltype\(|__va_list|\bva_list\b', text) else text
 
     def named_parts(self, t, named, policy):
@@ -416,15 +444,24 @@ class Unit:
         if len(body) != 1:
             return self.leave(qualified, line, 'no plain body')
         at = self.offset(api.rangeStart(api.extent(body[0])))
-        start = self.offset(api.rangeStart(api.extent(cursor)))
-        if at is None or start is None or self.text[at:at + 1] != b'{':
+        # Contract varargs 5: a head that begins with a macro (NEBULA_GAME_API) is read from where the macro is written.
+        start = self.expansion_offset(api.rangeStart(api.extent(cursor)))
+        if at is None or start is None or start > at or self.text[at:at + 1] != b'{':
             return self.leave(qualified, line, 'written by a macro')
         head = self.text[start:at].decode('utf-8', 'replace')
-        if re.search(r'\b(constexpr|consteval|noreturn|naked)\b', head):
-            return self.leave(qualified, line, 'constexpr, noreturn or naked')
+        if re.search(r'\b(consteval|noreturn|naked)\b', head):
+            sys.exit(f'instrument.py: {self.label}:{line}: {qualified} is consteval, noreturn or naked: no row is made for '
+                     'it, and every function has one (contract varargs 1)')
+        constexpr = bool(re.search(r'\bconstexpr\b', head))
         fntype = api.type(cursor)
-        if api.variadic(fntype):
-            return self.leave(qualified, line, 'takes a variable number of arguments')
+        variadic = bool(api.variadic(fntype))
+        if constexpr and (variadic or cursor.kind in (K_CONSTRUCTOR, K_DESTRUCTOR)):
+            sys.exit(f'instrument.py: {self.label}:{line}: {qualified} is a constexpr constructor, destructor or variadic '
+                     'function: a call row cannot call it (contract varargs 4)')
+        if variadic and not self.calls_va_list(body[0]):
+            # Contract varargs 3: a variadic function's work is done by a va_list sibling, which has the full row.
+            sys.exit(f'instrument.py: {self.label}:{line}: {qualified} takes a variable number of arguments and calls no '
+                     'function with a va_list parameter or `...`: move its work into a va_list sibling (contract varargs 3)')
 
         # The class the function belongs to, as the function's own code names it.
         owner = None
@@ -455,7 +492,26 @@ class Unit:
 
         signature_args = ', '.join(text for text, _ in params)
         pointers = ', '.join(f'(void*)&{identifier}' for _, identifier in params)
-        if cursor.kind in (K_CONSTRUCTOR, K_DESTRUCTOR):
+        if variadic:
+            # Contract varargs 3: before hooks only, told with the fixed parameters and a va_list of the rest.
+            if not params:
+                sys.exit(f'instrument.py: {self.label}:{line}: {qualified} takes only `...`: no parameter to start a '
+                         'va_list from')
+            signature_args = f'{signature_args}, ...'
+            if cursor.kind in (K_CONSTRUCTOR, K_DESTRUCTOR):
+                signature = f'({signature_args})'
+                first = '(void*)this'
+            else:
+                result = self.type_text(api.resultType(fntype))
+                if result is None:
+                    return self.leave(qualified, line, 'its result has a type with no name')
+                member = owner is not None and not api.isStatic(cursor)
+                const = member and bool(api.isConst(cursor))
+                signature = f'{result}({signature_args})' + (' const' if const else '')
+                first = 'const_cast<void*>(static_cast<const void*>(this))' if member else 'nullptr'
+            macro = f'LUMA_TELL_VA({quote(name)}, {quote(signature)}, {params[-1][1]}, ({first}, {pointers}))'
+            kind = 'tell'
+        elif cursor.kind in (K_CONSTRUCTOR, K_DESTRUCTOR):
             signature = f'({signature_args})'
             first = '(void*)this'
             macro = f'LUMA_TELL({quote(name)}, {quote(signature)}, ({first}{", " + pointers if pointers else ""}))'
@@ -485,6 +541,23 @@ class Unit:
             macro = (f'{alias}LUMA_HOOK({quote(name)}, {quote(signature)}, {result}, {call}, ({", ".join(taken)}), '
                      f'({", ".join(given)}), ({first}{", " + pointers if pointers else ""}))')
             kind = 'hook'
+            if constexpr:
+                # Contract varargs 4: the row after the function's end, at the scope it is defined in; nothing in its
+                # body (a constexpr function holds no static, and its numbers stay written: the compiler may evaluate it).
+                end = self.offset(api.rangeEnd(api.extent(cursor)))
+                if end is None or alias or member:
+                    sys.exit(f'instrument.py: {self.label}:{line}: {qualified}: a constexpr method, one whose result type '
+                             'holds a comma, or one whose end a macro writes has no call row (contract varargs 4)')
+                if self.identity(cursor) != (name, signature):
+                    sys.exit(f'instrument.py: {self.label}:{line}: the row {name} {signature} is named '
+                             f'{self.identity(cursor)} by identity()')
+                self.constexpr_rows += 1
+                row = f'LUMA_CALL_ROW(luma_cx_{self.constexpr_rows}, {quote(name)}, {quote(signature)}, {result}, {call});'
+                self.edits += edits + [(end, f'\n{row}\n'.encode())]
+                self.rows.append(f'{name}\t{signature}\tcall\t{line}')
+                self.facts.append((cursor, name, signature, 'free'))
+                self.count_numbers(cursor, 'a constexpr function (the compiler may evaluate it)')
+                return
         edits.append((at + 1, f' {macro}'.encode()))
         if self.identity(cursor) != (name, signature):
             # The name and signature an override is given (identity) are the row's own, by one rule: checked on every row.
@@ -501,6 +574,26 @@ class Unit:
     # 1.5: game data in code by name. Each number written in a row's code (and each use there of a file's number
     # constant) is read from one unit-local record, luma_numbers, which the copy defines before the source with the
     # numbers as written: so the build is the source's, number for number, and a mod changes one by its name.
+    def calls_va_list(self, body):
+        # True when the body calls a function with a va_list parameter, or another variadic one (contract varargs 3).
+        api = self.api
+        found = []
+
+        def visit(child, _parent, _data):
+            c = CXCursor.from_buffer_copy(child)
+            if c.kind == K_CALL_EXPR:
+                target = api.referenced(c)
+                if not api.isNull(target) and target.kind in FUNCTIONS:
+                    t = api.type(target)
+                    if api.variadic(t) or any(self.type_text(api.argType(t, i)) == 'va_list'
+                                              for i in range(max(api.numArgTypes(t), 0))):
+                        found.append(True)
+                        return 0  # break
+            return 2  # recurse
+
+        api.visit(body, VISITOR(visit), None)
+        return bool(found)
+
     def numbers_of(self, cursor, name, signature):
         """Names the numbers of one row's code (its member initializers and body): `name.k`, k from 1 in source order."""
         if self.label.startswith('Game/System/Luma'):
@@ -1073,6 +1166,8 @@ class Unit:
         texts = [self.type_text(api.argType(fntype, i)) for i in range(api.numArgs(cursor))]
         if None in texts:
             return None
+        if api.variadic(fntype):
+            texts.append('...')  # contract varargs 3: the signature is written with its `...`
         if cursor.kind in (K_CONSTRUCTOR, K_DESTRUCTOR):
             return name, f'({", ".join(texts)})'
         result = self.type_text(api.resultType(fntype))
@@ -1354,6 +1449,8 @@ class Unit:
         result = self.type_text(api.resultType(fntype))
         if None in texts or result is None:
             return None
+        if api.variadic(fntype):
+            texts.append('...')
         const = not api.isStatic(cursor) and bool(api.isConst(cursor))
         return f'{result}({", ".join(texts)})' + (' const' if const else '')
 
