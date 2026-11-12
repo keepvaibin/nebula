@@ -84,6 +84,15 @@ fn old_key(ptr: &str, key: &str, layer: Option<&str>) -> Option<String> {
 }
 const REQUIRED: [&str; 7] = ["format", "id", "version", "name", "summary", "authors", "game"];
 const OPTION_KINDS: [&str; 5] = ["choice", "number", "toggle", "text", "key"];
+
+/// The game's controls by the names its input bindings use (`runtime/src/input_bindings.cpp` kTargetIds, compared as
+/// `parse_game_input` does, without case): what a key option's default binds (director's decision 23:0x, key options
+/// are input actions).
+const GAME_CONTROLS: [&str; 25] = [
+    "a", "b", "one", "two", "plus", "minus", "home", "dpad_up", "dpad_down", "dpad_left", "dpad_right", "stick_up",
+    "stick_down", "stick_left", "stick_right", "c", "z", "shake", "nunchuk_shake", "pointer_up", "pointer_down",
+    "pointer_left", "pointer_right", "pointer_recenter", "jump_back",
+];
 pub const MAX_OPTIONS: usize = 64;
 pub const MAX_PICTURES: usize = 8;
 
@@ -608,10 +617,8 @@ fn options(m: &mut M, root: &Value, facts: &mut Facts) {
         };
         let allowed: Vec<&str> = ["key", "kind", "default", "name"].iter().chain(by_kind).copied().collect();
         m.keys(obj, &ptr, &allowed);
-        let mut required = vec!["key", "kind", "name"];
-        if kind != "key" {
-            required.push("default");
-        }
+        // Every kind has a default: a text option's within max_length, a key option's a control the game names.
+        let mut required = vec!["key", "kind", "name", "default"];
         required.extend_from_slice(by_kind);
         m.required(obj, &ptr, &required);
         let key = obj.get("key").and_then(|k| {
@@ -733,7 +740,8 @@ fn options(m: &mut M, root: &Value, facts: &mut Facts) {
                 });
                 if let (Some(d), Some(max)) = (default, max) {
                     if let Some(s) = m.string(d, &format!("{ptr}/default"), "options/default") {
-                        if !line_ok(s, 0, max) {
+                        // Code points, and one line: no newline or other control character (spaces are the mod's).
+                        if s.chars().count() > max || s.chars().any(char::is_control) {
                             m.at(210, d, &format!("{ptr}/default"), vec![("key", t(shown.clone())), ("why", p("Option.DefaultTooLong"))]);
                         }
                     }
@@ -741,7 +749,11 @@ fn options(m: &mut M, root: &Value, facts: &mut Facts) {
             }
             "key" => {
                 if let Some(d) = default {
-                    m.line(d, &format!("{ptr}/default"), "options/default", 1, 64);
+                    if let Some(s) = m.string(d, &format!("{ptr}/default"), "options/default") {
+                        if !GAME_CONTROLS.iter().any(|c| c.eq_ignore_ascii_case(s)) {
+                            m.at(210, d, &format!("{ptr}/default"), vec![("key", t(shown.clone())), ("why", p("Option.KeyDefaultUnknown")), ("value", t(s))]);
+                        }
+                    }
                 }
             }
             _ => {}
@@ -1051,6 +1063,11 @@ fn layers(m: &mut M, root: &Value, facts: &mut Facts) {
                         m.ctx.add(301, FILE, Some(member.key_pos), Some(&mp), vec![("layer", t(name.clone())), ("why", p("Layer.NoSuchOption")), ("value", t(member.key.clone()))]);
                         continue;
                     };
+                    // The mod reads its text and key options itself (services-mods); they choose no layer.
+                    if option.kind == "text" || option.kind == "key" {
+                        m.ctx.add(301, FILE, Some(member.key_pos), Some(&mp), vec![("layer", t(name.clone())), ("why", p("Layer.OptionNotChoosing")), ("value", t(member.key.clone()))]);
+                        continue;
+                    }
                     let wanted: Vec<&Value> = match &member.value.kind {
                         Kind::Array(list) => list.iter().collect(),
                         _ => vec![&member.value],
@@ -1063,7 +1080,6 @@ fn layers(m: &mut M, root: &Value, facts: &mut Facts) {
                             "choice" => w.as_str().is_some_and(|s| option.values.iter().any(|v| v == s)),
                             "toggle" => w.as_bool().is_some(),
                             "number" => w.as_f64().is_some(),
-                            "text" => w.as_str().is_some(),
                             _ => false,
                         };
                         if !ok {

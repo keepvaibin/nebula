@@ -783,3 +783,62 @@ fn the_previous_engines_keys_name_their_replacement() {
     let report = check(&luma(&[("pre_standard", r#"{"save": {}}"#)], &[]), &NO_GAME);
     assert_eq!(report.findings.iter().map(|f| f.level).collect::<Vec<_>>(), [luma_validate::Level::Note]);
 }
+
+/// Text and key options (director's decision 23:0x: a mod reads them itself, key options are input actions).
+#[test]
+fn text_and_key_options_are_whole_and_choose_no_layer() {
+    let said = |options: &str, layers: Option<&str>| -> Vec<(u16, String, String)> {
+        let mut over = vec![("options", options)];
+        let mut more = Vec::new();
+        if let Some(l) = layers {
+            over.push(("layers", l));
+            more.push(file("layers/base/files/a.wav", b"x"));
+        }
+        check(&luma(&over, &more), &NO_GAME)
+            .findings
+            .iter()
+            .map(|f| (f.code, f.pointer.clone().unwrap_or_default(), message(f, "UsEnglish")))
+            .collect()
+    };
+    let text = |default: &str, max: u32| format!(r#"[{{"key": "t", "kind": "text", "name": "T", "default": {default}, "max_length": {max}}}]"#);
+    // Within max_length in code points, spaces kept: no finding.
+    assert!(said(&text(r#""ééééé""#, 5), None).is_empty());
+    assert!(said(&text(r#"" a b ""#, 5), None).is_empty());
+    assert!(said(&text(r#""""#, 5), None).is_empty());
+    for bad in [r#""éééééé""#, r#""a\nb""#, r#""a\tb""#, r#""a\u0000""#] {
+        let got = said(&text(bad, 5), None);
+        assert_eq!(got.len(), 1, "{bad}: {got:?}");
+        assert_eq!((got[0].0, got[0].1.as_str()), (210, "/options/0/default"), "{bad}");
+        assert!(got[0].2.contains("max_length"), "{}", got[0].2);
+    }
+    // max_length and default are required.
+    let got = said(r#"[{"key": "t", "kind": "text", "name": "T", "default": "a"}]"#, None);
+    assert!(got.iter().any(|(c, p, m)| *c == 203 && p == "/options/0" && m.contains("max_length")), "{got:?}");
+    let got = said(r#"[{"key": "t", "kind": "text", "name": "T", "max_length": 4}]"#, None);
+    assert!(got.iter().any(|(c, p, m)| *c == 203 && p == "/options/0" && m.contains("default")), "{got:?}");
+    // A key option: a default is required and names one of the game's controls, as the input bindings spell them.
+    let key = |default: &str| format!(r#"[{{"key": "k", "kind": "key", "name": "K", "default": {default}}}]"#);
+    for good in [r#""two""#, r#""Two""#, r#""dpad_up""#, r#""jump_back""#] {
+        assert!(said(&key(good), None).is_empty(), "{good}");
+    }
+    for bad in [r#""Space""#, r#""2""#, r#""""#] {
+        let got = said(&key(bad), None);
+        assert_eq!(got.len(), 1, "{bad}: {got:?}");
+        assert_eq!((got[0].0, got[0].1.as_str()), (210, "/options/0/default"), "{bad}");
+        assert!(got[0].2.contains("is not a control the game names"), "{}", got[0].2);
+    }
+    let got = said(&key("2"), None);
+    assert!(got.iter().any(|(c, p, _)| *c == 204 && p == "/options/0/default"), "{got:?}");
+    let got = said(r#"[{"key": "k", "kind": "key", "name": "K"}]"#, None);
+    assert!(got.iter().any(|(c, p, m)| *c == 203 && p == "/options/0" && m.contains("default")), "{got:?}");
+    // A layer's when may not name a text or key option: its own message, not "a value it can never have".
+    let both = r#"[{"key": "t", "kind": "text", "name": "T", "default": "a", "max_length": 4}, {"key": "k", "kind": "key", "name": "K", "default": "two"}, {"key": "on", "kind": "toggle", "name": "On", "default": true}]"#;
+    for (named, value) in [("t", r#""a""#), ("k", r#""two""#)] {
+        let layers = format!(r#"[{{"name": "base", "when": {{"option": {{"{named}": {value}}}}}}}]"#);
+        let got = said(both, Some(&layers));
+        assert_eq!(got.len(), 1, "{named}: {got:?}");
+        assert_eq!((got[0].0, got[0].1.as_str()), (301, format!("/layers/0/when/option/{named}").as_str()));
+        assert!(got[0].2.contains("a text or key option") && got[0].2.contains(&format!("\"{named}\"")), "{}", got[0].2);
+    }
+    assert!(said(both, Some(r#"[{"name": "base", "when": {"option": {"on": true}}}]"#)).is_empty());
+}
