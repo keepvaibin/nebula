@@ -578,3 +578,15 @@ koopavs2partsdarkmatterb	DMMatA*	translucent									a ghost: drawn as the game,
 koopavs2partsdarkmatterc	DMMatA*	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
 koopavs2partsdarkmatterd	DMMatA*	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
 koopavs2partsdarkmattere	DMMatA*	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+# c94: honey and quicksand (EVERYTHING 4.11; FB coord/rows/fb_kinds_4_11.tsv).
+beewallclimbplaneta	honey_v_x	gloss	0.1	0	1.5		1				honey (the Honeyhive climbing wall; FC c94, 4.11): an opaque draw: a glossy body, its colour the body's; picture owed		
+beewallclimbplanetb	honey_01_v	gloss	0.1	0	1.5		1				honey (the Honeyhive climbing wall; FC c94, 4.11): an opaque draw: a glossy body, its colour the body's; picture owed		
+beewallclimbplanetc	honey_00_v	gloss	0.1	0	1.5		1				honey (the Honeyhive climbing wall; FC c94, 4.11): an opaque draw: a glossy body, its colour the body's; picture owed		
+forestbossplanet	honey_v	gloss	0.1	0	1.5		1				honey (Bugaboom's planet; FC c94, 4.11): an opaque draw: a glossy body, its colour the body's; picture owed		
+foresthomeplanet	honey_v	gloss	0.1	0	1.5		1				honey (the Honeyhive home planet; FC c94, 4.11): an opaque draw: a glossy body, its colour the body's; picture owed		
+honeyqueenplanet	honey_v	gloss	0.1	0	1.5		1				honey (the queen's planet; FC c94, 4.11): an opaque draw: a glossy body, its colour the body's; picture owed		
+minihoneybeeexgalaxy	honey_v_x	gloss	0.1	0	1.5		1				honey (a map preview; FC c94, 4.11): an opaque draw: a glossy body, its colour the body's; picture owed		
+minihoneybeekingdomgalaxy	BeeWallClimbPlanetA_0406e_honey_v_x	gloss	0.1	0	1.5		1				honey (a map preview; FC c94, 4.11): an opaque draw: a glossy body, its colour the body's; picture owed		
+sandstreamsmallplanet	QuickSandMat_v	dielectric	1	0			1				quicksand (the quicksand flow; FC c94, 4.11): matte; picture owed		
+quicksand2dplanet	lambert2_v	dielectric	1	0			1				quicksand (the 2D quicksand flow; FC c94, 4.11): matte; picture owed		
+quicksand2dplanet	lambert5_v_x	dielectric	1	0			1				quicksand (the 2D quicksand flow's second layer; FC c94, 4.11): matte; picture owed		
