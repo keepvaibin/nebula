@@ -373,7 +373,7 @@ public:
     void record_scene_aa();
     // The 3D scene in a wide target while `wanted` (the enhanced lighting), its camera at the end (scene_camera.h).
     bool begin_wide_scene(bool wanted, const SceneClearValues* initial_clear = nullptr);
-    void end_wide_scene(bool finish = false);  // finish: the traced relight's camera (scene_camera.hlsl g_finish)
+    void end_wide_scene(unsigned finish = 0u);  // finish: the traced relight's camera (scene_camera.hlsl g_finish)
     // Ambient occlusion (ambient_occlusion.h) of the scene drawn so far, from the view `set_scene_ao_view` gave:
     // after the opaque phases, before the translucent ones.
     [[nodiscard]] bool ambient_occlusion_ready() const noexcept { return ambient_occlusion_.ready(); }
@@ -1005,7 +1005,7 @@ private:
     bool scene_hdr_ = false;
     bool ensure_wide_set(SceneTargetSet& set, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& rtv_heap);
     void record_hdr_begin();
-    void record_hdr_end(bool finish = false);
+    void record_hdr_end(unsigned finish = 0u);
     SceneCamera camera_pass_;
     std::chrono::steady_clock::time_point camera_metered_{};
     // persistent_views: the conversion-source views live in the descriptor

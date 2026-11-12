@@ -208,7 +208,7 @@ public:
     [[nodiscard]] std::int64_t last_present_qpc() const noexcept { return swap_present_qpc_; }
     // The 3D scene in a wide target while `wanted` (the enhanced lighting), its camera at the end (scene_camera_vk.h).
     bool begin_wide_scene(bool wanted, const SceneClearValues* initial_clear = nullptr);
-    void end_wide_scene(bool finish = false);  // finish: the traced relight's camera (scene_camera.hlsl g_finish)
+    void end_wide_scene(unsigned finish = 0u);  // finish: the traced relight's camera (scene_camera.hlsl g_finish)
     [[nodiscard]] bool temporal_mode() const;
     // The upscaler reads the motion but no reactive mask (SGSR 2): every draw of the scene shares the motion pass, the
     // ones without motion leaving it as it is, so the pass is not closed and reopened between them.
@@ -709,7 +709,7 @@ private:
     bool wide_base_sampled_ = false;
     bool ensure_wide_set(SceneSet& set);
     void record_wide_begin(const SceneClearValues* initial_clear);
-    void record_wide_end(bool finish = false);
+    void record_wide_end(unsigned finish = 0u);
     vk::SceneCameraVk scene_camera_;
     std::chrono::steady_clock::time_point camera_metered_{};
     std::uint64_t scene_depth_serial_ = 0;

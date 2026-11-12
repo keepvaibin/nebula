@@ -1976,7 +1976,7 @@ void RendererVk::record_wide_begin(const SceneClearValues* initial_clear) {
     reset_draw_bindings();
 }
 
-void RendererVk::end_wide_scene(bool finish) {
+void RendererVk::end_wide_scene(unsigned finish) {
     if (!scene_.wide) {
         return;
     }
@@ -1985,7 +1985,7 @@ void RendererVk::end_wide_scene(bool finish) {
     record_wide_end(finish);
 }
 
-void RendererVk::record_wide_end(bool finish) {
+void RendererVk::record_wide_end(unsigned finish) {
     if (!scene_.wide) {
         return;
     }

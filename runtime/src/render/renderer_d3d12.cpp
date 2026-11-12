@@ -5503,14 +5503,14 @@ void RendererD3D12::record_hdr_begin() {
     bind_scene();
 }
 
-void RendererD3D12::end_wide_scene(bool finish) {
+void RendererD3D12::end_wide_scene(unsigned finish) {
     if (!scene_hdr_) {
         return;
     }
     record_hdr_end(finish);
 }
 
-void RendererD3D12::record_hdr_end(bool finish) {
+void RendererD3D12::record_hdr_end(unsigned finish) {
     if (!scene_hdr_) {
         return;
     }

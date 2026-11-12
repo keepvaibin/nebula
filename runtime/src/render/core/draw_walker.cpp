@@ -1459,8 +1459,10 @@ void RenderCore::walk_opaque_end(const NebulaFramePass& pass) {
 void RenderCore::walk_scene_end() {
     rt_program_signal();  // signals S and A: the scene as the programs drew it, before anything after the scene
     rt_reactive();
-    // The camera's finish (scene_camera.hlsl): traced, relight style on, form above 0 (rt_look_[0]; 0 is Painted).
-    const bool traced_finish = rt_light_on_ && rt_physical_ && rt_look_[0] > 0.0f;
+    // The camera's finish (scene_camera.hlsl g_finish): 1 traced with the relight in the sun (form above 0,
+    // rt_look_[0]; 0 is Painted), 2 traced with the relight and no sun (l95: the eye may open), 0 none.
+    const unsigned traced_finish =
+        !(rt_light_on_ && rt_physical_) ? 0u : rt_look_[0] > 0.0f ? 1u : rt_sunless_ ? 2u : 0u;
     rt_light_end();
     scene_phase_ = false;
     temporal_scene_ = false;

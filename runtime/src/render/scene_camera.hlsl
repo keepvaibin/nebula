@@ -17,7 +17,8 @@
 cbuffer CameraConstants : register(b0) {
     float2 g_size;     // the picture's pixels
     float g_seconds;   // since the last meter; below zero, the eye starts open
-    float g_finish;    // 1: the scene is traced and relit, the finish below; 0: the camera without it
+    float g_finish;    // 1: the scene is traced and relit, the finish below; 2: the same where no sun is traced
+                       // (the eye may open, l95); 0: the camera without it
 };
 
 // Linear light: where the shoulder starts (its values pass unchanged below). Authored white comes out at 0.963 linear.
@@ -41,6 +42,9 @@ static const float kAdaptLeast = 0.5f;          // the eye's least exposure (clo
 // Its most: 1.0, the game's own exposure (l91a, director A4): the meter cannot tell a sunlit view of dark ground from a
 // dim one, and a sunlit view is never opened.
 static const float kAdaptMost = 1.0f;
+// Its most where no sun is traced (g_finish 2, l95; PLANS-UNBUILT "Sunless places", FA's (b)): a room the art lights
+// dimly is metered open, up to one stop, as October's eye did.
+static const float kAdaptMostSunless = 2.0f;
 static const float kAdaptReference = 0.2f;      // the surfaces' mean light (the art's colour at full light is 1) a view is exposed for
 static const float kAdaptBright = 0.1f;         // the share of the surfaces, brightest first, that must not show past white
 static const float kAdaptSurfaces = 50.0f;      // a view is metered when its surfaces' weight times this passes the grid's cells
@@ -107,6 +111,7 @@ void meter_traced() {
             }
         }
     }
+    const float most = g_finish > 1.5f ? kAdaptMostSunless : kAdaptMost;
     const float now = u_exposure[uint2(0u, 0u)];
     float target = now > 0.0f ? now : 1.0f;
     if (float(weights) * kAdaptSurfaces > float(kMeterColumns * kMeterRows)) {
@@ -123,15 +128,15 @@ void meter_traced() {
             }
             above += count;
         }
-        const float highlight = bright > 0.0f ? 1.0f / max(bright, 1e-4f) : kAdaptMost;
-        target = clamp(min(max(kAdaptReference / max(mean, 1e-4f), 1.0f), highlight), kAdaptLeast, kAdaptMost);
+        const float highlight = bright > 0.0f ? 1.0f / max(bright, 1e-4f) : most;
+        target = clamp(min(max(kAdaptReference / max(mean, 1e-4f), 1.0f), highlight), kAdaptLeast, most);
     }
     // After a load or a pause, and with no eye yet, it starts at its target.
     float adapted = target;
     if (g_seconds >= 0.0f && now > 0.0f) {
         adapted = now * pow(abs(target / now), 1.0f - pow(1.0f - kEaseShare, min(g_seconds, 1.0f) * kEaseRate));
     }
-    adapted = clamp(adapted, kAdaptLeast, kAdaptMost);
+    adapted = clamp(adapted, kAdaptLeast, most);
     u_exposure[uint2(0u, 0u)] = adapted;
     u_exposure[uint2(1u, 0u)] = pow(abs(adapted), 1.0f / 2.2f);
 }

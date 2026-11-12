@@ -2216,6 +2216,7 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
         constexpr float kForm = 1.0f, kDebake = 1.0f, kAmbientLook = 1.0f;
         // No traced sun (a stage without one, the sun part off): the facing is 1 everywhere and the art keeps its own.
         const bool relit = rt_physical_ && sunned && rt_part(render, RtPart::Sun) != 0u;
+        rt_sunless_ = rt_physical_ && !relit;  // l95: the camera's finish 2 (the eye may open)
         const float up_sun = list.sky_up_known != 0u ? sky_up_[0] * sun[0] + sky_up_[1] * sun[1] + sky_up_[2] * sun[2] : 1.0f;
         rt_look_[0] = relit ? kForm : 0.0f;
         // The sun's height eased (c53; the director 11-11): a gravity flip under the fixed sun (d05) does not pop the

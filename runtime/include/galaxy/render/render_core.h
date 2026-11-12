@@ -429,6 +429,7 @@ private:
     [[nodiscard]] std::uint32_t rt_program_signal_due() const noexcept;
     void rt_program_signal();
     void rt_reactive();  // the reactive mask where the added light changed (plan 16.4)
+    bool rt_sunless_ = false;    // l95: the relight on and no traced sun this walk (the camera's finish 2)
     bool rt_physical_ = false;   // the relight (DIRECTOR.md D1; the setting's "physical"): rt_look_'s kForm and gains
     bool rt_lamps_own_ = false;  // local lights off (plan 19.1): the programs light by their own lamp (view_flags bit 32)
     // The second layer, at the opaque phases' end: the scene's blended surfaces (water, glass, crystal) drawn into the
