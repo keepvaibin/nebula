@@ -69,13 +69,19 @@ pub(crate) fn check(ctx: &mut Ctx) {
         .map(|l| l.members().iter().map(|m| (m.key.clone(), m.value.items().iter().filter_map(|x| x.as_str().map(str::to_string)).collect())).collect())
         .unwrap_or_default();
 
-    // The folders under code/: each a known platform, listed; nothing else under code/.
+    // The folders under code/: each a known platform, listed; nothing else under code/ but the mod's own .lumi.
+    let own_lumi: Option<String> = root.as_ref().and_then(|r| r.get("id")).and_then(|v| v.as_str()).map(|id| format!("{id}.lumi"));
     let mut found: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for item in ctx.m.items.clone() {
         let Some(rest) = item.name.strip_prefix("code/") else { continue };
         let mut parts = rest.splitn(2, '/');
         let folder = parts.next().unwrap_or("").to_string();
         let file = parts.next();
+        // A library mod's interface (`code/<id>.lumi`, written by `lumalink build`; a mod that uses the library reads
+        // it): the one file beside the platform folders.
+        if file.is_none() && item.kind == EntryKind::File && own_lumi.as_deref() == Some(folder.as_str()) {
+            continue;
+        }
         if platform(&folder).is_none() {
             ctx.add(501, &item.name, None, None, vec![("found", t(folder.clone())), ("why", p("Code.UnknownPlatform"))]);
             continue;
