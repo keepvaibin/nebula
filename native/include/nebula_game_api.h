@@ -24,7 +24,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 151u
+#define NEBULA_GAME_API_VERSION 152u
 
 /* The game's fixed step: nebula_game_run's loop runs this many steps a second (frame_wait paces them), whatever the
    display's rate; the host presents each or interpolates between them. */
@@ -382,6 +382,14 @@ enum {
     NEBULA_OPTION_DIAGNOSE_SCENE_LOADS, /* --diagnostics scene-loads: 1 logs what each scene change loads */
     NEBULA_OPTION_TOUCH_POINTER,       /* 0 no touch screen, 1 one, 2 the finger has the pointer, 3 and the game is on a
                                           menu: no pointer shows under a finger there */
+    NEBULA_OPTION_GRAPHICS_BACKEND,    /* the renderer's backend, the same all session: 1 D3D12, 2 Vulkan (draw.native) */
+};
+
+/* post_register's result (draw.post, contract draw 15). */
+enum {
+    NEBULA_POST_OK = 0,        /* *program is the compiled program (never 0) */
+    NEBULA_POST_COMPILE = 1,   /* the device's compiler refused the text: its first error in `error` */
+    NEBULA_POST_NO_MOTION = 2, /* it reads motion and the frame has no motion vectors (temporal upscaling off) */
 };
 
 /* The movie player's sound (movie_audio_control). */
@@ -917,6 +925,15 @@ typedef struct NebulaHostServices {
        per loss, then 0. The game asks only while it could open its pause menu, and opens it as the pause button does. A
        request the game did not take (a cutscene, a wipe) lapses when the window is in front again. */
     int (*take_pause_request)(void* user);
+    /* draw.post (contract draw 15): a mod's post program compiled for this device. `text` is the cooked program's text
+       (LumaLink's part: its params over post_params, the mod's `float4 post(PostIn i)`), `size` bytes, not NUL-ended;
+       the host adds its prelude (PostIn, scene, scene_texel, depth, motion, post_params, the bindings) and its entry.
+       `reads`: LUMA_DRAW_POST_READS_*. NEBULA_POST_* and *program; `error` holds the compiler's first error, NUL-ended
+       within `error_capacity`. Game thread. */
+    int32_t (*post_register)(void* user, const void* text, uint32_t size, uint32_t reads, uint32_t* program, char* error,
+                             uint32_t error_capacity);
+    /* The program freed, after the lists that name it are released. Game thread. */
+    void (*post_free)(void* user, uint32_t program);
 } NebulaHostServices;
 
 

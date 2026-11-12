@@ -194,6 +194,9 @@ namespace ModelSys {
         return mViewMtx;
     }
     extern u32 mEntryNum;
+    // draw.view (LumaCore 2.4 layer 7): while not null, a camera (eye from world) the scene's poses draw under in
+    // place of their own, in blocks never kept: the scene seen from another camera. Mirror and shadow poses keep theirs.
+    extern const f32 (*mViewOverride)[4];
 }  // namespace ModelSys
 
 enum ModelFlag {

@@ -237,6 +237,7 @@ namespace {
         Grown< NebulaScreenProbe > mProbes;
         Grown< u32 > mRingIndices;
         Grown< InstanceRow > mInstanceRows;
+        Grown< NebulaNativeCall > mNativeCalls;
         u8* mRingVertices;
         u32 mRingBytes;
         u32 mRingRoom;
@@ -321,6 +322,7 @@ namespace {
         pStore->mProbes.mCount = 0;
         pStore->mRingIndices.mCount = 0;
         pStore->mInstanceRows.mCount = 0;
+        pStore->mNativeCalls.mCount = 0;
         pStore->mRingBytes = 0;
         pStore->mPage = pStore->mFirstPage;
         if (pStore->mPage != nullptr) {
@@ -476,6 +478,8 @@ namespace Frame {
         rList.probes = pStore->mProbes.mData;
         rList.instance_rows = pStore->mInstanceRows.mData;
         rList.instance_row_count = pStore->mInstanceRows.mCount;
+        rList.native_calls = pStore->mNativeCalls.mData;
+        rList.native_call_count = pStore->mNativeCalls.mCount;
         rList.pass_count = pStore->mPasses.mCount;
         rList.item_count = pStore->mItems.mCount;
         rList.view_count = pStore->mViews.mCount;
@@ -1234,6 +1238,28 @@ namespace Frame {
         NebulaFramePass& rPass = addPass(static_cast< u8 >(kind));
         rPass.arg0 = arg0;
         rPass.arg1 = arg1;
+    }
+
+    void post(u32 program, const f32 (*pRows)[4]) {
+        Grown< InstanceRow >& rRows = store()->mInstanceRows;
+        const u32 first = rRows.mCount;
+        memcpy(rRows.addRun(4), pRows, 4 * sizeof(InstanceRow));
+        NebulaFramePass& rPass = addPass(NEBULA_PASS_POST);
+        rPass.arg0 = program;
+        rPass.first_item = first;
+        rPass.item_count = 4;
+    }
+
+    void native(u32 point, void (*fn)(void*, const NebulaNativeFrame*), void* pUser) {
+        Grown< NebulaNativeCall >& rCalls = store()->mNativeCalls;
+        const u32 index = rCalls.mCount;
+        NebulaNativeCall& rCall = rCalls.add();
+        rCall.fn = fn;
+        rCall.user = pUser;
+        NebulaFramePass& rPass = addPass(NEBULA_PASS_NATIVE);
+        rPass.arg0 = point;
+        rPass.first_item = index;
+        rPass.item_count = 1;
     }
 
     void cameraCut(u32 cuts) {

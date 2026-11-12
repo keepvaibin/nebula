@@ -183,8 +183,9 @@ typedef struct LumaDrawService {
        LUMA_E_HANDLE, reported. */
     int32_t (*texture_free)(const LumaMod* mod, LumaDrawTexture texture);
 
-    /* ---- 3-D (the world points only, else LUMA_E_STATE, reported): depth tested, unlit ----
-       Arguments as the 2-D calls. Plan 2.4 layer 3 (FB): until it lands each returns LUMA_E_ABSENT at a world point. */
+    /* ---- 3-D (the world points only, else LUMA_E_STATE, reported): depth tested, unlit (mesh: its own materials in
+       white light) ----
+       Arguments as the 2-D calls. */
 
     /* 1.0. A line from a to b, `thickness` world units wide (above 0), facing the camera. */
     int32_t (*line3)(const LumaMod* mod, const LumaDrawVec3* a, const LumaDrawVec3* b, float thickness,
