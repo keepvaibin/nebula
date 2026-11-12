@@ -97,6 +97,10 @@ K_TYPE_REF, K_TEMPLATE_REF, K_NAMESPACE_REF, K_MEMBER_REF, K_OVERLOADED_REF, K_V
 K_UNEXPOSED_EXPR, K_DECL_REF_EXPR, K_INTEGER_LITERAL, K_FLOATING_LITERAL, K_PAREN = 100, 101, 106, 107, 111
 K_UNARY_OPERATOR, K_ARRAY_SUBSCRIPT, K_BINARY, K_COMPOUND_ASSIGN, K_UNARY_EXPR = 112, 113, 114, 115, 136
 K_CASE, K_IF, K_ASM, K_MS_ASM, K_STATIC_ASSERT = 203, 205, 215, 229, 602
+# Casts whose type is written in them (C style, static, dynamic, reinterpret, const, functional): every child but the
+# last (the operand) is that type's; and new.
+K_CASTS = (117, 124, 125, 126, 127, 128)
+K_NEW = 134
 SC_STATIC = 3
 T_ENUM_KIND = 106
 # Whole numbers (bool and the character types too: a const one may be a constant expression)
@@ -479,8 +483,14 @@ class Unit:
             # The kernel's own numbers (its tables' sizes, its hashes' constants) are not the game's data.
             return self.count_numbers(cursor, "the kernel's own code")
         found = []
-        for child in self.children(cursor):
+        # A constructor's base written as a template (`: InlineVector< T, 4 >()`): its arguments are its children here.
+        for child in self.without_template_arguments(self.children(cursor)):
             if child.kind in (K_PARM, K_TYPE_REF, K_TEMPLATE_REF, K_NAMESPACE_REF, K_MEMBER_REF) or 400 <= child.kind < 500:
+                continue
+            if cursor.kind != K_CONSTRUCTOR and child.kind != K_COMPOUND:
+                # Beside the body, a function has only its type (an array size: `f32 (*f())[4]`); a constructor's
+                # member initializers are code outside its body.
+                self.count_numbers(child, "a function's type")
                 continue
             self.find_numbers(child, [cursor], found)
         place = 0
@@ -500,7 +510,12 @@ class Unit:
         self.number_skips[why] = self.number_skips.get(why, 0) + 1
 
     def count_numbers(self, cursor, why):
-        """The numbers in code that gets no row: counted, with the reason, for the completeness report."""
+        """The numbers of a tree that are not named (the cursor itself too): counted, with the reason, for the
+        completeness report."""
+        if cursor.kind in (K_INTEGER_LITERAL, K_FLOATING_LITERAL):
+            if self.offset(self.api.rangeStart(self.api.extent(cursor))) is not None:
+                self.skip_number(why)
+            return
         for child in self.children(cursor):
             if child.kind in (K_INTEGER_LITERAL, K_FLOATING_LITERAL):
                 if self.offset(self.api.rangeStart(self.api.extent(child))) is not None:
@@ -529,6 +544,19 @@ class Unit:
         if k in (K_ASM, K_MS_ASM):
             return self.count_numbers(cursor, 'inside assembly')
         children = self.children(cursor)
+        children = self.without_template_arguments(children)
+        if k in K_CASTS and len(children) > 1:
+            for child in children[:-1]:
+                self.count_numbers(child, "a cast's type (an array size)")
+            children = children[-1:]
+        elif k == K_NEW:
+            kept = []
+            for child in children:
+                if self.literal_cursor(child) is not None:
+                    self.count_numbers(child, "an array size in new")
+                else:
+                    kept.append(child)
+            children = kept
         if k == K_CASE:
             for child in children[:-1]:
                 self.count_numbers(child, 'a case label')
@@ -574,6 +602,44 @@ class Unit:
                 return self.find_numbers_no_constants(children[0], parents + [cursor], found)
         for child in children:
             self.find_numbers(child, parents + [cursor], found)
+
+    def without_template_arguments(self, children):
+        """The children less those written inside a template's argument list (`InlineVector< T, 4 >()`: the 4 is a
+        child of the expression, after its TemplateRef), each such one counted."""
+        refs = [c for c in children if c.kind == K_TEMPLATE_REF]
+        if not refs:
+            return children
+        spans = []
+        for ref in refs:
+            end = self.offset(self.api.rangeEnd(self.api.extent(ref)))
+            if end is None:
+                continue
+            at = end
+            while at < len(self.text) and self.text[at:at + 1] in b' \t\r\n':
+                at += 1
+            if self.text[at:at + 1] != b'<':
+                continue
+            depth = 0
+            close = None
+            for i in range(at, min(len(self.text), at + 4096)):
+                c = self.text[i:i + 1]
+                if c == b'<':
+                    depth += 1
+                elif c == b'>':
+                    depth -= 1
+                    if depth == 0:
+                        close = i
+                        break
+            if close is not None:
+                spans.append((at, close))
+        kept = []
+        for child in children:
+            start = self.offset(self.api.rangeStart(self.api.extent(child)))
+            if start is not None and any(a < start < b for a, b in spans):
+                self.count_numbers(child, 'a template argument')
+            else:
+                kept.append(child)
+        return kept
 
     def find_numbers_no_constants(self, cursor, parents, found):
         if cursor.kind == K_DECL_REF_EXPR:
