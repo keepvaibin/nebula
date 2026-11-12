@@ -378,6 +378,9 @@ float4 traced_at(float4 pixel) {
 // surface mirrors, over it (rgb, already by how much the surface mirrors; a: how much of the colour under it stays,
 // plus 2 on a blended surface: there what stays is taken from its alpha, and the mirror is given back the share
 // the blend would take of it).
+// The local lights' light on the draw's own colour (traced_colour's lamps), for a clear surface's composite (d11).
+static float3 g_traced_lamps = float3(0.0, 0.0, 0.0);
+static const float kClearLit = 0.5;  // of it a clear body scatters in its own colour
 float4 traced_mirror(float3 colour, float alpha, float4 pixel) {
     if (!traced_mirror_own(pixel)) {
         return float4(colour, alpha);  // another surface's mirror, or a glow (traced_mirror_own)
@@ -392,14 +395,18 @@ float4 traced_mirror(float3 colour, float alpha, float4 pixel) {
         const float f = saturate(mirror.a - 4.0);
         const float body = (1.0 - f) * saturate(gTextures[uint(view_traced.y)].Load(int3(pixel.xy, 0)).a) * alpha;
         const float covered = f + body;
+        // The local lights' light scattered inside it, in its own colour (d11): on what its mirror and body leave.
+        const float3 within = (1.0 - covered) * kClearLit * g_traced_lamps;
         if (view_transmit.y > 0.5) {
             // High (rt_transmit.hlsl): what lies behind traced bent; the rest of the pixel is it, covered whole.
             const float4 seen = gTextures[uint(view_transmit.x)].Load(int3(pixel.xy, 0));
             if (seen.a > 0.5) {
-                return float4(body * colour + mirror.rgb + (1.0 - covered) * seen.rgb, 1.0);
+                return float4(body * colour + mirror.rgb + (1.0 - covered) * seen.rgb + within, 1.0);
             }
         }
-        return float4((body * colour + mirror.rgb) / max(covered, 1e-4), covered);
+        // No T: the blend adds `within` by the alpha it raises.
+        const float cover = saturate(covered + max(within.r, max(within.g, within.b)));
+        return float4((body * colour + mirror.rgb + within) / max(cover, 1e-4), cover);
     }
     if (mirror.a > 1.5) {
         // Blended: its alpha by what stays (glass clears where a real mirror stands for its painted one), and the
@@ -622,7 +629,9 @@ float4 traced_untinted(float4 c) {
     }
     const float3 lin = traced_lin(c.rgb);
     const float l = max(lin.r, max(lin.g, lin.b));
-    return float4(traced_srgb(float3(l, l, l)), c.a);
+    // d12 (the owner 11-12: the sea blue, the fall and the pool above it white): kFallTint of its art's colour stays.
+    const float kFallTint = 0.35;
+    return float4(traced_srgb(lerp(float3(l, l, l), lin, kFallTint)), c.a);
 }
 float4 traced_colour(float4 c, float4 pixel) {
     if ((view_flags & 8u) == 0u) {
@@ -670,6 +679,7 @@ float4 traced_colour(float4 c, float4 pixel) {
     // kAddedMost a channel in linear light (plan s5's guard on the product, A2-05; counted by the tracer, l82).
     const float kAddedMost = 1.5;
     const float3 lamps = metal ? float3(0.0, 0.0, 0.0) : min(traced_pure(traced_lin(base), metal) * added, kAddedMost);
+    g_traced_lamps = lamps;
     const float4 seen = traced_mirror((traced_pure(traced_lin(c.rgb), metal) * share * sheen.a + sheen.rgb) + lamps, c.a, pixel);
     // c81, c97 (L4; the director 11-12): a glowing body (draw flag 256: its mesh a light this frame) shows its own
     // drawn colour lit from inside: at least 0.6 and at most 1.2 of its lit value, a channel (hue and pattern kept;

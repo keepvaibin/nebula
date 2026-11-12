@@ -256,7 +256,13 @@ void main(uint3 id : SV_DispatchThreadID) {
                     const float2 terms = mirror_terms(rough_, nv);
                     const float f_env = saturate(kSheenF0 * terms.x + terms.y);
                     const float3 o_here = g_pass.z != 0u ? max(g_point_o.Load(int3(pixel, 0)).rgb, 0.0f) : rt_open_o();
-                    const float3 lobe = st.sun * (v * kSheenPi * d * vis * f * nl) + st.sky * rt_o_prime(o_here) * f_env;
+                    // d10 (the director 11-12; r0415s's lava stop, the ground white toward the low sun): where the look
+                    // and the sun both graze, pi D Vis F is 12 at roughness 0.7 against 0.042 head on. A matte surface's
+                    // sun highlight is at most kSheenMost of the sun's light on it; a smoother one (roughness under
+                    // 0.6, open at 0.3) keeps the model's peak.
+                    const float kSheenMost = 0.0f;  // d12: a matte surface takes no sun lobe (the owner: "glare everywhere")
+                    const float most = lerp(16.0f, kSheenMost, saturate((rough_ - 0.3f) / 0.3f));
+                    const float3 lobe = st.sun * (v * nl * min(kSheenPi * d * vis * f, most)) + st.sky * rt_o_prime(o_here) * f_env;
                     mirror = float4(t * min(lobe, 16.0f), 1.0f - t * f_env);
                 }
             }
