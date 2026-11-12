@@ -937,7 +937,9 @@ std::int32_t ask(const LumaMod* mod, const char* where, Root root, Op op, const 
             return LUMA_E_TOO_LARGE;
         }
         try {
-            request->bytes.assign(static_cast<const char*>(data), static_cast<std::size_t>(bytes));
+            if (bytes > 0u) {  // a null data with 0 bytes is an empty file
+                request->bytes.assign(static_cast<const char*>(data), static_cast<std::size_t>(bytes));
+            }
         } catch (...) {
             return LUMA_E_MEMORY;
         }
