@@ -214,7 +214,8 @@ void NativeGameAudio::frame() {
     const std::span<const float> samples = s.mixer->end_frame();
     const std::span<const float> apart = s.mixer->surround();
     const galaxy::RuntimeAudioSettings audio = galaxy::get_runtime_settings().audio;
-    s.mixer->set_category_gains({1.0f, audio.music, audio.voice, audio.sfx, audio.ambience, audio.cutscene});
+    // A mod's music (audio.music) fades the game's own out and back.
+    s.mixer->set_category_gains({1.0f, audio.music * galaxy::luma_audio::game_music_share(), audio.voice, audio.sfx, audio.ambience, audio.cutscene});
     if (audio.sound_output != s.sound_output) {
         s.sound_output = audio.sound_output;
         if (s.device != nullptr) {
@@ -278,6 +279,7 @@ void NativeGameAudio::frame() {
             out[i * 2u + 1u] = both;
         }
     }
+    galaxy::luma_audio::tap_output(out.data(), frames, s.mixer->rate());  // what the player hears, to mods' taps
     const bool trace_first = ::galaxy::diagnosing(::galaxy::kDiagnoseFileReads);
     static bool first_sound = false;
     if (trace_first && !first_sound && std::any_of(out.begin(), out.end(), [](float value) { return value != 0.0f; })) {

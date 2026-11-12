@@ -28,7 +28,9 @@ extern "C" {
 #define LUMA_AUDIO_RING_MS 500u         /* what a stream holds pushed and not yet played */
 #define LUMA_AUDIO_NEED_MS 100u         /* under this much, a stream asks for more (NEED) */
 #define LUMA_AUDIO_VOLUME_MOST 4.0f     /* a voice's own volume (linear; 1: as cooked) */
-#define LUMA_AUDIO_FADE_MOST_MS 10000u  /* voice_stop's longest fade */
+#define LUMA_AUDIO_FADE_MOST_MS 10000u  /* voice_stop's, music's and music_restore's longest fade */
+#define LUMA_AUDIO_TAPS_MOST 2u         /* taps a mod holds at once */
+#define LUMA_AUDIO_TAP_FRAMES 1024u     /* frames in a SAMPLES block (stereo, float) */
 
 /* The buses a voice or stream plays on (an NSFX names its own; LUMA_AUDIO_BUS_SOUND keeps it). */
 typedef enum LumaAudioBus {
@@ -44,9 +46,18 @@ typedef enum LumaAudioEvent {
     LUMA_AUDIO_EVENT_ENDED = 1, /* a voice's, once: it played to its end (status LUMA_OK), or it was dropped for a
                                    voice of the mod's of higher priority (status LUMA_E_LIMIT, reported: Audio.Dropped).
                                    The handle is closed after it. A voice stopped by voice_stop has no event. */
-    LUMA_AUDIO_EVENT_NEED = 2   /* a stream's: less than LUMA_AUDIO_NEED_MS waits to be played; value: the frames
+    LUMA_AUDIO_EVENT_NEED = 2,  /* a stream's: less than LUMA_AUDIO_NEED_MS waits to be played; value: the frames
                                    stream_push takes now. Once a frame at most, and again only after a push. */
+    LUMA_AUDIO_EVENT_SAMPLES = 3 /* a tap's: data, LUMA_AUDIO_TAP_FRAMES stereo frames of float (left, right; valid
+                                   during the call only); value: the frames; flags: the output's rate (Hz); status
+                                   LUMA_E_BUSY when blocks before this one were lost (the mod took too long) */
 } LumaAudioEvent;
+
+/* What a tap hears (tap_open). */
+typedef enum LumaAudioTapSource {
+    LUMA_AUDIO_TAP_OUTPUT = 0, /* the game's output: the game's sound and every mod's, after the player's volumes */
+    LUMA_AUDIO_TAP_MODS = 1    /* every mod's voices and streams, before the master volume (the game's own not in it) */
+} LumaAudioTapSource;
 
 /* How play plays a sound (null: as cooked). */
 typedef struct LumaAudioPlay {
@@ -101,6 +112,21 @@ typedef struct LumaAudioService {
     /* Ends a stream: `drain` 1 plays what it holds first, 0 fades it out over 10 ms. No event after; the handle is
        closed at once. A handle not the mod's stream: LUMA_E_HANDLE, reported. */
     int32_t (*stream_close)(const LumaMod* mod, LumaHandle stream, uint32_t drain);
+    /* Replaces the game's music: the cooked sound `name` (as play's) plays on the music bus, looped by its loop
+       points (or whole), fading in over `fade_ms` (0: 10 ms) while the game's own music fades out as long. One music
+       for every mod: a later call, this mod's or another's, takes over (the one before fades out as long). Its end is
+       the mod's music_restore or its stop. Answers as play does (NOT_FOUND, FORMAT; fade_ms past
+       LUMA_AUDIO_FADE_MOST_MS: LUMA_E_ARGUMENT). */
+    int32_t (*music)(const LumaMod* mod, const char* name, uint32_t fade_ms);
+    /* The game's music back over `fade_ms` (0: 10 ms), the mod's fading out. LUMA_OK also when the mod's music is
+       not playing (nothing to do). */
+    int32_t (*music_restore)(const LumaMod* mod, uint32_t fade_ms);
+    /* Listens to `source` (LumaAudioTapSource): SAMPLES to fn (not null) once every LUMA_AUDIO_TAP_FRAMES frames,
+       for visualisers, recorders, beat detection. A 3rd tap: LUMA_E_LIMIT, reported. It hears only the game's
+       sound and the mods', nothing of the player's (the microphone is the audio.microphone service). */
+    int32_t (*tap_open)(const LumaMod* mod, uint32_t source, LumaEventFn fn, void* user, LumaHandle* out);
+    /* Ends a tap; no event after. A handle not the mod's tap: LUMA_E_HANDLE, reported. */
+    int32_t (*tap_close)(const LumaMod* mod, LumaHandle tap);
 } LumaAudioService;
 
 #ifdef __cplusplus

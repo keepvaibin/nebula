@@ -28,4 +28,12 @@ void set_store(const galaxy::assets::AssetStore* store) noexcept;
 // runs here; it waits for the game thread only while a call of the service holds the service's lock.
 bool mix(float* stereo, std::size_t frames, std::uint32_t rate, const float player[4]) noexcept;
 
+// The same thread, after the output is final (master, mute, mono, the remote speaker): the output's taps
+// (audio.tap_open LUMA_AUDIO_TAP_OUTPUT) get it. No tap: one atomic load.
+void tap_output(const float* stereo, std::size_t frames, std::uint32_t rate) noexcept;
+
+// The game's own music's share, 1 heard to 0 replaced by a mod's (audio.music), ramped by mix: the audio frame gives
+// the game's mixer the player's music volume times this.
+[[nodiscard]] float game_music_share() noexcept;
+
 }  // namespace galaxy::luma_audio
