@@ -40,7 +40,7 @@ namespace luma {
                 {"content.fx", 1, 0, nullptr, "effects"},
                 {"content.model", 1, 0, nullptr, "models"},
                 {"ui", 1, 0, nullptr, "ui"},
-                {"anim", 1, 0, nullptr, "animation"},
+                {"anim", 1, 1, nullptr, "animation"},
                 {"save", 1, 0, nullptr, "services-save"},
                 {"save.global", 1, 0, nullptr, "services-save"},
                 {"save.game", 1, 0, "save.game", "services-save"},
