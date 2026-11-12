@@ -445,8 +445,8 @@ def read_steps(t, bare, classes):
     out = []
     ends = 0
     pictures = set()
-    actions = {"hold", "stick", "shake", "pointer", "key", "settings", "picture", "call", "read", "stage", "wait", "end",
-               "take_out"}
+    actions = {"hold", "stick", "shake", "pointer", "key", "text", "settings", "picture", "call", "read", "stage", "wait",
+               "end", "take_out"}
     for i, s in enumerate(steps):
         path = "steps[%d]" % i
         if not isinstance(s, dict):
@@ -495,8 +495,8 @@ def read_steps(t, bare, classes):
         for key in needs:
             if key not in s:
                 raise HarnessError("%s: %s needs %s" % (path, action, key))
-        if bare and action not in ("wait", "picture", "key", "settings", "end"):
-            raise HarnessError("%s: a bare test has only wait, picture, key, settings and end steps" % path)
+        if bare and action not in ("wait", "picture", "key", "text", "settings", "end"):
+            raise HarnessError("%s: a bare test has only wait, picture, key, text, settings and end steps" % path)
         v = s[action]
         if action == "hold":
             if not isinstance(v, list) or not v or not all(isinstance(b, str) and b in BUTTONS for b in v):
@@ -515,6 +515,11 @@ def read_steps(t, bare, classes):
             if v not in KEYS:
                 raise HarnessError("%s.key must be one of %s" % (path, " ".join(sorted(KEYS))))
             step["line"] = "key %s" % v
+        elif action == "text":
+            # Typed into the open text request (input.text_request) as the keyboard types; the game half reads hex.
+            if not isinstance(v, str) or not v or len(v) > 256 or any(ord(c) < 0x20 or 0x7f <= ord(c) < 0xa0 for c in v):
+                raise HarnessError("%s.text is 1 to 256 characters, none a control character" % path)
+            step["line"] = "text %s" % v.encode("utf-8").hex()
         elif action == "settings":
             if not isinstance(v, str) or v not in SETTINGS_PAGES:
                 raise HarnessError("%s.settings must name a page: %s" % (path, " ".join(sorted(SETTINGS_PAGES))))

@@ -3,6 +3,7 @@
 // settings menu asks of its platform (host_window.h).
 
 #include "galaxy/achievements.h"
+#include "galaxy/luma_input_service.h"
 #include "galaxy/stats.h"
 #include "galaxy/vendor_download.h"
 #include "galaxy/render/host_window_win32.h"
@@ -779,6 +780,8 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     }
     if (msg == WM_CREATE) {
+        // The window types text for LumaCore's text requests (above).
+        galaxy::luma_input::set_text_entry_available(true);
         host_window::pointer_hwnd.store(reinterpret_cast<std::uintptr_t>(hwnd),
                              std::memory_order_release);
         raw_mouse_attach(hwnd);
@@ -809,6 +812,50 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         s_pointer_focus_valid.store(GetForegroundWindow() == hwnd,
                                     std::memory_order_release);
         seed_pointer_from_client(hwnd, false);
+    }
+    // LumaCore's text entry (input.text_request): while a request is open the keyboard types into it, not into the game.
+    // The system's input method composes in its own window and hands each result here as WM_CHAR (TranslateMessage
+    // makes the plain keys' WM_CHAR too); Enter, Escape and the editing keys arrive as WM_KEYDOWN. Key releases still
+    // reach the game below, so a key held when the request opened is not left down.
+    if (galaxy::luma_input::text_open()) {
+        if (msg == WM_KEYDOWN) {
+            using galaxy::luma_input::TextKey;
+            switch (wp) {
+            case VK_RETURN: galaxy::luma_input::text_key(TextKey::Enter); break;
+            case VK_ESCAPE: galaxy::luma_input::text_key(TextKey::Escape); break;
+            case VK_BACK: galaxy::luma_input::text_key(TextKey::Backspace); break;
+            case VK_DELETE: galaxy::luma_input::text_key(TextKey::Delete); break;
+            case VK_LEFT: galaxy::luma_input::text_key(TextKey::Left); break;
+            case VK_RIGHT: galaxy::luma_input::text_key(TextKey::Right); break;
+            case VK_HOME: galaxy::luma_input::text_key(TextKey::Home); break;
+            case VK_END: galaxy::luma_input::text_key(TextKey::End); break;
+            default: break;
+            }
+            return 0;
+        }
+        if (msg == WM_CHAR) {
+            // UTF-16: a high surrogate waits for its low one.
+            static wchar_t high = 0;
+            const auto unit = static_cast<wchar_t>(wp);
+            if (unit >= 0xD800 && unit <= 0xDBFF) {
+                high = unit;
+                return 0;
+            }
+            if (unit >= 0xDC00 && unit <= 0xDFFF) {
+                if (high != 0) {
+                    galaxy::luma_input::text_char(0x10000u + ((static_cast<char32_t>(high) - 0xD800u) << 10u) +
+                                                  (static_cast<char32_t>(unit) - 0xDC00u));
+                }
+                high = 0;
+                return 0;
+            }
+            high = 0;
+            galaxy::luma_input::text_char(static_cast<char32_t>(unit));
+            return 0;
+        }
+        if (msg == WM_KILLFOCUS) {
+            galaxy::luma_input::text_focus_lost();
+        }
     }
     if (msg == WM_CHAR) {
         // A mod's text option being typed in (services-mods 8.4): UTF-16 units, a surrogate pair in two messages.
