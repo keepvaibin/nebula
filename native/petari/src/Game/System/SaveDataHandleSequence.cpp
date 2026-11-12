@@ -1,5 +1,6 @@
 #include "Game/System/SaveDataHandleSequence.hpp"
 #include "Game/System/LumaSave.hpp"
+#include <nebula_module.h>
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/SaveIcon.hpp"
 #include "Game/Screen/SysInfoWindow.hpp"
@@ -14,7 +15,6 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Util/Tunable.hpp"
-#include <nebula_module.h>
 
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_trySave_1, "trySave.1", 20);
