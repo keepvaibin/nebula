@@ -832,7 +832,9 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     rt_caps_.shaders = rt_shaders_present();
     rt_caps_.bindless = bindless_;
     rt_caps_.unified_memory = properties_.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
-    if (core_12 && has_device_extension(physical_, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) &&
+    // --diagnostics rt-absent (9.8): taken as a device without ray tracing.
+    if (!::galaxy::diagnosing(::galaxy::kDiagnoseRtAbsent) && core_12 &&
+        has_device_extension(physical_, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) &&
         has_device_extension(physical_, VK_KHR_RAY_QUERY_EXTENSION_NAME) &&
         has_device_extension(physical_, VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME)) {
         VkPhysicalDeviceVulkan12Features have12{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};

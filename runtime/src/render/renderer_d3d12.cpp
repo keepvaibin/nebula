@@ -2047,8 +2047,10 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         ComPtr<ID3D12Device5> device5;
         const bool dxr_device5_supported = SUCCEEDED(device_.As(&device5));
         D3D12_FEATURE_DATA_D3D12_OPTIONS5 options5{};
+        // --diagnostics rt-absent (9.8): taken as a device without ray tracing.
+        const bool rt_absent = ::galaxy::diagnosing(::galaxy::kDiagnoseRtAbsent);
         const bool dxr_runtime_supported =
-            dxr_device5_supported &&
+            !rt_absent && dxr_device5_supported &&
             SUCCEEDED(device_->CheckFeatureSupport(
                 D3D12_FEATURE_D3D12_OPTIONS5,
                 &options5,
@@ -2067,7 +2069,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
                              shader_model.HighestShaderModel >= D3D_SHADER_MODEL_6_5;
             rt.bindless = SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options))) &&
                           options.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3;
-            rt.micromaps = static_cast<int>(options5.RaytracingTier) >= 12;  // D3D12_RAYTRACING_TIER_1_2
+            rt.micromaps = !rt_absent && static_cast<int>(options5.RaytracingTier) >= 12;  // D3D12_RAYTRACING_TIER_1_2
             D3D12_FEATURE_DATA_ARCHITECTURE1 architecture{};
             rt.unified_memory = SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_ARCHITECTURE1, &architecture, sizeof(architecture))) &&
                                 architecture.UMA != FALSE;
@@ -2100,7 +2102,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         copy_adapter_description(adapter_desc, caps.adapter_description);
         caps.dxr_device5_supported = dxr_device5_supported;
         caps.dxr_raytracing_tier =
-            raytracing_tier_code(options5.RaytracingTier);
+            rt_absent ? 0u : raytracing_tier_code(options5.RaytracingTier);
         const bool dlss_ready = streamline::active() &&
                                 streamline::attach_device(device_.Get(), adapter_desc.AdapterLuid);
         boot_step("streamline device");
