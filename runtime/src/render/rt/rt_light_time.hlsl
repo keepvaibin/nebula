@@ -172,8 +172,11 @@ void main(uint3 id : SV_DispatchThreadID) {
     const float3 history = clamp(sum / weight, low, high);
     float count = min(frames / weight * most_frames() + 1.0f, most_frames());
 #ifdef RT_LIGHTS
-    if (bright > 4.0f * dot(history, kLuminance) + 0.02f) {
-        count = min(count, 8.0f * rt_history_scale());  // a flash
+    // A flash (a lamp lit, a blast): the history is cut short. Asked of the mean of this frame's rays about the pixel,
+    // not of the pixel's own ray: a step that follows the sample being averaged makes the average read high (up to
+    // twice for a light met by few rays; director d04, audit A2-02).
+    if (dot(mean, kLuminance) > 4.0f * dot(history, kLuminance) + 0.02f) {
+        count = min(count, 8.0f * rt_history_scale());
     }
 #endif
     const float3 now = lerp(history, raw, max(1.0f / count, 0.06f / rt_history_scale()));
