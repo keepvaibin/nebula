@@ -1338,10 +1338,12 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                 // update shortened max_length) is dropped: the manifest's default stands.
                 if (s != nullptr && !s->texts.empty()) {
                     for (const luma::Option& entry : manifest->options) {
-                        const auto it = s->texts.find(entry.id);
-                        if (entry.kind != "text" || it == s->texts.end() || !text_option_fits(it->second, entry.max_length)) continue;
+                        const auto it_text = s->texts.find(entry.id);
+                        if (entry.kind != "text" || it_text == s->texts.end() ||
+                            !text_option_fits(it_text->second, entry.max_length))
+                            continue;
                         for (ModOption& option : mod.options) {
-                            if (option.key == entry.id && option.kind == "text") option.text = it->second;
+                            if (option.key == entry.id && option.kind == "text") option.text = it_text->second;
                         }
                     }
                 }
