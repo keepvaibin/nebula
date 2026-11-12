@@ -960,6 +960,8 @@ private:
     // RenderConfig::enhanced_lighting, sampled at each frame start; the last draw's eligibility and
     // material word (enhanced_lighting.h), kept until its keys or eligibility change.
     bool enhanced_lighting_ = false;
+    // scene_wide (render_config.h) for this frame, sampled at each frame start: the scene's target and pipelines.
+    bool wide_scene_ = false;
     // Texture-pack settings last applied (render config and the mods' folders, polled at frame begin).
     TexturePackSettings texture_pack_settings_{};
     bool texture_pack_settings_applied_ = false;

@@ -174,6 +174,12 @@ struct RenderConfig {
     return config.per_pixel_lighting || config.enhanced_lighting || config.ray_tracing_enabled;
 }
 
+// Whether the 3D scene is drawn in the wide (FP16) target with its camera: for the enhanced lighting, or while tracing
+// (the relit scene goes over 1; A3-F5). `tracing`: ray tracing on and the tracer started.
+[[nodiscard]] inline bool scene_wide(const RenderConfig& config, bool tracing) noexcept {
+    return (config.enhanced_lighting || tracing) && config.wide_scene;
+}
+
 // Frames per second the game picture is presented at. The game renders 60; lower rates present the newest frame on
 // their own cadence, higher rates add interpolated frames between game frames. Unlimited (0) is the display rate (at
 // least 60). VSync limits the rate to the display's.

@@ -1262,7 +1262,7 @@ gpu::Address RenderCore::ring_item_before(std::uint32_t index, gpu::Address own)
 // The sky's up and the flags a scene's views carry (walk_view), from its SCENE_BEGIN.
 void RenderCore::set_scene_sky(const NebulaFramePass& scene_begin) {
     const NebulaFrameList& list = *walk_.now->list;
-    const bool wide = enhanced_lighting_ && get_render_config().wide_scene;
+    const bool wide = wide_scene_;
     std::memcpy(sky_up_, list.sky_up, sizeof(sky_up_));
     view_flags_ = (list.sky_up_known != 0u ? 1u : 0u) | (enhanced_lighting_ ? 2u : 0u) | (wide ? 4u : 0u);
     if (scene_begin.scene_camera != NEBULA_NONE32 && walk_.between && list.sky_up_known != 0u) {
@@ -1273,8 +1273,7 @@ void RenderCore::set_scene_sky(const NebulaFramePass& scene_begin) {
 
 void RenderCore::walk_scene_begin(const NebulaFramePass& pass) {
     const NebulaFrameList& list = *walk_.now->list;
-    const RenderConfig cfg = get_render_config();
-    const bool wide = enhanced_lighting_ && cfg.wide_scene;
+    const bool wide = wide_scene_;
     set_scene_sky(pass);
     scene_phase_ = true;
     std::array<float, 12> view_at{};
@@ -1694,8 +1693,7 @@ void RenderCore::walk_pass(ListData& now, std::uint32_t p, std::uint32_t& target
             // The whole frame cleared just before the scene begins: the scene's own pass can open with the clear.
             const bool starts_scene = !target_open_ && (pass.clear_channels & 5u) == 5u &&
                 p + 1u < list.pass_count && list.passes[p + 1u].kind == NEBULA_PASS_SCENE_BEGIN;
-            const bool starts_hdr = starts_scene && enhanced_lighting_ && get_render_config().wide_scene &&
-                !renderer_.temporal_mode();
+            const bool starts_hdr = starts_scene && wide_scene_ && !renderer_.temporal_mode();
             SceneClearValues clear = make_scene_clear_values(pass.clear_rgba, 0u);
             if (starts_hdr) {
                 // The skipped SDR attachment would have rounded the clear before widening it to FP16.

@@ -1984,6 +1984,8 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
     pixel_lit_ = lights_at_pixel(render);
     curved_refine_ = render.curved_surfaces;
     rt_follow_setting(render);
+    // After the tracer follows the setting: a frame that starts it is drawn wide.
+    wide_scene_ = scene_wide(render, render.ray_tracing_enabled && rt_backend_.started());
     // Ray tracing's sky and bounce light shades what screen-space occlusion would darken a second time; with that part
     // off nothing traced darkens it (the light pass's O is 1: 22.10), so the occlusion runs as without ray tracing.
     ambient_occlusion_ = render.ambient_occlusion && renderer_.ambient_occlusion_ready() &&
@@ -2220,7 +2222,7 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
     }
     // Pipelines not yet asked for, for the settings in use.
     {
-        const bool wide = render.enhanced_lighting && render.wide_scene;
+        const bool wide = wide_scene_;
         // Native interpolation replays geometry and does not write temporal reconstruction targets.
         const bool motion = renderer_.temporal_mode();
         const bool one_pass = motion && renderer_.motion_pass_only();
