@@ -39,3 +39,13 @@ void fnInside(const FnV2<float>* p, FnVec4* q) { q->x = p->x; }
 void fnDefined(LUMA_OUT FnVec* out) { out->y = 2; }
 void FnMarked::get(FnVec* out) const { out->z = 3; }
 void fnByMacro(float* v) { *v = 1; }
+
+// Self-description (plan 1.8): an array table's keys, each row's leading string; none when a row has none.
+struct FnKeyRow {
+    const char* name;
+    int value;
+};
+[[maybe_unused]] static FnKeyRow sFnKeyed[] = {{"Alpha", 1}, {"Beta", 2}};
+[[maybe_unused]] static const char* sFnNames[] = {"One", "Two", "Three"};
+[[maybe_unused]] static FnKeyRow sFnUnkeyed[] = {{"A", 1}, {nullptr, 2}};
+[[maybe_unused]] static FnKeyRow sFnShort[3] = {{"A", 1}, {"B", 2}};

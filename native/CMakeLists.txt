@@ -107,6 +107,35 @@ if(NEBULA_LUMA_HOOKS)
             VERBATIM)
         add_custom_target(luma_types_check ALL DEPENDS "${luma_types}/luma_types_described.json")
     endif()
+    # The self-description (plan 1.8, contract self-description): one file beside the module saying everything a mod
+    # can name, from the generator's outputs; a cross build makes it too (no run of the module is needed).
+    string(TOLOWER "${CMAKE_SYSTEM_NAME}" luma_os)
+    if(luma_os STREQUAL "darwin")
+        set(luma_os "macos")
+    endif()
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64|x64)$")
+        set(luma_arch "x64")
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$")
+        set(luma_arch "arm64")
+    else()
+        message(FATAL_ERROR "the self-description has no name for the processor ${CMAKE_SYSTEM_PROCESSOR}")
+    endif()
+    if(WIN32)
+        set(luma_abi "msvc-${luma_arch}")
+    else()
+        set(luma_abi "itanium-${luma_arch}")
+    endif()
+    set(luma_self "${CMAKE_CURRENT_BINARY_DIR}/smg_game.luma-self.json")
+    add_custom_command(OUTPUT "${luma_self}"
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../tools/lumacore/self_description.py"
+                --types "${luma_types}/luma_types.json" --functions "${luma_types}/luma_functions.json"
+                --numbers "${luma_types}/luma_numbers.json" --module "$<TARGET_FILE:smg_game>"
+                --platform "${luma_os}-${luma_arch}" --abi "${luma_abi}" --luma-h "${CMAKE_CURRENT_SOURCE_DIR}/include/luma.h"
+                --source "${CMAKE_CURRENT_SOURCE_DIR}/.." --out "${luma_self}"
+        DEPENDS smg_game "${luma_types}/luma_types_table.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/../tools/lumacore/self_description.py"
+                "${CMAKE_CURRENT_SOURCE_DIR}/include/luma.h"
+        VERBATIM)
+    add_custom_target(luma_self_description ALL DEPENDS "${luma_self}")
 endif()
 
 add_library(smg_game SHARED

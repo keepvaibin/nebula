@@ -167,6 +167,16 @@ def main():
     if extra or len(have) != len(EXPECTED):
         failed.append("rows not in the expected list, or counted twice: %s (%d rows)" % (extra, len(have)))
 
+    # Self-description (plan 1.8): table keys
+    tables = {t["name"].rpartition("#")[2]: t for t in
+              json.loads((out / "gen" / "luma_numbers.json").read_text(encoding="utf-8"))["tables"]}
+    for name, want in (("sFnKeyed", ["Alpha", "Beta"]), ("sFnNames", ["One", "Two", "Three"]), ("sFnUnkeyed", None),
+                       ("sFnShort", None)):
+        if name not in tables:
+            failed.append("self-description: the table %s has no row" % name)
+        elif tables[name].get("keys") != want:
+            failed.append("self-description: the table %s's keys are %s, not %s" % (name, tables[name].get("keys"), want))
+
     # 3. planted faults, each named
     good = facts_file.read_text(encoding="utf-8")
     facts = json.loads(good)

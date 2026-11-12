@@ -123,6 +123,11 @@ def main():
         have = None if r is None else tuple(r.get(k) for k in keys)
         if have != want:
             failed.append("TY-10: %s should be %s %s; it is %s" % (n, keys, want, have))
+    # Self-description (plan 1.8): a virtual's calls, read from its body.
+    calls = [v.get("calls") for v in rows.get("FcNerve", {}).get("virtuals", []) if v["name"] == "FcNerve::execute"]
+    want_calls = [{"name": "FcOwner::exeGo", "signature": "void()"}, {"name": "FcOwner::helper", "signature": "s32(s32) const"}]
+    if calls != [want_calls]:
+        failed.append("self-description: FcNerve::execute's calls are %s, not %s" % (calls, want_calls))
     # Contract objects: polymorphic through a base that is an instance named only as a base.
     if not rows.get("FoHolder", {}).get("polymorphic"):
         failed.append("objects: FoHolder (a base FoGroup<FoB> : FoV) is not said polymorphic")

@@ -97,6 +97,7 @@ def left_rows(left):
     return sorted((g, n, rid, what) for (g, n), (rid, what) in rows.items())
 K_ENUM, K_FIELD, K_ENUM_CONST, K_VAR, K_METHOD, K_TYPEDEF, K_ALIAS, K_BASE = 5, 6, 7, 9, 21, 20, 36, 44
 K_ACCESS = 39
+K_CALL_EXPR = 103
 RECORDS = (I.K_STRUCT, I.K_UNION, I.K_CLASS)
 KIND_TEXT = {I.K_STRUCT: "struct", I.K_UNION: "union", I.K_CLASS: "class"}
 T_CONSTANT_ARRAY, T_RECORD, T_ELABORATED = 112, 105, 119
@@ -266,7 +267,7 @@ def set_target(raw):
 def parse(api, index, args):
     tu = c_void_p()
     encoded = (c_char_p * len(args))(*[a.encode() for a in args])
-    code = api.parse(index, None, encoded, len(args), None, 0, 0x40, byref(tu))  # function bodies skipped
+    code = api.parse(index, None, encoded, len(args), None, 0, 0, byref(tu))  # with bodies: a virtual's calls (1.8)
     if code != 0 or not tu:
         sys.exit(f"gen_types.py: the headers could not be parsed (libclang error {code})")
     errors = []
@@ -564,7 +565,33 @@ class Reader:
         if v["row"]:
             v["call"] = {"spelling": spelling, "params": params, "result": result, "const": bool(ua.isConst(m))}
             v["params"] = "(%s)%s" % (", ".join(params), " const" if v["call"]["const"] else "")
+        # Self-description (plan 1.8): the functions a body written in the class calls, in the order written, by their
+        # row names (a nerve's execute names its owner's exe function), when its definition is in this parse.
+        body = ua.definition(m)
+        if not ua.isNull(body):
+            v["calls"] = self.calls_in(body)
         row.setdefault("virtuals", []).append(v)
+
+    def calls_in(self, body):
+        """Every function or method a definition's body calls directly, by row name and signature, once each, in the
+        order written; a callee with no row identity (a template's, an unnamed scope's) is left out."""
+        ua = self.unit.api
+        found = []
+
+        def visit(child, _parent, _data):
+            c = I.CXCursor.from_buffer_copy(child)
+            if c.kind == K_CALL_EXPR:
+                target = ua.referenced(c)
+                if not ua.isNull(target) and target.kind in I.FUNCTIONS:
+                    ident = self.unit.identity(target)
+                    if ident is not None:
+                        entry = {"name": ident[0], "signature": ident[1]}
+                        if entry not in found:
+                            found.append(entry)
+            return 2  # recurse
+
+        ua.visit(body, I.VISITOR(visit), None)
+        return found
 
     def trivial(self, t):
         """TY-10: (trivially copyable, trivially destructible, a copy or move constructor can be called, a copy or move

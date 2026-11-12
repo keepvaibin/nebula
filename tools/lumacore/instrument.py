@@ -104,6 +104,8 @@ K_NEW = 134
 # 1.5's tables: the canonical types of an array with a size and of a record
 T_CONSTANT_ARRAY, T_RECORD = 112, 105
 K_MEMBER_REF_EXPR = 102
+# The self-description's table keys (plan 1.8): a row that begins with a string literal
+K_STRING_LITERAL, K_INIT_LIST = 109, 119
 # The kernel's own units: their numbers and tables are not the game's data.
 KERNEL_PREFIX = 'Game/System/Luma'
 SC_STATIC = 3
@@ -943,7 +945,9 @@ class Unit:
                     consts.append((start + len(head[:m.start()].encode('utf-8')), start + len(head[:m.end()].encode('utf-8'))))
             if not consts:
                 return self.skip_table('a const table whose const comes through a typedef')
+        keys = self.table_keys(initializer, count) if vtype.kind == T_CONSTANT_ARRAY else None
         self.table_candidates.append({
+            'keys': keys,
             'usr': self.string(api.usr(var)), 'name': f'{self.label}#{qualified}' if local else qualified,
             'expr': '::' + qualified, 'type': self.string(api.typeSpelling(api.unqualified(element))),
             'count': count, 'size': api.sizeOf(vtype), 'line': self.line(var), 'const': constant, 'consts': consts,
@@ -974,7 +978,44 @@ class Unit:
             if t['static'] and ('static', t['start']) not in done:
                 done.add(('static', t['start']))
                 self.replaces.append((t['start'], t['start'], b'static '))
-            self.tables.append({k: t[k] for k in ('name', 'type', 'count', 'size', 'line', 'const', 'expr')})
+            row = {k: t[k] for k in ('name', 'type', 'count', 'size', 'line', 'const', 'expr')}
+            if t['keys'] is not None:
+                row['keys'] = t['keys']
+            self.tables.append(row)
+
+    def table_keys(self, initializer, count):
+        """The self-description's keys of an array table (plan 1.8): each row's string, when every one of the `count`
+        rows is written and each is a plain string literal or a braced row whose first value is one (the event flags'
+        names, the factory's object names); else None. A literal with an escape, or one a macro writes, makes None."""
+        def bare(cursor):
+            while cursor.kind in (K_UNEXPOSED_EXPR, K_PAREN):
+                inner = self.children(cursor)
+                if len(inner) != 1:
+                    break
+                cursor = inner[0]
+            return cursor
+        top = bare(initializer)
+        if top.kind != K_INIT_LIST:
+            return None
+        rows = self.children(top)
+        if len(rows) != count:
+            return None
+        keys = []
+        for row in rows:
+            row = bare(row)
+            if row.kind == K_INIT_LIST:
+                values = self.children(row)
+                if not values:
+                    return None
+                row = bare(values[0])
+            if row.kind != K_STRING_LITERAL:
+                return None
+            written = self.text_of(row)
+            match = re.fullmatch(rb'"([^"\\]*)"', written) if written is not None else None
+            if match is None:
+                return None
+            keys.append(match.group(1).decode('utf-8', 'replace'))
+        return keys
 
     def literal_cursor(self, cursor):
         """The number an initializer is, through implicit conversions and parentheses, a minus allowed; None when it
