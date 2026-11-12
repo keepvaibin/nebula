@@ -340,6 +340,8 @@ namespace luma {
                 pStore->mCapacity = 0;
             }
 
+            void writeDone(GlobalStore* pStore);
+
             // The mod's store with its values here, or the status to return.
             s32 readyStore(const LumaMod* pMod, GlobalStore** ppStore) {
                 GlobalStore* const pStore = storeOf(pMod);
@@ -348,6 +350,12 @@ namespace luma {
                 }
                 if (pStore->mLoaded == 0) {
                     finishRead(pStore);
+                }
+                if (pStore->mSettingAside) {
+                    // The broken file's copy is still being written: a value set now would be answered OK and then
+                    // dropped if the copy were refused (J R2-3), so the copy is waited for here, once.
+                    waitFor(pStore);
+                    writeDone(pStore);
                 }
                 *ppStore = pStore;
                 if (pStore->mLoaded > 0 && pStore->mValues.isNewer()) {
@@ -688,8 +696,14 @@ namespace luma {
                 if (count == sForgetApplied) {
                     return false;
                 }
-                SaveDataHandleSequence* const pSequence =
-                    SingletonHolder< GameSystem >::get()->mSequenceDirector->mSaveDataHandleSequence;
+                // Waited for (true: the hook stays) until the game's save sequence is made and its start's read is
+                // over. The read always ends: BootScene::exeMountGameData starts it on the one way past the system
+                // archive, and exePreLoad leaves state 0 for 1 (read) or 2 (nothing readable) on every path (J R2-2).
+                GameSystem* const pSystem = SingletonHolder< GameSystem >::get();
+                if (pSystem == nullptr || pSystem->mSequenceDirector == nullptr) {
+                    return true;
+                }
+                SaveDataHandleSequence* const pSequence = pSystem->mSequenceDirector->mSaveDataHandleSequence;
                 if (pSequence == nullptr || pSequence->mSaveDataHandler == nullptr || pSequence->getPreLoadState() == 0 ||
                     pSequence->isActive()) {
                     return true;
