@@ -135,6 +135,7 @@
     "ui.open": "ui opens a screen layout (the game's or the mod's cooked one) on the HUD, drawn by the game's layout drawer every frame (2.4 layer 4, 3.8 layer 1)",
     "ui.pane": "ui finds a pane of an open screen by its exact name; the same pane is the same handle (2.4, 3.8)",
     "ui.text": "ui sets a text pane's text from UTF-8, kept as given in every script (2.4, 3.8)",
+    "ui.no_glyph": "A text holding a character its pane's font cannot draw is set, LUMA_OK, and Ui.NoGlyph names the character and its code (3.8)",
     "ui.text_cut": "A text longer than its pane holds is cut there, LUMA_OK, Ui.TextCut said (2.4, 3.8)",
     "ui.visible": "ui shows and hides a pane and a whole screen (2.4, 3.8)",
     "ui.refusals": "ui's refusals answer their status and write no handle; close ends a screen and its panes (2.4, 3.8)",
