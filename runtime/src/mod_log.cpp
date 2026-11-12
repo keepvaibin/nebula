@@ -366,6 +366,32 @@ std::string files_stamp(const std::filesystem::path& folder) {
     return hex(h);
 }
 
+// A package's bytes: every file's name and content under its folder, in name order. Read only when files_stamp changed
+// (a copy, a touch, an unpack keeps the bytes and so the verdict). Empty when a file cannot be read.
+std::string content_hash(const std::filesystem::path& folder) {
+    std::vector<std::filesystem::path> files;
+    std::error_code error;
+    for (std::filesystem::recursive_directory_iterator it(folder, error), end; !error && it != end; it.increment(error)) {
+        std::error_code e;
+        if (it->is_regular_file(e)) files.push_back(it->path());
+    }
+    if (error) return {};
+    std::sort(files.begin(), files.end());
+    std::uint64_t h = kFnvStart;
+    std::vector<char> chunk(64 * 1024);
+    for (const std::filesystem::path& file : files) {
+        std::error_code e;
+        h = fnv(fnv(h, std::filesystem::relative(file, folder, e).generic_string()), "\n");
+        std::ifstream in(file, std::ios::binary);
+        if (!in) return {};
+        while (in) {
+            in.read(chunk.data(), static_cast<std::streamsize>(chunk.size()));
+            h = fnv(h, std::string_view(chunk.data(), static_cast<std::size_t>(in.gcount())));
+        }
+    }
+    return hex(h);
+}
+
 // One finding as kept: code, level, line, column, file, played text, English text (tabs and line breaks escaped).
 struct Kept {
     std::uint32_t code = 0;
@@ -436,10 +462,11 @@ bool write_file(const std::filesystem::path& path, std::string_view bytes) {
     return !error;
 }
 
-// <id>.check: "files <stamp>", "findings <key>", then one finding a line. The key covers the files, the game and the
-// other packages' kept reports.
+// <id>.check: "files <stamp>", "content <hash>", "findings <key>", then one finding a line. The stamp and the hash are
+// each with the game's; the key covers the content, the game and the other packages'.
 struct Check {
     std::string files;
+    std::string content;
     std::string key;
     std::vector<Kept> findings;
 };
@@ -451,6 +478,8 @@ Check read_check(const std::filesystem::path& path) {
     while (std::getline(in, line)) {
         if (line.rfind("files ", 0) == 0) {
             check.files = line.substr(6);
+        } else if (line.rfind("content ", 0) == 0) {
+            check.content = line.substr(8);
         } else if (line.rfind("findings ", 0) == 0) {
             check.key = line.substr(9);
         } else if (line.rfind("f\t", 0) == 0) {
@@ -471,7 +500,7 @@ Check read_check(const std::filesystem::path& path) {
 }
 
 std::string check_text(const Check& check) {
-    std::string out = "files " + check.files + "\nfindings " + check.key + "\n";
+    std::string out = "files " + check.files + "\ncontent " + check.content + "\nfindings " + check.key + "\n";
     for (const Kept& k : check.findings) {
         out += "f\t" + std::to_string(k.code) + "\t" + std::to_string(k.level) + "\t" + std::to_string(k.line) + "\t" +
                std::to_string(k.column) + "\t" + escape(k.file) + "\t" + escape(k.played) + "\t" + escape(k.english) + "\n";
@@ -507,12 +536,14 @@ void add_start_findings(const std::vector<StartPackage>& packages, std::string_v
     const std::string game = std::string(NEBULA_VERSION) + "\t" + region + "\t" + platform + "\t" + played + "\t" +
                              std::to_string(LUMA_API);
 
-    // Pass 1: each package's kept report (its own rules), validated only when its files changed.
+    // Pass 1: each package's kept report (its own rules), validated only when its bytes changed: the names, sizes and
+    // times first; their content hashed only when those changed.
     struct Placed {
         const StartPackage* package;
         std::string files;
         Check check;
         std::string kept;
+        std::string content;  // the content key: the package's identity for the others' keys
     };
     std::vector<Placed> placed;
     placed.reserve(packages.size());
@@ -570,18 +601,31 @@ void add_start_findings(const std::vector<StartPackage>& packages, std::string_v
         return true;
     };
     for (const StartPackage& p : packages) {
-        Placed one{&p, files_stamp(p.folder), read_check(folder / (p.id + ".check")), read_file(folder / (p.id + ".kept"))};
+        Placed one{&p, files_stamp(p.folder), read_check(folder / (p.id + ".check")), read_file(folder / (p.id + ".kept")), {}};
         const std::string files_key = hex(fnv(fnv(kFnvStart, one.files), game));
         if (one.files.empty()) {
             std::fprintf(stderr, "[modlog] %s: its folder cannot be read; not checked\n", p.id.c_str());
-        } else if (one.check.files != files_key || one.kept.empty()) {
-            std::string kept;
-            if (run(p, {}, UINT32_MAX, {}, kept, nullptr)) {
-                one.kept = std::move(kept);
-                one.check = Check{files_key, {}, {}};
-                (void)write_file(folder / (p.id + ".kept"), one.kept);
+            one.kept.clear();
+        } else if (one.check.files == files_key && !one.check.content.empty() && !one.kept.empty()) {
+            one.content = one.check.content;
+        } else {
+            const std::string bytes = content_hash(p.folder);
+            const std::string content_key = bytes.empty() ? std::string() : hex(fnv(fnv(kFnvStart, bytes), game));
+            if (!content_key.empty() && one.check.content == content_key && !one.kept.empty()) {
+                // Touched, not changed: the verdict stands; only the stamp is new.
+                one.check.files = files_key;
+                (void)write_file(folder / (p.id + ".check"), check_text(one.check));
+                one.content = content_key;
             } else {
-                one.kept.clear();
+                std::string kept;
+                if (!content_key.empty() && run(p, {}, UINT32_MAX, {}, kept, nullptr)) {
+                    one.kept = std::move(kept);
+                    one.check = Check{files_key, content_key, {}, {}};
+                    one.content = content_key;
+                    (void)write_file(folder / (p.id + ".kept"), one.kept);
+                } else {
+                    one.kept.clear();
+                }
             }
         }
         one.files = files_key;
@@ -594,7 +638,7 @@ void add_start_findings(const std::vector<StartPackage>& packages, std::string_v
         if (one.kept.empty()) continue;
         std::vector<LumaInstalledMod> installed;
         std::vector<std::string> files;
-        std::uint64_t h = fnv(kFnvStart, one.files);
+        std::uint64_t h = fnv(kFnvStart, one.content);
         files.reserve(placed.size());
         for (std::size_t j = 0; j < placed.size(); ++j) {
             if (j == i || placed[j].kept.empty()) continue;
@@ -611,7 +655,7 @@ void add_start_findings(const std::vector<StartPackage>& packages, std::string_v
             m.kept = reinterpret_cast<const std::uint8_t*>(placed[j].kept.data());
             m.kept_size = placed[j].kept.size();
             installed.push_back(m);
-            h = fnv(fnv(fnv(h, placed[j].files), placed[j].package->on ? "1" : "0"), placed[j].package->id);
+            h = fnv(fnv(fnv(h, placed[j].content), placed[j].package->on ? "1" : "0"), placed[j].package->id);
         }
         const std::string key = hex(fnv(h, std::to_string(position)));
         if (one.check.key != key) {
@@ -619,6 +663,7 @@ void add_start_findings(const std::vector<StartPackage>& packages, std::string_v
             std::vector<Kept> findings;
             if (!run(*one.package, installed, position, one.kept, kept, &findings)) continue;
             one.check.files = one.files;
+            one.check.content = one.content;
             one.check.key = key;
             one.check.findings = std::move(findings);
             (void)write_file(folder / (one.package->id + ".check"), check_text(one.check));
