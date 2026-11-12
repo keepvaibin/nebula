@@ -202,9 +202,13 @@ void main(uint3 id : SV_DispatchThreadID) {
     uint seed = rt_seed(id.xy, g_more.y, 47u);
     float3 t;
     if (water) {
-        const float3 dir = refract(look, n, 1.0f / ior);
+        const float3 bent = refract(look, n, 1.0f / ior);
+        const float3 dir = dot(bent, bent) > 0.0f ? bent : look;
+        // From above the surface (FB b98, the shore's black line): a ray from under it starts inside shallow ground.
+        // The water's own face is blended: no floor ray meets it. The way under water: past the surface.
         float far_;
-        const float3 floor_ = seen_along(s.at - n * s.skin, dot(dir, dir) > 0.0f ? dir : look, cone, seed, far_);
+        const float3 floor_ = seen_along(s.at + n * s.skin, dir, cone, seed, far_);
+        far_ = max(far_ - s.skin / max(-dot(dir, n), 0.05f), 0.0f);
         // Pure water's absorption by the way under it (Pope and Fry's ratios, kWaterAbsorb; A4 W3, FB b75) at the
         // clear-water scale (FB b84): its colour is what it takes away. The map's colour is not a body colour (the
         // owner's D3): nothing of it is sent back.
