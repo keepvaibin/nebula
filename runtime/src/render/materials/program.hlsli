@@ -423,10 +423,13 @@ float traced_sky_chroma() { return view_dev[1].z > 0.5 ? view_dev[0].z : 0.4; }
 // (`held`: the reference over its luminance) held within [0.8, 1.25] a channel, so that a channel of either near 0 does
 // not blow up. 1 where the reference has no light. The one bound for the environment (traced_painted) and a lit
 // program's sky light (program_lit.hlsli, c69).
+// c73: kTintBound 1.5 a channel (the target's sky-blue shade on Good Egg's white stone, B/R 1.8 to 2.4 times the lit
+// side's; [0.8, 1.25] capped it at 1.56).
+static const float kTintBound = 1.5;
 float3 traced_bounded(float3 lit, float held_l, float3 held) {
     const float lit_l = dot(lit, float3(0.2126, 0.7152, 0.0722));
     const float3 tint = lit_l > 1e-6 && held_l > 1e-4 ? (lit / lit_l) / max(held, 1e-4) : float3(1.0, 1.0, 1.0);
-    return held_l > 1e-4 ? (lit_l / held_l) * clamp(tint, 0.8, 1.25) : float3(1.0, 1.0, 1.0);
+    return held_l > 1e-4 ? (lit_l / held_l) * clamp(tint, 1.0 / kTintBound, kTintBound) : float3(1.0, 1.0, 1.0);
 }
 float3 traced_painted(float4 light, float nl, float3 o3, bool coloured) {
     const float3 v = light.rgb, a = view_stage_a.rgb, k = view_stage_k.rgb;
@@ -449,7 +452,8 @@ float3 traced_painted(float4 light, float nl, float3 o3, bool coloured) {
     // October's own (the stage's light as it is: a dim or coloured stage dims and tints the art), 0 the art's own
     // brightness kept (divided by the full light). The view's part is the host's (F18, view_relight): lit =
     // (sky' O + key sun_strength nl V) E, held = lerp(full, 1, stage_light).
-    const float3 lit = view_relight[1].rgb * o3 + view_relight[2].rgb * (nl * v);
+    // c73 (b87): sky' the sky's luminance only; its hue is in O, once.
+    const float3 lit = dot(view_relight[1].rgb, luminance) * o3 + view_relight[2].rgb * (nl * v);
     // A3-F8: lit over held in luminance, its colour over held's limited to a stop either way.
     const float3 relit = traced_bounded(lit, view_relight[0].w, view_relight[3].rgb);  // c50, c69: one bound
     return lerp(painted, relit, view_look.x);

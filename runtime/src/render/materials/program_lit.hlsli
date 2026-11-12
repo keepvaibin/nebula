@@ -290,11 +290,11 @@ EnhShade enh_begin_traced(float3 P, float3 n, float4 pixel) {
     g_traced = traced_at(pixel);
     bool coloured = false;
     g_traced_o = traced_o(g_traced, pixel, coloured);
-    // c69: under the relight, the sky light as the environment takes it (traced_painted's sky'): O at kSkyChroma of its
-    // chroma, its colour bounded against white by the environment's own bound; Painted keeps FB's coloured O.
+    // c69, c73: under the relight, the sky light as the environment takes it: O with the sky's hue once (FB b87: the
+    // dome at kSkyChroma of its chroma), bounded against white by the environment's own bound (traced_bounded); Painted
+    // keeps FB's coloured O.
     if (view_look.x > 0.0) {
-        const float o_l = dot(g_traced_o, float3(0.2126, 0.7152, 0.0722));
-        const float3 o_sky = traced_bounded(lerp(float3(o_l, o_l, o_l), g_traced_o, traced_sky_chroma()), 1.0, float3(1.0, 1.0, 1.0));
+        const float3 o_sky = traced_bounded(g_traced_o, 1.0, float3(1.0, 1.0, 1.0));
         g_traced_o = lerp(g_traced_o, o_sky, saturate(view_look.x));
     }
     g_traced_lit = g_traced_keyed;
