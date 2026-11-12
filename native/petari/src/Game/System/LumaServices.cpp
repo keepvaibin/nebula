@@ -302,8 +302,17 @@ namespace luma {
                     sayCounted(pWhere, "a report without its mod (a provider bug); not kept");
                     return;
                 }
-                // LumaCore.report keeps it under (file, line, code): the place is "<service>.<function>", line 0.
-                core()->report(pMod, pWhere != nullptr ? pWhere : "", 0, code, ppArgs, argCount);
+                // LumaCore.report keeps it under (file, line, code): the place is "<service>.<function>", line 0. Every
+                // service row's first name is {where} (cOwnRows: Service.Argument, Service.Handle ...): the place leads
+                // the arguments, so a provider passes only its own.
+                const char* const pPlace = pWhere != nullptr ? pWhere : "";
+                const char* args[8];
+                u32 count = 0;
+                args[count++] = pPlace;
+                for (u32 i = 0; ppArgs != nullptr && i < argCount && count < 8; i++) {
+                    args[count++] = ppArgs[i];
+                }
+                core()->report(pMod, pPlace, 0, code, args, count);
             }
 
             int32_t kernelPost(LumaEventNode* pNode) {

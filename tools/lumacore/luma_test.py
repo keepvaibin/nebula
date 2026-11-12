@@ -222,8 +222,8 @@ def read_test(folder, types=None):
             raise HarnessError("proves names %s, which is not in tools/lumacore/capabilities.json" % capability)
     bare = boolean(t, "bare", "") if "bare" in t else False
     code = text(t, "code", "") if "code" in t else "allow"
-    if code not in ("allow", "deny"):
-        raise HarnessError("code must be allow or deny")
+    if code not in ("allow", "deny", "ask"):
+        raise HarnessError("code must be allow, deny or ask")
     mods = []
     if "mods" in t:
         if not isinstance(t["mods"], list):
@@ -239,8 +239,9 @@ def read_test(folder, types=None):
                    "install": "placed", "permissions": "allow", "options": {}}
             if "code" in entry:
                 mod["code"] = text(entry, "code", path)
-                if mod["code"] not in ("allow", "deny"):
-                    raise HarnessError("%s.code must be allow or deny" % path)
+                # "ask" (J, consent tests): nothing answered, so the game asks (the consent question shows).
+                if mod["code"] not in ("allow", "deny", "ask"):
+                    raise HarnessError("%s.code must be allow, deny or ask" % path)
             if "loads" in entry:
                 mod["loads"] = boolean(entry, "loads", path)
             if "install" in entry:
@@ -852,7 +853,7 @@ def install(settings, mod_folder, code_allowed, order, kept=False, permissions="
                 raise HarnessError("%s: permissions names %s, which the mod does not ask for" % (mod_folder, name))
             if answer not in ("allow", "deny"):
                 raise HarnessError("%s: the answer for %s must be allow or deny" % (mod_folder, name))
-    for p in declared:
+    for p in declared if permissions != "ask" else []:
         wanted = permissions if isinstance(permissions, str) else permissions.get(p["name"], "allow")
         lines += "permission.%s=%s %s\n" % (p["name"], "yes" if wanted == "allow" else "no", permission_digest(p))
     with ini.open("a", encoding="utf-8") as out:
@@ -978,7 +979,7 @@ def run_one(test, renderer, args, run_folder, previous):
         if not (m["path"] / "luma.json").is_file():
             raise HarnessError("the mod %s has no luma.json" % m["path"])
         mod_id = install(settings, m["path"], m["code"] == "allow", i + 1, kept=previous is not None,
-                         permissions=m["permissions"])
+                         permissions="ask" if m["code"] == "ask" else m["permissions"])
         mod_ids.append((mod_id, m))
         for lib in sorted((settings / "mods" / mod_id).rglob("*.dll")):
             frozen["mods/%s/%s" % (mod_id, lib.relative_to(settings / "mods" / mod_id).as_posix())] = sha256(lib)
