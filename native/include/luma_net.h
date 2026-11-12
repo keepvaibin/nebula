@@ -125,12 +125,15 @@ typedef struct LumaNetLocalService {
        ::1, 10/8, 172.16/12, 192.168/16, 169.254/16, fc00::/7, fe80::/10). LUMA_PENDING and *out: CONNECTED or ERROR
        follows. A host outside those, port 0, a null host, fn or out: LUMA_E_ARGUMENT, reported; a 17th socket:
        LUMA_E_LIMIT (Service.Limit), reported. */
+    /* events: CONNECTED(socket), ERROR(socket, status), DATA(socket, data), SENT(socket, value), CLOSED(socket,
+       status) */
     int32_t (*tcp_connect)(const LumaMod* mod, const char* host, uint16_t port, LumaEventFn fn, void* user,
                            LumaHandle* out);
     /* 1.0. Listens on `port` (0: one the system picks; `port` gives it), on this machine only (`local_network` 0) or
        on the local network too (1). LUMA_OK and *out at once; each connection is an ACCEPTED event. A port in use:
        LUMA_E_EXISTS (an answer, not reported); a local_network other than 0 or 1, a null fn or out: LUMA_E_ARGUMENT,
        reported; a 17th socket: LUMA_E_LIMIT, reported. */
+    /* events: ACCEPTED(socket), DATA(socket, data), SENT(socket, value), CLOSED(socket, status) */
     int32_t (*tcp_listen)(const LumaMod* mod, uint16_t port, uint32_t local_network, LumaEventFn fn, void* user,
                           LumaHandle* out);
     /* 1.0. The port a listener listens on, into *out. LUMA_OK; a handle that is not this mod's listener:
@@ -154,11 +157,13 @@ typedef struct LumaNetLocalService {
        sends with send_to (`send` on it: LUMA_E_HANDLE, reported). A port in use: LUMA_E_EXISTS (an answer); a
        local_network other than 0 or 1, a null fn or out: LUMA_E_ARGUMENT, reported; a 17th socket: LUMA_E_LIMIT,
        reported. */
+    /* events: DATAGRAM(socket, data, from), SENT(socket, value) */
     int32_t (*udp_open)(const LumaMod* mod, uint16_t port, uint32_t local_network, LumaEventFn fn, void* user,
                         LumaHandle* out);
     /* 1.1. A UDP socket tied to `host`:`port` (the same hosts as tcp_connect): it sends there with send and hears only
        from there. LUMA_PENDING and *out: CONNECTED (or ERROR) follows, then DATAGRAM events. Mistakes as
        tcp_connect's. */
+    /* events: CONNECTED(socket), ERROR(socket, status), DATAGRAM(socket, data, from), SENT(socket, value) */
     int32_t (*udp_connect)(const LumaMod* mod, const char* host, uint16_t port, LumaEventFn fn, void* user,
                            LumaHandle* out);
     /* 1.1. Queues one datagram of `bytes` (copied) to `host`:`port` from a udp_open socket; a SENT event follows once
@@ -181,16 +186,21 @@ typedef struct LumaNetLocalService {
        nothing listens there; LUMA_E_TIMEOUT: every pipe instance busy for 10 s; LUMA_E_DENIED: the system refused;
        LUMA_E_IO), then the stream calls and events of tcp_connect's sockets. A wrong name, a null fn or out:
        LUMA_E_ARGUMENT, reported; a 17th socket: LUMA_E_LIMIT, reported. */
+    /* events: CONNECTED(socket), ERROR(socket, status), DATA(socket, data), SENT(socket, value), CLOSED(socket,
+       status) */
     int32_t (*ipc_connect)(const LumaMod* mod, const char* name, LumaEventFn fn, void* user, LumaHandle* out);
     /* 1.2. Listens on this mod's endpoint "nebula.<mod id>.<name>" (`name` as ipc_connect's): only programs on this
        device reach it; each connection is an ACCEPTED, as tcp_listen's. LUMA_OK and *out at once; something already
        listening there: LUMA_E_EXISTS (an answer); a wrong name, a null fn or out: LUMA_E_ARGUMENT, reported; a 17th
        socket: LUMA_E_LIMIT, reported. `port` on it: LUMA_E_HANDLE. */
+    /* events: ACCEPTED(socket), DATA(socket, data), SENT(socket, value), CLOSED(socket, status) */
     int32_t (*ipc_listen)(const LumaMod* mod, const char* name, LumaEventFn fn, void* user, LumaHandle* out);
     /* 1.3. As tcp_connect, the bytes then encrypted by TLS 1.2 or 1.3: CONNECTED once the handshake is done and the
        host's certificate names `host` and leads to a root (the game's list, or one the mod's luma.json adds for
        itself). A certificate refused: ERROR LUMA_E_DENIED, reported (Net.CertificateRefused with the reason). Then
        the stream calls and events of tcp_connect's sockets (send and take carry the plain bytes). */
+    /* events: CONNECTED(socket), ERROR(socket, status), DATA(socket, data), SENT(socket, value), CLOSED(socket,
+       status) */
     int32_t (*tls_connect)(const LumaMod* mod, const char* host, uint16_t port, LumaEventFn fn, void* user,
                            LumaHandle* out);
     /* 1.3. As tcp_listen, each connection then encrypted by TLS with `certificate` (a PEM file of the chain, the
@@ -199,6 +209,7 @@ typedef struct LumaNetLocalService {
        DATA come after it; a handshake that fails is that socket's CLOSED with LUMA_E_DENIED. A file missing:
        LUMA_E_NOT_FOUND, reported; not PEM, or a key not the certificate's: LUMA_E_FORMAT, reported; a path with
        ".." or a root: LUMA_E_ARGUMENT, reported; the rest as tcp_listen's. */
+    /* events: ACCEPTED(socket), DATA(socket, data), SENT(socket, value), CLOSED(socket, status) */
     int32_t (*tls_listen)(const LumaMod* mod, uint16_t port, uint32_t local_network, const char* certificate,
                           const char* key, LumaEventFn fn, void* user, LumaHandle* out);
     /* 1.3. Sends an HTTP/1.1 request to a host of this machine or the local network (as tcp_connect's). LUMA_PENDING
@@ -209,6 +220,7 @@ typedef struct LumaNetLocalService {
        9th request or a 17th socket: LUMA_E_LIMIT, reported. The service sends Host, Content-Length (with a body),
        Accept-Encoding: gzip (without LUMA_NET_HTTP_RAW), Connection: close and User-Agent: Nebula/<version> <mod
        id> unless the mod names one. */
+    /* events: HEADERS(socket, value, data), DATA(socket, data), DONE(socket, value), ERROR(socket, status) */
     int32_t (*http)(const LumaMod* mod, const LumaNetRequest* request, LumaEventFn fn, void* user, LumaHandle* out);
     /* 1.4. A WebSocket client to `url` ("ws://" or "wss://", then as http's url; the host as tcp_connect's), asking
        for `protocol` (null: none; else 1 to LUMA_NET_PROTOCOL_MOST bytes of tokens separated by ", ", sent as
@@ -218,6 +230,8 @@ typedef struct LumaNetLocalService {
        first, then the connection ends as a socket's; no event after. `send` and `take` on it: LUMA_E_HANDLE. A url
        not ws(s) or past LUMA_NET_URL_MOST, a host outside tcp_connect's, a protocol not tokens, a null url, fn or out:
        LUMA_E_ARGUMENT, reported; a 17th socket: LUMA_E_LIMIT, reported. */
+    /* events: CONNECTED(socket, data), MESSAGE(socket, data, flags), SENT(socket, value), CLOSED(socket, status,
+       value, data), ERROR(socket, status, value) */
     int32_t (*ws_connect)(const LumaMod* mod, const char* url, const char* protocol, LumaEventFn fn, void* user,
                           LumaHandle* out);
     /* 1.4. Queues one message of `bytes` (copied): `binary` 0 text (must be UTF-8), 1 bytes. LUMA_OK; SENT follows
@@ -246,10 +260,13 @@ typedef struct LumaNetInternetService {
        follows. A host luma.json does not name: LUMA_E_DENIED, reported (Net.HostNotNamed); a host not a name or an
        address (or past LUMA_NET_HOST_MOST), port 0, a null host, fn or out: LUMA_E_ARGUMENT, reported; a 17th socket:
        LUMA_E_LIMIT, reported. */
+    /* events: CONNECTED(socket), ERROR(socket, status), DATA(socket, data), SENT(socket, value), CLOSED(socket,
+       status) */
     int32_t (*tcp_connect)(const LumaMod* mod, const char* host, uint16_t port, LumaEventFn fn, void* user,
                            LumaHandle* out);
     /* 1.0. LUMA_E_DENIED, an answer (not reported): no server on the open internet in 1.0; net.local listens. Here so
        both services keep one layout (services-registry 2 item 4). */
+    /* events: ACCEPTED(socket), DATA(socket, data), SENT(socket, value), CLOSED(socket, status) */
     int32_t (*tcp_listen)(const LumaMod* mod, uint16_t port, uint32_t local_network, LumaEventFn fn, void* user,
                           LumaHandle* out);
     /* 1.0. As net.local's; this service has no listener, so a handle is always LUMA_E_HANDLE, reported. */
@@ -260,10 +277,12 @@ typedef struct LumaNetInternetService {
     int64_t (*take)(const LumaMod* mod, LumaHandle socket, void* buf, uint64_t size);
     int32_t (*close)(const LumaMod* mod, LumaHandle handle);
     /* 1.1. LUMA_E_DENIED, an answer: a socket anyone on the internet may send to is a server (as tcp_listen). */
+    /* events: DATAGRAM(socket, data, from), SENT(socket, value) */
     int32_t (*udp_open)(const LumaMod* mod, uint16_t port, uint32_t local_network, LumaEventFn fn, void* user,
                         LumaHandle* out);
     /* 1.1. A UDP socket tied to `host`:`port`, the hosts and the rules of this service's tcp_connect (its name looked
        up, public addresses only, the first one taken: UDP cannot tell which answers). It hears only from there. */
+    /* events: CONNECTED(socket), ERROR(socket, status), DATAGRAM(socket, data, from), SENT(socket, value) */
     int32_t (*udp_connect)(const LumaMod* mod, const char* host, uint16_t port, LumaEventFn fn, void* user,
                            LumaHandle* out);
     /* 1.1. LUMA_E_DENIED, an answer (only udp_open's sockets send_to). */
@@ -272,17 +291,26 @@ typedef struct LumaNetInternetService {
     /* 1.1. As net.local's. */
     int64_t (*take_datagram)(const LumaMod* mod, LumaHandle socket, void* buf, uint64_t size, LumaNetPeer* from);
     /* 1.2. LUMA_E_DENIED, answers: endpoints on this device are net.local's. */
+    /* events: CONNECTED(socket), ERROR(socket, status), DATA(socket, data), SENT(socket, value), CLOSED(socket,
+       status) */
     int32_t (*ipc_connect)(const LumaMod* mod, const char* name, LumaEventFn fn, void* user, LumaHandle* out);
+    /* events: ACCEPTED(socket), DATA(socket, data), SENT(socket, value), CLOSED(socket, status) */
     int32_t (*ipc_listen)(const LumaMod* mod, const char* name, LumaEventFn fn, void* user, LumaHandle* out);
     /* 1.3. As net.local's tls_connect, to the hosts and by the rules of this service's tcp_connect. */
+    /* events: CONNECTED(socket), ERROR(socket, status), DATA(socket, data), SENT(socket, value), CLOSED(socket,
+       status) */
     int32_t (*tls_connect)(const LumaMod* mod, const char* host, uint16_t port, LumaEventFn fn, void* user,
                            LumaHandle* out);
     /* 1.3. LUMA_E_DENIED, an answer: a server is net.local's. */
+    /* events: ACCEPTED(socket), DATA(socket, data), SENT(socket, value), CLOSED(socket, status) */
     int32_t (*tls_listen)(const LumaMod* mod, uint16_t port, uint32_t local_network, const char* certificate,
                           const char* key, LumaEventFn fn, void* user, LumaHandle* out);
     /* 1.3. As net.local's http, to the hosts luma.json names (tcp_connect's rules; each redirect's host too). */
+    /* events: HEADERS(socket, value, data), DATA(socket, data), DONE(socket, value), ERROR(socket, status) */
     int32_t (*http)(const LumaMod* mod, const LumaNetRequest* request, LumaEventFn fn, void* user, LumaHandle* out);
     /* 1.4. As net.local's, to the hosts luma.json names (tcp_connect's rules). */
+    /* events: CONNECTED(socket, data), MESSAGE(socket, data, flags), SENT(socket, value), CLOSED(socket, status,
+       value, data), ERROR(socket, status, value) */
     int32_t (*ws_connect)(const LumaMod* mod, const char* url, const char* protocol, LumaEventFn fn, void* user,
                           LumaHandle* out);
     int32_t (*ws_send)(const LumaMod* mod, LumaHandle socket, const void* data, uint64_t bytes, uint32_t binary);
