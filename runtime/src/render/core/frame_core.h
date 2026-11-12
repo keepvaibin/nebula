@@ -99,6 +99,11 @@ struct GpuMesh {
     std::uint16_t map0_row = 0xFFFFu;
     std::uint16_t map0_form_rows = 0u;
     std::uint8_t map0_uv = 0u;
+    // Map 1's the same way (FB b90: water moves by both of its maps), in the same form; map1_slot its place in the
+    // item's texture table (the form's second map).
+    std::uint16_t map1_row = 0xFFFFu;
+    std::uint8_t map1_uv = 0u;
+    std::uint8_t map1_slot = 0xFFu;
     float hit_alpha = 0.5f;  // an alpha-tested material: the alpha from which it is there
     // Its paint as one light (nebula_model.h NebulaModelPaintLight; the Physical style, plan 14.6): the share b / (a + b)
     // (0: it stays painted) and the light's direction in the model's space, octahedral.

@@ -1884,8 +1884,17 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
                     std::uint32_t{mesh.map0_row} + 2u <= constants.vertex_rows) {
                     words[18] = static_cast<std::uint32_t>((rt_item_words_.size() + rt_item_coords_.size()) * 4u);
                     const std::size_t at = rt_item_coords_.size();
-                    rt_item_coords_.resize(at + 8u);
+                    // Map 0's two rows, map 1's two rows, map 1's texture slot (NONE: none), three words free (FB b90).
+                    rt_item_coords_.resize(at + 20u, 0u);
                     std::memcpy(rt_item_coords_.data() + at, rows + std::size_t{mesh.map0_row} * 4u, 8u * sizeof(float));
+                    rt_item_coords_[at + 16u] = NEBULA_NONE32;
+                    const core::TextureTable& maps = registries_.table(item.textures);
+                    if (mesh.map1_row != 0xFFFFu && mesh.map1_uv == 0u && std::uint32_t{mesh.map1_row} + 2u <= constants.vertex_rows &&
+                        mesh.map1_slot < std::min<std::size_t>(maps.count, maps.list.size()) && maps.list[mesh.map1_slot].texture != 0u &&
+                        !TextureStore::is_target(maps.list[mesh.map1_slot].texture)) {
+                        std::memcpy(rt_item_coords_.data() + at + 8u, rows + std::size_t{mesh.map1_row} * 4u, 8u * sizeof(float));
+                        rt_item_coords_[at + 16u] = renderer_.texture_slot(texture_store_.handle(maps.list[mesh.map1_slot].texture));
+                    }
                 }
             }
             // What it shows with no light, and whether its light is in the list (rt_shade.hlsli rt_hit_read). Listed

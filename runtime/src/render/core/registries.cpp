@@ -401,28 +401,43 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes)
                         continue;
                     }
                     if (form.texture_count != 0u && form.vertex_row_count + form.pixel_row_count < 0xFFFFu) {
-                        const std::uint8_t first = *at<std::uint8_t>(file, form.textures_at);
-                        const auto* stages = at<NebulaModelStage>(file, hit.stages_at);
-                        std::uint32_t coord = 0xFFu;
-                        for (std::uint32_t s = 0; s < hit.stage_count && coord == 0xFFu; ++s) {
-                            if (stages[s].map == first) {
-                                coord = stages[s].coord;
-                            }
-                        }
-                        const bool normal_coord = (form.flags & 1u) != 0u && coord == 0u;
-                        if (coord < material.coord_count && !normal_coord) {
-                            const NebulaModelCoord& c = at<NebulaModelCoord>(file, material.coords_at)[coord];
-                            if (c.type == 1u && c.source >= 4u && c.source <= 19u) {
-                                const auto* codes = at<std::uint32_t>(file, form.vertex_rows_at);
-                                const std::uint32_t coord_code = NEBULA_ROW_COORD + 3u * coord;
-                                for (std::uint32_t r = 0; r + 1u < form.vertex_row_count; ++r) {
-                                    if (codes[r] == coord_code && codes[r + 1u] == coord_code + 1u) {
-                                        gpu_mesh.map0_row = static_cast<std::uint16_t>(r);
-                                        gpu_mesh.map0_form_rows = static_cast<std::uint16_t>(form.vertex_row_count + form.pixel_row_count);
-                                        gpu_mesh.map0_uv = static_cast<std::uint8_t>(c.source - 4u);
-                                        break;
-                                    }
+                        // A map's coordinate rows: the first of its u and v rows among the form's vertex rows and the
+                        // uv set it reads, or none (FB b90: map 0's and map 1's alike).
+                        const auto map_rows = [&](std::uint8_t map, std::uint16_t& row, std::uint8_t& uv) {
+                            const auto* stages = at<NebulaModelStage>(file, hit.stages_at);
+                            std::uint32_t coord = 0xFFu;
+                            for (std::uint32_t s = 0; s < hit.stage_count && coord == 0xFFu; ++s) {
+                                if (stages[s].map == map) {
+                                    coord = stages[s].coord;
                                 }
+                            }
+                            const bool normal_coord = (form.flags & 1u) != 0u && coord == 0u;
+                            if (coord >= material.coord_count || normal_coord) {
+                                return;
+                            }
+                            const NebulaModelCoord& c = at<NebulaModelCoord>(file, material.coords_at)[coord];
+                            if (c.type != 1u || c.source < 4u || c.source > 19u) {
+                                return;
+                            }
+                            const auto* codes = at<std::uint32_t>(file, form.vertex_rows_at);
+                            const std::uint32_t coord_code = NEBULA_ROW_COORD + 3u * coord;
+                            for (std::uint32_t r = 0; r + 1u < form.vertex_row_count; ++r) {
+                                if (codes[r] == coord_code && codes[r + 1u] == coord_code + 1u) {
+                                    row = static_cast<std::uint16_t>(r);
+                                    uv = static_cast<std::uint8_t>(c.source - 4u);
+                                    return;
+                                }
+                            }
+                        };
+                        const auto* maps = at<std::uint8_t>(file, form.textures_at);
+                        map_rows(maps[0], gpu_mesh.map0_row, gpu_mesh.map0_uv);
+                        if (gpu_mesh.map0_row != 0xFFFFu) {
+                            gpu_mesh.map0_form_rows = static_cast<std::uint16_t>(form.vertex_row_count + form.pixel_row_count);
+                        }
+                        if (form.texture_count >= 2u && maps[1] != maps[0]) {
+                            map_rows(maps[1], gpu_mesh.map1_row, gpu_mesh.map1_uv);
+                            if (gpu_mesh.map1_row != 0xFFFFu) {
+                                gpu_mesh.map1_slot = 1u;
                             }
                         }
                     }

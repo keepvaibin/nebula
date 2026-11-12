@@ -203,39 +203,23 @@ uint triangle_by_ray(uint item, float2 centre, float away) {
 // map's coordinate (0: none); the luminance's change a texel along u' and v', at the level the pixel covers, tilts the
 // smooth normal against the rise, kWave of it. `place`: the pixel's point on the triangle (eye space).
 static const float kWave = 0.15f;
-float3 water_ripple(uint item_at, uint4 first, uint4 second, uint stream, uint map, uint triangle_, float3 place, float3 smooth_) {
-    const uint rows_at = g_items.Load(item_at + 72u);
-    const uint arena = first.z;
-    if (rows_at == 0u || arena >= 8u) {
-        return smooth_;
-    }
-    const float4 ra = asfloat(g_items.Load4(g_at.x + rows_at)), rb = asfloat(g_items.Load4(g_at.x + rows_at + 16u));
-    const uint base = mesh_at(arena);
-    const uint3 corner = triangle_corners(first, second, triangle_);
-    float3 p[3];
-    float2 t[3];
-    for (uint c = 0u; c < 3u; ++c) {
-        const uint row = vertex_rows(arena, base, second.w, stream, corner[c]);
-        const float4 r0 = asfloat(g_rows.Load4(row)), r1 = asfloat(g_rows.Load4(row + 16u)), r2 = asfloat(g_rows.Load4(row + 32u));
-        const float4 q = float4(asfloat(arena_words(arena, base + second.z + corner[c] * 12u)), 1.0f);
-        p[c] = float3(dot(r0, q), dot(r1, q), dot(r2, q));
-        const float4 uv = float4(asfloat(arena_words(arena, base + first.w + corner[c] * 24u + 12u).yz), 1.0f, 1.0f);
-        t[c] = float2(dot(uv, ra), dot(uv, rb));
-    }
-    // The point among the corners, and the triangle's directions of u' and v' (the change of place a unit of each).
-    const float3 e1 = p[1] - p[0], e2 = p[2] - p[0], e = place - p[0];
-    const float d11 = dot(e1, e1), d12 = dot(e1, e2), d22 = dot(e2, e2), de1 = dot(e, e1), de2 = dot(e, e2);
-    const float area = d11 * d22 - d12 * d12;
+// One map's slope at the pixel (FB b90, from water_ripple's first half): `t` the map's coordinate at the corners,
+// `along_u`/`along_v` out: the change of place a unit of u' and v' (unit-free directions found below), `place` the
+// pixel's point; the luminance's change a texel of the map's own size along u' and v' (b88), at the level the pixel
+// covers. false: no slope there.
+bool water_map_slope(uint map, float2 t[3], float3 e1, float3 e2, float v, float w, float3 place, float3 smooth_,
+                     out float3 along_u, out float3 along_v, out float2 slope) {
+    along_u = float3(0.0f, 0.0f, 0.0f);
+    along_v = float3(0.0f, 0.0f, 0.0f);
+    slope = float2(0.0f, 0.0f);
     const float2 m1 = t[1] - t[0], m2 = t[2] - t[0];
     const float turn = m1.x * m2.y - m1.y * m2.x;
-    if (!(abs(area) > 1e-12f) || !(abs(turn) > 1e-12f)) {
-        return smooth_;
+    if (!(abs(turn) > 1e-12f)) {
+        return false;
     }
-    const float v = (d22 * de1 - d12 * de2) / area, w = (d11 * de2 - d12 * de1) / area;
     const float2 here = t[0] + m1 * v + m2 * w;
-    const float3 along_u = (e1 * m2.y - e2 * m1.y) / turn, along_v = (e2 * m1.x - e1 * m2.x) / turn;
-    // The level the pixel covers: a pixel's width there (stretched along the surface as it turns from the eye) over
-    // the place a unit of u' spans, in texels.
+    along_u = (e1 * m2.y - e2 * m1.y) / turn;
+    along_v = (e2 * m1.x - e1 * m2.x) / turn;
     uint map_w, map_h;
     g_textures[NonUniformResourceIndex(map)].GetDimensions(map_w, map_h);
     const float pixel = -place.z * abs(g_ray.x) / max(abs(dot(smooth_, normalize(place))), 0.05f);
@@ -246,13 +230,65 @@ float3 water_ripple(uint item_at, uint4 first, uint4 second, uint stream, uint m
     const float l0 = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, here, level).rgb, luma);
     const float lu = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, here + float2(step_.x, 0.0f), level).rgb, luma);
     const float lv = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, here + float2(0.0f, step_.y), level).rgb, luma);
-    // The directions in the surface's plane (unit), the normal tilted against the rise.
-    const float3 tu = along_u - smooth_ * dot(along_u, smooth_), tv = along_v - smooth_ * dot(along_v, smooth_);
-    const float su = dot(tu, tu), sv = dot(tv, tv);
-    if (!(su > 1e-12f) || !(sv > 1e-12f)) {
+    slope = float2(lu - l0, lv - l0) * exp2(-level);  // a texel of the map's own size (b88)
+    return true;
+}
+float3 water_ripple(uint item_at, uint4 first, uint4 second, uint stream, uint map, uint triangle_, float3 place, float3 smooth_) {
+    const uint rows_at = g_items.Load(item_at + 72u);
+    const uint arena = first.z;
+    if (rows_at == 0u || arena >= 8u) {
         return smooth_;
     }
-    const float3 bent = normalize(smooth_ - kWave * ((lu - l0) * tu * rsqrt(su) + (lv - l0) * tv * rsqrt(sv)));
+    const float4 ra = asfloat(g_items.Load4(g_at.x + rows_at)), rb = asfloat(g_items.Load4(g_at.x + rows_at + 16u));
+    // Map 1's rows and slot after map 0's (FB b90; slot NONE: none).
+    const float4 ra1 = asfloat(g_items.Load4(g_at.x + rows_at + 32u)), rb1 = asfloat(g_items.Load4(g_at.x + rows_at + 48u));
+    const uint map1 = g_items.Load(g_at.x + rows_at + 64u);
+    const uint base = mesh_at(arena);
+    const uint3 corner = triangle_corners(first, second, triangle_);
+    float3 p[3];
+    float2 t[3], t1[3];
+    for (uint c = 0u; c < 3u; ++c) {
+        const uint row = vertex_rows(arena, base, second.w, stream, corner[c]);
+        const float4 r0 = asfloat(g_rows.Load4(row)), r1 = asfloat(g_rows.Load4(row + 16u)), r2 = asfloat(g_rows.Load4(row + 32u));
+        const float4 q = float4(asfloat(arena_words(arena, base + second.z + corner[c] * 12u)), 1.0f);
+        p[c] = float3(dot(r0, q), dot(r1, q), dot(r2, q));
+        const float4 uv = float4(asfloat(arena_words(arena, base + first.w + corner[c] * 24u + 12u).yz), 1.0f, 1.0f);
+        t[c] = float2(dot(uv, ra), dot(uv, rb));
+        t1[c] = float2(dot(uv, ra1), dot(uv, rb1));
+    }
+    // The point among the corners (FB b90: the triangle's own, then each map's directions and slope).
+    const float3 e1 = p[1] - p[0], e2 = p[2] - p[0], e = place - p[0];
+    const float d11 = dot(e1, e1), d12 = dot(e1, e2), d22 = dot(e2, e2), de1 = dot(e, e1), de2 = dot(e, e2);
+    const float area = d11 * d22 - d12 * d12;
+    if (!(abs(area) > 1e-12f)) {
+        return smooth_;
+    }
+    const float v = (d22 * de1 - d12 * de2) / area, w = (d11 * de2 - d12 * de1) / area;
+    // Each map's tilt in the surface's plane: its slope along its own u' and v' directions (unit), against the rise.
+    float3 tilt = float3(0.0f, 0.0f, 0.0f);
+    float maps = 0.0f;
+    for (uint k = 0u; k < 2u; ++k) {
+        if (k == 1u && map1 == 0xFFFFFFFFu) {
+            break;
+        }
+        float3 along_u, along_v;
+        float2 slope;
+        if (!water_map_slope(k == 0u ? map : map1, k == 0u ? t : t1, e1, e2, v, w, place, smooth_, along_u, along_v, slope)) {
+            continue;
+        }
+        const float3 tu = along_u - smooth_ * dot(along_u, smooth_), tv = along_v - smooth_ * dot(along_v, smooth_);
+        const float su = dot(tu, tu), sv = dot(tv, tv);
+        if (!(su > 1e-12f) || !(sv > 1e-12f)) {
+            continue;
+        }
+        tilt += slope.x * tu * rsqrt(su) + slope.y * tv * rsqrt(sv);
+        maps += 1.0f;
+    }
+    if (!(maps > 0.0f)) {
+        return smooth_;
+    }
+    // the normal tilted by both maps' mean slope (one map: its own, as before), kWave of it.
+    const float3 bent = normalize(smooth_ - kWave * tilt / maps);
     return dot(bent, smooth_) > 0.5f ? bent : smooth_;
 }
 
