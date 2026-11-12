@@ -52,6 +52,8 @@ struct ImportResult {
         std::uint32_t code = 0;  // 509 is L509
         std::string file;
         std::string text;
+        std::uint32_t line = 0;  // the place in `file` (0: none)
+        std::uint32_t column = 0;
     };
     bool checked = false;
     bool refused = false;

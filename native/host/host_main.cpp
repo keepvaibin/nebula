@@ -3722,7 +3722,9 @@ int run_mods_tool() {
         const galaxy::modlog::ImportCheck found = galaxy::modlog::check_import(staged, others);
         result.checked = found.ran;
         result.refused = found.refused;
-        for (const galaxy::modlog::ImportFinding& f : found.findings) result.findings.push_back({f.error, f.code, f.file, f.text});
+        for (const galaxy::modlog::ImportFinding& f : found.findings) {
+            result.findings.push_back({f.error, f.code, f.file, f.text, f.line, f.column});
+        }
         return !found.refused;
     };
     for (std::size_t i = 0; i < sources.size(); ++i) {

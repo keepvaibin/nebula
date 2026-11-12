@@ -2290,44 +2290,37 @@ const char* import_outcome_word(const galaxy::mods::ImportResult& result) {
     return result.replaced ? "UPDATED" : "IMPORTED";
 }
 
-// In a harness run, each outcome of the batch as the fact import.result.<n> (n from 1 in the batch's order):
-// {"source", "outcome", "title", "id", "checked", "refused", "findings": [{"code", "error", "file", "text"}]}.
-// Each finding also as import.finding.
+// In a harness run, each line the result page shows for a file as the fact import.<file name> (harness 4), in the
+// page's order: line 1 what happened {"line": 1, "text": the outcome word, "title", "id" ("" when nothing was added),
+// "checked", "refused"}; then each finding {"line", "text", "code", "file", "at" ("<line>:<column>", when it names
+// one), "error"}.
 void write_import_facts() {
     std::vector<ImportOutcome> outcomes;
     {
         const std::lock_guard<std::mutex> lock(s_mod_import_mutex);
         outcomes = s_import_outcomes;
     }
-    for (std::size_t n = 0; n < outcomes.size(); ++n) {
-        const ImportOutcome& o = outcomes[n];
-        std::string json = "{\"source\":";
-        galaxy::modlog::append_json_text(json, o.source);
-        json += ",\"outcome\":";
+    for (const ImportOutcome& o : outcomes) {
+        const std::string key = "import." + o.source;
+        std::string json = "{\"line\":1,\"text\":";
         galaxy::modlog::append_json_text(json, o.outcome);
         json += ",\"title\":";
         galaxy::modlog::append_json_text(json, o.title);
         json += ",\"id\":";
         galaxy::modlog::append_json_text(json, o.id);
-        json += std::string(",\"checked\":") + (o.checked ? "true" : "false") + ",\"refused\":" + (o.refused ? "true" : "false") +
-                ",\"findings\":[";
-        for (std::size_t f = 0; f < o.findings.size(); ++f) {
-            json += (f == 0u ? "{\"code\":" : ",{\"code\":") + std::to_string(o.findings[f].code) +
-                    ",\"error\":" + (o.findings[f].error ? "true" : "false") + ",\"file\":";
-            galaxy::modlog::append_json_text(json, o.findings[f].file);
-            json += ",\"text\":";
-            galaxy::modlog::append_json_text(json, o.findings[f].text);
-            json += '}';
-        }
-        json += "]}";
-        galaxy::modlog::fact("import.result." + std::to_string(n + 1u), json);
-        // And each finding alone, so a check can name one: import.finding {"result", "code", "error", "file"}.
+        json += std::string(",\"checked\":") + (o.checked ? "true" : "false") + ",\"refused\":" + (o.refused ? "true" : "false") + "}";
+        galaxy::modlog::fact(key, json);
+        std::uint32_t line = 1;
         for (const galaxy::mods::ImportResult::Finding& f : o.findings) {
-            std::string one = "{\"result\":" + std::to_string(n + 1u) + ",\"code\":" + std::to_string(f.code) +
-                              ",\"error\":" + (f.error ? "true" : "false") + ",\"file\":";
+            std::string one = "{\"line\":" + std::to_string(++line) + ",\"text\":";
+            galaxy::modlog::append_json_text(one, f.text);
+            one += ",\"code\":" + std::to_string(f.code) + ",\"file\":";
             galaxy::modlog::append_json_text(one, f.file);
-            one += '}';
-            galaxy::modlog::fact("import.finding", one);
+            if (f.line != 0u) {
+                one += ",\"at\":\"" + std::to_string(f.line) + (f.column != 0u ? ":" + std::to_string(f.column) : std::string()) + "\"";
+            }
+            one += std::string(",\"error\":") + (f.error ? "true" : "false") + "}";
+            galaxy::modlog::fact(key, one);
         }
     }
 }
@@ -2345,7 +2338,9 @@ bool check_import_package(const std::filesystem::path& staged, const std::string
     const galaxy::modlog::ImportCheck found = galaxy::modlog::check_import(staged, others);
     result.checked = found.ran;
     result.refused = found.refused;
-    for (const galaxy::modlog::ImportFinding& f : found.findings) result.findings.push_back({f.error, f.code, f.file, f.text});
+    for (const galaxy::modlog::ImportFinding& f : found.findings) {
+        result.findings.push_back({f.error, f.code, f.file, f.text, f.line, f.column});
+    }
     return !found.refused;
 }
 

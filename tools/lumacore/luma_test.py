@@ -1002,7 +1002,7 @@ def run_one(test, renderer, args, run_folder, previous):
             raise HarnessError("the mod %s has no luma.json" % m["path"])
         if m["install"] == "import":
             # Not placed: the game imports it as "Open with" starts it (--import, task 6.1), through the validator;
-            # each outcome is the fact import.result.<n>, each finding import.finding.
+            # each line of its result page is the fact import.<file name> (4).
             if m["loads"]:
                 raise HarnessError("the imported mod %s: an import adds it for the next start, so it takes loads false"
                                    % m["path"])

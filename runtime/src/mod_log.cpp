@@ -841,7 +841,7 @@ ImportCheck check_import(const std::filesystem::path& folder, const std::vector<
     if (!validate_package(v, "import", folder, side, installed, UINT32_MAX, {}, kept, &findings)) return out;
     out.ran = true;
     for (const Kept& k : findings) {
-        out.findings.push_back({k.code, k.level == 0, k.file, k.played});
+        out.findings.push_back({k.code, k.level == 0, k.file, k.played, k.line, k.column});
         out.refused = out.refused || k.level == 0;
     }
     return out;

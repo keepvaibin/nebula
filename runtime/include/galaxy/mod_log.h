@@ -45,6 +45,8 @@ struct ImportFinding {
     bool error = false;      // an Error refuses the import; else a Note
     std::string file;        // the entry inside the mod ("" for the whole mod)
     std::string text;
+    std::uint32_t line = 0;  // the place in `file` (0: none)
+    std::uint32_t column = 0;
 };
 
 // An import's check (validator 2 "at import", task 6.1): `ran` false when the validator did not run (the importer's
