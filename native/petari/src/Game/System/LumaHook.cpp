@@ -306,7 +306,7 @@ namespace luma {
 
     const void* replacedBy(const Function* pFunction) {
         prepare();
-        const Chain* const pChain = chainOf(pFunction);
+        const Chain* const pChain = pFunction->hooked != nullptr ? chainOf(pFunction) : nullptr;
         for (u32 i = 0; pChain != nullptr && i < pChain->count; i++) {
             if (pChain->hooks[i].kind == Hook_Replace) {
                 return pChain->hooks[i].owner;
@@ -320,7 +320,10 @@ namespace luma {
         if (!tGameThread) {
             return HookResult_NotGameThread;
         }
-        if (pFunction == nullptr || pCallback == nullptr || kind >= Hook_KindCount || (wraps(kind) && (isTell(pFunction) || resultKind(pFunction) == kFixed))) {
+        // A virtual call (objects 10: LumaCore.method, import kind 8) has no flag: it is not one function. Its rows'
+        // own functions are hooked instead.
+        if (pFunction == nullptr || pFunction->hooked == nullptr || pCallback == nullptr || kind >= Hook_KindCount ||
+            (wraps(kind) && (isTell(pFunction) || resultKind(pFunction) == kFixed))) {
             return HookResult_Refused;
         }
         if (kind == Hook_Replace) {
@@ -351,7 +354,7 @@ namespace luma {
         if (!tGameThread) {
             return HookResult_NotGameThread;
         }
-        const Chain* const pChain = pFunction != nullptr ? chainOf(pFunction) : nullptr;
+        const Chain* const pChain = pFunction != nullptr && pFunction->hooked != nullptr ? chainOf(pFunction) : nullptr;
         if (pChain == nullptr) {
             return -1;
         }

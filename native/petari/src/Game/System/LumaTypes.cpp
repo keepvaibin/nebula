@@ -187,14 +187,15 @@ namespace luma {
                 }
             }
 
-            const T* find(const char* pName, u32 length) const {
+            // The position of the row of that name in the index's order, or -1.
+            s32 indexOf(const char* pName, u32 length) const {
                 u32 low = 0;
                 u32 high = count;
                 while (low < high) {
                     const u32 mid = low + (high - low) / 2;
                     const s32 c = compare(pName, length, rows[mid]->name);
                     if (c == 0) {
-                        return rows[mid];
+                        return static_cast<s32>(mid);
                     }
                     if (c < 0) {
                         high = mid;
@@ -202,7 +203,12 @@ namespace luma {
                         low = mid + 1;
                     }
                 }
-                return nullptr;
+                return -1;
+            }
+
+            const T* find(const char* pName, u32 length) const {
+                const s32 at = indexOf(pName, length);
+                return at >= 0 ? rows[at] : nullptr;
             }
         };
 
@@ -612,6 +618,16 @@ namespace luma {
         sDeclared.build(methodsBegin(), methodsEnd());
     }
 
+    s32 classNumber(const TypeRow* pType) {
+        prepareTypes();
+        return pType != nullptr ? sTypes.indexOf(pType->name, textLength(pType->name)) : -1;
+    }
+
+    const TypeRow* classAt(s32 number) {
+        prepareTypes();
+        return number >= 0 && static_cast<u32>(number) < sTypes.count ? sTypes.rows[number] : nullptr;
+    }
+
     namespace {
         const MethodRow* methodRow(const char* pName, const char* pSignature) {
             const u32 nameLength = textLength(pName);
@@ -701,20 +717,25 @@ namespace luma {
         }
     }  // namespace
 
-    const Function* findMethod(const char* pName, const char* pSignature) {
+    const MethodRow* findMethodRow(const char* pName, const char* pSignature) {
         prepareTypes();
-        const MethodRow* const pRow = methodRow(pName, pSignature);
+        return pName != nullptr && pSignature != nullptr ? methodRow(pName, pSignature) : nullptr;
+    }
+
+    const Function* findMethod(const char* pName, const char* pSignature) {
+        const MethodRow* const pRow = findMethodRow(pName, pSignature);
         return pRow != nullptr ? pRow->function : nullptr;
     }
 
     const MethodRow* overrider(const void* pObject, const char* pName, const char* pSignature, bool* pAmbiguous) {
+        return overrider(ownClass(pObject), pObject, findMethodRow(pName, pSignature), pAmbiguous);
+    }
+
+    const MethodRow* overrider(const OwnClass& own, const void* pObject, const MethodRow* pTarget, bool* pAmbiguous) {
         *pAmbiguous = false;
-        prepareTypes();
-        const MethodRow* const pTarget = methodRow(pName, pSignature);
         if (pTarget == nullptr) {
             return nullptr;
         }
-        const OwnClass own = ownClass(pObject);
         const TypeRow* const pDeclaring = typeNamed(pTarget->record, textLength(pTarget->record));
         if (own.type == nullptr || pDeclaring == nullptr) {
             return nullptr;
@@ -753,9 +774,27 @@ namespace luma {
         return out;
     }
 
+    const char* typeInfoName(const void* pTypeInfo) {
+        if (pTypeInfo == nullptr) {
+            return "";
+        }
+#if defined(_WIN32)
+        // MSVC's type descriptor: its vtable pointer, a spare pointer, then the decorated name (".?AVLiveActor@@").
+        return static_cast<const char*>(pTypeInfo) + 2 * sizeof(void*);
+#else
+        // The Itanium C++ ABI's std::type_info: its vtable pointer, then the mangled name ("9LiveActor").
+        const char* pName;
+        __builtin_memcpy(&pName, static_cast<const char*>(pTypeInfo) + sizeof(void*), sizeof(pName));
+        return pName != nullptr ? pName : "";
+#endif
+    }
+
     const void* asClass(const void* pObject, const TypeRow* pTarget, bool* pAmbiguous) {
+        return asClass(ownClass(pObject), pTarget, pAmbiguous);
+    }
+
+    const void* asClass(const OwnClass& own, const TypeRow* pTarget, bool* pAmbiguous) {
         *pAmbiguous = false;
-        const OwnClass own = ownClass(pObject);
         if (own.type == nullptr || pTarget == nullptr) {
             return nullptr;
         }

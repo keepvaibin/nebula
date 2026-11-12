@@ -249,7 +249,8 @@ namespace luma {
 
         void apiProceed(LumaCall* pCall) { proceed(reinterpret_cast<Call*>(pCall)); }
 
-        s32 apiClassOf(const char* pClass) { return pClass != nullptr ? lumacore::findClass(pClass) : -1; }
+        // A class's number (objects 10, O-3): its record's index among the record rows sorted by name; -1 when none.
+        s32 apiClassOf(const char* pClass) { return classNumber(findType(pClass)); }
 
         // Any record the game defines (contract types), by its name or an alias's.
         s32 apiSizeOf(const char* pType) {
@@ -263,11 +264,11 @@ namespace luma {
             return bind.found && (pTypeText == nullptr || bind.sameType) ? bind.value : -1;
         }
 
-        s32 apiIsA(const void* pObject, s32 classNumber) {
-            if (pObject == nullptr || classNumber < 0) {
-                return 0;
-            }
-            return lumacore::isA(lumacore::classOf(static_cast<const NameObj*>(pObject)), static_cast<u16>(classNumber)) ? 1 : 0;
+        // as_class's answer without a report (it has no mod): 1 when the object's own class is that class or derives
+        // from it by one path.
+        s32 apiIsA(const void* pObject, s32 number) {
+            bool ambiguous = false;
+            return asClass(pObject, classAt(number), &ambiguous) != nullptr ? 1 : 0;
         }
 
         // Services come from the host (luma_set_service_finder), which asks its own services and its extensions.
@@ -347,10 +348,16 @@ namespace luma {
             {2, "Hook.NoResult", {"found", nullptr}},
             {3, "Hook.SkipRefused", {"found", nullptr}},
             {4, "Hook.ServiceNotGranted", {"service", "permission"}},
+            {5, "Object.NoRow", {"found", nullptr}},
+            {6, "Object.NotReadable", {"where", nullptr}},
+            {7, "Object.Ambiguous", {"where", "found"}},
         };
         const u32 kCodeNoResult = 2;
         const u32 kCodeSkipRefused = 3;
         const u32 kCodeNotGranted = 4;
+        const u32 kCodeObjectNoRow = 5;
+        const u32 kCodeObjectNotReadable = 6;
+        const u32 kCodeObjectAmbiguous = 7;
 
         // The row a code says, into pId; false when the code is no row (a bug in the reporting runtime).
         bool rowOf(u32 code, char* pId, u32 size, const OwnRow** ppOwn) {
@@ -583,6 +590,110 @@ namespace luma {
             record(pMod, pFile, line, code, ppArgs, argCount);
         }
 
+        // Objects (contract objects 10). What a call was given, read once: 0, or own_class's -1 (null), -2 (its class
+        // has no row: reported with the type_info's name) or -3 (not a game object the kernel can read: reported with
+        // the call's name). A report's place is the call's name, so each is kept once a mod and repeats are counted.
+        s32 readObject(const LumaMod* pMod, const void* pObject, const char* pWhere, OwnClass* pOwn) {
+            *pOwn = ownClass(pObject);
+            if (pObject == nullptr) {
+                return -1;
+            }
+            if (pOwn->typeInfo == nullptr) {
+                const char* const args[1] = {pWhere};
+                apiReport(pMod, pWhere, 0, kCodeObjectNotReadable, args, 1);
+                return -3;
+            }
+            if (pOwn->type == nullptr) {
+                const char* const args[1] = {typeInfoName(pOwn->typeInfo)};
+                apiReport(pMod, pWhere, 0, kCodeObjectNoRow, args, 1);
+                return -2;
+            }
+            return 0;
+        }
+
+        void reportAmbiguous(const LumaMod* pMod, const char* pWhere, const TypeRow* pClass) {
+            const char* const args[2] = {pWhere, pClass->name};
+            apiReport(pMod, pWhere, 0, kCodeObjectAmbiguous, args, 2);
+        }
+
+        s32 apiOwnClass(const LumaMod* pMod, const void* pObject) {
+            OwnClass own;
+            const s32 state = readObject(pMod, pObject, "own_class", &own);
+            return state != 0 ? state : classNumber(own.type);
+        }
+
+        const void* apiAsClass(const LumaMod* pMod, const void* pObject, s32 number) {
+            const TypeRow* const pTarget = classAt(number);
+            OwnClass own;
+            if (pTarget == nullptr || readObject(pMod, pObject, "as_class", &own) != 0) {
+                return nullptr;
+            }
+            bool ambiguous = false;
+            const void* const pSubobject = asClass(own, pTarget, &ambiguous);
+            if (ambiguous) {
+                reportAmbiguous(pMod, "as_class", pTarget);
+            }
+            return pSubobject;
+        }
+
+        // The virtual call (invoke takes args[0] as the object seen as the declaring class; `hooked` null: it is not
+        // one function, and hook refuses it).
+        const LumaFunction* apiMethod(const char* pName, const char* pSignature) { return asPublic(findMethod(pName, pSignature)); }
+
+        // The function row of the declaration the object's own class runs: the row of the overrider's own name and
+        // signature, null when it has none (inline in a header, implicit).
+        const LumaFunction* apiOverrider(const LumaMod* pMod, const void* pObject, const char* pName, const char* pSignature) {
+            const MethodRow* const pVirtual = findMethodRow(pName, pSignature);
+            OwnClass own;
+            if (pVirtual == nullptr || readObject(pMod, pObject, "overrider", &own) != 0) {
+                return nullptr;
+            }
+            bool ambiguous = false;
+            const MethodRow* const pRow = overrider(own, pObject, pVirtual, &ambiguous);
+            if (ambiguous) {
+                reportAmbiguous(pMod, "overrider", findType(pVirtual->record));
+            }
+            return pRow != nullptr ? asPublic(findFunction(pRow->function->name, pRow->function->signature, nullptr)) : nullptr;
+        }
+
+        // method() with the object adjusted to the declaring class: 0 called; -1 no such virtual; -2 not of that class
+        // (no row, or ambiguous: reported); -3 not readable or null (reported).
+        s32 apiCallMethod(const LumaMod* pMod, const void* pObject, const char* pName, const char* pSignature, void** ppArgs,
+                          void* pResult) {
+            const MethodRow* const pVirtual = findMethodRow(pName, pSignature);
+            // Null args: only for a virtual with no parameters ("()" or "() const"); args[0] is then the kernel's own.
+            void* pOwnArgs[1] = {nullptr};
+            const bool noParams = pVirtual != nullptr && pVirtual->params[0] == '(' && pVirtual->params[1] == ')';
+            if (pVirtual == nullptr || (ppArgs == nullptr && !noParams)) {
+                return -1;
+            }
+            if (ppArgs == nullptr) {
+                ppArgs = pOwnArgs;
+            }
+            OwnClass own;
+            const s32 state = readObject(pMod, pObject, "call_method", &own);
+            if (state == -1) {
+                const char* const args[1] = {"call_method"};
+                apiReport(pMod, "call_method", 0, kCodeObjectNotReadable, args, 1);
+                return -3;
+            }
+            if (state != 0) {
+                return state;
+            }
+            const TypeRow* const pDeclaring = findType(pVirtual->record);
+            bool ambiguous = false;
+            const void* const pSubobject = asClass(own, pDeclaring, &ambiguous);
+            if (ambiguous) {
+                reportAmbiguous(pMod, "call_method", pDeclaring);
+            }
+            if (pSubobject == nullptr) {
+                return -2;
+            }
+            ppArgs[0] = const_cast<void*>(pSubobject);
+            pVirtual->function->invoke(ppArgs, pResult);
+            return 0;
+        }
+
         bool grants(const LumaMod* pMod, const char* pPermission) {
             for (u32 i = 0; i < pMod->grantedCount; i++) {
                 if (sameText(pMod->granted[i], pPermission)) {
@@ -712,7 +823,7 @@ namespace luma {
 
         const LumaCore sCore = {
             sizeof(LumaCore), LUMA_API, apiLog, apiFunction, apiFunctionAt, apiHook, apiProceed, apiField, apiSizeOf, apiClassOf, apiIsA, apiService,
-            apiGameThread, apiUnhook, apiAlloc, apiFree, apiReport,
+            apiGameThread, apiUnhook, apiAlloc, apiFree, apiReport, apiOwnClass, apiAsClass, apiMethod, apiOverrider, apiCallMethod,
         };
 
         // One import: its function (functions and hooks) or number (fields, sizes, classes). False: the game has none,
@@ -724,6 +835,9 @@ namespace luma {
             case LUMA_IMPORT_FUNCTION:
             case LUMA_IMPORT_HOOK:
                 *ppFunction = findFunction(rImport.name, rImport.signature, nullptr);
+                return *ppFunction != nullptr;
+            case LUMA_IMPORT_METHOD:
+                *ppFunction = findMethod(rImport.name, rImport.signature);
                 return *ppFunction != nullptr;
             case LUMA_IMPORT_FIELD: {
                 const FieldBind bind = findField(rImport.name, rImport.signature);
@@ -761,6 +875,8 @@ namespace luma {
                 return rImport.signature != nullptr ? "Name.GlobalSig" : "Name.Global";
             case LUMA_IMPORT_SIZE:
                 return "Name.Type";
+            case LUMA_IMPORT_METHOD:
+                return "Name.Method";
             default:
                 return "Name.Class";
             }
@@ -974,7 +1090,7 @@ namespace luma {
         // Pass 1, every name; pass 2, every hook as `hook` would take it. Nothing is bound yet (LR-2).
         for (u32 i = 0; !refused && i < pInfo->import_count; i++) {
             const LumaImport& rImport = pInfo->imports[i];
-            if (rImport.name == nullptr || rImport.kind > LUMA_IMPORT_GLOBAL ||
+            if (rImport.name == nullptr || rImport.kind > LUMA_IMPORT_METHOD ||
                 (rImport.kind == LUMA_IMPORT_HOOK && (rImport.hook == nullptr || rImport.hook_kind >= Hook_KindCount))) {
                 refuse.start(512);
                 refuse.put("why", 'P', "Lib.ImportRowBad");
@@ -1173,7 +1289,7 @@ namespace luma {
             const Function* pFunction = nullptr;
             s32 number = -1;
             const bool found = resolve(rImport, &pFunction, &number);
-            if (rImport.kind == LUMA_IMPORT_FUNCTION) {
+            if (rImport.kind == LUMA_IMPORT_FUNCTION || rImport.kind == LUMA_IMPORT_METHOD) {
                 *static_cast<const LumaFunction**>(rImport.slot) = asPublic(pFunction);
             } else {
                 *static_cast<s32*>(rImport.slot) = found ? number : -1;

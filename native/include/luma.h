@@ -68,8 +68,10 @@ enum {
     LUMA_IMPORT_MOD_FUNCTION = 6, /* another mod's function (loader D3-3): `name` "<mod id>/<export name>", `signature`
                                     the export's ("lumi1:" and 16 hex digits, lumascript-abi R-2); slot: const void**.
                                     That mod is among this one's `needs`, so it is loaded first */
-    LUMA_IMPORT_GLOBAL = 7    /* a global the game defines (types 1.2): `name` qualified ("SoundEngine::sEngine"),
+    LUMA_IMPORT_GLOBAL = 7,   /* a global the game defines (types 1.2): `name` qualified ("SoundEngine::sEngine"),
                                  `signature` its type text; slot: void** (its address; const void** for a const one) */
+    LUMA_IMPORT_METHOD = 8    /* a virtual call (objects 1): name "Class::function" (the declaring class's), signature as
+                                 kind 0's; slot: const LumaFunction** (as LumaCore.method gives it) */
 };
 #define LUMA_OPTIONAL 1u
 
@@ -96,8 +98,9 @@ typedef struct LumaCore {
     const LumaFunction* (*function)(const char* name, const char* signature);
     /* Every function: `index` from 0 until it returns null, by name. */
     const LumaFunction* (*function_at)(uint32_t index);
-    /* Adds a hook after loading. 0: added; -1: refused (a constructor or destructor takes before and after only, and a
-       function whose result has no default takes no skipping hook); -2: another mod replaces the function already;
+    /* Adds a hook after loading. 0: added; -1: refused (a constructor or destructor takes before and after only, a
+       function whose result has no default takes no skipping hook, and a virtual call from `method` is not one
+       function: hook its rows' own functions, `overrider` names them); -2: another mod replaces the function already;
        -3: not on the game thread (nothing changes). A call already running keeps the hooks it started with. */
     int32_t (*hook)(const LumaMod* mod, const LumaFunction* function, uint32_t kind, LumaHook hook, void* user);
     /* From a wrap or a replace: runs the wraps after it, then the function. */
@@ -109,7 +112,9 @@ typedef struct LumaCore {
     int32_t (*field)(const char* class_name, const char* field, const char* type);
     /* Any record's size, or -1. */
     int32_t (*size_of)(const char* class_name);
-    /* A class's number, or -1; is_a says whether an object of the game is of that class or one made from it. */
+    /* A class's number, or -1: its record's index among the record rows sorted by name in byte order (objects O-3; kind 3
+       gives the same). is_a: 1 when the object's own class is that class or derives from it by one path (as_class's
+       answer, with no report), else 0. */
     int32_t (*class_of)(const char* class_name);
     int32_t (*is_a)(const void* object, int32_t class_number);
 
@@ -135,10 +140,36 @@ typedef struct LumaCore {
        UTF-8 and copied; at most 8 are kept. From any thread. */
     void (*report)(const LumaMod* mod, const char* file, uint32_t line, uint32_t code, const char* const* args,
                    uint32_t arg_count);
+
+    /* Objects (objects contract). The object's own class (the most derived), from the object or any of its
+       polymorphic subobjects: its number (class_of's). -1: object is null. -2: its class has no row (no name a mod
+       can write). -3: not a game object the kernel can read (the object or its vtable pointer not aligned as a
+       pointer; on Windows, a locator that is not one). -2 and -3 are reported for `mod`, once each. Any thread. */
+    int32_t (*own_class)(const LumaMod* mod, const void* object);
+    /* The address of the object's `class_number` subobject when its own class is that class or derives from it, else
+       null. Null too when the class is in the object twice (an ambiguous base), reported. Any thread. */
+    const void* (*as_class)(const LumaMod* mod, const void* object, int32_t class_number);
+    /* The virtual call of a virtual function a record declares ("LiveActor::control", "void()"), as import kind 8
+       binds it: invoke(args, result) with args[0] the object as the declaring class (as_class gives it); the object's
+       own class's function runs, and that function's hooks with it. `hooked` is null. Null: no such virtual (or one
+       no mod can name). */
+    const LumaFunction* (*method)(const char* name, const char* signature);
+    /* The function row the object's own class runs for that virtual, or null: no row (inline in a header, implicit),
+       an unknown name, -2 or -3 as own_class, or two subobjects of the declaring class with different overriders and
+       the object pointer at neither (reported, ambiguous). Any thread. */
+    const LumaFunction* (*overrider)(const LumaMod* mod, const void* object, const char* name, const char* signature);
+    /* method() with the adjustment done: sets args[0] to `object` as the declaring class, then invokes (args may be
+       null for a virtual with no parameters). 0: called; -1: no such virtual, or args null for one with parameters; -2: the object is not of that class (or ambiguous, reported); -3: not readable (reported).
+       The thread the call may run on is the called function's. */
+    int32_t (*call_method)(const LumaMod* mod, const void* object, const char* name, const char* signature, void** args,
+                           void* result);
 } LumaCore;
 
 /* report's own codes (D3-1). */
 #define LUMA_REPORT_OUT_OF_MEMORY 1u /* Hook.OutOfMemory: args[0] the size; luma.h's `new` then stops the game */
+/* The kernel's own, said for a mod by LumaCore (not passed to report): 2 Hook.NoResult and 3 Hook.SkipRefused (a hook's
+   result), 4 Hook.ServiceNotGranted, and the objects contract's 5 Object.NoRow (found: the class's type_info name as
+   the ABI writes it), 6 Object.NotReadable (where: the call), 7 Object.Ambiguous (where, found: the class). */
 
 /* One function a library mod gives the mods that need it (loader D3-3). Names "<module>.<fn>" and the signature form
    are lumascript-abi R-2's; the kernel compares both strings and nothing else. Sorted by name. */
@@ -186,6 +217,7 @@ typedef struct LumaModInfo {
 #define LUMA_HOOK_ON(name, signature, kind, hook) {LUMA_IMPORT_HOOK, 0, name, signature, 0, hook, kind, 0}
 #define LUMA_SERVICE(slot, name, major_minor) {LUMA_IMPORT_SERVICE, 0, name, major_minor, &slot, 0, 0, 0}
 #define LUMA_GLOBAL(slot, name, type) {LUMA_IMPORT_GLOBAL, 0, name, type, &slot, 0, 0, 0}
+#define LUMA_METHOD(slot, name, signature) {LUMA_IMPORT_METHOD, 0, name, signature, &slot, 0, 0, 0}
 /* A bit-field bound by kind 1 (its slot is its position in bits): read and write `width` bits of `object`. */
 #define LUMA_BITS_GET(object, position, width) luma_bits_get((const void*)(object), (position), (width))
 #define LUMA_BITS_SET(object, position, width, value) luma_bits_set((void*)(object), (position), (width), (value))
