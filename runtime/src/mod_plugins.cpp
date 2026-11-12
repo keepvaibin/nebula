@@ -4,6 +4,7 @@
 
 #include "galaxy/luma.h"
 #include "galaxy/host_extension.h"
+#include "galaxy/luma_services_host.h"
 #include <luma_host.h>
 
 #include <algorithm>
@@ -529,6 +530,10 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
             return galaxy::extensions::service(name, major, minor);
         });
     }
+    // LumaCore's services: the module's own, the host's, then the extensions' test ones (services-registry 13).
+    if (!plugins.empty()) {
+        galaxy::luma_services::provide_all(find_symbol, log, {});
+    }
     if (plugins.empty() && rows.empty()) return 0;
     if (game_api == nullptr || game_api->size < sizeof(NebulaModApi)) {
         say("the game module has no plugin interface");
@@ -914,10 +919,13 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
             }
             LumaRefusal refusal{};
             const std::string library = file.path.filename().string();
-            // The permissions the player granted: none until the consent screen (phase 6), so a permissioned service is
-            // refused by name, never allowed by omission (loader D3-2).
+            // The permissions the player granted, for the declarations as they are now (consent 1.4): a permissioned
+            // service the mod imports without one is refused by name, never allowed by omission (loader D3-2).
+            std::vector<const char*> granted;
+            granted.reserve(file.granted.size());
+            for (const std::string& permission : file.granted) granted.push_back(permission.c_str());
             if (load(static_cast<const LumaModInfo*>(info), file.mod_id.c_str(), library.c_str(), static_cast<std::int32_t>(index), module,
-                     close_luma_library, nullptr, 0u, &refusal) == 0) {
+                     close_luma_library, granted.data(), static_cast<std::uint32_t>(granted.size()), &refusal) == 0) {
                 if (refusal.code != 0) {
                     not_started(file, refusal);
                 } else {

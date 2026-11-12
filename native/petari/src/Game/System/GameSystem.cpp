@@ -1,6 +1,7 @@
 #include "Game/System/LumaScript.hpp"
 #include "Game/System/LumaHook.hpp"
 #include "Game/System/LumaLoader.hpp"
+#include "Game/System/LumaServices.hpp"
 #include "Game/System/LumaTime.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/NebulaHost.hpp"
@@ -245,6 +246,7 @@ void GameSystem::update() {
     NebulaPrepare::update();
     lumascript::beginFrame();  // the scripts' step budgets; nothing when no mod has a script
     luma::frame();             // replaced hook lists and taken-out mods no call holds; nothing when there are none
+    luma::services::frameStart();  // the services' events, then time's frame handlers; one load when nothing waits
     NebulaMods::fire(NEBULA_MOD_EVENT_FRAME);
     NebulaSettingsMenu::update();
     NebulaIcons::update();
