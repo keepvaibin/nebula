@@ -25,6 +25,7 @@ png = "0.17"
 zune-jpeg = "0.5"
 mikktspace = { version = "0.3", default-features = false, features = ["glam"] }
 serde_json = "1"
+ttf-parser = { version = "0.25", default-features = false, features = ["std", "opentype-layout"] }
 sha1.workspace = true
 
 [target.'cfg(windows)'.dependencies]

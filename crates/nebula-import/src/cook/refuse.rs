@@ -80,6 +80,8 @@ pub enum CookFact {
     Sound { path: String, source: String, facts: super::sound_effect::SoundFacts },
     /// A clip's frame events cooked (animation contract's `cook.events`).
     Events { path: String, source: String, facts: super::clip_events::EventFacts },
+    /// A mod's font cooked (layout contract's `cook.font`).
+    Font { path: String, source: String, facts: super::font_cook::FontFacts },
 }
 
 /// What `cook.effect` says of one effect (`<id>:<name>`) or one replaced game particle (its name).
@@ -188,6 +190,19 @@ pub fn cook_facts_text(facts: &[CookFact]) -> String {
                 let fixed = ["cook.events", path, "", source, &facts.clip, "", "", "", "", "", ""].map(str::to_string);
                 let frames = facts.frames.map_or_else(|| "none".to_string(), |n| n.to_string());
                 fixed.into_iter().chain([format!("rows={}", facts.rows), format!("frames={frames}")]).collect()
+            }
+            CookFact::Font { path, source, facts } => {
+                let fixed = ["cook.font", path, "", source, &facts.fallback, "", "", "", "", "", ""].map(str::to_string);
+                fixed
+                    .into_iter()
+                    .chain([
+                        format!("glyphs={}", facts.glyphs),
+                        format!("sheets={}", facts.sheets),
+                        format!("kern={}", facts.kern),
+                        format!("size={}", facts.size),
+                        format!("missing={}", facts.missing),
+                    ])
+                    .collect()
             }
         };
         out.push_str(&line.iter().map(|f| field(f)).collect::<Vec<_>>().join("\t"));

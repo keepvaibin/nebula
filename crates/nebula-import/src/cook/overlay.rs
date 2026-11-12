@@ -269,6 +269,18 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         super::refuse::record(super::refuse::CookFact::Sound { path: path.clone(), source: change.path.clone(), facts });
         return Ok(vec![(path, nsfx, true)]);
     }
+    // Name.font.json in a mod's assets: a font, Luma/<id>/<path>.brfnt (the store cooks it as the game's fonts) with
+    // its kerning (.kern) and fallback (.fallback) beside it (layout contract 2a). The font file it names is read beside it.
+    if super::font_cook::is_font_source(&lower) {
+        if !lower.starts_with("luma/") {
+            return Err(super::refuse::refuse("Cook.Font.NotAsset", &[("file", change.path.clone())]));
+        }
+        let folder = change.source.parent().map(Path::to_path_buf);
+        let file = |name: &str| -> Option<Vec<u8>> { fs::read(folder.as_ref()?.join(name)).ok() };
+        let (files, facts) = super::font_cook::cook(bytes, &change.path, &file)?;
+        super::refuse::record(super::refuse::CookFact::Font { path: files[0].0.clone(), source: change.path.clone(), facts });
+        return Ok(files);
+    }
     // A table as JSON: X.bcsv.json, a camera table X.bcam.json, or a stage's placement table (its name has no ending:
     // StageData/MyGalaxy.arc/jmp/placement/common/objinfo.json), as `lumalink extract` writes them.
     if lower.ends_with(".bcsv.json") || lower.ends_with(".bcam.json") || (lower.ends_with(".json") && lower.contains(".arc/jmp/")) {
@@ -377,8 +389,8 @@ pub fn write_overlay(game_id: &str, changes: &[Change], patches: &PlanPatches, b
             .and_then(|bytes| {
                 stats.bytes_in += bytes.len() as u64;
                 level_alone(change, changes)?;
-                // A sound file in a mod's assets is what a .sound.json reads; it is not a file of the game.
-                if super::sound_effect::is_asset_source(&change.path) {
+                // A sound or font file in a mod's assets is what a .sound.json or .font.json reads; not a file of the game.
+                if super::sound_effect::is_asset_source(&change.path) || super::font_cook::is_asset_source(&change.path) {
                     return Ok(Vec::new());
                 }
                 let modern = modern_files(change, &bytes, base)?;
@@ -856,6 +868,7 @@ mod tests {
             "LayoutData/Hud.arc/Hud.layout.json",
             "AudioRes/Jump.sound.json",
             "ObjectData/Kuribo.arc/Walk.anim.json",
+            "LayoutData/Fonts/Title.font.json",
         ];
         let dir = tempfile::tempdir().unwrap();
         for path in cooked {
@@ -901,6 +914,26 @@ mod tests {
         assert_eq!(cook_source("LayoutData/Hud.arc/Hud.layout.json", Path::new("layers/base/files/x"), source, None).unwrap(), 1);
         let error = cook_source("LayoutData/Hud.layout.json", &archive, source, None).unwrap_err();
         assert_eq!(said(&error).0, "Cook.Layout.NotInArchive");
+    }
+
+    #[test]
+    fn a_mods_font_is_cooked_as_the_games_fonts_with_its_kerning_and_fallback_beside_it() {
+        use super::super::refuse::{said, take_facts, CookFact};
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("Title.ttf"), super::super::font_cook::tests::plain_font()).unwrap();
+        let change = Change { path: "Luma/my.mod/fonts/Title.font.json".into(), source: dir.path().join("Title.font.json"), merge: false };
+        let _ = take_facts();
+        let made = modern_files(&change, br#"{"file": "Title.ttf", "size": 32}"#, None).unwrap();
+        let places: Vec<(&str, bool)> = made.iter().map(|(p, _, done)| (p.as_str(), *done)).collect();
+        assert_eq!(places, [("Luma/my.mod/fonts/Title.brfnt", false), ("Luma/my.mod/fonts/Title.kern", true), ("Luma/my.mod/fonts/Title.fallback", true)]);
+        // The store's cook makes the BRFNT the game's font form.
+        let items = super::super::cook_entry(&made[0].0, made[0].1.clone(), &mut Stats::default()).unwrap();
+        assert!(items.iter().any(|i| i.bytes.as_deref().is_some_and(|b| b.starts_with(b"NFNT"))));
+        let facts = take_facts();
+        assert!(facts.iter().any(|f| matches!(f, CookFact::Font { path, facts, .. } if path == "Luma/my.mod/fonts/Title.brfnt" && facts.glyphs == 3)), "{facts:?}");
+        // A font is a mod's asset, never a game file.
+        let error = modern_files(&Change { path: "LayoutData/Title.font.json".into(), ..change }, b"{}", None).unwrap_err();
+        assert_eq!(said(&error).0, "Cook.Font.NotAsset");
     }
 
     #[test]
