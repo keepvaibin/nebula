@@ -1,10 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* Nebula's plugin interface: the functions a .luma's code can call, and the events it can receive. Plain C with no
-   other dependencies, so any compiler that builds native libraries for the platform can use it.
-
-   A plugin exports the two functions NEBULA_PLUGIN_ENTRY declares. New fields are only ever added at the end of
-   NebulaModApi, so a plugin keeps working on later versions of Nebula. On an older Nebula, newer fields are missing:
-   check with NEBULA_MOD_API_HAS(api, field) before calling one.
+/* Nebula's old plugin interface, now the table the game module's scripts are given (luma_start) and the rows of mods
+   that are not code. A mod's code is a LumaCore mod (luma.h): the old plugin entry, nebula_plugin_start, its hook
+   and find_function are gone (plan 1.10a); the rest goes as LumaCore takes each part over (1.10b).
 
    Passing null where a call needs an object, layout, point or name makes the call do nothing and return 0, null, or
    -1 (where -1 means "not found"). Calls where null has a meaning (find_actor's `name`, stop_effect's) say so. Passing
@@ -23,12 +20,6 @@ extern "C" {
    placement_number(column) and placement_text(column), and added the nerve calls after state_frames. Plugins built
    for version 1 are not started. */
 #define NEBULA_MOD_API_VERSION 3u
-
-#if defined(_WIN32)
-#define NEBULA_PLUGIN_EXPORT __declspec(dllexport)
-#else
-#define NEBULA_PLUGIN_EXPORT __attribute__((visibility("default")))
-#endif
 
 /* An object in the game: an enemy, a coin, the player (a LiveActor in the game's code). Valid until the stage ends;
    don't keep one across NEBULA_MOD_EVENT_STAGE_START. */
@@ -970,28 +961,6 @@ typedef enum NebulaButton {
     NEBULA_BUTTON_PAUSE = 1u << 9,
     NEBULA_BUTTON_MAP = 1u << 10
 } NebulaButton;
-
-#if defined(_WIN32) && defined(__cplusplus)
-/* A plugin built without a C library that uses floats needs this one symbol the compiler expects. */
-#define NEBULA_PLUGIN_FLOATS extern "C" __declspec(selectany) int _fltused = 0;
-#elif defined(_WIN32)
-#define NEBULA_PLUGIN_FLOATS __declspec(selectany) int _fltused = 0;
-#else
-#define NEBULA_PLUGIN_FLOATS
-#endif
-
-#ifdef __cplusplus
-#define NEBULA_PLUGIN_C extern "C"
-#else
-#define NEBULA_PLUGIN_C
-#endif
-
-/* Declares a plugin's two exports: the interface version it was built against, and the start function the game
-   calls once before the game starts. */
-#define NEBULA_PLUGIN_ENTRY(api, self)                                                                         \
-    NEBULA_PLUGIN_FLOATS                                                                                       \
-    NEBULA_PLUGIN_C NEBULA_PLUGIN_EXPORT uint32_t nebula_plugin_api(void) { return NEBULA_MOD_API_VERSION; }   \
-    NEBULA_PLUGIN_C NEBULA_PLUGIN_EXPORT void nebula_plugin_start(const NebulaModApi* api, const NebulaPlugin* self)
 
 #ifdef __cplusplus
 }

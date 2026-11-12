@@ -113,11 +113,6 @@ Windows installs carry `dxc\dxc.exe`, `dxc\dxcompiler.dll` and `dxc\dxil.dll` fr
 <https://github.com/microsoft/DirectXShaderCompiler>, unchanged, with their license files beside them. The game starts them to
 build a mod's shaders on the player's PC.
 
-## MinHook (BSD 2-clause)
-
-`third_party/minhook` (1.3.4) from <https://github.com/TsudaKageyu/minhook>, unchanged, is how a mod's plugin replaces a
-game function on Windows. Copyright (C) 2009-2017 Tsuda Kageyu: `third_party/minhook/LICENSE.txt`.
-
 ## MiiPort (ISC)
 
 `runtime/src/mii_formats.cpp` adapts the Switch's colour and glasses downgrade tables and the 3DS/Wii U and Switch Mii

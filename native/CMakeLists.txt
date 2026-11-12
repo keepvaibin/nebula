@@ -297,21 +297,8 @@ endif()
 
 # The native game's host (host/host_main.cpp): loads the module and serves it. Built with the host's own C++ library.
 # The mods' virtual disc (galaxy::mods) serves this host's disc reads as the windowed host's.
-# How a plugin replaces a game function on Windows.
-set(nebula_minhook_sources)
-if(NOT WIN32)
-    set(nebula_minhook_sources ../runtime/src/mod_hook_posix.cpp)
-    if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
-        list(APPEND nebula_minhook_sources ../third_party/minhook/src/hde/hde64.c)
-        set_source_files_properties(../third_party/minhook/src/hde/hde64.c PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/../runtime/include/galaxy/hde_shim")
-    endif()
-endif()
-if(WIN32)
-    set(nebula_minhook_dir "${CMAKE_CURRENT_LIST_DIR}/../third_party/minhook")
-    set(nebula_minhook_sources "${nebula_minhook_dir}/src/buffer.c" "${nebula_minhook_dir}/src/hook.c" "${nebula_minhook_dir}/src/trampoline.c" "${nebula_minhook_dir}/src/hde/hde64.c")
-endif()
 add_executable(nebula_native_host host/host_main.cpp ../runtime/src/host_extension.cpp ../runtime/src/luma_services_host.cpp ../runtime/src/luma_system.cpp ../runtime/src/luma_mods.cpp ../runtime/src/luma_fs.cpp
-    ../runtime/src/mod_log.cpp ../runtime/src/mod_start_check.cpp ../runtime/src/mod_plugins.cpp ${nebula_minhook_sources}
+    ../runtime/src/mod_log.cpp ../runtime/src/mod_start_check.cpp ../runtime/src/mod_plugins.cpp
     ../runtime/src/luma.cpp ../runtime/src/mods.cpp ../runtime/src/mod_consent.cpp ../runtime/src/texture_categories.cpp ../runtime/src/dolphin_pack.cpp ../runtime/src/mod_xml.cpp ../runtime/src/atomic_file.cpp ../runtime/src/save_files.cpp ../runtime/src/asset_store.cpp
     ../runtime/src/crash_report.cpp ../runtime/src/discord_presence.cpp ../runtime/src/mii_import.cpp
     ../runtime/src/mii_formats.cpp ../runtime/src/pointer_control.cpp
@@ -321,7 +308,7 @@ add_executable(nebula_native_host host/host_main.cpp ../runtime/src/host_extensi
     $<$<PLATFORM_ID:Windows>:../runtime/src/render/mod_shader_compile_d3d12.cpp>
     $<$<PLATFORM_ID:Darwin,iOS>:../runtime/src/render/mtl/mod_shader_compile_mtl.cpp>
     $<$<NOT:$<PLATFORM_ID:Windows,Darwin,iOS>>:../runtime/src/render/vk/mod_shader_present_vk.cpp>)
-target_include_directories(nebula_native_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/minhook/include"
+target_include_directories(nebula_native_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/../runtime/include")
 target_compile_features(nebula_native_host PRIVATE cxx_std_20)
 target_compile_definitions(nebula_native_host PRIVATE _CRT_SECURE_NO_WARNINGS)

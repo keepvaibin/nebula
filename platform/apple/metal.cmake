@@ -53,7 +53,7 @@ if(TARGET nebula_archive)
 endif()
 target_include_directories(galaxy_render_mtl PUBLIC "${nebula_root}/runtime/src" "${nebula_root}/runtime/include")
 target_include_directories(galaxy_render_mtl PRIVATE "${nebula_root}/third_party/smaa" "${nebula_root}/native/include"
-    "${nebula_apple_utility_msl_dir}" "${nebula_root}/runtime/include/galaxy/hde_shim")
+    "${nebula_apple_utility_msl_dir}")
 target_link_libraries(galaxy_render_mtl PRIVATE nebula_msl)
 target_link_libraries(galaxy_render_mtl PUBLIC "-framework Metal" "-framework QuartzCore" "-framework Foundation"
     "-framework CoreGraphics" "-framework IOSurface")
