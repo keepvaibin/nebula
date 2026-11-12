@@ -23,6 +23,7 @@ struct PermissionFacts {
     std::string text_row;  // "Permission.net.internet.Text": the line's row; {hosts} to fill
     std::string hosts;     // net.internet: the hosts joined by ", "; "*" alone -> the row Permission.net.internet.Any
     std::string why;       // the mod's own line
+    std::string roots;     // net.local/net.internet: the certificate files it trusts (net.roots), joined by ", "
     Answer answer = Answer::NotAsked;
     bool changed = false;   // answered before, for a declaration that differs now (asked again: plan 6.4)
     bool required = false;  // the entry library imports its service without LUMA_OPTIONAL; `native` always

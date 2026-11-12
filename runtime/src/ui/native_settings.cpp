@@ -3017,6 +3017,7 @@ std::vector<SettingsRow> consent_page(const galaxy::mods::ModInfo& mod) {
         if (fresh) label = words("SettingsJoinAside", {{"0", label}, {"1", words("Consent.New")}});
         const std::string hosts = permission.hosts == "*" ? words("Permission.net.internet.Any") : permission.hosts;
         std::string help = words(permission.text_row.c_str(), {{"hosts", hosts}});
+        if (!permission.roots.empty()) help += ' ' + words("Consent.Roots", {{"roots", permission.roots}});
         if (!permission.why.empty()) {
             help += ' ' + words("Consent.Why") + " \u201C" + mods_ui_text(permission.why, 200u) + "\u201D";
         }
@@ -3051,6 +3052,8 @@ std::vector<SettingsRow> consent_page(const galaxy::mods::ModInfo& mod) {
         galaxy::modlog::append_json_text(fact_rows, words(permission.text_row.c_str(), {{"hosts", hosts}}));
         fact_rows += ",\"why\":";
         galaxy::modlog::append_json_text(fact_rows, permission.why);
+        fact_rows += ",\"roots\":";
+        galaxy::modlog::append_json_text(fact_rows, permission.roots);
         fact_rows += std::string(",\"required\":") + (permission.required ? "true" : "false") +
                      ",\"new\":" + (fresh ? "true" : "false") + '}';
     }
@@ -3207,6 +3210,9 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
             const std::string hosts = permission.hosts == "*" ? galaxy::modlog::row_words("Permission.net.internet.Any", id, {})
                                                               : permission.hosts;
             std::string help = galaxy::modlog::row_words(permission.text_row.c_str(), id, {{"hosts", hosts}});
+            if (!permission.roots.empty()) {
+                help += ' ' + galaxy::modlog::row_words("Consent.Roots", id, {{"roots", permission.roots}});
+            }
             // A required one turned to Not allowed says so before the restart does (H64-3): off from the next start.
             if (permission.required) {
                 help += ' ' + (granted ? galaxy::modlog::row_words("Consent.Required", id, {})
