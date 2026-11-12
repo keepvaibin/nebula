@@ -2225,7 +2225,21 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
             rt_look_up_frame_ = list.game_frame;
         }
         rt_look_[1] = rt_look_up_;
-        rt_look_[2] = relit ? kDebake : 0.0f;
+        // c87 (PLANS-UNBUILT "Sunless places"): with no traced sun the art's painted light is the room's light, taken
+        // out only as far as the lamps supply it (rt_emitters_finish), eased over about a second.
+        if (!rt_supplied_known_ || rt_supplied_stage_ != list.stage_hash || now.cut || walk_.time.reset) {
+            rt_supplied_ = rt_supplied_target_;
+            rt_supplied_known_ = true;
+            rt_supplied_stage_ = list.stage_hash;
+        } else {
+            const std::uint32_t steps = walk_.between ? 0u : std::min(list.game_frame - rt_supplied_frame_, 4u);
+            rt_supplied_ += (rt_supplied_target_ - rt_supplied_) * (1.0f - std::pow(0.95f, static_cast<float>(steps)));
+        }
+        if (!walk_.between) {
+            rt_supplied_frame_ = list.game_frame;
+        }
+        const bool lamps_light = rt_physical_ && rt_part(render, RtPart::Lights) != 0u;
+        rt_look_[2] = relit ? kDebake : lamps_light ? kDebake * rt_supplied_ : 0.0f;
         rt_look_[3] = rt_physical_ ? kAmbientLook : 1.0f;
         // A run's own (rt_dev.h form, art_facing, debake, ambient_look), over the style's.
         rt_look_[0] = rt_dev(RtDev::Form, rt_look_[0]);
@@ -3007,6 +3021,7 @@ void RenderCore::rt_emitters_finish(float exposure_lux) {
             return false;
         });
     }
+    float lamps = 0.0f;  // c87: lux where the eye is (the emitters' centres are in its space)
     for (RtEmitter& e : rt_emitters_) {
         const float metres = e.radius / kUnitsPerMetre;
         // c81 (L3): a glowing mesh's light at three times its radius adds at least half a lit surface's colour at the
@@ -3021,12 +3036,17 @@ void RenderCore::rt_emitters_finish(float exposure_lux) {
             }
         }
         const float candela = std::max({e.colour[0], e.colour[1], e.colour[2], 0.0f});
+        const float far2 = (e.centre[0] * e.centre[0] + e.centre[1] * e.centre[1] + e.centre[2] * e.centre[2]) /
+                           (kUnitsPerMetre * kUnitsPerMetre);
+        lamps += candela / std::max(far2 + metres * metres, 1e-4f);
         const float at_source = 1.0f / (exposure_lux * metres * metres);
         for (float& c : e.colour) {
             c *= at_source;
         }
         e.reach = std::clamp(kUnitsPerMetre * std::sqrt(candela / (0.02f * exposure_lux)), e.radius * 2.0f, 4000.0f);
     }
+    // c87 (the sunless rule): the share of a fully lit surface's light the lamps give where the eye is.
+    rt_supplied_target_ = std::isfinite(lamps) ? std::clamp(lamps / std::max(exposure_lux, 1.0f), 0.0f, 1.0f) : 0.0f;
 }
 
 // A particle draw as a light. Its kind gives its luminance (render/rt/rt_effect_lights.inc: an arc or a blast far

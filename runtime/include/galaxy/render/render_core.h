@@ -548,6 +548,11 @@ private:
     std::uint32_t rt_look_up_frame_ = 0u;
     std::uint32_t rt_look_up_stage_ = 0u;
     bool rt_look_up_known_ = false;
+    // c87 (the sunless rule): the share of a lit surface's light the frame's lamps give where the eye is (target from
+    // rt_emitters_finish), eased; kDebake's in a frame with no traced sun.
+    float rt_supplied_ = 0.0f, rt_supplied_target_ = 0.0f;
+    std::uint32_t rt_supplied_frame_ = 0u, rt_supplied_stage_ = 0u;
+    bool rt_supplied_known_ = false;
     // The development tunables (rt_dev.h, l63): the values a run gave, a bit each in rt_dev_set_.
     float rt_dev_[kRtDevCount]{};
     std::uint64_t rt_dev_set_ = 0u;
