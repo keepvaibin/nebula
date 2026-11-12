@@ -2290,6 +2290,8 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             if (!ambient_occlusion_.initialize(device_.Get())) {
                 std::cerr << "[ambient-occlusion] unavailable\n";
             }
+            // draw.post's programs compile with Microsoft's compiler beside the game (mod_shader_compile_d3d12.cpp).
+            set_mod_post_compiler(&compile_mod_post_stage, false);
             if (!camera_pass_.initialize(device_.Get())) {
                 std::cerr << "[scene-camera] unavailable: the scene stays in the scene target\n";
             }
@@ -2707,6 +2709,8 @@ void RendererD3D12::shutdown() {
     release_budget_notification();
     host_window::pending_resize_extent.store(0u, std::memory_order_relaxed);
     s_blit_root_sig.Reset();
+    set_mod_post_compiler(nullptr, false);
+    release_mod_post();
     post_process_.shutdown();
     ambient_occlusion_.shutdown();
     camera_pass_.shutdown();
@@ -3557,6 +3561,9 @@ void RendererD3D12::begin_frame() {
     if (frame_index_ % 120u == 0u) {
         sweep_target_slots();
     }
+
+    // draw.post: a program reading motion registers only while a temporal upscaler makes it.
+    set_mod_post_motion(temporal_ != nullptr && temporal_mode());
 
     // Bind both heaps for the entire frame: the one list-wide SetDescriptorHeaps unless a heap is replaced.
     srv_ring_.bind(command_list_.Get());

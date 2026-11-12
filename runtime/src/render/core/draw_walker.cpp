@@ -1211,6 +1211,20 @@ void RenderCore::walk_scene_begin(const NebulaFramePass& pass) {
     if (rt_backend_.started()) {
         rt_scene(pass);
     }
+    // The scene's camera for the passes after its end (draw.post's depth, draw.native's matrices).
+    post_scene_known_ = false;
+    if (pass.scene_view != NEBULA_NONE32 && pass.scene_camera != NEBULA_NONE32) {
+        const NebulaFrameView& view = list.views[pass.scene_view];
+        const ScaledViewport viewport = viewport_pixels(view.viewport, renderer_.frame_map());
+        if (viewport.valid()) {
+            post_scene_view_ = scene_depth_view(walk_view_terms_[pass.scene_view].data(), viewport);
+            std::memcpy(post_scene_camera_.data(), walk_cameras_[pass.scene_camera].data(), sizeof(post_scene_camera_));
+            post_scene_ortho_ = view.orthographic != 0u;
+            post_scene_target_[0] = static_cast<float>(renderer_.frame_map().width);
+            post_scene_target_[1] = static_cast<float>(renderer_.frame_map().height);
+            post_scene_known_ = true;
+        }
+    }
 }
 
 void RenderCore::walk_opaque_end(const NebulaFramePass& pass) {
@@ -1489,6 +1503,14 @@ void RenderCore::walk_list(ListData& now, ListData* before, const WalkTime& time
     prepare_walk(now, before, time);
     const NebulaFrameList& list = *now.list;
     target_open_ = false;
+    post_scene_known_ = false;
+    if (walk_picture_list_ == &list && walk_picture_frame_ == list.game_frame) {
+        ++walk_picture_;
+    } else {
+        walk_picture_list_ = &list;
+        walk_picture_frame_ = list.game_frame;
+        walk_picture_ = 0u;
+    }
     std::uint32_t target_channels = 0u;
     if (!now.targets_planned) {
         plan_early_targets(now);
@@ -1636,10 +1658,120 @@ void RenderCore::walk_pass(ListData& now, std::uint32_t p, std::uint32_t& target
         case NEBULA_PASS_SHOW:
             walk_show();
             break;
+        case NEBULA_PASS_POST:
+            walk_post(list, pass);
+            break;
+        case NEBULA_PASS_NATIVE:
+            walk_native(list, pass);
+            break;
         default:
             break;
         }
     }
+}
+
+void RenderCore::walk_post(const NebulaFrameList& list, const NebulaFramePass& pass) {
+    // A program the game freed after the list was made, or rows outside the list: the frame stays as it is.
+    const std::shared_ptr<const ModPostProgram> program = mod_post_program(pass.arg0);
+    if (!program || list.instance_rows == nullptr || pass.first_item > list.instance_row_count ||
+        list.instance_row_count - pass.first_item < 4u) {
+        return;
+    }
+    ModPostConstants constants{};
+    constants.time = static_cast<float>(static_cast<double>(list.game_frame) / 60.0);
+    constants.frame = list.game_frame;
+    std::memcpy(constants.params, list.instance_rows + pass.first_item, sizeof(constants.params));
+    // Distance along the view axis from the depth target's value D (scene_depth_view: the host's clip z is
+    // z z_scale + z_offset with z_scale = -E k, z_offset = -F k, w = -z; reversed, the far plane at 0):
+    // ndc = (D - min) / (max - min) = k (E - F / distance), so distance = F k (max - min) / (E k (max - min) + min - D).
+    bool depth = false;
+    constants.depth_terms[3] = 3.0e38f;
+    if (post_scene_known_ && !post_scene_ortho_ && (program->reads & kModPostReadsDepth) != 0u) {
+        const RtView& v = post_scene_view_;
+        const float range = v.max_depth - v.min_depth;
+        constants.depth_terms[0] = -v.z_offset * range;
+        constants.depth_terms[1] = -1.0f;
+        constants.depth_terms[2] = -v.z_scale * range + v.min_depth;
+        // The far plane: F / E (ndc 0); an infinite one (E 0) the largest number.
+        constants.depth_terms[3] = v.z_scale != 0.0f ? std::min(v.z_offset / v.z_scale, 3.0e38f) : 3.0e38f;
+        depth = constants.depth_terms[0] > 0.0f && constants.depth_terms[3] > 0.0f;
+    }
+    const FrameMap& map = renderer_.frame_map();
+    const auto width = static_cast<std::uint32_t>(map.width);
+    const auto height = static_cast<std::uint32_t>(map.height);
+    if (width == 0u || height == 0u) {
+        return;
+    }
+    // The frame so far becomes the program's input picture; a fresh target takes its place as the frame.
+    gpu::TextureRef picture = renderer_.take_frame_picture(display_pictures_.take_idle_texture(width, height));
+    if (!picture) {
+        return;
+    }
+    renderer_.record_mod_post(*program, constants, picture, depth);
+    display_pictures_.release_texture(std::move(picture), width, height);
+}
+
+void RenderCore::walk_native(const NebulaFrameList& list, const NebulaFramePass& pass) {
+    if (list.native_calls == nullptr || pass.first_item >= list.native_call_count) {
+        return;
+    }
+    const NebulaNativeCall& call = list.native_calls[pass.first_item];
+    if (call.fn == nullptr) {
+        return;
+    }
+    NebulaNativeFrame frame{};
+    frame.size = sizeof(frame);
+    frame.point = pass.arg0;
+    frame.game_frame = list.game_frame;
+    frame.picture = walk_picture_;
+    // Points 0 to 2 are in the scene. view: the game's 3x4 camera and 0 0 0 1. projection: the one the host draws the
+    // scene with, in Direct3D's clip space (x right, y up, z 0 to 1 reversed: near 1), with this picture's jitter,
+    // and the scene's viewport and depth range folded in: a vertex drawn with projection x view through a viewport
+    // over the whole target (depth 0 to 1) lands on the scene's own pixel and depth. The Vulkan renderer turns y for
+    // its positive-height viewport (record_native_call).
+    const bool scene_point = pass.arg0 <= 2u;
+    if (scene_point && post_scene_known_ && post_scene_target_[0] > 0.0f && post_scene_target_[1] > 0.0f) {
+        for (unsigned i = 0; i < 12u; ++i) {
+            frame.view[i] = post_scene_camera_[i];
+        }
+        frame.view[15] = 1.0f;
+        const RtView& v = post_scene_view_;
+        // The host's clip rows over the scene viewport (scene_depth_view's terms, its jitter in [1] and [3]).
+        float rows[4][4]{};
+        if (post_scene_ortho_) {
+            rows[0][0] = v.projection[0];
+            rows[0][3] = v.projection[1];
+            rows[1][1] = v.projection[2];
+            rows[1][3] = v.projection[3];
+            rows[2][2] = v.z_scale;
+            rows[2][3] = v.z_offset;
+            rows[3][3] = 1.0f;
+        } else {
+            rows[0][0] = v.projection[0];
+            rows[0][2] = v.projection[1];
+            rows[1][1] = v.projection[2];
+            rows[1][2] = v.projection[3];
+            rows[2][2] = v.z_scale;
+            rows[2][3] = v.z_offset;
+            rows[3][2] = -1.0f;
+        }
+        // The viewport (pixels, y down) and depth range into the whole target's: x' = x sx + w tx, y' = y sy + w ty,
+        // z' = z (max - min) + w min.
+        const float width = post_scene_target_[0];
+        const float height = post_scene_target_[1];
+        const float sx = v.viewport[2] / width;
+        const float tx = (2.0f * v.viewport[0] + v.viewport[2]) / width - 1.0f;
+        const float sy = v.viewport[3] / height;
+        const float ty = 1.0f - (2.0f * v.viewport[1] + v.viewport[3]) / height;
+        const float range = v.max_depth - v.min_depth;
+        for (unsigned c = 0; c < 4u; ++c) {
+            frame.projection[0u * 4u + c] = rows[0][c] * sx + rows[3][c] * tx;
+            frame.projection[1u * 4u + c] = rows[1][c] * sy + rows[3][c] * ty;
+            frame.projection[2u * 4u + c] = rows[2][c] * range + rows[3][c] * v.min_depth;
+            frame.projection[3u * 4u + c] = rows[3][c];
+        }
+    }
+    renderer_.record_native_call(call, frame, scene_point);
 }
 
 void RenderCore::walk_show() {

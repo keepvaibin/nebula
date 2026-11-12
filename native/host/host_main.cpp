@@ -42,6 +42,7 @@
 #include "galaxy/mod_log.h"
 #include "galaxy/mod_screens.h"
 #include "galaxy/mod_plugins.h"
+#include "galaxy/render/mod_post.h"
 #include "galaxy/render/mod_shaders.h"
 #include "galaxy/render/program_table.h"
 #include "galaxy/pointer_control.h"
@@ -2042,6 +2043,17 @@ uint32_t svc_probe_results(void*, uint32_t channel, NebulaScreenProbe* probes, u
     static_assert(sizeof(NebulaScreenProbe) == sizeof(galaxy::render::ScreenProbe));
     return galaxy::render::screen_probe_results(channel, reinterpret_cast<galaxy::render::ScreenProbe*>(probes), capacity);
 }
+// draw.post (contract draw 15): the program compiled for the running renderer (mod_post.cpp).
+static_assert(int{galaxy::render::kModPostOk} == NEBULA_POST_OK && int{galaxy::render::kModPostCompile} == NEBULA_POST_COMPILE &&
+                  int{galaxy::render::kModPostNoMotion} == NEBULA_POST_NO_MOTION,
+              "post_register's results are the game's");
+int32_t svc_post_register(void*, const void* text, uint32_t size, uint32_t reads, uint32_t* program, char* error,
+                          uint32_t error_capacity) {
+    return galaxy::render::mod_post_register(text, size, reads, program, error, error_capacity);
+}
+void svc_post_free(void*, uint32_t program) {
+    galaxy::render::mod_post_free(program);
+}
 #else
 // With no renderer nothing is drawn: every id is 0 and a list is read by nobody.
 uint32_t svc_model_register(void*, const void*, uint32_t* first_mesh) {
@@ -2081,6 +2093,16 @@ void svc_submit_frame(void*, NebulaFrameList* list) {
 uint32_t svc_probe_results(void*, uint32_t, NebulaScreenProbe*, uint32_t) {
     return 0u;
 }
+int32_t svc_post_register(void*, const void*, uint32_t, uint32_t, uint32_t* program, char* error, uint32_t error_capacity) {
+    if (program != nullptr) {
+        *program = 0u;
+    }
+    if (error != nullptr && error_capacity != 0u) {
+        std::snprintf(error, error_capacity, "%s", "no renderer: nothing is drawn");
+    }
+    return NEBULA_POST_COMPILE;
+}
+void svc_post_free(void*, uint32_t) {}
 #endif
 
 // The Mii library's file (mii_import.h) in the data folder; a Wii save folder's Mii database (or an earlier Nebula's)
@@ -2520,6 +2542,16 @@ uint32_t svc_option(void*, uint32_t what) {
         return galaxy::host::touch_pointer_state();
 #else
         return 0;
+#endif
+    case NEBULA_OPTION_GRAPHICS_BACKEND:
+        // draw.native's LumaDrawNativeBackend: the renderer this program was built with (one a session). Metal has
+        // none yet (0: draw.native's functions are not called).
+#if defined(NEBULA_HOST_RENDERER) && defined(NEBULA_HOST_D3D12)
+        return 1u;
+#elif defined(NEBULA_HOST_RENDERER) && !defined(__APPLE__)
+        return 2u;
+#else
+        return 0u;
 #endif
     default:
         return 0;
@@ -3528,6 +3560,10 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
         log_line("mods:", note.c_str());
     }
     cook_mod_files(plan, settings_folder, game_id);
+#if defined(NEBULA_HOST_RENDERER)
+    // draw.post's compiles write their scratch files beside the cooked mods (a test run keeps to its own folder).
+    galaxy::render::set_mod_post_work_folder(settings_folder / "mods" / ".cooked");
+#endif
     // What the .luma mods' materials need: what they brought, then what the game built for them.
     {
         std::error_code built_error;
@@ -4288,6 +4324,8 @@ int main(int argc, char** argv) {
     services.galaxy_select_names_wanted = svc_galaxy_select_names_wanted;
     services.galaxy_select_name = svc_galaxy_select_name;
     services.take_pause_request = svc_take_pause_request;
+    services.post_register = svc_post_register;
+    services.post_free = svc_post_free;
     // A mod's request screen pauses the game as Start does (services-mods 9, services-save 8).
     galaxy::mods::set_screen_pause([] { gPauseRequest.store(true, std::memory_order_release); });
     services.test_frame_step = deterministic_mode() ? svc_test_frame_step : nullptr;

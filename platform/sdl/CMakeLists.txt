@@ -115,6 +115,8 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/mod_shaders.cpp
     ${rt}/render/mod_shader_build.cpp
     ${rt}/render/vk/mod_shader_compile_vk.cpp
+    ${rt}/render/mod_post.cpp
+    ${rt}/render/vk/mod_post_vk.cpp
     ${rt}/render/vk/mod_shader_present_vk.cpp
     ${rt}/render/vk/shader_compile_vk.cpp
     ${rt}/render/vk/compile_journal.cpp

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // One stage of a mod's program as DXIL, with Microsoft's compiler where the game's installer puts it (dxc\ beside the game).
+#include "galaxy/render/mod_post.h"
 #include "galaxy/render/mod_shaders.h"
 
 #include "galaxy/windows_api.h"
@@ -102,7 +103,11 @@ std::vector<std::uint8_t> compile_mod_shader_stage(const std::string& source, co
         for (const char* c = define; *c != 0; ++c) command += static_cast<wchar_t>(*c);
         command += L"=1";
     }
-    command += L" -I \"" + includes.wstring() + L"\" -Fo \"" + output.wstring() + L"\" \"" + input.wstring() + L"\"";
+    // The compiler's messages go to a file (-Fe): a refusal names its first error (draw.post's 541; a material's log).
+    fs::path messages = stem;
+    messages += ".txt";
+    command += L" -I \"" + includes.wstring() + L"\" -Fo \"" + output.wstring() + L"\" -Fe \"" + messages.wstring() + L"\" \"" +
+               input.wstring() + L"\"";
     STARTUPINFOW startup{};
     startup.cb = sizeof(startup);
     PROCESS_INFORMATION process{};
@@ -125,12 +130,26 @@ std::vector<std::uint8_t> compile_mod_shader_stage(const std::string& source, co
     if (exit_code == 0u && !timed_out) {
         std::ifstream in(output, std::ios::binary);
         bytes.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    } else if (timed_out) {
+        problem = "a program took too long to compile";
     } else {
-        problem = timed_out ? "a program took too long to compile" : "a program didn't compile";
+        problem = "a program didn't compile";
+        std::ifstream in(messages, std::ios::binary);
+        const std::string said{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+        if (!said.empty()) {
+            problem += ":\n" + said.substr(0u, 4096u);
+        }
     }
     fs::remove(input, error);
     fs::remove(output, error);
+    fs::remove(messages, error);
     return bytes;
+}
+
+std::vector<std::uint8_t> compile_mod_post_stage(const std::string& source, const std::filesystem::path& work, bool pixel,
+                                                 std::string& problem) {
+    // compile_mod_shader_stage's entries are program_vs and program_ps, the names mod_post_source gives.
+    return compile_mod_shader_stage(source, work, pixel, {}, problem);
 }
 
 }  // namespace galaxy::render
