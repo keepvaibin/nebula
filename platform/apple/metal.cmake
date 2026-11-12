@@ -84,6 +84,7 @@ add_executable(nebula_native
     "${nebula_root}/native/host/host_main.cpp"
     "${nebula_root}/platform/sdl/native_game_host_sdl.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/host_window_apple.mm"
+    "${CMAKE_CURRENT_SOURCE_DIR}/luma_system_apple.mm"
     "${CMAKE_CURRENT_SOURCE_DIR}/audio_device_apple.mm"
     "${CMAKE_CURRENT_SOURCE_DIR}/display_clock_apple.mm"
     "${CMAKE_CURRENT_SOURCE_DIR}/apple_host.mm"
@@ -93,7 +94,7 @@ target_include_directories(nebula_native PRIVATE "${nebula_root}/native/include"
     "${nebula_root}/platform/sdl" "${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_definitions(nebula_native PRIVATE NEBULA_HOST_RENDERER=1 NEBULA_HOST_SDL=1 NEBULA_HOST_APPLE=1
     NEBULA_HOST_NATIVE_APPLE=1)
-set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/host_window_apple.mm" "${CMAKE_CURRENT_SOURCE_DIR}/audio_device_apple.mm"
+set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/host_window_apple.mm" "${CMAKE_CURRENT_SOURCE_DIR}/luma_system_apple.mm" "${CMAKE_CURRENT_SOURCE_DIR}/audio_device_apple.mm"
     "${CMAKE_CURRENT_SOURCE_DIR}/setup_apple.mm" PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
 
 # The importer (crates/nebula-import), linked into each program for the first start's setup, the mods' cooker and

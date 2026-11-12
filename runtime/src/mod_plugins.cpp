@@ -1010,6 +1010,27 @@ NotStartedText plugin_not_started_text(std::string_view mod_id) {
     return {refusal_text(refusal), true};
 }
 
+ValidatorText validator_text(std::uint32_t code, const std::vector<std::pair<std::string, std::string>>& values,
+                             std::string_view language) {
+    const char* names[LUMA_REFUSAL_MOST] = {};
+    const char* texts[LUMA_REFUSAL_MOST] = {};
+    std::uint32_t count = 0;
+    for (const auto& [name, value] : values) {
+        if (count == LUMA_REFUSAL_MOST) break;
+        names[count] = name.c_str();
+        texts[count++] = value.c_str();
+    }
+    if (const ValidateMessage message = validate_message(); message != nullptr) {
+        const std::string folder = !language.empty() ? std::string(language)
+                                   : !message_language().empty() ? message_language() : std::string("UsEnglish");
+        const char* const words = message(static_cast<std::uint16_t>(code), names, texts, count, folder.c_str());
+        if (words != nullptr) return {words, true};
+    }
+    std::string text = "L" + std::to_string(code);
+    for (std::uint32_t i = 0; i < count; ++i) text += std::string(" ") + names[i] + "=" + texts[i];
+    return {text, false};
+}
+
 void set_achievement_store(bool (*unlock)(std::string_view key)) noexcept {
     g_achievement_store = unlock;
 }

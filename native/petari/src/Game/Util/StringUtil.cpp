@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstring>
 #include <cstdarg>
+#include <cstdlib>
 #include <nebula_format.h>
 #include "Game/Util/Tunable.hpp"
 
@@ -513,6 +514,19 @@ namespace MR {
         va_end(args);
     }
 
+    namespace {
+        // A text's buffer past its inline room: from the C heap, not the current arena. Text is made on any thread (the
+        // mod log words host sentences where they are added, H312-1) and outlives no scene, so it belongs to no arena.
+        template < typename T >
+        T* textBlock(u32 count) {
+            T* const pBlock = static_cast< T* >(::malloc(count * sizeof(T)));
+            if (pBlock == nullptr) {
+                NEBULA_PANIC("no memory for a text of %u units", count);
+            }
+            return pBlock;
+        }
+    }  // namespace
+
     void FormattedName::vformat(const char* pFormat, va_list args) {
         char* const pOld = mText != mInline ? mText : nullptr;
         va_list again;
@@ -520,35 +534,35 @@ namespace MR {
         mText = mInline;
         const int length = nebula_vsnprintf(mInline, sizeof(mInline), pFormat, args);
         if (length >= static_cast< int >(sizeof(mInline))) {
-            mText = new char[length + 1];
+            mText = textBlock< char >(static_cast< u32 >(length) + 1);
             nebula_vsnprintf(mText, length + 1, pFormat, again);
         }
         va_end(again);
-        delete[] pOld;
+        ::free(pOld);
     }
 
     char* FormattedName::room(u32 size) {
         if (mText != mInline) {
-            delete[] mText;
+            ::free(mText);
         }
 
-        mText = size <= sizeof(mInline) ? mInline : new char[size];
+        mText = size <= sizeof(mInline) ? mInline : textBlock< char >(size);
         mText[0] = '\0';
         return mText;
     }
 
     FormattedName::~FormattedName() {
         if (mText != mInline) {
-            delete[] mText;
+            ::free(mText);
         }
     }
 
     char16_t* Text16::room(u32 units) {
         if (units > mRoom) {
             if (mText != mInline) {
-                delete[] mText;
+                ::free(mText);
             }
-            mText = new char16_t[units];
+            mText = textBlock< char16_t >(units);
             mRoom = units;
         }
         mText[0] = u'\0';
@@ -561,12 +575,12 @@ namespace MR {
             if (room < units) {
                 room = units;
             }
-            char16_t* const pNew = new char16_t[room];
+            char16_t* const pNew = textBlock< char16_t >(room);
             for (u32 i = 0; i < used && i < mRoom; i++) {
                 pNew[i] = mText[i];
             }
             if (mText != mInline) {
-                delete[] mText;
+                ::free(mText);
             }
             mText = pNew;
             mRoom = room;
@@ -588,7 +602,7 @@ namespace MR {
 
     Text16::~Text16() {
         if (mText != mInline) {
-            delete[] mText;
+            ::free(mText);
         }
     }
 };  // namespace MR

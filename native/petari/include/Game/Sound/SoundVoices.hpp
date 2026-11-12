@@ -169,6 +169,12 @@ public:
     // Its envelopes to their release (directRelease nonzero: that release instead), its slot to the release priority.
     void releaseNote(SoundNote* pNote, u16 directRelease);
     void updateAll();
+    // updateAll in its two halves: every slot's update (envelopes, pitch, volumes), then one tick of the mix.
+    void updateSlots();
+    void mix();
+    // The world clock's tape (services-time 7): every voice's playback rate times `scale` (1 at real time). The audio
+    // clock's thread only; takes effect at each slot's next update.
+    static void setRateScale(f32 scale);
     // Every playing slot's note gone (the reset's end).
     void dropActive();
     // Notes whose owner lies in [pBegin, pEnd) hear nothing more (a player's memory goes back to the game).

@@ -130,6 +130,8 @@ add_library(galaxy_render_vk STATIC
     "${galaxy_utility_spirv_dir}/utility_spirv_data.h"
     ${rt}/runtime_settings.cpp
     ${rt}/host_extension.cpp
+    ${rt}/luma_services_host.cpp
+    ${rt}/luma_system.cpp
     ${rt}/achievements.cpp
     ${rt}/stats.cpp
     ${rt}/input_bindings.cpp
@@ -152,8 +154,11 @@ add_library(galaxy_render_vk STATIC
     ${rt}/mii_formats.cpp
     ${rt}/mod_xml.cpp
     ${rt}/luma.cpp
+    ${rt}/mod_log.cpp
+    ${rt}/mod_start_check.cpp
     ${rt}/mod_plugins.cpp
     ${rt}/mods.cpp
+    ${rt}/mod_consent.cpp
     ${rt}/texture_categories.cpp
     ${rt}/dolphin_pack.cpp
     ${rt}/crash_report.cpp
@@ -217,6 +222,7 @@ add_subdirectory("${NEBULA_SDL_DIR}" SDL3 EXCLUDE_FROM_ALL)
 set(host_sources
     "${nebula_root}/native/host/host_main.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/host_window_sdl.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/luma_system_sdl.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/audio_device_sdl.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/display_clock.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/thread_sampler.cpp"
@@ -250,6 +256,7 @@ if(ANDROID)
         ${rt}/mii_formats.cpp
         ${rt}/mod_import.cpp
         ${rt}/mods.cpp
+        ${rt}/mod_consent.cpp
         ${rt}/mod_xml.cpp
         ${rt}/luma.cpp
         ${rt}/texture_categories.cpp

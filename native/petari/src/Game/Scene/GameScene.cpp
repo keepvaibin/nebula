@@ -72,6 +72,7 @@
 #include "Game/NPC/NebulaAchievementLuma.hpp"
 #include "Game/Screen/NebulaAchievementBoard.hpp"
 #include "Game/Screen/NebulaAchievementToast.hpp"
+#include "Game/Screen/NebulaModLogNotice.hpp"
 #include "Game/Screen/NebulaModText.hpp"
 #include "Game/System/NebulaAchievements.hpp"
 #include "Game/Util/MessageUtil.hpp"
@@ -277,6 +278,10 @@ void GameScene::update() {
     if (MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) && MR::getGameSceneLayoutHolder()->mModText != nullptr) {
         MR::getGameSceneLayoutHolder()->mModText->update();
     }
+    // The mod log's notice runs as the pop-up does: in play, cutscenes and menus alike.
+    if (MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder)) {
+        NebulaModLogNotice::update();
+    }
 }
 
 void GameScene::draw() const {
@@ -382,6 +387,10 @@ bool GameScene::isExecScenarioOpeningCamera() const {
 
 bool GameScene::isExecScenarioStarter() const {
     return isNerve(GET_NERVE(GameScene, GameSceneScenarioStarter));
+}
+
+bool GameScene::isExecPauseMenuOrGalaxyMap() const {
+    return isNerve(GET_NERVE(GameScene, GameScenePauseMenu)) || isNerve(GET_NERVE(GameScene, GameSceneGalaxyMap));
 }
 
 bool GameScene::isExecStageClearDemo() const {
@@ -567,6 +576,11 @@ void GameScene::draw2D() const {
     }
 
     CategoryList::execute(MR::DrawType_CameraCover);
+    // The mod log's notice over the game and under the pause screens (and the settings menu, drawn later), so it never
+    // covers a choice the player must read (contract mod-log 4.1).
+    if (MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder)) {
+        NebulaModLogNotice::draw();
+    }
     CategoryList::execute(MR::DrawType_LayoutOnPause);
     mPauseSeq->draw();
     MR::drawInitFor2DModel();

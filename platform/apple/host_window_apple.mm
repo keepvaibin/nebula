@@ -17,6 +17,7 @@
 #include "galaxy/game_paths.h"
 #include "galaxy/input/host_input.h"
 #include "galaxy/input_bindings.h"
+#include "galaxy/luma_system_platform.h"
 #include "galaxy/mod_import.h"
 #include "galaxy/native_settings_pad.h"
 #include "galaxy/path_text.h"
@@ -713,6 +714,11 @@ void files_opened(NSArray<NSURL*>* urls) {
     galaxy::render::host_window::pending_resize_extent.store(
         (static_cast<std::uint64_t>(state.window_width) << 32u) | static_cast<std::uint32_t>(state.window_height),
         std::memory_order_release);
+    [self lumaDisplayChanged];
+}
+// LumaCore's display snapshot (services-system 4).
+- (void)lumaDisplayChanged {
+    galaxy::luma_system::apple_window_changed((__bridge void*)galaxy::sdl::g_window);
 }
 - (BOOL)windowShouldClose:(NSWindow*)sender {
     galaxy::render::host_window::quit_request.store(true, std::memory_order_release);
@@ -758,9 +764,11 @@ void files_opened(NSArray<NSURL*>* urls) {
 // A minimised window: the host stops the game's clocks and sound as for an app out of sight.
 - (void)windowDidMiniaturize:(NSNotification*)notification {
     galaxy::sdl::g_background.store(true, std::memory_order_release);
+    [self lumaDisplayChanged];
 }
 - (void)windowDidDeminiaturize:(NSNotification*)notification {
     galaxy::sdl::g_background.store(false, std::memory_order_release);
+    [self lumaDisplayChanged];
 }
 - (void)windowDidBecomeKey:(NSNotification*)notification {
     {
@@ -771,6 +779,7 @@ void files_opened(NSArray<NSURL*>* urls) {
         galaxy::sdl::g_applied_mode = ~0u;  // the next pump puts the display mode in again
     }
     galaxy::sdl::update_cursor();
+    [self lumaDisplayChanged];
 }
 - (void)windowDidResignKey:(NSNotification*)notification {
     {
@@ -779,6 +788,7 @@ void files_opened(NSArray<NSURL*>* urls) {
         galaxy::sdl::g_input.keys = {};
     }
     galaxy::sdl::update_cursor();
+    [self lumaDisplayChanged];
 }
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication*)sender {
     // Quit from the menu, the Dock or the system. While the first start's setup window is up it is that window's
@@ -1151,6 +1161,9 @@ void make_window(int width, int height) {
     g_view = view;
     g_layer.store((__bridge void*)((NSView*)view).layer, std::memory_order_release);
     update_window_size();
+    // LumaCore's pasteboard and links on Apple's systems, and the first display snapshot (services-system 4 to 6).
+    galaxy::luma_system::set_platform(galaxy::luma_system::apple_platform());
+    galaxy::luma_system::apple_window_changed((__bridge void*)window);
     // Files opened before the window was up (Nebula started by opening a .luma): imported now.
     if (!g_opened_early.empty()) {
         galaxy::render::native_settings_files_dropped(std::move(g_opened_early));

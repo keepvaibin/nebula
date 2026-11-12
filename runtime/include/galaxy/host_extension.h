@@ -3,6 +3,7 @@
 // fixed points. Without one each question is a load and a branch.
 #pragma once
 
+#include <luma_service_provider.h>
 #include <nebula_host_extension.h>
 
 #include <cstdint>
@@ -42,5 +43,8 @@ void sound(const float* samples, std::uint32_t frames, std::uint32_t channels, s
 void log_line(const char* tag, const char* text) noexcept;
 // A service an extension offers to mods by name, or null.
 [[nodiscard]] const void* service(const char* name, std::uint32_t major, std::uint32_t minor) noexcept;
+// The extensions' LumaCore service providers ("test." services, checked at attach), in attach order: `give` is called
+// once for each.
+void luma_providers(void (*give)(const LumaServiceProvider* provider, void* user), void* user) noexcept;
 
 }  // namespace galaxy::extensions

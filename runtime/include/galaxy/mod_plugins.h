@@ -22,6 +22,9 @@ struct PluginFile {
     std::map<std::string, std::string> options;  // option id -> choice id
     std::string code;  // code_hash taken at start; a library that changed before it loads is not run
     std::vector<std::string> needs;  // the ids of the mods its manifest needs (loader D3-3: those start before it)
+    // The permissions the player granted it, for its declarations as they are now (mod_consent.h granted_permissions):
+    // what luma_load_mod is given. Filled once when the start's plan is made.
+    std::vector<std::string> granted;
 };
 
 // A hex hash of every file in a plugin library's folder (names and contents), so the files it ships with count too.
@@ -243,6 +246,17 @@ struct NotStartedText {
     bool as_is = false;
 };
 [[nodiscard]] NotStartedText plugin_not_started_text(std::string_view mod_id);
+
+// A validator code (L203 is 203) and its parameters (names and values, "T:"/"P:" values as the validator gives them)
+// as luma_validate_message words them in `language` (a language folder, "UsEnglish"; empty: the played language). When
+// the importer's library has no words (missing or old), the code and every parameter as given, and `worded` false.
+// The mod log's host entries (J's mod_log.cpp).
+struct ValidatorText {
+    std::string text;
+    bool worded = false;
+};
+[[nodiscard]] ValidatorText validator_text(std::uint32_t code, const std::vector<std::pair<std::string, std::string>>& values,
+                                           std::string_view language = {});
 
 // The mod id of the plugin containing `address`, or null.
 [[nodiscard]] const char* plugin_at(const void* address) noexcept;

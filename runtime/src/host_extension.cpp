@@ -92,8 +92,23 @@ bool attach(std::span<const std::filesystem::path> files, const NebulaHostForExt
             error = name + ": an extension version this host does not know";
             return false;
         }
-        NebulaHostExtension& kept = g_extensions[g_count++];
+        NebulaHostExtension kept{};
         std::memcpy(&kept, given, std::min<std::size_t>(given->size, sizeof(kept)));
+        // Its LumaCore providers: "test." services only, each whole (services-registry 14).
+        if (kept.luma_provider_count != 0u && kept.luma_providers == nullptr) {
+            error = name + ": it lists " + std::to_string(kept.luma_provider_count) + " LumaCore services and gives none";
+            return false;
+        }
+        for (std::uint32_t i = 0; i < kept.luma_provider_count; ++i) {
+            const LumaServiceProvider* const provider = kept.luma_providers[i];
+            if (provider == nullptr || provider->name == nullptr || std::strncmp(provider->name, "test.", 5) != 0) {
+                error = name + ": it provides the LumaCore service \"" +
+                        std::string(provider != nullptr && provider->name != nullptr ? provider->name : "(none)") +
+                        "\"; an extension provides only services named test.*";
+                return false;
+            }
+        }
+        g_extensions[g_count++] = kept;
         g_flags |= kept.flags;
         g_controls = g_controls || kept.controls != nullptr;
         g_pictures = g_pictures || kept.picture_path != nullptr;
@@ -104,6 +119,14 @@ bool attach(std::span<const std::filesystem::path> files, const NebulaHostForExt
         g_disc_read_delay_us = std::max(g_disc_read_delay_us, kept.disc_read_delay_us);
     }
     return true;
+}
+
+void luma_providers(void (*give)(const LumaServiceProvider* provider, void* user), void* user) noexcept {
+    for (std::size_t i = 0; i < g_count; ++i) {
+        for (std::uint32_t k = 0; k < g_extensions[i].luma_provider_count; ++k) {
+            give(g_extensions[i].luma_providers[k], user);
+        }
+    }
 }
 
 std::uint64_t vram_budget_bytes() noexcept {

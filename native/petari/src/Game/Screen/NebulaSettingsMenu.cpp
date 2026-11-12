@@ -3506,4 +3506,24 @@ namespace NebulaSettingsMenu {
     void requestOpen() {
         NebulaHost::settingsInput(NEBULA_SETTINGS_OPEN, 0);
     }
+
+    s32 translateHost(char16_t* pDst, s32 capacity, const char* pText) {
+        if (capacity <= 0) {
+            return 0;
+        }
+        MR::Text16 text;
+        translate(text, pText, false);
+        const char16_t* const pFrom = text.c_str();
+        s32 n = 0;
+        while (pFrom[n] != 0 && n + 1 < capacity) {
+            pDst[n] = pFrom[n];
+            n++;
+        }
+        // Cut short: never half a pair.
+        if (pFrom[n] != 0 && n > 0 && pDst[n - 1] >= 0xD800u && pDst[n - 1] < 0xDC00u) {
+            n--;
+        }
+        pDst[n] = 0;
+        return n;
+    }
 };  // namespace NebulaSettingsMenu

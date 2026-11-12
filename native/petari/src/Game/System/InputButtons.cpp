@@ -1,8 +1,10 @@
 #include "Game/System/InputButtons.hpp"
 #include "Game/System/PlayerInput.hpp"
 #include "Game/System/PlayerInputs.hpp"
+#include "Game/System/LumaTime.hpp"
 
-InputButtons::InputButtons(const PlayerInput* pPad) : mPad(pPad), mHold(), mTrigger(), mRelease() {
+InputButtons::InputButtons(const PlayerInput* pPad)
+    : mPad(pPad), mHold(), mTrigger(), mRelease(), mCarriedTrigger(0), mCarriedRelease(0) {
 }
 
 void InputButtons::update() {
@@ -15,6 +17,14 @@ void InputButtons::update() {
     mTrigger = pSample->mTrigger & ~mHold;
     mHold = pSample->mHold;
     mRelease = pSample->mRelease;
+    if (luma::time::isStepWithheld()) {
+        mCarriedTrigger |= mTrigger;
+        mCarriedRelease |= mRelease;
+    } else if ((mCarriedTrigger | mCarriedRelease) != 0) {
+        mTrigger |= mCarriedTrigger;
+        mRelease |= mCarriedRelease;
+        mCarriedTrigger = mCarriedRelease = 0;
+    }
 }
 
 bool InputButtons::testButtonUp() const {

@@ -13,6 +13,7 @@
 #include "galaxy/native_settings_pad.h"
 #include "galaxy/render_api.h"
 #include "galaxy/render/host_window.h"
+#include "galaxy/luma_system_platform.h"
 #include <deque>
 #include "sdl_host.h"
 
@@ -1105,9 +1106,11 @@ void pump_events(int timeout_ms) noexcept {
     std::vector<MenuKey> menu_keys;
     int menu_wheel = 0;
     std::vector<std::filesystem::path> dropped;
+    bool luma_display = false;  // LumaCore's display snapshot changes (services-system 4), read after the events
     {
     std::lock_guard<std::mutex> lock(g_input_mutex);
     while (any) {
+        luma_display = luma_display || galaxy::luma_system::sdl_display_event(event.type);
         switch (event.type) {
         case SDL_EVENT_QUIT:
         case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
@@ -1236,6 +1239,9 @@ void pump_events(int timeout_ms) noexcept {
     drain_android_pad_sensors();
 #endif
     sample_gamepads();
+    }
+    if (luma_display) {
+        galaxy::luma_system::sdl_window_changed(g_window);
     }
     // Pad 0 of the connected ones drives the menu as a controller does on Windows.
     {
@@ -1541,6 +1547,9 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
         backbuffer_height = static_cast<unsigned>(galaxy::sdl::g_input.window_height);
     }
     owner.window = window;
+    // LumaCore's clipboard and links on SDL, and the first display snapshot (services-system 4 to 6).
+    galaxy::luma_system::set_platform(galaxy::luma_system::sdl_platform());
+    galaxy::luma_system::sdl_window_changed(window);
     return {window, !hidden};
 }
 

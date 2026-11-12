@@ -4,6 +4,7 @@
 #include "galaxy/atomic_file.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/platform_paths.h"
+#include "galaxy/luma_system_platform.h"
 
 #include <algorithm>
 #include <array>
@@ -621,6 +622,15 @@ std::string next_start_gpu() {
 
 void record_render_adapter(const char* description, unsigned vendor_id, unsigned device_id,
                            unsigned subsys_id, bool ray_tracing) noexcept {
+    // LumaCore's system facts (services-system 3): this build's renderer and its device, whatever the config.
+#if defined(NEBULA_GPU_METAL)
+    constexpr std::uint32_t renderer = LUMA_SYSTEM_METAL;
+#elif defined(NEBULA_GPU_VULKAN)
+    constexpr std::uint32_t renderer = LUMA_SYSTEM_VULKAN;
+#else
+    constexpr std::uint32_t renderer = LUMA_SYSTEM_D3D12;
+#endif
+    galaxy::luma_system::set_renderer(renderer, description != nullptr ? description : "");
     try {
         const std::filesystem::path config = config_path();
         if (config.empty() || description == nullptr) {

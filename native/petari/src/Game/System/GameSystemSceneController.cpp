@@ -218,6 +218,10 @@ bool GameSystemSceneController::isReadyToStartScene() const {
            !mScenarioSelectScene->isScenarioSelecting();
 }
 
+bool GameSystemSceneController::isNerveNormal() const {
+    return isCurrentNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerNormal));
+}
+
 bool GameSystemSceneController::isFirstUpdateSceneNerveNormal() const {
     return isCurrentNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerNormal)) && mSpine->mStep == 1;
 }

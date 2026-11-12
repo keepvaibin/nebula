@@ -24,6 +24,7 @@
 #include "galaxy/mii_import.h"
 #include "galaxy/mod_import.h"
 #include "galaxy/mods.h"
+#include "galaxy/luma_system_platform.h"
 #include "galaxy/game_paths.h"
 #include "galaxy/native_settings_pad.h"
 #include "galaxy/platform_time.h"
@@ -596,6 +597,8 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
         }
         settings_window.store(
             reinterpret_cast<std::uintptr_t>(opened.window), std::memory_order_release);
+        // LumaCore's clipboard and links on Windows (services-system 5, 6).
+        galaxy::luma_system::set_platform(galaxy::luma_system::win32_platform());
         if (const std::uint64_t key = s_instance_key.load(std::memory_order_relaxed); key != 0u) {
             (void)SetPropW(opened.window, kInstanceProperty, reinterpret_cast<HANDLE>(static_cast<std::uintptr_t>(key)));
         }
@@ -654,6 +657,12 @@ static void raw_mouse_detach(HWND hwnd) noexcept {
 LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_NCDESTROY) {
         (void)RemovePropW(hwnd, kInstanceProperty);
+    }
+    if (msg == WM_SIZE || msg == WM_MOVE || msg == WM_WINDOWPOSCHANGED || msg == WM_DPICHANGED || msg == WM_DISPLAYCHANGE ||
+        msg == WM_ACTIVATE || msg == WM_SETFOCUS || msg == WM_KILLFOCUS) {
+        // LumaCore's display snapshot (services-system 4), where the window's changes arrive.
+        galaxy::luma_system::win32_window_changed(hwnd, msg == WM_ACTIVATE ? (LOWORD(wp) != WA_INACTIVE ? 1 : 0) : -1,
+                                                  msg == WM_DISPLAYCHANGE || msg == WM_DPICHANGED);
     }
     if (msg == kShowInstanceMessage) {
         ShowWindow(hwnd, IsIconic(hwnd) ? SW_RESTORE : SW_SHOW);

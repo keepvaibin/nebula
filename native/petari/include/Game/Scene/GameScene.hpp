@@ -30,6 +30,8 @@ public:
     bool isExecScenarioOpeningCamera() const;
     bool isExecScenarioStarter() const;
     bool isExecStageClearDemo() const;
+    // The scene's own pause menu or galaxy map is up (LumaCore's time state MENU, services-time 5).
+    bool isExecPauseMenuOrGalaxyMap() const;
     void exeScenarioOpeningCamera();
     void exeScenarioStarter();
     void exeSceneAction();

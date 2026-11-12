@@ -3,6 +3,7 @@ extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/System/NebulaLoadTrace.hpp"
 #include "Game/System/NebulaMods.hpp"
 #include "Game/System/LumaClass.hpp"
+#include "Game/System/LumaRefs.hpp"
 #include "Game/Scene/PlacementInfoOrdered.hpp"
 #include "Game/LiveActor/AllLiveActorGroup.hpp"
 #include "Game/Map/PlanetMapCreator.hpp"
@@ -17,7 +18,11 @@ namespace {
             return MR::getModelChangableObjCreator(rIdentifier.mName);
         }
 
-        return NameObjFactory::getCreator(rIdentifier.mName);
+        if (const CreationFuncPtr creator = NameObjFactory::getCreator(rIdentifier.mName)) {
+            return creator;
+        }
+        // A class a mod places that no mod made (references 3, after start): the placeholder object stands there.
+        return luma::refs::placeholderFor(rIdentifier.mName);
     }
 
     PlacementInfoOrdered::Identifier readIdentifier(const TableIter& rIter) {

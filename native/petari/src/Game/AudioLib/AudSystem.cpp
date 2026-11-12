@@ -150,6 +150,7 @@ void AudSystem::frameWork() {
     SoundSystem::frame();
     updateHomeButtonMenu();
     updatePauseMenu();
+    updateWorldHold();
     seFanfareProcess();
 
     if (mVolumeController != nullptr) {
@@ -427,15 +428,21 @@ void AudSystem::exitHomeButtonMenu() {
     mHomeButtonMenuState = MenuState_Exit;
     mHomeButtonToggleTime = 20 + 1;
 
-    if (!isPauseMenuActive()) {
+    if (!isPauseMenuActive() && !mWorldHeld) {
         mSeqMgr.getParams()->moveVolume(AudParams::masterVolBgm, 20);
         mStreamMgr.getParams()->moveVolume(AudParams::masterVolStream, 18);
     }
 
-    recoverSeVolumeSet(20);
+    // A world a mod holds keeps its sound held (holdForWorld): the pause stays, now the world's.
+    if (!mWorldHeld) {
+        recoverSeVolumeSet(20);
+    }
 
-    if (!isPauseMenuActive() && !mIsErrorWindowOpen) {
+    if (!isPauseMenuActive() && !mIsErrorWindowOpen && !mWorldHeld) {
         unpause();
+        mPausedByWorld = false;
+    } else if (mWorldHeld) {
+        keepWorldHold();
     }
 }
 
@@ -516,7 +523,13 @@ void AudSystem::fadeOutForQuit() {
 // `stayFaded`: the music stays faded on the close, under the cutscene skip's question or its unseen run (the skip
 // brings it back).
 void AudSystem::holdForSettingsMenu(bool hold, bool stayFaded) {
+    mSettingsHeld = hold;
     const bool otherMenu = isPauseMenuActive() || isHomeButtonMenuActive();
+    if (mWorldHeld && !hold) {
+        // A mod still holds the world: its sound stays held, the music the world's to pause.
+        keepWorldHold();
+        return;
+    }
     if (hold) {
         if (!otherMenu) {
             mSeqMgr.getParams()->moveVolume(0.0f, 12);
@@ -531,15 +544,81 @@ void AudSystem::holdForSettingsMenu(bool hold, bool stayFaded) {
         mStreamMgr.getParams()->moveVolume(AudParams::masterVolStream, 20);
     }
     recoverSeVolumeSet(20);
+    // The world was let go while this menu was open (holdForWorld left the world's pause to the menu's close): this menu
+    // does not own a pause of its own, so it gives the music back here (J22-1).
+    if (!otherMenu && mPausedByWorld) {
+        mPausedByWorld = false;
+        unpause();
+    }
+}
+
+// LumaCore's world clock (services-time 7). Held: as for the settings menu, the music fades and then pauses, the game's
+// sounds end and the system's play on. Under the pause menu, the HOME Menu or the settings menu only the flag is kept:
+// that menu holds the sound already, and its close leaves it held while the flag is up. Let go: everything returns as
+// it was, unless one of those menus still holds it (its close restores it).
+void AudSystem::holdForWorld(bool hold) {
+    if (hold == mWorldHeld) {
+        return;
+    }
+    mWorldHeld = hold;
+    const bool otherMenu = isPauseMenuActive() || isHomeButtonMenuActive() || mSettingsHeld;
+    if (hold) {
+        if (!otherMenu) {
+            mSeqMgr.getParams()->moveVolume(0.0f, 12);
+            mStreamMgr.getParams()->moveVolume(0.0f, 12);
+            setVolumeZeroForce(MenuType_Pause);
+            setSeVolumeSet(AudSystemVolumeController::VolumeSet_PauseMenu, 12);
+            mWorldHoldTime = 12 + 1;
+        }
+        return;
+    }
+    mWorldHoldTime = -1;
+    if (otherMenu) {
+        return;
+    }
+    mSeqMgr.getParams()->moveVolume(AudParams::masterVolBgm, 20);
+    mStreamMgr.getParams()->moveVolume(AudParams::masterVolStream, 20);
+    recoverSeVolumeSet(20);
+    if (mPausedByWorld) {
+        mPausedByWorld = false;
+        unpause();
+    }
+}
+
+// A menu closes while a mod holds the world: the world's hold stays (the music faded, the game's sounds silent); the
+// music is the world's to pause, now or at the next frame when the menu closed before its own pause (J22-2).
+void AudSystem::keepWorldHold() {
+    if (mIsPaused) {
+        mPausedByWorld = true;
+    } else {
+        mWorldHoldTime = 1;
+    }
+}
+
+// Each frame (frameWork): the music pauses once the hold's fade is over.
+void AudSystem::updateWorldHold() {
+    if (mWorldHoldTime > 0 && --mWorldHoldTime == 0) {
+        mWorldHoldTime = -1;
+        if (mWorldHeld && !mIsPaused) {
+            pause();
+            mPausedByWorld = true;
+        }
+    }
 }
 
 void AudSystem::exitPauseMenu() {
     mPauseMenuState = MenuState_Exit;
     mPauseMenuToggleTime = 20 + 1;
+    // A world a mod holds (a rate outside 125..4000 runs the scene with its sound held): the hold stays (J22-2).
+    if (mWorldHeld) {
+        keepWorldHold();
+        return;
+    }
     mSeqMgr.getParams()->moveVolume(AudParams::masterVolBgm, 20);
     mStreamMgr.getParams()->moveVolume(AudParams::masterVolStream, 20);
     recoverSeVolumeSet(20);
     unpause();
+    mPausedByWorld = false;
 }
 
 void AudSystem::updatePauseMenu() {
