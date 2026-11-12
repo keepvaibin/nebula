@@ -206,6 +206,10 @@ fn cook_change(change: &Change, bytes: Vec<u8>, waves: &BTreeMap<String, Vec<aud
 /// paths and reasons are returned. The patches by key apply after the files and merges, and their facts go in `facts`.
 pub fn write_overlay(game_id: &str, changes: &[Change], patches: &PlanPatches, base: Option<&Path>, output: &Path, facts: &mut Vec<Fact>,
                      stats: &mut Stats) -> Result<Vec<(String, String)>> {
+    // The store's header holds a disc id of six letters (RMGE01): checked before anything is written.
+    if game_id.len() != 6 || !game_id.bytes().all(|b| b.is_ascii_alphanumeric()) {
+        bail!("{game_id:?} is not a game's disc id (six letters and digits, as RMGE01)");
+    }
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent).with_context(|| format!("{} cannot be created", parent.display()))?;
     }
