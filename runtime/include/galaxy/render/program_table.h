@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 namespace galaxy::render {
 
@@ -78,5 +79,9 @@ void program_use_triangle_ids(bool ids) noexcept;
 [[nodiscard]] const char* program_file_name() noexcept;
 // SHA-1 of the programs' headers.
 [[nodiscard]] const char* program_interface() noexcept;
+
+// A dev run's file (FA l64): with --diagnostics, dev/<name> beside the program, whole, into `into`; false (and `into`
+// empty) without --diagnostics or the file. Used for dev/programs.bin and dev/rt_shaders.bin (tools/f_stage.sh).
+[[nodiscard]] bool dev_shader_file(const char* name, std::vector<unsigned char>& into);
 
 }  // namespace galaxy::render

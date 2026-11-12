@@ -6,11 +6,16 @@
 //   forms, then its ray tracing forms) offset u32 and size u32.
 #include "galaxy/render/program_table.h"
 
+#include "galaxy/launch_args.h"
+#include "galaxy/platform_paths.h"
 #include "galaxy/render/mod_shaders.h"
 
 #include <algorithm>
 #include <atomic>
+#include <cstdio>
 #include <cstring>
+#include <exception>
+#include <vector>
 
 #if defined(_WIN32)
 #include "galaxy/windows_api.h"
@@ -49,8 +54,25 @@ struct Blob {
     char interface_text[41]{};
 };
 
+// A dev run's programs (l64): dev/programs.bin beside the program, kept for the run.
+std::vector<unsigned char> g_dev_programs;
+
 Blob open_blob() noexcept {
     Blob blob;
+    try {
+        if (dev_shader_file("programs.bin", g_dev_programs)) {
+            if (g_dev_programs.size() >= 64u && std::memcmp(g_dev_programs.data(), "NBPROG03", 8u) == 0) {
+                blob.bytes = g_dev_programs.data();
+                std::fprintf(stderr, "[dev-shaders] programs from dev/programs.bin (%zu bytes, interface %.40s)\n",
+                             g_dev_programs.size(), reinterpret_cast<const char*>(g_dev_programs.data() + 16u));
+            } else {
+                std::fprintf(stderr, "[dev-shaders] dev/programs.bin refused (not a programs file): the linked ones\n");
+            }
+        }
+    } catch (const std::exception&) {
+        blob.bytes = nullptr;
+    }
+    if (blob.bytes == nullptr) {  // the linked programs
 #if defined(_WIN32)
     const HMODULE module = GetModuleHandleW(nullptr);
     HRSRC resource = FindResourceW(module, MAKEINTRESOURCEW(101), MAKEINTRESOURCEW(10));
@@ -61,6 +83,7 @@ Blob open_blob() noexcept {
 #else
     blob.bytes = nebula_programs_begin;
 #endif
+    }
     if (blob.bytes == nullptr || std::memcmp(blob.bytes, "NBPROG03", 8u) != 0) {
         blob.bytes = nullptr;
         return blob;
@@ -213,6 +236,24 @@ const char* program_file_name() noexcept {
 
 const char* program_interface() noexcept {
     return blob().interface_text;
+}
+
+bool dev_shader_file(const char* name, std::vector<unsigned char>& into) {
+    into.clear();
+    if (::galaxy::launch_args().diagnostics == 0u) {
+        return false;
+    }
+    const std::filesystem::path folder = ::galaxy::program_directory();
+    std::FILE* const file = folder.empty() ? nullptr : ::galaxy::open_path(folder / "dev" / name, "rb");
+    if (file == nullptr) {
+        return false;
+    }
+    unsigned char chunk[65536];
+    for (std::size_t got = 0; (got = std::fread(chunk, 1u, sizeof(chunk), file)) != 0u;) {
+        into.insert(into.end(), chunk, chunk + got);
+    }
+    std::fclose(file);
+    return !into.empty();
 }
 
 }  // namespace galaxy::render
