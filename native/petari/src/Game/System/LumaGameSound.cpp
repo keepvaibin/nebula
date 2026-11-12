@@ -13,6 +13,8 @@
 #include "Game/Sound/SoundStarter.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
+#include "Game/System/LumaGameSound.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include <luma_services.h>
 #include <nebula_game_api.h>
 #include <stdint.h>
@@ -35,6 +37,11 @@ namespace {
     // File scope, not function-local statics (the game module cannot link a guarded static's initialisation).
     Slot sSlots[cSlots];
     u64 sCount = 0;
+
+    // The audio service's replacer (luma_game_sound_replacer): null while no mod replaces a game sound, so a sound's
+    // start costs one test.
+    int32_t (*sReplaceStart)(const char*, const float*, int32_t) = nullptr;
+    void (*sReplaceFrame)(void) = nullptr;
 
     bool cameraThere() {
         return MR::isExistSceneObj(SceneObj_CameraContext);
@@ -103,7 +110,31 @@ namespace {
     }
 }  // namespace
 
+namespace LumaGameSound {
+    bool replaced(uint32_t id, const float* pPos, bool level) {
+        if (sReplaceStart == nullptr) {
+            return false;
+        }
+        const char* pName = NebulaMods::soundName(id);
+        return pName != nullptr && sReplaceStart(pName, pPos, level ? 1 : 0) != 0;
+    }
+
+    void frame() {
+        if (sReplaceFrame != nullptr) {
+            sReplaceFrame();
+        }
+    }
+}  // namespace LumaGameSound
+
 extern "C" {
+// The audio service's two calls for the sounds mods replace (sound.md 6): `start` with the game sound's name, where it
+// is (null: everywhere) and 1 for a level sound, answering 1 when the mod's plays instead; `frame` once a frame. Both
+// null: none replaced.
+NEBULA_GAME_API void luma_game_sound_replacer(int32_t (*start)(const char*, const float*, int32_t), void (*frame)(void)) {
+    sReplaceStart = start;
+    sReplaceFrame = frame;
+}
+
 // Starts the game's sound `pName` for `pOwner`. follow cNoPlace: heard everywhere (pPos unused); otherwise at pPos (a
 // point in the world, or a place from the player or the camera). LUMA_OK and *pOut; LUMA_E_NOT_FOUND: no sound of that
 // name in the game's table; LUMA_E_BUSY: the game does not start it now (its sound effects are held, as in the pause

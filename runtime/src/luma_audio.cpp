@@ -11,6 +11,8 @@
 #include "galaxy/luma_audio_service.h"
 
 #include "galaxy/asset_store.h"
+#include "galaxy/mod_log.h"
+#include "galaxy/mods.h"
 
 #include <luma_audio.h>
 
@@ -22,6 +24,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -109,6 +112,11 @@ struct Item {
     std::uint64_t order = 0;     // play's count: the oldest of equal priority drops first
     bool ended = false;          // ENDED to give
     std::int32_t ended_status = LUMA_OK;
+    // A replacement of a game sound that the game renews each frame (sound.md 6): what it is renewed by (the place
+    // pointer the game gives, 0 for none) and the replace frame it was last renewed at.
+    bool level = false;
+    std::uintptr_t level_key = 0;
+    std::uint64_t renewed = 0;
     // A stream's.
     std::uint32_t rate = 48000u;
     std::vector<float> ring;     // capacity frames × channels
@@ -1464,6 +1472,206 @@ std::int32_t audio_tap_close(const LumaMod* mod, LumaHandle tap) noexcept {
     return LUMA_OK;
 }
 
+// ---- Game sounds a mod's sound stands in for (sound.md 6; game thread) ---------------------------------------------
+
+// Made once by set_game from the session's mods: each game sound's name to the cooked sound that replaces it, the mod
+// highest in the list winning (as for files). Read only after that.
+struct Replacement {
+    Sound sound;
+    std::string mod;
+    unsigned order = 0;
+};
+std::unordered_map<std::string, Replacement> g_replacements;
+// The owner of every replacement voice: no mod, each bus's share 1. Its voices are closed from the start (no events)
+// and end with their sound, a fade (a level sound not renewed, the 33rd), or never before the game stops.
+ModState g_replacing;
+std::uint64_t g_replace_frame = 0;
+
+// The cooked sounds under a mod's folder of the store (Luma/<id>/...), each with a replace name, into the index.
+void index_replacements(const assets::AssetStore& store, std::int32_t folder, std::uint32_t children,
+                        const mods::ModInfo& mod, unsigned depth) {
+    if (depth > 32u) {
+        return;
+    }
+    for (std::uint32_t i = 0; i < children; ++i) {
+        const std::optional<assets::Entry> entry = store.child(folder, i);
+        if (!entry) {
+            continue;
+        }
+        if (entry->folder) {
+            index_replacements(store, entry->index, entry->children, mod, depth + 1u);
+            continue;
+        }
+        const std::string_view name = entry->name != nullptr ? std::string_view(entry->name) : std::string_view();
+        if (name.size() <= 5u || name.substr(name.size() - 5u) != ".nsfx" || entry->length < kNsfxHeader) {
+            continue;
+        }
+        const std::uint8_t* bytes = store.map(entry->position, static_cast<std::size_t>(entry->length));
+        Sound sound;
+        if (bytes == nullptr || !read_sound(bytes, entry->length, sound)) {
+            continue;
+        }
+        const std::uint32_t at = field<std::uint32_t>(bytes, 60u);
+        if (at < kNsfxHeader || at >= entry->length) {
+            continue;  // 0: replaces nothing
+        }
+        const std::size_t most = static_cast<std::size_t>(entry->length - at);
+        const char* text = reinterpret_cast<const char*>(bytes + at);
+        const std::size_t length = ::strnlen(text, most);
+        if (length == 0u || length == most || length > LUMA_AUDIO_NAME_MOST) {
+            continue;  // not 0-ended inside the file
+        }
+        const std::string replaced(text, length);
+        const auto known = g_replacements.find(replaced);
+        if (known == g_replacements.end() || mod.order < known->second.order) {
+            g_replacements[replaced] = Replacement{sound, mod.id, mod.order};
+        }
+    }
+}
+
+void make_replacements() {
+    const assets::AssetStore* store = g_store.load(std::memory_order_acquire);
+    if (store == nullptr) {
+        return;
+    }
+    for (const mods::ModInfo& mod : mods::session_mods().started_with) {
+        if (!mod.package || !mod.enabled) {
+            continue;
+        }
+        const std::optional<assets::Entry> folder = store->find("Luma/" + mod.id);
+        if (folder && folder->folder) {
+            index_replacements(*store, folder->index, folder->children, mod, 0u);
+        }
+    }
+}
+
+// The game's start of a sound (LumaGameSound::replaced): 1 when the replacing sound plays instead. A level sound
+// renewed while its voice plays only moves it.
+std::int32_t replace_start(const char* name, const float* pos, std::int32_t level) noexcept {
+    if (name == nullptr) {
+        return 0;
+    }
+    try {
+        const auto found = g_replacements.find(std::string(name));
+        if (found == g_replacements.end()) {
+            return 0;
+        }
+        const Sound& sound = found->second.sound;
+        bool placed = pos != nullptr;
+        for (int i = 0; placed && i < 3; ++i) {
+            placed = finite_in(pos[i], -LUMA_AUDIO_PLACE_MOST, LUMA_AUDIO_PLACE_MOST);
+        }
+        const Listener heard = placed ? listen() : Listener{};
+        const std::uintptr_t key = reinterpret_cast<std::uintptr_t>(pos);
+        std::unique_lock<std::mutex> lock(g_lock);
+        if (level != 0) {
+            for (Item* item : g_items) {
+                if (item->owner == &g_replacing && item->level && item->level_key == key && !item->ended &&
+                    !item->silent && item->name == found->first) {
+                    item->renewed = g_replace_frame;
+                    if (placed) {
+                        std::copy(pos, pos + 3, item->offset);
+                        aim_locked(item, heard);
+                    }
+                    return 1;
+                }
+            }
+        }
+        auto item = std::make_unique<Item>();
+        item->owner = &g_replacing;
+        item->closed = true;  // no mod holds it: no handle, no event
+        item->name = found->first;
+        item->samples = sound.samples;
+        item->channels = sound.channels;
+        item->frames = sound.frames;
+        item->bus = sound.bus;
+        item->sound_volume = sound.volume;
+        item->volume = sound.volume;
+        item->pitch_pick = pick(sound.pitch_low, sound.pitch_high);
+        item->pitch = item->pitch_pick;
+        item->priority = sound.priority;
+        item->order = ++g_order;
+        // A level sound keeps the sound's loop while renewed. A sound the game starts once plays once: the game ends
+        // its own looping ones through the handle, which a replacement does not have.
+        if (level != 0 && sound.loop_start != kNoLoop) {
+            item->looping = true;
+            item->loop_start = sound.loop_start;
+            item->loop_end = sound.loop_end;
+        }
+        item->level = level != 0;
+        item->level_key = key;
+        item->renewed = g_replace_frame;
+        item->near_units = sound.near_units;
+        item->far_units = sound.far_units;
+        if (placed) {
+            item->placed = true;
+            item->follow = LUMA_AUDIO_AT_POINT;
+            std::copy(pos, pos + 3, item->offset);
+            aim_locked(item.get(), heard);
+            item->pan[0] = item->pan_target[0];
+            item->pan[1] = item->pan_target[1];
+        }
+        // The 33rd replacement playing: the lowest priority ends (the new one's included; the oldest of equals).
+        Item* lowest = nullptr;
+        std::uint32_t playing = 0;
+        for (Item* other : g_items) {
+            if (other->owner == &g_replacing && !other->ended && !other->silent) {
+                playing++;
+                if (lowest == nullptr || other->priority < lowest->priority ||
+                    (other->priority == lowest->priority && other->order < lowest->order)) {
+                    lowest = other;
+                }
+            }
+        }
+        if (playing >= LUMA_AUDIO_VOICES_MOST) {
+            if (lowest == nullptr || item->priority < lowest->priority) {
+                return 1;  // the game's stays silent too: the mod's sound stands for it, dropped as the game drops
+            }
+            lowest->ended = true;
+            lowest->fading = true;
+            lowest->fade_ms = kRampMs;
+        }
+        g_items.reserve(g_items.size() + 1u);
+        g_items.push_back(item.release());
+        g_live.store(g_items.size(), std::memory_order_release);
+        reap_locked();
+        lock.unlock();
+        // In a harness run: which game sound a mod's stood in for (nothing otherwise).
+        std::string json = "{\"name\": ";
+        modlog::append_json_text(json, found->first);
+        json += ", \"mod\": ";
+        modlog::append_json_text(json, found->second.mod);
+        json += level != 0 ? ", \"level\": 1" : ", \"level\": 0";
+        json += placed ? ", \"placed\": 1}" : ", \"placed\": 0}";
+        modlog::fact("audio.replaced", json);
+        return 1;
+    } catch (...) {
+        return 0;  // memory: the game's own sound plays
+    }
+}
+
+// Once a frame (LumaGameSound::frame): placed replacements aimed from where the camera is now; a level one the game
+// did not renew last frame fades out.
+void replace_frame() noexcept {
+    ++g_replace_frame;
+    const Listener heard = listen();
+    const std::lock_guard<std::mutex> lock(g_lock);
+    for (Item* item : g_items) {
+        if (item->owner != &g_replacing || item->silent) {
+            continue;
+        }
+        if (item->level && !item->ended && g_replace_frame > item->renewed + 1u) {
+            item->ended = true;
+            item->fading = true;
+            item->fade_ms = kRampMs;
+        }
+        if (item->placed) {
+            aim_locked(item, heard);
+        }
+    }
+    reap_locked();
+}
+
 // ---- The provider --------------------------------------------------------------------------------------------------
 
 void mod_begin(void*, const LumaMod* mod) {
@@ -1571,6 +1779,33 @@ void set_game(void* (*find_symbol)(const char*)) noexcept {
     if (g_game.play == nullptr || g_game.place == nullptr || g_game.stop == nullptr || g_game.gone == nullptr ||
         g_game.follow == nullptr || g_game.listener == nullptr) {
         g_game = Game{};  // all or none: game_play answers LUMA_E_ABSENT, places keep the gains of no place
+    }
+}
+
+// The game sounds mods replace (sound.md 6), whether any mod has code or not: the index of the session's cooked sounds
+// with a replace name, and the module's replacer given this service's two calls when there is one (else it stays null
+// and a sound's start costs the game one test). Game thread, once, after the mods' store is attached.
+void set_replacements(void* (*find_symbol)(const char*)) noexcept {
+    if (find_symbol == nullptr) {
+        return;
+    }
+    using Replacer = void (*)(std::int32_t (*)(const char*, const float*, std::int32_t), void (*)());
+    const auto replacer = reinterpret_cast<Replacer>(find_symbol("luma_game_sound_replacer"));
+    if (replacer == nullptr) {
+        return;
+    }
+    try {
+        g_replacements.clear();
+        make_replacements();
+    } catch (...) {
+        g_replacements.clear();  // memory: the game's own sounds
+    }
+    replacer(g_replacements.empty() ? nullptr : replace_start, g_replacements.empty() ? nullptr : replace_frame);
+    if (!g_replacements.empty()) {
+        try {
+            modlog::fact("audio.replacing", "{\"count\": " + std::to_string(g_replacements.size()) + "}");
+        } catch (...) {
+        }
     }
 }
 
