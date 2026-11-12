@@ -6,6 +6,7 @@
 #include "Game/System/LumaAnim.hpp"
 #include "Game/System/LumaUi.hpp"
 #include "Game/System/LumaDraw.hpp"
+#include "Game/System/LumaMovie.hpp"
 #include "Game/System/LumaServices.hpp"
 #include "Game/System/LumaTime.hpp"
 #include "Game/System/GameSystem.hpp"
@@ -262,8 +263,9 @@ void GameSystem::update() {
     luma::content::fx::frame();    // the mods' open effects: their actors' ends and clipping; one load when none is open
     luma::content::model::frame(); // the mods' attached models: their actors' ends; one load when none is attached
     luma::anim::frame();           // the mods' plays: ends, marks (animation 7); one load when none is going
-    luma::ui::frame();
-    luma::draw::frame();  // textures the mods freed leave the renderer; one load when none was             // the mods' open screens' facts (harness); one load when none is open
+    luma::ui::frame();    // the mods' open screens' facts (harness); one load when none is open
+    luma::draw::frame();  // textures the mods freed leave the renderer; one load when none was
+    luma::movie::frame(); // the mods' movie ended (its end, the scene's, another movie); one load when none plays
     NebulaMods::fire(NEBULA_MOD_EVENT_FRAME);
     NebulaSettingsMenu::update();
     NebulaIcons::update();
