@@ -2359,7 +2359,12 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
     const std::string id = mod.id;
     const std::size_t on = static_cast<std::size_t>(
         std::count_if(s_mods.begin(), s_mods.end(), [](const galaxy::mods::ModInfo& m) { return m.enabled; }));
-    SettingsRow status{"STATUS", mod.enabled ? "ON (" + std::to_string(mod.order) + " OF " + std::to_string(on) + ")" : "OFF",
+    // Why its code did not start this run (Z-10): a refusal is already in the played language, shown as is. On the list
+    // but its code not running says so in the value (Z-13): "On, not running (2 of 2)".
+    const galaxy::mods::NotStartedText not_started =
+        mod.problem.empty() ? galaxy::mods::plugin_not_started_text(mod.id) : galaxy::mods::NotStartedText{};
+    const std::string place = " (" + std::to_string(mod.order) + " OF " + std::to_string(on) + ")";
+    SettingsRow status{"STATUS", !mod.enabled ? std::string("OFF") : not_started.text.empty() ? "ON" + place : "ON, NOT RUNNING" + place,
                        [id](RenderConfig&, int delta) {
                            const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
                            const galaxy::mods::ModInfo* const found = mod_by_id_locked(id);
@@ -2367,13 +2372,9 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
                            place_mod_locked(id, !found->enabled, 0u);
                        },
                        mod.problem.empty() ? std::string() : mods_ui_text(mod.problem, 120u)};
-    // Why its code did not start this run (Z-10): a refusal is already in the played language, shown as is.
-    if (mod.problem.empty()) {
-        const galaxy::mods::NotStartedText not_started = galaxy::mods::plugin_not_started_text(mod.id);
-        if (!not_started.text.empty()) {
-            status.help = mods_ui_text(not_started.text, 160u);
-            if (not_started.as_is) status.names |= 4u;
-        }
+    if (!not_started.text.empty()) {
+        status.help = mods_ui_text(not_started.text, 160u);
+        if (not_started.as_is) status.names |= 4u;
     }
     rows.push_back(std::move(status));
     const std::string kinds = galaxy::mods::change_kinds(mod);
