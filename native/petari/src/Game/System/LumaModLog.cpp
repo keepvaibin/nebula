@@ -485,8 +485,9 @@ namespace luma {
                 const u32 fileBytes = lengthOf(pFile) + 1;
                 const u32 playedBytes = utf8Length(rWords.played, rWords.playedUnits) + 1;
                 const u32 codeBytes = lengthOf(codeName) + 1;
+                const u32 rowBytes = (pRowId != nullptr ? lengthOf(pRowId) : 0u) + 1;
                 const size_t size = sizeof(Entry) + (rWords.playedUnits + 1) * sizeof(char16_t) + modBytes + fileBytes + playedBytes +
-                                    rWords.englishBytes + 1 + codeBytes;
+                                    rWords.englishBytes + 1 + codeBytes + rowBytes;
                 unsigned char* const pBlock = static_cast< unsigned char* >(zeroed(size));
                 if (pBlock == nullptr) {
                     NEBULA_PANIC("LumaCore: no memory for %s's mod-log line %u", rEntry.mod, rEntry.code);
@@ -511,6 +512,9 @@ namespace luma {
                 pAt += rWords.englishBytes + 1;
                 char* const pCodeName = pAt;
                 copy(pCodeName, codeName);
+                pAt += codeBytes;
+                char* const pRow = pAt;
+                copy(pRow, pRowId != nullptr ? pRowId : "");
 
                 pEntry->source = rEntry.source;
                 pEntry->level = rEntry.level;
@@ -525,6 +529,7 @@ namespace luma {
                 pEntry->textUtf8 = pPlayed8;
                 pEntry->english = pEnglish;
                 pEntry->codeName = pCodeName;
+                pEntry->row = pRow;
                 pEntry->next = nullptr;
                 return pEntry;
             }
@@ -598,7 +603,7 @@ namespace luma {
                     return;
                 }
                 const u32 room = 256 + 6 * (lengthOf(pEntry->mod) + lengthOf(pEntry->file) + lengthOf(pEntry->textUtf8) +
-                                            lengthOf(pEntry->english));
+                                            lengthOf(pEntry->english) + lengthOf(pEntry->row));
                 char* const pJson = static_cast< char* >(::malloc(room));
                 char* const pPart = static_cast< char* >(::malloc(room));
                 if (pJson == nullptr || pPart == nullptr) {
@@ -627,6 +632,12 @@ namespace luma {
                 put(",\"english\":");
                 jsonString(pPart, room, pEntry->english);
                 put(pPart);
+                if (pEntry->row[0] != 0) {
+                    // The row its words came from, so a test names the line it means whatever the language (mod-log 4.3).
+                    put(",\"row\":");
+                    jsonString(pPart, room, pEntry->row);
+                    put(pPart);
+                }
                 nebula_snprintf(number, sizeof(number), ",\"count\":%u}", count);
                 put(number);
                 fact("modlog", pJson);
