@@ -1,0 +1,104 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* LumaCore's mods services (contract services-mods): the session's list of mods (`mods`), numbers in the game's
+   numbered spaces by `<mod id>/<name>` (`mods.ids`), and a request to install a mod through the import screen
+   (`mods.install`). None needs a permission. Calling another mod's functions is the loader's (import kind 6). */
+#ifndef LUMA_MODS_H
+#define LUMA_MODS_H
+
+#include <luma_services.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define LUMA_MODS_NAME "mods"
+#define LUMA_MODS_MAJOR 1u
+#define LUMA_MODS_MINOR 0u
+#define LUMA_MODS_IDS_NAME "mods.ids"
+#define LUMA_MODS_IDS_MAJOR 1u
+#define LUMA_MODS_IDS_MINOR 0u
+#define LUMA_MODS_INSTALL_NAME "mods.install"
+#define LUMA_MODS_INSTALL_MAJOR 1u
+#define LUMA_MODS_INSTALL_MINOR 0u
+
+typedef enum LumaModsKind {
+    LUMA_MODS_LUMA = 0,        /* a .luma */
+    LUMA_MODS_RIIVOLUTION = 1, /* a Riivolution mod */
+    LUMA_MODS_TEXTURES = 2,    /* a texture pack */
+    LUMA_MODS_FILES = 3        /* loose files */
+} LumaModsKind;
+
+typedef enum LumaModsState {
+    LUMA_MODS_RUNNING = 0,     /* its code runs, or it has none and its content is in */
+    LUMA_MODS_OFF = 1,         /* the player turned it off */
+    LUMA_MODS_REFUSED = 2,     /* the check refused it (its reason on its Mods page) */
+    LUMA_MODS_NOT_STARTED = 3, /* on, its code did not start (consent waiting, a required mod not running) */
+    LUMA_MODS_TAKEN_OUT = 4    /* taken out while the game runs (reload 2) */
+} LumaModsState;
+
+typedef struct LumaModsInfo {
+    uint32_t size;       /* sizeof(LumaModsInfo) as the mod was built */
+    uint32_t order;      /* its place in the list from the top, from 1 */
+    LumaModsKind kind;   /* 4 bytes: a C enum on MSVC, GCC and Clang */
+    LumaModsState state;
+    uint32_t has_code;   /* 1: code for this platform, 0: none */
+    uint32_t reserved;   /* 0 */
+    char id[68];         /* NUL-terminated UTF-8, cut at a character's end (registry 3) */
+    char name[132];      /* as the Mods page shows it: text.<the player's language>.name, else name, else the id */
+    char version[36];    /* luma.json `version`, "" when it has none */
+} LumaModsInfo;          /* 1.0: 260 bytes */
+
+typedef struct LumaModsService {
+    LumaServiceTable base;
+    /* 1.0. Game thread. The number of mods in the session's list (fixed for the session; only `state` follows
+       take-out and reload). */
+    uint32_t (*count)(const LumaMod* mod);
+    /* 1.0. Game thread. The mod at `index` (0 the top) into *out. LUMA_OK; LUMA_E_NOT_FOUND past the end (an answer,
+       not reported); a null out: LUMA_E_ARGUMENT (Service.Argument), a size below 1.0's: LUMA_E_ARGUMENT
+       (Service.StructSize), both reported. */
+    int32_t (*at)(const LumaMod* mod, uint32_t index, LumaModsInfo* out);
+    /* 1.0. Game thread. The mod with id `id`, as `at`; LUMA_E_NOT_FOUND when none (not reported); a null id:
+       LUMA_E_ARGUMENT, reported. */
+    int32_t (*find)(const LumaMod* mod, const char* id, LumaModsInfo* out);
+} LumaModsService;
+
+/* The spaces of 1.0 (contract section 3): numbers 0x01000000 to 0x01FFFFFF in each. */
+#define LUMA_MODS_SPACE_MESSAGE "message" /* a message one mod's actors send and another's receive (receiveOtherMsg) */
+#define LUMA_MODS_SPACE_SENSOR "sensor"   /* a sensor type of a mod's actors (the character group) */
+
+typedef struct LumaModsIdsService {
+    LumaServiceTable base;
+    /* 1.0. Game thread. The number for `<the mod's id>/<name>` in `space` into *out: the same in every session and on
+       every machine with the same mods (derived from the key; a number two keys would share goes to the one that
+       asked first, Mods.IdMoved). LUMA_OK; an unknown space, a name outside 1 to 64 of a-z 0-9 _ - ., a null out:
+       LUMA_E_ARGUMENT, reported; a full space: LUMA_E_LIMIT, reported (Service.Limit). */
+    int32_t (*get)(const LumaMod* mod, const char* space, const char* name, uint32_t* out);
+    /* 1.0. Game thread. Another mod's number, read only: LUMA_OK when `<mod_id>/<name>` is in the record (that mod
+       asked for it in this or an earlier session); LUMA_E_NOT_FOUND when not (not reported); a bad space, mod id or
+       name, a null out: LUMA_E_ARGUMENT, reported. */
+    int32_t (*of)(const LumaMod* mod, const char* space, const char* mod_id, const char* name, uint32_t* out);
+} LumaModsIdsService;
+
+/* Events of mods.install (LumaEvent.kind); `handle` is the request's. */
+typedef enum LumaModsInstallEvent {
+    LUMA_MODS_INSTALL_EVENT_DONE = 1 /* data: none; value: 0; status: LUMA_OK, LUMA_E_DENIED, LUMA_E_FORMAT, LUMA_E_EXISTS */
+} LumaModsInstallEvent;
+
+typedef struct LumaModsInstallService {
+    LumaServiceTable base;
+    /* 1.0. Game thread. Asks the player, on the import screen, to install the .luma at `path` in the mod's data
+       folder (contract section 1 item 9; an installed mod starts the next time Nebula starts). LUMA_PENDING and *out:
+       a DONE event follows (to fn), closed after its event, never inside this call; LUMA_E_BUSY, LUMA_E_NOT_FOUND, LUMA_E_DENIED (don't ask again):
+       answers, not reported; LUMA_E_ABSENT: no fs yet; a path outside the mod's data folder or not ending ".luma",
+       a null fn or out: LUMA_E_ARGUMENT, reported. */
+    int32_t (*request)(const LumaMod* mod, const char* path, LumaEventFn fn, void* user, LumaHandle* out);
+    /* 1.0. Game thread. Ends a request: the screen closes as Not now when still open; no event after this returns.
+       LUMA_OK; a handle that is not this mod's open request: LUMA_E_HANDLE, reported. */
+    int32_t (*cancel)(const LumaMod* mod, LumaHandle handle);
+} LumaModsInstallService;
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* LUMA_MODS_H */

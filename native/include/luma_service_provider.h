@@ -47,9 +47,9 @@ typedef struct LumaServiceKernel {
     int32_t (*mod_live)(const LumaMod* mod);
     /* 1 on the game thread. */
     int32_t (*game_thread)(void);
-    /* A mistake of the mod: the row `code` (the provider's rows, or the registry's 100 to 119) with `args`; `where` is
-       "<service>.<function>". Kept and said as LumaCore.report does: once in the log, kept for the Mods page, repeats
-       counted. */
+    /* A mistake of the mod: the row `code` (the provider's rows, or the registry's 100 to 119); `where` is
+       "<service>.<function>", the row's first argument {where}; `args` are the row's arguments after it, in order (at
+       most 7). Kept and said as LumaCore.report does: once in the log, kept for the Mods page, repeats counted. */
     void (*report)(const LumaMod* mod, const char* where, uint32_t code, const char* const* args, uint32_t arg_count);
     /* Queues `node` for its mod (from any thread). LUMA_OK: queued, or queued already; LUMA_E_CANCELLED: the mod is
        gone or unknown, nothing queued (the node stays the provider's); LUMA_E_ARGUMENT: a null node, mod or deliver. */
@@ -101,6 +101,21 @@ typedef struct LumaServiceProvider {
    everything it points at stay valid for the process's life. */
 typedef const LumaServiceKernel* (*LumaServicesOpen)(void);
 typedef int32_t (*LumaProvideService)(const LumaServiceProvider* provider);
+
+/* The save half of the Mods page's REMOVED MODS line (services-save 5, services-mods 8): the game module's exports,
+   found by name.
+   luma_save_kept: any thread. fn(user, id, bytes) once for each mod id with values in the user files in memory (their
+   LUMA chunks as last read, copied, started or saved), `bytes` its entries' bytes over all of them; an id being
+   forgotten is not given. fn is called after the module's lock is let go (the pairs copied first): it may call the
+   module.
+   luma_save_forget: any thread. At the next frame's start the id's values leave the user files in memory (the stored
+   ones and the loaded file's), and when a stored file held some, the save file is written at once without a window
+   (waiting while a save or load runs, and for the start's read); every later save this session leaves them out too.
+   From the call on luma_save_kept no longer gives the id. An id outside the id rule is ignored; past 256 ids in one
+   session an id is logged and not forgotten. */
+typedef void (*LumaSaveKeptFn)(void* user, const char* id, uint64_t bytes);
+typedef void (*LumaSaveKept)(LumaSaveKeptFn fn, void* user);
+typedef void (*LumaSaveForget)(const char* id);
 
 #ifdef __cplusplus
 }

@@ -226,6 +226,11 @@ namespace {
          {"SettingsChoiceRemove", "SettingsChoiceKeep", nullptr},
          {NEBULA_SETTINGS_APPLY, NEBULA_SETTINGS_CLOSE, 0},
          {KeyApply, KeyBack, 0}},
+        // A removed mod's kept numbers and saved data (services-mods 8): its id above the question (fillTexts).
+        {NEBULA_SETTINGS_STATUS_MOD_FORGET_ASK, "SettingsModForgetAsk", "SettingsModForgetAsk", 2,
+         {"SettingsChoiceForget", "SettingsChoiceKeep", nullptr},
+         {NEBULA_SETTINGS_APPLY, NEBULA_SETTINGS_CLOSE, 0},
+         {KeyApply, KeyBack, 0}},
     };
     // The ABOUT window's pictures: at most this many texels a side (the host fits them so).
     const u32 cModPictureSide = 1024;
@@ -1932,8 +1937,9 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
                                                                : "SettingsJoyConConnect";
     }
     getNumbered(text, pText, rView.status_number);
-    if (rView.status == NEBULA_SETTINGS_STATUS_MODS_CODE_ASK && rView.status_text != nullptr && rView.status_text[0] != 0) {
-        // The mod's name above the question: more than one can wait for an answer.
+    if ((rView.status == NEBULA_SETTINGS_STATUS_MODS_CODE_ASK || rView.status == NEBULA_SETTINGS_STATUS_MOD_FORGET_ASK) &&
+        rView.status_text != nullptr && rView.status_text[0] != 0) {
+        // The mod's name above the question: more than one can wait for an answer (a removed mod's: its id).
         MR::Text16 asked;
         getNumbered(asked, pText, rView.status_number);
         fromUtf8(text, 0, rView.status_text);

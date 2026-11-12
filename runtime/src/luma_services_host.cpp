@@ -2,6 +2,8 @@
 #include "galaxy/luma_services_host.h"
 
 #include "galaxy/host_extension.h"
+#include "galaxy/luma_fs_service.h"
+#include "galaxy/luma_mods_service.h"
 #include "galaxy/luma_system_platform.h"
 
 #include <luma_services_facts.h>
@@ -61,6 +63,20 @@ bool provide_all(void* (*find_symbol)(const char*), void (*log)(const char*),
         log("LumaCore services: the game module has no luma_services_monotonic_ns; a link's spacing uses the system's clock");
     }
     for (const LumaServiceProvider* const provider : galaxy::luma_system::providers(log, monotonic)) {
+        provide(provider);
+    }
+    // The mods services (services-mods 4), and the module's half of the REMOVED MODS line (services-save 5).
+    for (const LumaServiceProvider* const provider : galaxy::luma_mods::providers(log)) {
+        provide(provider);
+    }
+    const auto kept = reinterpret_cast<LumaSaveKept>(find_symbol("luma_save_kept"));
+    const auto forget = reinterpret_cast<LumaSaveForget>(find_symbol("luma_save_forget"));
+    if ((kept == nullptr || forget == nullptr) && log != nullptr) {
+        log("LumaCore services: the game module has no luma_save_kept or luma_save_forget; REMOVED MODS counts no file values");
+    }
+    galaxy::luma_mods::set_chunk_half(kept, forget);
+    // The file services (services-fs 10).
+    for (const LumaServiceProvider* const provider : galaxy::luma_fs::providers(log)) {
         provide(provider);
     }
     Giving giving{provide};

@@ -288,7 +288,18 @@ void not_started(const PluginFile& file, const std::string& logged, std::string 
 
 // A mod's code was refused by the loader or the order: the refusal said in the played language, and kept whole.
 void not_started(const PluginFile& file, const LumaRefusal& refusal) {
-    say(refusal_text(refusal));
+    // An L506 for a permission the player declined is their choice, not a fault: the log says so (consent 2.3).
+    std::string declined;
+    if (refusal.code == 506u) {
+        const std::uint32_t named = refusal.count < LUMA_REFUSAL_MOST ? refusal.count : LUMA_REFUSAL_MOST;
+        for (std::uint32_t i = 0; i < named; ++i) {
+            if (refusal.names[i] == nullptr || refusal.values[i] == nullptr || std::string_view(refusal.names[i]) != "permission") continue;
+            std::string_view permission(refusal.values[i]);
+            if (permission.substr(0, 2) == "T:") permission.remove_prefix(2);
+            if (std::find(file.declined.begin(), file.declined.end(), permission) != file.declined.end()) declined = permission;
+        }
+    }
+    say(declined.empty() ? refusal_text(refusal) : file.mod_id + " is off: the player did not allow " + declined);
     NotStarted record;
     record.mod_id = file.mod_id;
     record.library = file.path.filename().string();

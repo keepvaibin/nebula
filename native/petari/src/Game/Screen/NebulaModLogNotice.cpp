@@ -26,7 +26,9 @@ namespace {
     const f32 cPadY = 7.0f;
     const f32 cGap = 6.0f;
     const f32 cLeft = 18.0f;
-    const f32 cBottom = 64.0f;
+    // 88: the lowest line clears the lives counter (Mario and his count, bottom left), whose top stands about 76 units
+    // up (run J4 3124 at 1280x720: 64 put the third line over Mario's face).
+    const f32 cBottom = 88.0f;
     const f32 cMaxShare = 0.55f;
     const u32 cFill = 0x141A2CD8;
     const u32 cRing = 0xD9534FFF;

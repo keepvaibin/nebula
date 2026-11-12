@@ -41,9 +41,14 @@ std::string read_all(const fs::path& path) {
 
 // A .luma's folder with code for this platform and the given permissions (a JSON array).
 std::string manifest(std::string_view permissions) {
-    return std::string(R"({"format":1,"id":"asker","name":"Asker","version":"1.0.0","game":"RMG","layers":[{"path":"layer"}],)") +
-           R"("plugins":[{"api":3,"binaries":{")" + std::string(galaxy::luma::plugin_target()) + R"(":"code/asker.bin"}}],)" +
+    return std::string(R"({"format":"1.0","id":"asker","name":"Asker","version":"1.0.0","game":{"id":"RMG"},"layers":[{"name":"layer"}],)") +
+           R"("code":{"platforms":[")" + std::string(galaxy::luma::plugin_target()) + R"("]},)" +
            R"("permissions":)" + std::string(permissions) + "}";
+}
+
+// The entry library of this platform in the mod's folder (luma-format 6).
+fs::path entry_library(const fs::path& folder) {
+    return folder / fs::path(galaxy::luma::code_entry(galaxy::luma::plugin_target()));
 }
 
 galaxy::mods::ModInfo* find(std::vector<galaxy::mods::ModInfo>& mods) {
@@ -96,8 +101,11 @@ bool facts() {
     ok &= expect(galaxy::mods::consent_facts(mod).permissions[1].required, "required from the kept report's list");
 
     galaxy::mods::record_code_answer(mod, false);
+    mod.enabled = false;  // Not now turns it off (consent 2.3)
     ok &= expect(galaxy::mods::consent_facts(mod).code_answer == Answer::Declined && !galaxy::mods::consent_needed(mod),
-                 "code Not now: declined, not asked again");
+                 "code Not now: declined, off, not asked again");
+    mod.enabled = true;
+    ok &= expect(galaxy::mods::consent_needed(mod), "code Not now, turned on again: asked (6402)");
 
     galaxy::mods::ModInfo content;
     content.id = "content";
@@ -116,7 +124,7 @@ bool store() {
     const std::string two_hosts = R"([{"name":"net.internet","why":"Uploads times.","hosts":["api.example.org"]},)"
                                   R"({"name":"system.links","why":"Opens its page."}])";
     write(folder / "luma.json", manifest(two_hosts));
-    write(folder / "code" / "asker.bin", "code");
+    write(entry_library(folder), "code");
     write(folder / "layer" / "files" / "a.txt", "a");
     galaxy::mods::set_mods_folder(root / "mods", root / "mods.ini", "RMGE01");
 
@@ -176,12 +184,13 @@ bool store() {
     mod = find(mods);
     if (mod == nullptr) return false;
     galaxy::mods::record_code_answer(*mod, false);
+    mod->enabled = false;  // Not now turns it off (consent 2.3)
     ok &= expect(galaxy::mods::save_mod_settings(mods) && read_all(root / "mods.ini").find("code_no=" + mod->code_token + "\n") != std::string::npos,
                  "code_no stored");
     mods = galaxy::mods::scan_mods();
     mod = find(mods);
     ok &= expect(mod != nullptr && mod->code_declined && !galaxy::mods::consent_needed(*mod), "Not now is not asked at the next start");
-    write(folder / "code" / "asker.bin", "other code");
+    write(entry_library(folder), "other code");
     mods = galaxy::mods::scan_mods();
     mod = find(mods);
     ok &= expect(mod != nullptr && !mod->code_declined && mod->code_changed && galaxy::mods::consent_needed(*mod),

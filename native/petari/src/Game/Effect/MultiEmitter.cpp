@@ -10,7 +10,94 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Particle/EmitterCore.hpp"
+#include "Game/System/LumaModLog.hpp"
+#include <luma_modlog.h>
+#include <nebula_format.h>
+#include <nebula_module.h>
+#include <cstdlib>
 #include <cstring>
+
+namespace {
+    // The particle words of list-form effect names (a space in the name, or two digits at its end) that the resources
+    // lack, each said once a session. Effects are made on the game thread and on a scene's loading thread, so the list
+    // is pushed without a lock; two threads meeting one new word may both say it, which is harmless. File-scope and
+    // constant-initialised (no function-local statics in the module); ::malloc, never a scene's arena, and kept until
+    // the module unloads.
+    struct MissingWord {
+        MissingWord* mNext;
+        u32 mHash;
+        char mWord[1];
+    };
+    MissingWord* sMissingWords = nullptr;
+
+    u32 hashOf(const char* pWord) {
+        u32 hash = 2166136261u;  // FNV-1a
+        for (const unsigned char* p = reinterpret_cast< const unsigned char* >(pWord); *p != 0; p++) {
+            hash = (hash ^ *p) * 16777619u;
+        }
+        return hash;
+    }
+
+    bool saidBefore(const char* pWord, u32 hash) {
+        for (const MissingWord* p = __atomic_load_n(&sMissingWords, __ATOMIC_ACQUIRE); p != nullptr; p = p->mNext) {
+            if (p->mHash == hash && strcmp(p->mWord, pWord) == 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // `pWord` names no particle: the game's log once; with a mod's prefix ("<id>:"), that mod's Content.MissingEffect
+    // (references 6, code 623; one entry a word: the word's hash is its column, so two words are two entries); while the
+    // harness runs, the fact `fx.particle_missing {"word", "mod"}`. Game data never does it; a mod's table can.
+    void sayMissingParticle(const char* pWord) {
+        const u32 hash = hashOf(pWord);
+        if (saidBefore(pWord, hash)) {
+            return;
+        }
+        const size_t length = strlen(pWord);
+        MissingWord* const pNew = static_cast< MissingWord* >(::malloc(sizeof(MissingWord) + length));
+        if (pNew == nullptr) {
+            NEBULA_PANIC("effects: no memory to note the missing particle %s", pWord);
+        }
+        pNew->mHash = hash;
+        memcpy(pNew->mWord, pWord, length + 1);
+        MissingWord* pHead = __atomic_load_n(&sMissingWords, __ATOMIC_ACQUIRE);
+        do {
+            pNew->mNext = pHead;
+        } while (!__atomic_compare_exchange_n(&sMissingWords, &pHead, pNew, true, __ATOMIC_RELEASE, __ATOMIC_ACQUIRE));
+
+        nebula_log("effects: no particle \"%s\" in the resources; its emitter is left out\n", pWord);
+        const char* const pColon = strchr(pWord, ':');
+        char mod[72];
+        mod[0] = 0;
+        if (pColon != nullptr && pColon != pWord && pColon - pWord < static_cast< ptrdiff_t >(sizeof(mod))) {
+            memcpy(mod, pWord, static_cast< size_t >(pColon - pWord));
+            mod[pColon - pWord] = 0;
+            LumaModLogEntry entry = {};
+            entry.size = sizeof(entry);
+            entry.source = LUMA_MODLOG_CONTENT;
+            entry.level = LUMA_MODLOG_ERROR;
+            entry.code = 623;
+            entry.mod = mod;
+            entry.file = "";
+            entry.column = hash;
+            entry.names[0] = "found";
+            entry.values[0] = pWord;
+            entry.count = 1;
+            luma::modlog::add(entry, "Content.MissingEffect");
+        }
+        if (luma::modlog::facts()) {
+            char word[200];
+            char modText[100];
+            luma::modlog::jsonString(word, sizeof(word), pWord);
+            luma::modlog::jsonString(modText, sizeof(modText), mod);
+            char json[320];
+            nebula_snprintf(json, sizeof(json), "{\"word\":%s,\"mod\":%s}", word, modText);
+            luma::modlog::fact("fx.particle_missing", json);
+        }
+    }
+}  // namespace
 
 
 MultiEmitter::MultiEmitter(const char* pName, const Vec3f* pTranslation, const Vec3f* pRotation, const Vec3f* pScale, const Vec3f& rOffset)
@@ -299,8 +386,15 @@ void MultiEmitter::allocateEmitter(const char* pName) {
         for (u32 i = 0; i <= length; i++) {
             if (pName[i] == ' ' || pName[i] == '\0') {
                 const MR::FormattedName name("%.*s", static_cast< int >(i - start), pName + start);
-                u16 index;
-                MR::Effect::isExistInResource(&index, name.c_str());
+                // A word the resources lack keeps its slot (callers address emitters by their place in the list:
+                // setGlobalRotation(.., idx)) with no resource, so it is never created.
+                u16 index = SingleEmitter::cNoResource;
+                if (!MR::Effect::isExistInResource(&index, name.c_str())) {
+                    index = SingleEmitter::cNoResource;
+                    if (name.c_str()[0] != 0) {  // two spaces together: an empty word, nothing to name
+                        sayMissingParticle(name.c_str());
+                    }
+                }
                 indices.push_back(index);
                 start = i + 1;
             }

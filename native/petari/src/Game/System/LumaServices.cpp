@@ -2,7 +2,10 @@
 
 #include "Game/System/LumaGuard.hpp"
 #include "Game/System/LumaHook.hpp"
+#include "Game/System/LumaContentFx.hpp"
+#include "Game/System/LumaContentModel.hpp"
 #include "Game/System/LumaLoader.hpp"
+#include "Game/System/LumaSave.hpp"
 #include "Game/System/LumaTime.hpp"
 #include <luma.h>
 #include <luma_service_provider.h>
@@ -30,6 +33,16 @@ namespace luma {
                 {"system", 1, 0, nullptr, "services-system"},
                 {"system.clipboard", 1, 0, "system.clipboard", "services-system"},
                 {"system.links", 1, 0, "system.links", "services-system"},
+                {"mods", 1, 0, nullptr, "services-mods"},
+                {"mods.ids", 1, 0, nullptr, "services-mods"},
+                {"mods.install", 1, 0, nullptr, "services-mods"},
+                {"content.fx", 1, 0, nullptr, "effects"},
+                {"content.model", 1, 0, nullptr, "models"},
+                {"save", 1, 0, nullptr, "services-save"},
+                {"save.global", 1, 0, nullptr, "services-save"},
+                {"save.game", 1, 0, "save.game", "services-save"},
+                {"fs", 1, 0, nullptr, "services-fs"},
+                {"fs.exchange", 1, 0, "fs.exchange", "services-fs"},
                 {nullptr, 0, 0, nullptr, nullptr},
             };
 
@@ -80,6 +93,8 @@ namespace luma {
             u32 sCarried = 0;  // nodes taken but kept for a later frame, all mods (game thread)
             void (*sTimePost)() = nullptr;     // time's due timers, before the events; null while no mod has a timer
             void (*sFrameHandler)() = nullptr;  // time's frame handlers, after them; null while no mod has one
+            void (*sSaveWork)() = nullptr;      // save.global's writes, a FORGET's save; null while there is none
+            void (*sSaveWake)() = nullptr;      // wakeSaveHook's, taken at the frame's start; atomic
 
             bool sameText(const char* pA, const char* pB) {
                 if (pA == nullptr || pB == nullptr) {
@@ -301,8 +316,16 @@ namespace luma {
                     sayCounted(pWhere, "a report without its mod (a provider bug); not kept");
                     return;
                 }
-                // LumaCore.report keeps it under (file, line, code): the place is "<service>.<function>", line 0.
-                core()->report(pMod, pWhere != nullptr ? pWhere : "", 0, code, ppArgs, argCount);
+                // Every service row names {where} first (services-registry 11): the kernel puts the place there, so no
+                // provider can leave it out and shift the rest. LumaCore.report keeps it under (file, line, code): the
+                // place is "<service>.<function>", line 0; it keeps at most 8 arguments.
+                const char* const pPlace = pWhere != nullptr ? pWhere : "";
+                const char* ppAll[8] = {pPlace};
+                u32 count = 1;
+                for (u32 i = 0; ppArgs != nullptr && i < argCount && count < 8u; i++) {
+                    ppAll[count++] = ppArgs[i];
+                }
+                core()->report(pMod, pPlace, 0, code, ppAll, count);
             }
 
             int32_t kernelPost(LumaEventNode* pNode) {
@@ -583,8 +606,14 @@ namespace luma {
                     }
                 }
             }
-            // The module's own services, each when its contract is signed: time (services-time).
+            // The module's own services, each when its contract is signed: time (services-time), content.fx (effects),
+            // content.model (models).
             (void)provide(luma::time::provider());
+            (void)provide(luma::content::fx::provider());
+            (void)provide(luma::content::model::provider());
+            (void)provide(luma::save::provider());
+            (void)provide(luma::save::globalProvider());
+            (void)provide(luma::save::gameProvider());
         }
 
         const void* find(const char* pName, u32 major, u32 minor, const char** ppPermission) {
@@ -746,6 +775,13 @@ namespace luma {
         }
 
         void frameStart() {
+            // One relaxed load a frame while nobody woke it (a FORGET is the host's, from any thread).
+            if (__atomic_load_n(&sSaveWake, __ATOMIC_RELAXED) != nullptr) {
+                sSaveWork = __atomic_exchange_n(&sSaveWake, nullptr, __ATOMIC_ACQUIRE);
+            }
+            if (sSaveWork != nullptr) {
+                sSaveWork();
+            }
             if (sTimePost != nullptr) {
                 sTimePost();
             }
@@ -777,6 +813,17 @@ namespace luma {
             }
             sTimePost = pPost;
             sFrameHandler = pAfter;
+        }
+
+        void setSaveHook(void (*pWork)()) {
+            if (!onGameThread()) {
+                NEBULA_PANIC("LumaCore: the save hook was set off the game thread");
+            }
+            sSaveWork = pWork;
+        }
+
+        void wakeSaveHook(void (*pWork)()) {
+            __atomic_store_n(&sSaveWake, pWork, __ATOMIC_RELEASE);
         }
 
         const LumaServiceKernel* kernel() { return &sKernel; }

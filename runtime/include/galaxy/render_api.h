@@ -244,6 +244,7 @@ enum class NativeSettingsStatus : unsigned {
                       // page's from 1, or -(page * 4 + 1 loading, 2 unreadable, 3 missing) for a picture not shown
                       // (next: Apply, before: Revert, back: Close)
     ModRemoveAsk,     // remove the mod whose page is open? status_number 1: to the recycle bin (yes: Apply, no: Close)
+    ModForgetAsk,     // forget what a removed mod kept? (status_text: its id; yes: Apply, no: Close)
 };
 // A picture the menu shows (a mod's icon or one of its pictures): RGBA8 rows, tightly packed, straight alpha.
 struct NativeSettingsPicture {

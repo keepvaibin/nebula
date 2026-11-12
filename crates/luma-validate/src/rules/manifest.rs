@@ -10,23 +10,112 @@ use std::collections::BTreeSet;
 
 const FILE: &str = "luma.json";
 pub const MAX_MANIFEST: u64 = 1 << 20;
-const TOP_KEYS: [&str; 25] = [
+const TOP_KEYS: [&str; 26] = [
     "format", "id", "version", "name", "summary", "text", "authors", "license", "links", "icon", "pictures", "game",
     "nebula", "needs", "conflicts", "load", "takes_over", "options", "permissions", "renderer", "layers", "code",
-    "saves", "kit", "build",
+    "saves", "kit", "build", "pre_standard",
 ];
+
+/// The previous engine's keys a package may still carry under `pre_standard` (board/OLD-ROWS.md, director 2026-11-11
+/// 20:35), each with the plan tasks that replace it: L221, a Note, never an error. The rows a layer has (`stages`,
+/// `text`...) may also be at the top, as the previous engine read them.
+const PRE_STANDARD_ROWS: [(&str, &str); 13] = [
+    ("galaxies", "3.11, 3.9"),
+    ("scenario", "3.11"),
+    ("stages", "3.11"),
+    ("story", "3.11"),
+    ("music", "3.11, 2.6"),
+    ("event_flags", "3.11"),
+    ("open_conditions", "3.11"),
+    ("hungry_luma", "3.11"),
+    ("change_area", "3.11"),
+    ("star_bits", "3.11"),
+    ("text", "3.8, 3.11"),
+    ("comet_schedule", "3.11"),
+    ("map_position", "3.11, 3.8"),
+];
+const PRE_STANDARD_TOP: [(&str, &str); 2] = [("achievements", "2.2, 2.4"), ("save", "2.2, 6.5")];
+const PRE_STANDARD_LAYER: [(&str, &str); 13] = [
+    ("object_changes", "3.9, 3.11"),
+    ("comet_time_limits", "3.11"),
+    ("player_constants", "1.5, 3.11"),
+    ("tunables", "1.5"),
+    ("sound_effects", "3.7"),
+    ("player_animations", "3.6"),
+    ("object_classes", "1.4"),
+    ("forms", "1.4"),
+    ("objects", "1.4"),
+    ("scripts", "4.3, 1.10"),
+    ("switches", "3.11"),
+    ("materials", "3.3"),
+    ("when", "3.1"),
+];
+const PRE_STANDARD_WHEN: [&str; 4] = ["mods", "version", "not", "any"];
+
+fn plan_of(list: &[(&'static str, &'static str)], key: &str) -> Option<&'static str> {
+    list.iter().find(|(k, _)| *k == key).map(|(_, plan)| *plan)
+}
+
+/// What the one form writes for a key of the previous engine's form at `ptr` (L220), `layer` the layer's name there.
+fn old_key(ptr: &str, key: &str, layer: Option<&str>) -> Option<String> {
+    let depth = ptr.matches('/').count();
+    let under_layer = |rest: &str| format!("pre_standard.layers.{}.{rest}", layer.unwrap_or("<layer>"));
+    let new = match (ptr, key) {
+        ("", "plugins") => "code (code/<platform>/mod.<ending>)".to_string(),
+        ("", "description") => "summary".to_string(),
+        ("", "homepage") => "links.home".to_string(),
+        ("", "load_after") => "load.after".to_string(),
+        ("", "load_before") => "load.before".to_string(),
+        ("", "regions" | "versions") => "game.regions".to_string(),
+        ("", "requires") => "renderer.features".to_string(),
+        ("", k) if plan_of(&PRE_STANDARD_TOP, k).is_some() || plan_of(&PRE_STANDARD_ROWS, k).is_some() => format!("pre_standard.{k}"),
+        (p, "path") if p.starts_with("/layers/") && depth == 2 => "name (layers/<name>/)".to_string(),
+        (p, k) if p.starts_with("/layers/") && depth == 2 && (plan_of(&PRE_STANDARD_LAYER, k).is_some() || plan_of(&PRE_STANDARD_ROWS, k).is_some()) => {
+            under_layer(k)
+        }
+        (p, k) if p.starts_with("/layers/") && p.ends_with("/when") && depth == 3 && PRE_STANDARD_WHEN.contains(&k) => under_layer(&format!("when.{k}")),
+        (p, "id") if p.starts_with("/options/") && depth == 2 => "key".to_string(),
+        (p, "choices") if p.starts_with("/options/") && depth == 2 => "kind \"choice\", values, value_names".to_string(),
+        (p, "range") if p.starts_with("/options/") && depth == 2 => "kind \"number\", min, max, step".to_string(),
+        (p, "below") if p.starts_with("/conflicts/") && depth == 2 => "why".to_string(),
+        _ => return None,
+    };
+    Some(new)
+}
 const REQUIRED: [&str; 7] = ["format", "id", "version", "name", "summary", "authors", "game"];
 const OPTION_KINDS: [&str; 5] = ["choice", "number", "toggle", "text", "key"];
+
+/// The game's controls by the names its input bindings use (`runtime/src/input_bindings.cpp` kTargetIds, compared as
+/// `parse_game_input` does, without case): what a key option's default binds (director's decision 23:0x, key options
+/// are input actions).
+const GAME_CONTROLS: [&str; 25] = [
+    "a", "b", "one", "two", "plus", "minus", "home", "dpad_up", "dpad_down", "dpad_left", "dpad_right", "stick_up",
+    "stick_down", "stick_left", "stick_right", "c", "z", "shake", "nunchuk_shake", "pointer_up", "pointer_down",
+    "pointer_left", "pointer_right", "pointer_recenter", "jump_back",
+];
 pub const MAX_OPTIONS: usize = 64;
 pub const MAX_PICTURES: usize = 8;
 
-/// An id: 3 to 64 of lowercase letters, digits, `-` and `.`, starting with a letter, without `..` (luma-format 4).
+/// An id: 3 to 64 of lowercase letters, digits, `-` and `.`, starting with a letter, without `..` (luma-format 4),
+/// whose part before the first `.` is no name Windows keeps (con, prn, aux, nul, com1-9, lpt1-9: a folder of that
+/// name cannot be made there; the host's valid_id refuses the same, director 2026-11-11).
 pub fn id_ok(id: &str) -> bool {
     (3..=64).contains(&id.len())
         && id.starts_with(|c: char| c.is_ascii_lowercase())
         && id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b'.')
         && !id.contains("..")
         && !id.ends_with('.')
+        && !windows_keeps(id.split('.').next().unwrap_or(id))
+}
+
+/// A device name Windows keeps in every folder, in any case.
+fn windows_keeps(part: &str) -> bool {
+    let part = part.to_ascii_lowercase();
+    match part.as_bytes() {
+        b"con" | b"prn" | b"aux" | b"nul" => true,
+        [b'c', b'o', b'm', d] | [b'l', b'p', b't', d] => (b'1'..=b'9').contains(d),
+        _ => false,
+    }
 }
 
 /// An option or layer key: as an id's characters, 1 to 64 long.
@@ -122,11 +211,24 @@ impl M<'_, '_, '_> {
     }
     /// L202 for every key not in `allowed`.
     fn keys(&mut self, obj: &Value, ptr: &str, allowed: &[&str]) {
+        self.keys_in(obj, ptr, allowed, None);
+    }
+    /// L202 for a key not allowed; L220 when it is the previous engine's, naming what to write (`layer`: the layer's
+    /// name, for a layer's keys).
+    fn keys_in(&mut self, obj: &Value, ptr: &str, allowed: &[&str], layer: Option<&str>) {
         for m in obj.members() {
             if !allowed.contains(&m.key.as_str()) {
-                self.ctx.add(202, FILE, Some(m.key_pos), Some(&format!("{ptr}/{}", seg(&m.key))), vec![("key", t(m.key.clone()))]);
+                let at = format!("{ptr}/{}", seg(&m.key));
+                match old_key(ptr, &m.key, layer) {
+                    Some(new) => self.ctx.add(220, FILE, Some(m.key_pos), Some(&at), vec![("key", t(m.key.clone())), ("expected", t(new))]),
+                    None => self.ctx.add(202, FILE, Some(m.key_pos), Some(&at), vec![("key", t(m.key.clone()))]),
+                }
             }
         }
+    }
+    /// L221 (a Note) at a key of `pre_standard`, `shown` its dotted name.
+    fn pre_standard_note(&mut self, m: &crate::json::Member, at: &str, shown: String, plan: &str) {
+        self.ctx.add(221, FILE, Some(m.key_pos), Some(at), vec![("key", t(shown)), ("expected", t(plan.to_string()))]);
     }
     /// L203 for every key of `required` not there; `shown` is how the object is named (`options/2`).
     fn required(&mut self, obj: &Value, ptr: &str, required: &[&str]) {
@@ -284,6 +386,7 @@ pub(crate) fn check(ctx: &mut Ctx) {
     m.keys(&root, "", &TOP_KEYS);
     m.required(&root, "", &REQUIRED);
     let mut facts = Facts::default();
+    pre_standard(&mut m, &root);
 
     if let Some(v) = root.get("format") {
         if let Some(s) = m.string(v, "/format", "format") {
@@ -514,10 +617,8 @@ fn options(m: &mut M, root: &Value, facts: &mut Facts) {
         };
         let allowed: Vec<&str> = ["key", "kind", "default", "name"].iter().chain(by_kind).copied().collect();
         m.keys(obj, &ptr, &allowed);
-        let mut required = vec!["key", "kind", "name"];
-        if kind != "key" {
-            required.push("default");
-        }
+        // Every kind has a default: a text option's within max_length, a key option's a control the game names.
+        let mut required = vec!["key", "kind", "name", "default"];
         required.extend_from_slice(by_kind);
         m.required(obj, &ptr, &required);
         let key = obj.get("key").and_then(|k| {
@@ -639,7 +740,8 @@ fn options(m: &mut M, root: &Value, facts: &mut Facts) {
                 });
                 if let (Some(d), Some(max)) = (default, max) {
                     if let Some(s) = m.string(d, &format!("{ptr}/default"), "options/default") {
-                        if !line_ok(s, 0, max) {
+                        // Code points, and one line: no newline or other control character (spaces are the mod's).
+                        if s.chars().count() > max || s.chars().any(char::is_control) {
                             m.at(210, d, &format!("{ptr}/default"), vec![("key", t(shown.clone())), ("why", p("Option.DefaultTooLong"))]);
                         }
                     }
@@ -647,7 +749,11 @@ fn options(m: &mut M, root: &Value, facts: &mut Facts) {
             }
             "key" => {
                 if let Some(d) = default {
-                    m.line(d, &format!("{ptr}/default"), "options/default", 1, 64);
+                    if let Some(s) = m.string(d, &format!("{ptr}/default"), "options/default") {
+                        if !GAME_CONTROLS.iter().any(|c| c.eq_ignore_ascii_case(s)) {
+                            m.at(210, d, &format!("{ptr}/default"), vec![("key", t(shown.clone())), ("why", p("Option.KeyDefaultUnknown")), ("value", t(s))]);
+                        }
+                    }
                 }
             }
             _ => {}
@@ -868,6 +974,48 @@ fn renderer(m: &mut M, root: &Value) {
     }
 }
 
+/// `pre_standard`: the previous engine's keys, read by the game until their replacements are proven (OLD-ROWS). Each
+/// key it carries is the Note L221 naming the plan tasks that replace it; a key the previous engine never had is L202.
+fn pre_standard(m: &mut M, root: &Value) {
+    let Some(v) = root.get("pre_standard") else { return };
+    let Some(obj) = m.object(v, "/pre_standard", "pre_standard") else { return };
+    for member in obj.members() {
+        let at = format!("/pre_standard/{}", seg(&member.key));
+        if member.key == "layers" {
+            let Some(layers) = m.object(&member.value, &at, "pre_standard/layers") else { continue };
+            for layer in layers.members() {
+                let lp = format!("{at}/{}", seg(&layer.key));
+                let Some(keys) = m.object(&layer.value, &lp, "pre_standard/layers") else { continue };
+                for key in keys.members() {
+                    let kp = format!("{lp}/{}", seg(&key.key));
+                    let shown = format!("pre_standard.layers.{}.{}", layer.key, key.key);
+                    let plan = plan_of(&PRE_STANDARD_LAYER, &key.key).or_else(|| plan_of(&PRE_STANDARD_ROWS, &key.key));
+                    match plan {
+                        Some(_) if key.key == "when" => {
+                            let Some(when) = m.object(&key.value, &kp, "pre_standard/when") else { continue };
+                            for w in when.members() {
+                                let wp = format!("{kp}/{}", seg(&w.key));
+                                if PRE_STANDARD_WHEN.contains(&w.key.as_str()) {
+                                    m.pre_standard_note(w, &wp, format!("{shown}.{}", w.key), "3.1");
+                                } else {
+                                    m.ctx.add(202, FILE, Some(w.key_pos), Some(&wp), vec![("key", t(w.key.clone()))]);
+                                }
+                            }
+                        }
+                        Some(plan) => m.pre_standard_note(key, &kp, shown, plan),
+                        None => m.ctx.add(202, FILE, Some(key.key_pos), Some(&kp), vec![("key", t(key.key.clone()))]),
+                    }
+                }
+            }
+            continue;
+        }
+        match plan_of(&PRE_STANDARD_TOP, &member.key).or_else(|| plan_of(&PRE_STANDARD_ROWS, &member.key)) {
+            Some(plan) => m.pre_standard_note(member, &at, format!("pre_standard.{}", member.key), plan),
+            None => m.ctx.add(202, FILE, Some(member.key_pos), Some(&at), vec![("key", t(member.key.clone()))]),
+        }
+    }
+}
+
 fn layers(m: &mut M, root: &Value, facts: &mut Facts) {
     let Some(v) = root.get("layers") else {
         // Default: one layer "base" when layers/base exists (luma-format 4).
@@ -880,7 +1028,8 @@ fn layers(m: &mut M, root: &Value, facts: &mut Facts) {
     for (i, x) in items.iter().enumerate() {
         let ptr = format!("/layers/{i}");
         let Some(obj) = m.object(x, &ptr, "layers") else { continue };
-        m.keys(obj, &ptr, &["name", "when"]);
+        let named = obj.get("name").and_then(Value::as_str).map(str::to_string);
+        m.keys_in(obj, &ptr, &["name", "when"], named.as_deref());
         m.required(obj, &ptr, &["name"]);
         let Some(name) = obj.get("name").and_then(|n| {
             let s = m.string(n, &format!("{ptr}/name"), "layers/name")?;
@@ -901,7 +1050,7 @@ fn layers(m: &mut M, root: &Value, facts: &mut Facts) {
         let Some(when) = obj.get("when") else { continue };
         let wp = format!("{ptr}/when");
         let Some(when) = m.object(when, &wp, "when") else { continue };
-        m.keys(when, &wp, &["option", "region", "language", "platform", "code"]);
+        m.keys_in(when, &wp, &["option", "region", "language", "platform", "code"], Some(&name));
         if when.members().is_empty() {
             m.at(301, when, &wp, vec![("layer", t(name.clone())), ("why", p("Layer.EmptyWhen"))]);
         }
@@ -914,6 +1063,11 @@ fn layers(m: &mut M, root: &Value, facts: &mut Facts) {
                         m.ctx.add(301, FILE, Some(member.key_pos), Some(&mp), vec![("layer", t(name.clone())), ("why", p("Layer.NoSuchOption")), ("value", t(member.key.clone()))]);
                         continue;
                     };
+                    // The mod reads its text and key options itself (services-mods); they choose no layer.
+                    if option.kind == "text" || option.kind == "key" {
+                        m.ctx.add(301, FILE, Some(member.key_pos), Some(&mp), vec![("layer", t(name.clone())), ("why", p("Layer.OptionNotChoosing")), ("value", t(member.key.clone()))]);
+                        continue;
+                    }
                     let wanted: Vec<&Value> = match &member.value.kind {
                         Kind::Array(list) => list.iter().collect(),
                         _ => vec![&member.value],
@@ -926,7 +1080,6 @@ fn layers(m: &mut M, root: &Value, facts: &mut Facts) {
                             "choice" => w.as_str().is_some_and(|s| option.values.iter().any(|v| v == s)),
                             "toggle" => w.as_bool().is_some(),
                             "number" => w.as_f64().is_some(),
-                            "text" => w.as_str().is_some(),
                             _ => false,
                         };
                         if !ok {
@@ -1225,6 +1378,13 @@ mod tests {
     #[test]
     fn small_checks() {
         assert!(id_ok("gold-flower") && id_ok("a.b-c") && !id_ok("ab") && !id_ok("Gold") && !id_ok("1abc") && !id_ok("a..b") && !id_ok("abc."));
+        // Windows' device names, alone or before the first dot; the same letters inside a longer part are fine.
+        for kept in ["con", "prn", "aux", "nul", "com1", "com9", "lpt1", "lpt9", "con.mod", "nul.x.y", "lpt3.gold"] {
+            assert!(!id_ok(kept), "{kept}");
+        }
+        for fine in ["com0", "lpt0", "com10", "console", "con-mod", "mod.con", "auxiliary", "nul2"] {
+            assert!(id_ok(fine), "{fine}");
+        }
         assert!(host_ok("api.example.org") && host_ok("*.example.org") && host_ok("127.0.0.1:8080") && !host_ok("a b") && !host_ok("x:0") && !host_ok("-a.org"));
         assert!(["*", "api.example.org", "API.Example.org", "*.example.org", "localhost", "10.0.0.1", "255.255.255.255", "0.0.0.0"].iter().all(|h| permission_host_ok(h)));
         assert!(!["", "*.", "**", "*.*.org", "a.org:80", "10.0.0.1:80", "::1", "[::1]", "1.2.3", "256.0.0.1", "01.2.3.4", "*.10.0.0.1", "-a.org", "a b", "a..org", "a.org."]
@@ -1243,5 +1403,16 @@ mod tests {
         assert_eq!(image_size(&png), Some(("png", 256, 128)));
         let jpeg = [0xff, 0xd8, 0xff, 0xe0, 0, 4, 0, 0, 0xff, 0xc0, 0, 11, 8, 0, 100, 0, 200, 3];
         assert_eq!(image_size(&jpeg), Some(("jpeg", 200, 100)));
+    }
+
+    /// GAME_CONTROLS is the input bindings' kTargetIds, in order (F's note on luma-format revision 5).
+    #[test]
+    fn the_controls_are_the_input_bindings_own() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../runtime/src/input_bindings.cpp");
+        let source = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        let start = source.find("kTargetIds{").expect("kTargetIds in input_bindings.cpp");
+        let list = &source[start..start + source[start..].find("};").unwrap()];
+        let ids: Vec<&str> = list.split('"').skip(1).step_by(2).collect();
+        assert_eq!(ids, GAME_CONTROLS);
     }
 }

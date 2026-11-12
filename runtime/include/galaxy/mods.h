@@ -98,8 +98,8 @@ struct ModInfo {
     bool package = false;  // a .luma: luma.json plus layers of files
     std::shared_ptr<const galaxy::luma::Manifest> luma;
     bool luma_changes_game = false;  // it or its active layers set something read at game start (luma::manifest_sets_game)
-    std::vector<std::filesystem::path> luma_textures;  // textures/ and movies/ of its active layers, in order
-    std::vector<std::filesystem::path> luma_movies;
+    std::vector<std::filesystem::path> luma_textures;  // textures/ of its active layers, in order
+    std::vector<std::filesystem::path> luma_movies;    // files/MovieData of its active layers, in order
     std::vector<std::string> languages;       // language folders it changes (UsEnglish, EuFrench, ...)
     bool own_text = true;                     // its text stands in for a language it lacks
     unsigned code_patches = 0;                // patches to the original Wii code; never applied (`problem` says so)
@@ -151,6 +151,8 @@ void set_mods_store_file(const std::filesystem::path& store);
 void set_mods_folder(const std::filesystem::path& folder, const std::filesystem::path& settings_file,
                      const std::string& game_id);
 [[nodiscard]] std::filesystem::path mods_folder();
+// The file given to set_mods_folder for the player's choices (empty before); its folder is the settings folder.
+[[nodiscard]] std::filesystem::path mods_settings_file();
 // Mod code was turned off after a crash in this run; the Mods page says so.
 void set_code_off_after_crash() noexcept;
 // The game id given to set_mods_folder (empty before).
@@ -192,6 +194,17 @@ struct ModPlan {
     std::vector<File> merges;
     // Materials that have a shader written for them. `disc` is the material name.
     std::vector<File> materials;
+    // A .luma's patches by key (luma-format 5.1, `layers/<layer>/patches/<game path>.json`): bottom of the list first,
+    // then layer order, then file order, as the applier takes them (contract table-keys 12: the last given wins).
+    struct Patch {
+        std::string mod_id;
+        std::string entry;  // the file in the mod, "layers/<layer>/patches/<game path>.json", to name it
+        std::string disc;   // the game path as written ("StageData/AstroGalaxy/jmp/Placement/Common/ObjInfo")
+        std::filesystem::path host;
+    };
+    std::vector<Patch> patches;
+    // Every mod whose content is used, by id, bottom of the list first (the applier's mod order).
+    std::vector<std::string> used;
     // The .luma mods in use, bottom of the list first, for their shaders.
     std::vector<std::filesystem::path> luma_folders;
     std::vector<PluginFile> plugins;  // code of the .luma mods, top of the list first (the order they bind in)

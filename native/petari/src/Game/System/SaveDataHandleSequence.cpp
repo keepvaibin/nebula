@@ -1,4 +1,6 @@
 #include "Game/System/SaveDataHandleSequence.hpp"
+#include "Game/System/LumaSave.hpp"
+#include <nebula_module.h>
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/SaveIcon.hpp"
 #include "Game/Screen/SysInfoWindow.hpp"
@@ -22,6 +24,7 @@ namespace {
     NEW_NERVE(SaveDataHandleSequenceSaveAllWithoutKeyWait, SaveDataHandleSequence, SaveAllWithoutKeyWait);
     NEW_NERVE(SaveDataHandleSequenceSaveAllWithoutKeyWaitDisappear, SaveDataHandleSequence, SaveAllWithoutKeyWaitDisappear);
     NEW_NERVE(SaveDataHandleSequenceSaveAllWithoutWindow, SaveDataHandleSequence, SaveAllWithoutWindow);
+    NEW_NERVE(SaveDataHandleSequenceQuietSave, SaveDataHandleSequence, QuietSave);
     NEW_NERVE(SaveDataHandleSequencePreLoad, SaveDataHandleSequence, PreLoad);
     NEW_NERVE(SaveDataHandleSequencePreLoadDone, SaveDataHandleSequence, PreLoadDone);
     NEW_NERVE(SaveDataHandleSequenceNoSaveConfirmRemind, SaveDataHandleSequence, NoSaveConfirmRemind);
@@ -31,7 +34,7 @@ namespace {
 SaveDataHandleSequence::SaveDataHandleSequence()
     : NerveExecutor("セーブ/ロード"), mCurrentUserFile(), mBackupUserFile(), mSaveDataHandler(), mSaveErrorSequence(),
       mSysInfoWindowConfirm(), mSysInfoWindowSave(), mSucceeded(), mIsConfirmRemind(), mIsSaveAndQuitMsg(), mIsCorrupted(), mIsNoSaveMode(), mWorkUserFile(),
-      mNerveForError(), mTempBuffer(), mSaveIcon(), mWindowFollows(false) {
+      mNerveForError(), mSaveIcon(), mWindowFollows(false) {
     initNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
 }
 
@@ -39,8 +42,6 @@ void SaveDataHandleSequence::initAfterResourceLoaded() {
     mCurrentUserFile = new UserFile();
     mBackupUserFile = new UserFile();
     mSaveDataHandler = new SaveDataHandler(mCurrentUserFile);
-    // Its size follows what the handler found a game file takes.
-    mTempBuffer = new u8[mSaveDataHandler->getFileRoom()];
 
     mSysInfoWindowConfirm = MR::createSysInfoWindowExecuteWithChildren();
     mSysInfoWindowConfirm->kill();
@@ -95,6 +96,7 @@ void SaveDataHandleSequence::startCreateUserFile(int index) {
     mCurrentUserFile->setCreated();
     mCurrentUserFile->updateLastModified();
     mSaveDataHandler->initializeUserFileMemory(index, mCurrentUserFile);
+    luma::save::fileLoaded();  // the new file is the one in play, as a picked one is (services-save 1)
     setNerve(GET_NERVE_ANON(SaveDataHandleSequenceSaveAllWithoutKeyWait));
 }
 
@@ -127,8 +129,34 @@ void SaveDataHandleSequence::startSaveAll() {
     setNerve(GET_NERVE_ANON(SaveDataHandleSequenceSaveAllWithoutKeyWait));
 }
 
+bool SaveDataHandleSequence::startQuietSave() {
+    if (isActive() || mPreLoadState != 1 || mIsNoSaveMode || mIsCorrupted) {
+        return false;
+    }
+    setNerve(GET_NERVE_ANON(SaveDataHandleSequenceQuietSave));
+    return true;
+}
+
+// mSucceeded is the game's own sequences' answer: left as it was. A refused write is logged; the game's next save
+// writes the same files (the forgotten ids are applied at every save) and shows its own error window if it fails too.
+// A sequence the game starts meanwhile takes over; its request waits for this one (SaveDataHandler::waitRequest).
+void SaveDataHandleSequence::exeQuietSave() {
+    if (MR::isFirstStep(this)) {
+        mSaveDataHandler->requestSaveSaveData();
+    }
+    if (!mSaveDataHandler->isDone()) {
+        return;
+    }
+    if (mSaveDataHandler->getLastResult() != SaveRequest::Result_Done) {
+        nebula_log("save: the quiet save (a mod's values forgotten) was refused (%d); the next save writes them out\n",
+                   static_cast< int >(mSaveDataHandler->getLastResult()));
+    }
+    setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
+}
+
 void SaveDataHandleSequence::startLoad(int userFileIndex, bool isPlayerMario) {
     restoreUserFile(mCurrentUserFile, userFileIndex, isPlayerMario);
+    luma::save::fileLoaded();
 
     mSucceeded = true;
 
@@ -199,10 +227,7 @@ void SaveDataHandleSequence::restoreUserFile(UserFile* pUserFile, int index, boo
 }
 
 void SaveDataHandleSequence::backupCurrentUserFile() {
-    mCurrentUserFile->makeGameDataBinary(mTempBuffer, mSaveDataHandler->getFileRoom());
-    mBackupUserFile->loadFromGameDataBinary(mCurrentUserFile->getGameDataFile(), mTempBuffer, mSaveDataHandler->getFileRoom());
-    mCurrentUserFile->makeConfigDataBinary(mTempBuffer, mSaveDataHandler->getFileRoom());
-    mBackupUserFile->loadFromConfigDataBinary(mCurrentUserFile->getConfigDataFile(), mTempBuffer, mSaveDataHandler->getFileRoom());
+    mSaveDataHandler->copyUserFile(mBackupUserFile, mCurrentUserFile);
 }
 
 void SaveDataHandleSequence::exeNoOperation() {
@@ -354,6 +379,7 @@ void SaveDataHandleSequence::exePreLoad() {
     if (MR::isFirstStep(this)) {
         if (!mSaveDataHandler->requestLoadSaveData(mSaveCopyLoading)) {
             mSaveCopyLoading = 0;
+            mPreLoadState = 2;
             if (mSaveDamaged) {
                 mSaveDamaged = false;
                 mNerveForError = GET_NERVE_ANON(SaveDataHandleSequenceNoOperation);
@@ -396,6 +422,7 @@ void SaveDataHandleSequence::exePreLoadDone() {
         mSaveCopyLoading = 0;
         mSaveDamaged = false;
         mSucceeded = true;
+        mPreLoadState = 1;
 
         setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
     }

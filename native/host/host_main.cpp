@@ -35,6 +35,7 @@
 #include "galaxy/discord_presence.h"
 #include "galaxy/mii_formats.h"
 #include "galaxy/mii_import.h"
+#include "galaxy/luma_mods_service.h"
 #include "galaxy/mods.h"
 #include "galaxy/render/host_window.h"
 #include "galaxy/mod_log.h"
@@ -524,6 +525,8 @@ galaxy::mods::ModRows gModRows;
 bool gModsChangeGame = false;
 // The mods on this session (the scan's enabled ones): the mod log is made only when there are any.
 std::uint32_t gModsOn = 0;
+// The placed packages of this start, for the start's check (modlog::check_packages).
+std::vector<galaxy::modlog::StartPackage> gStartPackages;
 
 void load_module(const fs::path& path) {
 #if defined(_WIN32)
@@ -1745,6 +1748,7 @@ static_assert(static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::Prepar
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::Arrange) == NEBULA_SETTINGS_STATUS_ARRANGE &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::ModAbout) == NEBULA_SETTINGS_STATUS_MOD_ABOUT &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::ModRemoveAsk) == NEBULA_SETTINGS_STATUS_MOD_REMOVE_ASK &&
+              static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::ModForgetAsk) == NEBULA_SETTINGS_STATUS_MOD_FORGET_ASK &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::Leave) == NEBULA_SETTINGS_STATUS_LEAVE &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::ModsRestartAsk) == NEBULA_SETTINGS_STATUS_MODS_RESTART_ASK &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::KeepDisplay) == NEBULA_SETTINGS_STATUS_KEEP_DISPLAY &&
@@ -2531,6 +2535,48 @@ static_assert(int{galaxy::saves::kDone} == NEBULA_SAVE_DONE && int{galaxy::saves
                   int{galaxy::saves::kFailed} == NEBULA_SAVE_FAILED,
               "save results are the game's");
 
+// The save half of the Mods page's REMOVED MODS line (services-save 5, services-mods 8): the mods' global files,
+// luma/<id>.bin in the save folder. Any thread: a removed mod runs nothing, so its file is only read or deleted here.
+fs::path mod_files_folder() {
+    fs::path folder;
+    return save_folder_path(gSaveDataPath.c_str(), &folder) ? folder / fs::path(galaxy::saves::kModFolder) : fs::path();
+}
+
+void kept_save_ids(std::vector<std::string>& out) {
+    const fs::path folder = mod_files_folder();
+    std::error_code error;
+    if (folder.empty() || !fs::is_directory(folder, error)) {
+        return;
+    }
+    for (fs::directory_iterator it(folder, error), end; !error && it != end; it.increment(error)) {
+        std::error_code status;
+        if (it->is_regular_file(status) && it->path().extension() == ".bin") {
+            out.push_back(galaxy::path_text(it->path().stem()));
+        }
+    }
+}
+
+fs::path kept_save_file(std::string_view id) {
+    const fs::path folder = mod_files_folder();
+    const std::string name = std::string(id) + ".bin";
+    return folder.empty() || !galaxy::saves::is_plain_name(name) ? fs::path() : folder / fs::path(name);
+}
+
+std::uint64_t kept_save_bytes(std::string_view id) {
+    const fs::path file = kept_save_file(id);
+    std::error_code error;
+    const std::uintmax_t size = file.empty() ? 0u : fs::file_size(file, error);
+    return error ? 0u : static_cast<std::uint64_t>(size);
+}
+
+void forget_save(std::string_view id) {
+    const fs::path file = kept_save_file(id);
+    std::error_code error;
+    if (!file.empty()) {
+        fs::remove(file, error);
+    }
+}
+
 // A save file operation on the save worker (the game polls the status): galaxy/save_files.h in the game's save folder
 // (gSaveDataPath under the save folder, or a mod's save folder).
 std::atomic<int> gSavesPending{0};
@@ -2538,6 +2584,8 @@ std::atomic<int> gSavesPending{0};
 std::mutex gSavesMutex;
 std::condition_variable gSavesDone;
 
+// gFs stays one worker taking its queue in order (FIFO): the game's save, save.global's luma/<id>.bin writes and a
+// broken file's luma/<id>.bin.broken copy rely on a later request never passing an earlier one.
 void svc_save_request(void*, const NebulaSaveRequest* request) {
     gSaveOps.fetch_add(1, std::memory_order_relaxed);
     *request->status = NEBULA_SAVE_PENDING;
@@ -2548,16 +2596,30 @@ void svc_save_request(void*, const NebulaSaveRequest* request) {
         fs::path folder;
         galaxy::saves::Result result = galaxy::saves::kFailed;
         if (save_folder_path(name.starts_with("GameData.bin") ? gOldSaveDataPath.c_str() : gSaveDataPath.c_str(), &folder)) {
-            switch (r.op) {
-            case NEBULA_SAVE_READ:
-                result = galaxy::saves::read(folder, name, r.buffer, r.size, r.length);
-                break;
-            case NEBULA_SAVE_WRITE:
-                result = galaxy::saves::write(folder, name, r.buffer, r.size);
-                break;
-            case NEBULA_SAVE_DELETE:
-                result = galaxy::saves::remove(folder, name);
-                break;
+            // A mod's global file (services-save 7): "luma/<id>.bin" in the luma folder, made at its first write, kept
+            // without backups. Any other name is the game's own file, a plain name in the save folder.
+            std::string_view file = name;
+            galaxy::saves::Backups backups = galaxy::saves::Backups::kKeep;
+            bool placed = true;
+            if (name.starts_with(std::string(galaxy::saves::kModFolder) + "/")) {
+                file = galaxy::saves::mod_file_name(name);
+                folder /= fs::path(galaxy::saves::kModFolder);
+                backups = galaxy::saves::Backups::kNone;
+                std::error_code made;
+                placed = !file.empty() && (r.op != NEBULA_SAVE_WRITE || fs::create_directories(folder, made) || !made);
+            }
+            if (placed) {
+                switch (r.op) {
+                case NEBULA_SAVE_READ:
+                    result = galaxy::saves::read(folder, file, r.buffer, r.size, r.length);
+                    break;
+                case NEBULA_SAVE_WRITE:
+                    result = galaxy::saves::write(folder, file, r.buffer, r.size, backups);
+                    break;
+                case NEBULA_SAVE_DELETE:
+                    result = galaxy::saves::remove(folder, file);
+                    break;
+                }
             }
         }
 #if defined(__cpp_lib_atomic_ref)
@@ -3361,6 +3423,8 @@ void svc_mods_start(void*) {
                                 [](const char* text) { log_line("mods:", text); });
     // Each mod whose code did not start, in the mod log as the Mods page says it.
     galaxy::modlog::add_not_started();
+    // Each placed package through the validator, its findings in the mod log (kept: nothing runs when nothing changed).
+    galaxy::modlog::add_start_findings();
 }
 
 void svc_app_restart(void*) {
@@ -3409,8 +3473,22 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
 void prepare_mod_files(const fs::path& settings_folder, const std::string& game_id, std::vector<galaxy::mods::ModInfo> mods) {
     const std::string language = galaxy::mods::language_folder(
         game_id, static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language)));
+    gStartPackages.clear();
+    for (const galaxy::mods::ModInfo& mod : mods) {
+        if (mod.package) gStartPackages.push_back({mod.id, mod.path, mod.enabled});
+    }
+    // The validator's errors refuse a package at each start as at import (one reading, validator 2); its findings go
+    // to the mod log once the log exists (add_start_findings).
+    galaxy::modlog::check_packages(gStartPackages, game_id, language);
+    for (galaxy::mods::ModInfo& mod : mods) {
+        if (mod.package && mod.problem.empty() && galaxy::modlog::package_refused(mod.id)) {
+            mod.problem = galaxy::modlog::refused_sentence();
+        }
+    }
     gModsOn = static_cast<std::uint32_t>(
         std::count_if(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) { return mod.enabled; }));
+    // The answers the plan's granted lists come from: a declined permission's L506 is then the player's choice (consent 2.3).
+    galaxy::modlog::keep_permission_answers(mods);
     const galaxy::mods::ModPlan plan = galaxy::mods::plan_mod_changes(gPak.store, game_id, language, std::move(mods));
     gPlugins = plan.plugins;
     gModRows = plan.rows;
@@ -3476,16 +3554,38 @@ void cook_failed(const fs::path& overlay) {
                                   : ("the mods' files could not be cooked: the game runs without them: " + why).c_str());
 }
 
+// The cooker this build runs, by its file's size and time: another cooker (a new build, with its own applier and
+// cooks) cooks the mods again. "none" when it is not found; the cook then fails and says so.
+std::string cooker_identity() {
+#if defined(_WIN32)
+    const fs::path cooker = fs::path(::galaxy::windows::executable_path()).parent_path() / "nebula-import.exe";
+#else
+    fs::path cooker;
+    if (void* const library = dlopen("libnebula_import.so", RTLD_NOW | RTLD_LOCAL)) {
+        Dl_info info{};
+        if (void* const cook = dlsym(library, "nebula_cook_overlay"); cook != nullptr && dladdr(cook, &info) != 0 && info.dli_fname != nullptr) {
+            cooker = fs::path(info.dli_fname);
+        }
+    }
+#endif
+    std::error_code error;
+    const auto size = fs::file_size(cooker, error);
+    if (error) return "cooker none\n";
+    const auto time = fs::last_write_time(cooker, error).time_since_epoch().count();
+    return "cooker " + std::to_string(size) + " " + std::to_string(static_cast<long long>(time)) + "\n";
+}
+
 void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_folder, const std::string& game_id) {
-    if (plan.files.empty() && plan.merges.empty()) {
+    if (plan.files.empty() && plan.merges.empty() && plan.patches.empty()) {
         return;
     }
     const fs::path folder = settings_folder / "mods" / ".cooked";
     const fs::path overlay = folder / "mods.pak";
     const fs::path signature_file = folder / "mods.signature";
-    // Another build's shader interface or shader compiler means their shaders are built again.
+    // Another build's shader interface or shader compiler means their shaders are built again; another cooker, that
+    // the mods are cooked again (table-keys 9: cached by the mod list, the game and the applier).
     const std::string signature = galaxy::mods::plan_signature(plan, game_id) + galaxy::render::program_interface() + " " +
-                                  std::to_string(galaxy::render::mod_shader_compiler_revision()) + "\n";
+                                  std::to_string(galaxy::render::mod_shader_compiler_revision()) + "\n" + cooker_identity();
     std::error_code error;
     fs::create_directories(folder, error);
     std::string kept;
@@ -3549,6 +3649,17 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
                 log_line("mods: left out:", line.c_str());
             }
         }
+        // What the patches by key did that a player must hear of (table-keys: conflicts, rows not there, selectors'
+        // counts, patches left out), one fact a line, for the log here and the Mods screen (plan 6.2).
+        {
+            fs::path facts = overlay;
+            facts.replace_extension("facts");
+            std::ifstream lines(facts);
+            std::string line;
+            while (std::getline(lines, line)) {
+                log_line("mods: patch:", line.c_str());
+            }
+        }
         {
             // What their materials need and they didn't bring.
             std::vector<fs::path> brought;
@@ -3603,7 +3714,8 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
     }
     if (gPak.store.attach_overlay(overlay)) {
         char text[96];
-        std::snprintf(text, sizeof(text), "%zu files and %zu table or file merges applied", plan.files.size(), plan.merges.size());
+        std::snprintf(text, sizeof(text), "%zu files, %zu table or file merges and %zu patches by key applied", plan.files.size(),
+                      plan.merges.size(), plan.patches.size());
         log_line("mods:", text);
     } else {
         log_line("mods:", "the mods' files could not be read: the game runs without them");
@@ -4004,6 +4116,7 @@ int main(int argc, char** argv) {
         gOldSaveDataPath = save_folders.earlier;
         gSaveDataPath = save_folders.current;
         fs::create_directories(gSaveRoot / gSaveDataPath.substr(1), error);  // the release's own save folder
+        galaxy::luma_mods::set_save_half({kept_save_ids, kept_save_bytes, forget_save});
         if (!settings_folder.empty()) {
             fs::create_directories(settings_folder / "mods", error);
             // Updates imported while their mod's folder was in use take its place before anything reads the mods.
