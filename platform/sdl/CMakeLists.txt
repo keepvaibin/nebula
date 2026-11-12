@@ -175,16 +175,6 @@ add_library(galaxy_render_vk STATIC
     ${rt}/discord_presence.cpp
     ${rt}/controller_roster.cpp
     ${rt}/wiimote_speaker.cpp)
-# How a plugin replaces a game function here. Android keeps it too: the same code, built for arm64.
-if(NOT WIN32)
-    target_sources(galaxy_render_vk PRIVATE ${rt}/mod_hook_posix.cpp)
-    if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
-        set(nebula_hde "${CMAKE_CURRENT_LIST_DIR}/../../third_party/minhook/src/hde/hde64.c")
-        target_sources(galaxy_render_vk PRIVATE "${nebula_hde}")
-        set_source_files_properties("${nebula_hde}" PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_LIST_DIR}/../../runtime/include/galaxy/hde_shim")
-        set_source_files_properties(${rt}/mod_hook_posix.cpp PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_LIST_DIR}/../../runtime/include/galaxy/hde_shim")
-    endif()
-endif()
 # Mod import (folders and archives).
 if(NOT IOS)
     set(NEBULA_ARCHIVE_SOURCES "${nebula_root}/third_party/archive" CACHE PATH "zlib, xz and libarchive sources")

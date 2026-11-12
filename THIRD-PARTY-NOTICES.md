@@ -157,11 +157,6 @@ extracts it (<https://curl.se/ca/cacert-2026-10-20.pem>, SHA-256 `796f1389bfea13
 unchanged. The net services trust these roots for TLS; the list is built into the program and changes with the game.
 License: Mozilla Public License 2.0 (<https://mozilla.org/MPL/2.0/>).
 
-## MinHook (BSD 2-clause)
-
-`third_party/minhook` (1.3.4) from <https://github.com/TsudaKageyu/minhook>, unchanged, is how a mod's plugin replaces a
-game function on Windows. Copyright (C) 2009-2017 Tsuda Kageyu: `third_party/minhook/LICENSE.txt`.
-
 ## MiiPort (ISC)
 
 `runtime/src/mii_formats.cpp` adapts the Switch's colour and glasses downgrade tables and the 3DS/Wii U and Switch Mii

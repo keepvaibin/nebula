@@ -26,14 +26,8 @@
 
 #if defined(_WIN32)
 #include "galaxy/windows_api.h"
-#if defined(_M_X64) || defined(__x86_64__)
-#include <MinHook.h>
-#define NEBULA_HAS_FUNCTION_HOOKS 1
-#endif
 #else
 #include <dlfcn.h>
-#include "galaxy/mod_hook.h"
-#define NEBULA_HAS_POSIX_HOOKS 1
 #endif
 
 namespace galaxy::mods {
@@ -62,9 +56,6 @@ Loaded* data_mod(std::unique_ptr<Loaded> made) {
 NebulaModApi g_api{};
 void* (*g_find_symbol)(const char*) = nullptr;
 void (*g_log)(const char*) = nullptr;
-bool g_starting = false;
-// The last replacement on each hooked function: the next plugin's hook goes in front of it.
-std::map<void*, void*> g_hook_tops;
 // The running mods' achievements; those unlocked and not yet shown, in order.
 std::vector<AchievementToAdd> g_achievements;
 // Each one known to be unlocked (now or in an earlier run): an event that matches it again costs nothing.
@@ -494,32 +485,6 @@ void api_store_set_text(const NebulaPlugin* self, const char* key, const char* t
     std::filesystem::rename(temporary, path, error);
 }
 
-int32_t api_hook(void* target, void* replacement, void** original) {
-    if (!g_starting || target == nullptr || replacement == nullptr || original == nullptr) return -1;
-#if defined(NEBULA_HAS_FUNCTION_HOOKS)
-    static const bool ready = MH_Initialize() == MH_OK;
-    if (!ready) return -1;
-    // A second hook on one function goes on the first's replacement, so that each one's `original` calls the one before.
-    const auto top = g_hook_tops.find(target);
-    void* const place = top != g_hook_tops.end() ? top->second : target;
-    if (MH_CreateHook(place, replacement, original) != MH_OK || MH_EnableHook(place) != MH_OK) return -1;
-    g_hook_tops[target] = replacement;
-    return 0;
-#elif defined(NEBULA_HAS_POSIX_HOOKS)
-    const auto top = g_hook_tops.find(target);
-    void* const place = top != g_hook_tops.end() ? top->second : target;
-    if (!hook_function(place, replacement, original)) return -1;
-    g_hook_tops[target] = replacement;
-    return 0;
-#else
-    return -1;
-#endif
-}
-
-void* api_find_function(const char* symbol) {
-    return symbol != nullptr && g_find_symbol != nullptr ? g_find_symbol(symbol) : nullptr;
-}
-
 }  // namespace
 
 bool dump_tunables(const NebulaModApi* game_api, const std::filesystem::path& list_file) {
@@ -575,8 +540,9 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
     g_api = *game_api;
     g_api.log = api_log;
     g_api.option = api_option;
-    g_api.hook = api_hook;
-    g_api.find_function = api_find_function;
+    // The old plugins' hook and find_function are gone (plan 1.10a): a mod hooks and finds through luma.h.
+    g_api.hook = nullptr;
+    g_api.find_function = nullptr;
     g_api.store_get = api_store_get;
     g_api.store_set = api_store_set;
     g_api.store_get_text = api_store_get_text;
@@ -791,7 +757,6 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
             }
         }
     }
-    g_starting = true;
     {
         const std::lock_guard<std::mutex> lock(g_not_started_mutex);
         g_not_started.clear();
@@ -977,53 +942,11 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
             say(name + " started");
             continue;
         }
-        const auto api_version = reinterpret_cast<std::uint32_t (*)()>(symbol_in(module, "nebula_plugin_api"));
-        const auto start = reinterpret_cast<void (*)(const NebulaModApi*, const NebulaPlugin*)>(symbol_in(module, "nebula_plugin_start"));
-        if (api_version == nullptr || start == nullptr) {
-            not_started(file, name + " not started: it is not a Nebula plugin", "ITS CODE DID NOT START. IT IS NOT A MOD'S CODE");
-            close_library(module);
-            continue;
-        }
-        if (api_version() > NEBULA_MOD_API_VERSION) {
-            not_started(file, name + " not started: it needs a newer Nebula", "THIS MOD NEEDS A NEWER NEBULA");
-            close_library(module);
-            continue;
-        }
-        // Version 3 only added calls at the end: a version 2 plugin runs as it is.
-        if (api_version() < 2u) {
-            not_started(file,
-                        name + " not started: it was built for plugin interface " + std::to_string(api_version()) +
-                            "; rebuild it with this nebula_mod_api.h (setting() is now get_tunable(), object_arg(index) is "
-                            "placement_number(\"Obj_argN\"))",
-                        "ITS CODE DID NOT START. IT WAS BUILT FOR AN OLDER NEBULA");
-            close_library(module);
-            continue;
-        }
-        // A plugin built with the game's own headers (an earlier kit's nebula_game_sdk.h): no longer offered, and its
-        // classes would not match this build.
-        if (symbol_in(module, "nebula_plugin_game_abi") != nullptr) {
-            not_started(file,
-                        name + " not started: it was built with the game's headers, which plugins no longer use; rebuild it with "
-                               "nebula_mod_api.h only",
-                        "ITS CODE DID NOT START. IT WAS BUILT FOR AN OLDER NEBULA");
-            close_library(module);
-            continue;
-        }
-        auto loaded = std::make_unique<Loaded>();
-        loaded->mod_id = file.mod_id;
-        loaded->version = file.version;
-        loaded->options = file.options;
-        loaded->module = module;
-        loaded->self.size = sizeof(NebulaPlugin);
-        loaded->self.id = loaded->mod_id.c_str();
-        loaded->self.version = loaded->version.c_str();
-        Loaded* const mine = loaded.get();
-        g_loaded.push_back(std::move(loaded));
-        start(&g_api, &mine->self);
-        started.push_back(file.mod_id);
-        say(name + " started");
+        // Code that is not a LumaCore mod (no luma_mod): the old plugin entry, nebula_plugin_start, is gone (plan 1.10a).
+        not_started(file, name + " not started: it is not a LumaCore mod (no luma_mod); rebuild it with luma.h",
+                    "ITS CODE DID NOT START. IT WAS BUILT FOR AN OLDER NEBULA");
+        close_library(module);
     }
-    g_starting = false;
     return g_loaded.size();
 }
 
