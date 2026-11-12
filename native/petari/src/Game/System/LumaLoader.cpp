@@ -7,6 +7,7 @@
 #include "Game/System/LumaServices.hpp"
 #include "Game/System/LumaTypes.hpp"
 #include "Game/System/LumaClasses.hpp"
+#include "Game/System/LumaGuard.hpp"
 #include "Game/System/LumaNumbers.hpp"
 #include "Game/System/NebulaText.hpp"
 #include <luma_host.h>
@@ -152,6 +153,13 @@ struct LumaMod {
     bool inStop;        // inside its stop: keep answers
     bool inStart;       // inside its start: kept answers
     u32 startedAt;      // its place in the start order, from 1 (a mod starts after every mod it uses)
+    // The guard (plan 1.6): its library's image, and 1 once a fault was caught in its code (atomic): none of its code
+    // runs again, its stop and finish included.
+    uintptr_t codeBase;
+    uintptr_t codeBegin;
+    uintptr_t codeEnd;
+    u32 faulted;
+    u32 costSlot;  // its code-time slot (LumaGuard.cpp): 0 none, else index + 1
 };
 
 namespace luma {
@@ -1220,7 +1228,8 @@ namespace luma {
                 LumaMod* const pOwner = pMod->uses[i - 1];
                 const LumaModInfo* const pInfo = pOwner->info;
                 if (covers(pInfo, offsetof(LumaModInfo, dependent_gone) + sizeof(pInfo->dependent_gone)) && pInfo->dependent_gone != nullptr) {
-                    pInfo->dependent_gone(pMod);
+                    luma::guard::run(pOwner, LUMA_GUARD_STOP, "dependent_gone", reinterpret_cast<const void*>(pInfo->dependent_gone), reinterpret_cast<uintptr_t>(pMod), 0, 0, 0,
+                                     nullptr);
                 }
             }
         }
@@ -1279,9 +1288,9 @@ namespace luma {
         // start says what it still held, and the harness gets takeout.<id> once its library is closed (reload.md 3).
         void finishMod(LumaMod* pMod) {
             const LumaModInfo* const pInfo = pMod->info;
-            const bool finished = pMod->begun && covers(pInfo, offsetof(LumaModInfo, finish) + sizeof(pInfo->finish)) && pInfo->finish != nullptr;
+            bool finished = pMod->begun && covers(pInfo, offsetof(LumaModInfo, finish) + sizeof(pInfo->finish)) && pInfo->finish != nullptr;
             if (finished) {
-                pInfo->finish();
+                finished = luma::guard::run(pMod, LUMA_GUARD_STOP, "finish", reinterpret_cast<const void*>(pInfo->finish), 0, 0, 0, 0, nullptr);
             }
             luma::services::modEnd(pMod);
             const Held held = freeAll(pMod);
@@ -1314,6 +1323,7 @@ namespace luma {
 
         // A mod whose code may still run on another thread waits for the grace; one whose code cannot ends now.
         void endMod(LumaMod* pMod) {
+            luma::guard::modEnd(pMod);
             if (!pMod->published) {
                 finishMod(pMod);
                 return;
@@ -1328,7 +1338,18 @@ namespace luma {
 
     const LumaCore* core() { return &sCore; }
 
+    const char* modId(const LumaMod* pMod) { return pMod->name; }
+    const char* modFile(const LumaMod* pMod) { return pMod->file; }
+    void modCode(const LumaMod* pMod, uintptr_t* pBase, uintptr_t* pBegin, uintptr_t* pEnd) {
+        *pBase = pMod->codeBase;
+        *pBegin = pMod->codeBegin;
+        *pEnd = pMod->codeEnd;
+    }
+    u32* modFaulted(LumaMod* pMod) { return &pMod->faulted; }
+    u32* modCostSlot(LumaMod* pMod) { return &pMod->costSlot; }
+
     void frame() {
+        luma::guard::frameEnd();
         reclaim(sGone != nullptr);
         for (LumaMod** ppAt = &sGone; *ppAt != nullptr;) {
             LumaMod* const pMod = *ppAt;
@@ -1361,6 +1382,8 @@ namespace luma {
         pMod->order = order;
         pMod->library = pLibrary;
         pMod->close = close;
+        luma::guard::codeRange(pLibrary, &pMod->codeBase, &pMod->codeBegin, &pMod->codeEnd);
+        luma::guard::modBegin(pMod);
         if (pGranted != nullptr && grantedCount != 0) {
             pMod->granted = static_cast<char**>(zeroed(grantedCount, sizeof(char*)));
             if (pMod->granted == nullptr) {
@@ -1627,14 +1650,18 @@ namespace luma {
                 *static_cast<s32*>(rImport.slot) = found ? number : -1;
             }
         }
+        luma::guard::measureForHarness();
         luma::services::modBegin(pMod, pMod->name, order, pMod->granted, pMod->grantedCount);
         if (covers(pInfo, offsetof(LumaModInfo, begin) + sizeof(pInfo->begin)) && pInfo->begin != nullptr) {
             pMod->begun = true;
-            pInfo->begin(&sCore, pMod);
+            luma::guard::run(pMod, LUMA_GUARD_START, "begin", reinterpret_cast<const void*>(pInfo->begin), reinterpret_cast<uintptr_t>(&sCore), reinterpret_cast<uintptr_t>(pMod), 0, 0, nullptr);
         }
         if (pInfo->start != nullptr) {
             pMod->inStart = true;
-            const int32_t answer = pInfo->start(&sCore, pMod);
+            u64 result = 0;
+            const bool started = luma::guard::run(pMod, LUMA_GUARD_START, "start", reinterpret_cast<const void*>(pInfo->start), reinterpret_cast<uintptr_t>(&sCore), reinterpret_cast<uintptr_t>(pMod), 0, 0,
+                                                  &result);
+            const int32_t answer = static_cast<int32_t>(static_cast<uint32_t>(result));
             pMod->inStart = false;
             // Kept bytes it read are gone now (reload.md 4).
             if (Kept* const pKept = keptOf(pMod->name)) {
@@ -1642,11 +1669,16 @@ namespace luma {
                     dropKept(pKept);
                 }
             }
-            if (answer != 0) {
+            if (!started || answer != 0) {
                 pMod->startRefused = true;
                 refuse.start(512);
-                refuse.put("why", 'P', "Lib.StartRefused");
-                refuse.number("found", answer);
+                if (!started) {
+                    // The guard caught a fault in its begin or start (said in the mod log, GUARD).
+                    refuse.put("why", 'P', "Lib.StartFaulted");
+                } else {
+                    refuse.put("why", 'P', "Lib.StartRefused");
+                    refuse.number("found", answer);
+                }
                 // Hooks its start added itself go; the mods it imported from are told; it ends after the grace when any
                 // was published.
                 removeHooks(pMod);
@@ -1702,11 +1734,10 @@ namespace luma {
             removeHooks(pMod);
             luma::classes::modGone(pMod);
             luma::numbers::modGone(pMod);
-            if (pInfo->stop != nullptr) {
+            if (pInfo->stop != nullptr && !luma::guard::faulted(pMod)) {
                 pMod->inStop = true;
-                pInfo->stop();
+                pMod->stopped = luma::guard::run(pMod, LUMA_GUARD_STOP, "stop", reinterpret_cast<const void*>(pInfo->stop), 0, 0, 0, 0, nullptr);
                 pMod->inStop = false;
-                pMod->stopped = true;
             }
             tellDependentGone(pMod);
             luma::services::modGone(pMod);
