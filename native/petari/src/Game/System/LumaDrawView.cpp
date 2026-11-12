@@ -293,7 +293,7 @@ namespace luma {
 
                 // ---- Calls ----
 
-                int32_t svcCreate(const LumaMod* pMod, uint32_t w, uint32_t h, LumaColor clear, LumaDrawView* pOut) {
+                int32_t svcCreate(const LumaMod* pMod, uint32_t w, uint32_t h, LumaColor clear, LumaDrawViewRegion* pOut) {
                     const char* const pWhere = "draw.view.create";
                     if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                         return status;
@@ -347,7 +347,7 @@ namespace luma {
                     return LUMA_OK;
                 }
 
-                int32_t svcCamera(const LumaMod* pMod, LumaDrawView view, const LumaDrawVec3* pEye, const LumaDrawVec3* pAt,
+                int32_t svcCamera(const LumaMod* pMod, LumaDrawViewRegion view, const LumaDrawVec3* pEye, const LumaDrawVec3* pAt,
                                   const LumaDrawVec3* pUp, float fovY) {
                     const char* const pWhere = "draw.view.camera";
                     View* pView = nullptr;
@@ -373,7 +373,7 @@ namespace luma {
                     return LUMA_OK;
                 }
 
-                int32_t svcFollow(const LumaMod* pMod, LumaDrawView view, LumaActor actor, const LumaDrawVec3* pOffset,
+                int32_t svcFollow(const LumaMod* pMod, LumaDrawViewRegion view, LumaActor actor, const LumaDrawVec3* pOffset,
                                   float fovY) {
                     const char* const pWhere = "draw.view.follow";
                     View* pView = nullptr;
@@ -467,7 +467,7 @@ namespace luma {
                     return nullptr;
                 }
 
-                int32_t svcRig(const LumaMod* pMod, LumaDrawView view, const LumaDrawViewCamera* pCamera) {
+                int32_t svcRig(const LumaMod* pMod, LumaDrawViewRegion view, const LumaDrawViewCamera* pCamera) {
                     const char* const pWhere = "draw.view.rig";
                     View* pView = nullptr;
                     if (const s32 status = enterView(pMod, pWhere, view, &pView); status != LUMA_OK) {
@@ -537,7 +537,7 @@ namespace luma {
                     return LUMA_OK;
                 }
 
-                int32_t svcTexture(const LumaMod* pMod, LumaDrawView view, LumaDrawTexture* pOut) {
+                int32_t svcTexture(const LumaMod* pMod, LumaDrawViewRegion view, LumaDrawTexture* pOut) {
                     const char* const pWhere = "draw.view.texture";
                     View* pView = nullptr;
                     if (const s32 status = enterView(pMod, pWhere, view, &pView); status != LUMA_OK) {
@@ -550,7 +550,7 @@ namespace luma {
                     return LUMA_OK;
                 }
 
-                int32_t svcSetOn(const LumaMod* pMod, LumaDrawView view, int32_t on) {
+                int32_t svcSetOn(const LumaMod* pMod, LumaDrawViewRegion view, int32_t on) {
                     View* pView = nullptr;
                     if (const s32 status = enterView(pMod, "draw.view.set_on", view, &pView); status != LUMA_OK) {
                         return status;
@@ -559,7 +559,7 @@ namespace luma {
                     return LUMA_OK;
                 }
 
-                int32_t svcRelease(const LumaMod* pMod, LumaDrawView view) {
+                int32_t svcRelease(const LumaMod* pMod, LumaDrawViewRegion view) {
                     View* pView = nullptr;
                     if (const s32 status = enterView(pMod, "draw.view.release", view, &pView); status != LUMA_OK) {
                         return status;

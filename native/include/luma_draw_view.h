@@ -35,8 +35,8 @@ extern "C" {
 #define LUMA_DRAW_VIEW_FOV_LEAST 1.0f
 #define LUMA_DRAW_VIEW_FOV_MOST 179.0f
 
-/* A view: owned by the mod until release or its end. */
-typedef LumaHandle LumaDrawView;
+/* A view (the script's view.Region): owned by the mod until release or its end. */
+typedef LumaHandle LumaDrawViewRegion;
 
 /* Where a camera is and how it looks (a script's view.Eye): world units and axes. */
 typedef struct LumaDrawViewEye {
@@ -78,34 +78,35 @@ typedef struct LumaDrawViewService {
        w x h x 4 in its bytes). LUMA_OK and *out. A size out of range, a null out: LUMA_E_ARGUMENT, reported;
        LUMA_DRAW_VIEWS_MOST of the mod's or ALL_MOST of all, or no texture room: LUMA_E_LIMIT, reported. Off the game
        thread: LUMA_E_THREAD; while the game takes the mod out: LUMA_E_CANCELLED. */
-    int32_t (*create)(const LumaMod* mod, uint32_t w, uint32_t h, LumaColor clear, LumaDrawView* out);
+    int32_t (*create)(const LumaMod* mod, uint32_t w, uint32_t h, LumaColor clear, LumaDrawViewRegion* out);
     /* 1.0. Game thread. The view's camera from now on: at `eye`, looking at `at`, `up` its up (world units and axes),
        `fov_y` degrees high, the picture's shape the view's w / h; it stops following. LUMA_OK. Not finite, `at` at the
        eye, `up` along the look or zero, fov out of range: LUMA_E_ARGUMENT, reported; an ended view or another mod's:
        LUMA_E_HANDLE, reported. */
-    int32_t (*camera)(const LumaMod* mod, LumaDrawView view, const LumaDrawVec3* eye, const LumaDrawVec3* at,
+    int32_t (*camera)(const LumaMod* mod, LumaDrawViewRegion view, const LumaDrawVec3* eye, const LumaDrawVec3* at,
                       const LumaDrawVec3* up, float fov_y);
     /* 1.0. Game thread. The view's camera follows `actor` each frame: the eye at `offset` from its place in the
        actor's own axes (its gravity's up as y), looking at the actor's place, the actor's up as up, `fov_y` degrees.
        Until camera, another follow, or the actor's death (the camera stays where it was last). A null, dead or
        non-actor `actor`, an offset not finite or of length 0, fov out of range: LUMA_E_ARGUMENT, reported. Handle as
        camera. */
-    int32_t (*follow)(const LumaMod* mod, LumaDrawView view, LumaActor actor, const LumaDrawVec3* offset, float fov_y);
+    int32_t (*follow)(const LumaMod* mod, LumaDrawViewRegion view, LumaActor actor, const LumaDrawVec3* offset,
+                      float fov_y);
     /* 1.0. Game thread. The view's texture (a draw texture: draw.image, draw.billboard; not texture_update), the same
        handle each call; texture_free on it: LUMA_E_ARGUMENT. LUMA_OK and *out. Handle as camera; a null out:
        LUMA_E_ARGUMENT. */
-    int32_t (*texture)(const LumaMod* mod, LumaDrawView view, LumaDrawTexture* out);
+    int32_t (*texture)(const LumaMod* mod, LumaDrawViewRegion view, LumaDrawTexture* out);
     /* 1.0. Game thread. The view drawn each frame (`on` 1, as made) or not (0: no cost; its texture keeps its last
        picture). Handle as camera. */
-    int32_t (*set_on)(const LumaMod* mod, LumaDrawView view, int32_t on);
+    int32_t (*set_on)(const LumaMod* mod, LumaDrawViewRegion view, int32_t on);
     /* 1.0. Game thread. The view ended and its texture freed (a draw of it after: the checker and LUMA_E_HANDLE).
        LUMA_OK; an ended view or another mod's: LUMA_E_HANDLE, reported. */
-    int32_t (*release)(const LumaMod* mod, LumaDrawView view);
+    int32_t (*release)(const LumaMod* mod, LumaDrawViewRegion view);
     /* 1.0. Game thread. The view's camera follows `camera` each frame from now on (a FIXED rig is `camera` once), until
        camera, follow, another rig, or the rig's actor's death (the camera stays where it was last). LUMA_OK. A null
        camera, an unknown rig, a rig's field out of its range (named): LUMA_E_ARGUMENT, reported; a joint the actor's
        model lacks: LUMA_E_ARGUMENT naming "joint". Handle as camera. */
-    int32_t (*rig)(const LumaMod* mod, LumaDrawView view, const LumaDrawViewCamera* camera);
+    int32_t (*rig)(const LumaMod* mod, LumaDrawViewRegion view, const LumaDrawViewCamera* camera);
     /* 1.0. Game thread. Where `camera`'s eye is this frame (the main camera's for LumaKit camera): LUMA_OK and *out.
        Arguments as rig, a null out: LUMA_E_ARGUMENT, reported. The rig's actor dead: LUMA_E_STATE, not reported (the
        caller keeps its last eye). Never needs a view. */
