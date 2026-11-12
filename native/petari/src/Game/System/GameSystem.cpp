@@ -3,6 +3,7 @@
 #include "Game/System/LumaLoader.hpp"
 #include "Game/System/LumaContentFx.hpp"
 #include "Game/System/LumaContentModel.hpp"
+#include "Game/System/LumaAnim.hpp"
 #include "Game/System/LumaUi.hpp"
 #include "Game/System/LumaServices.hpp"
 #include "Game/System/LumaTime.hpp"
@@ -253,6 +254,7 @@ void GameSystem::update() {
     luma::services::frameStart();  // the services' events, then time's frame handlers; one load when nothing waits
     luma::content::fx::frame();    // the mods' open effects: their actors' ends and clipping; one load when none is open
     luma::content::model::frame(); // the mods' attached models: their actors' ends; one load when none is attached
+    luma::anim::frame();           // the mods' plays: ends, marks (animation 7); one load when none is going
     luma::ui::frame();             // the mods' open screens' facts (harness); one load when none is open
     NebulaMods::fire(NEBULA_MOD_EVENT_FRAME);
     NebulaSettingsMenu::update();
