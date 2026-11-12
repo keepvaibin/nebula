@@ -42,10 +42,11 @@ cbuffer View : register(b0) {
                                // rt_transmit.hlsl), y 1 where drawn
     float4 view_blend_guide;   // with bit 3 in the scene's view: x the guide blended draws compare with
                                // (traced_by_air, traced_mirror_own), y 1 the second layer's, 2 the opaque layer's, 0 none
-    float4 view_look;          // with bit 3: the painted composite's look (traced_painted): x kForm, y the stage's m
-                               // (what the art is taken to hold of the sun's facing), z kDebake, w kAmbientLook
+    float4 view_look;          // with bit 3: the painted composite's look (traced_painted): x kForm, y the sun's
+                               // height over the player's up, at least 0.5 (the relight's exposure, M3), z kDebake,
+                               // w kAmbientLook
     float4 view_dev[2];        // with bit 3: the development tunables (rt_dev.h from base_floor): [0] the values, [1] 1
-                               // where the run gave one; x base_floor
+                               // where the run gave one; x base_floor, y sun_strength, z sky_chroma, w stage_light (traced_painted)
 };
 
 cbuffer Draw : register(b3) {
@@ -307,6 +308,16 @@ bool traced_mirror_own(float4 pixel) {
     const float away = d.y / ((pixel.z - d.z) / max(d.w - d.z, 1e-7) + d.x);
     return abs(away - guide.r) <= guide.r * 0.002 + 1.0;
 }
+// sRGB's transfer: a program's colour is display-encoded; the composite's products and sums are on linear light
+// (DIRECTOR.md M1) and the result is encoded again. Past 1 both curves carry on (the finish's shoulder takes it, M7).
+float3 traced_lin(float3 c) {
+    c = max(c, 0.0);
+    return lerp(pow((c + 0.055) / 1.055, 2.4), c / 12.92, step(c, 0.04045));
+}
+float3 traced_srgb(float3 l) {
+    l = max(l, 0.0);
+    return lerp(1.055 * pow(l, 1.0 / 2.4) - 0.055, l * 12.92, step(l, 0.0031308));
+}
 float4 traced_at(float4 pixel) {
     if ((view_flags & 8u) == 0u || traced_by_air(pixel)) {
         return float4(1.0, 1.0, 1.0, 1.0);  // the volume's share is all of its light (PROGRAM_LIGHT)
@@ -357,7 +368,8 @@ float4 env_fetch(float4 painted, float4 pixel) {
         return painted;
     }
     const float4 mirror = gTextures[uint(view_traced.z)].Load(int3(pixel.xy, 0));
-    return mirror.a < -0.5 ? float4(mirror.rgb + painted.rgb * (-mirror.a - 1.0), painted.a) : painted;
+    // R is linear (the tracer's pictures); the program's stages are display-encoded: R encoded here, once.
+    return mirror.a < -0.5 ? float4(traced_srgb(mirror.rgb) + painted.rgb * (-mirror.a - 1.0), painted.a) : painted;
 }
 // The program's fetch of a painted environment map (the generator wraps it); `i` holds the pixel.
 #define ENV_FETCH(t) env_fetch(t, i.pos)
@@ -365,9 +377,11 @@ float4 env_fetch(float4 painted, float4 pixel) {
 // it faces the key (nl); the traced light keeps the key's part by V and the ambient's by O, a channel at a time
 // (a shadow takes the sky's colour, and a coloured thing's shadow its colour) and in luminance, mixed by
 // kShadowTint. In open sun with nothing near: 1.
-// The relight (DIRECTOR.md C3): the art is taken to hold A + K m, m = lerp(nl, the stage's m, kForm): kForm 0 is the
-// above (m = nl, the art's own facing divided out); 1 every painted mesh by the traced sun's facing (a side away from
-// the sun keeps A O of A + K m, a top facing it gains K (1 - m)). The ambient by kAmbientLook (D4: a look dial).
+// The relight (DIRECTOR.md section 12, October's engine v2): the stage's light in linear units from the game's own
+// lights (M2: sky = lin(A), full = lin(A + K), sun = (full - sky) kSunStrength), exposed so that a surface facing the
+// player's up in open sun shows the full light (M3: E = luma(full) / (luma(sky) + luma(full - sky) max(up.s, 0.5))):
+// share = (sky' O + sun n.s V) E / full a channel at a time, sky' the sky at kSkyChroma of its chroma (M8) by
+// kAmbientLook (D4). kForm blends from the Painted form above to it.
 // O a channel at a time (FB 22.10, plan 11): the sky and bounce light's ratio (picture view_volume[2].z - 1, rt_indirect_up)
 // scaled to the light's O (the ratio itself where O is its mean; 0 with O), for an opaque draw of the scene view where
 // that pass ran; else O as it is. `coloured` says which.
@@ -384,18 +398,36 @@ float3 traced_o(float4 light, float4 pixel, out bool coloured) {
 float3 traced_painted(float4 light, float nl, float3 o3, bool coloured) {
     const float3 v = light.rgb, a = view_stage_a.rgb, k = view_stage_k.rgb;
     const float o = light.a;
-    const float m = lerp(nl, view_look.y, view_look.x);
-    const float ga = view_look.w;
-    const float3 held = a + k * m;
-    const float3 channel = float3(held.r > 1e-4 ? (ga * a.r * o3.r + k.r * nl * v.r) / held.r : 1.0,
-                                  held.g > 1e-4 ? (ga * a.g * o3.g + k.g * nl * v.g) / held.g : 1.0,
-                                  held.b > 1e-4 ? (ga * a.b * o3.b + k.b * nl * v.b) / held.b : 1.0);
     const float3 luminance = float3(0.2126, 0.7152, 0.0722);
-    const float al = dot(a, luminance), kl = dot(k, luminance);
+    // Painted: the art's A + K nl divided out, the traced light's put back.
+    const float3 whole = a + k * nl;
+    const float3 channel = float3(whole.r > 1e-4 ? (a.r * o3.r + k.r * nl * v.r) / whole.r : 1.0,
+                                  whole.g > 1e-4 ? (a.g * o3.g + k.g * nl * v.g) / whole.g : 1.0,
+                                  whole.b > 1e-4 ? (a.b * o3.b + k.b * nl * v.b) / whole.b : 1.0);
+    const float al = dot(a, luminance), kl = dot(k, luminance) * nl;
     const float ao = coloured ? dot(a * o3, luminance) : al * o;
-    const float held_l = al + kl * m;
-    const float mean = held_l > 1e-4 ? (ga * ao + kl * nl * dot(v, luminance)) / held_l : 1.0;
-    return lerp(float3(mean, mean, mean), channel, view_stage_a.w);
+    const float mean = al + kl > 1e-4 ? (ao + kl * dot(v, luminance)) / (al + kl) : 1.0;
+    // The Painted share is a ratio of display values; on linear colour its look holds by the power law's 2.2.
+    const float3 painted = pow(max(lerp(float3(mean, mean, mean), channel, view_stage_a.w), 0.0), 2.2);
+    if (view_look.x <= 0.0) {
+        return painted;
+    }
+    // The relight (M2, M3, M8): rt_dev.h sun_strength and sky_chroma over October's 1.25 and 0.4; stage_light 1
+    // October's own (the stage's light as it is: a dim or coloured stage dims and tints the art), 0 the art's own
+    // brightness kept (divided by the full light).
+    const float sun_strength = view_dev[1].y > 0.5 ? view_dev[0].y : 1.25;
+    const float sky_chroma = view_dev[1].z > 0.5 ? view_dev[0].z : 0.4;
+    const float stage_light = view_dev[1].w > 0.5 ? view_dev[0].w : 0.0;
+    const float3 sky = traced_lin(a), full = traced_lin(saturate(a + k));
+    const float3 key = max(full - sky, 0.0);
+    const float exposure = dot(full, luminance) / max(dot(sky, luminance) + dot(key, luminance) * view_look.y, 1e-4);
+    const float sky_l = dot(sky, luminance);
+    const float3 sky_seen = view_look.w * lerp(float3(sky_l, sky_l, sky_l), sky, sky_chroma);
+    const float3 lit = (sky_seen * o3 + key * (sun_strength * nl) * v) * exposure;
+    const float3 held = lerp(full, float3(1.0, 1.0, 1.0), stage_light);
+    const float3 relit = float3(held.r > 1e-4 ? lit.r / held.r : 1.0, held.g > 1e-4 ? lit.g / held.g : 1.0,
+                                held.b > 1e-4 ? lit.b / held.b : 1.0);
+    return lerp(painted, relit, view_look.x);
 }
 float4 traced_colour(float4 c, float4 pixel) {
     if ((view_flags & 8u) == 0u) {
@@ -418,7 +450,10 @@ float4 traced_colour(float4 c, float4 pixel) {
     // The added light by the surface's colour before lighting (a painted program's colour is that already).
     const float kBaseFloor = view_dev[1].x > 0.5 ? view_dev[0].x : 0.2;  // rt_dev.h base_floor
     const float3 base = g_traced_lit ? c.rgb / max(g_traced_level, kBaseFloor) : c.rgb;
-    return traced_mirror(c.rgb * share + base * added, c.a, pixel);
+    // In linear light (M1): the colour and its base decoded, the share, the added light and the mirror's exchange on
+    // them (the tracer's pictures are linear), the result encoded.
+    const float4 seen = traced_mirror(traced_lin(c.rgb) * share + traced_lin(base) * added, c.a, pixel);
+    return float4(traced_srgb(seen.rgb), seen.a);
 }
 // The light in the air (rt/rt_volume.hlsl, the master plan's 15.2), for a draw that is lit and not a light (draw flag
 // 4: a particle that is no light): its colour times what of the stage's light and the local lights' reaches the air
@@ -436,7 +471,7 @@ float4 traced_air(float4 c, float4 pixel) {
     const float3 at = float3((pixel.xy - view_volume[1].xy) / view_volume[1].zw, log(max(away, 1.0) / 50.0) / log(400.0));
     const float3 inner = clamp(at, 0.5 / cells, 1.0 - 0.5 / cells);
     const float4 air = gVolumes[uint(view_volume[2].x) - 1u].SampleLevel(gSamplers[uint(view_volume[2].y)], inner, 0.0);
-    return float4(c.rgb * air.rgb, c.a);
+    return float4(traced_srgb(traced_lin(c.rgb) * air.rgb), c.a);  // in linear light (M1)
 }
 // The light the air between the eye and the pixel scatters toward the eye (rt/rt_scatter.hlsl, 15.4; High, a stage
 // with air), added, for a draw that covers or alpha-blends (draw flag 8): its picture's place + 1 in view_volume[2].w.
@@ -457,7 +492,8 @@ float4 traced_scatter(float4 c, float4 pixel) {
     if (alone) {
         return float4(air.rgb / (1.0 + air.rgb), c.a);
     }
-    return float4(c.rgb * air.a + air.rgb, c.a);  // what the air lets through of the colour, and its own light (FB)
+    // What the air lets through of the colour, and its own light (FB), in linear light (M1).
+    return float4(traced_srgb(traced_lin(c.rgb) * air.a + air.rgb), c.a);
 }
 #if NATIVE_PREPASS
 float3 program_fog(float3 c, float3 colour, float amount) { return lerp(c, colour, amount); }
