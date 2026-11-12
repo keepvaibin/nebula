@@ -41,6 +41,7 @@ enum class RtDev : std::uint8_t {
     BaseFloor,      // traced_colour's kBaseFloor: a lit program's colour over at most 1 / this
     SunStrength,    // traced_painted: the relight's sun over the stage's key (M2, October's 1.25)
     SkyChroma,      // traced_painted: the share of the sky's chroma its light keeps in shade (M8, October's 0.4)
+    StageLight,     // traced_painted: 1 the relight lit by the stage's light as it is (October's), 0 divided by it
     // The tracer's (rt_frame.hlsli g_dev): from GlassShine, in this order.
     GlassShine,       // rt_mirror.hlsli: glass's F0 over ((ior - 1) / (ior + 1))^2 (kShine 2.0)
     WaterShine,       // water's (1.5)
@@ -66,8 +67,8 @@ inline constexpr std::string_view kRtDevNames[kRtDevCount] = {
     "ambient_gain",   "sun_gain",      "full_facing",    "bounce_ambient", "wrap",         "sky_gain",
     "area_emission",  "hit_sky",       "bounce",         "bounce_max",    "sky_min",       "hit_dark",
     "sun_glint",      "hit_gain",      "air_scale",      "sky_in_shadow", "light_srgb",    "base_floor",
-    "sun_strength",   "sky_chroma",    "glass_shine",    "water_shine",   "painted_glass", "painted_metal",
-    "painted_gloss",  "painted_mirror", "substitute_glass", "keep_metal", "keep_gloss",
+    "sun_strength",   "sky_chroma",    "stage_light",    "glass_shine",   "water_shine",   "painted_glass",
+    "painted_metal",  "painted_gloss", "painted_mirror", "substitute_glass", "keep_metal", "keep_gloss",
 };
 
 }  // namespace galaxy::render
