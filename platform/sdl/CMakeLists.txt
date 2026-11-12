@@ -250,7 +250,8 @@ if(ANDROID)
         ${rt}/input/wiimote_input.cpp
         ${rt}/input/wiimote_motion_pointer.cpp)
     add_library(main SHARED ${host_sources})
-    target_link_libraries(main PRIVATE android log nativewindow)
+    # aaudio, camera2ndk, mediandk: LumaCore's capture services (plan 8.2 c, runtime/src/luma_capture.cpp).
+    target_link_libraries(main PRIVATE android log nativewindow aaudio camera2ndk mediandk)
 else()
     add_executable(main ${host_sources})
     set_target_properties(main PROPERTIES OUTPUT_NAME nebula)

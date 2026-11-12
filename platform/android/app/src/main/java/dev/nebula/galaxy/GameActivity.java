@@ -112,8 +112,51 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
         return BuildConfig.DEBUG && getIntent().getBooleanExtra("nebula.profile", false);
     }
 
+    // A harness run (plan 8.2 b; debug builds only, as the profiling run): the test runner's folder under the app's
+    // private data, pushed there over adb (agents/luma/d/platforms/android/suite_android.py) and named by the
+    // intent's "nebula.harness". A name with anything but letters, digits, '.', '_' and '-' is no harness run.
+    private String harnessRun() {
+        if (!BuildConfig.DEBUG) {
+            return null;
+        }
+        final String name = getIntent().getStringExtra("nebula.harness");
+        return name != null && name.matches("[A-Za-z0-9._-]{1,64}") ? name : null;
+    }
+
+    private File harnessFolder() {
+        return new File(new File(GameFiles.data(this), "harness"), harnessRun());
+    }
+
     private File nativeData() {
+        if (harnessRun() != null) {
+            return new File(harnessFolder(), "appdata");
+        }
         return isProfileRun() ? new File(GameFiles.data(this), "profiling") : GameFiles.data(this);
+    }
+
+    // The desktop runner's names for a run's private folders (luma_test.py run_one): the test extension's data guard
+    // declines to start without them.
+    private void passHarness(File run) {
+        final String[][] names = {
+            {"NEBULA_WORK", run.getPath()},
+            {"NEBULA_SETTINGS", new File(run, "settings").getPath()},
+            {"NEBULA_SAVES", new File(run, "saves").getPath()},
+            {"NEBULA_APPDATA", new File(run, "appdata").getPath()},
+            {"GALAXY_RENDER_CONFIG_PATH", new File(run, "settings/config.ini").getPath()},
+            {"GALAXY_RUNTIME_SETTINGS_PATH", new File(run, "settings/runtime_settings.ini").getPath()},
+            {"GALAXY_CRASH_DUMP_DIR", run.getPath()},
+            {"GALAXY_AUDIO_WAV_DUMP_ONLY", "1"},
+            {"GALAXY_AUDIO_WAV_DUMP", new File(run, "audio.wav").getPath()},
+            {"GALAXY_AUDIO_WAV_DUMP_SECONDS", String.valueOf(getIntent().getIntExtra("nebula.seconds", 60))},
+            {"LUMA_HARNESS_PLAN", new File(run, "plan.txt").getPath()},
+        };
+        try {
+            for (String[] pair : names) {
+                android.system.Os.setenv(pair[0], pair[1], true);
+            }
+        } catch (android.system.ErrnoException failed) {
+            throw new IllegalStateException("harness run: the environment could not be set", failed);
+        }
     }
 
     /** The game's language follows the device's where the disc has it (runtime_settings.cpp reads LANG). */
@@ -128,6 +171,23 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     @Override
     protected String[] getArguments() {
         passLocale();
+        if (harnessRun() != null) {
+            // The desktop runner's command (luma_test.py run_one), with this app's game module and test extension.
+            final File run = harnessFolder();
+            passHarness(run);
+            final String libraries = getApplicationInfo().nativeLibraryDir;
+            return new String[] {
+                "--data", new File(run, "appdata").getPath(),
+                "--pak", GameFiles.pak(this).getPath(),
+                "--saves", new File(run, "saves").getPath(),
+                "--settings", new File(run, "settings").getPath(),
+                "--seconds", String.valueOf(getIntent().getIntExtra("nebula.seconds", 60)),
+                "--crash-dumps", run.getPath(),
+                "--module", libraries + "/libsmg_game.so",
+                "--extension", libraries + "/libnebula_test_extension.so",
+                "--diagnostics", "0",
+            };
+        }
         // The launcher's Record diagnostics: this run only.
         final SharedPreferences prefs = GameFiles.controls(this);
         final boolean record = isProfileRun() || prefs.getBoolean(GameFiles.RECORD_NEXT_RUN, false);

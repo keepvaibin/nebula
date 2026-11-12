@@ -6,9 +6,9 @@
 // thread end by itself (it holds the item through a shared_ptr, so nothing it touches is freed under it).
 //
 // Devices: Windows, WASAPI (shared mode, the default capture endpoint) and Media Foundation (the first video
-// capture source, its video processor converting to RGB32). Other platforms answer LUMA_E_ABSENT until their
-// backends land (plan 8.2: AAudio and Camera2 on Android; Core Audio and AVFoundation on Apple; PipeWire and V4L2 on
-// Linux).
+// capture source, its video processor converting to RGB32); Android, AAudio (the default input) and the NDK's
+// Camera2 (the first camera through an image reader, YUV 4:2:0 converted to RGBA; plan 8.2 c). Other platforms
+// answer LUMA_E_ABSENT until their backends land (Core Audio and AVFoundation on Apple; PipeWire and V4L2 on Linux).
 #include "galaxy/luma_capture_service.h"
 
 #include <luma_capture.h>
@@ -45,6 +45,17 @@
 #pragma comment(lib, "mf.lib")
 #pragma comment(lib, "mfreadwrite.lib")
 #pragma comment(lib, "mfuuid.lib")
+#elif defined(__ANDROID__)
+// plan 8.2 c: AAudio (the microphone) and the NDK's Camera2 with an image reader (the camera).
+#include <aaudio/AAudio.h>
+#include <camera/NdkCameraCaptureSession.h>
+#include <camera/NdkCameraDevice.h>
+#include <camera/NdkCameraManager.h>
+#include <camera/NdkCameraMetadata.h>
+#include <camera/NdkCaptureRequest.h>
+#include <media/NdkImage.h>
+#include <media/NdkImageReader.h>
+#include <SDL3/SDL_system.h>  // the system's question to the player for a device (the Android host is the SDL host)
 #endif
 
 namespace galaxy::luma_capture {
@@ -484,6 +495,306 @@ void camera_thread(std::shared_ptr<Item> item) {
     }
     if (SUCCEEDED(com)) {
         CoUninitialize();
+    }
+}
+
+constexpr bool kHasDevices = true;
+#elif defined(__ANDROID__)
+
+// ---- Android (plan 8.2 c): AAudio and the NDK's Camera2 -------------------------------------------------------------
+
+// The player's answer to the system's question for a device: -1 until it comes.
+struct Asked {
+    std::atomic<int> answer{-1};
+};
+
+void asked_answer(void* userdata, const char*, bool granted) {
+    // The callback's own reference: the asking thread may have gone on (stop) before the player answered.
+    auto* const held = static_cast<std::shared_ptr<Asked>*>(userdata);
+    (*held)->answer.store(granted ? 1 : 0, std::memory_order_release);
+    delete held;
+}
+
+// Whether the app may use the device `permission` names: the system asks the player the first time (a mod reaches
+// here only after the player consented to its capture permission, contract consent); false when refused, when the
+// question cannot be asked, or when the item is closed before the answer.
+bool may_use(const Item& item, const char* permission) {
+    const auto asked = std::make_shared<Asked>();
+    auto* const held = new std::shared_ptr<Asked>(asked);
+    if (!SDL_RequestAndroidPermission(permission, asked_answer, held)) {
+        delete held;
+        return false;
+    }
+    while (asked->answer.load(std::memory_order_acquire) < 0) {
+        if (item.stop.load(std::memory_order_acquire)) {
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    return asked->answer.load(std::memory_order_acquire) == 1;
+}
+
+// The default input until stop: ABSENT when there is none or the app may not record (the player refused
+// RECORD_AUDIO), IO when it goes (unplugged, taken by a call).
+void microphone_thread(std::shared_ptr<Item> item) {
+    AAudioStreamBuilder* builder = nullptr;
+    AAudioStream* stream = nullptr;
+    std::int32_t status = LUMA_E_ABSENT;
+    Converter converter;
+    do {
+        if (!may_use(*item, "android.permission.RECORD_AUDIO")) {
+            break;
+        }
+        if (AAudio_createStreamBuilder(&builder) != AAUDIO_OK) {
+            break;
+        }
+        AAudioStreamBuilder_setDirection(builder, AAUDIO_DIRECTION_INPUT);
+        AAudioStreamBuilder_setFormat(builder, AAUDIO_FORMAT_PCM_FLOAT);
+        AAudioStreamBuilder_setChannelCount(builder, static_cast<std::int32_t>(item->channels));
+        AAudioStreamBuilder_setSharingMode(builder, AAUDIO_SHARING_MODE_SHARED);
+        AAudioStreamBuilder_setPerformanceMode(builder, AAUDIO_PERFORMANCE_MODE_NONE);
+        if (AAudioStreamBuilder_openStream(builder, &stream) != AAUDIO_OK || stream == nullptr) {
+            break;
+        }
+        const std::int32_t in_rate = AAudioStream_getSampleRate(stream);
+        const std::int32_t in_channels = AAudioStream_getChannelCount(stream);
+        if (in_rate <= 0 || in_channels <= 0 || AAudioStream_getFormat(stream) != AAUDIO_FORMAT_PCM_FLOAT ||
+            AAudioStream_requestStart(stream) != AAUDIO_OK) {
+            break;
+        }
+        status = LUMA_OK;
+        // A fiftieth of a second a read; a read waits at most a tenth, so stop is seen soon.
+        const std::int32_t frames_a_read = std::max(in_rate / 50, 64);
+        std::vector<float> floats(static_cast<std::size_t>(frames_a_read) * static_cast<std::size_t>(in_channels));
+        while (!item->stop.load(std::memory_order_acquire)) {
+            const aaudio_result_t got = AAudioStream_read(stream, floats.data(), frames_a_read, 100000000);
+            if (got < 0) {
+                status = LUMA_E_IO;  // AAUDIO_ERROR_DISCONNECTED and the like
+                break;
+            }
+            if (got > 0) {
+                converter.push(*item, floats.data(), static_cast<std::size_t>(got), static_cast<std::uint32_t>(in_channels),
+                               static_cast<std::uint32_t>(in_rate));
+            }
+        }
+        (void)AAudioStream_requestStop(stream);
+    } while (false);
+    if (status != LUMA_OK) {
+        const std::lock_guard<std::mutex> lock(g_lock);
+        end_locked(item.get(), status);
+    }
+    if (stream != nullptr) {
+        (void)AAudioStream_close(stream);
+    }
+    if (builder != nullptr) {
+        (void)AAudioStreamBuilder_delete(builder);
+    }
+}
+
+// What the camera's own callbacks tell its thread.
+struct CameraState {
+    std::atomic<bool> gone{false};
+};
+
+void camera_disconnected(void* context, ACameraDevice*) {
+    static_cast<CameraState*>(context)->gone.store(true, std::memory_order_release);
+}
+
+void camera_error(void* context, ACameraDevice*, int) {
+    static_cast<CameraState*>(context)->gone.store(true, std::memory_order_release);
+}
+
+void session_quiet(void*, ACameraCaptureSession*) {}
+
+// One byte of colour from YUV (BT.601, full swing as the camera's JPEG-range output).
+inline std::uint8_t to_byte(int v) noexcept {
+    return static_cast<std::uint8_t>(v < 0 ? 0 : (v > 255 ? 255 : v));
+}
+
+// The first camera until stop, its YUV 4:2:0 pictures converted to RGBA rows top first: ABSENT when there is none or
+// the app may not use it (CAMERA not granted), IO when it goes.
+void camera_thread(std::shared_ptr<Item> item) {
+    ACameraManager* manager = ACameraManager_create();
+    ACameraIdList* ids = nullptr;
+    ACameraMetadata* about = nullptr;
+    ACameraDevice* device = nullptr;
+    AImageReader* reader = nullptr;
+    ACaptureRequest* request = nullptr;
+    ACameraOutputTarget* target = nullptr;
+    ACaptureSessionOutputContainer* outputs = nullptr;
+    ACaptureSessionOutput* output = nullptr;
+    ACameraCaptureSession* session = nullptr;
+    CameraState state;
+    std::int32_t status = LUMA_E_ABSENT;
+    std::vector<std::uint8_t> picture;
+    do {
+        if (!may_use(*item, "android.permission.CAMERA")) {
+            break;
+        }
+        if (manager == nullptr || ACameraManager_getCameraIdList(manager, &ids) != ACAMERA_OK || ids == nullptr ||
+            ids->numCameras < 1) {
+            break;
+        }
+        const char* const id = ids->cameraIds[0];
+        // The size: the one asked when the camera gives it as YUV 4:2:0, else its first such size (its own).
+        std::int32_t width = 0;
+        std::int32_t height = 0;
+        if (ACameraManager_getCameraCharacteristics(manager, id, &about) == ACAMERA_OK && about != nullptr) {
+            ACameraMetadata_const_entry sizes{};
+            if (ACameraMetadata_getConstEntry(about, ACAMERA_SCALER_AVAILABLE_STREAM_CONFIGURATIONS, &sizes) == ACAMERA_OK) {
+                for (std::uint32_t i = 0; i + 3u < sizes.count; i += 4u) {  // format, width, height, input
+                    if (sizes.data.i32[i] != AIMAGE_FORMAT_YUV_420_888 || sizes.data.i32[i + 3u] != 0) {
+                        continue;
+                    }
+                    const std::int32_t w = sizes.data.i32[i + 1u];
+                    const std::int32_t h = sizes.data.i32[i + 2u];
+                    if (width == 0) {
+                        width = w;
+                        height = h;
+                    }
+                    if (static_cast<std::uint32_t>(w) == item->width && static_cast<std::uint32_t>(h) == item->height) {
+                        width = w;
+                        height = h;
+                        break;
+                    }
+                }
+            }
+        }
+        if (width <= 0 || height <= 0) {
+            break;
+        }
+        ACameraDevice_StateCallbacks device_calls{};
+        device_calls.context = &state;
+        device_calls.onDisconnected = camera_disconnected;
+        device_calls.onError = camera_error;
+        if (ACameraManager_openCamera(manager, id, &device_calls, &device) != ACAMERA_OK || device == nullptr) {
+            break;  // ACAMERA_ERROR_PERMISSION_DENIED, or in use
+        }
+        if (AImageReader_new(width, height, AIMAGE_FORMAT_YUV_420_888, 2, &reader) != AMEDIA_OK || reader == nullptr) {
+            break;
+        }
+        ANativeWindow* window = nullptr;
+        if (AImageReader_getWindow(reader, &window) != AMEDIA_OK || window == nullptr) {
+            break;
+        }
+        ACameraCaptureSession_stateCallbacks session_calls{};
+        session_calls.context = &state;
+        session_calls.onClosed = session_quiet;
+        session_calls.onReady = session_quiet;
+        session_calls.onActive = session_quiet;
+        if (ACameraDevice_createCaptureRequest(device, TEMPLATE_PREVIEW, &request) != ACAMERA_OK ||
+            ACameraOutputTarget_create(window, &target) != ACAMERA_OK ||
+            ACaptureRequest_addTarget(request, target) != ACAMERA_OK ||
+            ACaptureSessionOutputContainer_create(&outputs) != ACAMERA_OK ||
+            ACaptureSessionOutput_create(window, &output) != ACAMERA_OK ||
+            ACaptureSessionOutputContainer_add(outputs, output) != ACAMERA_OK ||
+            ACameraDevice_createCaptureSession(device, outputs, &session_calls, &session) != ACAMERA_OK ||
+            ACameraCaptureSession_setRepeatingRequest(session, nullptr, 1, &request, nullptr) != ACAMERA_OK) {
+            break;
+        }
+        status = LUMA_OK;
+        const auto w = static_cast<std::size_t>(width);
+        const auto h = static_cast<std::size_t>(height);
+        picture.resize(w * h * 4u);
+        while (!item->stop.load(std::memory_order_acquire)) {
+            if (state.gone.load(std::memory_order_acquire)) {
+                status = LUMA_E_IO;
+                break;
+            }
+            AImage* image = nullptr;
+            if (AImageReader_acquireLatestImage(reader, &image) != AMEDIA_OK || image == nullptr) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(4));  // none yet
+                continue;
+            }
+            std::uint8_t* y_plane = nullptr;
+            std::uint8_t* u_plane = nullptr;
+            std::uint8_t* v_plane = nullptr;
+            int y_length = 0;
+            int u_length = 0;
+            int v_length = 0;
+            std::int32_t y_row = 0;
+            std::int32_t uv_row = 0;
+            std::int32_t uv_step = 0;
+            const bool planes = AImage_getPlaneData(image, 0, &y_plane, &y_length) == AMEDIA_OK &&
+                                AImage_getPlaneData(image, 1, &u_plane, &u_length) == AMEDIA_OK &&
+                                AImage_getPlaneData(image, 2, &v_plane, &v_length) == AMEDIA_OK &&
+                                AImage_getPlaneRowStride(image, 0, &y_row) == AMEDIA_OK &&
+                                AImage_getPlaneRowStride(image, 1, &uv_row) == AMEDIA_OK &&
+                                AImage_getPlanePixelStride(image, 1, &uv_step) == AMEDIA_OK;
+            // Every read below stays inside the planes' lengths.
+            const bool whole = planes && y_row >= width && uv_row > 0 && uv_step > 0 &&
+                               static_cast<std::size_t>(y_length) >= static_cast<std::size_t>(y_row) * (h - 1u) + w &&
+                               static_cast<std::size_t>(u_length) >=
+                                   static_cast<std::size_t>(uv_row) * ((h - 1u) / 2u) + ((w - 1u) / 2u) * static_cast<std::size_t>(uv_step) + 1u &&
+                               static_cast<std::size_t>(v_length) >=
+                                   static_cast<std::size_t>(uv_row) * ((h - 1u) / 2u) + ((w - 1u) / 2u) * static_cast<std::size_t>(uv_step) + 1u;
+            if (whole) {
+                for (std::size_t row = 0; row < h; ++row) {
+                    const std::uint8_t* ys = y_plane + row * static_cast<std::size_t>(y_row);
+                    const std::uint8_t* us = u_plane + (row / 2u) * static_cast<std::size_t>(uv_row);
+                    const std::uint8_t* vs = v_plane + (row / 2u) * static_cast<std::size_t>(uv_row);
+                    std::uint8_t* to = picture.data() + row * w * 4u;
+                    for (std::size_t x = 0; x < w; ++x) {
+                        const int luma = ys[x];
+                        const int cb = us[(x / 2u) * static_cast<std::size_t>(uv_step)] - 128;
+                        const int cr = vs[(x / 2u) * static_cast<std::size_t>(uv_step)] - 128;
+                        to[x * 4u] = to_byte(luma + ((cr * 359) >> 8));
+                        to[x * 4u + 1u] = to_byte(luma - ((cb * 88 + cr * 183) >> 8));
+                        to[x * 4u + 2u] = to_byte(luma + ((cb * 454) >> 8));
+                        to[x * 4u + 3u] = 255u;
+                    }
+                }
+                const auto now = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    std::chrono::steady_clock::now().time_since_epoch()).count());
+                const std::lock_guard<std::mutex> lock(g_lock);
+                if (!item->closed) {
+                    item->skipped |= item->fresh;
+                    item->ready.swap(picture);
+                    item->fresh = true;
+                    item->ready_width = static_cast<std::uint32_t>(width);
+                    item->ready_height = static_cast<std::uint32_t>(height);
+                    item->ready_time = now;
+                    post_locked(item.get());
+                }
+                picture.resize(w * h * 4u);
+            }
+            AImage_delete(image);
+        }
+        (void)ACameraCaptureSession_stopRepeating(session);
+    } while (false);
+    if (status != LUMA_OK) {
+        const std::lock_guard<std::mutex> lock(g_lock);
+        end_locked(item.get(), status);
+    }
+    if (session != nullptr) {
+        ACameraCaptureSession_close(session);
+    }
+    if (output != nullptr) {
+        ACaptureSessionOutput_free(output);
+    }
+    if (outputs != nullptr) {
+        ACaptureSessionOutputContainer_free(outputs);
+    }
+    if (target != nullptr) {
+        ACameraOutputTarget_free(target);
+    }
+    if (request != nullptr) {
+        ACaptureRequest_free(request);
+    }
+    if (device != nullptr) {
+        (void)ACameraDevice_close(device);
+    }
+    if (reader != nullptr) {
+        AImageReader_delete(reader);
+    }
+    if (about != nullptr) {
+        ACameraMetadata_free(about);
+    }
+    if (ids != nullptr) {
+        ACameraManager_deleteCameraIdList(ids);
+    }
+    if (manager != nullptr) {
+        ACameraManager_delete(manager);
     }
 }
 
