@@ -464,7 +464,8 @@ float4 traced_colour(float4 c, float4 pixel) {
     }
     // The added light by the surface's colour before lighting (a painted program's colour is that already).
     const float kBaseFloor = view_dev[1].x > 0.5 ? view_dev[0].x : 0.2;  // rt_dev.h base_floor
-    const float3 base = g_traced_lit ? c.rgb / max(g_traced_level, kBaseFloor) : c.rgb;
+    // An albedo: at most 1 a channel (A3-F7: a highlight in c over a small level is no colour).
+    const float3 base = g_traced_lit ? min(c.rgb / max(g_traced_level, kBaseFloor), 1.0) : c.rgb;
     // In linear light (M1): the colour and its base decoded, the share, the added light and the mirror's exchange on
     // them (the tracer's pictures are linear), the result encoded.
     const float4 seen = traced_mirror(traced_lin(c.rgb) * share + (metal ? float3(0.0, 0.0, 0.0) : traced_lin(base) * added), c.a, pixel);
