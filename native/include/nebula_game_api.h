@@ -593,6 +593,8 @@ enum {
                                                 next: APPLY, before: REVERT, back: CLOSE */
     NEBULA_SETTINGS_STATUS_MOD_REMOVE_ASK,   /* remove the mod whose page is open? `status_number` 1: it goes to the
                                                 recycle bin, 0: it is deleted. yes: APPLY, no: CLOSE */
+    NEBULA_SETTINGS_STATUS_MOD_FORGET_ASK,   /* forget what a removed mod kept (its numbers and saved data)?
+                                                `status_text` its id. yes: APPLY, no: CLOSE */
 };
 /* The Pair Joy-Con screen's halves (NEBULA_SETTINGS_STATUS_JOYCON). */
 enum {
