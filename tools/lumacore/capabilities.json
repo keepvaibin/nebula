@@ -71,6 +71,7 @@
     "modscreen.page": "Each row of a mod's page is the fact modscreen.<id> as shown, each time the page opens (harness 4, 6.2)",
     "mods.safe_start": "A safe start (--safe-start 1, Shift at the start) plans every mod off for that start and keeps the player's choices; the Mods tab says so (6.6)",
     "mods.safe_start.crash": "After a crash with mods on the next start is safe by itself and the Mods tab says why; the start after is not (6.6)",
+    "mods.blocklist": "BLOCK on a mod's page turns it off and keeps it off at every start, whatever the player's choices say, until UNBLOCK on its page (6.6)",
     "validator.start.kept": "A package unchanged since the last start (names, sizes, times, then content) is not validated again: its kept findings are read back (validator 2)",
     "modlog.text": "Entries shown in the player's language with the language's font (3.12)",
     "modlog.keep": "One entry a (file, line, code): repeats are counted on it, never new lines (3.12)",

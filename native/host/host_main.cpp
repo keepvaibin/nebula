@@ -4074,7 +4074,16 @@ int main(int argc, char** argv) {
                 log_line("mods:", safe == galaxy::mods::SafeStart::kAsked
                                       ? "safe start: every mod is off for this start"
                                       : "safe start: the last run crashed with mods on; every mod is off for this start");
-                for (galaxy::mods::ModInfo& mod : mods) mod.enabled = false;
+                // The harness's own game half (luma-test, placed by tools/lumacore/luma_test.py in a harness run) is the
+                // test's instrument, not a player's mod: it stays on, or no safe start could be run as a test.
+#if defined(_WIN32)
+                const bool harness_run = GetEnvironmentVariableA("LUMA_HARNESS_PLAN", nullptr, 0) != 0;
+#else
+                const bool harness_run = std::getenv("LUMA_HARNESS_PLAN") != nullptr;
+#endif
+                for (galaxy::mods::ModInfo& mod : mods) {
+                    if (!(harness_run && mod.id == "luma-test")) mod.enabled = false;
+                }
             } else if (std::any_of(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) { return mod.enabled; })) {
                 // A crash from here on (the cook, the packs, the game) makes the next start safe; svc_mods_start
                 // narrows it to the code when code is on.
