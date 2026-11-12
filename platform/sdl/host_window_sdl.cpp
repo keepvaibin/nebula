@@ -14,6 +14,7 @@
 #include "galaxy/render_api.h"
 #include "galaxy/render/host_window.h"
 #include "galaxy/luma_system_platform.h"
+#include "galaxy/luma_input_service.h"
 #include <deque>
 #include "sdl_host.h"
 
@@ -1064,9 +1065,10 @@ void run_requests() {
 
 void pump_events(int timeout_ms) noexcept {
     SDL_Event event;
-    // A mod's text option being typed in: SDL's text events, and the system's on-screen keyboard where there is one.
+    // A mod's text option being typed in, or LumaCore's text request (input.text_request) open: SDL's text events, and
+    // the system's on-screen keyboard where there is one.
     if (g_window != nullptr) {
-        const bool wanted = galaxy::render::native_settings_text_wanted();
+        const bool wanted = galaxy::render::native_settings_text_wanted() || galaxy::luma_input::text_open();
         if (wanted != SDL_TextInputActive(g_window)) {
             (void)(wanted ? SDL_StartTextInput(g_window) : SDL_StopTextInput(g_window));
         }
@@ -1168,6 +1170,7 @@ void pump_events(int timeout_ms) noexcept {
         case SDL_EVENT_WINDOW_FOCUS_LOST:
             g_input.window_focused = false;
             g_input.keys = {};
+            galaxy::luma_input::text_focus_lost();
             break;
         case SDL_EVENT_FINGER_DOWN:
         case SDL_EVENT_FINGER_MOTION:
@@ -1218,10 +1221,34 @@ void pump_events(int timeout_ms) noexcept {
             break;
         }
         case SDL_EVENT_TEXT_INPUT:
-            if (event.text.text != nullptr) (void)galaxy::render::native_settings_handle_window_text(event.text.text);
+            // An open text request takes the text first (its keys too, below); otherwise a Settings text field.
+            if (event.text.text != nullptr) {
+                if (galaxy::luma_input::text_open()) {
+                    galaxy::luma_input::text_utf8(event.text.text);
+                } else {
+                    (void)galaxy::render::native_settings_handle_window_text(event.text.text);
+                }
+            }
             break;
         case SDL_EVENT_KEY_DOWN:
         case SDL_EVENT_KEY_UP:
+            if (event.type == SDL_EVENT_KEY_DOWN && galaxy::luma_input::text_open()) {
+                using galaxy::luma_input::TextKey;
+                switch (event.key.scancode) {
+                case SDL_SCANCODE_RETURN:
+                case SDL_SCANCODE_KP_ENTER: galaxy::luma_input::text_key(TextKey::Enter); break;
+                case SDL_SCANCODE_ESCAPE:
+                case SDL_SCANCODE_AC_BACK: galaxy::luma_input::text_key(TextKey::Escape); break;
+                case SDL_SCANCODE_BACKSPACE: galaxy::luma_input::text_key(TextKey::Backspace); break;
+                case SDL_SCANCODE_DELETE: galaxy::luma_input::text_key(TextKey::Delete); break;
+                case SDL_SCANCODE_LEFT: galaxy::luma_input::text_key(TextKey::Left); break;
+                case SDL_SCANCODE_RIGHT: galaxy::luma_input::text_key(TextKey::Right); break;
+                case SDL_SCANCODE_HOME: galaxy::luma_input::text_key(TextKey::Home); break;
+                case SDL_SCANCODE_END: galaxy::luma_input::text_key(TextKey::End); break;
+                default: break;
+                }
+                break;
+            }
             if (event.key.scancode == SDL_SCANCODE_AC_BACK) {
                 // Android's back gesture: the HOME button, as the HOME Menu opens with it; in an open menu, back.
                 const bool down = event.type == SDL_EVENT_KEY_DOWN;
@@ -1568,6 +1595,7 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
     {
         std::lock_guard<std::mutex> lock(galaxy::sdl::g_input_mutex);
         galaxy::sdl::g_window = window;
+        galaxy::luma_input::set_text_entry_available(true);
         galaxy::sdl::update_window_size();
         backbuffer_width = static_cast<unsigned>(galaxy::sdl::g_input.window_width);
         backbuffer_height = static_cast<unsigned>(galaxy::sdl::g_input.window_height);

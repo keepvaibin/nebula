@@ -37,8 +37,10 @@
 #include "galaxy/discord_presence.h"
 #include "galaxy/mii_formats.h"
 #include "galaxy/mii_import.h"
+#include "galaxy/luma_input_service.h"
 #include "galaxy/luma_mods_service.h"
 #include "galaxy/mods.h"
+#include <luma_input.h>
 #include "galaxy/render/host_window.h"
 #include "galaxy/mod_log.h"
 #include "galaxy/mod_screens.h"
@@ -2796,10 +2798,11 @@ bool input_device_missing(bool wii_remote) {
     return missing;
 }
 
-// The controls now (under gInputSampleLock). Each read renews the motor's state (a stale one stops).
+// The controls now (under gInputSampleLock). Each read renews the motor's state (a stale one stops): the game's, or a
+// mod's when stronger (input.rumble).
 galaxy::input::PlayerInput controls_input() {
     const int32_t mode = gStarPointerMode.load(std::memory_order_relaxed);
-    galaxy::host::native_game_rumble(gMotor.load(std::memory_order_relaxed), mode);
+    galaxy::host::native_game_rumble(std::max(gMotor.load(std::memory_order_relaxed), galaxy::luma_input::mod_rumble(0)), mode);
     return galaxy::host::native_game_input(gGameFrames.load(std::memory_order_relaxed), mode,
                                            static_cast<uint8_t>(gTiltSection.load(std::memory_order_relaxed)));
 }
@@ -2818,6 +2821,36 @@ void note_input_activity(const NebulaInputSample& sample) {
         sample.spin_presses != 0u || sample.sub_spin_presses != 0u || pointer_moved) {
         gLastInputMs.store(steady_ms(), std::memory_order_relaxed);
     }
+}
+#endif
+
+#if defined(NEBULA_HOST_RENDERER)
+// The kind of device player 1 plays with now (LUMA_INPUT_DEVICE_*), for the input service: a real Wii Remote's motion
+// (the remote branch of svc_input_read), a phone's on-screen controls, a controller, or the keyboard and mouse.
+uint32_t main_device_kind(bool remote) {
+    if (remote) {
+        return LUMA_INPUT_DEVICE_MOTION;
+    }
+    const std::optional<galaxy::input::DeviceKey> last = galaxy::host::last_input_device();
+    if (!last || last->scheme == galaxy::input::ControlScheme::Keyboard) {
+        return galaxy::host::touch_controls_present() ? LUMA_INPUT_DEVICE_TOUCH : LUMA_INPUT_DEVICE_KEYBOARD_MOUSE;
+    }
+    return LUMA_INPUT_DEVICE_PAD;
+}
+
+// Whether a mod's rumble reaches player 1's device: a controller whose motor the host drives (the controller worker on
+// Windows, SDL's gamepads elsewhere), or a real Wii Remote (its motor bit). None for the keyboard or a phone's screen.
+bool main_motor(uint32_t device) {
+#if defined(NEBULA_REAL_WIIMOTE)
+    if (device == LUMA_INPUT_DEVICE_MOTION) {
+        return true;
+    }
+#endif
+#if defined(_WIN32)
+    return device == LUMA_INPUT_DEVICE_PAD && !galaxy::host::rumble_output_disabled();
+#else
+    return device == LUMA_INPUT_DEVICE_PAD;
+#endif
 }
 #endif
 
@@ -2846,6 +2879,8 @@ uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, Nebul
                 device->battery = 4;
                 if (sample != nullptr) {
                     *sample = input_sample(co_star);
+                    // Player 2 is always a controller (the last one attached); the worker drives no motor for it.
+                    galaxy::luma_input::game_read(1u, sample, LUMA_INPUT_DEVICE_PAD, false);
                     return 1;
                 }
             }
@@ -2878,6 +2913,8 @@ uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, Nebul
         const bool missing = input_device_missing(gRemoteConnected.load(std::memory_order_relaxed));
         galaxy::host::set_input_missing_shown(missing);
         gInputConnected.store(missing ? 0u : 1u, std::memory_order_relaxed);
+        const uint32_t device = missing ? LUMA_INPUT_DEVICE_NONE : main_device_kind(false);
+        galaxy::luma_input::game_read(0u, sample, device, main_motor(device));
     } else {
         galaxy::input::wiimote::MotionFrame frame;
         const galaxy::input::PlayerInput input = gRemoteMotion.read(frame);
@@ -2888,10 +2925,11 @@ uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, Nebul
         }
         sample->spin_presses = frame.spin_presses;
         sample->sub_spin_presses = frame.sub_spin_presses;
+        galaxy::luma_input::game_read(0u, sample, LUMA_INPUT_DEVICE_MOTION, main_motor(LUMA_INPUT_DEVICE_MOTION));
 #if defined(NEBULA_REAL_WIIMOTE)
-        // Its motor is on or off: a strength is how often it is on.
+        // Its motor is on or off: a strength is how often it is on (the game's, or a mod's when stronger).
         static uint32_t motor_share = 0;
-        motor_share += gMotor.load(std::memory_order_relaxed);
+        motor_share += std::max(gMotor.load(std::memory_order_relaxed), galaxy::luma_input::mod_rumble(0));
         const bool motor_on = motor_share >= 255u;
         if (motor_on) {
             motor_share -= 255u;
@@ -2902,7 +2940,9 @@ uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, Nebul
     note_input_activity(*sample);
     return 1;
 #else
+    // The headless host samples no controls: a controller at rest, which a mod's injection (input.inject) replaces.
     *sample = rest_input_sample();
+    galaxy::luma_input::game_read(0u, sample, LUMA_INPUT_DEVICE_NONE, false);
     return 1;
 #endif
 }
@@ -3212,6 +3252,18 @@ void extension_quit(void*) {
 }
 #if defined(NEBULA_HOST_RENDERER)
 void extension_menu_key(void*, uint32_t key) {
+    // An open text request takes the editing keys first, as the window's keyboard gives them to it.
+    if (galaxy::luma_input::text_open()) {
+        using galaxy::luma_input::TextKey;
+        switch (key) {
+        case NEBULA_EXT_KEY_ENTER: galaxy::luma_input::text_key(TextKey::Enter); return;
+        case NEBULA_EXT_KEY_ESCAPE: galaxy::luma_input::text_key(TextKey::Escape); return;
+        case NEBULA_EXT_KEY_BACKSPACE: galaxy::luma_input::text_key(TextKey::Backspace); return;
+        case NEBULA_EXT_KEY_LEFT: galaxy::luma_input::text_key(TextKey::Left); return;
+        case NEBULA_EXT_KEY_RIGHT: galaxy::luma_input::text_key(TextKey::Right); return;
+        default: break;
+        }
+    }
     static constexpr int kKeys[] = {0,         VK_UP,  VK_DOWN, VK_LEFT, VK_RIGHT, VK_RETURN,
                                     VK_ESCAPE, VK_TAB, VK_BACK, VK_SPACE, VK_F1};
     if (key != 0u && key < std::size(kKeys)) {
@@ -3229,6 +3281,11 @@ void extension_open_settings(void*, uint32_t page) {
 }
 void extension_resize_window(void*, uint32_t width, uint32_t height) {
     galaxy::render::host_window::resize_window_client(width, height);
+}
+// The harness's text step: the code points SDL's text input hands its host (the Win32 window's WM_CHAR feeds each of
+// them to the same text_char).
+void extension_type_text(void*, const char* utf8) {
+    galaxy::luma_input::text_utf8(utf8);
 }
 #endif
 
@@ -3254,6 +3311,7 @@ void attach_extensions() {
     host.menu_open = extension_menu_open;
     host.open_settings = extension_open_settings;
     host.resize_window = extension_resize_window;
+    host.type_text = extension_type_text;
 #endif
     std::string error;
     if (!galaxy::extensions::attach(files, host, error)) {

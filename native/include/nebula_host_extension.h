@@ -109,6 +109,10 @@ typedef struct NebulaHostForExtension {
     /* A running mod taken out at the next frame's start, with the mods that use it (reload.md 2; the game writes the
        harness fact takeout.<id> once each one's library is closed). Null in a host without mods. */
     void (*take_out_mod)(void* host, const char* mod_id);
+    /* UTF-8 typed into LumaCore's open text request (input.text_request) by the path the window's keyboard and input
+       method type through; nothing while none is open. While one is open, menu_key's enter, esc, backspace, left and
+       right edit it instead of reaching a menu. Null in a host without text entry. */
+    void (*type_text)(void* host, const char* utf8);
 } NebulaHostForExtension;
 
 /* What the extension offers. Each function may be null. */

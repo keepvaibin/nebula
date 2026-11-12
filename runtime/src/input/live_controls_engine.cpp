@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/input/live_controls_engine.h"
 #include "galaxy/input/mod_actions.h"
+#include "galaxy/luma_input_service.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -505,7 +506,7 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
                 pad_levels[pad_count++] = {pad.sample.scheme, pad.sample};
             }
         }
-        galaxy::input::mod_actions::sample(frame.host_menu, use_keyboard, keyboard_levels,
+        galaxy::input::mod_actions::sample(frame.host_menu || galaxy::luma_input::text_open(), use_keyboard, keyboard_levels,
                                            std::span<const galaxy::input::mod_actions::PadLevels>(pad_levels.data(), pad_count),
                                            game_held);
     }

@@ -362,7 +362,7 @@ std::string quoted(std::string_view text) {
 
 // --- The plan ------------------------------------------------------------------------------------------------------
 
-enum class Action { Hold, Stick, Shake, Pointer, Key, Settings, Picture, Wait, End, Game, TakeOut };
+enum class Action { Hold, Stick, Shake, Pointer, Key, Text, Settings, Picture, Wait, End, Game, TakeOut };
 
 struct Cond {
     bool log = false;
@@ -636,6 +636,24 @@ bool read_line(const std::string& line, std::string& why) {
                 why = "step " + std::to_string(s.number) + ": no key " + args[0];
                 return false;
             }
+        } else if (a == "text" && args.size() == 1u) {
+            // The runner writes the text as hex of its UTF-8 (a line splits at spaces).
+            s.action = Action::Text;
+            s.text.clear();
+            const std::string& hex = args[0];
+            const auto nibble = [](char c) -> int {
+                return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1;
+            };
+            bool good = !hex.empty() && hex.size() % 2u == 0u;
+            for (std::size_t i = 0; good && i < hex.size(); i += 2u) {
+                const int hi = nibble(hex[i]), lo = nibble(hex[i + 1u]);
+                good = hi >= 0 && lo >= 0 && (hi != 0 || lo != 0);
+                s.text.push_back(static_cast<char>(hi * 16 + lo));
+            }
+            if (!good) {
+                why = "step " + std::to_string(s.number) + ": text takes the hex of non-empty UTF-8";
+                return false;
+            }
         } else if (a == "settings" && args.size() == 1u) {
             // Revision 6 (R6-3): the host's own Settings opened on that page (the runner gives its number).
             s.action = Action::Settings;
@@ -786,6 +804,14 @@ void run_step(Step& s, std::int64_t now) {
         if (g.host != nullptr && g.host->menu_key != nullptr) {
             g.host->menu_key(g.host->host, s.key);
         }
+        break;
+    case Action::Text:
+        if (g.host == nullptr || g.host->size < offsetof(NebulaHostForExtension, type_text) + sizeof(g.host->type_text) ||
+            g.host->type_text == nullptr) {
+            finish("harness-error", "step " + std::to_string(s.number) + ": this host has no text entry");
+            return;
+        }
+        g.host->type_text(g.host->host, s.text.c_str());
         break;
     case Action::Settings:
         if (g.host == nullptr || g.host->size < offsetof(NebulaHostForExtension, open_settings) + sizeof(g.host->open_settings) ||
