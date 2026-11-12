@@ -534,12 +534,13 @@ float4 traced_added(float4 c) {
     return float4((draw_flags & 512u) != 0u ? c.rgb * c.a : c.rgb, 0.0);
 }
 // A material that keeps none of its art's tint (draw flag 1024: a fall, a splash; FB b95, V-D4): its colour's
-// luminance alone, in linear light; the light's own colour still goes on it.
+// brightest channel, in linear light (FB b110: by luminance a cyan streak went grey); the light's colour goes on it.
 float4 traced_untinted(float4 c) {
     if ((draw_flags & 1024u) == 0u) {
         return c;
     }
-    const float l = dot(traced_lin(c.rgb), float3(0.2126, 0.7152, 0.0722));
+    const float3 lin = traced_lin(c.rgb);
+    const float l = max(lin.r, max(lin.g, lin.b));
     return float4(traced_srgb(float3(l, l, l)), c.a);
 }
 float4 traced_colour(float4 c, float4 pixel) {
