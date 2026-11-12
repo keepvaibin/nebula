@@ -253,7 +253,12 @@ void main(uint3 id : SV_DispatchThreadID) {
                         const float a2 = a * a;
                         const float lobe = nh * nh * (a2 - 1.0f) + 1.0f;
                         const float d = a2 / (3.14159265f * lobe * lobe);
-                        const float f0 = class_ == kClassMetal ? 0.55f : class_ == kClassWater ? 0.02f : 0.04f;
+                        // Glass and water by the item's index, as the mirror's weight (rt_mirror.hlsli; FB b75b).
+                        const uint item_ = class_ == kClassGlass || class_ == kClassWater ? g_item_map.Load(int3(pixel, 0)).x : 0u;
+                        const uint ior_bits = item_ != 0u ? g_items.Load(g_at.x + (item_ - 1u) * kItemBytes + 60u) >> 12u & 255u : 0u;
+                        const float ior_ = ior_bits != 0u ? 1.0f + float(ior_bits) / 100.0f : (class_ == kClassWater ? 1.33f : 1.5f);
+                        const float r0_ = (ior_ - 1.0f) / (ior_ + 1.0f);
+                        const float f0 = class_ == kClassMetal ? 0.55f : class_ == kClassGloss ? 0.04f : r0_ * r0_;
                         const float glance = 1.0f - vh;
                         const float f = f0 + (1.0f - f0) * glance * glance * glance * glance * glance;
                         const float3 arriving = kept_light / max(nl, 1e-3f);

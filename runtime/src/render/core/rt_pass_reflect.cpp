@@ -104,7 +104,7 @@ void RenderCore::rt_pass_guides() {
         rows[i][2] = view[2u * 4u + i];
     }
     const bool reflected = rt_reflect_moved_;  // the reflections pass ran this frame (R raw holds its rays)
-    rt::PassBinds binds;
+    rt::PassBinds binds = rt_pass_binds();  // the item table and the pixels' items too (the index's F0; FB b75c)
     binds.constants = frame.binds.constants;
     binds.pass_constants = rt_bounce_constants(0u, 0u, reflected ? 1u : 0u, rows);
     binds.reads[0] = rt_image(RtImage::Material);

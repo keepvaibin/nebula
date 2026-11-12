@@ -30,6 +30,13 @@ RT_FORMAT(rgba16f) RWTexture2D<float4> g_raw : register(u0);
 static const uint kRtWater = 9u;
 static const float kReflectReach = 4000000.0f;
 
+// The pixel's index for its mirror's F0 (rt_mirror.hlsli mirror_f0; item word 15 bits 12-19): glass and water only,
+// as rt_reflect_out.hlsl reads it, so the highlights over the weight come back whole (FB b75b).
+uint mirror_ior_bits(int3 here, uint klass) {
+    const uint item = klass == kRtGlass || klass == kRtWater ? g_item_map.Load(here).x : 0u;
+    return item != 0u ? g_items.Load(g_at.x + (item - 1u) * kItemBytes + 60u) >> 12u & 255u : 0u;
+}
+
 // Whether a surface of class `klass` reflects under the preset (12.1, 19.1).
 bool reflects(uint klass, float roughness, float share, bool high) {
     if (klass == kRtGlass || klass == kRtWater) {
@@ -110,7 +117,7 @@ void main(uint3 id : SV_DispatchThreadID) {
         seen += rt_sun_glint();  // linear, the model's by kForm (A4 W8; FB b75)
     }
     const float4 weight = mirror_weight(uint(material.b * 255.0f + 0.5f), material.r, material.a, g_base.Load(here).rgb,
-                                        1.0f - saturate(-dot(n, look)));
+                                        1.0f - saturate(-dot(n, look)), mirror_ior_bits(here, klass));
     seen += g_lights_spec.Load(here).rgb / max(weight.rgb, 0.02f);
     g_raw[id.xy] = float4(min(seen, 64.0f), max(far_, 1.0f));
 }

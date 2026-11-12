@@ -4,8 +4,9 @@
 // from the surface pass's images of this frame, at the picture's size:
 //   diffuse albedo: S.base where there is a surface, white where the sky is (it is shown as it is);
 //   specular albedo: the split-sum environment term of what the surface mirrors, F0 * A + B, with A and B from Karis's
-//     analytic fit ("Physically Based Shading on Mobile", 2014) of roughness and n.v; F0 as rt_mirror.hlsli has it
-//     (glass 0.08, water 0.03, metal its colour, anything else 0.04); 0 at the sky;
+//     analytic fit ("Physically Based Shading on Mobile", 2014) of roughness and n.v; F0 rt_mirror.hlsli's mirror_f0
+//     (glass and water by the item's index, a metal its colour in linear light, anything else 0.04; FB b75c); 0 at the
+//     sky;
 //   normal and roughness: the smooth normal in the world (rows of the eye-to-world turn in g_pass_value), roughness in
 //     w (Streamline's packed mode);
 //   the reflection ray's length (R raw's a; 0 where nothing reflects or the reflections pass did not run: g_pass.w
@@ -22,6 +23,8 @@ RT_FORMAT(rgba8) RWTexture2D<float4> g_diffuse : register(u0);
 RT_FORMAT(rgba8) RWTexture2D<float4> g_specular : register(u1);
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_normal_roughness : register(u2);
 RT_FORMAT(r16f) RWTexture2D<float> g_hit : register(u3);
+ByteAddressBuffer g_items : register(t1);      // the item table (rt_common.hlsli's): word 15 bits 12-19 the index
+Texture2D<uint2> g_item_map : register(t6);    // the pixel's item, from 1
 
 static const uint kGlass = 3u, kWater = 9u, kMetal = 2u;
 
@@ -48,14 +51,10 @@ void main(uint3 id : SV_DispatchThreadID) {
     const float3 eye_normal = rt_unpack_normal(guide.a);
     const float3 look = normalize(rt_eye_ray(g_ray, float2(id.xy) + 0.5f));
     const float facing = saturate(dot(eye_normal, -look));
-    float3 f0 = float3(0.04f, 0.04f, 0.04f);
-    if (klass == kGlass) {
-        f0 = float3(0.08f, 0.08f, 0.08f);
-    } else if (klass == kWater) {
-        f0 = float3(0.03f, 0.03f, 0.03f);
-    } else if (klass == kMetal) {
-        f0 = base;
-    }
+    // The composite's own F0 (rt_reflect_out.hlsl): glass and water by the item's index (FB b75c).
+    const uint item = klass == kGlass || klass == kWater ? g_item_map.Load(here).x : 0u;
+    const uint ior_bits = item != 0u ? g_items.Load(g_at.x + (item - 1u) * kItemBytes + 60u) >> 12u & 255u : 0u;
+    const float3 f0 = mirror_f0(klass, base, ior_bits);
     const float2 terms = mirror_terms(roughness, facing);
     const float3 world_normal = normalize(float3(dot(g_pass_value[0].xyz, eye_normal), dot(g_pass_value[1].xyz, eye_normal),
                                                  dot(g_pass_value[2].xyz, eye_normal)));

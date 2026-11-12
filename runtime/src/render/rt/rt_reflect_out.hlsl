@@ -27,6 +27,13 @@ ByteAddressBuffer g_items : register(t1);         // the item table (rt_common.h
 Texture2D<uint2> g_item_map : register(t6);       // the pixel's item, from 1
 static const uint kCaptured = 128u;               // a hit flag (item word 11 bits 8-15): its maps include a capture
 
+// The pixel's index for its mirror's F0 (rt_mirror.hlsli mirror_f0; item word 15 bits 12-19): glass and water only,
+// as rt_reflect.hlsl reads it (FB b75b).
+uint mirror_ior_bits(int3 here, uint klass) {
+    const uint item = klass == kMirrorGlass || klass == kMirrorWater ? g_item_map.Load(here).x : 0u;
+    return item != 0u ? g_items.Load(g_at.x + (item - 1u) * kItemBytes + 60u) >> 12u & 255u : 0u;
+}
+
 float3 unoct(float2 o) {
     float3 n = float3(o, 1.0f - abs(o.x) - abs(o.y));
     const float t = saturate(-n.z);
@@ -74,8 +81,10 @@ void main(uint3 id : SV_DispatchThreadID) {
     const float3 n = dot(smooth_, look) < 0.0f ? smooth_ : unoct(normals.ba);
     const uint bits = uint(material.b * 255.0f + 0.5f);
     const uint klass = bits & 15u;
+    const uint ior_bits = mirror_ior_bits(here, klass);
     if ((g_pass.w & 1u) != 0u) {
-        const float4 weight = mirror_weight(bits, material.r, material.a, g_base.Load(here).rgb, 1.0f - saturate(-dot(n, look)));
+        const float4 weight = mirror_weight(bits, material.r, material.a, g_base.Load(here).rgb, 1.0f - saturate(-dot(n, look)),
+                                            ior_bits);
         r.rgb += g_lights_spec.Load(here).rgb / max(weight.rgb, 0.02f);
     }
     if ((bits & kMirrorPainted) != 0u && klass != kMirrorWater) {
@@ -83,8 +92,10 @@ void main(uint3 id : SV_DispatchThreadID) {
         const uint at = g_at.x + (item != 0u ? item - 1u : 0u) * kItemBytes;
         const uint word = item != 0u ? g_items.Load(at + 60u) : 0u;
         const bool captured = item != 0u && (g_items.Load(at + 44u) & (kCaptured << 8u)) != 0u;
-        const float3 tint = (word & 0xFFFu) != 0u ? float3(word & 15u, (word >> 4u) & 15u, (word >> 8u) & 15u) / 15.0f
-                                                  : float3(1.0f, 1.0f, 1.0f);
+        // A dielectric's mirror has no colour: glass keeps none of the painted map's tint (b75b).
+        const float3 tint = (word & 0xFFFu) != 0u && klass != kMirrorGlass
+                                ? float3(word & 15u, (word >> 4u) & 15u, (word >> 8u) & 15u) / 15.0f
+                                : float3(1.0f, 1.0f, 1.0f);
         const float gain = 1.0f;  // no gain over the mirror (A4 W5; FB b75)
         const float keep = captured ? 0.0f : klass == kMirrorMetal ? rt_dev_or(kDevKeepMetal, 0.5f)
                                            : klass == kMirrorGloss ? rt_dev_or(kDevKeepGloss, 0.25f) : 0.0f;
@@ -93,6 +104,6 @@ void main(uint3 id : SV_DispatchThreadID) {
         return;
     }
     const float4 w = mirror_weight(uint(material.b * 255.0f + 0.5f), material.r, material.a, g_base.Load(here).rgb,
-                                   1.0f - saturate(-dot(n, look)));
+                                   1.0f - saturate(-dot(n, look)), ior_bits);
     g_mirror[id.xy] = float4(r.rgb * w.rgb, w.a);
 }
