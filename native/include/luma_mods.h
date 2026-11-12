@@ -105,6 +105,12 @@ typedef struct LumaModsService {
        caller() numbers into out[] (up to capacity), and how many there are into *count (may exceed capacity).
        LUMA_OK; a null count, or a null out with capacity above 0: LUMA_E_ARGUMENT, reported. */
     int32_t (*needing)(const LumaMod* mod, uint64_t* out, uint32_t capacity, uint32_t* count);
+    /* 1.0. Game thread. The mod `which` names (a caller() number: its LumaMod pointer as a number) into *out, as `at`
+       gives it (its place in the list in `order`), so a library can put what it holds for each mod in the Mods
+       list's order. LUMA_OK; LUMA_E_NOT_FOUND when `which` is no mod the game runs now (0, any other number, a mod
+       stopped): an answer, not reported. A null out: LUMA_E_ARGUMENT, a size below 1.0's: LUMA_E_ARGUMENT
+       (Service.StructSize), both reported. */
+    int32_t (*of_mod)(const LumaMod* mod, uint64_t which, LumaModsInfo* out);
 } LumaModsService;
 
 /* The largest kit file kit_read gives: 4 MiB. */

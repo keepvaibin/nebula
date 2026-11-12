@@ -1392,6 +1392,35 @@ void registered(void*, const LumaServiceKernel* kernel) {
     g_kernel.store(kernel, std::memory_order_release);
 }
 
+// The mod a caller() number names, by its id in the session's list. mod_id compares the number with the kernel's
+// records only, so a number that is no mod is unknown, never read through.
+std::int32_t mods_of_mod(const LumaMod* mod, std::uint64_t which, LumaModsInfo* out) {
+    const char* const where = "mods.of_mod";
+    if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
+        return status;
+    }
+    if (out == nullptr) {
+        return argument(mod, where, "out");
+    }
+    if (out->size < kInfoLeast) {
+        return struct_size(mod, where, out->size);
+    }
+    const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
+    const auto* const other = reinterpret_cast<const LumaMod*>(static_cast<std::uintptr_t>(which));
+    const char* const id = which != 0u ? kernel->mod_id(other) : nullptr;
+    if (id == nullptr || kernel->mod_live(other) == 0) {
+        return LUMA_E_NOT_FOUND;
+    }
+    make_list();
+    for (const LumaModsInfo& info : g_list) {
+        if (std::strcmp(info.id, id) == 0) {
+            give(info, out);
+            return LUMA_OK;
+        }
+    }
+    return LUMA_E_NOT_FOUND;
+}
+
 const LumaModsService kMods = {
     {sizeof(LumaModsService), LUMA_MODS_MAJOR, LUMA_MODS_MINOR},
     mods_count,
@@ -1403,6 +1432,7 @@ const LumaModsService kMods = {
     kit_names,
     kit_read,
     kit_needing,
+    mods_of_mod,
 };
 
 // mods' report rows (section 5): {where} first, then the row's own.
