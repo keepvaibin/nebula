@@ -620,24 +620,9 @@ std::int32_t ids_of(const LumaMod* mod, const char* space, const char* mod_id, c
 
 // ---- mods.install (item 9) -----------------------------------------------------------------------------------------
 
-// A relative path inside the mod's data folder ending ".luma": no root, no drive, no "..", no empty part, "/" only.
+// A path of fs's rule (services-fs 4: inside the mod's data folder, the same on every platform) ending ".luma".
 bool valid_install_path(std::string_view path) noexcept {
-    if (path.size() <= 5u || path.size() > 1024u || path.substr(path.size() - 5u) != ".luma" || path.front() == '/') {
-        return false;
-    }
-    std::size_t start = 0;
-    while (start <= path.size()) {
-        std::size_t end = path.find('/', start);
-        if (end == std::string_view::npos) {
-            end = path.size();
-        }
-        const std::string_view part = path.substr(start, end - start);
-        if (part.empty() || part == "." || part == ".." || part.find_first_of("\\:") != std::string_view::npos) {
-            return false;
-        }
-        start = end + 1u;
-    }
-    return true;
+    return path.size() > 5u && path.substr(path.size() - 5u) == ".luma" && galaxy::luma_fs::path_in_rule(path, false);
 }
 
 std::int32_t install_request(const LumaMod* mod, const char* path, LumaEventFn fn, void*, LumaHandle* out) {
