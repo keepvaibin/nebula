@@ -527,19 +527,15 @@ void rt_share_terms_art(bool lit, float nl, float3 v, out float3 s0, out float3x
 }
 
 // The share in linear light, affine in O for the reference (ref_surface: c + M O), exactly (b69: the art's share is
-// linear light already), then for a painted surface the model mixed in by kForm (FB b59, M3: s0 = sun max(n.s, 0) V,
-// M = the sky's light). A lit surface keeps its own share at every kForm (b67).
+// linear light already), then the model mixed in by kForm, a lit surface's as a painted one's (FB b59, b69c, M3:
+// s0 = sun max(n.s, 0) V, M = the sky's light).
 void rt_share_terms(bool lit, float nl, float3 v, out float3 s0, out float3x3 mo) {
     rt_share_terms_art(lit, nl, v, s0, mo);
     const float t = rt_form();
-    if (!lit && t > 0.0f) {
+    if (t > 0.0f) {
         const RtStageLight st = rt_stage_light();
         s0 = lerp(s0, st.sun * max(nl, 0.0f) * v, t);
         mo = mo * (1.0f - t) + float3x3(st.sky.x, 0.0f, 0.0f, 0.0f, st.sky.y, 0.0f, 0.0f, 0.0f, st.sky.z) * t;
-    } else if (lit && t > 0.0f) {
-        // O in O's unit under kForm (b69): the same light as at kForm 0, the loop's gain lin(D) lin(base) still.
-        const float3 u = lerp(float3(1.0f, 1.0f, 1.0f), rt_stage_light().unit, t);
-        mo = float3x3(mo[0] * u, mo[1] * u, mo[2] * u);
     }
 }
 
@@ -566,16 +562,13 @@ float3 rt_air_share(float s, float3 v) {
     return sky_part * s + rt_air_sun() * v;
 }
 
-// The share a hit takes, exactly (b67, b69): the art's in linear light, a painted surface's lerped to the model by kForm.
+// The share a hit takes, exactly (b67, b69, b69c): the art's in linear light, lerped to the model by kForm (lit or
+// painted alike).
 float3 rt_share(bool lit, float nl, float3 v, float3 o) {
     float3 s0;
     float3x3 mo;
     rt_share_terms_art(lit, nl, v, s0, mo);
     const float t = rt_form();
-    if (lit) {
-        // O in O's unit under kForm (b69), as rt_share_terms.
-        return max(s0 + mul(mo, t > 0.0f ? o * lerp(float3(1.0f, 1.0f, 1.0f), rt_stage_light().unit, t) : o), 0.0f);
-    }
     const float3 art = max(s0 + mul(mo, o), 0.0f);
     if (!(t > 0.0f)) {
         return art;
@@ -723,14 +716,11 @@ float3 rt_hit_radiance_with(RtHit h, uint options, float3 o, bool d_known, float
     }
     if ((options & kRtShadeSkyOnly) != 0u) {
         const float t = rt_form();
-        // What the sky gives it in O's unit (b69): a painted hit 1 (O = 1 of its own look), a lit one its share's lin(D)
-        // at every kForm (O lerp(1, unit, t), as rt_share).
-        if ((h.item_flags & kItemLit) != 0u) {
-            const float3 d = rt_lin(saturate(g_shade.ambient.rgb + 0.5f * g_shade.fill.rgb));
-            return rt_hit_albedo(h) * g_shade.look.y * d *
-                   (t > 0.0f ? lerp(float3(1.0f, 1.0f, 1.0f), rt_stage_light().unit, t) : float3(1.0f, 1.0f, 1.0f));
-        }
-        const float3 art = rt_hit_albedo(h) * g_shade.look.y;
+        // What the sky gives it (b69, b69c): the art's, a painted hit 1 (O = 1 of its own look), a lit one its share's
+        // lin(D); the model's sky' by kForm, both alike.
+        const float3 art = rt_hit_albedo(h) * g_shade.look.y *
+                           ((h.item_flags & kItemLit) != 0u ? rt_lin(saturate(g_shade.ambient.rgb + 0.5f * g_shade.fill.rgb))
+                                                            : float3(1.0f, 1.0f, 1.0f));
         return t > 0.0f ? lerp(art, rt_hit_albedo(h) * g_shade.look.y * rt_stage_light().sky, t) : art;
     }
     const bool lit = (h.item_flags & kItemLit) != 0u;
