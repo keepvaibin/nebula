@@ -211,7 +211,10 @@ void main(uint3 id : SV_DispatchThreadID) {
         float facing = 1.0f;
         if ((g_more.z & 1u) != 0u) {
             const float turned = dot(s.smooth_, g_sun.xyz);
-            const float lambert = saturate((flags & kSurfaceTwoSided) != 0u ? abs(turned) : turned);
+            // Drawn from both sides: lit from either; a two-sided cutout's far side by kCardThrough (D5).
+            const bool two_sided = (flags & kSurfaceTwoSided) != 0u;
+            const bool card = two_sided && item != 0u && (g_items.Load(g_at.x + (item - 1u) * kItemBytes + 4u) & kItemAlphaTested) != 0u;
+            const float lambert = saturate(!two_sided ? turned : card && turned < 0.0f ? -kCardThrough * turned : abs(turned));
             facing = lit ? lambert : saturate(lambert / g_look.z);
         }
         facing_out.r = facing;

@@ -74,6 +74,9 @@ static const uint kItemLit = 1u, kItemGround = 2u, kItemSurface = 4u, kItemThin 
 // Bit 6: a map part its clip areas show (g_clip): a ray meets it where it shows alone. Bit 7: its program alpha-tests
 // (can discard): a clipped part without it is whole where it shows.
 static const uint kItemClipped = 64u, kItemAlphaTested = 128u;
+// A two-sided cutout (a leaf, a petal, a flower card; D5): its sun ray starts this far out, so the cards of one clump do
+// not black each other out, and its far side takes this share of the sun (light through a petal or a leaf).
+static const float kCardClear = 30.0f, kCardThrough = 0.6f;
 // Material classes (nebula_model.h NEBULA_HIT_*).
 static const uint kClassGloss = 1u, kClassMetal = 2u, kClassGlass = 3u, kClassEmissive = 6u, kClassTranslucent = 8u,
                   kClassWater = 9u;

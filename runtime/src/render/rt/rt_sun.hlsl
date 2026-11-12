@@ -57,7 +57,12 @@ void main(uint3 id : SV_DispatchThreadID) {
                 within_pixel = size > most ? moved * (most / size) : moved;
             }
         }
-        const float3 from = (turned >= 0.0f ? s.origin : s.at - s.normal * s.skin) + within_pixel;
+        const float3 from_surface = (turned >= 0.0f ? s.origin : s.at - s.normal * s.skin) + within_pixel;
+        // A two-sided cutout's ray starts kCardClear out (D5); distances stay counted from the surface.
+        const uint card_item = thin ? g_item_map.Load(int3(pixel, 0)).x : 0u;
+        const float clear = card_item != 0u && (g_items.Load(g_at.x + (card_item - 1u) * kItemBytes + 4u) & kItemAlphaTested) != 0u
+                                ? kCardClear : 0.0f;
+        const float3 from = from_surface + toward * clear;
         // A lit surface is shadowed by everything solid; so is a painted one, unless its model's paint holds the
         // shadows things cast on it (hit flag NEBULA_HIT_PAINTED_SHADOW, item word 11 bits 8-15) and the painted style
         // asks for that (g_look.y): then by lit things only, what the painting could not know (14.6).
@@ -70,7 +75,7 @@ void main(uint3 id : SV_DispatchThreadID) {
         const float occluder = occluder_at(from, toward, 200000.0f,
                                            (paint_holds ? kMaskLit : kMaskSolid | kMaskCutout) | kMaskShadowOnly, true, met);
         if (occluder >= 0.0f) {
-            v = float4(0.0f, 0.0f, 0.0f, min(occluder, kNoOccluder - 1.0f));
+            v = float4(0.0f, 0.0f, 0.0f, min(occluder + clear, kNoOccluder - 1.0f));
             InterlockedAdd(g_counters[18], 1u);
         } else {
             float first;
@@ -80,7 +85,7 @@ void main(uint3 id : SV_DispatchThreadID) {
                 tint = let_through(from, toward, 200000.0f, first);
             }
             if (first >= 0.0f) {
-                v = float4(tint, min(first, kNoOccluder - 1.0f));
+                v = float4(tint, min(first + clear, kNoOccluder - 1.0f));
             }
         }
     }
