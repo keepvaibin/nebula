@@ -37,7 +37,7 @@ struct OfferFile {
     bool in_play = false;  // the file loaded now: shown, never pickable
     bool luigi = false;    // its active character
     std::uint32_t stars = 0;
-    std::uint32_t play_seconds = 0;
+    std::int64_t saved = 0;  // its last save, Unix seconds (UTC); 0: not known (the game keeps no play time per file)
 };
 struct OfferFacts {
     OfferFile offered;               // the mod's file, as parsed before the screen
