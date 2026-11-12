@@ -28,19 +28,31 @@ bool enh_on() { return (view_flags & 2u) != 0u; }
 // V, a channel) and fill (light 1: O, the sky's share: the fill is the artists' bounce light) reaches it, and none
 // of its point light (light 4: an emitter, in the added light; all of it when view_flags bit 32 says the local lights
 // are off); all of lights 2 and 3 (alpha tricks). Its ambient by O.
+// A program whose colour sums no key (no lit colour channel it reads has light 0: the colour is the vertex colour with
+// only the alpha lit, or fill alone) begins with TRACED_UNKEYED (cook/programs.rs; D1): its sums take nothing traced
+// but the lamps' removal, and traced_colour gives its colour the Painted share as an unlit program's.
 static float4 g_traced = float4(1.0, 1.0, 1.0, 1.0);
 static float3 g_traced_o = float3(1.0, 1.0, 1.0);  // O a channel at a time (program.hlsli traced_o; FB 22.10)
+static bool g_traced_keyed = true;
+#define TRACED_UNKEYED g_traced_keyed = false
 float3 traced_light(uint n) {
     const float lamp = (view_flags & 32u) != 0u ? 1.0 : 0.0;
-    return n == 0u ? g_traced.rgb : n == 1u ? g_traced_o : n == 4u ? float3(lamp, lamp, lamp) : float3(1.0, 1.0, 1.0);
+    if (n == 4u) {
+        return float3(lamp, lamp, lamp);
+    }
+    if (!g_traced_keyed) {
+        return float3(1.0, 1.0, 1.0);
+    }
+    return n == 0u ? g_traced.rgb : n == 1u ? g_traced_o : float3(1.0, 1.0, 1.0);
 }
-// The ambient by O: a colour's a channel at a time, an alpha's by O itself.
-float ambient_term(float x) { return x * g_traced.a; }
-float3 ambient_term(float3 x) { return x * g_traced_o; }
-float4 ambient_term(float4 x) { return float4(x.rgb * g_traced_o, x.a * g_traced.a); }
+// The ambient by O: a colour's a channel at a time, an alpha's by O itself (a program that sums no key: as the game's).
+float ambient_term(float x) { return g_traced_keyed ? x * g_traced.a : x; }
+float3 ambient_term(float3 x) { return g_traced_keyed ? x * g_traced_o : x; }
+float4 ambient_term(float4 x) { return g_traced_keyed ? float4(x.rgb * g_traced_o, x.a * g_traced.a) : x; }
 #define AMBIENT_TERM(x) ambient_term(x)
 #else
 #define AMBIENT_TERM(x) (x)
+#define TRACED_UNKEYED
 #endif
 
 float3 enh_lin(float3 c) { return pow(max(c, 0.0), 2.2); }
@@ -217,12 +229,13 @@ float4 enh_env(float4 t) {
 
 #if NATIVE_TRACED
 // A lit program begins with enh_begin(i.lit_eye, i.lit_nrm) in its entry, whose input `i` holds the pixel (i.pos): the
-// traced form reads the pixel's light there, and every light_term after it is taken by its share.
+// traced form reads the pixel's light there, and every light_term after it is taken by its share (when its colour
+// sums the key: else TRACED_UNKEYED came first, and traced_colour shares its colour as a painted one's).
 EnhShade enh_begin_traced(float3 P, float3 n, float4 pixel) {
     g_traced = traced_at(pixel);
     bool coloured = false;
     g_traced_o = traced_o(g_traced, pixel, coloured);
-    g_traced_lit = true;
+    g_traced_lit = g_traced_keyed;
     return enh_begin(P, n);
 }
 #define enh_begin(P, n) enh_begin_traced(P, n, i.pos)

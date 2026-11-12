@@ -991,6 +991,13 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
         lit_body.push("    }".into());
     }
 
+    // Whether the lit form's colour sums the key (light 0 in a lit colour channel it reads, as channel_lines writes
+    // it): only then does its traced form take V and O in its sums (program_lit.hlsli TRACED_UNKEYED; D1).
+    let keyed = lit_channels
+        && (0..2usize).any(|ch| {
+            p.color_read[ch] && ch < m.channel_count as usize && channel_is_lit(&m.channels[2 * ch]) && m.channels[2 * ch].light_mask & 1 != 0
+        });
+
     // Vertex stage: writes exactly what the pixel stage reads, numbered as it reads them.
     let coords_read: Vec<u8> = p.coords.0.clone();
     let mut v_rows = Rows::default();
@@ -1172,6 +1179,9 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
     pixel.push_str(&vary);
     pixel.push_str("NativeOut program_ps(Varyings i) {\n");
     if form.lit {
+        if !keyed {
+            pixel.push_str("    TRACED_UNKEYED;\n");
+        }
         pixel.push_str("    g_enh = enh_begin(i.lit_eye, i.lit_nrm);\n");
     }
     if lit_rows_used {
