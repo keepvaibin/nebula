@@ -1,4 +1,4 @@
-//! L200-L217: `luma.json` (luma-format 4), `media/` (3, 4) and `saves/` (6.1).
+//! L200-L219 and L806: `luma.json` (luma-format 4), `media/` (3, 4) and `saves/` (6.1).
 
 use super::{p, seg, t, Ctx};
 use crate::json::{self, Kind, Value};
@@ -10,10 +10,10 @@ use std::collections::BTreeSet;
 
 const FILE: &str = "luma.json";
 pub const MAX_MANIFEST: u64 = 1 << 20;
-const TOP_KEYS: [&str; 24] = [
+const TOP_KEYS: [&str; 25] = [
     "format", "id", "version", "name", "summary", "text", "authors", "license", "links", "icon", "pictures", "game",
-    "nebula", "needs", "conflicts", "load", "takes_over", "options", "permissions", "layers", "code", "saves", "kit",
-    "build",
+    "nebula", "needs", "conflicts", "load", "takes_over", "options", "permissions", "renderer", "layers", "code",
+    "saves", "kit", "build",
 ];
 const REQUIRED: [&str; 7] = ["format", "id", "version", "name", "summary", "authors", "game"];
 const OPTION_KINDS: [&str; 5] = ["choice", "number", "toggle", "text", "key"];
@@ -216,6 +216,12 @@ pub(crate) struct Facts {
     pub layers: Vec<(String, json::Pos, String)>,
     pub options: Vec<OptionFacts>,
     pub permissions: BTreeSet<String>,
+    /// Each permission of the closed list asked for, once, with where (for L218, said after the code is read).
+    pub permission_at: Vec<(String, json::Pos, String)>,
+    /// The services any entry library imports (kind 5, optional or not), and how many entry libraries' imports were
+    /// read (L218, said by the code block).
+    pub services_imported: BTreeSet<String>,
+    pub entries_read: usize,
     pub needs: Vec<(String, Option<Range>)>,
     pub code_platforms: Vec<String>,
     pub has_code_key: bool,
@@ -353,6 +359,7 @@ pub(crate) fn check(ctx: &mut Ctx) {
     options(&mut m, &root, &mut facts);
     text(&mut m, &root, &facts);
     permissions(&mut m, &root, &mut facts);
+    renderer(&mut m, &root);
     layers(&mut m, &root, &mut facts);
     code_key(&mut m, &root, &mut facts);
     media(&mut m, &root);
@@ -697,10 +704,60 @@ fn text(m: &mut M, root: &Value, facts: &Facts) {
     }
 }
 
+/// The permissions a mod may ask for (luma-format revision 3, services-registry 5.1): a closed list. A permissioned
+/// service's permission is its own name (registry 9), so these are also the names of the services that need one,
+/// `native` aside (not a service: extra libraries, F-1).
+pub const PERMISSIONS: [&str; 11] = [
+    "native",
+    "fs.exchange",
+    "net.local",
+    "net.internet",
+    "input.inject",
+    "input.devices",
+    "audio.microphone",
+    "capture.camera",
+    "system.clipboard",
+    "system.links",
+    "save.game",
+];
+
+/// The most hosts `net.internet` may list (services-registry 5.1).
+pub const MAX_HOSTS: usize = 32;
+
+/// A host `net.internet` may reach (services-registry 5.1, G R-2): `*` alone, a name (`api.example.org`), a name
+/// under a domain (`*.example.org`), or an IPv4 address in dotted digits. No port, no IPv6 literal. Letters of either
+/// case: the host lowercases them (consent 1.2).
+pub fn permission_host_ok(host: &str) -> bool {
+    if host == "*" {
+        return true;
+    }
+    if ipv4_ok(host) {
+        return true;
+    }
+    let (wild, name) = match host.strip_prefix("*.") {
+        Some(rest) => (true, rest),
+        None => (false, host),
+    };
+    let labels: Vec<&str> = name.split('.').collect();
+    let label_ok = |l: &str| l.len() <= 63 && !l.is_empty() && !l.starts_with('-') && !l.ends_with('-') && l.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-');
+    // A last label of digits only is an address, not a name: `1.2.3` is neither, and `*.` takes a domain, not an address.
+    !name.is_empty()
+        && name.len() <= 253
+        && labels.iter().all(|l| label_ok(l))
+        && !labels.last().is_some_and(|l| l.bytes().all(|b| b.is_ascii_digit()))
+        && (!wild || !ipv4_ok(name))
+}
+
+/// Four decimal numbers from 0 to 255 joined by `.`, without leading zeros (`010` reads as octal in some resolvers).
+fn ipv4_ok(s: &str) -> bool {
+    let parts: Vec<&str> = s.split('.').collect();
+    parts.len() == 4
+        && parts.iter().all(|x| !x.is_empty() && x.len() <= 3 && x.bytes().all(|b| b.is_ascii_digit()) && (x.len() == 1 || !x.starts_with('0')) && x.parse::<u16>().is_ok_and(|n| n <= 255))
+}
+
 fn permissions(m: &mut M, root: &Value, facts: &mut Facts) {
     let Some(v) = root.get("permissions") else { return };
-    let Some(items) = m.array(v, "/permissions", "permissions", 0, 32) else { return };
-    let known: Option<Vec<String>> = m.ctx.game().and_then(|g| g.names).and_then(|n| n.permissions.clone());
+    let Some(items) = m.array(v, "/permissions", "permissions", 0, PERMISSIONS.len()) else { return };
     for (i, x) in items.iter().enumerate() {
         let ptr = format!("/permissions/{i}");
         let Some(obj) = m.object(x, &ptr, "permissions") else { continue };
@@ -712,14 +769,16 @@ fn permissions(m: &mut M, root: &Value, facts: &mut Facts) {
         if facts.permissions.contains(&name) {
             m.at(211, obj, &ptr, vec![("key", t(name.clone())), ("why", p("Perm.Twice"))]);
         }
-        // `native` and `net` are luma-format's own; every other name is a service's (validator contract: from the
-        // self-description), not checked without it.
-        if name != "native" && name != "net" {
-            match &known {
-                Some(list) if !list.contains(&name) => m.at(211, obj, &ptr, vec![("key", t(name.clone())), ("why", p("Perm.Unknown"))]),
-                Some(_) => {}
-                None => m.ctx.not_checked(211, "Missing.SelfDescription"),
-            }
+        // The closed list; the `net` of revision 1 became two permissions (revision 3). A `test.` name is a test
+        // service's (services-registry 14), which only a test run provides: a Note, L219.
+        let test = name.starts_with("test.") && crate::names::service_name_ok(&name);
+        let known = test || PERMISSIONS.contains(&name.as_str());
+        if name == "net" {
+            m.at(211, obj, &ptr, vec![("key", t(name.clone())), ("why", p("Perm.NetSplit"))]);
+        } else if test {
+            m.at(219, obj, &ptr, vec![("key", t(name.clone()))]);
+        } else if !known {
+            m.at(211, obj, &ptr, vec![("key", t(name.clone())), ("why", p("Perm.Unknown"))]);
         }
         match obj.get("why") {
             None => m.at(211, obj, &ptr, vec![("key", t(name.clone())), ("why", p("Perm.NoWhy"))]),
@@ -728,23 +787,84 @@ fn permissions(m: &mut M, root: &Value, facts: &mut Facts) {
             }
         }
         match (name.as_str(), obj.get("hosts")) {
-            ("net", None) => m.at(211, obj, &ptr, vec![("key", t(name.clone())), ("why", p("Perm.NetHosts"))]),
-            ("net", Some(h)) => {
-                if let Some(hosts) = m.array(h, &format!("{ptr}/hosts"), "permissions/hosts", 1, 64) {
-                    for (j, host) in hosts.iter().enumerate() {
-                        let hp = format!("{ptr}/hosts/{j}");
-                        if let Some(s) = m.string(host, &hp, "permissions/hosts") {
-                            if !host_ok(s) {
-                                m.wrong(host, &hp, "permissions/hosts", "Expect.Host");
-                            }
-                        }
+            ("net.internet", None) => m.at(211, obj, &ptr, vec![("key", t(name.clone())), ("why", p("Perm.NetHosts"))]),
+            ("net.internet", Some(h)) => {
+                let hp = format!("{ptr}/hosts");
+                if !h.is_array() {
+                    m.wrong(h, &hp, "permissions/hosts", "Expect.Array");
+                } else if h.items().is_empty() || h.items().len() > MAX_HOSTS {
+                    m.at(211, h, &hp, vec![("key", t(name.clone())), ("why", p("Perm.HostCount"))]);
+                }
+                let mut seen: Vec<String> = Vec::new();
+                for (j, host) in h.items().iter().enumerate() {
+                    let at = format!("{hp}/{j}");
+                    let Some(s) = m.string(host, &at, "permissions/hosts") else { continue };
+                    if !permission_host_ok(s) {
+                        m.wrong(host, &at, "permissions/hosts", "Expect.Host");
+                        continue;
+                    }
+                    let lower = s.to_ascii_lowercase();
+                    if seen.contains(&lower) {
+                        m.at(211, host, &at, vec![("key", t(name.clone())), ("why", p("Perm.HostTwice"))]);
+                    } else {
+                        seen.push(lower);
                     }
                 }
             }
+            // A revision-1 `net` had hosts: NetSplit says it already (F's AP-1).
+            (_, Some(_)) if name == "net" => {}
             (_, Some(h)) => m.at(211, h, &format!("{ptr}/hosts"), vec![("key", t(name.clone())), ("why", p("Perm.HostsOnlyNet"))]),
             _ => {}
         }
+        if known && !facts.permissions.contains(&name) {
+            facts.permission_at.push((name.clone(), obj.pos, ptr.clone()));
+        }
         facts.permissions.insert(name);
+    }
+}
+
+/// `renderer` (luma-format revision 4): `{"features": [...]}`, the renderer features the mod cannot do without, 1 to 64
+/// names, each once. With the game's list (the self-description's `renderer.features`) a name not on it is L204; with
+/// it and this device's features (start-check 3), a feature the device lacks is L806 and the mod is off. Without the
+/// list L806 is not checked; without the device's features (LumaLink) it is not checked either: the game checks it
+/// at every start.
+fn renderer(m: &mut M, root: &Value) {
+    let Some(v) = root.get("renderer") else { return };
+    let Some(obj) = m.object(v, "/renderer", "renderer") else { return };
+    m.keys(obj, "/renderer", &["features"]);
+    m.required(obj, "/renderer", &["features"]);
+    let Some(list) = obj.get("features") else { return };
+    let Some(items) = m.array(list, "/renderer/features", "renderer/features", 1, crate::names::MAX_FEATURES) else { return };
+    let known = m.ctx.game().and_then(|g| g.names).and_then(|n| n.renderer_features.clone());
+    let device: Option<Vec<String>> = m.ctx.game().and_then(|g| g.device_features).map(<[String]>::to_vec);
+    let mut seen: BTreeSet<&str> = BTreeSet::new();
+    let mut wanted: Vec<(&Value, String, &str)> = Vec::new();
+    for (i, item) in items.iter().enumerate() {
+        let ip = format!("/renderer/features/{i}");
+        let Some(s) = m.string(item, &ip, "renderer/features") else { continue };
+        if !crate::names::feature_name_ok(s) {
+            m.wrong(item, &ip, "renderer/features", "Expect.FeatureName");
+        } else if !seen.insert(s) {
+            m.at(204, item, &ip, vec![("key", t("renderer/features")), ("found", t(format!("\"{s}\""))), ("expected", p("Expect.Once"))]);
+        } else if known.as_ref().is_some_and(|k| !k.contains(s)) {
+            m.wrong(item, &ip, "renderer/features", "Expect.Feature");
+        } else {
+            wanted.push((item, ip, s));
+        }
+    }
+    if wanted.is_empty() {
+        return;
+    }
+    match (&known, &device) {
+        (None, _) => m.ctx.not_checked(806, "Missing.RendererFeatures"),
+        (Some(_), None) => m.ctx.not_checked(806, "Missing.Device"),
+        (Some(_), Some(have)) => {
+            for (item, ip, s) in wanted {
+                if !have.iter().any(|h| h == s) {
+                    m.at(806, item, &ip, vec![("feature", t(s))]);
+                }
+            }
+        }
     }
 }
 
@@ -1042,7 +1162,7 @@ pub fn save_problem(data: &[u8]) -> Option<&'static str> {
     }
     let entries = read32(8, big);
     let size = read32(12, big);
-    if size < 16 || size > u32::MAX - 31 || ((size as usize + 31) & !31usize) != data.len() {
+    if !(16..=u32::MAX - 31).contains(&size) || ((size as usize + 31) & !31usize) != data.len() {
         return Some("Save.Length");
     }
     if entries == 0 || entries >= 24 || entries > (size - 16) / 16 {
@@ -1106,6 +1226,10 @@ mod tests {
     fn small_checks() {
         assert!(id_ok("gold-flower") && id_ok("a.b-c") && !id_ok("ab") && !id_ok("Gold") && !id_ok("1abc") && !id_ok("a..b") && !id_ok("abc."));
         assert!(host_ok("api.example.org") && host_ok("*.example.org") && host_ok("127.0.0.1:8080") && !host_ok("a b") && !host_ok("x:0") && !host_ok("-a.org"));
+        assert!(["*", "api.example.org", "API.Example.org", "*.example.org", "localhost", "10.0.0.1", "255.255.255.255", "0.0.0.0"].iter().all(|h| permission_host_ok(h)));
+        assert!(!["", "*.", "**", "*.*.org", "a.org:80", "10.0.0.1:80", "::1", "[::1]", "1.2.3", "256.0.0.1", "01.2.3.4", "*.10.0.0.1", "-a.org", "a b", "a..org", "a.org."]
+            .iter()
+            .any(|h| permission_host_ok(h)));
         assert!(url_ok("https://example.org/x?y") && !url_ok("http://example.org") && !url_ok("https://localhost"));
         assert!(spdx_ok("GPL-3.0-only") && spdx_ok("MIT OR (Apache-2.0 AND BSD-3-Clause)") && spdx_ok("GPL-2.0-or-later WITH Classpath-exception-2.0"));
         assert!(spdx_ok("LicenseRef-Mine") && !spdx_ok("MIT OR") && !spdx_ok("(MIT") && !spdx_ok("") && !spdx_ok("MIT AND AND BSD"));

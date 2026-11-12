@@ -15,13 +15,16 @@
 //! about	<id>	<version>
 //! conflict	<id>
 //! need	<id>
-//! touch	replaces|cells|adds|removes|assets|functions|links|scenarios	<value>
+//! touch	replaces|cells|adds|removes|assets|functions|links|scenarios|services	<value>
 //! finding	<code>	<file>	<line>|-	<column>|-	<pointer>|-	<mod id>|-	(<name>=T:<text> | <name>=P:<phrase id>)...
 //! not-checked	<code>	<phrase id>	<places>
 //! end	<SHA-1 of every byte before this line, hex>
 //! ```
 //!
 //! A report cut short or changed in any byte does not read (then the mod is checked in full).
+
+// The form above is written as it is, tabs and all.
+#![allow(clippy::tabs_in_doc_comments)]
 
 use crate::{level_of, text, Arg, Finding, Installed, NotChecked, Report, Touches};
 
@@ -96,7 +99,7 @@ fn opt(v: Option<&str>) -> String {
     v.map_or_else(|| "-".to_string(), esc)
 }
 
-fn touch_lists(t: &Touches) -> [(&'static str, &Vec<String>); 8] {
+fn touch_lists(t: &Touches) -> [(&'static str, &Vec<String>); 10] {
     [
         ("replaces", &t.replaces),
         ("cells", &t.cells),
@@ -106,6 +109,8 @@ fn touch_lists(t: &Touches) -> [(&'static str, &Vec<String>); 8] {
         ("functions", &t.functions),
         ("links", &t.links),
         ("scenarios", &t.scenarios),
+        ("services", &t.services),
+        ("after_start", &t.after_start),
     ]
 }
 
@@ -214,6 +219,8 @@ impl Saved {
                         "functions" => t.functions.push(v),
                         "links" => t.links.push(v),
                         "scenarios" => t.scenarios.push(v),
+                        "services" => t.services.push(v),
+                        "after_start" => t.after_start.push(v),
                         _ => return None,
                     }
                 }

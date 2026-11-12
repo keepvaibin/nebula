@@ -88,7 +88,7 @@ fn a_correct_mod_passes_with_nothing_to_say() {
     assert!(report.findings.is_empty(), "{:?}", report.findings);
 
     let store = FakeStore { case_insensitive: false };
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: Some(&store) };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: None, store: Some(&store) };
     let patch = br#"{"patch": 1, "key": ["name"], "set": [{"where": {"name": "Alpha"}, "values": {"count": 3}}]}"#;
     let bytes = luma(
         &[("layers", r#"[{"name": "base"}]"#), ("nebula", r#"">=2.0.0""#)],
@@ -103,7 +103,7 @@ fn a_correct_mod_passes_with_nothing_to_say() {
 #[test]
 fn a_link_key_is_new_to_the_whole_zone() {
     let store = FakeStore { case_insensitive: false };
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: Some(&store) };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: None, store: Some(&store) };
     let layer = [("layers", r#"[{"name": "base"}]"#)];
     let common = "layers/base/patches/StageData/Zone/jmp/Placement/Common/ObjInfo.json";
     let layer_a = "layers/base/patches/StageData/Zone/jmp/Placement/LayerA/ObjInfo.json";
@@ -200,7 +200,7 @@ impl Store for ScenarioStore {
 #[test]
 fn a_new_galaxy_s_table_and_other_mods_cells_say_which_layers_are_on_together() {
     let store = ScenarioStore { listed: true };
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: Some(&store) };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: None, store: Some(&store) };
     let layer = [("layers", r#"[{"name": "base"}]"#)];
     let at = |l: &str| format!("layers/base/patches/{}.json", START.replace("{}", l));
     let add = |n: u32| format!(r#"{{"patch": 1, "key": ["MarioNo"], "add": [{{"MarioNo": {n}}}]}}"#).into_bytes();
@@ -284,7 +284,7 @@ fn a_new_galaxy_s_table_and_other_mods_cells_say_which_layers_are_on_together() 
 #[test]
 fn a_start_key_is_new_among_the_layers_on_together() {
     let store = ScenarioStore { listed: true };
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: Some(&store) };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: None, store: Some(&store) };
     let layer = [("layers", r#"[{"name": "base"}]"#)];
     let at = |l: &str| format!("layers/base/patches/{}.json", START.replace("{}", l));
     let add = |n: u32| format!(r#"{{"patch": 1, "key": ["MarioNo"], "add": [{{"MarioNo": {n}}}]}}"#).into_bytes();
@@ -333,7 +333,7 @@ fn a_start_key_is_new_among_the_layers_on_together() {
 
     // A store that cannot list its galaxies: only Common and the same layer are checked, and the report says so.
     let unlisted = ScenarioStore { listed: false };
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: Some(&unlisted) };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: None, store: Some(&unlisted) };
     let r = check(&luma(&layer, &[file(&at("LayerA"), &add(0))]), &Setup { game: Some(&game), ..NO_GAME });
     assert_eq!(in_group(&r), 0, "{:?}", r.findings);
     assert!(r.not_checked.iter().any(|n| n.code == 402 && n.because == "Missing.Scenarios"), "{:?}", r.not_checked);
@@ -342,7 +342,7 @@ fn a_start_key_is_new_among_the_layers_on_together() {
 #[test]
 fn every_rule_has_a_broken_mod() {
     let store = FakeStore { case_insensitive: false };
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: Some(&store) };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: None, store: Some(&store) };
     let layer = [("layers", r#"[{"name": "base"}]"#)];
     let patch_file = "layers/base/patches/stage/table.bcsv.json";
 
@@ -400,6 +400,12 @@ fn every_rule_has_a_broken_mod() {
         (209, luma(&[("icon", r#""media/none.png""#)], &[]), NO_GAME),
         (210, luma(&[("options", r#"[{"key": "a", "kind": "number", "name": "A", "default": 20, "min": 0, "max": 10, "step": 1}]"#)], &[]), NO_GAME),
         (211, luma(&[("permissions", r#"[{"name": "net"}]"#)], &[]), NO_GAME),
+        (211, luma(&[("permissions", r#"[{"name": "net.internet", "why": "Uploads your times."}]"#)], &[]), NO_GAME),
+        (211, luma(&[("permissions", r#"[{"name": "net.internet", "why": "Uploads your times.", "hosts": ["a.org", "A.org"]}]"#)], &[]), NO_GAME),
+        (211, luma(&[("permissions", r#"[{"name": "fs.exchange", "why": "Shares a ghost.", "hosts": ["a.org"]}]"#)], &[]), NO_GAME),
+        (211, luma(&[("permissions", r#"[{"name": "camera", "why": "Sees you."}]"#)], &[]), NO_GAME),
+        (218, luma(&[("permissions", r#"[{"name": "system.links", "why": "Opens the leaderboard page."}]"#)], &[]), NO_GAME),
+        (219, luma(&[("permissions", r#"[{"name": "test.secret", "why": "A test."}]"#)], &[]), NO_GAME),
         (212, luma(&[("load", r#"{"after": ["test.mod"]}"#)], &[]), NO_GAME),
         (213, luma(&[("takes_over", r#"["test.mod"]"#)], &[]), NO_GAME),
         (214, luma(&[("text", r#"{"Klingon": {"name": "Test"}}"#)], &[]), NO_GAME),
@@ -499,18 +505,19 @@ fn every_rule_has_a_broken_mod() {
         }
     }
     // The rules no broken mod here can reach yet, each with why (`libraries.rs` covers the code rules on libraries).
-    let elsewhere: [(u16, &str); 12] = [
+    let elsewhere: [(u16, &str); 13] = [
         (304, "what a source may stand in for is each content kind's contract (3.2 to 3.10)"),
         (407, "table_keys.rs"),
         (503, "libraries.rs"),
         (504, "libraries.rs"),
         (505, "libraries.rs"),
-        (506, "needs LUMA_IMPORT_SERVICE (1.1)"),
+        (506, "libraries.rs"),
         (508, "libraries.rs"),
         (510, "libraries.rs"),
         (511, "the iOS signing rules (8.3)"),
         (512, "libraries.rs"),
         (805, "libraries.rs"),
+        (806, "renderer.rs"),
         (701, "the LumaKit schemas (5.x); 702 likewise, and 804 is the cooker's (3.x)"),
     ];
     for code in luma_validate::CODES {
@@ -529,7 +536,7 @@ fn with_game_ref<'a>(game: &'a Game<'a>) -> Setup<'a> {
 #[test]
 fn a_table_matched_without_case_finds_its_rows() {
     let store = FakeStore { case_insensitive: true };
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: Some(&store) };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: None, store: Some(&store) };
     let patch = br#"{"patch": 1, "key": ["name"], "set": [{"where": {"name": "ALPHA"}, "values": {"count": 3}}]}"#;
     let bytes = luma(&[("layers", r#"[{"name": "base"}]"#)], &[file("layers/base/patches/stage/table.bcsv.json", patch)]);
     let report = check(&bytes, &with_game_ref(&game));
@@ -558,7 +565,7 @@ fn no_damaged_byte_makes_it_panic() {
         &[file("layers/base/patches/stage/table.bcsv.json", patch), deflated("layers/base/files/ObjectData/Kuribo.arc", &[7; 512])],
     );
     let store = FakeStore { case_insensitive: false };
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: Some(&store) };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: None, store: Some(&store) };
     // Every byte set to three values, and every length cut: none may panic, and every message stays filled.
     for at in 0..good.len() {
         for value in [0x00u8, 0xff, good[at] ^ 0x5a] {
@@ -577,7 +584,7 @@ fn no_damaged_byte_makes_it_panic() {
 #[test]
 fn a_start_takes_the_whole_file_findings_from_the_kept_report_and_runs_the_rest() {
     let store = FakeStore { case_insensitive: false };
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: Some(&store) };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: None, store: Some(&store) };
     let bad_row = br#"{"patch": 1, "key": ["name"], "set": [{"where": {"name": "Omega"}, "values": {"count": 3}}]}"#;
     let no_file = br#"{"patch": 1, "key": ["name"], "set": [{"where": {"name": "Alpha"}, "values": {"count": 3}}]}"#;
     let mut broken = file("layers/base/files/ObjectData/Kuribo.arc", &[7; 64]);
@@ -683,7 +690,7 @@ fn a_cycle_of_needs_through_the_mod_is_refused_and_named() {
 #[test]
 fn the_mod_higher_in_the_list_wins() {
     let store = FakeStore { case_insensitive: false };
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: Some(&store) };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: None, store: Some(&store) };
     let layer = [("layers", r#"[{"name": "base"}]"#)];
     let mut replacing = other("other.mod");
     replacing.touches.replaces = vec!["objectdata/kuribo.arc".into()];
@@ -702,4 +709,17 @@ fn the_mod_higher_in_the_list_wins() {
     assert_eq!(above.len(), 2, "{above:?}");
     assert!(below.iter().all(|(_, m)| m.contains("; other.mod's") && m.ends_with("(it is higher in the list).")), "{below:?}");
     assert!(above.iter().all(|(_, m)| m.contains("; test.mod's") && m.ends_with("(it is higher in the list).")), "{above:?}");
+}
+
+/// F's AP-1 (audit 3.1-perm): a revision-1 `net` with hosts is one finding, Perm.NetSplit, not NetSplit and
+/// HostsOnlyNet; another name with hosts still gets HostsOnlyNet.
+#[test]
+fn a_revision_1_net_with_hosts_is_one_finding() {
+    let r = check(&luma(&[("permissions", r#"[{"name": "net", "why": "Uploads your times.", "hosts": ["a.org"]}]"#)], &[]), &NO_GAME);
+    let got: Vec<(u16, String)> = r.findings.iter().map(|f| (f.code, message(f, "UsEnglish"))).collect();
+    assert_eq!(got.len(), 1, "{got:?}");
+    assert_eq!(got[0].0, 211);
+    assert!(got[0].1.contains("net is two permissions now"), "{}", got[0].1);
+    let r = check(&luma(&[("permissions", r#"[{"name": "fs.exchange", "why": "Shares a ghost.", "hosts": ["a.org"]}]"#)], &[]), &NO_GAME);
+    assert!(message(&r.findings[0], "UsEnglish").contains("only net.internet takes hosts"), "{:?}", r.findings);
 }

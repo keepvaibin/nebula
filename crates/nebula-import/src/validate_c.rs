@@ -57,8 +57,9 @@ pub struct LumaValidateInput {
     pub names: *const c_char,
     pub names_size: u64,
     pub luma_api: u32,
-    pub permissions: *const *const c_char,
-    pub permission_count: u32,
+    /// The game's services catalog (JSON with a `services` key, services-registry 9); null: kind 5 is not checked.
+    pub services: *const c_char,
+    pub services_size: u64,
     pub store: *const LumaGameStore,
     pub store_key: *const c_char,
     pub installed: *const LumaInstalledMod,
@@ -68,6 +69,15 @@ pub struct LumaValidateInput {
     pub option_count: u32,
     pub kept: *const u8,
     pub kept_size: u64,
+    /// The game's luma_types.json; null: kinds 1, 2 and 7 are not checked.
+    pub types: *const c_char,
+    pub types_size: u64,
+    /// The renderer's feature names (JSON with a `renderer` key, luma-format revision 4); null: L806 is not checked.
+    pub renderer: *const c_char,
+    pub renderer_size: u64,
+    /// The features this device's graphics have (start-check 3); null: L806 is not checked.
+    pub device_features: *const *const c_char,
+    pub device_feature_count: u32,
 }
 
 #[repr(C)]
@@ -92,6 +102,12 @@ pub struct LumaReport {
     strings: Vec<[Option<CString>; 3]>,
     id: Option<CString>,
     version: Option<CString>,
+    /// Touches.services: each platform and the name of a service its entry library requires, in import order.
+    required: Vec<(String, CString)>,
+    /// Touches.after_start: class, file and line, one per placement (references 3).
+    after_start: Vec<(CString, CString, u32)>,
+    /// Made by luma_report_read_kept: no rule ran (luma_report_state 2).
+    from_kept: bool,
     shown: RefCell<Option<(CString, LumaFinding)>>,
     shown_not_checked: RefCell<Option<CString>>,
     /// Why the input was not valid (for the developer's log, in English).
@@ -256,6 +272,9 @@ fn invalid(why: &str) -> *mut LumaReport {
         strings: Vec::new(),
         id: None,
         version: None,
+        required: Vec::new(),
+        after_start: Vec::new(),
+        from_kept: false,
         shown: RefCell::new(None),
         shown_not_checked: RefCell::new(None),
         invalid: Some(c(why)),
@@ -276,11 +295,41 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
         let bytes = std::slice::from_raw_parts(input.names.cast::<u8>(), input.names_size as usize);
         String::from_utf8_lossy(bytes).into_owned()
     });
+    let types_bytes = (!input.types.is_null()).then(|| std::slice::from_raw_parts(input.types.cast::<u8>(), input.types_size as usize));
+    if types_bytes.is_some() && names_text.is_none() {
+        return Err("types given without names".to_string());
+    }
+    let services_bytes = (!input.services.is_null()).then(|| std::slice::from_raw_parts(input.services.cast::<u8>(), input.services_size as usize));
+    if services_bytes.is_some() && names_text.is_none() {
+        return Err("services given without names".to_string());
+    }
+    let renderer_bytes = (!input.renderer.is_null()).then(|| std::slice::from_raw_parts(input.renderer.cast::<u8>(), input.renderer_size as usize));
+    if renderer_bytes.is_some() && names_text.is_none() {
+        return Err("renderer given without names".to_string());
+    }
+    // Each device feature is a name; one that is not, or a null in the list, is the caller's fault.
+    let device_features: Option<Vec<String>> = if input.device_features.is_null() {
+        None
+    } else {
+        let mut out = Vec::new();
+        for (i, &f) in list(input.device_features, input.device_feature_count).iter().enumerate() {
+            let name = text(f).ok_or_else(|| format!("device_features[{i}] is null"))?;
+            if !luma_validate::names::feature_name_ok(&name) {
+                return Err(format!("device_features[{i}] \"{name}\" is not a feature name"));
+            }
+            out.push(name);
+        }
+        out.sort();
+        out.dedup();
+        Some(out)
+    };
     let names = match &names_text {
         Some(t) => {
             let mut n = Names { api: input.luma_api, ..Names::default() };
             n.add_rows(t).map_err(|line| format!("names line {line}: not name, signature, kind, line"))?;
-            n.permissions = (!input.permissions.is_null()).then(|| list(input.permissions, input.permission_count).iter().filter_map(|&p| text(p)).collect());
+            n.types = types_bytes.map(luma_validate::names::Types::from_json).transpose().map_err(|e| format!("types: {e}"))?;
+            n.services = services_bytes.map(luma_validate::names::Services::from_json).transpose().map_err(|e| format!("services: {e}"))?;
+            n.renderer_features = renderer_bytes.map(luma_validate::names::renderer_features_from_json).transpose().map_err(|e| format!("renderer: {e}"))?;
             Some(n)
         }
         None => None,
@@ -295,16 +344,18 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
     }
     let store = (!input.store.is_null()).then(|| CStore(input.store));
     let store_key = text(input.store_key).unwrap_or_default();
-    // What identifies the game for a kept report: a change in any of it checks every rule again.
-    let mut perms: Vec<String> = names.as_ref().and_then(|n| n.permissions.clone()).unwrap_or_default();
-    perms.sort();
+    // What identifies the game for a kept report: a change in any of it checks every rule again. The device's
+    // features are not in it (F's AR-1): L806 is a manifest rule, run at every start, and a laptop that switches GPUs
+    // keeps its kept reports.
     let game_key = format!(
-        "nebula {nebula}; region {}; platform {platform}; languages {}; api {}; names {}; permissions {}; store {}",
+        "nebula {nebula}; region {}; platform {platform}; languages {}; api {}; names {}; types {}; services {}; renderer {}; store {}",
         region.as_deref().unwrap_or("-"),
         languages.join(","),
         input.luma_api,
         names_text.as_deref().map_or_else(|| "-".to_string(), |t| hex_sha1(t.as_bytes())),
-        perms.join(","),
+        types_bytes.map_or_else(|| "-".to_string(), hex_sha1),
+        services_bytes.map_or_else(|| "-".to_string(), hex_sha1),
+        renderer_bytes.map_or_else(|| "-".to_string(), hex_sha1),
         if store.is_some() { store_key.as_str() } else { "-" },
     );
     // Every other mod is given by its kept report; one that does not read is the caller's fault, never skipped.
@@ -331,6 +382,7 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
         region: region.as_deref(),
         extra_languages: &languages,
         names: names.as_ref(),
+        device_features: device_features.as_deref(),
         store: store.as_ref().map(|s| s as &dyn Store),
     };
     let platforms = [platform.as_str()];
@@ -346,9 +398,90 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
         .iter()
         .map(|f| [f.mod_id.as_deref().map(c), Some(c(&f.file)), f.pointer.as_deref().map(c)])
         .collect();
-    let id = report.about.as_ref().map(|a| c(&a.id));
-    let version = report.about.as_ref().map(|a| c(&a.version.to_string()));
-    Ok(LumaReport { report: Some(report), kept, strings, id, version, shown: RefCell::new(None), shown_not_checked: RefCell::new(None), invalid: None })
+    let (id, version, required, after_start) = from_touches(report.about.as_ref(), &report.touches);
+    Ok(LumaReport { report: Some(report), kept, strings, id, version, required, after_start, from_kept: false, shown: RefCell::new(None), shown_not_checked: RefCell::new(None), invalid: None })
+}
+
+type Facts = (Option<CString>, Option<CString>, Vec<(String, CString)>, Vec<(CString, CString, u32)>);
+
+/// What the accessors read beside the findings: id, version, the required services and the after-start rows, from a
+/// report or a kept report. A touch row not in its form is left out (the validator writes them all).
+fn from_touches(about: Option<&luma_validate::About>, touches: &luma_validate::Touches) -> Facts {
+    let id = about.map(|a| c(&a.id));
+    let version = about.map(|a| c(&a.version.to_string()));
+    let required = touches
+        .services
+        .iter()
+        .filter_map(|v| {
+            let mut parts = v.split('\u{1f}');
+            Some((parts.next()?.to_string(), c(parts.next()?)))
+        })
+        .collect();
+    let after_start = touches
+        .after_start
+        .iter()
+        .filter_map(|v| {
+            let mut parts = v.split('\u{1f}');
+            let (class, file, line) = (parts.next()?, parts.next()?, parts.next()?.parse().ok()?);
+            Some((c(class), c(file), line))
+        })
+        .collect();
+    (id, version, required, after_start)
+}
+
+/// A mod's kept report read as it is, no rule run (start-check F-S2: the scan's required permissions, before the
+/// start's check): id, version, required services and after-start rows answer on it; count 0, kept null. Kept bytes
+/// that do not read (another form, cut short, changed: the end line's SHA-1) give state -1 and why. Never null; give
+/// it back to luma_report_free.
+///
+/// # Safety
+/// `kept` is null or valid for `kept_size` bytes during the call.
+#[no_mangle]
+pub unsafe extern "C" fn luma_report_read_kept(kept: *const u8, kept_size: u64) -> *mut LumaReport {
+    if kept.is_null() {
+        return invalid("kept is null");
+    }
+    let bytes = std::slice::from_raw_parts(kept, kept_size as usize);
+    match std::panic::catch_unwind(|| Saved::parse(bytes)) {
+        Ok(Some(saved)) => {
+            let (id, version, required, after_start) = from_touches(saved.about.as_ref(), &saved.touches);
+            Box::into_raw(Box::new(LumaReport {
+                report: None,
+                kept: Vec::new(),
+                strings: Vec::new(),
+                id,
+                version,
+                required,
+                after_start,
+                from_kept: true,
+                shown: RefCell::new(None),
+                shown_not_checked: RefCell::new(None),
+                invalid: None,
+            }))
+        }
+        Ok(None) => invalid("the kept report does not read (made by another validator form, cut short, or changed); check the mod in full"),
+        Err(payload) => invalid(&format!("the validator failed (a bug): {}", panic_text(payload.as_ref()))),
+    }
+}
+
+/// After-start row `index` (0 first): 1 with the class, file and line, 0 past the last (the outputs untouched). On a
+/// report from luma_validate or luma_report_read_kept; the strings are valid until luma_report_free.
+///
+/// # Safety
+/// As luma_report_state; each output is null or writable.
+#[no_mangle]
+pub unsafe extern "C" fn luma_report_after_start(report: *const LumaReport, index: u32, class_name: *mut *const c_char, file: *mut *const c_char, line: *mut u32) -> u32 {
+    let Some((class, f, l)) = report.as_ref().and_then(|r| r.after_start.get(index as usize)) else { return 0 };
+    if let Some(out) = class_name.as_mut() {
+        *out = class.as_ptr();
+    }
+    if let Some(out) = file.as_mut() {
+        *out = f.as_ptr();
+    }
+    if let Some(out) = line.as_mut() {
+        *out = *l;
+    }
+    1
 }
 
 /// Validates the mod at `input->path` against the running game. Never null; give it back to luma_report_free.
@@ -407,16 +540,18 @@ pub unsafe extern "C" fn luma_report_invalid(report: *const LumaReport) -> *cons
     report.as_ref().and_then(|r| r.invalid.as_ref()).map_or(std::ptr::null(), |c| c.as_ptr())
 }
 
-/// 0: every rule ran; 1: a start's check (the whole-file rules from the kept report); -1: the input was not valid
-/// (luma_report_invalid says why).
+/// 0: every rule ran; 1: a start's check (the whole-file rules from the kept report); 2: a kept report read by
+/// luma_report_read_kept (no rule ran); -1: the input was not valid (luma_report_invalid says why).
 ///
 /// # Safety
-/// `report` is null or from luma_validate, not yet freed.
+/// `report` is null or from luma_validate or luma_report_read_kept, not yet freed.
 #[no_mangle]
 pub unsafe extern "C" fn luma_report_state(report: *const LumaReport) -> i32 {
-    match report.as_ref().and_then(|r| r.report.as_ref()) {
-        Some(r) if r.full => 0,
+    let Some(r) = report.as_ref() else { return -1 };
+    match r.report.as_ref() {
+        Some(rep) if rep.full => 0,
         Some(_) => 1,
+        None if r.from_kept => 2,
         None => -1,
     }
 }
@@ -513,6 +648,18 @@ pub unsafe extern "C" fn luma_report_kept(report: *const LumaReport, size: *mut 
 #[no_mangle]
 pub unsafe extern "C" fn luma_report_id(report: *const LumaReport) -> *const c_char {
     report.as_ref().and_then(|r| r.id.as_ref()).map_or(std::ptr::null(), |c| c.as_ptr())
+}
+
+/// The name of the service number `index` that the entry library for `platform` imports without LUMA_OPTIONAL
+/// (kind 5), in import order, each once; null past the last, or for a platform the mod has no code for. The same from
+/// a start's check that took the kept report (consent 1.3: the host maps each to its permission by name).
+///
+/// # Safety
+/// As luma_report_state; `platform` is null or a NUL-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn luma_report_required_service(report: *const LumaReport, platform: *const c_char, index: u32) -> *const c_char {
+    let (Some(r), Some(platform)) = (report.as_ref(), text(platform)) else { return std::ptr::null() };
+    r.required.iter().filter(|(p, _)| *p == platform).nth(index as usize).map_or(std::ptr::null(), |(_, name)| name.as_ptr())
 }
 
 /// # Safety
