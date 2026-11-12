@@ -38,9 +38,6 @@ void LayoutActor::calcAnim() {
 }
 
 void LayoutActor::draw() const {
-    if (mFlag.mHudPart != 0 && NebulaMods::isHudHidden(mFlag.mHudPart)) {
-        return;
-    }
     if (MR::isExecuteDrawLayout(this)) {
         MotionSignal::drawObject(mDrawSlot, mMotionEpoch);
         mLayoutManager->setDrawGeneration(mMotionEpoch);

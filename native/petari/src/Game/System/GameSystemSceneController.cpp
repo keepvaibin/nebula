@@ -257,7 +257,6 @@ void GameSystemSceneController::calcAnimScene() {
     Scene* pScene = getCurrentSceneForExecute();
 
     if (pScene != nullptr) {
-        const NebulaMods::InStage inStage(mCurrSceneControlInfo.mScene == SceneKind_Game);
         pScene->calcAnim();
         mScenarioSelectScene->calcAnim();
     }
@@ -267,7 +266,6 @@ void GameSystemSceneController::drawScene() {
     Scene* pScene = getCurrentSceneForExecute();
 
     if (pScene != nullptr) {
-        const NebulaMods::InStage inStage(mCurrSceneControlInfo.mScene == SceneKind_Game);
         pScene->draw();
         mScenarioSelectScene->draw();
     }

@@ -543,7 +543,7 @@ void StarPointerLayout::calcAnim() {
 }
 
 void StarPointerLayout::draw() const {
-    if (!isAppear() || NebulaMods::isHudHidden(NEBULA_HUD_POINTER)) {
+    if (!isAppear()) {
         mBlur->hideAll();
         return;
     }

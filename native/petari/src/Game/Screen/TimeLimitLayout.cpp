@@ -36,7 +36,6 @@ namespace NrvTimeLimitLayout {
 TimeLimitLayout::TimeLimitLayout(u32 timeLimit)
     : LayoutActor("タイムリミット", true), mTime(), mTimeLimit(timeLimit), mScaleControl(), mFadeControl(), mCurrentTiming(), mIsSuspend(), mIsNormalDisplay() {
     lumacore::setClass(this, lumacore::kClassId< TimeLimitLayout >);
-    mFlag.mHudPart = NEBULA_HUD_TIMER;
 }
 
 void TimeLimitLayout::init(const TableIter& /*rIter*/) {
@@ -56,13 +55,11 @@ void TimeLimitLayout::init(const TableIter& /*rIter*/) {
 void TimeLimitLayout::appear() {
     resetFrame();
     LayoutActor::appear();
-    NebulaMods::setCountdown(this, true);
     setNerve(GET_NERVE(TimeLimitLayout, TimeLimitLayoutAppear));
 }
 
 void TimeLimitLayout::kill() {
     LayoutActor::kill();
-    NebulaMods::setCountdown(this, false);
 }
 
 void TimeLimitLayout::setTimeLimit(u32 timeLimit) {
@@ -237,7 +234,7 @@ const Timing* TimeLimitLayout::getCurrentTiming() const {
 }
 
 bool TimeLimitLayout::updateNormal() {
-    if (mIsSuspend || NebulaMods::sCountdownHeld) {
+    if (mIsSuspend) {
         return false;
     }
 

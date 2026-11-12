@@ -2,7 +2,6 @@
 extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/System/NebulaLoadTrace.hpp"
 #include "Game/System/NebulaMods.hpp"
-#include "Game/System/LumaClass.hpp"
 #include "Game/System/LumaRefs.hpp"
 #include "Game/Scene/PlacementInfoOrdered.hpp"
 #include "Game/LiveActor/AllLiveActorGroup.hpp"
@@ -111,12 +110,10 @@ bool PlacementInfoOrdered::initPlacementStep(uint64_t deadline) {
             MR::setCurrentPlacementZoneId(MR::getPlacedZoneId(iter));
             if (mInitializing == nullptr) {
                 NebulaLoadTrace::placed(set->mName, MR::getPlacedZoneId(iter));
-                // A mod's object (placed by its name, or what a change turns the placed one into) is made by its own
-                // name; the game's by their Japanese names, as the game's creators take them.
-                const char* const pModObject = set->mShapeId == -1 ? NebulaMods::modObjectName(set->mName) : nullptr;
-                mInitializing = creator(pModObject != nullptr ? pModObject : MR::getJapaneseObjectName(set->mName));
+                // The game's creators take the Japanese names.
+                mInitializing = creator(MR::getJapaneseObjectName(set->mName));
                 if (mInitializing == nullptr) {
-                    // Nothing made (a mod's object it could not make): this placement is left out.
+                    // Nothing made (a mod's change removed it): this placement is left out.
                     MR::clearCurrentPlacementZoneId();
                     mPlacementLink = mPlacementLink->getNext();
                     if (mPlacementLink == nullptr) ++mPlacementSet;
@@ -128,10 +125,6 @@ bool PlacementInfoOrdered::initPlacementStep(uint64_t deadline) {
             MR::initLiveActorSystemInfo(iter);
             MR::clearCurrentPlacementZoneId();
             if (!ready) return false;
-            // The mods' classes on what this placement made (luma.json "object_classes" with a script, plugins' hooks).
-            if (lumacore::sClassRowCount != 0) [[unlikely]] {
-                lumacore::attachClass(mInitializing, set->mName);
-            }
             mInitializing = nullptr;
         }
         mPlacementLink = mPlacementLink->getNext();

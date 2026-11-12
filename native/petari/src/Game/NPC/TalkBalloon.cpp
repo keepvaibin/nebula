@@ -257,7 +257,7 @@ void TalkBalloonShort::exeOpen() {
 }
 
 TalkBalloonEvent::TalkBalloonEvent(const char* pName)
-    : TalkBalloon(pName), mFormMode(TalkTextForm_Event), mAButton(), mPlaced(false), mHome(0.0f, 0.0f) {
+    : TalkBalloon(pName), mFormMode(TalkTextForm_Event), mAButton() {
     lumacore::setClass(this, lumacore::kClassId< TalkBalloonEvent >);
     initNerve(GET_NERVE(TalkBalloonEvent, TalkBalloonEventNrvWait));
 }
@@ -296,49 +296,6 @@ void TalkBalloonEvent::close() {
     LayoutActor::setNerve(GET_NERVE(TalkBalloonEvent, TalkBalloonEventNrvClose));
 }
 
-void TalkBalloonEvent::updateBalloon() {
-    placeByPlugin();
-    TalkBalloon::updateBalloon();
-}
-
-// A plugin's place for the box (place_talk_box): the text's middle on its point, the whole text inside the screen.
-void TalkBalloonEvent::placeByPlugin() {
-    Ui::Pane* pRoot = MR::getRootPane(this);
-    f32 x = 0.0f;
-    f32 y = 0.0f;
-    if (!NebulaMods::talkBoxPlace(&x, &y)) {
-        if (mPlaced) {
-            pRoot->mTranslate.x = mHome.x;
-            pRoot->mTranslate.y = mHome.y;
-            mPlaced = false;
-        }
-        return;
-    }
-    if (!mPlaced) {
-        mHome.set(pRoot->mTranslate.x, pRoot->mTranslate.y);
-        mPlaced = true;
-    }
-
-    // The text's offset from the root, both as last drawn: the layout's own, the same wherever the root is.
-    Vec2f root;
-    Vec2f text;
-    MR::copyPaneTrans(&root, this, nullptr);
-    MR::copyPaneTrans(&text, this, "Text00");
-    const Ui::Pane* pText = MR::getPane(this, "Text00");
-    f32 halfWidth = 0.0f;
-    f32 halfHeight = 0.0f;
-    if (pText != nullptr) {
-        Vec2f corner;
-        MR::convertPaneLocalPosToScreenPos(&corner, pText, Vec2f(pText->mSize.width * 0.5f, pText->mSize.height * 0.5f));
-        halfWidth = corner.x > text.x ? corner.x - text.x : text.x - corner.x;
-        halfHeight = corner.y > text.y ? corner.y - text.y : text.y - corner.y;
-    }
-    const f32 width = MR::getScreenWidth();
-    const f32 height = MR::getScreenHeight();
-    x = x < halfWidth ? halfWidth : (x > width - halfWidth ? width - halfWidth : x);
-    y = y < halfHeight ? halfHeight : (y > height - halfHeight ? height - halfHeight : y);
-    setTrans(Vec2f(x - (text.x - root.x), y - (text.y - root.y)));
-}
 
 void TalkBalloonEvent::updateBeak() {
     if (!mHasBeak) {

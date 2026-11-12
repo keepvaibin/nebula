@@ -99,8 +99,6 @@ struct LaunchArgs {
     std::filesystem::path settings;     // --settings: the folder of config.ini and runtime_settings.ini; empty: the data folder
     std::filesystem::path crash_dumps;  // --crash-dumps: crash dumps and reports; empty: <data>/crashes
     std::filesystem::path timeline;     // --timeline: the recorded timeline's file; empty: the diagnostics folder's
-    // --dump-tunables: every tuning number mods can set is written there as the game module starts (docs/modding).
-    std::filesystem::path dump_tunables;
     unsigned diagnostics = 0u;          // --diagnostics: Diagnostic bits
     unsigned gpu_validation = 0u;       // --gpu-validation: 1 the graphics API's validation layer, 2 also Direct3D 12's GPU-based
     bool console_log = false;           // --console-log 1: the log stays on the console, not logs/latest.log

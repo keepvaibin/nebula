@@ -4819,20 +4819,10 @@ namespace {
 
 namespace NameObjFactory {
     CreatorFuncPtr getCreator(const char* pName) {
-        // First: a plugin may also take the place of one of the game's own.
-        if (const CreatorFuncPtr pPlugin = NebulaMods::findCreator(pName)) {
-            return pPlugin;
-        }
-
         pName = NebulaMods::objectBecomes(NEBULA_OBJECTS_PLACED, NebulaMods::objectLike(pName));
         if (pName == nullptr) {
             return nullptr;
         }
-        // A change into a mod's own object (luma.json "objects", a plugin's class).
-        if (const CreatorFuncPtr pPlugin = NebulaMods::findCreator(pName)) {
-            return pPlugin;
-        }
-
         if (PlanetMapCreatorFunction::isRegisteredObj(pName)) {
             return PlanetMapCreatorFunction::getPlanetMapCreator(pName);
         }
