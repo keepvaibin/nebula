@@ -8,7 +8,9 @@
 #include <cstdint>
 #include <filesystem>
 #include <span>
+#include <string>
 #include <string_view>
+#include <vector>
 
 namespace galaxy::luma_fs {
 
@@ -30,8 +32,10 @@ namespace galaxy::luma_fs {
 [[nodiscard]] std::int32_t find_data_file(std::string_view id, std::string_view path, std::filesystem::path* out);
 
 // Any thread, off the game thread. The bytes of the files in id's data folder (0 when there is none), for the Mods
-// page's REMOVED MODS line.
+// page's REMOVED MODS line; whether it has one; the ids that have one (folder names in the id rule).
 [[nodiscard]] std::uint64_t data_bytes(std::string_view id);
+[[nodiscard]] bool has_data_folder(std::string_view id);
+void data_ids(std::vector<std::string>& out);
 
 // Any thread: the player's FORGET. id's data folder is removed on the fs worker, after every request queued before.
 void forget_data(std::string_view id);

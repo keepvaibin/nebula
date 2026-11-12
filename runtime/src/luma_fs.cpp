@@ -1241,6 +1241,34 @@ std::uint64_t data_bytes(std::string_view id) {
     }
 }
 
+bool has_data_folder(std::string_view id) {
+    try {
+        const stdfs::path folder = data_folder(id);
+        return !folder.empty() && kind_of(folder) == Kind::Folder;
+    } catch (...) {
+        return false;
+    }
+}
+
+void data_ids(std::vector<std::string>& out) {
+    out.clear();
+    try {
+        const stdfs::path base = data_root();
+        if (base.empty()) {
+            return;
+        }
+        std::error_code error;
+        for (stdfs::directory_iterator it(base, error), end; !error && it != end; it.increment(error)) {
+            std::string name = name_of(it->path());
+            if (valid_id(name) && kind_of(it->path()) == Kind::Folder) {
+                out.push_back(std::move(name));
+            }
+        }
+    } catch (...) {
+        out.clear();
+    }
+}
+
 void forget_data(std::string_view id) {
     try {
         const stdfs::path folder = data_folder(id);

@@ -23,11 +23,13 @@ struct KeptMod {
     std::string id;
     std::uint32_t numbers = 0;    // its keys in the record, all spaces
     std::uint64_t save_bytes = 0; // its saved values (services-save 5), from the save half's counter
+    std::uint64_t data_bytes = 0; // the files in its fs data folder (services-fs 3)
 };
-// Any thread. The record is read first when this session has not read it yet.
+// Any thread but the game thread (it reads the fs data folders' sizes from the disk). The record is read first when
+// this session has not read it yet.
 void kept(std::vector<KeptMod>& out);
-// Any thread: the player's FORGET. Drops `id`'s keys from the record (written at once on the record's writer thread)
-// and asks the save half to drop its values; one Note Mods.Forgotten.
+// Any thread: the player's FORGET. Drops `id`'s keys from the record (written at once on the record's writer thread),
+// asks the save half to drop its values and fs to remove its data folder; one Note Mods.Forgotten.
 void forget(std::string_view id);
 // Game thread, at a renamed mod's first start (services-save 6, J-SM12): `old_id`'s keys become `new_id`'s with the
 // same numbers, in every space. Returns how many moved; a key the new id already holds keeps the new id's number.

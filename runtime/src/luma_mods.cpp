@@ -7,6 +7,7 @@
 
 #include "galaxy/atomic_file.h"
 #include "galaxy/luma.h"
+#include "galaxy/luma_fs_service.h"
 #include "galaxy/mod_log.h"
 #include "galaxy/mod_plugins.h"
 #include "galaxy/mods.h"
@@ -757,6 +758,16 @@ void kept(std::vector<KeptMod>& out) {
             }
         }
     }
+    // And ids with a data folder of fs (services-fs 3).
+    {
+        std::vector<std::string> data;
+        galaxy::luma_fs::data_ids(data);
+        for (std::string& id : data) {
+            if (valid_mod_id(id)) {
+                numbers.emplace(std::move(id), 0u);
+            }
+        }
+    }
     const galaxy::mods::SessionMods session = galaxy::mods::session_mods();
     const std::filesystem::path folder = galaxy::mods::mods_folder();
     for (const auto& [id, count] : numbers) {
@@ -769,8 +780,11 @@ void kept(std::vector<KeptMod>& out) {
         const auto in_chunks = chunk_bytes.find(id);
         const std::uint64_t bytes = (g_save.bytes != nullptr ? g_save.bytes(id) : 0u) +
                                     (in_chunks != chunk_bytes.end() ? in_chunks->second : 0u);
-        if (count != 0u || bytes != 0u) {
-            out.push_back({id, count, bytes});
+        const std::uint64_t data_bytes = galaxy::luma_fs::data_bytes(id);
+        // A data folder with no file in it still holds the id's place: FORGET removes it too.
+        const bool data_folder = data_bytes != 0u || galaxy::luma_fs::has_data_folder(id);
+        if (count != 0u || bytes != 0u || data_folder) {
+            out.push_back({id, count, bytes, data_bytes});
         }
     }
 }
@@ -807,6 +821,7 @@ void forget(std::string_view id) {
         if (g_chunk_forget != nullptr) {
             g_chunk_forget(std::string(id).c_str());
         }
+        galaxy::luma_fs::forget_data(id);  // its data folder, after every fs request queued before
     }
     galaxy::modlog::add_row(LUMA_MODLOG_CODE, LUMA_MODLOG_NOTE, id, 162u, "", "Mods.Forgotten", {});
 }
