@@ -3,6 +3,9 @@
 
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/NameObj/NameObjFactory.hpp"
+#include "Game/System/GameSystem.hpp"
+#include "Game/System/GameSystemSceneController.hpp"
+#include "Game/Util/SingletonHolder.hpp"
 #include "Game/System/LumaHook.hpp"
 #include "Game/System/LumaLoader.hpp"
 #include "Game/System/LumaTypes.hpp"
@@ -219,7 +222,19 @@ namespace luma {
                 return -1;
             }
 
+            // A scene is running: its objects (the planet map's creators among them) can be asked for.
+            bool inScene() {
+                const GameSystem* const pSystem = SingletonHolder< GameSystem >::get();
+                return pSystem != nullptr && pSystem->mSceneController != nullptr && pSystem->mSceneController->isExistSceneObjHolder();
+            }
+
             CreatorFuncPtr gameCreator(const char* pName) {
+                if (!inScene()) {
+                    // A mod's start comes before any scene: the factory's planet rows are a scene's table (getCreator would
+                    // ask a scene that is not there), so only its own table answers.
+                    const NameObjFactory::Name2CreateFunc* const pRow = NameObjFactory::getName2CreateFunc(pName);
+                    return pRow != nullptr ? pRow->mCreateFunc : nullptr;
+                }
                 tResolving = true;
                 const CreatorFuncPtr pCreator = NameObjFactory::getCreator(pName);
                 tResolving = false;
@@ -440,7 +455,8 @@ namespace luma {
             const char* const pMakerName = pDef->maker != nullptr ? pDef->maker : pDef->base;
             const CreatorFuncPtr pMaker = gameCreator(pMakerName);
             if (pMaker == nullptr) {
-                say(pMod, "define_class %s: the factory has no row %s to make its base", pName, pMakerName);
+                say(pMod, "define_class %s: the factory has no row %s to make its base%s", pName, pMakerName,
+                    inScene() ? "" : " (before a scene only its own table is known; a stage's planet names are not)");
                 return -5;
             }
             if (!installKernelHooks()) {
