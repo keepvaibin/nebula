@@ -959,6 +959,7 @@ private:
     std::string scene_capture_pending_path_;
     unsigned scene_capture_width_ = 0;
     unsigned scene_capture_height_ = 0;
+    bool scene_capture_wide_ = false;  // the copy is of the wide (RGBA16F) scene target: 8 bytes a pixel (FB b83)
     Readback backbuffer_capture_;
     std::string backbuffer_capture_pending_path_;
     unsigned backbuffer_capture_width_ = 0;

@@ -3191,7 +3191,13 @@ bool RendererVk::debug_copy_scene_to_readback() {
     vk::Context& context = vk::Context::get();
     const unsigned w = scene_map_.width;
     const unsigned h = scene_map_.height;
-    const std::uint64_t bytes = static_cast<std::uint64_t>(w) * h * 4u;
+    // The 10-bit scene target, or the wide one (RGBA16F, a traced scene's since l69): 8 bytes a pixel, its halves
+    // read as the 10-bit target's words (debug_log_readback; FB b83). Any other format is not read.
+    const bool wide = scene_.color->format == VK_FORMAT_R16G16B16A16_SFLOAT;
+    if (!wide && scene_.color->format != vk::kSceneColorFormat) {
+        return false;
+    }
+    const std::uint64_t bytes = static_cast<std::uint64_t>(w) * h * (wide ? 8u : 4u);
     if (!scene_capture_.buffer || scene_capture_.buffer->size < bytes) {
         scene_capture_.buffer = context.create_readback_buffer(bytes, "scene target capture");
         if (!scene_capture_.buffer) {
@@ -3211,6 +3217,7 @@ bool RendererVk::debug_copy_scene_to_readback() {
     scene_capture_pending_path_ = scene_capture_path_;
     scene_capture_width_ = w;
     scene_capture_height_ = h;
+    scene_capture_wide_ = wide;
     reset_draw_bindings();
     bind_scene();
     return true;
@@ -3223,8 +3230,16 @@ void RendererVk::debug_log_readback() {
     }
     vk::Context::get().invalidate(*scene_capture_.buffer);
     std::vector<std::uint8_t> rgba(static_cast<std::size_t>(scene_capture_width_) * scene_capture_height_ * 4u);
-    ten_bit_to_rgba8(reinterpret_cast<const std::uint8_t*>(scene_capture_.buffer->mapped), rgba.data(),
-                     scene_capture_width_, scene_capture_height_, scene_capture_width_ * 4u, scene_capture_width_ * 4u);
+    const auto* copied = reinterpret_cast<const std::uint8_t*>(scene_capture_.buffer->mapped);
+    std::vector<std::uint8_t> words;
+    if (scene_capture_wide_) {
+        words.resize(rgba.size());
+        half4_to_ten_bit(copied, words.data(), scene_capture_width_, scene_capture_height_, scene_capture_width_ * 8u,
+                         scene_capture_width_ * 4u);
+        copied = words.data();
+    }
+    ten_bit_to_rgba8(copied, rgba.data(), scene_capture_width_, scene_capture_height_, scene_capture_width_ * 4u,
+                     scene_capture_width_ * 4u);
     std::vector<std::uint8_t> rgb(static_cast<std::size_t>(scene_capture_width_) * scene_capture_height_ * 3u);
     for (std::size_t i = 0, n = rgb.size() / 3u; i < n; ++i) {
         rgb[i * 3u] = rgba[i * 4u];

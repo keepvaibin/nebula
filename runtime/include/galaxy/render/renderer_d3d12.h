@@ -1142,6 +1142,7 @@ private:
     // Debug scene target readback (debug_copy_scene_to_readback / debug_log_readback).
     Microsoft::WRL::ComPtr<ID3D12Resource> readback_buf_;
     bool readback_pending_ = false;
+    bool readback_wide_ = false;  // the copy is of the wide (RGBA16F) scene target: 8 bytes a pixel (FB b83)
     std::uint64_t readback_fence_value_ = 0;
     std::string next_scene_capture_path_;
     std::string readback_capture_path_;

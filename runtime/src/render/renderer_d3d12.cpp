@@ -6327,10 +6327,8 @@ void RendererD3D12::queue_debug_ppm_capture(
 }
 
 bool RendererD3D12::debug_copy_scene_to_readback() {
-    // The readback decodes the 10-bit scene target (R10G10B10A2): the wide scene target's dumps are taken after its scene's end.
-    if (scene_hdr_) {
-        return false;
-    }
+    // The scene target as it is: the 10-bit one (R10G10B10A2), or the wide one (RGBA16F, a traced scene's since l69),
+    // whose halves debug_log_readback turns into the 10-bit target's words (FB b83).
     resolve_scene(false);
     debug_log_readback();
     if (readback_pending_) {
@@ -6340,10 +6338,14 @@ bool RendererD3D12::debug_copy_scene_to_readback() {
     }
     const UINT w = frame_.width;
     const UINT h = frame_.height;
+    const bool wide = scene_hdr_;
     const UINT row_pitch =
-        (w * 4u + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u) &
+        (w * (wide ? 8u : 4u) + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u) &
         ~(D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u);
 
+    if (readback_buf_ && readback_buf_->GetDesc().Width < static_cast<UINT64>(row_pitch) * h) {
+        readback_buf_.Reset();  // made for the 10-bit target or a smaller frame: no copy is pending (checked above)
+    }
     if (!readback_buf_) {
         D3D12_HEAP_PROPERTIES hp{};
         hp.Type = D3D12_HEAP_TYPE_READBACK;
@@ -6374,7 +6376,7 @@ bool RendererD3D12::debug_copy_scene_to_readback() {
     src.Type      = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     dst.pResource = readback_buf_.Get();
     dst.Type      = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-    dst.PlacedFootprint.Footprint.Format   = kSceneColorFormat;
+    dst.PlacedFootprint.Footprint.Format   = wide ? kSceneHdrColorFormat : kSceneColorFormat;
     dst.PlacedFootprint.Footprint.Width    = w;
     dst.PlacedFootprint.Footprint.Height   = h;
     dst.PlacedFootprint.Footprint.Depth    = 1;
@@ -6383,6 +6385,7 @@ bool RendererD3D12::debug_copy_scene_to_readback() {
 
     uses.undo();
     readback_pending_ = true;
+    readback_wide_ = wide;
     readback_fence_value_ = 0u;
     readback_capture_path_ = next_scene_capture_path_;
     return true;
@@ -6402,12 +6405,12 @@ void RendererD3D12::debug_log_readback() {
 
     const UINT w = frame_.width;
     const UINT h = frame_.height;
-    const UINT row_pitch =
-        (w * 4u + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u) &
+    const UINT copied_pitch =
+        (w * (readback_wide_ ? 8u : 4u) + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u) &
         ~(D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u);
 
     void* mapped = nullptr;
-    D3D12_RANGE range{0, static_cast<SIZE_T>(row_pitch) * h};
+    D3D12_RANGE range{0, static_cast<SIZE_T>(copied_pitch) * h};
     if (FAILED(readback_buf_->Map(0, &range, &mapped))) {
         readback_capture_path_.clear();
         return;
@@ -6419,7 +6422,16 @@ void RendererD3D12::debug_log_readback() {
     });
     std::uint64_t nonblack = 0, alpha_hits = 0, rs = 0, gs = 0, bs = 0;
     std::uint8_t rmax = 0, gmax = 0, bmax = 0, amax = 0;
+    // The wide target's halves as the 10-bit target's words (FB b83); the rest reads words either way.
+    std::vector<std::uint8_t> words;
     const auto* base = static_cast<const std::uint8_t*>(mapped);
+    UINT row_pitch = copied_pitch;
+    if (readback_wide_) {
+        row_pitch = w * 4u;
+        words.resize(static_cast<std::size_t>(row_pitch) * h);
+        half4_to_ten_bit(base, words.data(), w, h, copied_pitch, row_pitch);
+        base = words.data();
+    }
     for (UINT y = 0; y < h; y += 4) {           // sample every 4th row/col
         const std::uint8_t* row = base + static_cast<std::size_t>(y) * row_pitch;
         for (UINT x = 0; x < w; x += 4) {

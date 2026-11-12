@@ -132,6 +132,10 @@ void rgba8_to_ten_bit(const std::uint8_t* rgba, std::uint8_t* words, unsigned wi
                       unsigned pitch) noexcept;
 void ten_bit_to_rgba8(const std::uint8_t* words, std::uint8_t* rgba, unsigned width, unsigned height,
                       unsigned word_pitch, unsigned rgba_pitch) noexcept;
+// The wide scene's RGBA16F rows as the 10-bit scene's words (FB b83): each channel round(clamp(v, 0, 1) * 1023), the
+// alpha round(a * 3), what the 10-bit target would have held; its readbacks then read as the 10-bit target's.
+void half4_to_ten_bit(const std::uint8_t* halves, std::uint8_t* words, unsigned width, unsigned height,
+                      unsigned half_pitch, unsigned word_pitch) noexcept;
 
 // The AA start-up self-test: a 32 x 32 white-over-black edge stepping down one row every four columns, the jagged
 // case both passes exist for. A working pass blends a few dozen pixels along the steps and leaves flat areas alone.
