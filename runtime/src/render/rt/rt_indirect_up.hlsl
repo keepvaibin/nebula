@@ -3,7 +3,8 @@
 // half-res values (the filter's last step: rgb in r, g, b), weighed by where they lie and by how surely they are its
 // own surface: the same object, the same distance, facing the same way (joint bilateral upsampling, Kopf et al.
 // 2007), so I stays inside the edges the picture has. Where none of the four is its surface, the nearest of any.
-// Written clamped to [kSkyMin, kBounceMax]: what the light pass and, from 22.13, the programs read. Where the near
+// Written with its luminance at least kSkyMin (its colour kept; FB b105), a channel at most kBounceMax: what the
+// light pass and, from 22.13, the programs read. Where the near
 // field ran (High; g_pass_value[0].z 1), times V_near over three by three pixels of the same object at the same
 // depth (rt_near_time.hlsl): O = O_far * V_near, the contact under the clamp (FB b76).
 // Pass constants: g_pass_value[0].x kSkyMin, .y kBounceMax, .z 1: the near field ran.
@@ -72,15 +73,19 @@ void main(uint3 id : SV_DispatchThreadID) {
         weight += w;
     }
     float3 ratio = weight > 1e-4f ? sum / weight : any_weight > 0.0f ? any_sum / any_weight : float3(1.0f, 1.0f, 1.0f);
-    ratio = clamp(ratio, g_pass_value[0].x, g_pass_value[0].y);
+    // kSkyMin a floor on the luminance, the colour kept (FB b105: a floor a channel greyed a dim coloured shade).
+    const float3 kLuma = float3(0.2126f, 0.7152f, 0.0722f);
+    ratio = max(ratio, 0.0f);
+    const float raw = dot(ratio, kLuma);
+    ratio = raw > 1e-4f ? ratio * max(g_pass_value[0].x / raw, 1.0f) : g_pass_value[0].xxx;
     // Its colour bounded as LIGHT-MODEL s2's tint (FB b89, EVERYTHING 2.3): a channel within 0.5 to 2 of the luminance,
     // the luminance kept.
-    const float3 kLuma = float3(0.2126f, 0.7152f, 0.0722f);
     const float lum = dot(ratio, kLuma);
     if (lum > 1e-4f) {
         const float3 held = clamp(ratio, 0.5f * lum, 2.0f * lum);
         ratio = held * (lum / max(dot(held, kLuma), 1e-6f));
     }
+    ratio = min(ratio, g_pass_value[0].y);  // kBounceMax a channel
     if (g_pass_value[0].z > 0.5f) {
         ratio *= saturate(near_seen(int2(id.xy), guide, width, height));  // O = O_far * V_near (b76)
     }
