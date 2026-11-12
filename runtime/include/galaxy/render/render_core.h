@@ -546,6 +546,11 @@ private:
     // player's up (at least 0.5), kDebake, kAmbientLook. Set every walk from the style (rt_walk.cpp); FA's dev block
     // sets them by name.
     float rt_look_[4]{0.0f, 1.0f, 0.0f, 1.0f};
+    // rt_look_[1]'s sun height, eased (c53): the value, the game frame it last stepped on, the stage it is for.
+    float rt_look_up_ = 1.0f;
+    std::uint32_t rt_look_up_frame_ = 0u;
+    std::uint32_t rt_look_up_stage_ = 0u;
+    bool rt_look_up_known_ = false;
     // The development tunables (rt_dev.h, l63): the values a run gave, a bit each in rt_dev_set_.
     float rt_dev_[kRtDevCount]{};
     std::uint64_t rt_dev_set_ = 0u;

@@ -2050,7 +2050,21 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
         const bool relit = rt_physical_ && sunned && rt_part(render, RtPart::Sun) != 0u;
         const float up_sun = list.sky_up_known != 0u ? sky_up_[0] * sun[0] + sky_up_[1] * sun[1] + sky_up_[2] * sun[2] : 1.0f;
         rt_look_[0] = relit ? kForm : 0.0f;
-        rt_look_[1] = std::max(up_sun, 0.5f);
+        // The sun's height eased (c53; the director 11-11): a gravity flip under the fixed sun (d05) does not pop the
+        // exposure; set at once on the first frame, a stage change, a cut, a time reset. 0 steps between walks.
+        const float up_target = std::max(up_sun, 0.5f);
+        if (!rt_look_up_known_ || rt_look_up_stage_ != list.stage_hash || now.cut || walk_.time.reset) {
+            rt_look_up_ = up_target;
+            rt_look_up_known_ = true;
+            rt_look_up_stage_ = list.stage_hash;
+        } else {
+            const std::uint32_t steps = walk_.between ? 0u : std::min(list.game_frame - rt_look_up_frame_, 4u);
+            rt_look_up_ += (up_target - rt_look_up_) * (1.0f - std::pow(0.98f, static_cast<float>(steps)));
+        }
+        if (!walk_.between) {
+            rt_look_up_frame_ = list.game_frame;
+        }
+        rt_look_[1] = rt_look_up_;
         rt_look_[2] = relit ? kDebake : 0.0f;
         rt_look_[3] = rt_physical_ ? kAmbientLook : 1.0f;
         // A run's own (rt_dev.h form, art_facing, debake, ambient_look), over the style's.

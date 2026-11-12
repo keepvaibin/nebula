@@ -39,6 +39,17 @@ static bool g_traced_keyed = true;
 // r), -1 where the pixel takes the light set's (no relight, a draw traced_at gives all of every light).
 static float g_traced_facing = -1.0;
 float traced_sun_strength() { return view_dev[1].y > 0.5 ? view_dev[0].y : 1.0; }
+// Light 1's diffuse factor under the relight (c53): the sky's hemisphere about the player's up, by kForm from the
+// game's (a fill in the camera's space on most light sets).
+float traced_sky_facing(float3 nrm) {
+    return saturate(0.5 + 0.5 * dot(nrm * rsqrt(max(dot(nrm, nrm), 1e-12)), view_sky_up));
+}
+float traced_fill_facing(uint n, uint diffuse, float facing, float3 nrm) {
+    if (n != 1u || diffuse == 0u || !g_traced_keyed || g_traced_facing < 0.0 || (view_flags & 1u) == 0u) {
+        return facing;
+    }
+    return lerp(facing, traced_sky_facing(nrm), saturate(view_look.x));
+}
 // Light 0's diffuse factor under the relight: the traced facing by kSun, by kForm from the game's.
 float traced_key_facing(uint n, uint diffuse, float facing) {
     if (n != 0u || diffuse == 0u || !g_traced_keyed || g_traced_facing < 0.0) {
@@ -205,6 +216,7 @@ void enh_add_light(uint base, uint n, bool spot, uint diffuse, bool first, bool 
 #if NATIVE_TRACED
     lcol *= traced_light(n);
     facing = traced_key_facing(n, diffuse, facing);  // light 0: the traced sun (c52)
+    facing = traced_fill_facing(n, diffuse, facing, g_enh.N);  // light 1: the sky's hemisphere (c53)
 #endif
     const float x = attn * facing;
     acc += lerp(enh_lin(amb + lcol * x) - amb_lin, (enh_lin(amb + lcol) - amb_lin) * x, kEnhRamp);
@@ -277,6 +289,11 @@ float4 traced_light_term(uint base, uint n, uint atten, uint diffuse, float3 pos
     if (n == 0u && atten != 1u && diffuse != 0u && g_traced_keyed && g_traced_facing >= 0.0) {
         const float4 flat = light_term(base, n, atten, 0u, pos, nrm);
         t.rgb = lerp(t.rgb, flat.rgb * (g_traced_facing * traced_sun_strength()), saturate(view_look.x));
+    }
+    if (n == 1u && atten != 1u && diffuse != 0u && g_traced_keyed && g_traced_facing >= 0.0 && (view_flags & 1u) != 0u) {
+        // Light 1: the sky's hemisphere about the player's up in place of its facing (c53).
+        const float4 flat = light_term(base, n, atten, 0u, pos, nrm);
+        t.rgb = lerp(t.rgb, flat.rgb * traced_sky_facing(nrm), saturate(view_look.x));
     }
     return t * float4(traced_light(n), 1.0);
 }
