@@ -135,3 +135,19 @@ crystalcagemoving	own	0
 crystalcagestick	own	0
 crystalcagelbreak	own	0
 crystalcagesbreak	own	0
+# c103 (the owner 11-12: every room's light sources; PLAN-ROOMS R2, coord/census/room_lights.tsv): lamps, flames,
+# screens and crystals the art shows lit that the cook left dark; each a row of its own material.
+astroroomlibrary/light_v	1.0 0.85 0.60	300
+astrobaseb/bedroomflame_v	1.0 0.55 0.20	400
+teresamansionlighta/omote_v	1.0 0.90 0.60	300
+teresamansionlightb/omote_v	1.0 0.90 0.60	300
+sandriverlighta/lightkasainside_v	1.0 0.95 0.50	300
+astrodomeentrancetower/starlightmat_v	1.0 0.90 0.60	150
+astrodomeentrancewell/starlightmat_v	1.0 0.90 0.60	150
+astrodomeentrancemachine/starlightmat_v	1.0 0.90 0.60	150
+astrodomeentrancebedroom/starlightmat_v	1.0 0.90 0.60	150
+astrodomeentranceobservatory/starlightmat_v	1.0 0.90 0.60	150
+astrodomeentrancekitchen/starlightmat_v	1.0 0.90 0.60	150
+astrodecoratepartsa/crystalfacemat	1.0 1.0 0.40	40
+astrodecoratepartsgeara/crystalfacemat	1.0 1.0 0.40	40
+astromapboard/screen_v	own	60
