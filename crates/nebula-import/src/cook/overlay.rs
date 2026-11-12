@@ -43,9 +43,59 @@ pub fn read_plan(text: &str) -> Result<(String, Vec<Change>)> {
     Ok((game_id, changes))
 }
 
+/// Where a mod's model file goes and the game model it stands in for (models contract 2, G-M1): `X.bdl.glb` and
+/// `X.bmd.glb` that file; a plain `X.glb` in an archive whichever of `X.bdl` and `X.bmd` the game's archive has; a model
+/// outside an archive (a new model) `X.bmd`, standing in for nothing. Without the game's store the place is the one
+/// its name gives and its joints are not numbered by the game's (a Note says so).
+fn model_place(change: &Change, base: Option<&Path>) -> Result<(String, Option<super::gltf::GameModel>)> {
+    use super::refuse::{note, refuse};
+    let lower = change.path.to_ascii_lowercase();
+    let without_modern = &change.path[..change.path.rfind('.').unwrap_or(change.path.len())];
+    let explicit = [".bdl.gltf", ".bdl.glb", ".bmd.gltf", ".bmd.glb"].iter().any(|e| lower.ends_with(e));
+    let (folder, file) = change.path.rsplit_once('/').unwrap_or(("", &change.path));
+    let stem = file.split('.').next().unwrap_or(file);
+    let written = if explicit { without_modern.to_string() } else { format!("{}.bmd", &change.path[..change.path.len() - file.len() + stem.len()]) };
+    if !folder.to_ascii_lowercase().ends_with(".arc") {
+        return Ok((written, None));
+    }
+    let Some(base) = base else {
+        note("Cook.Model.GameUnknown", &[("file", change.path.clone())]);
+        return Ok((written, None));
+    };
+    let models: Vec<(String, Vec<u8>)> = store::read_folder(base, folder)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|(name, _)| {
+            let name = name.to_ascii_lowercase();
+            !name.contains('/') && (name.ends_with(".bdl") || name.ends_with(".bmd"))
+        })
+        .collect();
+    let wanted: Vec<&(String, Vec<u8>)> = if explicit {
+        let name = written.rsplit('/').next().unwrap_or(&written).to_ascii_lowercase();
+        models.iter().filter(|(n, _)| n.to_ascii_lowercase() == name).collect()
+    } else {
+        models.iter().filter(|(n, _)| n.split('.').next().unwrap_or(n).eq_ignore_ascii_case(stem)).collect()
+    };
+    match wanted.as_slice() {
+        [] => {
+            let names: Vec<&str> = models.iter().map(|(n, _)| n.as_str()).collect();
+            Err(refuse("Cook.Model.NoGameModel", &[("archive", folder.to_string()), ("models", names.join(", "))]))
+        }
+        [(name, block)] => {
+            let path = format!("{folder}/{name}");
+            let game = super::gltf::GameModel::read(&path, block);
+            if game.is_none() {
+                note("Cook.Model.GameUnknown", &[("file", change.path.clone())]);
+            }
+            Ok((path, game))
+        }
+        _ => Err(refuse("Cook.Model.TwoGameModels", &[("name", stem.to_string()), ("archive", folder.to_string())])),
+    }
+}
+
 /// What a modern file of a mod becomes: each file's place in the game, with the game's ending, its bytes, and whether
 /// they are the store's already (else the cooker reads them). Empty: it isn't one. A model's animations go beside it.
-fn modern_files(change: &Change, bytes: &[u8]) -> Result<Vec<(String, Vec<u8>, bool)>> {
+fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Vec<(String, Vec<u8>, bool)>> {
     let lower = change.path.to_ascii_lowercase();
     let renamed = |ending: &str| {
         let dot = change.path.rfind('.').unwrap_or(change.path.len());
@@ -65,15 +115,10 @@ fn modern_files(change: &Change, bytes: &[u8]) -> Result<Vec<(String, Vec<u8>, b
     if lower.ends_with(".gltf") || lower.ends_with(".glb") {
         let file = change.path.rsplit('/').next().unwrap_or(&change.path);
         let stem = file.split('.').next().unwrap_or(file);
-        let (model, animations) = super::gltf::to_files(bytes, change.source.parent(), stem)?;
+        let (native_path, game) = model_place(change, base)?;
+        let (model, animations, made) = super::gltf::to_files_for(bytes, change.source.parent(), stem, game.as_ref())?;
+        super::refuse::record(super::refuse::CookFact::Model { path: native_path.clone(), source: change.path.clone(), facts: made });
         let folder = change.path.rfind('/').map_or("", |at| &change.path[..at + 1]);
-        let without_modern_extension = &change.path[..change.path.rfind('.').unwrap_or(change.path.len())];
-        let native_path = if lower.ends_with(".bdl.gltf") || lower.ends_with(".bdl.glb") ||
-            lower.ends_with(".bmd.gltf") || lower.ends_with(".bmd.glb") {
-            without_modern_extension.to_string()
-        } else {
-            renamed(".bmd")
-        };
         let mut out = vec![(native_path, model, true)];
         out.extend(animations.into_iter().map(|(file, clip)| (format!("{folder}{file}"), clip, true)));
         return Ok(out);
@@ -86,9 +131,9 @@ fn modern_files(change: &Change, bytes: &[u8]) -> Result<Vec<(String, Vec<u8>, b
     if lower.ends_with(".png") {
         // The game's interface keeps its pictures in another form, in a folder of that name.
         if lower.contains("/timg/") {
-            return Ok(vec![(renamed(".tpl"), super::gltf::png_to_tpl(bytes)?, false)]);
+            return Ok(vec![(renamed(".tpl"), super::gltf::png_to_tpl(bytes, &change.path)?, false)]);
         }
-        return Ok(vec![(renamed(".bti"), super::gltf::png_to_bti(bytes)?, false)]);
+        return Ok(vec![(renamed(".bti"), super::gltf::png_to_bti(bytes, &change.path)?, false)]);
     }
     if super::modern_audio::is_stream_source(&lower) {
         return Ok(vec![(renamed(".ast"), super::modern_audio::to_stream(&change.path, bytes)?, true)]);
@@ -170,7 +215,7 @@ pub fn write_overlay(game_id: &str, changes: &[Change], patches: &PlanPatches, b
             .with_context(|| format!("{} cannot be read", change.source.display()))
             .and_then(|bytes| {
                 stats.bytes_in += bytes.len() as u64;
-                let modern = modern_files(change, &bytes)?;
+                let modern = modern_files(change, &bytes, base)?;
                 if modern.is_empty() {
                     return Ok(vec![(change.path.clone(), cook_change(change, bytes, &waves, stats)?)]);
                 }
@@ -191,7 +236,16 @@ pub fn write_overlay(game_id: &str, changes: &[Change], patches: &PlanPatches, b
                     placed.extend(place(&mut pak, &mut at, &path, items, stats)?);
                 }
             }
-            Err(error) => failed.push((change.path.clone(), format!("{error:#}"))),
+            Err(error) => {
+                if let Some(finding) = super::refuse::refusal_of(&error) {
+                    super::refuse::record(super::refuse::CookFact::Refused { path: change.path.clone(), source: change.path.clone(), finding: finding.clone() });
+                }
+                failed.push((change.path.clone(), format!("{error:#}")));
+            }
+        }
+        // What was said of the file, cooked or not (a refused file's notes say what came before).
+        for finding in super::refuse::take_notes() {
+            super::refuse::record(super::refuse::CookFact::Noted { path: change.path.clone(), source: change.path.clone(), finding });
         }
     }
     apply_merges(changes, base, &mut pak, &temporary, &mut at, &mut placed, &mut failed, stats)?;
@@ -438,6 +492,8 @@ pub fn cook_plan(plan: &Path, output: &Path) -> Result<(Stats, Vec<(String, Stri
     let facts_file = output.with_extension("facts");
     fs::remove_file(&facts_file).ok();
     let mut facts = Vec::new();
+    super::refuse::take_facts();
+    super::refuse::take_notes();
     let cooked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| cook_plan_inner(plan, output, &mut facts)))
         .unwrap_or_else(|panic| {
             let text = panic
@@ -447,7 +503,7 @@ pub fn cook_plan(plan: &Path, output: &Path) -> Result<(Stats, Vec<(String, Stri
                 .unwrap_or_default();
             Err(anyhow::anyhow!("the converter stopped: {text}"))
         });
-    fs::write(&facts_file, facts_text(&facts)).ok();
+    fs::write(&facts_file, facts_text(&facts) + &super::refuse::cook_facts_text(&super::refuse::take_facts())).ok();
     let (stats, failed) = match cooked {
         Ok(done) => done,
         Err(error) => {
@@ -499,6 +555,89 @@ fn cook_plan_inner(plan: &Path, output: &Path, facts: &mut Vec<Fact>) -> Result<
 mod tests {
     use super::*;
 
+    /// A game store holding `files` (path, bytes) at their store paths.
+    fn game_store(dir: &Path, files: &[(&str, &[u8])]) -> PathBuf {
+        let base = dir.join("game.pak");
+        let mut pak = File::create(&base).unwrap();
+        pak.write_all(&vec![0u8; 0x100]).unwrap();
+        let mut placed = Vec::new();
+        for (path, bytes) in files {
+            let position = pak.stream_position().unwrap();
+            pak.write_all(bytes).unwrap();
+            placed.push(store::Placed { path: store::store_path(path), position, size: bytes.len() as u64, folder: false });
+        }
+        let end = pak.stream_position().unwrap();
+        store::write_index(&mut pak, end, &placed, b"RMGE01\0\0").unwrap();
+        base
+    }
+
+    #[test]
+    fn a_model_takes_the_place_and_joints_of_the_games_model() {
+        use super::super::refuse::{refusal_of, take_notes};
+        let dir = tempfile::tempdir().unwrap();
+        // The game's Kuribo: joints body and head.
+        let source = br#"{"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[0]}],"nodes":[{"name":"body","mesh":0,"children":[1]},{"name":"head"}],
+            "meshes":[{"primitives":[{"attributes":{"POSITION":0},"indices":1}]}],
+            "accessors":[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3"},{"bufferView":1,"componentType":5123,"count":3,"type":"SCALAR"}],
+            "bufferViews":[{"buffer":0,"byteLength":36},{"buffer":0,"byteOffset":36,"byteLength":6}],
+            "buffers":[{"byteLength":42,"uri":"data:application/octet-stream;base64,AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAABAAIA"}]}"#;
+        let (kuribo, _) = super::super::gltf::to_files(source, None, "Kuribo").unwrap();
+        let one = game_store(dir.path(), &[("ObjectData/Kuribo.arc/Kuribo.bdl", &kuribo), ("ObjectData/Kuribo.arc/Kuribo.btk", b"x")]);
+        let both = dir.path().join("both");
+        fs::create_dir(&both).unwrap();
+        let two = game_store(&both, &[("ObjectData/Kuribo.arc/Kuribo.bdl", &kuribo), ("ObjectData/Kuribo.arc/Kuribo.bmd", &kuribo)]);
+        let change = |path: &str| Change { path: path.into(), source: "Kuribo.glb".into(), merge: false };
+        let why = |error: anyhow::Error| refusal_of(&error).map(|f| (f.args[0].1.clone(), luma_validate::args_text(f))).unwrap();
+
+        let (path, game) = model_place(&change("ObjectData/Kuribo.arc/Kuribo.glb"), Some(&one)).unwrap();
+        assert_eq!((path.as_str(), game.unwrap().joints), ("ObjectData/Kuribo.arc/Kuribo.bdl", vec!["body".to_string(), "head".to_string()]));
+        // Another name in the archive: not the game's, and a new model goes in assets/.
+        let (phrase, args) = why(model_place(&change("ObjectData/Kuribo.arc/Kurib.glb"), Some(&one)).unwrap_err());
+        assert_eq!(phrase, luma_validate::Arg::Phrase("Cook.Model.NoGameModel"));
+        assert!(args.iter().any(|a| a == "models=T:Kuribo.bdl"), "{args:?}");
+        // Both endings: the file's name chooses.
+        let (phrase, _) = why(model_place(&change("ObjectData/Kuribo.arc/Kuribo.glb"), Some(&two)).unwrap_err());
+        assert_eq!(phrase, luma_validate::Arg::Phrase("Cook.Model.TwoGameModels"));
+        let (path, game) = model_place(&change("ObjectData/Kuribo.arc/Kuribo.bmd.glb"), Some(&two)).unwrap();
+        assert_eq!((path.as_str(), game.is_some()), ("ObjectData/Kuribo.arc/Kuribo.bmd", true));
+        // No game store: the name's place, and a note that its joints are the file's.
+        take_notes();
+        let (path, game) = model_place(&change("ObjectData/Kuribo.arc/Kuribo.glb"), None).unwrap();
+        assert_eq!((path.as_str(), game.is_none()), ("ObjectData/Kuribo.arc/Kuribo.bmd", true));
+        assert_eq!(take_notes().len(), 1);
+        // Outside an archive: a new model, standing in for nothing.
+        let (path, game) = model_place(&change("ObjectData/Thing.glb"), Some(&one)).unwrap();
+        assert_eq!((path.as_str(), game.is_none()), ("ObjectData/Thing.bmd", true));
+        // The cook numbers the joints by the game's; one it lacks is refused by name.
+        let swapped = String::from_utf8_lossy(source).replace("\"head\"", "\"neck\"");
+        let (_, game) = model_place(&change("ObjectData/Kuribo.arc/Kuribo.glb"), Some(&one)).unwrap();
+        let error = super::super::gltf::to_files_for(swapped.as_bytes(), None, "Kuribo", game.as_ref()).unwrap_err();
+        let (phrase, args) = why(error);
+        assert_eq!(phrase, luma_validate::Arg::Phrase("Cook.Model.MissingJoint"));
+        assert!(args.contains(&"joint=T:head".to_string()), "{args:?}");
+    }
+
+    #[test]
+    fn cook_facts_are_lines_of_the_facts_file() {
+        use super::super::refuse::{cook_facts_text, refuse, refusal_of, CookFact};
+        let error = refuse("Cook.Model.Joints", &[("count", "300".into()), ("max", "253".into())]);
+        let finding = refusal_of(&error).unwrap().clone();
+        let facts = cook_facts_text(&[
+            CookFact::Refused { path: "ObjectData/A.arc/A.bdl.glb".into(), source: "ObjectData/A.arc/A.bdl.glb".into(), finding },
+            CookFact::Model {
+                path: "ObjectData/B.arc/B.bdl".into(),
+                source: "ObjectData/B.arc/B.glb".into(),
+                facts: super::super::gltf::ModelFacts { replaced: "ObjectData/B.arc/B.bdl".into(), joints: 2, vertices: 3, ..Default::default() },
+            },
+        ]);
+        let lines: Vec<Vec<&str>> = facts.lines().map(|l| l.split('\t').collect()).collect();
+        assert_eq!((lines[0][0], lines[0][1], lines[0][9]), ("failed", "ObjectData/A.arc/A.bdl.glb", "804"));
+        assert!(lines[0][10].contains("300") && lines[0][10].contains("253"), "{:?}", lines[0]);
+        assert!(lines[0][11..].contains(&"why=P:Cook.Model.Joints"), "{:?}", lines[0]);
+        assert_eq!(lines[1][..5], ["cook.model", "ObjectData/B.arc/B.bdl", "", "ObjectData/B.arc/B.glb", "ObjectData/B.arc/B.bdl"]);
+        assert_eq!(lines[1][11..], ["joints=2", "extra_joints=0", "meshes=0", "vertices=3", "materials=0", "textures=0", "clips=0"]);
+    }
+
     #[test]
     fn modern_models_can_replace_either_native_model_ending() {
         let bytes = br#"{"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[0]}],"nodes":[{"mesh":0}],
@@ -509,7 +648,7 @@ mod tests {
         for (path, expected) in [("ObjectData/Coin.arc/coin.bdl.gltf", "ObjectData/Coin.arc/coin.bdl"),
                                  ("ObjectData/Test.arc/test.bmd.gltf", "ObjectData/Test.arc/test.bmd"),
                                  ("ObjectData/Test.arc/test.gltf", "ObjectData/Test.arc/test.bmd")] {
-            let files = modern_files(&Change { path: path.into(), source: "fixture.gltf".into(), merge: false }, bytes).unwrap();
+            let files = modern_files(&Change { path: path.into(), source: "fixture.gltf".into(), merge: false }, bytes, None).unwrap();
             assert_eq!(files[0].0, expected);
             assert!(files[0].2);
             assert_eq!(&files[0].1[..4], b"NMDL");

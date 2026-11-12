@@ -18,10 +18,12 @@ pub(crate) fn static_id(id: &str) -> Option<&'static str> {
 
 /// The names a finding's parameters have (every `("name", ...)` the rules write; the round trip of every broken mod's
 /// report through a kept report proves the list whole).
-const ARG_NAMES: [&str; 31] = [
-    "chain", "column", "count", "detail", "entry", "expected", "feature", "found", "has", "key", "kind", "layer", "library", "max", "method", "min",
-    "module", "other", "permission", "platform", "row", "service", "sig", "target", "text", "value", "version", "what",
-    "where", "why", "winner",
+const ARG_NAMES: [&str; 53] = [
+    "accessor", "animation", "archive", "chain", "column", "count", "detail", "entry", "expected", "feature", "file",
+    "found", "has", "height", "image", "joint", "key", "kind", "layer", "library", "line", "material", "max", "mesh",
+    "method", "min", "mode", "model", "models", "module", "name", "node", "other", "permission", "platform", "pointer",
+    "read", "row", "service", "sig", "target", "text", "uri", "value", "version", "vertex", "vertices", "view", "what",
+    "where", "why", "width", "winner",
 ];
 
 pub(crate) fn static_name(name: &str) -> Option<&'static str> {

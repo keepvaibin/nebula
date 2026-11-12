@@ -5,7 +5,8 @@
 
 use super::clip::{ClipIr, Target, Track, KIND_COLORS, KIND_JOINTS, KIND_PATTERN, KIND_TEXTURE_MATRICES, STEP};
 use super::model_ir::{CoordIr, CoordMatrixIr};
-use super::model_ir::{important_joints, plain_material, plain_texture, ArraysIr, Corner, GroupIr, JointIr, ModelIr, ShapeIr, ATTR_MATRIX, ATTR_NORMAL, NONE};
+use super::model_ir::{important_joints, plain_material, plain_texture, ArraysIr, Corner, GroupIr, JointIr, ModelIr, ShapeIr, ATTR_COLOR0, ATTR_MATRIX, ATTR_NORMAL, NONE};
+use super::refuse::{invalid, note, refuse, OrInvalid};
 use anyhow::{bail, Context, Result};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -19,7 +20,7 @@ struct Document {
     folder: Option<std::path::PathBuf>,
 }
 
-fn base64(text: &str) -> Result<Vec<u8>> {
+fn base64(text: &str) -> Option<Vec<u8>> {
     let mut out = Vec::with_capacity(text.len() / 4 * 3);
     let mut bits = 0u32;
     let mut count = 0;
@@ -32,7 +33,7 @@ fn base64(text: &str) -> Result<Vec<u8>> {
             b'/' => 63,
             b'=' => break,
             b'\r' | b'\n' => continue,
-            _ => bail!("not base64"),
+            _ => return None,
         };
         bits = (bits << 6) | u32::from(value);
         count += 1;
@@ -50,33 +51,36 @@ fn base64(text: &str) -> Result<Vec<u8>> {
         }
         _ => {}
     }
-    Ok(out)
+    Some(out)
 }
 
-fn read_uri(uri: &str, folder: Option<&Path>) -> Result<Vec<u8>> {
+/// A buffer's or an image's bytes by its `uri`, which `pointer` names: inline (`data:...;base64,`) or a file beside the
+/// model, never outside its folder.
+fn read_uri(uri: &str, folder: Option<&Path>, pointer: &str) -> Result<Vec<u8>> {
     if let Some(rest) = uri.strip_prefix("data:") {
-        let (_, data) = rest.split_once(";base64,").context("a data address that isn't base64")?;
-        return base64(data);
+        return rest.split_once(";base64,").and_then(|(_, data)| base64(data)).or_invalid(|| pointer.to_string());
     }
-    if uri.contains("..") || uri.starts_with('/') || uri.contains(':') {
-        bail!("{uri} leaves the model's folder");
+    if uri.contains("..") || uri.starts_with('/') || uri.contains(':') || uri.starts_with('\\') {
+        return Err(refuse("Cook.Model.Leaves", &[("uri", uri.to_string())]));
     }
-    let folder = folder.context("the model's other files aren't known")?;
-    std::fs::read(folder.join(uri)).with_context(|| format!("{uri} can't be read"))
+    let unreadable = || refuse("Cook.Model.Unreadable", &[("uri", uri.to_string())]);
+    let folder = folder.ok_or_else(unreadable)?;
+    std::fs::read(folder.join(uri)).map_err(|_| unreadable())
 }
 
 impl Document {
     fn parse(bytes: &[u8], folder: Option<&Path>) -> Result<Self> {
+        let cut = || refuse("Cook.Model.Cut", &[]);
         let (json, chunk): (Vec<u8>, Option<Vec<u8>>) = if bytes.starts_with(b"glTF") {
             let word = |at: usize| -> Result<usize> {
-                Ok(u32::from_le_bytes(bytes.get(at..at + 4).context("a cut-off .glb")?.try_into()?) as usize)
+                Ok(u32::from_le_bytes(bytes.get(at..at + 4).ok_or_else(cut)?.try_into()?) as usize)
             };
             let json_size = word(12)?;
-            let json = bytes.get(20..20 + json_size).context("a cut-off .glb")?.to_vec();
+            let json = bytes.get(20..20usize.saturating_add(json_size)).ok_or_else(cut)?.to_vec();
             let next = 20 + json_size;
             let chunk = if next + 8 <= bytes.len() {
                 let size = word(next)?;
-                Some(bytes.get(next + 8..next + 8 + size).context("a cut-off .glb")?.to_vec())
+                Some(bytes.get(next + 8..(next + 8).saturating_add(size)).ok_or_else(cut)?.to_vec())
             } else {
                 None
             };
@@ -84,16 +88,19 @@ impl Document {
         } else {
             (bytes.to_vec(), None)
         };
-        let root: Value = serde_json::from_slice(&json).context("its JSON can't be read")?;
-        if root["asset"]["version"].as_str().is_none_or(|v| !v.starts_with('2')) {
-            bail!("only glTF 2 can be read");
+        let root: Value = serde_json::from_slice(&json)
+            .map_err(|e| refuse("Cook.Model.Json", &[("line", e.line().to_string()), ("column", e.column().to_string())]))?;
+        if !root["asset"]["version"].as_str().is_some_and(|v| v.starts_with('2')) {
+            let found = root["asset"]["version"].as_str().unwrap_or("").to_string();
+            return Err(refuse("Cook.Model.Version", &[("found", found)]));
         }
         let mut buffers = Vec::new();
         for (i, buffer) in root["buffers"].as_array().map(Vec::as_slice).unwrap_or_default().iter().enumerate() {
+            let pointer = format!("/buffers/{i}/uri");
             buffers.push(match buffer["uri"].as_str() {
-                Some(uri) => read_uri(uri, folder)?,
-                None if i == 0 => chunk.clone().context("the .glb has no binary chunk")?,
-                None => bail!("buffer {i} has no data"),
+                Some(uri) => read_uri(uri, folder, &pointer)?,
+                None if i == 0 => chunk.clone().or_invalid(|| pointer.clone())?,
+                None => return Err(invalid(pointer)),
             });
         }
         Ok(Self { root, buffers, folder: folder.map(Path::to_path_buf) })
@@ -101,22 +108,26 @@ impl Document {
 
     fn view(&self, index: usize) -> Result<&[u8]> {
         let view = &self.root["bufferViews"][index];
-        let buffer = view["buffer"].as_u64().unwrap_or(0) as usize;
+        let buffer = view["buffer"].as_u64().or_invalid(|| format!("/bufferViews/{index}/buffer"))? as usize;
         let start = view["byteOffset"].as_u64().unwrap_or(0) as usize;
-        let length = view["byteLength"].as_u64().context("a buffer view with no length")? as usize;
-        self.buffers.get(buffer).and_then(|b| b.get(start..start + length)).context("a buffer view past its buffer")
+        let length = view["byteLength"].as_u64().or_invalid(|| format!("/bufferViews/{index}/byteLength"))? as usize;
+        self.buffers
+            .get(buffer)
+            .and_then(|b| b.get(start..start.checked_add(length)?))
+            .ok_or_else(|| refuse("Cook.Model.ViewPast", &[("view", index.to_string())]))
     }
 
     /// An accessor's numbers, each element as `width` floats.
     fn floats(&self, index: usize, width: usize) -> Result<Vec<f32>> {
         let accessor = &self.root["accessors"][index];
-        let count = accessor["count"].as_u64().context("an accessor with no count")?;
+        let count = accessor["count"].as_u64().or_invalid(|| format!("/accessors/{index}/count"))?;
         // Far past any model the game draws: a damaged count would ask for memory no device has.
         if count > MAX_ELEMENTS {
-            bail!("an accessor of {count} elements: a model has up to {MAX_ELEMENTS}");
+            return Err(refuse("Cook.Model.Accessor", &[("accessor", index.to_string()), ("count", count.to_string()), ("max", MAX_ELEMENTS.to_string())]));
         }
         let count = count as usize;
-        let kind = accessor["componentType"].as_u64().context("an accessor with no type")?;
+        let past = || refuse("Cook.Model.AccessorPast", &[("accessor", index.to_string())]);
+        let kind = accessor["componentType"].as_u64().or_invalid(|| format!("/accessors/{index}/componentType"))?;
         let normalized = accessor["normalized"].as_bool().unwrap_or(false);
         let (size, read): (usize, fn(&[u8]) -> f32) = match kind {
             5126 => (4, |b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])),
@@ -125,7 +136,7 @@ impl Document {
             5122 => (2, |b| f32::from(i16::from_le_bytes([b[0], b[1]]))),
             5123 => (2, |b| f32::from(u16::from_le_bytes([b[0], b[1]]))),
             5125 => (4, |b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as f32),
-            other => bail!("numbers of type {other}"),
+            _ => return Err(invalid(format!("/accessors/{index}/componentType"))),
         };
         // Normalized integers as glTF reads them: unsigned to 0..1, signed to -1..1.
         let scale = |value: f32| match (normalized, kind) {
@@ -145,39 +156,41 @@ impl Document {
                 for element in 0..count {
                     for c in 0..width {
                         let at = start + element * stride + c * size;
-                        out.push(scale(read(view.get(at..at + size).context("an accessor past its buffer view")?)));
+                        out.push(scale(read(view.get(at..at + size).ok_or_else(past)?)));
                     }
                 }
                 out
             }
             None => vec![0.0; count * width],
         };
-        self.sparse_into(accessor, &mut out, width, size, read, scale)?;
+        self.sparse_into(index, &mut out, width, size, read, scale)?;
         Ok(out)
     }
 
     /// An accessor's sparse values over its others.
-    fn sparse_into(&self, accessor: &Value, out: &mut [f32], width: usize, size: usize, read: fn(&[u8]) -> f32, scale: impl Fn(f32) -> f32) -> Result<()> {
-        let sparse = &accessor["sparse"];
+    fn sparse_into(&self, index: usize, out: &mut [f32], width: usize, size: usize, read: fn(&[u8]) -> f32, scale: impl Fn(f32) -> f32) -> Result<()> {
+        let sparse = &self.root["accessors"][index]["sparse"];
         if sparse.is_null() {
             return Ok(());
         }
-        let count = sparse["count"].as_u64().context("sparse values with no count")? as usize;
+        let at_sparse = |rest: &str| format!("/accessors/{index}/sparse/{rest}");
+        let past = || refuse("Cook.Model.AccessorPast", &[("accessor", index.to_string())]);
+        let count = sparse["count"].as_u64().or_invalid(|| at_sparse("count"))? as usize;
         let indices = &sparse["indices"];
-        let index_view = self.view(indices["bufferView"].as_u64().context("sparse values with no indices")? as usize)?;
+        let index_view = self.view(indices["bufferView"].as_u64().or_invalid(|| at_sparse("indices/bufferView"))? as usize)?;
         let index_start = indices["byteOffset"].as_u64().unwrap_or(0) as usize;
         let index_size = match indices["componentType"].as_u64() {
             Some(5121) => 1,
             Some(5123) => 2,
             Some(5125) => 4,
-            _ => bail!("sparse indices that aren't whole numbers"),
+            _ => return Err(invalid(at_sparse("indices/componentType"))),
         };
         let values = &sparse["values"];
-        let value_view = self.view(values["bufferView"].as_u64().context("sparse values with no values")? as usize)?;
+        let value_view = self.view(values["bufferView"].as_u64().or_invalid(|| at_sparse("values/bufferView"))? as usize)?;
         let value_start = values["byteOffset"].as_u64().unwrap_or(0) as usize;
         for k in 0..count {
             let at = index_start + k * index_size;
-            let b = index_view.get(at..at + index_size).context("sparse indices past their buffer view")?;
+            let b = index_view.get(at..at + index_size).ok_or_else(past)?;
             let element = match index_size {
                 1 => usize::from(b[0]),
                 2 => usize::from(u16::from_le_bytes([b[0], b[1]])),
@@ -185,8 +198,8 @@ impl Document {
             };
             for c in 0..width {
                 let at = value_start + (k * width + c) * size;
-                let value = scale(read(value_view.get(at..at + size).context("sparse values past their buffer view")?));
-                *out.get_mut(element * width + c).context("a sparse value past its accessor")? = value;
+                let value = scale(read(value_view.get(at..at + size).ok_or_else(past)?));
+                *out.get_mut(element * width + c).ok_or_else(past)? = value;
             }
         }
         Ok(())
@@ -195,16 +208,26 @@ impl Document {
     fn indices(&self, primitive: &Value, vertices: usize) -> Result<Vec<u32>> {
         match primitive["indices"].as_u64() {
             Some(index) => {
-                let a = &self.root["accessors"][index as usize];
-                let kind = a["componentType"].as_u64().context("index component type")?;
-                let size = match kind { 5121 => 1, 5123 => 2, 5125 => 4, _ => bail!("non-integer triangle indices") };
-                let view_index = a["bufferView"].as_u64().context("index buffer view")? as usize;
+                let index = index as usize;
+                let a = &self.root["accessors"][index];
+                let size = match a["componentType"].as_u64() {
+                    Some(5121) => 1,
+                    Some(5123) => 2,
+                    Some(5125) => 4,
+                    _ => return Err(invalid(format!("/accessors/{index}/componentType"))),
+                };
+                let view_index = a["bufferView"].as_u64().or_invalid(|| format!("/accessors/{index}/bufferView"))? as usize;
                 let view = self.view(view_index)?;
                 let start = a["byteOffset"].as_u64().unwrap_or(0) as usize;
-                let count = a["count"].as_u64().context("index count")? as usize;
+                let count = a["count"].as_u64().or_invalid(|| format!("/accessors/{index}/count"))?;
+                if count > MAX_ELEMENTS {
+                    return Err(refuse("Cook.Model.Accessor", &[("accessor", index.to_string()), ("count", count.to_string()), ("max", MAX_ELEMENTS.to_string())]));
+                }
+                let count = count as usize;
                 let stride = self.root["bufferViews"][view_index]["byteStride"].as_u64().map_or(size, |n| n as usize);
+                let past = || refuse("Cook.Model.AccessorPast", &[("accessor", index.to_string())]);
                 (0..count).map(|i| {
-                    let b = view.get(start + i * stride..start + i * stride + size).context("indices past their buffer view")?;
+                    let b = view.get(start + i * stride..start + i * stride + size).ok_or_else(past)?;
                     Ok(match size { 1 => u32::from(b[0]), 2 => u32::from(u16::from_le_bytes(b.try_into().unwrap())), _ => u32::from_le_bytes(b.try_into().unwrap()) })
                 }).collect()
             },
@@ -215,12 +238,13 @@ impl Document {
     /// An image as RGBA, top row first.
     fn image(&self, index: usize) -> Result<(u32, u32, Vec<u8>)> {
         let image = &self.root["images"][index];
+        let pointer = format!("/images/{index}/uri");
         let bytes = if let Some(view) = image["bufferView"].as_u64() {
             self.view(view as usize)?.to_vec()
         } else {
-            read_uri(image["uri"].as_str().context("an image with no data")?, self.folder.as_deref())?
+            read_uri(image["uri"].as_str().or_invalid(|| pointer.clone())?, self.folder.as_deref(), &pointer)?
         };
-        decode_image(&bytes)
+        decode_image(&bytes, &image["name"].as_str().map_or_else(|| format!("image {index}"), str::to_string))
     }
 }
 
@@ -231,7 +255,7 @@ fn required_extensions(root: &Value) -> Result<()> {
     for name in root["extensionsRequired"].as_array().map(Vec::as_slice).unwrap_or_default() {
         let name = name.as_str().unwrap_or("");
         if !EXTENSIONS_READ.contains(&name) {
-            bail!("the file needs {name}, which Nebula doesn't read: export without it (it reads {})", EXTENSIONS_READ.join(", "));
+            return Err(refuse("Cook.Model.Extension", &[("name", name.to_string()), ("read", EXTENSIONS_READ.join(", "))]));
         }
     }
     Ok(())
@@ -295,20 +319,34 @@ const MAX_ELEMENTS: u64 = 1 << 22;
 /// memory than a gigabyte of pixels.
 const MAX_IMAGE_SIDE: u32 = 16384;
 
-/// A PNG as RGBA, top row first.
-pub fn decode_image(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>)> {
-    if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
-        return decode_jpeg(bytes);
+/// A PNG or a JPEG as RGBA, top row first. `image` names it in a refusal (a file, or a model's image).
+pub fn decode_image(bytes: &[u8], image: &str) -> Result<(u32, u32, Vec<u8>)> {
+    let unreadable = || refuse("Cook.Image.Unreadable", &[("image", image.to_string())]);
+    let (width, height, rgba) = if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        decode_jpeg(bytes).map_err(|_| unreadable())?
+    } else if bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
+        decode_png(bytes, image).map_err(|e| if super::refuse::refusal_of(&e).is_some() { e } else { unreadable() })?
+    } else {
+        return Err(refuse("Cook.Image.Kind", &[("image", image.to_string())]));
+    };
+    if width > MAX_IMAGE_SIDE || height > MAX_IMAGE_SIDE {
+        return Err(image_side(image, width, height));
     }
-    if !bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
-        bail!("images have to be PNG or JPEG");
-    }
+    Ok((width, height, rgba))
+}
+
+fn image_side(image: &str, width: u32, height: u32) -> anyhow::Error {
+    refuse("Cook.Image.Side", &[("image", image.to_string()), ("width", width.to_string()), ("height", height.to_string()), ("max", MAX_IMAGE_SIDE.to_string())])
+}
+
+fn decode_png(bytes: &[u8], image: &str) -> Result<(u32, u32, Vec<u8>)> {
     let mut decoder = png::Decoder::new(bytes);
     decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16 | png::Transformations::ALPHA);
     let mut reader = decoder.read_info().context("the PNG can't be read")?;
     let (width, height) = reader.info().size();
+    // Before its pixels are kept: a damaged size would ask for memory no device has.
     if width > MAX_IMAGE_SIDE || height > MAX_IMAGE_SIDE {
-        bail!("a {width} by {height} image: images go up to {MAX_IMAGE_SIDE} pixels a side");
+        return Err(image_side(image, width, height));
     }
     let mut pixels = vec![0u8; reader.output_buffer_size()];
     let info = reader.next_frame(&mut pixels).context("the PNG can't be read")?;
@@ -379,8 +417,8 @@ pub fn image_header(width: u32, height: u32, data_offset: u32, wrap: u8, has_alp
 }
 
 /// A standalone image file (`.bti`) from a PNG, as the game's own images are.
-pub fn png_to_bti(bytes: &[u8]) -> Result<Vec<u8>> {
-    let (width, height, rgba) = decode_image(bytes)?;
+pub fn png_to_bti(bytes: &[u8], image: &str) -> Result<Vec<u8>> {
+    let (width, height, rgba) = decode_image(bytes, image)?;
     let record = super::texture::cook_rgba(width, height, &rgba)?;
     let mut out = Vec::with_capacity(64 + record.len());
     for word in [0x4954_424Eu32, 1, width, height, 1, 64, 0, 0, 0] { out.extend_from_slice(&word.to_le_bytes()); }
@@ -390,8 +428,8 @@ pub fn png_to_bti(bytes: &[u8]) -> Result<Vec<u8>> {
 }
 
 /// A PNG as a TPL, the game's form for its interface: one image, RGBA8, big-endian as the disc's are.
-pub fn png_to_tpl(bytes: &[u8]) -> Result<Vec<u8>> {
-    let (width, height, rgba) = decode_image(bytes)?;
+pub fn png_to_tpl(bytes: &[u8], image: &str) -> Result<Vec<u8>> {
+    let (width, height, rgba) = decode_image(bytes, image)?;
     const TABLE_AT: u32 = 12;
     const HEADER_AT: u32 = TABLE_AT + 8;
     const DATA_AT: u32 = 64;
@@ -417,6 +455,10 @@ pub fn png_to_tpl(bytes: &[u8]) -> Result<Vec<u8>> {
 }
 
 type Matrix = [f32; 16];
+
+/// A model's animations by name, as typed values or as the store's blocks.
+pub type Clips = Vec<(String, ClipIr)>;
+pub type ClipFiles = Vec<(String, Vec<u8>)>;
 
 const IDENTITY: Matrix = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0];
 
@@ -505,10 +547,21 @@ fn angles(q: [f32; 4]) -> [f32; 3] {
 
 struct Joint {
     name: String,
+    /// Its node; None for a root the cook adds.
+    node: Option<usize>,
     parent: Option<usize>,
+    /// At rest, from its parent joint.
     trs: Trs,
+    /// The nodes between its parent joint and its own parent node, which no animation moves: None when its parent node
+    /// is its parent joint's.
+    between: Option<Matrix>,
     inverse: Matrix,
+    /// A `socket:` node's joint (contract 6).
+    socket: bool,
 }
+
+/// A material's layers and coordinate sets at most: a program's inputs name them in a byte past NEBULA_INPUT_COORD0.
+const MATERIAL_LAYERS: usize = 240;
 
 /// Keeps one copy of each value, by its bytes: the curve analysis finds shared corners by these numbers.
 struct Pool<const N: usize> {
@@ -549,7 +602,7 @@ const NO_TRANSFORM: [f32; 5] = [1.0, 1.0, 0.0, 0.0, 0.0];
 /// scales before it turns where the game scales after, which is the same only when both scales are equal.
 fn texture_transform(t: &[f32; 5], material: &str) -> Result<[f32; 5]> {
     if t[2].abs() > 1e-6 && (t[0] - t[1]).abs() > 1e-5 * t[0].abs().max(t[1].abs()).max(1.0) {
-        bail!("material {material}: a texture turned with unequal scales ({} and {}): scale it evenly, or not turn it", t[0], t[1]);
+        return Err(refuse("Cook.Model.UnevenTransform", &[("material", material.to_string())]));
     }
     Ok([t[0], t[1], -t[2], t[3], t[4]])
 }
@@ -617,78 +670,375 @@ fn widen(low: &mut [f32; 3], high: &mut [f32; 3], at: [f32; 3]) {
     }
 }
 
+/// The game's model a mod's model stands in for (models contract 2 and 4): its store path, and its joints' names by
+/// number, which the mod's joints keep.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GameModel {
+    pub path: String,
+    pub joints: Vec<String>,
+}
+
+impl GameModel {
+    /// The joints of a model block as the store keeps it (nebula_model.h): None when `block` is no model block.
+    pub fn read(path: &str, block: &[u8]) -> Option<GameModel> {
+        let word = |at: usize| Some(u32::from_le_bytes(block.get(at..at.checked_add(4)?)?.try_into().ok()?) as usize);
+        if word(0)? != super::model_write::MAGIC as usize {
+            return None;
+        }
+        let (count, joints_at) = (word(4 * 4)?, word(15 * 4)?);
+        if count > block.len() / super::model_write::JOINT_BYTES {
+            return None;
+        }
+        let mut joints = Vec::with_capacity(count);
+        for j in 0..count {
+            let name_at = word(joints_at.checked_add(j * super::model_write::JOINT_BYTES + 88)?)?;
+            let rest = block.get(name_at..)?;
+            let end = rest.iter().position(|b| *b == 0)?;
+            joints.push(rest[..end].iter().map(|&b| char::from(b)).collect());
+        }
+        Some(GameModel { path: path.to_string(), joints })
+    }
+}
+
+/// What the cook made of a model file, for the fact `cook.model` (models contract 9).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ModelFacts {
+    /// The game model it stands in for; empty for a new model.
+    pub replaced: String,
+    /// Joints numbered by the game model (all of a new model's), and the source's others after them.
+    pub joints: usize,
+    pub extra_joints: usize,
+    pub meshes: usize,
+    pub vertices: usize,
+    pub materials: usize,
+    pub textures: usize,
+    pub clips: usize,
+}
+
+/// A mesh, node or material in a refusal: its glTF name, else its number.
+fn named(value: &Value, n: usize) -> String {
+    value["name"].as_str().filter(|s| !s.is_empty()).map_or_else(|| format!("#{n}"), str::to_string)
+}
+
+/// An affine matrix's inverse (glTF's node matrices are affine); a singular one has none, and is the identity.
+fn affine_inverse(m: &Matrix) -> Matrix {
+    let a = |r: usize, c: usize| f64::from(m[c * 4 + r]);
+    let det = a(0, 0) * (a(1, 1) * a(2, 2) - a(1, 2) * a(2, 1)) - a(0, 1) * (a(1, 0) * a(2, 2) - a(1, 2) * a(2, 0))
+        + a(0, 2) * (a(1, 0) * a(2, 1) - a(1, 1) * a(2, 0));
+    if det.abs() < 1e-18 {
+        return IDENTITY;
+    }
+    let i = [
+        [(a(1, 1) * a(2, 2) - a(1, 2) * a(2, 1)) / det, (a(0, 2) * a(2, 1) - a(0, 1) * a(2, 2)) / det, (a(0, 1) * a(1, 2) - a(0, 2) * a(1, 1)) / det],
+        [(a(1, 2) * a(2, 0) - a(1, 0) * a(2, 2)) / det, (a(0, 0) * a(2, 2) - a(0, 2) * a(2, 0)) / det, (a(0, 2) * a(1, 0) - a(0, 0) * a(1, 2)) / det],
+        [(a(1, 0) * a(2, 1) - a(1, 1) * a(2, 0)) / det, (a(0, 1) * a(2, 0) - a(0, 0) * a(2, 1)) / det, (a(0, 0) * a(1, 1) - a(0, 1) * a(1, 0)) / det],
+    ];
+    let t = [a(0, 3), a(1, 3), a(2, 3)];
+    let mut out = IDENTITY;
+    for r in 0..3 {
+        for c in 0..3 {
+            out[c * 4 + r] = i[r][c] as f32;
+        }
+        out[12 + r] = -(i[r][0] * t[0] + i[r][1] * t[1] + i[r][2] * t[2]) as f32;
+    }
+    out
+}
+
+/// An affine matrix as translation, rotation and scale (no shear: what glTF's nodes compose to).
+fn decompose(m: &Matrix) -> Trs {
+    let column = |c: usize| [m[c * 4], m[c * 4 + 1], m[c * 4 + 2]];
+    let length = |v: [f32; 3]| (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+    let mut scale = [length(column(0)), length(column(1)), length(column(2))];
+    let det = {
+        let (x, y, z) = (column(0), column(1), column(2));
+        x[0] * (y[1] * z[2] - y[2] * z[1]) - x[1] * (y[0] * z[2] - y[2] * z[0]) + x[2] * (y[0] * z[1] - y[1] * z[0])
+    };
+    if det < 0.0 {
+        scale[0] = -scale[0];
+    }
+    let r = |row: usize, c: usize| f64::from(m[c * 4 + row] / if scale[c].abs() > 1e-12 { scale[c] } else { 1.0 });
+    let trace = r(0, 0) + r(1, 1) + r(2, 2);
+    let q = if trace > 0.0 {
+        let s = (trace + 1.0).sqrt() * 2.0;
+        [(r(2, 1) - r(1, 2)) / s, (r(0, 2) - r(2, 0)) / s, (r(1, 0) - r(0, 1)) / s, 0.25 * s]
+    } else if r(0, 0) > r(1, 1) && r(0, 0) > r(2, 2) {
+        let s = (1.0 + r(0, 0) - r(1, 1) - r(2, 2)).sqrt() * 2.0;
+        [0.25 * s, (r(0, 1) + r(1, 0)) / s, (r(0, 2) + r(2, 0)) / s, (r(2, 1) - r(1, 2)) / s]
+    } else if r(1, 1) > r(2, 2) {
+        let s = (1.0 + r(1, 1) - r(0, 0) - r(2, 2)).sqrt() * 2.0;
+        [(r(0, 1) + r(1, 0)) / s, 0.25 * s, (r(1, 2) + r(2, 1)) / s, (r(0, 2) - r(2, 0)) / s]
+    } else {
+        let s = (1.0 + r(2, 2) - r(0, 0) - r(1, 1)).sqrt() * 2.0;
+        [(r(0, 2) + r(2, 0)) / s, (r(1, 2) + r(2, 1)) / s, 0.25 * s, (r(1, 0) - r(0, 1)) / s]
+    };
+    let n = q.iter().map(|v| v * v).sum::<f64>().sqrt().max(1e-12);
+    Trs { translation: [m[12], m[13], m[14]], rotation: q.map(|v| (v / n) as f32), scale }
+}
+
+/// glTF's linear colour (0 to 1) as the game's 8-bit vertex colours hold it: sRGB-encoded, as the game's own art.
+fn srgb_byte(linear: f32) -> u8 {
+    let c = linear.clamp(0.0, 1.0);
+    let encoded = if c <= 0.003_130_8 { c * 12.92 } else { 1.055 * c.powf(1.0 / 2.4) - 0.055 };
+    (encoded * 255.0).round() as u8
+}
+
+/// A primitive's triangles as vertex numbers, from its mode (glTF 2.0 3.7.2.1): triangles, a strip or a fan.
+fn triangles_of(mode: u64, indices: &[u32], pointer: &str) -> Result<Vec<u32>> {
+    let mut out = Vec::with_capacity(indices.len());
+    match mode {
+        4 => out.extend_from_slice(&indices[..indices.len() / 3 * 3]),
+        5 => {
+            for i in 0..indices.len().saturating_sub(2) {
+                let (b, c) = if i % 2 == 0 { (i + 1, i + 2) } else { (i + 2, i + 1) };
+                out.extend_from_slice(&[indices[i], indices[b], indices[c]]);
+            }
+        }
+        6 => {
+            for i in 1..indices.len().saturating_sub(1) {
+                out.extend_from_slice(&[indices[i], indices[i + 1], indices[0]]);
+            }
+        }
+        // Points and lines are refused by name before this; anything else is no glTF mode.
+        _ => return Err(invalid(pointer.to_string())),
+    }
+    Ok(out)
+}
+
+/// A colour accessor's numbers as RGBA (glTF allows VEC3 and VEC4).
+fn colour_values_of(document: &Document, index: usize) -> Result<Vec<f32>> {
+    match document.root["accessors"][index]["type"].as_str() {
+        Some("VEC4") => document.floats(index, 4),
+        Some("VEC3") => Ok(document.floats(index, 3)?.chunks_exact(3).flat_map(|c| [c[0], c[1], c[2], 1.0]).collect()),
+        _ => Err(invalid(format!("/accessors/{index}/type"))),
+    }
+}
+
 /// A glTF document as typed values: the model, and each animation by its name.
 pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(String, ClipIr)>)> {
+    to_ir_for(bytes, folder, None).map(|(ir, clips, _)| (ir, clips))
+}
+
+/// A glTF document as the model that stands in for `game` (None: a new model), its clips and what was made.
+pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) -> Result<(ModelIr, Clips, ModelFacts)> {
     let document = Document::parse(bytes, folder)?;
     let root = &document.root;
     required_extensions(root)?;
-    let scene = &root["scenes"][root["scene"].as_u64().unwrap_or(0) as usize];
+    let scene_number = root["scene"].as_u64().unwrap_or(0) as usize;
+    let scene = &root["scenes"][scene_number];
     let nodes = root["nodes"].as_array().map(Vec::as_slice).unwrap_or_default();
+    let mesh_name = |m: usize| named(&root["meshes"][m], m);
 
     // Every node in the scene with its whole transform, parents first.
     let mut world = vec![IDENTITY; nodes.len()];
-    let mut parents = vec![None; nodes.len()];
+    let mut parents: Vec<Option<usize>> = vec![None; nodes.len()];
+    let mut seen = vec![false; nodes.len()];
     let mut order = Vec::new();
-    let mut stack: Vec<(usize, Matrix)> = scene["nodes"].as_array().map(Vec::as_slice).unwrap_or_default().iter().rev().filter_map(|n| n.as_u64()).map(|n| (n as usize, IDENTITY)).collect();
+    let mut stack: Vec<(usize, Matrix)> = Vec::new();
+    for n in scene["nodes"].as_array().map(Vec::as_slice).unwrap_or_default().iter().rev() {
+        stack.push((n.as_u64().or_invalid(|| format!("/scenes/{scene_number}/nodes"))? as usize, IDENTITY));
+    }
     while let Some((node, parent)) = stack.pop() {
-        let matrix = multiply(&parent, &node_matrix(nodes.get(node).context("a scene naming a node it doesn't have")?));
+        let value = nodes.get(node).ok_or_else(|| refuse("Cook.Model.NodeMissing", &[("node", node.to_string())]))?;
+        // A node is in one place of the tree (glTF 2.0 3.5.3): a second visit is a cycle or a shared child.
+        if std::mem::replace(&mut seen[node], true) {
+            return Err(invalid(format!("/nodes/{node}/children")));
+        }
+        let matrix = multiply(&parent, &node_matrix(value));
         world[node] = matrix;
         order.push(node);
-        for child in nodes[node]["children"].as_array().map(Vec::as_slice).unwrap_or_default().iter().rev().filter_map(Value::as_u64) {
-            parents[child as usize] = Some(node);
-            stack.push((child as usize, matrix));
+        for child in value["children"].as_array().map(Vec::as_slice).unwrap_or_default().iter().rev() {
+            let child = child.as_u64().or_invalid(|| format!("/nodes/{node}/children"))? as usize;
+            if child >= nodes.len() {
+                return Err(refuse("Cook.Model.NodeMissing", &[("node", child.to_string())]));
+            }
+            parents[child] = Some(node);
+            stack.push((child, matrix));
         }
     }
     if order.is_empty() {
-        bail!("the scene has no nodes");
+        return Err(refuse("Cook.Model.NoTriangles", &[]));
     }
 
-    // Joints: a skin's, or every node in the scene. One root at the top: the game's tree has one.
+    // One skin at most (contract 4): the first skinned mesh's, and no other.
+    let mut skin_number: Option<(usize, usize)> = None;
+    for node in &order {
+        if let Some(s) = nodes[*node]["skin"].as_u64() {
+            let mesh = nodes[*node]["mesh"].as_u64().unwrap_or(0) as usize;
+            match skin_number {
+                None => skin_number = Some((s as usize, mesh)),
+                Some((first, first_mesh)) if first != s as usize => {
+                    return Err(refuse("Cook.Model.TwoSkins", &[("mesh", mesh_name(first_mesh)), ("other", mesh_name(mesh))]));
+                }
+                _ => {}
+            }
+        }
+    }
+    let skin = skin_number.map(|(s, _)| &root["skins"][s]);
+
+    // Sockets: `socket:<name>` nodes with no mesh, joints of their own whatever else the file has (contract 6).
+    let socket_of = |n: usize| -> Option<&str> { nodes[n]["name"].as_str()?.strip_prefix("socket:").filter(|_| nodes[n]["mesh"].is_null()) };
+
+    // Joints: a skin's, or every node in the scene; one root at the top, as the game's tree has one.
+    let mut inverse_of: BTreeMap<usize, Matrix> = BTreeMap::new();
+    let listed: Vec<usize> = match skin {
+        Some(skin) => {
+            let s = skin_number.map_or(0, |(s, _)| s);
+            let list: Vec<usize> = skin["joints"]
+                .as_array()
+                .or_invalid(|| format!("/skins/{s}/joints"))?
+                .iter()
+                .map(|j| j.as_u64().map(|v| v as usize).or_invalid(|| format!("/skins/{s}/joints")))
+                .collect::<Result<_>>()?;
+            let inverses = match skin["inverseBindMatrices"].as_u64() {
+                Some(index) => document.floats(index as usize, 16)?,
+                None => IDENTITY.repeat(list.len()),
+            };
+            for (place, node) in list.iter().enumerate() {
+                let inverse: Matrix = inverses.get(place * 16..place * 16 + 16).or_invalid(|| format!("/skins/{s}/inverseBindMatrices"))?.try_into()?;
+                inverse_of.insert(*node, inverse);
+            }
+            let listed: Vec<usize> = order.iter().copied().filter(|n| list.contains(n)).collect();
+            if let Some(outside) = list.iter().find(|n| !listed.contains(n)) {
+                return Err(refuse("Cook.Model.SkinOutside", &[("node", named(&nodes.get(*outside).cloned().unwrap_or(Value::Null), *outside))]));
+            }
+            listed
+        }
+        None => order.iter().copied().filter(|n| socket_of(*n).is_none()).collect(),
+    };
+    let ancestor_in = |n: usize, set: &[usize]| -> Option<usize> {
+        let mut at = parents[n];
+        while let Some(p) = at {
+            if set.contains(&p) {
+                return Some(p);
+            }
+            at = parents[p];
+        }
+        None
+    };
     let mut joints: Vec<Joint> = Vec::new();
     let mut joint_of_node: BTreeMap<usize, usize> = BTreeMap::new();
-    let skin = order.iter().find_map(|n| nodes[*n]["skin"].as_u64()).map(|s| &root["skins"][s as usize]);
-    let mut listed: Vec<usize> = order.clone();
-    let mut inverse_of: BTreeMap<usize, Matrix> = BTreeMap::new();
-    if let Some(skin) = skin {
-        let list: Vec<usize> = skin["joints"].as_array().context("a skin with no joints")?.iter().filter_map(|j| j.as_u64().map(|v| v as usize)).collect();
-        let inverses = match skin["inverseBindMatrices"].as_u64() {
-            Some(index) => document.floats(index as usize, 16)?,
-            None => IDENTITY.repeat(list.len()),
-        };
-        for (place, node) in list.iter().enumerate() {
-            let inverse: Matrix = inverses.get(place * 16..place * 16 + 16).context("a skin with too few matrices")?.try_into()?;
-            inverse_of.insert(*node, inverse);
-        }
-        listed = order.iter().copied().filter(|n| list.contains(n)).collect();
-        if listed.len() != list.len() {
-            bail!("a skin names a joint outside the scene");
-        }
-    }
-    if listed.len() + 1 >= NONE as usize {
-        bail!("too many joints");
-    }
-    let roots = listed.iter().filter(|n| parents[**n].is_none_or(|p| !listed.contains(&p))).count();
+    let roots = listed.iter().filter(|n| ancestor_in(**n, &listed).is_none()).count();
     if roots != 1 {
-        joints.push(Joint { name: "root".to_string(), parent: None, trs: Trs { translation: [0.0; 3], rotation: [0.0, 0.0, 0.0, 1.0], scale: [1.0; 3] }, inverse: IDENTITY });
+        let name = game.and_then(|g| g.joints.first().cloned()).unwrap_or_else(|| "root".to_string());
+        joints.push(Joint { name, node: None, parent: None, trs: Trs { translation: [0.0; 3], rotation: [0.0, 0.0, 0.0, 1.0], scale: [1.0; 3] }, between: None, inverse: IDENTITY, socket: false });
     }
+    // A joint's rest place from its parent joint's: the node's own when that is its parent, else what lies between.
+    let local = |node: usize, parent_node: Option<usize>| -> (Trs, Option<Matrix>) {
+        if parents[node] == parent_node {
+            return (node_trs(&nodes[node]), None);
+        }
+        let above = parent_node.map_or(IDENTITY, |p| affine_inverse(&world[p]));
+        let between = multiply(&above, &parents[node].map_or(IDENTITY, |p| world[p]));
+        (decompose(&multiply(&above, &world[node])), Some(between))
+    };
     for node in &listed {
+        let parent_node = ancestor_in(*node, &listed);
+        let parent = parent_node.and_then(|p| joint_of_node.get(&p).copied()).or(if joints.is_empty() { None } else { Some(0) });
+        let (trs, between) = local(*node, parent_node);
         joint_of_node.insert(*node, joints.len());
-        let parent = parents[*node].and_then(|p| joint_of_node.get(&p).copied()).or(if joints.is_empty() { None } else { Some(0) });
-        joints.push(Joint {
-            name: nodes[*node]["name"].as_str().map_or_else(|| format!("joint{node}"), str::to_string),
-            parent,
-            trs: node_trs(&nodes[*node]),
-            inverse: inverse_of.get(node).copied().unwrap_or(IDENTITY),
-        });
+        joints.push(Joint { name: named(&nodes[*node], *node), node: Some(*node), parent, trs, between, inverse: inverse_of.get(node).copied().unwrap_or(IDENTITY), socket: false });
+    }
+    let mut socket_names: BTreeSet<String> = BTreeSet::new();
+    for node in order.iter().copied().filter(|n| socket_of(*n).is_some()) {
+        let name = socket_of(node).unwrap_or_default().to_string();
+        if joints.iter().any(|j| !j.socket && j.name == name) || game.is_some_and(|g| g.joints.contains(&name)) {
+            return Err(refuse("Cook.Model.SocketIsJoint", &[("name", name)]));
+        }
+        if !socket_names.insert(name.clone()) {
+            return Err(refuse("Cook.Model.SocketTwice", &[("name", name)]));
+        }
+        let parent_node = ancestor_in(node, &listed);
+        let parent = parent_node.and_then(|p| joint_of_node.get(&p).copied()).unwrap_or(0);
+        let (trs, between) = local(node, parent_node);
+        joint_of_node.insert(node, joints.len());
+        joints.push(Joint { name, node: Some(node), parent: Some(parent), trs, between, inverse: IDENTITY, socket: true });
+    }
+    let joint_twice = |joints: &[Joint]| -> Result<()> {
+        let mut names_seen = BTreeSet::new();
+        for joint in joints {
+            if !names_seen.insert(joint.name.as_str()) {
+                return Err(refuse("Cook.Model.JointTwice", &[("joint", joint.name.clone())]));
+            }
+        }
+        Ok(())
+    };
+    joint_twice(&joints)?;
+
+    // Numbers by the game model (contract 4, G-M2): a one-joint model's root is joint 0 whatever its name; otherwise
+    // each of the game's joints by name, then the source's others in order, parents before children.
+    let mut facts = ModelFacts { replaced: game.map(|g| g.path.clone()).unwrap_or_default(), ..ModelFacts::default() };
+    let mut new_order: Vec<usize> = (0..joints.len()).collect();
+    if let Some(game) = game {
+        if game.joints.len() == 1 {
+            joints[0].name = game.joints[0].clone();
+            joint_twice(&joints)?;
+            facts.joints = 1;
+        } else {
+            new_order.clear();
+            for name in &game.joints {
+                let old = joints
+                    .iter()
+                    .position(|j| !j.socket && &j.name == name)
+                    .ok_or_else(|| refuse("Cook.Model.MissingJoint", &[("joint", name.clone()), ("model", game.path.clone())]))?;
+                new_order.push(old);
+            }
+            facts.joints = new_order.len();
+            for old in 0..joints.len() {
+                if !new_order.contains(&old) {
+                    new_order.push(old);
+                }
+            }
+        }
+    } else {
+        facts.joints = joints.len();
+    }
+    if joints.len() + 1 >= NONE as usize {
+        return Err(refuse("Cook.Model.Joints", &[("count", joints.len().to_string()), ("max", (NONE - 2).to_string())]));
+    }
+    let mut new_of_old = vec![0usize; joints.len()];
+    for (new, old) in new_order.iter().enumerate() {
+        new_of_old[*old] = new;
+    }
+    let mut taken: Vec<Option<Joint>> = joints.into_iter().map(Some).collect();
+    let mut joints: Vec<Joint> = new_order.iter().map(|old| taken[*old].take().expect("each joint once")).collect();
+    for joint in &mut joints {
+        joint.parent = joint.parent.map(|p| new_of_old[p]);
+    }
+    for joint in joint_of_node.values_mut() {
+        *joint = new_of_old[*joint];
+    }
+    facts.extra_joints = joints.len() - facts.joints;
+    // Each joint's place in the model at rest.
+    let joint_world: Vec<Matrix> = joints.iter().map(|j| j.node.map_or(IDENTITY, |n| world[n])).collect();
+    let skin_root = listed.first().and_then(|n| joint_of_node.get(n)).copied().unwrap_or(0);
+    // Billboards from the node's `extras.nebula.billboard` (contract 4, G-M9): 1 faces the screen, 2 turns about Y.
+    let mut billboard = vec![0u8; joints.len()];
+    for (number, joint) in joints.iter().enumerate() {
+        let Some(node) = joint.node else { continue };
+        match &nodes[node]["extras"]["nebula"]["billboard"] {
+            Value::Null => {}
+            Value::String(s) if s == "xy" => billboard[number] = 1,
+            Value::String(s) if s == "y" => billboard[number] = 2,
+            other => {
+                return Err(refuse("Cook.Model.Billboard", &[("node", named(&nodes[node], node)), ("value", other.to_string())]));
+            }
+        }
     }
 
     // Materials.
     let (moved, swapped) = animated_materials(root);
     let mut materials: Vec<SourceMaterial> = Vec::new();
     for (i, material) in root["materials"].as_array().map(Vec::as_slice).unwrap_or_default().iter().enumerate() {
+        let material_name = named(material, i);
         let pbr = &material["pbrMetallicRoughness"];
         let factor: [f32; 4] = numbers(&pbr["baseColorFactor"], [1.0; 4]);
-        let image = pbr["baseColorTexture"]["index"].as_u64().and_then(|t| root["textures"][t as usize]["source"].as_u64()).map(|s| s as usize);
+        let image_of_texture = |t: u64| -> Result<usize> {
+            root["textures"][t as usize]["source"].as_u64().map(|s| s as usize).or_invalid(|| format!("/textures/{t}/source"))
+        };
+        let image = match pbr["baseColorTexture"]["index"].as_u64() {
+            Some(t) => Some(image_of_texture(t)?),
+            None => None,
+        };
         let still = &pbr["baseColorTexture"]["extensions"]["KHR_texture_transform"];
         let transform = (still.is_object() || moved.contains(&i)).then(|| {
             let [sx, sy]: [f32; 2] = numbers(&still["scale"], [1.0; 2]);
@@ -700,22 +1050,22 @@ pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(Strin
             let coordinates = still["texCoord"].as_u64().or(pbr["baseColorTexture"]["texCoord"].as_u64()).unwrap_or(0);
             images.push((image, coordinates));
         } else if transform.is_some() {
-            bail!("material {i}: a texture transform with no base colour texture");
+            return Err(refuse("Cook.Model.TransformNoTexture", &[("material", material_name)]));
         }
         // Additional authored multiply layers use ordinary glTF texture indices
         // and UV sets, through the same material programs as the game's models.
-        for layer in material["extras"]["nebula"]["textures"].as_array().map(Vec::as_slice).unwrap_or_default() {
-            let index = layer["index"].as_u64().context("a material layer with no texture index")? as usize;
-            let image = root["textures"][index]["source"].as_u64().context("a material layer with no image")? as usize;
-            images.push((image, layer["texCoord"].as_u64().unwrap_or(0)));
+        for (k, layer) in material["extras"]["nebula"]["textures"].as_array().map(Vec::as_slice).unwrap_or_default().iter().enumerate() {
+            let index = layer["index"].as_u64().or_invalid(|| format!("/materials/{i}/extras/nebula/textures/{k}/index"))?;
+            images.push((image_of_texture(index)?, layer["texCoord"].as_u64().unwrap_or(0)));
         }
         // A program's inputs name coordinates in a byte past NEBULA_INPUT_COORD0, maps and coordinates in a byte.
-        if images.len() > 240 || images.iter().any(|(_, uv)| *uv >= 240) {
-            bail!("a material with more than 240 textures or coordinates");
+        if images.len() > MATERIAL_LAYERS || images.iter().any(|(_, uv)| *uv >= MATERIAL_LAYERS as u64) {
+            let count = images.len().max(images.iter().map(|(_, uv)| *uv as usize + 1).max().unwrap_or(0));
+            return Err(refuse("Cook.Model.Layers", &[("material", material_name), ("count", count.to_string()), ("max", MATERIAL_LAYERS.to_string())]));
         }
         let images = images.into_iter().map(|(image, uv)| (image, uv as u8)).collect();
         materials.push(SourceMaterial {
-            name: material["name"].as_str().map_or_else(|| format!("material{i}"), str::to_string),
+            name: material_name,
             color: factor.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8),
             images,
             blend: material["alphaMode"].as_str() == Some("BLEND"),
@@ -730,124 +1080,222 @@ pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(Strin
     let mut ir = ModelIr::default();
     let mut positions = Pool::<3>::new();
     let mut normals = Pool::<3>::new();
+    let mut colour_pools: [Pool<1>; 2] = [Pool::new(), Pool::new()];
     let mut coordinates: Vec<Pool<2>> = Vec::new();
     // A vertex's draw matrix: joints first (by joint number), then envelopes.
-    let mut envelope_ids: BTreeMap<Vec<(u32, u32)>, u32> = BTreeMap::new();
+    let mut envelope_ids: BTreeMap<Vec<(u32, u32)>, u64> = BTreeMap::new();
     let mut first_of_material: BTreeMap<usize, u32> = BTreeMap::new();
     let mut image_of: BTreeMap<usize, u32> = BTreeMap::new();
-    let (mut whole_low, mut whole_high) = ([f32::MAX; 3], [f32::MIN; 3]);
+    // Each joint's own vertices at rest, in the model's space and the game's units.
+    let mut joint_low = vec![[f32::MAX; 3]; joints.len()];
+    let mut joint_high = vec![[f32::MIN; 3]; joints.len()];
+    let mut meshes_of_joint: Vec<Vec<u32>> = vec![Vec::new(); joints.len()];
+    let mut flat_meshes: BTreeSet<usize> = BTreeSet::new();
     for node in &order {
         let Some(mesh) = nodes[*node]["mesh"].as_u64() else { continue };
+        let mesh = mesh as usize;
+        let name = mesh_name(mesh);
         let skinned = nodes[*node]["skin"].is_u64();
         let skin_joints: Vec<usize> = if skinned {
-            root["skins"][nodes[*node]["skin"].as_u64().unwrap_or(0) as usize]["joints"].as_array().map(Vec::as_slice).unwrap_or_default().iter().filter_map(|j| j.as_u64().map(|v| v as usize)).collect()
+            skin.map(|s| s["joints"].as_array().map(Vec::as_slice).unwrap_or_default().iter().filter_map(|j| j.as_u64().map(|v| v as usize)).collect()).unwrap_or_default()
         } else {
             Vec::new()
         };
-        for primitive in root["meshes"][mesh as usize]["primitives"].as_array().map(Vec::as_slice).unwrap_or_default() {
-            if primitive["mode"].as_u64().unwrap_or(4) != 4 {
-                bail!("a mesh that isn't triangles");
+        // A mesh that no skin moves draws with the joint at or above its node, in that joint's space (contract 5).
+        let static_joint = joint_of_node
+            .get(node)
+            .copied()
+            .or_else(|| ancestor_in(*node, &listed).and_then(|p| joint_of_node.get(&p).copied()))
+            .unwrap_or(0);
+        let to_joint = multiply(&affine_inverse(&joint_world[static_joint]), &world[*node]);
+        let mut unweighted = 0usize;
+        let primitives = root["meshes"][mesh]["primitives"].as_array().or_invalid(|| format!("/meshes/{mesh}/primitives"))?;
+        for (p, primitive) in primitives.iter().enumerate() {
+            let at = |rest: &str| format!("/meshes/{mesh}/primitives/{p}/{rest}");
+            let mode = primitive["mode"].as_u64().unwrap_or(4);
+            if mode <= 3 {
+                return Err(refuse("Cook.Model.NotTriangles", &[("mesh", name.clone()), ("mode", mode.to_string())]));
             }
             let attributes = &primitive["attributes"];
-            let position_values = document.floats(attributes["POSITION"].as_u64().context("a mesh with no positions")? as usize, 3)?;
+            let position_values = document.floats(attributes["POSITION"].as_u64().or_invalid(|| at("attributes/POSITION"))? as usize, 3)?;
             let count = position_values.len() / 3;
+            let source_indices = triangles_of(mode, &document.indices(primitive, count)?, &at("mode"))?;
+            if let Some(i) = source_indices.iter().find(|i| **i as usize >= count) {
+                return Err(refuse("Cook.Model.VertexPast", &[("mesh", name.clone()), ("vertex", i.to_string()), ("count", count.to_string())]));
+            }
+            // No normals: each triangle's own, as glTF 2.0 says a reader makes them (flat), each corner a vertex.
+            let flat = attributes["NORMAL"].is_null();
             let normal_values = match attributes["NORMAL"].as_u64() {
                 Some(index) => document.floats(index as usize, 3)?,
-                None => [0.0, 1.0, 0.0].repeat(count),
+                None => {
+                    if flat_meshes.insert(mesh) {
+                        note("Cook.Model.FlatNormals", &[("mesh", name.clone())]);
+                    }
+                    let mut out = Vec::with_capacity(source_indices.len());
+                    for t in source_indices.chunks_exact(3) {
+                        let v = |k: usize| -> [f32; 3] {
+                            let at = t[k] as usize * 3;
+                            [position_values[at], position_values[at + 1], position_values[at + 2]]
+                        };
+                        let (a, b, c) = (v(0), v(1), v(2));
+                        let (e, f) = ([b[0] - a[0], b[1] - a[1], b[2] - a[2]], [c[0] - a[0], c[1] - a[1], c[2] - a[2]]);
+                        let n = [e[1] * f[2] - e[2] * f[1], e[2] * f[0] - e[0] * f[2], e[0] * f[1] - e[1] * f[0]];
+                        let length = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+                        out.extend_from_slice(&if length > 1e-12 { n.map(|x| x / length) } else { [0.0, 1.0, 0.0] });
+                    }
+                    out
+                }
             };
-            let weights = match (attributes["JOINTS_0"].as_u64(), attributes["WEIGHTS_0"].as_u64(), skinned) {
-                (Some(j), Some(w), true) => Some((document.floats(j as usize, 4)?, document.floats(w as usize, 4)?)),
-                _ => None,
+            let weights = if skinned {
+                match (attributes["JOINTS_0"].as_u64(), attributes["WEIGHTS_0"].as_u64()) {
+                    (Some(j), Some(w)) => Some((document.floats(j as usize, 4)?, document.floats(w as usize, 4)?)),
+                    _ => return Err(refuse("Cook.Model.SkinNoWeights", &[("mesh", name.clone())])),
+                }
+            } else {
+                None
             };
+            // Four weights a vertex: a second set that weighs anything is refused, never dropped (contract 4).
+            if let (true, Some(w)) = (skinned, attributes["WEIGHTS_1"].as_u64()) {
+                let heavy = document.floats(w as usize, 4)?.chunks_exact(4).filter(|v| v.iter().any(|x| *x > 0.001)).count();
+                if heavy > 0 {
+                    return Err(refuse("Cook.Model.WeightsOver4", &[("mesh", name.clone()), ("vertices", heavy.to_string())]));
+                }
+            }
+            // Vertex colours: two sets, as the block has (contract 5).
+            let sets = attributes.as_object().map_or(0, |a| a.keys().filter_map(|k| k.strip_prefix("COLOR_")?.parse::<usize>().ok()).map(|k| k + 1).max().unwrap_or(0));
+            if sets > 2 {
+                return Err(refuse("Cook.Model.ColorSets", &[("mesh", name.clone()), ("count", sets.to_string()), ("max", "2".to_string())]));
+            }
+            let mut colour_values: [Option<Vec<f32>>; 2] = [None, None];
+            for (k, values) in colour_values.iter_mut().enumerate() {
+                if let Some(index) = attributes[format!("COLOR_{k}")].as_u64() {
+                    *values = Some(colour_values_of(&document, index as usize)?);
+                }
+            }
             let material = primitive["material"].as_u64().map_or(default_material, |m| m as usize);
-            let source = materials.get(material).context("a mesh naming a material it doesn't have")?;
+            let source = materials.get(material).or_invalid(|| at("material"))?;
             // Every TEXCOORD_n the primitive has, and every set its material's images read (zeros where it has none).
-            let named = attributes.as_object().map_or(0, |a| {
+            let named_sets = attributes.as_object().map_or(0, |a| {
                 a.keys().filter_map(|k| k.strip_prefix("TEXCOORD_")?.parse::<usize>().ok()).map(|k| k + 1).max().unwrap_or(0)
             });
             let read = source.images.iter().map(|&(_, uv)| usize::from(uv) + 1).max().unwrap_or(0);
-            let room = named.max(read);
+            let room = named_sets.max(read);
             if room > super::limits::MATERIAL_SLOTS {
-                bail!("TEXCOORD_{}: a model has up to {} sets of texture coordinates", room - 1, super::limits::MATERIAL_SLOTS);
+                return Err(refuse("Cook.Model.CoordSets", &[("mesh", name.clone()), ("count", room.to_string()), ("max", super::limits::MATERIAL_SLOTS.to_string())]));
             }
             let mut coordinate_present = vec![false; room];
             let mut coordinate_values = Vec::with_capacity(room);
             for (k, present) in coordinate_present.iter_mut().enumerate() {
                 let values = match attributes[format!("TEXCOORD_{k}")].as_u64() {
-                    Some(index) => { *present = true; document.floats(index as usize, 2)? },
+                    Some(index) => {
+                        *present = true;
+                        document.floats(index as usize, 2)?
+                    }
                     None => vec![0.0; count * 2],
                 };
                 coordinate_values.push(values);
             }
-            for &(_, uv) in &source.images { coordinate_present[usize::from(uv)] = true; }
+            for &(_, uv) in &source.images {
+                coordinate_present[usize::from(uv)] = true;
+            }
             if coordinates.len() < room {
                 coordinates.resize_with(room, Pool::new);
             }
-            let source_indices = document.indices(primitive, count)?;
             let mut corners: Vec<Corner> = Vec::new();
             let mut draws: Vec<u32> = Vec::new();
             let mut indices: Vec<u32> = Vec::with_capacity(source_indices.len());
             let mut corner_of: BTreeMap<u32, u32> = BTreeMap::new();
             let (mut low, mut high) = ([f32::MAX; 3], [f32::MIN; 3]);
-            for index in &source_indices {
-                if let Some(found) = corner_of.get(index) {
+            for (k, index) in source_indices.iter().enumerate() {
+                // Flat normals make each corner its own vertex; shared ones share it.
+                let key = if flat { k as u32 } else { *index };
+                if let Some(found) = corner_of.get(&key) {
                     indices.push(*found);
                     continue;
                 }
                 let i = *index as usize;
-                if i >= count {
-                    bail!("a triangle naming a vertex past the mesh");
-                }
-                let position: [f32; 3] = position_values[i * 3..i * 3 + 3].try_into()?;
-                let normal: [f32; 3] = normal_values[i * 3..i * 3 + 3].try_into()?;
-                let draw = match &weights {
+                let position = [position_values[i * 3], position_values[i * 3 + 1], position_values[i * 3 + 2]];
+                let n = if flat { k / 3 } else { i };
+                let normal: [f32; 3] = normal_values.get(n * 3..n * 3 + 3).or_invalid(|| at("attributes/NORMAL"))?.try_into()?;
+                // The joints that move the vertex and how much.
+                let set: Vec<(u32, f32)> = match &weights {
                     Some((joint_values, weight_values)) => {
                         let mut set: Vec<(u32, f32)> = Vec::new();
-                        for k in 0..4 {
-                            let weight = weight_values[i * 4 + k];
+                        for w in 0..4 {
+                            let weight = *weight_values.get(i * 4 + w).or_invalid(|| at("attributes/WEIGHTS_0"))?;
                             if weight > 0.001 {
-                                let node_of = *skin_joints.get(joint_values[i * 4 + k] as usize).context("a vertex naming a joint past the skin")?;
-                                set.push((*joint_of_node.get(&node_of).context("a vertex's joint isn't in the skin")? as u32, weight));
+                                let joint = *joint_values.get(i * 4 + w).or_invalid(|| at("attributes/JOINTS_0"))?;
+                                let node_of = *skin_joints.get(joint as usize).or_invalid(|| at("attributes/JOINTS_0"))?;
+                                set.push((*joint_of_node.get(&node_of).or_invalid(|| at("attributes/JOINTS_0"))? as u32, weight));
                             }
                         }
                         set.sort_by_key(|(j, _)| *j);
-                        let total: f32 = set.iter().map(|(_, w)| w).sum();
                         if set.is_empty() {
-                            0
-                        } else if set.len() == 1 {
-                            u32::from(set[0].0)
-                        } else {
-                            for item in &mut set {
-                                item.1 /= total;
-                            }
-                            let key: Vec<(u32, u32)> = set.iter().map(|(j, w)| (*j, w.to_bits())).collect();
-                            let id = *envelope_ids.entry(key).or_insert_with(|| {
-                                ir.envelopes.push(set.clone());
-                                ir.envelopes.len() as u32 - 1
-                            });
-                            joints.len() as u32 + id
+                            unweighted += 1;
+                            set.push((skin_root as u32, 1.0));
                         }
+                        let total: f32 = set.iter().map(|(_, w)| w).sum();
+                        set.iter_mut().for_each(|item| item.1 /= total);
+                        set
                     }
-                    None => joint_of_node.get(node).map_or(0, |j| *j as u32),
+                    None => vec![(static_joint as u32, 1.0)],
                 };
-                if draw >= u32::from(NONE) {
-                    bail!("too many blended vertices");
+                // Where it is at rest in the model, for its joints' bounds.
+                let rest = match &weights {
+                    Some(_) => set.iter().fold([0.0f32; 3], |sum, (j, w)| {
+                        let placed = transform(&multiply(&joint_world[*j as usize], &joints[*j as usize].inverse), position, 1.0);
+                        [sum[0] + placed[0] * w, sum[1] + placed[1] * w, sum[2] + placed[2] * w]
+                    }),
+                    None => transform(&world[*node], position, 1.0),
                 }
-                // One joint's vertex is in that joint's space; a blended one stays in the model's.
-                let (place, turned) = if weights.is_some() && (draw as usize) < joints.len() {
-                    let inverse = &joints[draw as usize].inverse;
-                    (transform(inverse, position, 1.0), transform(inverse, normal, 0.0))
+                .map(|v| v * UNITS_PER_METRE);
+                for (j, _) in &set {
+                    widen(&mut joint_low[*j as usize], &mut joint_high[*j as usize], rest);
+                }
+                // Draw matrices: joints, then envelopes, numbered in a u32 with NONE kept for none.
+                let draw = if set.len() == 1 {
+                    u64::from(set[0].0)
                 } else {
-                    (position, normal)
+                    let key: Vec<(u32, u32)> = set.iter().map(|(j, w)| (*j, w.to_bits())).collect();
+                    let next = ir.envelopes.len() as u64;
+                    let id = *envelope_ids.entry(key).or_insert_with(|| {
+                        ir.envelopes.push(set.clone());
+                        next
+                    });
+                    joints.len() as u64 + id
+                };
+                if draw >= u64::from(NONE) {
+                    return Err(refuse("Cook.Model.Blends", &[("mesh", name.clone()), ("max", (NONE as usize - joints.len()).to_string())]));
+                }
+                let draw = draw as u32;
+                // One joint's vertex is in that joint's space; a blended one stays in the model's.
+                let (place, turned) = match &weights {
+                    Some(_) if set.len() == 1 => {
+                        let inverse = &joints[draw as usize].inverse;
+                        (transform(inverse, position, 1.0), transform(inverse, normal, 0.0))
+                    }
+                    Some(_) => (position, normal),
+                    None => (transform(&to_joint, position, 1.0), transform(&to_joint, normal, 0.0)),
                 };
                 let place = place.map(|v| v * UNITS_PER_METRE);
                 widen(&mut low, &mut high, place);
-                widen(&mut whole_low, &mut whole_high, transform(&world[*node], position, 1.0).map(|v| v * UNITS_PER_METRE));
                 let length = (turned[0] * turned[0] + turned[1] * turned[1] + turned[2] * turned[2]).sqrt().max(1e-6);
                 let normal_number = normals.add(turned.map(|v| v / length));
                 let mut coord = vec![0u32; room];
-                for k in 0..room {
-                    coord[k] = coordinates[k].add(coordinate_values[k][i * 2..i * 2 + 2].try_into()?);
+                for (c, slot) in coord.iter_mut().enumerate() {
+                    let uv = coordinate_values[c].get(i * 2..i * 2 + 2).or_invalid(|| at(&format!("attributes/TEXCOORD_{c}")))?;
+                    *slot = coordinates[c].add([uv[0], uv[1]]);
+                }
+                let mut color = [0u32; 2];
+                for (c, values) in colour_values.iter().enumerate() {
+                    if let Some(values) = values {
+                        let v = values.get(i * 4..i * 4 + 4).or_invalid(|| at(&format!("attributes/COLOR_{c}")))?;
+                        let rgba = u32::from(srgb_byte(v[0])) << 24
+                            | u32::from(srgb_byte(v[1])) << 16
+                            | u32::from(srgb_byte(v[2])) << 8
+                            | u32::from((v[3].clamp(0.0, 1.0) * 255.0).round() as u8);
+                        color[c] = colour_pools[c].add([f32::from_bits(rgba)]);
+                    }
                 }
                 let number = corners.len() as u32;
                 corners.push(Corner {
@@ -855,17 +1303,16 @@ pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(Strin
                     normal: normal_number,
                     tangent: normal_number,
                     binormal: normal_number,
-                    color: [0; 2],
+                    color,
                     coord,
                     matrix: 0,
                     texture_matrix: Vec::new(),
                 });
                 draws.push(draw);
-                corner_of.insert(*index, number);
+                corner_of.insert(key, number);
                 indices.push(number);
             }
             ir.source_vertex_count += corners.len() as u32;
-            indices.truncate(indices.len() / 3 * 3);
             if indices.is_empty() {
                 continue;
             }
@@ -876,9 +1323,8 @@ pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(Strin
             // The draw matrices this mesh's corners name, by first use.
             let mut use_table: Vec<u32> = Vec::new();
             for (corner, draw) in corners.iter_mut().zip(&draws) {
-                let draw = *draw as u32;
-                let local = use_table.iter().position(|u| *u == draw).unwrap_or_else(|| {
-                    use_table.push(draw);
+                let local = use_table.iter().position(|u| u == draw).unwrap_or_else(|| {
+                    use_table.push(*draw);
                     use_table.len() - 1
                 });
                 corner.matrix = local as u32;
@@ -887,14 +1333,14 @@ pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(Strin
             let mut places = 0u32;
             if blended {
                 for corner in &corners {
-                    places |= 1u32.checked_shl(u32::from(corner.matrix)).unwrap_or(0);
+                    places |= 1u32.checked_shl(corner.matrix).unwrap_or(0);
                 }
             }
 
             // Its own material: a mesh's draw and the material drawing it are one to one.
             let shape = ir.shapes.len() as u32;
             if ir.shapes.len() + 1 >= NONE as usize {
-                bail!("too many meshes");
+                return Err(refuse("Cook.Model.Meshes", &[("count", (ir.shapes.len() + 1).to_string()), ("max", (NONE - 2).to_string())]));
             }
             let mut texture_ids = Vec::new();
             for &(image, _) in &source.images {
@@ -912,10 +1358,32 @@ pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(Strin
                 for (map, &(_, uv)) in source.images.iter().enumerate() {
                     made.coords.push(CoordIr { kind: 1, source: 4 + uv, matrix: NONE });
                     let mut stage = first;
-                    stage.map = map as u8; stage.coord = map as u8;
-                    if map != 0 { stage.color_in = [15, 8, 0, 15]; stage.alpha_in = [7, 4, 0, 7]; stage.channel = 255; }
+                    stage.map = map as u8;
+                    stage.coord = map as u8;
+                    if map != 0 {
+                        stage.color_in = [15, 8, 0, 15];
+                        stage.alpha_in = [7, 4, 0, 7];
+                        stage.channel = 255;
+                    }
                     made.stages.push(stage);
                 }
+                made.pixel_stage_count = made.stages.len() as u32;
+            }
+            // Vertex colours (glTF: base colour = factor x texture x COLOR_0): the channel takes the vertex's colour, and
+            // a last stage multiplies by the factor, held in constant colour 0.
+            if colour_values[0].is_some() {
+                made.channels[0].material_source = 1;
+                made.constants[0] = source.color;
+                made.material_color[0] = [0xFF; 4];
+                let mut last = made.stages[0];
+                last.coord = 255;
+                last.map = 255;
+                last.channel = 255;
+                last.color_in = [15, 0, 14, 15];
+                last.alpha_in = [7, 0, 6, 7];
+                last.color_constant = 12;
+                last.alpha_constant = 28;
+                made.stages.push(last);
                 made.pixel_stage_count = made.stages.len() as u32;
             }
             // Its base texture's transform: texture matrix 0 on its first coordinates.
@@ -928,59 +1396,89 @@ pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(Strin
                 }
                 made.matrices.push(CoordMatrixIr { slot: 0, projection: 1, info: 0, center: [0.0; 3], scale: [sx, sy], rotation, translation: [tx, ty], effect });
             }
+            // A mesh hangs on its node's joint, or the skin's root (contract 5); on a billboard joint it turns with it.
+            let attached = if skinned { skin_root } else { static_joint };
+            let turns = if blended || skinned { 0 } else { billboard[attached] };
+            made.on_billboard = turns != 0;
             made.same_as = same_as;
             made.mesh = shape;
-            made.joint = 0;
+            made.joint = attached as u32;
             ir.materials.push(made);
+            meshes_of_joint[attached].push(shape);
+            let mut attributes_used = ATTR_NORMAL | if blended { ATTR_MATRIX } else { 0 };
+            for (c, values) in colour_values.iter().enumerate() {
+                if values.is_some() {
+                    attributes_used |= ATTR_COLOR0 << c;
+                }
+            }
             ir.shapes.push(ShapeIr {
-                matrix_type: if blended { 3 } else { 0 },
+                matrix_type: if blended { 3 } else { turns },
                 radius: bounds_radius(&low, &high),
                 min: low,
                 max: high,
-                groups: vec![GroupIr {
-                    attributes: ATTR_NORMAL | if blended { ATTR_MATRIX } else { 0 },
-                    coordinates: coordinate_present,
-                    corners,
-                    indices,
-                    places,
-                    use_table,
-                }],
+                groups: vec![GroupIr { attributes: attributes_used, coordinates: coordinate_present, corners, indices, places, use_table }],
                 material: shape,
             });
+            ir.has_billboard |= turns != 0;
+        }
+        if unweighted > 0 {
+            note("Cook.Model.Unweighted", &[("mesh", name.clone()), ("count", unweighted.to_string())]);
         }
     }
     if ir.shapes.is_empty() {
-        bail!("the model has no triangles");
+        return Err(refuse("Cook.Model.NoTriangles", &[]));
     }
     // Textures an animation swaps in, which no material shows to begin with.
     for texture in &swapped {
-        let image = root["textures"][*texture]["source"].as_u64().with_context(|| format!("an animation swaps in texture {texture}, which has no image"))?;
+        let image = root["textures"][*texture]["source"].as_u64().or_invalid(|| format!("/textures/{texture}/source"))?;
         texture_number(&document, &mut ir, &mut image_of, image as usize)?;
     }
 
     ir.arrays = ArraysIr { normal_floats: 3, ..Default::default() };
     ir.arrays.positions = positions.values;
     ir.arrays.normals = normals.values;
+    ir.arrays.colors = colour_pools.map(|pool| pool.values.into_iter().map(|[v]| v.to_bits()).collect());
     ir.arrays.coords = coordinates.into_iter().map(|pool| pool.values).collect();
 
-    let whole_radius = bounds_radius(&whole_low, &whole_high);
+    // A joint's bounds hold every vertex it moves at rest: its own and its children's (contract 4).
+    let mut depth = vec![0usize; joints.len()];
+    for (j, d) in depth.iter_mut().enumerate() {
+        let mut at = joints[j].parent;
+        while let Some(p) = at {
+            *d += 1;
+            at = joints[p].parent;
+        }
+    }
+    let mut deepest_first: Vec<usize> = (0..joints.len()).collect();
+    deepest_first.sort_by_key(|j| std::cmp::Reverse(depth[*j]));
+    for j in deepest_first {
+        if let (Some(p), true) = (joints[j].parent, joint_low[j][0] <= joint_high[j][0]) {
+            let (low, high) = (joint_low[j], joint_high[j]);
+            widen(&mut joint_low[p], &mut joint_high[p], low);
+            widen(&mut joint_low[p], &mut joint_high[p], high);
+        }
+    }
     ir.joints = joints
         .iter()
-        .map(|joint| JointIr {
-            name: joint.name.clone(),
-            kind: 0,
-            scale_compensate: 0,
-            billboard: 0,
-            scale: joint.trs.scale,
-            rotation: angles(joint.trs.rotation),
-            translation: joint.trs.translation.map(|v| v * UNITS_PER_METRE),
-            radius: whole_radius,
-            min: whole_low,
-            max: whole_high,
-            parent: joint.parent.map_or(NONE, |p| p as u32),
-            child: NONE,
-            younger: NONE,
-            meshes: Vec::new(),
+        .enumerate()
+        .map(|(j, joint)| {
+            let (low, high) = if joint_low[j][0] <= joint_high[j][0] { (joint_low[j], joint_high[j]) } else { ([0.0; 3], [0.0; 3]) };
+            JointIr {
+                name: joint.name.clone(),
+                kind: 0,
+                scale_compensate: 0,
+                billboard: billboard[j],
+                scale: joint.trs.scale,
+                rotation: angles(joint.trs.rotation),
+                translation: joint.trs.translation.map(|v| v * UNITS_PER_METRE),
+                radius: bounds_radius(&low, &high),
+                min: low,
+                max: high,
+                parent: joint.parent.map_or(NONE, |p| p as u32),
+                child: NONE,
+                younger: NONE,
+                meshes: meshes_of_joint[j].iter().rev().copied().collect(),
+            }
         })
         .collect();
     let mut last_child: BTreeMap<usize, u32> = BTreeMap::new();
@@ -992,7 +1490,6 @@ pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(Strin
             }
         }
     }
-    ir.joints[0].meshes = (0..ir.shapes.len() as u32).rev().collect();
 
     ir.draw_matrices = (0..joints.len() as u32).map(|j| (0u8, j)).chain((0..ir.envelopes.len() as u32).map(|e| (1u8, e))).collect();
     ir.full_weight_count = joints.len() as u32;
@@ -1024,7 +1521,12 @@ pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(Strin
         }
         clips.extend(of_materials.into_iter().map(|clip| (name.clone(), clip)));
     }
-    Ok((ir, clips))
+    facts.meshes = ir.shapes.len();
+    facts.vertices = ir.source_vertex_count as usize;
+    facts.materials = materials.len() - 1;
+    facts.textures = ir.textures.len();
+    facts.clips = clips.len();
+    Ok((ir, clips, facts))
 }
 
 /// An animation's length and how it plays, the same for each of its files.
@@ -1040,8 +1542,8 @@ impl Timing {
         let samplers = animation["samplers"].as_array().map(Vec::as_slice).unwrap_or_default();
         let mut length = 0.0f32;
         for channel in animation["channels"].as_array().map(Vec::as_slice).unwrap_or_default() {
-            let sampler = samplers.get(channel["sampler"].as_u64().unwrap_or(0) as usize).context("a channel naming a sampler it doesn't have")?;
-            let times = document.floats(sampler["input"].as_u64().context("a sampler with no times")? as usize, 1)?;
+            let sampler = samplers.get(channel["sampler"].as_u64().unwrap_or(0) as usize).or_invalid(|| format!("{}/samplers", animation_at(document, animation)))?;
+            let times = document.floats(sampler["input"].as_u64().or_invalid(|| "/animations".to_string())? as usize, 1)?;
             length = length.max(times.last().copied().unwrap_or(0.0));
         }
         for swap in animation["extras"]["nebula"]["texture_swaps"].as_array().map(Vec::as_slice).unwrap_or_default() {
@@ -1058,12 +1560,24 @@ impl Timing {
             Some("once_then_first") => 1,
             Some("there_and_back") => 3,
             Some("loop_there_and_back") => 4,
-            Some(other) => bail!("an animation plays {other:?}: once, once_then_first, loop, there_and_back or loop_there_and_back"),
+            Some(other) => return Err(refuse("Cook.Clip.Plays", &[("animation", animation_name(document, animation)), ("found", other.to_string())])),
         };
         let frames = ((length * FRAMES_PER_SECOND).ceil() as usize).max(1);
         let samples = (0..=frames).step_by(2).chain(std::iter::once(frames)).collect::<BTreeSet<_>>().into_iter().collect();
         Ok(Timing { frames, samples, loop_mode })
     }
+}
+
+/// An animation's place in the file, as a JSON pointer (`/animations/2`).
+fn animation_at(document: &Document, animation: &Value) -> String {
+    let list = document.root["animations"].as_array().map(Vec::as_slice).unwrap_or_default();
+    let n = list.iter().position(|a| std::ptr::eq(a, animation)).unwrap_or(0);
+    format!("/animations/{n}")
+}
+
+/// An animation by its name for a refusal, else its number.
+fn animation_name(document: &Document, animation: &Value) -> String {
+    animation["name"].as_str().filter(|s| !s.is_empty()).map_or_else(|| format!("#{}", &animation_at(document, animation)["/animations/".len()..]), str::to_string)
 }
 
 /// The file a cooked animation is, by what it moves.
@@ -1078,11 +1592,11 @@ fn clip_extension(kind: u8) -> &'static str {
 
 /// A material's curve read from a pointer channel.
 fn pointer_curve(document: &Document, samplers: &[Value], channel: &Value, width: usize) -> Result<Curve> {
-    let sampler = samplers.get(channel["sampler"].as_u64().unwrap_or(0) as usize).context("a channel naming a sampler it doesn't have")?;
-    let times = document.floats(sampler["input"].as_u64().context("a sampler with no times")? as usize, 1)?;
-    let values = document.floats(sampler["output"].as_u64().context("a sampler with no values")? as usize, width)?;
+    let sampler = samplers.get(channel["sampler"].as_u64().unwrap_or(0) as usize).or_invalid(|| "/animations".to_string())?;
+    let times = document.floats(sampler["input"].as_u64().or_invalid(|| "/animations".to_string())? as usize, 1)?;
+    let values = document.floats(sampler["output"].as_u64().or_invalid(|| "/animations".to_string())? as usize, width)?;
     if times.is_empty() {
-        bail!("an animation channel with no times");
+        return Err(invalid("/animations".to_string()));
     }
     let mode = sampler["interpolation"].as_str().unwrap_or("LINEAR");
     Ok(Curve { times, values, width, step: mode == "STEP", cubic: mode == "CUBICSPLINE", turns: false })
@@ -1104,11 +1618,11 @@ fn material_clips(
         if channel["target"]["path"].as_str() != Some("pointer") {
             continue;
         }
-        let pointer = pointer_of(channel).context("an animation channel with a pointer path and no KHR_animation_pointer pointer")?;
-        let animates = "Nebula animates a material's baseColorFactor and its base colour texture's KHR_texture_transform offset, scale and rotation";
-        let Some((material, rest)) = material_pointer(pointer) else { bail!("an animation moves {pointer}: {animates}") };
+        let pointer = pointer_of(channel).or_invalid(|| format!("{}/channels", animation_at(document, animation)))?;
+        let moves_other = || refuse("Cook.Clip.Pointer", &[("animation", animation_name(document, animation)), ("pointer", pointer.to_string())]);
+        let Some((material, rest)) = material_pointer(pointer) else { return Err(moves_other()) };
         if material + 1 >= materials.len() {
-            bail!("an animation moves {pointer}, a material the file doesn't have");
+            return Err(invalid(format!("{}/channels", animation_at(document, animation))));
         }
         if rest == BASE_COLOR {
             colours.insert(material, pointer_curve(document, samplers, channel, 4)?);
@@ -1116,11 +1630,11 @@ fn material_clips(
             let width = if part == "rotation" { 1 } else { 2 };
             moves.entry(material).or_default().insert(part, pointer_curve(document, samplers, channel, width)?);
         } else {
-            bail!("an animation moves {pointer}: {animates}");
+            return Err(moves_other());
         }
     }
     let drawn = |material: usize| {
-        first_of_material.get(&material).copied().with_context(|| format!("an animation changes material {}, which no mesh draws", materials[material].name))
+        first_of_material.get(&material).copied().ok_or_else(|| refuse("Cook.Clip.Undrawn", &[("animation", animation_name(document, animation)), ("material", materials[material].name.clone())]))
     };
     let target = |material: usize, number: u32| Target { name: materials[material].name.as_bytes().to_vec(), material: number, slot: 0, center: [0.0; 3] };
     let clip = |kind: u8, count: usize| ClipIr { kind, loop_mode: timing.loop_mode, frames: timing.frames as i32, first_count: count as u32, ..ClipIr::default() };
@@ -1187,23 +1701,24 @@ fn material_clips(
     if !swaps.is_empty() {
         let mut c = clip(KIND_PATTERN, swaps.len());
         for swap in swaps {
-            let material = swap["material"].as_u64().context("a texture swap with no material number")? as usize;
+            let material = swap["material"].as_u64().or_invalid(|| format!("{}/extras/nebula/texture_swaps", animation_at(document, animation)))? as usize;
             if material + 1 >= materials.len() {
-                bail!("a texture swap of material {material}, which the file doesn't have");
+                return Err(invalid(format!("{}/extras/nebula/texture_swaps", animation_at(document, animation))));
             }
             if materials[material].images.is_empty() {
-                bail!("material {}: texture swaps with no base colour texture to swap", materials[material].name);
+                return Err(refuse("Cook.Clip.SwapNoTexture", &[("animation", animation_name(document, animation)), ("material", materials[material].name.clone())]));
             }
             let number = drawn(material)?;
             let mut keys: Vec<(f32, u32)> = Vec::new();
             for key in swap["keys"].as_array().map(Vec::as_slice).unwrap_or_default() {
-                let second = key[0].as_f64().context("a texture swap's key is [second, texture]")? as f32;
-                let texture = key[1].as_u64().context("a texture swap's key is [second, texture]")? as usize;
-                let image = document.root["textures"][texture]["source"].as_u64().with_context(|| format!("texture {texture} has no image"))?;
-                keys.push((second * FRAMES_PER_SECOND, *image_of.get(&(image as usize)).context("a swapped texture the model lacks")?));
+                let swaps = || format!("{}/extras/nebula/texture_swaps", animation_at(document, animation));
+                let second = key[0].as_f64().or_invalid(swaps)? as f32;
+                let texture = key[1].as_u64().or_invalid(swaps)? as usize;
+                let image = document.root["textures"][texture]["source"].as_u64().or_invalid(|| format!("/textures/{texture}/source"))?;
+                keys.push((second * FRAMES_PER_SECOND, *image_of.get(&(image as usize)).or_invalid(|| format!("/textures/{texture}/source"))?));
             }
             if keys.is_empty() {
-                bail!("material {}: a texture swap with no keys", materials[material].name);
+                return Err(refuse("Cook.Clip.SwapNoKeys", &[("animation", animation_name(document, animation)), ("material", materials[material].name.clone())]));
             }
             keys.sort_by(|a, b| a.0.total_cmp(&b.0));
             let at = c.indices.len() as u32;
@@ -1220,10 +1735,15 @@ fn material_clips(
 }
 
 /// A glTF document as the store's blocks: the model, and each animation by its name.
-pub fn to_files(bytes: &[u8], folder: Option<&Path>, stem: &str) -> Result<(Vec<u8>, Vec<(String, Vec<u8>)>)> {
-    let (ir, clips) = to_ir(bytes, folder)?;
+pub fn to_files(bytes: &[u8], folder: Option<&Path>, stem: &str) -> Result<(Vec<u8>, ClipFiles)> {
+    to_files_for(bytes, folder, stem, None).map(|(model, clips, _)| (model, clips))
+}
+
+/// The same for a model that stands in for `game`'s, and what was made.
+pub fn to_files_for(bytes: &[u8], folder: Option<&Path>, stem: &str, game: Option<&GameModel>) -> Result<(Vec<u8>, ClipFiles, ModelFacts)> {
+    let (ir, clips, facts) = to_ir_for(bytes, folder, game)?;
     let model = super::model_write::write(&ir, stem, &super::programs::written_or_unknown())?;
-    Ok((model, clips.iter().map(|(name, c)| (format!("{name}.{}", clip_extension(c.kind)), super::clip::write(c))).collect()))
+    Ok((model, clips.iter().map(|(name, c)| (format!("{name}.{}", clip_extension(c.kind)), super::clip::write(c))).collect(), facts))
 }
 
 /// The game counts animation frames at 60 a second.
@@ -1276,7 +1796,7 @@ fn axis_track(out: &mut Vec<f32>, frames: &[usize], values: &[f32]) -> Result<Tr
         out.push(values[0]);
         return Ok(Track { count: 1, stride: 3, integer_keys: false, at });
     }
-    let count = u32::try_from(values.len()).context("an animation with too many samples")?;
+    let count = u32::try_from(values.len()).ok().or_invalid(|| "/animations".to_string())?;
     for (k, value) in values.iter().enumerate() {
         let (a, b) = (k.saturating_sub(1), (k + 1).min(values.len() - 1));
         let slope = (values[b] - values[a]) / ((frames[b] - frames[a]).max(1) as f32);
@@ -1287,7 +1807,7 @@ fn axis_track(out: &mut Vec<f32>, frames: &[usize], values: &[f32]) -> Result<Tr
 
 /// An animation, each joint sampled on every other frame.
 fn clip_of(document: &Document, animation: &Value, joints: &[Joint], joint_of_node: &BTreeMap<usize, usize>, timing: &Timing) -> Result<ClipIr> {
-    let samplers = animation["samplers"].as_array().context("an animation with no samplers")?;
+    let samplers = animation["samplers"].as_array().or_invalid(|| format!("{}/samplers", animation_at(document, animation)))?;
     let mut curves: BTreeMap<(usize, &str), Curve> = BTreeMap::new();
     for channel in animation["channels"].as_array().map(Vec::as_slice).unwrap_or_default() {
         let Some(node) = channel["target"]["node"].as_u64() else { continue };
@@ -1299,9 +1819,9 @@ fn clip_of(document: &Document, animation: &Value, joints: &[Joint], joint_of_no
             "scale" => ("s", 3),
             _ => continue,
         };
-        let sampler = samplers.get(channel["sampler"].as_u64().unwrap_or(0) as usize).context("a channel naming a sampler it doesn't have")?;
-        let times = document.floats(sampler["input"].as_u64().context("a sampler with no times")? as usize, 1)?;
-        let values = document.floats(sampler["output"].as_u64().context("a sampler with no values")? as usize, width)?;
+        let sampler = samplers.get(channel["sampler"].as_u64().unwrap_or(0) as usize).or_invalid(|| format!("{}/samplers", animation_at(document, animation)))?;
+        let times = document.floats(sampler["input"].as_u64().or_invalid(|| "/animations".to_string())? as usize, 1)?;
+        let values = document.floats(sampler["output"].as_u64().or_invalid(|| "/animations".to_string())? as usize, width)?;
         if times.is_empty() {
             continue;
         }
@@ -1316,9 +1836,26 @@ fn clip_of(document: &Document, animation: &Value, joints: &[Joint], joint_of_no
         let mut translate_values = [vec![], vec![], vec![]];
         for frame in samples {
             let time = *frame as f32 / FRAMES_PER_SECOND;
-            let s = curves.get(&(index, "s")).map_or(joint.trs.scale.to_vec(), |c| c.at(time));
-            let r = curves.get(&(index, "r")).map_or(joint.trs.rotation.to_vec(), |c| c.at(time));
-            let t = curves.get(&(index, "t")).map_or(joint.trs.translation.to_vec(), |c| c.at(time));
+            let animated = |key: &str| curves.contains_key(&(index, key));
+            let (s, r, t) = match (&joint.between, animated("s") || animated("r") || animated("t")) {
+                // Moved by the clip, under nodes it does not move: those nodes' place, then the clip's.
+                (Some(between), true) => {
+                    let own = |key: &str, rest: &[f32]| curves.get(&(index, key)).map_or(rest.to_vec(), |c| c.at(time));
+                    let n = joint.node.map_or_else(|| node_trs(&Value::Null), |node| node_trs(&document.root["nodes"][node]));
+                    let sampled = Trs {
+                        translation: own("t", &n.translation).try_into().unwrap_or(n.translation),
+                        rotation: own("r", &n.rotation).try_into().unwrap_or(n.rotation),
+                        scale: own("s", &n.scale).try_into().unwrap_or(n.scale),
+                    };
+                    let whole = decompose(&multiply(between, &trs_matrix(&sampled)));
+                    (whole.scale.to_vec(), whole.rotation.to_vec(), whole.translation.to_vec())
+                }
+                _ => (
+                    curves.get(&(index, "s")).map_or(joint.trs.scale.to_vec(), |c| c.at(time)),
+                    curves.get(&(index, "r")).map_or(joint.trs.rotation.to_vec(), |c| c.at(time)),
+                    curves.get(&(index, "t")).map_or(joint.trs.translation.to_vec(), |c| c.at(time)),
+                ),
+            };
             let turned = angles([r[0], r[1], r[2], r[3]]);
             for axis in 0..3 {
                 scale_values[axis].push(s[axis]);
@@ -1689,9 +2226,15 @@ mod tests {
 
     #[test]
     fn a_bad_file_says_what_is_wrong() {
-        assert!(format!("{:#}", to_ir(b"nope", None).err().unwrap()).contains("JSON"));
+        assert_eq!(refused(&to_ir(b"nope", None).err().unwrap()).0, "Cook.Model.Json");
         let old = br#"{"asset":{"version":"1.0"}}"#;
-        assert!(format!("{:#}", to_ir(old, None).err().unwrap()).contains("glTF 2"));
+        assert_eq!(refused(&to_ir(old, None).err().unwrap()), ("Cook.Model.Version", vec![own(("found", "1.0"))]));
+        // A binary file whose header says it is longer than it is.
+        let mut cut = b"glTF".to_vec();
+        for word in [2u32, 1000, 100, 0x4E4F_534A] {
+            cut.extend_from_slice(&word.to_le_bytes());
+        }
+        assert_eq!(refused(&to_ir(&cut, None).err().unwrap()).0, "Cook.Model.Cut");
     }
 
     /// One more buffer of little-endian floats, its views and accessors (`(count, type, floats)`), numbered after the
@@ -1784,25 +2327,27 @@ mod tests {
 
     #[test]
     fn what_a_material_animation_cannot_be_says_so() {
-        let error = |document: &Value| format!("{:#}", to_ir(&serde_json::to_vec(document).unwrap(), None).err().expect("it cooked"));
+        let error = |document: &Value| refused(&to_ir(&serde_json::to_vec(document).unwrap(), None).err().expect("it cooked"));
         // Turned with uneven scales: glTF and the game scale and turn in different orders.
         let uneven = textured(serde_json::json!({ "scale": [2.0, 1.0], "rotation": 0.5 }));
-        assert!(error(&uneven).contains("unequal"), "{}", error(&uneven));
+        assert_eq!(error(&uneven), ("Cook.Model.UnevenTransform", vec![own(("material", "Face"))]));
         // Something else of a material.
         let mut other = textured(serde_json::json!({}));
         let a = add_floats(&mut other, &[(1, "SCALAR", vec![0.0]), (1, "VEC3", vec![1.0, 0.0, 0.0])]);
         other["animations"] = serde_json::json!([{ "name": "Shine", "samplers": [{ "input": a[0], "output": a[1] }],
             "channels": [{ "sampler": 0, "target": { "path": "pointer",
                 "extensions": { "KHR_animation_pointer": { "pointer": "/materials/0/emissiveFactor" } } } }] }]);
-        assert!(error(&other).contains("baseColorFactor"), "{}", error(&other));
+        assert_eq!(error(&other), ("Cook.Clip.Pointer", vec![own(("animation", "Shine")), own(("pointer", "/materials/0/emissiveFactor"))]));
         // A swap of a material that isn't there.
         let mut missing = textured(serde_json::json!({}));
         missing["animations"] = serde_json::json!([{ "name": "Blink", "extras": { "nebula": { "texture_swaps": [{ "material": 3, "keys": [[0.0, 1]] }] } } }]);
-        assert!(error(&missing).contains("material 3"), "{}", error(&missing));
+        assert_eq!(error(&missing), ("Cook.Model.Invalid", vec![own(("where", "/animations/0/extras/nebula/texture_swaps"))]));
         // An extension the file needs and Nebula doesn't read.
         let mut draco = textured(serde_json::json!({}));
         draco["extensionsRequired"] = serde_json::json!(["KHR_draco_mesh_compression"]);
-        assert!(error(&draco).contains("KHR_draco_mesh_compression"), "{}", error(&draco));
+        let (why, args) = error(&draco);
+        assert_eq!((why, &args[0]), ("Cook.Model.Extension", &own(("name", "KHR_draco_mesh_compression"))));
+        assert!(args[1].1.contains("KHR_texture_transform"), "{args:?}");
         draco["extensionsRequired"] = serde_json::json!(["KHR_texture_transform"]);
         to_ir(&serde_json::to_vec(&draco).unwrap(), None).unwrap();
     }
@@ -1846,17 +2391,208 @@ mod tests {
             encoder.set_color(png::ColorType::Rgba);
             encoder.write_header().unwrap().write_image_data(&vec![0u8; (MAX_IMAGE_SIDE as usize + 1) * 4]).unwrap();
         }
-        let error = format!("{:#}", decode_image(&png).unwrap_err());
-        assert!(error.contains("pixels a side"), "{error}");
+        let error = decode_image(&png, "big.png").unwrap_err();
+        let (side, max) = ((MAX_IMAGE_SIDE + 1).to_string(), MAX_IMAGE_SIDE.to_string());
+        assert_eq!(refused(&error), ("Cook.Image.Side", vec![own(("image", "big.png")), own(("width", &side)), own(("height", "1")), own(("max", &max))]));
     }
 
     #[test]
     fn a_jpeg_is_an_image() {
         // A 2 by 1 baseline JPEG of orange (200, 100, 50).
         let jpeg = base64("/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAIBAQEBAQIBAQECAgICAgQDAgICAgUEBAMEBgUGBgYFBgYGBwkIBgcJBwYGCAsICQoKCgoKBggLDAsKDAkKCgr/2wBDAQICAgICAgUDAwUKBwYHCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgr/wAARCAABAAIDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDPooor+Vz+2D//2Q==").unwrap();
-        let (width, height, rgba) = decode_image(&jpeg).unwrap();
+        let (width, height, rgba) = decode_image(&jpeg, "orange.jpg").unwrap();
         assert_eq!((width, height, rgba.len()), (2, 1, 8));
         assert!(rgba[0].abs_diff(200) < 8 && rgba[1].abs_diff(100) < 8 && rgba[2].abs_diff(50) < 8 && rgba[3] == 255, "{rgba:?}");
-        assert!(format!("{:#}", decode_image(b"GIF89a").err().unwrap()).contains("PNG or JPEG"));
+        assert_eq!(refused(&decode_image(b"GIF89a", "a.gif").err().unwrap()), ("Cook.Image.Kind", vec![own(("image", "a.gif"))]));
     }
+
+    fn own((name, value): (&'static str, &str)) -> (&'static str, String) {
+        (name, value.to_string())
+    }
+
+    /// A refusal's phrase and arguments; every phrase has its row and every placeholder of the row is given.
+    fn refused(error: &anyhow::Error) -> (&'static str, Vec<(&'static str, String)>) {
+        let finding = super::super::refuse::refusal_of(error).unwrap_or_else(|| panic!("not a refusal: {error:#}"));
+        assert_eq!(finding.code, super::super::refuse::COOK_FAILED);
+        let mut args = finding.args.iter();
+        let Some(("why", luma_validate::Arg::Phrase(why))) = args.next() else { panic!("no why: {finding:?}") };
+        let words = luma_validate::reason(finding, "UsEnglish");
+        assert!(!words.contains('{'), "{why}: a placeholder with no argument: {words}");
+        for language in ["UsFrench", "JpJapanese", "KrKorean"] {
+            assert!(!luma_validate::reason(finding, language).contains('{'), "{why} in {language}");
+        }
+        let rest = args
+            .map(|(name, value)| match value {
+                luma_validate::Arg::Text(text) => (*name, text.clone()),
+                other => panic!("{why}: {name} is {other:?}"),
+            })
+            .collect();
+        (why, rest)
+    }
+
+    /// The notes said so far on this thread.
+    fn notes() -> Vec<(&'static str, Vec<(&'static str, String)>)> {
+        super::super::refuse::take_notes()
+            .into_iter()
+            .map(|f| {
+                let mut args = f.args.into_iter();
+                let Some(("why", luma_validate::Arg::Phrase(why))) = args.next() else { panic!("no why") };
+                (why, args.map(|(n, v)| (n, if let luma_validate::Arg::Text(t) = v { t } else { String::new() })).collect())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn every_cook_phrase_has_a_row_in_every_language() {
+        let sources = [include_str!("gltf.rs"), include_str!("overlay.rs"), include_str!("refuse.rs")];
+        let mut seen = 0;
+        for source in sources {
+            for piece in source.split('"').skip(1).step_by(2) {
+                if piece.starts_with("Cook.") && piece.split('.').count() == 3 && piece.chars().all(|c| c.is_ascii_alphanumeric() || c == '.') {
+                    seen += 1;
+                    for language in ["UsEnglish", "UsFrench", "EuGerman", "JpJapanese", "CnSimpChinese"] {
+                        let words = luma_validate::phrase(piece, language);
+                        assert_ne!(words, format!("{{{piece}}}"), "no row Validator.{piece} ({language})");
+                    }
+                }
+            }
+        }
+        assert!(seen > 40, "{seen}");
+    }
+
+    fn document_of(bytes: &[u8]) -> Value {
+        serde_json::from_slice(bytes).unwrap()
+    }
+
+    fn cook(document: &Value, game: Option<&GameModel>) -> Result<(ModelIr, Clips, ModelFacts)> {
+        to_ir_for(&serde_json::to_vec(document).unwrap(), None, game)
+    }
+
+    #[test]
+    fn points_lines_and_past_vertices_are_refused_by_mesh() {
+        let mut lines = document_of(&triangle(1));
+        lines["meshes"][0]["name"] = "Rope".into();
+        lines["meshes"][0]["primitives"][0]["mode"] = 1.into();
+        assert_eq!(refused(&cook(&lines, None).err().unwrap()), ("Cook.Model.NotTriangles", vec![own(("mesh", "Rope")), own(("mode", "1"))]));
+        let mut past = document_of(&triangle(1));
+        past["accessors"][0]["count"] = 2.into();
+        assert_eq!(refused(&cook(&past, None).err().unwrap()), ("Cook.Model.VertexPast", vec![own(("mesh", "#0")), own(("vertex", "2")), own(("count", "2"))]));
+        let mut unknown = document_of(&triangle(1));
+        unknown["meshes"][0]["primitives"][0]["mode"] = 9.into();
+        assert_eq!(refused(&cook(&unknown, None).err().unwrap()), ("Cook.Model.Invalid", vec![own(("where", "/meshes/0/primitives/0/mode"))]));
+    }
+
+    #[test]
+    fn strips_and_fans_are_triangles_as_gltf_says() {
+        assert_eq!(triangles_of(5, &[0, 1, 2, 3, 4], "").unwrap(), [0, 1, 2, 1, 3, 2, 2, 3, 4]);
+        assert_eq!(triangles_of(6, &[0, 1, 2, 3], "").unwrap(), [1, 2, 0, 2, 3, 0]);
+        assert_eq!(triangles_of(4, &[0, 1, 2, 3], "").unwrap(), [0, 1, 2]);
+        let mut strip = document_of(&triangle(1));
+        strip["meshes"][0]["primitives"][0]["mode"] = 5.into();
+        let (strip_ir, _, strip_facts) = cook(&strip, None).unwrap();
+        let (ir, _, facts) = cook(&document_of(&triangle(1)), None).unwrap();
+        assert_eq!((strip_facts.vertices, strip_facts.meshes), (facts.vertices, facts.meshes));
+        assert_eq!(strip_ir.arrays.positions, ir.arrays.positions);
+    }
+
+    #[test]
+    fn a_mesh_with_no_normals_is_flat_and_says_so() {
+        notes();
+        let (_, _, facts) = cook(&document_of(&triangle(2)), None).unwrap();
+        // Once for the mesh, though both its primitives (each a mesh of the model) lack them.
+        assert_eq!(notes(), [("Cook.Model.FlatNormals", vec![own(("mesh", "#0"))])]);
+        assert_eq!(facts.meshes, 2);
+    }
+
+    #[test]
+    fn vertex_colours_are_srgb_bytes_and_three_sets_are_refused() {
+        let mut document = document_of(&triangle(1));
+        let a = add_floats(&mut document, &[(3, "VEC4", vec![1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0]), (3, "VEC3", vec![0.5; 9])]);
+        document["meshes"][0]["primitives"][0]["attributes"]["COLOR_0"] = a[0].into();
+        let (ir, _, _) = cook(&document, None).unwrap();
+        assert!(ir.arrays.colors[0].contains(&0xFF00_00FF), "{:x?}", ir.arrays.colors[0]);
+        assert!(ir.arrays.colors[1].is_empty());
+        // Linear 0.5 is sRGB 188.
+        document["meshes"][0]["primitives"][0]["attributes"]["COLOR_1"] = a[1].into();
+        let (ir, _, _) = cook(&document, None).unwrap();
+        assert!(ir.arrays.colors[1].contains(&0xBCBC_BCFF), "{:x?}", ir.arrays.colors[1]);
+        document["meshes"][0]["primitives"][0]["attributes"]["COLOR_2"] = a[1].into();
+        assert_eq!(refused(&cook(&document, None).err().unwrap()), ("Cook.Model.ColorSets", vec![own(("mesh", "#0")), own(("count", "3")), own(("max", "2"))]));
+    }
+
+    /// The triangle on a node `body` with `children` nodes (name, extras) under it.
+    fn with_nodes(children: &[(&str, Value)]) -> Value {
+        let mut document = document_of(&triangle(1));
+        let mut nodes = vec![serde_json::json!({ "name": "body", "mesh": 0, "children": (1..=children.len()).collect::<Vec<_>>() })];
+        for (name, extras) in children {
+            nodes.push(serde_json::json!({ "name": name, "translation": [0.0, 1.0, 0.0], "extras": extras }));
+        }
+        document["nodes"] = Value::Array(nodes);
+        document
+    }
+
+    #[test]
+    fn sockets_billboards_and_joint_names() {
+        let (ir, _, facts) = cook(&with_nodes(&[("head", Value::Null), ("socket:hand", Value::Null)]), None).unwrap();
+        let names: Vec<&str> = ir.joints.iter().map(|j| j.name.as_str()).collect();
+        assert_eq!(names, ["body", "head", "hand"]);
+        assert_eq!((ir.joints[2].parent, facts.joints, facts.extra_joints), (0, 3, 0));
+        let twice = cook(&with_nodes(&[("socket:hand", Value::Null), ("socket:hand", Value::Null)]), None).err().unwrap();
+        assert_eq!(refused(&twice), ("Cook.Model.SocketTwice", vec![own(("name", "hand"))]));
+        let joint = cook(&with_nodes(&[("head", Value::Null), ("socket:head", Value::Null)]), None).err().unwrap();
+        assert_eq!(refused(&joint), ("Cook.Model.SocketIsJoint", vec![own(("name", "head"))]));
+        let same = cook(&with_nodes(&[("body", Value::Null)]), None).err().unwrap();
+        assert_eq!(refused(&same), ("Cook.Model.JointTwice", vec![own(("joint", "body"))]));
+        let facing = serde_json::json!({ "nebula": { "billboard": "xy" } });
+        let (ir, _, _) = cook(&with_nodes(&[("leaf", facing)]), None).unwrap();
+        assert_eq!((ir.joints[0].billboard, ir.joints[1].billboard), (0, 1));
+        let bad = cook(&with_nodes(&[("leaf", serde_json::json!({ "nebula": { "billboard": "z" } }))]), None).err().unwrap();
+        assert_eq!(refused(&bad), ("Cook.Model.Billboard", vec![own(("node", "leaf")), own(("value", "\"z\""))]));
+    }
+
+    fn game(joints: &[&str]) -> GameModel {
+        GameModel { path: "ObjectData/Kuribo.arc/Kuribo.bdl".into(), joints: joints.iter().map(|j| j.to_string()).collect() }
+    }
+
+    #[test]
+    fn joints_are_numbered_as_the_game_model_has_them() {
+        let document = with_nodes(&[("tail", Value::Null), ("head", Value::Null)]);
+        let (ir, _, facts) = cook(&document, Some(&game(&["body", "head"]))).unwrap();
+        let names: Vec<&str> = ir.joints.iter().map(|j| j.name.as_str()).collect();
+        assert_eq!(names, ["body", "head", "tail"]);
+        assert_eq!((ir.joints[1].parent, ir.joints[2].parent), (0, 0));
+        assert_eq!((facts.replaced.as_str(), facts.joints, facts.extra_joints), ("ObjectData/Kuribo.arc/Kuribo.bdl", 2, 1));
+        // The game's joints in another order than the file's.
+        let (ir, _, _) = cook(&document, Some(&game(&["body", "head", "tail"]))).unwrap();
+        assert_eq!(ir.joints.iter().map(|j| j.name.as_str()).collect::<Vec<_>>(), ["body", "head", "tail"]);
+        let missing = cook(&document, Some(&game(&["body", "neck"]))).err().unwrap();
+        assert_eq!(refused(&missing), ("Cook.Model.MissingJoint", vec![own(("joint", "neck")), own(("model", "ObjectData/Kuribo.arc/Kuribo.bdl"))]));
+        // A one-joint game model: the root is its joint, whatever the file calls it.
+        let (ir, _, facts) = cook(&document_of(&triangle(1)), Some(&game(&["Kuribo"]))).unwrap();
+        assert_eq!((ir.joints[0].name.as_str(), facts.joints, facts.extra_joints), ("Kuribo", 1, 0));
+        let clash = cook(&document, Some(&game(&["head"]))).err().unwrap();
+        assert_eq!(refused(&clash), ("Cook.Model.JointTwice", vec![own(("joint", "head"))]));
+    }
+
+    #[test]
+    fn a_cooked_model_reads_back_as_a_game_model() {
+        let (model, _) = to_files(&serde_json::to_vec(&with_nodes(&[("head", Value::Null)])).unwrap(), None, "Kuribo").unwrap();
+        let read = GameModel::read("ObjectData/Kuribo.arc/Kuribo.bdl", &model).unwrap();
+        assert_eq!(read.joints, ["body", "head"]);
+        assert!(GameModel::read("x", &model[..40]).is_none());
+        assert!(GameModel::read("x", b"not a model").is_none());
+    }
+
+    #[test]
+    fn skins_are_one_and_weigh_four() {
+        let mut document = with_nodes(&[("head", Value::Null)]);
+        document["skins"] = serde_json::json!([{ "joints": [0, 1] }, { "joints": [1] }]);
+        document["nodes"][0]["skin"] = 0.into();
+        assert_eq!(refused(&cook(&document, None).err().unwrap()), ("Cook.Model.SkinNoWeights", vec![own(("mesh", "#0"))]));
+        document["meshes"] = serde_json::json!([document["meshes"][0].clone(), document["meshes"][0].clone()]);
+        document["nodes"][1]["mesh"] = 1.into();
+        document["nodes"][1]["skin"] = 1.into();
+        assert_eq!(refused(&cook(&document, None).err().unwrap()), ("Cook.Model.TwoSkins", vec![own(("mesh", "#0")), own(("other", "#1"))]));
+    }
+
 }
