@@ -114,10 +114,22 @@ SaveDataHandler::SaveDataHandler(const UserFile* pUserFile)
     }
 }
 
+void SaveDataHandler::waitRequest() const {
+    while (!mSaveRequest->isDone()) {
+#if defined(__x86_64__) || defined(__i386__)
+        __builtin_ia32_pause();
+#elif defined(__aarch64__) || defined(__arm__)
+        __asm__ volatile("yield");
+#endif
+    }
+}
+
 bool SaveDataHandler::requestLoadSaveData(int index) {
     if (static_cast< u32 >(index) >= ARRAY_SIZEU(cReadNames)) {
         return false;
     }
+
+    waitRequest();
 
     mReadIndex = index;
     mReadLength = 0;
@@ -260,7 +272,8 @@ void SaveDataHandler::setFile(SaveFileId file, const u8* pData, u32 size) {
     }
 }
 
-void SaveDataHandler::forgetLumaMod(const char* pId) {
+bool SaveDataHandler::forgetLumaMod(const char* pId) {
+    bool held = false;
     for (u32 user = 1; user <= cUserFiles; user++) {
         for (u32 kind = 0; kind < SaveFileId::Kind_Config; kind++) {
             const SaveFileId id = {static_cast< SaveFileId::Kind >(kind), static_cast< s32 >(user)};
@@ -276,6 +289,7 @@ void SaveDataHandler::forgetLumaMod(const char* pId) {
                 values.getModBytes(pId) == 0) {
                 continue;
             }
+            held = true;
             values.forgetMod(pId);
             // The file again with the chunk's data shorter: the part before it, its header with the new size, the data,
             // and the chunks after it as they were.
@@ -295,6 +309,7 @@ void SaveDataHandler::forgetLumaMod(const char* pId) {
             delete[] pNew;
         }
     }
+    return held;
 }
 
 const u8* SaveDataHandler::getFile(SaveFileId file, u32* pSize) const {
@@ -440,6 +455,7 @@ void SaveDataHandler::fitMake(const UserFile* pUserFile) {
 }
 
 void SaveDataHandler::requestSaveSaveData() {
+    waitRequest();
     luma::save::applyForgets(this, nullptr);
     const u32 count = cUserFiles * cKindNum;
     u32 total = cHeaderSize + count * cRowSize;

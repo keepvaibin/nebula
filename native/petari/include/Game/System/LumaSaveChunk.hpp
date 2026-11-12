@@ -47,11 +47,16 @@ public:
     virtual void initializeData();
 
     // The data form serialize writes (u16 version, u16 mods, the mods' blocks) read whole, saying nothing:
-    // Result_Ok, Result_NotFound when it does not parse (nothing kept), Result_Memory (nothing kept).
+    // Result_Ok, Result_NotFound when it does not parse (nothing kept), Result_Memory (nothing kept). A later version's
+    // data (a newer Nebula wrote it) is Result_Ok and kept as it is: see isNewer.
     Result parse(const u8* pData, u32 size);
 
+    // The data is a later version's, kept byte for byte and written back unchanged by serialize: no value is read or
+    // changed in it (the services answer LUMA_E_ABSENT for this file), no mod is listed, nothing is forgotten in it.
+    bool isNewer() const { return mNewer; }
+
     // The data serialize writes, header excluded: the make room the save handler gives on top of the fixed part.
-    u32 getDataSize() const { return mMods != 0 ? 4 + mSize : 4; }
+    u32 getDataSize() const { return mNewer ? mSize : (mMods != 0 ? 4 + mSize : 4); }
 
     // `pModId` is a mod's id, `pKey` a key by the rule (the service checks both before it calls).
     // The value's length, or -1 when not set; copies min(length, room) bytes into pOut.
@@ -70,7 +75,8 @@ public:
     // The LUMA chunk in a game-data file binary (BinaryDataChunkHolder::makeFileBinary's form): its offset and whole
     // size, header included. False when the file has none or its chunk list runs past its end.
     static bool findInFile(const u8* pFile, u32 size, u32* pAt, u32* pChunkSize);
-    // Each mod's block in order: its id (not terminated) and length, and its entries' bytes.
+    // Each mod's block with entries in order: its id (not terminated) and length, and its entries' bytes (a block of 0
+    // bytes, which this game never writes, is passed over).
     void forEachMod(void (*pFn)(void* pUser, const char* pId, u32 idLength, u32 bytes), void* pUser) const;
 
 private:
@@ -91,4 +97,5 @@ private:
     u32 mSize;
     u32 mRoom;
     u32 mMods;
+    bool mNewer;    // mData holds a later version's whole data (its version and count too), mMods 0
 };

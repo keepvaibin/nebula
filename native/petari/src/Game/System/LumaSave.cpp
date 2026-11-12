@@ -19,6 +19,7 @@
 #include <nebula_game_api.h>
 #include <luma_services.h>
 #include <nebula_format.h>
+#include <nebula_module.h>
 
 // The save service (contract services-save). Game thread only: the values live in the loaded file's GameDataHolder,
 // which the game's save sequence reads on the same thread. No mod, no cost: nothing here runs; the chunk is 16 bytes
@@ -87,8 +88,8 @@ namespace luma {
                     return LUMA_E_ARGUMENT;
                 }
                 GameDataHolder* const pHolder = loadedHolder();
-                if (pHolder == nullptr) {
-                    return LUMA_E_ABSENT;
+                if (pHolder == nullptr || pHolder->getLumaChunk()->isNewer()) {
+                    return LUMA_E_ABSENT;  // also a later version's values, kept unread (LumaSaveChunk::isNewer)
                 }
                 const u32 room = size < LumaSaveChunk::cValueMost ? static_cast< u32 >(size) : LumaSaveChunk::cValueMost;
                 const s64 length = pHolder->getLumaChunk()->get(sKernel->mod_id(pMod), pKey, pBuf, room);
@@ -108,7 +109,7 @@ namespace luma {
                     return LUMA_E_ARGUMENT;
                 }
                 GameDataHolder* const pHolder = loadedHolder();
-                if (pHolder == nullptr) {
+                if (pHolder == nullptr || pHolder->getLumaChunk()->isNewer()) {
                     return LUMA_E_ABSENT;
                 }
                 if (bytes > LumaSaveChunk::cValueMost) {
@@ -138,7 +139,7 @@ namespace luma {
                     return LUMA_E_ARGUMENT;
                 }
                 GameDataHolder* const pHolder = loadedHolder();
-                if (pHolder == nullptr) {
+                if (pHolder == nullptr || pHolder->getLumaChunk()->isNewer()) {
                     return LUMA_E_ABSENT;
                 }
                 return pHolder->getLumaChunk()->remove(sKernel->mod_id(pMod), pKey) == LumaSaveChunk::Result_Ok ? LUMA_OK
@@ -204,13 +205,19 @@ namespace luma {
 
             const u32 cFirstRead = 4096;    // most global files fit; a longer one is read again at its length
             const u32 cCodeGlobalBroken = 185;  // Save.GlobalBroken
+            const u32 cCodeGlobalWriteFailed = 186;  // Save.GlobalWriteFailed
+            const u32 cRetryFirst = 60;     // frames before a refused write is tried again, doubling to cRetryMost
+            const u32 cRetryMost = 3600;
+            u32 sFrame = 0;                 // frames the save hook ran (the retries' clock)
 
             struct GlobalStore {
                 GlobalStore() :
                     mNext(nullptr), mMod(nullptr), mValues(nullptr, LUMA_SAVE_GLOBAL_MOST, LUMA_SAVE_GLOBAL_MOST),
-                    mBuffer(nullptr), mCapacity(0), mLength(0), mLoaded(0), mWriting(false), mDirty(false) {
+                    mBuffer(nullptr), mCapacity(0), mLength(0), mLoaded(0), mWriting(false), mDirty(false),
+                    mSettingAside(false), mBackoff(0), mWaitUntil(0) {
                     mId[0] = '\0';
                     mName[0] = '\0';
+                    mBrokenName[0] = '\0';
                 }
                 ~GlobalStore() { delete[] mBuffer; }
 
@@ -218,6 +225,7 @@ namespace luma {
                 const LumaMod* mMod;    // null once the mod ended: the store stays until its request is done
                 char mId[LumaSaveChunk::cIdMost + 1];
                 char mName[5 + LumaSaveChunk::cIdMost + 5];  // "luma/<id>.bin", held by mRequest while it runs
+                char mBrokenName[5 + LumaSaveChunk::cIdMost + 12];  // "luma/<id>.bin.broken", likewise
                 LumaSaveChunk mValues;
                 SaveRequest mRequest;
                 u8* mBuffer;            // the running read's or write's bytes
@@ -226,6 +234,9 @@ namespace luma {
                 s32 mLoaded;            // 0 reading, 1 the values are here, < 0 the status every call answers
                 bool mWriting;
                 bool mDirty;            // changed since the last write began
+                bool mSettingAside;     // the running write is the broken file's copy (setAside)
+                u32 mBackoff;           // frames of the last wait after a refused write; 0 after a write that worked
+                u32 mWaitUntil;         // sFrame from which a refused write is tried again
             };
             GlobalStore* sStores = nullptr;
 
@@ -238,17 +249,20 @@ namespace luma {
                 return nullptr;
             }
 
-            void sayGlobalBroken(const GlobalStore* pStore) {
+            // An Error about the mod's global file; the place is the file (the rows have no arguments).
+            void sayGlobal(const GlobalStore* pStore, u32 code, const char* pRow, const char* pFile) {
                 LumaModLogEntry entry = {};
                 entry.size = sizeof(entry);
                 entry.source = LUMA_MODLOG_CODE;
                 entry.level = LUMA_MODLOG_ERROR;
-                entry.code = cCodeGlobalBroken;
+                entry.code = code;
                 entry.mod = pStore->mId;
-                entry.file = pStore->mName;  // the place: luma/<id>.bin; the row has no arguments
+                entry.file = pFile;
                 entry.count = 0;
-                luma::modlog::add(entry, "Save.GlobalBroken");
+                luma::modlog::add(entry, pRow);
             }
+
+            void saveFrame();
 
             bool startRead(GlobalStore* pStore, u32 capacity) {
                 delete[] pStore->mBuffer;
@@ -267,7 +281,25 @@ namespace luma {
             // The host stores the status from its own thread (an acquire load each time round).
             void waitFor(const GlobalStore* pStore) {
                 while (!pStore->mRequest.isDone()) {
+#if defined(__x86_64__) || defined(__i386__)
+                    __builtin_ia32_pause();
+#elif defined(__aarch64__) || defined(__arm__)
+                    __asm__ volatile("yield");
+#endif
                 }
+            }
+
+            // A file that does not parse: its bytes are written to luma/<id>.bin.broken first (said, naming it; an older
+            // copy there is replaced), and luma/<id>.bin is written over only once that copy is down. The values start
+            // empty. The read's buffer is the copy's until it is done.
+            void setAside(GlobalStore* pStore) {
+                sayGlobal(pStore, cCodeGlobalBroken, "Save.GlobalBroken", pStore->mBrokenName);
+                pStore->mRequest.setWriteSeq(pStore->mBrokenName, pStore->mBuffer, pStore->mLength);
+                pStore->mRequest.start();
+                pStore->mWriting = true;
+                pStore->mSettingAside = true;
+                pStore->mLoaded = 1;
+                luma::services::setSaveHook(saveFrame);
             }
 
             // Game thread: the read begun at the mod's begin, finished (waited for when still running) and kept.
@@ -278,7 +310,8 @@ namespace luma {
                     if (result == SaveRequest::Result_Done) {
                         const LumaSaveChunk::Result parsed = pStore->mValues.parse(pStore->mBuffer, pStore->mLength);
                         if (parsed == LumaSaveChunk::Result_NotFound) {
-                            sayGlobalBroken(pStore);  // starts empty; the next change writes the file again
+                            setAside(pStore);
+                            return;
                         }
                         pStore->mLoaded = parsed == LumaSaveChunk::Result_Memory ? LUMA_E_MEMORY : 1;
                     } else if (result == SaveRequest::Result_NoFile) {
@@ -291,8 +324,10 @@ namespace luma {
                             }
                             pStore->mLoaded = LUMA_E_MEMORY;
                         } else {
-                            sayGlobalBroken(pStore);
-                            pStore->mLoaded = 1;
+                            // Past the 1 MiB this game writes (a later version's, or no global file at all): never
+                            // written over; every call answers LUMA_E_ABSENT.
+                            sayGlobal(pStore, cCodeGlobalBroken, "Save.GlobalBroken", pStore->mName);
+                            pStore->mLoaded = LUMA_E_ABSENT;
                         }
                     } else {
                         // The file system refused: no values, and nothing is written over the file.
@@ -315,6 +350,9 @@ namespace luma {
                     finishRead(pStore);
                 }
                 *ppStore = pStore;
+                if (pStore->mLoaded > 0 && pStore->mValues.isNewer()) {
+                    return LUMA_E_ABSENT;  // a later version's file: kept, never written (no change reaches it)
+                }
                 return pStore->mLoaded < 0 ? pStore->mLoaded : LUMA_OK;
             }
 
@@ -334,19 +372,48 @@ namespace luma {
                 pStore->mDirty = false;
             }
 
-            // The frame's start while a store has work (LumaServices::setSaveHook): a finished write let go, a changed
-            // store written, an ended mod's store freed once its request is done. Unhooked when none has work.
-            void frameWork() {
+            // A write the host finished. Refused (a full disk, a locked file): the values stay here and are written whole
+            // again after a wait doubling from 1 s to 1 min, said once for each run of refusals. The broken file's copy
+            // refused: luma/<id>.bin is never written over this session (every call answers LUMA_E_IO).
+            void writeDone(GlobalStore* pStore) {
+                const bool written = pStore->mRequest.getResult() == SaveRequest::Result_Done;
+                pStore->mWriting = false;
+                delete[] pStore->mBuffer;
+                pStore->mBuffer = nullptr;
+                pStore->mCapacity = 0;
+                if (pStore->mSettingAside) {
+                    pStore->mSettingAside = false;
+                    if (!written) {
+                        pStore->mLoaded = LUMA_E_IO;
+                        pStore->mDirty = false;
+                    }
+                    return;
+                }
+                if (written) {
+                    pStore->mBackoff = 0;
+                    return;
+                }
+                if (pStore->mBackoff == 0) {
+                    sayGlobal(pStore, cCodeGlobalWriteFailed, "Save.GlobalWriteFailed", pStore->mName);
+                }
+                pStore->mBackoff = pStore->mBackoff == 0 ? cRetryFirst
+                                   : pStore->mBackoff >= cRetryMost / 2 ? cRetryMost
+                                                                        : pStore->mBackoff * 2;
+                pStore->mWaitUntil = sFrame + pStore->mBackoff;
+                pStore->mDirty = true;
+            }
+
+            // The frame's start while a store has work: a finished write let go, a changed store written (a refused
+            // one once its wait is over), an ended mod's store freed once its request is done. False: none has work.
+            bool globalsWork() {
+                sFrame++;
                 bool more = false;
                 for (GlobalStore** ppStore = &sStores; *ppStore != nullptr;) {
                     GlobalStore* const pStore = *ppStore;
                     if (pStore->mWriting && pStore->mRequest.isDone()) {
-                        // A refused write keeps the values here; the mod's next change writes them all again.
-                        pStore->mWriting = false;
-                        delete[] pStore->mBuffer;
-                        pStore->mBuffer = nullptr;
+                        writeDone(pStore);
                     }
-                    if (pStore->mDirty && !pStore->mWriting) {
+                    if (pStore->mDirty && !pStore->mWriting && static_cast< s32 >(sFrame - pStore->mWaitUntil) >= 0) {
                         startWrite(pStore);
                     }
                     if (pStore->mMod == nullptr && !pStore->mDirty && pStore->mRequest.isDone()) {
@@ -357,14 +424,24 @@ namespace luma {
                     more = more || pStore->mWriting || pStore->mDirty || pStore->mMod == nullptr;
                     ppStore = &pStore->mNext;
                 }
-                if (!more) {
+                return more;
+            }
+
+            bool forgetWork();
+
+            // The save hook (LumaServices::setSaveHook, wakeSaveHook): save.global's stores and a FORGET's files.
+            // Unhooked when neither has work.
+            void saveFrame() {
+                const bool globals = globalsWork();
+                const bool forgets = forgetWork();
+                if (!globals && !forgets) {
                     luma::services::setSaveHook(nullptr);
                 }
             }
 
             void changed(GlobalStore* pStore) {
                 pStore->mDirty = true;
-                luma::services::setSaveHook(frameWork);
+                luma::services::setSaveHook(saveFrame);
             }
 
             int64_t svcGlobalGet(const LumaMod* pMod, const char* pKey, void* pBuf, uint64_t size) {
@@ -460,6 +537,7 @@ namespace luma {
                 }
                 nebula_snprintf(pStore->mId, sizeof(pStore->mId), "%s", pId);
                 nebula_snprintf(pStore->mName, sizeof(pStore->mName), "luma/%s.bin", pStore->mId);
+                nebula_snprintf(pStore->mBrokenName, sizeof(pStore->mBrokenName), "luma/%s.bin.broken", pStore->mId);
                 pStore->mMod = pMod;
                 if (!startRead(pStore, cFirstRead)) {
                     pStore->mLoaded = LUMA_E_MEMORY;
@@ -477,10 +555,12 @@ namespace luma {
                 }
                 if (pStore->mWriting) {
                     waitFor(pStore);
-                    pStore->mWriting = false;
+                    writeDone(pStore);
                 }
-                startWrite(pStore);
-                luma::services::setSaveHook(frameWork);
+                if (pStore->mDirty) {
+                    startWrite(pStore);  // a refused write's wait is not kept: the game may end before it is over
+                }
+                luma::services::setSaveHook(saveFrame);
             }
 
             // Before the mod's memory goes: its store leaves the mod; freed at once, or by frameWork once its request
@@ -492,11 +572,12 @@ namespace luma {
                     return;
                 }
                 pStore->mMod = nullptr;
-                luma::services::setSaveHook(frameWork);
+                luma::services::setSaveHook(saveFrame);
             }
 
             const LumaServiceRow cGlobalRows[] = {
                 {185, "Save.GlobalBroken", {nullptr, nullptr, nullptr, nullptr}},
+                {186, "Save.GlobalWriteFailed", {nullptr, nullptr, nullptr, nullptr}},
             };
 
             const LumaServiceProvider cGlobalProvider = {
@@ -519,7 +600,7 @@ namespace luma {
             // Per game-data file in memory (6 users, Mario and Luigi): the mods with values in its chunk. Written on
             // the game thread, read by the host from any thread, both under sKeptLock.
             const u32 cKeptFiles = 12;
-            const u32 cForgetMost = 64;  // ids forgotten in one session
+            const u32 cForgetMost = 256;  // ids forgotten in one session (one past it is logged, not forgotten)
             struct KeptRow {
                 char mId[LumaSaveChunk::cIdMost + 1];
                 u32 mBytes;
@@ -531,10 +612,16 @@ namespace luma {
             KeptFile sKeptFiles[cKeptFiles] = {};
             char sForgetting[cForgetMost][LumaSaveChunk::cIdMost + 1];
             u32 sForgettingCount = 0;
+            u32 sForgetApplied = 0;  // of them, applied by forgetWork (game thread)
             char sKeptLock = 0;
 
             void lockKept() {
                 while (__atomic_test_and_set(&sKeptLock, __ATOMIC_ACQUIRE)) {
+#if defined(__x86_64__) || defined(__i386__)
+                    __builtin_ia32_pause();
+#elif defined(__aarch64__) || defined(__arm__)
+                    __asm__ volatile("yield");
+#endif
                 }
             }
 
@@ -583,9 +670,44 @@ namespace luma {
                 u32 mCount;
             };
 
-            // applyForgets' copy of the forgotten ids, taken under sKeptLock and used outside it (game thread only;
-            // off the stack: 4 KiB is a stack probe the module cannot link, DIRECTOR R9).
+            // applyForgets' and forgetWork's copy of the forgotten ids, taken under sKeptLock and used outside it (game
+            // thread only; off the stack: 4 KiB is a stack probe the module cannot link, DIRECTOR R9).
             char sApplying[cForgetMost][LumaSaveChunk::cIdMost + 1];
+
+            // The frame's start after a FORGET (woken from the host's thread): the new ids out of the files in memory at
+            // once, the stored ones and the loaded file's values, and when a stored file held values of one, the files
+            // written by the quiet save, so a FORGET holds with no save of the player's. Waits while a sequence runs and
+            // until the start's read (none read: no stored file has values). False: nothing more to do.
+            bool forgetWork() {
+                lockKept();
+                const u32 count = sForgettingCount;
+                for (u32 i = sForgetApplied; i < count; i++) {
+                    nebula_snprintf(sApplying[i], sizeof(sApplying[i]), "%s", sForgetting[i]);
+                }
+                unlockKept();
+                if (count == sForgetApplied) {
+                    return false;
+                }
+                SaveDataHandleSequence* const pSequence =
+                    SingletonHolder< GameSystem >::get()->mSequenceDirector->mSaveDataHandleSequence;
+                if (pSequence == nullptr || pSequence->mSaveDataHandler == nullptr || pSequence->getPreLoadState() == 0 ||
+                    pSequence->isActive()) {
+                    return true;
+                }
+                bool held = false;
+                GameDataHolder* const pHolder = loadedHolder();
+                for (u32 i = sForgetApplied; i < count; i++) {
+                    held = pSequence->mSaveDataHandler->forgetLumaMod(sApplying[i]) || held;
+                    if (pHolder != nullptr) {
+                        pHolder->getLumaChunk()->forgetMod(sApplying[i]);
+                    }
+                }
+                sForgetApplied = count;
+                if (held) {
+                    (void)pSequence->startQuietSave();  // false: saves are off; the files in memory are without them
+                }
+                return false;
+            }
         }  // namespace
 
         void fileStored(u32 index, const u8* pFile, u32 size) {
@@ -942,7 +1064,28 @@ NEBULA_GAME_API void luma_save_kept(LumaSaveKeptFn fn, void* user) {
     if (fn == nullptr) {
         return;
     }
-    lockKept();
+    // The pairs copied under the lock, fn called after it: room for every row (a file stored meanwhile may add some:
+    // counted again until the room holds).
+    KeptRow* pOut = nullptr;
+    u32 room = 0;
+    u32 out = 0;
+    for (;;) {
+        lockKept();
+        u32 rows = 0;
+        for (u32 f = 0; f < cKeptFiles; f++) {
+            rows += sKeptFiles[f].mCount;
+        }
+        if (rows <= room) {
+            break;  // still locked: the copy below
+        }
+        unlockKept();
+        delete[] pOut;
+        pOut = new KeptRow[rows];
+        room = pOut != nullptr ? rows : 0;
+        if (pOut == nullptr) {
+            return;  // no memory: nothing given this time
+        }
+    }
     for (u32 f = 0; f < cKeptFiles; f++) {
         for (u32 r = 0; r < sKeptFiles[f].mCount; r++) {
             const char* const pId = sKeptFiles[f].mRows[r].mId;
@@ -959,7 +1102,7 @@ NEBULA_GAME_API void luma_save_kept(LumaSaveKeptFn fn, void* user) {
             if (earlier || isForgotten(pId)) {
                 continue;
             }
-            uint64_t bytes = 0;
+            u32 bytes = 0;  // at most 12 files of 256 KiB
             for (u32 g = f; g < cKeptFiles; g++) {
                 for (u32 s = 0; s < sKeptFiles[g].mCount; s++) {
                     if (sameId(sKeptFiles[g].mRows[s].mId, pId)) {
@@ -967,10 +1110,16 @@ NEBULA_GAME_API void luma_save_kept(LumaSaveKeptFn fn, void* user) {
                     }
                 }
             }
-            fn(user, pId, bytes);
+            nebula_snprintf(pOut[out].mId, sizeof(pOut[out].mId), "%s", pId);
+            pOut[out].mBytes = bytes;
+            out++;
         }
     }
     unlockKept();
+    for (u32 i = 0; i < out; i++) {
+        fn(user, pOut[i].mId, pOut[i].mBytes);
+    }
+    delete[] pOut;
 }
 
 NEBULA_GAME_API void luma_save_forget(const char* id) {
@@ -979,10 +1128,18 @@ NEBULA_GAME_API void luma_save_forget(const char* id) {
         return;
     }
     lockKept();
-    if (!isForgotten(id) && sForgettingCount < cForgetMost) {
+    const bool known = isForgotten(id);
+    const bool room = sForgettingCount < cForgetMost;
+    if (!known && room) {
         nebula_snprintf(sForgetting[sForgettingCount], sizeof(sForgetting[0]), "%s", id);
         sForgettingCount++;
     }
     unlockKept();
+    if (!known && !room) {
+        nebula_log("LumaCore save: %u mods forgotten this session already; %s is not forgotten (FORGET it after a restart)\n",
+                   cForgetMost, id);
+    } else if (!known) {
+        luma::services::wakeSaveHook(saveFrame);
+    }
 }
 }

@@ -24,8 +24,9 @@ public:
     void copyUserFile(UserFile* pDst, const UserFile* pSrc);
     bool isDone();
     SaveRequest::Result getLastResult() const;
-    // FORGET (services-save 5): `pId`'s values out of each game-data file in memory (written by the next save).
-    void forgetLumaMod(const char* pId);
+    // FORGET (services-save 5): `pId`'s values out of each game-data file in memory (written by the next save). True
+    // when a file held some.
+    bool forgetLumaMod(const char* pId);
 
     // save.game's export (services-save 8): user file `user` (1 to 6) in the export form, cExportMagic, u16 version
     // 1, u16 parts 3, then Mario's game data, Luigi's and the config, each u32 length and its bytes; the frame's
@@ -56,6 +57,9 @@ private:
     void setFile(SaveFileId, const u8*, u32);
     // mMake made big enough for pUserFile's game data: the fixed part's room and its mods' values (services-save).
     void fitMake(const UserFile* pUserFile);
+    // A request still with the host finished first: mBuffer is the host's until then (a sequence that takes over from
+    // the quiet save starts its own request at once).
+    void waitRequest() const;
 
     SaveRequest* mSaveRequest;
     int mReadIndex;

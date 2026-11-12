@@ -86,7 +86,8 @@ namespace {
 }  // namespace
 
 LumaSaveChunk::LumaSaveChunk(const GameDataHolder* pHolder, u32 modMost, u32 chunkMost)
-    : mHolder(pHolder), mModMost(modMost), mChunkMost(chunkMost), mData(nullptr), mSize(0), mRoom(0), mMods(0) {
+    : mHolder(pHolder), mModMost(modMost), mChunkMost(chunkMost), mData(nullptr), mSize(0), mRoom(0), mMods(0),
+      mNewer(false) {
 }
 
 LumaSaveChunk::~LumaSaveChunk() {
@@ -108,6 +109,10 @@ s32 LumaSaveChunk::serialize(u8* pData, u32 size) const {
         fileNumber(file);
         sayFile(cCodeTooBig, "Save.ChunkTooBig", file);
         return 0;
+    }
+    if (mNewer) {
+        MR::copyMemory(pData, mData, mSize);
+        return static_cast< s32 >(mSize);
     }
     MR::storeSaveU16(pData, cVersion);
     MR::storeSaveU16(pData + 2, static_cast< u16 >(mMods));
@@ -135,6 +140,16 @@ s32 LumaSaveChunk::deserialize(const u8* pData, u32 size) {
 
 LumaSaveChunk::Result LumaSaveChunk::parse(const u8* pData, u32 size) {
     initializeData();
+    // A later version's data: kept whole, so this game's next save writes it back as it was (never dropped).
+    if (size >= 4 && size - 4 <= mChunkMost && MR::loadSaveU16(pData) > cVersion) {
+        if (!splice(0, 0, size)) {
+            initializeData();
+            return Result_Memory;
+        }
+        MR::copyMemory(mData, pData, size);
+        mNewer = true;
+        return Result_Ok;
+    }
     bool good = size >= 4 && size - 4 <= mChunkMost && MR::loadSaveU16(pData) == cVersion;
     const u32 mods = good ? MR::loadSaveU16(pData + 2) : 0;
     u32 at = 4;
@@ -213,6 +228,7 @@ LumaSaveChunk::Result LumaSaveChunk::parse(const u8* pData, u32 size) {
 void LumaSaveChunk::initializeData() {
     mSize = 0;
     mMods = 0;
+    mNewer = false;
 }
 
 bool LumaSaveChunk::findInFile(const u8* pFile, u32 size, u32* pAt, u32* pChunkSize) {
@@ -239,8 +255,13 @@ bool LumaSaveChunk::findInFile(const u8* pFile, u32 size, u32* pAt, u32* pChunkS
 }
 
 void LumaSaveChunk::forEachMod(void (*pFn)(void* pUser, const char* pId, u32 idLength, u32 bytes), void* pUser) const {
+    if (mNewer) {
+        return;
+    }
     for (u32 at = 0; at < mSize; at += 1 + mData[at] + 4 + modBytes(at)) {
-        pFn(pUser, reinterpret_cast< const char* >(mData + at + 1), mData[at], modBytes(at));
+        if (modBytes(at) != 0) {
+            pFn(pUser, reinterpret_cast< const char* >(mData + at + 1), mData[at], modBytes(at));
+        }
     }
 }
 
@@ -249,6 +270,9 @@ bool LumaSaveChunk::isValidKey(const char* pKey) {
 }
 
 s32 LumaSaveChunk::findMod(const char* pModId) const {
+    if (mNewer) {
+        return -1;  // get, remove, getModBytes, forgetMod and renameMod find nothing in a later version's data
+    }
     const u32 length = textLength(pModId);
     for (u32 at = 0; at < mSize; at += 1 + mData[at] + 4 + modBytes(at)) {
         if (mData[at] == length && sameBytes(mData + at + 1, pModId, length)) {
@@ -336,6 +360,9 @@ s64 LumaSaveChunk::get(const char* pModId, const char* pKey, void* pOut, u32 roo
 }
 
 LumaSaveChunk::Result LumaSaveChunk::set(const char* pModId, const char* pKey, const void* pValue, u32 length) {
+    if (mNewer) {
+        return Result_NotFound;  // the services answer LUMA_E_ABSENT before they call
+    }
     if (length > cValueMost) {
         return Result_Limit;
     }

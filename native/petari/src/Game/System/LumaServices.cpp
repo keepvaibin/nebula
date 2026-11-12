@@ -86,7 +86,8 @@ namespace luma {
             u32 sCarried = 0;  // nodes taken but kept for a later frame, all mods (game thread)
             void (*sTimePost)() = nullptr;     // time's due timers, before the events; null while no mod has a timer
             void (*sFrameHandler)() = nullptr;  // time's frame handlers, after them; null while no mod has one
-            void (*sSaveWork)() = nullptr;      // save.global's writes; null while no store has work
+            void (*sSaveWork)() = nullptr;      // save.global's writes, a FORGET's save; null while there is none
+            void (*sSaveWake)() = nullptr;      // wakeSaveHook's, taken at the frame's start; atomic
 
             bool sameText(const char* pA, const char* pB) {
                 if (pA == nullptr || pB == nullptr) {
@@ -759,6 +760,10 @@ namespace luma {
         }
 
         void frameStart() {
+            // One relaxed load a frame while nobody woke it (a FORGET is the host's, from any thread).
+            if (__atomic_load_n(&sSaveWake, __ATOMIC_RELAXED) != nullptr) {
+                sSaveWork = __atomic_exchange_n(&sSaveWake, nullptr, __ATOMIC_ACQUIRE);
+            }
             if (sSaveWork != nullptr) {
                 sSaveWork();
             }
@@ -800,6 +805,10 @@ namespace luma {
                 NEBULA_PANIC("LumaCore: the save hook was set off the game thread");
             }
             sSaveWork = pWork;
+        }
+
+        void wakeSaveHook(void (*pWork)()) {
+            __atomic_store_n(&sSaveWake, pWork, __ATOMIC_RELEASE);
         }
 
         const LumaServiceKernel* kernel() { return &sKernel; }

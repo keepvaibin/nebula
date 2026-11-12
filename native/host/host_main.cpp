@@ -2572,6 +2572,8 @@ std::atomic<int> gSavesPending{0};
 std::mutex gSavesMutex;
 std::condition_variable gSavesDone;
 
+// gFs stays one worker taking its queue in order (FIFO): the game's save, save.global's luma/<id>.bin writes and a
+// broken file's luma/<id>.bin.broken copy rely on a later request never passing an earlier one.
 void svc_save_request(void*, const NebulaSaveRequest* request) {
     gSaveOps.fetch_add(1, std::memory_order_relaxed);
     *request->status = NEBULA_SAVE_PENDING;

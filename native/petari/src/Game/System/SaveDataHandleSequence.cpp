@@ -14,6 +14,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Util/Tunable.hpp"
+#include <nebula_module.h>
 
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_trySave_1, "trySave.1", 20);
@@ -27,6 +28,7 @@ namespace {
     NEW_NERVE(SaveDataHandleSequenceSaveAllWithoutKeyWait, SaveDataHandleSequence, SaveAllWithoutKeyWait);
     NEW_NERVE(SaveDataHandleSequenceSaveAllWithoutKeyWaitDisappear, SaveDataHandleSequence, SaveAllWithoutKeyWaitDisappear);
     NEW_NERVE(SaveDataHandleSequenceSaveAllWithoutWindow, SaveDataHandleSequence, SaveAllWithoutWindow);
+    NEW_NERVE(SaveDataHandleSequenceQuietSave, SaveDataHandleSequence, QuietSave);
     NEW_NERVE(SaveDataHandleSequencePreLoad, SaveDataHandleSequence, PreLoad);
     NEW_NERVE(SaveDataHandleSequencePreLoadDone, SaveDataHandleSequence, PreLoadDone);
     NEW_NERVE(SaveDataHandleSequenceNoSaveConfirmRemind, SaveDataHandleSequence, NoSaveConfirmRemind);
@@ -129,6 +131,31 @@ void SaveDataHandleSequence::startSaveBackup(bool isConfirmRemind, bool isSaveAn
 
 void SaveDataHandleSequence::startSaveAll() {
     setNerve(GET_NERVE_ANON(SaveDataHandleSequenceSaveAllWithoutKeyWait));
+}
+
+bool SaveDataHandleSequence::startQuietSave() {
+    if (isActive() || mPreLoadState != 1 || mIsNoSaveMode || mIsCorrupted) {
+        return false;
+    }
+    setNerve(GET_NERVE_ANON(SaveDataHandleSequenceQuietSave));
+    return true;
+}
+
+// mSucceeded is the game's own sequences' answer: left as it was. A refused write is logged; the game's next save
+// writes the same files (the forgotten ids are applied at every save) and shows its own error window if it fails too.
+// A sequence the game starts meanwhile takes over; its request waits for this one (SaveDataHandler::waitRequest).
+void SaveDataHandleSequence::exeQuietSave() {
+    if (MR::isFirstStep(this)) {
+        mSaveDataHandler->requestSaveSaveData();
+    }
+    if (!mSaveDataHandler->isDone()) {
+        return;
+    }
+    if (mSaveDataHandler->getLastResult() != SaveRequest::Result_Done) {
+        nebula_log("save: the quiet save (a mod's values forgotten) was refused (%d); the next save writes them out\n",
+                   static_cast< int >(mSaveDataHandler->getLastResult()));
+    }
+    setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
 }
 
 void SaveDataHandleSequence::startLoad(int userFileIndex, bool isPlayerMario) {
@@ -356,6 +383,7 @@ void SaveDataHandleSequence::exePreLoad() {
     if (MR::isFirstStep(this)) {
         if (!mSaveDataHandler->requestLoadSaveData(mSaveCopyLoading)) {
             mSaveCopyLoading = 0;
+            mPreLoadState = 2;
             if (mSaveDamaged) {
                 mSaveDamaged = false;
                 mNerveForError = GET_NERVE_ANON(SaveDataHandleSequenceNoOperation);
@@ -398,6 +426,7 @@ void SaveDataHandleSequence::exePreLoadDone() {
         mSaveCopyLoading = 0;
         mSaveDamaged = false;
         mSucceeded = true;
+        mPreLoadState = 1;
 
         setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
     }

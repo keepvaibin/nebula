@@ -23,6 +23,14 @@ public:
     void startSave(bool, bool);
     void startSaveBackup(bool, bool);
     void startSaveAll();
+    // LumaCore's FORGET (services-save 5): the stored files written as they are in memory, no window, no sound, no
+    // question. False, nothing started: a sequence is running, the save was not read yet, or saves are off.
+    bool startQuietSave();
+    void exeQuietSave();
+    // A save was read at the start (1), or the start read none (2: no file, damaged, or saves off); 0 before.
+    int getPreLoadState() const {
+        return mPreLoadState;
+    }
     // The caller opens a system window when the save is done (the pause menu's question): the done message hands the
     // screen dim to it (SysInfoWindow::setDimHandOver). Until the next start.
     void setWindowFollows(bool follows) {
@@ -85,4 +93,5 @@ public:
     bool mWindowFollows;
     int mSaveCopyLoading = 0;
     bool mSaveDamaged = false;
+    int mPreLoadState = 0;
 };

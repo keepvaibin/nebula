@@ -106,10 +106,13 @@ typedef int32_t (*LumaProvideService)(const LumaServiceProvider* provider);
    found by name.
    luma_save_kept: any thread. fn(user, id, bytes) once for each mod id with values in the user files in memory (their
    LUMA chunks as last read, copied, started or saved), `bytes` its entries' bytes over all of them; an id being
-   forgotten is not given. Called under the module's lock: fn copies what it keeps and calls nothing of the module's.
-   luma_save_forget: any thread. The id's values leave the user files in memory, and the stored file's chunk, at each
-   of the game's saves from now on this session (the saves write the files without them); from the call on
-   luma_save_kept no longer gives the id. An id outside the id rule is ignored. */
+   forgotten is not given. fn is called after the module's lock is let go (the pairs copied first): it may call the
+   module.
+   luma_save_forget: any thread. At the next frame's start the id's values leave the user files in memory (the stored
+   ones and the loaded file's), and when a stored file held some, the save file is written at once without a window
+   (waiting while a save or load runs, and for the start's read); every later save this session leaves them out too.
+   From the call on luma_save_kept no longer gives the id. An id outside the id rule is ignored; past 256 ids in one
+   session an id is logged and not forgotten. */
 typedef void (*LumaSaveKeptFn)(void* user, const char* id, uint64_t bytes);
 typedef void (*LumaSaveKept)(LumaSaveKeptFn fn, void* user);
 typedef void (*LumaSaveForget)(const char* id);
