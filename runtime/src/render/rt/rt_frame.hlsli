@@ -68,8 +68,9 @@ cbuffer PassConstants : register(b1) {
 // (shown as it is); bits 8 up its light set from 1.
 static const uint kItemBytes = 80u;  // rt_walk.cpp kRtItemWords
 static const uint kItemLit = 1u, kItemGround = 2u, kItemSurface = 4u, kItemThin = 8u, kItemSky = 16u;
-// Bit 6: a map part its clip areas show (g_clip): a ray meets it where it shows alone.
-static const uint kItemClipped = 64u;
+// Bit 6: a map part its clip areas show (g_clip): a ray meets it where it shows alone. Bit 7: its program alpha-tests
+// (can discard): a clipped part without it is whole where it shows.
+static const uint kItemClipped = 64u, kItemAlphaTested = 128u;
 // Material classes (nebula_model.h NEBULA_HIT_*).
 static const uint kClassGloss = 1u, kClassMetal = 2u, kClassGlass = 3u, kClassEmissive = 6u, kClassTranslucent = 8u,
                   kClassWater = 9u;

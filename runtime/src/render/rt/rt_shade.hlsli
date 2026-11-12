@@ -187,7 +187,7 @@ float3 rt_through(float3 origin, float3 direction, float reach, uint self) {
 // What stands in the sun's way of a surface (as the sun pass): everything solid for a lit one; for a painted one
 // lit things only when the painted style asks (g_look.y), what the painting could not know.
 uint rt_sun_mask(bool lit) {
-    return lit || g_look.y == 0.0f ? kMaskSolid | kMaskCutout : kMaskLit;
+    return (lit || g_look.y == 0.0f ? kMaskSolid | kMaskCutout : kMaskLit) | kMaskShadowOnly;
 }
 
 bool rt_sun_traced() {

@@ -435,8 +435,8 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
             const bool lit_program = program_lit(pipeline.desc.pixel) || program_sums_key(pipeline.desc.pixel);
             const std::uint32_t mask =
                 sky ? rt::kMaskSky
-                // Seen by no view, mirror or probe; the sun's and the sky's rays stop at it.
-                : traced_only ? (kind != 0u ? rt::kMaskCutout : rt::kMaskSolid | (lit_program ? rt::kMaskLit : 0u))
+                // Seen by no view, mirror, bounce or probe: the sun's and the local lights' shadow rays alone meet it.
+                : traced_only ? rt::kMaskShadowOnly
                 : depth_write && (state & 3u) == 0u
                     // What stops light is a surface of the scene's opaque phases; an opaque draw made after them (a
                     // fill, a silhouette, a helper shape) is seen by the views and casts nothing.
@@ -1626,9 +1626,11 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
                 // 64: a map part its clip areas show (kItemClipped, cutout_there asks the volumes).
                 const bool clipped =
                     list.clip_rule != NEBULA_CLIP_RULE_NONE && item_category(item) == NEBULA_CATEGORY_CLIPPED_MAP_PARTS;
+                // 128: its program alpha-tests (kItemAlphaTested: a clipped part without it is whole where it shows).
+                const bool alpha_tested = program_variant(pipeline.desc.pixel, 0u, 1u) == kProgramSample;
                 rt_item_words_[i * kItemWords + 1u] = (program_sums_key(pipeline.desc.pixel) ? 1u : 0u) |
                                                       (pass.phase != kPhaseNoShadow ? 2u : 0u) | 4u | (thin ? 8u : 0u) |
-                                                      (area ? 32u : 0u) | (clipped ? 64u : 0u) |
+                                                      (area ? 32u : 0u) | (clipped ? 64u : 0u) | (alpha_tested ? 128u : 0u) |
                                                       (lamp ? (item.light_set + 1u) << 8u : 0u);
             }
             // Its mesh, for a pixel of it and for a ray that meets it.
@@ -1835,15 +1837,20 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     constexpr std::uint32_t kClipVolumes = 128u;
     std::uint32_t clip_words[kClipVolumes * 16u];
     std::uint32_t clip_count = 0u;
-    for (std::uint32_t v = 0; list.clip_rule != NEBULA_CLIP_RULE_NONE && list.clip_volumes != nullptr && v < list.clip_volume_count &&
-                              clip_count < kClipVolumes;
+    std::uint32_t clip_dropped = 0u;  // past the table, or a place that cannot be turned back (the report counts them)
+    for (std::uint32_t v = 0; list.clip_rule != NEBULA_CLIP_RULE_NONE && list.clip_volumes != nullptr && v < list.clip_volume_count;
          ++v) {
+        if (clip_count == kClipVolumes) {
+            clip_dropped += list.clip_volume_count - v;
+            break;
+        }
         const NebulaFrameClipVolume& volume = list.clip_volumes[v];
         Affine34 place{};
         std::memcpy(place.data(), volume.place, sizeof(volume.place));
         // From the eye's space (the rays') by the scene camera itself: `world_from_now` is filled with history only.
         Affine34 unit_from_eye{};
         if (!affine_inverse(affine_multiply(walk_cameras_[rt_scene_camera_], place), unit_from_eye)) {
+            ++clip_dropped;
             continue;
         }
         std::memcpy(clip_words + clip_count * 16u, unit_from_eye.data(), 12u * sizeof(float));
@@ -1851,6 +1858,7 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
         clip_words[clip_count * 16u + 13u] = clip_words[clip_count * 16u + 14u] = clip_words[clip_count * 16u + 15u] = 0u;
         ++clip_count;
     }
+    rt_clip_dropped_ = std::max(rt_clip_dropped_, clip_dropped);
     const std::size_t clip_bytes = std::size_t{clip_count} * 16u * sizeof(std::uint32_t);
     const UploadRing::Allocation items_at = ring.allocate(item_bytes + clip_bytes, 256u);
     const UploadRing::Allocation sets_at = ring.allocate(set_bytes, 256u);
@@ -2273,13 +2281,15 @@ void RenderCore::rt_report() {
     std::fprintf(stderr,
                  "[rt-inputs] light pass over %u frames, a frame: items in the prepass %.1f, surface pixels %.0f, rays %.0f, "
                  "in the sun's shadow %.0f, under a drop %.0f, in a lamp's shadow %.0f; emitters %zu now; cutout tests %.0f, "
-                 "cutouts unread %.0f, mirror rays %.0f; mesh arenas %u, items without %u, items of many matrices %u\n",
+                 "cutouts unread %.0f, mirror rays %.0f; mesh arenas %u, items without %u, items of many matrices %u; "
+                 "clip volumes left out (most a frame) %u\n",
                  rt_light_frames_, static_cast<double>(rt_light_sum_[5]) / n, static_cast<double>(rt_light_sum_[0]) / n,
                  static_cast<double>(rt_light_sum_[1]) / n, static_cast<double>(rt_light_sum_[2]) / n,
                  static_cast<double>(rt_light_sum_[3]) / n, static_cast<double>(rt_light_sum_[4]) / n, rt_emitters_.size(),
                  static_cast<double>(rt_light_sum_[6]) / n, static_cast<double>(rt_light_sum_[7]) / n,
                  static_cast<double>(rt_light_sum_[8]) / n, rt_light_arenas_,
-                 rt_light_unplaced_, rt_light_skinned_);
+                 rt_light_unplaced_, rt_light_skinned_, rt_clip_dropped_);
+    rt_clip_dropped_ = 0u;
     unsigned kinds[3]{};
     for (const RtEmitter& e : rt_emitters_) {
         ++kinds[std::min<std::uint32_t>(e.kind, 2u)];

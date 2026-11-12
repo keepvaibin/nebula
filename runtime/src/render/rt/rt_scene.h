@@ -30,6 +30,7 @@ inline constexpr std::uint32_t kMaskSolid = 8u;    // opaque and no cutout: ever
 inline constexpr std::uint32_t kMaskLit = 16u;     // solid and drawn by a lit program: what painted light could not know of
 inline constexpr std::uint32_t kMaskSky = 64u;     // the sky's dome: stops no light, is what a mirror shows where nothing else stands
 inline constexpr std::uint32_t kMaskCutout = 32u;  // opaque where its texture's alpha says so (an alpha test): a ray asks at each hit
+inline constexpr std::uint32_t kMaskShadowOnly = 128u;  // drawn for the tracer alone (a traced draw): only shadow rays meet it
 // What an instance is, read back at a hit (the instance's contribution field, which inline rays do not use).
 inline constexpr std::uint32_t kKindCutout = 1u;   // its pixel program may discard (an alpha test): a hit is not yet a surface
 inline constexpr std::uint32_t kKindClipped = 2u;  // with kKindCutout: a map part its clip areas show (c27), every hit asked

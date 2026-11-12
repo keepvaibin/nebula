@@ -142,7 +142,8 @@ float3 seen_along(float3 origin, float3 direction, float wide, float widens) {
         if (lambert > 0.0f) {
             const float3 met_at = origin + direction * query.CommittedRayT();
             uint met;
-            if (!blocked(met_at + facing * max(0.002f * query.CommittedRayT(), 0.5f), g_sun.xyz, 200000.0f, kMaskSolid | kMaskCutout, true, met)) {
+            if (!blocked(met_at + facing * max(0.002f * query.CommittedRayT(), 0.5f), g_sun.xyz, 200000.0f,
+                         kMaskSolid | kMaskCutout | kMaskShadowOnly, true, met)) {
                 sunlit = saturate(lambert / g_look.z);
             }
         }
@@ -268,7 +269,7 @@ void main(uint3 id : SV_DispatchThreadID) {
                 float3 seen_ = seen_along(s.at + n * s.skin, turned_ray, s.away * pixel_wide, pixel_wide);
                 uint met;
                 if ((g_more.z & 1u) != 0u && dot(turned_ray, g_sun.xyz) > 0.9995f &&
-                    !blocked(s.at + n * s.skin, g_sun.xyz, 200000.0f, kMaskSolid | kMaskCutout, true, met)) {
+                    !blocked(s.at + n * s.skin, g_sun.xyz, 200000.0f, kMaskSolid | kMaskCutout | kMaskShadowOnly, true, met)) {
                     seen_ += float3(4.0f, 3.8f, 3.4f);  // the sun itself, far brighter than the picture's white
                 }
                 mirror.rgb = seen_ * tint * share_;

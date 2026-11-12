@@ -604,6 +604,7 @@ private:
                                         // [9] refracted pixels
     std::uint32_t rt_light_arenas_ = 0u, rt_light_unplaced_ = 0u;  // this walk: mesh arenas bound, items left without
     std::uint32_t rt_light_skinned_ = 0u;  // this walk: mesh items whose vertices name their own matrices (no mesh words)
+    std::uint32_t rt_clip_dropped_ = 0u;   // the most clip volumes a frame left out since the last report (c38)
     std::uint32_t rt_light_frames_ = 0u;
     std::uint32_t rt_light_number_ = 0u;      // the noise's turn: counts the light passes
     // The tracer's views (--diagnostics rt-view, rt-check): the scene drawn by rays over the game's opaque scene.

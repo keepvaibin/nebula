@@ -67,7 +67,8 @@ void main(uint3 id : SV_DispatchThreadID) {
             paint_holds = item != 0u && (g_items.Load(g_at.x + (item - 1u) * kItemBytes + 44u) >> 8u & kHitPaintedShadow) != 0u;
         }
         uint met;
-        const float occluder = occluder_at(from, toward, 200000.0f, paint_holds ? kMaskLit : kMaskSolid | kMaskCutout, true, met);
+        const float occluder = occluder_at(from, toward, 200000.0f,
+                                           (paint_holds ? kMaskLit : kMaskSolid | kMaskCutout) | kMaskShadowOnly, true, met);
         if (occluder >= 0.0f) {
             v = float4(0.0f, 0.0f, 0.0f, min(occluder, kNoOccluder - 1.0f));
             InterlockedAdd(g_counters[18], 1u);

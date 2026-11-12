@@ -523,11 +523,11 @@ fn alpha_test_always(m: &MaterialIr) -> bool {
 }
 
 /// The class and numbers the signals give (the design's 2b.3, the rules that need the material alone).
-/// Whether a material's name says it is falling water: "fall" (FallMat, DxFallMat, ExFallMatSplash ...) or "taki"
-/// (waterfall) at its start; not OtaKing.
+/// Whether a material's name says it is falling water: "fallmat" or "fallback" (FallMat, DxFallMat, ExFallMatSplash,
+/// FallBackFaceMat ...: every Fall material of the census) or "taki" (waterfall) at its start; not OtaKing, Rainfall.
 fn falling_water(name: &str) -> bool {
     let name = name.to_ascii_lowercase();
-    name.contains("fall") || name.starts_with("taki")
+    name.contains("fallmat") || name.contains("fallback") || name.starts_with("taki")
 }
 
 pub fn read(m: &MaterialIr) -> Reading {
@@ -988,10 +988,11 @@ mod tests {
 
     #[test]
     fn falling_water_is_named_so() {
-        for name in ["FallMat_v_x", "A_FallMat_v_x", "zz_FallMat_v_x", "DxFallMat_v_x", "HxCupFallMat_v_x", "ExFallMatSplash_v_x", "taki_v_x"] {
+        for name in ["FallMat_v_x", "A_FallMat_v_x", "zz_FallMat_v_x", "DxFallMat_v_x", "HxCupFallMat_v_x", "ExFallMatSplash_v_x", "taki_v_x",
+                     "FallBackFaceMat_v", "AxCupFallMatBackFace_v_x"] {
             assert!(falling_water(name), "{name}");
         }
-        for name in ["glass_v_x", "OtaKingLow_a_v", "crystal_v", "WaterMat_v_x"] {
+        for name in ["glass_v_x", "OtaKingLow_a_v", "crystal_v", "WaterMat_v_x", "Rainfall_v", "FallenLeaf_v"] {
             assert!(!falling_water(name), "{name}");
         }
     }

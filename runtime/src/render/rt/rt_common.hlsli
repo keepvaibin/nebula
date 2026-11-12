@@ -183,7 +183,7 @@ bool clip_shows(float3 at) {
 // first coordinates, against the material's threshold: what the cutout of a leaf, a fence or a flower is drawn by.
 // Where the item gives no mesh or no map (a skinned or frame-made mesh), it is not there: a sheet whose holes the
 // pass cannot read casts no shadow rather than a solid one (counted). A clipped map part (kItemClipped) is there
-// where its clip areas show it (and its map, if it has one, says so).
+// where its clip areas show it (and its map, if it has one and its program alpha-tests, says so).
 bool cutout_there(uint item, uint triangle_, float2 where_, float3 at_eye) {
     const uint at = g_at.x + item * kItemBytes;
     const uint4 first = g_items.Load4(at), second = g_items.Load4(at + 16u);
@@ -192,6 +192,9 @@ bool cutout_there(uint item, uint triangle_, float2 where_, float3 at_eye) {
     const bool clipped = (first.y & kItemClipped) != 0u;
     if (clipped && !clip_shows(at_eye)) {
         return false;
+    }
+    if (clipped && (first.y & kItemAlphaTested) == 0u) {
+        return true;  // its program discards nothing: its map's alpha is no test of it
     }
     if (arena >= 8u || map.x == 0xFFFFFFFFu) {
         if (clipped) {
