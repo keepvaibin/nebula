@@ -4,7 +4,9 @@
 #include "galaxy/mod_log.h"
 
 #include "galaxy/host_extension.h"
+#include "galaxy/mod_consent.h"
 #include "galaxy/mod_plugins.h"
+#include "galaxy/mods.h"
 
 #include <luma_harness.h>
 #include <luma_modlog.h>
@@ -12,6 +14,10 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdio>
+#include <map>
+#include <mutex>
+#include <string>
+#include <vector>
 
 namespace galaxy::modlog {
 namespace {
@@ -129,9 +135,85 @@ void add_row(std::uint32_t source, std::uint32_t level, std::string_view mod, st
     add(entry);
 }
 
+namespace {
+// One declared permission's answer as the start's plan read it.
+struct KeptAnswer {
+    std::string name;   // "net.internet"
+    std::string shown;  // its short name in the played language at the start (the name when it has no row)
+    galaxy::mods::Answer answer = galaxy::mods::Answer::NotAsked;
+};
+std::mutex g_answers_mutex;
+std::map<std::string, std::vector<KeptAnswer>> g_answers;  // mod id -> its permissions, for mods on with a manifest
+
+// The permission an L506 names ("permission", a "T:" text value as the loader puts it); "" for another refusal.
+std::string refused_permission(const galaxy::mods::NotStarted& record) {
+    if (record.code != 506u) return {};
+    for (const auto& [name, value] : record.values) {
+        if (name == "permission") return value.rfind("T:", 0) == 0 ? value.substr(2) : value;
+    }
+    return {};
+}
+
+// The kept answer for the L506's permission; false when the record is not an L506 or the answer was not kept.
+bool kept_answer(const galaxy::mods::NotStarted& record, KeptAnswer& out) {
+    const std::string permission = refused_permission(record);
+    if (permission.empty()) return false;
+    const std::lock_guard<std::mutex> lock(g_answers_mutex);
+    const auto mod = g_answers.find(record.mod_id);
+    if (mod == g_answers.end()) return false;
+    for (const KeptAnswer& kept : mod->second) {
+        if (kept.name == permission) {
+            out = kept;
+            return true;
+        }
+    }
+    return false;
+}
+}  // namespace
+
+void keep_permission_answers(const std::vector<galaxy::mods::ModInfo>& mods) {
+    std::map<std::string, std::vector<KeptAnswer>> answers;
+    for (const galaxy::mods::ModInfo& mod : mods) {
+        if (!mod.enabled || !mod.luma) continue;
+        std::vector<KeptAnswer> kept;
+        for (const galaxy::mods::PermissionFacts& permission : galaxy::mods::consent_facts(mod).permissions) {
+            std::string shown = row_words(permission.row.c_str(), mod.id, {});
+            if (shown.empty()) shown = permission.name;
+            kept.push_back({permission.name, std::move(shown), permission.answer});
+        }
+        if (!kept.empty()) answers[mod.id] = std::move(kept);
+    }
+    const std::lock_guard<std::mutex> lock(g_answers_mutex);
+    g_answers = std::move(answers);
+}
+
+std::string declined_at_start(std::string_view mod_id) {
+    for (const galaxy::mods::NotStarted& record : galaxy::mods::plugins_not_started()) {
+        if (record.mod_id != mod_id) continue;
+        KeptAnswer kept;
+        return kept_answer(record, kept) && kept.answer == galaxy::mods::Answer::Declined ? kept.shown : std::string();
+    }
+    return {};
+}
+
 void add_not_started() {
     if (g_add.load(std::memory_order_acquire) == nullptr) return;
     for (const galaxy::mods::NotStarted& record : galaxy::mods::plugins_not_started()) {
+        KeptAnswer kept;
+        if (kept_answer(record, kept)) {
+            // The player declined it (on the mod's page): their choice, not a fault, and the mod is off until they
+            // allow it. Granted or never asked, yet refused: the store and the facts disagree (a Nebula fault).
+            if (kept.answer == galaxy::mods::Answer::Declined) {
+                add_row(LUMA_MODLOG_LOADER, LUMA_MODLOG_NOTE, record.mod_id, record.code, record.library,
+                        "Consent.OffDeclined", {{"permission", kept.shown}});
+            } else {
+                const char* const answer = kept.answer == galaxy::mods::Answer::Granted ? "Consent.Allowed" : "Consent.NotAsked";
+                add_row(LUMA_MODLOG_LOADER, LUMA_MODLOG_ERROR, record.mod_id, record.code, record.library,
+                        "Consent.RefusedAnyway",
+                        {{"permission", kept.shown}, {"answer", row_words(answer, record.mod_id, {})}});
+            }
+            continue;
+        }
         if (record.code != 0) {
             add_finding(LUMA_MODLOG_LOADER, LUMA_MODLOG_ERROR, record.mod_id, record.code, record.library, 0, 0, record.values);
             continue;

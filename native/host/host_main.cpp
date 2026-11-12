@@ -3402,6 +3402,8 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
         game_id, static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language)));
     gModsOn = static_cast<std::uint32_t>(
         std::count_if(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) { return mod.enabled; }));
+    // The answers the plan's granted lists come from: a declined permission's L506 is then the player's choice (consent 2.3).
+    galaxy::modlog::keep_permission_answers(mods);
     const galaxy::mods::ModPlan plan = galaxy::mods::plan_mod_changes(gPak.store, game_id, language, std::move(mods));
     gPlugins = plan.plugins;
     gModRows = plan.rows;
