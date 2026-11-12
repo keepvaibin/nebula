@@ -1655,6 +1655,23 @@ mod tests {
     }
 
     #[test]
+    fn a_lit_colour_from_the_vertex_colour_is_de_lit() {
+        // c72 (A5): the vertex colour as the colour, unlit or lit, takes the cooker's gain; a lit colour from a register
+        // does not (the game's live colour); blended alike.
+        let mut m = painted();
+        m.channels[0].material_source = 1;
+        assert!(super::super::model_write::debakes(&m), "painted from the vertex colour");
+        m.channels[0].enable = 1;
+        m.channels[0].light_mask = 1;
+        assert!(super::super::model_write::debakes(&m), "lit, its colour the vertex colour");
+        (m.blend_type, m.blend_src, m.blend_dst) = (1, 4, 5);
+        assert!(super::super::model_write::debakes(&m), "blended by the same rule");
+        m.blend_type = 0;
+        m.channels[0].material_source = 0;
+        assert!(!super::super::model_write::debakes(&m), "lit, its colour a register (the vertex colour unread)");
+    }
+
+    #[test]
     fn an_alpha_tested_material_keeps_its_look() {
         // Holes are not a look: an unlit alpha-tested sheet is painted and lets some light through, two-sided.
         let mut m = painted();

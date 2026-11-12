@@ -610,6 +610,21 @@ fn unit_normals(s: &MeshStreams) -> Vec<Option<[f64; 3]>> {
         .collect()
 }
 
+/// c72 (the owner's verdict A5): whether a material's vertex colour is de-lit by the cooker's gain (c37). Its vertex
+/// colour is read and it is no emitter; a lit colour channel that takes its colour from a register keeps it (the game's
+/// live colour holds no painted light), while one whose material or ambient colour is the vertex colour is de-lit as a
+/// painted one (the gain multiplies the vertex colour before the lights). Blended materials by the same rule.
+pub fn debakes(m: &MaterialIr) -> bool {
+    let r = super::hit_record::read(m);
+    if !r.signals.vertex_colour || r.class == super::hit_record::Class::Emissive {
+        return false;
+    }
+    !(0..(m.channel_count as usize).min(2)).any(|ch| {
+        let c = &m.channels[2 * ch];
+        c.enable != 0 && c.light_mask != 0 && c.material_source == 0 && c.ambient_source == 0
+    })
+}
+
 /// c55 (census; d07's question 3): a model's de-light with c37 alone and with d07's map ratios.
 pub struct DebakeReport {
     pub debaked: usize,
@@ -630,9 +645,7 @@ pub fn debake_report(ir: &ModelIr, stem: &str) -> Option<DebakeReport> {
         .materials
         .iter()
         .map(|m| {
-            let rgb_lit = (0..(m.channel_count as usize).min(2)).any(|ch| m.channels[2 * ch].enable != 0 && m.channels[2 * ch].light_mask != 0);
-            let r = super::hit_record::read(m);
-            r.signals.vertex_colour && !rgb_lit && r.signals.blend == 0 && r.class != super::hit_record::Class::Emissive
+            debakes(m)  // c72
         })
         .collect();
     let which: Vec<bool> = ir.shapes.iter().map(|s| debake_material.get(s.material as usize).copied().unwrap_or(false)).collect();
@@ -1176,10 +1189,8 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
             .materials
             .iter()
             .map(|m| {
-                // Painted colour: no colour channel's rgb lit (a channel that lights only its alpha keeps painted rgb).
-                let rgb_lit = (0..(m.channel_count as usize).min(2)).any(|ch| m.channels[2 * ch].enable != 0 && m.channels[2 * ch].light_mask != 0);
-                let r = super::hit_record::read(m);
-                r.signals.vertex_colour && !rgb_lit && r.signals.blend == 0 && r.class != super::hit_record::Class::Emissive
+                // c72: painted colour, or a lit colour taken from the vertex colour (debakes).
+                debakes(m)
             })
             .collect();
         let which: Vec<bool> = ir.shapes.iter().map(|s| debake_material.get(s.material as usize).copied().unwrap_or(false)).collect();
