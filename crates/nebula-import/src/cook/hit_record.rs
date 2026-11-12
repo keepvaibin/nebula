@@ -218,7 +218,8 @@ fn lava_or_sun(stem: &str, material: &str) -> bool {
     let lava = material.strip_prefix("lava").is_some_and(|rest| {
         rest.is_empty() || rest.starts_with('_') || rest.starts_with("mat") || rest.starts_with(|c: char| c.is_ascii_digit())
     });
-    lava || ["magma", "yougan", "sunmat", "sun_mat"].iter().any(|p| material.starts_with(p))
+    // prominencemat: the prominence stages' lava falls (c57).
+    lava || ["magma", "yougan", "sunmat", "sun_mat", "prominencemat"].iter().any(|p| material.starts_with(p))
 }
 
 /// What the sheen's name and model say its body is (c49).
@@ -1473,13 +1474,14 @@ mod tests {
         for (stem, name) in [("lavahomeplanet", "lavamat_v"), ("lavameteoplanet", "lava_m_v"), ("lavajshapeplanet", "lava2_v"),
                              ("floaterotakingplanet", "lava00_v"), ("iceringfireplanet", "lava_01_v"), ("hellballrotatepartsa", "lava_v"),
                              ("koopavs3cylinderinsideplanetlow", "magma_lod_v"), ("bossplanetr50", "yougan"),
-                             ("koopabattlesunplanet", "sunmat"), ("lavajambosunplanet", "sunmat_v"), ("lavahomevolcanoflow", "lavamat")] {
+                             ("koopabattlesunplanet", "sunmat"), ("lavajambosunplanet", "sunmat_v"), ("lavahomevolcanoflow", "lavamat"),
+                             ("lavaprominenceenvironment", "prominencemat_v_x"), ("lavaprominencetriple", "prominencemat_v")] {
             assert!(lava_or_sun(stem, name), "{stem}/{name}");
         }
         for (stem, name) in [("lavahomeplanet", "lavarock_v"), ("lavahomeplanet", "lavaundergorund_v"),
                              ("lavahomevolcanoinnerflow", "lavaedgemat_v"), ("koopabattlemapplanetbloom", "lavamat_v"),
                              ("minihellprominencegalaxy", "sunmat_v"), ("vrdarkspace", "sunmat"), ("koopavs3sandplanet", "suna_v"),
-                             ("lavahomeplanet", "meltmountain_v")] {
+                             ("lavahomeplanet", "meltmountain_v"), ("lavaprominencetriplebloom", "prominencemat_v")] {
             assert!(!lava_or_sun(stem, name), "{stem}/{name}");
         }
     }
