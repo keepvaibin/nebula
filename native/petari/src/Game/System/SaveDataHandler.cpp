@@ -1,4 +1,5 @@
 #include "Game/System/SaveDataHandler.hpp"
+#include "Game/System/ConfigDataHolder.hpp"
 #include "Game/System/GameDataHolder.hpp"
 #include "Game/System/LumaSave.hpp"
 #include "Game/System/LumaSaveChunk.hpp"
@@ -326,6 +327,98 @@ void SaveDataHandler::storeUserFile(const UserFile* pUserFile) {
     setFile(pUserFile->getGameDataFile(), mMake, size);
     size = pUserFile->makeConfigDataBinary(mMake, mMakeRoom);
     setFile(pUserFile->getConfigDataFile(), mMake, size);
+}
+
+const char SaveDataHandler::cExportMagic[5] = "NSAV";
+
+namespace {
+    void putLittle32(u8* pAt, u32 value) {
+        for (u32 i = 0; i < 4; i++) {
+            pAt[i] = static_cast< u8 >(value >> (8 * i));
+        }
+    }
+
+    // export's scratch for a stored file's config (is it created?); made once, on the game thread.
+    ConfigDataHolder* sExportConfig = nullptr;
+}  // namespace
+
+SaveDataHandler::ExportResult SaveDataHandler::makeExport(int user, const UserFile* pLoaded, u8** ppBytes, u32* pLength) {
+    *ppBytes = nullptr;
+    *pLength = 0;
+    const SaveFileId config = {SaveFileId::Kind_Config, user};
+    if (pLoaded != nullptr) {
+        if (!pLoaded->isCreated()) {
+            return Export_Empty;
+        }
+    } else {
+        const File* const pConfig = findFile(config);
+        if (pConfig == nullptr || pConfig->mSize == 0) {
+            return Export_Empty;
+        }
+        if (sExportConfig == nullptr) {
+            sExportConfig = new ConfigDataHolder();
+            if (sExportConfig == nullptr) {
+                return Export_Memory;
+            }
+        }
+        sExportConfig->resetAllData();
+        if (!sExportConfig->loadFromFileBinary(config, pConfig->mData, pConfig->mSize) || !sExportConfig->isCreated()) {
+            return Export_Empty;
+        }
+    }
+
+    // The loaded file's game data, made now into mMake (as storeUserFile makes it, the forgotten ids out first).
+    const SaveFileId loadedGame = pLoaded != nullptr ? pLoaded->getGameDataFile() : SaveFileId{SaveFileId::Kind_Num, 0};
+    u32 made = 0;
+    if (pLoaded != nullptr) {
+        luma::save::applyForgets(this, pLoaded->mGameDataHolder);
+        fitMake(pLoaded);
+        made = pLoaded->makeGameDataBinary(mMake, mMakeRoom);
+    }
+    // Room: the head, three lengths, the game data parts, and the config: made into the form directly (it is at most
+    // the fixed part's room), else as stored.
+    u32 room = cExportHead + 4 * cKindNum;
+    for (u32 kind = 0; kind < cKindNum; kind++) {
+        const SaveFileId file = {static_cast< SaveFileId::Kind >(kind), user};
+        if (pLoaded != nullptr && kind == SaveFileId::Kind_Config) {
+            room += mBaseRoom;
+        } else if (pLoaded != nullptr && kind == loadedGame.mKind) {
+            room += made;
+        } else {
+            const File* const pFile = findFile(file);
+            room += pFile != nullptr ? pFile->mSize : 0;
+        }
+    }
+    u8* const pBytes = new u8[room];
+    if (pBytes == nullptr) {
+        return Export_Memory;
+    }
+    memcpy(pBytes, cExportMagic, 4);
+    pBytes[4] = 1;  // version, little-endian u16
+    pBytes[5] = 0;
+    pBytes[6] = static_cast< u8 >(cKindNum);
+    pBytes[7] = 0;
+    u32 at = cExportHead;
+    for (u32 kind = 0; kind < cKindNum; kind++) {
+        u32 size = 0;
+        if (pLoaded != nullptr && kind == SaveFileId::Kind_Config) {
+            size = pLoaded->makeConfigDataBinary(pBytes + at + 4, room - at - 4);
+        } else if (pLoaded != nullptr && kind == loadedGame.mKind) {
+            size = made;
+            memcpy(pBytes + at + 4, mMake, size);
+        } else {
+            const File* const pFile = findFile({static_cast< SaveFileId::Kind >(kind), user});
+            size = pFile != nullptr ? pFile->mSize : 0;
+            if (size != 0) {
+                memcpy(pBytes + at + 4, pFile->mData, size);
+            }
+        }
+        putLittle32(pBytes + at, size);
+        at += 4 + size;
+    }
+    *ppBytes = pBytes;
+    *pLength = at;
+    return Export_Ok;
 }
 
 void SaveDataHandler::copyUserFile(UserFile* pDst, const UserFile* pSrc) {

@@ -19,6 +19,8 @@ namespace luma {
         const LumaServiceProvider* provider();
         // save.global's (item 7): each mod's values across files in <save root>/<code>/luma/<id>.bin.
         const LumaServiceProvider* globalProvider();
+        // save.game's (item 8, permission save.game): the game's own file out (export) and in (offer).
+        const LumaServiceProvider* gameProvider();
 
         // The REMOVED MODS line's half (item 5), game thread. SaveDataHandler::setFile: game-data file `index` (user - 1)
         // * 2 + kind holds these bytes now. Before each save: the forgotten ids out of the files in memory and out of

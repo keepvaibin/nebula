@@ -5,9 +5,14 @@
 #include "Game/System/LumaModLog.hpp"
 #include "Game/System/LumaSaveChunk.hpp"
 #include "Game/System/LumaServices.hpp"
+#include "Game/System/GameSequenceDirector.hpp"
+#include "Game/System/GameSystem.hpp"
+#include "Game/System/SaveDataHandleSequence.hpp"
 #include "Game/System/SaveDataHandler.hpp"
 #include "Game/System/SaveRequest.hpp"
+#include "Game/System/UserFile.hpp"
 #include "Game/Util/SceneUtil.hpp"
+#include "Game/Util/SingletonHolder.hpp"
 #include <luma_modlog.h>
 #include <luma_save.h>
 #include <luma_service_provider.h>
@@ -640,6 +645,279 @@ namespace luma {
             }
         }
 
+        // ---- save.game (item 8): the game's own file out (export_file, take) and in (offer) ----
+        namespace {
+            const u32 cExportsOpen = 4;   // one mod's open export requests
+            const u32 cExportSlots = 32;  // all mods'
+            const u32 cUserFiles = 6;
+            const u32 cCodeExported = 181;  // Save.Exported
+
+            struct ExportRequest {
+                LumaEventNode mNode;  // first: deliver and drop are given the request through it
+                LumaHandle mHandle;   // 0: a free slot
+                u32 mFile;
+                LumaEventFn mFn;
+                void* mUser;
+                const u8* mBytes;  // inside its EXPORT event's call only, else null
+                u32 mLength;
+                bool mTaken;
+                bool mCancelled;  // no event: freed at its delivery or drop (the kernel may still hold the node)
+            };
+            ExportRequest sExports[cExportSlots] = {};
+            LumaHandle sLastExport = 0;
+
+            void sayExported(const LumaMod* pMod, u32 file) {
+                char text[4];
+                nebula_snprintf(text, sizeof(text), "%u", file);
+                LumaModLogEntry entry = {};
+                entry.size = sizeof(entry);
+                entry.source = LUMA_MODLOG_CODE;
+                entry.level = LUMA_MODLOG_NOTE;
+                entry.code = cCodeExported;
+                entry.mod = sKernel->mod_id(pMod);
+                entry.file = "";
+                entry.names[0] = "file";
+                entry.values[0] = text;
+                entry.count = 1;
+                if (entry.mod != nullptr) {
+                    luma::modlog::add(entry, "Save.Exported");
+                }
+            }
+
+            void freeExport(ExportRequest* pRequest) {
+                pRequest->mHandle = 0;
+                pRequest->mFn = nullptr;
+                pRequest->mUser = nullptr;
+                pRequest->mBytes = nullptr;
+                pRequest->mLength = 0;
+                pRequest->mCancelled = false;
+            }
+
+            // The frame's start after the request: the file as the game would write it now, given in the event's call,
+            // then freed with the request.
+            void exportDeliver(LumaEventNode* pNode) {
+                ExportRequest* const pRequest = reinterpret_cast< ExportRequest* >(pNode);
+                if (pRequest->mCancelled) {
+                    freeExport(pRequest);
+                    return;
+                }
+                SaveDataHandleSequence* const pSequence =
+                    SingletonHolder< GameSystem >::get()->mSequenceDirector->mSaveDataHandleSequence;
+                const UserFile* pLoaded = pSequence->getCurrentUserFile();
+                if (loadedHolder() == nullptr || pLoaded->mGameDataHolder != loadedHolder() ||
+                    pLoaded->mGameDataHolder->getFileId().mUser != static_cast< s32 >(pRequest->mFile)) {
+                    pLoaded = nullptr;
+                }
+                u8* pBytes = nullptr;
+                u32 length = 0;
+                const SaveDataHandler::ExportResult result =
+                    pSequence->mSaveDataHandler->makeExport(static_cast< int >(pRequest->mFile), pLoaded, &pBytes, &length);
+                LumaEvent event = {};
+                event.size = sizeof(event);
+                event.kind = LUMA_SAVE_GAME_EVENT_EXPORT;
+                event.handle = pRequest->mHandle;
+                event.status = result == SaveDataHandler::Export_Ok      ? LUMA_OK
+                               : result == SaveDataHandler::Export_Empty ? LUMA_E_NOT_FOUND
+                                                                         : LUMA_E_MEMORY;
+                event.value = length;
+                pRequest->mBytes = pBytes;
+                pRequest->mLength = length;
+                pRequest->mTaken = false;
+                if (result == SaveDataHandler::Export_Ok) {
+                    sayExported(pNode->mod, pRequest->mFile);
+                }
+                (void)sKernel->call(pNode->mod, LUMA_SAVE_GAME_NAME, pRequest->mFn, pRequest->mUser, &event);
+                delete[] pBytes;
+                freeExport(pRequest);
+            }
+
+            void exportDrop(LumaEventNode* pNode) {
+                freeExport(reinterpret_cast< ExportRequest* >(pNode));
+            }
+
+            // The mod's open request `handle` (not cancelled), or null.
+            ExportRequest* openExport(const LumaMod* pMod, LumaHandle handle) {
+                if (handle == 0) {
+                    return nullptr;
+                }
+                for (ExportRequest& rRequest : sExports) {
+                    if (rRequest.mHandle == handle && rRequest.mNode.mod == pMod && !rRequest.mCancelled) {
+                        return &rRequest;
+                    }
+                }
+                return nullptr;
+            }
+
+            int32_t svcExport(const LumaMod* pMod, uint32_t file, LumaEventFn fn, void* pUser, LumaHandle* pOut) {
+                const char* const pWhere = "save.game.export_file";
+                if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
+                    return status;
+                }
+                if (file < 1 || file > cUserFiles) {
+                    report(pMod, pWhere, 101u, "file");
+                    return LUMA_E_ARGUMENT;
+                }
+                if (fn == nullptr || pOut == nullptr) {
+                    report(pMod, pWhere, 101u, fn == nullptr ? "fn" : "out");
+                    return LUMA_E_ARGUMENT;
+                }
+                u32 open = 0;
+                ExportRequest* pFree = nullptr;
+                for (ExportRequest& rRequest : sExports) {
+                    if (rRequest.mHandle == 0) {
+                        if (pFree == nullptr) {
+                            pFree = &rRequest;
+                        }
+                    } else if (rRequest.mNode.mod == pMod && !rRequest.mCancelled) {
+                        open++;
+                    }
+                }
+                if (open >= cExportsOpen || pFree == nullptr) {
+                    reportLimit(pMod, pWhere, open >= cExportsOpen ? cExportsOpen : cExportSlots);
+                    return LUMA_E_LIMIT;
+                }
+                if (++sLastExport == 0) {
+                    ++sLastExport;
+                }
+                pFree->mNode = {};
+                pFree->mNode.mod = pMod;
+                pFree->mNode.deliver = exportDeliver;
+                pFree->mNode.drop = exportDrop;
+                pFree->mHandle = sLastExport;
+                pFree->mFile = file;
+                pFree->mFn = fn;
+                pFree->mUser = pUser;
+                pFree->mBytes = nullptr;
+                pFree->mLength = 0;
+                pFree->mTaken = false;
+                pFree->mCancelled = false;
+                const s32 posted = sKernel->post(&pFree->mNode);
+                if (posted != LUMA_OK) {
+                    freeExport(pFree);
+                    return posted;
+                }
+                *pOut = pFree->mHandle;
+                return LUMA_PENDING;
+            }
+
+            int64_t svcTake(const LumaMod* pMod, LumaHandle handle, void* pBuf, uint64_t size) {
+                const char* const pWhere = "save.game.take";
+                if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
+                    return status;
+                }
+                ExportRequest* const pRequest = openExport(pMod, handle);
+                if (pRequest == nullptr || pRequest->mBytes == nullptr || pRequest->mTaken) {
+                    report(pMod, pWhere, 102u, nullptr);
+                    return LUMA_E_HANDLE;
+                }
+                if (pBuf == nullptr && size != 0) {
+                    report(pMod, pWhere, 101u, "buf");
+                    return LUMA_E_ARGUMENT;
+                }
+                const u32 copied = size < pRequest->mLength ? static_cast< u32 >(size) : pRequest->mLength;
+                if (copied != 0) {
+                    __builtin_memcpy(pBuf, pRequest->mBytes, copied);
+                }
+                pRequest->mTaken = true;
+                return pRequest->mLength;
+            }
+
+            // A file in the mod's data folder: relative, parts split by '/', none empty, "." or "..", no '\' or ':'.
+            bool isDataPath(const char* pPath) {
+                if (pPath == nullptr || pPath[0] == '\0' || pPath[0] == '/') {
+                    return false;
+                }
+                const char* pPart = pPath;
+                for (const char* p = pPath;; p++) {
+                    if (*p == '\\' || *p == ':') {
+                        return false;
+                    }
+                    if (*p == '/' || *p == '\0') {
+                        const u32 length = static_cast< u32 >(p - pPart);
+                        if (length == 0 || (length == 1 && pPart[0] == '.') ||
+                            (length == 2 && pPart[0] == '.' && pPart[1] == '.')) {
+                            return false;
+                        }
+                        if (*p == '\0') {
+                            return true;
+                        }
+                        pPart = p + 1;
+                    }
+                }
+            }
+
+            int32_t svcOffer(const LumaMod* pMod, const char* pPath, LumaEventFn fn, void* pUser, LumaHandle* pOut) {
+                const char* const pWhere = "save.game.offer";
+                (void)pUser;
+                if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
+                    return status;
+                }
+                if (!isDataPath(pPath)) {
+                    report(pMod, pWhere, 101u, "path");
+                    return LUMA_E_ARGUMENT;
+                }
+                if (fn == nullptr || pOut == nullptr) {
+                    report(pMod, pWhere, 101u, fn == nullptr ? "fn" : "out");
+                    return LUMA_E_ARGUMENT;
+                }
+                // The mod's data folder is the fs service's (plan 2.3), not built yet: no file can be named (item 8).
+                return LUMA_E_ABSENT;
+            }
+
+            int32_t svcCancel(const LumaMod* pMod, LumaHandle handle) {
+                const char* const pWhere = "save.game.cancel";
+                if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
+                    return status;
+                }
+                ExportRequest* const pRequest = openExport(pMod, handle);
+                if (pRequest == nullptr) {
+                    report(pMod, pWhere, 102u, nullptr);
+                    return LUMA_E_HANDLE;
+                }
+                // Queued: freed at its delivery, with no event. Inside its own call: freed when the call returns.
+                pRequest->mCancelled = true;
+                return LUMA_OK;
+            }
+
+            const LumaSaveGameService cGameTable = {
+                {sizeof(LumaSaveGameService), LUMA_SAVE_GAME_MAJOR, LUMA_SAVE_GAME_MINOR},
+                svcExport,
+                svcTake,
+                svcOffer,
+                svcCancel,
+            };
+
+            // After the mod's stop: nothing more for it (a queued request is dropped by the kernel, or freed at delivery).
+            void gameGone(void* pUser, const LumaMod* pMod) {
+                (void)pUser;
+                for (ExportRequest& rRequest : sExports) {
+                    if (rRequest.mHandle != 0 && rRequest.mNode.mod == pMod) {
+                        rRequest.mCancelled = true;
+                    }
+                }
+            }
+
+            const LumaServiceRow cGameRows[] = {
+                {181, "Save.Exported", {"file", nullptr, nullptr, nullptr}},
+                {182, "Save.Offered", {"file", nullptr, nullptr, nullptr}},
+                {183, "Save.Replaced", {"file", nullptr, nullptr, nullptr}},
+            };
+
+            const LumaServiceProvider cGameProvider = {
+                sizeof(LumaServiceProvider),
+                LUMA_SAVE_GAME_NAME,
+                &cGameTable.base,
+                nullptr,
+                cGameRows,
+                sizeof(cGameRows) / sizeof(cGameRows[0]),
+                nullptr,
+                nullptr,
+                gameGone,
+                nullptr,
+                nullptr,
+            };
+        }  // namespace
+
         void fileLoaded() {
             sLoaded = true;
         }
@@ -650,6 +928,10 @@ namespace luma {
 
         const LumaServiceProvider* globalProvider() {
             return &cGlobalProvider;
+        }
+
+        const LumaServiceProvider* gameProvider() {
+            return &cGameProvider;
         }
     }
 }

@@ -35,6 +35,7 @@ namespace luma {
                 {"mods.install", 1, 0, nullptr, "services-mods"},
                 {"save", 1, 0, nullptr, "services-save"},
                 {"save.global", 1, 0, nullptr, "services-save"},
+                {"save.game", 1, 0, "save.game", "services-save"},
                 {nullptr, 0, 0, nullptr, nullptr},
             };
 
@@ -596,6 +597,7 @@ namespace luma {
             (void)provide(luma::time::provider());
             (void)provide(luma::save::provider());
             (void)provide(luma::save::globalProvider());
+            (void)provide(luma::save::gameProvider());
         }
 
         const void* find(const char* pName, u32 major, u32 minor, const char** ppPermission) {
