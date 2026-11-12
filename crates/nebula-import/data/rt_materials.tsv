@@ -610,3 +610,12 @@ electricbazookaplanetindirect	ind_v										a screen-warp layer (IndDummy, the 
 foresthomeplanetindirect	FallBackFaceMat_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
 peachcastlegardenplanetindirect	lambert119_v_x										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
 reversekingdomplanetindirect	FallBackFaceMat_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+# c100: cages' bars and panes, the Goombeetle's helmet (the owner 11-12 on the lava stop; patches/c100_cage_rows.py).
+breakablecage	sabi_v*	metal	0.6	1							FC c100 (the owner 11-12, the lava stop): a cage's rusted bars (sabi), was gloss: iron; picture owed		iron	
+breakablecage	tethu_v*	metal	0.3	1							FC c100 (the owner 11-12, the lava stop): a cage's bars (tetsu), was gloss: iron; picture owed		iron	
+breakablecagel	sabi_v*	metal	0.6	1							FC c100 (the owner 11-12, the lava stop): a cage's rusted bars (sabi), was painted: iron; picture owed		iron	
+breakablecagel	tethu_v*	metal	0.3	1							FC c100 (the owner 11-12, the lava stop): a cage's bars (tetsu), was painted: iron; picture owed		iron	
+breakablecagebreak	sabi_v*	metal	0.6	1							FC c100 (the owner 11-12, the lava stop): a cage's rusted bars (sabi), was gloss: iron; picture owed		iron	
+breakablecagebreak	tethu_v*	metal	0.3	1							FC c100 (the owner 11-12, the lava stop): a cage's bars (tetsu), was gloss: iron; picture owed		iron	
+breakablecage	gaeasu_v	glass	0.02	0	1.5						FC c100: a cage's panes (garasu), was gloss: glass; picture owed			
+metbo	MetMat_v	metal	0.25	1							FC c100 (the owner 11-12): the Goombeetle's helmet, was gloss (a highlight sprite): metal, its own colour; picture owed		art	

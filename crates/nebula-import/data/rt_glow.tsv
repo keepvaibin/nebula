@@ -128,3 +128,10 @@ jumpbeamerbeam/beam	own	600
 eyebeamerbeam	own	600
 groundstar	1.0 0.90 0.40	200
 starduststar	1.0 0.90 0.40	200
+# c100 (the owner 11-12): the star bits inside a crystal cage (DummyDisplayModel's StarPieceDummy), each its own colour
+# as a free star bit; the cages themselves are no lamps (their light is the bits inside).
+starpiecedummy	own	40
+crystalcagemoving	own	0
+crystalcagestick	own	0
+crystalcagelbreak	own	0
+crystalcagesbreak	own	0
