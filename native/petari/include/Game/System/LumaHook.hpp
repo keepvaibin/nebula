@@ -37,6 +37,9 @@ namespace luma {
     u32 functionCount();
     // By name, then signature.
     const Function* functionAt(u32 index);
+    // The functions of a name: how many; *pFirst is the first one's index (functionAt), the others follow it by
+    // signature in byte order.
+    u32 functionsNamed(const char* pName, u32* pFirst);
     // pSignature may be null when the name has one function.
     const Function* findFunction(const char* pName, const char* pSignature, FindResult* pResult);
 

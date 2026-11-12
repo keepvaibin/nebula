@@ -256,10 +256,8 @@ namespace luma {
         return index < sCount ? sSorted[index] : nullptr;
     }
 
-    const Function* findFunction(const char* pName, const char* pSignature, FindResult* pResult) {
+    u32 functionsNamed(const char* pName, u32* pFirst) {
         prepare();
-        FindResult result = Find_NoName;
-        const Function* pFound = nullptr;
         u32 low = 0;
         u32 high = sCount;
         while (low < high) {
@@ -274,6 +272,16 @@ namespace luma {
         while (end < sCount && compare(sSorted[end]->name, pName) == 0) {
             end++;
         }
+        *pFirst = low;
+        return end - low;
+    }
+
+    const Function* findFunction(const char* pName, const char* pSignature, FindResult* pResult) {
+        FindResult result = Find_NoName;
+        const Function* pFound = nullptr;
+        u32 low = 0;
+        const u32 count = functionsNamed(pName, &low);
+        const u32 end = low + count;
         if (end > low) {
             if (pSignature == nullptr) {
                 result = end - low == 1 ? Find_Found : Find_SeveralSignatures;

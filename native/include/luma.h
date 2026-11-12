@@ -159,8 +159,9 @@ typedef struct LumaCore {
        the object pointer at neither (reported, ambiguous). Any thread. */
     const LumaFunction* (*overrider)(const LumaMod* mod, const void* object, const char* name, const char* signature);
     /* method() with the adjustment done: sets args[0] to `object` as the declaring class, then invokes (args may be
-       null for a virtual with no parameters). 0: called; -1: no such virtual, or args null for one with parameters; -2: the object is not of that class (or ambiguous, reported); -3: not readable (reported).
-       The thread the call may run on is the called function's. */
+       null for a virtual with no parameters). 0: called; -1: no such virtual, or args null for one with parameters;
+       -2: the object is not of that class (or ambiguous, reported); -3: not readable (reported). The thread the call
+       may run on is the called function's. */
     int32_t (*call_method)(const LumaMod* mod, const void* object, const char* name, const char* signature, void** args,
                            void* result);
 } LumaCore;

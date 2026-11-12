@@ -727,6 +727,32 @@ namespace luma {
         return pRow != nullptr ? pRow->function : nullptr;
     }
 
+    u32 methodsNamed(const char* pName, u32* pFirst) {
+        prepareTypes();
+        const u32 nameLength = textLength(pName);
+        u32 low = 0;
+        u32 high = sMethods.count;
+        while (low < high) {
+            const u32 mid = low + (high - low) / 2;
+            if (compare(pName, nameLength, sMethods.rows[mid]->function->name) > 0) {
+                low = mid + 1;
+            } else {
+                high = mid;
+            }
+        }
+        u32 end = low;
+        while (end < sMethods.count && compare(pName, nameLength, sMethods.rows[end]->function->name) == 0) {
+            end++;
+        }
+        *pFirst = low;
+        return end - low;
+    }
+
+    const Function* methodAt(u32 index) {
+        prepareTypes();
+        return index < sMethods.count ? sMethods.rows[index]->function : nullptr;
+    }
+
     const MethodRow* overrider(const void* pObject, const char* pName, const char* pSignature, bool* pAmbiguous) {
         return overrider(ownClass(pObject), pObject, findMethodRow(pName, pSignature), pAmbiguous);
     }
@@ -782,10 +808,15 @@ namespace luma {
         // MSVC's type descriptor: its vtable pointer, a spare pointer, then the decorated name (".?AVLiveActor@@").
         return static_cast<const char*>(pTypeInfo) + 2 * sizeof(void*);
 #else
-        // The Itanium C++ ABI's std::type_info: its vtable pointer, then the mangled name ("9LiveActor").
+        // The Itanium C++ ABI's std::type_info: its vtable pointer, then the mangled name ("9LiveActor"). GCC and Clang
+        // put a '*' before the name of a class that is not unique in the program (internal linkage); the symbols do
+        // not have it, so it is left out (G's O10-1).
         const char* pName;
         __builtin_memcpy(&pName, static_cast<const char*>(pTypeInfo) + sizeof(void*), sizeof(pName));
-        return pName != nullptr ? pName : "";
+        if (pName == nullptr) {
+            return "";
+        }
+        return pName[0] == '*' ? pName + 1 : pName;
 #endif
     }
 

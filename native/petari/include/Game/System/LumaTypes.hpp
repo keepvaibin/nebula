@@ -60,6 +60,10 @@ namespace luma {
     const Function* findMethod(const char* pName, const char* pSignature);
     // Its method row (the declaring record, own name, params); null as findMethod, or for a null name or signature.
     const MethodRow* findMethodRow(const char* pName, const char* pSignature);
+    // The virtual calls of a name (findMethod's): how many; *pFirst is the first one's index (methodAt), the others
+    // follow it by signature in byte order.
+    u32 methodsNamed(const char* pName, u32* pFirst);
+    const Function* methodAt(u32 index);
     // The method row of the declaration the object's own class runs for that virtual ("FoA::fa", "s32()" on a FoD
     // gives FoC's fa): for the declaring class's subobject pObject points at, the most derived record on that
     // subobject's path that declares one of that name and parameters (contract objects M-1: D : B1, B2 from A gives

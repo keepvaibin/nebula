@@ -882,6 +882,42 @@ namespace luma {
             }
         }
 
+        // L505's `has` (validator revision 5): the signatures of `count` rows from `first` (by signature in byte order,
+        // as their table keeps them), each quoted, joined by ", ". The caller frees it.
+        char* signatureList(const Function* (*pAt)(u32), u32 first, u32 count) {
+            size_t length = 1;
+            for (u32 i = 0; i < count; i++) {
+                for (const char* p = pAt(first + i)->signature; *p != 0; p++) {
+                    length++;
+                }
+                length += 4;  // two quotation marks, ", "
+            }
+            char* const pText = static_cast<char*>(::malloc(length));
+            if (pText == nullptr) {
+                NEBULA_PANIC("LumaCore: no memory to list a name's signatures");
+            }
+            size_t at = 0;
+            const char* pLast = nullptr;
+            for (u32 i = 0; i < count; i++) {
+                const char* const pSignature = pAt(first + i)->signature;
+                if (pLast != nullptr && sameText(pLast, pSignature)) {
+                    continue;
+                }
+                if (pLast != nullptr) {
+                    pText[at++] = ',';
+                    pText[at++] = ' ';
+                }
+                pText[at++] = '"';
+                for (const char* p = pSignature; *p != 0; p++) {
+                    pText[at++] = *p;
+                }
+                pText[at++] = '"';
+                pLast = pSignature;
+            }
+            pText[at] = 0;
+            return pText;
+        }
+
         // The reason a name is unbound, after kind, found and sig (contract types TY-7, TY2-1): its id, and the names
         // it holds when it holds any.
         void putWhy(Refuse& rRefuse, const char* pWhy, const char* pWhat) {
@@ -957,25 +993,54 @@ namespace luma {
             }
         }
 
-        // "major.minor" of a service import; false when it is not that.
+        // A service import's version (services-registry 2, validator revision 5): "<major>.<minor>", each a decimal
+        // number from 0 to 65535 with no leading zero, nothing else; false when it is not that.
         bool versionOf(const char* pText, u32* pMajor, u32* pMinor) {
             u32 parts[2] = {0, 0};
+            u32 digits[2] = {0, 0};
             u32 part = 0;
-            bool digit = false;
             for (const char* p = pText; p != nullptr && *p != 0; p++) {
-                if (*p >= '0' && *p <= '9' && parts[part] < 100000000u) {
+                if (*p >= '0' && *p <= '9') {
+                    if (digits[part] == 1 && parts[part] == 0) {
+                        return false;  // a leading zero
+                    }
                     parts[part] = parts[part] * 10u + static_cast<u32>(*p - '0');
-                    digit = true;
-                } else if (*p == '.' && part == 0 && digit) {
+                    digits[part]++;
+                    if (parts[part] > 65535u) {
+                        return false;
+                    }
+                } else if (*p == '.' && part == 0 && digits[0] != 0) {
                     part = 1;
-                    digit = false;
                 } else {
                     return false;
                 }
             }
             *pMajor = parts[0];
             *pMinor = parts[1];
-            return part == 1 && digit;
+            return part == 1 && digits[1] != 0;
+        }
+
+        // A service name (services-registry 2): parts [a-z][a-z0-9]* joined by '.', at most 31 bytes.
+        bool serviceNameOk(const char* pName) {
+            u32 length = 0;
+            bool partStart = true;
+            for (const char* p = pName; *p != 0; p++, length++) {
+                const char c = *p;
+                if (length == 31) {
+                    return false;
+                }
+                if (c == '.') {
+                    if (partStart) {
+                        return false;  // an empty part
+                    }
+                    partStart = true;
+                } else if (c >= 'a' && c <= 'z') {
+                    partStart = false;
+                } else if (c < '0' || c > '9' || partStart) {
+                    return false;  // not a letter or digit, or a part that does not start with a letter
+                }
+            }
+            return length != 0 && !partStart;
         }
 
         // After the grace: the mod's destructors, its memory, its library.
@@ -1090,7 +1155,7 @@ namespace luma {
         // Pass 1, every name; pass 2, every hook as `hook` would take it. Nothing is bound yet (LR-2).
         for (u32 i = 0; !refused && i < pInfo->import_count; i++) {
             const LumaImport& rImport = pInfo->imports[i];
-            if (rImport.name == nullptr || rImport.kind > LUMA_IMPORT_METHOD ||
+            if (rImport.name == nullptr || rImport.name[0] == 0 || rImport.kind > LUMA_IMPORT_METHOD ||
                 (rImport.kind == LUMA_IMPORT_HOOK && (rImport.hook == nullptr || rImport.hook_kind >= Hook_KindCount))) {
                 refuse.start(512);
                 refuse.put("why", 'P', "Lib.ImportRowBad");
@@ -1102,10 +1167,12 @@ namespace luma {
             if (rImport.kind == LUMA_IMPORT_SERVICE) {
                 u32 major = 0;
                 u32 minor = 0;
-                if (!versionOf(rImport.signature, &major, &minor)) {
-                    refuse.start(512);
-                    refuse.put("why", 'P', "Lib.ImportRowBad");
-                    refuse.number("row", i);
+                // Registry 2's grammar, whatever the flags: as the validator says it (L505, `sig` as found).
+                if (!serviceNameOk(rImport.name) || !versionOf(rImport.signature, &major, &minor)) {
+                    refuse.start(505);
+                    refuse.put("kind", 'P', "Name.Service");
+                    refuse.put("found", 'T', rImport.name);
+                    refuse.put("sig", 'T', rImport.signature != nullptr ? rImport.signature : "");
                     refused = true;
                     break;
                 }
@@ -1198,6 +1265,24 @@ namespace luma {
                     refuse.put("sig", 'T', rImport.signature);
                     if (pLeft != nullptr) {
                         putWhy(refuse, pLeft->why, pLeft->what);
+                    }
+                } else if (rImport.kind == LUMA_IMPORT_FUNCTION || rImport.kind == LUMA_IMPORT_HOOK || rImport.kind == LUMA_IMPORT_METHOD) {
+                    // The name is the game's under other signatures (or several, none asked): Name.FunctionSigHas,
+                    // Name.FunctionMany or Name.MethodHas with `has` listing them (validator revision 5). Else
+                    // Name.Function, Name.FunctionSig or Name.Method.
+                    const bool method = rImport.kind == LUMA_IMPORT_METHOD;
+                    u32 first = 0;
+                    const u32 count = method ? methodsNamed(rImport.name, &first) : functionsNamed(rImport.name, &first);
+                    refuse.put("kind", 'P', count == 0                     ? missingKind(rImport)
+                                            : method                       ? "Name.MethodHas"
+                                            : rImport.signature != nullptr ? "Name.FunctionSigHas"
+                                                                           : "Name.FunctionMany");
+                    refuse.put("found", 'T', rImport.name);
+                    refuse.put("sig", 'T', rImport.signature);
+                    if (count != 0) {
+                        char* const pHas = signatureList(method ? methodAt : functionAt, first, count);
+                        refuse.put("has", 'T', pHas);
+                        ::free(pHas);
                     }
                 } else {
                     refuse.put("kind", 'P', missingKind(rImport));
