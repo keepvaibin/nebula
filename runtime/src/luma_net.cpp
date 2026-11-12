@@ -9,12 +9,16 @@
 // named pipes, which are not sockets: the I/O thread drives them by overlapped calls it checks at each turn. The game
 // thread never closes a system socket and the I/O thread never frees a Socket: the game thread frees one once the I/O
 // thread closed it, its node is not queued and no lookup holds it, so a poll never meets a closed descriptor and a
-// delivery never meets freed memory.
+// delivery never meets freed memory. Minor 3 adds TLS (BoringSSL, third_party/boringssl) and HTTP/1.1 requests on
+// the same sockets: the I/O thread moves bytes between a socket and its TLS or request state under the lock, then does
+// the handshake, the encryption, the answer's parsing and gzip outside it (that state is the I/O thread's alone), then
+// settles what came of it under the lock again; the game thread never waits on cryptography.
 
 #include "galaxy/luma_net_service.h"
 
 #include "galaxy/luma.h"
 #include "galaxy/mods.h"
+#include "galaxy/path_text.h"
 
 #include <luma_net.h>
 
@@ -26,6 +30,8 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <mutex>
 #include <new>
@@ -60,6 +66,20 @@
 #include <sys/un.h>
 #include <unistd.h>
 #endif
+
+#include <openssl/bio.h>
+#include <openssl/err.h>
+#include <openssl/evp.h>
+#include <openssl/pem.h>
+#include <openssl/ssl.h>
+#include <openssl/x509.h>
+
+// zlib's inflate as third_party/zlib_inflate.cmake builds it (nebula_zinflate: z_ names).
+#ifndef Z_PREFIX
+#define Z_PREFIX
+#endif
+#include <zlib.h>
+#undef Byte  // zconf.h's z_Byte would rename the Windows in6_addr member behind s6_addr (u.Byte)
 
 namespace galaxy::luma_net {
 namespace {
@@ -308,6 +328,108 @@ void reset(OVERLAPPED& ov) noexcept {
 }
 #endif
 
+// ---- TLS and HTTP state (minor 3) ---------------------------------------------------------------------------------
+
+constexpr std::size_t kWireInMost = 256u << 10u;   // encrypted bytes read, not yet given to TLS (reading pauses)
+constexpr std::size_t kPlainOutMost = 1u << 20u;   // the mod's bytes TLS holds, not yet encrypted and sent
+constexpr std::size_t kRawMost = 256u << 10u;      // an answer's bytes read, not yet parsed (reading pauses)
+constexpr std::size_t kBodyOutMost = 1u << 20u;    // an answer's body parsed, not yet the mod's (parsing pauses)
+constexpr std::size_t kHeadMost = 64u << 10u;      // an answer's status line and header lines
+constexpr std::size_t kOwnFileMost = 64u << 10u;   // a certificate, key or root file of a mod's
+constexpr std::size_t kRequestBodyMost = LUMA_NET_SEND_QUEUED_MOST;  // a request's body (the mod's send queue)
+
+#include "net_roots.inc"  // kNetRoots: Mozilla's roots, PEM, built in by third_party/boringssl.cmake
+
+// The roots a mod's luma.json adds for its own TLS (a net permission's "roots"), read at its begin; read only after.
+struct Roots {
+    std::vector<bssl::UniquePtr<X509>> certificates;
+};
+
+// A TLS stream's state: the I/O thread's alone (made by the game thread before the socket joins the polled list).
+struct Tls {
+    SSL* ssl = nullptr;   // made at the I/O thread's first work on it; owns rbio and wbio
+    BIO* rbio = nullptr;  // the other side's bytes, for ssl
+    BIO* wbio = nullptr;  // what ssl wrote, for the other side
+    bool server = false;  // a tls_listen listener's connection
+    std::shared_ptr<SSL_CTX> context;     // a server's (its listener's); a client uses the shared client context
+    std::shared_ptr<const Roots> roots;   // a client's: its mod's own roots, or null
+    std::string host;                     // a client's: the name or address the certificate must name
+    std::string wire_in;                  // read from the socket, not yet given to ssl
+    std::string wire_out;                 // ssl wrote it, not yet sent
+    std::string plain_in;                 // decrypted, not yet the mod's (a stream's; a request's go to Http::raw)
+    std::string plain_out;                // the mod's, not yet given to ssl
+    std::uint64_t moved = 0;              // the mod's bytes taken from `outgoing` since the last SENT
+    bool eof = false;                     // the socket's other side ended (or broke: `broke`)
+    bool broke = false;
+    bool handshaken = false;
+    bool announced = false;               // what the handshake's end gives (CONNECTED, sends) was given
+    bool ended = false;                   // nothing more comes out of ssl
+    bool close_notify = false;            // the other side ended TLS properly (CLOSED with LUMA_OK)
+    bool closing = false;                 // the mod closed it (copied under the lock for the unlocked work)
+    bool shutdown_sent = false;
+    std::int32_t failed = LUMA_OK;        // the handshake failed with this status
+    std::string refusal;                  // why the certificate was refused (Net.CertificateRefused)
+
+    Tls() = default;
+    Tls(const Tls&) = delete;
+    Tls& operator=(const Tls&) = delete;
+    ~Tls() {
+        if (ssl != nullptr) {
+            SSL_free(ssl);
+        }
+    }
+};
+
+// A request's state (http): the request kept to send it again at a redirect, and the answer's parsing. The I/O
+// thread's alone once the socket joins the polled list.
+struct Http {
+    std::string method;
+    bool https = false;
+    std::string host;          // lower case; an IPv6 address without its brackets
+    std::uint16_t port = 0;
+    std::string target;        // the path and query, as they go on the wire
+    std::string lines;         // the mod's header lines, "Name: value\r\n" each
+    bool user_agent = false;   // the mod names its own User-Agent
+    std::string body;
+    std::uint32_t flags = 0;
+    std::string mod_id;
+    std::vector<std::string> hosts;      // net.internet's: luma.json's hosts (each redirect is checked against them)
+    std::shared_ptr<const Roots> roots;  // the mod's own TLS roots
+    std::chrono::steady_clock::time_point deadline{};
+    std::uint32_t redirects = 0;
+    // The answer.
+    enum class Stage : std::uint8_t { Head, Length, ToEnd, ChunkSize, ChunkData, ChunkEnd, Trailer, Flush, Done };
+    Stage stage = Stage::Head;
+    std::string raw;           // the stream's bytes, not parsed yet
+    bool eof = false;          // a plain request's socket ended (or broke); an https one's: its Tls's
+    bool broke = false;
+    std::uint64_t left = 0;    // Length: the body's bytes still to come; ChunkData: this chunk's
+    std::uint32_t status = 0;
+    std::string head;          // the header lines given at HEADERS
+    bool head_ready = false;
+    bool head_given = false;
+    z_stream* zs = nullptr;    // a gzip body's inflater
+    bool z_ended = false;
+    std::string body_out;      // the body parsed, not yet the mod's
+    std::uint64_t total = 0;   // the body's bytes (after gzip)
+    std::int32_t failed = LUMA_OK;
+    bool redirect = false;     // a 3xx to follow to `location` (settled under the lock)
+    std::string location;
+
+    Http() = default;
+    Http(const Http&) = delete;
+    Http& operator=(const Http&) = delete;
+    ~Http() { end_inflate(); }
+    void end_inflate() {
+        if (zs != nullptr) {
+            inflateEnd(zs);
+            delete zs;
+            zs = nullptr;
+        }
+        z_ended = false;
+    }
+};
+
 struct Socket;
 struct ModState;
 
@@ -361,6 +483,22 @@ struct Socket {
 #if defined(_WIN32)
     std::unique_ptr<Pipe> pipe;  // a named pipe's: `sock` stays kNoSock
 #endif
+    // TLS and requests (minor 3). The Tls and Http are the I/O thread's; the fields below them are g_lock's.
+    std::unique_ptr<Tls> tls;       // a TLS stream's (and an https request's); replaced at a redirect
+    std::unique_ptr<Http> http;     // a request's (set at its making, never changed)
+    std::shared_ptr<SSL_CTX> tls_server;  // a tls_listen listener's: its connections' context
+    bool tls_client = false;        // made by tls_connect: no send before its CONNECTED
+    bool tls_ready = false;         // its handshake is done
+    std::size_t tls_queued = 0;     // the mod's bytes TLS still holds (they count against the send queue)
+    const char* where = nullptr;    // the call that made it, for a report given with its ERROR
+    std::uint32_t report_code = 0;  // a row to report with its ERROR (251, 252), and its arguments
+    std::string report_a;
+    std::string report_b;
+    bool headers_event = false;     // HEADERS to give
+    std::uint32_t http_status = 0;
+    std::string http_headers;       // taken inside HEADERS
+    bool done_event = false;        // DONE to give, once the body is taken
+    std::uint64_t body_total = 0;
 };
 
 bool is_pipe(const Socket* socket) noexcept {
@@ -376,13 +514,18 @@ struct ModState {
     const LumaMod* mod = nullptr;
     std::uint32_t open = 0;  // g_lock: sockets counted against LUMA_NET_SOCKETS_MOST
     std::vector<std::string> hosts;  // game thread: luma.json's net.internet hosts, in lower case
+    std::filesystem::path package;   // game thread: its installed folder (empty: none)
+    std::shared_ptr<const Roots> roots;  // its luma.json's TLS roots, or null (read at its begin)
 };
 
 std::mutex g_lock;  // every Socket's fields but node.event's (the kernel's), g_sockets, ModState::open
 std::vector<Socket*> g_sockets;  // g_lock
 std::vector<std::unique_ptr<ModState>> g_mods;  // game thread
 std::atomic<LumaHandle> g_next_handle{1};
-const Socket* g_in_data = nullptr;  // game thread: the socket whose DATA call runs
+const Socket* g_in_data = nullptr;  // game thread: the socket whose DATA (or HEADERS) call runs
+bool g_in_headers = false;          // game thread: that call is a HEADERS: `take` gives the header lines
+const Socket* g_delivering = nullptr;  // g_lock: the socket whose deliver runs (reap leaves it: a call inside may
+                                       // close it and another, and the I/O thread close its system socket meanwhile)
 
 // The I/O thread: made at the first socket and never freed (a thread still polling at the process's end meets no
 // destroyed lock).
@@ -448,7 +591,7 @@ void uncount_locked(Socket* socket) {
 void reap_locked() {
     for (auto it = g_sockets.begin(); it != g_sockets.end();) {
         Socket* socket = *it;
-        if (socket->system_closed && !socket->posted && !socket->resolving &&
+        if (socket->system_closed && !socket->posted && !socket->resolving && socket != g_delivering &&
             (socket->closing || socket->finished || socket->owner == nullptr)) {
             it = g_sockets.erase(it);
             delete socket;
@@ -849,6 +992,1122 @@ void udp_turn_locked(Socket* socket, short revents) {
     }
 }
 
+// ---- TLS and HTTP on the I/O thread (minor 3) ---------------------------------------------------------------------
+
+std::string host_text(const char* given);
+bool host_named(const std::vector<std::string>& hosts, std::string_view host);
+void look_up(Socket* socket, std::string host, std::uint16_t port);
+
+// With g_lock, I/O thread: reads the socket into `in` while it holds less than `most` (straight into it, grown by up
+// to 64 KiB and cut back after; nothing on the stack, R9). False once the other side ended (*broke: it broke).
+bool read_stream_locked(Socket* socket, std::string& in, std::size_t most, bool* broke) {
+    while (in.size() < most) {
+        const std::size_t before = in.size();
+        const std::size_t room = std::min<std::size_t>(64u << 10u, most - before);
+        try {
+            in.resize(before + room);
+        } catch (...) {
+            return true;  // no memory now: the bytes wait in the system's buffer
+        }
+        const int got = receive_system(socket->sock, in.data() + before, room);
+        in.resize(before + (got > 0 ? static_cast<std::size_t>(got) : 0u));
+        if (got > 0) {
+            continue;
+        }
+        if (got == 0) {
+            *broke = false;
+            return false;
+        }
+        if (!would_block(system_error())) {
+            *broke = true;
+            return false;
+        }
+        return true;
+    }
+    return true;
+}
+
+// With g_lock, I/O thread: sends what the socket takes of `out` (the sent part erased). The bytes sent, or -1 when the
+// connection broke (`out` cleared).
+std::int64_t write_stream_locked(Socket* socket, std::string& out) {
+    std::size_t done = 0;
+    while (done < out.size()) {
+        const int put = send_system(socket->sock, out.data() + done, out.size() - done);
+        if (put > 0) {
+            done += static_cast<std::size_t>(put);
+            continue;
+        }
+        if (put < 0 && !would_block(system_error())) {
+            out.clear();
+            return -1;
+        }
+        break;
+    }
+    if (done > 0u) {
+        out.erase(0, done);
+    }
+    return static_cast<std::int64_t>(done);
+}
+
+// Whether a connect (its lookup, its TCP connect, its TLS handshake) has run past its 10 s, or a request past its
+// own time.
+bool connect_late(const Socket* socket, std::chrono::steady_clock::time_point now) {
+    return now - socket->started > kConnectTime || (socket->http != nullptr && now > socket->http->deadline);
+}
+
+// I/O thread: the client context of every tls_connect and https request (TLS 1.2 and 1.3, the other side's
+// certificate checked against Mozilla's roots), and those roots parsed once (a mod with roots of its own gets a store
+// of both). Made at the first TLS work, kept to the process's end (as g_io).
+SSL_CTX* g_client = nullptr;
+std::vector<bssl::UniquePtr<X509>>* g_mozilla = nullptr;
+bool g_client_tried = false;
+
+SSL_CTX* client_context() {
+    if (g_client_tried) {
+        return g_client;
+    }
+    g_client_tried = true;
+    try {
+        auto roots = std::make_unique<std::vector<bssl::UniquePtr<X509>>>();
+        bssl::UniquePtr<BIO> bio(BIO_new_mem_buf(kNetRoots, sizeof(kNetRoots)));
+        while (bio != nullptr) {
+            X509* root = PEM_read_bio_X509(bio.get(), nullptr, nullptr, nullptr);
+            if (root == nullptr) {
+                break;
+            }
+            roots->emplace_back(root);
+        }
+        ERR_clear_error();  // the read past the last root leaves "no start line"
+        bssl::UniquePtr<SSL_CTX> context(SSL_CTX_new(TLS_method()));
+        if (context != nullptr && !roots->empty() && SSL_CTX_set_min_proto_version(context.get(), TLS1_2_VERSION) &&
+            SSL_CTX_set_max_proto_version(context.get(), TLS1_3_VERSION)) {
+            X509_STORE* store = SSL_CTX_get_cert_store(context.get());
+            for (const bssl::UniquePtr<X509>& root : *roots) {
+                X509_STORE_add_cert(store, root.get());
+            }
+            SSL_CTX_set_verify(context.get(), SSL_VERIFY_PEER, nullptr);
+            g_mozilla = roots.release();
+            g_client = context.release();
+        }
+    } catch (...) {
+    }
+    ERR_clear_error();
+    if (g_client == nullptr && g_log != nullptr) {
+        g_log("LumaCore net: TLS could not start; every TLS connect ends with ERROR LUMA_E_IO");
+    }
+    return g_client;
+}
+
+bool is_address(const std::string& host) {
+    in_addr v4{};
+    in6_addr v6{};
+    return inet_pton(AF_INET, host.c_str(), &v4) == 1 || inet_pton(AF_INET6, host.c_str(), &v6) == 1;
+}
+
+// I/O thread: the Tls's SSL with its memory BIOs: a server's from its listener's context; a client's from the client
+// context, checking `host` (a name: also sent as SNI) against Mozilla's roots plus the mod's own.
+bool tls_start(Tls& tls) {
+    SSL_CTX* const context = tls.server ? tls.context.get() : client_context();
+    if (context == nullptr) {
+        return false;
+    }
+    bssl::UniquePtr<SSL> ssl(SSL_new(context));
+    BIO* const rbio = BIO_new(BIO_s_mem());
+    BIO* const wbio = BIO_new(BIO_s_mem());
+    if (ssl == nullptr || rbio == nullptr || wbio == nullptr) {
+        BIO_free(rbio);
+        BIO_free(wbio);
+        return false;
+    }
+    SSL_set_bio(ssl.get(), rbio, wbio);  // ssl owns both from here
+    if (tls.server) {
+        SSL_set_accept_state(ssl.get());
+    } else {
+        SSL_set_connect_state(ssl.get());
+        X509_VERIFY_PARAM* const param = SSL_get0_param(ssl.get());
+        if (is_address(tls.host)) {
+            if (!X509_VERIFY_PARAM_set1_ip_asc(param, tls.host.c_str())) {
+                return false;
+            }
+        } else if (!SSL_set_tlsext_host_name(ssl.get(), tls.host.c_str()) ||
+                   !X509_VERIFY_PARAM_set1_host(param, tls.host.data(), tls.host.size())) {
+            return false;
+        }
+        if (tls.roots != nullptr && !tls.roots->certificates.empty() && g_mozilla != nullptr) {
+            bssl::UniquePtr<X509_STORE> store(X509_STORE_new());
+            if (store == nullptr) {
+                return false;
+            }
+            for (const bssl::UniquePtr<X509>& root : *g_mozilla) {
+                X509_STORE_add_cert(store.get(), root.get());
+            }
+            for (const bssl::UniquePtr<X509>& root : tls.roots->certificates) {
+                X509_STORE_add_cert(store.get(), root.get());
+            }
+            if (!SSL_set1_verify_cert_store(ssl.get(), store.get())) {
+                return false;
+            }
+        }
+    }
+    tls.rbio = rbio;
+    tls.wbio = wbio;
+    tls.ssl = ssl.release();
+    return true;
+}
+
+// I/O thread, no lock (the Tls is this thread's alone): the handshake, the mod's bytes encrypted, the other side's
+// decrypted into `in` while it holds less than `most`, and what TLS wrote moved to wire_out.
+void tls_work(Tls& tls, std::string& in, std::size_t most) {
+    if (tls.failed != LUMA_OK) {
+        return;
+    }
+    ERR_clear_error();
+    if (tls.ssl == nullptr && !tls_start(tls)) {
+        tls.failed = LUMA_E_IO;
+        ERR_clear_error();
+        return;
+    }
+    if (!tls.wire_in.empty() && BIO_pending(tls.rbio) < kWireInMost) {
+        if (BIO_write(tls.rbio, tls.wire_in.data(), static_cast<int>(tls.wire_in.size())) !=
+            static_cast<int>(tls.wire_in.size())) {
+            tls.failed = LUMA_E_MEMORY;
+            return;
+        }
+        tls.wire_in.clear();
+    }
+    if (tls.eof && tls.wire_in.empty()) {
+        BIO_set_mem_eof_return(tls.rbio, 0);  // its last bytes are in: a read past them is the end, not "wait"
+    }
+    if (!tls.handshaken) {
+        const int done = SSL_do_handshake(tls.ssl);
+        if (done == 1) {
+            tls.handshaken = true;
+        } else {
+            const int error = SSL_get_error(tls.ssl, done);
+            if (error != SSL_ERROR_WANT_READ && error != SSL_ERROR_WANT_WRITE) {
+                const long verify = SSL_get_verify_result(tls.ssl);
+                if (!tls.server && verify != X509_V_OK) {
+                    tls.failed = LUMA_E_DENIED;
+                    try {
+                        tls.refusal = X509_verify_cert_error_string(verify);
+                    } catch (...) {
+                    }
+                } else {
+                    tls.failed = tls.server ? LUMA_E_DENIED : LUMA_E_IO;
+                }
+            }
+        }
+    }
+    if (tls.handshaken) {
+        while (!tls.plain_out.empty() && tls.wire_out.size() < kPlainOutMost) {
+            const std::size_t piece = std::min<std::size_t>(tls.plain_out.size(), 64u << 10u);
+            const int put = SSL_write(tls.ssl, tls.plain_out.data(), static_cast<int>(piece));
+            if (put <= 0) {
+                tls.eof = true;  // a write TLS refuses: the connection is over
+                tls.broke = true;
+                tls.plain_out.clear();
+                break;
+            }
+            tls.plain_out.erase(0, static_cast<std::size_t>(put));
+        }
+        while (!tls.ended && in.size() < most) {
+            const std::size_t before = in.size();
+            const std::size_t room = std::min<std::size_t>(64u << 10u, most - before);
+            try {
+                in.resize(before + room);
+            } catch (...) {
+                break;
+            }
+            const int got = SSL_read(tls.ssl, in.data() + before, static_cast<int>(room));
+            in.resize(before + (got > 0 ? static_cast<std::size_t>(got) : 0u));
+            if (got > 0) {
+                continue;
+            }
+            const int error = SSL_get_error(tls.ssl, got);
+            if (error == SSL_ERROR_WANT_READ || error == SSL_ERROR_WANT_WRITE) {
+                break;
+            }
+            tls.ended = true;  // a close_notify, the end of the socket's bytes, or a fault
+            tls.close_notify = error == SSL_ERROR_ZERO_RETURN;
+            break;
+        }
+        if (tls.closing && tls.plain_out.empty() && !tls.shutdown_sent) {
+            SSL_shutdown(tls.ssl);  // close_notify, after the mod's last bytes
+            tls.shutdown_sent = true;
+        }
+    }
+    for (std::size_t waiting = BIO_pending(tls.wbio); waiting > 0u; waiting = BIO_pending(tls.wbio)) {
+        const std::size_t before = tls.wire_out.size();
+        try {
+            tls.wire_out.resize(before + waiting);
+        } catch (...) {
+            tls.failed = LUMA_E_MEMORY;
+            break;
+        }
+        const int got = BIO_read(tls.wbio, tls.wire_out.data() + before, static_cast<int>(waiting));
+        tls.wire_out.resize(before + (got > 0 ? static_cast<std::size_t>(got) : 0u));
+        if (got <= 0) {
+            break;
+        }
+    }
+    ERR_clear_error();
+}
+
+// With g_lock, I/O thread: wire_out sent as far as the socket takes it; a stream's SENT once the mod's bytes are all
+// out.
+void tls_flush_locked(Socket* socket) {
+    Tls& tls = *socket->tls;
+    if (!tls.wire_out.empty() && write_stream_locked(socket, tls.wire_out) < 0) {
+        tls.eof = true;
+        tls.broke = true;
+    }
+    socket->tls_queued = tls.plain_out.size() + tls.wire_out.size();
+    if (socket->http == nullptr && tls.moved > 0u && socket->outgoing.empty() && socket->tls_queued == 0u &&
+        !socket->closing) {
+        socket->sent_since += tls.moved;
+        tls.moved = 0;
+        socket->sent_event = true;
+        post_locked(socket);
+    }
+}
+
+// With g_lock, I/O thread: an open TLS socket's turn after the poll: the encrypted bytes in and out, the mod's bytes
+// to TLS once the handshake is done (a server connection's wait queued until then).
+void tls_turn_locked(Socket* socket, short revents) {
+    Tls& tls = *socket->tls;
+    tls.closing = socket->closing;
+    if (!tls.eof && tls.wire_in.size() < kWireInMost && (revents & (POLLIN | POLLHUP | POLLERR)) != 0) {
+        bool broke = false;
+        if (!read_stream_locked(socket, tls.wire_in, kWireInMost, &broke)) {
+            tls.eof = true;
+            tls.broke = broke;
+        }
+    }
+    if (tls.handshaken && !socket->outgoing.empty() && tls.plain_out.size() < kPlainOutMost) {
+        try {
+            tls.plain_out += socket->outgoing;
+            tls.moved += socket->outgoing.size();
+            socket->outgoing.clear();
+        } catch (...) {
+        }
+    }
+    tls_flush_locked(socket);
+}
+
+// With g_lock, I/O thread, after tls_work: a TLS stream's outcome: its handshake's end (CONNECTED, or ERROR with the
+// certificate's refusal), decrypted bytes to `received`, its end (CLOSED), the mod's close (close_notify first).
+void tls_settle_locked(Socket* socket) {
+    Tls& tls = *socket->tls;
+    const auto now = std::chrono::steady_clock::now();
+    if (socket->closing) {
+        tls.closing = true;
+        tls_flush_locked(socket);
+        if (!tls.handshaken || tls.broke || tls.failed != LUMA_OK || (tls.shutdown_sent && tls.wire_out.empty()) ||
+            now - socket->started > kCloseTime) {
+            close_locked(socket);
+        }
+        return;
+    }
+    if (tls.failed == LUMA_OK && !tls.handshaken && connect_late(socket, now)) {
+        tls.failed = LUMA_E_TIMEOUT;
+    }
+    if (tls.failed != LUMA_OK) {
+        close_locked(socket);
+        if (tls.server) {
+            socket->received.clear();  // a connection whose handshake failed: its CLOSED (contract: LUMA_E_DENIED)
+            socket->closed_event = true;
+            socket->closed_status = LUMA_E_DENIED;
+        } else {
+            socket->failed = tls.failed;
+            if (!tls.refusal.empty()) {
+                socket->report_code = 251u;  // Net.CertificateRefused, given with the ERROR
+                socket->report_a = tls.host;
+                socket->report_b = tls.refusal;
+            }
+        }
+        post_locked(socket);
+        return;
+    }
+    if (tls.handshaken && !tls.announced) {
+        tls.announced = true;
+        socket->tls_ready = true;
+        if (!tls.server) {
+            socket->connected = true;
+            post_locked(socket);
+        }
+    }
+    if (!tls.plain_in.empty() && socket->received.size() < LUMA_NET_RECEIVED_MOST) {
+        const std::size_t moved = std::min(tls.plain_in.size(), LUMA_NET_RECEIVED_MOST - socket->received.size());
+        try {
+            socket->received.append(tls.plain_in, 0, moved);
+            tls.plain_in.erase(0, moved);
+            post_locked(socket);
+        } catch (...) {
+        }
+    }
+    tls_flush_locked(socket);
+    if (tls.ended) {
+        socket->peer_closed = true;  // sends answer LUMA_E_CLOSED from here
+        if (tls.plain_in.empty() && socket->received.empty()) {
+            close_locked(socket);
+            socket->closed_event = true;
+            socket->closed_status = tls.close_notify ? LUMA_OK : LUMA_E_IO;
+            post_locked(socket);
+        }
+    }
+}
+
+// ---- HTTP answers (I/O thread, no lock: the Http is this thread's alone) ----
+
+bool same_text(std::string_view a, std::string_view b) {
+    if (a.size() != b.size()) {
+        return false;
+    }
+    for (std::size_t i = 0; i < a.size(); i++) {
+        const char x = a[i] >= 'A' && a[i] <= 'Z' ? static_cast<char>(a[i] - 'A' + 'a') : a[i];
+        const char y = b[i] >= 'A' && b[i] <= 'Z' ? static_cast<char>(b[i] - 'A' + 'a') : b[i];
+        if (x != y) {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::string_view trimmed(std::string_view text) {
+    while (!text.empty() && (text.front() == ' ' || text.front() == '\t')) {
+        text.remove_prefix(1);
+    }
+    while (!text.empty() && (text.back() == ' ' || text.back() == '\t')) {
+        text.remove_suffix(1);
+    }
+    return text;
+}
+
+// RFC 9110's token: a header's name.
+bool token(std::string_view text) {
+    if (text.empty()) {
+        return false;
+    }
+    for (const char c : text) {
+        const bool plain = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
+        if (!plain && std::string_view("!#$%&'*+-.^_`|~").find(c) == std::string_view::npos) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool redirect_status(std::uint32_t status) {
+    return status == 301u || status == 302u || status == 303u || status == 307u || status == 308u;
+}
+
+// The body ends: a gzip body still gives what its inflater holds (Flush), then Done.
+void end_body(Http& h) {
+    h.stage = h.zs != nullptr ? Http::Stage::Flush : Http::Stage::Done;
+}
+
+// The answer's status line and header lines (`head` without the empty line that ends it, each line with its CRLF).
+// False: not an HTTP answer.
+bool read_head(Http& h, std::string_view head) {
+    const std::size_t first = head.find("\r\n");
+    const std::string_view line = head.substr(0, first);
+    if (line.size() < 12u || (line.substr(0, 9) != "HTTP/1.1 " && line.substr(0, 9) != "HTTP/1.0 ") ||
+        (line.size() > 12u && line[12] != ' ')) {
+        return false;
+    }
+    std::uint32_t status = 0;
+    for (std::size_t i = 9; i < 12u; i++) {
+        if (line[i] < '0' || line[i] > '9') {
+            return false;
+        }
+        status = status * 10u + static_cast<std::uint32_t>(line[i] - '0');
+    }
+    if (status < 100u || status > 599u || status == 101u) {
+        return false;  // 101 switches protocols, which no request asks for
+    }
+    h.status = status;
+    bool has_length = false;
+    std::uint64_t length = 0;
+    bool chunked = false;
+    std::string encoding;
+    std::string location;
+    std::string_view rest = head.substr(first + 2u);
+    while (!rest.empty()) {
+        const std::size_t end = rest.find("\r\n");
+        const std::string_view field = rest.substr(0, end);
+        rest.remove_prefix(end == std::string_view::npos ? rest.size() : end + 2u);
+        if (field.empty() || field.front() == ' ' || field.front() == '\t') {
+            return false;  // an empty line inside, or an obsolete folded line
+        }
+        const std::size_t colon = field.find(':');
+        if (colon == std::string_view::npos || !token(field.substr(0, colon))) {
+            return false;
+        }
+        const std::string_view name = field.substr(0, colon);
+        const std::string_view value = trimmed(field.substr(colon + 1u));
+        if (same_text(name, "content-length")) {
+            if (value.empty() || value.size() > 18u) {
+                return false;
+            }
+            std::uint64_t n = 0;
+            for (const char c : value) {
+                if (c < '0' || c > '9') {
+                    return false;
+                }
+                n = n * 10u + static_cast<std::uint64_t>(c - '0');
+            }
+            if (has_length && n != length) {
+                return false;  // two lengths that disagree
+            }
+            has_length = true;
+            length = n;
+        } else if (same_text(name, "transfer-encoding")) {
+            const std::size_t comma = value.rfind(',');
+            const std::string_view last = trimmed(comma == std::string_view::npos ? value : value.substr(comma + 1u));
+            if (!same_text(last, "chunked")) {
+                return false;  // a body framed some other way cannot be read
+            }
+            chunked = true;
+        } else if (same_text(name, "content-encoding")) {
+            encoding.assign(value);
+        } else if (same_text(name, "location")) {
+            location.assign(value);
+        }
+    }
+    if (status < 200u) {
+        return true;  // an interim answer (100, 103): the real one follows
+    }
+    if (redirect_status(status) && (h.flags & LUMA_NET_HTTP_NO_REDIRECT) == 0u && !location.empty()) {
+        h.redirect = true;
+        h.location = std::move(location);
+        return true;
+    }
+    h.head.assign(head.substr(first + 2u));
+    h.head_ready = true;
+    if (h.method == "HEAD" || status == 204u || status == 304u) {
+        h.stage = Http::Stage::Done;  // no body
+        return true;
+    }
+    const bool gzip = (h.flags & LUMA_NET_HTTP_RAW) == 0u && (same_text(encoding, "gzip") || same_text(encoding, "x-gzip"));
+    if (gzip) {
+        h.zs = new (std::nothrow) z_stream{};
+        if (h.zs == nullptr || inflateInit2(h.zs, 16 + MAX_WBITS) != Z_OK) {
+            delete h.zs;
+            h.zs = nullptr;
+            h.failed = LUMA_E_MEMORY;
+            return true;
+        }
+    }
+    if (chunked) {
+        h.stage = Http::Stage::ChunkSize;
+    } else if (has_length) {
+        if (!gzip && length > LUMA_NET_BODY_MOST) {
+            h.failed = LUMA_E_TOO_LARGE;  // said at once: no byte of it is read
+            return true;
+        }
+        h.left = length;
+        h.stage = Http::Stage::Length;
+        if (length == 0u) {
+            end_body(h);
+        }
+    } else {
+        h.stage = Http::Stage::ToEnd;  // to the connection's end
+    }
+    return true;
+}
+
+// Up to `n` bytes of body (as sent) into body_out, gzip undone, while body_out has room. The bytes of `data` used.
+std::size_t give(Http& h, const char* data, std::size_t n) {
+    const std::size_t room = h.body_out.size() < kBodyOutMost ? kBodyOutMost - h.body_out.size() : 0u;
+    if (room == 0u) {
+        return 0;
+    }
+    if (h.zs == nullptr) {
+        const std::size_t taken = std::min(n, room);
+        if (h.total + taken > LUMA_NET_BODY_MOST) {
+            h.failed = LUMA_E_TOO_LARGE;
+            return 0;
+        }
+        h.body_out.append(data, taken);
+        h.total += taken;
+        return taken;
+    }
+    if (h.z_ended) {
+        if (n > 0u) {
+            h.failed = LUMA_E_FORMAT;  // bytes after the gzip data's end
+        }
+        return 0;
+    }
+    const std::size_t before = h.body_out.size();
+    h.body_out.resize(before + room);
+    const std::size_t given = std::min<std::size_t>(n, 1u << 30u);
+    h.zs->next_in = reinterpret_cast<Bytef*>(const_cast<char*>(data));
+    h.zs->avail_in = static_cast<uInt>(given);
+    h.zs->next_out = reinterpret_cast<Bytef*>(h.body_out.data() + before);
+    h.zs->avail_out = static_cast<uInt>(room);
+    const int result = inflate(h.zs, Z_NO_FLUSH);
+    const std::size_t produced = room - h.zs->avail_out;
+    const std::size_t used = given - h.zs->avail_in;
+    h.body_out.resize(before + produced);
+    if (result == Z_STREAM_END) {
+        h.z_ended = true;
+    } else if (result != Z_OK && result != Z_BUF_ERROR) {
+        h.failed = LUMA_E_FORMAT;  // not gzip, or broken
+        return 0;
+    }
+    h.total += produced;
+    if (h.total > LUMA_NET_BODY_MOST) {
+        h.failed = LUMA_E_TOO_LARGE;
+        return 0;
+    }
+    return used;
+}
+
+// The answer's bytes in `raw` parsed as far as they go (`ended`: no more will come).
+void http_parse(Http& h, bool ended) {
+    for (;;) {
+        if (h.failed != LUMA_OK || h.redirect) {
+            return;
+        }
+        switch (h.stage) {
+        case Http::Stage::Head: {
+            const std::size_t end = h.raw.find("\r\n\r\n");
+            if (end == std::string::npos || end + 2u > kHeadMost) {
+                if (h.raw.size() > kHeadMost) {
+                    h.failed = LUMA_E_FORMAT;
+                } else if (ended) {
+                    h.failed = h.raw.empty() ? LUMA_E_IO : LUMA_E_FORMAT;  // closed with no answer, or half of one
+                }
+                return;
+            }
+            if (!read_head(h, std::string_view(h.raw).substr(0, end + 2u))) {
+                h.failed = LUMA_E_FORMAT;
+                return;
+            }
+            h.raw.erase(0, end + 4u);
+            if (h.status < 200u) {
+                h.status = 0;  // an interim answer: the next one
+            }
+            continue;
+        }
+        case Http::Stage::Length:
+        case Http::Stage::ChunkData: {
+            if (h.raw.empty()) {
+                if (ended) {
+                    h.failed = LUMA_E_IO;  // the body was cut short
+                }
+                return;
+            }
+            const std::size_t n = static_cast<std::size_t>(std::min<std::uint64_t>(h.left, h.raw.size()));
+            const std::size_t used = give(h, h.raw.data(), n);
+            h.raw.erase(0, used);
+            h.left -= used;
+            if (h.failed != LUMA_OK) {
+                return;
+            }
+            if (h.left == 0u) {
+                if (h.stage == Http::Stage::ChunkData) {
+                    h.stage = Http::Stage::ChunkEnd;
+                } else {
+                    end_body(h);
+                }
+                continue;
+            }
+            if (used < n) {
+                return;  // the body's room is full: the mod takes first
+            }
+            continue;
+        }
+        case Http::Stage::ToEnd: {
+            if (!h.raw.empty()) {
+                const std::size_t used = give(h, h.raw.data(), h.raw.size());
+                h.raw.erase(0, used);
+                if (h.failed != LUMA_OK || !h.raw.empty()) {
+                    return;
+                }
+            }
+            if (ended) {
+                end_body(h);
+                continue;
+            }
+            return;
+        }
+        case Http::Stage::ChunkSize: {
+            const std::size_t end = h.raw.find("\r\n");
+            if (end == std::string::npos) {
+                if (h.raw.size() > 1024u) {
+                    h.failed = LUMA_E_FORMAT;
+                } else if (ended) {
+                    h.failed = LUMA_E_IO;
+                }
+                return;
+            }
+            std::uint64_t size = 0;
+            std::size_t digits = 0;
+            for (; digits < end; digits++) {
+                const char c = h.raw[digits];
+                const int value = c >= '0' && c <= '9' ? c - '0'
+                                  : c >= 'a' && c <= 'f' ? c - 'a' + 10
+                                  : c >= 'A' && c <= 'F' ? c - 'A' + 10
+                                                         : -1;
+                if (value < 0) {
+                    break;
+                }
+                if (digits >= 15u) {
+                    h.failed = LUMA_E_FORMAT;  // a chunk past any body this service takes
+                    return;
+                }
+                size = size * 16u + static_cast<std::uint64_t>(value);
+            }
+            if (digits == 0u || (digits < end && h.raw[digits] != ';' && h.raw[digits] != ' ' && h.raw[digits] != '\t')) {
+                h.failed = LUMA_E_FORMAT;
+                return;
+            }
+            h.raw.erase(0, end + 2u);
+            if (size == 0u) {
+                h.stage = Http::Stage::Trailer;
+            } else {
+                h.left = size;
+                h.stage = Http::Stage::ChunkData;
+            }
+            continue;
+        }
+        case Http::Stage::ChunkEnd:
+            if (h.raw.size() < 2u) {
+                if (ended) {
+                    h.failed = LUMA_E_IO;
+                }
+                return;
+            }
+            if (h.raw[0] != '\r' || h.raw[1] != '\n') {
+                h.failed = LUMA_E_FORMAT;
+                return;
+            }
+            h.raw.erase(0, 2);
+            h.stage = Http::Stage::ChunkSize;
+            continue;
+        case Http::Stage::Trailer: {
+            const std::size_t end = h.raw.find("\r\n");
+            if (end == std::string::npos) {
+                if (h.raw.size() > kHeadMost) {
+                    h.failed = LUMA_E_FORMAT;
+                } else if (ended) {
+                    h.failed = LUMA_E_IO;
+                }
+                return;
+            }
+            h.raw.erase(0, end + 2u);  // a trailer field is not kept
+            if (end == 0u) {
+                end_body(h);
+            }
+            continue;
+        }
+        case Http::Stage::Flush: {
+            if (h.z_ended) {
+                h.stage = Http::Stage::Done;
+                continue;
+            }
+            if (h.body_out.size() >= kBodyOutMost) {
+                return;  // the mod takes first
+            }
+            const std::size_t before = h.body_out.size();
+            give(h, nullptr, 0);
+            if (h.failed != LUMA_OK) {
+                return;
+            }
+            if (!h.z_ended && h.body_out.size() == before) {
+                h.failed = LUMA_E_FORMAT;  // the body ended inside the gzip data
+                return;
+            }
+            continue;
+        }
+        case Http::Stage::Done:
+            return;
+        }
+    }
+}
+
+// I/O thread, no lock: a request's TLS (https) and its answer's parsing.
+void http_work(Socket* socket) {
+    Http& h = *socket->http;
+    if (socket->tls != nullptr) {
+        tls_work(*socket->tls, h.raw, kRawMost);
+    }
+    if (h.failed != LUMA_OK || h.redirect || h.stage == Http::Stage::Done) {
+        return;
+    }
+    try {
+        http_parse(h, socket->tls != nullptr ? socket->tls->ended : h.eof);
+    } catch (...) {
+        h.failed = LUMA_E_MEMORY;
+    }
+}
+
+// With g_lock, I/O thread: a plain request's turn after the poll: the answer's bytes in, the request out.
+void http_plain_turn_locked(Socket* socket, short revents) {
+    Http& h = *socket->http;
+    if (socket->closing) {
+        close_locked(socket);  // cancelled: nothing more is sent or heard
+        return;
+    }
+    if (!h.eof && h.raw.size() < kRawMost && (revents & (POLLIN | POLLHUP | POLLERR)) != 0) {
+        bool broke = false;
+        if (!read_stream_locked(socket, h.raw, kRawMost, &broke)) {
+            h.eof = true;
+            h.broke = broke;
+        }
+    }
+    if (!socket->outgoing.empty() && write_stream_locked(socket, socket->outgoing) < 0) {
+        h.eof = true;
+        h.broke = true;
+    }
+}
+
+// The request's text: its line, the service's headers, the mod's, its body.
+std::string request_text(const Http& h) {
+    std::string text;
+    text.reserve(256u + h.target.size() + h.lines.size() + h.body.size());
+    text += h.method;
+    text += ' ';
+    text += h.target;
+    text += " HTTP/1.1\r\nHost: ";
+    const bool v6 = h.host.find(':') != std::string::npos;
+    text += v6 ? "[" + h.host + "]" : h.host;
+    if (h.port != (h.https ? 443u : 80u)) {
+        text += ':';
+        text += std::to_string(h.port);
+    }
+    text += "\r\n";
+    if (!h.user_agent) {
+        text += "User-Agent: Nebula/" NEBULA_VERSION " ";
+        text += h.mod_id;
+        text += "\r\n";
+    }
+    if ((h.flags & LUMA_NET_HTTP_RAW) == 0u) {
+        text += "Accept-Encoding: gzip\r\n";
+    }
+    text += "Connection: close\r\n";
+    if (!h.body.empty() || h.method == "POST" || h.method == "PUT" || h.method == "PATCH") {
+        text += "Content-Length: ";
+        text += std::to_string(h.body.size());
+        text += "\r\n";
+    }
+    text += h.lines;
+    text += "\r\n";
+    text += h.body;
+    return text;
+}
+
+// Where a request goes: from its url, or a redirect's Location against the request it answers.
+struct Target {
+    bool https = false;
+    std::string host;  // lower case, an IPv6 address without brackets
+    std::uint16_t port = 0;
+    std::string path;  // starts with '/'
+};
+
+// The path and query of a url's rest (fragment left out; "/" when there is none); false: not as on the wire.
+bool url_path(std::string_view rest, std::string* out) {
+    const std::size_t hash = rest.find('#');
+    rest = rest.substr(0, hash);
+    for (const char c : rest) {
+        if (static_cast<unsigned char>(c) <= 0x20u || static_cast<unsigned char>(c) >= 0x7Fu) {
+            return false;
+        }
+    }
+    if (rest.empty() || rest.front() == '?') {
+        *out = "/";
+        out->append(rest);
+    } else if (rest.front() == '/') {
+        out->assign(rest);
+    } else {
+        return false;
+    }
+    return true;
+}
+
+// "http://" or "https://", the host (an IPv6 address in brackets), an optional ":port", the path and query.
+bool parse_url(std::string_view url, Target* out) {
+    if (url.size() > LUMA_NET_URL_MOST) {
+        return false;
+    }
+    std::string_view rest;
+    if (url.size() > 7u && same_text(url.substr(0, 7), "http://")) {
+        out->https = false;
+        rest = url.substr(7);
+    } else if (url.size() > 8u && same_text(url.substr(0, 8), "https://")) {
+        out->https = true;
+        rest = url.substr(8);
+    } else {
+        return false;
+    }
+    const std::size_t end = rest.find_first_of("/?#");
+    const std::string_view authority = rest.substr(0, end);
+    if (!url_path(end == std::string_view::npos ? std::string_view() : rest.substr(end), &out->path)) {
+        return false;
+    }
+    if (authority.empty() || authority.find('@') != std::string_view::npos) {
+        return false;  // no host, or a user name (never sent)
+    }
+    std::string_view host = authority;
+    std::string_view port;
+    if (authority.front() == '[') {
+        const std::size_t close = authority.find(']');
+        if (close == std::string_view::npos) {
+            return false;
+        }
+        host = authority.substr(1, close - 1u);
+        const std::string_view after = authority.substr(close + 1u);
+        if (!after.empty()) {
+            if (after.front() != ':') {
+                return false;
+            }
+            port = after.substr(1);
+        }
+        in6_addr v6{};
+        if (inet_pton(AF_INET6, std::string(host).c_str(), &v6) != 1) {
+            return false;
+        }
+    } else if (const std::size_t colon = authority.rfind(':'); colon != std::string_view::npos) {
+        host = authority.substr(0, colon);
+        port = authority.substr(colon + 1u);
+    }
+    if (host.empty()) {
+        return false;
+    }
+    std::uint32_t number = out->https ? 443u : 80u;
+    if (authority.back() == ':' && port.empty()) {
+        return false;
+    }
+    if (!port.empty()) {
+        if (port.size() > 5u) {
+            return false;
+        }
+        number = 0;
+        for (const char c : port) {
+            if (c < '0' || c > '9') {
+                return false;
+            }
+            number = number * 10u + static_cast<std::uint32_t>(c - '0');
+        }
+        if (number == 0u || number > 65535u) {
+            return false;
+        }
+    }
+    out->port = static_cast<std::uint16_t>(number);
+    out->host.assign(host);
+    for (char& c : out->host) {
+        if (c >= 'A' && c <= 'Z') {
+            c = static_cast<char>(c - 'A' + 'a');
+        }
+    }
+    return true;
+}
+
+// A redirect's Location against the request it answers: absolute, "//host...", "/path" or a path beside the current.
+bool resolve_location(const Http& h, std::string_view location, Target* out) {
+    if ((location.size() > 7u && same_text(location.substr(0, 7), "http://")) ||
+        (location.size() > 8u && same_text(location.substr(0, 8), "https://"))) {
+        return parse_url(location, out);
+    }
+    if (location.size() > 2u && location.substr(0, 2) == "//") {
+        return parse_url(std::string(h.https ? "https:" : "http:") + std::string(location), out);
+    }
+    out->https = h.https;
+    out->host = h.host;
+    out->port = h.port;
+    if (location.size() > LUMA_NET_URL_MOST) {
+        return false;
+    }
+    if (!location.empty() && location.front() == '/') {
+        return url_path(location, &out->path);
+    }
+    const std::string_view current = std::string_view(h.target).substr(0, h.target.find('?'));
+    const std::string base(current.substr(0, current.rfind('/') + 1u));
+    return url_path(base + std::string(location), &out->path);
+}
+
+// With g_lock, I/O thread: a request follows its answer's redirect: the host checked (net.internet: luma.json's
+// hosts; net.local: this machine or the local network; never from https to http), the old connection ended, a new
+// one made (a lookup on its own thread for net.internet), the request sent again (303, and 301/302 after a POST,
+// as GET without its body).
+void start_redirect_locked(Socket* socket) {
+    Http& h = *socket->http;
+    h.redirect = false;
+    const auto fail = [socket](std::int32_t status) {
+        close_locked(socket);
+        socket->failed = status;
+        post_locked(socket);
+    };
+    const auto refuse = [socket, &h, &fail]() {
+        socket->report_code = 252u;  // Net.RedirectRefused, given with the ERROR
+        socket->report_a = h.location.substr(0, LUMA_NET_URL_MOST);
+        fail(LUMA_E_DENIED);
+    };
+    if (h.redirects >= LUMA_NET_REDIRECTS_MOST) {
+        fail(LUMA_E_LIMIT);
+        return;
+    }
+    h.redirects++;
+    Target target;
+    if (!resolve_location(h, h.location, &target)) {
+        fail(LUMA_E_FORMAT);
+        return;
+    }
+    if (h.https && !target.https) {
+        refuse();
+        return;
+    }
+    sockaddr_storage address{};
+    socklen_t length = 0;
+    if (socket->internet) {
+        if (host_text(target.host.c_str()).empty() || !host_named(h.hosts, target.host)) {
+            refuse();
+            return;
+        }
+    } else if (!local_address(target.host.c_str(), target.port, &address, &length)) {
+        refuse();
+        return;
+    }
+    if (h.status == 303u || ((h.status == 301u || h.status == 302u) && h.method == "POST")) {
+        if (h.method != "HEAD") {
+            h.method = "GET";
+        }
+        h.body.clear();
+    }
+    h.https = target.https;
+    h.host = std::move(target.host);
+    h.port = target.port;
+    h.target = std::move(target.path);
+    if (socket->sock != kNoSock) {
+        close_system(socket->sock);  // the old connection (not system_closed: the request goes on)
+        socket->sock = kNoSock;
+    }
+    h.raw.clear();
+    h.stage = Http::Stage::Head;
+    h.eof = false;
+    h.broke = false;
+    h.status = 0;
+    h.end_inflate();
+    socket->tls.reset();
+    socket->tls_ready = false;
+    socket->tls_queued = 0;
+    try {
+        if (h.https) {
+            socket->tls = std::make_unique<Tls>();
+            socket->tls->host = h.host;
+            socket->tls->roots = h.roots;
+        }
+        socket->outgoing = request_text(h);
+    } catch (...) {
+        fail(LUMA_E_MEMORY);
+        return;
+    }
+    socket->started = std::chrono::steady_clock::now();
+    if (socket->internet) {
+        socket->kind = Kind::Resolving;
+        socket->looked_up = false;
+        socket->lookup_status = LUMA_OK;
+        socket->addresses.clear();
+        socket->next_address = 0;
+        socket->resolving = true;
+        try {
+            std::thread(look_up, socket, h.host, h.port).detach();
+        } catch (...) {
+            socket->resolving = false;
+            socket->looked_up = true;
+            socket->lookup_status = LUMA_E_IO;  // no thread: the Resolving turn gives the ERROR
+        }
+        return;
+    }
+    const Sock sock = ::socket(address.ss_family, SOCK_STREAM, IPPROTO_TCP);
+    if (sock == kNoSock) {
+        fail(LUMA_E_IO);
+        return;
+    }
+    if (!make_nonblocking(sock)) {
+        close_system(sock);
+        fail(LUMA_E_IO);
+        return;
+    }
+    int on = 1;
+    setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char*>(&on), sizeof(on));
+    socket->sock = sock;
+    socket->kind = Kind::Connecting;
+    if (::connect(sock, reinterpret_cast<const sockaddr*>(&address), length) != 0) {
+        const int error = system_error();
+        if (!connecting(error)) {
+            socket->failed = connect_failure(socket, error);  // the Connecting turn closes it and gives the ERROR
+        }
+    }
+}
+
+// With g_lock, I/O thread, after http_work: a request's outcome: HEADERS, the body to `received`, DONE, a redirect,
+// or ERROR (its time, its TLS, its answer).
+void http_settle_locked(Socket* socket) {
+    Http& h = *socket->http;
+    if (socket->closing) {
+        close_locked(socket);  // cancelled: no event from here
+        return;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    if (socket->tls != nullptr) {
+        Tls& tls = *socket->tls;
+        if (tls.failed == LUMA_OK && !tls.handshaken && connect_late(socket, now)) {
+            tls.failed = LUMA_E_TIMEOUT;
+        }
+        if (tls.failed != LUMA_OK && h.failed == LUMA_OK) {
+            h.failed = tls.failed;
+            if (!tls.refusal.empty()) {
+                socket->report_code = 251u;  // Net.CertificateRefused
+                socket->report_a = tls.host;
+                socket->report_b = tls.refusal;
+            }
+        }
+        if (tls.handshaken) {
+            tls.announced = true;
+            socket->tls_ready = true;
+        }
+        tls_flush_locked(socket);
+    }
+    if (h.failed == LUMA_OK && h.stage != Http::Stage::Done && now > h.deadline) {
+        h.failed = LUMA_E_TIMEOUT;
+    }
+    if (h.failed != LUMA_OK) {
+        close_locked(socket);
+        socket->received.clear();
+        socket->failed = h.failed;
+        post_locked(socket);
+        return;
+    }
+    if (h.redirect) {
+        start_redirect_locked(socket);
+        return;
+    }
+    if (h.head_ready && !h.head_given) {
+        h.head_given = true;
+        socket->headers_event = true;
+        socket->http_status = h.status;
+        socket->http_headers = std::move(h.head);
+        post_locked(socket);
+    }
+    if (!h.body_out.empty() && socket->received.size() < LUMA_NET_RECEIVED_MOST) {
+        const std::size_t moved = std::min(h.body_out.size(), LUMA_NET_RECEIVED_MOST - socket->received.size());
+        try {
+            socket->received.append(h.body_out, 0, moved);
+            h.body_out.erase(0, moved);
+            post_locked(socket);
+        } catch (...) {
+        }
+    }
+    if (h.stage == Http::Stage::Done && h.body_out.empty() && !socket->done_event) {
+        socket->done_event = true;
+        socket->body_total = h.total;
+        close_locked(socket);  // Connection: close; the Socket stays for its last events
+        post_locked(socket);
+    }
+}
+
 // With g_lock, I/O thread: one socket's turn after the poll (`revents` its poll result, 0 when not polled).
 void turn_locked(Socket* socket, short revents) {
     if (socket->system_closed) {
@@ -871,7 +2130,7 @@ void turn_locked(Socket* socket, short revents) {
             return;
         }
         if (!socket->looked_up) {
-            if (std::chrono::steady_clock::now() - socket->started > kConnectTime) {
+            if (connect_late(socket, std::chrono::steady_clock::now())) {
                 close_locked(socket);
                 socket->failed = LUMA_E_TIMEOUT;
                 post_locked(socket);
@@ -896,7 +2155,7 @@ void turn_locked(Socket* socket, short revents) {
             return;
         }
         if (revents == 0) {
-            if (std::chrono::steady_clock::now() - socket->started > kConnectTime) {
+            if (connect_late(socket, std::chrono::steady_clock::now())) {
                 close_locked(socket);
                 if (!socket->closing) {
                     socket->failed = LUMA_E_TIMEOUT;
@@ -924,8 +2183,10 @@ void turn_locked(Socket* socket, short revents) {
         if (socket->closing) {
             break;  // closed by the mod while connecting: what it queued (nothing) is flushed below
         }
-        socket->connected = true;
-        post_locked(socket);
+        if (socket->tls == nullptr && socket->http == nullptr) {
+            socket->connected = true;  // a TLS stream's CONNECTED comes after its handshake; a request's HEADERS
+            post_locked(socket);
+        }
         break;
     }
     case Kind::Listener: {
@@ -959,6 +2220,18 @@ void turn_locked(Socket* socket, short revents) {
             fresh->kind = Kind::Open;
             fresh->ipc = socket->ipc;
             fresh->sock = got;
+            fresh->where = socket->where;
+            fresh->started = std::chrono::steady_clock::now();  // a TLS connection's handshake has 10 s from here
+            if (socket->tls_server != nullptr) {
+                fresh->tls.reset(new (std::nothrow) Tls());
+                if (fresh->tls == nullptr) {
+                    close_system(got);
+                    delete fresh;
+                    continue;
+                }
+                fresh->tls->server = true;
+                fresh->tls->context = socket->tls_server;
+            }
             try {
                 g_sockets.push_back(fresh);
                 socket->accepted.push_back(fresh);
@@ -983,6 +2256,20 @@ void turn_locked(Socket* socket, short revents) {
         return;
     }
     if (socket->kind != Kind::Open) {
+        return;
+    }
+    if (socket->http != nullptr) {
+        if (socket->tls == nullptr) {
+            http_plain_turn_locked(socket, revents);
+        } else if (socket->closing) {
+            close_locked(socket);  // cancelled: nothing more is sent or heard
+        } else {
+            tls_turn_locked(socket, revents);
+        }
+        return;
+    }
+    if (socket->tls != nullptr) {
+        tls_turn_locked(socket, revents);  // its outcome: tls_settle_locked, after the unlocked work
         return;
     }
     // Open: read while there is room, write what is queued.
@@ -1052,9 +2339,26 @@ void turn_locked(Socket* socket, short revents) {
     }
 }
 
+// With g_lock, I/O thread: what an open TLS stream or request waits for in the poll.
+short stream_events(const Socket* socket) {
+    bool in = false;
+    bool out = false;
+    if (socket->tls != nullptr) {
+        const Tls& tls = *socket->tls;
+        in = !tls.eof && tls.wire_in.size() < kWireInMost;
+        out = !tls.wire_out.empty();
+    } else {
+        const Http& h = *socket->http;
+        in = !h.eof && h.raw.size() < kRawMost;
+        out = !socket->outgoing.empty();
+    }
+    return static_cast<short>((in ? POLLIN : 0) | (out ? POLLOUT : 0));
+}
+
 void io_loop() {
     std::vector<Socket*> polled;
     std::vector<PollFd> fds;
+    std::vector<Socket*> working;  // open TLS streams and requests: their work outside the lock
     for (;;) {
         polled.clear();
         fds.clear();
@@ -1080,9 +2384,13 @@ void io_loop() {
                         fd.events = POLLIN;
                         break;
                     case Kind::Open:
-                        fd.events = static_cast<short>(
-                            (!socket->peer_closed && socket->received.size() < LUMA_NET_RECEIVED_MOST ? POLLIN : 0) |
-                            (!socket->outgoing.empty() ? POLLOUT : 0));
+                        fd.events = socket->tls != nullptr || socket->http != nullptr
+                                        ? stream_events(socket)
+                                        : static_cast<short>(
+                                              (!socket->peer_closed && socket->received.size() < LUMA_NET_RECEIVED_MOST
+                                                   ? POLLIN
+                                                   : 0) |
+                                              (!socket->outgoing.empty() ? POLLOUT : 0));
                         break;
                     case Kind::Udp:
                         fd.events = static_cast<short>(
@@ -1110,18 +2418,54 @@ void io_loop() {
         } else {
             std::this_thread::sleep_for(std::chrono::milliseconds(kPollMs));
         }
+        working.clear();
+        {
+            const std::lock_guard<std::mutex> lock(g_lock);
+            for (std::size_t i = 0; i < polled.size(); i++) {
+                // A socket the game thread freed meanwhile is gone from g_sockets (it was closed by this thread first).
+                if (std::find(g_sockets.begin(), g_sockets.end(), polled[i]) == g_sockets.end()) {
+                    continue;
+                }
+                turn_locked(polled[i], fds[i].revents);
+            }
+            // Sockets made since the poll's list (none polled yet) and those the mod closed with nothing queued.
+            for (Socket* socket : g_sockets) {
+                if (std::find(polled.begin(), polled.end(), socket) == polled.end()) {
+                    turn_locked(socket, 0);
+                }
+            }
+            try {
+                for (Socket* socket : g_sockets) {
+                    if (!socket->system_closed && socket->kind == Kind::Open &&
+                        (socket->tls != nullptr || socket->http != nullptr)) {
+                        working.push_back(socket);
+                    }
+                }
+            } catch (...) {
+                working.clear();  // no memory now: the next round
+            }
+        }
+        if (working.empty()) {
+            continue;
+        }
+        // Outside the lock: the handshakes, the encryption, the answers' parsing and gzip. Only a socket this thread
+        // closed is ever freed, so each stays; its Tls and Http are this thread's alone.
+        for (Socket* socket : working) {
+            if (socket->http != nullptr) {
+                http_work(socket);
+            } else {
+                tls_work(*socket->tls, socket->tls->plain_in, LUMA_NET_RECEIVED_MOST);
+            }
+        }
         const std::lock_guard<std::mutex> lock(g_lock);
-        for (std::size_t i = 0; i < polled.size(); i++) {
-            // A socket the game thread freed meanwhile is gone from g_sockets (it was closed by this thread first).
-            if (std::find(g_sockets.begin(), g_sockets.end(), polled[i]) == g_sockets.end()) {
+        for (Socket* socket : working) {
+            if (socket->system_closed) {
                 continue;
             }
-            turn_locked(polled[i], fds[i].revents);
-        }
-        // Sockets made since the poll's list (none polled yet) and those the mod closed with nothing queued.
-        for (Socket* socket : g_sockets) {
-            if (std::find(polled.begin(), polled.end(), socket) == polled.end()) {
-                turn_locked(socket, 0);
+            if (socket->http != nullptr) {
+                http_settle_locked(socket);
+            } else {
+                tls_settle_locked(socket);
             }
         }
     }
@@ -1144,6 +2488,15 @@ void call(const LumaMod* mod, const char* service, LumaEventFn fn, void* user, s
     kernel->call(mod, service, fn, user, &event);
 }
 
+// A report with up to two arguments after {where} (b empty: one).
+void report_with(const LumaMod* mod, const char* where, std::uint32_t code, const std::string& a,
+                 const std::string& b) noexcept {
+    const char* args[2] = {a.c_str(), b.c_str()};
+    if (const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire)) {
+        kernel->report(mod, where, code, args, b.empty() ? 1u : 2u);
+    }
+}
+
 void deliver(LumaEventNode* node) {
     Socket* const socket = reinterpret_cast<Node*>(node)->socket;
     const LumaMod* const mod = node->mod;
@@ -1156,6 +2509,13 @@ void deliver(LumaEventNode* node) {
     std::uint64_t sent = 0;
     bool closed = false;
     std::int32_t closed_status = LUMA_OK;
+    bool headers = false;
+    std::uint32_t http_status = 0;
+    bool done = false;
+    std::uint64_t body_total = 0;
+    std::uint32_t report_code = 0;
+    std::string report_a;
+    std::string report_b;
     LumaEventFn fn = nullptr;
     void* user = nullptr;
     LumaHandle handle = 0;
@@ -1167,6 +2527,7 @@ void deliver(LumaEventNode* node) {
             reap_locked();
             return;
         }
+        g_delivering = socket;
         fn = socket->fn;
         user = socket->user;
         handle = socket->handle;
@@ -1187,7 +2548,19 @@ void deliver(LumaEventNode* node) {
         }
         closed = std::exchange(socket->closed_event, false);
         closed_status = socket->closed_status;
-        if (failed != LUMA_OK || (closed && !data)) {
+        headers = std::exchange(socket->headers_event, false) && failed == LUMA_OK;
+        http_status = socket->http_status;
+        if (socket->done_event && !data && failed == LUMA_OK) {
+            done = true;  // the body all taken first (header): DONE once `received` is empty
+            socket->done_event = false;
+            body_total = socket->body_total;
+        }
+        if (failed != LUMA_OK) {
+            report_code = std::exchange(socket->report_code, 0u);
+            report_a = std::move(socket->report_a);
+            report_b = std::move(socket->report_b);
+        }
+        if (failed != LUMA_OK || (closed && !data) || done) {
             uncount_locked(socket);
             socket->finished = true;  // the handle is closed after this event (header)
         }
@@ -1204,6 +2577,15 @@ void deliver(LumaEventNode* node) {
             break;
         }
         call(mod, service, fn, user, LUMA_NET_EVENT_ACCEPTED, handle, LUMA_OK, fresh);
+    }
+    if (headers && open()) {
+        g_in_data = socket;
+        g_in_headers = true;
+        call(mod, service, fn, user, LUMA_NET_EVENT_HEADERS, handle, LUMA_OK, http_status);
+        g_in_headers = false;
+        g_in_data = nullptr;
+        const std::lock_guard<std::mutex> lock(g_lock);
+        std::string().swap(socket->http_headers);  // lines not taken are gone (header)
     }
     if (data && open()) {
         std::uint64_t waiting = 0;
@@ -1224,7 +2606,12 @@ void deliver(LumaEventNode* node) {
         call(mod, service, fn, user, LUMA_NET_EVENT_SENT, handle, LUMA_OK, sent);
     }
     if (failed != LUMA_OK) {
+        if (report_code != 0u && socket->where != nullptr) {
+            report_with(mod, socket->where, report_code, report_a, report_b);  // why, before the ERROR
+        }
         call(mod, service, fn, user, LUMA_NET_EVENT_ERROR, handle, failed, 0u);
+    } else if (done) {
+        call(mod, service, fn, user, LUMA_NET_EVENT_DONE, handle, LUMA_OK, body_total);
     } else if (closed && !data) {
         call(mod, service, fn, user, LUMA_NET_EVENT_CLOSED, handle, closed_status, 0u);
     }
@@ -1233,10 +2620,12 @@ void deliver(LumaEventNode* node) {
         if (closed && data) {
             socket->closed_event = true;  // the bytes first (header): CLOSED once they are taken
         }
-        if (!socket->received.empty() || !socket->datagrams_in.empty() || socket->closed_event) {
-            post_locked(socket);  // bytes or datagrams left, or the CLOSED after them: a later frame
+        if (!socket->received.empty() || !socket->datagrams_in.empty() || socket->closed_event ||
+            socket->done_event) {
+            post_locked(socket);  // bytes or datagrams left, or the CLOSED or DONE after them: a later frame
         }
     }
+    g_delivering = nullptr;
     reap_locked();
 }
 
@@ -1359,9 +2748,42 @@ std::int32_t join(Socket* socket, LumaHandle* out) {
     return LUMA_OK;
 }
 
-// tcp_connect and udp_connect of net.local: a stream, or a datagram socket tied to one peer.
+// What tls_connect and http add to a connect: TLS (checking the connect's host), a request.
+struct Extra {
+    bool tls = false;
+    std::unique_ptr<Http> http;
+};
+
+// The connect's TLS and request on its new Socket, not joined yet (the call that made it kept for its reports).
+// False: no memory.
+bool attach(Socket* socket, const char* where, Extra* extra, const char* host, const ModState* state) noexcept {
+    socket->where = where;
+    if (extra == nullptr) {
+        return true;
+    }
+    try {
+        if (extra->tls) {
+            socket->tls = std::make_unique<Tls>();
+            socket->tls->host = host;
+            socket->tls->roots = state->roots;
+            socket->tls_client = extra->http == nullptr;
+        }
+        if (extra->http != nullptr) {
+            socket->outgoing = request_text(*extra->http);
+            socket->http = std::move(extra->http);
+        }
+    } catch (...) {
+        socket->tls.reset();
+        socket->outgoing.clear();
+        return false;
+    }
+    return true;
+}
+
+// tcp_connect and udp_connect of net.local: a stream, or a datagram socket tied to one peer (`extra`: tls_connect's
+// TLS, http's request).
 std::int32_t local_connect(const LumaMod* mod, const char* where, bool udp, const char* host, std::uint16_t port,
-                           LumaEventFn fn, void* user, LumaHandle* out) noexcept {
+                           LumaEventFn fn, void* user, LumaHandle* out, Extra* extra = nullptr) noexcept {
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
@@ -1392,6 +2814,11 @@ std::int32_t local_connect(const LumaMod* mod, const char* where, bool udp, cons
             status != LUMA_OK) {
             return status;
         }
+        if (!attach(socket, where, extra, host, state)) {
+            close_system(socket->sock);
+            delete socket;
+            return LUMA_E_MEMORY;
+        }
         socket->tied = udp;
         socket->kind = Kind::Connecting;  // a UDP connect only sets the peer: CONNECTED at the I/O thread's next turn
         socket->started = std::chrono::steady_clock::now();
@@ -1416,6 +2843,12 @@ std::int32_t net_tcp_connect(const LumaMod* mod, const char* host, std::uint16_t
 std::int32_t net_udp_connect(const LumaMod* mod, const char* host, std::uint16_t port, LumaEventFn fn, void* user,
                              LumaHandle* out) noexcept {
     return local_connect(mod, "net.local.udp_connect", true, host, port, fn, user, out);
+}
+std::int32_t net_tls_connect(const LumaMod* mod, const char* host, std::uint16_t port, LumaEventFn fn, void* user,
+                             LumaHandle* out) noexcept {
+    Extra extra;
+    extra.tls = true;
+    return local_connect(mod, "net.local.tls_connect", false, host, port, fn, user, out, &extra);
 }
 
 std::int32_t net_udp_open(const LumaMod* mod, std::uint16_t port, std::uint32_t local_network, LumaEventFn fn,
@@ -1467,9 +2900,125 @@ std::int32_t net_udp_open(const LumaMod* mod, std::uint16_t port, std::uint32_t 
     return join(socket, out);
 }
 
-std::int32_t net_tcp_listen(const LumaMod* mod, std::uint16_t port, std::uint32_t local_network, LumaEventFn fn,
-                            void* user, LumaHandle* out) noexcept {
-    static constexpr const char* where = "net.local.tcp_listen";
+// A file of the mod's own into *out (`given`: a path inside its folder, '/' between parts). LUMA_OK; a part empty,
+// "." or "..", a drive or a separator (a root, a way out): LUMA_E_ARGUMENT; missing, or no folder: LUMA_E_NOT_FOUND;
+// past kOwnFileMost: LUMA_E_FORMAT.
+std::int32_t read_own_file(const std::filesystem::path& package, std::string_view given, std::string* out) {
+    if (given.empty() || given.size() > 1024u) {
+        return LUMA_E_ARGUMENT;
+    }
+    std::filesystem::path path = package;
+    for (std::size_t start = 0;;) {
+        const std::size_t slash = given.find('/', start);
+        const std::string_view part =
+            given.substr(start, slash == std::string_view::npos ? std::string_view::npos : slash - start);
+        if (part.empty() || !galaxy::mods::safe_path_part(part)) {
+            return LUMA_E_ARGUMENT;
+        }
+        path /= galaxy::text_path(std::string(part));
+        if (slash == std::string_view::npos) {
+            break;
+        }
+        start = slash + 1u;
+    }
+    if (package.empty()) {
+        return LUMA_E_NOT_FOUND;
+    }
+    std::error_code error;
+    if (!std::filesystem::is_regular_file(path, error)) {
+        return LUMA_E_NOT_FOUND;
+    }
+    const std::uintmax_t size = std::filesystem::file_size(path, error);
+    if (error) {
+        return LUMA_E_NOT_FOUND;
+    }
+    if (size > kOwnFileMost) {
+        return LUMA_E_FORMAT;
+    }
+    std::ifstream file(path, std::ios::binary);
+    if (!file) {
+        return LUMA_E_NOT_FOUND;
+    }
+    out->resize(static_cast<std::size_t>(size));
+    file.read(out->data(), static_cast<std::streamsize>(size));
+    if (static_cast<std::uintmax_t>(file.gcount()) != size) {
+        return LUMA_E_NOT_FOUND;
+    }
+    return LUMA_OK;
+}
+
+// tls_listen's context: the certificate chain (the server's first) and its private key, from the mod's own files.
+std::int32_t server_context(const LumaMod* mod, const char* where, const ModState* state, const char* certificate,
+                            const char* key, std::shared_ptr<SSL_CTX>* out) noexcept {
+    if (certificate == nullptr) {
+        return argument(mod, where, "certificate");
+    }
+    if (key == nullptr) {
+        return argument(mod, where, "key");
+    }
+    try {
+        const auto refuse = [mod, where](const char* name, const char* path, std::int32_t status) {
+            if (status == LUMA_E_ARGUMENT) {
+                return argument(mod, where, name);
+            }
+            report(mod, where, 253u, path);  // Net.FileRefused
+            return status;
+        };
+        std::string chain_text;
+        std::string key_text;
+        if (const std::int32_t status = read_own_file(state->package, certificate, &chain_text); status != LUMA_OK) {
+            return refuse("certificate", certificate, status);
+        }
+        if (const std::int32_t status = read_own_file(state->package, key, &key_text); status != LUMA_OK) {
+            return refuse("key", key, status);
+        }
+        ERR_clear_error();
+        bssl::UniquePtr<SSL_CTX> context(SSL_CTX_new(TLS_method()));
+        if (context == nullptr || !SSL_CTX_set_min_proto_version(context.get(), TLS1_2_VERSION) ||
+            !SSL_CTX_set_max_proto_version(context.get(), TLS1_3_VERSION)) {
+            ERR_clear_error();
+            return LUMA_E_MEMORY;
+        }
+        bool good = false;
+        {
+            bssl::UniquePtr<BIO> bio(BIO_new_mem_buf(chain_text.data(), static_cast<ossl_ssize_t>(chain_text.size())));
+            bssl::UniquePtr<X509> leaf(bio != nullptr ? PEM_read_bio_X509(bio.get(), nullptr, nullptr, nullptr) : nullptr);
+            good = leaf != nullptr && SSL_CTX_use_certificate(context.get(), leaf.get()) == 1;
+            while (good) {
+                bssl::UniquePtr<X509> next(PEM_read_bio_X509(bio.get(), nullptr, nullptr, nullptr));
+                if (next == nullptr) {
+                    break;  // the chain's end
+                }
+                good = SSL_CTX_add1_chain_cert(context.get(), next.get()) == 1;
+            }
+        }
+        ERR_clear_error();
+        if (!good) {
+            return refuse("certificate", certificate, LUMA_E_FORMAT);
+        }
+        {
+            bssl::UniquePtr<BIO> bio(BIO_new_mem_buf(key_text.data(), static_cast<ossl_ssize_t>(key_text.size())));
+            bssl::UniquePtr<EVP_PKEY> pkey(
+                bio != nullptr ? PEM_read_bio_PrivateKey(bio.get(), nullptr, nullptr, nullptr) : nullptr);
+            good = pkey != nullptr && SSL_CTX_use_PrivateKey(context.get(), pkey.get()) == 1 &&
+                   SSL_CTX_check_private_key(context.get()) == 1;
+        }
+        ERR_clear_error();
+        if (!good) {
+            return refuse("key", key, LUMA_E_FORMAT);  // not PEM, or not the certificate's key
+        }
+        SSL_CTX* const raw = context.release();
+        *out = std::shared_ptr<SSL_CTX>(raw, SSL_CTX_free);  // a throw here frees raw
+        return LUMA_OK;
+    } catch (...) {
+        return LUMA_E_MEMORY;
+    }
+}
+
+// tcp_listen and tls_listen (`tls`: each connection's TLS with the mod's certificate and key).
+std::int32_t listen_on(const LumaMod* mod, const char* where, std::uint16_t port, std::uint32_t local_network,
+                       LumaEventFn fn, void* user, LumaHandle* out, bool tls, const char* certificate,
+                       const char* key) noexcept {
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
@@ -1485,6 +3034,13 @@ std::int32_t net_tcp_listen(const LumaMod* mod, std::uint16_t port, std::uint32_
     ModState* state = state_of(mod);
     if (state == nullptr) {
         return LUMA_E_CANCELLED;
+    }
+    std::shared_ptr<SSL_CTX> server;
+    if (tls) {
+        if (const std::int32_t status = server_context(mod, where, state, certificate, key, &server);
+            status != LUMA_OK) {
+            return status;
+        }
     }
     Socket* socket = nullptr;
     if (const std::int32_t status = make(mod, where, state, AF_INET, fn, user, &socket); status != LUMA_OK) {
@@ -1514,7 +3070,19 @@ std::int32_t net_tcp_listen(const LumaMod* mod, std::uint16_t port, std::uint32_
         socket->port = ntohs(bound.sin_port);
     }
     socket->kind = Kind::Listener;
+    socket->where = where;
+    socket->tls_server = std::move(server);
     return join(socket, out);
+}
+
+std::int32_t net_tcp_listen(const LumaMod* mod, std::uint16_t port, std::uint32_t local_network, LumaEventFn fn,
+                            void* user, LumaHandle* out) noexcept {
+    return listen_on(mod, "net.local.tcp_listen", port, local_network, fn, user, out, false, nullptr, nullptr);
+}
+std::int32_t net_tls_listen(const LumaMod* mod, std::uint16_t port, std::uint32_t local_network,
+                            const char* certificate, const char* key, LumaEventFn fn, void* user,
+                            LumaHandle* out) noexcept {
+    return listen_on(mod, "net.local.tls_listen", port, local_network, fn, user, out, true, certificate, key);
 }
 
 std::int32_t port_on(const LumaMod* mod, const char* where, bool internet, LumaHandle listener,
@@ -1541,7 +3109,7 @@ std::int32_t room_locked(const LumaMod* mod, const char* where, const ModState* 
     std::uint64_t queued = 0;
     for (const Socket* other : g_sockets) {
         if (other->owner == state) {
-            queued += other->outgoing.size() + other->datagrams_out_bytes;
+            queued += other->outgoing.size() + other->datagrams_out_bytes + other->tls_queued;
         }
     }
     if (bytes > LUMA_NET_SEND_QUEUED_MOST || queued + bytes > LUMA_NET_SEND_QUEUED_MOST) {
@@ -1566,9 +3134,12 @@ std::int32_t send_on(const LumaMod* mod, const char* where, bool internet, LumaH
         if (socket == nullptr || socket->kind == Kind::Listener || (socket->udp && !socket->tied)) {
             return bad_handle(mod, where);  // a udp_open socket sends with send_to
         }
+        if (socket->http != nullptr) {
+            return bad_handle(mod, where);  // a request is sent whole by http
+        }
         if (socket->kind == Kind::Resolving || socket->kind == Kind::Connecting || socket->peer_closed ||
-            socket->system_closed) {
-            return LUMA_E_CLOSED;  // an answer (header)
+            socket->system_closed || (socket->tls_client && !socket->tls_ready)) {
+            return LUMA_E_CLOSED;  // an answer (header): a TLS stream sends from its CONNECTED
         }
         if (socket->udp && bytes > LUMA_NET_DATAGRAM_MOST) {
             return LUMA_E_TOO_LARGE;  // an answer (header)
@@ -1607,16 +3178,17 @@ std::int64_t take_on(const LumaMod* mod, const char* where, bool internet, LumaH
     if (socket == nullptr || socket != g_in_data || socket->udp) {
         return bad_handle(mod, where);  // a UDP socket's datagrams: take_datagram
     }
+    std::string& from = g_in_headers ? socket->http_headers : socket->received;  // HEADERS: its header lines
     if (buf == nullptr) {
         if (size != 0u) {
             report(mod, where, 101u, "buf");
             return LUMA_E_ARGUMENT;
         }
-        return static_cast<std::int64_t>(socket->received.size());
+        return static_cast<std::int64_t>(from.size());
     }
-    const std::size_t taken = static_cast<std::size_t>(std::min<std::uint64_t>(size, socket->received.size()));
-    std::memcpy(buf, socket->received.data(), taken);
-    socket->received.erase(0, taken);
+    const std::size_t taken = static_cast<std::size_t>(std::min<std::uint64_t>(size, from.size()));
+    std::memcpy(buf, from.data(), taken);
+    from.erase(0, taken);
     return static_cast<std::int64_t>(taken);
 }
 
@@ -2116,7 +3688,7 @@ void look_up(Socket* socket, std::string host, std::uint16_t port) {
 // tcp_connect and udp_connect of net.internet: the host's name looked up, then a stream or a datagram socket tied to
 // its first public address that takes the connect.
 std::int32_t internet_connect(const LumaMod* mod, const char* where, bool udp, const char* host, std::uint16_t port,
-                              LumaEventFn fn, void* user, LumaHandle* out) noexcept {
+                              LumaEventFn fn, void* user, LumaHandle* out, Extra* extra = nullptr) noexcept {
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
@@ -2164,6 +3736,10 @@ std::int32_t internet_connect(const LumaMod* mod, const char* where, bool udp, c
         socket->tied = udp;
         socket->kind = Kind::Resolving;
         socket->started = std::chrono::steady_clock::now();  // the 10 s include the lookup
+        if (!attach(socket, where, extra, name.c_str(), state)) {
+            delete socket;
+            return LUMA_E_MEMORY;
+        }
         {
             const std::lock_guard<std::mutex> lock(g_lock);
             if (state->open >= LUMA_NET_SOCKETS_MOST) {
@@ -2199,6 +3775,167 @@ std::int32_t internet_tcp_connect(const LumaMod* mod, const char* host, std::uin
 std::int32_t internet_udp_connect(const LumaMod* mod, const char* host, std::uint16_t port, LumaEventFn fn, void* user,
                                   LumaHandle* out) noexcept {
     return internet_connect(mod, "net.internet.udp_connect", true, host, port, fn, user, out);
+}
+std::int32_t internet_tls_connect(const LumaMod* mod, const char* host, std::uint16_t port, LumaEventFn fn, void* user,
+                                  LumaHandle* out) noexcept {
+    Extra extra;
+    extra.tls = true;
+    return internet_connect(mod, "net.internet.tls_connect", false, host, port, fn, user, out, &extra);
+}
+std::int32_t internet_tls_listen(const LumaMod* mod, std::uint16_t, std::uint32_t, const char*, const char*,
+                                 LumaEventFn, void*, LumaHandle*) noexcept {
+    if (const std::int32_t status = enter(mod, "net.internet.tls_listen"); status != LUMA_OK) {
+        return status;
+    }
+    return LUMA_E_DENIED;  // a server is net.local's (an answer)
+}
+
+// ---- Requests (minor 3) --------------------------------------------------------------------------------------------
+
+constexpr std::string_view kMethods[] = {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"};
+constexpr std::string_view kServiceHeaders[] = {"host", "content-length", "transfer-encoding", "connection",
+                                                "accept-encoding"};
+
+// http of both services: the request checked and copied, then a connect (net.internet's: luma.json's hosts) that
+// sends it.
+std::int32_t http_on(const LumaMod* mod, const char* where, bool internet, const LumaNetRequest* request,
+                     LumaEventFn fn, void* user, LumaHandle* out) noexcept {
+    if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
+        return status;
+    }
+    if (request == nullptr || request->size != sizeof(LumaNetRequest)) {
+        return argument(mod, where, "request");
+    }
+    if (request->url == nullptr) {
+        return argument(mod, where, "url");
+    }
+    if (fn == nullptr) {
+        return argument(mod, where, "fn");
+    }
+    if (out == nullptr) {
+        return argument(mod, where, "out");
+    }
+    if (request->timeout_ms > LUMA_NET_TIMEOUT_MOST_MS) {
+        return argument(mod, where, "timeout_ms");
+    }
+    if ((request->flags & ~(LUMA_NET_HTTP_NO_REDIRECT | LUMA_NET_HTTP_RAW)) != 0u) {
+        return argument(mod, where, "flags");
+    }
+    if ((request->headers == nullptr && request->header_count != 0u) ||
+        request->header_count > LUMA_NET_REQUEST_HEADERS_MOST) {
+        return argument(mod, where, "headers");
+    }
+    if (request->body == nullptr && request->body_bytes != 0u) {
+        return argument(mod, where, "body");
+    }
+    try {
+        auto h = std::make_unique<Http>();
+        h->method = "GET";
+        if (request->method != nullptr) {
+            const std::string_view method(request->method, ::strnlen(request->method, 8u));
+            if (std::find(std::begin(kMethods), std::end(kMethods), method) == std::end(kMethods)) {
+                return argument(mod, where, "method");
+            }
+            h->method.assign(method);
+        }
+        Target target;
+        if (!parse_url(std::string_view(request->url, ::strnlen(request->url, LUMA_NET_URL_MOST + 1u)), &target)) {
+            return argument(mod, where, "url");
+        }
+        ModState* state = state_of(mod);
+        if (state == nullptr) {
+            return LUMA_E_CANCELLED;
+        }
+        if (internet) {
+            if (host_text(target.host.c_str()).empty()) {
+                return argument(mod, where, "url");  // luma.json's hosts: internet_connect checks them (reported)
+            }
+        } else {
+            sockaddr_storage address{};
+            socklen_t length = 0;
+            if (!local_address(target.host.c_str(), target.port, &address, &length)) {
+                return argument(mod, where, "url");  // not this machine's or the local network's
+            }
+        }
+        for (std::uint32_t i = 0; i < request->header_count; i++) {
+            const LumaNetHeader& header = request->headers[i];
+            if (header.name == nullptr || header.value == nullptr) {
+                return argument(mod, where, "headers");
+            }
+            const std::string_view name(header.name, ::strnlen(header.name, 65u));
+            const std::string_view value(header.value, ::strnlen(header.value, 4097u));
+            if (name.size() > 64u || !token(name) || value.size() > 4096u ||
+                std::any_of(std::begin(kServiceHeaders), std::end(kServiceHeaders),
+                            [name](std::string_view own) { return same_text(name, own); })) {
+                return argument(mod, where, "headers");
+            }
+            for (const char c : value) {
+                const auto byte = static_cast<unsigned char>(c);
+                if ((byte < 0x20u && c != '\t') || byte == 0x7Fu) {
+                    return argument(mod, where, "headers");  // no line ends, no control bytes
+                }
+            }
+            if (same_text(name, "user-agent")) {
+                h->user_agent = true;
+            }
+            h->lines.append(name);
+            h->lines += ": ";
+            h->lines.append(value);
+            h->lines += "\r\n";
+        }
+        if (request->body_bytes > kRequestBodyMost) {
+            report(mod, where, 104u, "4194304");  // Service.Limit: the send queue
+            return LUMA_E_LIMIT;
+        }
+        const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
+        const char* const id = kernel != nullptr ? kernel->mod_id(mod) : nullptr;
+        h->body.assign(static_cast<const char*>(request->body), static_cast<std::size_t>(request->body_bytes));
+        h->https = target.https;
+        h->host = target.host;
+        h->port = target.port;
+        h->target = std::move(target.path);
+        h->flags = request->flags;
+        h->mod_id = id != nullptr ? id : "";
+        if (internet) {
+            h->hosts = state->hosts;
+        }
+        h->roots = state->roots;
+        const std::uint32_t ms = request->timeout_ms != 0u ? request->timeout_ms : LUMA_NET_TIMEOUT_DEFAULT_MS;
+        h->deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms);
+        const std::size_t text_bytes = request_text(*h).size();
+        {
+            const std::lock_guard<std::mutex> lock(g_lock);
+            std::uint32_t requests = 0;
+            for (const Socket* socket : g_sockets) {
+                if (socket->owner == state && socket->http != nullptr && !socket->closing && !socket->finished) {
+                    requests++;
+                }
+            }
+            if (requests >= LUMA_NET_REQUESTS_MOST) {
+                report(mod, where, 104u, "8");  // Service.Limit
+                return LUMA_E_LIMIT;
+            }
+            if (const std::int32_t status = room_locked(mod, where, state, text_bytes); status != LUMA_OK) {
+                return status;
+            }
+        }
+        Extra extra;
+        extra.tls = target.https;
+        extra.http = std::move(h);
+        return internet ? internet_connect(mod, where, false, target.host.c_str(), target.port, fn, user, out, &extra)
+                        : local_connect(mod, where, false, target.host.c_str(), target.port, fn, user, out, &extra);
+    } catch (...) {
+        return LUMA_E_MEMORY;
+    }
+}
+
+std::int32_t net_http(const LumaMod* mod, const LumaNetRequest* request, LumaEventFn fn, void* user,
+                      LumaHandle* out) noexcept {
+    return http_on(mod, "net.local.http", false, request, fn, user, out);
+}
+std::int32_t internet_http(const LumaMod* mod, const LumaNetRequest* request, LumaEventFn fn, void* user,
+                           LumaHandle* out) noexcept {
+    return http_on(mod, "net.internet.http", true, request, fn, user, out);
 }
 std::int32_t internet_udp_open(const LumaMod* mod, std::uint16_t, std::uint32_t, LumaEventFn, void*,
                                LumaHandle*) noexcept {
@@ -2252,34 +3989,64 @@ std::int32_t internet_close(const LumaMod* mod, LumaHandle handle) noexcept {
 
 // ---- The providers -------------------------------------------------------------------------------------------------
 
-// luma.json's net.internet hosts of `id`, in lower case without a final dot (the manifest the session started with).
-std::vector<std::string> hosts_of(const char* id) {
-    std::vector<std::string> hosts;
+// From the manifest the session started with, for the mod `id`: its folder, luma.json's net.internet hosts (lower
+// case, no final dot), and the roots its net permissions add for its TLS (their PEM files read now; a file the
+// validator would refuse is left out, logged).
+void read_manifest(ModState* state, const char* id) {
     if (id == nullptr) {
-        return hosts;
+        return;
     }
     for (const galaxy::mods::ModInfo& info : galaxy::mods::session_mods().started_with) {
         if (info.id != id || !info.luma) {
             continue;
         }
+        state->package = info.path;
+        std::shared_ptr<Roots> roots;
         for (const galaxy::luma::Permission& permission : info.luma->permissions) {
-            if (permission.name != "net.internet") {
+            if (permission.name != "net.internet" && permission.name != "net.local") {
                 continue;
             }
-            for (std::string host : permission.hosts) {
-                for (char& c : host) {
-                    if (c >= 'A' && c <= 'Z') {
-                        c = static_cast<char>(c - 'A' + 'a');
+            if (permission.name == "net.internet") {
+                for (std::string host : permission.hosts) {
+                    for (char& c : host) {
+                        if (c >= 'A' && c <= 'Z') {
+                            c = static_cast<char>(c - 'A' + 'a');
+                        }
                     }
+                    if (!host.empty() && host.back() == '.') {
+                        host.pop_back();
+                    }
+                    state->hosts.push_back(std::move(host));
                 }
-                if (!host.empty() && host.back() == '.') {
-                    host.pop_back();
+            }
+            for (const std::string& file : permission.roots) {
+                std::string text;
+                std::size_t found = 0;
+                if (read_own_file(state->package, file, &text) == LUMA_OK) {
+                    bssl::UniquePtr<BIO> bio(BIO_new_mem_buf(text.data(), static_cast<ossl_ssize_t>(text.size())));
+                    while (bio != nullptr) {
+                        bssl::UniquePtr<X509> root(PEM_read_bio_X509(bio.get(), nullptr, nullptr, nullptr));
+                        if (root == nullptr) {
+                            break;
+                        }
+                        if (roots == nullptr) {
+                            roots = std::make_shared<Roots>();
+                        }
+                        roots->certificates.push_back(std::move(root));
+                        found++;
+                    }
+                    ERR_clear_error();
                 }
-                hosts.push_back(std::move(host));
+                if (found == 0u && g_log != nullptr) {
+                    const std::string line = "LumaCore net: " + info.id + ": the root file " + file +
+                                             " is missing or holds no PEM certificate; its TLS does not trust it";
+                    g_log(line.c_str());
+                }
             }
         }
+        state->roots = std::move(roots);
+        return;
     }
-    return hosts;
 }
 
 // Both services' (a mod importing both gets one state: the 16 sockets are the mod's, both services together).
@@ -2291,7 +4058,7 @@ void mod_begin(void*, const LumaMod* mod) {
         auto state = std::make_unique<ModState>();
         state->mod = mod;
         const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
-        state->hosts = hosts_of(kernel != nullptr ? kernel->mod_id(mod) : nullptr);
+        read_manifest(state.get(), kernel != nullptr ? kernel->mod_id(mod) : nullptr);
         g_mods.push_back(std::move(state));
     } catch (...) {
         // Memory: every call of this mod answers LUMA_E_CANCELLED (no state).
@@ -2353,12 +4120,20 @@ const LumaNetLocalService kLocal = {
     net_take_datagram,
     net_ipc_connect,
     net_ipc_listen,
+    net_tls_connect,
+    net_tls_listen,
+    net_http,
 };
 
-// net.local reports only the registry's rows (100-104).
+// net.local's own rows (the net range is 250-299), beside the registry's (100-104).
+const LumaServiceRow kLocalRows[] = {
+    {251u, "Net.CertificateRefused", {"where", "host", "reason", nullptr}},
+    {252u, "Net.RedirectRefused", {"where", "url", nullptr, nullptr}},
+    {253u, "Net.FileRefused", {"where", "path", nullptr, nullptr}},
+};
 const LumaServiceProvider kLocalProvider = {
-    sizeof(LumaServiceProvider), LUMA_NET_LOCAL_NAME, &kLocal.base, nullptr, nullptr, 0u, nullptr,
-    mod_begin, mod_gone, mod_end, registered,
+    sizeof(LumaServiceProvider), LUMA_NET_LOCAL_NAME, &kLocal.base, nullptr, kLocalRows,
+    sizeof(kLocalRows) / sizeof(kLocalRows[0]), nullptr, mod_begin, mod_gone, mod_end, registered,
 };
 
 const LumaNetInternetService kInternet = {
@@ -2375,11 +4150,16 @@ const LumaNetInternetService kInternet = {
     internet_take_datagram,
     internet_ipc_connect,
     internet_ipc_listen,
+    internet_tls_connect,
+    internet_tls_listen,
+    internet_http,
 };
 
-// net.internet's own row (the net range is 250-299).
+// net.internet's own rows (the net range is 250-299).
 const LumaServiceRow kInternetRows[] = {
     {250u, "Net.HostNotNamed", {"where", "host", nullptr, nullptr}},
+    {251u, "Net.CertificateRefused", {"where", "host", "reason", nullptr}},
+    {252u, "Net.RedirectRefused", {"where", "url", nullptr, nullptr}},
 };
 const LumaServiceProvider kInternetProvider = {
     sizeof(LumaServiceProvider), LUMA_NET_INTERNET_NAME, &kInternet.base, nullptr, kInternetRows,
