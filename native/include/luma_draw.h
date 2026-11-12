@@ -125,7 +125,7 @@ typedef struct LumaDrawService {
     int32_t (*line)(const LumaMod* mod, LumaDrawVec2 a, LumaDrawVec2 b, float thickness, LumaColor colour);
     /* 1.0. A filled triangle, a colour each corner (blended between them). */
     int32_t (*tri)(const LumaMod* mod, const LumaDrawVec2 points[3], const LumaColor colours[3]);
-    /* 1.0. `texture`'s part `src` (texels; null: the whole) drawn into `dst`, times `colour` (0xFFFFFFFF as it is). A
+    /* 1.0. `texture`'s part `src` (null: the whole; in texels) drawn into `dst`, times `colour` (0xFFFFFFFF as it is). A
        texture freed or never this mod's: the placeholder (magenta and black squares) drawn, LUMA_E_HANDLE, reported. */
     int32_t (*image)(const LumaMod* mod, LumaDrawTexture texture, const LumaDrawRect* dst, const LumaDrawRect* src,
                      LumaColor colour);
@@ -133,7 +133,7 @@ typedef struct LumaDrawService {
        break at '\n', and at spaces (or between any two characters of languages written without them) past `wrap`
        units (0: no wrapping). "MessageFont26" draws the language played, its Japanese, Korean and Chinese faces
        included; a mod's font draws a character it lacks from its fallback game font (3.8); a character no font here
-       has is drawn as the font's stand-in, Draw.NoGlyph in the mod log. *advance (may be null): where the text ended,
+       has is drawn as the font's stand-in, Draw.NoGlyph in the mod log. `advance` (null: not written): where the text ended,
        from x (the end of its last line for LUMA_DRAW_LEFT), so text continues after it. Not UTF-8: LUMA_E_ARGUMENT, reported (Draw.NotUtf8); a font not this mod's: LUMA_E_HANDLE,
        reported; size above 0 and at most 456. */
     int32_t (*text)(const LumaMod* mod, LumaDrawFont font, const char* text, float x, float y, float size,
@@ -176,7 +176,7 @@ typedef struct LumaDrawService {
        reported; not this mod's or freed: LUMA_E_HANDLE, reported. */
     int32_t (*texture_update)(const LumaMod* mod, LumaDrawTexture texture, uint32_t x, uint32_t y, uint32_t w,
                               uint32_t h, const void* rgba8, uint32_t stride);
-    /* 1.0. The texture's size in texels (w, h may be null). LUMA_OK; not this mod's or freed: LUMA_E_HANDLE,
+    /* 1.0. The texture's size in texels into `w` (null: not written) and `h` (null: not written). LUMA_OK; not this mod's or freed: LUMA_E_HANDLE,
        reported. */
     int32_t (*texture_size)(const LumaMod* mod, LumaDrawTexture texture, uint32_t* w, uint32_t* h);
     /* 1.0. The texture freed (drawn this frame already: shown this frame still). LUMA_OK; not this mod's or freed:
