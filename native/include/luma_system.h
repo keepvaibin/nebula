@@ -73,10 +73,12 @@ typedef struct LumaSystemService {
     int32_t (*display)(const LumaMod* mod, LumaSystemDisplay* out);
 } LumaSystemService;
 
-/* Events of system.clipboard (LumaEvent.kind); `handle` is the request's. */
-#define LUMA_SYSTEM_CLIPBOARD_EVENT_TEXT 1u  /* status OK: value = the text's bytes (no NUL); take_text in the call */
-#define LUMA_SYSTEM_CLIPBOARD_EVENT_IMAGE 2u /* status OK: value = width << 32 | height; take_image in the call */
-#define LUMA_SYSTEM_CLIPBOARD_EVENT_SET 3u   /* status OK: the clipboard holds it */
+/* Events of system.clipboard (LumaEvent.kind); `handle` is the request's (services-registry 3's form). */
+typedef enum LumaSystemClipboardEvent {
+    LUMA_SYSTEM_CLIPBOARD_EVENT_TEXT = 1,  /* data: none; status OK: value = the text's bytes (no NUL); take_text in the call */
+    LUMA_SYSTEM_CLIPBOARD_EVENT_IMAGE = 2, /* data: none; status OK: value = width << 32 | height; take_image in the call */
+    LUMA_SYSTEM_CLIPBOARD_EVENT_SET = 3    /* data: none; value: 0; status OK: the clipboard holds it */
+} LumaSystemClipboardEvent;
 /* Statuses an event may carry: LUMA_OK; LUMA_E_NOT_FOUND (no text / no image on the clipboard); LUMA_E_TOO_LARGE
    (over 16 MiB of text, over 8192 a side or 64 MiB of pixels); LUMA_E_BUSY (the game was not in front); LUMA_E_IO
    (the system refused, e.g. another program held the clipboard for 250 ms); LUMA_E_FORMAT (an image the game
@@ -112,7 +114,9 @@ typedef struct LumaSystemClipboardService {
     int32_t (*cancel)(const LumaMod* mod, LumaHandle request);
 } LumaSystemClipboardService;
 
-#define LUMA_SYSTEM_LINKS_EVENT_LINK 1u /* status OK: the system took the link; LUMA_E_IO: it refused it */
+typedef enum LumaSystemLinksEvent {
+    LUMA_SYSTEM_LINKS_EVENT_LINK = 1 /* data: none; value: 0; status OK: the system took the link; LUMA_E_IO: it refused it */
+} LumaSystemLinksEvent;
 
 typedef struct LumaSystemLinksService {
     LumaServiceTable base;

@@ -46,7 +46,9 @@ enum {
 /* LumaEvent.kind of `time`: a timer came due. `handle` is the timer, `value` how many times it came due since its
    last event (more than 1 when its period is shorter than a frame), `status` LUMA_OK. A timer given once is closed
    after its event. */
-#define LUMA_TIME_EVENT_TIMER 1u
+typedef enum LumaTimeEvent {
+    LUMA_TIME_EVENT_TIMER = 1 /* data: none; value: the times it came due since its last event */
+} LumaTimeEvent;
 
 /* The frame and its world step as the game sees them. Every field holds for the whole frame, except `step` and
    `step_in_frame`, which an on_step handler sees for its own step. */
