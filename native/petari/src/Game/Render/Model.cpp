@@ -199,6 +199,7 @@ namespace ModelSys {
     ItemBuffer* mDrawBuffer[2];
     u32 mViewRole;
     u32 mEntryNum;
+    const f32 (*mViewOverride)[4] = nullptr;
 
     u32 currentCamera() {
         return Frame::camera(mViewMtx, mViewRole);
@@ -578,6 +579,15 @@ void Model::viewCalc() {
 }
 
 u32 Model::poseBlock(ModelPose* pPose) {
+    if (ModelSys::mViewOverride != nullptr && pPose->mRole != NEBULA_CAMERA_MIRROR && pPose->mRole != NEBULA_CAMERA_SHADOW) {
+        // draw.view: a block under the view's camera, never kept (the scene's own is made when the scene draws); the
+        // joints copied into this frame's list once a frame and stamp, as the scene's.
+        if (pPose->mBlockFrame != Frame::number() || pPose->mBlockStamp != pPose->mStamp) {
+            pPose->mListJoints = nullptr;
+            pPose->mListFlags = nullptr;
+        }
+        return addPoseBlock(pPose, nullptr);
+    }
     if (pPose->mBlockFrame != Frame::number() || pPose->mBlockStamp != pPose->mStamp || pPose->mBlock == NEBULA_NONE32) {
         pPose->mListJoints = nullptr;
         pPose->mListFlags = nullptr;
@@ -594,6 +604,9 @@ u32 Model::block(const Material* pMaterial) {
     const u32 plain = poseBlock(pPose);
     if (pMaterial->mFile->has_scale == 0) {
         return plain;
+    }
+    if (ModelSys::mViewOverride != nullptr) {
+        return addPoseBlock(pPose, pMaterial->mFile->normal_scale);  // draw.view: never kept
     }
     // A bump map's normals scale by its material.
     if (pPose->mScaledBlock == NEBULA_NONE32 || pPose->mScaledFor != pMaterial->mFile) {
@@ -624,7 +637,10 @@ u32 Model::addPoseBlock(ModelPose* pPose, const f32* pNormalScale) {
     block.slot = pWriter->mSlot;
     block.generation = pWriter->mMotionEpoch;
     block.flags = NEBULA_BLOCK_WORLD_ROWS;
-    block.camera = Frame::camera(pPose->mView, pPose->mRole);
+    block.camera = ModelSys::mViewOverride != nullptr && pPose->mRole != NEBULA_CAMERA_MIRROR &&
+                           pPose->mRole != NEBULA_CAMERA_SHADOW
+                       ? Frame::camera(ModelSys::mViewOverride, NEBULA_CAMERA_OTHER)
+                       : Frame::camera(pPose->mView, pPose->mRole);
     block.calc_mode = pPose->mCalcMode;
     block.normals_from = pPose->mNormalFrom != nullptr ? poseBlock(pPose->mNormalFrom) : NEBULA_NONE32;
     if (pPose->mCalcMode == 2) {

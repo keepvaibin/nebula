@@ -85,6 +85,9 @@
 #include "Game/System/NebulaHost.hpp"
 #include "Game/System/LumaDraw.hpp"
 #include "Game/System/LumaDrawInst.hpp"
+#include "Game/System/LumaDrawPost.hpp"
+#include <luma_draw_post.h>
+#include "Game/System/LumaDrawView.hpp"
 
 namespace {
     CometRetryButton* getCometRetryButton() {
@@ -521,6 +524,7 @@ void GameScene::draw3D() const {
         return;
     }
 
+    luma::draw::view::render();  // the mods' views (draw.view) into their textures, before the scene (one load with none)
     f32 sceneCamera[4][4];
     MotionSignal::sceneCamera(sceneCamera);
     NebulaHost::gameStage(MR::getCurrentStageName());
@@ -571,6 +575,7 @@ void GameScene::draw3D() const {
     CategoryList::execute(MR::DrawType_PlayerIndirect);
     luma::draw::point(LUMA_DRAW_WORLD_AFTER);
     Frame::sceneEnd();
+    luma::draw::post::stage(LUMA_DRAW_POST_WORLD);  // the mods' post programs over the scene (one load with none)
     MR::clearZBuffer();
 }
 
@@ -587,6 +592,7 @@ void GameScene::draw2D() const {
     CategoryList::execute(MR::DrawType_CameraCover);
     // The mods' hud.after: over the HUD, under the mod log's notice and the pause screens (plan 2.4).
     luma::draw::point(LUMA_DRAW_HUD_AFTER);
+    luma::draw::post::stage(LUMA_DRAW_POST_FRAME);  // over the HUD, under the notice and the pause screens
     // The mod log's notice over the game and under the pause screens (and the settings menu, drawn later), so it never
     // covers a choice the player must read (contract mod-log 4.1).
     if (MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder)) {

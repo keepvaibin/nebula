@@ -1,7 +1,17 @@
 #include "Game/System/LumaDraw.hpp"
 
 #include "Game/Render/FrameList.hpp"
+#include "Game/Map/LightFunction.hpp"
 #include "Game/Render/GameTexture.hpp"
+#include "Game/Render/Material.hpp"
+#include "Game/Render/Model.hpp"
+#include "Game/Render/ModelData.hpp"
+#include "Game/System/Arenas.hpp"
+#include "Game/System/NebulaArena.hpp"
+#include "Game/System/ResourceHolder.hpp"
+#include "Game/Util/FileUtil.hpp"
+#include "Game/Util/ModelUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
 #include "Game/Render/RenderTexture.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Screen/MessageTagSkipTagProcessor.hpp"
@@ -9,6 +19,7 @@
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/System/LumaFont.hpp"
+#include "Game/System/LumaDrawNative.hpp"
 #include "Game/System/LumaModLog.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Ui/Font.hpp"
@@ -95,6 +106,7 @@ namespace luma {
                 GameTexture* texture;
                 ResTIMG info;       // a texture by name: the record its GameTexture reads
                 bool pixels;        // from pixels: the image is the GameTexture's own, handed to the renderer
+                bool target;        // a view's picture (draw.view): a key the frame draws into, the slot's own
                 u32 width;
                 u32 height;
                 u64 bytes;          // from pixels: width x height x 4
@@ -126,6 +138,7 @@ namespace luma {
             LumaHandle sNextHandle = 0;
             // Freed from pixels: they leave the renderer at the next frame's update (drawn this frame still).
             GameTexture* sFreed[kMostTextures];
+            bool sFreedTarget[kMostTextures];  // a view's target: its key is forgotten, not its pixels
             u32 sFreedCount = 0;
             GameTexture* sPlaceholder = nullptr;
 
@@ -410,8 +423,9 @@ namespace luma {
             }
 
             void freeTexture(Texture& rTexture) {
-                if (rTexture.pixels) {
+                if (rTexture.pixels || rTexture.target) {
                     if (sFreedCount < kMostTextures) {
+                        sFreedTarget[sFreedCount] = rTexture.target;
                         sFreed[sFreedCount++] = rTexture.texture;
                     } else {
                         // Never: there are no more textures than slots. Kept rather than freed under the frame.
@@ -1266,6 +1280,9 @@ namespace luma {
                     report(pMod, pWhere, 102u, nullptr, nullptr);
                     return LUMA_E_HANDLE;
                 }
+                if (pTexture->target) {
+                    return badArgument(pMod, pWhere, "texture");  // a view's: draw.view.release frees it
+                }
                 freeTexture(*pTexture);
                 return LUMA_OK;
             }
@@ -1385,13 +1402,148 @@ namespace luma {
             }
 
             // Layer 3's mesh (l3b): its arguments checked; drawing a model at a point of the frame is the next patch.
+            // ---- draw.mesh (FB, layer 3b) ----
+            // A model by name, made once a scene in the scene's arena (its memory goes with the scene) and drawn where a
+            // mod asks at a world point: its base the matrix, its joints at rest, its own material copies with the
+            // model's colours times the call's, in white light, through the service's own ItemBuffers right there.
+            const u32 kMeshesMost = 32;    // models made a scene, all mods together
+            const u32 kMeshName = 248;
+            const u32 kMeshColours = 8;    // a material's: material 0 1, ambient 0 1, constant 0 to 3
+            const u32 cMissingModelCode = 621;  // content's block (references 4)
+
+            struct MeshModel {
+                u32 hash;                  // the name's; 0: a free slot
+                char name[kMeshName];
+                Model* model;              // null: not in the store (said once a scene)
+                NebulaColor8* colours;     // the model's own, kMeshColours a material
+                u32 materials;
+                LumaColor applied;         // the colour its copies hold now
+            };
+            MeshModel sMeshes[kMeshesMost];
+            u32 sMeshCount = 0;
+            ItemBuffer* sMeshOpa = nullptr;  // made once, in the permanent arena (file-scope pointers: no local statics)
+            ItemBuffer* sMeshXlu = nullptr;
+
+            NebulaColor8* meshColour(Material* pMaterial, u32 which) {
+                if (which < 2) {
+                    return &pMaterial->mMaterialColor[which];
+                }
+                if (which < 4) {
+                    return &pMaterial->mAmbientColor[which - 2];
+                }
+                return &pMaterial->mConstants[which - 4];
+            }
+
+            // The scene's model of that name: made the first time (null: no room, no scene); its `model` null when the
+            // store has none (*pNew: this call made the entry).
+            MeshModel* meshOf(const char* pName, bool* pNew) {
+                *pNew = false;
+                const u32 hash = MR::getHashCode(pName) | 1u;
+                for (u32 i = 0; i < sMeshCount; i++) {
+                    if (sMeshes[i].hash == hash && strcmp(sMeshes[i].name, pName) == 0) {
+                        return &sMeshes[i];
+                    }
+                }
+                NebulaArena* const pScene = Arenas::scene();
+                if (sMeshCount == kMeshesMost || pScene == nullptr) {
+                    return nullptr;
+                }
+                MeshModel& rMesh = sMeshes[sMeshCount++];
+                memset(&rMesh, 0, sizeof(rMesh));
+                rMesh.hash = hash;
+                memcpy(rMesh.name, pName, strlen(pName) + 1);
+                rMesh.applied = 0xFFFFFFFFu;
+                *pNew = true;
+                if (!MR::isExistObjectOrLayoutArchive(pName)) {
+                    return &rMesh;
+                }
+                const NebulaArena::CurrentScope scope(pScene);
+                const ResourceHolder* const pHolder = MR::createAndAddResourceHolder(pName);
+                if (pHolder == nullptr || pHolder->mModelResTable == nullptr || pHolder->mModelResTable->getRes(pName) == nullptr) {
+                    return &rMesh;
+                }
+                Model* const pModel = MR::createModel(pHolder, pName, ModelFlag_None);
+                if (pModel == nullptr) {
+                    return &rMesh;
+                }
+                const Vec one = {1.0f, 1.0f, 1.0f};
+                pModel->setBaseScale(one);
+                const u32 count = pModel->getModelData()->getMaterialCount();
+                rMesh.colours = new NebulaColor8[count * kMeshColours + 1];
+                for (u32 i = 0; i < count; i++) {
+                    Material* const pMaterial = pModel->ownMaterial(i);
+                    for (u32 k = 0; k < kMeshColours; k++) {
+                        rMesh.colours[i * kMeshColours + k] = *meshColour(pMaterial, k);
+                    }
+                }
+                rMesh.materials = count;
+                rMesh.model = pModel;
+                return &rMesh;
+            }
+
+            // The model's colours times `colour` (as they were at 0xFFFFFFFF), written when it changes.
+            void meshColours(MeshModel& rMesh, LumaColor colour) {
+                if (rMesh.applied == colour) {
+                    return;
+                }
+                const u32 m[4] = {colour >> 24, colour >> 16 & 255u, colour >> 8 & 255u, colour & 255u};
+                for (u32 i = 0; i < rMesh.materials; i++) {
+                    Material* const pMaterial = rMesh.model->mMaterials[i];
+                    for (u32 k = 0; k < kMeshColours; k++) {
+                        const NebulaColor8& rWas = rMesh.colours[i * kMeshColours + k];
+                        NebulaColor8* const pNow = meshColour(pMaterial, k);
+                        pNow->r = static_cast< u8 >((rWas.r * m[0] + 127u) / 255u);
+                        pNow->g = static_cast< u8 >((rWas.g * m[1] + 127u) / 255u);
+                        pNow->b = static_cast< u8 >((rWas.b * m[2] + 127u) / 255u);
+                        pNow->a = static_cast< u8 >((rWas.a * m[3] + 127u) / 255u);
+                    }
+                }
+                rMesh.applied = colour;
+            }
+
+            // One draw of the model at `matrix` in the frame now (a world point: the scene's camera and projection).
+            void meshDraw(MeshModel& rMesh, const float matrix[12]) {
+                if (sMeshOpa == nullptr) {
+                    const NebulaArena::CurrentScope scope(Arenas::permanent());
+                    sMeshOpa = new ItemBuffer();
+                    sMeshOpa->setNonSort();
+                    sMeshXlu = new ItemBuffer();
+                    sMeshXlu->setNonSort();
+                }
+                Model* const pModel = rMesh.model;
+                Mtx base;
+                for (u32 r = 0; r < 3; r++) {
+                    for (u32 c = 0; c < 4; c++) {
+                        base[r][c] = matrix[r * 4 + c];
+                    }
+                }
+                pModel->setBaseTRMtx(base);
+                pModel->calc();
+                pModel->viewCalc();  // under ModelSys::mViewMtx: the scene's at a world point
+                ItemBuffer* const pWasOpa = ModelSys::mDrawBuffer[0];
+                ItemBuffer* const pWasXlu = ModelSys::mDrawBuffer[1];
+                {
+                    // The buffers grow in the permanent arena whatever is current at the point.
+                    const NebulaArena::CurrentScope scope(Arenas::permanent());
+                    ModelSys::mDrawBuffer[0] = sMeshOpa;
+                    ModelSys::mDrawBuffer[1] = sMeshXlu;
+                    pModel->entry();
+                    ModelSys::mDrawBuffer[0] = pWasOpa;
+                    ModelSys::mDrawBuffer[1] = pWasXlu;
+                }
+                LightFunction::loadAllLightWhite();
+                sMeshOpa->draw();
+                sMeshOpa->frameInit();
+                sMeshXlu->draw();
+                sMeshXlu->frameInit();
+            }
+
             int32_t svcMesh(const LumaMod* pMod, const char* pModel, const float matrix[12], LumaColor colour) {
                 const char* const pWhere = "draw.mesh";
-                (void)colour;
                 if (const s32 status = enter3D(pMod, pWhere); status != LUMA_OK) {
                     return status;
                 }
-                if (pModel == nullptr || pModel[0] == '\0') {
+                if (pModel == nullptr || pModel[0] == '\0' || strlen(pModel) >= kMeshName) {
                     return badArgument(pMod, pWhere, "model");
                 }
                 if (matrix == nullptr) {
@@ -1402,7 +1554,27 @@ namespace luma {
                         return badArgument(pMod, pWhere, "matrix");
                     }
                 }
-                return LUMA_E_ABSENT;
+                bool made = false;
+                MeshModel* const pMesh = meshOf(pModel, &made);
+                if (pMesh == nullptr) {
+                    char most[16];
+                    nebula_snprintf(most, sizeof(most), "%u", kMeshesMost);
+                    report(pMod, pWhere, 104u, most, nullptr);
+                    return LUMA_E_LIMIT;
+                }
+                if (pMesh->model == nullptr) {
+                    if (made) {
+                        say(pMod, cMissingModelCode, "Content.MissingModel", pModel, "found", pModel, nullptr, nullptr);
+                    }
+                    return LUMA_E_NOT_FOUND;
+                }
+                // A primitive a material (the model's draws).
+                if (!countFor(sModDraw, pMod, pWhere, pMesh->materials == 0 ? 1u : pMesh->materials)) {
+                    return LUMA_E_LIMIT;
+                }
+                meshColours(*pMesh, colour);
+                meshDraw(*pMesh, matrix);
+                return LUMA_OK;
             }
 
             int32_t svcBillboard(const LumaMod* pMod, LumaDrawTexture texture, const LumaDrawVec3* pPos, float w, float h,
@@ -1595,6 +1767,7 @@ namespace luma {
         }
 
         void point(u32 point) {
+            luma::draw::native::point(point);  // draw.native's functions here first (one load with none)
             if (point >= kPoints || sHandlerCount[point] == 0 || sKernel == nullptr) {
                 return;
             }
@@ -1680,11 +1853,30 @@ namespace luma {
             for (u32 i = 0; i < sFreedCount; i++) {
                 GameTexture* const pTexture = sFreed[i];
                 const uintptr_t start = reinterpret_cast< uintptr_t >(pTexture->image());
-                RenderTexture::forget(start, start + RenderTexture::linearSize(NEBULA_TEXTURE_LINEAR_RGBA8, pTexture->getWidth(),
-                                                                               pTexture->getHeight(), 1));
+                // A target's image is its key, four by four L8 (GameTexture::createPixelTarget).
+                RenderTexture::forget(start, start + (sFreedTarget[i] ? RenderTexture::linearSize(NEBULA_TEXTURE_LINEAR_L8, 4, 4, 1)
+                                                                       : RenderTexture::linearSize(NEBULA_TEXTURE_LINEAR_RGBA8, pTexture->getWidth(),
+                                                                                                   pTexture->getHeight(), 1)));
                 delete pTexture;
             }
             sFreedCount = 0;
+        }
+
+        void released(const void* pStart, const void* pEnd) {
+            // The models made in the scene's arena go with it: the table forgets them (none drawn after).
+            u32 kept = 0;
+            for (u32 i = 0; i < sMeshCount; i++) {
+                const void* const p = sMeshes[i].model != nullptr ? static_cast< const void* >(sMeshes[i].model)
+                                                                  : static_cast< const void* >(nullptr);
+                if (p == nullptr || (p >= pStart && p < pEnd)) {
+                    continue;  // its model is going, or none was found (said again next scene)
+                }
+                if (kept != i) {
+                    sMeshes[kept] = sMeshes[i];
+                }
+                kept++;
+            }
+            sMeshCount = kept;
         }
 
         const LumaMod* inWorld() {
@@ -1693,6 +1885,40 @@ namespace luma {
 
         bool count(const LumaMod* pMod, const char* pWhere, u32 more) {
             return pMod == sMod && countFor(sModDraw, pMod, pWhere, more);
+        }
+
+        s32 adoptTarget(const LumaMod* pMod, const char* pWhere, GameTexture* pTexture, u32 w, u32 h, LumaHandle* pOut) {
+            const u64 bytes = static_cast< u64 >(w) * h * 4u;
+            ModDraw* pDraw = nullptr;
+            Texture* const pSlot = textureSlot(pMod, pWhere, bytes, &pDraw);
+            if (pSlot == nullptr) {
+                delete pTexture;
+                return LUMA_E_LIMIT;
+            }
+            pSlot->texture = pTexture;
+            pSlot->handle = ++sNextHandle;
+            pSlot->mod = pMod;
+            pSlot->pixels = false;
+            pSlot->target = true;
+            pSlot->width = w;
+            pSlot->height = h;
+            pSlot->bytes = bytes;
+            pDraw->textures++;
+            pDraw->textureBytes += bytes;
+            *pOut = pSlot->handle;
+            return LUMA_OK;
+        }
+
+        GameTexture* targetOf(const LumaMod* pMod, LumaHandle handle) {
+            const Texture* const pTexture = textureOf(pMod, handle);
+            return pTexture != nullptr && pTexture->target ? pTexture->texture : nullptr;
+        }
+
+        void dropTarget(const LumaMod* pMod, LumaHandle handle) {
+            Texture* const pTexture = textureOf(pMod, handle);
+            if (pTexture != nullptr && pTexture->target) {
+                freeTexture(*pTexture);
+            }
         }
 
         const LumaServiceProvider* provider() {

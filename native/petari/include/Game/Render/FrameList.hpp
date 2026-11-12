@@ -167,5 +167,9 @@ namespace Frame {
     void mirror(bool begin);
     void phase(u8 phase);
     void bloom(u32 kind, u32 arg0, u32 arg1);
+    // draw.post: the host's program `program` over the frame, its params four rows of four.
+    void post(u32 program, const f32 (*pRows)[4]);
+    // draw.native: `fn(pUser, frame)` called by the host at draw point `point`.
+    void native(u32 point, void (*fn)(void*, const NebulaNativeFrame*), void* pUser);
     void cameraCut(u32 cuts);
 }  // namespace Frame
