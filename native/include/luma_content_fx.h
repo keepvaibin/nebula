@@ -36,8 +36,9 @@ typedef struct LumaContentFxService {
     int32_t (*start)(const LumaMod* mod, LumaActor actor, LumaEffectName name, const char* joint, const LumaPlace* place,
                      bool follow, LumaContentFxEffect* out);
     /* 1.0. Game thread. As start, on a model the mod attached (models 7) at its joint or socket `socket` (null: the
-       model's root): LUMA_OK and *out, LUMA_E_ARGUMENT, LUMA_E_LIMIT, LUMA_E_THREAD and LUMA_E_CANCELLED as start; an
-       unknown socket: the root, LUMA_OK, and Content.MissingJoint; an ended model handle: LUMA_E_HANDLE, reported.
+       model's root), offset and turned by `place` (null: none): LUMA_OK and *out, LUMA_E_ARGUMENT, LUMA_E_LIMIT,
+       LUMA_E_THREAD and LUMA_E_CANCELLED as start; an unknown socket: the root, LUMA_OK, and Content.MissingJoint; an
+       ended model handle: LUMA_E_HANDLE, reported.
        Until content.model gives model handles (models 7) every handle is an ended one. */
     int32_t (*start_on_model)(const LumaMod* mod, LumaHandle model, LumaEffectName name, const char* socket,
                               const LumaPlace* place, bool follow, LumaContentFxEffect* out);

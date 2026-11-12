@@ -605,7 +605,7 @@ def read_expect(t, bare, steps):
         if not isinstance(c, dict):
             raise HarnessError("%s is not an object" % path)
         if "fact" in c:
-            keys_known(c, path, {"fact", "when", "frames", "within", "matching"} | FACT_OPS)
+            keys_known(c, path, {"fact", "when", "frames", "within", "matching", "field"} | FACT_OPS)
             if bare:
                 raise HarnessError("%s: a bare test checks only the log, pictures and sound" % path)
             op, value, within = read_check(c, path, {"within", "count"})
@@ -616,6 +616,15 @@ def read_expect(t, bare, steps):
                 matching = c["matching"]
                 if not isinstance(matching, dict) or not matching:
                     raise HarnessError("%s.matching takes an object with at least one key" % path)
+            # `field` (J): the check reads one member of each write's object value, a dotted path ("particles",
+            # "at.x"); a write without it reads as no value, which no comparison takes.
+            field = None
+            if "field" in c:
+                field = c["field"]
+                if not isinstance(field, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*", field):
+                    raise HarnessError("%s.field is a dotted path of names" % path)
+                if op in ("absent", "exists", "count"):
+                    raise HarnessError("%s.field goes with a comparison, not %s" % (path, op))
             when = text(c, "when", path) if "when" in c else "last"
             if when not in ("last", "first", "any", "all"):
                 raise HarnessError("%s.when must be last, first, any or all" % path)
@@ -625,7 +634,8 @@ def read_expect(t, bare, steps):
                 if not (isinstance(frames, list) and len(frames) == 2 and all(isinstance(f, int) and not isinstance(f, bool) for f in frames)):
                     raise HarnessError("%s.frames must be [first, last]" % path)
             out.append({"kind": "fact", "key": fact_key(c["fact"], path + ".fact"), "op": op, "value": value,
-                        "within": within, "when": when, "frames": frames, "matching": matching, "source": c})
+                        "within": within, "when": when, "frames": frames, "matching": matching, "field": field,
+                        "source": c})
         elif "log" in c or "no_log" in c:
             keys_known(c, path, {"log", "no_log", "times"})
             if ("log" in c) == ("no_log" in c):
@@ -1056,6 +1066,18 @@ def has_value(actual, value):
     return True
 
 
+NO_MEMBER = object()
+
+
+def member(value, field):
+    """The member a dotted `field` names in an object value, or NO_MEMBER."""
+    for name in field.split("."):
+        if not isinstance(value, dict) or name not in value:
+            return NO_MEMBER
+        value = value[name]
+    return value
+
+
 def check_value(actual, op, value, within):
     if op == "is":
         return same_value(actual, value)
@@ -1160,7 +1182,11 @@ def evaluate(test, renderer, run_folder, ran):
                 add(name, False, None)
                 continue
             values = [f["value"] for f in got]
-            results = [check_value(v, c["op"], c["value"], c["within"]) for v in values]
+            if c.get("field") is not None:
+                values = [member(v, c["field"]) for v in values]
+                name += " field %s" % c["field"]
+            results = [v is not NO_MEMBER and check_value(v, c["op"], c["value"], c["within"]) for v in values]
+            values = [None if v is NO_MEMBER else v for v in values]
             pick = {"last": results[-1:], "first": results[:1], "any": [any(results)], "all": [all(results)]}[c["when"]]
             add(name + " (" + c["when"] + ")", all(pick), values[-1] if c["when"] == "last" else values[0] if c["when"] == "first" else values)
         elif c["kind"] in ("log", "no_log"):
