@@ -468,13 +468,19 @@ bool write_file(const std::filesystem::path& path, std::string_view bytes) {
     return !error;
 }
 
-// <id>.check: "files <stamp>", "content <hash>", "findings <key>", then one finding a line. The stamp and the hash are
-// each with the game's; the key covers the content, the game and the other packages'.
+// <id>.check: "files <stamp>", "content <hash>", then up to kVerdicts verdicts, newest first: "findings <key>" and one
+// finding a line. The stamp and the hash are each with the game's; a key covers the content, the game and the other
+// packages' as this one saw them. More than one, because a start's rounds (check_packages) see the others twice when
+// one is refused, and each start would otherwise validate again.
+struct Verdict {
+    std::string key;
+    std::vector<Kept> findings;
+};
+constexpr std::size_t kVerdicts = 4;
 struct Check {
     std::string files;
     std::string content;
-    std::string key;
-    std::vector<Kept> findings;
+    std::vector<Verdict> verdicts;
 };
 
 Check read_check(const std::filesystem::path& path) {
@@ -487,10 +493,11 @@ Check read_check(const std::filesystem::path& path) {
         } else if (line.rfind("content ", 0) == 0) {
             check.content = line.substr(8);
         } else if (line.rfind("findings ", 0) == 0) {
-            check.key = line.substr(9);
+            if (check.verdicts.size() == kVerdicts) break;
+            check.verdicts.push_back({line.substr(9), {}});
         } else if (line.rfind("f\t", 0) == 0) {
             const std::vector<std::string> p = split_tabs(line);
-            if (p.size() != 8) return {};  // another form: validated again
+            if (p.size() != 8 || check.verdicts.empty()) return {};  // another form: validated again
             Kept k;
             k.code = static_cast<std::uint32_t>(std::strtoul(p[1].c_str(), nullptr, 10));
             k.level = static_cast<std::uint32_t>(std::strtoul(p[2].c_str(), nullptr, 10));
@@ -499,17 +506,21 @@ Check read_check(const std::filesystem::path& path) {
             k.file = unescape(p[5]);
             k.played = unescape(p[6]);
             k.english = unescape(p[7]);
-            check.findings.push_back(std::move(k));
+            check.verdicts.back().findings.push_back(std::move(k));
         }
     }
     return check;
 }
 
 std::string check_text(const Check& check) {
-    std::string out = "files " + check.files + "\ncontent " + check.content + "\nfindings " + check.key + "\n";
-    for (const Kept& k : check.findings) {
-        out += "f\t" + std::to_string(k.code) + "\t" + std::to_string(k.level) + "\t" + std::to_string(k.line) + "\t" +
-               std::to_string(k.column) + "\t" + escape(k.file) + "\t" + escape(k.played) + "\t" + escape(k.english) + "\n";
+    std::string out = "files " + check.files + "\ncontent " + check.content + "\n";
+    for (const Verdict& verdict : check.verdicts) {
+        out += "findings " + verdict.key + "\n";
+        for (const Kept& k : verdict.findings) {
+            out += "f\t" + std::to_string(k.code) + "\t" + std::to_string(k.level) + "\t" + std::to_string(k.line) + "\t" +
+                   std::to_string(k.column) + "\t" + escape(k.file) + "\t" + escape(k.played) + "\t" + escape(k.english) +
+                   "\n";
+        }
     }
     return out;
 }
@@ -635,7 +646,7 @@ void check_packages(const std::vector<StartPackage>& packages, std::string_view 
                 std::string kept;
                 if (!content_key.empty() && run(p, {}, UINT32_MAX, {}, kept, nullptr)) {
                     one.kept = std::move(kept);
-                    one.check = Check{files_key, content_key, {}, {}};
+                    one.check = Check{files_key, content_key, {}};
                     one.content = content_key;
                     (void)write_file(folder / (p.id + ".kept"), one.kept);
                 } else {
@@ -661,44 +672,70 @@ void check_packages(const std::vector<StartPackage>& packages, std::string_view 
         }
     }
 
-    // Pass 2: each against the others (L8xx), from its kept report; again only when its key changed.
+    // Pass 2: each against the others (L8xx), from its kept report; again only when its key changed. In rounds: a
+    // package on that a round refuses is off for the others in the next (a mod that loses what it needs takes with it
+    // the mods that need it) and stays refused with that round's findings, so the rounds end, one at most a package.
+    // With nothing refused there is one round.
+    std::vector<bool> off(placed.size());
+    for (std::size_t j = 0; j < placed.size(); ++j) off[j] = !named[j];
+    std::vector<bool> refused(placed.size(), false);
+    std::vector<bool> checked(placed.size(), false);
+    std::vector<std::vector<Kept>> verdict_of(placed.size());  // each package's findings from its last round
+    for (std::size_t round = 0; round <= placed.size(); ++round) {
+        bool more = false;
+        for (std::size_t i = 0; i < placed.size(); ++i) {
+            Placed& one = placed[i];
+            if (one.kept.empty() || refused[i]) continue;
+            std::vector<LumaInstalledMod> installed;
+            std::vector<std::string> files;
+            std::uint64_t h = fnv(kFnvStart, one.content);
+            files.reserve(placed.size());
+            for (std::size_t j = 0; j < placed.size(); ++j) {
+                if (j == i || placed[j].kept.empty()) continue;
+                files.push_back(placed[j].package->id);
+            }
+            std::size_t at = 0;
+            std::uint32_t position = 0;
+            for (std::size_t j = 0; j < placed.size(); ++j) {
+                if (j == i || placed[j].kept.empty()) continue;
+                if (j < i) position++;
+                LumaInstalledMod m{};
+                m.file = files[at++].c_str();
+                const bool on = placed[j].package->on && !off[j];
+                m.on = on ? 1u : 0u;
+                m.kept = reinterpret_cast<const std::uint8_t*>(placed[j].kept.data());
+                m.kept_size = placed[j].kept.size();
+                installed.push_back(m);
+                h = fnv(fnv(fnv(h, placed[j].content), on ? "1" : "0"), placed[j].package->id);
+            }
+            const std::string key = hex(fnv(h, std::to_string(position)));
+            const auto known = std::find_if(one.check.verdicts.begin(), one.check.verdicts.end(),
+                                            [&key](const Verdict& v) { return v.key == key; });
+            if (known != one.check.verdicts.end()) {
+                verdict_of[i] = known->findings;
+            } else {
+                std::string kept;
+                std::vector<Kept> findings;
+                if (!run(*one.package, installed, position, one.kept, kept, &findings)) continue;
+                verdict_of[i] = findings;
+                one.check.files = one.files;
+                one.check.content = one.content;
+                one.check.verdicts.insert(one.check.verdicts.begin(), Verdict{key, std::move(findings)});
+                if (one.check.verdicts.size() > kVerdicts) one.check.verdicts.resize(kVerdicts);
+                (void)write_file(folder / (one.package->id + ".check"), check_text(one.check));
+            }
+            checked[i] = true;
+            if (one.package->on && std::any_of(verdict_of[i].begin(), verdict_of[i].end(),
+                                               [](const Kept& k) { return k.level == 0; })) {
+                refused[i] = true;
+                more = true;
+            }
+        }
+        if (!more) break;
+        for (std::size_t j = 0; j < placed.size(); ++j) off[j] = !named[j] || refused[j];
+    }
     for (std::size_t i = 0; i < placed.size(); ++i) {
-        Placed& one = placed[i];
-        if (one.kept.empty()) continue;
-        std::vector<LumaInstalledMod> installed;
-        std::vector<std::string> files;
-        std::uint64_t h = fnv(kFnvStart, one.content);
-        files.reserve(placed.size());
-        for (std::size_t j = 0; j < placed.size(); ++j) {
-            if (j == i || placed[j].kept.empty()) continue;
-            files.push_back(placed[j].package->id);
-        }
-        std::size_t at = 0;
-        std::uint32_t position = 0;
-        for (std::size_t j = 0; j < placed.size(); ++j) {
-            if (j == i || placed[j].kept.empty()) continue;
-            if (j < i) position++;
-            LumaInstalledMod m{};
-            m.file = files[at++].c_str();
-            const bool on = placed[j].package->on && named[j];
-            m.on = on ? 1u : 0u;
-            m.kept = reinterpret_cast<const std::uint8_t*>(placed[j].kept.data());
-            m.kept_size = placed[j].kept.size();
-            installed.push_back(m);
-            h = fnv(fnv(fnv(h, placed[j].content), on ? "1" : "0"), placed[j].package->id);
-        }
-        const std::string key = hex(fnv(h, std::to_string(position)));
-        if (one.check.key != key) {
-            std::string kept;
-            std::vector<Kept> findings;
-            if (!run(*one.package, installed, position, one.kept, kept, &findings)) continue;
-            one.check.files = one.files;
-            one.check.content = one.content;
-            one.check.key = key;
-            one.check.findings = std::move(findings);
-            (void)write_file(folder / (one.package->id + ".check"), check_text(one.check));
-        }
-        g_start_results.push_back({one.package->id, one.check.findings});
+        if (checked[i]) g_start_results.push_back({placed[i].package->id, std::move(verdict_of[i])});
     }
 }
 
