@@ -15,7 +15,7 @@
 struct RtShadeFrame {
     float4 ambient;   // rgb A: the stage's ambient colour as the programs take it (rt_stage_a_; FB b71); w free
     float4 key;       // rgb K: the stage key's colour; w kShadowTint
-    float4 fill;      // rgb Fl: the stage's fill colour; w kWrap
+    float4 fill;      // rgb Fl: the stage's fill colour; w free
     float4 sky;       // rgb what a ray that meets nothing at all shows; w kSkyGain
     float4 gains;     // x kAreaEmission, y kHitSky, z kBounce, w kBounceMax
     float4 axis[3];   // the world light grid: cell k along axis i = floor(dot(at, axis[i].xyz) + axis[i].w)
@@ -453,7 +453,7 @@ void rt_count_hit(float3 ratio) {
 
 // ---- Light.
 // Emitter `index` of the frame's list at a surface, unshadowed, as a share of the surface's own colour
-// (rt_common.hlsli emitter_light: kWrap 0.25 its facing).
+// (rt_common.hlsli emitter_light: its facing, n.l, no wrap).
 float3 rt_emitter_light(uint index, float3 at, float3 n, uint self, out float4 place, out uint slot) {
     return emitter_light(g_glow.x + index * 48u, at, n, self, place, slot);
 }

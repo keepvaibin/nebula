@@ -271,10 +271,8 @@ void RenderCore::rt_stop() noexcept {
     rt_micromap_asked_.clear();
     rt_drop_volumes_.clear();
     rt_sun_known_ = false;
-    rt_sun_ease_ = 0u;
     rt_sun_light_ = 0u;
     rt_sun_source_ = 0u;
-    rt_sun_up_known_ = false;
     rt_scene_pass_ = NEBULA_NONE32;
     rt_scene_view_ = NEBULA_NONE32;
     rt_scene_.clear();
@@ -1184,9 +1182,6 @@ constexpr RtImageKind kRtImageKinds[] = {
     {"Nebula RT Base", rt::ImageFormat::Rgba8, kRtFull, kForLight},
     {"Nebula RT Sun Raw", kHalf4, kRtFull, kForLight},
     {"Nebula RT Light", kHalf4, kRtFull, kForLight},
-    {"Nebula RT Light Step", kHalf4, kRtFull, kForLight},
-    {"Nebula RT Light Average A", kHalf4, kRtFull, kForLight},
-    {"Nebula RT Light Average B", kHalf4, kRtFull, kForLight},
     {"Nebula RT Lights", kHalf4, kRtFull, kForLight},
     {"Nebula RT Lights Average A", kHalf4, kRtFull, kForLight},
     {"Nebula RT Lights Average B", kHalf4, kRtFull, kForLight},
@@ -2632,10 +2627,6 @@ bool RenderCore::rt_sun(float eye_direction[3]) {
         rt_sun_known_ = false;
         rt_sun_source_ = 0u;
         rt_sun_light_ = 0u;
-        rt_sun_ease_ = 0u;
-        if (!walk_.between) {
-            rt_sun_frame_ = list.game_frame;
-        }
         return false;
     }
     // ONE FIXED SUN A STAGE (director d05; the owner, 11-11: "we need just the one fixed sun point and no moving suns
@@ -2676,16 +2667,12 @@ bool RenderCore::rt_sun(float eye_direction[3]) {
     rt_sun_known_ = true;
     rt_sun_source_ = source;
     rt_sun_light_ = key_id;
-    rt_sun_ease_ = 0u;
-    if (!walk_.between) {
-        rt_sun_frame_ = list.game_frame;
-    }
     const float sun[3] = {rt_sun_world_[0], rt_sun_world_[1], rt_sun_world_[2]};
     if (report) {
         static constexpr const char* kSources[] = {"none", "the visible sun", "the key", "the row", "overhead"};
-        std::fprintf(stderr, "[rt-inputs] sun: %s%s, world %.3f %.3f %.3f%s, easing %u (stage %08x %s, key %.3f)\n", kSources[source],
+        std::fprintf(stderr, "[rt-inputs] sun: %s%s, world %.3f %.3f %.3f%s (stage %08x %s, key %.3f)\n", kSources[source],
                      follows ? " (latched)" : "", static_cast<double>(sun[0]), static_cast<double>(sun[1]), static_cast<double>(sun[2]),
-                     lifted ? " lifted" : "", rt_sun_ease_, list.stage_hash, row != nullptr ? "row" : "default",
+                     lifted ? " lifted" : "", list.stage_hash, row != nullptr ? "row" : "default",
                      static_cast<double>(key_brightness));
     }
     for (unsigned r = 0; r < 3u; ++r) {

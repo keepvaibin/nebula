@@ -22,7 +22,6 @@ namespace {
 
 // The light model's tunables (the master plan's appendix G).
 constexpr float kShadowTint = 0.2f;    // how much of the per-channel ratio a painted surface's P takes
-constexpr float kWrap = 0.25f;         // the wrap of a local light's facing
 constexpr float kSkyGain = 1.0f;       // the dome as light
 constexpr float kAreaEmission = 3.0f;  // an emissive surface as a ray sees it, in shares
 constexpr float kHitSky = 0.7f;        // a hit's own indirect when no screen knows it
@@ -96,7 +95,6 @@ void RenderCore::rt_shade_frame(RtShadeFrame& frame) const {
         frame.fill[c] = fill[c];
     }
     frame.key[3] = rt_dev(RtDev::ShadowTint, kShadowTint);  // rt_dev.h: one key with the programs' view_stage_a.w
-    frame.fill[3] = rt_dev(RtDev::Wrap, kWrap);
     frame.sky[3] = rt_dev(RtDev::SkyGain, kSkyGain);
     frame.gains[0] = rt_dev(RtDev::AreaEmission, kAreaEmission);
     frame.gains[1] = rt_dev(RtDev::HitSky, kHitSky);
