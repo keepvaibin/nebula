@@ -1,6 +1,8 @@
 #include "Game/System/LumaDrawView.hpp"
 
+#include "Game/Camera/CameraContext.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
+#include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include "Game/Render/Model.hpp"
@@ -62,6 +64,16 @@ namespace luma {
 
                 const LumaServiceKernel* sKernel = nullptr;
                 View sViews[kMost];
+                // main_eye: the mod holding the main camera (null: none), its view (eye from world) and field of view;
+                // the game's own view and field of view under it (taken from the scene's camera context whenever its
+                // view is not the one last set, so a held scene keeps the game's last), the context they belong to.
+                const LumaMod* sMainMod = nullptr;
+                Pos3f sMainView;
+                f32 sMainFov = 45.0f;
+                Pos3f sApplied;
+                Pos3f sGameView;
+                f32 sGameFov = 45.0f;
+                const CameraContext* sGameContext = nullptr;
                 u32 sHigh = 0;
                 u32 sLive = 0;
                 LumaHandle sNextHandle = 0;
@@ -400,7 +412,7 @@ namespace luma {
                     if (pCamera == nullptr) {
                         return "camera";
                     }
-                    if (pCamera->rig < LUMA_DRAW_VIEW_RIG_FIXED || pCamera->rig > LUMA_DRAW_VIEW_RIG_WORLD) {
+                    if (static_cast< u32 >(pCamera->rig) > static_cast< u32 >(LUMA_DRAW_VIEW_RIG_WORLD)) {
                         return "rig";
                     }
                     if (!fovOk(pCamera->fov_y)) {
@@ -547,6 +559,69 @@ namespace luma {
                     return LUMA_OK;
                 }
 
+                CameraContext* cameraContext() {
+                    return MR::isExistSceneObj(SceneObj_CameraContext)
+                               ? MR::getSceneObj< CameraContext >(SceneObj_CameraContext)
+                               : nullptr;
+                }
+
+                // The main camera given back: the game's last view and field of view, in the same scene's context.
+                void mainGiveBack() {
+                    CameraContext* const pContext = cameraContext();
+                    if (pContext != nullptr && pContext == sGameContext) {
+                        MR::setCameraViewMtx(sGameView);
+                        pContext->setFovy(sGameFov);
+                    }
+                    sMainMod = nullptr;
+                    sGameContext = nullptr;
+                }
+
+                // Before the models take their poses: the held main camera's view and field of view in the scene's
+                // context.
+                void mainApply() {
+                    CameraContext* const pContext = cameraContext();
+                    if (pContext == nullptr) {
+                        return;
+                    }
+                    const Pos3f& rNow = MR::getCameraViewMtx();
+                    if (pContext != sGameContext || memcmp(&rNow, &sApplied, sizeof(Pos3f)) != 0) {
+                        sGameView.set(rNow);  // the game moved its camera since: that is its own now
+                        sGameFov = pContext->mFovy;
+                        sGameContext = pContext;
+                    }
+                    MR::setCameraViewMtx(sMainView);
+                    pContext->setFovy(sMainFov);
+                    sApplied.set(sMainView);
+                }
+
+                int32_t svcMainEye(const LumaMod* pMod, const LumaDrawViewEye* pEye) {
+                    const char* const pWhere = "draw.view.main_eye";
+                    if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
+                        return status;
+                    }
+                    if (pEye == nullptr) {
+                        if (sMainMod == pMod) {
+                            mainGiveBack();
+                        }
+                        return LUMA_OK;
+                    }
+                    if (!finiteArray(pEye->eye) || !finiteArray(pEye->at) || !finiteArray(pEye->up)) {
+                        return badArgument(pMod, pWhere, !finiteArray(pEye->eye) ? "eye" : !finiteArray(pEye->at) ? "at" : "up");
+                    }
+                    if (!fovOk(pEye->fov_y)) {
+                        return badArgument(pMod, pWhere, "fov_y");
+                    }
+                    Mtx camera;
+                    if (!lookAt(camera, Vec3f(pEye->eye[0], pEye->eye[1], pEye->eye[2]), Vec3f(pEye->at[0], pEye->at[1], pEye->at[2]),
+                                Vec3f(pEye->up[0], pEye->up[1], pEye->up[2]))) {
+                        return badArgument(pMod, pWhere, "up");
+                    }
+                    sMainView.setInline(camera);
+                    sMainFov = pEye->fov_y;
+                    sMainMod = pMod;
+                    return LUMA_OK;
+                }
+
                 const LumaDrawViewService cTable = {
                     {sizeof(LumaDrawViewService), LUMA_DRAW_VIEW_MAJOR, LUMA_DRAW_VIEW_MINOR},
                     svcCreate,
@@ -557,12 +632,16 @@ namespace luma {
                     svcRelease,
                     svcRig,
                     svcEyeOf,
+                    svcMainEye,
                 };
 
                 // ---- The provider ----
 
                 void modGone(void* pUser, const LumaMod* pMod) {
                     (void)pUser;
+                    if (sMainMod == pMod) {
+                        mainGiveBack();
+                    }
                     for (u32 i = 0; i < sHigh; i++) {
                         if (sViews[i].handle != 0 && sViews[i].mod == pMod) {
                             end(sViews[i], "mod");
@@ -594,6 +673,12 @@ namespace luma {
                     return p >= pStart && p < pEnd;
                 }
             }  // namespace
+
+            void mainCamera() {
+                if (sMainMod != nullptr) {
+                    mainApply();
+                }
+            }
 
             void render() {
                 if (sLive == 0) {
