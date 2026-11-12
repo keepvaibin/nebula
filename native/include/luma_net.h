@@ -87,7 +87,14 @@ typedef struct LumaNetInternetService {
        LUMA_E_LIMIT, reported. */
     int32_t (*tcp_connect)(const LumaMod* mod, const char* host, uint16_t port, LumaEventFn fn, void* user,
                            LumaHandle* out);
-    /* 1.0. As net.local's send, take and close, for this service's sockets. */
+    /* 1.0. LUMA_E_DENIED, an answer (not reported): no server on the open internet in 1.0; net.local listens. Here so
+       both services keep one layout (services-registry 2 item 4). */
+    int32_t (*tcp_listen)(const LumaMod* mod, uint16_t port, uint32_t local_network, LumaEventFn fn, void* user,
+                          LumaHandle* out);
+    /* 1.0. As net.local's; this service has no listener, so a handle is always LUMA_E_HANDLE, reported. */
+    int32_t (*port)(const LumaMod* mod, LumaHandle listener, uint16_t* out);
+    /* 1.0. As net.local's send, take and close, for this service's sockets (a handle belongs to the service that
+       made it). */
     int32_t (*send)(const LumaMod* mod, LumaHandle socket, const void* data, uint64_t bytes);
     int64_t (*take)(const LumaMod* mod, LumaHandle socket, void* buf, uint64_t size);
     int32_t (*close)(const LumaMod* mod, LumaHandle handle);
