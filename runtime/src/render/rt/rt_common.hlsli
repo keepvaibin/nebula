@@ -314,7 +314,8 @@ float3 let_through(float3 origin, float3 direction, float reach, out float first
         if (class_ == kClassGlass) {
             const uint colour = g_items.Load(at + 48u);
             const float3 base = float3(float(colour & 255u), float(colour >> 8u & 255u), float(colour >> 16u & 255u)) / 255.0f;
-            passes = sqrt(max(base, 0.02f)) * 0.96f;
+            // The body's transmittance on its LINEAR colour, half a body a face, and 1 - F a face (A4 K6, A5-B1; FB b75).
+            passes = sqrt(max(rt_lin(base), 0.002f)) * 0.96f;
         } else if (class_ == kClassWater) {
             const float t_water = query.CandidateTriangleRayT();
             if (waters == 0u || (abs(t_water - water_near) > kWaterLayer && abs(t_water - water_far) > kWaterLayer)) {
@@ -324,7 +325,7 @@ float3 let_through(float3 origin, float3 direction, float reach, out float first
             }
             counts = !watered;
             passes = !counts ? float3(1.0f, 1.0f, 1.0f)
-                             : 0.9f * (rt_part(kPartTransmit) >= 3u
+                             : 0.98f * (rt_part(kPartTransmit) >= 3u  // 1 - F head on (A4 K6; FB b75)
                                            ? caustic_there(item, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())
                                            : 1.0f).xxx;
             watered = true;

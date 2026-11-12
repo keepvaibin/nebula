@@ -739,6 +739,33 @@ float3 rt_hit_radiance_with(RtHit h, uint options, float3 o, bool d_known, float
     return out_;
 }
 
+// ---- What a mirrored ray sees (FB b75; A4 W7, W8): one function for every mirror the passes trace.
+// Whether the sun's own disc lies along `dir` (12.2 item 4: within three of its radii, the bloom's reach).
+bool rt_sees_sun(float3 dir) {
+    return rt_sun_traced() && dot(dir, g_sun.xyz) > cos(atan(3.0f * g_sun.w));
+}
+// The sun's glint, linear: the stage's key decoded, the model's sun by kForm, times kSunGlint (far over white).
+float3 rt_sun_glint() {
+    return lerp(rt_lin(g_shade.key.rgb), rt_stage_light().sun, rt_form()) * g_shade.look.w;
+}
+// Along a mirrored ray from `from`: the solid thing met by the shared hit shading (`options`: kRtShade*), the dome
+// decoded once, else what a ray that meets nothing shows; the sun's glint where the ray runs at it unhindered.
+float3 rt_mirror_seen(float3 from, float3 dir, float cone, uint options, inout uint seed) {
+    uint item, triangle_;
+    float2 where_;
+    float far_;
+    if (!rt_closest(from, dir, kRtFarAway, kMaskSolid | kMaskCutout | kMaskSky, item, triangle_, where_, far_)) {
+        return rt_lin(g_sky.rgb) + (rt_sees_sun(dir) ? rt_sun_glint() : float3(0.0f, 0.0f, 0.0f));
+    }
+    RtHit h;
+    rt_hit_read(item, triangle_, where_, far_, from, dir, cone, h);
+    if ((h.item_flags & kItemSky) != 0u) {
+        return rt_shown(rt_dome(h)) + (rt_sees_sun(dir) ? rt_sun_glint() : float3(0.0f, 0.0f, 0.0f));
+    }
+    const float3 o = float3(g_shade.gains.y, g_shade.gains.y, g_shade.gains.y);
+    return rt_hit_radiance(h, options, o, seed);
+}
+
 // ---- A pixel's surface as the surface pass left it (rt_common.hlsli's images), with what hit shading wants of it.
 struct RtPixel {
     RtSurface s;

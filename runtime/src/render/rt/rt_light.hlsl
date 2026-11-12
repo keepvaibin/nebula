@@ -13,7 +13,7 @@
 // For the opaque layer this pass writes, for the filter (rt_light_time, rt_light_space), r V (one number), b the facing
 // code (0 to 1 painted; -1 to -2 lit, -1 - n.l) and a 1; the filter's last step writes V (rgb, from the sun's filter)
 // with the sky's share. The second layer's are written here (O 1).
-#include "rt_common.hlsli"
+#include "rt_shade.hlsli"   // rt_mirror_seen: what a mirror shows by the shared hit shading (FB b75)
 #include "rt_mirror.hlsli"  // mirror_terms: the share a rough surface mirrors over its lobe (FB b47)
 
 Texture2D<float4> g_guide : register(t9);
@@ -44,12 +44,11 @@ struct ClearSurface {
 ClearSurface clear_surface(uint item, uint class_, float facing_eye, float depth) {
     const uint word = g_items.Load(g_at.x + (item - 1u) * kItemBytes + 60u);
     const bool water = class_ == kClassWater;
-    const uint ior_bits = word >> 12u & 255u, shine_bits = word >> 20u & 63u, body_bits = word >> 26u;
+    const uint ior_bits = word >> 12u & 255u, body_bits = word >> 26u;
     const bool written = ior_bits != 0u;
     const float ior = written ? 1.0f + float(ior_bits) / 100.0f : (water ? 1.33f : 1.5f);
-    // Schlick's share of the index (R2; FB b61): glass 1, water the owner's 1.2 (dev keys glass_shine, water_shine).
-    const float shine = written && shine_bits != 63u ? float(shine_bits) / 4.0f
-                                                     : (water ? rt_dev_or(kDevWaterShine, 1.2f) : rt_dev_or(kDevGlassShine, 1.0f));
+    // Schlick's exactly (LIGHT-MODEL.md 6, A4 W5; FB b75): no shine over it (the record's shine bits are not read).
+    const float shine = 1.0f;
     const float f0 = (ior - 1.0f) * (ior - 1.0f) / ((ior + 1.0f) * (ior + 1.0f));
     const float cos_in = saturate(facing_eye);
     ClearSurface c;
@@ -270,24 +269,34 @@ void main(uint3 id : SV_DispatchThreadID) {
                 head_on = 0.05f * (1.0f - rough);
             }
             if (head_on > 0.0f) {
+                if (g_pass.y != 0u) {
+                    rt_shade_begin(g_pass.w);  // the shading frame (rt_pass_light; FB b75)
+                }
                 const float3 look_along = normalize(s.at);
                 const float3 n = dot(s.smooth_, look_along) < 0.0f ? s.smooth_ : s.normal;
                 const float glance = 1.0f - saturate(-dot(n, look_along));
                 const float2 terms = mirror_terms(rough, 1.0f - glance);  // over its lobe: less at a glance when rough (b47)
                 const float share_ = saturate(head_on * terms.x + terms.y);
-                const float3 turned_ray = reflect(look_along, n);
-                const float pixel_wide = abs(g_ray.x);  // a pixel's width a unit of way from the eye
-                float3 seen_ = seen_along(s.at + n * s.skin, turned_ray, s.away * pixel_wide, pixel_wide);
-                uint met;
-                if ((g_more.z & 1u) != 0u && dot(turned_ray, g_sun.xyz) > 0.9995f &&
-                    !blocked(s.at + n * s.skin, g_sun.xyz, 200000.0f, kMaskSolid | kMaskCutout | kMaskShadowOnly, true, met)) {
-                    seen_ += float3(4.0f, 3.8f, 3.4f);  // the sun itself, far brighter than the picture's white
+                float3 turned_ray = reflect(look_along, n);
+                if (dot(turned_ray, s.normal) <= 0.0f) {
+                    turned_ray = reflect(turned_ray, s.normal);  // under the geometric surface (a ripple's tilt): up (A4 K12)
                 }
+                // What it mirrors by the shared hit shading, as the reflections pass's rays: the things in front with
+                // their sun and lights traced, the dome, the sun's glint (A4 W7, W8; FB b75). None without the frame.
+                uint mirror_seed = rt_seed(id.xy, g_more.y, 53u);
+                const float3 seen_ = g_pass.y != 0u ? rt_mirror_seen(s.at + n * s.skin, turned_ray, abs(g_ray.x),
+                                                                     kRtShadeSunRay | kRtShadeLightRay, mirror_seed)
+                                                    : float3(0.0f, 0.0f, 0.0f);
                 mirror.rgb = seen_ * tint * share_;
                 // The painted reflection it was drawn with gives way to the real one: that much less of the colour under
                 // the mirror (a blended surface: of its alpha, so glass clears); and what it mirrors is taken from the
                 // colour under it, never added on top (C2; FB b52b).
                 mirror.a = (1.0f - rt_dev_or(kDevPaintedMirror, 0.6f) * float(tint_word >> 24u) / 255.0f) * (1.0f - saturate(dot(tint * share_, float3(0.2126f, 0.7152f, 0.0722f))));
+                if (class_ == kClassMetal) {
+                    // A metal has no body: F R, F0 its own linear colour (LIGHT-MODEL.md 6, A4 W9, A3-F6; FB b75).
+                    const float3 f0_metal = rt_lin(float3(float(tint_word & 255u), float(tint_word >> 8u & 255u), float(tint_word >> 16u & 255u)) / 255.0f);
+                    mirror = float4(seen_ * saturate(f0_metal * terms.x + terms.y), 0.0f);
+                }
                 if (second && (class_ == kClassGlass || class_ == kClassWater)) {
                     const float4 under = g_guide_opaque.Load(int3(pixel, 0));
                     const ClearSurface c = clear_surface(item, class_, -dot(n, look_along), under.a != 0.0f ? under.r - guide.r : 0.0f);

@@ -1473,7 +1473,16 @@ void RenderCore::rt_pass_lights() {
 
 // The shares the programs read, with the sky's light near the surface and what the surface mirrors (rt_light.hlsl).
 void RenderCore::rt_pass_light() {
-    rt::PassBinds binds = rt_pass_binds();
+    // The shading frame too (t4): what glass, water and the other mirrors here show is the shared hit shading (FB b75);
+    // g_pass.y 1 where it is bound, g_pass.w its first byte.
+    rt::PassBinds binds;
+    std::uint32_t shade_at = 0u;
+    const bool shaded = rt_shade_binds(binds, shade_at);
+    if (!shaded) {
+        binds = rt_pass_binds();
+    }
+    const float none[3][4] = {};
+    binds.pass_constants = rt_bounce_constants(shaded ? 1u : 0u, 0u, shade_at, none);
     binds.reads[0] = rt_layer_guide();
     binds.reads[1] = rt_image(RtImage::Normal);
     binds.reads[2] = rt_image(RtImage::Motion);

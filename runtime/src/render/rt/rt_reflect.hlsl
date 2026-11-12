@@ -106,8 +106,8 @@ void main(uint3 id : SV_DispatchThreadID) {
         }
     }
     // The sun itself on the reflected ray, where nothing hides it (12.2 item 4): far brighter than white, it blooms.
-    if (open_sky && rt_sun_traced() && dot(dir, g_sun.xyz) > cos(atan(3.0f * g_sun.w))) {
-        seen += g_shade.key.rgb * g_shade.look.w;
+    if (open_sky && rt_sees_sun(dir)) {
+        seen += rt_sun_glint();  // linear, the model's by kForm (A4 W8; FB b75)
     }
     const float4 weight = mirror_weight(uint(material.b * 255.0f + 0.5f), material.r, material.a, g_base.Load(here).rgb,
                                         1.0f - saturate(-dot(n, look)));

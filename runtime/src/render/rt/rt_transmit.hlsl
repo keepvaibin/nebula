@@ -94,8 +94,31 @@ bool own_face(uint self, float3 from, float3 dir, float reach, out uint triangle
     return true;
 }
 
+// The nearest solid thing on a ray inside a body before `reach` (its far wall), shown as seen_along shows what it
+// meets; false where none (A4 W1; FB b75).
+bool solid_within(float3 from, float3 dir, float reach, float cone, inout uint seed, out float far_, out float3 seen) {
+    seen = float3(0.0f, 0.0f, 0.0f);
+    uint item, triangle_;
+    float2 where_;
+    if (!rt_closest(from, dir, reach, kMaskSolid | kMaskCutout, item, triangle_, where_, far_)) {
+        return false;
+    }
+#if RT_TRANSMIT_REFERENCE
+    const uint paths = max(uint(g_pass_value[0].x), 1u);
+    for (uint p = 0u; p < paths; ++p) {
+        seen += ref_mirror(from, dir, 0.0f, seed);
+    }
+    seen /= float(paths);
+#else
+    RtHit h;
+    rt_hit_read(item, triangle_, where_, far_, from, dir, cone, h);
+    seen = rt_hit_radiance(h, kRtShadeSunRay | kRtShadeLightRay, float3(g_shade.gains.y, g_shade.gains.y, g_shade.gains.y), seed);
+#endif
+    return true;
+}
+
 // Through a body of instance `self` at index `ior`, entering at `at` (normal `n` toward the eye) along `look`: what
-// comes out (before absorption) and the way inside.
+// comes out (before absorption) and the way inside; a solid thing inside it is met there (W1).
 float3 through_body(uint self, float ior, float3 at, float3 n, float3 look, float skin, float cone, inout uint seed,
                     out float inside) {
     inside = 0.0f;
@@ -109,6 +132,13 @@ float3 through_body(uint self, float ior, float3 at, float3 n, float3 look, floa
         if (!own_face(self, from, dir, kSeenReach, triangle_, where_, far_)) {
             break;  // open: as if it left where it is
         }
+        // A solid thing inside before the far wall: a planet in a glass ball, the building in Good Egg's capsule (W1).
+        float met_far;
+        float3 met_seen;
+        if (solid_within(from, dir, far_, cone, seed, met_far, met_seen)) {
+            inside += met_far;
+            return met_seen;
+        }
         RtHit h;
         rt_hit_read(self, triangle_, where_, far_, from, dir, cone, h);
         inside += far_;
@@ -120,6 +150,7 @@ float3 through_body(uint self, float ior, float3 at, float3 n, float3 look, floa
             break;
         }
         dir = reflect(dir, h.ns);  // total internal reflection: on inside
+        from = h.at + h.ns * skin;  // off the face, inside: the next segment does not meet it again (A4 K3; FB b75)
         out_normal = h.ns;
     }
     float far_;
@@ -152,6 +183,12 @@ void main(uint3 id : SV_DispatchThreadID) {
         g_out[id.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);
         return;
     }
+    if (water && (g_more.z & 4096u) != 0u) {
+        // The camera under water (A4 W2; FB b75): the eye's way is the game's fog and the surface is seen from inside;
+        // no T (the programs take the mirror alone, clear_surface's total internal reflection).
+        g_out[id.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        return;
+    }
     rt_shade_begin(g_pass.w);
     const RtSurface s = rt_surface(int2(id.xy), guide, g_normals.Load(here), g_motion.Load(here).w);
     const float3 look = normalize(s.at);
@@ -168,8 +205,11 @@ void main(uint3 id : SV_DispatchThreadID) {
         const float3 dir = refract(look, n, 1.0f / ior);
         float far_;
         const float3 floor_ = seen_along(s.at - n * s.skin, dot(dir, dir) > 0.0f ? dir : look, cone, seed, far_);
+        // Pure water's absorption by the way under it (Pope and Fry's ratios, kWaterAbsorb; A4 W3, FB b75), and its own
+        // colour scattered back where it takes the light away: (1 - T) of the art's colour under the sky's light.
         const float clear = rt_water_clear();
-        t = floor_ * exp(log(colour) * (min(far_, 8.0f * clear) / clear));
+        const float3 through = exp(-(min(far_, 8.0f * clear) / clear) * kWaterAbsorb);
+        t = floor_ * through + (1.0f - through) * colour * rt_air_share(1.0f, float3(0.0f, 0.0f, 0.0f));
     } else if (thickness < kThinGlass) {
         // A shell: straight on, its colour by the slant (R1, R3; FB b61).
         float far_;
