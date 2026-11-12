@@ -207,6 +207,10 @@ pub struct MaterialIr {
     pub fade_opaque: bool,
     /// The alpha's low and high ends over those (c61, the census); -1 for a material not blended by alpha.
     pub fade_alpha: [f32; 2],
+    /// A tangent-space normal map (glTF normalTexture; MOD-MATERIALS-FC.md 1: inside generate(), behind this): its slot
+    /// (map n through coordinate n, which no stage reads) and its scale. The lit form turns its pixel normal by it
+    /// before any light is summed; the mesh holds tangents and bitangents (ATTR_NBT, ATTR_NBT_THREE).
+    pub normal_map: Option<(u8, f32)>,
 }
 
 impl GroupIr {

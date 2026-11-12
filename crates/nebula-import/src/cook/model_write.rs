@@ -73,6 +73,9 @@ pub fn material_slots(m: &MaterialIr) -> Vec<(u32, u16, u8)> {
     for t in &m.matrices {
         count = count.max(usize::from(t.slot) + 1);
     }
+    if let Some((slot, _)) = m.normal_map {
+        count = count.max(usize::from(slot) + 1);
+    }
     let mut out: Vec<(u32, u16, u8)> = (0..count)
         .map(|n| {
             let map = m.coordinate_maps.get(n).copied().unwrap_or(255);
@@ -86,6 +89,10 @@ pub fn material_slots(m: &MaterialIr) -> Vec<(u32, u16, u8)> {
         if stage.map != 255 {
             out[usize::from(stage.map)].2 |= SLOT_USES_MAP;
         }
+    }
+    // A normal map is read in the lit form's pixel stage, through its own slot (MaterialIr normal_map).
+    if let Some((slot, _)) = m.normal_map {
+        out[usize::from(slot)].2 |= SLOT_USES_COORD | SLOT_USES_MAP;
     }
     for order in &m.warp_orders {
         if order[0] != 255 {

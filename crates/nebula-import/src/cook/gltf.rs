@@ -3,10 +3,10 @@
 //! material (the base colour texture, then `extras.nebula.textures`), skins and node animation. Lengths are metres in glTF: one metre is 100 of the game's units (`UNITS_PER_METRE`, models and collision alike). A glTF triangle winds counter-clockwise;
 //! the game's wind clockwise (measured on Kuribo, Coin and Mario: 650 to 2, 268 to 0, 4514 to 363).
 
-use super::clip::{ClipIr, Target, Track, KIND_COLORS, KIND_JOINTS, KIND_PATTERN, KIND_TEXTURE_MATRICES, STEP};
-use super::model_ir::{CoordIr, CoordMatrixIr};
+use super::clip::{ClipIr, Target, Track, KIND_COLORS, KIND_JOINTS, KIND_PATTERN, KIND_REGISTERS, KIND_TEXTURE_MATRICES, STEP};
+use super::model_ir::{CoordIr, CoordMatrixIr, MaterialIr};
 use super::model_ir::{important_joints, plain_material, plain_texture, ArraysIr, Corner, GroupIr, JointIr, PbrMaterial, ModelIr, ShapeIr, ATTR_COLOR0, ATTR_MATRIX, ATTR_NORMAL, NONE};
-use super::model_ir::{ATTR_NBT, ATTR_NBT_THREE, PBR_BASE, PBR_BLEND, PBR_DOUBLE_SIDED, PBR_MASK, PBR_NORMAL, PBR_UNLIT};
+use super::model_ir::{ATTR_NBT, ATTR_NBT_THREE, PBR_BASE, PBR_BLEND, PBR_DOUBLE_SIDED, PBR_EMISSIVE, PBR_MASK, PBR_NORMAL, PBR_UNLIT};
 use super::refuse::{invalid, note, refuse, OrInvalid};
 use anyhow::{bail, Context, Result};
 use serde_json::Value;
@@ -687,6 +687,17 @@ struct SourceMaterial {
     /// Its lit part (materials.md): the record with no maps yet, and each map as the file names it.
     lit: PbrMaterial,
     pbr_maps: [Option<PbrMap>; 5],
+    /// Its glow as the raster draws it (MOD-MATERIALS-FC.md 1: one more stage, previous + emissive texture x constant
+    /// 1): the emissive factor x strength, sRGB-encoded and held to 1, and the emissive map's image and coordinate set.
+    /// None when the material is unlit (KHR_materials_unlit shows its base colour alone) or its factor is black.
+    glow: Option<Glow>,
+}
+
+/// A glTF material's glow on the raster (SourceMaterial glow): constant colour 1, and the emissive map (image, set).
+#[derive(Clone, Copy)]
+struct Glow {
+    constant: [u8; 4],
+    map: Option<(usize, u8)>,
 }
 
 /// A map of a lit material as the file names it: its image, its coordinate set, and a KHR_texture_transform to bake
@@ -1032,11 +1043,44 @@ fn decompose(m: &Matrix) -> Trs {
     Trs { translation: [m[12], m[13], m[14]], rotation: q.map(|v| (v / n) as f32), scale }
 }
 
-/// glTF's linear colour (0 to 1) as the game's 8-bit vertex colours hold it: sRGB-encoded, as the game's own art.
+/// A map no plain stage reads (a glow's, a normal map): a slot of its own after the material's (map n through coordinate
+/// n), the first one in place of a material's "no texture".
+fn own_slot(made: &mut MaterialIr, texture: u32, uv: u8) -> u8 {
+    if made.coords.is_empty() && made.textures.iter().all(|&t| t == NONE) {
+        made.textures.clear();
+        made.coordinate_maps.clear();
+    }
+    debug_assert_eq!(made.textures.len(), made.coords.len());
+    let slot = made.textures.len() as u8;
+    made.textures.push(texture);
+    made.coords.push(CoordIr { kind: 1, source: 4 + uv, matrix: NONE });
+    made.coordinate_maps.push(slot);
+    slot
+}
+
+/// glTF's linear colour (0 to 1) sRGB-encoded (0 to 1), as the game's own art and its colour registers hold colours.
+fn srgb(linear: f32) -> f32 {
+    let c = if linear.is_nan() { 0.0 } else { linear.clamp(0.0, 1.0) };
+    // White stays exactly white (1.055 - 0.055 is 0.99999994 in f32: an animated 1 would be 254.99998, not 255).
+    if c >= 1.0 {
+        1.0
+    } else if c <= 0.003_130_8 {
+        c * 12.92
+    } else {
+        1.055 * c.powf(1.0 / 2.4) - 0.055
+    }
+}
+
+/// glTF's linear colour as an 8-bit colour of the game (vertex colours, material colours, constants): sRGB-encoded.
 fn srgb_byte(linear: f32) -> u8 {
-    let c = linear.clamp(0.0, 1.0);
-    let encoded = if c <= 0.003_130_8 { c * 12.92 } else { 1.055 * c.powf(1.0 / 2.4) - 0.055 };
-    (encoded * 255.0).round() as u8
+    (srgb(linear) * 255.0).round() as u8
+}
+
+/// A glTF colour factor (linear RGB, alpha a coverage) as the game's 8-bit colour: RGB sRGB-encoded, alpha as it is.
+/// A texel is sRGB and the stages multiply what they are given, so factor x texel is drawn as sRGB(factor) x texel,
+/// which is sRGB(factor x linear texel) for sRGB's power curve.
+fn colour_bytes(factor: [f32; 4]) -> [u8; 4] {
+    [srgb_byte(factor[0]), srgb_byte(factor[1]), srgb_byte(factor[2]), (factor[3].clamp(0.0, 1.0) * 255.0).round() as u8]
 }
 
 /// A primitive's triangles as vertex numbers, from its mode (glTF 2.0 3.7.2.1): triangles, a strip or a fan.
@@ -1325,15 +1369,24 @@ pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) 
             let index = layer["index"].as_u64().or_invalid(|| format!("/materials/{i}/extras/nebula/textures/{k}/index"))?;
             images.push((image_of_texture(index)?, layer["texCoord"].as_u64().unwrap_or(0)));
         }
+        let glowing = lit.flags & PBR_UNLIT == 0 && lit.emissive.iter().any(|&v| v > 0.0);
+        let glow_map = pbr_maps[PBR_EMISSIVE].filter(|_| glowing).map(|m| (m.image, m.coord));
+        let normal_slot = pbr_maps[PBR_NORMAL].is_some() && lit.flags & PBR_UNLIT == 0;
         // A program's inputs name coordinates in a byte past NEBULA_INPUT_COORD0, maps and coordinates in a byte.
-        if images.len() > MATERIAL_LAYERS || images.iter().any(|(_, uv)| *uv >= MATERIAL_LAYERS as u64) {
-            let count = images.len().max(images.iter().map(|(_, uv)| *uv as usize + 1).max().unwrap_or(0));
+        let layers = images.len() + usize::from(glow_map.is_some()) + usize::from(normal_slot);
+        if layers > MATERIAL_LAYERS || images.iter().chain(glow_map.as_ref()).any(|(_, uv)| *uv >= MATERIAL_LAYERS as u64) {
+            let count = layers.max(images.iter().chain(glow_map.as_ref()).map(|(_, uv)| *uv as usize + 1).max().unwrap_or(0));
             return Err(refuse("Cook.Model.Layers", &[("material", material_name), ("count", count.to_string()), ("max", MATERIAL_LAYERS.to_string())]));
         }
         let images = images.into_iter().map(|(image, uv)| (image, uv as u8)).collect();
+        let glow = glowing.then(|| {
+            let [r, g, b] = lit.emissive.map(srgb_byte);
+            Glow { constant: [r, g, b, 0xFF], map: glow_map.map(|(image, uv)| (image, uv as u8)) }
+        });
         materials.push(SourceMaterial {
             name: material_name,
-            color: factor.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8),
+            color: colour_bytes(factor),
+            glow,
             images,
             blend: material["alphaMode"].as_str() == Some("BLEND"),
             cutoff: (material["alphaMode"].as_str() == Some("MASK")).then(|| (material["alphaCutoff"].as_f64().unwrap_or(0.5).clamp(0.0, 1.0) * 255.0) as u8),
@@ -1354,6 +1407,7 @@ pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) 
         transform: None,
         lit: PbrMaterial::default(),
         pbr_maps: [None; 5],
+        glow: None,
     });
     // A lit record for each material when the file has any material (materials.md); a mesh with none has glTF's default.
     let has_materials = root["materials"].as_array().is_some_and(|m| !m.is_empty());
@@ -1367,6 +1421,8 @@ pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) 
     // A vertex's draw matrix: joints first (by joint number), then envelopes.
     let mut envelope_ids: BTreeMap<Vec<(u32, u32)>, u64> = BTreeMap::new();
     let mut first_of_material: BTreeMap<usize, u32> = BTreeMap::new();
+    // Materials a vertex-coloured mesh draws with: their base colour factor is constant colour 0, not material colour 0.
+    let mut vertex_coloured: BTreeSet<usize> = BTreeSet::new();
     let mut image_of: BTreeMap<usize, u32> = BTreeMap::new();
     // Each joint's own vertices at rest, in the model's space and the game's units.
     let mut joint_low = vec![[f32::MAX; 3]; joints.len()];
@@ -1715,6 +1771,7 @@ pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) 
             // Vertex colours (glTF: base colour = factor x texture x COLOR_0): the channel takes the vertex's colour, and
             // a last stage multiplies by the factor, held in constant colour 0.
             if colour_values[0].is_some() {
+                vertex_coloured.insert(material);
                 made.channels[0].material_source = 1;
                 made.constants[0] = source.color;
                 made.material_color[0] = [0xFF; 4];
@@ -1728,6 +1785,33 @@ pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) 
                 last.alpha_constant = 28;
                 made.stages.push(last);
                 made.pixel_stage_count = made.stages.len() as u32;
+            }
+            // Its glow (glTF: + emissive factor x emissive texture), last and in no light: a stage adds constant 1 x the
+            // emissive map, or constant 1 alone, to what the stages before made; alpha stays theirs. The sum is taken
+            // on sRGB values as the game's stages take theirs; the hit record holds the glow unclamped and linear.
+            if let Some(Glow { constant, map }) = source.glow {
+                made.constants[1] = constant;
+                let mut glow = made.stages[0];
+                glow.coord = 255;
+                glow.map = 255;
+                glow.channel = 255;
+                glow.color_in = [14, 15, 15, 0];
+                glow.alpha_in = [7, 7, 7, 0];
+                glow.color_constant = 13;
+                glow.alpha_constant = 28;
+                if let Some((image, uv)) = map {
+                    let slot = own_slot(&mut made, texture_number(&document, &mut ir, &mut image_of, image)?, uv);
+                    glow.map = slot;
+                    glow.coord = slot;
+                    glow.color_in = [15, 8, 14, 0];
+                }
+                made.stages.push(glow);
+                made.pixel_stage_count = made.stages.len() as u32;
+            }
+            // Its normal map, which the lit form's pixel stage reads (MaterialIr normal_map): a mesh with tangents.
+            if let Some(map) = source.pbr_maps[PBR_NORMAL].filter(|_| tangents.is_some() && source.lit.flags & PBR_UNLIT == 0) {
+                let slot = own_slot(&mut made, texture_number(&document, &mut ir, &mut image_of, map.image)?, map.coord as u8);
+                made.normal_map = Some((slot, source.lit.normal_scale));
             }
             // Its base texture's transform: texture matrix 0 on its first coordinates.
             if let Some(t) = source.transform {
@@ -1868,7 +1952,7 @@ pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) 
     for (i, animation) in root["animations"].as_array().map(Vec::as_slice).unwrap_or_default().iter().enumerate() {
         let name = animation["name"].as_str().map_or_else(|| format!("animation{i}"), str::to_string);
         let timing = Timing::of(&document, animation)?;
-        let of_materials = material_clips(&document, animation, &materials, &first_of_material, &image_of, &timing)?;
+        let of_materials = material_clips(&document, animation, &materials, &first_of_material, &vertex_coloured, &image_of, &timing)?;
         let moves_joints = animation["channels"].as_array().map(Vec::as_slice).unwrap_or_default().iter().any(|c| {
             c["target"]["node"].as_u64().is_some_and(|n| joint_of_node.contains_key(&(n as usize)))
                 && matches!(c["target"]["path"].as_str(), Some("translation" | "rotation" | "scale"))
@@ -1958,6 +2042,7 @@ fn animation_name(document: &Document, animation: &Value) -> String {
 fn clip_extension(kind: u8) -> &'static str {
     match kind {
         KIND_COLORS => "bpk",
+        KIND_REGISTERS => "brk",
         KIND_TEXTURE_MATRICES => "btk",
         KIND_PATTERN => "btp",
         _ => "bck",
@@ -1982,6 +2067,7 @@ fn material_clips(
     animation: &Value,
     materials: &[SourceMaterial],
     first_of_material: &BTreeMap<usize, u32>,
+    vertex_coloured: &BTreeSet<usize>,
     image_of: &BTreeMap<usize, u32>,
     timing: &Timing,
 ) -> Result<Vec<ClipIr>> {
@@ -2022,7 +2108,8 @@ fn material_clips(
             for frame in &timing.samples {
                 let value = curve.at(*frame as f32 / FRAMES_PER_SECOND);
                 for (k, channel) in channels.iter_mut().enumerate() {
-                    channel.push(value[k].clamp(0.0, 1.0) * 255.0);
+                    // As the still factor (colour_bytes): RGB sRGB-encoded, alpha as it is.
+                    channel.push(if k < 3 { srgb(value[k]) } else { value[k].clamp(0.0, 1.0) } * 255.0);
                 }
             }
             for channel in &channels {
@@ -2031,7 +2118,21 @@ fn material_clips(
             }
             c.targets.push(target(material, number));
         }
+        // A vertex-coloured mesh multiplies by the factor in constant colour 0 (its channel takes the vertex's colour), so
+        // the same curves play there too: a register animation's second set, constant 0.
+        let mut constants = clip(KIND_REGISTERS, 0);
+        for (e, (&material, _)) in colours.iter().enumerate() {
+            if vertex_coloured.contains(&material) {
+                constants.tracks.extend_from_slice(&c.tracks[e * 4..e * 4 + 4]);
+                constants.targets.push(Target { slot: 0, ..target(material, c.targets[e].material) });
+            }
+        }
+        constants.second_count = constants.targets.len() as u32;
+        constants.values = c.values.clone();
         out.push(c);
+        if constants.second_count > 0 {
+            out.push(constants);
+        }
     }
 
     if !moves.is_empty() {
@@ -2892,11 +2993,12 @@ mod tests {
         assert_eq!(kinds, [("Glow", KIND_COLORS), ("Scroll", KIND_TEXTURE_MATRICES), ("Blink", KIND_PATTERN)]);
         let glow = &clips[0].1;
         assert_eq!((glow.frames, glow.loop_mode, glow.tracks.len(), glow.targets[0].name.as_slice()), (60, 2, 4, b"Face".as_slice()));
-        // Red stays 255; green falls from 255 to half by the end.
+        // Red stays 255; green falls from 255 to linear half by the end, sRGB-encoded as the still factor is.
         assert_eq!((glow.tracks[0].count, glow.values[glow.tracks[0].at as usize]), (1, 255.0));
         let green = &glow.tracks[1];
         let last = green.at as usize + (green.count as usize - 1) * 3;
-        assert_eq!((glow.values[last], glow.values[last + 1]), (60.0, 127.5));
+        assert_eq!((glow.values[last], glow.values[last + 1]), (60.0, srgb(0.5) * 255.0));
+        assert!((glow.values[last + 1] - 187.5).abs() < 0.1, "{}", glow.values[last + 1]);
         let scroll = &clips[1].1;
         assert_eq!((scroll.loop_mode, scroll.tracks.len()), (0, 5));
         // Scale and turn stay as the material has them; the offset moves.
@@ -3466,6 +3568,114 @@ mod tests {
         assert_eq!(plain.pbr, [PbrMaterial::default()]);
         let (none, _, _) = cook(&document_of(&many_triangles(1)), None).unwrap();
         assert!(none.pbr.is_empty());
+    }
+
+    #[test]
+    fn a_glow_is_one_more_stage_and_factors_are_srgb() {
+        // MOD-MATERIALS-FC.md 1: the raster's glTF material is stages; the glow adds emissive texture x constant 1.
+        let (ir, _, _) = cook(&lit_document(), None).unwrap();
+        let m = &ir.materials[0];
+        // Base colour factor (1, 0.5, 0.25) linear is sRGB (255, 188, 137); alpha is a coverage, kept.
+        assert_eq!(m.material_color[0], [255, 188, 137, 255]);
+        assert_eq!((m.stages.len(), m.pixel_stage_count), (2, 2));
+        let glow = &m.stages[1];
+        // previous + texture x constant; alpha stays the previous stage's; constant colour 1 (selector 13).
+        assert_eq!((glow.color_in, glow.alpha_in, glow.color_constant), ([15, 8, 14, 0], [7, 7, 7, 0], 13));
+        assert_eq!((glow.map, glow.coord, glow.channel), (1, 1, 255));
+        // The glow 0.5 x 4, 0.25 x 4, 0 is held to 1: (255, 255, 0).
+        assert_eq!(m.constants[1], [255, 255, 0, 255]);
+        // Its map is the emissive texture, read through the emissive map's own set (0 here), slot 1 = map 1 = coord 1;
+        // the normal map's slot is 2 (set 2).
+        assert_eq!((m.textures.len(), m.textures[1], m.coordinate_maps.as_slice()), (3, ir.pbr[0].maps[PBR_EMISSIVE], [0, 1, 2].as_slice()));
+        assert_eq!((m.coords[1].kind, m.coords[1].source, m.coords[1].matrix), (1, 4, NONE));
+        assert_eq!((m.textures[2], m.coords[2].source, m.normal_map), (ir.pbr[0].maps[PBR_NORMAL], 6, Some((2, 0.5))));
+
+        // A glow with no map adds constant 1 alone; a material with no base texture has the glow's map as map 0.
+        let mut factor_only = lit_document();
+        factor_only["materials"][0].as_object_mut().unwrap().remove("emissiveTexture");
+        let (ir, _, _) = cook(&factor_only, None).unwrap();
+        let glow = &ir.materials[0].stages[1];
+        assert_eq!((glow.color_in, glow.map, glow.coord), ([14, 15, 15, 0], 255, 255));
+        let mut no_base = lit_document();
+        no_base["materials"][0]["pbrMetallicRoughness"].as_object_mut().unwrap().remove("baseColorTexture");
+        no_base["materials"][0]["emissiveTexture"]["texCoord"] = 2.into();
+        let (ir, _, _) = cook(&no_base, None).unwrap();
+        let m = &ir.materials[0];
+        assert_eq!((m.stages[0].map, m.stages[1].map, m.stages[1].coord, m.textures.len()), (255, 0, 0, 2));
+        assert_eq!((m.coords.len(), m.coords[0].source, m.coordinate_maps.as_slice(), m.normal_map), (2, 6, [0, 1].as_slice(), Some((1, 0.5))));
+
+        // No glow stage when the glow is black or the material unlit (it shows its base colour alone).
+        let mut black = lit_document();
+        black["materials"][0]["emissiveFactor"] = serde_json::json!([0.0, 0.0, 0.0]);
+        let mut unlit = lit_document();
+        unlit["materials"][0]["extensions"]["KHR_materials_unlit"] = serde_json::json!({});
+        // Black: the base and normal maps; unlit: the base map alone, no normal map either.
+        for (document, textures, normal) in [(black, 2, Some((1, 0.5))), (unlit, 1, None)] {
+            let (ir, _, _) = cook(&document, None).unwrap();
+            let m = &ir.materials[0];
+            assert_eq!((m.stages.len(), m.textures.len(), m.normal_map), (1, textures, normal));
+        }
+        assert_eq!(colour_bytes([0.0, 0.003, 0.5, 0.5]), [0, 10, 188, 128]);
+    }
+
+    #[test]
+    fn a_normal_map_turns_the_lit_form_s_pixel_normal() {
+        use super::super::programs::{forms_of, generate, Input, Registers};
+        // MOD-MATERIALS-FC.md 1: inside generate(), behind the material's normal map; no second generator.
+        let (ir, _, _) = cook(&lit_document(), None).unwrap();
+        let m = &ir.materials[0];
+        let forms = forms_of("fixture", m, 0).unwrap();
+        let lit = forms.iter().find(|f| f.lit && f.replace == 0).copied().expect("a lit form");
+        let text = generate(m, lit, false, &Registers::of(m)).unwrap();
+        // The vertex turns the tangent and bitangent as the normal; the pixel turns its normal before enh_begin.
+        assert!(text.inputs.contains(&Input::Tangent) && text.inputs.contains(&Input::Binormal), "{:?}", text.inputs);
+        assert!(text.vertex.contains("o.lit_tan = lit_normal(p, v.tangent);") && text.vertex.contains("o.lit_bin = lit_normal(p, v.binormal);"));
+        assert!(text.vertex.contains("lit_tan : TEXCOORD") && text.pixel.contains("lit_bin : TEXCOORD"));
+        let turned = text.pixel.find("i.lit_nrm = (nm_t * nm.x + nm_b * nm.y) * 0.5 + nm_n * nm.z;").expect(&text.pixel);
+        assert!(turned < text.pixel.find("g_enh = enh_begin(").unwrap());
+        // It reads the normal map's own slot: the program's textures name slot 2.
+        assert!(text.textures.contains(&2), "{:?}", text.textures);
+        // The forms that light by vertex do not read it.
+        for form in forms.iter().filter(|f| !f.lit) {
+            let text = generate(m, *form, false, &Registers::of(m)).unwrap();
+            assert!(!text.pixel.contains("lit_tan") && !text.inputs.contains(&Input::Tangent));
+        }
+        // Its slot is marked as read, so its texture is bound.
+        let block = super::super::model_write::write(&ir, "fixture", &super::super::programs::Written::unknown()).unwrap();
+        let word = |at: usize| u32::from_le_bytes(block[at..at + 4].try_into().unwrap());
+        let at = word(24 * 4) as usize;
+        let slots = word(at + super::super::model_write::MATERIAL_BYTES - 16) as usize;
+        let slot = slots + 2 * super::super::model_write::SLOT_BYTES;
+        assert_eq!(block[slot + 6], super::super::model_write::SLOT_USES_MAP | super::super::model_write::SLOT_USES_COORD);
+    }
+
+    #[test]
+    fn a_vertex_coloured_mesh_s_animated_factor_is_its_constant_colour() {
+        // The factor of a vertex-coloured mesh is constant colour 0 (its channel takes the vertex's colour): an animated
+        // factor is a register animation's constant 0 too, by the same name, beside the material colour's.
+        let mut document = textured(serde_json::json!({ "offset": [0.0, 0.0] }));
+        let a = add_floats(&mut document, &[
+            (2, "SCALAR", vec![0.0, 1.0]),
+            (2, "VEC4", vec![1.0, 1.0, 1.0, 1.0, 1.0, 0.5, 0.0, 1.0]),
+            (3, "VEC4", vec![1.0; 12]),
+        ]);
+        document["meshes"][0]["primitives"][0]["attributes"]["COLOR_0"] = a[2].into();
+        document["animations"] = serde_json::json!([{ "name": "Glow", "samplers": [{ "input": a[0], "output": a[1] }],
+            "channels": [{ "sampler": 0, "target": { "path": "pointer",
+                "extensions": { "KHR_animation_pointer": { "pointer": "/materials/0/pbrMetallicRoughness/baseColorFactor" } } } }] }]);
+        let (ir, clips) = to_ir(&serde_json::to_vec(&document).unwrap(), None).unwrap();
+        assert_eq!(ir.materials[0].channels[0].material_source, 1);
+        let kinds: Vec<(&str, u8)> = clips.iter().map(|(name, c)| (name.as_str(), c.kind)).collect();
+        assert_eq!(kinds, [("Glow", KIND_COLORS), ("Glow", KIND_REGISTERS)]);
+        let (colours, constants) = (&clips[0].1, &clips[1].1);
+        assert_eq!((constants.first_count, constants.second_count, constants.tracks.len()), (0, 1, 4));
+        assert_eq!((constants.targets[0].name.as_slice(), constants.targets[0].slot), (b"Face".as_slice(), 0));
+        assert_eq!(constants.targets[0].material, colours.targets[0].material);
+        // The same curves: green's last key is the material colour's.
+        let (c, k) = (&colours.tracks[1], &constants.tracks[1]);
+        let last = |clip: &ClipIr, t: &Track| clip.values[t.at as usize + (t.count as usize - 1) * 3 + 1];
+        assert_eq!(last(colours, c), last(constants, k));
+        assert_eq!(clip_extension(KIND_REGISTERS), "brk");
     }
 
     fn material_notes() -> Vec<(&'static str, Vec<(&'static str, String)>)> {

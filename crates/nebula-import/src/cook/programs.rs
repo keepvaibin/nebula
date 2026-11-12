@@ -363,6 +363,9 @@ impl Pixel<'_> {
                 self.sampled.push((order[0], order[1]));
             }
         }
+        if let Some((slot, _)) = self.m.normal_map.filter(|_| self.form.lit) {
+            self.sampled.push((slot, slot));
+        }
     }
     fn plain_coord(&self, c: u8) -> bool {
         if self.texels.contains(&c) {
@@ -902,15 +905,19 @@ pub fn has_lit_form(m: &MaterialIr) -> Result<bool> {
     Ok(false)
 }
 
-/// The program's varyings. Its own coordinates take TEXCOORD0 up; the lit varyings (three) and the motion varyings (two)
-/// follow them in that order, so their places move with the coordinate count.
-fn varyings(uv_kinds: &[bool], color: [bool; 2], lit: bool, gain: bool) -> String {
+/// The program's varyings. Its own coordinates take TEXCOORD0 up; the lit varyings (three, five with a normal map's
+/// tangent and bitangent) and the motion varyings (two) follow them in that order, so their places move with the
+/// coordinate count; `gain` (c93) after the motion pair.
+fn varyings(uv_kinds: &[bool], color: [bool; 2], lit: bool, normal_mapped: bool, gain: bool) -> String {
     let lit_first = uv_kinds.len();
-    let motion_first = lit_first + if lit { 3 } else { 0 };
+    let motion_first = lit_first + if lit { 3 } else { 0 } + if normal_mapped { 2 } else { 0 };
     let mut s = format!("#define NEBULA_MOTION_CURRENT_INDEX {motion_first}\n#define NEBULA_MOTION_PREVIOUS_INDEX {}\n", motion_first + 1);
     s.push_str("struct Varyings {\n");
     if lit {
         let _ = writeln!(s, "    PER_SAMPLE float3 lit_eye : TEXCOORD{lit_first};\n    PER_SAMPLE float3 lit_nrm : TEXCOORD{};\n    nointerpolation uint lit_light : TEXCOORD{};", lit_first + 1, lit_first + 2);
+    }
+    if normal_mapped {
+        let _ = writeln!(s, "    PER_SAMPLE float3 lit_tan : TEXCOORD{};\n    PER_SAMPLE float3 lit_bin : TEXCOORD{};", lit_first + 3, lit_first + 4);
     }
     s.push_str("    float4 pos : SV_Position;\n");
     if color[0] {
@@ -960,6 +967,8 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
     }
     env_coords.retain(|c| !sprite_coords.contains(c));
     let lit_channels = form.lit && light_terms_any(m);
+    // A normal map turns the lit form's pixel normal (MOD-MATERIALS-FC.md 1); the other forms light by vertex.
+    let normal_map = m.normal_map.filter(|_| form.lit && form.replace == 0);
     let metal = !env_coords.is_empty();
     let mut p = Pixel {
         m,
@@ -986,6 +995,20 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
         }
         let fog = fog_lines(fog_type, &mut p.rows);
         p.lines.extend(fog);
+    }
+    // glTF 2.0 normalTexture: normalize((texel x 2 - 1) x (scale, scale, 1)) in the surface's tangent space (tangent,
+    // bitangent, normal), here unnormalized, as enh_begin takes its normal; the map's texels are data, not sRGB colour.
+    let mut normal_lines: Vec<String> = Vec::new();
+    if let Some((slot, scale)) = normal_map {
+        let coord = p.sample_coord(slot, slot, None);
+        let texel = p.sample(slot, &coord);
+        normal_lines.push("    {".into());
+        normal_lines.push(format!("        const float3 nm = {texel}.rgb * 2.0 - 1.0;"));
+        for (name, of) in [("nm_t", "i.lit_tan"), ("nm_b", "i.lit_bin"), ("nm_n", "i.lit_nrm")] {
+            normal_lines.push(format!("        const float3 {name} = dot({of}, {of}) > 0.0 ? normalize({of}) : {of};"));
+        }
+        normal_lines.push(format!("        i.lit_nrm = (nm_t * nm.x + nm_b * nm.y) * {scale:?} + nm_n * nm.z;"));
+        normal_lines.push("    }".into());
     }
     // The lit form's channels run in the pixel stage and read both vertex colours.
     let mut lit_body: Vec<String> = Vec::new();
@@ -1034,6 +1057,14 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
         body.push("    o.lit_eye = p.eye;".into());
         body.push("    o.lit_nrm = nrm;".into());
         body.push("    o.lit_light = p.light;".into());
+    }
+    if normal_map.is_some() {
+        for (input, line) in [(Input::Tangent, "    o.lit_tan = lit_normal(p, v.tangent);"), (Input::Binormal, "    o.lit_bin = lit_normal(p, v.binormal);")] {
+            if !inputs.contains(&input) {
+                inputs.push(input);
+            }
+            body.push(line.into());
+        }
     }
     let mut reads_color = [false; 2];
     let names = [Channel { target: "c0", vertex: "v.color0" }, Channel { target: "c1", vertex: "v.color1" }];
@@ -1156,7 +1187,7 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
         body.insert(0, "    const float3 nrm = lit_normal(p, v.nrm);".into());
     }
     let read_normal = body.iter().any(|l| l.contains("v.nrm"));
-    let vary = varyings(&uv_kinds, color_written, form.lit, map_gained);
+    let vary = varyings(&uv_kinds, color_written, form.lit, normal_map.is_some(), map_gained);
     let mut vertex_in = String::from("struct VertexIn {\n    float3 pos : POSITION;\n    uint draw_matrix : BLENDINDICES;\n");
     let mut final_inputs = Vec::new();
     if read_normal {
@@ -1219,6 +1250,10 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
         let face = if skinned { super::hit_record::face_kind(&m.name) } else { 0 };
         if face != 0 {
             pixel.push_str(&format!("    TRACED_FACE({face}u);\n"));
+        }
+        for l in &normal_lines {
+            pixel.push_str(l);
+            pixel.push('\n');
         }
         pixel.push_str("    g_enh = enh_begin(i.lit_eye, i.lit_nrm);\n");
         if !m.highlight_maps.is_empty() {
