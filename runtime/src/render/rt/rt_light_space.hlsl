@@ -25,7 +25,7 @@ RT_FORMAT(rgba16f) RWTexture2D<float4> g_out : register(u0);
 Texture2D<float4> g_motion_map : register(t12);  // the last step's, for --diagnostics rt-motion
 Texture2D<float4> g_sun_out : register(t14);     // the last step's: the sun's V, filtered (rgb)
 Texture2D<float4> g_indirect : register(t13);    // the last step's: I (rt_indirect_up.hlsl), when bit 8 of g_more.z says
-// The last step's landing cue (l80): the drops (48 bytes each from g_at.z: base, length; direction, radius; caster, the
+// The last step's landing cue (l80): the drops (48 bytes each from g_at.z: base, radius; direction, length; caster, the
 // cue bit, the body's half reach along, its radius across) by 16-pixel tiles (from g_at.w; entries from g_more.x).
 ByteAddressBuffer g_drops : register(t3);
 ByteAddressBuffer g_tiles : register(t4);
@@ -58,7 +58,7 @@ float landing_cue(int2 pixel, float4 guide) {
         // From halfway down the body (its own upward faces below that: the ground under the feet) to the drop's end,
         // on what faces up against the drop.
         const float start = 0.5f * asfloat(rest.z);
-        if (along <= start || along > base.w || dot(normal, way.xyz) >= 0.0f) {
+        if (along <= start || along > way.w || dot(normal, way.xyz) >= 0.0f) {  // way.w: the drop's length (l90)
             continue;
         }
         const float height = along - start;
@@ -66,7 +66,7 @@ float landing_cue(int2 pixel, float4 guide) {
         const float radius = asfloat(rest.w);
         const float wide = max(height * g_stage.w, 1.0f);
         const float under = 1.0f - smoothstep(radius - wide, radius + wide, aside);
-        const float fade = 1.0f - saturate(height / max(base.w - start, 1.0f));
+        const float fade = 1.0f - saturate(height / max(way.w - start, 1.0f));
         v = min(v, 1.0f - under * fade);
     }
     return lerp(1.0f, v, kLandingCue);
