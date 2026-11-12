@@ -14,6 +14,7 @@
 #include "Game/Ui/Rect.hpp"
 #include "Game/Ui/UiCommon.hpp"
 #include "Game/Ui/WideTextWriter.hpp"
+#include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/HashUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
@@ -26,6 +27,7 @@
 #include <nebula_cooked_texture.h>
 #include <nebula_format.h>
 #include <nebula_module.h>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 
@@ -1259,8 +1261,9 @@ namespace luma {
                 return LUMA_OK;
             }
 
-            // The 3-D calls (layer 3, FB): at a world point only. Until FB's renderer side lands they draw nothing and
-            // say so: LUMA_E_ABSENT (the call exists; this game draws none yet).
+            // The 3-D calls (layer 3, FB): at a world point only, in the world's units under the scene's camera (a
+            // TypedDraw with no place of its own), depth tested against the scene (LEQUAL; no depth written: an overlay
+            // the world in front hides), blended by alpha, unlit, both sides.
             s32 enter3D(const LumaMod* pMod, const char* pWhere) {
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
@@ -1269,39 +1272,174 @@ namespace luma {
                     report(pMod, pWhere, cOutsideCode, nullptr, nullptr);
                     return LUMA_E_STATE;
                 }
-                return LUMA_E_ABSENT;
+                return LUMA_OK;
+            }
+
+            bool finite3(const LumaDrawVec3* pPoint) {
+                return pPoint != nullptr && finite(pPoint->x) && finite(pPoint->y) && finite(pPoint->z);
+            }
+
+            // vertex_color.hlsl in the world: the vertex colour, blended by its alpha, depth tested.
+            void worldMaterial(SiteMaterial& rMaterial) {
+                rMaterial.init(NEBULA_SHADER_VERTEX_COLOR, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, false,
+                               NEBULA_CULL_NONE);
+                rMaterial.constants[0] = 0.0f;
+            }
+
+            // tex_modulate.hlsl in the world: the texture times the vertex colour, its alpha times the colour's.
+            void worldImageMaterial(SiteMaterial& rMaterial, const GameTexture* pTexture, u8 alpha) {
+                rMaterial.init(NEBULA_SHADER_TEX_MODULATE, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, false,
+                               NEBULA_CULL_NONE);
+                rMaterial.constants[0] = alpha / 255.0f;
+                rMaterial.constants[1] = 0.0f;
+                rMaterial.setTexture(0, pTexture);
             }
 
             int32_t svcLine3(const LumaMod* pMod, const LumaDrawVec3* pA, const LumaDrawVec3* pB, float thickness,
                              LumaColor colour) {
-                (void)pA;
-                (void)pB;
-                (void)thickness;
-                (void)colour;
-                return enter3D(pMod, "draw.line3");
+                const char* const pWhere = "draw.line3";
+                if (const s32 status = enter3D(pMod, pWhere); status != LUMA_OK) {
+                    return status;
+                }
+                if (!finite3(pA)) {
+                    return badArgument(pMod, pWhere, "a");
+                }
+                if (!finite3(pB)) {
+                    return badArgument(pMod, pWhere, "b");
+                }
+                if (!finite(thickness) || !(thickness > 0.0f)) {
+                    return badArgument(pMod, pWhere, "thickness");
+                }
+                if (!countFor(sModDraw, pMod, pWhere, 1)) {
+                    return LUMA_E_LIMIT;
+                }
+                // A quad along the line, its width across both the line and the way to the eye (it faces the camera).
+                const Vec3f eye = MR::getCamPos();
+                const f32 dx = pB->x - pA->x;
+                const f32 dy = pB->y - pA->y;
+                const f32 dz = pB->z - pA->z;
+                const f32 ex = eye.x - (pA->x + pB->x) * 0.5f;
+                const f32 ey = eye.y - (pA->y + pB->y) * 0.5f;
+                const f32 ez = eye.z - (pA->z + pB->z) * 0.5f;
+                f32 sx = dy * ez - dz * ey;
+                f32 sy = dz * ex - dx * ez;
+                f32 sz = dx * ey - dy * ex;
+                const f32 length = std::sqrt(sx * sx + sy * sy + sz * sz);
+                if (!(length > 1e-6f)) {
+                    const Vec3f across = MR::getCamXdir();  // seen end on, or of no length: across the screen
+                    sx = across.x;
+                    sy = across.y;
+                    sz = across.z;
+                } else {
+                    sx /= length;
+                    sy /= length;
+                    sz /= length;
+                }
+                const f32 half = thickness * 0.5f;
+                sx *= half;
+                sy *= half;
+                sz *= half;
+                SiteMaterial material;
+                worldMaterial(material);
+                TypedDraw site(material, nullptr);
+                VertexPC* pVertex = site.vertices< VertexPC >(NEBULA_PRIMITIVE_QUADS, 4);
+                const Rgba8 tint(colour);
+                pVertex[0] = {pA->x - sx, pA->y - sy, pA->z - sz, tint};
+                pVertex[1] = {pB->x - sx, pB->y - sy, pB->z - sz, tint};
+                pVertex[2] = {pB->x + sx, pB->y + sy, pB->z + sz, tint};
+                pVertex[3] = {pA->x + sx, pA->y + sy, pA->z + sz, tint};
+                return LUMA_OK;
             }
 
             int32_t svcTri3(const LumaMod* pMod, const LumaDrawVec3 points[3], const LumaColor colours[3]) {
-                (void)points;
-                (void)colours;
-                return enter3D(pMod, "draw.tri3");
+                const char* const pWhere = "draw.tri3";
+                if (const s32 status = enter3D(pMod, pWhere); status != LUMA_OK) {
+                    return status;
+                }
+                if (points == nullptr || !finite3(&points[0]) || !finite3(&points[1]) || !finite3(&points[2])) {
+                    return badArgument(pMod, pWhere, "points");
+                }
+                if (colours == nullptr) {
+                    return badArgument(pMod, pWhere, "colours");
+                }
+                if (!countFor(sModDraw, pMod, pWhere, 1)) {
+                    return LUMA_E_LIMIT;
+                }
+                SiteMaterial material;
+                worldMaterial(material);
+                TypedDraw site(material, nullptr);
+                VertexPC* pVertex = site.vertices< VertexPC >(NEBULA_PRIMITIVE_TRIANGLES, 3);
+                for (u32 i = 0; i < 3; i++) {
+                    pVertex[i] = {points[i].x, points[i].y, points[i].z, Rgba8(colours[i])};
+                }
+                return LUMA_OK;
             }
 
+            // Layer 3's mesh (l3b): its arguments checked; drawing a model at a point of the frame is the next patch.
             int32_t svcMesh(const LumaMod* pMod, const char* pModel, const float matrix[12], LumaColor colour) {
-                (void)pModel;
-                (void)matrix;
+                const char* const pWhere = "draw.mesh";
                 (void)colour;
-                return enter3D(pMod, "draw.mesh");
+                if (const s32 status = enter3D(pMod, pWhere); status != LUMA_OK) {
+                    return status;
+                }
+                if (pModel == nullptr || pModel[0] == '\0') {
+                    return badArgument(pMod, pWhere, "model");
+                }
+                if (matrix == nullptr) {
+                    return badArgument(pMod, pWhere, "matrix");
+                }
+                for (u32 i = 0; i < 12; i++) {
+                    if (!finite(matrix[i])) {
+                        return badArgument(pMod, pWhere, "matrix");
+                    }
+                }
+                return LUMA_E_ABSENT;
             }
 
             int32_t svcBillboard(const LumaMod* pMod, LumaDrawTexture texture, const LumaDrawVec3* pPos, float w, float h,
                                  LumaColor colour) {
-                (void)texture;
-                (void)pPos;
-                (void)w;
-                (void)h;
-                (void)colour;
-                return enter3D(pMod, "draw.billboard");
+                const char* const pWhere = "draw.billboard";
+                if (const s32 status = enter3D(pMod, pWhere); status != LUMA_OK) {
+                    return status;
+                }
+                if (!finite3(pPos)) {
+                    return badArgument(pMod, pWhere, "pos");
+                }
+                if (!finite(w) || !finite(h) || w < 0.0f || h < 0.0f) {
+                    return badArgument(pMod, pWhere, "size");
+                }
+                Texture* const pTexture = textureOf(pMod, texture);
+                s32 status = LUMA_OK;
+                const GameTexture* pDrawn = nullptr;
+                if (pTexture == nullptr) {
+                    // A freed or foreign texture: the checker, so the mistake is seen, and the report (as image).
+                    report(pMod, pWhere, 102u, nullptr, nullptr);
+                    status = LUMA_E_HANDLE;
+                    pDrawn = placeholder();
+                } else {
+                    pDrawn = pTexture->texture;
+                }
+                if (!countFor(sModDraw, pMod, pWhere, 1)) {
+                    return LUMA_E_LIMIT;
+                }
+                if (w <= 0.0f || h <= 0.0f) {
+                    return status;
+                }
+                // Facing the camera: across its x and y in the world.
+                const Vec3f right = MR::getCamXdir();
+                const Vec3f up = MR::getCamYdir();
+                const f32 rx = right.x * w * 0.5f, ry = right.y * w * 0.5f, rz = right.z * w * 0.5f;
+                const f32 ux = up.x * h * 0.5f, uy = up.y * h * 0.5f, uz = up.z * h * 0.5f;
+                SiteMaterial material;
+                worldImageMaterial(material, pDrawn, static_cast< u8 >(colour & 0xFFu));
+                TypedDraw site(material, nullptr);
+                VertexPCT* pVertex = site.vertices< VertexPCT >(NEBULA_PRIMITIVE_QUADS, 4);
+                const Rgba8 tint(static_cast< u8 >(colour >> 24), static_cast< u8 >(colour >> 16), static_cast< u8 >(colour >> 8), 255);
+                pVertex[0] = {pPos->x - rx + ux, pPos->y - ry + uy, pPos->z - rz + uz, tint, 0.0f, 0.0f};
+                pVertex[1] = {pPos->x + rx + ux, pPos->y + ry + uy, pPos->z + rz + uz, tint, 1.0f, 0.0f};
+                pVertex[2] = {pPos->x + rx - ux, pPos->y + ry - uy, pPos->z + rz - uz, tint, 1.0f, 1.0f};
+                pVertex[3] = {pPos->x - rx - ux, pPos->y - ry - uy, pPos->z - rz - uz, tint, 0.0f, 1.0f};
+                return status;
             }
 
             const LumaDrawService cTable = {

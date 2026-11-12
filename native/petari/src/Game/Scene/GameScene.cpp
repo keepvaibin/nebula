@@ -83,6 +83,7 @@
 #include "Game/Render/Model.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include "Game/System/LumaDraw.hpp"
+#include "Game/System/LumaDrawInst.hpp"
 
 namespace {
     CometRetryButton* getCometRetryButton() {
@@ -341,6 +342,7 @@ void GameScene::calcAnim() {
 
     CategoryList::execute(MR::CalcAnimType_AnimParticleIgnorePause);
     SceneFunction::executeCalcViewAndEntryList();
+    luma::draw::inst::frame();  // the mods' overrides onto this frame's materials and draw poses (one load with none)
 }
 
 void GameScene::notifyEndScenarioStarter() {

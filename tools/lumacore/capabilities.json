@@ -140,6 +140,8 @@
     "draw.clip": "draw.clip_push/pop cut drawing to a rectangle and transform_push/pop move, turn and scale it, nested 16 deep (2.4 layer 1)",
     "draw.image": "draw.image draws part of a texture into a rectangle, tinted; a freed texture draws the checker and is reported (2.4 layer 2)",
     "draw.textures": "draw.texture finds a cooked texture by its store path and texture_from_pixels makes one from RGBA8 the mod gives (updated in part, freed), within 256 textures and 64 MiB a mod (2.4 layer 2)",
+    "draw.world": "draw.line3, tri3 and billboard draw in the world at a world point in world units, depth tested against the scene, blended by alpha, unlit; a freed texture on a billboard draws the checker and is reported (2.4 layer 3)",
+    "draw.inst": "draw.inst overrides one actor's drawn model for a mod: every material colour times a colour, a material's colour by name, a joint and its children hidden, a drawn scale about the actor's base; the game's own colour animation goes on under it, and all of it is gone with the mod, the actor or the scene (2.4 layer 5)",
     "draw.limits": "A mod's 20,001st primitive in a frame, a draw call outside its point, a pop with nothing pushed and text that is not UTF-8 draw nothing and are reported (2.4)",
     "ui.text_cut": "A text longer than its pane holds is cut there, LUMA_OK, Ui.TextCut said (2.4, 3.8)",
     "ui.visible": "ui shows and hides a pane and a whole screen (2.4, 3.8)",
