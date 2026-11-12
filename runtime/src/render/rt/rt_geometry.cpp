@@ -601,6 +601,9 @@ void Geometry::refit() {
 // recorded, so a frame names one or the other, never none.
 bool Geometry::build_with_micromap(Entry& entry) {
     const BuildSizes micromap_sizes = backend_.micromap_sizes(entry.omm);
+    if (micromap_sizes.structure == 0u) {
+        return false;  // no size yet (no page or buffer for the query to name, l87): it waits first in the queue
+    }
     const Range micromap_range = take_structure(micromap_sizes.structure);
     if (!micromap_range) {
         return false;

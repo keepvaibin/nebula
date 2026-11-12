@@ -194,7 +194,7 @@ D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS flags_of(BuildKind kind, con
 }
 
 // A micromap array of `input.triangles` micromaps of one level, four states (rt_backend.h MicromapInput); `at` the
-// address of its buffer, 0 for sizes alone.
+// address of its buffer. The size query reads no GPU memory but the debug layer wants both addresses named (l87).
 D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS micromap_inputs(const MicromapInput& input, std::uint64_t at,
                                                                      D3D12_RAYTRACING_OPACITY_MICROMAP_HISTOGRAM_ENTRY& histogram,
                                                                      D3D12_RAYTRACING_OPACITY_MICROMAP_ARRAY_DESC& array) {
@@ -202,11 +202,9 @@ D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS micromap_inputs(const Micro
     array = {};
     array.NumOmmHistogramEntries = 1u;
     array.pOmmHistogram = &histogram;
-    if (at != 0u) {
-        array.InputBuffer = at;
-        array.PerOmmDescs.StartAddress = at + input.triangles_at;
-        array.PerOmmDescs.StrideInBytes = 8u;
-    }
+    array.InputBuffer = at;
+    array.PerOmmDescs.StartAddress = at + input.triangles_at;
+    array.PerOmmDescs.StrideInBytes = 8u;
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{};
     inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_OPACITY_MICROMAP_ARRAY;
     inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
@@ -882,7 +880,18 @@ bool Backend::micromaps() const noexcept { return state_ != nullptr && state_->m
 BuildSizes Backend::micromap_sizes(const MicromapInput& input) const {
     D3D12_RAYTRACING_OPACITY_MICROMAP_HISTOGRAM_ENTRY histogram{};
     D3D12_RAYTRACING_OPACITY_MICROMAP_ARRAY_DESC array{};
-    const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = micromap_inputs(input, 0u, histogram, array);
+    // A real address the query never reads (l87): the input's own buffer where it exists, else the first page.
+    const State& s = *state_;
+    std::uint64_t named = 0u;
+    if (input.buffer < s.buffers.size() && s.buffers[input.buffer].buffer != nullptr) {
+        named = s.buffers[input.buffer].buffer->GetGPUVirtualAddress();
+    } else if (!s.pages.empty()) {
+        named = s.pages[0].address;
+    }
+    if (named == 0u) {
+        return {};
+    }
+    const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = micromap_inputs(input, named, histogram, array);
     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
     state_->device->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &info);
     return {info.ResultDataMaxSizeInBytes, info.ScratchDataSizeInBytes, 0u};
