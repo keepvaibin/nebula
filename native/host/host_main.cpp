@@ -2235,8 +2235,16 @@ int asset_entry_out(const std::optional<galaxy::assets::Entry>& entry, NebulaAss
     return 1;
 }
 
+// A file a mod provides (assets 1.1, luma_assets_service.h) comes before the store's at its path; its index, above
+// every store's, leads entry, child, map and read to it.
 int svc_asset_find(void*, const char* path, NebulaAssetEntry* out) {
-    return path != nullptr ? asset_entry_out(asset_table().find(path), out) : 0;
+    if (path == nullptr) {
+        return 0;
+    }
+    if (std::optional<galaxy::assets::Entry> provided = galaxy::luma_assets::provided_find(path)) {
+        return asset_entry_out(provided, out);
+    }
+    return asset_entry_out(asset_table().find(path), out);
 }
 
 int svc_asset_find_game(void*, const char* path, NebulaAssetEntry* out) {
@@ -2244,15 +2252,23 @@ int svc_asset_find_game(void*, const char* path, NebulaAssetEntry* out) {
 }
 
 int svc_asset_entry(void*, int32_t index, NebulaAssetEntry* out) {
-    return asset_entry_out(asset_table().entry(index), out);
+    return asset_entry_out(galaxy::luma_assets::is_provided(index) ? galaxy::luma_assets::provided_entry(index)
+                                                                   : asset_table().entry(index),
+                           out);
 }
 
 int svc_asset_added_child(void*, const char* path, uint32_t child, NebulaAssetEntry* out) {
-    return path != nullptr ? asset_entry_out(asset_table().added_child(path, child), out) : 0;
+    // What a mod provides at the path replaces the game's whole: nothing is added to it.
+    if (path == nullptr || galaxy::luma_assets::provided_find(path)) {
+        return 0;
+    }
+    return asset_entry_out(asset_table().added_child(path, child), out);
 }
 
 int svc_asset_child(void*, int32_t folder, uint32_t child, NebulaAssetEntry* out) {
-    return asset_entry_out(asset_table().child(folder, child), out);
+    return asset_entry_out(galaxy::luma_assets::is_provided(folder) ? galaxy::luma_assets::provided_child(folder, child)
+                                                                    : asset_table().child(folder, child),
+                           out);
 }
 
 // The game's memory. An arena is reserved from the top of the address space down, far above 4 GB and the file views, so an
@@ -2302,6 +2318,9 @@ void test_drive_delay() {
 
 const void* svc_asset_map(void*, int32_t file) {
     test_drive_delay();
+    if (galaxy::luma_assets::is_provided(file)) {
+        return galaxy::luma_assets::provided_view(file);
+    }
     const std::optional<galaxy::assets::Entry> entry = asset_table().entry(file);
     if (!entry) {
         return nullptr;
@@ -2311,6 +2330,10 @@ const void* svc_asset_map(void*, int32_t file) {
 
 void* svc_asset_map_private(void*, int32_t file) {
     test_drive_delay();
+    // A provided file is no view of the store: the game reads it into its own memory instead (GameAssets::load).
+    if (galaxy::luma_assets::is_provided(file)) {
+        return nullptr;
+    }
     const std::optional<galaxy::assets::Entry> entry = asset_table().entry(file);
     if (!entry) {
         return nullptr;
@@ -2337,10 +2360,15 @@ int32_t svc_asset_read(void*, int32_t file, uint64_t file_offset, uint32_t size,
     gFileReads.fetch_add(1, std::memory_order_relaxed);
     // --diagnostics file-reads: each read with the frame it came on: two runs of deterministic mode compare by it.
     const bool trace_reads = ::galaxy::diagnosing(::galaxy::kDiagnoseFileReads);
-    const std::optional<galaxy::assets::Entry> entry = asset_table().entry(file);
+    const bool provided = galaxy::luma_assets::is_provided(file);
+    const std::optional<galaxy::assets::Entry> entry =
+        provided ? galaxy::luma_assets::provided_entry(file) : asset_table().entry(file);
     if (trace_reads) {
         std::fprintf(stderr, "[read] frame %llu entry %d at %llu size %u %s\n", static_cast<unsigned long long>(gDeterministicFrames.load(std::memory_order_relaxed)),
                      file, static_cast<unsigned long long>(file_offset), size, entry && entry->name != nullptr ? entry->name : "?");
+    }
+    if (provided) {
+        return galaxy::luma_assets::provided_read(file, file_offset, size, dst) ? static_cast<int32_t>(size) : -1;
     }
     if (!entry || file_offset > entry->length || entry->length - file_offset < size ||
         !gPak.store.read(entry->position + file_offset, size, dst)) {

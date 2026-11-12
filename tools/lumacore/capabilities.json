@@ -189,6 +189,8 @@
     "services.net.ipc": "Endpoints on this device by name (1.2 of net.local): ipc_connect, ipc_listen; named pipes on Windows, Unix sockets elsewhere (2.7 layer 3)",
     "services.net.udp": "UDP datagrams (1.1 of net.local and net.internet): udp_open, udp_connect, send_to, take_datagram, DATAGRAM (2.7 layer 2b)",
     "services.assets": "The game's files by path as the game reads them, mods' over the game's or the game's own: find, bytes, a folder's entries (2.8 layer 1)",
+    "services.assets.provide": "A mod's files given to the game at a path, a file or a whole archive, before the game's; withdrawn, refused inside an archive and over another mod's (2.8 layer 2)",
+    "services.assets.cook": "A file as the disc has it cooked by the game's cooker on its own thread and provided, or refused with the cooker's words (2.8 layer 3)",
     "services.input": "A mod's own actions (its luma.json key options), each following a game control until the player binds keys or buttons to it in Controls, read each game frame (2.5)",
     "services.audio": "A mod's cooked sound effects played as voices (volume, pitch, bus, loop, 32 a mod, priority drops the 33rd, ENDED), and streams it fills with float frames at any rate (NEED, 4 a mod), mixed into the game's output on its effects, ui, voice and music buses (2.6 layers 1-2)",
     "services.audio.music": "A mod's cooked sound as the game's music, fading the game's own out and back (music, music_restore; 2.6 layer 3)",

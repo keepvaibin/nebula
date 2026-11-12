@@ -3,8 +3,8 @@
    by path: what is there, its bytes, a folder's entries, with the mods' files over the game's or the game's own under
    them. No permission: every mod may read the game. Every call is the game thread's and returns at once (the store is
    mapped for the whole session: no call waits on the drive; the first read of a file's bytes may, as the game's own
-   first read of them does). Later layers: a mod's files given to the game at run time (providers), run-time content
-   through the cooker and the validator. */
+   first read of them does). 1.1: a mod's files given to the game at run time (providers), in the game's form or in
+   the disc's, cooked by the game's own cooker. */
 #ifndef LUMA_ASSETS_H
 #define LUMA_ASSETS_H
 
@@ -16,7 +16,7 @@ extern "C" {
 
 #define LUMA_ASSETS_NAME "assets"
 #define LUMA_ASSETS_MAJOR 1u
-#define LUMA_ASSETS_MINOR 0u
+#define LUMA_ASSETS_MINOR 1u
 
 /* A path (the game's, from the store's root): '/' between parts, letters in either case, "." and ".." steps; a disc
    path is taken as the game's (an archive "ObjectData/Kuribo.arc" is the folder "ObjectData/Kuribo", a file inside it
@@ -57,6 +57,27 @@ typedef struct LumaAssetInfo {
     uint64_t bytes;     /* a file's length; a folder's 0 */
 } LumaAssetInfo; /* 1.0: 32 bytes */
 
+/* 1.1. One file a mod provides (provide). */
+typedef struct LumaAssetFile {
+    const char* path;  /* inside the folder provided: '/' between parts, no "." or ".." parts; null or "" with a count of
+                          1: the file is the path itself */
+    const void* data;  /* its bytes, copied by the call; null only with bytes 0 */
+    uint64_t bytes;
+} LumaAssetFile;
+
+/* 1.1. At most this many files in one provide, and this many bytes provided by one mod over a session (copies of what
+   it provided and withdrew included: the game may still hold them, so they stay until the game ends). */
+#define LUMA_ASSETS_PROVIDE_FILES_MOST 4096u
+#define LUMA_ASSETS_PROVIDE_MOST (256ull * 1024ull * 1024ull)
+/* 1.1. Cooks one mod may have waiting or running at once. */
+#define LUMA_ASSETS_COOKS_MOST 8u
+
+/* 1.1. Event kinds (LumaEvent.kind). */
+#define LUMA_ASSETS_EVENT_COOKED 1u /* cook's answer, handle the request: status LUMA_OK (provided; value the bytes
+                                       it holds now); LUMA_E_FORMAT with data the cooker's words (English UTF-8, not
+                                       terminated): the cooker refused the file; LUMA_E_EXISTS, LUMA_E_FORMAT (data
+                                       null), LUMA_E_LIMIT: as provide answers them for the cooked files */
+
 typedef struct LumaAssetsService {
     LumaServiceTable base;
     /* 1.0. What is at `path` into *out (out->size set by the mod). LUMA_OK; nothing there: LUMA_E_NOT_FOUND (an
@@ -77,6 +98,33 @@ typedef struct LumaAssetsService {
        reported. */
     int32_t (*entry)(const LumaMod* mod, const char* path, uint32_t flags, uint32_t index, char* name,
                      uint32_t name_size, uint32_t* needed, LumaAssetInfo* out);
+
+    /* 1.1. The mod's files for `path`, in the form the game reads (as `bytes` gives a file: a copy of the game's, or
+       cook's output): the game's next look at the path finds them (a file the game holds already, a loaded stage's
+       archive, changes when the game loads it again). A count of 1 with files[0].path null or "": a file at `path`;
+       otherwise an archive at `path` holding these files (sub-folders from their paths), replacing the game's whole.
+       The bytes are copied. find, bytes and entry see them (not with LUMA_ASSETS_GAME_ONLY); a folder's entries do not
+       list a path new to the game. A second provide of the mod's own path replaces its first.
+       LUMA_OK. Answers (not reported): LUMA_E_EXISTS another mod provides the path, or a path under it;
+       LUMA_E_FORMAT the path is inside an archive (provide the archive whole), or the game has a folder there and this
+       is a file, a file and this is an archive, or a plain folder (provide its files one by one).
+       Reported: LUMA_E_ARGUMENT a null or too long path, null files, a count of 0 or over
+       LUMA_ASSETS_PROVIDE_FILES_MOST, a null data with bytes, a file path empty, with an empty, "." or ".." part, or
+       given twice, or a file where another's folder is; LUMA_E_LIMIT over LUMA_ASSETS_PROVIDE_MOST. */
+    int32_t (*provide)(const LumaMod* mod, const char* path, const LumaAssetFile* files, uint32_t count);
+    /* 1.1. The game's own again at `path` (what it had before the mod's provide). LUMA_OK; the mod provides nothing
+       there: LUMA_E_NOT_FOUND (an answer). A null or too long path: LUMA_E_ARGUMENT, reported. A mod's stop withdraws
+       everything it provides. */
+    int32_t (*withdraw)(const LumaMod* mod, const char* path);
+    /* 1.1. A file as the disc has it (a model, a texture, an archive, compressed or not; the name `path` ends with
+       decides how it is read, as at install) cooked by the game's cooker on its own thread, then provided at `path` as
+       provide does. The bytes are copied. LUMA_PENDING and *request (not null): the answer comes as
+       LUMA_ASSETS_EVENT_COOKED to fn(user, event) on a later frame, with handle *request. Answers: LUMA_E_ABSENT this
+       game's cooker cannot cook at run time; LUMA_E_BUSY LUMA_ASSETS_COOKS_MOST cooks wait or run. Reported:
+       LUMA_E_ARGUMENT a null or too long path, null fn or request, null data or 0 bytes; LUMA_E_TOO_LARGE over
+       LUMA_ASSETS_PROVIDE_MOST bytes. A mod's stop cancels its cooks (no event). */
+    int32_t (*cook)(const LumaMod* mod, const char* path, const void* data, uint64_t bytes, LumaEventFn fn, void* user,
+                    LumaHandle* request);
 } LumaAssetsService;
 
 #ifdef __cplusplus

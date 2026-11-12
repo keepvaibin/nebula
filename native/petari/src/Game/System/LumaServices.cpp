@@ -62,7 +62,7 @@ namespace luma {
                 {"fs.exchange", 1, 0, "fs.exchange", "services-fs"},
                 {"net.local", 1, 4, "net.local", "services-net"},
                 {"net.internet", 1, 4, "net.internet", "services-net"},
-                {"assets", 1, 0, nullptr, "services-assets"},
+                {"assets", 1, 1, nullptr, "services-assets"},
                 {"input", 1, 0, nullptr, "services-input"},
                 {"audio", 1, 0, nullptr, "services-audio"},
                 {"audio.microphone", 1, 0, "audio.microphone", "services-audio"},
