@@ -22,14 +22,17 @@ typedef LumaHandle LumaMovie;
 
 /* The event a movie gives (LumaEvent.kind; handle: the movie). */
 enum {
-    LUMA_MOVIE_EVENT_ENDED = 1 /* status LUMA_OK: played to its end (never for a movie that loops); LUMA_E_CANCELLED:
+    LUMA_MOVIE_EVENT_ENDED = 1 /* status LUMA_OK: played to its end (never for a movie that loops), or the player
+                                  skipped it (+, Yes; a movie whose .movie.json leaves "skip" true); LUMA_E_CANCELLED:
                                   stop, another movie, the scene's end or the mod's ended it first */
 };
 
 typedef struct LumaMovieService {
     LumaServiceTable base;
     /* 1.0. Game thread, in a scene. The mod's movie `name` (its asset path without .movie.json: "movies/intro" is
-       Luma/<id>/movies/intro.nmov) played from its first frame, looping when its .movie.json says "loop". Whatever
+       Luma/<id>/movies/intro.nmov) played from its first frame, looping when its .movie.json says "loop", its
+       "subtitles" drawn over it in the game's cinema font (the text keys found as the game finds a message: the mod's
+       text rows in the played language first), the player's + skip offered unless it says "skip": false. Whatever
        movie the player was playing ends first (a mod's: its LUMA_E_CANCELLED). With `fn`, LUMA_MOVIE_EVENT_ENDED comes
        to fn(user, event) at the frame's start after it ends. LUMA_OK and *out. No such movie in the store: LUMA_E_NOT_FOUND,
        Content.MissingMovie (673) in the mod log; a file there that is not a cooked movie: LUMA_E_FORMAT, reported. No

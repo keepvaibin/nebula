@@ -56,6 +56,7 @@
 #include "Game/Screen/GameStageClearSequence.hpp"
 #include "Game/Screen/LensFlare.hpp"
 #include "Game/Screen/MoviePlayingSequence.hpp"
+#include "Game/System/LumaMovie.hpp"
 #include "Game/System/GalaxyMapController.hpp"
 #include "Game/System/GameSequenceFunction.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -578,6 +579,7 @@ void GameScene::draw2D() const {
     luma::draw::point(LUMA_DRAW_HUD_BEFORE);  // the mods' hud.before, under the game's HUD (one load with none)
     if (isPlayMovie()) {
         SceneFunction::executeDrawList2DMovie();
+        luma::movie::drawSubtitles();  // a mod's lines (<movie>.subs) over the movie (plan 3.10 layer 4)
     } else {
         SceneFunction::executeDrawList2DNormal();
     }

@@ -25,6 +25,9 @@ namespace luma {
         // The primitives `count` more for the mod drawing now: false past LUMA_DRAW_PRIMITIVES_MOST this frame (said
         // once a frame, Service.Limit), nothing to draw.
         bool count(const LumaMod* pMod, const char* pWhere, u32 count);
+        // A movie's subtitle (luma::movie::drawSubtitles, GameScene::draw2D over the movie): `pText` (UTF-16) centred
+        // low on the screen in the game's cinema font, white over a dark shadow, wrapped inside the 4:3 frame.
+        void subtitle(const char16_t* pText);
         // The service's provider, registered by luma::services::provideOwn.
         const LumaServiceProvider* provider();
     }  // namespace draw
