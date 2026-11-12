@@ -11,6 +11,8 @@
 #include <luma_harness.h>
 #include <luma_modlog.h>
 
+#include <functional>
+#include <vector>
 #include <atomic>
 #include <cstddef>
 #include <algorithm>
@@ -81,10 +83,40 @@ void add(const LumaModLogEntry& entry) {
     if (const LumaModLogAdd give = g_add.load(std::memory_order_acquire)) give(&entry);
 }
 
+// after_begin's queue: what waits for begin, and whether it has run. Under g_after_mutex.
+std::mutex g_after_mutex;
+bool g_begun = false;
+std::vector<std::function<void()>> g_after;
+
+// begin's end, whatever the module has: what waited runs now, in order.
+void begun() {
+    std::vector<std::function<void()>> waiting;
+    {
+        const std::lock_guard<std::mutex> lock(g_after_mutex);
+        g_begun = true;
+        waiting.swap(g_after);
+    }
+    for (std::function<void()>& then : waiting) then();
+}
+
 }  // namespace
 
+void after_begin(std::function<void()> then) {
+    {
+        const std::lock_guard<std::mutex> lock(g_after_mutex);
+        if (!g_begun) {
+            g_after.push_back(std::move(then));
+            return;
+        }
+    }
+    then();
+}
+
 void begin(void* (*find_symbol)(const char*), std::uint32_t mods_on) {
-    if (find_symbol == nullptr) return;
+    if (find_symbol == nullptr) {
+        begun();
+        return;
+    }
     const auto session = reinterpret_cast<LumaModLogSession>(find_symbol("luma_modlog_session"));
     g_next.store(reinterpret_cast<LumaModLogNext>(find_symbol("luma_modlog_next")), std::memory_order_release);
     g_next_mod.store(reinterpret_cast<LumaModLogNextMod>(find_symbol("luma_modlog_next_mod")), std::memory_order_release);
@@ -94,6 +126,7 @@ void begin(void* (*find_symbol)(const char*), std::uint32_t mods_on) {
     g_clock_of.store(reinterpret_cast<LumaTimeClockOf>(find_symbol("luma_time_clock_of")), std::memory_order_release);
     g_let_go.store(reinterpret_cast<LumaTimeLetGo>(find_symbol("luma_time_let_go")), std::memory_order_release);
     if (session != nullptr) session(mods_on, harness_fact());
+    begun();
 }
 
 void add_finding(std::uint32_t source, std::uint32_t level, std::string_view mod, std::uint32_t code, std::string_view file,
@@ -331,6 +364,10 @@ bool let_go(std::string_view mod) {
 void fact(const std::string& key, const std::string& json) {
     const LumaModLogFact write = harness_fact();
     if (write != nullptr) write(key.c_str(), json.c_str());
+}
+
+bool facts_wanted() {
+    return harness_fact() != nullptr;
 }
 
 void append_json_text(std::string& out, std::string_view text) {
@@ -616,6 +653,68 @@ struct StartResult {
 std::mutex g_start_lock;
 std::vector<StartResult> g_start_results;
 
+// What a check's findings and kept reports depend on beyond the package: the platform with its processor
+// ("windows-x64", luma-format 6), the disc ("RMGE01"; empty: none) and the played language folder.
+struct CheckGame {
+    std::string platform;
+    std::string region;
+    std::string played;
+};
+CheckGame g_check_game;  // the last start's check's, for check_import; under g_start_lock
+
+// One luma_validate call on the package in `folder`: `installed` the other packages (with `kept_in` empty: every rule,
+// alone), `position` its place among them (UINT32_MAX alone). Its kept report into `kept_out`, its findings (when
+// asked) in English and the played language. False: the validator did not run (no library, or the package unreadable).
+bool validate_package(const Validator* v, std::string_view id, const std::filesystem::path& folder, const CheckGame& game,
+                      const std::vector<LumaInstalledMod>& installed, std::uint32_t position, const std::string& kept_in,
+                      std::string& kept_out, std::vector<Kept>* findings) {
+    if (v == nullptr) return false;
+    const std::string path = folder.string();
+    LumaValidateInput input{};
+    input.size = sizeof(input);
+    input.path = path.c_str();
+    input.platform = game.platform.c_str();
+    input.nebula = NEBULA_VERSION;
+    input.region = game.region.empty() ? nullptr : game.region.c_str();
+    input.luma_api = LUMA_API;
+    input.installed = installed.empty() ? nullptr : installed.data();
+    input.installed_count = static_cast<std::uint32_t>(installed.size());
+    input.position = position;
+    input.kept = kept_in.empty() ? nullptr : reinterpret_cast<const std::uint8_t*>(kept_in.data());
+    input.kept_size = kept_in.size();
+    LumaReport* const report = v->validate(&input);
+    if (v->state(report) < 0) {
+        const char* why = v->invalid(report);
+        std::fprintf(stderr, "[modlog] %.*s: the check did not run: %s\n", static_cast<int>(id.size()), id.data(),
+                     why != nullptr ? why : "?");
+        v->release(report);
+        return false;
+    }
+    std::uint64_t size = 0;
+    const std::uint8_t* bytes = v->kept(report, &size);
+    kept_out.assign(reinterpret_cast<const char*>(bytes), bytes != nullptr ? static_cast<std::size_t>(size) : 0u);
+    if (findings != nullptr) {
+        findings->clear();
+        const std::uint32_t count = v->count(report);
+        for (std::uint32_t i = 0; i < count; ++i) {
+            Kept k;
+            const LumaFinding* f = v->at(report, i, "UsEnglish");
+            if (f == nullptr) break;
+            k.code = f->code;
+            k.level = f->level;
+            k.line = f->line;
+            k.column = f->column;
+            k.file = f->file != nullptr ? f->file : "";
+            k.english = f->text != nullptr ? f->text : "";
+            f = v->at(report, i, game.played.c_str());
+            k.played = f != nullptr && f->text != nullptr ? f->text : k.english;
+            findings->push_back(std::move(k));
+        }
+    }
+    v->release(report);
+    return true;
+}
+
 void add_kept(std::string_view mod, const Kept& k) {
     const std::string mod_id(mod);
     LumaModLogEntry entry{};
@@ -635,16 +734,19 @@ void add_kept(std::string_view mod, const Kept& k) {
 }  // namespace
 
 void check_packages(const std::vector<StartPackage>& packages, std::string_view program, std::string_view language) {
+    // luma-format's platform names carry the processor ("windows-x64"), as a package's code does.
+    const CheckGame side{std::string(galaxy::luma::plugin_target()), std::string(program),
+                         language.empty() ? std::string("UsEnglish") : std::string(language)};
     {
         const std::lock_guard<std::mutex> lock(g_start_lock);
         g_start_results.clear();
+        g_check_game = side;
     }
     if (packages.empty()) return;
     const std::filesystem::path folder = galaxy::mods::mods_folder() / ".cooked" / "validate";
-    // luma-format's platform names carry the processor ("windows-x64"), as a package's code does.
-    const std::string platform(galaxy::luma::plugin_target());
-    const std::string region(program);
-    const std::string played = language.empty() ? std::string("UsEnglish") : std::string(language);
+    const std::string& platform = side.platform;
+    const std::string& region = side.region;
+    const std::string& played = side.played;
     // What a kept report and a finding's words depend on beyond the package's own files.
     const std::string game = std::string(NEBULA_VERSION) + "\t" + region + "\t" + platform + "\t" + played + "\t" +
                              std::to_string(LUMA_API);
@@ -668,50 +770,7 @@ void check_packages(const std::vector<StartPackage>& packages, std::string_view 
             looked = true;
             v = validator();
         }
-        if (v == nullptr) return false;
-        const std::string path = p.folder.string();
-        LumaValidateInput input{};
-        input.size = sizeof(input);
-        input.path = path.c_str();
-        input.platform = platform.c_str();
-        input.nebula = NEBULA_VERSION;
-        input.region = region.empty() ? nullptr : region.c_str();
-        input.luma_api = LUMA_API;
-        input.installed = installed.empty() ? nullptr : installed.data();
-        input.installed_count = static_cast<std::uint32_t>(installed.size());
-        input.position = position;
-        input.kept = kept_in.empty() ? nullptr : reinterpret_cast<const std::uint8_t*>(kept_in.data());
-        input.kept_size = kept_in.size();
-        LumaReport* const report = v->validate(&input);
-        if (v->state(report) < 0) {
-            const char* why = v->invalid(report);
-            std::fprintf(stderr, "[modlog] %s: the start's check did not run: %s\n", p.id.c_str(), why != nullptr ? why : "?");
-            v->release(report);
-            return false;
-        }
-        std::uint64_t size = 0;
-        const std::uint8_t* bytes = v->kept(report, &size);
-        kept_out.assign(reinterpret_cast<const char*>(bytes), bytes != nullptr ? static_cast<std::size_t>(size) : 0u);
-        if (findings != nullptr) {
-            findings->clear();
-            const std::uint32_t count = v->count(report);
-            for (std::uint32_t i = 0; i < count; ++i) {
-                Kept k;
-                const LumaFinding* f = v->at(report, i, "UsEnglish");
-                if (f == nullptr) break;
-                k.code = f->code;
-                k.level = f->level;
-                k.line = f->line;
-                k.column = f->column;
-                k.file = f->file != nullptr ? f->file : "";
-                k.english = f->text != nullptr ? f->text : "";
-                f = v->at(report, i, played.c_str());
-                k.played = f != nullptr && f->text != nullptr ? f->text : k.english;
-                findings->push_back(std::move(k));
-            }
-        }
-        v->release(report);
-        return true;
+        return validate_package(v, p.id, p.folder, side, installed, position, kept_in, kept_out, findings);
     };
     for (const StartPackage& p : packages) {
         Placed one{&p, files_stamp(p.folder), read_check(folder / (p.id + ".check")), read_file(folder / (p.id + ".kept")), {}};
@@ -841,6 +900,127 @@ void add_start_findings() {
     }
 }
 
+namespace {
+
+// One field of a facts line as written (cook/refuse.rs `field`): `\t`, `\n`, `\r`, `\\` back to their bytes.
+std::string facts_field(std::string_view text) {
+    std::string out;
+    out.reserve(text.size());
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        if (text[i] != '\\' || i + 1 == text.size()) {
+            out.push_back(text[i]);
+            continue;
+        }
+        const char next = text[++i];
+        out.push_back(next == 't' ? '\t' : next == 'n' ? '\n' : next == 'r' ? '\r' : next);
+    }
+    return out;
+}
+
+// A cook fact's mod when the line names none (a mod's own file): the <id> of "Luma/<id>/..." (a "+" before it).
+std::string cook_fact_mod(const std::vector<std::string>& f) {
+    if (!f[2].empty()) return f[2];
+    for (const std::size_t at : {std::size_t{1}, std::size_t{3}}) {
+        std::string_view path = f[at];
+        if (!path.empty() && path.front() == '+') path.remove_prefix(1);
+        if (path.substr(0, 5) != "Luma/") continue;
+        path.remove_prefix(5);
+        return std::string(path.substr(0, path.find('/')));
+    }
+    return {};
+}
+
+// A parameter's value as JSON: a whole number as a number, a list of them (comma between) as a list, else text.
+void append_param_json(std::string& out, std::string_view name, std::string_view value) {
+    const auto whole = [](std::string_view v) {
+        return !v.empty() && v.size() <= 9 && std::all_of(v.begin(), v.end(), [](char c) { return c >= '0' && c <= '9'; });
+    };
+    if (name == "particles") {
+        out += '[';
+        bool first = true;
+        std::size_t at = 0;
+        while (at < value.size()) {
+            const std::size_t end = (std::min)(value.find(',', at), value.size());
+            const std::string_view one = value.substr(at, end - at);
+            if (whole(one)) {
+                out += first ? "" : ",";
+                out += one;
+                first = false;
+            }
+            at = end + 1;
+        }
+        out += ']';
+    } else if (whole(value)) {
+        out += value;
+    } else {
+        append_json(out, value);
+    }
+}
+
+}  // namespace
+
+void add_cook_facts(const std::filesystem::path& facts_file) {
+    if (facts_file.empty()) return;
+    std::istringstream in(read_file(facts_file));
+    std::string line;
+    while (std::getline(in, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.empty()) continue;
+        // kind table mod file other row column selector rows code why, then the parameters.
+        std::vector<std::string> f;
+        std::size_t at = 0;
+        for (;;) {
+            const std::size_t tab = line.find('\t', at);
+            f.push_back(facts_field(std::string_view(line).substr(at, tab == std::string::npos ? std::string::npos : tab - at)));
+            if (tab == std::string::npos) break;
+            at = tab + 1;
+        }
+        if (f.size() < 11) continue;
+        const std::string& kind = f[0];
+        const std::string mod = cook_fact_mod(f);
+        if (kind == "failed" || kind == "noted") {
+            std::uint32_t code = 0;
+            for (const char c : f[9]) {
+                if (c < '0' || c > '9' || code > 99999u) {
+                    code = 0;
+                    break;
+                }
+                code = code * 10u + static_cast<std::uint32_t>(c - '0');
+            }
+            if (code == 0u) continue;
+            std::vector<std::pair<std::string, std::string>> values;
+            for (std::size_t i = 11; i < f.size(); ++i) {
+                const std::size_t eq = f[i].find('=');
+                if (eq == std::string::npos || eq == 0) continue;
+                values.emplace_back(f[i].substr(0, eq), f[i].substr(eq + 1));
+            }
+            add_finding(LUMA_MODLOG_COOK, kind == "failed" ? LUMA_MODLOG_ERROR : LUMA_MODLOG_NOTE, mod, code,
+                        f[3].empty() ? f[1] : f[3], 0, 0, values);
+        } else if (kind == "cook.effect" || kind == "cook.model") {
+            std::string json = "{\"table\":";
+            append_json(json, f[1]);
+            json += ",\"file\":";
+            append_json(json, f[3]);
+            json += ",\"mod\":";
+            append_json(json, mod);
+            json += ",\"other\":";
+            append_json(json, f[4]);
+            for (std::size_t i = 11; i < f.size(); ++i) {
+                const std::size_t eq = f[i].find('=');
+                if (eq == std::string::npos || eq == 0) continue;
+                const std::string_view name = std::string_view(f[i]).substr(0, eq);
+                if (name == "table" || name == "file" || name == "mod" || name == "other") continue;
+                json += ',';
+                append_json(json, name);
+                json += ':';
+                append_param_json(json, name, std::string_view(f[i]).substr(eq + 1));
+            }
+            json += '}';
+            fact(kind, json);
+        }
+    }
+}
+
 bool package_refused(std::string_view id) {
     const std::lock_guard<std::mutex> lock(g_start_lock);
     for (const StartResult& result : g_start_results) {
@@ -850,6 +1030,60 @@ bool package_refused(std::string_view id) {
         }
     }
     return false;
+}
+
+ImportCheck check_import(const std::filesystem::path& folder, const std::vector<StartPackage>& others) {
+    ImportCheck out;
+    const Validator* const v = validator();
+    if (v == nullptr) return out;
+    CheckGame side;
+    {
+        const std::lock_guard<std::mutex> lock(g_start_lock);
+        side = g_check_game;
+    }
+    if (side.platform.empty()) side = CheckGame{std::string(galaxy::luma::plugin_target()), {}, "UsEnglish"};
+    // The packages placed now, each by its kept report: the last start's, else (placed since, or before any start's
+    // check) one made now, alone. On as the list has it, but off when it would not start: refused at the last start, a
+    // report made now with an Error, or a report naming no id (the validator takes those only off).
+    const std::filesystem::path validate = galaxy::mods::mods_folder() / ".cooked" / "validate";
+    std::vector<std::string> ids;
+    std::vector<std::string> reports;
+    std::vector<bool> on;
+    for (const StartPackage& p : others) {
+        std::string report = read_file(validate / (p.id + ".kept"));
+        bool starts = p.on && !package_refused(p.id);
+        if (report.empty()) {
+            std::vector<Kept> alone;
+            if (!validate_package(v, p.id, p.folder, side, {}, UINT32_MAX, {}, report, &alone) || report.empty()) continue;
+            starts = starts && std::none_of(alone.begin(), alone.end(), [](const Kept& k) { return k.level == 0; });
+        }
+        if (starts && v->read_kept != nullptr && v->id != nullptr) {
+            LumaReport* const read = v->read_kept(reinterpret_cast<const std::uint8_t*>(report.data()), report.size());
+            const char* const named = v->state(read) == 2 ? v->id(read) : "";
+            starts = named != nullptr && named[0] != 0;
+            v->release(read);
+        }
+        ids.push_back(p.id);
+        reports.push_back(std::move(report));
+        on.push_back(starts);
+    }
+    std::vector<LumaInstalledMod> installed(ids.size());
+    for (std::size_t i = 0; i < ids.size(); ++i) {
+        installed[i].file = ids[i].c_str();
+        installed[i].on = on[i] ? 1u : 0u;
+        installed[i].kept = reinterpret_cast<const std::uint8_t*>(reports[i].data());
+        installed[i].kept_size = reports[i].size();
+    }
+    // One call at import (validator 2: no kept report of its own, every rule), last in the list, against them all.
+    std::string kept;
+    std::vector<Kept> findings;
+    if (!validate_package(v, "import", folder, side, installed, UINT32_MAX, {}, kept, &findings)) return out;
+    out.ran = true;
+    for (const Kept& k : findings) {
+        out.findings.push_back({k.code, k.level == 0, k.file, k.played, k.line, k.column});
+        out.refused = out.refused || k.level == 0;
+    }
+    return out;
 }
 
 const char* refused_sentence() {

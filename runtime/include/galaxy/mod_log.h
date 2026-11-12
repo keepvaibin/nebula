@@ -4,6 +4,7 @@
 // and English. The module keeps them, shows them and writes the harness's facts (luma_modlog.h).
 #pragma once
 
+#include <functional>
 #include <cstdint>
 #include <filesystem>
 #include <optional>
@@ -27,6 +28,10 @@ void begin(void* (*find_symbol)(const char*), std::uint32_t mods_on);
 // (consent 1.4: the two never differ within one start). add_not_started and declined_at_start read them.
 void keep_permission_answers(const std::vector<galaxy::mods::ModInfo>& mods);
 
+// Runs `then` once begin has run (at once when it has; else at begin's end, on its thread): for what needs the module's
+// words, as an import's facts do when Open with or --import imports before the game module's log is found. Any thread.
+void after_begin(std::function<void()> then);
+
 // After start_plugins: each mod whose code did not start (galaxy::mods::plugins_not_started, Z-10) as a LOADER Error:
 // a refusal in the validator's words, a host sentence as the Mods page translates it. An L506 (a required service's
 // permission not granted) whose kept answer is Declined is the player's choice, a Note `Consent.OffDeclined`; one whose
@@ -49,8 +54,41 @@ struct StartPackage {
 // with no package.
 void check_packages(const std::vector<StartPackage>& packages, std::string_view program, std::string_view language);
 
+// One finding of an import's check, worded in the played language.
+struct ImportFinding {
+    std::uint32_t code = 0;  // 509 is L509
+    bool error = false;      // an Error refuses the import; else a Note
+    std::string file;        // the entry inside the mod ("" for the whole mod)
+    std::string text;
+    std::uint32_t line = 0;  // the place in `file` (0: none)
+    std::uint32_t column = 0;
+};
+
+// An import's check (validator 2 "at import", task 6.1): `ran` false when the validator did not run (the importer's
+// library is missing; nothing is refused then, as at the start); `refused` when it found an Error.
+struct ImportCheck {
+    bool ran = false;
+    bool refused = false;
+    std::vector<ImportFinding> findings;
+};
+
+// The validator on a package staged for import (`folder`, laid out as a placed mod), once: every rule (no kept report
+// of its own), last in the list after `others`, the packages placed now in list order, each by its kept report from
+// the last start's check (else one made now, alone), off when it would not start (L800 to L802). The disc and language
+// are the last start's check's (before any: no disc, English). Any thread; it reads the validator's library, the kept
+// reports and the packages it has to check alone.
+ImportCheck check_import(const std::filesystem::path& folder, const std::vector<StartPackage>& others);
+
 // After add_not_started: the start's check's findings, each a VALIDATOR entry (Error or Note as the validator's).
 void add_start_findings();
+
+// The device cooker's facts file (`<overlay>.facts`, cook/overlay.rs; mod-log 9's request to G, read by the host's
+// half): each `failed` line a COOK Error and each `noted` line a COOK Note, by its code, mod, file and parameters
+// (`name=T:<text>` or `name=P:<phrase>`); each `cook.effect` and `cook.model` line (effects 7, models 9) a harness fact
+// of that key: {"table", "file", "mod", "other", then each `name=value` parameter, a number as a number and
+// `particles` as a list}. A conflict is left out: the start's check says each overlap (L305, L404). After
+// add_start_findings, the overlay attached; no file, nothing.
+void add_cook_facts(const std::filesystem::path& facts_file);
 
 // The start's check found an Error in the package `id`: it is refused (the validator's errors refuse, as at import).
 [[nodiscard]] bool package_refused(std::string_view id);
@@ -104,6 +142,8 @@ struct PageMod {
 void page_fact(std::uint32_t row, std::string_view label, std::string_view value);
 // In a harness run, a fact `key` with `json` as its value (the host's screens: consent 2.6); nothing otherwise.
 void fact(const std::string& key, const std::string& json);
+// Whether this run has the harness, so a screen builds its facts' JSON only then.
+[[nodiscard]] bool facts_wanted();
 // `text` as a JSON string, quoted and escaped, appended to `out`.
 void append_json_text(std::string& out, std::string_view text);
 // In a harness run, an entry opened whole (A or Space on its row) as `modlog.entry {"mod", "pages", "text"}`: the

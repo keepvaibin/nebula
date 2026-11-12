@@ -112,6 +112,7 @@ struct ModInfo {
     bool code_allowed = false;  // the player allowed exactly these libraries
     bool code_declined = false; // the player said Not now to exactly these libraries (code_no)
     bool code_changed = false;  // an answer is stored for other libraries than these (asked again)
+    bool install_ask_never = false;  // install.ask=no: the player's DON'T ASK AGAIN to its install requests (J-SM4)
     // The player's answers by permission name, as stored (mod_consent.h reads them against the manifest's declarations).
     std::map<std::string, PermissionAnswer> permission_answers;
     // The permissions whose services the mod's entry library imports without LUMA_OPTIONAL, from the validator's kept
@@ -155,6 +156,24 @@ void set_mods_folder(const std::filesystem::path& folder, const std::filesystem:
 [[nodiscard]] std::filesystem::path mods_settings_file();
 // Mod code was turned off after a crash in this run; the Mods page says so.
 void set_code_off_after_crash() noexcept;
+// Safe start (task 6.6): every mod off for one start, the player's choices kept as they are. kAsked: --safe-start 1, or
+// Shift held as Nebula starts (Windows); kAfterCrash: the last run crashed while mods changed the game and no mod's code
+// was on (a crash with code on leaves only the code off first: .code_crashed).
+enum class SafeStart : std::uint8_t { kNo, kAsked, kAfterCrash };
+// The file whose presence makes the next start safe (in the mods folder; empty before set_mods_folder). A crash writes
+// it empty (kAfterCrash); anything else in it is kAsked.
+[[nodiscard]] std::filesystem::path safe_start_file();
+// At the start, once, after set_mods_folder: whether this start is safe (`asked` from the launch, else the file),
+// removing the file so the start after is not. Remembered for safe_start().
+SafeStart take_safe_start(bool asked);
+// This run's safe start (kNo before take_safe_start).
+[[nodiscard]] SafeStart safe_start() noexcept;
+// The player's blocklist (task 6.6): mod ids that never start, in mods-blocked.txt beside the file of the player's
+// choices, kept whether or not the mod is in the folder (it is blocked again when it comes back). A blocked mod scans
+// off with the reason, cannot be turned on, and its page offers UNBLOCK. Any thread.
+[[nodiscard]] bool mod_blocked(std::string_view id);
+// Blocks or unblocks `id`, written at once; false when the file could not be written (nothing changes then).
+bool set_mod_blocked(const std::string& id, bool blocked);
 // The game id given to set_mods_folder (empty before).
 [[nodiscard]] std::string mods_game_id();
 // The mods found, with their saved choices (Riivolution defaults when nothing is saved): enabled mods in load order

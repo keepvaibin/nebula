@@ -730,6 +730,7 @@ struct SavedMod {
     std::map<std::string, std::string> choice_ids;  // a .luma's choices, by option
     std::string code_ok;  // the libraries the player allowed
     std::string code_no;  // the libraries the player said Not now to
+    bool install_ask_never = false;  // install.ask=no
     std::map<std::string, PermissionAnswer> permissions;  // permission.<name>=yes|no <digest>
 };
 
@@ -847,6 +848,8 @@ std::map<std::string, SavedMod> read_saved(const fs::path& file) {
             current->code_ok = value;
         } else if (key == "code_no") {
             current->code_no = value;
+        } else if (key == "install.ask") {
+            current->install_ask_never = value == "no";
         } else if (key.starts_with("permission.")) {
             // "yes <digest>" or "no <digest>"; anything else is not an answer, so the player is asked again.
             const std::size_t space = value.find(' ');
@@ -1026,10 +1029,85 @@ std::string mods_game_id() {
 
 namespace {
 std::atomic<bool> s_code_off_after_crash{false};
+std::atomic<SafeStart> s_safe_start{SafeStart::kNo};
 }
 
 void set_code_off_after_crash() noexcept {
     s_code_off_after_crash.store(true, std::memory_order_relaxed);
+}
+
+std::filesystem::path safe_start_file() {
+    const std::filesystem::path folder = mods_folder();
+    return folder.empty() ? folder : folder / ".safe_start";
+}
+
+SafeStart take_safe_start(bool asked) {
+    SafeStart safe = asked ? SafeStart::kAsked : SafeStart::kNo;
+    const std::filesystem::path file = safe_start_file();
+    std::error_code error;
+    if (!file.empty() && std::filesystem::exists(file, error)) {
+        if (safe == SafeStart::kNo) {
+            safe = std::filesystem::file_size(file, error) == 0u && !error ? SafeStart::kAfterCrash : SafeStart::kAsked;
+        }
+        std::filesystem::remove(file, error);
+    }
+    s_safe_start.store(safe, std::memory_order_relaxed);
+    return safe;
+}
+
+SafeStart safe_start() noexcept {
+    return s_safe_start.load(std::memory_order_relaxed);
+}
+
+namespace {
+// The blocklist as read from its file (once, then as written). Under s_blocked_mutex.
+std::mutex s_blocked_mutex;
+std::set<std::string> s_blocked;
+bool s_blocked_read = false;
+
+fs::path blocked_file() {
+    const fs::path settings_file = mods_settings_file();
+    return settings_file.empty() ? settings_file : settings_file.parent_path() / "mods-blocked.txt";
+}
+
+// With s_blocked_mutex held.
+void read_blocked_locked() {
+    if (s_blocked_read) return;
+    const fs::path file = blocked_file();
+    if (file.empty()) return;  // before set_mods_folder: read when there is a file to read
+    s_blocked_read = true;
+    std::istringstream in(read_text(file));
+    std::string line;
+    while (std::getline(in, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.empty() || line[0] == ';') continue;
+        s_blocked.insert(line);
+    }
+}
+}  // namespace
+
+bool mod_blocked(std::string_view id) {
+    const std::lock_guard<std::mutex> lock(s_blocked_mutex);
+    read_blocked_locked();
+    return s_blocked.find(std::string(id)) != s_blocked.end();
+}
+
+bool set_mod_blocked(const std::string& id, bool blocked) {
+    const std::lock_guard<std::mutex> lock(s_blocked_mutex);
+    read_blocked_locked();
+    const fs::path file = blocked_file();
+    if (file.empty() || id.empty() || id.find_first_of("\r\n") != std::string::npos) return false;
+    std::set<std::string> next = s_blocked;
+    if (blocked) {
+        next.insert(id);
+    } else {
+        next.erase(id);
+    }
+    std::string text = "; Nebula: mods the player blocked (one id a line): they never start, even when on or imported again.\n";
+    for (const std::string& entry : next) text += entry + '\n';
+    if (!io::write_file_atomically(file, text)) return false;
+    s_blocked = std::move(next);
+    return true;
 }
 
 std::filesystem::path mods_folder() {
@@ -1101,6 +1179,7 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
         mod.enabled = s == nullptr || s->enabled;
         mod.own_text = s == nullptr || s->own_text;
         mod.categories_off = s != nullptr ? s->categories_off : 0u;
+        mod.install_ask_never = s != nullptr && s->install_ask_never;
         if (mod.textures) {
             // The game's names, read once from the store: a pack's files are named by them.
             start_texture_sorting();
@@ -1347,6 +1426,11 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
             mod.problem = "CONVERT THIS MOD WITH LUMALINK ON A COMPUTER, THEN OPEN THE FILE HERE";
         }
 #endif
+        // The player blocked it (task 6.6): off whatever mods.ini says, and why; its page unblocks it.
+        if (mod_blocked(mod.id)) {
+            mod.enabled = false;
+            mod.problem = "YOU BLOCKED THIS MOD. UNBLOCK IT ON ITS PAGE TO USE IT";
+        }
         if (first_time && mod.luma) new_mods.insert(mod.id);
         mods.push_back(std::move(mod));
     }
@@ -1499,6 +1583,7 @@ bool save_mod_settings(std::span<const ModInfo> mods) {
         if (mod.categories_off != 0u) out << "textures_off=" << mod.categories_off << '\n';
         if (mod.code_allowed) out << "code_ok=" << mod.code_token << '\n';
         if (mod.code_declined) out << "code_no=" << mod.code_token << '\n';
+        if (mod.install_ask_never) out << "install.ask=no\n";
         // Answers for the permissions it declares now, with the digest each was given for (a stale one is asked again);
         // an answer for a permission it no longer declares is dropped here. A mod whose manifest was not read this start
         // keeps every answer as read (consent 1.2).

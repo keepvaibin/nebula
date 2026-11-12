@@ -35,7 +35,7 @@ HOST_NOT_SHOWN = {'SSAO', 'GTAO', 'SB4', 'SB5', '(BLUETOOTH)', '(BT)', '-OPTIONS
                   # pieces joined at run time whose whole texts have rows: "INPUT: AUTO (<device>)", "THE GAME RUNS AT 60. INTERPOLATION ..."
                   'INPUT: AUTO (', '. INTERPOLATION ADDS FRAMES BETWEEN',
                   # the mods: unavailable buttons, hex digits, the game's id, the head of "ON (1 OF 2)"
-                  '-ABOUT', '-DETAILS', '0123456789ABCDEF', 'RMG', 'ON ('}
+                  '-ABOUT', '-DETAILS', '-PICK', '0123456789ABCDEF', 'RMG', 'ON ('}
 
 
 def unescape(cell):

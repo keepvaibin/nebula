@@ -205,7 +205,7 @@ def read_test(folder, types=None):
     t = load_json(folder / "test.json")
     keys_known(t, "", {"harness", "name", "about", "proves", "mods", "code", "language", "seed", "continue_from",
                        "renderers", "region", "limit_seconds", "bare", "save", "stage", "player", "steps", "expect",
-                       "faults", "hide_game_files"})
+                       "faults", "hide_game_files", "safe_start"})
     for key in ("harness", "name", "about", "proves", "steps", "expect"):
         if key not in t:
             raise HarnessError("the test has no %s" % key)
@@ -286,6 +286,11 @@ def read_test(folder, types=None):
         for i, f in enumerate(t["faults"]):
             keys_known(f, "faults[%d]" % i, {"mod"})
             faults.append(text(f, "mod", "faults[%d]" % i))
+    # A safe start (task 6.6): "asked" starts with --safe-start 1; "crash" leaves mods/.safe_start empty, as a crash
+    # with mods on does, before the start.
+    safe_start = t.get("safe_start")
+    if safe_start not in (None, "asked", "crash"):
+        raise HarnessError("safe_start must be \"asked\" or \"crash\"")
     hidden = []
     if "hide_game_files" in t:
         if not isinstance(t["hide_game_files"], list):
@@ -297,7 +302,7 @@ def read_test(folder, types=None):
     return {"folder": folder, "raw": t, "name": t["name"], "proves": t["proves"], "bare": bare, "mods": mods,
             "language": language, "seed": seed, "renderers": renderers, "region": t.get("region"), "limit": limit,
             "continue_from": continue_from, "faults": faults, "setup": setup, "steps": steps, "expect": expect,
-            "has_stage": "stage" in t, "hidden": hidden}
+            "has_stage": "stage" in t, "hidden": hidden, "safe_start": safe_start}
 
 
 def read_setup(t, bare, seed, language, classes):
@@ -950,8 +955,6 @@ def run_one(test, renderer, args, run_folder, previous):
     if test["region"] is not None:
         raise HarnessError("region: not built yet (one game per bin folder; the bin names its region in 0.8)")
     for m in test["mods"]:
-        if m["install"] == "import":
-            raise HarnessError("install import: no such fact source yet (the import screen, task 6.1)")
         if m["options"]:
             raise HarnessError("mod options: not built yet (the Mods screen's options, task 6.3)")
         if m["path"].suffix == ".luma":
@@ -998,14 +1001,28 @@ def run_one(test, renderer, args, run_folder, previous):
     if not test["bare"]:
         frozen["luma-test.dll"] = sha256(bin_folder / "luma-test.dll")
         install_game_half(settings, bin_folder)
+    imports = []
     for i, m in enumerate(test["mods"]):
         if not (m["path"] / "luma.json").is_file():
             raise HarnessError("the mod %s has no luma.json" % m["path"])
+        if m["install"] == "import":
+            # Not placed: the game imports it as "Open with" starts it (--import, task 6.1), through the validator;
+            # each line of its result page is the fact import.<file name> (4).
+            if m["loads"]:
+                raise HarnessError("the imported mod %s: an import adds it for the next start, so it takes loads false"
+                                   % m["path"])
+            imports += ["--import", str(m["path"].resolve())]
+            continue
         mod_id = install(settings, m["path"], m["code"] == "allow", i + 1, kept=previous is not None,
                          permissions="ask" if m["code"] == "ask" else m["permissions"])
         mod_ids.append((mod_id, m))
         for lib in sorted((settings / "mods" / mod_id).rglob("*.dll")):
             frozen["mods/%s/%s" % (mod_id, lib.relative_to(settings / "mods" / mod_id).as_posix())] = sha256(lib)
+    if test["safe_start"] == "asked":
+        imports += ["--safe-start", "1"]
+    elif test["safe_start"] == "crash":
+        (settings / "mods").mkdir(parents=True, exist_ok=True)
+        (settings / "mods" / ".safe_start").write_bytes(b"")
     assignments = ["GALAXY_WINDOW_WIDTH=1280", "GALAXY_WINDOW_HEIGHT=720"]
     if test["language"] is not None:
         assignments.append("GALAXY_LANGUAGE=%s" % LANGUAGES[test["language"]])
@@ -1035,7 +1052,7 @@ def run_one(test, renderer, args, run_folder, previous):
         env.pop(name, None)
     command = [str(run_folder / "bin" / exe.name), "--pak", pak, "--saves", str(run_folder / "saves"),
                "--seconds", str(int(math.ceil(test["limit"]))), "--settings", str(settings),
-               "--crash-dumps", str(run_folder), "--extension", str(run_folder / "bin" / "nebula_test_extension.dll")]
+               "--crash-dumps", str(run_folder), "--extension", str(run_folder / "bin" / "nebula_test_extension.dll")] + imports
     startup = subprocess.STARTUPINFO()
     startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
     startup.wShowWindow = subprocess.SW_HIDE

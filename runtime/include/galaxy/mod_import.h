@@ -9,6 +9,8 @@
 //   folder can't be moved (on Windows, a program has one of its files open), the update waits as .update-<name> and is
 //   applied at the next start (apply_pending_updates).
 // - Absolute, drive and `..` paths, device names, links, and archives that unpack past the size limits are refused.
+// - A package (a luma.json) passes the caller's check before it is placed (task 6.1: the validator, as at each start);
+//   refused, nothing is added and the findings say why.
 #pragma once
 
 #include <atomic>
@@ -44,16 +46,33 @@ struct ImportResult {
     std::uint64_t dolphin_files = 0;
     std::uint64_t dolphin_textures = 0;
     std::uint64_t dolphin_unmatched = 0;
+    // A package's check (ImportCheck): whether it ran, refused it, and what it found, in the played language.
+    struct Finding {
+        bool error = false;
+        std::uint32_t code = 0;  // 509 is L509
+        std::string file;
+        std::string text;
+        std::uint32_t line = 0;  // the place in `file` (0: none)
+        std::uint32_t column = 0;
+    };
+    bool checked = false;
+    bool refused = false;
+    std::vector<Finding> findings;
 };
+
+// Checks a package staged for import (`staged`, laid out as a placed mod) under the folder name `id` it will take
+// (an update's: the mod it replaces). Sets result.checked, refused and findings; true lets the import go on.
+using ImportCheck = std::function<bool(const std::filesystem::path& staged, const std::string& id, ImportResult& result)>;
 
 // True when `path` is an archive the importer can read. Checked by content, so a fake .zip is refused.
 [[nodiscard]] bool is_mod_archive(const std::filesystem::path& path);
 
 // Imports `source` (a folder or an archive) into `mods_folder` on the calling thread. `progress` (optional) is called
 // as files are written. Setting `cancel` stops the import and removes the staging folder.
+// `check` (optional) is asked about a package before it is placed.
 [[nodiscard]] ImportResult import_mod(const std::filesystem::path& source, const std::filesystem::path& mods_folder,
                                       const std::function<void(const ImportProgress&)>& progress = {},
-                                      const std::atomic<bool>* cancel = nullptr);
+                                      const std::atomic<bool>* cancel = nullptr, const ImportCheck& check = {});
 
 // Removes a mod's folder, to the recycle bin where there is one. Its settings stay until the next save. A folder in
 // use is left untouched (IN USE); a mod is never half removed.

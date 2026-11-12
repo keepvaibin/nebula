@@ -14,7 +14,9 @@
 
 #include <atomic>
 #include <cstdint>
+#include <filesystem>
 #include <string>
+#include <vector>
 
 namespace galaxy::render::host_window {
 
@@ -53,9 +55,13 @@ extern std::atomic<bool> monitor_changed;
 // One game per data folder. `key` names this process's folder: the window made afterwards carries it, and a second start finds
 // the first's window by it (another folder's game is not disturbed). show_existing_instance waits up to `wait_ms` for the
 // window to exist (the first start may still be opening it), lets that process take the foreground, and asks it to come
-// forward (restoring a minimised window). False: no window carries the key.
+// forward (restoring a minimised window). `imports` (--import) are handed to it first, and it imports them as dropped
+// files (WM_COPYDATA, kImportCopyData). False: no window carries the key.
 void set_instance_key(std::uint64_t key) noexcept;
-[[nodiscard]] bool show_existing_instance(std::uint64_t key, unsigned wait_ms) noexcept;
+[[nodiscard]] bool show_existing_instance(std::uint64_t key, unsigned wait_ms,
+                                          const std::vector<std::filesystem::path>& imports = {}) noexcept;
+// WM_COPYDATA's dwData for show_existing_instance's files: UTF-16 paths, each ended by a 0.
+inline constexpr ULONG_PTR kImportCopyData = 0x4E42494Du;  // "NBIM"
 
 // The window's outer rect for a windowed client size on a monitor.
 [[nodiscard]] RECT windowed_rect_on_monitor(const MonitorInfo& monitor, unsigned width, unsigned height);

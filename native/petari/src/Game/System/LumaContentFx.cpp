@@ -508,9 +508,11 @@ namespace luma {
                     u32 at = 0;
                     particles[at++] = '[';
                     s32 group = 0;
+                    s32 emitters = 0;
                     if (rEffect.shell != nullptr) {
                         group = rEffect.shell->info.mDrawOrder;
                         const MultiEmitter* const pEmitter = rEffect.shell->emitter;
+                        emitters = pEmitter->mEmitters.size();
                         for (s32 i = 0; i < pEmitter->mEmitters.size() && at + 8 < sizeof(particles); i++) {
                             at += static_cast< u32 >(nebula_snprintf(particles + at, sizeof(particles) - at, i == 0 ? "%u" : ",%u",
                                                                      static_cast< u32 >(pEmitter->mEmitters[i].mResourceId)));
@@ -520,9 +522,9 @@ namespace luma {
                     particles[at] = 0;
                     char json[1024];
                     nebula_snprintf(json, sizeof(json),
-                                    "{\"mod\":%s,\"name\":%s,\"particles\":%s,\"group\":%d,\"joint\":%s,\"follow\":%s,\"placeholder\":%s,"
-                                    "\"model\":%llu}",
-                                    mod, name, particles, group, joint, follow ? "true" : "false", placeholder ? "true" : "false",
+                                    "{\"mod\":%s,\"name\":%s,\"particles\":%s,\"emitters\":%d,\"group\":%d,\"joint\":%s,\"follow\":%s,"
+                                    "\"placeholder\":%s,\"model\":%llu}",
+                                    mod, name, particles, static_cast< int >(emitters), group, joint, follow ? "true" : "false", placeholder ? "true" : "false",
                                     static_cast< unsigned long long >(rEffect.model));
                     char key[48];
                     nebula_snprintf(key, sizeof(key), "fx.start.%llu", static_cast< unsigned long long >(rEffect.handle));

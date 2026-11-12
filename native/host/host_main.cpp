@@ -38,6 +38,7 @@
 #include "galaxy/mods.h"
 #include "galaxy/render/host_window.h"
 #include "galaxy/mod_log.h"
+#include "galaxy/mod_screens.h"
 #include "galaxy/mod_plugins.h"
 #include "galaxy/render/mod_shaders.h"
 #include "galaxy/render/program_table.h"
@@ -2364,6 +2365,8 @@ void svc_frame_begun(void*, int black, uint32_t frame) {
     }
 #endif
     galaxy::extensions::frame({frame});
+    // The Mods screens' answers to mods' requests (galaxy/mod_screens.h), on the game thread at the frame's start.
+    galaxy::mods::run_screen_answers();
 #if defined(NEBULA_HOST_RENDERER)
     {
         // While the start runs ahead, one frame a display period goes to the screen.
@@ -2571,6 +2574,8 @@ void forget_save(std::string_view id) {
 // A save file operation on the save worker (the game polls the status): galaxy/save_files.h in the game's save folder
 // (gSaveDataPath under the save folder, or a mod's save folder).
 std::atomic<int> gSavesPending{0};
+// The facts file of the mods' store attached this run (cook_mod_files), read into the mod log at the mods' start.
+fs::path gCookFacts;
 // The exit waits here for the saves still on the worker.
 std::mutex gSavesMutex;
 std::condition_variable gSavesDone;
@@ -3268,7 +3273,8 @@ bool one_game_at_a_time() {
     }
     log_line("host:", "the game is already running");
     // Up to 3 s: the first start may be opening its window still.
-    if (!galaxy::render::host_window::show_existing_instance(key != 0u ? key : 1u, 3000u)) {
+    // Files it was started to import (Open with, --import) go to the running game, which imports them.
+    if (!galaxy::render::host_window::show_existing_instance(key != 0u ? key : 1u, 3000u, galaxy::launch_args().imports)) {
         log_line("host:", "the running game has no window to bring forward");
     }
     return true;
@@ -3391,6 +3397,7 @@ void svc_mods_start(void*) {
     if (!gModsChangeGame) {
         return;
     }
+    // A crash from here with code on leaves the code off at the next start; without, every mod (set at the scan).
     if (!gPlugins.empty()) {
         gCodeCrashFile = crashed;
     }
@@ -3416,6 +3423,8 @@ void svc_mods_start(void*) {
     galaxy::modlog::add_not_started();
     // Each placed package through the validator, its findings in the mod log (kept: nothing runs when nothing changed).
     galaxy::modlog::add_start_findings();
+    // The cooker's facts for the store attached this run: its refusals and notes, and in a harness run what it cooked.
+    galaxy::modlog::add_cook_facts(gCookFacts);
 }
 
 void svc_app_restart(void*) {
@@ -3704,6 +3713,8 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
         }
     }
     if (gPak.store.attach_overlay(overlay)) {
+        gCookFacts = overlay;
+        gCookFacts.replace_extension("facts");
         char text[96];
         std::snprintf(text, sizeof(text), "%zu files, %zu table or file merges and %zu patches by key applied", plan.files.size(),
                       plan.merges.size(), plan.patches.size());
@@ -3808,14 +3819,34 @@ int run_mods_tool() {
     }
     int failed = 0;
     std::string out = "{\"results\":[";
+    // The same check as the game's own imports (task 6.1, validator 2 "at import"): against the packages placed now.
+    const galaxy::mods::ImportCheck check = [](const fs::path& staged, const std::string& id, galaxy::mods::ImportResult& result) {
+        std::vector<galaxy::modlog::StartPackage> others;
+        for (const galaxy::mods::ModInfo& mod : galaxy::mods::scan_mods()) {
+            if (mod.package && mod.id != id) others.push_back({mod.id, mod.path, mod.enabled});
+        }
+        const galaxy::modlog::ImportCheck found = galaxy::modlog::check_import(staged, others);
+        result.checked = found.ran;
+        result.refused = found.refused;
+        for (const galaxy::modlog::ImportFinding& f : found.findings) {
+            result.findings.push_back({f.error, f.code, f.file, f.text, f.line, f.column});
+        }
+        return !found.refused;
+    };
     for (std::size_t i = 0; i < sources.size(); ++i) {
-        const galaxy::mods::ImportResult result = galaxy::mods::import_mod(sources[i], settings_folder / "mods");
+        const galaxy::mods::ImportResult result = galaxy::mods::import_mod(sources[i], settings_folder / "mods", {}, nullptr, check);
         failed += result.ok ? 0 : 1;
+        std::string findings;
+        for (const galaxy::mods::ImportResult::Finding& f : result.findings) {
+            findings += std::string(findings.empty() ? "" : ",") + "{\"code\":" + std::to_string(f.code) + ",\"error\":" +
+                        (f.error ? "true" : "false") + ",\"file\":" + json_text(f.file) + ",\"text\":" + json_text(f.text) + "}";
+        }
         out += std::string(i ? "," : "") + "{\"ok\":" + (result.ok ? "true" : "false") + ",\"id\":" + json_text(result.id) +
                ",\"replaced\":" + (result.replaced ? "true" : "false") +
                ",\"already\":" + (result.already ? "true" : "false") + ",\"title\":" + json_text(result.title) + ",\"files\":" + std::to_string(result.files) +
                ",\"bytes\":" + std::to_string(result.bytes) + ",\"kinds\":" + json_text(result.kinds) +
-               ",\"message\":" + json_text(result.message) + "}";
+               ",\"message\":" + json_text(result.message) + ",\"checked\":" + (result.checked ? "true" : "false") +
+               ",\"refused\":" + (result.refused ? "true" : "false") + ",\"findings\":[" + findings + "]}";
     }
     out += "],\"ok\":" + std::string(failed == 0 && !sources.empty() ? "true" : "false") + "}";
     std::printf("%s\n", out.c_str());
@@ -3863,6 +3894,10 @@ void read_launch_args(int argc, char** argv) {
             args.dump_tunables = path_at(i + 1);
         } else if (key == "--extension") {
             args.extensions.push_back(path_at(i + 1));
+        } else if (key == "--import") {
+            args.imports.push_back(path_at(i + 1));
+        } else if (key == "--safe-start") {
+            args.safe_start = argv[i + 1][0] == '1';
         } else if (key == "--diagnostics") {
             std::string_view unknown;
             unsigned what = 0u;
@@ -4045,7 +4080,8 @@ int main(int argc, char** argv) {
             module = arg_path(i + 1);
         } else if (key == "--diagnostics" || key == "--timeline" || key == "--data" || key == "--settings" ||
                    key == "--crash-dumps" || key == "--gpu-validation" || key == "--console-log" ||
-                   key == "--gpu-start-retry" || key == "--dump-tunables" || key == "--extension") {
+                   key == "--gpu-start-retry" || key == "--dump-tunables" || key == "--extension" || key == "--import" ||
+                   key == "--safe-start") {
             // Read above, before anything uses them.
         } else if (key == "--seconds") {
             seconds = std::atof(argv[i + 1]);
@@ -4128,6 +4164,31 @@ int main(int argc, char** argv) {
             const unsigned scanned_in = played();
             galaxy::mods::set_played_language(scanned_in);
             std::vector<galaxy::mods::ModInfo> mods = galaxy::mods::scan_mods(game_id);
+            // Safe start (task 6.6): every mod off for this start only (the copy planned; mods.ini stays the player's).
+            bool safe_asked = ::galaxy::launch_args().safe_start;
+#if defined(_WIN32)
+            safe_asked = safe_asked || (!::galaxy::launch_args().started_hidden && (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0);
+#endif
+            if (const galaxy::mods::SafeStart safe = galaxy::mods::take_safe_start(safe_asked);
+                safe != galaxy::mods::SafeStart::kNo) {
+                log_line("mods:", safe == galaxy::mods::SafeStart::kAsked
+                                      ? "safe start: every mod is off for this start"
+                                      : "safe start: the last run crashed with mods on; every mod is off for this start");
+                // The harness's own game half (luma-test, placed by tools/lumacore/luma_test.py in a harness run) is the
+                // test's instrument, not a player's mod: it stays on, or no safe start could be run as a test.
+#if defined(_WIN32)
+                const bool harness_run = GetEnvironmentVariableA("LUMA_HARNESS_PLAN", nullptr, 0) != 0;
+#else
+                const bool harness_run = std::getenv("LUMA_HARNESS_PLAN") != nullptr;
+#endif
+                for (galaxy::mods::ModInfo& mod : mods) {
+                    if (!(harness_run && mod.id == "luma-test")) mod.enabled = false;
+                }
+            } else if (std::any_of(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) { return mod.enabled; })) {
+                // A crash from here on (the cook, the packs, the game) makes the next start safe; svc_mods_start
+                // narrows it to the code when code is on.
+                gCodeCrashFile = galaxy::mods::safe_start_file();
+            }
             bool added_language = false;
             for (const galaxy::mods::ModInfo& mod : mods) {
                 if (!mod.enabled) continue;
@@ -4216,6 +4277,8 @@ int main(int argc, char** argv) {
     services.galaxy_select_names_wanted = svc_galaxy_select_names_wanted;
     services.galaxy_select_name = svc_galaxy_select_name;
     services.take_pause_request = svc_take_pause_request;
+    // A mod's request screen pauses the game as Start does (services-mods 9, services-save 8).
+    galaxy::mods::set_screen_pause([] { gPauseRequest.store(true, std::memory_order_release); });
     services.test_frame_step = deterministic_mode() ? svc_test_frame_step : nullptr;
     services.texture_hd = svc_texture_hd;
     services.model_register = svc_model_register;
