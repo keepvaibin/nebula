@@ -98,8 +98,8 @@ struct ModInfo {
     bool package = false;  // a .luma: luma.json plus layers of files
     std::shared_ptr<const galaxy::luma::Manifest> luma;
     bool luma_changes_game = false;  // it or its active layers set something read at game start (luma::manifest_sets_game)
-    std::vector<std::filesystem::path> luma_textures;  // textures/ and movies/ of its active layers, in order
-    std::vector<std::filesystem::path> luma_movies;
+    std::vector<std::filesystem::path> luma_textures;  // textures/ of its active layers, in order
+    std::vector<std::filesystem::path> luma_movies;    // files/MovieData of its active layers, in order
     std::vector<std::string> languages;       // language folders it changes (UsEnglish, EuFrench, ...)
     bool own_text = true;                     // its text stands in for a language it lacks
     unsigned code_patches = 0;                // patches to the original Wii code; never applied (`problem` says so)

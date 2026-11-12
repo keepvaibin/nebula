@@ -1198,6 +1198,14 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                 for (const std::string& author : manifest->authors) {
                     mod.pack_author += (mod.pack_author.empty() ? "" : ", ") + author;
                 }
+                // Code for other devices only: not started here, and the Mods page says why. This is the device's own
+                // answer, not a check of the mod: the validator checks a mod once for every device (one form removed
+                // the old refusal() with this line in it; test 2282).
+                if (!manifest->plugins.empty() &&
+                    !manifest->plugins.front().binaries.contains(std::string(luma::plugin_target()))) {
+                    mod.problem = "THIS MOD HAS NO VERSION FOR THIS DEVICE";
+                    std::fprintf(stderr, "[mods] %s: %s\n", mod.id.c_str(), mod.problem.c_str());
+                }
                 mod.code_token = plugin_token(dir, *manifest);
                 mod.code_allowed = !mod.code_token.empty() && s != nullptr && s->code_ok == mod.code_token;
                 mod.code_declined = !mod.code_token.empty() && !mod.code_allowed && s != nullptr && s->code_no == mod.code_token;
@@ -1275,9 +1283,17 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                             for (std::string& key : luma::merge_keys(under, read_text(walk->path()))) settings_set.insert(std::move(key));
                         }
                     }
+                    // assets/ is the mod's own store (Luma/<id>/...): it changes what the cook writes, never another
+                    // mod's paths.
+                    if (child_any_case(place, "assets", true)) mod.luma_changes_game = true;
                     if (std::optional<fs::path> files = child_any_case(place, "files", true)) {
                         mod.luma_changes_game = true;
                         list_files(*files, std::string(), changed_paths[mod.id]);
+                        // A movie is a file at its game path (G's decision 3 of the one form, luma-format 5): the
+                        // movie player looks in files/MovieData for <name>.<video kind> (movie_playback.cpp find).
+                        if (std::optional<fs::path> movie_data = child_any_case(*files, "MovieData", true)) {
+                            mod.luma_movies.push_back(*movie_data);
+                        }
                         for (const char* language : kLanguageFolders) {
                             if (child_any_case(*files, language, true)) languages.insert(language);
                         }
@@ -1289,7 +1305,6 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                         mod.luma_textures.push_back(*textures);
                         list_textures(*textures, changed_textures[mod.id]);
                     }
-                    if (std::optional<fs::path> movies = child_any_case(place, "movies", true)) mod.luma_movies.push_back(*movies);
                 }
                 mod.luma_changes_game = mod.luma_changes_game || luma::manifest_sets_game(*manifest);
                 if (!mod.luma_textures.empty()) {
@@ -1606,7 +1621,7 @@ std::vector<std::filesystem::path> movie_folders(std::span<const ModInfo> mods) 
     std::vector<std::filesystem::path> out;
     for (auto it = mods.rbegin(); it != mods.rend(); ++it) {
         if (!in_use(*it) || !it->movies) continue;
-        // A .luma's layers' movies/ in its order (the last wins), then a folder's own.
+        // A .luma's layers' files/MovieData in its order (the last wins), then a folder's own movies/.
         out.insert(out.end(), it->luma_movies.begin(), it->luma_movies.end());
         const ModLayout layout = layout_of(it->path);
         if (!layout.movies.empty()) out.push_back(layout.movies);
@@ -1890,6 +1905,29 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                     std::sort(found.begin(), found.end());
                     for (const fs::path& file : found) {
                         plan.merges.push_back({galaxy::path_text(file.lexically_relative(*merge).generic_string()), file});
+                    }
+                }
+                // A layer's assets/ goes into the mod's own store at Luma/<id>/<path> (luma-format 5, G's decision of
+                // 2026-11-11): one plan line a file, a later layer's same path winning as files/ does. assets/effects.json
+                // is each layer's change instead, merged by the cook in layer order (contracts/effects.md).
+                if (const std::optional<fs::path> assets = child_any_case(mod.path / fs::path(from_utf8(layer.path)), "assets", true)) {
+                    std::error_code walk_error;
+                    std::error_code status_error;
+                    std::vector<fs::path> found;
+                    for (auto walk = fs::recursive_directory_iterator(*assets, walk_error);
+                         !walk_error && walk != fs::recursive_directory_iterator(); walk.increment(walk_error)) {
+                        if (walk->is_regular_file(status_error)) found.push_back(walk->path());
+                    }
+                    if (walk_error) note(layer.path + "/assets: the folder could not be read in full");
+                    std::sort(found.begin(), found.end());
+                    const std::string own = "Luma/" + mod.luma->id + "/";
+                    for (const fs::path& file : found) {
+                        const std::string under = galaxy::path_text(file.lexically_relative(*assets).generic_string());
+                        if (under == "effects.json") {
+                            plan.merges.push_back({own + under, file});
+                        } else {
+                            set_file(own + under, file);
+                        }
                     }
                 }
                 const std::optional<fs::path> files = child_any_case(mod.path / fs::path(from_utf8(layer.path)), "files", true);

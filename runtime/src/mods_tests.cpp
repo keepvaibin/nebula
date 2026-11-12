@@ -304,6 +304,47 @@ bool layer_only_mods() {
     return ok;
 }
 
+// A layer's assets/ is the mod's own store: each file a plan line at /Luma/<id>/<path>, the later layer's same path
+// winning; each layer's assets/effects.json a change for the cook, in layer order.
+bool layer_assets() {
+    bool ok = true;
+    const fs::path root = galaxy::test_temp_path("nebula_mods_layer_assets");
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    const fs::path mod = root / "mods" / "fx-mod";  // an installed mod's folder is named by its id
+    write(mod / "luma.json",
+          R"({"format":"1.0","id":"fx-mod","name":"n","version":"1.0.0","game":{"id":"RMG"},"layers":[{"name":"base"},{"name":"night"}]})");
+    write(mod / "layers" / "base" / "assets" / "spark.png", "base");
+    write(mod / "layers" / "base" / "assets" / "effects.json", R"({"effects":[]})");
+    write(mod / "layers" / "night" / "assets" / "spark.png", "night");
+    write(mod / "layers" / "night" / "assets" / "sub" / "glow.bti", "glow");
+    write(mod / "layers" / "night" / "assets" / "effects.json", R"({"effects":[]})");
+    write(root / "mods.ini", "[fx-mod]\nenabled=1\norder=1\n");
+    galaxy::mods::set_mods_folder(root / "mods", root / "mods.ini", "RMGE01");
+    const std::vector<galaxy::mods::ModInfo> mods = galaxy::mods::scan_mods();
+    const auto it = std::find_if(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& m) { return m.id == "fx-mod"; });
+    ok &= expect(it != mods.end() && it->problem.empty() && galaxy::mods::changes_game_files(*it), "assets set the game");
+    const galaxy::assets::AssetStore store;
+    const galaxy::mods::ModPlan plan = galaxy::mods::plan_mod_changes(store, "RMGE01", "UsEnglish", mods);
+    const auto host_of = [&](const char* disc) {
+        for (const galaxy::mods::ModPlan::File& f : plan.files) {
+            if (f.disc == disc) return f.host;
+        }
+        return fs::path();
+    };
+    ok &= expect(host_of("/Luma/fx-mod/spark.png") == mod / "layers" / "night" / "assets" / "spark.png",
+                 "the later layer's file wins its path");
+    ok &= expect(host_of("/Luma/fx-mod/sub/glow.bti") == mod / "layers" / "night" / "assets" / "sub" / "glow.bti",
+                 "a file in a sub-folder keeps its path");
+    ok &= expect(host_of("/Luma/fx-mod/effects.json").empty() && plan.files.size() == 2u, "effects.json is not a file line");
+    ok &= expect(plan.merges.size() == 2u && plan.merges[0].disc == "Luma/fx-mod/effects.json" &&
+                     plan.merges[0].host == mod / "layers" / "base" / "assets" / "effects.json" &&
+                     plan.merges[1].host == mod / "layers" / "night" / "assets" / "effects.json",
+                 "each layer's effects.json is a change, in layer order");
+    fs::remove_all(root, ec);
+    return ok;
+}
+
 // Two folder mods that each add a galaxy: the saves are the higher one's, as for every other choice of saves.
 bool galaxy_saves() {
     bool ok = true;
@@ -438,7 +479,7 @@ bool luma_rules() {
     mod("X", "mod-x", "");
     mod("Y", "mod-y", R"("conflicts":[{"id":"mod-x","why":"Both change the lives."}],)");
     mod("M", "mod-m", "");
-    write(root / "mods" / "M" / "layers" / "layer" / "movies" / "opening.mp4", "movie");
+    write(root / "mods" / "M" / "layers" / "layer" / "files" / "MovieData" / "opening.mp4", "movie");
     // What the reader refuses in its own words: a cut-off luma.json, a layer folder missing. A later format reads its
     // format and id only, and the second game reads: both are the validator's to refuse (L205, L207).
     write(root / "mods" / "Cut" / "luma.json", R"({"format":"1.0","id":"cut","na)");
@@ -472,8 +513,8 @@ bool luma_rules() {
     };
     ok &= expect(place("Q after P") < place("P") && place("0 before P") > place("P"), "load_after and load_before place a new mod");
     const std::vector<fs::path> movies = galaxy::mods::movie_folders(mods);
-    ok &= expect(movies.size() == 1u && movies[0].filename() == "movies" && movies[0].parent_path().filename() == "layer",
-                 "a .luma's movies are used");
+    ok &= expect(movies.size() == 1u && movies[0].filename() == "MovieData" && movies[0].parent_path().filename() == "files",
+                 "a .luma's movies at their game path are used");
     fs::remove_all(root, ec);
     return ok;
 }
@@ -668,7 +709,7 @@ bool texture_names() {
 int main() {
     test_texture_categories();
     // Every test runs, whichever fail.
-    const bool results[] = {texture_names(), xml(), importing(), code_patch_notes(), setting_overlaps(), layer_only_mods(), galaxy_saves(),
+    const bool results[] = {texture_names(), xml(), importing(), code_patch_notes(), setting_overlaps(), layer_only_mods(), layer_assets(), galaxy_saves(),
                             luma_rules(), luma_import()};
     bool ok = true;
     for (const bool passed : results) ok = ok && passed;
