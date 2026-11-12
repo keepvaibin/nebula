@@ -167,6 +167,12 @@ enum class SafeStart : std::uint8_t { kNo, kAsked, kAfterCrash };
 SafeStart take_safe_start(bool asked);
 // This run's safe start (kNo before take_safe_start).
 [[nodiscard]] SafeStart safe_start() noexcept;
+// The player's blocklist (task 6.6): mod ids that never start, in mods-blocked.txt beside the file of the player's
+// choices, kept whether or not the mod is in the folder (it is blocked again when it comes back). A blocked mod scans
+// off with the reason, cannot be turned on, and its page offers UNBLOCK. Any thread.
+[[nodiscard]] bool mod_blocked(std::string_view id);
+// Blocks or unblocks `id`, written at once; false when the file could not be written (nothing changes then).
+bool set_mod_blocked(const std::string& id, bool blocked);
 // The game id given to set_mods_folder (empty before).
 [[nodiscard]] std::string mods_game_id();
 // The mods found, with their saved choices (Riivolution defaults when nothing is saved): enabled mods in load order

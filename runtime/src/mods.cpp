@@ -1056,6 +1056,57 @@ SafeStart safe_start() noexcept {
     return s_safe_start.load(std::memory_order_relaxed);
 }
 
+namespace {
+// The blocklist as read from its file (once, then as written). Under s_blocked_mutex.
+std::mutex s_blocked_mutex;
+std::set<std::string> s_blocked;
+bool s_blocked_read = false;
+
+fs::path blocked_file() {
+    const fs::path settings_file = mods_settings_file();
+    return settings_file.empty() ? settings_file : settings_file.parent_path() / "mods-blocked.txt";
+}
+
+// With s_blocked_mutex held.
+void read_blocked_locked() {
+    if (s_blocked_read) return;
+    const fs::path file = blocked_file();
+    if (file.empty()) return;  // before set_mods_folder: read when there is a file to read
+    s_blocked_read = true;
+    std::istringstream in(read_text(file));
+    std::string line;
+    while (std::getline(in, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.empty() || line[0] == ';') continue;
+        s_blocked.insert(line);
+    }
+}
+}  // namespace
+
+bool mod_blocked(std::string_view id) {
+    const std::lock_guard<std::mutex> lock(s_blocked_mutex);
+    read_blocked_locked();
+    return s_blocked.find(std::string(id)) != s_blocked.end();
+}
+
+bool set_mod_blocked(const std::string& id, bool blocked) {
+    const std::lock_guard<std::mutex> lock(s_blocked_mutex);
+    read_blocked_locked();
+    const fs::path file = blocked_file();
+    if (file.empty() || id.empty() || id.find_first_of("\r\n") != std::string::npos) return false;
+    std::set<std::string> next = s_blocked;
+    if (blocked) {
+        next.insert(id);
+    } else {
+        next.erase(id);
+    }
+    std::string text = "; Nebula: mods the player blocked (one id a line): they never start, even when on or imported again.\n";
+    for (const std::string& entry : next) text += entry + '\n';
+    if (!io::write_file_atomically(file, text)) return false;
+    s_blocked = std::move(next);
+    return true;
+}
+
 std::filesystem::path mods_folder() {
     Settings& s = settings();
     const std::lock_guard<std::mutex> lock(s.mutex);
@@ -1354,6 +1405,11 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
             mod.problem = "CONVERT THIS MOD WITH LUMALINK ON A COMPUTER, THEN OPEN THE FILE HERE";
         }
 #endif
+        // The player blocked it (task 6.6): off whatever mods.ini says, and why; its page unblocks it.
+        if (mod_blocked(mod.id)) {
+            mod.enabled = false;
+            mod.problem = "YOU BLOCKED THIS MOD. UNBLOCK IT ON ITS PAGE TO USE IT";
+        }
         if (first_time && mod.luma) new_mods.insert(mod.id);
         mods.push_back(std::move(mod));
     }

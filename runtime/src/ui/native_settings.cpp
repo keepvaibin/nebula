@@ -2280,6 +2280,7 @@ void refresh_overlaps_locked() {
 // With s_mods_mutex held: mod `id` into the list of mods on at `index` (0 the top), or off (`on` false: among the
 // others by name). The draft only.
 void place_mod_locked(const std::string& id, bool on, std::size_t index) {
+    if (on && galaxy::mods::mod_blocked(id)) return;  // a blocked mod stays off until its page unblocks it (6.6)
     const auto find = [&] {
         return std::find_if(s_mods.begin(), s_mods.end(), [&](const galaxy::mods::ModInfo& m) { return m.id == id; });
     };
@@ -3027,12 +3028,21 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
         add_log_rows(rows, galaxy::modlog::entries(), said, s_native_settings_row.load(std::memory_order_relaxed));
     }
     const bool about = mod_has_about(mod);
-    SettingsRow buttons = button_row({}, {about ? "ABOUT" : "-ABOUT", "REMOVE", "DONE"},
+    // BLOCK (task 6.6): off in the draft and on the blocklist at once (it never starts again until UNBLOCK, even
+    // removed and imported again); UNBLOCK leaves it off for the player to turn on.
+    SettingsRow buttons = button_row({}, {about ? "ABOUT" : "-ABOUT", "REMOVE",
+                                          galaxy::mods::mod_blocked(mod.id) ? "UNBLOCK" : "BLOCK", "DONE"},
                                      [](RenderConfig& draft, unsigned button) {
                                          if (button == 0u) {
                                              open_mod_about();
                                          } else if (button == 1u) {
                                              ask_mod_remove();
+                                         } else if (button == 2u) {
+                                             const std::lock_guard<std::mutex> lock(s_mods_mutex);
+                                             const std::string id = s_mod_options;
+                                             const bool blocked = galaxy::mods::mod_blocked(id);
+                                             if (!blocked) place_mod_locked(id, false, 0u);
+                                             if (galaxy::mods::set_mod_blocked(id, !blocked)) reread_mods_locked();
                                          } else {
                                              close_mod_options(draft);
                                          }
