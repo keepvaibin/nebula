@@ -2083,7 +2083,14 @@ unsigned mods_draft_changes_locked() {
             continue;
         }
         bool same = mod.enabled == saved->enabled && mod.own_text == saved->own_text &&
-                    mod.options.size() == saved->options.size();
+                    mod.options.size() == saved->options.size() && mod.code_allowed == saved->code_allowed &&
+                    mod.code_declined == saved->code_declined &&
+                    mod.permission_answers.size() == saved->permission_answers.size();
+        for (auto answer = mod.permission_answers.begin(); same && answer != mod.permission_answers.end(); ++answer) {
+            const auto was = saved->permission_answers.find(answer->first);
+            same = was != saved->permission_answers.end() && was->second.granted == answer->second.granted &&
+                   was->second.digest == answer->second.digest;
+        }
         for (std::size_t o = 0; same && o < mod.options.size(); ++o) {
             same = mod.options[o].selected == saved->options[o].selected;
         }
@@ -2678,6 +2685,55 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
         rows.push_back(button_row("TIME: " + (clock->held ? std::string("HELD") : clock_rate_text(clock->rate)), {"LET GO"},
                                   [id](RenderConfig&, unsigned) { galaxy::modlog::let_go(id); }, {}));
     }
+    // The player's answers for its code and permissions, each turned with left and right; a draft like any setting,
+    // applied at the next start (consent 2.3). Code not allowed turns the mod off. Shown once the question was answered.
+    const galaxy::mods::ModConsent consent = galaxy::mods::consent_facts(mod);
+    if (consent.code && consent.code_answer != galaxy::mods::Answer::NotAsked) {
+        const auto answer_words = [&id](bool allowed) {
+            return galaxy::modlog::row_words(allowed ? "Consent.Allowed" : "Consent.Denied", id, {});
+        };
+        const bool code_allowed = consent.code_answer == galaxy::mods::Answer::Granted;
+        SettingsRow code{galaxy::modlog::row_words("Consent.Code", id, {}), answer_words(code_allowed),
+                         [id, code_allowed](RenderConfig&, int delta) {
+                             if (delta == 0) return;
+                             const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
+                             galaxy::mods::ModInfo* const found = mod_by_id_locked(id);
+                             if (found == nullptr) return;
+                             galaxy::mods::record_code_answer(*found, !code_allowed);
+                             if (code_allowed) found->enabled = false;
+                         },
+                         galaxy::modlog::row_words("SettingsModsCodeAsk", id, {})};
+        code.names = 1u | 2u | 4u;
+        rows.push_back(std::move(code));
+        std::string declined;
+        for (const galaxy::mods::PermissionFacts& permission : consent.permissions) {
+            if (permission.answer == galaxy::mods::Answer::NotAsked) continue;
+            const bool granted = permission.answer == galaxy::mods::Answer::Granted;
+            std::string name = galaxy::modlog::row_words(permission.row.c_str(), id, {});
+            if (name.empty()) name = permission.name;
+            if (!granted) declined += (declined.empty() ? "" : ", ") + name;
+            const std::string hosts = permission.hosts == "*" ? galaxy::modlog::row_words("Permission.net.internet.Any", id, {})
+                                                              : permission.hosts;
+            std::string help = galaxy::modlog::row_words(permission.text_row.c_str(), id, {{"hosts", hosts}});
+            if (permission.required) help += ' ' + galaxy::modlog::row_words("Consent.Required", id, {});
+            const std::string permission_name = permission.name;
+            SettingsRow row{name, answer_words(granted),
+                            [id, permission_name, granted](RenderConfig&, int delta) {
+                                if (delta == 0) return;
+                                const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
+                                galaxy::mods::ModInfo* const found = mod_by_id_locked(id);
+                                if (found != nullptr) (void)galaxy::mods::record_answer(*found, permission_name, !granted);
+                            },
+                            help};
+            row.names = 1u | 2u | 4u;
+            rows.push_back(std::move(row));
+        }
+        if (!declined.empty()) {
+            SettingsRow not_allowed{galaxy::modlog::row_words("Consent.NotAllowed", id, {{"list", declined}}), {}, nullptr, {}, true};
+            not_allowed.names = 1u;
+            rows.push_back(std::move(not_allowed));
+        }
+    }
     const std::string kinds = galaxy::mods::change_kinds(mod);
     rows.push_back({"CHANGES", kinds.empty() ? std::string("NOTHING THIS GAME USES") : kinds, nullptr, mod_details(mod)});
     if (mod.luma != nullptr && !mod.luma->version.empty()) fact("VERSION", mods_ui_text(mod.luma->version, 24u), {});
@@ -2807,6 +2863,11 @@ SettingsRow mod_row(const galaxy::mods::ModInfo& mod) {
             row.help = mods_ui_text(not_started.text, 160u);
             if (not_started.as_is) row.names |= 4u;
         }
+    }
+    if (row.help.empty() && mod.problem.empty() && mod.code_declined) {
+        // Not now was the answer for this code: it waits for the player (turning it on asks again).
+        row.help = galaxy::modlog::row_words("Consent.Waiting", mod.id, {});
+        row.names |= 4u;
     }
     row.list = mod.enabled ? 2u : 1u;
     row.held = s_mod_held == mod.id;
