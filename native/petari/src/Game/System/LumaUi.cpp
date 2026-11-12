@@ -8,6 +8,7 @@
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/System/LumaModLog.hpp"
 #include "Game/System/NebulaArena.hpp"
+#include "Game/Ui/Font.hpp"
 #include "Game/Ui/Pane.hpp"
 #include "Game/Ui/TextBox.hpp"
 #include "Game/Util/FileUtil.hpp"
@@ -46,6 +47,7 @@ namespace luma {
             const u32 cNoSceneCode = 574;
             const u32 cNotUtf8Code = 575;
             const u32 cMissingAnimationCode = 576;
+            const u32 cNoGlyphCode = 577;
             const u32 kMostEnds = kMostOpen * 2u;  // end events waiting or being given, across mods
             const u32 kMostBoxes = 32;              // text boxes one set_text reaches
 
@@ -144,6 +146,66 @@ namespace luma {
                     entry.count = 2;
                 }
                 (void)luma::modlog::add(entry, pRow);
+            }
+
+            // The first code point of pText that rFont has no glyph for, 0 when it draws them all. A control code is not
+            // drawn; a no-break space draws as the font's space (ResFontBase::GetGlyphIndex); past U+FFFF no font has one.
+            u32 firstMissing(const Ui::Font& rFont, const char16_t* pText) {
+                for (u32 i = 0; pText[i] != 0; i++) {
+                    const u32 unit = pText[i];
+                    if (unit >= 0xD800u && unit <= 0xDBFFu) {
+                        const u32 low = pText[i + 1];
+                        return 0x10000u + ((unit - 0xD800u) << 10u) + (low - 0xDC00u);
+                    }
+                    if (unit < 0x20u || rFont.HasGlyph(static_cast< Ui::CharCode >(unit))) {
+                        continue;
+                    }
+                    if ((unit == 0xA0u || unit == 0x202Fu) && rFont.HasGlyph(0x20)) {
+                        continue;
+                    }
+                    return unit;
+                }
+                return 0;
+            }
+
+            // Ui.NoGlyph {pane, found, code}: the font's stand-in is drawn in its place. One entry a pane and character.
+            void sayNoGlyph(const LumaMod* pMod, const char* pPane, u32 point) {
+                char found[5] = {};
+                if (point < 0x80u) {
+                    found[0] = static_cast< char >(point);
+                } else if (point < 0x800u) {
+                    found[0] = static_cast< char >(0xC0u | (point >> 6u));
+                    found[1] = static_cast< char >(0x80u | (point & 0x3Fu));
+                } else if (point < 0x10000u) {
+                    found[0] = static_cast< char >(0xE0u | (point >> 12u));
+                    found[1] = static_cast< char >(0x80u | ((point >> 6u) & 0x3Fu));
+                    found[2] = static_cast< char >(0x80u | (point & 0x3Fu));
+                } else {
+                    found[0] = static_cast< char >(0xF0u | (point >> 18u));
+                    found[1] = static_cast< char >(0x80u | ((point >> 12u) & 0x3Fu));
+                    found[2] = static_cast< char >(0x80u | ((point >> 6u) & 0x3Fu));
+                    found[3] = static_cast< char >(0x80u | (point & 0x3Fu));
+                }
+                char code[12];
+                nebula_snprintf(code, sizeof(code), "U+%04X", point);
+                char column[96];
+                nebula_snprintf(column, sizeof(column), "%s/%s", pPane, code);
+                LumaModLogEntry entry = {};
+                entry.size = sizeof(entry);
+                entry.source = LUMA_MODLOG_CONTENT;
+                entry.level = LUMA_MODLOG_ERROR;
+                entry.code = cNoGlyphCode;
+                entry.mod = sKernel->mod_id(pMod);
+                entry.file = "";
+                entry.column = MR::getHashCode(column);
+                entry.names[0] = "pane";
+                entry.values[0] = pPane;
+                entry.names[1] = "found";
+                entry.values[1] = found;
+                entry.names[2] = "code";
+                entry.values[2] = code;
+                entry.count = 3;
+                (void)luma::modlog::add(entry, "Ui.NoGlyph");
             }
 
             s32 enter(const LumaMod* pMod, const char* pWhere) {
@@ -633,6 +695,21 @@ namespace luma {
                 }
                 for (u32 i = 0; i < boxCount; i++) {
                     boxes[i]->SetString(text, 0);
+                }
+                // A character a box's font has no glyph for draws as the font's stand-in, often nothing (NumberFont has
+                // no letters): the first such one is said for each font the boxes use.
+                for (u32 i = 0; i < boxCount; i++) {
+                    const Ui::Font* const pFont = boxes[i]->mpFont;
+                    bool seen = pFont == nullptr;
+                    for (u32 j = 0; j < i && !seen; j++) {
+                        seen = boxes[j]->mpFont == pFont;
+                    }
+                    if (seen) {
+                        continue;
+                    }
+                    if (const u32 point = firstMissing(*pFont, text); point != 0) {
+                        sayNoGlyph(pMod, pPane->pane->mName, point);
+                    }
                 }
                 if (luma::modlog::facts()) {
                     paneFact(*pPane, "text");
