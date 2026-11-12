@@ -462,7 +462,9 @@ RtStageLight rt_stage_light() {
 // ambient; the model's: the sky's light.
 float3 rt_o_unit() {
     const float t = rt_form();
-    const float3 art = max(rt_lin(g_shade.authored.rgb), 0.002f);  // linear: O = 1 is "as authored" (M1; b59b)
+    // The art's: 1, a painted hit's O-part is in the art's own units (O = 1: as painted), so one trip round the bounce's
+    // loop multiplies O by lin(base), the albedo (the director 11-11; b69).
+    const float3 art = float3(1.0f, 1.0f, 1.0f);
     return t > 0.0f ? lerp(art, rt_stage_light().unit, t) : art;
 }
 // A hit's colour as it takes light: the art's, or (the model) its linear colour, a metal's diffuse gone (M6).
@@ -487,51 +489,53 @@ float3 rt_hit_mirror_stand_in(RtHit h) {
 // A surface's share of light as an affine function of what the sky and the bounce give it (O, rgb): share = s0 +
 // Mo * O. Painted surfaces (3.4): P_c = (A_c O_c + K_c nl V_c) / (A_c + K_c nl), its luminance form likewise with
 // the channel means, P = lerp(P_lum, P_c, kShadowTint). Lit surfaces (3.4, 10.2): A O + K nl V + Fl 0.5 O. `nl`
-// from the smooth normal. Linear in O and V, so a mean over samples of the share is the share of the means.
+// from the smooth normal. Linear in O and V, so a mean over samples of the share is the share of the means. All in
+// linear light (b69): one trip round the bounce's loop multiplies O by at most the hit's albedo.
 void rt_share_terms_art(bool lit, float nl, float3 v, out float3 s0, out float3x3 mo) {
     const float3 a = g_shade.ambient.rgb, k = g_shade.key.rgb;
     if (lit) {
-        s0 = k * nl * v;
-        const float3 d = a + 0.5f * g_shade.fill.rgb;
+        // Linear light (b69): lin(D) O + (lin(D + K nl) - lin(D)) V, D = A + Fl / 2; the loop's gain lin(D) lin(base).
+        const float3 d = rt_lin(saturate(a + 0.5f * g_shade.fill.rgb));
+        s0 = max(rt_lin(saturate(a + 0.5f * g_shade.fill.rgb + k * max(nl, 0.0f))) - d, 0.0f) * v;
         mo = float3x3(d.x, 0.0f, 0.0f, 0.0f, d.y, 0.0f, 0.0f, 0.0f, d.z);
         return;
     }
-    // The painted composite's share as the programs give it (FC c39 traced_painted's Painted; FB b53, b67): the art is
-    // taken to hold A + K f, f the sun's facing as the light pass gives a painted surface; share = lerp(mean, a channel
-    // at a time, kShadowTint), a ratio of display values (rt_share takes it to linear). Linear in O: s0 + M O.
+    // The painted composite's share (FC c39 traced_painted's Painted; FB b53, b67, b69): the art is taken to hold
+    // A + K f, f the sun's facing as the light pass gives a painted surface, in LINEAR light (O and V are ratios of
+    // linear light): share = (lin(A) O + (lin(A + K f) - lin(A)) V) / lin(A + K f), lerp(mean, a channel at a time,
+    // kShadowTint). Linear in O: s0 + M O; O in shade, 1 at O = V = 1.
     const float t = g_shade.key.w;
     const float f = rt_sun_traced() ? saturate(nl / max(g_look.z, 1e-3f)) : 1.0f;
-    const float m = f;
     const float ga = 1.0f;
-    const float la = rt_lum(a), lk = rt_lum(k);
-    const float lum_held = la + lk * m;
-    const float3 held = a + k * m;
+    const float3 a_lin = rt_lin(a);
+    const float3 held = rt_lin(saturate(a + k * f));
+    const float3 key_lin = max(held - a_lin, 0.0f);
+    const float lum_held = rt_lum(held);
     const float3 ok = float3(held > 1e-4f);  // a channel the art holds nothing of: 1
-    const float3 own_s0 = ok * (k * f * v / max(held, 1e-4f)) + (1.0f - ok);
-    const float3 own = ok * (ga * a / max(held, 1e-4f));
+    const float3 own_s0 = ok * (key_lin * v / max(held, 1e-4f)) + (1.0f - ok);
+    const float3 own = ok * (ga * a_lin / max(held, 1e-4f));
     const bool whole = lum_held > 1e-4f;
-    const float mean_s0 = whole ? lk * f * rt_lum(v) / lum_held : 1.0f;
-    const float3 shared_ = whole ? ga * float3(0.2126f, 0.7152f, 0.0722f) * a / lum_held : float3(0.0f, 0.0f, 0.0f);
+    const float mean_s0 = whole ? rt_lum(key_lin * v) / lum_held : 1.0f;
+    const float3 shared_ = whole ? ga * float3(0.2126f, 0.7152f, 0.0722f) * a_lin / lum_held : float3(0.0f, 0.0f, 0.0f);
     s0 = (1.0f - t) * mean_s0 + t * own_s0;
     const float3 row = (1.0f - t) * shared_;  // every channel takes lum(A O) alike: the same row of columns
     mo = float3x3(row.x + t * own.x, row.y, row.z, row.x, row.y + t * own.y, row.z, row.x, row.y, row.z + t * own.z);
 }
 
-// The share in linear light, affine in O for the reference (ref_surface: c + M O): the art's display ratio x to the
-// power 2.2 (c39's `painted`; a lit surface's sums likewise) by its tangent at O = 1 (exact there), then for a painted
-// surface the model mixed in by kForm (FB b59, M3: s0 = sun max(n.s, 0) V, M = the sky's light). A lit surface keeps its
-// own sums at every kForm, as the programs' lit share 1 (b67).
+// The share in linear light, affine in O for the reference (ref_surface: c + M O), exactly (b69: the art's share is
+// linear light already), then for a painted surface the model mixed in by kForm (FB b59, M3: s0 = sun max(n.s, 0) V,
+// M = the sky's light). A lit surface keeps its own share at every kForm (b67).
 void rt_share_terms(bool lit, float nl, float3 v, out float3 s0, out float3x3 mo) {
     rt_share_terms_art(lit, nl, v, s0, mo);
-    const float3 x1 = max(s0 + mul(mo, float3(1.0f, 1.0f, 1.0f)), 0.0f);
-    const float3 slope = 2.2f * pow(x1, 1.2f);
-    mo = float3x3(mo[0] * slope.x, mo[1] * slope.y, mo[2] * slope.z);
-    s0 = pow(x1, 2.2f) - mul(mo, float3(1.0f, 1.0f, 1.0f));
     const float t = rt_form();
     if (!lit && t > 0.0f) {
         const RtStageLight st = rt_stage_light();
         s0 = lerp(s0, st.sun * max(nl, 0.0f) * v, t);
         mo = mo * (1.0f - t) + float3x3(st.sky.x, 0.0f, 0.0f, 0.0f, st.sky.y, 0.0f, 0.0f, 0.0f, st.sky.z) * t;
+    } else if (lit && t > 0.0f) {
+        // O in O's unit under kForm (b69): the same light as at kForm 0, the loop's gain lin(D) lin(base) still.
+        const float3 u = lerp(float3(1.0f, 1.0f, 1.0f), rt_stage_light().unit, t);
+        mo = float3x3(mo[0] * u, mo[1] * u, mo[2] * u);
     }
 }
 
@@ -558,15 +562,18 @@ float3 rt_air_share(float s, float3 v) {
     return sky_part * s + rt_air_sun() * v;
 }
 
-// The share a hit takes, exactly (b67): the art's display ratio to the power 2.2, a painted surface's lerped to the model by
-// kForm.
+// The share a hit takes, exactly (b67, b69): the art's in linear light, a painted surface's lerped to the model by kForm.
 float3 rt_share(bool lit, float nl, float3 v, float3 o) {
     float3 s0;
     float3x3 mo;
     rt_share_terms_art(lit, nl, v, s0, mo);
-    const float3 art = pow(max(s0 + mul(mo, o), 0.0f), 2.2f);
     const float t = rt_form();
-    if (lit || !(t > 0.0f)) {
+    if (lit) {
+        // O in O's unit under kForm (b69), as rt_share_terms.
+        return max(s0 + mul(mo, t > 0.0f ? o * lerp(float3(1.0f, 1.0f, 1.0f), rt_stage_light().unit, t) : o), 0.0f);
+    }
+    const float3 art = max(s0 + mul(mo, o), 0.0f);
+    if (!(t > 0.0f)) {
         return art;
     }
     const RtStageLight st = rt_stage_light();
@@ -712,7 +719,14 @@ float3 rt_hit_radiance_with(RtHit h, uint options, float3 o, bool d_known, float
     }
     if ((options & kRtShadeSkyOnly) != 0u) {
         const float t = rt_form();
-        const float3 art = rt_hit_albedo(h) * g_shade.look.y * rt_lin(g_shade.ambient.rgb);  // linear (M1; b59b)
+        // What the sky gives it in O's unit (b69): a painted hit 1 (O = 1 of its own look), a lit one its share's lin(D)
+        // at every kForm (O lerp(1, unit, t), as rt_share).
+        if ((h.item_flags & kItemLit) != 0u) {
+            const float3 d = rt_lin(saturate(g_shade.ambient.rgb + 0.5f * g_shade.fill.rgb));
+            return rt_hit_albedo(h) * g_shade.look.y * d *
+                   (t > 0.0f ? lerp(float3(1.0f, 1.0f, 1.0f), rt_stage_light().unit, t) : float3(1.0f, 1.0f, 1.0f));
+        }
+        const float3 art = rt_hit_albedo(h) * g_shade.look.y;
         return t > 0.0f ? lerp(art, rt_hit_albedo(h) * g_shade.look.y * rt_stage_light().sky, t) : art;
     }
     const bool lit = (h.item_flags & kItemLit) != 0u;
