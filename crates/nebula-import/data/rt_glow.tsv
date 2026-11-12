@@ -151,3 +151,13 @@ astrodomeentrancekitchen/starlightmat_v	1.0 0.90 0.60	150
 astrodecoratepartsa/crystalfacemat	1.0 1.0 0.40	40
 astrodecoratepartsgeara/crystalfacemat	1.0 1.0 0.40	40
 astromapboard/screen_v	own	60
+# c104: the intent gate's self-lit rule, the bloom twins' gaps (4.15), the Starshroom's cockpit meters (tools/fc_bulk_rows.py).
+heavensdoorinsideplanetpartsa/crystalfacemat	1.0 1.0 0.40	40
+heavensdoormiddlerotatepartsb/crystalfacemat	1.0 1.0 0.63	40
+hellballguidepartsa/light_v	own	60
+assemblyblockpartstimera/crystal_v	own	40
+tripodbossbodya/arrow_v	own	60
+tripodbossfoot/arrow	own	60
+tripodbossleg2a/arrow_v	own	60
+ufokinoko/cockpitmeter_v	own	30
+ufokinokolanding/cockpitmeter_v	own	30

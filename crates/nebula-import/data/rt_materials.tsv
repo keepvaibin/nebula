@@ -619,6 +619,213 @@ breakablecagebreak	sabi_v*	metal	0.6	1							FC c100 (the owner 11-12, the lava 
 breakablecagebreak	tethu_v*	metal	0.3	1							FC c100 (the owner 11-12, the lava stop): a cage's bars (tetsu), was gloss: iron; picture owed		iron	
 breakablecage	gaeasu_v	glass	0.02	0	1.5						FC c100: a cage's panes (garasu), was gloss: glass; picture owed			
 metbo	MetMat_v	metal	0.25	1							FC c100 (the owner 11-12): the Goombeetle's helmet, was gloss (a highlight sprite): metal, its own colour; picture owed		art	
+# c104: the intent gate's shiny rule and the rooms' surfaces (tools/fc_bulk_rows.py; coord/census/intent_gate.tsv, room_surfaces.tsv).
+assemblyblockpartsa	coreE_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.60 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+assemblyblockpartsb	coreE_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.60 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+assemblyblockpartsc	coreA_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.60 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+assemblyblockpartsc	coreE_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.60 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+assemblyblockpartsd	coreE_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.60 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+assemblyblockpartse	coreA_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.57 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+assemblyblockpartse	coreE_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.60 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+astrobasea	bluetile_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was dielectric; picture owed			
+astrobasea	colortile_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was dielectric; picture owed			
+astrobasea	glass_v_x	glass	0.02	0	1.5						FC c104 room surface (PLAN-ROOMS R5): a see-through glass or window, was translucent; picture owed			
+astrobasea	golddoorwalu_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was painted; picture owed		art	
+astrobasea	yellowtile_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was dielectric; picture owed			
+astrobaseb	WoodMat_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+astrobaseb	WoodPanelMat_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+astrobaseb	glass_v_x	glass	0.02	0	1.5						FC c104 room surface (PLAN-ROOMS R5): a see-through glass or window, was translucent; picture owed			
+astrobaseb	mabletileKitchen_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was painted; picture owed			
+astrobaseb	woodpanelW_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was painted; picture owed			
+astrodomemachine	FloorMat1_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+astrodomemachine	FloorMat2_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+astrodomemachine	FloorMat3_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+astrodomemachine	PipeMat_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+astrodomemachine	WallMat_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+astroroomlibrary	FloorDairi_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was painted; picture owed			
+astroroomlibrary	FloorMat_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was painted; picture owed			
+astroroomlibrary	WoodSand_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was painted; picture owed			
+beamgoroundplanet	bluemetal_v	metal	0.26	1							FC c104 intent A: a painted reflection 0.99 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+beamgoroundplanet	redmetal_v	metal	0.26	1							FC c104 intent A: a painted reflection 0.95 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+biribiribegomanspikeplanet	GroundBase_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.84 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+biribiribegomanspikeplanet	kusizasi_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.77 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+bombtimeattack2planet	GroundBase_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.84 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+bombtimeattackplanet	GroundBase_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.84 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+bossbegomanhead	lambert2_v	metal	0.27	1							FC c104 intent A: a painted reflection 0.65 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+bossbegomanhead	lambert4_v	metal	0.27	1							FC c104 intent A: a painted reflection 0.67 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+bosscrab	BodyBall	gloss	0.15	0							FC c104 intent A: a painted reflection 0.90 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+bosscrab	LegGrid	gloss	0.15	0							FC c104 intent A: a painted reflection 0.71 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+bosscrab	LegGrid_Mark	gloss	0.15	0							FC c104 intent A: a painted reflection 0.71 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+bosscrab	lambert33	gloss	0.15	0							FC c104 intent A: a painted reflection 0.90 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+bosscrab	lambert37	gloss	0.15	0							FC c104 intent A: a painted reflection 0.93 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+bosscrabcannon	CannonBall1	metal	0.31	1							FC c104 intent A: a painted reflection 0.87 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+bosscrabcannon	CannonBall1_v	metal	0.31	1							FC c104 intent A: a painted reflection 0.87 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+bosscrabcannonswitch	Switch	metal	0.31	1							FC c104 intent A: a painted reflection 0.72 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+bosscrabkiller	Body	gloss	0.15	0							FC c104 intent A: a painted reflection 0.90 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+bosscrabkiller	Body2	gloss	0.15	0							FC c104 intent A: a painted reflection 0.71 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+bosscrabkiller	Wing	gloss	0.15	0							FC c104 intent A: a painted reflection 0.59 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+broadbeanplaneta	BeanFace_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.65 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+broadbeanplanetb	BeanFace_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.65 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+broadbeanplanetd	BeanFace_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.65 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+bumpappearplanet	amiwaku_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.67 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+bumpappearplanet	lambert2_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.67 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+bumpappearplanet	tetsu01_v	metal	0.29	1							FC c104 intent A: a painted reflection 0.67 of its colour and named a metal, was gloss: a metal (iron); picture owed		iron	
+bumpappearplanet	tetsu_v	metal	0.29	1							FC c104 intent A: a painted reflection 0.67 of its colour and named a metal, was gloss: a metal (iron); picture owed		iron	
+cannonstormgcaptureplanet	PipeA02_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.87 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+cannonstormgcaptureplanet	PipeA_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.88 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+cannonstormgcaptureplanet	houdaiC_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.99 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+challengeballaccelcylindera	lambert12_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+challengeballgeara	lambert12_v	metal	0.29	1							FC c104 intent A: a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+challengeballmovegrounda	lambert12_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+challengeballmovegroundb	lambert12_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+challengeballplanet	lambert12_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+challengeballrotatebridgea	lambert12_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+chargespot	Base	gloss	0.15	0							FC c104 intent A: a painted reflection 0.58 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+chargespot	Base1	gloss	0.15	0							FC c104 intent A: a painted reflection 0.56 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+chargespot	Base2_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.92 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+crestmodel	mat_crest	metal	0.30	1							FC c104 intent A: a painted reflection 0.61 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+cubebubbleexhomestep	PowerStarKeeperA_0406:redplastic_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.76 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+cubebubbleexpartsa	PowerStarKeeperA_0406:redplastic_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.95 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+cubebubbleexpartsa	redplastic2_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.87 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+cubebubbleexrotatewalll	redplastic_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.87 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+cubebubbleexstartstep	PowerStarKeeperA_0406:redplastic_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.87 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+damagebomb	Foot	gloss	0.15	0							FC c104 intent A: a painted reflection 0.80 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+damagebomb	hinawa	gloss	0.15	0							FC c104 intent A: a painted reflection 0.63 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+darkhopperplanetpartsa	FloorTile_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was dielectric; picture owed			
+darkhopperplanetpartsd	FloorTile_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was dielectric; picture owed			
+darknessroomdoora	ki_mm_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+darknessroomdoora	kin_m_v	metal	0.26	1							FC c104 intent A: a painted reflection 0.98 of its colour and named a metal, was gloss: a metal (gold); picture owed		gold	
+darknessroomdoora	tetu_m_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was dielectric; picture owed		art	
+darknessroomplanet	mokume_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+deathpromenade2dplanet	lambert15_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+earthenpipe	EarthenPipeMat_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.94 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+electricbazooka	WaterBazooka1_v	metal	0.16	1							FC c104 intent A: a painted reflection 0.65 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+electricbazookabreak	WaterBazooka1_v	metal	0.16	1							FC c104 intent A: a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+electricbazookabreak	WaterBazooka2_v	metal	0.45	1							FC c104 intent A: a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+groundstar	FooMat	gloss	0.03	0							FC c104 intent A: a painted reflection 0.69 of its colour, not named a metal: gloss kept, polished (roughness 0.03); picture owed			
+heavensdoorinsiderotatepartsa	MetalEnvMapMat_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was gloss; picture owed		art	
+heavensdoorinsiderotatepartsb	MetalEnvMapMat_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was gloss; picture owed		art	
+heavensdoorinsiderotatepartsc	MetalEnvMapMat_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was gloss; picture owed		art	
+heavensdoormiddleplanet	pipe2_v	gloss	0.06	0							FC c104 intent A: a painted reflection 0.62 of its colour, not named a metal: gloss kept, polished (roughness 0.06); picture owed			
+heavensdoormiddleplanet	pipe_v	gloss	0.06	0							FC c104 intent A: a painted reflection 0.58 of its colour, not named a metal: gloss kept, polished (roughness 0.06); picture owed			
+heavensdoorsmallplanet	pipe_v	gloss	0.06	0							FC c104 intent A: a painted reflection 0.58 of its colour, not named a metal: gloss kept, polished (roughness 0.06); picture owed			
+ironcannonlauncher	KillerGunnerMat_v	metal	0.15	1							FC c104 intent A: a painted reflection 0.75 of its colour and named a metal, was gloss: a metal (iron); picture owed		iron	
+jointballsplaneta	JointBall1_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.95 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+jointballsplaneta	JointBall3_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.86 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+jointballsplaneta	JointBall4_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.98 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+jointballsplanetalow	JointBall2_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.94 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+jointballsplanetalow	JointBall3_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.86 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+jointballsplanetalow	JointBall4_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.98 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+jumpbeamerroomplanet	bluemetal_v	metal	0.26	1							FC c104 intent A: a painted reflection 0.99 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+jumpbeamerroomplanet	redmetal_v	metal	0.26	1							FC c104 intent A: a painted reflection 0.95 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+jumpbeamerroomplanet	yellowmetal_v	metal	0.26	1							FC c104 intent A: a painted reflection 0.98 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+keyswitch	KeySwitchMat_v	metal	0.27	1							FC c104 intent A: a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+koopavs2partsjoinedmoveclip	floor_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+koopavs2partsrollingstep	floor2_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+koopavs2partsrollingstep	floor_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+lavabegomanplanet	WindowMat	gloss	0.15	0							FC c104 intent A: a painted reflection 0.91 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+lavabegomanplanetlow	WindowMat	gloss	0.15	0							FC c104 intent A: a painted reflection 0.91 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+lavabegomanplanetmiddle	WindowMat	gloss	0.15	0							FC c104 intent A: a painted reflection 0.91 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+lavabegomanufoplanet	WindowMat	gloss	0.15	0							FC c104 intent A: a painted reflection 0.91 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+lavabegomanufoplanetlow	WindowMat	gloss	0.15	0							FC c104 intent A: a painted reflection 0.91 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+lavabegomanufoplanetmiddle	WindowMat	gloss	0.15	0							FC c104 intent A: a painted reflection 0.91 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+lavamazecubeplanet	Fruit_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.91 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+marbleplanetcore	FaceMat_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.54 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+mariolauncher	LauncherMat_v	metal	0.31	1							FC c104 intent A: a painted reflection 0.67 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+mechakoopapartsbody	BlueMetal_v	metal	0.29	1							FC c104 intent A: a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+mechakoopapartscaterpillar	lambert40_v	metal	0.29	1							FC c104 intent A: a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+mechakoopapartscaterpillar	lambert41_v	metal	0.29	1							FC c104 intent A: a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+miniflippanelexgalaxy	lambert3_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.90 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+minimechakoopapartsgear	aka_v	metal	0.29	1							FC c104 intent A: a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+mysterygravityroombridgea	woodhasi_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+mysterygravityroomplanet	floor_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was dielectric; picture owed			
+nutshipfleetplanet	kusizasi_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.77 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+powerstarkeepera	redplastic_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.95 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+powerstarkeeperb	plastic_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.98 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+powerstarkeeperc	plastic_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.99 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+questioncoin	lambert10_v	metal	0.22	1							FC c104 intent A: a painted reflection 0.56 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+questioncoin	lambert6_v	metal	0.22	1							FC c104 intent A: a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+questioncoin	lambert9_v	metal	0.31	1							FC c104 intent A: a painted reflection 0.77 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+relayplaneth	planetbase_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.75 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+rollingovalplanet	whiteplastic_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.87 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+rollingovalplanetparts	bluemetal_v	metal	0.26	1							FC c104 intent A: a painted reflection 0.99 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+rollingovalplanetparts	redmetal_v	metal	0.26	1							FC c104 intent A: a painted reflection 0.95 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+rollingovalplanetparts	whiteplastic_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.87 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+sandstreamhightowerplanet	nut00_v	metal	0.29	1							FC c104 intent A: a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+scaledownrelayplanet	wood01_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+scaledownrelayplanet	woodpanel00_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+seesawmovenutb	nut_v	metal	0.29	1							FC c104 intent A: a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+sidespikemovestepa	lambert3_v	metal	0.33	1							FC c104 intent A: a painted reflection 0.90 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+spacecannonlauncher	TeresaMansionGatePlanet0412:lambert9_v	metal	0.26	1							FC c104 intent A: a painted reflection 0.61 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+spacedustwooda	WoodMat_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was painted; picture owed			
+spaceseparatora	Point_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.70 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+spaceseparatorb	Point_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.70 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+spaceshipstep	step_pipe_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.94 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+spotlightenemy	Body	gloss	0.15	0							FC c104 intent A: a painted reflection 0.85 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+stardustrollingstepa	Madara_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.74 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+stardustrollingstepa	lambert13_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.73 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+starpeacespoutingplanet	k_tetu01_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was gloss; picture owed		art	
+starpeacespoutingplanet	lambert2_v	gloss	0.06	0							FC c104 intent A: a painted reflection 0.61 of its colour, not named a metal: gloss kept, polished (roughness 0.06); picture owed			
+teresamansiondoora	ki_mm_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+teresamansiondoora	kin_m_v	metal	0.26	1							FC c104 intent A: a painted reflection 0.98 of its colour and named a metal, was gloss: a metal (gold); picture owed		gold	
+teresamansiondoora	tetu_m_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was dielectric; picture owed		art	
+teresamansiondoorb	ki_mm1_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+teresamansiondoorb	kin_m_v	metal	0.26	1							FC c104 intent A: a painted reflection 0.98 of its colour and named a metal, was gloss: a metal (gold); picture owed		gold	
+teresamansiondoorb	tetu_m1_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was dielectric; picture owed		art	
+teresamansionentrancedoor	ki_mm_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+teresamansionentrancedoor	kin_m_v	metal	0.26	1							FC c104 intent A: a painted reflection 0.98 of its colour and named a metal, was gloss: a metal (gold); picture owed		gold	
+teresamansionentrancedoor	tetu_m_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was dielectric; picture owed		art	
+teresamansionplanetb	FloorTile00_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was dielectric; picture owed			
+teresamansionplanetb	Mokume02_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+teresamansionplanetb	ki_01_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+teresamansionplanetd	FloorTile00_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was dielectric; picture owed			
+teresamansionplanetd	Mokume02_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+teresamansionplanetd	ki_01_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+teresaroomdoor	tobira3_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.55 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+teresaroomplanet	tile_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was dielectric; picture owed			
+tetukuri	Face	metal	0.45	1							FC c104 intent A: a painted reflection 0.75 of its colour and named a metal, was dielectric: a metal (iron); picture owed		iron	
+tetukuri	FaceColor	metal	0.45	1							FC c104 intent A: a painted reflection 0.75 of its colour and named a metal, was dielectric: a metal (iron); picture owed		iron	
+tetukuri	Foot	metal	0.31	1							FC c104 intent A: a painted reflection 0.70 of its colour and named a metal, was gloss: a metal (iron); picture owed		iron	
+trapbasea	TeresaMansionGatePlanet0412:lambert9_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.61 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+tshapeplanet	lambert5_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.72 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+tshapeplanet	lambert9_v	gloss	0.06	0							FC c104 intent A: a painted reflection 0.66 of its colour, not named a metal: gloss kept, polished (roughness 0.06); picture owed			
+valveswitch	Valve2_v	metal	0.15	1							FC c104 intent A: a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+vsbegomanspikeplanet	kusizasi_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.77 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+wanwanrollinggold	WanwanRollingBody	metal	0.25	1							FC c104 intent A: a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (gold); picture owed		gold	
+wanwanrollinggoldbreak	WanwanRollingBody_v	metal	0.25	1							FC c104 intent A: a painted reflection 0.59 of its colour and named a metal, was gloss: a metal (gold); picture owed		gold	
+waterroadcaveplanet	metalamip_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was painted; picture owed		art	
+waterroadcaveplanet	pipe2_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.60 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+waterroadcaverotateground	floor1_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was painted; picture owed			
+waterroadcaverotateground	floor2_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was painted; picture owed			
+waterroadcaverotateground	floor3_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was painted; picture owed			
+waterroadcaverotateground	floor4_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was painted; picture owed			
+waterroadcavestepa	metalamip_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was painted; picture owed		art	
+waterroadcavestepb	metalamip_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was painted; picture owed		art	
+windmillpropellermini	lambert12_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+wormeatenplanet	AppleMat_Green_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.67 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+wormeatenplanet	AppleMat_RedA_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.65 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+wormeatenplanet	LeafMat_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.57 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+woodbox	WhiteWoodMat_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+astrorotatestepb	goldami_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was painted; picture owed		art	
+astroparking	BlueMetalMat_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was gloss; picture owed		art	
+astroparking	ParkingFloorMat_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was painted; picture owed			
+astroparking	metalami_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was painted; picture owed		art	
+astrobasecentertop	PinkMetalMat_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was gloss; picture owed		art	
+astrobasecentertop	PurpleMetalMat_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was gloss; picture owed		art	
+astrobasecentertop	WhiteMetalMat_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was gloss; picture owed		art	
+astrobasekitchen	WoodMat_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+astrobasecentera	goldchain_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was dielectric; picture owed		art	
+astrolibrary	BookShelfMat_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was painted; picture owed			
+astrolibrary	WoodMat_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+astrorotatestepa	goldami_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was painted; picture owed		art	
+astrobasecenterb	PinkMetalMat_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was gloss; picture owed		art	
+astrobasecenterb	PurpleMetalMat_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was gloss; picture owed		art	
+astrobasecenterb	WhiteMetalMat_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was gloss; picture owed		art	
+astrobasecenterb	goldchain_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was dielectric; picture owed		art	
+astrobasec	FloorMoyou_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was painted; picture owed			
+astrobasec	floorline_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was painted; picture owed			
+astrochildroom	WoodPanelMat_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+miniaturegalaxyunknown	RockMat_v	gloss	0.15	0							FC c104 intent A: a painted reflection 1.00 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
 ufokinoko	lambert8_v	metal	0.22	1							director d15: the Starshroom, the red hull: polished metal in its own colour (the owner 11-12: not properly glass and metal); picture owed		art	
 ufokinoko	lambert7_v	metal	0.22	1							director d15: the Starshroom, the cream hull and stem: polished metal in its own colour (the owner 11-12: not properly glass and metal); picture owed		art	
 ufokinoko	wawa:lambert7_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
