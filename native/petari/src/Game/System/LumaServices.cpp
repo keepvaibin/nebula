@@ -580,7 +580,10 @@ namespace luma {
                     }
                     const char* const* ppNames = nullptr;
                     char id[64];
-                    if (rowOf(rRow.code, id, sizeof(id), &ppNames)) {
+                    // A code names one row. Sibling services of one contract give the same row under the same code
+                    // (net.local and net.internet: 251 Net.CertificateRefused, 252 Net.RedirectRefused); a code given
+                    // again with another id is a fault of the build.
+                    if (rowOf(rRow.code, id, sizeof(id), &ppNames) && !sameText(id, rRow.id)) {
                         NEBULA_PANIC("LumaCore: the service %s's report code %u is %s's already", pName, rRow.code, id);
                     }
                     for (u32 s = 0; s < r; s++) {
