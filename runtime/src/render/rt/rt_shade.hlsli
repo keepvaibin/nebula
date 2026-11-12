@@ -750,6 +750,27 @@ float3 rt_share(bool lit, float nl, float3 v, float3 o) {
     return lerp(art, st.sky * rt_o_prime(o) + st.sun * max(nl, 0.0f) * v, t);
 }
 
+// FB b116 (the director's B5, RT-ISSUES; r0415 fb_offon.tsv: Freezeflame's ice showed Mario 6.81 times as bright as
+// the screen does). A ray that only looks at a lit program's surface sees it within kLitSeenLow..kLitSeenHigh of its
+// light set's own level, in luminance: the art's share (the shading frame's set: lin(A + Fl/2) O + (lin(A + Fl/2 + K nl)
+// - lin(A + Fl/2)) V), as the screen draws it by its set (program_lit.hlsli traced_set_level, program.hlsli's
+// character bound 0.8 .. 1.25); its hue the model's. Painted (kForm 0): the art's share already, as it was.
+static const float kLitSeenLow = 0.8f, kLitSeenHigh = 1.25f;
+float3 rt_lit_seen_bound(float nl, float3 v, float3 o, float3 share_) {
+    if (!(rt_form() > 0.0f)) {
+        return share_;
+    }
+    float3 s0;
+    float3x3 mo;
+    rt_share_terms_art(true, nl, v, s0, mo);
+    const float art_l = rt_lum(max(s0 + mul(mo, o), 0.0f));
+    const float l = rt_lum(share_);
+    if (!(art_l > 1e-4f) || !(l > 1e-6f)) {
+        return share_;
+    }
+    return share_ * (clamp(l, kLitSeenLow * art_l, kLitSeenHigh * art_l) / l);
+}
+
 // From just off a surface: along its geometric normal, more the farther from the eye (depth's steps grow).
 float3 rt_off(float3 at, float3 ng) {
     return at + ng * max(0.003f * length(at), 0.5f);
@@ -925,7 +946,11 @@ float3 rt_hit_radiance_with(RtHit h, uint options, float3 o, bool d_known, float
         v = rt_hit_sun(h, false, float2(0.0f, 0.0f));
     }
     const float3 d = d_known ? d_seen : rt_grid_light(h.at, h.ns, h.slot, (options & kRtShadeLightRay) != 0u, seed);
-    float3 out_ = rt_return_albedo(h, lighting) * (rt_share(lit, nl, v, o) + d);
+    float3 share_ = rt_share(lit, nl, v, o);
+    if (lit && !lighting) {
+        share_ = rt_lit_seen_bound(nl, v, o, share_);  // a ray that looks sees a lit program as the screen does (b116)
+    }
+    float3 out_ = rt_return_albedo(h, lighting) * (share_ + d);
     // Mirror-like hits do not trace again: the stage's ambient stands for their reflection (10.2 item 6; the model:
     // the sky's light by F0, b59).
     if (h.klass == kRtMetal || h.klass == kRtGlass) {
