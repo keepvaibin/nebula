@@ -1236,6 +1236,12 @@ pub fn finish(stem: &str, name: &str, measured: f32, r: &mut Reading) {
         if roughness.is_none() && ior < 1.7 {
             r.thickness = 0.0;
         }
+        // c64 (the owner's G2): a pale crystal (the Pull Star Path pillars, base 0.81 1 1) has no hue of its own: its
+        // base and its reflection's tint white. A crystal coloured on purpose (saturation 0.5 and over) keeps its colour.
+        if ior >= 1.7 && hue_saturation(r.base).1 < 0.5 {
+            r.base = [1.0, 1.0, 1.0];
+            r.env_tint = [1.0, 1.0, 1.0];
+        }
     }
     review(MATERIALS_TABLE, &stem, name, r);
     for table in &packs.materials {
