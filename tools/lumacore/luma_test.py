@@ -1130,7 +1130,7 @@ def evaluate(test, renderer, run_folder, ran):
     coded = [line for line in log_lines if "refusals are given as codes" in line]
     add("refusals are given in words", not coded, coded)
     for bad in by_key.get("harness.bad_fact", []):
-        add("every fact is JSON", False, bad["value"])
+        add("every fact is well formed (JSON, a key a mod may log)", False, bad["value"])
     if not test["bare"]:
         loaded = by_key.get("mod.%s.loaded" % GAME_HALF_ID, [])
         add("the game half loaded", bool(loaded) and loaded[-1]["value"] is True, loaded[-1]["value"] if loaded else None)

@@ -876,7 +876,7 @@ void service_done(std::int32_t ok, const char* why) {
     const std::string reason = why != nullptr ? why : "";
     if (g.given_frame_line) {
         g.given_frame_line = false;
-        if (ok == 0) {
+        if (ok <= 0) {
             finish("harness-error", "the game half did not take the frame line: " + reason);
         }
         return;
@@ -888,7 +888,7 @@ void service_done(std::int32_t ok, const char* why) {
         const std::string item = g.setup[g.next_setup];
         g.setup_given = false;
         ++g.next_setup;
-        if (ok == 0) {
+        if (ok <= 0) {
             finish("setup-failed", item.substr(6) + ": " + reason);
             return;
         }
@@ -909,6 +909,9 @@ void service_done(std::int32_t ok, const char* why) {
     s.done = true;
     if (ok == 0) {
         finish("fail", "step " + std::to_string(s.number) + " (" + s.text + "): " + reason);
+    } else if (ok < 0) {
+        // Revision 7 (G-H6-2): the player or a live object the step names is not there.
+        finish("setup-failed", "step " + std::to_string(s.number) + " (" + s.text + "): " + reason);
     }
 }
 
