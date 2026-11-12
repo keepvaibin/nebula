@@ -577,6 +577,10 @@ namespace luma {
                 KeptRow* mRows;
                 u32 mCount;
             };
+
+            // applyForgets' copy of the forgotten ids, taken under sKeptLock and used outside it (game thread only;
+            // off the stack: 4 KiB is a stack probe the module cannot link, DIRECTOR R9).
+            char sApplying[cForgetMost][LumaSaveChunk::cIdMost + 1];
         }  // namespace
 
         void fileStored(u32 index, const u8* pFile, u32 size) {
@@ -620,7 +624,7 @@ namespace luma {
         }
 
         void applyForgets(SaveDataHandler* pHandler, GameDataHolder* pHolder) {
-            char ids[cForgetMost][LumaSaveChunk::cIdMost + 1];
+            char (&ids)[cForgetMost][LumaSaveChunk::cIdMost + 1] = sApplying;
             lockKept();
             const u32 count = sForgettingCount;
             for (u32 i = 0; i < count; i++) {
