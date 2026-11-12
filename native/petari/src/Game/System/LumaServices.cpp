@@ -3,6 +3,7 @@
 #include "Game/System/LumaHook.hpp"
 #include "Game/System/LumaContentFx.hpp"
 #include "Game/System/LumaContentModel.hpp"
+#include "Game/System/LumaUi.hpp"
 #include "Game/System/LumaLoader.hpp"
 #include "Game/System/LumaSave.hpp"
 #include "Game/System/LumaTime.hpp"
@@ -37,6 +38,7 @@ namespace luma {
                 {"mods.install", 1, 0, nullptr, "services-mods"},
                 {"content.fx", 1, 0, nullptr, "effects"},
                 {"content.model", 1, 0, nullptr, "models"},
+                {"ui", 1, 0, nullptr, "ui"},
                 {"save", 1, 0, nullptr, "services-save"},
                 {"save.global", 1, 0, nullptr, "services-save"},
                 {"save.game", 1, 0, "save.game", "services-save"},
@@ -605,6 +607,7 @@ namespace luma {
             (void)provide(luma::time::provider());
             (void)provide(luma::content::fx::provider());
             (void)provide(luma::content::model::provider());
+            (void)provide(luma::ui::provider());
             (void)provide(luma::save::provider());
             (void)provide(luma::save::globalProvider());
             (void)provide(luma::save::gameProvider());
