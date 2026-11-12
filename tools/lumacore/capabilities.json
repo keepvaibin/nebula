@@ -35,6 +35,7 @@
     "services.time.timers": "Timers on frames, world steps or real nanoseconds, given as events, cancelled exactly (2.2)",
     "services.time.handlers": "Frame and step handlers in list order, every world step its own call (2.2)",
     "services.time.real": "The monotonic clock from any thread and the wall clock with the player's offset (2.2)",
+    "script.build": "A LumaScript mod compiled by LumaLink to the platform's machine code (C with #line markers, clang), loaded by the game like any luma.h mod; its hooks run and its facts reach the harness (4.3)",
     "services.system": "Facts of the platform, the game and the player's locale; the game window's display (2.2)",
     "services.system.clipboard": "The system clipboard, text and RGBA images, read and written as requests, the window in front (2.2)",
     "services.system.links": "A https link opened in the browser, one at a time, 10 s apart, a Note naming its site (2.2)"
