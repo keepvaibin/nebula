@@ -268,6 +268,7 @@ struct Manifest : Rows {
     std::vector<Dependency> conflicts;      // id only (the form's `why` is the mod's own words)
     std::vector<std::string> load_after;    // load.after
     std::vector<std::string> load_before;   // load.before
+    std::vector<std::string> takes_over;    // earlier ids of this mod: what they kept moves to it (services-save 6)
     std::vector<Option> options;            // choice, number and toggle options (text and key: not yet, plan 6.3)
     std::vector<Layer> layers;              // layer.path is layers/<name>
     // False when luma.json has no "layers": read_manifest then uses layers/base when the folder exists (luma-format 4).

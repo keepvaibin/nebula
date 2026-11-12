@@ -960,6 +960,7 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
         out.load_after = string_list(load->get("after"));
         out.load_before = string_list(load->get("before"));
     }
+    out.takes_over = string_list(root->get("takes_over"));
     read_options(*root, out);
 
     // pre_standard: the previous engine's rows, read as before from this one key (OLD-ROWS.md).

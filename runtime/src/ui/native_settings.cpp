@@ -2326,6 +2326,9 @@ struct ImportOutcome {
     bool checked = false;
     bool refused = false;
     std::vector<galaxy::mods::ImportResult::Finding> findings;
+    // Its takes_over ids with no mod of theirs in the mods folder: what they kept moves to it at its first start
+    // (services-save 6), and the page says so under it ("Takes over what {old} kept"; installing is the answer).
+    std::vector<std::string> takes_over;
 };
 std::vector<ImportOutcome> s_import_outcomes;
 std::atomic<bool> s_import_page_open{false};
@@ -2358,6 +2361,14 @@ void write_import_facts() {
         json += std::string(",\"checked\":") + (o.checked ? "true" : "false") + ",\"refused\":" + (o.refused ? "true" : "false") + "}";
         galaxy::modlog::fact(key, json);
         std::uint32_t line = 1;
+        for (const std::string& old : o.takes_over) {
+            std::string one = "{\"line\":" + std::to_string(++line) + ",\"text\":";
+            galaxy::modlog::append_json_text(one, galaxy::modlog::row_words("Mods.TakesOver", o.id, {{"old", old}}));
+            one += ",\"takes_over\":";
+            galaxy::modlog::append_json_text(one, old);
+            one += '}';
+            galaxy::modlog::fact(key, one);
+        }
         for (const galaxy::mods::ImportResult::Finding& f : o.findings) {
             std::string one = "{\"line\":" + std::to_string(++line) + ",\"text\":";
             galaxy::modlog::append_json_text(one, f.text);
@@ -2444,6 +2455,14 @@ void run_mod_imports(std::vector<std::filesystem::path> sources) {
             one.checked = result.checked;
             one.refused = result.refused;
             one.findings = std::move(result.findings);
+            if (result.ok && !result.already && !result.id.empty()) {
+                if (const std::optional<galaxy::luma::Manifest> manifest = galaxy::luma::read_manifest(folder / result.id)) {
+                    for (const std::string& old : manifest->takes_over) {
+                        std::error_code exists_error;
+                        if (!old.empty() && !std::filesystem::exists(folder / old, exists_error)) one.takes_over.push_back(old);
+                    }
+                }
+            }
             outcomes.push_back(std::move(one));
         }
         {
@@ -2671,6 +2690,11 @@ std::vector<SettingsRow> import_page() {
         SettingsRow what{o.outcome, mods_ui_text(o.source, 40u), nullptr, mods_ui_text(o.message, 120u)};
         what.names = 2u;
         rows.push_back(std::move(what));
+        for (const std::string& old : o.takes_over) {
+            SettingsRow takes{galaxy::modlog::row_words("Mods.TakesOver", o.id, {{"old", old}}), {}, nullptr, {}, true};
+            takes.names = 1u;
+            rows.push_back(std::move(takes));
+        }
         for (const galaxy::mods::ImportResult::Finding& f : o.findings) {
             SettingsRow found{f.text, f.file, nullptr, f.text};
             found.names = 1u | 2u | 4u;
@@ -2870,6 +2894,15 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
         if (not_started.as_is) status.names |= 4u;
     }
     rows.push_back(std::move(status));
+    // It takes over a mod that is still installed (services-save 6): nothing moves while that one is there.
+    if (mod.luma != nullptr) {
+        for (const std::string& old : mod.luma->takes_over) {
+            if (mod_by_id_locked(old) == nullptr) continue;
+            SettingsRow still{galaxy::modlog::row_words("Mods.TakesOverInstalled", id, {{"old", old}}), {}, nullptr, {}, true};
+            still.names = 1u;
+            rows.push_back(std::move(still));
+        }
+    }
     // The mod changes the game's speed or holds it (services-time 10): shown, and the player's last word, LET GO, which
     // clears its rate, hold and owed steps from the next frame (the row goes when the clock is back to normal).
     if (const std::optional<galaxy::modlog::ModClock> clock = galaxy::modlog::mod_clock(id);

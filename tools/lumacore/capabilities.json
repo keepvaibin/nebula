@@ -66,6 +66,7 @@
     "import.refuse": "A package the import's check finds an Error in is not placed: NOT IMPORTED, its findings listed (6.1)",
     "import.against_placed": "The import's check reads the placed packages, so a need on no list refuses it (6.1)",
     "import.already": "A mod imported that is already in the mods folder unchanged is neither added nor replaced: ALREADY IN YOUR MODS (6.1)",
+    "import.takes_over": "A mod whose takes_over names an id no installed mod has is imported with the line Takes over what {old} kept under it, as a fact (services-save 6, 6.5)",
     "modscreen.list": "Each mod's line in the Mods tab's lists is the fact modscreen.<id> as shown, written once while it does not change (harness 4, 6.2)",
     "modscreen.page": "Each row of a mod's page is the fact modscreen.<id> as shown, each time the page opens (harness 4, 6.2)",
     "mods.safe_start": "A safe start (--safe-start 1, Shift at the start) plans every mod off for that start and keeps the player's choices; the Mods tab says so (6.6)",
