@@ -124,6 +124,9 @@ pub struct Reading {
     pub body: f32,
     pub shine: f32,
     pub tint_keep: f32,
+    /// The review's `traced` "hidden" (FB b85): a stand-in the tracer replaces (an opaque painted inside behind clear
+    /// glass, a painted rim): hit flag 7, neither drawn nor met by a ray while tracing reflections.
+    pub traced_hidden: bool,
 }
 
 /// The models that glow (data/rt_glow.tsv): a model's file stem to its light's colour (None: the material's own) and
@@ -1079,6 +1082,7 @@ pub fn read(m: &MaterialIr) -> Reading {
         body: -1.0,
         shine: -1.0,
         tint_keep: -1.0,
+        traced_hidden: false,
     };
     let metal_hue = s.environment_saturation < 0.15 || (8.0..=60.0).contains(&s.environment_hue);
     if s.blend == 2 {
@@ -1324,6 +1328,9 @@ fn review(table: &str, stem: &str, name: &str, r: &mut Reading) {
         }
         if let Some(v) = numbers("emission").filter(|v| v.len() == 3) {
             r.emission = [v[0], v[1], v[2]].map(|x| x.clamp(0.0, 16.0));
+        }
+        if let Some(v) = field("traced") {
+            r.traced_hidden = v.eq_ignore_ascii_case("hidden");
         }
     }
 }

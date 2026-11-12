@@ -1592,8 +1592,9 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
             | u8::from(s.environment) << 4
             | u8::from(super::hit_record::drawn_shadow(stem, &m.name, r.class)) << 5
             | u8::from(paint_holds_shadows && s.vertex_colour && !s.lit) << 6
-            | u8::from(matches!(super::hit_record::sheen_roles_kept(ir, stem).get(i),
-                                Some(super::hit_record::SheenRole::Sheen { body: Some(_) }))) << 7);
+            | u8::from(r.traced_hidden  // the review's stand-in (FB b85), as a sheen over a body (c49)
+                       || matches!(super::hit_record::sheen_roles_kept(ir, stem).get(i),
+                                   Some(super::hit_record::SheenRole::Sheen { body: Some(_) }))) << 7);
         b.u8(r.glow_source);
         b.f32(r.roughness);
         b.f32(r.metal);
