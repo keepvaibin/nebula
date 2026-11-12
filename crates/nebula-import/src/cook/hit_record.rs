@@ -208,6 +208,19 @@ pub fn drawn_shadow(stem: &str, material: &str, class: Class) -> bool {
         && matches!(class, Class::Translucent | Class::Painted | Class::Glass)
 }
 
+/// Whether a material is lava or a sun's surface by its name (G8): lava (Lava_v, LavaMat_v, Lava_m_v, Lava2_v, not
+/// LavaRock_v), magma, yougan ("lava"), sunmat, sun_mat; not on a bloom copy, an Observatory miniature or a sky.
+/// `stem` and `material` lower case.
+fn lava_or_sun(stem: &str, material: &str) -> bool {
+    if stem.ends_with("bloom") || stem.starts_with("mini") || stem.starts_with("vr") {
+        return false;
+    }
+    let lava = material.strip_prefix("lava").is_some_and(|rest| {
+        rest.is_empty() || rest.starts_with('_') || rest.starts_with("mat") || rest.starts_with(|c: char| c.is_ascii_digit())
+    });
+    lava || ["magma", "yougan", "sunmat", "sun_mat"].iter().any(|p| material.starts_with(p))
+}
+
 pub fn glow_of(stem: &str, material: &str, r: &Reading) -> [f32; 4] {
     // Water is never a light, whatever its brightness.
     if r.class == Class::Water {
@@ -240,6 +253,12 @@ pub fn glow_of(stem: &str, material: &str, r: &Reading) -> [f32; 4] {
             return [0.0; 4];
         }
         return [c[0], c[1], c[2], strength];
+    }
+    // Lava and suns by name (G8): their own colour at the blend-2 rule's luminance; the renderer makes a small one a
+    // lamp and a large one an emissive area.
+    if lava_or_sun(&stem, &material.to_ascii_lowercase()) && !matches!(r.class, Class::Translucent | Class::Glass) {
+        let c = own();
+        return [c[0], c[1], c[2], -120.0];
     }
     if r.class == Class::Emissive && r.signals.blend == 2 && luminance(r.emission) > 0.3 {
         // A surface added to what is behind it: a light by its size. Below zero: a luminance (candela a square
@@ -729,6 +748,12 @@ pub fn finish(stem: &str, name: &str, measured: f32, r: &mut Reading) {
         r.transmission = 1.0;
         r.rule = "water (rt_water.tsv)";
     }
+    // Lava and suns (G8): they shine of themselves. The emissive class shows them as they are on screen (draw flag
+    // 64: no share, no shadow, no added light) and to every ray; glow_of makes them lights. The review's rows after.
+    if lava_or_sun(&stem, &name.to_ascii_lowercase()) && !matches!(r.class, Class::Water | Class::Glass | Class::Translucent) {
+        r.class = Class::Emissive;
+        r.rule = "lava or a sun, by its name (G8)";
+    }
     // The clear classes (A4-W6; LIGHT-MODEL.md 6, 7): the surface untinted, the colour absorption; glass's index by
     // its name. The review's rows come after and may say otherwise.
     if r.class == Class::Glass || r.class == Class::Water {
@@ -832,6 +857,17 @@ pub fn mean_colour(texels: &[[u8; 4]]) -> Option<[f32; 3]> {
 /// Every material of every model under CONTENT, one row each, and the classes' counts.
 pub fn audit(input: &Path, output: &Path) -> Result<()> {
     let mut out = std::io::BufWriter::new(std::fs::File::create(output)?);
+    // G8: what the lava-and-sun rule took, and what it did not take that looks like it by its data (unlit, opaque, and
+    // bright and warm, or a moving texture): each of the second read once and settled by a row.
+    let mut by_rule = std::io::BufWriter::new(std::fs::File::create(output.with_file_name("glow_by_rule.tsv"))?);
+    writeln!(
+        by_rule,
+        "# Written by nebula-import rt-materials (c46, G8). taken: the name rule (hit_record.rs lava_or_sun). looks like it: unlit, opaque,\n\
+         # base x map mean bright (luminance over 0.5) and warm (red over twice blue), or its texture moves; settle each by a row in\n\
+         # rt_glow.tsv (strength 0: not a light) or say why not. size: the material's shapes' box in metres at scale 1; area: over 6 m\n\
+         # in two axes (rt_walk's L-3), else a lamp.\n\
+         why\tmodel\tmaterial\tclass\tlit\tblend\tmoving texture\tmean colour\tluminance\tsize\tlamp or area\tglow"
+    )?;
     writeln!(
         out,
         "model\tmaterial\tname\tclass\trule\tlit\tspecular\tvertex colour\tenvironment\tenvironment share\tenvironment hue\tenvironment saturation\t\
@@ -912,6 +948,64 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
                 r.tint_keep
             )?;
             glowing += u32::from(glow[3] != 0.0);
+            let short = stem.split('.').next().unwrap_or(stem).to_ascii_lowercase();
+            let taken = lava_or_sun(&short, &m.name.to_ascii_lowercase());
+            let map = m
+                .textures
+                .first()
+                .and_then(|&t| ir.textures.get(t as usize))
+                .and_then(|t| ir.records.get(t.record))
+                .and_then(|bytes| super::texture::record_level0(bytes))
+                .filter(|(_, _, texels)| !texels.is_empty())
+                .map(|(_, _, texels)| {
+                    let mut sum = [0.0f64; 3];
+                    for t in &texels {
+                        for c in 0..3 {
+                            sum[c] += f64::from(t[c]);
+                        }
+                    }
+                    let n = texels.len() as f64 * 255.0;
+                    [(sum[0] / n) as f32, (sum[1] / n) as f32, (sum[2] / n) as f32]
+                })
+                .unwrap_or([1.0; 3]);
+            let mean = [(r.base[0] * map[0]).min(1.0), (r.base[1] * map[1]).min(1.0), (r.base[2] * map[2]).min(1.0)];
+            let warm = luminance(mean) > 0.5 && mean[0] > 2.0 * mean[2];
+            let clear = matches!(r.class, Class::Water | Class::Glass | Class::Translucent);
+            let looks = !taken && !s.lit && s.blend == 0 && !clear && (warm || s.animated_coords);
+            if taken || looks {
+                let (mut lo, mut hi) = ([f32::MAX; 3], [f32::MIN; 3]);
+                for shape in ir.shapes.iter().filter(|shape| shape.material as usize == i) {
+                    for k in 0..3 {
+                        lo[k] = lo[k].min(shape.min[k]);
+                        hi[k] = hi[k].max(shape.max[k]);
+                    }
+                }
+                let size = if lo[0] <= hi[0] { [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]] } else { [0.0; 3] };
+                let wide = size.iter().filter(|&&v| v > 600.0).count() >= 2;
+                let why = if taken { "taken" } else if warm { "looks like it: bright, warm" } else { "looks like it: moving texture" };
+                writeln!(
+                    by_rule,
+                    "{why}\t{name}\t{}\t{}\t{}\t{}\t{}\t{}\t{:.2}\t{:.1} x {:.1} x {:.1} m\t{}\t{}",
+                    m.name,
+                    r.class.name(),
+                    flag(s.lit),
+                    s.blend,
+                    flag(s.animated_coords),
+                    triple(mean),
+                    luminance(mean),
+                    size[0] / 100.0,
+                    size[1] / 100.0,
+                    size[2] / 100.0,
+                    if wide { "area" } else { "lamp" },
+                    if glow[3] > 0.0 {
+                        format!("{:.0} cd", glow[3])
+                    } else if glow[3] < 0.0 {
+                        format!("{:.0} cd/m2", -glow[3])
+                    } else {
+                        "none".to_string()
+                    }
+                )?;
+            }
             let entry = classes.entry(r.class).or_default();
             entry.0 += 1;
             materials += 1;
@@ -920,6 +1014,7 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
         Ok(())
     })?;
     out.flush()?;
+    by_rule.flush()?;
     println!("{models} models, {materials} materials, {glowing} of them glow; {unread} files not read");
     for (class, (count, _)) in &classes {
         println!("{:<12} {count:>6}  {:.1} %", class.name(), 100.0 * f64::from(*count) / f64::from(materials.max(1)));
@@ -1018,6 +1113,22 @@ mod tests {
         let mut dark = painted();
         dark.material_color = [[0, 0, 0, 255]; 2];
         assert_eq!(glow_source(&dark), 0, "nothing shown: no source");
+    }
+
+    #[test]
+    fn lava_and_suns_are_named_so() {
+        for (stem, name) in [("lavahomeplanet", "lavamat_v"), ("lavameteoplanet", "lava_m_v"), ("lavajshapeplanet", "lava2_v"),
+                             ("floaterotakingplanet", "lava00_v"), ("iceringfireplanet", "lava_01_v"), ("hellballrotatepartsa", "lava_v"),
+                             ("koopavs3cylinderinsideplanetlow", "magma_lod_v"), ("bossplanetr50", "yougan"),
+                             ("koopabattlesunplanet", "sunmat"), ("lavajambosunplanet", "sunmat_v"), ("lavahomevolcanoflow", "lavamat")] {
+            assert!(lava_or_sun(stem, name), "{stem}/{name}");
+        }
+        for (stem, name) in [("lavahomeplanet", "lavarock_v"), ("lavahomeplanet", "lavaundergorund_v"),
+                             ("lavahomevolcanoinnerflow", "lavaedgemat_v"), ("koopabattlemapplanetbloom", "lavamat_v"),
+                             ("minihellprominencegalaxy", "sunmat_v"), ("vrdarkspace", "sunmat"), ("koopavs3sandplanet", "suna_v"),
+                             ("lavahomeplanet", "meltmountain_v")] {
+            assert!(!lava_or_sun(stem, name), "{stem}/{name}");
+        }
     }
 
     #[test]
