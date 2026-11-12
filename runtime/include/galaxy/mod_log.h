@@ -157,6 +157,14 @@ struct ModClock {
     bool held = false;           // the mod holds the world
 };
 [[nodiscard]] std::optional<ModClock> mod_clock(std::string_view mod);
+// A mod's code time as its page shows it (contract guard 3b, the module's luma_guard_cost, found by `begin`): its code's
+// time per frame over its last 120 frames, the average and the worst, in ns. Any thread. Empty when the module lacks
+// the export, the mod ran no code this session, or the clock is not scaled yet (the first quarter second).
+struct CodeTime {
+    std::uint64_t average_ns = 0;
+    std::uint64_t worst_ns = 0;
+};
+[[nodiscard]] std::optional<CodeTime> code_time(std::string_view mod);
 // The page's "Let go" (services-time 10): the module clears the mod's rate, hold and owed steps at the next frame's
 // start (luma_time_let_go); then the Note Time.LetGo is in the log. False when the module did not take it (the mod
 // unknown, or 8 already waiting); any thread.
