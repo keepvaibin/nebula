@@ -185,8 +185,8 @@ private:
 //   world, else none where the key is off), object (the sun it shows only), key (its key light only), none, or three
 //   numbers: the world direction toward the sun. shadow sets: keep (the zones' shadow light sets stay as the artists
 //   made them while the tracer shadows; empty: they give way to their lit partners). air: the density of the air
-//   that scatters light toward the eye (15.4), per unit: 0.00002 a clear day's, more in haze and dust (at most 0.01);
-//   empty or no row: none (space). Empty fields keep the defaults;
+//   that scatters light toward the eye (15.4), per unit: 0.000001 a day sky's (Koschmieder: a 39 km range), more in
+//   haze and dust (at most 0.01); empty or no row: none (space). Empty fields keep the defaults;
 //   a row exists only where a picture showed a default wrong, and a `note` column says what.
 struct RtStage {
     enum class Sun : std::uint8_t { Auto = 0, Object = 1, Key = 2, None = 3, Fixed = 4 };

@@ -11,7 +11,7 @@ namespace galaxy::render {
 
 namespace {
 
-// The air (15.4) is a stage's number (rt_stages.tsv's air column, per unit: 0.00002 thin air, more in fog and dust),
+// The air (15.4) is a stage's number (rt_stages.tsv's air column, per unit: 0.000001 a day sky's, more in haze, dust),
 // none in space. A stage without a row has none: most stages are in space, and a sky's brightness does not tell
 // (Ghostly's and Melty Molten's domes are bright and in space).
 
