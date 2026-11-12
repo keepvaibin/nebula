@@ -10,6 +10,7 @@
 #include "Game/System/ResourceHolder.hpp"
 #include "Game/Util/HashUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/Table.hpp"
 #include <luma.h>
 #include <luma_anim.h>
 #include <luma_modlog.h>
@@ -22,6 +23,11 @@
 
 // The anim service (plan 3.6 run time; contract animation 7). Game thread throughout: the service's calls, the frame,
 // the provider; NebulaArena::destroy is the scene end's, on the game thread as well.
+//
+// A clip's own events (1.1, animation 7.3): G's cook puts the rows of <clip>.anim.json beside the clip as <clip>.events,
+// a table (frame int, event text) in the model's archive. A play keeps the table's place in the archive (the actor's
+// resources outlive the play: the play ends with the actor or its scene) and gives a row as the mark mark_count + row,
+// its name copied into the event.
 //
 // A play starts the clip as the game's own code does (MR::startBck and the material starts): the actor's ModelManager
 // runs it in the actor's movement, its effect and sound keepers follow the joint clip as for the game's clips. The
@@ -54,6 +60,10 @@ namespace luma {
                 f32 seen;           // the lead's frame at the last look
                 u32 markCount;
                 f32 marks[LUMA_ANIM_MOST_MARKS];
+                const void* events;  // the clip's cooked event table in its archive, or null
+                u32 eventRows;
+                s32 eventFrame;      // the table's columns
+                s32 eventName;
                 LumaEventFn fn;
                 void* user;
                 char clip[kClipMost];
@@ -70,6 +80,8 @@ namespace luma {
                 u64 value;
                 LumaEventFn fn;
                 void* user;
+                u32 nameSize;  // an event row's mark: its name's bytes (no NUL)
+                char name[LUMA_ANIM_EVENT_NAME_MOST + 1];
             };
 
             const LumaServiceKernel* sKernel = nullptr;
@@ -251,6 +263,14 @@ namespace luma {
                 event.status = pEvent->status;
                 event.handle = pEvent->play;
                 event.value = pEvent->value;
+                // The name is the call's own copy: the slot is free during the call and may take another event.
+                char name[LUMA_ANIM_EVENT_NAME_MOST + 1];
+                if (pEvent->nameSize != 0) {
+                    memcpy(name, pEvent->name, pEvent->nameSize);
+                    name[pEvent->nameSize] = 0;
+                    event.data = name;
+                    event.data_size = pEvent->nameSize;
+                }
                 const LumaEventFn fn = pEvent->fn;
                 void* const pUser = pEvent->user;
                 pEvent->busy = false;  // free again before the mod's function, which may play again
@@ -261,7 +281,7 @@ namespace luma {
                 reinterpret_cast< Event* >(pNode)->busy = false;
             }
 
-            void post(const Play& rPlay, u32 kind, s32 status, u64 value) {
+            void post(const Play& rPlay, u32 kind, s32 status, u64 value, const char* pName = nullptr) {
                 if (rPlay.fn == nullptr) {
                     return;
                 }
@@ -280,6 +300,13 @@ namespace luma {
                     rEvent.value = value;
                     rEvent.fn = rPlay.fn;
                     rEvent.user = rPlay.user;
+                    rEvent.nameSize = 0;
+                    if (pName != nullptr) {
+                        while (rEvent.nameSize < LUMA_ANIM_EVENT_NAME_MOST && pName[rEvent.nameSize] != 0) {
+                            rEvent.name[rEvent.nameSize] = pName[rEvent.nameSize];
+                            rEvent.nameSize++;
+                        }
+                    }
                     if (sKernel->post(&rEvent.node) != LUMA_OK) {
                         rEvent.busy = false;  // the mod is gone: no one to tell
                     }
@@ -288,15 +315,63 @@ namespace luma {
                 nebula_log("anim: no room for an event of %s; it is not given\n", sKernel->mod_id(rPlay.mod));
             }
 
-            void mark(const Play& rPlay, u32 index, f32 frame) {
-                post(rPlay, LUMA_ANIM_EVENT_MARK, LUMA_OK, index);
+            // `pName`: an event row's name (null: one of the mod's own marks).
+            void mark(const Play& rPlay, u32 index, f32 frame, const char* pName = nullptr) {
+                post(rPlay, LUMA_ANIM_EVENT_MARK, LUMA_OK, index, pName);
                 if (luma::modlog::facts()) {
                     char key[64];
                     nebula_snprintf(key, sizeof(key), "anim.mark.%llu.%u", static_cast< unsigned long long >(rPlay.handle), index);
-                    char json[64];
-                    nebula_snprintf(json, sizeof(json), "{\"frame\":%.3f}", static_cast< double >(frame));
+                    char quoted[2 * LUMA_ANIM_EVENT_NAME_MOST + 8];
+                    luma::modlog::jsonString(quoted, sizeof(quoted), pName != nullptr ? pName : "");
+                    char json[224];
+                    if (pName != nullptr) {
+                        nebula_snprintf(json, sizeof(json), "{\"frame\":%.3f,\"event\":%s}", static_cast< double >(frame), quoted);
+                    } else {
+                        nebula_snprintf(json, sizeof(json), "{\"frame\":%.3f}", static_cast< double >(frame));
+                    }
                     luma::modlog::fact(key, json);
                 }
+            }
+
+            // The clip's cooked events in the actor's model archive: the table, its rows (at most
+            // LUMA_ANIM_MOST_EVENT_ROWS) and its columns; null with none, or with a file that is not the cook's table
+            // (named in the log once a play).
+            const void* findEvents(const LumaMod* pMod, const LiveActor* pActor, const char* pClip, u32* pRows,
+                                   s32* pFrame, s32* pName) {
+                const ResourceHolder* const pHolder = MR::getModelResourceHolder(pActor);
+                if (pHolder == nullptr) {
+                    return nullptr;
+                }
+                char file[kClipMost + 8];
+                nebula_snprintf(file, sizeof(file), "%s.events", pClip);
+                const void* const pFile = pHolder->findFile(file);
+                if (pFile == nullptr) {
+                    return nullptr;
+                }
+                if (memcmp(pFile, "NTBL", 4) != 0) {
+                    nebula_log("anim: %s's %s is not a cooked table; its events are not given\n", sKernel->mod_id(pMod), file);
+                    return nullptr;
+                }
+                Table table;
+                table.attach(pFile);
+                const s32 frameColumn = table.searchItemInfo("frame");
+                const s32 nameColumn = table.searchItemInfo("event");
+                if (frameColumn < 0 || nameColumn < 0 || table.getColumnKind("frame") != TableKind_Int ||
+                    table.getColumnKind("event") != TableKind_Text) {
+                    nebula_log("anim: %s's %s lacks its frame and event columns; its events are not given\n",
+                               sKernel->mod_id(pMod), file);
+                    return nullptr;
+                }
+                u32 rows = static_cast< u32 >(table.getNumEntries());
+                if (rows > LUMA_ANIM_MOST_EVENT_ROWS) {
+                    nebula_log("anim: %s's %s has %u rows; the first %u are given\n", sKernel->mod_id(pMod), file, rows,
+                               LUMA_ANIM_MOST_EVENT_ROWS);
+                    rows = LUMA_ANIM_MOST_EVENT_ROWS;
+                }
+                *pRows = rows;
+                *pFrame = frameColumn;
+                *pName = nameColumn;
+                return rows != 0 ? pFile : nullptr;
             }
 
             // ---- Ends ----
@@ -461,6 +536,10 @@ namespace luma {
                 for (u32 i = 0; i < how.mark_count; i++) {
                     rPlay.marks[i] = how.marks[i];
                 }
+                rPlay.events = findEvents(pMod, pActor, pClip, &rPlay.eventRows, &rPlay.eventFrame, &rPlay.eventName);
+                if (rPlay.events == nullptr) {
+                    rPlay.eventRows = 0;
+                }
                 rPlay.fn = fn;
                 rPlay.user = pUser;
                 memcpy(rPlay.clip, pClip, strlen(pClip) + 1);
@@ -485,18 +564,30 @@ namespace luma {
                     char json[768];
                     nebula_snprintf(json, sizeof(json),
                                     "{\"model\":%s,\"clip\":%s,\"kinds\":[%s],\"loops\":%s,\"frames\":%d,\"start\":%.3f,"
-                                    "\"rate\":%.3f,\"on_model\":%s}",
+                                    "\"rate\":%.3f,\"on_model\":%s,\"event_rows\":%u}",
                                     modelText, clip, kindList, loops ? "true" : "false",
                                     static_cast< int >(ctrlOf(pActor, lead)->getEnd()), static_cast< double >(rPlay.seen),
-                                    static_cast< double >(rate), model != 0 ? "true" : "false");
+                                    static_cast< double >(rate), model != 0 ? "true" : "false", rPlay.eventRows);
                     char key[48];
                     nebula_snprintf(key, sizeof(key), "anim.play.%llu", static_cast< unsigned long long >(rPlay.handle));
                     luma::modlog::fact(key, json);
                 }
-                // A mark on the frame it starts from is passed now.
+                // A mark or an event row on the frame it starts from is passed now.
                 for (u32 i = 0; i < rPlay.markCount; i++) {
                     if (rPlay.marks[i] == rPlay.seen) {
                         mark(rPlay, i, rPlay.seen);
+                    }
+                }
+                if (rPlay.events != nullptr) {
+                    Table table;
+                    table.attach(rPlay.events);
+                    for (u32 r = 0; r < rPlay.eventRows; r++) {
+                        s32 at = 0;
+                        const char* pName = nullptr;
+                        if (table.getValueFast(static_cast< int >(r), rPlay.eventFrame, &at) && static_cast< f32 >(at) == rPlay.seen &&
+                            table.getValueFast(static_cast< int >(r), rPlay.eventName, &pName)) {
+                            mark(rPlay, rPlay.markCount + r, rPlay.seen, pName);
+                        }
                     }
                 }
                 *pOut = rPlay.handle;
@@ -637,14 +728,31 @@ namespace luma {
 
             // The marks the lead's frame passed from `from` to `to` (a loop's wrap: past its last frame and on from its
             // first; a clip going back: the marks it passed going back).
+            bool passes(f32 at, f32 from, f32 to, bool wrapped) {
+                return wrapped     ? at > from || at <= to
+                       : to > from ? at > from && at <= to
+                                   : at >= to && at < from;
+            }
+
             void passMarks(const Play& rPlay, f32 from, f32 to, bool wrapped) {
                 for (u32 i = 0; i < rPlay.markCount; i++) {
-                    const f32 at = rPlay.marks[i];
-                    const bool passed = wrapped     ? at > from || at <= to
-                                        : to > from ? at > from && at <= to
-                                                    : at >= to && at < from;
-                    if (passed) {
+                    if (passes(rPlay.marks[i], from, to, wrapped)) {
                         mark(rPlay, i, to);
+                    }
+                }
+                // The clip's own event rows, after them (their frames are whole).
+                if (rPlay.events == nullptr) {
+                    return;
+                }
+                Table table;
+                table.attach(rPlay.events);
+                for (u32 r = 0; r < rPlay.eventRows; r++) {
+                    s32 at = 0;
+                    const char* pName = nullptr;
+                    if (table.getValueFast(static_cast< int >(r), rPlay.eventFrame, &at) &&
+                        passes(static_cast< f32 >(at), from, to, wrapped) &&
+                        table.getValueFast(static_cast< int >(r), rPlay.eventName, &pName)) {
+                        mark(rPlay, rPlay.markCount + r, to, pName);
                     }
                 }
             }

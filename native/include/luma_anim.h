@@ -20,11 +20,14 @@ extern "C" {
 
 #define LUMA_ANIM_NAME "anim"
 #define LUMA_ANIM_MAJOR 1u
-#define LUMA_ANIM_MINOR 0u
+#define LUMA_ANIM_MINOR 1u
 
-/* Plays one mod has going at once, and marks one play carries. */
+/* Plays one mod has going at once, marks one play carries, and event rows one clip's events give. */
 #define LUMA_ANIM_MOST_PLAYS 64u
 #define LUMA_ANIM_MOST_MARKS 16u
+#define LUMA_ANIM_MOST_EVENT_ROWS 64u
+/* An event row's name: 1 to 63 bytes of A-Z a-z 0-9 _ . (the cook's rule). */
+#define LUMA_ANIM_EVENT_NAME_MOST 63u
 /* The fastest rate: frames of the clip per frame of the game (60 a second). */
 #define LUMA_ANIM_MOST_RATE 16.0f
 
@@ -36,7 +39,10 @@ typedef LumaHandle LumaAnimPlay;
 enum {
     LUMA_ANIM_EVENT_END = 1, /* status LUMA_OK: a once clip reached its last frame; LUMA_E_CANCELLED: it ended first.
                                 value: a LumaAnimWhy. Last of its play's events. */
-    LUMA_ANIM_EVENT_MARK = 2 /* status LUMA_OK; value: the mark's index in LumaAnimHow.marks. */
+    LUMA_ANIM_EVENT_MARK = 2 /* status LUMA_OK; value: below LumaAnimHow.mark_count the mark's index in its marks;
+                                1.1: from mark_count up, mark_count + the row of the clip's own events (the cooked
+                                <clip>.events beside it, animation 7.3), data the row's name (data_size bytes, no NUL,
+                                valid during the call). A clip without events gives only the mod's marks. */
 };
 
 /* Why a play ended (LUMA_ANIM_EVENT_END value). */
@@ -77,7 +83,8 @@ typedef struct LumaAnimService {
     LumaServiceTable base;
     /* 1.0. Game thread. The clip `clip` of `actor`'s model played: every kind of clip of that name its model has (joints
        .bck, texture moves .btk, colours .brk and .bpk, texture swaps .btp, visibility .bva), the first of them in that
-       order leading (its frame is the play's; its end, its marks). An earlier play on the actor of a kind this one
+       order leading (its frame is the play's; its end, its marks; 1.1: its events' rows, as marks after the mod's own,
+       the first LUMA_ANIM_MOST_EVENT_ROWS of them). An earlier play on the actor of a kind this one
        plays ends (LUMA_ANIM_REPLACED). Played as `how` says (null: the clip as the game plays it, from its first
        frame). The play's events come to fn(user, event) at a frame's start (`fn` null: none; `user` null: given back
        null). LUMA_OK and *out. No clip of that name: LUMA_E_NOT_FOUND, Content.MissingAnimation in the mod log. A null
