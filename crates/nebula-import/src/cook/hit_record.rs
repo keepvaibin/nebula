@@ -1818,7 +1818,8 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
     let (mut ramp_count, mut picture_count, mut sprite_count) = (0u32, 0u32, 0u32);
     // c55 (d07's census): each model's de-light with c37 alone and with the first map's light (M5).
     let mut debake = std::io::BufWriter::new(std::fs::File::create(output.with_file_name("debake_maps.tsv"))?);
-    writeln!(debake, "model\tde-lit meshes\twith a map ratio\tvertices\tmean gain c37\tmean gain d07\tnear-black meshes")?;
+    writeln!(debake, "model\tde-lit meshes\twith a map ratio\tvertices\tmean gain c37\tmean gain d07\tnear-black meshes\tpainted by a map (c93)\tits map holds light\tmean gain c93")?;
+    let (mut map_painted_meshes, mut map_lit_meshes) = (0usize, 0usize);
     let (mut debaked_meshes, mut mapped_meshes, mut debaked_models, mut mapped_models) = (0usize, 0usize, 0usize, 0usize);
     let mut classes: BTreeMap<Class, (u32, u32)> = BTreeMap::new();
     let mut stats = Stats::default();
@@ -1873,7 +1874,13 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
             }
         }
         if let Some(d) = super::model_write::debake_report(&ir, stem) {
-            writeln!(debake, "{name}\t{}\t{}\t{}\t{:.3}\t{:.3}\t{}", d.debaked, d.mapped, d.vertices, d.gain_c37, d.gain_d07, d.near_black)?;
+            writeln!(
+                debake,
+                "{name}\t{}\t{}\t{}\t{:.3}\t{:.3}\t{}\t{}\t{}\t{:.3}",
+                d.debaked, d.mapped, d.vertices, d.gain_c37, d.gain_d07, d.near_black, d.map_painted, d.map_lit, d.gain_map
+            )?;
+            map_painted_meshes += d.map_painted;
+            map_lit_meshes += d.map_lit;
             debaked_meshes += d.debaked;
             mapped_meshes += d.mapped;
             debaked_models += 1;
@@ -2026,6 +2033,7 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
     ramps.flush()?;
     println!("normal-indexed maps (c56, c58): {ramp_count} colour ramps, {sprite_count} highlight sprites, {picture_count} painted reflections");
     println!("de-light (c55): {debaked_meshes} meshes in {debaked_models} models; {mapped_meshes} meshes in {mapped_models} models with a map ratio (d07)");
+    println!("de-light by the map alone (c93): {map_painted_meshes} meshes painted by a map, {map_lit_meshes} whose map holds light");
     println!("{models} models, {materials} materials, {glowing} of them glow; {unread} files not read");
     for (class, (count, _)) in &classes {
         println!("{:<12} {count:>6}  {:.1} %", class.name(), 100.0 * f64::from(*count) / f64::from(materials.max(1)));

@@ -291,6 +291,17 @@ float3 rt_vertex_gain(float3 c, uint gain) {
     return g / max(max(max(g.r, g.g), g.b), 1.0f);
 }
 
+// c93 (3.3): the same gain as a multiplier, for a mesh painted by its map alone (no vertex colour; programs.rs
+// map_gained): 1 without it.
+float3 rt_map_gain(uint gain) {
+    const float debake = g_shade.form.z;
+    if (!(debake > 0.0f) || gain == 0u) {
+        return float3(1.0f, 1.0f, 1.0f);
+    }
+    const int3 steps = int3(gain << 24u, gain << 16u, gain << 8u) >> 24;
+    return lerp(float3(1.0f, 1.0f, 1.0f), exp2(float3(steps) / 42.0f), debake);
+}
+
 void rt_hit_read(uint item, uint triangle_, float2 where_, float far_, float3 origin, float3 direction, float cone, out RtHit h) {
     const uint at = g_at.x + item * kItemBytes;
     const uint4 w0 = g_items.Load4(at), w1 = g_items.Load4(at + 16u), w2 = g_items.Load4(at + 32u), w3 = g_items.Load4(at + 48u);
@@ -376,6 +387,12 @@ void rt_hit_read(uint item, uint triangle_, float2 where_, float far_, float3 or
             const float4 m = g_textures[NonUniformResourceIndex(w2.x)].SampleLevel(g_wrap, h.uv, level);
             map = m.rgb;
             h.alpha = m.a;
+        }
+        // c93: a mesh painted by its map alone (gains, no vertex colour): its map de-lit as the raster's traced form,
+        // bounded by its largest channel (traced_map_shown).
+        if ((h.flags & kRtHitVertexColour) == 0u && gains != 0u) {
+            const float3 g = max(map, 0.0f) * (rt_map_gain(gain[0]) * u + rt_map_gain(gain[1]) * v + rt_map_gain(gain[2]) * w);
+            map = g / max(max(max(g.r, g.g), g.b), 1.0f);
         }
     }
     h.base = h.base * map * h.vertex;

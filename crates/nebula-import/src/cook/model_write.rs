@@ -584,7 +584,86 @@ pub fn debakes(m: &MaterialIr) -> bool {
     })
 }
 
-/// c55 (census; d07's question 3): a model's de-light with c37 alone and with d07's map ratios.
+/// c93 (3.3; c65's kind 2): whether a material's meshes may hold painted light in their first map alone: no colour
+/// channel's rgb lit, opaque, not emissive, its vertex colour unread, and a stage with a map and a coordinate. Which
+/// of its meshes do is map_light's.
+pub fn debakes_map(m: &MaterialIr) -> bool {
+    let rgb_lit = (0..(m.channel_count as usize).min(2)).any(|ch| m.channels[2 * ch].enable != 0 && m.channels[2 * ch].light_mask != 0);
+    let r = super::hit_record::read(m);
+    !rgb_lit
+        && r.signals.blend == 0
+        && r.class != super::hit_record::Class::Emissive
+        && !r.signals.vertex_colour
+        && m.stages.iter().any(|s| s.map != 0xFF && s.coord != 0xFF)
+}
+
+/// c93: how far a map's coordinate may run over its mesh and still be one tile (an unwrapped map: its brightness can be
+/// light painted for that mesh; a tiled one's is its pattern).
+const MAP_LIGHT_TILE: f64 = 1.05;
+/// c93: the least directional part of a map's light, against its mean (1): under it the map lies even to the facing.
+const MAP_LIGHT_LEAST: f64 = 0.05;
+
+/// c93: a mesh's first map at its vertices (first_map_at_vertices) where it holds light: the map one tile of the mesh's
+/// coordinate (MAP_LIGHT_TILE a side) and its brightness following the facing (map_follows_facing). None otherwise.
+fn map_light(ir: &ModelIr, material: usize, s: &MeshStreams) -> Option<Vec<f64>> {
+    let ratios = first_map_at_vertices(ir, material, s)?;
+    let m = ir.materials.get(material)?;
+    let stage = m.stages.iter().find(|stage| stage.map != 0xFF && stage.coord != 0xFF)?;
+    let k = usize::from(m.coords.get(usize::from(stage.coord))?.source.checked_sub(4)?);
+    let (mut low, mut high) = ([f64::MAX; 2], [f64::MIN; 2]);
+    for i in 0..s.positions.len() {
+        let uv = s.coord(i, k);
+        for a in 0..2 {
+            low[a] = low[a].min(f64::from(uv[a]));
+            high[a] = high[a].max(f64::from(uv[a]));
+        }
+    }
+    if (0..2).any(|a| !(high[a] - low[a] <= MAP_LIGHT_TILE)) || !map_follows_facing(s, &ratios) {
+        return None;
+    }
+    Some(ratios)
+}
+
+/// c93: whether light painted into a map follows the facing: the ratios fitted by an ambient and one directional light
+/// over the vertex normals (least squares, as PaintedLight) explain PAINT_LIGHT_FIT of their variance, and the
+/// directional part is at least MAP_LIGHT_LEAST.
+fn map_follows_facing(s: &MeshStreams, ratios: &[f64]) -> bool {
+    if s.normals.len() != ratios.len() || ratios.len() < 16 {
+        return false;
+    }
+    let (mut a, mut b) = ([[0.0f64; 4]; 4], [0.0f64; 4]);
+    let mut rows = Vec::with_capacity(ratios.len());
+    for (n, &y) in s.normals.iter().zip(ratios) {
+        let n = n.map(f64::from);
+        let length = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+        if length <= 1e-6 {
+            continue;
+        }
+        let x = [1.0, n[0] / length, n[1] / length, n[2] / length];
+        for i in 0..4 {
+            for j in 0..4 {
+                a[i][j] += x[i] * x[j];
+            }
+            b[i] += x[i] * y;
+        }
+        rows.push((x, y));
+    }
+    if rows.len() < 16 {
+        return false;
+    }
+    let Some(fit) = solve4(a, b) else { return false };
+    let mean = rows.iter().map(|r| r.1).sum::<f64>() / rows.len() as f64;
+    let (mut total, mut left) = (0.0f64, 0.0f64);
+    for (x, y) in &rows {
+        total += (y - mean).powi(2);
+        left += (y - (0..4).map(|k| fit[k] * x[k]).sum::<f64>()).powi(2);
+    }
+    let directional = (fit[1] * fit[1] + fit[2] * fit[2] + fit[3] * fit[3]).sqrt();
+    total > 1e-9 && 1.0 - left / total >= PAINT_LIGHT_FIT && directional >= MAP_LIGHT_LEAST
+}
+
+/// c55 (census; d07's question 3): a model's de-light with c37 alone and with d07's map ratios; c93: its meshes painted
+/// by a map alone (debakes_map), those whose map holds light (map_light), and their mean gain.
 pub struct DebakeReport {
     pub debaked: usize,
     pub mapped: usize,
@@ -593,6 +672,9 @@ pub struct DebakeReport {
     pub gain_d07: f64,
     /// c79: the chosen meshes painted near black all over (no light to take out).
     pub near_black: usize,
+    pub map_painted: usize,
+    pub map_lit: usize,
+    pub gain_map: f64,
 }
 
 /// The de-light of a model as write() makes it (the same meshes chosen), with and without the maps: None for a sky
@@ -851,7 +933,8 @@ pub fn debake_report(ir: &ModelIr, stem: &str) -> Option<DebakeReport> {
         })
         .collect();
     let which: Vec<bool> = ir.shapes.iter().map(|s| debake_material.get(s.material as usize).copied().unwrap_or(false)).collect();
-    if !which.iter().any(|&w| w) {
+    let map_painted: Vec<bool> = ir.shapes.iter().map(|s| ir.materials.get(s.material as usize).is_some_and(debakes_map)).collect();
+    if !which.iter().chain(&map_painted).any(|&w| w) {
         return None;
     }
     let curved = model_curves(ir);
@@ -863,18 +946,29 @@ pub fn debake_report(ir: &ModelIr, stem: &str) -> Option<DebakeReport> {
         .shapes
         .iter()
         .zip(&meshes)
-        .zip(&which)
-        .map(|((shape, streams), &w)| if w { first_map_at_vertices(ir, shape.material as usize, streams) } else { None })
+        .zip(which.iter().zip(&map_painted))
+        .map(|((shape, streams), (&w, &w2))| {
+            if w {
+                first_map_at_vertices(ir, shape.material as usize, streams)
+            } else if w2 {
+                map_light(ir, shape.material as usize, streams)
+            } else {
+                None
+            }
+        })
         .collect();
+    // c93: the map-painted meshes whose map holds light.
+    let map_only: Vec<bool> = map_painted.iter().zip(&maps).map(|(&w, m)| w && m.is_some()).collect();
+    let chosen: Vec<bool> = which.iter().zip(&map_only).map(|(&a, &b)| a || b).collect();
     let mut plain = meshes.clone();
     let no_maps: Vec<Option<Vec<f64>>> = vec![None; meshes.len()];
     let materials: Vec<u32> = ir.shapes.iter().map(|s| s.material).collect();
     let none = std::collections::BTreeMap::new();
     debake_gains(&mut plain, &which, &no_maps, &materials, &none, None);
-    let near_black = debake_gains(&mut meshes, &which, &maps, &materials, &none, None).len();
-    let mean = |ms: &[MeshStreams]| -> (f64, usize) {
+    let near_black = debake_gains_with(&mut meshes, &chosen, &map_only, &maps, &materials, &none, None).len();
+    let mean = |ms: &[MeshStreams], which: &[bool]| -> (f64, usize) {
         let (mut sum, mut count) = (0.0f64, 0usize);
-        for (s, &w) in ms.iter().zip(&which) {
+        for (s, &w) in ms.iter().zip(which) {
             if !w {
                 continue;
             }
@@ -887,15 +981,19 @@ pub fn debake_report(ir: &ModelIr, stem: &str) -> Option<DebakeReport> {
         }
         (if count > 0 { sum / count as f64 } else { 1.0 }, count)
     };
-    let (gain_c37, vertices) = mean(&plain);
-    let (gain_d07, _) = mean(&meshes);
+    let (gain_c37, vertices) = mean(&plain, &which);
+    let (gain_d07, _) = mean(&meshes, &which);
+    let (gain_map, _) = mean(&meshes, &map_only);
     Some(DebakeReport {
         debaked: which.iter().filter(|&&w| w).count(),
-        mapped: maps.iter().filter(|m| m.is_some()).count(),
+        mapped: maps.iter().zip(&which).filter(|&(m, &w)| w && m.is_some()).count(),
         vertices,
         gain_c37,
         gain_d07,
         near_black,
+        map_painted: map_painted.iter().filter(|&&w| w).count(),
+        map_lit: map_only.iter().filter(|&&w| w).count(),
+        gain_map,
     })
 }
 
@@ -1019,6 +1117,21 @@ fn debake_gains(
     fixed: &std::collections::BTreeMap<u32, f64>,
     references: Option<&mut std::collections::BTreeMap<u32, f64>>,
 ) -> Vec<usize> {
+    debake_gains_with(meshes, which, &[], maps, materials, fixed, references)
+}
+
+/// debake_gains with c93's meshes painted by their map alone (`map_only`, by mesh): no vertex colour, the colour white,
+/// L their map's ratio; one enters only with a ratio a vertex (map_light). Their gain multiplies what they show.
+fn debake_gains_with(
+    meshes: &mut [MeshStreams],
+    which: &[bool],
+    map_only: &[bool],
+    maps: &[Option<Vec<f64>>],
+    materials: &[u32],
+    fixed: &std::collections::BTreeMap<u32, f64>,
+    references: Option<&mut std::collections::BTreeMap<u32, f64>>,
+) -> Vec<usize> {
+    let painted_by_map = |mesh: usize| map_only.get(mesh).copied().unwrap_or(false);
     let colour = |c: u32| [f64::from(c >> 24), f64::from(c >> 16 & 255), f64::from(c >> 8 & 255)].map(|x| x / 255.0);
     let luma = |c: [f64; 3]| 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
     let mut near_black = Vec::new();
@@ -1028,14 +1141,17 @@ fn debake_gains(
     let mut point_material: Vec<u32> = Vec::new();  // c85
     for (mesh, s) in meshes.iter().enumerate() {
         let chosen = which.get(mesh).copied().unwrap_or(false)
-            && s.attributes & MESH_COLOR0 != 0
             && !s.positions.is_empty()
-            && s.colors.len() == s.positions.len();
+            && if painted_by_map(mesh) {
+                maps.get(mesh).and_then(|m| m.as_ref()).is_some_and(|m| m.len() == s.positions.len())
+            } else {
+                s.attributes & MESH_COLOR0 != 0 && s.colors.len() == s.positions.len()
+            };
         if !chosen {
             point_of.push(Vec::new());
             continue;
         }
-        if s.colors.iter().all(|&c| luma(colour(c)) < DEBAKE_NEAR_BLACK) {
+        if !painted_by_map(mesh) && s.colors.iter().all(|&c| luma(colour(c)) < DEBAKE_NEAR_BLACK) {
             near_black.push(mesh);
         }
         let material = materials.get(mesh).copied().unwrap_or(u32::MAX);
@@ -1068,7 +1184,8 @@ fn debake_gains(
         if ids.is_empty() {
             continue;
         }
-        let map = maps.get(mesh).and_then(|m| m.as_ref()).filter(|m| m.len() == s.colors.len());
+        let map = maps.get(mesh).and_then(|m| m.as_ref()).filter(|m| m.len() == s.positions.len());
+        let by_map = painted_by_map(mesh);
         let mut area = vec![0.0f64; ids.len()];
         for t in s.indices.chunks_exact(3).chain(s.refined_indices.chunks_exact(3)) {
             let [a, b, c] = [t[0] as usize, t[1] as usize, t[2] as usize];
@@ -1093,7 +1210,7 @@ fn debake_gains(
         }
         for (v, &p) in ids.iter().enumerate() {
             let w = area[v] + 1e-12;
-            let c = colour(s.colors[v]).map(|x| x * map.map_or(1.0, |m| m[v]));
+            let c = (if by_map { [1.0; 3] } else { colour(s.colors[v]) }).map(|x| x * map.map_or(1.0, |m| m[v]));
             weight[p] += w;
             light[p] += w * luma(c);
             for k in 0..3 {
@@ -1211,6 +1328,7 @@ fn debake_gains(
         if ids.is_empty() {
             continue;
         }
+        let by_map = painted_by_map(mesh);
         let gains: Vec<u32> = ids
             .iter()
             .enumerate()
@@ -1220,7 +1338,7 @@ fn debake_gains(
                     return 0;
                 }
                 let g = (reference / smooth[p].max(1e-6)).clamp(1.0, DEBAKE_CAP);
-                let c = colour(s.colors[v]);
+                let c = if by_map { [1.0; 3] } else { colour(s.colors[v]) };
                 let l = luma(c);
                 let mut gain = [g; 3];
                 if l > 1e-4 {
@@ -1546,23 +1664,37 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
             })
             .collect();
         let which: Vec<bool> = ir.shapes.iter().map(|s| debake_material.get(s.material as usize).copied().unwrap_or(false)).collect();
+        // c93 (3.3): the meshes painted by a map alone whose map holds light (map_light).
+        let map_painted: Vec<bool> = ir.shapes.iter().map(|s| ir.materials.get(s.material as usize).is_some_and(debakes_map)).collect();
         // M5 (director d07): each such mesh's first map as its vertices see it, for the same fit.
         let maps: Vec<Option<Vec<f64>>> = ir
             .shapes
             .iter()
             .zip(&meshes)
-            .zip(&which)
-            .map(|((shape, streams), &w)| if w { first_map_at_vertices(ir, shape.material as usize, streams) } else { None })
+            .zip(which.iter().zip(&map_painted))
+            .map(|((shape, streams), (&w, &w2))| {
+                if w {
+                    first_map_at_vertices(ir, shape.material as usize, streams)
+                } else if w2 {
+                    map_light(ir, shape.material as usize, streams)
+                } else {
+                    None
+                }
+            })
             .collect();
+        let map_only: Vec<bool> = map_painted.iter().zip(&maps).map(|(&w, m)| w && m.is_some()).collect();
+        let chosen: Vec<bool> = which.iter().zip(&map_only).map(|(&a, &b)| a || b).collect();
         let materials: Vec<u32> = ir.shapes.iter().map(|s| s.material).collect();
-        // c85: a far twin's de-baked materials take their near model's Lref.
+        // c85: a far twin's de-baked materials take their near model's Lref (a vertex colour's: c93 keeps the map
+        // ratios, each mesh's own, out).
         let fixed: std::collections::BTreeMap<u32, f64> = ir
             .materials
             .iter()
             .enumerate()
+            .filter(|(_, m)| debakes(m))
             .filter_map(|(i, m)| super::hit_record::twin_reference(stem, &m.name).map(|r| (i as u32, r)))
             .collect();
-        debake_gains(&mut meshes, &which, &maps, &materials, &fixed, None);  // c79: de-bake v2
+        debake_gains_with(&mut meshes, &chosen, &map_only, &maps, &materials, &fixed, None);  // c79: de-bake v2; c93
         for (streams, &slot) in meshes.iter().zip(&mesh_slots) {
             if streams.attributes & MESH_GAIN != 0 {
                 b.patch32(slot + 56, streams.attributes);
@@ -2183,6 +2315,29 @@ mod tests {
         let s = &meshes[0];
         assert!(s.attributes & MESH_GAIN != 0 && s.gains.len() == s.positions.len());
         let after: Vec<f64> = map.iter().zip(&s.gains).map(|(&m, &g)| m * 2f64.powf(f64::from(g as u8 as i8) / GAIN_STEPS)).collect();
+        assert!(spread(&map) > 2.5 && spread(&after) < 1.4, "{} {}", spread(&map), spread(&after));
+    }
+    #[test]
+    fn debake_gains_take_out_a_light_in_the_map_alone() {
+        // c93: the ball with no vertex colour, the light 0.3 + 0.6 max(n.y, 0) in its first map alone: it follows the
+        // facing (map_follows_facing), and fitted with the colour white the gains take it out, grey; a map-only mesh
+        // with no ratio takes none, and a pattern that does not follow the facing is not light.
+        let mut s = ball(|_| [0.5; 3]);
+        s.attributes = MESH_NORMAL;
+        s.colors.clear();
+        let map: Vec<f64> = s.normals.iter().map(|n| f64::from(0.3 + 0.6 * n[1].max(0.0)) / 0.6).collect();
+        assert!(map_follows_facing(&s, &map));
+        let checker: Vec<f64> = (0..map.len()).map(|i| if (i / 12 + i % 12) % 2 == 0 { 0.5 } else { 1.5 }).collect();
+        assert!(!map_follows_facing(&s, &checker));
+        let even = vec![1.0; map.len()];
+        assert!(!map_follows_facing(&s, &even));
+        let mut meshes = vec![s.clone(), s];
+        debake_gains_with(&mut meshes, &[true, true], &[true, true], &[Some(map.clone()), None], &[0, 1], &Default::default(), None);
+        assert!(meshes[0].attributes & MESH_GAIN != 0 && meshes[0].gains.len() == meshes[0].positions.len());
+        assert!(meshes[1].attributes & MESH_GAIN == 0 && meshes[1].gains.is_empty());
+        let g = &meshes[0].gains;
+        assert!(g.iter().all(|&g| g & 255 == g >> 8 & 255 && g & 255 == g >> 16 & 255), "grey");
+        let after: Vec<f64> = map.iter().zip(g).map(|(&m, &g)| m * 2f64.powf(f64::from(g as u8 as i8) / GAIN_STEPS)).collect();
         assert!(spread(&map) > 2.5 && spread(&after) < 1.4, "{} {}", spread(&map), spread(&after));
     }
     #[test]

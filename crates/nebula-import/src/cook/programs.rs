@@ -904,7 +904,7 @@ pub fn has_lit_form(m: &MaterialIr) -> Result<bool> {
 
 /// The program's varyings. Its own coordinates take TEXCOORD0 up; the lit varyings (three) and the motion varyings (two)
 /// follow them in that order, so their places move with the coordinate count.
-fn varyings(uv_kinds: &[bool], color: [bool; 2], lit: bool) -> String {
+fn varyings(uv_kinds: &[bool], color: [bool; 2], lit: bool, gain: bool) -> String {
     let lit_first = uv_kinds.len();
     let motion_first = lit_first + if lit { 3 } else { 0 };
     let mut s = format!("#define NEBULA_MOTION_CURRENT_INDEX {motion_first}\n#define NEBULA_MOTION_PREVIOUS_INDEX {}\n", motion_first + 1);
@@ -921,6 +921,11 @@ fn varyings(uv_kinds: &[bool], color: [bool; 2], lit: bool) -> String {
     }
     for (k, three) in uv_kinds.iter().enumerate() {
         let _ = writeln!(s, "    PER_SAMPLE {} uv{k} : TEXCOORD{k};", if *three { "float3" } else { "float2" });
+    }
+    // c93: the de-light gain of a mesh painted by its map alone, after the motion pair's indices and before
+    // VARYINGS_MOTION (the prepass's primitive number stays the last input); in every form, so all keep one interface.
+    if gain {
+        let _ = writeln!(s, "    PER_SAMPLE float3 gain : TEXCOORD{};", motion_first + 2);
     }
     s.push_str("    VARYINGS_MOTION\n};\n");
     s
@@ -1132,18 +1137,26 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
     // in the traced form alone (compile_programs.py gives such a stage its traced forms), so a draw without ray tracing
     // runs what it ran before.
     // Every form that reads colour 0: the gain word is the cooker's say (0, a gain of 1, where its rgb is lit).
-    let gained = reads_color[0];
-    if gained {
+    // c93 (3.3): a painted material with no vertex colour (model_write debakes_map) whose mesh holds light in its first
+    // map: its traced vertex forms pass the gain as a multiplier (traced_map_gain: 1 unless the relight de-lights), and
+    // its traced pixel forms take what the pixel shows through it. The material's own stages only (no replace pass, no
+    // pass edit).
+    let map_gained = form.pass == 0 && form.replace == 0 && !reads_color[0] && super::model_write::debakes_map(m);
+    let gained = reads_color[0] || map_gained;
+    if reads_color[0] {
         for (k, line) in ["#if NATIVE_TRACED", "    v.color0.rgb = traced_vertex_gain(v.color0.rgb, v.gain);", "#endif"].into_iter().enumerate() {
             body.insert(k, line.into());
         }
+    }
+    if map_gained {
+        body.extend(["#if NATIVE_TRACED".into(), "    o.gain = traced_map_gain(v.gain);".into(), "#endif".into()]);
     }
     // Lit lines name the turned normal; only a stage that reads it pays for it.
     if body.iter().any(|l| l.contains(", nrm)") || l.contains("= nrm;")) {
         body.insert(0, "    const float3 nrm = lit_normal(p, v.nrm);".into());
     }
     let read_normal = body.iter().any(|l| l.contains("v.nrm"));
-    let vary = varyings(&uv_kinds, color_written, form.lit);
+    let vary = varyings(&uv_kinds, color_written, form.lit, map_gained);
     let mut vertex_in = String::from("struct VertexIn {\n    float3 pos : POSITION;\n    uint draw_matrix : BLENDINDICES;\n");
     let mut final_inputs = Vec::new();
     if read_normal {
@@ -1230,6 +1243,9 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
     for l in &p.lines {
         pixel.push_str(l);
         pixel.push('\n');
+    }
+    if map_gained {
+        pixel.push_str("#if NATIVE_TRACED\n    prev.rgb = traced_map_shown(prev.rgb, i.gain);\n#endif\n");
     }
     if form.lit {
         pixel.push_str("    PROGRAM_RETURN(float4(max(prev.rgb, 0.0), saturate(prev.a)));\n}\n");

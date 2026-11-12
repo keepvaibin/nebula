@@ -144,7 +144,7 @@ def main():
                 add(stage, row, source, text, entry, defines, index)
             # A vertex stage that de-lights its colour (programs.rs, D2) does so in its traced forms alone; the tracer's
             # draws and their prepass run those (program_table.cpp program_bytes).
-            if "traced_vertex_gain(" in text:
+            if "traced_vertex_gain(" in text or "traced_map_gain(" in text:  # c93: a map's gain too
                 for name in ("traced", "traced_motion"):
                     index, defines = TRACED_VARIANTS[name]
                     add(stage, row, source, text, entry, defines, index, False)

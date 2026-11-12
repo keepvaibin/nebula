@@ -76,6 +76,25 @@ float3 traced_vertex_gain(float3 c, uint gain) {
     return g / max(max(max(g.r, g.g), g.b), 1.0);
 }
 
+// c93 (3.3): the same gain as a multiplier, for a mesh painted by its map alone (programs.rs map_gained): its traced
+// vertex forms pass it, its traced pixel forms take what they show through traced_map_shown.
+float3 traced_map_gain(uint gain) {
+    if (!(view_look.z > 0.0)) {
+        return float3(1.0, 1.0, 1.0);
+    }
+    const int3 steps = int3(gain << 24u, gain << 16u, gain << 8u) >> 24;
+    return lerp(float3(1.0, 1.0, 1.0), exp2(float3(steps) / 42.0), view_look.z);
+}
+// c93: what a map-painted pixel shows, de-lit: bounded by its largest channel as traced_vertex_gain. A zero multiplier
+// (a vertex form that did not pass it) leaves it.
+float3 traced_map_shown(float3 c, float3 gain) {
+    if (!(view_look.z > 0.0) || !(gain.r + gain.g + gain.b > 0.0)) {
+        return c;
+    }
+    const float3 g = max(c, 0.0) * gain;
+    return g / max(max(max(g.r, g.g), g.b), 1.0);
+}
+
 // The draw's textures: TEX(n) and SAMP(n) are its n-th map and that map's sampler.
 #if NEBULA_BOUND_TABLES
 // Devices without descriptor indexing (Vulkan only): the draw's own table of NEBULA_TABLE_SLOTS maps, bound per draw.
