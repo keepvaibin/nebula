@@ -134,6 +134,9 @@ namespace lumacore {
             return static_cast< u16 >(id & ~cExact);
         }
         const void* const vtable = vtableOf(pObj);
+        if (vtable == nullptr) {
+            return id;  // no object (memory of zeros): an empty slot's null must not match it, nor anything be written
+        }
         for (u32 i = slotOf(vtable), n = 0; n < cVtableSlots; i = (i + 1) & (cVtableSlots - 1), n++) {
             if (sVtables[i].mVtable == vtable) {
                 const_cast< NameObj* >(pObj)->mLumaClass = static_cast< u16 >(sVtables[i].mClass | cExact);

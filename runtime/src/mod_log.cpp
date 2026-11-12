@@ -23,6 +23,12 @@ std::atomic<LumaModLogAdd> g_add{nullptr};
 std::atomic<LumaModLogNext> g_next{nullptr};
 std::atomic<LumaModLogNextMod> g_next_mod{nullptr};
 std::atomic<LumaModLogWords> g_words{nullptr};
+std::atomic<LumaModLogRowWords> g_row_words{nullptr};
+// The world clock's page exports (services-time 11, native/include/luma_time.h), found with g_add; any thread.
+using LumaTimeClockOf = std::int32_t (*)(const char* id, std::uint32_t* rate, std::int32_t* holds);
+using LumaTimeLetGo = std::int32_t (*)(const char* id);
+std::atomic<LumaTimeClockOf> g_clock_of{nullptr};
+std::atomic<LumaTimeLetGo> g_let_go{nullptr};
 
 // The harness's fact writer, when this run has the harness (its service exists only then).
 LumaModLogFact harness_fact() {
@@ -61,7 +67,10 @@ void begin(void* (*find_symbol)(const char*), std::uint32_t mods_on) {
     g_next.store(reinterpret_cast<LumaModLogNext>(find_symbol("luma_modlog_next")), std::memory_order_release);
     g_next_mod.store(reinterpret_cast<LumaModLogNextMod>(find_symbol("luma_modlog_next_mod")), std::memory_order_release);
     g_words.store(reinterpret_cast<LumaModLogWords>(find_symbol("luma_modlog_words")), std::memory_order_release);
+    g_row_words.store(reinterpret_cast<LumaModLogRowWords>(find_symbol("luma_modlog_row_words")), std::memory_order_release);
     g_add.store(reinterpret_cast<LumaModLogAdd>(find_symbol("luma_modlog_add")), std::memory_order_release);
+    g_clock_of.store(reinterpret_cast<LumaTimeClockOf>(find_symbol("luma_time_clock_of")), std::memory_order_release);
+    g_let_go.store(reinterpret_cast<LumaTimeLetGo>(find_symbol("luma_time_let_go")), std::memory_order_release);
     if (session != nullptr) session(mods_on, harness_fact());
 }
 
@@ -175,12 +184,59 @@ std::string words(const char* row, std::string_view mod, std::uint32_t count) {
     return std::string(text, bytes);
 }
 
+std::string row_words(const char* row, std::string_view mod, const std::vector<std::pair<std::string, std::string>>& values) {
+    const LumaModLogRowWords give = g_row_words.load(std::memory_order_acquire);
+    if (give == nullptr) return {};
+    const std::string mod_id(mod);
+    LumaModLogEntry entry{};
+    entry.size = sizeof(entry);
+    entry.mod = mod_id.c_str();
+    for (const auto& [name, value] : values) {
+        if (entry.count == LUMA_MODLOG_ARGS) break;
+        entry.names[entry.count] = name.c_str();
+        entry.values[entry.count++] = value.c_str();
+    }
+    char text[1024];
+    const std::uint32_t bytes = give(&entry, row, text, sizeof(text));
+    return std::string(text, bytes);
+}
+
 std::uint32_t kept() {
     const LumaModLogNext next = g_next.load(std::memory_order_acquire);
     std::uint32_t count = 0;
     if (next == nullptr) return count;
     for (const void* at = next(nullptr, nullptr); at != nullptr; at = next(at, nullptr)) ++count;
     return count;
+}
+
+std::optional<ModClock> mod_clock(std::string_view mod) {
+    const LumaTimeClockOf clock_of = g_clock_of.load(std::memory_order_acquire);
+    if (clock_of == nullptr) return std::nullopt;
+    const std::string id(mod);
+    std::uint32_t rate = 1000u;
+    std::int32_t holds = 0;
+    if (clock_of(id.c_str(), &rate, &holds) != 1) return std::nullopt;
+    return ModClock{rate, holds > 0};
+}
+
+bool let_go(std::string_view mod) {
+    const LumaTimeLetGo ask = g_let_go.load(std::memory_order_acquire);
+    if (ask == nullptr) return false;
+    const std::string id(mod);
+    if (ask(id.c_str()) != 1) return false;
+    // The player's act, not the mod's mistake: a Note worded by its row (mod-log 3.1, draft 7: the host's row keeps the
+    // level), a service's code (121) so the page names it by the row, not as a validator's L-code.
+    add_row(LUMA_MODLOG_CODE, LUMA_MODLOG_NOTE, id, 121u, "", "Time.LetGo", {});
+    return true;
+}
+
+void fact(const std::string& key, const std::string& json) {
+    const LumaModLogFact write = harness_fact();
+    if (write != nullptr) write(key.c_str(), json.c_str());
+}
+
+void append_json_text(std::string& out, std::string_view text) {
+    append_json(out, text);
 }
 
 void page_fact(std::uint32_t row, std::string_view label, std::string_view value) {
@@ -192,6 +248,17 @@ void page_fact(std::uint32_t row, std::string_view label, std::string_view value
     append_json(json, value);
     json += '}';
     write("modlog.page", json.c_str());
+}
+
+void entry_fact(std::string_view mod, std::uint32_t pages, std::string_view text) {
+    const LumaModLogFact write = harness_fact();
+    if (write == nullptr) return;
+    std::string json = "{\"mod\":";
+    append_json(json, mod);
+    json += ",\"pages\":" + std::to_string(pages) + ",\"text\":";
+    append_json(json, text);
+    json += '}';
+    write("modlog.entry", json.c_str());
 }
 
 }  // namespace galaxy::modlog

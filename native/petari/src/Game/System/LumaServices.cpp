@@ -1,6 +1,8 @@
 #include "Game/System/LumaServices.hpp"
 
 #include "Game/System/LumaHook.hpp"
+#include "Game/System/LumaContentFx.hpp"
+#include "Game/System/LumaContentModel.hpp"
 #include "Game/System/LumaLoader.hpp"
 #include "Game/System/LumaTime.hpp"
 #include <luma.h>
@@ -29,6 +31,8 @@ namespace luma {
                 {"system", 1, 0, nullptr, "services-system"},
                 {"system.clipboard", 1, 0, "system.clipboard", "services-system"},
                 {"system.links", 1, 0, "system.links", "services-system"},
+                {"content.fx", 1, 0, nullptr, "effects"},
+                {"content.model", 1, 0, nullptr, "models"},
                 {nullptr, 0, 0, nullptr, nullptr},
             };
 
@@ -300,8 +304,17 @@ namespace luma {
                     sayCounted(pWhere, "a report without its mod (a provider bug); not kept");
                     return;
                 }
-                // LumaCore.report keeps it under (file, line, code): the place is "<service>.<function>", line 0.
-                core()->report(pMod, pWhere != nullptr ? pWhere : "", 0, code, ppArgs, argCount);
+                // LumaCore.report keeps it under (file, line, code): the place is "<service>.<function>", line 0. Every
+                // service row's first name is {where} (cOwnRows: Service.Argument, Service.Handle ...): the place leads
+                // the arguments, so a provider passes only its own.
+                const char* const pPlace = pWhere != nullptr ? pWhere : "";
+                const char* args[8];
+                u32 count = 0;
+                args[count++] = pPlace;
+                for (u32 i = 0; ppArgs != nullptr && i < argCount && count < 8; i++) {
+                    args[count++] = ppArgs[i];
+                }
+                core()->report(pMod, pPlace, 0, code, args, count);
             }
 
             int32_t kernelPost(LumaEventNode* pNode) {
@@ -577,8 +590,10 @@ namespace luma {
                     }
                 }
             }
-            // The module's own services, each when its contract is signed: time (services-time).
+            // The module's own services, each when its contract is signed: time (services-time), content.fx (effects).
             (void)provide(luma::time::provider());
+            (void)provide(luma::content::fx::provider());
+            (void)provide(luma::content::model::provider());
         }
 
         const void* find(const char* pName, u32 major, u32 minor, const char** ppPermission) {
