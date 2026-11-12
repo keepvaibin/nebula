@@ -1720,8 +1720,10 @@ bool Context::device_memory_budget(std::uint64_t& usage, std::uint64_t& budget) 
     if (allocator_ == nullptr) {
         return false;
     }
-    VkPhysicalDeviceMemoryProperties memory{};
-    vkGetPhysicalDeviceMemoryProperties(physical_, &memory);
+    // The allocator's copy of the heaps, read from the driver once when it was made (no heap size limit is given to it).
+    const VkPhysicalDeviceMemoryProperties* properties = nullptr;
+    vmaGetMemoryProperties(allocator_, &properties);
+    const VkPhysicalDeviceMemoryProperties& memory = *properties;
     std::array<VmaBudget, VK_MAX_MEMORY_HEAPS> budgets{};
     vmaGetHeapBudgets(allocator_, budgets.data());
     // The largest device-local heap holds the render targets (the only one on most devices).
@@ -1740,8 +1742,10 @@ bool Context::heap_stats(HeapStats& device_local, HeapStats& other) const noexce
     if (allocator_ == nullptr) {
         return false;
     }
-    VkPhysicalDeviceMemoryProperties memory{};
-    vkGetPhysicalDeviceMemoryProperties(physical_, &memory);
+    // The allocator's copy of the heaps, read from the driver once when it was made (no heap size limit is given to it).
+    const VkPhysicalDeviceMemoryProperties* properties = nullptr;
+    vmaGetMemoryProperties(allocator_, &properties);
+    const VkPhysicalDeviceMemoryProperties& memory = *properties;
     std::array<VmaBudget, VK_MAX_MEMORY_HEAPS> budgets{};
     vmaGetHeapBudgets(allocator_, budgets.data());
     VkDeviceSize largest = 0u;
