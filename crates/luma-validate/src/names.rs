@@ -552,8 +552,10 @@ impl FunctionFacts {
             if count.is_some() && fixed.is_some() {
                 return Err(bad(eat, "count and fixed both set"));
             }
-            if way == Way::Kept && (count.is_some() || fixed.is_some() || nullable) {
-                return Err(bad(eat, "kept with a count, a fixed count or nullable"));
+            // A kept pointer is one place, never a list; it may be nullable (C-6 as F changed it 11-12: the game takes
+            // null there, which is all a script can give it).
+            if way == Way::Kept && (count.is_some() || fixed.is_some()) {
+                return Err(bad(eat, "kept with a count or a fixed count"));
             }
             if count == Some(i) {
                 return Err(bad(format!("{eat}.count"), "its own parameter"));

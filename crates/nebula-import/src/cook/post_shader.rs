@@ -57,9 +57,10 @@ const FORBIDDEN: [&str; 15] = [
 ];
 
 /// Names a parameter may not take: a `#define` of one would rewrite every use of it in the program, so neither the
-/// host's names, PostIn's fields, HLSL's words nor its intrinsic functions.
+/// host's names (its prelude and entry point, render/mod_post.cpp), PostIn's fields, HLSL's words nor its intrinsics.
 const RESERVED: &[&str] = &[
     "post", "PostIn", "post_params", "scene", "scene_texel", "depth", "motion", "main", "uv", "pixel", "size", "time",
+    "position", "corner", "id", "program_vs", "program_ps",
     "i", "if", "else", "for", "while", "do", "return", "true", "false", "struct", "static", "const", "in", "out",
     "inout", "uniform", "void", "bool", "int", "uint", "float", "half", "double", "dword", "matrix", "vector", "string",
     "discard", "switch", "case", "default", "break", "continue", "typedef", "linear", "centroid", "nointerpolation",
@@ -71,7 +72,7 @@ const RESERVED: &[&str] = &[
     "normalize", "pow", "radians", "rcp", "reflect", "refract", "reversebits", "round", "rsqrt", "saturate", "sign",
     "sin", "sincos", "sinh", "smoothstep", "sqrt", "step", "tan", "tanh", "transpose", "trunc",
 ];
-const RESERVED_PREFIXES: [&str; 12] = ["post_", "scene_", "NEBULA_", "g_", "float", "int", "uint", "half", "bool", "double", "min1", "__"];
+const RESERVED_PREFIXES: [&str; 15] = ["post_", "scene_", "nebula_", "NEBULA_", "program_", "SV_", "g_", "float", "int", "uint", "half", "bool", "double", "min1", "__"];
 
 /// A parameter as the file holds it.
 #[derive(Clone, Debug, PartialEq)]
@@ -181,12 +182,16 @@ pub fn read_json(json_file: &str, json: &[u8]) -> Result<(Vec<Param>, u32)> {
     Ok((params, reads))
 }
 
-/// The program text the file carries: each parameter's name for its place, then the mod's code.
+/// The program text the file carries: each parameter's name for its place, then (from line 1 again) the mod's code.
 pub fn text(params: &[Param], code: &str) -> String {
     let mut out = String::new();
     for p in params {
         let columns = &"xyzw"[p.column as usize..(p.column + p.floats) as usize];
         out.push_str(&format!("#define {} (post_params[{}].{columns})\n", p.name, p.row));
+    }
+    // The compiler's lines are the mod's file's.
+    if !params.is_empty() {
+        out.push_str("#line 1\n");
     }
     out.push_str(code);
     out
@@ -310,7 +315,7 @@ mod tests {
         }
     }
 
-    const CODE: &[u8] = b"float4 post(PostIn i)\n{\n    return scene.Sample(i.uv) * tint * strength;\n}\n";
+    const CODE: &[u8] = b"float4 post(PostIn i)\n{\n    return scene(i.uv) * tint * strength;\n}\n";
 
     fn u32_at(b: &[u8], at: usize) -> u32 {
         u32::from_le_bytes(b[at..at + 4].try_into().unwrap())
@@ -337,7 +342,7 @@ mod tests {
         assert_eq!(f32::from_le_bytes(file[at + 4..at + 8].try_into().unwrap()), 0.5);
         let text = std::str::from_utf8(&file[24 + 3 * PARAM_BYTES..]).unwrap();
         assert_eq!(text.len() as u32, u32_at(&file, 20));
-        assert!(text.starts_with("#define strength (post_params[0].x)\n#define tint (post_params[1].xyzw)\n#define offset (post_params[0].yzw)\nfloat4 post("));
+        assert!(text.starts_with("#define strength (post_params[0].x)\n#define tint (post_params[1].xyzw)\n#define offset (post_params[0].yzw)\n#line 1\nfloat4 post("));
     }
 
     #[test]
