@@ -4,3 +4,5 @@
 # metal, ior, thickness (units), tint keep, body, shine (0 to 16), emission (r g b). Empty fields keep the cooker's
 # numbers; a note says what the picture showed. A mod's pack may carry a file of the same form.
 model	material	class	roughness	metal	ior	thickness	tint keep	body	shine	emission	note
+starduststartplanet	CryA_v				2.42						Pull Star Path pillar: tint removed, more reflective (the owner, G2; FB b82)
+tshapeplanet	crystal_v				2.42						Pull Star Path pillar: tint removed, more reflective (the owner, G2; FB b82)
