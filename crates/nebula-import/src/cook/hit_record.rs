@@ -293,12 +293,16 @@ pub fn sheen_roles(ir: &ModelIr, stem: &str) -> Vec<SheenRole> {
     }
     let key = |p: [f32; 3]| [(p[0] * 4.0).round() as i32, (p[1] * 4.0).round() as i32, (p[2] * 4.0).round() as i32];
     let mut places: Vec<std::collections::HashSet<[i32; 3]>> = vec![std::collections::HashSet::new(); n];
+    // c59: each material's corners once, for a sheen drawn as a shell off its body.
+    let mut points: Vec<Vec<[f32; 3]>> = vec![Vec::new(); n];
     for shape in &ir.shapes {
         let Some(set) = places.get_mut(shape.material as usize) else { continue };
         for group in &shape.groups {
             for corner in &group.corners {
                 if let Some(&p) = ir.arrays.positions.get(corner.position as usize) {
-                    set.insert(key(p));
+                    if set.insert(key(p)) {
+                        points[shape.material as usize].push(p);
+                    }
                 }
             }
         }
@@ -311,6 +315,58 @@ pub fn sheen_roles(ir: &ModelIr, stem: &str) -> Vec<SheenRole> {
                 let shared = own.iter().filter(|p| places[b].contains(*p)).count() as f32 / own.len() as f32;
                 if shared >= 0.8 && best.map_or(true, |(_, most)| shared > most) {
                     best = Some((b, shared));
+                }
+            }
+        }
+        // c59: no body with its corners: a shell a little off its body. The share of the sheen's corners within 5 % of
+        // its own size (its box's diagonal, at least 1 unit) of a body's corner, through a grid of cells that size.
+        if best.is_none() && !points[s].is_empty() {
+            let (mut lo, mut hi) = ([f32::MAX; 3], [f32::MIN; 3]);
+            for p in &points[s] {
+                for k in 0..3 {
+                    lo[k] = lo[k].min(p[k]);
+                    hi[k] = hi[k].max(p[k]);
+                }
+            }
+            let diagonal = ((hi[0] - lo[0]).powi(2) + (hi[1] - lo[1]).powi(2) + (hi[2] - lo[2]).powi(2)).sqrt();
+            let reach = (0.05 * diagonal).max(1.0);
+            let cell = |p: [f32; 3]| [(p[0] / reach).floor() as i32, (p[1] / reach).floor() as i32, (p[2] / reach).floor() as i32];
+            // Of the bodies near enough, the one nearest the sheen's size (a shell is its body's size; a base it sits
+            // on is larger): the least |ln(its diagonal / the sheen's)|.
+            let mut misfit = f32::MAX;
+            for b in (0..n).filter(|b| !sheens.contains(b) && !points[*b].is_empty()) {
+                let (mut blo, mut bhi) = ([f32::MAX; 3], [f32::MIN; 3]);
+                for q in &points[b] {
+                    for k in 0..3 {
+                        blo[k] = blo[k].min(q[k]);
+                        bhi[k] = bhi[k].max(q[k]);
+                    }
+                }
+                let body_diagonal = ((bhi[0] - blo[0]).powi(2) + (bhi[1] - blo[1]).powi(2) + (bhi[2] - blo[2]).powi(2)).sqrt();
+                let off = (body_diagonal.max(1e-3) / diagonal.max(1e-3)).ln().abs();
+                let mut grid: std::collections::HashMap<[i32; 3], Vec<[f32; 3]>> = std::collections::HashMap::new();
+                for &q in &points[b] {
+                    grid.entry(cell(q)).or_default().push(q);
+                }
+                let near = points[s]
+                    .iter()
+                    .filter(|p| {
+                        let c = cell(**p);
+                        (-1..=1).any(|x| {
+                            (-1..=1).any(|y| {
+                                (-1..=1).any(|z| {
+                                    grid.get(&[c[0] + x, c[1] + y, c[2] + z]).is_some_and(|qs| {
+                                        qs.iter().any(|q| (q[0] - p[0]).powi(2) + (q[1] - p[1]).powi(2) + (q[2] - p[2]).powi(2) <= reach * reach)
+                                    })
+                                })
+                            })
+                        })
+                    })
+                    .count() as f32
+                    / points[s].len() as f32;
+                if near >= 0.8 && off < misfit {
+                    misfit = off;
+                    best = Some((b, near));
                 }
             }
         }
