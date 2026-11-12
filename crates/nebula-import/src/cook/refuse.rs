@@ -76,6 +76,8 @@ pub enum CookFact {
     Effect { path: String, source: String, facts: EffectFacts },
     /// A layout of a mod cooked (layout contract's `cook.layout`).
     Layout { path: String, source: String, facts: super::layout_json::LayoutFacts },
+    /// A sound effect of a mod cooked (sound contract's `cook.sound`).
+    Sound { path: String, source: String, facts: super::sound_effect::SoundFacts },
 }
 
 /// What `cook.effect` says of one effect (`<id>:<name>`) or one replaced game particle (its name).
@@ -162,6 +164,22 @@ pub fn cook_facts_text(facts: &[CookFact]) -> String {
                 let fixed = ["cook.layout", path, "", source, path, "", "", "", "", "", ""].map(str::to_string);
                 let counts = [("panes", facts.panes), ("pictures", facts.pictures), ("texts", facts.texts), ("textures", facts.textures), ("groups", facts.groups)];
                 fixed.into_iter().chain(counts.iter().map(|(name, n)| format!("{name}={n}"))).collect()
+            }
+            CookFact::Sound { path, source, facts } => {
+                let fixed = ["cook.sound", path, "", source, path, "", "", "", "", "", ""].map(str::to_string);
+                let level = |v: f32| if v.is_finite() { format!("{v:.1}") } else { "none".to_string() };
+                fixed
+                    .into_iter()
+                    .chain([
+                        format!("frames={}", facts.frames),
+                        format!("channels={}", facts.channels),
+                        format!("rate={}", facts.rate_in),
+                        format!("looped={}", u8::from(facts.looped)),
+                        format!("loudness={}", level(facts.loudness)),
+                        format!("peak={}", level(facts.peak)),
+                        format!("replaces={}", facts.replaces),
+                    ])
+                    .collect()
             }
         };
         out.push_str(&line.iter().map(|f| field(f)).collect::<Vec<_>>().join("\t"));
