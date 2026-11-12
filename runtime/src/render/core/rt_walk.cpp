@@ -70,6 +70,7 @@ constexpr float kUnitsPerMetre = 100.0f;
 
 // The glow a draw gives now (defined with rt_emitter): the item words read it too (c60, A2-12).
 void live_glow(const NebulaFrameList& list, const NebulaFrameItem& item, const core::GpuMesh& mesh, float out[4]);
+bool live_tint(const NebulaFrameList& list, const NebulaFrameItem& item, const core::GpuMesh& mesh, float out[3]);
 
 // What an emitter is from one frame to the next (its kind, whose it is, which of them): a pixel's reservoir finds its
 // light again by it. Two emitters with one number are taken for each other. Never 0: kNoEmitterId is an emitter no
@@ -1884,8 +1885,19 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
             }
             words[11] = std::uint32_t{mesh.hit_class} | ((std::uint32_t{mesh.hit_flags} & 127u) | captured) << 8u |
                         byte_of(mesh.hit_roughness) << 16u | byte_of(mesh.hit_metal) << 24u;
-            words[12] = byte_of(mesh.hit_base[0]) | byte_of(mesh.hit_base[1]) << 8u | byte_of(mesh.hit_base[2]) << 16u |
-                        byte_of(mesh.hit_environment) << 24u;
+            // Its colour under full light by the colour the game gives it now (c70: the row that carries what it shows,
+            // live over cooked, as its glow), so a register set by the game's code or animation colours the hit.
+            float tint[3] = {1.0f, 1.0f, 1.0f};
+            if (live_tint(list, item, mesh, tint) && ::galaxy::diagnosing(::galaxy::kDiagnoseRtInputs) &&
+                (std::abs(tint[0] - 1.0f) > 0.1f || std::abs(tint[1] - 1.0f) > 0.1f || std::abs(tint[2] - 1.0f) > 0.1f)) {
+                auto& seen = rt_live_tints_[item.source_hash];
+                for (unsigned c = 0; c < 3u; ++c) {
+                    seen[c] = mesh.hit_base[c];
+                    seen[3u + c] = mesh.hit_base[c] * tint[c];
+                }
+            }
+            words[12] = byte_of(mesh.hit_base[0] * tint[0]) | byte_of(mesh.hit_base[1] * tint[1]) << 8u |
+                        byte_of(mesh.hit_base[2] * tint[2]) << 16u | byte_of(mesh.hit_environment) << 24u;
             // Water's first map's coordinate rows (plan 13.3, l54: its surface ripples as the map moves): the two rows
             // the program's coordinate takes, the walk's own at t for a listed material, after the items; word 18
             // their first byte from the items' first. Only a map read from uv set 0 (the tracer's vertices carry no
@@ -2603,6 +2615,19 @@ void RenderCore::rt_report() {
                  static_cast<double>(rt_light_sum_[9]) / n);
     std::fprintf(stderr, "[rt-inputs]   added light over the guard (kAddedMost 1.5 of the base) %.0f pixels a frame\n",
                  static_cast<double>(rt_light_sum_[10]) / n);
+    // c70's check: the materials whose live colour is off their cooked one (m<name hash>: cooked base -> live base).
+    if (!rt_live_tints_.empty()) {
+        std::fprintf(stderr, "[rt-inputs]   live colours (c70) %zu:", rt_live_tints_.size());
+        unsigned told = 0u;
+        for (const auto& [hash, seen] : rt_live_tints_) {
+            if (told++ == 48u) {
+                break;
+            }
+            std::fprintf(stderr, " m%08x %.2f,%.2f,%.2f->%.2f,%.2f,%.2f", hash, seen[0], seen[1], seen[2], seen[3], seen[4], seen[5]);
+        }
+        std::fprintf(stderr, "\n");
+        rt_live_tints_.clear();
+    }
     // What they are, over the report's frames (emitter_census.py names them): most lights first.
     if (!rt_emitter_sources_.empty()) {
         std::vector<std::pair<std::uint64_t, std::uint32_t>> sources(rt_emitter_sources_.begin(), rt_emitter_sources_.end());
@@ -2856,6 +2881,29 @@ namespace {
 // the material's glow-carrying row since cooking (a lamp it dims, tints or turns off), then made 0 to 1 again with
 // the largest channel's change moved into the strength. A draw without live rows, or whose rows are another form's,
 // keeps the cooked glow.
+// c70: the live colour of the row that carries what the material shows (glow_source, L-1) over its cooked colour, a
+// channel at a time (live_glow's ratio); false (out untouched, 1) where there is none to read.
+bool live_tint(const NebulaFrameList& list, const NebulaFrameItem& item, const core::GpuMesh& mesh, float out[3]) {
+    if (mesh.glow_row == 0xFFFFu || item.constants >= list.constants_count || list.constants == nullptr) {
+        return false;
+    }
+    const NebulaFrameConstants& constants = list.constants[item.constants];
+    if (constants.rows == nullptr || constants.vertex_rows + constants.pixel_rows != mesh.glow_row_count) {
+        return false;
+    }
+    // A row cooked black (c81's lamp the game lights) gave the base nothing to scale: the cooked base stands.
+    if (std::max({mesh.glow_cooked[0], mesh.glow_cooked[1], mesh.glow_cooked[2]}) < 0.5f / 255.0f) {
+        return false;
+    }
+    const float* live = constants.rows[mesh.glow_row];
+    for (unsigned c = 0; c < 3u; ++c) {
+        // A channel cooked under a byte's step holds none of the base's colour in it: that channel keeps 1.
+        const float ratio = mesh.glow_cooked[c] < 1.0f / 255.0f ? 1.0f : std::clamp(live[c], 0.0f, 8.0f) / mesh.glow_cooked[c];
+        out[c] = std::isfinite(ratio) ? std::min(ratio, 8.0f) : 1.0f;
+    }
+    return true;
+}
+
 void live_glow(const NebulaFrameList& list, const NebulaFrameItem& item, const core::GpuMesh& mesh, float out[4]) {
     std::copy_n(mesh.glow, 4u, out);
     if (mesh.glow_row == 0xFFFFu || item.constants >= list.constants_count || list.constants == nullptr) {

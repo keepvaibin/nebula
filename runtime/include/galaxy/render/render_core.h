@@ -600,6 +600,8 @@ private:
     // --diagnostics rt-inputs: the lights' sources over a report's frames (kind << 32 | name hash: 1 a glowing mesh's
     // material, 2 a particle light's effect), and how many lights each gave (c11, the emitter census a stop).
     std::unordered_map<std::uint64_t, std::uint32_t> rt_emitter_sources_;
+    // c70: per material name hash, its cooked base and its base by the live colour, where they differ (rt-inputs).
+    std::unordered_map<std::uint32_t, std::array<float, 6>> rt_live_tints_;
     std::vector<std::uint32_t> rt_glow_tiles_, rt_glow_entries_, rt_glow_counts_;
     void rt_emitter(const NebulaFrameItem& item, const core::GpuMesh& mesh, const float centre[3], float radius,
                     const float (*place)[4] = nullptr);
