@@ -118,6 +118,7 @@
     "model.detach": "detach ends the handle; an ended handle answers LUMA_E_HANDLE (3.2)",
     "model.reuse": "A detached model's part is used again for the same actor, model and follow (3.2)",
     "model.limit": "content.model refuses a mod's attach past LUMA_CONTENT_MODEL_MOST open ones; a detach frees one (3.2)",
+    "ui.mod_layout": "ui opens a mod's own cooked layout (<Name>.layout.json, 3.8 layer 1): its picture and text panes drawn by the game's layout drawer, its text set by name (3.8 layer 1)",
     "ui.open": "ui opens a screen layout (the game's or the mod's cooked one) on the HUD, drawn by the game's layout drawer every frame (2.4 layer 4, 3.8 layer 1)",
     "ui.pane": "ui finds a pane of an open screen by its exact name; the same pane is the same handle (2.4, 3.8)",
     "ui.text": "ui sets a text pane's text from UTF-8, kept as given in every script (2.4, 3.8)",
