@@ -102,6 +102,14 @@ fn a_correct_mod_passes_with_nothing_to_say() {
     );
     let report = check(&bytes, &Setup { game: Some(&game), ..NO_GAME });
     assert!(report.findings.is_empty(), "{:?}", report.findings);
+
+    // A layer of the previous engine's rows only has no folder (a converted Gecko list): L221 notes, no L300.
+    let bytes = luma(
+        &[("layers", r#"[{"name": "base"}]"#), ("pre_standard", r#"{"layers": {"base": {"tunables": {"player.jumps": 3}}}}"#)],
+        &[],
+    );
+    let report = check(&bytes, &NO_GAME);
+    assert!(report.findings.iter().all(|f| f.code == 221), "{:?}", report.findings);
 }
 
 /// Table-keys 13: a key added to one layer of a zone must be new to every layer of it, in the game and in the mod;

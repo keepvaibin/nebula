@@ -48,8 +48,17 @@ pub(crate) fn check(ctx: &mut Ctx) {
             ctx.add(306, &item.name, None, None, vec![("entry", t(item.name.clone()))]);
         }
     }
+    // A layer whose whole content is the previous engine's rows (`pre_standard.layers.<name>`, OLD-ROWS) has no folder:
+    // a .luma holds no empty folders.
+    let rows_only: BTreeSet<String> = ctx
+        .manifest
+        .as_ref()
+        .and_then(|m| m.get("pre_standard"))
+        .and_then(|p| p.get("layers"))
+        .map(|l| l.members().iter().map(|m| m.key.clone()).collect())
+        .unwrap_or_default();
     for (name, pos, ptr) in &listed {
-        if !folders.contains(name) {
+        if !folders.contains(name) && !rows_only.contains(name) {
             let ptr = if ptr.is_empty() { None } else { Some(ptr.as_str()) };
             ctx.add(300, "luma.json", Some(*pos), ptr, vec![("layer", t(name.clone())), ("why", p("Layer.NoFolder"))]);
         }
