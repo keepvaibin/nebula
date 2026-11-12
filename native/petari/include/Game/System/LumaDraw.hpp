@@ -9,6 +9,8 @@
 #include <luma_service_provider.h>
 #include <nebula_types.h>
 
+class GameTexture;
+
 namespace luma {
     namespace draw {
         // The frame's points (LumaDrawPoint): GameScene::draw3D (the world points), GameScene::draw2D (hud.before,
@@ -25,6 +27,14 @@ namespace luma {
         // The primitives `count` more for the mod drawing now: false past LUMA_DRAW_PRIMITIVES_MOST this frame (said
         // once a frame, Service.Limit), nothing to draw.
         bool count(const LumaMod* pMod, const char* pWhere, u32 count);
+        // draw.view (FB, layer 7): `pTexture` (GameTexture::createPixelTarget, w x h) becomes a texture of the mod's,
+        // owned by its slot from now on (counted as w x h x 4 bytes; texture_free refuses it). LUMA_OK and *pOut, or
+        // LUMA_E_LIMIT, reported, and pTexture deleted.
+        s32 adoptTarget(const LumaMod* pMod, const char* pWhere, GameTexture* pTexture, u32 w, u32 h, LumaHandle* pOut);
+        // The mod's target texture of that handle, or null (freed: the mod's end, dropTarget).
+        GameTexture* targetOf(const LumaMod* pMod, LumaHandle handle);
+        // The target freed (after this frame, as a texture from pixels); nothing for a handle that is not one.
+        void dropTarget(const LumaMod* pMod, LumaHandle handle);
         // The service's provider, registered by luma::services::provideOwn.
         const LumaServiceProvider* provider();
     }  // namespace draw

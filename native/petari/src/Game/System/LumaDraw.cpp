@@ -94,6 +94,7 @@ namespace luma {
                 GameTexture* texture;
                 ResTIMG info;       // a texture by name: the record its GameTexture reads
                 bool pixels;        // from pixels: the image is the GameTexture's own, handed to the renderer
+                bool target;        // a view's picture (draw.view): a key the frame draws into, the slot's own
                 u32 width;
                 u32 height;
                 u64 bytes;          // from pixels: width x height x 4
@@ -125,6 +126,7 @@ namespace luma {
             LumaHandle sNextHandle = 0;
             // Freed from pixels: they leave the renderer at the next frame's update (drawn this frame still).
             GameTexture* sFreed[kMostTextures];
+            bool sFreedTarget[kMostTextures];  // a view's target: its key is forgotten, not its pixels
             u32 sFreedCount = 0;
             GameTexture* sPlaceholder = nullptr;
 
@@ -401,8 +403,9 @@ namespace luma {
             }
 
             void freeTexture(Texture& rTexture) {
-                if (rTexture.pixels) {
+                if (rTexture.pixels || rTexture.target) {
                     if (sFreedCount < kMostTextures) {
+                        sFreedTarget[sFreedCount] = rTexture.target;
                         sFreed[sFreedCount++] = rTexture.texture;
                     } else {
                         // Never: there are no more textures than slots. Kept rather than freed under the frame.
@@ -1257,6 +1260,9 @@ namespace luma {
                     report(pMod, pWhere, 102u, nullptr, nullptr);
                     return LUMA_E_HANDLE;
                 }
+                if (pTexture->target) {
+                    return badArgument(pMod, pWhere, "texture");  // a view's: draw.view.release frees it
+                }
                 freeTexture(*pTexture);
                 return LUMA_OK;
             }
@@ -1625,8 +1631,10 @@ namespace luma {
             for (u32 i = 0; i < sFreedCount; i++) {
                 GameTexture* const pTexture = sFreed[i];
                 const uintptr_t start = reinterpret_cast< uintptr_t >(pTexture->image());
-                RenderTexture::forget(start, start + RenderTexture::linearSize(NEBULA_TEXTURE_LINEAR_RGBA8, pTexture->getWidth(),
-                                                                               pTexture->getHeight(), 1));
+                // A target's image is its key, four by four L8 (GameTexture::createPixelTarget).
+                RenderTexture::forget(start, start + (sFreedTarget[i] ? RenderTexture::linearSize(NEBULA_TEXTURE_LINEAR_L8, 4, 4, 1)
+                                                                       : RenderTexture::linearSize(NEBULA_TEXTURE_LINEAR_RGBA8, pTexture->getWidth(),
+                                                                                                   pTexture->getHeight(), 1)));
                 delete pTexture;
             }
             sFreedCount = 0;
@@ -1638,6 +1646,40 @@ namespace luma {
 
         bool count(const LumaMod* pMod, const char* pWhere, u32 more) {
             return pMod == sMod && countFor(sModDraw, pMod, pWhere, more);
+        }
+
+        s32 adoptTarget(const LumaMod* pMod, const char* pWhere, GameTexture* pTexture, u32 w, u32 h, LumaHandle* pOut) {
+            const u64 bytes = static_cast< u64 >(w) * h * 4u;
+            ModDraw* pDraw = nullptr;
+            Texture* const pSlot = textureSlot(pMod, pWhere, bytes, &pDraw);
+            if (pSlot == nullptr) {
+                delete pTexture;
+                return LUMA_E_LIMIT;
+            }
+            pSlot->texture = pTexture;
+            pSlot->handle = ++sNextHandle;
+            pSlot->mod = pMod;
+            pSlot->pixels = false;
+            pSlot->target = true;
+            pSlot->width = w;
+            pSlot->height = h;
+            pSlot->bytes = bytes;
+            pDraw->textures++;
+            pDraw->textureBytes += bytes;
+            *pOut = pSlot->handle;
+            return LUMA_OK;
+        }
+
+        GameTexture* targetOf(const LumaMod* pMod, LumaHandle handle) {
+            const Texture* const pTexture = textureOf(pMod, handle);
+            return pTexture != nullptr && pTexture->target ? pTexture->texture : nullptr;
+        }
+
+        void dropTarget(const LumaMod* pMod, LumaHandle handle) {
+            Texture* const pTexture = textureOf(pMod, handle);
+            if (pTexture != nullptr && pTexture->target) {
+                freeTexture(*pTexture);
+            }
         }
 
         const LumaServiceProvider* provider() {

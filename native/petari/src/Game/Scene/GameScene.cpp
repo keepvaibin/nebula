@@ -84,6 +84,7 @@
 #include "Game/System/NebulaHost.hpp"
 #include "Game/System/LumaDraw.hpp"
 #include "Game/System/LumaDrawInst.hpp"
+#include "Game/System/LumaDrawView.hpp"
 
 namespace {
     CometRetryButton* getCometRetryButton() {
@@ -520,6 +521,7 @@ void GameScene::draw3D() const {
         return;
     }
 
+    luma::draw::view::render();  // the mods' views (draw.view) into their textures, before the scene (one load with none)
     f32 sceneCamera[4][4];
     MotionSignal::sceneCamera(sceneCamera);
     NebulaHost::gameStage(MR::getCurrentStageName());
