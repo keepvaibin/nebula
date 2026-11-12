@@ -958,9 +958,15 @@ fn cook_plan_inner(plan: &Path, output: &Path, facts: &mut Vec<Fact>) -> Result<
     for (name, text) in super::programs::HEADERS {
         fs::write(sources.join(name), text)?;
     }
+    // flags.tsv: each text's program_table flags and coordinates (programs::text_flags), which the game's table has no row for.
+    let mut flags = String::new();
     for (name, text) in &texts {
         fs::write(sources.join(name), text)?;
+        let pixel = name.starts_with('p');
+        let coords = if pixel { 0 } else { super::programs::text_coords(text) };
+        flags.push_str(&format!("{}\t{}\t{coords}\n", &name[..name.len() - ".hlsl".len()], super::programs::text_flags(pixel, text)));
     }
+    fs::write(sources.join("flags.tsv"), flags)?;
     Ok((stats, failed))
 }
 

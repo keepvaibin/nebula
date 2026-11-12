@@ -1588,6 +1588,38 @@ pub fn prepare_written_files(files: &[super::PakFile], read: &mut dyn FnMut(&sup
 pub static MOD_TEXTS: std::sync::Mutex<Option<std::collections::BTreeMap<String, String>>> = std::sync::Mutex::new(None);
 pub static MOD_WRITTEN: std::sync::Mutex<Option<std::collections::BTreeMap<String, String>>> = std::sync::Mutex::new(None);
 
+/// program_table.cpp's flags of a program, as tools/dev/compile_programs.py derives them for the game's own: 1 a vertex
+/// program reads world_ values, 2 a pixel program is lit (includes program_lit.hlsli), 4 it sums the key light (light 0)
+/// itself. The game reads them for a mod's programs from `flags.tsv` beside their texts (cook_plan).
+pub const FLAG_READS_WORLD: u32 = 1;
+pub const FLAG_LIT: u32 = 2;
+pub const FLAG_SUMS_KEY: u32 = 4;
+
+pub fn text_flags(pixel: bool, text: &str) -> u32 {
+    if !pixel {
+        return if text.contains("world_") { FLAG_READS_WORLD } else { 0 };
+    }
+    let lit = if text.contains("program_lit.hlsli") { FLAG_LIT } else { 0 };
+    let keyed = ["light_term(i.lit_light, 0u", "enh_add_light(i.lit_light, 0u", "pbr_add_light(i.lit_light, 0u"].iter().any(|w| text.contains(w))
+        && !text.contains("TRACED_UNKEYED;");
+    let written_lit = text.lines().any(|line| {
+        let words: Vec<&str> = line.trim_start().trim_start_matches('#').split_whitespace().collect();
+        line.trim_start().starts_with('#') && words.len() >= 3 && words[0] == "define" && words[1] == "NATIVE_LIT" && words[2] == "1"
+    });
+    lit | if keyed || written_lit { FLAG_SUMS_KEY } else { 0 }
+}
+
+/// The texture coordinates a vertex text reads, by its `#define NATIVE_COORDS n`; 0 for a generated one.
+pub fn text_coords(text: &str) -> u32 {
+    text.lines()
+        .find_map(|line| {
+            let t = line.trim_start();
+            let words: Vec<&str> = t.trim_start_matches('#').split_whitespace().collect();
+            (t.starts_with('#') && words.len() >= 3 && words[0] == "define" && words[1] == "NATIVE_COORDS").then(|| words[2].parse().ok()).flatten()
+        })
+        .unwrap_or(0)
+}
+
 /// A form's texts as the file will name them: a mod's own pixel program in place of the plain form's, each text noted for a
 /// mod's conversion.
 pub fn finish_text(material: &str, form: Form, t: &mut Text) {

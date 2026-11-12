@@ -329,6 +329,30 @@ fn a_shader_compiles_or_names_its_line() {
     assert!(args.contains(&("line", "5".to_string())), "{args:?}");
 }
 
+/// program_table's flags for a mod's texts (flags.tsv): the stripes cube's plain pixel program is lit and sums the key
+/// light through pbr_add_light; a vertex text reads the world by its world_ values; a written program by NATIVE_LIT and
+/// NATIVE_COORDS.
+#[test]
+fn a_mod_programs_flags_are_the_tables() {
+    use crate::cook::programs::{finish_text, forms_of, generate, text_coords, text_flags, Registers, FLAG_LIT, FLAG_READS_WORLD, FLAG_SUMS_KEY};
+    let (_dir, folder) = shader_mod(&stripes_json(), STRIPES);
+    let doc = shader_document(serde_json::json!({"shader": "shaders/Stripes", "textures": {"paint": 0}}));
+    let (ir, _, _) = crate::cook::gltf::to_ir_for(&serde_json::to_vec(&doc).unwrap(), Some(&folder), None).unwrap();
+    let m = &ir.materials[0];
+    let form = forms_of("Cube", m, 0).unwrap()[0];
+    let mut t = generate(m, form, false, &Registers::of(m)).unwrap();
+    finish_text(&m.name, form, &mut t);
+    assert!(t.pixel.contains("pbr_add_light(i.lit_light, 0u"));
+    assert_eq!(text_flags(true, &t.pixel), FLAG_LIT | FLAG_SUMS_KEY);
+    assert_eq!(text_flags(false, &t.vertex) & !FLAG_READS_WORLD, 0);
+    assert_eq!(text_flags(false, "float3 p = world_pos;"), FLAG_READS_WORLD);
+    assert_eq!(text_flags(false, "float3 p = pos;"), 0);
+    assert_eq!(text_flags(true, "#include \"program_lit.hlsli\"\n  # define NATIVE_LIT 1\n"), FLAG_LIT | FLAG_SUMS_KEY);
+    assert_eq!(text_flags(true, "#include \"program_lit.hlsli\"\nx = light_term(i.lit_light, 0u, 1u);\nTRACED_UNKEYED;\n"), FLAG_LIT);
+    assert_eq!(text_coords("#define NATIVE_COORDS 2\n"), 2);
+    assert_eq!(text_coords(&t.vertex), 0);
+}
+
 /// Every form's texts of the stripes cube, for a compile on both back ends (agents/luma/g/tools/surface-dxc.sh):
 /// NEBULA_SURFACE_DUMP=<folder> cargo test -p nebula-import --lib -- --ignored dump_the_surface_shader
 #[test]

@@ -159,7 +159,7 @@ def main():
                 continue
             add(stage, row, source, text, entry, defines, index, False)
         flags[(stage, row)] = (LIT if "program_lit.hlsli" in text else 0) | (
-            SUMS_KEY if (re.search(r"(light_term|enh_add_light)\(i\.lit_light, 0u", text) and "TRACED_UNKEYED;" not in text)
+            SUMS_KEY if (re.search(r"(light_term|enh_add_light|pbr_add_light)\(i\.lit_light, 0u", text) and "TRACED_UNKEYED;" not in text)
             or WRITTEN_LIT.search(text) else 0)
 
     for number, name in enumerate(WRITTEN, 1):
