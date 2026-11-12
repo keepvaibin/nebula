@@ -67,6 +67,17 @@
     "fx.refusals": "content.fx refuses a null, dead or wrong actor, an empty name, a null out, a short LumaPlace, a bad scale and unknown handles, each reported, nothing written (3.5)",
     "fx.place": "content.fx places an effect by offset and turn, left where it started, tinted by scale and colour (3.5)",
     "fx.alive": "The harness's fx.alive facts follow a handle for its first frames only (3.5)",
-    "fx.nocost": "With no mod nothing of content.fx runs: no fx facts (3.5)"
+    "fx.nocost": "With no mod nothing of content.fx runs: no fx facts (3.5)",
+    "model.attach": "content.model attaches a game model to an actor, drawn as the game draws its own (3.2)",
+    "model.joint_follow": "An attached model follows one joint of its actor every frame (3.2)",
+    "model.missing": "A model in no store: the placeholder model, LUMA_OK, Content.MissingModel counted (3.2)",
+    "model.missing_joint": "A joint the actor lacks: the base, LUMA_OK, Content.MissingJoint once (3.2)",
+    "model.refusals": "content.model's refusals answer their status and write no handle (3.2)",
+    "model.skeleton_follow": "An attached model's joints take the actor's joints of their names every frame (3.2)",
+    "model.place": "An attached model is placed by offset and turn from what it follows (3.2)",
+    "model.show": "An attached model is hidden and shown by the mod (3.2)",
+    "model.detach": "detach ends the handle; an ended handle answers LUMA_E_HANDLE (3.2)",
+    "model.reuse": "A detached model's part is used again for the same actor, model and follow (3.2)",
+    "model.player_parts": "content.model lists the player's parts and the joints they are drawn at (3.2)"
   }
 }
