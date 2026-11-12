@@ -218,6 +218,38 @@ uint rt_gather(float3 origin, float3 direction, out uint item, out uint triangle
     return rt_closest(origin, direction, kDomeReach, kMaskSky, item, triangle_, where_, far_) ? 1u : 0u;
 }
 
+// The water a gathered ray crosses within `reach` (A4 W4; FB b78): sheets within kWaterLayer are one layer (b58b),
+// absorbed by the way under water (kWaterAbsorb, the stage's clear: b58c), 1 - F head on once. Two layers or more:
+// the ray crosses a body, the way between the outer two; one: it starts under it going up (the player's up: out, the
+// way to it) or ends under it going down (from the bank to the bed, the way past it). 1 where it meets no water.
+float3 rt_water_way(float3 origin, float3 dir, float reach) {
+    RayDesc ray;
+    ray.Origin = origin;
+    ray.Direction = dir;
+    ray.TMin = 0.0f;
+    ray.TMax = reach;
+    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE> query;
+    query.TraceRayInline(g_scene, RAY_FLAG_FORCE_NON_OPAQUE, kMaskBlended, ray);
+    uint waters = 0u;
+    float nearest = 3.0e38f, farthest = 0.0f;
+    while (query.Proceed()) {
+        if ((g_items.Load(g_at.x + query.CandidateInstanceID() * kItemBytes + 44u) & 255u) != kClassWater) {
+            continue;
+        }
+        const float t = query.CandidateTriangleRayT();
+        if (waters == 0u || (abs(t - nearest) > kWaterLayer && abs(t - farthest) > kWaterLayer)) {
+            ++waters;
+            nearest = min(nearest, t);
+            farthest = max(farthest, t);
+        }
+    }
+    if (waters == 0u) {
+        return float3(1.0f, 1.0f, 1.0f);
+    }
+    const float way = waters >= 2u ? farthest - nearest : (dot(dir, g_up.xyz) > 0.0f ? nearest : max(reach - nearest, 0.0f));
+    return 0.98f * exp(-way / rt_water_clear() * kWaterAbsorb);
+}
+
 // ---- What a hit knows (10.1).
 struct RtHit {
     float3 at, ng, ns;     // place, geometric normal, smooth normal (facing the ray)
@@ -605,7 +637,15 @@ float3 rt_hit_sun(RtHit h, bool disc, float2 u) {
     const float3 toward = disc ? rt_within(g_sun.xyz, g_sun.w, u) : g_sun.xyz;
     const bool thin = (h.item_flags & kItemThin) != 0u;
     const float3 n = thin && dot(h.ng, g_sun.xyz) < 0.0f ? -h.ng : h.ng;
-    return rt_through_of(rt_off(h.at, n), toward, kRtFarAway, 0xFFFFFFFFu, rt_sun_mask((h.item_flags & kItemLit) != 0u));
+    const float3 from = rt_off(h.at, n);
+    float3 v = rt_through_of(from, toward, kRtFarAway, 0xFFFFFFFFu, rt_sun_mask((h.item_flags & kItemLit) != 0u));
+    // What the blended things let through, at High as the sun pass (a hit under water takes the sun through it: A4
+    // W4; FB b78).
+    if (rt_part(kPartSun) >= 3u && any(v > 0.0f)) {
+        float first;
+        v *= let_through(from, toward, kRtFarAway, first);
+    }
+    return v;
 }
 
 float rt_hit_facing(RtHit h) {

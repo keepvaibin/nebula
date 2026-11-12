@@ -229,6 +229,10 @@ void main(uint3 id : SV_DispatchThreadID) {
                 }
             }
         }
+        // High: what the water on the way lets through (A4 W4; FB b78), after the hits' mean is counted.
+        if (mode == kModeHigh) {
+            fresh.light *= rt_water_way(from, dir, met == 2u ? far_ : kIndirectReach);
+        }
         // Cosine sampling: the first weight is the target over the chance, pi * lum(L).
         gi_take(r, fresh, kRtPi * rt_lum(fresh.light), seed);
         r.at = fresh.at;

@@ -72,6 +72,9 @@ float3 ref_ratio(float3 origin, float3 n, inout uint seed) {
         float2 where_;
         float far_;
         const uint met = rt_gather(from, dir, item, triangle_, where_, far_);
+        // What the water on this step lets through (A4 W4; FB b78), as the real-time gather.
+        const float3 water = rt_water_way(from, dir, met == 2u ? far_ : kIndirectReach);
+        through = float3x3(through[0] * water, through[1] * water, through[2] * water);
         if (met == 0u) {
             result += mul(through, float3(1.0f, 1.0f, 1.0f));  // nothing at all: the stage's ambient itself
             break;
