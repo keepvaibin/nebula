@@ -16,6 +16,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <mutex>
 #include <sstream>
 
 #include "galaxy/luma.h"
@@ -525,11 +526,13 @@ std::string check_text(const Check& check) {
     return out;
 }
 
-// The start's check's findings by package, in list order (check_packages; the game's start thread only).
+// The start's check's findings by package, in list order: written by check_packages (the start thread), read by the
+// log and the Mods page (any thread), each under g_start_lock.
 struct StartResult {
     std::string id;
     std::vector<Kept> findings;
 };
+std::mutex g_start_lock;
 std::vector<StartResult> g_start_results;
 
 void add_kept(std::string_view mod, const Kept& k) {
@@ -551,7 +554,10 @@ void add_kept(std::string_view mod, const Kept& k) {
 }  // namespace
 
 void check_packages(const std::vector<StartPackage>& packages, std::string_view program, std::string_view language) {
-    g_start_results.clear();
+    {
+        const std::lock_guard<std::mutex> lock(g_start_lock);
+        g_start_results.clear();
+    }
     if (packages.empty()) return;
     const std::filesystem::path folder = galaxy::mods::mods_folder() / ".cooked" / "validate";
     // luma-format's platform names carry the processor ("windows-x64"), as a package's code does.
@@ -734,19 +740,28 @@ void check_packages(const std::vector<StartPackage>& packages, std::string_view 
         if (!more) break;
         for (std::size_t j = 0; j < placed.size(); ++j) off[j] = !named[j] || refused[j];
     }
+    std::vector<StartResult> results;
     for (std::size_t i = 0; i < placed.size(); ++i) {
-        if (checked[i]) g_start_results.push_back({placed[i].package->id, std::move(verdict_of[i])});
+        if (checked[i]) results.push_back({placed[i].package->id, std::move(verdict_of[i])});
     }
+    const std::lock_guard<std::mutex> lock(g_start_lock);
+    g_start_results = std::move(results);
 }
 
 void add_start_findings() {
     if (g_add.load(std::memory_order_acquire) == nullptr) return;
-    for (const StartResult& result : g_start_results) {
+    std::vector<StartResult> results;
+    {
+        const std::lock_guard<std::mutex> lock(g_start_lock);
+        results = g_start_results;
+    }
+    for (const StartResult& result : results) {
         for (const Kept& k : result.findings) add_kept(result.id, k);
     }
 }
 
 bool package_refused(std::string_view id) {
+    const std::lock_guard<std::mutex> lock(g_start_lock);
     for (const StartResult& result : g_start_results) {
         if (result.id != id) continue;
         for (const Kept& k : result.findings) {
