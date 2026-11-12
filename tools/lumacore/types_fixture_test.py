@@ -1,4 +1,4 @@
-"""types_fixture_test.py --commands COMPILE_COMMANDS [--out DIR]
+"""types_fixture_test.py --commands COMPILE_COMMANDS [--out DIR] [--libclang PATH] [--run-with "PREFIX" --path-map FROM=TO]
 
 Contract types TY-8, on the fixture (tools/lumacore/tests/types_fixture): what the game's headers have too little of
 (a name hidden by a derived class's, one two bases up, ambiguous ones, one through a virtual base, bit-fields through a
@@ -6,10 +6,16 @@ base, an instance only an alias names, anonymous members, globals) through the r
 the real kernel (LumaTypes.cpp) and the real comparison (compare_types.py):
   1. gen_types.py writes the fixture's table and JSON;
   2. the table, the kernel and the driver are compiled with a game unit's flags and run: each answer against the
-     compiler's (offsetof, the bit-field's own access, a guard page for TY-4), then the kernel's description;
+     compiler's (offsetof, the bit-field's own access, a guard page for TY-4; contract objects: the own class,
+     subobjects, virtual calls and overriders against typeid, dynamic_cast and the compiler's own calls), then the
+     kernel's description;
   3. compare_types.py passes on that description, and fails, naming the row, on a copy of the JSON with one offset
-     planted wrong.
+     planted wrong (and on copies with a polymorphic flag and a method row planted wrong: contract objects).
 Exit 0 only when all three hold.
+
+The commands may be another platform's (an Android module's: the driver is linked static for its target). --run-with
+runs the driver under a prefix (`wsl.exe -d docker-desktop -e`: a Linux kernel runs a static Android x86-64 driver, the
+Itanium ABI's answers), with --path-map turning this machine's paths into the prefix's (`D:/=/mnt/host/d/`).
 """
 import json
 import os
@@ -67,7 +73,8 @@ def main():
 
     # 1. the generator
     code, so, se = run([sys.executable, "-X", "utf8", "-B", str(HERE / "gen_types.py"), "--commands", commands,
-                        "--out", str(out), "--tree", str(FIXTURE), "--defined", str(out / "defined")])
+                        "--out", str(out), "--tree", str(FIXTURE), "--defined", str(out / "defined")]
+                       + (["--libclang", option("--libclang")] if option("--libclang") else []))
     print("gen_types:", so.strip() or se.strip()[-2000:])
     if code != 0:
         sys.exit("types_fixture_test.py: the generator failed")
@@ -116,6 +123,9 @@ def main():
         have = None if r is None else tuple(r.get(k) for k in keys)
         if have != want:
             failed.append("TY-10: %s should be %s %s; it is %s" % (n, keys, want, have))
+    # Contract objects: polymorphic through a base that is an instance named only as a base.
+    if not rows.get("FoHolder", {}).get("polymorphic"):
+        failed.append("objects: FoHolder (a base FoGroup<FoB> : FoV) is not said polymorphic")
     missing = [r["name"] for r in data["types"] if r.get("kind") in ("struct", "class", "union")
                and any(k not in r for k in keys)]
     if missing:
@@ -125,26 +135,41 @@ def main():
     entries = json.loads(pathlib.Path(commands).read_text(encoding="utf-8"))
     entry = next(e for e in entries if e["file"].replace("\\", "/").endswith("Game/System/LumaLoader.cpp"))
     raw = entry.get("arguments") or I.split_command(entry["command"])
+    # The flags are a game unit's; the headers are this tree's (the commands may come from another tree's build).
+    built = entry["file"].replace("\\", "/")
+    built = built[:built.rindex("/native/petari/")]
+    here = TREE.as_posix()
+    raw = [a.replace(built, here) for a in raw]
     objects = []
     sources = [(out / "luma_types_table.cpp", ["-Xclang", "-fno-access-control"]),
                (TREE / "native/petari/src/Game/System/LumaTypes.cpp", []),
                (FIXTURE / "types_fixture_driver.cpp", [])]
     compiler = raw[0]
     for source, extra in sources:
-        args = [a for a in I.parse_arguments(raw, source) if a not in ("-fsyntax-only", "-Wno-everything", str(source))]
+        # The module with rows is built with RTTI data (contract objects): the game unit's flags may predate it.
+        args = [a for a in I.parse_arguments(raw, source)
+                if a not in ("-fsyntax-only", "-Wno-everything", "-fno-rtti", str(source))] + ["-frtti"]
         obj = out / (source.stem + ".o")
         args[1:1] = extra + ["-I", str(FIXTURE)]
         code, so, se = run(args + ["-c", str(source), "-o", str(obj)], cwd=entry["directory"])
         if code != 0:
             sys.exit("types_fixture_test.py: %s does not compile:\n%s" % (source.name, se[-3000:]))
         objects.append(str(obj))
-    exe = out / ("types_fixture_driver" + (".exe" if os.name == "nt" else ""))
-    link = [compiler] + objects + ["-o", str(exe)] + (["-fuse-ld=lld"] if os.name == "nt" else [])
+    target = [a for a in raw if a.startswith(("--target=", "--sysroot="))]
+    windows = not target and os.name == "nt"
+    exe = out / ("types_fixture_driver" + (".exe" if windows else ""))
+    link = [compiler] + target + objects + ["-o", str(exe)] + (["-fuse-ld=lld"] if windows else ["-static"] if target else [])
     code, so, se = run(link)
     if code != 0:
         sys.exit("types_fixture_test.py: the driver does not link:\n" + se[-3000:])
     described = out / "luma_types_described.json"
-    code, so, se = run([str(exe), str(described)])
+    prefix = (option("--run-with") or "").split()
+    frm, _, to = (option("--path-map") or "=").partition("=")
+
+    def there(path):
+        text = pathlib.Path(path).as_posix()
+        return to + text[len(frm):] if frm and text.lower().startswith(frm.lower()) else text
+    code, so, se = run(prefix + [there(exe), there(described)] if prefix else [str(exe), str(described)])
     print("driver:", so.strip()[-3000:], se.strip()[-1000:])
     if code != 0:
         failed.append("the driver's checks (exit %d)" % code)
@@ -163,6 +188,17 @@ def main():
     print("compare, planted:", se.strip()[-600:])
     if code == 0 or "field FxMid.y" not in se:
         failed.append("compare_types.py did not name the planted difference (field FxMid.y)")
+    # Contract objects: a record said not polymorphic, and a virtual the module has a row for said to have none.
+    for what, plant, named in (
+            ("polymorphic", lambda t: t["FoB"].update(polymorphic=False), "record FoB: polymorphic"),
+            ("method", lambda t: t["FoD"]["virtuals"][-1].update(row=False), "method FoD::secret s32(s32) const")):
+        planted = json.loads((out / "luma_types.json").read_text(encoding="utf-8"))
+        plant({r["name"]: r for r in planted["types"]})
+        (out / "planted.json").write_text(json.dumps(planted), encoding="utf-8")
+        code, so, se = run(compare + [str(out / "planted.json"), str(described)])
+        print("compare, planted %s:" % what, se.strip()[-400:])
+        if code == 0 or named not in se:
+            failed.append("compare_types.py did not name the planted difference (%s)" % named)
 
     if failed:
         print("types_fixture_test.py: FAILED:\n  " + "\n  ".join(failed))

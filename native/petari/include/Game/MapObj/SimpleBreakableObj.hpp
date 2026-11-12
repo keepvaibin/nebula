@@ -12,8 +12,7 @@ public:
 
     virtual ~SimpleBreakableObjBase() override {
     }
-
-    virtual void control() override;
+    // No control of its own: the game defines none (MapObjActor's), and only SimpleBreakableObj, which has one, is made.
 };
 
 class SimpleBreakableObj : public SimpleBreakableObjBase {

@@ -118,6 +118,15 @@ struct Call {
     store: LumaGameStore,
     installed: Vec<LumaInstalledMod>,
     files: Vec<CString>,
+    /// The types file given; empty: none.
+    types: Vec<u8>,
+    /// The services catalog given; empty: none.
+    services: Vec<u8>,
+    /// The renderer's feature list given; empty: none.
+    renderer: Vec<u8>,
+    /// This device's features; None: not given.
+    device: Option<Vec<CString>>,
+    device_ptrs: Vec<*const c_char>,
 }
 
 impl Call {
@@ -132,9 +141,19 @@ impl Call {
             store: c_store(std::ptr::null_mut()),
             installed: Vec::new(),
             files: Vec::new(),
+            types: Vec::new(),
+            services: Vec::new(),
+            renderer: Vec::new(),
+            device: None,
+            device_ptrs: Vec::new(),
         });
         c.store.context = (&*c.table as *const CTable).cast_mut().cast();
         c
+    }
+    fn set_device(&mut self, features: &[&str]) {
+        let list: Vec<CString> = features.iter().map(|f| CString::new(*f).unwrap()).collect();
+        self.device_ptrs = list.iter().map(|c| c.as_ptr()).collect();
+        self.device = Some(list);
     }
     fn input(&self, kept: Option<&[u8]>) -> LumaValidateInput {
         LumaValidateInput {
@@ -148,8 +167,8 @@ impl Call {
             names: ROWS.as_ptr().cast(),
             names_size: ROWS.len() as u64,
             luma_api: 1,
-            permissions: null(),
-            permission_count: 0,
+            services: if self.services.is_empty() { null() } else { self.services.as_ptr().cast() },
+            services_size: self.services.len() as u64,
             store: &self.store,
             store_key: self.store_key.as_ptr(),
             installed: self.installed.as_ptr(),
@@ -159,6 +178,12 @@ impl Call {
             option_count: 0,
             kept: kept.map_or(null(), |k| k.as_ptr()),
             kept_size: kept.map_or(0, |k| k.len() as u64),
+            types: if self.types.is_empty() { null() } else { self.types.as_ptr().cast() },
+            types_size: self.types.len() as u64,
+            renderer: if self.renderer.is_empty() { null() } else { self.renderer.as_ptr().cast() },
+            renderer_size: self.renderer.len() as u64,
+            device_features: if self.device.is_some() { self.device_ptrs.as_ptr() } else { null() },
+            device_feature_count: self.device_ptrs.len() as u32,
         }
     }
 }
@@ -202,7 +227,7 @@ fn c_call(input: Option<&LumaValidateInput>) -> Got {
 fn rust_call(path: &std::path::Path, platform: &str) -> Vec<(u32, u32, Option<String>, String, u32, u32, Option<String>, String, String)> {
     let mut names = Names { api: 1, ..Names::default() };
     names.add_rows(ROWS).unwrap();
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: Some(&names), store: Some(&RustStore) };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: Some(&names), store: Some(&RustStore) };
     let platforms = [platform];
     let r = validate(&Input { source: Source::File(path), game: Some(&game), installed: &[], platforms: &platforms, options: None, position: None });
     r.findings
@@ -336,6 +361,24 @@ fn a_faulty_input_is_refused_with_its_reason() {
     i.installed = installed.as_ptr();
     i.installed_count = 1;
     refused(Some(&i), "installed[0] x.luma");
+    // A types file that does not read names where; one given without names is the caller's fault.
+    let mut typed = Call::new(&path, "windows-x64");
+    typed.types = br#"{"types": [], "globals": [], "left_out": [{"kind": "nerve", "name": "x", "file": "a.hpp", "line": 1, "reason": "r"}]}"#.to_vec();
+    refused(Some(&typed.input(None)), "types: left_out[0].kind");
+    typed.types = b"{".to_vec();
+    refused(Some(&typed.input(None)), "types: line 1");
+    let mut i = typed.input(None);
+    i.names = null();
+    refused(Some(&i), "types given without names");
+
+    // A types file is part of what identifies the game: a kept report made without it checks every rule again.
+    let mut typed = Call::new(&path, "windows-x64");
+    typed.types = br#"{"types": [], "globals": [], "left_out": []}"#.to_vec();
+    let with_types = c_call(Some(&typed.input(None)));
+    assert_eq!(with_types.state, 0, "{:?}", with_types.invalid);
+    let without = c_call(Some(&call.input(None)));
+    assert_eq!(c_call(Some(&typed.input(Some(&with_types.kept)))).state, 1);
+    assert_eq!(c_call(Some(&typed.input(Some(&without.kept)))).state, 0);
 
     // A kept report that does not read is not a fault: every rule runs.
     let got = c_call(Some(&call.input(Some(junk))));
@@ -356,11 +399,12 @@ fn the_layout_is_the_header_s() {
     assert_eq!((size_of::<LumaGameStore>(), offset_of!(LumaGameStore, context), offset_of!(LumaGameStore, folder)), (40, 8, 32));
     assert_eq!(size_of::<LumaInstalledMod>(), 32);
     assert_eq!(size_of::<LumaOption>(), 16);
-    assert_eq!(size_of::<LumaValidateInput>(), 160);
+    assert_eq!(size_of::<LumaValidateInput>(), 208);
     assert_eq!(
         (offset_of!(LumaValidateInput, names_size), offset_of!(LumaValidateInput, store), offset_of!(LumaValidateInput, position), offset_of!(LumaValidateInput, kept_size)),
         (64, 96, 124, 152)
     );
+    assert_eq!((offset_of!(LumaValidateInput, types_size), offset_of!(LumaValidateInput, renderer_size), offset_of!(LumaValidateInput, device_feature_count)), (168, 184, 200));
     assert_eq!((size_of::<LumaFinding>(), offset_of!(LumaFinding, text)), (48, 40));
 }
 
@@ -414,4 +458,173 @@ fn a_refusal_is_said_from_its_code_and_parameters_in_every_language() {
     let none = unsafe { CStr::from_ptr(luma_validate_message(402, nulls.as_ptr(), nulls.as_ptr(), 2, null())) };
     assert!(!none.to_bytes().is_empty());
     assert!(!unsafe { luma_validate_reason(402, null(), null(), 3, null()) }.is_null());
+}
+
+#[test]
+fn the_required_services_are_read_per_platform_and_after_a_start_s_check() {
+    // pe-x64/service.dll imports net 1.0 without LUMA_OPTIONAL (luma-validate's tests/data/lib.c, SERVICE).
+    let dir = tempfile::tempdir().unwrap();
+    let bytes = luma(&[("code", r#"{"platforms": ["windows-x64"]}"#)], &[file("code/windows-x64/mod.dll", &fixture("pe-x64/service.dll"))]);
+    let path = write(dir.path(), "s.luma", &bytes);
+    let mut call = Call::new(&path, "windows-x64");
+    call.services = br#"{"services": [{"name": "net", "major": 1, "minor": 0, "permission": null}]}"#.to_vec();
+    let required = |input: &LumaValidateInput, platform: &str| unsafe {
+        let r = luma_validate(input);
+        assert_eq!(luma_report_errors(r), 0);
+        let p = CString::new(platform).unwrap();
+        let mut out = Vec::new();
+        for i in 0.. {
+            let name = luma_report_required_service(r, p.as_ptr(), i);
+            if name.is_null() {
+                break;
+            }
+            out.push(CStr::from_ptr(name).to_str().unwrap().to_string());
+        }
+        assert!(luma_report_required_service(r, null(), 0).is_null());
+        assert!(luma_report_required_service(null(), p.as_ptr(), 0).is_null());
+        luma_report_free(r);
+        out
+    };
+    assert_eq!(required(&call.input(None), "windows-x64"), vec!["net".to_string()]);
+    assert_eq!(required(&call.input(None), "linux-x64"), Vec::<String>::new());
+    // The start's check takes the kept report and gives the same.
+    let full = c_call(Some(&call.input(None)));
+    assert_eq!(c_call(Some(&call.input(Some(&full.kept)))).state, 1);
+    assert_eq!(required(&call.input(Some(&full.kept)), "windows-x64"), vec!["net".to_string()]);
+    // The catalog identifies the game: a kept report made against another one checks every rule again.
+    let mut other = Call::new(&path, "windows-x64");
+    other.services = br#"{"services": [{"name": "net", "major": 1, "minor": 1, "permission": null}]}"#.to_vec();
+    assert_eq!(c_call(Some(&other.input(Some(&full.kept)))).state, 0);
+    // A catalog not in registry 9's form is the caller's fault, said; one without names likewise.
+    other.services = br#"{"services": [{"name": "Net", "major": 1, "minor": 0, "permission": null}]}"#.to_vec();
+    let got = c_call(Some(&other.input(None)));
+    assert_eq!(got.state, -1);
+    assert!(got.invalid.unwrap().contains("services: services[0].name"));
+    let mut i = call.input(None);
+    i.names = null();
+    let got = c_call(Some(&i));
+    assert!(got.invalid.unwrap().contains("services given without names"));
+}
+
+/// luma-format revision 4 through the C input: the renderer's list and the device's features give L806 (an error, the
+/// mod off), both are part of the game's key, and a list or device name not in form is the caller's fault.
+#[test]
+fn renderer_features_and_the_device_s_reach_l806() {
+    let dir = tempfile::tempdir().unwrap();
+    let bytes = luma(&[("renderer", r#"{"features": ["ray_tracing"]}"#)], &[]);
+    let path = write(dir.path(), "r.luma", &bytes);
+    let mut call = Call::new(&path, "windows-x64");
+    call.renderer = br#"{"renderer": {"features": ["mesh_shaders", "ray_tracing"]}}"#.to_vec();
+    call.set_device(&["mesh_shaders"]);
+    let got = c_call(Some(&call.input(None)));
+    assert_eq!(got.state, 0);
+    assert_eq!(got.errors, 1);
+    let f = &got.findings[0];
+    assert_eq!((f.0, f.1, f.3.as_str(), f.6.as_deref()), (806, 0, "luma.json", Some("/renderer/features/0")));
+    assert_eq!(f.7, "test.mod needs ray_tracing, which this device's graphics do not have.");
+    // A device that has it: nothing. The device is not part of the game's key (F's AR-1): another GPU takes the kept
+    // report (state 1) and L806 is said from the manifest's rules, which run at every start.
+    let mut has = Call::new(&path, "windows-x64");
+    has.renderer = call.renderer.clone();
+    has.set_device(&["ray_tracing", "mesh_shaders", "ray_tracing"]);
+    let full = c_call(Some(&has.input(None)));
+    assert_eq!((full.state, full.findings.len()), (0, 0));
+    assert_eq!(c_call(Some(&has.input(Some(&full.kept)))).state, 1);
+    let again = c_call(Some(&call.input(Some(&full.kept))));
+    assert_eq!((again.state, again.findings.iter().map(|f| f.0).collect::<Vec<_>>()), (1, vec![806]));
+    // The list too.
+    let mut other = Call::new(&path, "windows-x64");
+    other.renderer = br#"{"renderer": {"features": ["ray_tracing"]}}"#.to_vec();
+    other.set_device(&["ray_tracing", "mesh_shaders"]);
+    assert_eq!(c_call(Some(&other.input(Some(&full.kept)))).state, 0);
+    // Not given: not checked, no finding.
+    let none = Call::new(&path, "windows-x64");
+    assert_eq!(c_call(Some(&none.input(None))).findings.len(), 0);
+    // The caller's faults, said.
+    let mut bad = Call::new(&path, "windows-x64");
+    bad.renderer = br#"{"renderer": {"features": ["b", "a"]}}"#.to_vec();
+    assert!(c_call(Some(&bad.input(None))).invalid.unwrap().contains("renderer: renderer.features[1]"));
+    let mut bad = Call::new(&path, "windows-x64");
+    bad.set_device(&["Ray Tracing"]);
+    assert!(c_call(Some(&bad.input(None))).invalid.unwrap().contains("device_features[0] \"Ray Tracing\" is not a feature name"));
+    let mut i = call.input(None);
+    i.names = null();
+    i.services = null();
+    assert!(c_call(Some(&i)).invalid.unwrap().contains("renderer given without names"));
+    let mut nulls = Call::new(&path, "windows-x64");
+    nulls.set_device(&["ray_tracing"]);
+    nulls.device_ptrs[0] = null();
+    assert!(c_call(Some(&nulls.input(None))).invalid.unwrap().contains("device_features[0] is null"));
+}
+
+/// start-check F-S2 and references 3: luma_report_read_kept reads a kept report with no rule run (state 2; id,
+/// version, required services and after-start rows answer; count 0, kept null); bytes that do not read are -1 with
+/// why. luma_report_after_start gives the rows on either kind of report.
+#[test]
+fn a_kept_report_is_read_without_a_check_and_gives_its_facts() {
+    let dir = tempfile::tempdir().unwrap();
+    let bytes = luma(&[("code", r#"{"platforms": ["windows-x64"]}"#)], &[file("code/windows-x64/mod.dll", &fixture("pe-x64/service.dll"))]);
+    let path = write(dir.path(), "s.luma", &bytes);
+    let mut call = Call::new(&path, "windows-x64");
+    call.services = br#"{"services": [{"name": "net", "major": 1, "minor": 0, "permission": null}]}"#.to_vec();
+    let full = c_call(Some(&call.input(None)));
+    let rows = |r: *const LumaReport| unsafe {
+        let mut out = Vec::new();
+        for i in 0.. {
+            let (mut class, mut file, mut line) = (null(), null(), 0u32);
+            if luma_report_after_start(r, i, &mut class, &mut file, &mut line) == 0 {
+                break;
+            }
+            out.push((CStr::from_ptr(class).to_str().unwrap().to_string(), CStr::from_ptr(file).to_str().unwrap().to_string(), line));
+        }
+        out
+    };
+    unsafe {
+        let r = luma_report_read_kept(full.kept.as_ptr(), full.kept.len() as u64);
+        assert_eq!(luma_report_state(r), 2);
+        assert!(luma_report_invalid(r).is_null());
+        assert_eq!(s(luma_report_id(r)).as_deref(), Some("test.mod"));
+        assert_eq!(s(luma_report_version(r)).as_deref(), Some("1.0.0"));
+        let p = CString::new("windows-x64").unwrap();
+        assert_eq!(s(luma_report_required_service(r, p.as_ptr(), 0)).as_deref(), Some("net"));
+        assert!(luma_report_required_service(r, p.as_ptr(), 1).is_null());
+        assert_eq!((luma_report_count(r), luma_report_errors(r), luma_report_not_checked_count(r)), (0, 0, 0));
+        let mut size = 7u64;
+        assert!(luma_report_kept(r, &mut size).is_null());
+        assert!(luma_report_at(r, 0, null()).is_null());
+        assert!(rows(r).is_empty());
+        luma_report_free(r);
+
+        // After-start rows, as the placement rules write them into the kept report's touches.
+        let mut saved = luma_validate::Saved::parse(&full.kept).unwrap();
+        saved.touches.after_start = vec!["MyMod::Lamp\u{1f}layers/a/stage.json\u{1f}12".into(), "Other\u{1f}layers/b/x.json\u{1f}3".into()];
+        let kept = saved.to_bytes();
+        let r = luma_report_read_kept(kept.as_ptr(), kept.len() as u64);
+        assert_eq!(rows(r), vec![("MyMod::Lamp".to_string(), "layers/a/stage.json".to_string(), 12), ("Other".to_string(), "layers/b/x.json".to_string(), 3)]);
+        // Null outputs are skipped; null report and an index past the last give 0.
+        assert_eq!(luma_report_after_start(r, 1, std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut()), 1);
+        assert_eq!(luma_report_after_start(r, 2, std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut()), 0);
+        assert_eq!(luma_report_after_start(null(), 0, std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut()), 0);
+        luma_report_free(r);
+        // The same rows from luma_validate's report at a start that takes those kept bytes.
+        let r = luma_validate(&call.input(Some(&kept)));
+        assert_eq!(luma_report_state(r), 1);
+        assert_eq!(rows(r).len(), 2);
+        luma_report_free(r);
+
+        // Bytes that do not read: changed, cut short, empty, null.
+        let mut changed = full.kept.clone();
+        let at = changed.len() / 2;
+        changed[at] ^= 1;
+        for (bytes, why) in [(&changed[..], "does not read"), (&full.kept[..full.kept.len() - 3], "does not read"), (&[][..], "does not read")] {
+            let r = luma_report_read_kept(bytes.as_ptr(), bytes.len() as u64);
+            assert_eq!(luma_report_state(r), -1);
+            assert!(s(luma_report_invalid(r)).unwrap().contains(why));
+            assert!(luma_report_id(r).is_null());
+            luma_report_free(r);
+        }
+        let r = luma_report_read_kept(null(), 0);
+        assert_eq!((luma_report_state(r), s(luma_report_invalid(r)).as_deref()), (-1, Some("kept is null")));
+        luma_report_free(r);
+    }
 }

@@ -194,8 +194,10 @@ target_compile_options(smg_game PRIVATE
     "SHELL:-include nebula_prelude.h"
     # Source paths in the module (assertion messages) relative to the tree, not the build machine.
     "-ffile-prefix-map=${petari}=petari" "-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=native"
-    $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti -fno-exceptions -fno-c++-static-destructors -fno-sized-deallocation -fno-aligned-allocation
->
+    $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions -fno-c++-static-destructors -fno-sized-deallocation -fno-aligned-allocation>
+    # The module with rows carries RTTI data, so the kernel finds an object's own class from its vtable (contract objects,
+    # plan 1.3); the game never uses typeid on an object or dynamic_cast. The module without rows has none.
+    $<$<COMPILE_LANGUAGE:CXX>:$<IF:$<BOOL:${NEBULA_LUMA_HOOKS}>,-frtti,-fno-rtti>>
     # Every new-expression tests the allocation before constructing: the arenas' operator new returns null when the
     # system has no memory left, and the game checks. Standard C++ lets the compiler drop those checks for an operator new that
     # is not noexcept, which would run a constructor on null.
@@ -224,6 +226,12 @@ elseif(APPLE)
         -Wl,-unexported_symbol,__ZT?St* -Wl,-unexported_symbol,__ZT?NSt* -Wl,-unexported_symbol,___cxa* -Wl,-unexported_symbol,___gxx*)
 else()
     target_link_options(smg_game PRIVATE -Wl,-Bsymbolic -Wl,-z,now)
+    # A symbol the module names and nothing defines (a class's type_info whose key function has no body: contract
+    # objects M-2) fails the link here, as the NDK's own flags make it fail on Android, never the game's start. A
+    # sanitizer's runtime is the executable's, so its build leaves them to the loader.
+    if(NOT ANDROID AND NOT NEBULA_SANITIZE)
+        target_link_options(smg_game PRIVATE -Wl,--no-undefined)
+    endif()
     if(NOT ANDROID)  # Android's C library holds the threads
         target_link_libraries(smg_game PRIVATE pthread)
     endif()

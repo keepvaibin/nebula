@@ -18,8 +18,9 @@ public:
     AreaForm() : mFollowMtx() {
     }
 
-    virtual void init(const TableIter&);
-    virtual bool isInVolume(const Vec3f&) const;
+    // Each form defines both; the game has no body for the base's, and no AreaForm of its own is made.
+    virtual void init(const TableIter&) = 0;
+    virtual bool isInVolume(const Vec3f&) const = 0;
 
     Pos3f* mFollowMtx;
 };

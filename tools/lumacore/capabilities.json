@@ -18,6 +18,15 @@
     "kernel.unhook": "Hooks added and taken out while the game runs: a call already running keeps its hooks (1.1)",
     "kernel.threads": "A hook runs on its caller's thread and knows whether it is the game thread; hook and unhook only from the game thread (1.1)",
     "kernel.released": "A mod's handles to objects are emptied when their memory goes (lumacore::released) (1.1)",
-    "kernel.cxx": "A mod written in C++: globals built before start in order, new and delete on the mod's memory, destructors at its end (1.1)"
+    "kernel.cxx": "A mod written in C++: globals built before start in order, new and delete on the mod's memory, destructors at its end (1.1)",
+    "kernel.bind.method": "A virtual is bound by name and signature as one function that runs the object's own class's override (kind 8, LUMA_METHOD; 1.3)",
+    "kernel.objects.own_class": "A mod asks any game object its own class: the class's number, from the object's run-time type (1.3)",
+    "kernel.objects.number": "A class's number is the same in the module, the types file and class_of: the record's index among the records sorted by name (1.3)",
+    "kernel.objects.as_class": "A mod turns an object pointer into a pointer to any of its classes, bases included, or null when it is not one (1.3)",
+    "kernel.objects.is_a": "A mod asks whether an object is of a class, its own or a base (1.3)",
+    "kernel.objects.method": "A mod finds a virtual by name and signature and calls it on any object, the object's own override running with its hooks (1.3)",
+    "kernel.objects.overrider": "A mod asks which function overrides a virtual for an object, as that function's row (1.3)",
+    "kernel.objects.call_method": "A mod calls a virtual on an object by name and signature in one call, the object adjusted to the declaring class (1.3)",
+    "kernel.objects.unit": "Classes a .cpp file defines (nerves, screens) have numbers and answer as the headers' classes do (1.3)"
   }
 }

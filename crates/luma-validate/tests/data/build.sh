@@ -17,7 +17,7 @@ mkdir -p pe-x64 pe-arm64 elf-x64 elf-arm64 elf-x64-relr macho-arm64 macho-arm64-
 
 common="-O2 -nostdlib -ffreestanding -fno-stack-protector -fvisibility=hidden -Wall -Wextra -Werror -I $inc"
 win="-fuse-ld=lld -Wl,/NOENTRY -Wl,/Brepro"
-variants="GOOD MISSING WRONG_SIGNATURE OPTIONAL_MISSING CONSTRUCTOR_WRAP CONSTRUCTOR_AFTER REPLACE BAD_ROW NEWER SHORT_INFO NO_IMPORTS NO_EXPORT SERVICE SERVICE_BAD MOD_FUNCTION MOD_FUNCTION_BAD"
+variants="GOOD MISSING WRONG_SIGNATURE NO_SIGNATURE OPTIONAL_MISSING CONSTRUCTOR_WRAP CONSTRUCTOR_AFTER REPLACE BAD_ROW NEWER SHORT_INFO NO_IMPORTS NO_EXPORT SERVICE SERVICE_BAD SERVICE_MORE MOD_FUNCTION MOD_FUNCTION_BAD METHOD METHOD_BAD"
 lower() { echo "$1" | tr 'A-Z' 'a-z'; }
 
 # Windows x64: every variant, an extra library pair, and a program.

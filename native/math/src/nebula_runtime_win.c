@@ -2,6 +2,10 @@
    page would need a stack probe, which is not here: the link fails on one. */
 int _fltused = 1;
 
+/* RTTI data (the module with rows, contract objects): each class's type descriptor starts with type_info's vtable, which
+   the C++ runtime would define. Nothing calls through it: the kernel compares the descriptors' addresses. */
+const void* const nebula_type_info_vtable[1] __asm__("??_7type_info@@6B@") = {0};
+
 void _purecall(void) {
     __builtin_trap();
 }

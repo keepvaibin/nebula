@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <typeinfo>
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -28,6 +29,10 @@ extern "C" void nebula_panic(const char* file, int line, const char* format, ...
     std::vfprintf(stderr, format, args);
     va_end(args);
     std::exit(3);
+}
+// The hook runner's ask marker (LumaHook.cpp): a method row's invoke answers its result's kind when given it.
+namespace luma {
+    void* kAskKind[1] = {nullptr};
 }
 extern "C" int nebula_vsnprintf(char* pDst, size_t length, const char* pFormat, va_list args) {
     return std::vsnprintf(pDst, length, pFormat, args);
@@ -233,6 +238,171 @@ int main(int argc, char** argv) {
                                                                       : pRow->what != nullptr && std::strcmp(pRow->what, w.what) == 0);
             check(ok, what);
         }
+    }
+    // Contract objects: the own class and the subobjects, against the compiler's typeid and dynamic_cast (this driver
+    // has the C++ runtime; the module never calls it).
+    {
+        struct DriverOnly : FoD {};  // a class with no row: the kernel names its type_info, no row
+        static FoD d;
+        static FoC c;
+        static FoAmb amb;
+        static DriverOnly only;
+        const luma::TypeRow* const pA = luma::findType("FoA");
+        const luma::TypeRow* const pB = luma::findType("FoB");
+        const luma::TypeRow* const pC = luma::findType("FoC");
+        const luma::TypeRow* const pD = luma::findType("FoD");
+        check(pA && pB && pC && pD && pA->typeInfo == &typeid(FoA) && pD->typeInfo == &typeid(FoD),
+              "FoA to FoD have rows with their type_info");
+        check(luma::findType("FxBase") != nullptr && luma::findType("FxBase")->typeInfo == nullptr,
+              "a record with no vtable has no type_info");
+        struct Case {
+            const void* object;            // as some polymorphic base
+            const void* complete;          // the whole object: dynamic_cast<const void*>
+            const std::type_info* own;     // the compiler's typeid of the object, through that base
+            const luma::TypeRow* row;
+            const char* what;
+        };
+        const Case cases[] = {
+            {static_cast<FoA*>(&d), dynamic_cast<const void*>(static_cast<FoA*>(&d)), &typeid(*static_cast<FoA*>(&d)), pD,
+             "FoD seen as FoA"},
+            {static_cast<FoB*>(&d), dynamic_cast<const void*>(static_cast<FoB*>(&d)), &typeid(*static_cast<FoB*>(&d)), pD,
+             "FoD seen as FoB (a secondary base)"},
+            {static_cast<FoB*>(&c), dynamic_cast<const void*>(static_cast<FoB*>(&c)), &typeid(*static_cast<FoB*>(&c)), pC,
+             "FoC seen as FoB"},
+            {static_cast<FoA*>(&c), dynamic_cast<const void*>(static_cast<FoA*>(&c)), &typeid(*static_cast<FoA*>(&c)), pC,
+             "FoC seen as FoA"},
+            {static_cast<FoB*>(&only), dynamic_cast<const void*>(static_cast<FoB*>(&only)), &typeid(*static_cast<FoB*>(&only)),
+             nullptr, "a class with no row, seen as FoB"},
+        };
+        check(cases[1].own == &typeid(FoD) && cases[1].complete == &d && cases[4].own == &typeid(DriverOnly),
+              "the compiler's own answers are the cases' (FoD's, DriverOnly's)");
+        for (const Case& k : cases) {
+            const luma::OwnClass own = luma::ownClass(k.object);
+            char what[256];
+            std::snprintf(what, sizeof(what), "ownClass of %s: row %s, type_info %s, whole object %s", k.what,
+                          own.type ? own.type->name : "(none)", own.typeInfo == k.own ? "right" : "wrong",
+                          own.complete == k.complete ? "right" : "wrong");
+            check(own.type == k.row && own.typeInfo == k.own && own.complete == k.complete, what);
+        }
+        bool ambiguous = true;
+        const void* p = luma::asClass(static_cast<FoB*>(&d), pA, &ambiguous);
+        check(p == dynamic_cast<FoA*>(static_cast<FoB*>(&d)) && !ambiguous, "asClass FoD from FoB to FoA is dynamic_cast's");
+        p = luma::asClass(static_cast<FoA*>(&d), pB, &ambiguous);
+        check(p == dynamic_cast<FoB*>(static_cast<FoA*>(&d)) && !ambiguous, "asClass FoD from FoA to FoB is dynamic_cast's");
+        p = luma::asClass(static_cast<FoA*>(&d), pD, &ambiguous);
+        check(p == &d && !ambiguous, "asClass FoD to its own class");
+        p = luma::asClass(static_cast<FoA*>(&c), pD, &ambiguous);
+        check(p == nullptr && !ambiguous && dynamic_cast<FoD*>(static_cast<FoA*>(&c)) == nullptr,
+              "asClass FoC to FoD is null, as dynamic_cast's");
+        p = luma::asClass(static_cast<FoB*>(&amb), pA, &ambiguous);
+        check(p == nullptr && ambiguous && dynamic_cast<FoA*>(static_cast<FoB*>(&amb)) == nullptr,
+              "asClass FoAmb to FoA is ambiguous, null as dynamic_cast's");
+        p = luma::asClass(static_cast<FoB*>(&amb), pC, &ambiguous);
+        check(p == static_cast<FoC*>(&amb) && !ambiguous, "asClass FoAmb to FoC");
+        p = luma::asClass(static_cast<FoB*>(&only), pD, &ambiguous);
+        check(p == nullptr && !ambiguous, "asClass of a class with no row is null");
+        check(luma::ownClass(nullptr).type == nullptr && luma::ownClass(nullptr).typeInfo == nullptr, "ownClass of null");
+        // Contract objects S-1: a pointer not aligned as an object's, and an object whose first word is no vtable
+        // (a plain struct's data, a misaligned word), are no class: none, nothing read past them.
+        {
+            alignas(8) static unsigned char bytes[32] = {};
+            check(luma::ownClass(bytes + 1).type == nullptr, "ownClass of a misaligned pointer");
+            alignas(8) static __UINTPTR_TYPE__ notVtable[2] = {3, 0};
+            check(luma::ownClass(notVtable).type == nullptr, "ownClass of an object whose first word is misaligned");
+        }
+        check(luma::findType("FoV") && luma::findType("FoV")->typeInfo == &typeid(FoV),
+              "a record whose only virtual is its destructor is polymorphic: its type_info");
+
+        // Virtual calls: the thunk dispatches by the object's own class, as the compiler's own call does.
+        struct Call {
+            const char* name;
+            const char* signature;
+            void* object;  // as the declaring class
+            s32 x, y;
+            s32 want;
+        };
+        const Call calls[] = {
+            {"FoA::fa", "s32()", static_cast<FoA*>(&d), 0, 0, static_cast<FoA*>(&d)->fa()},
+            {"FoB::fb", "s32()", static_cast<FoB*>(&d), 0, 0, static_cast<FoB*>(&d)->fb()},
+            {"FoB::fb", "s32()", static_cast<FoB*>(&c), 0, 0, static_cast<FoB*>(&c)->fb()},
+            {"FoA::add", "s32(s32, const s32 &) const", static_cast<FoA*>(&d), 6, 7, 42},
+            {"FoD::secret", "s32(s32) const", &d, 3, 0, 21},
+        };
+        check(calls[0].want == 3 && calls[1].want == 5 && calls[2].want == 4, "the compiler's calls are the cases'");
+        for (const Call& k : calls) {
+            const luma::Function* const pM = luma::findMethod(k.name, k.signature);
+            s32 x = k.x;
+            s32 y = k.y;
+            void* args[] = {k.object, &x, &y};
+            s32 got = -1;
+            unsigned kind = 99;
+            if (pM != nullptr) {
+                pM->invoke(args, &got);
+                pM->invoke(luma::kAskKind, &kind);
+            }
+            char what[256];
+            std::snprintf(what, sizeof(what), "method %s %s: %s, %d (want %d), kind %u, hooked %s", k.name, k.signature,
+                          pM ? "found" : "none", static_cast<int>(got), static_cast<int>(k.want), kind,
+                          pM && pM->hooked == nullptr ? "null" : "set");
+            check(pM != nullptr && got == k.want && kind == luma::kPlain && pM->hooked == nullptr, what);
+        }
+        // The overrider: the declaration the own class runs, as the calls above ran it.
+        struct Over {
+            const void* object;
+            const char* name;
+            const char* signature;
+            const char* want;  // the overrider's function name; null: none
+        };
+        static FoX x;
+        // Contract objects M-1: FoTA reached twice; each subobject's overrider is its own path's, as the compiler
+        // calls it; from a pointer that is no FoTA (FoTE's FoV at offset 0), none, said as ambiguous.
+        static FoTD td;
+        static FoTE te;
+        FoTA* const pTd1 = static_cast<FoTB1*>(&td);
+        FoTA* const pTd2 = static_cast<FoTB2*>(&td);
+        FoTA* const pTe2 = static_cast<FoTB2*>(&te);
+        check(pTd1->f() == 11 && pTd2->f() == 12 && pTe2->f() == 12, "the compiler's calls on FoTA's two subobjects");
+        {
+            bool ambiguous = true;
+            const luma::MethodRow* pRow = luma::overrider(pTd2, "FoTA::f", "s32()", &ambiguous);
+            check(pRow != nullptr && std::strcmp(pRow->function->name, "FoTB2::f") == 0 && !ambiguous, "overrider FoTD's second FoTA: FoTB2::f");
+            pRow = luma::overrider(pTd1, "FoTA::f", "s32()", &ambiguous);
+            check(pRow != nullptr && std::strcmp(pRow->function->name, "FoTB1::f") == 0 && !ambiguous, "overrider FoTD's first FoTA: FoTB1::f");
+            pRow = luma::overrider(pTe2, "FoTA::f", "s32()", &ambiguous);
+            check(pRow != nullptr && std::strcmp(pRow->function->name, "FoTB2::f") == 0 && !ambiguous, "overrider FoTE's second FoTA: FoTB2::f");
+            pRow = luma::overrider(static_cast<FoV*>(&te), "FoTA::f", "s32()", &ambiguous);
+            check(pRow == nullptr && ambiguous, "overrider from FoTE's FoV: none, ambiguous");
+            const luma::Function* const pM = luma::findMethod("FoTA::f", "s32()");
+            s32 got = -1;
+            void* args[] = {pTd2};
+            if (pM != nullptr) {
+                pM->invoke(args, &got);
+            }
+            check(got == 12, "method FoTA::f on FoTD's second FoTA runs FoTB2::f");
+        }
+        const Over overs[] = {
+            {static_cast<FoA*>(&d), "FoA::fa", "s32()", "FoC::fa"},
+            {static_cast<FoB*>(&d), "FoB::fb", "s32()", "FoD::fb"},
+            {static_cast<FoB*>(&c), "FoB::fb", "s32()", "FoC::fb"},
+            {static_cast<FoA*>(&d), "FoA::add", "s32(s32, const s32 &) const", "FoC::add"},
+            {static_cast<FoA*>(&x), "FoA::fa", "s32()", "FoA::fa"},
+            {&d, "FoD::secret", "s32(s32) const", "FoD::secret"},
+            {static_cast<FoB*>(&only), "FoB::fb", "s32()", nullptr},  // a class with no row
+            {static_cast<FoA*>(&d), "FoA::fa", "s32(s32)", nullptr},  // no such virtual
+        };
+        for (const Over& k : overs) {
+            bool ambiguous = true;
+            const luma::MethodRow* const pRow = luma::overrider(k.object, k.name, k.signature, &ambiguous);
+            check(!ambiguous, "overrider says nothing ambiguous with one subobject");
+            const char* const got = pRow != nullptr ? pRow->function->name : nullptr;
+            char what[256];
+            std::snprintf(what, sizeof(what), "overrider %s %s: %s (want %s)", k.name, k.signature, got ? got : "none",
+                          k.want ? k.want : "none");
+            check(k.want == nullptr ? got == nullptr : got != nullptr && std::strcmp(got, k.want) == 0, what);
+        }
+        check(luma::findMethod("FoA::fa", "s32(s32)") == nullptr && luma::findMethod("FoA::nope", "s32()") == nullptr &&
+                  luma::findMethod("FoA::~FoA", "()") == nullptr,
+              "no method row for another signature, an unknown name or a destructor");
     }
     lastByte();
     std::FILE* const file = std::fopen(argv[1], "wb");

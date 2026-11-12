@@ -18,6 +18,8 @@ namespace luma {
     extern const GlobalRow sGlobalsStop __asm("section$end$__DATA$lumagl");
     extern const LeftRow sLeftStart __asm("section$start$__DATA$lumalo");
     extern const LeftRow sLeftStop __asm("section$end$__DATA$lumalo");
+    extern const MethodRow sMethodsStart __asm("section$start$__DATA$lumamt");
+    extern const MethodRow sMethodsStop __asm("section$end$__DATA$lumamt");
 #elif !defined(_WIN32)
     // Weak: a module with no rows of a kind has no such section, and both bounds are then null.
     extern "C" __attribute__((weak)) const TypeRow __start_lumaty[];
@@ -28,6 +30,8 @@ namespace luma {
     extern "C" __attribute__((weak)) const GlobalRow __stop_lumagl[];
     extern "C" __attribute__((weak)) const LeftRow __start_lumalo[];
     extern "C" __attribute__((weak)) const LeftRow __stop_lumalo[];
+    extern "C" __attribute__((weak)) const MethodRow __start_lumamt[];
+    extern "C" __attribute__((weak)) const MethodRow __stop_lumamt[];
 #endif
 
     namespace {
@@ -48,6 +52,10 @@ namespace luma {
         __attribute__((section("lumalo$z"), used)) const LeftRow sLeftAfter = {};
         const LeftRow* leftBegin() { return &sLeftBefore + 1; }
         const LeftRow* leftEnd() { return &sLeftAfter; }
+        __attribute__((section("lumamt$a"), used)) const MethodRow sMethodsBefore = {};
+        __attribute__((section("lumamt$z"), used)) const MethodRow sMethodsAfter = {};
+        const MethodRow* methodsBegin() { return &sMethodsBefore + 1; }
+        const MethodRow* methodsEnd() { return &sMethodsAfter; }
 #elif defined(__APPLE__)
         const TypeRow* typesBegin() { return &sTypesStart; }
         const TypeRow* typesEnd() { return &sTypesStop; }
@@ -57,6 +65,8 @@ namespace luma {
         const GlobalRow* globalsEnd() { return &sGlobalsStop; }
         const LeftRow* leftBegin() { return &sLeftStart; }
         const LeftRow* leftEnd() { return &sLeftStop; }
+        const MethodRow* methodsBegin() { return &sMethodsStart; }
+        const MethodRow* methodsEnd() { return &sMethodsStop; }
 #else
         const TypeRow* typesBegin() { return __start_lumaty; }
         const TypeRow* typesEnd() { return __stop_lumaty; }
@@ -66,6 +76,8 @@ namespace luma {
         const GlobalRow* globalsEnd() { return __stop_lumagl; }
         const LeftRow* leftBegin() { return __start_lumalo; }
         const LeftRow* leftEnd() { return __stop_lumalo; }
+        const MethodRow* methodsBegin() { return __start_lumamt; }
+        const MethodRow* methodsEnd() { return __stop_lumamt; }
 #endif
 
         // The first `length` bytes of pA against the whole of pB.
@@ -99,14 +111,33 @@ namespace luma {
         bool takes(const AliasRow*, u32) { return true; }
         bool takes(const GlobalRow*, u32) { return true; }
         bool takes(const LeftRow* pRow, u32 group) { return pRow->group == group; }
+        bool takes(const MethodRow*, u32) { return true; }
 
-        // One sorted index of rows of type T, by name; built by prepareTypes.
-        template <class T> struct Index {
+        // An index's order (the third argument names it): a row's name. The method rows twice: by their function's
+        // name and signature (one name, several signatures: overloads), and by declaration (record, name, params).
+        struct ByDeclaration {};
+        template <class T> s32 order(const T* pA, const T* pB, const T*) {
+            return compare(pA->name, textLength(pA->name), pB->name);
+        }
+        s32 order(const MethodRow* pA, const MethodRow* pB, const MethodRow*) {
+            const s32 c = compare(pA->function->name, textLength(pA->function->name), pB->function->name);
+            return c != 0 ? c : compare(pA->function->signature, textLength(pA->function->signature), pB->function->signature);
+        }
+        s32 order(const MethodRow* pA, const MethodRow* pB, const ByDeclaration*) {
+            s32 c = compare(pA->record, textLength(pA->record), pB->record);
+            if (c == 0) {
+                c = compare(pA->name, textLength(pA->name), pB->name);
+            }
+            return c != 0 ? c : compare(pA->params, textLength(pA->params), pB->params);
+        }
+
+        // One sorted index of rows of type T, in the order `By` names; built by prepareTypes.
+        template <class T, class By = T> struct Index {
             const T** rows = nullptr;
             u32 count = 0;
             bool built = false;
 
-            static bool before(const T* pA, const T* pB) { return compare(pA->name, textLength(pA->name), pB->name) < 0; }
+            static bool before(const T* pA, const T* pB) { return order(pA, pB, static_cast<const By*>(nullptr)) < 0; }
 
             void sift(u32 root, u32 n) {
                 for (;;) {
@@ -147,22 +178,24 @@ namespace luma {
                     rows[end] = pHeld;
                     sift(0, end);
                 }
-                // Two rows of one name are the generator's fault: the build is wrong, and a mod must not guess.
+                // Two rows of one name (a method's: and signature) are the generator's fault: the build is wrong, and
+                // a mod must not guess.
                 for (u32 i = 1; i < count; i++) {
-                    if (sameText(rows[i - 1]->name, rows[i]->name)) {
+                    if (order(rows[i - 1], rows[i], static_cast<const By*>(nullptr)) == 0) {
                         NEBULA_PANIC("LumaCore: two rows are named %s", rows[i]->name);
                     }
                 }
             }
 
-            const T* find(const char* pName, u32 length) const {
+            // The position of the row of that name in the index's order, or -1.
+            s32 indexOf(const char* pName, u32 length) const {
                 u32 low = 0;
                 u32 high = count;
                 while (low < high) {
                     const u32 mid = low + (high - low) / 2;
                     const s32 c = compare(pName, length, rows[mid]->name);
                     if (c == 0) {
-                        return rows[mid];
+                        return static_cast<s32>(mid);
                     }
                     if (c < 0) {
                         high = mid;
@@ -170,7 +203,12 @@ namespace luma {
                         low = mid + 1;
                     }
                 }
-                return nullptr;
+                return -1;
+            }
+
+            const T* find(const char* pName, u32 length) const {
+                const s32 at = indexOf(pName, length);
+                return at >= 0 ? rows[at] : nullptr;
             }
         };
 
@@ -178,6 +216,8 @@ namespace luma {
         Index<AliasRow> sAliases;
         Index<GlobalRow> sGlobals;
         Index<LeftRow> sLeft[kLeftGroups];
+        Index<MethodRow> sMethods;
+        Index<MethodRow, ByDeclaration> sDeclared;
 
         // Where "Type.field"'s type name ends: at the first '.' outside a template's arguments (the field may hold
         // more, "mFlag.mIsDead"). The name's length when it has no such '.'.
@@ -258,10 +298,12 @@ namespace luma {
             for (u32 i = 0; i < pType->baseCount; i++) {
                 const TypeBase& rBase = pType->bases[i];
                 const TypeRow* const pBase = typeNamed(rBase.name, textLength(rBase.name));
-                if (pBase != nullptr) {
-                    // The nearest virtual base wins, as the generator's reason names it.
-                    lookIn(pBase, pField, base + rBase.offset, rBase.isVirtual != 0 ? rBase.name : pVirtual, pOut, depth + 1);
+                if (pBase == nullptr) {
+                    // luma_types.h: a base is a row of its own. One without is the generator's fault, never "no field".
+                    NEBULA_PANIC("LumaCore: %s's base %s has no row", pType->name, rBase.name);
                 }
+                // The nearest virtual base wins, as the generator's reason names it.
+                lookIn(pBase, pField, base + rBase.offset, rBase.isVirtual != 0 ? rBase.name : pVirtual, pOut, depth + 1);
             }
         }
 
@@ -398,6 +440,169 @@ namespace luma {
     // A field of the type named by the first typeLength bytes of pTypeName.
     static FieldBind bindField(const char* pTypeName, u32 typeLength, const char* pField, const char* pSignature);
 
+    namespace {
+        // Contract objects: the polymorphic rows by their type_info's address, sorted (built by prepareTypes).
+        const TypeRow** sByTypeInfo = nullptr;
+        u32 sByTypeInfoCount = 0;
+
+        bool typeInfoBefore(const TypeRow* pA, const TypeRow* pB) {
+            return reinterpret_cast<__UINTPTR_TYPE__>(pA->typeInfo) < reinterpret_cast<__UINTPTR_TYPE__>(pB->typeInfo);
+        }
+
+        void siftByTypeInfo(u32 root, u32 n) {
+            for (;;) {
+                u32 child = root * 2 + 1;
+                if (child >= n) {
+                    return;
+                }
+                if (child + 1 < n && typeInfoBefore(sByTypeInfo[child], sByTypeInfo[child + 1])) {
+                    child++;
+                }
+                if (!typeInfoBefore(sByTypeInfo[root], sByTypeInfo[child])) {
+                    return;
+                }
+                const TypeRow* const pHeld = sByTypeInfo[root];
+                sByTypeInfo[root] = sByTypeInfo[child];
+                sByTypeInfo[child] = pHeld;
+                root = child;
+            }
+        }
+
+        void indexTypeInfo() {
+            u32 n = 0;
+            for (u32 i = 0; i < sTypes.count; i++) {
+                n += sTypes.rows[i]->typeInfo != nullptr ? 1 : 0;
+            }
+            sByTypeInfo = static_cast<const TypeRow**>(::malloc(sizeof(const TypeRow*) * (static_cast<size_t>(n) + 1)));
+            if (sByTypeInfo == nullptr) {
+                NEBULA_PANIC("LumaCore: no memory to index the classes");
+            }
+            for (u32 i = 0; i < sTypes.count; i++) {
+                if (sTypes.rows[i]->typeInfo != nullptr) {
+                    sByTypeInfo[sByTypeInfoCount++] = sTypes.rows[i];
+                }
+            }
+            for (u32 i = n / 2; i-- > 0;) {
+                siftByTypeInfo(i, n);
+            }
+            for (u32 end = n; end-- > 1;) {
+                const TypeRow* const pHeld = sByTypeInfo[0];
+                sByTypeInfo[0] = sByTypeInfo[end];
+                sByTypeInfo[end] = pHeld;
+                siftByTypeInfo(0, end);
+            }
+            // One type_info is one class: two rows sharing one is the generator's fault (or a linker that did not merge
+            // a class's RTTI), and an object's class must never be guessed.
+            for (u32 i = 1; i < n; i++) {
+                if (sByTypeInfo[i - 1]->typeInfo == sByTypeInfo[i]->typeInfo) {
+                    NEBULA_PANIC("LumaCore: %s and %s have one type_info", sByTypeInfo[i - 1]->name, sByTypeInfo[i]->name);
+                }
+            }
+        }
+
+        const TypeRow* rowOfTypeInfo(const void* pTypeInfo) {
+            const __UINTPTR_TYPE__ key = reinterpret_cast<__UINTPTR_TYPE__>(pTypeInfo);
+            u32 low = 0;
+            u32 high = sByTypeInfoCount;
+            while (low < high) {
+                const u32 mid = low + (high - low) / 2;
+                const __UINTPTR_TYPE__ at = reinterpret_cast<__UINTPTR_TYPE__>(sByTypeInfo[mid]->typeInfo);
+                if (at == key) {
+                    return sByTypeInfo[mid];
+                }
+                if (key < at) {
+                    high = mid;
+                } else {
+                    low = mid + 1;
+                }
+            }
+            return nullptr;
+        }
+
+#if defined(_WIN32)
+        // The Microsoft C++ ABI on x64: vftable[-1] is the complete object locator. `offset` is the subobject's place in
+        // the whole object; the type descriptor and the locator itself are given as offsets from the image's base.
+        struct ObjectLocator {
+            u32 signature;  // 1: the x64 form, with image-relative offsets
+            u32 offset;
+            u32 constructorOffset;
+            s32 typeDescriptor;
+            s32 classDescriptor;
+            s32 self;
+        };
+#endif
+
+        // The own class's type_info and the whole object, from the vtable of the subobject at pObject. Null when the
+        // vtable carries no RTTI the kernel can read.
+        // A pointer that cannot be an object's or a vtable's: null or not aligned as a pointer. What a mod passes C
+        // cannot check further without reading it; a read that faults is the guard's (1.6), under which mod code runs.
+        // A vtable is not required to be the game module's: a mod's own derived class (1.4) has its vtable in the mod.
+        bool misaligned(const void* p) {
+            return p == nullptr || (reinterpret_cast<__UINTPTR_TYPE__>(p) & (sizeof(void*) - 1)) != 0;
+        }
+
+        const void* readOwnClass(const void* pObject, const void** pComplete) {
+            if (misaligned(pObject)) {
+                return nullptr;
+            }
+            const void* const* pVtable;
+            __builtin_memcpy(&pVtable, pObject, sizeof(pVtable));
+            if (misaligned(pVtable)) {
+                return nullptr;
+            }
+#if defined(_WIN32)
+            const ObjectLocator* const pLocator = static_cast<const ObjectLocator*>(pVtable[-1]);
+            // The locator is 32-bit words: aligned as one.
+            if (pLocator == nullptr || (reinterpret_cast<__UINTPTR_TYPE__>(pLocator) & 3) != 0 || pLocator->signature != 1) {
+                return nullptr;
+            }
+            // The locator's own offset leads to its image: a module begins "MZ" (S-1: a vtable with no locator is
+            // refused, not followed).
+            const char* const pImage = reinterpret_cast<const char*>(pLocator) - pLocator->self;
+            if (pImage[0] != 'M' || pImage[1] != 'Z') {
+                return nullptr;
+            }
+            *pComplete = static_cast<const char*>(pObject) - pLocator->offset;
+            return pImage + pLocator->typeDescriptor;
+#else
+            // The Itanium C++ ABI (Android, Linux, Apple): vtable[-2] is the offset to the whole object, vtable[-1]
+            // the type_info.
+            __PTRDIFF_TYPE__ top;
+            __builtin_memcpy(&top, pVtable - 2, sizeof(top));
+            *pComplete = static_cast<const char*>(pObject) + top;
+            return pVtable[-1];
+#endif
+        }
+
+        // Depth first through the bases' rows from pType (at `at` in the whole object): how many pTarget subobjects,
+        // and where the first is. A virtual base is not followed: its place is the whole object's, and no record of the
+        // game has one (contract objects, section 0).
+        void findBase(const TypeRow* pType, const TypeRow* pTarget, u32 at, u32* pCount, u32* pFirst, u32 depth) {
+            if (pType == pTarget) {
+                if ((*pCount)++ == 0) {
+                    *pFirst = at;
+                }
+                return;
+            }
+            // The rows are the compiler's hierarchy: deeper than any class of the game, or a base with no row, is the
+            // generator's fault, and a subobject must never be guessed.
+            if (depth >= 64) {
+                NEBULA_PANIC("LumaCore: the bases of %s nest deeper than 64", pTarget->name);
+            }
+            for (u32 i = 0; i < pType->baseCount; i++) {
+                const TypeBase& rBase = pType->bases[i];
+                if (rBase.isVirtual != 0) {
+                    continue;
+                }
+                const TypeRow* const pBase = typeNamed(rBase.name, textLength(rBase.name));
+                if (pBase == nullptr) {
+                    NEBULA_PANIC("LumaCore: %s's base %s has no row", pType->name, rBase.name);
+                }
+                findBase(pBase, pTarget, at + rBase.offset, pCount, pFirst, depth + 1);
+            }
+        }
+    }  // namespace
+
     void prepareTypes() {
         if (sTypes.built) {
             return;
@@ -408,6 +613,230 @@ namespace luma {
         for (u32 group = 0; group < kLeftGroups; group++) {
             sLeft[group].build(leftBegin(), leftEnd(), group);
         }
+        indexTypeInfo();
+        sMethods.build(methodsBegin(), methodsEnd());
+        sDeclared.build(methodsBegin(), methodsEnd());
+    }
+
+    s32 classNumber(const TypeRow* pType) {
+        prepareTypes();
+        return pType != nullptr ? sTypes.indexOf(pType->name, textLength(pType->name)) : -1;
+    }
+
+    const TypeRow* classAt(s32 number) {
+        prepareTypes();
+        return number >= 0 && static_cast<u32>(number) < sTypes.count ? sTypes.rows[number] : nullptr;
+    }
+
+    namespace {
+        const MethodRow* methodRow(const char* pName, const char* pSignature) {
+            const u32 nameLength = textLength(pName);
+            const u32 signatureLength = textLength(pSignature);
+            u32 low = 0;
+            u32 high = sMethods.count;
+            while (low < high) {
+                const u32 mid = low + (high - low) / 2;
+                const Function* const pRow = sMethods.rows[mid]->function;
+                s32 c = compare(pName, nameLength, pRow->name);
+                if (c == 0) {
+                    c = compare(pSignature, signatureLength, pRow->signature);
+                }
+                if (c == 0) {
+                    return sMethods.rows[mid];
+                }
+                if (c < 0) {
+                    high = mid;
+                } else {
+                    low = mid + 1;
+                }
+            }
+            return nullptr;
+        }
+
+        // The method row pType itself declares with pLike's name and params; null when it declares none.
+        const MethodRow* declaredIn(const TypeRow* pType, const MethodRow* pLike) {
+            MethodRow key = {nullptr, pType->name, pLike->name, pLike->params};
+            u32 low = 0;
+            u32 high = sDeclared.count;
+            while (low < high) {
+                const u32 mid = low + (high - low) / 2;
+                const s32 c = order(&key, sDeclared.rows[mid], static_cast<const ByDeclaration*>(nullptr));
+                if (c == 0) {
+                    return sDeclared.rows[mid];
+                }
+                if (c < 0) {
+                    high = mid;
+                } else {
+                    low = mid + 1;
+                }
+            }
+            return nullptr;
+        }
+
+        // The pDeclaring subobjects of an object and their final overriders: those at offset `want` (the object pointer's
+        // own subobject) and all of them.
+        struct Overriders {
+            u32 want;
+            u32 atCount;
+            const MethodRow* pAt;
+            u32 anyCount;
+            const MethodRow* pAny;
+        };
+
+        // Depth first from pType (at `at` in the complete object) through its bases that are not virtual: each
+        // pDeclaring subobject's final overrider is the most derived record on its own path that declares pLike's name
+        // and params (pAbove: the one found above pType on this path, if any). Two subobjects of one class can have
+        // different overriders (D : B1, B2, each from A and each overriding A::f).
+        void overridersIn(const TypeRow* pType, const TypeRow* pDeclaring, const MethodRow* pLike, u32 at, const MethodRow* pAbove,
+                          Overriders* pOut, u32 depth) {
+            const MethodRow* const pHere = pAbove != nullptr ? pAbove : declaredIn(pType, pLike);
+            if (pType == pDeclaring) {
+                // A class is never its own base: nothing below this one is another pDeclaring.
+                pOut->anyCount++;
+                pOut->pAny = pHere;
+                if (at == pOut->want) {
+                    pOut->atCount++;
+                    pOut->pAt = pHere;
+                }
+                return;
+            }
+            if (depth >= 64) {
+                NEBULA_PANIC("LumaCore: the bases of %s nest deeper than 64", pType->name);
+            }
+            for (u32 i = 0; i < pType->baseCount; i++) {
+                const TypeBase& rBase = pType->bases[i];
+                if (rBase.isVirtual != 0) {
+                    continue;
+                }
+                const TypeRow* const pBase = typeNamed(rBase.name, textLength(rBase.name));
+                if (pBase == nullptr) {
+                    NEBULA_PANIC("LumaCore: %s's base %s has no row", pType->name, rBase.name);
+                }
+                overridersIn(pBase, pDeclaring, pLike, at + rBase.offset, pHere, pOut, depth + 1);
+            }
+        }
+    }  // namespace
+
+    const MethodRow* findMethodRow(const char* pName, const char* pSignature) {
+        prepareTypes();
+        return pName != nullptr && pSignature != nullptr ? methodRow(pName, pSignature) : nullptr;
+    }
+
+    const Function* findMethod(const char* pName, const char* pSignature) {
+        const MethodRow* const pRow = findMethodRow(pName, pSignature);
+        return pRow != nullptr ? pRow->function : nullptr;
+    }
+
+    u32 methodsNamed(const char* pName, u32* pFirst) {
+        prepareTypes();
+        const u32 nameLength = textLength(pName);
+        u32 low = 0;
+        u32 high = sMethods.count;
+        while (low < high) {
+            const u32 mid = low + (high - low) / 2;
+            if (compare(pName, nameLength, sMethods.rows[mid]->function->name) > 0) {
+                low = mid + 1;
+            } else {
+                high = mid;
+            }
+        }
+        u32 end = low;
+        while (end < sMethods.count && compare(pName, nameLength, sMethods.rows[end]->function->name) == 0) {
+            end++;
+        }
+        *pFirst = low;
+        return end - low;
+    }
+
+    const Function* methodAt(u32 index) {
+        prepareTypes();
+        return index < sMethods.count ? sMethods.rows[index]->function : nullptr;
+    }
+
+    const MethodRow* overrider(const void* pObject, const char* pName, const char* pSignature, bool* pAmbiguous) {
+        return overrider(ownClass(pObject), pObject, findMethodRow(pName, pSignature), pAmbiguous);
+    }
+
+    const MethodRow* overrider(const OwnClass& own, const void* pObject, const MethodRow* pTarget, bool* pAmbiguous) {
+        *pAmbiguous = false;
+        if (pTarget == nullptr) {
+            return nullptr;
+        }
+        const TypeRow* const pDeclaring = typeNamed(pTarget->record, textLength(pTarget->record));
+        if (own.type == nullptr || pDeclaring == nullptr) {
+            return nullptr;
+        }
+        // The subobject pObject is: by its offset in the complete object. When pObject is no pDeclaring subobject (it
+        // points at the complete object, or another base) and there is more than one, which runs is not decided: the
+        // answer is none, said as ambiguous, as asClass says it (contract objects M-1).
+        Overriders found = {};
+        found.want = static_cast<u32>(static_cast<const char*>(pObject) - static_cast<const char*>(own.complete));
+        overridersIn(own.type, pDeclaring, pTarget, 0, nullptr, &found, 0);
+        if (found.atCount == 1) {
+            return found.pAt;
+        }
+        if (found.anyCount == 1) {
+            return found.pAny;
+        }
+        *pAmbiguous = found.anyCount > 1;
+        return nullptr;
+    }
+
+    OwnClass ownClass(const void* pObject) {
+        OwnClass out = {};
+        prepareTypes();
+        // A module with no RTTI data (no row has a type_info) has nothing to read in a vtable.
+        if (pObject == nullptr || sByTypeInfoCount == 0) {
+            return out;
+        }
+        const void* pComplete = nullptr;
+        const void* const pTypeInfo = readOwnClass(pObject, &pComplete);
+        if (pTypeInfo == nullptr) {
+            return out;
+        }
+        out.typeInfo = pTypeInfo;
+        out.complete = pComplete;
+        out.type = rowOfTypeInfo(pTypeInfo);
+        return out;
+    }
+
+    const char* typeInfoName(const void* pTypeInfo) {
+        if (pTypeInfo == nullptr) {
+            return "";
+        }
+#if defined(_WIN32)
+        // MSVC's type descriptor: its vtable pointer, a spare pointer, then the decorated name (".?AVLiveActor@@").
+        return static_cast<const char*>(pTypeInfo) + 2 * sizeof(void*);
+#else
+        // The Itanium C++ ABI's std::type_info: its vtable pointer, then the mangled name ("9LiveActor"). GCC and Clang
+        // put a '*' before the name of a class that is not unique in the program (internal linkage); the symbols do
+        // not have it, so it is left out (G's O10-1).
+        const char* pName;
+        __builtin_memcpy(&pName, static_cast<const char*>(pTypeInfo) + sizeof(void*), sizeof(pName));
+        if (pName == nullptr) {
+            return "";
+        }
+        return pName[0] == '*' ? pName + 1 : pName;
+#endif
+    }
+
+    const void* asClass(const void* pObject, const TypeRow* pTarget, bool* pAmbiguous) {
+        return asClass(ownClass(pObject), pTarget, pAmbiguous);
+    }
+
+    const void* asClass(const OwnClass& own, const TypeRow* pTarget, bool* pAmbiguous) {
+        *pAmbiguous = false;
+        if (own.type == nullptr || pTarget == nullptr) {
+            return nullptr;
+        }
+        u32 count = 0;
+        u32 first = 0;
+        findBase(own.type, pTarget, 0, &count, &first, 0);
+        if (count > 1) {
+            *pAmbiguous = true;
+            return nullptr;
+        }
+        return count == 1 ? static_cast<const char*>(own.complete) + first : nullptr;
     }
 
     const TypeRow* findType(const char* pName) {
@@ -541,6 +970,7 @@ namespace luma {
             out.number(rType.size);
             out.raw(", \"align\": ");
             out.number(rType.align);
+            out.raw(rType.typeInfo != nullptr ? ", \"polymorphic\": true" : ", \"polymorphic\": false");
             out.raw(", \"fields\": [");
             for (u32 i = 0; i < rType.fieldCount; i++) {
                 const TypeField& rField = rType.fields[i];
@@ -620,6 +1050,21 @@ namespace luma {
             out.raw(", \"type\": ");
             out.text(sGlobals.rows[g]->type);
             out.raw(sGlobals.rows[g]->readOnly != 0 ? ", \"const\": true}" : ", \"const\": false}");
+        }
+        out.raw("\n], \"methods\": [");
+        for (u32 m = 0; m < sMethods.count; m++) {
+            out.raw(m == 0 ? "\n {\"name\": " : ",\n {\"name\": ");
+            const MethodRow& rRow = *sMethods.rows[m];
+            out.text(rRow.function->name);
+            out.raw(", \"signature\": ");
+            out.text(rRow.function->signature);
+            out.raw(", \"record\": ");
+            out.text(rRow.record);
+            out.raw(", \"own\": ");
+            out.text(rRow.name);
+            out.raw(", \"params\": ");
+            out.text(rRow.params);
+            out.raw("}");
         }
         out.raw("\n], \"left_out\": [");
         u32 left = 0;

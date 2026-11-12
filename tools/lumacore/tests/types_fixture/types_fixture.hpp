@@ -154,6 +154,58 @@ struct FxPoly {  // a vtable: destructible only
     virtual void f() {}
 };
 
+// Contract objects (plan 1.3): an object's own class from its vtable, through primary and secondary bases.
+struct FoA {
+    virtual ~FoA() {}
+    virtual s32 fa() { return 1; }
+    virtual s32 add(s32 x, const s32& y) const { return x + y + a; }
+    s32 a = 0;
+};
+struct FoB {
+    virtual s32 fb() { return 2; }
+    s32 b = 0;
+};
+struct FoC : FoA, FoB {  // FoB is a secondary base, at a non-zero offset
+    s32 fa() override { return 3; }
+    s32 fb() override { return 4; }
+    s32 add(s32 x, const s32& y) const override { return x * y; }
+    s32 c = 0;
+};
+struct FoD : FoC {
+    s32 fb() override { return 5; }
+
+private:
+    virtual s32 secret(s32 x) const { return x * 7; }  // a private virtual: a method row all the same
+};
+struct FoV {  // polymorphic by its destructor alone: a type_info, no method row
+    virtual ~FoV() {}
+    s32 v = 0;
+};
+struct FoX : FoA {};
+struct FoAmb : FoC, FoX {};  // two FoA subobjects: as FoA, ambiguous
+// One class reached twice, with no virtual base: each subobject has its own final overrider (contract objects M-1).
+struct FoTA {
+    virtual s32 f() { return 10; }
+    s32 ta = 0;
+};
+struct FoTB1 : FoTA {
+    s32 f() override { return 11; }
+};
+struct FoTB2 : FoTA {
+    s32 f() override { return 12; }
+};
+struct FoTD : FoTB1, FoTB2 {};
+struct FoTE : FoV, FoTB1, FoTB2 {};  // at offset 0 a FoV: no FoTA there
+// Polymorphic only through an instance named nowhere but as a base, which declares nothing virtual itself
+// (the game's DeriveActorGroup<T> holders: a base walked after the record, or with no row of its own).
+template <class T>
+struct FoGroup : FoV {
+    T* first = nullptr;
+};
+struct FoHolder : FoGroup<FoB> {
+    s32 h = 0;
+};
+
 // Globals: one defined in the header (a row), one only declared (left out), one constant (a value, no row needed).
 inline s32 gFxDefined = 7;
 extern s32 gFxDeclaredOnly;

@@ -58,7 +58,7 @@ struct Seen {
 
 fn check(target: &str, patch: &str) -> Seen {
     let store = Tables;
-    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: Some(&store) };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: None, store: Some(&store) };
     let name = format!("layers/base/patches/{}.json", target.to_lowercase());
     let bytes = luma(&[("layers", r#"[{"name": "base"}]"#)], &[file(&name, patch.as_bytes())]);
     let report = validate(&Input { source: Source::Bytes(&bytes, "test.luma"), game: Some(&game), installed: &[], platforms: &["windows-x64"], options: None, position: None });

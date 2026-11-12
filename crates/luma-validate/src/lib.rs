@@ -196,6 +196,9 @@ pub struct Game<'a> {
     pub extra_languages: &'a [String],
     /// The self-description: rows, fields, classes, services and their permissions, the LumaCore version.
     pub names: Option<&'a Names>,
+    /// The renderer features this device's graphics have (`draw.native`'s capability query, start-check 3), absent in
+    /// LumaLink: L806 reads them against a mod's `renderer.features`.
+    pub device_features: Option<&'a [String]>,
     pub store: Option<&'a dyn Store>,
 }
 
@@ -236,6 +239,14 @@ pub struct Touches {
     /// galaxy (lowercase), ScenarioNo, column and value, joined by U+001F. Another mod's check reads them for the
     /// layers that are on together.
     pub scenarios: Vec<String>,
+    /// The services each platform's entry library imports without LUMA_OPTIONAL (kind 5): platform, service name and
+    /// "major.minor", joined by U+001F, in import order, each once. The host's consent question reads which declared
+    /// permissions are required from them (consent 1.3: a permissioned service's permission is its name).
+    pub services: Vec<String>,
+    /// The classes only code can make that a placement uses (references 3, G-2): class, file and line, joined by
+    /// U+001F, one per placement. The host gives them to the module after the last mod's start (luma_refs.h), which
+    /// looks each up in the factory. Filled by the placement rules of the stages' contract.
+    pub after_start: Vec<String>,
 }
 
 /// The layers of a zone, and the folders whose tables the game links by key across them (contract table-keys 13).
@@ -578,7 +589,7 @@ fn fill_by(template: &str, look: &dyn Fn(&str) -> Option<Val>, lang: usize, dept
 /// The level of each code (validator contract 5): the Notes, everything else an Error.
 pub fn level_of(code: u16) -> Level {
     match code {
-        208 | 305 | 404 | 407 | 507 | 510 => Level::Note,
+        208 | 218 | 219 | 305 | 404 | 407 | 507 | 510 => Level::Note,
         _ => Level::Error,
     }
 }
@@ -586,6 +597,6 @@ pub fn level_of(code: u16) -> Level {
 /// Every code this validator can report, for the suite's "one broken mod per code" check.
 pub const CODES: &[u16] = &[
     100, 101, 102, 103, 104, 105, 106, 107, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213,
-    214, 215, 216, 217, 300, 301, 302, 303, 304, 305, 306, 307, 400, 401, 402, 403, 404, 405, 406, 407, 500, 501,
-    502, 503, 504, 505, 506, 507, 508, 509, 510, 511, 512, 700, 701, 702, 800, 801, 802, 803, 804, 805,
+    214, 215, 216, 217, 218, 219, 300, 301, 302, 303, 304, 305, 306, 307, 400, 401, 402, 403, 404, 405, 406, 407, 500, 501,
+    502, 503, 504, 505, 506, 507, 508, 509, 510, 511, 512, 700, 701, 702, 800, 801, 802, 803, 804, 805, 806,
 ];

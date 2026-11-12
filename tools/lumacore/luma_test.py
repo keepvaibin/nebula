@@ -63,6 +63,16 @@ VEC_TYPES = {"const Vec3f &", "const TVec3f &", "Vec3f *", "const Vec3f *", "Vec
 OBJECT_TYPES = {"LiveActor *", "const LiveActor *", "NameObj *", "const NameObj *", "MarioActor *"}
 READ_TYPES = {"f32", "s32", "u32", "u16", "s16", "u8", "bool", "TVec3f", "Vec3f", "const char *"}
 FACT_OPS = {"is", "is_not", "less", "at_most", "more", "at_least", "near", "exists", "absent"}
+# Revision 6 (R6-3, G-H6-3): the host's Settings pages by name, lower case, as the Settings screen's own list keeps
+# them (runtime/src/ui/native_settings.cpp kNativeSettingsTabNames), and the number the host opens each by.
+SETTINGS_PAGES = {"display": 0, "graphics": 1, "controls": 2, "audio": 3, "general": 4, "mods": 5, "system": 6,
+                  "advanced": 7}
+# Revision 6 (R6-1, G-H6-1): a mod's own fact is mod.<id>.<key>; the id is luma-format's (3 to 64 of a-z 0-9 - .,
+# no "..", no trailing "."), the key [a-z0-9_]+, split at the last dot.
+MOD_ID = re.compile(r"[a-z0-9.-]{3,64}")
+MOD_KEY = re.compile(r"[a-z0-9_]+")
+# Revision 6 (R6-5): an object by name or by class, the n-th live one.
+OBJECT_REF = re.compile(r"(object:[^\s#]+|class:[^\s#]+)#\d+")
 
 
 class HarnessError(Exception):
@@ -142,12 +152,60 @@ def plain(value, path):
     return value
 
 
-def read_test(folder):
+def fact_key(value, path):
+    """A fact key a test names: plain, and a mod's own (mod.<id>.<key>) split at its last dot (G-H6-1)."""
+    key = plain(value, path)
+    if key.startswith("mod."):
+        mod_id, dot, own = key[4:].rpartition(".")
+        if not dot or not MOD_ID.fullmatch(mod_id) or ".." in mod_id or mod_id.endswith(".") or not MOD_KEY.fullmatch(own):
+            raise HarnessError("%s: %s is not mod.<id>.<key> (an id of luma-format, a key of a-z 0-9 _)" % (path, key))
+    return key
+
+
+def class_names(types_path):
+    """The class names class_of takes (a record or an alias) from a types file (luma_types.json)."""
+    data = load_json(pathlib.Path(types_path))
+    names = set()
+    for row in data.get("types", []) + data.get("aliases", []):
+        if isinstance(row, dict) and isinstance(row.get("name"), str):
+            names.add(row["name"])
+    return names
+
+
+# The classes class:<Class> may name (run_tests sets it from the bin folder's luma_types.json; read_test's `types`).
+CLASSES = None
+
+
+def object_ref(value, path, classes):
+    """`object:<name>#<n>` or `class:<Class>#<n>` (R6-5); a class the types file lacks is a harness-error (G-H6-2)."""
+    if not (isinstance(value, str) and OBJECT_REF.fullmatch(value)):
+        raise HarnessError("%s must be \"player\", \"object:<name>#<n>\" or \"class:<Class>#<n>\"" % path)
+    if value.startswith("class:"):
+        name = value[len("class:"):].rsplit("#", 1)[0]
+        if classes is None:
+            raise HarnessError("%s: class:%s needs the game's types (luma_types.json in the bin folder)" % (path, name))
+        if name not in classes:
+            raise HarnessError("%s: the game has no class %s (its types file)" % (path, name))
+    return value
+
+
+def hidden_path(value, path):
+    """A hide_game_files path (R6-4, G-H6-4): relative to the game's folder, no drive, no leading slash, no `..`."""
+    if not isinstance(value, str) or not value or any(c in value for c in "\t\r\n"):
+        raise HarnessError("%s must be a path" % path)
+    if (value[0] in "/\\" or re.match(r"[A-Za-z]:", value) or pathlib.PureWindowsPath(value).is_absolute()
+            or ".." in re.split(r"[/\\]", value)):
+        raise HarnessError("%s: %s must be relative to the game's folder, with no drive and no .." % (path, value))
+    return value.replace("\\", "/")
+
+
+def read_test(folder, types=None):
     folder = pathlib.Path(folder)
+    classes = class_names(types) if types is not None else CLASSES
     t = load_json(folder / "test.json")
     keys_known(t, "", {"harness", "name", "about", "proves", "mods", "code", "language", "seed", "continue_from",
                        "renderers", "region", "limit_seconds", "bare", "save", "stage", "player", "steps", "expect",
-                       "faults"})
+                       "faults", "hide_game_files"})
     for key in ("harness", "name", "about", "proves", "steps", "expect"):
         if key not in t:
             raise HarnessError("the test has no %s" % key)
@@ -227,16 +285,21 @@ def read_test(folder):
         for i, f in enumerate(t["faults"]):
             keys_known(f, "faults[%d]" % i, {"mod"})
             faults.append(text(f, "mod", "faults[%d]" % i))
-    setup = read_setup(t, bare, seed, language)
-    steps = read_steps(t, bare)
+    hidden = []
+    if "hide_game_files" in t:
+        if not isinstance(t["hide_game_files"], list):
+            raise HarnessError("hide_game_files must be a list")
+        hidden = [hidden_path(h, "hide_game_files[%d]" % i) for i, h in enumerate(t["hide_game_files"])]
+    setup = read_setup(t, bare, seed, language, classes)
+    steps = read_steps(t, bare, classes)
     expect = read_expect(t, bare, steps)
     return {"folder": folder, "raw": t, "name": t["name"], "proves": t["proves"], "bare": bare, "mods": mods,
             "language": language, "seed": seed, "renderers": renderers, "region": t.get("region"), "limit": limit,
             "continue_from": continue_from, "faults": faults, "setup": setup, "steps": steps, "expect": expect,
-            "has_stage": "stage" in t}
+            "has_stage": "stage" in t, "hidden": hidden}
 
 
-def read_setup(t, bare, seed, language):
+def read_setup(t, bare, seed, language, classes):
     """The game half's setup lines, in the game's own order: the save, then the stage, then the player."""
     lines = []
     if bare:
@@ -300,9 +363,11 @@ def read_setup(t, bare, seed, language):
             lines.append("setup player.position %r %r %r" % (float(x), float(y), float(z)))
         if "at" in p:
             at = text(p, "at", "player")
-            if not re.fullmatch(r"[^\s#]+#\d+", at):
-                raise HarnessError("player.at is <object name>#<n>")
-            name, number = at.split("#")
+            if at.startswith("class:"):
+                object_ref(at, "player.at", classes)
+            elif not re.fullmatch(r"[^\s#]+#\d+", at):
+                raise HarnessError("player.at is <object name>#<n> or class:<Class>#<n>")
+            name, number = at.rsplit("#", 1)
             lines.append("setup player.at %s %s" % (name, number))
         if "form" in p:
             form = text(p, "form", "player")
@@ -339,14 +404,14 @@ def read_check(c, path, keys):
     return op, value, within
 
 
-def read_steps(t, bare):
+def read_steps(t, bare, classes):
     steps = t["steps"]
     if not isinstance(steps, list) or not steps:
         raise HarnessError("steps must be a list with an end step")
     out = []
     ends = 0
     pictures = set()
-    actions = {"hold", "stick", "shake", "pointer", "key", "picture", "call", "read", "stage", "wait", "end"}
+    actions = {"hold", "stick", "shake", "pointer", "key", "settings", "picture", "call", "read", "stage", "wait", "end"}
     for i, s in enumerate(steps):
         path = "steps[%d]" % i
         if not isinstance(s, dict):
@@ -379,7 +444,7 @@ def read_steps(t, bare):
                     raise HarnessError("%s.after: a log condition takes no check" % path)
                 step["after"] = ("log", pattern)
             else:
-                key = plain(a["fact"], path + ".after.fact")
+                key = fact_key(a["fact"], path + ".after.fact")
                 op, value, within = read_check(a, path + ".after", {"within"})
                 step["after"] = ("fact", key, op, value, within)
             if "timeout" in s:
@@ -393,8 +458,8 @@ def read_steps(t, bare):
         for key in needs:
             if key not in s:
                 raise HarnessError("%s: %s needs %s" % (path, action, key))
-        if bare and action not in ("wait", "picture", "key", "end"):
-            raise HarnessError("%s: a bare test has only wait, picture, key and end steps" % path)
+        if bare and action not in ("wait", "picture", "key", "settings", "end"):
+            raise HarnessError("%s: a bare test has only wait, picture, key, settings and end steps" % path)
         v = s[action]
         if action == "hold":
             if not isinstance(v, list) or not v or not all(isinstance(b, str) and b in BUTTONS for b in v):
@@ -413,6 +478,10 @@ def read_steps(t, bare):
             if v not in KEYS:
                 raise HarnessError("%s.key must be one of %s" % (path, " ".join(sorted(KEYS))))
             step["line"] = "key %s" % v
+        elif action == "settings":
+            if not isinstance(v, str) or v not in SETTINGS_PAGES:
+                raise HarnessError("%s.settings must name a page: %s" % (path, " ".join(sorted(SETTINGS_PAGES))))
+            step["line"] = "settings %d" % SETTINGS_PAGES[v]
         elif action == "picture":
             name = plain(text(s, "picture", path), path + ".picture")
             if not re.fullmatch(r"[A-Za-z0-9_.-]+", name):
@@ -436,7 +505,7 @@ def read_steps(t, bare):
             args = s.get("args", [])
             if not isinstance(args, list) or len(args) != len(params):
                 raise HarnessError("%s: args must list %d argument(s) for %s" % (path, len(params), sig))
-            words = [call_arg(a, p, "%s.args[%d]" % (path, j)) for j, (a, p) in enumerate(zip(args, params))]
+            words = [call_arg(a, p, "%s.args[%d]" % (path, j), classes) for j, (a, p) in enumerate(zip(args, params))]
             fact = plain(text(s, "fact", path), path + ".fact") if "fact" in s else "-"
             rest = "\t".join([name, sig] + words)
             if len(rest.encode("utf-8")) > LINE_BYTES or len(params) + 2 > LINE_WORDS:
@@ -447,8 +516,8 @@ def read_steps(t, bare):
             if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*", field):
                 raise HarnessError("%s.read is Class.field" % path)
             of = text(s, "of", path)
-            if of != "player" and not re.fullmatch(r"object:[^\s#]+#\d+", of):
-                raise HarnessError("%s.of is player or object:<name>#<n>" % path)
+            if of != "player":
+                object_ref(of, path + ".of", classes)
             ty = text(s, "type", path)
             if ty not in READ_TYPES:
                 raise HarnessError("%s.type %s: the harness reads %s" % (path, ty, ", ".join(sorted(READ_TYPES))))
@@ -482,7 +551,7 @@ def signature_params(sig, path):
     return params
 
 
-def call_arg(value, param, path):
+def call_arg(value, param, path, classes):
     if param in ("f32", "float"):
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise HarnessError("%s must be a number for %s" % (path, param))
@@ -510,9 +579,7 @@ def call_arg(value, param, path):
             raise HarnessError("%s must be [x, y, z]" % path)
         return " ".join(repr(float(v)) for v in value)
     if param in OBJECT_TYPES:
-        if value != "player" and not (isinstance(value, str) and re.fullmatch(r"object:[^\s#]+#\d+", value)):
-            raise HarnessError("%s must be \"player\" or \"object:<name>#<n>\"" % path)
-        return value
+        return value if value == "player" else object_ref(value, path, classes)
     raise HarnessError("%s: the harness cannot pass a parameter of type %s" % (path, param))
 
 
@@ -539,7 +606,7 @@ def read_expect(t, bare, steps):
                 frames = c["frames"]
                 if not (isinstance(frames, list) and len(frames) == 2 and all(isinstance(f, int) and not isinstance(f, bool) for f in frames)):
                     raise HarnessError("%s.frames must be [first, last]" % path)
-            out.append({"kind": "fact", "key": plain(c["fact"], path + ".fact"), "op": op, "value": value,
+            out.append({"kind": "fact", "key": fact_key(c["fact"], path + ".fact"), "op": op, "value": value,
                         "within": within, "when": when, "frames": frames, "source": c})
         elif "log" in c or "no_log" in c:
             keys_known(c, path, {"log", "no_log", "times"})
@@ -845,6 +912,14 @@ def run_one(test, renderer, args, run_folder, previous):
     # gets refusals as codes, so it is frozen with the rest.
     shutil.copyfile(bin_folder / "nebula_import.dll", run_folder / "bin" / "nebula_import.dll")
     frozen["nebula_import.dll"] = sha256(run_folder / "bin" / "nebula_import.dll")
+    # R6-4: the test's hidden files are left out of the run's own copy (the bin folder itself is never touched).
+    for hidden in test["hidden"]:
+        if not (bin_folder / hidden).is_file():
+            raise SetupFailed("hide_game_files: the game's folder has no %s" % hidden)
+        copy = run_folder / "bin" / hidden
+        if copy.is_file():
+            copy.unlink()
+        frozen.pop(hidden, None)
     mod_ids = []
     if not test["bare"]:
         frozen["luma-test.dll"] = sha256(bin_folder / "luma-test.dll")
@@ -1149,6 +1224,9 @@ def run_tests(args):
     lock = pathlib.Path(args.lock)
     if lock.exists():
         raise SystemExit("run.lock held: " + lock.read_text(encoding="utf-8", errors="replace").strip())
+    global CLASSES
+    types = pathlib.Path(args.bin).resolve() / "luma_types.json"
+    CLASSES = class_names(types) if types.is_file() else None
     lock.write_text("%s %s luma-test %s\n" % (args.who, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), suite_name), encoding="utf-8")
     all_pass = True
     passed = {}

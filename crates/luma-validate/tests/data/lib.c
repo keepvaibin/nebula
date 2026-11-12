@@ -59,6 +59,12 @@ static LumaImport imports[] = {
     LUMA_FUNCTION(get_pos, "MR::getPlayerPos", "int()"),
 };
 LUMA_MOD(imports, start, 0);
+#elif defined(NO_SIGNATURE)
+/* A function named without its signature: it binds only while the game has one function of that name. */
+static LumaImport imports[] = {
+    LUMA_FUNCTION(get_pos, "MR::getPlayerPos", 0),
+};
+LUMA_MOD(imports, start, 0);
 #elif defined(OPTIONAL_MISSING)
 static LumaImport imports[] = {
     {LUMA_IMPORT_FUNCTION, LUMA_OPTIONAL, "MR::noSuchFunction", "void()", &get_pos, 0, 0, 0},
@@ -104,6 +110,18 @@ static LumaImport imports[] = {
     {5, 0, "net", "one", &get_pos, 0, 0, 0},
 };
 LUMA_MOD(imports, start, 0);
+#elif defined(SERVICE_MORE)
+/* Registry 2's grammar (L505 whatever the flags), an optional import the game lacks (nothing), an optional import of
+   a permissioned service the mod does not declare (L506, and not a required service). */
+static LumaImport imports[] = {
+    {5, 0, "Net", "1.0", &get_pos, 0, 0, 0},
+    {5, 0, "net..x", "1.0", &get_pos, 0, 0, 0},
+    {5, 0, "net", "01.0", &get_pos, 0, 0, 0},
+    {5, 0, "net", "1.70000", &get_pos, 0, 0, 0},
+    {5, LUMA_OPTIONAL, "fs", "1.0", &get_pos, 0, 0, 0},
+    {5, LUMA_OPTIONAL, "net.local", "1.0", &get_pos, 0, 0, 0},
+};
+LUMA_MOD(imports, start, 0);
 #elif defined(MOD_FUNCTION)
 /* Loader D3-3: another mod's exported function, "<mod id>/<export name>". */
 static LumaImport imports[] = {
@@ -113,6 +131,23 @@ LUMA_MOD(imports, start, 0);
 #elif defined(MOD_FUNCTION_BAD)
 static LumaImport imports[] = {
     {6, 0, "hud.meter", "lumi1:0123456789abcdef", &get_pos, 0, 0, 0},
+};
+LUMA_MOD(imports, start, 0);
+#elif defined(METHOD)
+/* Objects 10: a virtual call (kind 8) by the declaring class's name, and a class's number (kind 3) of any record. */
+static LumaImport imports[] = {
+    {8, 0, "LiveActor::calcAndSetBaseMtx", "void()", &get_pos, 0, 0, 0},
+    {3, 0, "LiveActor", 0, &get_pos, 0, 0, 0},
+};
+LUMA_MOD(imports, start, 0);
+#elif defined(METHOD_BAD)
+/* Not virtuals: a plain function, a virtual with another signature, one with no row; and no such record. */
+static LumaImport imports[] = {
+    {8, 0, "MR::getPlayerPos", "Vec3f *()", &get_pos, 0, 0, 0},
+    {8, 0, "LiveActor::calcAndSetBaseMtx", "int()", &get_pos, 0, 0, 0},
+    {8, 0, "LiveActor::noRow", "void()", &get_pos, 0, 0, 0},
+    {8, LUMA_OPTIONAL, "LiveActor::notThere", "void()", &get_pos, 0, 0, 0},
+    {3, 0, "NoSuchClass", 0, &get_pos, 0, 0, 0},
 };
 LUMA_MOD(imports, start, 0);
 #elif defined(NO_IMPORTS)
