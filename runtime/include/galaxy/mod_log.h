@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -57,5 +58,17 @@ struct PageMod {
 [[nodiscard]] std::uint32_t kept();
 // In a harness run, one row of the log page as the fact `modlog.page {"row", "label", "value"}` (contract 4.3).
 void page_fact(std::uint32_t row, std::string_view label, std::string_view value);
+
+// A mod's world clock as the Mods page shows it (contract services-time 10 and 11; the module's luma_time_clock_of,
+// found by `begin`); any thread. Empty when the module lacks the export or the mod never asked for time.
+struct ModClock {
+    std::uint32_t rate = 1000u;  // thousandths of real time
+    bool held = false;           // the mod holds the world
+};
+[[nodiscard]] std::optional<ModClock> mod_clock(std::string_view mod);
+// The page's "Let go" (services-time 10): the module clears the mod's rate, hold and owed steps at the next frame's
+// start (luma_time_let_go); then the Note Time.LetGo is in the log. False when the module did not take it (the mod
+// unknown, or 8 already waiting); any thread.
+bool let_go(std::string_view mod);
 
 }  // namespace galaxy::modlog

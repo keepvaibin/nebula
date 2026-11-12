@@ -2447,6 +2447,19 @@ SettingsRow mod_log_row() {
     return row;
 }
 
+// A world clock's rate as the page writes it, in thousandths: "2X", "0.5X", "1.25X" (S.#X words it in each language).
+std::string clock_rate_text(std::uint32_t rate) {
+    std::string text = std::to_string(rate / 1000u);
+    const std::uint32_t part = rate % 1000u;
+    if (part != 0u) {
+        std::string digits{static_cast<char>('0' + part / 100u), static_cast<char>('0' + part / 10u % 10u),
+                           static_cast<char>('0' + part % 10u)};
+        while (digits.back() == '0') digits.pop_back();
+        text += '.' + digits;
+    }
+    return text + "X";
+}
+
 // A mod's page instead of the lists: what it is (version, makers, license, website, folder), whether it is on (left and
 // right turn it on or off), what it changes, then its options (Riivolution choices, a .luma's options, the text it
 // shows, a pack's texture categories), all part of the draft; ABOUT shows its description and pictures, REMOVE removes
@@ -2483,6 +2496,13 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
         }
     }
     rows.push_back(std::move(status));
+    // The mod changes the game's speed or holds it (services-time 10): shown, and the player's last word, LET GO, which
+    // clears its rate, hold and owed steps from the next frame (the row goes when the clock is back to normal).
+    if (const std::optional<galaxy::modlog::ModClock> clock = galaxy::modlog::mod_clock(id);
+        clock.has_value() && (clock->held || clock->rate != 1000u)) {
+        rows.push_back(button_row("TIME: " + (clock->held ? std::string("HELD") : clock_rate_text(clock->rate)), {"LET GO"},
+                                  [id](RenderConfig&, unsigned) { galaxy::modlog::let_go(id); }, {}));
+    }
     const std::string kinds = galaxy::mods::change_kinds(mod);
     rows.push_back({"CHANGES", kinds.empty() ? std::string("NOTHING THIS GAME USES") : kinds, nullptr, mod_details(mod)});
     if (mod.luma != nullptr && !mod.luma->version.empty()) fact("VERSION", mods_ui_text(mod.luma->version, 24u), {});
