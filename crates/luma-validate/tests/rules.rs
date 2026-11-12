@@ -406,6 +406,8 @@ fn every_rule_has_a_broken_mod() {
         (211, luma(&[("permissions", r#"[{"name": "camera", "why": "Sees you."}]"#)], &[]), NO_GAME),
         (218, luma(&[("permissions", r#"[{"name": "system.links", "why": "Opens the leaderboard page."}]"#)], &[]), NO_GAME),
         (219, luma(&[("permissions", r#"[{"name": "test.secret", "why": "A test."}]"#)], &[]), NO_GAME),
+        (220, luma(&[("plugins", r#"[{"binaries": {"windows-x64": "code/windows-x64/mod.dll"}}]"#)], &[]), NO_GAME),
+        (221, luma(&[("pre_standard", r#"{"achievements": []}"#)], &[]), NO_GAME),
         (212, luma(&[("load", r#"{"after": ["test.mod"]}"#)], &[]), NO_GAME),
         (213, luma(&[("takes_over", r#"["test.mod"]"#)], &[]), NO_GAME),
         (214, luma(&[("text", r#"{"Klingon": {"name": "Test"}}"#)], &[]), NO_GAME),
@@ -722,4 +724,47 @@ fn a_revision_1_net_with_hosts_is_one_finding() {
     assert!(got[0].1.contains("net is two permissions now"), "{}", got[0].1);
     let r = check(&luma(&[("permissions", r#"[{"name": "fs.exchange", "why": "Shares a ghost.", "hosts": ["a.org"]}]"#)], &[]), &NO_GAME);
     assert!(message(&r.findings[0], "UsEnglish").contains("only net.internet takes hosts"), "{:?}", r.findings);
+}
+
+#[test]
+fn the_previous_engines_keys_name_their_replacement() {
+    let codes = |over: &[(&str, &str)]| -> Vec<(u16, String, String)> {
+        check(&luma(over, &[]), &NO_GAME)
+            .findings
+            .iter()
+            .map(|f| (f.code, f.pointer.clone().unwrap_or_default(), message(f, "UsEnglish")))
+            .collect()
+    };
+    // K2's luma.json as the previous engine read it: each old key says what the one form writes.
+    let got = codes(&[
+        ("plugins", r#"[{"binaries": {"windows-x64": "code/windows-x64/mod.dll"}}]"#),
+        ("description", r#""Old.""#),
+        ("load_after", "[]"),
+    ]);
+    let said: Vec<(u16, &str)> = got.iter().map(|(c, p, _)| (*c, p.as_str())).collect();
+    assert_eq!(said, [(220, "/plugins"), (220, "/description"), (220, "/load_after")], "{got:?}");
+    assert!(got[0].2.ends_with("\"plugins\" is the previous engine's; write code (code/<platform>/mod.<ending>)."), "{}", got[0].2);
+    assert!(got[1].2.ends_with("write summary."), "{}", got[1].2);
+    // A layer by path, its old rows and its old conditions: under pre_standard.layers.<name>.
+    let got = codes(&[("layers", r#"[{"name": "base", "path": "layer", "tunables": {}, "when": {"mods": ["a.mod"]}}]"#)]);
+    let expected: Vec<String> = got.iter().filter(|(c, _, _)| *c == 220).map(|(_, _, m)| m[m.rfind("write ").unwrap() + 6..].to_string()).collect();
+    assert_eq!(expected, ["name (layers/<name>/).", "pre_standard.layers.base.tunables.", "pre_standard.layers.base.when.mods."], "{got:?}");
+    // Under pre_standard: a Note per key, naming the plan that replaces it; a key the previous engine never had is L202.
+    let got = codes(&[("pre_standard", r#"{"achievements": [], "galaxies": [], "nope": 1, "layers": {"base": {"forms": [], "when": {"not": {}}, "nope": 2}}}"#)]);
+    let said: Vec<(u16, &str)> = got.iter().map(|(c, p, _)| (*c, p.as_str())).collect();
+    assert_eq!(
+        said,
+        [
+            (202, "/pre_standard/nope"),
+            (202, "/pre_standard/layers/base/nope"),
+            (221, "/pre_standard/achievements"),
+            (221, "/pre_standard/galaxies"),
+            (221, "/pre_standard/layers/base/forms"),
+            (221, "/pre_standard/layers/base/when/not"),
+        ],
+        "{got:?}"
+    );
+    assert!(got[4].2.ends_with("\"pre_standard.layers.base.forms\" is read by the previous engine only, until plan 1.4 replaces it."), "{}", got[4].2);
+    let report = check(&luma(&[("pre_standard", r#"{"save": {}}"#)], &[]), &NO_GAME);
+    assert_eq!(report.findings.iter().map(|f| f.level).collect::<Vec<_>>(), [luma_validate::Level::Note]);
 }

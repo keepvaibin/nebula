@@ -685,7 +685,7 @@ fn read_with(json: &[u8], folder: &Path, base: &ParticleIr, base_index: &HashMap
         for (name, file) in object(list, "textures")? {
             let file = file.as_str().with_context(|| format!("textures.{name}: a PNG file's name"))?;
             let bytes = std::fs::read(folder.join(file)).with_context(|| format!("textures.{name}: {file} cannot be read"))?;
-            let (width, height, rgba) = super::gltf::decode_image(&bytes).with_context(|| format!("textures.{name}: {file}"))?;
+            let (width, height, rgba) = super::gltf::decode_image(&bytes, file).with_context(|| format!("textures.{name}: {file}"))?;
             textures.out.push(texture_from_rgba(name, width, height, &rgba)?);
             textures.by_name.insert(name.clone(), (textures.out.len() - 1) as u32);
         }
