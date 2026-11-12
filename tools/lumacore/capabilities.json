@@ -68,6 +68,7 @@
     "fx.place": "content.fx places an effect by offset and turn, left where it started, tinted by scale and colour (3.5)",
     "fx.alive": "The harness's fx.alive facts follow a handle for its first frames only (3.5)",
     "fx.nocost": "With no mod nothing of content.fx runs: no fx facts (3.5)",
+    "fx.limit": "content.fx keeps 256 open effects a mod; the 257th is LUMA_E_LIMIT, reported once; a stopped one frees its place (3.5)",
     "fx.on_model": "content.fx starts an effect on a model the mod attached, at its joint, and ends it with the model (3.5)",
     "model.attach": "content.model attaches a game model to an actor, drawn as the game draws its own (3.2)",
     "model.joint_follow": "An attached model follows one joint of its actor every frame (3.2)",
