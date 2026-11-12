@@ -7,6 +7,8 @@
 #include "Game/System/LumaUi.hpp"
 #include "Game/System/LumaDraw.hpp"
 #include "Game/System/LumaDrawInst.hpp"
+#include "Game/System/LumaDrawNative.hpp"
+#include "Game/System/LumaDrawPost.hpp"
 #include "Game/System/LumaDrawView.hpp"
 #include "Game/System/LumaLoader.hpp"
 #include "Game/System/LumaSave.hpp"
@@ -46,6 +48,8 @@ namespace luma {
                 {"draw", 1, 0, nullptr, "draw"},
                 {"draw.inst", 1, 0, nullptr, "draw"},
                 {"draw.view", 1, 0, nullptr, "draw"},
+                {"draw.post", 1, 0, nullptr, "draw"},
+                {"draw.native", 1, 0, "native", "draw"},
                 {"anim", 1, 1, nullptr, "animation"},
                 {"save", 1, 0, nullptr, "services-save"},
                 {"save.global", 1, 0, nullptr, "services-save"},
@@ -623,6 +627,8 @@ namespace luma {
             (void)provide(luma::draw::provider());
             (void)provide(luma::draw::inst::provider());
             (void)provide(luma::draw::view::provider());
+            (void)provide(luma::draw::post::provider());
+            (void)provide(luma::draw::native::provider());
             (void)provide(luma::anim::provider());
             (void)provide(luma::save::provider());
             (void)provide(luma::save::globalProvider());

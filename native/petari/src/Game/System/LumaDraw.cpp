@@ -18,6 +18,7 @@
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/System/LumaFont.hpp"
+#include "Game/System/LumaDrawNative.hpp"
 #include "Game/System/LumaModLog.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Ui/Font.hpp"
@@ -1711,6 +1712,7 @@ namespace luma {
         }  // namespace
 
         void point(u32 point) {
+            luma::draw::native::point(point);  // draw.native's functions here first (one load with none)
             if (point >= kPoints || sHandlerCount[point] == 0 || sKernel == nullptr) {
                 return;
             }

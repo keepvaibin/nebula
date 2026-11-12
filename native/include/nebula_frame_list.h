@@ -6,6 +6,8 @@
 #ifndef NEBULA_FRAME_LIST_H
 #define NEBULA_FRAME_LIST_H
 
+#include "luma_draw_native.h"
+
 #include <stdint.h>
 #include "nebula_limits.h"
 
@@ -223,7 +225,21 @@ typedef enum NebulaPassKind {
     NEBULA_PASS_PROBE,       /* depth at `probes`, in `probe_channel`; `arg0` NEBULA_PROBE_* */
     NEBULA_PASS_SHOW,        /* the frame drawn so far is the picture this frame shows */
     NEBULA_PASS_SCENE_BEGIN, /* the 3D scene starts: `scene_camera`, `scene_view` */
+    NEBULA_PASS_POST,        /* draw.post: program `arg0` (post_register) over the frame into a new picture, the frame
+                                from here; its params the 4 rows of instance_rows from `first_item` */
+    NEBULA_PASS_NATIVE,      /* draw.native: native_calls[first_item] called with the frame at draw point `arg0` */
 } NebulaPassKind;
+
+/* draw.native (contract draw 16): what a native call is given, valid only during it (one struct with the mods'). */
+typedef LumaDrawNativeFrame NebulaNativeFrame;
+
+/* A native call: the game's trampoline and its word. The host calls it on its render thread at the pass, for every picture
+   it draws from the list, with its own render pass ended (Vulkan) or its list open (D3D12), and restores its state
+   after. */
+typedef struct NebulaNativeCall {
+    void (*fn)(void* user, const NebulaNativeFrame* frame);
+    void* user;
+} NebulaNativeCall;
 
 /* A probe pass's `arg0`. */
 enum {
@@ -309,6 +325,9 @@ typedef struct NebulaFrameList {
     /* Set by the renderer when it no longer reads this list. */
     volatile uint32_t released;
     uint32_t reserved;
+    const NebulaNativeCall* native_calls; /* NEBULA_PASS_NATIVE's calls */
+    uint32_t native_call_count;
+    uint32_t reserved_native;
 } NebulaFrameList;
 
 /* A pipeline: two programs named by their texts' hashes, or for a written shader NEBULA_PROGRAM_SITE | shader number << 1
