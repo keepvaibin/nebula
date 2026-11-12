@@ -324,7 +324,7 @@ EnhShade enh_begin_traced(float3 P, float3 n, float4 pixel) {
     // dome at kSkyChroma of its chroma), bounded against white by the environment's own bound (traced_bounded); Painted
     // keeps FB's coloured O.
     if (view_look.x > 0.0) {
-        const float3 o_sky = traced_bounded(g_traced_o, 1.0, float3(1.0, 1.0, 1.0));
+        const float3 o_sky = traced_bounded(g_traced_o, 1.0, float3(1.0, 1.0, 1.0), kTintBoundCharacter);
         g_traced_o = lerp(g_traced_o, o_sky, saturate(view_look.x));
     }
     g_traced_lit = g_traced_keyed;
