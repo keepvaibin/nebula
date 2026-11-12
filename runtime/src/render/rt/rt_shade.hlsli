@@ -225,6 +225,7 @@ uint rt_gather(float3 origin, float3 direction, out uint item, out uint triangle
 // wall) each meet a solid or a cutout within kIndirectReach: along `n`, along the player's up (where the sky is) and
 // toward the sun.
 static const float kRoomNear = 100.0f;       // a gathered hit nearer than this stands over the point (d18: a metre; 250 dimmed whole rooms)
+static const float kRoomProbe = 250.0f;      // where a sunned frame's room probes start: past a body (b112c)
 static const float kRoomNearShare = 0.25f;   // what such a hit sends of its light in a room; full again by 2 kRoomNear
 bool rt_room_point(RtSurface s, float3 n) {
     if (!rt_sun_traced()) {
@@ -233,7 +234,7 @@ bool rt_room_point(RtSurface s, float3 n) {
     const float3 way[3] = {n, dot(g_up.xyz, g_up.xyz) > 0.25f ? normalize(g_up.xyz) : n, g_sun.xyz};
     [unroll] for (uint k = 0u; k < 3u; ++k) {
         uint met;
-        if (!blocked(rt_ray_origin(s, way[k]) + way[k] * kRoomNear, way[k], kIndirectReach - kRoomNear, kMaskSolid | kMaskCutout,
+        if (!blocked(rt_ray_origin(s, way[k]) + way[k] * kRoomProbe, way[k], kIndirectReach - kRoomProbe, kMaskSolid | kMaskCutout,
                      true, met)) {
             return false;  // the sky that way: not a room (b112b)
         }

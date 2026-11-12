@@ -80,7 +80,7 @@ static const float3 kLuminance = float3(0.2126f, 0.7152f, 0.0722f);
 // added light's guard (plan s5 kAddedMost, the programs' traced_colour; A2-05, l82): counter 51 the pixels past it.
 Texture2D<float4> g_base_map : register(t13);
 RWStructuredBuffer<uint> g_counters : register(u8);
-static const float kAddedMost = 1.0f;  // c101: the programs' guard on the largest channel
+static const float kAddedMost = 0.6f;  // the programs' guard on the largest channel (c101 1.0; d17 0.6)
 float3 base_lin(float3 c) {
     c = saturate(c);
     return lerp(pow((c + 0.055f) / 1.055f, 2.4f), c / 12.92f, step(c, 0.04045f));
