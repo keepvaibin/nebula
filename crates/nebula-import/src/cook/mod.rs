@@ -18,6 +18,7 @@ pub mod kcl;
 pub mod layout_anim;
 pub mod layout_json;
 pub mod layout_patch;
+pub mod post_shader;
 pub mod camera;
 pub mod message;
 pub mod message_merge;

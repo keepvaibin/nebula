@@ -357,6 +357,17 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         super::refuse::record(super::refuse::CookFact::Font { path: files[0].0.clone(), source: change.path.clone(), facts });
         return Ok(files);
     }
+    // post/<name>.json in a mod's assets: a screen pass, Luma/<id>/post/<name>.post, with the HLSL beside it
+    // (contracts/draw.md 15).
+    if super::post_shader::is_post_source(&change.path) {
+        let stem = &change.path[..change.path.len() - ".json".len()];
+        let name = stem.rsplit('/').next().unwrap_or(stem);
+        // Named as the mod has them: assets/post/<name>.json and .hlsl.
+        let (json_file, hlsl_file) = (format!("assets/post/{name}.json"), format!("assets/post/{name}.hlsl"));
+        let hlsl = change.source.parent().and_then(|folder| fs::read(folder.join(format!("{name}.hlsl"))).ok());
+        let made = super::post_shader::cook(&json_file, bytes, &hlsl_file, hlsl.as_deref())?;
+        return Ok(vec![(format!("{stem}.post"), made, true)]);
+    }
     // A table as JSON: X.bcsv.json, a camera table X.bcam.json, or a stage's placement table (its name has no ending:
     // StageData/MyGalaxy.arc/jmp/placement/common/objinfo.json), as `lumalink extract` writes them.
     if lower.ends_with(".bcsv.json") || lower.ends_with(".bcam.json") || (lower.ends_with(".json") && lower.contains(".arc/jmp/")) {
@@ -469,6 +480,7 @@ pub fn write_overlay(game_id: &str, changes: &[Change], patches: &PlanPatches, b
                 if super::sound_effect::is_asset_source(&change.path)
                     || super::font_cook::is_asset_source(&change.path)
                     || super::movie_cook::is_asset_source(&change.path)
+                    || super::post_shader::is_asset_source(&change.path)
                 {
                     return Ok(Vec::new());
                 }
