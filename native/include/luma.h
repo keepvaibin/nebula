@@ -164,6 +164,15 @@ typedef struct LumaCore {
        may run on is the called function's. */
     int32_t (*call_method)(const LumaMod* mod, const void* object, const char* name, const char* signature, void** args,
                            void* result);
+
+    /* State across a reload (reload.md 4), the only thing carried from one load of the mod to the next. In `stop`
+       only (`mod` the one start was given): the game holds a copy of `size` bytes, at most 1 MiB, for the mod's next
+       load this session; the last call wins, and a size of 0 keeps nothing. 0: kept; -1: not in stop, more than 1 MiB,
+       bytes null with a size, or no memory; -3: not on the game thread. */
+    int32_t (*keep)(const LumaMod* mod, const void* bytes, uint32_t size);
+    /* In `start` only: the bytes the mod's previous load kept this session, their count in *size, or null (none kept,
+       or not in start; *size 0). Valid until start returns; once read, they are gone. */
+    const void* (*kept)(const LumaMod* mod, uint32_t* size);
 } LumaCore;
 
 /* report's own codes (D3-1). */

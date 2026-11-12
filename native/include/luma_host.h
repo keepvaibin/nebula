@@ -40,6 +40,18 @@ typedef int32_t (*LumaLoadMod)(const LumaModInfo* info, const char* mod_id, cons
                                LumaCloseLibrary close, const char* const* granted, uint32_t granted_count, LumaRefusal* refusal);
 typedef void (*LumaUnloadMod)(const LumaModInfo* info);
 
+/* luma_take_out_request asks for a mod to be taken out while the game runs (reload.md 2), from any thread. At the
+   start of the next frame the game thread takes out the mods that use it (through their mod imports, transitively),
+   the last started first, then the mod, each as luma_unload_mod does. A second request for a queued id is one
+   request; a mod that is not running is said in the log and left. 1: queued; 0: not (null, empty or over 63 bytes,
+   or 16 requests waiting; said in the log).
+
+   luma_set_taken_out gives the game a function it tells each mod's id once that mod is taken out (on the game
+   thread, after its stop; its library closes after the grace). Null: nobody is told. */
+typedef int32_t (*LumaTakeOutRequest)(const char* mod_id);
+typedef void (*LumaTakenOut)(const char* mod_id);
+typedef void (*LumaSetTakenOut)(LumaTakenOut taken_out);
+
 #ifdef __cplusplus
 }
 #endif

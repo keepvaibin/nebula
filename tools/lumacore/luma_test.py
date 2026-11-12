@@ -422,13 +422,16 @@ def read_steps(t, bare, classes):
     out = []
     ends = 0
     pictures = set()
-    actions = {"hold", "stick", "shake", "pointer", "key", "settings", "picture", "call", "read", "stage", "wait", "end"}
+    actions = {"hold", "stick", "shake", "pointer", "key", "settings", "picture", "call", "read", "stage", "wait", "end",
+               "take_out"}
     for i, s in enumerate(steps):
         path = "steps[%d]" % i
         if not isinstance(s, dict):
             raise HarnessError("%s is not an object" % path)
-        keys_known(s, path, actions | {"at", "after", "timeout", "frames", "signature", "args", "fact", "of", "type"})
-        kinds = [k for k in s if k in actions]
+        keys_known(s, path, actions | {"at", "after", "timeout", "frames", "signature", "args", "fact", "of", "type"}
+                   | ({"wait"} if "take_out" in s else set()))
+        # take_out's "wait" (true or false) is its option, not the wait action.
+        kinds = [k for k in s if k in actions and not (k == "wait" and "take_out" in s)]
         if len(kinds) != 1:
             raise HarnessError("%s needs exactly one action (%s)" % (path, ", ".join(sorted(actions))))
         action = kinds[0]
@@ -507,6 +510,16 @@ def read_steps(t, bare, classes):
                 raise HarnessError("%s.%s takes true" % (path, action))
             step["line"] = action
             ends += action == "end"
+        elif action == "take_out":
+            # Revision 7 (reload.md 2, G-RL4): a running mod taken out; its next step waits for takeout.<id> (the mod's
+            # library closed) up to 600 frames, else setup-failed, unless "wait" is false.
+            mod_id = text(s, "take_out", path)
+            if not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", mod_id) or len(mod_id.encode("utf-8")) > 63:
+                raise HarnessError("%s.take_out must be a mod id ([a-z0-9][a-z0-9._-]*, at most 63 bytes)" % path)
+            wait = s.get("wait", True)
+            if not isinstance(wait, bool):
+                raise HarnessError("%s.wait takes true or false" % path)
+            step["line"] = "take_out %s %d" % (mod_id, 1 if wait else 0)
         elif action == "call":
             name = plain(text(s, "call", path), path + ".call")
             sig = text(s, "signature", path)
@@ -1117,7 +1130,7 @@ def evaluate(test, renderer, run_folder, ran):
     coded = [line for line in log_lines if "refusals are given as codes" in line]
     add("refusals are given in words", not coded, coded)
     for bad in by_key.get("harness.bad_fact", []):
-        add("every fact is JSON", False, bad["value"])
+        add("every fact is well formed (JSON, a key a mod may log)", False, bad["value"])
     if not test["bare"]:
         loaded = by_key.get("mod.%s.loaded" % GAME_HALF_ID, [])
         add("the game half loaded", bool(loaded) and loaded[-1]["value"] is True, loaded[-1]["value"] if loaded else None)
