@@ -556,7 +556,8 @@ float4 program_fogged_at(float4 c, float4 pixel) {
         const float3 f = g_fog_amount > 0.0 ? fog_share(pixel) : float3(0.0, 0.0, 0.0);
         return float4(f / (1.0 + f), c.a);
     }
-    return g_fog_amount > 0.0 ? float4(lerp(c.rgb, g_fog_colour * fog_share(pixel), g_fog_amount), c.a) : c;
+    // The share is linear light (FB b64), the fog's colour a display value: lit in linear light (M1; c39f).
+    return g_fog_amount > 0.0 ? float4(lerp(c.rgb, traced_srgb(traced_lin(g_fog_colour) * fog_share(pixel)), g_fog_amount), c.a) : c;
 }
 #endif
 // A program returns inside its entry, whose input `i` holds the pixel. The light on the surface, the game's fog, the
