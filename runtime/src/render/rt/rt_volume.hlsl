@@ -146,7 +146,10 @@ void main(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID) {
                 const float3 inner = clamp(cell, 0.5f, float3(kCells) - 0.5f) / float3(kCells);
                 const float4 kept = g_before_volume.SampleLevel(g_wrap, inner, 0.0f);
                 if (all(kept == kept)) {
-                    now = lerp(now, kept, 1.0f - (1.0f - kKeep) / fb_history_scale());
+                    // Where V moved (a caster passed, the sun turned) the history gives way: kKeep to a move of 0.25,
+                    // 0.6 from 0.5 on (A5-A6; FB b79).
+                    const float keep = lerp(kKeep, 0.6f, saturate((abs(now.a - kept.a) - 0.25f) / 0.25f));
+                    now = lerp(now, kept, 1.0f - (1.0f - keep) / fb_history_scale());
                 }
             }
         }

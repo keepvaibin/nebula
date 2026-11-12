@@ -498,12 +498,14 @@ float4 traced_air(float4 c, float4 pixel) {
 // One medium (DIRECTOR.md, 11-11): a draw with a fog step of the game's (program_fog ran) has the game's fog for its
 // air, and takes none of the traced (FB b56).
 static bool g_fog_step = false;
+static bool g_fog_live = false;  // and it fogs: an amount here, or a curve whose end lies past its start (A5-A4; FB b79)
 float4 traced_scatter(float4 c, float4 pixel) {
     const bool alone = (view_flags & 128u) != 0u;  // signal A: the air's own light alone, x / (1 + x) (FA l65)
     if ((view_flags & 256u) != 0u) {
         return c;  // signal F (program_fogged_at) as it is (FB b68)
     }
-    if ((draw_flags & 8u) == 0u || (view_flags & 8u) == 0u || view_volume[2].w == 0.0 || (view_flags & 16u) != 0u || g_fog_step) {
+    if ((draw_flags & 8u) == 0u || (view_flags & 8u) == 0u || view_volume[2].w == 0.0 || (view_flags & 16u) != 0u ||
+        (g_fog_step && g_fog_live)) {
         return alone ? float4(0.0, 0.0, 0.0, c.a) : c;
     }
     const float4 d = view_volume[0];
@@ -528,16 +530,18 @@ float4 program_fogged_at(float4 c, float4 pixel) { return c; }
 // colour and amount, and PROGRAM_LIGHT puts the light on the surface's colour first and the fog over it.
 static float3 g_fog_colour = float3(0.0, 0.0, 0.0);
 static float g_fog_amount = 0.0;
+// The fog step with its curve (the cooker's fog line, native_fog): x its start, y its end, z the pixel's eye depth, w
+// its type (GX: 2 linear, 4 exp, 5 exp2, 6 reverse exp, 7 reverse exp2; bit 3 orthographic); 0 none known.
+static float4 g_fog_curve = float4(0.0, 0.0, 0.0, 0.0);
 float3 program_fog(float3 c, float3 colour, float amount) {
     g_fog_colour = colour;
     g_fog_amount = amount;
     g_fog_step = true;
+    // A fog line whose fog is off (amount 0, start = end) leaves the air to the tracer (A5-A4; FB b79).
+    g_fog_live = amount > 0.0 || (uint(g_fog_curve.w + 0.5) != 0u && g_fog_curve.y > g_fog_curve.x);
     return c;
 }
 float4 program_fogged(float4 c) { return g_fog_amount > 0.0 ? float4(lerp(c.rgb, g_fog_colour, g_fog_amount), c.a) : c; }
-// The fog step with its curve (the cooker's fog line, native_fog): x its start, y its end, z the pixel's eye depth, w
-// its type (GX: 2 linear, 4 exp, 5 exp2, 6 reverse exp, 7 reverse exp2; bit 3 orthographic); 0 none known.
-static float4 g_fog_curve = float4(0.0, 0.0, 0.0, 0.0);
 float3 program_fog_curve(float3 c, float3 colour, float amount, float4 curve) {
     g_fog_curve = curve;
     return program_fog(c, colour, amount);

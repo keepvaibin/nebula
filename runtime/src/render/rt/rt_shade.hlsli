@@ -396,22 +396,25 @@ float3 rt_dome(RtHit h) {
 // What the dome shows along a direction, as a ratio to the stage's authored ambient (11.1: S).
 // Against the dome's mean colour, a channel at a time, once it is known (FB b48): open sky averages 1, its colour
 // included (the art's ambient already is the sky's colour); before that against the mean luminance as at first.
+// Whole: a reservoir's light and p_hat take the sample as it is; the guard is the mean's clamp after the filters
+// (A1-10; FB b79). A floor so p_hat stays positive.
 float3 rt_sky_ratio(float3 dome) {
     if (g_shade.dome.w > 0.0f) {
-        return clamp(dome * g_shade.dome.rgb, 0.25f, 3.0f);
+        return max(dome * g_shade.dome.rgb, 1e-3f);
     }
     const float scale = g_shade.look.z > 0.0f ? g_shade.look.z : 1.0f / max(rt_lum(dome), 1e-3f);
-    return clamp(dome * scale, 0.25f, 3.0f);
+    return max(dome * scale, 1e-3f);
 }
 
-// The dome's luminance into the counters (fixed point, 256 a unit) for the host's running mean (11.1). The caller
-// counts only some pixels so a frame's sum stays far inside 32 bits.
+// The dome's luminance into the counters (fixed point, kDomeUnit a unit, each direction held to 8: the 4096 directions
+// of rt_count_dome_directions sum inside 32 bits) for the host's running mean (11.1; rt_bounce.cpp kDomeUnit).
+static const float kDomeUnit = 65536.0f;  // a dark dome (linear 0.01) to 1/655 (A1-9; FB b79)
 void rt_count_dome(float3 dome) {
     // Rounded: a dark dome's linear values are small (b65).
-    InterlockedAdd(g_counters[44], uint(clamp(rt_lum(dome), 0.0f, 64.0f) * 256.0f + 0.5f));
+    InterlockedAdd(g_counters[44], uint(clamp(rt_lum(dome), 0.0f, 8.0f) * kDomeUnit + 0.5f));
     InterlockedAdd(g_counters[45], 1u);
     // Its colour, a channel at a time (rt_sky_ratio; FB b48).
-    const uint3 c = uint3(clamp(dome, 0.0f, 64.0f) * 256.0f + 0.5f);
+    const uint3 c = uint3(clamp(dome, 0.0f, 8.0f) * kDomeUnit + 0.5f);
     InterlockedAdd(g_counters[48], c.r);
     InterlockedAdd(g_counters[49], c.g);
     InterlockedAdd(g_counters[50], c.b);

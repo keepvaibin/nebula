@@ -299,10 +299,11 @@ bool RenderCore::rt_dome_read() {
     // A walk's step, by the rate as the filters' histories take it (rt_history_scale; FB b50).
     const float step = 0.05f / std::clamp(rt_frame_rate_ / 60.0f, 0.5f, 2.0f);
     if (counted[45] != 0u) {
-        const float mean = static_cast<float>(counted[44]) / 256.0f / static_cast<float>(counted[45]);
+        constexpr float kDomeUnit = 65536.0f;  // rt_shade.hlsli rt_count_dome (A1-9; FB b79)
+        const float mean = static_cast<float>(counted[44]) / kDomeUnit / static_cast<float>(counted[45]);
         rt_dome_mean_ = rt_dome_mean_ > 0.0f ? rt_dome_mean_ + (mean - rt_dome_mean_) * step : mean;
         for (unsigned c = 0; c < 3u; ++c) {  // its colour (b48)
-            const float channel = static_cast<float>(counted[48u + c]) / 256.0f / static_cast<float>(counted[45]);
+            const float channel = static_cast<float>(counted[48u + c]) / kDomeUnit / static_cast<float>(counted[45]);
             rt_dome_colour_[c] = rt_dome_colour_[c] > 0.0f ? rt_dome_colour_[c] + (channel - rt_dome_colour_[c]) * step : channel;
         }
     }
@@ -464,6 +465,7 @@ void RenderCore::rt_reference_publish() {
     means.writes[0] = rt_image(RtImage::Light);
     means.writes[1] = rt_image(RtImage::Added);
     means.writes[2] = rt_image(RtImage::Mirror);
+    means.writes[3] = rt_image(RtImage::Indirect);  // its rgb O, as the step up writes the real-time one (A1-16; FB b79)
     rt_backend_.dispatch(RtShader::ReferenceOut, means, rt_light_frame_.across, rt_light_frame_.down);
     // The reference's R through the reflections' own composite where they are on (rt_reflect_out.hlsl, g_pass.w bit 0:
     // the mean, the local lights' highlights added there): the Mirror picture in a preset's encoding, so the two

@@ -252,9 +252,12 @@ void main(uint3 id : SV_DispatchThreadID) {
             const int2 at = int2(floor(before_half));
             if (all(at >= int2(0, 0)) && all(at < int2(half_width, half_height))) {
                 const float4 was = g_half_guide_before.Load(int3(at, 0));
-                if (was.a != 0.0f && was.g == guide.g && was.b == guide.b && abs(was.r - motion.z) < 0.05f * motion.z + 2.0f) {
+                if (was.a != 0.0f && was.g == guide.g && was.b == guide.b && abs(was.r - motion.z) < 0.05f * motion.z + 2.0f &&
+                    dot(n, normalize(mul((float3x3)now_from_before, rt_unpack_normal(was.a)))) >= 0.906f) {
                     const GiReservoir before = gi_load(at, now_from_before);
-                    if (before.m > 0.0f) {
+                    // Only a sample this receiver could have drawn counts its M: in front of its plane, past the near
+                    // field's reach (A1-7; FB b79).
+                    if (before.m > 0.0f && dot(n, before.at - x) > 0.0f && length(before.at - x) >= skip) {
                         const uint picked = r.sum > 0.0f ? 0u : 1u;
                         const float3 kept_at = r.at;
                         gi_take(r, before, gi_target(before.light, before.at, x, n) * before.w * before.m, seed);
@@ -298,7 +301,10 @@ void main(uint3 id : SV_DispatchThreadID) {
             if (!(cos_q > 1e-4f) || !(far_r > 1e-6f)) {
                 continue;
             }
-            const float jacobian = clamp(cos_r / cos_q * far_q / far_r, 0.0f, kMostJacobian);
+            const float jacobian = cos_r / cos_q * far_q / far_r;
+            if (!(jacobian <= kMostJacobian)) {
+                continue;  // its weight would be cut, its sample kept: left out instead (A1-8; FB b79)
+            }
             if (gi_hidden(s.origin, other.at, skip)) {
                 continue;  // hidden from here: neither its light nor its count
             }

@@ -2183,7 +2183,9 @@ void RenderCore::rt_light() {
         // FB (22.20): the renderer's outside denoiser takes the signals raw (rt_denoiser.h).
         const rt::Denoiser* const denoiser = renderer_.rt_denoiser();
         rt_raw_ = denoiser != nullptr && denoiser->raw_signals() == rt::kSignalAll;
-        const std::uint32_t wanted = (rt_raw_ ? kRtPassGuides : 0u) | kRtPassLight | (rt_pass_indirect_on() ? kRtPassIndirect : 0u) |
+        // The reference writes its rgb O into the Indirect image (A1-16; FB b79): made in its runs too.
+        const std::uint32_t wanted = (rt_raw_ ? kRtPassGuides : 0u) | kRtPassLight |
+                                     (rt_pass_indirect_on() || rt_fb_reference() ? kRtPassIndirect : 0u) |
                                      (rt_pass_near_on() ? kRtPassNear : 0u) |
                                      (rt_pass_reflect_on() ? kRtPassReflect : 0u) | (rt_pass_volume_on() ? kRtPassVolume : 0u) |
                                      (rt_blend_seen_ ? kRtPassBlend : 0u) | (rt_blend_seen_ && rt_transmit_wanted() ? kRtPassTransmit : 0u);
@@ -2280,7 +2282,7 @@ void RenderCore::rt_light() {
                 }
                 // The sky and bounce light's ratio a channel at a time (FB 22.10): picture 7 (program.hlsli traced_o).
                 rt_indirect_shown_ = false;
-                if (rt_pass_indirect_on()) {
+                if (rt_pass_indirect_on() || (rt_fb_reference() && rt_ref_ready_)) {  // the reference's once it has one (b79)
                     if (void* const ratio = rt_backend_.image_to_sample(rt_image(RtImage::Indirect)); ratio != nullptr) {
                         rt_indirect_slot_ = renderer_.rt_publish_light(ratio, texture_store_, 7u);
                         rt_indirect_shown_ = true;

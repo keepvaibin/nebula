@@ -99,6 +99,9 @@ void RenderCore::rt_pass_indirect() {
     half.ray[2] = frame.ray[2] * 2.0f;
     half.ray[3] = frame.ray[3];
     half.kept[2] = history ? 1u : 0u;
+    // The history scale, the frame's own (rt_walk.cpp: clamp(rate / 60, 0.5, 2); A1-15; FB b79).
+    const float scale = rt_frame_rate_ / 60.0f < 0.5f ? 0.5f : rt_frame_rate_ / 60.0f > 2.0f ? 2.0f : rt_frame_rate_ / 60.0f;
+    std::memcpy(&half.kept[3], &scale, sizeof(scale));
     const UploadRing::Allocation half_at = renderer_.constant_ring().allocate(512u, 256u);
     std::memset(half_at.cpu, 0, 512u);
     std::memcpy(half_at.cpu, &half, sizeof(half));
