@@ -226,6 +226,12 @@ typedef struct LumaNetLocalService {
        UTF-8, a binary other than 0 or 1, a null data with bytes: LUMA_E_ARGUMENT, reported; a handle not this mod's
        WebSocket: LUMA_E_HANDLE, reported. */
     int32_t (*ws_send)(const LumaMod* mod, LumaHandle socket, const void* data, uint64_t bytes, uint32_t binary);
+    /* 1.4. Game thread. This machine's IPv4 address on the local network in text ("192.168.1.20"): the one a phone on
+       the same network reaches it at (the interface the system routes to the network by; no packet is sent), into
+       buf with its NUL. Returns its length without the NUL; a null buf with size 0 asks the length only. No local
+       network (only loopback, or a public address): LUMA_E_NOT_FOUND (an answer, not reported); a buf too short:
+       LUMA_E_TOO_LARGE (an answer; nothing written); a null buf with size above 0: LUMA_E_ARGUMENT, reported. */
+    int64_t (*address)(const LumaMod* mod, char* buf, uint64_t size);
 } LumaNetLocalService;
 
 /* A host name or address in text: at most this many bytes. */

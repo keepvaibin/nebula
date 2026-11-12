@@ -4727,6 +4727,64 @@ void registered(void*, const LumaServiceKernel* kernel) {
     g_kernel.store(kernel, std::memory_order_release);
 }
 
+// The local-network address a UDP socket connected toward `target` takes (connect on a datagram socket only picks the
+// route and the source address; nothing is sent). True with the address in text when it is a private or link-local
+// IPv4 address other than loopback.
+bool routed_address(const char* target, char (&text)[INET_ADDRSTRLEN]) noexcept {
+    const Sock s = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (s == kNoSock) {
+        return false;
+    }
+    sockaddr_in to{};
+    to.sin_family = AF_INET;
+    to.sin_port = htons(9u);
+    bool found = false;
+    if (inet_pton(AF_INET, target, &to.sin_addr) == 1 &&
+        ::connect(s, reinterpret_cast<const sockaddr*>(&to), static_cast<socklen_t>(sizeof(to))) == 0) {
+        sockaddr_in self{};
+        socklen_t length = static_cast<socklen_t>(sizeof(self));
+        if (::getsockname(s, reinterpret_cast<sockaddr*>(&self), &length) == 0 && self.sin_family == AF_INET &&
+            (ntohl(self.sin_addr.s_addr) >> 24u) != 127u && local_v4(self.sin_addr) &&
+            inet_ntop(AF_INET, &self.sin_addr, text, INET_ADDRSTRLEN) != nullptr) {
+            found = true;
+        }
+    }
+    close_system(s);
+    return found;
+}
+
+std::int64_t net_address(const LumaMod* mod, char* buf, std::uint64_t size) noexcept {
+    static constexpr const char* where = "net.local.address";
+    if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
+        return status;
+    }
+    if (buf == nullptr && size != 0u) {
+        return argument(mod, where, "buf");
+    }
+    if (!system_ready()) {
+        return LUMA_E_NOT_FOUND;
+    }
+    // The default route's interface first (the usual home network), then a route into each private range, for a
+    // network with no way out.
+    static constexpr const char* kTargets[] = {"8.8.8.8", "192.168.0.1", "192.168.1.1", "10.0.0.1", "172.16.0.1",
+                                               "169.254.0.1"};
+    char text[INET_ADDRSTRLEN] = {};
+    for (const char* target : kTargets) {
+        if (routed_address(target, text)) {
+            const std::uint64_t length = std::strlen(text);
+            if (buf == nullptr) {
+                return static_cast<std::int64_t>(length);
+            }
+            if (size < length + 1u) {
+                return LUMA_E_TOO_LARGE;
+            }
+            std::memcpy(buf, text, length + 1u);
+            return static_cast<std::int64_t>(length);
+        }
+    }
+    return LUMA_E_NOT_FOUND;
+}
+
 const LumaNetLocalService kLocal = {
     {sizeof(LumaNetLocalService), LUMA_NET_LOCAL_MAJOR, LUMA_NET_LOCAL_MINOR},
     net_tcp_connect,
@@ -4746,6 +4804,7 @@ const LumaNetLocalService kLocal = {
     net_http,
     net_ws_connect,
     net_ws_send,
+    net_address,
 };
 
 // net.local's own rows (the net range is 250-299), beside the registry's (100-104).
