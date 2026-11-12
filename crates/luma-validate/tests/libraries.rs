@@ -135,9 +135,33 @@ fn each_broken_library_gives_its_finding() {
     let w = "windows-x64";
     let one = |v: &str| check(&code_mod(w, &lib(&format!("pe-x64/{v}.dll")), &[], false), w, true);
 
+    // The name is the game's under another signature: L505 lists the game's signatures for it (G-R22-2).
     let r = one("wrong_signature");
     assert_eq!(codes(&r), vec![505]);
-    assert!(english(&r, 505).contains("\"int()\""), "{}", english(&r, 505));
+    assert_eq!(
+        english(&r, 505),
+        "test.mod: code/windows-x64/mod.dll: the game has no function \"MR::getPlayerPos\" with the signature \"int()\" (its signatures: \"Vec3f *()\")."
+    );
+    assert_eq!(
+        message(&r.findings[0], "JpJapanese"),
+        "test.mod：code/windows-x64/mod.dll：ゲームにシグネチャ \"int()\" の関数 \"MR::getPlayerPos\"（あるシグネチャ：\"Vec3f *()\"）はありません。"
+    );
+    // The kept report carries the list as it was said.
+    let kept = luma_validate::Saved::parse(&luma_validate::Saved::from_report(&r, "key").to_bytes()).unwrap();
+    assert_eq!(kept.findings, r.findings);
+
+    // No signature asked: it binds while the game has one function of that name, and is L505 naming them all when
+    // it has several.
+    let r = one("no_signature");
+    assert!(r.findings.is_empty(), "{:?}", r.findings);
+    let mut two = names();
+    two.add_rows("MR::getPlayerPos\tVec3f *(s32)\thook\t4\n").unwrap();
+    let r = check_with(&code_mod(w, &lib("pe-x64/no_signature.dll"), &[], false), w, Some(&two));
+    assert_eq!(codes(&r), vec![505]);
+    assert_eq!(
+        english(&r, 505),
+        "test.mod: code/windows-x64/mod.dll: the game has no single function \"MR::getPlayerPos\": the import names no signature and it has several (\"Vec3f *()\", \"Vec3f *(s32)\")."
+    );
 
     let r = one("constructor_wrap");
     assert_eq!(codes(&r), vec![512]);
@@ -458,7 +482,7 @@ fn a_virtual_call_and_a_class_number_are_checked_against_the_types_file() {
     let head = "test.mod: code/windows-x64/mod.dll: the game has no ";
     for want in [
         "virtual function \"MR::getPlayerPos\" with the signature \"Vec3f *()\".",
-        "virtual function \"LiveActor::calcAndSetBaseMtx\" with the signature \"int()\".",
+        "virtual function \"LiveActor::calcAndSetBaseMtx\" with the signature \"int()\" (its signatures: \"void()\").",
         "virtual function \"LiveActor::noRow\" with the signature \"void()\".",
         "class \"NoSuchClass\".",
     ] {

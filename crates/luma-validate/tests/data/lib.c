@@ -59,6 +59,12 @@ static LumaImport imports[] = {
     LUMA_FUNCTION(get_pos, "MR::getPlayerPos", "int()"),
 };
 LUMA_MOD(imports, start, 0);
+#elif defined(NO_SIGNATURE)
+/* A function named without its signature: it binds only while the game has one function of that name. */
+static LumaImport imports[] = {
+    LUMA_FUNCTION(get_pos, "MR::getPlayerPos", 0),
+};
+LUMA_MOD(imports, start, 0);
 #elif defined(OPTIONAL_MISSING)
 static LumaImport imports[] = {
     {LUMA_IMPORT_FUNCTION, LUMA_OPTIONAL, "MR::noSuchFunction", "void()", &get_pos, 0, 0, 0},

@@ -335,6 +335,14 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
                     ctx.add(512, &name, None, None, vec![("why", p("Lib.HookOnConstructor")), ("found", t(row.name.clone()))]);
                     continue;
                 }
+                // The name is the game's but not the signature asked (or none was asked and it has several): L505
+                // lists the game's signatures for the name, so the fix is read off the message.
+                if let (None, Some(list), false) = (matched, rows.filter(|l| !l.is_empty()), optional) {
+                    let kind = if row.signature.is_some() { "Name.FunctionSigHas" } else { "Name.FunctionMany" };
+                    let has = signatures(list.iter().map(|(s, _)| s.as_str()));
+                    ctx.add(505, &name, None, None, vec![("kind", p(kind)), ("found", t(row.name.clone())), ("sig", t(row.signature.clone().unwrap_or_default())), ("has", t(has))]);
+                    continue;
+                }
                 (if row.signature.is_some() { "Name.FunctionSig" } else { "Name.Function" }, matched.is_some())
             }
             // A record's size (kind 2), its field (kind 1), a global (kind 7): against the types file, as the kernel
@@ -371,6 +379,15 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
             _ => match n.types.as_ref().map(|t| t.methods.as_ref()) {
                 Some(Some(methods)) => {
                     let found = row.signature.as_ref().and_then(|sig| methods.get(&(row.name.clone(), sig.clone())));
+                    // Not callable as asked, but the name has virtuals with a row: L505 lists their signatures.
+                    if found != Some(&true) && !optional {
+                        let callable: Vec<&str> = methods.iter().filter(|((n, _), with_row)| **with_row && *n == row.name).map(|((_, s), _)| s.as_str()).collect();
+                        if !callable.is_empty() {
+                            let has = signatures(callable.into_iter());
+                            ctx.add(505, &name, None, None, vec![("kind", p("Name.MethodHas")), ("found", t(row.name.clone())), ("sig", t(row.signature.clone().unwrap_or_default())), ("has", t(has))]);
+                            continue;
+                        }
+                    }
                     ("Name.Method", found == Some(&true))
                 }
                 Some(None) => {
@@ -396,6 +413,14 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
     if mod_functions {
         ctx.not_checked(505, "Missing.ModExports");
     }
+}
+
+/// The game's signatures for a name, as L505's `has` gives them: each quoted, in byte order, joined by ", ".
+fn signatures<'a>(list: impl Iterator<Item = &'a str>) -> String {
+    let mut list: Vec<&str> = list.collect();
+    list.sort_unstable();
+    list.dedup();
+    list.iter().map(|s| format!("\"{s}\"")).collect::<Vec<_>>().join(", ")
 }
 
 /// What the types file says of a kind 1, 2 or 7 import.
