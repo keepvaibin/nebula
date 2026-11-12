@@ -76,21 +76,21 @@ namespace luma {
             }
 
             // The place of object i: the given one, or the origin, unturned, scale 1, every argument -1.
-            void placeOf(const LumaPlace* pPlace, u32 i, LumaPlace* pOut) {
+            void placeOf(const LumaMakePlace* pPlace, u32 i, LumaMakePlace* pOut) {
                 if (pPlace == nullptr) {
-                    *pOut = LumaPlace{};
+                    *pOut = LumaMakePlace{};
                     pOut->scale[0] = pOut->scale[1] = pOut->scale[2] = 1.0f;
                     for (s32& rArg : pOut->args) {
                         rArg = -1;
                     }
                     return;
                 }
-                __builtin_memcpy(pOut, reinterpret_cast<const u8*>(pPlace) + static_cast<u64>(i) * pPlace->size, sizeof(LumaPlace));
+                __builtin_memcpy(pOut, reinterpret_cast<const u8*>(pPlace) + static_cast<u64>(i) * pPlace->size, sizeof(LumaMakePlace));
             }
 
             // The rows' table in the scene's memory: a TableData as the importer cooks one, then its Table. Null: none
             // left.
-            const ::Table* writeTable(const char* pName, u32 count, const LumaPlace* pPlace) {
+            const ::Table* writeTable(const char* pName, u32 count, const LumaMakePlace* pPlace) {
                 u32 nameBytes = 0;
                 while (pName[nameBytes] != 0) {
                     nameBytes++;
@@ -120,7 +120,7 @@ namespace luma {
                 }
                 u32* const pCells = reinterpret_cast<u32*>(pBlock + rowsAt);
                 for (u32 i = 0; i < count; i++) {
-                    LumaPlace place;
+                    LumaMakePlace place;
                     placeOf(pPlace, i, &place);
                     u32* const pRow = pCells + i * kColumns;
                     pRow[kName] = 0;  // the name, at the text's start
@@ -159,21 +159,21 @@ namespace luma {
             return pData != nullptr && pData->mReserved[0] == kMark0 && pData->mReserved[1] == kMark1;
         }
 
-        s32 make(const LumaMod* pMod, const char* pName, u32 count, const LumaPlace* pPlace, u32 flags, void** ppObjects) {
+        s32 make(const LumaMod* pMod, const char* pName, u32 count, const LumaMakePlace* pPlace, u32 flags, void** ppObjects) {
             if (!onGameThread()) {
                 return -3;
             }
             if (pName == nullptr || pName[0] == 0 || count == 0 || count > kMost || (flags & ~LUMA_MAKE_DEAD) != 0 ||
-                (pPlace != nullptr && pPlace->size < sizeof(LumaPlace))) {
+                (pPlace != nullptr && pPlace->size < sizeof(LumaMakePlace))) {
                 say(pMod, "make %s: %s", pName != nullptr ? pName : "(no name)",
                     pName == nullptr || pName[0] == 0 ? "no name"
                     : count == 0 || count > kMost     ? "the count is not 1 to 1024"
                     : (flags & ~LUMA_MAKE_DEAD) != 0  ? "a flag luma.h does not define"
-                                                      : "a place smaller than luma.h's LumaPlace");
+                                                      : "a place smaller than luma.h's LumaMakePlace");
                 return -4;
             }
             for (u32 i = 0; pPlace != nullptr && i < count; i++) {
-                LumaPlace place;
+                LumaMakePlace place;
                 placeOf(pPlace, i, &place);
                 if (!finite(place.pos, 3) || !finite(place.rot, 3) || !finite(place.scale, 3)) {
                     say(pMod, "make %s: place %u is not a finite position, turn and scale", pName, i);

@@ -10,7 +10,7 @@ struct TableData;
 namespace luma {
     namespace make {
         // LumaCore.make: the count made, or luma.h's -1 to -4, said in the log. On the game thread.
-        s32 make(const LumaMod* pMod, const char* pName, u32 count, const LumaPlace* pPlace, u32 flags, void** ppObjects);
+        s32 make(const LumaMod* pMod, const char* pName, u32 count, const LumaMakePlace* pPlace, u32 flags, void** ppObjects);
         // A placement table `make` wrote (its objects stand in the main stage): StageDataHolder::findPlacedStageDataHolder.
         bool isMadeTable(const TableData* pData);
     }

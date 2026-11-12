@@ -119,7 +119,8 @@ typedef struct LumaOverride {
 typedef struct LumaClassDef {
     uint32_t size;            /* sizeof(LumaClassDef) */
     const char* name;         /* the class's name (1 to 63 bytes): a stage places its objects by it. No game class,
-                                 factory row or other mod's class may have it */
+                                 factory row or other mod's class may have it; names compare with ASCII case
+                                 folded, as the game's factory does */
     const char* base;         /* the game class it derives from ("JetTurtle"): polymorphic, with a row */
     const char* maker;        /* the factory row that makes the base ("JetTurtle"); null: the one named as the base */
     const char* replaces;     /* null, or a name the game's stages place: its objects are made as this class instead */
@@ -139,13 +140,13 @@ typedef struct LumaClassDef {
 } LumaClassDef;
 
 /* Where LumaCore.make puts an object, as a stage's placement row gives it (classes contract, "make"). */
-typedef struct LumaPlace {
-    uint32_t size;    /* sizeof(LumaPlace); in an array, each place's (the first's is the stride) */
+typedef struct LumaMakePlace {
+    uint32_t size;    /* sizeof(LumaMakePlace); in an array, each place's (the first's is the stride) */
     float pos[3];     /* in the main stage, as a stage file's pos_x/y/z */
     float rot[3];     /* degrees, as dir_x/y/z */
     float scale[3];   /* as scale_x/y/z */
     int32_t args[8];  /* Obj_arg0 to 7; -1: not given (the placement file names what each class reads) */
-} LumaPlace;
+} LumaMakePlace;
 #define LUMA_MAKE_DEAD 1u /* made, then dead (makeActorDead) until something makes it appear; actors only */
 
 /* A table of the game's data as LumaCore.table gives it (numbers contract, plan 1.5). */
@@ -286,9 +287,9 @@ typedef struct LumaCore {
        placement's view group. Flags: LUMA_MAKE_DEAD. Each object's address in objects[i] (objects may be null).
        Returns the count made (fewer when a creator makes nothing, said), or -1 the factory makes nothing by that
        name, -2 its files are not in this game, -3 not on the game thread or not while the scene makes its objects,
-       -4 a bad argument (count not 1 to 1024, a place smaller than LumaPlace or not finite, an unknown flag) or no
+       -4 a bad argument (count not 1 to 1024, a place smaller than LumaMakePlace or not finite, an unknown flag) or no
        memory. Every refusal is said in the log with the name. */
-    int32_t (*make)(const LumaMod* mod, const char* name, uint32_t count, const LumaPlace* place, uint32_t flags,
+    int32_t (*make)(const LumaMod* mod, const char* name, uint32_t count, const LumaMakePlace* place, uint32_t flags,
                     void** objects);
 } LumaCore;
 

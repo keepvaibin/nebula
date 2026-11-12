@@ -1054,7 +1054,7 @@ namespace luma {
         }
 
         // Objects made by name (classes contract, "make").
-        s32 apiMake(const LumaMod* pMod, const char* pName, u32 count, const LumaPlace* pPlace, u32 flags, void** ppObjects) {
+        s32 apiMake(const LumaMod* pMod, const char* pName, u32 count, const LumaMakePlace* pPlace, u32 flags, void** ppObjects) {
             return luma::make::make(pMod, pName, count, pPlace, flags, ppObjects);
         }
 
