@@ -56,6 +56,9 @@ static const uint kDevPaintedGlass = 0u, kDevPaintedMetal = 1u, kDevPaintedGloss
                   kDevKeepMetal = 4u, kDevKeepGloss = 5u;
 // The programs' keys, copied into the tail by the host (rt_walk.cpp; FB b66): sun_strength, sky_chroma, stage_light.
 static const uint kDevSunStrength = 6u, kDevSkyChroma = 7u, kDevStageLight = 8u;
+// The share of the dome's chroma O keeps under the relight (FB b87; rt_sky_ratio): the next slot after the shared
+// three, the host's dome_chroma once it fills it (t4); unset, kSkyChroma 0.4.
+static const uint kDevDomeChroma = 9u;
 float rt_dev_or(uint slot, float otherwise) {
     return ((g_dev_set.x >> slot) & 1u) != 0u ? g_dev[slot >> 2u][slot & 3u] : otherwise;
 }

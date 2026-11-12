@@ -399,12 +399,49 @@ float3 rt_dome(RtHit h) {
 // included (the art's ambient already is the sky's colour); before that against the mean luminance as at first.
 // Whole: a reservoir's light and p_hat take the sample as it is; the guard is the mean's clamp after the filters
 // (A1-10; FB b79). A floor so p_hat stays positive.
-float3 rt_sky_ratio(float3 dome) {
+// Under the relight (kForm > 0; FB b87, the director's A1): against the dome's mean LUMINANCE, at kSkyChroma of its
+// chroma, lerp(luma(L), L, kSkyChroma) / mean: the sky's hue enters O, once (sky' takes luminance only); a uniform dome
+// gives luminance 1 (the furnace). Painted (kForm 0) as before, to the bit.
+static const float kSkyChroma = 0.4f;     // the sky's colour in shade at this share of its chroma (M8, October's)
+float rt_sky_chroma() {
+    return rt_dev_or(kDevDomeChroma, kSkyChroma);
+}
+// The dome's mean luminance as rt_sky_ratio divides by it (the mean colour's luminance once known: luminance is linear).
+float rt_dome_mean_lum(float3 dome) {
     if (g_shade.dome.w > 0.0f) {
-        return max(dome * g_shade.dome.rgb, 1e-3f);
+        return max(rt_lum(1.0f / max(g_shade.dome.rgb, 1e-6f)), 1e-3f);
     }
-    const float scale = g_shade.look.z > 0.0f ? g_shade.look.z : 1.0f / max(rt_lum(dome), 1e-3f);
-    return max(dome * scale, 1e-3f);
+    return g_shade.look.z > 0.0f ? 1.0f / g_shade.look.z : max(rt_lum(dome), 1e-3f);
+}
+float3 rt_sky_ratio(float3 dome) {
+    float3 art;
+    if (g_shade.dome.w > 0.0f) {
+        art = max(dome * g_shade.dome.rgb, 1e-3f);
+    } else {
+        const float scale = g_shade.look.z > 0.0f ? g_shade.look.z : 1.0f / max(rt_lum(dome), 1e-3f);
+        art = max(dome * scale, 1e-3f);
+    }
+    const float t = saturate(g_shade.form.x);
+    if (!(t > 0.0f)) {
+        return art;
+    }
+    const float3 model = max(lerp(rt_lum(dome).xxx, dome, rt_sky_chroma()) / rt_dome_mean_lum(dome), 1e-3f);
+    return lerp(art, model, t);
+}
+// The open sky's hue, its mean colour over its luminance (1 until the mean is known; FB b87).
+float3 rt_sky_hue() {
+    if (!(g_shade.dome.w > 0.0f)) {
+        return float3(1.0f, 1.0f, 1.0f);
+    }
+    const float3 mean = 1.0f / max(g_shade.dome.rgb, 1e-6f);
+    return mean / max(rt_lum(mean), 1e-3f);
+}
+// The O an open, unshadowed surface takes under the relight: the cosine mean of rt_sky_ratio's model (FB b87); 1
+// Painted.
+float3 rt_open_o() {
+    const float t = saturate(g_shade.form.x);
+    return t > 0.0f ? lerp(float3(1.0f, 1.0f, 1.0f), lerp(float3(1.0f, 1.0f, 1.0f), rt_sky_hue(), rt_sky_chroma()), t)
+                    : float3(1.0f, 1.0f, 1.0f);
 }
 
 // The dome's luminance into the counters (fixed point, kDomeUnit a unit, each direction held to 8: the 4096 directions
@@ -471,7 +508,6 @@ float3 rt_toward_light(float4 place, float3 from, float2 u, out float reach) {
 
 // ---- October's light model (DIRECTOR.md 12, M1..M3, M6; FB b59): linear light in the stage's own units.
 static const float kSunStrength = 1.0f;  // the sun at the stage's key: the anchor exact (the director's D3; FB b71)
-static const float kSkyChroma = 0.4f;     // the sky's colour in shade at this share of its chroma (M8; c39's sky_chroma)
 // The relight's share of the model: 0 the art's share (Painted), 1 the model.
 float rt_form() {
     return saturate(g_shade.form.x);
@@ -494,20 +530,20 @@ RtStageLight rt_stage_light() {
     // up.s as the programs take it: view_look.y (the shading frame's form.y, the same rt_look_; FC c39/c40).
     const float up = g_shade.form.y;
     const float e = rt_lum(full) / max(rt_lum(sky) + rt_lum(rest) * up, 1e-4f);
-    // The sky in shade by kAmbientLook, at kSkyChroma of its colour; a channel with no full light: share 1.
-    // The run's keys where it gives them, as the programs' (FB b66): sun_strength, sky_chroma, stage_light (1: the
-    // stage's light as it is, 0: divided by the full light).
+    // The sky in shade by kAmbientLook, its luminance only: its hue is in O (rt_sky_ratio; FB b87); a channel with
+    // no full light: share 1. The run's keys where it gives them, as the programs' (FB b66): sun_strength,
+    // stage_light (1: the stage's light as it is, 0: divided by the full light).
     const float sun_strength = rt_dev_or(kDevSunStrength, kSunStrength);
-    const float sky_chroma = rt_dev_or(kDevSkyChroma, kSkyChroma);
     const float3 held = lerp(full, float3(1.0f, 1.0f, 1.0f), rt_dev_or(kDevStageLight, 0.0f));
-    const float3 sky_look = g_shade.form.w * lerp(rt_lum(sky).xxx, sky, sky_chroma);
+    const float3 sky_look = g_shade.form.w * rt_lum(sky).xxx;
     const float3 ok = float3(held >= 1e-4f);
     RtStageLight s;
     s.sky = ok * (sky_look * e / max(held, 1e-4f)) + (1.0f - ok);
     s.sun = ok * (rest * sun_strength * e / max(held, 1e-4f));
-    // O's unit: the plain sky's light (no kAmbientLook, full chroma), so the dials move the shade and not O; at least
-    // the shade's sky a channel at a time, so the loop's gain stays under the albedo for a coloured sky (A1-5; FB b74).
-    s.unit = ok * max(max(sky * e / max(held, 1e-4f), s.sky), 1e-3f) + (1.0f - ok);
+    // O's unit: the plain sky's light (no kAmbientLook), its luminance (FB b87: a white hit under open sky returns its
+    // O, hue and all), so the dials move the shade and not O; at least the shade's sky a channel at a time, so the
+    // loop's gain stays under the albedo (A1-5; FB b74).
+    s.unit = ok * max(max(rt_lum(sky) * e / max(held, 1e-4f), s.sky), 1e-3f) + (1.0f - ok);
     return s;
 }
 // O's unit (C4: the one divisor of every gather return): what O = 1 gives a white surface. The art's: the authored
@@ -538,7 +574,8 @@ float3 rt_hit_mirror_stand_in(RtHit h) {
     }
     const float r = (h.ior - 1.0f) / (h.ior + 1.0f);
     const float3 f0 = h.klass == kRtMetal ? lerp(float3(0.04f, 0.04f, 0.04f), rt_lin(h.base), h.metal) : float3(r * r, r * r, r * r);
-    return lerp(art, rt_stage_light().unit * f0, t);  // what a mirror sees is the plain sky, no shade dial
+    // What a mirror sees is the plain sky, no shade dial, at its whole hue (FB b87).
+    return lerp(art, rt_stage_light().unit * rt_sky_hue() * f0, t);
 }
 
 // A surface's share of light as an affine function of what the sky and the bounce give it (O, rgb): share = s0 +
@@ -608,7 +645,7 @@ float3 rt_air_share(float s, float3 v) {
     float3 sky_part = ok * sky / max(full, 1e-4f);
     const float t = rt_form();
     if (t > 0.0f) {
-        sky_part = lerp(sky_part, rt_stage_light().sky, t);
+        sky_part = lerp(sky_part, rt_stage_light().sky * rt_open_o(), t);  // the open sky's O (FB b87)
     }
     return sky_part * s + rt_air_sun() * v;
 }
@@ -788,7 +825,7 @@ float3 rt_hit_radiance_with(RtHit h, uint options, float3 o, bool d_known, float
         const float3 art = rt_hit_albedo(h) * g_shade.look.y *
                            ((h.item_flags & kItemLit) != 0u ? rt_lin(saturate(g_shade.ambient.rgb + 0.5f * g_shade.fill.rgb))
                                                             : float3(1.0f, 1.0f, 1.0f));
-        return t > 0.0f ? lerp(art, rt_hit_albedo(h) * g_shade.look.y * rt_stage_light().sky, t) : art;
+        return t > 0.0f ? lerp(art, rt_hit_albedo(h) * g_shade.look.y * rt_stage_light().sky * rt_open_o(), t) : art;
     }
     const bool lit = (h.item_flags & kItemLit) != 0u;
     const float nl = rt_hit_facing(h);
