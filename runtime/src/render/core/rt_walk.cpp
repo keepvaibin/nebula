@@ -1621,7 +1621,11 @@ void RenderCore::rt_pass_light() {
         binds = rt_pass_binds();
     }
     const float none[3][4] = {};
-    binds.pass_constants = rt_bounce_constants(shaded ? 1u : 0u, 0u, shade_at, none);
+    // The point's O (FB b108): the sky and bounce light's picture, written before this pass, for the dielectric
+    // sheen's sky part (rt_light.hlsl); g_pass.z 1 where it is bound.
+    const std::uint32_t point_o = rt_pass_indirect_on() ? rt_image(RtImage::Indirect) : rt::kNoImage;
+    binds.pass_constants = rt_bounce_constants(shaded ? 1u : 0u, point_o != rt::kNoImage ? 1u : 0u, shade_at, none);
+    binds.reads[7] = point_o;
     binds.reads[0] = rt_layer_guide();
     binds.reads[1] = rt_image(RtImage::Normal);
     binds.reads[2] = rt_image(RtImage::Motion);

@@ -29,6 +29,7 @@ RT_FORMAT(rgba16f) RWTexture2D<float4> g_mirror : register(u1);
 RT_FORMAT(rgba8) RWTexture2D<float4> g_facing : register(u2);  // how a painted surface faces the sun, and its paint light
 RT_FORMAT(r8) RWTexture2D<unorm float> g_body : register(u3);  // the second layer's body (glass and water, FC's c16)
 Texture2D<float4> g_guide_opaque : register(t15);  // the opaque layer's guide: under water, how deep it is
+Texture2D<float4> g_point_o : register(t16);      // the point's O (Indirect; g_pass.z 1 where bound; FB b108)
 
 // Glass and water on the second layer (plan 13.2, 13.3; FC's c16): the Schlick reflectance of the material's ior times
 // its shine, at most 1, and its body. Item word 15 (FC's c15): ior bits 12-19 as (ior - 1) * 100, shine bits 20-25 as
@@ -227,8 +228,8 @@ void main(uint3 id : SV_DispatchThreadID) {
             }
         }
         // A dielectric's sheen (FB b107, the director's item 2): the sun's GGX lobe and the sky's, F0 0.04, by the
-        // model, on what no class mirrors; a = 1 - F_env. The sky's part whole by the open O' (b107b: by V it cut
-        // c74 out at a shadow's edge; the point's O is not bound here).
+        // model, on what no class mirrors; a = 1 - F_env. The sky's part by the point's O' where the host binds it
+        // (FB b108), else the open O' (b107b: not by V, which cut c74 out at a shadow's edge).
         if (!second && item != 0u && g_pass.y != 0u && (g_more.z & (1u | 32u)) == (1u | 32u) && (g_more.z & (128u | 512u)) == 0u &&
             mirror.a == 1.0f && !any(mirror.rgb != 0.0f)) {
             const uint sheen_look = g_items.Load(g_at.x + (item - 1u) * kItemBytes + 44u);
@@ -254,7 +255,8 @@ void main(uint3 id : SV_DispatchThreadID) {
                     const RtStageLight st = rt_stage_light();
                     const float2 terms = mirror_terms(rough_, nv);
                     const float f_env = saturate(kSheenF0 * terms.x + terms.y);
-                    const float3 lobe = st.sun * (v * kSheenPi * d * vis * f * nl) + st.sky * rt_o_prime(rt_open_o()) * f_env;
+                    const float3 o_here = g_pass.z != 0u ? max(g_point_o.Load(int3(pixel, 0)).rgb, 0.0f) : rt_open_o();
+                    const float3 lobe = st.sun * (v * kSheenPi * d * vis * f * nl) + st.sky * rt_o_prime(o_here) * f_env;
                     mirror = float4(t * min(lobe, 16.0f), 1.0f - t * f_env);
                 }
             }
