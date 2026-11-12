@@ -66,6 +66,9 @@ void page_fact(std::uint32_t row, std::string_view label, std::string_view value
 void fact(const std::string& key, const std::string& json);
 // `text` as a JSON string, quoted and escaped, appended to `out`.
 void append_json_text(std::string& out, std::string_view text);
+// In a harness run, an entry opened whole (A or Space on its row) as `modlog.entry {"mod", "pages", "text"}`: the
+// window's pages and the text they hold, all of it.
+void entry_fact(std::string_view mod, std::uint32_t pages, std::string_view text);
 
 // A mod's world clock as the Mods page shows it (contract services-time 10 and 11; the module's luma_time_clock_of,
 // found by `begin`); any thread. Empty when the module lacks the export or the mod never asked for time.
