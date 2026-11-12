@@ -307,16 +307,16 @@ pub fn at_key(at: &str, key: &str) -> String {
     if at == "/" { format!("/{key}") } else { format!("{at}/{key}") }
 }
 
-fn at_index(at: &str, n: usize) -> String {
+pub(crate) fn at_index(at: &str, n: usize) -> String {
     at_key(at, &n.to_string())
 }
 
 /// The value at `at` is not of the kind it takes; `is` is that kind's phrase (`Cook.Effect.Is.Number`).
-fn not_kind(at: &str, is: &'static str) -> anyhow::Error {
+pub(crate) fn not_kind(at: &str, is: &'static str) -> anyhow::Error {
     refuse_with("Cook.Effect.Kind", vec![("where", Arg::Text(at.to_string())), ("expected", Arg::Phrase(is))])
 }
 
-fn range(at: &str, value: impl ToString, min: impl ToString, max: impl ToString) -> anyhow::Error {
+pub(crate) fn range(at: &str, value: impl ToString, min: impl ToString, max: impl ToString) -> anyhow::Error {
     refuse("Cook.Effect.Range", &[("where", at.to_string()), ("value", value.to_string()), ("min", min.to_string()), ("max", max.to_string())])
 }
 
@@ -326,7 +326,7 @@ pub fn missing(at: &str, key: &str) -> anyhow::Error {
 }
 
 /// A value as the file wrote it: text without its quotes.
-fn shown(v: &Value) -> String {
+pub(crate) fn shown(v: &Value) -> String {
     v.as_str().map_or_else(|| v.to_string(), str::to_string)
 }
 
@@ -350,7 +350,7 @@ pub fn only(map: &Map<String, Value>, at: &str, parts: &[&str]) -> Result<()> {
     }
 }
 
-fn as_f32(v: &Value, at: &str) -> Result<f32> {
+pub(crate) fn as_f32(v: &Value, at: &str) -> Result<f32> {
     let x = v.as_f64().ok_or_else(|| not_kind(at, "Cook.Effect.Is.Number"))?;
     if !(x as f32).is_finite() {
         return Err(range(at, x, "-3.4e38", "3.4e38"));
@@ -358,7 +358,7 @@ fn as_f32(v: &Value, at: &str) -> Result<f32> {
     Ok(x as f32)
 }
 
-fn as_int(v: &Value, at: &str, min: i64, max: i64) -> Result<i64> {
+pub(crate) fn as_int(v: &Value, at: &str, min: i64, max: i64) -> Result<i64> {
     let n = match (v.as_i64(), v.as_u64(), v.as_f64()) {
         (Some(n), _, _) => i128::from(n),
         (None, Some(n), _) => i128::from(n),
@@ -373,7 +373,7 @@ fn as_int(v: &Value, at: &str, min: i64, max: i64) -> Result<i64> {
 }
 
 /// One of `names` by name, or its number up to `max`.
-fn choice(names: &[&str], v: &Value, at: &str, max: i64) -> Result<u32> {
+pub(crate) fn choice(names: &[&str], v: &Value, at: &str, max: i64) -> Result<u32> {
     if v.is_number() {
         return as_int(v, at, 0, max).map(|n| n as u32);
     }
@@ -401,11 +401,11 @@ pub fn parse_rgba(v: &Value, at: &str) -> Result<[u8; 4]> {
     Ok(u32::from_str_radix(&digits, 16).map_err(|_| bad())?.to_be_bytes())
 }
 
-fn length(at: &str, count: usize, found: usize) -> anyhow::Error {
+pub(crate) fn length(at: &str, count: usize, found: usize) -> anyhow::Error {
     refuse("Cook.Effect.Length", &[("where", at.to_string()), ("count", count.to_string()), ("found", found.to_string())])
 }
 
-fn floats_of(v: &Value, n: usize, at: &str) -> Result<Vec<f32>> {
+pub(crate) fn floats_of(v: &Value, n: usize, at: &str) -> Result<Vec<f32>> {
     let items = list(v, at)?;
     if items.len() != n {
         return Err(length(at, n, items.len()));

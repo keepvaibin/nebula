@@ -193,6 +193,31 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         out.extend(animations.into_iter().map(|(file, clip)| (format!("{folder}{file}"), clip, true)));
         return Ok(out);
     }
+    // Name.layout.json in an archive (or its blyt/): the game's layout file blyt/Name.brlyt, which the store cooks as
+    // the game's (layout contract 1). Its pictures' textures are the archive's timg/<texture>.png (or .tpl).
+    if lower.ends_with(".layout.json") {
+        let (folder, file) = change.path.rsplit_once('/').unwrap_or(("", &change.path));
+        let in_blyt = folder.to_ascii_lowercase().ends_with(".arc/blyt");
+        let archive = if in_blyt { &folder[..folder.len() - "/blyt".len()] } else { folder };
+        if !archive.to_ascii_lowercase().ends_with(".arc") {
+            return Err(super::refuse::refuse("Cook.Layout.NotInArchive", &[("file", change.path.clone())]));
+        }
+        let stem = &file[..file.len() - ".layout.json".len()];
+        // The archive's folder on disk, when the file is read from one (a mod folder, or the game's unpacked mods).
+        let on_disk = change.source.parent().map(|p| if in_blyt { p.parent().unwrap_or(p) } else { p }).filter(|p| p.is_dir());
+        let missing_texture = |name: &str| -> Option<String> {
+            let timg = on_disk?.join("timg");
+            let wanted = [format!("{name}.png"), format!("{name}.tpl")];
+            let found = fs::read_dir(&timg).ok().is_some_and(|entries| {
+                entries.flatten().any(|e| wanted.iter().any(|w| e.file_name().to_string_lossy().eq_ignore_ascii_case(w)))
+            });
+            (!found).then(|| format!("{archive}/timg/{name}.png"))
+        };
+        let (brlyt, facts) = super::layout_json::to_brlyt(bytes, &missing_texture)?;
+        let path = format!("{archive}/blyt/{stem}.brlyt");
+        super::refuse::record(super::refuse::CookFact::Layout { path: path.clone(), source: change.path.clone(), facts });
+        return Ok(vec![(path, brlyt, false)]);
+    }
     // A table as JSON: X.bcsv.json, a camera table X.bcam.json, or a stage's placement table (its name has no ending:
     // StageData/MyGalaxy.arc/jmp/placement/common/objinfo.json), as `lumalink extract` writes them.
     if lower.ends_with(".bcsv.json") || lower.ends_with(".bcam.json") || (lower.ends_with(".json") && lower.contains(".arc/jmp/")) {
@@ -765,6 +790,7 @@ mod tests {
             "ObjectData/Kuribo.arc/ActorAnimCtrl.bcsv.json",
             "ObjectData/Kuribo.arc/Kuribo.bcam.json",
             "StageData/MyGalaxy.arc/jmp/placement/common/objinfo.json",
+            "LayoutData/Hud.arc/Hud.layout.json",
         ];
         let dir = tempfile::tempdir().unwrap();
         for path in cooked {
@@ -779,6 +805,37 @@ mod tests {
             assert!(!luma_validate::cooked_source(&path.to_lowercase()), "{path}");
             assert_eq!(cook_source(path, &dir.path().join("x"), b"not this", None).unwrap(), 0, "{path}");
         }
+    }
+
+    #[test]
+    fn a_layout_is_the_archives_layout_file_and_its_textures_are_the_mods() {
+        use super::super::refuse::said;
+        let dir = tempfile::tempdir().unwrap();
+        let archive = dir.path().join("LayoutData/Hud.arc");
+        std::fs::create_dir_all(archive.join("blyt")).unwrap();
+        let source = br#"{"panes":[{"name":"Icon","type":"picture","size":[32,32],"texture":"Star"}]}"#;
+        let change = |path: &str, at: &Path| Change { path: path.to_string(), source: at.to_path_buf(), merge: false };
+        // The texture is not in the archive's timg/: refused, naming the file it would be.
+        let error = modern_files(&change("LayoutData/Hud.arc/Hud.layout.json", &archive.join("Hud.layout.json")), source, None).unwrap_err();
+        let (why, args) = said(&error);
+        assert_eq!(why, "Cook.Layout.NoTexture");
+        assert!(args.contains(&("uri", "LayoutData/Hud.arc/timg/Star.png".to_string())), "{args:?}");
+        // With it (any case), the layout is blyt/<Name>.brlyt of the archive, for the store to cook as the game's.
+        std::fs::create_dir_all(archive.join("timg")).unwrap();
+        std::fs::write(archive.join("timg/STAR.png"), b"read by the PNG's own cook").unwrap();
+        for (path, at) in [("LayoutData/Hud.arc/Hud.layout.json", archive.join("Hud.layout.json")), ("LayoutData/Hud.arc/blyt/Hud.layout.json", archive.join("blyt/Hud.layout.json"))] {
+            let made = modern_files(&change(path, &at), source, None).unwrap();
+            assert_eq!(made.len(), 1);
+            assert_eq!((made[0].0.as_str(), made[0].2), ("LayoutData/Hud.arc/blyt/Hud.brlyt", false));
+            super::super::ui_layout::read_layout(&made[0].1).unwrap();
+        }
+        let facts = super::super::refuse::take_facts();
+        assert!(facts.iter().any(|f| matches!(f, super::super::refuse::CookFact::Layout { facts, .. } if facts.pictures == 1 && facts.textures == 1)), "{facts:?}");
+        // Read from no folder (a packed mod's entry): the texture cannot be looked for here, and the game's start reads
+        // the mod's files from disk.
+        assert_eq!(cook_source("LayoutData/Hud.arc/Hud.layout.json", Path::new("layers/base/files/x"), source, None).unwrap(), 1);
+        let error = cook_source("LayoutData/Hud.layout.json", &archive, source, None).unwrap_err();
+        assert_eq!(said(&error).0, "Cook.Layout.NotInArchive");
     }
 
     #[test]

@@ -74,6 +74,8 @@ pub enum CookFact {
     Model { path: String, source: String, facts: super::gltf::ModelFacts },
     /// An effect of a mod cooked, or a game particle it replaced (effects contract 7's `cook.effect`).
     Effect { path: String, source: String, facts: EffectFacts },
+    /// A layout of a mod cooked (layout contract's `cook.layout`).
+    Layout { path: String, source: String, facts: super::layout_json::LayoutFacts },
 }
 
 /// What `cook.effect` says of one effect (`<id>:<name>`) or one replaced game particle (its name).
@@ -113,7 +115,8 @@ fn field(text: &str) -> String {
 /// English for the log and its parameters (`why=P:Cook.Model.<Kind>`, then `name=T:<text>`); `cook.model` carries the
 /// replaced game model in `other`, then `name=<number>` for joints, extra_joints, meshes, vertices, materials,
 /// textures and clips; `cook.effect` carries the effect (`<id>:<name>`, or the replaced game particle) in `other`, then
-/// `particles=<numbers, comma between>`, `group`, `sprite`, `textures` and `replaced` (0 or 1). `table` is the file's
+/// `particles=<numbers, comma between>`, `group`, `sprite`, `textures` and `replaced` (0 or 1); `cook.layout` carries the
+/// layout file it made in `other`, then `panes`, `pictures`, `texts`, `textures` and `groups`. `table` is the file's
 /// place in the game, `file` the mod's file it came from.
 pub fn cook_facts_text(facts: &[CookFact]) -> String {
     let mut out = String::new();
@@ -154,6 +157,11 @@ pub fn cook_facts_text(facts: &[CookFact]) -> String {
                         format!("replaced={}", u8::from(facts.replaced)),
                     ])
                     .collect()
+            }
+            CookFact::Layout { path, source, facts } => {
+                let fixed = ["cook.layout", path, "", source, path, "", "", "", "", "", ""].map(str::to_string);
+                let counts = [("panes", facts.panes), ("pictures", facts.pictures), ("texts", facts.texts), ("textures", facts.textures), ("groups", facts.groups)];
+                fixed.into_iter().chain(counts.iter().map(|(name, n)| format!("{name}={n}"))).collect()
             }
         };
         out.push_str(&line.iter().map(|f| field(f)).collect::<Vec<_>>().join("\t"));

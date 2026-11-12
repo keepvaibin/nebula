@@ -10,11 +10,11 @@ pub const SOURCE_ENDINGS: [&str; 16] =
 
 /// A source file (lowercase path under `files/`) of a kind the cook makes: a model, an animation file, collision, a
 /// cutscene camera (`.glb`, `.gltf` and their `.anim.`, `.kcl.`, `.canm.` forms), a picture (`.png`), a stream (`.wav`,
-/// `.ogg`) or a table (`.bcsv.json`, `.bcam.json`, a stage's placement `.arc/jmp/**.json`). What it stands in for is
-/// the cook's to say (nebula-import cook::overlay::cook_source, which a test holds to this list): it refuses by name
-/// (L804) at the game's start and in LumaLink's check before a pack.
+/// `.ogg`), a table (`.bcsv.json`, `.bcam.json`, a stage's placement `.arc/jmp/**.json`) or a screen layout
+/// (`.layout.json`). What it stands in for is the cook's to say (nebula-import cook::overlay::cook_source, which a
+/// test holds to this list): it refuses by name (L804) at the game's start and in LumaLink's check before a pack.
 pub fn cooked_source(lower: &str) -> bool {
-    [".glb", ".gltf", ".png", ".wav", ".ogg", ".bcsv.json", ".bcam.json"].iter().any(|e| lower.ends_with(e))
+    [".glb", ".gltf", ".png", ".wav", ".ogg", ".bcsv.json", ".bcam.json", ".layout.json"].iter().any(|e| lower.ends_with(e))
         || (lower.ends_with(".json") && lower.contains(".arc/jmp/"))
 }
 
