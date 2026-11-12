@@ -875,6 +875,34 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
     // The tag names a folder of saves: an id's letters keep it in mods/.saves.
     if (!valid_id(out.save_tag)) return std::nullopt;
     if (!read_rows(*root, out)) return std::nullopt;
+    // luma-format 6: code/<platform>/mod.<ending>, found by that path alone. One route only: with "plugins" beside it
+    // the manifest is not read (the validator names both).
+    if (const Value* code = root->get("code"); code != nullptr) {
+        if (code->object() == nullptr || root->get("plugins") != nullptr) return std::nullopt;
+        Plugin plugin;  // api 0: a LumaCore library (luma.h)
+        for (const std::string& platform : string_list(code->get("platforms"))) {
+            const std::string entry = code_entry(platform);
+            if (entry.empty() || plugin.binaries.count(platform) != 0u) return std::nullopt;
+            plugin.binaries[platform] = entry;
+        }
+        if (const Value* libraries = code->get("libraries"); libraries != nullptr) {
+            if (libraries->object() == nullptr) return std::nullopt;
+            for (const auto& [platform, files] : *libraries->object()) {
+                if (plugin.binaries.count(platform) == 0u || files.array() == nullptr) return std::nullopt;
+                std::vector<std::string>& list = out.code_libraries[platform];
+                for (const Value& file : *files.array()) {
+                    // A file name in code/<platform>/: no folder part, not the entry library itself.
+                    const std::string* name = file.string();
+                    if (name == nullptr || name->find_first_of("/\\") != std::string::npos || !path_stays_inside(*name) ||
+                        "code/" + platform + "/" + *name == plugin.binaries[platform]) {
+                        return std::nullopt;
+                    }
+                    list.push_back(*name);
+                }
+            }
+        }
+        if (!plugin.binaries.empty()) out.plugins.push_back(std::move(plugin));
+    }
     if (const Value* plugins = root->get("plugins"); plugins != nullptr && plugins->array() != nullptr) {
         for (const Value& entry : *plugins->array()) {
             Plugin plugin;
@@ -1008,12 +1036,26 @@ std::string_view plugin_target() noexcept {
     return "windows-" NEBULA_PLUGIN_ARCH;
 #elif defined(__ANDROID__)
     return "android-" NEBULA_PLUGIN_ARCH;
+#elif defined(__APPLE__) && TARGET_OS_IPHONE
+    return "ios-arm64";
 #elif defined(__APPLE__)
     return "macos-" NEBULA_PLUGIN_ARCH;
 #else
     return "linux-" NEBULA_PLUGIN_ARCH;
 #endif
 #undef NEBULA_PLUGIN_ARCH
+}
+
+std::string code_entry(std::string_view platform) {
+    static constexpr std::pair<std::string_view, std::string_view> kEndings[] = {
+        {"windows-x64", "dll"},   {"windows-arm64", "dll"}, {"linux-x64", "so"},     {"linux-arm64", "so"},
+        {"macos-arm64", "dylib"}, {"macos-x64", "dylib"},   {"android-arm64", "so"}, {"android-x64", "so"},
+        {"ios-arm64", "dylib"},
+    };
+    for (const auto& [name, ending] : kEndings) {
+        if (name == platform) return "code/" + std::string(platform) + "/mod." + std::string(ending);
+    }
+    return {};
 }
 
 std::string language_code(std::string_view folder) {
