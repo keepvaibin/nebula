@@ -49,7 +49,8 @@ cbuffer View : register(b0) {
                                // where the run gave one; x base_floor, y sun_strength, z sky_chroma, w stage_light (traced_painted)
     float4 view_relight[4];    // with bit 3: the relight's view constants (traced_painted; A3-F18, the host's from the
                                // rows above): [0] rgb lin(A), w luma(held); [1] rgb sky' E; [2] rgb key sun_strength E;
-                               // [3] rgb held / luma(held)
+                               // [3] rgb held / luma(held); [1..3].w the sun's direction in the eye's space,
+                               // the scene's view under the relight, else 0 (program_lit.hlsli traced_key_dir, c52)
 };
 
 cbuffer Draw : register(b3) {

@@ -528,6 +528,13 @@ const RenderCore::WalkView& RenderCore::walk_view(std::uint32_t index, const Neb
             rows.relight[3][ch] = held_l > 1e-4f ? held[ch] / held_l : 1.0f;
         }
         rows.relight[0][3] = held_l;
+        // The sun's direction in the eye's space for a lit program's key highlight (c52): the scene's view under the
+        // relight with a traced sun this walk (its Facing picture is the scene's; without one its r is 1), else none:
+        // the programs read the Facing picture only where it is given.
+        const bool sun_known = rows.look[0] > 0.0f && rt_sun_now_ && index == rt_scene_view_;
+        for (unsigned ch = 0; ch < 3u; ++ch) {
+            rows.relight[ch + 1u][3] = sun_known ? rt_sun_eye_[ch] : 0.0f;
+        }
     }
     rows.scale[1] = walk_.time.t;
     rows.scale[2] = walk_.time.t_prev;

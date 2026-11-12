@@ -35,6 +35,23 @@ static float4 g_traced = float4(1.0, 1.0, 1.0, 1.0);
 static float3 g_traced_o = float3(1.0, 1.0, 1.0);  // O a channel at a time (program.hlsli traced_o; FB 22.10)
 static bool g_traced_keyed = true;
 #define TRACED_UNKEYED g_traced_keyed = false
+// The traced sun as light 0 (c52; the director 11-11): the pixel's traced facing max(n . s, 0) (the Facing picture's
+// r), -1 where the pixel takes the light set's (no relight, a draw traced_at gives all of every light).
+static float g_traced_facing = -1.0;
+float traced_sun_strength() { return view_dev[1].y > 0.5 ? view_dev[0].y : 1.0; }
+// Light 0's diffuse factor under the relight: the traced facing by kSun, by kForm from the game's.
+float traced_key_facing(uint n, uint diffuse, float facing) {
+    if (n != 0u || diffuse == 0u || !g_traced_keyed || g_traced_facing < 0.0) {
+        return facing;
+    }
+    return lerp(facing, g_traced_facing * traced_sun_strength(), saturate(view_look.x));
+}
+// The highlight of light 0, or of light 1 where it comes first, under the relight: the sun's in the eye's space
+// (view_relight[1..3].w), where known (the director 11-11: no light follows the camera in a traced frame).
+float3 traced_key_dir(uint n, float3 ldir) {
+    const float3 sun = float3(view_relight[1].w, view_relight[2].w, view_relight[3].w);
+    return n <= 1u && g_traced_keyed && g_traced_facing >= 0.0 && view_look.x >= 0.5 && dot(sun, sun) > 0.5 ? sun : ldir;
+}
 float3 traced_light(uint n) {
     const float lamp = (view_flags & 32u) != 0u ? 1.0 : 0.0;
     if (n == 4u) {
@@ -184,13 +201,17 @@ void enh_add_light(uint base, uint n, bool spot, uint diffuse, bool first, bool 
     float attn;
     float3 lcol;
     enh_light(base, n, spot, eye, ldir, attn, lcol);
-    const float facing = diffuse == 1u ? dot(g_enh.N, ldir) : diffuse == 2u ? max(dot(g_enh.N, ldir), 0.0) : 1.0;
+    float facing = diffuse == 1u ? dot(g_enh.N, ldir) : diffuse == 2u ? max(dot(g_enh.N, ldir), 0.0) : 1.0;
 #if NATIVE_TRACED
     lcol *= traced_light(n);
+    facing = traced_key_facing(n, diffuse, facing);  // light 0: the traced sun (c52)
 #endif
     const float x = attn * facing;
     acc += lerp(enh_lin(amb + lcol * x) - amb_lin, (enh_lin(amb + lcol) - amb_lin) * x, kEnhRamp);
     if (first && diffuse != 0u && g_enh.valid) {
+#if NATIVE_TRACED
+        ldir = traced_key_dir(n, ldir);  // the sun's (c52)
+#endif
         enh_highlight(g_enh, ldir, enh_lin(lcol) * attn, metal);
     }
 }
@@ -209,6 +230,9 @@ void enh_key_highlight(uint base, inout EnhShade e, float3 P) {
     lcol *= traced_light(0u);
 #endif
     if (any(lcol > 0.0)) {
+#if NATIVE_TRACED
+        ldir = traced_key_dir(0u, ldir);  // the sun's (c52)
+#endif
         enh_highlight(e, ldir, enh_lin(lcol), true);
     }
 }
@@ -236,10 +260,27 @@ EnhShade enh_begin_traced(float3 P, float3 n, float4 pixel) {
     bool coloured = false;
     g_traced_o = traced_o(g_traced, pixel, coloured);
     g_traced_lit = g_traced_keyed;
+    // c52: the traced facing for light 0 where the relight is on and the pixel's traced light is its own.
+    g_traced_facing = -1.0;
+    const float3 sun_row = float3(view_relight[1].w, view_relight[2].w, view_relight[3].w);  // a traced sun, this view's
+    if (view_look.x > 0.0 && dot(sun_row, sun_row) > 0.5 && (view_flags & 8u) != 0u && (view_flags & 16u) == 0u && (draw_flags & (64u | 128u)) == 0u &&
+        !traced_by_air(pixel)) {
+        g_traced_facing = saturate(gTextures[uint(view_traced.w)].Load(int3(pixel.xy, 0)).r);
+    }
     return enh_begin(P, n);
 }
 #define enh_begin(P, n) enh_begin_traced(P, n, i.pos)
-#define light_term(base, n, atten, diffuse, pos, nrm) (light_term(base, n, atten, diffuse, pos, nrm) * float4(traced_light(n), 1.0))
+// Light n by its traced share; light 0's diffuse factor the traced sun's (c52): the light set's colour and
+// attenuation without its facing, by the traced facing.
+float4 traced_light_term(uint base, uint n, uint atten, uint diffuse, float3 pos, float3 nrm) {
+    float4 t = light_term(base, n, atten, diffuse, pos, nrm);
+    if (n == 0u && atten != 1u && diffuse != 0u && g_traced_keyed && g_traced_facing >= 0.0) {
+        const float4 flat = light_term(base, n, atten, 0u, pos, nrm);
+        t.rgb = lerp(t.rgb, flat.rgb * (g_traced_facing * traced_sun_strength()), saturate(view_look.x));
+    }
+    return t * float4(traced_light(n), 1.0);
+}
+#define light_term(base, n, atten, diffuse, pos, nrm) traced_light_term(base, n, atten, diffuse, pos, nrm)
 #endif
 
 #endif  // PROGRAM_LIT_HLSLI
