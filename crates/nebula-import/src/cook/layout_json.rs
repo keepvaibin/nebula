@@ -76,6 +76,7 @@ struct Reader<'a> {
     materials: Vec<(String, Option<u16>)>,
     facts: LayoutFacts,
     missing_texture: &'a dyn Fn(&str) -> Option<String>,
+    missing_font: &'a dyn Fn(&str) -> Option<String>,
 }
 
 /// A text's font as the layout file names it: one of the game's (`FONTS`), or a mod's own, `Luma/<id>/<path>` (its
@@ -271,6 +272,11 @@ impl Reader<'_> {
             Some(v) => font_name(v, &at_key(at, "font"))?,
             None => format!("{}.brfnt", FONTS[0]),
         };
+        if let Some(stem) = font.strip_suffix(".brfnt").filter(|s| s.starts_with("Luma/")) {
+            if let Some(file) = (self.missing_font)(stem) {
+                return Err(refuse("Cook.Layout.NoFont", &[("where", at_key(at, "font")), ("name", stem.to_string()), ("uri", file)]));
+            }
+        }
         let font = match self.fonts.iter().position(|f| *f == font) {
             Some(i) => i,
             None => {
@@ -462,6 +468,12 @@ fn material(name: &str, texture: Option<u16>) -> Vec<u8> {
 /// The layout source `bytes` as the game's layout file, and its facts. `missing_texture` answers for a texture name
 /// the file the mod lacks for it, or None when the mod has it (or when that cannot be known here).
 pub fn to_brlyt(bytes: &[u8], missing_texture: &dyn Fn(&str) -> Option<String>) -> Result<(Vec<u8>, LayoutFacts)> {
+    to_brlyt_with(bytes, missing_texture, &|_| None)
+}
+
+/// As `to_brlyt`; `missing_font` answers for a mod font a text names (`Luma/<id>/<path>`) with the source the mod
+/// lacks (`layers/<l>/assets/<path>.font.json`), None when it has it or this cannot be looked at here.
+pub fn to_brlyt_with(bytes: &[u8], missing_texture: &dyn Fn(&str) -> Option<String>, missing_font: &dyn Fn(&str) -> Option<String>) -> Result<(Vec<u8>, LayoutFacts)> {
     let root: Value = serde_json::from_slice(bytes).map_err(|e| refuse("Cook.Model.Json", &[("line", e.line().to_string()), ("column", e.column().to_string())]))?;
     let map = object(&root, "/")?;
     only(map, "/", &["size", "panes", "groups"])?;
@@ -475,7 +487,7 @@ pub fn to_brlyt(bytes: &[u8], missing_texture: &dyn Fn(&str) -> Option<String>) 
         }
         None => SCREEN,
     };
-    let mut reader = Reader { names: vec![ROOT.to_string()], textures: Vec::new(), fonts: Vec::new(), materials: Vec::new(), facts: LayoutFacts::default(), missing_texture };
+    let mut reader = Reader { names: vec![ROOT.to_string()], textures: Vec::new(), fonts: Vec::new(), materials: Vec::new(), facts: LayoutFacts::default(), missing_texture, missing_font };
     let mut children = Vec::new();
     for (i, pane) in list(map.get("panes").ok_or_else(|| missing("/", "panes"))?, "/panes")?.iter().enumerate() {
         children.push(reader.pane(pane, &at_index("/panes", i))?);
