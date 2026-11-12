@@ -4,11 +4,6 @@
 #include "Game/Util.hpp"
 #include "Game/Render/Material.hpp"
 #include "Game/Util/MotionSignal.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 1000000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f2, "update.f2", 1000000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f3, "update.f3", 1000000.0f);
 
 char MirrorReflectionMtxSetter::sMirrorTextureName[] = "MirrorTex";
 
@@ -234,7 +229,7 @@ void MarioShadowProjmapMtxSetter::update() {
     if (height > 0.0f) {
         NebulaMtxTrans(translationMtx, -playerPos.x, -playerPos.y, -playerPos.z);
     } else {
-        NebulaMtxTrans(translationMtx, cNum_update_f1, cNum_update_f2, cNum_update_f3);
+        NebulaMtxTrans(translationMtx, 1000000.0f, 1000000.0f, 1000000.0f);
     }
 
     Pos3f rotationMtx;

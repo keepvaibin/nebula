@@ -3,12 +3,11 @@
 #include "Game/AudioLib/AudSystem.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
 #include "Game/Sound/SoundArchive.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
     // The groups of the voice bank, a bit each.
-    NEBULA_TUNABLE(u32, cMarioVoices, 2);
-    NEBULA_TUNABLE(u32, cLuigiVoices, 4);
+    const u32 cMarioVoices = 2;
+    const u32 cLuigiVoices = 4;
 }  // namespace
 
 AudSceneMgr::AudSceneMgr(SoundArchive* pAudioData) : mAudioData(pAudioData), mPlayerMode(), mIsCubeBgmChangeInvalid() {

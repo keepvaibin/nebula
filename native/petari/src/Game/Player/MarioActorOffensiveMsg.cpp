@@ -10,29 +10,6 @@
 #include "Game/Util/GravityUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_attackOrPushSensor_f1, "attackOrPushSensor.f1", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackOrPushSensor_f2, "attackOrPushSensor.f2", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackOrPushSensor_f3, "attackOrPushSensor.f3", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackOrPushSensor_f4, "attackOrPushSensor.f4", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackOrPushSensor_f5, "attackOrPushSensor.f5", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackOrPushSensor_f6, "attackOrPushSensor.f6", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackOrPushSensor_f7, "attackOrPushSensor.f7", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackOrPushSensor_f8, "attackOrPushSensor.f8", 250.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackOrPushSensor_f9, "attackOrPushSensor.f9", 250.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackOrPushSensor_f10, "attackOrPushSensor.f10", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackOrPushSensorInDamage_f1, "attackOrPushSensorInDamage.f1", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackOrPushSensorInDamage_f2, "attackOrPushSensorInDamage.f2", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackOrPushSensorInDamage_f3, "attackOrPushSensorInDamage.f3", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackOrPushSensorInDamage_f4, "attackOrPushSensorInDamage.f4", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackOrPushSensorInDamage_f5, "attackOrPushSensorInDamage.f5", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackOrPushSensorInDamage_f6, "attackOrPushSensorInDamage.f6", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackOrPushSensorInDamage_f7, "attackOrPushSensorInDamage.f7", 250.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackOrPushSensorInDamage_f8, "attackOrPushSensorInDamage.f8", 250.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackOrPushSensorInRush_f1, "attackOrPushSensorInRush.f1", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkAndTryTrampleAttack_f1, "checkAndTryTrampleAttack.f1", 1.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryGetItem_f1, "tryGetItem.f1", 100.0f);
 
 static f32 mSensorRadiusAttack = 120.0f;
 static f32 mSensorRadiusTornadoAttack = 150.0f;
@@ -140,18 +117,18 @@ void MarioActor::attackOrPushSensor(HitSensor* pSensor, f32 distance) {
             }
         } else {
             f32 sensorRadius;
-            f32 width = cNum_attackOrPushSensor_f1 + mBodyRadius;
+            f32 width = 20.0f + mBodyRadius;
             f32 height = mBodyHeight;
             if (!mMario->isActiveTaskID(0x200)) {
                 if (isJumping()) {
-                    height += cNum_attackOrPushSensor_f2;
+                    height += 10.0f;
                 }
 
                 if (mMario->mTargetWalkSpeedIndex >= 5) {
-                    width += cNum_attackOrPushSensor_f3;
+                    width += 15.0f;
                 }
             } else {
-                width -= cNum_attackOrPushSensor_f4;
+                width -= 20.0f;
             }
 
             sensorRadius = pSensor->getRadius();
@@ -175,20 +152,20 @@ void MarioActor::attackOrPushSensor(HitSensor* pSensor, f32 distance) {
 
         addRushSensor(pSensor, touching);
     } else if (mMario->mActionStates.planeCollision) {
-        f32 width = cNum_attackOrPushSensor_f5 + mBodyRadius;
+        f32 width = 20.0f + mBodyRadius;
         f32 height = mBodyHeight;
         if (isJumping()) {
-            height += cNum_attackOrPushSensor_f6;
+            height += 10.0f;
         }
 
         if (mMario->mTargetWalkSpeedIndex >= 5) {
-            width += cNum_attackOrPushSensor_f7;
+            width += 15.0f;
         }
 
         f32 sensorRadius = pSensor->getRadius();
         Vec3f offset = pSensor->mPosition - mCenterPos;
         f32 depth = MR::vecKillElement(offset, mCamDirZ, &offset);
-        if (depth < cNum_attackOrPushSensor_f8 && depth > -cNum_attackOrPushSensor_f9 && cylinderPushCheck(offset, sensorRadius, width, height) && tryGetItem(pSensor)) {
+        if (depth < 250.0f && depth > -250.0f && cylinderPushCheck(offset, sensorRadius, width, height) && tryGetItem(pSensor)) {
             return;
         }
     }
@@ -203,7 +180,7 @@ void MarioActor::attackOrPushSensor(HitSensor* pSensor, f32 distance) {
     }
 
     trySetLockOnTarget(pSensor);
-    if (mPlayerMode == PlayerMode_Bee && distance < cNum_attackOrPushSensor_f10 + radius) {
+    if (mPlayerMode == PlayerMode_Bee && distance < 100.0f + radius) {
         mMario->tryBeeStick(pSensor);
     }
 
@@ -227,15 +204,15 @@ void MarioActor::attackOrPushSensorInDamage(HitSensor* pReceiver, f32 radius) {
         bool touching = false;
         f32 sensorRadius;
 
-        f32 width = cNum_attackOrPushSensorInDamage_f1 + mBodyRadius;
+        f32 width = 20.0f + mBodyRadius;
         f32 height = mBodyHeight;
 
         if (isJumping()) {
-            height += cNum_attackOrPushSensorInDamage_f2;
+            height += 10.0f;
         }
 
         if (mMario->mTargetWalkSpeedIndex >= 5) {
-            width += cNum_attackOrPushSensorInDamage_f3;
+            width += 15.0f;
         }
 
         sensorRadius = pReceiver->mRadius;
@@ -258,21 +235,21 @@ void MarioActor::attackOrPushSensorInDamage(HitSensor* pReceiver, f32 radius) {
         return;
     }
 
-    f32 width = cNum_attackOrPushSensorInDamage_f4 + mBodyRadius;
+    f32 width = 20.0f + mBodyRadius;
     f32 height = mBodyHeight;
 
     if (isJumping()) {
-        height += cNum_attackOrPushSensorInDamage_f5;
+        height += 10.0f;
     }
 
     if (mMario->mTargetWalkSpeedIndex >= 5) {
-        width += cNum_attackOrPushSensorInDamage_f6;
+        width += 15.0f;
     }
 
     f32 sensorRadius = pReceiver->mRadius;
     Vec3f offset = pReceiver->mPosition - mCenterPos;
     f32 depth = MR::vecKillElement(offset, mCamDirZ, &offset);
-    if (depth < cNum_attackOrPushSensorInDamage_f7 && depth > -cNum_attackOrPushSensorInDamage_f8 && cylinderPushCheck(offset, sensorRadius, width, height) && tryGetItem(pReceiver)) {
+    if (depth < 250.0f && depth > -250.0f && cylinderPushCheck(offset, sensorRadius, width, height) && tryGetItem(pReceiver)) {
         return;
     }
 }
@@ -280,7 +257,7 @@ void MarioActor::attackOrPushSensorInDamage(HitSensor* pReceiver, f32 radius) {
 void MarioActor::attackOrPushSensorInRush(HitSensor* pSensor, f32 radius) {
     f32 sensorRadius = pSensor->mRadius;
     if (radius < sensorRadius + mSensorRadiusAttack) {
-        f32 width = cNum_attackOrPushSensorInRush_f1 + mBodyRadius;
+        f32 width = 20.0f + mBodyRadius;
         f32 height = mBodyHeight;
         if (cylinderPushCheck(pSensor->mPosition - mCenterPos, sensorRadius, width, height)) {
             if (tryGetItem(pSensor)) {
@@ -351,7 +328,7 @@ bool MarioActor::checkAndTryTrampleAttack(HitSensor* pSensor, f32 distance, bool
         falling = true;
     }
 
-    bool near = distance < radius + mSensorRadiusTrampleAttack + cNum_checkAndTryTrampleAttack_f1 * mMario->mJumpVec.dot(getGravityVector());
+    bool near = distance < radius + mSensorRadiusTrampleAttack + 1.5f * mMario->mJumpVec.dot(getGravityVector());
     if (force) {
         falling = isJumping();
     }
@@ -495,7 +472,7 @@ bool MarioActor::tryGetItem(HitSensor* pSensor) {
 
         bool moving = false;
         Vec3f horizontal;
-        if (MR::vecKillElement(*getShadowPos() - pSensor->mPosition, getGravityVector(), &horizontal) > cNum_tryGetItem_f1) {
+        if (MR::vecKillElement(*getShadowPos() - pSensor->mPosition, getGravityVector(), &horizontal) > 100.0f) {
             moving = true;
         }
 

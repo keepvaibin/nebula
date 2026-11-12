@@ -11,7 +11,6 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
 #include <math.h>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace NrvNebulaAchievementLuma {
@@ -22,11 +21,11 @@ namespace NrvNebulaAchievementLuma {
 namespace {
     // Where it waits, from the Observatory's first start (where Mario arrives with a file): ahead of him and to his
     // left, on the walkway, at a Luma's height above its floor.
-    NEBULA_TUNABLE(s32, cStartNo, 0);
-    NEBULA_TUNABLE(f32, cAhead, 600.0f);
-    NEBULA_TUNABLE(f32, cLeft, 450.0f);
-    NEBULA_TUNABLE(f32, cAboveFloor, 140.0f);
-    NEBULA_TUNABLE(s32, cColor, 0);  // the Lumas' yellow (Tico's ColorChange frames)
+    const s32 cStartNo = 0;
+    const f32 cAhead = 600.0f;
+    const f32 cLeft = 450.0f;
+    const f32 cAboveFloor = 140.0f;
+    const s32 cColor = 0;  // the Lumas' yellow (Tico's ColorChange frames)
     const char cMessageId[] = "Nebula_AchievementLuma";  // MessageData answers it from NebulaText
 };  // namespace
 

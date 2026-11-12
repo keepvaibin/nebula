@@ -1,10 +1,7 @@
 #include "Game/MapObj/CollectCounter.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_setPosition_f1, "setPosition.f1", 75.0f);
 
 namespace NrvCollectCounter {
     NEW_NERVE(CollectCounterNrvHide, CollectCounter, Hide);
@@ -48,7 +45,7 @@ void CollectCounter::setCount(s32 num) {
 }
 
 void CollectCounter::setPosition() {
-    f32 pointRadius = MR::calcPointRadius2D(*MR::getPlayerCenterPos(), cNum_setPosition_f1);
+    f32 pointRadius = MR::calcPointRadius2D(*MR::getPlayerCenterPos(), 75.0f);
     Vec2f screenPos;
     MR::calcScreenPosition(&screenPos, *MR::getPlayerCenterPos());
     mFollowPosition.x = screenPos.x;

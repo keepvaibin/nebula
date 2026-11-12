@@ -25,12 +25,11 @@
 #include "Game/Util/StringUtil.hpp"
 #include <algorithm>
 #include <cstdio>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, sFocusKeepFrame, 30);
-    NEBULA_TUNABLE(f32, sPointingRange, 20.0f);
+    const s32 sFocusKeepFrame = 30;
+    const f32 sPointingRange = 20.0f;
 };  // namespace
 
 namespace {

@@ -4,58 +4,45 @@
 #include "Game/MapObj/CocoNut.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_calcHitBackVelocityAndGravity_f1, "calcHitBackVelocityAndGravity.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcHitBackVelocityAndGravity_f2, "calcHitBackVelocityAndGravity.f2", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcHitBackVelocityAndGravity_f3, "calcHitBackVelocityAndGravity.f3", 2.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHitBackToHost_setBckRate_1, "exeHitBackToHost.setBckRate.1", 1.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeHitBackToHost_1, "exeHitBackToHost.1", 1);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeHitBackToHost_2, "exeHitBackToHost.2", 2);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeHitBackToHost_3, "exeHitBackToHost.3", 1);
-
 namespace {
-    NEBULA_TUNABLE_RECORD(Vec, cReboundVelocity, {0.0f, 15.0f, 5.0f});
-    NEBULA_TUNABLE(f32, cBodyRadius, 40.0f);
-    NEBULA_TUNABLE(f32, cBindRadius, 500.0f);
-    NEBULA_TUNABLE(u16, cSensorGroupSize, 8);
-    NEBULA_TUNABLE(f32, cBinderRadius, 60.0f);
-    NEBULA_TUNABLE(f32, cPointerRadius, 150.0f);
-    NEBULA_TUNABLE(f32, cShadowRadius, 60.0f);
-    NEBULA_TUNABLE(f32, cDefaultHeightMax, 450.0f);
-    NEBULA_TUNABLE(f32, cDefaultKillDistance, 10000.0f);
-    NEBULA_TUNABLE(f32, cThrowSpeed, 15.0f);
-    NEBULA_TUNABLE(f32, cRallyAngleMin, 12.5f);
-    NEBULA_TUNABLE(f32, cRallyAngleMax, 17.5f);
-    NEBULA_TUNABLE(f32, cRallySpeedPerHit, 3.0f);
-    NEBULA_TUNABLE(f32, cPunchDistance, 400.0f);
+    const Vec cReboundVelocity = {0.0f, 15.0f, 5.0f};
+    const f32 cBodyRadius = 40.0f;
+    const f32 cBindRadius = 500.0f;
+    const u16 cSensorGroupSize = 8;
+    const f32 cBinderRadius = 60.0f;
+    const f32 cPointerRadius = 150.0f;
+    const f32 cShadowRadius = 60.0f;
+    const f32 cDefaultHeightMax = 450.0f;
+    const f32 cDefaultKillDistance = 10000.0f;
+    const f32 cThrowSpeed = 15.0f;
+    const f32 cRallyAngleMin = 12.5f;
+    const f32 cRallyAngleMax = 17.5f;
+    const f32 cRallySpeedPerHit = 3.0f;
+    const f32 cPunchDistance = 400.0f;
     // Horizontal speed of a hit back; the flight time follows from the distance.
-    NEBULA_TUNABLE(f32, cHitBackSpeed, 42.0f);
-    NEBULA_TUNABLE(f32, cHitBackGravityScale, 2.2f);
-    NEBULA_TUNABLE(f32, cHitBackCurve, 1.2f);
+    const f32 cHitBackSpeed = 42.0f;
+    const f32 cHitBackGravityScale = 2.2f;
+    const f32 cHitBackCurve = 1.2f;
     // The player is in line between the host and the ball below this dot.
-    NEBULA_TUNABLE(f32, cHitBackFrontDot, -0.95f);
-    NEBULA_TUNABLE(f32, cHitBackSideOffset, 150.0f);
-    NEBULA_TUNABLE(f32, cHitBackHeight, 100.0f);
-    NEBULA_TUNABLE(f32, cAimHeight, 120.0f);
+    const f32 cHitBackFrontDot = -0.95f;
+    const f32 cHitBackSideOffset = 150.0f;
+    const f32 cHitBackHeight = 100.0f;
+    const f32 cAimHeight = 120.0f;
     // Height-limited aim: the step raised past a clear line, the probe length scale, and the step otherwise.
-    NEBULA_TUNABLE(f32, cAimClearRaise, 120.0f);
-    NEBULA_TUNABLE(f32, cAimProbeScale, 1.5f);
-    NEBULA_TUNABLE(f32, cAimRaiseStep, 60.0f);
-    NEBULA_TUNABLE(f32, cNearClipDistance, 300.0f);
-    NEBULA_TUNABLE(s32, cFreezableStep, 20);
-    NEBULA_TUNABLE(f32, cFarFromPlayer, 5000.0f);
-    NEBULA_TUNABLE(s32, cHitBackStopSceneFrames, 6);
-    NEBULA_TUNABLE(f32, cReboundBckRate, 0.25f);
-    NEBULA_TUNABLE(f32, cReboundGravityScale, 2.0f);
-    NEBULA_TUNABLE(f32, cFreezeShakeSpeed, 75.0f);
-    NEBULA_TUNABLE(f32, cFreezeShakeWidth, 7.5f);
-    NEBULA_TUNABLE(s32, cFreezeSteps, 20);
+    const f32 cAimClearRaise = 120.0f;
+    const f32 cAimProbeScale = 1.5f;
+    const f32 cAimRaiseStep = 60.0f;
+    const f32 cNearClipDistance = 300.0f;
+    const s32 cFreezableStep = 20;
+    const f32 cFarFromPlayer = 5000.0f;
+    const s32 cHitBackStopSceneFrames = 6;
+    const f32 cReboundBckRate = 0.25f;
+    const f32 cReboundGravityScale = 2.0f;
+    const f32 cFreezeShakeSpeed = 75.0f;
+    const f32 cFreezeShakeWidth = 7.5f;
+    const s32 cFreezeSteps = 20;
 };  // namespace
 
 namespace NrvCocoNutBall {
@@ -257,14 +244,14 @@ void CocoNutBall::calcHitBackVelocityAndGravity() {
 
     // The vertical speed that lands the rise in flightSteps under mHitBackGravity.
     Vec3f verticalVelocity;
-    verticalVelocity = (rise.scaleInline(cNum_calcHitBackVelocityAndGravity_f1) - mHitBackGravity.scaleInline(flightSteps).scaleInline(flightSteps)).scaleInline(1.0f / (cNum_calcHitBackVelocityAndGravity_f2 * flightSteps));
+    verticalVelocity = (rise.scaleInline(2.0f) - mHitBackGravity.scaleInline(flightSteps).scaleInline(flightSteps)).scaleInline(1.0f / (2.0f * flightSteps));
     mVelocity.add(horizontal, verticalVelocity);
 
     // Off-line hits curve: a side speed that a side pull cancels over the flight.
     if (!hitBackFront) {
         f32 curve = (hitBackRight ? cHitBackCurve : -cHitBackCurve);
         Vec3f sideVelocity;
-        sideVelocity.scale(curve * flightSteps * flightSteps / (flightSteps * cNum_calcHitBackVelocityAndGravity_f3), side);
+        sideVelocity.scale(curve * flightSteps * flightSteps / (flightSteps * 2.0f), side);
         mVelocity.add(sideVelocity);
         sideVelocity.scale(curve, side);
         mHitBackGravity.sub(sideVelocity);
@@ -442,7 +429,7 @@ void CocoNutBall::exeThrow() {
 
 void CocoNutBall::exeHitBackToHost() {
     if (MR::isFirstStep(this)) {
-        MR::setBckRate(this, cNum_exeHitBackToHost_setBckRate_1);
+        MR::setBckRate(this, 1.0f);
         MR::deleteEffect(this, "Touch");
         MR::emitEffect(this, "CocoNutBlur");
         MR::emitEffect(this, "CocoNutLight");
@@ -463,15 +450,15 @@ void CocoNutBall::exeHitBackToHost() {
         calcHitBackVelocityAndGravity();
     }
 
-    if (MR::isStep(this, cStep_exeHitBackToHost_1)) {
+    if (MR::isStep(this, 1)) {
         MR::stopScene(cHitBackStopSceneFrames);
     }
 
-    if (MR::isStep(this, cStep_exeHitBackToHost_2)) {
+    if (MR::isStep(this, 2)) {
         MR::shakeCameraWeak();
     }
 
-    if (MR::isGreaterEqualStep(this, cStep_exeHitBackToHost_3)) {
+    if (MR::isGreaterEqualStep(this, 1)) {
         mVelocity.add(mHitBackGravity);
     }
 

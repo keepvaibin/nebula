@@ -8,23 +8,18 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_exeJump_f1, "exeJump.f1", 1500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeJump_f2, "exeJump.f2", 2500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeJump_f3, "exeJump.f3", 2000.0f);
 
 namespace {
-    NEBULA_TUNABLE(f32, sJumpSpeed1st, 50.0f);
-    NEBULA_TUNABLE(f32, sJumpSpeed, 40.0f);
-    NEBULA_TUNABLE(f32, sJumpSpeedVs3, 40.0f);
-    NEBULA_TUNABLE(f32, sJumpGravity, 1.5f);
-    NEBULA_TUNABLE(f32, sJumpGravityVs3, 2.0f);
-    NEBULA_TUNABLE(f32, sJumpTurnSpeedVs3, 3.0f);
-    NEBULA_TUNABLE(s32, sLandStep, 15);
-    NEBULA_TUNABLE(s32, sLandStepVs2, 10);
-    NEBULA_TUNABLE(s32, sLandStepVs3, 10);
-    NEBULA_TUNABLE(s32, sLandStepVs3Angry, 5);
+    const f32 sJumpSpeed1st = 50.0f;
+    const f32 sJumpSpeed = 40.0f;
+    const f32 sJumpSpeedVs3 = 40.0f;
+    const f32 sJumpGravity = 1.5f;
+    const f32 sJumpGravityVs3 = 2.0f;
+    const f32 sJumpTurnSpeedVs3 = 3.0f;
+    const s32 sLandStep = 15;
+    const s32 sLandStepVs2 = 10;
+    const s32 sLandStepVs3 = 10;
+    const s32 sLandStepVs3Angry = 5;
 };  // namespace
 
 namespace NrvKoopaStateAttackShockWave {
@@ -151,7 +146,7 @@ void KoopaStateAttackShockWave::exeJump() {
     }
 
     if (!MR::sendMsgEnemyAttackToBindedSensor(mHost, mHost->getSensor("Body")) && MR::isOnGround(mHost)) {
-        MR::tryRumblePadAndCameraDistanceMiddle(mHost, cNum_exeJump_f1, cNum_exeJump_f2, cNum_exeJump_f3);
+        MR::tryRumblePadAndCameraDistanceMiddle(mHost, 1500.0f, 2500.0f, 2000.0f);
         MR::shakeCameraWeak();
 
         MR::startSound(mHost, "SE_BM_KOOPA_LAND");

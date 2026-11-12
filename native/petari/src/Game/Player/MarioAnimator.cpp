@@ -24,39 +24,6 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_targetWeight_f1, "targetWeight.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_targetWeight_f2, "targetWeight.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setWalkWeight_f1, "setWalkWeight.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 79.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f2, "update.f2", 59.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f3, "update.f3", 59.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setTilt_f1, "setTilt.f1", 0.001f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setTilt_f2, "setTilt.f2", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setTilt_f3, "setTilt.f3", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setTilt_f4, "setTilt.f4", 0.95f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setTilt_f5, "setTilt.f5", 0.05f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setTilt_f6, "setTilt.f6", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setTilt_f7, "setTilt.f7", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setTilt_f8, "setTilt.f8", 4.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setTilt_f9, "setTilt.f9", 0.97f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setTilt_f10, "setTilt.f10", 0.03f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setHoming_f1, "setHoming.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setHoming_f2, "setHoming.f2", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setHoming_f3, "setHoming.f3", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setHoming_f4, "setHoming.f4", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setHoming_f5, "setHoming.f5", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setHipSlidingTilt_f1, "setHipSlidingTilt.f1", 1.414213f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateJointRumble_f1, "updateJointRumble.f1", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateJointRumble_f2, "updateJointRumble.f2", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateJointRumble_f3, "updateJointRumble.f3", 0.7f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateJointRumble_f4, "updateJointRumble.f4", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateJointRumble_f5, "updateJointRumble.f5", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateJointRumble_f6, "updateJointRumble.f6", 0.707f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateJointRumble_f7, "updateJointRumble.f7", 0.707f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateJointRumble_f8, "updateJointRumble.f8", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isMirrorAnimation_f1, "isMirrorAnimation.f1", 0.5f);
 
 namespace {
     // The player's animation tables with the mods' animations (NebulaMods::takePlayerAnimations) in them: the game's
@@ -209,7 +176,7 @@ void MarioAnimator::targetWeight(f32* pWeight, f32 target, f32 rate) {
     if (getPlayer()->isSwimming()) {
         *pWeight = *pWeight * (1.0f - mActor->mConst->getTable()->mWeightBlendRatioSwim) + target * mActor->mConst->getTable()->mWeightBlendRatioSwim;
     } else if (getPlayer()->mStartSpinTimer != 0) {
-        *pWeight = *pWeight * cNum_targetWeight_f1 + target * cNum_targetWeight_f2;
+        *pWeight = *pWeight * 0.5f + target * 0.5f;
     } else {
         *pWeight = *pWeight * (1.0f - rate) + target * rate;
     }
@@ -218,7 +185,7 @@ void MarioAnimator::targetWeight(f32* pWeight, f32 target, f32 rate) {
 void MarioAnimator::setWalkWeight(const f32* pWeights) {
     f32 rate = mActor->mConst->getTable()->mWeightBlendRatio;
     if (getPlayer()->mStartSpinTimer != 0) {
-        rate = cNum_setWalkWeight_f1;
+        rate = 0.5f;
     }
 
     setBlendWeight(pWeights, rate);
@@ -456,7 +423,7 @@ squatWalk:
         default: {
             if (!isAnimationRun("幅とび")) {
                 player = getPlayer();
-                player->startBas("SquatWalk", false, 0.0f, cNum_update_f1);
+                player->startBas("SquatWalk", false, 0.0f, 79.0f);
             } else {
                 player = getPlayer();
                 player->startBas(nullptr, false, 0.0f, 0.0f);
@@ -489,9 +456,9 @@ notSquat:
         player->decideWalkAnimation();
 
         if (mActor->mBeeWallWalk != 0) {
-            updateWalkBas("BeeCreepWalk", cNum_update_f2);
+            updateWalkBas("BeeCreepWalk", 59.0f);
         } else {
-            updateWalkBas("Walk", cNum_update_f3);
+            updateWalkBas("Walk", 59.0f);
         }
 
         goto afterBrake;
@@ -654,7 +621,7 @@ void MarioAnimator::setTilt() {
         f32 frontDot = mTiltPrevFront.dot(getFrontVec());
         tiltAngle = 1.0f - frontDot;
 
-        if (tiltAngle > cNum_setTilt_f1) {
+        if (tiltAngle > 0.001f) {
             Vec3f cross = mTiltPrevFront.cross(getFrontVec());
 
             f32 gravDot = cross.dot(*getPlayer()->getGravityVec());
@@ -685,9 +652,9 @@ void MarioAnimator::setTilt() {
     f32 absNew = MR::abs(tiltAngle);
 
     if (absNew > absOld) {
-        mTiltSide = cNum_setTilt_f2 * mTiltSide + cNum_setTilt_f3 * tiltAngle;
+        mTiltSide = 0.9f * mTiltSide + 0.1f * tiltAngle;
     } else {
-        mTiltSide = cNum_setTilt_f4 * mTiltSide + cNum_setTilt_f5 * tiltAngle;
+        mTiltSide = 0.95f * mTiltSide + 0.05f * tiltAngle;
     }
 
     table = mActor->mConst->getTable();
@@ -697,9 +664,9 @@ void MarioAnimator::setTilt() {
     Mario* player3 = getPlayer();
     f32 vertAngle = -player3->mSpinInertiaBlend;
     vertAngle *= PI;
-    f32 eased = cNum_setTilt_f6 * mTiltDown + cNum_setTilt_f7 * lookDown;
-    f32 target = vertAngle / cNum_setTilt_f8;
-    mTiltDown = cNum_setTilt_f9 * eased + cNum_setTilt_f10 * target;
+    f32 eased = 0.9f * mTiltDown + 0.1f * lookDown;
+    f32 target = vertAngle / 4.0f;
+    mTiltDown = 0.97f * eased + 0.03f * target;
 
     Vec3f rotation(0.0f, mTiltSide, mTiltDown);
     MR::orderRotateMtx(0, rotation, mTiltMtx.toMtxPtr());
@@ -743,7 +710,7 @@ void MarioAnimator::setHoming() {
         f32 dist = toTarget.length();
         f32 vAngle;
 
-        if (dist < cNum_setHoming_f1) {
+        if (dist < 10.0f) {
             vAngle = 0.0f;
         } else {
             f32 dist2 = toTarget.length();
@@ -784,7 +751,7 @@ void MarioAnimator::setHoming() {
         Mtx rotMtx;
         MR::orderRotateMtx(5, Vec3f(0.0f, angleH, -vAngle), rotMtx);
 
-        MR::blendMtx(mHomingMtx.toMtxPtr(), rotMtx, cNum_setHoming_f2, mHomingMtx.toMtxPtr());
+        MR::blendMtx(mHomingMtx.toMtxPtr(), rotMtx, 0.1f, mHomingMtx.toMtxPtr());
 
         XanimeCore* core = mXanimePlayer->getCore();
         u32 headIdx = MR::getJointIndex(mActor, "Head");
@@ -793,12 +760,12 @@ void MarioAnimator::setHoming() {
     } else {
         Mtx identMtx;
         NebulaMtxIdentity(identMtx);
-        MR::blendMtx(mHomingMtx.toMtxPtr(), identMtx, cNum_setHoming_f3, mHomingMtx.toMtxPtr());
+        MR::blendMtx(mHomingMtx.toMtxPtr(), identMtx, 0.1f, mHomingMtx.toMtxPtr());
     }
 
     MarioConstTable* table = mActor->mConst->getTable();
 
-    f32 blend = cNum_setHoming_f4 * mHomingAngle + cNum_setHoming_f5 * angleH;
+    f32 blend = 0.9f * mHomingAngle + 0.1f * angleH;
     mHomingAngle = blend;
 
     f32 leftShoulderRot = 0.0f;
@@ -835,7 +802,7 @@ void MarioAnimator::setHipSlidingTilt(f32 stickX, f32 stickY) {
 
     weights[3] = (Vec2f(1.0f, 0.0f) - input).length();
 
-    const f32 maxDist = cNum_setHipSlidingTilt_f1;
+    const f32 maxDist = 1.414213f;
     for (s32 i = 0; i < 4; i++) {
         if (weights[i] >= maxDist) {
             weights[i] = 0.0f;
@@ -1045,13 +1012,13 @@ void MarioAnimator::updateJointRumble() {
     u32 newTimer = timer - 1;
     mRumbleTimer = newTimer;
 
-    f32 t = (f32)newTimer * Angle::cRadian360 / cNum_updateJointRumble_f1;
+    f32 t = (f32)newTimer * Angle::cRadian360 / 30.0f;
     f32 sineVal = Angle::sinRadian(t);
 
     f32 power = -mRumblePower;
 
     if (mRumbleTimer < 30) {
-        f32 fade = (f32)mRumbleTimer / cNum_updateJointRumble_f2;
+        f32 fade = (f32)mRumbleTimer / 30.0f;
         sineVal *= fade;
     }
 
@@ -1064,20 +1031,20 @@ void MarioAnimator::updateJointRumble() {
     XjointTransform* rarmJt = core->getJointTransform(MR::getJointIndex(mActor, "ArmR2"));
     rarmJt->mTranslateOffset.y = sineVal * power;
 
-    f32 hipRot = cNum_updateJointRumble_f3 * ((f32)mRumbleTimer / cNum_updateJointRumble_f4);
+    f32 hipRot = 0.7f * ((f32)mRumbleTimer / 60.0f);
 
     if (getPlayer()->mMovementStates.onGround && !getPlayer()->mMovementStates.mode2D && getPlayer()->mTargetWalkSpeedIndex == 0 &&
-        getPlayer()->calcAngleD(getPlayer()->mGroundNorm) > cNum_updateJointRumble_f5) {
+        getPlayer()->calcAngleD(getPlayer()->mGroundNorm) > 5.0f) {
         Vec3f dir;
         const Vec3f* airGrav = &getAirGravityVec();
         Mario* playerVec = getPlayer();
         MR::vecKillElement(playerVec->mGroundNorm, *airGrav, &dir);
         MR::normalizeOrZero(&dir);
 
-        if (getFrontVec().dot(dir) < -cNum_updateJointRumble_f6) {
+        if (getFrontVec().dot(dir) < -0.707f) {
             hipRot = -hipRot;
         } else {
-            hipRot = getFrontVec().dot(dir) > cNum_updateJointRumble_f7 ? hipRot : cNum_updateJointRumble_f8 * mRumbleHipRot;
+            hipRot = getFrontVec().dot(dir) > 0.707f ? hipRot : 0.9f * mRumbleHipRot;
         }
 
         NebulaMtxRotRad(mHipMtx.toMtxPtr(), 'Z', hipRot);
@@ -1182,7 +1149,7 @@ bool MarioAnimator::isMirrorAnimation() {
         if (!mMirrorChecked) {
             const Vec3f& wallNorm = getPlayer()->getWallNorm();
             f32 wallDot = camDir.dot(wallNorm);
-            if (wallDot < -cNum_isMirrorAnimation_f1) {
+            if (wallDot < -0.5f) {
                 mMirror = true;
             } else {
                 mMirror = false;

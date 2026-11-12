@@ -1,8 +1,5 @@
 #include "Game/Gravity.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calcGravity_f1, "calcGravity.f1", 4000000.0f);
 
 PlanetGravity::PlanetGravity() {
     mRange = -1.0f;
@@ -41,7 +38,7 @@ bool PlanetGravity::calcGravity(Vec3f* pDest, const Vec3f& rPosition) const {
     }
 
     // Apply gravity speed
-    f32 scalar = cNum_calcGravity_f1 / (radius * radius);
+    f32 scalar = 4000000.0f / (radius * radius);
     gravity.x *= scalar;
     gravity.y *= scalar;
     gravity.z *= scalar;

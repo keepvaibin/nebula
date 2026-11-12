@@ -6,86 +6,64 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_kill_f1, "kill.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_kill_f2, "kill.f2", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updatePose_f1, "updatePose.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updatePose_f2, "updatePose.f2", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isFallNextMove_f1, "isFallNextMove.f1", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isFallNextMove_f2, "isFallNextMove.f2", 90.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isFallNextMove_f3, "isFallNextMove.f3", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isFallNextMove_f4, "isFallNextMove.f4", 150.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exePursue_isNearPlayer_1, "exePursue.isNearPlayer.1", 700.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromCollision_1, "updateNormalVelocity.reboundVelocityFromCollision.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromCollision_2, "updateNormalVelocity.reboundVelocityFromCollision.2", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromCollision_3, "updateNormalVelocity.reboundVelocityFromCollision.3", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateSwoonVelocity_reboundVelocityFromCollision_1, "updateSwoonVelocity.reboundVelocityFromCollision.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateSwoonVelocity_reboundVelocityFromCollision_2, "updateSwoonVelocity.reboundVelocityFromCollision.2", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateSwoonVelocity_reboundVelocityFromCollision_3, "updateSwoonVelocity.reboundVelocityFromCollision.3", 1.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exePunchDown_1, "exePunchDown.1", 5);
 
 namespace {
     static Vec3f sInkShotOffset(0.0f, 20.0f, 0.0f);
-    NEBULA_TUNABLE(f32, sBaseScale, 1.0f);
-    NEBULA_TUNABLE(f32, sBodyHitRadius, 70.0f);
-    NEBULA_TUNABLE(f32, sBodyHitYOffset, 70.0f);
-    NEBULA_TUNABLE(f32, sAttackHitRadius, 50.0f);
-    NEBULA_TUNABLE(f32, sAttackHitYOffset, 70.0f);
-    NEBULA_TUNABLE(f32, sCollisionRadius, 90.0f);
-    NEBULA_TUNABLE(f32, sShadowRadius, 60.0f);
-    NEBULA_TUNABLE(f32, sPointerHitSize, 70.0f);
-    NEBULA_TUNABLE(f32, sPushAccel, 5.0f);
-    NEBULA_TUNABLE(f32, sPushScaleYSpeed, 0.1f);
-    NEBULA_TUNABLE(s32, sNoPushTime, 20);
-    NEBULA_TUNABLE(f32, sPushScaleYMarioSpeed, 0.15f);
-    NEBULA_TUNABLE(f32, sPushMarioAccel, 12.0f);
+    const f32 sBaseScale = 1.0f;
+    const f32 sBodyHitRadius = 70.0f;
+    const f32 sBodyHitYOffset = 70.0f;
+    const f32 sAttackHitRadius = 50.0f;
+    const f32 sAttackHitYOffset = 70.0f;
+    const f32 sCollisionRadius = 90.0f;
+    const f32 sShadowRadius = 60.0f;
+    const f32 sPointerHitSize = 70.0f;
+    const f32 sPushAccel = 5.0f;
+    const f32 sPushScaleYSpeed = 0.1f;
+    const s32 sNoPushTime = 20;
+    const f32 sPushScaleYMarioSpeed = 0.15f;
+    const f32 sPushMarioAccel = 12.0f;
     static const s32 sNoPushMarioTime = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(f32, sNormalGroundFrec, 0.85f);
-    NEBULA_TUNABLE(f32, sNormalAirFrec, 0.99f);
-    NEBULA_TUNABLE(f32, sNormalGravityAccel, 1.5f);
-    NEBULA_TUNABLE(f32, sActiveDistance, 3000.0f);
+    const f32 sNormalGroundFrec = 0.85f;
+    const f32 sNormalAirFrec = 0.99f;
+    const f32 sNormalGravityAccel = 1.5f;
+    const f32 sActiveDistance = 3000.0f;
     static const s32 sWaitTime = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE(s32, sWalkMoveStartTime, 10);
+    const s32 sWalkMoveStartTime = 10;
     static const s32 sWalkEndTime = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE(f32, sWalkAccel, 0.2f);
-    NEBULA_TUNABLE(f32, sWalkGoalDistance, 500.0f);
-    NEBULA_TUNABLE(f32, sWalkTurnDegree, 6.0f);
-    NEBULA_TUNABLE(f32, sWalkTerritoryRadius, 400.0f);
-    NEBULA_TUNABLE(s32, sFindTurnTime, 20);
+    const f32 sWalkAccel = 0.2f;
+    const f32 sWalkGoalDistance = 500.0f;
+    const f32 sWalkTurnDegree = 6.0f;
+    const f32 sWalkTerritoryRadius = 400.0f;
+    const s32 sFindTurnTime = 20;
     static const s32 sFindTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, sFindDistance, 1600.0f);
-    NEBULA_TUNABLE(f32, sFindTurnDegree, 6.0f);
+    const f32 sFindDistance = 1600.0f;
+    const f32 sFindTurnDegree = 6.0f;
     static const s32 sPursueTime = NebulaFrameClock::stepsOfSeconds(5);
-    NEBULA_TUNABLE(f32, sPursueAccel, 0.5f);
-    NEBULA_TUNABLE(f32, sPursueTurnDegree, 6.0f);
+    const f32 sPursueAccel = 0.5f;
+    const f32 sPursueTurnDegree = 6.0f;
     static const s32 sCoolDownTime = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(f32, sAttackSignDegree, 8.0f);
-    NEBULA_TUNABLE(f32, sAttackDistanceNear, 650.0f);
-    NEBULA_TUNABLE(f32, sAttackDistanceFar, 750.0f);
-    NEBULA_TUNABLE(s32, sForceFarAttackTime, 250);
-    NEBULA_TUNABLE(f32, sSpurtPowerH, 20.0f);
-    NEBULA_TUNABLE(f32, sSpurtPowerV, -15.0f);
-    NEBULA_TUNABLE(f32, sCheckFrontHeight, 40.0f);
-    NEBULA_TUNABLE(f32, sCheckFrontAttackSpace, 140.0f);
-    NEBULA_TUNABLE(f32, sBackAttackSpaceAccel, -0.1f);
+    const f32 sAttackSignDegree = 8.0f;
+    const f32 sAttackDistanceNear = 650.0f;
+    const f32 sAttackDistanceFar = 750.0f;
+    const s32 sForceFarAttackTime = 250;
+    const f32 sSpurtPowerH = 20.0f;
+    const f32 sSpurtPowerV = -15.0f;
+    const f32 sCheckFrontHeight = 40.0f;
+    const f32 sCheckFrontAttackSpace = 140.0f;
+    const f32 sBackAttackSpaceAccel = -0.1f;
     static const s32 sAttackSuccessTime = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(f32, sAttackSuccessHitPower, 8.0f);
+    const f32 sAttackSuccessHitPower = 8.0f;
     static const s32 sSwoonTime = NebulaFrameClock::stepsOfSeconds(3);
-    NEBULA_TUNABLE(s32, sRecoverTime, 20);
-    NEBULA_TUNABLE(f32, sSwoonGroundFrec, 0.85f);
-    NEBULA_TUNABLE(f32, sSwoonGravityAccel, 1.5f);
-    NEBULA_TUNABLE(s32, sPunchStopSceneTime, 2);
-    NEBULA_TUNABLE(s32, sPunchDownTime, 22);
-    NEBULA_TUNABLE(f32, sPunchHorizonPower, 20.0f);
-    NEBULA_TUNABLE(f32, sPunchVerticalPower, 35.0f);
-    NEBULA_TUNABLE(s32, sFlatDownTime, 20);
-    NEBULA_TUNABLE(s32, sHipDropDownTime, 40);
+    const s32 sRecoverTime = 20;
+    const f32 sSwoonGroundFrec = 0.85f;
+    const f32 sSwoonGravityAccel = 1.5f;
+    const s32 sPunchStopSceneTime = 2;
+    const s32 sPunchDownTime = 22;
+    const f32 sPunchHorizonPower = 20.0f;
+    const f32 sPunchVerticalPower = 35.0f;
+    const s32 sFlatDownTime = 20;
+    const s32 sHipDropDownTime = 40;
     static const s32 sPressDownTime = NebulaFrameClock::stepsOfSeconds(3);
 };  // namespace
 
@@ -163,7 +141,7 @@ void TakoHei::kill() {
         MR::appearCoinPop(this, mPosition, 1);
         break;
     case 2:
-        MR::appearStarPiece(this, mPosition, 3, cNum_kill_f1, cNum_kill_f2, false);
+        MR::appearStarPiece(this, mPosition, 3, 10.0f, 40.0f, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
         break;
     }
@@ -624,7 +602,7 @@ void TakoHei::exePursue() {
 
     bool isFarPlayer = false;
 
-    if (MR::isNearPlayer(this, cNum_exePursue_isNearPlayer_1)) {
+    if (MR::isNearPlayer(this, 700.0f)) {
         MR::addVelocityAwayFromTarget(this, *MR::getPlayerPos(), ::sPursueAccel);
     } else {
         MR::addVelocityMoveToTarget(this, *MR::getPlayerPos(), ::sPursueAccel);
@@ -820,13 +798,13 @@ void TakoHei::exePunchDown() {
 
     updateNormalVelocity();
 
-    if (MR::isGreaterStep(this, ::sPunchDownTime) || (MR::isBinded(this) && MR::isGreaterStep(this, cStep_exePunchDown_1))) {
+    if (MR::isGreaterStep(this, ::sPunchDownTime) || (MR::isBinded(this) && MR::isGreaterStep(this, 5))) {
         kill();
     }
 }
 
 void TakoHei::updatePose() {
-    MR::blendQuatUpFront(&mPoseQuat, MR::isBindedGround(this) ? *MR::getGroundNormal(this) : -mGravity, mFront, cNum_updatePose_f1, cNum_updatePose_f2);
+    MR::blendQuatUpFront(&mPoseQuat, MR::isBindedGround(this) ? *MR::getGroundNormal(this) : -mGravity, mFront, 0.1f, 0.2f);
 }
 
 void TakoHei::updateNormalVelocity() {
@@ -837,7 +815,7 @@ void TakoHei::updateNormalVelocity() {
         MR::attenuateVelocity(this, ::sNormalAirFrec);
     }
 
-    MR::reboundVelocityFromCollision(this, cNum_updateNormalVelocity_reboundVelocityFromCollision_1, cNum_updateNormalVelocity_reboundVelocityFromCollision_2, cNum_updateNormalVelocity_reboundVelocityFromCollision_3);
+    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
 }
 
 void TakoHei::updateSwoonVelocity() {
@@ -848,7 +826,7 @@ void TakoHei::updateSwoonVelocity() {
         MR::attenuateVelocity(this, ::sNormalAirFrec);
     }
 
-    MR::reboundVelocityFromCollision(this, cNum_updateSwoonVelocity_reboundVelocityFromCollision_1, cNum_updateSwoonVelocity_reboundVelocityFromCollision_2, cNum_updateSwoonVelocity_reboundVelocityFromCollision_3);
+    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
 }
 
 void TakoHei::decideNextTargetPos() {
@@ -915,7 +893,7 @@ bool TakoHei::isFallNextMove() const {
     }
 
     if (MR::isOnGround(this)) {
-        return MR::isFallNextMove(mPosition, mVelocity, mGravity, cNum_isFallNextMove_f1, mScale.x * cNum_isFallNextMove_f2 * cNum_isFallNextMove_f3, cNum_isFallNextMove_f4, nullptr);
+        return MR::isFallNextMove(mPosition, mVelocity, mGravity, 150.0f, mScale.x * 90.0f * 2.0f, 150.0f, nullptr);
     } else {
         return false;
     }

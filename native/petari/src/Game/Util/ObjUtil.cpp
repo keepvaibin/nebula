@@ -46,11 +46,6 @@
 
 #include <cstdarg>
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_shakeCameraInfinity_f1, "shakeCameraInfinity.f1", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_findNamePosOnGround_f1, "findNamePosOnGround.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_findNamePosOnGround_f2, "findNamePosOnGround.f2", 1000.0f);
 
 bool MR::isJudgedToClipFrustum(const Vec3f& rCenter, f32 radius) {
     return MR::getClippingJudge()->isJudgedToClipFrustum(rCenter, radius);
@@ -66,7 +61,7 @@ bool MR::isJudgedToClipFrustum300m(const Vec3f& rCenter, f32 radius) {
 
 namespace {
     // Scales every distance objects hide within near the camera (rocks, bullets, a grand star); 0: none hide.
-    NEBULA_TUNABLE(f32, cNearClipScale, 1.0f);
+    const f32 cNearClipScale = 1.0f;
 }  // namespace
 
 bool MR::isJudgedToNearClip(const Vec3f& rPos, f32 distance) {
@@ -896,7 +891,7 @@ void MR::shakeCameraVeryWeak() {
 }
 
 void MR::shakeCameraInfinity(NameObj* pObj, f32 intensity, f32 speed) {
-    getCameraDirector()->mShaker->shakeInfinity(pObj, intensity, cNum_shakeCameraInfinity_f1 / speed);
+    getCameraDirector()->mShaker->shakeInfinity(pObj, intensity, 15.0f / speed);
 }
 
 void MR::stopShakingCamera(NameObj* pObj) {
@@ -935,7 +930,7 @@ void MR::findNamePosOnGround(const char* pName, MtxPtr pMtx) {
     mtx.getZDir(front);
     calcGravityVector(nullptr, position, &gravity, nullptr, 0);
 
-    if (getFirstPolyOnLineToMap(&hitPos, &triangle, position - gravity * cNum_findNamePosOnGround_f1, gravity * cNum_findNamePosOnGround_f2)) {
+    if (getFirstPolyOnLineToMap(&hitPos, &triangle, position - gravity * 100.0f, gravity * 1000.0f)) {
         makeMtxUpFrontPos(&mtx, -gravity, front, hitPos);
     }
 

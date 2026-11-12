@@ -3,16 +3,12 @@
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 2.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sRate, 0.5f);
-    NEBULA_TUNABLE(f32, sAngleX, 0.12f);
-    NEBULA_TUNABLE(f32, sAngleY, 0.7f);
+    const f32 sRate = 0.5f;
+    const f32 sAngleX = 0.12f;
+    const f32 sAngleY = 0.7f;
 };  // namespace
 
 CameraTalk::CameraTalk(const char* pName)
@@ -68,9 +64,9 @@ CameraTargetObj* CameraTalk::calc() {
 
     } else {
         if (orientation >= 0.0f) {
-            rotY.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), -MR::pi() / cNum_calc_f1);
+            rotY.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), -MR::pi() / 2.0f);
         } else {
-            rotY.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), MR::pi() / cNum_calc_f2);
+            rotY.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), MR::pi() / 2.0f);
         }
     }
 

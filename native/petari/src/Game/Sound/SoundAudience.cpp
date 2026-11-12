@@ -3,34 +3,17 @@
 #include "Game/Sound/SoundParams.hpp"
 #include "Game/Sound/StdSoundInfo.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_ease_f1, "ease.f1", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_ease_f2, "ease.f2", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_ease_f3, "ease.f3", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_ease_f4, "ease.f4", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_awayFromZero_f1, "awayFromZero.f1", 0.002f);
-NEBULA_TUNABLE_NAMED(f32, cNum_awayFromZero_f2, "awayFromZero.f2", 0.002f);
-NEBULA_TUNABLE_NAMED(f32, cNum_awayFromZero_f3, "awayFromZero.f3", 0.002f);
-NEBULA_TUNABLE_NAMED(f32, cNum_awayFromZero_f4, "awayFromZero.f4", 0.002f);
-NEBULA_TUNABLE_NAMED(f32, cNum_mixChannelOut_f1, "mixChannelOut.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_mixChannelOut_f2, "mixChannelOut.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcDeltaPriority__f1, "calcDeltaPriority_.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcDeltaPriority__f2, "calcDeltaPriority_.f2", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcVolume__f1, "calcVolume_.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcVolume__f2, "calcVolume_.f2", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcPan__f1, "calcPan_.f1", 0.5f);
 
 namespace {
     // Eases a value toward its target by a fifth once they are 0.2 or more apart.
     f32 ease(f32 target, f32 current) {
         if (target > current) {
-            if (target - current >= cNum_ease_f1) {
-                return current + (target - current) / cNum_ease_f2;
+            if (target - current >= 0.2f) {
+                return current + (target - current) / 5.0f;
             }
         } else {
-            if (current - target >= cNum_ease_f3) {
-                return target + (current - target) / cNum_ease_f4;
+            if (current - target >= 0.2f) {
+                return target + (current - target) / 5.0f;
             }
         }
         return target;
@@ -38,8 +21,8 @@ namespace {
 
     // A component under 0.002 from zero becomes 0.002 with its sign.
     f32 awayFromZero(f32 value) {
-        if (value > -cNum_awayFromZero_f1 && value < cNum_awayFromZero_f2) {
-            return value < 0.0f ? -cNum_awayFromZero_f3 : cNum_awayFromZero_f4;
+        if (value > -0.002f && value < 0.002f) {
+            return value < 0.0f ? -0.002f : 0.002f;
         }
         return value;
     }
@@ -153,7 +136,7 @@ void SoundAudience::mixChannelOut(const SoundParams& rParams, SoundAudible* pAud
         pAudible->mDolby = dolby;
         params.mDolby = dolby;
     } else {
-        params.mDolby = cNum_mixChannelOut_f1;
+        params.mDolby = 0.1f;
     }
 
     if (rParam.calcPan()) {
@@ -166,7 +149,7 @@ void SoundAudience::mixChannelOut(const SoundParams& rParams, SoundAudible* pAud
         pAudible->mPan = pan;
         params.mPan = pan;
     } else {
-        params.mPan = cNum_mixChannelOut_f2;
+        params.mPan = 0.5f;
     }
 
     params.mPitch = calcPitch(pChannel, pAudible, mListeners.begin()[channel]);
@@ -177,10 +160,10 @@ void SoundAudience::mixChannelOut(const SoundParams& rParams, SoundAudible* pAud
 }
 
 u32 SoundAudience::calcDeltaPriority_(f32 dist, bool excludeFar, s32 distVolBit) const {
-    f32 farDist = distVolBit == 8 ? mSetting.mFarDistance / cNum_calcDeltaPriority__f1 : mSetting.mFarDistance * distVolBit;
+    f32 farDist = distVolBit == 8 ? mSetting.mFarDistance / 2.0f : mSetting.mFarDistance * distVolBit;
 
     if (mFarCamera) {
-        farDist *= cNum_calcDeltaPriority__f2;
+        farDist *= 3.0f;
     }
 
     if (dist > farDist) {
@@ -200,10 +183,10 @@ u32 SoundAudience::calcDeltaPriority_(f32 dist, bool excludeFar, s32 distVolBit)
 }
 
 f32 SoundAudience::calcVolume_(f32 dist, s32 distVolBit) const {
-    f32 farDist = distVolBit == 8 ? mSetting.mFarDistance / cNum_calcVolume__f1 : mSetting.mFarDistance * distVolBit;
+    f32 farDist = distVolBit == 8 ? mSetting.mFarDistance / 2.0f : mSetting.mFarDistance * distVolBit;
 
     if (mFarCamera) {
-        farDist *= cNum_calcVolume__f2;
+        farDist *= 3.0f;
     }
 
     if (dist > farDist) {
@@ -238,7 +221,7 @@ f32 SoundAudience::calcDolby_(const Vec3f& rPos) const {
 f32 SoundAudience::calcPan_(f32 dist, const Vec3f& rPos) const {
     f32 panRate = dist <= MR::epsilon() ? 0.0f : rPos.x / dist;
 
-    return panRate * mSetting.mPanAmplitude + cNum_calcPan__f1;
+    return panRate * mSetting.mPanAmplitude + 0.5f;
 }
 
 f32 SoundAudience::calcPitch(SoundDopplerChannel* pChannel, const SoundAudible* pAudible, const SoundListener& rListener) const {

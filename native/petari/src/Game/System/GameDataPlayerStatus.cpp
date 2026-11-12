@@ -2,13 +2,12 @@
 #include "Game/System/GameRules.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/System/SaveBytes.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
     // The lives the player starts with and has again on every load (4).
-    NEBULA_TUNABLE(s32, cStartingPlayerLeft, 4);
+    const s32 cStartingPlayerLeft = 4;
     // The most lives (99).
-    NEBULA_TUNABLE(s32, cMaxPlayerLeft, 99);
+    const s32 cMaxPlayerLeft = 99;
 };  // namespace
 
 GameDataPlayerStatus::GameDataPlayerStatus() {

@@ -5,21 +5,18 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/ClipAreaHolder.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_setKameckBeamCollisionFilter_f1, "setKameckBeamCollisionFilter.f1", 10.0f);
-
 namespace {
-    NEBULA_TUNABLE_LIST(f32, sFireAngleLebel1, , {0.0f});
-    NEBULA_TUNABLE_LIST(f32, sFireAngleLebel2, , {30.0f, -30.0f});
-    NEBULA_TUNABLE_LIST(f32, sFireAngleLebel3, , {0.0f, 120.0f, -120.0f});
+    const f32 sFireAngleLebel1[] = {0.0f};
+    const f32 sFireAngleLebel2[] = {30.0f, -30.0f};
+    const f32 sFireAngleLebel3[] = {0.0f, 120.0f, -120.0f};
     const f32* sFireAngleList[] = {nullptr, sFireAngleLebel1, sFireAngleLebel2, sFireAngleLebel3, nullptr};
-    NEBULA_TUNABLE(s32, sMaxBeamLife, 360);
-    NEBULA_TUNABLE(f32, sBeamRadius, 80.0f);
+    const s32 sMaxBeamLife = 360;
+    const f32 sBeamRadius = 80.0f;
     // const s32 sMorphTime =
-    NEBULA_TUNABLE(s32, sBurningTime, 40);
-    NEBULA_TUNABLE(f32, sStormRange, 500.0f);
+    const s32 sBurningTime = 40;
+    const f32 sStormRange = 500.0f;
 };  // namespace
 
 KameckBeamEventListener::KameckBeamEventListener() {
@@ -476,6 +473,6 @@ void KameckBeam::emitBeamEffect() {
 
 namespace MR {
     void setKameckBeamCollisionFilter(LiveActor* pActor) {
-        MR::setBinderCollisionPartsFilter(pActor, new KameckBeamCollisionFilter(&pActor->mPosition, cNum_setKameckBeamCollisionFilter_f1));
+        MR::setBinderCollisionPartsFilter(pActor, new KameckBeamCollisionFilter(&pActor->mPosition, 10.0f));
     }
 };  // namespace MR

@@ -10,22 +10,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Render/GameTexture.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_draw_f1, "draw.f1", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw_f2, "draw.f2", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw_f3, "draw.f3", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw_f4, "draw.f4", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw_f5, "draw.f5", 4.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw_f6, "draw.f6", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw_f7, "draw.f7", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw_f8, "draw.f8", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw_f9, "draw.f9", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw_f10, "draw.f10", 8.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw_f11, "draw.f11", 12.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw_f12, "draw.f12", 242.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw_f13, "draw.f13", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw_f14, "draw.f14", 3.0f);
 
 namespace {
     // The cell's opacity is the draw's constant (flakes.constants[1]), not a vertex colour.
@@ -73,19 +57,19 @@ void MarineSnow::draw(const Vec3f& rPosition, const Vec3f& rUp, f32 surfaceDista
         return;
     }
 
-    f32 fadeRate = static_cast< f32 >(mFadeStep) / cNum_draw_f1;
+    f32 fadeRate = static_cast< f32 >(mFadeStep) / 60.0f;
 
-    s32 cellX = static_cast< s32 >((rPosition.x + mCellSize / cNum_draw_f2) / mCellSize);
+    s32 cellX = static_cast< s32 >((rPosition.x + mCellSize / 2.0f) / mCellSize);
     s32 originX = cellX * mCellSize;
-    s32 cellY = static_cast< s32 >((rPosition.y + mCellSize / cNum_draw_f3) / mCellSize);
+    s32 cellY = static_cast< s32 >((rPosition.y + mCellSize / 2.0f) / mCellSize);
     s32 originY = cellY * mCellSize;
-    s32 cellZ = static_cast< s32 >((rPosition.z + mCellSize / cNum_draw_f4) / mCellSize);
+    s32 cellZ = static_cast< s32 >((rPosition.z + mCellSize / 2.0f) / mCellSize);
     s32 originZ = cellZ * mCellSize;
 
     SiteMaterial material;
     TDDraw::setupNative(&material, 0, 1, 0);
     material.setDepth(true, NEBULA_COMPARE_LEQUAL, false);
-    material.mState.point_size = cNum_draw_f5;
+    material.mState.point_size = 4.5f;
 
     static u8 phase = 0;
     phase = (phase + 1) & 3;
@@ -105,8 +89,8 @@ void MarineSnow::draw(const Vec3f& rPosition, const Vec3f& rUp, f32 surfaceDista
     billboardUp.cross(billboardRight, cameraForward);
     MR::normalizeOrZero(&billboardUp);
 
-    Vec3f diagonalUp = (billboardRight + billboardUp) * cNum_draw_f6;
-    Vec3f diagonalDown = (billboardRight - billboardUp) * cNum_draw_f7;
+    Vec3f diagonalUp = (billboardRight + billboardUp) * 10.0f;
+    Vec3f diagonalDown = (billboardRight - billboardUp) * 10.0f;
 
     // Each cell draws as an object of its own (the caller's slot, a generation from the cell's place in the world), and
     // the caller's object and numbers are back when the snow is done: a cell left out, or the player crossing into
@@ -141,38 +125,38 @@ void MarineSnow::draw(const Vec3f& rPosition, const Vec3f& rUp, f32 surfaceDista
                 f32 cellDistance = (i >= 0 ? i : -i) + (j >= 0 ? j : -j) + (k >= 0 ? k : -k);
 
                 s32 particleStride = 1;
-                if (cellDistance > cNum_draw_f8) {
+                if (cellDistance > 3.0f) {
                     particleStride = 2;
                 }
 
-                if (cellDistance > cNum_draw_f9) {
+                if (cellDistance > 5.0f) {
                     particleStride = 4;
                 }
 
-                if (cellDistance > cNum_draw_f10) {
+                if (cellDistance > 8.0f) {
                     particleStride = 8;
                 }
 
-                f32 opacity = 1.0f - cellDistance / cNum_draw_f11;
+                f32 opacity = 1.0f - cellDistance / 12.0f;
                 if (opacity < 0.0f) {
                     opacity = 0.0f;
                 }
 
                 opacity *= opacity * opacity;
-                u32 alpha = cNum_draw_f12 * opacity * fadeRate;
+                u32 alpha = 242.0f * opacity * fadeRate;
 
                 if (alpha == 0) {
                     continue;
                 }
 
                 Frame::setObject(callerSlot, ::cellObject(cellX + i, cellY + j, cellZ + k));
-                flakes.constants[1] = static_cast< f32 >(alpha) / cNum_draw_f13;
+                flakes.constants[1] = static_cast< f32 >(alpha) / 255.0f;
                 TypedDraw site(flakes, MR::tmpMtxTrans(cellOrigin), MR::getCameraViewMtx());
 
                 u16 lastParticle;
                 u16 firstParticle;
 
-                if (opacity > cNum_draw_f14) {
+                if (opacity > 3.0f) {
                     firstParticle = start;
                     lastParticle = end;
                 } else {

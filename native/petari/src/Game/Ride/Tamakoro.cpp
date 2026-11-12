@@ -24,126 +24,71 @@
 #include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
 #include "Game/System/NebulaHost.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_calcTiltMove_f1, "calcTiltMove.f1", 0.0001f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f1, "initSensor.f1", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryBumpWall_f1, "tryBumpWall.f1", 0.6f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryBumpWall_f2, "tryBumpWall.f2", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryBumpWall_f3, "tryBumpWall.f3", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryLand_f1, "tryLand.f1", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeStandByTutorial_f1, "exeStandByTutorial.f1", 0.95f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeStandByBind_f1, "exeStandByBind.f1", 0.95f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeBindStart_f1, "exeBindStart.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeBindStartLand_f1, "exeBindStartLand.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTutorial_f1, "exeTutorial.f1", 0.25f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTutorial_f2, "exeTutorial.f2", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_f1, "exeFall.f1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeJump_f1, "exeJump.f1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeBumpWall_f1, "exeBumpWall.f1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeLand_f1, "exeLand.f1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeJumpHole_f1, "exeJumpHole.f1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeJumpHoleSetUp_f1, "exeJumpHoleSetUp.f1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeJumpHoleLaunch_f1, "exeJumpHoleLaunch.f1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeJumpHoleLaunch_f2, "exeJumpHoleLaunch.f2", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDashRail_f1, "exeDashRail.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDashRailEnd_f1, "exeDashRailEnd.f1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDashRailEnd_f2, "exeDashRailEnd.f2", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addVelocityOperate_f1, "addVelocityOperate.f1", 0.4f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addVelocityOperate_f2, "addVelocityOperate.f2", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRideRail_f1, "updateRideRail.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRideRail_f2, "updateRideRail.f2", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocityNormal_f1, "updateVelocityNormal.f1", 0.995f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateMoment_f1, "updateMoment.f1", 0.25f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateMoment_f2, "updateMoment.f2", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateMarioPose_f1, "updateMarioPose.f1", 0.001f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateMarioPose_f2, "updateMarioPose.f2", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateMarioPose_f3, "updateMarioPose.f3", 35.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateMarioPose_f4, "updateMarioPose.f4", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateSquatBckBlend_f1, "updateSquatBckBlend.f1", 6.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateSquatBckBlend_f2, "updateSquatBckBlend.f2", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startRotateLevelSound_f1, "startRotateLevelSound.f1", 0.001f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startRotateLevelSound_f2, "startRotateLevelSound.f2", 10000.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_tryBumpWall_reboundVelocityFromCollision_1, "tryBumpWall.reboundVelocityFromCollision.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryBumpWall_reboundVelocityFromCollision_2, "tryBumpWall.reboundVelocityFromCollision.2", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryLand_reboundVelocityFromCollision_1, "tryLand.reboundVelocityFromCollision.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryLand_reboundVelocityFromCollision_2, "tryLand.reboundVelocityFromCollision.2", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocityNormal_reboundVelocityFromCollision_1, "updateVelocityNormal.reboundVelocityFromCollision.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocityNormal_reboundVelocityFromCollision_2, "updateVelocityNormal.reboundVelocityFromCollision.2", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocityNormal_reboundVelocityFromCollision_3, "updateVelocityNormal.reboundVelocityFromCollision.3", 1.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeBumpWall_1, "exeBumpWall.1", 15);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeLand_1, "exeLand.1", 15);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeBindEnd_1, "exeBindEnd.1", 12);
-
 namespace {
-    NEBULA_TUNABLE(f32, mBaseRadius, 150.0f);
-    NEBULA_TUNABLE(f32, sBindableUpperDegree, 60.0f);
-    NEBULA_TUNABLE(s32, sBindStartTime, 40);
-    NEBULA_TUNABLE(f32, sBindStartJumpHeight, 150.0f);
-    NEBULA_TUNABLE(f32, sBindStartUpAdjustRate, 0.1f);
-    NEBULA_TUNABLE(f32, sBindStartFrontAdjustRate, 0.1f);
-    NEBULA_TUNABLE(s32, sBindStartLandTime, 14);
-    NEBULA_TUNABLE(f32, sLandStartPositionDegree, 35.0f);
-    NEBULA_TUNABLE(f32, sLandStartVelocityDegree, 40.0f);
-    NEBULA_TUNABLE(f32, sGravityAccel, 2.0f);
-    NEBULA_TUNABLE(f32, sGroundFric, 0.99f);
-    NEBULA_TUNABLE(f32, sIdleBckRate, 1.0f);
-    NEBULA_TUNABLE(f32, sSoftWalkSpeed, 0.25f);
-    NEBULA_TUNABLE(f32, sSoftWalkBckRate, 1.0f);
-    NEBULA_TUNABLE(f32, sWalkSpeed, 6.0f);
-    NEBULA_TUNABLE(f32, sWalkBckRate, 2.0f);
-    NEBULA_TUNABLE(f32, sRunSpeed, 18.0f);
-    NEBULA_TUNABLE(f32, sRunBckRate, 3.0f);
-    NEBULA_TUNABLE(f32, sRunMaxBckRate, 4.0f);
-    NEBULA_TUNABLE(s32, sFallStartTime, 5);
-    NEBULA_TUNABLE(f32, sFallOffsetSpeed, 3.0f);
-    NEBULA_TUNABLE(f32, sJumpPowerV, 40.0f);
-    NEBULA_TUNABLE(f32, sJumpPowerH, 7.0f);
-    NEBULA_TUNABLE(f32, sJumpOffsetSpeed, 4.0f);
-    NEBULA_TUNABLE(f32, sMarioJumpOffsetMax, 150.0f);
-    NEBULA_TUNABLE(f32, sMarioOffsetGravityAccel, 1.0f);
-    NEBULA_TUNABLE(f32, sMarioOffsetFric, 0.99f);
-    NEBULA_TUNABLE(f32, sNeedLandPower, 20.0f);
-    NEBULA_TUNABLE(s32, sLandTime, 2);
-    NEBULA_TUNABLE(f32, sLandFric, 0.88f);
-    NEBULA_TUNABLE(f32, sNeedBumpWallPower, 10.0f);
-    NEBULA_TUNABLE(f32, sCollisionStrongPower, 60.0f);
-    NEBULA_TUNABLE(f32, sCollisionMiddlePower, 25.0f);
-    NEBULA_TUNABLE(f32, sCollisionWeakPower, 5.0f);
-    NEBULA_TUNABLE(f32, sStampReactionV, 30.0f);
-    NEBULA_TUNABLE(f32, sStampReactionInvalidSpeed, 15.0f);
-    NEBULA_TUNABLE(f32, sExplosionReactionH, 20.0f);
-    NEBULA_TUNABLE(f32, sExplosionReactionV, 40.0f);
-    NEBULA_TUNABLE(f32, sRaidRailFastSpeed, 30.0f);
-    NEBULA_TUNABLE(f32, sRollBckRate, 1.5f);
-    NEBULA_TUNABLE(s32, sDashRailTime, 40);
-    NEBULA_TUNABLE(f32, sDashRailFric, 0.99f);
-    NEBULA_TUNABLE(f32, sDashBallRollSpeed, 60.0f);
-    NEBULA_TUNABLE(f32, sEndBindFrontPower, 5.0f);
-    NEBULA_TUNABLE(f32, sEndBindJumpPower, 35.0f);
+    const f32 mBaseRadius = 150.0f;
+    const f32 sBindableUpperDegree = 60.0f;
+    const s32 sBindStartTime = 40;
+    const f32 sBindStartJumpHeight = 150.0f;
+    const f32 sBindStartUpAdjustRate = 0.1f;
+    const f32 sBindStartFrontAdjustRate = 0.1f;
+    const s32 sBindStartLandTime = 14;
+    const f32 sLandStartPositionDegree = 35.0f;
+    const f32 sLandStartVelocityDegree = 40.0f;
+    const f32 sGravityAccel = 2.0f;
+    const f32 sGroundFric = 0.99f;
+    const f32 sIdleBckRate = 1.0f;
+    const f32 sSoftWalkSpeed = 0.25f;
+    const f32 sSoftWalkBckRate = 1.0f;
+    const f32 sWalkSpeed = 6.0f;
+    const f32 sWalkBckRate = 2.0f;
+    const f32 sRunSpeed = 18.0f;
+    const f32 sRunBckRate = 3.0f;
+    const f32 sRunMaxBckRate = 4.0f;
+    const s32 sFallStartTime = 5;
+    const f32 sFallOffsetSpeed = 3.0f;
+    const f32 sJumpPowerV = 40.0f;
+    const f32 sJumpPowerH = 7.0f;
+    const f32 sJumpOffsetSpeed = 4.0f;
+    const f32 sMarioJumpOffsetMax = 150.0f;
+    const f32 sMarioOffsetGravityAccel = 1.0f;
+    const f32 sMarioOffsetFric = 0.99f;
+    const f32 sNeedLandPower = 20.0f;
+    const s32 sLandTime = 2;
+    const f32 sLandFric = 0.88f;
+    const f32 sNeedBumpWallPower = 10.0f;
+    const f32 sCollisionStrongPower = 60.0f;
+    const f32 sCollisionMiddlePower = 25.0f;
+    const f32 sCollisionWeakPower = 5.0f;
+    const f32 sStampReactionV = 30.0f;
+    const f32 sStampReactionInvalidSpeed = 15.0f;
+    const f32 sExplosionReactionH = 20.0f;
+    const f32 sExplosionReactionV = 40.0f;
+    const f32 sRaidRailFastSpeed = 30.0f;
+    const f32 sRollBckRate = 1.5f;
+    const s32 sDashRailTime = 40;
+    const f32 sDashRailFric = 0.99f;
+    const f32 sDashBallRollSpeed = 60.0f;
+    const f32 sEndBindFrontPower = 5.0f;
+    const f32 sEndBindJumpPower = 35.0f;
     static const s32 sForceBindEndTime = NebulaFrameClock::stepsOfMilliseconds(1500);
-    NEBULA_TUNABLE(f32, sMarioUpAdjustRate, 0.1f);
-    NEBULA_TUNABLE(f32, sMarioFrontAdjustRate, 0.25f);
-    NEBULA_TUNABLE(f32, sStandDirInterRate, 0.02f);
-    NEBULA_TUNABLE(f32, sMarioUpperYAccel, 5.0f);
-    NEBULA_TUNABLE(f32, sMarioUpperYFric, 0.9f);
-    NEBULA_TUNABLE(f32, sRingMaxDegree, 45.0f);
-    NEBULA_TUNABLE(f32, sRingMaxAngleSpeed, 4.0f);
-    NEBULA_TUNABLE(f32, sTutorialAccel, 0.5f);
-    NEBULA_TUNABLE(f32, sTutorialFric, 0.95f);
-    NEBULA_TUNABLE(s32, sBgmStateChangeFrames, 30);
+    const f32 sMarioUpAdjustRate = 0.1f;
+    const f32 sMarioFrontAdjustRate = 0.25f;
+    const f32 sStandDirInterRate = 0.02f;
+    const f32 sMarioUpperYAccel = 5.0f;
+    const f32 sMarioUpperYFric = 0.9f;
+    const f32 sRingMaxDegree = 45.0f;
+    const f32 sRingMaxAngleSpeed = 4.0f;
+    const f32 sTutorialAccel = 0.5f;
+    const f32 sTutorialFric = 0.95f;
+    const s32 sBgmStateChangeFrames = 30;
 
     // Tilt steering (player 1's main controller): the rest angle in the YZ plane, a dead zone, and the tilt that
     // reaches full input.
-    NEBULA_TUNABLE(f32, cTiltBaseDegreeYZ, 10.0f);
-    NEBULA_TUNABLE(f32, cTiltDegreeMargin, 5.0f);
-    NEBULA_TUNABLE(f32, cTiltDegreeRange, 25.0f);
+    const f32 cTiltBaseDegreeYZ = 10.0f;
+    const f32 cTiltDegreeMargin = 5.0f;
+    const f32 cTiltDegreeRange = 25.0f;
 
     // Signed angle from rV2 to rV1; both unit length.
     f32 calcSignedAngle(const Vec2f& rV1, const Vec2f& rV2) {
@@ -204,7 +149,7 @@ namespace {
         f32 mag = x * x + y * y;
         mag = FloatUtil::sqrt(mag);
 
-        if (mag >= cNum_calcTiltMove_f1) {
+        if (mag >= 0.0001f) {
             Rot3f invMtx = MR::getCameraInvViewMtx();
 
             Vec3f dirX;
@@ -309,7 +254,7 @@ void Tamakoro::initSensor() {
     initHitSensor(3);
     MR::addHitSensor(this, "Body", ATYPE_SPHERE_PLAYER, 8, mBaseRadius, Vec3f(0.0f, 0.0f, 0.0f));
     MR::addHitSensor(this, "Hit", ATYPE_SPHERE_PLAYER_HIT, 8, mBaseRadius, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensor(this, "Bind", ATYPE_SPHERE_PLAYER_BIND, 8, mBaseRadius + cNum_initSensor_f1, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "Bind", ATYPE_SPHERE_PLAYER_BIND, 8, mBaseRadius + 15.0f, Vec3f(0.0f, 0.0f, 0.0f));
 }
 
 void Tamakoro::initJointControl() {
@@ -593,14 +538,14 @@ bool Tamakoro::tryJump() {
 
 bool Tamakoro::tryBumpWall() {
     if (MR::calcHitPowerToWall(this) > ::sNeedBumpWallPower) {
-        f32 rebound = -cNum_tryBumpWall_f1;
+        f32 rebound = -0.6f;
         if (isEnebleHitCollisionMessage()) {
             if (MR::sendMsgToWallSensor(ACTMES_BALL_DASH_WALL, getSensor("Body"))) {
-                rebound = cNum_tryBumpWall_f2;
+                rebound = 0.3f;
             }
         }
-        MR::reboundVelocityFromCollision(this, rebound, cNum_tryBumpWall_reboundVelocityFromCollision_1, cNum_tryBumpWall_reboundVelocityFromCollision_2);
-        mMarioOffsetVelocity = cNum_tryBumpWall_f3;
+        MR::reboundVelocityFromCollision(this, rebound, 0.0f, 1.0f);
+        mMarioOffsetVelocity = 2.0f;
         setNerve(GET_NERVE(Tamakoro, TamakoroNrvBumpWall));
         return true;
     }
@@ -614,12 +559,12 @@ bool Tamakoro::tryLand() {
         f32 rebound = 0.0f;
         if (isEnebleHitCollisionMessage()) {
             if (MR::sendMsgToWallSensor(ACTMES_BALL_DASH_GROUND, getSensor("Body"))) {
-                rebound = cNum_tryLand_f1;
+                rebound = 0.3f;
             }
         }
         mMarioOffsetVelocity = -power;
         mMarioOffset -= power;
-        MR::reboundVelocityFromCollision(this, rebound, cNum_tryLand_reboundVelocityFromCollision_1, cNum_tryLand_reboundVelocityFromCollision_2);
+        MR::reboundVelocityFromCollision(this, rebound, 0.0f, 1.0f);
         setNerve(GET_NERVE(Tamakoro, TamakoroNrvLand));
         return true;
     }
@@ -664,11 +609,11 @@ void Tamakoro::reactionCollision() {
 }
 
 void Tamakoro::exeStandByTutorial() {
-    updateVelocityNormal(cNum_exeStandByTutorial_f1);
+    updateVelocityNormal(0.95f);
 }
 
 void Tamakoro::exeStandByBind() {
-    updateVelocityNormal(cNum_exeStandByBind_f1);
+    updateVelocityNormal(0.95f);
 }
 
 void Tamakoro::exeBindStart() {
@@ -688,7 +633,7 @@ void Tamakoro::exeBindStart() {
     expectMario.scaleAdd(mBaseRadius, mDirectionToMario, mPosition);
     Vec3f horizontalVec;
     MR::vecBlend(mMarioBindRequestPos, expectMario, &horizontalVec, time);
-    time = (time * cNum_exeBindStart_f1) - 1.0f;
+    time = (time * 2.0f) - 1.0f;
     const Vec3f upVec = mGravity * (-(time * time * -::sBindStartJumpHeight + mBaseRadius));
 
     MR::blendQuatUpFront(&mMarioRotateQuat, -mGravity, mMarioFront, ::sBindStartUpAdjustRate, ::sBindStartFrontAdjustRate);
@@ -720,7 +665,7 @@ void Tamakoro::exeBindStartLand() {
         }
         mMarioPos.scaleAdd(mBaseRadius, mDirectionToMario, mPosition);
 
-        mMarioUp = (mDirectionToMario - mGravity) / cNum_exeBindStartLand_f1;
+        mMarioUp = (mDirectionToMario - mGravity) / 2.0f;
         if (MR::normalizeOrZero(&mMarioUp)) {
             mMarioUp.set(-mGravity);
         }
@@ -766,11 +711,11 @@ void Tamakoro::exeTutorial() {
 
     Vec3f moment;
     MR::calcMomentRollBall(&moment, mKickVel, -mGravity, mBaseRadius);
-    MR::vecBlend(mMoment, moment, &mMoment, cNum_exeTutorial_f1);
+    MR::vecBlend(mMoment, moment, &mMoment, 0.25f);
     mKickVel.mult(::sTutorialFric);
 
     updateMoveBckBlend(mMoment.length() * mBaseRadius);
-    updateMarioPose(cNum_exeTutorial_f2);
+    updateMarioPose(3.0f);
     updateMarioOffset();
 }
 
@@ -782,7 +727,7 @@ void Tamakoro::exeWait() {
     addVelocityOperate();
     updateVelocityNormal(::sGroundFric);
     updateMoveBckBlend(mMoment.length() * mBaseRadius);
-    updateMarioPose(cNum_exeWait_f1);
+    updateMarioPose(3.0f);
     updateMarioOffset();
 
     if (!tryJump()) {
@@ -802,7 +747,7 @@ void Tamakoro::exeFall() {
     if (!tryLand()) {
         addVelocityOperate();
         updateVelocityNormal(::sGroundFric);
-        updateMarioPose(cNum_exeFall_f1);
+        updateMarioPose(3.0f);
     }
 }
 
@@ -826,7 +771,7 @@ void Tamakoro::exeJump() {
 
     addVelocityOperate();
     updateVelocityNormal(::sGroundFric);
-    updateMarioPose(cNum_exeJump_f1);
+    updateMarioPose(3.0f);
 }
 
 void Tamakoro::exeBumpWall() {
@@ -840,10 +785,10 @@ void Tamakoro::exeBumpWall() {
 
     addVelocityOperate();
     updateVelocityNormal(::sGroundFric);
-    updateMarioPose(cNum_exeBumpWall_f1);
+    updateMarioPose(3.0f);
     updateMarioOffset();
 
-    if (!tryJump() && MR::isGreaterStep(this, cStep_exeBumpWall_1)) {
+    if (!tryJump() && MR::isGreaterStep(this, 15)) {
         setNerve(GET_NERVE(Tamakoro, TamakoroNrvWait));
     }
 }
@@ -860,10 +805,10 @@ void Tamakoro::exeLand() {
 
     addVelocityOperate();
     updateVelocityNormal(::sLandFric);
-    updateMarioPose(cNum_exeLand_f1);
+    updateMarioPose(3.0f);
     updateMarioOffset();
 
-    if (!tryJump() && MR::isGreaterStep(this, cStep_exeLand_1)) {
+    if (!tryJump() && MR::isGreaterStep(this, 15)) {
         setNerve(GET_NERVE(Tamakoro, TamakoroNrvWait));
     }
 }
@@ -878,7 +823,7 @@ void Tamakoro::exeJumpHole() {
         mMarioOffsetVelocity = 0.0f;
     }
     updateSquatBckBlend(mMoment.length() * mBaseRadius);
-    updateMarioPose(cNum_exeJumpHole_f1);
+    updateMarioPose(3.0f);
     updateMarioOffset();
 }
 
@@ -887,7 +832,7 @@ void Tamakoro::exeJumpHoleSetUp() {
         MR::tryRumblePadWeak(this, PLAYER_1);
     }
     updateSquatBckBlend(0.0f);
-    updateMarioPose(cNum_exeJumpHoleSetUp_f1);
+    updateMarioPose(3.0f);
     updateMarioOffset();
 }
 
@@ -900,10 +845,10 @@ void Tamakoro::exeJumpHoleLaunch() {
     }
     mControlDisabled = true;
 
-    mMarioOffset += cNum_exeJumpHoleLaunch_f1;
+    mMarioOffset += 3.0f;
     mMarioOffset = MR::clamp(mMarioOffset, 0.0f, ::sMarioJumpOffsetMax);
 
-    updateMarioPose(cNum_exeJumpHoleLaunch_f2);
+    updateMarioPose(3.0f);
 }
 
 void Tamakoro::endJumpHoleLaunch() {
@@ -922,7 +867,7 @@ void Tamakoro::exeDashRail() {
         mAccelRate = 0.0f;
     }
     mControlDisabled = true;
-    updateMarioPose(cNum_exeDashRail_f1);
+    updateMarioPose(10.0f);
     updateMarioOffset();
     MR::setBckRatePlayer(mVelocity.length() / ::sDashBallRollSpeed);
 }
@@ -940,7 +885,7 @@ void Tamakoro::exeDashRailEnd() {
         MR::startBckPlayer("Fall", "BallFall");
     }
 
-    mMarioOffset += cNum_exeDashRailEnd_f1;
+    mMarioOffset += 3.0f;
     mMarioOffset = MR::clamp(mMarioOffset, 0.0f, ::sMarioJumpOffsetMax);
 
     if (tryBumpWall() || tryLand()) {
@@ -948,7 +893,7 @@ void Tamakoro::exeDashRailEnd() {
     }
 
     updateVelocityNormal(::sDashRailFric);
-    updateMarioPose(cNum_exeDashRailEnd_f2);
+    updateMarioPose(10.0f);
 }
 
 void Tamakoro::exeRideRail() {
@@ -1017,7 +962,7 @@ void Tamakoro::exeBindEnd() {
         MR::stopStageBGM(10);
     }
 
-    if ((MR::isGreaterStep(this, cStep_exeBindEnd_1) && MR::isOnGroundPlayer()) || MR::isGreaterStep(this, ::sForceBindEndTime)) {
+    if ((MR::isGreaterStep(this, 12) && MR::isOnGroundPlayer()) || MR::isGreaterStep(this, ::sForceBindEndTime)) {
         MR::startLastStageBGM();
         MR::requestAppearPowerStar(this, mPosition);
         kill();
@@ -1027,26 +972,26 @@ void Tamakoro::exeBindEnd() {
 void Tamakoro::addVelocityOperate() {
     mAccelRate = ::calcTiltMove(&mAccelDir, mGravity);
 
-    mVelocity.scaleAdd(mAccelRate * (MR::isBindedGround(this) ? cNum_addVelocityOperate_f1 : cNum_addVelocityOperate_f2), mAccelDir, mVelocity);
+    mVelocity.scaleAdd(mAccelRate * (MR::isBindedGround(this) ? 0.4f : 0.2f), mAccelDir, mVelocity);
 }
 
 // Rolls along the velocity; returns the roll speed before the pose update.
 f32 Tamakoro::updateRideRail() {
     mAccelDir.set(mVelocity);
-    mAccelRate = MR::normalizeOrZero(&mAccelDir) ? cNum_updateRideRail_f1 : 0.0f;
+    mAccelRate = MR::normalizeOrZero(&mAccelDir) ? 0.5f : 0.0f;
 
     const f32 speed = mMoment.length() * mBaseRadius;
 
-    updateMarioPose(cNum_updateRideRail_f2);
+    updateMarioPose(15.0f);
     updateMarioOffset();
 
     return speed;
 }
 
 void Tamakoro::updateVelocityNormal(f32 friction) {
-    MR::reboundVelocityFromCollision(this, cNum_updateVelocityNormal_reboundVelocityFromCollision_1, cNum_updateVelocityNormal_reboundVelocityFromCollision_2, cNum_updateVelocityNormal_reboundVelocityFromCollision_3);
+    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
     MR::addVelocityToGravity(this, ::sGravityAccel);
-    MR::attenuateVelocity(this, MR::isBindedGround(this) ? friction : cNum_updateVelocityNormal_f1);
+    MR::attenuateVelocity(this, MR::isBindedGround(this) ? friction : 0.995f);
 }
 
 void Tamakoro::updateMoment() {
@@ -1063,10 +1008,10 @@ void Tamakoro::updateMoment() {
         }
 
         MR::calcMomentRollBall(&moment, mVelocity, *up, mBaseRadius);
-        MR::vecBlend(mMoment, moment, &mMoment, cNum_updateMoment_f1);
+        MR::vecBlend(mMoment, moment, &mMoment, 0.25f);
         startRotateLevelSound();
     } else {
-        mMoment.mult(cNum_updateMoment_f2);
+        mMoment.mult(0.98f);
     }
 }
 
@@ -1082,7 +1027,7 @@ void Tamakoro::updateMarioPose(f32 degree) {
     Vec3f velH = MR::getVelocityHorizon(this);
 
     if (MR::isNearZero(velH)) {
-        if (mAccelRate > cNum_updateMarioPose_f1) {
+        if (mAccelRate > 0.001f) {
             MR::turnDirectionDegree(this, &mMarioFront, mAccelDir, degree * mAccelRate);
         }
     } else {
@@ -1095,7 +1040,7 @@ void Tamakoro::updateMarioPose(f32 degree) {
     mMarioRotateQuat.getZDir(zDir);
 
     if (mAccelRate > 0.0f) {
-        const f32 turn = MR::normalize(1.0f - mAccelDir.dot(zDir), cNum_updateMarioPose_f2, 1.0f);
+        const f32 turn = MR::normalize(1.0f - mAccelDir.dot(zDir), 0.1f, 1.0f);
         const f32 sign = mAccelDir.dot(xDir) >= 0.0f ? 1.0f : -1.0f;
         mMarioRotateYAngle += (sign * turn) * ::sMarioUpperYAccel;
     }
@@ -1107,8 +1052,8 @@ void Tamakoro::updateMarioPose(f32 degree) {
     Vec3f rotAxis = mAccelDir.cross(mGravity);
 
     if (!MR::normalizeOrZero(&rotAxis)) {
-        MR::rotateVecDegree(&up, rotAxis, mAccelRate * cNum_updateMarioPose_f3);
-        MR::rotateVecDegree(&mMarioUp, rotAxis, mAccelRate * cNum_updateMarioPose_f4);
+        MR::rotateVecDegree(&up, rotAxis, mAccelRate * 35.0f);
+        MR::rotateVecDegree(&mMarioUp, rotAxis, mAccelRate * 20.0f);
     }
     MR::vecBlendSphere(mDirectionToMario, up, &mDirectionToMario, ::sStandDirInterRate);
 
@@ -1162,8 +1107,8 @@ void Tamakoro::updateMoveBckBlend(f32 pSpeed) {
 
 void Tamakoro::updateSquatBckBlend(f32 pSpeed) {
     // Squat to squat-move over 0..6.
-    const f32 moveWeight = MR::normalize(pSpeed, 0.0f, cNum_updateSquatBckBlend_f1);
-    const f32 rate = MR::getLinerValue(moveWeight, 1.0f, cNum_updateSquatBckBlend_f2, 1.0f);
+    const f32 moveWeight = MR::normalize(pSpeed, 0.0f, 6.0f);
+    const f32 rate = MR::getLinerValue(moveWeight, 1.0f, 2.0f, 1.0f);
 
     MR::setBckBlendWeight(1.0f - moveWeight, moveWeight);
     MR::setBckRatePlayer(rate);
@@ -1212,11 +1157,11 @@ bool Tamakoro::isNeedTutorial() const {
 void Tamakoro::startRotateLevelSound() {
     f32 mag = mMoment.length();
 
-    if (mag <= cNum_startRotateLevelSound_f1) {
+    if (mag <= 0.001f) {
         return;
     }
 
-    s32 lvl = ((mag * cNum_startRotateLevelSound_f2) / TWO_PI);
+    s32 lvl = ((mag * 10000.0f) / TWO_PI);
     if (isNerve(GET_NERVE(Tamakoro, TamakoroNrvRideRail))) {
         MR::startLevelSound(this, "SE_SM_LV_IRONSPH_ROLL_RAIL", lvl);
     } else {

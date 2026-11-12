@@ -3,10 +3,9 @@
 #include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(f32, sPlayerSpeedMin, 4.0f);
+    const f32 sPlayerSpeedMin = 4.0f;
 };  // namespace
 
 TalkSupportPlayerWatcher::TalkSupportPlayerWatcher() {

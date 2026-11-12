@@ -9,23 +9,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 2600.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 9.090277f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 0.06f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f3, "control.f3", 0.06f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f4, "control.f4", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f5, "control.f5", 0.06f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f6, "control.f6", 9.090277f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f7, "control.f7", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f8, "control.f8", 0.06f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f9, "control.f9", 0.99f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f1, "receiveOtherMsg.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f2, "receiveOtherMsg.f2", 0.45f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f3, "receiveOtherMsg.f3", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcAndSetBaseMtx_f1, "calcAndSetBaseMtx.f1", 400.0f);
 
 namespace {
     const Vec3f sBaseClipCentor = Vec3f(0.0f, 1250.0f, 0.0f);
@@ -38,9 +22,9 @@ namespace {
     // const f32 sNormalPushPower = 0.0f;
     // const f32 sDashPushPower = 0.0f;
     // const f32 sTestPushPower = 0.0f;
-    NEBULA_TUNABLE(s32, sQuakeTime, 80);
-    NEBULA_TUNABLE(f32, sShakeCameraNormalVelocity, 1.0f);
-    NEBULA_TUNABLE(f32, sShakeCameraWeakVelocity, 0.5f);
+    const s32 sQuakeTime = 80;
+    const f32 sShakeCameraNormalVelocity = 1.0f;
+    const f32 sShakeCameraWeakVelocity = 0.5f;
     // const f32 sLimitFallDownDgree = 0.0f;
 };  // namespace
 
@@ -68,7 +52,7 @@ void FallDownBridge::init(const TableIter& rIter) {
     MR::initCollisionParts(this, pName, getSensor("body"), nullptr);
     initSound(4, false);
 
-    MR::setClippingTypeSphere(this, cNum_init_f1, &mClipCenter);
+    MR::setClippingTypeSphere(this, 2600.0f, &mClipCenter);
 
     initNerve(GET_NERVE(FallDownBridge, FallDownBridgeNrvWait));
 
@@ -77,16 +61,16 @@ void FallDownBridge::init(const TableIter& rIter) {
 
 void FallDownBridge::control() {
     // Tips away from its balance angle (about 9.09 degrees either side), faster the further it leans.
-    f32 tip = MR::sin(MR::toRadian(MR::abs(mAngle) - cNum_control_f1));
+    f32 tip = MR::sin(MR::toRadian(MR::abs(mAngle) - 9.090277f));
 
     if (mAngle < 0.0f) {
         tip = -tip;
     }
 
-    mAngleSpeed += tip * cNum_control_f2;
+    mAngleSpeed += tip * 0.06f;
     mAngle += mAngleSpeed;
 
-    if (!mIsFallen && MR::abs(mAngleSpeed) >= cNum_control_f3) {
+    if (!mIsFallen && MR::abs(mAngleSpeed) >= 0.06f) {
         MR::startLevelSound(this, "SE_OJ_LV_CHAL_FD_BRIDGE_FL");
     }
 
@@ -112,23 +96,23 @@ void FallDownBridge::control() {
             }
         }
 
-        mAngleSpeed *= -cNum_control_f4;
+        mAngleSpeed *= -0.5f;
 
-        if (MR::abs(mAngleSpeed) < cNum_control_f5) {
+        if (MR::abs(mAngleSpeed) < 0.06f) {
             mAngleSpeed = 0.0f;
 
-            if (MR::abs(mAngle) > cNum_control_f6) {
+            if (MR::abs(mAngle) > 9.090277f) {
                 mIsFallen = true;
             }
         }
     }
 
-    if (MR::abs(mAngle) < cNum_control_f7 && MR::abs(mAngleSpeed) < cNum_control_f8) {
+    if (MR::abs(mAngle) < 0.1f && MR::abs(mAngleSpeed) < 0.06f) {
         mAngle = 0.0f;
         mAngleSpeed = 0.0f;
     }
 
-    mAngleSpeed *= cNum_control_f9;
+    mAngleSpeed *= 0.99f;
 }
 
 bool FallDownBridge::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
@@ -150,17 +134,17 @@ bool FallDownBridge::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*p
 
         f32 dot = side.dot(wallNormal);
 
-        if (MR::abs(dot) < cNum_receiveOtherMsg_f1) {
+        if (MR::abs(dot) < 0.1f) {
             return false;
         }
 
         f32 push;
 
         if (msg == ACTMES_BALL_DASH_WALL) {
-            push = cNum_receiveOtherMsg_f2;
+            push = 0.45f;
             MR::startSound(this, "SE_OJ_CHAL_FD_BRIDGE_HIT");
         } else {
-            push = cNum_receiveOtherMsg_f3;
+            push = 0.3f;
         }
 
         if (dot < 0.0f) {
@@ -191,7 +175,7 @@ void FallDownBridge::calcAndSetBaseMtx() {
     if (mAngle >= 0.0f) {
         pivot.set< f32 >(0.0f, 0.0f, 0.0f);
     } else {
-        pivot.set(mScale.x * cNum_calcAndSetBaseMtx_f1, 0.0f, 0.0f);
+        pivot.set(mScale.x * 400.0f, 0.0f, 0.0f);
     }
 
     toPivot.setTrans(-pivot);

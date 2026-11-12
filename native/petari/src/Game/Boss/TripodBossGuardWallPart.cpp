@@ -10,18 +10,12 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1000.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeBreak_1, "exeBreak.1", 5);
-
 namespace {
-    NEBULA_TUNABLE(f32, sRepairPlayerDistance, 1000.0f);
-    NEBULA_TUNABLE(s32, sRepairTiming, 600);
-    NEBULA_TUNABLE(s32, sMoveStopSeTiming, 38);
+    const f32 sRepairPlayerDistance = 1000.0f;
+    const s32 sRepairTiming = 600;
+    const s32 sMoveStopSeTiming = 38;
 };  // namespace
 
 namespace NrvTripodBossGuardWallPart {
@@ -41,7 +35,7 @@ void TripodBossGuardWallPart::init(const TableIter& /*rIter*/) {
     MR::connectToScene(this, MR::MovementType_MapObjDecoration, MR::CalcAnimType_MapObjDecoration, MR::DrawBufferType_TripodBoss, MR::DrawType_None);
     initHitSensor(2);
     MR::initCollisionParts(this, "TripodBossGuardWall",
-                           MR::addHitSensor(this, "collision", ATYPE_TRIPODBOSS_GUARD_WALL, 0, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f)), nullptr);
+                           MR::addHitSensor(this, "collision", ATYPE_TRIPODBOSS_GUARD_WALL, 0, 1000.0f, Vec3f(0.0f, 0.0f, 0.0f)), nullptr);
     initSound(4, false);
     initEffectKeeper(0, "TripodBoss");
     MR::invalidateClipping(this);
@@ -117,7 +111,7 @@ void TripodBossGuardWallPart::exeBreak() {
         MR::invalidateCollisionParts(this);
     }
 
-    if (MR::isStep(this, cStep_exeBreak_1)) {
+    if (MR::isStep(this, 5)) {
         MR::startBck(this, "2ndDemo");
         MR::setBckFrameAndStop(this, 0.0f);
     }

@@ -9,19 +9,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 60.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_addVelocityToGravity_1, "exeWait.addVelocityToGravity.1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_attenuateVelocity_1, "exeWait.attenuateVelocity.1", 0.992f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeGround_1, "exeGround.1", 75);
 
 namespace NrvDinoPackunFire {
     NEW_NERVE(DinoPackunTrackFireNrvWait, DinoPackunTrackFire, Wait);
@@ -51,13 +39,13 @@ void DinoPackunTrackFire::init(const TableIter& rIter) {
     sensorOffs.x = 0.0f;
     sensorOffs.y = 0.0f;
     sensorOffs.z = 0.0f;
-    MR::addHitSensorEnemyAttack(this, "attack", 8, cNum_init_f1, sensorOffs);
+    MR::addHitSensorEnemyAttack(this, "attack", 8, 60.0f, sensorOffs);
     Vec3f spOffs;
     spOffs.x = 0.0f;
     spOffs.y = 0.0f;
     spOffs.z = 0.0f;
-    MR::initStarPointerTarget(this, cNum_init_f2, spOffs);
-    initBinder(cNum_init_f3, 0.0f, 0);
+    MR::initStarPointerTarget(this, 60.0f, spOffs);
+    initBinder(60.0f, 0.0f, 0);
     initNerve(GET_NERVE(DinoPackunFire, DinoPackunTrackFireNrvWait));
     MR::onCalcGravity(this);
     MR::invalidateClipping(this);
@@ -96,8 +84,8 @@ void DinoPackunTrackFire::exeWait() {
         MR::emitEffect(this, "TrackFire");
     }
 
-    MR::addVelocityToGravity(this, cNum_exeWait_addVelocityToGravity_1);
-    MR::attenuateVelocity(this, cNum_exeWait_attenuateVelocity_1);
+    MR::addVelocityToGravity(this, 2.0f);
+    MR::attenuateVelocity(this, 0.992f);
     if (MR::isBindedGround(this)) {
         setNerve(GET_NERVE(DinoPackunFire, DinoPackunTrackFireNrvGround));
         MR::zeroVelocity(this);
@@ -110,7 +98,7 @@ void DinoPackunTrackFire::exeWait() {
 void DinoPackunTrackFire::exeGround() {
     MR::zeroVelocity(this);
 
-    if (MR::isGreaterStep(this, cStep_exeGround_1)) {
+    if (MR::isGreaterStep(this, 75)) {
         MR::deleteEffect(this, "TrackFire");
         kill();
     }

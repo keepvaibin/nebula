@@ -5,7 +5,6 @@
 #include "Game/System/LumaScript.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include <nebula_game_api.h>
 #include <nebula_module.h>
 #include <cstring>
@@ -13,7 +12,7 @@
 
 namespace {
     // How deep events may start events (an event's handler emitting one) before the deeper ones are dropped.
-    NEBULA_TUNABLE(u32, cEmitDepth, 8);
+    const u32 cEmitDepth = 8;
 
     struct ScriptFile {
         const NebulaPlugin* mMod;

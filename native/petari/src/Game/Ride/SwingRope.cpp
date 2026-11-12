@@ -21,58 +21,50 @@
 #include "Game/Render/GameTexture.hpp"
 #include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHangPoint_f1, "updateHangPoint.f1", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHangPoint_f2, "updateHangPoint.f2", 100.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sPointInterval, 50.0f);
-    NEBULA_TUNABLE(f32, sDrawWidthX, 30.0f);
-    NEBULA_TUNABLE(f32, sDrawWidthZ, 40.0f);
-    NEBULA_TUNABLE(f32, sDrawWidthLongOffsetX, 13.0f);
-    NEBULA_TUNABLE(f32, sDrawWidthShortOffsetX, 3.0f);
-    NEBULA_TUNABLE(f32, sDrawWidthShortOffsetZ, 3.0f);
-    NEBULA_TUNABLE(f32, sTexRate, 0.13f);
-    NEBULA_TUNABLE(f32, sHangAccelRateLoose, 0.8f);
-    NEBULA_TUNABLE(f32, sHangAccelRateStretch, 0.5f);
-    NEBULA_TUNABLE(f32, sHangPointGravityLoose, 0.6f);
-    NEBULA_TUNABLE(f32, sHangPointGravityStretcn, 0.8f);
-    NEBULA_TUNABLE(f32, sHangPointFrictionRate, 0.995f);
-    NEBULA_TUNABLE(f32, sHangPointReboundRate, 0.7f);
-    NEBULA_TUNABLE(s32, sAnimInterpoleFrame, 10);
-    NEBULA_TUNABLE(s32, sAnimInterpoleFrameToSlowWait, 10);
-    NEBULA_TUNABLE(s32, sStepWaitAfterSwing, 0);
-    NEBULA_TUNABLE(f32, sHangPointDownAccel, 0.5f);
-    NEBULA_TUNABLE(f32, sHangPointDownSpeedMax, -10.0f);
-    NEBULA_TUNABLE(f32, sHangCoordMin, 100.0f);
-    NEBULA_TUNABLE(f32, sJumpSpeedRate, 5.0f);
-    NEBULA_TUNABLE(f32, sJumpSpeedMinXZ, 5.0f);
-    NEBULA_TUNABLE(f32, sJumpSpeedMaxXZ, 35.0f);
-    NEBULA_TUNABLE(f32, sJumpSpeedMinY, 25.0f);
-    NEBULA_TUNABLE(f32, sJumpSpeedMaxY, 50.0f);
-    NEBULA_TUNABLE(f32, sBindPointFrictionRateHead, 0.7f);
-    NEBULA_TUNABLE(f32, sBindPointFrictionRateTail, 0.8f);
-    NEBULA_TUNABLE(s32, sStepFixUpperPointPos, 10);
-    NEBULA_TUNABLE(f32, sCoordStretchToLoose, 5.0f);
-    NEBULA_TUNABLE(f32, sCoordLooseToStretch, 1.0f);
-    NEBULA_TUNABLE(f32, sPointGravity, 1.0f);
-    NEBULA_TUNABLE(f32, sFreePointFrictionRateHead, 0.8f);
-    NEBULA_TUNABLE(f32, sFreePointFrictionRateTail, 0.92f);
-    NEBULA_TUNABLE(f32, sPointSpeedToStop, 0.1f);
-    NEBULA_TUNABLE(f32, sPointNormalToStop, 0.9999f);
-    NEBULA_TUNABLE(f32, sTransDiffMinY, 1.0f);
-    NEBULA_TUNABLE(f32, sSensorRiderOffsetY, -50.0f);
-    NEBULA_TUNABLE(f32, sFootPosOffsetY, -20.0f);
-    NEBULA_TUNABLE(f32, sFootPosOffsetZ, 10.0f);
-    NEBULA_TUNABLE(f32, sHangPointBlendRateAxisZ, 0.1f);
-    NEBULA_TUNABLE(f32, sPointBlendRateAxisZ, 0.5f);
-    NEBULA_TUNABLE(f32, sFootPointAxisBlendRate, 0.3f);
+    const f32 sPointInterval = 50.0f;
+    const f32 sDrawWidthX = 30.0f;
+    const f32 sDrawWidthZ = 40.0f;
+    const f32 sDrawWidthLongOffsetX = 13.0f;
+    const f32 sDrawWidthShortOffsetX = 3.0f;
+    const f32 sDrawWidthShortOffsetZ = 3.0f;
+    const f32 sTexRate = 0.13f;
+    const f32 sHangAccelRateLoose = 0.8f;
+    const f32 sHangAccelRateStretch = 0.5f;
+    const f32 sHangPointGravityLoose = 0.6f;
+    const f32 sHangPointGravityStretcn = 0.8f;
+    const f32 sHangPointFrictionRate = 0.995f;
+    const f32 sHangPointReboundRate = 0.7f;
+    const s32 sAnimInterpoleFrame = 10;
+    const s32 sAnimInterpoleFrameToSlowWait = 10;
+    const s32 sStepWaitAfterSwing = 0;
+    const f32 sHangPointDownAccel = 0.5f;
+    const f32 sHangPointDownSpeedMax = -10.0f;
+    const f32 sHangCoordMin = 100.0f;
+    const f32 sJumpSpeedRate = 5.0f;
+    const f32 sJumpSpeedMinXZ = 5.0f;
+    const f32 sJumpSpeedMaxXZ = 35.0f;
+    const f32 sJumpSpeedMinY = 25.0f;
+    const f32 sJumpSpeedMaxY = 50.0f;
+    const f32 sBindPointFrictionRateHead = 0.7f;
+    const f32 sBindPointFrictionRateTail = 0.8f;
+    const s32 sStepFixUpperPointPos = 10;
+    const f32 sCoordStretchToLoose = 5.0f;
+    const f32 sCoordLooseToStretch = 1.0f;
+    const f32 sPointGravity = 1.0f;
+    const f32 sFreePointFrictionRateHead = 0.8f;
+    const f32 sFreePointFrictionRateTail = 0.92f;
+    const f32 sPointSpeedToStop = 0.1f;
+    const f32 sPointNormalToStop = 0.9999f;
+    const f32 sTransDiffMinY = 1.0f;
+    const f32 sSensorRiderOffsetY = -50.0f;
+    const f32 sFootPosOffsetY = -20.0f;
+    const f32 sFootPosOffsetZ = 10.0f;
+    const f32 sHangPointBlendRateAxisZ = 0.1f;
+    const f32 sPointBlendRateAxisZ = 0.5f;
+    const f32 sFootPointAxisBlendRate = 0.3f;
 };  // namespace
 
 namespace NrvSwingRope {
@@ -91,8 +83,8 @@ namespace {
     static Color8 sColorPlusX(0xFF, 0xFF, 0xFF, 0xFF);
     static Color8 sColorMinusX(0xFF, 0xFF, 0xFF, 0xFF);
 
-    NEBULA_TUNABLE(f32, sHangCoordMaxOffset, 200.0f);
-    NEBULA_TUNABLE(f32, sFootPosOffsetX, 0.0f);
+    const f32 sHangCoordMaxOffset = 200.0f;
+    const f32 sFootPosOffsetX = 0.0f;
 };  // namespace
 
 SwingRope::SwingRope(const char* pName)
@@ -109,20 +101,20 @@ void SwingRope::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     mBasePos.set(mPosition);
-    mRopeLength = mScale.y * cNum_init_f1;
+    mRopeLength = mScale.y * 100.0f;
 
     MR::calcGravity(this);
     initPoints();
 
     initHitSensor(2);
-    MR::addHitSensorCallbackBinder(this, "bind", 8, cNum_init_f2);
-    MR::addHitSensorCallbackRide(this, "body", 8, cNum_init_f3);
+    MR::addHitSensorCallbackBinder(this, "bind", 8, 200.0f);
+    MR::addHitSensorCallbackRide(this, "body", 8, 150.0f);
 
     initSound(4, false);
 
     MR::setClippingTypeSphere(this, mRopeLength);
 
-    MR::initShadowSurfaceCircle(this, cNum_init_f4);
+    MR::initShadowSurfaceCircle(this, 50.0f);
     MR::onCalcShadow(this, nullptr);
     MR::setShadowDropPositionPtr(this, nullptr, &mShadowDropPos);
 
@@ -500,7 +492,7 @@ void SwingRope::updateHangPoint() {
     mShadowDropPos.x = mSledPoint->mPosition.x;
     mShadowDropPos.z = mSledPoint->mPosition.z;
 
-    s32 soundLvl = (mSledPoint->mVelocity.length() / cNum_updateHangPoint_f1) * cNum_updateHangPoint_f2;
+    s32 soundLvl = (mSledPoint->mVelocity.length() / 40.0f) * 100.0f;
     if (soundLvl > 100) {
         soundLvl = 100;
     }

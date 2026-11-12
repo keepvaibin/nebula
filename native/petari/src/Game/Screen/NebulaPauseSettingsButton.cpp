@@ -11,14 +11,13 @@
 #include <cstring>
 #include <Game/Ui/Layout.hpp>
 #include <Game/Ui/Pane.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
     // The middle of the pause menu's lower band, between its counters' two rows (4 and -32 about their pane at -147).
-    NEBULA_TUNABLE(f32, cBandMiddle, -161.0f);
+    const f32 cBandMiddle = -161.0f;
     // The button at the size of the counters beside it.
-    NEBULA_TUNABLE(f32, cScale, 0.62f);
+    const f32 cScale = 0.62f;
 };  // namespace
 
 NebulaPauseSettingsButton::NebulaPauseSettingsButton() : LayoutActor("NebulaPauseSettings", true), mButton(nullptr) {

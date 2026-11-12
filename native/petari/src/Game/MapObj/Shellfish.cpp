@@ -8,37 +8,25 @@
 #include "Game/MapObj/Coin.hpp"
 #include "Game/MapObj/YellowChip.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 400.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 120.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 170.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 260.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 130.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeOpen_f1, "exeOpen.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_endBindItem_f1, "endBindItem.f1", 30.0f);
-
 namespace {
-    NEBULA_TUNABLE_RECORD(Vec, sBodyHitOffset, {0.0f, 100.0f, 0.0f});
-    NEBULA_TUNABLE_RECORD(Vec, sSandHitOffset, {0.0f, -100.0f, 200.0f});
-    NEBULA_TUNABLE_RECORD(Vec, sCoinOffset, {0.0f, 50.0f, 30.0f});
-    NEBULA_TUNABLE_RECORD(Vec, sChipOffset, {0.0f, 100.0f, 50.0f});
-    NEBULA_TUNABLE_RECORD(Vec, sKinokoOneUpOffset, {0.0f, 70.0f, 30.0f});
+    const Vec sBodyHitOffset = {0.0f, 100.0f, 0.0f};
+    const Vec sSandHitOffset = {0.0f, -100.0f, 200.0f};
+    const Vec sCoinOffset = {0.0f, 50.0f, 30.0f};
+    const Vec sChipOffset = {0.0f, 100.0f, 50.0f};
+    const Vec sKinokoOneUpOffset = {0.0f, 70.0f, 30.0f};
     const s32 sStepToOpen = NebulaFrameClock::stepsOfMilliseconds(2500);
-    NEBULA_TUNABLE(s32, sStepToSetPosItem, 100);
-    NEBULA_TUNABLE(s32, sStepToCloseSignal, 170);
+    const s32 sStepToSetPosItem = 100;
+    const s32 sStepToCloseSignal = 170;
     const s32 sStepToClose = NebulaFrameClock::stepsOfMilliseconds(2500);
-    NEBULA_TUNABLE(s32, sStepToHitSensorOn, 0);
-    NEBULA_TUNABLE(s32, sStepToHitSensorOff, 15);
-    NEBULA_TUNABLE(s32, sStepToApperItem, 40);
-    NEBULA_TUNABLE(s32, sStepToDeadItem, 5);
+    const s32 sStepToHitSensorOn = 0;
+    const s32 sStepToHitSensorOff = 15;
+    const s32 sStepToApperItem = 40;
+    const s32 sStepToDeadItem = 5;
     const s32 sStepToRecover = NebulaFrameClock::stepsOfSeconds(9);
-    NEBULA_TUNABLE(s32, sShockToInterpole, 2);
-    NEBULA_TUNABLE(f32, sHitPushPower, 40.0f);
+    const s32 sShockToInterpole = 2;
+    const f32 sHitPushPower = 40.0f;
 };  // namespace
 
 namespace NrvShellfish {
@@ -61,27 +49,27 @@ void Shellfish::init(const TableIter& rIter) {
     initModelManagerWithAnm("Shellfish", nullptr, false);
     MR::connectToSceneMapObjStrongLight(this);
     initHitSensor(2);
-    MR::addHitSensorEnemy(this, "body", 8, cNum_init_f1, Vec3f(::sBodyHitOffset));
-    MR::addHitSensorAtJointEnemyAttack(this, "core", "Lid", 8, cNum_init_f2, Vec3f(::sSandHitOffset));
+    MR::addHitSensorEnemy(this, "body", 8, 400.0f, Vec3f(::sBodyHitOffset));
+    MR::addHitSensorAtJointEnemyAttack(this, "core", "Lid", 8, 120.0f, Vec3f(::sSandHitOffset));
     MR::invalidateHitSensor(this, "core");
     MR::initCollisionPartsAutoEqualScaleOne(this, "Hi", getSensor("body"), MR::getJointMtx(this, "Lid"));
     mLowCollision = MR::createCollisionPartsFromLiveActor(this, "Low", getSensor("body"), MR::CollisionScaleType_NotUsingScale);
     MR::validateCollisionParts(mLowCollision);
     MR::initLightCtrlNoDrawEnemy(this);
-    MR::initShadowVolumeCylinder(this, cNum_init_f3);
+    MR::initShadowVolumeCylinder(this, 170.0f);
     Vec3f front;
     MR::calcFrontVec(&front, this);
     Vec3f up;
     MR::calcUpVec(&up, this);
     Vec3f shadowPosition;
-    shadowPosition.scaleAdd(cNum_init_f4, front, mPosition);
-    shadowPosition.scaleAdd(cNum_init_f5, up, shadowPosition);
+    shadowPosition.scaleAdd(30.0f, front, mPosition);
+    shadowPosition.scaleAdd(5.0f, up, shadowPosition);
     MR::setShadowDropPosition(this, nullptr, shadowPosition);
     MR::offCalcShadow(this, nullptr);
     initEffectKeeper(2, nullptr);
     MR::addEffectHitNormal(this, nullptr);
     initSound(4, false);
-    MR::initStarPointerTarget(this, cNum_init_f6, Vec3f(0.0f, cNum_init_f7, -cNum_init_f8));
+    MR::initStarPointerTarget(this, 260.0f, Vec3f(0.0f, 130.0f, -50.0f));
     mScaleController = new AnimScaleController(nullptr);
     mScaleController->setParamTight();
     mStarPointerState = new WalkerStateBindStarPointer(this, mScaleController);
@@ -134,7 +122,7 @@ void Shellfish::exeOpen() {
     }
 
     if (mIsItemBound && MR::isLessStep(this, ::sStepToSetPosItem) && MR::isGreaterStep(this, ::sStepToApperItem)) {
-        f32 speed = cNum_exeOpen_f1;
+        f32 speed = 0.5f;
         Vec3f up;
         MR::calcUpVec(&up, this);
         mItem->mPosition.scaleAdd(speed, up, mItem->mPosition);
@@ -315,7 +303,7 @@ void Shellfish::endBindItem() {
     putItem();
     Vec3f up;
     MR::calcUpVec(&up, this);
-    mItem->mPosition.scaleAdd(cNum_endBindItem_f1, up, mItem->mPosition);
+    mItem->mPosition.scaleAdd(30.0f, up, mItem->mPosition);
     MR::sendArbitraryMsg(ACTMES_ITEM_END_MOVE, mItem->getSensor(nullptr), getSensor("body"));
     mIsItemBound = false;
 }

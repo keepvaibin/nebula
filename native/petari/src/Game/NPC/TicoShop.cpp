@@ -11,19 +11,14 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_kill_f1, "kill.f1", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_kill_f2, "kill.f2", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 350.0f);
-
 namespace {
-    NEBULA_TUNABLE(s32, sStarPieceNeed, 30);
-    NEBULA_TUNABLE(f32, sMouthSize, 30.0f);
-    NEBULA_TUNABLE(f32, sSensorSize, 100.0f);
-    NEBULA_TUNABLE(f32, sSensorOffset, 100.0f);
-    NEBULA_TUNABLE(f32, sShadowLength, 500.0f);
+    const s32 sStarPieceNeed = 30;
+    const f32 sMouthSize = 30.0f;
+    const f32 sSensorSize = 100.0f;
+    const f32 sSensorOffset = 100.0f;
+    const f32 sShadowLength = 500.0f;
 };  // namespace
 
 namespace NrvTicoShop {
@@ -36,11 +31,11 @@ TicoShop::TicoShop(const char* pName) : TicoComet(pName), mOneUp(), mLifeUp(), m
 
 void TicoShop::kill() {
     if (mOneUp != nullptr && mChoseOneUp) {
-        MR::appearKinokoOneUpPop(mOneUp, getBaseMtx(), cNum_kill_f1);
+        MR::appearKinokoOneUpPop(mOneUp, getBaseMtx(), 15.0f);
     }
 
     if (mLifeUp != nullptr && mChoseLifeUp) {
-        MR::appearKinokoSuper(mLifeUp, getBaseMtx(), cNum_kill_f2);
+        MR::appearKinokoSuper(mLifeUp, getBaseMtx(), 15.0f);
     }
 
     NPCActor::kill();
@@ -77,7 +72,7 @@ void TicoShop::init(const TableIter& rIter) {
     MR::setMessageArg(mMsgCtrl, mStarPieceNeed);
     MR::registerBranchFunc(getMsgCtrl(), TalkMessageFunc(this, &TicoShop::branchFunc));
     MR::registerEventFunc(getMsgCtrl(), TalkMessageFunc(this, &TicoShop::eventFunc));
-    MR::setDistanceToTalk(mMsgCtrl, cNum_init_f1);
+    MR::setDistanceToTalk(mMsgCtrl, 350.0f);
     mMetaNerve = GET_NERVE(TicoShop, TicoShopNrvDemo);
     mOneUp = MR::createKinokoOneUp();
     mLifeUp = MR::createKinokoSuper();

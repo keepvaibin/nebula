@@ -1,13 +1,12 @@
 #include "Game/System/GameRules.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, cPlayerHealth, 3);
-    NEBULA_TUNABLE(s32, cLifeUpHealth, 6);
-    NEBULA_TUNABLE(s32, cMaxCoins, 999);
-    NEBULA_TUNABLE(s32, cMaxStarBits, 9999);
-    NEBULA_TUNABLE(bool, cDodoryuShellOnly, false);
-    NEBULA_TUNABLE(bool, cBegomanFireProof, false);
+    const s32 cPlayerHealth = 3;
+    const s32 cLifeUpHealth = 6;
+    const s32 cMaxCoins = 999;
+    const s32 cMaxStarBits = 9999;
+    const bool cDodoryuShellOnly = false;
+    const bool cBegomanFireProof = false;
 };  // namespace
 
 namespace GameRules {

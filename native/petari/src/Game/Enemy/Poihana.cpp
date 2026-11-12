@@ -21,71 +21,51 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 70.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcAndSetBaseMtx_f1, "calcAndSetBaseMtx.f1", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeShake_f1, "exeShake.f1", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeShake_f2, "exeShake.f2", 36.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcBound_f1, "calcBound.f1", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcBound_f2, "calcBound.f2", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcBound_f3, "calcBound.f3", 9.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcBound_f4, "calcBound.f4", 27.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcBound_f5, "calcBound.f5", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcBound_f6, "calcBound.f6", 18.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sGravity, 2.0f);
-    NEBULA_TUNABLE(f32, sReceivePushPower, 1.5f);
-    NEBULA_TUNABLE(f32, sVelocityDownRate, 0.95f);
-    NEBULA_TUNABLE(f32, sVelocityDownRateSide, 0.8f);
-    NEBULA_TUNABLE(f32, sActiveRadius, 3500.0f);
-    NEBULA_TUNABLE(f32, sNormalBinderRadius, 125.0f);
-    NEBULA_TUNABLE(f32, sTrampleBinderRadius, 200.0f);
-    NEBULA_TUNABLE(f32, sWalkSpeedMax, 5.0f);
-    NEBULA_TUNABLE(f32, sWalkAccel, 0.5f);
-    NEBULA_TUNABLE(f32, sWalkTurnRate, 2.0f);
-    NEBULA_TUNABLE(f32, sWalkAroundRadius, 350.0f);
+    const f32 sGravity = 2.0f;
+    const f32 sReceivePushPower = 1.5f;
+    const f32 sVelocityDownRate = 0.95f;
+    const f32 sVelocityDownRateSide = 0.8f;
+    const f32 sActiveRadius = 3500.0f;
+    const f32 sNormalBinderRadius = 125.0f;
+    const f32 sTrampleBinderRadius = 200.0f;
+    const f32 sWalkSpeedMax = 5.0f;
+    const f32 sWalkAccel = 0.5f;
+    const f32 sWalkTurnRate = 2.0f;
+    const f32 sWalkAroundRadius = 350.0f;
     static const s32 sWalkAroundBreakTime = NebulaFrameClock::stepsOfSeconds(3);
     static const s32 sWalkAroundKeepTime = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE(s32, sWalkAroundTurn, 2);
-    NEBULA_TUNABLE(f32, sJudgeForGetUpSpeed, 10.0f);
-    NEBULA_TUNABLE(f32, sGetUpRadius, 500.0f);
-    NEBULA_TUNABLE(f32, sSearchRadius, 800.0f);
-    NEBULA_TUNABLE(f32, sChaseSpeedMax, 10.0f);
-    NEBULA_TUNABLE(f32, sChaseAccel, 0.5f);
-    NEBULA_TUNABLE(f32, sChaseTurnRate, 4.0f);
-    NEBULA_TUNABLE(f32, sChaseRadius, 1100.0f);
-    NEBULA_TUNABLE(f32, sChargeStartDistance, 100.0f);
-    NEBULA_TUNABLE(s32, sDefaultShootHeight, 1000);
-    NEBULA_TUNABLE(s32, sBindOffTiming, 2);
-    NEBULA_TUNABLE(s32, sBindOnTiming, 30);
-    NEBULA_TUNABLE(f32, sDistanceForNeedBack, 2000.0f);
-    NEBULA_TUNABLE(f32, sJudgeForGoBackRadius, 100.0f);
+    const s32 sWalkAroundTurn = 2;
+    const f32 sJudgeForGetUpSpeed = 10.0f;
+    const f32 sGetUpRadius = 500.0f;
+    const f32 sSearchRadius = 800.0f;
+    const f32 sChaseSpeedMax = 10.0f;
+    const f32 sChaseAccel = 0.5f;
+    const f32 sChaseTurnRate = 4.0f;
+    const f32 sChaseRadius = 1100.0f;
+    const f32 sChargeStartDistance = 100.0f;
+    const s32 sDefaultShootHeight = 1000;
+    const s32 sBindOffTiming = 2;
+    const s32 sBindOnTiming = 30;
+    const f32 sDistanceForNeedBack = 2000.0f;
+    const f32 sJudgeForGoBackRadius = 100.0f;
     static const s32 sStepForNonSearch = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE(f32, sShockReactionY, -30.0f);
-    NEBULA_TUNABLE(f32, sDistanceForHipDropShock, 500.0f);
-    NEBULA_TUNABLE(s32, sStepForSwoon, 110);
-    NEBULA_TUNABLE(s32, sStepToShockLand, 12);
-    NEBULA_TUNABLE(s32, sBoundTime, 40);
-    NEBULA_TUNABLE(f32, sBoundAmpMax, 0.4f);
-    NEBULA_TUNABLE(s32, sStepForShake, 20);
-    NEBULA_TUNABLE(f32, sShakeAmpMax, 0.2f);
+    const f32 sShockReactionY = -30.0f;
+    const f32 sDistanceForHipDropShock = 500.0f;
+    const s32 sStepForSwoon = 110;
+    const s32 sStepToShockLand = 12;
+    const s32 sBoundTime = 40;
+    const f32 sBoundAmpMax = 0.4f;
+    const s32 sStepForShake = 20;
+    const f32 sShakeAmpMax = 0.2f;
     static const s32 sStepForHide = NebulaFrameClock::stepsOfMilliseconds(2500);
     static const s32 sStepToAppearEffectEnd = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(f32, sGravityOffsetY, 20.0f);
+    const f32 sGravityOffsetY = 20.0f;
 
-    NEBULA_TUNABLE_RECORD(Vec, sNormalBinderPos, {0.0f, 130.0f, 120.0f});
-    NEBULA_TUNABLE_RECORD(Vec, sTrampleBinderPos, {0.0f, 150.0f, 0.0f});
+    const Vec sNormalBinderPos = {0.0f, 130.0f, 120.0f};
+    const Vec sTrampleBinderPos = {0.0f, 150.0f, 0.0f};
 };  // namespace
 
 namespace NrvPoihana {
@@ -126,15 +106,15 @@ void Poihana::init(const TableIter& rIter) {
 
     initHitSensor(2);
     MR::addHitSensorPriorBinder(this, "binder", 8, ::sNormalBinderRadius, ::sNormalBinderPos);
-    MR::addHitSensorAtJoint(this, "body", "Body", ATYPE_KILLER_TARGET_ENEMY, 8, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJoint(this, "body", "Body", ATYPE_KILLER_TARGET_ENEMY, 8, 70.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     bool useSmallBinder = false;
     MR::getPlacementArg7NoInit(rIter, &useSmallBinder);
 
     if (useSmallBinder) {
-        initBinder(cNum_init_f2, cNum_init_f3, 0);
+        initBinder(100.0f, 100.0f, 0);
     } else {
-        initBinder(cNum_init_f4, cNum_init_f5, 0);
+        initBinder(150.0f, 150.0f, 0);
     }
 
     mIsActive = true;
@@ -142,11 +122,11 @@ void Poihana::init(const TableIter& rIter) {
     initEffectKeeper(1, nullptr);
     initSound(4, false);
 
-    MR::initStarPointerTarget(this, cNum_init_f6, Vec3f(0.0f, cNum_init_f7, 0.0f));
+    MR::initStarPointerTarget(this, 100.0f, Vec3f(0.0f, 100.0f, 0.0f));
     mAnimScaleCtrl = new AnimScaleController(nullptr);
     mBindStarPointer = new WalkerStateBindStarPointer(this, mAnimScaleCtrl);
 
-    MR::initShadowVolumeSphere(this, cNum_init_f8);
+    MR::initShadowVolumeSphere(this, 80.0f);
     MR::addToAttributeGroupSearchTurtle(this);
 
     mRespawnPos.set(mPosition);
@@ -165,7 +145,7 @@ void Poihana::init(const TableIter& rIter) {
 
     if (mCanDrown) {
         mWaterColumn = MR::createModelObjMapObj("エフェクト水柱", "WaterColumn", getBaseMtx());
-        mWaterColumn->mScale.set(cNum_init_f9);
+        mWaterColumn->mScale.set(2.0f);
         makeActorDead();
     }
 
@@ -206,7 +186,7 @@ void Poihana::calcAndSetBaseMtx() {
     MR::calcMtxFromGravityAndZAxis(&baseMtx, this, mGravity, mFrontVec);
 
     if (isNerveTypeWalkOrWait()) {
-        MR::blendMtx(getBaseMtx(), baseMtx.toMtxPtr(), cNum_calcAndSetBaseMtx_f1, baseMtx.toMtxPtr());
+        MR::blendMtx(getBaseMtx(), baseMtx.toMtxPtr(), 0.3f, baseMtx.toMtxPtr());
     }
 
     MR::setBaseTRMtx(this, baseMtx);
@@ -483,8 +463,8 @@ void Poihana::exeRecover() {
 }
 
 void Poihana::exeShake() {
-    f32 amplitude = ::sShakeAmpMax - cNum_exeShake_f1 * getNerveStep();
-    f32 scale = MR::sinDegree(getNerveStep() * cNum_exeShake_f2) * amplitude + 1.0f;
+    f32 amplitude = ::sShakeAmpMax - 0.01f * getNerveStep();
+    f32 scale = MR::sinDegree(getNerveStep() * 36.0f) * amplitude + 1.0f;
     mScale.set(scale);
 
     if (MR::isStep(this, ::sStepForShake)) {
@@ -747,11 +727,11 @@ void Poihana::calcBound() {
 
     mBoundTimer++;
 
-    f32 amplitude = ::sBoundAmpMax - mBoundTimer * cNum_calcBound_f1;
+    f32 amplitude = ::sBoundAmpMax - mBoundTimer * 0.01f;
 
-    f32 scaleX = amplitude * cNum_calcBound_f2 * MR::sinDegree(mBoundTimer * cNum_calcBound_f3) + 1.0f;
-    f32 scaleY = amplitude * MR::sinDegree(mBoundTimer * cNum_calcBound_f4) + 1.0f;
-    f32 scaleZ = amplitude * cNum_calcBound_f5 * MR::sinDegree(mBoundTimer * cNum_calcBound_f6) + 1.0f;
+    f32 scaleX = amplitude * 0.9f * MR::sinDegree(mBoundTimer * 9.0f) + 1.0f;
+    f32 scaleY = amplitude * MR::sinDegree(mBoundTimer * 27.0f) + 1.0f;
+    f32 scaleZ = amplitude * 0.9f * MR::sinDegree(mBoundTimer * 18.0f) + 1.0f;
     mScale.set(scaleX, scaleY, scaleZ);
 }
 

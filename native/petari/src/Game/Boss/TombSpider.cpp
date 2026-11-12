@@ -19,10 +19,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWaitPlayer_f1, "exeWaitPlayer.f1", 18000.0f);
 
 namespace {
     const s32 sSecondBgmStartStep = NebulaFrameClock::stepsOfSeconds(3);
@@ -101,7 +98,7 @@ void TombSpider::exeWaitPlayer() {
         MR::invalidateHitSensors(this);
     }
 
-    if (MR::getPlayerPos()->distance(mPosition) < cNum_exeWaitPlayer_f1) {
+    if (MR::getPlayerPos()->distance(mPosition) < 18000.0f) {
         if (!mNoctilucaActive) {
             MR::emitEffect(this, "Noctiluca");
             mNoctilucaActive = true;

@@ -9,10 +9,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1400.0f);
 
 ClipAreaMovable::ClipAreaMovable(const char* pName) : ClipArea(pName), mMapPartsRailMover(), mMapPartsRotator() {
     lumacore::setClass(this, lumacore::kClassId< ClipAreaMovable >);
@@ -22,7 +19,7 @@ void ClipAreaMovable::init(const TableIter& rIter) {
     initBaseMatrix(rIter);
     MR::connectToScene(this, MR::MovementType_ClippedMapParts, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_ClipArea);
     MR::setGroupClipping(this, rIter, 0x40);
-    MR::setClippingTypeSphere(this, MR::getMaxAbsElement(mScale) * cNum_init_f1);
+    MR::setClippingTypeSphere(this, MR::getMaxAbsElement(mScale) * 1400.0f);
     initMoveFunction(rIter);
     initHitSensor(1);
     MR::addHitSensorMapObj(this, "body", 0, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));

@@ -13,12 +13,7 @@
 #include <nebula_geometry.hpp>
 
 #include "math_types.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 0.1f);
 
 LavaHomeSeesaw::LavaHomeSeesaw(const char* pName) : LiveActor(pName), mSeesawRotator(), mMtxSetter(), mGroundPos(gZeroVec), mYOffset() {
     lumacore::setClass(this, lumacore::kClassId< LavaHomeSeesaw >);
@@ -26,7 +21,7 @@ LavaHomeSeesaw::LavaHomeSeesaw(const char* pName) : LiveActor(pName), mSeesawRot
 
 void LavaHomeSeesaw::initAfterPlacement() {
     Vec3f gravity(mGravity);
-    gravity *= cNum_initAfterPlacement_f1;
+    gravity *= 1000.0f;
     if (!MR::getFirstPolyOnLineToMap(&mGroundPos, nullptr, mPosition, gravity)) {
         MR::calcMapGroundUpper(&mGroundPos, this);
     }
@@ -69,9 +64,9 @@ void LavaHomeSeesaw::init(const TableIter& rIter) {
     initSound(4, false);
     initHitSensor(1);
     MR::initCollisionParts(this, name, MR::addBodyMessageSensorMapObj(this), nullptr);
-    MR::setClippingTypeSphereContainsModelBoundingBox(this, cNum_init_f1);
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
     MR::connectToSceneCollisionMapObj(this);
-    mSeesawRotator = new LavaHomeSeesawRotator(this, "SE_OJ_LV_LAVA_SEESAW_MOVE", cNum_init_f2);
+    mSeesawRotator = new LavaHomeSeesawRotator(this, "SE_OJ_LV_LAVA_SEESAW_MOVE", 0.1f);
     mSeesawRotator->init(rIter);
     mSeesawRotator->start();
     makeActorAppeared();

@@ -3,15 +3,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_movement_f1, "movement.f1", 8.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_movement_f2, "movement.f2", 360.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_movement_f3, "movement.f3", 4.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_movement_f4, "movement.f4", 360.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_movement_f5, "movement.f5", 16.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_movement_f6, "movement.f6", 360.0f);
 
 CoinRotater::CoinRotater(const char* pName) : NameObj(pName), mRotateY(), mWaterRotateY(), mHiSpeedRotateY() {
     lumacore::setClass(this, lumacore::kClassId< CoinRotater >);
@@ -23,14 +15,14 @@ CoinRotater::CoinRotater(const char* pName) : NameObj(pName), mRotateY(), mWater
 }
 
 void CoinRotater::movement() {
-    mRotateY += cNum_movement_f1;
-    mRotateY = MR::repeat(mRotateY, 0.0f, cNum_movement_f2);
+    mRotateY += 8.0f;
+    mRotateY = MR::repeat(mRotateY, 0.0f, 360.0f);
 
-    mWaterRotateY += cNum_movement_f3;
-    mWaterRotateY = MR::repeat(mWaterRotateY, 0.0f, cNum_movement_f4);
+    mWaterRotateY += 4.0f;
+    mWaterRotateY = MR::repeat(mWaterRotateY, 0.0f, 360.0f);
 
-    mHiSpeedRotateY += cNum_movement_f5;
-    mHiSpeedRotateY = MR::repeat(mHiSpeedRotateY, 0.0f, cNum_movement_f6);
+    mHiSpeedRotateY += 16.0f;
+    mHiSpeedRotateY = MR::repeat(mHiSpeedRotateY, 0.0f, 360.0f);
 
     MR::makeMtxRotateY(mRotateYMtx, mRotateY);
     MR::makeMtxRotateY(mHiSpeedRotateYMtx, mHiSpeedRotateY);

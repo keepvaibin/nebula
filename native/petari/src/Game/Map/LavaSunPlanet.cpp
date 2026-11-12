@@ -9,10 +9,7 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 
 LavaSunPlanet::LavaSunPlanet(const char* pName) : LiveActor(pName), mRotator(), mObjName(), mLodCtrl() {
     lumacore::setClass(this, lumacore::kClassId< LavaSunPlanet >);
@@ -46,7 +43,7 @@ void LavaSunPlanet::init(const TableIter& rIter) {
     MR::connectToScenePlanet(this);
     initHitSensor(1);
     MR::initCollisionParts(this, mObjName, MR::addBodyMessageSensorMapObj(this), nullptr);
-    MR::setClippingTypeSphereContainsModelBoundingBox(this, cNum_init_f1);
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
     MR::setClippingFarMax(this);
     mLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f);
 

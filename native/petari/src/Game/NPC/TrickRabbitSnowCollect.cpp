@@ -4,13 +4,10 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/BombTimerLayout.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_initTalk_f1, "initTalk.f1", 120.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sInStartEventRange, 700.0f);
+    const f32 sInStartEventRange = 700.0f;
 };  // namespace
 
 namespace NrvTrickRabbitFreeRunCollect {
@@ -76,7 +73,7 @@ void TrickRabbitSnowCollect::initRabbits(const TableIter& rIter) {
 }
 
 void TrickRabbitSnowCollect::initTalk(const TableIter& rIter) {
-    mMsgCtrl = MR::createTalkCtrl(this, rIter, "SnowRabbitCollect", Vec3f(0.0f, cNum_initTalk_f1, 0.0f), nullptr);
+    mMsgCtrl = MR::createTalkCtrl(this, rIter, "SnowRabbitCollect", Vec3f(0.0f, 120.0f, 0.0f), nullptr);
 }
 
 MtxPtr TrickRabbitSnowCollect::getBaseMtx() const {

@@ -21,22 +21,12 @@
 
 #include <cmath>
 #include <nebula_math.h>
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calcEulerRadian_f1, "calcEulerRadian.f1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_faceToVector_f1, "faceToVector.f1", 0.95f);
-NEBULA_TUNABLE_NAMED(f32, cNum_faceToVector_f2, "faceToVector.f2", 0.95f);
-NEBULA_TUNABLE_NAMED(f32, cNum_faceToVector_f3, "faceToVector.f3", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_turnQuatUpToGravity_f1, "turnQuatUpToGravity.f1", 0.999f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setVelocityBlowAttack_f1, "setVelocityBlowAttack.f1", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_turnDirectionAndGravityH_f1, "turnDirectionAndGravityH.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcRotate_f1, "calcRotate.f1", 0.1f);
 
 namespace {
 
     // Turns of 3 degrees or less read the angles straight from the matrix.
     inline void calcEulerRadian(const Pos3f& rMtx, Vec3f* pVec, f32 turnDegree) {
-        if (cNum_calcEulerRadian_f1 < turnDegree) {
+        if (3.0f < turnDegree) {
             rMtx.getEulerXYZ(*pVec);
         } else {
             pVec->x = std::atan2(rMtx[2][1], rMtx[2][2]);
@@ -445,7 +435,7 @@ namespace MR {
         Vec3f yDir;
         pQuat->getYDir(yDir);
         normalizeOrZero(&direction);
-        if (vecKillElement(direction, yDir, &direction) > cNum_faceToVector_f1) {
+        if (vecKillElement(direction, yDir, &direction) > 0.95f) {
             return false;
         }
 
@@ -457,12 +447,12 @@ namespace MR {
         Vec3f up(pMtx[0][1], pMtx[1][1], pMtx[2][1]);
         Vec3f axis(0.0f, 1.0f, 0.0f);
         normalizeOrZero(&direction);
-        if (vecKillElement(direction, up, &direction) > cNum_faceToVector_f2) {
+        if (vecKillElement(direction, up, &direction) > 0.95f) {
             return true;
         }
 
         normalizeOrZero(&direction);
-        if (direction.dot(front) > MR::cos(PI_180 * (degree / cNum_faceToVector_f3))) {
+        if (direction.dot(front) > MR::cos(PI_180 * (degree / 2.0f))) {
             return true;
         }
 
@@ -499,7 +489,7 @@ namespace MR {
         rQuatSrc.getYDir(yDir);
 
         Quat4f turn;
-        if (yDir.dot(-pActor->mGravity) <= -cNum_turnQuatUpToGravity_f1) {
+        if (yDir.dot(-pActor->mGravity) <= -0.999f) {
             Vec3f xDir;
             rQuatSrc.getXDir(xDir);
             turn.setRotate(xDir, PI);
@@ -1029,7 +1019,7 @@ namespace MR {
     void setVelocityBlowAttack(LiveActor* pActor, HitSensor* pSender, HitSensor* pReceiver, f32 velH, f32 velV, s32 stopFrames) {
         setVelocitySeparateHV(pActor, pSender, pReceiver, velH, velV);
 
-        if (isNearPlayerAnyTime(pActor, cNum_setVelocityBlowAttack_f1)) {
+        if (isNearPlayerAnyTime(pActor, 1000.0f)) {
             stopSceneForDefaultHit(stopFrames);
         }
     }
@@ -1146,7 +1136,7 @@ namespace MR {
             turnVecToVecRadian(&frontVec, frontVec, dirH, radian, pActor->mGravity);
         } else {
             upVecBlendRate = 1.0f;
-            frontVecBlendRate = cNum_turnDirectionAndGravityH_f1;
+            frontVecBlendRate = 0.1f;
         }
 
         blendQuatUpFront(pDst, -pActor->mGravity, frontVec, upVecBlendRate, frontVecBlendRate);
@@ -1226,7 +1216,7 @@ namespace {
         }
 
         MR::calcUpVec(&up, pActor);
-        MR::vecBlend(up, targetUp, &blendUp, cNum_calcRotate_f1);
+        MR::vecBlend(up, targetUp, &blendUp, 0.1f);
         MR::normalizeOrZero(&blendUp);
         if (MR::isNearZero(blendUp)) {
             blendUp.set(up);

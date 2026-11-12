@@ -16,67 +16,6 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f2, "update.f2", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkHeight_f1, "checkHeight.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkHeight_f2, "checkHeight.f2", 120.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkHeight_f3, "checkHeight.f3", 110.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkHeight_f4, "checkHeight.f4", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkHeight_f5, "checkHeight.f5", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_procNoControl_f1, "procNoControl.f1", 0.99f);
-NEBULA_TUNABLE_NAMED(f32, cNum_procNoControl_f2, "procNoControl.f2", 0.99f);
-NEBULA_TUNABLE_NAMED(f32, cNum_procNoControl_f3, "procNoControl.f3", 0.99f);
-NEBULA_TUNABLE_NAMED(f32, cNum_procNearGroundControl_f1, "procNearGroundControl.f1", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_procNearGroundControl_f2, "procNearGroundControl.f2", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_procNearGroundControl_f3, "procNearGroundControl.f3", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_procNearGroundControl_f4, "procNearGroundControl.f4", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_procNearGroundControl_f5, "procNearGroundControl.f5", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_procNearGroundControl_f6, "procNearGroundControl.f6", 3.1415927f);
-NEBULA_TUNABLE_NAMED(f32, cNum_procDrop_f1, "procDrop.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_procDrop_f2, "procDrop.f2", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_procDrop_f3, "procDrop.f3", 0.25f);
-NEBULA_TUNABLE_NAMED(f32, cNum_procDrop_f4, "procDrop.f4", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_procDrop_f5, "procDrop.f5", 1.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_procDrop_f6, "procDrop.f6", 0.75f);
-NEBULA_TUNABLE_NAMED(f32, cNum_procDrop_f7, "procDrop.f7", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_procDrop_f8, "procDrop.f8", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_procDrop_f9, "procDrop.f9", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_procDrop_f10, "procDrop.f10", 0.04f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addTeresaVerticalVelocity_f1, "addTeresaVerticalVelocity.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addTeresaVerticalVelocity_f2, "addTeresaVerticalVelocity.f2", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addTeresaVerticalVelocity_f3, "addTeresaVerticalVelocity.f3", 3.1415927f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addTeresaVerticalVelocity_f4, "addTeresaVerticalVelocity.f4", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addTeresaVerticalVelocity_f5, "addTeresaVerticalVelocity.f5", 0.707f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addTeresaVerticalVelocity_f6, "addTeresaVerticalVelocity.f6", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addTeresaHorizontalVelocity_f1, "addTeresaHorizontalVelocity.f1", 0.707f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addTeresaHorizontalVelocity_f2, "addTeresaHorizontalVelocity.f2", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startTeresaDisappear_f1, "startTeresaDisappear.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startTeresaDisappear_f2, "startTeresaDisappear.f2", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkWind_f1, "checkWind.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkWind_f2, "checkWind.f2", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkWind_f3, "checkWind.f3", 0.94f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkWind_f4, "checkWind.f4", 0.94f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkWind_f5, "checkWind.f5", 0.94f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkWind_f6, "checkWind.f6", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkWind_f7, "checkWind.f7", 1.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkWind_f8, "checkWind.f8", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkWind_f9, "checkWind.f9", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkWallCeilReflect_f1, "checkWallCeilReflect.f1", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkWallCeilReflect_f2, "checkWallCeilReflect.f2", 1.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_procAirControl_f1, "procAirControl.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_procAirControl_f2, "procAirControl.f2", 0.4f);
-NEBULA_TUNABLE_NAMED(f32, cNum_procAirControl_f3, "procAirControl.f3", 0.25f);
-NEBULA_TUNABLE_NAMED(f32, cNum_procControl_f1, "procControl.f1", 1.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_procControl_f2, "procControl.f2", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_procControl_f3, "procControl.f3", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_procControl_f4, "procControl.f4", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateTeresaAnimation_f1, "updateTeresaAnimation.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_doTeresaReflection_f1, "doTeresaReflection.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_doTeresaReflection_f2, "doTeresaReflection.f2", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_doTeresaReflection_f3, "doTeresaReflection.f3", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_doTeresaReflection_f4, "doTeresaReflection.f4", 2.0f);
 
 void Mario::startTeresaMode() {
     mTeresaWallThroughTimer = 0;
@@ -182,8 +121,8 @@ bool MarioTeresa::update() {
     Mario* player = getPlayer();
     player->mAirTimer = 1;
     procControl();
-    f32 speed = mPrevJumpVec.length() / cNum_update_f1;
-    if (speed < cNum_update_f2) {
+    f32 speed = mPrevJumpVec.length() / 10.0f;
+    if (speed < 0.01f) {
         speed = 0.0f;
     }
 
@@ -200,23 +139,23 @@ f32 MarioTeresa::checkHeight() {
     f32 offset = 0.0f;
     f32 height = getPlayer()->mVerticalSpeed;
     MarioActor* actor;
-    while (offset < cNum_checkHeight_f1 * (actor = mActor)->getConst().getTable()->mTeresaWaitHeight) {
+    while (offset < 2.0f * (actor = mActor)->getConst().getTable()->mTeresaWaitHeight) {
         const Vec3f& position = actor->mCenterPos;
         bool found = false;
-        f32 radius = cNum_checkHeight_f2;
+        f32 radius = 120.0f;
         s32 count = Collision::checkStrikeBallToMapWithThickness(position + getGravityVec() * offset, radius, radius, nullptr, nullptr);
         for (u32 i = 0; i < count; i++) {
             const HitInfo* hit = Collision::getStrikeInfoMap(i);
             Vec3f normal(*hit->mParentTriangle.getNormal(0));
             Vec3f direction(hit->mHitPos);
             direction.sub(direction, position);
-            f32 distance = direction.length() - cNum_checkHeight_f3;
+            f32 distance = direction.length() - 110.0f;
             if (distance < 0.0f) {
                 distance = 0.0f;
             }
 
             MR::normalizeOrZero(&direction);
-            if (normal.dot(getGravityVec()) < -cNum_checkHeight_f4 && direction.dot(getGravityVec()) > cNum_checkHeight_f5) {
+            if (normal.dot(getGravityVec()) < -0.1f && direction.dot(getGravityVec()) > 0.1f) {
                 if (height > distance) {
                     height = distance;
                 }
@@ -273,9 +212,9 @@ void MarioTeresa::procNoControl() {
     }
 
     if (MR::isNearZero(getStickP())) {
-        mVelocity.x *= cNum_procNoControl_f1;
-        mVelocity.y *= cNum_procNoControl_f2;
-        mVelocity.z *= cNum_procNoControl_f3;
+        mVelocity.x *= 0.99f;
+        mVelocity.y *= 0.99f;
+        mVelocity.z *= 0.99f;
     }
 }
 
@@ -284,8 +223,8 @@ void MarioTeresa::procNearGroundControl() {
         return;
     }
 
-    if (calcAngleD(getPlayer()->getShadowNorm()) < cNum_procNearGroundControl_f1) {
-        if (!(mHeight < cNum_procNearGroundControl_f2 + mWaitHeight)) {
+    if (calcAngleD(getPlayer()->getShadowNorm()) < 60.0f) {
+        if (!(mHeight < 50.0f + mWaitHeight)) {
             return;
         }
 
@@ -307,9 +246,9 @@ void MarioTeresa::procNearGroundControl() {
         side.cross(direction, getPlayer()->getShadowNorm());
         direction.cross(getPlayer()->getShadowNorm(), side);
         direction.setLength(speed);
-        f32 blend = MR::clamp((cNum_procNearGroundControl_f3 + mWaitHeight - mHeight) / cNum_procNearGroundControl_f4, 0.0f, 1.0f);
-        blend *= cNum_procNearGroundControl_f5;
-        f32 reduction = MR::diffAngleAbs(mVelocity, direction) / cNum_procNearGroundControl_f6;
+        f32 blend = MR::clamp((50.0f + mWaitHeight - mHeight) / 50.0f, 0.0f, 1.0f);
+        blend *= 0.5f;
+        f32 reduction = MR::diffAngleAbs(mVelocity, direction) / 3.1415927f;
         MR::vecBlendSphere(mVelocity, direction, &mVelocity, blend);
         mVelocity.scale(1.0f - reduction);
     }
@@ -340,19 +279,19 @@ void MarioTeresa::procDrop() {
     if (mHeight > mWaitHeight) {
         f32 distance = mHeight - mWaitHeight;
         f32 ratio = 1.0f;
-        if (distance < cNum_procDrop_f1) {
-            ratio = distance / cNum_procDrop_f2;
+        if (distance < 100.0f) {
+            ratio = distance / 100.0f;
         }
 
         if (mDropping) {
-            addTeresaVerticalVelocity(cNum_procDrop_f3 * ratio);
+            addTeresaVerticalVelocity(0.25f * ratio);
         } else {
-            addTeresaVerticalVelocity(cNum_procDrop_f4 * ratio);
+            addTeresaVerticalVelocity(0.1f * ratio);
         }
 
         f32 vertical = MR::vecKillElement(mVelocity, getAirGravityVec(), &mVelocity);
-        if (cNum_procDrop_f5 * vertical > mHeight - mWaitHeight) {
-            vertical *= cNum_procDrop_f6;
+        if (1.5f * vertical > mHeight - mWaitHeight) {
+            vertical *= 0.75f;
         }
 
         mVelocity += getAirGravityVec() * vertical;
@@ -363,16 +302,16 @@ void MarioTeresa::procDrop() {
         }
     }
 
-    if (mHeight > cNum_procDrop_f7 + mWaitHeight) {
+    if (mHeight > 10.0f + mWaitHeight) {
         Vec3f horizontal;
         MarioActor* actor = mActor;
         f32 vertical = MR::vecKillElement(actor->getLastMove(), getGravityVec(), &horizontal);
         f32 brake;
-        if (vertical > -cNum_procDrop_f8) {
+        if (vertical > -0.5f) {
             f32 dropSpeed = vertical;
-            dropSpeed += cNum_procDrop_f9;
+            dropSpeed += 0.5f;
             brake = dropSpeed / mActor->getConst().getTable()->mTeresaDropBase;
-            brake += cNum_procDrop_f10;
+            brake += 0.04f;
         } else {
             brake = mActor->getConst().getTable()->mTeresaRisingBrake;
         }
@@ -388,15 +327,15 @@ void MarioTeresa::addTeresaVerticalVelocity(f32 amount) {
     f32 vertical = MR::vecKillElement(mVelocity, getAirGravityVec(), &horizontal);
     f32 minimum = -mActor->getConst().getTable()->mTeresaRiseSpeedMax;
     f32 maximum = mActor->getConst().getTable()->mTeresaDropSpeedMax;
-    minimum = cNum_addTeresaVerticalVelocity_f1 * minimum;
-    maximum = cNum_addTeresaVerticalVelocity_f2 * maximum;
+    minimum = 10.0f * minimum;
+    maximum = 20.0f * maximum;
     if (mDropping) {
-        f32 angle = cNum_addTeresaVerticalVelocity_f3 * (static_cast< f32 >(getPlayer()->mTeresaWallThroughTimer) / mActor->getConst().getTable()->mTeresaWallThroughTime);
-        maximum *= 1.0f + cNum_addTeresaVerticalVelocity_f4 * Angle::sinRadian(angle);
+        f32 angle = 3.1415927f * (static_cast< f32 >(getPlayer()->mTeresaWallThroughTimer) / mActor->getConst().getTable()->mTeresaWallThroughTime);
+        maximum *= 1.0f + 0.5f * Angle::sinRadian(angle);
     }
 
-    if (getPlayer()->mDrawStates.teresaInWind && mWind.dot(getAirGravityVec()) > cNum_addTeresaVerticalVelocity_f5) {
-        maximum *= cNum_addTeresaVerticalVelocity_f6;
+    if (getPlayer()->mDrawStates.teresaInWind && mWind.dot(getAirGravityVec()) > 0.707f) {
+        maximum *= 2.0f;
     }
 
     vertical = MR::clamp(vertical, minimum, maximum);
@@ -410,8 +349,8 @@ void MarioTeresa::addTeresaHorizontalVelocity(const Vec3f& rVelocity) {
     Vec3f horizontal;
     f32 vertical = MR::vecKillElement(mVelocity, getAirGravityVec(), &horizontal);
     f32 maximum = mActor->getConst().getTable()->mTeresaHorizontalSpeedMax;
-    if (getPlayer()->mDrawStates.teresaInWind && mWind.dot(horizontal) > cNum_addTeresaHorizontalVelocity_f1) {
-        maximum *= cNum_addTeresaHorizontalVelocity_f2;
+    if (getPlayer()->mDrawStates.teresaInWind && mWind.dot(horizontal) > 0.707f) {
+        maximum *= 2.0f;
     }
 
     if (horizontal.length() >= maximum) {
@@ -432,8 +371,8 @@ void Mario::startTeresaDisappear() {
     MR::startCSSound("CS_TERESA", nullptr, 0);
     mTeresa->updateDropFlag();
     resetSleepTimer();
-    if (mPolygonFloorCode == 5 && mVerticalSpeed < cNum_startTeresaDisappear_f1) {
-        mTeresa->mVelocity += getAirGravityVec() * cNum_startTeresaDisappear_f2;
+    if (mPolygonFloorCode == 5 && mVerticalSpeed < 100.0f) {
+        mTeresa->mVelocity += getAirGravityVec() * 10.0f;
     }
 }
 
@@ -455,9 +394,9 @@ void MarioTeresa::checkWind() {
     Vec3f wind;
     f32 strength;
     BigFanFunction::calcWindInfo(&wind, mActor->mCenterPos, &strength);
-    strength = MR::clamp(strength, 0.0f, cNum_checkWind_f1);
+    strength = MR::clamp(strength, 0.0f, 10.0f);
     if (strength > 0.0f) {
-        playSound("テレサ風に乗る", cNum_checkWind_f2 * strength);
+        playSound("テレサ風に乗る", 50.0f * strength);
     }
 
     if (!MR::isNearZero(strength)) {
@@ -465,12 +404,12 @@ void MarioTeresa::checkWind() {
     }
 
     wind.scale(strength);
-    mWind.x *= cNum_checkWind_f3;
-    mWind.y *= cNum_checkWind_f4;
-    mWind.z *= cNum_checkWind_f5;
-    mWind += wind * cNum_checkWind_f6 * cNum_checkWind_f7;
-    mVelocity += wind * cNum_checkWind_f8;
-    if (mWind.length() > cNum_checkWind_f9) {
+    mWind.x *= 0.94f;
+    mWind.y *= 0.94f;
+    mWind.z *= 0.94f;
+    mWind += wind * 0.1f * 1.5f;
+    mVelocity += wind * 0.2f;
+    if (mWind.length() > 0.2f) {
         getPlayer()->mDrawStates.teresaInWind = true;
     }
 }
@@ -480,7 +419,7 @@ void MarioTeresa::checkWallCeilReflect() {
     Vec3f normal;
     Vec3f wallNormal;
     bool hit = false;
-    if (getPlayer()->calcDistToCeil(false) < cNum_checkWallCeilReflect_f1) {
+    if (getPlayer()->calcDistToCeil(false) < 200.0f) {
         normal = getPlayer()->mCeilDistNorm;
         hit = true;
     }
@@ -495,7 +434,7 @@ void MarioTeresa::checkWallCeilReflect() {
         if (speed < 0.0f) {
             mVelocity += normal * -speed;
         } else {
-            mVelocity += normal * speed * cNum_checkWallCeilReflect_f2;
+            mVelocity += normal * speed * 1.5f;
         }
 
         if (!mReflectTimer) {
@@ -522,12 +461,12 @@ void MarioTeresa::procAirControl() {
     if (getPlayer()->mTeresaWallThroughTimer < mActor->getConst().getTable()->mTeresaWallThroughTime - 30 && ((isTeresaAccel() && !mWallReflectTimer) || mPushTimer)) {
         if (getPlayer()->mHitStates.teresaAccel) {
             if (mVelocity.dot(getAirGravityVec()) > 0.0f) {
-                addTeresaVerticalVelocity(-cNum_procAirControl_f1);
+                addTeresaVerticalVelocity(-2.0f);
             } else {
-                addTeresaVerticalVelocity(-cNum_procAirControl_f2);
+                addTeresaVerticalVelocity(-0.4f);
             }
         } else {
-            addTeresaVerticalVelocity(-cNum_procAirControl_f3);
+            addTeresaVerticalVelocity(-0.25f);
         }
 
         if (isTeresaAccel()) {
@@ -552,7 +491,7 @@ void MarioTeresa::procControl() {
         }
 
         if (getPlayer()->mAirWalkTimer < (mActor->getConst().getTable()->mAirWalkTime / 2)) {
-            getAnimator()->setSpeed(cNum_procControl_f1);
+            getAnimator()->setSpeed(1.5f);
         }
 
         Vec3f velocity(mPrevJumpVec);
@@ -562,12 +501,12 @@ void MarioTeresa::procControl() {
         }
 
         if (alignment < 0.0f) {
-            alignment *= cNum_procControl_f2;
+            alignment *= 0.3f;
         }
 
-        f32 acceleration = cNum_procControl_f3;
+        f32 acceleration = 0.3f;
         if (getPlayer()->mTeresaWallThroughTimer > (mActor->getConst().getTable()->mTeresaWallThroughTime / 2)) {
-            acceleration = cNum_procControl_f4;
+            acceleration = 2.0f;
         }
 
         addTeresaHorizontalVelocity(getWorldPadDir() * alignment * acceleration);
@@ -671,7 +610,7 @@ void MarioActor::updateTeresaAnimation() {
         }
 
         if (mTeresaAnimPlayer->isRun("基本")) {
-            mTeresaFlyWeight = mMario->mJumpVec.length() / cNum_updateTeresaAnimation_f1;
+            mTeresaFlyWeight = mMario->mJumpVec.length() / 10.0f;
             mTeresaFlyWeight = MR::clamp(mTeresaFlyWeight, 0.0f, 1.0f);
             mTeresaAnimPlayer->changeTrackWeight(0, 1.0f - mTeresaFlyWeight);
             mTeresaAnimPlayer->changeTrackWeight(1, mTeresaFlyWeight);
@@ -719,14 +658,14 @@ void MarioTeresa::doTeresaReflection(const Vec3f& rNormal, bool effect) {
     Vec3f tangent;
     f32 speed = MR::vecKillElement(mVelocity, direction, &tangent);
     if (speed < 0.0f) {
-        if (speed > -cNum_doTeresaReflection_f1) {
-            speed = -cNum_doTeresaReflection_f2;
+        if (speed > -10.0f) {
+            speed = -10.0f;
         }
 
         Vec3f horizontal;
         f32 vertical = MR::vecKillElement(direction * -speed, getAirGravityVec(), &horizontal);
-        addTeresaHorizontalVelocity(horizontal * cNum_doTeresaReflection_f3);
-        addTeresaVerticalVelocity(cNum_doTeresaReflection_f4 * vertical);
+        addTeresaHorizontalVelocity(horizontal * 2.0f);
+        addTeresaVerticalVelocity(2.0f * vertical);
     } else {
         Vec3f horizontal;
         f32 vertical = MR::vecKillElement(direction, getAirGravityVec(), &horizontal);

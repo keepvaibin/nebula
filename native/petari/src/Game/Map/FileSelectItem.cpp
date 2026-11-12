@@ -21,59 +21,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 900.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f3, "control.f3", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f4, "control.f4", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f5, "control.f5", 27.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_createNew_f1, "createNew.f1", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_createMii_f1, "createMii.f1", 27.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkCollisionOfPointAndTriangle_f1, "checkCollisionOfPointAndTriangle.f1", 900.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkCollisionOfPointAndTriangle_f2, "checkCollisionOfPointAndTriangle.f2", 900.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkCollisionOfPointAndTriangle_f3, "checkCollisionOfPointAndTriangle.f3", 900.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkCollisionOfPointAndTriangle_f4, "checkCollisionOfPointAndTriangle.f4", 900.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkCollisionOfPointAndTriangle_f5, "checkCollisionOfPointAndTriangle.f5", 900.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkCollisionOfPointAndTriangle_f6, "checkCollisionOfPointAndTriangle.f6", 900.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkCollisionOfPointAndTriangle_f7, "checkCollisionOfPointAndTriangle.f7", 900.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f1, "updateRotate.f1", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f2, "updateRotate.f2", 360.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f3, "updateRotate.f3", 900.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f4, "updateRotate.f4", 900.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f5, "updateRotate.f5", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f6, "updateRotate.f6", 900.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f7, "updateRotate.f7", 0.03f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f8, "updateRotate.f8", 25.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f9, "updateRotate.f9", 25.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f10, "updateRotate.f10", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f11, "updateRotate.f11", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f12, "updateRotate.f12", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f13, "updateRotate.f13", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f14, "updateRotate.f14", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f15, "updateRotate.f15", 360.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeToBig_f1, "exeToBig.f1", 1.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeOpen_f1, "exeOpen.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeOpen_f2, "exeOpen.f2", 6.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeSleep_f1, "exeSleep.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeBig_f1, "exeBig.f1", 1.2f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeFormat_1, "exeFormat.1", 40);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeFormat_2, "exeFormat.2", 40);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeFormat_3, "exeFormat.3", 40);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeChangeFellow_1, "exeChangeFellow.1", 40);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeChangeFellow_2, "exeChangeFellow.2", 40);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeChangeFellow_3, "exeChangeFellow.3", 40);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeChangeMii_1, "exeChangeMii.1", 40);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeChangeMii_2, "exeChangeMii.2", 39);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeChangeMii_3, "exeChangeMii.3", 40);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeChangeMii_4, "exeChangeMii.4", 40);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeShut_1, "exeShut.1", 10);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeBlink_1, "exeBlink.1", 40);
 
 namespace {
     // The icon's size ease lasts half a second.
@@ -106,7 +54,7 @@ namespace {
                                         "FileSelectDataPeach"};
     const s32 sFellowNum = ARRAY_SIZE(sFellowModel);
 
-    NEBULA_TUNABLE_RECORD(Vec, sDataInfoOffset, {0.0f, 2150.0f, 0.0f});
+    const Vec sDataInfoOffset = {0.0f, 2150.0f, 0.0f};
 };  // namespace
 
 namespace FileSelectItemSub {
@@ -161,7 +109,7 @@ void FileSelectItem::init(const TableIter& /*rIter*/) {
     createFellows();
     createMii();
     createNumber();
-    MR::initStarPointerTarget(this, cNum_init_f1, Vec3f(0.0f, cNum_init_f2, 0.0f));
+    MR::initStarPointerTarget(this, 1000.0f, Vec3f(0.0f, 900.0f, 0.0f));
     MR::invalidateClipping(this);
     initNerve(GET_NERVE_ANON(FileSelectItemNrvNewWait));
     MR::createCenterScreenBlur();
@@ -311,11 +259,11 @@ void FileSelectItem::turnToFront(s32 angle) {
 
 void FileSelectItem::exeFormat() {
 
-    if (MR::isLessStep(this, cStep_exeFormat_1)) {
+    if (MR::isLessStep(this, 40)) {
         MR::startSystemLevelSE("SE_SY_LV_FILE_SEL_MORPHBLUR");
     }
 
-    if (MR::isStep(this, cStep_exeFormat_2)) {
+    if (MR::isStep(this, 40)) {
         MR::startSystemSE("SE_SY_FILE_SEL_MORPH_DUMMY");
         emitVanish();
         killAllModels();
@@ -324,7 +272,7 @@ void FileSelectItem::exeFormat() {
         MR::shakeCameraNormal();
     }
 
-    if (MR::isGreaterEqualStep(this, cStep_exeFormat_3)) {
+    if (MR::isGreaterEqualStep(this, 40)) {
         mRotation.y = 0.0f;
         mRotateSpeed = 0.0f;
     }
@@ -336,11 +284,11 @@ void FileSelectItem::exeFormat() {
 
 void FileSelectItem::exeChangeFellow() {
 
-    if (MR::isLessStep(this, cStep_exeChangeFellow_1)) {
+    if (MR::isLessStep(this, 40)) {
         MR::startSystemLevelSE("SE_SY_LV_FILE_SEL_MORPHBLUR");
     }
 
-    if (MR::isStep(this, cStep_exeChangeFellow_2)) {
+    if (MR::isStep(this, 40)) {
         MR::startSystemSE("SE_SY_FILE_SEL_MORPH_MARIO");
         appearFellowModel();
         emitCompleteEffect();
@@ -350,7 +298,7 @@ void FileSelectItem::exeChangeFellow() {
         MR::shakeCameraNormal();
     }
 
-    if (MR::isGreaterEqualStep(this, cStep_exeChangeFellow_3)) {
+    if (MR::isGreaterEqualStep(this, 40)) {
         mRotation.y = 0.0f;
         mRotateSpeed = 0.0f;
     }
@@ -362,15 +310,15 @@ void FileSelectItem::exeChangeFellow() {
 
 void FileSelectItem::exeChangeMii() {
 
-    if (MR::isLessStep(this, cStep_exeChangeMii_1)) {
+    if (MR::isLessStep(this, 40)) {
         MR::startSystemLevelSE("SE_SY_LV_FILE_SEL_MORPHBLUR");
     }
 
-    if (MR::isStep(this, cStep_exeChangeMii_2)) {
+    if (MR::isStep(this, 39)) {
         mFaceParts->changeFaceModel(MiiFaceRecipe(Mii::SourceLibrary, mIconID->getMiiIndex(), 256, Mii::expressionBit(Mii::ExpressionNormal) | Mii::expressionBit(Mii::ExpressionBlink)));
     }
 
-    if (MR::isStep(this, cStep_exeChangeMii_3)) {
+    if (MR::isStep(this, 40)) {
         MR::startSystemSE("SE_SY_FILE_SEL_MORPH_MARIO");
         killAllModels();
         mFaceParts->makeActorAppeared();
@@ -381,7 +329,7 @@ void FileSelectItem::exeChangeMii() {
         MR::shakeCameraNormal();
     }
 
-    if (MR::isGreaterEqualStep(this, cStep_exeChangeMii_4)) {
+    if (MR::isGreaterEqualStep(this, 40)) {
         mRotation.y = 0.0f;
         mRotateSpeed = 0.0f;
     }
@@ -408,20 +356,20 @@ void FileSelectItem::control() {
     Vec3f trans;
     mtx.getTrans(trans);
     mPlanetMtx.set(mtx);
-    mPlanetMtx.setTrans(trans + yDir * cNum_control_f1 * cNum_control_f2);
+    mPlanetMtx.setTrans(trans + yDir * 30.0f * 30.0f);
 
     mFellowMtx.set(mtx);
     mFaceMtx.set(mtx);
 
     mScaleCtrl->updateNerve();
 
-    mPlanetMapObj->mScale.setAll< f32 >(cNum_control_f3 * mScaleCtrl->getScale());
+    mPlanetMapObj->mScale.setAll< f32 >(30.0f * mScaleCtrl->getScale());
 
     for (s32 i = 0; i < ::sFellowNum; i++) {
-        mModels[i]->mScale.setAll< f32 >(cNum_control_f4 * mScaleCtrl->getScale());
+        mModels[i]->mScale.setAll< f32 >(30.0f * mScaleCtrl->getScale());
     }
 
-    mFaceParts->mScale.setAll< f32 >(cNum_control_f5 * mScaleCtrl->getScale());
+    mFaceParts->mScale.setAll< f32 >(27.0f * mScaleCtrl->getScale());
 
     mBlinkCtrl->updateNerve();
 
@@ -434,7 +382,7 @@ void FileSelectItem::control() {
 
 void FileSelectItem::createNew() {
     mPlanetMapObj = MR::createPartsModelMapObj(this, "ニューフェイス", "FileSelectDataPlanet", mPlanetMtx);
-    mPlanetMapObj->mScale.set(cNum_createNew_f1);
+    mPlanetMapObj->mScale.set(30.0f);
     mPlanetMapObj->makeActorDead();
 }
 
@@ -453,7 +401,7 @@ void FileSelectItem::createMii() {
     }
 
     mFaceParts->initFixedPosition(mFaceMtx, Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
-    mFaceParts->mScale.set(cNum_createMii_f1);
+    mFaceParts->mScale.set(27.0f);
     mFaceParts->initEffectKeeper(0, "FileSelectDataMii");
     MR::invalidateClipping(mFaceParts);
     mFaceParts->makeActorDead();
@@ -551,7 +499,7 @@ namespace {
         bool containsPoint;
         bool collides;
 
-        if (MR::abs(planeDistance) >= cNum_checkCollisionOfPointAndTriangle_f1) {
+        if (MR::abs(planeDistance) >= 900.0f) {
             collides = false;
         } else {
             Vec3f projected;
@@ -559,18 +507,18 @@ namespace {
             containsPoint = triangle.contains(projected);
             if (containsPoint) {
                 collides = true;
-            } else if (triangle.mVertexA.distance(rCenter) <= cNum_checkCollisionOfPointAndTriangle_f2) {
+            } else if (triangle.mVertexA.distance(rCenter) <= 900.0f) {
                 collides = true;
-            } else if (triangle.mVertexB.distance(rCenter) <= cNum_checkCollisionOfPointAndTriangle_f3) {
+            } else if (triangle.mVertexB.distance(rCenter) <= 900.0f) {
                 collides = true;
-            } else if (triangle.mVertexC.distance(rCenter) <= cNum_checkCollisionOfPointAndTriangle_f4) {
+            } else if (triangle.mVertexC.distance(rCenter) <= 900.0f) {
                 collides = true;
-            } else if (::checkCollisionOfPointAndCylinder(rCenter, triangle.mVertexA, triangle.mEdgeAB, cNum_checkCollisionOfPointAndTriangle_f5)) {
+            } else if (::checkCollisionOfPointAndCylinder(rCenter, triangle.mVertexA, triangle.mEdgeAB, 900.0f)) {
                 collides = true;
-            } else if (::checkCollisionOfPointAndCylinder(rCenter, triangle.mVertexB, triangle.mEdgeBC, cNum_checkCollisionOfPointAndTriangle_f6)) {
+            } else if (::checkCollisionOfPointAndCylinder(rCenter, triangle.mVertexB, triangle.mEdgeBC, 900.0f)) {
                 collides = true;
             } else {
-                collides = ::checkCollisionOfPointAndCylinder(rCenter, triangle.mVertexC, triangle.mEdgeCA, cNum_checkCollisionOfPointAndTriangle_f7);
+                collides = ::checkCollisionOfPointAndCylinder(rCenter, triangle.mVertexC, triangle.mEdgeCA, 900.0f);
             }
         }
 
@@ -605,14 +553,14 @@ void FileSelectItem::updateRotate() {
             mTurnTime = 0;
         }
 
-        f32 angle = MR::repeat(mRotation.y, -cNum_updateRotate_f1, cNum_updateRotate_f2);
+        f32 angle = MR::repeat(mRotation.y, -180.0f, 360.0f);
         mRotation.y = angle - angle * rate;
         FileSelectItemSub::BlinkController* pBlink = mBlinkCtrl;
         pBlink->open();
         pBlink->setNerve(GET_NERVE_DIRECT(FileSelectItemSub, BlinkControllerNrvOpen));
         return;
     } else if (MR::isStarPointerInScreen(0)) {
-        Vec3f center = mPosition + Vec3f(0.0f, cNum_updateRotate_f3, 0.0f);
+        Vec3f center = mPosition + Vec3f(0.0f, 900.0f, 0.0f);
         Vec2f screenPos(*MR::getStarPointerScreenPosition(0));
 
         if (mIsPointerOut) {
@@ -623,15 +571,15 @@ void FileSelectItem::updateRotate() {
         Vec3f cameraPosition = MR::getCamPos();
         Vec3f cameraToCenter = center - cameraPosition;
 
-        f32 pointerDistance = (cNum_updateRotate_f4 + cameraToCenter.length());
-        if (FloatUtil::sqrt(screenPos.squareDist(mPrevPointerPos)) < cNum_updateRotate_f5) {
+        f32 pointerDistance = (900.0f + cameraToCenter.length());
+        if (FloatUtil::sqrt(screenPos.squareDist(mPrevPointerPos)) < 2.0f) {
             Vec3f pointerPosition;
             MR::calcWorldPositionFromScreen(&pointerPosition, screenPos, pointerDistance);
             Vec3f pointerDirection = pointerPosition - cameraPosition;
             MR::normalize(&pointerDirection);
             Vec3f crossDirection = cameraToCenter.cross(pointerDirection);
 
-            if (crossDirection.length() < cNum_updateRotate_f6) {
+            if (crossDirection.length() < 900.0f) {
                 mIsDragging = 1;
             }
         } else {
@@ -648,8 +596,8 @@ void FileSelectItem::updateRotate() {
 
         if (mIsDragging) {
             Vec2f delta = screenPos - mPrevPointerPos;
-            mRotateSpeed += cNum_updateRotate_f7 * delta.x / mScale.x;
-            mRotateSpeed = MR::clamp(mRotateSpeed, -cNum_updateRotate_f8, cNum_updateRotate_f9);
+            mRotateSpeed += 0.03f * delta.x / mScale.x;
+            mRotateSpeed = MR::clamp(mRotateSpeed, -25.0f, 25.0f);
         }
 
         mPrevPointerPos = screenPos;
@@ -657,17 +605,17 @@ void FileSelectItem::updateRotate() {
         mIsPointerOut = 1;
     }
 
-    mRotateSpeed *= cNum_updateRotate_f10;
+    mRotateSpeed *= 0.98f;
 
-    if (mRotateSpeed >= 0.0f && mRotateSpeed < cNum_updateRotate_f11) {
-        mRotateSpeed = cNum_updateRotate_f12;
+    if (mRotateSpeed >= 0.0f && mRotateSpeed < 0.5f) {
+        mRotateSpeed = 0.5f;
     }
 
-    if (mRotateSpeed < 0.0f && mRotateSpeed > -cNum_updateRotate_f13) {
-        mRotateSpeed = -cNum_updateRotate_f14;
+    if (mRotateSpeed < 0.0f && mRotateSpeed > -0.5f) {
+        mRotateSpeed = -0.5f;
     }
 
-    mRotation.y = MR::repeat(mRotation.y + mRotateSpeed, 0.0f, cNum_updateRotate_f15);
+    mRotation.y = MR::repeat(mRotation.y + mRotateSpeed, 0.0f, 360.0f);
     mIsDragging = 0;
 }
 
@@ -811,7 +759,7 @@ namespace FileSelectItemSub {
     void ScaleController::exeToBig() {
         if (MR::isLessEqualStep(this, cScaleEaseSteps)) {
             f32 rate = (static_cast< f32 >(getNerveStep()) / static_cast< f32 >(cScaleEaseSteps));
-            mScale += rate * (cNum_exeToBig_f1 - mScale);
+            mScale += rate * (1.2f - mScale);
         }
 
         MR::setNerveAtStep(this, GET_NERVE_DIRECT(FileSelectItemSub, ScaleControllerNrvBig), cScaleEaseSteps);
@@ -833,10 +781,10 @@ namespace FileSelectItemSub {
         // 1.5-3 s of spinning puts the icon to sleep.
         f32 spinSpeed = MR::abs(mItem->mRotateSpeed);
 
-        if (spinSpeed > cNum_exeOpen_f1) {
+        if (spinSpeed > 10.0f) {
             mBlinkStep += 2;
         } else {
-            if (spinSpeed > cNum_exeOpen_f2) {
+            if (spinSpeed > 6.0f) {
                 mBlinkStep++;
             } else {
                 mBlinkStep = 0;
@@ -857,7 +805,7 @@ namespace FileSelectItemSub {
             shut();
         }
 
-        if (MR::isGreaterEqualStep(this, cStep_exeShut_1)) {
+        if (MR::isGreaterEqualStep(this, 10)) {
             open();
             setNerve(GET_NERVE_DIRECT(FileSelectItemSub, BlinkControllerNrvOpen));
         }
@@ -871,7 +819,7 @@ namespace FileSelectItemSub {
 
         mBlinkStep++;
 
-        if (MR::abs(mItem->mRotateSpeed) > cNum_exeSleep_f1) {
+        if (MR::abs(mItem->mRotateSpeed) > 2.0f) {
             mBlinkStep = 0;
         }
 
@@ -902,7 +850,7 @@ namespace FileSelectItemSub {
         }
 
         if (mItem->mIconID->isMii()) {
-            if (MR::isGreaterEqualStep(this, cStep_exeBlink_1)) {
+            if (MR::isGreaterEqualStep(this, 40)) {
                 mItem->mFaceParts->changeExpressionNormal();
                 setNerve(GET_NERVE_DIRECT(FileSelectItemSub, BlinkControllerNrvOpen));
             }
@@ -940,7 +888,7 @@ namespace FileSelectItemSub {
     }
 
     void ScaleController::exeBig() {
-        mScale = cNum_exeBig_f1;
+        mScale = 1.2f;
     }
 
     void ScaleController::exeSmall() {

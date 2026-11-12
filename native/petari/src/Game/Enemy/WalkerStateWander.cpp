@@ -7,13 +7,6 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_WalkerStateWander_f1, "WalkerStateWander.f1", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWalk_f1, "exeWalk.f1", 8.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWalk_f2, "exeWalk.f2", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWalk_f3, "exeWalk.f3", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWalk_f4, "exeWalk.f4", 150.0f);
 
 namespace {
     WalkerStateWanderParam sDefaultParam;
@@ -36,7 +29,7 @@ WalkerStateWander::WalkerStateWander(LiveActor* pHost, Vec3f* pDirection, Walker
         mWanderParam = &::sDefaultParam;
     }
 
-    mTerritoryMover = new TerritoryMover(cNum_WalkerStateWander_f1);
+    mTerritoryMover = new TerritoryMover(500.0f);
     mTerritoryMover->setCenter(getHost()->mPosition);
 }
 
@@ -69,13 +62,13 @@ void WalkerStateWander::exeWalk() {
 
     MR::turnDirectionToTargetUseGroundNormalDegree(getHost(), mDirection, mTerritoryMover->mTarget, mWanderParam->mTurnMaxRateDegree);
 
-    if (MR::isFaceToTargetHorizontalDegree(getHost(), mTerritoryMover->mTarget, *mDirection, cNum_exeWalk_f1)) {
+    if (MR::isFaceToTargetHorizontalDegree(getHost(), mTerritoryMover->mTarget, *mDirection, 8.0f)) {
         MR::addVelocityMoveToDirection(getHost(), *mDirection, mWanderParam->mSpeed);
     }
 
     WalkerStateFunction::calcPassiveMovement(getHost(), mStateParam);
 
-    if (MR::isFallNextMove(getHost(), cNum_exeWalk_f2, cNum_exeWalk_f3, cNum_exeWalk_f4, nullptr)) {
+    if (MR::isFallNextMove(getHost(), 150.0f, 150.0f, 150.0f, nullptr)) {
         MR::zeroVelocity(getHost());
         setNerve(GET_NERVE(WalkerStateWander, WalkerStateWanderNrvWait));
         return;

@@ -16,79 +16,41 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 160.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 140.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 70.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 110.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_kill_f1, "kill.f1", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_kill_f2, "kill.f2", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_kill_f3, "kill.f3", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeSliding_f1, "exeSliding.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeSliding_f2, "exeSliding.f2", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeSliding_f3, "exeSliding.f3", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinning_f1, "exeSpinning.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinning_f2, "exeSpinning.f2", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinning_f3, "exeSpinning.f3", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinning_f4, "exeSpinning.f4", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinning_f5, "exeSpinning.f5", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinning_f6, "exeSpinning.f6", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcPlanarProjectedVec_f1, "calcPlanarProjectedVec.f1", 0.0001f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_reboundVelocityFromCollision_1, "exeFall.reboundVelocityFromCollision.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_reboundVelocityFromCollision_2, "exeFall.reboundVelocityFromCollision.2", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_reboundVelocityFromCollision_3, "exeFall.reboundVelocityFromCollision.3", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_reboundVelocityFromCollision_1, "exeWait.reboundVelocityFromCollision.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_reboundVelocityFromCollision_2, "exeWait.reboundVelocityFromCollision.2", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_reboundVelocityFromCollision_3, "exeWait.reboundVelocityFromCollision.3", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_applyVelocityDampAndGravity_1, "exeWait.applyVelocityDampAndGravity.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_applyVelocityDampAndGravity_2, "exeWait.applyVelocityDampAndGravity.2", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeSliding_reboundVelocityFromCollision_1, "exeSliding.reboundVelocityFromCollision.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeSliding_reboundVelocityFromCollision_2, "exeSliding.reboundVelocityFromCollision.2", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeSliding_reboundVelocityFromCollision_3, "exeSliding.reboundVelocityFromCollision.3", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinning_reboundVelocityFromCollision_1, "exeSpinning.reboundVelocityFromCollision.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinning_reboundVelocityFromCollision_2, "exeSpinning.reboundVelocityFromCollision.2", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinning_reboundVelocityFromCollision_3, "exeSpinning.reboundVelocityFromCollision.3", 1.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, hForceBindOffset, 65.0f);
-    NEBULA_TUNABLE(f32, hForceBindMul, 0.5f);
-    NEBULA_TUNABLE(f32, sShadowSize, 160.0f);
-    NEBULA_TUNABLE(f32, hGravityVel, 3.0f);
-    NEBULA_TUNABLE(f32, hVelHMin, 10.0f);
-    NEBULA_TUNABLE(f32, hReflectRate, 0.5f);
-    NEBULA_TUNABLE(f32, hSpinningAttackStrongVel, 10.0f);
-    NEBULA_TUNABLE(f32, hStopCheckVel, 0.1f);
-    NEBULA_TUNABLE(f32, hGroundCosine, 0.4f);
+    const f32 hForceBindOffset = 65.0f;
+    const f32 hForceBindMul = 0.5f;
+    const f32 sShadowSize = 160.0f;
+    const f32 hGravityVel = 3.0f;
+    const f32 hVelHMin = 10.0f;
+    const f32 hReflectRate = 0.5f;
+    const f32 hSpinningAttackStrongVel = 10.0f;
+    const f32 hStopCheckVel = 0.1f;
+    const f32 hGroundCosine = 0.4f;
     static const s32 hWaitTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, hPlayerIsSideDotCheck, 0.25f);
-    NEBULA_TUNABLE(f32, hSpinningAngle, 2.0f);
-    NEBULA_TUNABLE(f32, hDampVelHWait, 0.6f);
-    NEBULA_TUNABLE(f32, hDampVelVWait, 0.6f);
-    NEBULA_TUNABLE(f32, hTurnYDirRatio, 0.125f);
-    NEBULA_TUNABLE(f32, hPointedRotDamp, 0.8f);
-    NEBULA_TUNABLE(f32, hSlidingVelocitySub, 0.08f);
-    NEBULA_TUNABLE(f32, hSlidingVelMax, 17.0f);
-    NEBULA_TUNABLE(f32, hSlidingRotateSub, 0.01f);
-    NEBULA_TUNABLE(f32, hSlidingRotVelMin, 0.02f);
-    NEBULA_TUNABLE(f32, hSlidingRotVelMax, 0.02f);
+    const f32 hPlayerIsSideDotCheck = 0.25f;
+    const f32 hSpinningAngle = 2.0f;
+    const f32 hDampVelHWait = 0.6f;
+    const f32 hDampVelVWait = 0.6f;
+    const f32 hTurnYDirRatio = 0.125f;
+    const f32 hPointedRotDamp = 0.8f;
+    const f32 hSlidingVelocitySub = 0.08f;
+    const f32 hSlidingVelMax = 17.0f;
+    const f32 hSlidingRotateSub = 0.01f;
+    const f32 hSlidingRotVelMin = 0.02f;
+    const f32 hSlidingRotVelMax = 0.02f;
     static const s32 hKickableTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, hSpinningVelocitySub, 0.01f);
-    NEBULA_TUNABLE(f32, hSpinningVelMin, 0.0f);
-    NEBULA_TUNABLE(f32, hSpinningVelMax, 25.0f);
-    NEBULA_TUNABLE(f32, hSpinningRotateSub, 0.001f);
-    NEBULA_TUNABLE(f32, hSpinningRotVelMin, 0.1f);
-    NEBULA_TUNABLE(f32, hSpinningRotVelMax, 0.5f);
-    NEBULA_TUNABLE(f32, hPlayerVelocityCheck, 10.0f);
-    NEBULA_TUNABLE(f32, hIceInitBlowVelV, 100.0f);
-    NEBULA_TUNABLE(f32, hKickCheckOffsetUp, 0.0f);
-    NEBULA_TUNABLE(f32, hIceInitBlowVelH, 0.0f);
+    const f32 hSpinningVelocitySub = 0.01f;
+    const f32 hSpinningVelMin = 0.0f;
+    const f32 hSpinningVelMax = 25.0f;
+    const f32 hSpinningRotateSub = 0.001f;
+    const f32 hSpinningRotVelMin = 0.1f;
+    const f32 hSpinningRotVelMax = 0.5f;
+    const f32 hPlayerVelocityCheck = 10.0f;
+    const f32 hIceInitBlowVelV = 100.0f;
+    const f32 hKickCheckOffsetUp = 0.0f;
+    const f32 hIceInitBlowVelH = 0.0f;
 };  // namespace
 
 namespace NrvSpinningBox {
@@ -121,7 +83,7 @@ void SpinningBox::init(const TableIter& rIter) {
 
     f32 scale = getScale();
     initHitSensor(2);
-    MR::addHitSensorMapObj(this, "body", 32, scale * cNum_init_f1, Vec3f(0.0f, -cNum_init_f2, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 32, scale * 160.0f, Vec3f(0.0f, -40.0f, 0.0f));
 
     if (mIsIceBox) {
         MR::initCollisionParts(this, "IceBox", getSensor("body"), nullptr);
@@ -130,13 +92,13 @@ void SpinningBox::init(const TableIter& rIter) {
         MR::initCollisionPartsAutoEqualScaleOne(this, "SpinningBox", getSensor("body"), nullptr);
     }
 
-    initBinder(cNum_init_f3, cNum_init_f4, 0);
+    initBinder(140.0f, 80.0f, 0);
     MR::setBinderExceptActor(this, this);
     initEffectKeeper(0, "SpinningBox");
     initSound(6, false);
 
     MR::onCalcGravity(this);
-    MR::initShadowVolumeBox(this, Vec3f(::sShadowSize, -cNum_init_f5, ::sShadowSize) * scale, getBaseMtx());
+    MR::initShadowVolumeBox(this, Vec3f(::sShadowSize, -70.0f, ::sShadowSize) * scale, getBaseMtx());
     MR::excludeCalcShadowToMyCollision(this, nullptr);
 
     if (MR::isValidInfo(rIter)) {
@@ -144,7 +106,7 @@ void SpinningBox::init(const TableIter& rIter) {
     }
 
     MR::addToAttributeGroupReflectSpinningBox(this);
-    MR::initStarPointerTarget(this, cNum_init_f6, Vec3f(0.0f, cNum_init_f7, 0.0f));
+    MR::initStarPointerTarget(this, 110.0f, Vec3f(0.0f, 80.0f, 0.0f));
     MR::declareStarPiece(this, 3);
     if (mIsIceBox) {
         makeActorDead();
@@ -158,7 +120,7 @@ void SpinningBox::kill() {
     MR::startSound(this, "SE_OJ_SPIN_BOX_BREAK");
     MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
     LiveActor::kill();
-    MR::appearStarPiece(this, mPosition - mGravity * cNum_kill_f1, MR::getDeclareRemnantStarPieceCount(this), cNum_kill_f2, cNum_kill_f3, false);
+    MR::appearStarPiece(this, mPosition - mGravity * 50.0f, MR::getDeclareRemnantStarPieceCount(this), 10.0f, 40.0f, false);
     MR::emitEffect(this, "Break");
 }
 
@@ -208,7 +170,7 @@ void SpinningBox::exeFall() {
         MR::invalidateClipping(this);
     }
 
-    MR::reboundVelocityFromCollision(this, cNum_exeFall_reboundVelocityFromCollision_1, cNum_exeFall_reboundVelocityFromCollision_2, cNum_exeFall_reboundVelocityFromCollision_3);
+    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
     MR::applyVelocityDampAndGravity(this, ::hGravityVel, ::hDampVelHWait, ::hDampVelHWait, ::hDampVelVWait, ::hVelHMin);
 
     if (MR::isOnGround(this) && MR::isGreaterStep(this, ::hWaitTime)) {
@@ -234,10 +196,10 @@ void SpinningBox::exeWait() {
         mGravity.set(-*MR::getGroundNormal(this));
     }
 
-    MR::reboundVelocityFromCollision(this, cNum_exeWait_reboundVelocityFromCollision_1, cNum_exeWait_reboundVelocityFromCollision_2, cNum_exeWait_reboundVelocityFromCollision_3);
+    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
 
     if (mIsOnGround) {
-        MR::applyVelocityDampAndGravity(this, ::hGravityVel, cNum_exeWait_applyVelocityDampAndGravity_1, cNum_exeWait_applyVelocityDampAndGravity_2, ::hDampVelVWait, ::hVelHMin);
+        MR::applyVelocityDampAndGravity(this, ::hGravityVel, 0.0f, 0.0f, ::hDampVelVWait, ::hVelHMin);
     } else {
         MR::applyVelocityDampAndGravity(this, ::hGravityVel, ::hDampVelHWait, ::hDampVelHWait, ::hDampVelVWait, ::hVelHMin);
     }
@@ -261,9 +223,9 @@ void SpinningBox::exeSliding() {
 
     mRotateSpeed = MR::clamp(mRotateSpeed - ::hSlidingRotateSub, ::hSlidingRotVelMin, ::hSlidingRotVelMax);
     mSlideSpeed = MR::clamp(mSlideSpeed - ::hSlidingVelocitySub, 0.0f, ::hSlidingVelMax);
-    f32 slideSoundLvl = (mSlideSpeed / ::hSlidingVelMax) * cNum_exeSliding_f1;
-    if (slideSoundLvl > cNum_exeSliding_f2) {
-        slideSoundLvl = cNum_exeSliding_f3;
+    f32 slideSoundLvl = (mSlideSpeed / ::hSlidingVelMax) * 100.0f;
+    if (slideSoundLvl > 100.0f) {
+        slideSoundLvl = 100.0f;
     }
     MR::startLevelSound(this, "SE_OJ_LV_SPIN_BOX_SLIDE", slideSoundLvl);
 
@@ -272,7 +234,7 @@ void SpinningBox::exeSliding() {
         return;
     }
 
-    MR::reboundVelocityFromCollision(this, cNum_exeSliding_reboundVelocityFromCollision_1, cNum_exeSliding_reboundVelocityFromCollision_2, cNum_exeSliding_reboundVelocityFromCollision_3);
+    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
 
     MR::vecKillElement(mVelocity, mSlideDir, &mVelocity);
     mVelocity = mSlideDir * mSlideSpeed;
@@ -315,16 +277,16 @@ void SpinningBox::exeSpinning() {
             mSpinAngle -= ::hSpinningAngle;
         }
 
-        f32 spinSoundLvl = (mRotateSpeed / ::hSpinningRotVelMax) * cNum_exeSpinning_f1;
-        if (spinSoundLvl > cNum_exeSpinning_f2) {
-            spinSoundLvl = cNum_exeSpinning_f3;
+        f32 spinSoundLvl = (mRotateSpeed / ::hSpinningRotVelMax) * 100.0f;
+        if (spinSoundLvl > 100.0f) {
+            spinSoundLvl = 100.0f;
         }
         MR::startSound(this, "SE_OJ_SPIN_BOX_SPIN", spinSoundLvl);
     }
 
-    f32 slideSoundLvl = (mSlideSpeed / ::hSlidingVelMax) * cNum_exeSpinning_f4;
-    if (slideSoundLvl > cNum_exeSpinning_f5) {
-        slideSoundLvl = cNum_exeSpinning_f6;
+    f32 slideSoundLvl = (mSlideSpeed / ::hSlidingVelMax) * 100.0f;
+    if (slideSoundLvl > 100.0f) {
+        slideSoundLvl = 100.0f;
     }
     MR::startLevelSound(this, "SE_OJ_LV_SPIN_BOX_SLIDE", slideSoundLvl);
 
@@ -333,7 +295,7 @@ void SpinningBox::exeSpinning() {
         return;
     }
 
-    MR::reboundVelocityFromCollision(this, cNum_exeSpinning_reboundVelocityFromCollision_1, cNum_exeSpinning_reboundVelocityFromCollision_2, cNum_exeSpinning_reboundVelocityFromCollision_3);
+    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
 
     MR::vecKillElement(mVelocity, mSlideDir, &mVelocity);
     mVelocity = mSlideDir * mSlideSpeed;
@@ -375,7 +337,7 @@ void SpinningBox::calcPlanarProjectedVec(Vec3f* pProj, const Vec3f& rNorm, const
     // No gravity (or none along the ground) leaves the direction as it is.
     const f32 along = rNorm.dot(rGrav);
 
-    if (MR::isNearZero(along, cNum_calcPlanarProjectedVec_f1)) {
+    if (MR::isNearZero(along, 0.0001f)) {
         return;
     }
 

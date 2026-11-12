@@ -29,11 +29,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Sound/Sound.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_startRemixSound_f1, "startRemixSound.f1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startRemixSound_f2, "startRemixSound.f2", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startRemixSound_f3, "startRemixSound.f3", 3600.0f);
 
 namespace {
     AudBgmConductor* getAudBgmConductor() {
@@ -296,11 +291,11 @@ namespace MR {
         AudRemixSequencer* pRemixSequencer = AudWrap::getRemixSequencer();
         f32 playerSpeed = getPlayerVelocity()->length();
 
-        if (playerSpeed < cNum_startRemixSound_f1) {
-            playerSpeed = cNum_startRemixSound_f2;
+        if (playerSpeed < 3.0f) {
+            playerSpeed = 3.0f;
         }
 
-        pRemixSequencer->setTempo((playerSpeed * cNum_startRemixSound_f3) / beatLength);
+        pRemixSequencer->setTempo((playerSpeed * 3600.0f) / beatLength);
 
         for (s32 i = 0; i < pRemixNoteGroupData->mTrackCount; i++) {
             RemixNoteTrackData* pRemixNoteTrackData = &pRemixNoteGroupData->mRemixTracks[i];

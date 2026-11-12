@@ -2,10 +2,7 @@
 #include "Game/AreaObj/MercatorTransformCube.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_placementMercatorRail_f1, "placementMercatorRail.f1", 10.0f);
 
 namespace {
     class RailCoinMercatorDivInfo : public DivideMercatorRailPosInfo {
@@ -55,7 +52,7 @@ void RailCoin::placementNormalRail() {
 
 void RailCoin::placementMercatorRail() {
     ::RailCoinMercatorDivInfo info(this);
-    MR::getDivideMercatorRailPosition(&info, this, mCoinCount, cNum_placementMercatorRail_f1, 10);
+    MR::getDivideMercatorRailPosition(&info, this, mCoinCount, 10.0f, 10);
 }
 
 namespace MR {

@@ -4,19 +4,12 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcFovyPos_f1, "calcFovyPos.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcFovyPos_f2, "calcFovyPos.f2", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateReset_f1, "updateReset.f1", 140.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sPartialRate, 0.5f);
-    NEBULA_TUNABLE(f32, sAngularVel, 0.5f);
-    NEBULA_TUNABLE(s32, sInterpolate, 120);
+    const f32 sPartialRate = 0.5f;
+    const f32 sAngularVel = 0.5f;
+    const s32 sInterpolate = 120;
 };  // namespace
 
 CameraMedianTower::CameraMedianTower(const char* pName)
@@ -36,7 +29,7 @@ CameraTargetObj* CameraMedianTower::calc() {
     CameraTargetObj* target = CameraLocalUtil::getTarget(this);
 
     Vec3f watchOffset;
-    CameraLocalUtil::makeWatchOffset(&watchOffset, this, target, cNum_calc_f1 / cNum_calc_f2);
+    CameraLocalUtil::makeWatchOffset(&watchOffset, this, target, 0.1f / 15.0f);
 
     Vec3f pos;
     pos.set(target->getPosition() * (1.0f - mPartialRate) + CameraLocalUtil::getVecReg(mString) * mPartialRate);
@@ -89,11 +82,11 @@ void CameraMedianTower::calcFovyPos(Vec3f* pFovPos, const Vec3f& rFront, const V
     Vec3f projZ = rFront * rVec.dot(rFront);
     Vec3f vecOrtho = rVec - projZ;
 
-    f32 halfFov = MR::getFovy() * cNum_calcFovyPos_f1;
+    f32 halfFov = MR::getFovy() * 0.5f;
     Vec3f focusOffset = projZ - rFront * (vecOrtho.length() / MR::tanDegree(halfFov));
 
     pFovPos->set(rPos + focusOffset);
-    pFovPos->add(rFront * (-cNum_calcFovyPos_f2 / MR::sinDegree(halfFov)));
+    pFovPos->add(rFront * (-200.0f / MR::sinDegree(halfFov)));
 }
 
 void CameraMedianTower::limitAngularVelocity(Vec3f* pPos, Vec3f* pUp, const Vec3f& rPos, const Vec3f& rWatchPos, const Vec3f& rAxis) {
@@ -167,7 +160,7 @@ void CameraMedianTower::updateReset(const Vec3f& rPos, const Vec3f& rWatchPos, c
     targetDir.orthogonalize(rAxis);
     MR::normalizeOrZero(&targetDir);
 
-    if (outDir.dot(targetDir) < MR::cosDegree(cNum_updateReset_f1)) {
+    if (outDir.dot(targetDir) < MR::cosDegree(140.0f)) {
         if (mInterpolateTime == 0) {
             mInterpolateTime = ::sInterpolate;
             MR::startCameraInterpolation(::sInterpolate);

@@ -2,7 +2,6 @@
 #include "Game/AreaObj/LightArea.hpp"
 #include "Game/Map/LightFunction.hpp"
 #include "Game/Map/LightZoneDataHolder.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 LightAreaHolder::LightAreaHolder(s32 firstCapacity, const char* pName) : AreaObjMgr(firstCapacity, pName) {
@@ -14,7 +13,7 @@ namespace {
     // Leaving an area, or crossing into another, changes the light once the position has stayed out this many steps
     // in a row: an actor that sways over an edge (a platform, an animated joint, a camera spring) keeps one light.
     // Entering from no area, and a cleared id (a reset), change at once.
-    NEBULA_TUNABLE(s32, cLeaveSteps, 8);
+    const s32 cLeaveSteps = 8;
 }  // namespace
 
 bool LightAreaHolder::tryFindLightID(const Vec3f& rArea, ZoneLightID* pLightID) const {

@@ -1,11 +1,5 @@
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Player/MarioFreeze.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f2, "update.f2", 1.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f3, "update.f3", 8.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f4, "update.f4", 0.4f);
 
 bool Mario::doFreeze() {
     if (mMovementStates.invincible) {
@@ -85,7 +79,7 @@ bool MarioFreeze::update() {
                 addVelocity(getFrontVec(), -1.0f);
             }
         } else if (mFreezeTimer < 120 && mActor->mHealth != 0 && mActor->isRequestSpin()) {
-            addVelocity(getFrontVec(), -cNum_update_f1);
+            addVelocity(getFrontVec(), -10.0f);
             changeAnimation("地上ひねり");
 
             playSound("声スピン");
@@ -131,15 +125,15 @@ bool MarioFreeze::update() {
         if (!getPlayer()->getMovementStates().onGround || mVerticalSpeed < 0.0f) {
             getPlayer()->setJumpVec(getGravityVec() * mVerticalSpeed);
             addVelocity(getGravityVec() * mVerticalSpeed);
-            mVerticalSpeed += cNum_update_f2;
+            mVerticalSpeed += 1.5f;
             if (mVerticalSpeed < 0.0f) {
                 getPlayer()->mMovementStates.onGround = false;
             }
         } else if (mVerticalSpeed > 0.0f) {
-            if (mVerticalSpeed < cNum_update_f3) {
+            if (mVerticalSpeed < 8.0f) {
                 mVerticalSpeed = 0.0f;
             } else {
-                mVerticalSpeed = cNum_update_f4 * -mVerticalSpeed;
+                mVerticalSpeed = 0.4f * -mVerticalSpeed;
                 getPlayer()->mMovementStates.onGround = false;
                 getPlayer()->setJumpVec(getGravityVec() * mVerticalSpeed);
             }

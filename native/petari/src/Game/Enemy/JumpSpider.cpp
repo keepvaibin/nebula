@@ -19,52 +19,14 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 110.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f2, "initAfterPlacement.f2", 300.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePreJump_f1, "exePreJump.f1", 0.05f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeJump_f1, "exeJump.f1", 22.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeJump_f2, "exeJump.f2", 0.02f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeJumpEnd_f1, "exeJumpEnd.f1", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHitToPlayer_f1, "exeHitToPlayer.f1", 0.05f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeStampFall_f1, "exeStampFall.f1", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 0.25f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeJump_applyVelocityDampAndGravity_1, "exeJump.applyVelocityDampAndGravity.1", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHitToPlayer_reboundVelocityFromCollision_1, "exeHitToPlayer.reboundVelocityFromCollision.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHitToPlayer_reboundVelocityFromCollision_2, "exeHitToPlayer.reboundVelocityFromCollision.2", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHitToPlayer_reboundVelocityFromCollision_3, "exeHitToPlayer.reboundVelocityFromCollision.3", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHitToPlayer_applyVelocityDampAndGravity_1, "exeHitToPlayer.applyVelocityDampAndGravity.1", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHitToPlayer_applyVelocityDampAndGravity_2, "exeHitToPlayer.applyVelocityDampAndGravity.2", 0.8f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHitToPlayer_applyVelocityDampAndGravity_3, "exeHitToPlayer.applyVelocityDampAndGravity.3", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHitToPlayer_applyVelocityDampAndGravity_4, "exeHitToPlayer.applyVelocityDampAndGravity.4", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHitToPlayer_applyVelocityDampAndGravity_5, "exeHitToPlayer.applyVelocityDampAndGravity.5", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeNoPowerStart_applyVelocityDampAndGravity_1, "exeNoPowerStart.applyVelocityDampAndGravity.1", 0.8f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeNoPowerStart_applyVelocityDampAndGravity_2, "exeNoPowerStart.applyVelocityDampAndGravity.2", 0.8f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeNoPowerStart_applyVelocityDampAndGravity_3, "exeNoPowerStart.applyVelocityDampAndGravity.3", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeNoPowerStart_applyVelocityDampAndGravity_4, "exeNoPowerStart.applyVelocityDampAndGravity.4", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeNoPowerStart_applyVelocityDampAndGravity_5, "exeNoPowerStart.applyVelocityDampAndGravity.5", 1.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeHitToPlayer_1, "exeHitToPlayer.1", 58);
-
-
 namespace {
-    NEBULA_TUNABLE(f32, hGroundDamp, 0.8f);
-    NEBULA_TUNABLE(f32, hAirDampH, 0.98f);
-    NEBULA_TUNABLE(f32, hAirDampV, 0.98f);
-    NEBULA_TUNABLE(f32, hJumpVelV, 1.0f);
-    NEBULA_TUNABLE(s32, hStampDeathTime, 20);
+    const f32 hGroundDamp = 0.8f;
+    const f32 hAirDampH = 0.98f;
+    const f32 hAirDampV = 0.98f;
+    const f32 hJumpVelV = 1.0f;
+    const s32 hStampDeathTime = 20;
     static const s32 hNoPowerWaitTime = NebulaFrameClock::stepsOfSeconds(4);
 };  // namespace
 
@@ -104,19 +66,19 @@ void JumpSpider::init(const TableIter& rIter) {
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
     f32 scaleY = mScale.y;
-    initBinder(scaleY * cNum_init_f1, scaleY * cNum_init_f2, 0);
+    initBinder(scaleY * 100.0f, scaleY * 100.0f, 0);
     initHitSensor(1);
     Vec3f offset1;
-    offset1.set(0.0f, cNum_init_f3 * scaleY, 0.0f);
-    MR::addHitSensorEnemy(this, "body", 32, scaleY * cNum_init_f4, offset1);
+    offset1.set(0.0f, 60.0f * scaleY, 0.0f);
+    MR::addHitSensorEnemy(this, "body", 32, scaleY * 100.0f, offset1);
     initEffectKeeper(0, nullptr);
     initSound(4, false);
     initNerve(GET_NERVE(JumpSpider, HostTypeNrvWait));
     Vec3f offset2;
     offset2.x = 0.0f;
-    offset2.y = cNum_init_f5;
+    offset2.y = 80.0f;
     offset2.z = 0.0f;
-    MR::initStarPointerTarget(this, cNum_init_f6, offset2);
+    MR::initStarPointerTarget(this, 110.0f, offset2);
     MR::declareStarPiece(this, 3);
     MR::declareCoin(this, 1);
     mSpinHitController = new SpinHitController(this, 3, false);
@@ -129,10 +91,10 @@ void JumpSpider::init(const TableIter& rIter) {
 
 void JumpSpider::initAfterPlacement() {
     MR::calcGravity(this);
-    Vec3f lineStart(mPosition - mGravity * cNum_initAfterPlacement_f1);
+    Vec3f lineStart(mPosition - mGravity * 10.0f);
     Vec3f floorNormal, floorPos;
 
-    if (MR::getFirstPolyNormalOnLineToMap(&floorNormal, lineStart, mGravity * cNum_initAfterPlacement_f2, &floorPos, nullptr)) {
+    if (MR::getFirstPolyNormalOnLineToMap(&floorNormal, lineStart, mGravity * 300.0f, &floorPos, nullptr)) {
         mJumpPos.set(floorPos);
         mPosition.set(floorPos);
         mGravity.set(-floorNormal);
@@ -179,7 +141,7 @@ void JumpSpider::exeWait() {
         MR::startBck(this, "Wait");
     }
 
-    if (MR::calcDistanceToPlayer(this) < cNum_exeWait_f1) {
+    if (MR::calcDistanceToPlayer(this) < 1000.0f) {
         MR::startSound(this, "SE_EV_JUMPSPIDER_FIND");
         setNerve(GET_NERVE(JumpSpider, HostTypeNrvPreJump));
     }
@@ -193,7 +155,7 @@ void JumpSpider::exePreJump() {
 
     Vec3f heightVec;
     MR::calcVecToPlayerH(&heightVec, this, nullptr);
-    MR::turnVecToVecRadian(&mFront, mFront, heightVec, cNum_exePreJump_f1, mGravity);
+    MR::turnVecToVecRadian(&mFront, mFront, heightVec, 0.05f, mGravity);
 
     if (MR::isBckStopped(this)) {
         setNerve(GET_NERVE(JumpSpider, HostTypeNrvJump));
@@ -204,13 +166,13 @@ void JumpSpider::exeJump() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Jump");
         MR::startSound(this, "SE_EM_JUMPSPIDER_JUMP");
-        mVelocity.set(-mGravity * cNum_exeJump_f1);
+        mVelocity.set(-mGravity * 22.0f);
     }
 
-    MR::applyVelocityDampAndGravity(this, cNum_exeJump_applyVelocityDampAndGravity_1, ::hGroundDamp, ::hAirDampH, ::hAirDampV, ::hJumpVelV);
+    MR::applyVelocityDampAndGravity(this, 0.3f, ::hGroundDamp, ::hAirDampH, ::hAirDampV, ::hJumpVelV);
     Vec3f heightVec;
     MR::calcVecToPlayerH(&heightVec, this, nullptr);
-    MR::turnVecToVecRadian(&mFront, mFront, heightVec, cNum_exeJump_f2, mGravity);
+    MR::turnVecToVecRadian(&mFront, mFront, heightVec, 0.02f, mGravity);
 
     if (MR::isOnGround(this)) {
         MR::startSound(this, "SE_EM_JUMPSPIDER_LAND");
@@ -226,7 +188,7 @@ void JumpSpider::exeJumpEnd() {
     mPosition.set(mJumpPos);
 
     if (MR::isBckStopped(this)) {
-        if (cNum_exeJumpEnd_f1 < MR::calcDistanceToPlayer(this)) {
+        if (1000.0f < MR::calcDistanceToPlayer(this)) {
             setNerve(GET_NERVE(JumpSpider, HostTypeNrvWait));
         } else {
             setNerve(GET_NERVE(JumpSpider, HostTypeNrvPreJump));
@@ -240,14 +202,14 @@ void JumpSpider::exeHitToPlayer() {
         mVelocity.zero();
     }
 
-    MR::reboundVelocityFromCollision(this, cNum_exeHitToPlayer_reboundVelocityFromCollision_1, cNum_exeHitToPlayer_reboundVelocityFromCollision_2, cNum_exeHitToPlayer_reboundVelocityFromCollision_3);
-    MR::applyVelocityDampAndGravity(this, cNum_exeHitToPlayer_applyVelocityDampAndGravity_1, cNum_exeHitToPlayer_applyVelocityDampAndGravity_2, cNum_exeHitToPlayer_applyVelocityDampAndGravity_3, cNum_exeHitToPlayer_applyVelocityDampAndGravity_4, cNum_exeHitToPlayer_applyVelocityDampAndGravity_5);
+    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
+    MR::applyVelocityDampAndGravity(this, 0.3f, 0.8f, 0.98f, 0.98f, 1.0f);
     MR::killVelocityOnGroundH(this);
 
-    if (MR::isGreaterStep(this, cStep_exeHitToPlayer_1)) {
+    if (MR::isGreaterStep(this, 58)) {
         Vec3f heightVec;
         MR::calcVecToPlayerH(&heightVec, this, nullptr);
-        MR::turnVecToVecRadian(&mFront, mFront, heightVec, cNum_exeHitToPlayer_f1, mGravity);
+        MR::turnVecToVecRadian(&mFront, mFront, heightVec, 0.05f, mGravity);
     }
 
     if (MR::isBckStopped(this)) {
@@ -257,7 +219,7 @@ void JumpSpider::exeHitToPlayer() {
 
 void JumpSpider::exeStampFall() {
     if (MR::isFirstStep(this)) {
-        mVelocity.set(mGravity * cNum_exeStampFall_f1);
+        mVelocity.set(mGravity * 30.0f);
         MR::invalidateClipping(this);
     }
 
@@ -337,7 +299,7 @@ void JumpSpider::exeNoPowerStart() {
         mVelocity.zero();
     }
 
-    MR::applyVelocityDampAndGravity(this, cNum_exeNoPowerStart_applyVelocityDampAndGravity_1, cNum_exeNoPowerStart_applyVelocityDampAndGravity_2, cNum_exeNoPowerStart_applyVelocityDampAndGravity_3, cNum_exeNoPowerStart_applyVelocityDampAndGravity_4, cNum_exeNoPowerStart_applyVelocityDampAndGravity_5);
+    MR::applyVelocityDampAndGravity(this, 0.8f, 0.8f, 0.98f, 0.98f, 1.0f);
 
     if (MR::isOnGround(this) && MR::isBckStopped(this)) {
         mPosition.set(mJumpPos);
@@ -422,7 +384,7 @@ void JumpSpider::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
             return;
         }
 
-        if (MR::isPlayerExistUp(this, getSensor("body")->mRadius, cNum_attackSensor_f1)) {
+        if (MR::isPlayerExistUp(this, getSensor("body")->mRadius, 0.25f)) {
             MR::sendMsgPush(pReceiver, pSender);
             return;
         }

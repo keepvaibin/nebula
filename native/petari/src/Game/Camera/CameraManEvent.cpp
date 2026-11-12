@@ -10,15 +10,11 @@
 #include "Game/Camera/CameraParamChunkID.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_setSafePose_f1, "setSafePose.f1", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setSafePose_f2, "setSafePose.f2", 0.98f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sMinDistance, 300.0f);
-    NEBULA_TUNABLE(s32, sDefaultBlendFrame, 60);
+    const f32 sMinDistance = 300.0f;
+    const s32 sDefaultBlendFrame = 60;
 };  // namespace
 
 CameraManEvent::CameraManEvent(CameraHolder* pHolder, CameraParamChunkHolder* pChunkHolder, const char* pName)
@@ -296,10 +292,10 @@ void CameraManEvent::setSafePose() {
     MR::normalize(&camWatchDir);
     MR::normalizeOrZero(&up);
 
-    if (MR::isNearZero(up) || MR::abs(camWatchDir.dot(up)) > cNum_setSafePose_f1) {
+    if (MR::isNearZero(up) || MR::abs(camWatchDir.dot(up)) > 0.98f) {
         Vec3f watchDir = CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this);
         MR::normalize(&watchDir);
-        if (MR::abs(camWatchDir.dot(watchDir)) > cNum_setSafePose_f2) {
+        if (MR::abs(camWatchDir.dot(watchDir)) > 0.98f) {
             up.set(CameraLocalUtil::getUpVec(this));
         } else {
             Quat4f rot;

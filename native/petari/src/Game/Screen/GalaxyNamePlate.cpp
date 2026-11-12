@@ -7,11 +7,10 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, cAppearReadyFrame, 40);
+    const s32 cAppearReadyFrame = 40;
 };  // namespace
 
 namespace NrvGalaxyNamePlate {

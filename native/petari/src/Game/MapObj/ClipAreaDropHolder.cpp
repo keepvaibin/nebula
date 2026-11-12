@@ -1,10 +1,9 @@
 #include "Game/MapObj/ClipAreaDropHolder.hpp"
 #include "Game/MapObj/ClipAreaDrop.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, sMaxClipAreaDrop, 32);
+    const s32 sMaxClipAreaDrop = 32;
 };  // namespace
 
 ClipAreaDropHolder::ClipAreaDropHolder() : DeriveActorGroup< ClipAreaDrop >("クリップエリアのしずく管理", ::sMaxClipAreaDrop) {

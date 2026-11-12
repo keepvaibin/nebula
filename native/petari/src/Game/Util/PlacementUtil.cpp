@@ -1,12 +1,6 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_getPlacementRotate_f1, "getPlacementRotate.f1", 0.001f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getPlacementRotate_f2, "getPlacementRotate.f2", 1.5707964f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getPlacementRotate_f3, "getPlacementRotate.f3", 0.001f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getPlacementRotate_f4, "getPlacementRotate.f4", 1.5707964f);
 
 bool MR::getObjectName(const char** pName, const TableIter& rIter) {
     if (!rIter.isValid()) {
@@ -171,13 +165,13 @@ bool MR::getPlacementRotate(const TableIter& rIter, Vec3f* pOut) {
         rotateMtx.concat(*getZonePlacementMtx(rIter), rotateMtx);
 
         // Euler angles from the matrix, with the two gimbal-locked cases first.
-        if (-cNum_getPlacementRotate_f1 <= rotateMtx.mMtx[2][0] - 1.0f) {
+        if (-0.001f <= rotateMtx.mMtx[2][0] - 1.0f) {
             pOut->x = std::atan2(-rotateMtx.mMtx[0][1], rotateMtx.mMtx[1][1]);
-            pOut->y = -cNum_getPlacementRotate_f2;
+            pOut->y = -1.5707964f;
             pOut->z = 0.0f;
-        } else if (rotateMtx.mMtx[2][0] + 1.0f <= cNum_getPlacementRotate_f3) {
+        } else if (rotateMtx.mMtx[2][0] + 1.0f <= 0.001f) {
             pOut->x = std::atan2(rotateMtx.mMtx[0][1], rotateMtx.mMtx[1][1]);
-            pOut->y = cNum_getPlacementRotate_f4;
+            pOut->y = 1.5707964f;
             pOut->z = 0.0f;
         } else {
             pOut->x = std::atan2(rotateMtx.mMtx[2][1], rotateMtx.mMtx[2][2]);

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Game/LiveActor/Spine.hpp"
-#include "Game/Util/Tunable.hpp"
 
 /// @brief Used for executing states of a LiveActor.
 class Nerve {
@@ -94,8 +93,17 @@ namespace nebula {
 #define NEBULA_NERVE_SECTION __attribute__((section("nebnrv")))
 #endif
 
+#if defined(__has_attribute)
+#if __has_attribute(retain)
+#define NEBULA_NERVE_KEEP __attribute__((used, retain))
+#endif
+#endif
+#ifndef NEBULA_NERVE_KEEP
+#define NEBULA_NERVE_KEEP __attribute__((used))
+#endif
+
 #define NEBULA_NERVE_RECORD(name, parent_class)                                                                                                     \
-    NEBULA_NERVE_SECTION NEBULA_TUNABLE_KEEP static const ::nebula::NerveRecord name##_nebula_nerve = {                                            \
+    NEBULA_NERVE_SECTION NEBULA_NERVE_KEEP static const ::nebula::NerveRecord name##_nebula_nerve = {                                            \
         &name::sInstance, #parent_class, #name, &::nebula::nerveActorOf< parent_class >};
 
 #define NEW_NERVE(name, parent_class, executor_name)                                                                                                 \

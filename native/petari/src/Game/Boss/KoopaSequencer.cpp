@@ -12,10 +12,9 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, sKoopaFallVoiceStep, 20);
+    const s32 sKoopaFallVoiceStep = 20;
 };  // namespace
 
 KoopaSequencer::KoopaSequencer(const char* pName, s32 vs)

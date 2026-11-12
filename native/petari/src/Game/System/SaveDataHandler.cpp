@@ -13,7 +13,6 @@
 #include "Game/System/NebulaArena.hpp"
 #include <nebula_module.h>
 #include <cstring>
-#include "Game/Util/Tunable.hpp"
 
 namespace {
     // Nebula.sav: "NBSV", the version, the CRC-32 of everything after the header, the file count; a row per file
@@ -22,9 +21,9 @@ namespace {
     const char* const cReadNames[] = {
         "Nebula.sav", "Nebula.sav.1", "Nebula.sav.2", "GameData.bin", "GameData.bin.1", "GameData.bin.2",
     };
-    NEBULA_TUNABLE(u32, cMagic, 0x5653424E);
-    NEBULA_TUNABLE(u32, cVersion, 4);
-    NEBULA_TUNABLE(u32, cHeaderSize, 16);
+    const u32 cMagic = 0x5653424E;
+    const u32 cVersion = 4;
+    const u32 cHeaderSize = 16;
     const u32 cRowNameSize = 16;
     const u32 cRowSize = cRowNameSize + 4;
     const u32 cUserFiles = 6;

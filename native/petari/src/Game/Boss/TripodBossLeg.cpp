@@ -18,43 +18,32 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addToTargetPower_f1, "addToTargetPower.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addIKLimitPower_f1, "addIKLimitPower.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addIKLimitPower_f2, "addIKLimitPower.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addIKLimitPower_f3, "addIKLimitPower.f3", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addIKLimitPower_f4, "addIKLimitPower.f4", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_separateMatrixRotateYZX_f1, "separateMatrixRotateYZX.f1", 0.000001f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sLiftHeight, 1000.0f);  // above the step point: lift ends, ankle fully turned, landing target
+    const f32 sLiftHeight = 1000.0f;  // above the step point: lift ends, ankle fully turned, landing target
     const s32 sLeaveOutWaitTime = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(f32, sTargetBrakeDistance, 300.0f);
-    NEBULA_TUNABLE(f32, sStampSignDistance, 300.0f);
-    NEBULA_TUNABLE(f32, sMoveDamping, 0.9f);
-    NEBULA_TUNABLE(f32, sApproachDamping, 0.95f);
-    NEBULA_TUNABLE(f32, sFallDamping, 0.98f);
-    NEBULA_TUNABLE(f32, sFallAccel, 1.0f);
-    NEBULA_TUNABLE(f32, sUpAccel, 1.5f);
-    NEBULA_TUNABLE(f32, sLeaveOutUpAccel, 0.8f);
-    NEBULA_TUNABLE(f32, sAnkleSlerpRate, 0.2f);
-    NEBULA_TUNABLE(f32, sAnkleLandingStartRate, 0.15f);
-    NEBULA_TUNABLE(f32, sAnkleShadowOffset, 630.0f);
+    const f32 sTargetBrakeDistance = 300.0f;
+    const f32 sStampSignDistance = 300.0f;
+    const f32 sMoveDamping = 0.9f;
+    const f32 sApproachDamping = 0.95f;
+    const f32 sFallDamping = 0.98f;
+    const f32 sFallAccel = 1.0f;
+    const f32 sUpAccel = 1.5f;
+    const f32 sLeaveOutUpAccel = 0.8f;
+    const f32 sAnkleSlerpRate = 0.2f;
+    const f32 sAnkleLandingStartRate = 0.15f;
+    const f32 sAnkleShadowOffset = 630.0f;
     const s32 sStampSignTime = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(s32, sStampSignVibrationTime, 20);
-    NEBULA_TUNABLE(f32, sStampSignVibrationCycle, 10.0f);
-    NEBULA_TUNABLE(f32, sStampSignVibrationAmplitude, 20.0f);
-    NEBULA_TUNABLE(f32, sLandShakeStrongDistance, 2000.0f);
-    NEBULA_TUNABLE(f32, sLandShakeMiddleDistance, 3500.0f);
-    NEBULA_TUNABLE(s32, sDamageVibrationTime, 27);
-    NEBULA_TUNABLE(f32, sDamageVibrationCycle, 0.25f);
-    NEBULA_TUNABLE(f32, sDamageVibrationAmplitude, 40.0f);
-    NEBULA_TUNABLE(f32, sShadowDropLength, 2000.0f);
+    const s32 sStampSignVibrationTime = 20;
+    const f32 sStampSignVibrationCycle = 10.0f;
+    const f32 sStampSignVibrationAmplitude = 20.0f;
+    const f32 sLandShakeStrongDistance = 2000.0f;
+    const f32 sLandShakeMiddleDistance = 3500.0f;
+    const s32 sDamageVibrationTime = 27;
+    const f32 sDamageVibrationCycle = 0.25f;
+    const f32 sDamageVibrationAmplitude = 40.0f;
+    const f32 sShadowDropLength = 2000.0f;
 
     inline Vec3f calcAnkleShadowPosition(const Vec3f& rPosition, const Vec3f& rNormal) {
         Vec3f offset(rNormal);
@@ -104,7 +93,7 @@ void TripodBossLeg::init(const TableIter& /*rIter*/) {
     initNerve(GET_NERVE(TripodBossLeg, TripodBossLegNrvHold));
     MR::invalidateClipping(this);
     initHitSensor(1);
-    MR::addHitSensorMtxMapObj(this, "body", 16, cNum_init_f1, mEndJointMtx, Vec3f(cNum_init_f2, cNum_init_f3, 0.0f));
+    MR::addHitSensorMtxMapObj(this, "body", 16, 1000.0f, mEndJointMtx, Vec3f(500.0f, 200.0f, 0.0f));
     initSound(6, false);
     mSoundObj = new AudAnmSoundObject(&mForceEndPoint, 6, NebulaArena::current());
     initEffectKeeper(0, "TripodBoss");
@@ -487,7 +476,7 @@ void TripodBossLeg::addToTargetPower(const Vec3f& rTarget, f32 power) {
     mEndVelocity += dir * (power * MR::clamp(dist / sTargetBrakeDistance, -1.0f, 1.0f));
     f32 brakeRate = (1.0f - (dist / sTargetBrakeDistance));
     if (brakeRate > 0.0f) {
-        mEndVelocity -= mEndVelocity * brakeRate * cNum_addToTargetPower_f1;
+        mEndVelocity -= mEndVelocity * brakeRate * 0.1f;
     }
 }
 
@@ -503,14 +492,14 @@ void TripodBossLeg::addIKLimitPower() {
     f32 rate = MR::normalize(dist, minDist, maxDist);
     f32 startRate, power;
 
-    if (rate < cNum_addIKLimitPower_f1) {
+    if (rate < 0.5f) {
         rate = 1.0f - rate;
         toRoot = -toRoot;
-        startRate = cNum_addIKLimitPower_f2;
+        startRate = 0.5f;
         power = 0.0f;
     } else {
-        startRate = cNum_addIKLimitPower_f3;
-        power = cNum_addIKLimitPower_f4;
+        startRate = 0.9f;
+        power = 5.0f;
     }
 
     if (startRate < rate) {
@@ -672,7 +661,7 @@ namespace MR {
         local.getXDir(xDir);
         f32 lengthXZ = MR::sqrt((xDir.x * xDir.x) + (xDir.z * xDir.z));
 
-        if (MR::isNearZero(lengthXZ, cNum_separateMatrixRotateYZX_f1)) {
+        if (MR::isNearZero(lengthXZ, 0.000001f)) {
             if (xDir.y >= 0.0f) {
                 pYMtx->setXDir(0.0f, 1.0f, 0.0f);
                 pYMtx->setYDir(-1.0f, 0.0f, 0.0f);

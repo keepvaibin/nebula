@@ -3,14 +3,13 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(f32, sWindAccelBattle, 0.5f);
-    NEBULA_TUNABLE(f32, sWindAccelChance, 1.0f);
-    NEBULA_TUNABLE(f32, sWindAccelBattleEndTarget, 2.0f);
-    NEBULA_TUNABLE(f32, sWindAccelBattleEndCurrent, 100.0f);
-    NEBULA_TUNABLE(f32, sWindAccelSpeedBattleEnd, 0.4f);
+    const f32 sWindAccelBattle = 0.5f;
+    const f32 sWindAccelChance = 1.0f;
+    const f32 sWindAccelBattleEndTarget = 2.0f;
+    const f32 sWindAccelBattleEndCurrent = 100.0f;
+    const f32 sWindAccelSpeedBattleEnd = 0.4f;
     static const s32 sTimeToStartWindMin = NebulaFrameClock::stepsOfMilliseconds(500);
     static const s32 sTimeToStartWindMax = NebulaFrameClock::stepsOfSeconds(2);
     static const s32 sWindTimeMin = NebulaFrameClock::stepsOfSeconds(1);

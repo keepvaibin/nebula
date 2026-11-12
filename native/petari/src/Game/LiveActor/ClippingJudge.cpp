@@ -1,10 +1,7 @@
 #include "Game/LiveActor/ClippingJudge.hpp"
 #include "Game/LiveActor/ClippingDirector.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calcViewingVolumes_f1, "calcViewingVolumes.f1", 360.0f);
 
 namespace {
     // Level 0's entry is unused: it ends at the camera's far Z.
@@ -12,8 +9,8 @@ namespace {
         0.0f, 60000.0f, 50000.0f, 40000.0f, 30000.0f, 20000.0f, 10000.0f, 5000.0f,
     };
     // Objects closer than this in front of the camera are not drawn or run; the second while in first-person view.
-    NEBULA_TUNABLE(f32, cNearClip, 500.0f);
-    NEBULA_TUNABLE(f32, cNearClipSubjective, 100.0f);
+    const f32 cNearClip = 500.0f;
+    const f32 cNearClipSubjective = 100.0f;
 };  // namespace
 
 ClippingJudge::ClippingJudge(const char* pName) : NameObj(pName), mFrustums() {
@@ -46,7 +43,7 @@ void ClippingJudge::calcViewingVolumes(f32 farZ) {
     f32 fovy = MR::getRenderFovy();
     Pos3f cameraMtx;
     cameraMtx.setPositionFromLookAt(MR::getCameraViewMtx());
-    f32 height = nearClip * static_cast< f32 >(tan(fovy * (FloatUtil::PI() / cNum_calcViewingVolumes_f1)));
+    f32 height = nearClip * static_cast< f32 >(tan(fovy * (FloatUtil::PI() / 360.0f)));
     f32 width = aspect * height;
 
     Vec3f front;

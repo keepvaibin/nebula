@@ -7,14 +7,11 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
-
 namespace {
-    NEBULA_TUNABLE(s32, cInvalidCountUpInterval, 3);
-    NEBULA_TUNABLE(f32, cAstroLocationOffsetY, 40.0f);
+    const s32 cInvalidCountUpInterval = 3;
+    const f32 cAstroLocationOffsetY = 40.0f;
 };  // namespace
 
 namespace NrvCoinCounter {
@@ -37,7 +34,7 @@ void CoinCounter::init(const TableIter& /*rIter*/) {
     MR::setFollowPos(&mFollowPos, this, "CoinCounter");
     initEffectKeeper(0, nullptr, nullptr);
 
-    mLayoutAppearer = new CounterLayoutAppearer(this, Vec2f(cNum_init_f1, 0.0f));
+    mLayoutAppearer = new CounterLayoutAppearer(this, Vec2f(50.0f, 0.0f));
     mPaneRumbler = new CountUpPaneRumbler(this, "Counter");
 
     initNerve(GET_NERVE(CoinCounter, CoinCounterNrvHide));

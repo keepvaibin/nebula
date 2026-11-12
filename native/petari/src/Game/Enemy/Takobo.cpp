@@ -20,29 +20,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 70.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 1.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 35.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 110.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f1, "initSensor.f1", 70.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f2, "initSensor.f2", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f3, "initSensor.f3", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f4, "initSensor.f4", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_generateCoin_f1, "generateCoin.f1", 80.0f);
-NEBULA_TUNABLE_NAMED(f64, cNum_exeMove_f1, "exeMove.f1", 1.3);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 0.25f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAttack_setBckRate_1, "exeAttack.setBckRate.1", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeStunStart_setBckRate_1, "exeStunStart.setBckRate.1", 2.0f);
 
 namespace NrvTakobo {
     NEW_NERVE_ONEND(HostTypeNrvWait, Takobo, Wait, Wait);
@@ -59,16 +37,16 @@ namespace NrvTakobo {
 };  // namespace NrvTakobo
 
 namespace {
-    NEBULA_TUNABLE(f32, sAttackDistance, 250.0f);
-    NEBULA_TUNABLE(f32, sTurnDistance, 800.0f);
-    NEBULA_TUNABLE(f32, sTurnRadian, 0.05f);
-    NEBULA_TUNABLE(f32, sAttackAimRadian, 0.1f);
-    NEBULA_TUNABLE(f32, sFireBounceSpeed, 28.0f);
+    const f32 sAttackDistance = 250.0f;
+    const f32 sTurnDistance = 800.0f;
+    const f32 sTurnRadian = 0.05f;
+    const f32 sAttackAimRadian = 0.1f;
+    const f32 sFireBounceSpeed = 28.0f;
     const s32 sWaitSteps = NebulaFrameClock::stepsOfSeconds(1);
     const s32 sPressSteps = NebulaFrameClock::stepsOfMilliseconds(500);
     const s32 sStunSteps = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE(s32, sAttackHitStart, 85);
-    NEBULA_TUNABLE(s32, sAttackHitEnd, 90);
+    const s32 sAttackHitStart = 85;
+    const s32 sAttackHitEnd = 90;
 };  // namespace
 
 Takobo::Takobo(const char* pName)
@@ -128,15 +106,15 @@ void Takobo::init(const TableIter& rIter) {
     MR::declareStarPiece(this, 3);
     MR::declareCoin(this, 1);
     initSound(4, false);
-    initBinder(cNum_init_f1 * mScale.y, cNum_init_f2 * mScale.y, 0);
+    initBinder(80.0f * mScale.y, 60.0f * mScale.y, 0);
     initEffectKeeper(0, nullptr);
     initSensor();
-    MR::initShadowVolumeSphere(this, cNum_init_f3 * mScale.y);
+    MR::initShadowVolumeSphere(this, 70.0f * mScale.y);
     MR::onCalcShadow(this, nullptr);
     initNerve(GET_NERVE(Takobo, HostTypeNrvWait));
 
-    mSpinController = new SpinHitController(this, 22, 21, 3, cNum_init_f4, cNum_init_f5, cNum_init_f6, 3, false);
-    MR::initStarPointerTarget(this, cNum_init_f7, Vec3f(0.0f, cNum_init_f8, 0.0f));
+    mSpinController = new SpinHitController(this, 22, 21, 3, 1.5f, 20.0f, 35.0f, 3, false);
+    MR::initStarPointerTarget(this, 110.0f, Vec3f(0.0f, 80.0f, 0.0f));
     mScaleController = new AnimScaleController(nullptr);
     MR::initLightCtrl(this);
     appear();
@@ -155,9 +133,9 @@ void Takobo::initSensor() {
     f32 yScale = mScale.y;
     initHitSensor(4);
     // The body sphere sits on the ground: its radius is its height.
-    Vec3f bodyOffset(0.0f, cNum_initSensor_f1 * yScale, 0.0f);
+    Vec3f bodyOffset(0.0f, 70.0f * yScale, 0.0f);
     MR::addHitSensor(this, "body", ATYPE_TAKOBO, 32, bodyOffset.y, bodyOffset);
-    MR::addHitSensorAtJointEnemyAttack(this, "attack", "Hear", 0x10, (cNum_initSensor_f2 * yScale), Vec3f(cNum_initSensor_f3, cNum_initSensor_f4, 0.0f));
+    MR::addHitSensorAtJointEnemyAttack(this, "attack", "Hear", 0x10, (80.0f * yScale), Vec3f(10.0f, 2.0f, 0.0f));
 }
 
 void Takobo::kill() {
@@ -199,7 +177,7 @@ void Takobo::control() {
 
         if (MR::isOnGround(this)) {
             Vec3f lift(rNormal);
-            lift *= cNum_control_f1;
+            lift *= 5.0f;
             mPosition += lift;
         }
 
@@ -208,7 +186,7 @@ void Takobo::control() {
 }
 
 void Takobo::generateCoin() {
-    MR::appearCoinPop(this, mPosition - mGravity * cNum_generateCoin_f1, 1);
+    MR::appearCoinPop(this, mPosition - mGravity * 80.0f, 1);
 }
 
 bool Takobo::tryPress() {
@@ -237,7 +215,7 @@ void Takobo::exeMove() {
         }
 
         mMoveStep = (mMoveEnd - mMoveStart) / mMoveSpeed;
-        mMoveStep *= cNum_exeMove_f1;
+        mMoveStep *= 1.3;
     }
 
     f32 rate = MR::calcNerveRate(this, mMoveStep);
@@ -337,7 +315,7 @@ void Takobo::exeAttack() {
     mVelocity.zero();
 
     if (MR::isStep(this, sAttackHitStart)) {
-        MR::setBckRate(this, cNum_exeAttack_setBckRate_1);
+        MR::setBckRate(this, 1.0f);
         getSensor("attack")->validate();
     }
 
@@ -353,7 +331,7 @@ void Takobo::exeAttack() {
 void Takobo::exeStunStart() {
     if (MR::isFirstStep(this)) {
         MR::startAction(this, "StunStart");
-        MR::setBckRate(this, cNum_exeStunStart_setBckRate_1);
+        MR::setBckRate(this, 2.0f);
         MR::emitEffect(this, "Hit");
         MR::startSound(this, "SE_EM_TAKOBO_STARPIECE_HIT");
         mVelocity.zero();
@@ -424,7 +402,7 @@ void Takobo::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         }
 
         if (isNerve(GET_NERVE(Takobo, HostTypeNrvMove)) || isNerve(GET_NERVE(Takobo, HostTypeNrvAttack))) {
-            if (MR::isPlayerExistUp(this, getSensor("body")->mRadius, cNum_attackSensor_f1)) {
+            if (MR::isPlayerExistUp(this, getSensor("body")->mRadius, 0.25f)) {
                 MR::sendMsgPush(pReceiver, pSender);
                 return;
             }

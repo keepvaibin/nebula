@@ -5,11 +5,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 1000.0f);
 
 HeatHazeEffect::HeatHazeEffect(const char* pName) : LiveActor(pName), mHazeDistance(1500.0f) {
     lumacore::setClass(this, lumacore::kClassId< HeatHazeEffect >);
@@ -29,8 +25,8 @@ void HeatHazeEffect::control() {
     rCameraMtx.getTrans(mPosition);
     mPosition.add(direction);
     rCameraMtx.getEuler(mRotation);
-    mRotation.mult(cNum_control_f1 / PI);
-    mScale.setAll< f32 >(mHazeDistance / cNum_control_f2);
+    mRotation.mult(180.0f / PI);
+    mScale.setAll< f32 >(mHazeDistance / 1000.0f);
 }
 
 HeatHazeDirector::HeatHazeDirector(const char* pName) : NameObj(pName) {

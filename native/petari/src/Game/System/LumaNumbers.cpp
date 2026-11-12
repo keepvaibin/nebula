@@ -1,4 +1,4 @@
-// Numbers in the game's code by name (LumaNumbers.hpp; contract numbers, plan 1.5).
+// Numbers and tables in the game's code by name (LumaNumbers.hpp; contract numbers, plan 1.5).
 #include "Game/System/LumaNumbers.hpp"
 
 #include "Game/System/LumaHook.hpp"
@@ -44,6 +44,10 @@ namespace luma {
             const Number** sSlots = nullptr;
             u32 sSlotCount = 0;  // a power of two
             u32 sCount = 0;
+            // Every table by name, the same way.
+            const Table** sTableSlots = nullptr;
+            u32 sTableSlotCount = 0;  // a power of two
+            u32 sTableCount = 0;
             u32 sBuilt = 0;  // 1 once sSlots is whole (read with acquire)
             u32 sLock = 0;
 
@@ -64,6 +68,26 @@ namespace luma {
             Setting* sSettings = nullptr;
             u32 sSettingCount = 0;
             u32 sSettingRoom = 0;
+
+            // What mods wrote in tables: each table one has written, with the game's bytes from before the first write;
+            // and each write, in order, with its own copy of the bytes.
+            struct TableTouched {
+                const Table* table;
+                u8* game;
+            };
+            struct TableWrite {
+                u32 touched;
+                const LumaMod* mod;
+                u32 offset;
+                u32 size;
+                u8* bytes;
+            };
+            TableTouched* sTablesTouched = nullptr;
+            u32 sTablesTouchedCount = 0;
+            u32 sTablesTouchedRoom = 0;
+            TableWrite* sTableWrites = nullptr;
+            u32 sTableWriteCount = 0;
+            u32 sTableWriteRoom = 0;
 
             void lock() {
                 while (__atomic_exchange_n(&sLock, 1u, __ATOMIC_ACQUIRE) != 0u) {
@@ -111,17 +135,26 @@ namespace luma {
                 lock();
                 if (sBuilt == 0u) {
                     u32 count = 0;
+                    u32 tables = 0;
                     for (const Numbers* pUnit = unitsBegin(); pUnit < unitsEnd(); pUnit++) {
                         if (pUnit->unit != nullptr) {
                             count += pUnit->count;
+                            tables += pUnit->tableCount;
                         }
                     }
                     u32 slots = 16;
                     while (slots < count * 2u) {
                         slots <<= 1;
                     }
+                    u32 tableSlots = 16;
+                    while (tableSlots < tables * 2u) {
+                        tableSlots <<= 1;
+                    }
                     const Number** const pSlots = static_cast<const Number**>(::calloc(slots, sizeof(const Number*)));
-                    if (pSlots == nullptr) {
+                    const Table** const pTableSlots = static_cast<const Table**>(::calloc(tableSlots, sizeof(const Table*)));
+                    if (pSlots == nullptr || pTableSlots == nullptr) {
+                        ::free(pSlots);
+                        ::free(pTableSlots);
                         unlock();
                         return false;
                     }
@@ -137,10 +170,21 @@ namespace luma {
                             }
                             pSlots[at] = pNumber;
                         }
+                        for (u32 i = 0; i < pUnit->tableCount; i++) {
+                            const Table* const pTable = &pUnit->tables[i];
+                            u32 at = hashOf(pTable->name, 0) & (tableSlots - 1);
+                            while (pTableSlots[at] != nullptr) {
+                                at = (at + 1) & (tableSlots - 1);
+                            }
+                            pTableSlots[at] = pTable;
+                        }
                     }
                     sSlots = pSlots;
                     sSlotCount = slots;
                     sCount = count;
+                    sTableSlots = pTableSlots;
+                    sTableSlotCount = tableSlots;
+                    sTableCount = tables;
                     __atomic_store_n(&sBuilt, 1u, __ATOMIC_RELEASE);
                 }
                 unlock();
@@ -265,6 +309,24 @@ namespace luma {
                 }
                 return pNumber;
             }
+            // The table a mod names, or null, said. (gen_types.py fails the build when two tables share a name.)
+            const Table* namedTable(const LumaMod* pMod, const char* pName, const char* pAsk) {
+                if (pName == nullptr || pName[0] == 0) {
+                    say(pMod, "%s: no name", pAsk);
+                    return nullptr;
+                }
+                if (!build()) {
+                    say(pMod, "%s %s: no memory for the tables' index", pAsk, pName);
+                    return nullptr;
+                }
+                for (u32 at = hashOf(pName, 0) & (sTableSlotCount - 1); sTableSlots[at] != nullptr; at = (at + 1) & (sTableSlotCount - 1)) {
+                    if (same(sTableSlots[at]->name, pName)) {
+                        return sTableSlots[at];
+                    }
+                }
+                say(pMod, "%s %s: the game has no such table (luma_numbers.json lists them)", pAsk, pName);
+                return nullptr;
+            }
         }  // namespace
 
         void* find(const LumaMod* pMod, const char* pName, const char* pSignature, u32 place, u32* pKind) {
@@ -332,6 +394,56 @@ namespace luma {
             return build() ? sCount : 0;
         }
 
+        s32 table(const LumaMod* pMod, const char* pName, LumaTable* pOut) {
+            const Table* const pTable = namedTable(pMod, pName, "table");
+            if (pOut != nullptr) {
+                *pOut = pTable != nullptr ? LumaTable{pTable->address, pTable->type, pTable->size, pTable->count} : LumaTable{};
+            }
+            return pTable != nullptr ? 0 : -1;
+        }
+
+        s32 setTable(const LumaMod* pMod, const char* pName, u32 offset, const void* pBytes, u32 size) {
+            if (!onGameThread()) {
+                return -3;
+            }
+            const Table* const pTable = namedTable(pMod, pName, "set_table");
+            if (pTable == nullptr) {
+                return -1;
+            }
+            if (pBytes == nullptr || size == 0 || offset > pTable->size || size > pTable->size - offset) {
+                say(pMod, "set_table %s: %u bytes at %u are not inside its %u", pTable->name, size, offset, pTable->size);
+                return -2;
+            }
+            u32 touched = 0;
+            while (touched < sTablesTouchedCount && sTablesTouched[touched].table != pTable) {
+                touched++;
+            }
+            if (touched == sTablesTouchedCount) {
+                u8* const pGame = static_cast<u8*>(::malloc(pTable->size));
+                if (pGame == nullptr || !grow(&sTablesTouched, &sTablesTouchedRoom, sTablesTouchedCount)) {
+                    ::free(pGame);
+                    say(pMod, "set_table %s: no memory to remember the game's table", pTable->name);
+                    return -1;
+                }
+                __builtin_memcpy(pGame, pTable->address, pTable->size);
+                sTablesTouched[sTablesTouchedCount++] = {pTable, pGame};
+            }
+            u8* const pCopy = static_cast<u8*>(::malloc(size));
+            if (pCopy == nullptr || !grow(&sTableWrites, &sTableWriteRoom, sTableWriteCount)) {
+                ::free(pCopy);
+                say(pMod, "set_table %s: no memory to remember the write", pTable->name);
+                return -1;
+            }
+            __builtin_memcpy(pCopy, pBytes, size);
+            sTableWrites[sTableWriteCount++] = {touched, pMod, offset, size, pCopy};
+            __builtin_memcpy(static_cast<u8*>(pTable->address) + offset, pCopy, size);
+            return 0;
+        }
+
+        u32 tableCount() {
+            return build() ? sTableCount : 0;
+        }
+
         void modGone(const LumaMod* pMod) {
             u32 kept = 0;
             u32 undone = 0;
@@ -355,6 +467,38 @@ namespace luma {
             sSettingCount = kept;
             if (undone != 0) {
                 say(pMod, "its %u numbers are the game's again (or another mod's)", undone);
+            }
+            // Tables: each one the mod wrote is the game's again, then the writes of the mods still here, in order.
+            u32 tables = 0;
+            for (u32 touched = 0; touched < sTablesTouchedCount; touched++) {
+                bool wrote = false;
+                for (u32 i = 0; i < sTableWriteCount && !wrote; i++) {
+                    wrote = sTableWrites[i].touched == touched && sTableWrites[i].mod == pMod;
+                }
+                if (!wrote) {
+                    continue;
+                }
+                tables++;
+                const Table* const pTable = sTablesTouched[touched].table;
+                __builtin_memcpy(pTable->address, sTablesTouched[touched].game, pTable->size);
+                for (u32 i = 0; i < sTableWriteCount; i++) {
+                    const TableWrite& rWrite = sTableWrites[i];
+                    if (rWrite.touched == touched && rWrite.mod != pMod) {
+                        __builtin_memcpy(static_cast<u8*>(pTable->address) + rWrite.offset, rWrite.bytes, rWrite.size);
+                    }
+                }
+            }
+            kept = 0;
+            for (u32 i = 0; i < sTableWriteCount; i++) {
+                if (sTableWrites[i].mod == pMod) {
+                    ::free(sTableWrites[i].bytes);
+                } else {
+                    sTableWrites[kept++] = sTableWrites[i];
+                }
+            }
+            sTableWriteCount = kept;
+            if (tables != 0) {
+                say(pMod, "the tables it wrote (%u) are the game's again, with the other mods' writes", tables);
             }
         }
     }

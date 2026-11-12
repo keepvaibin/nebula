@@ -17,7 +17,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/NebulaCutsceneSkip.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
@@ -45,9 +44,9 @@ namespace {
     const char cNameTotalStarPieceNum[] = "ShaTPieceRNum";
     const char cNameBestCoinNum[] = "ShaCoinNum";
     const char cNameBestCoinRoot[] = "Coin";
-    NEBULA_TUNABLE(s32, sWaitBeforeCountUpPowerStar, 85);
-    NEBULA_TUNABLE(s32, sWaitAppearInformationWindow, 15);
-    NEBULA_TUNABLE(s32, sWaitDisplayStarPieceCount, 45);
+    const s32 sWaitBeforeCountUpPowerStar = 85;
+    const s32 sWaitAppearInformationWindow = 15;
+    const s32 sWaitDisplayStarPieceCount = 45;
 };  // namespace
 
 namespace {

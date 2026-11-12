@@ -14,7 +14,6 @@
 #include "Game/System/LumaRegistry.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include <cmath>
 #include <cstring>
 #include <nebula_module.h>
@@ -22,9 +21,9 @@
 
 namespace {
     // Steps one mod's scripts may run in one frame: past it the running handler stops (logged once).
-    NEBULA_TUNABLE(u32, cStepBudget, 200000);
+    const u32 cStepBudget = 200000;
     // Frames a handler may wait at most (Op_Wait).
-    NEBULA_TUNABLE(u32, cMaxWait, 36000);
+    const u32 cMaxWait = 36000;
 
     const u16 cVersion = 1;
     const u32 cNoState = 0xFFFFFFFFu;
@@ -371,7 +370,7 @@ namespace lumascript {
     char sFormatted[cFormatSlots][cFormatLength];
     u32 sFormatNext = 0;
     // Kept text per script, at most.
-    NEBULA_TUNABLE(u32, cKeptBytes, 262144);
+    const u32 cKeptBytes = 262144;
 
     class Instance {
     public:

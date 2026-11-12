@@ -5,11 +5,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_appearItem_f1, "appearItem.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_appearItem_f2, "appearItem.f2", 40.0f);
 
 namespace NrvCandlestand {
     NEW_NERVE(HostTypeWaitFire, Candlestand, WaitFire);
@@ -38,11 +34,11 @@ namespace {
     };
 
     const char* const sBurnSound = "SE_OJ_LV_PHANTOM_TOACH_BURN";
-    NEBULA_TUNABLE(f32, sAttackRange, 50.0f);
-    NEBULA_TUNABLE(f32, sFireRange, 150.0f);
-    NEBULA_TUNABLE(f32, sSpinStormRange, 350.0f);
+    const f32 sAttackRange = 50.0f;
+    const f32 sFireRange = 150.0f;
+    const f32 sSpinStormRange = 350.0f;
     const s32 sFireStep = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(s32, sExtinguishStep, 15);
+    const s32 sExtinguishStep = 15;
     const s32 sFlickerStep = NebulaFrameClock::stepsOfMilliseconds(500);
     const s32 sAttackStep = NebulaFrameClock::stepsOfMilliseconds(500);
 
@@ -215,7 +211,7 @@ void Candlestand::appearItem() {
             MR::appearCoinPopToDirection(this, position, up, 1);
         }
     } else if (mItem == 0) {
-        if (MR::appearStarPiece(this, position, 1, cNum_appearItem_f1, cNum_appearItem_f2, false)) {
+        if (MR::appearStarPiece(this, position, 1, 10.0f, 40.0f, false)) {
             MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
         }
     }

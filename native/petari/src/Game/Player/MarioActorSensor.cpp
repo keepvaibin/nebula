@@ -15,47 +15,13 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_setupSensors_f1, "setupSensors.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setupSensors_f2, "setupSensors.f2", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setupSensors_f3, "setupSensors.f3", 2000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setupSensors_f4, "setupSensors.f4", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setupSensors_f5, "setupSensors.f5", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f1, "updateHitSensor.f1", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f2, "updateHitSensor.f2", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f3, "updateHitSensor.f3", 600.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f4, "updateHitSensor.f4", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f5, "updateHitSensor.f5", 2000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f6, "updateHitSensor.f6", 2000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_trampleJump_f1, "trampleJump.f1", 1.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_trampleJump_f2, "trampleJump.f2", 1.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_recordScoutingObject_f1, "recordScoutingObject.f1", 1.5707964f);
-NEBULA_TUNABLE_NAMED(f32, cNum_recordScoutingObject_f2, "recordScoutingObject.f2", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateScouter_f1, "updateScouter.f1", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateScouter_f2, "updateScouter.f2", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateScouter_f3, "updateScouter.f3", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateScouter_f4, "updateScouter.f4", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateScouter_f5, "updateScouter.f5", 2400.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateScouter_f6, "updateScouter.f6", 3000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateScouter_f7, "updateScouter.f7", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateScouter_f8, "updateScouter.f8", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateScouter_f9, "updateScouter.f9", 300.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateScouter_f10, "updateScouter.f10", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateScouter_f11, "updateScouter.f11", 300.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateScouter_f12, "updateScouter.f12", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateScouter_f13, "updateScouter.f13", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateScouter_f14, "updateScouter.f14", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateScouter_f15, "updateScouter.f15", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initScouter_f1, "initScouter.f1", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initScouter_f2, "initScouter.f2", 100.0f);
 
 void MarioActor::setupSensors() {
     initHitSensor(4);
 
-    MR::addHitSensorCallback(this, "body", ATYPE_PLAYER, 32, cNum_setupSensors_f1);
-    MR::addHitSensorCallback(this, "ex-eye", ATYPE_PUSH, 32, cNum_setupSensors_f2);
-    MR::addHitSensorCallback(this, "eye", ATYPE_EYE, 64, cNum_setupSensors_f3);
+    MR::addHitSensorCallback(this, "body", ATYPE_PLAYER, 32, 100.0f);
+    MR::addHitSensorCallback(this, "ex-eye", ATYPE_PUSH, 32, 100.0f);
+    MR::addHitSensorCallback(this, "eye", ATYPE_EYE, 64, 2000.0f);
 
     MR::addHitSensor(this, "dummy", ATYPE_PLAYER, 1, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
@@ -79,7 +45,7 @@ void MarioActor::setupSensors() {
     mPunchSensorOn = false;
     mPolygonAttackDone = false;
 
-    MR::initStarPointerTarget(this, cNum_setupSensors_f4, Vec3f(0.0f, cNum_setupSensors_f5, 0.0f));
+    MR::initStarPointerTarget(this, 80.0f, Vec3f(0.0f, 80.0f, 0.0f));
 }
 
 void MarioActor::updateHitSensor(HitSensor* pSensor) {
@@ -87,7 +53,7 @@ void MarioActor::updateHitSensor(HitSensor* pSensor) {
     case ATYPE_PLAYER:
         if (mMario->isStatusActive(MarioStatus_Hang)) {
             getRealPos("Spine1", &pSensor->mPosition);
-            pSensor->mRadius = cNum_updateHitSensor_f1;
+            pSensor->mRadius = 60.0f;
             return;
         }
 
@@ -96,7 +62,7 @@ void MarioActor::updateHitSensor(HitSensor* pSensor) {
             pSensor->mPosition.add(mMario->mJumpVec);
         }
 
-        pSensor->mRadius = cNum_updateHitSensor_f2;
+        pSensor->mRadius = 100.0f;
         return;
     case ATYPE_PUSH:
         pSensor->setType(ATYPE_EYE);
@@ -107,18 +73,18 @@ void MarioActor::updateHitSensor(HitSensor* pSensor) {
             return;
         }
 
-        f32 radius = cNum_updateHitSensor_f3;
+        f32 radius = 600.0f;
         pSensor->mPosition.set(mCenterPos);
         if (mMario->mMovementStates.tornado) {
-            radius = cNum_updateHitSensor_f4;
+            radius = 1000.0f;
         }
 
         if (mTakeCount) {
-            radius = cNum_updateHitSensor_f5;
+            radius = 2000.0f;
         }
 
         if (mMario->isSwimming()) {
-            radius = cNum_updateHitSensor_f6;
+            radius = 2000.0f;
         }
 
         pSensor->mRadius = radius;
@@ -294,9 +260,9 @@ void MarioActor::trampleJump(f32 normal, f32 extra) {
     switch (mTrampleJumpStep) {
     case 2:
         if (mMario->checkLvlA()) {
-            velocity *= cNum_trampleJump_f1;
+            velocity *= 1.2f;
         } else {
-            velocity *= cNum_trampleJump_f2;
+            velocity *= 1.5f;
         }
 
         break;
@@ -389,13 +355,13 @@ void MarioActor::recordScoutingObject(HitSensor* pSensor) {
         return;
     }
 
-    if (MR::diffAngleAbsHorizontal(pSensor->mPosition - getSensor("ex-eye")->mPosition, mMario->mFrontVec, mGravityVec) >= cNum_recordScoutingObject_f1) {
+    if (MR::diffAngleAbsHorizontal(pSensor->mPosition - getSensor("ex-eye")->mPosition, mMario->mFrontVec, mGravityVec) >= 1.5707964f) {
         return;
     }
 
     mScoutSensor = pSensor;
     mScoutPrevRange = mScoutRange;
-    mScoutRange = cNum_recordScoutingObject_f2;
+    mScoutRange = 60.0f;
 }
 
 void MarioActor::updateScouter() {
@@ -417,26 +383,26 @@ void MarioActor::updateScouter() {
         }
     }
 
-    mScoutRange += cNum_updateScouter_f1;
-    if (mScoutRange < cNum_updateScouter_f2) {
-        mScoutRange = cNum_updateScouter_f3;
+    mScoutRange += 80.0f;
+    if (mScoutRange < 100.0f) {
+        mScoutRange = 100.0f;
     }
 
     if (mScoutRange > mScoutPrevRange) {
         mScoutSensor = nullptr;
     }
 
-    f32 maximum = cNum_updateScouter_f4;
+    f32 maximum = 1000.0f;
     if (mMario->isStatusActive(MarioStatus_Foo)) {
-        maximum = cNum_updateScouter_f5;
+        maximum = 2400.0f;
     }
 
     if (mTakeCount) {
-        maximum = cNum_updateScouter_f6;
+        maximum = 3000.0f;
     }
 
     if (mScoutRange > maximum) {
-        mScoutRange = cNum_updateScouter_f7;
+        mScoutRange = 60.0f;
     }
 
     Vec3f position;
@@ -447,13 +413,13 @@ void MarioActor::updateScouter() {
     }
 
     getSensor("ex-eye")->mPosition = position;
-    f32 radius = cNum_updateScouter_f8;
-    if (mScoutRange >= cNum_updateScouter_f9) {
-        radius = cNum_updateScouter_f10 + (mScoutRange - cNum_updateScouter_f11) * MR::tan(cNum_updateScouter_f12 * MR::pi() / cNum_updateScouter_f13);
+    f32 radius = 100.0f;
+    if (mScoutRange >= 300.0f) {
+        radius = 100.0f + (mScoutRange - 300.0f) * MR::tan(5.0f * MR::pi() / 180.0f);
     }
 
-    if (mScoutRange < cNum_updateScouter_f14) {
-        radius = cNum_updateScouter_f15;
+    if (mScoutRange < 200.0f) {
+        radius = 40.0f;
     }
 
     getSensor("ex-eye")->mRadius = radius;
@@ -461,11 +427,11 @@ void MarioActor::updateScouter() {
 
 void MarioActor::initScouter() {
     mScoutPrevRange = 0.0f;
-    mScoutRange = cNum_initScouter_f1;
+    mScoutRange = 60.0f;
     mScoutSensor = 0;
 
     HitSensor* sensor = getSensor("ex-eye");
-    sensor->mRadius = cNum_initScouter_f2;
+    sensor->mRadius = 100.0f;
     getSensor("ex-eye")->validate();
 }
 

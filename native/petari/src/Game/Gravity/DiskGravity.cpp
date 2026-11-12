@@ -2,20 +2,13 @@
 #include "Game/Util.hpp"
 #include "math_types.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_DiskGravity_f1, "DiskGravity.f1", 2500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_DiskGravity_f2, "DiskGravity.f2", 2500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_DiskGravity_f3, "DiskGravity.f3", 360.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateLocalParam_f1, "updateLocalParam.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateLocalParam_f2, "updateLocalParam.f2", 0.5f);
 
 DiskGravity::DiskGravity()
     : PlanetGravity(), mLocalPosition(0.0f, 50.0f, 0.0f), mWorldPosition(0.0f, 50.0f, 0.0f), mLocalNormal(0, 1, 0), mWorldNormal(0, 1, 0),
       mSideDirection(1, 0, 0), mOppositeSideVecOrtho(1, 0, 0), mWorldOppositeSideVecOrtho(1, 0, 0) {
-    mLocalRadius = cNum_DiskGravity_f1;
-    mWorldRadius = cNum_DiskGravity_f2;
-    mValidDegree = cNum_DiskGravity_f3;
+    mLocalRadius = 2500.0f;
+    mWorldRadius = 2500.0f;
+    mValidDegree = 360.0f;
     mValidCos = -1.0f;
     mEnableBothSide = true;
     mEnableEdgeGravity = true;
@@ -116,7 +109,7 @@ void DiskGravity::updateMtx(const Pos3f& rMtx) {
 void DiskGravity::updateLocalParam() {
     Rot3f rot;
 
-    mValidCos = MR::cosDegree(cNum_updateLocalParam_f1 * mValidDegree);
+    mValidCos = MR::cosDegree(0.5f * mValidDegree);
     if (MR::isNearZero(mLocalNormal)) {
         mOppositeSideVecOrtho.zero();
         return;
@@ -129,6 +122,6 @@ void DiskGravity::updateLocalParam() {
     }
 
     rot.identity();
-    rot.setRotate(mLocalNormal, cNum_updateLocalParam_f2 * mValidDegree * (PI / 180));
+    rot.setRotate(mLocalNormal, 0.5f * mValidDegree * (PI / 180));
     rot.mult(mOppositeSideVecOrtho, mOppositeSideVecOrtho);
 }

@@ -6,54 +6,38 @@
 #include "Game/Ride/FluffWind.hpp"
 #include "Game/Util.hpp"
 #include "Game/System/NebulaInput.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 300.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f10, "init.f10", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f11, "init.f11", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f12, "init.f12", 800.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeFreeBloom_f1, "exeFreeBloom.f1", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRideFlyOnWind_f1, "exeRideFlyOnWind.f1", 100.0f);
-
 namespace {
-    NEBULA_TUNABLE(s32, sFreeBloomFlyUpStep, 15);
-    NEBULA_TUNABLE(f32, sSpeedWaitAir, 10.0f);
-    NEBULA_TUNABLE(f32, sSpeedWaitAir2nd, 5.0f);
-    NEBULA_TUNABLE(f32, sGravityWaitAir, 0.15f);
-    NEBULA_TUNABLE(f32, sSpeedMaxWaitAir, 0.8f);
+    const s32 sFreeBloomFlyUpStep = 15;
+    const f32 sSpeedWaitAir = 10.0f;
+    const f32 sSpeedWaitAir2nd = 5.0f;
+    const f32 sGravityWaitAir = 0.15f;
+    const f32 sSpeedMaxWaitAir = 0.8f;
     static const s32 sStepToFreeWaitAir2nd = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(f32, sRideStartUpSpeedMax, 15.0f);
-    NEBULA_TUNABLE(f32, sRideStartUpAccel, 0.2f);
-    NEBULA_TUNABLE(f32, sRideGravity, 0.15f);
-    NEBULA_TUNABLE(f32, sRideFrictionRate, 0.98f);
-    NEBULA_TUNABLE(f32, sRideMoveFrontAccel, 0.2f);
-    NEBULA_TUNABLE(f32, sRideFrontSpeedMax, 6.0f);
-    NEBULA_TUNABLE(f32, sRideFrontBlendRate, 0.1f);
-    NEBULA_TUNABLE(f32, sRideFallRotateSpeed, 10.0f);
-    NEBULA_TUNABLE(f32, sWindDistanceMin, 0.0f);
-    NEBULA_TUNABLE(f32, sWindDistanceMax, 300.0f);
-    NEBULA_TUNABLE(f32, sWindAccelNear, 0.3f);
-    NEBULA_TUNABLE(f32, sWindAccelFar, 0.08f);
-    NEBULA_TUNABLE(f32, sDistanceToWindNear, 200.0f);
-    NEBULA_TUNABLE(f32, sDistanceToWindFar, 1500.0f);
-    NEBULA_TUNABLE(f32, sBlendRateToWind, 0.08f);
-    NEBULA_TUNABLE(f32, sBlendRateAxisY, 0.01f);
-    NEBULA_TUNABLE(f32, sBlendRateWindUp, 0.5f);
+    const f32 sRideStartUpSpeedMax = 15.0f;
+    const f32 sRideStartUpAccel = 0.2f;
+    const f32 sRideGravity = 0.15f;
+    const f32 sRideFrictionRate = 0.98f;
+    const f32 sRideMoveFrontAccel = 0.2f;
+    const f32 sRideFrontSpeedMax = 6.0f;
+    const f32 sRideFrontBlendRate = 0.1f;
+    const f32 sRideFallRotateSpeed = 10.0f;
+    const f32 sWindDistanceMin = 0.0f;
+    const f32 sWindDistanceMax = 300.0f;
+    const f32 sWindAccelNear = 0.3f;
+    const f32 sWindAccelFar = 0.08f;
+    const f32 sDistanceToWindNear = 200.0f;
+    const f32 sDistanceToWindFar = 1500.0f;
+    const f32 sBlendRateToWind = 0.08f;
+    const f32 sBlendRateAxisY = 0.01f;
+    const f32 sBlendRateWindUp = 0.5f;
     static const s32 sStepSpinUpAccel = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, sSpinUpAccelY, 0.8f);
-    NEBULA_TUNABLE(f32, sSpinUpAccelOnWindY, 1.3f);
+    const f32 sSpinUpAccelY = 0.8f;
+    const f32 sSpinUpAccelOnWindY = 1.3f;
     static const s32 sStepToSpinUp2nd = NebulaFrameClock::stepsOfSeconds(1);
     static const s32 sWindRemainTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, sJumpSpeedY, 18.0f);
+    const f32 sJumpSpeedY = 18.0f;
 };  // namespace
 
 namespace NrvFluff {
@@ -86,23 +70,23 @@ void Fluff::init(const TableIter& rIter) {
     MR::connectToSceneRide(this);
 
     initHitSensor(6);
-    MR::addHitSensorBinder(this, "bind", 8, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointRide(this, "body", "MarioHang", 8, cNum_init_f2, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorRide(this, "WindReceiver", 8, cNum_init_f3, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointRide(this, "DamageMario", "MarioHang", 8, cNum_init_f4, Vec3f(0.0f, -cNum_init_f5, 0.0f));
-    MR::addHitSensorAtJointRide(this, "DamageMiddle", "joint3", 8, cNum_init_f6, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointRide(this, "DamageHead", "Head", 8, cNum_init_f7, Vec3f(cNum_init_f8, 0.0f, 0.0f));
+    MR::addHitSensorBinder(this, "bind", 8, 150.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointRide(this, "body", "MarioHang", 8, 150.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorRide(this, "WindReceiver", 8, 300.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointRide(this, "DamageMario", "MarioHang", 8, 60.0f, Vec3f(0.0f, -50.0f, 0.0f));
+    MR::addHitSensorAtJointRide(this, "DamageMiddle", "joint3", 8, 50.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointRide(this, "DamageHead", "Head", 8, 100.0f, Vec3f(80.0f, 0.0f, 0.0f));
 
-    initBinder(cNum_init_f9, -cNum_init_f10, 0);
+    initBinder(50.0f, -80.0f, 0);
     initEffectKeeper(0, nullptr);
     initSound(6, false);
     MR::calcGravity(this);
-    MR::initShadowVolumeSphere(this, cNum_init_f11);
+    MR::initShadowVolumeSphere(this, 60.0f);
 
     MR::useStageSwitchWriteA(this, rIter);
 
     mCameraTargetMtx = new CameraTargetMtx("カメラターゲットダミー");
-    MR::setClippingTypeSphere(this, cNum_init_f12);
+    MR::setClippingTypeSphere(this, 800.0f);
     mModel = MR::createModelObjMapObj("わたげの葉", "FluffLeaf", nullptr);
     MR::copyTransRotateScale(this, mModel);
     mModel->initWithoutIter();
@@ -127,7 +111,7 @@ void Fluff::exeFreeBloom() {
         MR::offCalcGravity(this);
         MR::offBind(this);
         MR::startBck(mModel, "Bloom");
-        MR::setShadowVolumeSphereRadius(this, nullptr, cNum_exeFreeBloom_f1);
+        MR::setShadowVolumeSphereRadius(this, nullptr, 30.0f);
         MR::invalidateHitSensors(this);
         MR::validateHitSensor(this, "WindReceiver");
         MR::hideModel(this);
@@ -244,7 +228,7 @@ void Fluff::exeRideFlyOnWind() {
         mWindSpinTimer = ::sWindRemainTime;
         if (!trySpinUp(0)) {
             MR::tryRumblePadWeak(this, PLAYER_1);
-            if (mWindDistance > ::sWindDistanceMax + cNum_exeRideFlyOnWind_f1) {
+            if (mWindDistance > ::sWindDistanceMax + 100.0f) {
                 setNerve(GET_NERVE(Fluff, FluffNrvRideFly));
             }
         }

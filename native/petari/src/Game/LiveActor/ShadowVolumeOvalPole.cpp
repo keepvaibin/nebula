@@ -5,21 +5,10 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include <NebulaGpu.h>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_ShadowVolumeOvalPole_f1, "ShadowVolumeOvalPole.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_ShadowVolumeOvalPole_f2, "ShadowVolumeOvalPole.f2", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_ShadowVolumeOvalPole_f3, "ShadowVolumeOvalPole.f3", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_loadModelDrawMtx_f1, "loadModelDrawMtx.f1", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_loadModelDrawMtx_f2, "loadModelDrawMtx.f2", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_loadModelDrawMtx_f3, "loadModelDrawMtx.f3", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_loadModelDrawMtx_f4, "loadModelDrawMtx.f4", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_loadModelDrawMtx_f5, "loadModelDrawMtx.f5", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_loadModelDrawMtx_f6, "loadModelDrawMtx.f6", 0.01f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sModelScale, 100.0f);
+    const f32 sModelScale = 100.0f;
 };  // namespace
 
 ShadowVolumeOvalPole::~ShadowVolumeOvalPole() {
@@ -27,9 +16,9 @@ ShadowVolumeOvalPole::~ShadowVolumeOvalPole() {
 
 ShadowVolumeOvalPole::ShadowVolumeOvalPole() : ShadowVolumeModel("影描画[ボリューム楕円柱]") {
     lumacore::setClass(this, lumacore::kClassId< ShadowVolumeOvalPole >);
-    mSize.x = cNum_ShadowVolumeOvalPole_f1;
-    mSize.y = cNum_ShadowVolumeOvalPole_f2;
-    mSize.z = cNum_ShadowVolumeOvalPole_f3;
+    mSize.x = 100.0f;
+    mSize.y = 100.0f;
+    mSize.z = 200.0f;
     initVolumeModel("ShadowVolumeCylinder");
 }
 
@@ -46,16 +35,16 @@ void ShadowVolumeOvalPole::loadModelDrawMtx(TypedDraw& rDraw) const {
     direction.negate();
     f32 modelScale = ::sModelScale;
     Vec3f size(mSize / modelScale);
-    if (size.x <= cNum_loadModelDrawMtx_f1) {
-        size.x = cNum_loadModelDrawMtx_f2;
+    if (size.x <= 0.01f) {
+        size.x = 0.01f;
     }
 
-    if (size.y <= cNum_loadModelDrawMtx_f3) {
-        size.y = cNum_loadModelDrawMtx_f4;
+    if (size.y <= 0.01f) {
+        size.y = 0.01f;
     }
 
-    if (size.z <= cNum_loadModelDrawMtx_f5) {
-        size.z = cNum_loadModelDrawMtx_f6;
+    if (size.z <= 0.01f) {
+        size.z = 0.01f;
     }
 
     if (controller->isFollowHostScale()) {

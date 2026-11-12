@@ -3,17 +3,7 @@
 #include "Game/LiveActor/LodCtrl.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calcBodyDir_f1, "calcBodyDir.f1", 300.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcBodyDir_f2, "calcBodyDir.f2", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWriggle_f1, "exeWriggle.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initBodyParts_f1, "initBodyParts.f1", 300.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryGenerateBodyParts_f1, "tryGenerateBodyParts.f1", 300.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWriggle_moveCoordAndFollowTrans_1, "exeWriggle.moveCoordAndFollowTrans.1", 50.0f);
 
 namespace NrvGreenCaterpillarBig {
     NEW_NERVE(GreenCaterpillarBigNrvHide, GreenCaterpillarBig, Hide);
@@ -72,7 +62,7 @@ void GreenCaterpillarBigBody::calcAndSetBaseMtx() {
 
 void GreenCaterpillarBigBody::calcBodyDir(LiveActor* pActor, Vec3f* pOutDir) {
     f32 nearRailCoord = MR::calcNearestRailCoord(pActor, mPosition);
-    f32 coord = nearRailCoord - cNum_calcBodyDir_f1;
+    f32 coord = nearRailCoord - 300.0f;
     if (coord <= 0.0f) {
         MR::calcRailDirectionAtCoord(pOutDir, pActor, nearRailCoord);
     } else {
@@ -80,7 +70,7 @@ void GreenCaterpillarBigBody::calcBodyDir(LiveActor* pActor, Vec3f* pOutDir) {
         MR::calcRailPosAtCoord(&railPos, pActor, coord);
         endVec.sub(mPosition, railPos);
         MR::normalize(&endVec);
-        MR::blendVec(pOutDir, *pOutDir, endVec, cNum_calcBodyDir_f2);
+        MR::blendVec(pOutDir, *pOutDir, endVec, 0.1f);
     }
 }
 
@@ -130,7 +120,7 @@ void GreenCaterpillarBig::exeWriggle() {
         MR::startBck(this, "Eat");
     }
 
-    MR::moveCoordAndFollowTrans(this, cNum_exeWriggle_moveCoordAndFollowTrans_1);
+    MR::moveCoordAndFollowTrans(this, 50.0f);
     MR::startLevelSound(this, "SE_OJ_LV_GRN_CATERP_MOVE");
 
     if (MR::isRailReachedGoal(this)) {
@@ -153,7 +143,7 @@ void GreenCaterpillarBig::exeWriggle() {
                 MR::startSound(this, "SE_OJ_GRN_CATERP_IN");
             } else if (point_arg == 1.0f) {
                 setNerve(GET_NERVE(GreenCaterpillarBig, GreenCaterpillarBigNrvRest));
-            } else if (point_arg == cNum_exeWriggle_f1) {
+            } else if (point_arg == 2.0f) {
                 leaveApple();
             }
         }
@@ -177,7 +167,7 @@ void GreenCaterpillarBig::exeEnd() {
 }
 
 void GreenCaterpillarBig::initBodyParts(const TableIter& rIter) {
-    s32 count = MR::getRailTotalLength(this) / cNum_initBodyParts_f1;
+    s32 count = MR::getRailTotalLength(this) / 300.0f;
     mBodyArrayLength = count;
     mBodyArray = new GreenCaterpillarBigBody*[count];
     GreenCaterpillarBig* caterpillar = this;
@@ -197,7 +187,7 @@ bool GreenCaterpillarBig::tryGenerateBodyParts() {
 
     f32 coord = !mCurBodyParts ? MR::getRailCoord(this) : MR::calcNearestRailCoord(this, mBodyArray[mCurBodyParts - 1]->mPosition);
 
-    if (coord < cNum_tryGenerateBodyParts_f1) {
+    if (coord < 300.0f) {
         return false;
     }
 

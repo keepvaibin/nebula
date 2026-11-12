@@ -12,18 +12,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 90.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 77.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 410.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_kill_f1, "kill.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_kill_f2, "kill.f2", 40.0f);
 
 namespace NrvPunchBox {
     NEW_NERVE(PunchBoxNrvWait, PunchBox, Wait);
@@ -44,7 +33,7 @@ void PunchBox::init(const TableIter& rIter) {
     initNerve(GET_NERVE(PunchBox, PunchBoxNrvWait));
     initEffectKeeper(3, nullptr);
 
-    f32 radius = mScale.x * cNum_init_f1;
+    f32 radius = mScale.x * 90.0f;
     initHitSensor(1);
     Vec3f offset(0.0f, radius, 0.0f);
     MR::addHitSensorMapObj(this, "body", 8, radius, offset);
@@ -78,9 +67,9 @@ void PunchBox::init(const TableIter& rIter) {
     appear();
 
     if (mHasShadow) {
-        MR::initShadowVolumeBox(this, Vec3f(cNum_init_f2, cNum_init_f3, cNum_init_f4));
-        MR::setShadowVolumeStartDropOffset(this, nullptr, cNum_init_f5);
-        MR::setShadowVolumeEndDropOffset(this, nullptr, cNum_init_f6);
+        MR::initShadowVolumeBox(this, Vec3f(150.0f, 150.0f, 150.0f));
+        MR::setShadowVolumeStartDropOffset(this, nullptr, 77.0f);
+        MR::setShadowVolumeEndDropOffset(this, nullptr, 150.0f);
         MR::onShadowVolumeCutDropLength(this, nullptr);
         MR::excludeCalcShadowToMyCollision(this, nullptr);
     }
@@ -118,7 +107,7 @@ void PunchBox::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 
     Vec3f distance(pReceiver->mPosition - pSender->mPosition);
 
-    if (distance.length() < cNum_attackSensor_f1) {
+    if (distance.length() < 410.0f) {
         mIsPlayerNear = true;
     }
 }
@@ -176,7 +165,7 @@ void PunchBox::kill() {
         return;
     }
 
-    MR::appearStarPiece(this, mPosition, 1, cNum_kill_f1, cNum_kill_f2, false);
+    MR::appearStarPiece(this, mPosition, 1, 10.0f, 40.0f, false);
 
     MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
 

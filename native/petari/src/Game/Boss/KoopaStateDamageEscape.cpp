@@ -11,22 +11,6 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_exeEscapeStartLoop_f1, "exeEscapeStartLoop.f1", 800.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeEscapeStartLoop_f2, "exeEscapeStartLoop.f2", 1200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeEscapeStartLoop_f3, "exeEscapeStartLoop.f3", 2000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDown_f1, "exeDown.f1", 35.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDown_f2, "exeDown.f2", 1500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDown_f3, "exeDown.f3", 2000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDown_f4, "exeDown.f4", 2000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDownLand_f1, "exeDownLand.f1", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDownLand_f2, "exeDownLand.f2", 60.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_isDownEnd_1, "isDownEnd.1", 45);
-NEBULA_TUNABLE_NAMED(s32, cStep_isDownEnd_2, "isDownEnd.2", 45);
-NEBULA_TUNABLE_NAMED(s32, cStep_isDownEnd_3, "isDownEnd.3", 20);
 
 namespace {
     static MR::ActorMoveParam sEscapeStartParam = {1.8f, 1.5f, 0.95f, 3.0f};
@@ -41,21 +25,21 @@ namespace {
     static MR::ActorMoveParam sDamageTailRunParamLv3 = {8.0f, 1.5f, 0.8f, 0.0f};
     static MR::ActorMoveParam sDamageTailRunFinalParam = {13.0f, 3.0f, 0.8f, 0.0f};
     static MR::ActorMoveParam sDamageTailRunEndParam = {0.0f, 1.0f, 0.98f, 0.0f};
-    NEBULA_TUNABLE(f32, sEscapeStartJumpSpeed, 80.0f);
+    const f32 sEscapeStartJumpSpeed = 80.0f;
     static const s32 sEscapeStepVs1Lv1 = NebulaFrameClock::stepsOfSeconds(15);
     static const s32 sEscapeStep = NebulaFrameClock::stepsOfSeconds(10);
-    NEBULA_TUNABLE(f32, sEscapeRunWallJumpSpeed, 15.0f);
+    const f32 sEscapeRunWallJumpSpeed = 15.0f;
     static const s32 sDamageTailStep = NebulaFrameClock::stepsOfSeconds(10);
     static const s32 sDamageTailStepFinal = NebulaFrameClock::stepsOfSeconds(8);
-    NEBULA_TUNABLE(s32, sDamageTailRunStartBreakStep, 40);
-    NEBULA_TUNABLE(f32, sDamageTailRunStartSpeed, 40.0f);
-    NEBULA_TUNABLE(f32, sDamageTailWallJumpSpeed, 15.0f);
-    NEBULA_TUNABLE(s32, sDamageTailRunEndRecoverStep, 105);
-    NEBULA_TUNABLE(f32, sDamageTailTurnDegree, 0.1f);
-    NEBULA_TUNABLE(s32, sDownStopSceneStep, 5);
-    NEBULA_TUNABLE(f32, sDownFlyUpSpeed, 40.0f);
-    NEBULA_TUNABLE(f32, sDownFlyUpSpeedLv3, 60.0f);
-    NEBULA_TUNABLE(f32, sDownGravity, 2.0f);
+    const s32 sDamageTailRunStartBreakStep = 40;
+    const f32 sDamageTailRunStartSpeed = 40.0f;
+    const f32 sDamageTailWallJumpSpeed = 15.0f;
+    const s32 sDamageTailRunEndRecoverStep = 105;
+    const f32 sDamageTailTurnDegree = 0.1f;
+    const s32 sDownStopSceneStep = 5;
+    const f32 sDownFlyUpSpeed = 40.0f;
+    const f32 sDownFlyUpSpeedLv3 = 60.0f;
+    const f32 sDownGravity = 2.0f;
 };  // namespace
 
 namespace NrvKoopaStateDamageEscape {
@@ -172,17 +156,17 @@ void KoopaStateDamageEscape::startDamageReverse() {
 
 bool KoopaStateDamageEscape::isDownEnd() const {
     if ((KoopaFunction::isKoopaVs1(mHost) || KoopaFunction::isKoopaVs2(mHost)) && KoopaFunction::isKoopaLv3(mHost) &&
-        isNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvDown)) && MR::isGreaterStep(this, cStep_isDownEnd_1)) {
+        isNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvDown)) && MR::isGreaterStep(this, 45)) {
         return true;
     }
 
     if (KoopaFunction::isKoopaVs3(mHost) && KoopaFunction::isKoopaAngry(mHost) &&
         isNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvDown))) {
-        if ((KoopaFunction::isKoopaLv1(mHost) || KoopaFunction::isKoopaLv2(mHost)) && MR::isGreaterStep(this, cStep_isDownEnd_2)) {
+        if ((KoopaFunction::isKoopaLv1(mHost) || KoopaFunction::isKoopaLv2(mHost)) && MR::isGreaterStep(this, 45)) {
             return true;
         }
 
-        if (KoopaFunction::isKoopaLv3(mHost) && MR::isGreaterStep(this, cStep_isDownEnd_3)) {
+        if (KoopaFunction::isKoopaLv3(mHost) && MR::isGreaterStep(this, 20)) {
             return true;
         }
     }
@@ -305,7 +289,7 @@ void KoopaStateDamageEscape::exeEscapeStartLoop() {
     }
 
     if (!KoopaFunction::escapeKoopaFromPlayer(mHost, ::sEscapeStartParam) && MR::isBindedGround(mHost)) {
-        MR::tryRumblePadAndCameraDistanceStrong(mHost, cNum_exeEscapeStartLoop_f1, cNum_exeEscapeStartLoop_f2, cNum_exeEscapeStartLoop_f3);
+        MR::tryRumblePadAndCameraDistanceStrong(mHost, 800.0f, 1200.0f, 2000.0f);
         MR::startSound(mHost, "SE_BM_KOOPA_LAND");
 
         setNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvEscapeStartLand));
@@ -493,7 +477,7 @@ void KoopaStateDamageEscape::exeDamageTailRunEnd() {
 void KoopaStateDamageEscape::exeDown() {
     if (MR::isFirstStep(this)) {
         MR::startAction(mHost, "Down");
-        MR::setVelocityJumpAwayFromPlayer(mHost, cNum_exeDown_f1, mJumpAwayVelocity);
+        MR::setVelocityJumpAwayFromPlayer(mHost, 35.0f, mJumpAwayVelocity);
         KoopaFunction::startKoopaCamera(mHost, "逃走ダウン");
         MR::emitEffect(mHost, "DownSmoke");
     }
@@ -510,7 +494,7 @@ void KoopaStateDamageEscape::exeDown() {
 
     Koopa* pKoopa = mHost;
     if (!MR::sendMsgEnemyAttackToBindedSensor(pKoopa, pKoopa->getSensor("Body")) && !MR::isFirstStep(this) && MR::isBindedGround(mHost)) {
-        MR::tryRumblePadAndCameraDistanceStrong(mHost, cNum_exeDown_f2, cNum_exeDown_f3, cNum_exeDown_f4);
+        MR::tryRumblePadAndCameraDistanceStrong(mHost, 1500.0f, 2000.0f, 2000.0f);
         MR::startSound(mHost, "SE_BM_KOOPA_LAND");
 
         if (!MR::sendMsgToBindedSensor(ACTMES_KOOPA_PLATE_DAMAGE, KoopaFunction::getKoopaMessageSensor(mHost))) {
@@ -534,7 +518,7 @@ void KoopaStateDamageEscape::exeDownLand() {
         MR::startAction(mHost, "DownLand");
 
         if (KoopaFunction::isKoopaVs3(mHost) && !KoopaFunction::isKoopaLv3(mHost) && !KoopaFunction::isKoopaAngry(mHost)) {
-            MR::appearStarPieceToDirection(mHost, mHost->mPosition, -mHost->mGravity, 10, cNum_exeDownLand_f1, cNum_exeDownLand_f2, false);
+            MR::appearStarPieceToDirection(mHost, mHost->mPosition, -mHost->mGravity, 10, 50.0f, 60.0f, false);
             MR::startSound(mHost, "SE_OJ_STAR_PIECE_BURST");
         }
     }

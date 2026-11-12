@@ -12,9 +12,6 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 230.0f);
 
 namespace {
     static MR::ActorMoveParam sStartParam = {0.0f, 0.5f, 1.0f, 3.0f};
@@ -25,15 +22,15 @@ namespace {
     static MR::ActorMoveParam sEndParam = {0.0f, 1.0f, 0.95f, 1.0f};
     static const s32 sWaitToStartStep = NebulaFrameClock::stepsOfMilliseconds(1500);
     static const s32 sWaitToStartStepVs3Lv2 = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(s32, sWaitToStartStepVs3Angry, 75);
-    NEBULA_TUNABLE(s32, sStartStepToJump, 24);
-    NEBULA_TUNABLE(f32, sStartJumpSpeed, 20.0f);
-    NEBULA_TUNABLE(f32, sRotateSpeed, 5.0f);
+    const s32 sWaitToStartStepVs3Angry = 75;
+    const s32 sStartStepToJump = 24;
+    const f32 sStartJumpSpeed = 20.0f;
+    const f32 sRotateSpeed = 5.0f;
     static const s32 sRollGroundStep = NebulaFrameClock::stepsOfSeconds(10);
     static const s32 sRollGroundStepVs3Lv2Angry = NebulaFrameClock::stepsOfSeconds(5);
-    NEBULA_TUNABLE(s32, sRollGroundStepVs3Lv3, 280);
-    NEBULA_TUNABLE(s32, sRollGroundStepVs3Lv3Angry, 320);
-    NEBULA_TUNABLE(f32, sEndJumpSpeed, 30.0f);
+    const s32 sRollGroundStepVs3Lv3 = 280;
+    const s32 sRollGroundStepVs3Lv3Angry = 320;
+    const f32 sEndJumpSpeed = 30.0f;
 };  // namespace
 
 namespace NrvKoopaStateAttackRoll {
@@ -58,7 +55,7 @@ void KoopaStateAttackRoll::init() {
 
     KoopaFunction::createKoopaRollBall(mHost);
 
-    mFigureBall = new KoopaFigureBall("追跡ボール", mHost, cNum_init_f1, &::sAttackRollParamLv3Slow);
+    mFigureBall = new KoopaFigureBall("追跡ボール", mHost, 230.0f, &::sAttackRollParamLv3Slow);
     mFigureBall->initWithoutIter();
 
     kill();

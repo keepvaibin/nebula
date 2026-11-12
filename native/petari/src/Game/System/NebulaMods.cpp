@@ -17,7 +17,6 @@
 #include "Game/System/GameEventFlagTable.hpp"
 
 #include "Game/AudioLib/AudSoundNameConverter.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/LiveActor/EffectKeeper.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -702,31 +701,18 @@ namespace {
         }
     }
 
-    int32_t apiSetTunable(const char* pKey, double value) {
-        return value - value == 0.0 ? nebula::setTunable(pKey, value) : -1;
+    // The tunables lift is gone (plan 1.5): every number is named by LumaCore's number() and set_number(). The old
+    // table's three calls stay in their places until 1.10 removes the table, each answering "no such number".
+    int32_t apiSetTunable(const char*, double) {
+        return -1;
     }
 
-    int32_t apiGetTunable(const char* pKey, double* pValue, double* pGameValue) {
-        return nebula::getTunable(pKey, pValue, pGameValue) ? 0 : -1;
+    int32_t apiGetTunable(const char*, double*, double*) {
+        return -1;
     }
 
-    int32_t apiTunableAt(int32_t index, const char** pFile, const char** pName, int32_t* pPlace, int32_t* pKind, double* pGameValue, double* pValue) {
-        u32 kind = 0;
-        s32 place = -1;
-        const char* pFileOut = nullptr;
-        const char* pNameOut = nullptr;
-        f64 gameValue = 0.0;
-        f64 value = 0.0;
-        if (!nebula::tunableAt(index, &pFileOut, &pNameOut, &place, &kind, &gameValue, &value)) {
-            return -1;
-        }
-        if (pFile != nullptr) *pFile = pFileOut;
-        if (pName != nullptr) *pName = pNameOut;
-        if (pPlace != nullptr) *pPlace = place;
-        if (pKind != nullptr) *pKind = static_cast<int32_t>(kind);
-        if (pGameValue != nullptr) *pGameValue = gameValue;
-        if (pValue != nullptr) *pValue = value;
-        return 0;
+    int32_t apiTunableAt(int32_t, const char**, const char**, int32_t*, int32_t*, double*, double*) {
+        return -1;
     }
 
     // A galaxy with scenario data (the game's or a mod's): one a stage change or the scenario select can open.

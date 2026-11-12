@@ -13,18 +13,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 400.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getHitRadius_f1, "getHitRadius.f1", 120.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initRail_f1, "initRail.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initRail_f2, "initRail.f2", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initShadow_f1, "initShadow.f1", 0.8f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMoveCircle_f1, "exeMoveCircle.f1", 400.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMoveCircle_f2, "exeMoveCircle.f2", 400.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getHitRadius_f2, "getHitRadius.f2", 50.0f);
 
 namespace NrvBirikyu {
     NEW_NERVE(HostTypeMove, Birikyu, Move);
@@ -57,7 +46,7 @@ void Birikyu::init(const TableIter& rIter) {
     offset.x = 0.0f;
     offset.y = 0.0f;
     offset.z = 0.0f;
-    MR::initStarPointerTarget(this, cNum_init_f1, offset);
+    MR::initStarPointerTarget(this, 100.0f, offset);
 
     if (mHasRail) {
         initNerve(GET_NERVE(Birikyu, HostTypeMove));
@@ -80,7 +69,7 @@ void Birikyu::initAfterPlacement() {
         MR::normalize(&mCircleAxis);
         matrix.getZDir(mCircleFront);
         MR::normalize(&mCircleFront);
-        mPosition.set(mCircleCenter + mCircleFront * cNum_initAfterPlacement_f1);
+        mPosition.set(mCircleCenter + mCircleFront * 400.0f);
     }
 }
 
@@ -90,7 +79,7 @@ void Birikyu::appear() {
 }
 
 f32 Birikyu::getHitRadius() const {
-    return cNum_getHitRadius_f1;
+    return 120.0f;
 }
 
 const char* Birikyu::getCenterJointName() const {
@@ -157,7 +146,7 @@ void Birikyu::initRail(const TableIter& rIter) {
     mHasRail = MR::isConnectedWithRail(rIter);
     if (mHasRail) {
         initRailRider(rIter);
-        MR::initAndSetRailClipping(&mClipCenter, this, cNum_initRail_f1, cNum_initRail_f2);
+        MR::initAndSetRailClipping(&mClipCenter, this, 100.0f, 500.0f);
     }
 }
 
@@ -172,7 +161,7 @@ void Birikyu::initCollision() {
 void Birikyu::initShadow() {
     if (mHasShadow) {
         f32 num = getHitRadius();
-        MR::initShadowVolumeSphere(this, (cNum_initShadow_f1 * (num * mScale.x)));
+        MR::initShadowVolumeSphere(this, (0.8f * (num * mScale.x)));
         MR::onCalcShadowDropPrivateGravity(this, nullptr);
         MR::onCalcShadow(this, nullptr);
         MR::onCalcGravity(this);
@@ -223,11 +212,11 @@ void Birikyu::exeMove() {
 void Birikyu::exeMoveCircle() {
     MR::startLevelSound(this, "SE_OJ_LV_BIRIKYU_MOVE");
     if (!tryStopPointing()) {
-        mCircleAngle = MR::repeat(mCircleAngle + (mSpeed / cNum_exeMoveCircle_f1), 0.0f, TWO_PI);
+        mCircleAngle = MR::repeat(mCircleAngle + (mSpeed / 400.0f), 0.0f, TWO_PI);
         Pos3f rotation;
         rotation.identity();
         rotation.makeRotate(mCircleAxis, mCircleAngle);
-        Vec3f offset = mCircleFront * cNum_exeMoveCircle_f2;
+        Vec3f offset = mCircleFront * 400.0f;
         rotation.mult(offset, offset);
         Vec3f circlePos = (mCircleCenter + offset);
         mPosition.set(circlePos);
@@ -323,7 +312,7 @@ void BirikyuWithFace::calcAndSetBaseMtx() {
 }
 
 f32 BirikyuWithFace::getHitRadius() const {
-    return cNum_getHitRadius_f2;
+    return 50.0f;
 }
 
 const char* BirikyuWithFace::getCenterJointName() const {

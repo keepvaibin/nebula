@@ -6,18 +6,10 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Render/Clip.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_disappear_setAnimRate_1, "disappear.setAnimRate.1", 0.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeToLuigi_1, "exeToLuigi.1", 10);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeToMario_1, "exeToMario.1", 10);
-
 namespace {
-    NEBULA_TUNABLE(f32, sDisappearAnimRate, 0.25f);
+    const f32 sDisappearAnimRate = 0.25f;
 
     // A text's code units with its terminator.
     u32 unitsWithEnd(const char16_t* pText) {
@@ -95,7 +87,7 @@ void FileSelectInfo::disappear() {
 
         MR::startAnim(this, "Appear", 0);
         MR::setAnimFrame(this, animFrame, 0);
-        MR::setAnimRate(this, cNum_disappear_setAnimRate_1, 0);
+        MR::setAnimRate(this, 0.0f, 0);
         setNerve(GET_NERVE_ANON(FileSelectInfoNrvDisappear));
     }
 }
@@ -290,7 +282,7 @@ namespace FileSelectInfoSub {
             MR::startAnim(mHost, "MariottoLuigi", 2);
         }
 
-        if (MR::isStep(this, cStep_exeToLuigi_1)) {
+        if (MR::isStep(this, 10)) {
             mHost->reflectInfo();
         }
 
@@ -310,7 +302,7 @@ namespace FileSelectInfoSub {
             MR::startAnim(mHost, "LuigitoMario", 2);
         }
 
-        if (MR::isStep(this, cStep_exeToMario_1)) {
+        if (MR::isStep(this, 10)) {
             mHost->reflectInfo();
         }
 

@@ -25,79 +25,48 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 90.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 90.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 99999.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAppear_f1, "exeAppear.f1", 59.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePursue_f1, "exePursue.f1", 2000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeEscapeRun_f1, "exeEscapeRun.f1", 1.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeEscapeLand_f1, "exeEscapeLand.f1", 1.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHideAppear_f1, "exeHideAppear.f1", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 110.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_kill_f1, "kill.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_kill_f2, "kill.f2", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 0.25f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f2, "attackSensor.f2", 0.25f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f3, "attackSensor.f3", 0.25f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAppear_setBckRate_1, "exeAppear.setBckRate.1", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAttack_setBckRate_1, "exeAttack.setBckRate.1", 1.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_DharmaSambo_exeStarPointerBind_setBckRate_1, "DharmaSambo_exeStarPointerBind.setBckRate.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tearDownStarPointerBind_setBckRate_1, "tearDownStarPointerBind.setBckRate.1", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHide_setBckRate_1, "exeHide.setBckRate.1", 1.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_DharmaSamboParts_exeStarPointerBind_setBckRate_1, "DharmaSamboParts_exeStarPointerBind.setBckRate.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_endStarPointerBind_setBckRate_1, "endStarPointerBind.setBckRate.1", 1.0f);
-
 namespace {
-    NEBULA_TUNABLE_LIST(f32, hPursueGoParam, , {0.3f, 1.0f, 0.97f, 3.0f});
-    NEBULA_TUNABLE_LIST(f32, hPursueEscapeParam, , {-0.25f, 1.0f, 0.97f, 3.0f});
-    NEBULA_TUNABLE_LIST(f32, hOnlyTurnParam, , {0.0f, 1.0f, 0.97f, 3.0f});
-    NEBULA_TUNABLE_LIST(f32, hNoMoveNoTurnParam, , {0.0f, 1.0f, 0.8f, 0.0f});
-    NEBULA_TUNABLE_LIST(f32, hSpinHittedOnGroundParam, , {0.0f, 1.0f, 0.8f, 0.0f});
-    NEBULA_TUNABLE_LIST(f32, hSpinHittedAirParam, , {0.0f, 2.0f, 0.97f, 0.0f});
-    NEBULA_TUNABLE_LIST(f32, hEscapeOnGroundParam, , {0.0f, 1.0f, 0.7f, 5.0f});
-    NEBULA_TUNABLE_LIST(f32, hEscapeAirParam, , {0.15f, 2.0f, 0.98f, 5.0f});
-    NEBULA_TUNABLE_LIST(f32, hEscapeWaitOnGroundParam, , {0.0f, 1.0f, 0.7f, 5.0f});
-    NEBULA_TUNABLE_LIST(f32, hEscapeWaitAirParam, , {0.0f, 2.0f, 0.98f, 5.0f});
-    NEBULA_TUNABLE_LIST(f32, hPursueEscapeDist, , {100.0f, 200.0f, 300.0f, 400.0f});
+    const f32 hPursueGoParam[] = {0.3f, 1.0f, 0.97f, 3.0f};
+    const f32 hPursueEscapeParam[] = {-0.25f, 1.0f, 0.97f, 3.0f};
+    const f32 hOnlyTurnParam[] = {0.0f, 1.0f, 0.97f, 3.0f};
+    const f32 hNoMoveNoTurnParam[] = {0.0f, 1.0f, 0.8f, 0.0f};
+    const f32 hSpinHittedOnGroundParam[] = {0.0f, 1.0f, 0.8f, 0.0f};
+    const f32 hSpinHittedAirParam[] = {0.0f, 2.0f, 0.97f, 0.0f};
+    const f32 hEscapeOnGroundParam[] = {0.0f, 1.0f, 0.7f, 5.0f};
+    const f32 hEscapeAirParam[] = {0.15f, 2.0f, 0.98f, 5.0f};
+    const f32 hEscapeWaitOnGroundParam[] = {0.0f, 1.0f, 0.7f, 5.0f};
+    const f32 hEscapeWaitAirParam[] = {0.0f, 2.0f, 0.98f, 5.0f};
+    const f32 hPursueEscapeDist[] = {100.0f, 200.0f, 300.0f, 400.0f};
     const char* joint_name[] = {"Spine1", "Spine2", "Spine3", "Spine4"};
     const s32 hEscapeTime = NebulaFrameClock::stepsOfSeconds(5);
-    NEBULA_TUNABLE(f32, hEscapeRunVelH, 7.0f);
-    NEBULA_TUNABLE(f32, hEscapeRunVelV, 30.0f);
-    NEBULA_TUNABLE(f32, hEscapeWaitDist, 800.0f);
-    NEBULA_TUNABLE(f32, hEscapeWaitJumpVel, 30.0f);
-    NEBULA_TUNABLE(f32, hInitPosRange, 1250.0f);
+    const f32 hEscapeRunVelH = 7.0f;
+    const f32 hEscapeRunVelV = 30.0f;
+    const f32 hEscapeWaitDist = 800.0f;
+    const f32 hEscapeWaitJumpVel = 30.0f;
+    const f32 hInitPosRange = 1250.0f;
     const s32 hAppearTime = NebulaFrameClock::stepsOfSeconds(10);
-    NEBULA_TUNABLE(s32, hBodyPartsNum, 4);
-    NEBULA_TUNABLE(f32, hWaitUnderGroundDistance, 800.0f);
+    const s32 hBodyPartsNum = 4;
+    const f32 hWaitUnderGroundDistance = 800.0f;
     const s32 hWaitUnderGroundTime = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE(f32, hPursueGoAddDist, 100.0f);
+    const f32 hPursueGoAddDist = 100.0f;
     const s32 hToAttackTime = NebulaFrameClock::stepsOfSeconds(2);
     const s32 hAttackTurnTime = NebulaFrameClock::stepsOfMilliseconds(1500);
     const s32 hHideTime = NebulaFrameClock::stepsOfSeconds(5);
-    NEBULA_TUNABLE(s32, hHitStopTime, 5);
-    NEBULA_TUNABLE(f32, hSpinHittedMoveBodyRate, 0.5f);
-    NEBULA_TUNABLE(f32, hSpinHitVelH, 10.0f);
-    NEBULA_TUNABLE(f32, hSpinHitVelV, 30.0f);
-    NEBULA_TUNABLE(s32, hSpinHittedBlowableTime, 50);
-    NEBULA_TUNABLE(s32, hSpinHittedStarPointerBindableTime, 50);
-    NEBULA_TUNABLE(s32, hSpinHittedLandTime, 27);
+    const s32 hHitStopTime = 5;
+    const f32 hSpinHittedMoveBodyRate = 0.5f;
+    const f32 hSpinHitVelH = 10.0f;
+    const f32 hSpinHitVelV = 30.0f;
+    const s32 hSpinHittedBlowableTime = 50;
+    const s32 hSpinHittedStarPointerBindableTime = 50;
+    const s32 hSpinHittedLandTime = 27;
     const s32 hSpinHittedNoAttackTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(s32, hBindMinStep, 10);
-    NEBULA_TUNABLE(s32, hStarPointerBindEndLandTime, 27);
-    NEBULA_TUNABLE(s32, hAppearSeTiming, 60);
-    NEBULA_TUNABLE(s32, hHideSeTiming, 65);
-    NEBULA_TUNABLE(s32, hPreHideSeTiming, 30);
+    const s32 hBindMinStep = 10;
+    const s32 hStarPointerBindEndLandTime = 27;
+    const s32 hAppearSeTiming = 60;
+    const s32 hHideSeTiming = 65;
+    const s32 hPreHideSeTiming = 30;
 };  // namespace
 
 void DharmaSambo::endStarPointerBind() {
@@ -149,7 +118,7 @@ void DharmaSambo::init(const TableIter& rIter) {
     initModelManagerWithAnm("DharmaSambo", nullptr, false);
     MR::connectToSceneEnemy(this);
     f32 scale = mScale.y;
-    initBinder(cNum_init_f1 * scale, cNum_init_f2 * scale, 0);
+    initBinder(80.0f * scale, 80.0f * scale, 0);
     initEffectKeeper(1, nullptr);
     MR::addEffectHitNormal(this, nullptr);
     initSound(4, false);
@@ -185,7 +154,7 @@ void DharmaSambo::init(const TableIter& rIter) {
         }
 
         mParts.push_back(part);
-        mFixedPositions.push_back(new FixedPosition(this, joint_name[i], Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, -cNum_init_f3, -cNum_init_f4)));
+        mFixedPositions.push_back(new FixedPosition(this, joint_name[i], Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, -90.0f, -90.0f)));
     }
 }
 
@@ -232,7 +201,7 @@ void DharmaSambo::control() {
         isNerve(GET_NERVE(DharmaSambo, HostTypeNrvEscapeRun)) || isNerve(GET_NERVE(DharmaSambo, HostTypeNrvEscapeLand)) ||
         isNerve(GET_NERVE(DharmaSambo, HostTypeNrvStarPointerBind)) ||
         (isNerve(GET_NERVE(DharmaSambo, HostTypeNrvSpinHitted)) && MR::isGreaterStep(this, ::hSpinHittedBlowableTime))) {
-        f32 closest = cNum_control_f1;
+        f32 closest = 99999.0f;
         DharmaSamboParts* hit = nullptr;
 
         for (s32 i = 0; i < count; i++) {
@@ -343,8 +312,8 @@ void DharmaSambo::exeAppear() {
         startActionAllParts("Appear");
 
         if (isNerve(GET_NERVE(DharmaSambo, HostTypeNrvAppearImmediately))) {
-            MR::setBckFrameAndStop(this, cNum_exeAppear_f1);
-            MR::setBckRate(this, cNum_exeAppear_setBckRate_1);
+            MR::setBckFrameAndStop(this, 59.0f);
+            MR::setBckRate(this, 1.0f);
         }
     }
 
@@ -369,7 +338,7 @@ void DharmaSambo::exePursue() {
     bool inRange = false;
     f32 distance = MR::calcDistanceToPlayer(this);
 
-    if (cNum_exePursue_f1 < distance || ::hInitPosRange * ::hInitPosRange < mPosition.squared(mInitialPos)) {
+    if (2000.0f < distance || ::hInitPosRange * ::hInitPosRange < mPosition.squared(mInitialPos)) {
         setNerve(GET_NERVE(DharmaSambo, HostTypeNrvHide));
         return;
     }
@@ -406,7 +375,7 @@ void DharmaSambo::exeAttack() {
         }
 
         if (mPartsCount == 2) {
-            MR::setBckRate(this, cNum_exeAttack_setBckRate_1);
+            MR::setBckRate(this, 1.2f);
         }
     }
 
@@ -472,7 +441,7 @@ void DharmaSambo::exeSpinHitted() {
 
 void DharmaSambo::exeStarPointerBind() {
     if (MR::isFirstStep(this)) {
-        MR::setBckRate(this, cNum_DharmaSambo_exeStarPointerBind_setBckRate_1);
+        MR::setBckRate(this, 0.0f);
         MR::setBckRate(getHeadParts(), 0.0f);
         s32 count = mParts.size();
 
@@ -506,7 +475,7 @@ void DharmaSambo::tearDownStarPointerBind() {
         }
     }
 
-    MR::setBckRate(this, cNum_tearDownStarPointerBind_setBckRate_1);
+    MR::setBckRate(this, 1.0f);
     MR::setBckRate(getHeadParts(), 1.0f);
 }
 
@@ -517,7 +486,7 @@ void DharmaSambo::exeEscapeRun() {
             MR::startSound(this, "SE_EM_SAMBOHEAD_HOP");
         }
 
-        MR::setBckRate(getHeadParts(), cNum_exeEscapeRun_f1);
+        MR::setBckRate(getHeadParts(), 1.2f);
     }
 
     if (isNerve(GET_NERVE(DharmaSambo, HostTypeNrvEscapeWaitRun))) {
@@ -558,7 +527,7 @@ void DharmaSambo::exeEscapeLand() {
             MR::startAction(getHeadParts(), "Land");
         }
 
-        MR::setBckRate(getHeadParts(), cNum_exeEscapeLand_f1);
+        MR::setBckRate(getHeadParts(), 1.2f);
     }
 
     if (isNerve(GET_NERVE(DharmaSambo, HostTypeNrvEscapeWaitLand))) {
@@ -617,7 +586,7 @@ void DharmaSambo::exeHide() {
         startActionAllParts("Hide");
 
         if (mPartsCount == 1) {
-            MR::setBckRate(this, cNum_exeHide_setBckRate_1);
+            MR::setBckRate(this, 1.2f);
         }
     }
 
@@ -654,7 +623,7 @@ void DharmaSambo::exeHideAppear() {
             part->setHead(i == count - 1);
             part->setNerve(GET_NERVE(DharmaSamboParts, HostTypeNrvDoNothing));
             MR::startAction(part, "Wait");
-            MR::setBckFrameAndStop(part, cNum_exeHideAppear_f1);
+            MR::setBckFrameAndStop(part, 5.0f);
             mFixedPositions[i]->copyTrans(&part->mPosition);
             MR::resetPosition(part);
         }
@@ -772,10 +741,10 @@ void DharmaSamboParts::init(const TableIter& /*rIter*/) {
     initNerve(GET_NERVE(DharmaSamboParts, HostTypeNrvDoNothing));
     f32 scale = mScale.y;
     initHitSensor(1);
-    MR::addHitSensorEnemy(this, "body", 16, cNum_init_f5 * scale, Vec3f(0.0f, cNum_init_f6 * scale, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 16, 80.0f * scale, Vec3f(0.0f, 80.0f * scale, 0.0f));
     MR::initLightCtrl(this);
-    MR::initShadowVolumeSphere(this, cNum_init_f7 * mScale.y);
-    MR::initStarPointerTarget(this, cNum_init_f8, Vec3f(0.0f, cNum_init_f9, 0.0f));
+    MR::initShadowVolumeSphere(this, 80.0f * mScale.y);
+    MR::initStarPointerTarget(this, 110.0f, Vec3f(0.0f, 80.0f, 0.0f));
 }
 
 void DharmaSamboParts::appear() {
@@ -790,7 +759,7 @@ void DharmaSamboParts::kill() {
     MR::startSound(this, "SE_EM_EXPLODE_S");
 
     if (mIsHead) {
-        MR::appearStarPiece(mHost, mPosition, MR::getDeclareRemnantStarPieceCount(mHost), cNum_kill_f1, cNum_kill_f2, false);
+        MR::appearStarPiece(mHost, mPosition, MR::getDeclareRemnantStarPieceCount(mHost), 10.0f, 40.0f, false);
         MR::startSound(mHost, "SE_OJ_STAR_PIECE_BURST");
     }
 }
@@ -813,7 +782,7 @@ void DharmaSamboParts::exeBlow() {
 void DharmaSamboParts::exeStarPointerBind() {
     if (MR::isFirstStep(this)) {
         MR::startPointerHitSound();
-        MR::setBckRate(this, cNum_DharmaSamboParts_exeStarPointerBind_setBckRate_1);
+        MR::setBckRate(this, 0.0f);
         MR::emitEffect(this, "Touch");
     }
 
@@ -822,7 +791,7 @@ void DharmaSamboParts::exeStarPointerBind() {
 
 void DharmaSamboParts::endStarPointerBind() {
     MR::deleteEffect(this, "Touch");
-    MR::setBckRate(this, cNum_endStarPointerBind_setBckRate_1);
+    MR::setBckRate(this, 1.0f);
 }
 
 void DharmaSamboParts::setHead(bool head) {
@@ -868,7 +837,7 @@ void DharmaSamboParts::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 
     if (mIsHead) {
         if (mHost->isNerve(GET_NERVE(DharmaSambo, HostTypeNrvEscapeRun)) || mHost->isNerve(GET_NERVE(DharmaSambo, HostTypeNrvEscapeLand))) {
-            if (MR::isPlayerExistUp(this, getSensor("body")->mRadius, cNum_attackSensor_f1) || MR::isPlayerHipDropFalling() || MR::isPlayerHipDropLand()) {
+            if (MR::isPlayerExistUp(this, getSensor("body")->mRadius, 0.25f) || MR::isPlayerHipDropFalling() || MR::isPlayerHipDropLand()) {
                 MR::sendMsgPush(pReceiver, pSender);
                 return;
             }
@@ -884,7 +853,7 @@ void DharmaSamboParts::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
                 return;
             }
 
-            if (MR::isPlayerExistUp(this, getSensor("body")->mRadius, cNum_attackSensor_f2) || MR::isPlayerHipDropFalling() || MR::isPlayerHipDropLand()) {
+            if (MR::isPlayerExistUp(this, getSensor("body")->mRadius, 0.25f) || MR::isPlayerHipDropFalling() || MR::isPlayerHipDropLand()) {
                 MR::sendMsgPush(pReceiver, pSender);
                 return;
             }
@@ -902,7 +871,7 @@ void DharmaSamboParts::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
             mHost->isNerve(GET_NERVE(DharmaSambo, HostTypeNrvWaitUnderGround)) ||
             mHost->isNerve(GET_NERVE(DharmaSambo, HostTypeNrvStarPointerBind)) ||
             mHost->isNerve(GET_NERVE(DharmaSambo, HostTypeNrvAppearImmediately)) || mHost->isNerve(GET_NERVE(DharmaSambo, HostTypeNrvHide)) ||
-            mHost->isNerve(GET_NERVE(DharmaSambo, HostTypeNrvHideAppear)) || MR::isPlayerExistUp(this, getSensor("body")->mRadius, cNum_attackSensor_f3) ||
+            mHost->isNerve(GET_NERVE(DharmaSambo, HostTypeNrvHideAppear)) || MR::isPlayerExistUp(this, getSensor("body")->mRadius, 0.25f) ||
             MR::isPlayerHipDropFalling() || MR::isPlayerHipDropLand()) {
             MR::sendMsgPush(pReceiver, pSender);
             return;

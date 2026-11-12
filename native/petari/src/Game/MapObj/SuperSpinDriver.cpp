@@ -9,45 +9,44 @@
 #include "Game/MapObj/SpinDriverShootPath.hpp"
 #include "Game/MapObj/SpinDriverUtil.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
     const s32 sCanBindTime = NebulaFrameClock::stepsOfMilliseconds(1500);
-    NEBULA_TUNABLE(f32, sSensorRadius, 300.0f);
-    NEBULA_TUNABLE(f32, sClippingRadius, 300.0f);
-    NEBULA_TUNABLE(f32, sPullPlayerDistance, 240.0f);
-    NEBULA_TUNABLE(f32, sFarPlayerDistance, 350.0f);
+    const f32 sSensorRadius = 300.0f;
+    const f32 sClippingRadius = 300.0f;
+    const f32 sPullPlayerDistance = 240.0f;
+    const f32 sFarPlayerDistance = 350.0f;
     // The player's carried-in speed is capped at bind.
-    NEBULA_TUNABLE(f32, sBindSpeedMax, 40.0f);
-    NEBULA_TUNABLE(s32, sCaptureFrame, 60);
-    NEBULA_TUNABLE(f32, sCaptureEndDistance, 15.0f);
-    NEBULA_TUNABLE(f32, sCaptureSpinAccel, 0.004f);
-    NEBULA_TUNABLE(f32, sCapturePullRate, 1.5f);
-    NEBULA_TUNABLE(f32, sCapturePullDistance, 120.0f);
-    NEBULA_TUNABLE(f32, sCaptureDamp, 0.8f);
-    NEBULA_TUNABLE(s32, sShootStartFrame, 15);
-    NEBULA_TUNABLE(s32, sShootWaitFrame, 45);
-    NEBULA_TUNABLE(f32, sShootStartSpinDamp, 0.8f);
+    const f32 sBindSpeedMax = 40.0f;
+    const s32 sCaptureFrame = 60;
+    const f32 sCaptureEndDistance = 15.0f;
+    const f32 sCaptureSpinAccel = 0.004f;
+    const f32 sCapturePullRate = 1.5f;
+    const f32 sCapturePullDistance = 120.0f;
+    const f32 sCaptureDamp = 0.8f;
+    const s32 sShootStartFrame = 15;
+    const s32 sShootWaitFrame = 45;
+    const f32 sShootStartSpinDamp = 0.8f;
     // A rush cancel early in the shot is refused.
-    NEBULA_TUNABLE(s32, sShootNoCancelStep, 40);
-    NEBULA_TUNABLE(s32, sCoolDownFrame, 60);
+    const s32 sShootNoCancelStep = 40;
+    const s32 sCoolDownFrame = 60;
     const s32 sCoolDownWaitStep = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(f32, sSpinDamp, 0.985f);
-    NEBULA_TUNABLE(f32, sSwingSpinAccel, 0.1f);
-    NEBULA_TUNABLE(f32, sSwingSpinMax, 0.23f);
-    NEBULA_TUNABLE(f32, sHeadTurnRate, 0.4f);
-    NEBULA_TUNABLE(f32, sOperateDirWeight, 0.8f);
-    NEBULA_TUNABLE(f32, sOperateDropOffset, -75.0f);
-    NEBULA_TUNABLE(f32, sPathDirectionDelta, 0.01f);
+    const f32 sSpinDamp = 0.985f;
+    const f32 sSwingSpinAccel = 0.1f;
+    const f32 sSwingSpinMax = 0.23f;
+    const f32 sHeadTurnRate = 0.4f;
+    const f32 sOperateDirWeight = 0.8f;
+    const f32 sOperateDropOffset = -75.0f;
+    const f32 sPathDirectionDelta = 0.01f;
     // The last frames of the flight are the fall; the fly loop starts at most this far in.
-    NEBULA_TUNABLE(s32, sFallFrame, 20);
-    NEBULA_TUNABLE(f32, sFlyLoopStartRate, 0.2f);
-    NEBULA_TUNABLE(s32, sFlyLoopStartMax, 90);
+    const s32 sFallFrame = 20;
+    const f32 sFlyLoopStartRate = 0.2f;
+    const s32 sFlyLoopStartMax = 90;
     // Swing turns per loop step, whole turns only.
-    NEBULA_TUNABLE(f32, sSwingTurnPerStep, 0.05f);
-    NEBULA_TUNABLE(s32, sDefaultSpaceFlyStartFrame, 10);
-    NEBULA_TUNABLE(s32, sDefaultSpaceFlyEndFrame, 50);
+    const f32 sSwingTurnPerStep = 0.05f;
+    const s32 sDefaultSpaceFlyStartFrame = 10;
+    const s32 sDefaultSpaceFlyEndFrame = 50;
     const char* const cDemoNameAppear = "出現";
     const char* const cLightEffect = "SuperSpinDriverLight";
     const char* const cGlowEffect = "EndGlow";

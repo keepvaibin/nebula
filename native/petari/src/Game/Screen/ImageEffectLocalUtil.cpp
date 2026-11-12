@@ -17,17 +17,6 @@
 #include "Game/Render/GameTexture.hpp"
 #include <nebula_game_api.h>
 #include <cstring>
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_setupDrawTexture_f1, "setupDrawTexture.f1", 10000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setupDrawTexture_f2, "setupDrawTexture.f2", 10000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_blurTexture_f1, "blurTexture.f1", 1.333f);
-NEBULA_TUNABLE_NAMED(f32, cNum_blurTexture_f2, "blurTexture.f2", 160.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_blurTexture_f3, "blurTexture.f3", 114.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_blurTexture_f4, "blurTexture.f4", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_blurTexture_f5, "blurTexture.f5", 6.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_blurTexture_f6, "blurTexture.f6", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_blurTexture_f7, "blurTexture.f7", 6.0f);
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
@@ -97,7 +86,7 @@ void ImageEffectLocalUtil::setMode(EMode mode, const NebulaColor8& rEdge) {
 
 void ImageEffectLocalUtil::setupDrawTexture() {
     Mtx44 projectionMtx;
-    NebulaMtxOrtho(projectionMtx, 0.0f, 1.0f, 0.0f, 1.0f, -cNum_setupDrawTexture_f1, cNum_setupDrawTexture_f2);
+    NebulaMtxOrtho(projectionMtx, 0.0f, 1.0f, 0.0f, 1.0f, -10000.0f, 10000.0f);
     Frame::setOrthographic(projectionMtx);
 
     MR::loadViewMtxFor2DModel();
@@ -154,11 +143,11 @@ void ImageEffectLocalUtil::blurTexture(GameTexture* pSource, GameTexture* pScrat
                                        NebulaTargetChannels channels, f32 alphaGain) {
     // A ring of `radius` spreads radius^2 / 2 along each axis, and a tap's bilinear footprint at the picture this blur
     // was made for (160 x 114) adds texel^2 / 6: the same width at every resolution.
-    const f32 verticalRadius = radius * (MR::isScreen16Per9() ? cNum_blurTexture_f1 : 1.0f);
-    const f32 texelX = 1.0f / cNum_blurTexture_f2;
-    const f32 texelY = 1.0f / cNum_blurTexture_f3;
-    const f32 widthX = __builtin_sqrtf(radius * radius / cNum_blurTexture_f4 + texelX * texelX / cNum_blurTexture_f5);
-    const f32 widthY = __builtin_sqrtf(verticalRadius * verticalRadius / cNum_blurTexture_f6 + texelY * texelY / cNum_blurTexture_f7);
+    const f32 verticalRadius = radius * (MR::isScreen16Per9() ? 1.333f : 1.0f);
+    const f32 texelX = 1.0f / 160.0f;
+    const f32 texelY = 1.0f / 114.0f;
+    const f32 widthX = __builtin_sqrtf(radius * radius / 2.0f + texelX * texelX / 6.0f);
+    const f32 widthY = __builtin_sqrtf(verticalRadius * verticalRadius / 2.0f + texelY * texelY / 6.0f);
     const bool alphaAlone = channels == NEBULA_TARGET_ALPHA;
     Frame::targetBegin(pScratch->image(), pScratch->shareAcross(), pScratch->shareDown(), 0);
     drawQuad(gaussianMaterial(pSource, 1.0f, 0.0f, widthX, alphaAlone ? 1.0f : 0.0f));

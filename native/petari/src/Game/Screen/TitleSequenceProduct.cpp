@@ -12,10 +12,9 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
 #include "Game/Util/TriggerChecker.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, sPressABAppearFrame, 25);
+    const s32 sPressABAppearFrame = 25;
 
     // A prompt box the layout lacks (a mod's layout, or one that is not a text box) takes no buffer.
     void allocPromptBuffer(LayoutActor* pLayout, const char* pPaneName, u32 length) {

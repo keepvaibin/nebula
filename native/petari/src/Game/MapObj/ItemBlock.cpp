@@ -2,27 +2,16 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 77.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initBlock_f1, "initBlock.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initBlock_f2, "initBlock.f2", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_f1, "receiveMsgPlayerAttack.f1", 0.25f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAppearItem_f1, "exeAppearItem.f1", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAppearItemSplash_f1, "exeAppearItemSplash.f1", 40.0f);
-
 namespace {
-    NEBULA_TUNABLE(s32, cAppearItemStep, 1);
-    NEBULA_TUNABLE(f32, cAppearItemOffsetY, 100.0f);
+    const s32 cAppearItemStep = 1;
+    const f32 cAppearItemOffsetY = 100.0f;
     static const s32 cTimerLimit = NebulaFrameClock::stepsOfSeconds(4);
-    NEBULA_TUNABLE(s32, hNumTimerLastPiece, 11);
-    NEBULA_TUNABLE(f32, hLastBonusSplashRangeH, 10.0f);
-    NEBULA_TUNABLE(f32, hPointLightOffsetY, 100.0f);
-    NEBULA_TUNABLE(f32, hBrightness, 0.998646f);
+    const s32 hNumTimerLastPiece = 11;
+    const f32 hLastBonusSplashRangeH = 10.0f;
+    const f32 hPointLightOffsetY = 100.0f;
+    const f32 hBrightness = 0.998646f;
 };  // namespace
 
 namespace NrvItemBlock {
@@ -56,8 +45,8 @@ void ItemBlock::init(const TableIter& rIter) {
     initNerve(GET_NERVE(ItemBlock, ItemBlockNrvStandby));
     s32 arg = -1;
     MR::getPlacementArg4NoInit(rIter, &arg);
-    MR::initShadowVolumeBox(this, Vec3f(cNum_init_f1, cNum_init_f2, cNum_init_f3));
-    MR::setShadowVolumeStartDropOffset(this, 0, cNum_init_f4);
+    MR::initShadowVolumeBox(this, Vec3f(150.0f, 150.0f, 150.0f));
+    MR::setShadowVolumeStartDropOffset(this, 0, 77.0f);
 
     if (arg != -1) {
         MR::setShadowDropLength(this, nullptr, arg);
@@ -156,7 +145,7 @@ void ItemBlock::initBlock() {
     case 5:
         initModelManagerWithAnm("CoinBlock", nullptr, false);
         Pos3f mtx;
-        MR::addHitSensorMtxMapObj(this, "body", 8, cNum_initBlock_f1, MR::getJointMtx(this, "CoinBlock"), Vec3f(0.0f, cNum_initBlock_f2, 0.0f));
+        MR::addHitSensorMtxMapObj(this, "body", 8, 100.0f, MR::getJointMtx(this, "CoinBlock"), Vec3f(0.0f, 100.0f, 0.0f));
         MR::initCollisionPartsAutoEqualScale(this, "CoinBlock", getSensor("body"), MR::getJointMtx(this, "CoinBlock"));
     }
 }
@@ -188,7 +177,7 @@ void ItemBlock::control() {
 }
 
 bool ItemBlock::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    if (MR::isMsgPlayerUpperPunch(msg) && MR::isPlayerExistDown(this, 0.0f, cNum_receiveMsgPlayerAttack_f1) && tryStartJumpPunch()) {
+    if (MR::isMsgPlayerUpperPunch(msg) && MR::isPlayerExistDown(this, 0.0f, 0.25f) && tryStartJumpPunch()) {
         MR::sendArbitraryMsg(ACTMES_REFLECT_V, pSender, pReceiver);
         return true;
     }
@@ -272,7 +261,7 @@ void ItemBlock::exeAppearItem() {
 
         case 3:
             if (!mTimer && MR::getDeclareRemnantStarPieceCountNotExist(this) - ::hNumTimerLastPiece == 0) {
-                MR::appearStarPieceToDirection(this, position, -gravVec, 11, ::hLastBonusSplashRangeH, cNum_exeAppearItem_f1, false);
+                MR::appearStarPieceToDirection(this, position, -gravVec, 11, ::hLastBonusSplashRangeH, 40.0f, false);
 
             } else {
                 MR::hopStarPiece(this, position, -gravVec);
@@ -317,7 +306,7 @@ void ItemBlock::exeAppearItemSplash() {
             MR::appearCoinCircle(this, mPosition, mItemCount);
         }
     } else if (mKind == 4) {
-        MR::appearStarPiece(this, mPosition, mItemCount, ::hLastBonusSplashRangeH, cNum_exeAppearItemSplash_f1, false);
+        MR::appearStarPiece(this, mPosition, mItemCount, ::hLastBonusSplashRangeH, 40.0f, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
     } else if (mKind == 5) {
         MR::onSwitchDead(this);

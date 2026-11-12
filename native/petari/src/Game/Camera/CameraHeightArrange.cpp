@@ -5,23 +5,10 @@
 #include "Game/Camera/CameraPoseParam.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_resetParameter_f1, "resetParameter.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_resetParameter_f2, "resetParameter.f2", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_resetParameter_f3, "resetParameter.f3", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_resetParameter_f4, "resetParameter.f4", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_resetParameter_f5, "resetParameter.f5", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_resetParameter_f6, "resetParameter.f6", 800.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateUpper_f1, "updateUpper.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcOffset_f1, "calcOffset.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcOffset_f2, "calcOffset.f2", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcOffset_f3, "calcOffset.f3", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_chase_f1, "chase.f1", 0.5f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sLocalOffsetRateScale, 0.05f);
+    const f32 sLocalOffsetRateScale = 0.05f;
 };  // namespace
 
 CameraHeightArrange::CameraHeightArrange(Camera* pCamera)
@@ -116,13 +103,13 @@ void CameraHeightArrange::reset() {
 }
 
 void CameraHeightArrange::resetParameter() {
-    mOffsetScale = cNum_resetParameter_f1;
-    mOffsetScaleMax = cNum_resetParameter_f2;
-    mFocalScaleUpper = cNum_resetParameter_f3;
-    mFocalScaleLower = cNum_resetParameter_f4;
+    mOffsetScale = 0.1f;
+    mOffsetScaleMax = 15.0f;
+    mFocalScaleUpper = 0.3f;
+    mFocalScaleLower = 0.1f;
     mGndInt = 160;
-    mPosOffsetMinRiseLag = cNum_resetParameter_f5;
-    mPosOffsetMinDropLag = cNum_resetParameter_f6;
+    mPosOffsetMinRiseLag = 500.0f;
+    mPosOffsetMinDropLag = 800.0f;
     mRiseDelay = NebulaFrameClock::stepsOfSeconds(2);
     mDropDelay = NebulaFrameClock::stepsOfSeconds(2);
     mMaxRiseEaseTime = NebulaFrameClock::stepsOfSeconds(2);
@@ -239,7 +226,7 @@ void CameraHeightArrange::updateUpper() {
     if (t > 1.0f) {
         t = 1.0f;
     }
-    t = (MR::sin(t * MR::pi() + MR::pi() / 2) + 1.0f) * cNum_updateUpper_f1;
+    t = (MR::sin(t * MR::pi() + MR::pi() / 2) + 1.0f) * 0.5f;
     if (t > 1.0f) {
         t = 1.0f;
     }
@@ -331,7 +318,7 @@ void CameraHeightArrange::updateLower() {
 f32 CameraHeightArrange::calcOffset(f32 focalScale) {
     Vec3f globalAxis = getGlobalAxis();
 
-    f32 fovAngle = MR::atan2(MR::tan(((CameraLocalUtil::getFovy(mCamera) * MR::pi()) * cNum_calcOffset_f1) / cNum_calcOffset_f2) * focalScale, 1.0f);
+    f32 fovAngle = MR::atan2(MR::tan(((CameraLocalUtil::getFovy(mCamera) * MR::pi()) * 0.5f) / 180.0f) * focalScale, 1.0f);
 
     Vec3f front = mCurrParam->mWatchPos - mCurrParam->mPos;
     if (MR::isNearZero(front)) {
@@ -350,7 +337,7 @@ f32 CameraHeightArrange::calcOffset(f32 focalScale) {
 
     up.cross(front, side);
     f32 cosBetween = up.dot(globalAxis);
-    if (MR::abs(cosBetween) < cNum_calcOffset_f3) {
+    if (MR::abs(cosBetween) < 0.1f) {
         return 0.0f;
     }
 
@@ -367,7 +354,7 @@ void CameraHeightArrange::chase() {
         t = 1.0f;
     }
 
-    if (t > cNum_chase_f1) {
+    if (t > 0.5f) {
         mRiseEaseTime = 0;
     }
 

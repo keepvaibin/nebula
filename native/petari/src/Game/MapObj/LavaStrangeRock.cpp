@@ -2,17 +2,16 @@
 #include "Game/LiveActor/LodCtrl.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(f32, sHitRange, 870.0f);
-    NEBULA_TUNABLE(f32, sHitRangeL, 1300.0f);
-    NEBULA_TUNABLE(f32, sHitRangeTable, 730.0f);
-    NEBULA_TUNABLE(f32, sRockSLength, 150.0f);
-    NEBULA_TUNABLE(f32, sRockLLength, 200.0f);
-    NEBULA_TUNABLE(f32, sRockTableLength, 285.0f);
-    NEBULA_TUNABLE(f32, sPushVelocity, 50.0f);
+    const f32 sHitRange = 870.0f;
+    const f32 sHitRangeL = 1300.0f;
+    const f32 sHitRangeTable = 730.0f;
+    const f32 sRockSLength = 150.0f;
+    const f32 sRockLLength = 200.0f;
+    const f32 sRockTableLength = 285.0f;
+    const f32 sPushVelocity = 50.0f;
 };  // namespace
 
 namespace NrvLavaStrangeRock {

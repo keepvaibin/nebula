@@ -9,15 +9,6 @@
 #include "Game/Util.hpp"
 #include "Game/Render/ModelData.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calcFogStartEnd_f1, "calcFogStartEnd.f1", 100000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcFogStartEnd_f2, "calcFogStartEnd.f2", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcFogStartEnd_f3, "calcFogStartEnd.f3", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcFogStartEnd_f4, "calcFogStartEnd.f4", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcFogStartEnd_f5, "calcFogStartEnd.f5", 100000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcFogStartEnd_f6, "calcFogStartEnd.f6", 100000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcFogStartEnd_f7, "calcFogStartEnd.f7", 100000.0f);
 
 namespace MR {
 
@@ -176,15 +167,15 @@ namespace MR {
         f32 depth = -viewPos.z;
         if (strength == 0.0f) {
             *pFogStart = depth;
-            *pFogEnd = cNum_calcFogStartEnd_f1;
+            *pFogEnd = 100000.0f;
             return;
         }
 
-        f32 fogStart = cNum_calcFogStartEnd_f2;
-        f32 fogEnd = cNum_calcFogStartEnd_f3 + ((depth - cNum_calcFogStartEnd_f4) / strength);
-        if (fogEnd > cNum_calcFogStartEnd_f5) {
-            fogEnd = cNum_calcFogStartEnd_f6;
-            fogStart = depth - (cNum_calcFogStartEnd_f7 - depth) * (strength / (1.0f - strength));
+        f32 fogStart = 100.0f;
+        f32 fogEnd = 100.0f + ((depth - 100.0f) / strength);
+        if (fogEnd > 100000.0f) {
+            fogEnd = 100000.0f;
+            fogStart = depth - (100000.0f - depth) * (strength / (1.0f - strength));
         }
 
         *pFogStart = fogStart;

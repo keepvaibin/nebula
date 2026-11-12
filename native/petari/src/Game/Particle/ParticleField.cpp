@@ -3,10 +3,6 @@
 #include "Game/Particle/EmitterCore.hpp"
 #include "Game/Particle/ParticleCore.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 10.0f);
 
 void FieldBase::calcAffect(ParticleField* block, ParticleCore* ptcl) {
     Vec3f vec = mAccel;
@@ -141,9 +137,9 @@ void FieldNewton::calc(EmitterWork* /*work*/, ParticleField* block, ParticleCore
     mAccel.sub(mDir, ptcl->mLocalPosition);
     f32 len_sq = mAccel.squared();
     if (len_sq > mCutoff) {
-        mAccel.setLength(mCutoff * (block->getMag() * cNum_calc_f1) / len_sq);
+        mAccel.setLength(mCutoff * (block->getMag() * 10.0f) / len_sq);
     } else {
-        mAccel.setLength(block->getMag() * cNum_calc_f2);
+        mAccel.setLength(block->getMag() * 10.0f);
     }
     calcAffect(block, ptcl);
 }

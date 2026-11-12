@@ -1,10 +1,6 @@
 #include "Game/Util/IKJoint.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calcIKRootAngleCosign_f1, "calcIKRootAngleCosign.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 0.01f);
 
 IKJoint::IKJoint() : mPose(), mRootMtx(), mMiddleMtx(), mRootBoneLength(100.0f), mMiddleBoneLength(100.0f) {
     mPose.identity();
@@ -59,7 +55,7 @@ f32 IKJoint::calcIKRootAngleCosign(f32 distance, f32 rootLength, f32 middleLengt
     f32 rootLengthSquared = rootLength * rootLength;
     f32 middleLengthSquared = middleLength * middleLength;
     f32 value = middleLengthSquared - distanceSquared - rootLengthSquared;
-    value /= -cNum_calcIKRootAngleCosign_f1 * rootLength * distance;
+    value /= -2.0f * rootLength * distance;
     return MR::clamp(value, -1.0f, 1.0f);
 }
 
@@ -81,7 +77,7 @@ void IKJoint::update(MtxPtr pRootMatrix, MtxPtr pMiddleMatrix, MtxPtr pEndMatrix
     }
 
     Vec3f up(middlePosition - rootPosition);
-    if (MR::isSameDirection(side, up, cNum_update_f1)) {
+    if (MR::isSameDirection(side, up, 0.01f)) {
         MR::extractMtxYDir(pRootMatrix, &up);
     }
 

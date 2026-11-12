@@ -4,51 +4,24 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init2_f1, "init2.f1", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init2_f2, "init2.f2", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init2_f3, "init2.f3", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init2_f4, "init2.f4", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init2_f5, "init2.f5", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init2_f6, "init2.f6", 35.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init2_f7, "init2.f7", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 120.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_appear_f1, "appear.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_appear_f2, "appear.f2", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_boundDrop_f1, "boundDrop.f1", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_boundDrop_f2, "boundDrop.f2", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_boundDrop_f3, "boundDrop.f3", 0.8f);
-NEBULA_TUNABLE_NAMED(f32, cNum_boundDrop_f4, "boundDrop.f4", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeThrowing_f1, "exeThrowing.f1", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeThrowing_f2, "exeThrowing.f2", 57.295776f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTakenReserve_f1, "exeTakenReserve.f1", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTakenReserve_f2, "exeTakenReserve.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTakenReserve_f3, "exeTakenReserve.f3", 0.25f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDrop_f1, "exeDrop.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDrop_f2, "exeDrop.f2", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 0.2f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDrop_addVelocityToGravity_1, "exeDrop.addVelocityToGravity.1", 1.0f);
 
 namespace {
     // By mSpeedType.
-    NEBULA_TUNABLE_LIST(f32, sThrowSpdStraight, , {30.0f, 20.0f, 30.0f});
-    NEBULA_TUNABLE_LIST(f32, sThrowSpdHoming, , {24.0f, 20.0f, 24.0f});
-    NEBULA_TUNABLE_LIST(f32, sGravityLevel, , {0.017f, 0.01f, 0.0055f});
-    NEBULA_TUNABLE_LIST(u16, sResetStep, , {300, 480, 300});
+    const f32 sThrowSpdStraight[] = {30.0f, 20.0f, 30.0f};
+    const f32 sThrowSpdHoming[] = {24.0f, 20.0f, 24.0f};
+    const f32 sGravityLevel[] = {0.017f, 0.01f, 0.0055f};
+    const u16 sResetStep[] = {300, 480, 300};
 
     // Share of the into-surface part of the flight direction a rebound keeps.
-    NEBULA_TUNABLE(f32, sBounceRateFloor, 0.8f);  // ground and roof
-    NEBULA_TUNABLE(f32, sBounceRateWall, 0.9f);
+    const f32 sBounceRateFloor = 0.8f;  // ground and roof
+    const f32 sBounceRateWall = 0.9f;
 
-    NEBULA_TUNABLE(f32, sHomingAngle, 0.5235988f);  // 30 degrees
-    NEBULA_TUNABLE(f32, sResetFarDistance, 5000.0f);  // past this from the throw, the reset shows a star
-    NEBULA_TUNABLE(f32, sFlightMaxDistance, 10000.0f);
-    NEBULA_TUNABLE(s32, sReviveStep, 45);
-    NEBULA_TUNABLE(s32, sReviveEndStep, 105);
+    const f32 sHomingAngle = 0.5235988f;  // 30 degrees
+    const f32 sResetFarDistance = 5000.0f;  // past this from the throw, the reset shows a star
+    const f32 sFlightMaxDistance = 10000.0f;
+    const s32 sReviveStep = 45;
+    const s32 sReviveEndStep = 105;
 };  // namespace
 
 namespace NrvJetTurtle {
@@ -94,7 +67,7 @@ void JetTurtle::init2(const TableIter& rIter, bool isGolden) {
     mHasReviveLight = false;
     mIsRevive = true;
 
-    f32 shadowDropLength = cNum_init2_f1;
+    f32 shadowDropLength = 1000.0f;
 
     if (MR::isValidInfo(rIter)) {
         s32 noRevive = -1;
@@ -140,8 +113,8 @@ void JetTurtle::init2(const TableIter& rIter, bool isGolden) {
     MR::connectToSceneNoSilhouettedMapObjStrongLight(this);
 
     initHitSensor(2);
-    MR::addHitSensor(this, "body", ATYPE_JET_TURTLE, 8, cNum_init2_f2, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorEye(this, "eye", 8, cNum_init2_f3, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_JET_TURTLE, 8, 50.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEye(this, "eye", 8, 1000.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     if (shellType < SHELL_GOLD) {
         MR::startBrk(this, "Koura");
@@ -159,13 +132,13 @@ void JetTurtle::init2(const TableIter& rIter, bool isGolden) {
 
     initNerve(GET_NERVE(JetTurtle, JetTurtleNrvWait));
 
-    MR::initShadowVolumeCylinder(this, cNum_init2_f4);
+    MR::initShadowVolumeCylinder(this, 50.0f);
     MR::setShadowDropLength(this, nullptr, shadowDropLength);
-    MR::setShadowVolumeEndDropOffset(this, nullptr, cNum_init2_f5);
+    MR::setShadowVolumeEndDropOffset(this, nullptr, 50.0f);
     MR::onShadowVolumeCutDropLength(this, nullptr);
 
     initSound(6, false);
-    initBinder(cNum_init2_f6, cNum_init2_f7, 8);
+    initBinder(35.0f, 20.0f, 8);
     initEffectKeeper(8, "Koura");
     MR::addEffectHitNormal(this, nullptr);
     MR::validateShadow(this, nullptr);
@@ -286,7 +259,7 @@ void JetTurtle::exeWait() {
     if (isNerve(GET_NERVE(JetTurtle, JetTurtleNrvTakenReserve))) {
         if (getNerveStep() >= NebulaFrameClock::stepsOfSeconds(2)) {
             Vec3f direction = *MR::getPlayerCenterPos() - mPosition;
-            f32 rate = MR::clamp((getNerveStep() - 120) / cNum_exeWait_f1, 0.0f, 1.0f);
+            f32 rate = MR::clamp((getNerveStep() - 120) / 120.0f, 0.0f, 1.0f);
             direction.setLength(mVelocity.length());
             MR::vecBlendSphere(mVelocity, direction, &mVelocity, rate);
         }
@@ -350,7 +323,7 @@ void JetTurtle::appear() {
         Vec3f front;
         MR::calcGravityVectorOrZero(this, mPosition, &gravityHere, nullptr, 0);
         MR::calcFrontVec(&front, this);
-        MR::calcGravityVectorOrZero(this, mPosition + front * cNum_appear_f1, &gravityAhead, nullptr, 0);
+        MR::calcGravityVectorOrZero(this, mPosition + front * 100.0f, &gravityAhead, nullptr, 0);
 
         if (!MR::isNearZero(gravityHere - gravityAhead)) {
             mSpeedType = 1;
@@ -358,7 +331,7 @@ void JetTurtle::appear() {
     }
 
     setNerve(GET_NERVE(JetTurtle, JetTurtleNrvWait2));
-    getSensor("body")->mRadius = cNum_appear_f2;
+    getSensor("body")->mRadius = 60.0f;
     initAfterPlacement();
 }
 
@@ -454,16 +427,16 @@ void JetTurtle::boundDrop() {
     f32 vertical = MR::vecKillElement(mVelocity, gravity, &horizontal);
 
     if (MR::isBindedGround(this) && vertical > 0.0f) {
-        if (vertical < cNum_boundDrop_f1) {
+        if (vertical < 5.0f) {
             mVelocity.zero();
         } else {
-            horizontal.scale(cNum_boundDrop_f2);
-            mVelocity = horizontal - gravity * vertical * cNum_boundDrop_f3;
+            horizontal.scale(0.9f);
+            mVelocity = horizontal - gravity * vertical * 0.8f;
         }
     }
 
     if (MR::isBindedWall(this)) {
-        horizontal.scale(-cNum_boundDrop_f4);
+        horizontal.scale(-0.9f);
         mVelocity = horizontal + gravity * vertical;
     }
 
@@ -521,7 +494,7 @@ void JetTurtle::exeThrowing() {
         } else {
             Vec3f toTarget = mHomingTarget->mPosition - mPosition;
             MR::normalizeOrZero(&toTarget);
-            MR::vecBlendSphere(mThrowDir, toTarget, &mThrowDir, cNum_exeThrowing_f1);
+            MR::vecBlendSphere(mThrowDir, toTarget, &mThrowDir, 0.2f);
 
             if (MR::isBckOneTimeAndStopped(this)) {
                 if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
@@ -605,14 +578,14 @@ void JetTurtle::exeThrowing() {
         Pos3f frontUp;
         MR::makeMtxFrontUp(&frontUp, mVelocity, up);
         frontUp.getEulerXYZ(mRotation);
-        mRotation.mult(cNum_exeThrowing_f2);
+        mRotation.mult(57.295776f);
     }
 }
 
 // Moves toward the player's hand: 8 steps at 1/4 a step after a pull, 2 at 1/2 after a grab (TakenReserveD).
 void JetTurtle::exeTakenReserve() {
     if (MR::isFirstStep(this)) {
-        getSensor("body")->mRadius = cNum_exeTakenReserve_f1;
+        getSensor("body")->mRadius = 50.0f;
         mVelocity.zero();
 
         if (MR::isPlayerInWaterMode()) {
@@ -625,7 +598,7 @@ void JetTurtle::exeTakenReserve() {
     }
 
     const bool isGrab = isNerve(GET_NERVE(JetTurtle, JetTurtleNrvTakenReserveD));
-    f32 followRate = isGrab ? cNum_exeTakenReserve_f2 : cNum_exeTakenReserve_f3;
+    f32 followRate = isGrab ? 0.5f : 0.25f;
 
     Vec3f takePos;
     MR::getPlayerTakePos(&takePos);
@@ -708,12 +681,12 @@ void JetTurtle::exeDrop() {
     if (MR::isFirstStep(this)) {
         Vec3f front;
         MR::calcFrontVec(&front, this);
-        mVelocity = -mGravity * cNum_exeDrop_f1;
-        mVelocity += front * cNum_exeDrop_f2;
+        mVelocity = -mGravity * 10.0f;
+        mVelocity += front * 10.0f;
     }
 
     boundDrop();
-    MR::addVelocityToGravity(this, cNum_exeDrop_addVelocityToGravity_1);
+    MR::addVelocityToGravity(this, 1.0f);
 
     if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         mVelocity.zero();
@@ -745,7 +718,7 @@ void JetTurtle::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 
             if (MR::diffAngleAbs(mVelocity, difference) < sHomingAngle) {
                 MR::normalizeOrZero(&difference);
-                MR::vecBlendSphere(mThrowDir, difference, &mThrowDir, cNum_attackSensor_f1);
+                MR::vecBlendSphere(mThrowDir, difference, &mThrowDir, 0.2f);
                 mHomingTarget = pReceiver;
                 MR::startBck(this, "BulletSearch");
             }

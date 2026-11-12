@@ -10,29 +10,18 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 5.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f2, "exeWait.f2", 5.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeExplosion_f1, "exeExplosion.f1", 800.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeExplosion_f2, "exeExplosion.f2", 1200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeExplosion_f3, "exeExplosion.f3", 2000.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_reboundVelocityFromCollision_1, "exeWait.reboundVelocityFromCollision.1", 1.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sGroundFric, 1.0f);
-    NEBULA_TUNABLE(f32, sMomentFric, 0.96f);
-    NEBULA_TUNABLE(f32, sGravityAccel, 1.2f);
-    NEBULA_TUNABLE(f32, sReboundRate, 0.4f);
-    NEBULA_TUNABLE(f32, sReboundSpeedMin, 5.0f);
+    const f32 sGroundFric = 1.0f;
+    const f32 sMomentFric = 0.96f;
+    const f32 sGravityAccel = 1.2f;
+    const f32 sReboundRate = 0.4f;
+    const f32 sReboundSpeedMin = 5.0f;
     static const s32 sWaitTime = NebulaFrameClock::stepsOfMilliseconds(2500);
-    NEBULA_TUNABLE(s32, sExplosionMaxTime, 10);
-    NEBULA_TUNABLE(s32, sExplosionTime, 20);
-    NEBULA_TUNABLE(f32, sExplosionRadius, 280.0f);
+    const s32 sExplosionMaxTime = 10;
+    const s32 sExplosionTime = 20;
+    const f32 sExplosionRadius = 280.0f;
 };  // namespace
 
 namespace NrvBombBirdBomb {
@@ -50,7 +39,7 @@ void BombBirdBomb::init(const TableIter& /*rIter*/) {
     MR::connectToSceneEnemy(this);
     MR::onCalcGravity(this);
     initHitSensor(2);
-    MR::addHitSensorEnemy(this, "body", 8, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, 60.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::addHitSensorEnemyAttack(this, "bomb", 8, ::sExplosionRadius, Vec3f(0.0f, 0.0f, 0.0f));
     MR::invalidateHitSensor(this, "bomb");
     initBinder(getSensor("body")->mRadius, 0.0f, 0);
@@ -147,13 +136,13 @@ void BombBirdBomb::exeWait() {
         mVelocity.set(velocity * ::sGroundFric);
         MR::addVelocityToGravity(this, ::sGravityAccel);
 
-        if (dotP >= cNum_exeWait_f1) {
+        if (dotP >= 5.5f) {
             MR::startSound(this, "SE_EM_BOMBBIRDBOMB_LAND_SAND");
         }
     } else {
         MR::addVelocityToGravity(this, ::sGravityAccel);
 
-        if (MR::reboundVelocityFromCollision(this, ::sReboundRate, ::sReboundSpeedMin, cNum_exeWait_reboundVelocityFromCollision_1) && dotP >= cNum_exeWait_f2) {
+        if (MR::reboundVelocityFromCollision(this, ::sReboundRate, ::sReboundSpeedMin, 1.0f) && dotP >= 5.5f) {
             MR::startSound(this, "SE_EM_BOMBBIRDBOMB_LAND");
         }
     }
@@ -170,7 +159,7 @@ void BombBirdBomb::exeExplosion() {
         MR::invalidateHitSensor(this, "body");
         MR::emitEffect(this, "Explosion");
         MR::startSound(this, "SE_EM_BOMB_EXPLOSION");
-        MR::tryRumblePadAndCameraDistanceStrong(this, cNum_exeExplosion_f1, cNum_exeExplosion_f2, cNum_exeExplosion_f3);
+        MR::tryRumblePadAndCameraDistanceStrong(this, 800.0f, 1200.0f, 2000.0f);
         mVelocity.zero();
     }
 
