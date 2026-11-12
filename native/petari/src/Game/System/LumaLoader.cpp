@@ -174,6 +174,10 @@ namespace luma {
         char sTakeQueue[cTakeQueue][cIdBytes];
         u32 sTakeCount = 0;
         u32 sTakeLock = 0;
+        // takeOutRequested's own lists (game thread only), here rather than on its stack: the module links no
+        // __chkstk, so no frame may reach a page (LUMA_MAX_MODS pointers are 2 KiB).
+        char sTakeIds[cTakeQueue][cIdBytes];
+        LumaMod* sTakeOut[cMaxMods];
         // The host, told each mod's id as it is taken out (luma_set_taken_out); null: nobody.
         LumaTakenOut sTakenOut = nullptr;
 
@@ -1673,7 +1677,7 @@ namespace luma {
         if (!onGameThread()) {
             NEBULA_PANIC("LumaCore: take-out requests were taken off the game thread");
         }
-        char ids[cTakeQueue][cIdBytes];
+        char (&ids)[cTakeQueue][cIdBytes] = sTakeIds;
         lockTakes();
         const u32 count = __atomic_load_n(&sTakeCount, __ATOMIC_RELAXED);
         for (u32 i = 0; i < count; i++) {
@@ -1696,7 +1700,7 @@ namespace luma {
                 continue;
             }
             // It and every mod that uses it, through `uses`, transitively (reload.md 2).
-            LumaMod* out[cMaxMods];
+            LumaMod** const out = sTakeOut;
             u32 outCount = 0;
             out[outCount++] = pMod;
             for (bool grew = true; grew;) {
