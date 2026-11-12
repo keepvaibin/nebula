@@ -506,7 +506,11 @@ fn given(value: &str) -> Val {
 /// the template has and the parameters lack stays in the text as `{name}`, so a missing one is seen, never dropped.
 pub fn message_of(code: u16, args: &[(&str, &str)], language: &str) -> String {
     let lang = LANGUAGES.iter().position(|&l| l == language).unwrap_or(0);
-    let look = |name: &str| args.iter().find(|(n, _)| *n == name).map(|(_, v)| given(v));
+    // `text` missing: the `why` phrase is the text (as `message` takes it).
+    let look = |name: &str| {
+        let given_as = |wanted: &str| args.iter().find(|(n, _)| *n == wanted).map(|(_, v)| given(v));
+        given_as(name).or_else(|| if name == "text" { given_as("why") } else { None })
+    };
     fill_by(&text::get(&format!("L{code}"), lang), &look, lang, 0)
 }
 
@@ -543,6 +547,11 @@ fn fill(template: &str, f: &Finding, lang: usize, depth: u32) -> String {
             "file" => Some(Val::Text(f.file.clone())),
             "line" => f.line.map(|l| Val::Text(l.to_string())),
             "column" => f.column.map(|c| Val::Text(c.to_string())),
+            // A refusal of the cook or the loader (L804) gives why it was made as a phrase: that is its text.
+            "text" => f.args.iter().find(|(n, _)| *n == "why").map(|(_, a)| match a {
+                Arg::Text(t) => Val::Text(t.clone()),
+                Arg::Phrase(id) => Val::Phrase(id.to_string()),
+            }),
             _ => None,
         },
     };
