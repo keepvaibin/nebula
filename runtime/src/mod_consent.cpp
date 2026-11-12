@@ -88,7 +88,10 @@ ModConsent consent_facts(const ModInfo& mod) {
 }
 
 bool consent_needed(const ModInfo& mod) {
-    if (mod.code_token.empty() || mod.code_declined) return false;
+    if (mod.code_token.empty()) return false;
+    // Not now turned the mod off (consent 2.3); on again means the player turned it on, which asks again (consent 2.1
+    // "Turned on", test 6402). Off, it waits and is not asked.
+    if (mod.code_declined) return mod.enabled;
     if (!mod.code_allowed) return true;
     if (mod.luma == nullptr) return false;
     for (const galaxy::luma::Permission& permission : mod.luma->permissions) {
