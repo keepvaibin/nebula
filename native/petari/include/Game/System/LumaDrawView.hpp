@@ -12,6 +12,9 @@ namespace luma {
             // GameScene::draw3D, before the scene begins (the frame's poses, entry lists and lights are this frame's):
             // each live view drawn into its texture. One load while no view lives.
             void render();
+            // GameScene::calcAnim, before the models take their poses (SceneFunction::executeCalcViewAndEntryList): the
+            // main camera a mod holds (main_eye) into the scene's camera context. One load while none is held.
+            void mainCamera();
             // NebulaArena::destroy: views following an actor in [pStart, pEnd) stop following (the camera stays).
             void released(const void* pStart, const void* pEnd);
             // The service's provider, registered by luma::services::provideOwn.

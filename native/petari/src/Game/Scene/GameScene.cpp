@@ -340,6 +340,7 @@ void GameScene::calcAnim() {
     }
 
     CategoryList::execute(MR::CalcAnimType_AnimParticleIgnorePause);
+    luma::draw::view::mainCamera();  // a mod's main camera (draw.view main_eye) before the poses take it (one load with none)
     SceneFunction::executeCalcViewAndEntryList();
     luma::draw::inst::frame();  // the mods' overrides onto this frame's materials and draw poses (one load with none)
 }

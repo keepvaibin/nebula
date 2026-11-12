@@ -60,7 +60,7 @@ typedef enum LumaDrawViewRig {
 /* A camera rig (a script's view.Camera): the same rig drives a view (rig) or, through eye_of, the main camera
    (LumaKit camera). */
 typedef struct LumaDrawViewCamera {
-    int32_t rig;        /* LumaDrawViewRig */
+    LumaDrawViewRig rig;
     float eye[3];       /* FIXED */
     float at[3];        /* FIXED */
     float up[3];        /* FIXED */
@@ -110,6 +110,14 @@ typedef struct LumaDrawViewService {
        Arguments as rig, a null out: LUMA_E_ARGUMENT, reported. The rig's actor dead: LUMA_E_STATE, not reported (the
        caller keeps its last eye). Never needs a view. */
     int32_t (*eye_of)(const LumaMod* mod, const LumaDrawViewCamera* camera, LumaDrawViewEye* out);
+    /* 1.0. Game thread. The main camera at `eye` (null: the game's own again) from now on: each frame, before the
+       scene's models take their poses, the scene's view and field of view are set from it, so it holds while the
+       scene's update is held (a pause, a cutscene's hold) and what reads the camera until the game's camera moves again
+       (clipping, the stick's directions, sound) reads it; the game's camera keeps working out its own pose underneath
+       and has it back at once on null. The newest mod to call holds it; one mod's null gives back only its own. LUMA_OK.
+       An eye not finite, `at` at the eye, `up` along the look or zero, fov out of range: LUMA_E_ARGUMENT, reported.
+       Ends with the mod. */
+    int32_t (*main_eye)(const LumaMod* mod, const LumaDrawViewEye* eye);
 } LumaDrawViewService;
 
 #ifdef __cplusplus
