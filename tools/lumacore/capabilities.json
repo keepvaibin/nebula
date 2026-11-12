@@ -79,6 +79,7 @@
     "model.show": "An attached model is hidden and shown by the mod (3.2)",
     "model.detach": "detach ends the handle; an ended handle answers LUMA_E_HANDLE (3.2)",
     "model.reuse": "A detached model's part is used again for the same actor, model and follow (3.2)",
+    "model.limit": "content.model refuses a mod's attach past LUMA_CONTENT_MODEL_MOST open ones; a detach frees one (3.2)",
     "model.player_parts": "content.model lists the player's parts and the joints they are drawn at (3.2)"
   }
 }
