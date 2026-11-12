@@ -155,6 +155,14 @@ fn a_signatures_parameters_are_counted() {
     assert_eq!(signature_params("void(const char *, ...)"), Some(1));
     assert_eq!(signature_params("u32(char16_t *, s32, const char16_t *, u32, ...)"), Some(4));
     assert_eq!(signature_params("void(...)"), Some(0));
+    assert!(luma_validate::names::signature_variadic("void(const char *, ...)"));
+    assert!(luma_validate::names::signature_variadic("void(const char *, ...) const"));
+    assert!(!luma_validate::names::signature_variadic("void(void (*)(int, ...), int)"));
+    let mut names = luma_validate::names::Names::default();
+    names.add_rows("A::f\ts32(s32)\tcall\t3\nA::g\tvoid(const char *, ...)\ttell\t9\n").unwrap();
+    assert!(names.call_only.contains(&("A::f".to_string(), "s32(s32)".to_string())));
+    assert_eq!(names.functions["A::g"], vec![("void(const char *, ...)".to_string(), true)]);
+    assert_eq!(names.add_rows("A::h\tvoid()\tjump\t1\n"), Err(1));
     // A declarator's parentheses before the list (Ui::detail::GetDrawMtx in l16's luma_functions.json, K's fault).
     assert_eq!(signature_params("const f32 (*)[4]()"), Some(0));
     assert_eq!(signature_params("const f32 (*)[4](int, char) const"), Some(2));

@@ -1,6 +1,8 @@
 //! What the game has, by name: the self-description (plan 1.8) as far as it exists. Until 1.8's file is signed, the
-//! function rows come from the kernel's `.rows` files (one line per function: name, signature, `hook` or `tell`,
-//! source line; `tell` rows are constructors and destructors, which take `before` and `after` only), and the records,
+//! function rows come from the kernel's `.rows` files (one line per function: name, signature, `hook`, `tell` or
+//! `call`, source line; `tell` rows are constructors and destructors, which take `before` and `after` only, and
+//! variadic functions, which take `before` only; a `call` row is a constexpr function, called but never hooked:
+//! contract varargs 3 and 4), and the records,
 //! fields and globals from the types file `luma_types.json` (plan 1.2, contract types draft 2).
 
 use std::collections::HashMap;
@@ -11,7 +13,7 @@ use std::path::{Path, PathBuf};
 pub enum RowsError {
     /// A folder or file that cannot be read.
     Read { path: PathBuf, error: std::io::Error },
-    /// A line that is not four tab-separated fields (name, signature, `hook` or `tell`, source line); 1-based.
+    /// A line that is not four tab-separated fields (name, signature, `hook`, `tell` or `call`, source line); 1-based.
     Line { path: PathBuf, line: usize },
     /// A types file that does not read.
     Types { path: PathBuf, error: TypesError },
@@ -21,7 +23,7 @@ impl std::fmt::Display for RowsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RowsError::Read { path, error } => write!(f, "{}: {error}", path.display()),
-            RowsError::Line { path, line } => write!(f, "{} line {line}: not name, signature, hook or tell, source line", path.display()),
+            RowsError::Line { path, line } => write!(f, "{} line {line}: not name, signature, hook, tell or call, source line", path.display()),
             RowsError::Types { path, error } => write!(f, "{}: {error}", path.display()),
         }
     }
@@ -174,6 +176,8 @@ impl Services {
 pub struct Names {
     /// Each function's signatures, with whether the row is a constructor or destructor (`tell`).
     pub functions: HashMap<String, Vec<(String, bool)>>,
+    /// The `call` rows (name, signature): constexpr functions, which a mod calls and no hook may take.
+    pub call_only: std::collections::HashSet<(String, String)>,
     /// The game's records, fields and globals (kinds 1, 2 and 7); None when the types file was not given.
     pub types: Option<Types>,
     /// Each function row's facts (types TY-11): what it is, its record, virtual and const; None when the folder has
@@ -245,8 +249,11 @@ impl Names {
                 continue;
             }
             let fields: Vec<&str> = line.split('\t').collect();
-            if fields.len() != 4 || !matches!(fields[2], "hook" | "tell") {
+            if fields.len() != 4 || !matches!(fields[2], "hook" | "tell" | "call") {
                 return Err(n + 1);
+            }
+            if fields[2] == "call" {
+                self.call_only.insert((fields[0].to_string(), fields[1].to_string()));
             }
             let list = self.functions.entry(fields[0].to_string()).or_default();
             if !list.iter().any(|(s, _)| s == fields[1]) {
@@ -459,6 +466,12 @@ pub fn signature_params(signature: &str) -> Option<usize> {
         None => inside,
     };
     Some(if named.is_empty() || named == "void" { 0 } else { last_commas + 1 })
+}
+
+/// Whether a row's signature takes a variable number of arguments: its own parameter list ends with `...`.
+pub fn signature_variadic(signature: &str) -> bool {
+    let Some(close) = signature.rfind(')') else { return false };
+    signature[..close].trim_end().ends_with("...")
 }
 
 /// luma_functions.json (types TY-11): each row's facts by its name and signature.

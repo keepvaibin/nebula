@@ -330,6 +330,18 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
                     None if list.len() == 1 => list.first(),
                     None => None,
                 });
+                // A constexpr function's row is called, never hooked (contract varargs 4); a variadic function's
+                // takes before hooks only (varargs 3: its va_list sibling takes every kind).
+                if let (4, Some((sig, _))) = (row.kind, matched) {
+                    if n.call_only.contains(&(row.name.clone(), sig.clone())) {
+                        ctx.add(512, &name, None, None, vec![("why", p("Hook.Constexpr")), ("found", t(row.name.clone()))]);
+                        continue;
+                    }
+                    if row.hook_kind >= 1 && crate::names::signature_variadic(sig) {
+                        ctx.add(512, &name, None, None, vec![("why", p("Hook.Variadic")), ("found", t(row.name.clone()))]);
+                        continue;
+                    }
+                }
                 // A constructor or destructor (`tell`) takes before and after only.
                 if row.kind == 4 && row.hook_kind >= 2 && matched.is_some_and(|(_, tell)| *tell) {
                     ctx.add(512, &name, None, None, vec![("why", p("Lib.HookOnConstructor")), ("found", t(row.name.clone()))]);
