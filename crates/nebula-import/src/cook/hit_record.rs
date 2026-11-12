@@ -1486,6 +1486,11 @@ pub fn finish(stem: &str, name: &str, measured: f32, r: &mut Reading) {
         r.class = Class::Emissive;
         r.rule = "lava or a sun, by its name (G8)";
     }
+    // White water (V-D4; FB b95): a fall's or a splash's sheet scatters white, none of its art's tint, whatever its
+    // class (an opaque painted sheet too). Glass and water keep theirs; the review's rows come after.
+    if falling_water(name) && !matches!(r.class, Class::Glass | Class::Water) {
+        r.tint_keep = 0.0;
+    }
     // The clear classes (A4-W6; LIGHT-MODEL.md 6, 7): the surface untinted, the colour absorption; glass's index by
     // its name. The review's rows come after and may say otherwise.
     if r.class == Class::Glass || r.class == Class::Water {

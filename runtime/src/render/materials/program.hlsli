@@ -490,10 +490,20 @@ static bool g_exchanged = false;
 float4 traced_added(float4 c) {
     return float4((draw_flags & 512u) != 0u ? c.rgb * c.a : c.rgb, 0.0);
 }
+// A material that keeps none of its art's tint (draw flag 1024: a fall, a splash; FB b95, V-D4): its colour's
+// luminance alone, in linear light; the light's own colour still goes on it.
+float4 traced_untinted(float4 c) {
+    if ((draw_flags & 1024u) == 0u) {
+        return c;
+    }
+    const float l = dot(traced_lin(c.rgb), float3(0.2126, 0.7152, 0.0722));
+    return float4(traced_srgb(float3(l, l, l)), c.a);
+}
 float4 traced_colour(float4 c, float4 pixel) {
     if ((view_flags & 8u) == 0u) {
         return (draw_flags & 256u) != 0u ? traced_added(c) : c;
     }
+    c = traced_untinted(c);
     const float4 light = gTextures[uint(view_traced.x)].Load(int3(pixel.xy, 0));
     const float3 added = gTextures[uint(view_traced.y)].Load(int3(pixel.xy, 0)).rgb;
     if ((view_flags & 16u) != 0u) {
@@ -547,6 +557,7 @@ float4 traced_air(float4 c, float4 pixel) {
     if ((view_flags & 8u) == 0u || view_volume[2].x == 0.0 || (view_flags & 16u) != 0u) {
         return traced_colour(c, pixel);
     }
+    c = traced_untinted(c);  // FB b95
     const float4 d = view_volume[0];
     const float away = d.y / ((pixel.z - d.z) / max(d.w - d.z, 1e-7) + d.x);
     const float3 cells = float3(96.0, 54.0, 48.0);

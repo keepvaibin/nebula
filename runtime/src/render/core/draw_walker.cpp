@@ -1257,6 +1257,12 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
                           ? 32u
                           : 0u) |
                      (exchange ? 256u : 0u) |
+                     // White water (FB b95, V-D4): a material that keeps none of its art's tint (a fall, a splash; not
+                     // glass or water): its drawn colour by its luminance (program.hlsli traced_untinted).
+                     (rt_light_on_ && scene_layer && mesh != nullptr && mesh->hit_tint_keep == 0.0f &&
+                              mesh->hit_class != NEBULA_HIT_GLASS && mesh->hit_class != NEBULA_HIT_WATER
+                          ? 1024u
+                          : 0u) |
                      (exchange && ((state >> 2u) & 15u) == NEBULA_FACTOR_SRC_ALPHA ? 512u : 0u) |
                      // The air in front (traced_scatter): a draw that covers what is behind it or blends over it by
                      // its alpha (an added one would add the air twice).
