@@ -436,7 +436,11 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
             const bool depth_write = (state & 1u << 14u) != 0u;
             const std::uint32_t cull = state >> 15u & 3u;
             // No surface of the scene: drawn flat (no depth test), without colour, or as the sky around it (but its dome).
-            if (((!depth_test || item_is_sky(item)) && !sky) || (state & NEBULA_STATE_COLOR_WRITE) == 0u || cull == NEBULA_CULL_ALL) {
+            const std::uint32_t compare = state >> 11u & 7u;
+            const bool hidden_side = depth_test && (compare == NEBULA_COMPARE_NEVER || compare == NEBULA_COMPARE_GREATER ||
+                                                    compare == NEBULA_COMPARE_NEQUAL || compare == NEBULA_COMPARE_GEQUAL);
+            if (((!depth_test || item_is_sky(item)) && !sky) || hidden_side || (state & NEBULA_STATE_COLOR_WRITE) == 0u ||
+                cull == NEBULA_CULL_ALL) {
                 ++count.flat;
                 continue;
             }
@@ -453,6 +457,13 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
                 (!sky && (clipped || program_variant(pipeline.desc.pixel, 0u, 1u) == kProgramSample) ? rt::kKindCutout : 0u) |
                 (!sky && clipped ? rt::kKindClipped : 0u);
             const bool lit_program = program_lit(pipeline.desc.pixel) || program_sums_key(pipeline.desc.pixel);
+            // A mesh on a billboard joint turns to the eye each frame (compose.cpp): as a caster its shadow would swing
+            // with the camera. It is seen as drawn and stops no ray (l79; a sun-facing caster of its own is for later).
+            const bool turned = (item.flags & (NEBULA_ITEM_RING | NEBULA_ITEM_INSTANCES)) == 0u && registries_.mesh(item.mesh).billboard != 0u;
+            if (turned && traced_only) {
+                ++count.flat;
+                continue;
+            }
             const std::uint32_t mask =
                 sky ? rt::kMaskSky
                 // Seen by no view, mirror, bounce or probe: the sun's and the local lights' shadow rays alone meet it.
@@ -461,9 +472,10 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
                     // What stops light is a surface of the scene's opaque phases; an opaque draw made after them (a
                     // fill, a silhouette, a helper shape) is seen by the views and casts nothing.
                     ? rt::kMaskOpaque | (early ? rt::kMaskEarly : 0u) |
-                          (kind == 0u && early ? rt::kMaskSolid | (lit_program ? rt::kMaskLit : 0u) : 0u) |
-                          (kind != 0u && early ? rt::kMaskCutout : 0u)
-                    : rt::kMaskBlended;
+                          (kind == 0u && early && !turned ? rt::kMaskSolid | (lit_program ? rt::kMaskLit : 0u) : 0u) |
+                          (kind != 0u && early && !turned ? rt::kMaskCutout : 0u)
+                    // A blended one would tint the sun's rays (let_through) as the camera turns it: no ray meets it.
+                    : turned ? 0u : rt::kMaskBlended;
             if ((item.flags & (NEBULA_ITEM_INSTANCES | NEBULA_ITEM_PARTICLE | NEBULA_ITEM_WIDE)) != 0u) {
                 ++count.sprites;
                 // No surface a ray meets, but what glows among them is a light.

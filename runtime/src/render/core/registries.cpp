@@ -469,6 +469,7 @@ void Registries::place_model(std::uint32_t id, const LiveModel& live, GpuModel m
         const NebulaModelMesh& mesh = file_meshes[m];
         GpuMesh& gpu_mesh = meshes[m];
         gpu_mesh.positions = stream(mesh.positions_at);
+        gpu_mesh.billboard = mesh.billboard;
         gpu_mesh.attributes = stream(mesh.attributes_at);
         gpu_mesh.matrices = stream(mesh.matrices_at);
         gpu_mesh.further = stream(mesh.further_at);

@@ -74,6 +74,7 @@ struct GpuMesh {
     std::uint32_t further_stride = 0u;
     std::uint32_t single_matrix = NEBULA_MODEL_NONE;
     std::uint8_t index_bytes = 4u;
+    std::uint8_t billboard = 0u;  // NebulaModelMesh.billboard: 1 a billboard, 2 a Y billboard (it turns to the eye)
     // What a ray reads of the mesh's material (nebula_model.h NebulaModelHit): its class and flags, what it shows with
     // no light, its colour under full light, and its numbers.
     std::uint8_t hit_class = 0u, hit_flags = 0u;
