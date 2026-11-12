@@ -2483,7 +2483,6 @@ bool RenderCore::rt_sun(float eye_direction[3]) {
     const bool report = ::galaxy::diagnosing(::galaxy::kDiagnoseRtInputs) && rt_light_frames_ == 0u;
     const RtStage* const row = rt_stage(list.stage_hash);
     const RtStage::Sun mode = row != nullptr ? row->sun : RtStage::Sun::Auto;
-    const bool fresh = !rt_sun_known_ || walk_.time.reset || now.cut;
     float up[3]{};
     const bool up_known = list.sky_up_known != 0u && (to_world(sky_up_, up), unit(up));
     float target[3]{};
@@ -2549,97 +2548,49 @@ bool RenderCore::rt_sun(float eye_direction[3]) {
         }
         return false;
     }
-    // Where it is held: a key that moves with the camera keeps the direction it was latched at until the zone's light
-    // changes (or a cut); a change of source or zone eases over 30 frames; a direction of the world follows at once.
-    constexpr std::uint32_t kEase = 30u;
-    const bool jump = source != rt_sun_source_ || key_id != rt_sun_light_;
-    if (fresh) {
-        std::memcpy(rt_sun_world_, target, sizeof(target));
-        std::memcpy(rt_sun_to_, target, sizeof(target));
-        rt_sun_ease_ = 0u;
-    } else if (jump) {
-        std::memcpy(rt_sun_from_, rt_sun_world_, sizeof(target));
-        std::memcpy(rt_sun_to_, target, sizeof(target));
-        rt_sun_ease_ = kEase;
-    } else if (!follows) {
-        std::memcpy(rt_sun_to_, target, sizeof(target));
-    }
-    // The game frames since the eases last stepped (l57): a dropped list (a display under 60 Hz) steps them as many,
-    // so they take the same time at any rate; a long gap (a pause, a load) counts as four. 0 between real walks.
-    const std::uint32_t steps = walk_.between ? 0u : std::min(list.game_frame - rt_sun_frame_, 4u);
-    if (!walk_.between) {
-        rt_sun_frame_ = list.game_frame;
-    }
-    if (rt_sun_ease_ > 0u) {
-        rt_sun_ease_ -= std::min(rt_sun_ease_, steps);
-        const float t = 1.0f - static_cast<float>(rt_sun_ease_) / static_cast<float>(kEase);
-        const float share = t * t * (3.0f - 2.0f * t);
-        for (unsigned c = 0; c < 3u; ++c) {
-            rt_sun_world_[c] = rt_sun_from_[c] + (rt_sun_to_[c] - rt_sun_from_[c]) * share;
+    // ONE FIXED SUN A STAGE (director d05; the owner, 11-11: "we need just the one fixed sun point and no moving suns
+    // or anything"). The direction is taken once, the first frame the stage shows a sun, and held in the world until
+    // the stage changes: not taken again on a cut, when the zone's light changes, or as the camera or the player moves
+    // or turns over. A walk round a planet leaves the sun where it is: the far side is in shade, and the exposure's
+    // anchor and the eye keep it readable (LIGHT-MODEL.md 2 and 9). It is lifted ONCE, as it is taken, to at least 30
+    // degrees over the horizon of the player as he stands then, so the place a stage starts in has the sun (taken once
+    // more when his up first becomes known, for that lift); a stage row's own direction is taken as written. Ray
+    // tracing switched off and on again keeps it; a frame with no sun (an interior zone) leaves it waiting.
+    bool lifted = false;
+    if (!rt_sun_fixed_known_ || rt_sun_fixed_stage_ != list.stage_hash || (!rt_sun_fixed_final_ && up_known)) {
+        float taken[3] = {target[0], target[1], target[2]};
+        if (source != 3u && up_known) {
+            constexpr float kLeastRise = 0.5f, kFlat = 0.8660254f;  // 30 degrees above the player's horizon
+            const float rise = dot(taken, up);
+            if (rise < kLeastRise) {
+                lifted = true;
+                float flat[3] = {taken[0] - up[0] * rise, taken[1] - up[1] * rise, taken[2] - up[2] * rise};
+                if (!unit(flat)) {
+                    // Straight below: any side will do.
+                    const float side[3] = {std::fabs(up[0]) < 0.9f ? 1.0f : 0.0f, std::fabs(up[0]) < 0.9f ? 0.0f : 1.0f, 0.0f};
+                    flat[0] = up[1] * side[2] - up[2] * side[1];
+                    flat[1] = up[2] * side[0] - up[0] * side[2];
+                    flat[2] = up[0] * side[1] - up[1] * side[0];
+                    static_cast<void>(unit(flat));
+                }
+                for (unsigned c = 0; c < 3u; ++c) {
+                    taken[c] = flat[c] * kFlat + up[c] * kLeastRise;
+                }
+            }
         }
-        if (!unit(rt_sun_world_)) {
-            std::memcpy(rt_sun_world_, rt_sun_to_, sizeof(target));
-            rt_sun_ease_ = 0u;
-        }
-    } else {
-        std::memcpy(rt_sun_world_, rt_sun_to_, sizeof(target));
+        std::memcpy(rt_sun_world_, taken, sizeof(taken));
+        rt_sun_fixed_known_ = true;
+        rt_sun_fixed_final_ = up_known || source == 3u;
+        rt_sun_fixed_stage_ = list.stage_hash;
     }
     rt_sun_known_ = true;
     rt_sun_source_ = source;
     rt_sun_light_ = key_id;
-    // The player's up as the lift uses it: as given, but where it turns more than a degree in a frame (a jump between
-    // planets, a gravity change) it eases there, so the shadows do not snap.
-    if (up_known) {
-        if (fresh || !rt_sun_up_known_ || dot(rt_sun_up_, up) >= 0.99985f) {
-            std::memcpy(rt_sun_up_, up, sizeof(up));
-        } else if (steps != 0u) {
-            // A tenth of the angle a game frame (1 - 0.9^n over n), about the axis of the turn (any axis across the old
-            // up for a flip): a blend of the two would hold a flip still (half of v and of -v points along v).
-            float axis[3] = {rt_sun_up_[1] * up[2] - rt_sun_up_[2] * up[1], rt_sun_up_[2] * up[0] - rt_sun_up_[0] * up[2],
-                             rt_sun_up_[0] * up[1] - rt_sun_up_[1] * up[0]};
-            if (!unit(axis)) {
-                const float side[3] = {std::fabs(rt_sun_up_[0]) < 0.9f ? 1.0f : 0.0f, std::fabs(rt_sun_up_[0]) < 0.9f ? 0.0f : 1.0f, 0.0f};
-                axis[0] = rt_sun_up_[1] * side[2] - rt_sun_up_[2] * side[1];
-                axis[1] = rt_sun_up_[2] * side[0] - rt_sun_up_[0] * side[2];
-                axis[2] = rt_sun_up_[0] * side[1] - rt_sun_up_[1] * side[0];
-                static_cast<void>(unit(axis));
-            }
-            const float step = (1.0f - std::pow(0.9f, static_cast<float>(steps))) * std::acos(std::clamp(dot(rt_sun_up_, up), -1.0f, 1.0f));
-            const float c = std::cos(step), s = std::sin(step);
-            const float across[3] = {axis[1] * rt_sun_up_[2] - axis[2] * rt_sun_up_[1], axis[2] * rt_sun_up_[0] - axis[0] * rt_sun_up_[2],
-                                     axis[0] * rt_sun_up_[1] - axis[1] * rt_sun_up_[0]};
-            float eased[3];
-            for (unsigned k = 0; k < 3u; ++k) {
-                eased[k] = rt_sun_up_[k] * c + across[k] * s;  // the axis is across the old up: Rodrigues' formula
-            }
-            std::memcpy(rt_sun_up_, unit(eased) ? eased : up, sizeof(up));
-        }
-        rt_sun_up_known_ = true;
-    } else {
-        rt_sun_up_known_ = false;
+    rt_sun_ease_ = 0u;
+    if (!walk_.between) {
+        rt_sun_frame_ = list.game_frame;
     }
-    float sun[3] = {rt_sun_world_[0], rt_sun_world_[1], rt_sun_world_[2]};
-    bool lifted = false;
-    if (rt_sun_up_known_) {
-        const float* const held = rt_sun_up_;
-        constexpr float kLeastRise = 0.5f, kFlat = 0.8660254f;  // 30 degrees above the player's horizon
-        const float rise = dot(sun, held);
-        if (rise < kLeastRise) {
-            lifted = true;
-            float flat[3] = {sun[0] - held[0] * rise, sun[1] - held[1] * rise, sun[2] - held[2] * rise};
-            if (!unit(flat)) {
-                // Straight below: any side will do.
-                const float side[3] = {std::fabs(held[0]) < 0.9f ? 1.0f : 0.0f, std::fabs(held[0]) < 0.9f ? 0.0f : 1.0f, 0.0f};
-                flat[0] = held[1] * side[2] - held[2] * side[1];
-                flat[1] = held[2] * side[0] - held[0] * side[2];
-                flat[2] = held[0] * side[1] - held[1] * side[0];
-                static_cast<void>(unit(flat));
-            }
-            for (unsigned c = 0; c < 3u; ++c) {
-                sun[c] = flat[c] * kFlat + held[c] * kLeastRise;
-            }
-        }
-    }
+    const float sun[3] = {rt_sun_world_[0], rt_sun_world_[1], rt_sun_world_[2]};
     if (report) {
         static constexpr const char* kSources[] = {"none", "the visible sun", "the key", "the row", "overhead"};
         std::fprintf(stderr, "[rt-inputs] sun: %s%s, world %.3f %.3f %.3f%s, easing %u (stage %08x %s, key %.3f)\n", kSources[source],

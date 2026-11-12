@@ -415,6 +415,9 @@ private:
     float rt_sun_up_[3]{};              // the player's up as the lift uses it, in the world
     bool rt_sun_up_known_ = false;
     std::uint32_t rt_sun_frame_ = 0u;   // the game frame the sun's eases last stepped on (l57)
+    bool rt_sun_fixed_known_ = false;        // one fixed sun a stage (d05): rt_sun_world_ was taken for the stage below
+    bool rt_sun_fixed_final_ = false;        // taken with the player's up known (the one lift made), or from a row
+    std::uint32_t rt_sun_fixed_stage_ = 0u;  // the stage (its hash) it was taken for
     [[nodiscard]] std::uint32_t rt_scene_image(rt::ImageFormat format, unsigned width, unsigned height);
     // The traced light. Before the scene's draws, its opaque surfaces go into depth and the item target (the prepass:
     // every scene item that core::prepass_draws takes, under the scene's camera); the frame's passes give each pixel
