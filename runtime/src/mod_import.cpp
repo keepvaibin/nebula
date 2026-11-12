@@ -615,6 +615,68 @@ ImportResult import_mod(const fs::path& source, const fs::path& mods_folder,
     return result;
 }
 
+ImportPeek peek_import(const fs::path& source, const fs::path& mods_folder) {
+    ImportPeek peek;
+    std::error_code error;
+    std::optional<galaxy::luma::Manifest> manifest;
+    if (fs::is_directory(source, error)) {
+        manifest = galaxy::luma::read_manifest(source);
+    } else {
+        archive* reader = archive_read_new();
+        archive_read_support_filter_all(reader);
+        archive_read_support_format_all(reader);
+        struct Close {
+            archive* a;
+            ~Close() { archive_read_free(a); }
+        } close{reader};
+#if defined(_WIN32)
+        const int opened = archive_read_open_filename_w(reader, source.c_str(), 1u << 16);
+#else
+        const int opened = archive_read_open_filename(reader, source.c_str(), 1u << 16);
+#endif
+        if (opened != ARCHIVE_OK) return peek;
+        archive_entry* entry = nullptr;
+        for (std::uint64_t entries = 0; entries < kImportEntryLimit && archive_read_next_header(reader, &entry) == ARCHIVE_OK;
+             ++entries) {
+            const char* const raw = archive_entry_pathname_utf8(entry);
+            std::string name = raw != nullptr ? raw : (archive_entry_pathname(entry) ? archive_entry_pathname(entry) : "");
+            std::replace(name.begin(), name.end(), '\\', '/');
+            if (name.starts_with("./")) name.erase(0, 2u);
+            const std::size_t slash = name.find('/');
+            const bool top = name == "luma.json" ||
+                             (slash != std::string::npos && name.compare(slash + 1u, std::string::npos, "luma.json") == 0);
+            if (!top || archive_entry_filetype(entry) != AE_IFREG) continue;
+            const la_int64_t size = archive_entry_size(entry);
+            if (size <= 0 || size > (1 << 20)) break;
+            std::string text(static_cast<std::size_t>(size), '\0');
+            if (archive_read_data(reader, text.data(), text.size()) != static_cast<la_ssize_t>(text.size())) break;
+            manifest = galaxy::luma::parse_manifest(text);
+            break;
+        }
+    }
+    if (!manifest || manifest->id.empty()) return peek;
+    peek.id = manifest->id;
+    peek.version = manifest->version;
+    // The installed one: the folder of its id first, else any folder whose manifest has it (as import_mod finds it).
+    const auto version_in = [&](const fs::path& folder) {
+        const std::optional<galaxy::luma::Manifest> there = galaxy::luma::read_manifest(folder);
+        return there && there->id == manifest->id ? std::optional<std::string>(there->version) : std::nullopt;
+    };
+    std::optional<std::string> found;
+    if (fs::is_directory(mods_folder / from_utf8(folder_name(manifest->id)), error)) {
+        found = version_in(mods_folder / from_utf8(folder_name(manifest->id)));
+    }
+    std::error_code walk_error;
+    for (auto it = fs::directory_iterator(mods_folder, walk_error); !found && !walk_error && it != fs::directory_iterator();
+         it.increment(walk_error)) {
+        const std::string name = utf8(it->path().filename());
+        if (name.empty() || name.front() == '.' || !it->is_directory(error)) continue;
+        found = version_in(it->path());
+    }
+    if (found) peek.installed = *found;
+    return peek;
+}
+
 bool remove_mod(const fs::path& mods_folder, const std::string& id, std::string* message) {
     // A folder in the mods folder by its name: nothing else (no path, no folder Nebula keeps there).
     std::error_code error;

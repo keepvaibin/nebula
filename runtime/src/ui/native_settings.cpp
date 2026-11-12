@@ -23,7 +23,7 @@
 #include "galaxy/luma_mods_service.h"
 #include "galaxy/mod_log.h"
 #include "galaxy/mod_screens.h"
-#include "galaxy/luma_mods_service.h"
+#include "galaxy/luma_fs_service.h"
 #include "galaxy/mods.h"
 #include "galaxy/game_paths.h"
 #include "galaxy/native_settings_pad.h"
@@ -2391,6 +2391,7 @@ struct InstallAsk {
     std::string asker;
     std::function<void(std::int32_t)> done;
     bool importing = false;  // INSTALL pressed: the import runs, its result page shows, and its outcome answers
+    galaxy::mods::ImportPeek peek;  // the file's mod and the installed one of its id, read when asked
 };
 std::optional<InstallAsk> s_install_ask;
 struct OfferAsk {
@@ -3472,8 +3473,16 @@ SettingsRow mods_buttons_row() {
             const unsigned button = kButtons[std::min(shown, 2u)];
 #else
     SettingsRow row = button_row(
-        {}, {"IMPORT FILE", "IMPORT FOLDER", details ? "DETAILS" : "-DETAILS", "OPEN FOLDER", "RESCAN"},
+        {}, {"IMPORT FILE", "IMPORT FOLDER", details ? "DETAILS" : "-DETAILS", "OPEN FOLDER", "RESCAN", "EXCHANGE FOLDER"},
         [](RenderConfig&, unsigned button) {
+            // The Exchange folder (services-fs 1): the player's and every mod's allowed fs.exchange, made if missing.
+            if (button == 5u) {
+                const std::filesystem::path exchange = galaxy::luma_fs::exchange_folder();
+                std::error_code ec;
+                if (!exchange.empty()) std::filesystem::create_directories(exchange, ec);
+                open_folder_in_explorer(exchange);
+                return;
+            }
 #endif
             switch (button) {
             case 0u:
@@ -3541,7 +3550,8 @@ void add_kept_rows_locked(std::vector<SettingsRow>& rows) {
                 s_mod_forget_ask = id;
             },
             galaxy::modlog::row_words("Mods.KeptHelp", id,
-                                      {{"numbers", std::to_string(kept.numbers)}, {"size", kept_size_text(kept.save_bytes, id)}}));
+                                      {{"numbers", std::to_string(kept.numbers)},
+                                       {"size", kept_size_text(kept.save_bytes + kept.data_bytes, id)}}));
         row.key = "kept:" + id;
         row.names = 1u | 4u;  // both already in the played language
         rows.push_back(std::move(row));
@@ -3584,8 +3594,12 @@ std::vector<SettingsRow> install_page_locked() {
     SettingsRow file{"FILE", galaxy::path_text(ask.file.filename()), nullptr, {}};
     file.names = 2u;
     rows.push_back(std::move(file));
+    // An installed mod of the file's id at an older version: the file updates it (UPDATE, and both versions under the
+    // buttons). The same or a newer one installed: the import answers LUMA_E_EXISTS.
+    const bool update = !ask.peek.installed.empty() && !ask.peek.version.empty() &&
+                        galaxy::luma::compare_versions(ask.peek.version, ask.peek.installed) > 0;
     SettingsRow buttons = button_row(
-        {}, {"INSTALL", "NOT NOW", "DON'T ASK AGAIN"},
+        {}, {update ? "UPDATE" : "INSTALL", "NOT NOW", "DON'T ASK AGAIN"},
         [](RenderConfig&, unsigned button) {
             if (button == 0u) {
                 std::filesystem::path file;
@@ -3617,6 +3631,14 @@ std::vector<SettingsRow> install_page_locked() {
         galaxy::modlog::row_words("Mods.InstallStartsNext", ask.asker, {}));
     buttons.names |= 4u;
     rows.push_back(std::move(buttons));
+    if (update) {
+        SettingsRow versions{galaxy::modlog::row_words("Mods.InstallUpdates", ask.asker,
+                                                       {{"old", mods_ui_text(ask.peek.installed, 24u)},
+                                                        {"new", mods_ui_text(ask.peek.version, 24u)}}),
+                             {}, nullptr, {}, true};
+        versions.names = 1u;
+        rows.push_back(std::move(versions));
+    }
     return rows;
 }
 
@@ -3710,9 +3732,15 @@ std::int32_t screens_ask_install(const std::filesystem::path& file, std::string_
     {
         const std::lock_guard<std::mutex> lock(s_ask_mutex);
         if (s_install_ask || s_offer_ask) return LUMA_E_BUSY;
-        s_install_ask = InstallAsk{file, std::string(asker), std::move(done), false};
     }
-    open_request_screen(2u);  // the buttons (who, file, buttons)
+    // The file's manifest and the installed mod of its id, read before the screen shows (the import reads it again).
+    galaxy::mods::ImportPeek peek = galaxy::mods::peek_import(file, galaxy::mods::mods_folder());
+    {
+        const std::lock_guard<std::mutex> lock(s_ask_mutex);
+        if (s_install_ask || s_offer_ask) return LUMA_E_BUSY;
+        s_install_ask = InstallAsk{file, std::string(asker), std::move(done), false, std::move(peek)};
+    }
+    open_request_screen(2u);  // the buttons (who, file, buttons; the versions line under them)
     return LUMA_PENDING;
 }
 
