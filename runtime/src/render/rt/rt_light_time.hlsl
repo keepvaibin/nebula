@@ -14,8 +14,9 @@
 // kind also keeps what its noise is (Schied et al. 2017, "Spatiotemporal Variance-Guided Filtering"): the first and
 // second moment of the luminance over time, and from them the variance of the average, which the steps over space
 // (rt_lights_space.hlsl) weigh their taps by. A pixel with fewer than four frames behind it takes the variance of
-// this frame's rays around it instead. Two guards of ReSTIR's: the boiling filter (RTXDI's): a pixel whose kept light's
-// weight is over 20 times the mean of its lit neighbours' is a firefly, brought down to that; and a flash stays a
+// this frame's rays around it instead. Two guards of ReSTIR's: the boiling filter (RTXDI's): a pixel whose light is
+// over 20 times the mean of its lit neighbours' (luminance as written, f(y) W: not W, which is large for a weak light;
+// A2-03) is a firefly, brought down to that; and a flash stays a
 // flash: where this frame is over four times the history, the history holds at most 8 frames.
 #include "rt_bindings.hlsli"
 #include "rt_frame.hlsli"
@@ -74,15 +75,16 @@ void main(uint3 id : SV_DispatchThreadID) {
         const float to_right = right.x == pixel.x ? 1e30f : abs(g_guide.Load(int3(right, 0)).r - guide.r);
         raw = g_raw.Load(int3(to_left <= to_right ? left : right, 0)).rba;
     }
-    const float own = g_reservoirs_now.Load(int3(pixel, 0)).b;
-    if (own > 0.0f && !left_out) {
+    const float own = dot(raw, kLuminance);
+    if (g_reservoirs_now.Load(int3(pixel, 0)).b > 0.0f && own > 0.0f && !left_out) {
+        // Its lit neighbours (their kept light seen: weight > 0; not left out by Low): the luminance they wrote.
         float total = 0.0f, lit = 0.0f;
         for (int y = -1; y <= 1; ++y) {
             for (int x = -1; x <= 1; ++x) {
                 const int2 at = clamp(pixel + int2(x, y), int2(0, 0), int2(width, height) - 1);
-                const float w = g_reservoirs_now.Load(int3(at, 0)).b;
-                if ((x != 0 || y != 0) && w > 0.0f) {
-                    total += w;
+                const float4 near = g_raw.Load(int3(at, 0));
+                if ((x != 0 || y != 0) && g_reservoirs_now.Load(int3(at, 0)).b > 0.0f && near.g >= 0.0f) {
+                    total += dot(near.rba, kLuminance);
                     lit += 1.0f;
                 }
             }

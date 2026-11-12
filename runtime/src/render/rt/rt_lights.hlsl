@@ -173,6 +173,11 @@ void main(uint3 id : SV_DispatchThreadID) {
                     others_count[j] = behind;
                     counted += behind;
                     const uint was_index = uint(theirs.r) + uint(theirs.g) * 1024u;
+                    if (was_index != 0u && !(theirs.b > 0.0f)) {
+                        // Its light was in shadow there: it could not have handed that light on, so it does not stand
+                        // among those that could choose it (Z below; A2-07: else a lit pixel darkens at a shadow's edge).
+                        others_count[j] = 0.0f;
+                    }
                     if (was_index == 0u || was_index > g_kept.y || !(theirs.b > 0.0f)) {
                         continue;  // it kept none, or one found in shadow: its candidates count, its light is not handed on
                     }
