@@ -137,8 +137,8 @@ float3 ref_mirror(float3 from, float3 dir, float roughness, inout uint seed) {
         if ((h.item_flags & kItemSky) != 0u) {
             float3 seen = rt_shown(rt_dome(h));
             // The sun itself on the reflected ray, where nothing hides it (12.2 item 4; the model's sun: b59).
-            if (rt_sun_traced() && dot(dir, g_sun.xyz) > cos(atan(3.0f * g_sun.w))) {
-                seen += lerp(rt_lin(g_shade.key.rgb), rt_stage_light().sun, rt_form()) * g_shade.look.w;
+            if (rt_sees_sun(dir)) {
+                seen += rt_sun_glint();
             }
             result += weight * seen;
             break;

@@ -806,9 +806,11 @@ float3 rt_hit_radiance_with(RtHit h, uint options, float3 o, bool d_known, float
 }
 
 // ---- What a mirrored ray sees (FB b75; A4 W7, W8): one function for every mirror the passes trace.
-// Whether the sun's own disc lies along `dir` (12.2 item 4: within three of its radii, the bloom's reach).
+// Whether the sun's own disc lies along `dir` (12.2 item 4): within the bloom's reach, tan kSunSeenTan (three radii
+// of the 0.8 degree disc it was set for; l77b), or the disc itself where a stage's is wider.
+static const float kSunSeenTan = 0.042f;
 bool rt_sees_sun(float3 dir) {
-    return rt_sun_traced() && dot(dir, g_sun.xyz) > cos(atan(3.0f * g_sun.w));
+    return rt_sun_traced() && dot(dir, g_sun.xyz) > cos(atan(max(kSunSeenTan, g_sun.w)));
 }
 // The sun's glint, linear: the stage's key decoded, the model's sun by kForm, times kSunGlint (far over white).
 float3 rt_sun_glint() {
