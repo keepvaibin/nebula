@@ -950,8 +950,6 @@ def run_one(test, renderer, args, run_folder, previous):
     if test["region"] is not None:
         raise HarnessError("region: not built yet (one game per bin folder; the bin names its region in 0.8)")
     for m in test["mods"]:
-        if m["install"] == "import":
-            raise HarnessError("install import: no such fact source yet (the import screen, task 6.1)")
         if m["options"]:
             raise HarnessError("mod options: not built yet (the Mods screen's options, task 6.3)")
         if m["path"].suffix == ".luma":
@@ -998,9 +996,18 @@ def run_one(test, renderer, args, run_folder, previous):
     if not test["bare"]:
         frozen["luma-test.dll"] = sha256(bin_folder / "luma-test.dll")
         install_game_half(settings, bin_folder)
+    imports = []
     for i, m in enumerate(test["mods"]):
         if not (m["path"] / "luma.json").is_file():
             raise HarnessError("the mod %s has no luma.json" % m["path"])
+        if m["install"] == "import":
+            # Not placed: the game imports it as "Open with" starts it (--import, task 6.1), through the validator;
+            # each outcome is the fact import.result.<n>, each finding import.finding.
+            if m["loads"]:
+                raise HarnessError("the imported mod %s: an import adds it for the next start, so it takes loads false"
+                                   % m["path"])
+            imports += ["--import", str(m["path"].resolve())]
+            continue
         mod_id = install(settings, m["path"], m["code"] == "allow", i + 1, kept=previous is not None,
                          permissions="ask" if m["code"] == "ask" else m["permissions"])
         mod_ids.append((mod_id, m))
@@ -1035,7 +1042,7 @@ def run_one(test, renderer, args, run_folder, previous):
         env.pop(name, None)
     command = [str(run_folder / "bin" / exe.name), "--pak", pak, "--saves", str(run_folder / "saves"),
                "--seconds", str(int(math.ceil(test["limit"]))), "--settings", str(settings),
-               "--crash-dumps", str(run_folder), "--extension", str(run_folder / "bin" / "nebula_test_extension.dll")]
+               "--crash-dumps", str(run_folder), "--extension", str(run_folder / "bin" / "nebula_test_extension.dll")] + imports
     startup = subprocess.STARTUPINFO()
     startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
     startup.wShowWindow = subprocess.SW_HIDE

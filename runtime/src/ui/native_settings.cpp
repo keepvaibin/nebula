@@ -2292,6 +2292,7 @@ const char* import_outcome_word(const galaxy::mods::ImportResult& result) {
 
 // In a harness run, each outcome of the batch as the fact import.result.<n> (n from 1 in the batch's order):
 // {"source", "outcome", "title", "id", "checked", "refused", "findings": [{"code", "error", "file", "text"}]}.
+// Each finding also as import.finding.
 void write_import_facts() {
     std::vector<ImportOutcome> outcomes;
     {
@@ -2320,6 +2321,14 @@ void write_import_facts() {
         }
         json += "]}";
         galaxy::modlog::fact("import.result." + std::to_string(n + 1u), json);
+        // And each finding alone, so a check can name one: import.finding {"result", "code", "error", "file"}.
+        for (const galaxy::mods::ImportResult::Finding& f : o.findings) {
+            std::string one = "{\"result\":" + std::to_string(n + 1u) + ",\"code\":" + std::to_string(f.code) +
+                              ",\"error\":" + (f.error ? "true" : "false") + ",\"file\":";
+            galaxy::modlog::append_json_text(one, f.file);
+            one += '}';
+            galaxy::modlog::fact("import.finding", one);
+        }
     }
 }
 
