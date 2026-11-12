@@ -51,19 +51,8 @@ float3 seen_along(float3 from, float3 dir, float cone, inout uint seed, out floa
     }
     return sum / float(paths);
 #else
-    uint item, triangle_;
-    float2 where_;
-    if (!rt_closest(from, dir, kSeenReach, kMaskSolid | kMaskCutout | kMaskSky, item, triangle_, where_, far_)) {
-        far_ = kSeenReach;
-        return rt_lin(g_sky.rgb);  // linear (M1; FB b59b)
-    }
-    RtHit h;
-    rt_hit_read(item, triangle_, where_, far_, from, dir, cone, h);
-    if ((h.item_flags & kItemSky) != 0u) {
-        return rt_shown(rt_dome(h));  // linear (M1; FB b65)
-    }
-    const float3 o = float3(g_shade.gains.y, g_shade.gains.y, g_shade.gains.y);
-    return rt_hit_radiance(h, kRtShadeSunRay | kRtShadeLightRay, o, seed);
+    // A clear thing on the way is seen through, not shaded as a wall (the director's d08; rt_shade.hlsli).
+    return rt_seen_past_clear(from, dir, kSeenReach, cone, kRtShadeSunRay | kRtShadeLightRay, false, seed, far_);
 #endif
 }
 

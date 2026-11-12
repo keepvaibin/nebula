@@ -917,20 +917,48 @@ float3 rt_sun_glint() {
 }
 // Along a mirrored ray from `from`: the solid thing met by the shared hit shading (`options`: kRtShade*), the dome
 // decoded once, else what a ray that meets nothing shows; the sun's glint where the ray runs at it unhindered.
+// What a ray that only looks meets, a clear thing seen THROUGH (the director's d08): a glass-class hit that does not
+// glow passes the ray on (a shell is one face, a body two; at most kClearFaces), each face giving its stand-in mirror
+// and taking the square root of its body's through-colour (rt_clear_through; half a body a face, as let_through) times
+// 1 - F head on. `far_`: the way to the first thing met (`reach` where none). `glint`: the sun's own glint where the
+// ray runs at it unhindered (a mirror's ray).
+static const uint kClearFaces = 3u;
+float3 rt_seen_past_clear(float3 from, float3 dir, float reach, float cone, uint options, bool glint, inout uint seed,
+                          out float far_) {
+    float3 tint = float3(1.0f, 1.0f, 1.0f), added = float3(0.0f, 0.0f, 0.0f);
+    float3 at_ = from;
+    float run = 0.0f;
+    far_ = -1.0f;
+    for (uint face = 0u; face <= kClearFaces; ++face) {
+        uint item, triangle_;
+        float2 where_;
+        float t;
+        if (!rt_closest(at_, dir, max(reach - run, 1.0f), kMaskSolid | kMaskCutout | kMaskSky, item, triangle_, where_, t)) {
+            far_ = far_ < 0.0f ? reach : far_;
+            return added + tint * (rt_lin(g_sky.rgb) + (glint && rt_sees_sun(dir) ? rt_sun_glint() : float3(0.0f, 0.0f, 0.0f)));
+        }
+        far_ = far_ < 0.0f ? run + t : far_;
+        RtHit h;
+        rt_hit_read(item, triangle_, where_, t, at_, dir, cone, h);
+        if ((h.item_flags & kItemSky) != 0u) {
+            return added + tint * (rt_shown(rt_dome(h)) + (glint && rt_sees_sun(dir) ? rt_sun_glint() : float3(0.0f, 0.0f, 0.0f)));
+        }
+        if (h.klass != kRtGlass || h.glows || h.glow_body || face == kClearFaces) {
+            const float3 o = float3(g_shade.gains.y, g_shade.gains.y, g_shade.gains.y);
+            return added + tint * rt_hit_radiance(h, options, o, seed);
+        }
+        added += tint * rt_hit_mirror_stand_in(h);
+        tint *= sqrt(rt_clear_through(g_at.x + item * kItemBytes)) * 0.96f;
+        const float skin = max(0.003f * (run + t), 0.5f);
+        at_ = h.at + dir * skin;
+        run += t + skin;
+    }
+    return added;
+}
+
 float3 rt_mirror_seen(float3 from, float3 dir, float cone, uint options, inout uint seed) {
-    uint item, triangle_;
-    float2 where_;
     float far_;
-    if (!rt_closest(from, dir, kRtFarAway, kMaskSolid | kMaskCutout | kMaskSky, item, triangle_, where_, far_)) {
-        return rt_lin(g_sky.rgb) + (rt_sees_sun(dir) ? rt_sun_glint() : float3(0.0f, 0.0f, 0.0f));
-    }
-    RtHit h;
-    rt_hit_read(item, triangle_, where_, far_, from, dir, cone, h);
-    if ((h.item_flags & kItemSky) != 0u) {
-        return rt_shown(rt_dome(h)) + (rt_sees_sun(dir) ? rt_sun_glint() : float3(0.0f, 0.0f, 0.0f));
-    }
-    const float3 o = float3(g_shade.gains.y, g_shade.gains.y, g_shade.gains.y);
-    return rt_hit_radiance(h, options, o, seed);
+    return rt_seen_past_clear(from, dir, kRtFarAway, cone, options, true, seed, far_);
 }
 
 #endif
