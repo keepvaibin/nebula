@@ -14,6 +14,7 @@ pub mod formats;
 pub mod fur;
 pub mod material;
 pub mod kcl;
+pub mod layout_json;
 pub mod camera;
 pub mod message;
 pub mod message_merge;
