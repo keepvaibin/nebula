@@ -1201,6 +1201,12 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
         if !keyed {
             pixel.push_str("    TRACED_UNKEYED;\n");
         }
+        // c77 (7.6): a character's face part (skinned, by its name) takes the face's light (program_lit.hlsli
+        // TRACED_FACE: the eye's floor, the face's softened shadow).
+        let face = if skinned { super::hit_record::face_kind(&m.name) } else { 0 };
+        if face != 0 {
+            pixel.push_str(&format!("    TRACED_FACE({face}u);\n"));
+        }
         pixel.push_str("    g_enh = enh_begin(i.lit_eye, i.lit_nrm);\n");
         if !m.highlight_maps.is_empty() {
             // c58: the enhanced highlight as the sprite painted it (its roughness and peak), under the relight.

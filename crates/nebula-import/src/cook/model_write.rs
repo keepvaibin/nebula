@@ -1041,9 +1041,16 @@ pub fn finish_reading(ir: &ModelIr, stem: &str, material: usize, thickness: f32,
         }
     }
     super::hit_record::finish(stem, &m.name, thickness, r);
+    // c77 (7.6): a character's face part (a skinned mesh's, by its name) is a plain surface and never a sheen body.
+    let face = super::programs::mesh_skinned(ir, m) && super::hit_record::face_kind(&m.name) != 0;
     // c49: the body under a painted sheen mirrors for real (the sheen is not drawn while tracing).
     if let Some(super::hit_record::SheenRole::Body { kind, .. }) = super::hit_record::sheen_roles_kept(ir, stem).get(material).copied() {
-        super::hit_record::promote_sheen_body(kind, r);
+        if !face {
+            super::hit_record::promote_sheen_body(kind, r);
+        }
+    }
+    if face {
+        super::hit_record::face_plain(r);
     }
 }
 

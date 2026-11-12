@@ -231,6 +231,39 @@ pub enum SheenKind {
     Unknown,
 }
 
+/// c77 (7.6): what part of a face a material is, by its name: 2 an eye (eye, pupil, hitomi; not a lid), 1 another
+/// face part (a lid, mouth, lip, moustache, cheek, eyebrow, lash, tooth, a name beginning "face"), 0 none. A part of a
+/// skinned mesh (a character's, programs.rs mesh_skinned) is a face part: face_plain, never a sheen layer, and its
+/// program takes the face's light (programs.rs TRACED_FACE; program_lit.hlsli).
+pub fn face_kind(material: &str) -> u32 {
+    let name = material.to_ascii_lowercase();
+    if (name.contains("eye") || name.contains("pupil") || name.contains("hitomi")) && !name.contains("lid") {
+        return 2;
+    }
+    let part = ["eye", "mouth", "kuchi", "mustache", "moustache", "hige", "cheek", "mayu", "matuge", "tooth", "teeth"]
+        .iter()
+        .any(|w| name.contains(w));
+    if part || name.starts_with("lip") || name.starts_with("face") {
+        1
+    } else {
+        0
+    }
+}
+
+/// c77 (7.6): a face part is a plain surface: no light through it (the thin sheet's), and no mirror, clear or metal
+/// class (an environment map's, a painted sprite's): a dielectric at 0.45. Its painted reflection stays as drawn (a
+/// dielectric mirrors nothing in the tracer).
+pub fn face_plain(r: &mut Reading) {
+    r.transmission = 0.0;
+    if matches!(r.class, Class::Gloss | Class::Glass | Class::Metal | Class::Translucent | Class::Water) {
+        r.class = Class::Dielectric;
+        r.roughness = 0.45;
+        r.metal = 0.0;
+        r.ior = 1.5;
+        r.rule = "a face part: a plain surface (c77)";
+    }
+}
+
 pub fn sheen_kind(stem: &str, material: &str) -> SheenKind {
     let stem = stem.split('.').next().unwrap_or(stem).to_ascii_lowercase();
     let name = material.to_ascii_lowercase();
@@ -285,7 +318,8 @@ pub fn sheen_roles(ir: &ModelIr, stem: &str) -> Vec<SheenRole> {
             let m = &ir.materials[i];
             let mut r = read(m);
             finish(stem, &m.name, 0.0, &mut r);
-            sheen_layer(stem, &m.name, &r)
+            // c77: a face part is never a sheen layer.
+            sheen_layer(stem, &m.name, &r) && !(super::programs::mesh_skinned(ir, m) && face_kind(&m.name) != 0)
         })
         .collect();
     if sheens.is_empty() {
@@ -1652,6 +1686,32 @@ mod tests {
         m.swaps = [[0, 1, 2, 3]; 4];
         m.material_color = [[255; 4]; 2];
         m
+    }
+
+    #[test]
+    fn a_face_part_is_a_plain_surface() {
+        // c77 (7.6): an alpha-tested two-sided eyeball (a thin sheet by its shape) lets no light through once plain,
+        // and a glossy part becomes a dielectric; the names.
+        let mut m = painted();
+        (m.alpha_comp0, m.alpha_ref0, m.alpha_comp1, m.alpha_op, m.cull) = (4, 128, 0, 0, 0);
+        m.name = "EyeballL_v".into();
+        let mut eye = read(&m);
+        assert!(eye.transmission >= 0.25, "the thin sheet's, before");
+        face_plain(&mut eye);
+        assert!(eye.transmission == 0.0 && !matches!(eye.class, Class::Gloss | Class::Glass | Class::Metal | Class::Translucent));
+        let mut gloss = read(&m);
+        gloss.class = Class::Metal;
+        gloss.metal = 1.0;
+        face_plain(&mut gloss);
+        assert!(gloss.class == Class::Dielectric && gloss.metal == 0.0);
+        assert_eq!(face_kind("EyeballL_v"), 2);
+        assert_eq!(face_kind("Penguin_EyeM_Mat_v"), 2);
+        assert_eq!(face_kind("EyeLid_v"), 1);
+        assert_eq!(face_kind("Lip_v"), 1);
+        assert_eq!(face_kind("Face_v"), 1);
+        assert_eq!(face_kind("Body1_v"), 0);
+        assert_eq!(face_kind("SideFaceMat_v"), 0);
+        assert_eq!(face_kind("FlipPanel"), 0);
     }
 
     #[test]
