@@ -70,6 +70,9 @@ namespace luma {
 
             // The live records by list order, top first (game thread). Gone ones leave it.
             Record* sByOrder[kMostRecords];
+            // frameStart's copy of sByOrder (game thread; a frame's start never runs inside another). Not on the
+            // stack: 4 KiB there needs __chkstk, which the module (no C runtime) does not have.
+            Record* sDeliverOrder[kMostRecords];
             u32 sByOrderCount = 0;
 
             u32 sPosted = 0;   // 1 when a node was posted since the frame's start took the stacks, or nodes are carried; atomic
@@ -744,14 +747,13 @@ namespace luma {
             if (__atomic_load_n(&sPosted, __ATOMIC_ACQUIRE) != 0) {
                 (void)__atomic_exchange_n(&sPosted, 0u, __ATOMIC_ACQ_REL);
                 // A copy of the order: a mod taken out while its events run (the guard) leaves the list meanwhile.
-                Record* order[kMostRecords];
                 const u32 count = sByOrderCount;
                 for (u32 i = 0; i < count; i++) {
-                    order[i] = sByOrder[i];
+                    sDeliverOrder[i] = sByOrder[i];
                 }
                 for (u32 i = 0; i < count; i++) {
-                    if (!isGone(order[i])) {
-                        deliverMod(order[i]);
+                    if (!isGone(sDeliverOrder[i])) {
+                        deliverMod(sDeliverOrder[i]);
                     }
                 }
                 if (sCarried != 0) {
