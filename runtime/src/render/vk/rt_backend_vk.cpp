@@ -91,6 +91,8 @@ struct Backend::State {
     VkQueryPool queries[kFramesInFlight]{};
     unsigned frame_slot = 0u;
     bool asked = false;
+    // The frame's first begin has joined the last frame's tracer work (l88): cleared by frame().
+    bool joined = true;
 
     // Passes: one set layout for every pass (rt_bindings.hlsli as compile_rt_shaders.py places the registers: t at its
     // number, u at 200, b at 300), a pipeline a shader made at its first dispatch.
@@ -546,6 +548,7 @@ void Backend::frame(unsigned frame_slot) noexcept {
     }
     state_->pool_at = 0u;
     state_->counters_bound = false;  // the frame's first pass that counts zeroes them
+    state_->joined = false;          // the frame's first begin waits for the last frame's tracer work (l88)
 }
 
 void Backend::begin(void* commands, unsigned frame_slot, void* descriptors) noexcept {
@@ -553,6 +556,38 @@ void Backend::begin(void* commands, unsigned frame_slot, void* descriptors) noex
     s.commands = static_cast<VkCommandBuffer>(commands);
     s.frame_slot = frame_slot % kFramesInFlight;
     s.asked = false;
+    // l88: the last frame's builds, micromap builds and passes before this frame's. Nothing else orders two
+    // submissions on one queue, and this frame takes the same build scratch again from its start, builds the top level
+    // into the same structure, refits Moving structures in place and writes the buffers builds read.
+    if (!s.joined && s.commands != VK_NULL_HANDLE) {
+        s.joined = true;
+        if (const PFN_vkCmdPipelineBarrier2 barrier2 = vk::Context::get().pipeline_barrier2(); barrier2 != nullptr) {
+            VkPipelineStageFlags2 stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+            VkAccessFlags2 writes = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_2_SHADER_WRITE_BIT;
+            VkAccessFlags2 reads = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR | VK_ACCESS_2_SHADER_READ_BIT;
+            if (s.micromaps) {
+                stages |= VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT;
+                writes |= VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT;
+                reads |= VK_ACCESS_2_MICROMAP_READ_BIT_EXT;
+            }
+            VkMemoryBarrier2 join{VK_STRUCTURE_TYPE_MEMORY_BARRIER_2};
+            join.srcStageMask = stages;
+            join.srcAccessMask = writes;
+            join.dstStageMask = stages;
+            join.dstAccessMask = reads | writes;
+            VkDependencyInfo dependency{VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
+            dependency.memoryBarrierCount = 1u;
+            dependency.pMemoryBarriers = &join;
+            barrier2(s.commands, &dependency);
+        } else {
+            VkMemoryBarrier join{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+            join.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_SHADER_WRITE_BIT;
+            join.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR |
+                                 VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+            const VkPipelineStageFlags stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+            vkCmdPipelineBarrier(s.commands, stages, stages, 0u, 1u, &join, 0u, nullptr, 0u, nullptr);
+        }
+    }
     if (const auto* textures = static_cast<const TextureTable*>(descriptors); textures != nullptr && textures->layout != nullptr) {
         s.texture_set = static_cast<VkDescriptorSet>(textures->set);
         const auto images_layout = static_cast<VkDescriptorSetLayout>(textures->layout);
