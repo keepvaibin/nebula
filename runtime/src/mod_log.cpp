@@ -803,38 +803,43 @@ ImportCheck check_import(const std::filesystem::path& folder, const std::vector<
         side = g_check_game;
     }
     if (side.platform.empty()) side = CheckGame{std::string(galaxy::luma::plugin_target()), {}, "UsEnglish"};
-    // Alone, every rule (validator 2 "at import": kept null), as the start's pass 1 does for a changed package.
-    std::string kept;
-    std::vector<Kept> findings;
-    if (!validate_package(v, "import", folder, side, {}, UINT32_MAX, {}, kept, &findings)) return out;
-    out.ran = true;
-    // Against the packages placed now, as the start's pass 2: their kept reports from the last start's check.
+    // The packages placed now, each by its kept report: the last start's, else (placed since, or before any start's
+    // check) one made now, alone. On as the list has it, but off when it would not start: refused at the last start, a
+    // report made now with an Error, or a report naming no id (the validator takes those only off).
     const std::filesystem::path validate = galaxy::mods::mods_folder() / ".cooked" / "validate";
     std::vector<std::string> ids;
     std::vector<std::string> reports;
     std::vector<bool> on;
     for (const StartPackage& p : others) {
         std::string report = read_file(validate / (p.id + ".kept"));
-        if (report.empty()) continue;
+        bool starts = p.on && !package_refused(p.id);
+        if (report.empty()) {
+            std::vector<Kept> alone;
+            if (!validate_package(v, p.id, p.folder, side, {}, UINT32_MAX, {}, report, &alone) || report.empty()) continue;
+            starts = starts && std::none_of(alone.begin(), alone.end(), [](const Kept& k) { return k.level == 0; });
+        }
+        if (starts && v->read_kept != nullptr && v->id != nullptr) {
+            LumaReport* const read = v->read_kept(reinterpret_cast<const std::uint8_t*>(report.data()), report.size());
+            const char* const named = v->state(read) == 2 ? v->id(read) : "";
+            starts = named != nullptr && named[0] != 0;
+            v->release(read);
+        }
         ids.push_back(p.id);
         reports.push_back(std::move(report));
-        on.push_back(p.on);
+        on.push_back(starts);
     }
-    if (!ids.empty() && !kept.empty()) {
-        std::vector<LumaInstalledMod> installed(ids.size());
-        for (std::size_t i = 0; i < ids.size(); ++i) {
-            installed[i].file = ids[i].c_str();
-            installed[i].on = on[i] ? 1u : 0u;
-            installed[i].kept = reinterpret_cast<const std::uint8_t*>(reports[i].data());
-            installed[i].kept_size = reports[i].size();
-        }
-        std::string again;
-        std::vector<Kept> with_others;
-        if (validate_package(v, "import", folder, side, installed, static_cast<std::uint32_t>(installed.size()), kept, again,
-                             &with_others)) {
-            findings = std::move(with_others);
-        }
+    std::vector<LumaInstalledMod> installed(ids.size());
+    for (std::size_t i = 0; i < ids.size(); ++i) {
+        installed[i].file = ids[i].c_str();
+        installed[i].on = on[i] ? 1u : 0u;
+        installed[i].kept = reinterpret_cast<const std::uint8_t*>(reports[i].data());
+        installed[i].kept_size = reports[i].size();
     }
+    // One call at import (validator 2: no kept report of its own, every rule), last in the list, against them all.
+    std::string kept;
+    std::vector<Kept> findings;
+    if (!validate_package(v, "import", folder, side, installed, UINT32_MAX, {}, kept, &findings)) return out;
+    out.ran = true;
     for (const Kept& k : findings) {
         out.findings.push_back({k.code, k.level == 0, k.file, k.played});
         out.refused = out.refused || k.level == 0;
