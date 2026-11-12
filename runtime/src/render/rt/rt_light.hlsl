@@ -170,6 +170,9 @@ void main(uint3 id : SV_DispatchThreadID) {
         }
         if (second) {
             share = float4(v3, seen);  // as the programs read it: no filter after this layer's
+            if ((g_more.z & (1u | 256u)) == 256u) {
+                share.rgb = min(seen, 1.0f).xxx;  // no traced sun: the key's visibility by O, as the opaque layer's (FB b115)
+            }
         } else {
             share.b = lit ? -1.0f - facing : facing;  // for the filter's last step (rt_light_space.hlsl)
             share.a = seen;
@@ -267,7 +270,7 @@ void main(uint3 id : SV_DispatchThreadID) {
                     // sun highlight is at most kSheenMost of the sun's light on it; a smoother one (roughness under
                     // 0.6, open at 0.3) keeps the model's peak.
                     const float kSheenMost = 0.0f;  // d12: a matte surface takes no sun lobe (the owner: "glare everywhere")
-                    const float most = lerp(16.0f, kSheenMost, saturate((rough_ - 0.3f) / 0.3f));
+                    const float most = kSheenMost;  // d16: the sun's lobe withdrawn at every roughness (a lit dielectric's is 0.45)
                     const float3 lobe = st.sun * (v * nl * min(kSheenPi * d * vis * f, most)) + st.sky * rt_o_prime(o_here) * f_env;
                     mirror = float4(t * min(lobe, 16.0f), 1.0f - t * f_env);
                 }

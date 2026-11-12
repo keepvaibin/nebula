@@ -114,6 +114,11 @@ void main(uint3 id : SV_DispatchThreadID) {
             sky = (ratio.r + ratio.g + ratio.b) * (1.0f / 3.0f);
         }
         float4 shares = float4(g_sun_out.Load(int3(pixel, 0)).rgb, sky);
+        if ((g_more.z & (1u | 256u)) == 256u) {
+            // No traced sun (FB b115; PLAN-ROOMS R6): the key's visibility is the point's O, at most 1 (a room's key is
+            // hidden by what hides its sky: under a table, in a corner, at Mario's feet).
+            shares.rgb = min(sky, 1.0f).xxx;
+        }
         if ((g_more.z & 8192u) != 0u) {
             const float cue = landing_cue(pixel, guide);  // the landing cue under the player (l80)
             if (cue < 1.0f) {

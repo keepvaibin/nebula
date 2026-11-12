@@ -224,7 +224,7 @@ uint rt_gather(float3 origin, float3 direction, out uint item, out uint triangle
 // today's): three rays from kRoomNear out (what stands nearer, a body, a pot, a chair, is the near hits' and not a
 // wall) each meet a solid or a cutout within kIndirectReach: along `n`, along the player's up (where the sky is) and
 // toward the sun.
-static const float kRoomNear = 250.0f;       // a gathered hit nearer than this stands over the point
+static const float kRoomNear = 100.0f;       // a gathered hit nearer than this stands over the point (d18: a metre; 250 dimmed whole rooms)
 static const float kRoomNearShare = 0.25f;   // what such a hit sends of its light in a room; full again by 2 kRoomNear
 bool rt_room_point(RtSurface s, float3 n) {
     if (!rt_sun_traced()) {
@@ -934,7 +934,7 @@ float3 rt_hit_radiance_with(RtHit h, uint options, float3 o, bool d_known, float
     // comes through the list once) is shaded as any surface and adds a share of its own colour, a being 0.35 and an
     // object 0.6 of its albedo, at most 1.2 of it a channel (program.hlsli traced_colour's rule).
     if (h.glow_body && (options & kRtShadeLighting) == 0u) {
-        out_ = min(out_ + (h.being ? 0.35f : 0.6f) * h.base, 1.2f * h.base);
+        out_ = min(out_ + (h.being ? 0.35f : 0.8f) * h.base, 1.2f * h.base);  // d17: an object 0.8
     }
     return out_;
 }

@@ -592,7 +592,7 @@ float4 traced_sea(float3 pattern, float3 ring, float3 screen, float3 tint, float
     const float3 share = traced_painted(light, nl, o3, coloured);
     const float3 waves = traced_lin(saturate(pattern * kSeaPattern + ring));
     const float3 lamps = waves * added;
-    const float3 waves_lit = a * (waves * share + lamps * min(1.0, 1.0 / max(max(lamps.r, max(lamps.g, lamps.b)), 1e-4)));
+    const float3 waves_lit = a * (waves * share + lamps * min(1.0, 0.6 / max(max(lamps.r, max(lamps.g, lamps.b)), 1e-4)));  // d17
     // What lies under it (d14) is the frame behind, as it was drawn (every thing under the sea, under the traced light
     // already): the blend lets it through. The water's own colour is a thin veil of the game's tint, lit.
     const float veil = kSeaTint * a;
@@ -673,7 +673,7 @@ float4 traced_colour(float4 c, float4 pixel) {
     // largest channel is at most kAddedMost in linear light, its hue kept (c101: was each channel at 1.5, so a blue
     // thing by a lamp went white; plan s5's guard on the product, A2-05; counted by the tracer, l82). A glowing body
     // (draw flag 16384, c101) takes none: its own light would flood it.
-    const float kAddedMost = 1.0;
+    const float kAddedMost = 0.6;  // d17 (was c101's 1.0): a lamp lights a thing, it does not show it at full colour
     const bool body = (draw_flags & 16384u) != 0u;
     const float3 added_lit = traced_pure(traced_lin(base), metal) * added;
     const float added_top = max(added_lit.r, max(added_lit.g, added_lit.b));
@@ -687,7 +687,7 @@ float4 traced_colour(float4 c, float4 pixel) {
     // sunlit surface's 1.25, so it burns.
     const float3 lit_value = traced_lin(base);
     const bool hot = (draw_flags & 8192u) != 0u;
-    const float self_lit = (draw_flags & 32768u) != 0u ? 0.35 : 0.6;
+    const float self_lit = (draw_flags & 32768u) != 0u ? 0.35 : 0.8;  // d17: an object 0.8 (a star bit as he knows it)
     const float3 shown = !body ? seen.rgb
                          : hot ? clamp(seen.rgb, 2.0 * lit_value, 2.5 * lit_value)
                                : min(seen.rgb + self_lit * lit_value, 1.2 * lit_value);
