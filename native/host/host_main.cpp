@@ -4074,8 +4074,11 @@ int main(int argc, char** argv) {
     {
         // Two modules (plan 1.7, contract modules): the plain one unless a mod's code needs the rows. --module names the
         // rows module; the plain one is beside it. Updates imported while a mod was in use land first, as below.
-        const fs::path settings_folder = galaxy::runtime_settings_folder();
+        // A headless host (no NEBULA_HOST_RENDERER) is the test host: no settings folder, no player's mods, and the
+        // harness's extensions hook and call by name, so it keeps the module --module names (the rows one).
+#if defined(NEBULA_HOST_RENDERER)
         fs::path mods_folder;
+        const fs::path settings_folder = galaxy::runtime_settings_folder();
         if (!settings_folder.empty()) {
             fs::create_directories(settings_folder / "mods", error);
             galaxy::mods::apply_pending_updates(settings_folder / "mods");
@@ -4087,6 +4090,10 @@ int main(int argc, char** argv) {
                                              false, &why);
         galaxy::game_module::set_plain_loaded(module != rows_module);
         log_line("game module:", why.c_str());
+#else
+        galaxy::game_module::set_plain_loaded(false);
+        log_line("game module:", "rows (headless test host)");
+#endif
         boot_mark("game module chosen");
     }
     load_module(module);
