@@ -76,6 +76,9 @@ pub fn material_slots(m: &MaterialIr) -> Vec<(u32, u16, u8)> {
     if let Some((slot, _)) = m.normal_map {
         count = count.max(usize::from(slot) + 1);
     }
+    for slot in pbr_slots(m) {
+        count = count.max(usize::from(slot) + 1);
+    }
     let mut out: Vec<(u32, u16, u8)> = (0..count)
         .map(|n| {
             let map = m.coordinate_maps.get(n).copied().unwrap_or(255);
@@ -94,11 +97,23 @@ pub fn material_slots(m: &MaterialIr) -> Vec<(u32, u16, u8)> {
     if let Some((slot, _)) = m.normal_map {
         out[usize::from(slot)].2 |= SLOT_USES_COORD | SLOT_USES_MAP;
     }
+    // So are a glTF material's metal-roughness and occlusion maps (MaterialIr pbr).
+    for slot in pbr_slots(m) {
+        out[usize::from(slot)].2 |= SLOT_USES_COORD | SLOT_USES_MAP;
+    }
     for order in &m.warp_orders {
         if order[0] != 255 {
             out[usize::from(order[0])].2 |= SLOT_USES_COORD;
         }
     }
+    out
+}
+
+/// The slots a glTF material's lit template samples (MaterialIr pbr): its metal-roughness map and its occlusion map.
+pub fn pbr_slots(m: &MaterialIr) -> Vec<u8> {
+    let Some(p) = m.pbr else { return Vec::new() };
+    let mut out: Vec<u8> = p.metal_rough.into_iter().chain(p.occlusion.map(|(slot, _)| slot)).collect();
+    out.dedup();
     out
 }
 

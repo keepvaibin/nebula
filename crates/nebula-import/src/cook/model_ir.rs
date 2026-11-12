@@ -211,6 +211,24 @@ pub struct MaterialIr {
     /// (map n through coordinate n, which no stage reads) and its scale. The lit form turns its pixel normal by it
     /// before any light is summed; the mesh holds tangents and bitangents (ATTR_NBT, ATTR_NBT_THREE).
     pub normal_map: Option<(u8, f32)>,
+    /// A glTF material's light (plan 3.3; program_pbr.hlsli): its lit form lights the stages' result as metal and
+    /// roughness say, with the stage's reflection. None for the game's materials and an unlit glTF material.
+    pub pbr: Option<PbrShading>,
+}
+
+/// What a glTF material's lit template reads beyond its stages (MaterialIr pbr). Its maps are slots of their own (map n
+/// through coordinate n, which no stage reads), sampled as data, not as sRGB colour.
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub struct PbrShading {
+    /// metallicFactor and roughnessFactor (0 to 1).
+    pub metal: f32,
+    pub roughness: f32,
+    /// metallicRoughnessTexture's slot: its blue scales the metal, its green the roughness.
+    pub metal_rough: Option<u8>,
+    /// occlusionTexture's slot (its red) and strength: it darkens the indirect light only.
+    pub occlusion: Option<(u8, f32)>,
+    /// The material's last stage is its glow (gltf.rs Glow), added after the light: the light goes before it.
+    pub glow_last: bool,
 }
 
 impl GroupIr {

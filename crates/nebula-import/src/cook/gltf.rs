@@ -7,6 +7,7 @@ use super::clip::{ClipIr, Target, Track, KIND_COLORS, KIND_JOINTS, KIND_PATTERN,
 use super::model_ir::{CoordIr, CoordMatrixIr, MaterialIr};
 use super::model_ir::{important_joints, plain_material, plain_texture, ArraysIr, Corner, GroupIr, JointIr, PbrMaterial, ModelIr, ShapeIr, ATTR_COLOR0, ATTR_MATRIX, ATTR_NORMAL, NONE};
 use super::model_ir::{ATTR_NBT, ATTR_NBT_THREE, PBR_BASE, PBR_BLEND, PBR_DOUBLE_SIDED, PBR_EMISSIVE, PBR_MASK, PBR_NORMAL, PBR_UNLIT};
+use super::model_ir::{PbrShading, PBR_METAL_ROUGH, PBR_OCCLUSION};
 use super::refuse::{invalid, note, refuse, OrInvalid};
 use anyhow::{bail, Context, Result};
 use serde_json::Value;
@@ -1043,6 +1044,20 @@ fn decompose(m: &Matrix) -> Trs {
     Trs { translation: [m[12], m[13], m[14]], rotation: q.map(|v| (v / n) as f32), scale }
 }
 
+/// The images and sets the lit template samples (MaterialIr pbr): metal-roughness, then occlusion unless it is the same
+/// image through the same set.
+fn pbr_light_maps(maps: &[Option<PbrMap>; 5]) -> Vec<(usize, u64)> {
+    let mut out: Vec<(usize, u64)> = Vec::new();
+    for k in [PBR_METAL_ROUGH, PBR_OCCLUSION] {
+        if let Some(m) = maps[k] {
+            if !out.contains(&(m.image, m.coord)) {
+                out.push((m.image, m.coord));
+            }
+        }
+    }
+    out
+}
+
 /// A map no plain stage reads (a glow's, a normal map): a slot of its own after the material's (map n through coordinate
 /// n), the first one in place of a material's "no texture".
 fn own_slot(made: &mut MaterialIr, texture: u32, uv: u8) -> u8 {
@@ -1372,10 +1387,13 @@ pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) 
         let glowing = lit.flags & PBR_UNLIT == 0 && lit.emissive.iter().any(|&v| v > 0.0);
         let glow_map = pbr_maps[PBR_EMISSIVE].filter(|_| glowing).map(|m| (m.image, m.coord));
         let normal_slot = pbr_maps[PBR_NORMAL].is_some() && lit.flags & PBR_UNLIT == 0;
+        // The lit template's own maps (MaterialIr pbr): metal-roughness, and occlusion unless it is the same image
+        // through the same set (an ORM texture: one slot).
+        let light_maps: Vec<(usize, u64)> = if lit.flags & PBR_UNLIT == 0 { pbr_light_maps(&pbr_maps) } else { Vec::new() };
         // A program's inputs name coordinates in a byte past NEBULA_INPUT_COORD0, maps and coordinates in a byte.
-        let layers = images.len() + usize::from(glow_map.is_some()) + usize::from(normal_slot);
-        if layers > MATERIAL_LAYERS || images.iter().chain(glow_map.as_ref()).any(|(_, uv)| *uv >= MATERIAL_LAYERS as u64) {
-            let count = layers.max(images.iter().chain(glow_map.as_ref()).map(|(_, uv)| *uv as usize + 1).max().unwrap_or(0));
+        let layers = images.len() + usize::from(glow_map.is_some()) + usize::from(normal_slot) + light_maps.len();
+        if layers > MATERIAL_LAYERS || images.iter().chain(glow_map.as_ref()).chain(light_maps.iter()).any(|(_, uv)| *uv >= MATERIAL_LAYERS as u64) {
+            let count = layers.max(images.iter().chain(glow_map.as_ref()).chain(light_maps.iter()).map(|(_, uv)| *uv as usize + 1).max().unwrap_or(0));
             return Err(refuse("Cook.Model.Layers", &[("material", material_name), ("count", count.to_string()), ("max", MATERIAL_LAYERS.to_string())]));
         }
         let images = images.into_iter().map(|(image, uv)| (image, uv as u8)).collect();
@@ -1812,6 +1830,23 @@ pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) 
             if let Some(map) = source.pbr_maps[PBR_NORMAL].filter(|_| tangents.is_some() && source.lit.flags & PBR_UNLIT == 0) {
                 let slot = own_slot(&mut made, texture_number(&document, &mut ir, &mut image_of, map.image)?, map.coord as u8);
                 made.normal_map = Some((slot, source.lit.normal_scale));
+            }
+            // Its light (plan 3.3; program_pbr.hlsli): metal and roughness by their factors and map, occlusion on the
+            // indirect light, the glow after it. An unlit material shows its base colour alone.
+            if source.lit.flags & PBR_UNLIT == 0 {
+                let mut slots: Vec<((usize, u64), u8)> = Vec::new();
+                for map in pbr_light_maps(&source.pbr_maps) {
+                    let slot = own_slot(&mut made, texture_number(&document, &mut ir, &mut image_of, map.0)?, map.1 as u8);
+                    slots.push((map, slot));
+                }
+                let slot_of = |m: Option<PbrMap>| m.and_then(|m| slots.iter().find(|(k, _)| *k == (m.image, m.coord)).map(|(_, s)| *s));
+                made.pbr = Some(PbrShading {
+                    metal: source.lit.metal,
+                    roughness: source.lit.roughness,
+                    metal_rough: slot_of(source.pbr_maps[PBR_METAL_ROUGH]),
+                    occlusion: slot_of(source.pbr_maps[PBR_OCCLUSION]).map(|s| (s, source.lit.occlusion_strength)),
+                    glow_last: source.glow.is_some(),
+                });
             }
             // Its base texture's transform: texture matrix 0 on its first coordinates.
             if let Some(t) = source.transform {
@@ -3571,6 +3606,96 @@ mod tests {
     }
 
     #[test]
+    fn a_lit_material_is_drawn_by_the_pbr_template() {
+        // Plan 3.3 (J): the lit template (program_pbr.hlsli) lights the stages' base colour by metal and roughness, in
+        // every form, before the glow; its maps are slots of their own, an ORM texture one slot.
+        use super::super::programs::{generate, forms_of, Registers};
+        let (ir, _, _) = cook(&lit_document(), None).unwrap();
+        let m = &ir.materials[0];
+        assert_eq!(m.pbr, Some(PbrShading { metal: 0.2, roughness: 0.6, metal_rough: Some(3), occlusion: Some((3, 0.7)), glow_last: true }));
+        assert_eq!(super::super::model_write::pbr_slots(m), [3]);
+        let forms = forms_of("Shell", m, 0).unwrap();
+        assert!(forms.len() >= 2, "{forms:?}");
+        for form in &forms {
+            let t = generate(m, *form, false, &Registers::of(m)).unwrap();
+            let px = &t.pixel;
+            for wanted in ["#include \"program_pbr.hlsli\"", "pbr_begin(", "pbr_add_light(i.lit_light, 0u", "TRACED_LEVEL(pbr_level())",
+                           "ENV_FETCH(pbr_reflection(", "pbr_finish(prev.rgb", "pbr_metal *= pbr_mr.b", "pbr_ao = 1.0 + 0.7"] {
+                assert!(px.contains(wanted), "{form:?} lacks {wanted}:\n{px}");
+            }
+            // Not the game's enhanced finish: the template's own; and the light before the glow (stage 1).
+            assert!(!px.contains("enh_finish"), "{px}");
+            assert!(px.find("pbr_finish").unwrap() < px.find("NATIVE_STAGE(1,").unwrap(), "{px}");
+            assert!(px.find("NATIVE_STAGE(0,").unwrap() < px.find("pbr_finish").unwrap(), "{px}");
+            // The stages see the material colour unlit: the light is the template's.
+            assert!(px.contains("lit0.rgb = "), "{px}");
+            assert!(t.textures.contains(&3), "{:?}", t.textures);
+        }
+        // The plain form is the lit one: a mod's metal looks the same with any lighting setting.
+        let texts: Vec<String> = forms.iter().map(|f| generate(m, *f, false, &Registers::of(m)).unwrap().pixel).collect();
+        assert!(texts.windows(2).all(|w| w[0] == w[1]));
+
+        // No glow: the light after the last stage. Unlit: no template.
+        let mut black = lit_document();
+        black["materials"][0]["emissiveFactor"] = serde_json::json!([0.0, 0.0, 0.0]);
+        let (ir, _, _) = cook(&black, None).unwrap();
+        let m = &ir.materials[0];
+        assert_eq!(m.pbr.map(|p| p.glow_last), Some(false));
+        let px = generate(m, forms_of("Shell", m, 0).unwrap()[0], false, &Registers::of(m)).unwrap().pixel;
+        assert!(px.find("NATIVE_STAGE(0,").unwrap() < px.find("pbr_finish").unwrap(), "{px}");
+        let mut unlit = lit_document();
+        unlit["materials"][0]["extensions"]["KHR_materials_unlit"] = serde_json::json!({});
+        let (ir, _, _) = cook(&unlit, None).unwrap();
+        assert_eq!(ir.materials[0].pbr, None);
+
+        // Occlusion through another set: a slot of its own.
+        let mut own = lit_document();
+        own["materials"][0]["occlusionTexture"]["texCoord"] = 2.into();
+        let (ir, _, _) = cook(&own, None).unwrap();
+        let p = ir.materials[0].pbr.unwrap();
+        assert_eq!((p.metal_rough, p.occlusion.map(|o| o.0)), (Some(3), Some(4)));
+
+        // The conformance sphere: metal 1, roughness 0.05, no maps, no glow.
+        let (ir, _, _) = to_ir_for(include_bytes!("../../data/metal-smooth.gltf"), None, None).unwrap();
+        assert_eq!(ir.materials[0].pbr, Some(PbrShading { metal: 1.0, roughness: 0.05, metal_rough: None, occlusion: None, glow_last: false }));
+    }
+
+    /// The template's texts for a compile on both back ends (dxc DXIL and SPIR-V, agents/luma/j/bin/pbr-dxc.sh):
+    /// NEBULA_PBR_DUMP=<folder> cargo test -p nebula-import --lib -- --ignored dump_the_pbr_template
+    #[test]
+    #[ignore]
+    fn dump_the_pbr_template() {
+        use super::super::programs::{finish_text, forms_of, generate, Registers};
+        let Ok(dir) = std::env::var("NEBULA_PBR_DUMP") else { return };
+        let dir = std::path::PathBuf::from(dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut black = lit_document();
+        black["materials"][0]["emissiveFactor"] = serde_json::json!([0.0, 0.0, 0.0]);
+        let mut vertex_coloured = lit_document();
+        vertex_coloured["meshes"][0]["primitives"][0]["attributes"]["COLOR_0"] =
+            add_floats(&mut vertex_coloured, &[(3, "VEC4", vec![1.0; 12])])[0].into();
+        let sources: [(&str, Vec<u8>); 4] = [
+            ("lit", serde_json::to_vec(&lit_document()).unwrap()),
+            ("black", serde_json::to_vec(&black).unwrap()),
+            ("coloured", serde_json::to_vec(&vertex_coloured).unwrap()),
+            ("metal", include_bytes!("../../data/metal-smooth.gltf").to_vec()),
+        ];
+        for (name, source) in sources {
+            let (ir, _, _) = to_ir_for(&source, None, None).unwrap();
+            let m = &ir.materials[0];
+            for (k, form) in forms_of("Shell", m, 0).unwrap().into_iter().enumerate() {
+                for skinned in [false, true] {
+                    let mut t = generate(m, form, skinned, &Registers::of(m)).unwrap();
+                    finish_text(&m.name, form, &mut t);
+                    let stem = format!("{name}-{k}{}", if skinned { "s" } else { "" });
+                    std::fs::write(dir.join(format!("{stem}.vs.hlsl")), &t.vertex).unwrap();
+                    std::fs::write(dir.join(format!("{stem}.ps.hlsl")), &t.pixel).unwrap();
+                }
+            }
+        }
+    }
+
+    #[test]
     fn a_glow_is_one_more_stage_and_factors_are_srgb() {
         // MOD-MATERIALS-FC.md 1: the raster's glTF material is stages; the glow adds emissive texture x constant 1.
         let (ir, _, _) = cook(&lit_document(), None).unwrap();
@@ -3585,8 +3710,9 @@ mod tests {
         // The glow 0.5 x 4, 0.25 x 4, 0 is held to 1: (255, 255, 0).
         assert_eq!(m.constants[1], [255, 255, 0, 255]);
         // Its map is the emissive texture, read through the emissive map's own set (0 here), slot 1 = map 1 = coord 1;
-        // the normal map's slot is 2 (set 2).
-        assert_eq!((m.textures.len(), m.textures[1], m.coordinate_maps.as_slice()), (3, ir.pbr[0].maps[PBR_EMISSIVE], [0, 1, 2].as_slice()));
+        // the normal map's slot is 2 (set 2); the lit template's metal-roughness and occlusion map (one image, one set)
+        // slot 3.
+        assert_eq!((m.textures.len(), m.textures[1], m.coordinate_maps.as_slice()), (4, ir.pbr[0].maps[PBR_EMISSIVE], [0, 1, 2, 3].as_slice()));
         assert_eq!((m.coords[1].kind, m.coords[1].source, m.coords[1].matrix), (1, 4, NONE));
         assert_eq!((m.textures[2], m.coords[2].source, m.normal_map), (ir.pbr[0].maps[PBR_NORMAL], 6, Some((2, 0.5))));
 
@@ -3601,16 +3727,16 @@ mod tests {
         no_base["materials"][0]["emissiveTexture"]["texCoord"] = 2.into();
         let (ir, _, _) = cook(&no_base, None).unwrap();
         let m = &ir.materials[0];
-        assert_eq!((m.stages[0].map, m.stages[1].map, m.stages[1].coord, m.textures.len()), (255, 0, 0, 2));
-        assert_eq!((m.coords.len(), m.coords[0].source, m.coordinate_maps.as_slice(), m.normal_map), (2, 6, [0, 1].as_slice(), Some((1, 0.5))));
+        assert_eq!((m.stages[0].map, m.stages[1].map, m.stages[1].coord, m.textures.len()), (255, 0, 0, 3));
+        assert_eq!((m.coords.len(), m.coords[0].source, m.coordinate_maps.as_slice(), m.normal_map), (3, 6, [0, 1, 2].as_slice(), Some((1, 0.5))));
 
         // No glow stage when the glow is black or the material unlit (it shows its base colour alone).
         let mut black = lit_document();
         black["materials"][0]["emissiveFactor"] = serde_json::json!([0.0, 0.0, 0.0]);
         let mut unlit = lit_document();
         unlit["materials"][0]["extensions"]["KHR_materials_unlit"] = serde_json::json!({});
-        // Black: the base and normal maps; unlit: the base map alone, no normal map either.
-        for (document, textures, normal) in [(black, 2, Some((1, 0.5))), (unlit, 1, None)] {
+        // Black: the base, normal and metal-roughness maps; unlit: the base map alone, no normal map either.
+        for (document, textures, normal) in [(black, 3, Some((1, 0.5))), (unlit, 1, None)] {
             let (ir, _, _) = cook(&document, None).unwrap();
             let m = &ir.materials[0];
             assert_eq!((m.stages.len(), m.textures.len(), m.normal_map), (1, textures, normal));
@@ -3635,10 +3761,10 @@ mod tests {
         assert!(turned < text.pixel.find("g_enh = enh_begin(").unwrap());
         // It reads the normal map's own slot: the program's textures name slot 2.
         assert!(text.textures.contains(&2), "{:?}", text.textures);
-        // The forms that light by vertex do not read it.
+        // A glTF material lights at the pixel in its plain form too (the material template, plan 3.3): every form reads it.
         for form in forms.iter().filter(|f| !f.lit) {
             let text = generate(m, *form, false, &Registers::of(m)).unwrap();
-            assert!(!text.pixel.contains("lit_tan") && !text.inputs.contains(&Input::Tangent));
+            assert!(text.pixel.contains("lit_tan") && text.inputs.contains(&Input::Tangent));
         }
         // Its slot is marked as read, so its texture is bound.
         let block = super::super::model_write::write(&ir, "fixture", &super::super::programs::Written::unknown()).unwrap();

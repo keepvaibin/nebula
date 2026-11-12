@@ -320,6 +320,10 @@ struct Pixel<'a> {
     env_coords: BTreeSet<u8>,
     /// c58: the coordinates whose every map is a painted highlight sprite (HIGHLIGHT_FETCH in a lit form).
     sprite_coords: BTreeSet<u8>,
+    /// A glTF material's light (MaterialIr pbr; pbr_lines): its lines, and the stage they go before (its glow), or
+    /// None: after the last.
+    pbr_lines: Vec<String>,
+    pbr_before: Option<usize>,
 }
 
 impl Pixel<'_> {
@@ -365,6 +369,11 @@ impl Pixel<'_> {
         }
         if let Some((slot, _)) = self.m.normal_map.filter(|_| self.form.lit) {
             self.sampled.push((slot, slot));
+        }
+        if self.form.lit {
+            for slot in super::model_write::pbr_slots(self.m) {
+                self.sampled.push((slot, slot));
+            }
         }
     }
     fn plain_coord(&self, c: u8) -> bool {
@@ -673,6 +682,12 @@ fn stage_lines(p: &mut Pixel, registers: &Registers) -> Result<bool> {
         }
     }
     for (number, s) in stages.iter().enumerate() {
+        if p.pbr_before == Some(number) {
+            // A glTF material's light, before its glow (MaterialIr pbr): prev is its base colour, then lit, in 0 to 1.
+            let lines = std::mem::take(&mut p.pbr_lines);
+            p.lines.extend(lines);
+            state[0][0] = Range::UNIT;
+        }
         p.lines.push("    {".into());
         let reads_t = s.color_in.contains(&8) || s.color_in.contains(&9) || s.alpha_in.contains(&4);
         if Pixel::uses_tex(s) && reads_t {
@@ -773,6 +788,9 @@ fn stage_lines(p: &mut Pixel, registers: &Registers) -> Result<bool> {
         }
         None => {}
     }
+    // A glTF material's light after its last stage, when no glow follows it (MaterialIr pbr).
+    let lines = std::mem::take(&mut p.pbr_lines);
+    p.lines.extend(lines);
     let m = p.m;
     let (comp0, op, comp1) = (m.alpha_comp0, m.alpha_op, m.alpha_comp1);
     let mut tested = false;
@@ -888,6 +906,66 @@ fn enhanced_channel_lines(m: &MaterialIr, ch: usize, names: &Channel, eye: &str,
     }
 }
 
+/// A glTF material's lit channel 0 (program_pbr.hlsli): the light set's ambient and lights summed apart from the
+/// material's colour, which the channel passes on unlit so that the stages make the base colour; the alpha as
+/// channel_lines writes it. Channel 0's light level goes to the traced form (TRACED_LEVEL).
+fn pbr_channel_lines(m: &MaterialIr, eye: &str, base: &str, rows: &mut Rows, out: &mut Vec<String>) {
+    let names = Channel { target: "lit0", vertex: "i.color" };
+    if m.channel_count == 0 {
+        out.push("    lit0 = i.color;".into());
+        return;
+    }
+    let c = &m.channels[0];
+    let mat = if c.material_source != 0 { "i.color.rgb".to_string() } else { format!("{}.rgb", rows.at(ROW_MATERIAL_COLOR)) };
+    if c.enable != 0 {
+        let amb = if c.ambient_source != 0 { "i.color.rgb".to_string() } else { format!("{}.rgb", rows.at(ROW_AMBIENT_COLOR)) };
+        out.push("    {".into());
+        out.push(format!("        const float3 pbr_amb = {amb};"));
+        out.push("        pbr_begin(pbr_amb);".into());
+        for (k, (n, atten, diffuse)) in light_list(c).iter().enumerate() {
+            out.push(format!(
+                "        pbr_add_light({base}, {n}u, {}, {diffuse}u, {}, {eye}, pbr_amb);",
+                if *atten == 3 { "true" } else { "false" },
+                if k == 0 { "true" } else { "false" },
+            ));
+        }
+        out.push("        TRACED_LEVEL(pbr_level());".into());
+        out.push("    }".into());
+    } else {
+        out.push("    pbr_begin(float3(1.0, 1.0, 1.0));".into());
+    }
+    out.push(format!("    lit0.rgb = {mat};"));
+    let mut alpha = Vec::new();
+    channel_lines(m, 0, &names, eye, "g_enh.N", base, rows, &mut alpha);
+    out.extend(alpha.into_iter().filter(|l| l.trim_start().starts_with("lit0.a")));
+}
+
+/// A glTF material's light after its base colour (program_pbr.hlsli): metal and roughness by their factors and map,
+/// the occlusion, the stage's reflection through ENV_FETCH (the traced mirror where the tracer owns the pixel), then
+/// pbr_finish on prev.
+fn pbr_lines(p: &mut Pixel, shade: &PbrShading) -> Vec<String> {
+    let mut out = vec!["    {".to_string()];
+    out.push(format!("        float pbr_metal = {:?};", shade.metal.clamp(0.0, 1.0)));
+    out.push(format!("        float pbr_rough = {:?};", shade.roughness.clamp(0.0, 1.0)));
+    out.push("        float pbr_ao = 1.0;".into());
+    if let Some(slot) = shade.metal_rough {
+        let coord = p.sample_coord(slot, slot, None);
+        let texel = p.sample(slot, &coord);
+        out.push(format!("        const float4 pbr_mr = {texel};"));
+        out.push("        pbr_metal *= pbr_mr.b;".into());
+        out.push("        pbr_rough *= pbr_mr.g;".into());
+    }
+    if let Some((slot, strength)) = shade.occlusion {
+        let coord = p.sample_coord(slot, slot, None);
+        let texel = p.sample(slot, &coord);
+        out.push(format!("        pbr_ao = 1.0 + {:?} * ({texel}.r - 1.0);", strength.clamp(0.0, 1.0)));
+    }
+    out.push("        const float4 pbr_env = ENV_FETCH(pbr_reflection(prev.rgb, pbr_metal, pbr_rough, pbr_ao));".into());
+    out.push("        prev.rgb = pbr_finish(prev.rgb, pbr_metal, pbr_rough, pbr_ao, pbr_env.rgb);".into());
+    out.push("    }".into());
+    out
+}
+
 fn light_terms_any(m: &MaterialIr) -> bool {
     (0..2 * (m.channel_count as usize).min(2)).any(|k| channel_is_lit(&m.channels[k]) && m.channels[k].light_mask != 0)
 }
@@ -940,6 +1018,9 @@ fn varyings(uv_kinds: &[bool], color: [bool; 2], lit: bool, normal_mapped: bool,
 
 /// A material's two programs in one form. `fog_type` is the material's own; `skinned`: its mesh has a matrix per vertex.
 pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Registers) -> Result<Text> {
+    // A glTF material is lit at the pixel in its plain form too (MaterialIr pbr): its metal and roughness are its look,
+    // whatever the lighting setting.
+    let form = if source.pbr.is_some() && form.replace == 0 { Form { lit: true, ..form } } else { form };
     let edited;
     let m = if form.pass != 0 {
         edited = with_pass(source, form.pass);
@@ -982,15 +1063,23 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
         color_read: [false; 2],
         env_coords: env_coords.clone(),
         sprite_coords,
+        pbr_lines: Vec::new(),
+        pbr_before: None,
     };
     p.survey();
+    let pbr = m.pbr.filter(|_| form.lit && form.replace == 0);
+    if let Some(shade) = pbr {
+        p.pbr_lines = pbr_lines(&mut p, &shade);
+        let count = m.pixel_stage_count as usize;
+        p.pbr_before = (shade.glow_last && count > 1).then(|| count - 1);
+    }
     let mut alpha_test = false;
     if form.replace != 0 {
         replace_lines(&mut p, fog_type)?;
         alpha_test = true;
     } else {
         alpha_test |= stage_lines(&mut p, registers)?;
-        if form.lit {
+        if form.lit && pbr.is_none() {
             p.lines.push("    if (enh_on()) prev.rgb = enh_finish(prev.rgb, g_enh);".into());
         }
         let fog = fog_lines(fog_type, &mut p.rows);
@@ -1017,6 +1106,7 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
         lit_rows_used = true;
         let names = [Channel { target: "lit0", vertex: "i.color" }, Channel { target: "lit1", vertex: "i.color1" }];
         let (mut plain, mut enhanced) = (Vec::new(), Vec::new());
+        let mut pbr_body = Vec::new();
         for ch in 0..2 {
             if ch == 0 && !p.color_read[0] && !p.color_read[1] {
                 continue;
@@ -1024,16 +1114,24 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
             if !p.color_read[ch] {
                 continue;
             }
+            if ch == 0 && pbr.is_some() {
+                // A glTF material: its own light, the same with the enhanced setting or without (program_pbr.hlsli).
+                pbr_channel_lines(m, "i.lit_eye", "i.lit_light", &mut p.rows, &mut pbr_body);
+                continue;
+            }
             channel_lines(m, ch, &names[ch], "i.lit_eye", "g_enh.N", "i.lit_light", &mut p.rows, &mut plain);
             enhanced_channel_lines(m, ch, &names[ch], "i.lit_eye", "g_enh.N", "i.lit_light", metal, &mut p.rows, &mut enhanced);
         }
         lit_body.push("    float4 lit0 = float4(0.0, 0.0, 0.0, 0.0);".into());
         lit_body.push("    float4 lit1 = float4(0.0, 0.0, 0.0, 0.0);".into());
-        lit_body.push("    if (enh_on()) {".into());
-        lit_body.extend(enhanced.iter().map(|l| format!("    {l}")));
-        lit_body.push("    } else {".into());
-        lit_body.extend(plain.iter().map(|l| format!("    {l}")));
-        lit_body.push("    }".into());
+        lit_body.extend(pbr_body);
+        if !plain.is_empty() || !enhanced.is_empty() {
+            lit_body.push("    if (enh_on()) {".into());
+            lit_body.extend(enhanced.iter().map(|l| format!("    {l}")));
+            lit_body.push("    } else {".into());
+            lit_body.extend(plain.iter().map(|l| format!("    {l}")));
+            lit_body.push("    }".into());
+        }
     }
 
     // Whether the lit form's colour sums the key (light 0 in a lit colour channel it reads, as channel_lines writes
@@ -1238,6 +1336,9 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
     if form.lit {
         pixel.push_str("#include \"program_lit.hlsli\"\n");
     }
+    if pbr.is_some() {
+        pixel.push_str("#include \"program_pbr.hlsli\"\n");
+    }
     pixel.push_str(&p.rows.declare(2, "MaterialPixel"));
     pixel.push_str(&vary);
     pixel.push_str("NativeOut program_ps(Varyings i) {\n");
@@ -1293,10 +1394,11 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
 }
 
 /// The headers a mod's programs include, for building them on the player's machine.
-pub const HEADERS: [(&str, &str); 3] = [
+pub const HEADERS: [(&str, &str); 4] = [
     ("nebula_limits.hlsli", include_str!("../../../../runtime/src/render/materials/nebula_limits.hlsli")),
     ("program.hlsli", include_str!("../../../../runtime/src/render/materials/program.hlsli")),
     ("program_lit.hlsli", include_str!("../../../../runtime/src/render/materials/program_lit.hlsli")),
+    ("program_pbr.hlsli", include_str!("../../../../runtime/src/render/materials/program_pbr.hlsli")),
 ];
 
 /// How a form names a vertex attribute (nebula_model.h NEBULA_INPUT_*).
