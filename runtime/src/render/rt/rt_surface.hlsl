@@ -303,7 +303,16 @@ void main(uint3 id : SV_DispatchThreadID) {
         }
         away = -at.z;
     } else {
-        normal = surface_normal(pixel, at);
+        // The facet's own normal where the triangle is named and its plane passes through the pixel's place: the
+        // depth's is quantized, takes a neighbour facet across an edge and moves with the jitter, and a ray's origin
+        // and the terminator's lift go along it (the shadow terminator's sawtooth and its shimmer; l76).
+        float3 on_facet, facet;
+        if (triangle_ != kItemNoTriangle && triangle_place(shaded, mesh, third.z, triangle_, rt_eye_ray(g_ray, centre), on_facet, facet) &&
+            abs(-on_facet.z - away) < 0.02f * away + 1.0f) {
+            normal = facet;
+        } else {
+            normal = surface_normal(pixel, at);
+        }
     }
     float3 lifted, before;
     bool before_known;
