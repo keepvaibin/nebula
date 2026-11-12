@@ -5,7 +5,9 @@
    what waits is an event at a frame's start (services-registry 6). Both share the events, the limits and the
    socket calls' rules; a handle belongs to the service that made it. Minor 1 of both adds UDP: a socket open to
    anyone on this machine or the local network (net.local's udp_open), one tied to a single peer (udp_connect,
-   both services), datagrams sent whole and taken whole. */
+   both services), datagrams sent whole and taken whole. Minor 2 adds local endpoints by name (plan 2.7's net.ipc,
+   under net.local's permission: "programs on this device"): named pipes on Windows, Unix sockets elsewhere, the
+   stream calls and events of TCP. */
 #ifndef LUMA_NET_H
 #define LUMA_NET_H
 
@@ -17,15 +19,16 @@ extern "C" {
 
 #define LUMA_NET_LOCAL_NAME "net.local"
 #define LUMA_NET_LOCAL_MAJOR 1u
-#define LUMA_NET_LOCAL_MINOR 1u
+#define LUMA_NET_LOCAL_MINOR 2u
 #define LUMA_NET_INTERNET_NAME "net.internet"
 #define LUMA_NET_INTERNET_MAJOR 1u
-#define LUMA_NET_INTERNET_MINOR 1u
+#define LUMA_NET_INTERNET_MINOR 2u
 
 #define LUMA_NET_SOCKETS_MOST 16u            /* sockets and listeners a mod holds at once, both services together */
 #define LUMA_NET_SEND_QUEUED_MOST (4u << 20u) /* bytes a mod's sockets hold queued, not yet sent */
 #define LUMA_NET_RECEIVED_MOST (1u << 20u)    /* bytes a socket holds received and not taken; reading pauses past it */
 #define LUMA_NET_DATAGRAM_MOST 65507u        /* 1.1: bytes of one datagram (IPv4's most) */
+#define LUMA_NET_ENDPOINT_MOST 64u           /* 1.2: bytes of an endpoint's name */
 
 /* Events (LumaEvent.kind) to the fn given at connect or listen. `handle` is the socket's (ACCEPTED: the listener's). */
 typedef enum LumaNetEvent {
@@ -109,6 +112,19 @@ typedef struct LumaNetLocalService {
        none waiting: LUMA_E_NOT_FOUND (an answer). Outside a DATAGRAM call of this socket: LUMA_E_HANDLE, reported;
        a null buf with size: LUMA_E_ARGUMENT, reported. `take` on a UDP socket: LUMA_E_HANDLE. */
     int64_t (*take_datagram)(const LumaMod* mod, LumaHandle socket, void* buf, uint64_t size, LumaNetPeer* from);
+    /* 1.2. Connects to the endpoint `name` on this device (letters, digits, '.', '_', '-'; 1 to
+       LUMA_NET_ENDPOINT_MOST bytes): the named pipe \\.\pipe\<name> on Windows (LiveSplit's is "LiveSplit"), a Unix
+       socket elsewhere (Linux and Android: the abstract name <name>; Apple: <TMPDIR>/<name>.sock). A mod's own
+       endpoints are "nebula.<mod id>.<name>" (ipc_listen). LUMA_PENDING and *out: CONNECTED or ERROR (LUMA_E_NOT_FOUND:
+       nothing listens there; LUMA_E_TIMEOUT: every pipe instance busy for 10 s; LUMA_E_DENIED: the system refused;
+       LUMA_E_IO), then the stream calls and events of tcp_connect's sockets. A wrong name, a null fn or out:
+       LUMA_E_ARGUMENT, reported; a 17th socket: LUMA_E_LIMIT, reported. */
+    int32_t (*ipc_connect)(const LumaMod* mod, const char* name, LumaEventFn fn, void* user, LumaHandle* out);
+    /* 1.2. Listens on this mod's endpoint "nebula.<mod id>.<name>" (`name` as ipc_connect's): only programs on this
+       device reach it; each connection is an ACCEPTED, as tcp_listen's. LUMA_OK and *out at once; something already
+       listening there: LUMA_E_EXISTS (an answer); a wrong name, a null fn or out: LUMA_E_ARGUMENT, reported; a 17th
+       socket: LUMA_E_LIMIT, reported. `port` on it: LUMA_E_HANDLE. */
+    int32_t (*ipc_listen)(const LumaMod* mod, const char* name, LumaEventFn fn, void* user, LumaHandle* out);
 } LumaNetLocalService;
 
 /* A host name or address in text: at most this many bytes. */
@@ -148,6 +164,9 @@ typedef struct LumaNetInternetService {
                        uint64_t bytes);
     /* 1.1. As net.local's. */
     int64_t (*take_datagram)(const LumaMod* mod, LumaHandle socket, void* buf, uint64_t size, LumaNetPeer* from);
+    /* 1.2. LUMA_E_DENIED, answers: endpoints on this device are net.local's. */
+    int32_t (*ipc_connect)(const LumaMod* mod, const char* name, LumaEventFn fn, void* user, LumaHandle* out);
+    int32_t (*ipc_listen)(const LumaMod* mod, const char* name, LumaEventFn fn, void* user, LumaHandle* out);
 } LumaNetInternetService;
 
 #ifdef __cplusplus

@@ -4,7 +4,9 @@
 // own, one per lookup) or address, public addresses only. Non-blocking sockets: the game thread makes them (socket,
 // connect, bind, listen return at once; an internet connect's sockets are made by the I/O thread once its name is
 // looked up) and one I/O thread, started at the first socket, polls them, reads, writes and closes. Minor 1 adds UDP
-// sockets (udp_open, udp_connect): datagrams in and out whole, on the same thread and under the same caps. The game
+// sockets (udp_open, udp_connect): datagrams in and out whole, on the same thread and under the same caps. Minor 2
+// adds endpoints on this device by name (ipc_connect, ipc_listen): Unix sockets, polled as the others, and on Windows
+// named pipes, which are not sockets: the I/O thread drives them by overlapped calls it checks at each turn. The game
 // thread never closes a system socket and the I/O thread never frees a Socket: the game thread frees one once the I/O
 // thread closed it, its node is not queued and no lookup holds it, so a poll never meets a closed descriptor and a
 // delivery never meets freed memory.
@@ -47,12 +49,15 @@
 #else
 #include <arpa/inet.h>
 #include <cerrno>
+#include <cstddef>
+#include <cstdlib>
 #include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <poll.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <unistd.h>
 #endif
 
@@ -228,6 +233,81 @@ struct Datagram {
 };
 constexpr std::size_t kDatagramsWaitingMost = 4096;  // datagrams a socket holds not taken (0-byte ones count too)
 
+#if defined(_WIN32)
+// A named pipe (minor 2). Each overlapped call has its own event (a pipe's handle cannot tell a read's end from a
+// write's); ReadFile, WriteFile and ConnectNamedPipe reset it as they start.
+struct Pipe {
+    HANDLE handle = INVALID_HANDLE_VALUE;
+    std::wstring path;     // \\.\pipe\<name>
+    OVERLAPPED read_ov{};
+    OVERLAPPED write_ov{};
+    OVERLAPPED connect_ov{};
+    bool reading = false;  // a ReadFile runs into `in`
+    bool writing = false;  // a WriteFile runs from `out`
+    bool waiting = false;  // a listener's ConnectNamedPipe runs
+    std::vector<char> in;  // the running read's room (64 KiB)
+    std::string out;       // the running write's bytes, kept until it ends
+
+    // Ends what runs (cancelled, then waited for: no call writes into freed memory) and closes the handle.
+    void close() noexcept {
+        if (handle == INVALID_HANDLE_VALUE) {
+            return;
+        }
+        if (reading || writing || waiting) {
+            CancelIoEx(handle, nullptr);
+            DWORD n = 0;
+            if (reading) {
+                GetOverlappedResult(handle, &read_ov, &n, TRUE);
+            }
+            if (writing) {
+                GetOverlappedResult(handle, &write_ov, &n, TRUE);
+            }
+            if (waiting) {
+                GetOverlappedResult(handle, &connect_ov, &n, TRUE);
+            }
+            reading = writing = waiting = false;
+        }
+        CloseHandle(handle);
+        handle = INVALID_HANDLE_VALUE;
+    }
+    ~Pipe() {
+        close();
+        for (OVERLAPPED* ov : {&read_ov, &write_ov, &connect_ov}) {
+            if (ov->hEvent != nullptr) {
+                CloseHandle(ov->hEvent);
+            }
+        }
+    }
+};
+
+// A Pipe with its events and its read room, or null (no memory or no event).
+std::unique_ptr<Pipe> new_pipe() {
+    std::unique_ptr<Pipe> pipe(new (std::nothrow) Pipe());
+    if (pipe == nullptr) {
+        return nullptr;
+    }
+    try {
+        pipe->in.resize(64u << 10u);
+    } catch (...) {
+        return nullptr;
+    }
+    for (OVERLAPPED* ov : {&pipe->read_ov, &pipe->write_ov, &pipe->connect_ov}) {
+        ov->hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        if (ov->hEvent == nullptr) {
+            return nullptr;
+        }
+    }
+    return pipe;
+}
+
+// An OVERLAPPED cleared for its next call, its event kept.
+void reset(OVERLAPPED& ov) noexcept {
+    const HANDLE event = ov.hEvent;
+    std::memset(&ov, 0, sizeof(ov));
+    ov.hEvent = event;
+}
+#endif
+
 struct Socket;
 struct ModState;
 
@@ -275,7 +355,22 @@ struct Socket {
     std::size_t datagrams_in_bytes = 0;
     std::deque<Datagram> datagrams_out;  // queued, not sent: their bytes count against the mod's queue
     std::size_t datagrams_out_bytes = 0;
+    // Endpoints on this device (minor 2).
+    bool ipc = false;            // made by ipc_connect or ipc_listen (or accepted by such a listener)
+    std::string unix_path;       // a listener's socket file (Apple), removed when it closes
+#if defined(_WIN32)
+    std::unique_ptr<Pipe> pipe;  // a named pipe's: `sock` stays kNoSock
+#endif
 };
+
+bool is_pipe(const Socket* socket) noexcept {
+#if defined(_WIN32)
+    return socket->pipe != nullptr;
+#else
+    (void)socket;
+    return false;
+#endif
+}
 
 struct ModState {
     const LumaMod* mod = nullptr;
@@ -369,12 +464,36 @@ std::int32_t connect_status(int error) noexcept {
     return refused(error) ? LUMA_E_UNREACHABLE : LUMA_E_IO;
 }
 
+// A failed connect's status for the ERROR: an endpoint's (nothing there, refused) or a host's.
+std::int32_t connect_failure(const Socket* socket, int error) noexcept {
+#if !defined(_WIN32)
+    if (socket->ipc) {
+        if (error == ECONNREFUSED || error == ENOENT) {
+            return LUMA_E_NOT_FOUND;
+        }
+        return error == EACCES || error == EPERM ? LUMA_E_DENIED : LUMA_E_IO;
+    }
+#else
+    (void)socket;
+#endif
+    return connect_status(error);
+}
+
 // With g_lock, I/O thread: ends the system socket (once).
 void close_locked(Socket* socket) {
     if (!socket->system_closed) {
         if (socket->sock != kNoSock) {
             close_system(socket->sock);
         }
+#if defined(_WIN32)
+        if (socket->pipe != nullptr) {
+            socket->pipe->close();
+        }
+#else
+        if (!socket->unix_path.empty()) {
+            ::unlink(socket->unix_path.c_str());  // a listener's socket file goes with it
+        }
+#endif
         socket->sock = kNoSock;
         socket->system_closed = true;
     }
@@ -411,6 +530,253 @@ bool start_next_locked(Socket* socket) {
     }
     return false;
 }
+
+#if defined(_WIN32)
+// ---- Named pipes (minor 2, Windows), I/O thread, with g_lock ------------------------------------------------------
+
+constexpr DWORD kPipeBuffer = 64u << 10u;
+
+HANDLE pipe_instance(const std::wstring& path, bool first) noexcept {
+    return CreateNamedPipeW(path.c_str(),
+                            PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED | (first ? FILE_FLAG_FIRST_PIPE_INSTANCE : 0u),
+                            PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
+                            PIPE_UNLIMITED_INSTANCES, kPipeBuffer, kPipeBuffer, 0, nullptr);
+}
+
+// A connect: CreateFile each turn while every instance is busy (10 s), then the pipe is open.
+void pipe_connect_turn_locked(Socket* socket) {
+    if (socket->closing) {
+        close_locked(socket);
+        return;
+    }
+    Pipe& pipe = *socket->pipe;
+    // SECURITY_IDENTIFICATION: the program on the other end may learn who connects, never act as this game.
+    const HANDLE handle =
+        CreateFileW(pipe.path.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
+                    FILE_FLAG_OVERLAPPED | SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION, nullptr);
+    if (handle == INVALID_HANDLE_VALUE) {
+        const DWORD error = GetLastError();
+        if (error == ERROR_PIPE_BUSY && std::chrono::steady_clock::now() - socket->started <= kConnectTime) {
+            return;  // every instance taken: again at the next turn
+        }
+        close_locked(socket);
+        socket->failed = error == ERROR_FILE_NOT_FOUND ? LUMA_E_NOT_FOUND
+                         : error == ERROR_PIPE_BUSY    ? LUMA_E_TIMEOUT
+                         : error == ERROR_ACCESS_DENIED ? LUMA_E_DENIED
+                                                        : LUMA_E_IO;
+        post_locked(socket);
+        return;
+    }
+    pipe.handle = handle;
+    socket->kind = Kind::Open;
+    socket->connected = true;
+    post_locked(socket);  // its reads start at the next turn
+}
+
+// A listener's waiting instance became a connection: a new open socket of the mod (ACCEPTED), or closed when full.
+void accept_pipe_locked(Socket* listener, HANDLE handle) {
+    std::unique_ptr<Pipe> pipe = listener->owner->open < LUMA_NET_SOCKETS_MOST ? new_pipe() : nullptr;
+    Socket* fresh = pipe != nullptr ? new (std::nothrow) Socket() : nullptr;
+    if (fresh == nullptr) {
+        DisconnectNamedPipe(handle);  // full, or no memory: the other side sees its connection end at once
+        CloseHandle(handle);
+        return;
+    }
+    pipe->handle = handle;
+    fresh->pipe = std::move(pipe);
+    fresh->node.event.mod = listener->node.event.mod;
+    fresh->node.event.deliver = deliver;
+    fresh->node.event.drop = drop;
+    fresh->node.socket = fresh;
+    fresh->owner = listener->owner;
+    fresh->handle = g_next_handle.fetch_add(1, std::memory_order_relaxed);
+    fresh->fn = listener->fn;
+    fresh->user = listener->user;
+    fresh->kind = Kind::Open;
+    fresh->ipc = true;
+    try {
+        g_sockets.push_back(fresh);
+        listener->accepted.push_back(fresh);
+    } catch (...) {
+        if (!g_sockets.empty() && g_sockets.back() == fresh) {
+            g_sockets.pop_back();
+        }
+        delete fresh;  // its Pipe closes the handle
+        return;
+    }
+    listener->owner->open++;
+    post_locked(listener);
+}
+
+// A listener: one instance waits for a client at a time; each client's instance becomes a socket, then a new one waits.
+void pipe_listener_turn_locked(Socket* socket) {
+    Pipe& pipe = *socket->pipe;
+    for (int round = 0; round < 8; round++) {
+        if (pipe.handle == INVALID_HANDLE_VALUE) {
+            pipe.handle = pipe_instance(pipe.path, false);
+            if (pipe.handle == INVALID_HANDLE_VALUE) {
+                return;  // none to be had now: the next turn
+            }
+        }
+        if (!pipe.waiting) {
+            reset(pipe.connect_ov);
+            ConnectNamedPipe(pipe.handle, &pipe.connect_ov);  // overlapped: its answer is in GetLastError
+            const DWORD error = GetLastError();
+            if (error == ERROR_IO_PENDING) {
+                pipe.waiting = true;
+            } else if (error != ERROR_PIPE_CONNECTED) {
+                CloseHandle(pipe.handle);
+                pipe.handle = INVALID_HANDLE_VALUE;
+                return;  // this instance failed: a new one at the next turn
+            }
+        }
+        if (pipe.waiting) {
+            DWORD n = 0;
+            if (!GetOverlappedResult(pipe.handle, &pipe.connect_ov, &n, FALSE)) {
+                if (GetLastError() == ERROR_IO_INCOMPLETE) {
+                    return;  // nobody yet
+                }
+                pipe.waiting = false;
+                CloseHandle(pipe.handle);  // that client left before it was taken: a new instance
+                pipe.handle = INVALID_HANDLE_VALUE;
+                continue;
+            }
+            pipe.waiting = false;
+        }
+        const HANDLE connected = pipe.handle;
+        pipe.handle = INVALID_HANDLE_VALUE;
+        accept_pipe_locked(socket, connected);
+    }
+}
+
+// An open pipe: reads while there is room, writes what is queued, ends as a TCP socket does.
+void pipe_open_turn_locked(Socket* socket) {
+    Pipe& pipe = *socket->pipe;
+    const auto broke = [socket](DWORD error) {
+        socket->peer_closed = true;
+        socket->closed_status =
+            error == ERROR_BROKEN_PIPE || error == ERROR_PIPE_NOT_CONNECTED || error == ERROR_NO_DATA ? LUMA_OK
+                                                                                                       : LUMA_E_IO;
+    };
+    for (int round = 0; round < 16; round++) {
+        if (pipe.reading) {
+            DWORD got = 0;
+            if (!GetOverlappedResult(pipe.handle, &pipe.read_ov, &got, FALSE)) {
+                const DWORD error = GetLastError();
+                if (error == ERROR_IO_INCOMPLETE) {
+                    break;
+                }
+                pipe.reading = false;
+                broke(error);
+                break;
+            }
+            pipe.reading = false;
+            try {
+                socket->received.append(pipe.in.data(), got);
+            } catch (...) {
+                broke(ERROR_NOT_ENOUGH_MEMORY);  // the bytes are gone: the stream cannot go on whole
+                break;
+            }
+        }
+        if (socket->peer_closed || socket->closing || socket->received.size() >= LUMA_NET_RECEIVED_MOST) {
+            break;
+        }
+        reset(pipe.read_ov);
+        const DWORD room = static_cast<DWORD>(
+            std::min<std::size_t>(pipe.in.size(), LUMA_NET_RECEIVED_MOST - socket->received.size()));
+        if (!ReadFile(pipe.handle, pipe.in.data(), room, nullptr, &pipe.read_ov) &&
+            GetLastError() != ERROR_IO_PENDING) {
+            broke(GetLastError());
+            break;
+        }
+        pipe.reading = true;  // done at once or later: collected through the OVERLAPPED either way
+    }
+    if (!socket->received.empty() || socket->peer_closed) {
+        post_locked(socket);
+    }
+    for (int round = 0; round < 16; round++) {
+        if (pipe.writing) {
+            DWORD put = 0;
+            if (!GetOverlappedResult(pipe.handle, &pipe.write_ov, &put, FALSE)) {
+                const DWORD error = GetLastError();
+                if (error == ERROR_IO_INCOMPLETE) {
+                    break;
+                }
+                pipe.writing = false;
+                broke(error);
+                socket->outgoing.clear();
+                pipe.out.clear();
+                break;
+            }
+            pipe.writing = false;
+            socket->sent_since += put;
+            if (put < pipe.out.size()) {
+                try {
+                    socket->outgoing.insert(0, pipe.out, put, std::string::npos);  // the rest goes first, next
+                } catch (...) {
+                    broke(ERROR_NOT_ENOUGH_MEMORY);
+                    break;
+                }
+            }
+            pipe.out.clear();
+        }
+        if (socket->outgoing.empty() || socket->peer_closed) {
+            break;
+        }
+        try {
+            const std::size_t bytes = std::min<std::size_t>(socket->outgoing.size(), kPipeBuffer);
+            pipe.out.assign(socket->outgoing, 0, bytes);
+            socket->outgoing.erase(0, bytes);
+        } catch (...) {
+            break;  // no memory now: the next turn
+        }
+        reset(pipe.write_ov);
+        if (!WriteFile(pipe.handle, pipe.out.data(), static_cast<DWORD>(pipe.out.size()), nullptr, &pipe.write_ov) &&
+            GetLastError() != ERROR_IO_PENDING) {
+            broke(GetLastError());
+            socket->outgoing.clear();
+            pipe.out.clear();
+            break;
+        }
+        pipe.writing = true;
+    }
+    if (!pipe.writing && socket->outgoing.empty() && socket->sent_since > 0u && !socket->closing) {
+        socket->sent_event = true;
+        post_locked(socket);
+    }
+    const bool drained = !pipe.writing && socket->outgoing.empty();
+    if (socket->closing && (drained || std::chrono::steady_clock::now() - socket->started > kCloseTime)) {
+        close_locked(socket);  // the mod closed it: what it queued went first (or kCloseTime passed)
+        socket->outgoing.clear();
+    } else if (socket->peer_closed && socket->received.empty() && !socket->closing) {
+        close_locked(socket);
+        socket->closed_event = true;
+        post_locked(socket);
+    } else if (socket->peer_closed && socket->closing) {
+        close_locked(socket);
+    }
+}
+
+void pipe_turn_locked(Socket* socket) {
+    switch (socket->kind) {
+    case Kind::Connecting:
+        pipe_connect_turn_locked(socket);
+        return;
+    case Kind::Listener:
+        if (socket->closing) {
+            close_locked(socket);
+            return;
+        }
+        pipe_listener_turn_locked(socket);
+        return;
+    case Kind::Open:
+        pipe_open_turn_locked(socket);
+        return;
+    default:
+        return;
+    }
+}
+#endif
 
 // I/O thread: room for one datagram as it is read (made at the first, never freed, as g_io; not on the stack, R9).
 std::vector<char>* g_datagram = nullptr;
@@ -492,6 +858,12 @@ void turn_locked(Socket* socket, short revents) {
         close_locked(socket);  // its mod is gone: nothing is flushed for nobody
         return;
     }
+#if defined(_WIN32)
+    if (socket->pipe != nullptr) {
+        pipe_turn_locked(socket);
+        return;
+    }
+#endif
     switch (socket->kind) {
     case Kind::Resolving: {
         if (socket->closing) {
@@ -542,7 +914,8 @@ void turn_locked(Socket* socket, short revents) {
             }
             close_locked(socket);
             if (!socket->closing) {
-                socket->failed = error != 0 ? connect_status(error) : LUMA_E_UNREACHABLE;
+                socket->failed = error != 0 ? connect_failure(socket, error)
+                                            : (socket->ipc ? LUMA_E_NOT_FOUND : LUMA_E_UNREACHABLE);
                 post_locked(socket);
             }
             return;
@@ -584,6 +957,7 @@ void turn_locked(Socket* socket, short revents) {
             fresh->fn = socket->fn;
             fresh->user = socket->user;
             fresh->kind = Kind::Open;
+            fresh->ipc = socket->ipc;
             fresh->sock = got;
             try {
                 g_sockets.push_back(fresh);
@@ -691,8 +1065,8 @@ void io_loop() {
             });
             try {
                 for (Socket* socket : g_sockets) {
-                    if (socket->system_closed) {
-                        continue;
+                    if (socket->system_closed || is_pipe(socket)) {
+                        continue;  // a pipe is not a socket: its turn comes below
                     }
                     PollFd fd{};
                     fd.fd = socket->sock;
@@ -935,7 +1309,8 @@ std::int32_t make(const LumaMod* mod, const char* where, ModState* state, int fa
             return LUMA_E_LIMIT;
         }
     }
-    const Sock sock = ::socket(family, udp ? SOCK_DGRAM : SOCK_STREAM, udp ? IPPROTO_UDP : IPPROTO_TCP);
+    const Sock sock =
+        ::socket(family, udp ? SOCK_DGRAM : SOCK_STREAM, family == AF_UNIX ? 0 : (udp ? IPPROTO_UDP : IPPROTO_TCP));
     if (sock == kNoSock) {
         return LUMA_E_IO;
     }
@@ -943,7 +1318,7 @@ std::int32_t make(const LumaMod* mod, const char* where, ModState* state, int fa
         close_system(sock);
         return LUMA_E_IO;
     }
-    if (!udp) {
+    if (!udp && family != AF_UNIX) {
         int on = 1;
         setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char*>(&on), sizeof(on));  // small messages
     }
@@ -1024,7 +1399,7 @@ std::int32_t local_connect(const LumaMod* mod, const char* where, bool udp, cons
             const int error = system_error();
             if (!connecting(error)) {
                 // Refused at once (loopback with nobody listening, on some systems): an ERROR at the next frame.
-                socket->failed = connect_status(error);
+                socket->failed = connect_failure(socket, error);
             }
         }
         const std::int32_t status = join(socket, out);
@@ -1153,7 +1528,7 @@ std::int32_t port_on(const LumaMod* mod, const char* where, bool internet, LumaH
     const ModState* state = state_of(mod);
     const std::lock_guard<std::mutex> lock(g_lock);
     const Socket* socket = state != nullptr ? find_locked(state, listener, internet) : nullptr;
-    if (socket == nullptr || (socket->kind != Kind::Listener && !(socket->udp && !socket->tied))) {
+    if (socket == nullptr || socket->ipc || (socket->kind != Kind::Listener && !(socket->udp && !socket->tied))) {
         return bad_handle(mod, where);  // a listener's or a udp_open socket's
     }
     *out = socket->port;
@@ -1382,6 +1757,232 @@ std::int64_t take_datagram_on(const LumaMod* mod, const char* where, bool intern
 std::int64_t net_take_datagram(const LumaMod* mod, LumaHandle handle, void* buf, std::uint64_t size,
                                LumaNetPeer* from) noexcept {
     return take_datagram_on(mod, "net.local.take_datagram", false, handle, buf, size, from);
+}
+
+// ---- Endpoints on this device (minor 2) ----------------------------------------------------------------------------
+
+// An endpoint's name: 1 to `most` bytes of letters, digits, '.', '_', '-'.
+bool endpoint_ok(const char* name, std::size_t most) noexcept {
+    if (name == nullptr) {
+        return false;
+    }
+    const std::size_t length = ::strnlen(name, most + 1u);
+    if (length == 0u || length > most) {
+        return false;
+    }
+    for (std::size_t i = 0; i < length; i++) {
+        const char c = name[i];
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' || c == '_' ||
+              c == '-')) {
+            return false;
+        }
+    }
+    return true;
+}
+
+#if defined(_WIN32)
+std::wstring pipe_path(const std::string& name) {
+    std::wstring path = L"\\\\.\\pipe\\";
+    for (const char c : name) {
+        path += static_cast<wchar_t>(c);  // ASCII only (endpoint_ok)
+    }
+    return path;
+}
+
+// A pipe socket of the mod, counted at join: no system socket, its Pipe made. LUMA_OK or the status to return.
+std::int32_t make_pipe(const LumaMod* mod, const char* where, ModState* state, LumaEventFn fn, void* user,
+                       Socket** out) {
+    if (!io_started()) {
+        return LUMA_E_IO;
+    }
+    {
+        const std::lock_guard<std::mutex> lock(g_lock);
+        if (state->open >= LUMA_NET_SOCKETS_MOST) {
+            report(mod, where, 104u, "16");  // Service.Limit
+            return LUMA_E_LIMIT;
+        }
+    }
+    std::unique_ptr<Pipe> pipe = new_pipe();
+    Socket* socket = pipe != nullptr ? new (std::nothrow) Socket() : nullptr;
+    if (socket == nullptr) {
+        return LUMA_E_MEMORY;
+    }
+    socket->pipe = std::move(pipe);
+    socket->node.event.mod = mod;
+    socket->node.event.deliver = deliver;
+    socket->node.event.drop = drop;
+    socket->node.socket = socket;
+    socket->owner = state;
+    socket->handle = g_next_handle.fetch_add(1, std::memory_order_relaxed);
+    socket->fn = fn;
+    socket->user = user;
+    socket->ipc = true;
+    *out = socket;
+    return LUMA_OK;
+}
+#else
+// An endpoint's Unix socket address: Linux and Android's abstract name (no file; gone with its last socket), elsewhere
+// a socket file in the temporary folder (*path). False: too long for the system's address.
+bool unix_address(const std::string& name, sockaddr_un* out, socklen_t* length, std::string* path) {
+    std::memset(out, 0, sizeof(*out));
+    out->sun_family = AF_UNIX;
+    path->clear();
+#if defined(__linux__)
+    if (name.size() + 1u > sizeof(out->sun_path)) {
+        return false;
+    }
+    std::memcpy(out->sun_path + 1, name.data(), name.size());  // sun_path[0] 0: the abstract namespace
+    *length = static_cast<socklen_t>(offsetof(sockaddr_un, sun_path) + 1u + name.size());
+#else
+    const char* folder = std::getenv("TMPDIR");
+    std::string file = folder != nullptr && *folder != '\0' ? folder : "/tmp";
+    if (file.back() != '/') {
+        file += '/';
+    }
+    file += name;
+    file += ".sock";
+    if (file.size() + 1u > sizeof(out->sun_path)) {
+        return false;
+    }
+    std::memcpy(out->sun_path, file.c_str(), file.size() + 1u);
+    *length = static_cast<socklen_t>(offsetof(sockaddr_un, sun_path) + file.size() + 1u);
+    *path = std::move(file);
+#endif
+    return true;
+}
+#endif
+
+std::int32_t net_ipc_connect(const LumaMod* mod, const char* name, LumaEventFn fn, void* user,
+                             LumaHandle* out) noexcept {
+    static constexpr const char* where = "net.local.ipc_connect";
+    if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
+        return status;
+    }
+    if (!endpoint_ok(name, LUMA_NET_ENDPOINT_MOST)) {
+        return argument(mod, where, "name");
+    }
+    if (fn == nullptr) {
+        return argument(mod, where, "fn");
+    }
+    if (out == nullptr) {
+        return argument(mod, where, "out");
+    }
+    try {
+        ModState* state = state_of(mod);
+        if (state == nullptr) {
+            return LUMA_E_CANCELLED;
+        }
+        Socket* socket = nullptr;
+#if defined(_WIN32)
+        if (const std::int32_t status = make_pipe(mod, where, state, fn, user, &socket); status != LUMA_OK) {
+            return status;
+        }
+        socket->pipe->path = pipe_path(name);
+        socket->kind = Kind::Connecting;  // the I/O thread opens it (and waits on a busy pipe, 10 s)
+        socket->started = std::chrono::steady_clock::now();
+#else
+        sockaddr_un address{};
+        socklen_t length = 0;
+        std::string path;
+        if (!unix_address(name, &address, &length, &path)) {
+            return LUMA_E_IO;  // the temporary folder's path is too long for a socket's address
+        }
+        if (const std::int32_t status = make(mod, where, state, AF_UNIX, fn, user, &socket); status != LUMA_OK) {
+            return status;
+        }
+        socket->ipc = true;
+        socket->kind = Kind::Connecting;
+        socket->started = std::chrono::steady_clock::now();
+        if (::connect(socket->sock, reinterpret_cast<const sockaddr*>(&address), length) != 0) {
+            const int error = system_error();
+            if (!connecting(error)) {
+                socket->failed = connect_failure(socket, error);  // an ERROR at the next frame
+            }
+        }
+#endif
+        const std::int32_t status = join(socket, out);
+        return status != LUMA_OK ? status : LUMA_PENDING;
+    } catch (...) {
+        return LUMA_E_MEMORY;
+    }
+}
+
+std::int32_t net_ipc_listen(const LumaMod* mod, const char* name, LumaEventFn fn, void* user,
+                            LumaHandle* out) noexcept {
+    static constexpr const char* where = "net.local.ipc_listen";
+    if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
+        return status;
+    }
+    if (!endpoint_ok(name, LUMA_NET_ENDPOINT_MOST)) {
+        return argument(mod, where, "name");
+    }
+    if (fn == nullptr) {
+        return argument(mod, where, "fn");
+    }
+    if (out == nullptr) {
+        return argument(mod, where, "out");
+    }
+    try {
+        const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
+        const char* id = kernel != nullptr ? kernel->mod_id(mod) : nullptr;
+        const std::string endpoint = std::string("nebula.") + (id != nullptr ? id : "") + "." + name;
+        if (id == nullptr || !endpoint_ok(endpoint.c_str(), 100u)) {
+            return argument(mod, where, "name");  // with the mod's id: too long, or a letter no endpoint takes
+        }
+        ModState* state = state_of(mod);
+        if (state == nullptr) {
+            return LUMA_E_CANCELLED;
+        }
+        Socket* socket = nullptr;
+#if defined(_WIN32)
+        if (const std::int32_t status = make_pipe(mod, where, state, fn, user, &socket); status != LUMA_OK) {
+            return status;
+        }
+        socket->pipe->path = pipe_path(endpoint);
+        socket->pipe->handle = pipe_instance(socket->pipe->path, true);
+        if (socket->pipe->handle == INVALID_HANDLE_VALUE) {
+            const DWORD error = GetLastError();
+            delete socket;
+            // The first instance is refused when any other process (or this game) holds the name.
+            return error == ERROR_ACCESS_DENIED || error == ERROR_PIPE_BUSY ? LUMA_E_EXISTS : LUMA_E_IO;
+        }
+#else
+        sockaddr_un address{};
+        socklen_t length = 0;
+        std::string path;
+        if (!unix_address(endpoint, &address, &length, &path)) {
+            return LUMA_E_IO;
+        }
+        if (!path.empty()) {
+            // A socket file somebody answers on is taken (EXISTS); one nobody answers on is a crashed run's: removed.
+            const Sock probe = ::socket(AF_UNIX, SOCK_STREAM, 0);
+            if (probe != kNoSock) {
+                const bool answered = ::connect(probe, reinterpret_cast<const sockaddr*>(&address), length) == 0;
+                close_system(probe);
+                if (answered) {
+                    return LUMA_E_EXISTS;
+                }
+                ::unlink(path.c_str());
+            }
+        }
+        if (const std::int32_t status = make(mod, where, state, AF_UNIX, fn, user, &socket); status != LUMA_OK) {
+            return status;
+        }
+        if (::bind(socket->sock, reinterpret_cast<const sockaddr*>(&address), length) != 0 ||
+            ::listen(socket->sock, 16) != 0) {
+            const int error = system_error();
+            close_system(socket->sock);
+            delete socket;
+            return address_in_use(error) ? LUMA_E_EXISTS : LUMA_E_IO;
+        }
+        socket->unix_path = std::move(path);
+        socket->ipc = true;
+#endif
+        socket->kind = Kind::Listener;
+        return join(socket, out);
+    } catch (...) {
+        return LUMA_E_MEMORY;
+    }
 }
 
 // ---- net.internet (layer 2): the hosts luma.json names, public addresses only ---------------------------------------
@@ -1617,6 +2218,18 @@ std::int64_t internet_take_datagram(const LumaMod* mod, LumaHandle handle, void*
                                     LumaNetPeer* from) noexcept {
     return take_datagram_on(mod, "net.internet.take_datagram", true, handle, buf, size, from);
 }
+std::int32_t internet_ipc_connect(const LumaMod* mod, const char*, LumaEventFn, void*, LumaHandle*) noexcept {
+    if (const std::int32_t status = enter(mod, "net.internet.ipc_connect"); status != LUMA_OK) {
+        return status;
+    }
+    return LUMA_E_DENIED;  // endpoints on this device are net.local's (an answer)
+}
+std::int32_t internet_ipc_listen(const LumaMod* mod, const char*, LumaEventFn, void*, LumaHandle*) noexcept {
+    if (const std::int32_t status = enter(mod, "net.internet.ipc_listen"); status != LUMA_OK) {
+        return status;
+    }
+    return LUMA_E_DENIED;
+}
 std::int32_t internet_tcp_listen(const LumaMod* mod, std::uint16_t, std::uint32_t, LumaEventFn, void*,
                                  LumaHandle*) noexcept {
     if (const std::int32_t status = enter(mod, "net.internet.tcp_listen"); status != LUMA_OK) {
@@ -1738,6 +2351,8 @@ const LumaNetLocalService kLocal = {
     net_udp_connect,
     net_send_to,
     net_take_datagram,
+    net_ipc_connect,
+    net_ipc_listen,
 };
 
 // net.local reports only the registry's rows (100-104).
@@ -1758,6 +2373,8 @@ const LumaNetInternetService kInternet = {
     internet_udp_connect,
     internet_send_to,
     internet_take_datagram,
+    internet_ipc_connect,
+    internet_ipc_listen,
 };
 
 // net.internet's own row (the net range is 250-299).
