@@ -201,10 +201,14 @@ namespace luma {
 
             // The text boxes a set_text reaches, as the game's MR::executeTextBoxRecursive walks them: the pane itself
             // when it holds text, then every text box under it, in the tree's order. At most `most`; returns the count.
+            // A null `ppOut` counts them only.
             u32 textBoxes(Ui::Pane* pPane, Ui::TextBox** ppOut, u32 count, u32 most) {
                 if (count < most) {
                     if (Ui::TextBox* const pBox = Ui::PaneCast< Ui::TextBox >(pPane); pBox != nullptr) {
-                        ppOut[count++] = pBox;
+                        if (ppOut != nullptr) {
+                            ppOut[count] = pBox;
+                        }
+                        count++;
                     }
                 }
                 for (Ui::Pane* pChild : pPane->GetChildList()) {
@@ -236,9 +240,10 @@ namespace luma {
                 luma::modlog::jsonString(name, sizeof(name), rPane.pane->mName);
                 char text[1200];
                 text[0] = 0;
-                Ui::TextBox* boxes[kMostBoxes];
-                const u32 boxCount = textBoxes(rPane.pane, boxes, 0, kMostBoxes);
-                if (const Ui::TextBox* const pText = boxCount != 0 ? boxes[0] : nullptr; pText != nullptr) {
+                Ui::TextBox* pFirst = nullptr;
+                const u32 boxCount = textBoxes(rPane.pane, nullptr, 0, kMostBoxes);
+                textBoxes(rPane.pane, &pFirst, 0, 1);
+                if (const Ui::TextBox* const pText = pFirst; pText != nullptr) {
                     // The text as the pane holds it, back to UTF-8 (the harness compares it with what the mod gave).
                     char utf8[1024];
                     u32 at = 0;
@@ -267,9 +272,13 @@ namespace luma {
                         }
                     }
                     utf8[at] = 0;
-                    char quoted[1100];
-                    luma::modlog::jsonString(quoted, sizeof(quoted), utf8);
-                    nebula_snprintf(text, sizeof(text), ",\"text\":%s,\"boxes\":%u", quoted, boxCount);
+                    // ,"text":<quoted>,"boxes":N in one buffer: the quoted text leaves room for the count after it.
+                    static const char kHead[] = ",\"text\":";
+                    std::memcpy(text, kHead, sizeof(kHead));
+                    const u32 head = sizeof(kHead) - 1u;
+                    luma::modlog::jsonString(text + head, static_cast< u32 >(sizeof(text)) - head - 24u, utf8);
+                    const u32 used = static_cast< u32 >(std::strlen(text));
+                    nebula_snprintf(text + used, sizeof(text) - used, ",\"boxes\":%u", boxCount);
                 }
                 char json[1500];
                 nebula_snprintf(json, sizeof(json), "{\"screen\":%llu,\"pane\":%s,\"kind\":%u,\"visible\":%s%s}",
