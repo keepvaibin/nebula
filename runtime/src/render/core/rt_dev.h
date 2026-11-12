@@ -42,7 +42,7 @@ enum class RtDev : std::uint8_t {
                     // transmission as without it (FB b91: 0, their fake refraction left out)
     // The programs' (program.hlsli view_dev): from BaseFloor.
     BaseFloor,      // traced_colour's kBaseFloor: a lit program's colour over at most 1 / this
-    SunStrength,    // traced_painted: the relight's sun over the stage's key (M2; 1.0, D3: October's was 1.25)
+    SunStrength,    // traced_painted: the relight's sun over the stage's key (M2; October's 1.25, c92)
     SkyChroma,      // traced_painted: the share of the sky's chroma its light keeps in shade (M8, October's 0.4)
     StageLight,     // traced_painted: 1 the relight lit by the stage's light as it is (October's), 0 divided by it
     // The tracer's (rt_frame.hlsli g_dev): from PaintedGlass, in this order.

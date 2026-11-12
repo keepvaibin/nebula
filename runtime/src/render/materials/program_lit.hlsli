@@ -53,7 +53,7 @@ static const float kEyeFloor = 0.6;
 // The traced sun as light 0 (c52; the director 11-11): the pixel's traced facing max(n . s, 0) (the Facing picture's
 // r), -1 where the pixel takes the light set's (no relight, a draw traced_at gives all of every light).
 static float g_traced_facing = -1.0;
-float traced_sun_strength() { return view_dev[1].y > 0.5 ? view_dev[0].y : 1.0; }
+float traced_sun_strength() { return view_dev[1].y > 0.5 ? view_dev[0].y : 1.25; }  // c92: October's kSun
 // Light 1's diffuse factor under the relight (c53): the sky's hemisphere about the player's up, by kForm from the
 // game's (a fill in the camera's space on most light sets).
 // c69 (the director 23:05): at half the hemisphere's 0.5 + 0.5 n.up: a directional light's facing max(n.l, 0) averages
@@ -377,11 +377,12 @@ EnhShade enh_begin_traced(float3 P, float3 n, float4 pixel) {
     g_set_reflect = 1.0;
     bool coloured = false;
     g_traced_o = traced_o(g_traced, pixel, coloured);
-    // c69, c73: under the relight, the sky light as the environment takes it: O with the sky's hue once (FB b87: the
-    // dome at kSkyChroma of its chroma), bounded against white by the environment's own bound (traced_bounded); Painted
-    // keeps FB's coloured O.
+    // c69, c92: under the relight, O as the game's ambient and fill take it (they hold the set's own colour: the
+    // shade's hue is theirs, the director 11-12): its luminance and kShadowTint of its hue (traced_o_shade), bounded
+    // against white by the draw's bound (the environment's or a character's: traced_tint_bound); Painted keeps FB's
+    // coloured O.
     if (view_look.x > 0.0) {
-        const float3 o_sky = traced_bounded(g_traced_o, 1.0, float3(1.0, 1.0, 1.0), kTintBoundCharacter);
+        const float3 o_sky = traced_bounded(traced_o_shade(g_traced_o), 1.0, float3(1.0, 1.0, 1.0), traced_tint_bound());
         g_traced_o = lerp(g_traced_o, o_sky, saturate(view_look.x));
     }
     traced_o_held();  // FB b96
@@ -426,7 +427,7 @@ float4 traced_light_term(uint base, uint n, uint atten, uint diffuse, float3 pos
 #define light_term(base, n, atten, diffuse, pos, nrm) traced_light_term(base, n, atten, diffuse, pos, nrm)
 // c76 (EVERYTHING 2.9, the director 11-12): the plain form's channel 0 light in shade (its ambient and fill by O, the
 // fill by its facing) keeps the hue of the set's full light (ambient + key + fill without facing: the art's light on
-// the zone) within kTintBoundCharacter a channel, its luminance kept, under the relight (by kForm); the level is then
+// the zone) within the draw's bound a channel (traced_tint_bound, c92), its luminance kept, under the relight (by kForm); the level is then
 // the rest (key, other lights) and that shade, saturated as the sum; the enhanced form's alike in linear light (its
 // ambient enh_amb_lin by the sky term, its sum by the sky reflection's share under its shoulder). The parts are
 // cleared here; a program without them keeps its level.
@@ -453,7 +454,8 @@ float3 traced_set_level(float3 level) {
     float3 bounded = shade;
     if (shade_l > 1e-4 && full_l > 1e-4) {
         const float3 hue = full / full_l;
-        const float3 tint = clamp((shade / shade_l) / max(hue, 1e-4), 1.0 / kTintBoundCharacter, kTintBoundCharacter);
+        const float bound = traced_tint_bound();  // c92
+        const float3 tint = clamp((shade / shade_l) / max(hue, 1e-4), 1.0 / bound, bound);
         bounded = lerp(shade, shade_l * tint * hue, saturate(view_look.x));
     }
     float3 sum = rest + bounded;

@@ -441,6 +441,15 @@ float traced_sky_chroma() { return view_dev[1].z > 0.5 ? view_dev[0].z : 0.4; }
 // the characters', (0.8, 1.25) (B2: Mario in shade is not blue).
 static const float kTintBoundEnvironment = 2.0;
 static const float kTintBoundCharacter = 1.25;
+// c92 (the director 11-12): the draw's bound: a character's (draw flag 2048: a skinned model), else the environment's.
+float traced_tint_bound() { return (draw_flags & 2048u) != 0u ? kTintBoundCharacter : kTintBoundEnvironment; }
+// c92: O as it enters shade light (the sky term of a painted surface, a lit program's ambient and fill): its luminance
+// and kShadowTint (view_stage_a.w) of its own hue: the shade's hue is the art's ambient's, the bounce and the dome
+// colour it a little (FB b87's hue stays inside O).
+float3 traced_o_shade(float3 o) {
+    const float l = dot(o, float3(0.2126, 0.7152, 0.0722));
+    return l > 1e-6 ? l * lerp(float3(1.0, 1.0, 1.0), o / l, saturate(view_stage_a.w)) : o;
+}
 float3 traced_bounded(float3 lit, float held_l, float3 held, float bound) {
     const float lit_l = dot(lit, float3(0.2126, 0.7152, 0.0722));
     const float3 tint = lit_l > 1e-6 && held_l > 1e-4 ? (lit / lit_l) / max(held, 1e-4) : float3(1.0, 1.0, 1.0);
@@ -467,10 +476,12 @@ float3 traced_painted(float4 light, float nl, float3 o3, bool coloured) {
     // October's own (the stage's light as it is: a dim or coloured stage dims and tints the art), 0 the art's own
     // brightness kept (divided by the full light). The view's part is the host's (F18, view_relight): lit =
     // (sky' O + key sun_strength nl V) E, held = lerp(full, 1, stage_light).
-    // c73 (b87): sky' the sky's luminance only; its hue is in O, once.
-    const float3 lit = dot(view_relight[1].rgb, luminance) * o3 + view_relight[2].rgb * (nl * v);
-    // A3-F8: lit over held in luminance, its colour over held's limited to a stop either way.
-    const float3 relit = traced_bounded(lit, view_relight[0].w, view_relight[3].rgb, kTintBoundEnvironment);  // c50, c69: one bound
+    // c92 (the director 11-12; c73 withdrawn): sky' a channel at a time, the authored ambient's hue (M2, at kSkyChroma),
+    // by O's luminance and kShadowTint of its hue.
+    const float3 lit = view_relight[1].rgb * traced_o_shade(o3) + view_relight[2].rgb * (nl * v);
+    // A3-F8: lit over held in luminance, its colour over held's within the draw's bound (c92: the environment's or a
+    // character's).
+    const float3 relit = traced_bounded(lit, view_relight[0].w, view_relight[3].rgb, traced_tint_bound());
     return lerp(painted, relit, view_look.x);
 }
 // c74: the sheen where the pixel mirrors nothing else (its mirror picture a in [0.999, 1.5]: no class's own F), not a

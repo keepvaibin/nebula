@@ -528,7 +528,7 @@ const RenderCore::WalkView& RenderCore::walk_view(std::uint32_t index, const Neb
             return v <= 0.04045f ? v / 12.92f : std::pow((v + 0.055f) / 1.055f, 2.4f);
         };
         const auto luma = [](const float* v) { return 0.2126f * v[0] + 0.7152f * v[1] + 0.0722f * v[2]; };
-        const float sun_strength = rows.dev[1][1] > 0.5f ? rows.dev[0][1] : 1.0f;
+        const float sun_strength = rows.dev[1][1] > 0.5f ? rows.dev[0][1] : 1.25f;  // c92: October's kSun
         const float sky_chroma = rows.dev[1][2] > 0.5f ? rows.dev[0][2] : 0.4f;
         const float stage_light = rows.dev[1][3] > 0.5f ? rows.dev[0][3] : 0.0f;
         float sky[3], full[3], key[3], held[3];
@@ -1236,8 +1236,13 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
         const bool shown = rt_light_on_ && scene_layer &&
                            (sky_draw || ((item.flags & (NEBULA_ITEM_RING | NEBULA_ITEM_INSTANCES)) == 0u &&
                                          registries_.mesh(item.mesh).hit_class == NEBULA_HIT_EMISSIVE));
+        // c92 (the director 11-12): a character (its model skinned: envelopes) takes the characters' shade bound
+        // (program.hlsli traced_tint_bound, draw flag 2048); everything else the environment's.
+        const bool character = rt_light_on_ && scene_layer && item.block < list.block_count && list.blocks[item.block].model != 0u &&
+                               !registries_.model(list.blocks[item.block].model).envelopes.empty();
         root.flags = ((item.flags & NEBULA_ITEM_SPREAD_LINES) != 0u ? 1u : 0u) |
                      (shown ? 64u : 0u) |
+                     (character ? 2048u : 0u) |
                      (metal ? 128u : 0u) |
                      // c81 (L4): a glowing mesh that is a light this frame: never duller than its own colour.
                      (rt_light_on_ && scene_layer && i < rt_glow_bodies_.size() && rt_glow_bodies_[i] != 0u ? 256u : 0u) |
