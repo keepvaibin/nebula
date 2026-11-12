@@ -7,6 +7,7 @@
 #include "Game/System/LumaServices.hpp"
 #include "Game/System/LumaTypes.hpp"
 #include "Game/System/LumaClasses.hpp"
+#include "Game/System/LumaNumbers.hpp"
 #include "Game/System/NebulaText.hpp"
 #include <luma_host.h>
 #include <nebula_format.h>
@@ -1003,10 +1004,19 @@ namespace luma {
 
         void* apiClassData(const LumaMod*, const void* pObject, s32 number) { return luma::classes::data(pObject, number); }
 
+        // Numbers (numbers contract, plan 1.5).
+        void* apiNumber(const LumaMod* pMod, const char* pName, const char* pSignature, u32 place, u32* pKind) {
+            return luma::numbers::find(pMod, pName, pSignature, place, pKind);
+        }
+
+        s32 apiSetNumber(const LumaMod* pMod, const char* pName, const char* pSignature, u32 place, f64 value) {
+            return luma::numbers::set(pMod, pName, pSignature, place, value);
+        }
+
         const LumaCore sCore = {
             sizeof(LumaCore), LUMA_API, apiLog, apiFunction, apiFunctionAt, apiHook, apiProceed, apiField, apiSizeOf, apiClassOf, apiIsA, apiService,
             apiGameThread, apiUnhook, apiAlloc, apiFree, apiReport, apiOwnClass, apiAsClass, apiMethod, apiOverrider, apiCallMethod,
-            apiKeep, apiKept, apiDefineClass, apiClassData,
+            apiKeep, apiKept, apiDefineClass, apiClassData, apiNumber, apiSetNumber,
         };
 
         // One import: its function (functions and hooks) or number (fields, sizes, classes). False: the game has none,
@@ -1602,6 +1612,7 @@ namespace luma {
                 // was published.
                 removeHooks(pMod);
                 luma::classes::modGone(pMod);
+                luma::numbers::modGone(pMod);
                 tellDependentGone(pMod);
                 luma::services::modGone(pMod);
                 endMod(pMod);
@@ -1651,6 +1662,7 @@ namespace luma {
             // library (LR-5, D3-3).
             removeHooks(pMod);
             luma::classes::modGone(pMod);
+            luma::numbers::modGone(pMod);
             if (pInfo->stop != nullptr) {
                 pMod->inStop = true;
                 pInfo->stop();

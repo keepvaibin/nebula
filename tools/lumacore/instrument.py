@@ -91,6 +91,19 @@ DEFINE = re.compile(rb'^[ \t]*#[ \t]*define[ \t]+(\w+)((?:\\\r?\n|[^\n])*)', re.
 COMMENT = re.compile(rb'//[^\n]*|/\*.*?\*/', re.S)
 MARK_WORD = re.compile(rb'\bLUMA_(?:OUT|IN|INOUT|KEPT|COUNT|COUNT_FIXED|NULLABLE)\b')
 LINKAGE_INTERNAL, LINKAGE_EXTERNAL = 2, 4
+# 1.5's walk of a row's code
+K_ENUM_DECL, K_FIELD, K_PARM, K_TYPEDEF, K_NAMESPACE_ALIAS, K_USING_DIRECTIVE, K_USING_DECL, K_TYPE_ALIAS = 5, 6, 10, 20, 33, 34, 35, 36
+K_TYPE_REF, K_TEMPLATE_REF, K_NAMESPACE_REF, K_MEMBER_REF, K_OVERLOADED_REF, K_VARIABLE_REF = 43, 45, 46, 47, 49, 50
+K_UNEXPOSED_EXPR, K_DECL_REF_EXPR, K_INTEGER_LITERAL, K_FLOATING_LITERAL, K_PAREN = 100, 101, 106, 107, 111
+K_UNARY_OPERATOR, K_ARRAY_SUBSCRIPT, K_BINARY, K_COMPOUND_ASSIGN, K_UNARY_EXPR = 112, 113, 114, 115, 136
+K_CASE, K_IF, K_ASM, K_MS_ASM, K_STATIC_ASSERT = 203, 205, 215, 229, 602
+SC_STATIC = 3
+T_ENUM_KIND = 106
+# Whole numbers (bool and the character types too: a const one may be a constant expression)
+T_WHOLE = (3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19)
+T_SIGNED, T_UNSIGNED = (13, 14, 16, 17, 18, 19), (4, 5, 6, 7, 8, 9, 10, 11)
+# What a number may be read as: the whole numbers but bool, wchar_t and 128 bits; float; double
+T_NUMBER_KINDS = T_SIGNED + T_UNSIGNED + (21, 22)
 
 
 def load(path):
@@ -161,6 +174,14 @@ def load(path):
     api.hashCursor = fn('clang_hashCursor', c_uint, CXCursor)
     api.equalCursors = fn('clang_equalCursors', c_uint, CXCursor, CXCursor)
     api.fileContents = fn('clang_getFileContents', c_void_p, c_void_p, c_void_p, POINTER(ctypes.c_size_t))
+    api.varInitializer = fn('clang_Cursor_getVarDeclInitializer', CXCursor, CXCursor)
+    api.storageClass = fn('clang_Cursor_getStorageClass', c_int, CXCursor)
+    api.tlsKind = fn('clang_getCursorTLSKind', c_int, CXCursor)
+    api.canonicalType = fn('clang_getCanonicalType', CXType, CXType)
+    api.isConstType = fn('clang_isConstQualifiedType', c_uint, CXType)
+    api.sizeOf = fn('clang_Type_getSizeOf', ctypes.c_longlong, CXType)
+    api.usr = fn('clang_getCursorUSR', CXString, CXCursor)
+    api.access = fn('clang_getCXXAccessSpecifier', c_int, CXCursor)
     return api
 
 
@@ -211,6 +232,14 @@ class Unit:
         self.types_head = b''   # before the source: what the type rows need
         self.types_tail = b''   # after it: the rows
         self.types_part = {}
+        # 1.5: the unit's numbers (numbers_of), each one's uses, the reasons numbers were not named, the constants
+        self.numbers = []
+        self.number_index = {}
+        self.number_uses = []
+        self.number_skips = {}
+        self.constants = {}
+        self.unused_marked = set()
+        self.replaces = []
 
     def string(self, cx):
         raw = self.api.cstring(cx)
@@ -284,7 +313,12 @@ class Unit:
         for child in self.children(cursor):
             if child.kind in FUNCTIONS:
                 if self.api.isDefinition(child) and self.in_main(child):
+                    left = len(self.left)
                     self.function(child)
+                    if len(self.left) != left:
+                        self.count_numbers(child, 'its function has no row (' + self.left[-1].split('\t')[-1] + ')')
+            elif child.kind in (K_FUNCTION_TEMPLATE, K_CLASS_TEMPLATE, K_CLASS_PARTIAL) and self.in_main(child):
+                self.count_numbers(child, 'in a template')
             elif child.kind == K_VAR:
                 if self.api.isDefinition(child) and self.api.linkage(child) == LINKAGE_EXTERNAL and self.expanded_in_main(child):
                     self.defines.add(self.string(self.api.mangling(child)))
@@ -434,6 +468,285 @@ class Unit:
         if role is None:
             role = 'free' if owner is None else 'static' if api.isStatic(cursor) else 'method'
         self.facts.append((cursor, name, signature, role))
+        self.numbers_of(cursor, name, signature)
+
+    # 1.5: game data in code by name. Each number written in a row's code (and each use there of a file's number
+    # constant) is read from one unit-local record, luma_numbers, which the copy defines before the source with the
+    # numbers as written: so the build is the source's, number for number, and a mod changes one by its name.
+    def numbers_of(self, cursor, name, signature):
+        """Names the numbers of one row's code (its member initializers and body): `name.k`, k from 1 in source order."""
+        if self.label.startswith('Game/System/Luma'):
+            # The kernel's own numbers (its tables' sizes, its hashes' constants) are not the game's data.
+            return self.count_numbers(cursor, "the kernel's own code")
+        found = []
+        for child in self.children(cursor):
+            if child.kind in (K_PARM, K_TYPE_REF, K_TEMPLATE_REF, K_NAMESPACE_REF, K_MEMBER_REF) or 400 <= child.kind < 500:
+                continue
+            self.find_numbers(child, [cursor], found)
+        place = 0
+        for start, end, ctype, kind, written, line, constant in found:
+            if constant is None:
+                place += 1
+                number = (name, signature, place)
+            else:
+                number = self.constants[constant][:3]
+            self.number_uses.append((start, end, number))
+            if number not in self.number_index:
+                self.number_index[number] = len(self.numbers)
+                self.numbers.append({'name': number[0], 'signature': number[1], 'place': number[2], 'type': ctype,
+                                     'kind': kind, 'value': written, 'line': line})
+
+    def skip_number(self, why, cursor=None):
+        self.number_skips[why] = self.number_skips.get(why, 0) + 1
+
+    def count_numbers(self, cursor, why):
+        """The numbers in code that gets no row: counted, with the reason, for the completeness report."""
+        for child in self.children(cursor):
+            if child.kind in (K_INTEGER_LITERAL, K_FLOATING_LITERAL):
+                if self.offset(self.api.rangeStart(self.api.extent(child))) is not None:
+                    self.skip_number(why)
+            else:
+                self.count_numbers(child, why)
+
+    def find_numbers(self, cursor, parents, found):
+        """Every number of an expression tree that may be read at run time, into found (start, end, C type, kind,
+        written, line, constant): constant is None for a number written here, or the constant's key for a use of a
+        file's number constant. What the language needs as a constant, and what is not a tuning number, is counted
+        in number_skips with its reason."""
+        api = self.api
+        k = cursor.kind
+        if k in (K_INTEGER_LITERAL, K_FLOATING_LITERAL):
+            return self.literal(cursor, parents, found)
+        if k == K_DECL_REF_EXPR:
+            # A function's template arguments are its children: what the language needs as a constant.
+            self.constant_use(cursor, parents, found)
+            return self.count_numbers(cursor, 'a template argument')
+        if k in (K_TYPE_REF, K_TEMPLATE_REF, K_NAMESPACE_REF, K_MEMBER_REF, K_OVERLOADED_REF, K_VARIABLE_REF,
+                 K_STATIC_ASSERT) or 400 <= k < 500:
+            return self.count_numbers(cursor, 'a constant the language needs (a type, a template argument, an assert)')
+        if k == K_UNARY_EXPR:
+            return self.count_numbers(cursor, 'inside sizeof or alignof')
+        if k in (K_ASM, K_MS_ASM):
+            return self.count_numbers(cursor, 'inside assembly')
+        children = self.children(cursor)
+        if k == K_CASE:
+            for child in children[:-1]:
+                self.count_numbers(child, 'a case label')
+            children = children[-1:]
+        elif k == K_VAR:
+            initializer = api.varInitializer(cursor)
+            head = self.head_text(cursor)
+            vtype = api.canonicalType(api.type(cursor))
+            if api.storageClass(cursor) == SC_STATIC or api.tlsKind(cursor) != 0:
+                return self.count_numbers(cursor, "a local static's initializer (lifting it would make the static's start a guarded one)")
+            if re.search(r'\bconstexpr\b', head):
+                return self.count_numbers(cursor, 'a constexpr')
+            if api.isConstType(vtype) and vtype.kind in T_WHOLE + (T_ENUM,):
+                return self.count_numbers(cursor, 'a const whole number (the language may use it as a constant)')
+            kept = []
+            for child in children:
+                if not api.isNull(initializer) and api.equalCursors(child, initializer):
+                    kept.append(child)
+                else:
+                    self.count_numbers(child, 'an array size or a type of a local')
+            children = kept
+        elif k in (K_STRUCT, K_UNION, K_CLASS, K_ENUM_DECL, K_TYPEDEF, K_TYPE_ALIAS, K_FIELD, K_USING_DECL,
+                   K_USING_DIRECTIVE, K_NAMESPACE_ALIAS, K_FUNCTION, K_METHOD, K_CLASS_TEMPLATE, K_FUNCTION_TEMPLATE):
+            return self.count_numbers(cursor, 'a declaration inside a function (a local type)')
+        elif k == K_IF and re.match(rb'if\s+constexpr\b', self.text_of(cursor) or b''):
+            self.count_numbers(children[0], 'an if constexpr condition')
+            children = children[1:]
+        elif k == K_ARRAY_SUBSCRIPT and len(children) == 2:
+            self.whole_only(children[1], parents + [cursor], found, 'an index')
+            children = children[:1]
+        elif k in (K_BINARY, K_COMPOUND_ASSIGN) and len(children) == 2:
+            op = self.operator_between(children[0], children[1])
+            if op in (b'<<', b'>>', b'&', b'|', b'^', b'<<=', b'>>=', b'&=', b'|=', b'^='):
+                for child in children:
+                    self.whole_only(child, parents + [cursor], found, 'a bit pattern or a shift count')
+                return
+        elif k == K_UNARY_OPERATOR and len(children) == 1:
+            text = self.text_of(cursor) or b''
+            if text.startswith(b'~'):
+                return self.whole_only(children[0], parents + [cursor], found, 'a bit pattern or a shift count')
+            if text.startswith(b'&'):
+                # The address of a file's constant stays the constant's own.
+                return self.find_numbers_no_constants(children[0], parents + [cursor], found)
+        for child in children:
+            self.find_numbers(child, parents + [cursor], found)
+
+    def find_numbers_no_constants(self, cursor, parents, found):
+        if cursor.kind == K_DECL_REF_EXPR:
+            return self.count_numbers(cursor, 'a template argument')
+        if cursor.kind in (K_UNEXPOSED_EXPR, K_PAREN):
+            for child in self.children(cursor):
+                self.find_numbers_no_constants(child, parents + [cursor], found)
+            return
+        self.find_numbers(cursor, parents, found)
+
+    def whole_only(self, cursor, parents, found, why):
+        """An operand where a whole number is not a tuning number (through implicit conversions and parentheses)."""
+        if cursor.kind == K_INTEGER_LITERAL:
+            return self.skip_number(why) if self.offset(self.api.rangeStart(self.api.extent(cursor))) is not None else None
+        if cursor.kind in (K_UNEXPOSED_EXPR, K_PAREN):
+            for child in self.children(cursor):
+                self.whole_only(child, parents + [cursor], found, why)
+            return
+        self.find_numbers(cursor, parents, found)
+
+    def text_of(self, cursor):
+        start = self.offset(self.api.rangeStart(self.api.extent(cursor)))
+        end = self.offset(self.api.rangeEnd(self.api.extent(cursor)))
+        return None if start is None or end is None else self.text[start:end]
+
+    def head_text(self, cursor):
+        """A declaration's text up to its name."""
+        start = self.offset(self.api.rangeStart(self.api.extent(cursor)))
+        at = self.offset(self.api.location(cursor))
+        return '' if start is None or at is None else self.text[start:at].decode('utf-8', 'replace')
+
+    def operator_between(self, a, b):
+        end = self.offset(self.api.rangeEnd(self.api.extent(a)))
+        start = self.offset(self.api.rangeStart(self.api.extent(b)))
+        if end is None or start is None or start < end:
+            return None
+        return COMMENT.sub(b'', self.text[end:start]).strip()
+
+    def number_type(self, cursor, parents):
+        """The type the program reads the number as: the implicit conversion's around it when that is a number type
+        (so a list initializer does not narrow, and an overload is chosen as before), else the number's own."""
+        api = self.api
+        for parent in reversed(parents):
+            if parent.kind == K_UNEXPOSED_EXPR:
+                t = api.canonicalType(api.type(parent))
+                if t.kind in T_NUMBER_KINDS:
+                    return t
+                continue
+            if parent.kind == K_PAREN:
+                continue
+            break
+        return api.canonicalType(api.type(cursor))
+
+    def literal(self, cursor, parents, found):
+        api = self.api
+        start = self.offset(api.rangeStart(api.extent(cursor)))
+        end = self.offset(api.rangeEnd(api.extent(cursor)))
+        if start is None or end is None:
+            return self.skip_number('written inside a macro')
+        written = self.text[start:end].decode('ascii', 'replace')
+        value = number_value(written, cursor.kind == K_FLOATING_LITERAL)
+        if value is None:
+            return self.skip_number('a number form instrument.py does not read')
+        # A minus written before the number is part of it: "-2.0f" is one number.
+        outer = list(parents)
+        if outer and outer[-1].kind == K_UNARY_OPERATOR and (self.text_of(outer[-1]) or b'').startswith(b'-') and \
+                self.offset(api.rangeEnd(api.extent(outer[-1]))) == end:
+            start = self.offset(api.rangeStart(api.extent(outer[-1])))
+            written = self.text[start:end].decode('ascii', 'replace')
+            value = -value
+            outer = outer[:-1]
+        if value in (0, 1, -1):
+            return self.skip_number('0, 1 or -1 (an identity, not a tuning number)')
+        t = self.number_type(cursor, outer)
+        kind = number_kind(t.kind, api.sizeOf(t))
+        if kind is None:
+            t = api.canonicalType(api.type(cursor))
+            kind = number_kind(t.kind, api.sizeOf(t))
+        if kind is None:
+            return self.skip_number('a number of a type a mod does not write (long double, 128 bits)')
+        ctype = self.string(api.typeSpelling(t))
+        found.append((start, end, ctype, kind, written, self.line(cursor), None))
+
+    def constant_use(self, cursor, parents, found):
+        """A use of a file's number constant (`const f32 cWalkSpeed = 2.0f;` at namespace scope or a class's static)
+        is read from the constant's one entry, named by the constant."""
+        api = self.api
+        target = api.referenced(cursor)
+        if api.isNull(target) or target.kind != K_VAR:
+            return
+        key = self.constant_key(target)
+        if key is None:
+            return
+        start = self.offset(api.rangeStart(api.extent(cursor)))
+        end = self.offset(api.rangeEnd(api.extent(cursor)))
+        if start is None or end is None:
+            return self.skip_number("a file's constant used inside a macro")
+        entry = self.constants[key]
+        found.append((start, end, entry[3], entry[4], entry[5], self.line(cursor), key))
+
+    def constant_key(self, var):
+        """The entry of a file's number constant, made at its first use: (name, '', 0) plus its type, kind and
+        initializer; None when it is not one (defined in another file, not const, constexpr, not a number written
+        out, or private to a class)."""
+        api = self.api
+        usr = self.string(api.usr(var))
+        if usr in self.constants:
+            return usr if self.constants[usr] is not None else None
+        self.constants[usr] = None
+        definition = api.definition(var)
+        if api.isNull(definition) or not self.in_main(definition):
+            return None
+        vtype = api.canonicalType(api.type(definition))
+        parent = api.semanticParent(definition)
+        if parent.kind in FUNCTIONS or not api.isConstType(vtype) or re.search(r'\bconstexpr\b', self.head_text(definition)):
+            return None
+        if parent.kind in (K_STRUCT, K_UNION, K_CLASS) and api.access(definition) in (2, 3):
+            return None
+        kind = number_kind(vtype.kind, api.sizeOf(vtype))
+        initializer = api.varInitializer(definition)
+        if kind is None or api.isNull(initializer):
+            return None
+        literal = self.literal_cursor(initializer)
+        text = (self.text_of(initializer) or b'').decode('ascii', 'replace').strip()
+        if literal is None or not text:
+            self.skip_number("a file's constant whose value is not a number written out")
+            return None
+        scope = self.scope(definition)
+        if scope is None:
+            return None
+        qualified = '::'.join([n for n, _, _ in scope if n] + [self.string(api.spelling(definition))])
+        local = api.linkage(definition) == LINKAGE_INTERNAL or any(kind_ == K_CLASS and self.defined_here(c) for _, kind_, c in scope)
+        name = f'{self.label}#{qualified}' if local else qualified
+        ctype = self.string(api.typeSpelling(api.unqualified(vtype)))
+        self.constants[usr] = (name, '', 0, ctype, kind, text)
+        if parent.kind not in (K_STRUCT, K_UNION, K_CLASS):
+            # Its uses in rows' code read its entry: the constant itself may be read nowhere now.
+            start = self.offset(api.rangeStart(api.extent(definition)))
+            if start is not None and start not in self.unused_marked:
+                self.unused_marked.add(start)
+                self.edits.append((start, b'[[maybe_unused]] '))
+        return usr
+
+    def literal_cursor(self, cursor):
+        """The number an initializer is, through implicit conversions and parentheses, a minus allowed; None when it
+        is anything else."""
+        while cursor.kind in (K_UNEXPOSED_EXPR, K_PAREN):
+            inner = self.children(cursor)
+            if len(inner) != 1:
+                return None
+            cursor = inner[0]
+        if cursor.kind == K_UNARY_OPERATOR and (self.text_of(cursor) or b'').startswith(b'-'):
+            inner = self.children(cursor)
+            return self.literal_cursor(inner[0]) if len(inner) == 1 else None
+        return cursor if cursor.kind in (K_INTEGER_LITERAL, K_FLOATING_LITERAL) else None
+
+    def number_code(self):
+        """The copy's numbers: the record before the source, each number's uses replaced, the table after it."""
+        if not self.numbers:
+            return b'', b''
+        members = ' '.join(f'{n["type"]} v{i};' for i, n in enumerate(self.numbers))
+        values = ', '.join(f'({n["type"]})({n["value"]})' for n in self.numbers)
+        head = (f'namespace {{ struct LumaNumbers {{ {members} }} luma_numbers = {{ {values} }}; }}\n').encode()
+        for start, end, number in self.number_uses:
+            i = self.number_index[number]
+            self.replaces.append((start, end, f'(({self.numbers[i]["type"]})luma_numbers.v{i})'.encode()))
+        rows = ',\n'.join(f'    {{{quote(n["name"])}, {quote(n["signature"])}, {n["place"]}u, {n["kind"]}u, '
+                          f'&luma_numbers.v{i}}}' for i, n in enumerate(self.numbers))
+        tail = ('\n// The numbers of this unit\'s code by name (tools/lumacore/instrument.py, 1.5).\nnamespace {\n'
+                f'const ::luma::Number luma_number_rows[] = {{\n{rows}\n}};\n'
+                f'LUMA_NUMBERS_SECTION const ::luma::Numbers luma_numbers_unit = {{{quote(self.label)}, luma_number_rows, '
+                f'{len(self.numbers)}u}};\n}}\n').encode()
+        return head, tail
 
     def identity(self, cursor):
         """The row name and signature function() gives a function, whether this unit defines it or not (an overridden
@@ -802,18 +1115,64 @@ class Unit:
             cursor = parent
 
     def write(self, output):
+        numbers_head, numbers_tail = self.number_code()
         text = self.text
-        for at, added in sorted(self.edits, key=lambda e: e[0], reverse=True):
-            text = text[:at] + added + text[at:]
+        # Insertions (at, b'...') and replacements (start, end, b'...'), the last first: none overlaps another.
+        changes = [(at, at, added) for at, added in self.edits] + list(self.replaces)
+        last = None
+        for start, end, added in sorted(changes, key=lambda e: (e[0], e[1]), reverse=True):
+            if last is not None and end > last:
+                sys.exit(f'instrument.py: {self.source}: two changes overlap at offset {start}')
+            text = text[:start] + added + text[end:]
+            last = start
         marker = f'#include <luma_hook.h>\n#line 1 "{self.source.resolve().as_posix()}"\n'.encode()
-        if self.types_tail and not text.endswith(b'\n'):
+        if (self.types_tail or numbers_tail) and not text.endswith(b'\n'):
             text += b'\n'
-        write_if_changed(output, self.types_head + marker + text + self.types_tail)
+        write_if_changed(output, self.types_head + numbers_head + marker + text + self.types_tail + numbers_tail)
+        write_if_changed(output + '.numbers', (json.dumps({'numbers': self.numbers, 'uses': len(self.number_uses),
+                                                           'skipped': self.number_skips}, ensure_ascii=False) + '\n').encode('utf-8'))
         write_if_changed(output + '.types', (json.dumps(self.types_part, ensure_ascii=False) + '\n').encode('utf-8'))
         write_if_changed(output + '.rows', ('\n'.join(self.rows) + '\n' if self.rows else '').encode())
         write_if_changed(output + '.functions', (json.dumps(self.functions, ensure_ascii=False) + '\n').encode('utf-8'))
         write_if_changed(output + '.left', ('\n'.join(self.left) + '\n' if self.left else '').encode())
         write_if_changed(output + '.globals', ''.join(name + '\n' for name in sorted(self.defines) if name).encode())
+
+
+def number_value(written, floating):
+    """A number as C++ writes it, read: None for a form this does not read."""
+    text = written.replace("'", '')
+    try:
+        if floating:
+            text = text.rstrip('fFlL')
+            return float.fromhex(text) if text.lower().startswith('0x') else float(text)
+        text = text.rstrip('uUlLzZ')
+        low = text.lower()
+        if low.startswith('0x'):
+            return int(text[2:], 16)
+        if low.startswith('0b'):
+            return int(text[2:], 2)
+        if len(text) > 1 and text.startswith('0'):
+            return int(text[1:], 8)
+        return int(text, 10)
+    except ValueError:
+        return None
+
+
+def number_kind(type_kind, size):
+    """luma::Number's kind (luma_hook.h): 1 f32, 2 f64, 3 s8, 4 u8, 5 s16, 6 u16, 7 s32, 8 u32, 9 s64, 10 u64; None
+    for any other type."""
+    if type_kind == 21 and size == 4:
+        return 1
+    if type_kind == 22 and size == 8:
+        return 2
+    sizes = {1: 0, 2: 2, 4: 4, 8: 6}
+    if size not in sizes:
+        return None
+    if type_kind in T_SIGNED:
+        return 3 + sizes[size]
+    if type_kind in T_UNSIGNED:
+        return 4 + sizes[size]
+    return None
 
 
 def mark_text(entry):

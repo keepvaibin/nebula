@@ -212,6 +212,19 @@ typedef struct LumaCore {
     /* The object's data when it is one of the class's (from the object or any of its subobjects), else null. Any
        thread. */
     void* (*class_data)(const LumaMod* mod, const void* object, int32_t class_number);
+
+    /* Numbers in the game's code (numbers contract, plan 1.5): every number written in a function's code that the game
+       reads at run time, named by the function's row name, its signature, and its place there (the k-th named number,
+       from 1, in source order; luma_numbers.json lists them all), and every file's number constant by its name, with
+       signature "" and place 0. A null signature asks for the only function of that name with a number at that place.
+       number: its address and, in *kind, its kind (1 f32, 2 f64, 3 s8, 4 u8, 5 s16, 6 u16, 7 s32, 8 u32, 9 s64,
+       10 u64), or null and kind 0: no such number, or several (give the signature); said in the log. Any thread. */
+    void* (*number)(const LumaMod* mod, const char* name, const char* signature, uint32_t place, uint32_t* kind);
+    /* Sets one to `value` for the mod. When the mod goes, every number it set is again what the mods still here set
+       last, or the game's own (a write through number's address is not put back). 0: set; -1: no such number, several,
+       or no memory (said); -2: the value is not one of its kind (a fraction for a whole number, out of range; said);
+       -3: not on the game thread. */
+    int32_t (*set_number)(const LumaMod* mod, const char* name, const char* signature, uint32_t place, double value);
 } LumaCore;
 
 /* report's own codes (D3-1). */
