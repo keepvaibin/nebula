@@ -179,8 +179,12 @@ bool blended_prepass_draws(std::uint32_t state) noexcept {
 }
 
 bool added_prepass_draws(std::uint32_t state) noexcept {
-    return (state & NEBULA_STATE_COLOR_WRITE) != 0u && (state & 3u) == NEBULA_BLEND_ADD && ((state >> 6u) & 15u) == NEBULA_FACTOR_ONE &&
-           (state & (1u << 10u)) != 0u && ((state >> 20u) & 3u) == 0u && ((state >> 15u) & 3u) != NEBULA_CULL_ALL;
+    // Added (dst one), or tinting what is behind and adding (dst source colour: the air bubble, the Undergrunt Gunner's
+    // capsule; FB b94b).
+    const std::uint32_t dst = (state >> 6u) & 15u;
+    return (state & NEBULA_STATE_COLOR_WRITE) != 0u && (state & 3u) == NEBULA_BLEND_ADD &&
+           (dst == NEBULA_FACTOR_ONE || dst == NEBULA_FACTOR_SRC_COLOR) && (state & (1u << 10u)) != 0u &&
+           ((state >> 20u) & 3u) == 0u && ((state >> 15u) & 3u) != NEBULA_CULL_ALL;
 }
 
 void Pipelines::prepare(std::uint32_t id, const PipelineEntry& entry, const std::vector<unsigned>& variants, bool motion, bool layer,

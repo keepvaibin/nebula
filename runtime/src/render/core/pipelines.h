@@ -149,7 +149,8 @@ private:
 // crystal). Not what adds its own light to the picture, nor a stencil's marks.
 [[nodiscard]] bool blended_prepass_draws(std::uint32_t state) noexcept;
 // A state the second prepass takes when its surface is a glass row's (FB b94: an added clear shell, drawn as an
-// exchange): added to the picture (dst factor one), depth tested, no stencil.
+// exchange): added to the picture (dst factor one) or tinting it and adding (dst source colour, b94b), depth tested,
+// no stencil.
 [[nodiscard]] bool added_prepass_draws(std::uint32_t state) noexcept;
 
 // Writes `bytes` beside `file` and renames it over, so a crash mid-write leaves the old cache whole.
