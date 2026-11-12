@@ -155,6 +155,18 @@ void set_mods_folder(const std::filesystem::path& folder, const std::filesystem:
 [[nodiscard]] std::filesystem::path mods_settings_file();
 // Mod code was turned off after a crash in this run; the Mods page says so.
 void set_code_off_after_crash() noexcept;
+// Safe start (task 6.6): every mod off for one start, the player's choices kept as they are. kAsked: --safe-start 1, or
+// Shift held as Nebula starts (Windows); kAfterCrash: the last run crashed while mods changed the game and no mod's code
+// was on (a crash with code on leaves only the code off first: .code_crashed).
+enum class SafeStart : std::uint8_t { kNo, kAsked, kAfterCrash };
+// The file whose presence makes the next start safe (in the mods folder; empty before set_mods_folder). A crash writes
+// it empty (kAfterCrash); anything else in it is kAsked.
+[[nodiscard]] std::filesystem::path safe_start_file();
+// At the start, once, after set_mods_folder: whether this start is safe (`asked` from the launch, else the file),
+// removing the file so the start after is not. Remembered for safe_start().
+SafeStart take_safe_start(bool asked);
+// This run's safe start (kNo before take_safe_start).
+[[nodiscard]] SafeStart safe_start() noexcept;
 // The game id given to set_mods_folder (empty before).
 [[nodiscard]] std::string mods_game_id();
 // The mods found, with their saved choices (Riivolution defaults when nothing is saved): enabled mods in load order

@@ -19,6 +19,7 @@ and a value. The launcher passes `--pak` and `--saves`; the Android app also pas
 | `--timeline <file>` | Where the recorded timeline goes; default `diagnostics/timeline-<process id>.bin` in the data folder. |
 | `--seconds <n>` | End the game after n seconds. |
 | `--import <file or folder>` | Import this mod as a drop on the window does, then show the result (the validator's findings; nothing is added when it finds an error). Given again for each. "Open with" and the `.luma` association start the game with it; a game already running for the same settings folder takes the files and comes forward. |
+| `--safe-start 1` | Every mod is off for this start; your choices on the Mods page stay as they are for the next. Holding Shift as Nebula starts does the same. After a crash with mods on, the next start does this by itself (or, when mods' code was on, leaves only the code off). |
 | `--gpu-start-retry <n>` | Set by the game itself when it starts again because no graphics memory was free: the tries so far (5 at most). |
 
 The GPU is a setting: `gpu=` in `config.ini`, chosen in Nebula Settings (empty: the high-performance GPU).

@@ -1026,10 +1026,34 @@ std::string mods_game_id() {
 
 namespace {
 std::atomic<bool> s_code_off_after_crash{false};
+std::atomic<SafeStart> s_safe_start{SafeStart::kNo};
 }
 
 void set_code_off_after_crash() noexcept {
     s_code_off_after_crash.store(true, std::memory_order_relaxed);
+}
+
+std::filesystem::path safe_start_file() {
+    const std::filesystem::path folder = mods_folder();
+    return folder.empty() ? folder : folder / ".safe_start";
+}
+
+SafeStart take_safe_start(bool asked) {
+    SafeStart safe = asked ? SafeStart::kAsked : SafeStart::kNo;
+    const std::filesystem::path file = safe_start_file();
+    std::error_code error;
+    if (!file.empty() && std::filesystem::exists(file, error)) {
+        if (safe == SafeStart::kNo) {
+            safe = std::filesystem::file_size(file, error) == 0u && !error ? SafeStart::kAfterCrash : SafeStart::kAsked;
+        }
+        std::filesystem::remove(file, error);
+    }
+    s_safe_start.store(safe, std::memory_order_relaxed);
+    return safe;
+}
+
+SafeStart safe_start() noexcept {
+    return s_safe_start.load(std::memory_order_relaxed);
 }
 
 std::filesystem::path mods_folder() {

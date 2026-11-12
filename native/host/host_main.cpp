@@ -3334,6 +3334,7 @@ void svc_mods_start(void*) {
     if (!gModsChangeGame) {
         return;
     }
+    // A crash from here with code on leaves the code off at the next start; without, every mod (set at the scan).
     if (!gPlugins.empty()) {
         gCodeCrashFile = crashed;
     }
@@ -3796,6 +3797,8 @@ void read_launch_args(int argc, char** argv) {
             args.extensions.push_back(path_at(i + 1));
         } else if (key == "--import") {
             args.imports.push_back(path_at(i + 1));
+        } else if (key == "--safe-start") {
+            args.safe_start = argv[i + 1][0] == '1';
         } else if (key == "--diagnostics") {
             std::string_view unknown;
             unsigned what = 0u;
@@ -3978,7 +3981,8 @@ int main(int argc, char** argv) {
             module = arg_path(i + 1);
         } else if (key == "--diagnostics" || key == "--timeline" || key == "--data" || key == "--settings" ||
                    key == "--crash-dumps" || key == "--gpu-validation" || key == "--console-log" ||
-                   key == "--gpu-start-retry" || key == "--dump-tunables" || key == "--extension" || key == "--import") {
+                   key == "--gpu-start-retry" || key == "--dump-tunables" || key == "--extension" || key == "--import" ||
+                   key == "--safe-start") {
             // Read above, before anything uses them.
         } else if (key == "--seconds") {
             seconds = std::atof(argv[i + 1]);
@@ -4060,6 +4064,22 @@ int main(int argc, char** argv) {
             const unsigned scanned_in = played();
             galaxy::mods::set_played_language(scanned_in);
             std::vector<galaxy::mods::ModInfo> mods = galaxy::mods::scan_mods(game_id);
+            // Safe start (task 6.6): every mod off for this start only (the copy planned; mods.ini stays the player's).
+            bool safe_asked = ::galaxy::launch_args().safe_start;
+#if defined(_WIN32)
+            safe_asked = safe_asked || (!::galaxy::launch_args().started_hidden && (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0);
+#endif
+            if (const galaxy::mods::SafeStart safe = galaxy::mods::take_safe_start(safe_asked);
+                safe != galaxy::mods::SafeStart::kNo) {
+                log_line("mods:", safe == galaxy::mods::SafeStart::kAsked
+                                      ? "safe start: every mod is off for this start"
+                                      : "safe start: the last run crashed with mods on; every mod is off for this start");
+                for (galaxy::mods::ModInfo& mod : mods) mod.enabled = false;
+            } else if (std::any_of(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) { return mod.enabled; })) {
+                // A crash from here on (the cook, the packs, the game) makes the next start safe; svc_mods_start
+                // narrows it to the code when code is on.
+                gCodeCrashFile = galaxy::mods::safe_start_file();
+            }
             bool added_language = false;
             for (const galaxy::mods::ModInfo& mod : mods) {
                 if (!mod.enabled) continue;

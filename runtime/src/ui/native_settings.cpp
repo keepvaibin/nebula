@@ -3168,6 +3168,13 @@ std::vector<SettingsRow> mods_page_rows(const RenderConfig&) {
     for (auto it = s_modscreen_shown.begin(); it != s_modscreen_shown.end();) {
         it = it->first.compare(0u, 5u, "page:") == 0 ? s_modscreen_shown.erase(it) : std::next(it);
     }
+    // A safe start (task 6.6) on top: every mod is off for this start, and why; the lists keep the player's choices.
+    if (const galaxy::mods::SafeStart safe = galaxy::mods::safe_start(); safe != galaxy::mods::SafeStart::kNo) {
+        rows.push_back(SettingsRow{safe == galaxy::mods::SafeStart::kAsked
+                                       ? "SAFE START: EVERY MOD IS OFF UNTIL THE NEXT START"
+                                       : "NEBULA CLOSED UNEXPECTEDLY WITH MODS ON. EVERY MOD IS OFF UNTIL THE NEXT START",
+                                   {}, nullptr, {}, true});
+    }
     // A part of the game that mods need was missing at this start (contract start-check 2): the log's line for it on
     // top, as the notice said it. Nebula's own lines are under the mod "nebula"; the entries are read only then.
     const std::vector<galaxy::modlog::PageMod> said = galaxy::modlog::mods();
