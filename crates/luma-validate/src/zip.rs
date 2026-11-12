@@ -231,8 +231,12 @@ pub fn read_directory(bytes: &mut dyn Bytes) -> Result<Vec<Entry>, Problem> {
             return Err(Problem::MultiDisk);
         }
         let is_folder_name = raw_name.last() == Some(&b'/');
-        // Unix mode in the high half of the external attributes when made on Unix (3) or macOS (19).
-        let mode = if made_by_os == 3 || made_by_os == 19 { (external >> 16) & 0o170000 } else { 0 };
+        // Unix mode in the high half of the external attributes when made on Unix (3) or macOS (19). A link or a device
+        // there is one whatever the entry says made it: unpackers that honour the high half do not all ask (a link
+        // marked as made on MS-DOS would otherwise pass, and could point outside the mod's folder).
+        let unix = made_by_os == 3 || made_by_os == 19;
+        let high = (external >> 16) & 0o170000;
+        let mode = if unix || matches!(high, 0o120000 | 0o020000 | 0o060000 | 0o010000 | 0o140000) { high } else { 0 };
         let kind = match mode {
             0o120000 => EntryKind::Link,
             0o020000 | 0o060000 | 0o010000 | 0o140000 => EntryKind::Device,
