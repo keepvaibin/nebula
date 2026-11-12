@@ -20,7 +20,6 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/GameAssets.hpp"
 #include "Game/System/LumaContentModel.hpp"
 #include <luma.h>
@@ -51,8 +50,8 @@
 //
 // No cost with no mod (effects 5): frame() and released() are one load each while no effect was started.
 
-NEBULA_TUNABLE_NAMED(s32, cFrames_check_1, "check.1", 60);  // EffectEmpty's window after an emitter's first frame (effects 2)
-NEBULA_TUNABLE_NAMED(s32, cFrames_alive_1, "alive.1", 120); // fx.alive facts a handle writes, from its start (harness only)
+  // EffectEmpty's window after an emitter's first frame (effects 2)
+ // fx.alive facts a handle writes, from its start (harness only)
 
 namespace luma {
     namespace content {
@@ -597,7 +596,7 @@ namespace luma {
                             anyValid = true;
                             const EmitterCore* const pCore = rSingle.mEmitter->mEmitter;
                             particles += pCore->getParticleNumber();
-                            if (pCore->getAge() < static_cast< u32 >(cFrames_check_1)) {
+                            if (pCore->getAge() < static_cast< u32 >(60)) {
                                 allPast = false;
                             }
                         }
@@ -918,7 +917,7 @@ namespace luma {
                     if (rEffect.checkEmpty && rEffect.frame != 0) {
                         check(rEffect);
                     }
-                    if (facts && rEffect.frame < static_cast< u32 >(cFrames_alive_1)) {
+                    if (facts && rEffect.frame < static_cast< u32 >(120)) {
                         aliveFact(rEffect);
                     }
                     rEffect.frame++;
