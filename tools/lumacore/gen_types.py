@@ -420,6 +420,8 @@ class Reader:
     def walk(self, cursor):
         for c in self.unit.children(cursor):
             k = c.kind
+            if 500 <= k <= 503:
+                continue  # the preprocessing record's cursors (instrument.py parses with it for C-6's marks)
             if k in (I.K_NAMESPACE, I.K_LINKAGE, I.K_UNEXPOSED_DECL):
                 self.walk(c)
                 continue
@@ -1315,6 +1317,9 @@ def merge_functions(folder, records, left_records):
                 source, at + 1, " ".join(rows[at]) if at < len(rows) else "(none)",
                 " ".join(have[at]) if at < len(have) else "(none)"))
             continue
+        for f in facts:
+            if not isinstance(f.get("marks"), list):
+                wrong.append("%s: %s %s has no marks (C-6)" % (source, f["name"], f["signature"]))
         functions += facts
     every = {(f["name"], f["signature"]) for f in functions}
     for f in functions:
