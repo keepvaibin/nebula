@@ -1342,6 +1342,7 @@ def merge_numbers(folder, rows):
     named, how many uses read them, and each reason a number written in the game's code was not named, counted. A
     number of a function with no row, or a name given twice, is wrong."""
     numbers, wrong, skipped = [], [], {}
+    tables, tables_skipped, table_names = [], {}, set()
     uses = 0
     seen = set()
     for listed in sorted(pathlib.Path(folder).rglob("*.numbers")):
@@ -1358,9 +1359,18 @@ def merge_numbers(folder, rows):
             if n["place"] != 0 and (n["name"], n["signature"]) not in rows:
                 wrong.append("%s: %s %s has numbers and no row" % (unit, n["name"], n["signature"]))
             numbers.append(dict(n, unit=unit))
+        for why, count in part.get("tables_skipped", {}).items():
+            tables_skipped[why] = tables_skipped.get(why, 0) + count
+        for t in part.get("tables", []):
+            if t["name"] in table_names:
+                wrong.append("%s: the table %s is named twice" % (unit, t["name"]))
+            table_names.add(t["name"])
+            tables.append(dict(t, unit=unit))
     report = {"named": len(numbers), "uses": uses, "constants": sum(1 for n in numbers if n["place"] == 0),
-              "not_named": dict(sorted(skipped.items(), key=lambda kv: -kv[1]))}
-    return {"report": report, "numbers": numbers}, wrong
+              "not_named": dict(sorted(skipped.items(), key=lambda kv: -kv[1])),
+              "tables": len(tables), "tables_made_writable": sum(1 for t in tables if t["const"]),
+              "tables_not_named": dict(sorted(tables_skipped.items(), key=lambda kv: -kv[1]))}
+    return {"report": report, "numbers": numbers, "tables": tables}, wrong
 
 
 def defined_symbols(folder):
