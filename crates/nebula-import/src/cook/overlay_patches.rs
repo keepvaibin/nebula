@@ -4,7 +4,8 @@
 //! patched table starts from what the game would read without the patches (a mod's file of it in this store, else the
 //! game's) and is written whole into the store with every patch applied by the applier (cook::patch), the scenario
 //! tables first, so a start or generalpos table meets its key among the layers the patched scenario tables turn on
-//! together (13.6). What the applier says goes in the facts, one line each in `<store>.facts`.
+//! together (13.6). What the applier says goes in the facts, one line each in `<store>.facts`. A patch of a game
+//! layout (`<archive>/blyt/<Name>.brlyt`, layout contract 5) goes to that layout by pane name (layout_patch) instead.
 
 use super::patch::{apply_linked, unreadable, Fact, Link, ModPatch};
 use super::table::{TableIr, MAGIC};
@@ -94,19 +95,34 @@ impl CookView<'_> {
         self.placed.iter().find(|p| !p.folder && store::same_path(&p.path, path))
     }
 
+    /// A mod's file in the store being written.
+    fn read_mine(&self, mine: &store::Placed) -> Result<Vec<u8>> {
+        let read = || -> Result<Vec<u8>> {
+            let mut file = File::open(self.temporary)?;
+            file.seek(SeekFrom::Start(mine.position))?;
+            let mut bytes = vec![0u8; usize::try_from(mine.size)?];
+            file.read_exact(&mut bytes)?;
+            Ok(bytes)
+        };
+        read().context("the mods' store being written cannot be read")
+    }
+
+    /// The bytes a path holds before this cook's patches of it: a mod's file in this store, else the game's.
+    fn bytes(&self, path: &str) -> Option<Result<Vec<u8>>> {
+        if let Some(mine) = self.mine(path) {
+            return Some(self.read_mine(mine));
+        }
+        let base = self.base?;
+        let game_path = base.path(&path.to_ascii_lowercase())?;
+        base.file(&game_path).transpose()
+    }
+
     /// The table a path holds before this cook's patches of it; Err names why it cannot be read.
     fn original(&self, path: &str) -> Option<Result<TableIr>> {
         let bytes = if let Some(mine) = self.mine(path) {
-            let read = || -> Result<Vec<u8>> {
-                let mut file = File::open(self.temporary)?;
-                file.seek(SeekFrom::Start(mine.position))?;
-                let mut bytes = vec![0u8; usize::try_from(mine.size)?];
-                file.read_exact(&mut bytes)?;
-                Ok(bytes)
-            };
-            match read() {
+            match self.read_mine(mine) {
                 Ok(bytes) => bytes,
-                Err(e) => return Some(Err(e.context("the mods' store being written cannot be read"))),
+                Err(e) => return Some(Err(e)),
             }
         } else {
             let base = self.base?;
@@ -219,13 +235,15 @@ pub fn apply_patches(plan: &PlanPatches, base: Option<&Path>, pak: &mut File, te
             None => tables.push((key, vec![p])),
         }
     }
+    // A game layout's patches go to the layout by pane name, not to a table's rule.
+    let (layouts, mut tables): (Vec<_>, Vec<_>) = tables.into_iter().partition(|(key, _)| is_layout(key));
     // The scenario tables first: the layers they turn on decide the groups of start and generalpos (13.6).
     tables.sort_by_key(|(key, _)| luma_validate::scenario_table_galaxy(key).is_none());
     // Each patch file read once; one that is not JSON is a fact of its table.
     let mut json: BTreeMap<PathBuf, Option<serde_json::Value>> = BTreeMap::new();
     let mut view = CookView { base: base_store.as_ref(), temporary, placed: placed.as_slice(), patched: BTreeMap::new() };
     for p in &plan.patches {
-        if json.contains_key(&p.source) {
+        if json.contains_key(&p.source) || is_layout(&p.path) {
             continue;
         }
         match fs::read(&p.source) {
@@ -313,6 +331,36 @@ pub fn apply_patches(plan: &PlanPatches, base: Option<&Path>, pak: &mut File, te
         }
         done.push((cased, table.to_ntbl()));
     }
+    for (key, list) in &layouts {
+        let cased = view.path(key).unwrap_or_else(|| store::store_path(&list[0].path));
+        let name = |p: &PatchLine| format!("patch/{}/{}", p.mod_id, p.entry);
+        let mut layout = match view.bytes(&cased) {
+            Some(Ok(bytes)) => bytes,
+            Some(Err(e)) => {
+                for p in list {
+                    failed.push((name(p), format!("{cased}: {e:#}")));
+                }
+                continue;
+            }
+            None => {
+                for p in list {
+                    failed.push((name(p), format!("the game has no layout {cased}, and no mod brings one")));
+                }
+                continue;
+            }
+        };
+        // Each patch on what the ones before it left: one that cannot apply is named and left out, the rest apply.
+        for p in list {
+            let applied = fs::read(&p.source)
+                .with_context(|| format!("{} cannot be read", p.source.display()))
+                .and_then(|source| super::layout_patch::patch(&layout, &source));
+            match applied {
+                Ok(next) => layout = next,
+                Err(e) => failed.push((name(p), format!("{cased}: {e:#}"))),
+            }
+        }
+        done.push((cased, layout));
+    }
     drop(view);
     for (cased, bytes) in done {
         let path = placement_path(&cased, base_store.as_ref(), placed);
@@ -320,6 +368,11 @@ pub fn apply_patches(plan: &PlanPatches, base: Option<&Path>, pak: &mut File, te
         placed.extend(place(pak, at, &path, vec![StoreItem { path: String::new(), order: 0, bytes: Some(bytes) }], stats)?);
     }
     Ok(())
+}
+
+/// A patch of a game layout (layout contract 5): its target is the layout file, `<archive>/blyt/<Name>.brlyt`.
+fn is_layout(path: &str) -> bool {
+    path.to_ascii_lowercase().ends_with(".brlyt")
 }
 
 /// A field of a facts line: tab, line ends and backslash written as `\t`, `\n`, `\r`, `\\`.

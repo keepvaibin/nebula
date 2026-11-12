@@ -1,4 +1,4 @@
-//! L300-L307: layers and the paths in them (luma-format 4, 5).
+//! L300-L308: layers and the paths in them (luma-format 4, 5).
 
 use super::{p, t, Ctx};
 use crate::zip::EntryKind;
@@ -11,12 +11,14 @@ pub const SOURCE_ENDINGS: [&str; 16] =
 /// A source file (lowercase path under `files/`) of a kind the cook makes: a model, an animation file, collision, a
 /// cutscene camera (`.glb`, `.gltf` and their `.anim.`, `.kcl.`, `.canm.` forms), a picture (`.png`), a stream (`.wav`,
 /// `.ogg`), a table (`.bcsv.json`, `.bcam.json`, a stage's placement `.arc/jmp/**.json`), a screen layout
-/// (`.layout.json`), a clip's frame events (`.anim.json` in an archive), a sound effect (`.sound.json`) or a font
-/// (`.font.json`); the last two belong in `assets/`: the cook refuses them here by name.
+/// (`.layout.json`), a clip's frame events (`.anim.json` in an archive), a sound (`.sound.json`), a font (`.font.json`)
+/// or a movie (`.movie.json`); the last three belong in `assets/`: the cook refuses them here by name.
 /// What it stands in for is the cook's to say (nebula-import cook::overlay::cook_source, which a test holds to this
 /// list): it refuses by name (L804) at the game's start and in LumaLink's check before a pack.
 pub fn cooked_source(lower: &str) -> bool {
-    [".glb", ".gltf", ".png", ".wav", ".ogg", ".bcsv.json", ".bcam.json", ".layout.json", ".sound.json", ".anim.json", ".font.json"].iter().any(|e| lower.ends_with(e))
+    [".glb", ".gltf", ".png", ".wav", ".ogg", ".bcsv.json", ".bcam.json", ".layout.json", ".sound.json", ".anim.json", ".font.json", ".movie.json", ".model.json"]
+        .iter()
+        .any(|e| lower.ends_with(e))
         || (lower.ends_with(".json") && lower.contains(".arc/jmp/"))
 }
 
@@ -25,6 +27,10 @@ pub fn cooked_source(lower: &str) -> bool {
 /// one file in either form are named (V4-2).
 fn replaced(path: &str) -> String {
     let lower = path.to_lowercase();
+    // A hidden model replaces the model it names.
+    if let Some(model) = lower.strip_suffix(".model.json") {
+        return model.to_string();
+    }
     match lower.strip_suffix(".json") {
         Some(stem) if stem.rsplit('/').next().is_some_and(|name| name.contains('.')) => stem.to_string(),
         _ => lower,
@@ -121,6 +127,19 @@ pub(crate) fn check(ctx: &mut Ctx) {
                     continue;
                 };
                 let lower = path.to_lowercase();
+                // L308: `<path>.model.json` ({"hide": true}) hides a model of the game: `<path>` must be one (a .bdl
+                // or .bmd the game has; a plain `<Name>` is the archive's model of that name, the cook's to find).
+                if let Some(hidden) = lower.strip_suffix(".model.json") {
+                    let model = if hidden.ends_with(".bdl") || hidden.ends_with(".bmd") {
+                        store.path(hidden).is_some()
+                    } else {
+                        store.path(&format!("{hidden}.bdl")).is_some() || store.path(&format!("{hidden}.bmd")).is_some()
+                    };
+                    if !model {
+                        ctx.add(308, &item.name, None, None, vec![("found", t(hidden.to_string()))]);
+                    }
+                    continue;
+                }
                 let source = SOURCE_ENDINGS.iter().find(|e| lower.ends_with(**e));
                 match store.path(&lower) {
                     Some(game_path) => {

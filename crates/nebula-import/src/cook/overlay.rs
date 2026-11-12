@@ -216,6 +216,29 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         super::refuse::record(super::refuse::CookFact::Model { path: game.path.clone(), source: change.path.clone(), facts: made });
         return Ok(clips.into_iter().map(|(file, clip)| (format!("{folder}/{file}"), clip, true)).collect());
     }
+    // Name.bdl.model.json (or .bmd, or plain Name.model.json) in a game archive holding {"hide": true}: the game's model
+    // kept with all its joints and no meshes, so nothing of it is drawn (director 11-12; `lumalink add character`
+    // writes these for a character's own hands and face).
+    if lower.ends_with(".model.json") {
+        use super::refuse::refuse;
+        let stem = &change.path[..change.path.len() - ".model.json".len()];
+        let value: serde_json::Value = serde_json::from_slice(bytes).map_err(|_| refuse("Cook.Model.Hide", &[("file", change.path.clone())]))?;
+        let hide = value.as_object().filter(|o| o.len() == 1).and_then(|o| o.get("hide")).and_then(serde_json::Value::as_bool) == Some(true);
+        if !hide {
+            return Err(refuse("Cook.Model.Hide", &[("file", change.path.clone())]));
+        }
+        let base = base.ok_or_else(|| refuse("Cook.Model.HideNoGame", &[("file", change.path.clone())]))?;
+        let as_model = Change { path: format!("{stem}.glb"), source: change.source.clone(), merge: change.merge };
+        let (native_path, game) = model_place(&as_model, Some(base))?;
+        let game = game.ok_or_else(|| refuse("Cook.Model.HideNoGame", &[("file", change.path.clone())]))?;
+        let block = store::read_file(base, &native_path).map_err(|_| refuse("Cook.Model.HideNoGame", &[("file", change.path.clone())]))?;
+        let skeleton = super::gltf::skeleton_gltf(&game, &block).ok_or_else(|| refuse("Cook.Model.HideNoGame", &[("file", change.path.clone())]))?;
+        let file = stem.rsplit('/').next().unwrap_or(stem);
+        let name = file.split('.').next().unwrap_or(file);
+        let (model, _, made) = super::gltf::to_files_for(&skeleton, None, name, Some(&game))?;
+        super::refuse::record(super::refuse::CookFact::Model { path: native_path.clone(), source: change.path.clone(), facts: made });
+        return Ok(vec![(native_path, model, true)]);
+    }
     if lower.ends_with(".gltf") || lower.ends_with(".glb") {
         let file = change.path.rsplit('/').next().unwrap_or(&change.path);
         let stem = file.split('.').next().unwrap_or(file);
@@ -265,13 +288,17 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
             let found = fs::read_dir(root.join("layers")).ok()?.flatten().any(|layer| layer.path().join("assets").join(&file).is_file());
             (!found).then(|| format!("assets/{file}"))
         };
-        let (brlyt, facts) = super::layout_json::to_brlyt_with(bytes, &missing_texture, &missing_font)?;
+        let (brlyt, animations, facts) = super::layout_json::to_files(bytes, stem, &missing_texture, &missing_font)?;
         let path = format!("{archive}/blyt/{stem}.brlyt");
         super::refuse::record(super::refuse::CookFact::Layout { path: path.clone(), source: change.path.clone(), facts });
-        return Ok(vec![(path, brlyt, false)]);
+        // Its animations beside it in the archive's anim/, as the game's (layer 3).
+        let mut out = vec![(path, brlyt, false)];
+        out.extend(animations.into_iter().map(|(file, bytes)| (format!("{archive}/{file}"), bytes, false)));
+        return Ok(out);
     }
-    // Name.sound.json in a mod's assets (Luma/<id>/...): a sound effect, Name.nsfx, played by its path without the
-    // ending (sound contract 1). The sound file it names is read beside it.
+    // Name.sound.json in a mod's assets (Luma/<id>/...): a sound effect or voice line, Name.nsfx, played by its path
+    // without the ending (sound contract 1, 9); a stream, Name.ast (8); a sequence, Name.nseq (10). With `replace` a
+    // stream or sequence also takes the game's file's place. The sound file it names is read beside it.
     if lower.ends_with(".sound.json") {
         if !lower.starts_with("luma/") {
             return Err(super::refuse::refuse("Cook.Sound.NotAsset", &[("file", change.path.clone())]));
@@ -281,10 +308,42 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         // The game's sound names, for `replace` (layer 2): from the store's cooked sound archive, when there is one.
         let names = base.and_then(game_sound_names);
         let game_sound = |name: &str| -> Option<bool> { names.as_ref().map(|n| n.contains(name)) };
-        let (nsfx, facts) = super::sound_effect::cook(bytes, &super::sound_effect::Around { file: &file, game_sound: &game_sound })?;
-        let path = super::sound_effect::cooked_path(&change.path).unwrap_or_else(|| renamed(".nsfx"));
-        super::refuse::record(super::refuse::CookFact::Sound { path: path.clone(), source: change.path.clone(), facts });
-        return Ok(vec![(path, nsfx, true)]);
+        let game_file = |path: String| -> Option<bool> { base.and_then(|b| store::has_file(b, &path).ok()) };
+        let game_stream = |name: &str| game_file(format!("AudioRes/Stream/{name}.ast"));
+        let game_sequence = |name: &str| game_file(format!("AudioRes/Seqs/JaiSeq.arc/{name}"));
+        let around = super::sound_effect::Around { file: &file, game_sound: &game_sound, game_stream: &game_stream, game_sequence: &game_sequence };
+        let (made, facts) = super::sound_effect::cook_sound(bytes, &around)?;
+        let stem = &change.path[..change.path.len() - ".sound.json".len()];
+        let files: Vec<(String, Vec<u8>, bool)> = made
+            .into_iter()
+            .map(|(place, bytes)| match place {
+                super::sound_effect::Made::Own(ending) => (format!("{stem}{ending}"), bytes, true),
+                super::sound_effect::Made::Game(path) => (path, bytes, true),
+            })
+            .collect();
+        super::refuse::record(super::refuse::CookFact::Sound { path: files[0].0.clone(), source: change.path.clone(), facts });
+        return Ok(files);
+    }
+    // Name.movie.json in a mod's assets: a movie, Name.nmov (AV1), its subtitles Name.subs beside it, and with `replace`
+    // the same movie at the game's MovieData/<name>.thp (movies contract). The files it names are read beside it.
+    if super::movie_cook::is_movie_source(&lower) {
+        if !lower.starts_with("luma/") {
+            return Err(super::refuse::refuse("Cook.Movie.NotAsset", &[("file", change.path.clone())]));
+        }
+        let folder = change.source.parent().map(Path::to_path_buf);
+        let file = |name: &str| -> Option<Vec<u8>> { fs::read(folder.as_ref()?.join(name)).ok() };
+        let game_movie = |name: &str| base.and_then(|b| store::has_file(b, &format!("MovieData/{name}.thp")).ok());
+        let (made, facts) = super::movie_cook::cook(bytes, &super::movie_cook::Around { file: &file, game_movie: &game_movie })?;
+        let stem = &change.path[..change.path.len() - ".movie.json".len()];
+        let files: Vec<(String, Vec<u8>, bool)> = made
+            .into_iter()
+            .map(|(place, bytes)| match place {
+                super::movie_cook::Made::Own(ending) => (format!("{stem}{ending}"), bytes, true),
+                super::movie_cook::Made::Game(path) => (path, bytes, true),
+            })
+            .collect();
+        super::refuse::record(super::refuse::CookFact::Movie { path: files[0].0.clone(), source: change.path.clone(), facts });
+        return Ok(files);
     }
     // Name.font.json in a mod's assets: a font, Luma/<id>/<path>.brfnt (the store cooks it as the game's fonts) with
     // its kerning (.kern) and fallback (.fallback) beside it (layout contract 2a). The font file it names is read beside it.
@@ -297,6 +356,17 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         let (files, facts) = super::font_cook::cook(bytes, &change.path, &file)?;
         super::refuse::record(super::refuse::CookFact::Font { path: files[0].0.clone(), source: change.path.clone(), facts });
         return Ok(files);
+    }
+    // post/<name>.json in a mod's assets: a screen pass, Luma/<id>/post/<name>.post, with the HLSL beside it
+    // (contracts/draw.md 15).
+    if super::post_shader::is_post_source(&change.path) {
+        let stem = &change.path[..change.path.len() - ".json".len()];
+        let name = stem.rsplit('/').next().unwrap_or(stem);
+        // Named as the mod has them: assets/post/<name>.json and .hlsl.
+        let (json_file, hlsl_file) = (format!("assets/post/{name}.json"), format!("assets/post/{name}.hlsl"));
+        let hlsl = change.source.parent().and_then(|folder| fs::read(folder.join(format!("{name}.hlsl"))).ok());
+        let made = super::post_shader::cook(&json_file, bytes, &hlsl_file, hlsl.as_deref())?;
+        return Ok(vec![(format!("{stem}.post"), made, true)]);
     }
     // A table as JSON: X.bcsv.json, a camera table X.bcam.json, or a stage's placement table (its name has no ending:
     // StageData/MyGalaxy.arc/jmp/placement/common/objinfo.json), as `lumalink extract` writes them.
@@ -362,6 +432,7 @@ fn cook_change(change: &Change, bytes: Vec<u8>, waves: &BTreeMap<String, Vec<aud
 /// paths and reasons are returned. The patches by key apply after the files and merges, and their facts go in `facts`.
 pub fn write_overlay(game_id: &str, changes: &[Change], patches: &PlanPatches, base: Option<&Path>, output: &Path, facts: &mut Vec<Fact>,
                      stats: &mut Stats) -> Result<Vec<(String, String)>> {
+    let _cook = super::COOK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     // The store's header holds a disc id of six letters (RMGE01): checked before anything is written.
     if game_id.len() != 6 || !game_id.bytes().all(|b| b.is_ascii_alphanumeric()) {
         bail!("{game_id:?} is not a game's disc id (six letters and digits, as RMGE01)");
@@ -407,7 +478,11 @@ pub fn write_overlay(game_id: &str, changes: &[Change], patches: &PlanPatches, b
                 stats.bytes_in += bytes.len() as u64;
                 level_alone(change, changes)?;
                 // A sound or font file in a mod's assets is what a .sound.json or .font.json reads; not a file of the game.
-                if super::sound_effect::is_asset_source(&change.path) || super::font_cook::is_asset_source(&change.path) {
+                if super::sound_effect::is_asset_source(&change.path)
+                    || super::font_cook::is_asset_source(&change.path)
+                    || super::movie_cook::is_asset_source(&change.path)
+                    || super::post_shader::is_asset_source(&change.path)
+                {
                     return Ok(Vec::new());
                 }
                 let modern = modern_files(change, &bytes, base)?;
@@ -886,6 +961,7 @@ mod tests {
             "AudioRes/Jump.sound.json",
             "ObjectData/Kuribo.arc/Walk.anim.json",
             "LayoutData/Fonts/Title.font.json",
+            "ObjectData/MarioHandL.arc/MarioHandL.bdl.model.json",
         ];
         let dir = tempfile::tempdir().unwrap();
         for path in cooked {

@@ -694,6 +694,14 @@ pub fn sequence(bytes: &[u8]) -> Result<Vec<u8>> {
     program_file(bytes, &[vec![0]])
 }
 
+/// A BMS program's operations from its first byte, in address order: each one's code and arguments (a branch's target
+/// as an operation index), for tests that read a program back.
+#[cfg(test)]
+pub(crate) fn program_ops(bytes: &[u8]) -> Result<Vec<(String, [u32; 5])>> {
+    let program = decode_program(bytes, &[0])?;
+    Ok(program.ops.iter().map(|op| (format!("{:?}", op.code), op.args)).collect())
+}
+
 /// Whether a file is a member of the sequence archive.
 pub fn is_sequence_path(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();

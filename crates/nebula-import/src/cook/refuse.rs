@@ -82,6 +82,8 @@ pub enum CookFact {
     Events { path: String, source: String, facts: super::clip_events::EventFacts },
     /// A mod's font cooked (layout contract's `cook.font`).
     Font { path: String, source: String, facts: super::font_cook::FontFacts },
+    /// A mod's movie cooked (movies contract's `cook.movie`).
+    Movie { path: String, source: String, facts: super::movie_cook::MovieFacts },
 }
 
 /// What `cook.effect` says of one effect (`<id>:<name>`) or one replaced game particle (its name).
@@ -167,7 +169,7 @@ pub fn cook_facts_text(facts: &[CookFact]) -> String {
             }
             CookFact::Layout { path, source, facts } => {
                 let fixed = ["cook.layout", path, "", source, path, "", "", "", "", "", ""].map(str::to_string);
-                let counts = [("panes", facts.panes), ("pictures", facts.pictures), ("texts", facts.texts), ("textures", facts.textures), ("groups", facts.groups)];
+                let counts = [("panes", facts.panes), ("pictures", facts.pictures), ("texts", facts.texts), ("textures", facts.textures), ("groups", facts.groups), ("windows", facts.windows), ("animations", facts.animations)];
                 fixed.into_iter().chain(counts.iter().map(|(name, n)| format!("{name}={n}"))).collect()
             }
             CookFact::Sound { path, source, facts } => {
@@ -183,6 +185,9 @@ pub fn cook_facts_text(facts: &[CookFact]) -> String {
                         format!("loudness={}", level(facts.loudness)),
                         format!("peak={}", level(facts.peak)),
                         format!("replaces={}", facts.replaces),
+                        format!("kind={}", facts.kind),
+                        format!("notes={}", facts.notes),
+                        format!("dropped={}", facts.dropped),
                     ])
                     .collect()
             }
@@ -190,6 +195,22 @@ pub fn cook_facts_text(facts: &[CookFact]) -> String {
                 let fixed = ["cook.events", path, "", source, &facts.clip, "", "", "", "", "", ""].map(str::to_string);
                 let frames = facts.frames.map_or_else(|| "none".to_string(), |n| n.to_string());
                 fixed.into_iter().chain([format!("rows={}", facts.rows), format!("frames={frames}")]).collect()
+            }
+            CookFact::Movie { path, source, facts } => {
+                let fixed = ["cook.movie", path, "", source, &facts.replaces, "", "", "", "", "", ""].map(str::to_string);
+                fixed
+                    .into_iter()
+                    .chain([
+                        format!("frames={}", facts.frames),
+                        format!("width={}", facts.width),
+                        format!("height={}", facts.height),
+                        format!("rate={:.3}", facts.rate),
+                        format!("seconds={:.3}", facts.seconds),
+                        format!("audio_seconds={:.3}", facts.audio_seconds),
+                        format!("colour={}", facts.colour),
+                        format!("subtitles={}", facts.subtitles),
+                    ])
+                    .collect()
             }
             CookFact::Font { path, source, facts } => {
                 let fixed = ["cook.font", path, "", source, &facts.fallback, "", "", "", "", "", ""].map(str::to_string);

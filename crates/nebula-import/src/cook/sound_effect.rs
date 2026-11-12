@@ -38,12 +38,27 @@ pub const MOST_SECONDS: f64 = 60.0;
 pub const LOWEST_RATE: u32 = 8_000;
 pub const HIGHEST_RATE: u32 = 384_000;
 pub const BUSES: [&str; 4] = ["effects", "ui", "voice", "music"];
-pub const KINDS: [&str; 1] = ["effect"];
+/// The kinds of `.sound.json`: an effect (layer 1, with `replace` layer 2), a stream (layer 3, sound_stream.rs), a voice
+/// line (layer 4: an effect on the voice bus standing in for a game voice line), a sequence (layer 5, sound_sequence.rs).
+pub const KINDS: [&str; 4] = ["effect", "stream", "voice", "sequence"];
 const PARTS: [&str; 10] = ["kind", "file", "volume", "pitch", "distance", "priority", "bus", "loop", "positioned", "replace"];
 
-/// What `cook.sound` says of a sound.
+/// Where a file a `.sound.json` makes goes: beside the source with this ending (`Luma/<id>/<path><ending>`), or at a
+/// game path, in place of the game's file.
 #[derive(Clone, Debug, PartialEq)]
+pub enum Made {
+    Own(&'static str),
+    Game(String),
+}
+
+/// What `cook.sound` says of a sound.
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct SoundFacts {
+    /// Its kind (KINDS).
+    pub kind: String,
+    /// A sequence's notes, and the MIDI events it left out (`name x count`, comma between).
+    pub notes: u32,
+    pub dropped: String,
     pub frames: u32,
     pub channels: u32,
     /// The source file's rate.
@@ -192,13 +207,22 @@ pub fn decode(b: &[u8], file: &str) -> Result<Pcm> {
 /// Windowed-sinc resampling to `RATE` (Blackman, 32 zero crossings a side, the cutoff at the lower Nyquist), from a
 /// table of 4,096 phases read between its two nearest. With a loop, what is read past its end is read from its start,
 /// so the loop's seam is the source's.
+pub(super) fn resample_to_rate(pcm: &Pcm, loop_points: Option<(u64, u64)>) -> (Vec<f32>, Option<(u64, u64)>) {
+    resample(pcm, loop_points)
+}
+
 fn resample(pcm: &Pcm, loop_points: Option<(u64, u64)>) -> (Vec<f32>, Option<(u64, u64)>) {
+    resample_at(pcm, loop_points, RATE)
+}
+
+/// The same to any rate (a movie's sound is 32 kHz).
+pub(super) fn resample_at(pcm: &Pcm, loop_points: Option<(u64, u64)>, rate: u32) -> (Vec<f32>, Option<(u64, u64)>) {
     let ch = pcm.channels;
     let frames = pcm.samples.len() / ch;
-    if pcm.rate == RATE {
+    if pcm.rate == rate {
         return (pcm.samples.clone(), loop_points);
     }
-    let ratio = f64::from(RATE) / f64::from(pcm.rate);
+    let ratio = f64::from(rate) / f64::from(pcm.rate);
     let out_frames = ((frames as f64) * ratio).round() as usize;
     let out_loop = loop_points.map(|(s, e)| ((s as f64 * ratio).round() as u64, ((e as f64 * ratio).round() as u64).min(out_frames as u64)));
     let cutoff = ratio.min(1.0);
@@ -310,7 +334,7 @@ fn number_pair(v: &Value, at: &str) -> Result<[f32; 2]> {
     Ok([f[0], f[1]])
 }
 
-fn in_range(at: &str, v: f32, min: f32, max: f32) -> Result<f32> {
+pub(super) fn in_range(at: &str, v: f32, min: f32, max: f32) -> Result<f32> {
     if !(min..=max).contains(&v) {
         return Err(super::particle_json::range(at, v, min, max));
     }
@@ -322,17 +346,54 @@ fn in_range(at: &str, v: f32, min: f32, max: f32) -> Result<f32> {
 pub struct Around<'a> {
     pub file: &'a dyn Fn(&str) -> Option<Vec<u8>>,
     pub game_sound: &'a dyn Fn(&str) -> Option<bool>,
+    /// A game stream by name (`AudioRes/Stream/<name>.ast`).
+    pub game_stream: &'a dyn Fn(&str) -> Option<bool>,
+    /// A game sequence by its path in the sequence archive (`AudioRes/Seqs/JaiSeq.arc/<path>`).
+    pub game_sequence: &'a dyn Fn(&str) -> Option<bool>,
 }
 
-/// `<name>.sound.json`'s bytes as NSFX.
-pub fn cook(json: &[u8], around: &Around) -> Result<(Vec<u8>, SoundFacts)> {
-    let root: Value = serde_json::from_slice(json).map_err(|e| refuse("Cook.Model.Json", &[("line", e.line().to_string()), ("column", e.column().to_string())]))?;
-    let map = object(&root, "/")?;
-    only(map, "/", &PARTS)?;
-    choice(&KINDS, map.get("kind").ok_or_else(|| missing("/", "kind"))?, "/kind", 0)?;
+/// The file a source names, relative to it and inside its folder.
+pub(super) fn file_of(map: &serde_json::Map<String, Value>) -> Result<&str> {
     let file = text(map.get("file").ok_or_else(|| missing("/", "file"))?, "/file")?;
     if file.is_empty() || file.contains("..") || file.contains(':') || file.contains('\\') || file.starts_with('/') {
         return Err(refuse("Cook.Effect.FilePath", &[("where", "/file".into()), ("uri", file.to_string())]));
+    }
+    Ok(file)
+}
+
+/// `<name>.sound.json`'s bytes, of any kind, as the files it makes.
+/// The files a `.sound.json` makes, each with its place, and its fact.
+pub type Cooked = (Vec<(Made, Vec<u8>)>, SoundFacts);
+
+pub fn cook_sound(json: &[u8], around: &Around) -> Result<Cooked> {
+    let root: Value = serde_json::from_slice(json).map_err(|e| refuse("Cook.Model.Json", &[("line", e.line().to_string()), ("column", e.column().to_string())]))?;
+    let map = object(&root, "/")?;
+    match choice(&KINDS, map.get("kind").ok_or_else(|| missing("/", "kind"))?, "/kind", 0)? {
+        1 => super::sound_stream::cook(map, around),
+        3 => super::sound_sequence::cook(map, around),
+        kind => {
+            let (nsfx, facts) = cook_effect(map, around, kind == 2)?;
+            Ok((vec![(Made::Own(".nsfx"), nsfx)], facts))
+        }
+    }
+}
+
+/// `<name>.sound.json`'s bytes as NSFX: an effect or a voice line.
+pub fn cook(json: &[u8], around: &Around) -> Result<(Vec<u8>, SoundFacts)> {
+    let (mut made, facts) = cook_sound(json, around)?;
+    match made.pop() {
+        Some((Made::Own(".nsfx"), nsfx)) if made.is_empty() => Ok((nsfx, facts)),
+        _ => Err(refuse("Cook.Effect.Choice", &[("where", "/kind".into()), ("value", facts.kind.clone()), ("expected", "effect, voice".into())])),
+    }
+}
+
+/// An effect (layer 1, `replace` layer 2) or a voice line (layer 4: `replace` names the game's voice line it stands in
+/// for, and it plays on the voice bus unless it says).
+fn cook_effect(map: &serde_json::Map<String, Value>, around: &Around, voice: bool) -> Result<(Vec<u8>, SoundFacts)> {
+    only(map, "/", &PARTS)?;
+    let file = file_of(map)?;
+    if voice && !map.contains_key("replace") {
+        return Err(missing("/", "replace"));
     }
     let volume = match map.get("volume") {
         Some(v) => in_range("/volume", as_f32(v, "/volume")?, 0.0, 4.0)?,
@@ -369,6 +430,7 @@ pub fn cook(json: &[u8], around: &Around) -> Result<(Vec<u8>, SoundFacts)> {
     };
     let bus = match map.get("bus") {
         Some(v) => choice(&BUSES, v, "/bus", 3)? as u8,
+        None if voice => 2,
         None => 0,
     };
     let positioned = match map.get("positioned") {
@@ -429,6 +491,9 @@ pub fn cook(json: &[u8], around: &Around) -> Result<(Vec<u8>, SoundFacts)> {
     let out_frames = samples.len() / pcm.channels;
     let peak = samples.iter().fold(0f32, |m, s| m.max(s.abs()));
     let facts = SoundFacts {
+        kind: if voice { "voice" } else { "effect" }.to_string(),
+        notes: 0,
+        dropped: String::new(),
         frames: out_frames as u32,
         channels: pcm.channels as u32,
         rate_in: pcm.rate,
@@ -477,10 +542,11 @@ pub fn cooked_path(path: &str) -> Option<String> {
     lower.ends_with(".sound.json").then(|| format!("{}.nsfx", &path[..path.len() - ".sound.json".len()]))
 }
 
-/// A WAV, FLAC or Ogg file in a mod's assets (`Luma/<id>/...`): the source a `.sound.json` names, not a game file.
+/// A sound file in a mod's assets (`Luma/<id>/...`): the source a `.sound.json` names, not a game file. WAV, FLAC and
+/// Ogg for every kind, BRSTM, BCSTM and BFSTM for a stream, MIDI for a sequence.
 pub fn is_asset_source(path: &str) -> bool {
     let lower = path.trim_start_matches('/').to_ascii_lowercase();
-    lower.starts_with("luma/") && [".wav", ".flac", ".ogg"].iter().any(|e| lower.ends_with(e))
+    lower.starts_with("luma/") && [".wav", ".flac", ".ogg", ".brstm", ".bcstm", ".bfstm", ".mid", ".midi"].iter().any(|e| lower.ends_with(e))
 }
 
 #[cfg(test)]

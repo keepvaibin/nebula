@@ -22,10 +22,12 @@ struct FakeStore {
 /// Two layers of one zone's objects: a link group (table-keys 13).
 const COMMON: &str = "StageData/Zone/jmp/Placement/Common/ObjInfo";
 const LAYER_A: &str = "StageData/Zone/jmp/Placement/LayerA/ObjInfo";
+/// A game layout, patched by pane name (layout contract 5).
+const HUD: &str = "LayoutData/Hud.arc/blyt/Hud.brlyt";
 
 impl Store for FakeStore {
     fn path(&self, lower: &str) -> Option<String> {
-        [TABLE, "ObjectData/Kuribo.arc", COMMON, LAYER_A].iter().find(|p| p.to_lowercase() == lower).map(|p| p.to_string())
+        [TABLE, "ObjectData/Kuribo.arc", COMMON, LAYER_A, HUD].iter().find(|p| p.to_lowercase() == lower).map(|p| p.to_string())
     }
     fn table(&self, path: &str) -> Option<Table> {
         if path == COMMON || path == LAYER_A {
@@ -451,6 +453,7 @@ fn every_rule_has_a_broken_mod() {
         (306, luma(&layer, &[file("layers/base/other/a.wav", b"x")]), NO_GAME),
         (306, luma(&layer, &[file("layers/base/textures/Kuribo/notes.txt", b"x")]), NO_GAME),
         (307, luma(&[("layers", r#"[{"name": "base", "when": {"code": true}}]"#)], &[file("layers/base/files/a.wav", b"x")]), NO_GAME),
+        (308, luma(&layer, &[file("layers/base/files/ObjectData/Kuribo.arc/Nothing.bdl.model.json", br#"{"hide": true}"#)]), Setup { game: Some(&game), ..NO_GAME }),
         (400, luma(&layer, &[file(patch_file, b"{}")]), with_game_ref(&game)),
         (400, luma(&layer, &[file(patch_file, b"{\"patch\": 1, \"key\": [\"name\"], \"colour\": 1}")]), with_game_ref(&game)),
         (401, luma(&layer, &[file(patch_file, br#"{"patch": 1, "key": ["count"]}"#)]), with_game_ref(&game)),
@@ -463,6 +466,11 @@ fn every_rule_has_a_broken_mod() {
         (405, luma(&layer, &[file("layers/base/patches/@other.mod/stage/table.bcsv.json", set_alpha)]), with_game_ref(&game)),
         (406, luma(&layer, &[file(patch_file, br#"{"patch": 1, "key": ["name"], "select": [{"match": {"name": {"like": "A"}}, "values": {"count": 1}}]}"#)]), with_game_ref(&game)),
         (406, luma(&layer, &[file(patch_file, br#"{"patch": 1, "key": ["name"], "select": [{"match": {"colour": {"equals": "A"}}, "values": {"count": 1}}]}"#)]), with_game_ref(&game)),
+        // A layout patch: its own form, and a layout the game has.
+        (302, luma(&layer, &[file("layers/base/patches/LayoutData/Nope.arc/blyt/Nope.brlyt.json", br#"{"patch": 1, "panes": {}}"#)]), with_game_ref(&game)),
+        (400, luma(&layer, &[file("layers/base/patches/LayoutData/Hud.arc/blyt/Hud.brlyt.json", br#"{"patch": 1, "panes": []}"#)]), with_game_ref(&game)),
+        (400, luma(&layer, &[file("layers/base/patches/LayoutData/Hud.arc/blyt/Hud.brlyt.json", br#"{"patch": 1}"#)]), NO_GAME),
+        (400, luma(&layer, &[file("layers/base/patches/LayoutData/Hud.arc/blyt/Hud.brlyt.json", br#"{"patch": 1, "panes": {}, "key": ["name"]}"#)]), NO_GAME),
         (500, luma(&[("code", r#"{"platforms": ["windows-x64"]}"#)], &[]), NO_GAME),
         (500, luma(&[], &[file("code/windows-x64/mod.dll", b"MZ")]), NO_GAME),
         (501, luma(&[("code", r#"{"platforms": ["windows-x64"]}"#)], &[file("code/beos-x64/mod.dll", b"MZ")]), NO_GAME),
@@ -558,6 +566,16 @@ fn every_rule_has_a_broken_mod() {
 
 fn with_game_ref<'a>(game: &'a Game<'a>) -> Setup<'a> {
     Setup { game: Some(game), ..NO_GAME }
+}
+
+#[test]
+fn a_layout_patch_needs_no_key_and_its_panes_are_the_cooks() {
+    let store = FakeStore { case_insensitive: false };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: None, store: Some(&store) };
+    let patch = br#"{"patch": 1, "panes": {"Count": {"text": "x 99"}, "Icon": {"visible": false}}}"#;
+    let bytes = luma(&[("layers", r#"[{"name": "base"}]"#)], &[file("layers/base/patches/LayoutData/Hud.arc/blyt/Hud.brlyt.json", patch)]);
+    let report = check(&bytes, &with_game_ref(&game));
+    assert!(report.findings.is_empty(), "{:?}", report.findings);
 }
 
 #[test]

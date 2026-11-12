@@ -301,9 +301,41 @@ fn link_add(pc: &mut P, row: &Value, rp: &str, target: &str, id: &str) {
     }
 }
 
+/// A patch of a game layout by pane name (layout contract 5): `{"patch": 1, "panes": {"<pane>": {...}}}`. Its panes
+/// and their fields are checked by the cook against the layout the game start patches (overlay_patches), which names
+/// a patch that cannot apply in the store's left-out file; here the file's form and that the game has the layout.
+fn layout(pc: &mut P, root: &Value, target: &str) {
+    for m in root.members() {
+        if m.key != "patch" && m.key != "panes" {
+            let file = pc.file.clone();
+            pc.ctx.add(400, &file, Some(m.key_pos), Some(&format!("/{}", seg(&m.key))), vec![("found", p("Patch.UnknownKey")), ("detail", t(m.key.clone()))]);
+        }
+    }
+    match root.get("patch") {
+        None => pc.bad(root, "", "Patch.NoVersion", ""),
+        Some(v) if v.as_i64() != Some(1) => pc.bad(v, "/patch", "Patch.Version", cell_text(v).unwrap_or_default()),
+        _ => {}
+    }
+    match root.get("panes") {
+        None => pc.bad(root, "", "Patch.NoPanes", ""),
+        Some(v) if !v.is_object() => pc.bad(v, "/panes", "Patch.PanesShape", ""),
+        _ => {}
+    }
+    if let Some(store) = pc.ctx.game().and_then(|g| g.store) {
+        if store.path(&target.to_lowercase()).is_none() {
+            let file = pc.file.clone();
+            pc.ctx.add(302, &file, None, None, vec![("found", t(target))]);
+        }
+    }
+}
+
 fn one(pc: &mut P, root: &Value, target: &str) {
     if !root.is_object() {
         pc.bad(root, "", "Patch.NotObject", "");
+        return;
+    }
+    if !target.starts_with('@') && target.to_ascii_lowercase().ends_with(".brlyt") {
+        layout(pc, root, target);
         return;
     }
     for m in root.members() {

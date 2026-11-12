@@ -15,7 +15,10 @@ pub mod flac;
 pub mod fur;
 pub mod material;
 pub mod kcl;
+pub mod layout_anim;
 pub mod layout_json;
+pub mod layout_patch;
+pub mod post_shader;
 pub mod camera;
 pub mod message;
 pub mod message_merge;
@@ -44,7 +47,10 @@ pub mod clip_events;
 pub mod font_cook;
 pub mod ui_layout;
 pub mod sound;
+pub mod movie_cook;
 pub mod sound_effect;
+pub mod sound_sequence;
+pub mod sound_stream;
 pub mod store;
 pub mod table;
 pub mod table_keys;
@@ -425,6 +431,10 @@ fn be32(bytes: &[u8], at: usize) -> u32 {
 
 const ALIGN: u64 = 32;
 
+/// Held by every cook that fills the shared lists (pipeline_list, texture::NAMES): the store's, the mods' store and the
+/// run time's one file (cook_c), so none meets another's half-written.
+pub static COOK_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// Writes a cooked game.pak at `output` from a system area and a reader of the files' bytes. `progress(done, total)`
 /// reports the files' bytes read and returns false to stop.
 pub fn write_cooked_pak(
@@ -434,7 +444,6 @@ pub fn write_cooked_pak(
     progress: &mut dyn FnMut(u64, u64) -> bool,
     stats: &mut Stats,
 ) -> Result<u64> {
-    static COOK_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _cook = COOK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let files = pak_files(system.fst())?;
     programs::prepare_written_files(&files, read)?;
