@@ -1166,6 +1166,11 @@ pub fn finish(stem: &str, name: &str, measured: f32, r: &mut Reading) {
         if let Some(roughness) = roughness {
             r.roughness = roughness;
         }
+        // c62 (A4-K5): the game's other glass is a shell (capsules, bubbles, barriers, tanks, windows, transparent
+        // planets): a closed mesh's 3V/A made each a solid ball to rt_transmit. Crystal and ice keep the body.
+        if roughness.is_none() && ior < 1.7 {
+            r.thickness = 0.0;
+        }
     }
     review(MATERIALS_TABLE, &stem, name, r);
     for table in &packs.materials {
