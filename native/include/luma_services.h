@@ -50,7 +50,8 @@ enum {
     LUMA_E_BUSY = -14,      /* not now: a queue is full or the device is in use; try again on a later frame */
     LUMA_E_FORMAT = -15,    /* the data is not of the form the function reads */
     LUMA_E_TOO_LARGE = -16, /* more than the function or the contract allows at once */
-    LUMA_E_UNREACHABLE = -17 /* the network cannot reach the other side */
+    LUMA_E_UNREACHABLE = -17, /* the network cannot reach the other side */
+    LUMA_E_STATE = -18        /* not valid now: a draw call outside a draw point's function (draw 1.0) */
 };
 
 /* A handle to something a service made for the mod (a file, a socket, a sound). Never 0; never given twice in one

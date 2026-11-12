@@ -5,6 +5,7 @@
 #include "Game/System/LumaContentModel.hpp"
 #include "Game/System/LumaAnim.hpp"
 #include "Game/System/LumaUi.hpp"
+#include "Game/System/LumaDraw.hpp"
 #include "Game/System/LumaServices.hpp"
 #include "Game/System/LumaTime.hpp"
 #include "Game/System/GameSystem.hpp"
@@ -226,6 +227,10 @@ void GameSystem::draw() {
         drawOwn(Own_SystemWipe);
         mSystemWipeHolder->draw();
     }
+    // The mods' loading point: over the game's loading screen while it loads a scene (plan 2.4).
+    if (luma::draw::isLoading()) {
+        luma::draw::point(LUMA_DRAW_LOADING);
+    }
 
     drawOwn(Own_ErrorWatcher);
     mErrorWatcher->draw();
@@ -233,6 +238,8 @@ void GameSystem::draw() {
     mSceneController->drawSceneOverlay();
     drawOwn(Own_Prepare);
     NebulaPrepare::draw();
+    // The mods' present point: every frame shown, over the game's screens and under Nebula's settings menu.
+    luma::draw::point(LUMA_DRAW_PRESENT);
     if (isSettingsShown) {
         drawOwn(Own_Settings);
         NebulaSettingsMenu::draw();
@@ -255,7 +262,8 @@ void GameSystem::update() {
     luma::content::fx::frame();    // the mods' open effects: their actors' ends and clipping; one load when none is open
     luma::content::model::frame(); // the mods' attached models: their actors' ends; one load when none is attached
     luma::anim::frame();           // the mods' plays: ends, marks (animation 7); one load when none is going
-    luma::ui::frame();             // the mods' open screens' facts (harness); one load when none is open
+    luma::ui::frame();
+    luma::draw::frame();  // textures the mods freed leave the renderer; one load when none was             // the mods' open screens' facts (harness); one load when none is open
     NebulaMods::fire(NEBULA_MOD_EVENT_FRAME);
     NebulaSettingsMenu::update();
     NebulaIcons::update();
