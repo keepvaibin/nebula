@@ -23,6 +23,9 @@ namespace luma {
             // actor it is attached to while neither the model nor the placeholder is in the store); null: no open
             // handle of the mod. Game thread.
             LiveActor* actorOf(const LumaMod* pMod, LumaHandle handle);
+            // anim's play_on_model (animation 7): the part that draws the mod's open model `handle`, null while nothing
+            // shows; *pOpen: the handle is one of the mod's open ones. Game thread.
+            LiveActor* partOf(const LumaMod* pMod, LumaHandle handle, bool* pOpen);
             // The service's provider, registered by luma::services::provideOwn.
             const LumaServiceProvider* provider();
         }
