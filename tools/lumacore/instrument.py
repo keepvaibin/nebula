@@ -897,6 +897,8 @@ class Unit:
         parent = api.semanticParent(var)
         element = vtype
         count = 1
+        # The const of `const char* const t[]` may sit on the array type rather than on its element: any level.
+        constant = bool(api.isConstType(vtype))
         while element.kind == T_CONSTANT_ARRAY:
             inner = api.canonicalType(api.elementType(element))
             size, inner_size = api.sizeOf(element), api.sizeOf(inner)
@@ -904,9 +906,10 @@ class Unit:
                 return self.skip_table('a table of no size')
             count *= size // inner_size
             element = inner
+            constant = constant or bool(api.isConstType(element))
         if not api.isPOD(element):
             return self.skip_table('a table that is not plain data (a constructor, a virtual function)')
-        constant = bool(api.isConstType(element))
+        constant = constant or bool(api.isConstType(element))
         if parent.kind in (K_STRUCT, K_UNION, K_CLASS):
             if api.access(var) in (2, 3):
                 return self.skip_table("a class's private table")
@@ -944,6 +947,7 @@ class Unit:
             'usr': self.string(api.usr(var)), 'name': f'{self.label}#{qualified}' if local else qualified,
             'expr': '::' + qualified, 'type': self.string(api.typeSpelling(api.unqualified(element))),
             'count': count, 'size': api.sizeOf(vtype), 'line': self.line(var), 'const': constant, 'consts': consts,
+            'start': start,
             'static': (constant and parent.kind not in (K_STRUCT, K_UNION, K_CLASS) and not anonymous
                        and not re.search(r'\b(static|extern)\b', head))})
 
@@ -960,12 +964,16 @@ class Unit:
             if any(span in kept_spans for span in t['consts']):
                 self.skip_table('a table declared together with one a static\'s initializer reads')
                 continue
-            for i, (a, b) in enumerate(t['consts']):
+            for a, b in t['consts']:
                 if (a, b) in done:
                     continue
                 done.add((a, b))
-                # Namespace-scope const meant internal linkage: `static` keeps it so.
-                self.replaces.append((a, b, b'static ' if i == 0 and t['static'] else b''))
+                self.replaces.append((a, b, b''))
+            # Namespace-scope const meant internal linkage: `static`, at the declaration's head, keeps it so (once for
+            # a declaration of several declarators).
+            if t['static'] and ('static', t['start']) not in done:
+                done.add(('static', t['start']))
+                self.replaces.append((t['start'], t['start'], b'static '))
             self.tables.append({k: t[k] for k in ('name', 'type', 'count', 'size', 'line', 'const', 'expr')})
 
     def literal_cursor(self, cursor):
