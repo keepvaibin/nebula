@@ -2121,6 +2121,24 @@ mod tests {
     }
 
     #[test]
+    fn the_players_forms_and_the_core_read_their_rows() {
+        // c91, the game's own tables: Boo Mario a ghost, the spring's coil iron, the core's light a luminance (so it
+        // grows with the core) and its halo none, the rainbow form 300 cd.
+        let mut boo = read(&painted());
+        finish("teresamario", "body_m_v", 10.0, &mut boo);
+        assert_eq!(boo.class, Class::Translucent);
+        let mut coil = read(&painted());
+        finish("hoppermario.arc", "Snake_v", 10.0, &mut coil);
+        assert_eq!(coil.class, Class::Metal);
+        assert_eq!(METAL_KINDS[coil.metal_kind as usize - 1].0, "iron");
+        let r = read(&painted());
+        assert_eq!(glow_of("astrocore", "CoreMat", &r)[3], -265.0);
+        assert_eq!(glow_of("astrocore", "NovaMat_v_x", &r)[3], 0.0);
+        assert_eq!(glow_of("astrocore", "GlowMat", &r)[3], 0.0);
+        assert_eq!(glow_of("invinciblemario", "Body1_v", &r)[3], 300.0);
+    }
+
+    #[test]
     fn a_metal_takes_its_kinds_f0_and_its_art_only_tints_it() {
         // c88: gold by its name over a blue art colour: gold's F0 a quarter towards blue's hue, at most gold's own.
         let mut r = read(&painted());

@@ -41,12 +41,18 @@ kinokooneup	0.45 1.0 0.45	60
 ticoshopgoodsoneup	0.45 1.0 0.45	60
 kinokolifeup	1.0 0.45 0.45	60
 ticoshopgoodslifeup	1.0 0.45 0.45	60
-invinciblemario	own	250
-invincibleluigi	own	250
+# c91 (EVERYTHING 5.8, 7.2): the rainbow form 300 cd (the director), its colour the brk's live register.
+invinciblemario	own	300
+invincibleluigi	own	300
 invinciblemariohandl	own	40
 invinciblemariohandr	own	40
 kinopiogoodslight	1.0 0.95 0.80	400
-astrocore	1.0 0.80 0.50	30000
+# c91 (EVERYTHING 5.4): the Observatory core by luminance (a value below 0: candela a square metre), so its
+# light follows its growth (root joint 0.508 to 3.0); 265 gives the full-grown core 30000 cd. Its nova
+# and glow sheets are its halo: no light of their own.
+astrocore/coremat	1.0 0.80 0.50	-265
+astrocore/novamat_v_x	own	0
+astrocore/glowmat	own	0
 fireball	1.0 0.50 0.15	500
 firebubble	1.0 0.50 0.15	400
 firebarball	1.0 0.50 0.15	300

@@ -549,3 +549,12 @@ mirrormodeltwinfalllake	kori_v	glass	0.05	0	1.31						ice (FB water verdict, FC 
 twinfalllakeplanetlow	mizu_shita_v_x	dielectric		0							bed (FB water verdict, FC c89): the far stand-in is opaque; its near's water row would make it water by the twin rule (c83)
 lavasteam	lambert5_v	translucent	1	0							the lava stages' steam column: dims the sun, no hard shadow (EVERYTHING 1.15; FB b101)
 raincloudvolume	VolumeMat	translucent	1	0							a rain volume: dims the sun, no hard shadow (EVERYTHING 1.15; FB b101)
+# c91: Mario's forms (the director's item 6).
+teresamario	body_m_v	translucent									Boo form (FC c91, EVERYTHING 7.2): a ghost; as FB b101 its opaque draw dims the sun, no hard shadow; picture owed
+teresamario	Cap_v	translucent									Boo form (FC c91, EVERYTHING 7.2): a ghost; as FB b101 its opaque draw dims the sun, no hard shadow; picture owed
+teresamario	Eye_v	translucent									Boo form (FC c91, EVERYTHING 7.2): a ghost; as FB b101 its opaque draw dims the sun, no hard shadow; picture owed
+teresaluigi	body_m_v	translucent									Boo form (FC c91, EVERYTHING 7.2): a ghost; as FB b101 its opaque draw dims the sun, no hard shadow; picture owed
+teresaluigi	Cap_v	translucent									Boo form (FC c91, EVERYTHING 7.2): a ghost; as FB b101 its opaque draw dims the sun, no hard shadow; picture owed
+teresaluigi	Eye_v	translucent									Boo form (FC c91, EVERYTHING 7.2): a ghost; as FB b101 its opaque draw dims the sun, no hard shadow; picture owed
+hoppermario	Snake_v	metal		1							spring form's coil (FC c91, EVERYTHING 7.2): steel; picture owed		iron
+hopperluigi	Snake_v	metal		1							spring form's coil (FC c91, EVERYTHING 7.2): steel; picture owed		iron

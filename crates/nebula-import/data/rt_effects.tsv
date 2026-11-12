@@ -3328,3 +3328,22 @@ WormEatenHillSplash03	not added to the picture	0	steady
 YellowChipGet00	not added to the picture	0	steady
 YellowChipGet01	not added to the picture	0	steady
 YellowChipWaitLight00	not added to the picture	0	steady
+# Hand rows: the review's (kept by effect_tsv.py; a later row wins).
+# c91 (EVERYTHING 5.5): cannon flashes, the muzzle flash's two glows (census/particle_effects.tsv), 1500 flash.
+BossStinkBugShoot01	cannon flash	1500	flash
+BossStinkBugShoot02	cannon flash	1500	flash
+HomingKillerShoot01	cannon flash	1500	flash
+HomingKillerShoot02	cannon flash	1500	flash
+KillerGunnerSingleSmoke02	cannon flash	1500	flash
+KillerGunnerSingleSmoke03	cannon flash	1500	flash
+KoopaJrShipCannonShoot01	cannon flash	1500	flash
+KoopaJrShipCannonShoot02	cannon flash	1500	flash
+KoopaJrShipHeadCannonShoot02	cannon flash	1500	flash
+KoopaJrShipHeadCannonShoot03	cannon flash	1500	flash
+StoryDemoAc01KpShipCannonShoot01	cannon flash	1500	flash
+StoryDemoAc01KpShipCannonShoot02	cannon flash	1500	flash
+TorpeadShoot03	cannon flash	1500	flash
+TorpeadShoot04	cannon flash	1500	flash
+KoopaJrShipHeadCannonShootSign00	signal or energy	150	pulse
+# c91 (EVERYTHING 5.8): the flying form's red brake lamps on its hands.
+FooMarioTailLamp00	glow or lamp	150	steady
