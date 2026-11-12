@@ -114,6 +114,7 @@
     "services.save.global": "A mod's values across files, written at once (2.2)",
     "services.save.game": "The game's own file handed to a mod, or offered back through the game's screen with the player's answer (2.2)",
     "services.fs": "A mod's data folder and its own installed files: read, written whole, removed, moved, listed, the same path rule everywhere (2.3)",
-    "services.fs.exchange": "The Exchange folder shared by the player and mods granted it (2.3)"
+    "services.fs.exchange": "The Exchange folder shared by the player and mods granted it (2.3)",
+    "services.input": "A mod's own actions (its luma.json key options), each following a game control until the player binds keys or buttons to it in Controls, read each game frame (2.5)"
   }
 }

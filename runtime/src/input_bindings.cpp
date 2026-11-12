@@ -896,6 +896,18 @@ float source_value_pad(InputSource source, const PadSample& sample) noexcept {
     }
 }
 
+}  // namespace
+
+float keyboard_source_value(InputSource source, const KeyboardMouseLevels& levels) noexcept {
+    return source_value_keyboard(source, levels);
+}
+
+float pad_source_value(InputSource source, const PadSample& sample) noexcept {
+    return source_value_pad(source, sample);
+}
+
+namespace {
+
 bool is_trigger_source(InputSource source) noexcept {
     return source.kind == SourceKind::AxisPositive &&
            (source.code == static_cast<std::uint8_t>(PadAxis::LeftTrigger) ||

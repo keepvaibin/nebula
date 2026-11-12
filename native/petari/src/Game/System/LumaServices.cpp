@@ -42,6 +42,7 @@ namespace luma {
                 {"save.game", 1, 0, "save.game", "services-save"},
                 {"fs", 1, 0, nullptr, "services-fs"},
                 {"fs.exchange", 1, 0, "fs.exchange", "services-fs"},
+                {"input", 1, 0, nullptr, "services-input"},
                 {nullptr, 0, 0, nullptr, nullptr},
             };
 

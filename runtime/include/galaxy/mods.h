@@ -108,6 +108,13 @@ struct ModInfo {
     unsigned changed_textures = 0;            // textures its packs replace
     std::vector<ModOverlap> overlaps;         // enabled mods changing the same files or textures
     std::vector<ModOption> options;
+    // Its input actions (key options, services-input): id, the name in the player's language, the game control.
+    struct Action {
+        std::string id;
+        std::string name;
+        std::string follows;
+    };
+    std::vector<Action> actions;
     std::string code_token;     // identifies this device's libraries of a .luma; empty when it has no code
     bool code_allowed = false;  // the player allowed exactly these libraries
     bool code_declined = false; // the player said Not now to exactly these libraries (code_no)

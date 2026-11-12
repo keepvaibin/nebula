@@ -864,7 +864,8 @@ When read_form_when(const Value* value) {
 }
 
 // The form's options: choice (values, value_names), number (min..max by step, each a choice) and toggle (on, off).
-// text and key options have no place on the Mods page yet (plan 6.3) and are not read.
+// text options have no place on the Mods page yet (plan 6.3) and are not read; key options are the mod's input
+// actions (Manifest.keys), shown in Controls, not on the Mods page.
 void read_options(const Value& root, Manifest& out) {
     const Value* options = root.get("options");
     const Value* text = root.get("text");
@@ -903,6 +904,12 @@ void read_options(const Value& root, Manifest& out) {
                 }
             }
             option.fallback = start != nullptr ? when_value(*start) : std::string();
+        } else if (kind == "key") {
+            // An input action (services-input): its default is a game control's name; the validator keeps it one of
+            // kTargetIds (L210 Option.KeyDefaultUnknown), the input service checks it again.
+            KeyOption key{option.id, option.name, start != nullptr ? when_value(*start) : std::string()};
+            if (!key.id.empty()) out.keys.push_back(std::move(key));
+            continue;
         } else if (kind == "toggle") {
             // The Mods page's "off" is the toggle's false; its one choice is "on".
             option.choices.push_back({"off", {}});
