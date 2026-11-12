@@ -212,6 +212,13 @@ endif()
 target_compile_options(galaxy_render_vk PRIVATE -Wno-nullability-completeness)
 target_link_libraries(galaxy_render_vk PUBLIC nebula_vulkan_deps)
 target_link_libraries(galaxy_render_vk PRIVATE nebula_shader_compiler)
+# AV1 movies (plan 3.10): dav1d 1.5.1 built in-tree.
+option(NEBULA_AV1 "Decode AV1 movies with dav1d (plan 3.10)" ON)
+if(NEBULA_AV1)
+    include("${nebula_root}/cmake/dav1d.cmake")
+    target_link_libraries(galaxy_render_vk PRIVATE nebula_dav1d)
+    target_compile_definitions(galaxy_render_vk PRIVATE NEBULA_AV1=1)
+endif()
 
 # AMD FSR 3 (cmake/fidelityfx_android.cmake).
 include("${nebula_root}/cmake/fidelityfx_android.cmake")

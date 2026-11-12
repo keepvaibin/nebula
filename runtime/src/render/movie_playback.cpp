@@ -18,6 +18,10 @@
 #include <system_error>
 #include <thread>
 
+#if defined(NEBULA_AV1)
+#include <dav1d/dav1d.h>
+#endif
+
 #if defined(_WIN32)
 #include "galaxy/windows_api.h"
 #include <d3d11.h>
@@ -229,11 +233,15 @@ MovieYuvTransform movie_yuv_transform(bool bt709, bool full_range) noexcept {
     return t;
 }
 
-void convert_nv12_to_movie_planes(const std::uint8_t* y, std::int32_t y_pitch, const std::uint8_t* uv,
-                                  std::int32_t uv_pitch, std::uint32_t width, std::uint32_t height,
-                                  const MovieYuvTransform& t, std::uint8_t* out,
-                                  const std::array<std::uint64_t, 3>& offsets,
-                                  const std::array<std::uint32_t, 3>& pitches) noexcept {
+namespace {
+
+// 4:2:0 chroma at `cb` and `cr`, `step` bytes between a row's samples (2 for NV12's pairs, 1 for I420's planes), into
+// the planes.
+void convert_420_to_movie_planes(const std::uint8_t* y, std::int32_t y_pitch, const std::uint8_t* cb_in,
+                                 const std::uint8_t* cr_in, std::int32_t uv_pitch, std::uint32_t step,
+                                 std::uint32_t width, std::uint32_t height, const MovieYuvTransform& t,
+                                 std::uint8_t* out, const std::array<std::uint64_t, 3>& offsets,
+                                 const std::array<std::uint32_t, 3>& pitches) noexcept {
     const std::uint32_t cw = (width + 1u) / 2u;
     const std::uint32_t ch = (height + 1u) / 2u;
     // A source already in JPEG's YCbCr (full-range BT.601): the planes are its own bytes.
@@ -242,7 +250,8 @@ void convert_nv12_to_movie_planes(const std::uint8_t* y, std::int32_t y_pitch, c
     const std::int32_t luma_bias = 32768 - t.ky * t.y0;
     row_bands().run(ch, [&](std::uint32_t first, std::uint32_t end) {
         for (std::uint32_t j = first; j < end; ++j) {
-            const std::uint8_t* chroma = uv + static_cast<std::ptrdiff_t>(j) * uv_pitch;
+            const std::uint8_t* cb_row = cb_in + static_cast<std::ptrdiff_t>(j) * uv_pitch;
+            const std::uint8_t* cr_row = cr_in + static_cast<std::ptrdiff_t>(j) * uv_pitch;
             std::uint8_t* cb_out = out + offsets[1] + static_cast<std::uint64_t>(j) * pitches[1];
             std::uint8_t* cr_out = out + offsets[2] + static_cast<std::uint64_t>(j) * pitches[2];
             const std::uint32_t rows = std::min(2u, height - j * 2u);
@@ -254,8 +263,8 @@ void convert_nv12_to_movie_planes(const std::uint8_t* y, std::int32_t y_pitch, c
                     continue;
                 }
                 for (std::uint32_t i = 0; i < cw; ++i) {
-                    const std::int32_t cb = static_cast<std::int32_t>(chroma[i * 2u]) - 128;
-                    const std::int32_t cr = static_cast<std::int32_t>(chroma[i * 2u + 1u]) - 128;
+                    const std::int32_t cb = static_cast<std::int32_t>(cb_row[i * step]) - 128;
+                    const std::int32_t cr = static_cast<std::int32_t>(cr_row[i * step]) - 128;
                     const std::int32_t bias = luma_bias + t.kyb * cb + t.kyr * cr;
                     const std::uint32_t x0 = i * 2u;
                     const std::uint32_t x1 = std::min(x0 + 1u, width - 1u);
@@ -265,17 +274,35 @@ void convert_nv12_to_movie_planes(const std::uint8_t* y, std::int32_t y_pitch, c
             }
             for (std::uint32_t i = 0; i < cw; ++i) {
                 if (identity) {
-                    cb_out[i] = chroma[i * 2u];
-                    cr_out[i] = chroma[i * 2u + 1u];
+                    cb_out[i] = cb_row[i * step];
+                    cr_out[i] = cr_row[i * step];
                     continue;
                 }
-                const std::int32_t cb = static_cast<std::int32_t>(chroma[i * 2u]) - 128;
-                const std::int32_t cr = static_cast<std::int32_t>(chroma[i * 2u + 1u]) - 128;
+                const std::int32_t cb = static_cast<std::int32_t>(cb_row[i * step]) - 128;
+                const std::int32_t cr = static_cast<std::int32_t>(cr_row[i * step]) - 128;
                 cb_out[i] = clamp_byte(128 + ((t.kbb * cb + t.kbr * cr + 32768) >> 16));
                 cr_out[i] = clamp_byte(128 + ((t.krb * cb + t.krr * cr + 32768) >> 16));
             }
         }
     });
+}
+
+}  // namespace
+
+void convert_nv12_to_movie_planes(const std::uint8_t* y, std::int32_t y_pitch, const std::uint8_t* uv,
+                                  std::int32_t uv_pitch, std::uint32_t width, std::uint32_t height,
+                                  const MovieYuvTransform& t, std::uint8_t* out,
+                                  const std::array<std::uint64_t, 3>& offsets,
+                                  const std::array<std::uint32_t, 3>& pitches) noexcept {
+    convert_420_to_movie_planes(y, y_pitch, uv, uv + 1, uv_pitch, 2u, width, height, t, out, offsets, pitches);
+}
+
+void convert_i420_to_movie_planes(const std::uint8_t* y, std::int32_t y_pitch, const std::uint8_t* u,
+                                  const std::uint8_t* v, std::int32_t uv_pitch, std::uint32_t width,
+                                  std::uint32_t height, const MovieYuvTransform& t, std::uint8_t* out,
+                                  const std::array<std::uint64_t, 3>& offsets,
+                                  const std::array<std::uint32_t, 3>& pitches) noexcept {
+    convert_420_to_movie_planes(y, y_pitch, u, v, uv_pitch, 1u, width, height, t, out, offsets, pitches);
 }
 
 #if defined(_WIN32)
@@ -713,9 +740,15 @@ CookedMovieIndex index_cooked_movie(const std::uint8_t* data, std::uint64_t size
     const std::uint32_t frames = word(4);
     const std::uint32_t width = word(20);
     const std::uint32_t height = word(24);
+    const std::uint32_t codec = word(0x24);
+    const std::uint32_t colour = word(0x28);
     // Each frame takes at least its header, so a count the file cannot hold is refused before anything is reserved.
     if (frames == 0u || width == 0u || height == 0u || width > 4096u || height > 4096u ||
         frames > (size - kHeader) / kFrameHeader) {
+        return index;
+    }
+    // A codec this build has no decoder for: no frames (the caller names it).
+    if (codec > 1u || (codec == 1u && (!movie_av1_supported() || colour > 1u))) {
         return index;
     }
     index.video_at.reserve(frames);
@@ -738,7 +771,17 @@ CookedMovieIndex index_cooked_movie(const std::uint8_t* data, std::uint64_t size
     }
     index.width = width;
     index.height = height;
+    index.codec = static_cast<CookedMovieCodec>(codec);
+    index.bt709_limited = codec == 1u && colour == 1u;
     return index;
+}
+
+bool movie_av1_supported() noexcept {
+#if defined(NEBULA_AV1)
+    return true;
+#else
+    return false;
+#endif
 }
 
 namespace {
@@ -751,11 +794,96 @@ constexpr std::int32_t kCookedReach = 4;
 // The longest the render thread waits for one frame before the last one shows again.
 constexpr std::chrono::milliseconds kCookedWaitLimit{250};
 
+#if defined(NEBULA_AV1)
+// A cooked movie's AV1 frames (NMOV codec 1) through dav1d, in order: each frame's video is one temporal unit with one
+// shown frame, so a unit in is a picture out (max_frame_delay 1). Frame 0 is a key frame: going back, or round a loop,
+// starts again there.
+class Av1Frames {
+public:
+    Av1Frames() {
+        Dav1dSettings settings;
+        dav1d_default_settings(&settings);
+        settings.n_threads = 2;        // the movie's own thread and one more: the game's threads keep the rest
+        settings.max_frame_delay = 1;  // a picture for each unit sent, no frames held back
+        settings.apply_grain = 1;
+        if (dav1d_open(&context_, &settings) != 0) {
+            context_ = nullptr;
+        }
+    }
+    ~Av1Frames() {
+        if (context_ != nullptr) {
+            dav1d_close(&context_);
+        }
+    }
+    Av1Frames(const Av1Frames&) = delete;
+    Av1Frames& operator=(const Av1Frames&) = delete;
+
+    [[nodiscard]] bool open() const noexcept { return context_ != nullptr; }
+    // The frame the next unit is.
+    [[nodiscard]] std::int32_t next() const noexcept { return next_; }
+    void restart() noexcept {
+        dav1d_flush(context_);
+        next_ = 0;
+    }
+
+    // Frame next()'s unit in; its picture out into `picture` (the caller unrefs it) on 0. A negative dav1d error, or 1
+    // when the unit showed nothing.
+    int decode(const std::uint8_t* data, std::size_t size, Dav1dPicture& picture) {
+        ++next_;
+        if (size == 0u) {
+            return 1;
+        }
+        Dav1dData in{};
+        // The file stays mapped for the session: dav1d reads it in place.
+        if (dav1d_data_wrap(&in, data, size, [](const std::uint8_t*, void*) {}, nullptr) != 0) {
+            return -1;
+        }
+        bool got = false;
+        int result = 0;
+        // dav1d takes the unit whole or asks for a picture out first (EAGAIN); never both waiting. A bound all the same.
+        for (int round = 0; round < 64 && result == 0; ++round) {
+            const int sent = in.sz != 0u ? dav1d_send_data(context_, &in) : 0;
+            if (sent != 0 && sent != DAV1D_ERR(EAGAIN)) {
+                result = sent;
+                break;
+            }
+            Dav1dPicture out{};
+            const int taken = dav1d_get_picture(context_, &out);
+            if (taken == 0) {
+                if (got) {
+                    dav1d_picture_unref(&picture);
+                }
+                picture = out;
+                got = true;
+            } else if (taken != DAV1D_ERR(EAGAIN)) {
+                result = taken;
+                break;
+            }
+            if (in.sz == 0u && (got || taken == DAV1D_ERR(EAGAIN))) {
+                break;
+            }
+        }
+        dav1d_data_unref(&in);
+        if (result != 0) {
+            if (got) {
+                dav1d_picture_unref(&picture);
+            }
+            return result;
+        }
+        return got ? 0 : 1;
+    }
+
+private:
+    Dav1dContext* context_ = nullptr;
+    std::int32_t next_ = 0;
+};
+#endif
+
 }  // namespace
 
 // The game's cooked movie on its own thread, in order from where the render thread takes it, wrapping at the end (a
-// looping movie goes on; one that ends costs a frame or two). Every frame stands alone, so a jump is only a new place to
-// start.
+// looping movie goes on; one that ends costs a frame or two). A JPEG frame stands alone, so a jump is only a new place
+// to start; an AV1 frame needs the ones before it from frame 0 (Av1Frames), so a jump back starts again there.
 class MoviePlayback::CookedDecoder {
 public:
     CookedDecoder(std::string name, CookedMovieIndex index, const std::uint8_t* data,
@@ -879,6 +1007,19 @@ private:
         std::array<std::uint32_t, 3> pitches{};
         const std::uint64_t bytes = movie_plane_layout(width, height, offsets, pitches);
         const std::uint32_t chroma_rows = (height + 1u) / 2u;
+#if defined(NEBULA_AV1)
+        std::unique_ptr<Av1Frames> av1;
+        if (index_.codec == CookedMovieCodec::Av1) {
+            av1 = std::make_unique<Av1Frames>();
+            if (!av1->open()) {
+                std::cerr << "[movie] " << name_ << ": the AV1 decoder could not start\n";
+                std::lock_guard<std::mutex> lock(mutex_);
+                broken_ = true;
+                ready_signal_.notify_all();
+                return;
+            }
+        }
+#endif
         for (;;) {
             std::int32_t frame = 0;
             std::uint64_t generation = 0;
@@ -908,13 +1049,23 @@ private:
             }
             const auto start = std::chrono::steady_clock::now();
             std::uint8_t* const base = chunk->cpu_base;
-            const std::int32_t result = galaxy::movie::decode_video(
-                {data_ + index_.video_at[static_cast<std::size_t>(frame)], index_.video_size[static_cast<std::size_t>(frame)]},
-                static_cast<std::uint16_t>(width), static_cast<std::uint16_t>(height),
-                {base + offsets[0], static_cast<std::size_t>(pitches[0]) * height},
-                {base + offsets[1], static_cast<std::size_t>(pitches[1]) * chroma_rows},
-                {base + offsets[2], static_cast<std::size_t>(pitches[2]) * chroma_rows}, galaxy::movie::VideoKernel::Automatic,
-                pitches);
+            std::int32_t result = 0;
+#if defined(NEBULA_AV1)
+            if (av1 != nullptr) {
+                result = decode_av1(*av1, frame, generation, base, offsets, pitches);
+                if (result == kStopped) return;
+            } else
+#endif
+            {
+                result = galaxy::movie::decode_video(
+                    {data_ + index_.video_at[static_cast<std::size_t>(frame)],
+                     index_.video_size[static_cast<std::size_t>(frame)]},
+                    static_cast<std::uint16_t>(width), static_cast<std::uint16_t>(height),
+                    {base + offsets[0], static_cast<std::size_t>(pitches[0]) * height},
+                    {base + offsets[1], static_cast<std::size_t>(pitches[1]) * chroma_rows},
+                    {base + offsets[2], static_cast<std::size_t>(pitches[2]) * chroma_rows},
+                    galaxy::movie::VideoKernel::Automatic, pitches);
+            }
             const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
             Entry entry{};
             entry.frame = frame;
@@ -944,6 +1095,57 @@ private:
             ready_signal_.notify_all();
         }
     }
+
+#if defined(NEBULA_AV1)
+    static constexpr std::int32_t kStopped = -1000;  // decode_av1: stop_ came while it caught up
+
+    // Frame `frame` of an AV1 movie into the planes: from frame 0 again when it is behind the decoder's place, the frames
+    // between decoded and dropped. 0, kStopped, or the error (a frame of another size or form than the header's: -2).
+    std::int32_t decode_av1(Av1Frames& av1, std::int32_t frame, std::uint64_t generation, std::uint8_t* base,
+                            const std::array<std::uint64_t, 3>& offsets, const std::array<std::uint32_t, 3>& pitches) {
+        if (frame < av1.next()) {
+            av1.restart();
+        }
+        for (;;) {
+            const std::int32_t at = av1.next();
+            Dav1dPicture picture{};
+            const int result = av1.decode(data_ + index_.video_at[static_cast<std::size_t>(at)],
+                                          index_.video_size[static_cast<std::size_t>(at)], picture);
+            if (result < 0) {
+                av1.restart();  // the next frame asked for starts clean at 0
+                return result;
+            }
+            if (at == frame) {
+                if (result != 0) {
+                    return 1;  // the unit showed nothing
+                }
+                std::int32_t written = -2;
+                if (picture.p.w == static_cast<int>(index_.width) && picture.p.h == static_cast<int>(index_.height) &&
+                    picture.p.layout == DAV1D_PIXEL_LAYOUT_I420 && picture.p.bpc == 8) {
+                    convert_i420_to_movie_planes(
+                        static_cast<const std::uint8_t*>(picture.data[0]), static_cast<std::int32_t>(picture.stride[0]),
+                        static_cast<const std::uint8_t*>(picture.data[1]), static_cast<const std::uint8_t*>(picture.data[2]),
+                        static_cast<std::int32_t>(picture.stride[1]), index_.width, index_.height,
+                        movie_yuv_transform(index_.bt709_limited, !index_.bt709_limited), base, offsets, pitches);
+                    written = 0;
+                }
+                dav1d_picture_unref(&picture);
+                return written;
+            }
+            if (result == 0) {
+                dav1d_picture_unref(&picture);
+            }
+            // Catching up: a stop or a jump ends it.
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (stop_) {
+                return kStopped;
+            }
+            if (generation != generation_) {
+                return 1;  // dropped by the caller as from before the jump
+            }
+        }
+    }
+#endif
 
     std::string name_;
     CookedMovieIndex index_;
@@ -1056,7 +1258,11 @@ const MovieFrame* MoviePlayback::frame(const MovieFrameMark& mark) {
         cooked_data_ = mark.data;
         CookedMovieIndex index = index_cooked_movie(mark.data, mark.size);
         if (index.video_at.empty()) {
-            std::cerr << "[movie] " << name << ": not a cooked movie\n";
+            std::cerr << "[movie] " << name
+                      << (mark.size >= 0x2Cu && std::memcmp(mark.data, "NMOV", 4) == 0 && mark.data[0x24] == 1u &&
+                                  !movie_av1_supported()
+                              ? ": an AV1 movie, and this build has no AV1 decoder\n"
+                              : ": not a cooked movie\n");
         } else {
             cooked_ = std::make_unique<CookedDecoder>(name, std::move(index), mark.data, stager_);
         }

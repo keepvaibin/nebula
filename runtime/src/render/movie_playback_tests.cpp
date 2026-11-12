@@ -200,6 +200,33 @@ void test_index() {
     std::vector<std::uint8_t> bad = movie;
     bad[0] = 'X';
     expect(index_cooked_movie(bad.data(), bad.size()).video_at.empty(), "not NMOV: no table");
+    // The codec word (0x24) and an AV1 movie's colour word (0x28).
+    expect(index.codec == CookedMovieCodec::Jpeg && !index.bt709_limited, "a JPEG movie's codec word is 0");
+    std::vector<std::uint8_t> other = movie;
+    other[0x24] = 2;
+    expect(index_cooked_movie(other.data(), other.size()).video_at.empty(), "codec 2: no table");
+    std::vector<std::uint8_t> av1 = movie;
+    av1[0x24] = 1;
+    av1[0x28] = 1;
+    const CookedMovieIndex av1_index = index_cooked_movie(av1.data(), av1.size());
+    expect(movie_av1_supported() ? av1_index.codec == CookedMovieCodec::Av1 && av1_index.bt709_limited &&
+                                       av1_index.video_at.size() == 3u
+                                 : av1_index.video_at.empty(),
+           "an AV1 movie: a table only where the build decodes AV1");
+    av1[0x28] = 2;
+    expect(index_cooked_movie(av1.data(), av1.size()).video_at.empty(), "an AV1 movie's colour word past 1: no table");
+    // I420 in JPEG's own YCbCr: the planes are its bytes.
+    {
+        std::uint8_t y[4 * 2] = {10, 20, 30, 40, 50, 60, 70, 80};
+        const std::uint8_t u[2] = {100, 110};
+        const std::uint8_t v[2] = {150, 160};
+        std::array<std::uint64_t, 3> offsets{};
+        std::array<std::uint32_t, 3> pitches{};
+        std::vector<std::uint8_t> planes(movie_plane_layout(4, 2, offsets, pitches));
+        convert_i420_to_movie_planes(y, 4, u, v, 2, 4, 2, movie_yuv_transform(false, true), planes.data(), offsets, pitches);
+        expect(planes[offsets[0] + pitches[0] + 3] == 80 && planes[offsets[1] + 1] == 110 && planes[offsets[2]] == 150,
+               "I420 in JPEG's YCbCr copies through");
+    }
 
 #if defined(_WIN32)
     // The cooked decoder through the playback: frames in turn, a repeat, a loop, a wrap past the end, a jump back.
