@@ -275,15 +275,16 @@ float3 rt_bytes3(uint w) {
 // Everything a hit knows, from its item's sixteen words and its triangle; the first map at a level of detail by the
 // ray cone (Akenine-Moller et al. 2021, "Improved Shader and Texture Level of Detail Using Ray Cones"): `cone` is the
 // spread of the ray (radians a unit of way), so its width at the hit is far * cone.
-// A vertex colour de-lit by its cooked gain (D2; c37's traced_vertex_gain, FB b54): r g b signed bytes of log2 x 64, by
-// kDebake (the shading frame's form.z), saturated as the raster's vertex stage.
+// A vertex colour de-lit by its cooked gain (D2; traced_vertex_gain, FB b54; v2 c79): r g b signed bytes of log2 x 42,
+// by kDebake (the shading frame's form.z), bounded by its largest channel as the raster's vertex stage.
 float3 rt_vertex_gain(float3 c, uint gain) {
     const float debake = g_shade.form.z;
     if (!(debake > 0.0f) || gain == 0u) {
         return c;
     }
     const int3 steps = int3(gain << 24u, gain << 16u, gain << 8u) >> 24;
-    return saturate(c * lerp(float3(1.0f, 1.0f, 1.0f), exp2(float3(steps) / 64.0f), debake));
+    const float3 g = max(c, 0.0f) * lerp(float3(1.0f, 1.0f, 1.0f), exp2(float3(steps) / 42.0f), debake);
+    return g / max(max(max(g.r, g.g), g.b), 1.0f);
 }
 
 void rt_hit_read(uint item, uint triangle_, float2 where_, float far_, float3 origin, float3 direction, float cone, out RtHit h) {

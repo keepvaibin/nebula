@@ -1370,7 +1370,7 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
     let (mut ramp_count, mut picture_count, mut sprite_count) = (0u32, 0u32, 0u32);
     // c55 (d07's census): each model's de-light with c37 alone and with the first map's light (M5).
     let mut debake = std::io::BufWriter::new(std::fs::File::create(output.with_file_name("debake_maps.tsv"))?);
-    writeln!(debake, "model\tde-lit meshes\twith a map ratio\tvertices\tmean gain c37\tmean gain d07")?;
+    writeln!(debake, "model\tde-lit meshes\twith a map ratio\tvertices\tmean gain c37\tmean gain d07\tnear-black meshes")?;
     let (mut debaked_meshes, mut mapped_meshes, mut debaked_models, mut mapped_models) = (0usize, 0usize, 0usize, 0usize);
     let mut classes: BTreeMap<Class, (u32, u32)> = BTreeMap::new();
     let mut stats = Stats::default();
@@ -1425,7 +1425,7 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
             }
         }
         if let Some(d) = super::model_write::debake_report(&ir, stem) {
-            writeln!(debake, "{name}\t{}\t{}\t{}\t{:.3}\t{:.3}", d.debaked, d.mapped, d.vertices, d.gain_c37, d.gain_d07)?;
+            writeln!(debake, "{name}\t{}\t{}\t{}\t{:.3}\t{:.3}\t{}", d.debaked, d.mapped, d.vertices, d.gain_c37, d.gain_d07, d.near_black)?;
             debaked_meshes += d.debaked;
             mapped_meshes += d.mapped;
             debaked_models += 1;

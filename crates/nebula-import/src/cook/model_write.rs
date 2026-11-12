@@ -107,7 +107,7 @@ pub struct MeshStreams {
     pub coords: Vec<[f32; 2]>,
     pub colors1: Vec<u32>,
     pub tangents: Vec<[[f32; 3]; 2]>,
-    /// With MESH_GAIN: each vertex's de-light gain, r g b signed bytes of log2 x 64 (debake_gains).
+    /// With MESH_GAIN: each vertex's de-light gain, r g b signed bytes of log2 x GAIN_STEPS (debake_gains).
     pub gains: Vec<u32>,
     pub matrices: Vec<u32>,
     pub indices: Vec<u32>,
@@ -559,56 +559,15 @@ impl PaintedLight {
     }
 }
 
-/// The least squares solution of four normal equations (Gaussian elimination, partial pivoting); a whisker added to the
-/// diagonal keeps a flat mesh (every normal alike: the columns dependent) solvable. None when it still is not.
-/// The nine real spherical harmonics (bands 0-2) at unit direction n (the basis of October's de-baking).
-fn sh9(n: [f64; 3]) -> [f64; 9] {
-    [
-        0.282095,
-        0.488603 * n[1],
-        0.488603 * n[2],
-        0.488603 * n[0],
-        1.092548 * n[0] * n[1],
-        1.092548 * n[1] * n[2],
-        0.315392 * (3.0 * n[2] * n[2] - 1.0),
-        1.092548 * n[0] * n[2],
-        0.546274 * (n[0] * n[0] - n[1] * n[1]),
-    ]
-}
-
-/// A mesh's unit vertex normals: its own where it has them, else its triangles' (area-weighted); None where neither.
-fn unit_normals(s: &MeshStreams) -> Vec<Option<[f64; 3]>> {
-    let count = s.positions.len();
-    let mut sums = vec![[0.0f64; 3]; count];
-    if s.attributes & MESH_NORMAL != 0 && s.normals.len() == count {
-        for (sum, n) in sums.iter_mut().zip(&s.normals) {
-            *sum = n.map(f64::from);
-        }
-    } else {
-        for t in s.indices.chunks_exact(3) {
-            let [a, b, c] = [t[0] as usize, t[1] as usize, t[2] as usize];
-            if a >= count || b >= count || c >= count {
-                continue;
-            }
-            let p = |i: usize| s.positions[i].map(f64::from);
-            let (pa, pb, pc) = (p(a), p(b), p(c));
-            let u = [pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]];
-            let v = [pc[0] - pa[0], pc[1] - pa[1], pc[2] - pa[2]];
-            let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
-            for i in [a, b, c] {
-                for k in 0..3 {
-                    sums[i][k] += n[k];
-                }
-            }
-        }
-    }
-    sums.into_iter()
-        .map(|n| {
-            let length = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
-            (length > 1e-6).then(|| [n[0] / length, n[1] / length, n[2] / length])
-        })
-        .collect()
-}
+/// De-bake v2 (c79): the gain's byte, log2 x this (a signed byte: 2^(127/42) = 8.1 holds DEBAKE_CAP).
+pub const GAIN_STEPS: f64 = 42.0;
+/// The most a vertex colour is lifted, and the region's reference: this share of its area lies under it.
+const DEBAKE_CAP: f64 = 8.0;
+const DEBAKE_REFERENCE: f64 = 0.9;
+/// How far the hue that follows the painted light moves to the lit hue (kDebakeChroma).
+const DEBAKE_CHROMA: f64 = 0.5;
+/// A luminance under this (8 / 255) is painted black, not shade.
+const DEBAKE_NEAR_BLACK: f64 = 8.0 / 255.0;
 
 /// c72 (the owner's verdict A5): whether a material's vertex colour is de-lit by the cooker's gain (c37). Its vertex
 /// colour is read and it is no emitter; a lit colour channel that takes its colour from a register keeps it (the game's
@@ -632,6 +591,8 @@ pub struct DebakeReport {
     pub vertices: usize,
     pub gain_c37: f64,
     pub gain_d07: f64,
+    /// c79: the chosen meshes painted near black all over (no light to take out).
+    pub near_black: usize,
 }
 
 /// The de-light of a model as write() makes it (the same meshes chosen), with and without the maps: None for a sky
@@ -666,8 +627,9 @@ pub fn debake_report(ir: &ModelIr, stem: &str) -> Option<DebakeReport> {
         .collect();
     let mut plain = meshes.clone();
     let no_maps: Vec<Option<Vec<f64>>> = vec![None; meshes.len()];
-    debake_gains(&mut plain, &which, &no_maps);
-    debake_gains(&mut meshes, &which, &maps);
+    let materials: Vec<u32> = ir.shapes.iter().map(|s| s.material).collect();
+    debake_gains(&mut plain, &which, &no_maps, &materials);
+    let near_black = debake_gains(&mut meshes, &which, &maps, &materials).len();
     let mean = |ms: &[MeshStreams]| -> (f64, usize) {
         let (mut sum, mut count) = (0.0f64, 0usize);
         for (s, &w) in ms.iter().zip(&which) {
@@ -676,7 +638,7 @@ pub fn debake_report(ir: &ModelIr, stem: &str) -> Option<DebakeReport> {
             }
             for i in 0..s.positions.len() {
                 let g = s.gains.get(i).copied().unwrap_or(0);
-                let channel = |shift: u32| 2f64.powf(f64::from((g >> shift & 255) as u8 as i8) / 64.0);
+                let channel = |shift: u32| 2f64.powf(f64::from((g >> shift & 255) as u8 as i8) / GAIN_STEPS);
                 sum += (channel(0) + channel(8) + channel(16)) / 3.0;
                 count += 1;
             }
@@ -691,6 +653,7 @@ pub fn debake_report(ir: &ModelIr, stem: &str) -> Option<DebakeReport> {
         vertices,
         gain_c37,
         gain_d07,
+        near_black,
     })
 }
 
@@ -793,117 +756,207 @@ fn first_map_at_vertices(ir: &ModelIr, material: usize, s: &MeshStreams) -> Opti
     Some(seen.iter().map(|&x| (x / mean).clamp(0.25, 4.0)).collect())
 }
 
-/// D2 (DIRECTOR.md section 12 M4; October's engine v2, render_core.cpp fit_debake_light at 191ab083a^): the light
-/// painted into a model's vertex colours as a function of the surface's facing, fitted per channel by nine spherical
-/// harmonics of the vertex normal over the meshes `which` names (least squares, ridge 1e-3 of the mean diagonal), and
-/// taken out by a gain a vertex and channel, peak / max(fit, peak / 4) in [0.25, 4] (peak: the fit's most lit
-/// vertex). What the facing does not explain stays (paint, occlusion). A mesh whose every gain rounds to 1 takes none.
-/// `maps` (M5, director d07): by mesh, its first map's brightness at each vertex against the mesh's own mean
-/// (first_map_at_vertices), or None: what the surface shows is its vertex colour times that, so the light painted into
-/// the map by facing is found, and taken out, with the vertex colour's.
-fn debake_gains(meshes: &mut [MeshStreams], which: &[bool], maps: &[Option<Vec<f64>>]) {
+/// De-bake v2 (the owner's verdict A5, the director 11-12; LIGHT-MODEL.md 10): the light painted into the vertex
+/// colours of the meshes `which` names, taken out by a gain a vertex and channel (r g b signed bytes of log2 x
+/// GAIN_STEPS). Per vertex the light L is the luminance of its vertex colour times its first map's brightness there
+/// (`maps`, first_map_at_vertices; 1 where none). Vertices of one material (`materials`, by mesh) at the same position
+/// are one point; a point's L is its vertices' area-weighted mean, smoothed over its one ring. A region is the points of
+/// one material joined by triangles; its Lref is the area-weighted DEBAKE_REFERENCE percentile of L. The gain Lref / L
+/// lifts only, within [1, DEBAKE_CAP]. The hue that follows L in its region (each chroma channel's area-weighted
+/// regression on L) moves DEBAKE_CHROMA of the way to its value at Lref; the rest of the hue stays. A region whose
+/// Lref is under DEBAKE_NEAR_BLACK keeps its colours. A mesh whose every gain is 1 takes none. Returns the chosen
+/// meshes painted near black all over (to list).
+fn debake_gains(meshes: &mut [MeshStreams], which: &[bool], maps: &[Option<Vec<f64>>], materials: &[u32]) -> Vec<usize> {
     let colour = |c: u32| [f64::from(c >> 24), f64::from(c >> 16 & 255), f64::from(c >> 8 & 255)].map(|x| x / 255.0);
-    let normals: Vec<Vec<Option<[f64; 3]>>> = meshes
-        .iter()
-        .zip(which)
-        .map(|(s, &w)| if w && s.attributes & MESH_COLOR0 != 0 && s.colors.len() == s.positions.len() { unit_normals(s) } else { Vec::new() })
-        .collect();
-    let mut a = [[0.0f64; 9]; 9];
-    let mut b = [[0.0f64; 9]; 3];
-    let mut samples = 0usize;
-    for (mesh, (s, ns)) in meshes.iter().zip(&normals).enumerate() {
-        let map = maps.get(mesh).and_then(|m| m.as_ref()).filter(|m| m.len() == s.colors.len());
-        for (i, (n, &c)) in ns.iter().zip(&s.colors).enumerate() {
-            let Some(n) = n else { continue };
-            let y = sh9(*n);
-            let mut rgb = colour(c);
-            if let Some(map) = map {
-                rgb = rgb.map(|x| x * map[i]);
-            }
-            for i in 0..9 {
-                for j in 0..9 {
-                    a[i][j] += y[i] * y[j];
-                }
-                for k in 0..3 {
-                    b[k][i] += y[i] * rgb[k];
-                }
-            }
-            samples += 1;
-        }
-    }
-    if samples < 32 {
-        return;
-    }
-    let ridge = 1e-3 * (0..9).map(|i| a[i][i]).sum::<f64>() / 9.0;
-    for (i, row) in a.iter_mut().enumerate() {
-        row[i] += ridge;
-    }
-    // Cholesky: a = l l^T, then each channel's coefficients.
-    let mut l = [[0.0f64; 9]; 9];
-    for i in 0..9 {
-        for j in 0..=i {
-            let mut sum = a[i][j];
-            for k in 0..j {
-                sum -= l[i][k] * l[j][k];
-            }
-            if i == j {
-                if sum <= 0.0 {
-                    return;
-                }
-                l[i][i] = sum.sqrt();
-            } else {
-                l[i][j] = sum / l[j][j];
-            }
-        }
-    }
-    let mut coef = [[0.0f64; 9]; 3];
-    for k in 0..3 {
-        let mut z = [0.0f64; 9];
-        for i in 0..9 {
-            let mut sum = b[k][i];
-            for m in 0..i {
-                sum -= l[i][m] * z[m];
-            }
-            z[i] = sum / l[i][i];
-        }
-        for i in (0..9).rev() {
-            let mut sum = z[i];
-            for m in i + 1..9 {
-                sum -= l[m][i] * coef[k][m];
-            }
-            coef[k][i] = sum / l[i][i];
-        }
-    }
-    let fit = |n: [f64; 3]| {
-        let y = sh9(n);
-        [0, 1, 2].map(|k| (0..9).map(|i| coef[k][i] * y[i]).sum::<f64>())
-    };
-    let mut peak = [1e-3f64; 3];
-    for ns in &normals {
-        for n in ns.iter().flatten() {
-            let f = fit(*n);
-            for k in 0..3 {
-                peak[k] = peak[k].max(f[k]);
-            }
-        }
-    }
-    // A model painted dark all over (Lref under 0.05): no light to take out.
-    if 0.2126 * peak[0] + 0.7152 * peak[1] + 0.0722 * peak[2] < 0.05 {
-        return;
-    }
-    for (s, ns) in meshes.iter_mut().zip(&normals) {
-        if ns.is_empty() {
+    let luma = |c: [f64; 3]| 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    let mut near_black = Vec::new();
+    // Points: the chosen meshes' vertices, welded by material and exact position.
+    let mut points: std::collections::HashMap<(u32, [u32; 3]), usize> = std::collections::HashMap::new();
+    let mut point_of: Vec<Vec<usize>> = Vec::with_capacity(meshes.len());
+    for (mesh, s) in meshes.iter().enumerate() {
+        let chosen = which.get(mesh).copied().unwrap_or(false)
+            && s.attributes & MESH_COLOR0 != 0
+            && !s.positions.is_empty()
+            && s.colors.len() == s.positions.len();
+        if !chosen {
+            point_of.push(Vec::new());
             continue;
         }
-        let gains: Vec<u32> = ns
+        if s.colors.iter().all(|&c| luma(colour(c)) < DEBAKE_NEAR_BLACK) {
+            near_black.push(mesh);
+        }
+        let material = materials.get(mesh).copied().unwrap_or(u32::MAX);
+        let ids = s
+            .positions
             .iter()
-            .map(|n| {
-                let Some(n) = n else { return 0 };
-                let f = fit(*n);
+            .map(|&p| {
+                let next = points.len();
+                *points.entry((material, p.map(f32::to_bits))).or_insert(next)
+            })
+            .collect();
+        point_of.push(ids);
+    }
+    let count = points.len();
+    if count == 0 {
+        return near_black;
+    }
+    // Each point's weight (a third of its triangles' area, its vertices'), light and colour (weighted means), and the
+    // edges between points.
+    let mut weight = vec![0.0f64; count];
+    let mut light = vec![0.0f64; count];
+    let mut rgb = vec![[0.0f64; 3]; count];
+    let mut edges: Vec<(usize, usize)> = Vec::new();
+    for (mesh, s) in meshes.iter().enumerate() {
+        let ids = &point_of[mesh];
+        if ids.is_empty() {
+            continue;
+        }
+        let map = maps.get(mesh).and_then(|m| m.as_ref()).filter(|m| m.len() == s.colors.len());
+        let mut area = vec![0.0f64; ids.len()];
+        for t in s.indices.chunks_exact(3).chain(s.refined_indices.chunks_exact(3)) {
+            let [a, b, c] = [t[0] as usize, t[1] as usize, t[2] as usize];
+            if a >= ids.len() || b >= ids.len() || c >= ids.len() {
+                continue;
+            }
+            let p = |i: usize| s.positions[i].map(f64::from);
+            let (pa, pb, pc) = (p(a), p(b), p(c));
+            let u = [pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]];
+            let v = [pc[0] - pa[0], pc[1] - pa[1], pc[2] - pa[2]];
+            let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+            let third = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt() / 6.0;
+            for i in [a, b, c] {
+                area[i] += third;
+            }
+            for (x, y) in [(a, b), (b, c), (c, a)] {
+                let (x, y) = (ids[x], ids[y]);
+                if x != y {
+                    edges.push((x.min(y), x.max(y)));
+                }
+            }
+        }
+        for (v, &p) in ids.iter().enumerate() {
+            let w = area[v] + 1e-12;
+            let c = colour(s.colors[v]).map(|x| x * map.map_or(1.0, |m| m[v]));
+            weight[p] += w;
+            light[p] += w * luma(c);
+            for k in 0..3 {
+                rgb[p][k] += w * c[k];
+            }
+        }
+    }
+    for p in 0..count {
+        light[p] /= weight[p];
+        rgb[p] = rgb[p].map(|x| x / weight[p]);
+    }
+    edges.sort_unstable();
+    edges.dedup();
+    // The one ring's area-weighted light, and the regions (union-find over the edges).
+    fn root(parent: &mut [usize], mut x: usize) -> usize {
+        while parent[x] != x {
+            parent[x] = parent[parent[x]];
+            x = parent[x];
+        }
+        x
+    }
+    let mut ring_weight = weight.clone();
+    let mut ring_light: Vec<f64> = (0..count).map(|p| weight[p] * light[p]).collect();
+    let mut parent: Vec<usize> = (0..count).collect();
+    for &(a, b) in &edges {
+        ring_weight[a] += weight[b];
+        ring_light[a] += weight[b] * light[b];
+        ring_weight[b] += weight[a];
+        ring_light[b] += weight[a] * light[a];
+        let (ra, rb) = (root(&mut parent, a), root(&mut parent, b));
+        if ra != rb {
+            parent[ra] = rb;
+        }
+    }
+    let smooth: Vec<f64> = (0..count).map(|p| ring_light[p] / ring_weight[p]).collect();
+    let region: Vec<usize> = (0..count).map(|p| root(&mut parent, p)).collect();
+    let mut members: Vec<Vec<usize>> = vec![Vec::new(); count];
+    for p in 0..count {
+        members[region[p]].push(p);
+    }
+    // Each region's Lref and its hue's slope against L.
+    let mut fits = vec![(0.0f64, [0.0f64; 3]); count];
+    for (r, m) in members.iter_mut().enumerate() {
+        if m.is_empty() {
+            continue;
+        }
+        m.sort_by(|&a, &b| smooth[a].total_cmp(&smooth[b]));
+        let total: f64 = m.iter().map(|&p| weight[p]).sum();
+        let mut reference = smooth[m[m.len() - 1]];
+        let mut acc = 0.0;
+        for &p in m.iter() {
+            acc += weight[p];
+            if acc >= DEBAKE_REFERENCE * total {
+                reference = smooth[p];
+                break;
+            }
+        }
+        let (mut sw, mut sx, mut sxx) = (0.0f64, 0.0f64, 0.0f64);
+        let (mut sy, mut sxy) = ([0.0f64; 3], [0.0f64; 3]);
+        for &p in m.iter() {
+            if light[p] < DEBAKE_NEAR_BLACK {
+                continue;
+            }
+            let (w, x) = (weight[p], smooth[p]);
+            let hue = rgb[p].map(|c| c / light[p]);
+            sw += w;
+            sx += w * x;
+            sxx += w * x * x;
+            for k in 0..3 {
+                sy[k] += w * hue[k];
+                sxy[k] += w * x * hue[k];
+            }
+        }
+        let mut slope = [0.0f64; 3];
+        if sw > 0.0 {
+            let mean = sx / sw;
+            let spread = sxx / sw - mean * mean;
+            if spread > 1e-8 {
+                for k in 0..3 {
+                    slope[k] = (sxy[k] / sw - mean * sy[k] / sw) / spread;
+                }
+            }
+        }
+        fits[r] = (reference, slope);
+    }
+    for (mesh, s) in meshes.iter_mut().enumerate() {
+        let ids = &point_of[mesh];
+        if ids.is_empty() {
+            continue;
+        }
+        let gains: Vec<u32> = ids
+            .iter()
+            .enumerate()
+            .map(|(v, &p)| {
+                let (reference, slope) = fits[region[p]];
+                if reference < DEBAKE_NEAR_BLACK {
+                    return 0;
+                }
+                let g = (reference / smooth[p].max(1e-6)).clamp(1.0, DEBAKE_CAP);
+                let c = colour(s.colors[v]);
+                let l = luma(c);
+                let mut gain = [g; 3];
+                if l > 1e-4 {
+                    let hue = c.map(|x| x / l);
+                    let mut moved = [0.0f64; 3];
+                    for k in 0..3 {
+                        moved[k] = (hue[k] + DEBAKE_CHROMA * slope[k] * (reference - smooth[p])).max(0.0);
+                    }
+                    let moved_l = luma(moved);
+                    if moved_l > 1e-6 {
+                        for k in 0..3 {
+                            if hue[k] > 1e-4 {
+                                gain[k] = g * (moved[k] / moved_l) / hue[k];
+                            }
+                        }
+                    }
+                }
                 let mut word = 0u32;
                 for k in 0..3 {
-                    let gain = (peak[k] / f[k].max(peak[k] * 0.25)).clamp(0.25, 4.0);
-                    let step = (gain.log2() * 64.0).round().clamp(-128.0, 127.0) as i32;
+                    let step = (gain[k].log2() * GAIN_STEPS).round().clamp(-128.0, 127.0) as i32;
                     word |= ((step as u32) & 255) << (8 * k);
                 }
                 word
@@ -914,8 +967,11 @@ fn debake_gains(meshes: &mut [MeshStreams], which: &[bool], maps: &[Option<Vec<f
             s.attributes |= MESH_GAIN;
         }
     }
+    near_black
 }
 
+/// The least squares solution of four normal equations (Gaussian elimination, partial pivoting); a whisker added to the
+/// diagonal keeps a flat mesh (every normal alike: the columns dependent) solvable. None when it still is not.
 fn solve4(mut a: [[f64; 4]; 4], mut b: [f64; 4]) -> Option<[f64; 4]> {
     let trace = (0..4).map(|i| a[i][i]).sum::<f64>();
     for (i, row) in a.iter_mut().enumerate() {
@@ -1202,7 +1258,8 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
             .zip(&which)
             .map(|((shape, streams), &w)| if w { first_map_at_vertices(ir, shape.material as usize, streams) } else { None })
             .collect();
-        debake_gains(&mut meshes, &which, &maps);
+        let materials: Vec<u32> = ir.shapes.iter().map(|s| s.material).collect();
+        debake_gains(&mut meshes, &which, &maps, &materials);  // c79: de-bake v2
         for (streams, &slot) in meshes.iter().zip(&mesh_slots) {
             if streams.attributes & MESH_GAIN != 0 {
                 b.patch32(slot + 56, streams.attributes);
@@ -1717,55 +1774,99 @@ pub fn further_stride(s: &MeshStreams) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn debake_gains_take_out_a_painted_light_by_facing() {
-        // A grey ball painted 0.3 + 0.6 max(n.y, 0) (sky and a sun overhead): the gains bring every facing near the
-        // peak (what nine harmonics of the clamped cosine leave, and the byte's 1/64 octave), alike in every channel.
+    /// A ball of 24 x 12 vertices joined by triangles, each vertex coloured by `paint` of its normal.
+    fn ball(paint: impl Fn([f32; 3]) -> [f32; 3]) -> MeshStreams {
         let mut s = MeshStreams { attributes: MESH_NORMAL | MESH_COLOR0, ..Default::default() };
         for i in 0..24 {
             for j in 0..12 {
                 let (around, down) = (i as f32 / 24.0 * std::f32::consts::TAU, (j as f32 + 0.5) / 12.0 * std::f32::consts::PI);
                 let n = [down.sin() * around.cos(), down.cos(), down.sin() * around.sin()];
-                let q = ((0.3 + 0.6 * n[1].max(0.0)) * 255.0).round() as u32;
+                let q = paint(n).map(|x| (x * 255.0).round().clamp(0.0, 255.0) as u32);
                 s.positions.push(n);
                 s.normals.push(n);
-                s.colors.push(q << 24 | q << 16 | q << 8 | 255);
+                s.colors.push(q[0] << 24 | q[1] << 16 | q[2] << 8 | 255);
             }
         }
+        for i in 0..24u32 {
+            for j in 0..11u32 {
+                let (a, b) = (i * 12 + j, (i + 1) % 24 * 12 + j);
+                s.indices.extend([a, b, a + 1, b, b + 1, a + 1]);
+            }
+        }
+        s
+    }
+    fn gained(c: u32, g: u32, k: u32) -> f64 {
+        f64::from(c >> (24 - 8 * k) & 255) / 255.0 * 2f64.powf(f64::from((g >> (8 * k) & 255) as u8 as i8) / GAIN_STEPS)
+    }
+    fn spread(v: &[f64]) -> f64 {
+        v.iter().cloned().fold(0.0, f64::max) / v.iter().cloned().fold(f64::MAX, f64::min)
+    }
+    #[test]
+    fn debake_gains_lift_the_painted_shade_to_the_region_light() {
+        // A grey ball painted 0.3 + 0.6 max(n.y, 0): the shade lifts to the region's light (its 90th percentile), the
+        // lit top keeps its colour (lifts only), alike in every channel; a mesh not chosen takes none.
+        let s = ball(|n| [0.3 + 0.6 * n[1].max(0.0); 3]);
         let mut meshes = vec![s, MeshStreams::default()];
-        debake_gains(&mut meshes, &[true, false], &[None, None]);
+        let black = debake_gains(&mut meshes, &[true, false], &[None, None], &[0, 1]);
+        assert!(black.is_empty());
         let s = &meshes[0];
         assert!(s.attributes & MESH_GAIN != 0 && s.gains.len() == s.positions.len());
         assert!(meshes[1].attributes & MESH_GAIN == 0 && meshes[1].gains.is_empty());
         assert!(s.gains.iter().all(|&g| g & 255 == g >> 8 & 255 && g & 255 == g >> 16 & 255));
+        assert!(s.gains.iter().all(|&g| (g & 255) as u8 as i8 >= 0), "lifts only");
         let before: Vec<f64> = s.colors.iter().map(|&c| f64::from(c >> 24) / 255.0).collect();
-        let after: Vec<f64> = before.iter().zip(&s.gains).map(|(&c, &g)| c * 2f64.powf(f64::from(g as u8 as i8) / 64.0)).collect();
-        let spread = |v: &[f64]| v.iter().cloned().fold(0.0, f64::max) / v.iter().cloned().fold(f64::MAX, f64::min);
+        let after: Vec<f64> = s.colors.iter().zip(&s.gains).map(|(&c, &g)| gained(c, g, 0)).collect();
         assert!(spread(&before) > 2.5 && spread(&after) < 1.4, "{} {}", spread(&before), spread(&after));
     }
     #[test]
     fn debake_gains_take_out_a_light_painted_into_the_map() {
-        // The same ball, its vertex colours an even grey and the light 0.3 + 0.6 max(n.y, 0) in its first map's
-        // brightness at each vertex (M5): the gains take it out as they take a vertex colour's.
-        let mut s = MeshStreams { attributes: MESH_NORMAL | MESH_COLOR0, ..Default::default() };
-        let mut map = Vec::new();
-        for i in 0..24 {
-            for j in 0..12 {
-                let (around, down) = (i as f32 / 24.0 * std::f32::consts::TAU, (j as f32 + 0.5) / 12.0 * std::f32::consts::PI);
-                let n = [down.sin() * around.cos(), down.cos(), down.sin() * around.sin()];
-                s.positions.push(n);
-                s.normals.push(n);
-                s.colors.push(153 << 24 | 153 << 16 | 153 << 8 | 255);
-                map.push(f64::from(0.3 + 0.6 * n[1].max(0.0)) / 0.6);
-            }
-        }
+        // The same ball, its vertex colours an even grey and the light in its first map's brightness at each vertex
+        // (M5): the gains take it out as they take a vertex colour's.
+        let s = ball(|_| [0.6; 3]);
+        let map: Vec<f64> = s.normals.iter().map(|n| f64::from(0.3 + 0.6 * n[1].max(0.0)) / 0.6).collect();
         let mut meshes = vec![s];
-        debake_gains(&mut meshes, &[true], &[Some(map.clone())]);
+        debake_gains(&mut meshes, &[true], &[Some(map.clone())], &[0]);
         let s = &meshes[0];
         assert!(s.attributes & MESH_GAIN != 0 && s.gains.len() == s.positions.len());
-        let after: Vec<f64> = map.iter().zip(&s.gains).map(|(&m, &g)| m * 2f64.powf(f64::from(g as u8 as i8) / 64.0)).collect();
-        let spread = |v: &[f64]| v.iter().cloned().fold(0.0, f64::max) / v.iter().cloned().fold(f64::MAX, f64::min);
+        let after: Vec<f64> = map.iter().zip(&s.gains).map(|(&m, &g)| m * 2f64.powf(f64::from(g as u8 as i8) / GAIN_STEPS)).collect();
         assert!(spread(&map) > 2.5 && spread(&after) < 1.4, "{} {}", spread(&map), spread(&after));
+    }
+    #[test]
+    fn debake_gains_move_the_shade_hue_halfway_to_the_lit_hue() {
+        // Painted shade bluer than the lit side (sky in the shade): its blue over red moves about half way to the lit
+        // side's, its light to the region's.
+        let s = ball(|n| {
+            let t = n[1].max(0.0);
+            [0.2 + 0.7 * t, 0.2 + 0.7 * t, 0.4 + 0.5 * t]
+        });
+        let mut meshes = vec![s];
+        debake_gains(&mut meshes, &[true], &[None], &[0]);
+        let s = &meshes[0];
+        let ratio = |c: u32, g: u32| gained(c, g, 2) / gained(c, g, 0);
+        let (dark, lit) = (s.positions.iter().position(|p| p[1] < -0.9).unwrap(), s.positions.iter().position(|p| p[1] > 0.95).unwrap());
+        let (before, lit_ratio) = (ratio(s.colors[dark], 0), ratio(s.colors[lit], 0));
+        let after = ratio(s.colors[dark], s.gains[dark]);
+        assert!(before > 1.8 && lit_ratio < 1.1, "{before} {lit_ratio}");
+        assert!(after < before - 0.25 * (before - lit_ratio) && after > lit_ratio, "{before} {after} {lit_ratio}");
+    }
+    #[test]
+    fn debake_gains_keep_each_region_and_list_near_black() {
+        // Two balls of one material, apart: the dark one is its own region (its own light), so it is not lifted to the
+        // bright one's; a mesh painted black all over is listed and keeps its colours.
+        let bright = ball(|_| [0.8; 3]);
+        let mut dark = ball(|_| [0.3; 3]);
+        for p in dark.positions.iter_mut() {
+            p[0] += 10.0;
+        }
+        let mut black = ball(|_| [0.01; 3]);
+        for p in black.positions.iter_mut() {
+            p[0] += 20.0;
+        }
+        let mut meshes = vec![bright, dark, black];
+        let listed = debake_gains(&mut meshes, &[true, true, true], &[None, None, None], &[0, 0, 0]);
+        assert_eq!(listed, vec![2]);
+        assert!(meshes[1].gains.iter().all(|&g| g == 0), "the dark ball keeps its own light");
+        assert!(meshes[2].attributes & MESH_GAIN == 0);
     }
     #[test]
     fn mesh_index_width_changes_above_65535_and_wide_matrix_ids_survive() {
