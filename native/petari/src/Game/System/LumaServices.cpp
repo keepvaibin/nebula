@@ -175,6 +175,9 @@ namespace luma {
                 {"time", 120, 139},    {"system", 140, 159},  {"mods", 160, 179},  {"save", 180, 199},
                 {"fs", 200, 249},      {"net", 250, 299},     {"input", 300, 349}, {"audio", 350, 399},
                 {"capture", 400, 419}, {"assets", 420, 469},  {"draw", 470, 569},  {"ui", 570, 619},
+                // Content at run time (services-registry 11: 620 to 699, shared by the content services; contracts
+                // references 6, effects, models, animation, movies 6).
+                {"content", 620, 699}, {"anim", 620, 699},    {"movie", 620, 699},
             };
             bool rowBlock(const char* pName, u32* pFirst, u32* pLast) {
                 for (u32 i = 0; i < sizeof(cRowBlocks) / sizeof(cRowBlocks[0]); i++) {
