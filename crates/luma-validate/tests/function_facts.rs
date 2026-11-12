@@ -152,6 +152,9 @@ fn a_signatures_parameters_are_counted() {
     assert_eq!(signature_params("bool(const Vec3f &, s32) const"), Some(2));
     assert_eq!(signature_params("void(void (*)(int, int), JGeometry::TVec3<f32, int> *, int[3])"), Some(3));
     assert_eq!(signature_params("void"), None);
+    assert_eq!(signature_params("void(const char *, ...)"), Some(1));
+    assert_eq!(signature_params("u32(char16_t *, s32, const char16_t *, u32, ...)"), Some(4));
+    assert_eq!(signature_params("void(...)"), Some(0));
     // A declarator's parentheses before the list (Ui::detail::GetDrawMtx in l16's luma_functions.json, K's fault).
     assert_eq!(signature_params("const f32 (*)[4]()"), Some(0));
     assert_eq!(signature_params("const f32 (*)[4](int, char) const"), Some(2));

@@ -444,7 +444,21 @@ pub fn signature_params(signature: &str) -> Option<usize> {
     }
     let (open, close) = last?;
     let inside = signature[open + 1..close].trim();
-    Some(if inside.is_empty() || inside == "void" { 0 } else { last_commas + 1 })
+    // A variadic's `...` is not a parameter (`void(const char *, ...)` has one; its marks list has one entry).
+    let named = match inside.strip_suffix("...") {
+        Some(before) => {
+            let before = before.trim_end();
+            if before.is_empty() {
+                return Some(0);
+            }
+            match before.strip_suffix(',') {
+                Some(_) => return Some(last_commas),
+                None => inside,
+            }
+        }
+        None => inside,
+    };
+    Some(if named.is_empty() || named == "void" { 0 } else { last_commas + 1 })
 }
 
 /// luma_functions.json (types TY-11): each row's facts by its name and signature.
