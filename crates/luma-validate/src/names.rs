@@ -114,13 +114,40 @@ pub fn service_version(text: &str) -> Option<(u16, u16)> {
     Some((number(a)?, number(b)?))
 }
 
+/// The permissions a mod may ask for (luma-format revision 3, services-registry 5.1): a closed list, the kernel's
+/// cPermissions (LumaServices.cpp). Most are the name of the one service that needs them; `native` is asked by extra
+/// libraries (F-1) and by draw.native (contract draw 16), `input.devices` by input.dev (services-input).
+pub const PERMISSIONS: [&str; 11] = [
+    "native",
+    "fs.exchange",
+    "net.local",
+    "net.internet",
+    "input.inject",
+    "input.devices",
+    "audio.microphone",
+    "capture.camera",
+    "system.clipboard",
+    "system.links",
+    "save.game",
+];
+
+/// The permission an import of the service `name` shows in use (for L218, with or without a catalog): the two
+/// services whose permission is not their name, else the name itself.
+pub fn service_permission(name: &str) -> &str {
+    match name {
+        "draw.native" => "native",
+        "input.dev" => "input.devices",
+        other => other,
+    }
+}
+
 /// One catalogued service (services-registry 9).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Service {
     pub name: String,
     pub major: u16,
     pub minor: u16,
-    /// The permission it needs (its own name), or None.
+    /// The permission it needs (one of PERMISSIONS), or None.
     pub permission: Option<String>,
 }
 
@@ -133,7 +160,7 @@ pub struct Services {
 impl Services {
     /// Reads an object with a `services` key (the self-description, or luma_services.json). A row not in registry 9's
     /// form is an error naming it: a name outside section 2's grammar, a major or minor that is no whole number from 0
-    /// to 65535, a permission that is not null or the service's own name, a row out of order or given twice.
+    /// to 65535, a permission that is not null, the service's own name or one of PERMISSIONS, a row out of order or given twice.
     pub fn from_json(bytes: &[u8]) -> Result<Services, TypesError> {
         use crate::json::{Kind, Value};
         let root = crate::json::parse(bytes)
@@ -153,8 +180,8 @@ impl Services {
             let (major, minor) = (version("major")?, version("minor")?);
             let permission = match row.get("permission").map(|v| &v.kind) {
                 Some(Kind::Null) => None,
-                Some(Kind::String(p)) if p == name => Some(p.clone()),
-                _ => return Err(bad(format!("{at}.permission"), "missing, or not null or the service's own name")),
+                Some(Kind::String(p)) if p == name || PERMISSIONS.contains(&p.as_str()) => Some(p.clone()),
+                _ => return Err(bad(format!("{at}.permission"), "missing, or not null, the service's own name or a permission a mod may ask for")),
             };
             if let Some(last) = rows.last() {
                 if (last.name.as_bytes(), last.major) >= (name.as_bytes(), major) {

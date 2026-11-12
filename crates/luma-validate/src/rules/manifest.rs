@@ -810,22 +810,7 @@ fn text(m: &mut M, root: &Value, facts: &Facts) {
     }
 }
 
-/// The permissions a mod may ask for (luma-format revision 3, services-registry 5.1): a closed list. A permissioned
-/// service's permission is its own name (registry 9), so these are also the names of the services that need one,
-/// `native` aside (not a service: extra libraries, F-1).
-pub const PERMISSIONS: [&str; 11] = [
-    "native",
-    "fs.exchange",
-    "net.local",
-    "net.internet",
-    "input.inject",
-    "input.devices",
-    "audio.microphone",
-    "capture.camera",
-    "system.clipboard",
-    "system.links",
-    "save.game",
-];
+pub use crate::names::PERMISSIONS;
 
 /// The most hosts `net.internet` may list (services-registry 5.1).
 pub const MAX_HOSTS: usize = 32;

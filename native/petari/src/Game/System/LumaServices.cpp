@@ -609,16 +609,34 @@ namespace luma {
             return index < count ? &cCatalog[index] : nullptr;
         }
 
+        // The permissions a mod may ask for (luma-format revision 3, services-registry 5.1): the closed list the
+        // validator checks a manifest against (crates/luma-validate rules/manifest.rs PERMISSIONS). Most are the name
+        // of the one service that needs them; `native` (draw.native, and a mod's extra libraries) and
+        // `input.devices` (input.dev) are not.
+        const char* const cPermissions[] = {
+            "native",       "fs.exchange",      "net.local",      "net.internet",     "input.inject", "input.devices",
+            "audio.microphone", "capture.camera", "system.clipboard", "system.links", "save.game",
+        };
+
+        bool knownPermission(const char* pName) {
+            for (const char* pOne : cPermissions) {
+                if (sameText(pOne, pName)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         void provideOwn() {
             // The catalog's own check (services-registry 9): names by section 2's grammar, one row per name and major, a
-            // permission only the service's own name. The resolution rule against the headers' member names is the
+            // permission of the format's list. The resolution rule against the headers' member names is the
             // crates' mirror test (it reads the headers). A bad catalog is a build fault: the game stops naming it.
             for (const CatalogRow* pRow = cCatalog; pRow->name != nullptr; pRow++) {
                 if (!validName(pRow->name)) {
                     NEBULA_PANIC("LumaCore: the catalog's service \"%s\" is not a service name", pRow->name);
                 }
-                if (pRow->permission != nullptr && !sameText(pRow->permission, pRow->name)) {
-                    NEBULA_PANIC("LumaCore: the catalog's service %s needs the permission %s; a service's permission is its own name",
+                if (pRow->permission != nullptr && !knownPermission(pRow->permission)) {
+                    NEBULA_PANIC("LumaCore: the catalog's service %s needs the permission %s, which is not one a mod may ask for",
                                  pRow->name, pRow->permission);
                 }
                 for (const CatalogRow* pOther = cCatalog; pOther != pRow; pOther++) {

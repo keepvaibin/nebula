@@ -131,13 +131,14 @@ pub(crate) fn check(ctx: &mut Ctx) {
         }
     }
     // L218: a permission asked for that nothing of the mod needs (services-registry 5.2, a Note): `native` with no extra
-    // library; any other when no entry library imports its service (a permissioned service's name is its permission's).
+    // library and no import of draw.native; any other when no entry library imports its service
+    // (names::service_permission: the permission each imported service shows in use).
     // Said only when every entry library's imports were read (one that was not is an error already).
     let native_used = libraries.values().any(|l| !l.is_empty());
     let all_read = ctx.facts.entries_read == listed.len();
     for (permission, at, pointer) in ctx.facts.permission_at.clone() {
-        let used = if permission == "native" {
-            native_used
+        let used = if permission == "native" && native_used {
+            true
         } else if all_read {
             ctx.facts.services_imported.contains(&permission)
         } else {
@@ -272,7 +273,7 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
                     ctx.add(505, &name, None, None, vec![("kind", p("Name.Service")), ("found", t(row.name.clone())), ("sig", t(sig))]);
                     continue;
                 };
-                ctx.facts.services_imported.insert(row.name.clone());
+                ctx.facts.services_imported.insert(crate::names::service_permission(&row.name).to_string());
                 if !optional {
                     let required = format!("{plat}{SEP}{}{SEP}{major}.{minor}", row.name);
                     if !ctx.facts.touches.services.contains(&required) {
