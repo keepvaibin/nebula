@@ -7,7 +7,10 @@
    anyone on this machine or the local network (net.local's udp_open), one tied to a single peer (udp_connect,
    both services), datagrams sent whole and taken whole. Minor 2 adds local endpoints by name (plan 2.7's net.ipc,
    under net.local's permission: "programs on this device"): named pipes on Windows, Unix sockets elsewhere, the
-   stream calls and events of TCP. */
+   stream calls and events of TCP. Minor 3 adds TLS (1.2 and 1.3; the game's one library on every platform):
+   tls_connect checks the host's certificate against the root list shipped with the game plus the roots the mod's
+   luma.json adds for itself (`roots` on its net permission), tls_listen (net.local) serves with the mod's own
+   certificate; and HTTP/1.1 requests (http, https) whose answers come as events. */
 #ifndef LUMA_NET_H
 #define LUMA_NET_H
 
@@ -19,16 +22,23 @@ extern "C" {
 
 #define LUMA_NET_LOCAL_NAME "net.local"
 #define LUMA_NET_LOCAL_MAJOR 1u
-#define LUMA_NET_LOCAL_MINOR 2u
+#define LUMA_NET_LOCAL_MINOR 3u
 #define LUMA_NET_INTERNET_NAME "net.internet"
 #define LUMA_NET_INTERNET_MAJOR 1u
-#define LUMA_NET_INTERNET_MINOR 2u
+#define LUMA_NET_INTERNET_MINOR 3u
 
 #define LUMA_NET_SOCKETS_MOST 16u            /* sockets and listeners a mod holds at once, both services together */
 #define LUMA_NET_SEND_QUEUED_MOST (4u << 20u) /* bytes a mod's sockets hold queued, not yet sent */
 #define LUMA_NET_RECEIVED_MOST (1u << 20u)    /* bytes a socket holds received and not taken; reading pauses past it */
 #define LUMA_NET_DATAGRAM_MOST 65507u        /* 1.1: bytes of one datagram (IPv4's most) */
 #define LUMA_NET_ENDPOINT_MOST 64u           /* 1.2: bytes of an endpoint's name */
+#define LUMA_NET_REQUESTS_MOST 8u            /* 1.3: requests a mod has open at once (each also counts as a socket) */
+#define LUMA_NET_BODY_MOST (64u << 20u)      /* 1.3: bytes of one answer's body (after gzip); more: ERROR TOO_LARGE */
+#define LUMA_NET_URL_MOST 2048u              /* 1.3: bytes of a request's url */
+#define LUMA_NET_REQUEST_HEADERS_MOST 64u    /* 1.3: headers a request names */
+#define LUMA_NET_REDIRECTS_MOST 5u           /* 1.3: redirects a request follows */
+#define LUMA_NET_TIMEOUT_DEFAULT_MS 30000u   /* 1.3: a request's time when it names none */
+#define LUMA_NET_TIMEOUT_MOST_MS 600000u     /* 1.3: the longest time a request may name */
 
 /* Events (LumaEvent.kind) to the fn given at connect or listen. `handle` is the socket's (ACCEPTED: the listener's). */
 typedef enum LumaNetEvent {
@@ -45,9 +55,20 @@ typedef enum LumaNetEvent {
                                      also LUMA_E_NOT_FOUND (the name has no address) and LUMA_E_DENIED (its every
                                      address is this machine's, the local network's or not one a host has); the
                                      handle is closed after it */
-    LUMA_NET_EVENT_DATAGRAM = 7   /* 1.1, a UDP socket's: status LUMA_OK; value: the datagrams waiting;
+    LUMA_NET_EVENT_DATAGRAM = 7,  /* 1.1, a UDP socket's: status LUMA_OK; value: the datagrams waiting;
                                      `take_datagram` inside this call, one datagram each. Datagrams not taken stay,
                                      and another DATAGRAM follows at a later frame. */
+    LUMA_NET_EVENT_HEADERS = 8,   /* 1.3, a request's, once: status LUMA_OK; value: the HTTP status of the answer
+                                     (after redirects); `take` inside this call gives its header lines as received
+                                     ("Name: value\r\n" each, the status line left out). DATA events then bring the
+                                     body (gzip undone), then DONE. */
+    LUMA_NET_EVENT_DONE = 9       /* 1.3, a request's: the whole body came; status LUMA_OK; value: its bytes. The
+                                     handle is closed after it. A request that fails instead ends with ERROR:
+                                     LUMA_E_TIMEOUT (its time passed), LUMA_E_TOO_LARGE (a body past
+                                     LUMA_NET_BODY_MOST), LUMA_E_DENIED (a certificate refused, a redirect to a host
+                                     luma.json does not name or from https to http: reported), LUMA_E_FORMAT (not an
+                                     HTTP answer, a broken gzip or chunk), LUMA_E_LIMIT (more than 5 redirects), or
+                                     the connect's (LUMA_E_UNREACHABLE, LUMA_E_NOT_FOUND, LUMA_E_IO). */
 } LumaNetEvent;
 
 /* 1.1: who sent a datagram. */
@@ -56,6 +77,31 @@ typedef struct LumaNetPeer {
     uint16_t port;
     uint16_t reserved;
 } LumaNetPeer;
+
+/* 1.3: one header a request sends. */
+typedef struct LumaNetHeader {
+    const char* name;   /* 1 to 64 of letters, digits and !#$%&'*+-.^_`|~ ; not Host, Content-Length,
+                           Transfer-Encoding, Connection or Accept-Encoding (the service writes those) */
+    const char* value;  /* printable text and tabs, at most 4096 bytes, no line ends */
+} LumaNetHeader;
+
+/* 1.3: what http sends. Everything is copied before http returns. */
+typedef struct LumaNetRequest {
+    uint32_t size;                 /* sizeof(LumaNetRequest) */
+    uint32_t timeout_ms;           /* the whole request, redirects included; 0: LUMA_NET_TIMEOUT_DEFAULT_MS */
+    const char* method;            /* "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE" or "OPTIONS"; null: "GET" */
+    const char* url;               /* "http://" or "https://", the host as the service's tcp_connect takes it (an
+                                      IPv6 address in brackets), an optional ":port", then the path and query as
+                                      they go on the wire ("/" when none) */
+    const LumaNetHeader* headers;  /* header_count of them (may be null with 0) */
+    uint32_t header_count;
+    uint32_t flags;                /* LUMA_NET_HTTP_* */
+    const void* body;              /* body_bytes of it (may be null with 0); sent with Content-Length */
+    uint64_t body_bytes;
+} LumaNetRequest;
+
+#define LUMA_NET_HTTP_NO_REDIRECT 1u  /* a 3xx answer is the answer (HEADERS with its status), not followed */
+#define LUMA_NET_HTTP_RAW 2u          /* no Accept-Encoding sent and the body given as it came */
 
 typedef struct LumaNetLocalService {
     LumaServiceTable base;
@@ -125,6 +171,29 @@ typedef struct LumaNetLocalService {
        listening there: LUMA_E_EXISTS (an answer); a wrong name, a null fn or out: LUMA_E_ARGUMENT, reported; a 17th
        socket: LUMA_E_LIMIT, reported. `port` on it: LUMA_E_HANDLE. */
     int32_t (*ipc_listen)(const LumaMod* mod, const char* name, LumaEventFn fn, void* user, LumaHandle* out);
+    /* 1.3. As tcp_connect, the bytes then encrypted by TLS 1.2 or 1.3: CONNECTED once the handshake is done and the
+       host's certificate names `host` and leads to a root (the game's list, or one the mod's luma.json adds for
+       itself). A certificate refused: ERROR LUMA_E_DENIED, reported (Net.CertificateRefused with the reason). Then
+       the stream calls and events of tcp_connect's sockets (send and take carry the plain bytes). */
+    int32_t (*tls_connect)(const LumaMod* mod, const char* host, uint16_t port, LumaEventFn fn, void* user,
+                           LumaHandle* out);
+    /* 1.3. As tcp_listen, each connection then encrypted by TLS with `certificate` (a PEM file of the chain, the
+       server's first) and `key` (a PEM file of its private key), paths inside the mod's own files ("certs/a.pem").
+       Each connection is an ACCEPTED at once; its socket may send at once (the bytes go after the handshake) and its
+       DATA come after it; a handshake that fails is that socket's CLOSED with LUMA_E_DENIED. A file missing:
+       LUMA_E_NOT_FOUND, reported; not PEM, or a key not the certificate's: LUMA_E_FORMAT, reported; a path with
+       ".." or a root: LUMA_E_ARGUMENT, reported; the rest as tcp_listen's. */
+    int32_t (*tls_listen)(const LumaMod* mod, uint16_t port, uint32_t local_network, const char* certificate,
+                          const char* key, LumaEventFn fn, void* user, LumaHandle* out);
+    /* 1.3. Sends an HTTP/1.1 request to a host of this machine or the local network (as tcp_connect's). LUMA_PENDING
+       and *out (the request's handle): HEADERS, DATA, then DONE, or ERROR. `close` on it cancels it (no event after).
+       A request of the wrong size, a url not http(s) or past LUMA_NET_URL_MOST, a host outside those, a method not
+       listed, a header the service writes or of the wrong form, more than LUMA_NET_REQUEST_HEADERS_MOST, a timeout
+       past LUMA_NET_TIMEOUT_MOST_MS, an unknown flag, a null request, url, fn or out: LUMA_E_ARGUMENT, reported; a
+       9th request or a 17th socket: LUMA_E_LIMIT, reported. The service sends Host, Content-Length (with a body),
+       Accept-Encoding: gzip (without LUMA_NET_HTTP_RAW), Connection: close and User-Agent: Nebula/<version> <mod
+       id> unless the mod names one. */
+    int32_t (*http)(const LumaMod* mod, const LumaNetRequest* request, LumaEventFn fn, void* user, LumaHandle* out);
 } LumaNetLocalService;
 
 /* A host name or address in text: at most this many bytes. */
@@ -167,6 +236,14 @@ typedef struct LumaNetInternetService {
     /* 1.2. LUMA_E_DENIED, answers: endpoints on this device are net.local's. */
     int32_t (*ipc_connect)(const LumaMod* mod, const char* name, LumaEventFn fn, void* user, LumaHandle* out);
     int32_t (*ipc_listen)(const LumaMod* mod, const char* name, LumaEventFn fn, void* user, LumaHandle* out);
+    /* 1.3. As net.local's tls_connect, to the hosts and by the rules of this service's tcp_connect. */
+    int32_t (*tls_connect)(const LumaMod* mod, const char* host, uint16_t port, LumaEventFn fn, void* user,
+                           LumaHandle* out);
+    /* 1.3. LUMA_E_DENIED, an answer: a server is net.local's. */
+    int32_t (*tls_listen)(const LumaMod* mod, uint16_t port, uint32_t local_network, const char* certificate,
+                          const char* key, LumaEventFn fn, void* user, LumaHandle* out);
+    /* 1.3. As net.local's http, to the hosts luma.json names (tcp_connect's rules; each redirect's host too). */
+    int32_t (*http)(const LumaMod* mod, const LumaNetRequest* request, LumaEventFn fn, void* user, LumaHandle* out);
 } LumaNetInternetService;
 
 #ifdef __cplusplus

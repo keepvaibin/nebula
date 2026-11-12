@@ -325,6 +325,10 @@ add_executable(nebula_native_host host/host_main.cpp ../runtime/src/host_extensi
 target_include_directories(nebula_native_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/minhook/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/../runtime/include")
 target_compile_features(nebula_native_host PRIVATE cxx_std_20)
+# TLS (BoringSSL) and gzip answers for the net services (luma_net.cpp, net 1.3).
+include("${CMAKE_CURRENT_LIST_DIR}/../third_party/boringssl.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../third_party/zlib_inflate.cmake")
+target_link_libraries(nebula_native_host PRIVATE nebula_bssl_ssl nebula_zinflate)
 target_compile_definitions(nebula_native_host PRIVATE _CRT_SECURE_NO_WARNINGS)
 add_dependencies(nebula_native_host smg_game)
 if(NEBULA_SANITIZE)

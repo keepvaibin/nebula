@@ -251,6 +251,7 @@ struct Permission {
     std::string name;                // one of services-registry 5.1's names
     std::string why;                 // the manifest's line, shown as it is (the mod's own words)
     std::vector<std::string> hosts;  // net.internet only: as written, in order
+    std::vector<std::string> roots;  // net.local and net.internet: PEM files in the package the mod's TLS also trusts
 };
 
 enum class SaveMode {

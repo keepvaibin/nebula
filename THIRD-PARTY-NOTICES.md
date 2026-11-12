@@ -113,6 +113,21 @@ Windows installs carry `dxc\dxc.exe`, `dxc\dxcompiler.dll` and `dxc\dxil.dll` fr
 <https://github.com/microsoft/DirectXShaderCompiler>, unchanged, with their license files beside them. The game starts them to
 build a mod's shaders on the player's PC.
 
+## BoringSSL 0.20261020.0 (Apache-2.0 and others)
+
+`third_party/boringssl` holds the library files of BoringSSL release `0.20261020.0` from <https://github.com/google/boringssl>
+(commit `d3bf4795ad5b79d646cddf2fec687da5b9b502db`, archive SHA-256 in `third_party/boringssl/NEBULA-PIN.txt`), unchanged:
+the net services' TLS and the loader's mod signatures. Its tests, tools and build files are left out;
+`third_party/boringssl.cmake` builds it. License: `third_party/boringssl/LICENSE` (Apache-2.0, with the OpenSSL, SSLeay,
+ISC and MIT terms of the parts it names).
+
+## Mozilla's root certificates (MPL-2.0)
+
+`third_party/mozilla-roots/cacert.pem` is Mozilla's list of root certificate authorities as of 2026-10-20, as curl
+extracts it (<https://curl.se/ca/cacert-2026-10-20.pem>, SHA-256 `796f1389bfea13c0ed78f663b765baaff54a508e5483786bd6ece73c5e3e3cbe`),
+unchanged. The net services trust these roots for TLS; the list is built into the program and changes with the game.
+License: Mozilla Public License 2.0 (<https://mozilla.org/MPL/2.0/>).
+
 ## MinHook (BSD 2-clause)
 
 `third_party/minhook` (1.3.4) from <https://github.com/TsudaKageyu/minhook>, unchanged, is how a mod's plugin replaces a
