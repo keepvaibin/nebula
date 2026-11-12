@@ -2801,26 +2801,43 @@ bool RenderCore::rt_sun(float eye_direction[3]) {
             source = unit(target) ? 1u : 0u;
         }
     }
+    // The stage's key light as a unit direction from where the camera stands (false: none).
+    const auto key_toward = [&](const NebulaFrameWorldLight& key, float out[3]) {
+        if ((key.flags & NEBULA_WORLD_LIGHT_FOLLOWS_CAMERA) != 0u) {
+            to_world(key.position, out);
+        } else {
+            const float offset[3] = {view[3], view[7], view[11]};
+            float camera[3];
+            to_world(offset, camera);  // the camera stands at -R^T t
+            for (unsigned c = 0; c < 3u; ++c) {
+                out[c] = key.position[c] + camera[c];
+            }
+        }
+        return unit(out);
+    };
     // Else the stage's key light, from where the camera stands; none where the key is off (an interior, a night).
     if (source == 0u && (mode == RtStage::Sun::Auto || mode == RtStage::Sun::Key) && list.stage_light_known != 0u) {
         if (const NebulaFrameWorldLight* key = core::find_world_light(list, list.stage_light); key != nullptr) {
             key_brightness = 0.2126f * key->color[0] + 0.7152f * key->color[1] + 0.0722f * key->color[2];
             if (mode == RtStage::Sun::Key || key_brightness >= 0.05f) {
                 follows = (key->flags & NEBULA_WORLD_LIGHT_FOLLOWS_CAMERA) != 0u;
-                if (follows) {
-                    to_world(key->position, target);
-                } else {
-                    const float offset[3] = {view[3], view[7], view[11]};
-                    float camera[3];
-                    to_world(offset, camera);  // the camera stands at -R^T t
-                    for (unsigned c = 0; c < 3u; ++c) {
-                        target[c] = key->position[c] + camera[c];
-                    }
-                }
-                if (unit(target)) {
+                if (key_toward(*key, target)) {
                     source = 2u;
                     key_id = list.stage_light;
                 }
+            }
+        }
+    }
+    // EVERYTHING 1.7: where the sky shows the sun, how far the key light the game shades by stands from it (the bench
+    // reads where they disagree, PLANS-UNBUILT: over 10 degrees is decided by picture).
+    if (report && source == 1u && list.stage_light_known != 0u) {
+        if (const NebulaFrameWorldLight* key = core::find_world_light(list, list.stage_light); key != nullptr) {
+            float toward[3];
+            if (key_toward(*key, toward)) {
+                const float cosine = std::clamp(dot(target, toward), -1.0f, 1.0f);
+                std::fprintf(stderr, "[rt-inputs] sun: the visible sun %.1f degrees from the key (stage %08x, key %.3f)\n",
+                             static_cast<double>(std::acos(cosine) * 57.29578f), list.stage_hash,
+                             static_cast<double>(0.2126f * key->color[0] + 0.7152f * key->color[1] + 0.0722f * key->color[2]));
             }
         }
     }
@@ -2847,10 +2864,14 @@ bool RenderCore::rt_sun(float eye_direction[3]) {
     // degrees over the horizon of the player as he stands then, so the place a stage starts in has the sun (taken once
     // more when his up first becomes known, for that lift); a stage row's own direction is taken as written. Ray
     // tracing switched off and on again keeps it; a frame with no sun (an interior zone) leaves it waiting.
+    // EVERYTHING 1.7 (PLANS-UNBUILT): the sun the sky shows is the sun that casts. Its direction is taken as it is, with
+    // no lift (a low sun in the sky casts long shadows: his dusk target), and where it first shows after another
+    // source was taken for the stage (a sun that appears on a switch), it is taken once more, then held.
     bool lifted = false;
-    if (!rt_sun_fixed_known_ || rt_sun_fixed_stage_ != list.stage_hash || (!rt_sun_fixed_final_ && up_known)) {
+    if (!rt_sun_fixed_known_ || rt_sun_fixed_stage_ != list.stage_hash || (!rt_sun_fixed_final_ && up_known) ||
+        (source == 1u && rt_sun_fixed_source_ != 1u)) {
         float taken[3] = {target[0], target[1], target[2]};
-        if (source != 3u && up_known) {
+        if (source != 3u && source != 1u && up_known) {
             constexpr float kLeastRise = 0.5f, kFlat = 0.8660254f;  // 30 degrees above the player's horizon
             const float rise = dot(taken, up);
             if (rise < kLeastRise) {
@@ -2871,8 +2892,9 @@ bool RenderCore::rt_sun(float eye_direction[3]) {
         }
         std::memcpy(rt_sun_world_, taken, sizeof(taken));
         rt_sun_fixed_known_ = true;
-        rt_sun_fixed_final_ = up_known || source == 3u;
+        rt_sun_fixed_final_ = up_known || source == 3u || source == 1u;
         rt_sun_fixed_stage_ = list.stage_hash;
+        rt_sun_fixed_source_ = source;
     }
     rt_sun_known_ = true;
     rt_sun_source_ = source;
