@@ -236,11 +236,13 @@ void main(uint3 id : SV_DispatchThreadID) {
                 // Far over what a picture shows is cut: the filter's moments stay finite.
                 added = min(kept_light * weight, float3(32.0f, 32.0f, 32.0f));
                 // Its highlight on gloss, metal and glass: D_ggx(n.h) F(v.h) / (4 n.v) of the light arriving (the kept
-                // light without its wrap of facing), by the same weight.
+                // light without its facing n.l), by the same weight. Not for a glowing mesh (RtEmitter kind 1): a
+                // mirror's ray meets it and shows it already (A2-06).
                 const float4 material = g_material.Load(int3(pixel, 0));
                 const uint class_ = uint(material.b * 255.0f + 0.5f) & 15u;
-                if (weight > 0.0f && level >= 3u && (class_ == kClassGloss || class_ == kClassMetal || class_ == kClassGlass ||
-                                                        class_ == kClassWater)) {
+                const bool mesh_lamp = kept < g_glow.w && g_drops.Load(g_glow.x + kept * 48u + 36u) == 1u;
+                if (weight > 0.0f && level >= 3u && !mesh_lamp &&
+                    (class_ == kClassGloss || class_ == kClassMetal || class_ == kClassGlass || class_ == kClassWater)) {
                     const float3 l = (kept_at.xyz - s.at) / max(length(kept_at.xyz - s.at), 1e-3f);
                     const float3 v = -normalize(s.at);
                     const float nl = dot(s.smooth_, l), nv = dot(s.smooth_, v);
@@ -254,7 +256,7 @@ void main(uint3 id : SV_DispatchThreadID) {
                         const float f0 = class_ == kClassMetal ? 0.55f : class_ == kClassWater ? 0.02f : 0.04f;
                         const float glance = 1.0f - vh;
                         const float f = f0 + (1.0f - f0) * glance * glance * glance * glance * glance;
-                        const float3 arriving = kept_light / (0.25f + 0.75f * saturate(nl));
+                        const float3 arriving = kept_light / max(nl, 1e-3f);
                         const float3 spec = arriving * (d * f * 0.25f / max(nv, 0.05f)) * weight;
                         g_lights_spec[id.xy] = float4(min(spec, float3(32.0f, 32.0f, 32.0f)), 0.0f);
                     }

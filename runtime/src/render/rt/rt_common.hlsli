@@ -373,8 +373,8 @@ bool blocked_but(float3 origin, float3 direction, float reach, uint mask, uint o
 }
 
 // What an emitter adds at a surface unshadowed, as a share of the surface's own colour: its intensity over the
-// distance squared and its own size squared, by the surface's facing, ending at its reach without a step. Nothing on
-// the thing it belongs to (`self`) nor past its reach.
+// distance squared and its own size squared, by the surface's facing max(n.l, 0) (LIGHT-MODEL.md section 5: no wrap,
+// A2-01), ending at its reach without a step. Nothing on the thing it belongs to (`self`) nor past its reach.
 float3 emitter_light(uint emitter, float3 at, float3 facing, uint self, out float4 place, out uint slot) {
     place = asfloat(g_drops.Load4(emitter));
     const float4 colour = asfloat(g_drops.Load4(emitter + 16u));
@@ -386,7 +386,7 @@ float3 emitter_light(uint emitter, float3 at, float3 facing, uint self, out floa
     }
     const float facing_it = max(dot(facing, to) * rsqrt(max(far2, 1e-4f)), 0.0f);
     const float fade = saturate(1.0f - far2 / (colour.w * colour.w));
-    return colour.rgb * (place.w * place.w / (far2 + place.w * place.w) * (0.25f + 0.75f * facing_it) * fade * fade);
+    return colour.rgb * (place.w * place.w / (far2 + place.w * place.w) * facing_it * fade * fade);
 }
 
 // ---- The surface images (rt_surface.hlsl writes them; every later pass reads them) ----
