@@ -65,7 +65,7 @@ namespace Nebula.Setup
         /// <summary>What a version folder holds (each from the package, by its published name).</summary>
         private static readonly string[] NativeFiles =
         {
-            "NebulaNative.exe", "smg_game.dll", "nebula_import.dll", "nebula-import.exe", @"dxc\dxc.exe", @"dxc\dxcompiler.dll", @"dxc\dxil.dll", @"dxc\LICENSE-MS.txt", @"dxc\LICENCE-MIT.txt", @"dxc\LICENSE-LLVM.txt", "material-names.tsv", "rt-materials.tsv", "rt-suns.tsv",
+            "NebulaNative.exe", "smg_game.dll", "smg_game_plain.dll", "nebula_import.dll", "nebula-import.exe", @"dxc\dxc.exe", @"dxc\dxcompiler.dll", @"dxc\dxil.dll", @"dxc\LICENSE-MS.txt", @"dxc\LICENCE-MIT.txt", @"dxc\LICENSE-LLVM.txt", "material-names.tsv", "rt-materials.tsv", "rt-suns.tsv",
             "Nebula.exe", "NebulaSettings.exe", "LICENSE", "THIRD-PARTY-NOTICES.md", "README.md"
         };
 

@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # The Android app (docs/ANDROID.md), from source to a signed APK:
-#   1. per ABI: the game module (native/, libsmg_game.so), the SDL host with the Vulkan renderer (platform/sdl,
-#      libmain.so and libSDL3.so), the launcher's mod importer (platform/sdl, libnebula_mods.so) and setup's importer
-#      (crates/nebula-import, libnebula_import.so), with the NDK;
+#   1. per ABI: the game modules (native/, libsmg_game.so and libsmg_game_plain.so), the SDL host with the Vulkan
+#      renderer (platform/sdl, libmain.so and libSDL3.so), the launcher's mod importer (platform/sdl,
+#      libnebula_mods.so) and setup's importer (crates/nebula-import, libnebula_import.so), with the NDK;
 #   2. the license texts the app shows;
 #   3. Gradle: the launcher, SDL's Java half and the libraries, signed with the key -Signing names (debug key without).
 #
@@ -63,7 +63,8 @@ foreach ($abi in $Abis -split ",") {
     Invoke-Logged "$Work\module-$abi.log" {
         cmake -G Ninja -S "$root/native" -B $module "-DCMAKE_TOOLCHAIN_FILE=$toolchain" "-DANDROID_ABI=$abi" `
             "-DANDROID_PLATFORM=android-31" -DCMAKE_BUILD_TYPE=Release "-DNEBULA_PETARI_DIR=$root/native/petari"
-        if ($LASTEXITCODE -eq 0) { cmake --build $module --target smg_game }
+        # Both game modules (plan 1.7): the host loads libsmg_game_plain.so unless a mod's code needs the rows.
+        if ($LASTEXITCODE -eq 0) { cmake --build $module --target smg_game smg_game_plain }
     }
     $hostBuild = "$Work/host-$abi" -replace '\\', '/'
     Invoke-Logged "$Work\host-$abi.log" {
@@ -91,7 +92,7 @@ foreach ($abi in $Abis -split ",") {
     }
     $dest = Join-Path $jni $abi
     New-Item -ItemType Directory -Force $dest | Out-Null
-    Copy-Item "$module/libsmg_game.so", "$hostBuild/libmain.so", "$hostBuild/libnebula_mods.so", "$hostBuild/SDL3/libSDL3.so",
+    Copy-Item "$module/libsmg_game.so", "$module/libsmg_game_plain.so", "$hostBuild/libmain.so", "$hostBuild/libnebula_mods.so", "$hostBuild/SDL3/libSDL3.so",
         "$Work\cargo\$triple\release\libnebula_import.so" $dest -Force
 }
 

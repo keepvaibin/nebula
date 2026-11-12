@@ -109,34 +109,51 @@ if(NEBULA_LUMA_HOOKS)
     endif()
 endif()
 
-add_library(smg_game SHARED
-    ${module_sources}
+# Two modules (plan 1.7, contract modules): smg_game with every row (the instrumented copies above, the type table,
+# RTTI data, every function exported) and smg_game_plain, the source as written with none of it. The host loads the
+# plain one when no enabled mod has code (runtime/src/game_module.cpp). Everything else about them is the same, in
+# smg_game_common. OFF: one module, as before (a build that needs only the rows one).
+option(NEBULA_LUMA_PLAIN_MODULE "Also build smg_game_plain, the game without rows, for a start with no mod code" ON)
+set(game_runtime_sources
     math/src/nebula_math.c
     math/src/nebula_libm.c
     math/src/nebula_libc.c
     $<$<PLATFORM_ID:Windows>:math/src/nebula_runtime_win.c>)
+add_library(smg_game_common INTERFACE)
+add_library(smg_game SHARED ${module_sources} ${game_runtime_sources})
+target_link_libraries(smg_game PRIVATE smg_game_common)
+set(game_modules smg_game)
+if(NEBULA_LUMA_HOOKS AND NEBULA_LUMA_PLAIN_MODULE)
+    add_library(smg_game_plain SHARED ${game_sources} ${game_runtime_sources})
+    target_link_libraries(smg_game_plain PRIVATE smg_game_common)
+    list(APPEND game_modules smg_game_plain)
+endif()
 
 if(WIN32)
     enable_language(RC)
     include(../cmake/nebula_file_details.cmake)
     nebula_file_details(smg_game smg_game.dll "Super Mario Galaxy on PC, the game")
+    if(TARGET smg_game_plain)
+        nebula_file_details(smg_game_plain smg_game_plain.dll "Super Mario Galaxy on PC, the game (no mod code)")
+    endif()
 endif()
 
-target_include_directories(smg_game BEFORE PRIVATE
+target_include_directories(smg_game_common BEFORE INTERFACE
     "${CMAKE_CURRENT_SOURCE_DIR}/math/include"
     "${petari}/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 set(version_ids RMGJ01=0 RMGE01=1 RMGP01=2 RMGK01=3)
 string(REGEX MATCH "${NEBULA_GAME_VERSION}=([0-9])" _ "${version_ids}")
-target_compile_definitions(smg_game PRIVATE VERSION=${CMAKE_MATCH_1} ${version_ids} NEBULA_GAME_MODULE=1 _HAS_EXCEPTIONS=0)
+target_compile_definitions(smg_game_common INTERFACE VERSION=${CMAKE_MATCH_1} ${version_ids} NEBULA_GAME_MODULE=1 _HAS_EXCEPTIONS=0)
 
-set_target_properties(smg_game PROPERTIES
+set_target_properties(${game_modules} PROPERTIES
     C_STANDARD 11 C_EXTENSIONS ON
     CXX_STANDARD 17 CXX_EXTENSIONS ON
-    C_VISIBILITY_PRESET hidden CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON
-    # find_function (a native plugin's hook) finds the game's functions by name.
-    WINDOWS_EXPORT_ALL_SYMBOLS ON)
+    C_VISIBILITY_PRESET hidden CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
+# find_function (a native plugin's hook) finds the game's functions by name: the rows module only. The plain one
+# exports what NEBULA_GAME_API marks (the host's calls) and nothing else.
+set_target_properties(smg_game PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 # Only to measure what those exports cost, or to train the profile (its counters cannot be exported): find_function finds nothing in such a build.
 option(NEBULA_NO_PLUGIN_EXPORTS "Leave the game's functions unexported" OFF)
 if(NEBULA_NO_PLUGIN_EXPORTS OR CMAKE_CXX_FLAGS MATCHES "fprofile-instr-generate")
@@ -177,11 +194,11 @@ endif()
 # The same language on every platform: clang enables Microsoft extensions by default only when targeting Windows
 # (__declspec, a static definition after an extern declaration); glibc's GNU interfaces (dladdr, memfd_create, the
 # signal context's registers) are declared only under _GNU_SOURCE, which must precede the prelude's first include.
-target_compile_definitions(smg_game PRIVATE $<$<PLATFORM_ID:Linux,Android>:_GNU_SOURCE>
+target_compile_definitions(smg_game_common INTERFACE $<$<PLATFORM_ID:Linux,Android>:_GNU_SOURCE>
     # Apple's headers turn memcpy, strcpy and the like into checking macros that call the system's library: the module
     # defines those functions itself (math/src/nebula_libc.c) and calls its own.
     $<$<PLATFORM_ID:Darwin,iOS>:_FORTIFY_SOURCE=0>)
-target_compile_options(smg_game PRIVATE
+target_compile_options(smg_game_common INTERFACE
     -ffp-contract=off  # the same results on every CPU (A-10)
     $<$<NOT:$<PLATFORM_ID:Windows>>:-fms-extensions>
     -fno-strict-aliasing -fno-strict-float-cast-overflow -fno-math-errno -fno-stack-protector
@@ -200,9 +217,6 @@ target_compile_options(smg_game PRIVATE
     # Source paths in the module (assertion messages) relative to the tree, not the build machine.
     "-ffile-prefix-map=${petari}=petari" "-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=native"
     $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions -fno-c++-static-destructors -fno-sized-deallocation -fno-aligned-allocation>
-    # The module with rows carries RTTI data, so the kernel finds an object's own class from its vtable (contract objects,
-    # plan 1.3); the game never uses typeid on an object or dynamic_cast. The module without rows has none.
-    $<$<COMPILE_LANGUAGE:CXX>:$<IF:$<BOOL:${NEBULA_LUMA_HOOKS}>,-frtti,-fno-rtti>>
     # Every new-expression tests the allocation before constructing: the arenas' operator new returns null when the
     # system has no memory left, and the game checks. Standard C++ lets the compiler drop those checks for an operator new that
     # is not noexcept, which would run a constructor on null.
@@ -211,34 +225,40 @@ target_compile_options(smg_game PRIVATE
     # a unit seeing just a declaration would use another size than its callers.
     $<$<AND:$<PLATFORM_ID:Windows>,$<COMPILE_LANGUAGE:CXX>>:-fcomplete-member-pointers>
     -Wno-c++11-narrowing)
+# The module with rows carries RTTI data, so the kernel finds an object's own class from its vtable (contract objects,
+# plan 1.3); the game never uses typeid on an object or dynamic_cast. The module without rows has none.
+target_compile_options(smg_game PRIVATE $<$<COMPILE_LANGUAGE:CXX>:$<IF:$<BOOL:${NEBULA_LUMA_HOOKS}>,-frtti,-fno-rtti>>)
+if(TARGET smg_game_plain)
+    target_compile_options(smg_game_plain PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>)
+endif()
 
 set_source_files_properties(math/src/nebula_libm.c math/src/nebula_libc.c math/src/nebula_runtime_win.c PROPERTIES COMPILE_OPTIONS -fno-builtin)
-target_compile_definitions(smg_game PRIVATE _USE_STD_VECTOR_ALGORITHMS=0 _ACRTIMP=)
+target_compile_definitions(smg_game_common INTERFACE _USE_STD_VECTOR_ALGORITHMS=0 _ACRTIMP=)
 # No system library: everything the module uses it defines or asks the host for. A sanitizer's runtime and the profile counters' need the C runtime.
 if(WIN32 AND NOT NEBULA_SANITIZE AND NOT CMAKE_CXX_FLAGS MATCHES "fprofile-instr-generate")
-    target_link_options(smg_game PRIVATE -nostdlib "LINKER:/NOENTRY" "LINKER:/NODEFAULTLIB")
+    target_link_options(smg_game_common INTERFACE -nostdlib "LINKER:/NOENTRY" "LINKER:/NODEFAULTLIB")
 endif()
 
 if(WIN32)
     # The DLL's own operator new/delete are NebulaArena's; the host process keeps its own.
-    target_link_options(smg_game PRIVATE -fuse-ld=lld "LINKER:/errorlimit:0")
+    target_link_options(smg_game_common INTERFACE -fuse-ld=lld "LINKER:/errorlimit:0")
 elseif(APPLE)
     # Mach-O binds a library's calls to its own functions already (two-level names). The allocation operators and the
     # C++ library's own symbols stay inside: dyld would hand an exported operator new to every image that binds one weakly.
-    target_link_options(smg_game PRIVATE -Wl,-bind_at_load
+    target_link_options(smg_game_common INTERFACE -Wl,-bind_at_load
         -Wl,-unexported_symbol,__Znw* -Wl,-unexported_symbol,__Zna* -Wl,-unexported_symbol,__Zdl* -Wl,-unexported_symbol,__Zda*
         -Wl,-unexported_symbol,__ZNSt* -Wl,-unexported_symbol,__ZNKSt* -Wl,-unexported_symbol,__ZSt*
         -Wl,-unexported_symbol,__ZT?St* -Wl,-unexported_symbol,__ZT?NSt* -Wl,-unexported_symbol,___cxa* -Wl,-unexported_symbol,___gxx*)
 else()
-    target_link_options(smg_game PRIVATE -Wl,-Bsymbolic -Wl,-z,now)
+    target_link_options(smg_game_common INTERFACE -Wl,-Bsymbolic -Wl,-z,now)
     # A symbol the module names and nothing defines (a class's type_info whose key function has no body: contract
     # objects M-2) fails the link here, as the NDK's own flags make it fail on Android, never the game's start. A
     # sanitizer's runtime is the executable's, so its build leaves them to the loader.
     if(NOT ANDROID AND NOT NEBULA_SANITIZE)
-        target_link_options(smg_game PRIVATE -Wl,--no-undefined)
+        target_link_options(smg_game_common INTERFACE -Wl,--no-undefined)
     endif()
     if(NOT ANDROID)  # Android's C library holds the threads
-        target_link_libraries(smg_game PRIVATE pthread)
+        target_link_libraries(smg_game_common INTERFACE pthread)
     endif()
 endif()
 
@@ -247,9 +267,9 @@ endif()
 option(NEBULA_PGO "Build the game with ThinLTO and its profile" OFF)
 if(NEBULA_PGO)
     set(game_profile "${CMAKE_CURRENT_SOURCE_DIR}/pgo/game.profdata")
-    target_compile_options(smg_game PRIVATE -flto=thin "-fprofile-instr-use=${game_profile}"
+    target_compile_options(smg_game_common INTERFACE -flto=thin "-fprofile-instr-use=${game_profile}"
                            -Wno-profile-instr-unprofiled -Wno-profile-instr-out-of-date -Wno-backend-plugin)
-    target_link_options(smg_game PRIVATE -flto=thin "-fprofile-instr-use=${game_profile}")
+    target_link_options(smg_game_common INTERFACE -flto=thin "-fprofile-instr-use=${game_profile}")
 endif()
 
 # CPU level. The Windows package needs AVX2 (Setup checks it; the host is built for it), and every AVX2 CPU also has
@@ -266,16 +286,16 @@ if(NEBULA_CPU_LEVEL)
     if(NOT NEBULA_CPU_LEVEL MATCHES "^x86-64(-v[234])?$")
         message(FATAL_ERROR "NEBULA_CPU_LEVEL must be x86-64, x86-64-v2, x86-64-v3, x86-64-v4 or empty")
     endif()
-    target_compile_options(smg_game PRIVATE -march=${NEBULA_CPU_LEVEL})
+    target_compile_options(smg_game_common INTERFACE -march=${NEBULA_CPU_LEVEL})
 endif()
 message(STATUS "Nebula game module CPU level: ${NEBULA_CPU_LEVEL}")
 
 # Sanitizer builds (tests only): e.g. -DNEBULA_SANITIZE=address for the module and the host.
 set(NEBULA_SANITIZE "" CACHE STRING "Sanitizers for a test build (clang -fsanitize=...)")
 if(NEBULA_SANITIZE)
-    target_compile_options(smg_game PRIVATE -fsanitize=${NEBULA_SANITIZE} -fno-omit-frame-pointer)
+    target_compile_options(smg_game_common INTERFACE -fsanitize=${NEBULA_SANITIZE} -fno-omit-frame-pointer)
     # The module's operator new/delete are NebulaArena's; the sanitizer runtime's own definitions give way.
-    target_link_options(smg_game PRIVATE -fsanitize=${NEBULA_SANITIZE} $<$<PLATFORM_ID:Windows>:LINKER:/force:multiple>)
+    target_link_options(smg_game_common INTERFACE -fsanitize=${NEBULA_SANITIZE} $<$<PLATFORM_ID:Windows>:LINKER:/force:multiple>)
     if(NEBULA_SANITIZE MATCHES "address")
         # The game's arenas manage their own memory: built uninstrumented, they keep what is free poisoned and
         # what they hand out (NebulaArena.cpp), so overflows and uses after free inside them are reported too.
@@ -300,7 +320,7 @@ if(WIN32)
     set(nebula_minhook_sources "${nebula_minhook_dir}/src/buffer.c" "${nebula_minhook_dir}/src/hook.c" "${nebula_minhook_dir}/src/trampoline.c" "${nebula_minhook_dir}/src/hde/hde64.c")
 endif()
 add_executable(nebula_native_host host/host_main.cpp ../runtime/src/host_extension.cpp ../runtime/src/luma_services_host.cpp ../runtime/src/luma_system.cpp
-    ../runtime/src/mod_log.cpp ../runtime/src/mod_start_check.cpp ../runtime/src/mod_plugins.cpp ${nebula_minhook_sources}
+    ../runtime/src/mod_log.cpp ../runtime/src/mod_start_check.cpp ../runtime/src/mod_plugins.cpp ../runtime/src/game_module.cpp ${nebula_minhook_sources}
     ../runtime/src/luma.cpp ../runtime/src/mods.cpp ../runtime/src/mod_consent.cpp ../runtime/src/texture_categories.cpp ../runtime/src/dolphin_pack.cpp ../runtime/src/mod_xml.cpp ../runtime/src/atomic_file.cpp ../runtime/src/save_files.cpp ../runtime/src/asset_store.cpp
     ../runtime/src/crash_report.cpp ../runtime/src/discord_presence.cpp ../runtime/src/mii_import.cpp
     ../runtime/src/mii_formats.cpp ../runtime/src/pointer_control.cpp
@@ -312,7 +332,7 @@ target_include_directories(nebula_native_host PRIVATE "${CMAKE_CURRENT_SOURCE_DI
     "${CMAKE_CURRENT_SOURCE_DIR}/../runtime/include")
 target_compile_features(nebula_native_host PRIVATE cxx_std_20)
 target_compile_definitions(nebula_native_host PRIVATE _CRT_SECURE_NO_WARNINGS)
-add_dependencies(nebula_native_host smg_game)
+add_dependencies(nebula_native_host ${game_modules})
 if(NEBULA_SANITIZE)
     target_compile_options(nebula_native_host PRIVATE -fsanitize=${NEBULA_SANITIZE} -fno-omit-frame-pointer)
     target_link_options(nebula_native_host PRIVATE -fsanitize=${NEBULA_SANITIZE})

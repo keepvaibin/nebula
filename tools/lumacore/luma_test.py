@@ -11,9 +11,10 @@ test and renderer; exit 0 only when every verdict is `pass`.
 
 `refs` writes a run's pictures as the references a test names, after the person running it has looked at them.
 
-The bin folder holds NebulaNative.exe (and NebulaNativeVk.exe for Vulkan), smg_game.dll, nebula_test_extension.dll,
-luma-test.dll (the game half), nebula_import.dll (a refusal's words; without it the game gives codes) and
-nebula-import.exe, pak.path, and dxc/. Nothing outside the work folder is written but the run's own files.
+The bin folder holds NebulaNative.exe (and NebulaNativeVk.exe for Vulkan), smg_game.dll (and smg_game_plain.dll, which
+the game loads when no mod has code: contract modules), nebula_test_extension.dll, luma-test.dll (the game half),
+nebula_import.dll (a refusal's words; without it the game gives codes) and nebula-import.exe, pak.path, and dxc/.
+Nothing outside the work folder is written but the run's own files.
 """
 import argparse
 import datetime
@@ -947,7 +948,9 @@ def run_one(test, renderer, args, run_folder, previous):
             shutil.rmtree(run_folder / sub)
             shutil.copytree(previous / sub, run_folder / sub)
     frozen = {}
-    for name in (exe.name, "smg_game.dll", "nebula_test_extension.dll"):
+    # The plain module when the bin folder has it (plan 1.7): without it the game loads smg_game.dll and says so.
+    plain = ("smg_game_plain.dll",) if (bin_folder / "smg_game_plain.dll").is_file() else ()
+    for name in (exe.name, "smg_game.dll") + plain + ("nebula_test_extension.dll",):
         shutil.copyfile(bin_folder / name, run_folder / "bin" / name)
         frozen[name] = sha256(run_folder / "bin" / name)
     if (bin_folder / "dxc").is_dir():

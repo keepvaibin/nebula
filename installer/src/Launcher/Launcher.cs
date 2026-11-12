@@ -251,7 +251,7 @@ namespace Nebula.Launcher
             // --diagnostics 1 records the frame timeline; it is written into the session at exit.
             start.Arguments += " --timeline " + ProcessRunner.Quote(Path.Combine(session, "timeline.bin"));
             var launchFiles = new Dictionary<string, object>();
-            foreach (string name in new[] { "NebulaNative.exe", "smg_game.dll", "Nebula.exe" })
+            foreach (string name in new[] { "NebulaNative.exe", "smg_game.dll", "smg_game_plain.dll", "Nebula.exe" })
             {
                 string path = Path.Combine(App, name);
                 if (File.Exists(path)) launchFiles[name] = FileUtil.Sha256File(path);

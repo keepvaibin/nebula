@@ -13,8 +13,10 @@ namespace luma {
     extern const Numbers sNumbersStart __asm("section$start$__DATA$lumanum");
     extern const Numbers sNumbersStop __asm("section$end$__DATA$lumanum");
 #elif !defined(_WIN32)
-    extern "C" const Numbers __start_lumanum[];
-    extern "C" const Numbers __stop_lumanum[];
+    // Weak: the linker defines them only when the section exists, and the module without rows (plan 1.7) has none;
+    // both are then null, so there are no numbers.
+    extern "C" __attribute__((weak, visibility("hidden"))) const Numbers __start_lumanum[];
+    extern "C" __attribute__((weak, visibility("hidden"))) const Numbers __stop_lumanum[];
 #endif
 
     namespace numbers {

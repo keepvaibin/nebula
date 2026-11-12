@@ -196,6 +196,7 @@ add_library(galaxy_native_host STATIC
     runtime/src/luma_system.cpp
     runtime/src/luma_system_win32.cpp
     runtime/src/mod_plugins.cpp
+    runtime/src/game_module.cpp
     runtime/src/mods.cpp
     runtime/src/mod_consent.cpp
     runtime/src/texture_categories.cpp

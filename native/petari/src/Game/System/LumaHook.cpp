@@ -12,10 +12,12 @@ namespace luma {
     extern unsigned char sFlagsStart __asm("section$start$__DATA$lumaflg");
     extern unsigned char sFlagsStop __asm("section$end$__DATA$lumaflg");
 #elif !defined(_WIN32)
-    extern "C" const Function __start_lumafn[];
-    extern "C" const Function __stop_lumafn[];
-    extern "C" unsigned char __start_lumaflg[];
-    extern "C" unsigned char __stop_lumaflg[];
+    // Weak: the linker defines them only when the section exists, and the module without rows (plan 1.7) has none;
+    // both are then null, so there are no rows.
+    extern "C" __attribute__((weak, visibility("hidden"))) const Function __start_lumafn[];
+    extern "C" __attribute__((weak, visibility("hidden"))) const Function __stop_lumafn[];
+    extern "C" __attribute__((weak, visibility("hidden"))) unsigned char __start_lumaflg[];
+    extern "C" __attribute__((weak, visibility("hidden"))) unsigned char __stop_lumaflg[];
 #endif
 
     namespace {

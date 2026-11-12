@@ -28,6 +28,7 @@
 #include "galaxy/asset_store.h"
 #include "galaxy/save_files.h"
 #include "galaxy/crash_report.h"
+#include "galaxy/game_module.h"
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
 #include "galaxy/hidden_start.h"
 #endif
@@ -1178,7 +1179,7 @@ void note_crash_plugin(const EXCEPTION_POINTERS* info) noexcept {
                                                       : 0));
     log_line("crash:", text);
     log_line("crash: stage", gSceneStage.c_str());
-    gather_crash_facts(galaxy::crash::Facts::Kind::Fault, text, owner == GetModuleHandleW(L"smg_game.dll"),
+    gather_crash_facts(galaxy::crash::Facts::Kind::Fault, text, owner == static_cast<HMODULE>(gModule.module),
                        code == EXCEPTION_STACK_OVERFLOW);
     note_crash_plugin(info);
     report_crash(info);
@@ -1268,7 +1269,7 @@ LONG CALLBACK crash_handler(EXCEPTION_POINTERS* info) {
     HMODULE owner = nullptr;
     if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                             static_cast<LPCWSTR>(info->ExceptionRecord->ExceptionAddress), &owner) ||
-        (owner != GetModuleHandleW(nullptr) && owner != GetModuleHandleW(L"smg_game.dll") &&
+        (owner != GetModuleHandleW(nullptr) && owner != static_cast<HMODULE>(gModule.module) &&
          galaxy::mods::plugin_at(info->ExceptionRecord->ExceptionAddress) == nullptr)) {
         return EXCEPTION_CONTINUE_SEARCH;
     }
@@ -1330,7 +1331,7 @@ LONG WINAPI unhandled_filter(EXCEPTION_POINTERS* info) {
     GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                        static_cast<LPCWSTR>(info->ExceptionRecord->ExceptionAddress), &owner);
     gather_crash_facts(cpp ? galaxy::crash::Facts::Kind::Exception : galaxy::crash::Facts::Kind::Fault, line,
-                       !cpp && owner != nullptr && owner == GetModuleHandleW(L"smg_game.dll"),
+                       !cpp && owner != nullptr && owner == static_cast<HMODULE>(gModule.module),
                        info->ExceptionRecord->ExceptionCode == EXCEPTION_STACK_OVERFLOW);
     if (!cpp) {
         note_crash_plugin(info);
@@ -3314,6 +3315,13 @@ void svc_mods_start(void*) {
             galaxy::mods::set_code_off_after_crash();
         }
     }
+    // The plain module has no rows: no mod's code starts with it. The choice at start saw no such mod, or the crash flag
+    // above turned its code off (contract modules 2); one here means the mods changed between that look and this start,
+    // and its code waits for the next start.
+    if (galaxy::game_module::plain_loaded() && !gPlugins.empty()) {
+        log_line("mods:", "a mod with code was turned on after the game module was chosen: its code starts at the next start");
+        gPlugins.clear();
+    }
     // The mod log (contract mod-log): how many mods are on, and the harness's facts in a harness run. With none it is
     // never made.
     galaxy::modlog::begin(
@@ -3951,6 +3959,24 @@ int main(int argc, char** argv) {
     std::error_code error;
     if (!open_pak(pak)) return 2;
     boot_mark("disc opened");
+    {
+        // Two modules (plan 1.7, contract modules): the plain one unless a mod's code needs the rows. --module names the
+        // rows module; the plain one is beside it. Updates imported while a mod was in use land first, as below.
+        const fs::path settings_folder = galaxy::runtime_settings_folder();
+        fs::path mods_folder;
+        if (!settings_folder.empty()) {
+            fs::create_directories(settings_folder / "mods", error);
+            galaxy::mods::apply_pending_updates(settings_folder / "mods");
+            mods_folder = settings_folder / "mods";
+        }
+        std::string why;
+        const fs::path rows_module = module;
+        module = galaxy::game_module::choose(rows_module, mods_folder, settings_folder / "mods.ini", std::string(gPak.store.game_id()),
+                                             false, &why);
+        galaxy::game_module::set_plain_loaded(module != rows_module);
+        log_line("game module:", why.c_str());
+        boot_mark("game module chosen");
+    }
     load_module(module);
     boot_mark("game module loaded");
 #if defined(NEBULA_HOST_RENDERER)
