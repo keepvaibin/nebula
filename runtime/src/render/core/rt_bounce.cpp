@@ -56,7 +56,7 @@ struct BouncePassConstants {
 
 // The signals a kept picture is given (the plan's 2.2 names): which signal, its channels (0 r, 1 rgb, 2 a), and 1
 // when it goes over 1 (written as x / (1 + x)).
-enum class SignalOf : std::uint8_t { Light, Added, Mirror, Indirect, LightsSpec, Share, Air };
+enum class SignalOf : std::uint8_t { Light, Added, Mirror, Indirect, LightsSpec, Share, Air, Fog };
 struct Signal {
     const char* name;
     SignalOf of;
@@ -69,8 +69,10 @@ constexpr Signal kSignals[] = {{"V", SignalOf::Light, 0u, 0u},
                                {"I", SignalOf::Indirect, 1u, 1u},
                                {"H", SignalOf::LightsSpec, 1u, 1u},  // the local lights' highlight alone (l63)
                                {"S", SignalOf::Share, 1u, 1u},       // the programs' share (rt_program_signal; l63)
-                               {"A", SignalOf::Air, 1u, 1u}};        // the air's own light (rt_program_signal; l65)
+                               {"A", SignalOf::Air, 1u, 1u},         // the air's own light (rt_program_signal; l65)
+                               {"F", SignalOf::Fog, 1u, 1u}};        // the fog's lit share (rt_program_signal; FB b68)
 constexpr unsigned kSignalApart = 5u;  // walks between two signals (a readback is one at a time)
+static_assert(std::size(kSignals) * kSignalApart <= kSignalHoldWalks, "every signal inside the hold (FB b68)");
 
 }  // namespace
 
@@ -513,7 +515,8 @@ void RenderCore::rt_signals() {
     case SignalOf::Mirror: source = rt_image(RtImage::Mirror); break;
     case SignalOf::LightsSpec: source = rt_image(RtImage::LightsSpec); break;
     case SignalOf::Share:
-    case SignalOf::Air: return;  // the programs draw them (rt_program_signal)
+    case SignalOf::Air:
+    case SignalOf::Fog: return;  // the programs draw them (rt_program_signal)
     case SignalOf::Indirect:
         // The reference's mean, or the preset's own (the sky and bounce light pass, when it runs).
         if (rt_fb_reference()) {
@@ -573,14 +576,17 @@ std::uint32_t RenderCore::rt_program_signal_due() const noexcept {
     if (which >= std::size(kSignals)) {
         return 0u;
     }
-    return kSignals[which].of == SignalOf::Share ? 64u : kSignals[which].of == SignalOf::Air ? 128u : 0u;
+    return kSignals[which].of == SignalOf::Share ? 64u
+           : kSignals[which].of == SignalOf::Air ? 128u
+           : kSignals[which].of == SignalOf::Fog ? 256u
+                                                 : 0u;
 }
 
 void RenderCore::rt_program_signal() {
     if (rt_program_signal_ == 0u) {
         return;
     }
-    const char* const name = rt_program_signal_ == 64u ? "S" : "A";
+    const char* const name = rt_program_signal_ == 64u ? "S" : rt_program_signal_ == 128u ? "A" : "F";
     rt_program_signal_ = 0u;
     renderer_.set_debug_capture_paths(rt_hold_folder_ + "signal_" + name + "_" + rt_hold_number_ + ".ppm", {});
     if (!renderer_.debug_copy_scene_to_readback()) {

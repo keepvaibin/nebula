@@ -53,6 +53,8 @@ cbuffer FrameConstants : register(b0) {
 static const uint kDevGlassShine = 0u, kDevWaterShine = 1u, kDevPaintedGlass = 2u, kDevPaintedMetal = 3u,
                   kDevPaintedGloss = 4u, kDevPaintedMirror = 5u, kDevSubstituteGlass = 6u, kDevKeepMetal = 7u,
                   kDevKeepGloss = 8u;
+// The programs' keys, copied into the tail by the host (rt_walk.cpp; FB b66): sun_strength, sky_chroma, stage_light.
+static const uint kDevSunStrength = 9u, kDevSkyChroma = 10u, kDevStageLight = 11u;
 float rt_dev_or(uint slot, float otherwise) {
     return ((g_dev_set.x >> slot) & 1u) != 0u ? g_dev[slot >> 2u][slot & 3u] : otherwise;
 }

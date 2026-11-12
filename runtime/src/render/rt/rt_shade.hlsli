@@ -430,13 +430,18 @@ RtStageLight rt_stage_light() {
     const float up = g_shade.form.y;
     const float e = rt_lum(full) / max(rt_lum(sky) + rt_lum(rest) * up, 1e-4f);
     // The sky in shade by kAmbientLook, at kSkyChroma of its colour; a channel with no full light: share 1.
-    const float3 sky_look = g_shade.form.w * lerp(rt_lum(sky).xxx, sky, kSkyChroma);
-    const float3 ok = float3(full >= 1e-4f);
+    // The run's keys where it gives them, as the programs' (FB b66): sun_strength, sky_chroma, stage_light (1: the
+    // stage's light as it is, 0: divided by the full light).
+    const float sun_strength = rt_dev_or(kDevSunStrength, kSunStrength);
+    const float sky_chroma = rt_dev_or(kDevSkyChroma, kSkyChroma);
+    const float3 held = lerp(full, float3(1.0f, 1.0f, 1.0f), rt_dev_or(kDevStageLight, 0.0f));
+    const float3 sky_look = g_shade.form.w * lerp(rt_lum(sky).xxx, sky, sky_chroma);
+    const float3 ok = float3(held >= 1e-4f);
     RtStageLight s;
-    s.sky = ok * (sky_look * e / max(full, 1e-4f)) + (1.0f - ok);
-    s.sun = ok * (rest * kSunStrength * e / max(full, 1e-4f));
+    s.sky = ok * (sky_look * e / max(held, 1e-4f)) + (1.0f - ok);
+    s.sun = ok * (rest * sun_strength * e / max(held, 1e-4f));
     // O's unit: the plain sky's light (no kAmbientLook, full chroma), so the dials move the shade and not O.
-    s.unit = ok * max(sky * e / max(full, 1e-4f), 1e-3f) + (1.0f - ok);
+    s.unit = ok * max(sky * e / max(held, 1e-4f), 1e-3f) + (1.0f - ok);
     return s;
 }
 // O's unit (C4: the one divisor of every gather return): what O = 1 gives a white surface. The art's: the authored

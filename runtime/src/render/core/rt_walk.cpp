@@ -2112,6 +2112,18 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
             constants.dev_set[0] |= 1u << i;
         }
     }
+    // The programs' sun_strength, sky_chroma and stage_light again in the tracer's tail (g_dev 9, 10, 11): hits light a
+    // surface as the programs do under the same keys (FB b66).
+    constexpr RtDev kShared[3] = {RtDev::SunStrength, RtDev::SkyChroma, RtDev::StageLight};
+    for (unsigned j = 0; j < 3u; ++j) {
+        const unsigned which = static_cast<unsigned>(kShared[j]);
+        const unsigned i = kRtDevTracerSlots + j;
+        if ((rt_dev_set_ >> which & 1u) != 0u) {
+            constants.dev[i / 4u][i % 4u] = rt_dev_[which];
+            constants.dev_set[0] |= 1u << i;
+        }
+    }
+    static_assert(kRtDevTracerSlots + 3u <= 32u, "g_dev holds 32 slots");
     static_assert(kRtDevTracerSlots == 9u, "rt_frame.hlsli names each tracer slot (kDev*)");
     static_assert(offsetof(RtFrameConstants, dev) == 336u && offsetof(RtFrameConstants, dev_set) == 464u);
     static_assert(sizeof(RtFrameConstants) <= 512u && offsetof(RtFrameConstants, more) == 64u);
@@ -2250,7 +2262,7 @@ void RenderCore::rt_light() {
                 rt_program_signal_ = rt_program_signal_due();
                 view_flags_ |= 8u | (::galaxy::diagnosing(::galaxy::kDiagnoseRtLight | ::galaxy::kDiagnoseRtMotion) ? 16u : 0u) |
                                (rt_lamps_own_ ? 32u : 0u) |  // local lights off: the programs' own lamp (FC)
-                               rt_program_signal_;  // signals S (64) and A (128): drawn in place of the colour
+                               rt_program_signal_;  // signals S (64), A (128), F (256): drawn in place of the colour
                 ++walk_view_stamp_;  // the scene's views are written again, with the light
             }
         } else {

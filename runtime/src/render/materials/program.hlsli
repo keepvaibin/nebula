@@ -480,6 +480,9 @@ float4 traced_air(float4 c, float4 pixel) {
 static bool g_fog_step = false;
 float4 traced_scatter(float4 c, float4 pixel) {
     const bool alone = (view_flags & 128u) != 0u;  // signal A: the air's own light alone, x / (1 + x) (FA l65)
+    if ((view_flags & 256u) != 0u) {
+        return c;  // signal F (program_fogged_at) as it is (FB b68)
+    }
     if ((draw_flags & 8u) == 0u || (view_flags & 8u) == 0u || view_volume[2].w == 0.0 || (view_flags & 16u) != 0u || g_fog_step) {
         return alone ? float4(0.0, 0.0, 0.0, c.a) : c;
     }
@@ -548,6 +551,11 @@ float3 fog_share(float4 pixel) {
     return sum * 0.125;
 }
 float4 program_fogged_at(float4 c, float4 pixel) {
+    if ((view_flags & 256u) != 0u) {
+        // Signal F (--diagnostics rt-signals; FB b68): the fog's lit share alone, x / (1 + x); 0 with no fog of the game's.
+        const float3 f = g_fog_amount > 0.0 ? fog_share(pixel) : float3(0.0, 0.0, 0.0);
+        return float4(f / (1.0 + f), c.a);
+    }
     return g_fog_amount > 0.0 ? float4(lerp(c.rgb, g_fog_colour * fog_share(pixel), g_fog_amount), c.a) : c;
 }
 #endif
