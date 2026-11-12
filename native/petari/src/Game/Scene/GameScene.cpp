@@ -82,6 +82,7 @@
 #include "Game/Util/SystemUtil.hpp"
 #include "Game/Render/Model.hpp"
 #include "Game/System/NebulaHost.hpp"
+#include "Game/System/LumaDraw.hpp"
 
 namespace {
     CometRetryButton* getCometRetryButton() {
@@ -527,6 +528,7 @@ void GameScene::draw3D() const {
     MR::loadProjectionMtx();
     MR::setDefaultViewportAndScissor();
     Frame::setPassAlpha(true);
+    luma::draw::point(LUMA_DRAW_WORLD_BEFORE);  // the mods' world.before (one load with none)
     CategoryList::drawOpa(MR::DrawBufferType_ClippedMapParts);
     CategoryList::execute(MR::DrawType_ClipArea);
     CategoryList::execute(MR::DrawType_FallOutFieldDraw);
@@ -544,6 +546,7 @@ void GameScene::draw3D() const {
     SceneFunction::executeDrawBufferListNormalOpa();
     SceneFunction::executeDrawListOpa();
     MR::sceneOpaqueEnd();
+    luma::draw::point(LUMA_DRAW_WORLD_OPAQUE_AFTER);
     SceneFunction::executeDrawBufferListNormalXlu();
     SceneFunction::executeDrawListXlu();
     CategoryList::execute(MR::DrawType_ShadowSurface);
@@ -563,12 +566,14 @@ void GameScene::draw3D() const {
     MR::loadProjectionMtx();
     MR::loadLightPlayer();
     CategoryList::execute(MR::DrawType_PlayerIndirect);
+    luma::draw::point(LUMA_DRAW_WORLD_AFTER);
     Frame::sceneEnd();
     MR::clearZBuffer();
 }
 
 void GameScene::draw2D() const {
     Frame::scene2D(true);
+    luma::draw::point(LUMA_DRAW_HUD_BEFORE);  // the mods' hud.before, under the game's HUD (one load with none)
     if (isPlayMovie()) {
         SceneFunction::executeDrawList2DMovie();
     } else {
@@ -576,6 +581,8 @@ void GameScene::draw2D() const {
     }
 
     CategoryList::execute(MR::DrawType_CameraCover);
+    // The mods' hud.after: over the HUD, under the mod log's notice and the pause screens (plan 2.4).
+    luma::draw::point(LUMA_DRAW_HUD_AFTER);
     // The mod log's notice over the game and under the pause screens (and the settings menu, drawn later), so it never
     // covers a choice the player must read (contract mod-log 4.1).
     if (MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder)) {
