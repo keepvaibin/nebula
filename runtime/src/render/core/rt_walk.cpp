@@ -100,10 +100,11 @@ constexpr bool item_is_sky_dome(const NebulaFrameItem& item) noexcept {
     return category == NEBULA_CATEGORY_SKY || category == NEBULA_CATEGORY_ASTRO_DOME_SKY;
 }
 
-// The draw types (MR::DrawType) whose code draws a water surface: OceanBowl 6, OceanRing 7, its pipe's inside 8 and
-// outside 9, OceanSphere 10, WaterRoad 11, WhirlPoolAccelerator 12 (SceneFunction.hpp; WaterPlant is weed).
+// The draw types (MR::DrawType, SwingRope 0) whose code draws a water surface: OceanBowl 5, OceanRing 6, its pipe's
+// inside 7 and outside 8, OceanSphere 9, WaterRoad 10, WhirlPoolAccelerator 11 (SceneFunction.hpp; WaterPlant is
+// weed; ElectricRailHolder 12 is not water). The category is NEBULA_CATEGORY_DRAW + the enum's value (FB b103).
 constexpr bool category_is_water(std::uint32_t category) noexcept {
-    return category >= NEBULA_CATEGORY_DRAW + 6u && category <= NEBULA_CATEGORY_DRAW + 12u;
+    return category >= NEBULA_CATEGORY_DRAW + 5u && category <= NEBULA_CATEGORY_DRAW + 11u;
 }
 
 // A billboard mesh's rows turned to face the sun (l83): `rows` as drawn (turned to the eye), `kind` 1 a full
