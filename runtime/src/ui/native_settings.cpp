@@ -49,6 +49,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <ctime>
 #include <cstdlib>
 #include <cstring>
 #include <chrono>
@@ -3535,17 +3536,26 @@ void add_kept_rows_locked(std::vector<SettingsRow>& rows) {
 // The MODS page as the launcher's Mods tab: the mods off, then the mods on (the higher one wins a conflict), each list
 // under its title, then what removed mods keep, the LOG row and the buttons. A mod's options show instead while they
 // are open.
-// A user file on the offer screen: "Mario, 12 stars, 3:04" (Save.OfferSummary), or Save.OfferEmpty.
+// A user file on the offer screen: "Mario, 12 stars, saved 2026-11-12" (Save.OfferSummary, the local date of its
+// last save), "Mario, 12 stars" when that is not known (Save.OfferSummaryUndated), or Save.OfferEmpty.
 std::string offer_file_words(const galaxy::mods::OfferFile& file, const std::string& asker) {
     if (!file.exists) return galaxy::modlog::row_words("Save.OfferEmpty", asker, {});
-    const std::uint32_t minutes = file.play_seconds / 60u;
-    char time[24];
-    std::snprintf(time, sizeof(time), "%u:%02u", minutes / 60u, minutes % 60u);
-    return galaxy::modlog::row_words(
-        "Save.OfferSummary", asker,
-        {{"character", galaxy::modlog::row_words(file.luigi ? "Save.Luigi" : "Save.Mario", asker, {})},
-         {"stars", std::to_string(file.stars)},
-         {"time", time}});
+    const std::string character = galaxy::modlog::row_words(file.luigi ? "Save.Luigi" : "Save.Mario", asker, {});
+    std::tm local{};
+    const std::time_t time = static_cast<std::time_t>(file.saved);
+#if defined(_WIN32)
+    const bool dated = file.saved > 0 && localtime_s(&local, &time) == 0;
+#else
+    const bool dated = file.saved > 0 && localtime_r(&time, &local) != nullptr;
+#endif
+    if (!dated) {
+        return galaxy::modlog::row_words("Save.OfferSummaryUndated", asker,
+                                         {{"character", character}, {"stars", std::to_string(file.stars)}});
+    }
+    char date[24];
+    std::snprintf(date, sizeof(date), "%04d-%02d-%02d", local.tm_year + 1900, local.tm_mon + 1, local.tm_mday);
+    return galaxy::modlog::row_words("Save.OfferSummary", asker,
+                                     {{"character", character}, {"stars", std::to_string(file.stars)}, {"date", date}});
 }
 
 // mods.install's screen (services-mods 9): who asks, the file's name (never its path), and the answers; the line under
