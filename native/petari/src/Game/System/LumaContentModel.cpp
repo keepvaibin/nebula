@@ -298,16 +298,18 @@ namespace luma {
                     // every enemy's, NPC's and object's pose: SceneFunction::executeCalcAnimList).
                     const int drawBuffer = pHost == MR::getPlayerDemoActor() ? static_cast< int >(MR::DrawBufferType_PlayerDecoration) : -1;
                     PartsModel* const pActor = new PartsModel(pHost, "LumaCore model", pPart->archive, nullptr, drawBuffer, false);
-                    pActor->initFixedPosition(rOffset, rTurn, pPart->joint);
-                    pActor->initWithoutIter();
-                    MR::initLightCtrl(pActor);
                     pPart->actor = pActor;
+                    // The skeleton's callback before the part first appears: makeActorAppeared poses it at once
+                    // (MR::resetPosition), and that pose is the one drawn the frame it is attached.
                     if (follow == LUMA_CONTENT_MODEL_SKELETON) {
                         makeSkeletonTables(pPart);
                         Model* const pModel = MR::getModel(pActor);
                         pModel->mUserArea = reinterpret_cast< uintptr_t >(pPart);
                         pModel->mCalcCallBack = followSkeleton;
                     }
+                    pActor->initFixedPosition(rOffset, rTurn, pPart->joint);
+                    pActor->initWithoutIter();
+                    MR::initLightCtrl(pActor);
                     pPart->next = sParts;
                     sParts = pPart;
                     return pPart;
@@ -680,6 +682,17 @@ namespace luma {
                         ppLink = &pPart->next;
                     }
                 }
+            }
+
+            LiveActor* actorOf(const LumaMod* pMod, LumaHandle handle) {
+                if (sLive == 0) {
+                    return nullptr;
+                }
+                const Attached* const pAttached = attachedOf(pMod, handle);
+                if (pAttached == nullptr) {
+                    return nullptr;
+                }
+                return pAttached->part != nullptr ? static_cast< LiveActor* >(pAttached->part->actor) : pAttached->host;
             }
 
             const LumaServiceProvider* provider() { return &cProvider; }

@@ -72,4 +72,17 @@ namespace luma {
     const MethodRow* overrider(const void* pObject, const char* pName, const char* pSignature, bool* pAmbiguous);
     // The same from an own class already read and the virtual's row (findMethodRow); null for a null row.
     const MethodRow* overrider(const OwnClass& rOwn, const void* pObject, const MethodRow* pTarget, bool* pAmbiguous);
+
+    // Contract classes (plan 1.4). The record rows' count: a game class's number is below it, a mod class's at or
+    // above it.
+    u32 classCount();
+    // The type_info of the object's own class and the whole object, read from the vtable as ownClass reads them, with
+    // no row looked up (a mod class's override asks on every call); null when the object cannot be read.
+    const void* ownTypeInfo(const void* pObject, const void** ppComplete);
+    // The method row a whole object of class pClass runs for the virtual pTarget (overrider's answer for an object
+    // pointer at the whole object); null when pClass is not pTarget's record or derives from it, or ambiguous.
+    const MethodRow* overriderOfClass(const TypeRow* pClass, const MethodRow* pTarget, bool* pAmbiguous);
+    // Where the one pBase subobject is in a whole pType object. False: pBase is not pType or a base of it, or is one
+    // twice.
+    bool baseOffset(const TypeRow* pType, const TypeRow* pBase, u32* pOffset);
 }

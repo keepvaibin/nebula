@@ -101,8 +101,11 @@ bool facts() {
     ok &= expect(galaxy::mods::consent_facts(mod).permissions[1].required, "required from the kept report's list");
 
     galaxy::mods::record_code_answer(mod, false);
+    mod.enabled = false;  // Not now turns it off (consent 2.3)
     ok &= expect(galaxy::mods::consent_facts(mod).code_answer == Answer::Declined && !galaxy::mods::consent_needed(mod),
-                 "code Not now: declined, not asked again");
+                 "code Not now: declined, off, not asked again");
+    mod.enabled = true;
+    ok &= expect(galaxy::mods::consent_needed(mod), "code Not now, turned on again: asked (6402)");
 
     galaxy::mods::ModInfo content;
     content.id = "content";
@@ -181,6 +184,7 @@ bool store() {
     mod = find(mods);
     if (mod == nullptr) return false;
     galaxy::mods::record_code_answer(*mod, false);
+    mod->enabled = false;  // Not now turns it off (consent 2.3)
     ok &= expect(galaxy::mods::save_mod_settings(mods) && read_all(root / "mods.ini").find("code_no=" + mod->code_token + "\n") != std::string::npos,
                  "code_no stored");
     mods = galaxy::mods::scan_mods();

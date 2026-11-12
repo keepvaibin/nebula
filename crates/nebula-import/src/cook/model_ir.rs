@@ -260,6 +260,60 @@ pub struct ModelIr {
     /// By record of a disc model: its source's palette hash (texture::source_palette_hash), for its name. Empty for a
     /// model never on the disc (a mod's glTF).
     pub record_palettes: Vec<u64>,
+    /// Version 5's lit table (materials.md): one per material (material n's at n), or none (every game model).
+    pub lits: Vec<LitIr>,
+}
+
+/// NebulaModelLit's alpha modes and flags (nebula_model.h).
+pub const LIT_OPAQUE: u8 = 0;
+pub const LIT_MASK: u8 = 1;
+pub const LIT_BLEND: u8 = 2;
+pub const LIT_DOUBLE_SIDED: u8 = 1 << 0;
+pub const LIT_UNLIT: u8 = 1 << 1;
+/// sizeof(NebulaModelLit).
+pub const LIT_BYTES: usize = 80;
+/// The maps of a lit material, in NebulaModelLit's order.
+pub const LIT_BASE: usize = 0;
+pub const LIT_METAL_ROUGH: usize = 1;
+pub const LIT_NORMAL: usize = 2;
+pub const LIT_EMISSIVE: usize = 3;
+pub const LIT_OCCLUSION: usize = 4;
+
+/// A material's lit part (materials.md, nebula_model.h NebulaModelLit): glTF 2.0's metallic-roughness material as the
+/// cook read it. Colours linear; `maps` model texture numbers (NONE: none), each read through `coords`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LitIr {
+    pub base_color: [f32; 4],
+    pub emissive: [f32; 3],
+    pub metal: f32,
+    pub roughness: f32,
+    pub normal_scale: f32,
+    pub occlusion_strength: f32,
+    pub alpha_cutoff: f32,
+    /// LIT_BASE, LIT_METAL_ROUGH, LIT_NORMAL, LIT_EMISSIVE, LIT_OCCLUSION.
+    pub maps: [u32; 5],
+    pub coords: [u8; 5],
+    pub alpha_mode: u8,
+    pub flags: u8,
+}
+
+impl Default for LitIr {
+    /// glTF 2.0's default material: white, fully metal and rough, no maps.
+    fn default() -> LitIr {
+        LitIr {
+            base_color: [1.0; 4],
+            emissive: [0.0; 3],
+            metal: 1.0,
+            roughness: 1.0,
+            normal_scale: 1.0,
+            occlusion_strength: 1.0,
+            alpha_cutoff: 0.0,
+            maps: [NONE; 5],
+            coords: [0; 5],
+            alpha_mode: LIT_OPAQUE,
+            flags: 0,
+        }
+    }
 }
 
 fn be16(b: &[u8], at: usize) -> Result<u32> {

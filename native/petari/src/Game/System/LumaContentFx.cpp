@@ -21,6 +21,8 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/GameAssets.hpp"
+#include "Game/System/LumaContentModel.hpp"
 #include <luma.h>
 #include <luma_content_fx.h>
 #include <luma_modlog.h>
@@ -87,6 +89,7 @@ namespace luma {
                     u32 frame;          // frames the frame has seen it
                     bool clipped;
                     bool checkEmpty;    // section 2's window is open
+                    LumaHandle model;   // the mod's model it was started on (start_on_model); 0: on an actor
                 };
 
                 const LumaServiceKernel* sKernel = nullptr;
@@ -180,10 +183,170 @@ namespace luma {
                     return true;
                 }
 
-                // The draw group (effects 4) of a mod's effect, from the cook's `<id>:effects`. The cook does not write
-                // it yet (G's form, effects 7): every effect draws in 3D (0), the game's default.
+                // ---- Draw groups (effects 4; D5-5) ----
+
+                // A mod's effects list as the cook writes it (G, effects "G on draft 4"): Luma/<id>/effects.txt, one
+                // line an effect sorted by name, `<name>\t<group>\t<emitters>\n`. Read once a session per mod, ::malloc,
+                // kept to the end (a few bytes an effect).
+                struct GroupRow {
+                    u32 hash;       // MR::getHashCode of the name
+                    s32 group;      // 0 to 5
+                    char name[64];  // the effect's own name (the cook's names are shorter)
+                };
+                struct ModGroups {
+                    ModGroups* next;
+                    char id[68];
+                    u32 count;  // rows; 0 also when the list is absent or damaged (every effect then draws in group 0)
+                    GroupRow rows[1];
+                };
+                ModGroups* sGroups = nullptr;
+                const u32 cEffectsFileCode = 641;
+                const u32 kMostEffectsFile = 64u * 1024u;
+
+                bool nameChar(char c, bool first) {
+                    return (c >= 'a' && c <= 'z') || (!first && ((c >= '0' && c <= '9') || c == '_'));
+                }
+
+                // The list's line `line` (from 1) outside the form: one Content.EffectsFile entry for the mod (its
+                // repeats are counted by the log), and every effect of the mod in group 0.
+                void sayEffectsFile(const char* pId, u32 line) {
+                    char path[96];
+                    char number[16];
+                    nebula_snprintf(path, sizeof(path), "Luma/%s/effects.txt", pId);
+                    nebula_snprintf(number, sizeof(number), "%u", line);
+                    LumaModLogEntry entry = {};
+                    entry.size = sizeof(entry);
+                    entry.source = LUMA_MODLOG_CONTENT;
+                    entry.level = LUMA_MODLOG_ERROR;
+                    entry.code = cEffectsFileCode;
+                    entry.mod = pId;
+                    entry.file = path;
+                    entry.line = line;
+                    entry.names[0] = "line";
+                    entry.values[0] = number;
+                    entry.count = 1;
+                    (void)luma::modlog::add(entry, "Content.EffectsFile");
+                }
+
+                // Parses `pText` (`length` bytes) into `pGroups`; false at the first line outside the form (*pBad its
+                // number).
+                bool parseGroups(const char* pText, u32 length, ModGroups* pGroups, u32* pBad) {
+                    u32 at = 0;
+                    u32 line = 0;
+                    const char* pLast = nullptr;
+                    u32 lastLength = 0;
+                    while (at < length) {
+                        line++;
+                        *pBad = line;
+                        const char* const pName = pText + at;
+                        u32 n = 0;
+                        while (at + n < length && nameChar(pText[at + n], n == 0)) {
+                            n++;
+                        }
+                        if (n == 0 || at + n >= length || pText[at + n] != '\t') {
+                            return false;
+                        }
+                        // Sorted by name in byte order, each once.
+                        if (pLast != nullptr) {
+                            const u32 common = n < lastLength ? n : lastLength;
+                            const s32 order = memcmp(pLast, pName, common);
+                            if (order > 0 || (order == 0 && lastLength >= n)) {
+                                return false;
+                            }
+                        }
+                        u32 p = at + n + 1;
+                        if (p + 1 >= length || pText[p] < '0' || pText[p] > '5' || pText[p + 1] != '\t') {
+                            return false;
+                        }
+                        const s32 group = pText[p] - '0';
+                        p += 2;
+                        u32 emitters = 0;
+                        u32 digits = 0;
+                        while (p < length && pText[p] >= '0' && pText[p] <= '9' && digits < 3) {
+                            emitters = emitters * 10u + static_cast< u32 >(pText[p] - '0');
+                            p++;
+                            digits++;
+                        }
+                        if (digits == 0 || (digits > 1 && pText[p - digits] == '0') || emitters < 1u || emitters > 16u ||
+                            p >= length || pText[p] != '\n') {
+                            return false;
+                        }
+                        char name[64];
+                        if (n >= sizeof(name)) {
+                            return false;
+                        }
+                        memcpy(name, pName, n);
+                        name[n] = 0;
+                        memcpy(pGroups->rows[pGroups->count].name, name, n + 1);
+                        pGroups->rows[pGroups->count].hash = MR::getHashCode(name);
+                        pGroups->rows[pGroups->count].group = group;
+                        pGroups->count++;
+                        pLast = pName;
+                        lastLength = n;
+                        at = p + 1;
+                    }
+                    return true;
+                }
+
+                // The mod's list, read the first time one of its effects is made.
+                const ModGroups* groupsOf(const char* pId, u32 idLength) {
+                    for (const ModGroups* p = sGroups; p != nullptr; p = p->next) {
+                        if (strlen(p->id) == idLength && memcmp(p->id, pId, idLength) == 0) {
+                            return p;
+                        }
+                    }
+                    if (idLength == 0 || idLength >= sizeof(ModGroups::id)) {
+                        return nullptr;
+                    }
+                    char id[sizeof(ModGroups::id)];
+                    memcpy(id, pId, idLength);
+                    id[idLength] = 0;
+                    char path[96];
+                    nebula_snprintf(path, sizeof(path), "/Luma/%s/effects.txt", id);
+                    GameAssets::File file;
+                    const u32 length = GameAssets::open(path, &file) ? file.mLength : 0u;
+                    // At most one row a line, and a line is at least 6 bytes ("a\t0\t1\n").
+                    const u32 most = length <= kMostEffectsFile ? length / 6u + 1u : 1u;
+                    ModGroups* const pGroups = static_cast< ModGroups* >(::malloc(sizeof(ModGroups) + most * sizeof(GroupRow)));
+                    if (pGroups == nullptr) {
+                        return nullptr;
+                    }
+                    memcpy(pGroups->id, id, idLength + 1);
+                    pGroups->count = 0;
+                    if (length > kMostEffectsFile) {
+                        sayEffectsFile(id, 1);
+                    } else if (length > 0) {
+                        char* const pText = static_cast< char* >(::malloc(length));
+                        u32 bad = 0;
+                        if (pText != nullptr && GameAssets::read(&file, pText, static_cast< s32 >(length), 0) >= 0 &&
+                            !parseGroups(pText, length, pGroups, &bad)) {
+                            pGroups->count = 0;
+                            sayEffectsFile(id, bad);
+                        }
+                        ::free(pText);
+                    }
+                    pGroups->next = sGroups;
+                    sGroups = pGroups;
+                    return pGroups;
+                }
+
+                // The draw group (effects 4) of an effect: a mod's (`<id>:<name>`) from its list, the game's own 0 (3D,
+                // the game's default for one with no AutoEffectList row).
                 s32 drawGroupOf(const char* pName) {
-                    (void)pName;
+                    const char* const pColon = strchr(pName, ':');
+                    if (pColon == nullptr) {
+                        return 0;
+                    }
+                    const ModGroups* const pGroups = groupsOf(pName, static_cast< u32 >(pColon - pName));
+                    if (pGroups == nullptr || pGroups->count == 0) {
+                        return 0;
+                    }
+                    const u32 hash = MR::getHashCode(pColon + 1);
+                    for (u32 i = 0; i < pGroups->count; i++) {
+                        if (pGroups->rows[i].hash == hash && strcmp(pGroups->rows[i].name, pColon + 1) == 0) {
+                            return pGroups->rows[i].group;
+                        }
+                    }
                     return 0;
                 }
 
@@ -358,8 +521,10 @@ namespace luma {
                     particles[at] = 0;
                     char json[1024];
                     nebula_snprintf(json, sizeof(json),
-                                    "{\"mod\":%s,\"name\":%s,\"particles\":%s,\"group\":%d,\"joint\":%s,\"follow\":%s,\"placeholder\":%s}", mod,
-                                    name, particles, group, joint, follow ? "true" : "false", placeholder ? "true" : "false");
+                                    "{\"mod\":%s,\"name\":%s,\"particles\":%s,\"group\":%d,\"joint\":%s,\"follow\":%s,\"placeholder\":%s,"
+                                    "\"model\":%llu}",
+                                    mod, name, particles, group, joint, follow ? "true" : "false", placeholder ? "true" : "false",
+                                    static_cast< unsigned long long >(rEffect.model));
                     char key[48];
                     nebula_snprintf(key, sizeof(key), "fx.start.%llu", static_cast< unsigned long long >(rEffect.handle));
                     luma::modlog::fact(key, json);
@@ -451,9 +616,9 @@ namespace luma {
 
                 // ---- The service ----
 
-                int32_t svcStart(const LumaMod* pMod, LumaActor actor, LumaEffectName name, const char* pJoint, const LumaPlace* pPlace,
-                                 bool follow, LumaContentFxEffect* pOut) {
-                    const char* const pWhere = "content.fx.start";
+                // start and start_on_model: `model` the mod's model handle the actor draws (0: an actor of the game's).
+                int32_t startOn(const LumaMod* pMod, const char* pWhere, LumaActor actor, LumaEffectName name, const char* pJoint,
+                                const LumaPlace* pPlace, bool follow, LumaContentFxEffect* pOut, LumaHandle model) {
                     if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                         return status;
                     }
@@ -545,6 +710,7 @@ namespace luma {
                     rEffect.handle = ++sNextHandle;
                     rEffect.mod = pMod;
                     rEffect.actor = pActor;
+                    rEffect.model = model;
                     rEffect.name = pName != nullptr ? pName : cPlaceholder;
                     if (pName != nullptr) {
                         Shell* const pShell = shellFor(pActor, pName, pSource, pHostScale, composed, follow);
@@ -579,21 +745,24 @@ namespace luma {
                     return LUMA_OK;
                 }
 
-                // No model handle exists until content.model (models 7) gives them, so each is an ended one.
+                int32_t svcStart(const LumaMod* pMod, LumaActor actor, LumaEffectName name, const char* pJoint, const LumaPlace* pPlace,
+                                 bool follow, LumaContentFxEffect* pOut) {
+                    return startOn(pMod, "content.fx.start", actor, name, pJoint, pPlace, follow, pOut, 0);
+                }
+
+                // On the actor that draws the mod's model (content.model): its joints are the sockets.
                 int32_t svcStartOnModel(const LumaMod* pMod, LumaHandle model, LumaEffectName name, const char* pSocket,
                                         const LumaPlace* pPlace, bool follow, LumaContentFxEffect* pOut) {
-                    (void)model;
-                    (void)name;
-                    (void)pSocket;
-                    (void)pPlace;
-                    (void)follow;
-                    (void)pOut;
                     const char* const pWhere = "content.fx.start_on_model";
                     if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                         return status;
                     }
-                    report(pMod, pWhere, 102u, nullptr, nullptr, nullptr);
-                    return LUMA_E_HANDLE;
+                    LiveActor* const pActor = luma::content::model::actorOf(pMod, model);
+                    if (pActor == nullptr) {
+                        report(pMod, pWhere, 102u, nullptr, nullptr, nullptr);
+                        return LUMA_E_HANDLE;
+                    }
+                    return startOn(pMod, pWhere, pActor, name, pSocket, pPlace, follow, pOut, model);
                 }
 
                 int32_t svcStop(const LumaMod* pMod, LumaContentFxEffect effect, bool now) {
@@ -715,6 +884,14 @@ namespace luma {
                     }
                     Shell* const pShell = rEffect.shell;
                     LiveActor* const pActor = rEffect.actor;
+                    if (rEffect.model != 0 && luma::content::model::actorOf(rEffect.mod, rEffect.model) == nullptr) {
+                        // Its model was detached or ended: as the actor's own effects at its death.
+                        if (pShell != nullptr) {
+                            pShell->emitter->playCalcAndDeleteForeverEmitter();
+                        }
+                        end(rEffect, "model");
+                        continue;
+                    }
                     if (MR::isDead(pActor)) {
                         // As the actor's own effects (LiveActor::makeActorDead, EffectKeeper::clear).
                         if (pShell != nullptr) {

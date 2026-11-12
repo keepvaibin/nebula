@@ -374,7 +374,7 @@ namespace luma {
 
             void fill(LumaTimeNow* pNow, u32 stepInFrame) {
                 pNow->size = sizeof(LumaTimeNow);
-                pNow->state = state();
+                pNow->state = static_cast< LumaTimeState >(state());
                 pNow->frame = sFrame;
                 pNow->step = sStep;
                 pNow->steps = sStepsThisFrame;
@@ -697,12 +697,17 @@ namespace luma {
                 return LUMA_OK;
             }
 
-            int32_t svcTimer(const LumaMod* pMod, uint32_t clock, uint64_t after, uint64_t every, LumaEventFn fn, void* pUser,
-                             LumaHandle* pOut) {
+            int32_t svcTimer(const LumaMod* pMod, LumaTimeClock clockGiven, uint64_t after, uint64_t every, LumaEventFn fn,
+                             void* pUser, LumaTimeTimer* pOut) {
                 const char* const pWhere = "time.timer";
                 if (const s32 status = enter(pMod, pWhere, false); status != LUMA_OK) {
                     return status;
                 }
+                // The mod's 4 bytes as they came: a value outside the enum is the mod's mistake to report, not a value
+                // the compiler may assume away.
+                static_assert(sizeof(clockGiven) == sizeof(u32), "LumaTimeClock is 4 bytes");
+                u32 clock;
+                __builtin_memcpy(&clock, &clockGiven, sizeof(clock));
                 const char* pWrong = clock > LUMA_TIME_NANOSECONDS ? "clock"
                                      : after == 0                  ? "after"
                                      : fn == nullptr               ? "fn"
