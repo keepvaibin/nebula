@@ -69,14 +69,15 @@ float effect_luminance(std::uint32_t name) noexcept {
 constexpr float kUnitsPerMetre = 100.0f;
 
 // What an emitter is from one frame to the next (its kind, whose it is, which of them): a pixel's reservoir finds its
-// light again by it. Two emitters with one number are taken for each other, which costs a little noise and nothing
-// else.
+// light again by it. Two emitters with one number are taken for each other. Never 0: kNoEmitterId is an emitter no
+// reservoir finds again (a particle: A2-09).
+constexpr std::uint32_t kNoEmitterId = 0u;
 constexpr std::uint32_t rt_emitter_id(std::uint32_t kind, std::uint32_t whose, std::uint32_t which) {
     std::uint32_t h = (whose * 0x9E3779B1u) ^ (which * 0x85EBCA6Bu) ^ (kind * 0xC2B2AE35u);
     h ^= h >> 15u;
     h *= 0x2C1B3C6Du;
     h ^= h >> 12u;
-    return h;
+    return h != kNoEmitterId ? h : 1u;
 }
 
 // The words of an item in the light pass's table (rt_light).
@@ -1902,7 +1903,9 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
         // reservoir names its light by the list of the frame it was written in.
         rt_emitter_now_.clear();
         for (std::size_t e = 0; e < rt_emitters_.size(); ++e) {
-            rt_emitter_now_.try_emplace(rt_emitters_[e].reserved[1], static_cast<std::uint32_t>(e));
+            if (rt_emitters_[e].reserved[1] != kNoEmitterId) {
+                rt_emitter_now_.try_emplace(rt_emitters_[e].reserved[1], static_cast<std::uint32_t>(e));
+            }
         }
         rt_emitter_remap_.assign(rt_emitter_ids_before_.size(), ~0u);
         for (std::size_t e = 0; e < rt_emitter_ids_before_.size(); ++e) {
@@ -2889,7 +2892,9 @@ void RenderCore::rt_particle_emitter(const NebulaFrameItem& item, std::uint32_t 
         emitter.reach = 0.0f;
         emitter.slot = item.slot;
         emitter.kind = 2u;
-        emitter.reserved[1] = rt_emitter_id(2u, item.slot ^ static_cast<std::uint32_t>(item.source_hash), (ordinal - 1u) / every);
+        // No lasting number: a particle's place in its draw shifts as others are born and die, so a reservoir would
+        // find another particle by it (A2-09). Its light is found again by this frame's candidates alone.
+        emitter.reserved[1] = kNoEmitterId;
     };
     if ((item.flags & NEBULA_ITEM_INSTANCES) != 0u) {
         // Instanced particles: each a matrix in the world, its quad as wide and tall as the matrix's first two columns.
