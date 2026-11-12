@@ -2,6 +2,7 @@
 #include "galaxy/luma_services_host.h"
 
 #include "galaxy/host_extension.h"
+#include "galaxy/luma_fs_service.h"
 #include "galaxy/luma_mods_service.h"
 #include "galaxy/luma_system_platform.h"
 
@@ -74,6 +75,10 @@ bool provide_all(void* (*find_symbol)(const char*), void (*log)(const char*),
         log("LumaCore services: the game module has no luma_save_kept or luma_save_forget; REMOVED MODS counts no file values");
     }
     galaxy::luma_mods::set_chunk_half(kept, forget);
+    // The file services (services-fs 10).
+    for (const LumaServiceProvider* const provider : galaxy::luma_fs::providers(log)) {
+        provide(provider);
+    }
     Giving giving{provide};
     galaxy::extensions::luma_providers(
         [](const LumaServiceProvider* provider, void* user) { static_cast<Giving*>(user)->provide(provider); }, &giving);
