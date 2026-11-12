@@ -275,7 +275,7 @@ namespace luma::font {
         void readKerns(ModFont& rFont, const char* pName) {
             const s32 entry = sidecar(pName, ".kern");
             const void* const pData = entry < 0 ? nullptr : GameAssets::map(entry);
-            Table table;
+            ::Table table;
             if (pData == nullptr || !table.attach(pData)) {
                 return;
             }
