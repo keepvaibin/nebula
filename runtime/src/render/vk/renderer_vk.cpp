@@ -206,6 +206,8 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
         reset_sampler_frame();
         // The game's bloom, compiled on a worker; the game draws its own chains until it is ready.
         bloom_.initialize();
+        // draw.post's programs compile with the linked HLSL front end (vk/mod_shader_compile_vk.cpp).
+        set_mod_post_compiler(&compile_mod_post_stage, true);
         // Presentation post-processing, compiled on a worker; the plain blit presents until it is ready.
         const RenderConfig cfg = get_render_config();
         if (cfg.post_process) {
@@ -1511,6 +1513,8 @@ void RendererVk::shutdown() {
         uploads_store_ = nullptr;
         texture_lists_ = {};
         texture_lists_used_ = 0u;
+        set_mod_post_compiler(nullptr, true);
+        release_mod_post();
         post_.shutdown();
         bloom_.shutdown();
         oriented_.reset();
@@ -1729,6 +1733,8 @@ void RendererVk::begin_frame() {
     apply_window_size();
     grow_rings();
     prepare_temporal_upscaler();
+    // draw.post: a program reading motion registers only while a temporal upscaler makes it.
+    set_mod_post_motion(temporal_ != nullptr && temporal_mode());
     if (temporal_interp_suspended_ && temporal_interp_key() != temporal_interp_key_) {
         // The settings changed: decided again.
         temporal_interp_suspended_ = false;

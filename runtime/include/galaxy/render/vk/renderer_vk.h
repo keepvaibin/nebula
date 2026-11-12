@@ -36,6 +36,8 @@
 #include "galaxy/render/host_window.h"
 #include "galaxy/render/window_owner.h"
 #include "galaxy/render_api.h"
+#include "galaxy/render/mod_post.h"
+#include <nebula_frame_list.h>
 
 #include <array>
 #include <chrono>
@@ -157,6 +159,13 @@ public:
     // The game's bloom (game_bloom_vk.h): `kind` a NEBULA_PASS_BLOOM_*, `a` and `b` its values.
     [[nodiscard]] bool game_bloom_ready() const noexcept { return bloom_.ready(); }
     void game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t b);
+    // draw.post (mod_post.h, mod_post_vk.cpp): `program` full screen over `picture` (the frame so far, from
+    // take_frame_picture) into the scene target, in a pass of its own; `depth_known` the walker could give the depth terms.
+    void record_mod_post(const ModPostProgram& program, ModPostConstants constants, const gpu::TextureRef& picture,
+                         bool depth_known);
+    // draw.native (luma_draw_native.h): `call` with the device and the command buffer between passes, the scene target
+    // (with its depth at a scene point); the projection's y row turned for Vulkan's clip space.
+    void record_native_call(const NebulaNativeCall& call, LumaDrawNativeFrame& frame, bool scene_point);
     void reset_generated_gpu_ema() noexcept { generated_gpu_ema_ms_ = 0.0; }
     [[nodiscard]] double generated_gpu_ema_ms() const noexcept { return generated_gpu_ema_ms_; }
     [[nodiscard]] double interpolation_gpu_cost_ms() const noexcept {
@@ -750,6 +759,30 @@ private:
         FrameMap map{};
     };
     MotionTargets motion_;
+    // draw.post's layout, its colour-only passes (by format and samples) and the programs' pipelines.
+    struct ModPostPass {
+        VkFormat format = VK_FORMAT_UNDEFINED;
+        unsigned samples = 1u;
+        VkRenderPass pass = VK_NULL_HANDLE;
+    };
+    struct ModPostPipelineVk {
+        std::uint32_t program = 0u;
+        VkFormat format = VK_FORMAT_UNDEFINED;
+        unsigned samples = 1u;
+        VkPipeline pipeline = VK_NULL_HANDLE;  // null: the device refused it
+    };
+    VkSampler mod_post_samplers_[2]{};
+    VkDescriptorSetLayout mod_post_set_layout_ = VK_NULL_HANDLE;
+    VkPipelineLayout mod_post_layout_ = VK_NULL_HANDLE;
+    bool mod_post_failed_ = false;
+    std::vector<ModPostPass> mod_post_passes_;
+    std::vector<ModPostPipelineVk> mod_post_pipelines_;
+    std::uint64_t mod_post_epoch_ = 0u;
+    bool ensure_mod_post_layout();
+    [[nodiscard]] VkRenderPass mod_post_pass(VkFormat format, unsigned samples);
+    [[nodiscard]] VkPipeline mod_post_pipeline(const ModPostProgram& program, VkFormat format, unsigned samples,
+                                               VkRenderPass pass);
+    void release_mod_post();
     [[nodiscard]] bool ensure_motion_targets();
     void clear_motion_targets(bool motion = true);  // the reactive mask too where it is read
     // The layer's targets to nothing added (zero colour) and everything let through (transmittance one).

@@ -266,6 +266,10 @@ private:
     void walk_target_begin(const NebulaFramePass& pass);
     void walk_target_end(std::uint32_t channels);
     void walk_show();
+    // draw.post (contract draw 15): a mod's post program full screen into a new picture, the frame from there.
+    void walk_post(const NebulaFrameList& list, const NebulaFramePass& pass);
+    // draw.native (contract draw 16): a mod's own GPU commands at a draw point, on this thread.
+    void walk_native(const NebulaFrameList& list, const NebulaFramePass& pass);
     [[nodiscard]] bool generated_written(std::uint32_t texture) const noexcept;
     void note_generated_written(std::uint32_t texture);
 
@@ -506,6 +510,18 @@ private:
     [[nodiscard]] double interp_slot_t() const;
     static void interp_sleep_us(std::int64_t us);
     float scene_jitter_px_[2]{};
+    // The walked list's scene camera, kept at its scene's end for the passes after it (draw.post's depth, draw.native's
+    // matrices): the view (3x4 rows, the game's), its projection terms and viewport; `post_scene_known_` false before a
+    // scene in this list.
+    bool post_scene_known_ = false;
+    RtView post_scene_view_{};
+    std::array<float, 12> post_scene_camera_{};
+    bool post_scene_ortho_ = false;
+    float post_scene_target_[2]{};  // the scene target's pixels the viewport was placed in
+    // draw.native's `picture`: which picture of the list this walk draws (0 the first, interpolated ones after).
+    const NebulaFrameList* walk_picture_list_ = nullptr;
+    std::uint32_t walk_picture_frame_ = 0u;
+    std::uint32_t walk_picture_ = 0u;
     bool producer_movie_content_{},render_movie_content_{};
     MovieFrameMark producer_movie_frame_{}, render_movie_frame_{};
     // The game's movies: the cooked movie's decoder (a worker), HD replacements (render thread), the folders last applied.

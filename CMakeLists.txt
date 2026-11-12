@@ -419,6 +419,8 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/mod_shaders.cpp
     runtime/src/render/mod_shader_build.cpp
     runtime/src/render/mod_shader_compile_d3d12.cpp
+    runtime/src/render/mod_post.cpp
+    runtime/src/render/mod_post_d3d12.cpp
     runtime/src/render/post_process.cpp
     runtime/src/render/post_process_settings.cpp
     ${galaxy_post_headers}
@@ -595,6 +597,8 @@ galaxy_test(galaxy_host_pointer_events_tests SOURCES ${rt}/host_pointer_events_t
     LIBS galaxy_host_pointer_events)
 galaxy_test(galaxy_audio_mixer_tests SOURCES ${rt}/audio_mixer_tests.cpp LIBS galaxy_audio_mixer)
 galaxy_test(galaxy_movie_video_tests SOURCES ${rt}/movie_video_tests.cpp ${rt}/movie_video.cpp)
+# draw.post's registry (mod_post.cpp) without a device.
+galaxy_test(galaxy_mod_post_tests SOURCES ${rt}/render/mod_post_tests.cpp ${rt}/render/mod_post.cpp)
 galaxy_test(galaxy_windows_power_tests SOURCES ${rt}/windows_power_tests.cpp)
 galaxy_test(galaxy_power_policy_tests SOURCES ${rt}/power_policy_tests.cpp)
 galaxy_test(galaxy_frame_phase_tests SOURCES ${rt}/frame_phase_tests.cpp ${rt}/frame_phase.cpp)
@@ -752,6 +756,8 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/mod_shaders.cpp
         runtime/src/render/mod_shader_build.cpp
         runtime/src/render/vk/mod_shader_compile_vk.cpp
+        runtime/src/render/mod_post.cpp
+        runtime/src/render/vk/mod_post_vk.cpp
         runtime/src/render/vk/mod_shader_present_vk.cpp
         runtime/src/render/vk/shader_compile_vk.cpp
         runtime/src/render/vk/compile_journal.cpp

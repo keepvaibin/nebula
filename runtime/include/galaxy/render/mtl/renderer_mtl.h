@@ -33,6 +33,8 @@
 #include "galaxy/render/rt_types.h"
 #include "galaxy/render/window_owner.h"
 #include "galaxy/render_api.h"
+#include "galaxy/render/mod_post.h"
+#include <nebula_frame_list.h>
 #include "render/core/draw_record.h"
 #include "render/core/gpu_encoder.h"
 
@@ -211,6 +213,11 @@ public:
     [[nodiscard]] gpu::Address zero_stream(std::uint32_t bytes);
     // The frame so far is the frame's picture now: `fresh` (or a new target) takes its place.
     [[nodiscard]] gpu::TextureRef take_frame_picture(gpu::TextureRef fresh);
+    // draw.post and draw.native (mod_post.h, luma_draw_native.h): not on Metal yet. No compiler is installed, so every
+    // post program is refused at post_register ("no compiler for post programs on this renderer") and no list names
+    // one; draw.native's backend values are D3D12 and Vulkan only, so no native call reaches here.
+    void record_mod_post(const ModPostProgram&, ModPostConstants, const gpu::TextureRef&, bool) {}
+    void record_native_call(const NebulaNativeCall&, LumaDrawNativeFrame&, bool) {}
     [[nodiscard]] bool can_take_scene() const noexcept;
     bool take_scene(std::uint64_t key, gpu::TextureRef fresh, TextureStore& textures, gpu::TextureRef& released);
     void open_frame_for_pass(std::uint64_t color_key, std::uint8_t channels, std::uint64_t depth_key, TextureStore& textures);

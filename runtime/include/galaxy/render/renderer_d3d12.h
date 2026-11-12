@@ -41,6 +41,8 @@
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/window_owner.h"
 #include "galaxy/render_api.h"
+#include "galaxy/render/mod_post.h"
+#include <nebula_frame_list.h>
 
 #include <array>
 #include <bit>
@@ -396,6 +398,13 @@ public:
     // The game's bloom (game_bloom.h): `kind` a NEBULA_PASS_BLOOM_*, `a` and `b` its values.
     [[nodiscard]] bool game_bloom_ready() const noexcept { return game_bloom_.ready(); }
     void game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t b);
+    // draw.post (mod_post.h, mod_post_d3d12.cpp): `program` full screen over `picture` (the frame so far, from
+    // take_frame_picture) into the scene target; `depth_known` the walker could give the depth terms.
+    void record_mod_post(const ModPostProgram& program, ModPostConstants constants, const gpu::TextureRef& picture,
+                         bool depth_known);
+    // draw.native (luma_draw_native.h): `call` with the device, the open list and the scene target (with its depth at
+    // a scene point); the scene's state is set again after it.
+    void record_native_call(const NebulaNativeCall& call, LumaDrawNativeFrame& frame, bool scene_point);
     [[nodiscard]] bool output_scene_active() const noexcept { return output_scene_active_; }
     // Whether the targets for `scale` fit the adapter's video-memory budget
     // next to everything already resident.
@@ -954,6 +963,26 @@ private:
     std::array<float, 12> scene_view_{};
     bool scene_view_known_ = false;
     Microsoft::WRL::ComPtr<ID3D12Resource> motion_target_;
+    // draw.post's root signature and pipelines (a program's for a target format and samples), and those of programs
+    // freed, kept until the frames in flight end.
+    struct ModPostPipeline {
+        std::uint32_t program = 0u;
+        DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
+        UINT samples = 1u;
+        Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline;  // null: the device refused it
+    };
+    struct RetiredPipeline {
+        Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline;
+        std::uint64_t free_from = 0u;
+    };
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> mod_post_root_;
+    bool mod_post_root_failed_ = false;
+    std::vector<ModPostPipeline> mod_post_pipelines_;
+    std::vector<RetiredPipeline> mod_post_retired_;
+    std::uint64_t mod_post_epoch_ = 0u;
+    bool ensure_mod_post_root();
+    [[nodiscard]] ID3D12PipelineState* mod_post_pipeline(const ModPostProgram& program, DXGI_FORMAT format, UINT samples);
+    void release_mod_post();
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> motion_rtv_heap_;
     D3D12_CPU_DESCRIPTOR_HANDLE motion_rtv_{};
     FrameMap motion_target_map_{};
