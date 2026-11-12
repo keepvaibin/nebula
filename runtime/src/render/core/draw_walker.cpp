@@ -1352,7 +1352,7 @@ void RenderCore::walk_opaque_end(const NebulaFramePass& pass) {
 }
 
 void RenderCore::walk_scene_end() {
-    rt_share_signal();  // signal S: the scene as the share drew it, before anything after the scene
+    rt_program_signal();  // signals S and A: the scene as the programs drew it, before anything after the scene
     rt_reactive();
     rt_light_end();
     scene_phase_ = false;

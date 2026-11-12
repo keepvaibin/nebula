@@ -36,6 +36,23 @@ namespace {
 #include "render/rt/rt_effect_lights.inc"
 #include "render/rt/rt_blue_noise.inc"
 
+// A light's colour as the game or the cooker gives it (a display value: sRGB-encoded) as linear light of the same
+// luminance (l65): the composite is linear, so the chroma decodes while the candela keeps the light's strength.
+// `decode` false (dev light_srgb=0): as given.
+void light_colour(const float in[3], float out[3], bool decode) {
+    float lin[3];
+    for (unsigned c = 0; c < 3u; ++c) {
+        const float x = std::max(in[c], 0.0f);
+        lin[c] = !decode ? x : x <= 0.04045f ? x / 12.92f : std::pow((x + 0.055f) / 1.055f, 2.4f);
+    }
+    const float before = 0.2126f * std::max(in[0], 0.0f) + 0.7152f * std::max(in[1], 0.0f) + 0.0722f * std::max(in[2], 0.0f);
+    const float after = 0.2126f * lin[0] + 0.7152f * lin[1] + 0.0722f * lin[2];
+    const float scale = decode && after > 1e-6f ? before / after : 1.0f;
+    for (unsigned c = 0; c < 3u; ++c) {
+        out[c] = lin[c] * scale;
+    }
+}
+
 // A particle effect's luminance (candela a square metre of what it draws), by the name its draws carry: the pak's row
 // (rt_effects.tsv, a mod's pack may add its effects), else the compiled table's; -1 for a name neither holds.
 float effect_luminance(std::uint32_t name) noexcept {
@@ -142,7 +159,7 @@ void RenderCore::rt_dev_read() {
                 continue;
             }
             rt_dev_[which] = value;
-            rt_dev_set_ |= 1u << which;
+            rt_dev_set_ |= std::uint64_t{1} << which;
         }
     }
     std::string taken;
@@ -356,10 +373,12 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
             const float half_metres = light.half_distance / kUnitsPerMetre;
             const float candela = light.candela > 0.0f ? light.candela : 37.5f * half_metres * half_metres;
             RtEmitter& emitter = rt_emitters_.emplace_back();
+            float linear[3];
+            light_colour(light.color, linear, rt_dev(RtDev::LightSrgb, 1.0f) > 0.5f);
             for (unsigned r = 0; r < 3u; ++r) {
                 emitter.centre[r] = eye[r * 4u] * light.position[0] + eye[r * 4u + 1u] * light.position[1] + eye[r * 4u + 2u] * light.position[2] +
                                     eye[r * 4u + 3u];
-                emitter.colour[r] = light.color[r] * std::min(candela, 5000.0f);
+                emitter.colour[r] = linear[r] * std::min(candela, 5000.0f);
             }
             // Its body's size where the game knows it (the actor's binder), else a small lamp's.
             emitter.radius = light.radius > 0.0f && std::isfinite(light.radius) ? std::clamp(light.radius, 5.0f, 400.0f) : 25.0f;
@@ -1786,7 +1805,7 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     const float ambient_gain = rt_dev(RtDev::AmbientGain, stage_row.ambient_gain);
     const float sun_gain = rt_dev(RtDev::SunGain, stage_row.sun_gain);
     key *= sun_gain;
-    rt_stage_air_ = stage_row.air > 0.0f ? stage_row.air : 0.0f;  // the light in the air's density (FB, 15.4)
+    rt_stage_air_ = stage_row.air > 0.0f ? stage_row.air * std::max(rt_dev(RtDev::AirScale, 1.0f), 0.0f) : 0.0f;  // the light in the air's density (FB, 15.4)
     ambient *= ambient_gain / kRtStageDefaults.ambient_gain;
     // The stage's ambient and key colours for the programs' painted composite (RT-MASTER-PLAN 3.4): a shadow takes
     // the sky's colour, a channel at a time, by kShadowTint. By the row's gains; an even grey where the stage names
@@ -2009,6 +2028,30 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
         // The relight takes the facing as it is (max(n.s, 0)); Painted from kFullFacing up (the light pass, g_look.z).
         if (rt_look_[0] > 0.0f) {
             constants.look[2] = rt_dev(RtDev::FullFacing, 1.0f);
+            constants.look[0] = 1.0f;  // the relight keeps all of the sky in the sun's shadow (October had no cut)
+        }
+        constants.look[0] = rt_dev(RtDev::SkyInShadow, constants.look[0]);
+        // The model's numbers once a stage (rt-inputs; FB b59's sky, sun and E from the programs' A and K).
+        if (::galaxy::diagnosing(::galaxy::kDiagnoseRtInputs) && list.stage_hash != rt_stage_logged_) {
+            rt_stage_logged_ = list.stage_hash;
+            const auto lin = [](float x) {
+                x = std::clamp(x, 0.0f, 1.0f);
+                return x <= 0.04045f ? x / 12.92f : std::pow((x + 0.055f) / 1.055f, 2.4f);
+            };
+            const auto luma = [](const float v[3]) { return 0.2126f * v[0] + 0.7152f * v[1] + 0.0722f * v[2]; };
+            float sky[3], full[3], rest[3];
+            for (unsigned c = 0; c < 3u; ++c) {
+                sky[c] = lin(rt_stage_a_[c]);
+                full[c] = std::max(lin(std::min(rt_stage_a_[c] + rt_stage_k_[c], 1.0f)), 1e-4f);
+                rest[c] = std::max(full[c] - sky[c], 0.0f);
+            }
+            const float e = luma(full) / std::max(luma(sky) + luma(rest) * rt_look_[1], 1e-4f);
+            const float strength = rt_dev(RtDev::SunStrength, 1.25f);
+            std::fprintf(stderr, "[rt-stage] %08x E %.3f sky %.3f %.3f %.3f sun %.3f %.3f %.3f up %.3f\n", list.stage_hash,
+                         static_cast<double>(e), static_cast<double>(sky[0] * e / full[0]), static_cast<double>(sky[1] * e / full[1]),
+                         static_cast<double>(sky[2] * e / full[2]), static_cast<double>(rest[0] * strength * e / full[0]),
+                         static_cast<double>(rest[1] * strength * e / full[1]), static_cast<double>(rest[2] * strength * e / full[2]),
+                         static_cast<double>(rt_look_[1]));
         }
     }
     constants.more[2] = (sunned && rt_part(render, RtPart::Sun) != 0u ? 1u : 0u) |
@@ -2204,10 +2247,10 @@ void RenderCore::rt_light() {
                 }
                 rt_light_on_ = true;
                 rt_guides_publish();
-                rt_share_walk_ = rt_share_due();
+                rt_program_signal_ = rt_program_signal_due();
                 view_flags_ |= 8u | (::galaxy::diagnosing(::galaxy::kDiagnoseRtLight | ::galaxy::kDiagnoseRtMotion) ? 16u : 0u) |
                                (rt_lamps_own_ ? 32u : 0u) |  // local lights off: the programs' own lamp (FC)
-                               (rt_share_walk_ ? 64u : 0u);  // signal S: the share in place of the colour (FC c36)
+                               rt_program_signal_;  // signals S (64) and A (128): drawn in place of the colour
                 ++walk_view_stamp_;  // the scene's views are written again, with the light
             }
         } else {
@@ -2378,7 +2421,7 @@ void RenderCore::rt_reactive() {
 void RenderCore::rt_light_end() noexcept {
     if (rt_light_on_) {
         rt_light_on_ = false;
-        view_flags_ &= ~120u;  // bits 3 to 6
+        view_flags_ &= ~248u;  // bits 3 to 7
     }
 }
 
@@ -2653,6 +2696,7 @@ void RenderCore::rt_emitter(const NebulaFrameItem& item, const core::GpuMesh& me
     constexpr std::size_t kMost = 4608u;  // past the particles' own 4096: a mesh's light is not crowded out by sparks
     float glow[4];
     live_glow(*walk_.now->list, item, mesh, glow);
+    light_colour(glow, glow, rt_dev(RtDev::LightSrgb, 1.0f) > 0.5f);  // its rgb as linear light (l65); glow[3] stays
     if (glow[3] == 0.0f) {
         return;  // the game has turned this glow off
     }
@@ -2835,9 +2879,11 @@ void RenderCore::rt_particle_emitter(const NebulaFrameItem& item, std::uint32_t 
         const float candela =
             luminance * static_cast<float>(shown / (static_cast<double>(kUnitsPerMetre) * kUnitsPerMetre)) * static_cast<float>(every);
         RtEmitter& emitter = rt_emitters_.emplace_back();
+        float linear[3];
+        light_colour(colour, linear, rt_dev(RtDev::LightSrgb, 1.0f) > 0.5f);
         for (unsigned c = 0; c < 3u; ++c) {
             emitter.centre[c] = eye[c];
-            emitter.colour[c] = colour[c] * std::min(candela, 20000.0f);
+            emitter.colour[c] = linear[c] * std::min(candela, 20000.0f);
         }
         emitter.radius = std::clamp(static_cast<float>(std::sqrt(shown / 3.14159265358979)), 10.0f, 400.0f);
         emitter.reach = 0.0f;

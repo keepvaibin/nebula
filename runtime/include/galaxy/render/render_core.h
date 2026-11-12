@@ -424,8 +424,10 @@ private:
     void rt_light();
     void rt_light_end() noexcept;
     void rt_dev_read();                         // rt_dev.h: the run's tunables, as ray tracing starts
-    [[nodiscard]] bool rt_share_due() const noexcept;  // this walk of a hold shows the share (signal S)
-    void rt_share_signal();                     // at the scene's end: the share read back (signal S)
+    // Signals S and A (rt_bounce.cpp): the view flag (64 the share, 128 the air's light) this walk of a hold draws
+    // with, 0 none; and at the scene's end the scene read back.
+    [[nodiscard]] std::uint32_t rt_program_signal_due() const noexcept;
+    void rt_program_signal();
     void rt_reactive();  // the reactive mask where the added light changed (plan 16.4)
     bool rt_physical_ = false;   // the relight (DIRECTOR.md D1; the setting's "physical"): rt_look_'s kForm and gains
     bool rt_lamps_own_ = false;  // local lights off (plan 19.1): the programs light by their own lamp (view_flags bit 32)
@@ -540,8 +542,9 @@ private:
     float rt_look_[4]{0.0f, 1.0f, 0.0f, 1.0f};
     // The development tunables (rt_dev.h, l63): the values a run gave, a bit each in rt_dev_set_.
     float rt_dev_[kRtDevCount]{};
-    std::uint32_t rt_dev_set_ = 0u;
-    bool rt_share_walk_ = false;  // this walk's scene shows the share (view_flags bit 64; signal S)
+    std::uint64_t rt_dev_set_ = 0u;
+    std::uint32_t rt_program_signal_ = 0u;  // this walk's scene shows a signal: view_flags 64 (S) or 128 (A)
+    std::uint32_t rt_stage_logged_ = 0u;    // the stage whose [rt-stage] line was written (rt-inputs)
     [[nodiscard]] float rt_dev(RtDev which, float otherwise) const noexcept {
         const unsigned i = static_cast<unsigned>(which);
         return (rt_dev_set_ >> i & 1u) != 0u ? rt_dev_[i] : otherwise;

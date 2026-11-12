@@ -44,7 +44,7 @@ constexpr std::uint32_t kRefMostSamples = 4096u;
 // The walks a kept picture is held for (the same list walked again): enough for 1,024 samples of the reference, and
 // for the real-time filters to settle when only the signals are taken.
 constexpr unsigned kRefHoldWalks = 256u;
-constexpr unsigned kSignalHoldWalks = 60u;  // the signals from 25 walks in, the kept picture 35 walks after S (l63)
+constexpr unsigned kSignalHoldWalks = 60u;  // the signals from 20 walks in (A, l65), the kept picture 35 walks after S
 // The dome's mean (11.1) is measured over the first walks of a hold, then kept while the reference adds up.
 constexpr unsigned kDomeWalks = 16u;
 
@@ -56,7 +56,7 @@ struct BouncePassConstants {
 
 // The signals a kept picture is given (the plan's 2.2 names): which signal, its channels (0 r, 1 rgb, 2 a), and 1
 // when it goes over 1 (written as x / (1 + x)).
-enum class SignalOf : std::uint8_t { Light, Added, Mirror, Indirect, LightsSpec, Share };
+enum class SignalOf : std::uint8_t { Light, Added, Mirror, Indirect, LightsSpec, Share, Air };
 struct Signal {
     const char* name;
     SignalOf of;
@@ -68,7 +68,8 @@ constexpr Signal kSignals[] = {{"V", SignalOf::Light, 0u, 0u},
                                {"R", SignalOf::Mirror, 1u, 1u},
                                {"I", SignalOf::Indirect, 1u, 1u},
                                {"H", SignalOf::LightsSpec, 1u, 1u},  // the local lights' highlight alone (l63)
-                               {"S", SignalOf::Share, 1u, 1u}};      // the programs' share (rt_share_signal; l63)
+                               {"S", SignalOf::Share, 1u, 1u},       // the programs' share (rt_program_signal; l63)
+                               {"A", SignalOf::Air, 1u, 1u}};        // the air's own light (rt_program_signal; l65)
 constexpr unsigned kSignalApart = 5u;  // walks between two signals (a readback is one at a time)
 
 }  // namespace
@@ -511,7 +512,8 @@ void RenderCore::rt_signals() {
     case SignalOf::Added: source = rt_image(RtImage::Added); break;
     case SignalOf::Mirror: source = rt_image(RtImage::Mirror); break;
     case SignalOf::LightsSpec: source = rt_image(RtImage::LightsSpec); break;
-    case SignalOf::Share: return;  // the programs draw it (rt_share_signal)
+    case SignalOf::Share:
+    case SignalOf::Air: return;  // the programs draw them (rt_program_signal)
     case SignalOf::Indirect:
         // The reference's mean, or the preset's own (the sky and bounce light pass, when it runs).
         if (rt_fb_reference()) {
@@ -559,25 +561,30 @@ void RenderCore::rt_signals() {
     }
 }
 
-// Signal S, the share traced_painted gives (program.hlsli traced_colour, view_flags bit 64; FC c36): its walk of the
-// hold draws the scene with the share in place of the colour, read back at the scene's end (walk_scene_end), before
-// anything drawn after the scene. The scene's later walks draw as ever; the kept picture is 35 walks on.
-bool RenderCore::rt_share_due() const noexcept {
+// Signals the programs draw: S, the share traced_painted gives (program.hlsli traced_colour, view_flags 64; FC c36),
+// and A, the air's own light (traced_scatter, view_flags 128; l65). Its walk of the hold draws the scene with the
+// signal in place of the colour, read back at the scene's end (walk_scene_end), before anything drawn after the
+// scene. The scene's later walks draw as ever; the kept picture is 35 walks or more on.
+std::uint32_t RenderCore::rt_program_signal_due() const noexcept {
     if (!::galaxy::diagnosing(::galaxy::kDiagnoseRtSignals) || rt_hold_left_ == 0u || rt_hold_left_ % kSignalApart != 0u) {
-        return false;
+        return 0u;
     }
     const unsigned which = rt_hold_left_ / kSignalApart - 1u;
-    return which < std::size(kSignals) && kSignals[which].of == SignalOf::Share;
+    if (which >= std::size(kSignals)) {
+        return 0u;
+    }
+    return kSignals[which].of == SignalOf::Share ? 64u : kSignals[which].of == SignalOf::Air ? 128u : 0u;
 }
 
-void RenderCore::rt_share_signal() {
-    if (!rt_share_walk_) {
+void RenderCore::rt_program_signal() {
+    if (rt_program_signal_ == 0u) {
         return;
     }
-    rt_share_walk_ = false;
-    renderer_.set_debug_capture_paths(rt_hold_folder_ + "signal_S_" + rt_hold_number_ + ".ppm", {});
+    const char* const name = rt_program_signal_ == 64u ? "S" : "A";
+    rt_program_signal_ = 0u;
+    renderer_.set_debug_capture_paths(rt_hold_folder_ + "signal_" + name + "_" + rt_hold_number_ + ".ppm", {});
     if (!renderer_.debug_copy_scene_to_readback()) {
-        std::fprintf(stderr, "[rt-signals] S of picture %s not taken (the scene's colour cannot be read now)\n",
+        std::fprintf(stderr, "[rt-signals] %s of picture %s not taken (the scene's colour cannot be read now)\n", name,
                      rt_hold_number_.c_str());
     }
     renderer_.set_debug_capture_paths({}, {});

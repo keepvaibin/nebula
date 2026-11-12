@@ -34,6 +34,9 @@ enum class RtDev : std::uint8_t {
     HitDark,        // kHitDark
     SunGlint,       // kSunGlint
     HitGain,        // 1: a hit's surfaces met against their running mean (1 / mean where over 1; b46), 0 held at 1 (b51)
+    AirScale,       // the stage row's air (rt_stages.tsv air) times this
+    SkyInShadow,    // g_look.x: what the sun's shadow keeps of the sky's light (1 under the relight, 0.5 Painted)
+    LightSrgb,      // 1: the lights' colours (display values) taken as linear light of the same luminance; 0 as given
     // The programs' (program.hlsli view_dev): from BaseFloor.
     BaseFloor,      // traced_colour's kBaseFloor: a lit program's colour over at most 1 / this
     SunStrength,    // traced_painted: the relight's sun over the stage's key (M2, October's 1.25)
@@ -51,7 +54,7 @@ enum class RtDev : std::uint8_t {
     Count,
 };
 inline constexpr unsigned kRtDevCount = static_cast<unsigned>(RtDev::Count);
-static_assert(kRtDevCount <= 32u, "one bit a tunable");
+static_assert(kRtDevCount <= 64u, "one bit a tunable (RenderCore::rt_dev_set_)");
 inline constexpr unsigned kRtDevProgramFirst = static_cast<unsigned>(RtDev::BaseFloor);
 inline constexpr unsigned kRtDevTracerFirst = static_cast<unsigned>(RtDev::GlassShine);
 inline constexpr unsigned kRtDevProgramSlots = kRtDevTracerFirst - kRtDevProgramFirst;  // view_dev[0]: 4 at most
@@ -62,9 +65,9 @@ inline constexpr std::string_view kRtDevNames[kRtDevCount] = {
     "rate",           "form",          "art_facing",     "debake",        "ambient_look",  "shadow_tint",
     "ambient_gain",   "sun_gain",      "full_facing",    "bounce_ambient", "wrap",         "sky_gain",
     "area_emission",  "hit_sky",       "bounce",         "bounce_max",    "sky_min",       "hit_dark",
-    "sun_glint",      "hit_gain",      "base_floor",     "sun_strength",  "sky_chroma",    "glass_shine",
-    "water_shine",    "painted_glass",
-    "painted_metal",  "painted_gloss", "painted_mirror", "substitute_glass", "keep_metal", "keep_gloss",
+    "sun_glint",      "hit_gain",      "air_scale",      "sky_in_shadow", "light_srgb",    "base_floor",
+    "sun_strength",   "sky_chroma",    "glass_shine",    "water_shine",   "painted_glass", "painted_metal",
+    "painted_gloss",  "painted_mirror", "substitute_glass", "keep_metal", "keep_gloss",
 };
 
 }  // namespace galaxy::render

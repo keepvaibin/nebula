@@ -444,8 +444,9 @@ float4 traced_air(float4 c, float4 pixel) {
 // air, and takes none of the traced (FB b56).
 static bool g_fog_step = false;
 float4 traced_scatter(float4 c, float4 pixel) {
+    const bool alone = (view_flags & 128u) != 0u;  // signal A: the air's own light alone, x / (1 + x) (FA l65)
     if ((draw_flags & 8u) == 0u || (view_flags & 8u) == 0u || view_volume[2].w == 0.0 || (view_flags & 16u) != 0u || g_fog_step) {
-        return c;
+        return alone ? float4(0.0, 0.0, 0.0, c.a) : c;
     }
     const float4 d = view_volume[0];
     const float away = d.y / ((pixel.z - d.z) / max(d.w - d.z, 1e-7) + d.x);
@@ -453,6 +454,9 @@ float4 traced_scatter(float4 c, float4 pixel) {
     const float3 at = float3((pixel.xy - view_volume[1].xy) / view_volume[1].zw, log(max(away, 1.0) / 50.0) / log(400.0));
     const float3 inner = clamp(at, 0.5 / cells, 1.0 - 0.5 / cells);
     const float4 air = gVolumes[uint(view_volume[2].w) - 1u].SampleLevel(gSamplers[uint(view_volume[2].y)], inner, 0.0);
+    if (alone) {
+        return float4(air.rgb / (1.0 + air.rgb), c.a);
+    }
     return float4(c.rgb * air.a + air.rgb, c.a);  // what the air lets through of the colour, and its own light (FB)
 }
 #if NATIVE_PREPASS
