@@ -50,7 +50,7 @@ kinopiogoodslight	1.0 0.95 0.80	400
 # c91 (EVERYTHING 5.4): the Observatory core by luminance (a value below 0: candela a square metre), so its
 # light follows its growth (root joint 0.508 to 3.0); 265 gives the full-grown core 30000 cd. Its nova
 # and glow sheets are its halo: no light of their own.
-astrocore/coremat	1.0 0.80 0.50	-265
+astrocore/coremat	1.0 0.80 0.50	-37.5
 astrocore/novamat_v_x	own	0
 astrocore/glowmat	own	0
 fireball	1.0 0.50 0.15	500
@@ -109,6 +109,110 @@ class:lamp	own	250
 class:star	own	200
 class:glow	own	150
 class:crystal	own	40
+# c106 (the energy audit, coord/census/light_energy.tsv): the lights that flooded what is near them, each at rho x D 0.35
+# at 3 m from its surface at its stage's low exposure (tools/fc_light_energy.py); 2 rows of the same name replaced in place above.
+# meteorstrike/lava_m_v: rho D at 3 m 2.18 -> 0.35 at 40 lux
+meteorstrike/lava_m_v	1.0 0.50 0.15	643
+# koopafire/fire: rho D at 3 m 1.95 -> 0.35 at 40 lux
+koopafire/fire	1.0 0.50 0.15	539
+# meteorstrike/rock_m_v: rho D at 3 m 1.88 -> 0.35 at 40 lux
+meteorstrike/rock_m_v	1.0 0.50 0.15	743
+# asteroidblockplanet/Lava_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+asteroidblockplanet/lava_v	own	-7.2
+# bossplanetr50/yougan: rho D at 3 m 1.54 -> 0.35 at 40 lux
+bossplanetr50/yougan	own	-7.2
+# dinopackunbattlelv2planet/Lava_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+dinopackunbattlelv2planet/lava_v	own	-7.2
+# dinopackunflame/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+dinopackunflame/lavamat_v	own	-7.2
+# exterminatemerameraplanet/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+exterminatemerameraplanet/lavamat_v	own	-7.2
+# floaterotakingplanet/Lava00_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+floaterotakingplanet/lava00_v	own	-7.2
+# heavensdoorinsideplanetpartsa/SunMat: rho D at 3 m 1.54 -> 0.35 at 40 lux
+heavensdoorinsideplanetpartsa/sunmat	own	-7.2
+# hellballrotatepartsa/lava_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+hellballrotatepartsa/lava_v	own	-7.2
+# hellballrotatepartsb/lava_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+hellballrotatepartsb/lava_v	own	-7.2
+# hellballrotatepartsc/lava_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+hellballrotatepartsc/lava_v	own	-7.2
+# hellballrotatepartsd/lava_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+hellballrotatepartsd/lava_v	own	-7.2
+# hellballrotatepartse/lava_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+hellballrotatepartse/lava_v	own	-7.2
+# hellballrotatepartsf/lava_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+hellballrotatepartsf/lava_v	own	-7.2
+# hellballrotatepartsg/lava_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+hellballrotatepartsg/lava_v	own	-7.2
+# iceringfireplanet/Lava_01_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+iceringfireplanet/lava_01_v	own	-7.2
+# koopabattlemapplanet/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 150 lux
+koopabattlemapplanet/lavamat_v	own	-27.2
+# koopabattlemapplanetvs2/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+koopabattlemapplanetvs2/lavamat_v	own	-7.2
+# koopabattlemapplanetvs3lv3/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+koopabattlemapplanetvs3lv3/lavamat_v	own	-7.2
+# koopabattlesunplanet/SunMat: rho D at 3 m 1.54 -> 0.35 at 150 lux
+koopabattlesunplanet/sunmat	own	-27.2
+# koopavs3cylinderinsideplanetlow/magma_lod_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+koopavs3cylinderinsideplanetlow/magma_lod_v	own	-7.2
+# koopavs3dryiceplanet/SunMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+koopavs3dryiceplanet/sunmat_v	own	-7.2
+# koopavs3holesuninsideplanet/SunMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+koopavs3holesuninsideplanet/sunmat_v	own	-7.2
+# koopavs3holesunplanet/SunMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+koopavs3holesunplanet/sunmat_v	own	-7.2
+# koopavs3rotatestepd/lava00_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+koopavs3rotatestepd/lava00_v	own	-7.2
+# lavaballrisingplanetlava/Lava_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavaballrisingplanetlava/lava_v	own	-7.2
+# lavadomedplanet/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavadomedplanet/lavamat_v	own	-7.2
+# lavadomedplanetlow/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavadomedplanetlow/lavamat_v	own	-7.2
+# lavadomedplanetmiddle/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavadomedplanetmiddle/lavamat_v	own	-7.2
+# lavahomeplanet/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavahomeplanet/lavamat_v	own	-7.2
+# lavahomeplanetlow/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavahomeplanetlow/lavamat_v	own	-7.2
+# lavahomevolcanoflow/LavaMat: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavahomevolcanoflow/lavamat	own	-7.2
+# lavahomevolcanoinnerflow/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavahomevolcanoinnerflow/lavamat_v	own	-7.2
+# lavajshapeplanet/Lava2_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavajshapeplanet/lava2_v	own	-7.2
+# lavajshapeplanetlow/Lava2_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavajshapeplanetlow/lava2_v	own	-7.2
+# lavameteoplanet/lava_m_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavameteoplanet/lava_m_v	own	-7.2
+# lavameteoplanetlow/lava_m_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavameteoplanetlow/lava_m_v	own	-7.2
+# lavameteoplanetmiddle/lava_m_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavameteoplanetmiddle/lava_m_v	own	-7.2
+# lavarotateplanet/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavarotateplanet/lavamat_v	own	-7.2
+# lavarotateplanetlow/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavarotateplanetlow/lavamat_v	own	-7.2
+# lavarotateplanetmiddle/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavarotateplanetmiddle/lavamat_v	own	-7.2
+# lavarotatestepsplanet/Lava1_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavarotatestepsplanet/lava1_v	own	-7.2
+# reversegravityroomplanet/Magma_side_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+reversegravityroomplanet/magma_side_v	own	-7.2
+# reversegravityroomplanet/Magma_top_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+reversegravityroomplanet/magma_top_v	own	-7.2
+# koopafire/fire_v_x: rho D at 3 m 1.16 -> 0.35 at 40 lux
+koopafire/fire_v_x	1.0 0.50 0.15	903
+# koopaplatedamage/LavaMat_v: rho D at 3 m 1.13 -> 0.35 at 40 lux
+koopaplatedamage/lavamat_v	own	-9.8
+# electricball/LightMat: rho D at 3 m 0.70 -> 0.35 at 40 lux
+electricball/lightmat	0.60 0.80 1.0	399
+# electricball/EnvMapMat: rho D at 3 m 0.64 -> 0.35 at 40 lux
+electricball/envmapmat	0.60 0.80 1.0	439
+# bosskameckfireball/lambert1: rho D at 3 m 0.60 -> 0.35 at 40 lux
+bosskameckfireball/lambert1	1.0 0.45 0.20	463
 # The director's rows (11-12, coord/rows/director_glow_rows.tsv): glowing models that had none.
 rosetta	own	250
 rosettalow	own	250
@@ -121,7 +225,7 @@ lavaprominencetriple	own	600
 otakingmagma	1.0 0.45 0.10	1500
 koopashockwave	own	1200
 teresamansionglaringlightb	own	400
-tripodbosscore/core_v	own	2000
+tripodbosscore/core_v	own	479
 tripodbosscore/eyelight_v_x	own	400
 whiteroom	own	1500
 jumpbeamerbeam/beam	own	600

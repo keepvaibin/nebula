@@ -478,6 +478,8 @@ pub fn sheen_roles(ir: &ModelIr, stem: &str) -> Vec<SheenRole> {
         return roles;
     }
     let key = |p: [f32; 3]| [(p[0] * 4.0).round() as i32, (p[1] * 4.0).round() as i32, (p[2] * 4.0).round() as i32];
+    // c106b: an overlay the game adds (blend 1, destination one) is light on a surface, never a body.
+    let added = |b: usize| ir.materials[b].blend_type == 1 && ir.materials[b].blend_dst == 1;
     let mut places: Vec<std::collections::HashSet<[i32; 3]>> = vec![std::collections::HashSet::new(); n];
     // c59: each material's corners once, for a sheen drawn as a shell off its body.
     let mut points: Vec<Vec<[f32; 3]>> = vec![Vec::new(); n];
@@ -497,7 +499,7 @@ pub fn sheen_roles(ir: &ModelIr, stem: &str) -> Vec<SheenRole> {
         let own = &places[s];
         let mut best: Option<(usize, f32)> = None;
         if !own.is_empty() {
-            for b in (0..n).filter(|b| !sheens.contains(b)) {
+            for b in (0..n).filter(|b| !sheens.contains(b) && !added(*b)) {
                 let shared = own.iter().filter(|p| places[b].contains(*p)).count() as f32 / own.len() as f32;
                 if shared >= 0.8 && best.map_or(true, |(_, most)| shared > most) {
                     best = Some((b, shared));
@@ -520,7 +522,7 @@ pub fn sheen_roles(ir: &ModelIr, stem: &str) -> Vec<SheenRole> {
             // Of the bodies near enough, the one nearest the sheen's size (a shell is its body's size; a base it sits
             // on is larger): the least |ln(its diagonal / the sheen's)|.
             let mut misfit = f32::MAX;
-            for b in (0..n).filter(|b| !sheens.contains(b) && !points[*b].is_empty()) {
+            for b in (0..n).filter(|b| !sheens.contains(b) && !added(*b) && !points[*b].is_empty()) {
                 let (mut blo, mut bhi) = ([f32::MAX; 3], [f32::MIN; 3]);
                 for q in &points[b] {
                     for k in 0..3 {
@@ -698,7 +700,8 @@ pub fn glow_with_rule(stem: &str, material: &str, r: &Reading) -> ([f32; 4], u8)
             return NONE;
         }
         let c = if parts.len() == 3 { [parts[0], parts[1], parts[2]] } else { own() };
-        return ([c[0], c[1], c[2], strength], GLOW_ROW);
+        // c106: a row of lava or a sun (its strength set by the energy audit) keeps the name rule: still a hot body.
+        return ([c[0], c[1], c[2], strength], if lava_or_sun(&stem, &name) { GLOW_NAME } else { GLOW_ROW });
     }
     // c83 (3.5): a far twin's material glows as its near model's of the same name.
     if let Some((near_stem, near_name, near)) = twin_of(&stem, material, true) {
@@ -2038,7 +2041,8 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
             let warm = luminance(mean) > 0.5 && mean[0] > 2.0 * mean[2];
             let clear = matches!(r.class, Class::Water | Class::Glass | Class::Translucent);
             let looks = !taken && !s.lit && s.blend == 0 && !clear && (warm || s.animated_coords);
-            if taken || looks {
+            // c105: every light too (the energy audit reads its size).
+            if taken || looks || glow[3] != 0.0 {
                 let (mut lo, mut hi) = ([f32::MAX; 3], [f32::MIN; 3]);
                 for shape in ir.shapes.iter().filter(|shape| shape.material as usize == i) {
                     for k in 0..3 {
@@ -2048,7 +2052,7 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
                 }
                 let size = if lo[0] <= hi[0] { [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]] } else { [0.0; 3] };
                 let wide = size.iter().filter(|&&v| v > 600.0).count() >= 2;
-                let why = if taken { "taken" } else if warm { "looks like it: bright, warm" } else { "looks like it: moving texture" };
+                let why = if taken { "taken" } else if !looks { "a light" } else if warm { "looks like it: bright, warm" } else { "looks like it: moving texture" };
                 writeln!(
                     by_rule,
                     "{why}\t{name}\t{}\t{}\t{}\t{}\t{}\t{}\t{:.2}\t{:.1} x {:.1} x {:.1} m\t{}\t{}",
@@ -2211,7 +2215,8 @@ mod tests {
         assert_eq!(coil.class, Class::Metal);
         assert_eq!(METAL_KINDS[coil.metal_kind as usize - 1].0, "iron");
         let r = read(&painted());
-        assert_eq!(glow_of("astrocore", "CoreMat", &r)[3], -265.0);
+        // c106: the core's luminance as the energy audit sets it (a reviewed luminance, below zero).
+        assert!(glow_of("astrocore", "CoreMat", &r)[3] < 0.0);
         assert_eq!(glow_of("astrocore", "NovaMat_v_x", &r)[3], 0.0);
         assert_eq!(glow_of("astrocore", "GlowMat", &r)[3], 0.0);
         assert_eq!(glow_of("invinciblemario", "Body1_v", &r)[3], 300.0);
@@ -2349,15 +2354,18 @@ mod tests {
         assert_eq!(glow_with_rule("testmodel", "LaserBeam_v", &r).0[3], -600.0);
         assert_eq!(glow_with_rule("vrsky", "CableMat_v", &r).1, GLOW_NONE);
         assert_eq!(glow_with_rule("testmodelbloom", "CableMat_v", &r).1, GLOW_NONE);
-        assert_eq!(glow_with_rule("lavahomeplanet", "lavamat_v", &r), ([1.0, 1.0, 1.0, -300.0], GLOW_NAME));
+        assert_eq!(glow_with_rule("lavatestplanet", "lavamat_v", &r), ([1.0, 1.0, 1.0, -300.0], GLOW_NAME));
+        // c106: a row of lava (the energy audit's) sets its strength and keeps the name rule.
+        let row = glow_with_rule("lavahomeplanet", "lavamat_v", &r);
+        assert!(row.1 == GLOW_NAME && row.0[3] < 0.0 && row.0[3] > -300.0, "{row:?}");
         // c99: the colour it shows with its own map (a red-orange map under a yellow-green register), not the register's.
         let mut lava = r.clone();
         lava.base = [0.55, 1.0, 0.02];
         lava.shown = Some([0.5, 0.25, 0.0]);
-        assert_eq!(glow_with_rule("lavahomeplanet", "lavamat_v", &lava), ([1.0, 0.5, 0.0, -300.0], GLOW_NAME));
+        assert_eq!(glow_with_rule("lavatestplanet", "lavamat_v", &lava), ([1.0, 0.5, 0.0, -300.0], GLOW_NAME));
         // A material showing almost nothing at the cook keeps the colour it had.
         lava.shown = Some([0.01, 0.0, 0.0]);
-        assert_eq!(glow_with_rule("lavahomeplanet", "lavamat_v", &lava).0[1], 1.0);
+        assert_eq!(glow_with_rule("lavatestplanet", "lavamat_v", &lava).0[1], 1.0);
         let mut dark = m.clone();
         dark.material_color = [[0, 0, 0, 255]; 2];
         let d = read(&dark);
