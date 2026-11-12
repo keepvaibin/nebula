@@ -178,9 +178,36 @@ namespace luma {
                 return rEntry.count < LUMA_MODLOG_ARGS ? rEntry.count : LUMA_MODLOG_ARGS;
             }
 
+            u32 fill(char16_t* pDst, const char16_t* pTemplate, const LumaModLogEntry& rEntry, bool english, u32 depth);
+
+            // A value "R:<row>" (luma_modlog.h `row`): that row's words in the same language, its {names} filled from the
+            // same entry, one level deep (a row inside it stays as its value). At pDst + at when pDst is not null; the
+            // units, or ~0u when the value is not such a row.
+            u32 putRow(char16_t* pDst, u32 at, const char* pValue, const LumaModLogEntry& rEntry, bool english, u32 depth) {
+                if (depth != 0 || pValue[0] != 'R' || pValue[1] != ':' || !NebulaText::has(pValue + 2)) {
+                    return ~0u;
+                }
+                const char* const pRow = pValue + 2;
+                const char16_t* pTemplate = english ? NebulaText::english(pRow) : nullptr;
+                char16_t* pPlayed = nullptr;
+                if (pTemplate == nullptr) {
+                    const s32 length = NebulaText::length(pRow);
+                    pPlayed = static_cast< char16_t* >(::malloc((length + 1) * sizeof(char16_t)));
+                    if (pPlayed == nullptr) {
+                        NEBULA_PANIC("LumaCore: no memory for %s's mod-log line %u", rEntry.mod, rEntry.code);
+                    }
+                    NebulaText::get(pPlayed, length + 1, pRow);
+                    pTemplate = pPlayed;
+                }
+                const u32 units = fill(pDst != nullptr ? pDst + at : nullptr, pTemplate, rEntry, english, depth + 1);
+                ::free(pPlayed);
+                return units;
+            }
+
             // The row's words with {mod} and the entry's {names} filled; a {name} the entry does not give stays as it is
-            // (loader D3-1: visible, never blank). Into pDst when it is not null; the units, without a terminator.
-            u32 fill(char16_t* pDst, const char16_t* pTemplate, const LumaModLogEntry& rEntry) {
+            // (loader D3-1: visible, never blank). `english`: the row is the English one (a value "R:<row>" follows it).
+            // Into pDst when it is not null; the units, without a terminator.
+            u32 fill(char16_t* pDst, const char16_t* pTemplate, const LumaModLogEntry& rEntry, bool english, u32 depth) {
                 u32 at = 0;
                 const u32 count = argCount(rEntry);
                 for (const char16_t* pAt = pTemplate; *pAt != 0;) {
@@ -204,7 +231,8 @@ namespace luma {
                                 }
                             }
                             if (pValue != nullptr) {
-                                at += put8Units(pDst, at, pValue);
+                                const u32 rowUnits = putRow(pDst, at, pValue, rEntry, english, depth);
+                                at += rowUnits != ~0u ? rowUnits : put8Units(pDst, at, pValue);
                                 pAt = pEnd + 1;
                                 continue;
                             }
@@ -318,6 +346,10 @@ namespace luma {
                 return rEntry.size >= offsetof(LumaModLogEntry, host) + sizeof(const char*) ? rEntry.host : nullptr;
             }
 
+            const char* rowOf(const LumaModLogEntry& rEntry) {
+                return rEntry.size >= offsetof(LumaModLogEntry, row) + sizeof(const char*) ? rEntry.row : nullptr;
+            }
+
             void wordsOf(const LumaModLogEntry& rEntry, const char* pRowId, bool own, Words* pWords) {
                 pWords->played = nullptr;
                 pWords->english = nullptr;
@@ -353,7 +385,10 @@ namespace luma {
                     return;
                 }
                 // The module's own sources, and the log's own lines (code 0) whatever their source, by their row.
-                const bool fromRow = pRowId != nullptr && (rEntry.source >= LUMA_MODLOG_CODE || own) && NebulaText::has(pRowId);
+                // A row the host gave (luma_modlog.h `row`) is used whatever the source.
+                const bool given = pRowId != nullptr && pRowId == rowOf(rEntry);
+                const bool fromRow =
+                    pRowId != nullptr && (rEntry.source >= LUMA_MODLOG_CODE || own || given) && NebulaText::has(pRowId);
                 if (fromRow) {
                     const s32 length = NebulaText::length(pRowId);
                     char16_t* const pTemplate = static_cast< char16_t* >(::malloc((length + 1) * sizeof(char16_t)));
@@ -361,18 +396,18 @@ namespace luma {
                         NEBULA_PANIC("LumaCore: no memory for %s's mod-log line %u", rEntry.mod, rEntry.code);
                     }
                     NebulaText::get(pTemplate, length + 1, pRowId);
-                    pWords->playedUnits = fill(nullptr, pTemplate, rEntry);
+                    pWords->playedUnits = fill(nullptr, pTemplate, rEntry, false, 0);
                     pWords->played = static_cast< char16_t* >(::malloc((pWords->playedUnits + 1) * sizeof(char16_t)));
                     const char16_t* const pEnglishTemplate = NebulaText::english(pRowId);
                     const char16_t* const pUse = pEnglishTemplate != nullptr ? pEnglishTemplate : pTemplate;
-                    const u32 englishUnits = fill(nullptr, pUse, rEntry);
+                    const u32 englishUnits = fill(nullptr, pUse, rEntry, pEnglishTemplate != nullptr, 0);
                     char16_t* const pEnglish16 = static_cast< char16_t* >(::malloc((englishUnits + 1) * sizeof(char16_t)));
                     if (pWords->played == nullptr || pEnglish16 == nullptr) {
                         NEBULA_PANIC("LumaCore: no memory for %s's mod-log line %u", rEntry.mod, rEntry.code);
                     }
-                    fill(pWords->played, pTemplate, rEntry);
+                    fill(pWords->played, pTemplate, rEntry, false, 0);
                     pWords->played[pWords->playedUnits] = 0;
-                    fill(pEnglish16, pUse, rEntry);
+                    fill(pEnglish16, pUse, rEntry, pEnglishTemplate != nullptr, 0);
                     pWords->englishBytes = utf8Length(pEnglish16, englishUnits);
                     pWords->english = static_cast< char* >(::malloc(pWords->englishBytes + 1));
                     if (pWords->english == nullptr) {
@@ -931,12 +966,12 @@ namespace luma {
             values.names[0] = "count";
             values.values[0] = number;
             values.count = 1;
-            const u32 units = fill(nullptr, pTemplate, values);
+            const u32 units = fill(nullptr, pTemplate, values, false, 0);
             char16_t* const pText = static_cast< char16_t* >(::malloc((units + 1) * sizeof(char16_t)));
             if (pText == nullptr) {
                 NEBULA_PANIC("LumaCore: no memory for the mod log's row %s", pRow);
             }
-            fill(pText, pTemplate, values);
+            fill(pText, pTemplate, values, false, 0);
             pText[units] = 0;
             toUtf8(pDst, size, pText);
             ::free(pText);
@@ -956,7 +991,8 @@ NEBULA_GAME_API void luma_modlog_add(const LumaModLogEntry* entry) {
         nebula_log("LumaCore: luma_modlog_add(null) (a bug in its caller)\n");
         return;
     }
-    luma::modlog::add(*entry, nullptr);
+    // The host's own row for the words, when it gives one (luma_modlog.h `row`).
+    luma::modlog::add(*entry, entry->size >= offsetof(LumaModLogEntry, row) + sizeof(const char*) ? entry->row : nullptr);
 }
 
 NEBULA_GAME_API const void* luma_modlog_next(const void* after, LumaModLogView* view) {

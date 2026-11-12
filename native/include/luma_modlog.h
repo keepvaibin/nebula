@@ -53,6 +53,10 @@ typedef struct LumaModLogEntry {
     const char* host;    /* a host sentence (English capitals, as the Mods page's: "ITS CODE DID NOT START"), used when
                             text is null: the words are its translation as the settings menu translates host text, and
                             english is the sentence as given. Read only when size covers it; null: none */
+    const char* row;     /* a row of the module's text table ("Start.PartMissing") for the words, used when text
+                            and host are null: {mod} and the row's {names} filled from names/values, both languages
+                            from the row; a value written "R:<row>" is that row's words in the same language, its own
+                            {names} filled from the same entry. Read only when size covers it; null: none */
 } LumaModLogEntry;
 
 /* The smallest `size` the log reads: every field up to and including `english`. */

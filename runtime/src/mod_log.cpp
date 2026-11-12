@@ -16,6 +16,8 @@
 namespace galaxy::modlog {
 namespace {
 
+static_assert(kSourceCook == LUMA_MODLOG_COOK, "mod_log.h's kSourceCook is luma_modlog.h's");
+
 std::atomic<LumaModLogAdd> g_add{nullptr};
 // The page's reads (luma_modlog.h), found with g_add.
 std::atomic<LumaModLogNext> g_next{nullptr};
@@ -90,6 +92,31 @@ void add_finding(std::uint32_t source, std::uint32_t level, std::string_view mod
     // Without the validator's words the log renders the code and values itself and says once why (ModLog.NoText).
     entry.text = played.worded ? played.text.c_str() : nullptr;
     entry.english = played.worded && english.worded ? english.text.c_str() : nullptr;
+    add(entry);
+}
+
+void add_row(std::uint32_t source, std::uint32_t level, std::string_view mod, std::uint32_t code, std::string_view file,
+             std::string_view row, const std::vector<std::pair<std::string, std::string>>& values) {
+    if (g_add.load(std::memory_order_acquire) == nullptr) return;
+    const std::string mod_id(mod);
+    const std::string place(file);
+    const std::string row_id(row);
+    LumaModLogEntry entry{};
+    entry.size = sizeof(entry);
+    entry.source = source;
+    entry.level = level;
+    entry.code = code;
+    entry.mod = mod_id.c_str();
+    entry.file = place.c_str();
+    for (const auto& [name, value] : values) {
+        if (entry.count == LUMA_MODLOG_ARGS) {
+            entry.count++;  // the log says once that the rest are not shown (ModLog.ArgsCut)
+            break;
+        }
+        entry.names[entry.count] = name.c_str();
+        entry.values[entry.count++] = value.c_str();
+    }
+    entry.row = row_id.c_str();
     add(entry);
 }
 

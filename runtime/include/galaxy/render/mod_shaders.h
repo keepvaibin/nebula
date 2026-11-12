@@ -38,6 +38,11 @@ ModShaderBuild build_missing_mod_shaders(const std::filesystem::path& sources, c
 // Vulkan: a pixel program is also built in its bound-table form (program.hlsli NEBULA_BOUND_TABLES), for a device without
 // descriptor indexing, stored at the variant + kProgramBoundOffset. The cooking machine need not be the one that plays.
 [[nodiscard]] bool mod_shader_has_bound_form() noexcept;
+// Whether the compiler compile_mod_shader_stage uses is here and runs (contract start-check, section 2): "" when it is,
+// else what is missing, in English for the developer's log. Direct3D 12: Microsoft's dxc beside the game, its version run
+// once per install of it (the files' sizes and times kept in `cache_folder`); Vulkan: its front end is linked in, always
+// ""; Metal: "" (a mod's own programs are refused one by one there, not every mod).
+[[nodiscard]] std::string mod_shader_compiler_missing(const std::filesystem::path& cache_folder);
 // One stage of a program for this build's graphics interface; empty, with the reason, when it can't be. `bound_tables`: the
 // bound-table form (only where mod_shader_has_bound_form).
 std::vector<std::uint8_t> compile_mod_shader_stage(const std::string& source, const std::filesystem::path& includes, bool pixel,

@@ -2705,6 +2705,17 @@ std::vector<SettingsRow> mods_page(const RenderConfig&) {
     s_mod_options.clear();
     s_mod_about.reset();
     s_mod_remove_ask.clear();
+    // A part of the game that mods need was missing at this start (contract start-check 2): the log's line for it on
+    // top, as the notice said it. Nebula's own lines are under the mod "nebula"; the entries are read only then.
+    const std::vector<galaxy::modlog::PageMod> said = galaxy::modlog::mods();
+    if (std::any_of(said.begin(), said.end(), [](const galaxy::modlog::PageMod& m) { return m.id == "nebula"; })) {
+        for (const galaxy::modlog::PageEntry& entry : galaxy::modlog::entries()) {
+            if (entry.mod != "nebula" || entry.source != galaxy::modlog::kSourceCook || entry.code != 0u) continue;
+            SettingsRow part{entry.text, {}, nullptr, {}, true};
+            part.names = 1u;
+            rows.push_back(std::move(part));
+        }
+    }
     SettingsRow off{"DISABLED", {}, nullptr, {}, true};
     off.list = 1u;
     rows.push_back(std::move(off));
@@ -2742,7 +2753,7 @@ void close_mod_options(const RenderConfig& render) {
 }
 
 // The MODS page's keys while its lists show, as the launcher's lists: up and down within a list, left and right to
-// the other list at the same place, down from a list's last mod to the buttons and up again. A or Space picks the
+// the other list at the same place, down from a list's last mod to the LOG row, then the buttons, and up again. A or Space picks the
 // selected mod up; held, up and down move it among the mods on (a higher one wins), left turns it off, right on, and
 // A, Space, Enter or Escape puts it down. On a mod's options, Escape goes back to the lists.
 bool mods_page_key(std::uintptr_t key, bool accept, bool was_down) {
@@ -2767,9 +2778,11 @@ bool mods_page_key(std::uintptr_t key, bool accept, bool was_down) {
     // The rows of each list (1 off, 2 on) in order, and the buttons' row.
     std::vector<unsigned> members[3];
     unsigned buttons = 0u;
+    unsigned log_row = ~0u;  // the LOG row (mod_log_row), between the lists and the buttons
     for (unsigned r = 0; r < rows.size(); ++r) {
         if (rows[r].list != 0u && !rows[r].heading) members[rows[r].list].push_back(r);
         if (rows[r].key == "buttons") buttons = r;
+        if (rows[r].key == "modlog") log_row = r;
     }
     const std::uint8_t list = rows[selected].heading ? 0u : rows[selected].list;
     const std::size_t place = list != 0u ? static_cast<std::size_t>(
@@ -2832,8 +2845,16 @@ bool mods_page_key(std::uintptr_t key, bool accept, bool was_down) {
     }
     if (key == VK_RETURN || key == VK_ESCAPE) return false;  // apply and close, as on every page
     if (list == 0u) {
-        // The buttons: up goes back to the mod last selected (else the first in a list); left, right and pressing
-        // are the buttons'.
+        // The LOG row and the buttons: down from LOG to the buttons, up from the buttons to LOG; up from LOG goes back to
+        // the mod last selected (else the first in a list); left, right and pressing are the buttons'.
+        if (key == VK_DOWN && selected == log_row) {
+            select(buttons);
+            return true;
+        }
+        if (key == VK_UP && selected == buttons && log_row != ~0u) {
+            select(log_row);
+            return true;
+        }
         if (key != VK_UP) return key == VK_DOWN;
         std::string focus;
         {
@@ -2854,7 +2875,7 @@ bool mods_page_key(std::uintptr_t key, bool accept, bool was_down) {
         if (place > 0u) select(members[list][place - 1u]);
         return true;
     case VK_DOWN:
-        select(place + 1u < members[list].size() ? members[list][place + 1u] : buttons);
+        select(place + 1u < members[list].size() ? members[list][place + 1u] : log_row != ~0u ? log_row : buttons);
         return true;
     case VK_LEFT:
     case VK_RIGHT: {

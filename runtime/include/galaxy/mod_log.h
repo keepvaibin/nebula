@@ -27,8 +27,17 @@ void add_not_started();
 void add_finding(std::uint32_t source, std::uint32_t level, std::string_view mod, std::uint32_t code, std::string_view file,
                  std::uint32_t line, std::uint32_t column, const std::vector<std::pair<std::string, std::string>>& values);
 
+// One host entry worded by a row of the game's text table (`row`, e.g. Start.PartMissing; luma_modlog.h `row`): its
+// {names} from `values`, a value "R:<row>" being that row's words. For the host's own lines that no validator code words.
+void add_row(std::uint32_t source, std::uint32_t level, std::string_view mod, std::uint32_t code, std::string_view file,
+             std::string_view row, const std::vector<std::pair<std::string, std::string>>& values);
+
 // What the log holds, for the Mods > Log page and a mod's own page (contract 4.2); any thread. Empty when the module
 // has no log or nothing was kept.
+// PageEntry::source of the cooker's and the start's own lines (luma_modlog.h LUMA_MODLOG_COOK), for code that does not
+// include the C header.
+inline constexpr std::uint32_t kSourceCook = 2u;
+
 struct PageEntry {
     std::uint32_t source = 0, level = 0, code = 0, line = 0, column = 0, count = 0;
     std::string mod;

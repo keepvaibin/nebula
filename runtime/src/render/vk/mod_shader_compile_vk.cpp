@@ -18,6 +18,10 @@ bool mod_shader_has_bound_form() noexcept {
     return true;
 }
 
+std::string mod_shader_compiler_missing(const std::filesystem::path&) {
+    return {};  // the HLSL front end is part of this program
+}
+
 std::vector<std::uint8_t> compile_mod_shader_stage(const std::string& source, const std::filesystem::path& includes, bool pixel,
                                                    const std::vector<const char*>& defines, std::string& problem, bool bound_tables) {
     std::string text = source;
