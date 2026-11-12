@@ -56,7 +56,7 @@ typedef struct LumaOption {
 
 typedef struct LumaValidateInput {
     uint32_t size;          /* sizeof(LumaValidateInput) */
-    const char* path;       /* the .luma, UTF-8 */
+    const char* path;       /* the .luma, or a placed mod's folder laid out as one; UTF-8 */
     const char* platform;   /* "windows-x64", "android-arm64"... (luma-format 6) */
     const char* nebula;     /* this release, "2.0.0" */
     const char* region;     /* "RMGE01", "RMGP01", "RMGJ01" */

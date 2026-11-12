@@ -1034,6 +1034,12 @@ std::filesystem::path mods_folder() {
     return s.folder;
 }
 
+std::filesystem::path mods_settings_file() {
+    Settings& s = settings();
+    const std::lock_guard<std::mutex> lock(s.mutex);
+    return s.file;
+}
+
 void set_played_language(unsigned language) noexcept {
     s_played_language.store(language, std::memory_order_relaxed);
 }

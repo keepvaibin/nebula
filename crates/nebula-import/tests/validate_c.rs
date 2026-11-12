@@ -229,7 +229,8 @@ fn rust_call(path: &std::path::Path, platform: &str) -> Vec<(u32, u32, Option<St
     names.add_rows(ROWS).unwrap();
     let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: Some(&names), store: Some(&RustStore) };
     let platforms = [platform];
-    let r = validate(&Input { source: Source::File(path), game: Some(&game), installed: &[], platforms: &platforms, options: None, position: None });
+    let source = if path.is_dir() { Source::Folder(path) } else { Source::File(path) };
+    let r = validate(&Input { source, game: Some(&game), installed: &[], platforms: &platforms, options: None, position: None });
     r.findings
         .iter()
         .map(|f| {
@@ -276,6 +277,27 @@ fn the_c_interface_gives_what_the_rust_one_gives() {
         assert_eq!(start.findings, full.findings, "{name}");
         assert_eq!(start.kept, full.kept, "{name}");
     }
+}
+
+#[test]
+fn a_placed_folder_is_checked_as_its_luma() {
+    let dir = tempfile::tempdir().unwrap();
+    let placed = dir.path().join("example.mod");
+    std::fs::create_dir_all(placed.join("code/windows-x64")).unwrap();
+    write(&placed, "luma.json", &manifest(&[("code", r#"{"platforms": ["windows-x64"]}"#)]));
+    write(&placed.join("code/windows-x64"), "mod.dll", &fixture("pe-x64/missing.dll"));
+    let luma = write(dir.path(), "example.luma", &luma(&[("code", r#"{"platforms": ["windows-x64"]}"#)], &[file("code/windows-x64/mod.dll", &fixture("pe-x64/missing.dll"))]));
+    let call = Call::new(&placed, "windows-x64");
+    let got = c_call(Some(&call.input(None)));
+    assert_eq!(got.state, 0, "{:?}", got.invalid);
+    assert_eq!(got.findings, rust_call(&placed, "windows-x64"));
+    // The same findings as the .luma of the same entries, but for the name shown.
+    let strip = |f: &Vec<(u32, u32, Option<String>, String, u32, u32, Option<String>, String, String)>| -> Vec<(u32, Option<String>)> { f.iter().map(|r| (r.0, r.6.clone())).collect() };
+    assert_eq!(strip(&got.findings), strip(&rust_call(&luma, "windows-x64")));
+    assert!(!got.findings.is_empty());
+    // A kept report never stands for a folder: every rule runs again.
+    let again = c_call(Some(&call.input(Some(&got.kept))));
+    assert_eq!((again.state, again.findings), (0, got.findings));
 }
 
 #[test]

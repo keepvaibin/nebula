@@ -21,4 +21,9 @@ namespace luma {
     void unloadMod(const LumaModInfo* pInfo);
     // Once a frame on the game thread: replaced hook lists and taken-out mods whose grace is over are let go.
     void frame();
+    // Any thread: the mod taken out at the next frame's start (reload.md 2). False: not queued, said in the log.
+    bool requestTakeOut(const char* pId);
+    // At a frame's start on the game thread, before frame() and the services' deliveries: each queued mod with the
+    // mods that use it, the last started first. One load when nothing is queued.
+    void takeOutRequested();
 }

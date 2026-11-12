@@ -24,8 +24,9 @@ typedef struct LumaHarness {
        the next call. The game half calls it once a game frame (and again after each line it finished) and answers each
        line with `done` before asking again. */
     const char* (*next)(void);
-    /* The answer to the line `next` gave: 1 done, 0 failed (`why` names what, in a few words). A setup line that fails
-       ends the test as setup-failed; a step that fails ends it as fail. */
+    /* The answer to the line `next` gave: 1 done, 0 failed (`why` names what, in a few words), -1 not set up (revision
+       7: a step whose player or named live object is not there; the test did not reach what it checks). A setup line
+       that fails ends the test as setup-failed; a step that fails ends it as fail, one not set up as setup-failed. */
     void (*done)(int32_t ok, const char* why);
     /* A fact: `key` and its value as JSON text, on the test clock's current frame. */
     void (*fact)(const char* key, const char* json);

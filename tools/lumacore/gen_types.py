@@ -882,6 +882,10 @@ class Reader:
                          "\n  ".join(wrong[:200]) + ("\n  ... %d in all" % len(wrong) if len(wrong) > 200 else ""))
             I.write_if_changed(OUT / "luma_functions.json", (json.dumps(
                 {"functions": functions}, indent=1, ensure_ascii=False) + "\n").encode("utf-8"))
+            numbers, wrong = merge_numbers(DEFINED, {(f["name"], f["signature"]) for f in functions})
+            if wrong:
+                sys.exit("gen_types.py: the numbers (luma_numbers.json) do not hold:\n  " + "\n  ".join(wrong[:200]))
+            I.write_if_changed(OUT / "luma_numbers.json", (json.dumps(numbers, indent=1, ensure_ascii=False) + "\n").encode("utf-8"))
         self.outputs(lines)
 
     def cpp_rows(self, defined):
@@ -1330,6 +1334,33 @@ def merge_functions(folder, records, left_records):
                 wrong.append("%s %s: it overrides a function with no name a row can have" % (f["name"], f["signature"]))
             o["row"] = (o["name"], o["signature"]) in every
     return functions, wrong
+
+
+def merge_numbers(folder, rows):
+    """1.5: every unit's .numbers (instrument.py) as luma_numbers.json: each number by its name, signature and place,
+    with its unit, line, type and the game's value as written; and the completeness report: how many numbers were
+    named, how many uses read them, and each reason a number written in the game's code was not named, counted. A
+    number of a function with no row, or a name given twice, is wrong."""
+    numbers, wrong, skipped = [], [], {}
+    uses = 0
+    seen = set()
+    for listed in sorted(pathlib.Path(folder).rglob("*.numbers")):
+        unit = listed.relative_to(folder).as_posix()[:-len(".numbers")]
+        part = json.loads(listed.read_text(encoding="utf-8"))
+        uses += part["uses"]
+        for why, count in part["skipped"].items():
+            skipped[why] = skipped.get(why, 0) + count
+        for n in part["numbers"]:
+            key = (n["name"], n["signature"], n["place"])
+            if key in seen:
+                wrong.append("%s: %s %s.%d is named twice" % (unit, n["name"], n["signature"], n["place"]))
+            seen.add(key)
+            if n["place"] != 0 and (n["name"], n["signature"]) not in rows:
+                wrong.append("%s: %s %s has numbers and no row" % (unit, n["name"], n["signature"]))
+            numbers.append(dict(n, unit=unit))
+    report = {"named": len(numbers), "uses": uses, "constants": sum(1 for n in numbers if n["place"] == 0),
+              "not_named": dict(sorted(skipped.items(), key=lambda kv: -kv[1]))}
+    return {"report": report, "numbers": numbers}, wrong
 
 
 def defined_symbols(folder):

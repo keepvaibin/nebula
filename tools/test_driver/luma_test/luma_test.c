@@ -1010,7 +1010,7 @@ static void do_call(const char* key, const char* rest) {
             values[i].p = object_of(text);
             args[i + 1] = &values[i].p;
             if (values[i].p == 0) {
-                finish(0, same(text, "player") ? "call: there is no player" : missing_text("call: ", text));
+                finish(-1, same(text, "player") ? "call: there is no player" : missing_text("call: ", text));
                 return;
             }
             const int32_t needs = same(type, "MarioActor *") ? class_mario_actor
@@ -1138,9 +1138,13 @@ static void do_read(const Words* w) {
     }
     void* const object = object_of(w->word[2]);
     const int32_t offset = cf.count == 2u ? core->field(cf.word[0], cf.word[1], type) : -1;
-    if (object == 0 || offset < 0) {
-        finish(0, object == 0 ? (same(w->word[2], "player") ? "read: there is no player" : missing_text("read: ", w->word[2]))
-                              : "the game has no field of that name and type");
+    if (object == 0) {
+        // Revision 7 (G-H6-2): the object a step names is not there: the test is not set up, not failed.
+        finish(-1, same(w->word[2], "player") ? "read: there is no player" : missing_text("read: ", w->word[2]));
+        return;
+    }
+    if (offset < 0) {
+        finish(0, "the game has no field of that name and type");
         return;
     }
     if (!object_is(object, core->class_of(cf.word[0]))) {

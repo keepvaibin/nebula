@@ -271,7 +271,13 @@ struct Manifest : Rows {
     std::string save_tag;   // mods with the same tag share saves; defaults to the mod id
     std::string save_path;  // folder in the mod with the starting save files
     bool save_player_can_change = false;
+    // The mod's code. luma-format 6: `code.platforms` read as one Plugin whose binaries are code/<platform>/mod.<ending>
+    // (code_entry). The older "plugins" list is read too until LumaLink writes `code` (then it goes); a manifest with
+    // both is not read.
     std::vector<Plugin> plugins;
+    // luma-format 6 `code.libraries`: per platform, the extra libraries in load order, each a file name in
+    // code/<platform>/ (they need the permission `native`; the loader loads them before the entry library).
+    std::map<std::string, std::vector<std::string>> code_libraries;
     std::vector<Permission> permissions;  // in the manifest's order
     // Set when the manifest uses a retired key (a layer's "switches"): what to write instead. The mod is refused.
     std::string retired;
@@ -311,9 +317,12 @@ struct Situation {
 };
 [[nodiscard]] bool layer_used(const Layer& layer, const Situation& situation);
 [[nodiscard]] bool when_holds(const When& when, const Situation& situation);
-// This platform as a plugin `binaries` key: windows-x64, windows-arm64, linux-x64, linux-arm64, macos-x64, macos-arm64,
-// android-arm64, android-x64.
+// This platform as luma-format 6 names it (a `code.platforms` entry, a folder under code/, a plugin `binaries` key):
+// windows-x64, windows-arm64, linux-x64, linux-arm64, macos-x64, macos-arm64, android-arm64, android-x64, ios-arm64.
 [[nodiscard]] std::string_view plugin_target() noexcept;
+// The entry library of `platform` in a .luma (luma-format 6): "code/<platform>/mod.dll" (Windows), "mod.so" (Linux,
+// Android), "mod.dylib" (macOS, iOS); empty for a platform the format does not name.
+[[nodiscard]] std::string code_entry(std::string_view platform);
 
 // The language code (for Text) of a game language folder.
 [[nodiscard]] std::string language_code(std::string_view folder);

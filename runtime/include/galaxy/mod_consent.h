@@ -43,8 +43,8 @@ struct ModConsent {
 // The mod's code and declared permissions with their answers.
 [[nodiscard]] ModConsent consent_facts(const ModInfo& mod);
 // True when it has code whose answer is NotAsked for its current token, or code Granted with a declared permission
-// NotAsked (changed ones included): the screen asks before the mod starts. Never for a mod without code; never for
-// code the player said Not now to (the mod is off until the player turns it on, which asks again).
+// NotAsked (changed ones included): the screen asks before the mod starts. Never for a mod without code; for code the
+// player said Not now to, only while the mod is on (Not now turns it off; turning it on asks again).
 [[nodiscard]] bool consent_needed(const ModInfo& mod);
 // Records the player's answer for the mod's code (its current token).
 void record_code_answer(ModInfo& mod, bool granted);
