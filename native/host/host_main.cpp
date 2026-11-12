@@ -3522,6 +3522,15 @@ void svc_mods_start(void*) {
 #endif
         },
         gModsOn);
+    // The game sounds mods replace (sound.md 6; the audio service), code or none. A module without the replacer is
+    // left alone.
+    galaxy::luma_audio::set_replacements([](const char* name) -> void* {
+#if defined(_WIN32)
+        return reinterpret_cast<void*>(GetProcAddress(static_cast<HMODULE>(gModule.module), name));
+#else
+        return dlsym(gModule.module, name);
+#endif
+    });
     // Any mod at all tells the game: a stage then holds more than its level asks for.
     if (!gModsChangeGame) {
         return;

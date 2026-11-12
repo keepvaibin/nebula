@@ -27,6 +27,7 @@
 #include "Game/Sound/SoundSystem.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/System/AssetFolder.hpp"
+#include "Game/System/LumaGameSound.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaMods.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
@@ -175,6 +176,7 @@ void AudSystem::frameWork() {
     }
 
     updateLimitedSound();
+    LumaGameSound::frame();
 }
 
 void AudSystem::calc() {
@@ -232,6 +234,11 @@ bool AudSystem::startSound(SoundID soundID, SoundHandle* pHandle, const Vec3f* p
         return false;
     }
 
+    // A mod's sound in its place (sound.md 6), after every rule that would keep the game's from starting.
+    if (LumaGameSound::replaced(static_cast< u32 >(soundID), pPos != nullptr ? &pPos->x : nullptr, false)) {
+        return false;
+    }
+
     if (!SoundManager::startSound(soundID, pHandle, pPos)) {
         return false;
     }
@@ -275,6 +282,10 @@ bool AudSystem::startLevelSound(SoundID soundID, SoundHandle* pHandle, const Vec
     }
 
     if (soundID.getGroupID() != AudGroup_HomeSe && mHomeButtonMenuState != MenuState_Off) {  // only the HOME menu's own while it is up
+        return false;
+    }
+
+    if (LumaGameSound::replaced(static_cast< u32 >(soundID), pPos != nullptr ? &pPos->x : nullptr, true)) {
         return false;
     }
 

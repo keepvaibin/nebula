@@ -24,6 +24,11 @@ void set_store(const galaxy::assets::AssetStore* store) noexcept;
 // LUMA_E_ABSENT and a placed voice is heard as one with no place.
 void set_game(void* (*find_symbol)(const char*)) noexcept;
 
+// The game sounds the session's mods replace (sound.md 6), whether any mod has code or not (host_main, game thread,
+// once, after the mods' store is attached): the module's luma_game_sound_replacer is given this service's calls when a
+// cooked sound names one, and null otherwise.
+void set_replacements(void* (*find_symbol)(const char*)) noexcept;
+
 // The providers, in catalog order, for luma_services::provide_all (game thread, once, before the first mod).
 [[nodiscard]] std::span<const LumaServiceProvider* const> providers(void (*log)(const char*)) noexcept;
 
