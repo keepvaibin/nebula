@@ -900,6 +900,47 @@ impl GameModel {
     }
 }
 
+/// A glTF of a game model's skeleton alone: its joints with their names, parents and rest pose, and no meshes. A hidden
+/// model (`<path>.model.json` holding `{"hide": true}`, director 11-12) is cooked from it: the game's joints stay, so
+/// its animations and the code that names them still find them, and nothing is drawn. None when `block` is no model
+/// block.
+pub fn skeleton_gltf(game: &GameModel, block: &[u8]) -> Option<Vec<u8>> {
+    let word = |at: usize| Some(u32::from_le_bytes(block.get(at..at.checked_add(4)?)?.try_into().ok()?) as usize);
+    let float = |at: usize| Some(f32::from_le_bytes(block.get(at..at.checked_add(4)?)?.try_into().ok()?));
+    if word(0)? != super::model_write::MAGIC as usize {
+        return None;
+    }
+    let joints_at = word(15 * 4)?;
+    let mut nodes = Vec::with_capacity(game.joints.len());
+    for (j, name) in game.joints.iter().enumerate() {
+        let at = joints_at.checked_add(j.checked_mul(super::model_write::JOINT_BYTES)?)?;
+        let three = |o: usize| -> Option<[f32; 3]> { Some([float(at + o)?, float(at + o + 4)?, float(at + o + 8)?]) };
+        let (scale, angles, translation) = (three(0)?, three(12)?, three(28)?);
+        let children: Vec<usize> = (0..game.joints.len()).filter(|c| *c != j && game.parents.get(*c).copied().flatten() == Some(j)).collect();
+        let mut node = serde_json::json!({
+            "name": name,
+            "translation": translation.map(|v| v / UNITS_PER_METRE),
+            "rotation": quaternion_of(angles),
+            "scale": scale,
+        });
+        if !children.is_empty() {
+            node["children"] = serde_json::json!(children);
+        }
+        nodes.push(node);
+    }
+    let roots: Vec<usize> = (0..game.joints.len()).filter(|j| game.parents.get(*j).copied().flatten().is_none()).collect();
+    let document = serde_json::json!({ "asset": { "version": "2.0" }, "nodes": nodes, "scenes": [{ "nodes": roots }], "scene": 0 });
+    serde_json::to_vec(&document).ok()
+}
+
+/// The game's joint angles (X, Y, Z radians composed Z·Y·X, contract 4) as a quaternion: what [`angles`] reads back.
+fn quaternion_of(r: [f32; 3]) -> [f32; 4] {
+    let (sx, cx) = (r[0] / 2.0).sin_cos();
+    let (sy, cy) = (r[1] / 2.0).sin_cos();
+    let (sz, cz) = (r[2] / 2.0).sin_cos();
+    [sx * cy * cz - cx * sy * sz, cx * sy * cz + sx * cy * sz, cx * cy * sz - sx * sy * cz, cx * cy * cz + sx * sy * sz]
+}
+
 /// What the cook made of a model file, for the fact `cook.model` (models contract 9).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ModelFacts {

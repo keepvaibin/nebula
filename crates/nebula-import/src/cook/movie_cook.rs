@@ -694,12 +694,17 @@ pub fn cook(json: &[u8], around: &Around) -> Result<(Vec<(Made, Vec<u8>)>, Movie
         replaces: replaces.clone(),
     };
     let mut files = vec![(Made::Own(".nmov"), out.clone())];
-    if !subtitle_rows.is_empty() {
-        let json = serde_json::json!({"columns": {"text": "string", "from": "float", "to": "float"}, "rows": subtitle_rows});
-        files.push((Made::Own(".subs"), super::table::TableIr::from_json(json.to_string().as_bytes())?.to_ntbl()));
+    let has_subtitles = !subtitle_rows.is_empty();
+    let json = serde_json::json!({"columns": {"text": "string", "from": "float", "to": "float"}, "rows": subtitle_rows});
+    let subs = super::table::TableIr::from_json(json.to_string().as_bytes())?.to_ntbl();
+    if has_subtitles {
+        files.push((Made::Own(".subs"), subs.clone()));
     }
     if !replaces.is_empty() {
         files.push((Made::Game(format!("MovieData/{replaces}.thp")), out));
+        // The replaced movie's lines, empty when it has none: the game's own timed lines for that movie give way to
+        // them, so a replaced movie never shows the game's lines over another picture (J, 11-12).
+        files.push((Made::Game(format!("MovieData/{replaces}.subs")), subs));
     }
     Ok((files, facts))
 }

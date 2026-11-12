@@ -216,6 +216,29 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         super::refuse::record(super::refuse::CookFact::Model { path: game.path.clone(), source: change.path.clone(), facts: made });
         return Ok(clips.into_iter().map(|(file, clip)| (format!("{folder}/{file}"), clip, true)).collect());
     }
+    // Name.bdl.model.json (or .bmd, or plain Name.model.json) in a game archive holding {"hide": true}: the game's model
+    // kept with all its joints and no meshes, so nothing of it is drawn (director 11-12; `lumalink add character`
+    // writes these for a character's own hands and face).
+    if lower.ends_with(".model.json") {
+        use super::refuse::refuse;
+        let stem = &change.path[..change.path.len() - ".model.json".len()];
+        let value: serde_json::Value = serde_json::from_slice(bytes).map_err(|_| refuse("Cook.Model.Hide", &[("file", change.path.clone())]))?;
+        let hide = value.as_object().filter(|o| o.len() == 1).and_then(|o| o.get("hide")).and_then(serde_json::Value::as_bool) == Some(true);
+        if !hide {
+            return Err(refuse("Cook.Model.Hide", &[("file", change.path.clone())]));
+        }
+        let base = base.ok_or_else(|| refuse("Cook.Model.HideNoGame", &[("file", change.path.clone())]))?;
+        let as_model = Change { path: format!("{stem}.glb"), source: change.source.clone(), merge: change.merge };
+        let (native_path, game) = model_place(&as_model, Some(base))?;
+        let game = game.ok_or_else(|| refuse("Cook.Model.HideNoGame", &[("file", change.path.clone())]))?;
+        let block = store::read_file(base, &native_path).map_err(|_| refuse("Cook.Model.HideNoGame", &[("file", change.path.clone())]))?;
+        let skeleton = super::gltf::skeleton_gltf(&game, &block).ok_or_else(|| refuse("Cook.Model.HideNoGame", &[("file", change.path.clone())]))?;
+        let file = stem.rsplit('/').next().unwrap_or(stem);
+        let name = file.split('.').next().unwrap_or(file);
+        let (model, _, made) = super::gltf::to_files_for(&skeleton, None, name, Some(&game))?;
+        super::refuse::record(super::refuse::CookFact::Model { path: native_path.clone(), source: change.path.clone(), facts: made });
+        return Ok(vec![(native_path, model, true)]);
+    }
     if lower.ends_with(".gltf") || lower.ends_with(".glb") {
         let file = change.path.rsplit('/').next().unwrap_or(&change.path);
         let stem = file.split('.').next().unwrap_or(file);
@@ -922,6 +945,7 @@ mod tests {
             "AudioRes/Jump.sound.json",
             "ObjectData/Kuribo.arc/Walk.anim.json",
             "LayoutData/Fonts/Title.font.json",
+            "ObjectData/MarioHandL.arc/MarioHandL.bdl.model.json",
         ];
         let dir = tempfile::tempdir().unwrap();
         for path in cooked {

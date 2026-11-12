@@ -451,6 +451,7 @@ fn every_rule_has_a_broken_mod() {
         (306, luma(&layer, &[file("layers/base/other/a.wav", b"x")]), NO_GAME),
         (306, luma(&layer, &[file("layers/base/textures/Kuribo/notes.txt", b"x")]), NO_GAME),
         (307, luma(&[("layers", r#"[{"name": "base", "when": {"code": true}}]"#)], &[file("layers/base/files/a.wav", b"x")]), NO_GAME),
+        (308, luma(&layer, &[file("layers/base/files/ObjectData/Kuribo.arc/Nothing.bdl.model.json", br#"{"hide": true}"#)]), Setup { game: Some(&game), ..NO_GAME }),
         (400, luma(&layer, &[file(patch_file, b"{}")]), with_game_ref(&game)),
         (400, luma(&layer, &[file(patch_file, b"{\"patch\": 1, \"key\": [\"name\"], \"colour\": 1}")]), with_game_ref(&game)),
         (401, luma(&layer, &[file(patch_file, br#"{"patch": 1, "key": ["count"]}"#)]), with_game_ref(&game)),

@@ -224,7 +224,7 @@ fn a_webm_movie_round_trips_with_its_sound_and_subtitles() {
     let notes = crate::cook::refuse::said_notes();
     assert!(notes.iter().any(|(why, args)| *why == "Cook.Movie.AudioTrack" && args.contains(&("found", "A_OPUS".to_string()))), "{notes:?}");
     let places: Vec<&Made> = made.iter().map(|(m, _)| m).collect();
-    assert_eq!(places, [&Made::Own(".nmov"), &Made::Own(".subs"), &Made::Game("MovieData/PrologueA.thp".into())]);
+    assert_eq!(places, [&Made::Own(".nmov"), &Made::Own(".subs"), &Made::Game("MovieData/PrologueA.thp".into()), &Made::Game("MovieData/PrologueA.subs".into())]);
     let b = &made[0].1;
     assert_eq!((word(b, 4), f32::from_bits(word(b, 8)), word(b, 28), word(b, 0x2C)), (4, 25.0, 1, 1));
     let frames = frames_of(b);
