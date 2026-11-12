@@ -38,7 +38,7 @@ typedef enum LumaContentModelFollow {
 typedef struct LumaPlayerPart {
     uint32_t size;     /* sizeof(LumaPlayerPart) as the mod was built */
     const char* name;  /* "MarioHandR": the model, ObjectData/<name>.arc */
-    const char* joint; /* the body's joint it is drawn at ("HandR0"); "" for one drawn at the base */
+    const char* joint; /* the body's joint it is drawn at ("HandR"); "" for one drawn at the base */
 } LumaPlayerPart;      /* 1.0: 24 bytes on 64-bit */
 
 typedef struct LumaContentModelService {

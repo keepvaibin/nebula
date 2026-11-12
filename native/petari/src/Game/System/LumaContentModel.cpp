@@ -78,6 +78,7 @@ namespace luma {
                     LiveActor* host;
                     Part* part;         // null: neither the model nor the placeholder is in the store: nothing shows
                     u32 frame;          // frames the frame has seen it
+                    bool reused;        // its part was a dead one used again (harness fact)
                 };
 
                 const LumaServiceKernel* sKernel = nullptr;
@@ -88,17 +89,17 @@ namespace luma {
                 Part* sParts = nullptr;
 
                 // The player's parts (models 7): models of their own the game draws at the body's joints
-                // (MarioActorHand.cpp, MarioActorDraw.cpp, MarioActorShadow.cpp).
+                // (MarioActorDraw.cpp updates each at the body joint's matrix, MarioActor.cpp 1471; MarioActorShadow.cpp).
                 struct PlayerPartRow {
                     const char* name;
                     const char* joint;
                 };
                 const PlayerPartRow cPlayerParts[] = {
-                    {"MarioHandL", "HandL0"},           {"MarioHandR", "HandR0"},
-                    {"IceMarioHandL", "HandL0"},        {"IceMarioHandR", "HandR0"},
-                    {"InvincibleMarioHandL", "HandL0"}, {"InvincibleMarioHandR", "HandR0"},
+                    {"MarioHandL", "HandL"},           {"MarioHandR", "HandR"},
+                    {"IceMarioHandL", "HandL"},        {"IceMarioHandR", "HandR"},
+                    {"InvincibleMarioHandL", "HandL"}, {"InvincibleMarioHandR", "HandR"},
                     {"MarioFace", "Face0"},             {"LuigiFace", "Face0"},
-                    {"MarioShadow", ""},
+                    {"MarioShadow", ""},                {"LuigiShadow", ""},
                 };
                 const u32 cPlayerPartCount = sizeof(cPlayerParts) / sizeof(cPlayerParts[0]);
 
@@ -263,7 +264,8 @@ namespace luma {
 
                 // A dead part for this host, model, follow and joint, or a new one, placed by `rOffset` and `rTurn`.
                 Part* partFor(LiveActor* pHost, const char* pArchive, u32 follow, const char* pJoint, const Vec3f& rOffset,
-                              const Vec3f& rTurn) {
+                              const Vec3f& rTurn, bool* pReused) {
+                    *pReused = false;
                     for (Part* p = sParts; p != nullptr; p = p->next) {
                         if (!p->busy && p->host == pHost && p->follow == follow && strcmp(p->archive, pArchive) == 0 &&
                             sameText(p->joint, pJoint)) {
@@ -271,6 +273,7 @@ namespace luma {
                             p->actor->mFixedPosition->mLocalRotate = rTurn;
                             p->actor->makeActorAppeared();
                             MR::showModelIfHidden(p->actor);
+                            *pReused = true;
                             return p;
                         }
                     }
@@ -335,7 +338,7 @@ namespace luma {
                     char json[1024];
                     nebula_snprintf(json, sizeof(json),
                                     "{\"mod\":%s,\"model\":%s,\"follow\":\"%s\",\"joint\":%s,\"placeholder\":%s,\"drawn\":%s,\"joints\":%u,"
-                                    "\"mapped\":%u}",
+                                    "\"mapped\":%u,\"reused\":%s}",
                                     mod, name, followName(follow), joint, placeholder ? "true" : "false", pPart != nullptr ? "true" : "false",
                                     pPart != nullptr ? MR::getModelData(pPart->actor)->getJointCount() : 0u, [pPart]() {
                                         u32 mapped = 0;
@@ -343,7 +346,8 @@ namespace luma {
                                             mapped += pPart->map[pPart->order[i]] >= 0 ? 1u : 0u;
                                         }
                                         return mapped;
-                                    }());
+                                    }(),
+                                    rAttached.reused ? "true" : "false");
                     char key[48];
                     nebula_snprintf(key, sizeof(key), "model.attach.%llu", static_cast< unsigned long long >(rAttached.handle));
                     luma::modlog::fact(key, json);
@@ -384,13 +388,17 @@ namespace luma {
                             worst = d > worst ? d : worst;
                         }
                     }
+                    const f32 gx = root[0][3] - hostAt.x;
+                    const f32 gy = root[1][3] - hostAt.y;
+                    const f32 gz = root[2][3] - hostAt.z;
+                    const f32 gap = sqrtf(gx * gx + gy * gy + gz * gz);
                     const bool shown = !pPart->actor->mIsDead && !MR::isDead(pPart->actor) && !MR::isHiddenModel(pPart->actor);
-                    char json[320];
+                    char json[352];
                     nebula_snprintf(json, sizeof(json),
-                                    "{\"frame\":%u,\"at\":[%.3f,%.3f,%.3f],\"host_at\":[%.3f,%.3f,%.3f],\"worst\":%.4f,\"shown\":%s}",
+                                    "{\"frame\":%u,\"at\":[%.3f,%.3f,%.3f],\"host_at\":[%.3f,%.3f,%.3f],\"gap\":%.4f,\"worst\":%.4f,\"shown\":%s}",
                                     rAttached.frame, static_cast< double >(root[0][3]), static_cast< double >(root[1][3]),
                                     static_cast< double >(root[2][3]), static_cast< double >(hostAt.x), static_cast< double >(hostAt.y),
-                                    static_cast< double >(hostAt.z), static_cast< double >(worst), shown ? "true" : "false");
+                                    static_cast< double >(hostAt.z), static_cast< double >(gap), static_cast< double >(worst), shown ? "true" : "false");
                     char key[48];
                     nebula_snprintf(key, sizeof(key), "model.pose.%llu", static_cast< unsigned long long >(rAttached.handle));
                     luma::modlog::fact(key, json);
@@ -509,7 +517,7 @@ namespace luma {
                     rAttached.mod = pMod;
                     rAttached.host = pHost;
                     if (pArchive != nullptr) {
-                        Part* const pPart = partFor(pHost, pArchive, followed, pFollowed, offset, turn);
+                        Part* const pPart = partFor(pHost, pArchive, followed, pFollowed, offset, turn, &rAttached.reused);
                         pPart->busy = true;
                         rAttached.part = pPart;
                     }
