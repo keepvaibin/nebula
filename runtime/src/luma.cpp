@@ -864,8 +864,9 @@ When read_form_when(const Value* value) {
 }
 
 // The form's options: choice (values, value_names), number (min..max by step, each a choice) and toggle (on, off);
-// text (max_length, its default text) and key (its default control) have no choices: the player types or binds them
-// (J's 6.3 page, F's 2.5 input), and a mod reads each as text (services-mods 8).
+// text (max_length, its default text) has no choices: the player types it on the Mods page (J's 6.3) and a mod reads
+// it as text (services-mods 8). Key options are the mod's input actions (Manifest.keys, services-input 2), bound in
+// Controls, not on the Mods page; they are options too, which a mod reads as its default control's name.
 void read_options(const Value& root, Manifest& out) {
     const Value* options = root.get("options");
     const Value* text = root.get("text");
@@ -905,19 +906,27 @@ void read_options(const Value& root, Manifest& out) {
                 }
             }
             option.fallback = start != nullptr ? when_value(*start) : std::string();
+        } else if (kind == "key") {
+            // An input action (services-input 2): in keys for Controls and the input service, and an option too, so
+            // that mods.option reads its default control's name as text (services-mods 8). The validator keeps the
+            // default one of kTargetIds (L210 Option.KeyDefaultUnknown); the input service checks it again.
+            option.fallback = start != nullptr ? when_value(*start) : std::string();
+            if (!option.id.empty()) {
+                out.keys.push_back({option.id, option.name, option.fallback});
+                out.options.push_back(std::move(option));
+            }
+            continue;
         } else if (kind == "toggle") {
             // The Mods page's "off" is the toggle's false; its one choice is "on".
             option.choices.push_back({"off", {}});
             option.choices.push_back({"on", {}});
             option.fallback = start != nullptr ? when_value(*start) : std::string("off");
-        } else if (kind == "text" || kind == "key") {
-            // The validator refuses a text default over max_length or a key default that is not a control (G, L210).
+        } else if (kind == "text") {
+            // The validator refuses a text default over max_length (G, L210).
             option.fallback = text_field(entry, "default");
-            if (kind == "text") {
-                const Value* most = entry.get("max_length");
-                const double length = most != nullptr && most->number() != nullptr ? *most->number() : 256.0;
-                option.max_length = length >= 1.0 && length <= 256.0 ? static_cast<std::uint32_t>(length) : 256u;
-            }
+            const Value* most = entry.get("max_length");
+            const double length = most != nullptr && most->number() != nullptr ? *most->number() : 256.0;
+            option.max_length = length >= 1.0 && length <= 256.0 ? static_cast<std::uint32_t>(length) : 256u;
             if (!option.id.empty()) out.options.push_back(std::move(option));
             continue;
         } else {

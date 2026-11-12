@@ -5,6 +5,7 @@
 #include "galaxy/luma_assets_service.h"
 #include "galaxy/luma_fs_service.h"
 #include "galaxy/luma_net_service.h"
+#include "galaxy/luma_input_service.h"
 #include "galaxy/luma_mods_service.h"
 #include "galaxy/luma_system_platform.h"
 #include "galaxy/mod_screens.h"
@@ -161,6 +162,10 @@ bool provide_all(void* (*find_symbol)(const char*), void (*log)(const char*),
     }
     // The assets service (services-assets; layer 1: the game's files by path).
     for (const LumaServiceProvider* const provider : galaxy::luma_assets::providers(log)) {
+        provide(provider);
+    }
+    // The input service (services-input): every host has it; a host that samples no controls leaves every action up.
+    for (const LumaServiceProvider* const provider : galaxy::luma_input::providers(log)) {
         provide(provider);
     }
     Giving giving{provide};

@@ -24,6 +24,7 @@
 #include "galaxy/mod_log.h"
 #include "galaxy/mod_screens.h"
 #include "galaxy/luma_fs_service.h"
+#include "galaxy/input/mod_actions.h"
 #include "galaxy/mods.h"
 #include "galaxy/game_paths.h"
 #include "galaxy/native_settings_pad.h"
@@ -44,6 +45,7 @@
 #include <atomic>
 #include <bit>
 #include <condition_variable>
+#include <map>
 #include <exception>
 #include <functional>
 #include <cmath>
@@ -341,6 +343,13 @@ galaxy::input::DeviceKey s_controls_device{};
 galaxy::input::DeviceList s_controls_devices{};
 std::uint64_t s_controls_devices_ms = 0u;
 std::size_t s_capture_target = galaxy::input::kGameInputCount;
+// The mods' input actions (services-input 6; plan 2.5 layer 1b): a row each after the game's bindings, bound per scheme
+// as those are. The draft holds, per scheme, only the actions edited since it was taken, by "<mod id>/<action id>"; the
+// rest show their live bindings. A capture for action i waits as s_capture_target kModCaptureBase + i.
+constexpr std::size_t kModCaptureBase = galaxy::input::kGameInputCount + 1u;
+std::array<std::map<std::string, galaxy::input::TargetBindings>, galaxy::input::kControlSchemeCount> s_mod_binds_draft;
+// The harness facts controls.<mod id> last written per action ("<mod id>/<action id>"), written when they change.
+std::map<std::string, std::string> s_mod_action_facts;
 std::uint64_t s_capture_deadline_ms = 0u;
 constexpr std::uint64_t kCaptureTimeoutMs = 6000u;
 std::string s_controls_message;
@@ -510,6 +519,51 @@ std::string menu_bindings(galaxy::input::ControlScheme scheme, const galaxy::inp
 
 unsigned controls_changes();
 
+// The declared actions on the scheme being edited (none until the first code mod begins: services-input 3).
+std::vector<galaxy::input::mod_actions::Listed> mod_action_list() {
+    if (!galaxy::input::mod_actions::any()) return {};
+    return galaxy::input::mod_actions::list(s_controls_scheme);
+}
+
+std::string mod_action_key(const galaxy::input::mod_actions::Listed& action) {
+    return action.mod_id + "/" + action.id;
+}
+
+std::map<std::string, galaxy::input::TargetBindings>& mod_binds_draft(galaxy::input::ControlScheme scheme) {
+    return s_mod_binds_draft[static_cast<std::size_t>(scheme) % galaxy::input::kControlSchemeCount];
+}
+
+// An action's bindings on `scheme` as the draft has them (none: it follows its game control).
+galaxy::input::TargetBindings mod_action_draft(galaxy::input::ControlScheme scheme,
+                                               const galaxy::input::mod_actions::Listed& action) {
+    const auto& draft = mod_binds_draft(scheme);
+    const auto it = draft.find(mod_action_key(action));
+    return it != draft.end() ? it->second : action.bindings;
+}
+
+bool no_bindings(const galaxy::input::TargetBindings& bindings) {
+    return std::all_of(bindings.begin(), bindings.end(), [](const galaxy::input::InputSource& s) { return s.empty(); });
+}
+
+// The game control an action follows, in the played language (its CONTROLS label's S. row; a digit or a sign as is).
+std::string mod_action_control(const galaxy::input::mod_actions::Listed& action) {
+    const std::string label = galaxy::input::game_input_label(action.follows);
+    std::string control;
+    if (label.find_first_of("0123456789+-") == std::string::npos || label.find(' ') != std::string::npos) {
+        std::string row = "S.";
+        for (const char c : label) row += c == ' ' ? '_' : c;
+        control = galaxy::modlog::row_words(row.c_str(), action.mod_id, {});
+    }
+    return control.empty() ? label : control;
+}
+
+// An unbound action's value: the game control it follows (Mods.ActionFollows).
+std::string mod_action_follows(const galaxy::input::mod_actions::Listed& action) {
+    const std::string control = mod_action_control(action);
+    std::string words = galaxy::modlog::row_words("Mods.ActionFollows", action.mod_id, {{"control", control}});
+    return words.empty() ? "SAME AS " + control : words;
+}
+
 // The LIGHTING row: 0 per vertex, 1 per pixel, 2 enhanced.
 using ui::lighting_mode;
 
@@ -613,12 +667,14 @@ enum class ControlsRow {
     TouchOpacity,
     TouchVibration,
     TouchPlaces,
+    ModAction,  // a mod's input action (services-input): `action` is its place in mod_actions::list
     Reset,
 };
 
 struct ControlsRowInfo {
     ControlsRow kind = ControlsRow::Reset;
     galaxy::input::GameInput target = galaxy::input::GameInput::A;
+    std::uint32_t action = 0;
     friend bool operator==(const ControlsRowInfo&, const ControlsRowInfo&) = default;
 };
 
@@ -738,6 +794,10 @@ std::vector<ControlsRowInfo> controls_rows() {
                                               : static_cast<GameInput>(index);
         rows.push_back({ControlsRow::Binding, target});
     }
+    const std::size_t actions = mod_action_list().size();
+    for (std::uint32_t action = 0; action < actions; ++action) {
+        rows.push_back({ControlsRow::ModAction, GameInput::A, action});
+    }
     for (const ControlsRow kind : controls_tail_rows()) {
         rows.push_back({kind});
     }
@@ -779,6 +839,12 @@ unsigned controls_changes() {
             changes += s_controls_draft.tables[i].targets[t] != live.tables[i].targets[t];
         }
         changes += !(s_controls_draft.tuning[i] == live.tuning[i]);
+        if (!s_mod_binds_draft[i].empty()) {
+            for (const auto& action : galaxy::input::mod_actions::list(static_cast<galaxy::input::ControlScheme>(i))) {
+                const auto it = s_mod_binds_draft[i].find(mod_action_key(action));
+                changes += it != s_mod_binds_draft[i].end() && it->second != action.bindings;
+            }
+        }
     }
     changes += s_input_mode_draft != get_runtime_settings().input_mode;
     changes += touch_draft_changes();
@@ -791,7 +857,7 @@ void show_controls_message(const char* message) {
 }
 
 bool controls_capturing() {
-    return s_capture_target < galaxy::input::kGameInputCount;
+    return s_capture_target != galaxy::input::kGameInputCount;
 }
 
 void end_controls_capture() {
@@ -801,16 +867,40 @@ void end_controls_capture() {
     }
 }
 
-void start_controls_capture(galaxy::input::GameInput target) {
-    s_capture_target = static_cast<std::size_t>(target);
+// `target`: a GameInput, or kModCaptureBase + a mod action's place.
+void start_controls_capture_at(std::size_t target) {
+    s_capture_target = target;
     s_capture_deadline_ms = galaxy::steady_ms() + kCaptureTimeoutMs;
     if (galaxy::input::scheme_is_gamepad(s_controls_scheme)) {
         galaxy::host::arm_controller_binding_capture(s_controls_scheme, s_controls_device.slot);
     }
 }
 
+void start_controls_capture(galaxy::input::GameInput target) {
+    start_controls_capture_at(static_cast<std::size_t>(target));
+}
+
 void finish_controls_capture(galaxy::input::InputSource source) {
     if (!controls_capturing()) {
+        return;
+    }
+    if (s_capture_target >= kModCaptureBase) {
+        // A mod's action: a source its game control could take (mod_actions::bind refuses the others).
+        const std::size_t index = s_capture_target - kModCaptureBase;
+        end_controls_capture();
+        const std::vector<galaxy::input::mod_actions::Listed> actions = mod_action_list();
+        if (index >= actions.size()) return;
+        const galaxy::input::mod_actions::Listed& action = actions[index];
+        if (!galaxy::input::binding_source_allowed(s_controls_scheme, action.follows, source)) {
+            show_controls_message("THAT INPUT CANNOT DRIVE THIS ROW");
+            return;
+        }
+        galaxy::input::TargetBindings bindings = mod_action_draft(s_controls_scheme, action);
+        galaxy::input::add_binding(bindings, source);
+        mod_binds_draft(s_controls_scheme)[mod_action_key(action)] = bindings;
+        std::cerr << "[settings] bind " << galaxy::input::control_scheme_id(s_controls_scheme) << ".mod "
+                  << mod_action_key(action) << " = " << galaxy::input::format_target_bindings(s_controls_scheme, bindings)
+                  << '\n';
         return;
     }
     const auto target = static_cast<galaxy::input::GameInput>(s_capture_target);
@@ -885,6 +975,7 @@ void refresh_controls_devices(bool force) {
 void reset_controls_draft() {
     end_controls_capture();
     s_controls_draft = galaxy::input::get_controls_config();
+    for (auto& draft : s_mod_binds_draft) draft.clear();
     s_input_mode_draft = get_runtime_settings().input_mode;
     s_touch_draft = {};
 }
@@ -952,6 +1043,19 @@ void apply_controls_draft() {
     if (!(s_controls_draft == live)) {
         galaxy::input::set_controls_config(s_controls_draft);
         s_controls_draft = galaxy::input::get_controls_config();
+    }
+    // The mods' actions: kept in the settings file's modbind. lines with the rest (written by this apply's save).
+    for (std::size_t i = 0; i < galaxy::input::kControlSchemeCount; ++i) {
+        if (s_mod_binds_draft[i].empty()) continue;
+        const auto scheme = static_cast<galaxy::input::ControlScheme>(i);
+        for (const auto& action : galaxy::input::mod_actions::list(scheme)) {
+            const auto it = s_mod_binds_draft[i].find(mod_action_key(action));
+            if (it == s_mod_binds_draft[i].end() || it->second == action.bindings) continue;
+            if (!galaxy::input::mod_actions::bind(scheme, action.mod_id, action.id, it->second)) {
+                std::cerr << "[settings] mod action " << mod_action_key(action) << ": binding refused\n";
+            }
+        }
+        s_mod_binds_draft[i].clear();
     }
     RuntimeSettings runtime = get_runtime_settings();
     if (s_input_mode_draft != runtime.input_mode) {
@@ -1085,7 +1189,8 @@ void step_native_setting_round(int direction) {
     const unsigned row = s_native_settings_row.load(std::memory_order_relaxed);
     // A binding (on: wait for an input) and the reset (on: the defaults) are no lists: stepped as the keys step them.
     if (tab == kControlsTab &&
-        (controls_row(row).kind == ControlsRow::Binding || controls_row(row).kind == ControlsRow::Reset ||
+        (controls_row(row).kind == ControlsRow::Binding || controls_row(row).kind == ControlsRow::ModAction ||
+         controls_row(row).kind == ControlsRow::Reset ||
          controls_row(row).kind == ControlsRow::PairJoyCon || controls_row(row).kind == ControlsRow::ArrangeTouch ||
          controls_row(row).kind == ControlsRow::TouchPlaces)) {
         adjust_native_setting(direction);
@@ -1176,6 +1281,9 @@ void adjust_native_setting_unlogged(int delta) {
         }
         case ControlsRow::Binding:
             if (delta > 0) start_controls_capture(info.target);
+            return;
+        case ControlsRow::ModAction:
+            if (delta > 0) start_controls_capture_at(kModCaptureBase + info.action);
             return;
         case ControlsRow::PointerSpeed:
             tuning.pointer_speed = step_float(tuning.pointer_speed, 0.2f, 0.2f, 6.0f);
@@ -1276,6 +1384,10 @@ void adjust_native_setting_unlogged(int delta) {
                     galaxy::input::default_binding_table(s_controls_scheme);
                 s_controls_draft.tune(s_controls_scheme) =
                     galaxy::input::default_scheme_tuning(s_controls_scheme);
+                // The mods' actions back to following their game controls.
+                for (const auto& action : mod_action_list()) {
+                    mod_binds_draft(s_controls_scheme)[mod_action_key(action)] = {};
+                }
             }
             return;
         }
@@ -1438,6 +1550,10 @@ bool handle_controls_key(std::uintptr_t key, bool was_down, bool from_pad) {
             start_controls_capture(info.target);
             return true;
         }
+        if (info.kind == ControlsRow::ModAction) {
+            start_controls_capture_at(kModCaptureBase + info.action);
+            return true;
+        }
         if (info.kind == ControlsRow::Reset || info.kind == ControlsRow::PairJoyCon || info.kind == ControlsRow::ArrangeTouch ||
             info.kind == ControlsRow::TouchPlaces) {
             adjust_native_setting(1);
@@ -1450,6 +1566,16 @@ bool handle_controls_key(std::uintptr_t key, bool was_down, bool from_pad) {
                 s_controls_draft.table(s_controls_scheme)[info.target] = {};
                 std::cerr << "[settings] clear " << galaxy::input::control_scheme_id(s_controls_scheme) << '.'
                           << galaxy::input::game_input_id(info.target) << '\n';
+            }
+            return true;
+        }
+        if (info.kind == ControlsRow::ModAction) {
+            // Back to following its game control.
+            const std::vector<galaxy::input::mod_actions::Listed> actions = mod_action_list();
+            if (!was_down && info.action < actions.size()) {
+                mod_binds_draft(s_controls_scheme)[mod_action_key(actions[info.action])] = {};
+                std::cerr << "[settings] clear " << galaxy::input::control_scheme_id(s_controls_scheme) << ".mod "
+                          << mod_action_key(actions[info.action]) << '\n';
             }
             return true;
         }
@@ -3255,13 +3381,15 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
         fact("WEBSITE", mods_ui_text(mod.luma->homepage, 60u), {});
     }
     fact("FOLDER", mods_ui_text(mod.id, 60u), {});
-    if (!mod.options.empty()) {
+    // Key options are the mod's input actions, bound in CONTROLS (services-input 2), not here.
+    if (std::any_of(mod.options.begin(), mod.options.end(), [](const galaxy::mods::ModOption& o) { return o.kind != "key"; })) {
         SettingsRow heading{"OPTIONS", {}, nullptr, {}, true};
         rows.push_back(std::move(heading));
     }
     for (std::size_t o = 0; o < mod.options.size(); ++o) {
         const galaxy::mods::ModOption& option = mod.options[o];
-        if (option.kind == "text" || option.kind == "key") {
+        if (option.kind == "key") continue;
+        if (option.kind == "text") {
             const galaxy::luma::Option* entry = nullptr;
             if (mod.luma != nullptr) {
                 for (const galaxy::luma::Option& e : mod.luma->options) {
@@ -4254,6 +4382,20 @@ std::string native_settings_row_text(
             if (bound.size() > 34u) bound = bound.substr(0, 32u) + "..";
             return line + bound;
         }
+        case ControlsRow::ModAction: {
+            const std::vector<galaxy::input::mod_actions::Listed> actions = mod_action_list();
+            if (info.action >= actions.size()) return {};
+            const galaxy::input::mod_actions::Listed& action = actions[info.action];
+            std::string_view name = action.name.empty() ? std::string_view(action.id) : std::string_view(action.name);
+            while (!name.empty() && (name.back() == ':' || name.back() == ' ')) name.remove_suffix(1);
+            const std::string line = mods_ui_text(name, 24u) + ": ";
+            if (s_capture_target == kModCaptureBase + info.action) return line + "PRESS AN INPUT";
+            const galaxy::input::TargetBindings bindings = mod_action_draft(s_controls_scheme, action);
+            if (no_bindings(bindings)) return line + mod_action_follows(action);
+            std::string bound = upper_ascii(menu_bindings(s_controls_scheme, bindings));
+            if (bound.size() > 34u) bound = bound.substr(0, 32u) + "..";
+            return line + bound;
+        }
         case ControlsRow::PointerSpeed:
             std::snprintf(text, sizeof(text), "POINTER SPEED: %.1f", static_cast<double>(tuning.pointer_speed));
             return text;
@@ -5016,6 +5158,56 @@ NativeSettingsView build_native_settings_view() {
             }
             shown.inputs = info.kind == ControlsRow::Binding;
             shown.shared = shown.inputs && (shared_targets & galaxy::input::game_input_bit(info.target)) != 0u;
+            if (info.kind == ControlsRow::ModAction) {
+                // A mod's action: its name as the mod gave it; its own inputs, else the game control it follows (in
+                // the played language already), or the wait for an input.
+                const std::vector<galaxy::input::mod_actions::Listed> actions = mod_action_list();
+                if (info.action < actions.size()) {
+                    const galaxy::input::mod_actions::Listed& action = actions[info.action];
+                    std::string_view name = action.name.empty() ? std::string_view(action.id) : std::string_view(action.name);
+                    while (!name.empty() && (name.back() == ':' || name.back() == ' ')) name.remove_suffix(1);
+                    shown.label = mods_ui_text(name, 24u);
+                    shown.label_name = true;
+                    const galaxy::input::TargetBindings bindings = mod_action_draft(s_controls_scheme, action);
+                    if (s_capture_target == kModCaptureBase + info.action) {
+                        shown.value = "PRESS AN INPUT";
+                    } else if (no_bindings(bindings)) {
+                        shown.value = mod_action_follows(action);
+                        shown.name = true;
+                    } else {
+                        shown.value = menu_bindings(s_controls_scheme, bindings);
+                        shown.inputs = true;
+                    }
+                    if (galaxy::modlog::facts_wanted()) {
+                        // controls.<mod id> {"row", "action", "scheme", "label", "value", "inputs"} (harness), as shown.
+                        std::string json = "{\"row\":" + std::to_string(row) + ",\"action\":";
+                        galaxy::modlog::append_json_text(json, action.id);
+                        json += ",\"scheme\":\"";
+                        json += galaxy::input::control_scheme_id(s_controls_scheme);
+                        json += "\",\"label\":";
+                        galaxy::modlog::append_json_text(json, shown.label);
+                        json += ",\"value\":";
+                        galaxy::modlog::append_json_text(json, shown.value);
+                        json += shown.inputs ? ",\"inputs\":true}" : ",\"inputs\":false}";
+                        std::string& last = s_mod_action_facts[mod_action_key(action)];
+                        if (last != json) {
+                            last = json;
+                            galaxy::modlog::fact("controls." + action.mod_id, json);
+                        }
+                    }
+                    if (row == view.selected) {
+                        std::string mod_name = action.mod_id;
+                        {
+                            const std::lock_guard<std::mutex> mods_lock(s_mods_mutex);
+                            if (const galaxy::mods::ModInfo* const mod = mod_by_id_locked(action.mod_id)) mod_name = mod_title(*mod);
+                        }
+                        view.help = galaxy::modlog::row_words(
+                            "Mods.ActionHelp", action.mod_id,
+                            {{"mod", mod_name}, {"control", mod_action_control(action)}});
+                        view.help_as_is = !view.help.empty();
+                    }
+                }
+            }
             if (info.kind == ControlsRow::Reset) {
                 shown.buttons = true;
                 shown.value = "RESET";
