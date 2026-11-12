@@ -851,3 +851,12 @@ ufokinokounderconstruction	lambert7_v	gloss	0.10	0							director d15b: the Star
 ufokinokounderconstruction	wawa:lambert7_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
 ufokinokounderconstruction	wawa:lambert8_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
 ufokinokounderconstruction	lambert13_v	metal	0.25	1							director d15: the Starshroom, the bands and bolts: silver (the owner 11-12: not properly glass and metal); picture owed		silver	
+iceringiceplanet	CrackMat_v	painted				0					director d21: the frozen lake's crack lines (Freezeflame's shards), an added overlay, not a glass body (the transmit pass bent rays through it); picture owed			
+icesliproad	CrackMat_v	painted				0					director d21: an ice road's crack lines, an added overlay, not a glass body (the transmit pass bent rays through it); picture owed			
+icecannonplanet	CrackMat_v	painted				0					director d21: an ice planet's crack lines, an added overlay, not a glass body (the transmit pass bent rays through it); picture owed			
+icemountainseesawslipa	CIceCrack01_v	painted				0					director d21: an ice seesaw's crack lines, an added overlay, not a glass body (the transmit pass bent rays through it); picture owed			
+icelavaislandicemovablestepa	Ice02_v	painted				0					director d21: an ice step's added layer, an added overlay, not a glass body (the transmit pass bent rays through it); picture owed			
+crystalcagelbreak	HiLightMat*	painted				0					director d21: a breaking crystal cage's highlight layers, an added overlay, not a glass body (the transmit pass bent rays through it); picture owed			
+crystalcagesbreak	HiLightMat*	painted				0					director d21: a breaking crystal cage's highlight layers, an added overlay, not a glass body (the transmit pass bent rays through it); picture owed			
+crystalboxbreak	HiLightMat*	painted				0					director d21: a breaking crystal box's highlight layers, an added overlay, not a glass body (the transmit pass bent rays through it); picture owed			
+starpiececluster	StarPieceClusterMat_v(3)	painted				0					director d21: a star bit cluster's glow layer, an added overlay, not a glass body (the transmit pass bent rays through it); picture owed			
