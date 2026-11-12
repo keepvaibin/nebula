@@ -2825,6 +2825,23 @@ mod tests {
     }
 
     #[test]
+    fn the_metal_smooth_sphere_is_lit_metal() {
+        // The conformance model metal-smooth (materials contract): a 1 m sphere, metal 1, roughness 0.05.
+        let source = include_bytes!("../../data/metal-smooth.gltf");
+        let (ir, _, facts) = to_ir_for(source, None, None).unwrap();
+        assert_eq!((facts.joints, ir.joints[0].translation), (1, [0.0, 50.0, 0.0]));
+        assert_eq!((ir.lits.len(), ir.lits[0].metal, ir.lits[0].roughness, ir.lits[0].base_color), (1, 1.0, 0.05, [0.95, 0.95, 0.95, 1.0]));
+        // A metre across: every vertex 50 units from the joint, and the joint's bounds from 0 to 100 up.
+        assert!(ir.arrays.positions.iter().all(|p| ((p[0] * p[0] + p[1] * p[1] + p[2] * p[2]).sqrt() - 50.0).abs() < 1e-3));
+        assert!((ir.joints[0].min[1] - 0.0).abs() < 1e-3 && (ir.joints[0].max[1] - 100.0).abs() < 1e-3, "{:?} {:?}", ir.joints[0].min, ir.joints[0].max);
+        let (model, _) = to_files(source, None, "metal-smooth").unwrap();
+        let word = |at: usize| u32::from_le_bytes(model[at..at + 4].try_into().unwrap());
+        assert_ne!(word(12) & (1 << 6), 0, "HAS_LIT");
+        let at = word(29 * 4) as usize;
+        assert_eq!(f32::from_le_bytes(model[at + 28..at + 32].try_into().unwrap()), 1.0);
+    }
+
+    #[test]
     fn sockets_billboards_and_joint_names() {
         let (ir, _, facts) = cook(&with_nodes(&[("head", Value::Null), ("socket:hand", Value::Null)]), None).unwrap();
         let names: Vec<&str> = ir.joints.iter().map(|j| j.name.as_str()).collect();
