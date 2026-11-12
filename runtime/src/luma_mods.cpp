@@ -9,6 +9,7 @@
 #include "galaxy/luma.h"
 #include "galaxy/luma_fs_service.h"
 #include "galaxy/mod_log.h"
+#include "galaxy/mod_screens.h"
 #include "galaxy/mod_plugins.h"
 #include "galaxy/mods.h"
 
@@ -626,7 +627,57 @@ bool valid_install_path(std::string_view path) noexcept {
     return path.size() > 5u && path.substr(path.size() - 5u) == ".luma" && galaxy::luma_fs::path_in_rule(path, false);
 }
 
-std::int32_t install_request(const LumaMod* mod, const char* path, LumaEventFn fn, void*, LumaHandle* out) {
+// The one open request (J's screen shows one at a time: a second is LUMA_E_BUSY). Game thread only: the request, the
+// screen's answer (run_screen_answers) and the delivery all run there.
+struct InstallRequest;
+struct InstallNode {
+    LumaEventNode event;     // first, and both plain members: the kernel's node is the InstallNode
+    InstallRequest* owner;
+};
+struct InstallRequest {
+    InstallNode node{};
+    LumaHandle handle = 0;
+    LumaEventFn fn = nullptr;
+    void* user = nullptr;
+    std::string asker;
+    std::int32_t status = LUMA_OK;  // the screen's answer, given at delivery
+    bool posted = false;            // queued with the kernel: freed by deliver or drop, not before
+    bool closed = false;            // cancelled, or the mod is gone: no event
+};
+InstallRequest* g_install = nullptr;  // game thread
+LumaHandle g_install_next = 1;        // game thread: never 0, never given twice
+
+void install_free(InstallRequest* request) {
+    if (g_install == request) {
+        g_install = nullptr;
+    }
+    delete request;
+}
+
+// The DONE event (closed after it: the request goes).
+void install_deliver(LumaEventNode* node) {
+    InstallRequest* const request = reinterpret_cast<InstallNode*>(node)->owner;
+    request->posted = false;
+    if (!request->closed) {
+        LumaEvent event{};
+        event.size = sizeof(event);
+        event.kind = LUMA_MODS_INSTALL_EVENT_DONE;
+        event.status = request->status;
+        event.handle = request->handle;
+        if (const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire)) {
+            (void)kernel->call(request->node.event.mod, LUMA_MODS_INSTALL_NAME, request->fn, request->user, &event);
+        }
+    }
+    install_free(request);
+}
+
+void install_drop(LumaEventNode* node) {
+    InstallRequest* const request = reinterpret_cast<InstallNode*>(node)->owner;
+    request->posted = false;
+    install_free(request);
+}
+
+std::int32_t install_request(const LumaMod* mod, const char* path, LumaEventFn fn, void* user, LumaHandle* out) {
     const char* const where = "mods.install.request";
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
@@ -640,18 +691,97 @@ std::int32_t install_request(const LumaMod* mod, const char* path, LumaEventFn f
     if (out == nullptr) {
         return argument(mod, where, "out");
     }
-    // A mod's data folder is fs 2.3's; until it exists no path names a file (item 9).
-    return LUMA_E_ABSENT;
+    const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
+    const char* const id = kernel != nullptr ? kernel->mod_id(mod) : nullptr;
+    if (id == nullptr) {
+        return LUMA_E_CANCELLED;
+    }
+    // The player's DON'T ASK AGAIN for this mod (J-SM6): an answer, no screen.
+    if (!galaxy::mods::install_ask_allowed(id)) {
+        return LUMA_E_DENIED;
+    }
+    if (g_install != nullptr || galaxy::mods::player_screen_up()) {
+        return LUMA_E_BUSY;
+    }
+    // The file at the call (J-SM5): a short walk of the mod's own data folder, no link followed (services-fs 5).
+    std::filesystem::path file;
+    if (galaxy::luma_fs::find_data_file(id, path, &file) != LUMA_OK) {
+        return LUMA_E_NOT_FOUND;
+    }
+    InstallRequest* request = nullptr;
+    try {
+        request = new InstallRequest();
+        request->asker = id;
+    } catch (...) {
+        delete request;
+        return LUMA_E_MEMORY;
+    }
+    request->node.owner = request;
+    request->node.event.mod = mod;
+    request->node.event.deliver = install_deliver;
+    request->node.event.drop = install_drop;
+    request->handle = g_install_next++;
+    request->fn = fn;
+    request->user = user;
+    const LumaHandle handle = request->handle;
+    g_install = request;
+    // J's screen answers on the game thread at a frame's start, never inside this call. The answer finds the request
+    // by its handle: one closed meanwhile (cancel, the mod gone) or already answered takes none.
+    std::int32_t status = LUMA_E_MEMORY;
+    try {
+        status = galaxy::mods::ask_install(file, request->asker, [handle](std::int32_t answer) {
+            InstallRequest* const open = g_install;
+            if (open == nullptr || open->handle != handle || open->closed || open->posted) {
+                return;
+            }
+            open->status = answer;
+            const LumaServiceKernel* const k = g_kernel.load(std::memory_order_acquire);
+            if (k != nullptr && k->post(&open->node.event) == LUMA_OK) {
+                open->posted = true;
+            } else {
+                install_free(open);  // the mod is going: nothing is said
+            }
+        });
+    } catch (...) {
+        status = LUMA_E_MEMORY;
+    }
+    if (status != LUMA_PENDING) {
+        install_free(request);
+        return status;  // LUMA_E_BUSY or LUMA_E_ABSENT (no menu in this host): answers
+    }
+    *out = handle;
+    return LUMA_PENDING;
 }
 
-std::int32_t install_cancel(const LumaMod* mod, LumaHandle) {
+// Closes the open request of `mod` (cancel, or the mod gone): its screen closes as Not now, no event after.
+void install_close(const LumaMod* mod) {
+    InstallRequest* const request = g_install;
+    if (request == nullptr || request->node.event.mod != mod || request->closed) {
+        return;
+    }
+    request->closed = true;
+    galaxy::mods::close_asks(request->asker);
+    if (!request->posted) {
+        install_free(request);  // queued: freed by deliver or drop
+    }
+}
+
+std::int32_t install_cancel(const LumaMod* mod, LumaHandle handle) {
     const char* const where = "mods.install.cancel";
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    // No request is ever open before fs 2.3.
-    report(mod, where, 102u);  // Service.Handle
-    return LUMA_E_HANDLE;
+    const InstallRequest* const request = g_install;
+    if (request == nullptr || request->node.event.mod != mod || request->handle != handle || request->closed) {
+        report(mod, where, 102u);  // Service.Handle
+        return LUMA_E_HANDLE;
+    }
+    install_close(mod);
+    return LUMA_OK;
+}
+
+void install_mod_gone(void*, const LumaMod* mod) {
+    install_close(mod);
 }
 
 // ---- mods: a mod's own options (section 8) -------------------------------------------------------------------------
@@ -936,7 +1066,7 @@ const LumaServiceProvider kIdsProvider = {
 };
 const LumaServiceProvider kInstallProvider = {
     sizeof(LumaServiceProvider), LUMA_MODS_INSTALL_NAME, &kInstall.base, nullptr, nullptr, 0u, nullptr,
-    nullptr, nullptr, nullptr, registered,
+    nullptr, install_mod_gone, nullptr, registered,
 };
 const LumaServiceProvider* const kProviders[] = {&kModsProvider, &kIdsProvider, &kInstallProvider};
 
