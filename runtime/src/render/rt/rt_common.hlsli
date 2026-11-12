@@ -386,7 +386,7 @@ bool blocked(float3 origin, float3 direction, float reach, uint mask, bool any, 
 
 // Whether anything of `mask` but the items of slot `own` (a light's own body) stands on the ray before `reach`. The
 // walk ends at the first such hit (A2-14): every candidate is offered (forced non-opaque), the own slot's are passed
-// over.
+// over; a cutout's only where its texture is there (FB b113: a railing's holes let the lamp through).
 bool blocked_but(float3 origin, float3 direction, float reach, uint mask, uint own) {
     RayDesc ray;
     ray.Origin = origin;
@@ -397,7 +397,10 @@ bool blocked_but(float3 origin, float3 direction, float reach, uint mask, uint o
     query.TraceRayInline(g_scene, RAY_FLAG_FORCE_NON_OPAQUE, mask, ray);
     while (query.Proceed()) {
         if (query.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE &&
-            g_items.Load(g_at.x + query.CandidateInstanceID() * kItemBytes) != own) {
+            g_items.Load(g_at.x + query.CandidateInstanceID() * kItemBytes) != own &&
+            ((query.CandidateInstanceContributionToHitGroupIndex() & kKindCutout) == 0u ||
+             cutout_there(query.CandidateInstanceID(), query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics(),
+                          ray.Origin + ray.Direction * query.CandidateTriangleRayT()))) {
             query.CommitNonOpaqueTriangleHit();
             query.Abort();
         }
