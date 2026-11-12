@@ -181,7 +181,7 @@ void RendererMtl::record_wide_begin(const SceneClearValues* initial_clear) {
     reset_draw_bindings();
 }
 
-void RendererMtl::end_wide_scene() {
+void RendererMtl::end_wide_scene(bool /*finish*/) {
     if (!scene_.wide) {
         return;
     }

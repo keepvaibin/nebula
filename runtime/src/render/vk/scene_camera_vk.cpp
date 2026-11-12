@@ -192,13 +192,14 @@ VkDescriptorSet SceneCameraVk::set_of(const SetAllocator& allocate, const Textur
 }
 
 void SceneCameraVk::full_screen(VkCommandBuffer commands, VkPipeline pipeline, VkDescriptorSet set, unsigned width,
-                                unsigned height) const {
+                                unsigned height, bool finish) const {
     const VkViewport viewport{0.0f, static_cast<float>(height), static_cast<float>(width), -static_cast<float>(height),
                               0.0f, 1.0f};
     const VkRect2D scissor{{0, 0}, {width, height}};
     camera::Constants constants{};
     constants.width = static_cast<float>(width);
     constants.height = static_cast<float>(height);
+    constants.finish = finish ? 1.0f : 0.0f;
     vkCmdSetViewport(commands, 0, 1, &viewport);
     vkCmdSetScissor(commands, 0, 1, &scissor);
     vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
@@ -216,7 +217,7 @@ void SceneCameraVk::widen(VkCommandBuffer commands, VkRenderPass pass, unsigned 
 }
 
 void SceneCameraVk::meter(VkCommandBuffer commands, const Texture& wide, const Texture& depth, VkImageLayout depth_layout,
-                          float seconds, const SetAllocator& allocate) {
+                          float seconds, bool finish, const SetAllocator& allocate) {
     // The last frame's reads finish before the meter writes (a read before a write needs the execution dependency alone).
     image_barrier(commands, exposure_->image, VK_IMAGE_ASPECT_COLOR_BIT,
                   exposure_ready_ ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
@@ -226,6 +227,7 @@ void SceneCameraVk::meter(VkCommandBuffer commands, const Texture& wide, const T
     constants.width = static_cast<float>(wide.width);
     constants.height = static_cast<float>(wide.height);
     constants.seconds = exposure_ready_ ? seconds : -1.0f;
+    constants.finish = finish ? 1.0f : 0.0f;
     exposure_ready_ = true;
     const VkDescriptorSet set = set_of(allocate, wide, &depth, depth_layout);
     vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_COMPUTE, meter_);
@@ -238,10 +240,10 @@ void SceneCameraVk::meter(VkCommandBuffer commands, const Texture& wide, const T
 }
 
 void SceneCameraVk::draw(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const Texture& wide,
-                         bool per_sample, const SetAllocator& allocate, bool resolve) {
+                         bool per_sample, const SetAllocator& allocate, bool resolve, bool finish) {
     const VkPipeline camera = pipeline(resolve ? kCameraResolve : per_sample ? kCameraSamples : kCamera, pass, samples_log2);
     if (camera != VK_NULL_HANDLE) {
-        full_screen(commands, camera, set_of(allocate, wide), wide.width, wide.height);
+        full_screen(commands, camera, set_of(allocate, wide), wide.width, wide.height, finish);
     }
 }
 

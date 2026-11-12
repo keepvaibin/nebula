@@ -5501,14 +5501,14 @@ void RendererD3D12::record_hdr_begin() {
     bind_scene();
 }
 
-void RendererD3D12::end_wide_scene() {
+void RendererD3D12::end_wide_scene(bool finish) {
     if (!scene_hdr_) {
         return;
     }
-    record_hdr_end();
+    record_hdr_end(finish);
 }
 
-void RendererD3D12::record_hdr_end() {
+void RendererD3D12::record_hdr_end(bool finish) {
     if (!scene_hdr_) {
         return;
     }
@@ -5540,6 +5540,7 @@ void RendererD3D12::record_hdr_end() {
     in.resolve = resolve_output;
     // After a load or a long pause the eye starts open.
     in.seconds = seconds > 1.0f ? -1.0f : seconds;
+    in.finish = finish;
     static_cast<void>(camera_pass_.record(command_list_.Get(), srv_ring_, in));
     if (scene_msaa_.samples > 1u) {
         scene_msaa_.color_dirty = true;

@@ -171,6 +171,7 @@ bool SceneCamera::record(ID3D12GraphicsCommandList* list, DescriptorRing& ring, 
     constants.width = static_cast<float>(in.width);
     constants.height = static_cast<float>(in.height);
     constants.seconds = exposure_ready_ ? in.seconds : -1.0f;
+    constants.finish = in.finish ? 1.0f : 0.0f;
     exposure_ready_ = true;
 
     // Two tables: the meter's (the resolved picture, the exposure, its storage view) and the camera's (the picture it

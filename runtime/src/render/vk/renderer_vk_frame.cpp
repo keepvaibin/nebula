@@ -1976,16 +1976,16 @@ void RendererVk::record_wide_begin(const SceneClearValues* initial_clear) {
     reset_draw_bindings();
 }
 
-void RendererVk::end_wide_scene() {
+void RendererVk::end_wide_scene(bool finish) {
     if (!scene_.wide) {
         return;
     }
     end_scene_pass();
 
-    record_wide_end();
+    record_wide_end(finish);
 }
 
-void RendererVk::record_wide_end() {
+void RendererVk::record_wide_end(bool finish) {
     if (!scene_.wide) {
         return;
     }
@@ -2016,7 +2016,7 @@ void RendererVk::record_wide_end() {
                   VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
                   VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
     // After a load or a long pause the eye starts open.
-    scene_camera_.meter(commands_, *wide, *scene_.depth, kDepthSampleLayout, seconds > 1.0f ? -1.0f : seconds, allocate);
+    scene_camera_.meter(commands_, *wide, *scene_.depth, kDepthSampleLayout, seconds > 1.0f ? -1.0f : seconds, finish, allocate);
     image_barrier(commands_, scene_.depth->image, aspects, kDepthSampleLayout, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                   VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
                   VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
@@ -2040,7 +2040,7 @@ void RendererVk::record_wide_end() {
     }
     begin_scene_pass_with(0u, nullptr, true);
     scene_camera_.draw(commands_, draw_layout_.pass_for(scene_variant(), false), scene_samples_log2(),
-                       resolve_output || per_sample ? *wide_ms : *wide, per_sample, allocate, resolve_output);
+                       resolve_output || per_sample ? *wide_ms : *wide, per_sample, allocate, resolve_output, finish);
     reset_draw_bindings();
 }
 

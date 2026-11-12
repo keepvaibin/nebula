@@ -8,6 +8,7 @@
 #include "galaxy/launch_args.h"
 #include "galaxy/loss_report.h"
 #include "galaxy/render/render_config.h"
+#include "galaxy/render/scene_camera_shape.h"
 
 #include <algorithm>
 #include <bit>
@@ -1354,13 +1355,15 @@ void RenderCore::walk_opaque_end(const NebulaFramePass& pass) {
 void RenderCore::walk_scene_end() {
     rt_program_signal();  // signals S and A: the scene as the programs drew it, before anything after the scene
     rt_reactive();
+    // The camera's finish (scene_camera.hlsl): traced, relight style on, form above 0 (rt_look_[0]; 0 is Painted).
+    const bool traced_finish = rt_light_on_ && rt_physical_ && rt_look_[0] > 0.0f;
     rt_light_end();
     scene_phase_ = false;
     temporal_scene_ = false;
     motion_scene_ = false;
     scene_mip_bias_ = 0.0f;
     collect_ao_objects_ = false;
-    renderer_.end_wide_scene();
+    renderer_.end_wide_scene(traced_finish);
     // Once 3D is complete, post-AA and the 2D layer need one value per pixel. Keep all the selected
     // geometry samples through the resolve, without writing their identical post-AA result back N times.
     if (renderer_.begin_output_scene(true)) {
