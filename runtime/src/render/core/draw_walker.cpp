@@ -1091,6 +1091,27 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
             ++i;
             continue;
         }
+        // The game's fake refraction is not drawn under the traced transmission (FB b91, V-D2, EVERYTHING 6.11): a draw
+        // of its indirect categories whose maps hold a picture of the scene redraws what is on screen, warped (a second
+        // image of Mario on Freezeflame's ice); the tracer's transmit and mirror show what lies under and before it. It
+        // stays in the traced scene; the prepass leaves it out too (the guide is what is drawn). rt_dev indirect_drawn 1:
+        // drawn as before.
+        if ((rt_light_on_ || rt_prepass_walk_) && scene_layer && rt_pass_transmit_on()) {
+            const std::uint32_t category = (item.flags & NEBULA_ITEM_CATEGORY_MASK) >> NEBULA_ITEM_CATEGORY_SHIFT;
+            if (category >= NEBULA_CATEGORY_INDIRECT_MAP_OBJ && category <= NEBULA_CATEGORY_INDIRECT_PLANET &&
+                rt_dev(RtDev::IndirectDrawn, 0.0f) < 0.5f) {
+                const core::TextureTable& maps = registries_.table(item.textures);
+                const std::size_t listed = std::min<std::size_t>(maps.count, maps.list.size());
+                bool reads_scene = false;
+                for (std::size_t k = 0; k < listed && !reads_scene; ++k) {
+                    reads_scene = maps.list[k].texture != 0u && TextureStore::is_target(maps.list[k].texture);
+                }
+                if (reads_scene) {
+                    ++i;
+                    continue;
+                }
+            }
+        }
         // A drop shadow's stencil volume whose shadow the tracer draws (rt_drops_collect) is left out.
         if (!rt_drop_volumes_.empty() && scene_layer && !state_color_write(state) && state_stencil(state) &&
             rt_drop_volumes_.contains(item.slot)) {

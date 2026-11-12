@@ -38,6 +38,8 @@ enum class RtDev : std::uint8_t {
     SunSize,        // the tangent of the sun disc's half angle, over the stage row's (sun_size; kSunTan 0.026)
     NearField,      // 1: the sky and bounce light's near field at High (rt_near.hlsl, FB b76); 0 the gather alone
     LandingAll,     // 1: every drop shadow the tracer takes gives the landing cue, not the player's alone (l80)
+    IndirectDrawn,  // 1: the game's indirect draws that read a picture of the scene are drawn under the traced
+                    // transmission as without it (FB b91: 0, their fake refraction left out)
     // The programs' (program.hlsli view_dev): from BaseFloor.
     BaseFloor,      // traced_colour's kBaseFloor: a lit program's colour over at most 1 / this
     SunStrength,    // traced_painted: the relight's sun over the stage's key (M2; 1.0, D3: October's was 1.25)
@@ -64,7 +66,7 @@ inline constexpr std::string_view kRtDevNames[kRtDevCount] = {
     "rate",           "form",          "art_facing",     "debake",        "ambient_look",  "shadow_tint",
     "ambient_gain",   "sun_gain",      "full_facing",    "sky_gain",
     "area_emission",  "hit_sky",       "bounce",         "bounce_max",    "sky_min",       "hit_dark",
-    "sun_glint",      "hit_gain",      "air_scale",      "sky_in_shadow", "light_srgb",    "sun_size",      "near_field",    "landing_all",   "base_floor",
+    "sun_glint",      "hit_gain",      "air_scale",      "sky_in_shadow", "light_srgb",    "sun_size",      "near_field",    "landing_all",   "indirect_drawn", "base_floor",
     "sun_strength",   "sky_chroma",    "stage_light",    "painted_glass",
     "painted_metal",  "painted_gloss", "painted_mirror", "keep_metal", "keep_gloss",
 };
