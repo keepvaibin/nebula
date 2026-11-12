@@ -35,6 +35,15 @@ static float4 g_traced = float4(1.0, 1.0, 1.0, 1.0);
 static float3 g_traced_o = float3(1.0, 1.0, 1.0);  // O a channel at a time (program.hlsli traced_o; FB 22.10)
 static bool g_traced_keyed = true;
 #define TRACED_UNKEYED g_traced_keyed = false
+// c76 (2.9): the plain form's channel 0 light set in parts, as its sum is made (ambient_term, traced_light_term) and
+// taken by traced_set_level: the ambient (0 to 1, before O), the fill as it falls (by O), the key and the other lights
+// as traced, and the key and fill without their facing (the set's full light), in the sum's units (255 full).
+static bool g_set_seen = false;
+static float3 g_set_amb = float3(0.0, 0.0, 0.0);
+static float3 g_set_shade = float3(0.0, 0.0, 0.0);
+static float3 g_set_rest = float3(0.0, 0.0, 0.0);
+static float3 g_set_full = float3(0.0, 0.0, 0.0);
+static float g_set_reflect = 1.0;  // the enhanced form's diffuse share after the sky's reflection (enh_sky_reflection)
 // The traced sun as light 0 (c52; the director 11-11): the pixel's traced facing max(n . s, 0) (the Facing picture's
 // r), -1 where the pixel takes the light set's (no relight, a draw traced_at gives all of every light).
 static float g_traced_facing = -1.0;
@@ -78,7 +87,11 @@ float3 traced_light(uint n) {
 }
 // The ambient by O: a colour's a channel at a time, an alpha's by O itself (a program that sums no key: as the game's).
 float ambient_term(float x) { return g_traced_keyed ? x * g_traced.a : x; }
-float3 ambient_term(float3 x) { return g_traced_keyed ? x * g_traced_o : x; }
+float3 ambient_term(float3 x) {
+    g_set_amb = x;  // c76
+    g_set_seen = true;
+    return g_traced_keyed ? x * g_traced_o : x;
+}
 float4 ambient_term(float4 x) { return g_traced_keyed ? float4(x.rgb * g_traced_o, x.a * g_traced.a) : x; }
 #define AMBIENT_TERM(x) ambient_term(x)
 #else
@@ -221,6 +234,9 @@ float enh_sky_reflection(inout EnhShade e, float3 sky) {
     const float reflected = saturate(0.04 * ab.x + ab.y) * kEnhSky;
     const float3 R = reflect(-e.V, e.Nv);
     e.spec += sky * (reflected * (1.0 + kEnhHemi * dot(R, enh_up())));
+#if NATIVE_TRACED
+    g_set_reflect = 1.0 - reflected;  // c76
+#endif
     return 1.0 - reflected;
 }
 
@@ -233,12 +249,25 @@ void enh_add_light(uint base, uint n, bool spot, uint diffuse, bool first, bool 
     enh_light(base, n, spot, eye, ldir, attn, lcol);
     float facing = diffuse == 1u ? dot(g_enh.N, ldir) : diffuse == 2u ? max(dot(g_enh.N, ldir), 0.0) : 1.0;
 #if NATIVE_TRACED
+    const float3 lcol_set = lcol;  // c76: the set's own colour
     lcol *= traced_light(n);
     facing = traced_key_facing(n, diffuse, facing);  // light 0: the traced sun (c52)
     facing = traced_fill_facing(n, diffuse, facing, g_enh.N);  // light 1: the sky's hemisphere (c53)
 #endif
     const float x = attn * facing;
-    acc += lerp(enh_lin(amb + lcol * x) - amb_lin, (enh_lin(amb + lcol) - amb_lin) * x, kEnhRamp);
+    const float3 added = lerp(enh_lin(amb + lcol * x) - amb_lin, (enh_lin(amb + lcol) - amb_lin) * x, kEnhRamp);
+    acc += added;
+#if NATIVE_TRACED
+    // c76: the set's parts (traced_set_level), in linear light.
+    if (n == 1u) {
+        g_set_shade += added;
+    } else {
+        g_set_rest += added;
+    }
+    if (n <= 1u) {
+        g_set_full += enh_lin(amb + lcol_set * attn) - amb_lin;
+    }
+#endif
     if (first && diffuse != 0u && g_enh.valid) {
 #if NATIVE_TRACED
         ldir = traced_key_dir(n, ldir);  // the sun's (c52)
@@ -318,6 +347,11 @@ float4 traced_sheen(EnhShade e) {
 // sums the key: else TRACED_UNKEYED came first, and traced_colour shares its colour as a painted one's).
 EnhShade enh_begin_traced(float3 P, float3 n, float4 pixel) {
     g_traced = traced_at(pixel);
+    g_set_seen = false;  // c76: no set parts before the first sum
+    g_set_shade = float3(0.0, 0.0, 0.0);
+    g_set_rest = float3(0.0, 0.0, 0.0);
+    g_set_full = float3(0.0, 0.0, 0.0);
+    g_set_reflect = 1.0;
     bool coloured = false;
     g_traced_o = traced_o(g_traced, pixel, coloured);
     // c69, c73: under the relight, the sky light as the environment takes it: O with the sky's hue once (FB b87: the
@@ -353,9 +387,55 @@ float4 traced_light_term(uint base, uint n, uint atten, uint diffuse, float3 pos
         const float4 flat = light_term(base, n, atten, 0u, pos, nrm);
         t.rgb = lerp(t.rgb, flat.rgb * traced_sky_facing(nrm), saturate(view_look.x));
     }
-    return t * float4(traced_light(n), 1.0);
+    const float4 lit = t * float4(traced_light(n), 1.0);
+    // c76: the set's parts for traced_set_level.
+    if (n == 1u) {
+        g_set_shade += lit.rgb;
+    } else {
+        g_set_rest += lit.rgb;
+    }
+    if (n <= 1u) {
+        g_set_full += light_term(base, n, atten, 0u, pos, nrm).rgb;
+    }
+    return lit;
 }
 #define light_term(base, n, atten, diffuse, pos, nrm) traced_light_term(base, n, atten, diffuse, pos, nrm)
+// c76 (EVERYTHING 2.9, the director 11-12): the plain form's channel 0 light in shade (its ambient and fill by O, the
+// fill by its facing) keeps the hue of the set's full light (ambient + key + fill without facing: the art's light on
+// the zone) within kTintBoundCharacter a channel, its luminance kept, under the relight (by kForm); the level is then
+// the rest (key, other lights) and that shade, saturated as the sum; the enhanced form's alike in linear light (its
+// ambient enh_amb_lin by the sky term, its sum by the sky reflection's share under its shoulder). The parts are
+// cleared here; a program without them keeps its level.
+float3 traced_set_level(float3 level) {
+    const bool enhanced = enh_on();
+    const float scale = enhanced ? 1.0 : 255.0;  // the ambient in the sum's units
+    const float3 shade = g_set_amb * scale * g_traced_o + g_set_shade;
+    const float3 full = g_set_amb * scale + g_set_full;
+    const float3 rest = g_set_rest;
+    const float reflect_share = g_set_reflect;
+    const bool seen = g_set_seen;
+    g_set_seen = false;
+    g_set_amb = float3(0.0, 0.0, 0.0);
+    g_set_shade = float3(0.0, 0.0, 0.0);
+    g_set_rest = float3(0.0, 0.0, 0.0);
+    g_set_full = float3(0.0, 0.0, 0.0);
+    g_set_reflect = 1.0;
+    if (!seen || !g_traced_keyed || !(view_look.x > 0.0)) {
+        return level;
+    }
+    const float3 luminance = float3(0.2126, 0.7152, 0.0722);
+    const float shade_l = dot(shade, luminance);
+    const float full_l = dot(full, luminance);
+    if (!(shade_l > 1e-4) || !(full_l > 1e-4)) {
+        return level;
+    }
+    const float3 hue = full / full_l;
+    const float3 tint = clamp((shade / shade_l) / max(hue, 1e-4), 1.0 / kTintBoundCharacter, kTintBoundCharacter);
+    const float3 sum = rest + lerp(shade, shade_l * tint * hue, saturate(view_look.x));
+    return enhanced ? enh_srgb(enh_shoulder(max(sum * reflect_share, 0.0))) : saturate(sum / 255.0);
+}
+#undef TRACED_LEVEL
+#define TRACED_LEVEL(x) traced_level(traced_set_level(x))
 #endif
 
 #endif  // PROGRAM_LIT_HLSLI
