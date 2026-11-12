@@ -8,6 +8,7 @@ mod manifest;
 mod mods;
 mod patches;
 
+pub use layers::cooked_source;
 pub use manifest::save_problem;
 
 use crate::json::{self, Pos};

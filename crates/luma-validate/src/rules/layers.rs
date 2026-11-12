@@ -8,6 +8,16 @@ use std::collections::BTreeSet;
 pub const SOURCE_ENDINGS: [&str; 16] =
     [".gltf", ".glb", ".bin", ".png", ".jpg", ".jpeg", ".ktx2", ".dds", ".wav", ".ogg", ".mid", ".json", ".ttf", ".otf", ".webm", ".mp4"];
 
+/// A source file (lowercase path under `files/`) of a kind the cook makes: a model, an animation file, collision, a
+/// cutscene camera (`.glb`, `.gltf` and their `.anim.`, `.kcl.`, `.canm.` forms), a picture (`.png`), a stream (`.wav`,
+/// `.ogg`) or a table (`.bcsv.json`, `.bcam.json`, a stage's placement `.arc/jmp/**.json`). What it stands in for is
+/// the cook's to say (nebula-import cook::overlay::cook_source, which a test holds to this list): it refuses by name
+/// (L804) at the game's start and in LumaLink's check before a pack.
+pub fn cooked_source(lower: &str) -> bool {
+    [".glb", ".gltf", ".png", ".wav", ".ogg", ".bcsv.json", ".bcam.json"].iter().any(|e| lower.ends_with(e))
+        || (lower.ends_with(".json") && lower.contains(".arc/jmp/"))
+}
+
 /// The game path a file at `layers/<l>/files/<path>` stands at, as kept for L305: lowercase, and a source form with
 /// `.json` added to a file name that has its own ending (`scenariodata.bcsv.json`) is that file, so two mods bringing
 /// one file in either form are named (V4-2).
@@ -122,9 +132,10 @@ pub(crate) fn check(ctx: &mut Ctx) {
                         let table = source.and_then(|e| store.path(&lower[..lower.len() - e.len()])).filter(|g| store.table(g).is_some());
                         if let Some(game_path) = table {
                             ctx.add(303, &item.name, None, None, vec![("found", t(game_path))]);
-                        } else if source.is_some() {
+                        } else if source.is_some() && !cooked_source(&lower) {
                             // A source standing in for a game file of another ending: what it may stand in for is
-                            // each content kind's contract (3.2 to 3.10), checked by that kind's rules.
+                            // each content kind's contract (3.2 to 3.10), checked by that kind's rules; the kinds the
+                            // cook makes are the cook's (L804), the others not yet defined.
                             ctx.not_checked(304, "Missing.KindContract");
                         } else if !store.may_be_new(&lower) {
                             ctx.add(302, &item.name, None, None, vec![("found", t(path))]);
