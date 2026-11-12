@@ -2,9 +2,10 @@
 # (hit_record::finish). A row a material: the model's file stem, the material's name (a trailing * matches names that
 # begin so), then any of: class (dielectric gloss metal glass ramp emissive painted translucent water), roughness,
 # metal, ior, thickness (units), tint keep, body, shine (0 to 16), emission (r g b), traced (hidden: a stand-in the
-# tracer replaces, neither drawn nor met by a ray while tracing reflections; FB b85). Empty fields keep the cooker's
+# tracer replaces, neither drawn nor met by a ray while tracing reflections; FB b85), and a metal's kind (gold
+# silver copper iron chrome brass platinum, or art: its own colour; c88). Empty fields keep the cooker's
 # numbers; a note says what the picture showed. A mod's pack may carry a file of the same form.
-model	material	class	roughness	metal	ior	thickness	tint keep	body	shine	emission	note	traced
+model	material	class	roughness	metal	ior	thickness	tint keep	body	shine	emission	note	traced	kind
 starduststartplanet	CryA_v				2.42						Pull Star Path pillar: tint removed, more reflective (the owner, G2; FB b82)
 tshapeplanet	crystal_v				2.42						Pull Star Path pillar: tint removed, more reflective (the owner, G2; FB b82)
 itembubble	LifeBubble_Mat	glass	0.02	0	1.33	0	0			0 0 0	item bubble: a clear shell, not a glowing light (EVERYTHING 6.7; FB b93)

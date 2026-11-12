@@ -52,7 +52,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     const float3 look = normalize(rt_eye_ray(g_ray, float2(id.xy) + 0.5f));
     const float facing = saturate(dot(eye_normal, -look));
     // The composite's own F0 (rt_reflect_out.hlsl): glass and water by the item's index (FB b75c).
-    const uint item = klass == kGlass || klass == kWater ? g_item_map.Load(here).x : 0u;
+    const uint item = klass == kGlass || klass == kWater || klass == kMetal ? g_item_map.Load(here).x : 0u;  // c88: metal's kind
     const uint ior_bits = item != 0u ? g_items.Load(g_at.x + (item - 1u) * kItemBytes + 60u) >> 12u & 255u : 0u;
     const float3 f0 = mirror_f0(klass, base, ior_bits);
     const float2 terms = mirror_terms(roughness, facing);

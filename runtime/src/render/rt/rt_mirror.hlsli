@@ -40,11 +40,34 @@ float3 mirror_lin(float3 c) {
     return lerp(pow((c + 0.055f) / 1.055f, 2.4f), c / 12.92f, step(c, 0.04045f));
 }
 
+// c88: a metal's F0 by its kind (hit_record.rs METAL_KINDS, the same numbers): gold, silver, copper, iron, chrome,
+// brass, platinum; linear.
+float3 mirror_metal_f0(uint kind) {
+    switch (kind) {
+    case 1u: return float3(1.000f, 0.766f, 0.336f);
+    case 2u: return float3(0.972f, 0.960f, 0.915f);
+    case 3u: return float3(0.955f, 0.638f, 0.538f);
+    case 4u: return float3(0.562f, 0.565f, 0.578f);
+    case 5u: return float3(0.550f, 0.556f, 0.554f);
+    case 6u: return float3(0.910f, 0.778f, 0.423f);
+    default: return float3(0.673f, 0.637f, 0.585f);
+    }
+}
+static const float kMetalTint = 0.25f;  // hit_record.rs METAL_TINT: how far the art's hue tints a kind's F0
+
 // Schlick's F0 of a surface of class `klass`: glass and water ((n - 1) / (n + 1))^2 by the item's index (`ior_bits`:
-// item word 15 bits 12-19, (n - 1) x 100; 0: the class's own, 1.5 and 1.33), a metal its colour, gloss 0.04 (FB b75b).
+// item word 15 bits 12-19, (n - 1) x 100; 0: the class's own, 1.5 and 1.33), gloss 0.04 (FB b75b); a metal its
+// kind's (the same bits on a metal, 1 to 7: c88) times lerp(1, its colour's hue, kMetalTint), else its colour.
 float3 mirror_f0(uint klass, float3 colour, uint ior_bits) {
     if (klass == kMirrorMetal) {
-        return mirror_lin(colour);
+        const uint kind = ior_bits & 255u;
+        const float3 art = mirror_lin(colour);
+        if (kind == 0u || kind > 7u) {
+            return art;
+        }
+        const float top = max(max(art.r, art.g), art.b);
+        const float3 hue = top > 1e-4f ? art / top : float3(1.0f, 1.0f, 1.0f);
+        return mirror_metal_f0(kind) * lerp(float3(1.0f, 1.0f, 1.0f), hue, kMetalTint);
     }
     if (klass != kMirrorGlass && klass != kMirrorWater) {
         return float3(0.04f, 0.04f, 0.04f);

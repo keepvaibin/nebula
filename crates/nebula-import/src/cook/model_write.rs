@@ -1339,6 +1339,8 @@ pub fn finish_reading(ir: &ModelIr, stem: &str, material: usize, thickness: f32,
     if face && r.rule != "the review (rt_materials.tsv)" {
         super::hit_record::face_plain(r);
     }
+    // c88: a metal's F0 by its kind, the art a tint.
+    super::hit_record::metal_finish(stem, &m.name, r);
 }
 
 /// Which mesh corners the program reads comes with the generator; here a mesh holds what its source held.

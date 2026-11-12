@@ -30,7 +30,7 @@ static const uint kCaptured = 128u;               // a hit flag (item word 11 bi
 // The pixel's index for its mirror's F0 (rt_mirror.hlsli mirror_f0; item word 15 bits 12-19): glass and water only,
 // as rt_reflect.hlsl reads it (FB b75b).
 uint mirror_ior_bits(int3 here, uint klass) {
-    const uint item = klass == kMirrorGlass || klass == kMirrorWater ? g_item_map.Load(here).x : 0u;
+    const uint item = klass == kMirrorGlass || klass == kMirrorWater || klass == kMirrorMetal ? g_item_map.Load(here).x : 0u;  // c88
     return item != 0u ? g_items.Load(g_at.x + (item - 1u) * kItemBytes + 60u) >> 12u & 255u : 0u;
 }
 

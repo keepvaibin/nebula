@@ -130,6 +130,8 @@ pub struct Reading {
     /// The review's `traced` "hidden" (FB b85): a stand-in the tracer replaces (an opaque painted inside behind clear
     /// glass, a painted rim): hit flag 7, neither drawn nor met by a ray while tracing reflections.
     pub traced_hidden: bool,
+    /// c88: a metal's kind (METAL_KINDS' place + 1), 0 not yet chosen, 255 the review's `art` (its colour as it is).
+    pub metal_kind: u8,
 }
 
 /// The models that glow (data/rt_glow.tsv): a model's file stem to its light's colour (None: the material's own) and
@@ -1341,6 +1343,7 @@ pub fn read(m: &MaterialIr) -> Reading {
         shine: -1.0,
         tint_keep: -1.0,
         traced_hidden: false,
+        metal_kind: 0,
     };
     let metal_hue = s.environment_saturation < 0.15 || (8.0..=60.0).contains(&s.environment_hue);
     if s.blend == 2 {
@@ -1602,7 +1605,106 @@ fn review(table: &str, stem: &str, name: &str, r: &mut Reading) {
         if let Some(v) = field("traced") {
             r.traced_hidden = v.eq_ignore_ascii_case("hidden");
         }
+        if let Some(v) = field("kind").map(|v| v.to_ascii_lowercase()) {
+            if v == "art" {
+                r.metal_kind = 255;
+            } else if let Some(k) = METAL_KINDS.iter().position(|(n, _)| *n == v) {
+                r.metal_kind = k as u8 + 1;
+            }
+        }
     }
+}
+
+/// c88 (the director's item 4): the metals' F0, linear (Lagarde and de Rousiers 2014, Hoffman 2015: the spectral
+/// means in sRGB primaries; brass Real-Time Rendering 4th ed. 9.2). rt_mirror.hlsli mirror_metal_f0 holds the same.
+pub const METAL_KINDS: [(&str, [f32; 3]); 7] = [
+    ("gold", [1.000, 0.766, 0.336]),
+    ("silver", [0.972, 0.960, 0.915]),
+    ("copper", [0.955, 0.638, 0.538]),
+    ("iron", [0.562, 0.565, 0.578]),
+    ("chrome", [0.550, 0.556, 0.554]),
+    ("brass", [0.910, 0.778, 0.423]),
+    ("platinum", [0.673, 0.637, 0.585]),
+];
+/// How far a metal's art colour tints its kind's F0 (rt_mirror.hlsli kMetalTint).
+pub const METAL_TINT: f32 = 0.25;
+
+fn srgb_to_linear(c: f32) -> f32 {
+    let c = c.clamp(0.0, 1.0);
+    if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
+}
+
+fn linear_to_srgb(c: f32) -> f32 {
+    let c = c.clamp(0.0, 1.0);
+    if c <= 0.0031308 { c * 12.92 } else { 1.055 * c.powf(1.0 / 2.4) - 0.055 }
+}
+
+/// c88: a metal's kind by a name (lower case): METAL_KINDS' place + 1, 0 none. Gold and silver before iron
+/// (FixIronGold_v, FixIronSilver_v).
+pub fn metal_kind_named(name: &str) -> u8 {
+    const NAMES: [(&str, u8); 12] = [
+        ("gold", 1),
+        ("silver", 2),
+        ("platinum", 7),
+        ("copper", 3),
+        ("bronze", 3),
+        ("brass", 6),
+        ("chrome", 5),
+        ("iron", 4),
+        ("steel", 4),
+        ("bolt", 4),
+        ("screw", 4),
+        ("chain", 4),
+    ];
+    NAMES.iter().find(|(n, _)| name.contains(n)).map_or(0, |&(_, k)| k)
+}
+
+/// c88: a metal's kind by its art colour (sRGB): saturated (0.3 and over) gold from 35 to 65 degrees, copper from 5 to
+/// 35, another hue none (a painted metal keeps its colour); grey, silver from linear luminance 0.5, else iron.
+pub fn metal_kind_of_colour(base: [f32; 3]) -> u8 {
+    let (hue, saturation) = hue_saturation(base);
+    if saturation >= 0.3 {
+        return if (35.0..=65.0).contains(&hue) {
+            1
+        } else if (5.0..35.0).contains(&hue) {
+            3
+        } else {
+            0
+        };
+    }
+    if luminance(base.map(srgb_to_linear)) >= 0.5 { 2 } else { 4 }
+}
+
+/// c88: a metal's F0 by its kind, the art's hue (its linear colour over its largest channel) a tint of METAL_TINT; the
+/// result as its base (sRGB) and its kind in its index field (1 + kind / 100; 1.5 none: item word 15 bits 12-19).
+pub fn metal_finish(stem: &str, material: &str, r: &mut Reading) {
+    if r.class != Class::Metal {
+        return;
+    }
+    r.ior = 1.5;
+    if r.metal_kind == 255 {
+        return;
+    }
+    let stem = stem.split('.').next().unwrap_or(stem).to_ascii_lowercase();
+    let mut kind = r.metal_kind;
+    if kind == 0 {
+        kind = metal_kind_named(&material.to_ascii_lowercase());
+    }
+    if kind == 0 {
+        kind = metal_kind_named(&stem);
+    }
+    if kind == 0 {
+        kind = metal_kind_of_colour(r.base);
+    }
+    let Some(&(_, f0)) = METAL_KINDS.get(usize::from(kind).wrapping_sub(1)) else { return };
+    let art = r.base.map(srgb_to_linear);
+    let top = art[0].max(art[1]).max(art[2]);
+    let hue = if top > 1e-4 { art.map(|v| v / top) } else { [1.0; 3] };
+    for c in 0..3 {
+        r.base[c] = linear_to_srgb(f0[c] * (1.0 + (hue[c] - 1.0) * METAL_TINT));
+    }
+    r.metal_kind = kind;
+    r.ior = 1.0 + f32::from(kind) / 100.0;
 }
 
 /// Roughness from the art (14.2 change 4): a painted environment map's sharpness, the mean size of its luminance's
@@ -1963,6 +2065,52 @@ mod tests {
         m.swaps = [[0, 1, 2, 3]; 4];
         m.material_color = [[255; 4]; 2];
         m
+    }
+
+    #[test]
+    fn a_metal_takes_its_kinds_f0_and_its_art_only_tints_it() {
+        // c88: gold by its name over a blue art colour: gold's F0 a quarter towards blue's hue, at most gold's own.
+        let mut r = read(&painted());
+        r.class = Class::Metal;
+        r.base = [0.2, 0.2, 0.8];
+        metal_finish("astrobasea.arc", "Gold_v", &mut r);
+        let lin = r.base.map(srgb_to_linear);
+        let gold = METAL_KINDS[0].1;
+        assert_eq!(r.metal_kind, 1);
+        assert!((r.ior - 1.01).abs() < 1e-6);
+        for c in 0..3 {
+            assert!(lin[c] <= gold[c] + 1e-3 && lin[c] >= gold[c] * (1.0 - METAL_TINT) - 1e-3, "{c}: {lin:?}");
+        }
+        assert!(lin[0] > lin[2], "still gold");
+        // Silver before iron; a generic name by its colour; a painted (green) metal keeps its colour; `art` keeps it.
+        assert_eq!(metal_kind_named("fixironsilver_v"), 2);
+        assert_eq!(metal_kind_named("fixirongold"), 1);
+        assert_eq!(metal_kind_named("boltmat_v"), 4);
+        assert_eq!(metal_kind_of_colour([0.9, 0.9, 0.88]), 2);
+        assert_eq!(metal_kind_of_colour([0.3, 0.3, 0.32]), 4);
+        assert_eq!(metal_kind_of_colour([0.9, 0.7, 0.2]), 1);
+        assert_eq!(metal_kind_of_colour([0.2, 0.8, 0.2]), 0);
+        let mut green = read(&painted());
+        green.class = Class::Metal;
+        green.base = [0.2, 0.8, 0.2];
+        metal_finish("anything", "Metal_v", &mut green);
+        assert!(green.metal_kind == 0 && green.base == [0.2, 0.8, 0.2] && green.ior == 1.5);
+        let mut art = read(&painted());
+        art.class = Class::Metal;
+        art.base = [0.5, 0.5, 0.5];
+        review("model\tmaterial\tclass\tkind\nanything\tGold_v\tmetal\tart\n", "anything", "Gold_v", &mut art);
+        metal_finish("anything", "Gold_v", &mut art);
+        assert!(art.metal_kind == 255 && art.base == [0.5, 0.5, 0.5] && art.ior == 1.5);
+        let mut iron = read(&painted());
+        iron.class = Class::Metal;
+        review("model\tmaterial\tkind\nanything\tGold_v\tiron\n", "anything", "Gold_v", &mut iron);
+        metal_finish("anything", "Gold_v", &mut iron);
+        assert!(iron.metal_kind == 4 && (iron.ior - 1.04).abs() < 1e-6);
+        // Not a metal: nothing changes.
+        let mut plain = read(&painted());
+        let before = (plain.base, plain.ior);
+        metal_finish("anything", "Gold_v", &mut plain);
+        assert!((plain.base, plain.ior) == before && plain.metal_kind == 0);
     }
 
     #[test]
