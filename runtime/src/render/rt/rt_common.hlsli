@@ -409,6 +409,26 @@ float3 emitter_light(uint emitter, float3 at, float3 facing, uint self, out floa
     place = asfloat(g_drops.Load4(emitter));
     const float4 colour = asfloat(g_drops.Load4(emitter + 16u));
     slot = g_drops.Load(emitter + 32u);
+    // A disc (PLAN-LIGHTS L2, l93: a glowing mesh's kind 1, its word 40 bits 0-2 = 5): lit at its point nearest the
+    // surface (Karis 2013, area lights' representative point), by its own cosine there, one-sided unless bit 3.
+    // place.w stays its radius: the shadow ray's spread (rt_toward_light).
+    float disc_cosine = 1.0f;
+    const uint shape = g_drops.Load(emitter + 40u);
+    if (g_drops.Load(emitter + 36u) == 1u && (shape & 7u) == 5u) {
+        float3 n = float3(float2(shape >> 4u & 0x3FFFu, shape >> 18u) * (2.0f / 16383.0f) - 1.0f, 0.0f);
+        n.z = 1.0f - abs(n.x) - abs(n.y);
+        const float fold = saturate(-n.z);
+        n.xy += float2(n.x >= 0.0f ? -fold : fold, n.y >= 0.0f ? -fold : fold);
+        n = normalize(n);
+        const float3 off = at - place.xyz;
+        float3 across = off - dot(off, n) * n;
+        const float wide = length(across);
+        across *= wide > place.w ? place.w / wide : 1.0f;
+        place.xyz += across;
+        const float3 back = at - place.xyz;
+        const float c = dot(back, n) * rsqrt(max(dot(back, back), 1e-4f));
+        disc_cosine = (shape & 8u) != 0u ? abs(c) : max(c, 0.0f);
+    }
     const float3 to = place.xyz - at;
     const float far2 = dot(to, to);
     if (slot == self || far2 > colour.w * colour.w) {
@@ -416,7 +436,7 @@ float3 emitter_light(uint emitter, float3 at, float3 facing, uint self, out floa
     }
     const float facing_it = max(dot(facing, to) * rsqrt(max(far2, 1e-4f)), 0.0f);
     const float fade = saturate(1.0f - far2 / (colour.w * colour.w));
-    return colour.rgb * (place.w * place.w / (far2 + place.w * place.w) * facing_it * fade * fade);
+    return colour.rgb * (place.w * place.w / (far2 + place.w * place.w) * facing_it * fade * fade * disc_cosine);
 }
 
 // ---- The surface images (rt_surface.hlsl writes them; every later pass reads them) ----

@@ -472,6 +472,7 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
         }
     }
     rt_emitter_blocks_.clear();
+    rt_emitter_meshes_.clear();
     rt_water_ring_item_ = ~0u;
     rt_emissive_areas_.assign(walk_.now->list->item_count, 0u);
     rt_glow_bodies_.assign(walk_.now->list->item_count, 0u);
@@ -2882,6 +2883,147 @@ void live_glow(const NebulaFrameList& list, const NebulaFrameItem& item, const c
 
 }  // namespace
 
+// L2 (PLAN-LIGHTS; FA l93, FC c86 cooks the shapes in the mesh's own space): a rigid glowing mesh's light by its
+// cooked pieces, each at most 6 m: a sphere, a capsule as a row of spheres along the piece's own axis, a disc facing
+// its normal (emitter_light). A row's candela splits by the pieces' areas (a capsule's is a metre of it); a luminance lights by each piece's area (a
+// closed piece shows a quarter of its surface on the mean, Cauchy; a disc its whole area at its normal, by its cosine).
+// False: no shape usable (none, out of the model's list, or not in the mesh's own box): the box path lights it.
+bool RenderCore::rt_emitter_shapes(const NebulaFrameItem& item, const core::GpuMesh& mesh, const float glow[4],
+                                   const float (*place)[4]) {
+    const NebulaFrameList& list = *walk_.now->list;
+    if (item.block >= list.block_count || list.blocks[item.block].model == 0u) {
+        return false;
+    }
+    const core::GpuModel& model = registries_.model(list.blocks[item.block].model);
+    if (item.mesh < model.first_mesh || item.mesh - model.first_mesh >= model.mesh_count ||
+        std::size_t{mesh.glow_shape_first} + mesh.glow_shape_count > model.glow_shapes.size()) {
+        return false;
+    }
+    const NebulaModelGlowShape* const shapes = model.glow_shapes.data() + mesh.glow_shape_first;
+    float area = 0.0f;
+    for (std::uint32_t s = 0; s < mesh.glow_shape_count; ++s) {
+        const NebulaModelGlowShape& shape = shapes[s];
+        for (unsigned k = 0; k < 3u; ++k) {
+            const float slack = 0.1f * (mesh.max[k] - mesh.min[k]) + 1.0f;
+            if (!(shape.centre[k] >= mesh.min[k] - slack && shape.centre[k] <= mesh.max[k] + slack) || !std::isfinite(shape.extent[k])) {
+                return false;  // not in the mesh's own space
+            }
+        }
+        if (!(shape.area > 0.0f) || !std::isfinite(shape.area) || shape.kind > NEBULA_GLOW_DISC) {
+            return false;
+        }
+        area += shape.area;
+    }
+    const std::uint64_t key = std::uint64_t{item.block} << 32u | item.mesh;
+    if (!rt_emitter_meshes_.try_emplace(key, 0u).second) {
+        return true;  // its pieces are in the list already
+    }
+    const bool fresh = rt_emitter_blocks_.try_emplace(item.block, static_cast<std::uint32_t>(rt_emitters_.size())).second;
+    if (fresh && ::galaxy::diagnosing(::galaxy::kDiagnoseRtInputs)) {
+        ++rt_emitter_sources_[std::uint64_t{1u} << 32u | item.source_hash];
+    }
+    // The matrix's 3x3: a point is M p + t; a direction's length through it; a normal by (M a) x (M b), its sign by det M.
+    const auto turn = [&](const float v[3], float out[3]) {
+        for (unsigned r = 0; r < 3u; ++r) {
+            out[r] = place[r][0] * v[0] + place[r][1] * v[1] + place[r][2] * v[2];
+        }
+    };
+    const auto length3 = [](const float v[3]) { return std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]); };
+    float scale = 0.0f;
+    for (unsigned c = 0; c < 3u; ++c) {
+        scale += std::sqrt(place[0][c] * place[0][c] + place[1][c] * place[1][c] + place[2][c] * place[2][c]) / 3.0f;
+    }
+    const float det = place[0][0] * (place[1][1] * place[2][2] - place[1][2] * place[2][1]) -
+                      place[0][1] * (place[1][0] * place[2][2] - place[1][2] * place[2][0]) +
+                      place[0][2] * (place[1][0] * place[2][1] - place[1][1] * place[2][0]);
+    if (!(scale > 0.0f) || !std::isfinite(scale + det)) {
+        return true;  // a matrix with no size shows nothing
+    }
+    constexpr std::size_t kMost = 4608u;  // as rt_emitter's
+    const std::uint32_t mesh_index = item.mesh - model.first_mesh;
+    std::uint32_t piece_number = 0u;
+    for (std::uint32_t s = 0; s < mesh.glow_shape_count; ++s) {
+        const NebulaModelGlowShape& shape = shapes[s];
+        float centre[3], axis[3];
+        turn(shape.centre, centre);
+        for (unsigned r = 0; r < 3u; ++r) {
+            centre[r] += place[r][3];
+        }
+        turn(shape.axis, axis);
+        const float axis_scale = length3(axis);
+        const float area_m2 = shape.area * scale * scale / (kUnitsPerMetre * kUnitsPerMetre);
+        const bool disc = shape.kind == NEBULA_GLOW_DISC;
+        // Its candela: a row's value by the piece's share of the area (a capsule's a metre of its length, as the box
+        // path's row), or the luminance by what it shows.
+        float candela = glow[3] > 0.0f ? glow[3] * shape.area / area : -glow[3] * area_m2 * (disc ? 1.0f : 0.25f);
+        unsigned count = 1u;
+        float radius = scale * (shape.extent[0] + shape.extent[1] + shape.extent[2]) / 3.0f;
+        float along[3]{}, piece = 0.0f;
+        std::uint32_t words = 1u;  // bit 0: a shape's piece keeps its place
+        if (shape.kind == NEBULA_GLOW_CAPSULE && axis_scale > 0.0f) {
+            const float half = shape.extent[0] * axis_scale;
+            const float thick = std::max(shape.extent[1] * scale, 12.0f);
+            count = std::clamp(static_cast<unsigned>(half / (2.0f * thick)), 1u, 8u);
+            piece = half / static_cast<float>(count);
+            radius = std::max(thick, piece);
+            if (glow[3] > 0.0f) {
+                candela = glow[3] * (2.0f * half / kUnitsPerMetre);
+            }
+            for (unsigned r = 0; r < 3u; ++r) {
+                along[r] = axis[r] / axis_scale * half;
+            }
+        } else if (disc) {
+            radius = scale * std::sqrt(std::max(shape.extent[0], 0.0f) * std::max(shape.extent[1], 0.0f));
+            // Two directions across the disc's normal, through the matrix: their cross is its normal there.
+            const float* n = shape.normal;
+            const float side[3] = {std::fabs(n[0]) < 0.9f ? 1.0f : 0.0f, std::fabs(n[0]) < 0.9f ? 0.0f : 1.0f, 0.0f};
+            float a[3] = {side[1] * n[2] - side[2] * n[1], side[2] * n[0] - side[0] * n[2], side[0] * n[1] - side[1] * n[0]};
+            const float b[3] = {n[1] * a[2] - n[2] * a[1], n[2] * a[0] - n[0] * a[2], n[0] * a[1] - n[1] * a[0]};
+            float ma[3], mb[3];
+            turn(a, ma);
+            turn(b, mb);
+            float normal[3] = {ma[1] * mb[2] - ma[2] * mb[1], ma[2] * mb[0] - ma[0] * mb[2], ma[0] * mb[1] - ma[1] * mb[0]};
+            const float norm = length3(normal) * (det < 0.0f ? -1.0f : 1.0f);
+            if (!(std::fabs(norm) > 0.0f)) {
+                continue;
+            }
+            // a x b = n |a|^2 (a = side x n, b = n x a), and (M a) x (M b) = det M M^-T (a x b): det's sign turns it back.
+            for (float& v : normal) {
+                v /= norm;
+            }
+            const float sum = std::fabs(normal[0]) + std::fabs(normal[1]) + std::fabs(normal[2]);
+            float ox = normal[0] / sum, oy = normal[1] / sum;
+            if (normal[2] < 0.0f) {
+                const float x = ox;
+                ox = (1.0f - std::fabs(oy)) * (x >= 0.0f ? 1.0f : -1.0f);
+                oy = (1.0f - std::fabs(x)) * (oy >= 0.0f ? 1.0f : -1.0f);
+            }
+            const auto bits14 = [](float v) {
+                return static_cast<std::uint32_t>(std::lround(std::clamp(v * 0.5f + 0.5f, 0.0f, 1.0f) * 16383.0f));
+            };
+            words = 1u | 2u << 1u | (shape.two_sided != 0u ? 8u : 0u) | bits14(ox) << 4u | bits14(oy) << 18u;
+        }
+        for (unsigned p = 0; p < count; ++p) {
+            if (rt_emitters_.size() >= kMost) {
+                return true;
+            }
+            RtEmitter& emitter = rt_emitters_.emplace_back();
+            const float t = count == 1u ? 0.0f : (2.0f * (static_cast<float>(p) + 0.5f) / static_cast<float>(count) - 1.0f);
+            for (unsigned c = 0; c < 3u; ++c) {
+                emitter.centre[c] = centre[c] + along[c] * t;
+                emitter.colour[c] = glow[c] * candela / static_cast<float>(count);
+            }
+            emitter.radius = std::clamp(radius, disc ? 12.0f : 25.0f, 600.0f);
+            emitter.reach = 0.0f;
+            emitter.slot = item.slot;
+            emitter.kind = 1u;
+            emitter.reserved[0] = words;
+            emitter.reserved[1] = rt_emitter_id(1u, item.slot, 0x80000000u | (mesh_index & 0xFFFFu) << 10u | (piece_number++ & 0x3FFu));
+        }
+    }
+    return true;
+}
+
 // A glowing mesh's draw as a light: one a block (a model's glowing meshes are one light, the largest of them). Its
 // intensity is the cooker's (candela, or below zero a luminance by the mesh's size); a long thin mesh (a rail of
 // electricity, a beam) is a row of lights along its length, its value taken a metre.
@@ -2896,6 +3038,10 @@ void RenderCore::rt_emitter(const NebulaFrameItem& item, const core::GpuMesh& me
     light_colour(glow, glow, rt_dev(RtDev::LightSrgb, 1.0f) > 0.5f);  // its rgb as linear light (l65); glow[3] stays
     if (glow[3] == 0.0f) {
         return;  // the game has turned this glow off
+    }
+    // L2 (l93): its cooked shapes, where it has them and lies still.
+    if (place != nullptr && mesh.glow_shape_count != 0u && rt_emitter_shapes(item, mesh, glow, place)) {
+        return;
     }
     // How the mesh's box lies: its three half axes through its matrix; with none (a skinned mesh: only where its
     // matrices stand is known), its own box's proportions at the size given.
@@ -3050,6 +3196,9 @@ void RenderCore::rt_emitters_finish(float exposure_lux) {
             c *= at_source;
         }
         e.reach = std::clamp(kUnitsPerMetre * std::sqrt(candela / (0.02f * exposure_lux)), e.radius * 2.0f, 4000.0f);
+        if (e.kind == 1u && (e.reserved[0] & 7u) == 5u) {
+            e.reach += e.radius;  // a disc (l93): its reach from its edge; the bins and the pass count from the centre
+        }
     }
     // c87 (the sunless rule): the share of a fully lit surface's light the lamps give where the eye is.
     rt_supplied_target_ = std::isfinite(lamps) ? std::clamp(lamps / std::max(exposure_lux, 1.0f), 0.0f, 1.0f) : 0.0f;

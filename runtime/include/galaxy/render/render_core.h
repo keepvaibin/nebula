@@ -585,6 +585,8 @@ private:
     std::vector<float> rt_emitter_places_before_;
     std::unordered_map<std::uint32_t, std::uint32_t> rt_emitter_now_;
     std::unordered_map<std::uint32_t, std::uint32_t> rt_emitter_blocks_;
+    // L2 (l93): the glowing meshes whose cooked shapes are in the list this frame (block << 32 | mesh).
+    std::unordered_map<std::uint64_t, std::uint32_t> rt_emitter_meshes_;
     // A byte an item of this walk's list: 1 for a glowing mesh too large to be one light (over 6 m in two axes, L-3):
     // the item table flags it (word 1, kItemEmissiveArea) and the indirect pass lights by its emission.
     std::vector<std::uint8_t> rt_emissive_areas_;
@@ -597,6 +599,10 @@ private:
     std::vector<std::uint32_t> rt_glow_tiles_, rt_glow_entries_, rt_glow_counts_;
     void rt_emitter(const NebulaFrameItem& item, const core::GpuMesh& mesh, const float centre[3], float radius,
                     const float (*place)[4] = nullptr);
+    // L2 (l93): a rigid glowing mesh's light by its cooked shapes (c86); false: it has none usable, the box path
+    // lights it.
+    bool rt_emitter_shapes(const NebulaFrameItem& item, const core::GpuMesh& mesh, const float glow[4],
+                           const float (*place)[4]);
     // A particle draw as a light: every effect that is added to the picture and is a light by its kind
     // (render/rt/rt_effect_lights.inc, from the census of the game's effects), with the particles' own place, size and
     // colour this frame. `state`: its pipeline's; `camera`: the scene's.
