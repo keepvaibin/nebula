@@ -3,6 +3,7 @@
 
 #include "galaxy/host_extension.h"
 #include "galaxy/luma_fs_service.h"
+#include "galaxy/luma_net_service.h"
 #include "galaxy/luma_mods_service.h"
 #include "galaxy/luma_system_platform.h"
 
@@ -77,6 +78,10 @@ bool provide_all(void* (*find_symbol)(const char*), void (*log)(const char*),
     galaxy::luma_mods::set_chunk_half(kept, forget);
     // The file services (services-fs 10).
     for (const LumaServiceProvider* const provider : galaxy::luma_fs::providers(log)) {
+        provide(provider);
+    }
+    // The net services (services-net; layer 1: net.local).
+    for (const LumaServiceProvider* const provider : galaxy::luma_net::providers(log)) {
         provide(provider);
     }
     Giving giving{provide};
