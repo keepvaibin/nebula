@@ -3,6 +3,9 @@
 
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/NameObj/NameObjFactory.hpp"
+#include "Game/System/GameSystem.hpp"
+#include "Game/System/GameSystemSceneController.hpp"
+#include "Game/Util/SingletonHolder.hpp"
 #include "Game/System/LumaHook.hpp"
 #include "Game/System/LumaLoader.hpp"
 #include "Game/System/LumaTypes.hpp"
@@ -219,27 +222,41 @@ namespace luma {
                 return -1;
             }
 
+            // A scene is running: its objects (the planet map's creators among them) can be asked for.
+            bool inScene() {
+                const GameSystem* const pSystem = SingletonHolder< GameSystem >::get();
+                return pSystem != nullptr && pSystem->mSceneController != nullptr && pSystem->mSceneController->isExistSceneObjHolder();
+            }
+
             CreatorFuncPtr gameCreator(const char* pName) {
+                if (!inScene()) {
+                    // A mod's start comes before any scene: the factory's planet rows are a scene's table (getCreator would
+                    // ask a scene that is not there), so only its own table answers.
+                    const NameObjFactory::Name2CreateFunc* const pRow = NameObjFactory::getName2CreateFunc(pName);
+                    return pRow != nullptr ? pRow->mCreateFunc : nullptr;
+                }
                 tResolving = true;
                 const CreatorFuncPtr pCreator = NameObjFactory::getCreator(pName);
                 tResolving = false;
                 return pCreator;
             }
 
-            // The creator the factory gives for a mod class's name: the base's maker makes it (the name the maker is the
-            // factory's row for is the one its constructor is given), then its data and `made`.
-            NameObj* make(const char* pName) {
+            // The creator the factory gives for class row r's name: the base's maker makes it (the name the maker is the
+            // factory's row for is the one its constructor is given), then its data and `made`. The game calls a creator
+            // with the placement's own name (often not the class name the factory was asked for), so each row has its
+            // own creator (kMakers) and the row is never found from the name.
+            NameObj* make(u32 r, const char* pName) {
                 lock();
-                const s32 r = rowForPlacement(pName);
-                if (r < 0) {
+                ClassRow* const pRow = r < sRowCount ? sRows[r] : nullptr;
+                if (pRow == nullptr || !pRow->live) {
                     unlock();
-                    // The class went between the factory's answer and this call: the game's own object, if it has one.
-                    const CreatorFuncPtr pGame = gameCreator(pName);
-                    nebula_log("LumaCore: %s was a mod's class when the stage asked for it and is not now; %s\n", pName,
+                    // The class went between the factory's answer and this call: the object it replaced, if any.
+                    const CreatorFuncPtr pGame = pRow != nullptr && pRow->replaces[0] != 0 ? gameCreator(pRow->replaces) : nullptr;
+                    nebula_log("LumaCore: %s (%s) was a mod's class when the stage asked for it and is not now; %s\n",
+                               pRow != nullptr ? pRow->name : "?", pName != nullptr ? pName : "",
                                pGame != nullptr ? "the game's object is made" : "nothing is made");
                     return pGame != nullptr ? pGame(pName) : nullptr;
                 }
-                ClassRow* const pRow = sRows[r];
                 sMaking++;
                 unlock();
                 NameObj* const pObject = pRow->maker(pRow->makerName);
@@ -286,6 +303,13 @@ namespace luma {
                 return pObject;
             }
 
+            template <u32 R> NameObj* makeRow(const char* pName) { return make(R, pName); }
+            template <class T, T... Rows> struct Makers {
+                static constexpr CreatorFuncPtr kAll[sizeof...(Rows)] = {&makeRow<Rows>...};
+            };
+            // Row r's creator, for every row a session can have.
+            constexpr const CreatorFuncPtr* kMakers = __make_integer_seq<Makers, u32, kMaxClasses>::kAll;
+
             // After NameObjFactory::getCreator: a live class's name (or the name it replaces) gets the kernel's maker.
             s32 factoryHook(Call* pCall, void*) {
                 if (tResolving || sLiveCount == 0) {
@@ -293,10 +317,10 @@ namespace luma {
                 }
                 const char* const pName = *static_cast<const char* const*>(pCall->args[1]);
                 lock();
-                const bool ours = rowForPlacement(pName) >= 0;
+                const s32 r = rowForPlacement(pName);
                 unlock();
-                if (ours) {
-                    *static_cast<CreatorFuncPtr*>(pCall->result) = &make;
+                if (r >= 0) {
+                    *static_cast<CreatorFuncPtr*>(pCall->result) = kMakers[r];
                 }
                 return 0;
             }
@@ -440,7 +464,8 @@ namespace luma {
             const char* const pMakerName = pDef->maker != nullptr ? pDef->maker : pDef->base;
             const CreatorFuncPtr pMaker = gameCreator(pMakerName);
             if (pMaker == nullptr) {
-                say(pMod, "define_class %s: the factory has no row %s to make its base", pName, pMakerName);
+                say(pMod, "define_class %s: the factory has no row %s to make its base%s", pName, pMakerName,
+                    inScene() ? "" : " (before a scene only its own table is known; a stage's planet names are not)");
                 return -5;
             }
             if (!installKernelHooks()) {
