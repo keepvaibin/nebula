@@ -193,7 +193,7 @@ struct RtStage {
     Sun sun = Sun::Auto;
     float direction[3] = {0.0f, 1.0f, 0.0f};  // Fixed: toward the sun in the stage's world, unit length
     float sun_gain = 1.0f;                    // multiplies the key light
-    float sun_size = 0.014f;                  // the tangent of the sun disc's half angle (kSunTan)
+    float sun_size = 0.026f;                  // the tangent of the sun disc's half angle (rt_walk.cpp kSunTan)
     float ambient_gain = 1.10f;               // multiplies the stage's ambient (kAmbientGain)
     float sky_gain = 1.0f;                    // multiplies the sky dome as light
     float exposure_low = 40.0f;               // the stage's exposure's limits, lux (3.1)

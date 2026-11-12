@@ -37,6 +37,7 @@ enum class RtDev : std::uint8_t {
     AirScale,       // the stage row's air (rt_stages.tsv air) times this
     SkyInShadow,    // g_look.x: what the sun's shadow keeps of the sky's light (1 under the relight, 0.5 Painted)
     LightSrgb,      // 1: the lights' colours (display values) taken as linear light of the same luminance; 0 as given
+    SunSize,        // the tangent of the sun disc's half angle, over the stage row's (sun_size; kSunTan 0.026)
     // The programs' (program.hlsli view_dev): from BaseFloor.
     BaseFloor,      // traced_colour's kBaseFloor: a lit program's colour over at most 1 / this
     SunStrength,    // traced_painted: the relight's sun over the stage's key (M2; 1.0, D3: October's was 1.25)
@@ -66,7 +67,7 @@ inline constexpr std::string_view kRtDevNames[kRtDevCount] = {
     "rate",           "form",          "art_facing",     "debake",        "ambient_look",  "shadow_tint",
     "ambient_gain",   "sun_gain",      "full_facing",    "bounce_ambient", "wrap",         "sky_gain",
     "area_emission",  "hit_sky",       "bounce",         "bounce_max",    "sky_min",       "hit_dark",
-    "sun_glint",      "hit_gain",      "air_scale",      "sky_in_shadow", "light_srgb",    "base_floor",
+    "sun_glint",      "hit_gain",      "air_scale",      "sky_in_shadow", "light_srgb",    "sun_size",      "base_floor",
     "sun_strength",   "sky_chroma",    "stage_light",    "glass_shine",   "water_shine",   "painted_glass",
     "painted_metal",  "painted_gloss", "painted_mirror", "substitute_glass", "keep_metal", "keep_gloss",
 };

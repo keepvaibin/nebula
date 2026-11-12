@@ -1768,7 +1768,9 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
         }
     }
     // The sun, the stage's ambient and key as brightness, and the drops by tile.
-    constexpr float kSunTan = 0.014f;    // 0.8 of a degree: three times the real sun's, for a penumbra that reads soft
+    // 1.5 degrees (the real sun's is 0.27): a shadow's edge 2 tan d wide, d its caster's distance, soft and grounded
+    // (l77, the owner's "softer shadows"); a stage row's sun_size over it (rt_materials.h, the same default).
+    constexpr float kSunTan = 0.026f;
     constexpr float kDropTan = 0.035f;   // the drop light's 2 degrees (decision D1)
     constexpr float kSkyInShadow = 0.5f;  // what the sun's shadow keeps of the sky's light: the sky turned down (the
                                           // view's tint gives back up to 0.3 of the rest in the sky's colour)
@@ -1951,7 +1953,7 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     constants.sun[0] = sun[0];
     constants.sun[1] = sun[1];
     constants.sun[2] = sun[2];
-    constants.sun[3] = stage_row.sun_size > 0.0f ? stage_row.sun_size : kSunTan;
+    constants.sun[3] = std::clamp(rt_dev(RtDev::SunSize, stage_row.sun_size > 0.0f ? stage_row.sun_size : kSunTan), 0.0f, 0.2f);
     constants.stage[0] = ambient;
     constants.stage[1] = key;
     // The game's time at the frame in seconds, wrapped at an hour (l58: the caustics' drift keeps the game's pace at
