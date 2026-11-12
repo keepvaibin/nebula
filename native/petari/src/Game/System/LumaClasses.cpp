@@ -6,7 +6,6 @@
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/Util/SingletonHolder.hpp"
-#include "Game/System/LumaGuard.hpp"
 #include "Game/System/LumaHook.hpp"
 #include "Game/System/LumaLoader.hpp"
 #include "Game/System/LumaTypes.hpp"
@@ -69,6 +68,7 @@ namespace luma {
             u32 sMaking = 0;  // makes between the maker and `made` (modGone waits for none)
 
             // The kernel's own hooks (the factory, NameObj's destructor): an owner no mod is.
+            const char sKernelOwner = 0;
             bool sHooked = false;
             // The factory asked by the kernel itself: the game's own answer, never a mod class's.
             LUMA_THREAD bool tResolving = false;
@@ -292,9 +292,7 @@ namespace luma {
                                 core()->free(sRows[replaced.row]->mod, replaced.data);
                             }
                             if (pRow->made != nullptr) {
-                                guard::run(const_cast<LumaMod*>(pRow->mod), LUMA_GUARD_CLASS, pRow->name,
-                                           reinterpret_cast<const void*>(pRow->made), reinterpret_cast<uintptr_t>(pComplete),
-                                           reinterpret_cast<uintptr_t>(pData), reinterpret_cast<uintptr_t>(pRow->user), 0, nullptr);
+                                pRow->made(const_cast<void*>(pComplete), pData, pRow->user);
                             }
                         }
                     }
@@ -361,17 +359,7 @@ namespace luma {
                     unlock();
                 }
                 if (own) {
-                    // A boundary of its own: the kernel's frame of this wrap lies between the wrap's boundary and the mod.
-                    const ClassRow* const pRow = sRows[pOverride->row];
-                    const u32 entered = pCall->ran;  // this wrap the deepest entered, the function's own code not run
-                    if (!guard::run(const_cast<LumaMod*>(pRow->mod), LUMA_GUARD_CLASS, pOverride->function->name,
-                                    reinterpret_cast<const void*>(pOverride->hook), reinterpret_cast<uintptr_t>(pCall),
-                                    reinterpret_cast<uintptr_t>(pOverride->user), 0, 0, nullptr) &&
-                        pCall->ran == entered) {
-                        // Its code failed (or its mod is off) before it proceeded (no wrap inside entered, the base's
-                        // own code not run): the call goes on as if it had (LumaHook proceed does the same for a wrap).
-                        core()->proceed(pCall);
-                    }
+                    pOverride->hook(pCall, pOverride->user);
                 } else {
                     core()->proceed(pCall);
                 }
@@ -389,12 +377,12 @@ namespace luma {
                     return false;
                 }
                 // The factory's answer is the kernel's before any mod's after sees it (afters run the highest order first).
-                if (addHook(pFactory, Hook_After, factoryHook, nullptr, &cKernelOwner, 0x7FFFFFFF) != HookResult_Added) {
+                if (addHook(pFactory, Hook_After, factoryHook, nullptr, &sKernelOwner, 0x7FFFFFFF) != HookResult_Added) {
                     nebula_log("LumaCore: the factory's hook was refused; no mod can define a class\n");
                     return false;
                 }
-                if (addHook(pDestroyed, Hook_Before, destroyedHook, nullptr, &cKernelOwner, 0x7FFFFFFF) != HookResult_Added) {
-                    removeHook(pFactory, Hook_After, factoryHook, nullptr, &cKernelOwner);
+                if (addHook(pDestroyed, Hook_Before, destroyedHook, nullptr, &sKernelOwner, 0x7FFFFFFF) != HookResult_Added) {
+                    removeHook(pFactory, Hook_After, factoryHook, nullptr, &sKernelOwner);
                     nebula_log("LumaCore: NameObj's destructor's hook was refused; no mod can define a class\n");
                     return false;
                 }

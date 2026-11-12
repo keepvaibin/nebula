@@ -26,13 +26,4 @@ namespace luma {
     // At a frame's start on the game thread, before frame() and the services' deliveries: each queued mod with the
     // mods that use it, the last started first. One load when nothing is queued.
     void takeOutRequested();
-
-    // The guard's view of a mod (LumaGuard.cpp): its id, its library's file name, its library's image (0, 0: none), and
-    // its fault flag (atomic; 1 once the guard caught a fault in its code).
-    const char* modId(const LumaMod* pMod);
-    const char* modFile(const LumaMod* pMod);
-    void modCode(const LumaMod* pMod, uintptr_t* pBase, uintptr_t* pBegin, uintptr_t* pEnd);
-    u32* modFaulted(LumaMod* pMod);
-    // Its code-time slot in the guard (LumaGuard.cpp): 0 none, else the slot's index + 1.
-    u32* modCostSlot(LumaMod* pMod);
 }

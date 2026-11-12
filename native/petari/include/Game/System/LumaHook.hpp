@@ -52,9 +52,6 @@ namespace luma {
     };
     // Hooks of a function run by `order`, then in the order they were added. On the game thread only: a function's
     // hooks are never changed in place; the new list is published at once and a call already running keeps its own.
-    // The owner the kernel's own hooks carry (LumaClasses): not a mod, so its callbacks are not run through the guard.
-    // Every other owner is a LumaMod.
-    extern const char cKernelOwner;
     HookResult addHook(const Function* pFunction, HookKind kind, HookCallback pCallback, void* pUser, const void* pOwner, s32 order);
     // One hook of an owner: 0 taken out, -1 the owner has no such hook, -3 not on the game thread.
     s32 removeHook(const Function* pFunction, HookKind kind, HookCallback pCallback, void* pUser, const void* pOwner);
