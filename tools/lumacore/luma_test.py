@@ -62,7 +62,7 @@ LINE_WORDS = 16
 VEC_TYPES = {"const Vec3f &", "const TVec3f &", "Vec3f *", "const Vec3f *", "Vec3f", "TVec3f"}
 OBJECT_TYPES = {"LiveActor *", "const LiveActor *", "NameObj *", "const NameObj *", "MarioActor *"}
 READ_TYPES = {"f32", "s32", "u32", "u16", "s16", "u8", "bool", "TVec3f", "Vec3f", "const char *"}
-FACT_OPS = {"is", "is_not", "less", "at_most", "more", "at_least", "near", "exists", "absent"}
+FACT_OPS = {"is", "is_not", "less", "at_most", "more", "at_least", "near", "exists", "absent", "has", "count"}
 # Revision 6 (R6-3, G-H6-3): the host's Settings pages by name, lower case, as the Settings screen's own list keeps
 # them (runtime/src/ui/native_settings.cpp kNativeSettingsTabNames), and the number the host opens each by.
 SETTINGS_PAGES = {"display": 0, "graphics": 1, "controls": 2, "audio": 3, "general": 4, "mods": 5, "system": 6,
@@ -390,6 +390,17 @@ def read_check(c, path, keys):
     within = None
     if op in ("exists", "absent") and value is not True:
         raise HarnessError("%s.%s takes true" % (path, op))
+    # Revision 7 (J's R-6): `has` an object whose every key the fact's value holds with that value (an object inside
+    # is checked the same way, any other value with `is`); `count` the number of times the key was written.
+    if op == "has" and not isinstance(value, dict):
+        raise HarnessError("%s.has takes an object" % path)
+    if op == "count":
+        if "count" not in keys:
+            raise HarnessError("%s: count is a check of the whole run (expect), not of one fact" % path)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise HarnessError("%s.count must be a whole number of at least 0" % path)
+        if "when" in c:
+            raise HarnessError("%s: count counts every write; when does not go with it" % path)
     if op in ("less", "at_most", "more", "at_least"):
         number(c, op, path)
     if op == "near":
@@ -431,7 +442,7 @@ def read_steps(t, bare, classes):
         else:
             a = s["after"]
             keys_known(a, path + ".after", {"fact", "log", "is", "is_not", "less", "at_most", "more", "at_least",
-                                            "near", "within", "exists", "absent"})
+                                            "near", "within", "exists", "absent", "has"})
             if ("fact" in a) == ("log" in a):
                 raise HarnessError("%s.after needs fact or log" % path)
             if "log" in a:
@@ -594,10 +605,17 @@ def read_expect(t, bare, steps):
         if not isinstance(c, dict):
             raise HarnessError("%s is not an object" % path)
         if "fact" in c:
-            keys_known(c, path, {"fact", "when", "frames", "within"} | FACT_OPS)
+            keys_known(c, path, {"fact", "when", "frames", "within", "matching"} | FACT_OPS)
             if bare:
                 raise HarnessError("%s: a bare test checks only the log, pictures and sound" % path)
-            op, value, within = read_check(c, path, {"within"})
+            op, value, within = read_check(c, path, {"within", "count"})
+            # `matching` (J): only the writes whose value has it (as `has` reads) are checked, so `count`, `absent`
+            # and the rest speak of one mod's or one word's writes of a key many write ("modlog", "fx.*").
+            matching = None
+            if "matching" in c:
+                matching = c["matching"]
+                if not isinstance(matching, dict) or not matching:
+                    raise HarnessError("%s.matching takes an object with at least one key" % path)
             when = text(c, "when", path) if "when" in c else "last"
             if when not in ("last", "first", "any", "all"):
                 raise HarnessError("%s.when must be last, first, any or all" % path)
@@ -607,7 +625,7 @@ def read_expect(t, bare, steps):
                 if not (isinstance(frames, list) and len(frames) == 2 and all(isinstance(f, int) and not isinstance(f, bool) for f in frames)):
                     raise HarnessError("%s.frames must be [first, last]" % path)
             out.append({"kind": "fact", "key": fact_key(c["fact"], path + ".fact"), "op": op, "value": value,
-                        "within": within, "when": when, "frames": frames, "source": c})
+                        "within": within, "when": when, "frames": frames, "matching": matching, "source": c})
         elif "log" in c or "no_log" in c:
             keys_known(c, path, {"log", "no_log", "times"})
             if ("log" in c) == ("no_log" in c):
@@ -778,9 +796,21 @@ def code_token(library):
     return "%016x" % fnv(OFFSET, ("%016x" % h).encode())
 
 
-def install(settings, mod_folder, code_allowed, order, kept=False):
+def permission_digest(declared):
+    """consent.md 1.2 (runtime mod_consent.cpp permission_digest): FNV-1a 64 over the name and each host, lowercased
+    (A-Z), sorted in byte order, each followed by a 0 byte; `why` is not in it."""
+    h = fnv(OFFSET, declared["name"].encode("utf-8") + b"\0")
+    hosts = ["".join(chr(ord(c) + 32) if "A" <= c <= "Z" else c for c in host) for host in declared.get("hosts", [])]
+    for host in sorted(hosts, key=lambda text: text.encode("utf-8")):
+        h = fnv(h, host.encode("utf-8") + b"\0")
+    return "%016x" % h
+
+
+def install(settings, mod_folder, code_allowed, order, kept=False, permissions="allow"):
     """A mod folder holding luma.json (the base's form, as examples/luma-hello) into the run's mods, on, in order.
-    kept: the mods an earlier test left (continue_from) stay as they are, with their data; only new ids are added."""
+    kept: the mods an earlier test left (continue_from) stay as they are, with their data; only new ids are added.
+    permissions: "allow", "deny" or {name: "allow"|"deny"}: each declared permission's answer, as the consent screen
+    records a player's (consent.md 1.2; a name the object leaves out is allowed)."""
     manifest = load_json(mod_folder / "luma.json")
     mod_id = manifest.get("id")
     if not isinstance(mod_id, str) or not mod_id:
@@ -803,6 +833,18 @@ def install(settings, mod_folder, code_allowed, order, kept=False):
     lines = "[%s]\nenabled=1\norder=%d\n" % (mod_id, order)
     if code_allowed and libraries:
         lines += "code_ok=%s\n" % code_token(target / libraries[0])
+    # The player's answers as the consent screen records them (consent.md 1.2): every declared permission answered.
+    declared = [p for p in manifest.get("permissions", []) if isinstance(p, dict) and isinstance(p.get("name"), str)]
+    names = {p["name"] for p in declared}
+    if isinstance(permissions, dict):
+        for name, answer in permissions.items():
+            if name not in names:
+                raise HarnessError("%s: permissions names %s, which the mod does not ask for" % (mod_folder, name))
+            if answer not in ("allow", "deny"):
+                raise HarnessError("%s: the answer for %s must be allow or deny" % (mod_folder, name))
+    for p in declared:
+        wanted = permissions if isinstance(permissions, str) else permissions.get(p["name"], "allow")
+        lines += "permission.%s=%s %s\n" % (p["name"], "yes" if wanted == "allow" else "no", permission_digest(p))
     with ini.open("a", encoding="utf-8") as out:
         out.write(lines)
     return mod_id
@@ -878,8 +920,6 @@ def run_one(test, renderer, args, run_folder, previous):
             raise HarnessError("install import: no such fact source yet (the import screen, task 6.1)")
         if m["options"]:
             raise HarnessError("mod options: not built yet (the Mods screen's options, task 6.3)")
-        if m["permissions"] != "allow":
-            raise HarnessError("permissions other than allow: not built yet (permissions, task 2.1)")
         if m["path"].suffix == ".luma":
             raise HarnessError("a .luma file: not readable before the luma-format reader (task 3.1); give the mod's folder")
     if test["language"] is not None and LANGUAGES[test["language"]] is None:
@@ -927,7 +967,8 @@ def run_one(test, renderer, args, run_folder, previous):
     for i, m in enumerate(test["mods"]):
         if not (m["path"] / "luma.json").is_file():
             raise HarnessError("the mod %s has no luma.json" % m["path"])
-        mod_id = install(settings, m["path"], m["code"] == "allow", i + 1, kept=previous is not None)
+        mod_id = install(settings, m["path"], m["code"] == "allow", i + 1, kept=previous is not None,
+                         permissions=m["permissions"])
         mod_ids.append((mod_id, m))
         for lib in sorted((settings / "mods" / mod_id).rglob("*.dll")):
             frozen["mods/%s/%s" % (mod_id, lib.relative_to(settings / "mods" / mod_id).as_posix())] = sha256(lib)
@@ -1000,9 +1041,26 @@ def same_value(a, b):
     return a == b
 
 
+def has_value(actual, value):
+    """Revision 7's `has`: every key of `value` is in `actual` with the same value (an object, recursively)."""
+    if not isinstance(actual, dict):
+        return False
+    for key, want in value.items():
+        if key not in actual:
+            return False
+        if isinstance(want, dict):
+            if not has_value(actual[key], want):
+                return False
+        elif not same_value(actual[key], want):
+            return False
+    return True
+
+
 def check_value(actual, op, value, within):
     if op == "is":
         return same_value(actual, value)
+    if op == "has":
+        return has_value(actual, value)
     if op == "is_not":
         return not same_value(actual, value)
     if op == "near":
@@ -1086,11 +1144,17 @@ def evaluate(test, renderer, run_folder, ran):
         if c["kind"] == "fact":
             got = [f for f in by_key.get(c["key"], []) if c["frames"] is None or c["frames"][0] <= f["frame"] <= c["frames"][1]]
             name = "fact %s %s %s" % (c["key"], c["op"], json.dumps(c["value"]))
+            if c["matching"] is not None:
+                got = [f for f in got if has_value(f["value"], c["matching"])]
+                name += " matching %s" % json.dumps(c["matching"], ensure_ascii=False)
             if c["op"] == "absent":
                 add(name, not got, [f["value"] for f in got])
                 continue
             if c["op"] == "exists":
                 add(name, bool(got), got[-1]["value"] if got else None)
+                continue
+            if c["op"] == "count":
+                add(name, len(got) == c["value"], len(got))
                 continue
             if not got:
                 add(name, False, None)
