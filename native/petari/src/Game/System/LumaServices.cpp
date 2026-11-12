@@ -29,6 +29,9 @@ namespace luma {
                 {"system", 1, 0, nullptr, "services-system"},
                 {"system.clipboard", 1, 0, "system.clipboard", "services-system"},
                 {"system.links", 1, 0, "system.links", "services-system"},
+                {"mods", 1, 0, nullptr, "services-mods"},
+                {"mods.ids", 1, 0, nullptr, "services-mods"},
+                {"mods.install", 1, 0, nullptr, "services-mods"},
                 {nullptr, 0, 0, nullptr, nullptr},
             };
 

@@ -2,6 +2,7 @@
 #include "galaxy/luma_services_host.h"
 
 #include "galaxy/host_extension.h"
+#include "galaxy/luma_mods_service.h"
 #include "galaxy/luma_system_platform.h"
 
 #include <luma_services_facts.h>
@@ -61,6 +62,10 @@ bool provide_all(void* (*find_symbol)(const char*), void (*log)(const char*),
         log("LumaCore services: the game module has no luma_services_monotonic_ns; a link's spacing uses the system's clock");
     }
     for (const LumaServiceProvider* const provider : galaxy::luma_system::providers(log, monotonic)) {
+        provide(provider);
+    }
+    // The mods services (services-mods 4).
+    for (const LumaServiceProvider* const provider : galaxy::luma_mods::providers(log)) {
         provide(provider);
     }
     Giving giving{provide};
