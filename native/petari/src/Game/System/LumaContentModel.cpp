@@ -684,6 +684,17 @@ namespace luma {
                 }
             }
 
+            LiveActor* actorOf(const LumaMod* pMod, LumaHandle handle) {
+                if (sLive == 0) {
+                    return nullptr;
+                }
+                const Attached* const pAttached = attachedOf(pMod, handle);
+                if (pAttached == nullptr) {
+                    return nullptr;
+                }
+                return pAttached->part != nullptr ? static_cast< LiveActor* >(pAttached->part->actor) : pAttached->host;
+            }
+
             const LumaServiceProvider* provider() { return &cProvider; }
         }
     }

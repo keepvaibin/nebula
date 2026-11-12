@@ -5,7 +5,10 @@
 // model.attach, model.end, model.pose.
 
 #include <luma_service_provider.h>
+#include <luma_services.h>
 #include <nebula_types.h>
+
+class LiveActor;
 
 namespace luma {
     namespace content {
@@ -16,6 +19,10 @@ namespace luma {
             // NebulaArena::destroy, before its memory goes: models made in [pStart, pEnd), or on actors there, end
             // ("scene"), never touched again. One load while no model was ever attached.
             void released(const void* pStart, const void* pEnd);
+            // content.fx's start_on_model (effects 3): the actor that draws the mod's open model `handle` (its part; the
+            // actor it is attached to while neither the model nor the placeholder is in the store); null: no open
+            // handle of the mod. Game thread.
+            LiveActor* actorOf(const LumaMod* pMod, LumaHandle handle);
             // The service's provider, registered by luma::services::provideOwn.
             const LumaServiceProvider* provider();
         }

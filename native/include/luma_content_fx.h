@@ -38,8 +38,7 @@ typedef struct LumaContentFxService {
     /* 1.0. Game thread. As start, on a model the mod attached (models 7) at its joint or socket `socket` (null: the
        model's root), offset and turned by `place` (null: none): LUMA_OK and *out, LUMA_E_ARGUMENT, LUMA_E_LIMIT,
        LUMA_E_THREAD and LUMA_E_CANCELLED as start; an unknown socket: the root, LUMA_OK, and Content.MissingJoint; an
-       ended model handle: LUMA_E_HANDLE, reported.
-       Until content.model gives model handles (models 7) every handle is an ended one. */
+       ended model handle: LUMA_E_HANDLE, reported. The effect ends ("model") when the model's handle ends. */
     int32_t (*start_on_model)(const LumaMod* mod, LumaHandle model, LumaEffectName name, const char* socket,
                               const LumaPlace* place, bool follow, LumaContentFxEffect* out);
     /* 1.0. Game thread. Stops making particles: those alive fade as the effect says (`now` false), or all go at once
