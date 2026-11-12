@@ -21,6 +21,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaContentModel.hpp"
 #include <luma.h>
 #include <luma_content_fx.h>
 #include <luma_modlog.h>
@@ -87,6 +88,7 @@ namespace luma {
                     u32 frame;          // frames the frame has seen it
                     bool clipped;
                     bool checkEmpty;    // section 2's window is open
+                    LumaHandle model;   // the mod's model it was started on (start_on_model); 0: on an actor
                 };
 
                 const LumaServiceKernel* sKernel = nullptr;
@@ -358,8 +360,10 @@ namespace luma {
                     particles[at] = 0;
                     char json[1024];
                     nebula_snprintf(json, sizeof(json),
-                                    "{\"mod\":%s,\"name\":%s,\"particles\":%s,\"group\":%d,\"joint\":%s,\"follow\":%s,\"placeholder\":%s}", mod,
-                                    name, particles, group, joint, follow ? "true" : "false", placeholder ? "true" : "false");
+                                    "{\"mod\":%s,\"name\":%s,\"particles\":%s,\"group\":%d,\"joint\":%s,\"follow\":%s,\"placeholder\":%s,"
+                                    "\"model\":%llu}",
+                                    mod, name, particles, group, joint, follow ? "true" : "false", placeholder ? "true" : "false",
+                                    static_cast< unsigned long long >(rEffect.model));
                     char key[48];
                     nebula_snprintf(key, sizeof(key), "fx.start.%llu", static_cast< unsigned long long >(rEffect.handle));
                     luma::modlog::fact(key, json);
@@ -451,9 +455,9 @@ namespace luma {
 
                 // ---- The service ----
 
-                int32_t svcStart(const LumaMod* pMod, LumaActor actor, LumaEffectName name, const char* pJoint, const LumaPlace* pPlace,
-                                 bool follow, LumaContentFxEffect* pOut) {
-                    const char* const pWhere = "content.fx.start";
+                // start and start_on_model: `model` the mod's model handle the actor draws (0: an actor of the game's).
+                int32_t startOn(const LumaMod* pMod, const char* pWhere, LumaActor actor, LumaEffectName name, const char* pJoint,
+                                const LumaPlace* pPlace, bool follow, LumaContentFxEffect* pOut, LumaHandle model) {
                     if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                         return status;
                     }
@@ -545,6 +549,7 @@ namespace luma {
                     rEffect.handle = ++sNextHandle;
                     rEffect.mod = pMod;
                     rEffect.actor = pActor;
+                    rEffect.model = model;
                     rEffect.name = pName != nullptr ? pName : cPlaceholder;
                     if (pName != nullptr) {
                         Shell* const pShell = shellFor(pActor, pName, pSource, pHostScale, composed, follow);
@@ -579,21 +584,24 @@ namespace luma {
                     return LUMA_OK;
                 }
 
-                // No model handle exists until content.model (models 7) gives them, so each is an ended one.
+                int32_t svcStart(const LumaMod* pMod, LumaActor actor, LumaEffectName name, const char* pJoint, const LumaPlace* pPlace,
+                                 bool follow, LumaContentFxEffect* pOut) {
+                    return startOn(pMod, "content.fx.start", actor, name, pJoint, pPlace, follow, pOut, 0);
+                }
+
+                // On the actor that draws the mod's model (content.model): its joints are the sockets.
                 int32_t svcStartOnModel(const LumaMod* pMod, LumaHandle model, LumaEffectName name, const char* pSocket,
                                         const LumaPlace* pPlace, bool follow, LumaContentFxEffect* pOut) {
-                    (void)model;
-                    (void)name;
-                    (void)pSocket;
-                    (void)pPlace;
-                    (void)follow;
-                    (void)pOut;
                     const char* const pWhere = "content.fx.start_on_model";
                     if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                         return status;
                     }
-                    report(pMod, pWhere, 102u, nullptr, nullptr, nullptr);
-                    return LUMA_E_HANDLE;
+                    LiveActor* const pActor = luma::content::model::actorOf(pMod, model);
+                    if (pActor == nullptr) {
+                        report(pMod, pWhere, 102u, nullptr, nullptr, nullptr);
+                        return LUMA_E_HANDLE;
+                    }
+                    return startOn(pMod, pWhere, pActor, name, pSocket, pPlace, follow, pOut, model);
                 }
 
                 int32_t svcStop(const LumaMod* pMod, LumaContentFxEffect effect, bool now) {
@@ -715,6 +723,14 @@ namespace luma {
                     }
                     Shell* const pShell = rEffect.shell;
                     LiveActor* const pActor = rEffect.actor;
+                    if (rEffect.model != 0 && luma::content::model::actorOf(rEffect.mod, rEffect.model) == nullptr) {
+                        // Its model was detached or ended: as the actor's own effects at its death.
+                        if (pShell != nullptr) {
+                            pShell->emitter->playCalcAndDeleteForeverEmitter();
+                        }
+                        end(rEffect, "model");
+                        continue;
+                    }
                     if (MR::isDead(pActor)) {
                         // As the actor's own effects (LiveActor::makeActorDead, EffectKeeper::clear).
                         if (pShell != nullptr) {
