@@ -474,6 +474,7 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
     rt_emitter_blocks_.clear();
     rt_water_ring_item_ = ~0u;
     rt_emissive_areas_.assign(walk_.now->list->item_count, 0u);
+    rt_glow_bodies_.assign(walk_.now->list->item_count, 0u);
     rt_drops_.clear();
     rt_drop_volumes_.clear();
     rt_scene_pass_ = NEBULA_NONE32;
@@ -1910,9 +1911,14 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
             }
             const bool glow_off = mesh.glow[3] != 0.0f && glow_now[3] == 0.0f;
             const bool glow_listed = glow_now[3] != 0.0f && rt_emitter_blocks_.contains(item.block);
+            // c81 (L4): bit 25, and the raster's draw flag 256: a light this frame, never duller than its colour.
+            if (glow_now[3] != 0.0f && i < rt_glow_bodies_.size()) {
+                rt_glow_bodies_[i] = 1u;
+            }
             words[14] = glow_off ? 0u
                                  : byte_of(mesh.hit_emission[0]) | byte_of(mesh.hit_emission[1]) << 8u |
-                                       byte_of(mesh.hit_emission[2]) << 16u | (glow_listed ? 1u << 24u : 0u);
+                                       byte_of(mesh.hit_emission[2]) << 16u | (glow_listed ? 1u << 24u : 0u) |
+                                       (glow_now[3] != 0.0f ? 1u << 25u : 0u);
             // Its paint as one light (the Physical style, FB 22.19): the share in bits 0-7, the direction in the
             // model's space as two signed 12-bit octahedral numbers (8-19, 20-31). 0: it stays painted.
             if (mesh.paint_share > 0.0f) {
@@ -2830,14 +2836,21 @@ void live_glow(const NebulaFrameList& list, const NebulaFrameItem& item, const c
         return;
     }
     const float* live = constants.rows[mesh.glow_row];
-    float colour[3], largest = 0.0f;
+    // c81 (L1): a row black at the cook (a lamp the game lights by it) gives its live colour as it is; the cooked glow
+    // is what the material shows with it white.
+    const bool dark = std::max({mesh.glow_cooked[0], mesh.glow_cooked[1], mesh.glow_cooked[2]}) < 0.5f / 255.0f;
+    float colour[3], now[3], largest = 0.0f;
     for (unsigned c = 0; c < 3u; ++c) {
         // A channel cooked black takes the live value against a byte's step: never a division by nothing.
-        const float ratio = std::clamp(live[c], 0.0f, 8.0f) / std::max(mesh.glow_cooked[c], 1.0f / 255.0f);
+        now[c] = std::clamp(live[c], 0.0f, 8.0f);
+        const float ratio = dark ? now[c] : now[c] / std::max(mesh.glow_cooked[c], 1.0f / 255.0f);
         colour[c] = mesh.glow[c] * std::min(ratio, 8.0f);
         largest = std::max(largest, colour[c]);
     }
-    if (!std::isfinite(largest) || !(largest > 1.0e-4f)) {
+    // c81 (L1.3): a row the game has dimmed under a twentieth of white (and under its cooked value) shows no light.
+    const auto luma = [](const float* v) { return 0.2126f * v[0] + 0.7152f * v[1] + 0.0722f * v[2]; };
+    const bool dimmed = luma(now) < 0.05f && (dark || luma(now) < luma(mesh.glow_cooked));
+    if (!std::isfinite(largest) || !(largest > 1.0e-4f) || dimmed) {
         out[3] = 0.0f;  // turned off
         return;
     }
@@ -2996,6 +3009,17 @@ void RenderCore::rt_emitters_finish(float exposure_lux) {
     }
     for (RtEmitter& e : rt_emitters_) {
         const float metres = e.radius / kUnitsPerMetre;
+        // c81 (L3): a glowing mesh's light at three times its radius adds at least half a lit surface's colour at the
+        // stage's exposure, I >= 0.5 E (3 r)^2: raised so (up to the 5,000 candela cap), never lowered.
+        if (e.kind == 1u) {
+            const float was = std::max({e.colour[0], e.colour[1], e.colour[2]});
+            const float least = std::min(0.5f * exposure_lux * 9.0f * metres * metres, 5000.0f);
+            if (was > 0.0f && was < least) {
+                for (float& c : e.colour) {
+                    c *= least / was;
+                }
+            }
+        }
         const float candela = std::max({e.colour[0], e.colour[1], e.colour[2], 0.0f});
         const float at_source = 1.0f / (exposure_lux * metres * metres);
         for (float& c : e.colour) {

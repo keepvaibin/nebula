@@ -323,7 +323,8 @@ typedef struct NebulaModelHit {
     uint8_t flags;
     uint8_t glow_source; /* where a glow's colour comes from as the game animates it: 0 fixed (glow's own), 1 + a
                             NEBULA_ROW_* code under NEBULA_ROW_OVERRIDE (the register, constant or material colour that
-                            carries what it shows unlit), 16 the vertex colour */
+                            carries what it shows unlit), 16 the vertex colour; bits 5-7 (c81) what made it a
+                            light: 0 none, 1 a row of rt_glow.tsv, 2 its name, 3 its class, 4 the game's bloom pass */
     float roughness, metal, ior, transmission;
     float base[3];      /* its colour under full light, maps mid grey: 0 to 1 */
     float emission[3];  /* what it shows with no light at all */

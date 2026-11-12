@@ -583,6 +583,9 @@ private:
     // A byte an item of this walk's list: 1 for a glowing mesh too large to be one light (over 6 m in two axes, L-3):
     // the item table flags it (word 1, kItemEmissiveArea) and the indirect pass lights by its emission.
     std::vector<std::uint8_t> rt_emissive_areas_;
+    // c81 (L4): a byte an item: 1 for a glowing mesh that is a light this frame (rt_tables): draw flag 256, never
+    // duller than its own colour (program.hlsli traced_colour).
+    std::vector<std::uint8_t> rt_glow_bodies_;
     // --diagnostics rt-inputs: the lights' sources over a report's frames (kind << 32 | name hash: 1 a glowing mesh's
     // material, 2 a particle light's effect), and how many lights each gave (c11, the emitter census a stop).
     std::unordered_map<std::uint64_t, std::uint32_t> rt_emitter_sources_;

@@ -1049,7 +1049,8 @@ pub fn finish_reading(ir: &ModelIr, stem: &str, material: usize, thickness: f32,
             super::hit_record::promote_sheen_body(kind, r);
         }
     }
-    if face {
+    // c80: a review row (an ice being's: OWNER-VERDICT G) is kept on its face too.
+    if face && r.rule != "the review (rt_materials.tsv)" {
         super::hit_record::face_plain(r);
     }
 }
@@ -1595,7 +1596,8 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
             | u8::from(r.traced_hidden  // the review's stand-in (FB b85), as a sheen over a body (c49)
                        || matches!(super::hit_record::sheen_roles_kept(ir, stem).get(i),
                                    Some(super::hit_record::SheenRole::Sheen { body: Some(_) }))) << 7);
-        b.u8(r.glow_source);
+        // c81 (L1): bits 5-7 what made it a light (hit_record.rs GLOW_*).
+        b.u8(r.glow_source | super::hit_record::glow_with_rule(stem, &m.name, &r).1 << 5);
         b.f32(r.roughness);
         b.f32(r.metal);
         b.f32(r.ior);

@@ -266,6 +266,8 @@ struct RtHit {
     bool glows;            // it shows itself and takes no light: an emissive-class surface alone (a ray sees what the
                            // screen shows; FB b77)
     bool listed;           // its light is one of the frame's emitter list: a ray that lights something shades it instead
+    bool glow_body;        // c81 (L4): a glowing mesh that is a light this frame (word 14 bit 25): never duller than
+                           // its emission to a ray that only looks
 };
 
 float3 rt_bytes3(uint w) {
@@ -382,7 +384,8 @@ void rt_hit_read(uint item, uint triangle_, float2 where_, float far_, float3 or
     const bool area = (w0.y & kRtItemArea) != 0u;
     h.listed = (w3.z >> 24u & 1u) != 0u && !area;
     h.glows = h.klass == kRtEmissive;
-    if (h.glows || area) {
+    h.glow_body = (w3.z >> 25u & 1u) != 0u;
+    if (h.glows || area || h.glow_body) {
         // The record's emission was read with its maps mid grey (hit_record.rs): twice it under the map is what it shows.
         const float3 own = rt_bytes3(w3.z);
         h.emission = (max(own.r, max(own.g, own.b)) > 0.02f ? min(own * 2.0f, 1.0f) * map : h.base);
@@ -839,6 +842,10 @@ float3 rt_hit_radiance_with(RtHit h, uint options, float3 o, bool d_known, float
     // the sky's light by F0, b59).
     if (h.klass == kRtMetal || h.klass == kRtGlass) {
         out_ += rt_hit_mirror_stand_in(h);
+    }
+    // c81 (L4): a glowing body seen (a mirror's ray, not one that lights: that light comes through the list once).
+    if (h.glow_body && (options & kRtShadeLighting) == 0u) {
+        out_ = max(out_, rt_shown(h.emission) * g_shade.gains.x);
     }
     return out_;
 }

@@ -527,7 +527,9 @@ float4 traced_colour(float4 c, float4 pixel) {
     const float kAddedMost = 1.5;
     const float3 lamps = metal ? float3(0.0, 0.0, 0.0) : min(traced_lin(base) * added, kAddedMost);
     const float4 seen = traced_mirror((traced_lin(c.rgb) * share * sheen.a + sheen.rgb) + lamps, c.a, pixel);
-    return float4(traced_srgb(seen.rgb), seen.a);
+    // c81 (L4): a glowing body (draw flag 256: its mesh a light this frame) is never duller than its own colour unlit.
+    const float3 shown = (draw_flags & 256u) != 0u ? max(seen.rgb, traced_lin(base)) : seen.rgb;
+    return float4(traced_srgb(shown), seen.a);
 }
 // The light in the air (rt/rt_volume.hlsl, the master plan's 15.2), for a draw that is lit and not a light (draw flag
 // 4: a particle that is no light): its colour times what of the stage's light and the local lights' reaches the air

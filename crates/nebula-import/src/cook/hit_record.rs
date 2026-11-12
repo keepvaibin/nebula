@@ -114,6 +114,9 @@ pub struct Reading {
     pub rule: &'static str,
     /// nebula_model.h NebulaModelHit.glow_source (L-1).
     pub glow_source: u8,
+    /// c81 (L1): what it shows with its glow_source row white, where that row is black at the cook (a lamp the game
+    /// lights by a register: the Observatory's StarLightMat_v); 0 otherwise.
+    pub glow_lit: [f32; 3],
     /// Units light crosses inside it (13.2): the model's meshes give it (model_write::Measure); 0 until then.
     pub thickness: f32,
     /// Its painted reflection's colour, largest channel 1 (the map's mean joins at the cook).
@@ -456,52 +459,169 @@ pub fn promote_sheen_body(kind: SheenKind, r: &mut Reading) {
     r.rule = "the body under a painted sheen (c49)";
 }
 
+/// c81 (L1): what made a material a light, in NebulaModelHit.glow_source bits 5-7 (effective_table.py "glow rule").
+pub const GLOW_NONE: u8 = 0;
+pub const GLOW_ROW: u8 = 1;
+pub const GLOW_NAME: u8 = 2;
+pub const GLOW_CLASS: u8 = 3;
+/// The game's own bloom pass (L1.2): not yet (the `*bloom` twins need a lookup over the whole pak).
+#[allow(dead_code)]
+pub const GLOW_BLOOM: u8 = 4;
+
+/// c81 (L1, L3): the kind of light a glowing material is, by its own name, else its model's, and its luminance
+/// (candela a square metre of the surface as the eye sees it; CHOSEN, the emitter sweep tunes them). rt_glow.tsv rows
+/// `class:<kind>` override the value.
+pub fn glow_kind(stem: &str, material: &str) -> (&'static str, f32) {
+    fn kind_of(s: &str) -> Option<(&'static str, f32)> {
+        let has = |words: &[&str]| words.iter().any(|w| s.contains(w));
+        if has(&["lava", "magma", "yougan", "prominence"]) {
+            Some(("lava", 300.0))
+        } else if has(&["electric", "thunder", "laser", "beam", "spark"]) {
+            Some(("electric", 600.0))
+        } else if has(&["fire", "flame", "meramera"]) || s.starts_with("sun") {
+            Some(("fire", 400.0))
+        } else if has(&["crystal", "jewel"]) {
+            Some(("crystal", 40.0))
+        } else if has(&["lamp", "lantern", "window", "neon", "light"]) {
+            Some(("lamp", 250.0))
+        } else if has(&["star"]) {
+            Some(("star", 200.0))
+        } else {
+            None
+        }
+    }
+    let stem = stem.split('.').next().unwrap_or(stem).to_ascii_lowercase();
+    kind_of(&material.to_ascii_lowercase()).or_else(|| kind_of(&stem)).unwrap_or(("glow", 150.0))
+}
+
+/// The light a material of the model `stem` gives: its colour and, last, its strength (0: none; above 0 candela,
+/// below 0 a luminance the renderer makes an intensity by the mesh's size).
 pub fn glow_of(stem: &str, material: &str, r: &Reading) -> [f32; 4] {
+    glow_with_rule(stem, material, r).0
+}
+
+/// glow_of and what made it a light (GLOW_*). A row of rt_glow.tsv first (a pack's, the last pack's first, then the
+/// game's; a row of one material, `model/material`, before a row of the model); else, past what is no light by data
+/// (L1.3), lava and suns by their names (G8) and every emissive-class material (L1.1), at their kind's luminance.
+pub fn glow_with_rule(stem: &str, material: &str, r: &Reading) -> ([f32; 4], u8) {
+    const NONE: ([f32; 4], u8) = ([0.0; 4], GLOW_NONE);
     // Water is never a light, whatever its brightness.
     if r.class == Class::Water {
-        return [0.0; 4];
+        return NONE;
     }
-    let stem = stem.to_ascii_lowercase();
-    // A row may name one material of the model (`model/material`): it alone glows, and it comes before a row of the
-    // whole model.
-    let one = format!("{stem}/{}", material.to_ascii_lowercase());
-    let own = || {
-        // The material's bright colour, its strongest channel at 1.
-        let c = if luminance(r.emission) > 0.05 { r.emission } else { r.base };
-        let top = c[0].max(c[1]).max(c[2]).max(1e-3);
-        [c[0] / top, c[1] / top, c[2] / top]
+    let stem = stem.split('.').next().unwrap_or(stem).to_ascii_lowercase();
+    let name = material.to_ascii_lowercase();
+    let one = format!("{stem}/{name}");
+    // The material's bright colour: its emission, else its colour under full light, else (black at the cook, a row
+    // the game animates lights it: c81) what it shows with that row white.
+    let colour = if luminance(r.emission) > 0.05 {
+        r.emission
+    } else if luminance(r.glow_lit) > luminance(r.base) {
+        r.glow_lit
+    } else {
+        r.base
     };
-    // A pack's row first (the last pack's before the others'), then the game's.
-    let packs = PACK_TABLES.read().unwrap_or_else(|e| e.into_inner());
-    let found = packs
-        .glow
-        .iter()
-        .rev()
-        .find_map(|table| glow_row(table, &one).or_else(|| glow_row(table, &stem)))
-        .or_else(|| glow_row(GLOW_TABLE, &one).or_else(|| glow_row(GLOW_TABLE, &stem)));
-    if let Some((colour, strength)) = found {
-        let strength: f32 = strength.trim().parse().unwrap_or(0.0);
-        let parts: Vec<f32> = colour.split_whitespace().filter_map(|v| v.parse().ok()).collect();
-        let c = if parts.len() == 3 { [parts[0], parts[1], parts[2]] } else { own() };
-        // A model's dark or see-through parts (eyes, shadows' blobs) are not what glows.
-        if r.class == Class::Translucent {
-            return [0.0; 4];
+    let own = || {
+        // Its strongest channel at 1.
+        let top = colour[0].max(colour[1]).max(colour[2]).max(1e-3);
+        [colour[0] / top, colour[1] / top, colour[2] / top]
+    };
+    // A row: (its own material's, its colour's numbers, its strength). The packs' lock is let go before sheen_layer
+    // takes it again.
+    fn row_of<'a>(table: &'a str, one: &str, stem: &str) -> Option<(bool, &'a str, &'a str)> {
+        glow_row(table, one).map(|(c, s)| (true, c, s)).or_else(|| glow_row(table, stem).map(|(c, s)| (false, c, s)))
+    }
+    let row = {
+        let packs = PACK_TABLES.read().unwrap_or_else(|e| e.into_inner());
+        packs
+            .glow
+            .iter()
+            .rev()
+            .find_map(|table| row_of(table, &one, &stem))
+            .or_else(|| row_of(GLOW_TABLE, &one, &stem))
+            .map(|(single, colour, strength)| {
+                let parts: Vec<f32> = colour.split_whitespace().filter_map(|v| v.parse().ok()).collect();
+                (single, parts, strength.trim().parse::<f32>().unwrap_or(0.0))
+            })
+    };
+    if let Some((single, parts, strength)) = row {
+        // A model's see-through parts (eyes, shadows' blobs) are not what glows; a row of the material itself says it is.
+        if r.class == Class::Translucent && !single {
+            return NONE;
         }
-        return [c[0], c[1], c[2], strength];
+        let c = if parts.len() == 3 { [parts[0], parts[1], parts[2]] } else { own() };
+        return ([c[0], c[1], c[2], strength], GLOW_ROW);
     }
-    // Lava and suns by name (G8): their own colour at the blend-2 rule's luminance; the renderer makes a small one a
-    // lamp and a large one an emissive area.
-    if lava_or_sun(&stem, &material.to_ascii_lowercase()) && !matches!(r.class, Class::Translucent | Class::Glass) {
-        let c = own();
-        return [c[0], c[1], c[2], -120.0];
+    // Not a light by data (L1.3): the sky, a bloom pass's twin (the game's second draw of a glow, L1.2), an
+    // Observatory miniature, a painted sheen that is not drawn while tracing (c49), what light passes through.
+    if stem.ends_with("sky")
+        || stem.starts_with("vr")
+        || stem.ends_with("bloom")
+        || stem.starts_with("mini")
+        || matches!(r.class, Class::Translucent | Class::Glass)
+        || sheen_layer(&stem, material, r)
+    {
+        return NONE;
     }
-    if r.class == Class::Emissive && r.signals.blend == 2 && luminance(r.emission) > 0.3 {
-        // A surface added to what is behind it: a light by its size. Below zero: a luminance (candela a square
-        // metre of the surface as the eye sees it), not an intensity; the renderer knows the mesh's size.
-        let c = own();
-        return [c[0], c[1], c[2], -120.0];
+    let rule = if lava_or_sun(&stem, &name) {
+        GLOW_NAME
+    } else if r.class == Class::Emissive {
+        GLOW_CLASS
+    } else {
+        return NONE;
+    };
+    // A fixed colour (no row the game animates) that shows under a twentieth of white is no light; a live one the
+    // renderer turns on and off as the game does (rt_walk.cpp live_glow).
+    if r.glow_source == 0 && luminance(colour) < 0.05 {
+        return NONE;
     }
-    [0.0; 4]
+    let (kind, value) = glow_kind(&stem, &name);
+    let key = format!("class:{kind}");
+    let scale = {
+        let packs = PACK_TABLES.read().unwrap_or_else(|e| e.into_inner());
+        packs
+            .glow
+            .iter()
+            .rev()
+            .find_map(|table| glow_row(table, &key))
+            .or_else(|| glow_row(GLOW_TABLE, &key))
+            .map_or(value, |(_, strength)| strength.trim().parse::<f32>().unwrap_or(value))
+    };
+    if !(scale > 0.0) {
+        return NONE;
+    }
+    let c = own();
+    ([c[0], c[1], c[2], -scale], rule)
+}
+
+/// c81 (L1): for a material that shows nothing at the cook, the row (glow_source's codes, as there) that lights it most
+/// when white, and what it shows then; None when no row shows a twentieth of white.
+fn glow_probe(m: &MaterialIr) -> Option<(u8, [f32; 3])> {
+    let whole = luminance(signals(m).unlit);
+    let mut best: Option<(f32, u8, [f32; 3])> = None;
+    let mut consider = |t: &MaterialIr, code: u8| {
+        let lit = signals(t).unlit;
+        let rise = luminance(lit) - whole;
+        if rise >= 0.05 && best.map_or(true, |b| rise > b.0) {
+            best = Some((rise, code, lit));
+        }
+    };
+    for r in 0..3 {
+        let mut t = m.clone();
+        t.registers[r][..3].copy_from_slice(&[255; 3]);
+        consider(&t, 1 + r as u8);
+    }
+    for k in 0..4 {
+        let mut t = m.clone();
+        t.constants[k][..3].copy_from_slice(&[255; 3]);
+        consider(&t, 4 + k as u8);
+    }
+    for n in 0..2 {
+        let mut t = m.clone();
+        t.material_color[n][..3].copy_from_slice(&[255; 3]);
+        consider(&t, 8 + n as u8);
+    }
+    best.map(|(_, code, lit)| (code, lit))
 }
 
 const FRACTION: [f32; 8] = [1.0, 223.0 / 255.0, 191.0 / 255.0, 159.0 / 255.0, 128.0 / 255.0, 96.0 / 255.0, 64.0 / 255.0, 32.0 / 255.0];
@@ -1076,6 +1196,7 @@ pub fn read(m: &MaterialIr) -> Reading {
         transmission: 0.0,
         rule: "",
         glow_source: 0,
+        glow_lit: [0.0; 3],
         thickness: 0.0,
         env_tint: unit_colour(s.environment_tint),
         env_map,
@@ -1151,6 +1272,13 @@ pub fn read(m: &MaterialIr) -> Reading {
         r.transmission = r.transmission.max(0.25);
     }
     r.glow_source = glow_source(m);
+    // c81 (L1): an emissive surface black at the cook is lit by a row the game animates: that row, and what it shows.
+    if r.class == Class::Emissive && r.glow_source == 0 && luminance(r.signals.unlit) < 0.02 {
+        if let Some((code, lit)) = glow_probe(m) {
+            r.glow_source = code;
+            r.glow_lit = lit;
+        }
+    }
     r
 }
 
@@ -1760,6 +1888,31 @@ mod tests {
         let mut dark = painted();
         dark.material_color = [[0, 0, 0, 255]; 2];
         assert_eq!(glow_source(&dark), 0, "nothing shown: no source");
+    }
+
+    #[test]
+    fn what_glows_is_found_by_its_data() {
+        // c81 (L1): an added surface glows by its class, at its kind's luminance; a black one by the row that lights it
+        // (the Observatory's cables); a painted one, a sky's and a bloom twin's do not; lava by its name.
+        let mut m = painted();
+        (m.blend_type, m.blend_src, m.blend_dst) = (1, 4, 1);
+        m.name = "CableMat_v".into();
+        let r = read(&m);
+        assert_eq!(r.class, Class::Emissive);
+        assert_eq!(glow_with_rule("testmodel", "CableMat_v", &r), ([1.0, 1.0, 1.0, -150.0], GLOW_CLASS));
+        assert_eq!(glow_with_rule("testmodel", "LaserBeam_v", &r).0[3], -600.0);
+        assert_eq!(glow_with_rule("vrsky", "CableMat_v", &r).1, GLOW_NONE);
+        assert_eq!(glow_with_rule("testmodelbloom", "CableMat_v", &r).1, GLOW_NONE);
+        assert_eq!(glow_with_rule("lavahomeplanet", "lavamat_v", &r), ([1.0, 1.0, 1.0, -300.0], GLOW_NAME));
+        let mut dark = m.clone();
+        dark.material_color = [[0, 0, 0, 255]; 2];
+        let d = read(&dark);
+        assert_eq!(d.class, Class::Emissive);
+        assert_eq!(d.glow_source, 8, "material colour 0 lights it");
+        let g = glow_with_rule("testmodel", "StarLightMat_v", &d);
+        assert!(g.1 == GLOW_CLASS && g.0[3] < 0.0 && g.0[0] == 1.0, "{g:?}");
+        let flat = read(&painted());
+        assert_eq!(glow_with_rule("testmodel", "CableMat_v", &flat).1, GLOW_NONE);
     }
 
     #[test]

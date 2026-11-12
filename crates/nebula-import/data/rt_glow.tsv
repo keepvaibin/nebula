@@ -93,3 +93,32 @@ icemeramera	0.75 0.92 1.0	60
 icemerameraking	0.75 0.92 1.0	150
 shootingstar	own	60
 gcapturetarget	0.55 0.70 1.0	250
+# c81 (PLAN-LIGHTS L1, L3): what glows by its data (lava and suns by name, every emissive surface by its class) takes
+# its kind's luminance in candela a square metre (hit_record.rs glow_kind; colour and strength as rows: "own" and the
+# value). A pack's `class:` row overrides the game's; 0: that kind does not glow.
+class:lava	own	300
+class:fire	own	400
+class:electric	own	600
+class:lamp	own	250
+class:star	own	200
+class:glow	own	150
+class:crystal	own	40
+# The director's rows (11-12, coord/rows/director_glow_rows.tsv): glowing models that had none.
+rosetta	own	250
+rosettalow	own	250
+rosettamiddle	own	250
+rosettareading	own	250
+fullmoonplanet	own	3000
+lavajambosunplanet	1.0 0.62 0.22	5000
+lavaprominenceenvironment	own	600
+lavaprominencetriple	own	600
+otakingmagma	1.0 0.45 0.10	1500
+koopashockwave	own	1200
+teresamansionglaringlightb	own	400
+tripodbosscore/core_v	own	2000
+tripodbosscore/eyelight_v_x	own	400
+whiteroom	own	1500
+jumpbeamerbeam/beam	own	600
+eyebeamerbeam	own	600
+groundstar	1.0 0.90 0.40	200
+starduststar	1.0 0.90 0.40	200

@@ -352,7 +352,7 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes)
             gpu_mesh.hit_transmission = hit.transmission;
             gpu_mesh.hit_environment = hit.environment_share;
             std::copy_n(hit.glow, 4u, gpu_mesh.glow);
-            gpu_mesh.glow_source = hit.glow_source;
+            gpu_mesh.glow_source = static_cast<std::uint8_t>(hit.glow_source & 31u);  // bits 5-7: why it glows (c81)
             gpu_mesh.hit_ior = hit.ior;
             gpu_mesh.hit_thickness = hit.thickness;
             std::copy_n(hit.env_tint, 3u, gpu_mesh.hit_env_tint);
@@ -363,8 +363,8 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes)
             // Where glow_source's colour sits among the rows of the material's own stages (the first form that
             // replaces nothing), and its cooked value: registers r (code r) are signed, the others bytes, all /255
             // as Material::fillRow fills them.
-            const std::uint32_t code = hit.glow_source - 1u;
-            if (hit.glow_source >= 1u && hit.glow_source <= 9u && material.forms_at != 0u) {
+            const std::uint32_t code = gpu_mesh.glow_source - 1u;
+            if (gpu_mesh.glow_source >= 1u && gpu_mesh.glow_source <= 9u && material.forms_at != 0u) {
                 const auto* forms = at<NebulaModelForm>(file, material.forms_at);
                 for (std::uint32_t f = 0; f < material.form_count; ++f) {
                     const NebulaModelForm& form = forms[f];
