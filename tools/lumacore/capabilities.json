@@ -59,6 +59,14 @@
     "startcheck.allmodsoff": "With a game part missing every mod is off and the title is still reached (3.13)",
     "startcheck.nocost": "With no mod none of the game's parts is checked: no line, no notice (3.13)",
     "fx.particle_missing": "A particle name an effect lists that no resource has is said once by name, in the mod's log when it is a mod's, and the game goes on (3.5)",
-    "effects.no_resource_slot": "An effect's emitter whose particle is missing keeps its place in the effect's list and is never made; the others play (3.5)"
+    "effects.no_resource_slot": "An effect's emitter whose particle is missing keeps its place in the effect's list and is never made; the others play (3.5)",
+    "fx.start": "content.fx start: a game particle on an actor at a joint, followed, shows particles; the handle is the mod's (3.5)",
+    "fx.stop": "content.fx stop ends the handle (fading or at once); an ended handle is refused (3.5)",
+    "fx.missing": "A name in no store: the placeholder, LUMA_OK, Content.MissingEffect once per name (3.5)",
+    "fx.joint": "A joint the actor lacks: the base, LUMA_OK, Content.MissingJoint once (3.5)",
+    "fx.refusals": "content.fx refuses a null, dead or wrong actor, an empty name, a null out, a short LumaPlace, a bad scale and unknown handles, each reported, nothing written (3.5)",
+    "fx.place": "content.fx places an effect by offset and turn, left where it started, tinted by scale and colour (3.5)",
+    "fx.alive": "The harness's fx.alive facts follow a handle for its first frames only (3.5)",
+    "fx.nocost": "With no mod nothing of content.fx runs: no fx facts (3.5)"
   }
 }
