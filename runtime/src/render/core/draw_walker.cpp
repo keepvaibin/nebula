@@ -1144,6 +1144,9 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
             walk_tables(item.textures, lists, root.table);
             encoder.bind_textures(lists);
         }
+        // A metal (draw flag 128, A3-F4): no body, all its light its mirror's: share 1, no added light.
+        const bool metal = rt_light_on_ && scene_layer && (item.flags & (NEBULA_ITEM_RING | NEBULA_ITEM_INSTANCES)) == 0u &&
+                           registries_.mesh(item.mesh).hit_class == NEBULA_HIT_METAL;
         root.first_instance = i;
         // Shown as it is (program.hlsli draw flag 64; the director's D2): the sky and what is drawn with it, and a
         // surface the cooker classed glowing: no share, no added light, no mirror. The sky takes no air in front (8).
@@ -1155,6 +1158,7 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
                                          registries_.mesh(item.mesh).hit_class == NEBULA_HIT_EMISSIVE));
         root.flags = ((item.flags & NEBULA_ITEM_SPREAD_LINES) != 0u ? 1u : 0u) |
                      (shown ? 64u : 0u) |
+                     (metal ? 128u : 0u) |
                      ((item.flags & NEBULA_ITEM_SPREAD_POINTS) != 0u ? 2u : 0u) |
                      (rt_light_on_ && rt_volume_drawn_ && scene_layer && rt_volume_reads(item, state) ? 4u : 0u) |
                      // A blended surface off the one the light pass saw (program.hlsli traced_by_air; FB 15.2).

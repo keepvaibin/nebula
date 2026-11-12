@@ -334,6 +334,9 @@ float4 traced_at(float4 pixel) {
         // takes all of every light: a lit program's sums are its own.
         return float4(1.0, 1.0, 1.0, 1.0);
     }
+    if ((draw_flags & 128u) != 0u) {
+        return float4(1.0, 1.0, 1.0, 1.0);  // a metal (A3-F4): its light is its mirror's; a lit metal's sums unshadowed
+    }
     return gTextures[uint(view_traced.x)].Load(int3(pixel.xy, 0));
 }
 // The colour under it: darkened by the ground's share, and lit again by what glows near the pixel (the added light:
@@ -458,7 +461,8 @@ float4 traced_colour(float4 c, float4 pixel) {
     const float nl = g_traced_lit ? 1.0 : saturate(gTextures[uint(view_traced.w)].Load(int3(pixel.xy, 0)).r);
     bool coloured = false;
     const float3 o3 = g_traced_lit ? light.aaa : traced_o(light, pixel, coloured);
-    const float3 share = g_traced_lit ? float3(1.0, 1.0, 1.0) : traced_painted(light, nl, o3, !g_traced_lit && coloured);
+    const bool metal = (draw_flags & 128u) != 0u;  // no body: share 1, no added light (A3-F4)
+    const float3 share = g_traced_lit || metal ? float3(1.0, 1.0, 1.0) : traced_painted(light, nl, o3, !g_traced_lit && coloured);
     if ((view_flags & 64u) != 0u) {
         // The share alone (--diagnostics rt-signals, S; a lit program's is 1), as x / (1 + x): the scene target is unorm.
         return float4(share / (1.0 + share), c.a);
@@ -468,7 +472,7 @@ float4 traced_colour(float4 c, float4 pixel) {
     const float3 base = g_traced_lit ? c.rgb / max(g_traced_level, kBaseFloor) : c.rgb;
     // In linear light (M1): the colour and its base decoded, the share, the added light and the mirror's exchange on
     // them (the tracer's pictures are linear), the result encoded.
-    const float4 seen = traced_mirror(traced_lin(c.rgb) * share + traced_lin(base) * added, c.a, pixel);
+    const float4 seen = traced_mirror(traced_lin(c.rgb) * share + (metal ? float3(0.0, 0.0, 0.0) : traced_lin(base) * added), c.a, pixel);
     return float4(traced_srgb(seen.rgb), seen.a);
 }
 // The light in the air (rt/rt_volume.hlsl, the master plan's 15.2), for a draw that is lit and not a light (draw flag
