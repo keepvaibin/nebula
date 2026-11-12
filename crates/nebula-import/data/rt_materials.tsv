@@ -524,20 +524,20 @@ tripodbossshellbreak	ShellMetal1(8)	metal	0.30	1							director metal: was diele
 tripodbossshellbreak	ShellMetal1(9)	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
 tshapeplanet	MetalC_v	metal	0.26	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
 tshapeplanetlow	MaterialCode:Ice_v	glass	0.05	0	1.31		0	0			director ice: was dielectric; OWNER-VERDICT G: ice, ior 1.31, through-colour 0.35 of the art's; picture owed
-ufobattlestagec	MetalMat	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
-ufobattlestagec	darkmetal	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
-ufobattlestaged	MetalMat	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
-ufobattlestaged	colormetal	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
-ufobattlestagee	MetalMat	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
-ufobattlestagee	colormetal	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
-ufobluestarcupsule	UFOMetalMat_v	metal	0.26	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
-ufonormalb	MetalMat	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
-ufonormalb	MetalMat(2)	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
-ufonormalb	MetalMat(3)	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
-ufonormald	MetalMat	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
-ufonormald	darkmetal	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
-ufostronga	MetalMat	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
-ufostronga	darkmetal	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufobattlestagec	MetalMat	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufobattlestagec	darkmetal	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufobattlestaged	MetalMat	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufobattlestaged	colormetal	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufobattlestagee	MetalMat	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufobattlestagee	colormetal	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufobluestarcupsule	UFOMetalMat_v	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufonormalb	MetalMat	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufonormalb	MetalMat(2)	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufonormalb	MetalMat(3)	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufonormald	MetalMat	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufonormald	darkmetal	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufostronga	MetalMat	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufostronga	darkmetal	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
 vsbegomanspikeplanet	MetalMat_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
 warppod	MetalMat_v	metal	0.24	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
 warppod	MetalMat_v(2)	metal	0.24	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
@@ -619,3 +619,28 @@ breakablecagebreak	sabi_v*	metal	0.6	1							FC c100 (the owner 11-12, the lava 
 breakablecagebreak	tethu_v*	metal	0.3	1							FC c100 (the owner 11-12, the lava stop): a cage's bars (tetsu), was gloss: iron; picture owed		iron	
 breakablecage	gaeasu_v	glass	0.02	0	1.5						FC c100: a cage's panes (garasu), was gloss: glass; picture owed			
 metbo	MetMat_v	metal	0.25	1							FC c100 (the owner 11-12): the Goombeetle's helmet, was gloss (a highlight sprite): metal, its own colour; picture owed		art	
+ufokinoko	lambert8_v	metal	0.22	1							director d15: the Starshroom, the red hull: polished metal in its own colour (the owner 11-12: not properly glass and metal); picture owed		art	
+ufokinoko	lambert7_v	metal	0.22	1							director d15: the Starshroom, the cream hull and stem: polished metal in its own colour (the owner 11-12: not properly glass and metal); picture owed		art	
+ufokinoko	wawa:lambert7_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
+ufokinoko	wawa:lambert8_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
+ufokinoko	lambert13_v	metal	0.25	1							director d15: the Starshroom, the bands and bolts: silver (the owner 11-12: not properly glass and metal); picture owed		silver	
+ufokinokolanding	lambert8_v	metal	0.22	1							director d15: the Starshroom, the red hull: polished metal in its own colour (the owner 11-12: not properly glass and metal); picture owed		art	
+ufokinokolanding	lambert7_v	metal	0.22	1							director d15: the Starshroom, the cream hull and stem: polished metal in its own colour (the owner 11-12: not properly glass and metal); picture owed		art	
+ufokinokolanding	wawa:lambert7_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
+ufokinokolanding	wawa:lambert8_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
+ufokinokolanding	lambert13_v	metal	0.25	1							director d15: the Starshroom, the bands and bolts: silver (the owner 11-12: not properly glass and metal); picture owed		silver	
+ufokinokolandingastro	lambert8_v	metal	0.22	1							director d15: the Starshroom, the red hull: polished metal in its own colour (the owner 11-12: not properly glass and metal); picture owed		art	
+ufokinokolandingastro	lambert7_v	metal	0.22	1							director d15: the Starshroom, the cream hull and stem: polished metal in its own colour (the owner 11-12: not properly glass and metal); picture owed		art	
+ufokinokolandingastro	wawa:lambert7_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
+ufokinokolandingastro	wawa:lambert8_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
+ufokinokolandingastro	lambert13_v	metal	0.25	1							director d15: the Starshroom, the bands and bolts: silver (the owner 11-12: not properly glass and metal); picture owed		silver	
+ufokinokolow	lambert8_v	metal	0.22	1							director d15: the Starshroom, the red hull: polished metal in its own colour (the owner 11-12: not properly glass and metal); picture owed		art	
+ufokinokolow	lambert7_v	metal	0.22	1							director d15: the Starshroom, the cream hull and stem: polished metal in its own colour (the owner 11-12: not properly glass and metal); picture owed		art	
+ufokinokolow	wawa:lambert7_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
+ufokinokolow	wawa:lambert8_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
+ufokinokolow	lambert13_v	metal	0.25	1							director d15: the Starshroom, the bands and bolts: silver (the owner 11-12: not properly glass and metal); picture owed		silver	
+ufokinokounderconstruction	lambert8_v	metal	0.22	1							director d15: the Starshroom, the red hull: polished metal in its own colour (the owner 11-12: not properly glass and metal); picture owed		art	
+ufokinokounderconstruction	lambert7_v	metal	0.22	1							director d15: the Starshroom, the cream hull and stem: polished metal in its own colour (the owner 11-12: not properly glass and metal); picture owed		art	
+ufokinokounderconstruction	wawa:lambert7_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
+ufokinokounderconstruction	wawa:lambert8_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
+ufokinokounderconstruction	lambert13_v	metal	0.25	1							director d15: the Starshroom, the bands and bolts: silver (the owner 11-12: not properly glass and metal); picture owed		silver	
