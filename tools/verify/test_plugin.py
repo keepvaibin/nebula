@@ -4,7 +4,8 @@ The test library (nebula_test_extension.dll) is two halves: the host loads it wi
 menus), and the mods run it as a plugin (tours, events, teleports and walks through the mod API). This puts it in
 SETTINGS_FOLDER/mods/nebula-tests with its luma.json, and turns it on in mods.ini with its code allowed, as the Mods
 page's allow would (code_ok: FNV-1a 64 over the library folder's files, as mod_plugins.cpp's plugin_token makes it).
-The library keeps its file name: the plugin finds the host's instance of it by that name.
+The library goes in as code/windows-x64/mod.dll (the one route for a mod's code); the plugin finds the host's instance
+of it by its exports, not its name (test_plugin.cpp find_extension).
 """
 import json
 import pathlib
@@ -36,19 +37,18 @@ def main():
     mod = settings / "mods" / MOD_ID
     if mod.exists():
         shutil.rmtree(mod)
-    (mod / "plugins").mkdir(parents=True)
-    shutil.copyfile(library, mod / "plugins" / library.name)
-    rel = "plugins/" + library.name
+    rel = "code/windows-x64/mod.dll"
+    (mod / "code" / "windows-x64").mkdir(parents=True)
+    shutil.copyfile(library, mod / rel)
     (mod / "luma.json").write_text(json.dumps({
-        "format": 1,
+        "format": "1.0",
         "id": MOD_ID,
         "name": "Nebula tests",
         "version": "1.0.0",
-        "game": "RMG",
+        "game": {"id": "RMG"},
         "authors": ["Nebula tests"],
         "description": "The test runs' tours and events (tools/test_driver/extension/test_plugin.cpp).",
-        "layers": [],
-        "plugins": [{"api": 2, "binaries": {"windows-x64": rel}}],
+        "code": {"platforms": ["windows-x64"]},
     }, indent=2), encoding="utf-8")
     token = "%016x" % fnv(OFFSET, code_hash(mod / rel).encode())
     ini = settings / "mods.ini"
