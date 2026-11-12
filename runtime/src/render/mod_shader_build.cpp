@@ -29,6 +29,7 @@ struct Variant {
     bool only_with_discard;
     std::vector<const char*> defines;
     bool tracer = false;  // ray tracing's: never in the bound-table form
+    bool gained_vertex = false;  // a vertex stage's too where it de-lights its colour (traced_vertex_gain; D2)
 };
 
 // compile_programs.py's forms of a generated program.
@@ -40,8 +41,8 @@ const std::vector<Variant>& variants() {
         {kProgramMotion, true, false, {"NATIVE_MOTION"}},
         {kProgramSample, false, true, {"NATIVE_SAMPLE"}},
         {kProgramPrepass, false, false, {"NATIVE_PREPASS"}, true},
-        {kProgramTraced, false, false, {"NATIVE_TRACED"}, true},
-        {kProgramTracedMotion, false, false, {"NATIVE_TRACED", "NATIVE_MOTION"}, true},
+        {kProgramTraced, false, false, {"NATIVE_TRACED"}, true, true},
+        {kProgramTracedMotion, false, false, {"NATIVE_TRACED", "NATIVE_MOTION"}, true, true},
         {kProgramTracedReactive, false, false, {"NATIVE_TRACED", "NATIVE_REACTIVE"}, true},
         {kProgramTracedLayer, false, false, {"NATIVE_TRACED", "NATIVE_REACTIVE", "NATIVE_LAYER"}, true},
         {kProgramPrepassItem, false, false, {"NATIVE_PREPASS", "NATIVE_PREPASS_ITEM"}, true},
@@ -154,7 +155,8 @@ ModShaderBuild build_missing_mod_shaders(const std::filesystem::path& sources, c
                 std::vector<Stage> stages;
                 bool good = true;
                 for (const Variant& variant : variants()) {
-                    if ((!job.pixel && !variant.vertex) ||
+                    if ((!job.pixel && !variant.vertex &&
+                         !(variant.gained_vertex && job.text.find("traced_vertex_gain(") != std::string::npos)) ||
                         (variant.only_with_discard && job.text.find("discard") == std::string::npos)) {
                         continue;
                     }

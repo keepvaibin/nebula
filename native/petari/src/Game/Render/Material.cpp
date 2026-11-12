@@ -881,6 +881,12 @@ void meshLayoutInput(NebulaPipelineDesc* pDesc, NebulaLayoutInput* pInputs, u16 
                 return;
             }
             break;
+        case NEBULA_INPUT_GAIN:
+            if ((rMesh.attributes & NEBULA_MESH_GAIN) != 0) {
+                further(3, static_cast< u32 >(afterColor + ((rMesh.attributes & NEBULA_MESH_TANGENTS) != 0 ? 24 : 0)));
+                return;
+            }
+            break;
         default: {
             const u32 number = semantic - NEBULA_INPUT_COORD0;
             if (number < rMesh.coord_count && pCoords[number].stream != NEBULA_MESH_NO_COORD) {
@@ -896,15 +902,20 @@ void meshLayoutInput(NebulaPipelineDesc* pDesc, NebulaLayoutInput* pInputs, u16 
         }
         }
         // What the mesh has none of reads zero.
-        place(NEBULA_STREAM_ZERO, semantic >= NEBULA_INPUT_COORD0 ? 1 : semantic == NEBULA_INPUT_COLOR0 || semantic == NEBULA_INPUT_COLOR1 ? 2 : 0, 0, 0);
+        place(NEBULA_STREAM_ZERO,
+              semantic >= NEBULA_INPUT_COORD0                                    ? 1
+              : semantic == NEBULA_INPUT_COLOR0 || semantic == NEBULA_INPUT_COLOR1 ? 2
+              : semantic == NEBULA_INPUT_GAIN                                    ? 3
+                                                                                 : 0,
+              0, 0);
     }
 }
 
-// Exact for meshes with up to six coordinates (attributes 4 bits, stride 12 bits, a byte a coordinate: its stream 1,
+// Exact for meshes with up to six coordinates (attributes 5 bits, stride 11 bits, a byte a coordinate: its stream 1,
 // 3 or none and its place among stream 3's in eights); a 64-bit hash of them past that.
 u64 meshLayoutKey(const NebulaModelMesh& rMesh) {
     const NebulaModelMeshCoord* pCoords = nebula_mesh_coords(&rMesh);
-    u64 key = static_cast< u64 >(rMesh.attributes & 0xF) | static_cast< u64 >(rMesh.further_stride & 0xFFF) << 4;
+    u64 key = static_cast< u64 >(rMesh.attributes & 0x1F) | static_cast< u64 >(rMesh.further_stride & 0x7FF) << 5;
     if (rMesh.coord_count <= 6) {
         for (u32 n = 0; n < rMesh.coord_count; n++) {
             const u64 code = pCoords[n].stream == NEBULA_MESH_NO_COORD ? 0 : pCoords[n].stream == 1 ? 1 : 2 + pCoords[n].offset / 8;

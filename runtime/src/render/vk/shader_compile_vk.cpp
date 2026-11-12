@@ -107,6 +107,7 @@ std::optional<std::uint32_t> semantic_location(std::string semantic, std::uint32
         if (name == "POSITION" && index == 1u) return 7u;
         if (name == "BEND" && index == 0u) return 7u;
         if (name == "BLENDINDICES" && index == 1u) return 8u;
+        if (name == "BLENDWEIGHT" && index == 0u) return 8u;  // the de-light gain (NEBULA_INPUT_GAIN): no site reads it
         if (name == "TEXCOORD") return 9u + index;
         return std::nullopt;
     }

@@ -60,6 +60,16 @@ cbuffer Draw : register(b3) {
 StructuredBuffer<float4> rows : register(t16);
 StructuredBuffer<uint4> instances : register(t17);  // row base, last frame's row base, light base, world row base
 
+// The painted light taken out of a vertex colour (D2; model_write.rs debake_gains): the cooker's gain a channel, signed
+// bytes of log2 x 64 (a mesh without gains reads 0: 1), by kDebake (view_look.z: 1 under the relight, else 0).
+float3 traced_vertex_gain(float3 c, uint gain) {
+    if (!(view_look.z > 0.0)) {
+        return c;
+    }
+    const int3 steps = int3(gain << 24u, gain << 16u, gain << 8u) >> 24;
+    return saturate(c * lerp(float3(1.0, 1.0, 1.0), exp2(float3(steps) / 64.0), view_look.z));
+}
+
 // The draw's textures: TEX(n) and SAMP(n) are its n-th map and that map's sampler.
 #if NEBULA_BOUND_TABLES
 // Devices without descriptor indexing (Vulkan only): the draw's own table of NEBULA_TABLE_SLOTS maps, bound per draw.

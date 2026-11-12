@@ -111,6 +111,12 @@ def main():
             for name in VERTEX_FORMS:
                 index, defines = VARIANTS[name]
                 add(stage, row, source, text, entry, defines, index)
+            # A vertex stage that de-lights its colour (programs.rs, D2) does so in its traced forms alone; the tracer's
+            # draws and their prepass run those (program_table.cpp program_bytes).
+            if "traced_vertex_gain(" in text:
+                for name in ("traced", "traced_motion"):
+                    index, defines = TRACED_VARIANTS[name]
+                    add(stage, row, source, text, entry, defines, index, False)
             flags[(stage, row)] = READS_WORLD if "world_" in text else 0
             return
         for name, (index, defines) in VARIANTS.items():

@@ -107,6 +107,7 @@ enum {
     NEBULA_MESH_COLOR0 = 1u << 1,
     NEBULA_MESH_COLOR1 = 1u << 2,
     NEBULA_MESH_TANGENTS = 1u << 3,
+    NEBULA_MESH_GAIN = 1u << 4, /* stream 3: a word a vertex, the de-light gain (NEBULA_INPUT_GAIN) */
 };
 
 /* Where a mesh keeps coordinate n: stream 1 at 16 for coordinate 0, stream 3 at `offset` for the others;
@@ -119,7 +120,7 @@ typedef struct NebulaModelMeshCoord {
 
 /* Stream 0: position, 3 floats. Stream 1: normal 3 floats, colour word, coordinate 0 2 floats (24 bytes).
    Stream 2: draw matrix number, u32, present when single_matrix is NEBULA_MODEL_NONE. Stream 3: the further
-   coordinates, 2 floats each in ascending order, then colour 1, then tangent and binormal. */
+   coordinates, 2 floats each in ascending order, then colour 1, then tangent and binormal, then the gain. */
 typedef struct NebulaModelMesh {
     float min[3], max[3], radius;
     uint32_t vertex_count, index_count;
@@ -171,6 +172,8 @@ enum {
     NEBULA_INPUT_BINORMAL = 4,
     NEBULA_INPUT_WIDEN = 5, /* a site's widened corner: one uint, which corner */
     NEBULA_INPUT_MATRIX = 6, /* a site's vertex carrying its draw matrix: one uint */
+    NEBULA_INPUT_GAIN = 7, /* the painted light's de-light gain a channel (NEBULA_MESH_GAIN): one uint, signed bytes of
+                              log2 x 64 (r, g, b), 0 a gain of 1 */
     NEBULA_INPUT_COORD0 = 16, /* + the mesh's coordinate number */
 };
 

@@ -2001,15 +2001,15 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
         // The painted composite's look (program.hlsli traced_painted; DIRECTOR.md D1, D4, section 12). kForm: 1 the
         // relight (October's engine v2: every painted mesh by the traced sun in the stage's linear units), 0 Painted
         // (the art's own facing). y: the sun's height over the player's up, at least 0.5 (M3's exposure: a sun below
-        // the horizon does not leave the reference to the sky). kDebake: D2's per-vertex gain (0 until the cooker
-        // writes it). kAmbientLook: the share of the stage's sky the relight keeps. Painted: (0, -, 0, 1).
-        constexpr float kForm = 1.0f, kDebake = 0.0f, kAmbientLook = 1.0f;
+        // the horizon does not leave the reference to the sky). kDebake: D2's per-vertex gain (the cooker's, c37), all
+        // of it under the relight. kAmbientLook: the share of the stage's sky the relight keeps. Painted: (0, -, 0, 1).
+        constexpr float kForm = 1.0f, kDebake = 1.0f, kAmbientLook = 1.0f;
         // No traced sun (a stage without one, the sun part off): the facing is 1 everywhere and the art keeps its own.
         const bool relit = rt_physical_ && sunned && rt_part(render, RtPart::Sun) != 0u;
         const float up_sun = list.sky_up_known != 0u ? sky_up_[0] * sun[0] + sky_up_[1] * sun[1] + sky_up_[2] * sun[2] : 1.0f;
         rt_look_[0] = relit ? kForm : 0.0f;
         rt_look_[1] = std::max(up_sun, 0.5f);
-        rt_look_[2] = rt_physical_ ? kDebake : 0.0f;
+        rt_look_[2] = relit ? kDebake : 0.0f;
         rt_look_[3] = rt_physical_ ? kAmbientLook : 1.0f;
         // A run's own (rt_dev.h form, art_facing, debake, ambient_look), over the style's.
         rt_look_[0] = rt_dev(RtDev::Form, rt_look_[0]);

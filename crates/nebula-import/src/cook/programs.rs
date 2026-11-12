@@ -164,6 +164,8 @@ pub enum Input {
     Coord(u8),
     Tangent,
     Binormal,
+    /// The painted light's de-light gain (nebula_model.h NEBULA_INPUT_GAIN; model_write.rs debake_gains).
+    Gain,
 }
 
 #[derive(Default, Clone)]
@@ -1102,6 +1104,16 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
         uv_kinds.push(projective);
     }
 
+    // An unlit channel's vertex colour de-lit by the cooker's gain, by kDebake (program.hlsli traced_vertex_gain; D2):
+    // in the traced form alone (compile_programs.py gives such a stage its traced forms), so a draw without ray tracing
+    // runs what it ran before.
+    // Every form that reads colour 0: the gain word is the cooker's say (0, a gain of 1, where its rgb is lit).
+    let gained = reads_color[0];
+    if gained {
+        for (k, line) in ["#if NATIVE_TRACED", "    v.color0.rgb = traced_vertex_gain(v.color0.rgb, v.gain);", "#endif"].into_iter().enumerate() {
+            body.insert(k, line.into());
+        }
+    }
     // Lit lines name the turned normal; only a stage that reads it pays for it.
     if body.iter().any(|l| l.contains(", nrm)") || l.contains("= nrm;")) {
         body.insert(0, "    const float3 nrm = lit_normal(p, v.nrm);".into());
@@ -1119,6 +1131,10 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
             let _ = writeln!(vertex_in, "    float4 color{ch} : COLOR{ch};");
             final_inputs.push(if ch == 0 { Input::Color0 } else { Input::Color1 });
         }
+    }
+    if gained {
+        vertex_in.push_str("    uint gain : BLENDWEIGHT;\n");
+        final_inputs.push(Input::Gain);
     }
     let mut uv = 0;
     for i in &inputs {
@@ -1201,6 +1217,7 @@ pub fn input_code(input: &Input) -> u8 {
         Input::Color1 => 2,
         Input::Tangent => 3,
         Input::Binormal => 4,
+        Input::Gain => 7,
         Input::Coord(k) => 16 + *k,
     }
 }

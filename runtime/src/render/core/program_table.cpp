@@ -135,13 +135,14 @@ ProgramBytes program_bytes(std::uint64_t id, unsigned variant, bool pixel) noexc
     if (variant >= kProgramVariants && !traced) {
         return {};
     }
-    // A traced form's vertex stage: a written lit material's own (its light varyings) where it has one, for its
-    // prepass too: the prepass writes the depth the scene pass then tests, so both run one vertex stage.
+    // A traced form's vertex stage: its own where it has one (a written lit material's light varyings; a generated
+    // stage's de-lit colour, D2), a mod's too, for its prepass too: the prepass writes the depth the scene pass then
+    // tests, so both run one vertex stage.
     bool own_form = false;
     if (!pixel && traced) {
         const unsigned own = variant == kProgramTracedMotion ? unsigned{kProgramTracedMotion} : unsigned{kProgramTraced};
         const Row* const row = find(id, false);
-        if (row != nullptr && row->variants[own].size != 0u) {
+        if (row != nullptr ? row->variants[own].size != 0u : mod_program_bytes(id, own, false).size != 0u) {
             variant = own;
             own_form = true;
         }

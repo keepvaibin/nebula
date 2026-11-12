@@ -79,6 +79,7 @@ std::uint32_t input_location(std::uint32_t semantic) noexcept {
     case NEBULA_INPUT_BINORMAL: return kBinormal;
     case NEBULA_INPUT_WIDEN: return kWiden;
     case NEBULA_INPUT_MATRIX: return kMatrix;
+    case NEBULA_INPUT_GAIN: return kWiden;  // a uint at the widened corner's place: only sites read that one
     default: return semantic >= NEBULA_INPUT_COORD0 ? kCoord0 + (semantic - NEBULA_INPUT_COORD0) : kNoLocation;
     }
 }

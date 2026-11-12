@@ -250,6 +250,7 @@ void fill_inputs(const PipelineEntry& entry, bool motion, InputList& list) {
         case NEBULA_INPUT_BINORMAL: list.add("BINORMAL", 0u, format, slot, input.offset); break;
         case NEBULA_INPUT_WIDEN: list.add("BLENDINDICES", 1u, format, slot, input.offset); break;
         case NEBULA_INPUT_MATRIX: list.add("BLENDINDICES", 0u, format, slot, input.offset); break;
+        case NEBULA_INPUT_GAIN: list.add("BLENDWEIGHT", 0u, format, slot, input.offset); break;
         default:
             if (input.semantic >= NEBULA_INPUT_COORD0) {
                 list.add("TEXCOORD", input.semantic - NEBULA_INPUT_COORD0, format, slot, input.offset);
