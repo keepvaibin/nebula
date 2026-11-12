@@ -273,7 +273,11 @@ float3 water_ripple(uint item_at, uint4 first, uint4 second, uint stream, uint m
         }
         float3 along_u, along_v;
         float2 slope;
-        if (!water_map_slope(k == 0u ? map : map1, k == 0u ? t : t1, e1, e2, v, w, place, smooth_, along_u, along_v, slope)) {
+        float2 tk[3];  // this map's coordinate at the corners (b90b)
+        for (uint c = 0u; c < 3u; ++c) {
+            tk[c] = k == 0u ? t[c] : t1[c];
+        }
+        if (!water_map_slope(k == 0u ? map : map1, tk, e1, e2, v, w, place, smooth_, along_u, along_v, slope)) {
             continue;
         }
         const float3 tu = along_u - smooth_ * dot(along_u, smooth_), tv = along_v - smooth_ * dot(along_v, smooth_);
