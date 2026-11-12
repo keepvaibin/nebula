@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include "luma_content.h"
+#include "luma_content_model.h"
 #include "luma_services.h"
 
 #ifdef __cplusplus
@@ -39,17 +40,17 @@ typedef struct LumaContentFxService {
        model's root), offset and turned by `place` (null: none): LUMA_OK and *out, LUMA_E_ARGUMENT, LUMA_E_LIMIT,
        LUMA_E_THREAD and LUMA_E_CANCELLED as start; an unknown socket: the root, LUMA_OK, and Content.MissingJoint; an
        ended model handle: LUMA_E_HANDLE, reported. The effect ends ("model") when the model's handle ends. */
-    int32_t (*start_on_model)(const LumaMod* mod, LumaHandle model, LumaEffectName name, const char* socket,
+    int32_t (*start_on_model)(const LumaMod* mod, LumaContentModel model, LumaEffectName name, const char* socket,
                               const LumaPlace* place, bool follow, LumaContentFxEffect* out);
     /* 1.0. Game thread. Stops making particles: those alive fade as the effect says (`now` false), or all go at once
        (true). The handle ends. LUMA_OK; an ended handle: LUMA_E_HANDLE, reported; off the game thread: LUMA_E_THREAD,
        reported; while the game takes the mod out: LUMA_E_CANCELLED. */
     int32_t (*stop)(const LumaMod* mod, LumaContentFxEffect effect, bool now);
-    /* 1.0. Game thread. Scale and colour on top of the effect's own (1 and 0xFFFFFFFF: none; colour as 0xRRGGBBAA), as
+    /* 1.0. Game thread. Scale and colour on top of the effect's own (1 and 0xFFFFFFFF: none), as
        the game's setEffectBaseScale and setEffectPrmColor. LUMA_OK; a scale not above 0 or not finite:
        LUMA_E_ARGUMENT, reported; an ended handle: LUMA_E_HANDLE, reported; off the game thread: LUMA_E_THREAD,
        reported; while the game takes the mod out: LUMA_E_CANCELLED. */
-    int32_t (*tint)(const LumaMod* mod, LumaContentFxEffect effect, float scale, uint32_t rgba);
+    int32_t (*tint)(const LumaMod* mod, LumaContentFxEffect effect, float scale, LumaColor rgba);
 } LumaContentFxService;
 
 #ifdef __cplusplus
