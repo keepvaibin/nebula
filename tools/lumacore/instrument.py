@@ -101,6 +101,7 @@ K_CASE, K_IF, K_ASM, K_MS_ASM, K_STATIC_ASSERT = 203, 205, 215, 229, 602
 # last (the operand) is that type's; and new.
 K_CASTS = (117, 124, 125, 126, 127, 128)
 K_NEW = 134
+K_CALL = 103  # CXCursor_CallExpr
 # 1.5's tables: the canonical types of an array with a size and of a record
 T_CONSTANT_ARRAY, T_RECORD = 112, 105
 K_MEMBER_REF_EXPR = 102
@@ -204,6 +205,8 @@ def load(path):
     api.evalUnsigned = fn('clang_EvalResult_getAsUnsigned', ctypes.c_ulonglong, c_void_p)
     api.evalDispose = fn('clang_EvalResult_dispose', None, c_void_p)
     api.canonicalCursor = fn('clang_getCanonicalCursor', CXCursor, CXCursor)
+    api.templateArgCount = fn('clang_Cursor_getNumTemplateArguments', c_int, CXCursor)
+    api.templateArgType = fn('clang_Cursor_getTemplateArgumentType', CXType, CXCursor, c_uint)
     return api
 
 
@@ -265,6 +268,9 @@ class Unit:
         # 1.5's tables: the candidates (table_candidate), the variables a file-scope initializer reads (a table read
         # there stays as it is: made writable, its reader would be initialized at run time), the rows, the reasons
         self.table_candidates = []
+        # 1.8 places (G's 3.9): the placement argument reads and helper calls of each function with a row, and the
+        # object factory's rows when this unit is NameObjFactory.cpp (OUTPUT.places)
+        self.places_part = {'functions': [], 'factory': None}
         self.init_reads = set()
         self.tables = []
         self.table_skips = {}
@@ -1202,6 +1208,200 @@ class Unit:
                 'const': role == 'method' and bool(api.isConst(cursor)), 'overrides': overrides,
                 'marks': self.marks_of(cursor)})
 
+    # 1.8 places (contract self-description, places; G's 3.9 cooks a stage's placement arguments by name): what each
+    # function this unit gives a row does with a placement iterator, read from its body, nothing matched by name:
+    #   reads    each MR::getPlacementArgN{NoInit,WithInit}(iter, &target): the argument, the overload's type, the field
+    #            or local it sets (as written), the line;
+    #   helpers  each call to another function taking a placement iterator (getDomeIdFromArg0(rIter)): placement.py
+    #            gives the caller that function's reads, with no target.
+    # And, in NameObjFactory.cpp, the factory's rows: each name with the class its creator makes.
+    def places(self, types):
+        api = self.api
+        for cursor, name, signature, role in self.facts:
+            if name.startswith('MR::getPlacementArg'):
+                continue  # the readers themselves (PlacementUtil.cpp): their calls are the reads
+            reads, helpers, news = [], [], []
+
+            def visit(child, _parent, _data, reads=reads, helpers=helpers, news=news):
+                c = CXCursor.from_buffer_copy(child)
+                if c.kind == K_CALL:
+                    self.place_call(c, reads, helpers)
+                elif c.kind == K_NEW:
+                    t = api.type(c)
+                    made = self.type_text(api.pointeeType(t)) if t.kind == T_POINTER else None
+                    if made not in news:
+                        news.append(made)
+                return 2  # recurse
+
+            api.visit(cursor, VISITOR(visit), None)
+            if reads or helpers:
+                owner = None if role == 'free' else types.name(api.semanticParent(cursor))
+                self.places_part['functions'].append({
+                    'name': name, 'signature': signature, 'owner': owner, 'file': self.label, 'line': self.line(cursor),
+                    'reads': reads, 'helpers': helpers})
+            # A free function that news one class (MR::createSuperSpinDriverPink, defined beside its class): the class a
+            # factory row with it as creator makes, when the factory's own unit cannot see its body (placement.py).
+            if role == 'free' and len(news) == 1 and news[0] is not None:
+                self.places_part.setdefault('makers', {})[name] = news[0]
+        if self.label.endswith('NameObj/NameObjFactory.cpp'):
+            self.places_part['factory'] = self.factory_rows(api.cursor(self.tu))
+
+    def placement_iter(self, t):
+        """A parameter of the placement iterator's type (TableIter, by reference or pointer, const or not)."""
+        api = self.api
+        if t.kind in (T_LVALUE, T_RVALUE, T_POINTER):
+            t = api.pointeeType(t)
+        return self.string(api.typeSpelling(api.unqualified(api.canonicalType(t)))) in ('TableIter', 'JMapInfoIter')
+
+    def place_call(self, call, reads, helpers):
+        api = self.api
+        target = api.referenced(call)
+        if api.isNull(target) or target.kind not in FUNCTIONS:
+            return
+        fntype = api.type(target)
+        count = api.numArgs(target)
+        if not any(self.placement_iter(api.argType(fntype, i)) for i in range(max(count, 0))):
+            return
+        spelling = self.string(api.spelling(target))
+        scope = self.scope(target)
+        # MR::getPlacementArgN{NoInit,WithInit}(iter, &v), and the by-name form MR::getPlacementArgNoInit(iter, "Obj_arg0"
+        # or another field's name, &v): `field` is the stage file's column, `arg` its number when it is Obj_argN.
+        read = re.fullmatch(r'getPlacementArg([0-7]?)(NoInit|WithInit)', spelling)
+        if read and scope is not None and [n for n, _, _ in scope] == ['MR'] and count == (2 if read.group(1) else 3):
+            column = 'Obj_arg' + read.group(1) if read.group(1) else self.place_literal(api.argument(call, 1))
+            numbered = re.fullmatch(r'Obj_arg([0-7])', column or '')
+            field, local, written = self.place_target(api.argument(call, count - 1))
+            reads.append({'arg': int(numbered.group(1)) if numbered else None, 'field': column,
+                          'type': self.place_type(api.argType(fntype, count - 1)),
+                          'with_init': read.group(2) == 'WithInit', 'target': field, 'local': local, 'written': written,
+                          'line': self.line(call)})
+            return
+        ident = self.identity(target)
+        if ident is not None and not any(h['name'] == ident[0] and h['signature'] == ident[1] for h in helpers):
+            helpers.append({'name': ident[0], 'signature': ident[1], 'line': self.line(call)})
+
+    def place_literal(self, argument):
+        """A string literal argument's text (a column's name); None for anything else (a variable)."""
+        c = self.bare(argument)
+        if c.kind != K_STRING_LITERAL:
+            return None
+        try:
+            return json.loads(self.string(self.api.spelling(c)))
+        except ValueError:
+            return None
+
+    def place_type(self, t):
+        """The overload's value type: s32, f32 or bool (another is named as clang spells it)."""
+        api = self.api
+        value = api.canonicalType(api.pointeeType(t))
+        if value.kind == T_FLOAT:
+            return 'f32'
+        if value.kind == 3:  # CXType_Bool
+            return 'bool'
+        if value.kind in T_INTEGERS:
+            return 's32'
+        return self.string(api.typeSpelling(value))
+
+    def bare(self, cursor):
+        """An expression without its parentheses, casts and the compiler's unexposed wrappers."""
+        while cursor.kind in (K_UNEXPOSED_EXPR, K_PAREN) or cursor.kind in K_CASTS:
+            inner = [c for c in self.children(cursor) if c.kind != K_TYPE_REF]
+            if len(inner) != 1:
+                break
+            cursor = inner[0]
+        return cursor
+
+    def place_target(self, argument):
+        """What a read sets: (field, None, text) for &mField or &this->mField, (None, local, text) for a local or a
+        parameter (&value, pOut), (None, None, text) for anything else (&mArgs[1], a call). text: the argument as
+        written, when it is in this file and not made by a macro."""
+        api = self.api
+        written = None
+        start, end = self.offset(api.rangeStart(api.extent(argument))), self.offset(api.rangeEnd(api.extent(argument)))
+        if start is not None and end is not None and end > start:
+            written = self.text[start:end].decode('utf-8', 'replace')
+        c = self.bare(argument)
+        if c.kind == K_UNARY_OPERATOR:
+            inner = self.children(c)
+            if len(inner) == 1:
+                c = self.bare(inner[0])
+        if c.kind == K_MEMBER_REF_EXPR:
+            return self.string(api.spelling(c)), None, written
+        if c.kind == K_DECL_REF_EXPR:
+            ref = api.referenced(c)
+            if not api.isNull(ref) and ref.kind in (K_VAR, K_PARM):
+                return None, self.string(api.spelling(c)), written
+        return None, None, written
+
+    def factory_rows(self, cursor):
+        """NameObjFactory.cpp's cCreateTable: [{name, class, creator}] in its order. A creator that is a template
+        instance (createNameObj<Kuribo>) makes its argument's class; a function (MR::createSuperSpinDriverPink) the
+        one class its body news, when its body is in this unit; else class is null."""
+        api = self.api
+        table = []
+
+        def find(c):
+            for child in self.children(c):
+                if child.kind == K_VAR and self.string(api.spelling(child)) == 'cCreateTable' and self.in_main(child):
+                    table.append(child)
+                elif child.kind in SCOPES:
+                    find(child)
+
+        find(cursor)
+        if len(table) != 1:
+            sys.exit(f'instrument.py: {self.source}: {len(table)} cCreateTable definitions, not one')
+        init = [c for c in self.children(table[0]) if c.kind == K_INIT_LIST]
+        if len(init) != 1:
+            sys.exit(f'instrument.py: {self.source}: cCreateTable has no initializer list')
+        rows = []
+        for entry in self.children(init[0]):
+            entry = self.bare(entry)
+            parts = [self.bare(c) for c in self.children(entry)] if entry.kind == K_INIT_LIST else []
+            if len(parts) != 2 or parts[0].kind != K_STRING_LITERAL:
+                sys.exit(f'instrument.py: {self.source}:{self.line(entry)}: a cCreateTable row is not {{"name", creator}}')
+            name = json.loads(self.string(api.spelling(parts[0])))
+            ref = api.referenced(parts[1]) if parts[1].kind == K_DECL_REF_EXPR else None
+            if ref is not None and not api.isNull(ref) and ref.kind == K_OVERLOADED_REF:
+                # A template named with its arguments (createNameObj< Kuribo >): libclang gives the name's overload set;
+                # the argument is the expression's one type reference, as the compiler resolved it.
+                types_named = [c for c in self.children(parts[1]) if c.kind == K_TYPE_REF]
+                if len(types_named) != 1:
+                    sys.exit(f'instrument.py: {self.source}:{self.line(entry)}: the creator of {name} names {len(types_named)} types')
+                made = self.type_text(api.type(types_named[0]))
+                rows.append({'name': name, 'class': made, 'creator': f'{self.string(api.spelling(ref))}<{made}>'})
+                continue
+            if ref is None or api.isNull(ref) or ref.kind not in FUNCTIONS:
+                sys.exit(f'instrument.py: {self.source}:{self.line(entry)}: {name}\'s creator is no function')
+            rows.append(self.factory_row(name, ref))
+        return rows
+
+    def factory_row(self, name, creator):
+        api = self.api
+        made = None
+        if api.templateArgCount(creator) == 1:
+            made = self.type_text(api.templateArgType(creator, 0))
+            label = f'{self.string(api.spelling(creator))}<{made}>'
+            return {'name': name, 'class': made, 'creator': label}
+        ident = self.identity(creator)
+        label = ident[0] if ident else self.string(api.spelling(creator))
+        body = api.definition(creator)
+        if not api.isNull(body):
+            news = []
+
+            def visit(child, _parent, _data):
+                c = CXCursor.from_buffer_copy(child)
+                if c.kind == K_NEW:
+                    t = api.type(c)
+                    made_type = self.type_text(api.pointeeType(t)) if t.kind == T_POINTER else None
+                    if made_type not in news:
+                        news.append(made_type)
+                return 2
+
+            api.visit(body, VISITOR(visit), None)
+            if len(news) == 1:
+                made = news[0]
+        return {'name': name, 'class': made, 'creator': label}
+
     # C-6 (contracts/self-description.md): the parameter marks of Game/LumaMarks.hpp. Each expands to nothing, so the
     # declarations do not show them; the parse's detailed preprocessing record keeps each expansion with its place.
     def spelled(self, location):
@@ -1544,6 +1744,7 @@ class Unit:
         write_if_changed(output + '.types', (json.dumps(self.types_part, ensure_ascii=False) + '\n').encode('utf-8'))
         write_if_changed(output + '.rows', ('\n'.join(self.rows) + '\n' if self.rows else '').encode())
         write_if_changed(output + '.functions', (json.dumps(self.functions, ensure_ascii=False) + '\n').encode('utf-8'))
+        write_if_changed(output + '.places', (json.dumps(self.places_part, ensure_ascii=False) + '\n').encode('utf-8'))
         write_if_changed(output + '.left', ('\n'.join(self.left) + '\n' if self.left else '').encode())
         write_if_changed(output + '.globals', ''.join(name + '\n' for name in sorted(self.defines) if name).encode())
 
@@ -1709,6 +1910,7 @@ def main():
     unit.type_rows(types)
     unit.read_marks()
     unit.function_facts(types)
+    unit.places(types)
     unit.write(output)
     if '--depfile' in options:
         included = []
