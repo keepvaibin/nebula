@@ -48,6 +48,9 @@ PermissionFacts facts_of(const ModInfo& mod, const galaxy::luma::Permission& per
     for (const std::string& host : permission.hosts) {
         out.hosts += (out.hosts.empty() ? "" : ", ") + host;
     }
+    for (const std::string& root : permission.roots) {
+        out.roots += (out.roots.empty() ? "" : ", ") + root;
+    }
     out.why = permission.why;
     out.answer = answer_of(mod, permission, &out.changed);
     out.required = permission.name == "native" ||
@@ -66,6 +69,13 @@ std::string permission_digest(const galaxy::luma::Permission& permission) {
     std::uint64_t hash = kFnvBasis;
     fnv(hash, permission.name);
     for (const std::string& host : hosts) fnv(hash, host);
+    // The certificates it trusts (net.roots): a changed set is asked again. None: the digest as before roots existed.
+    if (!permission.roots.empty()) {
+        std::vector<std::string> roots = permission.roots;
+        std::sort(roots.begin(), roots.end());
+        fnv(hash, "roots");
+        for (const std::string& root : roots) fnv(hash, root);
+    }
     char text[17];
     std::snprintf(text, sizeof(text), "%016llx", static_cast<unsigned long long>(hash));
     return text;

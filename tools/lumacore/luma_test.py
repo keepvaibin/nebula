@@ -832,6 +832,12 @@ def permission_digest(declared):
     hosts = ["".join(chr(ord(c) + 32) if "A" <= c <= "Z" else c for c in host) for host in declared.get("hosts", [])]
     for host in sorted(hosts, key=lambda text: text.encode("utf-8")):
         h = fnv(h, host.encode("utf-8") + b"\0")
+    # net.roots (consent 1.2): "roots" and each file as written, sorted in byte order, when there are any.
+    roots = declared.get("roots", [])
+    if roots:
+        h = fnv(h, b"roots\0")
+        for root in sorted(roots, key=lambda text: text.encode("utf-8")):
+            h = fnv(h, root.encode("utf-8") + b"\0")
     return "%016x" % h
 
 
