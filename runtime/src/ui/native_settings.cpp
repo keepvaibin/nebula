@@ -2224,8 +2224,8 @@ void revert_mods_draft() {
     s_mod_held.clear();
 }
 
-// With s_mods_mutex held: the draft's list settled again (copies, needs, conflicts, overlaps and who wins them) by the
-// draft's order and on/off state.
+// With s_mods_mutex held: the draft's list settled again (the families of saves, overlaps and who wins them) by the
+// draft's order and on/off state; another copy, needs and conflicts are the start's check's (mark_refused).
 void refresh_overlaps_locked() {
     galaxy::mods::settle_mods(s_mods);
     mark_refused(s_mods);
