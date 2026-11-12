@@ -123,6 +123,8 @@ struct PageMod {
 void page_fact(std::uint32_t row, std::string_view label, std::string_view value);
 // In a harness run, a fact `key` with `json` as its value (the host's screens: consent 2.6); nothing otherwise.
 void fact(const std::string& key, const std::string& json);
+// Whether this run has the harness, so a screen builds its facts' JSON only then.
+[[nodiscard]] bool facts_wanted();
 // `text` as a JSON string, quoted and escaped, appended to `out`.
 void append_json_text(std::string& out, std::string_view text);
 // In a harness run, an entry opened whole (A or Space on its row) as `modlog.entry {"mod", "pages", "text"}`: the

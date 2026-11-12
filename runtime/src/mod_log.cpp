@@ -252,6 +252,10 @@ void fact(const std::string& key, const std::string& json) {
     if (write != nullptr) write(key.c_str(), json.c_str());
 }
 
+bool facts_wanted() {
+    return harness_fact() != nullptr;
+}
+
 void append_json_text(std::string& out, std::string_view text) {
     append_json(out, text);
 }

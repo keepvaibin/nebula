@@ -1935,6 +1935,52 @@ bool s_consent_focus = false;
 std::map<std::string, bool> s_consent_chosen;
 std::string s_consent_facts_for;
 
+// The Mods screen's lines about each mod as the harness facts `modscreen.<id>` (harness 4): its line in its list, and
+// each row of its page while that shows, written when what they say changes (a page each time it opens). `wanted`: a
+// harness run with the menu on this tab (read once per build of the page); `shown`: per place and mod ("list:<id>",
+// "page:<id>") a hash of the lines last written; `pending`: the facts to write once s_mods_mutex is let go. Under
+// s_mods_mutex.
+std::atomic<bool> s_modscreen_wanted{false};
+std::map<std::string, std::size_t> s_modscreen_shown;
+std::vector<std::pair<std::string, std::string>> s_modscreen_pending;
+
+// Rows shown about mod `id` at `page` ("list" or "page"), queued as facts `modscreen.<id>` {"line", "page", "label",
+// "value", "help"} (with "buttons" for a row of buttons, "list" "on" or "off" for a mod's line in a list) when they
+// differ from the lines last written there. With s_mods_mutex held.
+void modscreen_facts_locked(const std::string& id, const char* page, const SettingsRow* rows, std::size_t count) {
+    if (!s_modscreen_wanted.load(std::memory_order_relaxed)) return;
+    std::vector<std::string> lines;
+    lines.reserve(count);
+    std::string all;
+    for (std::size_t r = 0; r < count; ++r) {
+        const SettingsRow& row = rows[r];
+        std::string json = "{\"line\":" + std::to_string(r) + ",\"page\":\"" + page + "\",\"label\":";
+        galaxy::modlog::append_json_text(json, row.label);
+        json += ",\"value\":";
+        galaxy::modlog::append_json_text(json, row.value);
+        json += ",\"help\":";
+        galaxy::modlog::append_json_text(json, row.help);
+        if (!row.buttons.empty()) {
+            json += ",\"buttons\":[";
+            for (std::size_t b = 0; b < row.buttons.size(); ++b) {
+                if (b != 0u) json += ',';
+                galaxy::modlog::append_json_text(json, row.buttons[b]);
+            }
+            json += ']';
+        }
+        if (row.list != 0u) json += row.list == 2u ? ",\"list\":\"on\"" : ",\"list\":\"off\"";
+        json += '}';
+        all += json;
+        all += '\n';
+        lines.push_back(std::move(json));
+    }
+    const std::size_t hash = std::hash<std::string>{}(all);
+    const auto [it, added] = s_modscreen_shown.try_emplace(std::string(page) + ":" + id, hash);
+    if (!added && it->second == hash) return;
+    it->second = hash;
+    for (std::string& line : lines) s_modscreen_pending.emplace_back("modscreen." + id, std::move(line));
+}
+
 // The mod page's ABOUT window: the mod's name and description in pages, then its pictures (its icon first), a page at a
 // time. A picture is read on its own thread when its page first shows (a large one takes a moment). Under s_mods_mutex.
 struct ModAbout {
@@ -2994,6 +3040,7 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
                                      {});
     buttons.key = "mod-buttons";
     rows.push_back(std::move(buttons));
+    modscreen_facts_locked(mod.id, "page", rows.data(), rows.size());
     return rows;
 }
 
@@ -3081,7 +3128,7 @@ SettingsRow mods_buttons_row() {
 
 // The MODS page as the launcher's Mods tab: the mods off, then the mods on (the higher one wins a conflict), each list
 // under its title, then the buttons. A mod's options show instead while they are open.
-std::vector<SettingsRow> mods_page(const RenderConfig&) {
+std::vector<SettingsRow> mods_page_rows(const RenderConfig&) {
 #if defined(__APPLE__)
     // Mods are not on Apple's systems yet (docs/APPLE.md): the page says so, and nothing on it is chosen.
     return {SettingsRow{"THIS IS STILL A WORK IN PROGRESS. PLEASE COME BACK LATER!", {}, nullptr, {}, true}};
@@ -3118,6 +3165,9 @@ std::vector<SettingsRow> mods_page(const RenderConfig&) {
     s_mod_options.clear();
     s_mod_about.reset();
     s_mod_remove_ask.clear();
+    for (auto it = s_modscreen_shown.begin(); it != s_modscreen_shown.end();) {
+        it = it->first.compare(0u, 5u, "page:") == 0 ? s_modscreen_shown.erase(it) : std::next(it);
+    }
     // A part of the game that mods need was missing at this start (contract start-check 2): the log's line for it on
     // top, as the notice said it. Nebula's own lines are under the mod "nebula"; the entries are read only then.
     const std::vector<galaxy::modlog::PageMod> said = galaxy::modlog::mods();
@@ -3141,6 +3191,11 @@ std::vector<SettingsRow> mods_page(const RenderConfig&) {
     for (const galaxy::mods::ModInfo& mod : mods) {
         if (mod.enabled) rows.push_back(mod_row(mod));
     }
+    for (const SettingsRow& row : rows) {
+        if (row.list != 0u && !row.heading && row.key.compare(0u, 4u, "mod:") == 0) {
+            modscreen_facts_locked(row.key.substr(4u), "list", &row, 1u);
+        }
+    }
     // The mod shown selected is the one the buttons act on, from the moment the page opens.
     const unsigned selected = s_native_settings_row.load(std::memory_order_relaxed);
     if (selected < rows.size() && rows[selected].list != 0u && !rows[selected].heading) {
@@ -3150,6 +3205,23 @@ std::vector<SettingsRow> mods_page(const RenderConfig&) {
     rows.push_back(mods_buttons_row());
     return rows;
 #endif
+}
+
+std::vector<SettingsRow> mods_page(const RenderConfig& render) {
+    // Facts only for what is on screen: the menu open on this tab, in a harness run.
+    s_modscreen_wanted.store(s_native_settings_visible.load(std::memory_order_relaxed) &&
+                                 s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount ==
+                                     kModsTab &&
+                                 galaxy::modlog::facts_wanted(),
+                             std::memory_order_relaxed);
+    std::vector<SettingsRow> rows = mods_page_rows(render);
+    std::vector<std::pair<std::string, std::string>> facts;
+    {
+        const std::lock_guard<std::mutex> lock(s_mods_mutex);
+        facts.swap(s_modscreen_pending);
+    }
+    for (const auto& [key, json] : facts) galaxy::modlog::fact(key, json);
+    return rows;
 }
 
 // Back from an import's result to the lists, on the first mod it added, else the buttons.
