@@ -10,6 +10,7 @@
 #include <map>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace galaxy::mods {
@@ -221,6 +222,27 @@ void set_achievement_store(bool (*unlock)(std::string_view key)) noexcept;
 [[nodiscard]] std::int32_t next_mod_achievement_unlocked() noexcept;
 // The NEBULA_MOD_EVENT_* value for an event name ("star_get"), or -1.
 [[nodiscard]] int mod_event_by_name(std::string_view name) noexcept;
+
+// Why a mod's code did not start (loader contract 3: said once, translated; Z-10): one record per mod, kept from
+// start_plugins for the Mods page and the mod log. Either the loader's or the order's refusal (a LumaRefusal copied,
+// its values owned) or a host sentence: capitals in English, which the menu translates as every host text.
+struct NotStarted {
+    std::string mod_id;
+    std::string library;  // the code's file name
+    std::uint32_t code = 0;  // the refusal's code (L5xx, L800); 0: a host sentence
+    std::vector<std::pair<std::string, std::string>> values;  // the refusal's names and values, in order
+    std::string sentence;  // when code is 0
+};
+// A copy of the records (any thread).
+[[nodiscard]] std::vector<NotStarted> plugins_not_started();
+// What the Mods page shows for a mod whose code did not start, and whether it is already in the played language (a
+// refusal, as the validator words it: shown as is) or a host sentence the menu translates. Empty: its code started, or
+// it has none.
+struct NotStartedText {
+    std::string text;
+    bool as_is = false;
+};
+[[nodiscard]] NotStartedText plugin_not_started_text(std::string_view mod_id);
 
 // The mod id of the plugin containing `address`, or null.
 [[nodiscard]] const char* plugin_at(const void* address) noexcept;

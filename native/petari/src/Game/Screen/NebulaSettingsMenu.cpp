@@ -1721,7 +1721,7 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
     }
 
     const s32 hint = firstHint(rView);
-    if (pShown != nullptr && pShown->status == rView.status && pShown->status_number == rView.status_number &&
+    if (pShown != nullptr && pShown->status == rView.status && pShown->status_number == rView.status_number && pShown->help_as_is == rView.help_as_is &&
         MR::isEqualString(pShown->help, rView.help) && MR::isEqualString(pShown->status_text, rView.status_text) &&
         MR::isEqualString(pShown->long_text, rView.long_text) && pShown->page == rView.page && pShown->input == rView.input && firstHint(*pShown) == hint) {
         return;
@@ -1778,6 +1778,8 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
     }
     if (pStatusId != nullptr) {
         getNumbered(mStatusText, pStatusId, rView.status_number);
+    } else if (rView.status == NEBULA_SETTINGS_STATUS_HELP && rView.help_as_is != 0) {
+        fromUtf8(mStatusText, 0, pStatusText);  // already in the played language (a mod's refusal)
     } else {
         translateLine(mStatusText, pStatusText, false);
     }

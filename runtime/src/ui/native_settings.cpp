@@ -2367,6 +2367,14 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
                            place_mod_locked(id, !found->enabled, 0u);
                        },
                        mod.problem.empty() ? std::string() : mods_ui_text(mod.problem, 120u)};
+    // Why its code did not start this run (Z-10): a refusal is already in the played language, shown as is.
+    if (mod.problem.empty()) {
+        const galaxy::mods::NotStartedText not_started = galaxy::mods::plugin_not_started_text(mod.id);
+        if (!not_started.text.empty()) {
+            status.help = mods_ui_text(not_started.text, 160u);
+            if (not_started.as_is) status.names |= 4u;
+        }
+    }
     rows.push_back(std::move(status));
     const std::string kinds = galaxy::mods::change_kinds(mod);
     rows.push_back({"CHANGES", kinds.empty() ? std::string("NOTHING THIS GAME USES") : kinds, nullptr, mod_details(mod)});
@@ -2484,6 +2492,13 @@ SettingsRow mod_row(const galaxy::mods::ModInfo& mod) {
     SettingsRow row{twin ? title + " (" + mods_ui_text(mod.id, 24u) + ")" : title, {}, nullptr, mod_details(mod)};
     row.key = "mod:" + mod.id;
     row.names = 1u;
+    if (mod.problem.empty()) {
+        const galaxy::mods::NotStartedText not_started = galaxy::mods::plugin_not_started_text(mod.id);
+        if (!not_started.text.empty()) {
+            row.help = mods_ui_text(not_started.text, 160u);
+            if (not_started.as_is) row.names |= 4u;
+        }
+    }
     row.list = mod.enabled ? 2u : 1u;
     row.held = s_mod_held == mod.id;
     return row;
@@ -3582,7 +3597,10 @@ NativeSettingsView build_native_settings_view() {
             shown.mod_list = page[row].list;
             shown.held = page[row].held;
             shown.buttons = !page[row].buttons.empty();
-            if (row == view.selected) view.help = page[row].help;
+            if (row == view.selected) {
+                view.help = page[row].help;
+                view.help_as_is = (page[row].names & 4u) != 0u;
+            }
         } else {
             shown.label = native_settings_row_text(tab, row, row_render, row_runtime, row_caps);
             if (const std::size_t colon = shown.label.find(": "); colon != std::string::npos) {
