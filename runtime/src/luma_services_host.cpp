@@ -170,7 +170,9 @@ bool provide_all(void* (*find_symbol)(const char*), void (*log)(const char*),
     for (const LumaServiceProvider* const provider : galaxy::luma_input::providers(log)) {
         provide(provider);
     }
-    // The audio service (services-audio; layers 1-2: a mod's cooked sounds and its streams).
+    // The audio service (services-audio): a mod's cooked sounds, its streams, music, taps; the game's own sounds and
+    // the camera's place from the module.
+    galaxy::luma_audio::set_game(find_symbol);
     for (const LumaServiceProvider* const provider : galaxy::luma_audio::providers(log)) {
         provide(provider);
     }

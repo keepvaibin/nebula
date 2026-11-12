@@ -181,6 +181,8 @@
     "services.audio": "A mod's cooked sound effects played as voices (volume, pitch, bus, loop, 32 a mod, priority drops the 33rd, ENDED), and streams it fills with float frames at any rate (NEED, 4 a mod), mixed into the game's output on its effects, ui, voice and music buses (2.6 layers 1-2)",
     "services.audio.music": "A mod's cooked sound as the game's music, fading the game's own out and back (music, music_restore; 2.6 layer 3)",
     "services.audio.tap": "The game's output or the mods' mix as blocks of 1024 stereo float frames, for visualisers and recorders; no permission (2.6 layer 4)",
+    "services.audio.place": "A mod's voice heard from a place in the world, still or following the player or the camera: the sound's near and far, its side from the camera (play_at, voice_place; 2.6 layer 1b)",
+    "services.audio.game": "The game's own sounds started by name (SE_PM_JUMP_M), heard everywhere or from a place through the game's sound engine, moved and stopped (game_play, game_place, game_stop; 2.6 layer 1b)",
     "services.audio.microphone": "The player's microphone as float blocks at the mod's rate and channels, with the audio.microphone permission; Windows (WASAPI) now, ABSENT elsewhere until 8.2 (2.6 layer 5)",
     "services.capture.camera": "The player's camera as RGBA frames, the newest each game frame, with the capture.camera permission; Windows (Media Foundation) now, ABSENT elsewhere until 8.2 (2.6 layer 6)",
     "services.net.tls": "TLS 1.2 and 1.3 streams (1.3 of net.local and net.internet, BoringSSL): tls_connect checked against Mozilla's roots plus the mod's own, tls_listen with the mod's certificate (net 1.3)",

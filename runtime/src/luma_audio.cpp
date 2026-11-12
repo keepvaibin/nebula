@@ -43,12 +43,13 @@ constexpr std::uint32_t kRowNotASound = 350u;
 constexpr std::uint32_t kRowDropped = 351u;
 constexpr std::uint32_t kRowNotANumber = 352u;
 
+struct Item;
+
 struct ModState {
     const LumaMod* mod = nullptr;
     float bus[4] = {1.0f, 1.0f, 1.0f, 1.0f};  // g_lock: the mod's own share of each bus (bus_volume)
+    Item* placer = nullptr;                    // g_lock: its placer, made when it first places a sound
 };
-
-struct Item;
 
 struct Node {
     LumaEventNode event;  // first, and both plain members: the kernel's node is the Node
@@ -65,6 +66,7 @@ struct Item {
     bool stream = false;
     bool music = false;   // a voice that is the game's music (music): one at a time, not among the 32
     bool tap = false;     // a tap (tap_open): not mixed, fed
+    bool placer = false;  // the mod's placer (one a mod, never mixed): its node comes back each frame while needed
     bool posted = false;  // the node is queued with the kernel
     bool closed = false;  // the handle is closed (stop, close, the last event given): no event from now on
     bool silent = false;  // the mix is done with it: freed once neither queued nor being delivered
@@ -94,6 +96,15 @@ struct Item {
     float sound_volume = 1.0f;  // the sound's own (voice_set's volume is times this)
     float pitch_pick = 1.0f;    // this play's pick in the sound's pitch range (voice_set's pitch is times this)
     float pitch = 1.0f;         // the pick times play's (or voice_set's)
+    // A voice heard from a place (play_at, voice_place): the gains of left and right, aimed on the game thread
+    // (pan_target, g_lock) and reached by the mix over one block (pan, the audio thread's).
+    bool placed = false;
+    std::uint32_t follow = LUMA_AUDIO_AT_POINT;
+    float offset[3] = {0.0f, 0.0f, 0.0f};
+    float near_units = 300.0f;
+    float far_units = 3000.0f;
+    float pan_target[2] = {1.0f, 1.0f};
+    float pan[2] = {1.0f, 1.0f};
     std::uint8_t priority = 128;
     std::uint64_t order = 0;     // play's count: the oldest of equal priority drops first
     bool ended = false;          // ENDED to give
@@ -141,6 +152,18 @@ std::atomic<std::uint32_t> g_music_ms{kRampMs};
 float g_music_step = 0.0f;  // the audio thread's
 float g_music_step_target = -1.0f;
 std::uint64_t g_order = 0;                // game thread
+
+// The game module's half (LumaGameSound.cpp), found by set_game before the first mod; null in a host without it.
+struct Game {
+    std::int32_t (*play)(const void*, const char*, std::uint32_t, const float*, std::uint64_t*) = nullptr;
+    std::int32_t (*place)(const void*, std::uint64_t, std::uint32_t, const float*) = nullptr;
+    std::int32_t (*stop)(const void*, std::uint64_t, std::uint32_t) = nullptr;
+    void (*gone)(const void*) = nullptr;
+    std::uint32_t (*follow)() = nullptr;
+    std::uint32_t (*listener)(float*) = nullptr;
+};
+Game g_game;  // game thread
+constexpr std::uint32_t kNoPlace = 0xFFFFFFFFu;  // LumaGameSound.cpp's follow for a sound heard everywhere
 std::uint64_t g_random = 0x9E3779B97F4A7C15ull;  // game thread: a play's pick in its pitch range
 
 void report(const LumaMod* mod, const char* where, std::uint32_t code, const char* a = nullptr) noexcept {
@@ -233,7 +256,7 @@ void reap_locked() {
 Item* find_locked(const ModState* state, LumaHandle handle, bool stream, bool tap = false) noexcept {
     for (Item* item : g_items) {
         if (item->owner == state && item->handle == handle && item->stream == stream && item->tap == tap &&
-            !item->music && !item->closed) {
+            !item->music && !item->placer && !item->closed) {
             return item;
         }
     }
@@ -308,6 +331,14 @@ bool mix_voice(Item* item, float* stereo, std::size_t frames, std::uint32_t rate
     const Ramp ramp = ramp_for(item, target, rate);
     const double step = static_cast<double>(kNsfxRate) / static_cast<double>(rate) * static_cast<double>(item->pitch);
     const std::uint32_t right = item->channels == 2u ? 1u : 0u;
+    // The place's gains, from the last block's to the game thread's latest over this block.
+    const float pan_l = item->pan[0];
+    const float pan_r = item->pan[1];
+    const float step_l = (item->pan_target[0] - pan_l) / static_cast<float>(frames);
+    const float step_r = (item->pan_target[1] - pan_r) / static_cast<float>(frames);
+    item->pan[0] = item->pan_target[0];
+    item->pan[1] = item->pan_target[1];
+    const bool placed = item->placed;
     for (std::size_t i = 0; i < frames; ++i) {
         if (item->looping) {
             const double length = static_cast<double>(item->loop_end - item->loop_start);
@@ -338,8 +369,15 @@ bool mix_voice(Item* item, float* stereo, std::size_t frames, std::uint32_t rate
         const float r0 = sample_at(item, at, right);
         const float l1 = past ? 0.0f : sample_at(item, next, 0u);
         const float r1 = past ? 0.0f : sample_at(item, next, right);
-        stereo[i * 2u] += (l0 + (l1 - l0) * t) * gain;
-        stereo[i * 2u + 1u] += (r0 + (r1 - r0) * t) * gain;
+        float left = l0 + (l1 - l0) * t;
+        float right_sample = r0 + (r1 - r0) * t;
+        if (placed) {  // a placed sound is one point: its channels together, then aimed
+            left = (left + right_sample) * 0.5f;
+            right_sample = left;
+        }
+        const float moved = static_cast<float>(i + 1u);
+        stereo[i * 2u] += left * gain * (pan_l + step_l * moved);
+        stereo[i * 2u + 1u] += right_sample * gain * (pan_r + step_r * moved);
         item->place += step;
     }
     return true;
@@ -434,8 +472,14 @@ void move_music_share(std::size_t frames, std::uint32_t rate) noexcept {
 
 // ---- Deliveries (game thread) --------------------------------------------------------------------------------------
 
+void place_frame(Item* placer) noexcept;
+
 void deliver(LumaEventNode* node) {
     Item* const item = reinterpret_cast<Node*>(node)->item;
+    if (item->placer) {  // set at its making, never changed
+        place_frame(item);
+        return;
+    }
     LumaEvent event{};
     event.size = sizeof(event);
     LumaEventFn fn = nullptr;
@@ -533,6 +577,8 @@ struct Sound {
     float pitch_high = 1.0f;
     std::uint8_t priority = 128;
     std::uint8_t bus = 0;
+    float near_units = 300.0f;  // sound.md 3's distance; a file of before it (0, 0) hears the default
+    float far_units = 3000.0f;
 };
 
 template <typename T>
@@ -557,6 +603,15 @@ bool read_sound(const std::uint8_t* bytes, std::uint64_t length, Sound& sound) n
     sound.pitch_high = field<float>(bytes, 36u);
     sound.priority = bytes[48];
     sound.bus = bytes[49];
+    const float near_units = field<float>(bytes, 40u);
+    const float far_units = field<float>(bytes, 44u);
+    if (near_units != 0.0f || far_units != 0.0f) {
+        if (!finite_in(near_units, 0.0f, 1.0e6f) || !finite_in(far_units, 0.0f, 1.0e6f) || near_units >= far_units) {
+            return false;
+        }
+        sound.near_units = near_units;
+        sound.far_units = far_units;
+    }
     if (sound.channels != 1u && sound.channels != 2u) {
         return false;
     }
@@ -604,9 +659,132 @@ bool store_path(const char* id, std::string_view given, std::string& path) {
     return low + (high - low) * unit;
 }
 
-std::int32_t audio_play(const LumaMod* mod, const char* name, const LumaAudioPlay* how, LumaEventFn fn, void* user,
-                        LumaHandle* out) noexcept {
-    static constexpr const char* where = "audio.play";
+// ---- Places (game thread) -----------------------------------------------------------------------------------------
+
+std::int32_t check_place(const LumaMod* mod, const char* where, const LumaAudioPlace* at) noexcept {
+    if (at->size < sizeof(LumaAudioPlace)) {
+        return struct_size(mod, where, "LumaAudioPlace", at->size, sizeof(LumaAudioPlace));
+    }
+    if (at->follow > LUMA_AUDIO_AT_CAMERA) {
+        return argument(mod, where, "at.follow");
+    }
+    for (const float value : at->pos) {
+        if (!finite_in(value, -LUMA_AUDIO_PLACE_MOST, LUMA_AUDIO_PLACE_MOST)) {
+            return argument(mod, where, "at.pos");
+        }
+    }
+    return LUMA_OK;
+}
+
+// Where the camera and the player are now (LumaGameSound.cpp luma_game_listener).
+struct Listener {
+    bool camera = false;
+    bool player = false;
+    float v[12] = {};  // camera place, front, up; the player's place
+};
+
+Listener listen() noexcept {
+    Listener heard;
+    if (g_game.listener != nullptr) {
+        const std::uint32_t bits = g_game.listener(heard.v);
+        heard.camera = (bits & 1u) != 0u;
+        heard.player = (bits & 2u) != 0u;
+    }
+    return heard;
+}
+
+// With g_lock: a placed voice's gains from where it is and where the camera hears from. A place not there now (no
+// camera; no player for one that follows it) keeps the gains last aimed.
+void aim_locked(Item* item, const Listener& heard) noexcept {
+    if (!item->placed) {
+        item->pan_target[0] = 1.0f;
+        item->pan_target[1] = 1.0f;
+        return;
+    }
+    if (!heard.camera || (item->follow == LUMA_AUDIO_AT_PLAYER && !heard.player)) {
+        return;
+    }
+    const float* camera = heard.v;
+    const float* front = heard.v + 3;
+    const float* up = heard.v + 6;
+    const float zero[3] = {0.0f, 0.0f, 0.0f};
+    const float* from = item->follow == LUMA_AUDIO_AT_PLAYER ? heard.v + 9
+                        : item->follow == LUMA_AUDIO_AT_CAMERA ? camera : zero;
+    float rel[3];
+    for (int i = 0; i < 3; ++i) {
+        rel[i] = from[i] + item->offset[i] - camera[i];
+    }
+    const float distance = std::sqrt(rel[0] * rel[0] + rel[1] * rel[1] + rel[2] * rel[2]);
+    float gain = 1.0f;
+    if (distance >= item->far_units) {
+        gain = 0.0f;
+    } else if (distance > item->near_units) {
+        gain = (item->far_units - distance) / (item->far_units - item->near_units);
+    }
+    // The camera's right: front × up (the game's view: x right, y up, the front along -z).
+    const float right[3] = {front[1] * up[2] - front[2] * up[1], front[2] * up[0] - front[0] * up[2],
+                            front[0] * up[1] - front[1] * up[0]};
+    const float right_length = std::sqrt(right[0] * right[0] + right[1] * right[1] + right[2] * right[2]);
+    float side = 0.0f;
+    if (distance > 1.0e-3f && right_length > 1.0e-6f) {
+        side = (rel[0] * right[0] + rel[1] * right[1] + rel[2] * right[2]) / (distance * right_length);
+        side = std::clamp(side, -1.0f, 1.0f);
+    }
+    // Constant power, ahead as loud as a sound with no place.
+    constexpr float kQuarterPi = 0.78539816f;
+    constexpr float kRootTwo = 1.41421356f;
+    const float angle = (side + 1.0f) * kQuarterPi;
+    item->pan_target[0] = std::cos(angle) * kRootTwo * gain;
+    item->pan_target[1] = std::sin(angle) * kRootTwo * gain;
+}
+
+// With g_lock: the mod's placer made (once) and queued for the next frame's start. May throw (memory).
+void need_placer_locked(ModState* state, const LumaMod* mod) {
+    if (state->placer == nullptr) {
+        auto placer = std::make_unique<Item>();
+        placer->node.event.mod = mod;
+        placer->node.event.deliver = deliver;
+        placer->node.event.drop = drop;
+        placer->node.item = placer.get();
+        placer->owner = state;
+        placer->placer = true;
+        placer->silent = true;  // never mixed
+        g_items.reserve(g_items.size() + 1u);
+        state->placer = placer.get();
+        g_items.push_back(placer.release());
+        g_live.store(g_items.size(), std::memory_order_release);
+    }
+    post_locked(state->placer);
+}
+
+// The placer's frame (game thread, the frame's start): the game's following sounds moved, the mod's placed voices
+// aimed, and the node queued again while either is left.
+void place_frame(Item* placer) noexcept {
+    const std::uint32_t following = g_game.follow != nullptr ? g_game.follow() : 0u;
+    const Listener heard = listen();
+    const std::lock_guard<std::mutex> lock(g_lock);
+    placer->posted = false;
+    if (placer->owner == nullptr || placer->closed) {
+        reap_locked();
+        return;
+    }
+    bool again = following != 0u;
+    for (Item* item : g_items) {
+        if (item->owner == placer->owner && item->placed && !item->silent && !item->ended) {
+            aim_locked(item, heard);
+            again = true;
+        }
+    }
+    if (again) {
+        post_locked(placer);
+    }
+    reap_locked();
+}
+
+// ---- The calls, continued ------------------------------------------------------------------------------------------
+
+std::int32_t play_sound(const LumaMod* mod, const char* where, const char* name, const LumaAudioPlay* how,
+                        const LumaAudioPlace* at, LumaEventFn fn, void* user, LumaHandle* out) noexcept {
     ModState* state = nullptr;
     if (const std::int32_t status = begin(mod, where, &state); status != LUMA_OK) {
         return status;
@@ -640,6 +818,12 @@ std::int32_t audio_play(const LumaMod* mod, const char* name, const LumaAudioPla
             return argument(mod, where, "how.loop");
         }
     }
+    if (at != nullptr) {
+        if (const std::int32_t status = check_place(mod, where, at); status != LUMA_OK) {
+            return status;
+        }
+    }
+    const Listener heard = at != nullptr ? listen() : Listener{};
     const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
     const assets::AssetStore* store = g_store.load(std::memory_order_acquire);
     try {
@@ -691,13 +875,26 @@ std::int32_t audio_play(const LumaMod* mod, const char* name, const LumaAudioPla
             item->loop_start = sound.loop_start;
             item->loop_end = sound.loop_end;
         }
+        item->near_units = sound.near_units;
+        item->far_units = sound.far_units;
+        if (at != nullptr) {
+            item->placed = true;
+            item->follow = at->follow;
+            std::copy(at->pos, at->pos + 3, item->offset);
+        }
         const std::lock_guard<std::mutex> lock(g_lock);
+        if (at != nullptr) {
+            aim_locked(item.get(), heard);
+            item->pan[0] = item->pan_target[0];  // heard from its place from its first sample
+            item->pan[1] = item->pan_target[1];
+            need_placer_locked(state, mod);
+        }
         // The 33rd: the mod's voice of the lowest priority ends (the new one's included; the oldest of equals).
         Item* lowest = nullptr;
         std::uint32_t playing = 0;
         for (Item* other : g_items) {
-            if (other->owner == state && !other->stream && !other->music && !other->tap && !other->closed &&
-                !other->ended) {
+            if (other->owner == state && !other->stream && !other->music && !other->tap && !other->placer &&
+                !other->closed && !other->ended) {
                 playing++;
                 if (lowest == nullptr || other->priority < lowest->priority ||
                     (other->priority == lowest->priority && other->order < lowest->order)) {
@@ -730,6 +927,144 @@ std::int32_t audio_play(const LumaMod* mod, const char* name, const LumaAudioPla
         return LUMA_E_MEMORY;
     }
     return LUMA_OK;
+}
+
+std::int32_t audio_play(const LumaMod* mod, const char* name, const LumaAudioPlay* how, LumaEventFn fn, void* user,
+                        LumaHandle* out) noexcept {
+    return play_sound(mod, "audio.play", name, how, nullptr, fn, user, out);
+}
+
+std::int32_t audio_play_at(const LumaMod* mod, const char* name, const LumaAudioPlay* how, const LumaAudioPlace* at,
+                           LumaEventFn fn, void* user, LumaHandle* out) noexcept {
+    return play_sound(mod, "audio.play_at", name, how, at, fn, user, out);
+}
+
+std::int32_t audio_voice_place(const LumaMod* mod, LumaHandle voice, const LumaAudioPlace* at) noexcept {
+    static constexpr const char* where = "audio.voice_place";
+    ModState* state = nullptr;
+    if (const std::int32_t status = begin(mod, where, &state); status != LUMA_OK) {
+        return status;
+    }
+    if (at != nullptr) {
+        if (const std::int32_t status = check_place(mod, where, at); status != LUMA_OK) {
+            return status;
+        }
+    }
+    const Listener heard = at != nullptr ? listen() : Listener{};
+    const std::lock_guard<std::mutex> lock(g_lock);
+    Item* item = find_locked(state, voice, false);
+    if (item == nullptr) {
+        return bad_handle(mod, where);
+    }
+    item->placed = at != nullptr;
+    if (at != nullptr) {
+        item->follow = at->follow;
+        std::copy(at->pos, at->pos + 3, item->offset);
+    }
+    aim_locked(item, heard);
+    if (at != nullptr) {
+        try {
+            need_placer_locked(state, mod);
+        } catch (...) {
+            return LUMA_E_MEMORY;
+        }
+    }
+    return LUMA_OK;
+}
+
+// The game's own sounds (LumaGameSound.cpp). Their handles are the game module's ids, never a voice's.
+std::int32_t audio_game_play(const LumaMod* mod, const char* name, const LumaAudioPlace* at, LumaHandle* out) noexcept {
+    static constexpr const char* where = "audio.game_play";
+    ModState* state = nullptr;
+    if (const std::int32_t status = begin(mod, where, &state); status != LUMA_OK) {
+        return status;
+    }
+    if (name == nullptr) {
+        return argument(mod, where, "name");
+    }
+    const std::size_t length = ::strnlen(name, LUMA_AUDIO_NAME_MOST + 1u);
+    if (length == 0u || length > LUMA_AUDIO_NAME_MOST) {
+        return argument(mod, where, "name");
+    }
+    if (out == nullptr) {
+        return argument(mod, where, "out");
+    }
+    if (at != nullptr) {
+        if (const std::int32_t status = check_place(mod, where, at); status != LUMA_OK) {
+            return status;
+        }
+    }
+    if (g_game.play == nullptr) {
+        return LUMA_E_ABSENT;
+    }
+    std::uint64_t id = 0;
+    const std::int32_t status =
+        g_game.play(mod, name, at != nullptr ? at->follow : kNoPlace, at != nullptr ? at->pos : nullptr, &id);
+    if (status == LUMA_E_LIMIT) {
+        report(mod, where, 104u, "16");  // Service.Limit
+        return status;
+    }
+    if (status == LUMA_E_ARGUMENT) {
+        return argument(mod, where, "at");
+    }
+    if (status != LUMA_OK) {
+        return status;  // NOT_FOUND, BUSY: answers
+    }
+    *out = id;
+    if (at != nullptr && at->follow != LUMA_AUDIO_AT_POINT) {
+        const std::lock_guard<std::mutex> lock(g_lock);
+        try {
+            need_placer_locked(state, mod);
+        } catch (...) {
+            // It plays where it started; it follows from the next place or play that finds memory.
+        }
+    }
+    return LUMA_OK;
+}
+
+std::int32_t audio_game_place(const LumaMod* mod, LumaHandle sound, const LumaAudioPlace* at) noexcept {
+    static constexpr const char* where = "audio.game_place";
+    ModState* state = nullptr;
+    if (const std::int32_t status = begin(mod, where, &state); status != LUMA_OK) {
+        return status;
+    }
+    if (at == nullptr) {
+        return argument(mod, where, "at");
+    }
+    if (const std::int32_t status = check_place(mod, where, at); status != LUMA_OK) {
+        return status;
+    }
+    const std::int32_t status = g_game.place != nullptr ? g_game.place(mod, sound, at->follow, at->pos) : LUMA_E_HANDLE;
+    if (status == LUMA_E_HANDLE) {
+        return bad_handle(mod, where);
+    }
+    if (status == LUMA_E_ARGUMENT) {
+        return argument(mod, where, "sound");  // started with no place
+    }
+    if (status == LUMA_OK && at->follow != LUMA_AUDIO_AT_POINT) {
+        const std::lock_guard<std::mutex> lock(g_lock);
+        try {
+            need_placer_locked(state, mod);
+        } catch (...) {
+        }
+    }
+    return status;
+}
+
+std::int32_t audio_game_stop(const LumaMod* mod, LumaHandle sound, std::uint32_t fade_ms) noexcept {
+    static constexpr const char* where = "audio.game_stop";
+    ModState* state = nullptr;
+    if (const std::int32_t status = begin(mod, where, &state); status != LUMA_OK) {
+        return status;
+    }
+    if (fade_ms > LUMA_AUDIO_FADE_MOST_MS) {
+        return argument(mod, where, "fade_ms");
+    }
+    const std::int32_t status = g_game.stop != nullptr ? g_game.stop(mod, sound, fade_ms) : LUMA_E_HANDLE;
+    if (status == LUMA_E_HANDLE) {
+        return bad_handle(mod, where);
+    }
+    return status;
 }
 
 std::int32_t audio_voice_set(const LumaMod* mod, LumaHandle voice, float volume, float pitch) noexcept {
@@ -1151,7 +1486,11 @@ void mod_gone(void*, const LumaMod* mod) {
     if (state == nullptr) {
         return;
     }
+    if (g_game.gone != nullptr) {
+        g_game.gone(mod);  // its game sounds stop the same frame
+    }
     const std::lock_guard<std::mutex> lock(g_lock);
+    state->placer = nullptr;
     for (Item* item : g_items) {
         if (item->owner == state) {
             if (item->tap && !item->closed && item->source == LUMA_AUDIO_TAP_OUTPUT) {
@@ -1195,6 +1534,11 @@ const LumaAudioService kAudio = {
     audio_music_restore,
     audio_tap_open,
     audio_tap_close,
+    audio_play_at,
+    audio_voice_place,
+    audio_game_play,
+    audio_game_place,
+    audio_game_stop,
 };
 
 const LumaServiceRow kRows[] = {
@@ -1212,6 +1556,22 @@ const LumaServiceProvider* const kProviders[] = {&kAudioProvider};
 
 void set_store(const galaxy::assets::AssetStore* store) noexcept {
     g_store.store(store, std::memory_order_release);
+}
+
+void set_game(void* (*find_symbol)(const char*)) noexcept {
+    if (find_symbol == nullptr) {
+        return;
+    }
+    g_game.play = reinterpret_cast<decltype(g_game.play)>(find_symbol("luma_game_sound_play"));
+    g_game.place = reinterpret_cast<decltype(g_game.place)>(find_symbol("luma_game_sound_place"));
+    g_game.stop = reinterpret_cast<decltype(g_game.stop)>(find_symbol("luma_game_sound_stop"));
+    g_game.gone = reinterpret_cast<decltype(g_game.gone)>(find_symbol("luma_game_sound_gone"));
+    g_game.follow = reinterpret_cast<decltype(g_game.follow)>(find_symbol("luma_game_sound_follow"));
+    g_game.listener = reinterpret_cast<decltype(g_game.listener)>(find_symbol("luma_game_listener"));
+    if (g_game.play == nullptr || g_game.place == nullptr || g_game.stop == nullptr || g_game.gone == nullptr ||
+        g_game.follow == nullptr || g_game.listener == nullptr) {
+        g_game = Game{};  // all or none: game_play answers LUMA_E_ABSENT, places keep the gains of no place
+    }
 }
 
 std::span<const LumaServiceProvider* const> providers(void (*)(const char*)) noexcept {
