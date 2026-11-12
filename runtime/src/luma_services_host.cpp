@@ -4,6 +4,7 @@
 #include "galaxy/host_extension.h"
 #include "galaxy/luma_assets_service.h"
 #include "galaxy/luma_audio_service.h"
+#include "galaxy/luma_capture_service.h"
 #include "galaxy/luma_fs_service.h"
 #include "galaxy/luma_net_service.h"
 #include "galaxy/luma_input_service.h"
@@ -171,6 +172,10 @@ bool provide_all(void* (*find_symbol)(const char*), void (*log)(const char*),
     }
     // The audio service (services-audio; layers 1-2: a mod's cooked sounds and its streams).
     for (const LumaServiceProvider* const provider : galaxy::luma_audio::providers(log)) {
+        provide(provider);
+    }
+    // The capture services (services-audio 7; layers 5-6: the microphone and the camera, each its permission).
+    for (const LumaServiceProvider* const provider : galaxy::luma_capture::providers(log)) {
         provide(provider);
     }
     Giving giving{provide};

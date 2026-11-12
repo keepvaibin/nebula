@@ -55,6 +55,8 @@ namespace luma {
                 {"assets", 1, 0, nullptr, "services-assets"},
                 {"input", 1, 0, nullptr, "services-input"},
                 {"audio", 1, 0, nullptr, "services-audio"},
+                {"audio.microphone", 1, 0, "audio.microphone", "services-audio"},
+                {"capture.camera", 1, 0, "capture.camera", "services-audio"},
                 {nullptr, 0, 0, nullptr, nullptr},
             };
 

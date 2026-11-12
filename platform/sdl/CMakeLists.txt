@@ -138,6 +138,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/luma_net.cpp
     ${rt}/luma_assets.cpp
     ${rt}/luma_audio.cpp
+    ${rt}/luma_capture.cpp
     ${rt}/luma_input.cpp
     ${rt}/achievements.cpp
     ${rt}/stats.cpp

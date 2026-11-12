@@ -1,0 +1,769 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// LumaCore's capture services (contract services-audio 7; plan 2.6 layers 5 and 6): `audio.microphone` and
+// `capture.camera`. Each open starts a thread of its own that opens the device, reads it, converts what it gives
+// (the microphone to float at the mod's rate and channels; the camera to RGBA rows top first) and posts the item's
+// node; the game thread delivers at a frame's start. No call waits for a device: closing marks the item and lets the
+// thread end by itself (it holds the item through a shared_ptr, so nothing it touches is freed under it).
+//
+// Devices: Windows, WASAPI (shared mode, the default capture endpoint) and Media Foundation (the first video
+// capture source, its video processor converting to RGB32). Other platforms answer LUMA_E_ABSENT until their
+// backends land (plan 8.2: AAudio and Camera2 on Android; Core Audio and AVFoundation on Apple; PipeWire and V4L2 on
+// Linux).
+#include "galaxy/luma_capture_service.h"
+
+#include <luma_capture.h>
+
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <cstring>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <thread>
+#include <utility>
+#include <vector>
+
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#include <audioclient.h>
+#include <ks.h>
+#include <ksmedia.h>
+#include <mfapi.h>
+#include <mferror.h>
+#include <mfidl.h>
+#include <mfreadwrite.h>
+#include <mmdeviceapi.h>
+#pragma comment(lib, "ole32.lib")
+#pragma comment(lib, "mfplat.lib")
+#pragma comment(lib, "mf.lib")
+#pragma comment(lib, "mfreadwrite.lib")
+#pragma comment(lib, "mfuuid.lib")
+#endif
+
+namespace galaxy::luma_capture {
+namespace {
+
+static_assert(sizeof(LumaMicrophoneDesc) == 16u, "LumaMicrophoneDesc 1.0 is 16 bytes");
+static_assert(sizeof(LumaCameraDesc) == 16u, "LumaCameraDesc 1.0 is 16 bytes");
+
+constexpr std::size_t kBlocks = 8u;  // microphone blocks waiting: 170 ms at 48 kHz
+
+struct Item;
+struct Node {
+    LumaEventNode event;  // first, and both plain members: the kernel's node is the Node
+    Item* item;
+};
+
+// One open device. Members marked g_lock are shared with its thread.
+struct Item {
+    Node node{};
+    const LumaMod* mod = nullptr;
+    LumaHandle handle = 0;
+    LumaEventFn fn = nullptr;
+    void* user = nullptr;
+    bool camera = false;
+    std::atomic<bool> stop{false};  // closed, or its mod gone: the thread ends at its next look
+    bool closed = false;            // g_lock: no event from now on
+    bool posted = false;            // g_lock
+    std::int32_t ended = LUMA_OK;   // g_lock: ENDED to give (its status), not LUMA_OK
+    // Microphone (g_lock): blocks of LUMA_MICROPHONE_BLOCK_FRAMES × channels.
+    std::uint32_t rate = 48000u;
+    std::uint32_t channels = 1u;
+    std::vector<float> blocks;
+    std::size_t ready_first = 0;
+    std::size_t ready_count = 0;
+    bool lost = false;
+    std::vector<float> handing;  // the game thread's copy
+    // Camera (g_lock): the newest picture, swapped in by the thread, out by the delivery.
+    std::uint32_t width = 0;
+    std::uint32_t height = 0;
+    std::uint32_t fps = 0;
+    std::vector<std::uint8_t> ready;
+    bool fresh = false;
+    bool skipped = false;
+    std::uint32_t ready_width = 0;
+    std::uint32_t ready_height = 0;
+    std::uint64_t ready_time = 0;
+    std::vector<std::uint8_t> shown;  // the game thread's
+};
+
+std::mutex g_lock;
+std::vector<std::shared_ptr<Item>> g_items;  // g_lock; an item leaves once closed and not queued
+const Item* g_delivering = nullptr;          // g_lock
+std::atomic<const LumaServiceKernel*> g_kernel{nullptr};
+std::atomic<LumaHandle> g_next_handle{1};
+
+void report(const LumaMod* mod, const char* where, std::uint32_t code, const char* a = nullptr) noexcept {
+    const char* args[1] = {a};
+    if (const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire)) {
+        kernel->report(mod, where, code, args, a == nullptr ? 0u : 1u);
+    }
+}
+
+std::int32_t enter(const LumaMod* mod, const char* where) noexcept {
+    const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
+    if (kernel == nullptr) {
+        return LUMA_E_CANCELLED;
+    }
+    if (mod == nullptr || kernel->mod_id(mod) == nullptr) {
+        kernel->unknown_mod(where);
+        return LUMA_E_ARGUMENT;
+    }
+    if (kernel->mod_live(mod) == 0) {
+        return LUMA_E_CANCELLED;
+    }
+    if (kernel->game_thread() == 0) {
+        report(mod, where, 100u);  // Service.Thread
+        return LUMA_E_THREAD;
+    }
+    return LUMA_OK;
+}
+
+std::int32_t argument(const LumaMod* mod, const char* where, const char* name) noexcept {
+    report(mod, where, 101u, name);  // Service.Argument
+    return LUMA_E_ARGUMENT;
+}
+
+std::int32_t struct_size(const LumaMod* mod, const char* where, const char* name, std::uint32_t found,
+                         std::uint32_t expected) noexcept {
+    const std::string a = std::to_string(found);
+    const std::string b = std::to_string(expected);
+    const char* args[3] = {name, a.c_str(), b.c_str()};
+    if (const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire)) {
+        kernel->report(mod, where, 103u, args, 3u);  // Service.StructSize
+    }
+    return LUMA_E_ARGUMENT;
+}
+
+// With g_lock: queue the item's node (once). Any thread.
+void post_locked(Item* item) noexcept {
+    if (item->posted || item->closed) {
+        return;
+    }
+    const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
+    if (kernel != nullptr && kernel->post(&item->node.event) == LUMA_OK) {
+        item->posted = true;
+    }
+}
+
+// Game thread, with g_lock: lets go of the closed items no queue or delivery holds (their threads may still run on
+// their own reference).
+void reap_locked() {
+    g_items.erase(std::remove_if(g_items.begin(), g_items.end(),
+                                 [](const std::shared_ptr<Item>& item) {
+                                     return item->closed && !item->posted && item.get() != g_delivering;
+                                 }),
+                  g_items.end());
+}
+
+// The device's thread, with g_lock: it ended on its own (status ABSENT or IO).
+[[maybe_unused]] void end_locked(Item* item, std::int32_t status) noexcept {
+    if (!item->closed && item->ended == LUMA_OK) {
+        item->ended = status;
+        post_locked(item);
+    }
+}
+
+// ---- The microphone's conversion (its thread) ----------------------------------------------------------------------
+
+// Device frames (float, `in_channels` each) to the mod's rate and channels, into blocks.
+struct Converter {
+    double place = 0.0;    // between `last` and the next device frame
+    float last[2] = {0.0f, 0.0f};
+    bool started = false;
+    std::vector<float> filling;
+    std::size_t filled = 0;
+
+    void push(Item& item, const float* in, std::size_t frames, std::uint32_t in_channels, std::uint32_t in_rate) {
+        const double step = static_cast<double>(in_rate) / static_cast<double>(item.rate);
+        const std::size_t out_channels = item.channels;
+        if (filling.size() != LUMA_MICROPHONE_BLOCK_FRAMES * out_channels) {
+            filling.assign(LUMA_MICROPHONE_BLOCK_FRAMES * out_channels, 0.0f);
+            filled = 0;
+        }
+        for (std::size_t f = 0; f < frames; ++f) {
+            const float* frame = in + f * in_channels;
+            const float left = frame[0];
+            const float right = in_channels >= 2u ? frame[1] : frame[0];
+            if (!started) {
+                last[0] = left;
+                last[1] = right;
+                started = true;
+                continue;
+            }
+            // Outputs between the last device frame and this one.
+            while (place < 1.0) {
+                const auto t = static_cast<float>(place);
+                const float l = last[0] + (left - last[0]) * t;
+                const float r = last[1] + (right - last[1]) * t;
+                float* to = filling.data() + filled * out_channels;
+                if (out_channels == 1u) {
+                    to[0] = 0.5f * (l + r);
+                } else {
+                    to[0] = l;
+                    to[1] = r;
+                }
+                if (++filled == LUMA_MICROPHONE_BLOCK_FRAMES) {
+                    filled = 0;
+                    hand(item);
+                }
+                place += step;
+            }
+            place -= 1.0;
+            last[0] = left;
+            last[1] = right;
+        }
+    }
+
+    void hand(Item& item) {
+        const std::lock_guard<std::mutex> lock(g_lock);
+        if (item.closed) {
+            return;
+        }
+        if (item.ready_count == kBlocks) {
+            item.lost = true;
+            return;
+        }
+        const std::size_t block = LUMA_MICROPHONE_BLOCK_FRAMES * item.channels;
+        const std::size_t slot = (item.ready_first + item.ready_count) % kBlocks;
+        std::copy(filling.begin(), filling.end(), item.blocks.begin() + static_cast<std::ptrdiff_t>(slot * block));
+        item.ready_count++;
+        post_locked(&item);
+    }
+};
+
+#if defined(_WIN32)
+
+template <typename T>
+void let_go(T*& p) noexcept {
+    if (p != nullptr) {
+        p->Release();
+        p = nullptr;
+    }
+}
+
+// The default capture endpoint until stop: ABSENT when there is none (or it is refused), IO when it goes.
+void microphone_thread(std::shared_ptr<Item> item) {
+    const HRESULT com = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    IMMDeviceEnumerator* devices = nullptr;
+    IMMDevice* device = nullptr;
+    IAudioClient* client = nullptr;
+    IAudioCaptureClient* capture = nullptr;
+    WAVEFORMATEX* format = nullptr;
+    HANDLE ready = nullptr;
+    std::int32_t status = LUMA_E_ABSENT;
+    Converter converter;
+    std::vector<float> floats;
+    do {
+        if (FAILED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, __uuidof(IMMDeviceEnumerator),
+                                    reinterpret_cast<void**>(&devices))) ||
+            FAILED(devices->GetDefaultAudioEndpoint(eCapture, eConsole, &device)) ||
+            FAILED(device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, reinterpret_cast<void**>(&client))) ||
+            FAILED(client->GetMixFormat(&format))) {
+            break;  // none, or the system's privacy setting refuses it: ABSENT
+        }
+        bool is_float = format->wFormatTag == WAVE_FORMAT_IEEE_FLOAT;
+        if (format->wFormatTag == WAVE_FORMAT_EXTENSIBLE) {
+            const auto* extensible = reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(format);
+            is_float = IsEqualGUID(extensible->SubFormat, KSDATAFORMAT_SUBTYPE_IEEE_FLOAT) != 0;
+        }
+        const std::uint32_t bits = format->wBitsPerSample;
+        const std::uint32_t in_channels = std::max<std::uint32_t>(format->nChannels, 1u);
+        const std::uint32_t in_rate = format->nSamplesPerSec;
+        if ((is_float && bits != 32u) || (!is_float && bits != 16u && bits != 24u && bits != 32u) || in_rate == 0u) {
+            break;
+        }
+        ready = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+        if (ready == nullptr ||
+            FAILED(client->Initialize(AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_EVENTCALLBACK, 200000, 0, format,
+                                      nullptr)) ||
+            FAILED(client->SetEventHandle(ready)) ||
+            FAILED(client->GetService(__uuidof(IAudioCaptureClient), reinterpret_cast<void**>(&capture))) ||
+            FAILED(client->Start())) {
+            break;
+        }
+        status = LUMA_OK;
+        const std::uint32_t bytes = bits / 8u;
+        while (!item->stop.load(std::memory_order_acquire)) {
+            (void)WaitForSingleObject(ready, 100);
+            UINT32 packet = 0;
+            HRESULT result = S_OK;
+            while (SUCCEEDED(result = capture->GetNextPacketSize(&packet)) && packet > 0u) {
+                BYTE* data = nullptr;
+                UINT32 frames = 0;
+                DWORD flags = 0;
+                if (FAILED(result = capture->GetBuffer(&data, &frames, &flags, nullptr, nullptr))) {
+                    break;
+                }
+                floats.resize(static_cast<std::size_t>(frames) * in_channels);
+                for (std::size_t i = 0; i < floats.size(); ++i) {
+                    float value = 0.0f;
+                    if ((flags & AUDCLNT_BUFFERFLAGS_SILENT) == 0u) {
+                        const BYTE* at = data + i * bytes;
+                        if (is_float) {
+                            std::memcpy(&value, at, 4u);
+                        } else if (bits == 16u) {
+                            std::int16_t v;
+                            std::memcpy(&v, at, 2u);
+                            value = static_cast<float>(v) / 32768.0f;
+                        } else if (bits == 24u) {
+                            const std::int32_t v = static_cast<std::int32_t>(static_cast<std::uint32_t>(at[0]) << 8u |
+                                                                             static_cast<std::uint32_t>(at[1]) << 16u |
+                                                                             static_cast<std::uint32_t>(at[2]) << 24u);
+                            value = static_cast<float>(v) / 2147483648.0f;
+                        } else {
+                            std::int32_t v;
+                            std::memcpy(&v, at, 4u);
+                            value = static_cast<float>(v) / 2147483648.0f;
+                        }
+                    }
+                    floats[i] = value;
+                }
+                (void)capture->ReleaseBuffer(frames);
+                converter.push(*item, floats.data(), frames, in_channels, in_rate);
+            }
+            if (FAILED(result)) {
+                status = LUMA_E_IO;  // AUDCLNT_E_DEVICE_INVALIDATED and the like: unplugged or taken
+                break;
+            }
+        }
+        (void)client->Stop();
+    } while (false);
+    if (status != LUMA_OK) {
+        const std::lock_guard<std::mutex> lock(g_lock);
+        end_locked(item.get(), status);
+    }
+    let_go(capture);
+    let_go(client);
+    let_go(device);
+    let_go(devices);
+    if (format != nullptr) {
+        CoTaskMemFree(format);
+    }
+    if (ready != nullptr) {
+        CloseHandle(ready);
+    }
+    if (SUCCEEDED(com)) {
+        CoUninitialize();
+    }
+}
+
+// The first video capture source until stop, converted to RGBA rows top first.
+void camera_thread(std::shared_ptr<Item> item) {
+    const HRESULT com = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    const bool started = SUCCEEDED(MFStartup(MF_VERSION, MFSTARTUP_LITE));
+    IMFAttributes* find = nullptr;
+    IMFActivate** sources = nullptr;
+    UINT32 source_count = 0;
+    IMFMediaSource* source = nullptr;
+    IMFAttributes* settings = nullptr;
+    IMFSourceReader* reader = nullptr;
+    IMFMediaType* wanted = nullptr;
+    IMFMediaType* given = nullptr;
+    std::int32_t status = LUMA_E_ABSENT;
+    std::vector<std::uint8_t> picture;
+    do {
+        if (!started || FAILED(MFCreateAttributes(&find, 1)) ||
+            FAILED(find->SetGUID(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID)) ||
+            FAILED(MFEnumDeviceSources(find, &sources, &source_count)) || source_count == 0u ||
+            FAILED(sources[0]->ActivateObject(IID_PPV_ARGS(&source))) || FAILED(MFCreateAttributes(&settings, 1)) ||
+            FAILED(settings->SetUINT32(MF_SOURCE_READER_ENABLE_VIDEO_PROCESSING, TRUE)) ||
+            FAILED(MFCreateSourceReaderFromMediaSource(source, settings, &reader)) ||
+            FAILED(MFCreateMediaType(&wanted)) || FAILED(wanted->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video)) ||
+            FAILED(wanted->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_RGB32))) {
+            break;
+        }
+        if (item->width != 0u) {
+            (void)MFSetAttributeSize(wanted, MF_MT_FRAME_SIZE, item->width, item->height);
+        }
+        if (item->fps != 0u) {
+            (void)MFSetAttributeRatio(wanted, MF_MT_FRAME_RATE, item->fps, 1u);
+        }
+        const DWORD stream = static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM);
+        if (FAILED(reader->SetCurrentMediaType(stream, nullptr, wanted))) {
+            // The size or rate asked is not one the camera gives: its own, still RGB32.
+            (void)wanted->DeleteItem(MF_MT_FRAME_SIZE);
+            (void)wanted->DeleteItem(MF_MT_FRAME_RATE);
+            if (FAILED(reader->SetCurrentMediaType(stream, nullptr, wanted))) {
+                break;
+            }
+        }
+        UINT32 width = 0;
+        UINT32 height = 0;
+        if (FAILED(reader->GetCurrentMediaType(stream, &given)) ||
+            FAILED(MFGetAttributeSize(given, MF_MT_FRAME_SIZE, &width, &height)) || width == 0u || height == 0u) {
+            break;
+        }
+        // RGB32's default stride is negative for rows bottom first.
+        const auto stride = static_cast<std::int32_t>(MFGetAttributeUINT32(given, MF_MT_DEFAULT_STRIDE, width * 4u));
+        status = LUMA_OK;
+        picture.resize(static_cast<std::size_t>(width) * height * 4u);
+        while (!item->stop.load(std::memory_order_acquire)) {
+            DWORD index = 0;
+            DWORD flags = 0;
+            LONGLONG when = 0;
+            IMFSample* sample = nullptr;
+            if (FAILED(reader->ReadSample(stream, 0, &index, &flags, &when, &sample))) {
+                status = LUMA_E_IO;
+                break;
+            }
+            if ((flags & (MF_SOURCE_READERF_ERROR | MF_SOURCE_READERF_ENDOFSTREAM)) != 0u) {
+                let_go(sample);
+                status = LUMA_E_IO;
+                break;
+            }
+            if (sample == nullptr) {
+                continue;
+            }
+            IMFMediaBuffer* buffer = nullptr;
+            BYTE* bytes = nullptr;
+            DWORD length = 0;
+            if (SUCCEEDED(sample->ConvertToContiguousBuffer(&buffer)) &&
+                SUCCEEDED(buffer->Lock(&bytes, nullptr, &length))) {
+                const std::size_t row = static_cast<std::size_t>(width) * 4u;
+                const std::size_t step = static_cast<std::size_t>(stride < 0 ? -stride : stride);
+                if (step >= row && length >= step * (height - 1u) + row) {
+                    for (UINT32 y = 0; y < height; ++y) {
+                        const BYTE* from = bytes + (stride < 0 ? (height - 1u - y) : y) * step;
+                        std::uint8_t* to = picture.data() + y * row;
+                        for (UINT32 x = 0; x < width; ++x) {  // BGRA to RGBA, alpha opaque
+                            to[x * 4u] = from[x * 4u + 2u];
+                            to[x * 4u + 1u] = from[x * 4u + 1u];
+                            to[x * 4u + 2u] = from[x * 4u];
+                            to[x * 4u + 3u] = 255u;
+                        }
+                    }
+                    const auto now = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now().time_since_epoch()).count());
+                    const std::lock_guard<std::mutex> lock(g_lock);
+                    if (!item->closed) {
+                        item->skipped |= item->fresh;
+                        item->ready.swap(picture);
+                        item->fresh = true;
+                        item->ready_width = width;
+                        item->ready_height = height;
+                        item->ready_time = now;
+                        post_locked(item.get());
+                    }
+                    picture.resize(static_cast<std::size_t>(width) * height * 4u);
+                }
+                (void)buffer->Unlock();
+            }
+            let_go(buffer);
+            let_go(sample);
+        }
+    } while (false);
+    if (status != LUMA_OK) {
+        const std::lock_guard<std::mutex> lock(g_lock);
+        end_locked(item.get(), status);
+    }
+    let_go(given);
+    let_go(wanted);
+    let_go(reader);
+    let_go(settings);
+    if (source != nullptr) {
+        (void)source->Shutdown();
+        let_go(source);
+    }
+    for (UINT32 i = 0; i < source_count; ++i) {
+        let_go(sources[i]);
+    }
+    if (sources != nullptr) {
+        CoTaskMemFree(sources);
+    }
+    let_go(find);
+    if (started) {
+        (void)MFShutdown();
+    }
+    if (SUCCEEDED(com)) {
+        CoUninitialize();
+    }
+}
+
+constexpr bool kHasDevices = true;
+#else
+constexpr bool kHasDevices = false;
+void microphone_thread(std::shared_ptr<Item>) {}
+void camera_thread(std::shared_ptr<Item>) {}
+#endif
+
+// ---- Deliveries (game thread) --------------------------------------------------------------------------------------
+
+void deliver(LumaEventNode* node) {
+    Item* const item = reinterpret_cast<Node*>(node)->item;
+    const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
+    const char* const service = item->camera ? LUMA_CAMERA_NAME : LUMA_MICROPHONE_NAME;
+    {
+        const std::lock_guard<std::mutex> lock(g_lock);
+        item->posted = false;
+        if (item->closed) {
+            reap_locked();
+            return;
+        }
+        g_delivering = item;
+    }
+    std::int32_t ended = LUMA_OK;
+    for (;;) {
+        LumaEvent event{};
+        event.size = sizeof(event);
+        event.handle = item->handle;
+        LumaCameraFrame frame{};
+        {
+            const std::lock_guard<std::mutex> lock(g_lock);
+            if (item->closed) {
+                break;
+            }
+            if (item->camera && item->fresh) {
+                item->fresh = false;
+                item->shown.swap(item->ready);
+                frame.size = sizeof(frame);
+                frame.width = item->ready_width;
+                frame.height = item->ready_height;
+                frame.stride = item->ready_width * 4u;
+                frame.time_ns = item->ready_time;
+                frame.pixels = item->shown.data();
+                event.kind = LUMA_CAPTURE_EVENT_FRAME;
+                event.status = std::exchange(item->skipped, false) ? LUMA_E_BUSY : LUMA_OK;
+                event.data = &frame;
+                event.data_size = sizeof(frame);
+            } else if (!item->camera && item->ready_count > 0u) {
+                const std::size_t block = LUMA_MICROPHONE_BLOCK_FRAMES * item->channels;
+                const float* from = item->blocks.data() + item->ready_first * block;
+                std::copy(from, from + block, item->handing.begin());
+                item->ready_first = (item->ready_first + 1u) % kBlocks;
+                item->ready_count--;
+                event.kind = LUMA_CAPTURE_EVENT_SAMPLES;
+                event.status = std::exchange(item->lost, false) ? LUMA_E_BUSY : LUMA_OK;
+                event.data = item->handing.data();
+                event.data_size = block * sizeof(float);
+                event.value = LUMA_MICROPHONE_BLOCK_FRAMES;
+                event.flags = item->rate;
+            } else if (item->ended != LUMA_OK) {
+                ended = item->ended;
+                item->closed = true;  // its last event
+                event.kind = LUMA_CAPTURE_EVENT_ENDED;
+                event.status = ended;
+            } else {
+                break;
+            }
+        }
+        if (kernel == nullptr || kernel->call(item->mod, service, item->fn, item->user, &event) != LUMA_OK ||
+            ended != LUMA_OK) {
+            break;
+        }
+    }
+    const std::lock_guard<std::mutex> lock(g_lock);
+    g_delivering = nullptr;
+    reap_locked();
+}
+
+void drop(LumaEventNode* node) {
+    Item* const item = reinterpret_cast<Node*>(node)->item;
+    const std::lock_guard<std::mutex> lock(g_lock);
+    item->posted = false;
+    reap_locked();
+}
+
+// ---- The calls (game thread) ---------------------------------------------------------------------------------------
+
+std::int32_t open_item(const LumaMod* mod, const char* where, bool camera, LumaEventFn fn, void* user,
+                       LumaHandle* out, const std::shared_ptr<Item>& item) {
+    {
+        const std::lock_guard<std::mutex> lock(g_lock);
+        for (const std::shared_ptr<Item>& other : g_items) {
+            if (other->mod == mod && other->camera == camera && !other->closed) {
+                report(mod, where, 104u, "1");  // Service.Limit
+                return LUMA_E_LIMIT;
+            }
+        }
+    }
+    if (!kHasDevices) {
+        return LUMA_E_ABSENT;
+    }
+    item->node.event.mod = mod;
+    item->node.event.deliver = deliver;
+    item->node.event.drop = drop;
+    item->node.item = item.get();
+    item->mod = mod;
+    item->fn = fn;
+    item->user = user;
+    item->camera = camera;
+    try {
+        const std::lock_guard<std::mutex> lock(g_lock);
+        g_items.reserve(g_items.size() + 1u);
+        std::thread(camera ? camera_thread : microphone_thread, item).detach();
+        item->handle = g_next_handle.fetch_add(1, std::memory_order_relaxed);
+        *out = item->handle;
+        g_items.push_back(item);
+    } catch (...) {
+        item->stop.store(true, std::memory_order_release);
+        return LUMA_E_MEMORY;
+    }
+    return LUMA_OK;
+}
+
+std::int32_t close_item(const LumaMod* mod, const char* where, bool camera, LumaHandle handle) {
+    if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
+        return status;
+    }
+    const std::lock_guard<std::mutex> lock(g_lock);
+    for (const std::shared_ptr<Item>& item : g_items) {
+        if (item->mod == mod && item->handle == handle && item->camera == camera && !item->closed) {
+            item->closed = true;
+            item->stop.store(true, std::memory_order_release);
+            reap_locked();
+            return LUMA_OK;
+        }
+    }
+    report(mod, where, 102u);  // Service.Handle
+    return LUMA_E_HANDLE;
+}
+
+std::int32_t microphone_open(const LumaMod* mod, const LumaMicrophoneDesc* desc, LumaEventFn fn, void* user,
+                             LumaHandle* out) noexcept {
+    static constexpr const char* where = "audio.microphone.open";
+    if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
+        return status;
+    }
+    if (desc == nullptr) {
+        return argument(mod, where, "desc");
+    }
+    if (desc->size < sizeof(LumaMicrophoneDesc)) {
+        return struct_size(mod, where, "LumaMicrophoneDesc", desc->size, sizeof(LumaMicrophoneDesc));
+    }
+    const std::uint32_t rate = desc->rate == 0u ? 48000u : desc->rate;
+    if (rate < 8000u || rate > 192000u) {
+        return argument(mod, where, "desc.rate");
+    }
+    if (desc->channels != 1u && desc->channels != 2u) {
+        return argument(mod, where, "desc.channels");
+    }
+    if (fn == nullptr) {
+        return argument(mod, where, "fn");
+    }
+    if (out == nullptr) {
+        return argument(mod, where, "out");
+    }
+    try {
+        auto item = std::make_shared<Item>();
+        item->rate = rate;
+        item->channels = desc->channels;
+        item->blocks.assign(kBlocks * LUMA_MICROPHONE_BLOCK_FRAMES * desc->channels, 0.0f);
+        item->handing.assign(LUMA_MICROPHONE_BLOCK_FRAMES * desc->channels, 0.0f);
+        return open_item(mod, where, false, fn, user, out, item);
+    } catch (...) {
+        return LUMA_E_MEMORY;
+    }
+}
+
+std::int32_t microphone_close(const LumaMod* mod, LumaHandle microphone) noexcept {
+    try {
+        return close_item(mod, "audio.microphone.close", false, microphone);
+    } catch (...) {
+        return LUMA_E_MEMORY;
+    }
+}
+
+std::int32_t camera_open(const LumaMod* mod, const LumaCameraDesc* desc, LumaEventFn fn, void* user,
+                         LumaHandle* out) noexcept {
+    static constexpr const char* where = "capture.camera.open";
+    if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
+        return status;
+    }
+    if (desc == nullptr) {
+        return argument(mod, where, "desc");
+    }
+    if (desc->size < sizeof(LumaCameraDesc)) {
+        return struct_size(mod, where, "LumaCameraDesc", desc->size, sizeof(LumaCameraDesc));
+    }
+    if (desc->width > LUMA_CAMERA_WIDTH_MOST || desc->height > LUMA_CAMERA_HEIGHT_MOST ||
+        (desc->width == 0u) != (desc->height == 0u)) {
+        return argument(mod, where, "desc.width");
+    }
+    if (desc->fps > LUMA_CAMERA_FPS_MOST) {
+        return argument(mod, where, "desc.fps");
+    }
+    if (fn == nullptr) {
+        return argument(mod, where, "fn");
+    }
+    if (out == nullptr) {
+        return argument(mod, where, "out");
+    }
+    try {
+        auto item = std::make_shared<Item>();
+        item->width = desc->width;
+        item->height = desc->height;
+        item->fps = desc->fps;
+        return open_item(mod, where, true, fn, user, out, item);
+    } catch (...) {
+        return LUMA_E_MEMORY;
+    }
+}
+
+std::int32_t camera_close(const LumaMod* mod, LumaHandle camera) noexcept {
+    try {
+        return close_item(mod, "capture.camera.close", true, camera);
+    } catch (...) {
+        return LUMA_E_MEMORY;
+    }
+}
+
+// ---- The providers -------------------------------------------------------------------------------------------------
+
+// After the mod's stop: its devices close (their threads end by themselves); nothing is posted for it from now on.
+void mod_gone(void*, const LumaMod* mod) {
+    const std::lock_guard<std::mutex> lock(g_lock);
+    for (const std::shared_ptr<Item>& item : g_items) {
+        if (item->mod == mod) {
+            item->closed = true;
+            item->stop.store(true, std::memory_order_release);
+        }
+    }
+    reap_locked();
+}
+
+void mod_end(void*, const LumaMod*) {
+    const std::lock_guard<std::mutex> lock(g_lock);
+    reap_locked();
+}
+
+void registered(void*, const LumaServiceKernel* kernel) {
+    g_kernel.store(kernel, std::memory_order_release);
+}
+
+const LumaMicrophoneService kMicrophone = {
+    {sizeof(LumaMicrophoneService), LUMA_MICROPHONE_MAJOR, LUMA_MICROPHONE_MINOR},
+    microphone_open,
+    microphone_close,
+};
+const LumaCameraService kCamera = {
+    {sizeof(LumaCameraService), LUMA_CAMERA_MAJOR, LUMA_CAMERA_MINOR},
+    camera_open,
+    camera_close,
+};
+
+// Both report only the registry's rows (100-104); the permission is checked when the mod binds.
+const LumaServiceProvider kMicrophoneProvider = {
+    sizeof(LumaServiceProvider), LUMA_MICROPHONE_NAME, &kMicrophone.base, nullptr, nullptr, 0u, nullptr,
+    nullptr, mod_gone, mod_end, registered,
+};
+const LumaServiceProvider kCameraProvider = {
+    sizeof(LumaServiceProvider), LUMA_CAMERA_NAME, &kCamera.base, nullptr, nullptr, 0u, nullptr,
+    nullptr, mod_gone, mod_end, registered,
+};
+const LumaServiceProvider* const kProviders[] = {&kMicrophoneProvider, &kCameraProvider};
+
+}  // namespace
+
+std::span<const LumaServiceProvider* const> providers(void (*)(const char*)) noexcept {
+    return kProviders;
+}
+
+}  // namespace galaxy::luma_capture
