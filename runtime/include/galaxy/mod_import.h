@@ -74,6 +74,16 @@ using ImportCheck = std::function<bool(const std::filesystem::path& staged, cons
                                       const std::function<void(const ImportProgress&)>& progress = {},
                                       const std::atomic<bool>* cancel = nullptr, const ImportCheck& check = {});
 
+// The mod a folder or archive holds, read before importing it (services-mods 9: the install screen's UPDATE): its
+// manifest's id and version, and the version of the installed mod of that id in `mods_folder` (empty: none installed,
+// or no manifest). Reads the archive's luma.json only (at its top or in its one top folder, at most 1 MiB). Any thread.
+struct ImportPeek {
+    std::string id;
+    std::string version;
+    std::string installed;
+};
+[[nodiscard]] ImportPeek peek_import(const std::filesystem::path& source, const std::filesystem::path& mods_folder);
+
 // Removes a mod's folder, to the recycle bin where there is one. Its settings stay until the next save. A folder in
 // use is left untouched (IN USE); a mod is never half removed.
 bool remove_mod(const std::filesystem::path& mods_folder, const std::string& id, std::string* message);

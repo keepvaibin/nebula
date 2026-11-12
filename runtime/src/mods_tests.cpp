@@ -467,6 +467,17 @@ bool luma_import() {
                     fs::perms::owner_write | fs::perms::group_write | fs::perms::others_write, fs::perm_options::remove, ec);
     fs::rename(root / "mods" / "kaizo", root / "mods" / "My Kaizo", ec);
     write(root / "mods" / "kaizo" / "riivolution" / "other.xml", "<wiidisc version=\"1\"><id game=\"RMG\"/></wiidisc>");
+    {
+        // The install screen's read (services-mods 9): the archive's id and version, and the installed one of its id
+        // found in a folder of another name; nothing installed for an id no folder holds.
+        const galaxy::mods::ImportPeek peek = galaxy::mods::peek_import(root / "Kaizo v2.luma", root / "mods");
+        ok &= expect(peek.id == "kaizo" && peek.version == "1.1.0" && peek.installed == "1.0.0",
+                     "a file's mod and the installed version of its id are read before importing");
+        const galaxy::mods::ImportPeek none = galaxy::mods::peek_import(root / "Kaizo v2.luma", root / "empty");
+        ok &= expect(none.id == "kaizo" && none.installed.empty(), "no installed version where no mod of its id is");
+        const galaxy::mods::ImportPeek bad = galaxy::mods::peek_import(root / "missing.luma", root / "mods");
+        ok &= expect(bad.id.empty() && bad.version.empty(), "a file that cannot be read gives nothing");
+    }
     const galaxy::mods::ImportResult update = galaxy::mods::import_mod(root / "Kaizo v2.luma", root / "mods");
     ok &= expect(update.ok && update.replaced && update.id == "My Kaizo" && update.old_version == "1.0.0" &&
                      update.new_version == "1.1.0" && update.message == "UPDATED: Kaizo (1.0.0 TO 1.1.0)",
