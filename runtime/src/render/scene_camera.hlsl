@@ -38,7 +38,9 @@ static const uint kMeterRows = 9u;
 // The traced relight's finish (g_finish 1).
 static const float kShoulderStart = 0.76f;      // linear light from which the shoulder (per channel) bends; below it unchanged
 static const float kAdaptLeast = 0.5f;          // the eye's least exposure (closes one stop for a bright view)
-static const float kAdaptMost = 2.0f;           // its most (opens one stop for a dim one: dark levels stay dark)
+// Its most: 1.0, the game's own exposure (l91a, director A4): the meter cannot tell a sunlit view of dark ground from a
+// dim one, and a sunlit view is never opened.
+static const float kAdaptMost = 1.0f;
 static const float kAdaptReference = 0.2f;      // the surfaces' mean light (the art's colour at full light is 1) a view is exposed for
 static const float kAdaptBright = 0.1f;         // the share of the surfaces, brightest first, that must not show past white
 static const float kAdaptSurfaces = 50.0f;      // a view is metered when its surfaces' weight times this passes the grid's cells
