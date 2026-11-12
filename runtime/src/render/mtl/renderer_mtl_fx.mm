@@ -101,11 +101,24 @@ void RendererMtl::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t 
             // Turned off: the kept scene alone comes back, and none of the chain's passes run.
             p.kind = mtl::GameBloom::Kind::Restore;
         }
+        const bool whole = in.frame_width == scene_.color->width && in.frame_height == scene_.color->height;
+        const mtl::Format color_format = scene_.wide ? draw_layout_.wide_color : draw_layout_.scene_color;
+        // As RendererVk::game_bloom: the simple bloom's source is the frame, traded with the scene instead of copied where
+        // the composite writes the whole target from it; with nothing to draw, the frame is drawn back from its picture.
+        gpu::TextureRef source;
+        if (p.kind == mtl::GameBloom::Kind::Simple && whole && scene_.samples <= 1u &&
+            bloom_.prepare_draw_back(color_format, scene_.samples)) {
+            source = swap_scene_color(bloom_.take_source_image());
+            bloom_.give_source(source);
+        }
         if (bloom_.prepare(commands_, in, p)) {
             // The composite writes every channel of each pixel it covers, unblended (from the kept scene and the
             // levels): over the whole target the pass opens without loading the colour it replaces.
-            begin_scene_pass_with(0u, nullptr, in.frame_width == scene_.color->width && in.frame_height == scene_.color->height);
-            bloom_.finish(pass_, scene_.wide ? draw_layout_.wide_color : draw_layout_.scene_color, scene_.samples);
+            begin_scene_pass_with(0u, nullptr, whole);
+            bloom_.finish(pass_, color_format, scene_.samples);
+        } else if (source) {
+            begin_scene_pass_with(0u, nullptr, true);
+            bloom_.draw_back(pass_, color_format, scene_.samples, *source, in.frame_width, in.frame_height);
         }
     }
     reset_draw_bindings();

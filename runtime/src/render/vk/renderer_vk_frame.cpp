@@ -2087,12 +2087,26 @@ void RendererVk::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t b
             p.ring_x = p.ring_y = 1.0f;
         }
         p.strength = static_cast<float>(std::min(get_render_config().bloom, kMaxBloom)) / 100.0f;
+        const bool whole = in.frame_width == scene_.color->width && in.frame_height == scene_.color->height;
+        const VkRenderPass scene_pass = draw_layout_.pass_for(scene_variant(), false);
+        // The simple bloom's source is the frame: the scene and the source trade places instead of the scene being
+        // copied, where the composite then writes the whole target from it. Should the chain have nothing to draw, the
+        // frame is drawn back from its picture.
+        gpu::TextureRef source;
+        if (kind == NEBULA_PASS_BLOOM_SIMPLE && whole && scene_.samples <= 1u &&
+            bloom_.prepare_draw_back(commands_, scene_pass, scene_samples_log2())) {
+            source = swap_scene_color(bloom_.take_source_image());
+            bloom_.give_source(commands_, source);
+        }
         if (bloom_.prepare(commands_, in, p, allocate)) {
             // The composite writes every channel of each pixel it covers, unblended (from the kept scene and the
             // levels): over the whole target the pass opens without loading the colour it replaces.
-            begin_scene_pass_with(0u, nullptr,
-                                  in.frame_width == scene_.color->width && in.frame_height == scene_.color->height);
-            bloom_.finish(commands_, draw_layout_.pass_for(scene_variant(), false), scene_samples_log2(), allocate);
+            begin_scene_pass_with(0u, nullptr, whole);
+            bloom_.finish(commands_, scene_pass, scene_samples_log2(), allocate);
+        } else if (source) {
+            begin_scene_pass_with(0u, nullptr, true);
+            bloom_.draw_back(commands_, scene_pass, scene_samples_log2(), allocate, *source, in.frame_width,
+                             in.frame_height);
         }
     }
     reset_draw_bindings();

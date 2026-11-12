@@ -253,6 +253,40 @@ void GameBloom::keep_picture(Microsoft::WRL::ComPtr<ID3D12Resource> picture, con
     kept_ = true;
 }
 
+bool GameBloom::can_take_source(const Inputs& in) {
+    return ready_ && composite_pipeline(in.samples, in.hdr) != nullptr;
+}
+
+Microsoft::WRL::ComPtr<ID3D12Resource> GameBloom::take_source_image(ID3D12GraphicsCommandList* list, const Inputs& in,
+                                                                     std::uint64_t frame_index,
+                                                                     unsigned frames_in_flight) {
+    retire(frame_index);
+    frame_ = frame_index;
+    Microsoft::WRL::ComPtr<ID3D12Resource> image;
+    if (source_.resource) {
+        const D3D12_RESOURCE_DESC desc = source_.resource->GetDesc();
+        if (source_.width == in.frame_width && source_.height == in.frame_height &&
+            (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0) {
+            transition(list, source_, gpu::Use::PixelRead);
+            image = std::move(source_.resource);
+        } else {
+            retired_.push_back({std::move(source_.resource), frame_index + frames_in_flight});
+        }
+    }
+    source_ = {};
+    return image;
+}
+
+void GameBloom::give_source(Microsoft::WRL::ComPtr<ID3D12Resource> picture, const Inputs& in) {
+    source_.resource = std::move(picture);
+    source_.width = in.frame_width;
+    source_.height = in.frame_height;
+    source_.format = in.hdr ? kSceneHdrColorFormat : kSceneColorFormat;
+    source_.use = gpu::Use::PixelRead;
+    source_.used_frame = frame_;
+    source_given_ = true;
+}
+
 void GameBloom::trim_idle(std::uint64_t frame_index, unsigned frames_in_flight) {
     constexpr std::uint64_t kIdleFrames = 600u;
     retire(frame_index);
@@ -282,6 +316,7 @@ bool GameBloom::apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, con
     retire(frame_index);
     const bool normal = p.kind == Kind::Normal;
     const bool kept = std::exchange(kept_, false);
+    const bool given = std::exchange(source_given_, false);
     if (!ready_ || in.scene_target == nullptr || in.frame_width == 0u || in.frame_height == 0u || (normal && !kept)) {
         return false;
     }
@@ -309,7 +344,15 @@ bool GameBloom::apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, con
                                  L"bloom level 2 blur");
         }
     }
-    if (!made || (!normal && !copy_frame(list, in, source_, L"bloom source", frame_index, frames_in_flight))) {
+    if (given) {
+        transition(list, source_, kRead);  // the selection reads it in a compute pass
+    }
+    if (!made || (!normal && !given && !copy_frame(list, in, source_, L"bloom source", frame_index, frames_in_flight))) {
+        if (given && composite != nullptr) {
+            // The scene target is the source's last image: the frame comes back from its picture (kind 0).
+            draw_composite(list, ring, in, composite, source_, source_, source_, Constants{});
+            return true;
+        }
         return false;
     }
 

@@ -219,6 +219,16 @@ void GameBloom::keep_picture(std::shared_ptr<Texture> picture) {
     kept_ = true;
 }
 
+std::shared_ptr<Texture> GameBloom::take_source_image() {
+    return std::move(source_);
+}
+
+void GameBloom::give_source(std::shared_ptr<Texture> picture) {
+    source_ = std::move(picture);
+    simple_used_ = clock_;
+    source_given_ = true;
+}
+
 void GameBloom::trim_idle() {
     constexpr std::uint64_t kIdleFrames = 600u;
     ++clock_;
@@ -259,6 +269,7 @@ void GameBloom::dispatch(Object compute_encoder, Program program, const Constant
 bool GameBloom::prepare(Object commands, const Inputs& in, const Params& p) {
     pending_ = false;
     const bool kept = std::exchange(kept_, false);
+    const bool given = std::exchange(source_given_, false);
     const bool restore = p.kind == Kind::Restore;
     const bool normal = p.kind == Kind::Normal;
     if (!ready_ || in.color == nullptr || in.frame_width == 0u || in.frame_height == 0u || ((normal || restore) && !kept)) {
@@ -296,7 +307,7 @@ bool GameBloom::prepare(Object commands, const Inputs& in, const Params& p) {
             made = ensure(blur2_h_[i], s.w2, s.h2, kWorkFormat, true, "bloom level 2 blur");
         }
     }
-    if (!made || (!normal && !copy_frame(commands, in, source_, "bloom source"))) {
+    if (!made || (!normal && !given && !copy_frame(commands, in, source_, "bloom source"))) {
         return false;
     }
     const bloom::Widths w = bloom::widths_of(normal, s, in.frame_width, in.frame_height, p.ring_x, p.ring_y);

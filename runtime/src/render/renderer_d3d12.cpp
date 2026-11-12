@@ -5767,6 +5767,14 @@ void RendererD3D12::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_
             p.ring_x = p.ring_y = 1.0f;
         }
         p.strength = static_cast<float>(std::min(get_render_config().bloom, kMaxBloom)) / 100.0f;
+        // The simple bloom's source is the frame: the scene and the source trade places instead of the scene being
+        // copied, where the composite then writes the whole target from it (as the bloom hold's trade, not the HDR scene).
+        if (kind == NEBULA_PASS_BLOOM_SIMPLE && scene_msaa_.samples <= 1u && !scene_hdr_ &&
+            in.frame_width == desc.Width && in.frame_height == desc.Height && game_bloom_.can_take_source(in)) {
+            game_bloom_.give_source(
+                swap_scene_color(game_bloom_.take_source_image(command_list_.Get(), in, frame_index_, kFramesInFlight)), in);
+            in.scene_target = scene_color_.Get();
+        }
         if (!game_bloom_.apply(command_list_.Get(), srv_ring_, in, p, frame_index_, kFramesInFlight)) {
             return;
         }

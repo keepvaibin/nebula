@@ -301,6 +301,24 @@ void GameBloomVk::keep_picture(std::shared_ptr<Texture> picture) {
     kept_ = true;
 }
 
+std::shared_ptr<Texture> GameBloomVk::take_source_image() {
+    return std::move(source_);
+}
+
+void GameBloomVk::give_source(VkCommandBuffer commands, std::shared_ptr<Texture> picture) {
+    source_ = std::move(picture);
+    simple_used_ = clock_;
+    source_given_ = true;
+    // The hand-over left it shader-readable for the fragment stage; the selection reads it in a compute pass.
+    BarriersVk read(commands);
+    read.image_scoped(source_->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                      VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, 1u);
+    read.issue();
+}
+
 void GameBloomVk::trim_idle() {
     constexpr std::uint64_t kIdleFrames = 600u;
     ++clock_;
@@ -363,6 +381,7 @@ void GameBloomVk::dispatch(VkCommandBuffer commands, Program program, const Cons
 bool GameBloomVk::prepare(VkCommandBuffer commands, const Inputs& in, const Params& p, const SetAllocator& allocate) {
     pending_ = false;
     const bool kept = std::exchange(kept_, false);
+    const bool given = std::exchange(source_given_, false);
     const bool restore = p.kind == Kind::Restore;
     const bool normal = p.kind == Kind::Normal;
     if (!ready_ || in.color == nullptr || in.frame_width == 0u || in.frame_height == 0u || ((normal || restore) && !kept)) {
@@ -399,7 +418,7 @@ bool GameBloomVk::prepare(VkCommandBuffer commands, const Inputs& in, const Para
             made = ensure(blur2_h_[i], s.w2, s.h2, kWorkFormat, true, "bloom level 2 blur");
         }
     }
-    if (!made || (!normal && !copy_frame(commands, in, source_, "bloom source"))) {
+    if (!made || (!normal && !given && !copy_frame(commands, in, source_, "bloom source"))) {
         return false;
     }
     // The work images live in GENERAL (written as storage, read as sampled images); the earlier frame's reads of them
