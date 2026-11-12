@@ -73,6 +73,7 @@
     "import.takes_over": "A mod whose takes_over names an id no installed mod has is imported with the line Takes over what {old} kept under it, as a fact (services-save 6, 6.5)",
     "modscreen.list": "Each mod's line in the Mods tab's lists is the fact modscreen.<id> as shown, written once while it does not change (harness 4, 6.2)",
     "modscreen.page": "Each row of a mod's page is the fact modscreen.<id> as shown, each time the page opens (harness 4, 6.2)",
+    "modscreen.code_time": "A mod's page shows CODE TIME, its code's time a frame over its last 120 frames from the guard's luma_guard_cost (6.7, guard 3b)",
     "mods.safe_start": "A safe start (--safe-start 1, Shift at the start) plans every mod off for that start and keeps the player's choices; the Mods tab says so (6.6)",
     "mods.safe_start.crash": "After a crash with mods on the next start is safe by itself and the Mods tab says why; the start after is not (6.6)",
     "mods.blocklist": "BLOCK on a mod's page turns it off and keeps it off at every start, whatever the player's choices say, until UNBLOCK on its page (6.6)",
