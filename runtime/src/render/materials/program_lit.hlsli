@@ -44,6 +44,12 @@ static float3 g_set_shade = float3(0.0, 0.0, 0.0);
 static float3 g_set_rest = float3(0.0, 0.0, 0.0);
 static float3 g_set_full = float3(0.0, 0.0, 0.0);
 static float g_set_reflect = 1.0;  // the enhanced form's diffuse share after the sky's reflection (enh_sky_reflection)
+// c78 (7.6): a face part's kind (TRACED_FACE, written by cook/programs.rs c77 first in its lit program): 2 an eye, 1
+// another face part, 0 none. An eye's light never under kEyeFloor of its set's full light (traced_set_level); a face
+// part's shadow at most half deep (enh_begin_traced).
+static uint g_traced_face = 0u;
+static const float kEyeFloor = 0.6;
+#define TRACED_FACE(k) g_traced_face = (k)
 // The traced sun as light 0 (c52; the director 11-11): the pixel's traced facing max(n . s, 0) (the Facing picture's
 // r), -1 where the pixel takes the light set's (no relight, a draw traced_at gives all of every light).
 static float g_traced_facing = -1.0;
@@ -97,6 +103,7 @@ float4 ambient_term(float4 x) { return g_traced_keyed ? float4(x.rgb * g_traced_
 #else
 #define AMBIENT_TERM(x) (x)
 #define TRACED_UNKEYED
+#define TRACED_FACE(k)
 #endif
 
 float3 enh_lin(float3 c) { return pow(max(c, 0.0), 2.2); }
@@ -347,6 +354,10 @@ float4 traced_sheen(EnhShade e) {
 // sums the key: else TRACED_UNKEYED came first, and traced_colour shares its colour as a painted one's).
 EnhShade enh_begin_traced(float3 P, float3 n, float4 pixel) {
     g_traced = traced_at(pixel);
+    // c78 (7.6): a face part's shadows (the cap brim's, the nose's) at most half deep: V to 0.5 + 0.5 V, by kForm.
+    if (g_traced_face != 0u && view_look.x > 0.0) {
+        g_traced.rgb = lerp(g_traced.rgb, 0.5 + 0.5 * g_traced.rgb, saturate(view_look.x));
+    }
     g_set_seen = false;  // c76: no set parts before the first sum
     g_set_shade = float3(0.0, 0.0, 0.0);
     g_set_rest = float3(0.0, 0.0, 0.0);
@@ -426,12 +437,17 @@ float3 traced_set_level(float3 level) {
     const float3 luminance = float3(0.2126, 0.7152, 0.0722);
     const float shade_l = dot(shade, luminance);
     const float full_l = dot(full, luminance);
-    if (!(shade_l > 1e-4) || !(full_l > 1e-4)) {
-        return level;
+    float3 bounded = shade;
+    if (shade_l > 1e-4 && full_l > 1e-4) {
+        const float3 hue = full / full_l;
+        const float3 tint = clamp((shade / shade_l) / max(hue, 1e-4), 1.0 / kTintBoundCharacter, kTintBoundCharacter);
+        bounded = lerp(shade, shade_l * tint * hue, saturate(view_look.x));
     }
-    const float3 hue = full / full_l;
-    const float3 tint = clamp((shade / shade_l) / max(hue, 1e-4), 1.0 / kTintBoundCharacter, kTintBoundCharacter);
-    const float3 sum = rest + lerp(shade, shade_l * tint * hue, saturate(view_look.x));
+    float3 sum = rest + bounded;
+    // c78 (7.6): THE EYE LIGHT: an eye's light never under kEyeFloor of the set's full light (its hue), by kForm.
+    if (g_traced_face == 2u) {
+        sum = max(sum, full * (kEyeFloor * saturate(view_look.x)));
+    }
     return enhanced ? enh_srgb(enh_shoulder(max(sum * reflect_share, 0.0))) : saturate(sum / 255.0);
 }
 #undef TRACED_LEVEL
