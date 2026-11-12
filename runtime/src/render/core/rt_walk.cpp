@@ -2372,6 +2372,9 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     for (unsigned c = 0; c < 3u; ++c) {
         constants.sky[c] = list.stage_light_known != 0u ? list.stage_ambient[c] : 0.25f;
     }
+    // A room's open O (FB b115b): the gathered hits' running mean (rt_dome_read), where an open floor's O lies when
+    // every ray meets a surface; V's unit with no traced sun (rt_light_space.hlsl).
+    constants.sky[3] = rt_hit_mean_;
     for (unsigned i = 0; i < kRtDevTracerSlots; ++i) {
         const unsigned which = kRtDevTracerFirst + i;
         if ((rt_dev_set_ >> which & 1u) != 0u) {

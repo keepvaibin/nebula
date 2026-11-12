@@ -33,7 +33,9 @@ cbuffer FrameConstants : register(b0) {
     uint4 g_glow;       // the emitters (48 bytes each: centre, radius; colour, reach; slot): x their first byte in the
                         // drops' buffer, y their tiles' and z their entries' first byte in the tiles' buffer, w how many
     uint4 g_mesh_at[3]; // where each arena's first byte is in its buffer (eight of them), then the rows'
-    float4 g_sky;       // rgb: what a mirror shows where its ray meets nothing at all
+    float4 g_sky;       // rgb: what a mirror shows where its ray meets nothing at all; w: a room's open O (the
+                        // gathered hits' running mean, rt_hit_mean_; 0 not yet measured): V's unit with no traced
+                        // sun (FB b115b)
     float4 g_up;        // xyz: the player's up in the eye's space (where the sky is)
     float4 g_ray_before;   // rt_eye_ray of the frame before
     float4 g_before[3];    // the frame before's eye space from this frame's (rows of a 3x4 matrix): for a pixel whose

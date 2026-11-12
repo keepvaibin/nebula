@@ -171,7 +171,9 @@ void main(uint3 id : SV_DispatchThreadID) {
         if (second) {
             share = float4(v3, seen);  // as the programs read it: no filter after this layer's
             if ((g_more.z & (1u | 256u)) == 256u) {
-                share.rgb = min(seen, 1.0f).xxx;  // no traced sun: the key's visibility by O, as the opaque layer's (FB b115)
+                // No traced sun: the key's visibility by O over the room's open level, as the opaque layer's (FB b115, b115b).
+                const float open_ = g_sky.w > 0.0f ? clamp(g_sky.w, 0.25f, 1.0f) : 1.0f;
+                share.rgb = min(seen / open_, 1.0f).xxx;
             }
         } else {
             share.b = lit ? -1.0f - facing : facing;  // for the filter's last step (rt_light_space.hlsl)
