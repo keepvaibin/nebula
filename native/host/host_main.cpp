@@ -2527,6 +2527,8 @@ static_assert(int{galaxy::saves::kDone} == NEBULA_SAVE_DONE && int{galaxy::saves
 // A save file operation on the save worker (the game polls the status): galaxy/save_files.h in the game's save folder
 // (gSaveDataPath under the save folder, or a mod's save folder).
 std::atomic<int> gSavesPending{0};
+// The facts file of the mods' store attached this run (cook_mod_files), read into the mod log at the mods' start.
+fs::path gCookFacts;
 // The exit waits here for the saves still on the worker.
 std::mutex gSavesMutex;
 std::condition_variable gSavesDone;
@@ -3357,6 +3359,8 @@ void svc_mods_start(void*) {
     galaxy::modlog::add_not_started();
     // Each placed package through the validator, its findings in the mod log (kept: nothing runs when nothing changed).
     galaxy::modlog::add_start_findings();
+    // The cooker's facts for the store attached this run: its refusals and notes, and in a harness run what it cooked.
+    galaxy::modlog::add_cook_facts(gCookFacts);
 }
 
 void svc_app_restart(void*) {
@@ -3610,6 +3614,8 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
         }
     }
     if (gPak.store.attach_overlay(overlay)) {
+        gCookFacts = overlay;
+        gCookFacts.replace_extension("facts");
         char text[96];
         std::snprintf(text, sizeof(text), "%zu files and %zu table or file merges applied", plan.files.size(), plan.merges.size());
         log_line("mods:", text);

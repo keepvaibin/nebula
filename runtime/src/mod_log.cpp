@@ -782,6 +782,127 @@ void add_start_findings() {
     }
 }
 
+namespace {
+
+// One field of a facts line as written (cook/refuse.rs `field`): `\t`, `\n`, `\r`, `\\` back to their bytes.
+std::string facts_field(std::string_view text) {
+    std::string out;
+    out.reserve(text.size());
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        if (text[i] != '\\' || i + 1 == text.size()) {
+            out.push_back(text[i]);
+            continue;
+        }
+        const char next = text[++i];
+        out.push_back(next == 't' ? '\t' : next == 'n' ? '\n' : next == 'r' ? '\r' : next);
+    }
+    return out;
+}
+
+// A cook fact's mod when the line names none (a mod's own file): the <id> of "Luma/<id>/..." (a "+" before it).
+std::string cook_fact_mod(const std::vector<std::string>& f) {
+    if (!f[2].empty()) return f[2];
+    for (const std::size_t at : {std::size_t{1}, std::size_t{3}}) {
+        std::string_view path = f[at];
+        if (!path.empty() && path.front() == '+') path.remove_prefix(1);
+        if (path.substr(0, 5) != "Luma/") continue;
+        path.remove_prefix(5);
+        return std::string(path.substr(0, path.find('/')));
+    }
+    return {};
+}
+
+// A parameter's value as JSON: a whole number as a number, a list of them (comma between) as a list, else text.
+void append_param_json(std::string& out, std::string_view name, std::string_view value) {
+    const auto whole = [](std::string_view v) {
+        return !v.empty() && v.size() <= 9 && std::all_of(v.begin(), v.end(), [](char c) { return c >= '0' && c <= '9'; });
+    };
+    if (name == "particles") {
+        out += '[';
+        bool first = true;
+        std::size_t at = 0;
+        while (at < value.size()) {
+            const std::size_t end = std::min(value.find(',', at), value.size());
+            const std::string_view one = value.substr(at, end - at);
+            if (whole(one)) {
+                out += first ? "" : ",";
+                out += one;
+                first = false;
+            }
+            at = end + 1;
+        }
+        out += ']';
+    } else if (whole(value)) {
+        out += value;
+    } else {
+        append_json(out, value);
+    }
+}
+
+}  // namespace
+
+void add_cook_facts(const std::filesystem::path& facts_file) {
+    if (facts_file.empty()) return;
+    std::istringstream in(read_file(facts_file));
+    std::string line;
+    while (std::getline(in, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.empty()) continue;
+        // kind table mod file other row column selector rows code why, then the parameters.
+        std::vector<std::string> f;
+        std::size_t at = 0;
+        for (;;) {
+            const std::size_t tab = line.find('\t', at);
+            f.push_back(facts_field(std::string_view(line).substr(at, tab == std::string::npos ? std::string::npos : tab - at)));
+            if (tab == std::string::npos) break;
+            at = tab + 1;
+        }
+        if (f.size() < 11) continue;
+        const std::string& kind = f[0];
+        const std::string mod = cook_fact_mod(f);
+        if (kind == "failed" || kind == "noted") {
+            std::uint32_t code = 0;
+            for (const char c : f[9]) {
+                if (c < '0' || c > '9' || code > 99999u) {
+                    code = 0;
+                    break;
+                }
+                code = code * 10u + static_cast<std::uint32_t>(c - '0');
+            }
+            if (code == 0u) continue;
+            std::vector<std::pair<std::string, std::string>> values;
+            for (std::size_t i = 11; i < f.size(); ++i) {
+                const std::size_t eq = f[i].find('=');
+                if (eq == std::string::npos || eq == 0) continue;
+                values.emplace_back(f[i].substr(0, eq), f[i].substr(eq + 1));
+            }
+            add_finding(LUMA_MODLOG_COOK, kind == "failed" ? LUMA_MODLOG_ERROR : LUMA_MODLOG_NOTE, mod, code,
+                        f[3].empty() ? f[1] : f[3], 0, 0, values);
+        } else if (kind == "cook.effect" || kind == "cook.model") {
+            std::string json = "{\"table\":";
+            append_json(json, f[1]);
+            json += ",\"file\":";
+            append_json(json, f[3]);
+            json += ",\"mod\":";
+            append_json(json, mod);
+            json += ",\"other\":";
+            append_json(json, f[4]);
+            for (std::size_t i = 11; i < f.size(); ++i) {
+                const std::size_t eq = f[i].find('=');
+                if (eq == std::string::npos || eq == 0) continue;
+                const std::string_view name = std::string_view(f[i]).substr(0, eq);
+                if (name == "table" || name == "file" || name == "mod" || name == "other") continue;
+                json += ',';
+                append_json(json, name);
+                json += ':';
+                append_param_json(json, name, std::string_view(f[i]).substr(eq + 1));
+            }
+            json += '}';
+            fact(kind, json);
+        }
+    }
+}
+
 bool package_refused(std::string_view id) {
     const std::lock_guard<std::mutex> lock(g_start_lock);
     for (const StartResult& result : g_start_results) {

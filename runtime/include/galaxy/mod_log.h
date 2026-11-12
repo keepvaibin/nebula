@@ -67,6 +67,14 @@ ImportCheck check_import(const std::filesystem::path& folder, const std::vector<
 // After add_not_started: the start's check's findings, each a VALIDATOR entry (Error or Note as the validator's).
 void add_start_findings();
 
+// The device cooker's facts file (`<overlay>.facts`, cook/overlay.rs; mod-log 9's request to G, read by the host's
+// half): each `failed` line a COOK Error and each `noted` line a COOK Note, by its code, mod, file and parameters
+// (`name=T:<text>` or `name=P:<phrase>`); each `cook.effect` and `cook.model` line (effects 7, models 9) a harness fact
+// of that key: {"table", "file", "mod", "other", then each `name=value` parameter, a number as a number and
+// `particles` as a list}. A conflict is left out: the start's check says each overlap (L305, L404). After
+// add_start_findings, the overlay attached; no file, nothing.
+void add_cook_facts(const std::filesystem::path& facts_file);
+
 // The start's check found an Error in the package `id`: it is refused (the validator's errors refuse, as at import).
 [[nodiscard]] bool package_refused(std::string_view id);
 
