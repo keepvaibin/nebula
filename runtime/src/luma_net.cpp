@@ -169,6 +169,9 @@ bool local_address(const char* host, std::uint16_t port, sockaddr_storage* out, 
 // ---- Sockets -------------------------------------------------------------------------------------------------------
 
 constexpr auto kConnectTime = std::chrono::seconds(10);
+// A closed socket's queued bytes go for at most this long; a peer that never reads cannot hold the descriptor (and the
+// mod's queued budget) past it.
+constexpr auto kCloseTime = std::chrono::seconds(10);
 constexpr int kPollMs = 10;  // the I/O thread's wait while it holds sockets (a socket made meanwhile waits at most this)
 
 std::atomic<const LumaServiceKernel*> g_kernel{nullptr};
@@ -193,7 +196,7 @@ struct Socket {
     Kind kind = Kind::Connecting;
     Sock sock = kNoSock;         // closed by the I/O thread only
     std::uint16_t port = 0;      // a listener's
-    std::chrono::steady_clock::time_point started{};  // a connect's start
+    std::chrono::steady_clock::time_point started{};  // a connect's start; from close() on, the close's
     // What the I/O thread found, for the next delivery (g_lock).
     bool posted = false;         // the node is queued with the kernel
     bool connected = false;      // CONNECTED to give
@@ -465,8 +468,10 @@ void turn_locked(Socket* socket, short revents) {
             post_locked(socket);
         }
     }
-    if (socket->closing && socket->outgoing.empty()) {
-        close_locked(socket);  // the mod closed it: what it queued went first
+    if (socket->closing &&
+        (socket->outgoing.empty() || std::chrono::steady_clock::now() - socket->started > kCloseTime)) {
+        close_locked(socket);  // the mod closed it: what it queued went first (or kCloseTime passed)
+        socket->outgoing.clear();
     } else if (socket->peer_closed && socket->received.empty() && !socket->closing) {
         close_locked(socket);
         socket->closed_event = true;
@@ -957,11 +962,13 @@ std::int32_t net_close(const LumaMod* mod, LumaHandle handle) noexcept {
         }
         uncount_locked(socket);
         socket->closing = true;  // no event from now on; what it queued is still sent (I/O thread), then it ends
+        socket->started = std::chrono::steady_clock::now();  // kCloseTime from here
         socket->received.clear();
         // Sockets it accepted that the mod never heard of (their ACCEPTED not given yet) close with it.
         for (Socket* fresh : socket->accepted) {
             uncount_locked(fresh);
             fresh->closing = true;
+            fresh->started = socket->started;
         }
         socket->accepted.clear();
         reap_locked();

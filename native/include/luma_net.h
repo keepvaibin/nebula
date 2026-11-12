@@ -22,15 +22,15 @@ extern "C" {
 /* Events (LumaEvent.kind) to the fn given at connect or listen. `handle` is the socket's (ACCEPTED: the listener's). */
 typedef enum LumaNetEvent {
     LUMA_NET_EVENT_CONNECTED = 1, /* status LUMA_OK; value 0. The socket may send. */
-    LUMA_NET_EVENT_ACCEPTED = 2,  /* a listener's: status LUMA_OK; value: the new socket's handle, open, its events to the
-                                     listener's fn and user */
+    LUMA_NET_EVENT_ACCEPTED = 2,  /* a listener's: status LUMA_OK; value: the new socket's handle, open, its events to
+                                     the listener's fn and user */
     LUMA_NET_EVENT_DATA = 3,      /* status LUMA_OK; value: the bytes waiting; `take` inside this call. Bytes not taken
                                      stay, and another DATA follows at a later frame. */
     LUMA_NET_EVENT_SENT = 4,      /* status LUMA_OK; value: the bytes sent since the last SENT; nothing is queued now */
     LUMA_NET_EVENT_CLOSED = 5,    /* the other side closed (status LUMA_OK) or the connection broke (LUMA_E_IO); the
                                      handle is closed after this event (bytes still waiting came first as DATA) */
-    LUMA_NET_EVENT_ERROR = 6      /* a connect that failed: LUMA_E_UNREACHABLE (nobody listens, no route), LUMA_E_TIMEOUT (10 s),
-                                     LUMA_E_NOT_FOUND (a name not found), LUMA_E_IO; the handle is closed after it */
+    LUMA_NET_EVENT_ERROR = 6      /* a connect that failed: LUMA_E_UNREACHABLE (nobody listens, no route),
+                                     LUMA_E_TIMEOUT (10 s), LUMA_E_IO; the handle is closed after it */
 } LumaNetEvent;
 
 typedef struct LumaNetLocalService {
@@ -59,8 +59,9 @@ typedef struct LumaNetLocalService {
        were taken (the rest stay). A null buf with size 0: the bytes waiting. Outside a DATA call of this socket:
        LUMA_E_HANDLE, reported. */
     int64_t (*take)(const LumaMod* mod, LumaHandle socket, void* buf, uint64_t size);
-    /* 1.0. Closes a socket or listener: bytes queued are still sent, then the connection ends; no event for the handle
-       after this returns. LUMA_OK; a handle that is not this mod's open one: LUMA_E_HANDLE, reported. */
+    /* 1.0. Closes a socket or listener: bytes queued are still sent (for up to 10 s), then the connection ends; no
+       event for the handle after this returns. LUMA_OK; a handle that is not this mod's open one: LUMA_E_HANDLE,
+       reported. */
     int32_t (*close)(const LumaMod* mod, LumaHandle handle);
 } LumaNetLocalService;
 
