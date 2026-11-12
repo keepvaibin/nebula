@@ -925,13 +925,13 @@ namespace luma {
                 return LUMA_OK;
             }
 
-            int32_t svcMenuRows(const LumaMod* pMod, LumaUiScreen screen, const LumaUiPane* pPanes, const bool* pOn, uint32_t count) {
+            int32_t svcMenuRows(const LumaMod* pMod, LumaUiScreen screen, const LumaUiMenuRow* pRows, uint32_t count) {
                 const char* const pWhere = "ui.menu_rows";
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
                 }
-                if (count > LUMA_UI_MENU_ROWS_MOST || (count != 0u && pPanes == nullptr)) {
-                    report(pMod, pWhere, 101u, count > LUMA_UI_MENU_ROWS_MOST ? "count" : "panes", nullptr);
+                if (count > LUMA_UI_MENU_ROWS_MOST || (count != 0u && pRows == nullptr)) {
+                    report(pMod, pWhere, 101u, count > LUMA_UI_MENU_ROWS_MOST ? "count" : "rows", nullptr);
                     return LUMA_E_ARGUMENT;
                 }
                 Screen* const pScreen = screenOf(pMod, screen);
@@ -941,7 +941,7 @@ namespace luma {
                 }
                 Ui::Pane* found[LUMA_UI_MENU_ROWS_MOST];
                 for (u32 i = 0; i < count; i++) {
-                    const Pane* const pPane = paneOf(pMod, pPanes[i]);
+                    const Pane* const pPane = paneOf(pMod, pRows[i].pane);
                     if (pPane == nullptr || pPane->screen != screen) {
                         report(pMod, pWhere, 102u, nullptr, nullptr);
                         return LUMA_E_HANDLE;
@@ -954,7 +954,7 @@ namespace luma {
                 rMenu.count = count;
                 for (u32 i = 0; i < count; i++) {
                     rMenu.panes[i] = found[i];
-                    rMenu.on[i] = pOn == nullptr || pOn[i];
+                    rMenu.on[i] = pRows[i].enabled;
                     rMenu.scale[i] = found[i]->mScale;
                     rMenu.alpha[i] = found[i]->mAlpha;
                 }
