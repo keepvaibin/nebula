@@ -839,14 +839,14 @@ def install(settings, mod_folder, code_allowed, order, kept=False, permissions="
     mod_id = manifest.get("id")
     if not isinstance(mod_id, str) or not mod_id:
         raise HarnessError("%s/luma.json has no id" % mod_folder)
+    # The previous runtime's form would install with no code and fail far from here: named at once instead.
+    if "plugins" in manifest:
+        raise HarnessError("%s/luma.json has \"plugins\": a mod's code is code/<platform>/mod.<ending> with "
+                           "\"code\": {\"platforms\": [...]} (board/contracts/manifest-one-form.md)" % mod_folder)
+    if not isinstance(manifest.get("format"), str):
+        raise HarnessError("%s/luma.json: format must be \"1.0\", a string (board/contracts/manifest-one-form.md)"
+                           % mod_folder)
     libraries = []
-    for plugin in manifest.get("plugins", []):
-        rel = plugin.get("binaries", {}).get("windows-x64")
-        if rel is None:
-            raise HarnessError("%s/luma.json names no code for windows-x64" % mod_folder)
-        if not (mod_folder / rel).is_file():
-            raise HarnessError("%s: the code %s is missing (building is not the runner's job)" % (mod_folder, rel))
-        libraries.append(rel)
     # luma-format 6: code/<platform>/mod.<ending> by `code.platforms` alone. A mod whose code is for other platforms
     # only has no library here: the game says it has no version for this device.
     code = manifest.get("code")
@@ -890,11 +890,12 @@ def install_game_half(settings, bin_folder):
     if (settings / "mods" / GAME_HALF_ID).exists():
         return  # kept from the test this one continues
     folder = settings / "staging-game-half"
-    (folder / "plugins").mkdir(parents=True)
-    shutil.copyfile(library, folder / "plugins" / "luma-test.dll")
+    (folder / "code" / "windows-x64").mkdir(parents=True)
+    shutil.copyfile(library, folder / "code" / "windows-x64" / "mod.dll")
     (folder / "luma.json").write_text(json.dumps({
-        "format": 1, "id": GAME_HALF_ID, "name": GAME_HALF_ID, "version": RUNNER_VERSION, "game": "RMG", "layers": [],
-        "plugins": [{"binaries": {"windows-x64": "plugins/luma-test.dll"}}]}, indent=2), encoding="utf-8")
+        "format": "1.0", "id": GAME_HALF_ID, "name": GAME_HALF_ID, "summary": "The test runner's game half.",
+        "authors": ["keepvaibin"], "version": RUNNER_VERSION + ".0", "game": {"id": "RMG"},
+        "code": {"platforms": ["windows-x64"]}}, indent=2), encoding="utf-8")
     install(settings, folder, True, 0)
     shutil.rmtree(folder)
 

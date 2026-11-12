@@ -651,9 +651,13 @@ std::vector<std::string> g_mods_on;
 luma::Situation situation_of(const ModInfo& mod, const std::string& game_id, const std::string& language) {
     luma::Situation situation;
     situation.mods = g_mods_on;
+    situation.region = game_id;
     situation.version = game_id.size() >= 4u ? game_id.substr(3, 1) : std::string("E");
     situation.language = language;
-    situation.platform = std::string(luma::this_platform());
+    situation.platform = std::string(luma::plugin_target());
+    situation.code = mod.code_allowed && mod.luma && std::any_of(mod.luma->plugins.begin(), mod.luma->plugins.end(), [](const luma::Plugin& plugin) {
+                         return plugin.binaries.count(std::string(luma::plugin_target())) != 0u;
+                     });
     for (const ModOption& option : mod.options) {
         situation.options[option.key] =
             option.selected != 0u && option.selected <= option.choice_ids.size() ? option.choice_ids[option.selected - 1u] : std::string("off");
@@ -1183,10 +1187,9 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
             // The answers as read, whatever the manifest does this start: one not read keeps them (consent 1.2).
             if (s != nullptr) mod.permission_answers = s->permissions;
             std::optional<luma::Manifest> manifest = luma::read_manifest(dir);
+            // What refuses a mod is the validator's (its report at the start check); this reads what the game uses.
             if (!manifest) {
                 mod.problem = "THIS FILE IS DAMAGED";
-            } else if (manifest->format > luma::kFormat) {
-                mod.problem = "THIS MOD NEEDS A NEWER NEBULA";
             } else {
                 const std::string playing = language_folder(region_id, s_played_language.load(std::memory_order_relaxed));
                 const std::string words = luma::language_code(playing);
@@ -1194,11 +1197,6 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                 mod.pack_description = manifest->description.in(words);
                 for (const std::string& author : manifest->authors) {
                     mod.pack_author += (mod.pack_author.empty() ? "" : ", ") + author;
-                }
-                mod.problem = luma::refusal(*manifest, region_id, NEBULA_VERSION, luma::this_platform());
-                if (!mod.problem.empty()) {
-                    const std::string detail = luma::refusal_detail(*manifest);
-                    std::fprintf(stderr, "[mods] %s: %s%s%s\n", mod.id.c_str(), mod.problem.c_str(), detail.empty() ? "" : ": ", detail.c_str());
                 }
                 mod.code_token = plugin_token(dir, *manifest);
                 mod.code_allowed = !mod.code_token.empty() && s != nullptr && s->code_ok == mod.code_token;
@@ -1406,10 +1404,6 @@ void settle_mods(std::vector<ModInfo>& mods) {
                     mod.problem = "THIS MOD NEEDS: " + (any == mods.end() ? need.id : title(*any));
                     break;
                 }
-                if (!need.version.empty() && luma::compare_versions(them->luma->version, need.version) < 0) {
-                    mod.problem = "THIS MOD NEEDS A NEWER VERSION OF: " + title(*them);
-                    break;
-                }
             }
             if (!mod.problem.empty()) continue;
             // One family of saves at a time: the higher on the list has them.
@@ -1430,8 +1424,7 @@ void settle_mods(std::vector<ModInfo>& mods) {
                 const auto them = std::find_if(mods.begin(), mods.end(), [&](const ModInfo& m) {
                     return &m != &mod && m.luma && m.luma->id == conflict.id && m.enabled && m.problem.empty();
                 });
-                if (mod.enabled && them != mods.end() &&
-                    (conflict.version.empty() || luma::compare_versions(them->luma->version, conflict.version) < 0)) {
+                if (mod.enabled && them != mods.end()) {
                     ModInfo& lower = &*them > &mod ? *them : mod;
                     lower.problem = "THIS MOD CAN'T RUN WITH: " + title(&lower == &mod ? *them : mod);
                     if (&lower == &mod) break;
@@ -1741,7 +1734,6 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
             // each mod's libraries go in front of the lower mods' already listed, in the mod's own order.
             const std::size_t lower_mods = plan.plugins.size();
             for (const luma::Plugin& plugin : mod.luma->plugins) {
-                if (!luma::when_holds(plugin.when, situation)) continue;
                 const auto binary = plugin.binaries.find(std::string(luma::plugin_target()));
                 if (binary == plugin.binaries.end()) continue;
                 if (!mod.code_allowed) {
