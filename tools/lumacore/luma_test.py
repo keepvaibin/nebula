@@ -605,10 +605,17 @@ def read_expect(t, bare, steps):
         if not isinstance(c, dict):
             raise HarnessError("%s is not an object" % path)
         if "fact" in c:
-            keys_known(c, path, {"fact", "when", "frames", "within"} | FACT_OPS)
+            keys_known(c, path, {"fact", "when", "frames", "within", "matching"} | FACT_OPS)
             if bare:
                 raise HarnessError("%s: a bare test checks only the log, pictures and sound" % path)
             op, value, within = read_check(c, path, {"within", "count"})
+            # `matching` (J): only the writes whose value has it (as `has` reads) are checked, so `count`, `absent`
+            # and the rest speak of one mod's or one word's writes of a key many write ("modlog", "fx.*").
+            matching = None
+            if "matching" in c:
+                matching = c["matching"]
+                if not isinstance(matching, dict) or not matching:
+                    raise HarnessError("%s.matching takes an object with at least one key" % path)
             when = text(c, "when", path) if "when" in c else "last"
             if when not in ("last", "first", "any", "all"):
                 raise HarnessError("%s.when must be last, first, any or all" % path)
@@ -618,7 +625,7 @@ def read_expect(t, bare, steps):
                 if not (isinstance(frames, list) and len(frames) == 2 and all(isinstance(f, int) and not isinstance(f, bool) for f in frames)):
                     raise HarnessError("%s.frames must be [first, last]" % path)
             out.append({"kind": "fact", "key": fact_key(c["fact"], path + ".fact"), "op": op, "value": value,
-                        "within": within, "when": when, "frames": frames, "source": c})
+                        "within": within, "when": when, "frames": frames, "matching": matching, "source": c})
         elif "log" in c or "no_log" in c:
             keys_known(c, path, {"log", "no_log", "times"})
             if ("log" in c) == ("no_log" in c):
@@ -1137,6 +1144,9 @@ def evaluate(test, renderer, run_folder, ran):
         if c["kind"] == "fact":
             got = [f for f in by_key.get(c["key"], []) if c["frames"] is None or c["frames"][0] <= f["frame"] <= c["frames"][1]]
             name = "fact %s %s %s" % (c["key"], c["op"], json.dumps(c["value"]))
+            if c["matching"] is not None:
+                got = [f for f in got if has_value(f["value"], c["matching"])]
+                name += " matching %s" % json.dumps(c["matching"], ensure_ascii=False)
             if c["op"] == "absent":
                 add(name, not got, [f["value"] for f in got])
                 continue
