@@ -303,7 +303,8 @@ void main(uint3 id : SV_DispatchThreadID) {
         r.w = target > 0.0f && r.m > 0.0f ? min(r.sum / (r.m * target), kMostWeight) : 0.0f;
     }
     const float facing = max(dot(n, normalize(r.at - x)), 0.0f);
-    const float3 ratio = min(r.light * r.w * facing / kRtPi, g_shade.gains.w);
+    // Whole: the guard is the mean's clamp after the filters (rt_indirect_up); a half float's range only (A1-4; FB b73).
+    const float3 ratio = min(r.light * r.w * facing / kRtPi, kMostWeight);
     g_reservoirs[id.xy] = uint4(asuint(r.at), gi_pack(r.n, min(r.m, kMostM * fb_history_scale())));
     g_weights[id.xy] = float4(r.light, r.w);
     g_raw[id.xy] = float4(ratio.r, 0.0f, ratio.g, ratio.b);

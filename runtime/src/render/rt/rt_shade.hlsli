@@ -454,8 +454,9 @@ RtStageLight rt_stage_light() {
     RtStageLight s;
     s.sky = ok * (sky_look * e / max(held, 1e-4f)) + (1.0f - ok);
     s.sun = ok * (rest * sun_strength * e / max(held, 1e-4f));
-    // O's unit: the plain sky's light (no kAmbientLook, full chroma), so the dials move the shade and not O.
-    s.unit = ok * max(sky * e / max(held, 1e-4f), 1e-3f) + (1.0f - ok);
+    // O's unit: the plain sky's light (no kAmbientLook, full chroma), so the dials move the shade and not O; at least
+    // the shade's sky a channel at a time, so the loop's gain stays under the albedo for a coloured sky (A1-5; FB b74).
+    s.unit = ok * max(max(sky * e / max(held, 1e-4f), s.sky), 1e-3f) + (1.0f - ok);
     return s;
 }
 // O's unit (C4: the one divisor of every gather return): what O = 1 gives a white surface. The art's: the authored
