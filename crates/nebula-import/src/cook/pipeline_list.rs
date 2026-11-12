@@ -30,6 +30,44 @@ pub fn reset() {
     LIST.lock().unwrap().clear();
 }
 
+/// What `f` adds to the list, apart from it: the list holds after it what it held before (a cook outside the store's,
+/// cook_c). Hold cook::COOK_LOCK around it.
+pub fn added_by<T>(f: impl FnOnce() -> T) -> (T, Vec<Vec<u8>>) {
+    // Put back however `f` ends (a fault in a cook unwinds through here).
+    struct Held(Option<BTreeSet<Vec<u8>>>);
+    impl Drop for Held {
+        fn drop(&mut self) {
+            if let Some(held) = self.0.take() {
+                *LIST.lock().unwrap_or_else(|e| e.into_inner()) = held;
+            }
+        }
+    }
+    let mut held = Held(Some(std::mem::take(&mut *LIST.lock().unwrap_or_else(|e| e.into_inner()))));
+    let out = f();
+    let added = std::mem::replace(&mut *LIST.lock().unwrap_or_else(|e| e.into_inner()), held.0.take().unwrap_or_default());
+    (out, added.into_iter().collect())
+}
+
+/// The (vertex, pixel) programs of `records` the renderer was not built with: neither written (tools/dev/
+/// compile_programs.py) nor in its table.
+pub fn unshipped(records: &[Vec<u8>]) -> Vec<(u64, u64)> {
+    let mut vertex = BTreeSet::new();
+    let mut pixel = BTreeSet::new();
+    for line in include_str!("../../../../runtime/src/render/programs/table.tsv").lines() {
+        let mut fields = line.split('\t');
+        let stage = fields.next().unwrap_or("");
+        if let Some(hash) = fields.next().and_then(|h| u64::from_str_radix(h, 16).ok()) {
+            if stage == "v" { vertex.insert(hash); } else if stage == "p" { pixel.insert(hash); }
+        }
+    }
+    records
+        .iter()
+        .filter(|r| r.len() >= 16)
+        .map(|r| (u64::from_le_bytes(r[..8].try_into().unwrap()), u64::from_le_bytes(r[8..16].try_into().unwrap())))
+        .filter(|(v, p)| !((written(*v) || vertex.contains(v)) && (written(*p) || pixel.contains(p))))
+        .collect()
+}
+
 fn input(code: u8, program_number: u16, m: &MeshStreams) -> [u8; INPUT_BYTES] {
     let further = further_stride(m);
     let coords = (1..m.coordinates.len()).filter(|&n| m.has_coord(n)).count() as u32;
@@ -276,20 +314,8 @@ fn written(id: u64) -> bool {
 /// A base-game import must only name the programs shipped with the renderer. Mods use their own compiler path.
 pub fn checked_bytes() -> anyhow::Result<Vec<u8>> {
     let records = records();
-    let mut vertex = BTreeSet::new();
-    let mut pixel = BTreeSet::new();
-    for line in include_str!("../../../../runtime/src/render/programs/table.tsv").lines() {
-        let mut fields = line.split('\t');
-        let stage = fields.next().unwrap_or("");
-        if let Some(hash) = fields.next().and_then(|h| u64::from_str_radix(h, 16).ok()) {
-            if stage == "v" { vertex.insert(hash); } else if stage == "p" { pixel.insert(hash); }
-        }
-    }
-    for record in &records {
-        let v = u64::from_le_bytes(record[..8].try_into().unwrap());
-        let p = u64::from_le_bytes(record[8..16].try_into().unwrap());
-        anyhow::ensure!((written(v) || vertex.contains(&v)) && (written(p) || pixel.contains(&p)),
-            "The imported material names an uncompiled program ({v:016x}, {p:016x}); the game store was not installed");
+    if let Some((v, p)) = unshipped(&records).first() {
+        anyhow::bail!("The imported material names an uncompiled program ({v:016x}, {p:016x}); the game store was not installed");
     }
     Ok(file(&records))
 }
