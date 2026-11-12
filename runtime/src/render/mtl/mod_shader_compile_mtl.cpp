@@ -15,6 +15,10 @@ bool mod_shader_has_bound_form() noexcept {
     return false;
 }
 
+std::string mod_shader_compiler_missing(const std::filesystem::path&) {
+    return {};  // nothing compiles a mod's programs here yet: each is refused (compile_mod_shader_stage), not every mod
+}
+
 std::vector<std::uint8_t> compile_mod_shader_stage(const std::string&, const std::filesystem::path&, bool,
                                                    const std::vector<const char*>&, std::string& error, bool) {
     error = "mods' own programs are not compiled on Apple devices yet";

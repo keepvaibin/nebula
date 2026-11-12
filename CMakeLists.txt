@@ -191,6 +191,8 @@ add_library(galaxy_native_host STATIC
     runtime/src/mii_formats.cpp
     runtime/src/mod_xml.cpp
     runtime/src/luma.cpp
+    runtime/src/mod_log.cpp
+    runtime/src/mod_start_check.cpp
     runtime/src/mod_plugins.cpp
     runtime/src/mods.cpp
     runtime/src/mod_consent.cpp

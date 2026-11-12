@@ -10,6 +10,7 @@
 #include "Game/NPC/NebulaAchievementLuma.hpp"
 #include "Game/Screen/NebulaAchievementBoard.hpp"
 #include "Game/Screen/NebulaAchievementToast.hpp"
+#include "Game/Screen/NebulaModLogNotice.hpp"
 #include "Game/Screen/NebulaModText.hpp"
 #include "Game/Screen/NoteCounter.hpp"
 #include "Game/Screen/OneUpBoard.hpp"
@@ -59,6 +60,8 @@ GameSceneLayoutHolder::GameSceneLayoutHolder()
 
     mAchievementToast = new NebulaAchievementToast();
     mAchievementToast->initWithoutIter();
+    // The mod log's notice: only when the session has mods or something was said (contract mod-log 5).
+    NebulaModLogNotice::make();
     if (NebulaMods::hasCode()) {
         mModText = new NebulaModText();
         mModText->initWithoutIter();

@@ -36,6 +36,7 @@
 #include "galaxy/mii_import.h"
 #include "galaxy/mods.h"
 #include "galaxy/render/host_window.h"
+#include "galaxy/mod_log.h"
 #include "galaxy/mod_plugins.h"
 #include "galaxy/render/mod_shaders.h"
 #include "galaxy/render/program_table.h"
@@ -520,6 +521,8 @@ void finish() {
 std::vector<galaxy::mods::PluginFile> gPlugins;
 galaxy::mods::ModRows gModRows;
 bool gModsChangeGame = false;
+// The mods on this session (the scan's enabled ones): the mod log is made only when there are any.
+std::uint32_t gModsOn = 0;
 
 void load_module(const fs::path& path) {
 #if defined(_WIN32)
@@ -1707,6 +1710,7 @@ struct SettingsContent {
     std::vector<std::string> pages;
     std::vector<SettingsRowContent> rows;
     std::string help;
+    uint32_t help_as_is = 0;
     std::string status_text;
     std::string long_text;
     // Held here while the view points at its pixels; the same pointer is the same picture.
@@ -1795,6 +1799,7 @@ void svc_settings_view(void*, NebulaSettingsView* view) {
     next.selected = static_cast<uint32_t>(selected);
     next.selected_button = source.selected_button;
     next.help = source.help;
+    next.help_as_is = source.help_as_is ? 1u : 0u;
     next.status = static_cast<uint32_t>(source.status);
     next.status_number = source.status_number;
     next.status_text = source.status_text;
@@ -1828,6 +1833,7 @@ void svc_settings_view(void*, NebulaSettingsView* view) {
     view->mod_list_count[0] = content.mod_list_count[0];
     view->mod_list_count[1] = content.mod_list_count[1];
     view->help = content.help.c_str();
+    view->help_as_is = content.help_as_is;
     view->status = content.status;
     view->status_number = content.status_number;
     view->status_text = content.status_text.c_str();
@@ -3301,6 +3307,17 @@ void svc_mods_start(void*) {
             galaxy::mods::set_code_off_after_crash();
         }
     }
+    // The mod log (contract mod-log): how many mods are on, and the harness's facts in a harness run. With none it is
+    // never made.
+    galaxy::modlog::begin(
+        [](const char* name) -> void* {
+#if defined(_WIN32)
+            return reinterpret_cast<void*>(GetProcAddress(static_cast<HMODULE>(gModule.module), name));
+#else
+            return dlsym(gModule.module, name);
+#endif
+        },
+        gModsOn);
     // Any mod at all tells the game: a stage then holds more than its level asks for.
     if (!gModsChangeGame) {
         return;
@@ -3326,6 +3343,8 @@ void svc_mods_start(void*) {
 #endif
                                 },
                                 [](const char* text) { log_line("mods:", text); });
+    // Each mod whose code did not start, in the mod log as the Mods page says it.
+    galaxy::modlog::add_not_started();
 }
 
 void svc_app_restart(void*) {
@@ -3374,6 +3393,8 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
 void prepare_mod_files(const fs::path& settings_folder, const std::string& game_id, std::vector<galaxy::mods::ModInfo> mods) {
     const std::string language = galaxy::mods::language_folder(
         game_id, static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language)));
+    gModsOn = static_cast<std::uint32_t>(
+        std::count_if(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) { return mod.enabled; }));
     const galaxy::mods::ModPlan plan = galaxy::mods::plan_mod_changes(gPak.store, game_id, language, std::move(mods));
     gPlugins = plan.plugins;
     gModRows = plan.rows;

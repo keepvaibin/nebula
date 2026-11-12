@@ -1721,7 +1721,7 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
     }
 
     const s32 hint = firstHint(rView);
-    if (pShown != nullptr && pShown->status == rView.status && pShown->status_number == rView.status_number &&
+    if (pShown != nullptr && pShown->status == rView.status && pShown->status_number == rView.status_number && pShown->help_as_is == rView.help_as_is &&
         MR::isEqualString(pShown->help, rView.help) && MR::isEqualString(pShown->status_text, rView.status_text) &&
         MR::isEqualString(pShown->long_text, rView.long_text) && pShown->page == rView.page && pShown->input == rView.input && firstHint(*pShown) == hint) {
         return;
@@ -1778,6 +1778,8 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
     }
     if (pStatusId != nullptr) {
         getNumbered(mStatusText, pStatusId, rView.status_number);
+    } else if (rView.status == NEBULA_SETTINGS_STATUS_HELP && rView.help_as_is != 0) {
+        fromUtf8(mStatusText, 0, pStatusText);  // already in the played language (a mod's refusal)
     } else {
         translateLine(mStatusText, pStatusText, false);
     }
@@ -3503,5 +3505,25 @@ namespace NebulaSettingsMenu {
 
     void requestOpen() {
         NebulaHost::settingsInput(NEBULA_SETTINGS_OPEN, 0);
+    }
+
+    s32 translateHost(char16_t* pDst, s32 capacity, const char* pText) {
+        if (capacity <= 0) {
+            return 0;
+        }
+        MR::Text16 text;
+        translate(text, pText, false);
+        const char16_t* const pFrom = text.c_str();
+        s32 n = 0;
+        while (pFrom[n] != 0 && n + 1 < capacity) {
+            pDst[n] = pFrom[n];
+            n++;
+        }
+        // Cut short: never half a pair.
+        if (pFrom[n] != 0 && n > 0 && pDst[n - 1] >= 0xD800u && pDst[n - 1] < 0xDC00u) {
+            n--;
+        }
+        pDst[n] = 0;
+        return n;
     }
 };  // namespace NebulaSettingsMenu
