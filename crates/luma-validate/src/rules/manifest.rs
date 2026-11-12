@@ -87,13 +87,26 @@ const OPTION_KINDS: [&str; 5] = ["choice", "number", "toggle", "text", "key"];
 pub const MAX_OPTIONS: usize = 64;
 pub const MAX_PICTURES: usize = 8;
 
-/// An id: 3 to 64 of lowercase letters, digits, `-` and `.`, starting with a letter, without `..` (luma-format 4).
+/// An id: 3 to 64 of lowercase letters, digits, `-` and `.`, starting with a letter, without `..` (luma-format 4),
+/// whose part before the first `.` is no name Windows keeps (con, prn, aux, nul, com1-9, lpt1-9: a folder of that
+/// name cannot be made there; the host's valid_id refuses the same, director 2026-11-11).
 pub fn id_ok(id: &str) -> bool {
     (3..=64).contains(&id.len())
         && id.starts_with(|c: char| c.is_ascii_lowercase())
         && id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b'.')
         && !id.contains("..")
         && !id.ends_with('.')
+        && !windows_keeps(id.split('.').next().unwrap_or(id))
+}
+
+/// A device name Windows keeps in every folder, in any case.
+fn windows_keeps(part: &str) -> bool {
+    let part = part.to_ascii_lowercase();
+    match part.as_bytes() {
+        b"con" | b"prn" | b"aux" | b"nul" => true,
+        [b'c', b'o', b'm', d] | [b'l', b'p', b't', d] => (b'1'..=b'9').contains(d),
+        _ => false,
+    }
 }
 
 /// An option or layer key: as an id's characters, 1 to 64 long.
@@ -1349,6 +1362,13 @@ mod tests {
     #[test]
     fn small_checks() {
         assert!(id_ok("gold-flower") && id_ok("a.b-c") && !id_ok("ab") && !id_ok("Gold") && !id_ok("1abc") && !id_ok("a..b") && !id_ok("abc."));
+        // Windows' device names, alone or before the first dot; the same letters inside a longer part are fine.
+        for kept in ["con", "prn", "aux", "nul", "com1", "com9", "lpt1", "lpt9", "con.mod", "nul.x.y", "lpt3.gold"] {
+            assert!(!id_ok(kept), "{kept}");
+        }
+        for fine in ["com0", "lpt0", "com10", "console", "con-mod", "mod.con", "auxiliary", "nul2"] {
+            assert!(id_ok(fine), "{fine}");
+        }
         assert!(host_ok("api.example.org") && host_ok("*.example.org") && host_ok("127.0.0.1:8080") && !host_ok("a b") && !host_ok("x:0") && !host_ok("-a.org"));
         assert!(["*", "api.example.org", "API.Example.org", "*.example.org", "localhost", "10.0.0.1", "255.255.255.255", "0.0.0.0"].iter().all(|h| permission_host_ok(h)));
         assert!(!["", "*.", "**", "*.*.org", "a.org:80", "10.0.0.1:80", "::1", "[::1]", "1.2.3", "256.0.0.1", "01.2.3.4", "*.10.0.0.1", "-a.org", "a b", "a..org", "a.org."]
