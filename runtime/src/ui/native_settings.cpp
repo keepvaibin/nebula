@@ -20,6 +20,7 @@
 #include "galaxy/mii_import.h"
 #include "galaxy/mod_import.h"
 #include "galaxy/mod_consent.h"
+#include "galaxy/luma_mods_service.h"
 #include "galaxy/mod_log.h"
 #include "galaxy/mods.h"
 #include "galaxy/game_paths.h"
@@ -1951,6 +1952,12 @@ struct ModAbout {
 std::optional<ModAbout> s_mod_about;
 // The mod whose REMOVE the menu asks about (empty: none). Under s_mods_mutex.
 std::string s_mod_remove_ask;
+// The removed mod whose kept data the menu asks to forget (empty: none). Under s_mods_mutex.
+std::string s_mod_forget_ask;
+// The removed mods' kept data for the REMOVED MODS line (services-mods 8): read when the page first lists the mods and
+// again after a rescan or a FORGET, never each frame. Under s_mods_mutex.
+std::vector<galaxy::luma_mods::KeptMod> s_mods_kept;
+bool s_mods_kept_read = false;
 
 // A mod as the MODS page names it: its own name (a .luma's, a resource pack's), else its folder's.
 std::string mod_title(const galaxy::mods::ModInfo& mod) {
@@ -2078,6 +2085,7 @@ void reread_mods_locked() {
     s_mods = std::move(merged);
     s_mods_saved = std::move(fresh);
     s_mods_scanned = true;
+    s_mods_kept_read = false;  // a folder that came back, or went
     refresh_overlaps_locked();
     apply_live_mods();
 }
@@ -2958,8 +2966,50 @@ SettingsRow mods_buttons_row() {
     return row;
 }
 
+// A size as the REMOVED MODS line says it, in the played language's units (Size.* rows): bytes, else whole KB or MB
+// (of 1024), rounded up so a few bytes never read 0.
+std::string kept_size_text(std::uint64_t bytes, const std::string& id) {
+    const char* row = "Size.Bytes";
+    std::uint64_t n = bytes;
+    if (bytes >= 1024u * 1024u) {
+        row = "Size.MB";
+        n = (bytes + 1048575u) / 1048576u;
+    } else if (bytes >= 1024u) {
+        row = "Size.KB";
+        n = (bytes + 1023u) / 1024u;
+    }
+    return galaxy::modlog::row_words(row, id, {{"n", std::to_string(n)}});
+}
+
+// The REMOVED MODS line (services-mods 8, services-save 5): a mod whose folder is gone keeps its numbers and saved data
+// for when it returns. One row each, "{mod}: kept for when it returns", its numbers and bytes as the help, and FORGET
+// behind a question (mod_question_key). Nothing when no removed mod keeps anything. With s_mods_mutex held.
+void add_kept_rows_locked(std::vector<SettingsRow>& rows) {
+    if (!s_mods_kept_read) {
+        galaxy::luma_mods::kept(s_mods_kept);
+        s_mods_kept_read = true;
+    }
+    if (s_mods_kept.empty()) return;
+    rows.push_back(SettingsRow{"REMOVED MODS", {}, nullptr, {}, true});
+    for (const galaxy::luma_mods::KeptMod& kept : s_mods_kept) {
+        const std::string id = kept.id;
+        SettingsRow row = button_row(
+            galaxy::modlog::row_words("Mods.Kept", id, {}), {"FORGET"},
+            [id](RenderConfig&, unsigned) {
+                const std::lock_guard<std::mutex> lock(s_mods_mutex);
+                s_mod_forget_ask = id;
+            },
+            galaxy::modlog::row_words("Mods.KeptHelp", id,
+                                      {{"numbers", std::to_string(kept.numbers)}, {"size", kept_size_text(kept.save_bytes, id)}}));
+        row.key = "kept:" + id;
+        row.names = 1u | 4u;  // both already in the played language
+        rows.push_back(std::move(row));
+    }
+}
+
 // The MODS page as the launcher's Mods tab: the mods off, then the mods on (the higher one wins a conflict), each list
-// under its title, then the buttons. A mod's options show instead while they are open.
+// under its title, then what removed mods keep, the LOG row and the buttons. A mod's options show instead while they
+// are open.
 std::vector<SettingsRow> mods_page(const RenderConfig&) {
 #if defined(__APPLE__)
     // Mods are not on Apple's systems yet (docs/APPLE.md): the page says so, and nothing on it is chosen.
@@ -3021,6 +3071,7 @@ std::vector<SettingsRow> mods_page(const RenderConfig&) {
     if (selected < rows.size() && rows[selected].list != 0u && !rows[selected].heading) {
         s_mod_focus = rows[selected].key.substr(4u);
     }
+    add_kept_rows_locked(rows);
     rows.push_back(mod_log_row());
     rows.push_back(mods_buttons_row());
     return rows;
@@ -3041,7 +3092,8 @@ void close_mod_options(const RenderConfig& render) {
 }
 
 // The MODS page's keys while its lists show, as the launcher's lists: up and down within a list, left and right to
-// the other list at the same place, down from a list's last mod to the LOG row, then the buttons, and up again. A or Space picks the
+// the other list at the same place, down from a list's last mod to the rows under the lists (what removed mods keep,
+// LOG), then the buttons, and up again. A or Space picks the
 // selected mod up; held, up and down move it among the mods on (a higher one wins), left turns it off, right on, and
 // A, Space, Enter or Escape puts it down. On a mod's options, Escape goes back to the lists.
 bool mods_page_key(std::uintptr_t key, bool accept, bool was_down) {
@@ -3082,15 +3134,15 @@ bool mods_page_key(std::uintptr_t key, bool accept, bool was_down) {
     }
     const unsigned selected = std::min(s_native_settings_row.load(std::memory_order_relaxed),
                                        static_cast<unsigned>(rows.size()) - 1u);
-    // The rows of each list (1 off, 2 on) in order, and the buttons' row.
+    // The rows of each list (1 off, 2 on) in order, and the rows under the lists top to bottom: what removed mods keep
+    // (add_kept_rows_locked), the LOG row (mod_log_row) and the buttons.
     std::vector<unsigned> members[3];
-    unsigned buttons = 0u;
-    unsigned log_row = ~0u;  // the LOG row (mod_log_row), between the lists and the buttons
+    std::vector<unsigned> below;
     for (unsigned r = 0; r < rows.size(); ++r) {
         if (rows[r].list != 0u && !rows[r].heading) members[rows[r].list].push_back(r);
-        if (rows[r].key == "buttons") buttons = r;
-        if (rows[r].key == "modlog") log_row = r;
+        if (rows[r].key.rfind("kept:", 0) == 0 || rows[r].key == "modlog" || rows[r].key == "buttons") below.push_back(r);
     }
+    const unsigned buttons = !below.empty() ? below.back() : 0u;
     const std::uint8_t list = rows[selected].heading ? 0u : rows[selected].list;
     const std::size_t place = list != 0u ? static_cast<std::size_t>(
         std::find(members[list].begin(), members[list].end(), selected) - members[list].begin()) : 0u;
@@ -3152,17 +3204,18 @@ bool mods_page_key(std::uintptr_t key, bool accept, bool was_down) {
     }
     if (key == VK_RETURN || key == VK_ESCAPE) return false;  // apply and close, as on every page
     if (list == 0u) {
-        // The LOG row and the buttons: down from LOG to the buttons, up from the buttons to LOG; up from LOG goes back to
-        // the mod last selected (else the first in a list); left, right and pressing are the buttons'.
-        if (key == VK_DOWN && selected == log_row) {
-            select(buttons);
+        // Under the lists: down and up step among the rows there; up from the first goes back to the mod last selected
+        // (else the first in a list); left, right and pressing are the rows' buttons.
+        const auto at = std::find(below.begin(), below.end(), selected);
+        if (key == VK_DOWN) {
+            if (at != below.end() && at + 1 != below.end()) select(*(at + 1));
             return true;
         }
-        if (key == VK_UP && selected == buttons && log_row != ~0u) {
-            select(log_row);
+        if (key != VK_UP) return false;
+        if (at != below.end() && at != below.begin()) {
+            select(*(at - 1));
             return true;
         }
-        if (key != VK_UP) return key == VK_DOWN;
         std::string focus;
         {
             const std::lock_guard<std::mutex> lock(s_mods_mutex);
@@ -3182,7 +3235,7 @@ bool mods_page_key(std::uintptr_t key, bool accept, bool was_down) {
         if (place > 0u) select(members[list][place - 1u]);
         return true;
     case VK_DOWN:
-        select(place + 1u < members[list].size() ? members[list][place + 1u] : log_row != ~0u ? log_row : buttons);
+        select(place + 1u < members[list].size() ? members[list][place + 1u] : !below.empty() ? below.front() : buttons);
         return true;
     case VK_LEFT:
     case VK_RIGHT: {
@@ -3819,8 +3872,9 @@ bool mod_question_up() {
     if (s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount != kModsTab) {
         s_mod_about.reset();
         s_mod_remove_ask.clear();
+        s_mod_forget_ask.clear();
     }
-    return s_mod_about.has_value() || !s_mod_remove_ask.empty();
+    return s_mod_about.has_value() || !s_mod_remove_ask.empty() || !s_mod_forget_ask.empty();
 }
 
 // The ABOUT window's keys: Enter, Space or Y the next page, Backspace or X the one before, Escape, B or F1 back to the
@@ -3839,6 +3893,25 @@ bool mod_question_key(std::uintptr_t key, bool was_down) {
             --about.page;
         } else if ((key == VK_RETURN || key == VK_SPACE) && about.page + 1u < count) {
             ++about.page;
+        }
+        return true;
+    }
+    if (!s_mod_forget_ask.empty()) {
+        // FORGET's: Enter, Space or Y drops what the removed mod kept (services-mods 8: its numbers at once, its saved
+        // data at each file's next save; one Note Mods.Forgotten), Escape, Backspace, B or F1 keeps it.
+        if (was_down) return true;
+        if (key == VK_RETURN || key == VK_SPACE) {
+            const std::string id = s_mod_forget_ask;
+            s_mod_forget_ask.clear();
+            lock.unlock();
+            galaxy::luma_mods::forget(id);
+            {
+                const std::lock_guard<std::mutex> relock(s_mods_mutex);
+                s_mods_kept_read = false;  // read again after the forget, so the row is gone
+            }
+            select_mods_row(s_settings_draft, "modlog");
+        } else if (key == VK_ESCAPE || key == VK_BACK || key == VK_F1) {
+            s_mod_forget_ask.clear();
         }
         return true;
     }
@@ -3871,6 +3944,11 @@ bool mod_question_key(std::uintptr_t key, bool was_down) {
 // its own thread; until it is in, the page says it loads.
 bool fill_mod_question_view(NativeSettingsView& view) {
     const std::lock_guard<std::mutex> lock(s_mods_mutex);
+    if (!s_mod_forget_ask.empty()) {
+        view.status = NativeSettingsStatus::ModForgetAsk;
+        view.status_text = s_mod_forget_ask;  // its folder is gone: its id is what names it
+        return true;
+    }
     if (!s_mod_remove_ask.empty()) {
         view.status = NativeSettingsStatus::ModRemoveAsk;
 #if defined(_WIN32)
