@@ -9,8 +9,17 @@ pub const MAX_NAME_BYTES: usize = 240;
 pub const MAX_FILE: u64 = 4 << 30;
 pub const MAX_TOTAL: u64 = 64 << 30;
 
-const TOP: [(&str, bool); 7] =
-    [("luma.json", false), ("layers", true), ("code", true), ("media", true), ("saves", true), ("kit", true), ("source", true)];
+const TOP: [(&str, bool); 8] = [
+    ("luma.json", false),
+    ("layers", true),
+    ("code", true),
+    ("media", true),
+    ("saves", true),
+    ("kit", true),
+    ("source", true),
+    // TLS roots a net permission adds (services-net 7).
+    ("certs", true),
+];
 
 /// The phrase for what is wrong with an entry name, if anything (luma-format 2, "Names").
 pub fn name_problem(name: &str) -> Option<&'static str> {

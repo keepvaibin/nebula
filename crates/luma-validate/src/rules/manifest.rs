@@ -829,6 +829,9 @@ pub const PERMISSIONS: [&str; 11] = [
 
 /// The most hosts `net.internet` may list (services-registry 5.1).
 pub const MAX_HOSTS: usize = 32;
+/// The most TLS roots a net permission may add, and the most bytes of each file (services-net 7).
+pub const MAX_ROOTS: usize = 8;
+pub const MAX_ROOT_BYTES: u64 = 64 << 10;
 
 /// A host `net.internet` may reach (services-registry 5.1, G R-2): `*` alone, a name (`api.example.org`), a name
 /// under a domain (`*.example.org`), or an IPv4 address in dotted digits. No port, no IPv6 literal. Letters of either
@@ -867,7 +870,7 @@ fn permissions(m: &mut M, root: &Value, facts: &mut Facts) {
     for (i, x) in items.iter().enumerate() {
         let ptr = format!("/permissions/{i}");
         let Some(obj) = m.object(x, &ptr, "permissions") else { continue };
-        m.keys(obj, &ptr, &["name", "why", "hosts"]);
+        m.keys(obj, &ptr, &["name", "why", "hosts", "roots"]);
         m.required(obj, &ptr, &["name"]);
         let Some(name) = obj.get("name").and_then(|n| m.string(n, &format!("{ptr}/name"), "permissions/name")).map(str::to_string) else {
             continue;
@@ -922,10 +925,65 @@ fn permissions(m: &mut M, root: &Value, facts: &mut Facts) {
             (_, Some(h)) => m.at(211, h, &format!("{ptr}/hosts"), vec![("key", t(name.clone())), ("why", p("Perm.HostsOnlyNet"))]),
             _ => {}
         }
+        if let Some(r) = obj.get("roots") {
+            roots(m, &name, r, &format!("{ptr}/roots"));
+        }
         if known && !facts.permissions.contains(&name) {
             facts.permission_at.push((name.clone(), obj.pos, ptr.clone()));
         }
         facts.permissions.insert(name);
+    }
+}
+
+/// A net permission's `roots` (services-net 7): 1 to MAX_ROOTS files of the package under `certs/`, each once, each at
+/// most MAX_ROOT_BYTES and holding a PEM certificate: the TLS roots the mod adds for its own hosts. Only on `net.local`
+/// and `net.internet`. Every fault is L211, the file named.
+fn roots(m: &mut M, name: &str, r: &Value, rp: &str) {
+    let fail = |m: &mut M, v: &Value, at: &str, why: &'static str, entry: &str| {
+        m.at(211, v, at, vec![("key", t(name.to_string())), ("why", p(why)), ("entry", t(entry.to_string()))]);
+    };
+    if !matches!(name, "net.local" | "net.internet") {
+        fail(m, r, rp, "Perm.RootsOnlyNet", "");
+        return;
+    }
+    if !r.is_array() {
+        m.wrong(r, rp, "permissions/roots", "Expect.Array");
+        return;
+    }
+    if r.items().is_empty() || r.items().len() > MAX_ROOTS {
+        fail(m, r, rp, "Perm.RootCount", "");
+    }
+    let mut seen: Vec<&str> = Vec::new();
+    for (j, x) in r.items().iter().enumerate() {
+        let at = format!("{rp}/{j}");
+        let Some(path) = m.string(x, &at, "permissions/roots") else { continue };
+        let inside = path.strip_prefix("certs/").is_some_and(|rest| !rest.is_empty())
+            && super::container::name_problem(path).is_none()
+            && path.split('/').all(|part| !part.is_empty() && part != "." && part != "..");
+        if !inside {
+            fail(m, x, &at, "Perm.RootPath", path);
+            continue;
+        }
+        if seen.contains(&path) {
+            fail(m, x, &at, "Perm.RootTwice", path);
+            continue;
+        }
+        seen.push(path);
+        let Some(index) = m.ctx.m.index_of(path) else {
+            fail(m, x, &at, "Perm.RootMissing", path);
+            continue;
+        };
+        if m.ctx.m.items[index].size > MAX_ROOT_BYTES {
+            fail(m, x, &at, "Perm.RootSize", path);
+            continue;
+        }
+        let pem = match m.ctx.m.keep(index, MAX_ROOT_BYTES) {
+            Ok(data) => data.windows(27).any(|w| w == b"-----BEGIN CERTIFICATE-----"),
+            Err(_) => false,
+        };
+        if !pem {
+            fail(m, x, &at, "Perm.RootNotPem", path);
+        }
     }
 }
 

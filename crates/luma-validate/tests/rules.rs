@@ -751,6 +751,35 @@ fn a_revision_1_net_with_hosts_is_one_finding() {
     assert!(message(&r.findings[0], "UsEnglish").contains("only net.internet takes hosts"), "{:?}", r.findings);
 }
 
+/// H's TLS roots (services-net 7): a net permission's `roots` name PEM files under certs/; every fault is L211 naming
+/// the file, and certs/ is a folder a `.luma` may have.
+#[test]
+fn a_net_permissions_roots_are_pem_files_in_certs() {
+    let pem = b"-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n";
+    let said = |roots: &str, name: &str, more: &[E]| -> Vec<(u16, String)> {
+        let perm = format!(r#"[{{"name": "{name}", "why": "Talks to the test server.", "roots": {roots}}}]"#);
+        check(&luma(&[("permissions", perm.as_str())], more), &NO_GAME).findings.iter().map(|f| (f.code, message(f, "UsEnglish"))).collect()
+    };
+    let root = file("certs/test-root.pem", pem);
+    // (L218, a permission no code uses, is this test mod's having no code.)
+    let good = said(r#"["certs/test-root.pem"]"#, "net.local", std::slice::from_ref(&root));
+    assert!(good.iter().all(|(code, _)| *code == 218), "{good:?}");
+    let cases: [(&str, &str, Vec<E>, &str); 8] = [
+        (r#"["certs/test-root.pem"]"#, "fs.exchange", vec![root.clone()], "only net.local and net.internet take roots"),
+        ("[]", "net.local", vec![], "roots lists 1 to 8 files"),
+        (r#"["test-root.pem"]"#, "net.local", vec![], "must be a file in the mod's certs/ folder"),
+        (r#"["certs/../luma.json"]"#, "net.local", vec![], "must be a file in the mod's certs/ folder"),
+        (r#"["certs/test-root.pem", "certs/test-root.pem"]"#, "net.local", vec![root.clone()], "is listed twice"),
+        (r#"["certs/other.pem"]"#, "net.local", vec![root.clone()], "the mod has no file \"certs/other.pem\""),
+        (r#"["certs/big.pem"]"#, "net.local", vec![file("certs/big.pem", &vec![b'a'; 65 << 10])], "larger than 64 KiB"),
+        (r#"["certs/plain.pem"]"#, "net.local", vec![file("certs/plain.pem", b"not a certificate")], "holds no PEM certificate"),
+    ];
+    for (roots, name, more, words) in cases {
+        let got = said(roots, name, &more);
+        assert!(got.iter().any(|(code, text)| *code == 211 && text.contains(words)), "{roots}: {got:?}");
+    }
+}
+
 #[test]
 fn the_previous_engines_keys_name_their_replacement() {
     let codes = |over: &[(&str, &str)]| -> Vec<(u16, String, String)> {
