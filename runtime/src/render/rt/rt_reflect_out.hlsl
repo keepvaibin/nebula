@@ -99,7 +99,7 @@ void main(uint3 id : SV_DispatchThreadID) {
         r.rgb += g_lights_spec.Load(here).rgb / max(weight.rgb, 0.02f);
     }
     // d19: a painted gloss or metal is ADDED by its Fresnel (below); painted glass keeps the SUBSTITUTE.
-    const bool added = mirror_painted_added(bits);
+    const bool added = mirror_painted_added(bits) && r.a > 0.0f;  // d22: only where a traced R is held (Medium's unvisited pixels)
     if ((bits & kMirrorPainted) != 0u && klass != kMirrorWater && !added) {
         const uint item = g_item_map.Load(here).x;
         const uint at = g_at.x + (item != 0u ? item - 1u : 0u) * kItemBytes;
