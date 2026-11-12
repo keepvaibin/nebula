@@ -2110,6 +2110,22 @@ mod tests {
         assert_eq!(clear_kind("bathtubplanet", "glass_v"), (1.5, None));
     }
 
+    // EVERYTHING 1.12: the shadow models by name, with their materials and classes as the cook reads them
+    // (journal/SHADOWS.md); flagged, they are neither drawn nor met by a ray with traced light (draw_walker.cpp, rt_walk.cpp).
+    #[test]
+    fn shadow_models_by_name() {
+        assert!(drawn_shadow("jumpbeamerbeamshadow", "Beam", Class::Translucent));
+        assert!(drawn_shadow("koopashockwaveshadow", "Beam", Class::Translucent));
+        assert!(drawn_shadow("koopaplanetshadow", "KoopaShadow_v_x", Class::Translucent));
+        assert!(drawn_shadow("miniaturegalaxyshadow", "ShadowMat", Class::Glass));
+        assert!(drawn_shadow("spindrivershadow", "StarShadow_v", Class::Painted));
+        assert!(drawn_shadow("superspindrivershadow", "StarShadow_v", Class::Painted));
+        assert!(drawn_shadow("shadowvolumesphere", "lambert1", Class::Painted));
+        assert!(drawn_shadow("marioshadow", "MarioShadow", Class::Painted));
+        assert!(!drawn_shadow("jumpbeamer", "Beam", Class::Translucent));
+        assert!(!drawn_shadow("spindriver", "StarShadow_v", Class::Metal));
+    }
+
     fn stage(colour: [u8; 4], alpha: [u8; 4]) -> StageIr {
         StageIr { coord: 0xFF, map: 0xFF, channel: 0xFF, color_in: colour, alpha_in: alpha, color_clamp: 1, alpha_clamp: 1, ..Default::default() }
     }
