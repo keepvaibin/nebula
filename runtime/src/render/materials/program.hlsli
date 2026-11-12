@@ -440,7 +440,7 @@ float3 traced_painted(float4 light, float nl, float3 o3, bool coloured) {
     // A3-F8: lit over held in luminance, its colour over held's limited to a stop either way.
     const float lit_l = dot(lit, luminance), held_l = view_relight[0].w;
     const float3 tint = lit_l > 1e-6 && held_l > 1e-4 ? (lit / lit_l) / max(view_relight[3].rgb, 1e-4) : float3(1.0, 1.0, 1.0);
-    const float3 relit = held_l > 1e-4 ? (lit_l / held_l) * clamp(tint, 0.5, 2.0) : float3(1.0, 1.0, 1.0);
+    const float3 relit = held_l > 1e-4 ? (lit_l / held_l) * clamp(tint, 0.8, 1.25) : float3(1.0, 1.0, 1.0);  // c50: a quarter stop
     return lerp(painted, relit, view_look.x);
 }
 float4 traced_colour(float4 c, float4 pixel) {
