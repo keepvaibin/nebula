@@ -187,7 +187,7 @@ struct ViewRows {
                            // traced_mirror_own): x the guide blended draws compare with, y 1 the second layer's
                            // (picture 9), 2 the opaque layer's (picture 8), 0 none
     float look[4];  // with view_flags bit 3: the painted composite's look (program.hlsli traced_painted; RenderCore
-                    // rt_look_): kForm, the stage's m, kDebake, kAmbientLook
+                    // rt_look_): kForm, the sun's height over the player's up (at least 0.5), kDebake, kAmbientLook
     float dev[2][4];  // with view_flags bit 3: the programs' development tunables (rt_dev.h from BaseFloor): [0] the
                       // values, [1] 1 where the run gave one
 };

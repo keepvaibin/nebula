@@ -16,7 +16,7 @@ enum class RtDev : std::uint8_t {
     Rate,           // the rate the filters and the build budget take, frames a second (0: measured): pinned for
                     // picture runs on a busy machine
     Form,           // rt_look_[0] kForm (program.hlsli traced_painted, FC c36)
-    ArtFacing,      // rt_look_[1] the stage's m
+    ArtFacing,      // rt_look_[1] the sun's height over the player's up for the relight's exposure (c39 M3)
     Debake,         // rt_look_[2] kDebake
     AmbientLook,    // rt_look_[3] kAmbientLook
     ShadowTint,     // a shadow's tint by the sky's colour: view_stage_a.w and the shading frame's key[3]
@@ -36,6 +36,8 @@ enum class RtDev : std::uint8_t {
     HitGain,        // 1: a hit's surfaces met against their running mean (1 / mean where over 1; b46), 0 held at 1 (b51)
     // The programs' (program.hlsli view_dev): from BaseFloor.
     BaseFloor,      // traced_colour's kBaseFloor: a lit program's colour over at most 1 / this
+    SunStrength,    // traced_painted: the relight's sun over the stage's key (M2, October's 1.25)
+    SkyChroma,      // traced_painted: the share of the sky's chroma its light keeps in shade (M8, October's 0.4)
     // The tracer's (rt_frame.hlsli g_dev): from GlassShine, in this order.
     GlassShine,       // rt_mirror.hlsli: glass's F0 over ((ior - 1) / (ior + 1))^2 (kShine 2.0)
     WaterShine,       // water's (1.5)
@@ -60,7 +62,8 @@ inline constexpr std::string_view kRtDevNames[kRtDevCount] = {
     "rate",           "form",          "art_facing",     "debake",        "ambient_look",  "shadow_tint",
     "ambient_gain",   "sun_gain",      "full_facing",    "bounce_ambient", "wrap",         "sky_gain",
     "area_emission",  "hit_sky",       "bounce",         "bounce_max",    "sky_min",       "hit_dark",
-    "sun_glint",      "hit_gain",      "base_floor",     "glass_shine",   "water_shine",   "painted_glass",
+    "sun_glint",      "hit_gain",      "base_floor",     "sun_strength",  "sky_chroma",    "glass_shine",
+    "water_shine",    "painted_glass",
     "painted_metal",  "painted_gloss", "painted_mirror", "substitute_glass", "keep_metal", "keep_gloss",
 };
 

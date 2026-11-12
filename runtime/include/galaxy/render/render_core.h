@@ -534,9 +534,10 @@ private:
     // The stage's ambient (A) and key (K) colours the programs' painted composite takes (ViewRows::stage_a/k,
     // RT-MASTER-PLAN 3.4); rt_stage_a_[3] is kShadowTint.
     float rt_stage_a_[4]{}, rt_stage_k_[4]{};
-    // The painted composite's look (program.hlsli traced_painted, view row `look`): kForm, the stage's m, kDebake,
-    // kAmbientLook. Set every walk from the style (rt_walk.cpp); FA's dev block sets them by name.
-    float rt_look_[4]{0.0f, 0.7f, 0.0f, 1.0f};
+    // The painted composite's look (program.hlsli traced_painted, view row `look`): kForm, the sun's height over the
+    // player's up (at least 0.5), kDebake, kAmbientLook. Set every walk from the style (rt_walk.cpp); FA's dev block
+    // sets them by name.
+    float rt_look_[4]{0.0f, 1.0f, 0.0f, 1.0f};
     // The development tunables (rt_dev.h, l63): the values a run gave, a bit each in rt_dev_set_.
     float rt_dev_[kRtDevCount]{};
     std::uint32_t rt_dev_set_ = 0u;
