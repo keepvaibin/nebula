@@ -208,10 +208,11 @@ static const float kWave = 0.15f;
 // pixel's point; the luminance's change a texel of the map's own size along u' and v' (b88), at the level the pixel
 // covers. false: no slope there.
 bool water_map_slope(uint map, float2 t[3], float3 e1, float3 e2, float v, float w, float3 place, float3 smooth_,
-                     out float3 along_u, out float3 along_v, out float2 slope) {
+                     out float3 along_u, out float3 along_v, out float2 slope, out float lost) {
     along_u = float3(0.0f, 0.0f, 0.0f);
     along_v = float3(0.0f, 0.0f, 0.0f);
     slope = float2(0.0f, 0.0f);
+    lost = 0.0f;
     const float2 m1 = t[1] - t[0], m2 = t[2] - t[0];
     const float turn = m1.x * m2.y - m1.y * m2.x;
     if (!(abs(turn) > 1e-12f)) {
@@ -231,9 +232,28 @@ bool water_map_slope(uint map, float2 t[3], float3 e1, float3 e2, float v, float
     const float lu = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, here + float2(step_.x, 0.0f), level).rgb, luma);
     const float lv = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, here + float2(0.0f, step_.y), level).rgb, luma);
     slope = float2(lu - l0, lv - l0) * exp2(-level);  // a texel of the map's own size (b88)
+    // The slope variance the level's filter took away (Toksvig; FB b92): the slopes two levels finer at the four
+    // quarters of the footprint (a texel of this level), their mean square less the filtered slope's square.
+    if (level >= 1.0f) {
+        const float fine = max(level - 2.0f, 0.0f);
+        const float2 fine_step = exp2(fine) / float2(max(map_w, 1u), max(map_h, 1u));
+        const float2 quarter = 0.25f * step_;
+        float square = 0.0f;
+        [unroll] for (uint q = 0u; q < 4u; ++q) {
+            const float2 at = here + float2((q & 1u) != 0u ? quarter.x : -quarter.x, (q & 2u) != 0u ? quarter.y : -quarter.y);
+            const float f0 = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, at, fine).rgb, luma);
+            const float fu = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, at + float2(fine_step.x, 0.0f), fine).rgb, luma);
+            const float fv = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, at + float2(0.0f, fine_step.y), fine).rgb, luma);
+            const float2 s = float2(fu - f0, fv - f0) * exp2(-fine);
+            square += dot(s, s);
+        }
+        lost = max(0.25f * square - dot(slope, slope), 0.0f);
+    }
     return true;
 }
-float3 water_ripple(uint item_at, uint4 first, uint4 second, uint stream, uint map, uint triangle_, float3 place, float3 smooth_) {
+float3 water_ripple(uint item_at, uint4 first, uint4 second, uint stream, uint map, uint triangle_, float3 place, float3 smooth_,
+                    out float wave_variance) {
+    wave_variance = 0.0f;
     const uint rows_at = g_items.Load(item_at + 72u);
     const uint arena = first.z;
     if (rows_at == 0u || arena >= 8u) {
@@ -273,11 +293,12 @@ float3 water_ripple(uint item_at, uint4 first, uint4 second, uint stream, uint m
         }
         float3 along_u, along_v;
         float2 slope;
+        float lost;
         float2 tk[3];  // this map's coordinate at the corners (b90b)
         for (uint c = 0u; c < 3u; ++c) {
             tk[c] = k == 0u ? t[c] : t1[c];
         }
-        if (!water_map_slope(k == 0u ? map : map1, tk, e1, e2, v, w, place, smooth_, along_u, along_v, slope)) {
+        if (!water_map_slope(k == 0u ? map : map1, tk, e1, e2, v, w, place, smooth_, along_u, along_v, slope, lost)) {
             continue;
         }
         const float3 tu = along_u - smooth_ * dot(along_u, smooth_), tv = along_v - smooth_ * dot(along_v, smooth_);
@@ -286,13 +307,14 @@ float3 water_ripple(uint item_at, uint4 first, uint4 second, uint stream, uint m
             continue;
         }
         tilt += slope.x * tu * rsqrt(su) + slope.y * tv * rsqrt(sv);
+        wave_variance += kWave * kWave * lost;  // independent maps' variances add (b92)
         maps += 1.0f;
     }
     if (!(maps > 0.0f)) {
         return smooth_;
     }
-    // the normal tilted by both maps' mean slope (one map: its own, as before), kWave of it.
-    const float3 bent = normalize(smooth_ - kWave * tilt / maps);
+    // the normal tilted by both maps' slopes summed, as heights add (FB b92; one map: its own, as before), kWave of it.
+    const float3 bent = normalize(smooth_ - kWave * tilt);
     return dot(bent, smooth_) > 0.5f ? bent : smooth_;
 }
 
@@ -379,8 +401,9 @@ void main(uint3 id : SV_DispatchThreadID) {
     g_guide[id.xy] = float4(away, float(words4.x & 1023u), float(words4.x >> 10u), rt_pack_normal(smooth_));
     // Water shades by its rippled normal (l54); the guide keeps the smooth one for the filters. `shaded` and the
     // resolved `triangle_`: with no triangle found its arena is 8 and the ripple stays out.
+    float wave_variance = 0.0f;  // the slope variance the waves' filter took away (b92)
     const float3 shading = (third.w & 255u) == kClassWater && third.x != 0xFFFFFFFFu
-                               ? water_ripple(at_item, shaded, mesh, third.z, third.x, triangle_, at, smooth_)
+                               ? water_ripple(at_item, shaded, mesh, third.z, third.x, triangle_, at, smooth_, wave_variance)
                                : smooth_;
     g_normals[id.xy] = float4(rt_oct(shading), rt_oct(normal));
     // The material: the hit record's numbers as the item table carries them.
@@ -388,7 +411,11 @@ void main(uint3 id : SV_DispatchThreadID) {
     const uint class_ = look & 255u, hit_flags = look >> 8u & 255u;
     const uint flags = ((words4.y & kItemLit) != 0u ? kSurfaceLit : 0u) | (class_ == kClassEmissive ? kSurfaceEmissive : 0u) |
                        ((hit_flags & 16u) != 0u ? kSurfaceEnvironment : 0u) | ((words4.y & kItemThin) != 0u ? kSurfaceTwoSided : 0u);
-    g_material[id.xy] = float4(float(look >> 16u & 255u), float(look >> 24u), float((class_ & 15u) | flags), float(fourth.x >> 24u)) / 255.0f;
+    // Water's roughness is its waves' (FB b92, Toksvig): alpha^2 the slope variance the level's filter took away,
+    // written as sqrt(alpha) as every pass squares it; 0 where nothing was lost (a mirror, as before).
+    const float rough_byte = class_ == kClassWater ? saturate(sqrt(sqrt(saturate(wave_variance)))) * 255.0f
+                                                   : float(look >> 16u & 255u);
+    g_material[id.xy] = float4(rough_byte, float(look >> 24u), float((class_ & 15u) | flags), float(fourth.x >> 24u)) / 255.0f;
     // Its colour: the record's under its first map at the pixel (the map's level by the pixel's footprint on it), by
     // the vertex's colour where the material takes it.
     float4 base = float4(float(fourth.x & 255u), float(fourth.x >> 8u & 255u), float(fourth.x >> 16u & 255u), 255.0f) / 255.0f;

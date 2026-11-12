@@ -78,7 +78,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     const RtSurface s = rt_surface(int2(id.xy), guide, g_normals.Load(here), g_motion.Load(here).w);
     const float3 look = normalize(s.at);
     const float3 n = dot(s.smooth_, look) < 0.0f ? s.smooth_ : s.normal;
-    const float roughness = klass == kRtWater ? 0.0f : material.r;
+    const float roughness = material.r;  // water's: its waves' (rt_surface.hlsl, FB b92; was 0)
     float3 dir = roughness < 0.03f ? reflect(look, n) : rt_ggx_reflect(n, -look, roughness * roughness, rt_sample(id.xy, g_more.y, kSampleReflect));
     if (dot(dir, s.normal) <= 0.0f) {
         dir = reflect(dir, s.normal);
