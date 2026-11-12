@@ -1269,6 +1269,9 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                             for (std::string& key : luma::merge_keys(under, read_text(walk->path()))) settings_set.insert(std::move(key));
                         }
                     }
+                    // assets/ is the mod's own store (Luma/<id>/...): it changes what the cook writes, never another
+                    // mod's paths.
+                    if (child_any_case(place, "assets", true)) mod.luma_changes_game = true;
                     if (std::optional<fs::path> files = child_any_case(place, "files", true)) {
                         mod.luma_changes_game = true;
                         list_files(*files, std::string(), changed_paths[mod.id]);
@@ -1884,6 +1887,29 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                     std::sort(found.begin(), found.end());
                     for (const fs::path& file : found) {
                         plan.merges.push_back({galaxy::path_text(file.lexically_relative(*merge).generic_string()), file});
+                    }
+                }
+                // A layer's assets/ goes into the mod's own store at Luma/<id>/<path> (luma-format 5, G's decision of
+                // 2026-11-11): one plan line a file, a later layer's same path winning as files/ does. assets/effects.json
+                // is each layer's change instead, merged by the cook in layer order (contracts/effects.md).
+                if (const std::optional<fs::path> assets = child_any_case(mod.path / fs::path(from_utf8(layer.path)), "assets", true)) {
+                    std::error_code walk_error;
+                    std::error_code status_error;
+                    std::vector<fs::path> found;
+                    for (auto walk = fs::recursive_directory_iterator(*assets, walk_error);
+                         !walk_error && walk != fs::recursive_directory_iterator(); walk.increment(walk_error)) {
+                        if (walk->is_regular_file(status_error)) found.push_back(walk->path());
+                    }
+                    if (walk_error) note(layer.path + "/assets: the folder could not be read in full");
+                    std::sort(found.begin(), found.end());
+                    const std::string own = "Luma/" + mod.luma->id + "/";
+                    for (const fs::path& file : found) {
+                        const std::string under = galaxy::path_text(file.lexically_relative(*assets).generic_string());
+                        if (under == "effects.json") {
+                            plan.merges.push_back({own + under, file});
+                        } else {
+                            set_file(own + under, file);
+                        }
                     }
                 }
                 const std::optional<fs::path> files = child_any_case(mod.path / fs::path(from_utf8(layer.path)), "files", true);
