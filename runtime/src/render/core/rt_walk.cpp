@@ -75,6 +75,16 @@ void live_glow(const NebulaFrameList& list, const NebulaFrameItem& item, const c
 inline bool glow_by_data(const core::GpuMesh& mesh) {
     return mesh.glow_rule == 3u || mesh.glow_rule == 4u;
 }
+// d20b: a mesh that glows by its class alone (by data, or a hot body by name: rule 2), no row naming its model.
+inline bool glow_by_class(const core::GpuMesh& mesh) {
+    return glow_by_data(mesh) || mesh.glow_rule == 2u;
+}
+// d20b: the most candela a by-class piece of `radius` (units) is a lamp of at exposure `lux`: what gives a surface 3 m
+// from it 0.7 of the stage's full light.
+inline float glow_class_bound(float candela, float radius, float lux) {
+    const float metres = std::clamp(radius, 25.0f, 600.0f) / 100.0f;
+    return lux > 0.0f ? std::min(candela, 0.7f * lux * (9.0f + metres * metres)) : candela;
+}
 bool live_tint(const NebulaFrameList& list, const NebulaFrameItem& item, const core::GpuMesh& mesh, float out[3]);
 
 // What an emitter is from one frame to the next (its kind, whose it is, which of them): a pixel's reservoir finds its
@@ -3122,6 +3132,9 @@ bool RenderCore::rt_emitter_shapes(const NebulaFrameItem& item, const core::GpuM
             };
             words = 1u | 2u << 1u | (shape.two_sided != 0u ? 8u : 0u) | bits14(ox) << 4u | bits14(oy) << 18u;
         }
+        // d20b: a by-class piece is bounded as the box path's.
+        const float piece_candela = glow_by_class(mesh) ? glow_class_bound(candela / static_cast<float>(count), radius, rt_exposure_)
+                                                         : candela / static_cast<float>(count);
         for (unsigned p = 0; p < count; ++p) {
             if (rt_emitters_.size() >= kMost) {
                 return true;
@@ -3130,7 +3143,7 @@ bool RenderCore::rt_emitter_shapes(const NebulaFrameItem& item, const core::GpuM
             const float t = count == 1u ? 0.0f : (2.0f * (static_cast<float>(p) + 0.5f) / static_cast<float>(count) - 1.0f);
             for (unsigned c = 0; c < 3u; ++c) {
                 emitter.centre[c] = centre[c] + along[c] * t;
-                emitter.colour[c] = glow[c] * candela / static_cast<float>(count);
+                emitter.colour[c] = glow[c] * piece_candela;
             }
             emitter.radius = std::clamp(radius, disc ? 12.0f : 25.0f, 600.0f);
             emitter.reach = 0.0f;
@@ -3164,6 +3177,12 @@ void RenderCore::rt_emitter(const NebulaFrameItem& item, const core::GpuMesh& me
     light_colour(glow, glow, rt_dev(RtDev::LightSrgb, 1.0f) > 0.5f);  // its rgb as linear light (l65); glow[3] stays
     if (glow[3] == 0.0f) {
         return;  // the game has turned this glow off
+    }
+    // d20b: a by-class luminance is on a scale where 150 cd/m2 is a white surface; a white surface of this stage shows
+    // E / pi. Scaled before the shapes and the box read it.
+    const bool by_class = glow_by_class(mesh);
+    if (by_class && glow[3] < 0.0f && rt_exposure_ > 0.0f) {
+        glow[3] *= std::min(1.0f, rt_exposure_ / 471.2389f);
     }
     // L2 (l93): its cooked shapes, where it has them and lies still.
     if (place != nullptr && mesh.glow_shape_count != 0u && rt_emitter_shapes(item, mesh, glow, place)) {
@@ -3199,11 +3218,9 @@ void RenderCore::rt_emitter(const NebulaFrameItem& item, const core::GpuMesh& me
     // the surface it is drawn as: no brighter than a white one in the stage's full light, E / pi (a hot body 2.5 times
     // that, as c99 shows it); its cooked 150 to 600 cd/m2 made a 12 m sheet a lamp of 77,000 cd. A row that names it
     // keeps its value.
-    const bool by_class = glow_by_data(mesh) || mesh.glow_rule == 2u;
-    const float luminance_most =
-        by_class && rt_exposure_ > 0.0f ? (mesh.glow_rule == 2u ? 2.5f : 1.0f) * rt_exposure_ / 3.14159265f : 1.0e9f;
-    const auto candela_of = [&](float area_m2) {
-        return glow[3] > 0.0f ? glow[3] : std::min(-glow[3], luminance_most) * area_m2;
+    const auto candela_of = [&](float area_m2) { return glow[3] > 0.0f ? glow[3] : -glow[3] * area_m2; };
+    const auto bounded = [&](float candela, float size) {
+        return by_class ? glow_class_bound(candela, size, rt_exposure_) : candela;
     };
     // One lamp: each half no wider than 6 m (a glowing plain is not one lamp).
     const float lamp_candela =
@@ -3215,7 +3232,7 @@ void RenderCore::rt_emitter(const NebulaFrameItem& item, const core::GpuMesh& me
     if (!fresh) {
         RtEmitter& same = rt_emitters_[found->second];
         if (same.kind == 1u && same.reserved[0] == 0u && radius > same.radius) {
-            const float candela = lamp_candela;
+            const float candela = bounded(lamp_candela, radius);
             std::memcpy(same.centre, centre, sizeof(same.centre));
             same.radius = std::clamp(radius, 25.0f, 600.0f);
             for (unsigned c = 0; c < 3u; ++c) {
@@ -3263,7 +3280,7 @@ void RenderCore::rt_emitter(const NebulaFrameItem& item, const core::GpuMesh& me
         // A row's piece: at its place along the axis, as long as a piece, its value a metre of that length.
         const float t = count == 1u ? 0.0f : (2.0f * (static_cast<float>(n) + 0.5f) / static_cast<float>(count) - 1.0f);
         const float size = count == 1u ? radius : std::max(thick, piece);
-        const float candela = count == 1u ? lamp_candela : row_candela;
+        const float candela = bounded(count == 1u ? lamp_candela : row_candela, size);
         for (unsigned c = 0; c < 3u; ++c) {
             emitter.centre[c] = centre[c] + along[c] * t;
             emitter.colour[c] = glow[c] * candela;
