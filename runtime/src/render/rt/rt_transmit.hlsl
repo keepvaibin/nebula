@@ -2,8 +2,8 @@
 // What is seen through glass, crystal, ice and water, bent (the master plan's 13.2 High, 13.3 High; work list 22.14):
 // one pass over the second layer's pixels (the nearest blended surface a pixel) of class glass or water, High only.
 //   Water: the eye's ray refracted at the surface (index 1.33) on to the floor (the nearest solid or cut-out thing),
-//     what the floor sends back by the shared model (rt_hit_radiance: its sun traced), times exp(-sigma d), sigma from
-//     the water's own colour over kWaterClear: shallow water clear, deep water its colour and dark.
+//     what the floor sends back by the shared model (rt_hit_radiance: its sun traced), times exp(-a d): pure water's
+//     absorption at the clear-water scale (kWaterAbsorb over rt_water_clear; FB b84). Nothing of the map's colour.
 //   Glass, crystal, ice that is a body (its thickness, item word 17, at least kThinGlass): refracted in, traced inside
 //     against the same instance's faces (blended, no culling) to its exit, refracted out (total internal reflection:
 //     turned back inside, at most two inside segments), then on into the scene; exp(-sigma d) over the way inside,
@@ -31,7 +31,6 @@ RT_FORMAT(rgba32f) RWTexture2D<float4> g_t_mean : register(u1);  // this walk's:
 
 static const float kThinGlass = 4.0f;      // units: thinner is a shell (a soap film, a dome's pane)
 static const float kGlassTint = 1.0f;      // 13.2: the art's whole tint at the thickness (R1; FB b61: was 0.5)
-// 13.3: the way to mostly the water's colour is the stage's water clear (g_look.w; 600 units by default; FB b58)
 static const float kSeenReach = 4000000.0f;
 static const uint kInsideSegments = 2u;
 
@@ -205,11 +204,12 @@ void main(uint3 id : SV_DispatchThreadID) {
         const float3 dir = refract(look, n, 1.0f / ior);
         float far_;
         const float3 floor_ = seen_along(s.at - n * s.skin, dot(dir, dir) > 0.0f ? dir : look, cone, seed, far_);
-        // Pure water's absorption by the way under it (Pope and Fry's ratios, kWaterAbsorb; A4 W3, FB b75), and its own
-        // colour scattered back where it takes the light away: (1 - T) of the art's colour under the sky's light.
+        // Pure water's absorption by the way under it (Pope and Fry's ratios, kWaterAbsorb; A4 W3, FB b75) at the
+        // clear-water scale (FB b84): its colour is what it takes away. The map's colour is not a body colour (the
+        // owner's D3): nothing of it is sent back.
         const float clear = rt_water_clear();
         const float3 through = exp(-(min(far_, 8.0f * clear) / clear) * kWaterAbsorb);
-        t = floor_ * through + (1.0f - through) * colour * rt_air_share(1.0f, float3(0.0f, 0.0f, 0.0f));
+        t = floor_ * through;
     } else if (thickness < kThinGlass) {
         // A shell: straight on, its colour by the slant (R1, R3; FB b61).
         float far_;

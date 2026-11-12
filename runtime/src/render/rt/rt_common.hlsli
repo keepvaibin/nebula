@@ -286,9 +286,12 @@ float caustic_there(uint item, uint triangle_, float2 where_) {
     return clamp(1.0f + kCaustic * (a * b / (mean * mean) - 1.0f), 0.5f, 1.8f);
 }
 
-// The stage's water clear (g_look.w, b58): bins whose host does not fill it (0) keep 600 units (b58b).
+// Water's clear way, one for every stage (the owner's D3; FB b84): green's 1/e way in units, so that red loses 10 % in
+// 600 units (red's absorption kWaterAbsorb.r / 34270 = 1.756e-4 a unit): this art's lakes are swimming pools, clear
+// and colourless; the stage's own (g_look.w, b58) is not read.
+static const float kWaterClear = 34270.0f;
 float rt_water_clear() {
-    return g_look.w > 0.0f ? g_look.w : 600.0f;
+    return kWaterClear;
 }
 static const float kWaterLayer = 2.0f;  // water hits this near one another are one sheet of it drawn twice (b58b)
 // Pure water's absorption against green's (Pope and Fry 1997: 0.340, 0.0565, 0.0092 per metre at 650, 550, 450 nm;
