@@ -16,6 +16,7 @@
 #include "Game/System/GameSequenceFunction.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
+#include "Game/System/LumaMovie.hpp"
 #include "Game/System/NebulaText.hpp"
 #include "Game/Util/Array.hpp"
 #include "Game/Util/DemoUtil.hpp"
@@ -156,7 +157,11 @@ namespace {
         if (!isGameSceneRunning() || GameSequenceFunction::isActiveSaveDataHandleSequence()) {
             return false;
         }
-        if (MR::isActiveMoviePlayer() || GameSceneFunction::isExecScenarioOpeningCamera()) {
+        // A movie: the game's own always; a mod's when its cook says it may be skipped (luma::movie::isSkippable).
+        if (MR::isActiveMoviePlayer()) {
+            return luma::movie::isSkippable();
+        }
+        if (GameSceneFunction::isExecScenarioOpeningCamera()) {
             return true;
         }
         const DemoDirector* pDirector = getActiveDemo();

@@ -4,6 +4,7 @@
 #include "Game/Render/GameTexture.hpp"
 #include "Game/Render/RenderTexture.hpp"
 #include "Game/Render/TypedDraw.hpp"
+#include "Game/Screen/MessageTagSkipTagProcessor.hpp"
 #include "Game/System/GameAssets.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
@@ -140,6 +141,14 @@ namespace luma {
             // 2x3 transforms, [0] identity; each the product with the one under it.
             f32 sTransforms[LUMA_DRAW_STACK_MOST + 1][6];
             u32 sTransformDepth = 0;
+
+            // A movie's subtitle (subtitle): its line height in the screen's units (the cinema font's own), the room
+            // under it, its shadow's offset, its widest line as a share of the 4:3 frame; its frame slot (0 until the first).
+            const f32 cSubtitleSize = 26.0f;
+            const f32 cSubtitleBottom = 40.0f;
+            const f32 cSubtitleShadow = 2.0f;
+            const f32 cSubtitleWidth = 0.86f;
+            u32 sSubtitleSlot = 0;
 
             // A text call's UTF-16 (the writer's form); static: 8 KiB is past the module's stack (no __chkstk).
             char16_t sText[LUMA_DRAW_TEXT_BYTES_MOST + 1];
@@ -1400,6 +1409,52 @@ namespace luma {
                 registered,
             };
         }  // namespace
+
+        void subtitle(const char16_t* pText) {
+            if (pText == nullptr || pText[0] == 0) {
+                return;
+            }
+            Ui::Font* const pFont = MR::getCinemaFont();
+            if (pFont == nullptr) {
+                return;
+            }
+            u32 length = 0;
+            while (length < LUMA_DRAW_TEXT_BYTES_MOST && pText[length] != 0) {
+                length++;
+            }
+            LumaDrawScreen screen;
+            screenNow(screen, LUMA_DRAW_HUD_AFTER);
+            MR::setupScreen2D();
+            if (sSubtitleSlot == 0) {
+                sSubtitleSlot = Frame::newSlot();
+            }
+            Frame::setObject(sSubtitleSlot, 0);
+            Ui::WideTextWriter writer;
+            setupWriter(writer, pFont, cSubtitleSize, LUMA_DRAW_CENTRE, screen.safe_w * cSubtitleWidth);
+            // The game's message tags (a colour, a wait, a sound) in the words take no room and draw nothing.
+            MessageTagSkipTagProcessor tags;
+            writer.SetTagProcessor(&tags);
+            Ui::Rect rect;
+            writer.CalcStringRect(&rect, pText, static_cast< int >(length));
+            const f32 x = screen.w * 0.5f;
+            const f32 y = screen.h - cSubtitleBottom - rect.GetHeight();
+            const f32 mtx[3][4] = {{1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}};
+            Ui::detail::SetDrawMtx(mtx);
+            // The shadow, then the words over it.
+            for (u32 pass = 0; pass < 2; pass++) {
+                Color8 tint;
+                if (pass == 0) {
+                    tint.set(0, 0, 0, 176);
+                } else {
+                    tint.set(255, 255, 255, 255);
+                }
+                const f32 offset = pass == 0 ? cSubtitleShadow : 0.0f;
+                writer.SetTextColor(tint);
+                writer.Setup();
+                writer.SetCursor(x + offset, y + offset);
+                (void)writer.Print(pText, static_cast< int >(length));
+            }
+        }
 
         void point(u32 point) {
             if (point >= kPoints || sHandlerCount[point] == 0 || sKernel == nullptr) {

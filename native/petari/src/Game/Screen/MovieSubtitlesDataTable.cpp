@@ -1,4 +1,5 @@
 #include "Game/Screen/MovieSubtitlesDataTable.hpp"
+#include "Game/System/LumaMovie.hpp"
 #include "Game/Util/StringUtil.hpp"
 
 #define ENTRY(name, step, appear) {name, step, appear}
@@ -49,6 +50,11 @@ namespace {
     };
 
     const SubtitlesInfo* getSubtitlesInfo(const char* pMovieName) {
+        // A mod's movie in the game movie's place with its own lines beside it (<name>.subs, plan 3.10): the game's
+        // lines were timed for the game's movie and are not shown over it; luma::movie draws the mod's.
+        if (luma::movie::hasSubtitles(pMovieName)) {
+            return nullptr;
+        }
         for (u32 i = 0; i < ARRAY_SIZE(sSubtitlesInfo); i++) {
             if (MR::isEqualString(pMovieName, sSubtitlesInfo[i].mMovieName)) {
                 return &sSubtitlesInfo[i];
