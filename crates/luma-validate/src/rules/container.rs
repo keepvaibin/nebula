@@ -86,6 +86,11 @@ fn wanted(name: &str) -> bool {
 pub(crate) fn check(ctx: &mut Ctx) {
     let file = ctx.m.shown.clone();
     let count = ctx.m.items.len();
+    // An archive written with "\" between folders throughout is read with "/" (zip::backslash_form), never silently:
+    // every rule below runs on the names as read.
+    if matches!(&ctx.m.backing, Backing::Zip { entries, .. } if zip::backslash_form(entries)) {
+        ctx.add(108, &file, None, None, vec![]);
+    }
     // Names, kinds, methods and sizes, entry by entry.
     let mut total: u64 = 0;
     for i in 0..count {

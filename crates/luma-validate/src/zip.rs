@@ -276,7 +276,26 @@ pub fn read_directory(bytes: &mut dyn Bytes) -> Result<Vec<Entry>, Problem> {
         });
         at = next;
     }
+    if backslash_form(&entries) {
+        for e in &mut entries {
+            if let Some(name) = &mut e.name {
+                *name = name.replace('\\', "/");
+                if name.ends_with('/') && e.kind == EntryKind::File {
+                    e.kind = EntryKind::Folder;
+                }
+            }
+        }
+    }
     Ok(entries)
+}
+
+/// Whether the archive writes "\" between folders throughout: some name has "\" and none has "/" (raw names, as
+/// stored). .NET Framework's ZipFile, and so Windows PowerShell's Compress-Archive, write such archives. Its names
+/// are read with "\" as "/" (`name`; `raw_name` stays as stored), and every name rule then runs on what is read, so
+/// nothing gets in that "/" would not let in; the validator says so in a note (L108). An archive mixing the two keeps
+/// its names as stored, refused (L102 Name.Backslash).
+pub fn backslash_form(entries: &[Entry]) -> bool {
+    entries.iter().all(|e| !e.raw_name.contains(&b'/')) && entries.iter().any(|e| e.raw_name.contains(&b'\\'))
 }
 
 /// The data ranges of two entries overlap (a zip bomb reuses one entry's data for many). Returns the pairs found,
