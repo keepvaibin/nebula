@@ -19,7 +19,8 @@
 // Writes the half-res guide and motion the filters (rt_lights_time.hlsl, rt_lights_space.hlsl at half res) read, the
 // raw I in their channels (r, b, a), and the reservoirs: the sample's place (float bits, eye space of this frame) with
 // its normal and M in Rgba32ui, its light (ratio) and W in Rgba16f.
-// Pass constants: g_pass.y the mode; g_pass.z bit 0 the frame before's reservoirs and I count; g_pass.w the shading
+// Pass constants: g_pass.y the mode; g_pass.z bit 0 the frame before's reservoirs and I count, bit 1 the near field
+// runs (rt_near.hlsl: the gather from its reach on; FB b76e); g_pass.w the shading
 // frame's first byte in t4; g_pass_value[0..2] this frame's eye space from the frame before's (3x4 rows).
 #include "rt_shade.hlsli"
 
@@ -160,7 +161,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     // The ray's direction from the frame's blue noise (rt_sample.hlsli); the reservoirs' picks from the hash.
     const float3 dir = rt_cosine(n, rt_sample(id.xy, g_more.y, kSampleIndirect));
     // High: the far field only, from the near field's reach on (rt_near.hlsl sees 0..r at full size; FB b76).
-    const float skip = mode == kModeHigh ? rt_near_reach(s.away) : 0.0f;
+    const float skip = mode == kModeHigh && (g_pass.z & 2u) != 0u ? rt_near_reach(s.away) : 0.0f;
     const float3 origin = rt_ray_origin(s, dir);
 
     if (mode == kModeSky) {

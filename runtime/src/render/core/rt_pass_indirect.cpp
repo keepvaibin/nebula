@@ -39,7 +39,7 @@ bool RenderCore::rt_pass_indirect_on() const {
 
 // The near field (rt_near.hlsl; FB b76): High alone, where the gather sees the far field only.
 bool RenderCore::rt_pass_near_on() const {
-    return rt_pass_indirect_on() && rt_levels_[kFbIndirect] >= 3u;
+    return rt_pass_indirect_on() && rt_levels_[kFbIndirect] >= 3u && rt_dev(RtDev::NearField, 1.0f) > 0.5f;  // b76e
 }
 
 void RenderCore::rt_pass_indirect() {
@@ -68,7 +68,9 @@ void RenderCore::rt_pass_indirect() {
     }
     // The part's level: 1 low, 2 medium, 3 high.
     const std::uint32_t mode = rt_levels_[kFbIndirect] <= 1u ? kIndirectSky : rt_levels_[kFbIndirect] == 2u ? kIndirectMedium : kIndirectHigh;
-    binds.pass_constants = rt_bounce_constants(mode, history ? 1u : 0u, shade_at, rows);
+    // g_pass.z bit 1: the near field runs this frame, the gather sees the far field only (FB b76e).
+    const bool near_ready = rt_pass_near_on() && rt_image(RtImage::NearRaw) != rt::kNoImage && rt_now(RtImage::NearA) != rt::kNoImage;
+    binds.pass_constants = rt_bounce_constants(mode, (history ? 1u : 0u) | (near_ready ? 2u : 0u), shade_at, rows);
     binds.reads[0] = rt_now(RtImage::GuideA);
     binds.reads[1] = rt_image(RtImage::Normal);
     binds.reads[2] = rt_image(RtImage::Motion);
@@ -126,7 +128,7 @@ void RenderCore::rt_pass_indirect() {
     }
     // The near field at full size (High): its rays, then over time; the step up multiplies it in (FB b76).
     const std::uint32_t near_raw = rt_image(RtImage::NearRaw), near_now = rt_now(RtImage::NearA);
-    const bool near_on = rt_pass_near_on() && near_raw != rt::kNoImage && near_now != rt::kNoImage;
+    const bool near_on = near_ready;
     if (near_on) {
         rt::PassBinds rays = rt_pass_binds();  // the scene, the items, the depth, the blue noise
         rays.constants = frame.binds.constants;
