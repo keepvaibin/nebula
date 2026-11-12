@@ -7,7 +7,7 @@ use super::clip::{ClipIr, Target, Track, KIND_COLORS, KIND_JOINTS, KIND_PATTERN,
 use super::model_ir::{CoordIr, CoordMatrixIr, MaterialIr};
 use super::model_ir::{important_joints, plain_material, plain_texture, ArraysIr, Corner, GroupIr, JointIr, PbrMaterial, ModelIr, ShapeIr, ATTR_COLOR0, ATTR_MATRIX, ATTR_NORMAL, NONE};
 use super::model_ir::{ATTR_NBT, ATTR_NBT_THREE, PBR_BASE, PBR_BLEND, PBR_DOUBLE_SIDED, PBR_EMISSIVE, PBR_MASK, PBR_NORMAL, PBR_UNLIT};
-use super::model_ir::{PbrShading, PBR_METAL_ROUGH, PBR_OCCLUSION};
+use super::model_ir::{PbrShading, SurfaceIr, PBR_METAL_ROUGH, PBR_OCCLUSION};
 use super::refuse::{invalid, note, refuse, OrInvalid};
 use anyhow::{bail, Context, Result};
 use serde_json::Value;
@@ -692,6 +692,8 @@ struct SourceMaterial {
     /// 1): the emissive factor x strength, sRGB-encoded and held to 1, and the emissive map's image and coordinate set.
     /// None when the material is unlit (KHR_materials_unlit shows its base colour alone) or its factor is black.
     glow: Option<Glow>,
+    /// Its hand-written shader (plan 3.4; surface_shader.rs): the source, its values here, each texture's image.
+    shader: Option<(super::surface_shader::Source, super::surface_shader::Use, Vec<usize>)>,
 }
 
 /// A glTF material's glow on the raster (SourceMaterial glow): constant colour 1, and the emissive map (image, set).
@@ -1058,6 +1060,41 @@ fn pbr_light_maps(maps: &[Option<PbrMap>; 5]) -> Vec<(usize, u64)> {
     out
 }
 
+/// The material's colour places its stages read (surface_shader::places): registers 1 to 3 (places 0 to 2) by a
+/// stage's inputs or outputs, constant colours 0 to 3 (places 3 to 6) by a stage that takes its constant.
+fn places_used(made: &MaterialIr) -> [bool; super::surface_shader::PLACES] {
+    let mut used = [false; super::surface_shader::PLACES];
+    for s in &made.stages[..(made.pixel_stage_count as usize).min(made.stages.len())] {
+        // Colour inputs 2 to 7 are registers 1 to 3 (colour, alpha); alpha inputs 1 to 3 the same.
+        for &c in &s.color_in {
+            if (2..=7).contains(&c) {
+                used[usize::from((c - 2) / 2)] = true;
+            }
+        }
+        for &a in &s.alpha_in {
+            if (1..=3).contains(&a) {
+                used[usize::from(a - 1)] = true;
+            }
+        }
+        for out in [s.color_out, s.alpha_out] {
+            if (1..=3).contains(&out) {
+                used[usize::from(out - 1)] = true;
+            }
+        }
+        if s.color_in.contains(&14) {
+            match s.color_constant {
+                0x0C..=0x0F => used[3 + usize::from(s.color_constant - 0x0C)] = true,
+                0x10..=0x1F => used[3 + usize::from((s.color_constant - 0x10) % 4)] = true,
+                _ => {}
+            }
+        }
+        if s.alpha_in.contains(&6) && (0x10..=0x1F).contains(&s.alpha_constant) {
+            used[3 + usize::from((s.alpha_constant - 0x10) % 4)] = true;
+        }
+    }
+    used
+}
+
 /// A map no plain stage reads (a glow's, a normal map): a slot of its own after the material's (map n through coordinate
 /// n), the first one in place of a material's "no texture".
 fn own_slot(made: &mut MaterialIr, texture: u32, uv: u8) -> u8 {
@@ -1361,6 +1398,20 @@ pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) 
             root["textures"][t as usize]["source"].as_u64().map(|s| s as usize).or_invalid(|| format!("/textures/{t}/source"))
         };
         let (lit, pbr_maps) = pbr_of(root, material, i, &material_name)?;
+        // Its hand-written shader (contract materials 3.4): `extras.nebula.shader` names `assets/<name>.hlsl` of the mod
+        // the file is in; `params` and `textures` (an object, by the shader's names) are this material's.
+        let nebula = &material["extras"]["nebula"];
+        let shader = match &nebula["shader"] {
+            Value::Null => None,
+            Value::String(name) => {
+                let (file, json, hlsl) = super::surface_shader::find(folder, &material_name, name)?;
+                let source = super::surface_shader::read(name, &file, &json, &hlsl)?;
+                let used = super::surface_shader::use_of(&source, &material_name, nebula)?;
+                let images = used.textures.iter().map(|&t| image_of_texture(t)).collect::<Result<Vec<_>>>()?;
+                Some((source, used, images))
+            }
+            other => return Err(refuse("Cook.Shader.Name", &[("material", material_name.clone()), ("name", other.to_string())])),
+        };
         let image = match pbr["baseColorTexture"]["index"].as_u64() {
             Some(t) => Some(image_of_texture(t)?),
             None => None,
@@ -1412,6 +1463,7 @@ pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) 
             transform,
             lit,
             pbr_maps,
+            shader,
         });
     }
     let default_material = materials.len();
@@ -1426,6 +1478,7 @@ pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) 
         lit: PbrMaterial::default(),
         pbr_maps: [None; 5],
         glow: None,
+        shader: None,
     });
     // A lit record for each material when the file has any material (materials.md); a mesh with none has glTF's default.
     let has_materials = root["materials"].as_array().is_some_and(|m| !m.is_empty());
@@ -1848,6 +1901,42 @@ pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) 
                     glow_last: source.glow.is_some(),
                 });
             }
+            // Its hand-written shader (plan 3.4): each texture a slot of its own, each parameter a place of the material's
+            // colours the stages leave free, holding its value; the lit forms call its `surface` in place of the stages.
+            if let Some((shader, used, images)) = &source.shader {
+                if made.pbr.is_none() {
+                    return Err(refuse("Cook.Shader.Unlit", &[("material", source.name.clone()), ("shader", shader.name.clone())]));
+                }
+                let mut textures = Vec::new();
+                for ((_, name), &image) in shader.textures.iter().zip(images) {
+                    let slot = own_slot(&mut made, texture_number(&document, &mut ir, &mut image_of, image)?, 0);
+                    textures.push((name.clone(), slot));
+                }
+                let places = super::surface_shader::places(shader, &source.name, &used.values, places_used(&made))?;
+                let mut params = Vec::new();
+                for ((p, value), &place) in shader.params.iter().zip(&used.values).zip(&places) {
+                    let width = if p.four { 4 } else { 1 };
+                    for (k, &given) in value.iter().enumerate() {
+                        let v = if k < width { given } else { 0.0 };
+                        if place < 3 {
+                            made.registers[usize::from(place) + 1][k] = (v * 255.0).round() as i16;
+                        } else {
+                            made.constants[usize::from(place) - 3][k] = (v * 255.0).round().clamp(0.0, 255.0) as u8;
+                        }
+                    }
+                    params.push((p.name.clone(), p.four, place));
+                }
+                let emission = source.glow.as_ref().map_or([0.0; 3], |g| [0, 1, 2].map(|k| f32::from(g.constant[k]) / 255.0));
+                made.surface = Some(SurfaceIr {
+                    file: shader.file.clone(),
+                    code: shader.code.clone(),
+                    params,
+                    textures,
+                    uv: [0, 1].map(|k| coordinate_present.get(k).copied().unwrap_or(false)),
+                    reads: shader.reads,
+                    emission,
+                });
+            }
             // Its base texture's transform: texture matrix 0 on its first coordinates.
             if let Some(t) = source.transform {
                 let [sx, sy, rotation, tx, ty] = texture_transform(&t, &source.name)?;
@@ -2253,7 +2342,32 @@ pub fn to_files(bytes: &[u8], folder: Option<&Path>, stem: &str) -> Result<(Vec<
 pub fn to_files_for(bytes: &[u8], folder: Option<&Path>, stem: &str, game: Option<&GameModel>) -> Result<(Vec<u8>, ClipFiles, ModelFacts)> {
     let (ir, clips, facts) = to_ir_for(bytes, folder, game)?;
     let model = super::model_write::write(&ir, stem, &super::programs::written_or_unknown())?;
-    Ok((model, clips.iter().map(|(name, c)| (format!("{name}.{}", clip_extension(c.kind)), super::clip::write(c))).collect(), facts))
+    super::surface_shader::check_compile(&ir)?;
+    let mut files: ClipFiles = clips.iter().map(|(name, c)| (format!("{name}.{}", clip_extension(c.kind)), super::clip::write(c))).collect();
+    if let Some(table) = params_table(&ir)? {
+        files.push((format!("{stem}.params"), table));
+    }
+    Ok((model, files, facts))
+}
+
+/// `<model>.params` (contract materials 3.4; content.model set_param reads it): a row for each parameter of each
+/// material with a surface shader: material (its name), param, register (its place, 0 to 6). None without one.
+pub fn params_table(ir: &ModelIr) -> Result<Option<Vec<u8>>> {
+    let mut rows: Vec<Value> = Vec::new();
+    let mut seen = BTreeSet::new();
+    for m in &ir.materials {
+        let Some(sf) = &m.surface else { continue };
+        for (param, _, place) in &sf.params {
+            if seen.insert((m.name.clone(), param.clone())) {
+                rows.push(serde_json::json!({ "material": m.name, "param": param, "register": place }));
+            }
+        }
+    }
+    if rows.is_empty() {
+        return Ok(None);
+    }
+    let json = serde_json::json!({ "columns": { "material": "string", "param": "string", "register": "int" }, "rows": rows });
+    Ok(Some(super::table::TableIr::from_json(json.to_string().as_bytes())?.to_ntbl()))
 }
 
 /// An animation file (`<archive>.arc/<any>.anim.glb`, animation contract 2): animations only, each a clip of `game`

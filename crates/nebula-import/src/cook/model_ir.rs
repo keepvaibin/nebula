@@ -214,6 +214,27 @@ pub struct MaterialIr {
     /// A glTF material's light (plan 3.3; program_pbr.hlsli): its lit form lights the stages' result as metal and
     /// roughness say, with the stage's reflection. None for the game's materials and an unlit glTF material.
     pub pbr: Option<PbrShading>,
+    /// A mod's hand-written surface shader (plan 3.4; contract materials 3.4; surface_shader.rs): its lit forms call its
+    /// `surface` in place of the stages and light what it fills as `pbr` says. Only with `pbr`.
+    pub surface: Option<SurfaceIr>,
+}
+
+/// A material's hand-written shader as the generator writes it in (MaterialIr surface).
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct SurfaceIr {
+    /// The shader's file as the mod has it (`assets/shaders/Stripes.hlsl`): the compiler's lines name it.
+    pub file: String,
+    pub code: String,
+    /// Each parameter: its name, float4 or float, its place (0 to 2: registers 1 to 3; 3 to 6: constant colours 0 to 3).
+    pub params: Vec<(String, bool, u8)>,
+    /// Each texture: its name and the material's map slot (map n through coordinate n).
+    pub textures: Vec<(String, u8)>,
+    /// Whether the mesh has TEXCOORD_0 and TEXCOORD_1: SurfaceIn uv0 and uv1 read them, else 0.
+    pub uv: [bool; 2],
+    /// surface_shader::READ_*.
+    pub reads: u8,
+    /// The emission it starts from: the glTF emissive factor, display-encoded.
+    pub emission: [f32; 3],
 }
 
 /// What a glTF material's lit template reads beyond its stages (MaterialIr pbr). Its maps are slots of their own (map n

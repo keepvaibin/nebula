@@ -57,6 +57,7 @@ pub mod table;
 pub mod table_keys;
 pub mod patch;
 pub mod refuse;
+pub mod surface_shader;
 pub mod table_columns;
 pub mod texture;
 pub mod thp;

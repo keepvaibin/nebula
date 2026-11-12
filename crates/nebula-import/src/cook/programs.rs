@@ -791,6 +791,11 @@ fn stage_lines(p: &mut Pixel, registers: &Registers) -> Result<bool> {
     // A glTF material's light after its last stage, when no glow follows it (MaterialIr pbr).
     let lines = std::mem::take(&mut p.pbr_lines);
     p.lines.extend(lines);
+    Ok(alpha_test_lines(p))
+}
+
+/// The material's alpha test on prev (its two comparisons and their logic), when it has one: whether it has.
+fn alpha_test_lines(p: &mut Pixel) -> bool {
     let m = p.m;
     let (comp0, op, comp1) = (m.alpha_comp0, m.alpha_op, m.alpha_comp1);
     let mut tested = false;
@@ -805,7 +810,121 @@ fn stage_lines(p: &mut Pixel, registers: &Registers) -> Result<bool> {
         p.lines.push("        discard;".into());
         p.lines.push("    }".into());
     }
-    Ok(tested)
+    tested
+}
+
+/// A material's metal, roughness and occlusion before its light (MaterialIr pbr): the factors by their maps.
+fn pbr_factor_lines(p: &mut Pixel, shade: &PbrShading, indent: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    out.push(format!("{indent}float pbr_metal = {:?};", shade.metal.clamp(0.0, 1.0)));
+    out.push(format!("{indent}float pbr_rough = {:?};", shade.roughness.clamp(0.0, 1.0)));
+    out.push(format!("{indent}float pbr_ao = 1.0;"));
+    if let Some(slot) = shade.metal_rough {
+        let coord = p.sample_coord(slot, slot, None);
+        let texel = p.sample(slot, &coord);
+        out.push(format!("{indent}const float4 pbr_mr = {texel};"));
+        out.push(format!("{indent}pbr_metal *= pbr_mr.b;"));
+        out.push(format!("{indent}pbr_rough *= pbr_mr.g;"));
+    }
+    if let Some((slot, strength)) = shade.occlusion {
+        let coord = p.sample_coord(slot, slot, None);
+        let texel = p.sample(slot, &coord);
+        out.push(format!("{indent}pbr_ao = 1.0 + {:?} * ({texel}.r - 1.0);", strength.clamp(0.0, 1.0)));
+    }
+    out
+}
+
+/// A hand-written surface shader's file-scope text (MaterialIr surface; contract materials 3.4): SurfaceIn with what
+/// it reads, Surface, its parameters as globals of their names, a function per texture, then its code under its own
+/// file's lines.
+fn surface_globals(p: &mut Pixel, sf: &SurfaceIr) -> String {
+    use super::surface_shader::{READ_NORMAL, READ_TIME, READ_VIEW, READ_WORLD};
+    let mut out = String::from("struct SurfaceIn {\n    float2 uv0;\n    float2 uv1;\n    float4 color;\n");
+    for (bit, field) in [(READ_NORMAL, "float3 normal"), (READ_WORLD, "float3 world_position"), (READ_VIEW, "float3 view"), (READ_TIME, "float time")] {
+        if sf.reads & bit != 0 {
+            let _ = writeln!(out, "    {field};");
+        }
+    }
+    out.push_str("};\nstruct Surface {\n    float3 base;\n    float alpha;\n    float3 normal;\n    float roughness;\n    float metal;\n    float3 emission;\n};\n");
+    for (name, four, _) in &sf.params {
+        let _ = writeln!(out, "static {} {name};", if *four { "float4" } else { "float" });
+    }
+    for (name, slot) in &sf.textures {
+        let n = p.maps.at(*slot);
+        let _ = writeln!(out, "float4 {name}(float2 uv) {{ return TEX({n}).Sample(SAMP({n}), uv); }}");
+        let _ = writeln!(out, "float4 {name}_level(float2 uv, float lod) {{ return TEX({n}).SampleLevel(SAMP({n}), uv, lod); }}");
+    }
+    let file = sf.file.replace(['"', '\\'], "_");
+    let _ = writeln!(out, "#line 1 \"{file}\"");
+    out.push_str(&sf.code);
+    if !sf.code.ends_with('\n') {
+        out.push('\n');
+    }
+    out.push_str("#line 1 \"program\"\n");
+    out
+}
+
+/// A surface shader's call, before the material's light (it may turn the normal): its parameters from their places,
+/// the factors, SurfaceIn, Surface from the material's colour, metal, roughness and glow, `surface`, its normal.
+fn surface_head_lines(p: &mut Pixel, sf: &SurfaceIr, shade: &PbrShading) -> Vec<String> {
+    use super::surface_shader::{READ_NORMAL, READ_TIME, READ_VIEW, READ_WORLD};
+    let mut out = Vec::new();
+    for (name, four, place) in &sf.params {
+        let row = if *place < 3 { p.rows.at(ROW_REGISTER + u32::from(*place)) } else { p.rows.at(ROW_CONSTANT + u32::from(*place) - 3) };
+        out.push(format!("    {name} = {row}{};", if *four { "" } else { ".x" }));
+    }
+    out.extend(pbr_factor_lines(p, shade, "    "));
+    // glTF's base colour: the factor (constant colour 0) x COLOR_0 with vertex colours (gltf.rs), else the factor as
+    // the material colour.
+    let base = if p.m.channels[0].material_source != 0 { format!("i.color * {}", p.rows.at(ROW_CONSTANT)) } else { p.rows.at(ROW_MATERIAL_COLOR) };
+    out.push(format!("    const float4 surf_base = {base};"));
+    out.push("    const float3 surf_n = dot(i.lit_nrm, i.lit_nrm) > 0.0 ? normalize(i.lit_nrm) : float3(0.0, 0.0, 1.0);".into());
+    out.push("    SurfaceIn si = (SurfaceIn)0;".into());
+    for k in 0..2 {
+        if sf.uv[k] {
+            out.push(format!("    si.uv{k} = i.surf_uv{k};"));
+        }
+    }
+    out.push(format!("    si.color = {};", if p.color_read[0] { "i.color" } else { "float4(1.0, 1.0, 1.0, 1.0)" }));
+    if sf.reads & READ_NORMAL != 0 {
+        out.push("    si.normal = surf_n;".into());
+    }
+    if sf.reads & READ_WORLD != 0 {
+        out.push("    si.world_position = i.surf_world;".into());
+    }
+    if sf.reads & READ_VIEW != 0 {
+        out.push("    si.view = dot(i.lit_eye, i.lit_eye) > 0.0 ? normalize(-i.lit_eye) : float3(0.0, 0.0, 1.0);".into());
+    }
+    if sf.reads & READ_TIME != 0 {
+        out.push("    si.time = view_scale.y;".into());
+    }
+    let [er, eg, eb] = sf.emission;
+    out.push("    Surface s;".into());
+    out.push("    s.base = surf_base.rgb;".into());
+    out.push("    s.alpha = surf_base.a;".into());
+    out.push("    s.normal = surf_n;".into());
+    out.push("    s.roughness = pbr_rough;".into());
+    out.push("    s.metal = pbr_metal;".into());
+    out.push(format!("    s.emission = float3({er:?}, {eg:?}, {eb:?});"));
+    out.push("    surface(si, s);".into());
+    out.push("    i.lit_nrm = dot(s.normal, s.normal) > 0.0 ? s.normal : surf_n;".into());
+    out
+}
+
+/// A surface shader's record lit (program_pbr.hlsli), its emission added, the material's alpha test and fog.
+fn surface_tail_lines(p: &mut Pixel, fog_type: u8) -> bool {
+    p.lines.push("    float4 prev = float4(saturate(s.base), saturate(s.alpha));".into());
+    p.lines.push("    {".into());
+    p.lines.push("        const float surf_metal = saturate(s.metal);".into());
+    p.lines.push("        const float surf_rough = saturate(s.roughness);".into());
+    p.lines.push("        const float4 pbr_env = ENV_FETCH(pbr_reflection(prev.rgb, surf_metal, surf_rough, pbr_ao));".into());
+    p.lines.push("        prev.rgb = pbr_finish(prev.rgb, surf_metal, surf_rough, pbr_ao, pbr_env.rgb);".into());
+    p.lines.push("    }".into());
+    p.lines.push("    prev.rgb += max(s.emission, 0.0);".into());
+    let tested = alpha_test_lines(p);
+    let fog = fog_lines(fog_type, &mut p.rows);
+    p.lines.extend(fog);
+    tested
 }
 
 /// One channel's lines in the vertex stage, or its body in a lit pixel stage: `target.part = ...` with what it reads.
@@ -945,21 +1064,7 @@ fn pbr_channel_lines(m: &MaterialIr, eye: &str, base: &str, rows: &mut Rows, out
 /// pbr_finish on prev.
 fn pbr_lines(p: &mut Pixel, shade: &PbrShading) -> Vec<String> {
     let mut out = vec!["    {".to_string()];
-    out.push(format!("        float pbr_metal = {:?};", shade.metal.clamp(0.0, 1.0)));
-    out.push(format!("        float pbr_rough = {:?};", shade.roughness.clamp(0.0, 1.0)));
-    out.push("        float pbr_ao = 1.0;".into());
-    if let Some(slot) = shade.metal_rough {
-        let coord = p.sample_coord(slot, slot, None);
-        let texel = p.sample(slot, &coord);
-        out.push(format!("        const float4 pbr_mr = {texel};"));
-        out.push("        pbr_metal *= pbr_mr.b;".into());
-        out.push("        pbr_rough *= pbr_mr.g;".into());
-    }
-    if let Some((slot, strength)) = shade.occlusion {
-        let coord = p.sample_coord(slot, slot, None);
-        let texel = p.sample(slot, &coord);
-        out.push(format!("        pbr_ao = 1.0 + {:?} * ({texel}.r - 1.0);", strength.clamp(0.0, 1.0)));
-    }
+    out.extend(pbr_factor_lines(p, shade, "        "));
     out.push("        const float4 pbr_env = ENV_FETCH(pbr_reflection(prev.rgb, pbr_metal, pbr_rough, pbr_ao));".into());
     out.push("        prev.rgb = pbr_finish(prev.rgb, pbr_metal, pbr_rough, pbr_ao, pbr_env.rgb);".into());
     out.push("    }".into());
@@ -985,10 +1090,11 @@ pub fn has_lit_form(m: &MaterialIr) -> Result<bool> {
 
 /// The program's varyings. Its own coordinates take TEXCOORD0 up; the lit varyings (three, five with a normal map's
 /// tangent and bitangent) and the motion varyings (two) follow them in that order, so their places move with the
-/// coordinate count; `gain` (c93) after the motion pair.
-fn varyings(uv_kinds: &[bool], color: [bool; 2], lit: bool, normal_mapped: bool, gain: bool) -> String {
+/// coordinate count; a surface shader's own varyings after them; `gain` (c93) after the motion pair.
+fn varyings(uv_kinds: &[bool], color: [bool; 2], lit: bool, normal_mapped: bool, surface: &[(&str, String)], gain: bool) -> String {
     let lit_first = uv_kinds.len();
-    let motion_first = lit_first + if lit { 3 } else { 0 } + if normal_mapped { 2 } else { 0 };
+    let surface_first = lit_first + if lit { 3 } else { 0 } + if normal_mapped { 2 } else { 0 };
+    let motion_first = surface_first + surface.len();
     let mut s = format!("#define NEBULA_MOTION_CURRENT_INDEX {motion_first}\n#define NEBULA_MOTION_PREVIOUS_INDEX {}\n", motion_first + 1);
     s.push_str("struct Varyings {\n");
     if lit {
@@ -996,6 +1102,9 @@ fn varyings(uv_kinds: &[bool], color: [bool; 2], lit: bool, normal_mapped: bool,
     }
     if normal_mapped {
         let _ = writeln!(s, "    PER_SAMPLE float3 lit_tan : TEXCOORD{};\n    PER_SAMPLE float3 lit_bin : TEXCOORD{};", lit_first + 3, lit_first + 4);
+    }
+    for (k, (ty, name)) in surface.iter().enumerate() {
+        let _ = writeln!(s, "    PER_SAMPLE {ty} {name} : TEXCOORD{};", surface_first + k);
     }
     s.push_str("    float4 pos : SV_Position;\n");
     if color[0] {
@@ -1068,7 +1177,13 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
     };
     p.survey();
     let pbr = m.pbr.filter(|_| form.lit && form.replace == 0);
-    if let Some(shade) = pbr {
+    // A hand-written surface shader (MaterialIr surface): in place of the stages, in every lit form. Its channel 0 sums
+    // the light (pbr_channel_lines), so it reads colour 0.
+    let surface = m.surface.as_ref().filter(|_| pbr.is_some());
+    if surface.is_some() {
+        p.color_read[0] = true;
+    }
+    if let (Some(shade), None) = (pbr, surface) {
         p.pbr_lines = pbr_lines(&mut p, &shade);
         let count = m.pixel_stage_count as usize;
         p.pbr_before = (shade.glow_last && count > 1).then(|| count - 1);
@@ -1077,6 +1192,8 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
     if form.replace != 0 {
         replace_lines(&mut p, fog_type)?;
         alpha_test = true;
+    } else if surface.is_some() {
+        alpha_test |= surface_tail_lines(&mut p, fog_type);
     } else {
         alpha_test |= stage_lines(&mut p, registers)?;
         if form.lit && pbr.is_none() {
@@ -1284,8 +1401,30 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
     if body.iter().any(|l| l.contains(", nrm)") || l.contains("= nrm;")) {
         body.insert(0, "    const float3 nrm = lit_normal(p, v.nrm);".into());
     }
+    // A surface shader's varyings: the mesh's coordinate sets 0 and 1 as they are, the world position if it reads it.
+    let mut surface_vary: Vec<(&str, String)> = Vec::new();
+    if let Some(sf) = surface {
+        for k in 0..2u8 {
+            if !sf.uv[usize::from(k)] {
+                continue;
+            }
+            let at = match inputs.iter().filter(|i| matches!(i, Input::Coord(_))).position(|i| *i == Input::Coord(k)) {
+                Some(at) => at,
+                None => {
+                    inputs.push(Input::Coord(k));
+                    inputs.iter().filter(|i| matches!(i, Input::Coord(_))).count() - 1
+                }
+            };
+            body.push(format!("    o.surf_uv{k} = v.uv{at};"));
+            surface_vary.push(("float2", format!("surf_uv{k}")));
+        }
+        if sf.reads & super::surface_shader::READ_WORLD != 0 {
+            body.push("    o.surf_world = world_position(p, v.pos);".into());
+            surface_vary.push(("float3", "surf_world".into()));
+        }
+    }
     let read_normal = body.iter().any(|l| l.contains("v.nrm"));
-    let vary = varyings(&uv_kinds, color_written, form.lit, normal_map.is_some(), map_gained);
+    let vary = varyings(&uv_kinds, color_written, form.lit, normal_map.is_some(), &surface_vary, map_gained);
     let mut vertex_in = String::from("struct VertexIn {\n    float3 pos : POSITION;\n    uint draw_matrix : BLENDINDICES;\n");
     let mut final_inputs = Vec::new();
     if read_normal {
@@ -1339,8 +1478,14 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
     if pbr.is_some() {
         pixel.push_str("#include \"program_pbr.hlsli\"\n");
     }
+    // A surface shader's text and call (the rows they read are declared with the rest).
+    let (surface_text, surface_head) = match (surface, pbr) {
+        (Some(sf), Some(shade)) => (surface_globals(&mut p, sf), surface_head_lines(&mut p, sf, &shade)),
+        _ => (String::new(), Vec::new()),
+    };
     pixel.push_str(&p.rows.declare(2, "MaterialPixel"));
     pixel.push_str(&vary);
+    pixel.push_str(&surface_text);
     pixel.push_str("NativeOut program_ps(Varyings i) {\n");
     if form.lit {
         if !keyed {
@@ -1352,7 +1497,7 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
         if face != 0 {
             pixel.push_str(&format!("    TRACED_FACE({face}u);\n"));
         }
-        for l in &normal_lines {
+        for l in normal_lines.iter().chain(&surface_head) {
             pixel.push_str(l);
             pixel.push('\n');
         }
