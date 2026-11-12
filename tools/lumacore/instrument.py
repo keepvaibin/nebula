@@ -16,6 +16,9 @@ OUTPUT.functions (each row's facts, in the rows' order: gen_types.py merges them
   "virtual", "pure", "const"
   "overrides"            for a virtual, each function it overrides directly (clang_getOverriddenCursors), by the
                          name and signature its own row has or would have
+  "marks"                C-6: one entry per declared parameter (a method's `this` not counted): null, or
+                         {"way": "in"|"out"|"inout"|"kept", "count": index|null, "fixed": n|null, "nullable": bool},
+                         from the LUMA_ marks (native/petari/include/Game/LumaMarks.hpp) any declaration of it carries
 
 The records, aliases and globals only SOURCE can name (a nerve class, a file's own struct) get their type rows at the end
 of OUTPUT (gen_types.py's unit pass), as members of the unit's LumaUnitRows. Each record SOURCE writes declares it a
@@ -24,6 +27,7 @@ friend (on the line of its opening brace), so the rows' offsetof and & are the c
 The arguments of SOURCE's own compile command are read from --commands, where the build lists OUTPUT (or --entry).
 --root: the folder the names of file-local functions are relative to.
 """
+import bisect
 import ctypes
 import json
 import os
@@ -61,6 +65,7 @@ INCLUSION = ctypes.CFUNCTYPE(None, c_void_p, POINTER(CXSourceLocation), c_uint, 
 K_UNEXPOSED_DECL, K_STRUCT, K_UNION, K_CLASS, K_FUNCTION, K_METHOD, K_NAMESPACE, K_LINKAGE = 1, 2, 3, 4, 8, 21, 22, 23
 K_CONSTRUCTOR, K_DESTRUCTOR, K_CONVERSION, K_FUNCTION_TEMPLATE, K_CLASS_TEMPLATE, K_CLASS_PARTIAL = 24, 25, 26, 30, 31, 32
 K_TRANSLATION_UNIT, K_COMPOUND, K_VAR = 350, 202, 9
+K_MACRO_EXPANSION, K_FRIEND = 502, 603
 FUNCTIONS = (K_FUNCTION, K_METHOD, K_CONSTRUCTOR, K_DESTRUCTOR, K_CONVERSION)
 SCOPES = (K_UNEXPOSED_DECL, K_STRUCT, K_UNION, K_CLASS, K_NAMESPACE, K_LINKAGE)
 # CXTypeKind
@@ -68,6 +73,23 @@ T_VOID, T_LVALUE, T_RVALUE = 2, 103, 104
 T_UNEXPOSED, T_POINTER, T_BLOCK_POINTER, T_RECORD, T_ENUM, T_TYPEDEF = 1, 101, 102, 105, 106, 107
 T_FUNCTION_NO_PROTO, T_FUNCTION_PROTO, T_CONSTANT_ARRAY, T_INCOMPLETE_ARRAY, T_VARIABLE_ARRAY = 110, 111, 112, 114, 115
 T_DEPENDENT_ARRAY, T_MEMBER_POINTER, T_ELABORATED, T_ATTRIBUTED = 116, 117, 119, 163
+T_FLOAT = 21
+# C-6 (audit A18M-1): the numbers LumaScript crosses with one width on every system. A count: UChar, Char16, Char32,
+# UShort, UInt, ULongLong, SChar, Short, Int, LongLong. A pointee: those, Bool, Float and Double. Never plain char (a
+# buffer, or text when const), long, unsigned long, wchar_t (4 bytes on Windows, 8 or 4 elsewhere), long double,
+# __int128 or a half.
+T_INTEGERS = (5, 6, 7, 8, 9, 11, 14, 16, 17, 19)
+T_NUMBERS = T_INTEGERS + (3, 21, 22)
+# C-6's marks (Game/LumaMarks.hpp); a way is one of the first four
+WAYS = ('LUMA_IN', 'LUMA_OUT', 'LUMA_INOUT', 'LUMA_KEPT')
+MARKS = WAYS + ('LUMA_COUNT', 'LUMA_COUNT_FIXED', 'LUMA_NULLABLE')
+# CXTranslationUnit_DetailedPreprocessingRecord: the macro expansions, where C-6's marks are
+PARSE_OPTIONS = 0x01
+# A #define whose own text names a mark (A18M-4): the record keeps only the outermost expansion, so such a mark would
+# mark nothing.
+DEFINE = re.compile(rb'^[ \t]*#[ \t]*define[ \t]+(\w+)((?:\\\r?\n|[^\n])*)', re.M)
+COMMENT = re.compile(rb'//[^\n]*|/\*.*?\*/', re.S)
+MARK_WORD = re.compile(rb'\bLUMA_(?:OUT|IN|INOUT|KEPT|COUNT|COUNT_FIXED|NULLABLE)\b')
 LINKAGE_INTERNAL, LINKAGE_EXTERNAL = 2, 4
 
 
@@ -135,6 +157,10 @@ def load(path):
     api.isPure = fn('clang_CXXMethod_isPureVirtual', c_uint, CXCursor)
     api.overridden = fn('clang_getOverriddenCursors', None, CXCursor, POINTER(POINTER(CXCursor)), POINTER(c_uint))
     api.disposeOverridden = fn('clang_disposeOverriddenCursors', None, POINTER(CXCursor))
+    api.referenced = fn('clang_getCursorReferenced', CXCursor, CXCursor)
+    api.hashCursor = fn('clang_hashCursor', c_uint, CXCursor)
+    api.equalCursors = fn('clang_equalCursors', c_uint, CXCursor, CXCursor)
+    api.fileContents = fn('clang_getFileContents', c_void_p, c_void_p, c_void_p, POINTER(ctypes.c_size_t))
     return api
 
 
@@ -178,6 +204,7 @@ class Unit:
         self.rows = []
         self.facts = []  # per row, in order: (cursor, name, signature, kind)
         self.functions = []
+        self.marks = {}
         self.left = []
         self.defines = set()
         self.main_file = None
@@ -454,7 +481,247 @@ class Unit:
             self.functions.append({
                 'name': name, 'signature': signature, 'kind': role, 'owner': owner,
                 'virtual': member and bool(api.isVirtual(cursor)), 'pure': member and bool(api.isPure(cursor)),
-                'const': role == 'method' and bool(api.isConst(cursor)), 'overrides': overrides})
+                'const': role == 'method' and bool(api.isConst(cursor)), 'overrides': overrides,
+                'marks': self.marks_of(cursor)})
+
+    # C-6 (contracts/self-description.md): the parameter marks of Game/LumaMarks.hpp. Each expands to nothing, so the
+    # declarations do not show them; the parse's detailed preprocessing record keeps each expansion with its place.
+    def spelled(self, location):
+        """(file, offset, line) where a location is written."""
+        file, line, column, offset = c_void_p(), c_uint(), c_uint(), c_uint()
+        self.api.spellingLocation(location, byref(file), byref(line), byref(column), byref(offset))
+        return file.value, offset.value, line.value
+
+    def file_name(self, file):
+        names = self.__dict__.setdefault('file_names', {})
+        if file not in names:
+            names[file] = self.string(self.api.fileName(file)).replace('\\', '/') if file else '(no file)'
+        return names[file]
+
+    def declarations(self, cursor, found):
+        """Every function declaration the unit sees, headers' included (not inside function bodies)."""
+        for c in self.children(cursor):
+            if c.kind in FUNCTIONS or c.kind == K_FUNCTION_TEMPLATE:
+                found.append(c)
+            elif c.kind in SCOPES or c.kind in (K_CLASS_TEMPLATE, K_CLASS_PARTIAL, K_FRIEND):
+                self.declarations(c, found)
+        return found
+
+    def read_marks(self):
+        """Each LUMA_ mark bound to the parameter it is written in: after the function's name or the previous
+        parameter, up to the end of this one (`LUMA_OUT Vec3f* p`, `const LUMA_OUT Vec3f* p`); checked; merged over a
+        function's declarations, an unmarked parameter taking the marked one's. self.marks: hash of a canonical
+        declaration -> [(canonical, one entry per parameter)]. Stops, naming the file and line, on a mark that marks no
+        parameter, a mark of the wrong form, or two declarations marking one parameter differently."""
+        api = self.api
+        self.marks = {}
+        self.marks_in_macros()
+        found = {}  # file -> [(start, end, line, name, argument)], in the order written
+        texts = {}
+        for c in self.children(api.cursor(self.tu)):
+            if c.kind != K_MACRO_EXPANSION:
+                continue
+            name = self.string(api.spelling(c))
+            if name not in MARKS:
+                continue
+            extent = api.extent(c)
+            file, start, line = self.spelled(api.rangeStart(extent))
+            end_file, end, _ = self.spelled(api.rangeEnd(extent))
+            where = f'{self.file_name(file)}:{line}'
+            definition = api.referenced(c)
+            if api.isNull(definition) or not self.file_name(self.spelled(api.location(definition))[0]).endswith(
+                    '/Game/LumaMarks.hpp'):
+                sys.exit(f'instrument.py: {where}: {name} is not the mark native/petari/include/Game/LumaMarks.hpp '
+                         'defines')
+            if not file or end_file != file:
+                sys.exit(f'instrument.py: {where}: {name} is written inside a macro: a mark is written in the declaration')
+            argument = None
+            if name in ('LUMA_COUNT', 'LUMA_COUNT_FIXED'):
+                if file not in texts:
+                    texts[file] = pathlib.Path(self.file_name(file)).read_bytes()
+                written = texts[file][start:end].decode('utf-8', 'replace')
+                match = re.fullmatch(re.escape(name) + r'\s*\(\s*([^()]*?)\s*\)', written, re.S)
+                if match is None:
+                    sys.exit(f'instrument.py: {where}: {name} is written "{written}": one argument in parentheses')
+                argument = match.group(1)
+            found.setdefault(file, []).append((start, end, line, name, argument))
+        if not found:
+            return
+        for marks in found.values():
+            marks.sort()
+        starts = {file: [m[0] for m in marks] for file, marks in found.items()}
+        bound = set()
+        templates = []  # (file, start, end) of each function template's declaration
+        for d in self.declarations(api.cursor(self.tu), []):
+            if d.kind == K_FUNCTION_TEMPLATE:
+                extent = api.extent(d)
+                file, start, _ = self.spelled(api.rangeStart(extent))
+                templates.append((file, start, self.spelled(api.rangeEnd(extent))[1]))
+                continue
+            file, low, line = self.spelled(api.location(d))
+            if file not in found:
+                continue
+            count = api.numArgs(d)
+            ends = []
+            for i in range(max(count, 0)):
+                extent = api.extent(api.argument(d, i))
+                if self.spelled(api.rangeStart(extent))[0] != file or self.spelled(api.rangeEnd(extent))[0] != file:
+                    break  # a parameter a macro writes: no mark can be bound to it
+                ends.append(self.spelled(api.rangeEnd(extent))[1])
+            if not ends or len(ends) != count:
+                continue
+            at = bisect.bisect_left(starts[file], low)
+            if at == len(starts[file]) or starts[file][at] >= ends[-1]:
+                continue  # no mark between the name and the last parameter's end
+            marks = found[file]
+            per = [[] for _ in range(count)]
+            for i, end in enumerate(ends):
+                while at < len(marks) and marks[at][0] < end:
+                    start, mark_end, mark_line, name, argument = marks[at]
+                    if mark_end <= end:
+                        per[i].append((name, argument, mark_line))
+                        bound.add((file, start))
+                    at += 1
+            if not any(per):
+                continue
+            if self.scope(d) is None:
+                first = next(p for p in per if p)
+                sys.exit(f'instrument.py: {self.file_name(file)}:{first[0][2]}: {first[0][0]} is on a function in a '
+                         'template or an unnamed class: no row carries its marks')
+            entries = [self.mark_entry(d, i, per[i], file) for i in range(count)]
+            canonical = api.canonical_cursor(d)
+            bucket = self.marks.setdefault(api.hashCursor(canonical), [])
+            group = next((g for g in bucket if api.equalCursors(g[0], canonical)), None)
+            if group is None:
+                bucket.append((canonical, entries, [(self.file_name(file), line)] * count))
+                continue
+            _, merged, places = group
+            for i, entry in enumerate(entries):
+                if entry is None:
+                    continue
+                if merged[i] is not None and merged[i] != entry:
+                    sys.exit(f'instrument.py: {places[i][0]}:{places[i][1]} and {self.file_name(file)}:{line}: '
+                             f'{self.string(api.spelling(d))} parameter {i + 1} is marked {mark_text(merged[i])} in '
+                             f'one declaration and {mark_text(entry)} in the other')
+                merged[i], places[i] = entry, (self.file_name(file), line)
+        for file, marks in found.items():
+            for start, _, line, name, _ in marks:
+                if (file, start) in bound:
+                    continue
+                where = f'{self.file_name(file)}:{line}'
+                if any(f == file and s <= start < e for f, s, e in templates):
+                    sys.exit(f'instrument.py: {where}: {name} is on a function template: no row carries its marks')
+                sys.exit(f'instrument.py: {where}: {name} marks no parameter (a mark is written before a parameter\'s '
+                         'type in a function\'s declaration)')
+
+    def marks_in_macros(self):
+        """Stops on a #define whose own text names a mark (`#define OUT_VEC LUMA_OUT Vec3f*`): the preprocessing record
+        keeps only the outermost expansion, so that mark would mark nothing, with no word. A mark in a macro's argument
+        (`DECLARE(LUMA_OUT Vec3f*)`) is recorded and binds as written."""
+        api = self.api
+        files = []
+        api.inclusions(self.tu, INCLUSION(lambda file, _stack, _depth, _data: files.append(file)), None)
+        for file in files:
+            size = ctypes.c_size_t()
+            data = api.fileContents(self.tu, file, byref(size))
+            if not data:
+                continue
+            text = ctypes.string_at(data, size.value)
+            if b'LUMA_' not in text or self.file_name(file).endswith('/Game/LumaMarks.hpp'):
+                continue
+            for define in DEFINE.finditer(text):
+                mark = MARK_WORD.search(COMMENT.sub(b' ', define.group(2)))
+                if mark is not None:
+                    line = text.count(b'\n', 0, define.start()) + 1
+                    sys.exit(f'instrument.py: {self.file_name(file)}:{line}: {mark.group(0).decode()} is written inside a '
+                             f'macro ({define.group(1).decode()}): a mark is written in the declaration itself')
+
+    def mark_entry(self, d, i, names, file):
+        """One parameter's marks as the functions file has them (C-6): None, or {"way", "count", "fixed", "nullable"}."""
+        if not names:
+            return None
+        api = self.api
+        parameter = api.argument(d, i)
+
+        def stop(why):
+            sys.exit(f'instrument.py: {self.file_name(file)}:{names[0][2]}: {self.string(api.spelling(d))} parameter '
+                     f'{i + 1} ({self.string(api.spelling(parameter)) or "unnamed"}): {why}')
+
+        written = [name for name, _, _ in names]
+        for name in MARKS:
+            if written.count(name) > 1:
+                stop(f'{name} twice')
+        ways = [name for name in written if name in WAYS]
+        if len(ways) > 1:
+            stop(f'two ways ({ways[0]} and {ways[1]})')
+        way = ways[0] if ways else None
+        arguments = {name: argument for name, argument, _ in names}
+        count, fixed = 'LUMA_COUNT' in arguments, 'LUMA_COUNT_FIXED' in arguments
+        if count and fixed:
+            stop('LUMA_COUNT and LUMA_COUNT_FIXED on one parameter')
+        for mark in ('LUMA_COUNT', 'LUMA_COUNT_FIXED', 'LUMA_NULLABLE'):
+            if mark in arguments and way is None:
+                stop(f'{mark} with no way (LUMA_IN, LUMA_OUT or LUMA_INOUT)')
+            if mark in arguments and way == 'LUMA_KEPT':
+                stop(f'{mark} with LUMA_KEPT')
+        declared = api.type(parameter)
+        pointer = api.canonical(declared)
+        if pointer.kind != T_POINTER or not self.markable(api.canonical(api.pointeeType(pointer))):
+            stop(f'{way} on a parameter of type {self.string(api.typeSpelling(declared))}: a mark takes a pointer to a '
+                 'number of one width on every system (not char, long, wchar_t or long double), a vector or an enum')
+        index = None
+        if count:
+            target = arguments['LUMA_COUNT']
+            parameters = [self.string(api.spelling(api.argument(d, j))) for j in range(api.numArgs(d))]
+            if not re.fullmatch(r'[A-Za-z_]\w*', target) or target not in parameters:
+                stop(f'LUMA_COUNT({target}) names no parameter of this declaration')
+            index = parameters.index(target)
+            if index == i:
+                stop(f'LUMA_COUNT({target}) names its own parameter')
+            counted = api.argument(d, index)
+            if api.canonical(api.type(counted)).kind not in T_INTEGERS:
+                stop(f'LUMA_COUNT({target}) names a parameter of type '
+                     f'{self.string(api.typeSpelling(api.type(counted)))}, not an integer of one width on every system')
+        size = None
+        if fixed:
+            text = arguments['LUMA_COUNT_FIXED']
+            if not re.fullmatch(r'[0-9]+', text) or not 1 <= int(text) <= 4096:
+                stop(f'LUMA_COUNT_FIXED({text}): the count is a number from 1 to 4096')
+            size = int(text)
+        return {'way': way[len('LUMA_'):].lower(), 'count': index, 'fixed': size, 'nullable': 'LUMA_NULLABLE' in arguments}
+
+    def markable(self, t):
+        """A number LumaScript crosses (T_NUMBERS), an enum, or a vector: a record of 2 to 4 floats named x, y(, z(, w)),
+        its bases' first (the lumascript-abi table's vec2, vec3, vec4 and quat)."""
+        if t.kind in T_NUMBERS or t.kind == T_ENUM:
+            return True
+        if t.kind != T_RECORD:
+            return False
+        api = self.api
+        names = []
+
+        def flat(record):
+            for base in api.members(api.visitBases, record):
+                if not flat(api.canonical(api.type(base))):
+                    return False
+            for field in api.members(api.visitFields, record):
+                if api.canonical(api.type(field)).kind != T_FLOAT:
+                    return False
+                names.append(self.string(api.spelling(field)))
+            return True
+
+        return flat(t) and names in (['x', 'y'], ['x', 'y', 'z'], ['x', 'y', 'z', 'w'])
+
+    def marks_of(self, cursor):
+        """A row's "marks" (C-6): its function's merged list, or one null per parameter."""
+        api = self.api
+        count = max(api.numArgs(cursor), 0)
+        if self.marks:
+            canonical = api.canonical_cursor(cursor)
+            for first, merged, _ in self.marks.get(api.hashCursor(canonical), []):
+                if api.equalCursors(first, canonical):
+                    return list(merged)
+        return [None] * count
 
     def identity_signature(self, cursor):
         """identity()'s signature of a member function whose class has no scope a row can name (a template's instance)."""
@@ -547,6 +814,16 @@ class Unit:
         write_if_changed(output + '.functions', (json.dumps(self.functions, ensure_ascii=False) + '\n').encode('utf-8'))
         write_if_changed(output + '.left', ('\n'.join(self.left) + '\n' if self.left else '').encode())
         write_if_changed(output + '.globals', ''.join(name + '\n' for name in sorted(self.defines) if name).encode())
+
+
+def mark_text(entry):
+    """A mark entry as its macros are written, for a refusal."""
+    text = 'LUMA_' + entry['way'].upper()
+    if entry['count'] is not None:
+        text += f' LUMA_COUNT(parameter {entry["count"] + 1})'
+    if entry['fixed'] is not None:
+        text += f' LUMA_COUNT_FIXED({entry["fixed"]})'
+    return text + (' LUMA_NULLABLE' if entry['nullable'] else '')
 
 
 def qualified_call(scope):
@@ -645,7 +922,7 @@ def main():
     index = api.createIndex(0, 0)
     tu = c_void_p()
     encoded = (c_char_p * len(args))(*[a.encode() for a in args])
-    code = api.parse(index, None, encoded, len(args), None, 0, 0, byref(tu))
+    code = api.parse(index, None, encoded, len(args), None, 0, PARSE_OPTIONS, byref(tu))
     if code != 0 or not tu:
         sys.exit(f'instrument.py: {source} could not be parsed (libclang error {code})')
     errors = []
@@ -661,6 +938,7 @@ def main():
     types = gen_types.Reader(api, tu, [], unit_pass=True, unit=unit)
     types.walk(api.cursor(tu))
     unit.type_rows(types)
+    unit.read_marks()
     unit.function_facts(types)
     unit.write(output)
     if '--depfile' in options:

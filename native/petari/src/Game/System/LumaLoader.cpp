@@ -3,6 +3,7 @@
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/System/LumaCore.hpp"
 #include "Game/System/LumaHook.hpp"
+#include "Game/System/LumaServices.hpp"
 #include "Game/System/LumaTypes.hpp"
 #include "Game/System/NebulaText.hpp"
 #include <luma_host.h>
@@ -271,12 +272,16 @@ namespace luma {
             return asClass(pObject, classAt(number), &ambiguous) != nullptr ? 1 : 0;
         }
 
-        // Services come from the host (luma_set_service_finder), which asks its own services and its extensions.
+        // The host's finder (luma_set_service_finder): the harness's extension services, which need no permission.
         LumaServiceFinder sServiceFinder = nullptr;
 
-        // The host's service and the permission it needs (null: none), or null.
+        // A service and the permission it needs (null: none), or null: the registry's first (services-registry 12e),
+        // then the host's finder.
         const void* findService(const char* pName, u32 major, u32 minor, const char** ppPermission) {
             *ppPermission = nullptr;
+            if (const void* const pTable = luma::services::find(pName, major, minor, ppPermission)) {
+                return pTable;
+            }
             return pName != nullptr && sServiceFinder != nullptr ? sServiceFinder(pName, major, minor, ppPermission) : nullptr;
         }
 
@@ -341,7 +346,7 @@ namespace luma {
         struct OwnRow {
             u32 code;
             const char* id;
-            const char* names[2];
+            const char* names[4];
         };
         const OwnRow cOwnRows[] = {
             {LUMA_REPORT_OUT_OF_MEMORY, "Hook.OutOfMemory", {"size", nullptr}},
@@ -359,15 +364,19 @@ namespace luma {
         const u32 kCodeObjectNotReadable = 6;
         const u32 kCodeObjectAmbiguous = 7;
 
-        // The row a code says, into pId; false when the code is no row (a bug in the reporting runtime).
-        bool rowOf(u32 code, char* pId, u32 size, const OwnRow** ppOwn) {
-            *ppOwn = nullptr;
+        // The row a code says, into pId, and the names of its args (null: positional); false when the code is no row
+        // (a bug in the reporting runtime). 100 to 899 are the services' (services-registry 12d).
+        bool rowOf(u32 code, char* pId, u32 size, const char* const** pppNames) {
+            *pppNames = nullptr;
             for (u32 i = 0; i < sizeof(cOwnRows) / sizeof(cOwnRows[0]); i++) {
                 if (cOwnRows[i].code == code) {
-                    *ppOwn = &cOwnRows[i];
+                    *pppNames = cOwnRows[i].names;
                     copyText(pId, size, cOwnRows[i].id);
                     return true;
                 }
+            }
+            if (code >= 100u && code <= 899u) {
+                return luma::services::rowOf(code, pId, size, pppNames);
             }
             if (code >= 900u && code <= 9999u) {
                 nebula_snprintf(pId, size, "Script.S%04u", code);
@@ -418,8 +427,8 @@ namespace luma {
         void englishOf(char* pDst, u32 size, const LumaMod* pMod, const Report& rReport) {
             pDst[0] = 0;
             char id[32];
-            const OwnRow* pOwn = nullptr;
-            const bool known = rowOf(rReport.code, id, sizeof(id), &pOwn);
+            const char* const* pNames = nullptr;
+            const bool known = rowOf(rReport.code, id, sizeof(id), &pNames);
             const char16_t* const pTemplate = known ? NebulaText::english(id) : nullptr;
             u32 at = 0;
             if (pTemplate == nullptr) {
@@ -456,7 +465,7 @@ namespace luma {
                             for (u32 i = 0; i < rReport.argCount && pValue == nullptr; i++) {
                                 char positional[12];
                                 nebula_snprintf(positional, sizeof(positional), "%u", i);
-                                const char* const pName = pOwn != nullptr ? (i < 2 ? pOwn->names[i] : nullptr) : positional;
+                                const char* const pName = pNames != nullptr ? (i < 4 ? pNames[i] : nullptr) : positional;
                                 if (pName != nullptr && sameText(name, pName)) {
                                     pValue = rReport.args[i];
                                 }
@@ -1049,6 +1058,7 @@ namespace luma {
             if (pMod->begun && covers(pInfo, offsetof(LumaModInfo, finish) + sizeof(pInfo->finish)) && pInfo->finish != nullptr) {
                 pInfo->finish();
             }
+            luma::services::modEnd(pMod);
             freeAll(pMod);
             if (pMod->library != nullptr && pMod->close != nullptr) {
                 pMod->close(pMod->library);
@@ -1380,6 +1390,7 @@ namespace luma {
                 *static_cast<s32*>(rImport.slot) = found ? number : -1;
             }
         }
+        luma::services::modBegin(pMod, pMod->name, order, pMod->granted, pMod->grantedCount);
         if (covers(pInfo, offsetof(LumaModInfo, begin) + sizeof(pInfo->begin)) && pInfo->begin != nullptr) {
             pMod->begun = true;
             pInfo->begin(&sCore, pMod);
@@ -1394,6 +1405,7 @@ namespace luma {
                 // was published.
                 removeHooks(pMod);
                 tellDependentGone(pMod);
+                luma::services::modGone(pMod);
                 endMod(pMod);
                 return false;
             }
@@ -1443,6 +1455,7 @@ namespace luma {
                 pInfo->stop();
             }
             tellDependentGone(pMod);
+            luma::services::modGone(pMod);
             endMod(pMod);
             frame();
             return;

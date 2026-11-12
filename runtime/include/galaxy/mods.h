@@ -204,6 +204,8 @@ struct ModPlan {
 };
 // The language played, used to pick a .luma's translated text (same numbering as language_folder).
 void set_played_language(unsigned language) noexcept;
+// The language set_played_language gave (1, English, before it); any thread.
+[[nodiscard]] unsigned played_language() noexcept;
 // Builds the plan from the list scan_mods(game_id) returned at start, so the start scans only once. Call
 // set_played_language first.
 [[nodiscard]] ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::string& game_id,

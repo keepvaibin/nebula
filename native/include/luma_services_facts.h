@@ -19,6 +19,10 @@ typedef struct LumaServicesFacts {
    life). Game thread. */
 typedef void (*LumaServicesGiveFacts)(const LumaServicesFacts* facts);
 
+/* The module's export "luma_services_monotonic_ns", for the host's services (services-system 6: a link's spacing): the
+   game's steady clock as time.monotonic_ns reads it (frames in deterministic mode). Any thread. */
+typedef uint64_t (*LumaServicesMonotonic)(void);
+
 #ifdef __cplusplus
 }
 #endif

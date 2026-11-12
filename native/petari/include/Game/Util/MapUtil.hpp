@@ -1,6 +1,7 @@
 #pragma once
 
 #include <nebula_geometry.hpp>
+#include "Game/LumaMarks.hpp"
 
 class CollisionPartsFilterBase;
 class HitInfo;
@@ -20,12 +21,12 @@ namespace MR {
     bool isCeilingPolygon(f32);
     bool isWaterPolygon(const Triangle*);
     bool isThroughPolygon(const Triangle*);
-    bool getFirstPolyOnLineToMap(Vec3f*, Triangle*, const Vec3f&, const Vec3f&);
+    bool getFirstPolyOnLineToMap(LUMA_OUT LUMA_NULLABLE Vec3f*, Triangle*, const Vec3f&, const Vec3f&);
     bool getFirstPolyOnLineToMapAndMoveLimit(Vec3f*, Triangle*, const Vec3f&, const Vec3f&);
     bool getFirstPolyOnLineToWaterSurface(Vec3f*, Triangle*, const Vec3f&, const Vec3f&);
     bool getFirstPolyOnLineToMapExceptSensor(Vec3f*, Triangle*, const Vec3f&, const Vec3f&, const HitSensor*);
     bool getFirstPolyOnLineToMapExceptActor(Vec3f*, Triangle*, const Vec3f&, const Vec3f&, const LiveActor*);
-    bool getFirstPolyOnLineToMap(Vec3f*, Triangle*, const Vec3f&, const Vec3f&, const CollisionPartsFilterBase*, const TriangleFilterBase*);
+    bool getFirstPolyOnLineToMap(LUMA_OUT LUMA_NULLABLE Vec3f*, Triangle*, const Vec3f&, const Vec3f&, const CollisionPartsFilterBase*, const TriangleFilterBase*);
     bool getFirstPolyOnLineToWaterSurface(Vec3f*, Triangle*, const Vec3f&, const Vec3f&, const CollisionPartsFilterBase*,
                                           const TriangleFilterBase*);
     bool getFirstPolyNormalOnLineToMap(Vec3f*, const Vec3f&, const Vec3f&, Vec3f*, const HitSensor*);

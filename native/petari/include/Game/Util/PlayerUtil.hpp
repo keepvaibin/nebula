@@ -1,6 +1,7 @@
 #pragma once
 
 #include <nebula_geometry.hpp>
+#include "Game/LumaMarks.hpp"
 
 class BckCtrlData;
 class CameraTargetArg;
@@ -55,7 +56,7 @@ namespace MR {
     bool checkPlayerSwingTrigger();
     f32 calcDistanceToPlayer(const Vec3f&);
     void getPlayerUpVec(Vec3f*);
-    void getPlayerFrontVec(Vec3f*);
+    void getPlayerFrontVec(LUMA_OUT Vec3f*);
     void getPlayerSideVec(Vec3f*);
     void getPlayerThrowVec(Vec3f*);
     void getPlayerGroundPos(Vec3f*);

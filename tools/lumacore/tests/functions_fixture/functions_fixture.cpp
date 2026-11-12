@@ -23,3 +23,19 @@ struct Local : FnBase {  // a record with no name a mod can write: its functions
 }  // namespace
 
 FnBase* fnMake() { return new Local(); }
+
+void fnOut(LUMA_OUT FnVec*);  // a redeclaration with the same marks
+void fnOut(FnVec* out) { out->x = 1; }
+void fnIn(const float* value) { (void)value; }
+void fnInout(FnColor* color) { *color = FnBlue; }
+void fnKept(int* registered) { (void)registered; }
+void fnCount(const float* p, int n, FnVec* out) {
+    if (out) {
+        out->x = p[n - 1];
+    }
+}
+void fnFixed(float* m) { m[11] = 0; }
+void fnInside(const FnV2<float>* p, FnVec4* q) { q->x = p->x; }
+void fnDefined(LUMA_OUT FnVec* out) { out->y = 2; }
+void FnMarked::get(FnVec* out) const { out->z = 3; }
+void fnByMacro(float* v) { *v = 1; }

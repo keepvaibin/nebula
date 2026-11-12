@@ -2,6 +2,7 @@
 #include "galaxy/luma_services_host.h"
 
 #include "galaxy/host_extension.h"
+#include "galaxy/luma_system_platform.h"
 
 #include <luma_services_facts.h>
 
@@ -52,6 +53,14 @@ bool provide_all(void* (*find_symbol)(const char*), void (*log)(const char*),
     }
     // A bad provider stops the game in the module (luma_service_provider.h), naming it; 0 is the only other answer.
     for (const LumaServiceProvider* const provider : own) {
+        provide(provider);
+    }
+    // The system services (services-system 10), after the host's own.
+    const auto monotonic = reinterpret_cast<LumaServicesMonotonic>(find_symbol("luma_services_monotonic_ns"));
+    if (monotonic == nullptr && log != nullptr) {
+        log("LumaCore services: the game module has no luma_services_monotonic_ns; a link's spacing uses the system's clock");
+    }
+    for (const LumaServiceProvider* const provider : galaxy::luma_system::providers(log, monotonic)) {
         provide(provider);
     }
     Giving giving{provide};
