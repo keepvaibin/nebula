@@ -187,6 +187,23 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         let stem = &change.path[..lower.rfind(".canm.").unwrap_or(change.path.len())];
         return Ok(vec![(format!("{stem}.canm"), super::gltf::to_camera(bytes, change.source.parent())?, false)]);
     }
+    // Clip.anim.json in a game archive: the clip's frame events, Clip.events beside it (animation contract 5).
+    if super::clip_events::is_events_source(&lower) {
+        let (folder, clip, path) = super::clip_events::place(&change.path)?;
+        let members = base.and_then(|base| store::read_folder(base, &folder).ok()).unwrap_or_default();
+        let frames = super::clip_events::lead_frames(&members, &clip);
+        if frames.is_none() {
+            let archive = folder.clone();
+            if base.is_some() {
+                super::refuse::note("Cook.Events.ClipUnknown", &[("file", change.path.clone()), ("clip", clip.clone()), ("archive", archive)]);
+            } else {
+                super::refuse::note("Cook.Events.GameUnknown", &[("file", change.path.clone())]);
+            }
+        }
+        let (table, facts) = super::clip_events::cook(bytes, &change.path, frames)?;
+        super::refuse::record(super::refuse::CookFact::Events { path: path.clone(), source: change.path.clone(), facts });
+        return Ok(vec![(path, table, true)]);
+    }
     // Name.anim.glb in a game archive: clips of the archive's model (animation contract 2).
     if lower.ends_with(".anim.glb") || lower.ends_with(".anim.gltf") {
         let folder = change.path.rsplit_once('/').map_or("", |(f, _)| f);
@@ -838,6 +855,7 @@ mod tests {
             "StageData/MyGalaxy.arc/jmp/placement/common/objinfo.json",
             "LayoutData/Hud.arc/Hud.layout.json",
             "AudioRes/Jump.sound.json",
+            "ObjectData/Kuribo.arc/Walk.anim.json",
         ];
         let dir = tempfile::tempdir().unwrap();
         for path in cooked {
@@ -883,6 +901,44 @@ mod tests {
         assert_eq!(cook_source("LayoutData/Hud.arc/Hud.layout.json", Path::new("layers/base/files/x"), source, None).unwrap(), 1);
         let error = cook_source("LayoutData/Hud.layout.json", &archive, source, None).unwrap_err();
         assert_eq!(said(&error).0, "Cook.Layout.NotInArchive");
+    }
+
+    #[test]
+    fn a_clips_events_go_beside_it_checked_against_the_games_clip() {
+        use super::super::refuse::{said, said_notes, take_facts, CookFact};
+        use super::super::table::TableIr;
+        let dir = tempfile::tempdir().unwrap();
+        // The game's walk as the store keeps it: the cooked clip form, 40 frames.
+        let mut walk = super::super::clip::MAGIC.to_le_bytes().to_vec();
+        walk.extend_from_slice(&[0u8; 12]);
+        walk.extend_from_slice(&40i32.to_le_bytes());
+        let base = game_store(dir.path(), &[("ObjectData/Kuribo.arc/walk.bck", &walk)]);
+        let path = "ObjectData/Kuribo.arc/Walk.anim.json";
+        let change = Change { path: path.into(), source: dir.path().join("Walk.anim.json"), merge: false };
+        let text = br#"{"events": [{"frame": 39, "event": "last"}, {"frame": 0, "event": "start"}]}"#;
+        let _ = take_facts();
+        let made = modern_files(&change, text, Some(&base)).unwrap();
+        assert_eq!(made.len(), 1);
+        let (place, ntbl, done) = &made[0];
+        assert_eq!((place.as_str(), *done), ("ObjectData/Kuribo.arc/Walk.events", true));
+        assert_eq!(TableIr::from_ntbl(ntbl).unwrap().rows.len(), 2);
+        let facts = take_facts();
+        assert!(
+            facts.iter().any(|f| matches!(f, CookFact::Events { path, facts, .. }
+                if path == "ObjectData/Kuribo.arc/Walk.events" && facts.rows == 2 && facts.frames == Some(40))),
+            "{facts:?}"
+        );
+        assert!(said_notes().is_empty());
+        // Past the walk's last frame: refused, naming it.
+        let error = modern_files(&change, br#"{"events": [{"frame": 40, "event": "a"}]}"#, Some(&base)).unwrap_err();
+        assert_eq!(said(&error).0, "Cook.Events.PastEnd");
+        // A clip the game's archive lacks, or no game: made, and said that the frames were not checked against a clip.
+        let dance = Change { path: "ObjectData/Kuribo.arc/Dance.anim.json".into(), ..change };
+        assert_eq!(modern_files(&dance, text, Some(&base)).unwrap().len(), 1);
+        assert_eq!(said_notes().iter().map(|(why, _)| *why).collect::<Vec<_>>(), vec!["Cook.Events.ClipUnknown"]);
+        assert_eq!(modern_files(&dance, text, None).unwrap().len(), 1);
+        assert_eq!(said_notes().iter().map(|(why, _)| *why).collect::<Vec<_>>(), vec!["Cook.Events.GameUnknown"]);
+        let _ = take_facts();
     }
 
     #[test]
