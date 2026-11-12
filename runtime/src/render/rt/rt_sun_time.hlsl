@@ -3,8 +3,9 @@
 // found by where it was (S.motion) and taken only where the pixel there was the same object at the same depth. At
 // most 16 frames: a shadow must follow its moving caster (the lights keep 32). The history is held inside what this
 // frame's rays saw around the pixel (their mean, give or take 1.25 of their spread, over five by five pixels of the
-// same object), so a caster that moves leaves no trail. The occluder's distance is averaged over the taps that have
-// one, and over time the same way: the blur after takes the penumbra's width from it. Outside the penumbra tiles
+// same object), so a caster that moves leaves no trail. The occluder's distance is the nearest of the taps that have
+// one (each ray reports the first caster its walk met, not the nearest: B3), averaged over time: the blur after takes
+// the penumbra's width from it. Outside the penumbra tiles
 // (rt_sun_tiles) V is copied through.
 #include "rt_bindings.hlsli"
 #include "rt_frame.hlsli"
@@ -61,7 +62,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     }
     // This frame's rays around the pixel, on the same object.
     float3 first = float3(0.0f, 0.0f, 0.0f), square = float3(0.0f, 0.0f, 0.0f);
-    float taps = 0.0f, distance_sum = 0.0f, hits = 0.0f;
+    float taps = 0.0f, nearest = kNoOccluder, hits = 0.0f;
     for (int y = -2; y <= 2; ++y) {
         for (int x = -2; x <= 2; ++x) {
             const int2 at = clamp(pixel + int2(x, y), int2(0, 0), int2(width, height) - 1);
@@ -72,7 +73,7 @@ void main(uint3 id : SV_DispatchThreadID) {
                 square += value.rgb * value.rgb;
                 taps += 1.0f;
                 if (value.a < kNoOccluder) {
-                    distance_sum += value.a;
+                    nearest = min(nearest, value.a);
                     hits += 1.0f;
                 }
             }
@@ -81,7 +82,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     const float3 mean = first / max(taps, 1.0f);
     const float3 spread = sqrt(max(square / max(taps, 1.0f) - mean * mean, 0.0f));
     const float3 low = min(raw.rgb, mean - 1.25f * spread - 0.02f), high = max(raw.rgb, mean + 1.25f * spread + 0.02f);
-    const float distance_now = hits > 0.0f ? distance_sum / hits : 0.0f;
+    const float distance_now = hits > 0.0f ? nearest : 0.0f;
     float3 sum = float3(0.0f, 0.0f, 0.0f);
     float frames = 0.0f, weight = 0.0f, distance_was = 0.0f, distance_weight = 0.0f;
     if (rt_history()) {

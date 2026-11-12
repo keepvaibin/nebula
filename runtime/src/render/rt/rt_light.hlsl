@@ -19,7 +19,7 @@
 Texture2D<float4> g_guide : register(t9);
 Texture2D<float4> g_normals : register(t10);
 Texture2D<float4> g_motion : register(t11);
-Texture2D<float4> g_sun_v : register(t12);     // rgb V: filtered on the opaque layer, raw on the second
+Texture2D<float4> g_sun_v : register(t12);     // rgb V as the sun's filter leaves it (SunOut; each layer its own)
 Texture2D<float4> g_material : register(t13);
 Texture2D<float4> g_lights_spec : register(t14);  // the local lights' highlights (rt_lights.hlsl), the opaque layer
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_out : register(u0);
