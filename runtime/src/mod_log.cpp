@@ -537,7 +537,8 @@ void check_packages(const std::vector<StartPackage>& packages, std::string_view 
     g_start_results.clear();
     if (packages.empty()) return;
     const std::filesystem::path folder = galaxy::mods::mods_folder() / ".cooked" / "validate";
-    const std::string platform(galaxy::luma::this_platform());
+    // luma-format's platform names carry the processor ("windows-x64"), as a package's code does.
+    const std::string platform(galaxy::luma::plugin_target());
     const std::string region(program);
     const std::string played = language.empty() ? std::string("UsEnglish") : std::string(language);
     // What a kept report and a finding's words depend on beyond the package's own files.
