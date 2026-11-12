@@ -205,6 +205,7 @@ add_library(galaxy_native_host STATIC
     runtime/src/luma_net.cpp
     runtime/src/luma_assets.cpp
     runtime/src/luma_audio.cpp
+    runtime/src/luma_capture.cpp
     runtime/src/luma_input.cpp
     runtime/src/mod_plugins.cpp
     runtime/src/mods.cpp
