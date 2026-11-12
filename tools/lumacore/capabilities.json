@@ -40,6 +40,9 @@
     "services.system.links": "A https link opened in the browser, one at a time, 10 s apart, a Note naming its site (2.2)",
     "services.mods": "The session's list of mods: order, id, name, version, kind, code, and state as the player and the check left it (2.2)",
     "services.mods.ids": "Numbers in the game's message and sensor spaces by <mod id>/<name>, derived alike on every machine, kept and never reused (2.2)",
-    "services.mods.install": "A mod's request to install a .luma through the import screen and the player's answer (2.2)"
+    "services.mods.install": "A mod's request to install a .luma through the import screen and the player's answer (2.2)",
+    "services.save": "A mod's own values in the player's game file: written when the game saves, copied and erased with the file, per character (2.2)",
+    "services.save.global": "A mod's values across files, written at once (2.2)",
+    "services.save.game": "The game's own file handed to a mod, or offered back through the game's screen with the player's answer (2.2)"
   }
 }
