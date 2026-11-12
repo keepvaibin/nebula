@@ -9,8 +9,8 @@ use anyhow::{bail, Context, Result};
 use std::collections::HashMap;
 
 pub const MAGIC: u32 = 0x4C44_4D4E;
-pub const VERSION: u32 = 4;
-pub const HEADER_WORDS: usize = 28;
+pub const VERSION: u32 = 5;
+pub const HEADER_WORDS: usize = 30;
 pub const JOINT_BYTES: usize = 96;
 pub const MESH_BYTES: usize = 100;
 pub const MESH_COORD_BYTES: usize = 4;
@@ -880,6 +880,9 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
         textures_at,
         geometry_at,
         geometry_size,
+        // Version 5's lit table (materials.md): none until the cook reads glTF's metallic-roughness (plan 3.3).
+        0,
+        0,
     ];
     for (i, &v) in header.iter().enumerate() {
         b.patch32(i * 4, v);
