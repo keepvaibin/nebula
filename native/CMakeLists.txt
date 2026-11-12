@@ -64,14 +64,14 @@ foreach(source IN LISTS game_sources)
         get_filename_component(folder "${source}" DIRECTORY)
         set(copy "${CMAKE_CURRENT_BINARY_DIR}/luma/${relative}")
         add_custom_command(OUTPUT "${copy}"
-            BYPRODUCTS "${copy}.globals" "${copy}.types" "${copy}.rows" "${copy}.functions" "${copy}.numbers"
+            BYPRODUCTS "${copy}.globals" "${copy}.types" "${copy}.rows" "${copy}.functions" "${copy}.numbers" "${copy}.places"
             COMMAND "${Python3_EXECUTABLE}" "${luma_tool}" "${source}" "${copy}"
                     --commands "${CMAKE_BINARY_DIR}/compile_commands.json" --root "${petari}/src" --depfile "${copy}.d"
                     ${luma_libclang}
             DEPENDS "${source}" "${luma_tool}" "${luma_types_tool}" DEPFILE "${copy}.d" VERBATIM)
         set_source_files_properties("${copy}" PROPERTIES COMPILE_OPTIONS "-iquote${folder}")
         list(APPEND module_sources "${copy}")
-        list(APPEND luma_defined_lists "${copy}.globals" "${copy}.types" "${copy}.rows" "${copy}.functions" "${copy}.numbers")
+        list(APPEND luma_defined_lists "${copy}.globals" "${copy}.types" "${copy}.rows" "${copy}.functions" "${copy}.numbers" "${copy}.places")
     else()
         list(APPEND module_sources "${source}")
     endif()
@@ -135,7 +135,15 @@ if(NEBULA_LUMA_HOOKS)
         DEPENDS smg_game "${luma_types}/luma_types_table.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/../tools/lumacore/self_description.py"
                 "${CMAKE_CURRENT_SOURCE_DIR}/include/luma.h"
         VERBATIM)
-    add_custom_target(luma_self_description ALL DEPENDS "${luma_self}")
+    # The placement facts (plan 1.8 places): the factory's rows and each class's placement argument reads, from the
+    # copies' .places parts, for the stage cook (G's 3.9).
+    set(luma_placement "${CMAKE_CURRENT_BINARY_DIR}/smg_game.luma-placement.json")
+    add_custom_command(OUTPUT "${luma_placement}"
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../tools/lumacore/placement.py"
+                --types "${luma_types}/luma_types.json" --defined "${CMAKE_CURRENT_BINARY_DIR}/luma" --out "${luma_placement}"
+        DEPENDS "${luma_types}/luma_types_table.cpp" ${luma_defined_lists} "${CMAKE_CURRENT_SOURCE_DIR}/../tools/lumacore/placement.py"
+        VERBATIM)
+    add_custom_target(luma_self_description ALL DEPENDS "${luma_self}" "${luma_placement}")
 endif()
 
 add_library(smg_game SHARED
