@@ -554,7 +554,7 @@ pub fn evaluate(m: &MaterialIr, map: &dyn Fn(u8) -> [f32; 4], raster: &dyn Fn(u8
 /// The maps a material reads through a coordinate made from the normal that are its painted reflections: not those
 /// that hold a colour ramp (c56).
 fn environment_maps(m: &MaterialIr) -> Vec<u8> {
-    normal_maps(m).into_iter().filter(|map| !m.ramp_maps.contains(map)).collect()
+    normal_maps(m).into_iter().filter(|map| !m.ramp_maps.contains(map) && !m.highlight_maps.contains(map)).collect()
 }
 
 /// c56 (the director 11-11, Surfing's rainbow arches): what a map read through a normal-made coordinate holds. Each
@@ -570,6 +570,9 @@ pub struct MapShape {
     pub hue_span: f64,
     pub dark: f64,
     pub spread: f64,
+    /// c58: the share of the texels at half the brightest one's luminance or more (the spot), and that luminance.
+    pub spot: f64,
+    pub peak: f64,
 }
 
 pub fn map_shape(width: u32, height: u32, texels: &[[u8; 4]]) -> Option<MapShape> {
@@ -628,6 +631,9 @@ pub fn map_shape(width: u32, height: u32, texels: &[[u8; 4]]) -> Option<MapShape
         }
     }
     let explained = |rest: f64| if total > 1e-9 { 1.0 - rest / total } else { 1.0 };
+    let lum = |t: [u8; 4]| (0.2126 * f64::from(t[0]) + 0.7152 * f64::from(t[1]) + 0.0722 * f64::from(t[2])) / 255.0;
+    let peak = texels[..w * h].iter().map(|&t| lum(t)).fold(0.0f64, f64::max);
+    let spot = if peak > 0.0 { texels[..w * h].iter().filter(|&&t| lum(t) >= 0.5 * peak).count() as f64 / n } else { 0.0 };
     let hue_span = if saturated < 1.0 {
         0.0
     } else {
@@ -651,7 +657,62 @@ pub fn map_shape(width: u32, height: u32, texels: &[[u8; 4]]) -> Option<MapShape
         hue_span,
         dark: dark / n,
         spread: (total / (3.0 * n)).sqrt(),
+        spot,
+        peak,
     })
+}
+
+/// c58's rule: a painted highlight sprite, a light spot on a dark ground (at least 0.6 of it dark), not a ramp.
+pub fn is_highlight(s: &MapShape) -> bool {
+    const SPRITE_DARK: f64 = 0.6;
+    s.dark >= SPRITE_DARK && !is_ramp(s) && s.peak > 0.05
+}
+
+/// c58: the roughness of the highlight a sprite paints. The map stands for the normal's x and y over -1..1 (its
+/// square 4, the disc pi): a spot of share A of the texels is a disc of radius sqrt(4A / pi) in n.xy, the angle
+/// asin of that between the normal at its edge and the centre's: the GGX lobe's half width at half its peak, where
+/// tan = 0.6436 alpha; roughness = sqrt(alpha) (enh_highlight: a2 = rough^4). 0.08 to 0.8.
+pub fn sprite_roughness(s: &MapShape) -> f32 {
+    let radius = (4.0 * s.spot / std::f64::consts::PI).sqrt().min(0.999);
+    let alpha = radius.asin().tan() / 0.6436;
+    (alpha.sqrt() as f32).clamp(0.08, 0.8)
+}
+
+/// c58: whether a map is ADDED to the stages' colour (a highlight) and not multiplied in (a mask, which hiding would
+/// blacken): the result with the map black keeps a quarter or more of its brightness with the map mid grey (the other
+/// maps and the rasterised colours mid grey).
+fn sprite_adds(m: &MaterialIr, sprite: u8) -> bool {
+    let raster = |_: u8| [0.5f32, 0.5, 0.5, 1.0];
+    let at = |v: f32| {
+        let c = evaluate(m, &move |n: u8| if n == sprite { [v, v, v, 1.0] } else { [0.5, 0.5, 0.5, 1.0] }, &raster);
+        luminance([c[0], c[1], c[2]])
+    };
+    let (off, on) = (at(0.0), at(0.5));
+    on <= 1e-3 || off >= 0.25 * on
+}
+
+/// c58: each material's normal-indexed maps that are painted highlight sprites (MaterialIr highlight_maps), and the
+/// first one's roughness and peak.
+pub fn mark_highlights(ir: &mut ModelIr) {
+    let found: Vec<Vec<(u8, MapShape)>> = ir
+        .materials
+        .iter()
+        .map(|m| {
+            normal_maps(m)
+                .into_iter()
+                .filter(|map| !m.ramp_maps.contains(map))
+                .filter(|&map| sprite_adds(m, map))
+                .filter_map(|map| map_texels(ir, m, map).and_then(|(w, h, t)| map_shape(w, h, &t)).filter(is_highlight).map(|s| (map, s)))
+                .collect()
+        })
+        .collect();
+    for (m, sprites) in ir.materials.iter_mut().zip(found) {
+        if let Some((_, s)) = sprites.first() {
+            m.highlight_rough = sprite_roughness(s);
+            m.highlight_gain = (s.peak as f32).clamp(0.25, 1.0);
+        }
+        m.highlight_maps = sprites.into_iter().map(|(map, _)| map).collect();
+    }
 }
 
 /// c56's rule: a colour ramp, not a picture. One axis or the radius explains kRampExplained of its colour, its hues
@@ -918,6 +979,13 @@ pub fn read(m: &MaterialIr) -> Reading {
     } else {
         r.rule = "lit, opaque, no painted reflection";
     }
+    // c58: a lit opaque material whose shine is a painted highlight sprite (no painted reflection of its own): a gloss
+    // with the sprite's roughness and no painted bit, so the tracer gives it a mirror by Fresnel, not by a share.
+    if !m.highlight_maps.is_empty() && s.lit && s.blend == 0 && r.env_map == 0xFF && matches!(r.class, Class::Dielectric | Class::Gloss) {
+        r.class = Class::Gloss;
+        r.roughness = m.highlight_rough;
+        r.rule = "a painted highlight sprite: the traced sun's highlight and a mirror by Fresnel (c58)";
+    }
     // Holes are not a look (14.2 change 1): an alpha-tested material keeps the class its look gives; a two-sided one
     // is a thin sheet that lets some light through.
     if s.alpha_test && s.blend == 0 && s.two_sided {
@@ -1167,7 +1235,7 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
          # rings' means explain; hue span in degrees among saturated texels; dark: share under luminance 0.1; spread: colour sd.\n\
          verdict\tmodel\tmaterial\tmap\ttexture\tsize\trows\tcolumns\trings\tsaturation\thue span\tdark\tspread"
     )?;
-    let (mut ramp_count, mut picture_count) = (0u32, 0u32);
+    let (mut ramp_count, mut picture_count, mut sprite_count) = (0u32, 0u32, 0u32);
     // c55 (d07's census): each model's de-light with c37 alone and with the first map's light (M5).
     let mut debake = std::io::BufWriter::new(std::fs::File::create(output.with_file_name("debake_maps.tsv"))?);
     writeln!(debake, "model\tde-lit meshes\twith a map ratio\tvertices\tmean gain c37\tmean gain d07")?;
@@ -1198,13 +1266,21 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
                 let Some((w, h, texels)) = map_texels(&ir, m, map) else { continue };
                 let Some(s) = map_shape(w, h, &texels) else { continue };
                 let ramp = m.ramp_maps.contains(&map);
+                let sprite = m.highlight_maps.contains(&map);
                 ramp_count += u32::from(ramp);
-                picture_count += u32::from(!ramp);
+                sprite_count += u32::from(sprite);
+                picture_count += u32::from(!ramp && !sprite);
                 let texture = m.textures.get(usize::from(map)).and_then(|&t| ir.textures.get(t as usize)).map_or("", |t| t.name.as_str());
                 writeln!(
                     ramps,
                     "{}\t{name}\t{}\t{map}\t{texture}\t{w} x {h}\t{:.3}\t{:.3}\t{:.3}\t{:.2}\t{:.0}\t{:.2}\t{:.3}",
-                    if ramp { "ramp" } else { "picture" },
+                    if ramp {
+                        "ramp".to_string()
+                    } else if sprite {
+                        format!("highlight (rough {:.2}, peak {:.2})", sprite_roughness(&s), s.peak)
+                    } else {
+                        "reflection".to_string()
+                    },
                     m.name,
                     s.rows,
                     s.columns,
@@ -1367,7 +1443,7 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
     by_rule.flush()?;
     debake.flush()?;
     ramps.flush()?;
-    println!("normal-indexed maps (c56): {ramp_count} colour ramps, {picture_count} painted reflections");
+    println!("normal-indexed maps (c56, c58): {ramp_count} colour ramps, {sprite_count} highlight sprites, {picture_count} painted reflections");
     println!("de-light (c55): {debaked_meshes} meshes in {debaked_models} models; {mapped_meshes} meshes in {mapped_models} models with a map ratio (d07)");
     println!("{models} models, {materials} materials, {glowing} of them glow; {unread} files not read");
     for (class, (count, _)) in &classes {

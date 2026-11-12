@@ -318,6 +318,8 @@ struct Pixel<'a> {
     sampled: Vec<(u8, u8)>,
     color_read: [bool; 2],
     env_coords: BTreeSet<u8>,
+    /// c58: the coordinates whose every map is a painted highlight sprite (HIGHLIGHT_FETCH in a lit form).
+    sprite_coords: BTreeSet<u8>,
 }
 
 impl Pixel<'_> {
@@ -722,6 +724,8 @@ fn stage_lines(p: &mut Pixel, registers: &Registers) -> Result<bool> {
             let wrapped = if p.form.lit && p.env_coords.contains(&c) { format!("enh_env({sampled})") } else { sampled };
             // A painted environment: the traced form's reflection takes its place (program.hlsli ENV_FETCH).
             let wrapped = if p.env_coords.contains(&c) { format!("ENV_FETCH({wrapped})") } else { wrapped };
+            // A painted highlight sprite (c58): not drawn under the relight in a lit form; the sun's highlight stands for it.
+            let wrapped = if p.form.lit && p.sprite_coords.contains(&c) { format!("HIGHLIGHT_FETCH({wrapped})") } else { wrapped };
             p.lines.push(format!("        const float4 t = {wrapped};"));
         } else if reads_t {
             p.lines.push("        const float4 t = float4(0.0, 0.0, 0.0, 0.0);".into());
@@ -941,6 +945,15 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
             env_coords.insert(i as u8);
         }
     }
+    // c58: a coordinate whose every map is a painted highlight sprite is no environment's (MaterialIr highlight_maps).
+    let mut sprite_coords = BTreeSet::new();
+    for i in 0..m.coords.len() {
+        let mut maps = m.stages.iter().filter(|s| s.map != 0xFF && usize::from(s.coord) == i).map(|s| s.map).peekable();
+        if maps.peek().is_some() && maps.all(|map| m.highlight_maps.contains(&map)) {
+            sprite_coords.insert(i as u8);
+        }
+    }
+    env_coords.retain(|c| !sprite_coords.contains(c));
     let lit_channels = form.lit && light_terms_any(m);
     let metal = !env_coords.is_empty();
     let mut p = Pixel {
@@ -954,6 +967,7 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
         sampled: Vec::new(),
         color_read: [false; 2],
         env_coords: env_coords.clone(),
+        sprite_coords,
     };
     p.survey();
     let mut alpha_test = false;
@@ -1186,6 +1200,10 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
             pixel.push_str("    TRACED_UNKEYED;\n");
         }
         pixel.push_str("    g_enh = enh_begin(i.lit_eye, i.lit_nrm);\n");
+        if !m.highlight_maps.is_empty() {
+            // c58: the enhanced highlight as the sprite painted it (its roughness and peak), under the relight.
+            pixel.push_str(&format!("    enh_sprite({:.3}, {:.3});\n", m.highlight_rough, m.highlight_gain));
+        }
     }
     if lit_rows_used {
         for l in &lit_body {

@@ -162,6 +162,22 @@ EnhShade enh_begin(float3 P, float3 n) {
     return e;
 }
 
+// c58: a dielectric highlight's roughness and strength, a painted highlight sprite's under the relight (enh_sprite,
+// by kForm; the generator calls it for a material with a sprite), else kEnhSheenRough and 1.
+static float g_enh_sheen_rough = kEnhSheenRough;
+static float g_enh_sheen_gain = 1.0;
+void enh_sprite(float rough, float gain) {
+    const float k = (view_flags & 8u) != 0u ? saturate(view_look.x) : 0.0;
+    g_enh_sheen_rough = lerp(kEnhSheenRough, rough, k);
+    g_enh_sheen_gain = lerp(1.0, gain, k);
+}
+// c58: a painted highlight sprite's texel: under the relight with enhanced lighting its spot is not drawn (by kForm),
+// the traced sun's highlight stands for it; else as it is.
+float4 highlight_fetch(float4 t) {
+    const float k = enh_on() && (view_flags & 8u) != 0u ? saturate(view_look.x) : 0.0;
+    return float4(t.rgb * (1.0 - k), t.a);
+}
+#define HIGHLIGHT_FETCH(t) highlight_fetch(t)
 // A light's highlight. `radiance` is its colour in linear light: the diffuse term is the colour times N.L, so the colour
 // is the light's irradiance over pi and the lobe takes kEnhSheen = pi.
 void enh_highlight(inout EnhShade e, float3 ldir, float3 radiance, bool metal) {
@@ -169,7 +185,7 @@ void enh_highlight(inout EnhShade e, float3 ldir, float3 radiance, bool metal) {
     if (NoL <= 0.0) {
         return;
     }
-    const float rough = metal ? kEnhMetalRough : kEnhSheenRough;
+    const float rough = metal ? kEnhMetalRough : g_enh_sheen_rough;  // c58: a sprite's
     const float a2 = min(rough * rough * rough * rough + e.a2_filter, 1.0);
     const float a = sqrt(a2);
     const float3 H = normalize(ldir + e.V);
@@ -180,7 +196,7 @@ void enh_highlight(inout EnhShade e, float3 ldir, float3 radiance, bool metal) {
         e.metal = radiance * (lobe * kEnhMetal);
         e.metal_fw = fw;
     } else {
-        e.spec += radiance * (lobe * kEnhSheen * (0.04 + 0.96 * fw));
+        e.spec += radiance * (lobe * kEnhSheen * g_enh_sheen_gain * (0.04 + 0.96 * fw));
     }
 }
 

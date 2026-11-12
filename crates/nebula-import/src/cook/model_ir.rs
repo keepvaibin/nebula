@@ -197,6 +197,11 @@ pub struct MaterialIr {
     /// The maps read through a normal-made coordinate that hold a colour ramp, not a reflection (c56,
     /// hit_record.rs mark_ramps): they keep their own fetch.
     pub ramp_maps: Vec<u8>,
+    /// The maps read through a normal-made coordinate that are painted highlight sprites (c58, hit_record.rs
+    /// mark_highlights), and the first one's roughness and peak as the enhanced highlight takes them.
+    pub highlight_maps: Vec<u8>,
+    pub highlight_rough: f32,
+    pub highlight_gain: f32,
 }
 
 impl GroupIr {
@@ -1301,6 +1306,8 @@ pub fn read_file(bytes: &[u8], source: Source, stats: &mut Stats) -> Result<Mode
     }
     // c56: a normal-indexed map that holds a colour ramp, not a reflection, by its content.
     super::hit_record::mark_ramps(&mut ir);
+    // c58: and one that is a painted highlight sprite.
+    super::hit_record::mark_highlights(&mut ir);
     if source == Source::Table {
         return Ok(ir);
     }
