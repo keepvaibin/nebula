@@ -70,6 +70,13 @@ struct MovieYuvTransform {
     std::int32_t krb = 0, krr = 65536;
 };
 [[nodiscard]] MovieYuvTransform movie_yuv_transform(bool bt709, bool full_range) noexcept;
+// I420 (`y` rows; `u` and `v` rows at half size, `uv_pitch` apart) into the planes as convert_bgra_to_movie_planes
+// writes them.
+void convert_i420_to_movie_planes(const std::uint8_t* y, std::int32_t y_pitch, const std::uint8_t* u,
+                                  const std::uint8_t* v, std::int32_t uv_pitch, std::uint32_t width,
+                                  std::uint32_t height, const MovieYuvTransform& transform, std::uint8_t* out,
+                                  const std::array<std::uint64_t, 3>& offsets,
+                                  const std::array<std::uint32_t, 3>& pitches) noexcept;
 // NV12 (`y` rows, then interleaved Cb Cr rows at half size) into the planes as convert_bgra_to_movie_planes writes them.
 void convert_nv12_to_movie_planes(const std::uint8_t* y, std::int32_t y_pitch, const std::uint8_t* uv,
                                   std::int32_t uv_pitch, std::uint32_t width, std::uint32_t height,
@@ -80,14 +87,22 @@ void convert_nv12_to_movie_planes(const std::uint8_t* y, std::int32_t y_pitch, c
 std::uint64_t movie_plane_layout(std::uint32_t width, std::uint32_t height, std::array<std::uint64_t, 3>& offsets,
                                  std::array<std::uint32_t, 3>& pitches) noexcept;
 
-// One cooked movie's frame table: each frame's JPEG in the NMOV (crates/nebula-import/src/cook/thp.rs). Empty when the
-// bytes are not a whole NMOV.
+// One cooked movie's frame table: each frame's video in the NMOV (crates/nebula-import/src/cook/thp.rs). Empty when the
+// bytes are not a whole NMOV, or hold video this build cannot decode.
+// The header's word at 0x24 is the codec: 0 the game's JPEG frames, 1 AV1 (plan 3.10: a mod's movie; each frame one
+// temporal unit of OBUs, frame 0 a key frame, 4:2:0 8-bit; only where the build has dav1d, NEBULA_AV1). The word at
+// 0x28 is an AV1 movie's colour: 0 BT.601 full range (JPEG's), 1 BT.709 limited range.
+enum class CookedMovieCodec : std::uint32_t { Jpeg = 0, Av1 = 1 };
 struct CookedMovieIndex {
     std::uint32_t width = 0;
     std::uint32_t height = 0;
-    std::vector<std::uint64_t> video_at;   // per frame: its JPEG's offset in the file
+    CookedMovieCodec codec = CookedMovieCodec::Jpeg;
+    bool bt709_limited = false;
+    std::vector<std::uint64_t> video_at;   // per frame: its video's offset in the file
     std::vector<std::uint32_t> video_size;
 };
+// Whether this build decodes AV1 movies (built with dav1d).
+[[nodiscard]] bool movie_av1_supported() noexcept;
 [[nodiscard]] CookedMovieIndex index_cooked_movie(const std::uint8_t* data, std::uint64_t size);
 
 class MoviePlayback {

@@ -838,3 +838,15 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/vk/device_quirks_vk.cpp runtime/src/render/vk/vk_libraries.cpp
         LIBS nebula_vulkan_deps)
 endif()
+
+# AV1 movies (plan 3.10: a mod's movie, NMOV codec 1): dav1d 1.5.1 built in-tree (cmake/dav1d.cmake), for both renderers.
+option(NEBULA_AV1 "Decode AV1 movies with dav1d (plan 3.10)" ON)
+if(NEBULA_AV1)
+    include(cmake/dav1d.cmake)
+    foreach(target galaxy_render galaxy_render_vk)
+        if(TARGET ${target})
+            target_link_libraries(${target} PRIVATE nebula_dav1d)
+            target_compile_definitions(${target} PRIVATE NEBULA_AV1=1)
+        endif()
+    endforeach()
+endif()
