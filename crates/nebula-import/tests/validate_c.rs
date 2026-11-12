@@ -555,3 +555,75 @@ fn renderer_features_and_the_device_s_reach_l806() {
     nulls.device_ptrs[0] = null();
     assert!(c_call(Some(&nulls.input(None))).invalid.unwrap().contains("device_features[0] is null"));
 }
+
+/// start-check F-S2 and references 3: luma_report_read_kept reads a kept report with no rule run (state 2; id,
+/// version, required services and after-start rows answer; count 0, kept null); bytes that do not read are -1 with
+/// why. luma_report_after_start gives the rows on either kind of report.
+#[test]
+fn a_kept_report_is_read_without_a_check_and_gives_its_facts() {
+    let dir = tempfile::tempdir().unwrap();
+    let bytes = luma(&[("code", r#"{"platforms": ["windows-x64"]}"#)], &[file("code/windows-x64/mod.dll", &fixture("pe-x64/service.dll"))]);
+    let path = write(dir.path(), "s.luma", &bytes);
+    let mut call = Call::new(&path, "windows-x64");
+    call.services = br#"{"services": [{"name": "net", "major": 1, "minor": 0, "permission": null}]}"#.to_vec();
+    let full = c_call(Some(&call.input(None)));
+    let rows = |r: *const LumaReport| unsafe {
+        let mut out = Vec::new();
+        for i in 0.. {
+            let (mut class, mut file, mut line) = (null(), null(), 0u32);
+            if luma_report_after_start(r, i, &mut class, &mut file, &mut line) == 0 {
+                break;
+            }
+            out.push((CStr::from_ptr(class).to_str().unwrap().to_string(), CStr::from_ptr(file).to_str().unwrap().to_string(), line));
+        }
+        out
+    };
+    unsafe {
+        let r = luma_report_read_kept(full.kept.as_ptr(), full.kept.len() as u64);
+        assert_eq!(luma_report_state(r), 2);
+        assert!(luma_report_invalid(r).is_null());
+        assert_eq!(s(luma_report_id(r)).as_deref(), Some("test.mod"));
+        assert_eq!(s(luma_report_version(r)).as_deref(), Some("1.0.0"));
+        let p = CString::new("windows-x64").unwrap();
+        assert_eq!(s(luma_report_required_service(r, p.as_ptr(), 0)).as_deref(), Some("net"));
+        assert!(luma_report_required_service(r, p.as_ptr(), 1).is_null());
+        assert_eq!((luma_report_count(r), luma_report_errors(r), luma_report_not_checked_count(r)), (0, 0, 0));
+        let mut size = 7u64;
+        assert!(luma_report_kept(r, &mut size).is_null());
+        assert!(luma_report_at(r, 0, null()).is_null());
+        assert!(rows(r).is_empty());
+        luma_report_free(r);
+
+        // After-start rows, as the placement rules write them into the kept report's touches.
+        let mut saved = luma_validate::Saved::parse(&full.kept).unwrap();
+        saved.touches.after_start = vec!["MyMod::Lamp\u{1f}layers/a/stage.json\u{1f}12".into(), "Other\u{1f}layers/b/x.json\u{1f}3".into()];
+        let kept = saved.to_bytes();
+        let r = luma_report_read_kept(kept.as_ptr(), kept.len() as u64);
+        assert_eq!(rows(r), vec![("MyMod::Lamp".to_string(), "layers/a/stage.json".to_string(), 12), ("Other".to_string(), "layers/b/x.json".to_string(), 3)]);
+        // Null outputs are skipped; null report and an index past the last give 0.
+        assert_eq!(luma_report_after_start(r, 1, std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut()), 1);
+        assert_eq!(luma_report_after_start(r, 2, std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut()), 0);
+        assert_eq!(luma_report_after_start(null(), 0, std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut()), 0);
+        luma_report_free(r);
+        // The same rows from luma_validate's report at a start that takes those kept bytes.
+        let r = luma_validate(&call.input(Some(&kept)));
+        assert_eq!(luma_report_state(r), 1);
+        assert_eq!(rows(r).len(), 2);
+        luma_report_free(r);
+
+        // Bytes that do not read: changed, cut short, empty, null.
+        let mut changed = full.kept.clone();
+        let at = changed.len() / 2;
+        changed[at] ^= 1;
+        for (bytes, why) in [(&changed[..], "does not read"), (&full.kept[..full.kept.len() - 3], "does not read"), (&[][..], "does not read")] {
+            let r = luma_report_read_kept(bytes.as_ptr(), bytes.len() as u64);
+            assert_eq!(luma_report_state(r), -1);
+            assert!(s(luma_report_invalid(r)).unwrap().contains(why));
+            assert!(luma_report_id(r).is_null());
+            luma_report_free(r);
+        }
+        let r = luma_report_read_kept(null(), 0);
+        assert_eq!((luma_report_state(r), s(luma_report_invalid(r)).as_deref()), (-1, Some("kept is null")));
+        luma_report_free(r);
+    }
+}

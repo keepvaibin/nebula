@@ -99,7 +99,7 @@ fn opt(v: Option<&str>) -> String {
     v.map_or_else(|| "-".to_string(), esc)
 }
 
-fn touch_lists(t: &Touches) -> [(&'static str, &Vec<String>); 9] {
+fn touch_lists(t: &Touches) -> [(&'static str, &Vec<String>); 10] {
     [
         ("replaces", &t.replaces),
         ("cells", &t.cells),
@@ -110,6 +110,7 @@ fn touch_lists(t: &Touches) -> [(&'static str, &Vec<String>); 9] {
         ("links", &t.links),
         ("scenarios", &t.scenarios),
         ("services", &t.services),
+        ("after_start", &t.after_start),
     ]
 }
 
@@ -219,6 +220,7 @@ impl Saved {
                         "links" => t.links.push(v),
                         "scenarios" => t.scenarios.push(v),
                         "services" => t.services.push(v),
+                        "after_start" => t.after_start.push(v),
                         _ => return None,
                     }
                 }

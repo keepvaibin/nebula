@@ -710,3 +710,16 @@ fn the_mod_higher_in_the_list_wins() {
     assert!(below.iter().all(|(_, m)| m.contains("; other.mod's") && m.ends_with("(it is higher in the list).")), "{below:?}");
     assert!(above.iter().all(|(_, m)| m.contains("; test.mod's") && m.ends_with("(it is higher in the list).")), "{above:?}");
 }
+
+/// F's AP-1 (audit 3.1-perm): a revision-1 `net` with hosts is one finding, Perm.NetSplit, not NetSplit and
+/// HostsOnlyNet; another name with hosts still gets HostsOnlyNet.
+#[test]
+fn a_revision_1_net_with_hosts_is_one_finding() {
+    let r = check(&luma(&[("permissions", r#"[{"name": "net", "why": "Uploads your times.", "hosts": ["a.org"]}]"#)], &[]), &NO_GAME);
+    let got: Vec<(u16, String)> = r.findings.iter().map(|f| (f.code, message(f, "UsEnglish"))).collect();
+    assert_eq!(got.len(), 1, "{got:?}");
+    assert_eq!(got[0].0, 211);
+    assert!(got[0].1.contains("net is two permissions now"), "{}", got[0].1);
+    let r = check(&luma(&[("permissions", r#"[{"name": "fs.exchange", "why": "Shares a ghost.", "hosts": ["a.org"]}]"#)], &[]), &NO_GAME);
+    assert!(message(&r.findings[0], "UsEnglish").contains("only net.internet takes hosts"), "{:?}", r.findings);
+}

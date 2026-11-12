@@ -243,6 +243,10 @@ pub struct Touches {
     /// "major.minor", joined by U+001F, in import order, each once. The host's consent question reads which declared
     /// permissions are required from them (consent 1.3: a permissioned service's permission is its name).
     pub services: Vec<String>,
+    /// The classes only code can make that a placement uses (references 3, G-2): class, file and line, joined by
+    /// U+001F, one per placement. The host gives them to the module after the last mod's start (luma_refs.h), which
+    /// looks each up in the factory. Filled by the placement rules of the stages' contract.
+    pub after_start: Vec<String>,
 }
 
 /// The layers of a zone, and the folders whose tables the game links by key across them (contract table-keys 13).

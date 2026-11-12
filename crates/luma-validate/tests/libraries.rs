@@ -492,3 +492,36 @@ fn a_virtual_call_and_a_class_number_are_checked_against_the_types_file() {
     let twice = file(&[record("A", Some(r#"[{"name": "A::f", "signature": "void()", "pure": false, "row": true}]"#)), record("B", Some(r#"[{"name": "A::f", "signature": "void()", "pure": true, "row": false}]"#))]);
     assert_eq!(Types::from_json(twice.as_bytes()).unwrap_err().to_string(), "types[1].virtuals[0]: a second virtual \"A::f\" \"void()\"");
 }
+
+/// F's AP-4 (audit 3.1-perm): registry 2's grammar is L505 whatever the flags; an optional import of a service the
+/// game lacks gives nothing; an optional import of a permissioned service the mod does not declare is L506 and is not
+/// a required service. AP-2: a catalog row with a key other than the four does not read.
+#[test]
+fn service_imports_follow_the_grammar_and_optional_rules() {
+    use luma_validate::names::Services;
+    let w = "windows-x64";
+    let mut n = names();
+    n.services = Some(Services::from_json(br#"{"services": [{"name": "net", "major": 1, "minor": 0, "permission": null}, {"name": "net.local", "major": 1, "minor": 0, "permission": "net.local"}]}"#).unwrap());
+    let r = check_with(&code_mod(w, &lib("pe-x64/service_more.dll"), &[], false), w, Some(&n));
+    let mut got: Vec<(u16, String)> = r.findings.iter().map(|f| (f.code, message(f, "UsEnglish"))).collect();
+    got.sort();
+    let head = "test.mod: code/windows-x64/mod.dll: the game has no service";
+    let want: Vec<(u16, String)> = vec![
+        (505, format!("{head} \"Net\" at version 1.0 or a later one with the same major number.")),
+        (505, format!("{head} \"net\" at version 01.0 or a later one with the same major number.")),
+        (505, format!("{head} \"net\" at version 1.70000 or a later one with the same major number.")),
+        (505, format!("{head} \"net..x\" at version 1.0 or a later one with the same major number.")),
+        (506, "test.mod uses net.local without asking for the \"net.local\" permission.".to_string()),
+    ];
+    let mut want = want;
+    want.sort();
+    assert_eq!(got, want);
+    assert!(r.not_checked.is_empty(), "{:?}", r.not_checked);
+    // Optional imports are never required; the bad rows are not either (they bind nothing).
+    assert!(r.touches.services.is_empty(), "{:?}", r.touches.services);
+
+    let refused = Services::from_json(br#"{"services": [{"name": "net", "major": 1, "minor": 0, "permission": null, "minr": 3}]}"#).unwrap_err();
+    assert_eq!(refused.to_string(), "services[0].minr: not a key of a service row (name, major, minor, permission)");
+    // The root may carry other keys: it is the self-description.
+    assert!(Services::from_json(br#"{"self": 1, "services": []}"#).is_ok());
+}

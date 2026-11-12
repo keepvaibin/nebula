@@ -141,6 +141,9 @@ impl Services {
         let mut rows: Vec<Service> = Vec::new();
         for (i, row) in list.iter().enumerate() {
             let at = format!("services[{i}]");
+            if let Some(m) = row.members().iter().find(|m| !matches!(m.key.as_str(), "name" | "major" | "minor" | "permission")) {
+                return Err(bad(format!("{at}.{}", m.key), "not a key of a service row (name, major, minor, permission)"));
+            }
             let name = row.get("name").and_then(Value::as_str).filter(|n| service_name_ok(n)).ok_or_else(|| bad(format!("{at}.name"), "missing, or not a service name"))?;
             let version = |key: &str| {
                 row.get(key).and_then(Value::as_i64).filter(|n| (0..=i64::from(u16::MAX)).contains(n)).map(|n| n as u16).ok_or_else(|| bad(format!("{at}.{key}"), "missing, or not a whole number from 0 to 65535"))

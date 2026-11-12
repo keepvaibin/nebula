@@ -102,7 +102,12 @@ typedef struct LumaReport LumaReport;
 
 /* Never null; give it back to luma_report_free. */
 LumaReport* luma_validate(const LumaValidateInput* input);
-/* 0: every rule ran; 1: a start's check; -1: the input was not valid (luma_report_invalid says why, in English). */
+/* A mod's kept report read as it is, no rule run (start-check 1a, F-S2): luma_report_id, _version,
+   _required_service and _after_start answer on it; count 0, kept null. State 2; -1 when the bytes do not read (another
+   form, cut short, changed), luma_report_invalid saying why. Never null; give it back to luma_report_free. */
+LumaReport* luma_report_read_kept(const uint8_t* kept, uint64_t kept_size);
+/* 0: every rule ran; 1: a start's check; 2: read by luma_report_read_kept; -1: the input was not valid
+   (luma_report_invalid says why, in English). */
 int32_t luma_report_state(const LumaReport* report);
 const char* luma_report_invalid(const LumaReport* report);
 uint32_t luma_report_count(const LumaReport* report);
@@ -123,6 +128,10 @@ const char* luma_report_version(const LumaReport* report);
    import order, each once: its name; null past the last. The same after a start's check that took the kept report. A
    permissioned service's permission is its name (services-registry 9). */
 const char* luma_report_required_service(const LumaReport* report, const char* platform, uint32_t index);
+/* After-start row `index` (0 first; references 3): 1 with the class only code makes that a placement uses, its file
+   and its line; 0 past the last. Strings valid until luma_report_free. */
+uint32_t luma_report_after_start(const LumaReport* report, uint32_t index, const char** class_name, const char** file,
+                                 uint32_t* line);
 void luma_report_free(LumaReport* report);
 
 /* A refusal said as the validator says its findings (loader contract 3; the cook's `failed` facts): rule `code`'s

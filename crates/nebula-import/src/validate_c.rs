@@ -104,6 +104,10 @@ pub struct LumaReport {
     version: Option<CString>,
     /// Touches.services: each platform and the name of a service its entry library requires, in import order.
     required: Vec<(String, CString)>,
+    /// Touches.after_start: class, file and line, one per placement (references 3).
+    after_start: Vec<(CString, CString, u32)>,
+    /// Made by luma_report_read_kept: no rule ran (luma_report_state 2).
+    from_kept: bool,
     shown: RefCell<Option<(CString, LumaFinding)>>,
     shown_not_checked: RefCell<Option<CString>>,
     /// Why the input was not valid (for the developer's log, in English).
@@ -269,6 +273,8 @@ fn invalid(why: &str) -> *mut LumaReport {
         id: None,
         version: None,
         required: Vec::new(),
+        after_start: Vec::new(),
+        from_kept: false,
         shown: RefCell::new(None),
         shown_not_checked: RefCell::new(None),
         invalid: Some(c(why)),
@@ -391,10 +397,18 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
         .iter()
         .map(|f| [f.mod_id.as_deref().map(c), Some(c(&f.file)), f.pointer.as_deref().map(c)])
         .collect();
-    let id = report.about.as_ref().map(|a| c(&a.id));
-    let version = report.about.as_ref().map(|a| c(&a.version.to_string()));
-    let required = report
-        .touches
+    let (id, version, required, after_start) = from_touches(report.about.as_ref(), &report.touches);
+    Ok(LumaReport { report: Some(report), kept, strings, id, version, required, after_start, from_kept: false, shown: RefCell::new(None), shown_not_checked: RefCell::new(None), invalid: None })
+}
+
+type Facts = (Option<CString>, Option<CString>, Vec<(String, CString)>, Vec<(CString, CString, u32)>);
+
+/// What the accessors read beside the findings: id, version, the required services and the after-start rows, from a
+/// report or a kept report. A touch row not in its form is left out (the validator writes them all).
+fn from_touches(about: Option<&luma_validate::About>, touches: &luma_validate::Touches) -> Facts {
+    let id = about.map(|a| c(&a.id));
+    let version = about.map(|a| c(&a.version.to_string()));
+    let required = touches
         .services
         .iter()
         .filter_map(|v| {
@@ -402,7 +416,71 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
             Some((parts.next()?.to_string(), c(parts.next()?)))
         })
         .collect();
-    Ok(LumaReport { report: Some(report), kept, strings, id, version, required, shown: RefCell::new(None), shown_not_checked: RefCell::new(None), invalid: None })
+    let after_start = touches
+        .after_start
+        .iter()
+        .filter_map(|v| {
+            let mut parts = v.split('\u{1f}');
+            let (class, file, line) = (parts.next()?, parts.next()?, parts.next()?.parse().ok()?);
+            Some((c(class), c(file), line))
+        })
+        .collect();
+    (id, version, required, after_start)
+}
+
+/// A mod's kept report read as it is, no rule run (start-check F-S2: the scan's required permissions, before the
+/// start's check): id, version, required services and after-start rows answer on it; count 0, kept null. Kept bytes
+/// that do not read (another form, cut short, changed: the end line's SHA-1) give state -1 and why. Never null; give
+/// it back to luma_report_free.
+///
+/// # Safety
+/// `kept` is null or valid for `kept_size` bytes during the call.
+#[no_mangle]
+pub unsafe extern "C" fn luma_report_read_kept(kept: *const u8, kept_size: u64) -> *mut LumaReport {
+    if kept.is_null() {
+        return invalid("kept is null");
+    }
+    let bytes = std::slice::from_raw_parts(kept, kept_size as usize);
+    match std::panic::catch_unwind(|| Saved::parse(bytes)) {
+        Ok(Some(saved)) => {
+            let (id, version, required, after_start) = from_touches(saved.about.as_ref(), &saved.touches);
+            Box::into_raw(Box::new(LumaReport {
+                report: None,
+                kept: Vec::new(),
+                strings: Vec::new(),
+                id,
+                version,
+                required,
+                after_start,
+                from_kept: true,
+                shown: RefCell::new(None),
+                shown_not_checked: RefCell::new(None),
+                invalid: None,
+            }))
+        }
+        Ok(None) => invalid("the kept report does not read (made by another validator form, cut short, or changed); check the mod in full"),
+        Err(payload) => invalid(&format!("the validator failed (a bug): {}", panic_text(payload.as_ref()))),
+    }
+}
+
+/// After-start row `index` (0 first): 1 with the class, file and line, 0 past the last (the outputs untouched). On a
+/// report from luma_validate or luma_report_read_kept; the strings are valid until luma_report_free.
+///
+/// # Safety
+/// As luma_report_state; each output is null or writable.
+#[no_mangle]
+pub unsafe extern "C" fn luma_report_after_start(report: *const LumaReport, index: u32, class_name: *mut *const c_char, file: *mut *const c_char, line: *mut u32) -> u32 {
+    let Some((class, f, l)) = report.as_ref().and_then(|r| r.after_start.get(index as usize)) else { return 0 };
+    if let Some(out) = class_name.as_mut() {
+        *out = class.as_ptr();
+    }
+    if let Some(out) = file.as_mut() {
+        *out = f.as_ptr();
+    }
+    if let Some(out) = line.as_mut() {
+        *out = *l;
+    }
+    1
 }
 
 /// Validates the mod at `input->path` against the running game. Never null; give it back to luma_report_free.
@@ -461,16 +539,18 @@ pub unsafe extern "C" fn luma_report_invalid(report: *const LumaReport) -> *cons
     report.as_ref().and_then(|r| r.invalid.as_ref()).map_or(std::ptr::null(), |c| c.as_ptr())
 }
 
-/// 0: every rule ran; 1: a start's check (the whole-file rules from the kept report); -1: the input was not valid
-/// (luma_report_invalid says why).
+/// 0: every rule ran; 1: a start's check (the whole-file rules from the kept report); 2: a kept report read by
+/// luma_report_read_kept (no rule ran); -1: the input was not valid (luma_report_invalid says why).
 ///
 /// # Safety
-/// `report` is null or from luma_validate, not yet freed.
+/// `report` is null or from luma_validate or luma_report_read_kept, not yet freed.
 #[no_mangle]
 pub unsafe extern "C" fn luma_report_state(report: *const LumaReport) -> i32 {
-    match report.as_ref().and_then(|r| r.report.as_ref()) {
-        Some(r) if r.full => 0,
+    let Some(r) = report.as_ref() else { return -1 };
+    match r.report.as_ref() {
+        Some(rep) if rep.full => 0,
         Some(_) => 1,
+        None if r.from_kept => 2,
         None => -1,
     }
 }

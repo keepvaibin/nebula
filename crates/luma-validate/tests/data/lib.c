@@ -104,6 +104,18 @@ static LumaImport imports[] = {
     {5, 0, "net", "one", &get_pos, 0, 0, 0},
 };
 LUMA_MOD(imports, start, 0);
+#elif defined(SERVICE_MORE)
+/* Registry 2's grammar (L505 whatever the flags), an optional import the game lacks (nothing), an optional import of
+   a permissioned service the mod does not declare (L506, and not a required service). */
+static LumaImport imports[] = {
+    {5, 0, "Net", "1.0", &get_pos, 0, 0, 0},
+    {5, 0, "net..x", "1.0", &get_pos, 0, 0, 0},
+    {5, 0, "net", "01.0", &get_pos, 0, 0, 0},
+    {5, 0, "net", "1.70000", &get_pos, 0, 0, 0},
+    {5, LUMA_OPTIONAL, "fs", "1.0", &get_pos, 0, 0, 0},
+    {5, LUMA_OPTIONAL, "net.local", "1.0", &get_pos, 0, 0, 0},
+};
+LUMA_MOD(imports, start, 0);
 #elif defined(MOD_FUNCTION)
 /* Loader D3-3: another mod's exported function, "<mod id>/<export name>". */
 static LumaImport imports[] = {

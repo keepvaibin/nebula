@@ -260,8 +260,8 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
             continue;
         }
         match row.kind {
-            // A service (loader D3-2): `signature` is "major.minor". Which services there are, their versions and
-            // permissions are the host's (its service finder), not the self-description's: said below.
+            // A service (loader D3-2, services-registry 2): `signature` is "major.minor", bound against the game's
+            // catalog (the self-description's `services`, registry 9) when it is given; not checked without it.
             5 => {
                 any_service = true;
                 let optional = row.flags & LUMA_OPTIONAL != 0;
@@ -492,7 +492,6 @@ fn left_out_reason(reason: &str) -> Vec<(&'static str, crate::Arg)> {
     vec![("why", t(reason))]
 }
 
-/// A service import's version, "major.minor": two whole numbers (loader D3-2).
 #[cfg(test)]
 mod types_tests {
     use super::{left_out_reason, typed, Typed};

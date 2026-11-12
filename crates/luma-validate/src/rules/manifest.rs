@@ -811,6 +811,8 @@ fn permissions(m: &mut M, root: &Value, facts: &mut Facts) {
                     }
                 }
             }
+            // A revision-1 `net` had hosts: NetSplit says it already (F's AP-1).
+            (_, Some(_)) if name == "net" => {}
             (_, Some(h)) => m.at(211, h, &format!("{ptr}/hosts"), vec![("key", t(name.clone())), ("why", p("Perm.HostsOnlyNet"))]),
             _ => {}
         }
