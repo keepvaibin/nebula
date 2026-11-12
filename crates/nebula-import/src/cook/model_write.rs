@@ -610,12 +610,114 @@ fn unit_normals(s: &MeshStreams) -> Vec<Option<[f64; 3]>> {
         .collect()
 }
 
+/// M5 (director d07; LIGHT-MODEL.md 10): the first map's brightness at each vertex against the mesh's own mean, read
+/// from a coarse copy of the map (at most 16 texels a side, box-filtered by alpha: its broad shading, not its detail),
+/// where the material's first stage with a map takes one of the mesh's own coordinates through no matrix. None where
+/// there is no such map (a generated or moving coordinate, no texels) or the map lies even over the mesh: nothing to
+/// add to the fit. A ratio, so one mesh's darker map than another's is not taken for light: only how a map's
+/// brightness lies over its own mesh enters, and of that debake_gains keeps what follows the facing.
+fn first_map_at_vertices(ir: &ModelIr, material: usize, s: &MeshStreams) -> Option<Vec<f64>> {
+    let m = ir.materials.get(material)?;
+    let stage = m.stages.iter().find(|stage| stage.map != 0xFF && stage.coord != 0xFF)?;
+    let coord = m.coords.get(usize::from(stage.coord))?;
+    // A plain coordinate of the mesh (sources 4 to 11: coordinates 0 to 7) through no matrix, of the plain kinds (0
+    // and 1: 3x4 and 2x4; a bump kind's light-offset coordinate or kind 10 is not the surface's own uv: FC's review).
+    if coord.matrix != NONE || !(4..=11).contains(&coord.source) || coord.kind > 1 {
+        return None;
+    }
+    let k = usize::from(coord.source - 4);
+    if !s.has_coord(k) || s.coords.len() != s.positions.len() * s.coordinates.len() {
+        return None;
+    }
+    let texture = ir.textures.get(*m.textures.get(usize::from(stage.map))? as usize)?;
+    let (width, height, texels) = super::texture::record_level0(ir.records.get(texture.record)?)?;
+    let (width, height) = (width as usize, height as usize);
+    if width == 0 || height == 0 || texels.len() < width * height {
+        return None;
+    }
+    const SIDE: usize = 16;
+    let (across, down) = (width.min(SIDE), height.min(SIDE));
+    let mut cells = vec![[0.0f64; 2]; across * down]; // a cell's luminance by alpha, and its alpha
+    for y in 0..height {
+        for x in 0..width {
+            let t = texels[y * width + x];
+            let alpha = f64::from(t[3]) / 255.0;
+            let luminance = (0.2126 * f64::from(t[0]) + 0.7152 * f64::from(t[1]) + 0.0722 * f64::from(t[2])) / 255.0;
+            let cell = &mut cells[(y * down / height) * across + x * across / width];
+            cell[0] += luminance * alpha;
+            cell[1] += alpha;
+        }
+    }
+    let covered: f64 = cells.iter().map(|c| c[1]).sum();
+    if covered <= 0.0 {
+        return None;
+    }
+    let all = cells.iter().map(|c| c[0]).sum::<f64>() / covered;
+    let grid: Vec<f64> = cells.iter().map(|c| if c[1] > 1e-6 { c[0] / c[1] } else { all }).collect();
+    // Where a coordinate falls among `n` cells by the map's wrap (0 clamp, 1 repeat, 2 mirror): two cells and the share
+    // of the second.
+    let place = |u: f64, mode: u8, n: usize| -> (usize, usize, f64) {
+        let u = match mode {
+            1 => u - u.floor(),
+            2 => {
+                let f = u - 2.0 * (u * 0.5).floor();
+                if f > 1.0 {
+                    2.0 - f
+                } else {
+                    f
+                }
+            }
+            _ => u.clamp(0.0, 1.0),
+        };
+        let at = u * n as f64 - 0.5;
+        let low = at.floor();
+        let cell = |i: i64| -> usize {
+            if mode == 1 {
+                i.rem_euclid(n as i64) as usize
+            } else {
+                i.clamp(0, n as i64 - 1) as usize
+            }
+        };
+        (cell(low as i64), cell(low as i64 + 1), at - low)
+    };
+    let seen: Vec<f64> = (0..s.positions.len())
+        .map(|i| {
+            let uv = s.coord(i, k);
+            let (u, v) = (f64::from(uv[0]), f64::from(uv[1]));
+            if !u.is_finite() || !v.is_finite() || u.abs() > 1e6 || v.abs() > 1e6 {
+                return all;
+            }
+            let (x0, x1, px) = place(u, texture.wrap_s, across);
+            let (y0, y1, py) = place(v, texture.wrap_t, down);
+            let top = grid[y0 * across + x0] * (1.0 - px) + grid[y0 * across + x1] * px;
+            let bottom = grid[y1 * across + x0] * (1.0 - px) + grid[y1 * across + x1] * px;
+            top * (1.0 - py) + bottom * py
+        })
+        .collect();
+    if seen.is_empty() {
+        return None;
+    }
+    let mean = seen.iter().sum::<f64>() / seen.len() as f64;
+    if mean <= 1e-3 {
+        return None;
+    }
+    // An even map says nothing: under 2 % between its darkest and brightest place on the mesh.
+    let (least, most) = seen.iter().fold((f64::MAX, 0.0f64), |(a, b), &x| (a.min(x), b.max(x)));
+    if most - least < 0.02 * mean {
+        return None;
+    }
+    Some(seen.iter().map(|&x| (x / mean).clamp(0.25, 4.0)).collect())
+}
+
 /// D2 (DIRECTOR.md section 12 M4; October's engine v2, render_core.cpp fit_debake_light at 191ab083a^): the light
 /// painted into a model's vertex colours as a function of the surface's facing, fitted per channel by nine spherical
 /// harmonics of the vertex normal over the meshes `which` names (least squares, ridge 1e-3 of the mean diagonal), and
 /// taken out by a gain a vertex and channel, peak / max(fit, peak / 4) in [0.25, 4] (peak: the fit's most lit
 /// vertex). What the facing does not explain stays (paint, occlusion). A mesh whose every gain rounds to 1 takes none.
-fn debake_gains(meshes: &mut [MeshStreams], which: &[bool]) {
+/// `maps` (M5, director d07): by mesh, its first map's brightness at each vertex against the mesh's own mean
+/// (first_map_at_vertices), or None: what the surface shows is its vertex colour times that, so the light painted into
+/// the map by facing is found, and taken out, with the vertex colour's.
+fn debake_gains(meshes: &mut [MeshStreams], which: &[bool], maps: &[Option<Vec<f64>>]) {
     let colour = |c: u32| [f64::from(c >> 24), f64::from(c >> 16 & 255), f64::from(c >> 8 & 255)].map(|x| x / 255.0);
     let normals: Vec<Vec<Option<[f64; 3]>>> = meshes
         .iter()
@@ -625,11 +727,15 @@ fn debake_gains(meshes: &mut [MeshStreams], which: &[bool]) {
     let mut a = [[0.0f64; 9]; 9];
     let mut b = [[0.0f64; 9]; 3];
     let mut samples = 0usize;
-    for (s, ns) in meshes.iter().zip(&normals) {
-        for (n, &c) in ns.iter().zip(&s.colors) {
+    for (mesh, (s, ns)) in meshes.iter().zip(&normals).enumerate() {
+        let map = maps.get(mesh).and_then(|m| m.as_ref()).filter(|m| m.len() == s.colors.len());
+        for (i, (n, &c)) in ns.iter().zip(&s.colors).enumerate() {
             let Some(n) = n else { continue };
             let y = sh9(*n);
-            let rgb = colour(c);
+            let mut rgb = colour(c);
+            if let Some(map) = map {
+                rgb = rgb.map(|x| x * map[i]);
+            }
             for i in 0..9 {
                 for j in 0..9 {
                     a[i][j] += y[i] * y[j];
@@ -1006,7 +1112,15 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
             })
             .collect();
         let which: Vec<bool> = ir.shapes.iter().map(|s| debake_material.get(s.material as usize).copied().unwrap_or(false)).collect();
-        debake_gains(&mut meshes, &which);
+        // M5 (director d07): each such mesh's first map as its vertices see it, for the same fit.
+        let maps: Vec<Option<Vec<f64>>> = ir
+            .shapes
+            .iter()
+            .zip(&meshes)
+            .zip(&which)
+            .map(|((shape, streams), &w)| if w { first_map_at_vertices(ir, shape.material as usize, streams) } else { None })
+            .collect();
+        debake_gains(&mut meshes, &which, &maps);
         for (streams, &slot) in meshes.iter().zip(&mesh_slots) {
             if streams.attributes & MESH_GAIN != 0 {
                 b.patch32(slot + 56, streams.attributes);
@@ -1537,7 +1651,7 @@ mod tests {
             }
         }
         let mut meshes = vec![s, MeshStreams::default()];
-        debake_gains(&mut meshes, &[true, false]);
+        debake_gains(&mut meshes, &[true, false], &[None, None]);
         let s = &meshes[0];
         assert!(s.attributes & MESH_GAIN != 0 && s.gains.len() == s.positions.len());
         assert!(meshes[1].attributes & MESH_GAIN == 0 && meshes[1].gains.is_empty());
@@ -1546,6 +1660,30 @@ mod tests {
         let after: Vec<f64> = before.iter().zip(&s.gains).map(|(&c, &g)| c * 2f64.powf(f64::from(g as u8 as i8) / 64.0)).collect();
         let spread = |v: &[f64]| v.iter().cloned().fold(0.0, f64::max) / v.iter().cloned().fold(f64::MAX, f64::min);
         assert!(spread(&before) > 2.5 && spread(&after) < 1.4, "{} {}", spread(&before), spread(&after));
+    }
+    #[test]
+    fn debake_gains_take_out_a_light_painted_into_the_map() {
+        // The same ball, its vertex colours an even grey and the light 0.3 + 0.6 max(n.y, 0) in its first map's
+        // brightness at each vertex (M5): the gains take it out as they take a vertex colour's.
+        let mut s = MeshStreams { attributes: MESH_NORMAL | MESH_COLOR0, ..Default::default() };
+        let mut map = Vec::new();
+        for i in 0..24 {
+            for j in 0..12 {
+                let (around, down) = (i as f32 / 24.0 * std::f32::consts::TAU, (j as f32 + 0.5) / 12.0 * std::f32::consts::PI);
+                let n = [down.sin() * around.cos(), down.cos(), down.sin() * around.sin()];
+                s.positions.push(n);
+                s.normals.push(n);
+                s.colors.push(153 << 24 | 153 << 16 | 153 << 8 | 255);
+                map.push(f64::from(0.3 + 0.6 * n[1].max(0.0)) / 0.6);
+            }
+        }
+        let mut meshes = vec![s];
+        debake_gains(&mut meshes, &[true], &[Some(map.clone())]);
+        let s = &meshes[0];
+        assert!(s.attributes & MESH_GAIN != 0 && s.gains.len() == s.positions.len());
+        let after: Vec<f64> = map.iter().zip(&s.gains).map(|(&m, &g)| m * 2f64.powf(f64::from(g as u8 as i8) / 64.0)).collect();
+        let spread = |v: &[f64]| v.iter().cloned().fold(0.0, f64::max) / v.iter().cloned().fold(f64::MAX, f64::min);
+        assert!(spread(&map) > 2.5 && spread(&after) < 1.4, "{} {}", spread(&map), spread(&after));
     }
     #[test]
     fn mesh_index_width_changes_above_65535_and_wide_matrix_ids_survive() {
