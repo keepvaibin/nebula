@@ -134,6 +134,20 @@ namespace MR {
     }
 
     bool makeObjectArchiveFileName(FormattedName& rDst, const char* pName) {
+        // A mod's model (references 4): no game archive name has a ':'.
+        if (const char* const pColon = strchr(pName, ':'); pColon != nullptr) {
+            char id[128];
+            const u32 length = static_cast< u32 >(pColon - pName);
+            if (length == 0 || length >= sizeof(id) || pColon[1] == 0) {
+                rDst.format("%s", pName);
+                return false;
+            }
+            memcpy(id, pName, length);
+            id[length] = 0;
+            rDst.format("/Luma/%s/%s", id, pColon + 1);
+            return isFileExist(rDst.c_str(), false);
+        }
+
         rDst.format("/ObjectData/%s", pName);
 
         if (isFileExist(rDst.c_str(), true)) {
@@ -149,6 +163,20 @@ namespace MR {
         rDst.format("%s", pName);
 
         return isFileExist(rDst.c_str(), true);
+    }
+
+    const char* getArchiveModelName(const char* pName) {
+        const char* const pColon = strchr(pName, ':');
+        if (pColon == nullptr) {
+            return pName;
+        }
+        const char* pLeaf = pColon + 1;
+        for (const char* p = pLeaf; *p != 0; p++) {
+            if (*p == '/') {
+                pLeaf = p + 1;
+            }
+        }
+        return pLeaf;
     }
 
     bool makeLayoutArchiveFileName(FormattedName& rDst, const char* pName) {

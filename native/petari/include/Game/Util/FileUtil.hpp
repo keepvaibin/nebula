@@ -45,8 +45,13 @@ namespace MR {
     void makeFileNameConsideringLanguage(FormattedName& rDst, const char* pFilePath);
 
     // The store path of the object archive pName ("Kuribo": the language's, ObjectData's or MapPartsData's, else pName
-    // itself); whether the store has it.
+    // itself); whether the store has it. A mod's model "<id>:<path>" (references 4) is the archive its cook made of
+    // assets/<path>.glb: /Luma/<id>/<path> (the store drops ".arc").
     bool makeObjectArchiveFileName(FormattedName& rDst, const char* pName);
+
+    // The name of the model inside the object archive pName: pName for the game's ("Kuribo"); for a mod's
+    // "<id>:<path>" the last segment of <path> (the cook's <leaf>.bmd, models 2). A pointer into pName.
+    const char* getArchiveModelName(const char* pName);
 
     // The store path of the layout archive pName (the region's or LayoutData's, else pName itself); whether the store
     // has it.

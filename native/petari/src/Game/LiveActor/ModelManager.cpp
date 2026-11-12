@@ -1,4 +1,5 @@
 #include "Game/LiveActor/ModelManager.hpp"
+#include "Game/Util/FileUtil.hpp"
 #include "Game/Animation/BckCtrl.hpp"
 #include "Game/Animation/BpkPlayer.hpp"
 #include "Game/Animation/BrkPlayer.hpp"
@@ -435,10 +436,12 @@ void ModelManager::changeBckSetting(const char* pBckName, const char* pActorAnim
 void ModelManager::init(const char* pModelName, const char* pAnimationName, bool deferMaterials) {
     ResourceHolder* modelHolder = MR::createAndAddResourceHolder(pModelName);
     ResourceHolder* animationHolder = pAnimationName == nullptr ? modelHolder : MR::createAndAddResourceHolder(pAnimationName);
+    // The archive by its name, the model in it by the model's (a mod's "<id>:<path>" holds <leaf>.bmd: FileUtil).
+    const char* const pResName = MR::getArchiveModelName(pModelName);
 
     bool hasMaterialAnm = animationHolder->isExistMaterialAnm();
-    bool hasMovingMaterial = MaterialUpdater::hasMovingMaterial(static_cast< ModelData* >(modelHolder->mModelResTable->getRes(pModelName)));
-    initModelAndAnimation(modelHolder, pModelName, animationHolder, ModelFlag_None);
+    bool hasMovingMaterial = MaterialUpdater::hasMovingMaterial(static_cast< ModelData* >(modelHolder->mModelResTable->getRes(pResName)));
+    initModelAndAnimation(modelHolder, pResName, animationHolder, ModelFlag_None);
     initVisibilityAnm();
     if (hasMaterialAnm) {
         initMaterialAnm();
