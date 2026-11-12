@@ -590,3 +590,23 @@ minihoneybeekingdomgalaxy	BeeWallClimbPlanetA_0406e_honey_v_x	gloss	0.1	0	1.5		1
 sandstreamsmallplanet	QuickSandMat_v	dielectric	1	0			1				quicksand (the quicksand flow; FC c94, 4.11): matte; picture owed		
 quicksand2dplanet	lambert2_v	dielectric	1	0			1				quicksand (the 2D quicksand flow; FC c94, 4.11): matte; picture owed		
 quicksand2dplanet	lambert5_v_x	dielectric	1	0			1				quicksand (the 2D quicksand flow's second layer; FC c94, 4.11): matte; picture owed		
+iceringiceplanet	BackFaceMat										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+icesliproad	BackFaceMat										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+assemblyblockpartsiceb	IceBackFaceMat_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+assemblyblockpartsicec	IceBackFaceMat_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+assemblyblockpartsiced	IceBackFaceMat_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+assemblyblockpartsicee	IceBackFaceMat_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+lavabreakcolumn	BackFaceMat_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+lavashelltower	BackFaceMat_v*										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+lavatransparentplanet	BackMat										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+koopaball	BuckFaceMat_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+tamakoro	BuckFaceMat_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+watersphereobj	InsideMat										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+shockwavegenerator	glass_ura_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+glassbottletall	in1_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+capsulecage	IndMat										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+heavensdoorinsidecage	IndMat										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+electricbazookaplanetindirect	ind_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+foresthomeplanetindirect	FallBackFaceMat_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+peachcastlegardenplanetindirect	lambert119_v_x										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+reversekingdomplanetindirect	FallBackFaceMat_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
