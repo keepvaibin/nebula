@@ -68,6 +68,9 @@ float effect_luminance(std::uint32_t name) noexcept {
 // 100 units of the game are a metre (the player is 1.6 m tall).
 constexpr float kUnitsPerMetre = 100.0f;
 
+// The glow a draw gives now (defined with rt_emitter): the item words read it too (c60, A2-12).
+void live_glow(const NebulaFrameList& list, const NebulaFrameItem& item, const core::GpuMesh& mesh, float out[4]);
+
 // What an emitter is from one frame to the next (its kind, whose it is, which of them): a pixel's reservoir finds its
 // light again by it. Two emitters with one number are taken for each other. Never 0: kNoEmitterId is an emitter no
 // reservoir finds again (a particle: A2-09).
@@ -1775,9 +1778,19 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
                     std::memcpy(rt_item_coords_.data() + at, rows + std::size_t{mesh.map0_row} * 4u, 8u * sizeof(float));
                 }
             }
-            // What it shows with no light, and whether it glows (rt_shade.hlsli rt_hit_read).
-            words[14] = byte_of(mesh.hit_emission[0]) | byte_of(mesh.hit_emission[1]) << 8u | byte_of(mesh.hit_emission[2]) << 16u |
-                        (mesh.glow[3] != 0.0f ? 1u << 24u : 0u);
+            // What it shows with no light, and whether its light is in the list (rt_shade.hlsli rt_hit_read). Listed
+            // only where rt_emitter kept its block's light (not a glowing surface too large to be one light, not one
+            // past the list's room; a point light the game asked at its place stands for it too); its glow turned
+            // off by the game, it shows none and is not listed (c60, A2-12).
+            float glow_now[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+            if (mesh.glow[3] != 0.0f) {
+                live_glow(list, item, mesh, glow_now);
+            }
+            const bool glow_off = mesh.glow[3] != 0.0f && glow_now[3] == 0.0f;
+            const bool glow_listed = glow_now[3] != 0.0f && rt_emitter_blocks_.contains(item.block);
+            words[14] = glow_off ? 0u
+                                 : byte_of(mesh.hit_emission[0]) | byte_of(mesh.hit_emission[1]) << 8u |
+                                       byte_of(mesh.hit_emission[2]) << 16u | (glow_listed ? 1u << 24u : 0u);
             // Its paint as one light (the Physical style, FB 22.19): the share in bits 0-7, the direction in the
             // model's space as two signed 12-bit octahedral numbers (8-19, 20-31). 0: it stays painted.
             if (mesh.paint_share > 0.0f) {
@@ -2731,12 +2744,36 @@ void RenderCore::rt_emitter(const NebulaFrameItem& item, const core::GpuMesh& me
     if (glow[3] == 0.0f) {
         return;  // the game has turned this glow off
     }
-    const auto intensity_of = [&](float r) {
-        // A luminance lights by the mesh's size as the light itself stands for it (no wider than 6 m: a glowing
-        // plain is not one lamp).
-        const float metres = std::min(r, 600.0f) / kUnitsPerMetre;
-        return glow[3] > 0.0f ? glow[3] : -glow[3] * 3.14159265f * metres * metres;
+    // How the mesh's box lies: its three half axes through its matrix; with none (a skinned mesh: only where its
+    // matrices stand is known), its own box's proportions at the size given.
+    float axis[3][3]{}, half[3];
+    {
+        float extent[3], length = 0.0f;
+        for (unsigned k = 0; k < 3u; ++k) {
+            extent[k] = (mesh.max[k] - mesh.min[k]) * 0.5f;
+            length += extent[k] * extent[k];
+        }
+        length = std::sqrt(length);
+        for (unsigned k = 0; k < 3u; ++k) {
+            if (place != nullptr) {
+                for (unsigned r = 0; r < 3u; ++r) {
+                    axis[k][r] = place[r][k] * extent[k];
+                }
+                half[k] = std::sqrt(axis[k][0] * axis[k][0] + axis[k][1] * axis[k][1] + axis[k][2] * axis[k][2]);
+            } else {
+                half[k] = length > 0.0f ? extent[k] * (radius / length) : radius * 0.57735027f;
+            }
+        }
+    }
+    // A luminance lights by the area the mesh shows, its mean over all directions: a quarter of its surface (Cauchy;
+    // a box of half axes a, b, c: 2(ab + bc + ca)), in square metres (c60, A2-10; plan s5 I = L a).
+    const auto shown_m2 = [](float a, float b, float c) {
+        return 2.0f * (a * b + b * c + c * a) / (kUnitsPerMetre * kUnitsPerMetre);
     };
+    const auto candela_of = [&](float area_m2) { return glow[3] > 0.0f ? glow[3] : -glow[3] * area_m2; };
+    // One lamp: each half no wider than 6 m (a glowing plain is not one lamp).
+    const float lamp_candela =
+        candela_of(shown_m2(std::min(half[0], 600.0f), std::min(half[1], 600.0f), std::min(half[2], 600.0f)));
     const auto [found, fresh] = rt_emitter_blocks_.try_emplace(item.block, static_cast<std::uint32_t>(rt_emitters_.size()));
     if (fresh && ::galaxy::diagnosing(::galaxy::kDiagnoseRtInputs)) {
         ++rt_emitter_sources_[std::uint64_t{1u} << 32u | item.source_hash];
@@ -2744,7 +2781,7 @@ void RenderCore::rt_emitter(const NebulaFrameItem& item, const core::GpuMesh& me
     if (!fresh) {
         RtEmitter& same = rt_emitters_[found->second];
         if (same.kind == 1u && same.reserved[0] == 0u && radius > same.radius) {
-            const float candela = intensity_of(radius);
+            const float candela = lamp_candela;
             std::memcpy(same.centre, centre, sizeof(same.centre));
             same.radius = std::clamp(radius, 25.0f, 600.0f);
             for (unsigned c = 0; c < 3u; ++c) {
@@ -2753,19 +2790,11 @@ void RenderCore::rt_emitter(const NebulaFrameItem& item, const core::GpuMesh& me
         }
         return;
     }
-    // How the mesh's box lies: its three half axes through its matrix.
     float along[3]{}, thick = radius;
     unsigned count = 1u;
     float piece = radius;
+    float row_candela = lamp_candela;  // a row's piece: its share of the whole box's area
     if (place != nullptr) {
-        float axis[3][3], half[3];
-        for (unsigned k = 0; k < 3u; ++k) {
-            const float extent = (mesh.max[k] - mesh.min[k]) * 0.5f;
-            for (unsigned r = 0; r < 3u; ++r) {
-                axis[k][r] = place[r][k] * extent;
-            }
-            half[k] = std::sqrt(axis[k][0] * axis[k][0] + axis[k][1] * axis[k][1] + axis[k][2] * axis[k][2]);
-        }
         // Over 6 m in two axes: a glowing surface, not a lamp (L-3). Its light comes by the rays that meet it.
         constexpr float kAreaHalf = 300.0f;
         if ((half[0] > kAreaHalf ? 1 : 0) + (half[1] > kAreaHalf ? 1 : 0) + (half[2] > kAreaHalf ? 1 : 0) >= 2) {
@@ -2783,6 +2812,10 @@ void RenderCore::rt_emitter(const NebulaFrameItem& item, const core::GpuMesh& me
             count = std::clamp(static_cast<unsigned>(half[longest] / (2.0f * thick)), 2u, 16u);
             piece = half[longest] / static_cast<float>(count);
             std::memcpy(along, axis[longest], sizeof(along));
+            row_candela = glow[3] > 0.0f ? glow[3] * (2.0f * piece / kUnitsPerMetre)
+                                         : candela_of(shown_m2(half[longest], std::min(half[(longest + 1u) % 3u], 600.0f),
+                                                               std::min(half[(longest + 2u) % 3u], 600.0f)) /
+                                                      static_cast<float>(count));
         }
     }
     for (unsigned n = 0; n < count; ++n) {
@@ -2796,9 +2829,7 @@ void RenderCore::rt_emitter(const NebulaFrameItem& item, const core::GpuMesh& me
         // A row's piece: at its place along the axis, as long as a piece, its value a metre of that length.
         const float t = count == 1u ? 0.0f : (2.0f * (static_cast<float>(n) + 0.5f) / static_cast<float>(count) - 1.0f);
         const float size = count == 1u ? radius : std::max(thick, piece);
-        const float candela = count == 1u ? intensity_of(radius)
-                              : glow[3] > 0.0f ? glow[3] * (2.0f * piece / kUnitsPerMetre)
-                                                    : intensity_of(std::sqrt(thick * piece));
+        const float candela = count == 1u ? lamp_candela : row_candela;
         for (unsigned c = 0; c < 3u; ++c) {
             emitter.centre[c] = centre[c] + along[c] * t;
             emitter.colour[c] = glow[c] * candela;
