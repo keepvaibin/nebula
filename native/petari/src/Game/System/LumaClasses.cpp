@@ -94,13 +94,10 @@ namespace luma {
                 return n;
             }
 
-            bool same(const char* pA, const char* pB) {
-                while (*pA != 0 && *pA == *pB) {
-                    pA++;
-                    pB++;
-                }
-                return *pA == *pB;
-            }
+            // Names as the game's factory compares them (NameObjFactory: hashNameCase, isEqualStringCase): ASCII case
+            // folded, so a stage row's "kuribo" finds the class that replaces Kuribo, and two classes may not differ by
+            // case alone.
+            bool same(const char* pA, const char* pB) { return ::nebula_stricmp(pA, pB) == 0; }
 
             void copyName(char* pTo, const char* pFrom) {
                 u32 i = 0;
