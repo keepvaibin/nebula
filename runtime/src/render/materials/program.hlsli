@@ -47,6 +47,9 @@ cbuffer View : register(b0) {
                                // w kAmbientLook
     float4 view_dev[2];        // with bit 3: the development tunables (rt_dev.h from base_floor): [0] the values, [1] 1
                                // where the run gave one; x base_floor, y sun_strength, z sky_chroma, w stage_light (traced_painted)
+    float4 view_relight[4];    // with bit 3: the relight's view constants (traced_painted; A3-F18, the host's from the
+                               // rows above): [0] rgb lin(A), w luma(held); [1] rgb sky' E; [2] rgb key sun_strength E;
+                               // [3] rgb held / luma(held)
 };
 
 cbuffer Draw : register(b3) {
@@ -417,7 +420,7 @@ float3 traced_painted(float4 light, float nl, float3 o3, bool coloured) {
     const float o = light.a;
     const float3 luminance = float3(0.2126, 0.7152, 0.0722);
     // Painted (section 3): the art's light lin(A + K nl) divided out, the traced light's put back, in linear light.
-    const float3 sk = traced_lin(a), whole = traced_lin(saturate(a + k * nl));
+    const float3 sk = view_relight[0].rgb, whole = traced_lin(saturate(a + k * nl));  // lin(A): the host's (F18)
     const float3 keyed = max(whole - sk, 0.0);
     const float3 channel = float3(whole.r > 1e-4 ? (sk.r * o3.r + keyed.r * v.r) / whole.r : 1.0,
                                   whole.g > 1e-4 ? (sk.g * o3.g + keyed.g * v.g) / whole.g : 1.0,
@@ -431,20 +434,12 @@ float3 traced_painted(float4 light, float nl, float3 o3, bool coloured) {
     }
     // The relight (M2, M3, M8): rt_dev.h sun_strength and sky_chroma over 1.0 (D3) and October's 0.4; stage_light 1
     // October's own (the stage's light as it is: a dim or coloured stage dims and tints the art), 0 the art's own
-    // brightness kept (divided by the full light).
-    const float sun_strength = view_dev[1].y > 0.5 ? view_dev[0].y : 1.0;
-    const float sky_chroma = view_dev[1].z > 0.5 ? view_dev[0].z : 0.4;
-    const float stage_light = view_dev[1].w > 0.5 ? view_dev[0].w : 0.0;
-    const float3 sky = sk, full = traced_lin(saturate(a + k));
-    const float3 key = max(full - sky, 0.0);
-    const float exposure = dot(full, luminance) / max(dot(sky, luminance) + dot(key, luminance) * view_look.y, 1e-4);
-    const float sky_l = dot(sky, luminance);
-    const float3 sky_seen = view_look.w * lerp(float3(sky_l, sky_l, sky_l), sky, sky_chroma);
-    const float3 lit = (sky_seen * o3 + key * (sun_strength * nl) * v) * exposure;
-    const float3 held = lerp(full, float3(1.0, 1.0, 1.0), stage_light);
+    // brightness kept (divided by the full light). The view's part is the host's (F18, view_relight): lit =
+    // (sky' O + key sun_strength nl V) E, held = lerp(full, 1, stage_light).
+    const float3 lit = view_relight[1].rgb * o3 + view_relight[2].rgb * (nl * v);
     // A3-F8: lit over held in luminance, its colour over held's limited to a stop either way.
-    const float lit_l = dot(lit, luminance), held_l = dot(held, luminance);
-    const float3 tint = lit_l > 1e-6 && held_l > 1e-4 ? (lit / lit_l) / max(held / held_l, 1e-4) : float3(1.0, 1.0, 1.0);
+    const float lit_l = dot(lit, luminance), held_l = view_relight[0].w;
+    const float3 tint = lit_l > 1e-6 && held_l > 1e-4 ? (lit / lit_l) / max(view_relight[3].rgb, 1e-4) : float3(1.0, 1.0, 1.0);
     const float3 relit = held_l > 1e-4 ? (lit_l / held_l) * clamp(tint, 0.5, 2.0) : float3(1.0, 1.0, 1.0);
     return lerp(painted, relit, view_look.x);
 }

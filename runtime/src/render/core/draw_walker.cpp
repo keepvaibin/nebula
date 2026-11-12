@@ -502,6 +502,32 @@ const RenderCore::WalkView& RenderCore::walk_view(std::uint32_t index, const Neb
             rows.dev[0][i] = given ? rt_dev_[which] : 0.0f;
             rows.dev[1][i] = given ? 1.0f : 0.0f;
         }
+        // The relight's view constants (program.hlsli traced_painted, view_relight; A3-F18): the program's formulas
+        // on the rows above, once a view, not a pixel. sRGB decoded as traced_lin; dev y, z, w as the program reads them.
+        const auto lin = [](float v) {
+            v = std::max(v, 0.0f);
+            return v <= 0.04045f ? v / 12.92f : std::pow((v + 0.055f) / 1.055f, 2.4f);
+        };
+        const auto luma = [](const float* v) { return 0.2126f * v[0] + 0.7152f * v[1] + 0.0722f * v[2]; };
+        const float sun_strength = rows.dev[1][1] > 0.5f ? rows.dev[0][1] : 1.0f;
+        const float sky_chroma = rows.dev[1][2] > 0.5f ? rows.dev[0][2] : 0.4f;
+        const float stage_light = rows.dev[1][3] > 0.5f ? rows.dev[0][3] : 0.0f;
+        float sky[3], full[3], key[3], held[3];
+        for (unsigned ch = 0; ch < 3u; ++ch) {
+            sky[ch] = lin(rows.stage_a[ch]);
+            full[ch] = lin(std::clamp(rows.stage_a[ch] + rows.stage_k[ch], 0.0f, 1.0f));
+            key[ch] = std::max(full[ch] - sky[ch], 0.0f);
+            held[ch] = full[ch] + (1.0f - full[ch]) * stage_light;
+        }
+        const float exposure = luma(full) / std::max(luma(sky) + luma(key) * rows.look[1], 1e-4f);
+        const float sky_l = luma(sky), held_l = luma(held);
+        for (unsigned ch = 0; ch < 3u; ++ch) {
+            rows.relight[0][ch] = sky[ch];
+            rows.relight[1][ch] = rows.look[3] * (sky_l + (sky[ch] - sky_l) * sky_chroma) * exposure;
+            rows.relight[2][ch] = key[ch] * sun_strength * exposure;
+            rows.relight[3][ch] = held_l > 1e-4f ? held[ch] / held_l : 1.0f;
+        }
+        rows.relight[0][3] = held_l;
     }
     rows.scale[1] = walk_.time.t;
     rows.scale[2] = walk_.time.t_prev;

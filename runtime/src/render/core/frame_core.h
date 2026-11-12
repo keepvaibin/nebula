@@ -192,13 +192,15 @@ struct ViewRows {
                     // rt_look_): kForm, the sun's height over the player's up (at least 0.5), kDebake, kAmbientLook
     float dev[2][4];  // with view_flags bit 3: the programs' development tunables (rt_dev.h from BaseFloor): [0] the
                       // values, [1] 1 where the run gave one
+    float relight[4][4];  // with view_flags bit 3: the relight's view constants (program.hlsli view_relight; A3-F18):
+                          // lin(A) and luma(held), sky' E, key sun_strength E, held / luma(held)
 };
 // The cbuffer's packing: view_sky_up and view_flags share one 16-byte row.
 static_assert(offsetof(ViewRows, sky_up) == 128 && offsetof(ViewRows, view_flags) == 140 &&
               offsetof(ViewRows, scale) == 144 && offsetof(ViewRows, traced) == 160 && offsetof(ViewRows, stage_a) == 176 && offsetof(ViewRows, stage_k) == 192 &&
               offsetof(ViewRows, volume) == 208 &&
               offsetof(ViewRows, transmit) == 256 && offsetof(ViewRows, blend_guide) == 272 && offsetof(ViewRows, look) == 288 &&
-              offsetof(ViewRows, dev) == 304 && sizeof(ViewRows) == 336);
+              offsetof(ViewRows, dev) == 304 && offsetof(ViewRows, relight) == 336 && sizeof(ViewRows) == 400);
 
 // Everything one list needs that lasts as long as the list.
 struct ListData {
