@@ -133,6 +133,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/luma_services_host.cpp
     ${rt}/luma_system.cpp
     ${rt}/luma_mods.cpp
+    ${rt}/luma_fs.cpp
     ${rt}/achievements.cpp
     ${rt}/stats.cpp
     ${rt}/input_bindings.cpp
