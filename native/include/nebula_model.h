@@ -11,7 +11,7 @@ extern "C" {
 #endif
 
 #define NEBULA_MODEL_MAGIC 0x4C444D4Eu /* "NMDL" */
-#define NEBULA_MODEL_VERSION 8u
+#define NEBULA_MODEL_VERSION 10u /* 9: the hit record's bump fields (c67); 10: glow_shapes_at (c86) */
 #define NEBULA_MODEL_NONE NEBULA_NONE32
 
 enum { NEBULA_SCALE_BASIC = 0, NEBULA_SCALE_SOFTIMAGE = 1, NEBULA_SCALE_MAYA = 2 };
@@ -58,7 +58,23 @@ typedef struct NebulaModelHeader {
     uint32_t geometry_at, geometry_size; /* every stream, for one copy to the GPU */
     uint32_t hits_at;  /* material_count NebulaModelHit, in the materials' order */
     uint32_t paint_lights_at; /* mesh_count NebulaModelPaintLight, in the meshes' order; 0: none */
+    uint32_t glow_shapes_at;  /* version 10 on: mesh_count NebulaModelGlowSpan, then the NebulaModelGlowShape records;
+                                 0: none (c86, PLAN-LIGHTS L2) */
 } NebulaModelHeader;
+
+/* A glowing mesh's light as shapes (c86, PLAN-LIGHTS L2), in its model's space (units), each piece at most 6 m long:
+   a sphere (radius: the mean extent), a capsule (the segment along `axis`, 2 extent[0] long, radius extent[1]) or a
+   disc (facing `normal`, extent[0] by extent[1]; lit on both sides when two_sided). extent: the half spans along axis,
+   along the axis between, and along the shortest (`normal` for a disc: its triangles' mean normal). */
+enum { NEBULA_GLOW_SPHERE = 0, NEBULA_GLOW_CAPSULE = 1, NEBULA_GLOW_DISC = 2 };
+typedef struct NebulaModelGlowSpan {
+    uint32_t first, count; /* its shapes among the records; count 0: none */
+} NebulaModelGlowSpan;
+typedef struct NebulaModelGlowShape {
+    float centre[3], axis[3], normal[3], extent[3];
+    float area; /* its triangles', square units */
+    uint8_t kind, two_sided, reserved[2];
+} NebulaModelGlowShape;
 
 /* A painted mesh whose paint is one light (ray tracing's Physical style, RT-MASTER-PLAN 14.6): its vertex light fitted
    as a + b max(n.d, 0); the share b / (a + b) (0: the mesh stays as painted) and d in the model's space, octahedral,
@@ -360,7 +376,7 @@ static_assert(sizeof(NebulaModelMeshCoord) == 4);
 static_assert(sizeof(NebulaModelSlot) == 8);
 static_assert(sizeof(NebulaModelStep) == 8);
 static_assert(sizeof(NebulaModelDrawMatrix) == 8);
-static_assert(sizeof(NebulaModelHeader) == 30 * 4);
+static_assert(sizeof(NebulaModelHeader) == 31 * 4);
 static_assert(sizeof(NebulaModelStage) == 36);
 static_assert(sizeof(NebulaModelHit) == 120);
 static_assert(sizeof(NebulaModelJoint) == 96);

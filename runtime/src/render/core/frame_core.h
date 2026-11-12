@@ -74,6 +74,7 @@ struct GpuMesh {
     std::uint32_t site_stride = 0u;     // nonzero: one stream at `positions`
     std::uint32_t further_stride = 0u;
     std::uint32_t single_matrix = NEBULA_MODEL_NONE;
+    std::uint32_t glow_shape_first = 0u, glow_shape_count = 0u;  // c86 (L2): among its model's glow_shapes
     std::uint8_t index_bytes = 4u;
     std::uint8_t billboard = 0u;  // NebulaModelMesh.billboard: 1 a billboard, 2 a Y billboard (it turns to the eye)
     // What a ray reads of the mesh's material (nebula_model.h NebulaModelHit): its class and flags, what it shows with
@@ -125,6 +126,7 @@ struct GpuModel {
     std::vector<float> inverse_binds;  // 12 per joint
     std::vector<NebulaModelJoint> joints;
     std::vector<ao::ObjectSlot> object_slots;
+    std::vector<NebulaModelGlowShape> glow_shapes;  // c86 (L2): its glowing meshes' light shapes, model space
     ModelTables tables{};
     std::uint32_t first_mesh = 0u, mesh_count = 0u;
     std::uint32_t arena = 0u;

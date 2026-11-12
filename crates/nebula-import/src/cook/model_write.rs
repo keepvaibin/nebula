@@ -9,8 +9,8 @@ use anyhow::{bail, Context, Result};
 use std::collections::HashMap;
 
 pub const MAGIC: u32 = 0x4C44_4D4E;
-pub const VERSION: u32 = 8;
-pub const HEADER_WORDS: usize = 30;
+pub const VERSION: u32 = 10;
+pub const HEADER_WORDS: usize = 31;
 pub const HIT_BYTES: usize = 120;
 pub const STAGE_BYTES: usize = 36;
 pub const JOINT_BYTES: usize = 96;
@@ -634,6 +634,208 @@ pub fn twin_measures(ir: &ModelIr, stem: &str) -> (Vec<f64>, std::collections::B
         debake_gains(&mut meshes, &which, &maps, &materials, &std::collections::BTreeMap::new(), Some(&mut references));
     }
     (area, references)
+}
+
+/// c86 (PLAN-LIGHTS L2): a piece of a glowing mesh no longer than this (units: 6 m), and at most this many a mesh.
+const GLOW_PIECE: f64 = 600.0;
+const GLOW_PIECES_MOST: usize = 32;
+/// nebula_model.h NEBULA_GLOW_*.
+pub const GLOW_SPHERE: u8 = 0;
+pub const GLOW_CAPSULE: u8 = 1;
+pub const GLOW_DISC: u8 = 2;
+
+/// c86: one piece of a glowing mesh as a light's shape (nebula_model.h NebulaModelGlowShape), in the model's space.
+#[derive(Clone, Debug, PartialEq)]
+pub struct GlowShape {
+    pub centre: [f32; 3],
+    pub axis: [f32; 3],
+    pub normal: [f32; 3],
+    pub extent: [f32; 3],
+    pub area: f32,
+    pub kind: u8,
+    pub two_sided: bool,
+}
+
+/// c86: a symmetric 3 x 3 matrix's eigenvectors (Jacobi rotations; Press et al., Numerical Recipes, 11.1), largest
+/// eigenvalue first.
+fn principal_axes(mut a: [[f64; 3]; 3]) -> [[f64; 3]; 3] {
+    let mut v = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+    for _ in 0..50 {
+        let (p, q) = [(0usize, 1usize), (0, 2), (1, 2)]
+            .into_iter()
+            .max_by(|x, y| a[x.0][x.1].abs().total_cmp(&a[y.0][y.1].abs()))
+            .unwrap_or((0, 1));
+        let scale = a[0][0].abs() + a[1][1].abs() + a[2][2].abs();
+        if !(a[p][q].abs() > 1e-12 * scale) {
+            break;
+        }
+        let theta = (a[q][q] - a[p][p]) / (2.0 * a[p][q]);
+        let t = theta.signum() / (theta.abs() + (theta * theta + 1.0).sqrt());
+        let c = 1.0 / (t * t + 1.0).sqrt();
+        let s = t * c;
+        for k in 0..3 {
+            let (kp, kq) = (a[k][p], a[k][q]);
+            a[k][p] = c * kp - s * kq;
+            a[k][q] = s * kp + c * kq;
+        }
+        for k in 0..3 {
+            let (pk, qk) = (a[p][k], a[q][k]);
+            a[p][k] = c * pk - s * qk;
+            a[q][k] = s * pk + c * qk;
+        }
+        for k in 0..3 {
+            let (kp, kq) = (v[k][p], v[k][q]);
+            v[k][p] = c * kp - s * kq;
+            v[k][q] = s * kp + c * kq;
+        }
+    }
+    let mut order = [0usize, 1, 2];
+    order.sort_by(|&x, &y| a[y][y].total_cmp(&a[x][x]));
+    order.map(|i| [v[0][i], v[1][i], v[2][i]])
+}
+
+/// c86 (PLAN-LIGHTS L2): a glowing mesh's light as shapes (see GLOW_PIECE; capsule, disc or sphere).
+pub fn glow_shapes(s: &MeshStreams, two_sided: bool) -> Vec<GlowShape> {
+    let indices = if s.indices.is_empty() { &s.refined_indices } else { &s.indices };
+    let p = |i: u32| s.positions.get(i as usize).map(|v| v.map(f64::from));
+    // Each triangle: its corners and area.
+    let mut tris: Vec<([[f64; 3]; 3], f64, [f64; 3])> = Vec::new();
+    for t in indices.chunks_exact(3) {
+        let (Some(a), Some(b), Some(c)) = (p(t[0]), p(t[1]), p(t[2])) else { continue };
+        let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+        let w = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+        let n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+        let area = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt() / 2.0;
+        if area > 0.0 && area.is_finite() {
+            tris.push(([a, b, c], area, n.map(|x| x / (2.0 * area))));
+        }
+    }
+    if tris.is_empty() {
+        return Vec::new();
+    }
+    let (mut lo, mut hi) = ([f64::MAX; 3], [f64::MIN; 3]);
+    for (corners, _, _) in &tris {
+        for c in corners {
+            for k in 0..3 {
+                lo[k] = lo[k].min(c[k]);
+                hi[k] = hi[k].max(c[k]);
+            }
+        }
+    }
+    let across = (0..3).map(|k| hi[k] - lo[k]).fold(0.0, f64::max);
+    // A piece's frame: (centre, axes longest first, half extents, area).
+    let frame = |piece: &[usize]| {
+        let total: f64 = piece.iter().map(|&t| tris[t].1).sum();
+        let mut mean = [0.0f64; 3];
+        for &t in piece {
+            for c in &tris[t].0 {
+                for k in 0..3 {
+                    mean[k] += tris[t].1 / 3.0 * c[k];
+                }
+            }
+        }
+        mean = mean.map(|x| x / total);
+        let mut cov = [[0.0f64; 3]; 3];
+        for &t in piece {
+            for c in &tris[t].0 {
+                let d = [c[0] - mean[0], c[1] - mean[1], c[2] - mean[2]];
+                for i in 0..3 {
+                    for j in 0..3 {
+                        cov[i][j] += tris[t].1 / 3.0 * d[i] * d[j];
+                    }
+                }
+            }
+        }
+        let axes = principal_axes(cov);
+        let mut span = [(f64::MAX, f64::MIN); 3];
+        for &t in piece {
+            for c in &tris[t].0 {
+                for (k, axis) in axes.iter().enumerate() {
+                    let x = (c[0] - mean[0]) * axis[0] + (c[1] - mean[1]) * axis[1] + (c[2] - mean[2]) * axis[2];
+                    span[k] = (span[k].0.min(x), span[k].1.max(x));
+                }
+            }
+        }
+        let mut order = [0usize, 1, 2];
+        order.sort_by(|&x, &y| (span[y].1 - span[y].0).total_cmp(&(span[x].1 - span[x].0)));
+        let mut centre = mean;
+        for k in 0..3 {
+            let mid = (span[k].0 + span[k].1) / 2.0;
+            for i in 0..3 {
+                centre[i] += axes[k][i] * mid;
+            }
+        }
+        (centre, order.map(|k| axes[k]), order.map(|k| (span[k].1 - span[k].0) / 2.0), total)
+    };
+    let mut pieces: Vec<Vec<usize>> = vec![(0..tris.len()).collect()];
+    let mut whole = vec![false];
+    while pieces.len() < GLOW_PIECES_MOST {
+        // The longest piece that can still be split.
+        let longest = (0..pieces.len())
+            .filter(|&i| !whole[i])
+            .map(|i| (i, frame(&pieces[i])))
+            .filter(|(_, f)| 2.0 * f.2[0] > GLOW_PIECE)
+            .max_by(|x, y| x.1 .2[0].total_cmp(&y.1 .2[0]));
+        let Some((i, (centre, axes, _, total))) = longest else { break };
+        let along = |t: usize| {
+            let c = tris[t].0;
+            (0..3).map(|k| ((c[0][k] + c[1][k] + c[2][k]) / 3.0 - centre[k]) * axes[0][k]).sum::<f64>()
+        };
+        let mut piece = std::mem::take(&mut pieces[i]);
+        piece.sort_by(|&x, &y| along(x).total_cmp(&along(y)).then(x.cmp(&y)));
+        let mut sum = 0.0;
+        let cut = piece
+            .iter()
+            .position(|&t| {
+                sum += tris[t].1;
+                sum >= total / 2.0
+            })
+            .map_or(piece.len(), |n| n + 1);
+        if cut == 0 || cut >= piece.len() {
+            pieces[i] = piece;
+            whole[i] = true;
+            continue;
+        }
+        let rest = piece.split_off(cut);
+        pieces[i] = piece;
+        pieces.push(rest);
+        whole.push(false);
+    }
+    pieces
+        .iter()
+        .map(|piece| {
+            let (centre, axes, extent, area) = frame(piece);
+            let kind = if extent[0] > 3.0 * extent[1] {
+                GLOW_CAPSULE
+            } else if across > GLOW_PIECE && extent[2] < 0.1 * extent[1] {
+                GLOW_DISC
+            } else {
+                GLOW_SPHERE
+            };
+            let mut normal = axes[2];
+            if kind == GLOW_DISC {
+                let mut n = [0.0f64; 3];
+                for &t in piece {
+                    for k in 0..3 {
+                        n[k] += tris[t].1 * tris[t].2[k];
+                    }
+                }
+                let length = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+                if length > 0.5 * area {
+                    normal = n.map(|x| x / length);
+                }
+            }
+            GlowShape {
+                centre: centre.map(|x| x as f32),
+                axis: axes[0].map(|x| x as f32),
+                normal: normal.map(|x| x as f32),
+                extent: extent.map(|x| x as f32),
+                area: area as f32,
+                kind,
+                two_sided,
+            }
+        })
+        .collect()
 }
 
 pub fn debake_report(ir: &ModelIr, stem: &str) -> Option<DebakeReport> {
@@ -1768,6 +1970,53 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
     } else {
         0
     };
+    // c86 (PLAN-LIGHTS L2): each glowing mesh's light as shapes (nebula_model.h NebulaModelGlowSpan, NebulaModelGlowShape).
+    let glowing: Vec<bool> = ir
+        .materials
+        .iter()
+        .enumerate()
+        .map(|(i, m)| {
+            let mut r = super::hit_record::read(m);
+            finish_reading(ir, stem, i, 0.0, &mut r);
+            super::hit_record::glow_of(stem, &m.name, &r)[3] != 0.0
+        })
+        .collect();
+    let shapes: Vec<Vec<GlowShape>> = ir
+        .shapes
+        .iter()
+        .zip(&meshes)
+        .map(|(shape, streams)| {
+            let material = shape.material as usize;
+            if !glowing.get(material).copied().unwrap_or(false) {
+                return Vec::new();
+            }
+            let two_sided = ir.materials.get(material).is_some_and(|m| m.cull == 0);
+            glow_shapes(streams, two_sided)
+        })
+        .collect();
+    b.align(4);
+    let glow_shapes_at = if shapes.iter().any(|v| !v.is_empty()) {
+        let at = b.at();
+        let mut first = 0u32;
+        for v in &shapes {
+            b.u32(if v.is_empty() { 0 } else { first });
+            b.u32(v.len() as u32);
+            first += v.len() as u32;
+        }
+        for g in shapes.iter().flatten() {
+            b.fs(&g.centre);
+            b.fs(&g.axis);
+            b.fs(&g.normal);
+            b.fs(&g.extent);
+            b.f32(g.area);
+            b.u8(g.kind);
+            b.u8(u8::from(g.two_sided));
+            b.u16(0);
+        }
+        at
+    } else {
+        0
+    };
     b.align(32);
     let size = b.at();
     let mut flags = u32::from(ir.scale_mode);
@@ -1808,6 +2057,7 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
         geometry_size,
         hits_at,
         paint_lights_at,
+        glow_shapes_at,
     ];
     for (i, &v) in header.iter().enumerate() {
         b.patch32(i * 4, v);
@@ -1969,6 +2219,50 @@ mod tests {
         assert!(meshes[1].gains.iter().all(|&g| g == 0), "the dark ball keeps its own light");
         assert!(meshes[2].attributes & MESH_GAIN == 0);
     }
+    #[test]
+    fn a_glowing_mesh_is_cut_into_capsules_discs_and_spheres() {
+        // c86 (L2): a cable 20 m long and 0.2 m thick is capsules along it, each at most 6 m; a lit floor 12 m square
+        // is discs facing up; a ball of 1 m is one sphere.
+        let mut cable = MeshStreams::default();
+        for i in 0..=40u32 {
+            let x = i as f32 * 50.0;
+            for (y, z) in [(0.0, 0.0), (20.0, 0.0), (0.0, 20.0)] {
+                cable.positions.push([x, y, z]);
+            }
+            if i < 40 {
+                let a = i * 3;
+                for (p, q) in [(0, 1), (1, 2), (2, 0)] {
+                    cable.indices.extend([a + p, a + 3 + p, a + q, a + q, a + 3 + p, a + 3 + q]);
+                }
+            }
+        }
+        let pieces = glow_shapes(&cable, false);
+        assert!(pieces.len() >= 4 && pieces.iter().all(|g| g.kind == GLOW_CAPSULE && 2.0 * g.extent[0] <= 600.5), "{pieces:?}");
+        assert!(pieces.iter().all(|g| g.axis[0].abs() > 0.99));
+        let mut floor = MeshStreams::default();
+        for i in 0..=12u32 {
+            for j in 0..=12u32 {
+                floor.positions.push([i as f32 * 100.0, 0.0, j as f32 * 100.0]);
+            }
+        }
+        for i in 0..12u32 {
+            for j in 0..12u32 {
+                let (a, b) = (i * 13 + j, (i + 1) * 13 + j);
+                floor.indices.extend([a, a + 1, b, b, a + 1, b + 1]);
+            }
+        }
+        let discs = glow_shapes(&floor, true);
+        assert!(discs.len() >= 4 && discs.iter().all(|g| g.kind == GLOW_DISC && g.normal[1].abs() > 0.99 && g.two_sided), "{discs:?}");
+        let area: f32 = discs.iter().map(|g| g.area).sum();
+        assert!((area - 1200.0 * 1200.0).abs() < 1.0, "{area}");
+        let mut ball = ball(|_| [1.0; 3]);
+        for p in ball.positions.iter_mut() {
+            *p = p.map(|x| x * 50.0);
+        }
+        let one = glow_shapes(&ball, false);
+        assert!(one.len() == 1 && one[0].kind == GLOW_SPHERE && (one[0].extent[0] - 50.0).abs() < 2.0, "{one:?}");
+    }
+
     #[test]
     fn a_far_twin_takes_its_near_models_light_level() {
         // c85 (3.5): an even ball painted 0.3 keeps its colour on its own (Lref 0.3); given its near model's Lref 0.6 it

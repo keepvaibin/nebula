@@ -334,6 +334,21 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes)
     model.mesh_count = header.mesh_count;
 
     meshes.resize(header.mesh_count);
+    // c86 (PLAN-LIGHTS L2): each glowing mesh's light shapes (version 10 on; the lights pass shades them).
+    model.glow_shapes.clear();
+    if (header.version >= 10u && header.glow_shapes_at != 0u) {
+        const auto* spans = at<NebulaModelGlowSpan>(file, header.glow_shapes_at);
+        const auto* shapes = reinterpret_cast<const NebulaModelGlowShape*>(spans + header.mesh_count);
+        std::uint32_t total = 0u;
+        for (std::uint32_t m = 0; m < header.mesh_count; ++m) {
+            total = std::max(total, spans[m].first + spans[m].count);
+        }
+        model.glow_shapes.assign(shapes, shapes + total);
+        for (std::uint32_t m = 0; m < header.mesh_count; ++m) {
+            meshes[m].glow_shape_first = spans[m].first;
+            meshes[m].glow_shape_count = spans[m].count;
+        }
+    }
     const auto* file_meshes = at<NebulaModelMesh>(file, header.meshes_at);
     const auto* hits = header.hits_at != 0u ? at<NebulaModelHit>(file, header.hits_at) : nullptr;
     const auto* paint_lights = header.paint_lights_at != 0u ? at<NebulaModelPaintLight>(file, header.paint_lights_at) : nullptr;
