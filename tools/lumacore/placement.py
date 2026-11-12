@@ -48,7 +48,11 @@ def main():
 
     bases = {}
     for t in read_json(a.types)["types"]:
-        bases[t["name"]] = [b["name"] for b in t.get("bases", ())]
+        # A record with no name (an anonymous struct or union inside a class) is no class a placement can make, and
+        # sorted(bases) cannot order None among names (the integration build, 11-12).
+        if t["name"] is None:
+            continue
+        bases[t["name"]] = [b["name"] for b in t.get("bases", ()) if b["name"] is not None]
 
     folder = pathlib.Path(a.defined)
     functions = {}

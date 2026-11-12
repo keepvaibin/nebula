@@ -435,7 +435,16 @@ namespace luma {
                         return "actor";
                     }
                     if (pCamera->rig == LUMA_DRAW_VIEW_RIG_JOINT) {
-                        if (memchr(pCamera->joint, '\0', sizeof(pCamera->joint)) == nullptr || pCamera->joint[0] == '\0') {
+                        // The joint's name ends inside its 32 bytes and is not empty. (A loop, not memchr: the game
+                        // module links no C library, and smg_game_plain.dll did not link with it; int0400.)
+                        bool ends = false;
+                        for (unsigned i = 0; i < sizeof(pCamera->joint); i++) {
+                            if (pCamera->joint[i] == '\0') {
+                                ends = true;
+                                break;
+                            }
+                        }
+                        if (!ends || pCamera->joint[0] == '\0') {
                             return "joint";
                         }
                         if (!finite(pCamera->near_z) || !(pCamera->near_z > 0.0f)) {

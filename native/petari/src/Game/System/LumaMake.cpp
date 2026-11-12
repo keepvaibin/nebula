@@ -88,8 +88,10 @@ namespace luma {
             }
 
             // The rows' table in the scene's memory: a TableData as the importer cooks one, then its Table. Null: none
-            // left.
-            const ::Table* writeTable(const char* pName, u32 count, const LumaMakePlace* pPlace) {
+            // left. Its result is written const void* (the game's ::Table): this function's hook row is generated
+            // inside namespace luma, where the type text "const Table *" names luma::Table, and the row did not
+            // compile (the integration build, 11-12).
+            const void* writeTable(const char* pName, u32 count, const LumaMakePlace* pPlace) {
                 u32 nameBytes = 0;
                 while (pName[nameBytes] != 0) {
                     nameBytes++;
@@ -195,7 +197,7 @@ namespace luma {
                 say(pMod, "make %s: its files are not in this game", pName);
                 return -2;
             }
-            const ::Table* const pTable = writeTable(pName, count, pPlace);
+            const ::Table* const pTable = static_cast<const ::Table*>(writeTable(pName, count, pPlace));
             if (pTable == nullptr) {
                 say(pMod, "make %s: no memory in the scene for %u places", pName, count);
                 return -4;
