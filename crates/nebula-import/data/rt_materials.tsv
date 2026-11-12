@@ -826,28 +826,28 @@ astrobasec	FloorMoyou_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5):
 astrobasec	floorline_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was painted; picture owed			
 astrochildroom	WoodPanelMat_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
 miniaturegalaxyunknown	RockMat_v	gloss	0.15	0							FC c104 intent A: a painted reflection 1.00 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
-ufokinoko	lambert8_v	metal	0.22	1							director d15: the Starshroom, the red hull: polished metal in its own colour (the owner 11-12: not properly glass and metal); picture owed		art	
-ufokinoko	lambert7_v	metal	0.22	1							director d15: the Starshroom, the cream hull and stem: polished metal in its own colour (the owner 11-12: not properly glass and metal); picture owed		art	
+ufokinoko	lambert8_v	gloss	0.10	0							director d15b: the Starshroom, a painted hull with a strong coat (the art's reflection share is its F0, d19); not a metal: its paint stays; picture owed			
+ufokinoko	lambert7_v	gloss	0.10	0							director d15b: the Starshroom, a painted hull with a strong coat (the art's reflection share is its F0, d19); not a metal: its paint stays; picture owed			
 ufokinoko	wawa:lambert7_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
 ufokinoko	wawa:lambert8_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
 ufokinoko	lambert13_v	metal	0.25	1							director d15: the Starshroom, the bands and bolts: silver (the owner 11-12: not properly glass and metal); picture owed		silver	
-ufokinokolanding	lambert8_v	metal	0.22	1							director d15: the Starshroom, the red hull: polished metal in its own colour (the owner 11-12: not properly glass and metal); picture owed		art	
-ufokinokolanding	lambert7_v	metal	0.22	1							director d15: the Starshroom, the cream hull and stem: polished metal in its own colour (the owner 11-12: not properly glass and metal); picture owed		art	
+ufokinokolanding	lambert8_v	gloss	0.10	0							director d15b: the Starshroom, a painted hull with a strong coat (the art's reflection share is its F0, d19); not a metal: its paint stays; picture owed			
+ufokinokolanding	lambert7_v	gloss	0.10	0							director d15b: the Starshroom, a painted hull with a strong coat (the art's reflection share is its F0, d19); not a metal: its paint stays; picture owed			
 ufokinokolanding	wawa:lambert7_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
 ufokinokolanding	wawa:lambert8_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
 ufokinokolanding	lambert13_v	metal	0.25	1							director d15: the Starshroom, the bands and bolts: silver (the owner 11-12: not properly glass and metal); picture owed		silver	
-ufokinokolandingastro	lambert8_v	metal	0.22	1							director d15: the Starshroom, the red hull: polished metal in its own colour (the owner 11-12: not properly glass and metal); picture owed		art	
-ufokinokolandingastro	lambert7_v	metal	0.22	1							director d15: the Starshroom, the cream hull and stem: polished metal in its own colour (the owner 11-12: not properly glass and metal); picture owed		art	
+ufokinokolandingastro	lambert8_v	gloss	0.10	0							director d15b: the Starshroom, a painted hull with a strong coat (the art's reflection share is its F0, d19); not a metal: its paint stays; picture owed			
+ufokinokolandingastro	lambert7_v	gloss	0.10	0							director d15b: the Starshroom, a painted hull with a strong coat (the art's reflection share is its F0, d19); not a metal: its paint stays; picture owed			
 ufokinokolandingastro	wawa:lambert7_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
 ufokinokolandingastro	wawa:lambert8_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
 ufokinokolandingastro	lambert13_v	metal	0.25	1							director d15: the Starshroom, the bands and bolts: silver (the owner 11-12: not properly glass and metal); picture owed		silver	
-ufokinokolow	lambert8_v	metal	0.22	1							director d15: the Starshroom, the red hull: polished metal in its own colour (the owner 11-12: not properly glass and metal); picture owed		art	
-ufokinokolow	lambert7_v	metal	0.22	1							director d15: the Starshroom, the cream hull and stem: polished metal in its own colour (the owner 11-12: not properly glass and metal); picture owed		art	
+ufokinokolow	lambert8_v	gloss	0.10	0							director d15b: the Starshroom, a painted hull with a strong coat (the art's reflection share is its F0, d19); not a metal: its paint stays; picture owed			
+ufokinokolow	lambert7_v	gloss	0.10	0							director d15b: the Starshroom, a painted hull with a strong coat (the art's reflection share is its F0, d19); not a metal: its paint stays; picture owed			
 ufokinokolow	wawa:lambert7_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
 ufokinokolow	wawa:lambert8_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
 ufokinokolow	lambert13_v	metal	0.25	1							director d15: the Starshroom, the bands and bolts: silver (the owner 11-12: not properly glass and metal); picture owed		silver	
-ufokinokounderconstruction	lambert8_v	metal	0.22	1							director d15: the Starshroom, the red hull: polished metal in its own colour (the owner 11-12: not properly glass and metal); picture owed		art	
-ufokinokounderconstruction	lambert7_v	metal	0.22	1							director d15: the Starshroom, the cream hull and stem: polished metal in its own colour (the owner 11-12: not properly glass and metal); picture owed		art	
+ufokinokounderconstruction	lambert8_v	gloss	0.10	0							director d15b: the Starshroom, a painted hull with a strong coat (the art's reflection share is its F0, d19); not a metal: its paint stays; picture owed			
+ufokinokounderconstruction	lambert7_v	gloss	0.10	0							director d15b: the Starshroom, a painted hull with a strong coat (the art's reflection share is its F0, d19); not a metal: its paint stays; picture owed			
 ufokinokounderconstruction	wawa:lambert7_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
 ufokinokounderconstruction	wawa:lambert8_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
 ufokinokounderconstruction	lambert13_v	metal	0.25	1							director d15: the Starshroom, the bands and bolts: silver (the owner 11-12: not properly glass and metal); picture owed		silver	
