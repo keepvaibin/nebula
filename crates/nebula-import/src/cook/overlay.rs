@@ -44,9 +44,11 @@ pub fn read_plan(text: &str) -> Result<(String, Vec<Change>)> {
 }
 
 /// Where a mod's model file goes and the game model it stands in for (models contract 2, G-M1): `X.bdl.glb` and
-/// `X.bmd.glb` that file; a plain `X.glb` in an archive whichever of `X.bdl` and `X.bmd` the game's archive has; a model
-/// outside an archive (a new model) `X.bmd`, standing in for nothing. Without the game's store the place is the one
-/// its name gives and its joints are not numbered by the game's (a Note says so).
+/// `X.bmd.glb` that file; a plain `X.glb` in an archive whichever of `X.bdl` and `X.bmd` the game's archive has. A model
+/// outside an archive is a new model, standing in for nothing (a mod's `assets/<path>.glb`, the store's
+/// `Luma/<id>/<path>.glb`): it becomes an object archive of its own laid out as the game's, `<path>.arc/X.bmd` (or
+/// `X.bdl` when named so), its clips inside, which the game loads as it loads its own. Without the game's store the
+/// place is the one its name gives and its joints are not numbered by the game's (a Note says so).
 fn model_place(change: &Change, base: Option<&Path>) -> Result<(String, Option<super::gltf::GameModel>)> {
     use super::refuse::{note, refuse};
     let lower = change.path.to_ascii_lowercase();
@@ -56,7 +58,9 @@ fn model_place(change: &Change, base: Option<&Path>) -> Result<(String, Option<s
     let stem = file.split('.').next().unwrap_or(file);
     let written = if explicit { without_modern.to_string() } else { format!("{}.bmd", &change.path[..change.path.len() - file.len() + stem.len()]) };
     if !folder.to_ascii_lowercase().ends_with(".arc") {
-        return Ok((written, None));
+        let ending = if lower.ends_with(".bdl.gltf") || lower.ends_with(".bdl.glb") { "bdl" } else { "bmd" };
+        let archive = &change.path[..change.path.len() - file.len() + stem.len()];
+        return Ok((format!("{archive}.arc/{stem}.{ending}"), None));
     }
     let Some(base) = base else {
         note("Cook.Model.GameUnknown", &[("file", change.path.clone())]);
@@ -93,6 +97,31 @@ fn model_place(change: &Change, base: Option<&Path>) -> Result<(String, Option<s
     }
 }
 
+/// A new model's level of detail (models contract 6: `<path>Middle.glb` or `<path>Low.glb` outside an archive, the
+/// endings with their capitals as LodCtrl names them) whose base model `<path>` is none of the mod's files: refused
+/// as `Cook.Model.LevelAlone` {file, model}. The store compares paths without case, so the base is found so.
+fn level_alone(change: &Change, changes: &[Change]) -> Result<()> {
+    let lower = change.path.to_ascii_lowercase();
+    let (folder, file) = change.path.rsplit_once('/').map_or(("", change.path.as_str()), |(f, n)| (f, n));
+    if folder.to_ascii_lowercase().ends_with(".arc") || !(lower.ends_with(".glb") || lower.ends_with(".gltf")) {
+        return Ok(());
+    }
+    let stem = file.split('.').next().unwrap_or(file);
+    let Some(base) = ["Middle", "Low"].iter().find_map(|level| stem.strip_suffix(level).filter(|b| !b.is_empty())) else {
+        return Ok(());
+    };
+    let prefix = if folder.is_empty() { String::new() } else { format!("{folder}/") };
+    let wanted = format!("{prefix}{base}").to_ascii_lowercase();
+    let is_base = |c: &Change| {
+        let path = c.path.to_ascii_lowercase();
+        !c.merge && [".glb", ".gltf", ".bmd.glb", ".bmd.gltf", ".bdl.glb", ".bdl.gltf"].iter().any(|e| path == format!("{wanted}{e}"))
+    };
+    if changes.iter().any(is_base) {
+        return Ok(());
+    }
+    Err(super::refuse::refuse("Cook.Model.LevelAlone", &[("file", change.path.clone()), ("model", format!("{prefix}{base}.glb"))]))
+}
+
 /// What a modern file of a mod becomes: each file's place in the game, with the game's ending, its bytes, and whether
 /// they are the store's already (else the cooker reads them). Empty: it isn't one. A model's animations go beside it.
 fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Vec<(String, Vec<u8>, bool)>> {
@@ -118,7 +147,8 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         let (native_path, game) = model_place(change, base)?;
         let (model, animations, made) = super::gltf::to_files_for(bytes, change.source.parent(), stem, game.as_ref())?;
         super::refuse::record(super::refuse::CookFact::Model { path: native_path.clone(), source: change.path.clone(), facts: made });
-        let folder = change.path.rfind('/').map_or("", |at| &change.path[..at + 1]);
+        // Clips go beside the model in its archive.
+        let folder = native_path.rfind('/').map_or(String::new(), |at| native_path[..at + 1].to_string());
         let mut out = vec![(native_path, model, true)];
         out.extend(animations.into_iter().map(|(file, clip)| (format!("{folder}{file}"), clip, true)));
         return Ok(out);
@@ -215,6 +245,7 @@ pub fn write_overlay(game_id: &str, changes: &[Change], patches: &PlanPatches, b
             .with_context(|| format!("{} cannot be read", change.source.display()))
             .and_then(|bytes| {
                 stats.bytes_in += bytes.len() as u64;
+                level_alone(change, changes)?;
                 let modern = modern_files(change, &bytes, base)?;
                 if modern.is_empty() {
                     return Ok(vec![(change.path.clone(), cook_change(change, bytes, &waves, stats)?)]);
@@ -699,9 +730,23 @@ mod tests {
         let (path, game) = model_place(&change("ObjectData/Kuribo.arc/Kuribo.glb"), None).unwrap();
         assert_eq!((path.as_str(), game.is_none()), ("ObjectData/Kuribo.arc/Kuribo.bmd", true));
         assert_eq!(take_notes().len(), 1);
-        // Outside an archive: a new model, standing in for nothing.
+        // Outside an archive: a new model, standing in for nothing, in an archive of its own as the game's are.
         let (path, game) = model_place(&change("ObjectData/Thing.glb"), Some(&one)).unwrap();
-        assert_eq!((path.as_str(), game.is_none()), ("ObjectData/Thing.bmd", true));
+        assert_eq!((path.as_str(), game.is_none()), ("ObjectData/Thing.arc/Thing.bmd", true));
+        let (path, _) = model_place(&change("Luma/gold.mario/hats/top.bdl.glb"), Some(&one)).unwrap();
+        assert_eq!(path, "Luma/gold.mario/hats/top.arc/top.bdl");
+        let (path, _) = model_place(&change("Luma/gold.mario/hats/topLow.glb"), None).unwrap();
+        assert_eq!(path, "Luma/gold.mario/hats/topLow.arc/topLow.bmd");
+        // A level needs its base model among the mod's files (contract 6); the endings keep their capitals.
+        let low = change("Luma/gold.mario/hats/topLow.glb");
+        let (phrase, args) = why(level_alone(&low, std::slice::from_ref(&low)).unwrap_err());
+        assert_eq!(phrase, luma_validate::Arg::Phrase("Cook.Model.LevelAlone"));
+        assert!(args.contains(&"model=T:Luma/gold.mario/hats/top.glb".to_string()), "{args:?}");
+        let both = [change("Luma/gold.mario/hats/topLow.glb"), change("Luma/gold.mario/hats/TOP.gltf")];
+        assert!(level_alone(&both[0], &both).is_ok());
+        let yellow = change("Luma/gold.mario/yellow.glb");
+        assert!(level_alone(&yellow, std::slice::from_ref(&yellow)).is_ok());
+        assert!(level_alone(&change("ObjectData/KuriboLow.arc/KuriboLow.glb"), &[]).is_ok());
         // The cook numbers the joints by the game's; one it lacks is refused by name.
         let swapped = String::from_utf8_lossy(source).replace("\"head\"", "\"neck\"");
         let (_, game) = model_place(&change("ObjectData/Kuribo.arc/Kuribo.glb"), Some(&one)).unwrap();
