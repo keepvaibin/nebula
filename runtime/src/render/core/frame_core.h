@@ -68,6 +68,7 @@ struct GpuMesh {
     gpu::Address further = 0u;
     gpu::Address indices = 0u;
     gpu::Address refined_indices = 0u;
+    gpu::Address gains = 0u;  // D2: vertex 0's de-light gain word in stream 3 (NEBULA_MESH_GAIN, c37; 0 none; FB b54)
     std::uint32_t vertex_count = 0u, refined_vertex_count = 0u;
     std::uint32_t index_count = 0u, refined_index_count = 0u;
     std::uint32_t site_stride = 0u;     // nonzero: one stream at `positions`

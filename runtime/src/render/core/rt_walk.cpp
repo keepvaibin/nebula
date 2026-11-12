@@ -1687,6 +1687,12 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
             std::uint32_t* words = rt_item_words_.data() + i * kItemWords;
             words[2] = arena;
             words[3] = static_cast<std::uint32_t>(mesh.attributes - base);
+            // D2: where its vertices' de-light gains are (c37; FB b54): word 19, vertex 0's gain word's arena byte / 4 and
+            // the stride / 4 in the top 4 bits; 0 none (a refined draw's added vertices are in stream 3 too: b54b).
+            if (mesh.gains >= base && mesh.gains - base < arenas[arena].bytes && mesh.further_stride % 4u == 0u &&
+                mesh.further_stride / 4u <= 15u && (mesh.gains - base) / 4u < (gpu::Address{1u} << 28u)) {
+                words[19] = static_cast<std::uint32_t>((mesh.gains - base) / 4u) | (mesh.further_stride / 4u) << 28u;
+            }
             words[4] = static_cast<std::uint32_t>(indices - base);
             words[5] = mesh.index_bytes;
             words[6] = static_cast<std::uint32_t>(mesh.positions - base);

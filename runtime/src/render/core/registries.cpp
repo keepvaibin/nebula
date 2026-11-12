@@ -475,6 +475,10 @@ void Registries::place_model(std::uint32_t id, const LiveModel& live, GpuModel m
         gpu_mesh.further = stream(mesh.further_at);
         gpu_mesh.indices = stream(mesh.indices_at);
         gpu_mesh.refined_indices = stream(mesh.refined_indices_at);
+        // D2: each vertex's last word of stream 3 is its de-light gain (c37); a ray's hit reads it (FB b54).
+        gpu_mesh.gains = (mesh.attributes & NEBULA_MESH_GAIN) != 0u && mesh.further_at != 0u && mesh.further_stride >= 4u
+                             ? stream(mesh.further_at) + (mesh.further_stride - 4u)
+                             : gpu::Address{0u};
         gpu_mesh.arena = placed.arena;
         gpu_mesh.model = id;
         incoming_.meshes.emplace_back(live.first_mesh + m, gpu_mesh);

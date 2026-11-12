@@ -229,6 +229,17 @@ float3 rt_bytes3(uint w) {
 // Everything a hit knows, from its item's sixteen words and its triangle; the first map at a level of detail by the
 // ray cone (Akenine-Moller et al. 2021, "Improved Shader and Texture Level of Detail Using Ray Cones"): `cone` is the
 // spread of the ray (radians a unit of way), so its width at the hit is far * cone.
+// A vertex colour de-lit by its cooked gain (D2; c37's traced_vertex_gain, FB b54): r g b signed bytes of log2 x 64, by
+// kDebake (the shading frame's form.z), saturated as the raster's vertex stage.
+float3 rt_vertex_gain(float3 c, uint gain) {
+    const float debake = g_shade.form.z;
+    if (!(debake > 0.0f) || gain == 0u) {
+        return c;
+    }
+    const int3 steps = int3(gain << 24u, gain << 16u, gain << 8u) >> 24;
+    return saturate(c * lerp(float3(1.0f, 1.0f, 1.0f), exp2(float3(steps) / 64.0f), debake));
+}
+
 void rt_hit_read(uint item, uint triangle_, float2 where_, float far_, float3 origin, float3 direction, float cone, out RtHit h) {
     const uint at = g_at.x + item * kItemBytes;
     const uint4 w0 = g_items.Load4(at), w1 = g_items.Load4(at + 16u), w2 = g_items.Load4(at + 32u), w3 = g_items.Load4(at + 48u);
@@ -260,7 +271,8 @@ void rt_hit_read(uint item, uint triangle_, float2 where_, float far_, float3 or
         const uint3 corner = triangle_corners(w0, w1, triangle_);
         float3 place[3], normal[3];
         float2 coordinate[3];
-        uint colour[3];
+        uint colour[3], gain[3];
+        const uint gains = g_items.Load(at + 76u);  // item word 19: the vertices' de-light gains (b54)
         for (uint c = 0u; c < 3u; ++c) {
             const uint row = vertex_rows(arena, base, w1.w, w2.z, corner[c]);
             const float4 r0 = asfloat(g_rows.Load4(row)), r1 = asfloat(g_rows.Load4(row + 16u)), r2 = asfloat(g_rows.Load4(row + 32u));
@@ -272,6 +284,7 @@ void rt_hit_read(uint item, uint triangle_, float2 where_, float far_, float3 or
             normal[c] = float3(dot(n0, n), dot(n1, n), dot(n2, n));
             const uint3 b = arena_words(arena, base + w0.w + corner[c] * 24u + 12u);
             colour[c] = b.x;
+            gain[c] = gains != 0u ? arena_word(arena, base + (gains & 0x0FFFFFFFu) * 4u + corner[c] * ((gains >> 28u) * 4u)) : 0u;
             coordinate[c] = asfloat(b.yz);
         }
         const float u = 1.0f - where_.x - where_.y, v = where_.x, w = where_.y;
@@ -295,7 +308,8 @@ void rt_hit_read(uint item, uint triangle_, float2 where_, float far_, float3 or
         if ((h.flags & kRtHitVertexColour) != 0u) {
             float3 vc = float3(0.0f, 0.0f, 0.0f);
             for (uint k = 0u; k < 3u; ++k) {
-                vc += float3(float(colour[k] & 255u), float(colour[k] >> 8u & 255u), float(colour[k] >> 16u & 255u)) / 255.0f *
+                vc += rt_vertex_gain(float3(float(colour[k] & 255u), float(colour[k] >> 8u & 255u), float(colour[k] >> 16u & 255u)) / 255.0f,
+                                     gain[k]) *
                       (k == 0u ? u : k == 1u ? v : w);
             }
             // The cooker read the material with the vertex's colour mid grey (hit_record.rs): twice it is the colour.
