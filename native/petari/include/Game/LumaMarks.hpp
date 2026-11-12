@@ -9,12 +9,13 @@
 //   LUMA_OUT             it may write one value through the pointer, never reads it first, does not keep the address
 //   LUMA_IN              it reads one value through it, never writes it, does not keep it
 //   LUMA_INOUT           it reads one value, may write it, does not keep it
-//   LUMA_KEPT            the game keeps the address (a registration)
+//   LUMA_KEPT            the game keeps the address (a registration); the pointer may be to anything (a matrix, a struct)
 //   LUMA_COUNT(param)    with a way: an array whose element count is the integer parameter `param`
 //   LUMA_COUNT_FIXED(n)  with a way: an array of exactly n elements (1 to 4096)
-//   LUMA_NULLABLE        with LUMA_IN, LUMA_OUT or LUMA_INOUT: the function accepts null there
+//   LUMA_NULLABLE        with any way: the function accepts null there (with LUMA_KEPT: it reads the kept address only
+//                        when it was given one)
 //
-// The pointer is to a number, an enum or a vector (2 to 4 floats x, y, z, w).
+// Except under LUMA_KEPT, the pointer is to a number, an enum or a vector (2 to 4 floats x, y, z, w).
 
 #define LUMA_OUT
 #define LUMA_IN

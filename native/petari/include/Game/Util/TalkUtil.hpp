@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/LumaMarks.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include <nebula_geometry.hpp>
 
@@ -69,9 +70,9 @@ namespace MR {
     void registerKillFunc(TalkMessageCtrl*, const TalkMessageFuncBase&);
     void setMessageArg(TalkMessageCtrl*, int);
     void setMessageArg(TalkMessageCtrl*, const char16_t*);
-    TalkMessageCtrl* createTalkCtrl(LiveActor*, const TableIter&, const char*, const Vec3f&, MtxPtr);
-    TalkMessageCtrl* createTalkCtrlDirect(LiveActor*, const TableIter&, const char*, const Vec3f&, MtxPtr);
-    TalkMessageCtrl* createTalkCtrlDirectOnRootNodeAutomatic(LiveActor*, const TableIter&, const char*, const Vec3f&, MtxPtr);
+    TalkMessageCtrl* createTalkCtrl(LiveActor*, const TableIter&, const char*, const Vec3f&, LUMA_KEPT LUMA_NULLABLE MtxPtr);
+    TalkMessageCtrl* createTalkCtrlDirect(LiveActor*, const TableIter&, const char*, const Vec3f&, LUMA_KEPT LUMA_NULLABLE MtxPtr);
+    TalkMessageCtrl* createTalkCtrlDirectOnRootNodeAutomatic(LiveActor*, const TableIter&, const char*, const Vec3f&, LUMA_KEPT LUMA_NULLABLE MtxPtr);
     bool tryTalkNearPlayer(TalkMessageCtrl*);
     bool tryTalkNearPlayerAtEnd(TalkMessageCtrl*);
     bool tryTalkForce(TalkMessageCtrl*);
