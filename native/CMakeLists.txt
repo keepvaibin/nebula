@@ -191,6 +191,10 @@ target_compile_options(smg_game PRIVATE
     -Werror=int-to-pointer-cast -Werror=pointer-to-enum-cast
     -Werror=implicit-function-declaration -Werror=implicit-int -Werror=int-conversion
     -Werror=incompatible-function-pointer-types -Werror=return-stack-address -Werror=array-bounds
+    # The module has no C runtime: a stack frame of 4 KiB or more makes the compiler call a stack probe (__chkstk on
+    # Windows), which nothing defines, and the link fails with no word of where. This stops it at compile, in the
+    # function that did it. clang counts the frame without the return address; it probes from 4096, so 4095 is exact.
+    -Wframe-larger-than=4095 -Werror=frame-larger-than
     "SHELL:-include nebula_prelude.h"
     # Source paths in the module (assertion messages) relative to the tree, not the build machine.
     "-ffile-prefix-map=${petari}=petari" "-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=native"
