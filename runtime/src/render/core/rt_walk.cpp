@@ -1486,31 +1486,19 @@ void RenderCore::rt_filters() {
     for (std::uint32_t step = 0u; step < 3u; ++step) {
         steps[step] = rt_pass_constants(0u, 1u << step, step == 2u ? 1u : 0u);
     }
-    // The sun's and the sky's shares.
-    const std::uint32_t light = rt_image(RtImage::Light), light_step = rt_image(RtImage::LightStep);
-    const std::uint32_t average = rt_now(RtImage::LightAverageA);
-    rt::PassBinds over_time;
-    over_time.constants = frame.binds.constants;
-    over_time.pass_constants = frame.pass;
-    over_time.reads[0] = light;
-    over_time.reads[1] = rt_before(RtImage::LightAverageA);
-    over_time.reads[2] = guide;
-    over_time.reads[3] = guide_before;
-    over_time.reads[4] = motion;
-    over_time.writes[0] = average;
-    rt_backend_.dispatch(RtShader::LightTime, over_time, frame.across, frame.down);
-    for (std::uint32_t step = 0u; step < 3u; ++step) {
-        rt::PassBinds over_space;
-        over_space.constants = frame.binds.constants;
-        over_space.pass_constants = steps[step];
-        over_space.reads[0] = step == 0u ? average : step == 1u ? light : light_step;
-        over_space.reads[2] = guide;
-        over_space.reads[3] = step == 2u ? motion : rt::kNoImage;  // the last step's, for --diagnostics rt-motion
-        over_space.reads[4] = step == 2u && rt_pass_indirect_on() ? rt_image(RtImage::Indirect) : rt::kNoImage;  // the sky's share
-        over_space.reads[5] = step == 2u ? rt_image(RtImage::SunOut) : rt::kNoImage;  // the last step's V (rgb)
-        over_space.writes[0] = step == 1u ? light_step : light;
-        rt_backend_.dispatch(RtShader::LightSpace, over_space, frame.across, frame.down);
-    }
+    // The sun's and the sky's shares as the programs read them, in one step (rt_light_space.hlsl's last; A5-P1): the
+    // sun's V as its own filter left it (SunOut) and the sky and bounce light's mean ratio, else 1. The light pass's own
+    // sky share is the constant 1, so nothing of the Light picture needs a filter over time or space.
+    const std::uint32_t light = rt_image(RtImage::Light);
+    rt::PassBinds compose;
+    compose.constants = frame.binds.constants;
+    compose.pass_constants = steps[2];
+    compose.reads[2] = guide;
+    compose.reads[3] = motion;  // for --diagnostics rt-motion
+    compose.reads[4] = rt_pass_indirect_on() ? rt_image(RtImage::Indirect) : rt::kNoImage;  // the sky's share
+    compose.reads[5] = rt_image(RtImage::SunOut);  // V (rgb)
+    compose.writes[0] = light;
+    rt_backend_.dispatch(RtShader::LightSpace, compose, frame.across, frame.down);
     // The local lights' share: over time (its averages and the moments of its noise), then three steps over space
     // weighed by that noise, the last into the added light the programs read.
     const std::uint32_t lights = rt_image(RtImage::Lights), added = rt_image(RtImage::Added);

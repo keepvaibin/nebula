@@ -42,8 +42,37 @@ void main(uint3 id : SV_DispatchThreadID) {
         return;
     }
     const int2 pixel = int2(id.xy);
-    const float4 centre = g_in.Load(int3(pixel, 0));
     const float4 guide = g_guide.Load(int3(pixel, 0));
+#ifndef RT_LIGHTS
+    // The light pass's shares are composed in one step (A5-P1, l70): the host runs only the last, which reads no
+    // picture of the light pass (its sky share is the constant 1).
+    if (g_pass.z != 0u) {
+        if (guide.a == 0.0f) {
+            g_out[id.xy] = float4(1.0f, 1.0f, 1.0f, 1.0f);
+            return;
+        }
+        // What the programs read: V as a colour and the sky's share. O: the sky and bounce light's mean ratio where
+        // that pass runs (bit 8), else 1 (that part off).
+        float sky = 1.0f;
+        if ((g_more.z & 256u) != 0u) {
+            const float3 ratio = g_indirect.Load(int3(pixel, 0)).rgb;
+            sky = (ratio.r + ratio.g + ratio.b) * (1.0f / 3.0f);
+        }
+        float4 shares = float4(g_sun_out.Load(int3(pixel, 0)).rgb, sky);
+        if ((g_more.z & 128u) != 0u) {
+            shares = float4(0.0f, 0.0f, 0.0f, 0.0f);  // the emitters alone (--diagnostics rt-added)
+        }
+        if ((g_more.z & 512u) != 0u) {
+            // --diagnostics rt-motion (shown as rt-light shows r, a, b): the move across in red, down in green, eight
+            // pixels a frame full; blue where where the point was is not known.
+            const float4 m = g_motion_map.Load(int3(pixel, 0));
+            shares = float4(saturate(abs(m.x) / 8.0f), 1.0f, m.z > 0.0f ? 0.0f : 1.0f, saturate(abs(m.y) / 8.0f));
+        }
+        g_out[id.xy] = shares;
+        return;
+    }
+#endif
+    const float4 centre = g_in.Load(int3(pixel, 0));
     const float frames = g_pass.z != 0u ? 1.0f : centre.g;
     if (guide.a == 0.0f) {
 #ifdef RT_LIGHTS
@@ -122,27 +151,6 @@ void main(uint3 id : SV_DispatchThreadID) {
     const float body = g_pass.z != 0u && rt_second_layer() ? g_body.Load(int3(pixel, 0)).r : 1.0f;
     g_out[id.xy] = g_pass.z != 0u ? float4(now.x, now.y, now.z, body) : float4(now.x, frames, now.y, now.z);
 #else
-    if (g_pass.z == 0u) {
-        g_out[id.xy] = float4(centre.r, frames, centre.b, now.z);
-        return;
-    }
-    // What the programs read: V as a colour and the sky's share.
-    // O: the sky and bounce light's mean ratio where that pass runs (bit 8), else 1 (the light pass's: that part off).
-    float sky = now.z;
-    if ((g_more.z & 256u) != 0u) {
-        const float3 ratio = g_indirect.Load(int3(pixel, 0)).rgb;
-        sky = (ratio.r + ratio.g + ratio.b) * (1.0f / 3.0f);
-    }
-    float4 shares = float4(g_sun_out.Load(int3(pixel, 0)).rgb, sky);
-    if ((g_more.z & 128u) != 0u) {
-        shares = float4(0.0f, 0.0f, 0.0f, 0.0f);  // the emitters alone (--diagnostics rt-added)
-    }
-    if ((g_more.z & 512u) != 0u) {
-        // --diagnostics rt-motion (shown as rt-light shows r, a, b): the move across in red, down in green, eight
-        // pixels a frame full; blue where where the point was is not known.
-        const float4 m = g_motion_map.Load(int3(pixel, 0));
-        shares = float4(saturate(abs(m.x) / 8.0f), 1.0f, m.z > 0.0f ? 0.0f : 1.0f, saturate(abs(m.y) / 8.0f));
-    }
-    g_out[id.xy] = shares;
+    g_out[id.xy] = float4(centre.r, frames, centre.b, now.z);  // a step before the last (none runs: l70)
 #endif
 }
