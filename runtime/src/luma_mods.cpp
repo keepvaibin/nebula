@@ -127,6 +127,11 @@ LumaModsState state_of(const galaxy::mods::ModInfo& mod, const std::vector<galax
             return record.code >= 500u && record.code < 600u ? LUMA_MODS_REFUSED : LUMA_MODS_NOT_STARTED;
         }
     }
+    // Code for this platform the player has not allowed (consent waiting or Not now): the plan never hands it to the
+    // loader (mods.cpp, "its code isn't run"), so no record says so.
+    if (!mod.code_token.empty() && !mod.code_allowed) {
+        return LUMA_MODS_NOT_STARTED;
+    }
     return LUMA_MODS_RUNNING;
 }
 
