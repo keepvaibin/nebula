@@ -222,4 +222,15 @@ void page_fact(std::uint32_t row, std::string_view label, std::string_view value
     write("modlog.page", json.c_str());
 }
 
+void entry_fact(std::string_view mod, std::uint32_t pages, std::string_view text) {
+    const LumaModLogFact write = harness_fact();
+    if (write == nullptr) return;
+    std::string json = "{\"mod\":";
+    append_json(json, mod);
+    json += ",\"pages\":" + std::to_string(pages) + ",\"text\":";
+    append_json(json, text);
+    json += '}';
+    write("modlog.entry", json.c_str());
+}
+
 }  // namespace galaxy::modlog
