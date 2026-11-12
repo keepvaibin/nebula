@@ -33,7 +33,14 @@ void forget(std::string_view id);
 // same numbers, in every space. Returns how many moved; a key the new id already holds keeps the new id's number.
 std::uint32_t take_over_ids(std::string_view old_id, std::string_view new_id);
 
-// The save half (services-save 5) gives its counter and its forget; until it does, save_bytes is 0.
-void set_save_half(std::uint64_t (*bytes)(std::string_view id), void (*forget)(std::string_view id)) noexcept;
+// The save half (services-save 5): the ids it keeps values for, their bytes and its forget, each callable from any
+// thread. kept() walks its ids with the record's, so a removed mod with saved values and no numbers has its line.
+// Until it is given, kept() walks the record alone.
+struct SaveHalf {
+    void (*ids)(std::vector<std::string>& out) = nullptr;
+    std::uint64_t (*bytes)(std::string_view id) = nullptr;
+    void (*forget)(std::string_view id) = nullptr;
+};
+void set_save_half(const SaveHalf& half) noexcept;
 
 }  // namespace galaxy::luma_mods
