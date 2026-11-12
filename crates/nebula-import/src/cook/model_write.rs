@@ -597,6 +597,45 @@ pub struct DebakeReport {
 
 /// The de-light of a model as write() makes it (the same meshes chosen), with and without the maps: None for a sky
 /// model, one with no painted mesh, or one whose meshes do not flatten.
+/// c85 (3.5): what a near model gives its far twins: each material's area (its meshes' triangles, square units) and
+/// its de-baked materials' Lref (debake_gains).
+pub fn twin_measures(ir: &ModelIr, stem: &str) -> (Vec<f64>, std::collections::BTreeMap<u32, f64>) {
+    let mut area = vec![0.0f64; ir.materials.len()];
+    let mut references = std::collections::BTreeMap::new();
+    let curved = model_curves(ir);
+    let Ok(mut meshes) = ir.shapes.iter().map(|s| flatten(&ir.arrays, s, curved.as_ref())).collect::<Result<Vec<MeshStreams>>>() else {
+        return (area, references);
+    };
+    for (shape, s) in ir.shapes.iter().zip(&meshes) {
+        let Some(sum) = area.get_mut(shape.material as usize) else { continue };
+        for t in s.indices.chunks_exact(3) {
+            let [a, b, c] = [t[0] as usize, t[1] as usize, t[2] as usize];
+            let (Some(pa), Some(pb), Some(pc)) = (s.positions.get(a), s.positions.get(b), s.positions.get(c)) else { continue };
+            let u = [f64::from(pb[0] - pa[0]), f64::from(pb[1] - pa[1]), f64::from(pb[2] - pa[2])];
+            let v = [f64::from(pc[0] - pa[0]), f64::from(pc[1] - pa[1]), f64::from(pc[2] - pa[2])];
+            let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+            *sum += (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt() / 2.0;
+        }
+    }
+    let lower = stem.split('.').next().unwrap_or(stem).to_ascii_lowercase();
+    if lower.ends_with("sky") || lower.starts_with("vrorbit") {
+        return (area, references);
+    }
+    let which: Vec<bool> = ir.shapes.iter().map(|s| ir.materials.get(s.material as usize).is_some_and(debakes)).collect();
+    if which.iter().any(|&w| w) {
+        let maps: Vec<Option<Vec<f64>>> = ir
+            .shapes
+            .iter()
+            .zip(&meshes)
+            .zip(&which)
+            .map(|((shape, streams), &w)| if w { first_map_at_vertices(ir, shape.material as usize, streams) } else { None })
+            .collect();
+        let materials: Vec<u32> = ir.shapes.iter().map(|s| s.material).collect();
+        debake_gains(&mut meshes, &which, &maps, &materials, &std::collections::BTreeMap::new(), Some(&mut references));
+    }
+    (area, references)
+}
+
 pub fn debake_report(ir: &ModelIr, stem: &str) -> Option<DebakeReport> {
     let lower = stem.split('.').next().unwrap_or(stem).to_ascii_lowercase();
     if lower.ends_with("sky") || lower.starts_with("vrorbit") {
@@ -628,8 +667,9 @@ pub fn debake_report(ir: &ModelIr, stem: &str) -> Option<DebakeReport> {
     let mut plain = meshes.clone();
     let no_maps: Vec<Option<Vec<f64>>> = vec![None; meshes.len()];
     let materials: Vec<u32> = ir.shapes.iter().map(|s| s.material).collect();
-    debake_gains(&mut plain, &which, &no_maps, &materials);
-    let near_black = debake_gains(&mut meshes, &which, &maps, &materials).len();
+    let none = std::collections::BTreeMap::new();
+    debake_gains(&mut plain, &which, &no_maps, &materials, &none, None);
+    let near_black = debake_gains(&mut meshes, &which, &maps, &materials, &none, None).len();
     let mean = |ms: &[MeshStreams]| -> (f64, usize) {
         let (mut sum, mut count) = (0.0f64, 0usize);
         for (s, &w) in ms.iter().zip(&which) {
@@ -766,13 +806,24 @@ fn first_map_at_vertices(ir: &ModelIr, material: usize, s: &MeshStreams) -> Opti
 /// regression on L) moves DEBAKE_CHROMA of the way to its value at Lref; the rest of the hue stays. A region whose
 /// Lref is under DEBAKE_NEAR_BLACK keeps its colours. A mesh whose every gain is 1 takes none. Returns the chosen
 /// meshes painted near black all over (to list).
-fn debake_gains(meshes: &mut [MeshStreams], which: &[bool], maps: &[Option<Vec<f64>>], materials: &[u32]) -> Vec<usize> {
+/// c85: `fixed` gives a material's Lref to take in place of each of its regions' own (a far twin's: its near model's;
+/// a region whose own Lref is near black keeps its colours still); `references`, when given, receives each material's
+/// own Lref (its points' area-weighted DEBAKE_REFERENCE percentile).
+fn debake_gains(
+    meshes: &mut [MeshStreams],
+    which: &[bool],
+    maps: &[Option<Vec<f64>>],
+    materials: &[u32],
+    fixed: &std::collections::BTreeMap<u32, f64>,
+    references: Option<&mut std::collections::BTreeMap<u32, f64>>,
+) -> Vec<usize> {
     let colour = |c: u32| [f64::from(c >> 24), f64::from(c >> 16 & 255), f64::from(c >> 8 & 255)].map(|x| x / 255.0);
     let luma = |c: [f64; 3]| 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
     let mut near_black = Vec::new();
     // Points: the chosen meshes' vertices, welded by material and exact position.
     let mut points: std::collections::HashMap<(u32, [u32; 3]), usize> = std::collections::HashMap::new();
     let mut point_of: Vec<Vec<usize>> = Vec::with_capacity(meshes.len());
+    let mut point_material: Vec<u32> = Vec::new();  // c85
     for (mesh, s) in meshes.iter().enumerate() {
         let chosen = which.get(mesh).copied().unwrap_or(false)
             && s.attributes & MESH_COLOR0 != 0
@@ -791,7 +842,11 @@ fn debake_gains(meshes: &mut [MeshStreams], which: &[bool], maps: &[Option<Vec<f
             .iter()
             .map(|&p| {
                 let next = points.len();
-                *points.entry((material, p.map(f32::to_bits))).or_insert(next)
+                let id = *points.entry((material, p.map(f32::to_bits))).or_insert(next);
+                if id == next {
+                    point_material.push(material);
+                }
+                id
             })
             .collect();
         point_of.push(ids);
@@ -877,6 +932,27 @@ fn debake_gains(meshes: &mut [MeshStreams], which: &[bool], maps: &[Option<Vec<f
     for p in 0..count {
         members[region[p]].push(p);
     }
+    // c85: each material's own Lref, for its far twins.
+    if let Some(out) = references {
+        let mut by_material: std::collections::BTreeMap<u32, Vec<usize>> = std::collections::BTreeMap::new();
+        for p in 0..count {
+            by_material.entry(point_material[p]).or_default().push(p);
+        }
+        for (material, mut m) in by_material {
+            m.sort_by(|&a, &b| smooth[a].total_cmp(&smooth[b]));
+            let total: f64 = m.iter().map(|&p| weight[p]).sum();
+            let mut level = smooth[m[m.len() - 1]];
+            let mut sum = 0.0;
+            for &p in &m {
+                sum += weight[p];
+                if sum >= DEBAKE_REFERENCE * total {
+                    level = smooth[p];
+                    break;
+                }
+            }
+            out.insert(material, level);
+        }
+    }
     // Each region's Lref and its hue's slope against L.
     let mut fits = vec![(0.0f64, [0.0f64; 3]); count];
     for (r, m) in members.iter_mut().enumerate() {
@@ -892,6 +968,12 @@ fn debake_gains(meshes: &mut [MeshStreams], which: &[bool], maps: &[Option<Vec<f
             if acc >= DEBAKE_REFERENCE * total {
                 reference = smooth[p];
                 break;
+            }
+        }
+        // c85: a far twin's region takes its near material's Lref (the swap keeps the brightness).
+        if reference >= DEBAKE_NEAR_BLACK {
+            if let Some(&shared) = fixed.get(&point_material[m[0]]) {
+                reference = shared;
             }
         }
         let (mut sw, mut sx, mut sxx) = (0.0f64, 0.0f64, 0.0f64);
@@ -1269,7 +1351,14 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
             .map(|((shape, streams), &w)| if w { first_map_at_vertices(ir, shape.material as usize, streams) } else { None })
             .collect();
         let materials: Vec<u32> = ir.shapes.iter().map(|s| s.material).collect();
-        debake_gains(&mut meshes, &which, &maps, &materials);  // c79: de-bake v2
+        // c85: a far twin's de-baked materials take their near model's Lref.
+        let fixed: std::collections::BTreeMap<u32, f64> = ir
+            .materials
+            .iter()
+            .enumerate()
+            .filter_map(|(i, m)| super::hit_record::twin_reference(stem, &m.name).map(|r| (i as u32, r)))
+            .collect();
+        debake_gains(&mut meshes, &which, &maps, &materials, &fixed, None);  // c79: de-bake v2
         for (streams, &slot) in meshes.iter().zip(&mesh_slots) {
             if streams.attributes & MESH_GAIN != 0 {
                 b.patch32(slot + 56, streams.attributes);
@@ -1819,7 +1908,7 @@ mod tests {
         // lit top keeps its colour (lifts only), alike in every channel; a mesh not chosen takes none.
         let s = ball(|n| [0.3 + 0.6 * n[1].max(0.0); 3]);
         let mut meshes = vec![s, MeshStreams::default()];
-        let black = debake_gains(&mut meshes, &[true, false], &[None, None], &[0, 1]);
+        let black = debake_gains(&mut meshes, &[true, false], &[None, None], &[0, 1], &Default::default(), None);
         assert!(black.is_empty());
         let s = &meshes[0];
         assert!(s.attributes & MESH_GAIN != 0 && s.gains.len() == s.positions.len());
@@ -1837,7 +1926,7 @@ mod tests {
         let s = ball(|_| [0.6; 3]);
         let map: Vec<f64> = s.normals.iter().map(|n| f64::from(0.3 + 0.6 * n[1].max(0.0)) / 0.6).collect();
         let mut meshes = vec![s];
-        debake_gains(&mut meshes, &[true], &[Some(map.clone())], &[0]);
+        debake_gains(&mut meshes, &[true], &[Some(map.clone())], &[0], &Default::default(), None);
         let s = &meshes[0];
         assert!(s.attributes & MESH_GAIN != 0 && s.gains.len() == s.positions.len());
         let after: Vec<f64> = map.iter().zip(&s.gains).map(|(&m, &g)| m * 2f64.powf(f64::from(g as u8 as i8) / GAIN_STEPS)).collect();
@@ -1852,7 +1941,7 @@ mod tests {
             [0.2 + 0.7 * t, 0.2 + 0.7 * t, 0.4 + 0.5 * t]
         });
         let mut meshes = vec![s];
-        debake_gains(&mut meshes, &[true], &[None], &[0]);
+        debake_gains(&mut meshes, &[true], &[None], &[0], &Default::default(), None);
         let s = &meshes[0];
         let ratio = |c: u32, g: u32| gained(c, g, 2) / gained(c, g, 0);
         let (dark, lit) = (s.positions.iter().position(|p| p[1] < -0.9).unwrap(), s.positions.iter().position(|p| p[1] > 0.95).unwrap());
@@ -1875,10 +1964,25 @@ mod tests {
             p[0] += 20.0;
         }
         let mut meshes = vec![bright, dark, black];
-        let listed = debake_gains(&mut meshes, &[true, true, true], &[None, None, None], &[0, 0, 0]);
+        let listed = debake_gains(&mut meshes, &[true, true, true], &[None, None, None], &[0, 0, 0], &Default::default(), None);
         assert_eq!(listed, vec![2]);
         assert!(meshes[1].gains.iter().all(|&g| g == 0), "the dark ball keeps its own light");
         assert!(meshes[2].attributes & MESH_GAIN == 0);
+    }
+    #[test]
+    fn a_far_twin_takes_its_near_models_light_level() {
+        // c85 (3.5): an even ball painted 0.3 keeps its colour on its own (Lref 0.3); given its near model's Lref 0.6 it
+        // lifts to it; a material's own Lref is reported.
+        let mut meshes = vec![ball(|_| [0.3; 3])];
+        let mut own = std::collections::BTreeMap::new();
+        debake_gains(&mut meshes, &[true], &[None], &[0], &Default::default(), Some(&mut own));
+        assert!(meshes[0].gains.iter().all(|&g| g == 0));
+        assert!((own[&0] - 76.0 / 255.0).abs() < 0.01, "{own:?}");
+        let mut far = vec![ball(|_| [0.3; 3])];
+        let fixed: std::collections::BTreeMap<u32, f64> = [(0u32, 0.6f64)].into_iter().collect();
+        debake_gains(&mut far, &[true], &[None], &[0], &fixed, None);
+        let lifted: Vec<f64> = far[0].colors.iter().zip(&far[0].gains).map(|(&c, &g)| gained(c, g, 0)).collect();
+        assert!(far[0].gains.len() == far[0].colors.len() && lifted.iter().all(|&x| (x - 0.6).abs() < 0.03), "{:?}", &lifted[..4]);
     }
     #[test]
     fn mesh_index_width_changes_above_65535_and_wide_matrix_ids_survive() {

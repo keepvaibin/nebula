@@ -170,6 +170,8 @@ impl Drop for PackTablesInUse {
 /// programs::prepare_written_files; None outside a game's cook.
 pub struct Twins {
     near: std::collections::HashMap<String, Vec<(String, Reading)>>,
+    /// c85: each near material's area and de-bake Lref, in `near`'s order.
+    measures: std::collections::HashMap<String, Vec<(f64, Option<f64>)>>,
     bloom: std::collections::HashMap<String, std::collections::HashSet<String>>,
 }
 
@@ -178,7 +180,11 @@ static TWINS: std::sync::RwLock<Option<Twins>> = std::sync::RwLock::new(None);
 /// c83: the cook begins: the twins' table is empty and filling.
 pub fn twins_begin() {
     *TWINS.write().unwrap_or_else(|e| e.into_inner()) =
-        Some(Twins { near: std::collections::HashMap::new(), bloom: std::collections::HashMap::new() });
+        Some(Twins {
+            near: std::collections::HashMap::new(),
+            measures: std::collections::HashMap::new(),
+            bloom: std::collections::HashMap::new(),
+        });
 }
 
 /// c83: the cook ends.
@@ -203,8 +209,13 @@ pub fn twins_add(name: &str, bytes: &[u8]) {
             (m.name.to_ascii_lowercase(), r)
         })
         .collect();
+    // c85: its materials' areas and de-bake levels (a far twin's swap keeps both).
+    let (area, levels) = super::model_write::twin_measures(&ir, &stem);
+    let measures: Vec<(f64, Option<f64>)> =
+        (0..ir.materials.len()).map(|i| (area.get(i).copied().unwrap_or(0.0), levels.get(&(i as u32)).copied())).collect();
     let mut twins = TWINS.write().unwrap_or_else(|e| e.into_inner());
     let Some(twins) = twins.as_mut() else { return };
+    twins.measures.entry(stem.clone()).or_insert(measures);
     if let Some(base) = stem.strip_suffix("bloom") {
         twins.bloom.entry(base.to_string()).or_default().extend(materials.iter().map(|(n, _)| n.clone()));
     }
@@ -227,12 +238,38 @@ pub fn twin_of(stem: &str, material: &str, by_name: bool) -> Option<(String, Str
     if by_name {
         return None;
     }
-    let mut count: BTreeMap<Class, usize> = BTreeMap::new();
-    for (_, r) in near {
-        *count.entry(r.class).or_default() += 1;
+    // c85: the class of the largest area (by materials where the near model's meshes did not read).
+    let areas = twins.as_ref()?.measures.get(base);
+    let total: f64 = areas.map_or(0.0, |m| m.iter().map(|x| x.0).sum());
+    let mut weight: BTreeMap<Class, f64> = BTreeMap::new();
+    for (i, (_, r)) in near.iter().enumerate() {
+        let a = if total > 0.0 { areas.and_then(|m| m.get(i)).map_or(0.0, |x| x.0) } else { 1.0 };
+        *weight.entry(r.class).or_default() += a;
     }
-    let (&most, _) = count.iter().max_by_key(|(c, n)| (**n, std::cmp::Reverse(**c)))?;
+    let (&most, _) = weight.iter().max_by(|a, b| a.1.total_cmp(b.1).then(b.0.cmp(a.0)))?;
     near.iter().find(|(_, r)| r.class == most).map(|(n, r)| (base.to_string(), n.clone(), r.clone()))
+}
+
+/// c85 (3.5): the de-bake Lref a far twin's material takes: its near material's of the same name, else the near
+/// model's de-baked materials' area-weighted mean; None when `stem` is no far twin or nothing near is de-baked.
+pub fn twin_reference(stem: &str, material: &str) -> Option<f64> {
+    let stem = stem.split('.').next().unwrap_or(stem).to_ascii_lowercase();
+    let base = stem.strip_suffix("low").or_else(|| stem.strip_suffix("middle")).or_else(|| stem.strip_suffix("break"))?;
+    let twins = TWINS.read().unwrap_or_else(|e| e.into_inner());
+    let t = twins.as_ref()?;
+    let (near, measures) = (t.near.get(base)?, t.measures.get(base)?);
+    let name = material.to_ascii_lowercase();
+    if let Some(level) = near.iter().position(|(n, _)| *n == name).and_then(|i| measures.get(i)).and_then(|m| m.1) {
+        return Some(level);
+    }
+    let (mut w, mut sum) = (0.0f64, 0.0f64);
+    for &(area, level) in measures {
+        if let Some(level) = level {
+            w += area;
+            sum += area * level;
+        }
+    }
+    (w > 0.0).then(|| sum / w)
 }
 
 /// c83 (3.5): a far twin's material takes its near model's class and numbers (twin_of), unless a review row chose
@@ -2028,7 +2065,11 @@ mod tests {
         gloss.class = Class::Gloss;
         gloss.roughness = 0.1;
         let plain = read(&painted());
-        let mut twins = Twins { near: std::collections::HashMap::new(), bloom: std::collections::HashMap::new() };
+        let mut twins = Twins {
+            near: std::collections::HashMap::new(),
+            measures: std::collections::HashMap::new(),
+            bloom: std::collections::HashMap::new(),
+        };
         twins.near.insert("testtwin".into(), vec![("road_v".into(), gloss.clone()), ("grass_v".into(), plain.clone()),
                                                   ("rock_v".into(), plain.clone())]);
         twins.bloom.insert("testtwin".into(), ["grass_v".to_string()].into_iter().collect());
