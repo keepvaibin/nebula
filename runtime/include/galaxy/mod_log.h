@@ -46,7 +46,7 @@ struct PageMod {
 [[nodiscard]] std::string words(const char* row, std::string_view mod, std::uint32_t count);
 // How many entries the log keeps (a walk, nothing copied).
 [[nodiscard]] std::uint32_t kept();
-// In a harness run, one row of the log page as the fact `modscreen.log {"row", "label", "value"}` (contract 4.3).
+// In a harness run, one row of the log page as the fact `modlog.page {"row", "label", "value"}` (contract 4.3).
 void page_fact(std::uint32_t row, std::string_view label, std::string_view value);
 
 }  // namespace galaxy::modlog

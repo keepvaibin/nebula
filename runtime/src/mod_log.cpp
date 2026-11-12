@@ -164,7 +164,7 @@ void page_fact(std::uint32_t row, std::string_view label, std::string_view value
     json += ",\"value\":";
     append_json(json, value);
     json += '}';
-    write("modscreen.log", json.c_str());
+    write("modlog.page", json.c_str());
 }
 
 }  // namespace galaxy::modlog
