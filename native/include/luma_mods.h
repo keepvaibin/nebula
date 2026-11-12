@@ -92,10 +92,10 @@ typedef struct LumaModsService {
        part can be in them); another: LUMA_E_ARGUMENT, reported. A null length, or a null buf with size above 0:
        LUMA_E_ARGUMENT, reported. A null buf with size 0 asks the length only.
        kit_names: 1.0. Game thread. The names (file stems) of the `kit/<module>/<name>.json` files in `of`, sorted byte for byte, each
-       followed by a 0 byte, into buf; *length the bytes they take (0: none, or a mod that is not a .luma). LUMA_OK;
+       followed by a 0 byte, into buf; *length the bytes they take (0: none). A folder mod reads like a .luma. LUMA_OK;
        LUMA_E_TOO_LARGE when size is below *length (an answer, not reported; nothing written). */
     int32_t (*kit_names)(const LumaMod* mod, uint64_t of, const char* module, char* buf, uint64_t size, uint64_t* length);
-    /* 1.0. Game thread. The bytes of `kit/<module>/<name>.json` in `of` into buf, as the installed .luma has them (read
+    /* 1.0. Game thread. The bytes of `kit/<module>/<name>.json` in `of` into buf, as the installed .luma (or folder mod) has them (read
        once, kept until `of` stops); *length their count. LUMA_OK; LUMA_E_NOT_FOUND when there is no such file (an
        answer, not reported); LUMA_E_TOO_LARGE when size is below *length (an answer; nothing written); a file past
        LUMA_MODS_KIT_FILE_MOST: LUMA_E_FORMAT, reported (Mods.KitTooLarge); LUMA_E_IO when it could not be read. */

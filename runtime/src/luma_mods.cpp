@@ -1136,9 +1136,10 @@ void options_mod_gone(void*, const LumaMod* mod) {
 
 // ---- mods: kit data (section 9, lumakit R-6) ------------------------------------------------------------------------
 
-// What the kit calls read of a mod in the session's list: its folder (a .luma's) and the ids its luma.json needs.
+// What the kit calls read of a mod in the session's list: its folder (an installed .luma's, or a folder mod's: both keep
+// kit/<module>/<name>.json at their top) and the ids its luma.json needs.
 struct KitMod {
-    std::filesystem::path folder;  // empty: not a .luma
+    std::filesystem::path folder;
     std::vector<std::string> needs;
 };
 
@@ -1157,9 +1158,7 @@ void make_kit_index() {
     g_kit_index_made = true;
     for (const galaxy::mods::ModInfo& mod : galaxy::mods::session_mods().started_with) {
         KitMod entry;
-        if (mod.package) {
-            entry.folder = mod.path;
-        }
+        entry.folder = mod.path;
         if (mod.luma) {
             for (const galaxy::luma::Dependency& need : mod.luma->needs) {
                 entry.needs.push_back(need.id);
