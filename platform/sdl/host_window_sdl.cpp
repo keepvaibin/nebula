@@ -163,6 +163,7 @@ std::atomic<float> g_touch_slop_px{0.0f};
 void forward_output_to_logcat() {
     static int pipe_fds[2];
     if (pipe(pipe_fds) != 0) {
+        install_crash_log(-1);
         return;
     }
     std::FILE* file = nullptr;
@@ -176,6 +177,8 @@ void forward_output_to_logcat() {
     setvbuf(stderr, nullptr, _IONBF, 0);
     dup2(pipe_fds[1], STDOUT_FILENO);
     dup2(pipe_fds[1], STDERR_FILENO);
+    // A crash's report goes to the file itself: the thread below stops with the rest when the system dumps the process.
+    install_crash_log(file != nullptr ? fileno(file) : -1);
     std::thread([file] {
         char line[1024];
         std::size_t used = 0;
@@ -983,6 +986,8 @@ bool start() noexcept {
     g_sdl_thread = std::this_thread::get_id();
 #if defined(__ANDROID__)
     forward_output_to_logcat();
+#else
+    install_crash_log(-1);
 #endif
     // Landscape either way up: the game lays out for shapes from 4:3 wide; taller ones come with Vert+ framing.
     SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");

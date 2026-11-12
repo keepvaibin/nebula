@@ -224,6 +224,7 @@ set(host_sources
     "${CMAKE_CURRENT_SOURCE_DIR}/audio_device_sdl.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/display_clock.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/thread_sampler.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/crash_log.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/native_game_host_sdl.cpp")
 if(ANDROID)
     # A real Wii Remote on a DolphinBar (wiimote_hid.h over wiimote_link_android.cpp).

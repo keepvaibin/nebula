@@ -41,6 +41,9 @@ bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns) noexcept;
 // Android, when `adb shell setprop debug.nebula.profile <seconds>` asks: that many seconds on, the render, host-main and
 // game threads' instruction pointers are sampled for 2 s each and the busiest places logged (thread_sampler.cpp).
 void start_thread_sampler() noexcept;
+// Linux and Android: a fatal signal (a bad access, an abort) is reported in the log before the system's own handler runs
+// (crash_log.cpp): the signal, the thread and the stack as library + offset. `fd` is the log file (-1: stderr).
+void install_crash_log(int fd) noexcept;
 
 // The on-screen controls (Android: the activity's overlay, through JNI).
 enum TouchButton : std::uint32_t {
