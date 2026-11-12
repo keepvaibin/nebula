@@ -156,6 +156,12 @@ fn the_disc_cooks() {
     for path in &archives {
         let file = archive(&read(path)).unwrap_or_else(|e| panic!("{path}: {e:#}"));
         assert_eq!(archive(&file).unwrap(), file);
+        let names = sound_names(&file).unwrap();
+        println!("{path}: {} sound names", names.len());
+        if path.ends_with("/AudioRes/SMR.szs") && path.starts_with(&files) {
+            assert_eq!(names.len(), 3487);
+            assert!(names.iter().any(|n| n == "SE_PM_JUMP_M") && names.iter().any(|n| n == "SE_SY_2P_ASSIST_JUMP"));
+        }
         let effects = word(&file, 9) as usize;
         let seq = &file[effects..effects + word(&file, 10) as usize];
         println!(
@@ -239,4 +245,29 @@ fn a_me_stack_bound_counts_calls_loops_and_children() {
     // A call to itself nests without end.
     let bytes = [0, 0, 0, 1, 0, 0, 0, 8, 0x31, 0x00, 0x00, 0x08, 0x24];
     assert!(me_program(&bytes).is_err());
+}
+
+/// The names of a cooked archive: items with a name, in order, each once; an item only in the table has none.
+#[test]
+fn a_cooked_archives_sound_names_are_read_in_order() {
+    let names = b"SE_A\0SE_B\0\0\0";
+    let mut file = b"NSND".to_vec();
+    for v in [1u32, 1, 1, 4, 0, 0, 0, names.len() as u32, 0, 0, 3] {
+        file.extend_from_slice(&v.to_le_bytes());
+    }
+    file.extend_from_slice(&[0; 32]); // a section and a group (not read)
+    for (flags, name) in [(3u8, 5u32), (1, u32::MAX), (2, 0), (2, 5)] {
+        let mut record = [0u8; 24];
+        record[1] = flags;
+        record[20..24].copy_from_slice(&name.to_le_bytes());
+        file.extend_from_slice(&record);
+    }
+    file.extend_from_slice(names);
+    assert_eq!(sound_names(&file).unwrap(), ["SE_B", "SE_A"]);
+    // A name past the names, or an archive cut short, is an error, not a guess.
+    let mut bad = file.clone();
+    bad[48 + 32 + 20..48 + 32 + 24].copy_from_slice(&99u32.to_le_bytes());
+    assert!(sound_names(&bad).is_err());
+    assert!(sound_names(&file[..file.len() - 4]).is_err());
+    assert!(sound_names(b"AA_<").is_err());
 }

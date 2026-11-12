@@ -1447,6 +1447,45 @@ pub fn archive(bytes: &[u8]) -> Result<Vec<u8>> {
     Ok(out)
 }
 
+/// The game's sound names (its BSTN, the names `replace` of a mod's sound effect takes) from a cooked NSND, in the
+/// table's order. A name the table has twice is listed once.
+pub fn sound_names(nsnd: &[u8]) -> Result<Vec<String>> {
+    if !cooked(nsnd, ARCHIVE_MAGIC, ARCHIVE_VERSION)? {
+        bail!("not a cooked sound archive");
+    }
+    let word = |i: usize| -> Result<usize> {
+        let at = 4 * i;
+        Ok(u32::from_le_bytes(nsnd.get(at..at + 4).context("the sound archive's head")?.try_into().unwrap()) as usize)
+    };
+    let (sections, groups, items) = (word(2)?, word(3)?, word(4)?);
+    let (banks, wave_banks, names_size) = (word(6)?, word(7)?, word(8)?);
+    let items_at = 48usize
+        .checked_add(sections.checked_mul(16).context("sections")?)
+        .and_then(|v| v.checked_add(groups.checked_mul(16)?))
+        .context("groups")?;
+    let names_at = items_at
+        .checked_add(items.checked_mul(24).context("items")?)
+        .and_then(|v| v.checked_add(banks.checked_add(wave_banks)?.checked_mul(8)?))
+        .context("banks")?;
+    let names = nsnd.get(names_at..names_at.checked_add(names_size).context("names")?).context("the sound names past the archive")?;
+    let mut out = Vec::new();
+    let mut seen = HashSet::new();
+    for i in 0..items {
+        let record = &nsnd[items_at + 24 * i..items_at + 24 * i + 24];
+        let name = u32::from_le_bytes(record[20..24].try_into().unwrap());
+        if u32::from(record[1]) & IN_NAMES == 0 || name == u32::MAX {
+            continue;
+        }
+        let from = names.get(name as usize..).context("a sound name past the names")?;
+        let end = from.iter().position(|&c| c == 0).context("a sound name with no end")?;
+        let text = String::from_utf8_lossy(&from[..end]).into_owned();
+        if seen.insert(text.clone()) {
+            out.push(text);
+        }
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 #[path = "sound_tests.rs"]
 mod tests;

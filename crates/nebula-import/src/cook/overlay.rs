@@ -150,6 +150,24 @@ fn level_alone(change: &Change, changes: &[Change]) -> Result<()> {
     Err(super::refuse::refuse("Cook.Model.LevelAlone", &[("file", change.path.clone()), ("model", format!("{prefix}{base}.glb"))]))
 }
 
+/// The game's sound names in the store `base` (AudioRes/SMR, cooked), read once per store: None when it has none.
+fn game_sound_names(base: &Path) -> Option<std::sync::Arc<std::collections::HashSet<String>>> {
+    type Known = Option<(std::path::PathBuf, Option<std::sync::Arc<std::collections::HashSet<String>>>)>;
+    static LAST: std::sync::Mutex<Known> = std::sync::Mutex::new(None);
+    let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((path, names)) = last.as_ref() {
+        if path == base {
+            return names.clone();
+        }
+    }
+    let names = store::read_file(base, "AudioRes/SMR.szs")
+        .ok()
+        .and_then(|nsnd| super::sound::sound_names(&nsnd).ok())
+        .map(|list| std::sync::Arc::new(list.into_iter().collect()));
+    *last = Some((base.to_path_buf(), names.clone()));
+    names
+}
+
 /// What a modern file of a mod becomes: each file's place in the game, with the game's ending, its bytes, and whether
 /// they are the store's already (else the cooker reads them). Empty: it isn't one. A model's animations go beside it.
 fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Vec<(String, Vec<u8>, bool)>> {
@@ -217,6 +235,22 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         let path = format!("{archive}/blyt/{stem}.brlyt");
         super::refuse::record(super::refuse::CookFact::Layout { path: path.clone(), source: change.path.clone(), facts });
         return Ok(vec![(path, brlyt, false)]);
+    }
+    // Name.sound.json in a mod's assets (Luma/<id>/...): a sound effect, Name.nsfx, played by its path without the
+    // ending (sound contract 1). The sound file it names is read beside it.
+    if lower.ends_with(".sound.json") {
+        if !lower.starts_with("luma/") {
+            return Err(super::refuse::refuse("Cook.Sound.NotAsset", &[("file", change.path.clone())]));
+        }
+        let folder = change.source.parent().map(Path::to_path_buf);
+        let file = |name: &str| -> Option<Vec<u8>> { fs::read(folder.as_ref()?.join(name)).ok() };
+        // The game's sound names, for `replace` (layer 2): from the store's cooked sound archive, when there is one.
+        let names = base.and_then(game_sound_names);
+        let game_sound = |name: &str| -> Option<bool> { names.as_ref().map(|n| n.contains(name)) };
+        let (nsfx, facts) = super::sound_effect::cook(bytes, &super::sound_effect::Around { file: &file, game_sound: &game_sound })?;
+        let path = super::sound_effect::cooked_path(&change.path).unwrap_or_else(|| renamed(".nsfx"));
+        super::refuse::record(super::refuse::CookFact::Sound { path: path.clone(), source: change.path.clone(), facts });
+        return Ok(vec![(path, nsfx, true)]);
     }
     // A table as JSON: X.bcsv.json, a camera table X.bcam.json, or a stage's placement table (its name has no ending:
     // StageData/MyGalaxy.arc/jmp/placement/common/objinfo.json), as `lumalink extract` writes them.
@@ -323,6 +357,10 @@ pub fn write_overlay(game_id: &str, changes: &[Change], patches: &PlanPatches, b
             .and_then(|bytes| {
                 stats.bytes_in += bytes.len() as u64;
                 level_alone(change, changes)?;
+                // A sound file in a mod's assets is what a .sound.json reads; it is not a file of the game.
+                if super::sound_effect::is_asset_source(&change.path) {
+                    return Ok(Vec::new());
+                }
                 let modern = modern_files(change, &bytes, base)?;
                 if modern.is_empty() {
                     return Ok(vec![(change.path.clone(), cook_change(change, bytes, &waves, stats)?)]);
@@ -791,6 +829,7 @@ mod tests {
             "ObjectData/Kuribo.arc/Kuribo.bcam.json",
             "StageData/MyGalaxy.arc/jmp/placement/common/objinfo.json",
             "LayoutData/Hud.arc/Hud.layout.json",
+            "AudioRes/Jump.sound.json",
         ];
         let dir = tempfile::tempdir().unwrap();
         for path in cooked {
