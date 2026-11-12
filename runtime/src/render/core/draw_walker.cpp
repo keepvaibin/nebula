@@ -179,6 +179,17 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
         in.scale_flags = block.scale_flags;
         in.model = block.model != 0u ? &registries_.model(block.model).tables : nullptr;
         in.joint_count = block.joint_count;
+        if (in.model != nullptr && in.model->has_weighted) {
+            // Each joint's product made once for the block's eye and world rows (the envelopes' joints are the model's).
+            const std::size_t joints = in.model->joint_count;
+            if (walk_skin_made_.size() < joints) {
+                walk_skin_.resize(joints * 12u);
+                walk_skin_made_.resize(joints);
+            }
+            std::memset(walk_skin_made_.data(), 0, joints);
+            in.skin = reinterpret_cast<float (*)[4]>(walk_skin_.data());
+            in.skin_made = walk_skin_made_.data();
+        }
         in.normal_scale = block.normal_scale;
         const std::uint32_t camera = now.block_camera[b];
         const bool eye_block = block.camera == NEBULA_NONE32;

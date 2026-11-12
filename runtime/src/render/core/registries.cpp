@@ -340,6 +340,8 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes)
     model.tables.draw_matrix_count = header.draw_matrix_count;
     model.tables.joint_count = header.joint_count;
     model.tables.has_billboard = (header.flags & NEBULA_MODEL_HAS_BILLBOARD) != 0u;
+    model.tables.has_weighted = std::any_of(model.draw_matrices.begin(), model.draw_matrices.end(),
+                                            [](const NebulaModelDrawMatrix& matrix) { return matrix.weighted != 0u; });
     model.mesh_count = header.mesh_count;
 
     meshes.resize(header.mesh_count);

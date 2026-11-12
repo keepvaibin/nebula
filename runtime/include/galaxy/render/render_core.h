@@ -653,6 +653,8 @@ private:
     std::vector<std::uint32_t> walk_block_rows_, walk_block_world_, walk_previous_;
     std::vector<std::uint32_t> walk_light_rows_;  // per light set: its header row in this walk's rows
     std::vector<float> walk_rows_, walk_joints_, walk_lerped_;
+    std::vector<float> walk_skin_;            // a weighted block's joint products (core::ComposeInput::skin)
+    std::vector<std::uint8_t> walk_skin_made_;
     std::vector<std::array<float, 6>> walk_view_terms_, walk_view_previous_;
     std::vector<WalkView> walk_views_;
     std::vector<core::StaticSlot> walk_constants_;
