@@ -313,7 +313,8 @@ float3 rt_clear_through(uint at) {
 // crystal their colour's square root (the absorption exp(-sigma t) with kGlassTint 0.5: the thickness cancels) by
 // 1 - F at normal incidence (index 1.5); water 0.9 once a ray (a body of water is drawn as several sheets at one
 // place: the surface, its back face, a cup; the others weigh nothing and do not count to the four); a translucent
-// thing (a cloud, a ghost, jelly) 1 - 0.5 alpha at the hit; what glows, what is painted and the rest nothing.
+// thing (a cloud, a ghost, jelly, steam, a fall) none under 0.4 alpha at the hit and half from 0.6 (FB b102: the
+// plan's "no shadow under 0.5 alpha, half above"); what glows, what is painted and the rest nothing.
 float3 let_through(float3 origin, float3 direction, float reach, out float first) {
     RayDesc ray;
     ray.Origin = origin;
@@ -354,7 +355,8 @@ float3 let_through(float3 origin, float3 direction, float reach, out float first
                                            : 1.0f).xxx;
             watered = true;
         } else if (class_ == kClassTranslucent) {
-            passes = (1.0f - 0.5f * alpha_there(item, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())).xxx;
+            passes = (1.0f - 0.5f * smoothstep(0.4f, 0.6f, alpha_there(item, query.CandidatePrimitiveIndex(),
+                                                                       query.CandidateTriangleBarycentrics()))).xxx;
         } else {
             continue;
         }
