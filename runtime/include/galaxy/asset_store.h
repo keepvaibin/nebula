@@ -22,6 +22,7 @@ struct Entry {
     std::uint64_t length = 0;   // a file's length in bytes; a folder's, from its first file to its last one's end
     std::uint64_t position = 0; // the first byte in the store
     std::uint32_t children = 0; // a folder's entries
+    bool from_overlay = false;  // a mods' store's entry (attach_overlay), not the game's own
     const char* name = nullptr; // valid while the store is open
 };
 
