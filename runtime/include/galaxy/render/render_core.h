@@ -649,6 +649,9 @@ private:
 
     WalkState walk_{};
     std::uint64_t walk_serial_ = 0u;
+    // Counts the frame captures and takes that published a target's picture in another image (a new view): a table naming
+    // a target, written earlier in the walk, names it again after one.
+    std::uint64_t pictures_moved_ = 0u;
     std::vector<Affine34> walk_cameras_;
     std::vector<std::uint32_t> walk_block_rows_, walk_block_world_, walk_previous_;
     std::vector<std::uint32_t> walk_light_rows_;  // per light set: its header row in this walk's rows

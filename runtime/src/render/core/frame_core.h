@@ -133,6 +133,7 @@ struct TextureTable {
     float samplers_mip_lines = 0.0f, samplers_scene_bias = 0.0f;
     bool has_target = false;
     std::uint64_t walk_stamp = 0u;
+    std::uint64_t pictures_moved = 0u;  // RenderCore::pictures_moved_ when its target's pictures were named
     // The last frame (RenderCore::frame_index_) a walk named the table; a table idle for kTableIdleFrames gives up what was built
     // for it (retire_idle_tables) and is `retired` until a walk names it again.
     std::uint64_t last_frame = 0u;

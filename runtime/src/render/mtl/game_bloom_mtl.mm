@@ -394,6 +394,32 @@ bool GameBloom::prepare(Object commands, const Inputs& in, const Params& p) {
     return true;
 }
 
+bool GameBloom::prepare_draw_back(Format color_format, unsigned samples) {
+    return ready_ && composite_pipeline(color_format, samples) != nullptr;
+}
+
+void GameBloom::draw_back(Object encoder, Format color_format, unsigned samples, const Texture& picture, unsigned width,
+                          unsigned height) {
+    const Object pipeline = composite_pipeline(color_format, samples);  // made by prepare_draw_back
+    const Constants constants{};  // kind 0: the picture alone
+    id<MTLRenderCommandEncoder> const pass = (__bridge id<MTLRenderCommandEncoder>)encoder;
+    [pass setRenderPipelineState:(__bridge id<MTLRenderPipelineState>)pipeline];
+    [pass setDepthStencilState:(__bridge id<MTLDepthStencilState>)no_depth_];
+    [pass setCullMode:MTLCullModeNone];
+    [pass setTriangleFillMode:MTLTriangleFillModeFill];
+    [pass setDepthClipMode:MTLDepthClipModeClip];
+    [pass setDepthBias:0.0f slopeScale:0.0f clamp:0.0f];
+    for (unsigned i = 0; i < 3u; ++i) {
+        [pass setFragmentTexture:metal(&picture) atIndex:i];
+    }
+    [pass setFragmentSamplerState:(__bridge id<MTLSamplerState>)sampler_ atIndex:kLinearSampler];
+    [pass setVertexBytes:&constants length:sizeof(Constants) atIndex:kUtilityPushBuffer];
+    [pass setFragmentBytes:&constants length:sizeof(Constants) atIndex:kUtilityPushBuffer];
+    [pass setViewport:MTLViewport{0.0, 0.0, static_cast<double>(width), static_cast<double>(height), 0.0, 1.0}];
+    [pass setScissorRect:MTLScissorRect{0u, 0u, width, height}];
+    [pass drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
+}
+
 void GameBloom::finish(Object encoder, Format color_format, unsigned samples) {
     if (!std::exchange(pending_, false)) {
         return;

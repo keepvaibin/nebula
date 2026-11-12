@@ -2949,6 +2949,32 @@ bool RendererVk::draw_frame_pass(const FramePassRequest& params, TextureStore& t
     const std::uint64_t dest_key = static_cast<std::uint64_t>(params.key) |
         (static_cast<std::uint64_t>(params.channels) << 48u);
     FramePassTarget& dest = frame_pass_targets_[dest_key];
+    // Every channel of a single-sample scene target of the capture's size and format: the copy would write each pixel as
+    // it is (one target pixel to one picture pixel, sampled at its centre). The capture takes the scene target's image
+    // instead, and the scene goes on in the capture's last image with the frame drawn back into it as the pass opens
+    // (the bloom composite's kind 0 loads each pixel and its alpha). On a tiled GPU the frame is stored once and read once,
+    // where the copy stored it, read it, wrote the capture and loaded the scene target again. Not in a scene drawn with a
+    // motion or reactive target (its draws open a pass of their own, which would load the frame again).
+    if (params.channels == 0u && can_take_scene() && scene_pass_aux_ == 0u && scene_.color->width == w &&
+        scene_.color->height == h && scene_.color->format == vk::kSceneColorFormat) {
+        end_scene_pass();
+        const VkRenderPass scene_pass = draw_layout_.pass_for(scene_variant(), false);
+        const unsigned samples_log2 = scene_samples_log2();
+        if (bloom_.prepare_draw_back(commands_, scene_pass, samples_log2)) {
+            // The last capture's image, or one made for it (swap_scene_color: one of another size or use is retired).
+            gpu::TextureRef picture = swap_scene_color(std::move(dest.texture));
+            dest.texture = picture;
+            dest.width = w;
+            dest.height = h;
+            // The colour opens unloaded: the draw writes every pixel. The depth loads.
+            begin_scene_pass_with(0u, nullptr, true);
+            bloom_.draw_back(commands_, scene_pass, samples_log2,
+                             [this](VkDescriptorSetLayout layout) { return allocate_frame_set(layout); }, *picture, w, h);
+            reset_draw_bindings();
+            bind_scene();
+            return publish_frame_pass(params, std::move(picture), textures);
+        }
+    }
     if (!dest.texture || dest.width != w || dest.height != h) {
         if (dest.texture) {
             retire(std::move(dest.texture));

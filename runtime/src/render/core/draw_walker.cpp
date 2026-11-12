@@ -666,7 +666,8 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_
     // A list written earlier in this walk stands unless the generation moved since (the sampler array started again, or
     // the Vulkan image array grew and its null slot moved): then it is written again.
     const auto generation = renderer_.sampler_generation();
-    if (table.walk_stamp == walk_.serial && table.samplers_generation == generation) {
+    if (table.walk_stamp == walk_.serial && table.samplers_generation == generation &&
+        (!table.has_target || table.pictures_moved == pictures_moved_)) {
         lists = table.lists;
         first = table.list_first;
         return;
@@ -731,6 +732,8 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_
         walk_pairs_[2u * i + 1u] = table.sampler_slots[i];
     }
     renderer_.write_texture_list(walk_pairs_.data(), count, table.lists, table.list_first);
+    table.has_target = has_target;
+    table.pictures_moved = pictures_moved_;
     if (count > table.count && !table.clamp_logged) {
         table.clamp_logged = true;
         std::fprintf(stderr, "[textures] test: a list of %u maps walked as a run of %u (first entry %u)\n", table.count, count,
@@ -761,7 +764,7 @@ void RenderCore::walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::
         return table.count == 0u ? none : table.list[std::min(i, table.count - 1u)];
     };
     const bool stale = table.textures.ptr == 0u || table.textures_revision != texture_store_.revision();
-    const bool per_walk = table.has_target && table.walk_stamp != walk_.serial;
+    const bool per_walk = table.has_target && (table.walk_stamp != walk_.serial || table.pictures_moved != pictures_moved_);
     const float mip_lines = walk_.mip_lines;  // taken once in prepare_walk
     const auto generation = renderer_.sampler_generation();
     const bool samplers_stale = table.samplers.ptr == 0u || table.samplers_generation != generation ||
@@ -789,6 +792,7 @@ void RenderCore::walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::
                 // A target's picture changes from frame to frame: the table lives for this frame.
                 table.textures = renderer_.texture_table_for(handles.data(), count, texture_store_);
                 table.walk_stamp = walk_.serial;
+                table.pictures_moved = pictures_moved_;
             } else {
                 table.textures = renderer_.persistent_texture_table(handles.data(), count, texture_store_, table.textures);
             }
@@ -1684,7 +1688,9 @@ void RenderCore::walk_pass(ListData& now, std::uint32_t p, std::uint32_t& target
                 note_generated_written(pass.target);
             }
             request.channels = pass.channels < kCopyLayoutDisplay ? static_cast<std::uint8_t>(pass.channels) : 0u;
-            (void)renderer_.draw_frame_pass(request, texture_store_);
+            if (renderer_.draw_frame_pass(request, texture_store_)) {
+                ++pictures_moved_;
+            }
             break;
         }
         case NEBULA_PASS_TAKE_FRAME: {
@@ -1698,12 +1704,16 @@ void RenderCore::walk_pass(ListData& now, std::uint32_t p, std::uint32_t& target
                 const auto width = static_cast<std::uint32_t>(map.width);
                 const auto height = static_cast<std::uint32_t>(map.height);
                 gpu::TextureRef released;
-                (void)renderer_.take_scene(key, display_pictures_.take_idle_texture(width, height), texture_store_, released);
+                if (renderer_.take_scene(key, display_pictures_.take_idle_texture(width, height), texture_store_, released)) {
+                    ++pictures_moved_;
+                }
                 display_pictures_.release_texture(std::move(released), width, height);
             } else {
                 FramePassRequest request{};
                 request.key = key;
-                (void)renderer_.draw_frame_pass(request, texture_store_);
+                if (renderer_.draw_frame_pass(request, texture_store_)) {
+                    ++pictures_moved_;
+                }
             }
             break;
         }

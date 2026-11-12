@@ -61,6 +61,13 @@ public:
     // The composite prepare() set up, in the open scene pass `encoder` (an id<MTLRenderCommandEncoder>) whose colour is
     // `color_format` over `samples` samples a pixel.
     void finish(Object encoder, Format color_format, unsigned samples);
+    // A picture of the scene target's own format drawn back over the frame, each pixel's channels as they were (the
+    // composite's kind 0, which loads the pixel): a capture that took the scene target's texture continues the scene
+    // from it. prepare_draw_back with no encoder open (it may make the composite); false: the capture copies instead.
+    // draw_back in the open scene pass `encoder`.
+    [[nodiscard]] bool prepare_draw_back(Format color_format, unsigned samples);
+    void draw_back(Object encoder, Format color_format, unsigned samples, const Texture& picture, unsigned width,
+                   unsigned height);
     // Once a frame: hands back the textures no pass has asked for in 600 frames; prepare() makes them again.
     void trim_idle();
 

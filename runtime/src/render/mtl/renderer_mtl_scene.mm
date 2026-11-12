@@ -991,6 +991,27 @@ bool RendererMtl::draw_frame_pass(const FramePassRequest& params, TextureStore& 
     // Keyed by the texture and its channels.
     const std::uint64_t dest_key = static_cast<std::uint64_t>(params.key) | (static_cast<std::uint64_t>(params.channels) << 48u);
     FramePassTarget& dest = frame_pass_targets_[dest_key];
+    // As RendererVk::draw_frame_pass: every channel of a single-sample scene target of the capture's size and format is
+    // taken with the scene target's texture, and the scene goes on in the capture's last texture with the frame drawn back
+    // into it as the pass opens (the bloom composite's kind 0). On Apple's tiled GPUs the frame is stored once and read
+    // once, where the copy stored it, read it, wrote the capture and loaded the scene target again.
+    if (params.channels == 0u && can_take_scene() && scene_pass_aux_ == 0u && scene_.color->width == w &&
+        scene_.color->height == h && scene_.color->format == draw_layout_.scene_color) {
+        end_scene_pass();
+        if (bloom_.prepare_draw_back(draw_layout_.scene_color, scene_.samples)) {
+            // The last capture's texture, or one made for it (swap_scene_color: one of another size or use is retired).
+            gpu::TextureRef picture = swap_scene_color(std::move(dest.texture));
+            dest.texture = picture;
+            dest.width = w;
+            dest.height = h;
+            // The colour opens unloaded: the draw writes every pixel. The depth loads.
+            begin_scene_pass_with(0u, nullptr, true);
+            bloom_.draw_back(pass_, draw_layout_.scene_color, scene_.samples, *picture, w, h);
+            reset_draw_bindings();
+            bind_scene();
+            return publish_frame_pass(params, std::move(picture), textures);
+        }
+    }
     if (!dest.texture || dest.width != w || dest.height != h) {
         if (dest.texture) {
             retire(std::move(dest.texture));

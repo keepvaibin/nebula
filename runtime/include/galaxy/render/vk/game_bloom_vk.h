@@ -63,6 +63,13 @@ public:
     // The composite prepare() set up, in the open scene target pass `pass` of 2^samples_log2 samples (RGB; the game's alpha
     // stays).
     void finish(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const SetAllocator& allocate);
+    // A picture of the scene target's own format drawn back over the frame, each pixel's channels as they were (the
+    // composite's kind 0, which loads the pixel): a capture that took the scene target's image continues the scene from
+    // it. prepare_draw_back with no render pass open (it may make the composite and the unused slot's image); false: the
+    // capture copies instead. draw_back in the open scene target pass `pass`, `picture` shader-readable.
+    [[nodiscard]] bool prepare_draw_back(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2);
+    void draw_back(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const SetAllocator& allocate,
+                   const Texture& picture, unsigned width, unsigned height);
     // Once a frame, outside a submission being recorded: hands back the images no pass has asked for in 600 frames (the
     // bloom switched off, a scene without one, the other bloom's kind); prepare() makes them again. The images go
     // through the context's deferred destruction, behind the fence of any submission naming them.

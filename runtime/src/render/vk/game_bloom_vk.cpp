@@ -529,6 +529,42 @@ bool GameBloomVk::prepare(VkCommandBuffer commands, const Inputs& in, const Para
     return true;
 }
 
+bool GameBloomVk::prepare_draw_back(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2) {
+    if (!ready_ || composite_pipeline(pass, samples_log2) == VK_NULL_HANDLE) {
+        return false;
+    }
+    if (dummy_ && dummy_->layout == VK_IMAGE_LAYOUT_GENERAL) {
+        return true;
+    }
+    if (!ensure(dummy_, 1u, 1u, kWorkFormat, true, "bloom unused slot")) {
+        return false;
+    }
+    // The unused slot is never read; its descriptor names it in GENERAL, as prepare() leaves it.
+    BarriersVk slot(commands);
+    slot.image_scoped(dummy_->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
+                      VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                      VK_ACCESS_2_NONE, 1u);
+    slot.issue();
+    dummy_->layout = VK_IMAGE_LAYOUT_GENERAL;
+    return true;
+}
+
+void GameBloomVk::draw_back(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2,
+                            const SetAllocator& allocate, const Texture& picture, unsigned width, unsigned height) {
+    const VkPipeline pipeline = composite_pipeline(pass, samples_log2);  // made by prepare_draw_back
+    const VkDescriptorSet set = set_of(allocate, {&picture, &picture, &picture}, {nullptr, nullptr, nullptr});
+    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+    const VkDescriptorSet sets[2] = {set, sampler_set_};
+    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, layout_, 0, 2, sets, 0, nullptr);
+    const Constants constants{};  // kind 0: the picture alone
+    vkCmdPushConstants(commands, layout_, kStages, 0, sizeof(Constants), &constants);
+    const VkViewport viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
+    const VkRect2D scissor{{0, 0}, {width, height}};
+    vkCmdSetViewport(commands, 0, 1, &viewport);
+    vkCmdSetScissor(commands, 0, 1, &scissor);
+    vkCmdDraw(commands, 3, 1, 0, 0);
+}
+
 void GameBloomVk::finish(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2,
                          const SetAllocator& allocate) {
     if (!std::exchange(pending_, false)) {
