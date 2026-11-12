@@ -90,6 +90,7 @@ private:
     PendingList mDisconnectMovement;
     PendingList mConnectDraw;
     PendingList mDisconnectDraw;
+    bool mConnectingDone;  // initConnectting has run: an object registered later starts disconnected, not "before init"
 };
 
 namespace MR {

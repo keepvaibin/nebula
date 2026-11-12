@@ -335,11 +335,6 @@ namespace luma {
 
                 // ---- Facts (harness only) ----
 
-                void putVec(char* pDst, u32 size, const char* pKey, f32 x, f32 y, f32 z) {
-                    nebula_snprintf(pDst, size, ",\"%s\":[%.3f,%.3f,%.3f]", pKey, static_cast< double >(x), static_cast< double >(y),
-                                    static_cast< double >(z));
-                }
-
                 void startFact(const Effect& rEffect, const char* pJoint, bool follow, bool placeholder) {
                     char mod[160];
                     char name[300];
@@ -392,14 +387,12 @@ namespace luma {
                     } else {
                         jointAt = pShell->actor->mPosition;
                     }
-                    char json[256];
-                    nebula_snprintf(json, sizeof(json), "{\"frame\":%u,\"particles\":%u", rEffect.frame, particles);
-                    char part[96];
-                    putVec(part, sizeof(part), "at", at.x, at.y, at.z);
-                    strncat(json, part, sizeof(json) - strlen(json) - 1);
-                    putVec(part, sizeof(part), "joint_at", jointAt.x, jointAt.y, jointAt.z);
-                    strncat(json, part, sizeof(json) - strlen(json) - 1);
-                    strncat(json, "}", sizeof(json) - strlen(json) - 1);
+                    char json[320];
+                    nebula_snprintf(json, sizeof(json),
+                                    "{\"frame\":%u,\"particles\":%u,\"at\":[%.3f,%.3f,%.3f],\"joint_at\":[%.3f,%.3f,%.3f]}",
+                                    rEffect.frame, particles, static_cast< double >(at.x), static_cast< double >(at.y),
+                                    static_cast< double >(at.z), static_cast< double >(jointAt.x), static_cast< double >(jointAt.y),
+                                    static_cast< double >(jointAt.z));
                     char key[48];
                     nebula_snprintf(key, sizeof(key), "fx.alive.%llu", static_cast< unsigned long long >(rEffect.handle));
                     luma::modlog::fact(key, json);
