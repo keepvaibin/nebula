@@ -381,6 +381,57 @@ pub struct Facts {
     /// A const method: called on a const view.
     pub konst: bool,
     pub overrides: Vec<Overridden>,
+    /// C-6: one entry per declared parameter (a method's `this` not counted): what the function does through a
+    /// pointer parameter its header marks; None for no mark.
+    pub marks: Vec<Option<Mark>>,
+}
+
+/// What a function does through a pointer parameter (self-description C-6, Game/LumaMarks.hpp).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Way {
+    /// Reads one value, never writes it, does not keep the address.
+    In,
+    /// May write one value, never reads it first, does not keep the address.
+    Out,
+    /// Reads one value, may write it, does not keep the address.
+    InOut,
+    /// Keeps the address: never callable from LumaScript.
+    Kept,
+}
+
+/// One parameter's mark (C-6).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Mark {
+    pub way: Way,
+    /// An array whose element count is the parameter at this 0-based index (an integer, itself unmarked).
+    pub count: Option<usize>,
+    /// An array of exactly this many elements (1 to 4096).
+    pub fixed: Option<u32>,
+    /// The function accepts null there.
+    pub nullable: bool,
+}
+
+/// The number of parameters a row's signature declares (`bool(const Vec3f &, s32) const` -> 2): top-level commas
+/// inside its first parentheses, `()` and `(void)` none. None when the text has no balanced parameter list.
+pub fn signature_params(signature: &str) -> Option<usize> {
+    let open = signature.find('(')?;
+    let (mut depth, mut commas, mut end) = (0i32, 0usize, None);
+    for (i, c) in signature[open..].char_indices() {
+        match c {
+            '(' | '<' | '[' => depth += 1,
+            ')' | '>' | ']' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(open + i);
+                    break;
+                }
+            }
+            ',' if depth == 1 => commas += 1,
+            _ => {}
+        }
+    }
+    let inside = signature[open + 1..end?].trim();
+    Some(if inside.is_empty() || inside == "void" { 0 } else { commas + 1 })
 }
 
 /// luma_functions.json (types TY-11): each row's facts by its name and signature.
@@ -392,7 +443,7 @@ pub struct FunctionFacts {
 impl FunctionFacts {
     /// Reads a facts file. Anything not in TY-11's form, a row given twice, or facts that cannot be (a free function
     /// with a record, a const or virtual function that is no member, a pure one that is not virtual, overrides of one
-    /// that is not virtual) is an error naming the row.
+    /// that is not virtual, marks not in C-6's form) is an error naming the row.
     pub fn from_json(bytes: &[u8]) -> Result<FunctionFacts, TypesError> {
         use crate::json::{Kind, Value};
         let root = crate::json::parse(bytes)
@@ -435,11 +486,76 @@ impl FunctionFacts {
             if !overrides.is_empty() && !is_virtual {
                 return Err(bad(format!("{at}.overrides"), "only a virtual overrides"));
             }
-            if facts.rows.insert((name, signature), Facts { kind, owner, is_virtual, pure, konst, overrides }).is_some() {
+            let marks = Self::marks(row, &at, &signature)?;
+            if facts.rows.insert((name, signature), Facts { kind, owner, is_virtual, pure, konst, overrides, marks }).is_some() {
                 return Err(bad(at, "a row given twice"));
             }
         }
         Ok(facts)
+    }
+
+    /// A row's "marks" (C-6, G-C6-1 and 2): a list with one entry per parameter of its signature, each null or an
+    /// object of exactly `way`, `count`, `fixed`, `nullable`. Any other form is an error naming the row and the entry.
+    fn marks(row: &crate::json::Value, at: &str, signature: &str) -> Result<Vec<Option<Mark>>, TypesError> {
+        use crate::json::{Kind, Value};
+        let bad = |at: String, why: &str| TypesError::Row { at, why: why.to_string() };
+        let at = format!("{at}.marks");
+        let list = row.get("marks").filter(|v| v.is_array()).map(Value::items).ok_or_else(|| bad(at.clone(), "missing, or not a list"))?;
+        let n = signature_params(signature).ok_or_else(|| bad(at.clone(), "the row's signature has no parameter list"))?;
+        if list.len() != n {
+            return Err(bad(at, &format!("{} entries for {n} parameters", list.len())));
+        }
+        let mut marks = Vec::with_capacity(n);
+        for (i, v) in list.iter().enumerate() {
+            let eat = format!("{at}[{i}]");
+            if matches!(v.kind, Kind::Null) {
+                marks.push(None);
+                continue;
+            }
+            if !v.is_object() || v.members().len() != 4 || ["way", "count", "fixed", "nullable"].iter().any(|k| v.get(k).is_none()) {
+                return Err(bad(eat, "not null, nor an object of exactly way, count, fixed and nullable"));
+            }
+            let way = match v.get("way").and_then(Value::as_str) {
+                Some("in") => Way::In,
+                Some("out") => Way::Out,
+                Some("inout") => Way::InOut,
+                Some("kept") => Way::Kept,
+                _ => return Err(bad(format!("{eat}.way"), "not in, out, inout or kept")),
+            };
+            // A whole number from `low` to `high`, or null.
+            let whole = |key: &str, low: i64, high: i64| -> Result<Option<i64>, TypesError> {
+                let x = v.get(key).expect("checked above");
+                if matches!(x.kind, Kind::Null) {
+                    return Ok(None);
+                }
+                match x.as_i64() {
+                    Some(k) if (low..=high).contains(&k) => Ok(Some(k)),
+                    _ => Err(bad(format!("{eat}.{key}"), &format!("not null or a whole number from {low} to {high}"))),
+                }
+            };
+            let count = whole("count", 0, n as i64 - 1)?.map(|k| k as usize);
+            let fixed = whole("fixed", 1, 4096)?.map(|k| k as u32);
+            let nullable = v.get("nullable").and_then(Value::as_bool).ok_or_else(|| bad(format!("{eat}.nullable"), "not true or false"))?;
+            if count.is_some() && fixed.is_some() {
+                return Err(bad(eat, "count and fixed both set"));
+            }
+            if way == Way::Kept && (count.is_some() || fixed.is_some() || nullable) {
+                return Err(bad(eat, "kept with a count, a fixed count or nullable"));
+            }
+            if count == Some(i) {
+                return Err(bad(format!("{eat}.count"), "its own parameter"));
+            }
+            marks.push(Some(Mark { way, count, fixed, nullable }));
+        }
+        // A count parameter is an integer, so it carries no mark itself.
+        for (i, m) in marks.iter().enumerate() {
+            if let Some(c) = m.and_then(|m| m.count) {
+                if marks[c].is_some() {
+                    return Err(bad(format!("{at}[{i}].count"), "names a parameter that is itself marked"));
+                }
+            }
+        }
+        Ok(marks)
     }
 
     /// A row's facts.
