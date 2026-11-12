@@ -298,6 +298,28 @@ static const float kWaterLayer = 2.0f;  // water hits this near one another are 
 // LIGHT-MODEL.md 7; FB b58c): the way is in units of the stage's water clear, green's 1/e way.
 static const float3 kWaterAbsorb = float3(0.340f, 0.0565f, 0.0092f) / 0.0565f;
 
+// What a clear thing lets through at its own thickness (the owner's "everything clear", the director's table G; FB
+// b86), linear: lerp(white, its art's colour, k), k by its class as its own numbers say (item word 15's index, word
+// 11's roughness): crystal (index 1.7 and over) 0.25; ice (1.30 to 1.32) 0.35, an ice being (rougher, 0.07 and over)
+// 0.7; other glass 0.2 and never under 0.75 luminance. `at`: the item's first byte in g_items.
+float3 rt_clear_through(uint at) {
+    const uint colour = g_items.Load(at + 48u);
+    const float3 art = max(rt_lin(float3(float(colour & 255u), float(colour >> 8u & 255u), float(colour >> 16u & 255u)) / 255.0f),
+                           0.002f);
+    const uint ior_bits = g_items.Load(at + 60u) >> 12u & 255u;
+    const float ior = ior_bits != 0u ? 1.0f + float(ior_bits) / 100.0f : 1.5f;
+    const float roughness = float(g_items.Load(at + 44u) >> 16u & 255u) / 255.0f;
+    const bool ice = ior >= 1.295f && ior <= 1.325f;
+    const float k = ior >= 1.7f ? 0.25f : ice ? (roughness >= 0.07f ? 0.7f : 0.35f) : 0.2f;
+    float3 through = lerp(float3(1.0f, 1.0f, 1.0f), art, k);
+    if (!ice && ior < 1.7f) {
+        // Clear glass keeps at least 0.75 of white's luminance: what it takes, scaled down to that.
+        const float lum = dot(through, float3(0.2126f, 0.7152f, 0.0722f));
+        through = lum < 0.75f ? 1.0f - (1.0f - through) * (0.25f / max(1.0f - lum, 1e-4f)) : through;
+    }
+    return through;
+}
+
 // What the blended things on a ray let through (plan 13.4), rgb; `first`: how far along the first of them stands (-1:
 // none). Every candidate is weighed and none committed (the product does not care for order), at most four: glass and
 // crystal their colour's square root (the absorption exp(-sigma t) with kGlassTint 0.5: the thickness cancels) by
@@ -327,10 +349,9 @@ float3 let_through(float3 origin, float3 direction, float reach, out float first
         float3 passes = float3(1.0f, 1.0f, 1.0f);
         bool counts = true;
         if (class_ == kClassGlass) {
-            const uint colour = g_items.Load(at + 48u);
-            const float3 base = float3(float(colour & 255u), float(colour >> 8u & 255u), float(colour >> 16u & 255u)) / 255.0f;
-            // The body's transmittance on its LINEAR colour, half a body a face, and 1 - F a face (A4 K6, A5-B1; FB b75).
-            passes = sqrt(max(rt_lin(base), 0.002f)) * 0.96f;
+            // The body's transmittance (its class's through-colour, FB b86), half a body a face, and 1 - F a face
+            // (A4 K6, A5-B1; FB b75).
+            passes = sqrt(rt_clear_through(at)) * 0.96f;
         } else if (class_ == kClassWater) {
             const float t_water = query.CandidateTriangleRayT();
             if (waters == 0u || (abs(t_water - water_near) > kWaterLayer && abs(t_water - water_far) > kWaterLayer)) {

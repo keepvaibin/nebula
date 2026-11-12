@@ -192,8 +192,9 @@ void main(uint3 id : SV_DispatchThreadID) {
     const RtSurface s = rt_surface(int2(id.xy), guide, g_normals.Load(here), g_motion.Load(here).w);
     const float3 look = normalize(s.at);
     const float3 n = dot(s.smooth_, look) < 0.0f ? s.smooth_ : s.normal;
-    // The filter's colour in linear light: white seen through it turns the art's colour (M1; FB b59b).
-    const float3 colour = max(rt_lin(rt_bytes3(g_items.Load(at + 48u))), 0.002f);
+    // The filter's colour in linear light at its own thickness: its class's through-colour (FB b86: the owner's
+    // "everything clear"; lerp(white, art, k), rt_common.hlsli), not the art's whole colour.
+    const float3 colour = rt_clear_through(at);
     // The index (item word 15, FC's c15: bits 12-19 as (ior - 1) x 100; 0: the class's own).
     const uint ior_bits = g_items.Load(at + 60u) >> 12u & 255u;
     const float ior = ior_bits != 0u ? 1.0f + float(ior_bits) / 100.0f : (water ? 1.33f : 1.5f);
