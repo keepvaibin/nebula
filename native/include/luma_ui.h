@@ -32,6 +32,12 @@ typedef LumaHandle LumaUiScreen;
 /* A pane of an open screen: ends with its screen. */
 typedef LumaHandle LumaUiPane;
 
+/* A row of a screen's menu (menu_rows, 1.2): its pane and whether it can be taken. */
+typedef struct LumaUiMenuRow {
+    LumaUiPane pane; /* a pane of the screen */
+    bool enabled;    /* false: shown at half its alpha, skipped by up and down, never taken */
+} LumaUiMenuRow;     /* 16 bytes */
+
 /* The events a screen's animation gives (LumaEvent.kind; handle: the screen). */
 enum {
     LUMA_UI_EVENT_ANIMATION_END = 1 /* status LUMA_OK: it played to its end; LUMA_E_CANCELLED: another play, stop,
@@ -96,17 +102,17 @@ typedef struct LumaUiService {
        set again or an animation that moves its scale plays. LUMA_OK; a number not finite or past 64 either way:
        LUMA_E_ARGUMENT, reported; an ended pane: LUMA_E_HANDLE, reported. Thread and taking out as open. */
     int32_t (*set_scale)(const LumaMod* mod, LumaUiPane pane, float x, float y);
-    /* 1.2. Game thread. The screen's panes `panes` (count of them, top first, at most LUMA_UI_MENU_ROWS_MOST, panes of
-       this screen) made a menu the player moves through and takes a row of as the game's own menus: up and down move
-       the focus over the rows that are on (on[i]; a null `on`: all), wrapping at the ends; the pointer (and touch,
+    /* 1.2. Game thread. The screen's panes `rows` (count of them, top first, at most LUMA_UI_MENU_ROWS_MOST, each a
+       pane of this screen and whether it can be taken) made a menu the player moves through and takes a row of as the
+       game's own menus: up and down move the focus over the rows that are on, wrapping at the ends; the pointer (and touch,
        which is the pointer) on a row that is on focuses it; A takes the focused row, once a press. The focused row is
        drawn a tenth larger, a row that is off at half its alpha (the pane's own scale and alpha given back when the
        menu changes or the screen ends). A second call on the screen replaces the menu and keeps the focus on the same
        row when it is still on (else the first that is on). count 0 takes the menu away. One screen's menu moves at a
        time: the newest screen with one. LUMA_OK; an ended screen or a pane that is not one of the screen's:
-       LUMA_E_HANDLE, reported; null panes with a count, or a count past the most: LUMA_E_ARGUMENT, reported. Thread
+       LUMA_E_HANDLE, reported; null rows with a count, or a count past the most: LUMA_E_ARGUMENT, reported. Thread
        and taking out as open. */
-    int32_t (*menu_rows)(const LumaMod* mod, LumaUiScreen screen, const LumaUiPane* panes, const bool* on, uint32_t count);
+    int32_t (*menu_rows)(const LumaMod* mod, LumaUiScreen screen, const LumaUiMenuRow* rows, uint32_t count);
     /* 1.2. Game thread. The row of the screen's menu taken at the last reading of the controls into *row (0 the
        top), -1 when none was: no press, a host menu open (Settings, the HOME menu), or no menu. The controls are read
        once a frame after the mods' frame handlers, and a row taken stays until the next reading, so the next frame's
