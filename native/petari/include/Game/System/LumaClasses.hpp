@@ -1,8 +1,10 @@
 #pragma once
 // Mods' own classes (contract classes, plan 1.4; luma.h LumaClassDef): a class derived from a game class, made by the
-// game's own factory (a kernel hook on NameObjFactory::getCreator), its overrides wraps on the rows the base runs that
-// run the mod's code only for its own objects, with data of its own per object. The game's vtables are never touched:
-// when the mod goes, its hooks go and its objects are the base's again.
+// game's own factory (a kernel hook on NameObjFactory::getCreator), with data of its own per object. Its overrides are
+// slots of a table of its own: a copy of the base's table at the object's start (prefix and RTTI too), whose overridden
+// slots hold the build's entry for that virtual (gen_types.py slot_code); `made` sees the object with that table, and
+// a virtual call on it runs the mod's hook, whose proceed runs the base's code. The game's own tables are never
+// written: when the mod goes, its objects get the base's table back.
 
 #include <luma.h>
 #include <luma_types.h>

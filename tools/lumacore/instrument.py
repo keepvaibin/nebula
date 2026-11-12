@@ -1579,12 +1579,16 @@ class Unit:
             stop('LUMA_COUNT and LUMA_COUNT_FIXED on one parameter')
         for mark in ('LUMA_COUNT', 'LUMA_COUNT_FIXED', 'LUMA_NULLABLE'):
             if mark in arguments and way is None:
-                stop(f'{mark} with no way (LUMA_IN, LUMA_OUT or LUMA_INOUT)')
-            if mark in arguments and way == 'LUMA_KEPT':
+                stop(f'{mark} with no way (LUMA_IN, LUMA_OUT, LUMA_INOUT or LUMA_KEPT)')
+            # A kept address may be null when the game reads it only when set (TalkMessageCtrl's balloon matrix); a
+            # count says nothing of an address the game keeps.
+            if mark != 'LUMA_NULLABLE' and mark in arguments and way == 'LUMA_KEPT':
                 stop(f'{mark} with LUMA_KEPT')
         declared = api.type(parameter)
         pointer = api.canonical(declared)
-        if pointer.kind != T_POINTER or not self.markable(api.canonical(api.pointeeType(pointer))):
+        # A kept address is the game's to read later, whatever it points at (a matrix, a struct): the mark says only that
+        # the caller keeps it alive. The other ways read or write values the mod sees, so those are numbers or vectors.
+        if pointer.kind != T_POINTER or (way != 'LUMA_KEPT' and not self.markable(api.canonical(api.pointeeType(pointer)))):
             stop(f'{way} on a parameter of type {self.string(api.typeSpelling(declared))}: a mark takes a pointer to a '
                  'number of one width on every system (not char, long, wchar_t or long double), a vector or an enum')
         index = None

@@ -22,14 +22,30 @@ namespace luma {
 
             struct ClassRow;
 
-            // One override: the row the base runs, and the mod's wrap. Kept for the session (a call on another thread may
-            // still read it after the mod's hooks are gone; the rows are at most kMaxClasses).
+            // One override: a slot of the class's table (from its address point) and the mod's hook. Kept for the session
+            // (a call on another thread may still read it after the mod went; the rows are at most kMaxClasses).
             struct Override {
-                u32 row;
-                const void* baseTypeInfo;
-                const Function* function;
+                const MethodRow* method;    // the virtual the mod named
+                const Function* original;   // method->original: the call's function, and the entry's key
+                u32 slot;
+                const void* entry;          // the build's code for the slot (it calls slotCall)
+                const void* code;           // the base's code in the slot: set when the table is copied
                 LumaHook hook;
                 void* user;
+            };
+
+            // A class's table, ahead of the copy: the kernel's mark and the row, so an entry finds its class from the
+            // object's table with no lookup. kPrefix: the entries before the address point, per ABI (gen_types.py reads
+            // the build's layout dump; a base whose prefix differs takes no override).
+#if defined(_WIN32)
+            constexpr u32 kPrefix = 1;  // Microsoft's: the RTTI locator
+#else
+            constexpr u32 kPrefix = 2;  // Itanium's: offset to top, the type_info
+#endif
+            constexpr uintptr_t kTableMark = 0x4C756D6154626C31ull;  // "LumaTbl1"
+            struct TableHead {
+                uintptr_t mark;
+                ClassRow* row;
             };
 
             struct ClassRow {
@@ -44,10 +60,17 @@ namespace luma {
                 u32 dataSize;
                 u32 dataAlign;
                 void (*made)(void* object, void* data, void* user);
+                void (*gone)(void* object, void* data, void* user);  // null: none (or a definition from before it)
                 void* user;
                 Override* overrides;
                 u32 overrideCount;
                 bool saidOther;  // the maker made another class: said once
+                // With overrides: the base's table at its address point, as the first object made had it, and the
+                // class's copy (never freed: an object or a call may hold it). Null until the first object.
+                void* const* baseTable;
+                void** table;
+                u32 tableCount;  // the base's: all entries, the prefix's too
+                bool saidTable;  // a table problem: said once
             };
 
             ClassRow* sRows[kMaxClasses];
@@ -67,6 +90,7 @@ namespace luma {
             u32 sLock = 0;
             u32 sMaking = 0;  // makes between the maker and `made` (modGone waits for none)
 
+            // The kernel's own hooks (the factory, NameObj's destructor): an owner no mod is.
             // The kernel's own hooks (the factory, NameObj's destructor): an owner no mod is.
             const char sKernelOwner = 0;
             bool sHooked = false;
@@ -93,13 +117,10 @@ namespace luma {
                 return n;
             }
 
-            bool same(const char* pA, const char* pB) {
-                while (*pA != 0 && *pA == *pB) {
-                    pA++;
-                    pB++;
-                }
-                return *pA == *pB;
-            }
+            // Names as the game's factory compares them (NameObjFactory: hashNameCase, isEqualStringCase): ASCII case
+            // folded, so a stage row's "kuribo" finds the class that replaces Kuribo, and two classes may not differ by
+            // case alone.
+            bool same(const char* pA, const char* pB) { return ::nebula_stricmp(pA, pB) == 0; }
 
             void copyName(char* pTo, const char* pFrom) {
                 u32 i = 0;
@@ -208,6 +229,16 @@ namespace luma {
                 sInstanceCount--;
             }
 
+            // The mod's `gone` for one object of row pRow's class, before the kernel frees its data (contract classes,
+            // "gone"): once for every object the class kept, whose `made` ran just after. `pObject` is the object's
+            // address while its NameObj part is still whole (its own parts' destructors have run); null when the scene's
+            // memory went with it.
+            void callGone(const ClassRow* pRow, const void* pObject, void* pData) {
+                if (pRow->gone != nullptr) {
+                    pRow->gone(const_cast<void*>(pObject), pData, pRow->user);
+                }
+            }
+
             // A live row by the name the factory is asked for: its own name, or the name it replaces. -1: none.
             s32 rowForPlacement(const char* pName) {
                 if (pName == nullptr) {
@@ -245,6 +276,8 @@ namespace luma {
             // factory's row for is the one its constructor is given), then its data and `made`. The game calls a creator
             // with the placement's own name (often not the class name the factory was asked for), so each row has its
             // own creator (kMakers) and the row is never found from the name.
+            bool takeTable(ClassRow* pRow, void* pObject);
+
             NameObj* make(u32 r, const char* pName) {
                 lock();
                 ClassRow* const pRow = r < sRowCount ? sRows[r] : nullptr;
@@ -288,10 +321,24 @@ namespace luma {
                             say(pRow->mod, "class %s: no memory to keep one more object; this one is a plain %s", pRow->name, pRow->base->name);
                             core()->free(pRow->mod, pData);
                         } else {
-                            if (replaced.object != nullptr && replaced.data != nullptr) {
-                                core()->free(sRows[replaced.row]->mod, replaced.data);
+                            if (replaced.object != nullptr) {
+                                // The object at this address went without its destructor seen: its class's gone, then
+                                // its data.
+                                callGone(sRows[replaced.row], nullptr, replaced.data);
+                                if (replaced.data != nullptr) {
+                                    core()->free(sRows[replaced.row]->mod, replaced.data);
+                                }
                             }
-                            if (pRow->made != nullptr) {
+                            if (pRow->overrideCount != 0 && !takeTable(pRow, const_cast<void*>(pComplete))) {
+                                // No table of its own (said): the object is not the class's; it stays a plain base.
+                                lock();
+                                const s32 at = findLocked(pComplete);
+                                if (at >= 0 && sSlots[at].row == static_cast<u32>(r)) {
+                                    removeAtLocked(static_cast<u32>(at));
+                                }
+                                unlock();
+                                core()->free(pRow->mod, pData);
+                            } else if (pRow->made != nullptr) {
                                 pRow->made(const_cast<void*>(pComplete), pData, pRow->user);
                             }
                         }
@@ -339,32 +386,15 @@ namespace luma {
                     removeAtLocked(static_cast<u32>(at));
                 }
                 unlock();
-                if (gone.data != nullptr) {
-                    core()->free(sRows[gone.row]->mod, gone.data);
+                if (gone.object != nullptr) {
+                    callGone(sRows[gone.row], gone.object, gone.data);
+                    if (gone.data != nullptr) {
+                        core()->free(sRows[gone.row]->mod, gone.data);
+                    }
                 }
                 return 0;
             }
 
-            // The wrap on a row the base runs: the mod's override for its own objects, the rest of the chain for others.
-            int32_t overrideHook(LumaCall* pCall, void* pUser) {
-                const Override* const pOverride = static_cast<const Override*>(pUser);
-                const void* const pSelf = pCall->args[0];
-                const void* pComplete = nullptr;
-                bool own = false;
-                // Most calls of a shared row are other classes': one vtable read sends them on with no lock.
-                if (pSelf != nullptr && ownTypeInfo(pSelf, &pComplete) == pOverride->baseTypeInfo) {
-                    lock();
-                    const s32 at = findLocked(pComplete);
-                    own = at >= 0 && sSlots[at].row == pOverride->row;
-                    unlock();
-                }
-                if (own) {
-                    pOverride->hook(pCall, pOverride->user);
-                } else {
-                    core()->proceed(pCall);
-                }
-                return 0;
-            }
 
             bool installKernelHooks() {
                 if (sHooked) {
@@ -400,11 +430,184 @@ namespace luma {
                 return taken;
             }
 
-            void unhookOverrides(const LumaMod* pMod, const Override* pOverrides, u32 count) {
-                for (u32 i = 0; i < count; i++) {
-                    core()->unhook(pMod, reinterpret_cast<const LumaFunction*>(pOverrides[i].function), LUMA_WRAP, overrideHook,
-                                   const_cast<Override*>(&pOverrides[i]));
+            uintptr_t word(const MemberBytes& rBytes, u32 at) {
+                uintptr_t value = 0;
+                if ((at + 1) * sizeof(uintptr_t) <= rBytes.size) {
+                    __builtin_memcpy(&value, rBytes.bytes + at * sizeof(uintptr_t), sizeof(value));
                 }
+                return value;
+            }
+
+            // The slot (from the address point) a member pointer to a virtual calls through, per ABI, or -1 when it is
+            // not one of the table at the object's start (an adjustment of `this`) or its code is not the compiler's
+            // own form. Microsoft's x64: the pointer is a thunk, "mov rax, [rcx]" then the slot's load and a jump
+            // (clang's: mov rax, [rax + d]; jmp rax; or jmp [rax + d]), the other words (adjustments) 0. Itanium's
+            // x86-64: the pointer is 1 + the slot's offset, the adjustment 0. Itanium's arm64: the pointer is the offset,
+            // the adjustment 1 (2 x 0 + virtual).
+            s32 slotOfVirtual(const MemberBytes& rMember) {
+                for (u32 i = 1; i * sizeof(uintptr_t) < rMember.size; i++) {
+#if defined(__aarch64__) && !defined(_WIN32)
+                    if (word(rMember, i) != (i == 1 ? 1u : 0u)) {
+#else
+                    if (word(rMember, i) != 0) {
+#endif
+                        return -1;
+                    }
+                }
+                uintptr_t offset = 0;
+#if defined(_WIN32) && defined(__x86_64__)
+                const unsigned char* p = reinterpret_cast<const unsigned char*>(word(rMember, 0));
+                if (p == nullptr) {
+                    return -1;
+                }
+                if (p[0] == 0xE9) {  // a linker's jump to the thunk
+                    s32 rel;
+                    __builtin_memcpy(&rel, p + 1, sizeof(rel));
+                    p += 5 + rel;
+                }
+                if (!(p[0] == 0x48 && p[1] == 0x8B && p[2] == 0x01)) {
+                    return -1;
+                }
+                p += 3;
+                s32 displacement = 0;
+                bool jumped = false;
+                if (p[0] == 0x48 && p[1] == 0x8B && (p[2] == 0x00 || p[2] == 0x40 || p[2] == 0x80)) {
+                    if (p[2] == 0x40) {
+                        displacement = static_cast<signed char>(p[3]);
+                        p += 4;
+                    } else if (p[2] == 0x80) {
+                        __builtin_memcpy(&displacement, p + 3, sizeof(displacement));
+                        p += 7;
+                    } else {
+                        p += 3;
+                    }
+                    jumped = (p[0] == 0x48 && p[1] == 0xFF && p[2] == 0xE0) || (p[0] == 0xFF && p[1] == 0xE0);
+                } else if (p[0] == 0xFF && (p[1] == 0x20 || p[1] == 0x60 || p[1] == 0xA0)) {
+                    if (p[1] == 0x60) {
+                        displacement = static_cast<signed char>(p[2]);
+                    } else if (p[1] == 0xA0) {
+                        __builtin_memcpy(&displacement, p + 2, sizeof(displacement));
+                    }
+                    jumped = true;
+                }
+                if (!jumped || displacement < 0) {
+                    return -1;
+                }
+                offset = static_cast<uintptr_t>(displacement);
+#elif defined(__x86_64__)
+                const uintptr_t pointer = word(rMember, 0);
+                if ((pointer & 1u) == 0) {
+                    return -1;
+                }
+                offset = pointer - 1;
+#elif defined(__aarch64__)
+                offset = word(rMember, 0);
+#else
+                return -1;
+#endif
+                if (offset % sizeof(void*) != 0 || offset / sizeof(void*) > 0xFFFF) {
+                    return -1;
+                }
+                return static_cast<s32>(offset / sizeof(void*));
+            }
+
+            // The code of a member pointer to a function that is not virtual and takes `this` unadjusted (the entry's).
+            const void* codeOfMember(const MemberBytes& rMember) {
+                for (u32 i = 1; i * sizeof(uintptr_t) < rMember.size; i++) {
+                    if (word(rMember, i) != 0) {
+                        return nullptr;
+                    }
+                }
+#if defined(__x86_64__) && !defined(_WIN32)
+                if ((word(rMember, 0) & 1u) != 0) {
+                    return nullptr;  // Itanium x86-64: odd says virtual
+                }
+#endif
+                return reinterpret_cast<const void*>(word(rMember, 0));
+            }
+
+            // The class's table from an object's: its head when the table is one of the kernel's copies, else null.
+            ClassRow* rowOfTable(const void* pObject) {
+                void* const* const pTable = *static_cast<void* const* const*>(pObject);
+                const TableHead* const pHead = reinterpret_cast<const TableHead*>(pTable - kPrefix) - 1;
+                return pHead->mark == kTableMark ? pHead->row : nullptr;
+            }
+
+            // An object's class row from the kernel's own records (the object's table may be the base's again).
+            ClassRow* rowOfObject(const void* pObject) {
+                const void* pComplete = nullptr;
+                if (ownTypeInfo(pObject, &pComplete) == nullptr) {
+                    return nullptr;
+                }
+                lock();
+                const s32 at = findLocked(pComplete);
+                ClassRow* const pRow = at >= 0 ? sRows[sSlots[at].row] : nullptr;
+                unlock();
+                return pRow;
+            }
+
+            const Override* overrideOf(const ClassRow* pRow, const Function* pOriginal) {
+                for (u32 i = 0; pRow != nullptr && i < pRow->overrideCount; i++) {
+                    if (pRow->overrides[i].original == pOriginal) {
+                        return &pRow->overrides[i];
+                    }
+                }
+                return nullptr;
+            }
+
+            // The object gets the class's table: the first object's table (the base's) is copied whole with the head
+            // before it, and each overridden slot takes its entry. Later objects must have the same base table. False:
+            // said (once) and the object stays a plain base.
+            bool takeTable(ClassRow* pRow, void* pObject) {
+                void* const* const pBase = *static_cast<void* const* const*>(pObject);
+                lock();
+                void* const* const pKnown = pRow->baseTable;
+                void** const pTable = pRow->table;
+                unlock();
+                if (pKnown == nullptr) {
+                    const u32 count = pRow->tableCount;
+                    void** const pCopy = static_cast<void**>(::calloc(count + 2, sizeof(void*)));  // the head is two words
+                    if (pCopy == nullptr) {
+                        if (!pRow->saidTable) {
+                            pRow->saidTable = true;
+                            say(pRow->mod, "class %s: no memory for its table; its objects are plain %s", pRow->name, pRow->base->name);
+                        }
+                        return false;
+                    }
+                    TableHead* const pHead = reinterpret_cast<TableHead*>(pCopy);
+                    pHead->mark = kTableMark;
+                    pHead->row = pRow;
+                    void** const pPoint = pCopy + 2 + kPrefix;
+                    for (u32 i = 0; i < count; i++) {
+                        pCopy[2 + i] = pBase[static_cast<s32>(i) - static_cast<s32>(kPrefix)];
+                    }
+                    for (u32 i = 0; i < pRow->overrideCount; i++) {
+                        Override& rOverride = pRow->overrides[i];
+                        rOverride.code = pPoint[rOverride.slot];
+                        pPoint[rOverride.slot] = const_cast<void*>(rOverride.entry);
+                    }
+                    lock();
+                    if (pRow->baseTable == nullptr) {
+                        pRow->baseTable = pBase;
+                        pRow->table = pPoint;
+                        unlock();
+                        *static_cast<void***>(pObject) = pPoint;
+                        return true;
+                    }
+                    unlock();
+                    ::free(pCopy);  // another thread's first object took it first
+                    return takeTable(pRow, pObject);
+                }
+                if (pBase != pKnown) {
+                    if (!pRow->saidTable) {
+                        pRow->saidTable = true;
+                        say(pRow->mod, "class %s: the factory's %s made an object with another table than the first one's; it is a plain %s",
+                            pRow->name, pRow->makerName, pRow->base->name);
+                    }
+                    return false;
+                }
+                *static_cast<void***>(pObject) = pTable;
+                return true;
             }
         }  // namespace
 
@@ -412,7 +615,9 @@ namespace luma {
             if (!onGameThread()) {
                 return -3;
             }
-            if (pMod == nullptr || pDef == nullptr || pDef->size < sizeof(LumaClassDef)) {
+            // A definition from before `gone` (contract classes, "gone") ends at override_count: taken, with no gone.
+            constexpr u32 cBeforeGone = __builtin_offsetof(LumaClassDef, gone);
+            if (pMod == nullptr || pDef == nullptr || pDef->size < cBeforeGone) {
                 say(pMod, "define_class: %s", pDef == nullptr ? "no definition" : "the definition is smaller than luma.h's LumaClassDef");
                 return -1;
             }
@@ -482,35 +687,59 @@ namespace luma {
                 say(pMod, "define_class %s: no memory for the class", pName);
                 return -1;
             }
-            const u32 row = sRowCount;
+            // Overrides by slot: the base's table must be one the build laid out with this ABI's prefix.
+            if (pDef->override_count != 0 && (pBase->vtablePrefix != kPrefix || pBase->vtableCount <= kPrefix)) {
+                say(pMod, "define_class %s: the build gives no layout of %s's table of virtual functions, so no override can take a "
+                          "slot of it", pName, pBase->name);
+                ::free(pRow);
+                ::free(pOverrides);
+                return -4;
+            }
             for (u32 i = 0; i < pDef->override_count; i++) {
                 const LumaOverride& rWant = pDef->overrides[i];
                 const MethodRow* const pVirtual = findMethodRow(rWant.name, rWant.signature);
+                const TypeRow* const pDeclaring = pVirtual != nullptr ? findType(pVirtual->record) : nullptr;
                 bool ambiguous = false;
                 const MethodRow* const pRuns = pVirtual != nullptr ? overriderOfClass(pBase, pVirtual, &ambiguous) : nullptr;
-                const Function* const pFunction =
-                    pRuns != nullptr ? findFunction(pRuns->function->name, pRuns->function->signature, nullptr) : nullptr;
-                s32 hooked = -1;
-                if (pFunction != nullptr && rWant.hook != nullptr) {
-                    pOverrides[i] = {row, pBase->typeInfo, pFunction, rWant.hook, rWant.user};
-                    hooked = core()->hook(pMod, reinterpret_cast<const LumaFunction*>(pFunction), LUMA_WRAP, overrideHook, &pOverrides[i]);
+                u32 declaredAt = 1;
+                const bool atStart = pDeclaring != nullptr && (pDeclaring == pBase || (baseOffset(pBase, pDeclaring, &declaredAt) && declaredAt == 0));
+                MemberBytes member = {};
+                MemberBytes entry = {};
+                if (pVirtual != nullptr && pVirtual->members != nullptr) {
+                    pVirtual->members(&member, &entry);
                 }
-                if (hooked != 0) {
-                    const char* const pWhy = rWant.hook == nullptr ? "has no hook"
-                                             : pVirtual == nullptr ? "names no virtual function the game declares"
-                                             : ambiguous           ? "is the base's twice (two subobjects)"
-                                             : pRuns == nullptr    ? "is not a virtual of the base"
-                                             : pFunction == nullptr ? "is run by a function with no row (inline or implicit)"
-                                                                    : "was refused as a hook";
-                    say(pMod, "define_class %s: override %s %s %s%s%s", pName, rWant.name != nullptr ? rWant.name : "(no name)",
-                        rWant.signature != nullptr ? rWant.signature : "(no signature)", pWhy, pRuns != nullptr && pFunction == nullptr ? ": " : "",
-                        pRuns != nullptr && pFunction == nullptr ? pRuns->function->name : "");
-                    unhookOverrides(pMod, pOverrides, i);
+                const s32 slot = pVirtual != nullptr && pVirtual->members != nullptr ? slotOfVirtual(member) : -1;
+                const void* const pEntry = pVirtual != nullptr && pVirtual->members != nullptr ? codeOfMember(entry) : nullptr;
+                unsigned kind = kFixed;
+                if (pVirtual != nullptr && pVirtual->original != nullptr) {
+                    pVirtual->original->invoke(kAskKind, &kind);
+                }
+                bool twice = false;
+                for (u32 j = 0; j < i; j++) {
+                    twice = twice || (slot >= 0 && pOverrides[j].slot == static_cast<u32>(slot));
+                }
+                const char* const pWhy =
+                    rWant.hook == nullptr                                  ? "has no hook"
+                    : pVirtual == nullptr                                  ? "names no virtual function the game declares"
+                    : ambiguous                                            ? "is the base's twice (two subobjects)"
+                    : pRuns == nullptr                                     ? "is not a virtual of the base"
+                    : pVirtual->members == nullptr                         ? "is declared by a class the factory does not make, so it has no slot entry"
+                    : !atStart                                             ? "is a virtual of a base that is not at the start of the base (not taken yet)"
+                    : slot < 0 || pEntry == nullptr                        ? "has a slot this build cannot read"
+                    : static_cast<u32>(slot) + kPrefix >= pBase->vtableCount ? "has a slot past the end of the base's table"
+                    : kind == kFixed                                       ? "returns a class with a destructor or no default constructor, which an override cannot leave unbuilt"
+                    : twice                                                ? "is overridden twice"
+                                                                           : nullptr;
+                if (pWhy != nullptr) {
+                    say(pMod, "define_class %s: override %s %s %s", pName, rWant.name != nullptr ? rWant.name : "(no name)",
+                        rWant.signature != nullptr ? rWant.signature : "(no signature)", pWhy);
                     ::free(pRow);
                     ::free(pOverrides);
                     return -4;
                 }
+                pOverrides[i] = {pVirtual, pVirtual->original, static_cast<u32>(slot), pEntry, nullptr, rWant.hook, rWant.user};
             }
+            const u32 row = sRowCount;
             pRow->live = true;
             pRow->mod = pMod;
             copyName(pRow->name, pName);
@@ -522,9 +751,11 @@ namespace luma {
             pRow->dataSize = pDef->data_size;
             pRow->dataAlign = align;
             pRow->made = pDef->made;
+            pRow->gone = pDef->size >= cBeforeGone + sizeof(pDef->gone) ? pDef->gone : nullptr;
             pRow->user = pDef->user;
             pRow->overrides = pOverrides;
             pRow->overrideCount = pDef->override_count;
+            pRow->tableCount = pBase->vtableCount;
             lock();
             sRows[row] = pRow;
             sRowCount = row + 1;
@@ -593,6 +824,37 @@ namespace luma {
 
         bool isModNumber(s32 number) { return number >= static_cast<s32>(classCount()); }
 
+        void slotCall(const Function* pOriginal, void** args, void* result) {  // luma::slotCall
+            // Only the kernel's tables hold an entry, so the object's table is one: its head says the class.
+            ClassRow* const pRow = rowOfTable(args[0]);
+            const Override* const pOverride = overrideOf(pRow, pOriginal);
+            if (pOverride == nullptr) {
+                NEBULA_PANIC("LumaCore: the entry of %s ran on an object whose table has no override of it", pOriginal->name);
+            }
+            Call call = {pOriginal, args, result, 0, 0, nullptr};
+            // A class that ended (its mod gone) runs the base's code; a live class's override runs and proceeds itself, as a
+            // wrap does (LumaHook proceed).
+            if (!pRow->live) {
+                proceed(&call);
+            } else {
+                (void)pOverride->hook(reinterpret_cast<LumaCall*>(&call), pOverride->user);
+            }
+        }
+
+        const void* slotOriginal(const void* pObject, const Function* pOriginal) {  // luma::slotOriginal
+            // The object's table is the class's copy, or the base's again (its mod went while the call was in it): the
+            // kernel's records say the class then.
+            ClassRow* pRow = rowOfTable(pObject);
+            if (pRow == nullptr) {
+                pRow = rowOfObject(pObject);
+            }
+            const Override* const pOverride = overrideOf(pRow, pOriginal);
+            if (pOverride == nullptr || pOverride->code == nullptr) {
+                NEBULA_PANIC("LumaCore: %s proceeded on an object that is no class overriding it", pOriginal->name);
+            }
+            return pOverride->code;
+        }
+
         void modGone(const LumaMod* pMod) {
             if (sRowCount == 0) {
                 return;
@@ -630,6 +892,11 @@ namespace luma {
             lock();
             for (u32 at = 0; at < sSlotCount;) {
                 if (sSlots[at].object != nullptr && sRows[sSlots[at].row]->mod == pMod) {
+                    const ClassRow* const pRow = sRows[sSlots[at].row];
+                    void** const pObject = static_cast<void**>(const_cast<void*>(sSlots[at].object));
+                    if (pRow->table != nullptr && *pObject == static_cast<void*>(pRow->table)) {
+                        *pObject = const_cast<void*>(static_cast<const void*>(pRow->baseTable));
+                    }
                     removeAtLocked(at);
                     objects++;
                     continue;  // the slot now holds what moved back into it
@@ -653,11 +920,17 @@ namespace luma {
             sInstanceCount = 0;
             unlock();
             for (u32 i = 0; i < count; i++) {
-                if (pOld[i].object != nullptr && pOld[i].data != nullptr) {
-                    core()->free(sRows[pOld[i].row]->mod, pOld[i].data);
+                if (pOld[i].object != nullptr) {
+                    callGone(sRows[pOld[i].row], nullptr, pOld[i].data);
+                    if (pOld[i].data != nullptr) {
+                        core()->free(sRows[pOld[i].row]->mod, pOld[i].data);
+                    }
                 }
             }
             ::free(pOld);
         }
     }  // namespace classes
+
+    void slotCall(const Function* pOriginal, void** args, void* result) { classes::slotCall(pOriginal, args, result); }
+    const void* slotOriginal(const void* pObject, const Function* pOriginal) { return classes::slotOriginal(pObject, pOriginal); }
 }  // namespace luma

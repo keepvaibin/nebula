@@ -119,7 +119,8 @@ typedef struct LumaOverride {
 typedef struct LumaClassDef {
     uint32_t size;            /* sizeof(LumaClassDef) */
     const char* name;         /* the class's name (1 to 63 bytes): a stage places its objects by it. No game class,
-                                 factory row or other mod's class may have it */
+                                 factory row or other mod's class may have it; names compare with ASCII case
+                                 folded, as the game's factory does */
     const char* base;         /* the game class it derives from ("JetTurtle"): polymorphic, with a row */
     const char* maker;        /* the factory row that makes the base ("JetTurtle"); null: the one named as the base */
     const char* replaces;     /* null, or a name the game's stages place: its objects are made as this class instead */
@@ -130,7 +131,23 @@ typedef struct LumaClassDef {
     void* user;
     const LumaOverride* overrides;
     uint32_t override_count;
+    /* Once for each object whose `made` ran, before its data is freed: when it is destroyed (`object` is its address,
+       its own parts' destructors already run: read `data`, not the object), or with `object` null when the scene's
+       memory went with it, or when an object is made again at its address. On the thread that destroys it. Not called
+       when the mod is taken out (its memory goes whole). May be null; a definition whose `size` ends before it has
+       none. */
+    void (*gone)(void* object, void* data, void* user);
 } LumaClassDef;
+
+/* Where LumaCore.make puts an object, as a stage's placement row gives it (classes contract, "make"). */
+typedef struct LumaMakePlace {
+    uint32_t size;    /* sizeof(LumaMakePlace); in an array, each place's (the first's is the stride) */
+    float pos[3];     /* in the main stage, as a stage file's pos_x/y/z */
+    float rot[3];     /* degrees, as dir_x/y/z */
+    float scale[3];   /* as scale_x/y/z */
+    int32_t args[8];  /* Obj_arg0 to 7; -1: not given (the placement file names what each class reads) */
+} LumaMakePlace;
+#define LUMA_MAKE_DEAD 1u /* made, then dead (makeActorDead) until something makes it appear; actors only */
 
 /* A table of the game's data as LumaCore.table gives it (numbers contract, plan 1.5). */
 typedef struct LumaTable {
@@ -261,6 +278,19 @@ typedef struct LumaCore {
        the writes of the mods still here, in their order. 0: written; -1: no such table, or no memory (said); -2: the
        bytes are not inside the table, or none (said); -3: not on the game thread. */
     int32_t (*set_table)(const LumaMod* mod, const char* name, uint32_t offset, const void* bytes, uint32_t size);
+
+    /* Objects (classes contract, "make"): `count` objects by a name the factory makes (a game object's, a mod class's,
+       a mod's object: as a stage places it, its changes and replacements applied), each made and initialised as a
+       placed one, at `place[i]` (null: the origin, unturned, scale 1, every argument -1). Only while the scene makes
+       its objects (from a hook that runs then: after StageDataHolder::initPlacementMario, a class's init); they stand
+       in the main stage and live as long as the scene; made inside another object's init, they join that
+       placement's view group. Flags: LUMA_MAKE_DEAD. Each object's address in objects[i] (objects may be null).
+       Returns the count made (fewer when a creator makes nothing, said), or -1 the factory makes nothing by that
+       name, -2 its files are not in this game, -3 not on the game thread or not while the scene makes its objects,
+       -4 a bad argument (count not 1 to 1024, a place smaller than LumaMakePlace or not finite, an unknown flag) or no
+       memory. Every refusal is said in the log with the name. */
+    int32_t (*make)(const LumaMod* mod, const char* name, uint32_t count, const LumaMakePlace* place, uint32_t flags,
+                    void** objects);
 } LumaCore;
 
 /* report's own codes (D3-1). */

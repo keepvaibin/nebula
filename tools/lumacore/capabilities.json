@@ -50,6 +50,8 @@
     "kernel.classes.scene": "A new scene makes a mod class's objects again; the old scene's are forgotten with it (1.4)",
     "kernel.modules.plain": "No mod with code: the game loads its module without rows (no hook test, no row, no RTTI data, no export), and says so (1.7)",
     "kernel.modules.rows": "A mod with code on: the game loads its module with rows, naming the mod, and the mod's code runs (1.7)",
+    "kernel.classes.gone": "A mod class's gone runs once for each object it made, with that object's data, before the kernel frees it; a definition without it is taken (1.4, K's ask)",
+    "kernel.classes.make": "A mod makes objects by a name the factory makes while the scene makes its objects, each at its place with its placement arguments, alive or dead; refused, and said, at any other time (1.3, K's ask)",
     "kernel.reload.take_out": "A mod taken out while the game runs: its hooks go, its stop runs, dependents first, what it held counted and freed (1.11)",
     "kernel.numbers.by_name": "Every number the game reads in a function's code, by the function's name, signature and place, and every file's number constant by its name: address and kind (1.5)",
     "kernel.numbers.set": "A mod sets one by name and the game's code reads the new value (1.5)",
