@@ -10,7 +10,8 @@
    stream calls and events of TCP. Minor 3 adds TLS (1.2 and 1.3; the game's one library on every platform):
    tls_connect checks the host's certificate against the root list shipped with the game plus the roots the mod's
    luma.json adds for itself (`roots` on its net permission), tls_listen (net.local) serves with the mod's own
-   certificate; and HTTP/1.1 requests (http, https) whose answers come as events. */
+   certificate; and HTTP/1.1 requests (http, https) whose answers come as events. Minor 4 adds WebSocket clients
+   (ws://, wss://; RFC 6455): whole messages in (MESSAGE) and out (ws_send), pings answered by the service. */
 #ifndef LUMA_NET_H
 #define LUMA_NET_H
 
@@ -22,10 +23,10 @@ extern "C" {
 
 #define LUMA_NET_LOCAL_NAME "net.local"
 #define LUMA_NET_LOCAL_MAJOR 1u
-#define LUMA_NET_LOCAL_MINOR 3u
+#define LUMA_NET_LOCAL_MINOR 4u
 #define LUMA_NET_INTERNET_NAME "net.internet"
 #define LUMA_NET_INTERNET_MAJOR 1u
-#define LUMA_NET_INTERNET_MINOR 3u
+#define LUMA_NET_INTERNET_MINOR 4u
 
 #define LUMA_NET_SOCKETS_MOST 16u            /* sockets and listeners a mod holds at once, both services together */
 #define LUMA_NET_SEND_QUEUED_MOST (4u << 20u) /* bytes a mod's sockets hold queued, not yet sent */
@@ -39,17 +40,27 @@ extern "C" {
 #define LUMA_NET_REDIRECTS_MOST 5u           /* 1.3: redirects a request follows */
 #define LUMA_NET_TIMEOUT_DEFAULT_MS 30000u   /* 1.3: a request's time when it names none */
 #define LUMA_NET_TIMEOUT_MOST_MS 600000u     /* 1.3: the longest time a request may name */
+#define LUMA_NET_MESSAGE_MOST (16u << 20u)   /* 1.4: bytes of one WebSocket message, either way */
+#define LUMA_NET_PROTOCOL_MOST 256u          /* 1.4: bytes of ws_connect's protocol list */
+#define LUMA_NET_WS_TEXT 1u                  /* 1.4: MESSAGE's flags, ws_send's `binary` 0: UTF-8 text */
+#define LUMA_NET_WS_BINARY 2u                /* 1.4: MESSAGE's flags, ws_send's `binary` 1: bytes */
 
 /* Events (LumaEvent.kind) to the fn given at connect or listen. `handle` is the socket's (ACCEPTED: the listener's). */
 typedef enum LumaNetEvent {
-    LUMA_NET_EVENT_CONNECTED = 1, /* status LUMA_OK; value 0. The socket may send. */
+    LUMA_NET_EVENT_CONNECTED = 1, /* status LUMA_OK; value 0. The socket may send. 1.4, a WebSocket's: after the
+                                     server's 101 answer; data the protocol it chose (data_size 0: none) */
     LUMA_NET_EVENT_ACCEPTED = 2,  /* a listener's: status LUMA_OK; value: the new socket's handle, open, its events to
                                      the listener's fn and user */
     LUMA_NET_EVENT_DATA = 3,      /* status LUMA_OK; value: the bytes waiting; `take` inside this call. Bytes not taken
                                      stay, and another DATA follows at a later frame. */
     LUMA_NET_EVENT_SENT = 4,      /* status LUMA_OK; value: the bytes sent since the last SENT; nothing is queued now */
     LUMA_NET_EVENT_CLOSED = 5,    /* the other side closed (status LUMA_OK) or the connection broke (LUMA_E_IO); the
-                                     handle is closed after this event (bytes still waiting came first as DATA) */
+                                     handle is closed after this event (bytes still waiting came first as DATA).
+                                     1.4, a WebSocket's: value the close code (status LUMA_OK: the server's, 1005
+                                     when it sent none, data its reason; LUMA_E_IO 1006: the connection ended
+                                     without a close; LUMA_E_FORMAT 1002 or 1007: the server broke the protocol or
+                                     sent text not UTF-8; LUMA_E_TOO_LARGE 1009: a message past
+                                     LUMA_NET_MESSAGE_MOST), the service having sent its own close */
     LUMA_NET_EVENT_ERROR = 6,     /* a connect that failed: LUMA_E_UNREACHABLE (nobody listens, no route),
                                      LUMA_E_TIMEOUT (10 s, the name's lookup included), LUMA_E_IO; net.internet
                                      also LUMA_E_NOT_FOUND (the name has no address) and LUMA_E_DENIED (its every
@@ -62,13 +73,18 @@ typedef enum LumaNetEvent {
                                      (after redirects); `take` inside this call gives its header lines as received
                                      ("Name: value\r\n" each, the status line left out). DATA events then bring the
                                      body (gzip undone), then DONE. */
-    LUMA_NET_EVENT_DONE = 9       /* 1.3, a request's: the whole body came; status LUMA_OK; value: its bytes. The
+    LUMA_NET_EVENT_DONE = 9,      /* 1.3, a request's: the whole body came; status LUMA_OK; value: its bytes. The
                                      handle is closed after it. A request that fails instead ends with ERROR:
                                      LUMA_E_TIMEOUT (its time passed), LUMA_E_TOO_LARGE (a body past
                                      LUMA_NET_BODY_MOST), LUMA_E_DENIED (a certificate refused, a redirect to a host
                                      luma.json does not name or from https to http: reported), LUMA_E_FORMAT (not an
                                      HTTP answer, a broken gzip or chunk), LUMA_E_LIMIT (more than 5 redirects), or
                                      the connect's (LUMA_E_UNREACHABLE, LUMA_E_NOT_FOUND, LUMA_E_IO). */
+    LUMA_NET_EVENT_MESSAGE = 10   /* 1.4, a WebSocket's: one whole message; status LUMA_OK; data its bytes (valid
+                                     during the call), value their count; flags LUMA_NET_WS_TEXT (UTF-8, checked)
+                                     or LUMA_NET_WS_BINARY. A WebSocket's ERROR before its CONNECTED: the connect's,
+                                     or LUMA_E_FORMAT (value: the HTTP status, 0 when not HTTP) when the server did
+                                     not accept the upgrade. */
 } LumaNetEvent;
 
 /* 1.1: who sent a datagram. */
@@ -194,6 +210,22 @@ typedef struct LumaNetLocalService {
        Accept-Encoding: gzip (without LUMA_NET_HTTP_RAW), Connection: close and User-Agent: Nebula/<version> <mod
        id> unless the mod names one. */
     int32_t (*http)(const LumaMod* mod, const LumaNetRequest* request, LumaEventFn fn, void* user, LumaHandle* out);
+    /* 1.4. A WebSocket client to `url` ("ws://" or "wss://", then as http's url; the host as tcp_connect's), asking
+       for `protocol` (null: none; else 1 to LUMA_NET_PROTOCOL_MOST bytes of tokens separated by ", ", sent as
+       Sec-WebSocket-Protocol). LUMA_PENDING and *out: CONNECTED once the server answered 101 with the right
+       Sec-WebSocket-Accept (and, if it chose one, a protocol asked), or ERROR. Then MESSAGE for each message, SENT once
+       what ws_send queued is sent, CLOSED at its end. Pings are answered by the service. `close` sends a close (1000)
+       first, then the connection ends as a socket's; no event after. `send` and `take` on it: LUMA_E_HANDLE. A url
+       not ws(s) or past LUMA_NET_URL_MOST, a host outside tcp_connect's, a protocol not tokens, a null url, fn or out:
+       LUMA_E_ARGUMENT, reported; a 17th socket: LUMA_E_LIMIT, reported. */
+    int32_t (*ws_connect)(const LumaMod* mod, const char* url, const char* protocol, LumaEventFn fn, void* user,
+                          LumaHandle* out);
+    /* 1.4. Queues one message of `bytes` (copied): `binary` 0 text (must be UTF-8), 1 bytes. LUMA_OK; SENT follows
+       once all queued is sent. Before CONNECTED or after the close: LUMA_E_CLOSED (an answer); past
+       LUMA_NET_MESSAGE_MOST: LUMA_E_TOO_LARGE (an answer); the send queue full: LUMA_E_LIMIT, reported; text not
+       UTF-8, a binary other than 0 or 1, a null data with bytes: LUMA_E_ARGUMENT, reported; a handle not this mod's
+       WebSocket: LUMA_E_HANDLE, reported. */
+    int32_t (*ws_send)(const LumaMod* mod, LumaHandle socket, const void* data, uint64_t bytes, uint32_t binary);
 } LumaNetLocalService;
 
 /* A host name or address in text: at most this many bytes. */
@@ -244,6 +276,10 @@ typedef struct LumaNetInternetService {
                           const char* key, LumaEventFn fn, void* user, LumaHandle* out);
     /* 1.3. As net.local's http, to the hosts luma.json names (tcp_connect's rules; each redirect's host too). */
     int32_t (*http)(const LumaMod* mod, const LumaNetRequest* request, LumaEventFn fn, void* user, LumaHandle* out);
+    /* 1.4. As net.local's, to the hosts luma.json names (tcp_connect's rules). */
+    int32_t (*ws_connect)(const LumaMod* mod, const char* url, const char* protocol, LumaEventFn fn, void* user,
+                          LumaHandle* out);
+    int32_t (*ws_send)(const LumaMod* mod, LumaHandle socket, const void* data, uint64_t bytes, uint32_t binary);
 } LumaNetInternetService;
 
 #ifdef __cplusplus

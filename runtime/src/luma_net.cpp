@@ -71,6 +71,8 @@
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
+#include <openssl/rand.h>
+#include <openssl/sha.h>
 #include <openssl/ssl.h>
 #include <openssl/x509.h>
 
@@ -430,6 +432,21 @@ struct Http {
     }
 };
 
+// A WebSocket's state (minor 4): the game thread's alone (made by ws_connect, read and changed only by deliver and the
+// calls). Its bytes ride on the stream below it (plain or TLS) as any socket's: the upgrade request first, in
+// `outgoing`, then the mod's frames.
+struct Ws {
+    enum class Stage : std::uint8_t { Head, Open, Ended };
+    Stage stage = Stage::Head;
+    std::string request;            // the upgrade request (moved to `outgoing` at the socket's making)
+    std::string accept;             // the Sec-WebSocket-Accept the server must answer
+    std::vector<std::string> protocols;  // asked (empty: none)
+    std::string in;                 // the stream's bytes not parsed yet
+    std::string message;            // a message's frames so far
+    std::uint8_t message_op = 0;    // 1 text, 2 binary; 0: none begun
+    std::string chosen;             // the protocol the server chose (CONNECTED's data)
+};
+
 struct Socket;
 struct ModState;
 
@@ -499,6 +516,7 @@ struct Socket {
     std::string http_headers;       // taken inside HEADERS
     bool done_event = false;        // DONE to give, once the body is taken
     std::uint64_t body_total = 0;
+    std::unique_ptr<Ws> ws;         // a WebSocket's (minor 4; set at its making, never changed): the game thread's
 };
 
 bool is_pipe(const Socket* socket) noexcept {
@@ -2497,9 +2515,15 @@ void report_with(const LumaMod* mod, const char* where, std::uint32_t code, cons
     }
 }
 
+void deliver_ws(Socket* socket, const LumaMod* mod);
+
 void deliver(LumaEventNode* node) {
     Socket* const socket = reinterpret_cast<Node*>(node)->socket;
     const LumaMod* const mod = node->mod;
+    if (socket->ws != nullptr) {  // set at its making, never changed
+        deliver_ws(socket, mod);
+        return;
+    }
     bool connected = false;
     std::int32_t failed = LUMA_OK;
     std::vector<LumaHandle> accepted;
@@ -2752,6 +2776,7 @@ std::int32_t join(Socket* socket, LumaHandle* out) {
 struct Extra {
     bool tls = false;
     std::unique_ptr<Http> http;
+    std::unique_ptr<Ws> ws;
 };
 
 // The connect's TLS and request on its new Socket, not joined yet (the call that made it kept for its reports).
@@ -2771,6 +2796,10 @@ bool attach(Socket* socket, const char* where, Extra* extra, const char* host, c
         if (extra->http != nullptr) {
             socket->outgoing = request_text(*extra->http);
             socket->http = std::move(extra->http);
+        }
+        if (extra->ws != nullptr) {
+            socket->outgoing = extra->ws->request;  // sent once connected (TLS: after the handshake)
+            socket->ws = std::move(extra->ws);
         }
     } catch (...) {
         socket->tls.reset();
@@ -3134,8 +3163,8 @@ std::int32_t send_on(const LumaMod* mod, const char* where, bool internet, LumaH
         if (socket == nullptr || socket->kind == Kind::Listener || (socket->udp && !socket->tied)) {
             return bad_handle(mod, where);  // a udp_open socket sends with send_to
         }
-        if (socket->http != nullptr) {
-            return bad_handle(mod, where);  // a request is sent whole by http
+        if (socket->http != nullptr || socket->ws != nullptr) {
+            return bad_handle(mod, where);  // a request is sent whole by http; a WebSocket's messages by ws_send
         }
         if (socket->kind == Kind::Resolving || socket->kind == Kind::Connecting || socket->peer_closed ||
             socket->system_closed || (socket->tls_client && !socket->tls_ready)) {
@@ -3175,8 +3204,8 @@ std::int64_t take_on(const LumaMod* mod, const char* where, bool internet, LumaH
     const ModState* state = state_of(mod);
     const std::lock_guard<std::mutex> lock(g_lock);
     Socket* socket = state != nullptr ? find_locked(state, handle, internet) : nullptr;
-    if (socket == nullptr || socket != g_in_data || socket->udp) {
-        return bad_handle(mod, where);  // a UDP socket's datagrams: take_datagram
+    if (socket == nullptr || socket != g_in_data || socket->udp || socket->ws != nullptr) {
+        return bad_handle(mod, where);  // a UDP socket's datagrams: take_datagram; a WebSocket's: MESSAGE
     }
     std::string& from = g_in_headers ? socket->http_headers : socket->received;  // HEADERS: its header lines
     if (buf == nullptr) {
@@ -3192,6 +3221,587 @@ std::int64_t take_on(const LumaMod* mod, const char* where, bool internet, LumaH
     return static_cast<std::int64_t>(taken);
 }
 
+// ---- WebSockets (minor 4, game thread) ------------------------------------------------------------------------------
+
+constexpr std::string_view kWsGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";  // RFC 6455 1.3
+
+std::string base64(const unsigned char* bytes, std::size_t n) {
+    std::string out(((n + 2u) / 3u) * 4u + 1u, '\0');
+    const std::size_t written = EVP_EncodeBlock(reinterpret_cast<std::uint8_t*>(out.data()), bytes, n);
+    out.resize(written);
+    return out;
+}
+
+// A client frame (RFC 6455 5.2): FIN, the opcode, the length, a mask of 4 random bytes, the payload masked.
+std::string ws_frame(std::uint8_t op, std::string_view payload) {
+    std::string frame;
+    frame.reserve(payload.size() + 14u);
+    frame.push_back(static_cast<char>(0x80u | op));
+    const std::uint64_t n = payload.size();
+    if (n < 126u) {
+        frame.push_back(static_cast<char>(0x80u | n));
+    } else if (n <= 0xFFFFu) {
+        frame.push_back(static_cast<char>(0x80u | 126u));
+        frame.push_back(static_cast<char>((n >> 8u) & 0xFFu));
+        frame.push_back(static_cast<char>(n & 0xFFu));
+    } else {
+        frame.push_back(static_cast<char>(0x80u | 127u));
+        for (int shift = 56; shift >= 0; shift -= 8) {
+            frame.push_back(static_cast<char>((n >> shift) & 0xFFu));
+        }
+    }
+    unsigned char mask[4] = {};
+    RAND_bytes(mask, sizeof(mask));
+    frame.append(reinterpret_cast<const char*>(mask), sizeof(mask));
+    const std::size_t at = frame.size();
+    frame.append(payload);
+    for (std::size_t i = 0; i < payload.size(); ++i) {
+        frame[at + i] = static_cast<char>(static_cast<unsigned char>(frame[at + i]) ^ mask[i & 3u]);
+    }
+    return frame;
+}
+
+// With g_lock: a close frame queued (once: the stage ends), code 0 with no reason: an empty one.
+void ws_close_frame_locked(Socket* socket, std::uint32_t code, std::string_view reason) {
+    Ws& ws = *socket->ws;
+    if (ws.stage == Ws::Stage::Ended || socket->peer_closed || socket->system_closed) {
+        ws.stage = Ws::Stage::Ended;
+        return;
+    }
+    ws.stage = Ws::Stage::Ended;
+    try {
+        std::string payload;
+        if (code != 0u) {
+            payload.push_back(static_cast<char>((code >> 8u) & 0xFFu));
+            payload.push_back(static_cast<char>(code & 0xFFu));
+            payload.append(reason.substr(0, 123u));
+        }
+        socket->outgoing += ws_frame(8u, payload);
+    } catch (...) {
+    }
+}
+
+// UTF-8 as RFC 3629 allows it (no overlongs, no surrogates, nothing past U+10FFFF).
+bool utf8(std::string_view text) {
+    std::size_t i = 0;
+    while (i < text.size()) {
+        const auto c = static_cast<unsigned char>(text[i]);
+        std::size_t extra = 0;
+        std::uint32_t point = 0;
+        if (c < 0x80u) {
+            ++i;
+            continue;
+        } else if (c >= 0xC2u && c <= 0xDFu) {
+            extra = 1;
+            point = c & 0x1Fu;
+        } else if (c >= 0xE0u && c <= 0xEFu) {
+            extra = 2;
+            point = c & 0x0Fu;
+        } else if (c >= 0xF0u && c <= 0xF4u) {
+            extra = 3;
+            point = c & 0x07u;
+        } else {
+            return false;
+        }
+        if (i + extra >= text.size()) {
+            return false;  // cut short
+        }
+        for (std::size_t k = 1; k <= extra; ++k) {
+            const auto next = static_cast<unsigned char>(text[i + k]);
+            if ((next & 0xC0u) != 0x80u) {
+                return false;
+            }
+            point = (point << 6u) | (next & 0x3Fu);
+        }
+        if ((extra == 2u && (point < 0x800u || (point >= 0xD800u && point <= 0xDFFFu))) ||
+            (extra == 3u && (point < 0x10000u || point > 0x10FFFFu))) {
+            return false;
+        }
+        i += extra + 1u;
+    }
+    return true;
+}
+
+// The server's answer to the upgrade (its status line and header lines, without the empty line): 101 with Upgrade:
+// websocket, Connection: Upgrade, the right Accept, no extension, a protocol only if one was asked.
+bool ws_head_ok(Ws& ws, std::string_view head, std::uint32_t* status) {
+    *status = 0;
+    const std::size_t first = head.find("\r\n");
+    const std::string_view line = head.substr(0, first);
+    if (line.size() < 12u || line.substr(0, 5) != "HTTP/" || line[8] != ' ') {
+        return false;
+    }
+    std::uint32_t code = 0;
+    for (std::size_t i = 9; i < 12u; ++i) {
+        if (line[i] < '0' || line[i] > '9') {
+            return false;
+        }
+        code = code * 10u + static_cast<std::uint32_t>(line[i] - '0');
+    }
+    *status = code;
+    if (code != 101u) {
+        return false;
+    }
+    bool upgrade = false;
+    bool connection = false;
+    bool accepted = false;
+    std::string_view rest = first == std::string_view::npos ? std::string_view() : head.substr(first + 2u);
+    while (!rest.empty()) {
+        const std::size_t end = rest.find("\r\n");
+        const std::string_view header = rest.substr(0, end);
+        rest = end == std::string_view::npos ? std::string_view() : rest.substr(end + 2u);
+        const std::size_t colon = header.find(':');
+        if (colon == std::string_view::npos) {
+            return false;
+        }
+        const std::string_view name = trimmed(header.substr(0, colon));
+        const std::string_view value = trimmed(header.substr(colon + 1u));
+        if (same_text(name, "upgrade")) {
+            upgrade = same_text(value, "websocket");
+        } else if (same_text(name, "connection")) {
+            std::string_view tokens = value;
+            while (!tokens.empty()) {
+                const std::size_t comma = tokens.find(',');
+                connection |= same_text(trimmed(tokens.substr(0, comma)), "upgrade");
+                tokens = comma == std::string_view::npos ? std::string_view() : tokens.substr(comma + 1u);
+            }
+        } else if (same_text(name, "sec-websocket-accept")) {
+            accepted = value == ws.accept;
+        } else if (same_text(name, "sec-websocket-extensions")) {
+            return false;  // none was asked
+        } else if (same_text(name, "sec-websocket-protocol")) {
+            if (std::find(ws.protocols.begin(), ws.protocols.end(), value) == ws.protocols.end()) {
+                return false;  // not one asked (or none was)
+            }
+            ws.chosen.assign(value);
+        }
+    }
+    return upgrade && connection && accepted;
+}
+
+void call_data(const LumaMod* mod, const char* service, LumaEventFn fn, void* user, std::uint32_t kind,
+               LumaHandle handle, std::int32_t status, std::uint64_t value, std::string_view data,
+               std::uint32_t flags) {
+    const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
+    if (kernel == nullptr) {
+        return;
+    }
+    LumaEvent event{};
+    event.size = sizeof(event);
+    event.kind = kind;
+    event.status = status;
+    event.flags = flags;
+    event.handle = handle;
+    event.data = data.empty() ? nullptr : data.data();
+    event.data_size = data.size();
+    event.value = value;
+    kernel->call(mod, service, fn, user, &event);
+}
+
+// A WebSocket's delivery: the stream's bytes taken whole into Ws::in and parsed here; the upgrade's answer
+// (CONNECTED), frames (MESSAGE; pings answered; a close echoed: CLOSED), the stream's end (CLOSED 1006), SENT.
+void deliver_ws(Socket* socket, const LumaMod* mod) {
+    Ws& ws = *socket->ws;
+    const char* const service = socket->internet ? LUMA_NET_INTERNET_NAME : LUMA_NET_LOCAL_NAME;
+    LumaEventFn fn = nullptr;
+    void* user = nullptr;
+    LumaHandle handle = 0;
+    std::int32_t failed = LUMA_OK;
+    std::uint32_t report_code = 0;
+    std::string report_a;
+    std::string report_b;
+    bool sent_given = false;
+    std::uint64_t sent = 0;
+    bool closed = false;
+    {
+        const std::lock_guard<std::mutex> lock(g_lock);
+        socket->posted = false;
+        if (socket->closing || socket->finished || socket->owner == nullptr) {
+            reap_locked();
+            return;
+        }
+        g_delivering = socket;
+        fn = socket->fn;
+        user = socket->user;
+        handle = socket->handle;
+        socket->connected = false;  // the stream's: a WebSocket's CONNECTED is the upgrade's
+        failed = std::exchange(socket->failed, LUMA_OK);
+        if (failed != LUMA_OK) {
+            report_code = std::exchange(socket->report_code, 0u);
+            report_a = std::move(socket->report_a);
+            report_b = std::move(socket->report_b);
+        }
+        try {
+            ws.in += socket->received;
+        } catch (...) {
+            failed = LUMA_E_MEMORY;
+        }
+        socket->received.clear();
+        if (std::exchange(socket->sent_event, false)) {
+            sent_given = true;
+            sent = std::exchange(socket->sent_since, 0u);
+        }
+        closed = std::exchange(socket->closed_event, false);
+    }
+    const auto open = [socket] {
+        const std::lock_guard<std::mutex> lock(g_lock);
+        return !socket->closing;  // the mod may close it inside a call
+    };
+    // The end, when it comes: an ERROR (before CONNECTED) or a CLOSED, then the handle closed.
+    bool end = false;
+    bool end_error = false;
+    std::int32_t end_status = LUMA_OK;
+    std::uint64_t end_value = 0;
+    std::string end_reason;
+    std::uint32_t close_code = 0;  // a close of ours to queue (0: none)
+    if (failed != LUMA_OK) {
+        end = true;
+        end_error = true;
+        end_status = failed;
+    }
+    if (!end && ws.stage == Ws::Stage::Head) {
+        const std::size_t at = ws.in.find("\r\n\r\n");
+        if (at == std::string::npos) {
+            if (ws.in.size() > kHeadMost) {
+                end = true;
+                end_error = true;
+                end_status = LUMA_E_FORMAT;
+            }
+        } else {
+            std::uint32_t http_status = 0;
+            if (!ws_head_ok(ws, std::string_view(ws.in).substr(0, at), &http_status)) {
+                end = true;
+                end_error = true;
+                end_status = LUMA_E_FORMAT;
+                end_value = http_status;
+            } else {
+                ws.in.erase(0, at + 4u);
+                ws.stage = Ws::Stage::Open;
+                call_data(mod, service, fn, user, LUMA_NET_EVENT_CONNECTED, handle, LUMA_OK, 0u, ws.chosen, 0u);
+            }
+        }
+    }
+    // Whole frames only (a frame's bytes wait in `in`; the message limit bounds them).
+    while (!end && ws.stage == Ws::Stage::Open && open()) {
+        if (ws.in.size() < 2u) {
+            break;
+        }
+        const auto b0 = static_cast<std::uint8_t>(ws.in[0]);
+        const auto b1 = static_cast<std::uint8_t>(ws.in[1]);
+        const bool fin = (b0 & 0x80u) != 0u;
+        const std::uint8_t op = b0 & 0x0Fu;
+        std::uint64_t length = b1 & 0x7Fu;
+        std::size_t head = 2u;
+        if (length == 126u) {
+            if (ws.in.size() < 4u) {
+                break;
+            }
+            length = (static_cast<std::uint64_t>(static_cast<std::uint8_t>(ws.in[2])) << 8u) |
+                     static_cast<std::uint8_t>(ws.in[3]);
+            head = 4u;
+        } else if (length == 127u) {
+            if (ws.in.size() < 10u) {
+                break;
+            }
+            length = 0;
+            for (std::size_t i = 2; i < 10u; ++i) {
+                length = (length << 8u) | static_cast<std::uint8_t>(ws.in[i]);
+            }
+            head = 10u;
+        }
+        std::uint32_t bad = 0;
+        if ((b0 & 0x70u) != 0u || (b1 & 0x80u) != 0u) {
+            bad = 1002u;  // an extension's bits, or a masked frame from a server
+        } else if (op >= 8u) {
+            if (!fin || length > 125u || (op != 8u && op != 9u && op != 10u)) {
+                bad = 1002u;
+            }
+        } else if (op > 2u || (op == 0u && ws.message_op == 0u) || (op != 0u && ws.message_op != 0u)) {
+            bad = 1002u;
+        } else if (length > LUMA_NET_MESSAGE_MOST || ws.message.size() + length > LUMA_NET_MESSAGE_MOST) {
+            bad = 1009u;
+        }
+        if (bad == 0u && ws.in.size() - head < length) {
+            break;  // the frame's rest has not come
+        }
+        if (bad != 0u) {
+            end = true;
+            end_status = bad == 1009u ? LUMA_E_TOO_LARGE : LUMA_E_FORMAT;
+            end_value = bad;
+            close_code = bad;
+            break;
+        }
+        const std::string_view payload(ws.in.data() + head, static_cast<std::size_t>(length));
+        bool message_done = false;
+        if (op <= 2u) {
+            try {
+                if (op != 0u) {
+                    ws.message_op = op;
+                }
+                ws.message.append(payload);
+            } catch (...) {
+                end = true;
+                end_status = LUMA_E_TOO_LARGE;
+                end_value = 1009u;
+                close_code = 1009u;
+                break;
+            }
+            message_done = fin;
+        } else if (op == 9u) {
+            const std::lock_guard<std::mutex> lock(g_lock);
+            try {
+                socket->outgoing += ws_frame(10u, payload);  // a pong with the ping's data (RFC 6455 5.5.3)
+            } catch (...) {
+            }
+        } else if (op == 8u) {
+            if (length == 1u) {
+                end = true;
+                end_status = LUMA_E_FORMAT;
+                end_value = 1002u;
+                close_code = 1002u;
+                break;
+            }
+            end = true;
+            end_status = LUMA_OK;
+            end_value = length >= 2u ? ((static_cast<std::uint32_t>(static_cast<std::uint8_t>(payload[0])) << 8u) |
+                                        static_cast<std::uint8_t>(payload[1]))
+                                     : 1005u;
+            end_reason.assign(length > 2u ? payload.substr(2) : std::string_view());
+            close_code = length >= 2u ? static_cast<std::uint32_t>(end_value) : 0u;  // echoed (5.5.1)
+            if (close_code == 0u) {
+                const std::lock_guard<std::mutex> lock(g_lock);
+                ws_close_frame_locked(socket, 0u, {});
+            }
+        }
+        ws.in.erase(0, head + static_cast<std::size_t>(length));
+        if (message_done) {
+            const std::uint32_t kind = ws.message_op == 1u ? LUMA_NET_WS_TEXT : LUMA_NET_WS_BINARY;
+            if (kind == LUMA_NET_WS_TEXT && !utf8(ws.message)) {
+                end = true;
+                end_status = LUMA_E_FORMAT;
+                end_value = 1007u;
+                close_code = 1007u;
+                break;
+            }
+            std::string message;
+            message.swap(ws.message);
+            ws.message_op = 0;
+            call_data(mod, service, fn, user, LUMA_NET_EVENT_MESSAGE, handle, LUMA_OK, message.size(), message, kind);
+        }
+    }
+    if (!end && closed) {
+        end = true;
+        end_error = ws.stage == Ws::Stage::Head;
+        end_status = LUMA_E_IO;
+        end_value = end_error ? 0u : 1006u;
+    }
+    if (!end && sent_given && sent > 0u && ws.stage == Ws::Stage::Open && open()) {
+        call(mod, service, fn, user, LUMA_NET_EVENT_SENT, handle, LUMA_OK, sent);
+    }
+    if (end && open()) {
+        {
+            const std::lock_guard<std::mutex> lock(g_lock);
+            if (close_code != 0u) {
+                ws_close_frame_locked(socket, close_code, {});
+            }
+            ws.stage = Ws::Stage::Ended;
+            uncount_locked(socket);
+            socket->finished = true;  // its last event (header): the handle is closed after it
+            socket->closing = true;   // the close queued is still sent (I/O thread), then the connection ends
+            socket->started = std::chrono::steady_clock::now();
+        }
+        g_io->ready.notify_one();
+        if (end_error) {
+            if (report_code != 0u && socket->where != nullptr) {
+                report_with(mod, socket->where, report_code, report_a, report_b);  // why, before the ERROR
+            }
+            call(mod, service, fn, user, LUMA_NET_EVENT_ERROR, handle, end_status, end_value);
+        } else {
+            call_data(mod, service, fn, user, LUMA_NET_EVENT_CLOSED, handle, end_status, end_value, end_reason, 0u);
+        }
+    }
+    const std::lock_guard<std::mutex> lock(g_lock);
+    if (!socket->closing && !socket->finished && (!socket->received.empty() || socket->closed_event)) {
+        post_locked(socket);
+    }
+    g_delivering = nullptr;
+    reap_locked();
+    g_io->ready.notify_one();  // a pong queued: the I/O thread sends it
+}
+
+// The protocols asked, as tokens separated by ","; false: not that form (or past LUMA_NET_PROTOCOL_MOST).
+bool ws_protocols(const char* given, std::vector<std::string>* out) {
+    const std::string_view text(given, ::strnlen(given, LUMA_NET_PROTOCOL_MOST + 1u));
+    if (text.empty() || text.size() > LUMA_NET_PROTOCOL_MOST) {
+        return false;
+    }
+    std::string_view rest = text;
+    while (true) {
+        const std::size_t comma = rest.find(',');
+        const std::string_view one = trimmed(rest.substr(0, comma));
+        if (one.empty() || !token(one)) {
+            return false;
+        }
+        out->emplace_back(one);
+        if (comma == std::string_view::npos) {
+            return true;
+        }
+        rest = rest.substr(comma + 1u);
+    }
+}
+
+std::int32_t internet_connect(const LumaMod* mod, const char* where, bool udp, const char* host, std::uint16_t port,
+                              LumaEventFn fn, void* user, LumaHandle* out, Extra* extra) noexcept;
+
+std::int32_t ws_connect_on(const LumaMod* mod, const char* where, bool internet, const char* url,
+                           const char* protocol, LumaEventFn fn, void* user, LumaHandle* out) noexcept {
+    if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
+        return status;
+    }
+    if (url == nullptr) {
+        return argument(mod, where, "url");
+    }
+    if (fn == nullptr) {
+        return argument(mod, where, "fn");
+    }
+    if (out == nullptr) {
+        return argument(mod, where, "out");
+    }
+    try {
+        const std::string_view given(url, ::strnlen(url, LUMA_NET_URL_MOST + 1u));
+        std::string as_http;
+        if (given.size() > 5u && same_text(given.substr(0, 5), "ws://")) {
+            as_http = "http://";
+            as_http.append(given.substr(5));
+        } else if (given.size() > 6u && same_text(given.substr(0, 6), "wss://")) {
+            as_http = "https://";
+            as_http.append(given.substr(6));
+        } else {
+            return argument(mod, where, "url");
+        }
+        Target target;
+        if (given.size() > LUMA_NET_URL_MOST || !parse_url(as_http, &target)) {
+            return argument(mod, where, "url");
+        }
+        auto ws = std::make_unique<Ws>();
+        if (protocol != nullptr && !ws_protocols(protocol, &ws->protocols)) {
+            return argument(mod, where, "protocol");
+        }
+        ModState* state = state_of(mod);
+        if (state == nullptr) {
+            return LUMA_E_CANCELLED;
+        }
+        if (internet) {
+            if (host_text(target.host.c_str()).empty()) {
+                return argument(mod, where, "url");  // luma.json's hosts: internet_connect checks them (reported)
+            }
+        } else {
+            sockaddr_storage address{};
+            socklen_t length = 0;
+            if (!local_address(target.host.c_str(), target.port, &address, &length)) {
+                return argument(mod, where, "url");  // not this machine's or the local network's
+            }
+        }
+        unsigned char nonce[16] = {};
+        RAND_bytes(nonce, sizeof(nonce));
+        const std::string key = base64(nonce, sizeof(nonce));
+        std::string keyed = key;
+        keyed.append(kWsGuid);
+        unsigned char digest[SHA_DIGEST_LENGTH] = {};
+        SHA1(reinterpret_cast<const std::uint8_t*>(keyed.data()), keyed.size(), digest);
+        ws->accept = base64(digest, sizeof(digest));
+        const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
+        const char* const id = kernel != nullptr ? kernel->mod_id(mod) : nullptr;
+        std::string& r = ws->request;
+        r = "GET ";
+        r += target.path;
+        r += " HTTP/1.1\r\nHost: ";
+        const bool v6 = target.host.find(':') != std::string::npos;
+        r += v6 ? "[" + target.host + "]" : target.host;
+        if (target.port != (target.https ? 443u : 80u)) {
+            r += ':';
+            r += std::to_string(target.port);
+        }
+        r += "\r\nUser-Agent: Nebula/" NEBULA_VERSION " ";
+        r += id != nullptr ? id : "";
+        r += "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ";
+        r += key;
+        r += "\r\nSec-WebSocket-Version: 13\r\n";
+        if (!ws->protocols.empty()) {
+            r += "Sec-WebSocket-Protocol: ";
+            for (std::size_t i = 0; i < ws->protocols.size(); ++i) {
+                r += i == 0u ? "" : ", ";
+                r += ws->protocols[i];
+            }
+            r += "\r\n";
+        }
+        r += "\r\n";
+        {
+            const std::lock_guard<std::mutex> lock(g_lock);
+            if (const std::int32_t status = room_locked(mod, where, state, r.size()); status != LUMA_OK) {
+                return status;
+            }
+        }
+        Extra extra;
+        extra.tls = target.https;
+        extra.ws = std::move(ws);
+        return internet ? internet_connect(mod, where, false, target.host.c_str(), target.port, fn, user, out, &extra)
+                        : local_connect(mod, where, false, target.host.c_str(), target.port, fn, user, out, &extra);
+    } catch (...) {
+        return LUMA_E_MEMORY;
+    }
+}
+
+std::int32_t ws_send_on(const LumaMod* mod, const char* where, bool internet, LumaHandle handle, const void* data,
+                        std::uint64_t bytes, std::uint32_t binary) noexcept {
+    if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
+        return status;
+    }
+    if (data == nullptr && bytes != 0u) {
+        return argument(mod, where, "data");
+    }
+    if (binary > 1u) {
+        return argument(mod, where, "binary");
+    }
+    const ModState* state = state_of(mod);
+    {
+        const std::lock_guard<std::mutex> lock(g_lock);
+        Socket* socket = state != nullptr ? find_locked(state, handle, internet) : nullptr;
+        if (socket == nullptr || socket->ws == nullptr) {
+            return bad_handle(mod, where);
+        }
+        if (socket->ws->stage != Ws::Stage::Open || socket->peer_closed || socket->system_closed) {
+            return LUMA_E_CLOSED;  // an answer (header)
+        }
+        if (bytes > LUMA_NET_MESSAGE_MOST) {
+            return LUMA_E_TOO_LARGE;  // an answer (header)
+        }
+        const std::string_view payload(static_cast<const char*>(data), static_cast<std::size_t>(bytes));
+        if (binary == 0u && !utf8(payload)) {
+            return argument(mod, where, "data");  // text must be UTF-8 (RFC 6455 5.6)
+        }
+        if (const std::int32_t status = room_locked(mod, where, state, bytes + 14u); status != LUMA_OK) {
+            return status;
+        }
+        try {
+            socket->outgoing += ws_frame(binary != 0u ? 2u : 1u, payload);
+        } catch (...) {
+            return LUMA_E_MEMORY;
+        }
+    }
+    g_io->ready.notify_one();
+    return LUMA_OK;
+}
+
+std::int32_t net_ws_connect(const LumaMod* mod, const char* url, const char* protocol, LumaEventFn fn, void* user,
+                            LumaHandle* out) noexcept {
+    return ws_connect_on(mod, "net.local.ws_connect", false, url, protocol, fn, user, out);
+}
+std::int32_t net_ws_send(const LumaMod* mod, LumaHandle handle, const void* data, std::uint64_t bytes,
+                         std::uint32_t binary) noexcept {
+    return ws_send_on(mod, "net.local.ws_send", false, handle, data, bytes, binary);
+}
+
 std::int32_t close_on(const LumaMod* mod, const char* where, bool internet, LumaHandle handle) noexcept {
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
@@ -3202,6 +3812,9 @@ std::int32_t close_on(const LumaMod* mod, const char* where, bool internet, Luma
         Socket* socket = state != nullptr ? find_locked(state, handle, internet) : nullptr;
         if (socket == nullptr) {
             return bad_handle(mod, where);
+        }
+        if (socket->ws != nullptr && socket->ws->stage == Ws::Stage::Open) {
+            ws_close_frame_locked(socket, 1000u, {});  // a close first (RFC 6455 7.1.2): then the connection ends
         }
         uncount_locked(socket);
         socket->closing = true;  // no event from now on; what it queued is still sent (I/O thread), then it ends
@@ -3937,6 +4550,14 @@ std::int32_t internet_http(const LumaMod* mod, const LumaNetRequest* request, Lu
                            LumaHandle* out) noexcept {
     return http_on(mod, "net.internet.http", true, request, fn, user, out);
 }
+std::int32_t internet_ws_connect(const LumaMod* mod, const char* url, const char* protocol, LumaEventFn fn, void* user,
+                                 LumaHandle* out) noexcept {
+    return ws_connect_on(mod, "net.internet.ws_connect", true, url, protocol, fn, user, out);
+}
+std::int32_t internet_ws_send(const LumaMod* mod, LumaHandle handle, const void* data, std::uint64_t bytes,
+                              std::uint32_t binary) noexcept {
+    return ws_send_on(mod, "net.internet.ws_send", true, handle, data, bytes, binary);
+}
 std::int32_t internet_udp_open(const LumaMod* mod, std::uint16_t, std::uint32_t, LumaEventFn, void*,
                                LumaHandle*) noexcept {
     if (const std::int32_t status = enter(mod, "net.internet.udp_open"); status != LUMA_OK) {
@@ -4123,6 +4744,8 @@ const LumaNetLocalService kLocal = {
     net_tls_connect,
     net_tls_listen,
     net_http,
+    net_ws_connect,
+    net_ws_send,
 };
 
 // net.local's own rows (the net range is 250-299), beside the registry's (100-104).
@@ -4153,6 +4776,8 @@ const LumaNetInternetService kInternet = {
     internet_tls_connect,
     internet_tls_listen,
     internet_http,
+    internet_ws_connect,
+    internet_ws_send,
 };
 
 // net.internet's own rows (the net range is 250-299).
