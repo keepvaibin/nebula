@@ -392,6 +392,13 @@ pub fn face_kind(material: &str) -> u32 {
     }
 }
 
+/// c96 (4.20): an eye (face_kind's 2) that is no light by its name (an eye-light cone, a beamer's beam): it is never a
+/// mirror ball (finish) and never glows with its model (glow_with_rule).
+pub fn is_eye(material: &str) -> bool {
+    let name = material.to_ascii_lowercase();
+    face_kind(&name) == 2 && !["light", "cone", "beam"].iter().any(|w| name.contains(w))
+}
+
 /// c77 (7.6): a face part is a plain surface: no light through it (the thin sheet's), and no mirror, clear or metal
 /// class (an environment map's, a painted sprite's): a dielectric at 0.45. Its painted reflection stays as drawn (a
 /// dielectric mirrors nothing in the tracer).
@@ -680,8 +687,9 @@ pub fn glow_with_rule(stem: &str, material: &str, r: &Reading) -> ([f32; 4], u8)
             })
     };
     if let Some((single, parts, strength)) = row {
-        // A model's see-through parts (eyes, shadows' blobs) are not what glows; a row of the material itself says it is.
-        if r.class == Class::Translucent && !single {
+        // A model's see-through parts (eyes, shadows' blobs) and its eyes (c96) are not what glows; a row of the material
+        // itself says it is.
+        if (r.class == Class::Translucent || is_eye(material)) && !single {
             return NONE;
         }
         let c = if parts.len() == 3 { [parts[0], parts[1], parts[2]] } else { own() };
@@ -1558,6 +1566,14 @@ pub fn finish(stem: &str, name: &str, measured: f32, r: &mut Reading) {
         }
     }
     r.through = foliage_through(&stem, &name.to_ascii_lowercase(), r);
+    // c96 (4.20): an eye read as metal (an environment map's) is a small gloss, never a mirror ball. The rows after.
+    if r.class == Class::Metal && is_eye(name) {
+        r.class = Class::Gloss;
+        r.roughness = 0.2;
+        r.metal = 0.0;
+        r.ior = 1.5;
+        r.rule = "an eye: a small gloss (c96)";
+    }
     review(MATERIALS_TABLE, &stem, name, r);
     for table in &packs.materials {
         review(table, &stem, name, r);
@@ -2208,6 +2224,12 @@ mod tests {
         gloss.metal = 1.0;
         face_plain(&mut gloss);
         assert!(gloss.class == Class::Dielectric && gloss.metal == 0.0);
+        // c96 (4.20): an eye read as metal is a small gloss; an eye-light cone is no eye.
+        let mut metal_eye = read(&m);
+        (metal_eye.class, metal_eye.metal) = (Class::Metal, 1.0);
+        finish("powerstar", "Eye", 0.0, &mut metal_eye);
+        assert!(metal_eye.class == Class::Gloss && metal_eye.metal == 0.0 && metal_eye.roughness == 0.2);
+        assert!(is_eye("Eye") && is_eye("Eye1_v") && !is_eye("EyeLightCone_v_x") && !is_eye("EyeLid_v"));
         assert_eq!(face_kind("EyeballL_v"), 2);
         assert_eq!(face_kind("Penguin_EyeM_Mat_v"), 2);
         assert_eq!(face_kind("EyeLid_v"), 1);
