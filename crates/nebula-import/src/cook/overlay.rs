@@ -248,7 +248,24 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
             });
             (!found).then(|| format!("{archive}/timg/{name}.png"))
         };
-        let (brlyt, facts) = super::layout_json::to_brlyt(bytes, &missing_texture)?;
+        // A text naming this mod's own font (Luma/<id>/<path>): the mod's folder, when the file is read from one, has its
+        // source in a layer's assets (layout contract 2a). Another mod's font is that mod's to have.
+        let mod_root = change.source.ancestors().skip(1).find(|a| a.join("luma.json").is_file());
+        let mod_id = mod_root
+            .and_then(|root| fs::read(root.join("luma.json")).ok())
+            .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+            .and_then(|v| v["id"].as_str().map(str::to_string));
+        let missing_font = |font: &str| -> Option<String> {
+            let (root, id) = (mod_root?, mod_id.as_deref()?);
+            let (owner, path) = font.strip_prefix("Luma/")?.split_once('/')?;
+            if !owner.eq_ignore_ascii_case(id) {
+                return None;
+            }
+            let file = format!("{path}.font.json");
+            let found = fs::read_dir(root.join("layers")).ok()?.flatten().any(|layer| layer.path().join("assets").join(&file).is_file());
+            (!found).then(|| format!("assets/{file}"))
+        };
+        let (brlyt, facts) = super::layout_json::to_brlyt_with(bytes, &missing_texture, &missing_font)?;
         let path = format!("{archive}/blyt/{stem}.brlyt");
         super::refuse::record(super::refuse::CookFact::Layout { path: path.clone(), source: change.path.clone(), facts });
         return Ok(vec![(path, brlyt, false)]);
@@ -914,6 +931,28 @@ mod tests {
         assert_eq!(cook_source("LayoutData/Hud.arc/Hud.layout.json", Path::new("layers/base/files/x"), source, None).unwrap(), 1);
         let error = cook_source("LayoutData/Hud.layout.json", &archive, source, None).unwrap_err();
         assert_eq!(said(&error).0, "Cook.Layout.NotInArchive");
+    }
+
+    #[test]
+    fn a_layout_naming_its_own_mods_font_needs_the_fonts_source() {
+        use super::super::refuse::said;
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("my-mod");
+        let archive = root.join("layers/base/files/LayoutData/Hud.arc");
+        std::fs::create_dir_all(&archive).unwrap();
+        std::fs::write(root.join("luma.json"), br#"{"id": "my.mod"}"#).unwrap();
+        let text = |font: &str| format!(r#"{{"panes":[{{"name":"A","type":"text","size":[10,10],"font":"{font}"}}]}}"#);
+        let path = "LayoutData/Hud.arc/Hud.layout.json";
+        let source = archive.join("Hud.layout.json");
+        let error = cook_source(path, &source, text("Luma/my.mod/fonts/Title").as_bytes(), None).unwrap_err();
+        let (why, args) = said(&error);
+        assert_eq!(why, "Cook.Layout.NoFont");
+        assert!(args.contains(&("uri", "assets/fonts/Title.font.json".into())), "{args:?}");
+        // In any layer's assets; another mod's font is not looked for.
+        std::fs::create_dir_all(root.join("layers/extra/assets/fonts")).unwrap();
+        std::fs::write(root.join("layers/extra/assets/fonts/Title.font.json"), b"{}").unwrap();
+        assert_eq!(cook_source(path, &source, text("Luma/my.mod/fonts/Title").as_bytes(), None).unwrap(), 1);
+        assert_eq!(cook_source(path, &source, text("Luma/other.mod/fonts/Title").as_bytes(), None).unwrap(), 1);
     }
 
     #[test]
