@@ -4225,9 +4225,10 @@ int main(int argc, char** argv) {
 #endif
     while (Clock::now() < end && !gTourDone.load(std::memory_order_relaxed)) {
 #if defined(NEBULA_HOST_RENDERER)
-        // The window's messages, on the thread that created it.
+        // The window's messages, on the thread that created it. Every 8 ms at most: a controller's state is at most that
+        // old when the game reads it once a frame, and a phone's main thread wakes 125 times a second, not 250.
 #if defined(NEBULA_HOST_SDL)
-        galaxy::sdl::pump_events(4);
+        galaxy::sdl::pump_events(8);
         if (const bool away = galaxy::sdl::in_background(); away != gSuspended) {
             {
                 std::lock_guard<std::mutex> lock(gSuspendLock);
