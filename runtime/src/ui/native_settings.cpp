@@ -3398,14 +3398,6 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
             }
             std::string_view name = option.name;
             while (!name.empty() && (name.back() == ':' || name.back() == ' ')) name.remove_suffix(1);
-            if (option.kind == "key") {
-                // A bindable action (plan 2.5): its control, the manifest's default until input's store binds it.
-                SettingsRow key{mods_ui_text(name, 24u), entry != nullptr ? mods_ui_text(entry->fallback, 22u) : std::string(),
-                                nullptr, mods_ui_text(option.section, 30u)};
-                key.names = 1u | 2u | 4u;
-                rows.push_back(std::move(key));
-                continue;
-            }
             std::string value = option.text.empty() && entry != nullptr ? entry->fallback : option.text;
             std::string help = mods_ui_text(option.section, 30u);
             {
@@ -3471,6 +3463,26 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
                                         : mods_ui_text(option.section, 30u)};
         choice.names = option.selected != 0u ? 3u : 1u;
         rows.push_back(std::move(choice));
+    }
+    // Its input actions (the manifest's key options, services-input 2): the record CONTROLS binds, on the scheme shown
+    // there, read here (its own inputs, else the game control it follows); changed in CONTROLS only.
+    bool actions_heading = false;
+    for (const galaxy::input::mod_actions::Listed& action : mod_action_list()) {
+        if (action.mod_id != id) continue;
+        if (!actions_heading) {
+            SettingsRow heading{"KEYS", {}, nullptr, {}, true};
+            rows.push_back(std::move(heading));
+            actions_heading = true;
+        }
+        std::string_view name = action.name.empty() ? std::string_view(action.id) : std::string_view(action.name);
+        while (!name.empty() && (name.back() == ':' || name.back() == ' ')) name.remove_suffix(1);
+        const galaxy::input::TargetBindings bindings = mod_action_draft(s_controls_scheme, action);
+        SettingsRow shown{mods_ui_text(name, 24u),
+                          no_bindings(bindings) ? mod_action_follows(action) : menu_bindings(s_controls_scheme, bindings),
+                          nullptr,
+                          galaxy::modlog::row_words("Mods.ActionWhere", id, {})};
+        shown.names = 1u | 2u | 4u;
+        rows.push_back(std::move(shown));
     }
     // Text in the language played: the mod's own (in a language it has) or the game's.
     const std::string playing = next_start_language_folder();
