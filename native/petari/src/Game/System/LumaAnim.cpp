@@ -43,6 +43,7 @@ namespace luma {
             const u32 kMostOpen = LUMA_ANIM_MOST_PLAYS * 8u;  // across mods
             const u32 kMostEvents = kMostOpen * 4u;          // marks and ends waiting or being given, across mods
             const u32 cMissingAnimationCode = 627;            // content's block (references 6)
+            const u32 cEventPastEndCode = 670;
             const u32 kClipMost = 128;                        // a clip name's bytes with its 0
 
             // The kinds of clip of one name a model can have, in the order the first present leads.
@@ -539,6 +540,42 @@ namespace luma {
                 rPlay.events = findEvents(pMod, pActor, pClip, &rPlay.eventRows, &rPlay.eventFrame, &rPlay.eventName);
                 if (rPlay.events == nullptr) {
                     rPlay.eventRows = 0;
+                } else {
+                    // A row past the lead's last frame never comes (the cook checks a game clip's, not a mod's own:
+                    // animation 2a): Content.EventPastEnd, each start of such a play.
+                    Table table;
+                    table.attach(rPlay.events);
+                    const s32 last = static_cast< s32 >(ctrlOf(pActor, lead)->getEnd());
+                    for (u32 r = 0; r < rPlay.eventRows; r++) {
+                        s32 at = 0;
+                        const char* pName = nullptr;
+                        if (!table.getValueFast(static_cast< int >(r), rPlay.eventFrame, &at) || at <= last ||
+                            !table.getValueFast(static_cast< int >(r), rPlay.eventName, &pName)) {
+                            continue;
+                        }
+                        char frame[16];
+                        char lastText[16];
+                        nebula_snprintf(frame, sizeof(frame), "%d", at);
+                        nebula_snprintf(lastText, sizeof(lastText), "%d", last);
+                        char column[300];
+                        nebula_snprintf(column, sizeof(column), "%s/%s", pClip, pName);
+                        LumaModLogEntry entry = {};
+                        entry.size = sizeof(entry);
+                        entry.source = LUMA_MODLOG_CONTENT;
+                        entry.level = LUMA_MODLOG_ERROR;
+                        entry.code = cEventPastEndCode;
+                        entry.mod = sKernel->mod_id(pMod);
+                        entry.file = "";
+                        entry.column = MR::getHashCode(column);
+                        const char* const names[4] = {"found", "clip", "frame", "last"};
+                        const char* const values[4] = {pName, pClip, frame, lastText};
+                        for (u32 i = 0; i < 4; i++) {
+                            entry.names[i] = names[i];
+                            entry.values[i] = values[i];
+                        }
+                        entry.count = 4;
+                        (void)luma::modlog::add(entry, "Content.EventPastEnd");
+                    }
                 }
                 rPlay.fn = fn;
                 rPlay.user = pUser;
