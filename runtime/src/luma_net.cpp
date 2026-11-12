@@ -935,8 +935,8 @@ std::int32_t net_tcp_listen(const LumaMod* mod, std::uint16_t port, std::uint32_
     return join(socket, out);
 }
 
-std::int32_t net_port(const LumaMod* mod, LumaHandle listener, std::uint16_t* out) noexcept {
-    static constexpr const char* where = "net.local.port";
+std::int32_t port_on(const LumaMod* mod, const char* where, bool internet, LumaHandle listener,
+                     std::uint16_t* out) noexcept {
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
@@ -945,7 +945,7 @@ std::int32_t net_port(const LumaMod* mod, LumaHandle listener, std::uint16_t* ou
     }
     const ModState* state = state_of(mod);
     const std::lock_guard<std::mutex> lock(g_lock);
-    const Socket* socket = state != nullptr ? find_locked(state, listener) : nullptr;
+    const Socket* socket = state != nullptr ? find_locked(state, listener, internet) : nullptr;
     if (socket == nullptr || socket->kind != Kind::Listener) {
         return bad_handle(mod, where);
     }
@@ -1047,6 +1047,9 @@ std::int32_t close_on(const LumaMod* mod, const char* where, bool internet, Luma
     return LUMA_OK;
 }
 
+std::int32_t net_port(const LumaMod* mod, LumaHandle listener, std::uint16_t* out) noexcept {
+    return port_on(mod, "net.local.port", false, listener, out);
+}
 std::int32_t net_send(const LumaMod* mod, LumaHandle handle, const void* data, std::uint64_t bytes) noexcept {
     return send_on(mod, "net.local.send", false, handle, data, bytes);
 }
@@ -1261,6 +1264,16 @@ std::int32_t internet_tcp_connect(const LumaMod* mod, const char* host, std::uin
     }
 }
 
+std::int32_t internet_tcp_listen(const LumaMod* mod, std::uint16_t, std::uint32_t, LumaEventFn, void*,
+                                 LumaHandle*) noexcept {
+    if (const std::int32_t status = enter(mod, "net.internet.tcp_listen"); status != LUMA_OK) {
+        return status;
+    }
+    return LUMA_E_DENIED;  // no server on the open internet in 1.0 (an answer)
+}
+std::int32_t internet_port(const LumaMod* mod, LumaHandle listener, std::uint16_t* out) noexcept {
+    return port_on(mod, "net.internet.port", true, listener, out);
+}
 std::int32_t internet_send(const LumaMod* mod, LumaHandle handle, const void* data, std::uint64_t bytes) noexcept {
     return send_on(mod, "net.internet.send", true, handle, data, bytes);
 }
@@ -1379,6 +1392,8 @@ const LumaServiceProvider kLocalProvider = {
 const LumaNetInternetService kInternet = {
     {sizeof(LumaNetInternetService), LUMA_NET_INTERNET_MAJOR, LUMA_NET_INTERNET_MINOR},
     internet_tcp_connect,
+    internet_tcp_listen,
+    internet_port,
     internet_send,
     internet_take,
     internet_close,
