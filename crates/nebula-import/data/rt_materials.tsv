@@ -558,3 +558,23 @@ teresaluigi	Cap_v	translucent									Boo form (FC c91, EVERYTHING 7.2): a ghost
 teresaluigi	Eye_v	translucent									Boo form (FC c91, EVERYTHING 7.2): a ghost; as FB b101 its opaque draw dims the sun, no hard shadow; picture owed
 hoppermario	Snake_v	metal		1							spring form's coil (FC c91, EVERYTHING 7.2): steel; picture owed		iron
 hopperluigi	Snake_v	metal		1							spring form's coil (FC c91, EVERYTHING 7.2): steel; picture owed		iron
+teresa	body_m_v	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+teresachief	body_m_v	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+teresamario	*	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+teresaluigi	*	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+teresaracer	body_m_v	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+bombteresa	BodyMat_v	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+bombteresatongue	BodyM_v	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+ghostmario	*	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+ghostluigi	*	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+polta	BodyMat_v	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+poltaleftarm	BodyMat_v	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+poltarightarm	BodyMat_v	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+jellyfish	JellyFish1_v	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+jellyfish	JellyFish3_v	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+jellyfish	JellyFish4_v	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+koopavs2partsdarkmattera	DMMatA*	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+koopavs2partsdarkmatterb	DMMatA*	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+koopavs2partsdarkmatterc	DMMatA*	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+koopavs2partsdarkmatterd	DMMatA*	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+koopavs2partsdarkmattere	DMMatA*	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
