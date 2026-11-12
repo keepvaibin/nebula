@@ -426,16 +426,23 @@ static int object_is(const void* object, int32_t class_number) {
     return object != 0 && class_number >= 0 && core->is_a(object, class_number) != 0;
 }
 
-/* The n-th live object (creation order) whose name is `name`, or null. Live: not destroyed, and for an actor not
-   dead (MR::isDead). */
-static void* object_named(const char* name, int64_t n) {
+/* The n-th live object (creation order: the order the game made them, the list this file keeps) whose name is `name`,
+   or with class_number >= 0 whose own class is that class or one made from it (harness revision 6, R6-5); null when
+   there is none. Live: not destroyed, and for an actor not dead (MR::isDead). */
+static void* object_found(const char* name, int32_t class_number, int64_t n) {
     for (uint32_t i = 0; i < object_count; i++) {
         if (objects[i] == 0) {
             continue;
         }
-        const char* const its = *(const char* const*)((const char*)objects[i] + field_name);
-        if (its == 0 || !same(its, name)) {
-            continue;
+        if (class_number >= 0) {
+            if (!object_is(objects[i], class_number)) {
+                continue;
+            }
+        } else {
+            const char* const its = *(const char* const*)((const char*)objects[i] + field_name);
+            if (its == 0 || !same(its, name)) {
+                continue;
+            }
         }
         unsigned char dead = 0;
         if (object_is(objects[i], class_live_actor)) {
@@ -448,22 +455,69 @@ static void* object_named(const char* name, int64_t n) {
     return 0;
 }
 
-/* "player" or "object:<name>#<n>". */
+/* The text after `prefix` when `text` starts with it; null otherwise. */
+static const char* after_prefix(const char* text, const char* prefix) {
+    for (; *prefix != 0; prefix++, text++) {
+        if (*text != *prefix) {
+            return 0;
+        }
+    }
+    return text;
+}
+
+/* "<name>#<n>" or "class:<Class>#<n>" (the runner checked the class against the types file): its object, or null. */
+static void* object_ref(const char* ref) {
+    const char* const of_class = after_prefix(ref, "class:");
+    static Words w;
+    split(&w, of_class != 0 ? of_class : ref, '#');
+    int good = 0;
+    const int64_t n = w.count == 2u && w.over == 0u ? to_int(w.word[1], &good) : 0;
+    if (w.count != 2u || !good) {
+        return 0;
+    }
+    if (of_class == 0) {
+        return object_found(w.word[0], -1, n);
+    }
+    const int32_t number = core->class_of(w.word[0]);
+    return number >= 0 ? object_found(0, number, n) : 0;
+}
+
+/* "player", "object:<name>#<n>" or "class:<Class>#<n>". */
 static void* object_of(const char* ref) {
     if (same(ref, "player")) {
         return player();
     }
-    const char prefix[] = "object:";
-    for (uint32_t i = 0; i + 1 < sizeof(prefix); i++) {
-        if (ref[i] != prefix[i]) {
-            return 0;
-        }
+    const char* const named = after_prefix(ref, "object:");
+    return named != 0 ? object_ref(named) : after_prefix(ref, "class:") != 0 ? object_ref(ref) : 0;
+}
+
+/* Why a reference found nothing, as the test names it: "no live object <name>#<n>" or "no live object of class
+   <Class> #<n>" (G-H6-2: a typo is told from a stage without the object), after `lead`. */
+static const char* missing_text(const char* lead, const char* ref) {
+    static Out why;
+    out_empty(&why);
+    put(&why, lead);
+    if (objects_lost != 0) {
+        put(&why, "more objects than the harness keeps (" MOST_OBJECTS_TEXT "), the object may be one of those; ");
     }
-    static Words w;
-    split(&w, ref + 7, '#');
-    int good = 0;
-    const int64_t n = w.count == 2u && w.over == 0u ? to_int(w.word[1], &good) : 0;
-    return w.count == 2u && good ? object_named(w.word[0], n) : 0;
+    put(&why, "no live object ");
+    const char* const named = after_prefix(ref, "object:");
+    const char* const of_class = after_prefix(ref, "class:");
+    if (of_class != 0) {
+        static char cls[128];
+        uint32_t i = 0;
+        for (; of_class[i] != 0 && of_class[i] != '#' && i + 1 < sizeof(cls); i++) {
+            cls[i] = of_class[i];
+        }
+        cls[i] = 0;
+        put(&why, "of class ");
+        put(&why, cls);
+        put(&why, " ");
+        put(&why, of_class + i);
+    } else {
+        put(&why, named != 0 ? named : ref);
+    }
+    return why.text;
 }
 
 /* --- What a line asks ------------------------------------------------------------------------------------------------ */
@@ -758,18 +812,15 @@ static void setup_player(const Words* w) {
             place.z = to_float(w->word[4], &g3);
             good = g1 && g2 && g3;
         } else {
-            const int64_t n = to_int(w->word[3], &good);
-            void* const object = good ? object_named(w->word[2], n) : 0;
+            static Out ref;
+            out_empty(&ref);
+            put(&ref, w->word[2]);
+            put(&ref, "#");
+            put(&ref, w->word[3]);
+            void* const object = object_ref(ref.text);
             if (object == 0) {
-                /* Named as the test names it (name#n). */
-                static Out why;
-                out_empty(&why);
-                put(&why, objects_lost != 0 ? "player.at: more objects than the harness keeps (" MOST_OBJECTS_TEXT "); " : "player.at: ");
-                put(&why, "no live object ");
-                put(&why, w->word[2]);
-                put(&why, "#");
-                put(&why, w->word[3]);
-                finish(0, why.text);
+                /* Named as the test names it (name#n, class:Class#n). */
+                finish(0, missing_text("player.at: ", ref.text));
                 return;
             }
             if (!object_is(object, class_live_actor)) {
@@ -959,8 +1010,7 @@ static void do_call(const char* key, const char* rest) {
             values[i].p = object_of(text);
             args[i + 1] = &values[i].p;
             if (values[i].p == 0) {
-                finish(0, objects_lost != 0 && !same(text, "player") ? "call: more objects than the harness keeps (" MOST_OBJECTS_TEXT "): the object may be one of those"
-                                                                     : "call: an argument names no live object");
+                finish(0, same(text, "player") ? "call: there is no player" : missing_text("call: ", text));
                 return;
             }
             const int32_t needs = same(type, "MarioActor *") ? class_mario_actor
@@ -1089,8 +1139,7 @@ static void do_read(const Words* w) {
     void* const object = object_of(w->word[2]);
     const int32_t offset = cf.count == 2u ? core->field(cf.word[0], cf.word[1], type) : -1;
     if (object == 0 || offset < 0) {
-        finish(0, object == 0 ? (objects_lost != 0 ? "read: more objects than the harness keeps (" MOST_OBJECTS_TEXT "): the object may be one of those"
-                                                   : "no live object of that name and number")
+        finish(0, object == 0 ? (same(w->word[2], "player") ? "read: there is no player" : missing_text("read: ", w->word[2]))
                               : "the game has no field of that name and type");
         return;
     }

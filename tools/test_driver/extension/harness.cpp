@@ -15,7 +15,8 @@
 // key <name> | picture <name> | wait | end | game <line for the game half: call, read, stage>.
 //
 // Facts go to <out>/facts.jsonl: {"frame": <test clock, -1 before frame 0>, "key": ..., "value": <JSON>}. Besides the
-// game half's and the mods' (a log line "[mod <id>] fact <key> <JSON>" is the fact "<id>.<key>"): mod.<id>.loaded from
+// game half's and the mods' (a log line "[mod <id>] fact <key> <JSON>" is the fact "mod.<id>.<key>", the key
+// [a-z0-9_]+ and not `loaded`; another is harness.bad_fact): mod.<id>.loaded from
 // the host's mods lines; picture.<name> when a picture is kept; harness.clock {"game_frame"} when frame 0 is fixed;
 // harness.end {"frame"} at the end step; harness.stop {"verdict", "reason"} when setup or a step failed. The runner
 // decides every verdict from these files.
@@ -25,6 +26,7 @@
 
 #include <cctype>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -353,7 +355,7 @@ std::string quoted(std::string_view text) {
 
 // --- The plan ------------------------------------------------------------------------------------------------------
 
-enum class Action { Hold, Stick, Shake, Pointer, Key, Picture, Wait, End, Game };
+enum class Action { Hold, Stick, Shake, Pointer, Key, Settings, Picture, Wait, End, Game };
 
 struct Cond {
     bool log = false;
@@ -620,6 +622,14 @@ bool read_line(const std::string& line, std::string& why) {
                 why = "step " + std::to_string(s.number) + ": no key " + args[0];
                 return false;
             }
+        } else if (a == "settings" && args.size() == 1u) {
+            // Revision 6 (R6-3): the host's own Settings opened on that page (the runner gives its number).
+            s.action = Action::Settings;
+            if (!number(args[0], value) || value < 0.0 || value > 255.0 || value != std::floor(value)) {
+                why = "step " + std::to_string(s.number) + ": settings takes a page number";
+                return false;
+            }
+            s.key = static_cast<std::uint32_t>(value);
         } else if (a == "picture" && args.size() == 1u) {
             s.action = Action::Picture;
         } else if (a == "wait" && args.empty()) {
@@ -757,6 +767,14 @@ void run_step(Step& s, std::int64_t now) {
         if (g.host != nullptr && g.host->menu_key != nullptr) {
             g.host->menu_key(g.host->host, s.key);
         }
+        break;
+    case Action::Settings:
+        if (g.host == nullptr || g.host->size < offsetof(NebulaHostForExtension, open_settings) + sizeof(g.host->open_settings) ||
+            g.host->open_settings == nullptr) {
+            finish("harness-error", "step " + std::to_string(s.number) + ": this host cannot open its Settings");
+            return;
+        }
+        g.host->open_settings(g.host->host, s.key);
         break;
     case Action::Picture: g.pictures.push_back({g.game_frame, s.text}); break;
     case Action::Wait: break;
@@ -1058,8 +1076,14 @@ void log_line(const char* tag, const char* line) {
             const std::size_t space = rest.find(' ');
             const std::string key = space == std::string::npos ? rest : rest.substr(0, space);
             const std::string json = space == std::string::npos ? std::string() : rest.substr(space + 1u);
-            if (!key.empty() && parse(json)) {
-                write_fact(id + "." + key, json);
+            // Revision 6 (R6-1, G-H6-1): a mod's key is [a-z0-9_]+ and not `loaded` (the host's); it is the fact
+            // mod.<id>.<key>, which the runner splits at its last dot (an id may hold dots, a key never).
+            bool key_ok = !key.empty() && key != "loaded";
+            for (const char c : key) {
+                key_ok = key_ok && ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_');
+            }
+            if (key_ok && parse(json)) {
+                write_fact("mod." + id + "." + key, json);
             } else {
                 write_fact("harness.bad_fact", quoted(text));
             }
