@@ -6338,7 +6338,14 @@ bool RendererD3D12::debug_copy_scene_to_readback() {
     }
     const UINT w = frame_.width;
     const UINT h = frame_.height;
-    const bool wide = scene_hdr_;
+    // 8 or 4 bytes a pixel from the target's own format (FB b83b, as the Vulkan side): any other is not read.
+    const DXGI_FORMAT format = scene_color_->GetDesc().Format;
+    const bool wide = format == kSceneHdrColorFormat;
+    if (!wide && format != kSceneColorFormat) {
+        std::cerr << "[scene-dump] skipped=scene-format-not-read format=" << static_cast<unsigned>(format)
+                  << " path=" << next_scene_capture_path_ << '\n';
+        return false;
+    }
     const UINT row_pitch =
         (w * (wide ? 8u : 4u) + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u) &
         ~(D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u);
