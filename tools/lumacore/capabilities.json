@@ -11,6 +11,7 @@
     "kernel.hook.after": "An after hook on any function: runs last, may change the result (0.2, 1.1)",
     "kernel.hook.wrap": "A wrap on any function: runs around it and calls proceed (0.2, 1.1)",
     "kernel.hook.replace": "A replace on any function: one mod holds it, a second is refused naming the first (0.2, 1.1)",
+    "format.code": "A mod's code is found at code/<platform>/mod.<ending> by luma.json code.platforms alone; a mod with none for this device is off with the reason (luma-format 6)",
     "kernel.refusal": "Every refusal to load a mod names its cause in the log and on the Mods screen (0.2 Z-1, 1.1)",
     "kernel.service": "A mod finds a service by name and version through LumaCore.service (0.3, 2.x)",
     "kernel.memory": "Memory for a mod from LumaCore.alloc: aligned up to 65536, counted per mod, null when there is none, freed when the mod is taken out (1.1)",
