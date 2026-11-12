@@ -38,6 +38,9 @@ $ffxArgs = @()
 if (Test-Path "$Deps\ffx-src\FidelityFX-SDK-1.1.4\sdk") { $ffxArgs += "-DFETCHCONTENT_SOURCE_DIR_FIDELITYFX_SDK=$depsSlash/ffx-src/FidelityFX-SDK-1.1.4" }
 if ($FfxShaders) { $ffxArgs += "-DNEBULA_FFX_VK_SHADERS=$($FfxShaders -replace '\\', '/')" }
 New-Item -ItemType Directory -Force $Work | Out-Null
+# Plan 2.9: every platform's release items (permissions, usage texts, file and link associations) are in the tree.
+& python (Join-Path $root "tools\check_platform_items.py") $root
+if ($LASTEXITCODE -ne 0) { throw "tools/check_platform_items.py: a platform item is missing" }
 
 # A step's output to a UTF-8 log; its errors shown and the build stopped when it fails. Tools write progress to
 # stderr, so stderr lines are output here, not errors.

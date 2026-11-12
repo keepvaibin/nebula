@@ -109,6 +109,9 @@ struct LaunchArgs {
     bool started_hidden = false;
     unsigned gpu_start_retry = 0u;      // --gpu-start-retry: starts so far that found no graphics memory free
     std::vector<std::filesystem::path> extensions;  // --extension, each time given: host extensions (host_extension.h)
+    // --open, each time given: what the system opened Nebula with (a desktop entry's %u, plan 2.9): a mod's file, which
+    // goes where a drop on the window goes, or a nebula:// link (6.1's import by link; nothing until net.internet).
+    std::vector<std::filesystem::path> open;
 };
 
 inline LaunchArgs g_launch_args;

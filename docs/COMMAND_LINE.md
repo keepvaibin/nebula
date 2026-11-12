@@ -18,6 +18,7 @@ and a value. The launcher passes `--pak` and `--saves`; the Android app also pas
 | `--luma-describe <file> [--module <file>]` | First argument only, for the build, not for players: loads the game module (default as `--module`), writes its type rows as JSON (contract types) to the file and exits: 0, or 2 when the file cannot be written. tools/lumacore/compare_types.py checks them against `luma_types.json`. Needs no `--pak`. |
 | `--timeline <file>` | Where the recorded timeline goes; default `diagnostics/timeline-<process id>.bin` in the data folder. |
 | `--seconds <n>` | End the game after n seconds. |
+| `--open <file or link>` | What the system opened Nebula with (the Linux desktop entry's `%u`; may be given more than once): a mod's file goes where a file dropped on the window goes; a `nebula://` link is only logged until links can be imported. |
 | `--gpu-start-retry <n>` | Set by the game itself when it starts again because no graphics memory was free: the tries so far (5 at most). |
 
 The GPU is a setting: `gpu=` in `config.ini`, chosen in Nebula Settings (empty: the high-performance GPU).

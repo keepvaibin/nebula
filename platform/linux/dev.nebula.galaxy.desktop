@@ -1,0 +1,15 @@
+[Desktop Entry]
+# Plan 2.9: what the Linux package declares at release. Installed as share/applications/dev.nebula.galaxy.desktop
+# beside share/mime/packages/dev.nebula.galaxy.xml (the .luma type, tools/package_text.py). "Open with" on a .luma
+# and a nebula:// link start Nebula with --open (docs/COMMAND_LINE.md); `nebula-launch` is the package's start
+# script (plan 8.1), which adds the game's --pak and --saves.
+Type=Application
+Version=1.5
+Name=Nebula
+Icon=dev.nebula.galaxy
+Exec=nebula-launch --open %u
+Terminal=false
+Categories=Game;ActionGame;
+MimeType=application/x-nebula-luma;x-scheme-handler/nebula;
+StartupWMClass=nebula
+SingleMainWindow=true
