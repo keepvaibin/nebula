@@ -92,6 +92,8 @@
     "fx.nocost": "With no mod nothing of content.fx runs: no fx facts (3.5)",
     "fx.limit": "content.fx keeps 256 open effects a mod; the 257th is LUMA_E_LIMIT, reported once; a stopped one frees its place (3.5)",
     "fx.on_model": "content.fx starts an effect on a model the mod attached, at its joint, and ends it with the model (3.5)",
+    "fx.replace": "A mod's effects.json replaces a game particle the game's own table starts, with no code: the cook keeps its number and says so (cook.effect) (3.5, effects 7)",
+    "fx.group": "A mod's own effect of several emitters takes its source's draw group: cooked into its effects list, started with every emitter in that group (3.5, effects 4)",
     "fx.actor_end": "An effect on an actor that dies ends with it (\"actor\"), as the actor's own effects; the ended handle and a start on the dead actor are refused (3.5)",
     "model.attach": "content.model attaches a game model to an actor, drawn as the game draws its own (3.2)",
     "model.joint_follow": "An attached model follows one joint of its actor every frame (3.2)",
