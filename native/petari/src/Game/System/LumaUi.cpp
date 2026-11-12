@@ -343,9 +343,13 @@ namespace luma {
                     nebula_snprintf(text + used, sizeof(text) - used, ",\"boxes\":%u", boxCount);
                 }
                 char json[1500];
-                nebula_snprintf(json, sizeof(json), "{\"screen\":%llu,\"pane\":%s,\"kind\":%u,\"visible\":%s%s}",
+                // The scale in thousandths (set_scale's; 1000 as the layout has it).
+                const s32 scaleX = static_cast< s32 >(rPane.pane->mScale.x * 1000.0f + (rPane.pane->mScale.x < 0.0f ? -0.5f : 0.5f));
+                const s32 scaleY = static_cast< s32 >(rPane.pane->mScale.y * 1000.0f + (rPane.pane->mScale.y < 0.0f ? -0.5f : 0.5f));
+                nebula_snprintf(json, sizeof(json),
+                                "{\"screen\":%llu,\"pane\":%s,\"kind\":%u,\"visible\":%s,\"scale_x\":%d,\"scale_y\":%d%s}",
                                 static_cast< unsigned long long >(rPane.screen), name, static_cast< u32 >(rPane.pane->mKind),
-                                rPane.pane->IsVisible() ? "true" : "false", text);
+                                rPane.pane->IsVisible() ? "true" : "false", scaleX, scaleY, text);
                 char key[48];
                 nebula_snprintf(key, sizeof(key), "ui.%s.%llu", pWhat, static_cast< unsigned long long >(rPane.handle));
                 luma::modlog::fact(key, json);
@@ -827,6 +831,51 @@ namespace luma {
                 return LUMA_OK;
             }
 
+            int32_t svcAlive(const LumaMod* pMod, LumaUiScreen screen, bool* pOut) {
+                const char* const pWhere = "ui.alive";
+                if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
+                    return status;
+                }
+                if (pOut == nullptr) {
+                    report(pMod, pWhere, 101u, "out", nullptr);
+                    return LUMA_E_ARGUMENT;
+                }
+                if (screen == 0 || screen > sNextHandle) {
+                    report(pMod, pWhere, 102u, nullptr, nullptr);
+                    return LUMA_E_HANDLE;
+                }
+                // A handle this run gave that is not an open screen of this mod (ended, or a pane's): false.
+                *pOut = screenOf(pMod, screen) != nullptr;
+                return LUMA_OK;
+            }
+
+            int32_t svcSetScale(const LumaMod* pMod, LumaUiPane pane, float x, float y) {
+                const char* const pWhere = "ui.set_scale";
+                if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
+                    return status;
+                }
+                // NaN fails both comparisons; the infinities are past 64.
+                if (!(x >= -64.0f && x <= 64.0f)) {
+                    report(pMod, pWhere, 101u, "x", nullptr);
+                    return LUMA_E_ARGUMENT;
+                }
+                if (!(y >= -64.0f && y <= 64.0f)) {
+                    report(pMod, pWhere, 101u, "y", nullptr);
+                    return LUMA_E_ARGUMENT;
+                }
+                Pane* const pPane = paneOf(pMod, pane);
+                if (pPane == nullptr) {
+                    report(pMod, pWhere, 102u, nullptr, nullptr);
+                    return LUMA_E_HANDLE;
+                }
+                // The pane's matrix is built again from its scale when it changes (Ui::Pane::CalculateMtx).
+                pPane->pane->mScale = Vec2f(x, y);
+                if (luma::modlog::facts()) {
+                    paneFact(*pPane, "scale");
+                }
+                return LUMA_OK;
+            }
+
             const LumaUiService cTable = {
                 {sizeof(LumaUiService), LUMA_UI_MAJOR, LUMA_UI_MINOR},
                 svcOpen,
@@ -837,6 +886,8 @@ namespace luma {
                 svcClose,
                 svcPlay,
                 svcStop,
+                svcAlive,
+                svcSetScale,
             };
 
             // The service's rows (services-registry 11: ui's block, 570-619).

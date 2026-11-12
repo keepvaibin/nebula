@@ -142,6 +142,8 @@
     "ui.text_cut": "A text longer than its pane holds is cut there, LUMA_OK, Ui.TextCut said (2.4, 3.8)",
     "ui.visible": "ui shows and hides a pane and a whole screen (2.4, 3.8)",
     "ui.refusals": "ui's refusals answer their status and write no handle; close ends a screen and its panes (2.4, 3.8)",
+    "ui.scale": "ui scales a pane and the panes under it across and down about its origin, mirrored when negative; past 64 or not a number refused (ui 1.1)",
+    "ui.alive": "ui answers whether a screen is still open, false once close, its scene or the mod ended it (ui 1.1)",
     "ui.reuse": "A screen a mod closed is that mod's again when it opens the layout on the layer: its panes shown as the layout has them (2.4, 3.8)",
     "ui.limit": "ui refuses a mod's open past LUMA_UI_MOST_SCREENS open ones; a close frees one (2.4, 3.8)",
     "ui.play": "ui plays a layout animation on a screen, once or looping, whatever its data says (2.4, 3.8 layer 3)",

@@ -41,7 +41,7 @@ namespace luma {
                 {"mods.install", 1, 0, nullptr, "services-mods"},
                 {"content.fx", 1, 0, nullptr, "effects"},
                 {"content.model", 1, 1, nullptr, "models"},
-                {"ui", 1, 0, nullptr, "ui"},
+                {"ui", 1, 1, nullptr, "ui"},
                 {"draw.light", 1, 0, nullptr, "draw"},
                 {"draw", 1, 0, nullptr, "draw"},
                 {"anim", 1, 1, nullptr, "animation"},

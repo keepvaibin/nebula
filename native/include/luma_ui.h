@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* LumaCore's ui service (plan 2.4 layer 4 on 3.8 layer 1; contract ui): a screen layout of the mod's or the game's,
    shown over the game as the game shows its own (the game's layout drawer: picture and text panes, its fonts, its
-   16:9 widening), its panes found by name, their text set and their visibility. Import: LUMA_SERVICE(slot, "ui",
-   "1.0"). */
+   16:9 widening), its panes found by name, their text, visibility and scale set. Import: LUMA_SERVICE(slot, "ui",
+   "1.1") (alive and set_scale; "1.0" for the rest). */
 #ifndef LUMA_UI_H
 #define LUMA_UI_H
 
@@ -17,7 +17,7 @@ extern "C" {
 
 #define LUMA_UI_NAME "ui"
 #define LUMA_UI_MAJOR 1u
-#define LUMA_UI_MINOR 0u
+#define LUMA_UI_MINOR 1u
 
 /* Screens one mod has open at once, and panes it has found across them. */
 #define LUMA_UI_MOST_SCREENS 16u
@@ -85,6 +85,15 @@ typedef struct LumaUiService {
     /* 1.0. Game thread. The playing animation stops where it is (its end event: LUMA_E_CANCELLED). LUMA_OK, also with
        none playing; an ended screen: LUMA_E_HANDLE, reported. Thread and taking out as open. */
     int32_t (*stop)(const LumaMod* mod, LumaUiScreen screen);
+    /* 1.1. Game thread. Whether `screen` is still open: *out true until close, its scene's end or the mod's end ended
+       it (then false: open it again). LUMA_OK; a handle this run never gave: LUMA_E_HANDLE, reported; a null out:
+       LUMA_E_ARGUMENT, reported. Thread and taking out as open. */
+    int32_t (*alive)(const LumaMod* mod, LumaUiScreen screen, bool* out);
+    /* 1.1. Game thread. The pane drawn scaled by x across and y down about its own origin, with the panes under it (1
+       is the layout's own size; a meter's bar at 0.3 is three tenths of it; a negative one mirrors it), until it is
+       set again or an animation that moves its scale plays. LUMA_OK; a number not finite or past 64 either way:
+       LUMA_E_ARGUMENT, reported; an ended pane: LUMA_E_HANDLE, reported. Thread and taking out as open. */
+    int32_t (*set_scale)(const LumaMod* mod, LumaUiPane pane, float x, float y);
 } LumaUiService;
 
 #ifdef __cplusplus
