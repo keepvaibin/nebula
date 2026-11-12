@@ -73,6 +73,35 @@ namespace {
         sMaterial.constants[8] = intensity ? 1.0f : 0.0f;
         sMaterial.constants[9] = static_cast< f32 >(range);
     }
+
+    // The material as Setup chooses it for a font whose sheets are the glyph's (a mod font's fallback glyph comes from
+    // another font): when it differs from the run's, the run so far is sent first. The game's fonts never differ.
+    void UseSheet(const Ui::Glyph& glyph, bool mapped) {
+        bool intensity = false;
+        u8 range = glyph.fieldRange;
+        if (!mapped) {
+            switch (glyph.texFormat) {
+            case Ui::SHEET_I4:
+            case Ui::SHEET_I8:
+                intensity = true;
+                break;
+            case Ui::SHEET_RGB565:
+            case Ui::SHEET_RGB5A3:
+            case Ui::SHEET_RGBA8:
+                range = 0;
+                break;
+            default:
+                break;
+            }
+        }
+        const f32 wantIntensity = intensity ? 1.0f : 0.0f;
+        const f32 wantRange = static_cast< f32 >(range);
+        if (sMaterial.constants[8] != wantIntensity || sMaterial.constants[9] != wantRange) {
+            SendRun();
+            sMaterial.constants[8] = wantIntensity;
+            sMaterial.constants[9] = wantRange;
+        }
+    }
 };  // namespace
 
 namespace Ui {
@@ -222,15 +251,16 @@ namespace Ui {
 
     void CharWriter::PrintGlyph(f32 x, f32 y, f32 z, const Glyph& glyph) {
         const f32 posLeft = x;
-        const f32 posTop = y;
-        const f32 posRight = posLeft + glyph.widths.glyphWidth * mScale.x;
-        const f32 posBottom = posTop + glyph.height * mScale.y;
+        const f32 posTop = y + glyph.lift * mScale.y;
+        const f32 posRight = posLeft + glyph.widths.glyphWidth * glyph.scale * mScale.x;
+        const f32 posBottom = posTop + glyph.height * glyph.scale * mScale.y;
         const f32 posZ = z;
         // The cell's corners on its sheet, in the sheet's own size (source pixels: a distance sheet's texels are
         // finer, its coordinates the same).
         const f32 sheetWidth = static_cast< f32 >(glyph.texWidth);
         const f32 sheetHeight = static_cast< f32 >(glyph.texHeight);
 
+        UseSheet(glyph, (mColorMapping.min != 0x00000000u) || (mColorMapping.max != 0xFFFFFFFFu));
         LoadTexture(glyph, 0);
 
         NebulaGlyphInstance* pGlyph = RunGlyph(detail::GetDrawMtx(), posZ);
