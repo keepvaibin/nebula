@@ -412,6 +412,19 @@ void AudioMixer::render_source(VoiceState& state, NebulaVoice& voice, float* out
         const auto whole = static_cast<std::uint32_t>(at);
         const float* w = kernel.weights(at - whole);
         const float* s = x + whole;
+#if defined(__clang__) || defined(__GNUC__)
+        // The four running sums as one vector, lane j the scalar form's sum[j]: the same multiply-adds in the same order,
+        // which the compiler fuses or not exactly as it does the scalar ones (it fused two lanes and left two scalar).
+        using Lanes = float __attribute__((vector_size(16)));
+        Lanes sum{};
+        for (std::uint32_t k = 0; k < kVoiceTaps; k += 4u) {
+            Lanes a;
+            Lanes b;
+            std::memcpy(&a, s + k, sizeof(a));
+            std::memcpy(&b, w + k, sizeof(b));
+            sum += a * b;
+        }
+#else
         float sum[4] = {};
         for (std::uint32_t k = 0; k < kVoiceTaps; k += 4u) {
             sum[0] += s[k] * w[k];
@@ -419,6 +432,7 @@ void AudioMixer::render_source(VoiceState& state, NebulaVoice& voice, float* out
             sum[2] += s[k + 2u] * w[k + 2u];
             sum[3] += s[k + 3u] * w[k + 3u];
         }
+#endif
         out[i] = sum[0] + sum[1] + sum[2] + sum[3];
     }
     state.last = out[n - 1u];
