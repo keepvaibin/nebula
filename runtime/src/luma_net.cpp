@@ -2208,6 +2208,13 @@ void turn_locked(Socket* socket, short revents) {
         break;
     }
     case Kind::Listener: {
+        if (socket->closing) {
+            // Closed by the mod: its system socket now, whether or not a connection waits (one waiting is refused by
+            // the system; the ones accepted and not yet given were closed with it in close_on). Waiting for a POLLIN
+            // here kept the port listening forever, and a later connect there was accepted, never refused (2702).
+            close_locked(socket);
+            return;
+        }
         if ((revents & POLLIN) == 0) {
             return;
         }

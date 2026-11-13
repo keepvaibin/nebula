@@ -197,8 +197,10 @@ namespace {
         }
     }
 
-    // The texts are the played language's: until the game's objects (and its language) exist, a lookup (a mod's report
-    // at its start) answers from the table in English, loads nothing and expands no token; the first after loads once.
+    // The texts are the played language's: until the game's objects exist, a lookup (a mod's report at its start)
+    // answers from the table in the language they will take (MR::getLanguage decides it from the settings and the
+    // disc's region, as GameSystemObjHolder will), loads no override file and expands no token; the first after loads
+    // once.
     void load();
 
     bool ready() {
@@ -207,6 +209,9 @@ namespace {
         }
         const GameSystem* const pSystem = SingletonHolder< GameSystem >::get();
         if (pSystem == nullptr || pSystem->mObjHolder == nullptr) {
+            const char* const pPrefix = MR::getCurrentLanguagePrefix();
+            const s32 column = findColumn(pPrefix, lengthOf(pPrefix));
+            sColumn = column >= 0 ? column : 0;
             return false;
         }
         load();
