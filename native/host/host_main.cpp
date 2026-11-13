@@ -3527,6 +3527,13 @@ void hold_runtime_lease() {
     game_profile::finish();
 #endif
 #if defined(NEBULA_HOST_RENDERER)
+    // The process ends without the renderer's shutdown: the pictures handed to an extension (a test's) are taken from
+    // the GPU and written first, as that shutdown would.
+    if (galaxy::extensions::keeps_pictures() && !galaxy::render::finish_pictures(5000u)) {
+        log_line("host:", "the pictures asked were not all written at exit");
+    }
+#endif
+#if defined(NEBULA_HOST_RENDERER)
     // --diagnostics pipelines: the pipelines this run created (tools/dev/site_pipelines.py merges them).
     if (::galaxy::diagnosing(::galaxy::kDiagnosePipelines)) {
         if (const fs::path folder = galaxy::nebula_diagnostics_directory(); !folder.empty()) {

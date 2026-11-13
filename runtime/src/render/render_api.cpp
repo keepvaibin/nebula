@@ -31,6 +31,10 @@ void wait_for_render_idle() {
     backend().wait_for_render_idle();
 }
 
+bool finish_pictures(std::uint32_t limit_ms) {
+    return backend().finish_pictures(std::chrono::milliseconds(limit_ms));
+}
+
 void set_frame_end_presents(bool enabled) noexcept {
     backend().set_frame_end_presents(enabled);
 }

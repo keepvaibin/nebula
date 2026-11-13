@@ -6004,6 +6004,16 @@ const std::uint8_t* RendererD3D12::pin_readback_mapping(ID3D12Resource* readback
     return static_cast<const std::uint8_t*>(mapped);
 }
 
+void RendererD3D12::finish_pictures() {
+    if (queue_ && fence_) {
+        wait_for_gpu();
+    }
+    debug_log_readback();
+    debug_log_backbuffer_readback();
+    debug_log_selected_display_readback();
+    reap_debug_capture_writers(true);
+}
+
 void RendererD3D12::set_debug_capture_paths(
     std::string scene_ppm_path,
     std::string backbuffer_ppm_path) {

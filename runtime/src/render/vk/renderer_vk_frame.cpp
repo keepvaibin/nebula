@@ -40,15 +40,6 @@ namespace {
 
 using namespace vk_detail;
 
-// A test capture's pixels as a binary PPM, written off the render thread.
-void write_ppm_async(std::string path, std::vector<std::uint8_t> rgb, unsigned width, unsigned height) {
-    std::thread([path = std::move(path), rgb = std::move(rgb), width, height] {
-        std::ofstream out(path, std::ios::binary | std::ios::trunc);
-        out << "P6\n" << width << ' ' << height << "\n255\n";
-        out.write(reinterpret_cast<const char*>(rgb.data()), static_cast<std::streamsize>(rgb.size()));
-    }).detach();
-}
-
 // A conversion input (utility_set_layout_, its sampler the linear clamp): `view`, shader-readable.
 void write_conversion_input(VkDescriptorSet set, VkImageView view) {
     const VkDescriptorImageInfo image{VK_NULL_HANDLE, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
@@ -3008,6 +2999,13 @@ const float* RendererVk::screen_probes_finished(std::size_t slot) {
     vk::Context::get().invalidate(*out.values);
     out.fence = 0u;
     return reinterpret_cast<const float*>(out.values->mapped);
+}
+
+void RendererVk::finish_pictures() {
+    wait_for_gpu_idle();
+    debug_log_readback();
+    debug_log_backbuffer_readback();
+    wait_picture_files();
 }
 
 void RendererVk::set_debug_capture_paths(std::string scene_ppm_path, std::string backbuffer_ppm_path) {

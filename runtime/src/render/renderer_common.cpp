@@ -14,7 +14,11 @@
 #include <algorithm>
 #include <bit>
 #include <cmath>
+#include <condition_variable>
 #include <cstring>
+#include <fstream>
+#include <mutex>
+#include <thread>
 
 namespace galaxy::render {
 
@@ -323,6 +327,37 @@ double PresentPacer::pace(unsigned vsync_interval, float max_fps) {
             ? now
             : ((now - target > max_lag) ? now : target);
     return wait_ms;
+}
+
+namespace {
+
+// The PPM writes asked and not yet finished (write_ppm_async, wait_picture_files).
+std::mutex g_picture_files_lock;
+std::condition_variable g_picture_files_done;
+std::size_t g_picture_files_open = 0u;
+
+}  // namespace
+
+void write_ppm_async(std::string path, std::vector<std::uint8_t> rgb, unsigned width, unsigned height) {
+    {
+        const std::lock_guard<std::mutex> hold(g_picture_files_lock);
+        ++g_picture_files_open;
+    }
+    std::thread([path = std::move(path), rgb = std::move(rgb), width, height] {
+        {
+            std::ofstream out(path, std::ios::binary | std::ios::trunc);
+            out << "P6\n" << width << ' ' << height << "\n255\n";
+            out.write(reinterpret_cast<const char*>(rgb.data()), static_cast<std::streamsize>(rgb.size()));
+        }
+        const std::lock_guard<std::mutex> hold(g_picture_files_lock);
+        --g_picture_files_open;
+        g_picture_files_done.notify_all();
+    }).detach();
+}
+
+void wait_picture_files() {
+    std::unique_lock<std::mutex> hold(g_picture_files_lock);
+    g_picture_files_done.wait(hold, [] { return g_picture_files_open == 0u; });
 }
 
 }  // namespace galaxy::render
