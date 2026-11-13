@@ -4,7 +4,7 @@
 //! rows and values given as the patch rules and the applier (cook::patch) both write them.
 
 use crate::cook::patch::cell_text;
-use crate::cook::store::{store_path, MAGIC};
+use crate::cook::store::{read_header, store_path};
 use crate::cook::table::{self, Column, Kind, TableIr};
 use crate::cook::table_columns::{columns_of, widen_empty};
 use crate::cook::table_keys::{self, Key};
@@ -61,11 +61,7 @@ impl PakStore {
     pub fn open(pak: &Path) -> Result<Self> {
         let mut file = File::open(pak).with_context(|| format!("{} cannot be read", pak.display()))?;
         let length = file.metadata()?.len();
-        let mut header = [0u8; 64];
-        file.read_exact(&mut header).with_context(|| format!("{} is too short to be an asset store", pak.display()))?;
-        if &header[..8] != MAGIC {
-            bail!("{} is not an asset store", pak.display());
-        }
+        let header = read_header(&mut file, pak)?;
         let word = |at: usize| u64::from_le_bytes(header[at..at + 8].try_into().unwrap());
         let count = u32::from_le_bytes(header[12..16].try_into().unwrap()) as usize;
         let (nodes_at, names_at, names_size) = (word(16), word(32), word(40));
@@ -380,7 +376,8 @@ mod tests {
         std::fs::write(&path, [0u8; 100]).unwrap();
         assert!(PakStore::open(&path).is_err());
         let mut header = [0u8; 64];
-        header[..8].copy_from_slice(MAGIC);
+        header[..8].copy_from_slice(crate::cook::store::MAGIC);
+        header[8..12].copy_from_slice(&crate::cook::store::VERSION.to_le_bytes());
         header[12..16].copy_from_slice(&u32::MAX.to_le_bytes());
         std::fs::write(&path, header).unwrap();
         assert!(PakStore::open(&path).is_err());

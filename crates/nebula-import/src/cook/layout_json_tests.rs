@@ -132,8 +132,7 @@ fn a_layout_says_what_it_cannot_make() {
         (pane(r#","length":0"#), "Cook.Effect.Range", "/panes/0/length"),
         (pane(r#","text":"a\u001ab""#), "Cook.Layout.Control", "/panes/0/text"),
         (pane(r#","align":"justify""#), "Cook.Effect.Choice", "/panes/0/align"),
-        (pane(r#","text":"a
-b","font_size":1"#), "Cook.Layout.TextTall", "/panes/0/text"),
+        (pane(r#","text":"a\nb","font_size":1"#), "Cook.Layout.TextTall", "/panes/0/text"),
         (pane(r#","text":"abcdefgh","font_size":1"#), "Cook.Layout.TextWide", "/panes/0/text"),
         (r#"{"panes":[],"groups":[{"name":"G","panes":["Nope"]}]}"#.into(), "Cook.Layout.NoPane", "/groups/0/panes/0"),
         (r#"{"panes":[],"groups":[{"name":"G","panes":[]},{"name":"g","panes":[]}]}"#.into(), "Cook.Layout.Twice", "/groups/1/name"),

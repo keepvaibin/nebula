@@ -23,6 +23,23 @@ pub const VERSION: u32 = include!("../../../../runtime/include/galaxy/store_vers
 /// The files start past this.
 pub const HEADER: u64 = 64;
 
+/// A store's header as every read of a store takes it: the magic, then this version. A store of another version holds
+/// its files in another form (or lacks some): the game refuses it (runtime/src/asset_store.cpp), and so does every read
+/// here, by name, rather than failing later on a file the old form does not have.
+pub fn read_header(pak: &mut impl std::io::Read, pak_path: &std::path::Path) -> Result<[u8; HEADER as usize]> {
+    use anyhow::Context;
+    let mut header = [0u8; HEADER as usize];
+    pak.read_exact(&mut header).with_context(|| format!("{} is too short to be an asset store", pak_path.display()))?;
+    if &header[..8] != MAGIC {
+        bail!("{} is not an asset store", pak_path.display());
+    }
+    let version = u32::from_le_bytes(header[8..12].try_into().unwrap());
+    if version != VERSION {
+        bail!("{} is an asset store of version {version}, and this reads version {VERSION}: import the game again with Setup", pak_path.display());
+    }
+    Ok(header)
+}
+
 /// A file in the store: its path from the root, with '/', and where its bytes are; or a folder with nothing in it.
 pub struct Placed {
     pub path: String,
@@ -241,11 +258,7 @@ pub fn read_file(pak_path: &std::path::Path, path: &str) -> Result<Vec<u8>> {
     use anyhow::Context;
     use std::io::Read;
     let mut pak = File::open(pak_path).with_context(|| format!("{} cannot be read", pak_path.display()))?;
-    let mut header = [0u8; HEADER as usize];
-    pak.read_exact(&mut header)?;
-    if &header[..8] != MAGIC {
-        bail!("{} is not an asset store", pak_path.display());
-    }
+    let header = read_header(&mut pak, pak_path)?;
     let word = |at: usize| u64::from_le_bytes(header[at..at + 8].try_into().unwrap());
     let count = u32::from_le_bytes(header[12..16].try_into().unwrap()) as u64;
     let (nodes_at, hashes_at) = (word(16), word(24));
@@ -274,11 +287,7 @@ pub fn has_file(pak_path: &std::path::Path, path: &str) -> Result<bool> {
     use anyhow::Context;
     use std::io::Read;
     let mut pak = File::open(pak_path).with_context(|| format!("{} cannot be read", pak_path.display()))?;
-    let mut header = [0u8; HEADER as usize];
-    pak.read_exact(&mut header)?;
-    if &header[..8] != MAGIC {
-        bail!("{} is not an asset store", pak_path.display());
-    }
+    let header = read_header(&mut pak, pak_path)?;
     let count = u64::from(u32::from_le_bytes(header[12..16].try_into().unwrap()));
     let hashes_at = u64::from_le_bytes(header[24..32].try_into().unwrap());
     let wanted = path_hash(&store_path(path));
@@ -300,11 +309,7 @@ pub fn visit_folder(pak_path: &std::path::Path, path: &str, visit: &mut dyn FnMu
     use anyhow::Context;
     use std::io::Read;
     let mut pak = File::open(pak_path).with_context(|| format!("{} cannot be read", pak_path.display()))?;
-    let mut header = [0u8; HEADER as usize];
-    pak.read_exact(&mut header)?;
-    if &header[..8] != MAGIC {
-        bail!("{} is not an asset store", pak_path.display());
-    }
+    let header = read_header(&mut pak, pak_path)?;
     let word = |at: usize| u64::from_le_bytes(header[at..at + 8].try_into().unwrap());
     let count = u64::from(u32::from_le_bytes(header[12..16].try_into().unwrap()));
     let (nodes_at, hashes_at) = (word(16), word(24));
@@ -469,5 +474,27 @@ mod tests {
         looped[nodes + 3 * 40 + 28..nodes + 3 * 40 + 32].copy_from_slice(&3u32.to_le_bytes());
         std::fs::write(&path, &looped).unwrap();
         assert!(read_folder(&path, "x.arc").is_err());
+    }
+
+    #[test]
+    fn a_store_of_another_version_is_refused_by_its_version_at_every_read() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("store");
+        let mut pak = File::create(&path).unwrap();
+        pak.write_all(&vec![0u8; 0x200]).unwrap();
+        pak.seek(SeekFrom::Start(0x140)).unwrap();
+        pak.write_all(b"aa").unwrap();
+        let file = |path: &str, position, size| Placed { path: path.to_string(), position, size, folder: false };
+        write_index(&mut pak, 0x200, &[file("x.arc/a.bin", 0x140, 2)], b"RMGE01\0\0").unwrap();
+        drop(pak);
+        assert_eq!(read_file(&path, "x.arc/a.bin").unwrap(), b"aa");
+        let mut old = std::fs::read(&path).unwrap();
+        old[8..12].copy_from_slice(&(VERSION - 1).to_le_bytes());
+        std::fs::write(&path, &old).unwrap();
+        let said = format!("{:#}", read_file(&path, "x.arc/a.bin").unwrap_err());
+        assert!(said.contains(&format!("version {}", VERSION - 1)) && said.contains("Setup"), "{said}");
+        assert!(has_file(&path, "x.arc/a.bin").is_err());
+        assert!(read_folder(&path, "x.arc").is_err());
+        assert!(crate::store_view::PakStore::open(&path).is_err());
     }
 }
