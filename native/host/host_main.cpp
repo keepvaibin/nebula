@@ -3560,6 +3560,8 @@ void hold_runtime_lease() {
     galaxy::achievements::flush();
     galaxy::stats::flush();
 #endif
+    // The record of mods' numbers (services-mods 7), written off the game thread.
+    galaxy::luma_mods::flush_ids(2000u);
     std::fflush(stdout);
 #if defined(_WIN32)
     if (restart) {

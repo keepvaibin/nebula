@@ -281,7 +281,8 @@ struct Record {
     std::uint64_t written = 0;
     bool writer = false;
     std::condition_variable wake;
-    std::mutex io;  // one write at a time
+    std::condition_variable caught_up;  // the writer has written every change so far (flush_ids waits on it)
+    std::mutex io;                      // one write at a time
 };
 
 Record& record() {
@@ -459,8 +460,11 @@ void writer_main() {
             std::this_thread::sleep_for(std::chrono::seconds(2));
             continue;
         }
-        const std::lock_guard<std::mutex> lock(r.lock);
-        r.written = std::max(r.written, changes);
+        {
+            const std::lock_guard<std::mutex> lock(r.lock);
+            r.written = std::max(r.written, changes);
+        }
+        r.caught_up.notify_all();
     }
 }
 
@@ -1670,6 +1674,19 @@ std::uint32_t take_over_ids(std::string_view old_id, std::string_view new_id) {
 
 void set_save_half(const SaveHalf& half) noexcept {
     g_save = half;
+}
+
+void flush_ids(unsigned wait_ms) noexcept {
+    Record& r = record();
+    std::unique_lock<std::mutex> lock(r.lock);
+    if (!r.writer || r.written == r.changes) {
+        return;
+    }
+    if (!r.caught_up.wait_for(lock, std::chrono::milliseconds(wait_ms), [&r] { return r.written == r.changes; })) {
+        lock.unlock();
+        log_line("LumaCore mods.ids: the record of mods' numbers was not written before the end; this session's new "
+                 "numbers are derived again next time");
+    }
 }
 
 void set_chunk_half(LumaSaveKept kept_ids, LumaSaveForget forget) noexcept {
