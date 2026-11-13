@@ -5,6 +5,7 @@
 #include "Game/Render/Clip.hpp"
 #include "Game/Screen/NebulaSettingsMenu.hpp"
 #include "Game/System/Arenas.hpp"
+#include "Game/System/GameAssets.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/System/LumaModLog.hpp"
@@ -57,14 +58,20 @@ namespace luma {
             // A layout actor the service made: the game's LayoutActor, connected to the layer it was made for.
             class ScreenActor : public LayoutActor {
             public:
-                ScreenActor(const char* pLayout, u32 layer) : LayoutActor("LumaCore screen", true) {
+                ScreenActor(const char* pLayout, u32 layer, bool modLayout) : LayoutActor("LumaCore screen", true) {
                     if (layer == LUMA_UI_PAUSE) {
                         MR::connectToSceneLayoutOnPause(this);
                     } else {
                         MR::connectToSceneLayout(this);
                     }
-                    // One animation layer on the root (ui.play); text boxes keep the layout's text until set_text.
-                    initLayoutManagerKeepText(pLayout, 1);
+                    // One animation layer on the root (ui.play). A mod's own layout keeps its text boxes as its cook made
+                    // them (contract layout: `text`, and `length` where set_text cuts); the game's are set up as the game
+                    // sets them (its code sets every box).
+                    if (modLayout) {
+                        initLayoutManagerKeepText(pLayout, 1);
+                    } else {
+                        initLayoutManager(pLayout, 1);
+                    }
                 }
             };
 
@@ -615,7 +622,8 @@ namespace luma {
                     pMade->mod = pMod;
                     pMade->layout = copyText(pLayout);
                     pMade->layer = placed;
-                    pMade->actor = new ScreenActor(pMade->layout, placed);
+                    // No game file at the path: a mod's own layout (one replacing the game's is the game's).
+                    pMade->actor = new ScreenActor(pMade->layout, placed, GameAssets::findGame(path.c_str()) < 0);
                     pMade->next = sMade;
                     sMade = pMade;
                     sMadeCount++;
