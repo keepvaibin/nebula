@@ -32,6 +32,8 @@ std::uint32_t g_flags = 0u;
 bool g_controls = false;
 bool g_pictures = false;
 bool g_sound = false;
+bool g_motor = false;              // an extension takes the motor (NEBULA_EXT_CONTROLS_PAD and `motor`)
+std::uint8_t g_motor_given = 0u;   // the strength it was last given
 std::uint32_t g_vram_budget_mb = 0u;
 std::uint32_t g_disc_read_delay_us = 0u;
 
@@ -113,6 +115,7 @@ bool attach(std::span<const std::filesystem::path> files, const NebulaHostForExt
         g_controls = g_controls || kept.controls != nullptr;
         g_pictures = g_pictures || kept.picture_path != nullptr;
         g_sound = g_sound || kept.sound != nullptr;
+        g_motor = g_motor || ((kept.flags & NEBULA_EXT_CONTROLS_PAD) != 0u && kept.motor != nullptr);
         if (kept.vram_budget_mb != 0u && (g_vram_budget_mb == 0u || kept.vram_budget_mb < g_vram_budget_mb)) {
             g_vram_budget_mb = kept.vram_budget_mb;
         }
@@ -175,6 +178,18 @@ void frame(const NebulaExtensionFrame& frame) noexcept {
     for (std::size_t i = 0; i < g_count; ++i) {
         if (g_extensions[i].frame != nullptr) {
             g_extensions[i].frame(g_extensions[i].user, &frame);
+        }
+    }
+}
+
+void motor(std::uint8_t strength) noexcept {
+    if (!g_motor || strength == g_motor_given) {
+        return;
+    }
+    g_motor_given = strength;
+    for (std::size_t i = 0; i < g_count; ++i) {
+        if ((g_extensions[i].flags & NEBULA_EXT_CONTROLS_PAD) != 0u && g_extensions[i].motor != nullptr) {
+            g_extensions[i].motor(g_extensions[i].user, strength);
         }
     }
 }

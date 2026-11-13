@@ -749,7 +749,8 @@ NEBULA_EXTENSION_EXPORT const NebulaHostExtension* nebula_extension_attach(const
     e.size = sizeof(e);
     e.flags = (in_harness || env_flag("GALAXY_TEST_DETERMINISTIC") ? NEBULA_EXT_FIXED_STEPS : 0u) |
               (env_flag("GALAXY_AUDIO_WAV_DUMP_ONLY") ? NEBULA_EXT_NO_SOUND_DEVICE : 0u) |
-              (env("GALAXY_TEST_MODS_SCREEN").has_value() ? NEBULA_EXT_MODS_SCREEN : 0u);
+              (env("GALAXY_TEST_MODS_SCREEN").has_value() ? NEBULA_EXT_MODS_SCREEN : 0u) |
+              (in_harness && harness::as_pad() ? NEBULA_EXT_CONTROLS_PAD : 0u);
     e.controls = controls;
     e.frame = frame;
     e.picture_path = picture_path;
@@ -762,6 +763,7 @@ NEBULA_EXTENSION_EXPORT const NebulaHostExtension* nebula_extension_attach(const
         e.service = [](void*, const char* name, std::uint32_t major, std::uint32_t minor) { return harness::service(name, major, minor); };
         // The registry's test services (services-registry 14): only in a harness run.
         e.luma_providers = test_services::providers(&e.luma_provider_count);
+        e.motor = [](void*, std::uint8_t strength) { harness::motor(strength); };
     }
     log("test extension attached");
     return &e;

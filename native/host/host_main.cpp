@@ -2880,7 +2880,9 @@ bool input_device_missing(bool wii_remote) {
 // mod's when stronger (input.rumble).
 galaxy::input::PlayerInput controls_input() {
     const int32_t mode = gStarPointerMode.load(std::memory_order_relaxed);
-    galaxy::host::native_game_rumble(std::max(gMotor.load(std::memory_order_relaxed), galaxy::luma_input::mod_rumble(0)), mode);
+    const uint8_t strength = std::max(gMotor.load(std::memory_order_relaxed), galaxy::luma_input::mod_rumble(0));
+    galaxy::host::native_game_rumble(strength, mode);
+    galaxy::extensions::motor(strength);
     return galaxy::host::native_game_input(gGameFrames.load(std::memory_order_relaxed), mode,
                                            static_cast<uint8_t>(gTiltSection.load(std::memory_order_relaxed)));
 }
@@ -2909,6 +2911,9 @@ uint32_t main_device_kind(bool remote) {
     if (remote) {
         return LUMA_INPUT_DEVICE_MOTION;
     }
+    if ((galaxy::extensions::flags() & NEBULA_EXT_CONTROLS_PAD) != 0u) {
+        return LUMA_INPUT_DEVICE_PAD;  // a test extension's controller (its motor the extension's)
+    }
     const std::optional<galaxy::input::DeviceKey> last = galaxy::host::last_input_device();
     if (!last || last->scheme == galaxy::input::ControlScheme::Keyboard) {
         return galaxy::host::touch_controls_present() ? LUMA_INPUT_DEVICE_TOUCH : LUMA_INPUT_DEVICE_KEYBOARD_MOUSE;
@@ -2917,8 +2922,12 @@ uint32_t main_device_kind(bool remote) {
 }
 
 // Whether a mod's rumble reaches player 1's device: a controller whose motor the host drives (the controller worker on
-// Windows, SDL's gamepads elsewhere), or a real Wii Remote (its motor bit). None for the keyboard or a phone's screen.
+// Windows, SDL's gamepads elsewhere; a test extension's, NEBULA_EXT_CONTROLS_PAD), or a real Wii Remote (its motor bit).
+// None for the keyboard or a phone's screen.
 bool main_motor(uint32_t device) {
+    if (device == LUMA_INPUT_DEVICE_PAD && (galaxy::extensions::flags() & NEBULA_EXT_CONTROLS_PAD) != 0u) {
+        return true;
+    }
 #if defined(NEBULA_REAL_WIIMOTE)
     if (device == LUMA_INPUT_DEVICE_MOTION) {
         return true;

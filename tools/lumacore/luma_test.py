@@ -223,7 +223,7 @@ def read_test(folder, types=None):
     t = load_json(folder / "test.json")
     keys_known(t, "", {"harness", "name", "about", "proves", "mods", "code", "language", "seed", "continue_from",
                        "renderers", "region", "limit_seconds", "bare", "save", "stage", "player", "steps", "expect",
-                       "faults", "hide_game_files", "safe_start"})
+                       "faults", "hide_game_files", "safe_start", "device"})
     for key in ("harness", "name", "about", "proves", "steps", "expect"):
         if key not in t:
             raise HarnessError("the test has no %s" % key)
@@ -239,6 +239,10 @@ def read_test(folder, types=None):
         if capability not in known:
             raise HarnessError("proves names %s, which is not in tools/lumacore/capabilities.json" % capability)
     bare = boolean(t, "bare", "") if "bare" in t else False
+    # Player 1's device: the keyboard (the default) or a controller whose motor the harness reads (fact input.motor).
+    device = text(t, "device", "") if "device" in t else "keyboard"
+    if device not in ("keyboard", "pad"):
+        raise HarnessError("device is keyboard or pad")
     code = text(t, "code", "") if "code" in t else "allow"
     if code not in ("allow", "deny", "ask"):
         raise HarnessError("code must be allow, deny or ask")
@@ -320,7 +324,7 @@ def read_test(folder, types=None):
     return {"folder": folder, "raw": t, "name": t["name"], "proves": t["proves"], "bare": bare, "mods": mods,
             "language": language, "seed": seed, "renderers": renderers, "region": t.get("region"), "limit": limit,
             "continue_from": continue_from, "faults": faults, "setup": setup, "steps": steps, "expect": expect,
-            "has_stage": "stage" in t, "hidden": hidden, "safe_start": safe_start}
+            "has_stage": "stage" in t, "hidden": hidden, "safe_start": safe_start, "device": device}
 
 
 def read_setup(t, bare, seed, language, classes):
@@ -984,6 +988,8 @@ def plan_text(test, out):
     lines = ["harness 1", "out %s" % out, "bare %d" % (1 if test["bare"] else 0)]
     if not test["has_stage"]:
         lines.append("clock title")
+    if test.get("device", "keyboard") == "pad":
+        lines.append("device pad")
     lines += test["setup"]
     for s in test["steps"]:
         if s["at"] is not None:

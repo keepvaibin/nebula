@@ -6,6 +6,8 @@
 //   out <folder>                   where facts.jsonl and pictures/ go (the rest of the line)
 //   bare 0|1                       1: no game half
 //   clock title                    a test with no stage: frame 0 is not before the title screen ("boot: title screen")
+//   device pad                     the controls are a controller's (NEBULA_EXT_CONTROLS_PAD); its motor is the fact
+//                                  input.motor (0 to 255) at each change
 //   setup <item ...>               given to the game half in order ("setup save.spin 1", ..., "setup done")
 //   step <at|after> <action ...>   a step; `at` a frame of the test clock, or `after` with the cond lines below it
 //   cond fact <key> <op> <within|-> <JSON>   the step above waits for this fact (its newest value) to hold
@@ -415,6 +417,7 @@ struct State {
     bool on = false;
     bool bare = false;
     bool clock_title = false;     // frame 0 waits for the title screen
+    bool as_pad = false;          // `device pad`
     bool title_seen = false;
     bool setup_finished = false;  // "setup done" answered
     std::string out;
@@ -578,6 +581,14 @@ bool read_line(const std::string& line, std::string& why) {
             return false;
         }
         g.clock_title = true;
+        return true;
+    }
+    if (w[0] == "device") {
+        if (w.size() != 2u || w[1] != "pad") {
+            why = "a device line is `device pad`";
+            return false;
+        }
+        g.as_pad = true;
         return true;
     }
     if (w[0] == "bare") {
@@ -1228,6 +1239,17 @@ const void* service(const char* name, std::uint32_t major, std::uint32_t minor) 
         return nullptr;
     }
     return &g_service;
+}
+
+bool as_pad() {
+    return g.on && g.as_pad;
+}
+
+void motor(std::uint8_t strength) {
+    if (!g.on) {
+        return;
+    }
+    write_fact("input.motor", std::to_string(strength));
 }
 
 }  // namespace harness

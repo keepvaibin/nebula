@@ -90,6 +90,9 @@ enum {
     NEBULA_EXT_NO_SOUND_DEVICE = 1u << 1,
     /* A hidden start still shows the mods' preparing screen (and starts again after it) as a player's start does. */
     NEBULA_EXT_MODS_SCREEN = 1u << 2,
+    /* The extension's controls are a controller's: player 1 plays with a controller (input's LUMA_INPUT_DEVICE_PAD)
+       whose motor is the extension's (`motor`), whatever devices are attached. */
+    NEBULA_EXT_CONTROLS_PAD = 1u << 3,
 };
 
 /* What the host offers. Any thread unless said. */
@@ -150,6 +153,9 @@ typedef struct NebulaHostExtension {
        and permissions it controls. Any other name refuses the extension at attach. They stay valid for the run. */
     const struct LumaServiceProvider* const* luma_providers;
     uint32_t luma_provider_count;
+    /* Game thread, with NEBULA_EXT_CONTROLS_PAD: player 1's motor strength as the host drives it (0 still, 255 full; the
+       game's or a mod's, the stronger), at each change. */
+    void (*motor)(void* user, uint8_t strength);
 } NebulaHostExtension;
 
 typedef const NebulaHostExtension* (*NebulaExtensionAttach)(const NebulaHostForExtension* host);

@@ -27,5 +27,9 @@ const char* picture_path(std::uint64_t game_frame, std::uint32_t kind);
 void log_line(const char* tag, const char* text);
 // Game thread: the harness's service for mods, or null.
 const void* service(const char* name, std::uint32_t major, std::uint32_t minor);
+// After start: the plan's controls are a controller's (`device pad`).
+[[nodiscard]] bool as_pad();
+// Game thread: the controller's motor strength at a change (the fact input.motor).
+void motor(std::uint8_t strength);
 
 }  // namespace harness
