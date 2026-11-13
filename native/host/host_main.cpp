@@ -3674,6 +3674,16 @@ void svc_app_restart(void*) {
 }
 
 
+// The launcher's mod tools (run_mods_tool): the first argument names one.
+bool is_mods_tool(std::string_view first) {
+    return first == "--import-mod" || first == "--list-mods" || first == "--remove-mod";
+}
+
+// The launch arguments a mods tool takes too: the folders it works in.
+bool is_tool_folder_option(std::string_view key) {
+    return key == "--data" || key == "--settings" || key == "--crash-dumps";
+}
+
 }  // namespace
 
 
@@ -4010,8 +4020,9 @@ bool read_game_id(const fs::path& path, std::string& id) {
 }
 
 // The launcher's mod tools: NebulaNative --import-mod <folder or archive>..., --remove-mod <id> or --list-mods
-// [--game <id>] [--pak <game.pak>], on the mods folder beside the settings (as the game uses it). One JSON line on
-// stdout; exit code 0 when everything succeeded.
+// [--game <id>] [--pak <game.pak>] [--data, --settings or --crash-dumps <folder>], on the mods folder beside the
+// settings (as the game uses it; the folder options read_launch_args took). One JSON line on stdout; exit code 0 when
+// everything succeeded.
 int run_mods_tool() {
     std::vector<fs::path> args;
 #if defined(_WIN32)
@@ -4033,6 +4044,8 @@ int run_mods_tool() {
             if (read_game_id(args[++i], id)) {
                 game_id = id;
             }
+        } else if (is_tool_folder_option(utf8_of(args[i])) && i + 1u < args.size()) {
+            ++i;  // read_launch_args took it: not a mod to import
         } else {
             sources.push_back(args[i]);
         }
@@ -4149,7 +4162,22 @@ void read_launch_args(int argc, char** argv) {
 #endif
         return fs::path(argv[index]);
     };
-    for (int i = 1; i + 1 < argc; i += 2) {
+    // A mods tool (--import-mod a.luma b.luma --pak P --data D) has its own words between the options, so only its
+    // folder options are read, wherever they are (LumaLink's `run` names the data folder it found); a start's
+    // arguments are pairs.
+    if (argc >= 2 && is_mods_tool(argv[1])) {
+        for (int i = 2; i + 1 < argc; ++i) {
+            const std::string_view key = argv[i];
+            if (key == "--data") {
+                args.data = path_at(++i);
+            } else if (key == "--settings") {
+                args.settings = path_at(++i);
+            } else if (key == "--crash-dumps") {
+                args.crash_dumps = path_at(++i);
+            }
+        }
+    }
+    for (int i = 1; i + 1 < argc && !(argc >= 2 && is_mods_tool(argv[1])); i += 2) {
         const std::string_view key = argv[i];
         if (key == "--data") {
             args.data = path_at(i + 1);
@@ -4278,8 +4306,7 @@ int main(int argc, char** argv) {
     install_crash_reporter();
 #endif
 #if defined(NEBULA_HOST_RENDERER)
-    if (argc >= 2 && (std::strcmp(argv[1], "--import-mod") == 0 || std::strcmp(argv[1], "--list-mods") == 0 ||
-                      std::strcmp(argv[1], "--remove-mod") == 0)) {
+    if (argc >= 2 && is_mods_tool(argv[1])) {
         return run_mods_tool();
     }
 #endif
