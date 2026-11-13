@@ -300,6 +300,7 @@ class Reader:
             unit = I.Unit.__new__(I.Unit)
             unit.api = api
             unit.tu = tu
+            unit.label = None  # no file: a local function (identity()'s "file#...") has no row name here
         self.unit = unit
         self.foreign = {}   # typedefs outside the game's trees at file scope (<stdint.h>'s): name -> cursor (TY-9)
         self.named_instances = set()  # unit pass: the instances (and their members) its types name (TY-9)

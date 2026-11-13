@@ -476,6 +476,8 @@ class Unit:
             if all(name for name, _, _ in scope):
                 owner = '::' + owner
         local = api.linkage(cursor) == LINKAGE_INTERNAL or any(kind == K_CLASS and self.defined_here(c) for _, kind, c in scope)
+        if local and self.label is None:
+            return None  # gen_types' header pass: a unit's own function is named by its file, which that pass has not
         name = f'{self.label}#{qualified}' if local else qualified
 
         edits = []
@@ -1167,6 +1169,8 @@ class Unit:
         qualified = '::'.join([name for name, _, _ in scope if name] + [self.string(api.spelling(cursor))])
         member_of = bool(scope) and scope[-1][1] == K_CLASS and cursor.kind != K_FUNCTION
         local = api.linkage(cursor) == LINKAGE_INTERNAL or any(kind == K_CLASS and self.defined_here(c) for _, kind, c in scope)
+        if local and self.label is None:
+            return None  # gen_types' header pass: a unit's own function is named by its file, which that pass has not
         name = f'{self.label}#{qualified}' if local else qualified
         fntype = api.type(cursor)
         texts = [self.type_text(api.argType(fntype, i)) for i in range(api.numArgs(cursor))]
