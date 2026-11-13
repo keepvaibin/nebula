@@ -171,6 +171,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/mod_xml.cpp
     ${rt}/luma.cpp
     ${rt}/mod_log.cpp
+    ${rt}/mod_check.cpp
     ${rt}/mod_screens.cpp
     ${rt}/mod_start_check.cpp
     ${rt}/mod_plugins.cpp
@@ -282,6 +283,7 @@ if(ANDROID)
         ${rt}/mii_import.cpp
         ${rt}/mii_formats.cpp
         ${rt}/mod_import.cpp
+        ${rt}/mod_check.cpp
         ${rt}/mods.cpp
         ${rt}/mod_consent.cpp
         ${rt}/mod_xml.cpp
@@ -291,7 +293,7 @@ if(ANDROID)
         ${rt}/asset_store.cpp
         ${rt}/atomic_file.cpp)
     target_include_directories(nebula_mods PRIVATE "${nebula_root}/runtime/include" "${nebula_root}/native/include")
-    target_link_libraries(nebula_mods PRIVATE nebula_archive log)
+    target_link_libraries(nebula_mods PRIVATE nebula_archive log dl)
     target_link_options(nebula_mods PRIVATE "-Wl,--gc-sections")
 endif()
 

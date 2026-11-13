@@ -75,8 +75,9 @@ struct ImportCheck {
 // The validator on a package staged for import (`folder`, laid out as a placed mod), once: every rule (no kept report
 // of its own), last in the list after `others`, the packages placed now in list order, each by its kept report from
 // the last start's check (else one made now, alone), off when it would not start (L800 to L802). The disc and language
-// are the last start's check's (before any: no disc, English). Any thread; it reads the validator's library, the kept
-// reports and the packages it has to check alone.
+// are the last start's check's (before any: the mods folder's game id and the played language, as that check would
+// take them). Any thread; it reads the validator's library, the kept reports and the packages it has to check alone.
+// The work is mod_check.h's, which the Android launcher's import calls too.
 ImportCheck check_import(const std::filesystem::path& folder, const std::vector<StartPackage>& others);
 
 // After add_not_started: the start's check's findings, each a VALIDATOR entry (Error or Note as the validator's).

@@ -187,18 +187,18 @@ void start(const std::filesystem::path& folder) {
 }
 
 Result write_dump(DWORD thread, EXCEPTION_POINTERS* pointers, unsigned type, wchar_t* path, std::size_t size, DWORD* error,
-                  DWORD wait_ms) noexcept {
+                  DWORD wait_ms, const wchar_t* kind) noexcept {
     *error = 0;
     if (size != 0) path[0] = 0;
     if (g_process == nullptr || g_block == nullptr || WaitForSingleObject(g_process, 0) != WAIT_TIMEOUT ||
         WaitForSingleObject(g_ready, 0) != WAIT_OBJECT_0) {
         return Result::kNoWatcher;
     }
-    // The file name is fixed width (a date, a time and a process id); the folder is any length.
+    // The file name is fixed width (the kind, a date, a time and a process id); the folder is any length.
     SYSTEMTIME now;
     GetLocalTime(&now);
     wchar_t file[64];
-    std::swprintf(file, sizeof(file) / sizeof(file[0]), L"nebula-native-%04u%02u%02u-%02u%02u%02u-%lu.dmp", now.wYear, now.wMonth,
+    std::swprintf(file, sizeof(file) / sizeof(file[0]), L"%.16ls-%04u%02u%02u-%02u%02u%02u-%lu.dmp", kind, now.wYear, now.wMonth,
                   now.wDay, now.wHour, now.wMinute, now.wSecond, GetCurrentProcessId());
     const std::size_t room = sizeof(g_block->path) / sizeof(g_block->path[0]);
     std::size_t at = 0;

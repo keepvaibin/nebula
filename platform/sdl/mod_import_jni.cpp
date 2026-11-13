@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The launcher's mod import on Android (dev.nebula.galaxy.ModImport): galaxy::mods::import_mod, the importer the
-// desktop runs, so a phone reads every archive and layout a PC does (.luma, zip, 7z, RAR 4 and 5, tar).
+// desktop runs, so a phone reads every archive and layout a PC does (.luma, zip, 7z, RAR 4 and 5, tar), checked by the
+// validator as the game checks an import (mod_check.h: the same call, against the mods placed, for the disc of game.pak).
+#include "galaxy/asset_store.h"
+#include "galaxy/luma.h"
 #include "galaxy/mod_import.h"
 #include "galaxy/mods.h"
+
+#include "../../runtime/src/mod_check.h"
 
 #include <jni.h>
 
@@ -23,15 +28,36 @@ std::string text_of(JNIEnv* env, jbyteArray value) {
 
 }  // namespace
 
-// Imports the file at `source` into <data>/mods (both UTF-8). `progress.update(done, total)` returning false cancels.
-// The answer is UTF-8 "ok\nid\nkinds\ntitle\nmessage", ok being 1, 0, or 2 when the same mod was there already.
+// Imports the file at `source` into <data>/mods (all UTF-8), checked for the disc of `pak` (setup's game.pak; no disc
+// when it is not one: the rules on the game's files are then not checked). `progress.update(done, total)` returning
+// false cancels. The answer is UTF-8 "ok\nid\nkinds\ntitle\nmessage", ok being 1, 0, or 2 when the same mod was there
+// already; a refused mod's message has a line for each of the check's findings under it.
 extern "C" JNIEXPORT jbyteArray JNICALL Java_dev_nebula_galaxy_ModImport_importFile(JNIEnv* env, jclass, jbyteArray source,
-                                                                                   jbyteArray data, jobject progress) {
+                                                                                   jbyteArray data, jbyteArray pak,
+                                                                                   jobject progress) {
     namespace fs = std::filesystem;
     std::string answer;
     try {
         const fs::path folder = fs::path(text_of(env, data));
-        galaxy::mods::set_mods_folder(folder / "mods", folder / "mods.ini", {});
+        const std::string game_id = galaxy::assets::store_game_id(fs::path(text_of(env, pak)));
+        galaxy::mods::set_mods_folder(folder / "mods", folder / "mods.ini", game_id);
+        // The launcher's words are English: the findings too, until the launcher speaks the game's languages.
+        const galaxy::modlog::check::Game game{std::string(galaxy::luma::plugin_target()), game_id, "UsEnglish"};
+        const galaxy::mods::ImportCheck check = [&game](const fs::path& staged, const std::string& id,
+                                                        galaxy::mods::ImportResult& result) {
+            std::vector<galaxy::modlog::StartPackage> others;
+            for (const galaxy::mods::ModInfo& mod : galaxy::mods::scan_mods()) {
+                if (mod.package && mod.id != id) others.push_back({mod.id, mod.path, mod.enabled});
+            }
+            // No start's verdicts outside the game: a placed package is off only by its own report.
+            const galaxy::modlog::ImportCheck found = galaxy::modlog::check::import(staged, others, game, {});
+            result.checked = found.ran;
+            result.refused = found.refused;
+            for (const galaxy::modlog::ImportFinding& f : found.findings) {
+                result.findings.push_back({f.error, f.code, f.file, f.text, f.line, f.column});
+            }
+            return !found.refused;
+        };
         std::atomic<bool> cancel{false};
         jmethodID update = nullptr;
         if (progress != nullptr) {
@@ -53,9 +79,13 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_dev_nebula_galaxy_ModImport_importF
                 }
                 if (!more) cancel.store(true, std::memory_order_relaxed);
             },
-            &cancel);
+            &cancel, check);
+        std::string message = result.message;
+        if (result.refused) {
+            for (const galaxy::mods::ImportResult::Finding& f : result.findings) message += "\n" + f.text;
+        }
         answer = std::string(result.already ? "2" : result.ok ? "1" : "0") + "\n" + result.id + "\n" + result.kinds + "\n" + result.title + "\n" +
-                 result.message;
+                 message;
     } catch (const std::exception& error) {
         // An exception must not cross into the Java VM.
         answer = std::string("0\n\n\n\nTHE IMPORT STOPPED: ") + error.what();
