@@ -2477,7 +2477,9 @@ pub fn to_clip_files(bytes: &[u8], folder: Option<&Path>, file: &str, game: &Gam
             }
         }
         let timing = Timing::of(&document, animation)?;
-        let of_materials = material_clips(&document, animation, &game_materials.materials, &game_materials.number, &game_materials.texture, &timing)?;
+        // The game model's materials: whether a mesh of one is vertex-coloured is the game file's, not this file's, so
+        // its colour plays on its colour register only (as before the vertex-coloured constant).
+        let of_materials = material_clips(&document, animation, &game_materials.materials, &game_materials.number, &BTreeSet::new(), &game_materials.texture, &timing)?;
         let moves_joints = animation["channels"]
             .as_array()
             .map(Vec::as_slice)
@@ -2525,6 +2527,8 @@ fn standing_material(name: String, images: Vec<(usize, u8)>, transform: Option<[
         transform,
         lit: PbrMaterial::default(),
         pbr_maps: [None; 5],
+        glow: None,
+        shader: None,
     }
 }
 
