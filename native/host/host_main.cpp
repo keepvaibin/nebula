@@ -4772,6 +4772,17 @@ int main(int argc, char** argv) {
     bool first_frame = false;
     uint32_t reported = 0;
     auto next_report = Clock::now() + std::chrono::seconds(1);
+#if defined(_WIN32)
+    // A test run's stall: the game made no frame for kStall while in sight. Once per run, every thread's stack is
+    // dumped from outside (crash_watch, nebula-hang-*.dmp beside the crash dumps), for d/tools/read_dump.py; the run
+    // goes on, and the runner fails it for the stall. Test runs only (an extension loaded): a player's long stop (a
+    // debugger, a sleeping laptop) is not a fault worth a file.
+    constexpr auto kStall = std::chrono::seconds(10);
+    const bool watch_stalls = !::galaxy::launch_args().extensions.empty();
+    uint32_t stall_frames = 0;
+    auto stall_since = Clock::now();
+    bool stall_dumped = false;
+#endif
 #if defined(_WIN32) && defined(NEBULA_HOST_RENDERER) && !defined(NEBULA_HOST_SDL)
     gHostWake = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     galaxy::render::host_window::set_state_wake(gHostWake);
@@ -4871,6 +4882,26 @@ int main(int argc, char** argv) {
 #endif
         next_report += std::chrono::seconds(1);
         const uint32_t frames = gGameFrames.load(std::memory_order_relaxed);
+#if defined(_WIN32)
+        if (frames != stall_frames || frames == 0u || gSuspended) {
+            stall_frames = frames;
+            stall_since = Clock::now();
+        } else if (watch_stalls && !stall_dumped && Clock::now() - stall_since >= kStall) {
+            stall_dumped = true;
+            static wchar_t hang[1024];
+            DWORD hang_error = 0;
+            const galaxy::crash_watch::Result written = galaxy::crash_watch::write_dump(
+                GetCurrentThreadId(), nullptr,
+                MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithThreadInfo | MiniDumpIgnoreInaccessibleMemory, hang,
+                sizeof(hang) / sizeof(hang[0]), &hang_error, 30000u, L"nebula-hang");
+            char text[MAX_PATH + 128];
+            std::snprintf(text, sizeof(text), "the game made no frame for %lld s at frame %u: %s %ls (0x%08lX)",
+                          static_cast<long long>(kStall.count()), frames,
+                          written == galaxy::crash_watch::Result::kWritten ? "every thread's stack in" : "no stall dump",
+                          fs::path(hang).filename().c_str(), hang_error);
+            log_line("host:", text);
+        }
+#endif
         if (frames != reported) {
             char text[384];
             std::snprintf(text, sizeof(text), "frame %u, file reads %u, save ops %u, sound blocks %u, sound subframes %u",

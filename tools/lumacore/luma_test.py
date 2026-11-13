@@ -1301,7 +1301,10 @@ def evaluate(test, renderer, run_folder, ran):
         checks.append({"check": name, "result": "pass" if ok else "fail", "actual": actual})
         return ok
 
-    dumps = sorted(p.name for p in run_folder.glob("*.dmp"))
+    # A crash's dump, and a stall's (nebula-hang-*.dmp: the host's every-thread dump when a test run's game made no
+    # frame for 10 s; it goes on, so the run is judged by it here).
+    dumps = sorted(p.name for p in run_folder.glob("*.dmp") if not p.name.startswith("nebula-hang-"))
+    hangs = sorted(p.name for p in run_folder.glob("nebula-hang-*.dmp"))
     stop = by_key.get("harness.stop", [])
     end = by_key.get("harness.end", [])
     crash_lines = [line for line in log_lines if CRASH_LINE.match(line)]
@@ -1328,6 +1331,9 @@ def evaluate(test, renderer, run_folder, ran):
     elif not end and not meant:
         verdict = "timeout"
         reason = "the run did not reach its end step within limit_seconds (%s s)" % test["limit"]
+        stalled = [line for line in log_lines if "the game made no frame for" in line]
+        if stalled:
+            reason += "; %s (agents/luma d/tools/read_dump.py)" % stalled[0].split("host: ", 1)[-1]
     # Always checked (3.7).
     end_step = next(s for s in test["steps"] if s["action"] == "end")
     if test["ends"] == "crash":
@@ -1342,6 +1348,7 @@ def evaluate(test, renderer, run_folder, ran):
             frame = end[-1]["value"].get("frame")
             add("the run ended at its end step", end_step["at"] is None or frame == end_step["at"], frame)
         add("no crash dump", not dumps, dumps)
+        add("the game never stopped making frames", not hangs, hangs)
         add("the game quit by itself with exit 0", ran.get("code") == 0, ran.get("code"))
     # The game says this once when it cannot give a refusal in words (mod_plugins.cpp validate_message): the importer's
     # library did not load or has no luma_validate_message. Every refusal of the run is then codes only.
