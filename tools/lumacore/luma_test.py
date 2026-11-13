@@ -13,7 +13,8 @@ test and renderer; exit 0 only when every verdict is `pass`.
 
 The bin folder holds NebulaNative.exe (and NebulaNativeVk.exe for Vulkan), smg_game.dll (and smg_game_plain.dll, which
 the game loads when no mod has code: contract modules), nebula_test_extension.dll, luma-test.dll (the game half),
-nebula_import.dll (a refusal's words; without it the game gives codes) and nebula-import.exe, pak.path, and dxc/.
+nebula_import.dll (a refusal's words; without it the game gives codes) and nebula-import.exe, pak.path, dxc/, and
+smg_game.luma-placement.json (the placement facts a stage patch's arguments by name need).
 Nothing outside the work folder is written but the run's own files.
 On Linux (plan 8.1, the container suite) the same with the platform's names: nebula (Vulkan only: give --renderer
 vulkan), libsmg_game.so (and libsmg_game_plain.so), libnebula_test_extension.so, luma-test.so, libnebula_import.so and
@@ -1026,6 +1027,10 @@ def run_one(test, renderer, args, run_folder, previous):
     for name in (exe.name, HOST["game"]) + plain + (HOST["extension"],):
         shutil.copy2(bin_folder / name, run_folder / "bin" / name)  # copy2: the program keeps its mode on Linux
         frozen[name] = sha256(run_folder / "bin" / name)
+    # The game's placement facts, which the build writes beside the module (native/CMakeLists.txt, placement.py): an
+    # installed placement patch's arguments by name need them (crates/nebula-import cook/placement_args.rs).
+    if (bin_folder / "smg_game.luma-placement.json").is_file():
+        shutil.copyfile(bin_folder / "smg_game.luma-placement.json", run_folder / "bin" / "smg_game.luma-placement.json")
     if (bin_folder / "dxc").is_dir():
         shutil.copytree(bin_folder / "dxc", run_folder / "bin" / "dxc")
     if (bin_folder / HOST["importer_exe"]).is_file():
