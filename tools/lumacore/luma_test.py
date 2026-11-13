@@ -223,7 +223,7 @@ def read_test(folder, types=None):
     t = load_json(folder / "test.json")
     keys_known(t, "", {"harness", "name", "about", "proves", "mods", "code", "language", "seed", "continue_from",
                        "renderers", "region", "limit_seconds", "bare", "save", "stage", "player", "steps", "expect",
-                       "faults", "hide_game_files", "safe_start", "device"})
+                       "faults", "hide_game_files", "safe_start", "device", "ends"})
     for key in ("harness", "name", "about", "proves", "steps", "expect"):
         if key not in t:
             raise HarnessError("the test has no %s" % key)
@@ -318,13 +318,21 @@ def read_test(folder, types=None):
         if not isinstance(t["hide_game_files"], list):
             raise HarnessError("hide_game_files must be a list")
         hidden = [hidden_path(h, "hide_game_files[%d]" % i) for i, h in enumerate(t["hide_game_files"])]
+    # How the run must end (revision 10): "end", at its end step by the harness (the default); or "crash", by the
+    # host's crash reporter before the end step (a test of a fault that must never be resumed, guard 2). A crash test
+    # names the crash line it expects: at least one log expectation reading the host's "crash: " line.
+    ends = text(t, "ends", "") if "ends" in t else "end"
+    if ends not in ("end", "crash"):
+        raise HarnessError("ends must be end or crash")
     setup = read_setup(t, bare, seed, language, classes)
     steps = read_steps(t, bare, classes)
     expect = read_expect(t, bare, steps)
+    if ends == "crash" and not any(c["kind"] == "log" and c["pattern"].startswith("crash: ") for c in expect):
+        raise HarnessError("a test that ends in a crash expects its crash line: a log expectation starting \"crash: \"")
     return {"folder": folder, "raw": t, "name": t["name"], "proves": t["proves"], "bare": bare, "mods": mods,
             "language": language, "seed": seed, "renderers": renderers, "region": t.get("region"), "limit": limit,
             "continue_from": continue_from, "faults": faults, "setup": setup, "steps": steps, "expect": expect,
-            "has_stage": "stage" in t, "hidden": hidden, "safe_start": safe_start, "device": device}
+            "has_stage": "stage" in t, "hidden": hidden, "safe_start": safe_start, "device": device, "ends": ends}
 
 
 def read_setup(t, bare, seed, language, classes):
@@ -1260,6 +1268,10 @@ def evaluate(test, renderer, run_folder, ran):
     dumps = sorted(p.name for p in run_folder.glob("*.dmp"))
     stop = by_key.get("harness.stop", [])
     end = by_key.get("harness.end", [])
+    crash_lines = [line for line in log_lines if CRASH_LINE.match(line)]
+    crashed = bool(dumps or crash_lines)
+    # A test that must end in a crash (ends "crash") that crashed is judged by its checks, as any run that ended.
+    meant = test["ends"] == "crash" and crashed
     verdict, reason = None, None
     declined = [line for line in log_lines if "fatal: --extension" in line or "extension: test extension:" in line]
     # The host could not open the bin folder's game.pak (host_main.cpp open_pak: another store version, or unreadable).
@@ -1271,22 +1283,30 @@ def evaluate(test, renderer, run_folder, ran):
         # The extension refused the run's folders: the runner's fault, not the game's.
         verdict = "harness-error"
         reason = "the test extension declined the run: %s" % " | ".join(declined)
-    elif dumps or any(CRASH_LINE.match(line) for line in log_lines):
+    elif crashed and not meant:
         verdict = "crashed"
         reason = "dump %s; last lines: %s" % (", ".join(dumps) or "none", " | ".join(log_lines[-5:]))
     elif stop:
         verdict = stop[-1]["value"].get("verdict", "fail")
         reason = stop[-1]["value"].get("reason", "")
-    elif not end:
+    elif not end and not meant:
         verdict = "timeout"
         reason = "the run did not reach its end step within limit_seconds (%s s)" % test["limit"]
     # Always checked (3.7).
     end_step = next(s for s in test["steps"] if s["action"] == "end")
-    if end:
-        frame = end[-1]["value"].get("frame")
-        add("the run ended at its end step", end_step["at"] is None or frame == end_step["at"], frame)
-    add("no crash dump", not dumps, dumps)
-    add("the game quit by itself with exit 0", ran.get("code") == 0, ran.get("code"))
+    if test["ends"] == "crash":
+        # The crash is the run's end: before the end step, by the host's crash reporter (its line, a dump, the game
+        # gone with a code that is not 0, not killed at the limit).
+        add("the game ended in a crash before its end step", crashed and not end,
+            (crash_lines[:1] or dumps) if not end else end[-1]["value"].get("frame"))
+        add("a crash dump was written", bool(dumps), dumps)
+        add("the game ended with a code other than 0", ran.get("code") not in (0, None), ran.get("code"))
+    else:
+        if end:
+            frame = end[-1]["value"].get("frame")
+            add("the run ended at its end step", end_step["at"] is None or frame == end_step["at"], frame)
+        add("no crash dump", not dumps, dumps)
+        add("the game quit by itself with exit 0", ran.get("code") == 0, ran.get("code"))
     # The game says this once when it cannot give a refusal in words (mod_plugins.cpp validate_message): the importer's
     # library did not load or has no luma_validate_message. Every refusal of the run is then codes only.
     coded = [line for line in log_lines if "refusals are given as codes" in line]
@@ -1296,7 +1316,10 @@ def evaluate(test, renderer, run_folder, ran):
     if not test["bare"]:
         loaded = by_key.get("mod.%s.loaded" % GAME_HALF_ID, [])
         add("the game half loaded", bool(loaded) and loaded[-1]["value"] is True, loaded[-1]["value"] if loaded else None)
-        add("every setup item verified", bool(by_key.get("setup.done")),
+        # A crash test's fault may come before the setup's last item (a hook on the first frame of play): its items
+        # are those the run verified before the crash (one that failed stops the run: harness.stop, above).
+        add("every setup item verified" + (" before the crash" if meant else ""),
+            bool(by_key.get("setup.done")) or (meant and not stop),
             [f["key"] for f in facts if f.get("key", "").startswith("setup.")])
     for mod_id, m in ran["mods"]:
         loaded = by_key.get("mod.%s.loaded" % mod_id, [])
