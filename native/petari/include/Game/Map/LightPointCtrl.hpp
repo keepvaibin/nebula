@@ -24,8 +24,10 @@ public:
     void update();
     void requestPointLight(const LiveActor* pActor, Vec3f pos, Color8 color, f32 intensity, s32 duration);
     // Nebula: a request by any owner (`pKey`: an actor, or a mod's light of draw.light), `distance` from it to the
-    // player now; the nearest asking wins, as among actors.
-    void requestPointLightBy(const void* pKey, f32 distance, Vec3f pos, Color8 color, f32 intensity, s32 duration);
+    // player now; the nearest asking wins, as among actors. Every request also goes to the frame as a light of
+    // `radius` (Frame::pointLight: a renderer that lights from each source).
+    void requestPointLightBy(const void* pKey, f32 distance, Vec3f pos, Color8 color, f32 intensity, s32 duration,
+                             f32 radius = 0.0f);
     void clearPointLight(PointLightInfo* pInfo);
     void blendPointLight(PointLightInfo* pDst, const PointLightInfo& rStart, const PointLightInfo& rEnd, f32 t);
 

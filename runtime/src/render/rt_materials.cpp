@@ -233,18 +233,56 @@ const RtMaterialTable& table() {
     return loaded;
 }
 
-const RtStageSunTable& suns() {
-    static const RtStageSunTable loaded = [] {
-        RtStageSunTable t;
-        const std::string path = galaxy::path_text(program_directory() / "rt-suns.tsv");
-        std::ifstream file(galaxy::text_path(path));
-        if (file) {
-            const std::size_t rows = t.read(file);
-            std::cerr << "[rt-suns] file=" << path << " rows=" << rows << '\n';
+// The pak's tables (set_rt_tables): written once before the renderer starts, read only after.
+RtStageTable& stage_table() {
+    static RtStageTable rows;
+    return rows;
+}
+
+RtEffectTable& effect_table() {
+    static RtEffectTable rows;
+    return rows;
+}
+
+// A table's lines as rows of fields; the first is the header, its names in lower case with '_' as ' '.
+std::vector<std::vector<std::string>> tsv_rows(std::string_view text) {
+    std::vector<std::vector<std::string>> rows;
+    std::size_t start = 0u;
+    while (start < text.size()) {
+        std::size_t end = text.find('\n', start);
+        if (end == std::string_view::npos) {
+            end = text.size();
         }
-        return t;
-    }();
-    return loaded;
+        std::string line(text.substr(start, end - start));
+        start = end + 1u;
+        while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) {
+            line.pop_back();
+        }
+        if (line.empty() || line[0] == '#') {
+            continue;
+        }
+        rows.push_back(split(line, '\t'));
+    }
+    if (!rows.empty()) {
+        for (std::string& name : rows[0]) {
+            name = lower(name);
+            std::replace(name.begin(), name.end(), '_', ' ');
+        }
+    }
+    return rows;
+}
+
+int column_of(const std::vector<std::string>& header, std::string_view name) {
+    for (std::size_t i = 0; i < header.size(); ++i) {
+        if (header[i] == name) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+std::string field(const std::vector<std::string>& row, int column) {
+    return column >= 0 && static_cast<std::size_t>(column) < row.size() ? lower(row[static_cast<std::size_t>(column)]) : std::string();
 }
 
 }  // namespace
@@ -418,79 +456,141 @@ std::vector<std::pair<std::uint32_t, std::uint16_t>> RtMaterialTable::stage_iden
     return out;
 }
 
-std::size_t RtStageSunTable::read(std::istream& in) {
-    std::string line;
-    bool header_read = false;
-    int stage_col = -1, source_col = -1, x_col = -1, y_col = -1, z_col = -1, r_col = -1, g_col = -1, b_col = -1,
-        strength_col = -1, size_col = -1, shafts_col = -1, day_col = -1, ambient_col = -1, core_col = -1;
-    std::size_t rows = 0u;
-    while (std::getline(in, line)) {
-        if (line.empty() || line[0] == '#') {
+std::size_t RtStageTable::read(std::string_view text) {
+    const std::vector<std::vector<std::string>> rows = tsv_rows(text);
+    if (rows.empty()) {
+        return 0u;
+    }
+    const std::vector<std::string>& head = rows[0];
+    const int stage_col = column_of(head, "stage"), sun_col = column_of(head, "sun"), gain_col = column_of(head, "sun gain"),
+              size_col = column_of(head, "sun size"), ambient_col = column_of(head, "ambient gain"),
+              sky_col = column_of(head, "sky gain"), low_col = column_of(head, "exposure low"),
+              high_col = column_of(head, "exposure high"), air_col = column_of(head, "air"),
+              water_col = column_of(head, "water clear"), sets_col = column_of(head, "shadow sets");
+    std::size_t read = 0u;
+    for (std::size_t r = 1; r < rows.size(); ++r) {
+        const std::vector<std::string>& row = rows[r];
+        std::string name = stage_col >= 0 && static_cast<std::size_t>(stage_col) < row.size() ? row[static_cast<std::size_t>(stage_col)] : std::string();
+        while (!name.empty() && (name.back() == ' ' || name.back() == '\r')) {
+            name.pop_back();
+        }
+        if (name.empty()) {
             continue;
         }
-        const std::vector<std::string> row = split(line, '\t');
-        if (!header_read) {
-            header_read = true;
-            for (std::size_t i = 0; i < row.size(); ++i) {
-                const std::string name = lower(row[i]);
-                int* const slot = name == "stage" ? &stage_col : name == "source" ? &source_col
-                                : name == "x" ? &x_col : name == "y" ? &y_col : name == "z" ? &z_col
-                                : name == "r" ? &r_col : name == "g" ? &g_col : name == "b" ? &b_col
-                                : name == "strength" ? &strength_col : name == "size" ? &size_col
-                                : name == "shafts" ? &shafts_col : name == "day" ? &day_col
-                                : name == "ambient" ? &ambient_col : name == "core" ? &core_col : nullptr;
-                if (slot != nullptr) *slot = static_cast<int>(i);
-            }
-            continue;
-        }
-        if (stage_col < 0 || static_cast<std::size_t>(stage_col) >= row.size()) {
-            continue;
-        }
-        std::string stage = row[static_cast<std::size_t>(stage_col)];
-        while (!stage.empty() && (stage.back() == '\r' || stage.back() == ' ')) stage.pop_back();
-        if (stage.empty()) {
-            continue;
-        }
-        RtStageSun sun{};
-        const std::string source = source_col >= 0 && static_cast<std::size_t>(source_col) < row.size()
-                                       ? lower(row[static_cast<std::size_t>(source_col)])
-                                       : std::string();
+        RtStage stage{};
+        const std::string sun = field(row, sun_col);
+        const std::vector<std::string> parts = split(sun, ' ');
         float d[3]{};
-        const bool direction = number(row, x_col, d[0]) && number(row, y_col, d[1]) && number(row, z_col, d[2]);
-        const float length = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
-        if ((source == "table" || source == "moon") && direction && length > 1e-4f) {
-            sun.source = source == "moon" ? RtStageSun::Source::Moon : RtStageSun::Source::Table;
-            for (unsigned i = 0; i < 3u; ++i) sun.direction[i] = d[i] / length;
-        } else if (source == "none") {
-            sun.source = RtStageSun::Source::None;
-        } else if (source == "core") {
-            sun.source = RtStageSun::Source::Core;
+        char* end = nullptr;
+        bool direction = parts.size() == 3u;
+        for (std::size_t i = 0; i < 3u && direction; ++i) {
+            d[i] = std::strtof(parts[i].c_str(), &end);
+            direction = end != parts[i].c_str() && std::isfinite(d[i]);
         }
-        float c[3]{};
-        if (number(row, r_col, c[0]) && number(row, g_col, c[1]) && number(row, b_col, c[2])) {
-            sun.has_color = true;
-            for (unsigned i = 0; i < 3u; ++i) sun.color[i] = std::clamp(c[i], 0.0f, 1.0f);
+        const float length = direction ? std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) : 0.0f;
+        if (direction && length > 1e-4f) {
+            stage.sun = RtStage::Sun::Fixed;
+            for (unsigned i = 0; i < 3u; ++i) {
+                stage.direction[i] = d[i] / length;
+            }
+        } else if (sun == "object") {
+            stage.sun = RtStage::Sun::Object;
+        } else if (sun == "key") {
+            stage.sun = RtStage::Sun::Key;
+        } else if (sun == "none") {
+            stage.sun = RtStage::Sun::None;
         }
         float v = 0.0f;
-        if (number(row, strength_col, v)) sun.strength = std::clamp(v, 0.0f, 4.0f);
-        if (number(row, size_col, v)) sun.size = std::clamp(v, 0.0f, 30.0f);
-        if (number(row, shafts_col, v)) sun.shafts = std::clamp(v, 0.0f, 4.0f);
-        if (number(row, day_col, v)) sun.day = std::clamp(v, 0.0f, 1.0f);
-        if (number(row, ambient_col, v)) sun.ambient = std::clamp(v, 0.0f, 2.0f);
-        if (number(row, core_col, v)) sun.core = std::clamp(v, 0.0f, 1000.0f);
-        suns_[stage] = sun;
-        ++rows;
+        if (number(row, gain_col, v)) stage.sun_gain = std::clamp(v, 0.0f, 4.0f);
+        if (number(row, size_col, v)) stage.sun_size = std::clamp(v, 0.0f, 0.2f);
+        if (number(row, ambient_col, v)) stage.ambient_gain = std::clamp(v, 0.0f, 4.0f);
+        if (number(row, sky_col, v)) stage.sky_gain = std::clamp(v, 0.0f, 4.0f);
+        if (number(row, low_col, v)) stage.exposure_low = std::clamp(v, 1.0f, 10000.0f);
+        if (number(row, high_col, v)) stage.exposure_high = std::clamp(v, stage.exposure_low, 10000.0f);
+        stage.exposure_high = std::max(stage.exposure_high, stage.exposure_low);
+        if (number(row, air_col, v)) stage.air = std::clamp(v, 0.0f, 0.01f);
+        if (number(row, water_col, v)) stage.water_clear = std::clamp(v, 1.0f, 100000.0f);
+        stage.shadow_sets_kept = field(row, sets_col) == "keep";
+        rows_[rt_stage_hash(name)] = stage;
+        ++read;
     }
-    return rows;
+    return read;
 }
 
-const RtStageSun* RtStageSunTable::find(std::string_view stage) const noexcept {
-    const auto it = suns_.find(std::string(stage));
-    return it != suns_.end() ? &it->second : nullptr;
+const RtStage* RtStageTable::find(std::uint32_t hash) const noexcept {
+    const auto it = rows_.find(hash);
+    return it != rows_.end() ? &it->second : nullptr;
 }
 
-const RtStageSun* rt_stage_sun(std::string_view stage) noexcept {
-    return suns().find(stage);
+std::uint32_t rt_stage_hash(std::string_view name) noexcept {
+    if (name.empty()) {
+        return 0u;
+    }
+    std::uint32_t hash = 2166136261u;
+    for (const char c : name) {
+        hash = (hash ^ static_cast<std::uint8_t>(c)) * 16777619u;
+    }
+    return hash != 0u ? hash : 1u;
+}
+
+std::size_t RtEffectTable::read(std::string_view text) {
+    const std::vector<std::vector<std::string>> rows = tsv_rows(text);
+    if (rows.empty()) {
+        return 0u;
+    }
+    const std::vector<std::string>& head = rows[0];
+    const int effect_col = column_of(head, "effect"), luminance_col = column_of(head, "luminance"),
+              behaviour_col = column_of(head, "behaviour");
+    std::size_t read = 0u;
+    for (std::size_t r = 1; r < rows.size(); ++r) {
+        const std::vector<std::string>& row = rows[r];
+        std::string name = effect_col >= 0 && static_cast<std::size_t>(effect_col) < row.size() ? row[static_cast<std::size_t>(effect_col)] : std::string();
+        while (!name.empty() && (name.back() == ' ' || name.back() == '\r')) {
+            name.pop_back();
+        }
+        float luminance = 0.0f;
+        if (name.empty() || !number(row, luminance_col, luminance)) {
+            continue;
+        }
+        RtEffectRow effect{};
+        effect.luminance = std::clamp(luminance, 0.0f, 100000.0f);
+        const std::string behaviour = field(row, behaviour_col);
+        effect.behaviour = behaviour == "flicker" ? 1u : behaviour == "pulse" ? 2u : behaviour == "flash" ? 3u
+                         : behaviour == "streak" ? 4u : behaviour == "own" ? 5u : 0u;
+        rows_[rt_effect_hash(name)] = effect;
+        ++read;
+    }
+    return read;
+}
+
+const RtEffectRow* RtEffectTable::find(std::uint32_t hash) const noexcept {
+    const auto it = rows_.find(hash);
+    return it != rows_.end() ? &it->second : nullptr;
+}
+
+std::uint32_t rt_effect_hash(std::string_view name) noexcept {
+    std::uint32_t hash = 2166136261u;
+    for (const char c : std::string_view("Effect/")) {
+        hash = (hash ^ static_cast<std::uint8_t>(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c)) * 16777619u;
+    }
+    for (const char c : name) {
+        hash = (hash ^ static_cast<std::uint8_t>(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c)) * 16777619u;
+    }
+    return hash != 0u ? hash : 1u;
+}
+
+void set_rt_tables(std::string_view stages, std::string_view effects) {
+    const std::size_t stage_rows = stage_table().read(stages);
+    const std::size_t effect_rows = effect_table().read(effects);
+    std::cerr << "[rt] tables of the pak: " << stage_rows << " stage rows, " << effect_rows << " effect rows\n";
+}
+
+const RtStage* rt_stage(std::uint32_t hash) noexcept {
+    return hash != 0u ? stage_table().find(hash) : nullptr;
+}
+
+const RtEffectRow* rt_effect(std::uint32_t hash) noexcept {
+    return effect_table().find(hash);
 }
 
 bool rt_materials_loaded() noexcept {

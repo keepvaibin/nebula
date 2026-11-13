@@ -35,10 +35,15 @@ def key_of(path):
     text = open(path, encoding="utf-8", errors="replace").read()
     signature = []
     for name in ("; Input signature:", "; Output signature:"):
+        # d23: the whole table, to the two bare ";" lines that close it. ("\n;\n;" alone matched between the header's
+        # own ";" line and "; Name": the key held no signature, and two pixel programs with the same instructions
+        # and different inputs were grouped as one; r0715's refused pipelines.)
         at = text.find(name)
-        if at >= 0:
-            end = text.find("\n;\n;", at)
-            signature.append(text[at:end if end >= 0 else at + 2000])
+        end = text.find("\n;\n;\n", at) if at >= 0 else -1
+        table = text[at:end] if end > at else ""
+        if "; Name" not in table or "-----" not in table:
+            raise SystemExit(f"build_programs: {path}: no whole '{name}' table (the grouping key needs it)")
+        signature.append(table)
     begin = text.find("define void @")
     end = text.find("\n}\n", begin)
     body = text[begin:end]

@@ -35,6 +35,8 @@ bool startup(const std::wstring& directory, bool frame_generation = false) noexc
 // resolution runs on the adapter.
 bool attach_device(ID3D12Device* device, const LUID& adapter) noexcept;
 [[nodiscard]] bool dlss_supported() noexcept;
+// DLSS Ray Reconstruction (sl.dlss_d, when installed) runs on the adapter.
+[[nodiscard]] bool dlss_rr_supported() noexcept;
 // Streamline's device proxy for creating the command queue, or `device`.
 [[nodiscard]] Microsoft::WRL::ComPtr<ID3D12Device> queue_device(ID3D12Device* device) noexcept;
 // Streamline's factory proxy for creating the swap chain (so its presents
@@ -78,6 +80,7 @@ struct FrameGenerationInputs {
     ID3D12Resource* motion = nullptr;
     unsigned render_width = 0;
     unsigned render_height = 0;
+    bool common = false;  // depth and motion in the common state (TemporalUpscaleInputs::common)
 };
 bool tag_frame_generation(const FrameGenerationInputs& in) noexcept;
 void tag_backbuffer_region(ID3D12GraphicsCommandList* list, unsigned left, unsigned top, unsigned width,
@@ -98,10 +101,12 @@ void set_frame_generation(unsigned generated, bool dynamic = false, float target
 
 // DLSS super resolution for one render/output size. quality: 0 DLAA, 1
 // quality, 2 balanced, 3 performance, 4 ultra performance. Null when DLSS is
-// not available.
+// not available. With `ray_reconstruction` (dlss_rr_supported, the tracer
+// running): DLSS Ray Reconstruction, the tracer's outside denoiser too
+// (rt_denoiser.h), in the same modes.
 [[nodiscard]] std::unique_ptr<TemporalUpscaler> create_dlss_upscaler(
     unsigned render_width, unsigned render_height,
-    unsigned output_width, unsigned output_height, unsigned quality);
+    unsigned output_width, unsigned output_height, unsigned quality, bool ray_reconstruction = false);
 // The narrowest render width DLSS accepts for this quality and output (0: unknown).
 [[nodiscard]] unsigned dlss_min_render_width(unsigned quality, unsigned output_width,
                                              unsigned output_height) noexcept;

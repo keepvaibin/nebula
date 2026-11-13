@@ -30,7 +30,17 @@ enum Diagnostic : unsigned {
     kDiagnoseRtCheck = 1u << 15u,        // rt-check: the tracer's scene against the depth the game drew, coloured and counted
     kDiagnoseDeviceFaults = 1u << 16u,   // device-faults: a lost device's breadcrumbs and the driver's fault data
     kDiagnoseTelemetry = 1u << 17u,      // telemetry: frame counts in shared memory each second (tools/telemetry)
-    kDiagnoseRingStress = 1u << 18u,     // ring-stress: the upload rings made again every kRingStressFrames frames (a test
+    kDiagnoseRtLight = 1u << 18u,        // rt-light: the light pass's shares as the scene's colours (sun red, ground green, lamp blue)
+    kDiagnoseRtAdded = 1u << 19u,        // rt-added: the scene under its emitters alone (no sun, no sky): where each light source lights
+    kDiagnoseRtReference = 1u << 20u,    // rt-reference: the reference path tracer's signals in place of the real-time passes'
+    kDiagnoseRtSignals = 1u << 21u,      // rt-signals: each kept picture's lighting signals as pictures of their own (signal_*.ppm)
+    kDiagnoseRtMotion = 1u << 22u,       // rt-motion: where each pixel's point was the frame before, as colours (across red, down green, unknown blue)
+    kDiagnoseRtNoGeometry = 1u << 24u,   // rt-no-geometry: a test: the Vulkan device is made as one without geometry shaders
+    kDiagnoseRtToggle = 1u << 23u,       // rt-toggle: ray tracing switched off and on every 90 frames (the setting changed while the game runs)
+    kDiagnoseRtNoMicromaps = 1u << 25u,  // rt-no-micromaps: a test: no opacity micromaps (alpha-tested surfaces asked at every hit)
+    kDiagnoseProgramsDrawn = 1u << 26u,  // programs-drawn: each program pair a draw asks for, once (a stage compiles only those)
+    kDiagnoseRtAbsent = 1u << 27u,       // rt-absent: a test: the device is taken as one without ray tracing (9.8)
+    kDiagnoseRingStress = 1u << 28u,     // ring-stress: the upload rings made again every kRingStressFrames frames (a test
                                          // of their retirement: the old rings must outlive every frame that reads them)
 };
 
@@ -60,6 +70,16 @@ inline constexpr DiagnosticName kDiagnosticNames[] = {
     {"rt-check", kDiagnoseRtCheck},
     {"device-faults", kDiagnoseDeviceFaults},
     {"telemetry", kDiagnoseTelemetry},
+    {"rt-light", kDiagnoseRtLight},
+    {"rt-added", kDiagnoseRtAdded},
+    {"rt-reference", kDiagnoseRtReference},
+    {"rt-signals", kDiagnoseRtSignals},
+    {"rt-motion", kDiagnoseRtMotion},
+    {"rt-no-geometry", kDiagnoseRtNoGeometry},
+    {"rt-toggle", kDiagnoseRtToggle},
+    {"rt-no-micromaps", kDiagnoseRtNoMicromaps},
+    {"programs-drawn", kDiagnoseProgramsDrawn},
+    {"rt-absent", kDiagnoseRtAbsent},
     {"ring-stress", kDiagnoseRingStress},
     {"frames", kDiagnoseFrames},
     {"gpu", kDiagnoseGpuPasses},

@@ -23,7 +23,7 @@ graphics API while the game runs, and the app holds no library that is not the g
 | Mac host (`host_window_apple.mm`, `audio_device_apple.mm`, `display_clock_apple.mm`, `setup_apple.mm`) | The window (a `CAMetalLayer` view, full screen, the pointer hidden over the picture), keyboard and mouse, controllers with motion, touch surface and rumble, sound, the vsync clock, the file panel, and the first start's setup from the player's disc image. |
 | Apple silicon | The universal app's Apple silicon half is compiled on an Intel Mac. It has not been run: no such Mac has been at hand. What an Apple GPU does differently is written from Apple's documentation (shared-storage textures, MetalFX's temporal scaler, the sampler limit). |
 | iPhone and iPad app | Not started (a UIKit host, touch controls, the device's motion). It needs Xcode's iPhone SDK. |
-| Mods, ray tracing | Not on Apple yet: the MODS page says so, and mods' programs are not compiled. |
+| Mods, ray tracing | Not on Apple yet: the MODS page says so. A mod's programs are made on the player's machine (Shaders) but have not been run on a Mac. |
 
 The Vulkan renderer on MoltenVK with the SDL host (`nebula` in the build tree) is kept as a development aid only: the
 picture the Metal renderer's is compared against. It is not in the app.
@@ -216,6 +216,12 @@ A draw's bindings, the same numbers in the vertex and the fragment function (`sh
 | buffer 10 to 15 | vertex buffers | the vertex streams (`gpu::StreamSlot`) |
 
 `platform/apple/tools/msl_check.mm` compiles every stage with each of the machine's GPUs.
+
+A mod's programs (its materials' HLSL, as the .luma carries it for every renderer) are made on the player's machine
+when the mod is converted, as on the other renderers: the Vulkan renderer's HLSL front end (`shader_compile_vk.cpp`
+`compile_mod_stage`, linked into the Metal renderer with glslang) makes the SPIR-V, `spirv_to_msl` turns it with the
+options of the game's own programs (the pixel programs in both forms), and the MSL text is stored. `function_of`
+compiles it when a draw first needs it. Its revision is the front end's and SPIRV-Cross's (`mod_shader_compiler_revision`).
 
 With Apple's Metal compiler on the build machine (`xcrun metal`: Xcode), `platform/apple/tools/compile_metallib.py`
 compiles the texts there: forty-eight programs to a source file, each in a namespace of its own (their types share

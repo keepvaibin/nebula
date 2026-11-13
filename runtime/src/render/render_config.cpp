@@ -104,6 +104,16 @@ static float parse_float(const char* v, float def) {
         ? value : def;
 }
 
+// A time in milliseconds: any finite number, at least 0.
+static float parse_milliseconds(const char* v, float def) {
+    std::istringstream input(v);
+    input.imbue(std::locale::classic());
+    float value = 0.0f;
+    if (!(input >> value)) return def;
+    input >> std::ws;
+    return input.eof() && std::isfinite(value) && value >= 0.0f ? value : def;
+}
+
 static bool parse_bool(const char* v, bool def) {
     if (std::strcmp(v, "1") == 0 || std::strcmp(v, "true") == 0) return true;
     if (std::strcmp(v, "0") == 0 || std::strcmp(v, "false") == 0) return false;
@@ -111,6 +121,20 @@ static bool parse_bool(const char* v, bool def) {
 }
 
 // A choice given by index or by name (case-insensitive): names[i] selects i.
+// config.ini's names of the presets and of a part's levels.
+constexpr const char* kRtPresetNames[] = {"medium", "high", "low", "reference", "custom"};
+constexpr const char* kRtLevelNames[] = {"off", "low", "medium", "high"};
+
+// config.ini's names of ray tracing's parts, in RtPart's order.
+constexpr const char* kRtPartKeys[] = {"rt_sun", "rt_lights", "rt_indirect", "rt_reflect", "rt_transmit", "rt_volume"};
+static_assert(std::size(kRtPartKeys) == static_cast<std::size_t>(RtPart::Count));
+static int rt_part_key(const char* key) {
+    for (std::size_t i = 0; i < std::size(kRtPartKeys); ++i) {
+        if (std::strcmp(key, kRtPartKeys[i]) == 0) return static_cast<int>(i);
+    }
+    return -1;
+}
+
 template <std::size_t N>
 static unsigned parse_choice(const char* v, const char* const (&names)[N], unsigned def) {
     if (v == nullptr || *v == '\0') return def;
@@ -179,15 +203,22 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     }
     else if (std::strcmp(key, "ray_tracing_enabled") == 0) cfg.ray_tracing_enabled = parse_bool(val, false);
     else if (std::strcmp(key, "rt_quality") == 0) {
-        static constexpr const char* kNames[] = {"medium", "high", "low"};
+        static constexpr const char* kNames[] = {"medium", "high", "low", "reference", "custom"};
         cfg.rt_quality = parse_choice(val, kNames, cfg.rt_quality);
     }
+    else if (const int part = rt_part_key(key); part >= 0) {
+        static constexpr const char* kLevels[] = {"off", "low", "medium", "high"};
+        cfg.rt_parts[static_cast<std::size_t>(part)] =
+            static_cast<std::uint8_t>(parse_choice(val, kLevels, cfg.rt_parts[static_cast<std::size_t>(part)]));
+    }
     else if (std::strcmp(key, "rt_lens_bloom") == 0) cfg.rt_lens_bloom = parse_bool(val, cfg.rt_lens_bloom);
-    else if (std::strcmp(key, "rt_sun_rays") == 0) cfg.rt_sun_rays = parse_bool(val, cfg.rt_sun_rays);
-    else if (std::strcmp(key, "rt_water") == 0) cfg.rt_water = parse_bool(val, cfg.rt_water);
-    else if (std::strcmp(key, "rt_shadow_quality") == 0) cfg.rt_shadow_quality = std::clamp(parse_uint(val, 0), 0u, 3u);
-    else if (std::strcmp(key, "rt_ao_enabled")  == 0) cfg.rt_ao_enabled       = parse_bool(val, false);
-    else if (std::strcmp(key, "rt_reflections") == 0) cfg.rt_reflections      = parse_bool(val, cfg.rt_reflections);
+    else if (std::strcmp(key, "rt_landing_shadow") == 0) cfg.rt_landing_shadow = parse_bool(val, cfg.rt_landing_shadow);
+    else if (std::strcmp(key, "rt_probe_ms") == 0) cfg.rt_probe_ms = parse_milliseconds(val, cfg.rt_probe_ms);
+    else if (std::strcmp(key, "rt_chosen") == 0) cfg.rt_chosen = parse_bool(val, cfg.rt_chosen);
+    else if (std::strcmp(key, "rt_light_style") == 0) {  // rt_style before the relight was the default: left behind
+        static constexpr const char* kNames[] = {"painted", "physical"};
+        cfg.rt_style = parse_choice(val, kNames, cfg.rt_style);
+    }
     else if (std::strcmp(key, "texture_packs") == 0) cfg.texture_packs = parse_bool(val, cfg.texture_packs);
     else if (std::strcmp(key, "texture_pack_preload") == 0) cfg.texture_pack_preload = parse_bool(val, cfg.texture_pack_preload);
     else if (std::strcmp(key, "texture_dump") == 0) cfg.texture_dump = parse_bool(val, cfg.texture_dump);
@@ -274,9 +305,13 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.gpu.back() = '\0';
     cfg.msaa_samples = std::bit_floor(std::clamp(cfg.msaa_samples, 1u, 8u));
     cfg.taa_enabled = false;
-    cfg.rt_shadow_quality = 0;
-    cfg.rt_quality = std::min(cfg.rt_quality, 2u);
-    cfg.rt_ao_enabled = false;
+    cfg.rt_quality = std::min(cfg.rt_quality, kRtPresetCustom);
+    cfg.rt_style = std::min(cfg.rt_style, 1u);
+    cfg.rt_probe_ms = cfg.rt_probe_ms > 0.0f ? std::min(cfg.rt_probe_ms, 1000.0f) : 0.0f;  // NaN too: not measured
+    for (std::uint8_t& part : cfg.rt_parts) {
+        part = static_cast<std::uint8_t>(std::min<unsigned>(part, 3u));
+    }
+    rt_apply_preset(cfg);
     // Ray tracing follows its setting in every build; Nebula Settings offers its row once it is finished
     // (rt_caps.h kRayTracingRowOffered).
 }
@@ -331,12 +366,39 @@ static std::filesystem::path config_path() {
 
 }  // namespace
 
-RenderConfig get_render_config() {
+namespace {
+// Bit 0: the tracer runs; bit 1: FSR 3 runs on the device.
+std::atomic<unsigned> s_tracing{0u};
+}  // namespace
+
+RenderConfig get_render_config_chosen() {
     s_lock.lock_shared();
     const RenderConfig copy = s_config;
     s_lock.unlock_shared();
     return copy;
 }
+
+RenderConfig get_render_config() {
+    RenderConfig copy = get_render_config_chosen();
+    const unsigned tracing = s_tracing.load(std::memory_order_relaxed);
+    if ((tracing & 1u) != 0u) {
+        copy.msaa_samples = 1u;
+#if !defined(NEBULA_GPU_METAL)
+        if ((tracing & 2u) != 0u && copy.upscaler <= 1u) {
+            // FSR 1's scales are the temporal modes' (1-5); 0, the output's size, is FSR 3's native anti-aliasing.
+            copy.temporal_quality = copy.upscaler == 1u ? copy.spatial_quality : 0u;
+            copy.upscaler = 2u;
+        }
+#endif
+    }
+    return copy;
+}
+
+void set_render_tracing(bool tracing, bool fsr3) noexcept {
+    s_tracing.store((tracing ? 1u : 0u) | (tracing && fsr3 ? 2u : 0u), std::memory_order_relaxed);
+}
+
+bool render_tracing() noexcept { return (s_tracing.load(std::memory_order_relaxed) & 1u) != 0u; }
 
 namespace {
 std::atomic<bool> s_frame_generation_running{false};
@@ -415,14 +477,6 @@ RenderFeatureStatus make_render_feature_status(
     return status;
 }
 
-bool rt_effect_on(const RenderConfig& cfg, RtEffect effect) noexcept {
-    const bool configured = effect == RtEffect::Reflections ? cfg.rt_reflections
-                            : effect == RtEffect::Water     ? cfg.rt_water
-                            : effect == RtEffect::SunRays   ? cfg.rt_sun_rays
-                                                            : cfg.rt_lens_bloom;
-    return configured;
-}
-
 namespace {
 std::atomic<bool> s_curved_surfaces_offered{false};
 }  // namespace
@@ -459,7 +513,7 @@ void set_render_feature_caps(const RenderFeatureCaps& caps) {
 }
 
 void load_render_config_from_file() {
-    RenderConfig cfg = get_render_config();
+    RenderConfig cfg = get_render_config_chosen();
     // A file without the key is the automatic choice.
     cfg.gpu.fill('\0');
 
@@ -495,7 +549,7 @@ bool reload_render_config_if_changed() {
     if (write_time == 0u || write_time == known) {
         return false;
     }
-    RenderConfig cfg = get_render_config();
+    RenderConfig cfg = get_render_config_chosen();
     FILE* f = galaxy::open_path(path, "r");
     if (f == nullptr) {
         return false;  // Being replaced; the next check reads it.
@@ -581,11 +635,18 @@ bool save_render_config_to_file() {
              << "texture_pack_preload=" << (cfg.texture_pack_preload ? 1u : 0u) << '\n'
              << "texture_dump=" << (cfg.texture_dump ? 1u : 0u) << '\n'
              << "texture_pack_budget_mb=" << cfg.texture_pack_budget_mb << '\n'
-             << "rt_quality=" << (cfg.rt_quality == 1u ? "high" : cfg.rt_quality == 2u ? "low" : "medium") << '\n'
-             << "rt_reflections=" << (cfg.rt_reflections ? 1u : 0u) << '\n'
+             << "rt_quality=" << kRtPresetNames[std::min(cfg.rt_quality, kRtPresetCustom)] << '\n'
+             << "rt_sun=" << kRtLevelNames[cfg.rt_parts[0]] << '\n'
+             << "rt_lights=" << kRtLevelNames[cfg.rt_parts[1]] << '\n'
+             << "rt_indirect=" << kRtLevelNames[cfg.rt_parts[2]] << '\n'
+             << "rt_reflect=" << kRtLevelNames[cfg.rt_parts[3]] << '\n'
+             << "rt_transmit=" << kRtLevelNames[cfg.rt_parts[4]] << '\n'
+             << "rt_volume=" << kRtLevelNames[cfg.rt_parts[5]] << '\n'
              << "rt_lens_bloom=" << (cfg.rt_lens_bloom ? 1u : 0u) << '\n'
-             << "rt_sun_rays=" << (cfg.rt_sun_rays ? 1u : 0u) << '\n'
-             << "rt_water=" << (cfg.rt_water ? 1u : 0u) << '\n'
+             << "rt_landing_shadow=" << (cfg.rt_landing_shadow ? 1u : 0u) << '\n'
+             << "rt_probe_ms=" << cfg.rt_probe_ms << '\n'
+             << "rt_chosen=" << (cfg.rt_chosen ? 1u : 0u) << '\n'
+             << "rt_light_style=" << (cfg.rt_style == 1u ? "physical" : "painted") << '\n'
              << "window_width=" << cfg.window_width << '\n'
              << "window_height=" << cfg.window_height << '\n'
              << "display_mode=" << cfg.display_mode << '\n'

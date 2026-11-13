@@ -5,15 +5,17 @@ using Microsoft.Win32;
 namespace Nebula
 {
     /// <summary>
-    /// NVIDIA DLSS and DLSS Frame Generation, installed on request from NVIDIA's
+    /// NVIDIA DLSS, DLSS Frame Generation and DLSS Ray Reconstruction, installed on request from NVIDIA's
     /// Streamline 2.14.1 release on GitHub (VendorPackage). Only the files the
-    /// runtime loads are read out of the release zip (36 MB of its 276 MB), and
+    /// runtime loads are read out of the release zip (58 MB of its 276 MB), and
     /// each must match its SHA-256 below. Nebula ships none of NVIDIA's files.
     /// </summary>
     internal static class DlssPackage
     {
-        // Streamline's interposer and plug-ins, NVIDIA's DLSS and DLSS Frame Generation libraries,
-        // Reflex (Frame Generation needs it) and the three licenses.
+        // Streamline's interposer and plug-ins, NVIDIA's DLSS, DLSS Frame Generation and DLSS Ray
+        // Reconstruction (the ray tracer's denoiser) libraries, Reflex (Frame Generation needs it) and the three
+        // licenses. An install made before Ray Reconstruction's two files reads as not installed; its download
+        // fetches only those.
         public static readonly VendorPackage Package = new VendorPackage(
             "NVIDIA DLSS", "NVIDIA's Streamline 2.14.1 release",
             "https://github.com/NVIDIA-RTX/Streamline/releases/download/v2.14.1/streamline-sdk-v2.14.1.zip", 275994000,
@@ -31,6 +33,8 @@ namespace Nebula
                 new VendorPackage.Part("bin/x64/sl.reflex.dll", "sl.reflex.dll", "0ce9725e3e03ea9e7f81d008b57f33ee365973d2e349131c8b1c3e3378fe2db0", 388736, 180983),
                 new VendorPackage.Part("bin/x64/sl.pcl.dll", "sl.pcl.dll", "f13d51cfa05f4cd514df2026049e2db8adf359221713170ad386fd499915b582", 360064, 167265),
                 new VendorPackage.Part("bin/x64/reflex.license.txt", "reflex.license.txt", "ebf83c07fb3b2939908c3795d887afde3161c89a28ba391724efc784ce1bdabe", 20504, 7617),
+                new VendorPackage.Part("bin/x64/sl.dlss_d.dll", "sl.dlss_d.dll", "026b9f4f9ea848f2f5aa0e2024fc6b1c885f57eea5d41078124dba14f873b86b", 437376, 198360),
+                new VendorPackage.Part("bin/x64/nvngx_dlssd.dll", "nvngx_dlssd.dll", "4bc7ea5fcb2f32cf86bc2cb072e8d2860914a0be511cbdcb2fc206c1d9d83b80", 48343664, 21565278),
             });
 
         public static long DownloadBytes { get { return Package.DownloadBytes; } }

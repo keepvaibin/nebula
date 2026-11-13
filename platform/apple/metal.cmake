@@ -40,8 +40,12 @@ file(GLOB nebula_apple_mtl_backend CONFIGURE_DEPENDS
     "${nebula_root}/runtime/src/render/mtl/*.mm" "${nebula_root}/runtime/src/render/mtl/*.cpp")
 # shader_msl.cpp is nebula_msl's (it needs SPIRV-Cross's headers).
 list(FILTER nebula_apple_mtl_backend EXCLUDE REGEX "/shader_msl\\.cpp$")
+# A mod's programs are made on the player's machine through the Vulkan renderer's HLSL front end, then SPIRV-Cross
+# (mtl/mod_shader_compile_mtl.cpp): that one source of render/vk comes along, with glslang.
 add_library(galaxy_render_mtl STATIC ${nebula_apple_mtl_sources} ${nebula_apple_mtl_backend}
+    "${nebula_root}/runtime/src/render/vk/shader_compile_vk.cpp"
     "${nebula_apple_utility_msl_dir}/utility_msl_data.h")
+target_link_libraries(galaxy_render_mtl PRIVATE nebula_shader_compiler)
 target_compile_features(galaxy_render_mtl PUBLIC cxx_std_20)
 # The game's version, from the main project's file (as platform/sdl reads it for its own targets).
 file(STRINGS "${nebula_root}/CMakeLists.txt" nebula_apple_project_line REGEX "^project\\(Nebula VERSION ")

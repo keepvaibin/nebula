@@ -1,0 +1,44 @@
+# Water surfaces (RT-MASTER-PLAN 13.3; the audit: agents/rt/census/water.tsv, tools/water_audit.py): a model's file
+# stem and a material (a trailing * matches names that begin so). Waterfalls, splashes and foam are not water: they
+# stay translucent sheets. Code-drawn water (OceanBowl, OceanRing, OceanSphere, WaterRoad, WhirlPool) is the game's
+# draw category, not this table.
+model	material
+astrobasea	SpringMat_v_x
+astrodomewell	zz_SpringMat_v_x
+bumpappearplanet	water1_v
+cocotwinalow	water_low_v
+cocotwinblow	water_v
+floaterlandplanetlow	water_upside_v
+floaterlandplanetwater	CxSeaMat_v_x
+floaterlandplanetwater	FxSeaMatBuckFace_v
+floaterlandplanetwater	GxCupMat
+floaterlandplanetwater	BxCupMatBackFace
+flowerplanet	Water
+flowerroadplanet	WaterMat_v_x
+forestbossplanet	WaterMat_v_x
+foresthomeplanet	WaterMat_v_x
+foresthomeplanet	SpringMat_v_x
+ghostshipcaveplanet	WaterBack_v
+ghostshipcaveplanet	WaterFace_v_x
+heavenlybeachplanetwater	CxSeaMat
+heavenlybeachplanetwater	FxSeaMatBuckFace
+heavenlybeachplanetwater	BxCupMatBackFace
+heavensdoormysteriousplanet	WaterMat_v_x
+honeyqueenplanet	WaterMat_v_x
+icewaterupdownparts	Mizu01
+lavamazecubeplanet	TopWaterMat_v
+miniskullsharkgalaxy	Water_v_x
+oceanjshapeplanet	Water00_v
+oceanringpipematinside	WRingInnerMat
+poihanarelayplanet	water_v
+pukupukugambolplanet	water_up_v_x
+reversekingdomplanet	WaterMat_v_x
+reversekingdomplanet	SpringMat_v_x
+submarinevolcanoplanetlow	Water
+teresaroomplanet	WaterFace
+twinfalllakeplanet	mizu_shita_v_x
+underseatunnelplanet	WaterBack_v
+underseatunnelplanet	WaterFace_v_x
+waterroadcaveplanet	stream_v_x
+watersphereobj	OutsideMat
+mirrorreflectiontwinfalllake	MirrorMat_v_x

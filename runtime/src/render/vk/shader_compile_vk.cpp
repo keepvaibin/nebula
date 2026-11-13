@@ -14,6 +14,8 @@
 #include <cctype>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
+#include <iterator>
 #include <map>
 #include <mutex>
 #include <optional>
@@ -34,6 +36,7 @@ constexpr RegisterBinding kDrawBindings[] = {
     // Set 1 the images and set 2 the samplers, as one array each over every texture and sampler (space1) or as a bound
     // table (program.hlsli).
     {"t0, space1", 1, 0},
+    {"t0, space2", 1, 0},  // the same images as Texture3D (program.hlsli gVolumes)
     {"s0, space1", 2, 0},
     {"t0", 1, 0},
     {"s0", 2, 0},
@@ -106,6 +109,7 @@ std::optional<std::uint32_t> semantic_location(std::string semantic, std::uint32
         if (name == "POSITION" && index == 1u) return 7u;
         if (name == "BEND" && index == 0u) return 7u;
         if (name == "BLENDINDICES" && index == 1u) return 8u;
+        if (name == "BLENDWEIGHT" && index == 0u) return 8u;  // the de-light gain (NEBULA_INPUT_GAIN): no site reads it
         if (name == "TEXCOORD") return 9u + index;
         return std::nullopt;
     }
@@ -285,6 +289,40 @@ std::string annotate(std::string_view hlsl, std::span<const RegisterBinding> bin
     }
     out.append(hlsl.substr(copied));
     return out;
+}
+
+std::vector<std::uint32_t> compile_mod_stage(const std::string& source, const std::filesystem::path& includes,
+                                             bool pixel, const std::vector<const char*>& defines, std::string& problem,
+                                             bool bound_tables) {
+    std::string text = source;
+    std::vector<std::string> included;
+    for (std::size_t at = text.find("#include \""); at != std::string::npos; at = text.find("#include \"", at)) {
+        const std::size_t open = at + 10u;
+        const std::size_t close = text.find('"', open);
+        if (close == std::string::npos) {
+            problem = "a program's include has no end";
+            return {};
+        }
+        const std::string name = text.substr(open, close - open);
+        std::string body;
+        if (std::find(included.begin(), included.end(), name) == included.end()) {
+            std::ifstream in(includes / name, std::ios::binary);
+            if (!in) {
+                problem = name + " is missing";
+                return {};
+            }
+            body.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+            included.push_back(name);
+        }
+        text.replace(at, close + 1u - at, body);
+    }
+    std::string head;
+    for (const char* define : defines) {
+        head += std::string("#define ") + define + " 1\n";
+    }
+    head += pixel ? "#define program_ps main\n" : "#define program_vs main\n";
+    return compile_hlsl(annotate(head + text, draw_bindings()), pixel ? ShaderStage::Fragment : ShaderStage::Vertex,
+                        "main", {}, problem, {.bound_tables = bound_tables});
 }
 
 std::vector<std::uint32_t> compile_hlsl(std::string_view hlsl, ShaderStage stage, const char* entry,

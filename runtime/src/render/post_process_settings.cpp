@@ -69,6 +69,51 @@ void ten_bit_to_rgba8(const std::uint8_t* words, std::uint8_t* rgba, unsigned wi
     }
 }
 
+void half4_to_ten_bit(const std::uint8_t* halves, std::uint8_t* words, unsigned width, unsigned height,
+                      unsigned half_pitch, unsigned word_pitch) noexcept {
+    // IEEE 754 binary16 to float: subnormals, infinities and NaN (NaN reads as 0 below) kept.
+    const auto to_float = [](std::uint16_t h) {
+        const std::uint32_t sign = static_cast<std::uint32_t>(h & 0x8000u) << 16u;
+        std::uint32_t exponent = (h >> 10u) & 31u;
+        std::uint32_t mantissa = h & 1023u;
+        std::uint32_t bits = 0u;
+        if (exponent == 31u) {
+            bits = sign | 0x7F800000u | mantissa << 13u;
+        } else if (exponent != 0u) {
+            bits = sign | (exponent + 112u) << 23u | mantissa << 13u;
+        } else if (mantissa != 0u) {
+            exponent = 113u;
+            while ((mantissa & 1024u) == 0u) {
+                mantissa <<= 1u;
+                --exponent;
+            }
+            bits = sign | exponent << 23u | (mantissa & 1023u) << 13u;
+        } else {
+            bits = sign;
+        }
+        return std::bit_cast<float>(bits);
+    };
+    const auto quantise = [](float v, float levels) {
+        return static_cast<std::uint32_t>(std::clamp(v, 0.0f, 1.0f) * levels + 0.5f);
+    };
+    for (unsigned y = 0u; y < height; ++y) {
+        const std::uint8_t* from = halves + static_cast<std::size_t>(y) * half_pitch;
+        std::uint8_t* to = words + static_cast<std::size_t>(y) * word_pitch;
+        for (unsigned x = 0u; x < width; ++x) {
+            std::uint16_t h[4];
+            std::memcpy(h, from + x * 8u, 8u);
+            float v[4];
+            for (unsigned c = 0u; c < 4u; ++c) {
+                const float f = to_float(h[c]);
+                v[c] = f == f ? f : 0.0f;
+            }
+            const std::uint32_t word = quantise(v[0], 1023.0f) | quantise(v[1], 1023.0f) << 10u |
+                                       quantise(v[2], 1023.0f) << 20u | quantise(v[3], 3.0f) << 30u;
+            std::memcpy(to + x * 4u, &word, 4u);
+        }
+    }
+}
+
 void set_fsr_easu_constants(PostConstants& c, float in_w, float in_h, float out_w, float out_h) noexcept {
     const auto bits = [](float value) { return std::bit_cast<std::uint32_t>(value); };
     c.con0[0] = bits(in_w / out_w);

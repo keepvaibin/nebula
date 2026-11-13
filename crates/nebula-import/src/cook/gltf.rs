@@ -3,10 +3,11 @@
 //! material (the base colour texture, then `extras.nebula.textures`), skins and node animation. Lengths are metres in glTF: one metre is 100 of the game's units (`UNITS_PER_METRE`, models and collision alike). A glTF triangle winds counter-clockwise;
 //! the game's wind clockwise (measured on Kuribo, Coin and Mario: 650 to 2, 268 to 0, 4514 to 363).
 
-use super::clip::{ClipIr, Target, Track, KIND_COLORS, KIND_JOINTS, KIND_PATTERN, KIND_TEXTURE_MATRICES, STEP};
-use super::model_ir::{CoordIr, CoordMatrixIr};
-use super::model_ir::{important_joints, plain_material, plain_texture, ArraysIr, Corner, GroupIr, JointIr, LitIr, ModelIr, ShapeIr, ATTR_COLOR0, ATTR_MATRIX, ATTR_NORMAL, NONE};
-use super::model_ir::{ATTR_NBT, ATTR_NBT_THREE, LIT_BASE, LIT_BLEND, LIT_DOUBLE_SIDED, LIT_MASK, LIT_NORMAL, LIT_UNLIT};
+use super::clip::{ClipIr, Target, Track, KIND_COLORS, KIND_JOINTS, KIND_PATTERN, KIND_REGISTERS, KIND_TEXTURE_MATRICES, STEP};
+use super::model_ir::{CoordIr, CoordMatrixIr, MaterialIr};
+use super::model_ir::{important_joints, plain_material, plain_texture, ArraysIr, Corner, GroupIr, JointIr, PbrMaterial, ModelIr, ShapeIr, ATTR_COLOR0, ATTR_MATRIX, ATTR_NORMAL, NONE};
+use super::model_ir::{ATTR_NBT, ATTR_NBT_THREE, PBR_BASE, PBR_BLEND, PBR_DOUBLE_SIDED, PBR_EMISSIVE, PBR_MASK, PBR_NORMAL, PBR_UNLIT};
+use super::model_ir::{PbrShading, SurfaceIr, PBR_METAL_ROUGH, PBR_OCCLUSION};
 use super::refuse::{invalid, note, refuse, OrInvalid};
 use anyhow::{bail, Context, Result};
 use serde_json::Value;
@@ -267,8 +268,15 @@ impl Document {
 }
 
 /// The extensions a file can require and still be read as made: anything else would cook into something it isn't.
-const EXTENSIONS_READ: [&str; 5] =
-    ["KHR_texture_transform", "KHR_animation_pointer", "KHR_mesh_quantization", "KHR_materials_emissive_strength", "KHR_materials_unlit"];
+const EXTENSIONS_READ: [&str; 7] = [
+    "KHR_texture_transform",
+    "KHR_animation_pointer",
+    "KHR_mesh_quantization",
+    "KHR_materials_emissive_strength",
+    "KHR_materials_unlit",
+    "KHR_materials_ior",
+    "KHR_materials_transmission",
+];
 
 fn required_extensions(root: &Value) -> Result<()> {
     for name in root["extensionsRequired"].as_array().map(Vec::as_slice).unwrap_or_default() {
@@ -695,21 +703,34 @@ struct SourceMaterial {
     /// Its base colour texture's KHR_texture_transform, still or animated: scale x, y, rotation, offset x, y.
     transform: Option<[f32; 5]>,
     /// Its lit part (materials.md): the record with no maps yet, and each map as the file names it.
-    lit: LitIr,
-    lit_maps: [Option<LitMap>; 5],
+    lit: PbrMaterial,
+    pbr_maps: [Option<PbrMap>; 5],
+    /// Its glow as the raster draws it (MOD-MATERIALS-FC.md 1: one more stage, previous + emissive texture x constant
+    /// 1): the emissive factor x strength, sRGB-encoded and held to 1, and the emissive map's image and coordinate set.
+    /// None when the material is unlit (KHR_materials_unlit shows its base colour alone) or its factor is black.
+    glow: Option<Glow>,
+    /// Its hand-written shader (plan 3.4; surface_shader.rs): the source, its values here, each texture's image.
+    shader: Option<(super::surface_shader::Source, super::surface_shader::Use, Vec<usize>)>,
+}
+
+/// A glTF material's glow on the raster (SourceMaterial glow): constant colour 1, and the emissive map (image, set).
+#[derive(Clone, Copy)]
+struct Glow {
+    constant: [u8; 4],
+    map: Option<(usize, u8)>,
 }
 
 /// A map of a lit material as the file names it: its image, its coordinate set, and a KHR_texture_transform to bake
 /// into that set's coordinates (every map but the base colour's, whose transform is the material's texture matrix 0).
 #[derive(Clone, Copy, Debug)]
-struct LitMap {
+struct PbrMap {
     image: usize,
     coord: u64,
     bake: Option<[f32; 5]>,
 }
 
-/// The maps of a glTF material, in NebulaModelLit's order: where each is, and its name for a refusal.
-const LIT_MAPS: [(&str, &str); 5] = [
+/// The maps of a glTF material, in PbrMaterial's order (PBR_BASE ...): where each is, and its name for a refusal.
+const PBR_MAPS: [(&str, &str); 5] = [
     ("pbrMetallicRoughness", "baseColorTexture"),
     ("pbrMetallicRoughness", "metallicRoughnessTexture"),
     ("", "normalTexture"),
@@ -718,7 +739,7 @@ const LIT_MAPS: [(&str, &str); 5] = [
 ];
 
 /// A glTF material's lit part (materials.md): its factors, clamped where glTF bounds them (a Note each), and its maps.
-fn lit_of(root: &Value, material: &Value, number: usize, name: &str) -> Result<(LitIr, [Option<LitMap>; 5])> {
+fn pbr_of(root: &Value, material: &Value, number: usize, name: &str) -> Result<(PbrMaterial, [Option<PbrMap>; 5])> {
     let pbr = &material["pbrMetallicRoughness"];
     let clamp = |factor: &str, value: f32, low: f32, high: f32| -> f32 {
         if value.is_nan() || value < low || value > high {
@@ -730,31 +751,40 @@ fn lit_of(root: &Value, material: &Value, number: usize, name: &str) -> Result<(
     let emissive = numbers(&material["emissiveFactor"], [0.0f32; 3]);
     let strength = material["extensions"]["KHR_materials_emissive_strength"]["emissiveStrength"].as_f64().unwrap_or(1.0) as f32;
     let strength = clamp("emissiveStrength", strength, 0.0, f32::MAX);
-    let mut lit = LitIr {
+    let mut lit = PbrMaterial {
         base_color: base.map(|v| clamp("baseColorFactor", v, 0.0, 1.0)),
         emissive: emissive.map(|v| clamp("emissiveFactor", v, 0.0, 1.0) * strength),
         metal: clamp("metallicFactor", pbr["metallicFactor"].as_f64().unwrap_or(1.0) as f32, 0.0, 1.0),
         roughness: clamp("roughnessFactor", pbr["roughnessFactor"].as_f64().unwrap_or(1.0) as f32, 0.0, 1.0),
         normal_scale: material["normalTexture"]["scale"].as_f64().unwrap_or(1.0) as f32,
         occlusion_strength: clamp("occlusionTexture.strength", material["occlusionTexture"]["strength"].as_f64().unwrap_or(1.0) as f32, 0.0, 1.0),
-        ..LitIr::default()
+        // KHR_materials_ior: 0 is its "no refraction" (a surface with no inside); glTF bounds it at 1 otherwise.
+        ior: match material["extensions"]["KHR_materials_ior"]["ior"].as_f64() {
+            Some(0.0) => 1.0,
+            Some(v) => clamp("ior", v as f32, 1.0, 3.0),
+            None => 1.5,
+        },
+        transmission: material["extensions"]["KHR_materials_transmission"]
+            .is_object()
+            .then(|| clamp("transmissionFactor", material["extensions"]["KHR_materials_transmission"]["transmissionFactor"].as_f64().unwrap_or(0.0) as f32, 0.0, 1.0)),
+        ..PbrMaterial::default()
     };
     match material["alphaMode"].as_str() {
         Some("MASK") => {
-            lit.alpha_mode = LIT_MASK;
+            lit.alpha_mode = PBR_MASK;
             lit.alpha_cutoff = clamp("alphaCutoff", material["alphaCutoff"].as_f64().unwrap_or(0.5) as f32, 0.0, f32::MAX);
         }
-        Some("BLEND") => lit.alpha_mode = LIT_BLEND,
+        Some("BLEND") => lit.alpha_mode = PBR_BLEND,
         _ => {}
     }
     if material["doubleSided"].as_bool() == Some(true) {
-        lit.flags |= LIT_DOUBLE_SIDED;
+        lit.flags |= PBR_DOUBLE_SIDED;
     }
     if material["extensions"]["KHR_materials_unlit"].is_object() {
-        lit.flags |= LIT_UNLIT;
+        lit.flags |= PBR_UNLIT;
     }
-    let mut maps: [Option<LitMap>; 5] = [None; 5];
-    for (k, (group, map)) in LIT_MAPS.iter().enumerate() {
+    let mut maps: [Option<PbrMap>; 5] = [None; 5];
+    for (k, (group, map)) in PBR_MAPS.iter().enumerate() {
         let info = if group.is_empty() { &material[*map] } else { &material[*group][*map] };
         if info.is_null() {
             continue;
@@ -770,22 +800,22 @@ fn lit_of(root: &Value, material: &Value, number: usize, name: &str) -> Result<(
         let mut bake = None;
         if transform.is_object() {
             coord = transform["texCoord"].as_u64().unwrap_or(coord);
-            if k != LIT_BASE {
+            if k != PBR_BASE {
                 let [sx, sy]: [f32; 2] = numbers(&transform["scale"], [1.0; 2]);
                 let [ox, oy]: [f32; 2] = numbers(&transform["offset"], [0.0; 2]);
                 bake = Some([sx, sy, transform["rotation"].as_f64().unwrap_or(0.0) as f32, ox, oy]);
                 note("Cook.Material.TextureTransform", &[("material", name.to_string()), ("map", map.to_string())]);
             }
         }
-        maps[k] = Some(LitMap { image: image as usize, coord, bake });
+        maps[k] = Some(PbrMap { image: image as usize, coord, bake });
     }
     // A transform is baked into a coordinate set's numbers: no other map of the material may read that set.
     let mut sets: Vec<u64> = material["extras"]["nebula"]["textures"].as_array().map(Vec::as_slice).unwrap_or_default().iter().map(|l| l["texCoord"].as_u64().unwrap_or(0)).collect();
     sets.extend(maps.iter().flatten().map(|m| m.coord));
     for (k, m) in maps.iter().enumerate() {
-        if let Some(LitMap { coord, bake: Some(_), .. }) = m {
+        if let Some(PbrMap { coord, bake: Some(_), .. }) = m {
             if sets.iter().filter(|s| *s == coord).count() > 1 {
-                return Err(refuse("Cook.Material.TransformShared", &[("material", name.to_string()), ("map", LIT_MAPS[k].1.to_string()), ("set", coord.to_string())]));
+                return Err(refuse("Cook.Material.TransformShared", &[("material", name.to_string()), ("map", PBR_MAPS[k].1.to_string()), ("set", coord.to_string())]));
             }
         }
     }
@@ -1033,11 +1063,93 @@ fn decompose(m: &Matrix) -> Trs {
     Trs { translation: [m[12], m[13], m[14]], rotation: q.map(|v| (v / n) as f32), scale }
 }
 
-/// glTF's linear colour (0 to 1) as the game's 8-bit vertex colours hold it: sRGB-encoded, as the game's own art.
+/// The images and sets the lit template samples (MaterialIr pbr): metal-roughness, then occlusion unless it is the same
+/// image through the same set.
+fn pbr_light_maps(maps: &[Option<PbrMap>; 5]) -> Vec<(usize, u64)> {
+    let mut out: Vec<(usize, u64)> = Vec::new();
+    for k in [PBR_METAL_ROUGH, PBR_OCCLUSION] {
+        if let Some(m) = maps[k] {
+            if !out.contains(&(m.image, m.coord)) {
+                out.push((m.image, m.coord));
+            }
+        }
+    }
+    out
+}
+
+/// The material's colour places its stages read (surface_shader::places): registers 1 to 3 (places 0 to 2) by a
+/// stage's inputs or outputs, constant colours 0 to 3 (places 3 to 6) by a stage that takes its constant.
+fn places_used(made: &MaterialIr) -> [bool; super::surface_shader::PLACES] {
+    let mut used = [false; super::surface_shader::PLACES];
+    for s in &made.stages[..(made.pixel_stage_count as usize).min(made.stages.len())] {
+        // Colour inputs 2 to 7 are registers 1 to 3 (colour, alpha); alpha inputs 1 to 3 the same.
+        for &c in &s.color_in {
+            if (2..=7).contains(&c) {
+                used[usize::from((c - 2) / 2)] = true;
+            }
+        }
+        for &a in &s.alpha_in {
+            if (1..=3).contains(&a) {
+                used[usize::from(a - 1)] = true;
+            }
+        }
+        for out in [s.color_out, s.alpha_out] {
+            if (1..=3).contains(&out) {
+                used[usize::from(out - 1)] = true;
+            }
+        }
+        if s.color_in.contains(&14) {
+            match s.color_constant {
+                0x0C..=0x0F => used[3 + usize::from(s.color_constant - 0x0C)] = true,
+                0x10..=0x1F => used[3 + usize::from((s.color_constant - 0x10) % 4)] = true,
+                _ => {}
+            }
+        }
+        if s.alpha_in.contains(&6) && (0x10..=0x1F).contains(&s.alpha_constant) {
+            used[3 + usize::from((s.alpha_constant - 0x10) % 4)] = true;
+        }
+    }
+    used
+}
+
+/// A map no plain stage reads (a glow's, a normal map): a slot of its own after the material's (map n through coordinate
+/// n), the first one in place of a material's "no texture".
+fn own_slot(made: &mut MaterialIr, texture: u32, uv: u8) -> u8 {
+    if made.coords.is_empty() && made.textures.iter().all(|&t| t == NONE) {
+        made.textures.clear();
+        made.coordinate_maps.clear();
+    }
+    debug_assert_eq!(made.textures.len(), made.coords.len());
+    let slot = made.textures.len() as u8;
+    made.textures.push(texture);
+    made.coords.push(CoordIr { kind: 1, source: 4 + uv, matrix: NONE });
+    made.coordinate_maps.push(slot);
+    slot
+}
+
+/// glTF's linear colour (0 to 1) sRGB-encoded (0 to 1), as the game's own art and its colour registers hold colours.
+fn srgb(linear: f32) -> f32 {
+    let c = if linear.is_nan() { 0.0 } else { linear.clamp(0.0, 1.0) };
+    // White stays exactly white (1.055 - 0.055 is 0.99999994 in f32: an animated 1 would be 254.99998, not 255).
+    if c >= 1.0 {
+        1.0
+    } else if c <= 0.003_130_8 {
+        c * 12.92
+    } else {
+        1.055 * c.powf(1.0 / 2.4) - 0.055
+    }
+}
+
+/// glTF's linear colour as an 8-bit colour of the game (vertex colours, material colours, constants): sRGB-encoded.
 fn srgb_byte(linear: f32) -> u8 {
-    let c = linear.clamp(0.0, 1.0);
-    let encoded = if c <= 0.003_130_8 { c * 12.92 } else { 1.055 * c.powf(1.0 / 2.4) - 0.055 };
-    (encoded * 255.0).round() as u8
+    (srgb(linear) * 255.0).round() as u8
+}
+
+/// A glTF colour factor (linear RGB, alpha a coverage) as the game's 8-bit colour: RGB sRGB-encoded, alpha as it is.
+/// A texel is sRGB and the stages multiply what they are given, so factor x texel is drawn as sRGB(factor) x texel,
+/// which is sRGB(factor x linear texel) for sRGB's power curve.
+fn colour_bytes(factor: [f32; 4]) -> [u8; 4] {
+    [srgb_byte(factor[0]), srgb_byte(factor[1]), srgb_byte(factor[2]), (factor[3].clamp(0.0, 1.0) * 255.0).round() as u8]
 }
 
 /// A primitive's triangles as vertex numbers, from its mode (glTF 2.0 3.7.2.1): triangles, a strip or a fan.
@@ -1308,7 +1420,21 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
         let image_of_texture = |t: u64| -> Result<usize> {
             root["textures"][t as usize]["source"].as_u64().map(|s| s as usize).or_invalid(|| format!("/textures/{t}/source"))
         };
-        let (lit, lit_maps) = lit_of(root, material, i, &material_name)?;
+        let (lit, pbr_maps) = pbr_of(root, material, i, &material_name)?;
+        // Its hand-written shader (contract materials 3.4): `extras.nebula.shader` names `assets/<name>.hlsl` of the mod
+        // the file is in; `params` and `textures` (an object, by the shader's names) are this material's.
+        let nebula = &material["extras"]["nebula"];
+        let shader = match &nebula["shader"] {
+            Value::Null => None,
+            Value::String(name) => {
+                let (file, json, hlsl) = super::surface_shader::find(folder, &material_name, name)?;
+                let source = super::surface_shader::read(name, &file, &json, &hlsl)?;
+                let used = super::surface_shader::use_of(&source, &material_name, nebula)?;
+                let images = used.textures.iter().map(|&t| image_of_texture(t)).collect::<Result<Vec<_>>>()?;
+                Some((source, used, images))
+            }
+            other => return Err(refuse("Cook.Shader.Name", &[("material", material_name.clone()), ("name", other.to_string())])),
+        };
         let image = match pbr["baseColorTexture"]["index"].as_u64() {
             Some(t) => Some(image_of_texture(t)?),
             None => None,
@@ -1332,22 +1458,35 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
             let index = layer["index"].as_u64().or_invalid(|| format!("/materials/{i}/extras/nebula/textures/{k}/index"))?;
             images.push((image_of_texture(index)?, layer["texCoord"].as_u64().unwrap_or(0)));
         }
+        let glowing = lit.flags & PBR_UNLIT == 0 && lit.emissive.iter().any(|&v| v > 0.0);
+        let glow_map = pbr_maps[PBR_EMISSIVE].filter(|_| glowing).map(|m| (m.image, m.coord));
+        let normal_slot = pbr_maps[PBR_NORMAL].is_some() && lit.flags & PBR_UNLIT == 0;
+        // The lit template's own maps (MaterialIr pbr): metal-roughness, and occlusion unless it is the same image
+        // through the same set (an ORM texture: one slot).
+        let light_maps: Vec<(usize, u64)> = if lit.flags & PBR_UNLIT == 0 { pbr_light_maps(&pbr_maps) } else { Vec::new() };
         // A program's inputs name coordinates in a byte past NEBULA_INPUT_COORD0, maps and coordinates in a byte.
-        if images.len() > MATERIAL_LAYERS || images.iter().any(|(_, uv)| *uv >= MATERIAL_LAYERS as u64) {
-            let count = images.len().max(images.iter().map(|(_, uv)| *uv as usize + 1).max().unwrap_or(0));
+        let layers = images.len() + usize::from(glow_map.is_some()) + usize::from(normal_slot) + light_maps.len();
+        if layers > MATERIAL_LAYERS || images.iter().chain(glow_map.as_ref()).chain(light_maps.iter()).any(|(_, uv)| *uv >= MATERIAL_LAYERS as u64) {
+            let count = layers.max(images.iter().chain(glow_map.as_ref()).chain(light_maps.iter()).map(|(_, uv)| *uv as usize + 1).max().unwrap_or(0));
             return Err(refuse("Cook.Model.Layers", &[("material", material_name), ("count", count.to_string()), ("max", MATERIAL_LAYERS.to_string())]));
         }
         let images = images.into_iter().map(|(image, uv)| (image, uv as u8)).collect();
+        let glow = glowing.then(|| {
+            let [r, g, b] = lit.emissive.map(srgb_byte);
+            Glow { constant: [r, g, b, 0xFF], map: glow_map.map(|(image, uv)| (image, uv as u8)) }
+        });
         materials.push(SourceMaterial {
             name: material_name,
-            color: factor.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8),
+            color: colour_bytes(factor),
+            glow,
             images,
             blend: material["alphaMode"].as_str() == Some("BLEND"),
             cutoff: (material["alphaMode"].as_str() == Some("MASK")).then(|| (material["alphaCutoff"].as_f64().unwrap_or(0.5).clamp(0.0, 1.0) * 255.0) as u8),
             two_sided: material["doubleSided"].as_bool().unwrap_or(false),
             transform,
             lit,
-            lit_maps,
+            pbr_maps,
+            shader,
         });
     }
     let default_material = materials.len();
@@ -1359,12 +1498,14 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
         cutoff: None,
         two_sided: false,
         transform: None,
-        lit: LitIr::default(),
-        lit_maps: [None; 5],
+        lit: PbrMaterial::default(),
+        pbr_maps: [None; 5],
+        glow: None,
+        shader: None,
     });
     // A lit record for each material when the file has any material (materials.md); a mesh with none has glTF's default.
     let has_materials = root["materials"].as_array().is_some_and(|m| !m.is_empty());
-    let mut lits: Vec<LitIr> = Vec::new();
+    let mut pbr: Vec<PbrMaterial> = Vec::new();
 
     let mut ir = ModelIr::default();
     let mut positions = Pool::<3>::new();
@@ -1374,6 +1515,8 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
     // A vertex's draw matrix: joints first (by joint number), then envelopes.
     let mut envelope_ids: BTreeMap<Vec<(u32, u32)>, u64> = BTreeMap::new();
     let mut first_of_material: BTreeMap<usize, u32> = BTreeMap::new();
+    // Materials a vertex-coloured mesh draws with: their base colour factor is constant colour 0, not material colour 0.
+    let mut vertex_coloured: BTreeSet<usize> = BTreeSet::new();
     let mut image_of: BTreeMap<usize, u32> = BTreeMap::new();
     // Each joint's own vertices at rest, in the model's space and the game's units.
     let mut joint_low = vec![[f32::MAX; 3]; joints.len()];
@@ -1468,12 +1611,12 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
                 a.keys().filter_map(|k| k.strip_prefix("TEXCOORD_")?.parse::<usize>().ok()).map(|k| k + 1).max().unwrap_or(0)
             });
             // Each lit map reads a coordinate set the mesh has (materials.md: Cook.Material.CoordSet).
-            for (k, m) in source.lit_maps.iter().enumerate() {
+            for (k, m) in source.pbr_maps.iter().enumerate() {
                 if let Some(m) = m {
                     if !attributes[format!("TEXCOORD_{}", m.coord)].is_u64() {
                         return Err(refuse(
                             "Cook.Material.CoordSet",
-                            &[("material", source.name.clone()), ("map", LIT_MAPS[k].1.to_string()), ("set", m.coord.to_string()), ("mesh", name.clone())],
+                            &[("material", source.name.clone()), ("map", PBR_MAPS[k].1.to_string()), ("set", m.coord.to_string()), ("mesh", name.clone())],
                         ));
                     }
                 }
@@ -1499,7 +1642,7 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
                 coordinate_present[usize::from(uv)] = true;
             }
             // A map's own transform, baked into the set it alone reads.
-            for m in source.lit_maps.iter().flatten() {
+            for m in source.pbr_maps.iter().flatten() {
                 if let Some(t) = &m.bake {
                     for uv in coordinate_values[m.coord as usize].chunks_exact_mut(2) {
                         let [u, v] = transformed_coordinate(t, [uv[0], uv[1]]);
@@ -1511,7 +1654,7 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
             // A normal-mapped material's tangents (materials.md): the file's TANGENT by vertex, or MikkTSpace's by
             // corner over the normal map's (baked) coordinates when it has none or its normals are made flat (glTF 2.0
             // then ignores the file's).
-            let tangents: Option<(Vec<f32>, bool)> = match &source.lit_maps[LIT_NORMAL] {
+            let tangents: Option<(Vec<f32>, bool)> = match &source.pbr_maps[PBR_NORMAL] {
                 None => None,
                 Some(map) => match attributes["TANGENT"].as_u64() {
                     Some(index) if !flat => Some((document.floats(index as usize, 4)?, false)),
@@ -1722,6 +1865,7 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
             // Vertex colours (glTF: base colour = factor x texture x COLOR_0): the channel takes the vertex's colour, and
             // a last stage multiplies by the factor, held in constant colour 0.
             if colour_values[0].is_some() {
+                vertex_coloured.insert(material);
                 made.channels[0].material_source = 1;
                 made.constants[0] = source.color;
                 made.material_color[0] = [0xFF; 4];
@@ -1735,6 +1879,88 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
                 last.alpha_constant = 28;
                 made.stages.push(last);
                 made.pixel_stage_count = made.stages.len() as u32;
+            }
+            // Its glow (glTF: + emissive factor x emissive texture), last and in no light: a stage adds constant 1 x the
+            // emissive map, or constant 1 alone, to what the stages before made; alpha stays theirs. The sum is taken
+            // on sRGB values as the game's stages take theirs; the hit record holds the glow unclamped and linear.
+            if let Some(Glow { constant, map }) = source.glow {
+                made.constants[1] = constant;
+                let mut glow = made.stages[0];
+                glow.coord = 255;
+                glow.map = 255;
+                glow.channel = 255;
+                glow.color_in = [14, 15, 15, 0];
+                glow.alpha_in = [7, 7, 7, 0];
+                glow.color_constant = 13;
+                glow.alpha_constant = 28;
+                if let Some((image, uv)) = map {
+                    let slot = own_slot(&mut made, texture_number(&document, &mut ir, &mut image_of, image)?, uv);
+                    glow.map = slot;
+                    glow.coord = slot;
+                    glow.color_in = [15, 8, 14, 0];
+                }
+                made.stages.push(glow);
+                made.pixel_stage_count = made.stages.len() as u32;
+            }
+            // Its normal map, which the lit form's pixel stage reads (MaterialIr normal_map): a mesh with tangents.
+            if let Some(map) = source.pbr_maps[PBR_NORMAL].filter(|_| tangents.is_some() && source.lit.flags & PBR_UNLIT == 0) {
+                let slot = own_slot(&mut made, texture_number(&document, &mut ir, &mut image_of, map.image)?, map.coord as u8);
+                made.normal_map = Some((slot, source.lit.normal_scale));
+            }
+            // Its light (plan 3.3; program_pbr.hlsli): metal and roughness by their factors and map, occlusion on the
+            // indirect light, the glow after it. An unlit material shows its base colour alone.
+            if source.lit.flags & PBR_UNLIT == 0 {
+                let mut slots: Vec<((usize, u64), u8)> = Vec::new();
+                for map in pbr_light_maps(&source.pbr_maps) {
+                    let slot = own_slot(&mut made, texture_number(&document, &mut ir, &mut image_of, map.0)?, map.1 as u8);
+                    slots.push((map, slot));
+                }
+                let slot_of = |m: Option<PbrMap>| m.and_then(|m| slots.iter().find(|(k, _)| *k == (m.image, m.coord)).map(|(_, s)| *s));
+                made.pbr = Some(PbrShading {
+                    metal: source.lit.metal,
+                    roughness: source.lit.roughness,
+                    metal_rough: slot_of(source.pbr_maps[PBR_METAL_ROUGH]),
+                    occlusion: slot_of(source.pbr_maps[PBR_OCCLUSION]).map(|s| (s, source.lit.occlusion_strength)),
+                    glow_last: source.glow.is_some(),
+                });
+            }
+            // Its hand-written shader (plan 3.4): each texture a slot of its own, each parameter a place of the material's
+            // colours the stages leave free, holding its value; the lit forms call its `surface` in place of the stages.
+            if let Some((shader, used, images)) = &source.shader {
+                if made.pbr.is_none() {
+                    return Err(refuse("Cook.Shader.Unlit", &[("material", source.name.clone()), ("shader", shader.name.clone())]));
+                }
+                let mut textures = Vec::new();
+                for ((_, name), &image) in shader.textures.iter().zip(images) {
+                    let slot = own_slot(&mut made, texture_number(&document, &mut ir, &mut image_of, image)?, 0);
+                    textures.push((name.clone(), slot));
+                }
+                let places = super::surface_shader::places(shader, &source.name, &used.values, places_used(&made))?;
+                let mut params = Vec::new();
+                for ((p, value), &place) in shader.params.iter().zip(&used.values).zip(&places) {
+                    let width = if p.four { 4 } else { 1 };
+                    for (k, &given) in value.iter().enumerate() {
+                        let v = if k < width { given } else { 0.0 };
+                        // Place 0 to 2 is register 1 to 3: registers[0] to [2] (NEBULA_ROW_REGISTER, Material::fillRow).
+                        if place < 3 {
+                            made.registers[usize::from(place)][k] = (v * 255.0).round() as i16;
+                        } else {
+                            made.constants[usize::from(place) - 3][k] = (v * 255.0).round().clamp(0.0, 255.0) as u8;
+                        }
+                    }
+                    params.push((p.name.clone(), p.four, place));
+                }
+                let emission = source.glow.as_ref().map_or([0.0; 3], |g| [0, 1, 2].map(|k| f32::from(g.constant[k]) / 255.0));
+                made.surface = Some(SurfaceIr {
+                    file: shader.file.clone(),
+                    code: shader.code.clone(),
+                    params,
+                    textures,
+                    uv: [0, 1].map(|k| coordinate_present.get(k).copied().unwrap_or(false)),
+                    reads: shader.reads,
+                    emission,
+                    ray: shader.ray.clone(),
+                });
             }
             // Its base texture's transform: texture matrix 0 on its first coordinates.
             if let Some(t) = source.transform {
@@ -1756,13 +1982,13 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
             ir.materials.push(made);
             if has_materials {
                 let mut lit = source.lit.clone();
-                for (k, m) in source.lit_maps.iter().enumerate() {
+                for (k, m) in source.pbr_maps.iter().enumerate() {
                     if let Some(m) = m {
                         lit.maps[k] = texture_number(&document, &mut ir, &mut image_of, m.image)?;
                         lit.coords[k] = m.coord as u8;
                     }
                 }
-                lits.push(lit);
+                pbr.push(lit);
             }
             meshes_of_joint[attached].push(shape);
             let mut attributes_used = ATTR_NORMAL | if blended { ATTR_MATRIX } else { 0 };
@@ -1797,7 +2023,7 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
         texture_number(&document, &mut ir, &mut image_of, image as usize)?;
     }
 
-    ir.lits = lits;
+    ir.pbr = pbr;
     ir.arrays = ArraysIr { normal_floats: 3, ..Default::default() };
     ir.arrays.positions = positions.values;
     ir.arrays.normals = normals.values;
@@ -1875,7 +2101,7 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
     for (i, animation) in root["animations"].as_array().map(Vec::as_slice).unwrap_or_default().iter().enumerate() {
         let name = animation["name"].as_str().map_or_else(|| format!("animation{i}"), str::to_string);
         let timing = Timing::of(&document, animation)?;
-        let of_materials = material_clips(&document, animation, &materials, &first_of_material, &image_of, &timing)?;
+        let of_materials = material_clips(&document, animation, &materials, &first_of_material, &vertex_coloured, &image_of, &timing)?;
         let moves_joints = animation["channels"].as_array().map(Vec::as_slice).unwrap_or_default().iter().any(|c| {
             c["target"]["node"].as_u64().is_some_and(|n| joint_of_node.contains_key(&(n as usize)))
                 && matches!(c["target"]["path"].as_str(), Some("translation" | "rotation" | "scale"))
@@ -1965,6 +2191,7 @@ fn animation_name(document: &Document, animation: &Value) -> String {
 fn clip_extension(kind: u8) -> &'static str {
     match kind {
         KIND_COLORS => "bpk",
+        KIND_REGISTERS => "brk",
         KIND_TEXTURE_MATRICES => "btk",
         KIND_PATTERN => "btp",
         _ => "bck",
@@ -1989,6 +2216,7 @@ fn material_clips(
     animation: &Value,
     materials: &[SourceMaterial],
     first_of_material: &BTreeMap<usize, u32>,
+    vertex_coloured: &BTreeSet<usize>,
     image_of: &BTreeMap<usize, u32>,
     timing: &Timing,
 ) -> Result<Vec<ClipIr>> {
@@ -2029,7 +2257,8 @@ fn material_clips(
             for frame in &timing.samples {
                 let value = curve.at(*frame as f32 / FRAMES_PER_SECOND);
                 for (k, channel) in channels.iter_mut().enumerate() {
-                    channel.push(value[k].clamp(0.0, 1.0) * 255.0);
+                    // As the still factor (colour_bytes): RGB sRGB-encoded, alpha as it is.
+                    channel.push(if k < 3 { srgb(value[k]) } else { value[k].clamp(0.0, 1.0) } * 255.0);
                 }
             }
             for channel in &channels {
@@ -2038,7 +2267,21 @@ fn material_clips(
             }
             c.targets.push(target(material, number));
         }
+        // A vertex-coloured mesh multiplies by the factor in constant colour 0 (its channel takes the vertex's colour), so
+        // the same curves play there too: a register animation's second set, constant 0.
+        let mut constants = clip(KIND_REGISTERS, 0);
+        for (e, (&material, _)) in colours.iter().enumerate() {
+            if vertex_coloured.contains(&material) {
+                constants.tracks.extend_from_slice(&c.tracks[e * 4..e * 4 + 4]);
+                constants.targets.push(Target { slot: 0, ..target(material, c.targets[e].material) });
+            }
+        }
+        constants.second_count = constants.targets.len() as u32;
+        constants.values = c.values.clone();
         out.push(c);
+        if constants.second_count > 0 {
+            out.push(constants);
+        }
     }
 
     if !moves.is_empty() {
@@ -2124,7 +2367,53 @@ pub fn to_files(bytes: &[u8], folder: Option<&Path>, stem: &str) -> Result<(Vec<
 pub fn to_files_for(bytes: &[u8], folder: Option<&Path>, stem: &str, game: Option<&GameModel>) -> Result<(Vec<u8>, ClipFiles, ModelFacts)> {
     let (ir, clips, facts) = to_ir_for(bytes, folder, game)?;
     let model = super::model_write::write(&ir, stem, &super::programs::written_or_unknown())?;
-    Ok((model, clips.iter().map(|(name, c)| (format!("{name}.{}", clip_extension(c.kind)), super::clip::write(c))).collect(), facts))
+    super::surface_shader::check_compile(&ir)?;
+    let mut files: ClipFiles = clips.iter().map(|(name, c)| (format!("{name}.{}", clip_extension(c.kind)), super::clip::write(c))).collect();
+    if let Some(table) = params_table(&ir)? {
+        files.push((format!("{stem}.params"), table));
+    }
+    if let Some(table) = ray_hit_table(&ir)? {
+        files.push((format!("{stem}.rayhit"), table));
+    }
+    Ok((model, files, facts))
+}
+
+/// `<model>.rayhit` (contract materials 3.4 layer 3; the tracer reads it): a row for each material with a surface
+/// shader: material (its name) and text (its ray-hit form, programs::ray_hit_form). None without one.
+pub fn ray_hit_table(ir: &ModelIr) -> Result<Option<Vec<u8>>> {
+    let mut rows: Vec<Value> = Vec::new();
+    let mut seen = BTreeSet::new();
+    for m in &ir.materials {
+        let Some(sf) = &m.surface else { continue };
+        if seen.insert(m.name.clone()) {
+            rows.push(serde_json::json!({ "material": m.name, "text": super::programs::ray_hit_form(sf) }));
+        }
+    }
+    if rows.is_empty() {
+        return Ok(None);
+    }
+    let json = serde_json::json!({ "columns": { "material": "string", "text": "string" }, "rows": rows });
+    Ok(Some(super::table::TableIr::from_json(json.to_string().as_bytes())?.to_ntbl()))
+}
+
+/// `<model>.params` (contract materials 3.4; content.model set_param reads it): a row for each parameter of each
+/// material with a surface shader: material (its name), param, register (its place, 0 to 6). None without one.
+pub fn params_table(ir: &ModelIr) -> Result<Option<Vec<u8>>> {
+    let mut rows: Vec<Value> = Vec::new();
+    let mut seen = BTreeSet::new();
+    for m in &ir.materials {
+        let Some(sf) = &m.surface else { continue };
+        for (param, _, place) in &sf.params {
+            if seen.insert((m.name.clone(), param.clone())) {
+                rows.push(serde_json::json!({ "material": m.name, "param": param, "register": place }));
+            }
+        }
+    }
+    if rows.is_empty() {
+        return Ok(None);
+    }
+    let json = serde_json::json!({ "columns": { "material": "string", "param": "string", "register": "int" }, "rows": rows });
+    Ok(Some(super::table::TableIr::from_json(json.to_string().as_bytes())?.to_ntbl()))
 }
 
 /// The hidden model of `game` (`<path>.model.json` holding `{"hide": true}`): `skeleton` (skeleton_gltf's) as the
@@ -2219,7 +2508,9 @@ pub fn to_clip_files(bytes: &[u8], folder: Option<&Path>, file: &str, game: &Gam
             }
         }
         let timing = Timing::of(&document, animation)?;
-        let of_materials = material_clips(&document, animation, &game_materials.materials, &game_materials.number, &game_materials.texture, &timing)?;
+        // The game model's materials: whether a mesh of one is vertex-coloured is the game file's, not this file's, so
+        // its colour plays on its colour register only (as before the vertex-coloured constant).
+        let of_materials = material_clips(&document, animation, &game_materials.materials, &game_materials.number, &BTreeSet::new(), &game_materials.texture, &timing)?;
         let moves_joints = animation["channels"]
             .as_array()
             .map(Vec::as_slice)
@@ -2265,8 +2556,10 @@ fn standing_material(name: String, images: Vec<(usize, u8)>, transform: Option<[
         cutoff: None,
         two_sided: false,
         transform,
-        lit: LitIr::default(),
-        lit_maps: [None; 5],
+        lit: PbrMaterial::default(),
+        pbr_maps: [None; 5],
+        glow: None,
+        shader: None,
     }
 }
 
@@ -2906,11 +3199,12 @@ mod tests {
         assert_eq!(kinds, [("Glow", KIND_COLORS), ("Scroll", KIND_TEXTURE_MATRICES), ("Blink", KIND_PATTERN)]);
         let glow = &clips[0].1;
         assert_eq!((glow.frames, glow.loop_mode, glow.tracks.len(), glow.targets[0].name.as_slice()), (60, 2, 4, b"Face".as_slice()));
-        // Red stays 255; green falls from 255 to half by the end.
+        // Red stays 255; green falls from 255 to linear half by the end, sRGB-encoded as the still factor is.
         assert_eq!((glow.tracks[0].count, glow.values[glow.tracks[0].at as usize]), (1, 255.0));
         let green = &glow.tracks[1];
         let last = green.at as usize + (green.count as usize - 1) * 3;
-        assert_eq!((glow.values[last], glow.values[last + 1]), (60.0, 127.5));
+        assert_eq!((glow.values[last], glow.values[last + 1]), (60.0, srgb(0.5) * 255.0));
+        assert!((glow.values[last + 1] - 187.5).abs() < 0.1, "{}", glow.values[last + 1]);
         let scroll = &clips[1].1;
         assert_eq!((scroll.loop_mode, scroll.tracks.len()), (0, 5));
         // Scale and turn stay as the material has them; the offset moves.
@@ -3150,20 +3444,22 @@ mod tests {
     }
 
     #[test]
-    fn the_metal_smooth_sphere_is_lit_metal() {
+    fn the_metal_smooth_sphere_is_metal_to_a_ray() {
         // The conformance model metal-smooth (materials contract): a 1 m sphere, metal 1, roughness 0.05.
         let source = include_bytes!("../../data/metal-smooth.gltf");
         let (ir, _, facts) = to_ir_for(source, None, None).unwrap();
         assert_eq!((facts.joints, ir.joints[0].translation), (1, [0.0, 50.0, 0.0]));
-        assert_eq!((ir.lits.len(), ir.lits[0].metal, ir.lits[0].roughness, ir.lits[0].base_color), (1, 1.0, 0.05, [0.95, 0.95, 0.95, 1.0]));
+        assert_eq!((ir.pbr.len(), ir.pbr[0].metal, ir.pbr[0].roughness, ir.pbr[0].base_color), (1, 1.0, 0.05, [0.95, 0.95, 0.95, 1.0]));
         // A metre across: every vertex 50 units from the joint, and the joint's bounds from 0 to 100 up.
         assert!(ir.arrays.positions.iter().all(|p| ((p[0] * p[0] + p[1] * p[1] + p[2] * p[2]).sqrt() - 50.0).abs() < 1e-3));
         assert!((ir.joints[0].min[1] - 0.0).abs() < 1e-3 && (ir.joints[0].max[1] - 100.0).abs() < 1e-3, "{:?} {:?}", ir.joints[0].min, ir.joints[0].max);
         let (model, _) = to_files(source, None, "metal-smooth").unwrap();
         let word = |at: usize| u32::from_le_bytes(model[at..at + 4].try_into().unwrap());
-        assert_ne!(word(12) & (1 << 6), 0, "HAS_LIT");
-        let at = word(29 * 4) as usize;
-        assert_eq!(f32::from_le_bytes(model[at + 28..at + 32].try_into().unwrap()), 1.0);
+        let float = |at: usize| f32::from_le_bytes(model[at..at + 4].try_into().unwrap());
+        // Its NebulaModelHit (hits_at, header word 28): class METAL, no stages, lit; roughness 0.05, metal 1, base 0.95.
+        let at = word(28 * 4) as usize;
+        assert_eq!((model[at], model[at + 1], model[at + 2]), (2, 0, 1));
+        assert_eq!((float(at + 4), float(at + 8), [float(at + 20), float(at + 24), float(at + 28)]), (0.05, 1.0, [0.95; 3]));
     }
 
     #[test]
@@ -3460,12 +3756,12 @@ mod tests {
     #[test]
     fn a_lit_material_keeps_every_factor_and_map() {
         let (ir, _, _) = cook(&lit_document(), None).unwrap();
-        assert_eq!(ir.lits.len(), ir.materials.len());
-        let lit = &ir.lits[0];
+        assert_eq!(ir.pbr.len(), ir.materials.len());
+        let lit = &ir.pbr[0];
         assert_eq!(lit.base_color, [1.0, 0.5, 0.25, 1.0]);
         assert_eq!(lit.emissive, [2.0, 1.0, 0.0]);
         assert_eq!((lit.metal, lit.roughness, lit.normal_scale, lit.occlusion_strength, lit.alpha_cutoff), (0.2, 0.6, 0.5, 0.7, 0.3));
-        assert_eq!((lit.alpha_mode, lit.flags), (LIT_MASK, LIT_DOUBLE_SIDED));
+        assert_eq!((lit.alpha_mode, lit.flags), (PBR_MASK, PBR_DOUBLE_SIDED));
         assert_eq!(lit.coords, [0, 1, 2, 0, 1]);
         // One texture per image, whichever maps read it.
         assert_eq!((lit.maps[0], lit.maps[1]), (lit.maps[3], lit.maps[4]));
@@ -3475,30 +3771,227 @@ mod tests {
         assert_eq!(numbers.len(), 3);
         assert!(numbers.iter().all(|n| (*n as usize) < ir.textures.len()), "{numbers:?} of {}", ir.textures.len());
 
-        // The model block: flag 6, then material_count records of 80 bytes at lits_at (nebula_model.h).
+        // What a ray reads of it (NebulaModelHit at hits_at, header word 28; MOD-MATERIALS-FC.md 2): the maps are white,
+        // so the factors stand; its glow outshines what light shows of its base, so it is emissive.
         let (model, _) = to_files(&serde_json::to_vec(&lit_document()).unwrap(), None, "Shell").unwrap();
         let word = |at: usize| u32::from_le_bytes(model[at..at + 4].try_into().unwrap());
         let float = |at: usize| f32::from_le_bytes(model[at..at + 4].try_into().unwrap());
-        assert_eq!(word(4), 5);
-        assert_ne!(word(12) & (1 << 6), 0);
-        let (count, at) = (word(28 * 4) as usize, word(29 * 4) as usize);
-        assert_eq!(count, word(12 * 4) as usize);
-        assert_eq!((count, at % 4), (1, 0));
-        assert_eq!([float(at), float(at + 4), float(at + 8), float(at + 12)], lit.base_color);
-        assert_eq!([float(at + 16), float(at + 20), float(at + 24)], lit.emissive);
-        assert_eq!([float(at + 28), float(at + 32), float(at + 36), float(at + 40), float(at + 44)], [0.2, 0.6, 0.5, 0.7, 0.3]);
-        assert_eq!([word(at + 48), word(at + 52), word(at + 56), word(at + 60), word(at + 64)], lit.maps);
-        assert_eq!(model[at + 68..at + 80], [0, 1, 2, 0, 1, LIT_MASK, LIT_DOUBLE_SIDED, 0, 0, 0, 0, 0]);
-        assert!(at + count * super::super::model_ir::LIT_BYTES <= model.len());
+        let floats = |at: usize| [float(at), float(at + 4), float(at + 8)];
+        assert_eq!(word(4), super::super::model_write::VERSION);
+        let at = word(28 * 4) as usize;
+        assert_eq!(at % 4, 0);
+        // Class EMISSIVE, no stages, lit + two-sided + alpha test.
+        assert_eq!((model[at], model[at + 1], model[at + 2]), (6, 0, 1 | 2 | 4));
+        assert_eq!([float(at + 4), float(at + 8), float(at + 12), float(at + 16)], [0.6, 0.2, 1.5, 0.0]);
+        assert_eq!((floats(at + 20), floats(at + 32)), ([1.0, 0.5, 0.25], [2.0, 1.0, 0.0]));
+        // No painted reflection: env_map 255, its tint 0 (white).
+        assert_eq!((model[at + 100], floats(at + 88)), (255, [0.0; 3]));
+        assert!(at + super::super::model_write::HIT_BYTES <= model.len());
 
-        // A material with nothing said is glTF's default; a file with no material has no lit table.
+        // A material with nothing said is glTF's default; a file with no material has no glTF materials.
         let (plain, _, _) = cook(&document_of(&triangle(1)), None).unwrap();
-        assert_eq!(plain.lits, [LitIr::default()]);
+        assert_eq!(plain.pbr, [PbrMaterial::default()]);
         let (none, _, _) = cook(&document_of(&many_triangles(1)), None).unwrap();
-        assert!(none.lits.is_empty());
-        let (model, _) = to_files(&many_triangles(1), None, "None").unwrap();
-        let word = |at: usize| u32::from_le_bytes(model[at..at + 4].try_into().unwrap());
-        assert_eq!((word(12) & (1 << 6), word(28 * 4), word(29 * 4)), (0, 0, 0));
+        assert!(none.pbr.is_empty());
+    }
+
+    #[test]
+    fn a_lit_material_is_drawn_by_the_pbr_template() {
+        // Plan 3.3 (J): the lit template (program_pbr.hlsli) lights the stages' base colour by metal and roughness, in
+        // every form, before the glow; its maps are slots of their own, an ORM texture one slot.
+        use super::super::programs::{generate, forms_of, Registers};
+        let (ir, _, _) = cook(&lit_document(), None).unwrap();
+        let m = &ir.materials[0];
+        assert_eq!(m.pbr, Some(PbrShading { metal: 0.2, roughness: 0.6, metal_rough: Some(3), occlusion: Some((3, 0.7)), glow_last: true }));
+        assert_eq!(super::super::model_write::pbr_slots(m), [3]);
+        let forms = forms_of("Shell", m, 0).unwrap();
+        assert!(forms.len() >= 2, "{forms:?}");
+        for form in &forms {
+            let t = generate(m, *form, false, &Registers::of(m)).unwrap();
+            let px = &t.pixel;
+            for wanted in ["#include \"program_pbr.hlsli\"", "pbr_begin(", "pbr_add_light(i.lit_light, 0u", "TRACED_LEVEL(pbr_level())",
+                           "ENV_FETCH(pbr_reflection(", "pbr_finish(prev.rgb", "pbr_metal *= pbr_mr.b", "pbr_ao = 1.0 + 0.7"] {
+                assert!(px.contains(wanted), "{form:?} lacks {wanted}:\n{px}");
+            }
+            // Not the game's enhanced finish: the template's own; and the light before the glow (stage 1).
+            assert!(!px.contains("enh_finish"), "{px}");
+            assert!(px.find("pbr_finish").unwrap() < px.find("NATIVE_STAGE(1,").unwrap(), "{px}");
+            assert!(px.find("NATIVE_STAGE(0,").unwrap() < px.find("pbr_finish").unwrap(), "{px}");
+            // The stages see the material colour unlit: the light is the template's.
+            assert!(px.contains("lit0.rgb = "), "{px}");
+            assert!(t.textures.contains(&3), "{:?}", t.textures);
+        }
+        // The plain form is the lit one: a mod's metal looks the same with any lighting setting.
+        let texts: Vec<String> = forms.iter().map(|f| generate(m, *f, false, &Registers::of(m)).unwrap().pixel).collect();
+        assert!(texts.windows(2).all(|w| w[0] == w[1]));
+
+        // No glow: the light after the last stage. Unlit: no template.
+        let mut black = lit_document();
+        black["materials"][0]["emissiveFactor"] = serde_json::json!([0.0, 0.0, 0.0]);
+        let (ir, _, _) = cook(&black, None).unwrap();
+        let m = &ir.materials[0];
+        assert_eq!(m.pbr.map(|p| p.glow_last), Some(false));
+        let px = generate(m, forms_of("Shell", m, 0).unwrap()[0], false, &Registers::of(m)).unwrap().pixel;
+        assert!(px.find("NATIVE_STAGE(0,").unwrap() < px.find("pbr_finish").unwrap(), "{px}");
+        let mut unlit = lit_document();
+        unlit["materials"][0]["extensions"]["KHR_materials_unlit"] = serde_json::json!({});
+        let (ir, _, _) = cook(&unlit, None).unwrap();
+        assert_eq!(ir.materials[0].pbr, None);
+
+        // Occlusion through another set: a slot of its own.
+        let mut own = lit_document();
+        own["materials"][0]["occlusionTexture"]["texCoord"] = 2.into();
+        let (ir, _, _) = cook(&own, None).unwrap();
+        let p = ir.materials[0].pbr.unwrap();
+        assert_eq!((p.metal_rough, p.occlusion.map(|o| o.0)), (Some(3), Some(4)));
+
+        // The conformance sphere: metal 1, roughness 0.05, no maps, no glow.
+        let (ir, _, _) = to_ir_for(include_bytes!("../../data/metal-smooth.gltf"), None, None).unwrap();
+        assert_eq!(ir.materials[0].pbr, Some(PbrShading { metal: 1.0, roughness: 0.05, metal_rough: None, occlusion: None, glow_last: false }));
+    }
+
+    /// The template's texts for a compile on both back ends (dxc DXIL and SPIR-V, agents/luma/j/bin/pbr-dxc.sh):
+    /// NEBULA_PBR_DUMP=<folder> cargo test -p nebula-import --lib -- --ignored dump_the_pbr_template
+    #[test]
+    #[ignore]
+    fn dump_the_pbr_template() {
+        use super::super::programs::{finish_text, forms_of, generate, Registers};
+        let Ok(dir) = std::env::var("NEBULA_PBR_DUMP") else { return };
+        let dir = std::path::PathBuf::from(dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut black = lit_document();
+        black["materials"][0]["emissiveFactor"] = serde_json::json!([0.0, 0.0, 0.0]);
+        let mut vertex_coloured = lit_document();
+        vertex_coloured["meshes"][0]["primitives"][0]["attributes"]["COLOR_0"] =
+            add_floats(&mut vertex_coloured, &[(3, "VEC4", vec![1.0; 12])])[0].into();
+        let sources: [(&str, Vec<u8>); 4] = [
+            ("lit", serde_json::to_vec(&lit_document()).unwrap()),
+            ("black", serde_json::to_vec(&black).unwrap()),
+            ("coloured", serde_json::to_vec(&vertex_coloured).unwrap()),
+            ("metal", include_bytes!("../../data/metal-smooth.gltf").to_vec()),
+        ];
+        for (name, source) in sources {
+            let (ir, _, _) = to_ir_for(&source, None, None).unwrap();
+            let m = &ir.materials[0];
+            for (k, form) in forms_of("Shell", m, 0).unwrap().into_iter().enumerate() {
+                for skinned in [false, true] {
+                    let mut t = generate(m, form, skinned, &Registers::of(m)).unwrap();
+                    finish_text(&m.name, form, &mut t);
+                    let stem = format!("{name}-{k}{}", if skinned { "s" } else { "" });
+                    std::fs::write(dir.join(format!("{stem}.vs.hlsl")), &t.vertex).unwrap();
+                    std::fs::write(dir.join(format!("{stem}.ps.hlsl")), &t.pixel).unwrap();
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_glow_is_one_more_stage_and_factors_are_srgb() {
+        // MOD-MATERIALS-FC.md 1: the raster's glTF material is stages; the glow adds emissive texture x constant 1.
+        let (ir, _, _) = cook(&lit_document(), None).unwrap();
+        let m = &ir.materials[0];
+        // Base colour factor (1, 0.5, 0.25) linear is sRGB (255, 188, 137); alpha is a coverage, kept.
+        assert_eq!(m.material_color[0], [255, 188, 137, 255]);
+        assert_eq!((m.stages.len(), m.pixel_stage_count), (2, 2));
+        let glow = &m.stages[1];
+        // previous + texture x constant; alpha stays the previous stage's; constant colour 1 (selector 13).
+        assert_eq!((glow.color_in, glow.alpha_in, glow.color_constant), ([15, 8, 14, 0], [7, 7, 7, 0], 13));
+        assert_eq!((glow.map, glow.coord, glow.channel), (1, 1, 255));
+        // The glow 0.5 x 4, 0.25 x 4, 0 is held to 1: (255, 255, 0).
+        assert_eq!(m.constants[1], [255, 255, 0, 255]);
+        // Its map is the emissive texture, read through the emissive map's own set (0 here), slot 1 = map 1 = coord 1;
+        // the normal map's slot is 2 (set 2); the lit template's metal-roughness and occlusion map (one image, one set)
+        // slot 3.
+        assert_eq!((m.textures.len(), m.textures[1], m.coordinate_maps.as_slice()), (4, ir.pbr[0].maps[PBR_EMISSIVE], [0, 1, 2, 3].as_slice()));
+        assert_eq!((m.coords[1].kind, m.coords[1].source, m.coords[1].matrix), (1, 4, NONE));
+        assert_eq!((m.textures[2], m.coords[2].source, m.normal_map), (ir.pbr[0].maps[PBR_NORMAL], 6, Some((2, 0.5))));
+
+        // A glow with no map adds constant 1 alone; a material with no base texture has the glow's map as map 0.
+        let mut factor_only = lit_document();
+        factor_only["materials"][0].as_object_mut().unwrap().remove("emissiveTexture");
+        let (ir, _, _) = cook(&factor_only, None).unwrap();
+        let glow = &ir.materials[0].stages[1];
+        assert_eq!((glow.color_in, glow.map, glow.coord), ([14, 15, 15, 0], 255, 255));
+        let mut no_base = lit_document();
+        no_base["materials"][0]["pbrMetallicRoughness"].as_object_mut().unwrap().remove("baseColorTexture");
+        no_base["materials"][0]["emissiveTexture"]["texCoord"] = 2.into();
+        let (ir, _, _) = cook(&no_base, None).unwrap();
+        let m = &ir.materials[0];
+        assert_eq!((m.stages[0].map, m.stages[1].map, m.stages[1].coord, m.textures.len()), (255, 0, 0, 3));
+        assert_eq!((m.coords.len(), m.coords[0].source, m.coordinate_maps.as_slice(), m.normal_map), (3, 6, [0, 1, 2].as_slice(), Some((1, 0.5))));
+
+        // No glow stage when the glow is black or the material unlit (it shows its base colour alone).
+        let mut black = lit_document();
+        black["materials"][0]["emissiveFactor"] = serde_json::json!([0.0, 0.0, 0.0]);
+        let mut unlit = lit_document();
+        unlit["materials"][0]["extensions"]["KHR_materials_unlit"] = serde_json::json!({});
+        // Black: the base, normal and metal-roughness maps; unlit: the base map alone, no normal map either.
+        for (document, textures, normal) in [(black, 3, Some((1, 0.5))), (unlit, 1, None)] {
+            let (ir, _, _) = cook(&document, None).unwrap();
+            let m = &ir.materials[0];
+            assert_eq!((m.stages.len(), m.textures.len(), m.normal_map), (1, textures, normal));
+        }
+        assert_eq!(colour_bytes([0.0, 0.003, 0.5, 0.5]), [0, 10, 188, 128]);
+    }
+
+    #[test]
+    fn a_normal_map_turns_the_lit_form_s_pixel_normal() {
+        use super::super::programs::{forms_of, generate, Input, Registers};
+        // MOD-MATERIALS-FC.md 1: inside generate(), behind the material's normal map; no second generator.
+        let (ir, _, _) = cook(&lit_document(), None).unwrap();
+        let m = &ir.materials[0];
+        let forms = forms_of("fixture", m, 0).unwrap();
+        let lit = forms.iter().find(|f| f.lit && f.replace == 0).copied().expect("a lit form");
+        let text = generate(m, lit, false, &Registers::of(m)).unwrap();
+        // The vertex turns the tangent and bitangent as the normal; the pixel turns its normal before enh_begin.
+        assert!(text.inputs.contains(&Input::Tangent) && text.inputs.contains(&Input::Binormal), "{:?}", text.inputs);
+        assert!(text.vertex.contains("o.lit_tan = lit_normal(p, v.tangent);") && text.vertex.contains("o.lit_bin = lit_normal(p, v.binormal);"));
+        assert!(text.vertex.contains("lit_tan : TEXCOORD") && text.pixel.contains("lit_bin : TEXCOORD"));
+        let turned = text.pixel.find("i.lit_nrm = (nm_t * nm.x + nm_b * nm.y) * 0.5 + nm_n * nm.z;").expect(&text.pixel);
+        assert!(turned < text.pixel.find("g_enh = enh_begin(").unwrap());
+        // It reads the normal map's own slot: the program's textures name slot 2.
+        assert!(text.textures.contains(&2), "{:?}", text.textures);
+        // A glTF material lights at the pixel in its plain form too (the material template, plan 3.3): every form reads it.
+        for form in forms.iter().filter(|f| !f.lit) {
+            let text = generate(m, *form, false, &Registers::of(m)).unwrap();
+            assert!(text.pixel.contains("lit_tan") && text.inputs.contains(&Input::Tangent));
+        }
+        // Its slot is marked as read, so its texture is bound.
+        let block = super::super::model_write::write(&ir, "fixture", &super::super::programs::Written::unknown()).unwrap();
+        let word = |at: usize| u32::from_le_bytes(block[at..at + 4].try_into().unwrap());
+        let at = word(24 * 4) as usize;
+        let slots = word(at + super::super::model_write::MATERIAL_BYTES - 16) as usize;
+        let slot = slots + 2 * super::super::model_write::SLOT_BYTES;
+        assert_eq!(block[slot + 6], super::super::model_write::SLOT_USES_MAP | super::super::model_write::SLOT_USES_COORD);
+    }
+
+    #[test]
+    fn a_vertex_coloured_mesh_s_animated_factor_is_its_constant_colour() {
+        // The factor of a vertex-coloured mesh is constant colour 0 (its channel takes the vertex's colour): an animated
+        // factor is a register animation's constant 0 too, by the same name, beside the material colour's.
+        let mut document = textured(serde_json::json!({ "offset": [0.0, 0.0] }));
+        let a = add_floats(&mut document, &[
+            (2, "SCALAR", vec![0.0, 1.0]),
+            (2, "VEC4", vec![1.0, 1.0, 1.0, 1.0, 1.0, 0.5, 0.0, 1.0]),
+            (3, "VEC4", vec![1.0; 12]),
+        ]);
+        document["meshes"][0]["primitives"][0]["attributes"]["COLOR_0"] = a[2].into();
+        document["animations"] = serde_json::json!([{ "name": "Glow", "samplers": [{ "input": a[0], "output": a[1] }],
+            "channels": [{ "sampler": 0, "target": { "path": "pointer",
+                "extensions": { "KHR_animation_pointer": { "pointer": "/materials/0/pbrMetallicRoughness/baseColorFactor" } } } }] }]);
+        let (ir, clips) = to_ir(&serde_json::to_vec(&document).unwrap(), None).unwrap();
+        assert_eq!(ir.materials[0].channels[0].material_source, 1);
+        let kinds: Vec<(&str, u8)> = clips.iter().map(|(name, c)| (name.as_str(), c.kind)).collect();
+        assert_eq!(kinds, [("Glow", KIND_COLORS), ("Glow", KIND_REGISTERS)]);
+        let (colours, constants) = (&clips[0].1, &clips[1].1);
+        assert_eq!((constants.first_count, constants.second_count, constants.tracks.len()), (0, 1, 4));
+        assert_eq!((constants.targets[0].name.as_slice(), constants.targets[0].slot), (b"Face".as_slice(), 0));
+        assert_eq!(constants.targets[0].material, colours.targets[0].material);
+        // The same curves: green's last key is the material colour's.
+        let (c, k) = (&colours.tracks[1], &constants.tracks[1]);
+        let last = |clip: &ClipIr, t: &Track| clip.values[t.at as usize + (t.count as usize - 1) * 3 + 1];
+        assert_eq!(last(colours, c), last(constants, k));
+        assert_eq!(clip_extension(KIND_REGISTERS), "brk");
     }
 
     fn material_notes() -> Vec<(&'static str, Vec<(&'static str, String)>)> {
@@ -3535,7 +4028,7 @@ mod tests {
         noted["materials"][0]["pbrMetallicRoughness"]["metallicFactor"] = 1.5.into();
         noted["materials"][0]["occlusionTexture"]["strength"] = (-1.0).into();
         let (ir, _, _) = cook(&noted, None).unwrap();
-        assert_eq!((ir.lits[0].metal, ir.lits[0].occlusion_strength), (1.0, 0.0));
+        assert_eq!((ir.pbr[0].metal, ir.pbr[0].occlusion_strength), (1.0, 0.0));
         assert_eq!(material_notes(), [
             ("Cook.Material.Clamped", vec![shell(), own(("factor", "metallicFactor")), own(("found", "1.5"))]),
             ("Cook.Material.Clamped", vec![shell(), own(("factor", "occlusionTexture.strength")), own(("found", "-1"))]),
@@ -3554,7 +4047,7 @@ mod tests {
         unlit["materials"][0]["extensions"]["KHR_materials_unlit"] = serde_json::json!({});
         unlit["extensionsRequired"] = serde_json::json!(["KHR_materials_unlit", "KHR_materials_emissive_strength"]);
         let (ir, _, _) = cook(&unlit, None).unwrap();
-        assert_eq!(ir.lits[0].flags, LIT_DOUBLE_SIDED | LIT_UNLIT);
+        assert_eq!(ir.pbr[0].flags, PBR_DOUBLE_SIDED | PBR_UNLIT);
     }
 
     /// The triangle (0,0,0) (1,0,0) (0,1,0) with a normal map read through coordinates `uv` (by vertex).

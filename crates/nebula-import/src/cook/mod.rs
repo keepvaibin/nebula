@@ -30,6 +30,7 @@ mod proof_tests;
 #[cfg(feature = "proof-tools")]
 pub use proof_tests::{clip_census, model_census};
 pub mod programs;
+pub mod hit_record;
 pub mod curves;
 pub mod mesh_order;
 pub mod model_ir;
@@ -56,6 +57,7 @@ pub mod table;
 pub mod table_keys;
 pub mod patch;
 pub mod refuse;
+pub mod surface_shader;
 pub mod table_columns;
 pub mod texture;
 pub mod thp;
@@ -453,6 +455,7 @@ pub fn write_cooked_pak(
     impl Drop for Collecting {
         fn drop(&mut self) {
             *texture::NAMES.lock().unwrap_or_else(|e| e.into_inner()) = None;
+            hit_record::twins_clear();  // c83
         }
     }
     let _collecting = Collecting;
@@ -590,6 +593,11 @@ pub fn write_cooked_pak(
     let mut rows = texture::NAMES.lock().unwrap_or_else(|e| e.into_inner()).take().unwrap_or_default();
     let item = StoreItem { path: String::new(), order: 0, bytes: Some(texture::names_table(&mut rows)) };
     placed.extend(place(&mut pak, &mut at, texture::NAMES_PATH, vec![item], stats)?);
+    // Ray tracing's tables: each stage's numbers and the particle effects' light (rt_materials.h set_rt_tables).
+    for (path, text) in [(RT_STAGES_PATH, RT_STAGES), (RT_EFFECTS_PATH, RT_EFFECTS)] {
+        let item = StoreItem { path: String::new(), order: 0, bytes: Some(text.as_bytes().to_vec()) };
+        placed.extend(place(&mut pak, &mut at, path, vec![item], stats)?);
+    }
     // Nebula's placeholder model, the object archive a mod's missing class draws (contract references 4).
     let item = StoreItem { path: PLACEHOLDER_MODEL.to_string(), order: 0, bytes: Some(placeholder_model()?) };
     placed.extend(place(&mut pak, &mut at, PLACEHOLDER_ARCHIVE, vec![item], stats)?);
@@ -598,6 +606,13 @@ pub fn write_cooked_pak(
     pak.sync_all().context("game.pak cannot be flushed to storage")?;
     Ok(at)
 }
+
+/// Ray tracing's tables, as the renderer finds them in the pak (runtime/include/galaxy/render/rt_materials.h
+/// kRtStagesPath, kRtEffectsPath).
+const RT_STAGES_PATH: &str = "NebulaData/RtStages.tsv";
+const RT_EFFECTS_PATH: &str = "NebulaData/RtEffects.tsv";
+const RT_STAGES: &str = include_str!("../../data/rt_stages.tsv");
+const RT_EFFECTS: &str = include_str!("../../data/rt_effects.tsv");
 
 /// Nebula's placeholder archive in the store (contract references 4): the game draws its model for a mod's missing class
 /// (LumaRefs.cpp), and the start check (3.13, mod_start_check.cpp) turns mods off when a store lacks it.

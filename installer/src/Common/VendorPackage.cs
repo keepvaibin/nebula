@@ -54,13 +54,17 @@ namespace Nebula
         /// <summary>The runtime loads the files from here.</summary>
         public string Folder { get { return Path.Combine(NebulaPaths.DataRoot, "vendor", folderName); } }
 
-        /// <summary>What the download reads: the parts' compressed sizes.</summary>
+        /// <summary>What the download reads: the compressed sizes of the parts not yet in place.</summary>
         public long DownloadBytes
         {
             get
             {
                 long total = 0;
-                foreach (var part in parts) total += part.Compressed;
+                foreach (var part in parts)
+                {
+                    var file = new FileInfo(Path.Combine(Folder, part.File));
+                    if (!file.Exists || file.Length != part.Size) total += part.Compressed;
+                }
                 return total;
             }
         }

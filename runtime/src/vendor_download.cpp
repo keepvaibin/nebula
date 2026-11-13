@@ -45,7 +45,8 @@ struct Release {
     std::size_t part_count;
 };
 
-// Streamline's interposer and plug-ins, DLSS and DLSS Frame Generation, Reflex (Frame Generation needs it), the licenses.
+// Streamline's interposer and plug-ins, DLSS, DLSS Frame Generation and DLSS Ray Reconstruction (the ray tracer's
+// denoiser), Reflex (Frame Generation needs it), the licenses.
 constexpr Part kDlssParts[] = {
     {"bin/x64/sl.interposer.dll", L"sl.interposer.dll", "8c87c9499461da561edd529aa9bf7831d67d7b94ebb1c1a5ed54ef4934e1ea4c", 652928u, 284550u},
     {"bin/x64/sl.common.dll", L"sl.common.dll", "82924a8954dd671e09351c5de0eb87ad0eb25b944cc9f9ab955ca1d9950de15d", 843392u, 390298u},
@@ -58,6 +59,8 @@ constexpr Part kDlssParts[] = {
     {"bin/x64/sl.reflex.dll", L"sl.reflex.dll", "0ce9725e3e03ea9e7f81d008b57f33ee365973d2e349131c8b1c3e3378fe2db0", 388736u, 180983u},
     {"bin/x64/sl.pcl.dll", L"sl.pcl.dll", "f13d51cfa05f4cd514df2026049e2db8adf359221713170ad386fd499915b582", 360064u, 167265u},
     {"bin/x64/reflex.license.txt", L"reflex.license.txt", "ebf83c07fb3b2939908c3795d887afde3161c89a28ba391724efc784ce1bdabe", 20504u, 7617u},
+    {"bin/x64/sl.dlss_d.dll", L"sl.dlss_d.dll", "026b9f4f9ea848f2f5aa0e2024fc6b1c885f57eea5d41078124dba14f873b86b", 437376u, 198360u},
+    {"bin/x64/nvngx_dlssd.dll", L"nvngx_dlssd.dll", "4bc7ea5fcb2f32cf86bc2cb072e8d2860914a0be511cbdcb2fc206c1d9d83b80", 48343664u, 21565278u},
 };
 
 constexpr Part kXessParts[] = {

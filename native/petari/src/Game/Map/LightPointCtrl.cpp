@@ -1,8 +1,11 @@
 #include "Game/Map/LightPointCtrl.hpp"
+#include "Game/Render/FrameList.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Map/LightFunction.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/LiveActor/LiveActor.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
 
 namespace {
     const s32 sDefaultBlendTime = NebulaFrameClock::stepsOfMilliseconds(500);
@@ -41,14 +44,31 @@ void LightPointCtrl::update() {
 }
 
 void LightPointCtrl::requestPointLight(const LiveActor* pActor, Vec3f pos, Color8 color, f32 intensity, s32 duration) {
-    if (mStep == -1) {
-        requestPointLightBy(pActor, MR::calcDistanceToPlayer(pActor), pos, color, intensity, duration);
+    {
+        requestPointLightBy(pActor, MR::calcDistanceToPlayer(pActor), pos, color, intensity, duration,
+                            pActor != nullptr && pActor->getBinder() != nullptr ? MR::getBinderRadius(pActor) : 0.0f);
     }
 }
 
 // The nearest to the player of those asking since the last choice (the distance each had when it asked: an actor's
 // from its place, a mod's light's from its centre).
-void LightPointCtrl::requestPointLightBy(const void* pKey, f32 distance, Vec3f pos, Color8 color, f32 intensity, s32 duration) {
+void LightPointCtrl::requestPointLightBy(const void* pKey, f32 distance, Vec3f pos, Color8 color, f32 intensity, s32 duration,
+                                         f32 radius) {
+    {
+        // Every request, for a renderer that lights from each source (the game keeps one, below). Its reach as the
+        // game's own falloff gives it: half the light at the reference distance times sqrt(b / (1 - b)).
+        const f32 brightness = MR::clamp(intensity, 0.95f, 0.999999f);
+        NebulaFramePointLight light{};
+        light.position[0] = pos.x;
+        light.position[1] = pos.y;
+        light.position[2] = pos.z;
+        light.half_distance = ::sDefaultDistRef * MR::sqrt(brightness / (1.0f - brightness));
+        light.color[0] = static_cast< f32 >(color.r) / 255.0f;
+        light.color[1] = static_cast< f32 >(color.g) / 255.0f;
+        light.color[2] = static_cast< f32 >(color.b) / 255.0f;
+        light.radius = radius;  // the glowing body's size (an actor's binder sphere; 0: a point)
+        Frame::pointLight(light);
+    }
     if (mStep == -1 && (mCandidateActor == nullptr || distance < mCandidateDistance)) {
         mCandidateActor = pKey;
         mCandidateDistance = distance;

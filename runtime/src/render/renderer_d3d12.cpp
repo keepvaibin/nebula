@@ -2,6 +2,7 @@
 #include "galaxy/render/utility_shaders.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/render/renderer_d3d12.h"
+#include "galaxy/render/program_table.h"
 #include <nebula_frame_list.h>
 #include "galaxy/render/host_window_win32.h"
 #include "galaxy/crash_notes.h"
@@ -295,6 +296,32 @@ static void dump_device_removal(ID3D12Device* dev) {
                       << count << " total)\n";
         }
     }
+}
+
+// The Agility SDK's configuration and debug classes (d3d12.h's values; the Windows SDK's libraries may not define them).
+constexpr GUID kClsidSdkConfiguration = {0x7cda6aca, 0xa03e, 0x49c8, {0x94, 0x58, 0x03, 0x34, 0xd2, 0x0e, 0x07, 0xce}};
+constexpr GUID kClsidDebug = {0xf2352aeb, 0xdd84, 0x49fe, {0xb9, 0x7b, 0xa9, 0xdc, 0xfd, 0xcc, 0x1b, 0x4f}};
+constexpr GUID kClsidRemovedData = {0x4a75bbc4, 0x9ff4, 0x4ad8, {0x9f, 0x18, 0xab, 0xae, 0x84, 0xdc, 0x5f, 0xf2}};
+
+// The Agility SDK's runtime from D3D12\ beside the program (cmake/agility_sdk.cmake: the version of the headers it was
+// built with), through a device factory (l62). Null where Windows has no SDK configuration interface or the folder is
+// missing or refused: Windows' own runtime then makes the device.
+ComPtr<ID3D12DeviceFactory> agility_device_factory() {
+    using GetInterface = HRESULT(WINAPI*)(REFCLSID, REFIID, void**);
+    HMODULE d3d12 = GetModuleHandleW(L"d3d12.dll");
+    if (d3d12 == nullptr) {
+        d3d12 = LoadLibraryExW(L"d3d12.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    }
+    // Looked up, not linked: a Windows without the configuration interface has no D3D12GetInterface.
+    const auto get = d3d12 != nullptr ? reinterpret_cast<GetInterface>(reinterpret_cast<void*>(GetProcAddress(d3d12, "D3D12GetInterface")))
+                                      : nullptr;
+    ComPtr<ID3D12SDKConfiguration1> configuration;
+    ComPtr<ID3D12DeviceFactory> factory;
+    if (get == nullptr || FAILED(get(kClsidSdkConfiguration, IID_PPV_ARGS(&configuration))) ||
+        FAILED(configuration->CreateDeviceFactory(D3D12_SDK_VERSION, ".\\D3D12\\", IID_PPV_ARGS(&factory)))) {
+        return nullptr;
+    }
+    return factory;
 }
 
 }  // namespace
@@ -1068,6 +1095,9 @@ HRESULT create_draw_root_signature(
     tex_range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     tex_range.NumDescriptors = UINT_MAX;
     tex_range.RegisterSpace = 1u;
+    // The same table as Texture3D (t0 space2, from the heap's start too): the light volume (program.hlsli traced_air).
+    D3D12_DESCRIPTOR_RANGE tex_ranges[2] = {tex_range, tex_range};
+    tex_ranges[1].RegisterSpace = 2u;
     D3D12_DESCRIPTOR_RANGE samp_range{};
     samp_range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER;
     samp_range.NumDescriptors = UINT_MAX;
@@ -1084,8 +1114,8 @@ HRESULT create_draw_root_signature(
     params[3].Constants.Num32BitValues = gpu::kDrawRootWords;
     params[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     params[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    params[4].DescriptorTable.NumDescriptorRanges = 1;
-    params[4].DescriptorTable.pDescriptorRanges = &tex_range;
+    params[4].DescriptorTable.NumDescriptorRanges = 2;
+    params[4].DescriptorTable.pDescriptorRanges = tex_ranges;
     params[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     params[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     params[5].DescriptorTable.NumDescriptorRanges = 1;
@@ -1724,10 +1754,18 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
 
     // --gpu-validation: 1 enables the D3D12 debug layer, 2 also GPU-based validation.
     const unsigned d3d_debug_level = ::galaxy::launch_args().gpu_validation;
+    // The runtime the device comes from (l62): the Agility SDK's by its factory, else Windows' own. The debug layer and
+    // the removal data are asked of the same one.
+    const ComPtr<ID3D12DeviceFactory> agility = agility_device_factory();
+    std::fprintf(stderr, "[d3d12] runtime: %s\n",
+                 agility ? "the Agility SDK's from D3D12\\ (device factory)" : "Windows' own (D3D12\\ missing or not accepted)");
+    const auto configuration = [&](REFCLSID which, REFIID riid, void** out) {
+        return agility ? agility->GetConfigurationInterface(which, riid, out) : D3D12GetDebugInterface(riid, out);
+    };
     try {
         if (d3d_debug_level >= 1) {
             ComPtr<ID3D12Debug> d;
-            if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&d)))) {
+            if (SUCCEEDED(configuration(kClsidDebug, IID_PPV_ARGS(&d)))) {
                 d->EnableDebugLayer();
                 if (d3d_debug_level >= 2) {
                     ComPtr<ID3D12Debug1> d1;
@@ -1741,13 +1779,13 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         // allocations, breadcrumb contexts), asked for before the device exists. Otherwise the system's choice.
         if (::galaxy::diagnosing(::galaxy::kDiagnoseDeviceFaults)) {
             ComPtr<ID3D12DeviceRemovedExtendedDataSettings1> dred;
-            if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&dred)))) {
+            if (SUCCEEDED(configuration(kClsidRemovedData, IID_PPV_ARGS(&dred)))) {
                 dred->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
                 dred->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
                 dred->SetBreadcrumbContextEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
             } else {
                 ComPtr<ID3D12DeviceRemovedExtendedDataSettings> basic;
-                if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&basic)))) {
+                if (SUCCEEDED(configuration(kClsidRemovedData, IID_PPV_ARGS(&basic)))) {
                     basic->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
                     basic->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
                 }
@@ -1777,9 +1815,9 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
                 return false;
             }
             ComPtr<ID3D12Device> candidate_device;
-            if (FAILED(D3D12CreateDevice(
-                    candidate, D3D_FEATURE_LEVEL_11_0,
-                    IID_PPV_ARGS(&candidate_device)))) {
+            const HRESULT made = agility ? agility->CreateDevice(candidate, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&candidate_device))
+                                         : D3D12CreateDevice(candidate, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&candidate_device));
+            if (FAILED(made)) {
                 return false;
             }
             adapter = candidate;
@@ -2009,8 +2047,10 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         ComPtr<ID3D12Device5> device5;
         const bool dxr_device5_supported = SUCCEEDED(device_.As(&device5));
         D3D12_FEATURE_DATA_D3D12_OPTIONS5 options5{};
+        // --diagnostics rt-absent (9.8): taken as a device without ray tracing.
+        const bool rt_absent = ::galaxy::diagnosing(::galaxy::kDiagnoseRtAbsent);
         const bool dxr_runtime_supported =
-            dxr_device5_supported &&
+            !rt_absent && dxr_device5_supported &&
             SUCCEEDED(device_->CheckFeatureSupport(
                 D3D12_FEATURE_D3D12_OPTIONS5,
                 &options5,
@@ -2029,7 +2069,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
                              shader_model.HighestShaderModel >= D3D_SHADER_MODEL_6_5;
             rt.bindless = SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options))) &&
                           options.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3;
-            rt.micromaps = static_cast<int>(options5.RaytracingTier) >= 12;  // D3D12_RAYTRACING_TIER_1_2
+            rt.micromaps = !rt_absent && static_cast<int>(options5.RaytracingTier) >= 12;  // D3D12_RAYTRACING_TIER_1_2
             D3D12_FEATURE_DATA_ARCHITECTURE1 architecture{};
             rt.unified_memory = SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_ARCHITECTURE1, &architecture, sizeof(architecture))) &&
                                 architecture.UMA != FALSE;
@@ -2062,7 +2102,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         copy_adapter_description(adapter_desc, caps.adapter_description);
         caps.dxr_device5_supported = dxr_device5_supported;
         caps.dxr_raytracing_tier =
-            raytracing_tier_code(options5.RaytracingTier);
+            rt_absent ? 0u : raytracing_tier_code(options5.RaytracingTier);
         const bool dlss_ready = streamline::active() &&
                                 streamline::attach_device(device_.Get(), adapter_desc.AdapterLuid);
         boot_step("streamline device");
@@ -3066,7 +3106,9 @@ void RendererD3D12::invalidate_draw_bindings() {
 }
 
 void RendererD3D12::set_render_targets(ID3D12GraphicsCommandList* list, unsigned aux) const {
-    if (aux == 3u) {
+    if (aux == kAuxPrepass) {
+        list->OMSetRenderTargets(1, &item_rtv_, FALSE, &scene_dsv_);
+    } else if (aux == 3u) {
         const D3D12_CPU_DESCRIPTOR_HANDLE targets[4]{scene_rtv_, reactive_rtv_, layer_color_rtv_, layer_trans_rtv_};
         list->OMSetRenderTargets(4, targets, FALSE, &scene_dsv_);
     } else if (aux != 0u) {
@@ -4431,11 +4473,16 @@ bool RendererD3D12::ensure_motion_target() {
     }
     rd.Format = kReactiveMaskFormat;
     cv.Format = kReactiveMaskFormat;
+    // The tracer writes into it too where the device can trace (plan 16.4: where the added light changed).
+    if (rt_capable(rt_caps())) {
+        rd.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    }
     if (FAILED(create_texture(device_.Get(), &hp, D3D12_HEAP_FLAG_NONE, &rd, gpu::Use::ColorWrite,
             &cv, IID_PPV_ARGS(&reactive_target_)))) {
         motion_target_.Reset();
         return false;
     }
+    rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
     rd.Format = kLayerFormat;
     cv.Format = kLayerFormat;
     if (FAILED(create_texture(device_.Get(), &hp, D3D12_HEAP_FLAG_NONE, &rd, gpu::Use::ColorWrite,
@@ -4560,9 +4607,11 @@ void RendererD3D12::prepare_temporal_upscaler() {
     const RenderConfig cfg = get_render_config();
     const unsigned kind = cfg.upscaler;
     const unsigned quality = std::min(cfg.temporal_quality, 5u);
+    // DLSS as Ray Reconstruction while the tracer runs, where it is installed and supported (FB, 22.20).
+    const bool rr = kind == 3u && render_tracing() && streamline::dlss_rr_supported();
     // A failed creation is not retried until its sizes or mode change.
     if (rw == temporal_render_w_ && rh == temporal_render_h_ && ow == temporal_output_w_ &&
-        oh == temporal_output_h_ && kind == temporal_kind_ && (kind < 3u || quality == temporal_quality_)) {
+        oh == temporal_output_h_ && kind == temporal_kind_ && (kind < 3u || (quality == temporal_quality_ && rr == temporal_rr_))) {
         if (temporal_pending_.valid() &&
             temporal_pending_.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
             temporal_ = temporal_pending_.get();
@@ -4582,6 +4631,7 @@ void RendererD3D12::prepare_temporal_upscaler() {
     temporal_pending_ = {};
     temporal_kind_ = kind;
     temporal_quality_ = quality;
+    temporal_rr_ = rr;
     temporal_history_valid_ = false;
     temporal_render_w_ = rw;
     temporal_render_h_ = rh;
@@ -4601,7 +4651,7 @@ void RendererD3D12::prepare_temporal_upscaler() {
         });
         return;
     }
-    temporal_ = create_dlss_upscaler(rw, rh, ow, oh, quality);
+    temporal_ = create_dlss_upscaler(rw, rh, ow, oh, quality, rr);
     if (temporal_) {
         std::cout << "[Renderer] " << temporal_->name() << " " << rw << "x" << rh
                   << " -> " << ow << "x" << oh << "\n";
@@ -4701,7 +4751,40 @@ bool RendererD3D12::record_temporal_upscale(const FrameMap& output) {
     in.reset = !temporal_history_valid_;
     in.view = scene_view_;
     in.view_known = scene_view_known_;
+    // An SDK that records its own legacy barriers takes its textures in the common layout on the enhanced path (the
+    // only place the two models meet), and gives them back there; then they go back to their uses.
+    const bool common = BarrierPath::enhanced();
+    in.common = common && temporal_->own_barriers();
+    BarriersD3D12 handed{command_list_.Get()};
+    if (in.common) {
+        handed.texture(in.color, gpu::Use::ColorWrite, gpu::Use::Common);
+        handed.texture(in.depth, gpu::Use::DepthWrite, gpu::Use::Common);
+        handed.texture(in.motion, gpu::Use::ColorWrite, gpu::Use::Common);
+        handed.texture(in.reactive, gpu::Use::ColorWrite, gpu::Use::Common);
+        handed.texture(in.output, gpu::Use::ColorWrite, gpu::Use::Common);
+        // An outside denoiser's guides (DLSS Ray Reconstruction), from the shader-read layout the tracer left them in.
+        if (const rt::Denoiser* denoiser = temporal_->denoiser()) {
+            if (const rt::DenoiseGuides guides = denoiser->pending_guides(); guides.valid) {
+                for (void* guide : {guides.diffuse_albedo, guides.specular_albedo, guides.normal_roughness, guides.hit_distance}) {
+                    handed.texture(static_cast<ID3D12Resource*>(guide), gpu::Use::ShaderRead, gpu::Use::Common);
+                }
+            }
+        }
+        handed.issue();
+    }
     const bool recorded = temporal_inputs_match(in) && temporal_->evaluate(in);
+    if (in.common) {
+        handed.undo();
+    }
+    // Frame generation's SDKs too (FSR 3's, Streamline's): the depth and the motion.
+    BarriersD3D12 generation{command_list_.Get()};
+    const auto hand_generation = [&] {
+        if (common) {
+            generation.texture(in.depth, gpu::Use::DepthWrite, gpu::Use::Common);
+            generation.texture(in.motion, gpu::Use::ColorWrite, gpu::Use::Common);
+            generation.issue();
+        }
+    };
     if (recorded && fsr_swap_chain_) {
         const unsigned display_width = host_window::backbuffer_width;
         const unsigned display_height = host_window::backbuffer_height;
@@ -4724,7 +4807,12 @@ bool RendererD3D12::record_temporal_upscale(const FrameMap& output) {
             prepare.camera_near = in.camera_near;
             prepare.camera_far = in.camera_far;
             prepare.fov_y = in.fov_y;
+            prepare.common = common;
+            hand_generation();
             (void)fsr_generation_.prepare(prepare);
+            if (common) {
+                generation.undo();
+            }
         }
     } else if (recorded && frame_generation_running()) {
         streamline::FrameGenerationInputs fg{};
@@ -4733,7 +4821,12 @@ bool RendererD3D12::record_temporal_upscale(const FrameMap& output) {
         fg.motion = in.motion;
         fg.render_width = in.render_width;
         fg.render_height = in.render_height;
+        fg.common = common;
+        hand_generation();
         (void)streamline::tag_frame_generation(fg);
+        if (common) {
+            generation.undo();
+        }
     }
     // The upscaler binds its own heaps, root signature and pipelines.
     srv_ring_.forget_bound();
@@ -5106,6 +5199,10 @@ bool RendererD3D12::publish_picture(std::uint64_t key, std::uint32_t width, std:
         swizzle[0] == 4u ? 5u : swizzle[0], swizzle[1] == 4u ? 5u : swizzle[1], swizzle[2] == 4u ? 5u : swizzle[2],
         swizzle[3] == 4u ? 5u : swizzle[3]);
     desc.Texture2D.MipLevels = 1u;
+    if (picture.viewed->GetDesc().Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D) {
+        desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;  // the light volume (rt_publish_light)
+        desc.Texture3D = D3D12_TEX3D_SRV{0u, 1u, 0.0f};
+    }
     const auto cpu = textures.backend().srv_cpu(picture.view);
     device_->CreateShaderResourceView(picture.viewed.Get(), &desc, cpu);
     textures.backend().publish_view(picture.view);
@@ -5416,14 +5513,14 @@ void RendererD3D12::record_hdr_begin() {
     bind_scene();
 }
 
-void RendererD3D12::end_wide_scene() {
+void RendererD3D12::end_wide_scene(unsigned finish) {
     if (!scene_hdr_) {
         return;
     }
-    record_hdr_end();
+    record_hdr_end(finish);
 }
 
-void RendererD3D12::record_hdr_end() {
+void RendererD3D12::record_hdr_end(unsigned finish) {
     if (!scene_hdr_) {
         return;
     }
@@ -5455,6 +5552,7 @@ void RendererD3D12::record_hdr_end() {
     in.resolve = resolve_output;
     // After a load or a long pause the eye starts open.
     in.seconds = seconds > 1.0f ? -1.0f : seconds;
+    in.finish = finish;
     static_cast<void>(camera_pass_.record(command_list_.Get(), srv_ring_, in));
     if (scene_msaa_.samples > 1u) {
         scene_msaa_.color_dirty = true;
@@ -5477,12 +5575,18 @@ void RendererD3D12::rt_commands_end() {
     invalidate_draw_bindings();
 }
 
-bool RendererD3D12::rt_depth_begin(rt::TextureView& depth, unsigned& width, unsigned& height, rt::ImageFormat& color) {
+bool RendererD3D12::rt_depth_begin(rt::TextureView& depth, unsigned& width, unsigned& height, rt::ImageFormat& color,
+                                   rt::TextureView* color_view) {
     if (!scene_depth_ || !scene_color_ || scene_msaa_.samples > 1u) {
         return false;
     }
     BarriersD3D12 uses{command_list_.Get()};
     uses.texture(scene_depth_.Get(), gpu::Use::DepthWrite, gpu::Use::ShaderRead);
+    rt_color_read_ = color_view != nullptr;
+    if (rt_color_read_) {
+        uses.texture(scene_color_.Get(), gpu::Use::ColorWrite, gpu::Use::ComputeRead);
+        *color_view = {scene_color_.Get(), static_cast<std::uint32_t>(scene_color_->GetDesc().Format)};
+    }
     uses.issue();
     const D3D12_RESOURCE_DESC desc = scene_depth_->GetDesc();
     depth = {scene_depth_.Get(), static_cast<std::uint32_t>(kSceneDepthSrvFormat)};
@@ -5495,6 +5599,10 @@ bool RendererD3D12::rt_depth_begin(rt::TextureView& depth, unsigned& width, unsi
 void RendererD3D12::rt_depth_end() {
     BarriersD3D12 uses{command_list_.Get()};
     uses.texture(scene_depth_.Get(), gpu::Use::ShaderRead, gpu::Use::DepthWrite);
+    if (rt_color_read_) {
+        uses.texture(scene_color_.Get(), gpu::Use::ComputeRead, gpu::Use::ColorWrite);
+        rt_color_read_ = false;
+    }
     uses.issue();
 }
 
@@ -5512,6 +5620,115 @@ void RendererD3D12::rt_copy_to_scene(void* image) {
     uses.issue();
     command_list_->CopyResource(scene_color_.Get(), source);
     uses.undo();
+}
+
+bool RendererD3D12::rt_items_begin() {
+    if (!scene_depth_ || !scene_color_ || scene_msaa_.samples > 1u) {
+        return false;
+    }
+    const D3D12_RESOURCE_DESC depth = scene_depth_->GetDesc();
+    if (!item_target_ || item_target_->GetDesc().Width != depth.Width || item_target_->GetDesc().Height != depth.Height) {
+        if (item_target_) {
+            retired_targets_[frame_slot_].push_back(std::move(item_target_));  // this frame's commands may name it
+        }
+        item_target_.Reset();
+        if (!item_rtv_heap_) {
+            D3D12_DESCRIPTOR_HEAP_DESC heap{};
+            heap.NumDescriptors = 1;
+            heap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+            if (FAILED(device_->CreateDescriptorHeap(&heap, IID_PPV_ARGS(&item_rtv_heap_)))) {
+                return false;
+            }
+        }
+        D3D12_HEAP_PROPERTIES hp{};
+        hp.Type = D3D12_HEAP_TYPE_DEFAULT;
+        D3D12_RESOURCE_DESC rd{};
+        rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        rd.Width = depth.Width;
+        rd.Height = depth.Height;
+        rd.DepthOrArraySize = 1;
+        rd.MipLevels = 1;
+        rd.Format = kItemFormat;
+        rd.SampleDesc.Count = 1;
+        rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        D3D12_CLEAR_VALUE cv{};
+        cv.Format = kItemFormat;
+        if (FAILED(create_texture(device_.Get(), &hp, D3D12_HEAP_FLAG_NONE, &rd, gpu::Use::ColorWrite, &cv,
+                                  IID_PPV_ARGS(&item_target_)))) {
+            return false;
+        }
+        item_target_->SetName(L"ray tracing item target");
+        item_rtv_ = item_rtv_heap_->GetCPUDescriptorHandleForHeapStart();
+        device_->CreateRenderTargetView(item_target_.Get(), nullptr, item_rtv_);
+    }
+    const float none[4]{};
+    command_list_->ClearRenderTargetView(item_rtv_, none, 0u, nullptr);
+    return true;
+}
+
+bool RendererD3D12::rt_light_begin(rt::TextureView& depth, rt::TextureView& items, unsigned& width, unsigned& height) {
+    if (!scene_depth_ || !item_target_ || scene_msaa_.samples > 1u) {
+        return false;
+    }
+    BarriersD3D12 uses{command_list_.Get()};
+    uses.texture(scene_depth_.Get(), gpu::Use::DepthWrite, gpu::Use::ShaderRead);
+    uses.texture(item_target_.Get(), gpu::Use::ColorWrite, gpu::Use::ComputeRead);
+    uses.issue();
+    const D3D12_RESOURCE_DESC desc = scene_depth_->GetDesc();
+    depth = {scene_depth_.Get(), static_cast<std::uint32_t>(kSceneDepthSrvFormat)};
+    items = {item_target_.Get(), static_cast<std::uint32_t>(kItemFormat)};
+    width = static_cast<unsigned>(desc.Width);
+    height = desc.Height;
+    return true;
+}
+
+void RendererD3D12::rt_light_end() {
+    BarriersD3D12 uses{command_list_.Get()};
+    uses.texture(scene_depth_.Get(), gpu::Use::ShaderRead, gpu::Use::DepthWrite);
+    uses.texture(item_target_.Get(), gpu::Use::ComputeRead, gpu::Use::ColorWrite);
+    uses.issue();
+}
+
+bool RendererD3D12::rt_reactive_begin(rt::TextureView& reactive) {
+    if (!reactive_scene_ || !reactive_target_ ||
+        (reactive_target_->GetDesc().Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) == D3D12_RESOURCE_FLAG_NONE) {
+        return false;
+    }
+    BarriersD3D12 uses{command_list_.Get()};
+    uses.texture(reactive_target_.Get(), gpu::Use::ColorWrite, gpu::Use::ComputeWrite);
+    uses.issue();
+    reactive = {reactive_target_.Get(), static_cast<std::uint32_t>(kReactiveMaskFormat)};
+    return true;
+}
+
+void RendererD3D12::rt_reactive_end() {
+    BarriersD3D12 uses{command_list_.Get()};
+    uses.texture(reactive_target_.Get(), gpu::Use::ComputeWrite, gpu::Use::ColorWrite);
+    uses.issue();
+}
+
+void RendererD3D12::rt_unpublish_lights(TextureStore& textures) {
+    for (unsigned which = 0u; which < kRtLightPictures; ++which) {  // light, added, mirror, facing, volume, scatter, transmit, indirect, two guides
+        const auto found = pictures_.find(kRtLightPicture + which);
+        if (found == pictures_.end()) {
+            continue;
+        }
+        if (found->second.view != ~0u) {
+            textures.retire_view(found->second.view, std::move(found->second.viewed));
+        }
+        pictures_.erase(found);
+    }
+}
+
+std::uint32_t RendererD3D12::rt_publish_light(void* image, TextureStore& textures, unsigned which) {
+    auto* const resource = static_cast<ID3D12Resource*>(image);
+    if (resource == nullptr) {
+        return null_texture_slot_;
+    }
+    const D3D12_RESOURCE_DESC desc = resource->GetDesc();
+    static_cast<void>(publish_picture(kRtLightPicture + which, static_cast<std::uint32_t>(desc.Width), desc.Height,
+                                      gpu::TextureRef(resource), 0u, textures));
+    return pictures_[kRtLightPicture + which].view;
 }
 
 // The scene target's depth, single-sample (MSAA resolves it, sample 0), read by the occlusion; the product lands on the
@@ -6132,10 +6349,8 @@ void RendererD3D12::queue_debug_ppm_capture(
 }
 
 bool RendererD3D12::debug_copy_scene_to_readback() {
-    // The readback decodes the 10-bit scene target (R10G10B10A2): the wide scene target's dumps are taken after its scene's end.
-    if (scene_hdr_) {
-        return false;
-    }
+    // The scene target as it is: the 10-bit one (R10G10B10A2), or the wide one (RGBA16F, a traced scene's since l69),
+    // whose halves debug_log_readback turns into the 10-bit target's words (FB b83).
     resolve_scene(false);
     debug_log_readback();
     if (readback_pending_) {
@@ -6145,10 +6360,21 @@ bool RendererD3D12::debug_copy_scene_to_readback() {
     }
     const UINT w = frame_.width;
     const UINT h = frame_.height;
+    // 8 or 4 bytes a pixel from the target's own format (FB b83b, as the Vulkan side): any other is not read.
+    const DXGI_FORMAT format = scene_color_->GetDesc().Format;
+    const bool wide = format == kSceneHdrColorFormat;
+    if (!wide && format != kSceneColorFormat) {
+        std::cerr << "[scene-dump] skipped=scene-format-not-read format=" << static_cast<unsigned>(format)
+                  << " path=" << next_scene_capture_path_ << '\n';
+        return false;
+    }
     const UINT row_pitch =
-        (w * 4u + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u) &
+        (w * (wide ? 8u : 4u) + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u) &
         ~(D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u);
 
+    if (readback_buf_ && readback_buf_->GetDesc().Width < static_cast<UINT64>(row_pitch) * h) {
+        readback_buf_.Reset();  // made for the 10-bit target or a smaller frame: no copy is pending (checked above)
+    }
     if (!readback_buf_) {
         D3D12_HEAP_PROPERTIES hp{};
         hp.Type = D3D12_HEAP_TYPE_READBACK;
@@ -6179,7 +6405,7 @@ bool RendererD3D12::debug_copy_scene_to_readback() {
     src.Type      = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     dst.pResource = readback_buf_.Get();
     dst.Type      = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-    dst.PlacedFootprint.Footprint.Format   = kSceneColorFormat;
+    dst.PlacedFootprint.Footprint.Format   = wide ? kSceneHdrColorFormat : kSceneColorFormat;
     dst.PlacedFootprint.Footprint.Width    = w;
     dst.PlacedFootprint.Footprint.Height   = h;
     dst.PlacedFootprint.Footprint.Depth    = 1;
@@ -6188,6 +6414,7 @@ bool RendererD3D12::debug_copy_scene_to_readback() {
 
     uses.undo();
     readback_pending_ = true;
+    readback_wide_ = wide;
     readback_fence_value_ = 0u;
     readback_capture_path_ = next_scene_capture_path_;
     return true;
@@ -6207,12 +6434,12 @@ void RendererD3D12::debug_log_readback() {
 
     const UINT w = frame_.width;
     const UINT h = frame_.height;
-    const UINT row_pitch =
-        (w * 4u + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u) &
+    const UINT copied_pitch =
+        (w * (readback_wide_ ? 8u : 4u) + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u) &
         ~(D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u);
 
     void* mapped = nullptr;
-    D3D12_RANGE range{0, static_cast<SIZE_T>(row_pitch) * h};
+    D3D12_RANGE range{0, static_cast<SIZE_T>(copied_pitch) * h};
     if (FAILED(readback_buf_->Map(0, &range, &mapped))) {
         readback_capture_path_.clear();
         return;
@@ -6224,7 +6451,16 @@ void RendererD3D12::debug_log_readback() {
     });
     std::uint64_t nonblack = 0, alpha_hits = 0, rs = 0, gs = 0, bs = 0;
     std::uint8_t rmax = 0, gmax = 0, bmax = 0, amax = 0;
+    // The wide target's halves as the 10-bit target's words (FB b83); the rest reads words either way.
+    std::vector<std::uint8_t> words;
     const auto* base = static_cast<const std::uint8_t*>(mapped);
+    UINT row_pitch = copied_pitch;
+    if (readback_wide_) {
+        row_pitch = w * 4u;
+        words.resize(static_cast<std::size_t>(row_pitch) * h);
+        half4_to_ten_bit(base, words.data(), w, h, copied_pitch, row_pitch);
+        base = words.data();
+    }
     for (UINT y = 0; y < h; y += 4) {           // sample every 4th row/col
         const std::uint8_t* row = base + static_cast<std::size_t>(y) * row_pitch;
         for (UINT x = 0; x < w; x += 4) {

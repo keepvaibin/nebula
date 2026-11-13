@@ -24,6 +24,7 @@ namespace MR {
         AreaLightInfo* inf = MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->mDefaultAreaLight;
 
         if (inf != nullptr) {
+            GameLightSignal::actorLightType(type);  // c95
             if (type == MR::LightType_Strong) {
                 LightFunction::loadActorLightInfo(&inf->mStrongLight);
             } else if (type == MR::LightType_Weak) {

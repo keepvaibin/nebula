@@ -233,6 +233,11 @@ namespace {
         Grown< u32 > mLightFollow;
         Grown< NebulaFrameLightOwner > mLightOwners;
         Grown< NebulaFrameWorldLight > mWorldLights;
+        Grown< NebulaFrameShadowDrop > mShadowDrops;
+        Grown< NebulaFramePointLight > mPointLights;
+        Grown< NebulaFrameClipVolume > mClipVolumes;
+        u32 mClipRule;
+        Grown< u32 > mCategories;  // pairs: the first item of a run of draws, and the category they are drawn as
         Grown< NebulaFrameConstants > mConstants;
         Grown< NebulaScreenProbe > mProbes;
         Grown< u32 > mRingIndices;
@@ -249,6 +254,7 @@ namespace {
     Store* sCurrent;
     u32 sNumber;
     s32 sOpenDraw = -1;
+    bool sTracedOnly = false;  // Frame::tracedOnly: new draws open NEBULA_PASS_TRACED_DRAW passes
 
     bool sPixelLit;
 
@@ -281,6 +287,8 @@ namespace {
     u64 sStageLight = 0;
     f32 sStageAmbient[3] = {};
     bool sStageLightKnown = false;
+    // The stage being played (NebulaFrameList::stage_hash).
+    u32 sStageHash = 0;
 
     // The pass's own decisions.
     bool sPassAlpha = false;
@@ -318,6 +326,11 @@ namespace {
         pStore->mLightFollow.mCount = 0;
         pStore->mLightOwners.mCount = 0;
         pStore->mWorldLights.mCount = 0;
+        pStore->mShadowDrops.mCount = 0;
+        pStore->mPointLights.mCount = 0;
+        pStore->mClipVolumes.mCount = 0;
+        pStore->mClipRule = NEBULA_CLIP_RULE_NONE;
+        pStore->mCategories.mCount = 0;
         pStore->mConstants.mCount = 0;
         pStore->mProbes.mCount = 0;
         pStore->mRingIndices.mCount = 0;
@@ -353,6 +366,7 @@ namespace {
         resetStore(pFree);
         sCurrent = pFree;
         sOpenDraw = -1;
+        sTracedOnly = false;
         sViewDirty = true;
         sLightsDirty = true;
         sLightSet = NEBULA_NONE32;
@@ -465,11 +479,29 @@ namespace Frame {
         rList.light_set_owners = pStore->mLightOwners.mData;
         rList.world_lights = pStore->mWorldLights.mData;
         rList.world_light_count = pStore->mWorldLights.mCount;
+        rList.shadow_drops = pStore->mShadowDrops.mData;
+        rList.shadow_drop_count = pStore->mShadowDrops.mCount;
+        rList.point_lights = pStore->mPointLights.mData;
+        rList.point_light_count = pStore->mPointLights.mCount;
+        rList.clip_volumes = pStore->mClipVolumes.mData;
+        rList.clip_volume_count = pStore->mClipVolumes.mCount;
+        rList.clip_rule = pStore->mClipRule;
+        // Each item's category, by the runs the draws were made in: a draw writes its item's flags whole when it is
+        // made, so they are set now.
+        for (u32 run = 0; run + 1 < pStore->mCategories.mCount; run += 2) {
+            const u32 next = run + 2 < pStore->mCategories.mCount ? pStore->mCategories.mData[run + 2] : pStore->mItems.mCount;
+            const u32 last = next < pStore->mItems.mCount ? next : pStore->mItems.mCount;
+            const u32 bits = pStore->mCategories.mData[run + 1] << NEBULA_ITEM_CATEGORY_SHIFT;
+            for (u32 item = pStore->mCategories.mData[run]; item < last; item++) {
+                pStore->mItems.mData[item].flags = (pStore->mItems.mData[item].flags & ~static_cast< u32 >(NEBULA_ITEM_CATEGORY_MASK)) | bits;
+            }
+        }
         rList.stage_light_known = sStageLightKnown ? 1u : 0u;
         rList.stage_light = sStageLight;
         rList.stage_ambient[0] = sStageAmbient[0];
         rList.stage_ambient[1] = sStageAmbient[1];
         rList.stage_ambient[2] = sStageAmbient[2];
+        rList.stage_hash = sStageHash;
         // A scene that stops saying what its light is has none on the next frame.
         sStageLightKnown = false;
         rList.constants = pStore->mConstants.mData;
@@ -536,7 +568,7 @@ namespace Frame {
     NebulaFrameItem& addItem() {
         Store* pStore = store();
         if (sOpenDraw < 0) {
-            NebulaFramePass& rPass = addPass(NEBULA_PASS_DRAW);
+            NebulaFramePass& rPass = addPass(sTracedOnly ? NEBULA_PASS_TRACED_DRAW : NEBULA_PASS_DRAW);
             rPass.first_item = pStore->mItems.mCount;
             sOpenDraw = static_cast< s32 >(pStore->mPasses.mCount - 1);
         }
@@ -768,9 +800,32 @@ namespace Frame {
         rLights.mData[at] = rLight;
     }
 
-    void setLightOwner(const NebulaFrameWorldLight* pKey, const NebulaFrameWorldLight* pFill, const f32* pAmbient) {
+    void shadowDrop(const NebulaFrameShadowDrop& rDrop) {
+        Grown< NebulaFrameShadowDrop >& rDrops = store()->mShadowDrops;
+        rDrops.add();
+        rDrops.mData[rDrops.mCount - 1] = rDrop;
+    }
+
+    void pointLight(const NebulaFramePointLight& rLight) {
+        Grown< NebulaFramePointLight >& rLights = store()->mPointLights;
+        rLights.add();
+        rLights.mData[rLights.mCount - 1] = rLight;
+    }
+
+    void clipVolume(const NebulaFrameClipVolume& rVolume) {
+        Grown< NebulaFrameClipVolume >& rVolumes = store()->mClipVolumes;
+        rVolumes.add();
+        rVolumes.mData[rVolumes.mCount - 1] = rVolume;
+    }
+
+    void clipRule(u32 rule) {
+        store()->mClipRule = rule;
+    }
+
+    void setLightOwner(const NebulaFrameWorldLight* pKey, const NebulaFrameWorldLight* pFill, const f32* pAmbient, u32 kind) {
         NebulaFrameLightOwner owner = sLightOwner;
         owner.actor_light = pKey != nullptr ? pKey->id : 0;
+        owner.kind = kind;  // c95
         for (u32 c = 0; c < 3; c++) {
             owner.ambient[c] = pAmbient != nullptr ? pAmbient[c] : 0.0f;
         }
@@ -801,6 +856,23 @@ namespace Frame {
             sStageAmbient[c] = pAmbient[c];
         }
         sStageLightKnown = true;
+    }
+
+    void setStage(const char* pName) {
+        u32 hash = 0;
+        if (pName != nullptr && pName[0] != '\0') {
+            hash = 2166136261u;
+            for (const char* c = pName; *c != '\0'; c++) {
+                hash = (hash ^ static_cast< u8 >(*c)) * 16777619u;
+            }
+            hash = hash != 0 ? hash : 1;
+        }
+        if (hash != sStageHash) {
+            sStageHash = hash;
+            if (pName != nullptr && host()->game_stage != nullptr) {
+                host()->game_stage(host()->user, pName);
+            }
+        }
     }
 
     // Lights 0-31 at once.
@@ -1232,6 +1304,27 @@ namespace Frame {
         sPhase = phase;
         sOpenDraw = -1;
         setObject(0, 0);
+    }
+
+    void tracedOnly(bool on) {
+        if (sTracedOnly != on) {
+            sTracedOnly = on;
+            sOpenDraw = -1;  // the next draw opens a pass of the other kind
+        }
+    }
+
+    void category(u8 category) {
+        Store* pStore = store();
+        Grown< u32 >& rRuns = pStore->mCategories;
+        if (rRuns.mCount >= 2 && rRuns.mData[rRuns.mCount - 1] == category) {
+            return;  // the run goes on
+        }
+        if (rRuns.mCount >= 2 && rRuns.mData[rRuns.mCount - 2] == pStore->mItems.mCount) {
+            rRuns.mData[rRuns.mCount - 1] = category;  // the run before held no draw
+            return;
+        }
+        rRuns.add() = pStore->mItems.mCount;
+        rRuns.add() = category;
     }
 
     void bloom(u32 kind, u32 arg0, u32 arg1) {

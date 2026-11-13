@@ -14,6 +14,8 @@ struct RtCaps {
     bool micromaps = false;                // opacity micromaps (DXR 1.2, VK_EXT_opacity_micromap): optional
     bool unified_memory = false;           // the GPU shares the system's memory: told, never a reason to refuse
     bool enabled = false;                  // the device was made with what the above needs
+    bool triangle_ids = true;              // the prepass's pixel stage reads its triangle's number (Vulkan: geometry
+                                           // shaders); else the surface pass finds it by a ray (D11)
 };
 
 // Why a device cannot trace; null when it can.

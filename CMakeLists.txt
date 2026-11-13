@@ -23,6 +23,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # The mods importer's archive libraries (zlib, liblzma, libarchive), built once per build tree.
+# The DirectX 12 Agility SDK's headers before the Windows SDK's, for every target (cmake/agility_sdk.cmake).
+include(cmake/agility_sdk.cmake)
 include(cmake/archive_deps.cmake)
 # TLS (BoringSSL) and gzip answers for the net services (runtime/src/luma_net.cpp, net 1.3).
 include(third_party/boringssl.cmake)
@@ -452,6 +454,11 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/core/compose.cpp
     runtime/src/render/core/draw_walker.cpp
     runtime/src/render/core/rt_walk.cpp
+    runtime/src/render/core/rt_bounce.cpp
+    runtime/src/render/core/rt_pass_indirect.cpp
+    runtime/src/render/core/rt_pass_reflect.cpp
+    runtime/src/render/core/rt_pass_transmit.cpp
+    runtime/src/render/core/rt_pass_volume.cpp
     runtime/src/render/core/pairing.cpp
     runtime/src/render/core/pipelines.cpp
     runtime/src/render/core/program_table.cpp
@@ -516,6 +523,7 @@ target_include_directories(NebulaNative PRIVATE native/include runtime/include)
 target_compile_definitions(NebulaNative PRIVATE NEBULA_HOST_RENDERER=1 NEBULA_HOST_D3D12=1 _CRT_SECURE_NO_WARNINGS)
 target_compile_features(NebulaNative PRIVATE cxx_std_20)
 target_link_libraries(NebulaNative PRIVATE galaxy_render galaxy_save_files galaxy_asset_store dwmapi)
+nebula_agility_runtime(NebulaNative)
 if(MSVC)
     # Paths past MAX_PATH (CMake merges a .manifest source into the program's manifest).
     target_sources(NebulaNative PRIVATE native/host/nebula_host.manifest)
@@ -732,6 +740,11 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/core/compose.cpp
         runtime/src/render/core/draw_walker.cpp
         runtime/src/render/core/rt_walk.cpp
+        runtime/src/render/core/rt_bounce.cpp
+        runtime/src/render/core/rt_pass_indirect.cpp
+        runtime/src/render/core/rt_pass_reflect.cpp
+        runtime/src/render/core/rt_pass_transmit.cpp
+        runtime/src/render/core/rt_pass_volume.cpp
         runtime/src/render/core/pairing.cpp
         runtime/src/render/core/pipelines.cpp
         runtime/src/render/core/program_table.cpp

@@ -7,7 +7,7 @@
 use std::collections::BTreeSet;
 use std::sync::Mutex;
 
-use super::model_write::{further_stride, MeshStreams, MESH_COLOR0, MESH_COLOR1, MESH_NORMAL, MESH_TANGENTS};
+use super::model_write::{further_stride, MeshStreams, MESH_COLOR0, MESH_COLOR1, MESH_GAIN, MESH_NORMAL, MESH_TANGENTS};
 
 pub const PATH: &str = "NebulaData/Pipelines.bin";
 /// NEBULA_PIPELINE_RECORD_BYTES and NEBULA_LAYOUT_INPUT_BYTES.
@@ -79,6 +79,7 @@ fn input(code: u8, program_number: u16, m: &MeshStreams) -> [u8; INPUT_BYTES] {
         2 if m.attributes & MESH_COLOR1 != 0 => (3, 2, after_coords, further),
         3 if m.attributes & MESH_TANGENTS != 0 => (3, 0, after_color, further),
         4 if m.attributes & MESH_TANGENTS != 0 => (3, 0, after_color + 12, further),
+        7 if m.attributes & MESH_GAIN != 0 => (3, 3, after_color + if m.attributes & MESH_TANGENTS != 0 { 24 } else { 0 }, further),
         c if c >= INPUT_COORD0 && m.has_coord(usize::from(c - INPUT_COORD0)) => {
             let number = usize::from(c - INPUT_COORD0);
             if number == 0 {
@@ -88,7 +89,7 @@ fn input(code: u8, program_number: u16, m: &MeshStreams) -> [u8; INPUT_BYTES] {
                 (3, 1, before * 8, further)
             }
         }
-        c => (STREAM_ZERO, if c >= INPUT_COORD0 { 1 } else if c == 1 || c == 2 { 2 } else { 0 }, 0, 0),
+        c => (STREAM_ZERO, if c >= INPUT_COORD0 { 1 } else if c == 1 || c == 2 { 2 } else if c == 7 { 3 } else { 0 }, 0, 0),
     };
     // NebulaLayoutInput: semantic u16, stream, format, offset, stride.
     let semantic = if code >= INPUT_COORD0 { u16::from(INPUT_COORD0) + program_number } else { u16::from(code) };

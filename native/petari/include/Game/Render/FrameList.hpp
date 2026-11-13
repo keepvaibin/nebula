@@ -100,11 +100,22 @@ namespace Frame {
     void worldLight(const NebulaFrameWorldLight& rLight);
     // Whose lights the sets made from now on hold: the key and fill of an area's light record (ids pKey->id and
     // pKey->id + 1) with its ambient, or none (null: lights that are no light of the world).
-    void setLightOwner(const NebulaFrameWorldLight* pKey, const NebulaFrameWorldLight* pFill, const f32* pAmbient);
+    void setLightOwner(const NebulaFrameWorldLight* pKey, const NebulaFrameWorldLight* pFill, const f32* pAmbient, u32 kind);
     // The world light that is light 4 of the sets made from now on, or null.
     void setLightPointOwner(const NebulaFrameWorldLight* pPoint);
     // The light of the stage's own surfaces this frame (key `id`, fill `id` + 1) and its ambient.
     void setStageLight(u64 id, const f32* pAmbient);
+    // The stage being played (its name, or null for none): the list's stage_hash from this frame on; the host hears
+    // of each change (game_stage).
+    void setStage(const char* pName);
+    // A drop shadow the game draws this frame (NebulaFrameShadowDrop), into this frame's list.
+    void shadowDrop(const NebulaFrameShadowDrop& rDrop);
+    // A point light an actor asks for this frame (NebulaFramePointLight), into this frame's list.
+    void pointLight(const NebulaFramePointLight& rLight);
+    // A clip area's volume as drawn this frame (NebulaFrameClipVolume), and the rule the parts it clips show by
+    // (NEBULA_CLIP_RULE_*), into this frame's list: the ray tracer takes those parts where they show alone.
+    void clipVolume(const NebulaFrameClipVolume& rVolume);
+    void clipRule(u32 rule);
 
     // A state word with what the pass decides: its alpha and its stencil.
     u32 finishState(u32 state);
@@ -166,6 +177,11 @@ namespace Frame {
     void scene2D(bool begin);
     void mirror(bool begin);
     void phase(u8 phase);
+    // The draws from here on are of this category (NEBULA_CATEGORY_*; 0 none): what the game draws them as.
+    void category(u8 category);
+    // The draws from here on (until tracedOnly(false)) are the ray tracer's alone: things that stop its light, never
+    // drawn (NEBULA_PASS_TRACED_DRAW). Only while ray tracing is on.
+    void tracedOnly(bool on);
     void bloom(u32 kind, u32 arg0, u32 arg1);
     // draw.post: the host's program `program` over the frame, its params four rows of four.
     void post(u32 program, const f32 (*pRows)[4]);

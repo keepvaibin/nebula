@@ -31,6 +31,7 @@ void SceneCensus::add(const SceneCount& count) noexcept {
     each(&SceneCount::flat);
     each(&SceneCount::sprites);
     each(&SceneCount::other_view);
+    each(&SceneCount::outside);
     each(&SceneCount::repeats);
     sum_triangles += count.triangles;
     sum_skinned_triangles += count.skinned_triangles;
@@ -49,7 +50,8 @@ void SceneCensus::report(std::uint64_t scene_bytes) {
     std::fprintf(stderr,
                  "[rt-inputs] scene over %u frames, mean (most): instances %.1f (%u) opaque %.1f (%u) blended %.1f (%u) triangles %.0f (%llu) "
                  "waiting %.2f (%u) repeats %.1f (%u) skinned %.1f (%u) of %.0f (%llu) triangles, rebuilt %.2f (%u); left out: ring %.1f "
-                 "(%u) of %.0f (%llu) vertices, site %.1f (%u), flat %.1f (%u), sprites %.1f (%u), other-view %.1f (%u); memory %.2f MB\n",
+                 "(%u) of %.0f (%llu) vertices, site %.1f (%u), flat %.1f (%u), sprites %.1f (%u), other-view %.1f (%u); outside-view %.1f (%u); "
+                 "memory %.2f MB\n",
                  scenes, mean(&SceneCount::instances), most.instances, mean(&SceneCount::opaque), most.opaque, mean(&SceneCount::blended),
                  most.blended, static_cast<double>(sum_triangles) / n, static_cast<unsigned long long>(most.triangles),
                  mean(&SceneCount::waiting), most.waiting, mean(&SceneCount::repeats), most.repeats, mean(&SceneCount::skinned), most.skinned,
@@ -57,7 +59,7 @@ void SceneCensus::report(std::uint64_t scene_bytes) {
                  mean(&SceneCount::rebuilt), most.rebuilt, mean(&SceneCount::ring), most.ring, static_cast<double>(sum_ring_vertices) / n,
                  static_cast<unsigned long long>(most.ring_vertices), mean(&SceneCount::site), most.site, mean(&SceneCount::flat), most.flat,
                  mean(&SceneCount::sprites), most.sprites, mean(&SceneCount::other_view), most.other_view,
-                 static_cast<double>(scene_bytes) / 1048576.0);
+                 mean(&SceneCount::outside), most.outside, static_cast<double>(scene_bytes) / 1048576.0);
     *this = SceneCensus{};
 }
 
@@ -91,7 +93,10 @@ void Scene::begin() noexcept {
 // agree when det A < 0 (the eye's space is right-handed), so an instance flips its facing when det A > 0; a draw that
 // shows its back faces flips once more.
 void Scene::add(const float (*rows)[4], std::uint32_t id, std::uint32_t mask, std::uint64_t structure, Faces faces,
-                std::uint32_t kind) {
+                std::uint32_t kind, Micromapped micromapped) {
+    if ((kind & kKindClipped) != 0u && micromapped == Micromapped::Own) {
+        micromapped = Micromapped::Other;  // a clipped part's every hit is asked (clip_shows): no micromap answers first
+    }
     Instance& instance = instances_.emplace_back();
     std::memcpy(instance.transform, rows, sizeof(instance.transform));
     instance.id_mask = (id & 0xFFFFFFu) | mask << 24u;
@@ -102,8 +107,19 @@ void Scene::add(const float (*rows)[4], std::uint32_t id, std::uint32_t mask, st
                           m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
         flags = (det > 0.0f) == (faces == Faces::Front) ? kInstanceFlip : 0u;
     }
+    if (((kind & kKindCutout) != 0u && micromapped != Micromapped::Own) || (kind & kKindCard) != 0u) {
+        flags |= kInstanceNotOpaque;  // a ray that does not force hits opaque reads its alpha at each one (a card: l83)
+    }
+    if (micromapped == Micromapped::Other) {
+        flags |= kInstanceNoMicromaps;
+    }
     instance.flags = flags << 24u | (kind & 0xFFFFFFu);
     instance.structure = structure;
+}
+
+void Scene::no_micromap(std::uint32_t instance) noexcept {
+    Instance& at = instances_[instance];
+    at.flags |= (kInstanceNoMicromaps | ((at.flags & kKindCutout) != 0u ? kInstanceNotOpaque : 0u)) << 24u;
 }
 
 // The structure and its scratch in use go once no recorded frame can read them.

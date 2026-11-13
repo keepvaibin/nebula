@@ -164,6 +164,8 @@ pub enum Input {
     Coord(u8),
     Tangent,
     Binormal,
+    /// The painted light's de-light gain (nebula_model.h NEBULA_INPUT_GAIN; model_write.rs debake_gains).
+    Gain,
 }
 
 #[derive(Default, Clone)]
@@ -316,6 +318,12 @@ struct Pixel<'a> {
     sampled: Vec<(u8, u8)>,
     color_read: [bool; 2],
     env_coords: BTreeSet<u8>,
+    /// c58: the coordinates whose every map is a painted highlight sprite (HIGHLIGHT_FETCH in a lit form).
+    sprite_coords: BTreeSet<u8>,
+    /// A glTF material's light (MaterialIr pbr; pbr_lines): its lines, and the stage they go before (its glow), or
+    /// None: after the last.
+    pbr_lines: Vec<String>,
+    pbr_before: Option<usize>,
 }
 
 impl Pixel<'_> {
@@ -357,6 +365,14 @@ impl Pixel<'_> {
         for n in warp_stages {
             if let Some(order) = self.m.warp_orders.get(n as usize) {
                 self.sampled.push((order[0], order[1]));
+            }
+        }
+        if let Some((slot, _)) = self.m.normal_map.filter(|_| self.form.lit) {
+            self.sampled.push((slot, slot));
+        }
+        if self.form.lit {
+            for slot in super::model_write::pbr_slots(self.m) {
+                self.sampled.push((slot, slot));
             }
         }
     }
@@ -534,7 +550,9 @@ fn fog_lines(fog_type: u8, rows: &mut Rows) -> Vec<String> {
         7 => format!("fog_rev_exp2({amount})"),
         _ => amount,
     };
-    vec![format!("    prev.rgb = lerp(prev.rgb, {color}.rgb, {curved});")]
+    // program.hlsli program_fog_curve: fogs at once, or in a traced form after the traced light, the fog lit by the
+    // traced share along its curve (RT-MASTER-PLAN 15.3; FB b57): start, end, the pixel's depth, the type.
+    vec![format!("    prev.rgb = program_fog_curve(prev.rgb, {color}.rgb, {curved}, float4({fog}.x, {fog}.y, {ze}, {fog_type}.0));")]
 }
 
 fn replace_lines(p: &mut Pixel, fog_type: u8) -> Result<()> {
@@ -664,6 +682,12 @@ fn stage_lines(p: &mut Pixel, registers: &Registers) -> Result<bool> {
         }
     }
     for (number, s) in stages.iter().enumerate() {
+        if p.pbr_before == Some(number) {
+            // A glTF material's light, before its glow (MaterialIr pbr): prev is its base colour, then lit, in 0 to 1.
+            let lines = std::mem::take(&mut p.pbr_lines);
+            p.lines.extend(lines);
+            state[0][0] = Range::UNIT;
+        }
         p.lines.push("    {".into());
         let reads_t = s.color_in.contains(&8) || s.color_in.contains(&9) || s.alpha_in.contains(&4);
         if Pixel::uses_tex(s) && reads_t {
@@ -716,6 +740,10 @@ fn stage_lines(p: &mut Pixel, registers: &Registers) -> Result<bool> {
             let sampled = p.sample(map, &coord);
             let sampled = format!("{sampled}.{}", swizzle(&p.m.swaps[s.texture_swap as usize & 3]));
             let wrapped = if p.form.lit && p.env_coords.contains(&c) { format!("enh_env({sampled})") } else { sampled };
+            // A painted environment: the traced form's reflection takes its place (program.hlsli ENV_FETCH).
+            let wrapped = if p.env_coords.contains(&c) { format!("ENV_FETCH({wrapped})") } else { wrapped };
+            // A painted highlight sprite (c58): not drawn under the relight in a lit form; the sun's highlight stands for it.
+            let wrapped = if p.form.lit && p.sprite_coords.contains(&c) { format!("HIGHLIGHT_FETCH({wrapped})") } else { wrapped };
             p.lines.push(format!("        const float4 t = {wrapped};"));
         } else if reads_t {
             p.lines.push("        const float4 t = float4(0.0, 0.0, 0.0, 0.0);".into());
@@ -760,6 +788,14 @@ fn stage_lines(p: &mut Pixel, registers: &Registers) -> Result<bool> {
         }
         None => {}
     }
+    // A glTF material's light after its last stage, when no glow follows it (MaterialIr pbr).
+    let lines = std::mem::take(&mut p.pbr_lines);
+    p.lines.extend(lines);
+    Ok(alpha_test_lines(p))
+}
+
+/// The material's alpha test on prev (its two comparisons and their logic), when it has one: whether it has.
+fn alpha_test_lines(p: &mut Pixel) -> bool {
     let m = p.m;
     let (comp0, op, comp1) = (m.alpha_comp0, m.alpha_op, m.alpha_comp1);
     let mut tested = false;
@@ -774,7 +810,205 @@ fn stage_lines(p: &mut Pixel, registers: &Registers) -> Result<bool> {
         p.lines.push("        discard;".into());
         p.lines.push("    }".into());
     }
-    Ok(tested)
+    tested
+}
+
+/// A material's metal, roughness and occlusion before its light (MaterialIr pbr): the factors by their maps.
+fn pbr_factor_lines(p: &mut Pixel, shade: &PbrShading, indent: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    out.push(format!("{indent}float pbr_metal = {:?};", shade.metal.clamp(0.0, 1.0)));
+    out.push(format!("{indent}float pbr_rough = {:?};", shade.roughness.clamp(0.0, 1.0)));
+    out.push(format!("{indent}float pbr_ao = 1.0;"));
+    if let Some(slot) = shade.metal_rough {
+        let coord = p.sample_coord(slot, slot, None);
+        let texel = p.sample(slot, &coord);
+        out.push(format!("{indent}const float4 pbr_mr = {texel};"));
+        out.push(format!("{indent}pbr_metal *= pbr_mr.b;"));
+        out.push(format!("{indent}pbr_rough *= pbr_mr.g;"));
+    }
+    if let Some((slot, strength)) = shade.occlusion {
+        let coord = p.sample_coord(slot, slot, None);
+        let texel = p.sample(slot, &coord);
+        out.push(format!("{indent}pbr_ao = 1.0 + {:?} * ({texel}.r - 1.0);", strength.clamp(0.0, 1.0)));
+    }
+    out
+}
+
+/// A hand-written surface shader's file-scope text (MaterialIr surface; contract materials 3.4): SurfaceIn with what
+/// it reads, Surface, its parameters as globals of their names, a function per texture, then its code under its own
+/// file's lines.
+fn surface_globals(p: &mut Pixel, sf: &SurfaceIr) -> String {
+    use super::surface_shader::{READ_NORMAL, READ_TIME, READ_VIEW, READ_WORLD};
+    let mut out = String::from("struct SurfaceIn {\n    float2 uv0;\n    float2 uv1;\n    float4 color;\n");
+    for (bit, field) in [(READ_NORMAL, "float3 normal"), (READ_WORLD, "float3 world_position"), (READ_VIEW, "float3 view"), (READ_TIME, "float time")] {
+        if sf.reads & bit != 0 {
+            let _ = writeln!(out, "    {field};");
+        }
+    }
+    out.push_str("};\nstruct Surface {\n    float3 base;\n    float alpha;\n    float3 normal;\n    float roughness;\n    float metal;\n    float3 emission;\n};\n");
+    for (name, four, _) in &sf.params {
+        let _ = writeln!(out, "static {} {name};", if *four { "float4" } else { "float" });
+    }
+    for (name, slot) in &sf.textures {
+        let n = p.maps.at(*slot);
+        let _ = writeln!(out, "float4 {name}(float2 uv) {{ return TEX({n}).Sample(SAMP({n}), uv); }}");
+        let _ = writeln!(out, "float4 {name}_level(float2 uv, float lod) {{ return TEX({n}).SampleLevel(SAMP({n}), uv, lod); }}");
+    }
+    let file = sf.file.replace(['"', '\\'], "_");
+    let _ = writeln!(out, "#line 1 \"{file}\"");
+    out.push_str(&sf.code);
+    if !sf.code.ends_with('\n') {
+        out.push('\n');
+    }
+    out.push_str("#line 1 \"program\"\n");
+    out
+}
+
+/// A surface shader's ray-hit form (contract materials 3.4 layer 3): the same `surface` run at a ray's hit, in a
+/// namespace of its own (`RT_MOD_SURFACE_NS`, `rt_mod` unless the includer names another), so the tracer can include
+/// every mod material's form in one program. The includer gives, before it:
+/// - `struct RtModHit { float2 uv; float4 color; float3 normal; float3 world_position; float3 view; float time; float lod; }`:
+///   the hit's first coordinate (the tracer's vertices carry no second: uv1 is uv0), its vertex colour (1 without),
+///   its smooth normal and the way back to the ray's start (world space, unit), its place (game units), the frame's
+///   time (view_scale.y) and the ray cone's map level;
+/// - `struct RtModSurface { float3 base; float alpha; float3 normal; float roughness; float metal; float3 emission; }`:
+///   in, what the hit record says (base x the vertex colour where the record says so, not x a map; display-encoded);
+///   out, what the shader made of it;
+/// - `float4 rt_mod_place(uint place)`: the material's place on this hit's item (0 to 2 registers, -4 to 4; 3 to 6
+///   constant colours, 0 to 1), as content.model set_param leaves it;
+/// - `float4 rt_mod_map(uint slot, float2 uv, float lod)`: the material's map `slot` at `uv`, level `lod`.
+/// It calls `RT_MOD_SURFACE_NS::surface_hit(RtModHit h, inout RtModSurface o)`. A texture function samples at the
+/// cone's level; `ddx`, `ddy` and `fwidth` are 0 (a hit has no neighbours); `discard` and `clip` leave alpha 0, which the
+/// tracer reads as no surface there. Class and through stay the record's (shader.json `ray`).
+pub fn ray_hit_form(sf: &SurfaceIr) -> String {
+    use super::surface_shader::{READ_NORMAL, READ_TIME, READ_VIEW, READ_WORLD};
+    let mut out = String::from("#ifndef RT_MOD_SURFACE_NS\n#define RT_MOD_SURFACE_NS rt_mod\n#endif\nnamespace RT_MOD_SURFACE_NS {\n");
+    out.push_str("struct SurfaceIn {\n    float2 uv0;\n    float2 uv1;\n    float4 color;\n");
+    for (bit, field) in [(READ_NORMAL, "float3 normal"), (READ_WORLD, "float3 world_position"), (READ_VIEW, "float3 view"), (READ_TIME, "float time")] {
+        if sf.reads & bit != 0 {
+            let _ = writeln!(out, "    {field};");
+        }
+    }
+    out.push_str("};\nstruct Surface {\n    float3 base;\n    float alpha;\n    float3 normal;\n    float roughness;\n    float metal;\n    float3 emission;\n};\n");
+    for (name, four, _) in &sf.params {
+        let _ = writeln!(out, "static {} {name};", if *four { "float4" } else { "float" });
+    }
+    out.push_str("static float rt_mod_lod_;\nstatic bool rt_mod_cut_;\n");
+    for (name, slot) in &sf.textures {
+        let _ = writeln!(out, "float4 {name}(float2 uv) {{ return rt_mod_map({slot}u, uv, rt_mod_lod_); }}");
+        let _ = writeln!(out, "float4 {name}_level(float2 uv, float lod) {{ return rt_mod_map({slot}u, uv, lod); }}");
+    }
+    // What a pixel has and a hit does not: neighbours (ddx, ddy, fwidth: 0) and an end that drops it (no surface there).
+    out.push_str(concat!(
+        "#define ddx(v) ((v) - (v))\n#define ddy(v) ((v) - (v))\n#define ddx_coarse(v) ((v) - (v))\n#define ddy_coarse(v) ((v) - (v))\n",
+        "#define ddx_fine(v) ((v) - (v))\n#define ddy_fine(v) ((v) - (v))\n#define fwidth(v) ((v) - (v))\n",
+        "#define discard rt_mod_cut_ = true\n#define clip(v) (rt_mod_cut_ = rt_mod_cut_ || any((v) < 0))\n",
+    ));
+    let file = sf.file.replace(['"', '\\'], "_");
+    let _ = writeln!(out, "#line 1 \"{file}\"");
+    out.push_str(&sf.code);
+    if !sf.code.ends_with('\n') {
+        out.push('\n');
+    }
+    out.push_str("#line 1 \"program\"\n");
+    out.push_str("#undef ddx\n#undef ddy\n#undef ddx_coarse\n#undef ddy_coarse\n#undef ddx_fine\n#undef ddy_fine\n#undef fwidth\n#undef discard\n#undef clip\n");
+    out.push_str("void surface_hit(RtModHit h, inout RtModSurface o) {\n");
+    for (name, four, place) in &sf.params {
+        let _ = writeln!(out, "    {name} = rt_mod_place({place}u){};", if *four { "" } else { ".x" });
+    }
+    out.push_str("    rt_mod_lod_ = h.lod;\n    rt_mod_cut_ = false;\n");
+    out.push_str("    const float3 rt_n_ = dot(h.normal, h.normal) > 0.0 ? normalize(h.normal) : float3(0.0, 0.0, 1.0);\n");
+    out.push_str("    SurfaceIn si = (SurfaceIn)0;\n");
+    for k in 0..2 {
+        if sf.uv[k] {
+            let _ = writeln!(out, "    si.uv{k} = h.uv;");
+        }
+    }
+    out.push_str("    si.color = h.color;\n");
+    if sf.reads & READ_NORMAL != 0 {
+        out.push_str("    si.normal = rt_n_;\n");
+    }
+    if sf.reads & READ_WORLD != 0 {
+        out.push_str("    si.world_position = h.world_position;\n");
+    }
+    if sf.reads & READ_VIEW != 0 {
+        out.push_str("    si.view = dot(h.view, h.view) > 0.0 ? normalize(h.view) : rt_n_;\n");
+    }
+    if sf.reads & READ_TIME != 0 {
+        out.push_str("    si.time = h.time;\n");
+    }
+    out.push_str(concat!(
+        "    Surface s;\n    s.base = o.base;\n    s.alpha = o.alpha;\n    s.normal = rt_n_;\n    s.roughness = o.roughness;\n",
+        "    s.metal = o.metal;\n    s.emission = o.emission;\n    surface(si, s);\n",
+        "    o.base = saturate(s.base);\n    o.alpha = rt_mod_cut_ ? 0.0 : saturate(s.alpha);\n",
+        "    o.normal = dot(s.normal, s.normal) > 0.0 ? normalize(s.normal) : rt_n_;\n",
+        "    o.roughness = saturate(s.roughness);\n    o.metal = saturate(s.metal);\n    o.emission = max(s.emission, 0.0);\n",
+        "}\n}\n",
+    ));
+    out
+}
+
+/// A surface shader's call, before the material's light (it may turn the normal): its parameters from their places,
+/// the factors, SurfaceIn, Surface from the material's colour, metal, roughness and glow, `surface`, its normal.
+fn surface_head_lines(p: &mut Pixel, sf: &SurfaceIr, shade: &PbrShading) -> Vec<String> {
+    use super::surface_shader::{READ_NORMAL, READ_TIME, READ_VIEW, READ_WORLD};
+    let mut out = Vec::new();
+    for (name, four, place) in &sf.params {
+        let row = if *place < 3 { p.rows.at(ROW_REGISTER + u32::from(*place)) } else { p.rows.at(ROW_CONSTANT + u32::from(*place) - 3) };
+        out.push(format!("    {name} = {row}{};", if *four { "" } else { ".x" }));
+    }
+    out.extend(pbr_factor_lines(p, shade, "    "));
+    // glTF's base colour: the factor (constant colour 0) x COLOR_0 with vertex colours (gltf.rs), else the factor as
+    // the material colour.
+    let base = if p.m.channels[0].material_source != 0 { format!("i.color * {}", p.rows.at(ROW_CONSTANT)) } else { p.rows.at(ROW_MATERIAL_COLOR) };
+    out.push(format!("    const float4 surf_base = {base};"));
+    out.push("    const float3 surf_n = dot(i.lit_nrm, i.lit_nrm) > 0.0 ? normalize(i.lit_nrm) : float3(0.0, 0.0, 1.0);".into());
+    out.push("    SurfaceIn si = (SurfaceIn)0;".into());
+    for k in 0..2 {
+        if sf.uv[k] {
+            out.push(format!("    si.uv{k} = i.surf_uv{k};"));
+        }
+    }
+    out.push(format!("    si.color = {};", if p.color_read[0] { "i.color" } else { "float4(1.0, 1.0, 1.0, 1.0)" }));
+    if sf.reads & READ_NORMAL != 0 {
+        out.push("    si.normal = surf_n;".into());
+    }
+    if sf.reads & READ_WORLD != 0 {
+        out.push("    si.world_position = i.surf_world;".into());
+    }
+    if sf.reads & READ_VIEW != 0 {
+        out.push("    si.view = dot(i.lit_eye, i.lit_eye) > 0.0 ? normalize(-i.lit_eye) : float3(0.0, 0.0, 1.0);".into());
+    }
+    if sf.reads & READ_TIME != 0 {
+        out.push("    si.time = view_scale.y;".into());
+    }
+    let [er, eg, eb] = sf.emission;
+    out.push("    Surface s;".into());
+    out.push("    s.base = surf_base.rgb;".into());
+    out.push("    s.alpha = surf_base.a;".into());
+    out.push("    s.normal = surf_n;".into());
+    out.push("    s.roughness = pbr_rough;".into());
+    out.push("    s.metal = pbr_metal;".into());
+    out.push(format!("    s.emission = float3({er:?}, {eg:?}, {eb:?});"));
+    out.push("    surface(si, s);".into());
+    out.push("    i.lit_nrm = dot(s.normal, s.normal) > 0.0 ? s.normal : surf_n;".into());
+    out
+}
+
+/// A surface shader's record lit (program_pbr.hlsli), its emission added, the material's alpha test and fog.
+fn surface_tail_lines(p: &mut Pixel, fog_type: u8) -> bool {
+    p.lines.push("    float4 prev = float4(saturate(s.base), saturate(s.alpha));".into());
+    p.lines.push("    {".into());
+    p.lines.push("        const float surf_metal = saturate(s.metal);".into());
+    p.lines.push("        const float surf_rough = saturate(s.roughness);".into());
+    p.lines.push("        const float4 pbr_env = ENV_FETCH(pbr_reflection(prev.rgb, surf_metal, surf_rough, pbr_ao));".into());
+    p.lines.push("        prev.rgb = pbr_finish(prev.rgb, surf_metal, surf_rough, pbr_ao, pbr_env.rgb);".into());
+    p.lines.push("    }".into());
+    p.lines.push("    prev.rgb += max(s.emission, 0.0);".into());
+    let tested = alpha_test_lines(p);
+    let fog = fog_lines(fog_type, &mut p.rows);
+    p.lines.extend(fog);
+    tested
 }
 
 /// One channel's lines in the vertex stage, or its body in a lit pixel stage: `target.part = ...` with what it reads.
@@ -822,7 +1056,10 @@ fn channel_lines(m: &MaterialIr, ch: usize, names: &Channel, eye: &str, nrm: &st
         let terms: Vec<String> =
             light_list(c).iter().map(|(n, atten, diffuse)| format!("light_term({base}, {n}u, {atten}u, {diffuse}u, {eye}, {nrm}).{part}")).collect();
         let terms = if terms.is_empty() { "0.0".to_string() } else { terms.join(" + ") };
-        out.push(format!("    {target}.{part} = {mat} * saturate(({amb} * 255.0 + {terms}) / 255.0);"));
+        // Channel 0's light level, which the traced form keeps (program.hlsli TRACED_LEVEL: the added light's base).
+        let level = format!("saturate((AMBIENT_TERM({amb}) * 255.0 + {terms}) / 255.0)");
+        let level = if ch == 0 && part == "rgb" { format!("TRACED_LEVEL({level})") } else { level };
+        out.push(format!("    {target}.{part} = {mat} * {level};"));
     }
 }
 
@@ -842,7 +1079,7 @@ fn enhanced_channel_lines(m: &MaterialIr, ch: usize, names: &Channel, eye: &str,
         out.push(format!("        const float3 enh_mat = {mat};"));
         out.push(format!("        const float3 enh_amb = {amb};"));
         out.push("        const float3 enh_amb_lin = enh_lin(enh_amb);".into());
-        out.push("        float3 enh_acc = enh_amb_lin * enh_sky(g_enh);".into());
+        out.push("        float3 enh_acc = AMBIENT_TERM(enh_amb_lin * enh_sky(g_enh));".into());
         for (i, (n, atten, diffuse)) in light_list(c).iter().enumerate() {
             out.push(format!(
                 "        enh_add_light({base}, {n}u, {}, {diffuse}u, {}, {metal}, {eye}, enh_amb, enh_amb_lin, enh_acc);",
@@ -851,7 +1088,9 @@ fn enhanced_channel_lines(m: &MaterialIr, ch: usize, names: &Channel, eye: &str,
             ));
         }
         out.push("        enh_acc *= enh_sky_reflection(g_enh, enh_amb_lin);".into());
-        out.push(format!("        {target}.rgb = enh_mat * enh_srgb(enh_shoulder(max(enh_acc, 0.0)));"));
+        let level = "enh_srgb(enh_shoulder(max(enh_acc, 0.0)))";
+        let level = if ch == 0 { format!("TRACED_LEVEL({level})") } else { level.to_string() };
+        out.push(format!("        {target}.rgb = enh_mat * {level};"));
         out.push("    }".into());
     } else {
         let mat = if c.material_source != 0 { format!("{vtx}.rgb") } else { format!("{}.rgb", rows.at(ROW_MATERIAL_COLOR + ch as u32)) };
@@ -868,6 +1107,52 @@ fn enhanced_channel_lines(m: &MaterialIr, ch: usize, names: &Channel, eye: &str,
         let terms = if terms.is_empty() { "0.0".to_string() } else { terms.join(" + ") };
         out.push(format!("    {target}.a = {mat} * saturate(({amb} * 255.0 + {terms}) / 255.0);"));
     }
+}
+
+/// A glTF material's lit channel 0 (program_pbr.hlsli): the light set's ambient and lights summed apart from the
+/// material's colour, which the channel passes on unlit so that the stages make the base colour; the alpha as
+/// channel_lines writes it. Channel 0's light level goes to the traced form (TRACED_LEVEL).
+fn pbr_channel_lines(m: &MaterialIr, eye: &str, base: &str, rows: &mut Rows, out: &mut Vec<String>) {
+    let names = Channel { target: "lit0", vertex: "i.color" };
+    if m.channel_count == 0 {
+        out.push("    lit0 = i.color;".into());
+        return;
+    }
+    let c = &m.channels[0];
+    let mat = if c.material_source != 0 { "i.color.rgb".to_string() } else { format!("{}.rgb", rows.at(ROW_MATERIAL_COLOR)) };
+    if c.enable != 0 {
+        let amb = if c.ambient_source != 0 { "i.color.rgb".to_string() } else { format!("{}.rgb", rows.at(ROW_AMBIENT_COLOR)) };
+        out.push("    {".into());
+        out.push(format!("        const float3 pbr_amb = {amb};"));
+        out.push("        pbr_begin(pbr_amb);".into());
+        for (k, (n, atten, diffuse)) in light_list(c).iter().enumerate() {
+            out.push(format!(
+                "        pbr_add_light({base}, {n}u, {}, {diffuse}u, {}, {eye}, pbr_amb);",
+                if *atten == 3 { "true" } else { "false" },
+                if k == 0 { "true" } else { "false" },
+            ));
+        }
+        out.push("        TRACED_LEVEL(pbr_level());".into());
+        out.push("    }".into());
+    } else {
+        out.push("    pbr_begin(float3(1.0, 1.0, 1.0));".into());
+    }
+    out.push(format!("    lit0.rgb = {mat};"));
+    let mut alpha = Vec::new();
+    channel_lines(m, 0, &names, eye, "g_enh.N", base, rows, &mut alpha);
+    out.extend(alpha.into_iter().filter(|l| l.trim_start().starts_with("lit0.a")));
+}
+
+/// A glTF material's light after its base colour (program_pbr.hlsli): metal and roughness by their factors and map,
+/// the occlusion, the stage's reflection through ENV_FETCH (the traced mirror where the tracer owns the pixel), then
+/// pbr_finish on prev.
+fn pbr_lines(p: &mut Pixel, shade: &PbrShading) -> Vec<String> {
+    let mut out = vec!["    {".to_string()];
+    out.extend(pbr_factor_lines(p, shade, "        "));
+    out.push("        const float4 pbr_env = ENV_FETCH(pbr_reflection(prev.rgb, pbr_metal, pbr_rough, pbr_ao));".into());
+    out.push("        prev.rgb = pbr_finish(prev.rgb, pbr_metal, pbr_rough, pbr_ao, pbr_env.rgb);".into());
+    out.push("    }".into());
+    out
 }
 
 fn light_terms_any(m: &MaterialIr) -> bool {
@@ -887,15 +1172,23 @@ pub fn has_lit_form(m: &MaterialIr) -> Result<bool> {
     Ok(false)
 }
 
-/// The program's varyings. Its own coordinates take TEXCOORD0 up; the lit varyings (three) and the motion varyings (two)
-/// follow them in that order, so their places move with the coordinate count.
-fn varyings(uv_kinds: &[bool], color: [bool; 2], lit: bool) -> String {
+/// The program's varyings. Its own coordinates take TEXCOORD0 up; the lit varyings (three, five with a normal map's
+/// tangent and bitangent) and the motion varyings (two) follow them in that order, so their places move with the
+/// coordinate count; a surface shader's own varyings after them; `gain` (c93) after the motion pair.
+fn varyings(uv_kinds: &[bool], color: [bool; 2], lit: bool, normal_mapped: bool, surface: &[(&str, String)], gain: bool) -> String {
     let lit_first = uv_kinds.len();
-    let motion_first = lit_first + if lit { 3 } else { 0 };
+    let surface_first = lit_first + if lit { 3 } else { 0 } + if normal_mapped { 2 } else { 0 };
+    let motion_first = surface_first + surface.len();
     let mut s = format!("#define NEBULA_MOTION_CURRENT_INDEX {motion_first}\n#define NEBULA_MOTION_PREVIOUS_INDEX {}\n", motion_first + 1);
     s.push_str("struct Varyings {\n");
     if lit {
         let _ = writeln!(s, "    PER_SAMPLE float3 lit_eye : TEXCOORD{lit_first};\n    PER_SAMPLE float3 lit_nrm : TEXCOORD{};\n    nointerpolation uint lit_light : TEXCOORD{};", lit_first + 1, lit_first + 2);
+    }
+    if normal_mapped {
+        let _ = writeln!(s, "    PER_SAMPLE float3 lit_tan : TEXCOORD{};\n    PER_SAMPLE float3 lit_bin : TEXCOORD{};", lit_first + 3, lit_first + 4);
+    }
+    for (k, (ty, name)) in surface.iter().enumerate() {
+        let _ = writeln!(s, "    PER_SAMPLE {ty} {name} : TEXCOORD{};", surface_first + k);
     }
     s.push_str("    float4 pos : SV_Position;\n");
     if color[0] {
@@ -907,12 +1200,20 @@ fn varyings(uv_kinds: &[bool], color: [bool; 2], lit: bool) -> String {
     for (k, three) in uv_kinds.iter().enumerate() {
         let _ = writeln!(s, "    PER_SAMPLE {} uv{k} : TEXCOORD{k};", if *three { "float3" } else { "float2" });
     }
+    // c93: the de-light gain of a mesh painted by its map alone, after the motion pair's indices and before
+    // VARYINGS_MOTION (the prepass's primitive number stays the last input); in every form, so all keep one interface.
+    if gain {
+        let _ = writeln!(s, "    PER_SAMPLE float3 gain : TEXCOORD{};", motion_first + 2);
+    }
     s.push_str("    VARYINGS_MOTION\n};\n");
     s
 }
 
 /// A material's two programs in one form. `fog_type` is the material's own; `skinned`: its mesh has a matrix per vertex.
 pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Registers) -> Result<Text> {
+    // A glTF material is lit at the pixel in its plain form too (MaterialIr pbr): its metal and roughness are its look,
+    // whatever the lighting setting.
+    let form = if source.pbr.is_some() && form.replace == 0 { Form { lit: true, ..form } } else { form };
     let edited;
     let m = if form.pass != 0 {
         edited = with_pass(source, form.pass);
@@ -923,11 +1224,25 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
     let fog_type = if form.fog_linear { 2 } else { m.fog.kind };
     let mut env_coords = BTreeSet::new();
     for (i, c) in m.coords.iter().enumerate() {
-        if matches!(coord_source(m, c)?, From::EyeNormal | From::WorldNormal | From::ObjectNormal) {
+        // A coordinate whose every map is a colour ramp (c56, MaterialIr ramp_maps) keeps its own fetch.
+        let mut maps = m.stages.iter().filter(|s| s.map != 0xFF && usize::from(s.coord) == i).map(|s| s.map).peekable();
+        let ramp_only = maps.peek().is_some() && maps.all(|map| m.ramp_maps.contains(&map));
+        if !ramp_only && matches!(coord_source(m, c)?, From::EyeNormal | From::WorldNormal | From::ObjectNormal) {
             env_coords.insert(i as u8);
         }
     }
+    // c58: a coordinate whose every map is a painted highlight sprite is no environment's (MaterialIr highlight_maps).
+    let mut sprite_coords = BTreeSet::new();
+    for i in 0..m.coords.len() {
+        let mut maps = m.stages.iter().filter(|s| s.map != 0xFF && usize::from(s.coord) == i).map(|s| s.map).peekable();
+        if maps.peek().is_some() && maps.all(|map| m.highlight_maps.contains(&map)) {
+            sprite_coords.insert(i as u8);
+        }
+    }
+    env_coords.retain(|c| !sprite_coords.contains(c));
     let lit_channels = form.lit && light_terms_any(m);
+    // A normal map turns the lit form's pixel normal (MOD-MATERIALS-FC.md 1); the other forms light by vertex.
+    let normal_map = m.normal_map.filter(|_| form.lit && form.replace == 0);
     let metal = !env_coords.is_empty();
     let mut p = Pixel {
         m,
@@ -940,19 +1255,50 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
         sampled: Vec::new(),
         color_read: [false; 2],
         env_coords: env_coords.clone(),
+        sprite_coords,
+        pbr_lines: Vec::new(),
+        pbr_before: None,
     };
     p.survey();
+    let pbr = m.pbr.filter(|_| form.lit && form.replace == 0);
+    // A hand-written surface shader (MaterialIr surface): in place of the stages, in every lit form. Its channel 0 sums
+    // the light (pbr_channel_lines), so it reads colour 0.
+    let surface = m.surface.as_ref().filter(|_| pbr.is_some());
+    if surface.is_some() {
+        p.color_read[0] = true;
+    }
+    if let (Some(shade), None) = (pbr, surface) {
+        p.pbr_lines = pbr_lines(&mut p, &shade);
+        let count = m.pixel_stage_count as usize;
+        p.pbr_before = (shade.glow_last && count > 1).then(|| count - 1);
+    }
     let mut alpha_test = false;
     if form.replace != 0 {
         replace_lines(&mut p, fog_type)?;
         alpha_test = true;
+    } else if surface.is_some() {
+        alpha_test |= surface_tail_lines(&mut p, fog_type);
     } else {
         alpha_test |= stage_lines(&mut p, registers)?;
-        if form.lit {
+        if form.lit && pbr.is_none() {
             p.lines.push("    if (enh_on()) prev.rgb = enh_finish(prev.rgb, g_enh);".into());
         }
         let fog = fog_lines(fog_type, &mut p.rows);
         p.lines.extend(fog);
+    }
+    // glTF 2.0 normalTexture: normalize((texel x 2 - 1) x (scale, scale, 1)) in the surface's tangent space (tangent,
+    // bitangent, normal), here unnormalized, as enh_begin takes its normal; the map's texels are data, not sRGB colour.
+    let mut normal_lines: Vec<String> = Vec::new();
+    if let Some((slot, scale)) = normal_map {
+        let coord = p.sample_coord(slot, slot, None);
+        let texel = p.sample(slot, &coord);
+        normal_lines.push("    {".into());
+        normal_lines.push(format!("        const float3 nm = {texel}.rgb * 2.0 - 1.0;"));
+        for (name, of) in [("nm_t", "i.lit_tan"), ("nm_b", "i.lit_bin"), ("nm_n", "i.lit_nrm")] {
+            normal_lines.push(format!("        const float3 {name} = dot({of}, {of}) > 0.0 ? normalize({of}) : {of};"));
+        }
+        normal_lines.push(format!("        i.lit_nrm = (nm_t * nm.x + nm_b * nm.y) * {scale:?} + nm_n * nm.z;"));
+        normal_lines.push("    }".into());
     }
     // The lit form's channels run in the pixel stage and read both vertex colours.
     let mut lit_body: Vec<String> = Vec::new();
@@ -961,6 +1307,7 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
         lit_rows_used = true;
         let names = [Channel { target: "lit0", vertex: "i.color" }, Channel { target: "lit1", vertex: "i.color1" }];
         let (mut plain, mut enhanced) = (Vec::new(), Vec::new());
+        let mut pbr_body = Vec::new();
         for ch in 0..2 {
             if ch == 0 && !p.color_read[0] && !p.color_read[1] {
                 continue;
@@ -968,17 +1315,32 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
             if !p.color_read[ch] {
                 continue;
             }
+            if ch == 0 && pbr.is_some() {
+                // A glTF material: its own light, the same with the enhanced setting or without (program_pbr.hlsli).
+                pbr_channel_lines(m, "i.lit_eye", "i.lit_light", &mut p.rows, &mut pbr_body);
+                continue;
+            }
             channel_lines(m, ch, &names[ch], "i.lit_eye", "g_enh.N", "i.lit_light", &mut p.rows, &mut plain);
             enhanced_channel_lines(m, ch, &names[ch], "i.lit_eye", "g_enh.N", "i.lit_light", metal, &mut p.rows, &mut enhanced);
         }
         lit_body.push("    float4 lit0 = float4(0.0, 0.0, 0.0, 0.0);".into());
         lit_body.push("    float4 lit1 = float4(0.0, 0.0, 0.0, 0.0);".into());
-        lit_body.push("    if (enh_on()) {".into());
-        lit_body.extend(enhanced.iter().map(|l| format!("    {l}")));
-        lit_body.push("    } else {".into());
-        lit_body.extend(plain.iter().map(|l| format!("    {l}")));
-        lit_body.push("    }".into());
+        lit_body.extend(pbr_body);
+        if !plain.is_empty() || !enhanced.is_empty() {
+            lit_body.push("    if (enh_on()) {".into());
+            lit_body.extend(enhanced.iter().map(|l| format!("    {l}")));
+            lit_body.push("    } else {".into());
+            lit_body.extend(plain.iter().map(|l| format!("    {l}")));
+            lit_body.push("    }".into());
+        }
     }
+
+    // Whether the lit form's colour sums the key (light 0 in a lit colour channel it reads, as channel_lines writes
+    // it): only then does its traced form take V and O in its sums (program_lit.hlsli TRACED_UNKEYED; D1).
+    let keyed = lit_channels
+        && (0..2usize).any(|ch| {
+            p.color_read[ch] && ch < m.channel_count as usize && channel_is_lit(&m.channels[2 * ch]) && m.channels[2 * ch].light_mask & 1 != 0
+        });
 
     // Vertex stage: writes exactly what the pixel stage reads, numbered as it reads them.
     let coords_read: Vec<u8> = p.coords.0.clone();
@@ -994,6 +1356,14 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
         body.push("    o.lit_eye = p.eye;".into());
         body.push("    o.lit_nrm = nrm;".into());
         body.push("    o.lit_light = p.light;".into());
+    }
+    if normal_map.is_some() {
+        for (input, line) in [(Input::Tangent, "    o.lit_tan = lit_normal(p, v.tangent);"), (Input::Binormal, "    o.lit_bin = lit_normal(p, v.binormal);")] {
+            if !inputs.contains(&input) {
+                inputs.push(input);
+            }
+            body.push(line.into());
+        }
     }
     let mut reads_color = [false; 2];
     let names = [Channel { target: "c0", vertex: "v.color0" }, Channel { target: "c1", vertex: "v.color1" }];
@@ -1093,12 +1463,52 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
         uv_kinds.push(projective);
     }
 
+    // An unlit channel's vertex colour de-lit by the cooker's gain, by kDebake (program.hlsli traced_vertex_gain; D2):
+    // in the traced form alone (compile_programs.py gives such a stage its traced forms), so a draw without ray tracing
+    // runs what it ran before.
+    // Every form that reads colour 0: the gain word is the cooker's say (0, a gain of 1, where its rgb is lit).
+    // c93 (3.3): a painted material with no vertex colour (model_write debakes_map) whose mesh holds light in its first
+    // map: its traced vertex forms pass the gain as a multiplier (traced_map_gain: 1 unless the relight de-lights), and
+    // its traced pixel forms take what the pixel shows through it. The material's own stages only (no replace pass, no
+    // pass edit).
+    let map_gained = form.pass == 0 && form.replace == 0 && !reads_color[0] && super::model_write::debakes_map(m);
+    let gained = reads_color[0] || map_gained;
+    if reads_color[0] {
+        for (k, line) in ["#if NATIVE_TRACED", "    v.color0.rgb = traced_vertex_gain(v.color0.rgb, v.gain);", "#endif"].into_iter().enumerate() {
+            body.insert(k, line.into());
+        }
+    }
+    if map_gained {
+        body.extend(["#if NATIVE_TRACED".into(), "    o.gain = traced_map_gain(v.gain);".into(), "#endif".into()]);
+    }
     // Lit lines name the turned normal; only a stage that reads it pays for it.
     if body.iter().any(|l| l.contains(", nrm)") || l.contains("= nrm;")) {
         body.insert(0, "    const float3 nrm = lit_normal(p, v.nrm);".into());
     }
+    // A surface shader's varyings: the mesh's coordinate sets 0 and 1 as they are, the world position if it reads it.
+    let mut surface_vary: Vec<(&str, String)> = Vec::new();
+    if let Some(sf) = surface {
+        for k in 0..2u8 {
+            if !sf.uv[usize::from(k)] {
+                continue;
+            }
+            let at = match inputs.iter().filter(|i| matches!(i, Input::Coord(_))).position(|i| *i == Input::Coord(k)) {
+                Some(at) => at,
+                None => {
+                    inputs.push(Input::Coord(k));
+                    inputs.iter().filter(|i| matches!(i, Input::Coord(_))).count() - 1
+                }
+            };
+            body.push(format!("    o.surf_uv{k} = v.uv{at};"));
+            surface_vary.push(("float2", format!("surf_uv{k}")));
+        }
+        if sf.reads & super::surface_shader::READ_WORLD != 0 {
+            body.push("    o.surf_world = world_position(p, v.pos);".into());
+            surface_vary.push(("float3", "surf_world".into()));
+        }
+    }
     let read_normal = body.iter().any(|l| l.contains("v.nrm"));
-    let vary = varyings(&uv_kinds, color_written, form.lit);
+    let vary = varyings(&uv_kinds, color_written, form.lit, normal_map.is_some(), &surface_vary, map_gained);
     let mut vertex_in = String::from("struct VertexIn {\n    float3 pos : POSITION;\n    uint draw_matrix : BLENDINDICES;\n");
     let mut final_inputs = Vec::new();
     if read_normal {
@@ -1110,6 +1520,12 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
             let _ = writeln!(vertex_in, "    float4 color{ch} : COLOR{ch};");
             final_inputs.push(if ch == 0 { Input::Color0 } else { Input::Color1 });
         }
+    }
+    if gained {
+        // Read by the traced forms alone (above): declared there alone, so no other form's module has an input it
+        // never reads (l89; compile_programs.py refuses one).
+        vertex_in.push_str("#if NATIVE_TRACED\n    uint gain : BLENDWEIGHT;\n#endif\n");
+        final_inputs.push(Input::Gain);
     }
     let mut uv = 0;
     for i in &inputs {
@@ -1126,7 +1542,9 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
     }
     vertex_in.push_str("};\n");
 
-    let mut vertex = String::from("#include \"program.hlsli\"\n");
+    // A vertex stage that sums lights takes the game's ambient: the traced light reaches only a pixel stage
+    // (program_lit.hlsli's AMBIENT_TERM).
+    let mut vertex = String::from("#include \"program.hlsli\"\n#define AMBIENT_TERM(x) (x)\n");
     vertex.push_str(&v_rows.declare(1, "MaterialVertex"));
     vertex.push_str(&vertex_in);
     vertex.push_str(&vary);
@@ -1141,11 +1559,37 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
     if form.lit {
         pixel.push_str("#include \"program_lit.hlsli\"\n");
     }
+    if pbr.is_some() {
+        pixel.push_str("#include \"program_pbr.hlsli\"\n");
+    }
+    // A surface shader's text and call (the rows they read are declared with the rest).
+    let (surface_text, surface_head) = match (surface, pbr) {
+        (Some(sf), Some(shade)) => (surface_globals(&mut p, sf), surface_head_lines(&mut p, sf, &shade)),
+        _ => (String::new(), Vec::new()),
+    };
     pixel.push_str(&p.rows.declare(2, "MaterialPixel"));
     pixel.push_str(&vary);
+    pixel.push_str(&surface_text);
     pixel.push_str("NativeOut program_ps(Varyings i) {\n");
     if form.lit {
+        if !keyed {
+            pixel.push_str("    TRACED_UNKEYED;\n");
+        }
+        // c77 (7.6): a character's face part (skinned, by its name) takes the face's light (program_lit.hlsli
+        // TRACED_FACE: the eye's floor, the face's softened shadow).
+        let face = if skinned { super::hit_record::face_kind(&m.name) } else { 0 };
+        if face != 0 {
+            pixel.push_str(&format!("    TRACED_FACE({face}u);\n"));
+        }
+        for l in normal_lines.iter().chain(&surface_head) {
+            pixel.push_str(l);
+            pixel.push('\n');
+        }
         pixel.push_str("    g_enh = enh_begin(i.lit_eye, i.lit_nrm);\n");
+        if !m.highlight_maps.is_empty() {
+            // c58: the enhanced highlight as the sprite painted it (its roughness and peak), under the relight.
+            pixel.push_str(&format!("    enh_sprite({:.3}, {:.3});\n", m.highlight_rough, m.highlight_gain));
+        }
     }
     if lit_rows_used {
         for l in &lit_body {
@@ -1165,6 +1609,9 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
         pixel.push_str(l);
         pixel.push('\n');
     }
+    if map_gained {
+        pixel.push_str("#if NATIVE_TRACED\n    prev.rgb = traced_map_shown(prev.rgb, i.gain);\n#endif\n");
+    }
     if form.lit {
         pixel.push_str("    PROGRAM_RETURN(float4(max(prev.rgb, 0.0), saturate(prev.a)));\n}\n");
     } else {
@@ -1176,10 +1623,11 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
 }
 
 /// The headers a mod's programs include, for building them on the player's machine.
-pub const HEADERS: [(&str, &str); 3] = [
+pub const HEADERS: [(&str, &str); 4] = [
     ("nebula_limits.hlsli", include_str!("../../../../runtime/src/render/materials/nebula_limits.hlsli")),
     ("program.hlsli", include_str!("../../../../runtime/src/render/materials/program.hlsli")),
     ("program_lit.hlsli", include_str!("../../../../runtime/src/render/materials/program_lit.hlsli")),
+    ("program_pbr.hlsli", include_str!("../../../../runtime/src/render/materials/program_pbr.hlsli")),
 ];
 
 /// How a form names a vertex attribute (nebula_model.h NEBULA_INPUT_*).
@@ -1190,6 +1638,7 @@ pub fn input_code(input: &Input) -> u8 {
         Input::Color1 => 2,
         Input::Tangent => 3,
         Input::Binormal => 4,
+        Input::Gain => 7,
         Input::Coord(k) => 16 + *k,
     }
 }
@@ -1204,9 +1653,13 @@ pub fn written_or_unknown() -> Written {
 /// Every animation that can write a register, for the store's whole cook.
 pub fn prepare_written_files(files: &[super::PakFile], read: &mut dyn FnMut(&super::PakFile) -> Result<Vec<u8>>) -> Result<()> {
     let mut written = Written::default();
+    // c83: every model read once before the cook (hit_record.rs TWINS: the near and far twins, the bloom twins).
+    super::hit_record::twins_begin();
     walk_partition_files(files, read, &mut |name, bytes| {
         if name.to_ascii_lowercase().ends_with(".brk") {
             written.add(&clip::read(&bytes).with_context(|| name.to_string())?);
+        } else if super::native_data::is_model_file(&bytes) {
+            super::hit_record::twins_add(name, &bytes);
         }
         Ok(())
     })?;
@@ -1218,6 +1671,38 @@ pub fn prepare_written_files(files: &[super::PakFile], read: &mut dyn FnMut(&sup
 /// the mod didn't bring them; and pixel programs the mod wrote, by material name.
 pub static MOD_TEXTS: std::sync::Mutex<Option<std::collections::BTreeMap<String, String>>> = std::sync::Mutex::new(None);
 pub static MOD_WRITTEN: std::sync::Mutex<Option<std::collections::BTreeMap<String, String>>> = std::sync::Mutex::new(None);
+
+/// program_table.cpp's flags of a program, as tools/dev/compile_programs.py derives them for the game's own: 1 a vertex
+/// program reads world_ values, 2 a pixel program is lit (includes program_lit.hlsli), 4 it sums the key light (light 0)
+/// itself. The game reads them for a mod's programs from `flags.tsv` beside their texts (cook_plan).
+pub const FLAG_READS_WORLD: u32 = 1;
+pub const FLAG_LIT: u32 = 2;
+pub const FLAG_SUMS_KEY: u32 = 4;
+
+pub fn text_flags(pixel: bool, text: &str) -> u32 {
+    if !pixel {
+        return if text.contains("world_") { FLAG_READS_WORLD } else { 0 };
+    }
+    let lit = if text.contains("program_lit.hlsli") { FLAG_LIT } else { 0 };
+    let keyed = ["light_term(i.lit_light, 0u", "enh_add_light(i.lit_light, 0u", "pbr_add_light(i.lit_light, 0u"].iter().any(|w| text.contains(w))
+        && !text.contains("TRACED_UNKEYED;");
+    let written_lit = text.lines().any(|line| {
+        let words: Vec<&str> = line.trim_start().trim_start_matches('#').split_whitespace().collect();
+        line.trim_start().starts_with('#') && words.len() >= 3 && words[0] == "define" && words[1] == "NATIVE_LIT" && words[2] == "1"
+    });
+    lit | if keyed || written_lit { FLAG_SUMS_KEY } else { 0 }
+}
+
+/// The texture coordinates a vertex text reads, by its `#define NATIVE_COORDS n`; 0 for a generated one.
+pub fn text_coords(text: &str) -> u32 {
+    text.lines()
+        .find_map(|line| {
+            let t = line.trim_start();
+            let words: Vec<&str> = t.trim_start_matches('#').split_whitespace().collect();
+            (t.starts_with('#') && words.len() >= 3 && words[0] == "define" && words[1] == "NATIVE_COORDS").then(|| words[2].parse().ok()).flatten()
+        })
+        .unwrap_or(0)
+}
 
 /// A form's texts as the file will name them: a mod's own pixel program in place of the plain form's, each text noted for a
 /// mod's conversion.
@@ -1469,7 +1954,7 @@ fn walk_partition_files(files: &[super::PakFile], read: &mut dyn FnMut(&super::P
     Ok(())
 }
 
-fn walk_files(input: &Path, visit: &mut dyn FnMut(&str, Vec<u8>) -> Result<()>) -> Result<()> {
+pub(super) fn walk_files(input: &Path, visit: &mut dyn FnMut(&str, Vec<u8>) -> Result<()>) -> Result<()> {
     let source = input.join("game.pak");
     let mut pak = File::open(&source).with_context(|| format!("{} cannot be opened", source.display()))?;
     let system = pak_system_area(&mut pak)?;

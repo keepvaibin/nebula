@@ -94,6 +94,7 @@
 #endif
 #include <nebula_frame_list.h>
 #include "galaxy/render/rt_materials.h"
+#include "galaxy/render/rt_caps.h"
 #include "galaxy/render/texture_pack.h"
 #if defined(NEBULA_HOST_D3D12)
 #endif
@@ -1628,6 +1629,13 @@ void submit_frame(bool present, bool black) {
 void svc_game_stage(void*, const char* name) {
     if (name != nullptr && gSceneStage != name) {
         gSceneStage = name;
+#if defined(NEBULA_HOST_RENDERER)
+        if (::galaxy::diagnosing(::galaxy::kDiagnoseRtInputs)) {
+            const std::uint32_t hash = galaxy::render::rt_stage_hash(gSceneStage);
+            std::fprintf(stderr, "[rt-inputs] stage %s: %08x, %s\n", name, hash,
+                         galaxy::render::rt_stage(hash) != nullptr ? "a row of its own" : "the defaults");
+        }
+#endif
     }
 }
 
@@ -2333,6 +2341,25 @@ const galaxy::assets::AssetStore& asset_table() {
     return gPak.store;
 }
 
+#if defined(NEBULA_HOST_RENDERER)
+// Ray tracing's tables in the pak (nebula-import: each stage's numbers, the particle effects' light), read once before
+// the renderer starts; a pak without them leaves the defaults.
+void load_rt_tables() {
+    const auto text_of = [](const char* path) {
+        std::string text;
+        const std::optional<galaxy::assets::Entry> entry = asset_table().find(path);
+        if (entry && !entry->folder) {
+            text.resize(static_cast<std::size_t>(entry->length));
+            if (!gPak.store.read(entry->position, text.size(), text.data())) {
+                text.clear();
+            }
+        }
+        return text;
+    };
+    galaxy::render::set_rt_tables(text_of(galaxy::render::kRtStagesPath), text_of(galaxy::render::kRtEffectsPath));
+}
+#endif
+
 int asset_entry_out(const std::optional<galaxy::assets::Entry>& entry, NebulaAssetEntry* out) {
     if (!entry) {
         return 0;
@@ -2576,7 +2603,7 @@ uint32_t svc_option(void*, uint32_t what) {
 #if defined(NEBULA_HOST_RENDERER)
     {
         const galaxy::render::RenderConfig render = galaxy::render::get_render_config();
-        return render.per_pixel_lighting || render.enhanced_lighting ? 1u : 0u;
+        return galaxy::render::lights_at_pixel(render) ? 1u : 0u;
     }
 #else
         return 0;
@@ -2670,6 +2697,28 @@ uint32_t svc_option(void*, uint32_t what) {
         return 1u;
 #elif defined(NEBULA_HOST_RENDERER) && !defined(__APPLE__)
         return 2u;
+#else
+        return 0u;
+#endif
+    case NEBULA_OPTION_RAY_TRACING:
+#if defined(NEBULA_HOST_RENDERER)
+    {
+        if (!galaxy::render::get_render_config().ray_tracing_enabled || !galaxy::render::rt_capable(galaxy::render::rt_caps())) {
+            return 0u;
+        }
+        // A stage's row may keep its shadow light sets as the artists made them (rt_stages.tsv `shadow sets`).
+        const galaxy::render::RtStage* stage = galaxy::render::rt_stage(galaxy::render::rt_stage_hash(gSceneStage));
+        // Reflections traced at High show what a mirror shows: the game's mirror pass is not drawn (FB, RT-MASTER-PLAN
+        // 12.5). The reflections pass's own rule (rt_pass_reflect.cpp rt_pass_reflect_on): not under the reference
+        // (its preset or rt-reference) nor rt-added or rt-motion, which leave the pass out.
+        const galaxy::render::RenderConfig config = galaxy::render::get_render_config();
+        const bool mirror = galaxy::render::rt_part(config, galaxy::render::RtPart::Reflect) >= 3u &&
+                            config.rt_quality != galaxy::render::kRtPresetReference &&
+                            !::galaxy::diagnosing(::galaxy::kDiagnoseRtReference) && !::galaxy::diagnosing(::galaxy::kDiagnoseRtAdded) &&
+                            !::galaxy::diagnosing(::galaxy::kDiagnoseRtMotion);
+        return NEBULA_RAY_TRACING_ON | (stage != nullptr && stage->shadow_sets_kept ? 0u : NEBULA_RAY_TRACING_SHADOW_SETS) |
+               (mirror ? NEBULA_RAY_TRACING_MIRROR : 0u);
+    }
 #else
         return 0u;
 #endif
@@ -3811,6 +3860,8 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
         if (fs::is_regular_file(built, built_error)) {
             galaxy::render::load_mod_shaders(built);
         }
+        // The flags program_table keeps for its own programs, for the mods' (the cook's, beside the texts).
+        galaxy::render::load_mod_program_flags(settings_folder / "mods" / ".cooked" / "mods.sources" / "flags.tsv");
     }
     for (const fs::path& folder : plan.luma_folders) {
         std::error_code shaders_error;
@@ -4549,6 +4600,11 @@ int main(int argc, char** argv) {
             galaxy::render::set_movie_mod_folders(galaxy::mods::movie_folders(mods));
             prepare_mod_files(settings_folder, game_id, std::move(mods));
         }
+#if defined(NEBULA_HOST_RENDERER)
+        // Ray tracing's tables, with the mods' rows (their merge/NebulaData/RtStages.tsv and RtEffects.tsv) now that
+        // their store is attached.
+        load_rt_tables();
+#endif
         {
             // The session's mods, for crash reports: one line each, and whether one changes the game itself.
             std::string lines;
