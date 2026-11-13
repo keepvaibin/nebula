@@ -285,7 +285,8 @@ typedef struct LumaCore {
        from 1, in source order; luma_numbers.json lists them all), and every file's number constant by its name, with
        signature "" and place 0. A null signature asks for the only function of that name with a number at that place.
        number: its address and, in *kind, its kind (1 f32, 2 f64, 3 s8, 4 u8, 5 s16, 6 u16, 7 s32, 8 u32, 9 s64,
-       10 u64), or null and kind 0: no such number, or several (give the signature); said in the log. Any thread. */
+       10 u64, 11 bool: a file's constant, 0 or 1), or null and kind 0: no such number, or several (give the
+       signature); said in the log. Any thread. */
     void* (*number)(const LumaMod* mod, const char* name, const char* signature, uint32_t place, uint32_t* kind);
     /* Sets one to `value` for the mod. When the mod goes, every number it set is again what the mods still here set
        last, or the game's own (a write through number's address is not put back). 0: set; -1: no such number, several,

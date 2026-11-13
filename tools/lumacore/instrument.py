@@ -112,6 +112,7 @@ K_CALL_EXPR = 103
 # The kernel's own units: their numbers and tables are not the game's data.
 KERNEL_PREFIX = 'Game/System/Luma'
 SC_STATIC = 3
+T_BOOL = 3
 T_ENUM_KIND = 106
 # Whole numbers (bool and the character types too: a const one may be a constant expression)
 T_WHOLE = (3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19)
@@ -886,7 +887,8 @@ class Unit:
             return None
         if parent.kind in (K_STRUCT, K_UNION, K_CLASS) and api.access(definition) in (2, 3):
             return None
-        kind = number_kind(vtype.kind, api.sizeOf(vtype))
+        # A file's bool constant is a switch a mod may set (kind 11, 0 or 1); a bool written in code is no number.
+        kind = 11 if vtype.kind == T_BOOL and api.sizeOf(vtype) == 1 else number_kind(vtype.kind, api.sizeOf(vtype))
         initializer = api.varInitializer(definition)
         if kind is None or api.isNull(initializer):
             return None
@@ -1788,7 +1790,8 @@ def number_value(written, floating):
 
 
 def number_kind(type_kind, size):
-    """luma::Number's kind (luma_hook.h): 1 f32, 2 f64, 3 s8, 4 u8, 5 s16, 6 u16, 7 s32, 8 u32, 9 s64, 10 u64; None
+    """luma::Number's kind (luma_hook.h): 1 f32, 2 f64, 3 s8, 4 u8, 5 s16, 6 u16, 7 s32, 8 u32, 9 s64, 10 u64 (11 bool:
+    a file's constant only, constant_key); None
     for any other type."""
     if type_kind == 21 and size == 4:
         return 1
