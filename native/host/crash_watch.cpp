@@ -4,6 +4,7 @@
 
 #if defined(_WIN32)
 #include <dbghelp.h>
+#include <processsnapshot.h>
 
 #include <cstdint>
 #include <cstdio>
@@ -46,6 +47,38 @@ void append(wchar_t* out, std::size_t size, std::size_t* at, const wchar_t* text
     out[*at] = 0;
 }
 
+// MiniDumpWriteDump given a process snapshot: it reads the snapshot (S_FALSE to IsProcessSnapshotCallback).
+BOOL CALLBACK snapshot_callback(PVOID, const PMINIDUMP_CALLBACK_INPUT input, PMINIDUMP_CALLBACK_OUTPUT output) {
+    if (input->CallbackType == IsProcessSnapshotCallback) {
+        output->Status = S_FALSE;
+    }
+    return TRUE;
+}
+
+// The dump of the game's process as it is now, read from a snapshot: its address space cloned (copy on write), its
+// threads and their contexts, its handles. The game's other threads run on while the dump is written, a driver's among
+// them; read live, a fault in a graphics driver stopped the dump at ERROR_PARTIAL_COPY with nothing in it (p0479
+// kit-replay, p0480 3511: its memory freed while it was read), MiniDumpIgnoreInaccessibleMemory or not. No snapshot
+// (the system refuses one): the live process, as before.
+BOOL write_dump(decltype(&MiniDumpWriteDump) write, HANDLE game, DWORD pid, HANDLE file, MINIDUMP_TYPE type,
+                MINIDUMP_EXCEPTION_INFORMATION* exception) {
+    HPSS snapshot = nullptr;
+    const auto flags = static_cast<PSS_CAPTURE_FLAGS>(
+        PSS_CAPTURE_VA_CLONE | PSS_CAPTURE_HANDLES | PSS_CAPTURE_HANDLE_NAME_INFORMATION | PSS_CAPTURE_HANDLE_BASIC_INFORMATION |
+        PSS_CAPTURE_HANDLE_TYPE_SPECIFIC_INFORMATION | PSS_CAPTURE_HANDLE_TRACE | PSS_CAPTURE_THREADS | PSS_CAPTURE_THREAD_CONTEXT |
+        PSS_CAPTURE_THREAD_CONTEXT_EXTENDED | PSS_CREATE_BREAKAWAY_OPTIONAL | PSS_CREATE_USE_VM_ALLOCATIONS |
+        PSS_CREATE_RELEASE_SECTION);
+    if (PssCaptureSnapshot(game, flags, CONTEXT_ALL, &snapshot) != ERROR_SUCCESS) {
+        return write(game, pid, file, type, exception, nullptr, nullptr);
+    }
+    MINIDUMP_CALLBACK_INFORMATION callback{snapshot_callback, nullptr};
+    const BOOL ok = write(reinterpret_cast<HANDLE>(snapshot), pid, file, type, exception, nullptr, &callback);
+    const DWORD error = ok ? 0u : GetLastError();
+    PssFreeSnapshot(GetCurrentProcess(), snapshot);
+    SetLastError(error);
+    return ok;
+}
+
 }  // namespace
 
 int run(int argc, char** argv) {
@@ -64,8 +97,10 @@ int run(int argc, char** argv) {
     const HANDLE done = OpenEventW(EVENT_MODIFY_STATE, FALSE, name);
     name_of(name, 128, base, L"ready");
     const HANDLE ready = OpenEventW(EVENT_MODIFY_STATE, FALSE, name);
-    // What MiniDumpWriteDump reads of another process: its memory, threads and handles.
-    const HANDLE game = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | PROCESS_DUP_HANDLE | SYNCHRONIZE, FALSE, pid);
+    // What MiniDumpWriteDump reads of another process: its memory, threads and handles; PROCESS_CREATE_PROCESS for the
+    // snapshot's clone of its address space (write_dump).
+    const HANDLE game = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | PROCESS_DUP_HANDLE | PROCESS_CREATE_PROCESS | SYNCHRONIZE,
+                                    FALSE, pid);
     auto* const block = mapping != nullptr ? static_cast<Block*>(MapViewOfFile(mapping, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(Block)))
                                            : nullptr;
     const HMODULE dbghelp = LoadLibraryW(L"dbghelp.dll");
@@ -98,8 +133,7 @@ int run(int argc, char** argv) {
             MINIDUMP_EXCEPTION_INFORMATION exception{block->thread,
                                                      reinterpret_cast<EXCEPTION_POINTERS*>(static_cast<std::uintptr_t>(block->pointers)),
                                                      TRUE};
-            ok = write(game, pid, file, static_cast<MINIDUMP_TYPE>(block->type), block->pointers != 0 ? &exception : nullptr,
-                       nullptr, nullptr);
+            ok = write_dump(write, game, pid, file, static_cast<MINIDUMP_TYPE>(block->type), block->pointers != 0 ? &exception : nullptr);
             // MiniDumpWriteDump's failure is an HRESULT in the last error.
             error = ok ? 0u : GetLastError();
             CloseHandle(file);
