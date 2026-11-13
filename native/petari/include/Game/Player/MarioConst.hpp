@@ -501,6 +501,9 @@ struct MarioConstTable {
     f32 mLookMaxAngleVM;
     f32 mLookShoulderMoveMax;
     u16 mRushInBlendTimer;
+    // Nebula: sizes the game wrote as numbers in MarioActor, named so a mod can scale the player (LumaKit forms).
+    f32 mBinderRadius;  // the body's ground collision radius standing (60); squatting 40/60 of it, as a Boo 100/60
+    f32 mSensorRadius;  // the body's hit sensor radius (100); hanging 60/100 of it
 };
 
 bool setMarioConstant(s32 character, const char* pName, s32 index, f32 value);

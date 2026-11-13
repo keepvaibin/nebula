@@ -2616,22 +2616,24 @@ void MarioActor::calcCenterPos() {
         }
     }
 
+    // The player's sizes (MarioConst mBinderRadius: 60 standing, 40 squatting, 100 a Boo at the game's own).
+    const f32 binderRadius = mConst->getTable()->mBinderRadius;
     f32 centerHeight;
     if (mMario->getMovementStates().squat) {
         f32 radius = mBinder->mRadius;
-        f32 height = 40.0f;
+        f32 height = binderRadius * 40.0f / 60.0f;
         centerHeight = 0.8f * radius + 0.2f * height;
         mBinder->mRadius = centerHeight;
     } else {
         f32 radius = mBinder->mRadius;
-        f32 height = 60.0f;
+        f32 height = binderRadius;
         centerHeight = 0.9f * radius + 0.1f * height;
         mBinder->mRadius = centerHeight;
     }
 
     if (mPlayerMode == PlayerMode_Teresa) {
         f32 radius = mBinder->mRadius;
-        f32 height = 100.0f;
+        f32 height = binderRadius * 100.0f / 60.0f;
         f32 teresaRadius = 0.8f * radius + 0.2f * height;
         centerHeight = 20.0f + teresaRadius;
         mBinder->mRadius = teresaRadius;
