@@ -88,24 +88,26 @@ public:
         }
         FfxFsr3UpscalerDispatchDescription d{};
         d.commandList = ffxGetCommandListDX12(in.list);
+        const FfxResourceStates target = in.common ? FFX_RESOURCE_STATE_COMMON : FFX_RESOURCE_STATE_RENDER_TARGET;
+        const FfxResourceStates depth = in.common ? FFX_RESOURCE_STATE_COMMON : FFX_RESOURCE_STATE_DEPTH_ATTACHEMENT;
         d.color = ffxGetResourceDX12(in.color, ffxGetResourceDescriptionDX12(in.color),
-                                     L"Nebula scene target color", FFX_RESOURCE_STATE_RENDER_TARGET);
+                                     L"Nebula scene target color", target);
         d.depth = ffxGetResourceDX12(in.depth, ffxGetResourceDescriptionDX12(in.depth),
-                                     L"Nebula scene target depth", FFX_RESOURCE_STATE_DEPTH_ATTACHEMENT);
+                                     L"Nebula scene target depth", depth);
         if (in.motion != nullptr) {
             d.motionVectors = ffxGetResourceDX12(
                 in.motion, ffxGetResourceDescriptionDX12(in.motion),
-                L"Nebula motion vectors", FFX_RESOURCE_STATE_RENDER_TARGET);
+                L"Nebula motion vectors", target);
         }
         if (in.reactive != nullptr) {
             d.reactive = ffxGetResourceDX12(
                 in.reactive, ffxGetResourceDescriptionDX12(in.reactive),
-                L"Nebula reactive mask", FFX_RESOURCE_STATE_RENDER_TARGET);
+                L"Nebula reactive mask", target);
         }
         d.output = ffxGetResourceDX12(
             in.output,
             ffxGetResourceDescriptionDX12(in.output, FFX_RESOURCE_USAGE_UAV),
-            L"Nebula upscaled scene", FFX_RESOURCE_STATE_RENDER_TARGET);
+            L"Nebula upscaled scene", target);
         d.dilatedDepth = backend_.fpGetResource(&backend_, shared_[0]);
         d.dilatedMotionVectors = backend_.fpGetResource(&backend_, shared_[1]);
         d.reconstructedPrevNearestDepth = backend_.fpGetResource(&backend_, shared_[2]);
@@ -146,6 +148,7 @@ public:
     }
 
     const char* name() const noexcept override { return "FSR 3.1"; }
+    bool own_barriers() const noexcept override { return true; }
 
 private:
     std::vector<unsigned char> scratch_;

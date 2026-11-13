@@ -6,6 +6,7 @@
 #include <sl.h>
 #include <sl_consts.h>
 #include <sl_dlss.h>
+#include <sl_dlss_d.h>
 
 #include "galaxy/render/halton.h"
 
@@ -85,6 +86,53 @@ void fill_constants(sl::Constants& constants, const Inputs& in) {
     constants.orthographicProjection = sl::Boolean::eFalse;
     constants.motionVectorsDilated = sl::Boolean::eFalse;
     constants.motionVectorsJittered = sl::Boolean::eFalse;
+}
+
+// A world-to-eye matrix (rows 3x4, the eye looking down -z) as Streamline's camera space (+z ahead), for row
+// vectors (v' = v M), and its inverse.
+inline void camera_matrices(const float (&view)[12], sl::float4x4& world_to_view, sl::float4x4& view_to_world) {
+    const float sign[3] = {1.0f, 1.0f, -1.0f};
+    float m[4][4] = {};
+    for (unsigned c = 0u; c < 3u; ++c) {
+        for (unsigned r = 0u; r < 3u; ++r) {
+            m[r][c] = sign[c] * view[c * 4u + r];
+        }
+        m[3][c] = sign[c] * view[c * 4u + 3u];
+    }
+    m[3][3] = 1.0f;
+    // The inverse of a turn and a move: the turn's transpose, the move undone.
+    float inv[4][4] = {};
+    for (unsigned r = 0u; r < 3u; ++r) {
+        for (unsigned c = 0u; c < 3u; ++c) {
+            inv[r][c] = m[c][r];
+        }
+    }
+    for (unsigned c = 0u; c < 3u; ++c) {
+        inv[3][c] = -(m[3][0] * inv[0][c] + m[3][1] * inv[1][c] + m[3][2] * inv[2][c]);
+    }
+    inv[3][3] = 1.0f;
+    for (unsigned r = 0u; r < 4u; ++r) {
+        world_to_view[r] = sl::float4(m[r][0], m[r][1], m[r][2], m[r][3]);
+        view_to_world[r] = sl::float4(inv[r][0], inv[r][1], inv[r][2], inv[r][3]);
+    }
+}
+
+// The eye's projection for DLSS Ray Reconstruction, which reads the specular hit distance through it: Streamline's
+// camera space (+z ahead), reversed depth.
+template <typename Inputs>
+void rr_projection(sl::Constants& constants, const Inputs& in) {
+    const float aspect = static_cast<float>(in.output_width) / static_cast<float>(std::max(in.output_height, 1u));
+    const float y_scale = 1.0f / std::tan(0.5f * in.fov_y);
+    const float n = in.camera_near, f = in.camera_far;
+    const float b = n * f / std::max(f - n, 1e-6f), a = -n / std::max(f - n, 1e-6f);
+    constants.cameraViewToClip[0] = sl::float4(y_scale / aspect, 0.0f, 0.0f, 0.0f);
+    constants.cameraViewToClip[1] = sl::float4(0.0f, y_scale, 0.0f, 0.0f);
+    constants.cameraViewToClip[2] = sl::float4(0.0f, 0.0f, a, 1.0f);
+    constants.cameraViewToClip[3] = sl::float4(0.0f, 0.0f, b, 0.0f);
+    constants.clipToCameraView[0] = sl::float4(aspect / y_scale, 0.0f, 0.0f, 0.0f);
+    constants.clipToCameraView[1] = sl::float4(0.0f, 1.0f / y_scale, 0.0f, 0.0f);
+    constants.clipToCameraView[2] = sl::float4(0.0f, 0.0f, 0.0f, 1.0f / b);
+    constants.clipToCameraView[3] = sl::float4(0.0f, 0.0f, 1.0f, -a / b);
 }
 
 }  // namespace galaxy::render::streamline_common

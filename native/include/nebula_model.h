@@ -11,7 +11,8 @@ extern "C" {
 #endif
 
 #define NEBULA_MODEL_MAGIC 0x4C444D4Eu /* "NMDL" */
-#define NEBULA_MODEL_VERSION 5u
+#define NEBULA_MODEL_VERSION 11u /* 9: the hit record's bump fields (c67); 10: glow_shapes_at (c86); 11: the
+                                    lits (plan 3.3) with the hits in one header */
 #define NEBULA_MODEL_NONE NEBULA_NONE32
 
 enum { NEBULA_SCALE_BASIC = 0, NEBULA_SCALE_SOFTIMAGE = 1, NEBULA_SCALE_MAYA = 2 };
@@ -57,8 +58,34 @@ typedef struct NebulaModelHeader {
     uint32_t draw_matrices_at, envelopes_at, mixes_at, inverse_binds_at, important_at;
     uint32_t meshes_at, materials_at, textures_at;
     uint32_t geometry_at, geometry_size; /* every stream, for one copy to the GPU */
-    uint32_t lit_count, lits_at;         /* version 5: 0, or material_count NebulaModelLit (material n's at n) */
+    uint32_t hits_at;  /* material_count NebulaModelHit, in the materials' order */
+    uint32_t paint_lights_at; /* mesh_count NebulaModelPaintLight, in the meshes' order; 0: none */
+    uint32_t glow_shapes_at;  /* version 10 on: mesh_count NebulaModelGlowSpan, then the NebulaModelGlowShape records;
+                                 0: none (c86, PLAN-LIGHTS L2) */
+    uint32_t lit_count, lits_at;         /* 0, or material_count NebulaModelLit (material n's at n) */
 } NebulaModelHeader;
+
+/* A glowing mesh's light as shapes (c86, PLAN-LIGHTS L2), in its model's space (units), each piece at most 6 m long:
+   a sphere (radius: the mean extent), a capsule (the segment along `axis`, 2 extent[0] long, radius extent[1]) or a
+   disc (facing `normal`, extent[0] by extent[1]; lit on both sides when two_sided). extent: the half spans along axis,
+   along the axis between, and along the shortest (`normal` for a disc: its triangles' mean normal). */
+enum { NEBULA_GLOW_SPHERE = 0, NEBULA_GLOW_CAPSULE = 1, NEBULA_GLOW_DISC = 2 };
+typedef struct NebulaModelGlowSpan {
+    uint32_t first, count; /* its shapes among the records; count 0: none */
+} NebulaModelGlowSpan;
+typedef struct NebulaModelGlowShape {
+    float centre[3], axis[3], normal[3], extent[3];
+    float area; /* its triangles', square units */
+    uint8_t kind, two_sided, reserved[2];
+} NebulaModelGlowShape;
+
+/* A painted mesh whose paint is one light (ray tracing's Physical style, RT-MASTER-PLAN 14.6): its vertex light fitted
+   as a + b max(n.d, 0); the share b / (a + b) (0: the mesh stays as painted) and d in the model's space, octahedral,
+   signed 16-bit (x, y; -32767 to 32767 for -1 to 1). */
+typedef struct NebulaModelPaintLight {
+    float share;
+    int16_t direction[2];
+} NebulaModelPaintLight;
 
 /* Joints by number, the number animation tracks and the game use. */
 typedef struct NebulaModelJoint {
@@ -99,6 +126,7 @@ enum {
     NEBULA_MESH_COLOR0 = 1u << 1,
     NEBULA_MESH_COLOR1 = 1u << 2,
     NEBULA_MESH_TANGENTS = 1u << 3,
+    NEBULA_MESH_GAIN = 1u << 4, /* stream 3: a word a vertex, the de-light gain (NEBULA_INPUT_GAIN) */
 };
 
 /* Where a mesh keeps coordinate n: stream 1 at 16 for coordinate 0, stream 3 at `offset` for the others;
@@ -111,7 +139,7 @@ typedef struct NebulaModelMeshCoord {
 
 /* Stream 0: position, 3 floats. Stream 1: normal 3 floats, colour word, coordinate 0 2 floats (24 bytes).
    Stream 2: draw matrix number, u32, present when single_matrix is NEBULA_MODEL_NONE. Stream 3: the further
-   coordinates, 2 floats each in ascending order, then colour 1, then tangent and binormal. */
+   coordinates, 2 floats each in ascending order, then colour 1, then tangent and binormal, then the gain. */
 typedef struct NebulaModelMesh {
     float min[3], max[3], radius;
     uint32_t vertex_count, index_count;
@@ -163,6 +191,8 @@ enum {
     NEBULA_INPUT_BINORMAL = 4,
     NEBULA_INPUT_WIDEN = 5, /* a site's widened corner: one uint, which corner */
     NEBULA_INPUT_MATRIX = 6, /* a site's vertex carrying its draw matrix: one uint */
+    NEBULA_INPUT_GAIN = 7, /* the painted light's de-light gain a channel (NEBULA_MESH_GAIN): one uint, signed bytes of
+                              log2 x 64 (r, g, b), 0 a gain of 1 */
     NEBULA_INPUT_COORD0 = 16, /* + the mesh's coordinate number */
 };
 
@@ -288,6 +318,79 @@ typedef struct NebulaModelLit {
     uint8_t reserved[5];
 } NebulaModelLit;
 
+/* What a ray reads of a material where it meets it (crates/nebula-import/src/cook/hit_record.rs): its class, from
+   the material's own data, the numbers that class takes, and the material's stages as data, for a shader that cannot
+   run the material's program (a ray's hit is not a pixel of its draw). */
+enum {
+    NEBULA_HIT_DIELECTRIC = 0, /* lit, opaque, no painted reflection */
+    NEBULA_HIT_GLOSS = 1,      /* a lit base under a painted reflection or an authored highlight */
+    NEBULA_HIT_METAL = 2,      /* a painted reflection carries the look over a dark base */
+    NEBULA_HIT_GLASS = 3,      /* blended, with a painted reflection or a warp */
+    NEBULA_HIT_CUTOUT = 4,     /* unused from model 6 (alpha-tested materials take their look's class and
+                                  NEBULA_HIT_ALPHA_TEST); kept so the numbers stay */
+    NEBULA_HIT_RAMP = 5,       /* shaded through a ramp map */
+    NEBULA_HIT_EMISSIVE = 6,   /* shows itself without light: added to what is behind it, or blended, unlit and bright */
+    NEBULA_HIT_PAINTED = 7,    /* not lit, opaque: its colours are its light */
+    NEBULA_HIT_TRANSLUCENT = 8, /* blended, no reflection */
+    NEBULA_HIT_WATER = 9,      /* a water surface (the cooker's rt_water.tsv) */
+    NEBULA_HIT_CLASS_COUNT
+};
+
+/* NebulaModelHit.flags */
+enum {
+    NEBULA_HIT_LIT = 1u << 0,          /* a colour channel sums lights */
+    NEBULA_HIT_TWO_SIDED = 1u << 1,
+    NEBULA_HIT_ALPHA_TEST = 1u << 2,
+    NEBULA_HIT_VERTEX_COLOUR = 1u << 3, /* its material colour is the vertex's */
+    NEBULA_HIT_ENVIRONMENT = 1u << 4,   /* it reads a map through the normal */
+    NEBULA_HIT_DRAWN_SHADOW = 1u << 5,  /* it is a shadow drawn by hand (a shadow model or decal): a renderer that
+                                           traces shadows neither draws it nor lets it cast one */
+    NEBULA_HIT_PAINTED_SHADOW = 1u << 6, /* painted (vertex colour, not lit) on a model whose paint holds the shadows
+                                            things cast on it (the cooker's study of its vertex light): a renderer that
+                                            traces shadows lets only lit things shadow it (RT-MASTER-PLAN 14.6) */
+    NEBULA_HIT_DRAWN_SHEEN = 1u << 7,  /* a painted sheen drawn as an added layer over a body that mirrors (c49): a
+                                          renderer that traces reflections neither draws it nor lets a ray meet it */
+};
+
+/* One combiner stage as the game's file orders it (the cooker's StageIr). */
+typedef struct NebulaModelStage {
+    uint8_t coord, map, channel;
+    uint8_t color_in[4], color_op, color_bias, color_scale, color_clamp, color_out;
+    uint8_t alpha_in[4], alpha_op, alpha_bias, alpha_scale, alpha_clamp, alpha_out;
+    uint8_t raster_swap, texture_swap, color_constant, alpha_constant;
+    uint8_t warp[9];
+    uint8_t reserved[2];
+} NebulaModelStage;
+
+typedef struct NebulaModelHit {
+    uint8_t klass;       /* NEBULA_HIT_* */
+    uint8_t stage_count;
+    uint8_t flags;
+    uint8_t glow_source; /* where a glow's colour comes from as the game animates it: 0 fixed (glow's own), 1 + a
+                            NEBULA_ROW_* code under NEBULA_ROW_OVERRIDE (the register, constant or material colour that
+                            carries what it shows unlit), 16 the vertex colour; bits 5-7 (c81) what made it a
+                            light: 0 none, 1 a row of rt_glow.tsv, 2 its name, 3 its class, 4 the game's bloom pass */
+    float roughness, metal, ior, transmission;
+    float base[3];      /* its colour under full light, maps mid grey: 0 to 1 */
+    float emission[3];  /* what it shows with no light at all */
+    float environment_share; /* how much of its look a painted reflection carries, 0 to 1 */
+    uint32_t stages_at; /* stage_count NebulaModelStage, from the model's start; 0: none */
+    uint8_t swaps[4][4];
+    float thickness;    /* units light crosses inside it: a closed mesh's 3 x volume / area, else half the smallest
+                           extent of its meshes' bounds */
+    float glow[4];      /* a model that glows (the cooker's rt_glow.tsv, or a surface added to what is behind it): the
+                           light's colour, 0 to 1, and in w its intensity in candela (100 units a metre); below
+                           zero: a luminance, candela a square metre of the mesh; 0: it lights nothing */
+    float env_tint[3];  /* its painted reflection's colour: the map's mean times what multiplies it, largest channel 1 */
+    uint8_t env_map;    /* the material's map read through the normal (its painted reflection), 255 none */
+    uint8_t reserved[2];
+    uint8_t through;    /* c90: the share of the sun its far side takes x 255 (a crown of leaves, a cloud), its sun ray
+                           passing its own mesh; 0 none */
+    float body, shine, tint_keep; /* the review's (rt_materials.tsv): a see-through body's coverage, the reflection's
+                                     gain, how much of its tint stays; below 0: the class's own */
+    float reserved2;
+} NebulaModelHit;
+
 typedef struct NebulaModelTexture {
     uint32_t name_at, record_at;
     uint32_t width, height;
@@ -304,8 +407,10 @@ static_assert(sizeof(NebulaModelMeshCoord) == 4);
 static_assert(sizeof(NebulaModelSlot) == 8);
 static_assert(sizeof(NebulaModelStep) == 8);
 static_assert(sizeof(NebulaModelDrawMatrix) == 8);
-static_assert(sizeof(NebulaModelHeader) == 30 * 4);
+static_assert(sizeof(NebulaModelHeader) == 33 * 4);
 static_assert(sizeof(NebulaModelLit) == 80);
+static_assert(sizeof(NebulaModelStage) == 36);
+static_assert(sizeof(NebulaModelHit) == 120);
 static_assert(sizeof(NebulaModelJoint) == 96);
 static_assert(sizeof(NebulaModelMesh) == 100);
 static_assert(sizeof(NebulaModelForm) == 64);

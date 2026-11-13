@@ -1,4 +1,7 @@
 #include "Game/LiveActor/ShadowVolumeDrawer.hpp"
+#include "Game/LiveActor/LiveActor.hpp"
+#include "Game/LiveActor/ModelManager.hpp"
+#include "Game/Render/Model.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -90,6 +93,27 @@ void ShadowVolumeDrawer::draw() const {
         // The host's life and the shape's run of smooth steps name the draws: a host renewed in place, or a shape that
         // jumped, is never blended from where it was (world-space shapes carry no teleport test of their own).
         beginDrawObject();
+        // For a renderer that traces this shadow instead of filling its volume: where it falls and whose it is.
+        // (A drawer whose own isDraw does not ask a controller may have none: its shadow stays the game's.)
+        if (const ShadowController* pController = getController()) {
+            Vec3f position;
+            Vec3f direction;
+            calcBaseDropPosition(&position, pController);
+            pController->getDropDir(&direction);
+            NebulaFrameShadowDrop drop = {};
+            drop.position[0] = position.x;
+            drop.position[1] = position.y;
+            drop.position[2] = position.z;
+            drop.length = calcBaseDropLength(pController);
+            drop.direction[0] = direction.x;
+            drop.direction[1] = direction.y;
+            drop.direction[2] = direction.z;
+            const LiveActor* pHost = pController->getHost();
+            const Model* pModel = pHost != nullptr && pHost->mModelManager != nullptr ? pHost->mModelManager->getModel() : nullptr;
+            drop.caster = pModel != nullptr ? pModel->getSlot() : 0;
+            drop.volume = Frame::objectSlot();
+            Frame::shadowDrop(drop);
+        }
         NebulaColor8 shapeColor = ::sShapeColor;
         SiteMaterial material;
         MR::initShadowVolumeMaterial(material, shapeColor);

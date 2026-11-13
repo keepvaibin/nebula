@@ -1981,9 +1981,19 @@ void RenderCore::enforce_video_memory() {
 void RenderCore::begin_walk_frame(ListEntry& entry) {
     const RenderConfig render = get_render_config();
     enhanced_lighting_ = render.enhanced_lighting;
-    pixel_lit_ = render.per_pixel_lighting || render.enhanced_lighting;
+    pixel_lit_ = lights_at_pixel(render);
     curved_refine_ = render.curved_surfaces;
-    ambient_occlusion_ = render.ambient_occlusion && renderer_.ambient_occlusion_ready();
+    rt_follow_setting(render);
+    // After the tracer follows the setting: a frame that starts it is drawn wide.
+    wide_scene_ = scene_wide(render, render.ray_tracing_enabled && rt_backend_.started());
+    // Ray tracing's sky and bounce light shades what screen-space occlusion would darken a second time; with that part
+    // off nothing traced darkens it (the light pass's O is 1: 22.10), so the occlusion runs as without ray tracing.
+    ambient_occlusion_ = render.ambient_occlusion && renderer_.ambient_occlusion_ready() &&
+                         !(render.ray_tracing_enabled && rt_backend_.started() && rt_part(render, RtPart::Indirect) != 0u);
+    rt_quality_ = render.rt_quality;
+    for (unsigned part = 0; part < 6u; ++part) {
+        rt_levels_[part] = static_cast<std::uint8_t>(rt_part(render, static_cast<RtPart>(part)));
+    }
     // The complete native list is available before begin_frame can resize a
     // ring. Include all eye/world rows, even rows a particular program omits.
     const NebulaFrameList& list = *entry.data.list;
@@ -2008,6 +2018,10 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
         // The scene's instances, and the ring draws' triangles as the tracer takes them.
         matrix_bytes += std::size_t{list.item_count} * sizeof(rt::Instance) + 64u;
         matrix_bytes += std::size_t{list.ring_index_count} * 12u + static_cast<std::size_t>(list.ring_vertex_bytes);
+        // The drop shadows' pass: its drops, each item's slot, and the screen's tiles with their entries (a drop that
+        // covers the screen fills every tile).
+        const std::size_t tiles = (std::size_t{renderer_.frame_map().width} / 16u + 2u) * (std::size_t{renderer_.frame_map().height} / 16u + 2u);
+        matrix_bytes += std::size_t{list.shadow_drop_count} * (48u + tiles * 4u) + tiles * 8u + std::size_t{list.item_count} * 4u + 2048u;
     }
     std::size_t constant_bytes = std::size_t{list.view_count} * (sizeof(core::ViewRows) + 255u);
     for (std::uint32_t c = 0; c < list.constants_count; ++c) {
@@ -2208,14 +2222,15 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
     }
     // Pipelines not yet asked for, for the settings in use.
     {
-        const bool wide = render.enhanced_lighting && render.wide_scene;
+        const bool wide = wide_scene_;
         // Native interpolation replays geometry and does not write temporal reconstruction targets.
         const bool motion = renderer_.temporal_mode();
         const bool one_pass = motion && renderer_.motion_pass_only();
         const bool layer = motion && renderer_.has_layer_targets();
         const unsigned samples = renderer_.scene_samples_log2();
         const std::uint32_t settings =
-            samples | (wide ? 4u : 0u) | (motion ? 8u : 0u) | (pixel_lit_ ? 16u : 0u) | (one_pass ? 32u : 0u);
+            samples | (wide ? 4u : 0u) | (motion ? 8u : 0u) | (pixel_lit_ ? 16u : 0u) | (one_pass ? 32u : 0u) |
+            (rt_backend_.started() ? 64u : 0u);  // tracing turned on: every pipeline again, with its traced forms
         if (settings != pipelines_settings_) {
             pipelines_settings_ = settings;
             pipelines_queued_.store(0u, std::memory_order_relaxed);
@@ -2234,7 +2249,7 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
                 if (pipeline.lit_form && !pixel_lit_) {
                     continue;
                 }
-                pipelines_.prepare(id, pipeline, variants, motion, layer, one_pass);
+                pipelines_.prepare(id, pipeline, variants, motion, layer, one_pass, rt_backend_.started());
             }
             pipelines_queued_.store(count, std::memory_order_relaxed);
         }
@@ -2250,8 +2265,12 @@ void RenderCore::walk_frame(ListEntry& entry, const core::WalkTime& time, bool p
     begin_walk_frame(entry);
     walk_list(entry.data, entry.before != nullptr ? &entry.before->data : nullptr, time);
     const bool real = time.t >= 1.0f;
-    const DisplayTexture* const selected = present ? display_pictures_.latest() : nullptr;
+    const DisplayTexture* selected = present ? display_pictures_.latest() : nullptr;
     const std::string snapshot_path = selected != nullptr ? present_snapshot_path(real ? NEBULA_EXT_PICTURE_GAME : NEBULA_EXT_PICTURE_GENERATED) : std::string{};
+    if (!snapshot_path.empty() && real && rt_holds()) {
+        rt_hold(entry, time, snapshot_path);
+        selected = display_pictures_.latest();
+    }
     if (selected != nullptr) {
         if (!snapshot_path.empty()) {
             renderer_.set_debug_capture_paths({}, snapshot_path);
@@ -2351,7 +2370,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                               !interp_on_ && !black_shown_ && !native_settings_overlay_visible() && !renderer_.temporal_mode() &&
                               !frame_generation_running();
     const bool presents = chunk.present_swap_chain || frame_end_present;
-    const DisplayTexture* const selected_display = chunk.black ? nullptr : display_pictures_.latest();
+    const DisplayTexture* selected_display = chunk.black ? nullptr : display_pictures_.latest();
     const bool duplicate_display_present =
         selected_display != nullptr && selected_display->picture_number == last_presented_picture_.load(std::memory_order_relaxed);
     const bool skip_duplicate_present = presents && duplicate_display_present && !native_settings_overlay_visible();
@@ -2367,6 +2386,10 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     }
     if (present_swap_chain) {
         const std::string snapshot_path = present_snapshot_path(duplicate_display_present ? NEBULA_EXT_PICTURE_REPEAT : NEBULA_EXT_PICTURE_GAME);
+        if (!snapshot_path.empty() && !duplicate_display_present && rt_holds()) {
+            rt_hold(entry, core::WalkTime{}, snapshot_path);
+            selected_display = display_pictures_.latest();
+        }
         if (!snapshot_path.empty()) {
             renderer_.set_debug_capture_paths({}, snapshot_path);
         }

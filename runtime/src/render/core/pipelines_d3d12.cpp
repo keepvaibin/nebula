@@ -250,6 +250,7 @@ void fill_inputs(const PipelineEntry& entry, bool motion, InputList& list) {
         case NEBULA_INPUT_BINORMAL: list.add("BINORMAL", 0u, format, slot, input.offset); break;
         case NEBULA_INPUT_WIDEN: list.add("BLENDINDICES", 1u, format, slot, input.offset); break;
         case NEBULA_INPUT_MATRIX: list.add("BLENDINDICES", 0u, format, slot, input.offset); break;
+        case NEBULA_INPUT_GAIN: list.add("BLENDWEIGHT", 0u, format, slot, input.offset); break;
         default:
             if (input.semantic >= NEBULA_INPUT_COORD0) {
                 list.add("TEXCOORD", input.semantic - NEBULA_INPUT_COORD0, format, slot, input.offset);
@@ -290,20 +291,23 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
     const unsigned samples_log2 = variant & kSceneVariantSamplesMask;
     const unsigned program = program_variant(desc.pixel, aux,
         (desc.state & NEBULA_STATE_PIXEL_SHADING) != 0u ? 0u : samples_log2);
-    const ProgramBytes vs = program_bytes(desc.vertex, program, false);
+    // The tracer's prepass of a motion draw goes through the vertex stage's motion form, as the draw itself will.
+    const ProgramBytes vs = program_bytes(desc.vertex, aux == kAuxPrepassMotion ? unsigned{kProgramTracedMotion} : program, false);
     const ProgramBytes ps = program_bytes(desc.pixel, program, true);
     if (vs.size == 0u || ps.size == 0u) {
         std::fprintf(stderr, "[pipelines] no program %llx %llx variant %u\n", static_cast<unsigned long long>(desc.vertex),
                      static_cast<unsigned long long>(desc.pixel), program);
         return nullptr;
     }
+    const unsigned targets = aux_targets(aux);
+    const bool prepass = targets == kAuxPrepass;
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
     pd.pRootSignature = root_;
     pd.VS = {vs.data, vs.size};
     pd.PS = {ps.data, ps.size};
     InputList inputs;
-    fill_inputs(entry, aux == 1u, inputs);
+    fill_inputs(entry, aux_motion_form(aux), inputs);
     if (inputs.elements.size() > D3D12_IA_VERTEX_INPUT_STRUCTURE_ELEMENT_COUNT) {
         std::fprintf(stderr, "[pipelines] %zu vertex inputs: the device takes %u\n", inputs.elements.size(),
                      static_cast<unsigned>(D3D12_IA_VERTEX_INPUT_STRUCTURE_ELEMENT_COUNT));
@@ -343,6 +347,18 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
         rt.BlendOpAlpha = rt.BlendOp;
     }
 
+    // An added clear shell's traced form (FB b94, EVERYTHING 6.7): an exchange, premultiplied: the program gives F R and
+    // F, what is behind keeps 1 - F.
+    if (aux >= kAuxTraced && (aux & kAuxExchange) != 0u) {
+        rt.BlendEnable = TRUE;
+        rt.SrcBlend = D3D12_BLEND_ONE;
+        rt.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+        rt.BlendOp = D3D12_BLEND_OP_ADD;
+        rt.SrcBlendAlpha = D3D12_BLEND_ONE;
+        rt.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+        rt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    }
+
     pd.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
     // Culling all has no state: the walker draws nothing.
     switch ((state >> 15u) & 3u) {
@@ -364,7 +380,8 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
         pd.DepthStencilState.DepthFunc = kDepth[(state >> 11u) & 7u];
         pd.DepthStencilState.DepthWriteMask = (state & (1u << 14u)) != 0u ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
     }
-    if (const std::uint32_t test = (state >> 20u) & 3u; test != 0u) {
+    // The prepass leaves the stencil alone: a draw's marks are made once, by the scene pass.
+    if (const std::uint32_t test = (state >> 20u) & 3u; test != 0u && !prepass) {
         static constexpr D3D12_COMPARISON_FUNC kStencilTest[4] = {D3D12_COMPARISON_FUNC_ALWAYS, D3D12_COMPARISON_FUNC_ALWAYS,
                                                                   D3D12_COMPARISON_FUNC_EQUAL, D3D12_COMPARISON_FUNC_NOT_EQUAL};
         static constexpr D3D12_STENCIL_OP kStencilOp[4] = {D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_INCR_SAT, D3D12_STENCIL_OP_DECR_SAT,
@@ -385,15 +402,20 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
     pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     pd.NumRenderTargets = 1u;
     pd.RTVFormats[0] = target ? kTargetColorFormat : (variant & kSceneVariantHdr) != 0u ? kSceneHdrColorFormat : kSceneColorFormat;
-    if (aux == 1u) {
+    if (prepass) {
+        // The item target alone: the draw's item where it is nearest.
+        pd.RTVFormats[0] = kItemFormat;
+        rt.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_RED | D3D12_COLOR_WRITE_ENABLE_GREEN;
+        rt.BlendEnable = FALSE;  // a blended entry's item (the second layer) replaces like any other
+    } else if (targets == 1u) {
         pd.NumRenderTargets = 2u;
         pd.RTVFormats[1] = kMotionVectorFormat;
-    } else if (aux == 4u) {
+    } else if (targets == 4u) {
         // The motion pass's second target is bound and left as it is (the base program writes target 0 only).
         pd.NumRenderTargets = 2u;
         pd.RTVFormats[1] = kMotionVectorFormat;
         pd.BlendState.RenderTarget[1].RenderTargetWriteMask = 0u;
-    } else if (aux == 2u || aux == 3u) {
+    } else if (targets == 2u || targets == 3u) {
         pd.NumRenderTargets = 2u;
         pd.RTVFormats[1] = kReactiveMaskFormat;
         pd.BlendState.IndependentBlendEnable = TRUE;
@@ -406,7 +428,7 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
         mask.DestBlendAlpha = D3D12_BLEND_ONE;
         mask.BlendOpAlpha = D3D12_BLEND_OP_MAX;
         mask.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_RED;
-        if (aux == 3u) {
+        if (targets == 3u) {
             pd.NumRenderTargets = 4u;
             pd.RTVFormats[2] = kLayerFormat;
             pd.RTVFormats[3] = kLayerFormat;

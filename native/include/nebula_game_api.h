@@ -24,7 +24,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 152u
+#define NEBULA_GAME_API_VERSION 156u
 
 /* The game's fixed step: nebula_game_run's loop runs this many steps a second (frame_wait paces them), whatever the
    display's rate; the host presents each or interpolates between them. */
@@ -383,6 +383,7 @@ enum {
     NEBULA_OPTION_TOUCH_POINTER,       /* 0 no touch screen, 1 one, 2 the finger has the pointer, 3 and the game is on a
                                           menu: no pointer shows under a finger there */
     NEBULA_OPTION_GRAPHICS_BACKEND,    /* the renderer's backend, the same all session: 1 D3D12, 2 Vulkan (draw.native) */
+    NEBULA_OPTION_RAY_TRACING,         /* what ray tracing asks of the game now (NEBULA_RAY_TRACING_*); 0: nothing */
 };
 
 /* post_register's result (draw.post, contract draw 15). */
@@ -390,6 +391,17 @@ enum {
     NEBULA_POST_OK = 0,        /* *program is the compiled program (never 0) */
     NEBULA_POST_COMPILE = 1,   /* the device's compiler refused the text: its first error in `error` */
     NEBULA_POST_NO_MOTION = 2, /* it reads motion and the frame has no motion vectors (temporal upscaling off) */
+};
+
+/* NEBULA_OPTION_RAY_TRACING's bits. */
+enum {
+    NEBULA_RAY_TRACING_ON = 1u << 0,          /* the renderer traces its shadows and lights */
+    NEBULA_RAY_TRACING_SHADOW_SETS = 1u << 1, /* a zone's shadow light set (the artists' darker lights for actors in a
+                                                 shade) gives way to the lit set it darkens: the traced shadow darkens
+                                                 them, once */
+    NEBULA_RAY_TRACING_MIRROR = 1u << 2,      /* reflections are traced at High: the game draws no mirror pass (a
+                                                 mirror's own view, captured for its surface); the surface's fetch of
+                                                 the capture takes the traced reflection in its place (12.5) */
 };
 
 /* The movie player's sound (movie_audio_control). */

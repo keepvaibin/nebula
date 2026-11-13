@@ -68,12 +68,50 @@ struct GpuMesh {
     gpu::Address further = 0u;
     gpu::Address indices = 0u;
     gpu::Address refined_indices = 0u;
+    gpu::Address gains = 0u;  // D2: vertex 0's de-light gain word in stream 3 (NEBULA_MESH_GAIN, c37; 0 none; FB b54)
     std::uint32_t vertex_count = 0u, refined_vertex_count = 0u;
     std::uint32_t index_count = 0u, refined_index_count = 0u;
     std::uint32_t site_stride = 0u;     // nonzero: one stream at `positions`
     std::uint32_t further_stride = 0u;
     std::uint32_t single_matrix = NEBULA_MODEL_NONE;
+    std::uint32_t glow_shape_first = 0u, glow_shape_count = 0u;  // c86 (L2): among its model's glow_shapes
     std::uint8_t index_bytes = 4u;
+    std::uint8_t billboard = 0u;  // NebulaModelMesh.billboard: 1 a billboard, 2 a Y billboard (it turns to the eye)
+    // What a ray reads of the mesh's material (nebula_model.h NebulaModelHit): its class and flags, what it shows with
+    // no light, its colour under full light, and its numbers.
+    std::uint8_t hit_class = 0u, hit_flags = 0u;
+    float hit_emission[3]{}, hit_base[3]{0.5f, 0.5f, 0.5f};
+    float hit_roughness = 0.45f, hit_metal = 0.0f, hit_transmission = 0.0f;
+    float hit_environment = 0.0f;  // how much of its look a painted reflection carries
+    float glow[4]{};  // the light it gives: colour, and its strength (0: none)
+    std::uint8_t glow_source = 0u;  // NebulaModelHit.glow_source: where the glow's colour comes from as it animates
+    std::uint8_t glow_rule = 0u;    // its bits 5-7: why it glows (hit_record.rs GLOW_*; 2 a hot body by name: c99)
+    std::uint8_t hit_env_map = 0xFFu;
+    float hit_ior = 1.5f, hit_thickness = 0.0f;
+    float hit_env_tint[3]{};
+    float hit_body = -1.0f, hit_shine = -1.0f, hit_tint_keep = -1.0f;  // the review's; below 0: the class's own
+    float hit_through = 0.0f;  // c90: the share of the sun its far side takes (NebulaModelHit.through / 255)
+    // The live colour of glow_source (L-1): its row among the material's form 0 rows (vertex rows first; 0xFFFF
+    // none), how many rows that form has, and the row's cooked colour, which the live one is measured against.
+    std::uint16_t glow_row = 0xFFFFu;
+    std::uint16_t glow_row_count = 0u;
+    float glow_cooked[3]{};
+    // Map 0's coordinate (plan 13.3, the water's ripple): the first of its two rows (u, v) among the material's own
+    // form's rows (vertex rows first; 0xFFFF none: no stage samples map 0 through a coordinate made from a uv set by a
+    // matrix), the uv set it reads, and that form's row count (a draw's rows are the form's where they agree).
+    std::uint16_t map0_row = 0xFFFFu;
+    std::uint16_t map0_form_rows = 0u;
+    std::uint8_t map0_uv = 0u;
+    // Map 1's the same way (FB b90: water moves by both of its maps), in the same form; map1_slot its place in the
+    // item's texture table (the form's second map).
+    std::uint16_t map1_row = 0xFFFFu;
+    std::uint8_t map1_uv = 0u;
+    std::uint8_t map1_slot = 0xFFu;
+    float hit_alpha = 0.5f;  // an alpha-tested material: the alpha from which it is there
+    // Its paint as one light (nebula_model.h NebulaModelPaintLight; the Physical style, plan 14.6): the share b / (a + b)
+    // (0: it stays painted) and the light's direction in the model's space, octahedral.
+    float paint_share = 0.0f;
+    std::int16_t paint_direction[2]{};
     float min[3]{}, max[3]{};
     std::uint32_t object_slots_first = 0u, object_slots_count = 0u;
     std::uint32_t arena = 0u;
@@ -90,6 +128,7 @@ struct GpuModel {
     std::vector<float> inverse_binds;  // 12 per joint
     std::vector<NebulaModelJoint> joints;
     std::vector<ao::ObjectSlot> object_slots;
+    std::vector<NebulaModelGlowShape> glow_shapes;  // c86 (L2): its glowing meshes' light shapes, model space
     ModelTables tables{};
     std::uint32_t first_mesh = 0u, mesh_count = 0u;
     std::uint32_t arena = 0u;
@@ -124,6 +163,9 @@ struct TextureTable {
 
 struct StaticSlot {
     gpu::Address vertex_rows = 0u, pixel_rows = 0u;
+    // A registered material's rows as registered (vertex rows, then pixel rows): the registries' copy, kept for their
+    // life. Null for a frame's own constants (their rows are the list's).
+    const float* cpu = nullptr;
 };
 
 struct PipelineEntry {
@@ -142,12 +184,32 @@ struct ViewRows {
     float motion[4];
     float raster[4];
     float sky_up[3];          // the player's up in eye space (unit), else the view's up
-    std::uint32_t view_flags; // bit 0 sky up known, bit 1 enhanced, bit 2 wide target
+    std::uint32_t view_flags; // bit 0 sky up known, bit 1 enhanced, bit 2 wide target, bit 3 traced light (`traced`), bit 4 shown
     float scale[4];
+    float traced[4];  // with view_flags bit 3: the light image's place among the textures, the added light's, the mirror's,
+                      // the facing picture's
+    float stage_a[4]; // with view_flags bit 3: the stage's ambient colour A (rgb), w kShadowTint (program.hlsli)
+    float stage_k[4]; // with view_flags bit 3: the stage's key colour K (rgb)
+    float volume[3][4];  // with view_flags bit 3, the scene's view (FB, the light volume: program.hlsli traced_air): the
+                         // depth's eye terms (rt_eye_z), the viewport it spans, its picture's and sampler's places and 1
+    float transmit[4];  // with view_flags bit 3, the scene's view: x picture 6's place (T, rt_pass_transmit), y 1
+                        // where the pass drew this walk
+    float blend_guide[4];  // with view_flags bit 3, the scene's view (FB, 15.2: program.hlsli traced_by_air,
+                           // traced_mirror_own): x the guide blended draws compare with, y 1 the second layer's
+                           // (picture 9), 2 the opaque layer's (picture 8), 0 none
+    float look[4];  // with view_flags bit 3: the painted composite's look (program.hlsli traced_painted; RenderCore
+                    // rt_look_): kForm, the sun's height over the player's up (at least 0.5), kDebake, kAmbientLook
+    float dev[2][4];  // with view_flags bit 3: the programs' development tunables (rt_dev.h from BaseFloor): [0] the
+                      // values, [1] 1 where the run gave one
+    float relight[4][4];  // with view_flags bit 3: the relight's view constants (program.hlsli view_relight; A3-F18):
+                          // lin(A) and luma(held), sky' E, key sun_strength E, held / luma(held)
 };
 // The cbuffer's packing: view_sky_up and view_flags share one 16-byte row.
 static_assert(offsetof(ViewRows, sky_up) == 128 && offsetof(ViewRows, view_flags) == 140 &&
-              offsetof(ViewRows, scale) == 144 && sizeof(ViewRows) == 160);
+              offsetof(ViewRows, scale) == 144 && offsetof(ViewRows, traced) == 160 && offsetof(ViewRows, stage_a) == 176 && offsetof(ViewRows, stage_k) == 192 &&
+              offsetof(ViewRows, volume) == 208 &&
+              offsetof(ViewRows, transmit) == 256 && offsetof(ViewRows, blend_guide) == 272 && offsetof(ViewRows, look) == 288 &&
+              offsetof(ViewRows, dev) == 304 && offsetof(ViewRows, relight) == 336 && sizeof(ViewRows) == 400);
 
 // Everything one list needs that lasts as long as the list.
 struct ListData {
@@ -182,7 +244,8 @@ struct ListData {
     };
     bool targets_planned = false;
     std::vector<EarlyTargets> early_targets;
-    // Probes asked right after an earlier pass (plan_early_probes), in list order.
+    // Probes asked right after an earlier pass (plan_early_probes), in list order; `after` a SCENE_END: asked as the
+    // scene ends, before walk_scene_end trades the targets.
     struct EarlyProbe {
         std::uint32_t after = 0u, probe = 0u;
     };
@@ -289,6 +352,9 @@ public:
         std::uint32_t slots = 0u;         // material slots registered
     };
     [[nodiscard]] MemoryStats memory_stats() noexcept;
+    // Arena `index`'s memory, where the meshes placed in it lie (GpuMesh::arena): its first byte and its size. False
+    // when there is no such arena now.
+    [[nodiscard]] bool arena_memory(std::uint32_t index, gpu::Address& base, std::size_t& bytes) noexcept;
 
 private:
     // A page of upload memory models and meshes are placed in: free ranges (offset -> size), taken best fit and given back

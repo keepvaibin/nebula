@@ -2,6 +2,7 @@
 #include "Game/LiveActor/ClippingDirector.hpp"
 #include "Game/Util.hpp"
 #include "Game/System/LumaCore.hpp"
+#include "Game/System/NebulaHost.hpp"
 
 namespace {
     // Level 0's entry is unused: it ends at the camera's far Z.
@@ -11,13 +12,19 @@ namespace {
     // Objects closer than this in front of the camera are not drawn or run; the second while in first-person view.
     const f32 cNearClip = 500.0f;
     const f32 cNearClipSubjective = 100.0f;
+    // While the host traces: how far outside the view a stopped actor stays drawn (30 m), so a tree's shadow does not
+    // leave the ground in view as the tree leaves the picture. Drawn only: it still does not run.
+    const f32 sTracedDrawMargin = 3000.0f;
 };  // namespace
 
-ClippingJudge::ClippingJudge(const char* pName) : NameObj(pName), mFrustums() {
+ClippingJudge::ClippingJudge(const char* pName) : NameObj(pName), mFrustums(), mTracedDrawMargin(0.0f) {
     lumacore::setClass(this, lumacore::kClassId< ClippingJudge >);
 }
 
 void ClippingJudge::movement() {
+    // Once a frame: the host's answer is not free (it looks up the stage's row).
+    const u32 tracing = NebulaHost::option(NEBULA_OPTION_RAY_TRACING);
+    mTracedDrawMargin = (tracing & static_cast< u32 >(NEBULA_RAY_TRACING_ON)) != 0 && ::sTracedDrawMargin > 0.0f ? ::sTracedDrawMargin : 0.0f;
     calcViewingVolumes(MR::getFarZ());
 }
 

@@ -132,6 +132,27 @@ bool a_budget_spreads_builds() {
     return ok;
 }
 
+bool what_is_drawn_is_built_first_the_nearest_first() {
+    Run run;
+    for (std::uint64_t key = 1u; key <= 6u; ++key) {
+        run.geometry.want(key, mesh(1000u, key * 0x10000u));
+    }
+    run.geometry.drawn_at(5u, 100.0f);
+    run.geometry.drawn_at(3u, 900.0f);
+    run.geometry.drawn_at(5u, 400.0f);  // drawn twice: its nearer place counts
+    run.geometry.drawn_at(42u, 1.0f);   // not waiting: no effect
+    run.step(1500u);  // one a frame
+    bool ok = expect(run.geometry.name(5u) != 0u && run.geometry.name(1u) == 0u, "the nearest drawn mesh is built first");
+    run.step(1500u);
+    ok &= expect(run.geometry.name(3u) != 0u && run.geometry.name(1u) == 0u, "then the next drawn one");
+    run.step(1500u);
+    run.step(1500u);
+    ok &= expect(run.geometry.name(1u) != 0u && run.geometry.name(2u) != 0u && run.geometry.name(4u) == 0u,
+                 "then the rest, oldest first");
+    ok &= expect(fake::log().faults == 0u, "and nothing a back end refuses was recorded");
+    return ok;
+}
+
 bool scratch_is_used_again_only_after_a_barrier() {
     Run run;
     // Builds whose scratch together is several pages of it.
@@ -229,16 +250,76 @@ bool a_scene_is_built_over_its_instances() {
     return ok;
 }
 
+// 5.3 G-4: past the ceiling the static structures no frame named for longest go; one named each frame stays, and a
+// released mesh is built again when wanted again.
+bool a_ceiling_releases_the_least_recently_named() {
+    Run run;
+    const fake::Log& log = fake::log();
+    run.geometry.set_ceiling(fake::structure_bytes(1000u));
+    for (std::uint64_t key = 1u; key <= 5u; ++key) {
+        run.geometry.want(key, mesh(1000u, key * 0x10000u));
+    }
+    for (unsigned i = 0; i < 12u; ++i) {
+        run.step();
+        (void)run.geometry.name(5u);
+    }
+    bool ok = expect(run.geometry.stats().released >= 3u && run.geometry.name(1u) == 0u && run.geometry.name(5u) != 0u,
+                     "past the ceiling the least recently named go, the one named each frame stays");
+    const std::uint32_t builds = log.builds;
+    run.geometry.want(1u, mesh(1000u, 0x10000u));
+    run.step();
+    ok &= expect(log.builds == builds + 1u && run.geometry.name(1u) != 0u, "a released mesh is built again when wanted");
+    ok &= expect(log.faults == 0u, "and nothing a back end refuses was recorded");
+    return ok;
+}
+
+// 5.3 G-2: a cutout mesh's micromap and the structure built again over it.
+bool a_mesh_takes_a_micromap() {
+    Run run;
+    const fake::Log& log = fake::log();
+    run.geometry.want(1u, mesh(100u));
+    MicromapInput omm;
+    omm.buffer = 3u;
+    omm.triangles = 100u;
+    omm.triangles_at = 6400u;
+    omm.indices_at = 7424u;
+    bool ok = expect(!run.geometry.give_micromap(1u, omm, 77u), "a mesh not built yet takes none");
+    run.step();
+    const std::uint64_t first = run.geometry.name(1u);
+    ok &= expect(run.geometry.micromap_tag(1u) == 0u && run.geometry.give_micromap(1u, omm, 77u), "a built mesh takes a micromap's input");
+    ok &= expect(!run.geometry.give_micromap(1u, omm, 77u) && !run.geometry.takes_micromap(1u), "once");
+    ok &= expect(run.geometry.name(1u) == first && run.geometry.micromap_tag(1u) == 0u, "its structure stays named until the new one is built");
+    run.step();
+    ok &= expect(log.micromap_builds == 1u && log.micromaps == 1u && run.geometry.micromap_tag(1u) == 77u, "the micromap is built");
+    ok &= expect(run.geometry.name(1u) != 0u && run.geometry.name(1u) != first && log.builds == 2u, "and the structure over it named in that frame");
+    for (std::uint64_t i = 0; i < kFramesToRelease + kFramesInFlight + 2u; ++i) {
+        run.step();
+    }
+    ok &= expect(log.micromaps == 1u && run.geometry.micromap_tag(1u) == 77u && run.geometry.stats().compacted == 1u,
+                 "the structure is compacted and the micromap stays under it");
+    ok &= expect(log.structures == 1u && run.geometry.stats().micromaps == 1u, "the old forms are gone");
+    run.geometry.forget(1u);
+    for (std::uint64_t i = 0; i < kFramesToRelease + 1u; ++i) {
+        run.step();
+    }
+    ok &= expect(log.micromaps == 0u && log.structures == 0u && run.geometry.stats().micromaps == 0u, "a forgotten mesh's micromap goes with it");
+    ok &= expect(log.faults == 0u, "and nothing a back end refuses was recorded");
+    return ok;
+}
+
 }  // namespace
 
 int main() {
     bool ok = ranges_fit_and_merge();
+    ok &= a_ceiling_releases_the_least_recently_named();
     ok &= a_mesh_is_built_compacted_and_released();
     ok &= a_budget_spreads_builds();
+    ok &= what_is_drawn_is_built_first_the_nearest_first();
     ok &= scratch_is_used_again_only_after_a_barrier();
     ok &= a_moving_mesh_is_refitted_and_forgotten();
     ok &= an_answer_waits_for_its_frame_slot();
     ok &= a_scene_is_built_over_its_instances();
+    ok &= a_mesh_takes_a_micromap();
     if (ok) {
         std::cout << "rt geometry tests passed\n";
     }

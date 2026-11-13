@@ -9,6 +9,7 @@
 
 #include <vk_mem_alloc.h>
 
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -90,6 +91,8 @@ struct Backend::State {
     VkQueryPool queries[kFramesInFlight]{};
     unsigned frame_slot = 0u;
     bool asked = false;
+    // The frame's first begin has joined the last frame's tracer work (l88): cleared by frame().
+    bool joined = true;
 
     // Passes: one set layout for every pass (rt_bindings.hlsli as compile_rt_shaders.py places the registers: t at its
     // number, u at 200, b at 300), a pipeline a shader made at its first dispatch.
@@ -100,14 +103,21 @@ struct Backend::State {
     [[nodiscard]] VkDescriptorSet allocate_set();
     std::vector<std::shared_ptr<vk::Texture>> images;
     VkDescriptorSetLayout set_layout = VK_NULL_HANDLE;
-    VkPipelineLayout layout = VK_NULL_HANDLE;
+    VkPipelineLayout layout = VK_NULL_HANDLE;  // made when the renderer's image set's layout is known (begin)
+    VkSampler sampler = VK_NULL_HANDLE;        // s0
+    VkDescriptorSet texture_set = VK_NULL_HANDLE;  // the renderer's textures, set 1
+    VkDescriptorSetLayout images_layout = VK_NULL_HANDLE;
     VkPipeline pipelines[static_cast<unsigned>(RtShader::Count)]{};
     bool refused[static_cast<unsigned>(RtShader::Count)]{};
+    [[nodiscard]] bool make_pipeline(unsigned index);  // false: refused, the pass left out
     // Counters: the GPU adds to `counters`; a frame slot's copy is read a frame later.
     VkBuffer counters = VK_NULL_HANDLE;
     VmaAllocation counters_allocation = nullptr;
     std::shared_ptr<vk::Buffer> counters_read[kFramesInFlight];
     bool counters_bound = false;
+    // The timed stretch (time_mark): two timestamps a frame slot (none: no measure).
+    VkQueryPool times = VK_NULL_HANDLE;
+    bool timed[kFramesInFlight][kTimedStretches]{};
     // Buffers passes write and builds read.
     struct OwnBuffer {
         VkBuffer buffer = VK_NULL_HANDLE;
@@ -117,17 +127,24 @@ struct Backend::State {
         bool for_builds = false;
     };
     std::vector<OwnBuffer> buffers;
+    // Opacity micromaps (5.3 G-2): the device builds them (the extension's feature and synchronization2).
+    bool micromaps = false;
 
     [[nodiscard]] bool make_passes();
     [[nodiscard]] std::uint64_t own_address(const TriangleInput& input) const {
         return input.own_buffer < buffers.size() ? buffers[input.own_buffer].address : 0u;
     }
+    [[nodiscard]] std::uint64_t micromap_indices(const TriangleInput& input) const {
+        return input.micromap_buffer < buffers.size() ? buffers[input.micromap_buffer].address + input.micromap_indices : 0u;
+    }
 };
 
 namespace {
 
+constexpr std::uint32_t kMeshBinding = 1u + kPassBuffers + kPassTextures + kPassReads;
+constexpr std::uint32_t kSamplerBinding = 100u;  // s0 (the shaders' samplers are shifted by 100)
 constexpr std::uint32_t kImageBinding = 200u, kCountersBinding = 200u + kPassWrites, kWriteBufferBinding = kCountersBinding + 1u,
-                        kConstantsBinding = 300u;
+                        kConstantsBinding = 300u, kPassConstantsBinding = 301u;
 constexpr VkDeviceSize kCountersBytes = VkDeviceSize{kCounters} * 4u;
 
 }  // namespace
@@ -139,10 +156,11 @@ VkDescriptorSet Backend::State::allocate_set() {
         if (pool_at >= slot_pools.size()) {
             const VkDescriptorPoolSize sizes[] = {
                 {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, kSets},
-                {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, kSets * (kPassBuffers + 2u)},
+                {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, kSets * (kPassBuffers + 2u + kPassMeshBuffers)},
                 {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, kSets * (kPassTextures + kPassReads)},
                 {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, kSets * kPassWrites},
-                {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kSets},
+                {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kSets * 2u},
+                {VK_DESCRIPTOR_TYPE_SAMPLER, kSets},
             };
             VkDescriptorPoolCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
             info.maxSets = kSets;
@@ -167,7 +185,7 @@ VkDescriptorSet Backend::State::allocate_set() {
 }
 
 bool Backend::State::make_passes() {
-    VkDescriptorSetLayoutBinding bindings[1u + kPassBuffers + kPassTextures + kPassReads + kPassWrites + 3u]{};
+    VkDescriptorSetLayoutBinding bindings[1u + kPassBuffers + kPassTextures + kPassReads + kPassWrites + 5u + kPassMeshBuffers]{};
     std::uint32_t count = 0u;
     bindings[count++] = {0u, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1u, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
     for (std::uint32_t i = 0; i < kPassBuffers; ++i) {
@@ -182,18 +200,41 @@ bool Backend::State::make_passes() {
     bindings[count++] = {kCountersBinding, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1u, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
     bindings[count++] = {kWriteBufferBinding, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1u, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
     bindings[count++] = {kConstantsBinding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1u, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    bindings[count++] = {kPassConstantsBinding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1u, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    // s0: one sampler for the renderer's textures (linear, repeating), fixed in the layout.
+    VkSamplerCreateInfo sampler_info{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+    sampler_info.magFilter = sampler_info.minFilter = VK_FILTER_LINEAR;
+    sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    sampler_info.addressModeU = sampler_info.addressModeV = sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sampler_info.maxLod = VK_LOD_CLAMP_NONE;
+    if (vkCreateSampler(device, &sampler_info, nullptr, &sampler) != VK_SUCCESS) {
+        return false;
+    }
+    bindings[count++] = {kSamplerBinding, VK_DESCRIPTOR_TYPE_SAMPLER, 1u, VK_SHADER_STAGE_COMPUTE_BIT, &sampler};
+    for (std::uint32_t i = 0; i < kPassMeshBuffers; ++i) {  // t21 up: the mesh memory
+        bindings[count++] = {kMeshBinding + i, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1u, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    }
     VkDescriptorSetLayoutCreateInfo set_info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
     set_info.bindingCount = count;
     set_info.pBindings = bindings;
+    // A pass binds only the images it has (an image not made yet: the second layer's body before glass is seen, a
+    // filter step's pictures it does not read): every binding partially bound, as Direct3D 12's null descriptors; the
+    // shaders read those only under the constants that bind them. The device has it with bindless (the tracer needs it).
+    VkDescriptorBindingFlags flags[std::size(bindings)]{};
+    VkDescriptorSetLayoutBindingFlagsCreateInfo binding_flags{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO};
+    if (vk::Context::get().bindless()) {
+        for (std::uint32_t i = 0; i < count; ++i) {
+            flags[i] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
+        }
+        binding_flags.bindingCount = count;
+        binding_flags.pBindingFlags = flags;
+        set_info.pNext = &binding_flags;
+    }
     if (vkCreateDescriptorSetLayout(device, &set_info, nullptr, &set_layout) != VK_SUCCESS) {
         return false;
     }
-    VkPipelineLayoutCreateInfo layout_info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
-    layout_info.setLayoutCount = 1u;
-    layout_info.pSetLayouts = &set_layout;
-    if (vkCreatePipelineLayout(device, &layout_info, nullptr, &layout) != VK_SUCCESS) {
-        return false;
-    }
+    // The pipeline layout waits for the renderer's image set's layout (begin's `descriptors`): the passes' set is
+    // set 0, the renderer's textures set 1.
     VkBufferCreateInfo buffer_info{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
     buffer_info.size = kCountersBytes;
     buffer_info.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
@@ -227,8 +268,11 @@ std::uint64_t device_address(VkDevice device, gpu::Address address) {
     return vkGetBufferDeviceAddress(device, &info) + at.offset;
 }
 
-// `own`: the address of the tracer's buffer the input names, or 0.
-VkAccelerationStructureGeometryKHR geometry_of(VkDevice device, const TriangleInput& input, std::uint64_t own) {
+// `own`: the address of the tracer's buffer the input names, or 0. With a micromap, `omm` and `usage` (the caller's,
+// alive while the geometry is) carry it, its indices at `omm_indices`.
+VkAccelerationStructureGeometryKHR geometry_of(VkDevice device, const TriangleInput& input, std::uint64_t own,
+                                               VkAccelerationStructureTrianglesOpacityMicromapEXT& omm, VkMicromapUsageEXT& usage,
+                                               std::uint64_t omm_indices) {
     VkAccelerationStructureGeometryKHR g{VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR};
     g.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
     // Opaque here; an instance whose material tests alpha says so itself.
@@ -242,9 +286,34 @@ VkAccelerationStructureGeometryKHR geometry_of(VkDevice device, const TriangleIn
     if (input.indices != 0u) {
         g.geometry.triangles.indexData.deviceAddress = device_address(device, input.indices);
     }
+    if (input.micromap != 0u) {
+        // Its micromap decides where a triangle is opaque, transparent or asks (the geometry's opaque flag stands where an
+        // instance turns micromaps off).
+        usage = {input.triangles(), input.micromap_level, VK_OPACITY_MICROMAP_FORMAT_4_STATE_EXT};
+        omm = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_TRIANGLES_OPACITY_MICROMAP_EXT};
+        omm.indexType = VK_INDEX_TYPE_UINT32;
+        omm.indexBuffer.deviceAddress = omm_indices;
+        omm.indexStride = 4u;
+        omm.usageCountsCount = 1u;
+        omm.pUsageCounts = &usage;
+        omm.micromap = reinterpret_cast<VkMicromapEXT>(input.micromap);
+        g.geometry.triangles.pNext = &omm;
+    }
     return g;
 }
 
+VkMicromapBuildInfoEXT micromap_info(const VkMicromapUsageEXT& usage) {
+    VkMicromapBuildInfoEXT info{VK_STRUCTURE_TYPE_MICROMAP_BUILD_INFO_EXT};
+    info.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
+    info.flags = VK_BUILD_MICROMAP_PREFER_FAST_TRACE_BIT_EXT;
+    info.mode = VK_BUILD_MICROMAP_MODE_BUILD_EXT;
+    info.usageCountsCount = 1u;
+    info.pUsageCounts = &usage;
+    info.triangleArrayStride = 8u;
+    return info;
+}
+
+// (A structure over a micromap also lets its instances turn the micromap off: Scene's kInstanceNoMicromaps.)
 VkBuildAccelerationStructureFlagsKHR flags_of(BuildKind kind) {
     return kind == BuildKind::Static
                ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR | VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR
@@ -258,6 +327,34 @@ Backend::Backend() = default;
 Backend::~Backend() { stop(); }
 
 bool Backend::started() const noexcept { return state_ != nullptr; }
+
+bool Backend::State::make_pipeline(unsigned index) {
+    if (refused[index]) {
+        return false;
+    }
+    const RtShaderBytes code = rt_shader(static_cast<RtShader>(index));
+    VkShaderModule module = VK_NULL_HANDLE;
+    VkShaderModuleCreateInfo module_info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+    module_info.codeSize = code.size;
+    module_info.pCode = static_cast<const std::uint32_t*>(code.data);
+    bool made = code.size != 0u && layout != VK_NULL_HANDLE && vkCreateShaderModule(device, &module_info, nullptr, &module) == VK_SUCCESS;
+    if (made) {
+        VkComputePipelineCreateInfo info{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
+        info.stage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+        info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+        info.stage.module = module;
+        info.stage.pName = "main";
+        info.layout = layout;
+        made = vkCreateComputePipelines(device, VK_NULL_HANDLE, 1u, &info, nullptr, &pipelines[index]) == VK_SUCCESS;
+        vkDestroyShaderModule(device, module, nullptr);
+    }
+    if (!made) {
+        pipelines[index] = VK_NULL_HANDLE;
+        refused[index] = true;
+        std::fprintf(stderr, "[rt] pass %u: no pipeline; the pass is left out\n", index);
+    }
+    return made;
+}
 
 bool Backend::start(gpu::Device* device) {
     stop();
@@ -292,12 +389,37 @@ bool Backend::start(gpu::Device* device) {
         stop();
         return false;
     }
+    state->micromaps = context.rt_caps().micromaps && context.pipeline_barrier2() != nullptr && vkCreateMicromapEXT != nullptr &&
+                       vkCmdBuildMicromapsEXT != nullptr && vkGetMicromapBuildSizesEXT != nullptr;
+    if (context.properties().limits.timestampComputeAndGraphics == VK_TRUE) {
+        VkQueryPoolCreateInfo info{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
+        info.queryType = VK_QUERY_TYPE_TIMESTAMP;
+        info.queryCount = 2u * kTimedStretches * kFramesInFlight;
+        if (vkCreateQueryPool(state->device, &info, nullptr, &state->times) != VK_SUCCESS) {
+            state->times = VK_NULL_HANDLE;
+        }
+    }
+    // Every pass's pipeline now (plan 26: a pass's first use in a frame never waits on the driver's compile).
+    const auto making = std::chrono::steady_clock::now();
+    unsigned made = 0u, wanted = 0u;
+    for (unsigned index = 0; index < static_cast<unsigned>(RtShader::Count); ++index) {
+        if (index == static_cast<unsigned>(RtShader::Omm) && !state->micromaps) {
+            continue;
+        }
+        ++wanted;
+        made += state->pipelines[index] != VK_NULL_HANDLE || state->make_pipeline(index) ? 1u : 0u;
+    }
+    std::fprintf(stderr, "[rt] passes: %u of %u pipelines made at the start in %.1f ms\n", made, wanted,
+                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - making).count());
     return true;
 }
 
 void Backend::stop() noexcept {
     if (state_ == nullptr) {
         return;
+    }
+    if (state_->times != VK_NULL_HANDLE) {
+        vkDestroyQueryPool(state_->device, state_->times, nullptr);
     }
     for (const VkQueryPool pool : state_->queries) {
         if (pool != VK_NULL_HANDLE) {
@@ -314,6 +436,9 @@ void Backend::stop() noexcept {
     }
     if (state_->layout != VK_NULL_HANDLE) {
         vkDestroyPipelineLayout(state_->device, state_->layout, nullptr);
+    }
+    if (state_->sampler != VK_NULL_HANDLE) {
+        vkDestroySampler(state_->device, state_->sampler, nullptr);
     }
     if (state_->set_layout != VK_NULL_HANDLE) {
         vkDestroyDescriptorSetLayout(state_->device, state_->set_layout, nullptr);
@@ -334,10 +459,14 @@ void Backend::stop() noexcept {
 }
 
 BuildSizes Backend::sizes(const TriangleInput& input, BuildKind kind) const {
-    const VkAccelerationStructureGeometryKHR geometry = geometry_of(state_->device, input, state_->own_address(input));
+    VkAccelerationStructureTrianglesOpacityMicromapEXT omm{};
+    VkMicromapUsageEXT usage{};
+    const VkAccelerationStructureGeometryKHR geometry =
+        geometry_of(state_->device, input, state_->own_address(input), omm, usage, state_->micromap_indices(input));
     VkAccelerationStructureBuildGeometryInfoKHR info{VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
     info.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-    info.flags = flags_of(kind);
+    info.flags = flags_of(kind) |
+                 (input.micromap != 0u ? VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_DISABLE_OPACITY_MICROMAPS_BIT_EXT : 0u);  // see flags_of
     info.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
     info.geometryCount = 1u;
     info.pGeometries = &geometry;
@@ -352,6 +481,9 @@ std::uint32_t Backend::make_page(std::uint64_t bytes, bool scratch) {
     buffer_info.size = bytes;
     buffer_info.usage = (scratch ? VK_BUFFER_USAGE_STORAGE_BUFFER_BIT : VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR) |
                         VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    if (!scratch && state_->micromaps) {
+        buffer_info.usage |= VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT;  // micromaps lie in the structures' pages
+    }
     buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     VmaAllocationCreateInfo alloc_info{};
     alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
@@ -415,19 +547,87 @@ void Backend::frame(unsigned frame_slot) noexcept {
         vkResetDescriptorPool(state_->device, pool, 0u);
     }
     state_->pool_at = 0u;
+    state_->counters_bound = false;  // the frame's first pass that counts zeroes them
+    state_->joined = false;          // the frame's first begin waits for the last frame's tracer work (l88)
 }
 
-void Backend::begin(void* commands, unsigned frame_slot, void*) noexcept {
-    state_->commands = static_cast<VkCommandBuffer>(commands);
-    state_->frame_slot = frame_slot % kFramesInFlight;
-    state_->asked = false;
+void Backend::begin(void* commands, unsigned frame_slot, void* descriptors) noexcept {
+    State& s = *state_;
+    s.commands = static_cast<VkCommandBuffer>(commands);
+    s.frame_slot = frame_slot % kFramesInFlight;
+    s.asked = false;
+    // l88: the last frame's builds, micromap builds and passes before this frame's. Nothing else orders two
+    // submissions on one queue, and this frame takes the same build scratch again from its start, builds the top level
+    // into the same structure, refits Moving structures in place and writes the buffers builds read.
+    if (!s.joined && s.commands != VK_NULL_HANDLE) {
+        s.joined = true;
+        if (const PFN_vkCmdPipelineBarrier2 barrier2 = vk::Context::get().pipeline_barrier2(); barrier2 != nullptr) {
+            VkPipelineStageFlags2 stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+            VkAccessFlags2 writes = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_2_SHADER_WRITE_BIT;
+            VkAccessFlags2 reads = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR | VK_ACCESS_2_SHADER_READ_BIT;
+            if (s.micromaps) {
+                stages |= VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT;
+                writes |= VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT;
+                reads |= VK_ACCESS_2_MICROMAP_READ_BIT_EXT;
+            }
+            VkMemoryBarrier2 join{VK_STRUCTURE_TYPE_MEMORY_BARRIER_2};
+            join.srcStageMask = stages;
+            join.srcAccessMask = writes;
+            join.dstStageMask = stages;
+            join.dstAccessMask = reads | writes;
+            VkDependencyInfo dependency{VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
+            dependency.memoryBarrierCount = 1u;
+            dependency.pMemoryBarriers = &join;
+            barrier2(s.commands, &dependency);
+        } else {
+            VkMemoryBarrier join{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+            join.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_SHADER_WRITE_BIT;
+            join.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR |
+                                 VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+            const VkPipelineStageFlags stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+            vkCmdPipelineBarrier(s.commands, stages, stages, 0u, 1u, &join, 0u, nullptr, 0u, nullptr);
+        }
+    }
+    if (const auto* textures = static_cast<const TextureTable*>(descriptors); textures != nullptr && textures->layout != nullptr) {
+        s.texture_set = static_cast<VkDescriptorSet>(textures->set);
+        const auto images_layout = static_cast<VkDescriptorSetLayout>(textures->layout);
+        if (s.layout == VK_NULL_HANDLE || s.images_layout != images_layout) {
+            // The passes' pipeline layout over the two sets (anew should the renderer's layout ever change: the
+            // pipelines made with the old one go with it).
+            const VkDevice device = s.device;
+            for (VkPipeline& pipeline : s.pipelines) {
+                if (pipeline != VK_NULL_HANDLE) {
+                    const VkPipeline old = pipeline;
+                    vk::Context::get().defer([device, old] { vkDestroyPipeline(device, old, nullptr); });
+                    pipeline = VK_NULL_HANDLE;
+                }
+            }
+            if (s.layout != VK_NULL_HANDLE) {
+                const VkPipelineLayout old = s.layout;
+                vk::Context::get().defer([device, old] { vkDestroyPipelineLayout(device, old, nullptr); });
+                s.layout = VK_NULL_HANDLE;
+            }
+            const VkDescriptorSetLayout sets[2] = {s.set_layout, images_layout};
+            VkPipelineLayoutCreateInfo layout_info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+            layout_info.setLayoutCount = 2u;
+            layout_info.pSetLayouts = sets;
+            if (vkCreatePipelineLayout(device, &layout_info, nullptr, &s.layout) != VK_SUCCESS) {
+                s.layout = VK_NULL_HANDLE;
+            }
+            s.images_layout = images_layout;
+        }
+    }
 }
 
 void Backend::build(const TriangleInput& input, BuildKind kind, const Structure& to, const Range& scratch, bool refit) {
-    const VkAccelerationStructureGeometryKHR geometry = geometry_of(state_->device, input, state_->own_address(input));
+    VkAccelerationStructureTrianglesOpacityMicromapEXT omm{};
+    VkMicromapUsageEXT usage{};
+    const VkAccelerationStructureGeometryKHR geometry =
+        geometry_of(state_->device, input, state_->own_address(input), omm, usage, state_->micromap_indices(input));
     VkAccelerationStructureBuildGeometryInfoKHR info{VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
     info.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-    info.flags = flags_of(kind);
+    info.flags = flags_of(kind) |
+                 (input.micromap != 0u ? VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_DISABLE_OPACITY_MICROMAPS_BIT_EXT : 0u);  // see flags_of
     info.mode = refit ? VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR : VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
     const auto handle = reinterpret_cast<VkAccelerationStructureKHR>(to.handle);
     info.srcAccelerationStructure = refit ? handle : VK_NULL_HANDLE;
@@ -531,8 +731,52 @@ constexpr VkFormat format_of(ImageFormat format) noexcept {
     case ImageFormat::R8: return VK_FORMAT_R8_UNORM;
     case ImageFormat::R32f: return VK_FORMAT_R32_SFLOAT;
     case ImageFormat::Rgb10a2: return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+    case ImageFormat::Rgba32ui: return VK_FORMAT_R32G32B32A32_UINT;
+    case ImageFormat::Rgba32f: return VK_FORMAT_R32G32B32A32_SFLOAT;
+    case ImageFormat::Rg16ui: return VK_FORMAT_R16G16_UINT;
     }
     return VK_FORMAT_UNDEFINED;
+}
+
+// A volume of `depth` slices, read and written by passes (Texture3D): its own image and a 3D view.
+std::shared_ptr<vk::Texture> make_volume(std::uint32_t width, std::uint32_t height, std::uint32_t depth, VkFormat format) {
+    vk::Context& context = vk::Context::get();
+    auto texture = std::make_shared<vk::Texture>();
+    VkImageCreateInfo image_info{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+    image_info.imageType = VK_IMAGE_TYPE_3D;
+    image_info.format = format;
+    image_info.extent = {width, height, depth};
+    image_info.mipLevels = 1u;
+    image_info.arrayLayers = 1u;
+    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    image_info.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    VmaAllocationCreateInfo alloc_info{};
+    alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+    VmaAllocationInfo allocated{};
+    if (vmaCreateImage(context.allocator(), &image_info, &alloc_info, &texture->image, &texture->allocation, &allocated) != VK_SUCCESS) {
+        texture->image = VK_NULL_HANDLE;
+        texture->allocation = nullptr;
+        return {};
+    }
+    texture->format = format;
+    texture->usage = image_info.usage;
+    texture->width = width;
+    texture->height = height;
+    texture->levels = 1u;
+    texture->allocation_bytes = allocated.size;
+    VkImageViewCreateInfo view_info{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+    view_info.image = texture->image;
+    view_info.viewType = VK_IMAGE_VIEW_TYPE_3D;
+    view_info.format = format;
+    view_info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
+    if (vkCreateImageView(context.device(), &view_info, nullptr, &texture->view) != VK_SUCCESS) {
+        texture->view = VK_NULL_HANDLE;
+        return {};  // the texture's end lets the image go
+    }
+    return texture;
 }
 
 // What a pass wrote, before the next pass or a draw reads it.
@@ -542,15 +786,17 @@ void written(VkCommandBuffer commands) {
 
 }  // namespace
 
-std::uint32_t Backend::make_image(ImageFormat format, std::uint32_t width, std::uint32_t height, const char* name) {
+std::uint32_t Backend::make_image(ImageFormat format, std::uint32_t width, std::uint32_t height, const char* name, std::uint32_t depth) {
     VkFormatProperties properties{};
     vkGetPhysicalDeviceFormatProperties(vk::Context::get().physical_device(), format_of(format), &properties);
     if (width == 0u || height == 0u || (properties.optimalTilingFeatures & VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT) == 0u) {
         return kNoImage;
     }
-    std::shared_ptr<vk::Texture> image = vk::Context::get().create_texture(
-        width, height, 1u, format_of(format), VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-        false, name);
+    std::shared_ptr<vk::Texture> image =
+        depth > 1u ? make_volume(width, height, depth, format_of(format))
+                   : vk::Context::get().create_texture(width, height, 1u, format_of(format),
+                                                       VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                                                       false, name);
     if (image == nullptr) {
         return kNoImage;
     }
@@ -570,6 +816,26 @@ void Backend::free_image(std::uint32_t image) noexcept {
     }
 }
 
+Backend::Live Backend::live() const noexcept {
+    Live live;
+    if (state_ == nullptr) {
+        return live;
+    }
+    for (const std::shared_ptr<vk::Texture>& image : state_->images) {
+        if (image != nullptr) {
+            ++live.images;
+            live.image_bytes += image->allocation_bytes;
+        }
+    }
+    for (const State::OwnBuffer& buffer : state_->buffers) {
+        if (buffer.buffer != VK_NULL_HANDLE) {
+            ++live.buffers;
+            live.buffer_bytes += buffer.bytes;
+        }
+    }
+    return live;
+}
+
 // An image of the tracer's stays in the general layout, which a copy reads too, once the pass's writes are done.
 void* Backend::image_to_copy(std::uint32_t image) {
     if (image >= state_->images.size() || state_->images[image] == nullptr) {
@@ -583,35 +849,30 @@ void* Backend::image_to_copy(std::uint32_t image) {
     return state_->images[image].get();
 }
 
+// The draws' programs sample it in the read-only layout (the texture array's); the next pass that writes it takes it
+// back to the general one.
+void* Backend::image_to_sample(std::uint32_t image) {
+    if (image >= state_->images.size() || state_->images[image] == nullptr) {
+        return nullptr;
+    }
+    vk::Texture& texture = *state_->images[image];
+    if (texture.layout == VK_IMAGE_LAYOUT_GENERAL) {
+        vk::image_barrier(state_->commands, texture.image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ComputeWrite, gpu::Use::ShaderRead,
+                          gpu::Contents::Keep, 1u);
+        texture.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
+    return &texture;
+}
+
 void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t groups_x, std::uint32_t groups_y) {
     State& s = *state_;
     const auto index = static_cast<unsigned>(shader);
-    if (index >= static_cast<unsigned>(RtShader::Count) || s.refused[index] || groups_x == 0u || groups_y == 0u) {
+    if (index >= static_cast<unsigned>(RtShader::Count) || s.refused[index] || groups_x == 0u || groups_y == 0u ||
+        s.layout == VK_NULL_HANDLE) {
         return;
     }
-    if (s.pipelines[index] == VK_NULL_HANDLE) {
-        const RtShaderBytes code = rt_shader(shader);
-        VkShaderModule module = VK_NULL_HANDLE;
-        VkShaderModuleCreateInfo module_info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-        module_info.codeSize = code.size;
-        module_info.pCode = static_cast<const std::uint32_t*>(code.data);
-        bool made = code.size != 0u && vkCreateShaderModule(s.device, &module_info, nullptr, &module) == VK_SUCCESS;
-        if (made) {
-            VkComputePipelineCreateInfo info{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
-            info.stage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
-            info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-            info.stage.module = module;
-            info.stage.pName = "main";
-            info.layout = s.layout;
-            made = vkCreateComputePipelines(s.device, VK_NULL_HANDLE, 1u, &info, nullptr, &s.pipelines[index]) == VK_SUCCESS;
-            vkDestroyShaderModule(s.device, module, nullptr);
-        }
-        if (!made) {
-            s.pipelines[index] = VK_NULL_HANDLE;
-            s.refused[index] = true;
-            std::fprintf(stderr, "[rt] pass %u: no pipeline; the pass is left out\n", index);
-            return;
-        }
+    if (s.pipelines[index] == VK_NULL_HANDLE && !s.make_pipeline(index)) {
+        return;  // made at the start; here only after a refusal there
     }
     const VkCommandBuffer commands = s.commands;
     const auto image_of = [&](std::uint32_t image) -> vk::Texture* {
@@ -621,6 +882,16 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
     for (const std::uint32_t write : binds.writes) {
         vk::Texture* const image = image_of(write);
         if (image != nullptr && image->layout != VK_IMAGE_LAYOUT_GENERAL) {
+            vk::image_barrier(commands, image->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ShaderRead, gpu::Use::ComputeWrite,
+                              gpu::Contents::Discard, 1u);
+            image->layout = VK_IMAGE_LAYOUT_GENERAL;
+        }
+    }
+    // So does an image read before any pass wrote it (the filter's history on its first frame): a descriptor names
+    // no image without a layout, whatever the pass makes of its contents.
+    for (const std::uint32_t read : binds.reads) {
+        vk::Texture* const image = image_of(read);
+        if (image != nullptr && image->layout == VK_IMAGE_LAYOUT_UNDEFINED) {
             vk::image_barrier(commands, image->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ShaderRead, gpu::Use::ComputeWrite,
                               gpu::Contents::Discard, 1u);
             image->layout = VK_IMAGE_LAYOUT_GENERAL;
@@ -640,9 +911,9 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
     if (set == VK_NULL_HANDLE) {
         return;  // the device has no pool left for it: the pass is left out this frame
     }
-    constexpr unsigned kMost = 4u + kPassBuffers + kPassTextures + kPassReads + kPassWrites;
+    constexpr unsigned kMost = 5u + kPassBuffers + kPassTextures + kPassReads + kPassWrites + kPassMeshBuffers;
     VkWriteDescriptorSet writes[kMost]{};
-    VkDescriptorBufferInfo buffers[kPassBuffers + 3u]{};
+    VkDescriptorBufferInfo buffers[kPassBuffers + 4u + kPassMeshBuffers]{};
     VkDescriptorImageInfo views[kPassTextures + kPassReads + kPassWrites]{};
     std::uint32_t write_count = 0u, buffer_count = 0u, view_count = 0u;
     const auto next = [&](std::uint32_t binding, VkDescriptorType type) -> VkWriteDescriptorSet& {
@@ -680,7 +951,8 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
     }
     for (std::uint32_t i = 0; i < kPassReads; ++i) {
         if (const vk::Texture* image = image_of(binds.reads[i])) {
-            views[view_count] = {VK_NULL_HANDLE, image->view, VK_IMAGE_LAYOUT_GENERAL};
+            // As it lies: the general layout, or read-only once the draws sampled it (image_to_sample).
+            views[view_count] = {VK_NULL_HANDLE, image->view, image->layout};
             next(1u + kPassBuffers + kPassTextures + i, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE).pImageInfo = &views[view_count++];
         }
     }
@@ -689,6 +961,10 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
             views[view_count] = {VK_NULL_HANDLE, image->view, VK_IMAGE_LAYOUT_GENERAL};
             next(kImageBinding + i, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE).pImageInfo = &views[view_count++];
         }
+    }
+    if (binds.write_texture.texture != nullptr && image_of(binds.writes[kPassWrites - 1u]) == nullptr) {
+        views[view_count] = {VK_NULL_HANDLE, static_cast<VkImageView>(binds.write_texture.texture), VK_IMAGE_LAYOUT_GENERAL};
+        next(kImageBinding + kPassWrites - 1u, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE).pImageInfo = &views[view_count++];
     }
     if (binds.counters) {
         buffers[buffer_count] = {s.counters, 0u, kCountersBytes};
@@ -701,9 +977,18 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
     if (binds.constants.at != 0u) {
         next(kConstantsBinding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER).pBufferInfo = buffer_at(binds.constants);
     }
+    if (binds.pass_constants.at != 0u) {
+        next(kPassConstantsBinding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER).pBufferInfo = buffer_at(binds.pass_constants);
+    }
+    for (std::uint32_t i = 0; i < kPassMeshBuffers; ++i) {
+        if (binds.mesh[i].at != 0u) {
+            next(kMeshBinding + i, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER).pBufferInfo = buffer_at(binds.mesh[i]);
+        }
+    }
     vkUpdateDescriptorSets(s.device, write_count, writes, 0u, nullptr);
     vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_COMPUTE, s.pipelines[index]);
-    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_COMPUTE, s.layout, 0u, 1u, &set, 0u, nullptr);
+    const VkDescriptorSet sets[2] = {set, s.texture_set};
+    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_COMPUTE, s.layout, 0u, s.texture_set != VK_NULL_HANDLE ? 2u : 1u, sets, 0u, nullptr);
     vkCmdDispatch(commands, groups_x, groups_y, 1u);
     written(commands);
 }
@@ -720,7 +1005,6 @@ void Backend::end_counters() {
                          nullptr);
     const VkBufferCopy all{0u, 0u, kCountersBytes};
     vkCmdCopyBuffer(s.commands, s.counters, s.counters_read[s.frame_slot]->buffer, 1u, &all);
-    s.counters_bound = false;
 }
 
 void Backend::read_counters(unsigned frame_slot, std::uint32_t out[kCounters]) const {
@@ -729,16 +1013,52 @@ void Backend::read_counters(unsigned frame_slot, std::uint32_t out[kCounters]) c
     std::memcpy(out, read.mapped, kCountersBytes);
 }
 
+void Backend::time_mark(unsigned stretch, bool end) {
+    State& s = *state_;
+    if (s.times == VK_NULL_HANDLE || stretch >= kTimedStretches) {
+        return;
+    }
+    const std::uint32_t at = (s.frame_slot * kTimedStretches + stretch) * 2u;
+    if (!end) {
+        vkCmdResetQueryPool(s.commands, s.times, at, 2u);
+    }
+    // Each mark when every command before it has finished.
+    vkCmdWriteTimestamp(s.commands, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, s.times, at + (end ? 1u : 0u));
+    if (end) {
+        s.timed[s.frame_slot][stretch] = true;
+    }
+}
+
+std::uint64_t Backend::timed_ticks(unsigned stretch, unsigned frame_slot) const {
+    State& s = *state_;
+    const unsigned slot = frame_slot % kFramesInFlight;
+    if (s.times == VK_NULL_HANDLE || stretch >= kTimedStretches || !s.timed[slot][stretch]) {
+        return 0u;
+    }
+    s.timed[slot][stretch] = false;
+    std::uint64_t ticks[2]{};
+    if (vkGetQueryPoolResults(s.device, s.times, (slot * kTimedStretches + stretch) * 2u, 2u, sizeof(ticks), ticks, sizeof(std::uint64_t),
+                              VK_QUERY_RESULT_64_BIT) != VK_SUCCESS) {
+        return 0u;
+    }
+    return ticks[1] > ticks[0] ? ticks[1] - ticks[0] : 0u;
+}
+
 std::uint32_t Backend::make_buffer(std::uint64_t bytes, const char* name) {
     VkBufferCreateInfo buffer_info{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
     buffer_info.size = bytes;
     buffer_info.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
                         VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+    if (state_->micromaps) {
+        buffer_info.usage |= VK_BUFFER_USAGE_MICROMAP_BUILD_INPUT_READ_ONLY_BIT_EXT;  // a micromap's input
+    }
     buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     VmaAllocationCreateInfo alloc_info{};
     alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
     State::OwnBuffer made;
-    if (vmaCreateBuffer(vk::Context::get().allocator(), &buffer_info, &alloc_info, &made.buffer, &made.allocation, nullptr) != VK_SUCCESS) {
+    // At a multiple of 256 bytes: a micromap build reads its input from there.
+    if (vmaCreateBufferWithAlignment(vk::Context::get().allocator(), &buffer_info, &alloc_info, kRangeAlign, &made.buffer, &made.allocation,
+                                     nullptr) != VK_SUCCESS) {
         return kNoBuffer;
     }
     if (name != nullptr) {
@@ -764,6 +1084,81 @@ void Backend::free_buffer(std::uint32_t buffer) noexcept {
     }
     vmaDestroyBuffer(vk::Context::get().allocator(), state_->buffers[buffer].buffer, state_->buffers[buffer].allocation);
     state_->buffers[buffer] = State::OwnBuffer{};
+}
+
+bool Backend::micromaps() const noexcept { return state_ != nullptr && state_->micromaps; }
+
+BuildSizes Backend::micromap_sizes(const MicromapInput& input) const {
+    const VkMicromapUsageEXT usage{input.triangles, input.level, VK_OPACITY_MICROMAP_FORMAT_4_STATE_EXT};
+    const VkMicromapBuildInfoEXT info = micromap_info(usage);
+    VkMicromapBuildSizesInfoEXT sizes{VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT};
+    vkGetMicromapBuildSizesEXT(state_->device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &info, &sizes);
+    return {sizes.micromapSize, sizes.buildScratchSize, 0u};
+}
+
+Structure Backend::make_micromap(const Range& range) {
+    VkMicromapCreateInfoEXT info{VK_STRUCTURE_TYPE_MICROMAP_CREATE_INFO_EXT};
+    info.buffer = state_->pages[range.page].buffer;
+    info.offset = range.offset;
+    info.size = range.size;
+    info.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
+    VkMicromapEXT handle = VK_NULL_HANDLE;
+    if (vkCreateMicromapEXT(state_->device, &info, nullptr, &handle) != VK_SUCCESS) {
+        return {};
+    }
+    Structure out;
+    out.range = range;
+    out.handle = reinterpret_cast<std::uint64_t>(handle);
+    out.name = out.handle;
+    return out;
+}
+
+void Backend::free_micromap(Structure& micromap) noexcept {
+    if (state_ != nullptr && micromap.handle != 0u) {
+        vkDestroyMicromapEXT(state_->device, reinterpret_cast<VkMicromapEXT>(micromap.handle), nullptr);
+    }
+    micromap = Structure{};
+}
+
+void Backend::build_micromap(const MicromapInput& input, const Structure& to, const Range& scratch) {
+    State& s = *state_;
+    const PFN_vkCmdPipelineBarrier2 barrier2 = vk::Context::get().pipeline_barrier2();
+    if (barrier2 == nullptr || input.buffer >= s.buffers.size()) {
+        return;
+    }
+    const std::uint64_t at = s.buffers[input.buffer].address;
+    // The pass's writes before this build and the structure's build read them (the indices), and the scratch's last
+    // use by a build before this one writes it.
+    VkMemoryBarrier2 before[2] = {{VK_STRUCTURE_TYPE_MEMORY_BARRIER_2}, {VK_STRUCTURE_TYPE_MEMORY_BARRIER_2}};
+    before[0].srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+    before[0].srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT;
+    before[0].dstStageMask = VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+    before[0].dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
+    before[1].srcStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR | VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT;
+    before[1].srcAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT;
+    before[1].dstStageMask = VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT;
+    before[1].dstAccessMask = VK_ACCESS_2_MICROMAP_READ_BIT_EXT | VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT;
+    VkDependencyInfo dependency{VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
+    dependency.memoryBarrierCount = 2u;
+    dependency.pMemoryBarriers = before;
+    barrier2(s.commands, &dependency);
+    const VkMicromapUsageEXT usage{input.triangles, input.level, VK_OPACITY_MICROMAP_FORMAT_4_STATE_EXT};
+    VkMicromapBuildInfoEXT info = micromap_info(usage);
+    info.dstMicromap = reinterpret_cast<VkMicromapEXT>(to.handle);
+    info.data.deviceAddress = at;
+    info.scratchData.deviceAddress = s.pages[scratch.page].address + scratch.offset;
+    info.triangleArray.deviceAddress = at + input.triangles_at;
+    vkCmdBuildMicromapsEXT(s.commands, 1u, &info);
+    // The micromap whole for the structure built over it next, and the scratch free for that build.
+    VkMemoryBarrier2 after{VK_STRUCTURE_TYPE_MEMORY_BARRIER_2};
+    after.srcStageMask = VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT;
+    after.srcAccessMask = VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT;
+    after.dstStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR | VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT;
+    after.dstAccessMask = VK_ACCESS_2_MICROMAP_READ_BIT_EXT | VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT |
+                          VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR | VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+    dependency.memoryBarrierCount = 1u;
+    dependency.pMemoryBarriers = &after;
+    barrier2(s.commands, &dependency);
 }
 
 // What the passes wrote before a build reads it, and a build's reads before the passes write again.

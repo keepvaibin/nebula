@@ -42,11 +42,12 @@ int main() {
     ok &= expect(refuses("timeline,frame", "frame"), "a prefix is not a name");
     ok &= expect(refuses("Timeline", "Timeline"), "names are lower case");
     ok &= expect(refuses("memory,", ""), "an empty name after a comma");
+    ok &= expect(parses("rt-no-geometry", kDiagnoseRtNoGeometry), "the no-geometry test");
     unsigned every = 0u;
     for (const DiagnosticName& entry : kDiagnosticNames) {
         every |= entry.what;
     }
-    ok &= expect(every == (kDiagnoseTelemetry << 1u) - 1u, "every diagnostic has a name");
+    ok &= expect(every == (kDiagnoseRtAbsent << 1u) - 1u, "every diagnostic has a name");
     std::cout << (ok ? "launch args tests passed\n" : "launch args tests failed\n");
     return ok ? 0 : 1;
 }

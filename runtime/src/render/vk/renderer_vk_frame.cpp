@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The Vulkan renderer's scene target (renderer_vk.h): its targets, draws, clears, copies, screen probes and test captures.
 
+#include "galaxy/render/rt_caps.h"
+#include "galaxy/render/program_table.h"
 #include "renderer_vk_internal.h"
 #include "galaxy/render/vk/renderer_vk.h"
 
@@ -447,8 +449,9 @@ void RendererVk::begin_scene_pass_with(unsigned aux, const SceneClearValues* cle
     }
     const VkCommandBuffer commands = commands_;
     VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-    begin.renderPass = aux != 0u ? draw_layout_.aux_pass_for(scene_variant(), aux, clear != nullptr)
-                                 : draw_layout_.pass_for(scene_variant(), clear != nullptr);
+    begin.renderPass = aux == kAuxPrepass ? VK_NULL_HANDLE
+                       : aux != 0u        ? draw_layout_.aux_pass_for(scene_variant(), aux, clear != nullptr)
+                                          : draw_layout_.pass_for(scene_variant(), clear != nullptr);
     // The scene target's own variants (a texture target's colour has another format).
     if (discard_color && aux == 0u && !target_pass_active_) {
         begin.renderPass = draw_layout_.discard_color_passes[scene_.wide ? 1u : 0u][scene_samples_log2()];
@@ -456,7 +459,13 @@ void RendererVk::begin_scene_pass_with(unsigned aux, const SceneClearValues* cle
     if (clear_depth != 0u && clear != nullptr && aux == 0u && !target_pass_active_) {
         begin.renderPass = draw_layout_.depth_clear_passes[clear_depth - 1u][scene_.wide ? 1u : 0u][scene_samples_log2()];
     }
-    begin.framebuffer = aux != 0u ? motion_framebuffer(aux) : scene_framebuffer();
+    begin.framebuffer = aux == kAuxPrepass ? VK_NULL_HANDLE : aux != 0u ? motion_framebuffer(aux) : scene_framebuffer();
+    const bool items = aux == kAuxPrepass;
+    if (items) {
+        // The tracer's prepass: the item target with the scene's depth; its first pass clears the item target.
+        begin.renderPass = item_clear_pending_ ? draw_layout_.item_pass_clear : draw_layout_.item_pass;
+        begin.framebuffer = item_framebuffer();
+    }
     scene_pass_aux_ = aux;
     // Loading a pass, tone mapping and AO compositing do not modify depth.
     // Native depth-writing draws and explicit clears invalidate the resolved image.
@@ -469,6 +478,12 @@ void RendererVk::begin_scene_pass_with(unsigned aux, const SceneClearValues* cle
         values[1].depthStencil = {clear->reversed_depth, 0u};  // reversed-Z, as clear_scene's
         begin.clearValueCount = aux != 0u ? 3u : 2u;
         begin.pClearValues = values;
+    }
+    if (items) {
+        values[0] = VkClearValue{};  // no item
+        begin.clearValueCount = item_clear_pending_ ? 1u : 0u;
+        begin.pClearValues = item_clear_pending_ ? values : nullptr;
+        item_clear_pending_ = false;
     }
     gpu_pass(current_pass_);
     vkCmdBeginRenderPass(commands, &begin,
@@ -889,9 +904,15 @@ void RendererVk::prepare_temporal_upscaler() {
     const RenderConfig cfg = get_render_config();
     const unsigned kind = cfg.upscaler;
     const unsigned quality = std::min(cfg.temporal_quality, 5u);
+#if defined(_WIN32)
+    // DLSS as Ray Reconstruction while the tracer runs, where it is installed and supported (FB, 22.20).
+    const bool rr = kind == 3u && render_tracing() && streamline::dlss_rr_supported();
+#else
+    const bool rr = false;
+#endif
     // A failed creation is not retried until its sizes or mode change.
     if (rw == temporal_render_w_ && rh == temporal_render_h_ && ow == temporal_output_w_ && oh == temporal_output_h_ &&
-        kind == temporal_kind_ && (kind < 3u || quality == temporal_quality_)) {
+        kind == temporal_kind_ && (kind < 3u || (quality == temporal_quality_ && rr == temporal_rr_))) {
         if (temporal_pending_.valid() &&
             temporal_pending_.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
             temporal_ = temporal_pending_.get();
@@ -915,9 +936,10 @@ void RendererVk::prepare_temporal_upscaler() {
     temporal_output_h_ = oh;
     temporal_kind_ = kind;
     temporal_quality_ = quality;
+    temporal_rr_ = rr;
 #if defined(_WIN32)
     if (kind == 3u) {
-        temporal_ = vk::streamline_vk::create_dlss_upscaler(rw, rh, ow, oh, quality);
+        temporal_ = vk::streamline_vk::create_dlss_upscaler(rw, rh, ow, oh, quality, rr);
         if (temporal_) {
             std::cout << "[Renderer] " << temporal_->name() << " " << rw << "x" << rh << " -> " << ow << "x" << oh << "\n";
         }
@@ -1033,7 +1055,16 @@ bool RendererVk::ensure_motion_targets() {
     const VkImageUsageFlags usage =
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     gpu::TextureRef motion = context.create_texture(width, height, 1u, VK_FORMAT_R16G16_SFLOAT, usage, true, "motion vectors");
-    gpu::TextureRef reactive = context.create_texture(width, height, 1u, VK_FORMAT_R8_UNORM, usage, true, "reactive mask");
+    // The tracer writes into the reactive mask too (plan 16.4) where the device traces and R8 images store.
+    VkImageUsageFlags reactive_usage = usage;
+    reactive_storable_ = false;
+    if (rt_capable(rt_caps())) {
+        VkFormatProperties formats{};
+        vkGetPhysicalDeviceFormatProperties(context.physical_device(), VK_FORMAT_R8_UNORM, &formats);
+        reactive_storable_ = (formats.optimalTilingFeatures & VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT) != 0u;
+        reactive_usage |= reactive_storable_ ? VK_IMAGE_USAGE_STORAGE_BIT : 0u;
+    }
+    gpu::TextureRef reactive = context.create_texture(width, height, 1u, VK_FORMAT_R8_UNORM, reactive_usage, true, "reactive mask");
     if (!motion || !reactive) {
         std::cerr << "[Renderer] motion targets " << width << 'x' << height << " allocation failed\n";
         return false;
@@ -1588,12 +1619,15 @@ RendererVk::RtCommands RendererVk::rt_commands_begin() {
     end_scene_pass();
     rt_outer_pass_ = current_pass_;
     gpu_pass(GpuPass::RayTracing);
-    return {commands_, nullptr};
+    rt_textures_.set = bindless_images_;
+    rt_textures_.layout = bindless_images_ != VK_NULL_HANDLE ? draw_layout_.sets[1] : VK_NULL_HANDLE;
+    return {commands_, &rt_textures_};
 }
 
 void RendererVk::rt_commands_end() { gpu_pass(rt_outer_pass_); }
 
-bool RendererVk::rt_depth_begin(rt::TextureView& depth, unsigned& width, unsigned& height, rt::ImageFormat& color) {
+bool RendererVk::rt_depth_begin(rt::TextureView& depth, unsigned& width, unsigned& height, rt::ImageFormat& color,
+                                rt::TextureView* color_view) {
     if (!scene_.color || !scene_.depth || scene_.samples > 1u || (scene_.color->usage & VK_IMAGE_USAGE_TRANSFER_DST_BIT) == 0u ||
         (scene_.color->format != vk::kSceneColorFormat && scene_.color->format != VK_FORMAT_R16G16B16A16_SFLOAT)) {
         return false;
@@ -1604,6 +1638,15 @@ bool RendererVk::rt_depth_begin(rt::TextureView& depth, unsigned& width, unsigne
                   kDepthSampleLayout, VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
                   VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
     depth = {scene_.depth->view, static_cast<std::uint32_t>(kDepthSampleLayout)};
+    rt_color_read_ = color_view != nullptr && (scene_.color->usage & VK_IMAGE_USAGE_SAMPLED_BIT) != 0u;
+    if (color_view != nullptr && !rt_color_read_) {
+        rt_depth_end();
+        return false;
+    }
+    if (rt_color_read_) {
+        image_barrier(commands_, scene_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ColorWrite, gpu::Use::ComputeRead);
+        *color_view = {scene_.color->view, static_cast<std::uint32_t>(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)};
+    }
     width = scene_.depth->width;
     height = scene_.depth->height;
     color = scene_.color->format == vk::kSceneColorFormat ? rt::ImageFormat::Rgb10a2 : rt::ImageFormat::Rgba16f;
@@ -1611,10 +1654,135 @@ bool RendererVk::rt_depth_begin(rt::TextureView& depth, unsigned& width, unsigne
 }
 
 void RendererVk::rt_depth_end() {
+    if (rt_color_read_) {
+        image_barrier(commands_, scene_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ComputeRead, gpu::Use::ColorWrite);
+        rt_color_read_ = false;
+    }
     image_barrier(commands_, scene_.depth->image, depth_aspects(depth_format_), kDepthSampleLayout,
                   VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_NONE,
                   VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
                   VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+}
+
+void RendererVk::destroy_item_framebuffer() {
+    if (item_framebuffer_ != VK_NULL_HANDLE) {
+        const VkDevice device = vk::Context::get().device();
+        const VkFramebuffer retired = item_framebuffer_;
+        vk::Context::get().defer([device, retired] { vkDestroyFramebuffer(device, retired, nullptr); });
+        item_framebuffer_ = VK_NULL_HANDLE;
+    }
+    item_framebuffer_depth_ = VK_NULL_HANDLE;
+}
+
+VkFramebuffer RendererVk::item_framebuffer() {
+    const VkImageView depth = scene_.depth->target_view;
+    if (item_framebuffer_ != VK_NULL_HANDLE && item_framebuffer_depth_ != depth) {
+        destroy_item_framebuffer();
+    }
+    if (item_framebuffer_ == VK_NULL_HANDLE) {
+        const VkImageView views[2] = {item_target_->target_view, depth};
+        VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
+        info.renderPass = draw_layout_.item_pass;
+        info.attachmentCount = 2u;
+        info.pAttachments = views;
+        info.width = item_target_->width;
+        info.height = item_target_->height;
+        info.layers = 1;
+        vk::check(vkCreateFramebuffer(vk::Context::get().device(), &info, nullptr, &item_framebuffer_), "ray tracing prepass framebuffer");
+        item_framebuffer_depth_ = depth;
+    }
+    return item_framebuffer_;
+}
+
+bool RendererVk::rt_items_begin() {
+    if (!scene_.color || !scene_.depth || scene_.samples > 1u || target_pass_active_ || draw_layout_.item_pass == VK_NULL_HANDLE) {
+        return false;
+    }
+    if (!item_target_ || item_target_->width != scene_.depth->width || item_target_->height != scene_.depth->height) {
+        end_scene_pass();
+        destroy_item_framebuffer();
+        retire(std::move(item_target_));
+        item_target_ = vk::Context::get().create_texture(scene_.depth->width, scene_.depth->height, 1u, VK_FORMAT_R32G32_UINT,
+                                                         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, true,
+                                                         "ray tracing items");
+        if (!item_target_) {
+            return false;
+        }
+    }
+    item_clear_pending_ = true;
+    return true;
+}
+
+bool RendererVk::rt_light_begin(rt::TextureView& depth, rt::TextureView& items, unsigned& width, unsigned& height) {
+    if (!scene_.depth || !item_target_ || scene_.samples > 1u) {
+        return false;
+    }
+    if (item_clear_pending_) {
+        begin_scene_pass_with(kAuxPrepass, nullptr);  // the prepass drew nothing: the item target is cleared all the same
+    }
+    end_scene_pass();
+    settle_depth_clear();
+    image_barrier(commands_, scene_.depth->image, depth_aspects(depth_format_), VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                  kDepthSampleLayout, VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                  VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+    image_barrier(commands_, item_target_->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ColorWrite, gpu::Use::ComputeRead);
+    depth = {scene_.depth->view, static_cast<std::uint32_t>(kDepthSampleLayout)};
+    items = {item_target_->view, static_cast<std::uint32_t>(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)};
+    width = scene_.depth->width;
+    height = scene_.depth->height;
+    return true;
+}
+
+void RendererVk::rt_light_end() {
+    image_barrier(commands_, item_target_->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ComputeRead, gpu::Use::ColorWrite);
+    image_barrier(commands_, scene_.depth->image, depth_aspects(depth_format_), kDepthSampleLayout,
+                  VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_NONE,
+                  VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+                  VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+}
+
+bool RendererVk::rt_reactive_begin(rt::TextureView& reactive) {
+    if (!reactive_scene_ || !motion_.reactive || !reactive_storable_) {
+        return false;
+    }
+    end_scene_pass();
+    image_barrier(commands_, motion_.reactive->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ColorWrite, gpu::Use::ComputeWrite);
+    reactive = {motion_.reactive->view, static_cast<std::uint32_t>(VK_IMAGE_LAYOUT_GENERAL)};
+    return true;
+}
+
+void RendererVk::rt_reactive_end() {
+    image_barrier(commands_, motion_.reactive->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ComputeWrite, gpu::Use::ColorWrite);
+}
+
+void RendererVk::rt_unpublish_lights(TextureStore& textures) {
+    const VkDevice device = vk::Context::get().device();
+    for (unsigned which = 0u; which < kRtLightPictures; ++which) {  // light, added, mirror, facing, volume, scatter, transmit, indirect, two guides
+        const auto found = pictures_.find(kRtLightPicture + which);
+        if (found == pictures_.end()) {
+            continue;
+        }
+        Picture& picture = found->second;
+        if (picture.view != ~0u) {
+            textures.retire_view(picture.view, std::move(picture.viewed));
+        }
+        if (picture.sampled != VK_NULL_HANDLE) {
+            const VkImageView old = picture.sampled;
+            vk::Context::get().defer([device, old] { vkDestroyImageView(device, old, nullptr); });
+        }
+        pictures_.erase(found);
+    }
+}
+
+std::uint32_t RendererVk::rt_publish_light(void* image, TextureStore& textures, unsigned which) {
+    auto* const texture = static_cast<vk::Texture*>(image);
+    if (texture == nullptr) {
+        return null_texture_slot_;
+    }
+    // The tracer owns the image (and frees it frames after its last use): the picture only names it.
+    static_cast<void>(publish_picture(kRtLightPicture + which, texture->width, texture->height, gpu::TextureRef(gpu::TextureRef(), texture),
+                                      0u, textures));
+    return pictures_[kRtLightPicture + which].view;
 }
 
 void RendererVk::rt_copy_to_scene(void* image) {
@@ -1808,16 +1976,16 @@ void RendererVk::record_wide_begin(const SceneClearValues* initial_clear) {
     reset_draw_bindings();
 }
 
-void RendererVk::end_wide_scene() {
+void RendererVk::end_wide_scene(unsigned finish) {
     if (!scene_.wide) {
         return;
     }
     end_scene_pass();
 
-    record_wide_end();
+    record_wide_end(finish);
 }
 
-void RendererVk::record_wide_end() {
+void RendererVk::record_wide_end(unsigned finish) {
     if (!scene_.wide) {
         return;
     }
@@ -1848,7 +2016,7 @@ void RendererVk::record_wide_end() {
                   VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
                   VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
     // After a load or a long pause the eye starts open.
-    scene_camera_.meter(commands_, *wide, *scene_.depth, kDepthSampleLayout, seconds > 1.0f ? -1.0f : seconds, allocate);
+    scene_camera_.meter(commands_, *wide, *scene_.depth, kDepthSampleLayout, seconds > 1.0f ? -1.0f : seconds, finish, allocate);
     image_barrier(commands_, scene_.depth->image, aspects, kDepthSampleLayout, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                   VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
                   VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
@@ -1872,7 +2040,7 @@ void RendererVk::record_wide_end() {
     }
     begin_scene_pass_with(0u, nullptr, true);
     scene_camera_.draw(commands_, draw_layout_.pass_for(scene_variant(), false), scene_samples_log2(),
-                       resolve_output || per_sample ? *wide_ms : *wide, per_sample, allocate, resolve_output);
+                       resolve_output || per_sample ? *wide_ms : *wide, per_sample, allocate, resolve_output, finish);
     reset_draw_bindings();
 }
 
@@ -3023,7 +3191,13 @@ bool RendererVk::debug_copy_scene_to_readback() {
     vk::Context& context = vk::Context::get();
     const unsigned w = scene_map_.width;
     const unsigned h = scene_map_.height;
-    const std::uint64_t bytes = static_cast<std::uint64_t>(w) * h * 4u;
+    // The 10-bit scene target, or the wide one (RGBA16F, a traced scene's since l69): 8 bytes a pixel, its halves
+    // read as the 10-bit target's words (debug_log_readback; FB b83). Any other format is not read.
+    const bool wide = scene_.color->format == VK_FORMAT_R16G16B16A16_SFLOAT;
+    if (!wide && scene_.color->format != vk::kSceneColorFormat) {
+        return false;
+    }
+    const std::uint64_t bytes = static_cast<std::uint64_t>(w) * h * (wide ? 8u : 4u);
     if (!scene_capture_.buffer || scene_capture_.buffer->size < bytes) {
         scene_capture_.buffer = context.create_readback_buffer(bytes, "scene target capture");
         if (!scene_capture_.buffer) {
@@ -3043,6 +3217,7 @@ bool RendererVk::debug_copy_scene_to_readback() {
     scene_capture_pending_path_ = scene_capture_path_;
     scene_capture_width_ = w;
     scene_capture_height_ = h;
+    scene_capture_wide_ = wide;
     reset_draw_bindings();
     bind_scene();
     return true;
@@ -3055,8 +3230,16 @@ void RendererVk::debug_log_readback() {
     }
     vk::Context::get().invalidate(*scene_capture_.buffer);
     std::vector<std::uint8_t> rgba(static_cast<std::size_t>(scene_capture_width_) * scene_capture_height_ * 4u);
-    ten_bit_to_rgba8(reinterpret_cast<const std::uint8_t*>(scene_capture_.buffer->mapped), rgba.data(),
-                     scene_capture_width_, scene_capture_height_, scene_capture_width_ * 4u, scene_capture_width_ * 4u);
+    const auto* copied = reinterpret_cast<const std::uint8_t*>(scene_capture_.buffer->mapped);
+    std::vector<std::uint8_t> words;
+    if (scene_capture_wide_) {
+        words.resize(rgba.size());
+        half4_to_ten_bit(copied, words.data(), scene_capture_width_, scene_capture_height_, scene_capture_width_ * 8u,
+                         scene_capture_width_ * 4u);
+        copied = words.data();
+    }
+    ten_bit_to_rgba8(copied, rgba.data(), scene_capture_width_, scene_capture_height_, scene_capture_width_ * 4u,
+                     scene_capture_width_ * 4u);
     std::vector<std::uint8_t> rgb(static_cast<std::size_t>(scene_capture_width_) * scene_capture_height_ * 3u);
     for (std::size_t i = 0, n = rgb.size() / 3u; i < n; ++i) {
         rgb[i * 3u] = rgba[i * 4u];

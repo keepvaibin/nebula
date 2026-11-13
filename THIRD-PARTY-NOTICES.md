@@ -142,6 +142,12 @@ Windows installs carry `dxc\dxc.exe`, `dxc\dxcompiler.dll` and `dxc\dxil.dll` fr
 <https://github.com/microsoft/DirectXShaderCompiler>, unchanged, with their license files beside them. The game starts them to
 build a mod's shaders on the player's PC.
 
+## DirectX 12 Agility SDK 1.620.2 (headers MIT; runtime under Microsoft's terms)
+
+Built with the headers of Microsoft's NuGet package Microsoft.Direct3D.D3D12 1.620.2
+(<https://devblogs.microsoft.com/directx/directx12agility/>). Windows installs carry its `D3D12Core.dll` in `D3D12\`,
+unchanged, with the package's license beside it; the game asks Windows to load it from there.
+
 ## BoringSSL 0.20261020.0 (Apache-2.0 and others)
 
 `third_party/boringssl` holds the library files of BoringSSL release `0.20261020.0` from <https://github.com/google/boringssl>

@@ -26,11 +26,23 @@ static_assert(sizeof(Instance) == 64u);
 inline constexpr std::uint32_t kMaskOpaque = 1u;   // writes depth unblended: stops light
 inline constexpr std::uint32_t kMaskBlended = 2u;  // drawn blended or without depth: seen, casts no hard shadow
 inline constexpr std::uint32_t kMaskEarly = 4u;    // opaque and drawn before the scene's opaque end: what the depth holds there
+inline constexpr std::uint32_t kMaskSolid = 8u;    // opaque and no cutout: every triangle of it stops light (a shadow ray's)
+inline constexpr std::uint32_t kMaskLit = 16u;     // solid and drawn by a lit program: what painted light could not know of
+inline constexpr std::uint32_t kMaskSky = 64u;     // the sky's dome: stops no light, is what a mirror shows where nothing else stands
+inline constexpr std::uint32_t kMaskCutout = 32u;  // opaque where its texture's alpha says so (an alpha test): a ray asks at each hit
+inline constexpr std::uint32_t kMaskShadowOnly = 128u;  // drawn for the tracer alone (a traced draw): only shadow rays meet it
 // What an instance is, read back at a hit (the instance's contribution field, which inline rays do not use).
 inline constexpr std::uint32_t kKindCutout = 1u;   // its pixel program may discard (an alpha test): a hit is not yet a surface
+inline constexpr std::uint32_t kKindCard = 4u;     // a billboard's sun card (l83): never opaque, so a ray can pass its own
+inline constexpr std::uint32_t kKindClipped = 2u;  // with kKindCutout: a map part its clip areas show (c27), every hit asked
 // Instance flags (the same bits in both APIs).
 inline constexpr std::uint32_t kInstanceNoCull = 1u;  // a ray that culls back faces meets both of this instance's
 inline constexpr std::uint32_t kInstanceFlip = 2u;    // its triangles face the other way
+inline constexpr std::uint32_t kInstanceNotOpaque = 8u;  // a hit on it is a candidate the ray's shader decides (a cutout)
+inline constexpr std::uint32_t kInstanceNoMicromaps = 32u;  // its structure's opacity micromap is not this draw's (5.3 G-2)
+// What an instance has of its structure's opacity micromap (5.3 G-2): none under it; this draw's own (the micromap
+// decides where its cutout is, asking only where it cannot tell); another's (turned off for this instance).
+enum class Micromapped : std::uint8_t { None, Own, Other };
 
 // Which faces a draw shows. A ray that culls back faces (the views; a ray that asks what the scene drew) meets the
 // same faces as the draw; a ray without that flag (a shadow's) meets every face.
@@ -47,6 +59,7 @@ struct SceneCount {
     std::uint32_t flat = 0u;         // no depth test or no colour: sky, volumes
     std::uint32_t sprites = 0u;      // particles, glyphs, widened lines
     std::uint32_t other_view = 0u;   // under another camera or an orthographic view
+    std::uint32_t outside = 0u;      // taken, outside the view: the raster passes leave them out (5.3 G-1)
     std::uint32_t repeats = 0u;      // the same mesh under the same matrix again
     std::uint64_t triangles = 0u;    // under the instances that stand still
     std::uint64_t skinned_triangles = 0u;
@@ -76,7 +89,9 @@ public:
     // A frame's instances, in the order added.
     void begin() noexcept;
     void add(const float (*rows)[4], std::uint32_t id, std::uint32_t mask, std::uint64_t structure, Faces faces = Faces::Both,
-             std::uint32_t kind = 0u);
+             std::uint32_t kind = 0u, Micromapped micromapped = Micromapped::None);
+    // An instance drawn again by a draw the micromap is not for: micromaps off, its cutout asked at every hit.
+    void no_micromap(std::uint32_t instance) noexcept;
     // A draw of an instance already added (the same mesh under the same matrix): its mask joins.
     void also(std::uint32_t instance, std::uint32_t mask) noexcept { instances_[instance].id_mask |= mask << 24u; }
     [[nodiscard]] std::span<const Instance> instances() const noexcept { return instances_; }

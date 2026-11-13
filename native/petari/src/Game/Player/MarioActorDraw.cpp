@@ -19,6 +19,7 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/System/ResourceHolder.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
+#include "Game/System/NebulaHost.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/FileUtil.hpp"
@@ -502,6 +503,23 @@ void MarioActor::drawMarioModel() const {
     if (!mFlag.mIsHiddenModel) {
         model->mDrawPasses &= ~PlayerModel::Pass_BehindMark;
         if (mMario->isStatusActive(MarioStatus_FpView)) {
+            // With ray tracing on, the body the camera fades or hides still casts: whole, into the tracer's scene
+            // alone (the faded draw below is blended, so no light stops at it).
+            if ((NebulaHost::option(NEBULA_OPTION_RAY_TRACING) & static_cast< u32 >(NEBULA_RAY_TRACING_ON)) != 0) {
+                const u32 passes = model->mDrawPasses;
+                MR::showJoint(model, "HandR0");
+                MR::showJoint(model, "HandL0");
+                MR::showJoint(model, "Face0");
+                model->setDynamicList(mCurrModel == 4 ? nullptr : &mLightTint);  // as the third-person draw below
+                Frame::tracedOnly(true);
+                model->setDrawView(0);
+                model->directDraw();
+                Frame::tracedOnly(false);
+                model->mDrawPasses = passes;
+                MR::hideJoint(model, "HandR0");
+                MR::hideJoint(model, "HandL0");
+                MR::hideJoint(model, "Face0");
+            }
             if (mFpViewHidden) {
                 return;
             }

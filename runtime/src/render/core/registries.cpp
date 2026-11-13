@@ -79,6 +79,16 @@ std::uint64_t Registries::memory_bytes() noexcept {
     return bytes + slot_bytes_;
 }
 
+bool Registries::arena_memory(std::uint32_t index, gpu::Address& base, std::size_t& bytes) noexcept {
+    const std::lock_guard guard(lock_);
+    if (index >= arenas_.size() || !arenas_[index].memory) {
+        return false;
+    }
+    base = arenas_[index].memory.gpu;
+    bytes = arenas_[index].bytes;
+    return true;
+}
+
 Registries::MemoryStats Registries::memory_stats() noexcept {
     const std::lock_guard guard(lock_);
     MemoryStats stats;
@@ -324,10 +334,142 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes)
     model.mesh_count = header.mesh_count;
 
     meshes.resize(header.mesh_count);
+    // c86 (PLAN-LIGHTS L2): each glowing mesh's light shapes (version 10 on; the lights pass shades them).
+    model.glow_shapes.clear();
+    if (header.version >= 10u && header.glow_shapes_at != 0u) {
+        const auto* spans = at<NebulaModelGlowSpan>(file, header.glow_shapes_at);
+        const auto* shapes = reinterpret_cast<const NebulaModelGlowShape*>(spans + header.mesh_count);
+        std::uint32_t total = 0u;
+        for (std::uint32_t m = 0; m < header.mesh_count; ++m) {
+            total = std::max(total, spans[m].first + spans[m].count);
+        }
+        model.glow_shapes.assign(shapes, shapes + total);
+        for (std::uint32_t m = 0; m < header.mesh_count; ++m) {
+            meshes[m].glow_shape_first = spans[m].first;
+            meshes[m].glow_shape_count = spans[m].count;
+        }
+    }
     const auto* file_meshes = at<NebulaModelMesh>(file, header.meshes_at);
+    const auto* hits = header.hits_at != 0u ? at<NebulaModelHit>(file, header.hits_at) : nullptr;
+    const auto* paint_lights = header.paint_lights_at != 0u ? at<NebulaModelPaintLight>(file, header.paint_lights_at) : nullptr;
     for (std::uint32_t m = 0; m < header.mesh_count; ++m) {
         const NebulaModelMesh& mesh = file_meshes[m];
         GpuMesh& gpu_mesh = meshes[m];
+        if (hits != nullptr && mesh.material < header.material_count) {
+            const NebulaModelHit& hit = hits[mesh.material];
+            const NebulaModelMaterial& material = at<NebulaModelMaterial>(file, header.materials_at)[mesh.material];
+            gpu_mesh.hit_class = hit.klass;
+            gpu_mesh.hit_flags = hit.flags;
+            std::copy_n(hit.emission, 3u, gpu_mesh.hit_emission);
+            std::copy_n(hit.base, 3u, gpu_mesh.hit_base);
+            gpu_mesh.hit_roughness = hit.roughness;
+            gpu_mesh.hit_metal = hit.metal;
+            gpu_mesh.hit_transmission = hit.transmission;
+            gpu_mesh.hit_environment = hit.environment_share;
+            std::copy_n(hit.glow, 4u, gpu_mesh.glow);
+            gpu_mesh.glow_source = static_cast<std::uint8_t>(hit.glow_source & 31u);  // bits 5-7: why it glows (c81)
+            gpu_mesh.glow_rule = static_cast<std::uint8_t>(hit.glow_source >> 5u);
+            gpu_mesh.hit_ior = hit.ior;
+            gpu_mesh.hit_thickness = hit.thickness;
+            std::copy_n(hit.env_tint, 3u, gpu_mesh.hit_env_tint);
+            gpu_mesh.hit_env_map = hit.env_map;
+            gpu_mesh.hit_body = hit.body;
+            gpu_mesh.hit_shine = hit.shine;
+            gpu_mesh.hit_tint_keep = hit.tint_keep;
+            gpu_mesh.hit_through = static_cast<float>(hit.through) / 255.0f;
+            // Where glow_source's colour sits among the rows of the material's own stages (the first form that
+            // replaces nothing), and its cooked value: registers r (code r) are signed, the others bytes, all /255
+            // as Material::fillRow fills them.
+            const std::uint32_t code = gpu_mesh.glow_source - 1u;
+            if (gpu_mesh.glow_source >= 1u && gpu_mesh.glow_source <= 9u && material.forms_at != 0u) {
+                const auto* forms = at<NebulaModelForm>(file, material.forms_at);
+                for (std::uint32_t f = 0; f < material.form_count; ++f) {
+                    const NebulaModelForm& form = forms[f];
+                    if (form.replace != 0u) {
+                        continue;
+                    }
+                    const auto* codes = at<std::uint32_t>(file, form.pixel_rows_at);
+                    for (std::uint32_t p = 0; p < form.pixel_row_count; ++p) {
+                        if (codes[p] == code && form.vertex_row_count + p < 0xFFFFu &&
+                            form.vertex_row_count + form.pixel_row_count < 0xFFFFu) {
+                            gpu_mesh.glow_row = static_cast<std::uint16_t>(form.vertex_row_count + p);
+                            gpu_mesh.glow_row_count = static_cast<std::uint16_t>(form.vertex_row_count + form.pixel_row_count);
+                            break;
+                        }
+                    }
+                    break;
+                }
+                for (unsigned c = 0; c < 3u; ++c) {
+                    const float value = code <= NEBULA_ROW_REGISTER + 2u ? static_cast<float>(material.registers[code][c])
+                                        : code < NEBULA_ROW_MATERIAL_COLOR
+                                            ? static_cast<float>(material.constants[code - NEBULA_ROW_CONSTANT][c])
+                                            : static_cast<float>(material.material_color[code - NEBULA_ROW_MATERIAL_COLOR][c]);
+                    gpu_mesh.glow_cooked[c] = value / 255.0f;
+                }
+            }
+            // Map 0's coordinate (plan 13.3): the form's texture table's first map, the first stage that samples it,
+            // its coordinate when made from a uv set by a matrix (type 1, sources 4 to 19; not the form's normal
+            // coordinate), and that coordinate's u and v rows among the form's vertex rows.
+            if (material.forms_at != 0u && material.coords_at != 0u && hit.stages_at != 0u) {
+                const auto* forms = at<NebulaModelForm>(file, material.forms_at);
+                for (std::uint32_t f = 0; f < material.form_count; ++f) {
+                    const NebulaModelForm& form = forms[f];
+                    if (form.replace != 0u) {
+                        continue;
+                    }
+                    if (form.texture_count != 0u && form.vertex_row_count + form.pixel_row_count < 0xFFFFu) {
+                        // A map's coordinate rows: the first of its u and v rows among the form's vertex rows and the
+                        // uv set it reads, or none (FB b90: map 0's and map 1's alike).
+                        const auto map_rows = [&](std::uint8_t map, std::uint16_t& row, std::uint8_t& uv) {
+                            const auto* stages = at<NebulaModelStage>(file, hit.stages_at);
+                            std::uint32_t coord = 0xFFu;
+                            for (std::uint32_t s = 0; s < hit.stage_count && coord == 0xFFu; ++s) {
+                                if (stages[s].map == map) {
+                                    coord = stages[s].coord;
+                                }
+                            }
+                            const bool normal_coord = (form.flags & 1u) != 0u && coord == 0u;
+                            if (coord >= material.coord_count || normal_coord) {
+                                return;
+                            }
+                            const NebulaModelCoord& c = at<NebulaModelCoord>(file, material.coords_at)[coord];
+                            if (c.type != 1u || c.source < 4u || c.source > 19u) {
+                                return;
+                            }
+                            const auto* codes = at<std::uint32_t>(file, form.vertex_rows_at);
+                            const std::uint32_t coord_code = NEBULA_ROW_COORD + 3u * coord;
+                            for (std::uint32_t r = 0; r + 1u < form.vertex_row_count; ++r) {
+                                if (codes[r] == coord_code && codes[r + 1u] == coord_code + 1u) {
+                                    row = static_cast<std::uint16_t>(r);
+                                    uv = static_cast<std::uint8_t>(c.source - 4u);
+                                    return;
+                                }
+                            }
+                        };
+                        const auto* maps = at<std::uint8_t>(file, form.textures_at);
+                        map_rows(maps[0], gpu_mesh.map0_row, gpu_mesh.map0_uv);
+                        if (gpu_mesh.map0_row != 0xFFFFu) {
+                            gpu_mesh.map0_form_rows = static_cast<std::uint16_t>(form.vertex_row_count + form.pixel_row_count);
+                        }
+                        if (form.texture_count >= 2u && maps[1] != maps[0]) {
+                            map_rows(maps[1], gpu_mesh.map1_row, gpu_mesh.map1_uv);
+                            if (gpu_mesh.map1_row != 0xFFFFu) {
+                                gpu_mesh.map1_slot = 1u;
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+            // The alpha test's first comparison, where it is "greater" or "greater or equal" (4, 6): its reference.
+            if (material.alpha_comp0 == 4u || material.alpha_comp0 == 6u) {
+                gpu_mesh.hit_alpha = std::max(static_cast<float>(material.alpha_ref0) / 255.0f, 1.0f / 255.0f);
+            }
+        }
+        if (paint_lights != nullptr) {
+            gpu_mesh.paint_share = paint_lights[m].share;
+            std::copy_n(paint_lights[m].direction, 2u, gpu_mesh.paint_direction);
+        }
         gpu_mesh.vertex_count = mesh.vertex_count;
         gpu_mesh.refined_vertex_count = mesh.refined_vertex_count;
         gpu_mesh.index_count = mesh.index_count;
@@ -359,11 +501,16 @@ void Registries::place_model(std::uint32_t id, const LiveModel& live, GpuModel m
         const NebulaModelMesh& mesh = file_meshes[m];
         GpuMesh& gpu_mesh = meshes[m];
         gpu_mesh.positions = stream(mesh.positions_at);
+        gpu_mesh.billboard = mesh.billboard;
         gpu_mesh.attributes = stream(mesh.attributes_at);
         gpu_mesh.matrices = stream(mesh.matrices_at);
         gpu_mesh.further = stream(mesh.further_at);
         gpu_mesh.indices = stream(mesh.indices_at);
         gpu_mesh.refined_indices = stream(mesh.refined_indices_at);
+        // D2: each vertex's last word of stream 3 is its de-light gain (c37); a ray's hit reads it (FB b54).
+        gpu_mesh.gains = (mesh.attributes & NEBULA_MESH_GAIN) != 0u && mesh.further_at != 0u && mesh.further_stride >= 4u
+                             ? stream(mesh.further_at) + (mesh.further_stride - 4u)
+                             : gpu::Address{0u};
         gpu_mesh.arena = placed.arena;
         gpu_mesh.model = id;
         incoming_.meshes.emplace_back(live.first_mesh + m, gpu_mesh);
@@ -479,6 +626,7 @@ void Registries::place_slot(const float (*rows)[4], std::uint32_t vertex_rows, s
     StaticSlot slot;
     slot.vertex_rows = vertex_page.gpu + vertex_at;
     slot.pixel_rows = slot_page_.gpu + pixel_at;
+    slot.cpu = &rows[0][0];  // the record's copy (material_register_locked, restart): kept for the registries' life
     incoming_.slots.push_back(slot);
 }
 
@@ -566,15 +714,16 @@ std::uint32_t Registries::material_register_locked(const float (*rows)[4], std::
             return record.id;
         }
     }
-    place_slot(rows, vertex_rows, pixel_rows);
     const std::uint32_t id = next_slot_++;
-    // Compares read the rows back from the mapped page's copy kept here: the page is write-combined.
+    // Compares read the rows back from the mapped page's copy kept here: the page is write-combined. The slot points
+    // at this copy too (StaticSlot::cpu): it lives as long as the registries.
     SlotRecord record;
     record.vertex_rows = vertex_rows;
     record.pixel_rows = pixel_rows;
     record.id = id;
-    record.cpu = std::make_unique<float[]>(count * 4u);
+    record.cpu = std::make_unique<float[]>(std::max<std::size_t>(count, 1u) * 4u);
     std::memcpy(record.cpu.get(), rows, count * 16u);
+    place_slot(reinterpret_cast<const float (*)[4]>(record.cpu.get()), vertex_rows, pixel_rows);
     bucket.push_back(std::move(record));
     return id;
 }

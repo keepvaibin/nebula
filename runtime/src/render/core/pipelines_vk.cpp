@@ -2,6 +2,7 @@
 #include "render/core/pipelines.h"
 
 #include "render/core/pipeline_cache_file.h"
+#include "galaxy/launch_args.h"
 #include "galaxy/render/program_table.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/renderer_common.h"
@@ -19,6 +20,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <mutex>
 #include <system_error>
 #include <type_traits>
@@ -77,6 +79,7 @@ std::uint32_t input_location(std::uint32_t semantic) noexcept {
     case NEBULA_INPUT_BINORMAL: return kBinormal;
     case NEBULA_INPUT_WIDEN: return kWiden;
     case NEBULA_INPUT_MATRIX: return kMatrix;
+    case NEBULA_INPUT_GAIN: return kWiden;  // a uint at the widened corner's place: only sites read that one
     default: return semantic >= NEBULA_INPUT_COORD0 ? kCoord0 + (semantic - NEBULA_INPUT_COORD0) : kNoLocation;
     }
 }
@@ -110,6 +113,199 @@ std::vector<bool> input_locations(const ProgramBytes& program) {
         }
     }
     return reads;
+}
+
+// A tracer pipeline's pixel module with an unread input at each location the vertex module writes and it declares
+// none of (defect D10): a 32-bit float or integer scalar or vector as the output is, integers flat, listed in the fragment entry
+// point. Empty when nothing is missing or a module is not as expected (the pipeline then takes the module as it is).
+std::vector<std::uint32_t> with_unread_inputs(const ProgramBytes& pixel, const ProgramBytes& vertex) {
+    constexpr std::uint32_t kOpEntryPoint = 15u, kOpTypeInt = 21u, kOpTypeFloat = 22u, kOpTypeVector = 23u, kOpTypePointer = 32u,
+                            kOpFunction = 54u, kOpVariable = 59u, kOpDecorate = 71u, kDecorationFlat = 14u, kDecorationLocation = 30u,
+                            kStorageInput = 1u, kStorageOutput = 3u, kModelFragment = 4u;
+    // A varying's type: kind 1 float, 2 signed, 3 unsigned (32 bits); count its components.
+    struct Shape {
+        std::uint32_t kind = 0u, count = 0u;
+        bool operator<(const Shape& o) const noexcept { return kind != o.kind ? kind < o.kind : count < o.count; }
+    };
+    struct Scan {
+        std::map<std::uint32_t, Shape> shapes;             // type id -> shape (scalars and vectors)
+        std::map<std::uint32_t, std::uint32_t> pointers;   // pointer type id (the storage asked) -> pointee
+        std::map<std::uint32_t, std::uint32_t> variables;  // variable (the storage asked) -> its pointer type
+        std::map<std::uint32_t, std::uint32_t> locations;  // decorated id -> location
+        std::uint32_t bound = 0u;
+    };
+    const auto scan = [&](const ProgramBytes& program, std::uint32_t storage, Scan& out) {
+        const auto* code = static_cast<const std::uint32_t*>(program.data);
+        const std::size_t words = program.size / 4u;
+        if (code == nullptr || words < 5u) {
+            return false;
+        }
+        out.bound = code[3];
+        for (std::size_t at = 5u; at < words;) {
+            const std::uint32_t op = code[at] & 0xFFFFu;
+            const std::size_t length = code[at] >> 16u;
+            if (length == 0u || length > words - at) {
+                return false;
+            }
+            if (op == kOpTypeFloat && length >= 3u && code[at + 2u] == 32u) {
+                out.shapes[code[at + 1u]] = {1u, 1u};
+            } else if (op == kOpTypeInt && length >= 4u && code[at + 2u] == 32u) {
+                out.shapes[code[at + 1u]] = {code[at + 3u] != 0u ? 2u : 3u, 1u};
+            } else if (op == kOpTypeVector && length >= 4u) {
+                if (const auto it = out.shapes.find(code[at + 2u]); it != out.shapes.end() && it->second.count == 1u) {
+                    out.shapes[code[at + 1u]] = {it->second.kind, code[at + 3u]};
+                }
+            } else if (op == kOpTypePointer && length >= 4u && code[at + 2u] == storage) {
+                out.pointers[code[at + 1u]] = code[at + 3u];
+            } else if (op == kOpVariable && length >= 4u && code[at + 3u] == storage) {
+                out.variables[code[at + 2u]] = code[at + 1u];
+            } else if (op == kOpDecorate && length >= 4u && code[at + 2u] == kDecorationLocation) {
+                out.locations[code[at + 1u]] = code[at + 3u];
+            }
+            at += length;
+        }
+        return true;
+    };
+    Scan vs, ps;
+    if (!scan(vertex, kStorageOutput, vs) || !scan(pixel, kStorageInput, ps)) {
+        return {};
+    }
+    std::map<std::uint32_t, bool> declared;  // the pixel module's input locations
+    for (const auto& input : ps.variables) {
+        if (const auto it = ps.locations.find(input.first); it != ps.locations.end()) {
+            declared[it->second] = true;
+        }
+    }
+    std::map<std::uint32_t, Shape> missing;  // location -> shape
+    for (const auto& [variable, pointer] : vs.variables) {
+        const auto location = vs.locations.find(variable);
+        const auto pointee = vs.pointers.find(pointer);
+        if (location == vs.locations.end() || pointee == vs.pointers.end() || declared.count(location->second) != 0u) {
+            continue;
+        }
+        if (const auto shape = vs.shapes.find(pointee->second); shape != vs.shapes.end()) {
+            missing[location->second] = shape->second;
+        }
+    }
+    if (missing.empty()) {
+        return {};
+    }
+    // The pixel module's own types where it has them, new ones after its others.
+    std::uint32_t next = ps.bound;
+    std::map<Shape, std::uint32_t> type_of;
+    for (const auto& [id, shape] : ps.shapes) {
+        type_of.emplace(shape, id);
+    }
+    std::map<std::uint32_t, std::uint32_t> input_pointer_of;  // pointee -> Input pointer
+    for (const auto& [pointer, pointee] : ps.pointers) {
+        input_pointer_of.emplace(pointee, pointer);
+    }
+    std::vector<std::uint32_t> types, decorations, added;
+    const auto type_for = [&](Shape shape) {
+        if (const auto it = type_of.find(shape); it != type_of.end()) {
+            return it->second;
+        }
+        const std::uint32_t id = next++;
+        if (shape.count == 1u) {
+            if (shape.kind == 1u) {
+                types.insert(types.end(), {3u << 16u | kOpTypeFloat, id, 32u});
+            } else {
+                types.insert(types.end(), {4u << 16u | kOpTypeInt, id, 32u, shape.kind == 2u ? 1u : 0u});
+            }
+        } else {
+            const std::uint32_t component = [&] {
+                const Shape one{shape.kind, 1u};
+                if (const auto it = type_of.find(one); it != type_of.end()) {
+                    return it->second;
+                }
+                const std::uint32_t scalar = next++;
+                if (shape.kind == 1u) {
+                    types.insert(types.end(), {3u << 16u | kOpTypeFloat, scalar, 32u});
+                } else {
+                    types.insert(types.end(), {4u << 16u | kOpTypeInt, scalar, 32u, shape.kind == 2u ? 1u : 0u});
+                }
+                type_of.emplace(one, scalar);
+                return scalar;
+            }();
+            types.insert(types.end(), {4u << 16u | kOpTypeVector, id, component, shape.count});
+        }
+        type_of.emplace(shape, id);
+        return id;
+    };
+    for (const auto& [location, shape] : missing) {
+        const std::uint32_t type = type_for(shape);
+        std::uint32_t pointer = 0u;
+        if (const auto it = input_pointer_of.find(type); it != input_pointer_of.end()) {
+            pointer = it->second;
+        } else {
+            pointer = next++;
+            types.insert(types.end(), {4u << 16u | kOpTypePointer, pointer, kStorageInput, type});
+            input_pointer_of.emplace(type, pointer);
+        }
+        const std::uint32_t variable = next++;
+        types.insert(types.end(), {4u << 16u | kOpVariable, pointer, variable, kStorageInput});
+        decorations.insert(decorations.end(), {4u << 16u | kOpDecorate, variable, kDecorationLocation, location});
+        if (shape.kind != 1u) {
+            decorations.insert(decorations.end(), {3u << 16u | kOpDecorate, variable, kDecorationFlat});
+        }
+        added.push_back(variable);
+    }
+    // Written again: the decorations before the first type, the types and variables before the first function, the
+    // fragment entry point listing the new inputs.
+    const auto* code = static_cast<const std::uint32_t*>(pixel.data);
+    const std::size_t words = pixel.size / 4u;
+    std::vector<std::uint32_t> out(code, code + 5u);
+    out[3] = next;
+    bool decorated = false, typed = false, listed = false;
+    for (std::size_t at = 5u; at < words;) {
+        const std::uint32_t op = code[at] & 0xFFFFu;
+        const std::size_t length = code[at] >> 16u;
+        const bool declares = (op >= 19u && op <= 39u) || (op >= 41u && op <= 52u) || op == kOpVariable || op == 1u;
+        if (!decorated && (declares || op == kOpFunction)) {
+            out.insert(out.end(), decorations.begin(), decorations.end());
+            decorated = true;
+        }
+        if (!typed && op == kOpFunction) {
+            out.insert(out.end(), types.begin(), types.end());
+            typed = true;
+        }
+        if (op == kOpEntryPoint && length >= 3u && code[at + 1u] == kModelFragment && !listed) {
+            out.push_back(static_cast<std::uint32_t>(length + added.size()) << 16u | kOpEntryPoint);
+            out.insert(out.end(), code + at + 1u, code + at + length);
+            out.insert(out.end(), added.begin(), added.end());
+            listed = true;
+        } else {
+            out.insert(out.end(), code + at, code + at + length);
+        }
+        at += length;
+    }
+    if (!decorated || !typed || !listed) {
+        return {};
+    }
+    return out;
+}
+
+// The widened pixel modules, by (pixel, vertex) program: kept for the modules' life, so a module's key stays its words.
+struct WidenedModules {
+    std::mutex lock;
+    std::map<std::pair<const void*, const void*>, std::vector<std::uint32_t>> words;
+};
+WidenedModules gWidened;
+
+// `named`: with --diagnostics rt-inputs, a pair first widened here is named (a pipeline other than the prepass, whose
+// pixel form should read what its vertex stage writes).
+ProgramBytes widened_pixel(const ProgramBytes& pixel, const ProgramBytes& vertex, std::uint64_t pixel_id, std::uint64_t vertex_id,
+                           unsigned form, unsigned aux, bool named) {
+    std::lock_guard guard(gWidened.lock);
+    auto [it, made] = gWidened.words.try_emplace({pixel.data, vertex.data});
+    if (made) {
+        it->second = with_unread_inputs(pixel, vertex);
+        if (named && !it->second.empty() && ::galaxy::diagnosing(::galaxy::kDiagnoseRtInputs)) {
+            std::fprintf(stderr, "[rt-inputs] vk interface: pixel %016llx form %u (aux %u) lacks varyings vertex %016llx writes\n",
+                         static_cast<unsigned long long>(pixel_id), form, aux, static_cast<unsigned long long>(vertex_id));
+        }
+    }
+    return it->second.empty() ? pixel : ProgramBytes{it->second.data(), it->second.size() * 4u};
 }
 
 VkBlendFactor blend_factor(std::uint32_t f) noexcept {
@@ -345,15 +541,21 @@ gpu::Pipeline* Pipelines::build_vk(const PipelineEntry& entry, unsigned variant,
     const unsigned samples_log2 = variant & kSceneVariantSamplesMask;
     const unsigned program = program_variant(desc.pixel, aux,
         (desc.state & NEBULA_STATE_PIXEL_SHADING) != 0u ? 0u : samples_log2);
-    const ProgramBytes vs = program_bytes(desc.vertex, program, false);
+    // The tracer's prepass of a motion draw goes through the vertex stage's motion form, as the draw itself will.
+    const ProgramBytes vs = program_bytes(desc.vertex, aux == kAuxPrepassMotion ? unsigned{kProgramTracedMotion} : program, false);
     const ProgramBytes ps = program_bytes(desc.pixel, program, true);
     if (vs.size == 0u || ps.size == 0u) {
         std::fprintf(stderr, "[pipelines] no program %llx %llx variant %u\n", static_cast<unsigned long long>(desc.vertex),
                      static_cast<unsigned long long>(desc.pixel), program);
         return nullptr;
     }
+    const unsigned bound = aux_targets(aux);  // the targets: 0-4, or the prepass's
+    const bool prepass = bound == kAuxPrepass;
     const VkShaderModule vs_module = module_of(device, vs);
-    const VkShaderModule ps_module = module_of(device, ps);
+    // A tracer's pipeline (the prepass and the traced forms, made only with ray tracing on): its pixel stage declares
+    // every varying its vertex stage writes (D10: no interface notes). Ray tracing off, every pipeline is as it was.
+    const VkShaderModule ps_module =
+        module_of(device, aux >= kAuxPrepass ? widened_pixel(ps, vs, desc.pixel, desc.vertex, program, aux, !prepass) : ps);
     if (vs_module == VK_NULL_HANDLE || ps_module == VK_NULL_HANDLE) {
         return nullptr;
     }
@@ -395,7 +597,7 @@ gpu::Pipeline* Pipelines::build_vk(const PipelineEntry& entry, unsigned variant,
     if (desc.position_stride == 0u) {
         add(kMatrix, VK_FORMAT_R32_UINT, gpu::kStreamMatrix, 4u, 0u);
     }
-    if (aux == 1u) {
+    if (aux_motion_form(aux)) {
         add(kBefore, VK_FORMAT_R32G32B32_SFLOAT, gpu::kStreamBefore, position_stride, 0u);
     }
     for (const NebulaLayoutInput& input : entry.inputs) {
@@ -455,7 +657,8 @@ gpu::Pipeline* Pipelines::build_vk(const PipelineEntry& entry, unsigned variant,
         depth.depthCompareOp = kDepth[(state >> 11u) & 7u];
         depth.depthWriteEnable = (state & (1u << 14u)) != 0u ? VK_TRUE : VK_FALSE;
     }
-    if (const std::uint32_t test = (state >> 20u) & 3u; test != 0u) {
+    // The prepass leaves the stencil alone: a draw's marks are made once, by the scene pass.
+    if (const std::uint32_t test = (state >> 20u) & 3u; test != 0u && !prepass) {
         static constexpr VkCompareOp kStencilTest[4] = {VK_COMPARE_OP_ALWAYS, VK_COMPARE_OP_ALWAYS, VK_COMPARE_OP_EQUAL,
                                                         VK_COMPARE_OP_NOT_EQUAL};
         static constexpr VkStencilOp kStencilOp[4] = {VK_STENCIL_OP_KEEP, VK_STENCIL_OP_INCREMENT_AND_CLAMP,
@@ -498,11 +701,26 @@ gpu::Pipeline* Pipelines::build_vk(const PipelineEntry& entry, unsigned variant,
         color.dstAlphaBlendFactor = alpha_factor(color.dstColorBlendFactor);
         color.alphaBlendOp = color.colorBlendOp;
     }
+    // An added clear shell's traced form (FB b94, EVERYTHING 6.7): an exchange, premultiplied: the program gives F R and
+    // F, what is behind keeps 1 - F.
+    if (aux >= kAuxTraced && (aux & kAuxExchange) != 0u) {
+        color.blendEnable = VK_TRUE;
+        color.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+        color.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        color.colorBlendOp = VK_BLEND_OP_ADD;
+        color.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        color.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        color.alphaBlendOp = VK_BLEND_OP_ADD;
+    }
+    if (prepass) {
+        color.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT;  // the item target alone: the draw's item and triangle where it is nearest
+        color.blendEnable = VK_FALSE;  // a blended entry's item (the second layer) replaces like any other
+    }
     VkPipelineColorBlendAttachmentState targets[4]{color, {}, {}, {}};
     // Aux 4: the motion pass's second target is there and left as it is.
-    if (aux == 1u) {
+    if (bound == 1u) {
         targets[1].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT;
-    } else if (aux == 2u || aux == 3u) {
+    } else if (bound == 2u || bound == 3u) {
         targets[1].blendEnable = VK_TRUE;
         targets[1].srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
         targets[1].dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
@@ -512,7 +730,7 @@ gpu::Pipeline* Pipelines::build_vk(const PipelineEntry& entry, unsigned variant,
         targets[1].alphaBlendOp = VK_BLEND_OP_MAX;
         targets[1].colorWriteMask = VK_COLOR_COMPONENT_R_BIT;
     }
-    if (aux == 3u) {
+    if (bound == 3u) {
         // The effects layer: render target 2 takes the colour as the scene target blends it, 3 the product of the
         // destination factors (nothing from the source: it keeps what the destination factor lets through). Colour only.
         constexpr VkColorComponentFlags kRgb = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
@@ -527,7 +745,7 @@ gpu::Pipeline* Pipelines::build_vk(const PipelineEntry& entry, unsigned variant,
         targets[3].alphaBlendOp = VK_BLEND_OP_ADD;
     }
     VkPipelineColorBlendStateCreateInfo blend{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-    blend.attachmentCount = aux == 3u ? 4u : aux != 0u ? 2u : 1u;
+    blend.attachmentCount = prepass ? 1u : bound == 3u ? 4u : bound != 0u ? 2u : 1u;
     blend.pAttachments = targets;
 
     const VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
@@ -547,7 +765,9 @@ gpu::Pipeline* Pipelines::build_vk(const PipelineEntry& entry, unsigned variant,
     info.pColorBlendState = &blend;
     info.pDynamicState = &dynamic;
     info.layout = layout->layout;
-    info.renderPass = aux != 0u ? layout->aux_pass_for(variant, aux == 4u ? 1u : std::min(aux, 3u)) : layout->pass_for(variant, false);
+    info.renderPass = prepass      ? layout->item_pass
+                      : bound != 0u ? layout->aux_pass_for(variant, bound == 4u ? 1u : std::min(bound, 3u))
+                                    : layout->pass_for(variant, false);
     if (info.renderPass == VK_NULL_HANDLE) {
         // The device cannot draw this variant (the effects layer's pass is absent): the walker misses this draw.
         return nullptr;

@@ -51,4 +51,9 @@ public:
     AreaLightInfo* mLights;
     LightInfoCoin mCoinLight;
     MR::NameIndex mIndex;  // area light name -> index in mLights, the first of a name
+    // Ray tracing (nebula_game_api.h NEBULA_RAY_TRACING_SHADOW_SETS): a shadow light set's lit partner (an index in
+    // mLights, or -1), and per light its own record with the partner's actor lights (its planet light kept): what an
+    // actor in a shade zone takes while the tracer draws the shade.
+    s32* mPartner;
+    AreaLightInfo* mLit;
 };

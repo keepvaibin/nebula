@@ -15,7 +15,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 MATERIALS = os.path.join(ROOT, "runtime", "src", "render", "materials")
 PROGRAMS = os.path.join(ROOT, "runtime", "src", "render", "programs")
 DXC = os.environ.get("GALAXY_DXC", "dxc")
-JOBS = int(os.environ.get("JOBS", "4"))
+JOBS = int(os.environ.get("JOBS", "24"))
 SITE = 1 << 63
 
 WRITTEN = """whirlpool ocean_bowl screen_blur flat_color clip_fill big_bubble whirlpool_accelerator spin_driver_path spider_thread
@@ -34,13 +34,28 @@ VARIANTS = {
     "motion": (3, ["NATIVE_MOTION"]),
     "sample": (4, ["NATIVE_SAMPLE"]),
 }
+# Ray tracing's forms of a pixel program, stored after the bound-table forms and never in one (a device that traces
+# has descriptor indexing): every program's prepass and traced forms.
+TRACED_VARIANTS = {
+    "prepass": (10, ["NATIVE_PREPASS"]),
+    "traced": (11, ["NATIVE_TRACED"]),
+    "traced_motion": (12, ["NATIVE_TRACED", "NATIVE_MOTION"]),
+    "traced_reactive": (13, ["NATIVE_TRACED", "NATIVE_REACTIVE"]),
+    "traced_layer": (14, ["NATIVE_TRACED", "NATIVE_REACTIVE", "NATIVE_LAYER"]),
+    # Vulkan without geometry shaders: the prepass names the item only (D11). SPIR-V only.
+    "prepass_item": (15, ["NATIVE_PREPASS", "NATIVE_PREPASS_ITEM"]),
+}
 VERTEX_FORMS = ("base", "motion")
 # A Vulkan device without descriptor indexing reads each pixel program's bound-table form (program.hlsli
 # NEBULA_BOUND_TABLES): stored at the variant + BOUND_OFFSET, STORED variants to a row (core/program_table.h).
 BOUND_OFFSET = 5
-STORED = 10
+STORED = 16
 READS_WORLD = 1
 LIT = 2
+SUMS_KEY = 4  # a pixel program that sums its light set's first light: light_term or enh_add_light of light 0
+# A written material that sums the game's lights (native_material.hlsli NATIVE_LIT): its traced form has a vertex
+# form of its own (the light varyings), and its pixel program sums its key at the pixel there (SUMS_KEY).
+WRITTEN_LIT = re.compile(r"^\s*#\s*define\s+NATIVE_LIT\s+1", re.M)
 
 
 def native_coords(path):
@@ -54,6 +69,37 @@ def native_coords(path):
         if inner is not None:
             return inner
     return None
+
+
+def vertex_unused_inputs(data):
+    """A SPIR-V vertex module's input variables no instruction names (only their names, their decorations and the entry
+    point's list), as their locations (-1 a built-in): every one is fetched for every draw all the same (l89). None for
+    a module that is not a vertex stage or not SPIR-V."""
+    count = len(data) // 4
+    words = struct.unpack("<%dI" % count, data[:count * 4])
+    if count < 5 or words[0] != 0x07230203:
+        return None
+    vertex = False
+    inputs, location, used = set(), {}, set()
+    at = 5
+    while at < count:
+        n, op = words[at] >> 16, words[at] & 0xFFFF
+        if n == 0 or at + n > count:
+            break
+        if op == 15:  # OpEntryPoint: execution model (0 vertex), id, name, interface ids
+            vertex = vertex or words[at + 1] == 0
+        elif op == 59 and n >= 4:  # OpVariable: type, id, storage class (1 input), initializer
+            if words[at + 3] == 1:
+                inputs.add(words[at + 2])
+            used.update(words[at + 4:at + n])
+        elif op == 71 and n >= 4 and words[at + 2] == 30:  # OpDecorate id Location n
+            location[words[at + 1]] = words[at + 3]
+        elif op not in (5, 6, 71, 72):  # OpName, OpMemberName, OpDecorate, OpMemberDecorate
+            used.update(words[at + 1:at + n])
+        at += n
+    if not vertex:
+        return None
+    return sorted(location.get(v, -1) for v in inputs - used)
 
 
 def read(path):
@@ -80,11 +126,11 @@ def main():
     flags = {}
     coords = {}
 
-    def add(stage, row, source, text, entry, defines, variant):
+    def add(stage, row, source, text, entry, defines, variant, bound_form=True):
         key = hashlib.sha1(("\0".join([tool_id, headers, text, stage, entry] + defines)).encode()).hexdigest()
         jobs[key] = (source, stage, entry, defines)
         rows.setdefault((stage, row), {})[variant] = key
-        if backend == "spirv" and stage == "ps":
+        if backend == "spirv" and stage == "ps" and bound_form:
             bound = defines + ["NEBULA_BOUND_TABLES"]
             bound_key = hashlib.sha1(("\0".join([tool_id, headers, text, stage, entry] + bound)).encode()).hexdigest()
             jobs[bound_key] = (source, stage, entry, bound)
@@ -96,13 +142,25 @@ def main():
             for name in VERTEX_FORMS:
                 index, defines = VARIANTS[name]
                 add(stage, row, source, text, entry, defines, index)
+            # A vertex stage that de-lights its colour (programs.rs, D2) does so in its traced forms alone; the tracer's
+            # draws and their prepass run those (program_table.cpp program_bytes).
+            if "traced_vertex_gain(" in text or "traced_map_gain(" in text:  # c93: a map's gain too
+                for name in ("traced", "traced_motion"):
+                    index, defines = TRACED_VARIANTS[name]
+                    add(stage, row, source, text, entry, defines, index, False)
             flags[(stage, row)] = READS_WORLD if "world_" in text else 0
             return
         for name, (index, defines) in VARIANTS.items():
             if name == "sample" and "discard" not in text:
                 continue
             add(stage, row, source, text, entry, defines, index)
-        flags[(stage, row)] = LIT if "program_lit.hlsli" in text else 0
+        for name, (index, defines) in TRACED_VARIANTS.items():
+            if name == "prepass_item" and backend != "spirv":
+                continue
+            add(stage, row, source, text, entry, defines, index, False)
+        flags[(stage, row)] = (LIT if "program_lit.hlsli" in text else 0) | (
+            SUMS_KEY if (re.search(r"(light_term|enh_add_light)\(i\.lit_light, 0u", text) and "TRACED_UNKEYED;" not in text)
+            or WRITTEN_LIT.search(text) else 0)
 
     for number, name in enumerate(WRITTEN, 1):
         source = os.path.join(MATERIALS, name + ".hlsl")
@@ -113,6 +171,10 @@ def main():
             return 1
         coords[("vs", row)] = coords[("vs", row | 1)] = count
         add_program("vs", row, source, "native_vs")
+        if WRITTEN_LIT.search(read(source)):
+            for name in ("traced", "traced_motion"):
+                index, defines = TRACED_VARIANTS[name]
+                add("vs", row, source, read(source), "native_vs", defines, index)
         if name in VERTEX_ONLY:
             continue
         add_program("ps", row, source, "native_ps")
@@ -152,6 +214,7 @@ def main():
         os.replace(temp, target)
         return None
 
+    print(f"programs {backend}: {len(jobs)} stages, {JOBS} jobs", flush=True)
     with ThreadPoolExecutor(JOBS) as pool:
         failed = [r for r in pool.map(compile_job, jobs.items()) if r]
     for f in failed[:40]:
@@ -159,6 +222,23 @@ def main():
     if failed:
         print(len(failed), "of", len(jobs), "failed")
         return 1
+
+    # No form without ray tracing fetches what only a traced form reads (l89): a SPIR-V vertex module's every input is
+    # read. DXIL keeps its signature as declared; its drivers fetch only what a shader reads.
+    if backend == "spirv":
+        unread = []
+        for key, (source, stage, entry, defines) in sorted(jobs.items()):
+            if stage != "vs" or "NATIVE_TRACED" in defines:
+                continue
+            with open(os.path.join(cache, key), "rb") as f:
+                locations = vertex_unused_inputs(f.read())
+            if locations:
+                unread.append(f"{os.path.basename(source)} {' '.join(defines) or 'base'}: input locations {locations}")
+        for u in unread[:40]:
+            print("UNREAD INPUT", u)
+        if unread:
+            print(len(unread), "vertex modules declare an input they never read")
+            return 1
 
     # Two programs compiling the same mean the set's dedupe missed: the build fails.
     seen = {}
@@ -207,7 +287,7 @@ def main():
             for variant, key in rows[(stage, row)].items():
                 words[variant] = place(key)
             packed.append(struct.pack("<QII", row, flags[(stage, row)], coords.get((stage, row), 0)) + b"".join(struct.pack("<II", *w) for w in words))
-    head = b"NBPROG02" + struct.pack("<II", len(vertex), len(pixel)) + interface.encode() + b"\0" * 8
+    head = b"NBPROG03" + struct.pack("<II", len(vertex), len(pixel)) + interface.encode() + b"\0" * 8
     blob = head + b"".join(packed) + b"".join(chunks)
     temp = out + ".tmp"
     with open(temp, "wb") as f:

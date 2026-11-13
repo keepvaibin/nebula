@@ -164,6 +164,8 @@ pub enum Input {
     Coord(u8),
     Tangent,
     Binormal,
+    /// The painted light's de-light gain (nebula_model.h NEBULA_INPUT_GAIN; model_write.rs debake_gains).
+    Gain,
 }
 
 #[derive(Default, Clone)]
@@ -316,6 +318,8 @@ struct Pixel<'a> {
     sampled: Vec<(u8, u8)>,
     color_read: [bool; 2],
     env_coords: BTreeSet<u8>,
+    /// c58: the coordinates whose every map is a painted highlight sprite (HIGHLIGHT_FETCH in a lit form).
+    sprite_coords: BTreeSet<u8>,
 }
 
 impl Pixel<'_> {
@@ -534,7 +538,9 @@ fn fog_lines(fog_type: u8, rows: &mut Rows) -> Vec<String> {
         7 => format!("fog_rev_exp2({amount})"),
         _ => amount,
     };
-    vec![format!("    prev.rgb = lerp(prev.rgb, {color}.rgb, {curved});")]
+    // program.hlsli program_fog_curve: fogs at once, or in a traced form after the traced light, the fog lit by the
+    // traced share along its curve (RT-MASTER-PLAN 15.3; FB b57): start, end, the pixel's depth, the type.
+    vec![format!("    prev.rgb = program_fog_curve(prev.rgb, {color}.rgb, {curved}, float4({fog}.x, {fog}.y, {ze}, {fog_type}.0));")]
 }
 
 fn replace_lines(p: &mut Pixel, fog_type: u8) -> Result<()> {
@@ -716,6 +722,10 @@ fn stage_lines(p: &mut Pixel, registers: &Registers) -> Result<bool> {
             let sampled = p.sample(map, &coord);
             let sampled = format!("{sampled}.{}", swizzle(&p.m.swaps[s.texture_swap as usize & 3]));
             let wrapped = if p.form.lit && p.env_coords.contains(&c) { format!("enh_env({sampled})") } else { sampled };
+            // A painted environment: the traced form's reflection takes its place (program.hlsli ENV_FETCH).
+            let wrapped = if p.env_coords.contains(&c) { format!("ENV_FETCH({wrapped})") } else { wrapped };
+            // A painted highlight sprite (c58): not drawn under the relight in a lit form; the sun's highlight stands for it.
+            let wrapped = if p.form.lit && p.sprite_coords.contains(&c) { format!("HIGHLIGHT_FETCH({wrapped})") } else { wrapped };
             p.lines.push(format!("        const float4 t = {wrapped};"));
         } else if reads_t {
             p.lines.push("        const float4 t = float4(0.0, 0.0, 0.0, 0.0);".into());
@@ -822,7 +832,10 @@ fn channel_lines(m: &MaterialIr, ch: usize, names: &Channel, eye: &str, nrm: &st
         let terms: Vec<String> =
             light_list(c).iter().map(|(n, atten, diffuse)| format!("light_term({base}, {n}u, {atten}u, {diffuse}u, {eye}, {nrm}).{part}")).collect();
         let terms = if terms.is_empty() { "0.0".to_string() } else { terms.join(" + ") };
-        out.push(format!("    {target}.{part} = {mat} * saturate(({amb} * 255.0 + {terms}) / 255.0);"));
+        // Channel 0's light level, which the traced form keeps (program.hlsli TRACED_LEVEL: the added light's base).
+        let level = format!("saturate((AMBIENT_TERM({amb}) * 255.0 + {terms}) / 255.0)");
+        let level = if ch == 0 && part == "rgb" { format!("TRACED_LEVEL({level})") } else { level };
+        out.push(format!("    {target}.{part} = {mat} * {level};"));
     }
 }
 
@@ -842,7 +855,7 @@ fn enhanced_channel_lines(m: &MaterialIr, ch: usize, names: &Channel, eye: &str,
         out.push(format!("        const float3 enh_mat = {mat};"));
         out.push(format!("        const float3 enh_amb = {amb};"));
         out.push("        const float3 enh_amb_lin = enh_lin(enh_amb);".into());
-        out.push("        float3 enh_acc = enh_amb_lin * enh_sky(g_enh);".into());
+        out.push("        float3 enh_acc = AMBIENT_TERM(enh_amb_lin * enh_sky(g_enh));".into());
         for (i, (n, atten, diffuse)) in light_list(c).iter().enumerate() {
             out.push(format!(
                 "        enh_add_light({base}, {n}u, {}, {diffuse}u, {}, {metal}, {eye}, enh_amb, enh_amb_lin, enh_acc);",
@@ -851,7 +864,9 @@ fn enhanced_channel_lines(m: &MaterialIr, ch: usize, names: &Channel, eye: &str,
             ));
         }
         out.push("        enh_acc *= enh_sky_reflection(g_enh, enh_amb_lin);".into());
-        out.push(format!("        {target}.rgb = enh_mat * enh_srgb(enh_shoulder(max(enh_acc, 0.0)));"));
+        let level = "enh_srgb(enh_shoulder(max(enh_acc, 0.0)))";
+        let level = if ch == 0 { format!("TRACED_LEVEL({level})") } else { level.to_string() };
+        out.push(format!("        {target}.rgb = enh_mat * {level};"));
         out.push("    }".into());
     } else {
         let mat = if c.material_source != 0 { format!("{vtx}.rgb") } else { format!("{}.rgb", rows.at(ROW_MATERIAL_COLOR + ch as u32)) };
@@ -889,7 +904,7 @@ pub fn has_lit_form(m: &MaterialIr) -> Result<bool> {
 
 /// The program's varyings. Its own coordinates take TEXCOORD0 up; the lit varyings (three) and the motion varyings (two)
 /// follow them in that order, so their places move with the coordinate count.
-fn varyings(uv_kinds: &[bool], color: [bool; 2], lit: bool) -> String {
+fn varyings(uv_kinds: &[bool], color: [bool; 2], lit: bool, gain: bool) -> String {
     let lit_first = uv_kinds.len();
     let motion_first = lit_first + if lit { 3 } else { 0 };
     let mut s = format!("#define NEBULA_MOTION_CURRENT_INDEX {motion_first}\n#define NEBULA_MOTION_PREVIOUS_INDEX {}\n", motion_first + 1);
@@ -907,6 +922,11 @@ fn varyings(uv_kinds: &[bool], color: [bool; 2], lit: bool) -> String {
     for (k, three) in uv_kinds.iter().enumerate() {
         let _ = writeln!(s, "    PER_SAMPLE {} uv{k} : TEXCOORD{k};", if *three { "float3" } else { "float2" });
     }
+    // c93: the de-light gain of a mesh painted by its map alone, after the motion pair's indices and before
+    // VARYINGS_MOTION (the prepass's primitive number stays the last input); in every form, so all keep one interface.
+    if gain {
+        let _ = writeln!(s, "    PER_SAMPLE float3 gain : TEXCOORD{};", motion_first + 2);
+    }
     s.push_str("    VARYINGS_MOTION\n};\n");
     s
 }
@@ -923,10 +943,22 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
     let fog_type = if form.fog_linear { 2 } else { m.fog.kind };
     let mut env_coords = BTreeSet::new();
     for (i, c) in m.coords.iter().enumerate() {
-        if matches!(coord_source(m, c)?, From::EyeNormal | From::WorldNormal | From::ObjectNormal) {
+        // A coordinate whose every map is a colour ramp (c56, MaterialIr ramp_maps) keeps its own fetch.
+        let mut maps = m.stages.iter().filter(|s| s.map != 0xFF && usize::from(s.coord) == i).map(|s| s.map).peekable();
+        let ramp_only = maps.peek().is_some() && maps.all(|map| m.ramp_maps.contains(&map));
+        if !ramp_only && matches!(coord_source(m, c)?, From::EyeNormal | From::WorldNormal | From::ObjectNormal) {
             env_coords.insert(i as u8);
         }
     }
+    // c58: a coordinate whose every map is a painted highlight sprite is no environment's (MaterialIr highlight_maps).
+    let mut sprite_coords = BTreeSet::new();
+    for i in 0..m.coords.len() {
+        let mut maps = m.stages.iter().filter(|s| s.map != 0xFF && usize::from(s.coord) == i).map(|s| s.map).peekable();
+        if maps.peek().is_some() && maps.all(|map| m.highlight_maps.contains(&map)) {
+            sprite_coords.insert(i as u8);
+        }
+    }
+    env_coords.retain(|c| !sprite_coords.contains(c));
     let lit_channels = form.lit && light_terms_any(m);
     let metal = !env_coords.is_empty();
     let mut p = Pixel {
@@ -940,6 +972,7 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
         sampled: Vec::new(),
         color_read: [false; 2],
         env_coords: env_coords.clone(),
+        sprite_coords,
     };
     p.survey();
     let mut alpha_test = false;
@@ -979,6 +1012,13 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
         lit_body.extend(plain.iter().map(|l| format!("    {l}")));
         lit_body.push("    }".into());
     }
+
+    // Whether the lit form's colour sums the key (light 0 in a lit colour channel it reads, as channel_lines writes
+    // it): only then does its traced form take V and O in its sums (program_lit.hlsli TRACED_UNKEYED; D1).
+    let keyed = lit_channels
+        && (0..2usize).any(|ch| {
+            p.color_read[ch] && ch < m.channel_count as usize && channel_is_lit(&m.channels[2 * ch]) && m.channels[2 * ch].light_mask & 1 != 0
+        });
 
     // Vertex stage: writes exactly what the pixel stage reads, numbered as it reads them.
     let coords_read: Vec<u8> = p.coords.0.clone();
@@ -1093,12 +1133,30 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
         uv_kinds.push(projective);
     }
 
+    // An unlit channel's vertex colour de-lit by the cooker's gain, by kDebake (program.hlsli traced_vertex_gain; D2):
+    // in the traced form alone (compile_programs.py gives such a stage its traced forms), so a draw without ray tracing
+    // runs what it ran before.
+    // Every form that reads colour 0: the gain word is the cooker's say (0, a gain of 1, where its rgb is lit).
+    // c93 (3.3): a painted material with no vertex colour (model_write debakes_map) whose mesh holds light in its first
+    // map: its traced vertex forms pass the gain as a multiplier (traced_map_gain: 1 unless the relight de-lights), and
+    // its traced pixel forms take what the pixel shows through it. The material's own stages only (no replace pass, no
+    // pass edit).
+    let map_gained = form.pass == 0 && form.replace == 0 && !reads_color[0] && super::model_write::debakes_map(m);
+    let gained = reads_color[0] || map_gained;
+    if reads_color[0] {
+        for (k, line) in ["#if NATIVE_TRACED", "    v.color0.rgb = traced_vertex_gain(v.color0.rgb, v.gain);", "#endif"].into_iter().enumerate() {
+            body.insert(k, line.into());
+        }
+    }
+    if map_gained {
+        body.extend(["#if NATIVE_TRACED".into(), "    o.gain = traced_map_gain(v.gain);".into(), "#endif".into()]);
+    }
     // Lit lines name the turned normal; only a stage that reads it pays for it.
     if body.iter().any(|l| l.contains(", nrm)") || l.contains("= nrm;")) {
         body.insert(0, "    const float3 nrm = lit_normal(p, v.nrm);".into());
     }
     let read_normal = body.iter().any(|l| l.contains("v.nrm"));
-    let vary = varyings(&uv_kinds, color_written, form.lit);
+    let vary = varyings(&uv_kinds, color_written, form.lit, map_gained);
     let mut vertex_in = String::from("struct VertexIn {\n    float3 pos : POSITION;\n    uint draw_matrix : BLENDINDICES;\n");
     let mut final_inputs = Vec::new();
     if read_normal {
@@ -1110,6 +1168,12 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
             let _ = writeln!(vertex_in, "    float4 color{ch} : COLOR{ch};");
             final_inputs.push(if ch == 0 { Input::Color0 } else { Input::Color1 });
         }
+    }
+    if gained {
+        // Read by the traced forms alone (above): declared there alone, so no other form's module has an input it
+        // never reads (l89; compile_programs.py refuses one).
+        vertex_in.push_str("#if NATIVE_TRACED\n    uint gain : BLENDWEIGHT;\n#endif\n");
+        final_inputs.push(Input::Gain);
     }
     let mut uv = 0;
     for i in &inputs {
@@ -1126,7 +1190,9 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
     }
     vertex_in.push_str("};\n");
 
-    let mut vertex = String::from("#include \"program.hlsli\"\n");
+    // A vertex stage that sums lights takes the game's ambient: the traced light reaches only a pixel stage
+    // (program_lit.hlsli's AMBIENT_TERM).
+    let mut vertex = String::from("#include \"program.hlsli\"\n#define AMBIENT_TERM(x) (x)\n");
     vertex.push_str(&v_rows.declare(1, "MaterialVertex"));
     vertex.push_str(&vertex_in);
     vertex.push_str(&vary);
@@ -1145,7 +1211,20 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
     pixel.push_str(&vary);
     pixel.push_str("NativeOut program_ps(Varyings i) {\n");
     if form.lit {
+        if !keyed {
+            pixel.push_str("    TRACED_UNKEYED;\n");
+        }
+        // c77 (7.6): a character's face part (skinned, by its name) takes the face's light (program_lit.hlsli
+        // TRACED_FACE: the eye's floor, the face's softened shadow).
+        let face = if skinned { super::hit_record::face_kind(&m.name) } else { 0 };
+        if face != 0 {
+            pixel.push_str(&format!("    TRACED_FACE({face}u);\n"));
+        }
         pixel.push_str("    g_enh = enh_begin(i.lit_eye, i.lit_nrm);\n");
+        if !m.highlight_maps.is_empty() {
+            // c58: the enhanced highlight as the sprite painted it (its roughness and peak), under the relight.
+            pixel.push_str(&format!("    enh_sprite({:.3}, {:.3});\n", m.highlight_rough, m.highlight_gain));
+        }
     }
     if lit_rows_used {
         for l in &lit_body {
@@ -1164,6 +1243,9 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
     for l in &p.lines {
         pixel.push_str(l);
         pixel.push('\n');
+    }
+    if map_gained {
+        pixel.push_str("#if NATIVE_TRACED\n    prev.rgb = traced_map_shown(prev.rgb, i.gain);\n#endif\n");
     }
     if form.lit {
         pixel.push_str("    PROGRAM_RETURN(float4(max(prev.rgb, 0.0), saturate(prev.a)));\n}\n");
@@ -1190,6 +1272,7 @@ pub fn input_code(input: &Input) -> u8 {
         Input::Color1 => 2,
         Input::Tangent => 3,
         Input::Binormal => 4,
+        Input::Gain => 7,
         Input::Coord(k) => 16 + *k,
     }
 }
@@ -1204,9 +1287,13 @@ pub fn written_or_unknown() -> Written {
 /// Every animation that can write a register, for the store's whole cook.
 pub fn prepare_written_files(files: &[super::PakFile], read: &mut dyn FnMut(&super::PakFile) -> Result<Vec<u8>>) -> Result<()> {
     let mut written = Written::default();
+    // c83: every model read once before the cook (hit_record.rs TWINS: the near and far twins, the bloom twins).
+    super::hit_record::twins_begin();
     walk_partition_files(files, read, &mut |name, bytes| {
         if name.to_ascii_lowercase().ends_with(".brk") {
             written.add(&clip::read(&bytes).with_context(|| name.to_string())?);
+        } else if super::native_data::is_model_file(&bytes) {
+            super::hit_record::twins_add(name, &bytes);
         }
         Ok(())
     })?;
@@ -1469,7 +1556,7 @@ fn walk_partition_files(files: &[super::PakFile], read: &mut dyn FnMut(&super::P
     Ok(())
 }
 
-fn walk_files(input: &Path, visit: &mut dyn FnMut(&str, Vec<u8>) -> Result<()>) -> Result<()> {
+pub(super) fn walk_files(input: &Path, visit: &mut dyn FnMut(&str, Vec<u8>) -> Result<()>) -> Result<()> {
     let source = input.join("game.pak");
     let mut pak = File::open(&source).with_context(|| format!("{} cannot be opened", source.display()))?;
     let system = pak_system_area(&mut pak)?;

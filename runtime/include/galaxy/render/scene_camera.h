@@ -34,6 +34,7 @@ public:
         unsigned width = 0u, height = 0u, samples = 1u;
         float seconds = 0.0f;  // since the last meter; below zero the eye starts open
         bool resolve = false;  // tone-map MSAA samples directly into a single-sample output
+        unsigned finish = 0u;  // the traced relight's finish (scene_camera.hlsl g_finish): 0 none, 1 in sun, 2 sunless
     };
     // The pipeline state is left set for this pass; the caller binds its own again.
     bool record(ID3D12GraphicsCommandList* list, DescriptorRing& ring, const Inputs& in);

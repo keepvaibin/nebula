@@ -15,6 +15,11 @@ use std::path::{Path, PathBuf};
 /// Where the store keeps the disc's wave layout.
 pub const WAVE_LAYOUT: &str = "NebulaData/WaveLayout.txt";
 
+/// A pack's ray tracing tables in its merge/ folder (RT-MASTER-PLAN 20), lower case: three class its models as they
+/// cook (read before them, kept out of the store; hit_record), two are rows the host reads, added to the game's.
+const RT_CLASSING: [&str; 3] = ["nebuladata/rtmaterials.tsv", "nebuladata/rtglow.tsv", "nebuladata/rtwater.tsv"];
+const RT_ROWS: [&str; 2] = ["nebuladata/rtstages.tsv", "nebuladata/rteffects.tsv"];
+
 pub struct Change {
     pub path: String,
     pub source: PathBuf,
@@ -455,6 +460,28 @@ pub fn write_overlay(game_id: &str, changes: &[Change], patches: &PlanPatches, b
     }
     let mut placed = Vec::new();
     let mut failed = Vec::new();
+    // The packs' tables that class their models, before the models cook.
+    let mut tables = super::hit_record::PackTables::default();
+    for change in changes.iter().filter(|c| c.merge) {
+        let Some(kind) = RT_CLASSING.iter().position(|p| *p == change.path.to_ascii_lowercase()) else { continue };
+        let text = match fs::read_to_string(&change.source) {
+            Ok(text) => text,
+            Err(error) => {
+                failed.push((format!("merge/{}", change.path), format!("{} cannot be read: {error}", change.source.display())));
+                continue;
+            }
+        };
+        if let Some(problem) = super::hit_record::pack_table_problem(kind, &text) {
+            failed.push((format!("merge/{}", change.path), problem));
+            continue;
+        }
+        match kind {
+            0 => tables.materials.push(text),
+            1 => tables.glow.push(text),
+            _ => tables.water.push(text),
+        }
+    }
+    let _tables = super::hit_record::PackTablesInUse::set(tables);
     // Two of the files may be one place in the game under two names (StageData/X.arc and StageData/S/X.arc, or two
     // mods' cases): the later one stands, the other is named, and the rest of the store is still written.
     let mut last_of: BTreeMap<String, usize> = BTreeMap::new();
@@ -602,6 +629,15 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
     let place_of = |text: &str| store::store_path(text.trim_start_matches('/')).to_ascii_lowercase();
     for change in merges {
         let result = (|| -> Result<()> {
+            // A picture beside particles written as JSON is one of their textures: their cook reads it.
+            let path = lower(&change.path);
+            if [".png", ".jpg", ".jpeg"].iter().any(|ending| path.ends_with(ending)) {
+                return Ok(());
+            }
+            // A pack's tables that class its models: read before they cooked (write_overlay), no file of the store.
+            if RT_CLASSING.contains(&path.as_str()) {
+                return Ok(());
+            }
             let bytes = fs::read(&change.source).with_context(|| format!("{} cannot be read", change.source.display()))?;
             if let Some(languages) = message_languages(&change.path, base, placed)? {
                 // Every language or none: a merge that fails in one is left out of all.
@@ -669,8 +705,16 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
                 };
                 let cooked = super::cook_file(&change.path, bytes, stats)?.context("not a particle file")?;
                 merged.insert(key, super::merge::add_particles(&current, &cooked, first)?);
+            } else if RT_ROWS.contains(&lower(&change.path).as_str()) {
+                // Ray tracing's rows the host reads (RtStages.tsv, RtEffects.tsv): after the game's and earlier mods'.
+                let key = place_of(&change.path);
+                let current = match merged.get(&key) {
+                    Some(current) => current.clone(),
+                    None => merge_start(&change.path, base, temporary, pak, placed)?,
+                };
+                merged.insert(key, super::merge::add_rows(&current, &bytes)?);
             } else {
-                bail!("only tables (.json), messages (message.bmg.json, messages.json) and particles (.jpc) can be added to");
+                bail!("only tables (.json; ray tracing's NebulaData/Rt*.tsv), messages (message.bmg.json, messages.json) and particles (.jpc, .jpc.json) can be added to");
             }
             Ok(())
         })();

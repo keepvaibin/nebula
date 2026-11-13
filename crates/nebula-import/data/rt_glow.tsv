@@ -1,0 +1,267 @@
+# Models that glow: with ray tracing on, each is a light that lights what is near it (the owner's list of 11-09, and
+# what the material audit cannot see: a glow that is in the art's intent, not in the material's data).
+# model (file stem, lower case)	colour (r g b, 0 to 1; "own": the material's own bright colour)	intensity in candela
+# The intensity is the source's luminous intensity as a lighting artist would set it: 100 units of the game are a
+# metre, the light at a surface is intensity / (distance^2 + the source's own radius^2), and a stage's exposure
+# (40 lux in the dark of space to 150 on a bright day, from the stage's own light) says how much of the surface's
+# colour that adds. For a sense of scale: a candle is 1, a household bulb 65, a torch 100 to 200, a street lamp
+# 2000. The values below are stylised upward so a glow reads in daylight, and are ordered as the things are: a coin's
+# glint under a star bit, a star bit under a Luma, a Luma under a launch star, under a power star, under a grand
+# star, under the Observatory's core. A long thin model (an electric rail) takes its value a metre of its length.
+# A mod's pack may carry a file of the same form.
+starpiece	own	40
+starpiececluster	own	60
+starpiecemother	own	120
+kinopiogoodsstarpiece	own	40
+ticofatgoodsstarpiece	own	40
+coin	1.0 0.80 0.25	40
+coinflower	1.0 0.80 0.25	40
+purplecoin	0.72 0.35 1.0	40
+questioncoin	1.0 0.82 0.28	60
+koopaplatecoin	1.0 0.80 0.25	40
+bluechip	0.30 0.62 1.0	40
+yellowchip	1.0 0.85 0.30	40
+powerstar	1.0 0.90 0.40	900
+powerstarhalo	1.0 0.90 0.40	150
+grandstar	1.0 0.90 0.50	2500
+ticocometgoodsstar	1.0 0.90 0.40	300
+superspindriver	1.0 0.85 0.30	700
+spindriver	1.0 0.80 0.30	350
+itemappearstonespindriver	1.0 0.80 0.30	200
+tico	own	150
+ticobaby	own	100
+ticolow	own	150
+ticomiddle	own	150
+ticofat	own	300
+ticocomet	own	250
+ticojii	own	150
+ticoshop	own	150
+straytico	own	150
+kinokooneup	0.45 1.0 0.45	60
+ticoshopgoodsoneup	0.45 1.0 0.45	60
+kinokolifeup	1.0 0.45 0.45	60
+ticoshopgoodslifeup	1.0 0.45 0.45	60
+# c91 (EVERYTHING 5.8, 7.2): the rainbow form 300 cd (the director), its colour the brk's live register.
+invinciblemario	own	300
+invincibleluigi	own	300
+invinciblemariohandl	own	40
+invinciblemariohandr	own	40
+kinopiogoodslight	1.0 0.95 0.80	400
+# c91 (EVERYTHING 5.4): the Observatory core by luminance (a value below 0: candela a square metre), so its
+# light follows its growth (root joint 0.508 to 3.0); 265 gives the full-grown core 30000 cd. Its nova
+# and glow sheets are its halo: no light of their own.
+astrocore/coremat	1.0 0.80 0.50	-37.5
+astrocore/novamat_v_x	own	0
+astrocore/glowmat	own	0
+fireball	1.0 0.50 0.15	500
+firebubble	1.0 0.50 0.15	400
+firebarball	1.0 0.50 0.15	300
+firebarcore	1.0 0.50 0.15	150
+firebullet	1.0 0.50 0.15	400
+koopafire	1.0 0.50 0.15	3000
+dinopackunfireball	1.0 0.50 0.15	800
+bosskameckfireball	1.0 0.45 0.20	800
+meteorstrike	1.0 0.50 0.15	4000
+elementblockfire	1.0 0.50 0.15	300
+electricball	0.60 0.80 1.0	800
+electricbullet	0.60 0.80 1.0	800
+electricrail	0.60 0.80 1.0	250
+electricrailmoving	0.60 0.80 1.0	250
+electricrailpoint	0.60 0.80 1.0	300
+jellyfishelectric	0.60 0.80 1.0	400
+candlestandicevolcano	1.0 0.60 0.25	150
+phantomcandlestand	0.55 0.75 1.0	150
+teresamansioncandlestand	1.0 0.60 0.25	150
+gravitylighta	own	500
+spotmarklight	own	300
+torpedolight	1.0 0.90 0.70	600
+skeletalfishbosslight/lightcone_eyea_v_x	0.70 0.90 1.0	1500
+tripodbosseyelight	1.0 0.60 0.40	1500
+tripodbossheadlight/redlamp_v_x	1.0 0.90 0.70	3000
+teresaroomglaringlight	1.0 0.95 0.80	1200
+dashring	own	100
+prizering	own	120
+# Decided by agents/rt/tools/glow_audit.py's review (census/glow_decisions.tsv, 11-11). `model/material`: that material alone.
+meramera	1.0 0.55 0.20	150
+mariofireball	1.0 0.50 0.15	500
+ballbeamer/ray_v	1.0 0.90 0.77	300
+ringbeamer/ray_v	1.0 0.90 0.77	300
+jumpbeamerbody/ray_v	1.0 0.90 0.77	300
+icelavaislandlavamovablestepa/lava_v	1.0 0.45 0.12	400
+lavageyser	1.0 0.45 0.12	400
+lavaminisunplanet	own	3000
+lavaprominence	own	600
+# Lava and suns glow by their name (hit_record.rs lava_or_sun, G8); a row of 0 where the name lies.
+oceanjshapeplanet/lava2_v	own	0
+oceanjshapeplanetlow/lava2_v	own	0
+# Ice enemies: a faint cold light of their own (the director, 11-11: lit ice, a pale blue pool as the fire twin's warm one).
+icemeramera	0.75 0.92 1.0	60
+icemerameraking	0.75 0.92 1.0	150
+shootingstar	own	60
+gcapturetarget	0.55 0.70 1.0	250
+# c81 (PLAN-LIGHTS L1, L3): what glows by its data (lava and suns by name, every emissive surface by its class) takes
+# its kind's luminance in candela a square metre (hit_record.rs glow_kind; colour and strength as rows: "own" and the
+# value). A pack's `class:` row overrides the game's; 0: that kind does not glow.
+class:lava	own	300
+class:fire	own	400
+class:electric	own	600
+class:lamp	own	250
+class:star	own	200
+class:glow	own	150
+class:crystal	own	40
+# c106 (the energy audit, coord/census/light_energy.tsv): the lights that flooded what is near them, each at rho x D 0.35
+# at 3 m from its surface at its stage's low exposure (tools/fc_light_energy.py); 2 rows of the same name replaced in place above.
+# meteorstrike/lava_m_v: rho D at 3 m 2.18 -> 0.35 at 40 lux
+meteorstrike/lava_m_v	1.0 0.50 0.15	643
+# koopafire/fire: rho D at 3 m 1.95 -> 0.35 at 40 lux
+koopafire/fire	1.0 0.50 0.15	539
+# meteorstrike/rock_m_v: rho D at 3 m 1.88 -> 0.35 at 40 lux
+meteorstrike/rock_m_v	1.0 0.50 0.15	743
+# asteroidblockplanet/Lava_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+asteroidblockplanet/lava_v	own	-7.2
+# bossplanetr50/yougan: rho D at 3 m 1.54 -> 0.35 at 40 lux
+bossplanetr50/yougan	own	-7.2
+# dinopackunbattlelv2planet/Lava_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+dinopackunbattlelv2planet/lava_v	own	-7.2
+# dinopackunflame/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+dinopackunflame/lavamat_v	own	-7.2
+# exterminatemerameraplanet/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+exterminatemerameraplanet/lavamat_v	own	-7.2
+# floaterotakingplanet/Lava00_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+floaterotakingplanet/lava00_v	own	-7.2
+# heavensdoorinsideplanetpartsa/SunMat: rho D at 3 m 1.54 -> 0.35 at 40 lux
+heavensdoorinsideplanetpartsa/sunmat	own	-7.2
+# hellballrotatepartsa/lava_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+hellballrotatepartsa/lava_v	own	-7.2
+# hellballrotatepartsb/lava_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+hellballrotatepartsb/lava_v	own	-7.2
+# hellballrotatepartsc/lava_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+hellballrotatepartsc/lava_v	own	-7.2
+# hellballrotatepartsd/lava_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+hellballrotatepartsd/lava_v	own	-7.2
+# hellballrotatepartse/lava_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+hellballrotatepartse/lava_v	own	-7.2
+# hellballrotatepartsf/lava_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+hellballrotatepartsf/lava_v	own	-7.2
+# hellballrotatepartsg/lava_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+hellballrotatepartsg/lava_v	own	-7.2
+# iceringfireplanet/Lava_01_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+iceringfireplanet/lava_01_v	own	-7.2
+# koopabattlemapplanet/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 150 lux
+koopabattlemapplanet/lavamat_v	own	-27.2
+# koopabattlemapplanetvs2/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+koopabattlemapplanetvs2/lavamat_v	own	-7.2
+# koopabattlemapplanetvs3lv3/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+koopabattlemapplanetvs3lv3/lavamat_v	own	-7.2
+# koopabattlesunplanet/SunMat: rho D at 3 m 1.54 -> 0.35 at 150 lux
+koopabattlesunplanet/sunmat	own	-27.2
+# koopavs3cylinderinsideplanetlow/magma_lod_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+koopavs3cylinderinsideplanetlow/magma_lod_v	own	-7.2
+# koopavs3dryiceplanet/SunMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+koopavs3dryiceplanet/sunmat_v	own	-7.2
+# koopavs3holesuninsideplanet/SunMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+koopavs3holesuninsideplanet/sunmat_v	own	-7.2
+# koopavs3holesunplanet/SunMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+koopavs3holesunplanet/sunmat_v	own	-7.2
+# koopavs3rotatestepd/lava00_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+koopavs3rotatestepd/lava00_v	own	-7.2
+# lavaballrisingplanetlava/Lava_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavaballrisingplanetlava/lava_v	own	-7.2
+# lavadomedplanet/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavadomedplanet/lavamat_v	own	-7.2
+# lavadomedplanetlow/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavadomedplanetlow/lavamat_v	own	-7.2
+# lavadomedplanetmiddle/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavadomedplanetmiddle/lavamat_v	own	-7.2
+# lavahomeplanet/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavahomeplanet/lavamat_v	own	-7.2
+# lavahomeplanetlow/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavahomeplanetlow/lavamat_v	own	-7.2
+# lavahomevolcanoflow/LavaMat: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavahomevolcanoflow/lavamat	own	-7.2
+# lavahomevolcanoinnerflow/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavahomevolcanoinnerflow/lavamat_v	own	-7.2
+# lavajshapeplanet/Lava2_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavajshapeplanet/lava2_v	own	-7.2
+# lavajshapeplanetlow/Lava2_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavajshapeplanetlow/lava2_v	own	-7.2
+# lavameteoplanet/lava_m_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavameteoplanet/lava_m_v	own	-7.2
+# lavameteoplanetlow/lava_m_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavameteoplanetlow/lava_m_v	own	-7.2
+# lavameteoplanetmiddle/lava_m_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavameteoplanetmiddle/lava_m_v	own	-7.2
+# lavarotateplanet/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavarotateplanet/lavamat_v	own	-7.2
+# lavarotateplanetlow/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavarotateplanetlow/lavamat_v	own	-7.2
+# lavarotateplanetmiddle/LavaMat_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavarotateplanetmiddle/lavamat_v	own	-7.2
+# lavarotatestepsplanet/Lava1_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+lavarotatestepsplanet/lava1_v	own	-7.2
+# reversegravityroomplanet/Magma_side_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+reversegravityroomplanet/magma_side_v	own	-7.2
+# reversegravityroomplanet/Magma_top_v: rho D at 3 m 1.54 -> 0.35 at 40 lux
+reversegravityroomplanet/magma_top_v	own	-7.2
+# koopafire/fire_v_x: rho D at 3 m 1.16 -> 0.35 at 40 lux
+koopafire/fire_v_x	1.0 0.50 0.15	903
+# koopaplatedamage/LavaMat_v: rho D at 3 m 1.13 -> 0.35 at 40 lux
+koopaplatedamage/lavamat_v	own	-9.8
+# electricball/LightMat: rho D at 3 m 0.70 -> 0.35 at 40 lux
+electricball/lightmat	0.60 0.80 1.0	399
+# electricball/EnvMapMat: rho D at 3 m 0.64 -> 0.35 at 40 lux
+electricball/envmapmat	0.60 0.80 1.0	439
+# bosskameckfireball/lambert1: rho D at 3 m 0.60 -> 0.35 at 40 lux
+bosskameckfireball/lambert1	1.0 0.45 0.20	463
+# The director's rows (11-12, coord/rows/director_glow_rows.tsv): glowing models that had none.
+rosetta	own	250
+rosettalow	own	250
+rosettamiddle	own	250
+rosettareading	own	250
+fullmoonplanet	own	3000
+lavajambosunplanet	1.0 0.62 0.22	5000
+lavaprominenceenvironment	own	600
+lavaprominencetriple	own	600
+otakingmagma	1.0 0.45 0.10	1500
+koopashockwave	own	1200
+teresamansionglaringlightb	own	400
+tripodbosscore/core_v	own	479
+tripodbosscore/eyelight_v_x	own	400
+whiteroom	own	1500
+jumpbeamerbeam/beam	own	600
+eyebeamerbeam	own	600
+groundstar	1.0 0.90 0.40	200
+starduststar	1.0 0.90 0.40	200
+# c100 (the owner 11-12): the star bits inside a crystal cage (DummyDisplayModel's StarPieceDummy), each its own colour
+# as a free star bit; the cages themselves are no lamps (their light is the bits inside).
+starpiecedummy	own	40
+crystalcagemoving	own	0
+crystalcagestick	own	0
+crystalcagelbreak	own	0
+crystalcagesbreak	own	0
+# c103 (the owner 11-12: every room's light sources; PLAN-ROOMS R2, coord/census/room_lights.tsv): lamps, flames,
+# screens and crystals the art shows lit that the cook left dark; each a row of its own material.
+astroroomlibrary/light_v	1.0 0.85 0.60	300
+astrobaseb/bedroomflame_v	1.0 0.55 0.20	400
+teresamansionlighta/omote_v	1.0 0.90 0.60	300
+teresamansionlightb/omote_v	1.0 0.90 0.60	300
+sandriverlighta/lightkasainside_v	1.0 0.95 0.50	300
+astrodomeentrancetower/starlightmat_v	1.0 0.90 0.60	150
+astrodomeentrancewell/starlightmat_v	1.0 0.90 0.60	150
+astrodomeentrancemachine/starlightmat_v	1.0 0.90 0.60	150
+astrodomeentrancebedroom/starlightmat_v	1.0 0.90 0.60	150
+astrodomeentranceobservatory/starlightmat_v	1.0 0.90 0.60	150
+astrodomeentrancekitchen/starlightmat_v	1.0 0.90 0.60	150
+astrodecoratepartsa/crystalfacemat	1.0 1.0 0.40	40
+astrodecoratepartsgeara/crystalfacemat	1.0 1.0 0.40	40
+astromapboard/screen_v	own	60
+# c104: the intent gate's self-lit rule, the bloom twins' gaps (4.15), the Starshroom's cockpit meters (tools/fc_bulk_rows.py).
+heavensdoorinsideplanetpartsa/crystalfacemat	1.0 1.0 0.40	40
+heavensdoormiddlerotatepartsb/crystalfacemat	1.0 1.0 0.63	40
+hellballguidepartsa/light_v	own	60
+assemblyblockpartstimera/crystal_v	own	40
+tripodbossbodya/arrow_v	own	60
+tripodbossfoot/arrow	own	60
+tripodbossleg2a/arrow_v	own	60
+ufokinoko/cockpitmeter_v	own	30
+ufokinokolanding/cockpitmeter_v	own	30

@@ -194,6 +194,19 @@ pub struct MaterialIr {
     pub pixel_stage_count: u32,
     /// The map each coordinate's scale comes from (255 none), by coordinate number.
     pub coordinate_maps: Vec<u8>,
+    /// The maps read through a normal-made coordinate that hold a colour ramp, not a reflection (c56,
+    /// hit_record.rs mark_ramps): they keep their own fetch.
+    pub ramp_maps: Vec<u8>,
+    /// The maps read through a normal-made coordinate that are painted highlight sprites (c58, hit_record.rs
+    /// mark_highlights), and the first one's roughness and peak as the enhanced highlight takes them.
+    pub highlight_maps: Vec<u8>,
+    pub highlight_rough: f32,
+    pub highlight_gain: f32,
+    /// Drawn blended by alpha for a fade of the whole material: its alpha 0.9 or more over its maps' texels and its
+    /// vertices (c61, hit_record.rs mark_fades). The class rules take it as opaque.
+    pub fade_opaque: bool,
+    /// The alpha's low and high ends over those (c61, the census); -1 for a material not blended by alpha.
+    pub fade_alpha: [f32; 2],
 }
 
 impl GroupIr {
@@ -1350,7 +1363,13 @@ pub fn read_file(bytes: &[u8], source: Source, stats: &mut Stats) -> Result<Mode
             ir.materials.push(read_material(&m, i, &label, source).with_context(|| format!("material {i}"))?);
         }
     }
+    // c56: a normal-indexed map that holds a colour ramp, not a reflection, by its content.
+    super::hit_record::mark_ramps(&mut ir);
+    // c58: and one that is a painted highlight sprite.
+    super::hit_record::mark_highlights(&mut ir);
     if source == Source::Table {
+        // c63: a table's fades too (no vertices: their alpha counts 1); a model's are marked at the end, after VTX1.
+        super::hit_record::mark_fades(&mut ir);
         return Ok(ir);
     }
     let inf = parts.get(b"INF1").context("a model without its information block")?;
@@ -1412,5 +1431,7 @@ pub fn read_file(bytes: &[u8], source: Source, stats: &mut Stats) -> Result<Mode
             }
         }
     }
+    // c61: a material blended only for a fade (its alpha high over its texels and vertices) is opaque to the classes.
+    super::hit_record::mark_fades(&mut ir);
     Ok(ir)
 }

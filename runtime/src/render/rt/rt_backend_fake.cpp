@@ -105,6 +105,9 @@ void Backend::begin(void*, unsigned frame_slot, void*) noexcept {
 
 void Backend::build(const TriangleInput& input, BuildKind, const Structure& to, const Range& scratch, bool refit) {
     ++(refit ? g_log.refits : g_log.builds);
+    if (input.micromap != 0u && (!state_->alive.contains(input.micromap) || input.micromap_buffer == kNoBuffer)) {
+        ++g_log.faults;  // over a micromap that is not there, or without its indices
+    }
     const std::uint64_t need = refit ? std::uint64_t{input.triangles()} * 4u + 100u : std::uint64_t{input.triangles()} * 16u + 100u;
     if (!state_->alive.contains(to.name) || scratch.size < need || scratch.page >= state_->pages.size() ||
         scratch.offset + scratch.size > state_->pages[scratch.page]) {
@@ -171,13 +174,16 @@ void Backend::compact(const Structure& from, const Structure& to) {
     state_->building.insert(to.name);
 }
 
-std::uint32_t Backend::make_image(ImageFormat, std::uint32_t width, std::uint32_t height, const char*) {
+std::uint32_t Backend::make_image(ImageFormat, std::uint32_t width, std::uint32_t height, const char*, std::uint32_t) {
     return width != 0u && height != 0u ? g_log.images++ : kNoImage;
 }
 
 void Backend::free_image(std::uint32_t) noexcept {}
+Backend::Live Backend::live() const noexcept { return {}; }
 
 void* Backend::image_to_copy(std::uint32_t) { return nullptr; }
+
+void* Backend::image_to_sample(std::uint32_t) { return nullptr; }
 
 void Backend::dispatch(RtShader, const PassBinds&, std::uint32_t, std::uint32_t) { ++g_log.passes; }
 
@@ -189,7 +195,40 @@ void Backend::read_counters(unsigned, std::uint32_t out[kCounters]) const {
     }
 }
 
+void Backend::time_mark(unsigned, bool) {}
+std::uint64_t Backend::timed_ticks(unsigned, unsigned) const { return 0u; }
+
 std::uint32_t Backend::make_buffer(std::uint64_t bytes, const char*) { return bytes != 0u ? g_log.buffers++ : kNoBuffer; }
+
+bool Backend::micromaps() const noexcept { return state_ != nullptr; }
+
+BuildSizes Backend::micromap_sizes(const MicromapInput& input) const {
+    return {std::uint64_t{input.triangles} * 64u + 100u, std::uint64_t{input.triangles} * 8u + 100u, 0u};
+}
+
+Structure Backend::make_micromap(const Range& range) {
+    Structure out = make_structure(range, false);
+    out.handle = out.name;
+    --g_log.structures;
+    ++g_log.micromaps;
+    return out;
+}
+
+void Backend::free_micromap(Structure& micromap) noexcept {
+    if (state_ != nullptr && micromap.name != 0u) {
+        ++g_log.structures;
+        --g_log.micromaps;
+    }
+    free_structure(micromap);
+}
+
+void Backend::build_micromap(const MicromapInput& input, const Structure& to, const Range& scratch) {
+    ++g_log.micromap_builds;
+    if (!state_->alive.contains(to.name) || input.buffer == kNoBuffer || scratch.size < std::uint64_t{input.triangles} * 8u + 100u ||
+        input.triangles_at % kRangeAlign != 0u || input.indices_at % kRangeAlign != 0u) {
+        ++g_log.faults;
+    }
+}
 
 void Backend::free_buffer(std::uint32_t) noexcept {}
 

@@ -5,6 +5,8 @@
 
 #include <volk.h>
 
+#include "galaxy/render/rt/rt_denoiser.h"
+
 #include <array>
 #include <cstdint>
 #include <memory>
@@ -55,6 +57,8 @@ public:
     // Sub-pixel offset (render pixels, -0.5..0.5) for frame `index`.
     virtual void jitter_offset(unsigned index, unsigned phase_count, float& x, float& y) const = 0;
     [[nodiscard]] virtual const char* name() const noexcept = 0;
+    // The tracer's outside denoiser, when this upscaler is one (rt_denoiser.h): null for the others.
+    [[nodiscard]] virtual rt::Denoiser* denoiser() noexcept { return nullptr; }
 };
 
 // Every input to its compute read state and the output to general (back: to their steady layouts again).

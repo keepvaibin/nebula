@@ -1,0 +1,862 @@
+# The material review's decisions (RT-MASTER-PLAN 14.2 change 8, 14.4), applied last by the cooker
+# (hit_record::finish). A row a material: the model's file stem, the material's name (a trailing * matches names that
+# begin so), then any of: class (dielectric gloss metal glass ramp emissive painted translucent water), roughness,
+# metal, ior, thickness (units), tint keep, body, shine (0 to 16), emission (r g b), traced (hidden: a stand-in the
+# tracer replaces, neither drawn nor met by a ray while tracing reflections; FB b85), a metal's kind (gold silver
+# copper iron chrome brass platinum, or art: its own colour; c88), and through (0 to 1: the share of the sun its far
+# side takes, its sun ray passing its own clump; leaves 0.6 and clouds 0.5 by name; c90). Empty fields keep the
+# cooker's numbers; a note says what the picture showed. A mod's pack may carry a file of the same form.
+model	material	class	roughness	metal	ior	thickness	tint keep	body	shine	emission	note	traced	kind	through
+starduststartplanet	CryA_v				2.42						Pull Star Path pillar: tint removed, more reflective (the owner, G2; FB b82)
+tshapeplanet	crystal_v				2.42						Pull Star Path pillar: tint removed, more reflective (the owner, G2; FB b82)
+itembubble	LifeBubble_Mat	glass	0.02	0	1.33	0	0			0 0 0	item bubble: a clear shell, not a glowing light (EVERYTHING 6.7; FB b93)
+airbubble	LifeBubble_Mat	glass	0.02	0	1.33	0	0			0 0 0	air bubble: a clear shell, not milky (EVERYTHING 6.7; FB b93)
+ufokinoko	lambert4_v	glass	0.02	0	1.5	0	0			0 0 0	the Starshroom's dome: a clear shell, not a glowing light (EVERYTHING 6.7; FB b93)
+ufokinokolanding	lambert4_v	glass	0.02	0	1.5	0	0			0 0 0	the Starshroom's dome: a clear shell, not a glowing light (EVERYTHING 6.7; FB b93)
+bluestarcupsuleplanet	BackMat_v										pull-star bubble: its opaque painted inside, seen through the glass instead (the owner, D1/G1; FB b85)	hidden
+bluestarcupsuleplanet	HaloMat_v_x										pull-star bubble: its painted cyan rim, the traced mirror instead (the owner, D1/G1; FB b85)	hidden
+ufobluestarcupsule	BackMat										the UFO's pull-star dome: its opaque painted inside, seen through the glass instead (FB b85)	hidden
+# c82: the director's rows (11-12, coord/rows/director_rows_t2b.tsv; FC reviewed: patches/c82_material_rows.py).
+arrowswitch	Metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrobasea	gold_v	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrobasea	silver_v	metal	0.06	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrobaseb	gold_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrobasec	Gold_v	metal	0.26	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrobasecentera	gold_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrobasecentera	jewelry1_v	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+astrobasecenterb	gold_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrobasecentertop	gold_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrobasecentertop	jewelry1_v	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+astrobasekitchen	gold_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrobasekitchen	silvermetal_v	metal	0.06	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrodomebedroom	gold_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrodomeentrancebedroom	gold_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrodomeentrancebedroom	jewelry1_v	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+astrodomeentrancebedroom	jewelry2_v	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+astrodomeentrancebedroom	whitemetal_v	gloss	0.25	0							director painted metal: was painted; a coloured coat over metal: a glossy dielectric; picture owed
+astrodomeentrancekitchen	gold_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrodomeentrancekitchen	jewelry1_v	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+astrodomeentrancekitchen	jewelry2_v	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+astrodomeentrancekitchen	whitemetal_v	gloss	0.25	0							director painted metal: was painted; a coloured coat over metal: a glossy dielectric; picture owed
+astrodomeentrancemachine	gold_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrodomeentrancemachine	jewelry1_v	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+astrodomeentrancemachine	jewelry2_v	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+astrodomeentrancemachine	whitemetal_v	gloss	0.25	0							director painted metal: was painted; a coloured coat over metal: a glossy dielectric; picture owed
+astrodomeentranceobservatory	gold_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrodomeentranceobservatory	jewelry1_v	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+astrodomeentranceobservatory	jewelry2_v	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+astrodomeentranceobservatory	whitemetal_v	gloss	0.25	0							director painted metal: was painted; a coloured coat over metal: a glossy dielectric; picture owed
+astrodomeentrancetower	gold_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrodomeentrancetower	jewelry1_v	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+astrodomeentrancetower	jewelry2_v	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+astrodomeentrancetower	whitemetal_v	gloss	0.25	0							director painted metal: was painted; a coloured coat over metal: a glossy dielectric; picture owed
+astrodomeentrancewell	gold_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrodomeentrancewell	jewelry1_v	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+astrodomeentrancewell	jewelry2_v	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+astrodomeentrancewell	whitemetal_v	gloss	0.25	0							director painted metal: was painted; a coloured coat over metal: a glossy dielectric; picture owed
+astrodomemachine	BoltMat_v	metal	0.26	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrolibrary	gold_v	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astroparking	MetalPipe_v	metal	0.26	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astroparking	PlatinumMat_v	metal	0.26	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrorotatestepa	gold_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrorotatestepa	gold_v(2)	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrorotatestepb	gold_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrorotatestepb	gold_v(2)	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrostarplatebedroom	silver_v	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrostarplatebedroom	silver_v(2)	metal	0.26	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrostarplatebedroom	silver_v(3)	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrostarplatekitchen	silver_v	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrostarplatekitchen	silver_v(2)	metal	0.26	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrostarplatekitchen	silver_v(3)	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrostarplatemachine	silver_v	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrostarplatemachine	silver_v(2)	metal	0.26	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrostarplatemachine	silver_v(3)	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrostarplateobservatory	silver_v	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrostarplateobservatory	silver_v(2)	metal	0.26	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrostarplateobservatory	silver_v(3)	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrostarplatetower	silver_v	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrostarplatetower	silver_v(2)	metal	0.26	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrostarplatetower	silver_v(3)	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrostarplatewell	silver_v	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrostarplatewell	silver_v(2)	metal	0.26	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+astrostarplatewell	silver_v(3)	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ballopener	metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+basabasaice	IceBasaBasaBodyMat_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was dielectric; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+basabasaice	IceBasabasaBody2_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was dielectric; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+basabasaicehang	IceBasaBasaHangBodyMat_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was dielectric; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+battleshipelevator	silvermetal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+battleshipelevator	silvermetal_v(2)	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+battleshipmovepartsa	metalfloor_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+battleshipmovepartsa	moveA_metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+battleshipmovepartsb	metalfloor_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+battleshipmovepartsb	moveA_metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+beamgoroundplanet	silvermetal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+beamgoroundplanet	silvermetal_v(2)	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+beamgoroundplanet	whitemetal_v	gloss	0.25	0							director painted metal: was dielectric; a coloured coat over metal: a glossy dielectric; picture owed
+beamgoroundplanet	whitemetal_v(2)	gloss	0.25	0							director painted metal: was dielectric; a coloured coat over metal: a glossy dielectric; picture owed
+biribiribegomanspikepistona	MetalMat_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+biribiribegomanspikeplanet	MetalMat_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+bluechip	lambert60	glass	0.02	0	1.8		0	0			director crystal: was metal; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+breakabletrash	steel_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+cannonfortresscollapseplanet	metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+cannonfortressplanet	bolt1_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+cannonstormspaceshipplanet	bolt_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+choconveyorplanetb	iron_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+choconveyorplanetblow	iron_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+choochootrain	MetalBase_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+choochootrain	MetalBase_v(2)	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+choochootrain	MetalBase_v(3)	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+choochootrainbody	MetalBase_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+choochootrainbody	MetalBase_v(2)	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+choochootrainbody	MetalBase_v(3)	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+choochootrainstationplanet	MetalBase_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+clockworkhandle	Metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+crystalbox	IndTex	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalboxbreak	IndTex	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalboxbreak	IndTex(2)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalboxbreak	IndTex(3)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalboxbreak	IndTex(4)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalboxbreak	IndTex(5)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalboxbreak	IndTex(6)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalboxbreak	IndTex(7)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalboxbreak	IndTex(8)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagelbreak	IndTex	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagelbreak	IndTex(10)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagelbreak	IndTex(11)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagelbreak	IndTex(12)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagelbreak	IndTex(13)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagelbreak	IndTex(14)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagelbreak	IndTex(15)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagelbreak	IndTex(16)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagelbreak	IndTex(17)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagelbreak	IndTex(18)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagelbreak	IndTex(19)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagelbreak	IndTex(2)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagelbreak	IndTex(3)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagelbreak	IndTex(4)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagelbreak	IndTex(5)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagelbreak	IndTex(6)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagelbreak	IndTex(7)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagelbreak	IndTex(8)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagelbreak	IndTex(9)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagemoving	IndTex	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagemoving	IndTex(2)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagesbreak	IndTex	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagesbreak	IndTex(2)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagesbreak	IndTex(3)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagesbreak	IndTex(4)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagesbreak	IndTex(5)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagesbreak	IndTex(6)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagesbreak	IndTex(7)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagesbreak	IndTex(8)	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalcagestick	IndTex	glass	0.02	0	1.8		0	0			director crystal: was painted; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalswitch	lambert2	glass	0.02	0	1.8		0	0			director crystal: was translucent; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalswitch	lambert3	glass	0.02	0	1.8		0	0			director crystal: was dielectric; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+crystalswitch	lambert4	glass	0.02	0	1.8		0	0			director crystal: was dielectric; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+cylinderinsideplaneta	Metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+dinopackunfireball	FireBullet_Mat	emissive								1.000 1.000 0.000	director fire: was dielectric; named fire or flame: shown as is and a light; emission = its base colour; picture owed
+fireball	FireBall_v	emissive								1.000 1.000 1.000	director fire: was dielectric; named fire or flame: shown as is and a light; emission = its base colour; picture owed
+firebullet	FireBullet_Mat	emissive								1.000 1.000 0.000	director fire: was dielectric; named fire or flame: shown as is and a light; emission = its base colour; picture owed
+flippanel	Metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+flippanelplaneta	Metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+flippanelreverse	Metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+floaterotakingfloatera	SteelMat_v	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+forestnarrowstepa	iron03_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+hatchwaterplanet	curclemetal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+hatchwaterplanet	curclemetal_v(2)	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+hatchwaterplanet	goldmetal1_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+hatchwaterplanet	silvermetal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+hatchwaterplanet	silvermetal_v(2)	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+hatchwaterplanetlow	goldmetal1_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+hatchwaterplanetlow	orangemetal_v	gloss	0.25	0							director painted metal: was dielectric; a coloured coat over metal: a glossy dielectric; picture owed
+hatchwaterplanetlow	orangemetal_v(2)	gloss	0.25	0							director painted metal: was dielectric; a coloured coat over metal: a glossy dielectric; picture owed
+hatchwaterplanetlow	redmetalLod_v	gloss	0.25	0							director painted metal: was dielectric; a coloured coat over metal: a glossy dielectric; picture owed
+hatchwaterplanetlow	redmetalLod_v(2)	gloss	0.25	0							director painted metal: was dielectric; a coloured coat over metal: a glossy dielectric; picture owed
+hatchwaterplanetlow	silvermetalLod_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+heavenlybeachplanetwater	ExFallMatSplash_v	translucent	1.0	0			0				director falling water: was painted; white water scatters: no tint, no mirror (V-D4); picture owed
+heavensdoorinsideplanet	metalwall_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+heavensdoormiddleplanet	chain3_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+heavensdoormiddleplanet	sibumetal_v	metal	0.28	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+heavensdoorsmallplanet	sibumetal_v	metal	0.28	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+holeplanet	iron01_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+holeplanet	iron02_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+holeplanet	iron03_v	metal	0.25	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+holeplanet	iron04_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+hopperbeltconveyerplanet	metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+hugebattleshipplanetentrance	bolt_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+icelavaislandicemovablestepa	Hyouga_v	glass	0.05	0	1.31		0	0			director ice: was metal; OWNER-VERDICT G: ice, ior 1.31, through-colour 0.35 of the art's; picture owed
+icelavaislandicemovablestepa	Ice01_v	glass	0.05	0	1.31		0	0			director ice: was painted; OWNER-VERDICT G: ice, ior 1.31, through-colour 0.35 of the art's; picture owed
+iceluigi	Body1_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+iceluigi	Cap_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+iceluigi	Face_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+iceluigi	Hair_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+iceluigi	Hand_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+iceluigi	Hand_v(2)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+iceman	BodyMat_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemanice	IceManIceMat_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemario	Body1_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemario	Cap_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemario	Face_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemario	Hair_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemario	Hand_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemario	Hand_v(2)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemariohandl	hand_Hand_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemariohandl	hand_Hand_v(2)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemariohandl	hand_Hand_v(3)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemariohandl	hand_Hand_v(4)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemariohandl	hand_Hand_v(5)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemariohandl	hand_Hand_v(6)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemariohandl	hand_Hand_v(7)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemariohandl	hand_Hand_v(8)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemariohandr	hand_Hand_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemariohandr	hand_Hand_v(2)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemariohandr	hand_Hand_v(3)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemariohandr	hand_Hand_v(4)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemariohandr	hand_Hand_v(5)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemariohandr	hand_Hand_v(6)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemariohandr	hand_Hand_v(7)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemariohandr	hand_Hand_v(8)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemariomat	Body1_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemariomat	Cap_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemariomat	Face_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemariomat	Hair_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemariomat	Hand_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemariomat	Hand_v(2)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemeramera	MiniIga23:MiniIga7:lambert20_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was metal; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemerameraking	BodyMat_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemerameraking	CrownMat_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemeramerakingbreak	BodyMat_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemeramerakingbreak	BodyMat_v(10)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemeramerakingbreak	BodyMat_v(11)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemeramerakingbreak	BodyMat_v(12)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemeramerakingbreak	BodyMat_v(13)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemeramerakingbreak	BodyMat_v(14)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemeramerakingbreak	BodyMat_v(2)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemeramerakingbreak	BodyMat_v(3)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemeramerakingbreak	BodyMat_v(4)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemeramerakingbreak	BodyMat_v(5)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemeramerakingbreak	BodyMat_v(6)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemeramerakingbreak	BodyMat_v(7)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemeramerakingbreak	BodyMat_v(8)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemeramerakingbreak	BodyMat_v(9)	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemeramerakingshock	Beam_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was translucent; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+icemountainplanet	Hyouga03_v	glass	0.05	0	1.31		0	0			director ice: was metal; OWNER-VERDICT G: ice, ior 1.31, through-colour 0.35 of the art's; picture owed
+icemountainplanet	Ice01_v	glass	0.05	0	1.31		0	0			director ice: was metal; OWNER-VERDICT G: ice, ior 1.31, through-colour 0.35 of the art's; picture owed
+icestep	IceStep01_Mat	glass	0.05	0	1.31		0	0			director ice: was gloss; OWNER-VERDICT G: ice, ior 1.31, through-colour 0.35 of the art's; picture owed
+icestepnoslip	IceStepNoSlip_Mat	glass	0.05	0	1.31		0	0			director ice: was gloss; OWNER-VERDICT G: ice, ior 1.31, through-colour 0.35 of the art's; picture owed
+icewaterupdownplanet	Hyouga03_v	glass	0.05	0	1.31		0	0			director ice: was metal; OWNER-VERDICT G: ice, ior 1.31, through-colour 0.35 of the art's; picture owed
+jumpbeamerroomplanet	silvermetal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+jumphole	metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+kameckship	Metal_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+karikarifreeze	Karikari1_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was gloss; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+karikariice	OmoteMat_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was glass; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+karikariice	OmoteMat_v(2)	glass	0.08	0	1.31		0.7	0.5			director ice being: was translucent; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+karikariice	UraMat_v	glass	0.08	0	1.31		0.7	0.5			director ice being: was painted; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+kinopiogoodsstarpiece	StarPiece1_v	glass	0.02	0	1.8		0	0			director crystal: was metal; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+kirairachain	KirairaChain_Mat_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+koopabattlemapplanet	MetalBackMat_v	metal	0.26	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+koopabattlemapplanet	MetalRingMat_v	metal	0.28	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+koopabattlemapplanet	MetalSideMat_v	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+koopabattlemapplanetvs2	MetalRingMat_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+koopabattlemapplanetvs2	MetalSideMat_v	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+koopabattlemapplanetvs3lv3	MetalBackMat_v	metal	0.26	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+koopabattlemapplanetvs3lv3	MetalSideMat_v	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+koopafire	fire	emissive								1.000 1.000 1.000	director fire: was painted; named fire or flame: shown as is and a light; emission = its base colour; picture owed
+koopafire	fire_v_x	emissive								1.000 1.000 1.000	director fire: was painted; named fire or flame: shown as is and a light; emission = its base colour; picture owed
+koopaplate	MetalMat_v(2)	metal	0.26	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+koopaplate	MetalMat_v(3)	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+koopaplatecoin	MetalMat_v(2)	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+koopavs1partsrotatemovestepa	iron_v	metal	0.26	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+koopavs1partsrotatemovestepb	iron_v	metal	0.26	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+koopavs1partsspiralroad	iron_v	metal	0.26	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+koopavs2parts2dmovestepbara	iron_v	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+koopavs2parts2dmovestepbarb	iron_v	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+koopavs2parts2dmovestepconvex	iron_v	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+koopavs2parts2dmovestepcross	iron_v	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+koopavs2parts2dmovesteplshape	iron_v	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+koopavs2parts2dmovestepsbarb	iron_v	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+koopavs2partssquaremoveclipa	iron_v	metal	0.06	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+koopavs2partssquaremoveclipb	iron_v	metal	0.06	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+koopavs2partssquaremovestepa	iron_v	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+koopavs2partsstartmovestepa	iron_v	metal	0.06	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+koopavs2partsstartmovestepb	iron_v	metal	0.06	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+koopavs2partsstartmovestepc	iron_v	metal	0.06	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+koopavs3rotatestepsa	iron_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+lavabegomancubeplanet	MetalMat	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+lavabegomancubeplanetlow	MetalMat	metal	0.15	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+lavabegomanplanet	MetalMat	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+lavabegomanplanet	SteelMat	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+lavabegomanplanetlow	MetalMat	metal	0.15	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+lavabegomanplanetlow	SteelMat	metal	0.15	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+lavabegomanplanetmiddle	MetalMat	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+lavabegomanplanetmiddle	SteelMat	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+lavabegomanufoplanet	MetalMat	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+lavabegomanufoplanetlow	MetalMat	metal	0.15	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+lavabegomanufoplanetmiddle	MetalMat	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+lavafloatingstepa	SteelMat_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+lavafloatingstepb	SteelMat_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+lavafloatingstepc	SteelMat_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+lavafloatingstepd	SteelMat_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+lavahomefloaterb	SteelMat_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+lavahomeseesaw	SteelMat_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+lavaprominence	fire	emissive								1.000 1.000 0.043	director fire: was painted; named fire or flame: shown as is and a light; emission = its base colour; picture owed
+lavaprominence	fire_v_x	emissive								1.000 0.831 0.000	director fire: was painted; named fire or flame: shown as is and a light; emission = its base colour; picture owed
+lavarotatestepsplanet	Bolt_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+mariofreezeice	Break_IndTex	glass	0.08	0	1.31		0.7	0.5			director ice being: was painted; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+mariofreezeice	Break_IndTex(2)	glass	0.08	0	1.31		0.7	0.5			director ice being: was painted; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+mariofreezeice	Break_IndTex(3)	glass	0.08	0	1.31		0.7	0.5			director ice being: was painted; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+mariofreezeice	Break_IndTex(4)	glass	0.08	0	1.31		0.7	0.5			director ice being: was painted; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+mariofreezeice	Break_IndTex(5)	glass	0.08	0	1.31		0.7	0.5			director ice being: was painted; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+mariofreezeice	Break_IndTex(6)	glass	0.08	0	1.31		0.7	0.5			director ice being: was painted; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+mariofreezeice	Break_IndTex(7)	glass	0.08	0	1.31		0.7	0.5			director ice being: was painted; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+mariofreezeice	Break_IndTex(8)	glass	0.08	0	1.31		0.7	0.5			director ice being: was painted; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+mariofreezeice	IndTex	glass	0.08	0	1.31		0.7	0.5			director ice being: was painted; OWNER-VERDICT G: loses a little tint, half clear, glows (rt_glow row); picture owed
+mariolauncherroomplanet	MetalMat_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+mariolauncherroomplanet	bolt_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+mechakoopapartsarmleft	Metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+mechakoopapartsarmright	Metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+mechakoopapartsbody	Metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+mechakoopapartsbodylow	BlueMetal_v	gloss	0.25	0							director painted metal: was dielectric; a coloured coat over metal: a glossy dielectric; picture owed
+mechakoopapartsbodylow	GoldMetal_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+mechakoopapartsbreast	Metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+mechakoopapartscaterpillar	Metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+mechakoopapartscaterpillar	Metal_v(2)	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+mechakoopapartscaterpillar	Metal_v(3)	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+mechakoopapartscaterpillar	Metal_v(4)	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+mechakoopapartscaterpillar	Metal_v(5)	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+mechakoopapartscaterpillar	Metal_v(6)	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+mechakoopapartscollar	Metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+mechakoopapartshead	Metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+mechakoopapartsmovestepa	Metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+mechakoopapartsrollera	GoldMetal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+mechakoopapartsrollera	Metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+mechakoopapartswrecka	Metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+minibattleshipgalaxy	darkmetal_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+minifactorygalaxy	MetalBase_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+miniflippanelexgalaxy	Metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+minifloaterotakinggalaxy	SteelMat_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+miniicevolcanogalaxy	Ice1_v	glass	0.05	0	1.31		0	0			director ice: was dielectric; OWNER-VERDICT G: ice, ior 1.31, through-colour 0.35 of the art's; picture owed
+minimechakoopapartscage	Metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+minimechakoopapartsfan	Metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+minimechakoopapartsmovestepa	Metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+minimechakoopaplanet	Metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+minioceanfloaterlandgalaxy	goldmetal1_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+minioceanfloaterlandgalaxy	orangemetal_v	gloss	0.25	0							director painted metal: was dielectric; a coloured coat over metal: a glossy dielectric; picture owed
+minioceanfloaterlandgalaxy	redmetalLod_v	gloss	0.25	0							director painted metal: was dielectric; a coloured coat over metal: a glossy dielectric; picture owed
+minioceanfloaterlandgalaxy	silvermetalLod_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+miniphantomgalaxy	soto_013_mado1_v	gloss	0.05	0							director window: was dielectric; a window painted on a building: opaque and reflective, never see-through; picture owed
+miniphantomgalaxy	soto_08_mado_v	gloss	0.05	0							director window: was dielectric; a window painted on a building: opaque and reflective, never see-through; picture owed
+ministardustgalaxy	Bluecrystal_v	glass	0.02	0	1.8		0	0			director crystal: was metal; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+ministardustgalaxy	Greencrystal_v	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+ministardustgalaxy	Orangecrystal_v	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+ministardustgalaxy	Purplecrystal_v	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+ministardustgalaxy	Redcrystal_v	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+minitrileglv1galaxy	FixIronGold_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+minitrileglv1galaxy	FixIronSilver_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+minitrileglv1galaxy	IronEdge2_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+minitrileglv1galaxy	IronEdge3_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+minitrileglv1galaxy	MetalBody_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+moguhole	MoguHoleSilverMat_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+moguhole	MoguHoleSilverMat_v(2)	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+moguhole	MoguHoleSilverMat_v(3)	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+moguhole	MoguHoleSilverMat_v(4)	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+moguhole	MoguHoleSilverMat_v(5)	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+moguhole	MoguHoleSilverMat_v(6)	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+moguhole	MoguHoleSilverMat_v(7)	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+nutshipfleetplanet	screw1_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+otakingbath	SteelMat	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+otakingbath	SteelMat_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+otakingbathplanet	SteelMat_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+peachcastlegardenplanet	mado_v	gloss	0.05	0							director window: was painted; a window painted on a building: opaque and reflective, never see-through; picture owed
+peachcastletownafterattack	mado_v	gloss	0.05	0							director window: was painted; a window painted on a building: opaque and reflective, never see-through; picture owed
+peachcastletownbeforeattack	mado_v	gloss	0.05	0							director window: was painted; a window painted on a building: opaque and reflective, never see-through; picture owed
+phantomshipa	shipwindow_v	gloss	0.05	0							director window: was dielectric; a window painted on a building: opaque and reflective, never see-through; picture owed
+phantomshipb	shipwindow_v	gloss	0.05	0							director window: was dielectric; a window painted on a building: opaque and reflective, never see-through; picture owed
+poltarock	GoldMat_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+poweruplife	Metal	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+quarterrollgravityroomplanet	metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+questionboxmovestepa	MetalMat_v	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+questionboxplaneta	MetalMat_v	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+questionboxplanetb	MetalMat_v	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+questionboxplanetc	MetalMat_v	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+questionboxplanetd	MetalMat_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+questionboxplanete	Metal_v	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+quicksand2dmovepartsa	metalfloor_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+quicksand2dmovepartsa	moveA_metal_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+raygunplanet	Metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+raygunplanetpartsscrew	Metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+relayplanete	metal_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+relayplaneth	bolt1_v	metal	0.28	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+reversegravityroomplanet	metal1_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+reversegravityroompressgrounda	metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+reversegravityroompressgroundb	metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+reversegravityroompressgroundc	metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+reversegravityroompressgroundd	metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+reversegravityroompressgrounde	metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+reversegravitytowerplanetlow	IceMat_v	glass	0.05	0	1.31		0	0			director ice: was translucent; OWNER-VERDICT G: ice, ior 1.31, through-colour 0.35 of the art's; picture owed
+reversekingdomplanet	taki_ike_v	translucent	1.0	0			0				director falling water: was painted; white water scatters: no tint, no mirror (V-D4); picture owed
+rollingovalplanet	bolt_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+rollingovalplanet	metalmat_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+rollingovalplanetparts	metalmat_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+screwswitch	Screw1_v	metal	0.05	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+screwswitch	Screw2_v	metal	0.05	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+screwswitch	Screw3_v	metal	0.05	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+screwswitchreverse	Screw1_v	metal	0.05	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+seabottombigdoora	MetalMat_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+seabottombigdoorb	MetalMat_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+seabottombigdoorc	gold_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+seabottomtriplepropeller	whitemetal_v	gloss	0.25	0							director painted metal: was dielectric; a coloured coat over metal: a glossy dielectric; picture owed
+seabottomtriplepropeller	whitemetal_v(2)	gloss	0.25	0							director painted metal: was dielectric; a coloured coat over metal: a glossy dielectric; picture owed
+seabottomtriplepropeller	whitemetal_v(3)	gloss	0.25	0							director painted metal: was dielectric; a coloured coat over metal: a glossy dielectric; picture owed
+seabottomtriplepropellerstand	silvermetal_v	metal	0.05	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+seabottomtriplepropellerstand	whitemetal_v	gloss	0.25	0							director painted metal: was dielectric; a coloured coat over metal: a glossy dielectric; picture owed
+shockwavegenerator	aymetal	metal	0.26	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+spaceshipstep	bolt_v	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+spaceshipstep	bolt_v(2)	metal	0.30	1							director metal: was painted; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+spinleverswitch	Bolt03_v(2)	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+spinleverswitch	Bolt03_v(3)	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+starduststartplanet	MetalC_v	metal	0.26	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+starduststartplanet	MetalE_v	metal	0.26	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+starmanfort	Window_v	gloss	0.05	0							director window: was painted; a window painted on a building: opaque and reflective, never see-through; picture owed
+starpiece	StarPiece1_v	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+starpiececluster	StarPieceClusterMat_v	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+starpiececluster	StarPieceClusterMat_v(2)	glass	0.02	0	1.8		0	0			director crystal: was glass; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+starpiececluster	StarPieceClusterMat_v(3)	glass	0.02	0	1.8		0	0			director crystal: was emissive; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+starpiecedummy	StarPiece1_v	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+starpiecedummy	StarPiece1_v(10)	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+starpiecedummy	StarPiece1_v(2)	glass	0.02	0	1.8		0	0			director crystal: was metal; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+starpiecedummy	StarPiece1_v(3)	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+starpiecedummy	StarPiece1_v(4)	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+starpiecedummy	StarPiece1_v(5)	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+starpiecedummy	StarPiece1_v(6)	glass	0.02	0	1.8		0	0			director crystal: was metal; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+starpiecedummy	StarPiece1_v(7)	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+starpiecedummy	StarPiece1_v(8)	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+starpiecedummy	StarPiece1_v(9)	glass	0.02	0	1.8		0	0			director crystal: was metal; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+starpiecemother	StarPiece1_v	glass	0.02	0	1.8		0	0			director crystal: was metal; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+stringspiderarmor	ArmorMat_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+surfingracevictorystand	Metal_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+takobarrela	Iron_v	metal	0.22	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+takobarrelb	Iron_v	metal	0.22	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+takoheirelayplanet	Gold_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+teardropplanet	shipwindow_v	gloss	0.05	0							director window: was dielectric; a window painted on a building: opaque and reflective, never see-through; picture owed
+teresamansionplaneta	soto_013_mado_v	gloss	0.05	0							director window: was dielectric; a window painted on a building: opaque and reflective, never see-through; picture owed
+teresamansionplaneta	soto_08_mado_v	gloss	0.05	0							director window: was dielectric; a window painted on a building: opaque and reflective, never see-through; picture owed
+teresamansionplanetc	soto_013_mado_v	gloss	0.05	0							director window: was dielectric; a window painted on a building: opaque and reflective, never see-through; picture owed
+teresaroomplanet	gold_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ticofatgoodsstarpiece	StarPiece1_v	glass	0.02	0	1.8		0	0			director crystal: was gloss; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+toyfactorydecoratepartsgeara	Metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+treasureboxgold	TreasureBoxGoldIn_Mat_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+treasureboxgold	TreasureBoxGoldIn_Mat_v(2)	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+treasureboxgold	TreasureBoxGoldMt_Mat_v	metal	0.27	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+treasureboxgold	TreasureBoxGoldMt_Mat_v(2)	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+treasureboxgold	TreasureBoxGoldMt_Mat_v(3)	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+treasureboxgold	TreasureBoxGoldMt_Mat_v(4)	metal	0.27	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+treasureboxgold	TreasureBoxGold_Mat_v	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+treasureboxgold	TreasureBoxGold_Mat_v(2)	metal	0.30	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+trialballplanet	metal_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripod2bosslow	FixIronGold_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripod2bosslow	FixIronSilver_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripod2bosslow	IronA_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripod2bosslow	IronEdge2_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripod2bosslow	IronEdge3_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripod2bosslow	MetalBody_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossbodya	IronEdge2_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossbodya	IronEdge3_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossbodya	IronEdge_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbosscore	MetalBody_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbosscore	MetalBody_v(2)	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossfoot	FixIronSilver	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossfoot	IronEdge3	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossgearb	FixIronGold	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossgearbody	FixIronGold	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossgearc	FixIronSilver	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossgearsmalla	FixIronGold	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossgearsmallb	FixIronSilver	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossgearsmallc	FixIronGold	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossguardwall	IronA	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossleg1a	IronEdge2	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossleg1a	IronEdge3	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossleg1b	FixIronGold	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossleg1b	FixIronSilver	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossleg1b	IronEdge2	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossleg1b	IronEdge3	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossleg1c	IronEdge3	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossleg2a	FixIronSilver	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossleg2a	IronA	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossleg2a	IronEdge3	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossleg3b	IronG	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossleg3b	IronH	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossleg3c	IronB	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossleg3c	IronF	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossleg3c	IronH	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossleg3d	IronF	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbosslegbottom	IronF	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbosslow	FixIronGold_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbosslow	FixIronSilver_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbosslow	IronA_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbosslow	IronEdge2_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbosslow	IronEdge3_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbosslow	MetalBody_v	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossshell	ShellMetal1	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossshellbreak	ShellMetal1	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossshellbreak	ShellMetal1(10)	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossshellbreak	ShellMetal1(11)	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossshellbreak	ShellMetal1(12)	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossshellbreak	ShellMetal1(13)	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossshellbreak	ShellMetal1(14)	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossshellbreak	ShellMetal1(15)	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossshellbreak	ShellMetal1(16)	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossshellbreak	ShellMetal1(17)	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossshellbreak	ShellMetal1(18)	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossshellbreak	ShellMetal1(19)	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossshellbreak	ShellMetal1(2)	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossshellbreak	ShellMetal1(20)	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossshellbreak	ShellMetal1(21)	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossshellbreak	ShellMetal1(22)	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossshellbreak	ShellMetal1(23)	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossshellbreak	ShellMetal1(24)	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossshellbreak	ShellMetal1(3)	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossshellbreak	ShellMetal1(4)	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossshellbreak	ShellMetal1(5)	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossshellbreak	ShellMetal1(6)	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossshellbreak	ShellMetal1(7)	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossshellbreak	ShellMetal1(8)	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tripodbossshellbreak	ShellMetal1(9)	metal	0.30	1							director metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tshapeplanet	MetalC_v	metal	0.26	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+tshapeplanetlow	MaterialCode:Ice_v	glass	0.05	0	1.31		0	0			director ice: was dielectric; OWNER-VERDICT G: ice, ior 1.31, through-colour 0.35 of the art's; picture owed
+ufobattlestagec	MetalMat	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufobattlestagec	darkmetal	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufobattlestaged	MetalMat	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufobattlestaged	colormetal	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufobattlestagee	MetalMat	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufobattlestagee	colormetal	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufobluestarcupsule	UFOMetalMat_v	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufonormalb	MetalMat	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufonormalb	MetalMat(2)	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufonormalb	MetalMat(3)	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufonormald	MetalMat	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufonormald	darkmetal	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufostronga	MetalMat	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+ufostronga	darkmetal	metal	0.12	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+vsbegomanspikeplanet	MetalMat_v	metal	0.29	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+warppod	MetalMat_v	metal	0.24	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+warppod	MetalMat_v(2)	metal	0.24	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
+yellowchip	lambert60	glass	0.02	0	1.8		0	0			director crystal: was metal; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+# c89: water verdicts (FB measure/water_verdicts.tsv; the director's item 5).
+twinfalllakeplanet	kori_v	glass	0.05	0	1.31						ice (FB water verdict, FC c89): a frozen lake read as metal; glass, ior 1.31 (F0 0.018); picture owed
+twinfalllakeplanetlow	kori_v	glass	0.05	0	1.31						ice (FB water verdict, FC c89): a frozen lake read as metal; glass, ior 1.31 (F0 0.018); picture owed
+mirrormodeltwinfalllake	kori_v	glass	0.05	0	1.31						ice (FB water verdict, FC c89): a frozen lake read as metal; glass, ior 1.31 (F0 0.018); picture owed
+twinfalllakeplanetlow	mizu_shita_v_x	dielectric		0							bed (FB water verdict, FC c89): the far stand-in is opaque; its near's water row would make it water by the twin rule (c83)
+lavasteam	lambert5_v	translucent	1	0							the lava stages' steam column: dims the sun, no hard shadow (EVERYTHING 1.15; FB b101)
+raincloudvolume	VolumeMat	translucent	1	0							a rain volume: dims the sun, no hard shadow (EVERYTHING 1.15; FB b101)
+# c91: Mario's forms (the director's item 6).
+teresamario	body_m_v	translucent									Boo form (FC c91, EVERYTHING 7.2): a ghost; as FB b101 its opaque draw dims the sun, no hard shadow; picture owed
+teresamario	Cap_v	translucent									Boo form (FC c91, EVERYTHING 7.2): a ghost; as FB b101 its opaque draw dims the sun, no hard shadow; picture owed
+teresamario	Eye_v	translucent									Boo form (FC c91, EVERYTHING 7.2): a ghost; as FB b101 its opaque draw dims the sun, no hard shadow; picture owed
+teresaluigi	body_m_v	translucent									Boo form (FC c91, EVERYTHING 7.2): a ghost; as FB b101 its opaque draw dims the sun, no hard shadow; picture owed
+teresaluigi	Cap_v	translucent									Boo form (FC c91, EVERYTHING 7.2): a ghost; as FB b101 its opaque draw dims the sun, no hard shadow; picture owed
+teresaluigi	Eye_v	translucent									Boo form (FC c91, EVERYTHING 7.2): a ghost; as FB b101 its opaque draw dims the sun, no hard shadow; picture owed
+hoppermario	Snake_v	metal		1							spring form's coil (FC c91, EVERYTHING 7.2): steel; picture owed		iron
+hopperluigi	Snake_v	metal		1							spring form's coil (FC c91, EVERYTHING 7.2): steel; picture owed		iron
+teresa	body_m_v	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+teresachief	body_m_v	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+teresamario	*	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+teresaluigi	*	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+teresaracer	body_m_v	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+bombteresa	BodyMat_v	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+bombteresatongue	BodyM_v	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+ghostmario	*	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+ghostluigi	*	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+polta	BodyMat_v	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+poltaleftarm	BodyMat_v	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+poltarightarm	BodyMat_v	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+jellyfish	JellyFish1_v	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+jellyfish	JellyFish3_v	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+jellyfish	JellyFish4_v	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+koopavs2partsdarkmattera	DMMatA*	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+koopavs2partsdarkmatterb	DMMatA*	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+koopavs2partsdarkmatterc	DMMatA*	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+koopavs2partsdarkmatterd	DMMatA*	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+koopavs2partsdarkmattere	DMMatA*	translucent									a ghost: drawn as the game, dims the sun, no hard shadow (EVERYTHING 4.21; FB b109)
+# c94: honey and quicksand (EVERYTHING 4.11; FB coord/rows/fb_kinds_4_11.tsv).
+beewallclimbplaneta	honey_v_x	gloss	0.1	0	1.5		1				honey (the Honeyhive climbing wall; FC c94, 4.11): an opaque draw: a glossy body, its colour the body's; picture owed		
+beewallclimbplanetb	honey_01_v	gloss	0.1	0	1.5		1				honey (the Honeyhive climbing wall; FC c94, 4.11): an opaque draw: a glossy body, its colour the body's; picture owed		
+beewallclimbplanetc	honey_00_v	gloss	0.1	0	1.5		1				honey (the Honeyhive climbing wall; FC c94, 4.11): an opaque draw: a glossy body, its colour the body's; picture owed		
+forestbossplanet	honey_v	gloss	0.1	0	1.5		1				honey (Bugaboom's planet; FC c94, 4.11): an opaque draw: a glossy body, its colour the body's; picture owed		
+foresthomeplanet	honey_v	gloss	0.1	0	1.5		1				honey (the Honeyhive home planet; FC c94, 4.11): an opaque draw: a glossy body, its colour the body's; picture owed		
+honeyqueenplanet	honey_v	gloss	0.1	0	1.5		1				honey (the queen's planet; FC c94, 4.11): an opaque draw: a glossy body, its colour the body's; picture owed		
+minihoneybeeexgalaxy	honey_v_x	gloss	0.1	0	1.5		1				honey (a map preview; FC c94, 4.11): an opaque draw: a glossy body, its colour the body's; picture owed		
+minihoneybeekingdomgalaxy	BeeWallClimbPlanetA_0406e_honey_v_x	gloss	0.1	0	1.5		1				honey (a map preview; FC c94, 4.11): an opaque draw: a glossy body, its colour the body's; picture owed		
+sandstreamsmallplanet	QuickSandMat_v	dielectric	1	0			1				quicksand (the quicksand flow; FC c94, 4.11): matte; picture owed		
+quicksand2dplanet	lambert2_v	dielectric	1	0			1				quicksand (the 2D quicksand flow; FC c94, 4.11): matte; picture owed		
+quicksand2dplanet	lambert5_v_x	dielectric	1	0			1				quicksand (the 2D quicksand flow's second layer; FC c94, 4.11): matte; picture owed		
+iceringiceplanet	BackFaceMat										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+icesliproad	BackFaceMat										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+assemblyblockpartsiceb	IceBackFaceMat_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+assemblyblockpartsicec	IceBackFaceMat_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+assemblyblockpartsiced	IceBackFaceMat_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+assemblyblockpartsicee	IceBackFaceMat_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+lavabreakcolumn	BackFaceMat_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+lavashelltower	BackFaceMat_v*										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+lavatransparentplanet	BackMat										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+koopaball	BuckFaceMat_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+tamakoro	BuckFaceMat_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+watersphereobj	InsideMat										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+shockwavegenerator	glass_ura_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+glassbottletall	in1_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+capsulecage	IndMat										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+heavensdoorinsidecage	IndMat										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+electricbazookaplanetindirect	ind_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+foresthomeplanetindirect	FallBackFaceMat_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+peachcastlegardenplanetindirect	lambert119_v_x										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+reversekingdomplanetindirect	FallBackFaceMat_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing (the director r0415 fault 1; FB b111)	hidden
+# c100: cages' bars and panes, the Goombeetle's helmet (the owner 11-12 on the lava stop; patches/c100_cage_rows.py).
+breakablecage	sabi_v*	metal	0.6	1							FC c100 (the owner 11-12, the lava stop): a cage's rusted bars (sabi), was gloss: iron; picture owed		iron	
+breakablecage	tethu_v*	metal	0.3	1							FC c100 (the owner 11-12, the lava stop): a cage's bars (tetsu), was gloss: iron; picture owed		iron	
+breakablecagel	sabi_v*	metal	0.6	1							FC c100 (the owner 11-12, the lava stop): a cage's rusted bars (sabi), was painted: iron; picture owed		iron	
+breakablecagel	tethu_v*	metal	0.3	1							FC c100 (the owner 11-12, the lava stop): a cage's bars (tetsu), was painted: iron; picture owed		iron	
+breakablecagebreak	sabi_v*	metal	0.6	1							FC c100 (the owner 11-12, the lava stop): a cage's rusted bars (sabi), was gloss: iron; picture owed		iron	
+breakablecagebreak	tethu_v*	metal	0.3	1							FC c100 (the owner 11-12, the lava stop): a cage's bars (tetsu), was gloss: iron; picture owed		iron	
+breakablecage	gaeasu_v	glass	0.02	0	1.5						FC c100: a cage's panes (garasu), was gloss: glass; picture owed			
+metbo	MetMat_v	metal	0.25	1							FC c100 (the owner 11-12): the Goombeetle's helmet, was gloss (a highlight sprite): metal, its own colour; picture owed		art	
+# c104: the intent gate's shiny rule and the rooms' surfaces (tools/fc_bulk_rows.py; coord/census/intent_gate.tsv, room_surfaces.tsv).
+assemblyblockpartsa	coreE_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.60 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+assemblyblockpartsb	coreE_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.60 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+assemblyblockpartsc	coreA_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.60 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+assemblyblockpartsc	coreE_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.60 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+assemblyblockpartsd	coreE_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.60 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+assemblyblockpartse	coreA_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.57 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+assemblyblockpartse	coreE_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.60 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+astrobasea	bluetile_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was dielectric; picture owed			
+astrobasea	colortile_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was dielectric; picture owed			
+astrobasea	glass_v_x	glass	0.02	0	1.5						FC c104 room surface (PLAN-ROOMS R5): a see-through glass or window, was translucent; picture owed			
+astrobasea	golddoorwalu_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was painted; picture owed		art	
+astrobasea	yellowtile_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was dielectric; picture owed			
+astrobaseb	WoodMat_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+astrobaseb	WoodPanelMat_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+astrobaseb	glass_v_x	glass	0.02	0	1.5						FC c104 room surface (PLAN-ROOMS R5): a see-through glass or window, was translucent; picture owed			
+astrobaseb	mabletileKitchen_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was painted; picture owed			
+astrobaseb	woodpanelW_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was painted; picture owed			
+astrodomemachine	FloorMat1_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+astrodomemachine	FloorMat2_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+astrodomemachine	FloorMat3_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+astrodomemachine	PipeMat_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+astrodomemachine	WallMat_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+astroroomlibrary	FloorDairi_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was painted; picture owed			
+astroroomlibrary	FloorMat_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was painted; picture owed			
+astroroomlibrary	WoodSand_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was painted; picture owed			
+beamgoroundplanet	bluemetal_v	metal	0.26	1							FC c104 intent A: a painted reflection 0.99 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+beamgoroundplanet	redmetal_v	metal	0.26	1							FC c104 intent A: a painted reflection 0.95 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+biribiribegomanspikeplanet	GroundBase_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.84 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+biribiribegomanspikeplanet	kusizasi_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.77 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+bombtimeattack2planet	GroundBase_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.84 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+bombtimeattackplanet	GroundBase_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.84 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+bossbegomanhead	lambert2_v	metal	0.27	1							FC c104 intent A: a painted reflection 0.65 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+bossbegomanhead	lambert4_v	metal	0.27	1							FC c104 intent A: a painted reflection 0.67 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+bosscrab	BodyBall	gloss	0.15	0							FC c104 intent A: a painted reflection 0.90 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+bosscrab	LegGrid	gloss	0.15	0							FC c104 intent A: a painted reflection 0.71 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+bosscrab	LegGrid_Mark	gloss	0.15	0							FC c104 intent A: a painted reflection 0.71 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+bosscrab	lambert33	gloss	0.15	0							FC c104 intent A: a painted reflection 0.90 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+bosscrab	lambert37	gloss	0.15	0							FC c104 intent A: a painted reflection 0.93 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+bosscrabcannon	CannonBall1	metal	0.31	1							FC c104 intent A: a painted reflection 0.87 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+bosscrabcannon	CannonBall1_v	metal	0.31	1							FC c104 intent A: a painted reflection 0.87 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+bosscrabcannonswitch	Switch	metal	0.31	1							FC c104 intent A: a painted reflection 0.72 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+bosscrabkiller	Body	gloss	0.15	0							FC c104 intent A: a painted reflection 0.90 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+bosscrabkiller	Body2	gloss	0.15	0							FC c104 intent A: a painted reflection 0.71 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+bosscrabkiller	Wing	gloss	0.15	0							FC c104 intent A: a painted reflection 0.59 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+broadbeanplaneta	BeanFace_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.65 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+broadbeanplanetb	BeanFace_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.65 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+broadbeanplanetd	BeanFace_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.65 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+bumpappearplanet	amiwaku_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.67 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+bumpappearplanet	lambert2_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.67 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+bumpappearplanet	tetsu01_v	metal	0.29	1							FC c104 intent A: a painted reflection 0.67 of its colour and named a metal, was gloss: a metal (iron); picture owed		iron	
+bumpappearplanet	tetsu_v	metal	0.29	1							FC c104 intent A: a painted reflection 0.67 of its colour and named a metal, was gloss: a metal (iron); picture owed		iron	
+cannonstormgcaptureplanet	PipeA02_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.87 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+cannonstormgcaptureplanet	PipeA_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.88 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+cannonstormgcaptureplanet	houdaiC_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.99 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+challengeballaccelcylindera	lambert12_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+challengeballgeara	lambert12_v	metal	0.29	1							FC c104 intent A: a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+challengeballmovegrounda	lambert12_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+challengeballmovegroundb	lambert12_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+challengeballplanet	lambert12_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+challengeballrotatebridgea	lambert12_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+chargespot	Base	gloss	0.15	0							FC c104 intent A: a painted reflection 0.58 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+chargespot	Base1	gloss	0.15	0							FC c104 intent A: a painted reflection 0.56 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+chargespot	Base2_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.92 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+crestmodel	mat_crest	metal	0.30	1							FC c104 intent A: a painted reflection 0.61 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+cubebubbleexhomestep	PowerStarKeeperA_0406:redplastic_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.76 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+cubebubbleexpartsa	PowerStarKeeperA_0406:redplastic_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.95 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+cubebubbleexpartsa	redplastic2_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.87 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+cubebubbleexrotatewalll	redplastic_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.87 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+cubebubbleexstartstep	PowerStarKeeperA_0406:redplastic_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.87 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+damagebomb	Foot	gloss	0.15	0							FC c104 intent A: a painted reflection 0.80 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+damagebomb	hinawa	gloss	0.15	0							FC c104 intent A: a painted reflection 0.63 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+darkhopperplanetpartsa	FloorTile_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was dielectric; picture owed			
+darkhopperplanetpartsd	FloorTile_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was dielectric; picture owed			
+darknessroomdoora	ki_mm_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+darknessroomdoora	kin_m_v	metal	0.26	1							FC c104 intent A: a painted reflection 0.98 of its colour and named a metal, was gloss: a metal (gold); picture owed		gold	
+darknessroomdoora	tetu_m_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was dielectric; picture owed		art	
+darknessroomplanet	mokume_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+deathpromenade2dplanet	lambert15_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+earthenpipe	EarthenPipeMat_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.94 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+electricbazooka	WaterBazooka1_v	metal	0.16	1							FC c104 intent A: a painted reflection 0.65 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+electricbazookabreak	WaterBazooka1_v	metal	0.16	1							FC c104 intent A: a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+electricbazookabreak	WaterBazooka2_v	metal	0.45	1							FC c104 intent A: a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+groundstar	FooMat	gloss	0.03	0							FC c104 intent A: a painted reflection 0.69 of its colour, not named a metal: gloss kept, polished (roughness 0.03); picture owed			
+heavensdoorinsiderotatepartsa	MetalEnvMapMat_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was gloss; picture owed		art	
+heavensdoorinsiderotatepartsb	MetalEnvMapMat_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was gloss; picture owed		art	
+heavensdoorinsiderotatepartsc	MetalEnvMapMat_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was gloss; picture owed		art	
+heavensdoormiddleplanet	pipe2_v	gloss	0.06	0							FC c104 intent A: a painted reflection 0.62 of its colour, not named a metal: gloss kept, polished (roughness 0.06); picture owed			
+heavensdoormiddleplanet	pipe_v	gloss	0.06	0							FC c104 intent A: a painted reflection 0.58 of its colour, not named a metal: gloss kept, polished (roughness 0.06); picture owed			
+heavensdoorsmallplanet	pipe_v	gloss	0.06	0							FC c104 intent A: a painted reflection 0.58 of its colour, not named a metal: gloss kept, polished (roughness 0.06); picture owed			
+ironcannonlauncher	KillerGunnerMat_v	metal	0.15	1							FC c104 intent A: a painted reflection 0.75 of its colour and named a metal, was gloss: a metal (iron); picture owed		iron	
+jointballsplaneta	JointBall1_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.95 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+jointballsplaneta	JointBall3_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.86 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+jointballsplaneta	JointBall4_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.98 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+jointballsplanetalow	JointBall2_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.94 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+jointballsplanetalow	JointBall3_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.86 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+jointballsplanetalow	JointBall4_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.98 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+jumpbeamerroomplanet	bluemetal_v	metal	0.26	1							FC c104 intent A: a painted reflection 0.99 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+jumpbeamerroomplanet	redmetal_v	metal	0.26	1							FC c104 intent A: a painted reflection 0.95 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+jumpbeamerroomplanet	yellowmetal_v	metal	0.26	1							FC c104 intent A: a painted reflection 0.98 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+keyswitch	KeySwitchMat_v	metal	0.27	1							FC c104 intent A: a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+koopavs2partsjoinedmoveclip	floor_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+koopavs2partsrollingstep	floor2_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+koopavs2partsrollingstep	floor_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+lavabegomanplanet	WindowMat	gloss	0.15	0							FC c104 intent A: a painted reflection 0.91 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+lavabegomanplanetlow	WindowMat	gloss	0.15	0							FC c104 intent A: a painted reflection 0.91 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+lavabegomanplanetmiddle	WindowMat	gloss	0.15	0							FC c104 intent A: a painted reflection 0.91 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+lavabegomanufoplanet	WindowMat	gloss	0.15	0							FC c104 intent A: a painted reflection 0.91 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+lavabegomanufoplanetlow	WindowMat	gloss	0.15	0							FC c104 intent A: a painted reflection 0.91 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+lavabegomanufoplanetmiddle	WindowMat	gloss	0.15	0							FC c104 intent A: a painted reflection 0.91 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+lavamazecubeplanet	Fruit_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.91 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+marbleplanetcore	FaceMat_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.54 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+mariolauncher	LauncherMat_v	metal	0.31	1							FC c104 intent A: a painted reflection 0.67 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+mechakoopapartsbody	BlueMetal_v	metal	0.29	1							FC c104 intent A: a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+mechakoopapartscaterpillar	lambert40_v	metal	0.29	1							FC c104 intent A: a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+mechakoopapartscaterpillar	lambert41_v	metal	0.29	1							FC c104 intent A: a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+miniflippanelexgalaxy	lambert3_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.90 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+minimechakoopapartsgear	aka_v	metal	0.29	1							FC c104 intent A: a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+mysterygravityroombridgea	woodhasi_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+mysterygravityroomplanet	floor_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was dielectric; picture owed			
+nutshipfleetplanet	kusizasi_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.77 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+powerstarkeepera	redplastic_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.95 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+powerstarkeeperb	plastic_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.98 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+powerstarkeeperc	plastic_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.99 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+questioncoin	lambert10_v	metal	0.22	1							FC c104 intent A: a painted reflection 0.56 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+questioncoin	lambert6_v	metal	0.22	1							FC c104 intent A: a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+questioncoin	lambert9_v	metal	0.31	1							FC c104 intent A: a painted reflection 0.77 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+relayplaneth	planetbase_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.75 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+rollingovalplanet	whiteplastic_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.87 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+rollingovalplanetparts	bluemetal_v	metal	0.26	1							FC c104 intent A: a painted reflection 0.99 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+rollingovalplanetparts	redmetal_v	metal	0.26	1							FC c104 intent A: a painted reflection 0.95 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+rollingovalplanetparts	whiteplastic_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.87 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+sandstreamhightowerplanet	nut00_v	metal	0.29	1							FC c104 intent A: a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+scaledownrelayplanet	wood01_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+scaledownrelayplanet	woodpanel00_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+seesawmovenutb	nut_v	metal	0.29	1							FC c104 intent A: a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+sidespikemovestepa	lambert3_v	metal	0.33	1							FC c104 intent A: a painted reflection 0.90 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+spacecannonlauncher	TeresaMansionGatePlanet0412:lambert9_v	metal	0.26	1							FC c104 intent A: a painted reflection 0.61 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+spacedustwooda	WoodMat_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was painted; picture owed			
+spaceseparatora	Point_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.70 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+spaceseparatorb	Point_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.70 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+spaceshipstep	step_pipe_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.94 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+spotlightenemy	Body	gloss	0.15	0							FC c104 intent A: a painted reflection 0.85 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+stardustrollingstepa	Madara_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.74 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+stardustrollingstepa	lambert13_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.73 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+starpeacespoutingplanet	k_tetu01_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was gloss; picture owed		art	
+starpeacespoutingplanet	lambert2_v	gloss	0.06	0							FC c104 intent A: a painted reflection 0.61 of its colour, not named a metal: gloss kept, polished (roughness 0.06); picture owed			
+teresamansiondoora	ki_mm_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+teresamansiondoora	kin_m_v	metal	0.26	1							FC c104 intent A: a painted reflection 0.98 of its colour and named a metal, was gloss: a metal (gold); picture owed		gold	
+teresamansiondoora	tetu_m_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was dielectric; picture owed		art	
+teresamansiondoorb	ki_mm1_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+teresamansiondoorb	kin_m_v	metal	0.26	1							FC c104 intent A: a painted reflection 0.98 of its colour and named a metal, was gloss: a metal (gold); picture owed		gold	
+teresamansiondoorb	tetu_m1_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was dielectric; picture owed		art	
+teresamansionentrancedoor	ki_mm_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+teresamansionentrancedoor	kin_m_v	metal	0.26	1							FC c104 intent A: a painted reflection 0.98 of its colour and named a metal, was gloss: a metal (gold); picture owed		gold	
+teresamansionentrancedoor	tetu_m_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was dielectric; picture owed		art	
+teresamansionplanetb	FloorTile00_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was dielectric; picture owed			
+teresamansionplanetb	Mokume02_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+teresamansionplanetb	ki_01_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+teresamansionplanetd	FloorTile00_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was dielectric; picture owed			
+teresamansionplanetd	Mokume02_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+teresamansionplanetd	ki_01_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+teresaroomdoor	tobira3_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.55 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+teresaroomplanet	tile_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was dielectric; picture owed			
+tetukuri	Face	metal	0.45	1							FC c104 intent A: a painted reflection 0.75 of its colour and named a metal, was dielectric: a metal (iron); picture owed		iron	
+tetukuri	FaceColor	metal	0.45	1							FC c104 intent A: a painted reflection 0.75 of its colour and named a metal, was dielectric: a metal (iron); picture owed		iron	
+tetukuri	Foot	metal	0.31	1							FC c104 intent A: a painted reflection 0.70 of its colour and named a metal, was gloss: a metal (iron); picture owed		iron	
+trapbasea	TeresaMansionGatePlanet0412:lambert9_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.61 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+tshapeplanet	lambert5_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.72 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+tshapeplanet	lambert9_v	gloss	0.06	0							FC c104 intent A: a painted reflection 0.66 of its colour, not named a metal: gloss kept, polished (roughness 0.06); picture owed			
+valveswitch	Valve2_v	metal	0.15	1							FC c104 intent A: a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (art); picture owed		art	
+vsbegomanspikeplanet	kusizasi_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.77 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+wanwanrollinggold	WanwanRollingBody	metal	0.25	1							FC c104 intent A: a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (gold); picture owed		gold	
+wanwanrollinggoldbreak	WanwanRollingBody_v	metal	0.25	1							FC c104 intent A: a painted reflection 0.59 of its colour and named a metal, was gloss: a metal (gold); picture owed		gold	
+waterroadcaveplanet	metalamip_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was painted; picture owed		art	
+waterroadcaveplanet	pipe2_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.60 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+waterroadcaverotateground	floor1_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was painted; picture owed			
+waterroadcaverotateground	floor2_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was painted; picture owed			
+waterroadcaverotateground	floor3_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was painted; picture owed			
+waterroadcaverotateground	floor4_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was painted; picture owed			
+waterroadcavestepa	metalamip_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was painted; picture owed		art	
+waterroadcavestepb	metalamip_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was painted; picture owed		art	
+windmillpropellermini	lambert12_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+wormeatenplanet	AppleMat_Green_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.67 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+wormeatenplanet	AppleMat_RedA_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.65 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+wormeatenplanet	LeafMat_v	gloss	0.15	0							FC c104 intent A: a painted reflection 0.57 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+woodbox	WhiteWoodMat_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+astrorotatestepb	goldami_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was painted; picture owed		art	
+astroparking	BlueMetalMat_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was gloss; picture owed		art	
+astroparking	ParkingFloorMat_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was painted; picture owed			
+astroparking	metalami_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was painted; picture owed		art	
+astrobasecentertop	PinkMetalMat_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was gloss; picture owed		art	
+astrobasecentertop	PurpleMetalMat_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was gloss; picture owed		art	
+astrobasecentertop	WhiteMetalMat_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was gloss; picture owed		art	
+astrobasekitchen	WoodMat_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+astrobasecentera	goldchain_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was dielectric; picture owed		art	
+astrolibrary	BookShelfMat_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was painted; picture owed			
+astrolibrary	WoodMat_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+astrorotatestepa	goldami_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was painted; picture owed		art	
+astrobasecenterb	PinkMetalMat_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was gloss; picture owed		art	
+astrobasecenterb	PurpleMetalMat_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was gloss; picture owed		art	
+astrobasecenterb	WhiteMetalMat_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was gloss; picture owed		art	
+astrobasecenterb	goldchain_v	metal	0.30	1							FC c104 room surface (PLAN-ROOMS R5): a metal fitting by its name, was dielectric; picture owed		art	
+astrobasec	FloorMoyou_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was painted; picture owed			
+astrobasec	floorline_v	gloss	0.25	0							FC c104 room surface (PLAN-ROOMS R5): a floor, tiles or marble: polished, was painted; picture owed			
+astrochildroom	WoodPanelMat_v	gloss	0.40	0							FC c104 room surface (PLAN-ROOMS R5): varnished wood, was dielectric; picture owed			
+miniaturegalaxyunknown	RockMat_v	gloss	0.15	0							FC c104 intent A: a painted reflection 1.00 of its colour, not named a metal: gloss kept, polished (roughness 0.15); picture owed			
+ufokinoko	lambert8_v	gloss	0.10	0							director d15b: the Starshroom, a painted hull with a strong coat (the art's reflection share is its F0, d19); not a metal: its paint stays; picture owed			
+ufokinoko	lambert7_v	gloss	0.10	0							director d15b: the Starshroom, a painted hull with a strong coat (the art's reflection share is its F0, d19); not a metal: its paint stays; picture owed			
+ufokinoko	wawa:lambert7_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
+ufokinoko	wawa:lambert8_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
+ufokinoko	lambert13_v	metal	0.25	1							director d15: the Starshroom, the bands and bolts: silver (the owner 11-12: not properly glass and metal); picture owed		silver	
+ufokinokolanding	lambert8_v	gloss	0.10	0							director d15b: the Starshroom, a painted hull with a strong coat (the art's reflection share is its F0, d19); not a metal: its paint stays; picture owed			
+ufokinokolanding	lambert7_v	gloss	0.10	0							director d15b: the Starshroom, a painted hull with a strong coat (the art's reflection share is its F0, d19); not a metal: its paint stays; picture owed			
+ufokinokolanding	wawa:lambert7_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
+ufokinokolanding	wawa:lambert8_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
+ufokinokolanding	lambert13_v	metal	0.25	1							director d15: the Starshroom, the bands and bolts: silver (the owner 11-12: not properly glass and metal); picture owed		silver	
+ufokinokolandingastro	lambert8_v	gloss	0.10	0							director d15b: the Starshroom, a painted hull with a strong coat (the art's reflection share is its F0, d19); not a metal: its paint stays; picture owed			
+ufokinokolandingastro	lambert7_v	gloss	0.10	0							director d15b: the Starshroom, a painted hull with a strong coat (the art's reflection share is its F0, d19); not a metal: its paint stays; picture owed			
+ufokinokolandingastro	wawa:lambert7_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
+ufokinokolandingastro	wawa:lambert8_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
+ufokinokolandingastro	lambert13_v	metal	0.25	1							director d15: the Starshroom, the bands and bolts: silver (the owner 11-12: not properly glass and metal); picture owed		silver	
+ufokinokolow	lambert8_v	gloss	0.10	0							director d15b: the Starshroom, a painted hull with a strong coat (the art's reflection share is its F0, d19); not a metal: its paint stays; picture owed			
+ufokinokolow	lambert7_v	gloss	0.10	0							director d15b: the Starshroom, a painted hull with a strong coat (the art's reflection share is its F0, d19); not a metal: its paint stays; picture owed			
+ufokinokolow	wawa:lambert7_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
+ufokinokolow	wawa:lambert8_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
+ufokinokolow	lambert13_v	metal	0.25	1							director d15: the Starshroom, the bands and bolts: silver (the owner 11-12: not properly glass and metal); picture owed		silver	
+ufokinokounderconstruction	lambert8_v	gloss	0.10	0							director d15b: the Starshroom, a painted hull with a strong coat (the art's reflection share is its F0, d19); not a metal: its paint stays; picture owed			
+ufokinokounderconstruction	lambert7_v	gloss	0.10	0							director d15b: the Starshroom, a painted hull with a strong coat (the art's reflection share is its F0, d19); not a metal: its paint stays; picture owed			
+ufokinokounderconstruction	wawa:lambert7_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
+ufokinokounderconstruction	wawa:lambert8_v	metal	0.15	1							director d15: the Starshroom, a window rim: chrome (the owner 11-12: not properly glass and metal); picture owed		chrome	
+ufokinokounderconstruction	lambert13_v	metal	0.25	1							director d15: the Starshroom, the bands and bolts: silver (the owner 11-12: not properly glass and metal); picture owed		silver	
+iceringiceplanet	CrackMat_v	painted				0					director d21: the frozen lake's crack lines (Freezeflame's shards), an added overlay, not a glass body (the transmit pass bent rays through it); picture owed			
+icesliproad	CrackMat_v	painted				0					director d21: an ice road's crack lines, an added overlay, not a glass body (the transmit pass bent rays through it); picture owed			
+icecannonplanet	CrackMat_v	painted				0					director d21: an ice planet's crack lines, an added overlay, not a glass body (the transmit pass bent rays through it); picture owed			
+icemountainseesawslipa	CIceCrack01_v	painted				0					director d21: an ice seesaw's crack lines, an added overlay, not a glass body (the transmit pass bent rays through it); picture owed			
+icelavaislandicemovablestepa	Ice02_v	painted				0					director d21: an ice step's added layer, an added overlay, not a glass body (the transmit pass bent rays through it); picture owed			
+crystalcagelbreak	HiLightMat*	painted				0					director d21: a breaking crystal cage's highlight layers, an added overlay, not a glass body (the transmit pass bent rays through it); picture owed			
+crystalcagesbreak	HiLightMat*	painted				0					director d21: a breaking crystal cage's highlight layers, an added overlay, not a glass body (the transmit pass bent rays through it); picture owed			
+crystalboxbreak	HiLightMat*	painted				0					director d21: a breaking crystal box's highlight layers, an added overlay, not a glass body (the transmit pass bent rays through it); picture owed			
+starpiececluster	StarPieceClusterMat_v(3)	painted				0					director d21: a star bit cluster's glow layer, an added overlay, not a glass body (the transmit pass bent rays through it); picture owed			

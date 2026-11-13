@@ -25,6 +25,7 @@
 #include "galaxy/render/mtl/fx_mtl.h"
 #include "galaxy/render/mtl/mtl_context.h"
 #include "galaxy/render/rt/rt_backend.h"
+#include "galaxy/render/rt/rt_denoiser.h"
 #include "galaxy/render/mtl/temporal_upscaler_mtl.h"
 #include "galaxy/render/mtl/utility_msl.h"
 #include "galaxy/render/post_process_settings.h"
@@ -95,6 +96,9 @@ public:
     void suspend_temporal_interpolation(double ms_per_frame);
     [[nodiscard]] bool temporal_interpolation() const noexcept { return temporal_interp_; }
     [[nodiscard]] unsigned temporal_output_width() const noexcept { return temporal_output_w_; }
+    [[nodiscard]] double gpu_ms_per_tick() const noexcept { return 0.0; }  // the tracer's measure: none yet
+    // Smoothed GPU time of a frame that drew the scene (0 until measured): the tracer's build budget (5.3 G-3).
+    [[nodiscard]] double scene_gpu_ema_ms() const noexcept { return native_scene_gpu_ema_ms_; }
     void set_scene_view(const std::array<float, 12>* view) noexcept {
         scene_view_known_ = view != nullptr;
         if (view != nullptr) {
@@ -108,7 +112,7 @@ public:
     [[nodiscard]] std::int64_t last_present_qpc() const noexcept { return swap_present_qpc_; }
     // The 3D scene in a wide target while `wanted` (the enhanced lighting), its camera at the end (mtl::SceneCamera).
     bool begin_wide_scene(bool wanted, const SceneClearValues* initial_clear = nullptr);
-    void end_wide_scene();
+    void end_wide_scene(unsigned finish = 0u);  // finish: the traced relight's camera (none on Metal yet)
     [[nodiscard]] bool temporal_mode() const;
     // The upscaler reads the motion but no reactive mask (SGSR 2): every draw of the scene shares the motion pass.
     [[nodiscard]] bool motion_pass_only() const;
@@ -180,6 +184,15 @@ public:
     [[nodiscard]] bool rt_depth_begin(rt::TextureView&, unsigned&, unsigned&, rt::ImageFormat&) { return false; }
     void rt_depth_end() {}
     void rt_copy_to_scene(void*) {}
+    [[nodiscard]] bool rt_items_begin() { return false; }
+    [[nodiscard]] bool rt_light_begin(rt::TextureView&, rt::TextureView&, unsigned&, unsigned&) { return false; }
+    void rt_light_end() {}
+    [[nodiscard]] bool rt_reactive_begin(rt::TextureView&) { return false; }
+    void rt_reactive_end() {}
+    [[nodiscard]] rt::Denoiser* rt_denoiser() noexcept { return nullptr; }
+    [[nodiscard]] std::uint32_t rt_publish_light(void*, TextureStore&, unsigned = 0u) { return 0u; }
+    void rt_unpublish_lights(TextureStore&) {}
+    void rt_wait_idle() { wait_for_gpu_idle(); }
     [[nodiscard]] std::size_t gpu_pass_times(GpuPassTime* out, std::size_t capacity) const noexcept;
     void scene_jitter_info(unsigned& index, unsigned& phases) const noexcept {
         index = scene_jitter_index_;

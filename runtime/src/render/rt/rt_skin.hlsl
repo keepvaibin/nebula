@@ -8,7 +8,7 @@
 ByteAddressBuffer g_positions : register(t1);  // three floats a vertex
 ByteAddressBuffer g_matrices : register(t2);   // one uint a vertex: its draw matrix
 ByteAddressBuffer g_rows : register(t3);       // the walk's rows, four floats each
-RWByteAddressBuffer g_out : register(u5);      // three floats a vertex
+RWByteAddressBuffer g_out : register(u9);      // three floats a vertex
 
 cbuffer SkinConstants : register(b0) {
     uint4 g_at;       // bytes: the first position, the first matrix number, the block's first row, the first output

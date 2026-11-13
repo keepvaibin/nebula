@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The tracer on Direct3D 12 (rt_backend.h): DXR 1.1, acceleration structures in pages and inline ray queries in compute
-// shaders.
+// shaders; DXR 1.2's opacity micromaps where the device has them (the Agility SDK's runtime, cmake/agility_sdk.cmake).
 #include "galaxy/render/rt/rt_backend.h"
 
 #include "galaxy/render/renderer_d3d12.h"
@@ -10,6 +10,7 @@
 #include <d3d12.h>
 #include <wrl/client.h>
 
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -73,23 +74,33 @@ struct Backend::State {
         ComPtr<ID3D12Resource> texture;
         DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
         gpu::Use use = gpu::Use::ComputeRead;
+        std::uint32_t depth = 1u;  // above 1: a volume
     };
     std::vector<Image> images;
     DescriptorRing* descriptors = nullptr;
     ComPtr<ID3D12RootSignature> pass_root;
     ComPtr<ID3D12PipelineState> pipelines[static_cast<unsigned>(RtShader::Count)];
     bool refused[static_cast<unsigned>(RtShader::Count)]{};
+    [[nodiscard]] bool make_pipeline(unsigned index);  // false: refused, the pass left out
     // Counters: the GPU adds to `counters`; `counters_zero` clears it; a frame slot's copy is read a frame later.
     ComPtr<ID3D12Resource> counters, counters_zero;
     ComPtr<ID3D12Resource> counters_read[kFramesInFlight];
     const std::uint32_t* counters_mapped[kFramesInFlight]{};
     bool counters_bound = false;
+    // The timed stretch (time_mark): two timestamps a frame slot, resolved into `times_read` (none: no measure).
+    ComPtr<ID3D12QueryHeap> times;
+    ComPtr<ID3D12Resource> times_read;
+    const std::uint64_t* times_mapped = nullptr;
+    bool timed[kFramesInFlight][kTimedStretches]{};
     // Buffers passes write and builds read.
     struct OwnBuffer {
         ComPtr<ID3D12Resource> buffer;
         bool for_builds = false;
     };
     std::vector<OwnBuffer> buffers;
+    // Opacity micromaps (5.3 G-2): the device has DXR 1.2 and takes the ray queries' opt-in (pipeline_flags).
+    bool micromaps = false;
+    D3D12_PIPELINE_STATE_FLAGS pipeline_flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 
     void transition(ID3D12Resource* resource, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after) const {
         D3D12_RESOURCE_BARRIER barrier{};
@@ -105,6 +116,11 @@ struct Backend::State {
     [[nodiscard]] std::uint64_t own_address(const TriangleInput& input) const {
         return input.own_buffer < buffers.size() && buffers[input.own_buffer].buffer != nullptr
                    ? buffers[input.own_buffer].buffer->GetGPUVirtualAddress()
+                   : 0u;
+    }
+    [[nodiscard]] std::uint64_t micromap_indices(const TriangleInput& input) const {
+        return input.micromap_buffer < buffers.size() && buffers[input.micromap_buffer].buffer != nullptr
+                   ? buffers[input.micromap_buffer].buffer->GetGPUVirtualAddress() + input.micromap_indices
                    : 0u;
     }
 
@@ -132,29 +148,70 @@ struct Backend::State {
 
 namespace {
 
-// `own`: the address of the tracer's buffer the input names, or 0.
-D3D12_RAYTRACING_GEOMETRY_DESC geometry_of(const TriangleInput& input, std::uint64_t own) {
-    D3D12_RAYTRACING_GEOMETRY_DESC g{};
-    g.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-    // Opaque here; an instance whose material tests alpha says so itself.
-    g.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
-    g.Triangles.VertexBuffer.StartAddress = own + input.positions;
-    g.Triangles.VertexBuffer.StrideInBytes = input.position_stride;
-    g.Triangles.VertexCount = input.vertex_count;
-    g.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+// `own`: the address of the tracer's buffer the input names, or 0. With a micromap, `triangles` and `linkage` (the
+// caller's, alive while the geometry is) carry the triangles and the micromap, its indices at `omm_indices`.
+D3D12_RAYTRACING_GEOMETRY_DESC geometry_of(const TriangleInput& input, std::uint64_t own, D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC& triangles,
+                                           D3D12_RAYTRACING_GEOMETRY_OMM_LINKAGE_DESC& linkage, std::uint64_t omm_indices) {
+    triangles = {};
+    triangles.VertexBuffer.StartAddress = own + input.positions;
+    triangles.VertexBuffer.StrideInBytes = input.position_stride;
+    triangles.VertexCount = input.vertex_count;
+    triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
     if (input.indices != 0u) {
-        g.Triangles.IndexBuffer = input.indices;
-        g.Triangles.IndexCount = input.index_count;
-        g.Triangles.IndexFormat = input.index_bytes == 2u ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
+        triangles.IndexBuffer = input.indices;
+        triangles.IndexCount = input.index_count;
+        triangles.IndexFormat = input.index_bytes == 2u ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
+    }
+    D3D12_RAYTRACING_GEOMETRY_DESC g{};
+    // Opaque here; an instance whose material tests alpha says so itself. Where a micromap is linked, it decides each
+    // triangle's parts instead (the flag stands where an instance turns micromaps off).
+    g.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+    if (input.micromap != 0u && omm_indices != 0u) {
+        linkage = {};
+        linkage.OpacityMicromapIndexBuffer.StartAddress = omm_indices;
+        linkage.OpacityMicromapIndexBuffer.StrideInBytes = 4u;
+        linkage.OpacityMicromapIndexFormat = DXGI_FORMAT_R32_UINT;
+        linkage.OpacityMicromapArray = input.micromap;
+        g.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_OMM_TRIANGLES;
+        g.OmmTriangles.pTriangles = &triangles;
+        g.OmmTriangles.pOmmLinkage = &linkage;
+    } else {
+        g.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+        g.Triangles = triangles;
     }
     return g;
 }
 
-D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS flags_of(BuildKind kind) {
-    return kind == BuildKind::Static ? D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
-                                           D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION
-                                     : D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD |
-                                           D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE;
+// A structure over a micromap lets its instances turn the micromap off (Scene's kInstanceNoMicromaps; undefined
+// otherwise).
+D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS flags_of(BuildKind kind, const TriangleInput& input) {
+    return (kind == BuildKind::Static ? D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
+                                            D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION
+                                      : D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD |
+                                            D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE) |
+           (input.micromap != 0u ? D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_DISABLE_OMMS
+                                 : D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE);
+}
+
+// A micromap array of `input.triangles` micromaps of one level, four states (rt_backend.h MicromapInput); `at` the
+// address of its buffer. The size query reads no GPU memory but the debug layer wants both addresses named (l87).
+D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS micromap_inputs(const MicromapInput& input, std::uint64_t at,
+                                                                     D3D12_RAYTRACING_OPACITY_MICROMAP_HISTOGRAM_ENTRY& histogram,
+                                                                     D3D12_RAYTRACING_OPACITY_MICROMAP_ARRAY_DESC& array) {
+    histogram = {input.triangles, input.level, D3D12_RAYTRACING_OPACITY_MICROMAP_FORMAT_OC1_4_STATE};
+    array = {};
+    array.NumOmmHistogramEntries = 1u;
+    array.pOmmHistogram = &histogram;
+    array.InputBuffer = at;
+    array.PerOmmDescs.StartAddress = at + input.triangles_at;
+    array.PerOmmDescs.StrideInBytes = 8u;
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{};
+    inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_OPACITY_MICROMAP_ARRAY;
+    inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+    inputs.NumDescs = 1u;
+    inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+    inputs.pOpacityMicromapArrayDesc = &array;
+    return inputs;
 }
 
 }  // namespace
@@ -164,6 +221,24 @@ Backend::Backend() = default;
 Backend::~Backend() { stop(); }
 
 bool Backend::started() const noexcept { return state_ != nullptr; }
+
+bool Backend::State::make_pipeline(unsigned index) {
+    if (refused[index]) {
+        return false;
+    }
+    const RtShaderBytes code = rt_shader(static_cast<RtShader>(index));
+    D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};
+    desc.pRootSignature = pass_root.Get();
+    desc.CS = {code.data, code.size};
+    desc.Flags = pipeline_flags;  // its ray queries meet micromaps where there are any
+    const HRESULT made = code.size != 0u ? device->CreateComputePipelineState(&desc, IID_PPV_ARGS(&pipelines[index])) : E_FAIL;
+    if (FAILED(made)) {
+        refused[index] = true;
+        std::fprintf(stderr, "[rt] pass %u: no pipeline (%08lx); the pass is left out\n", index, static_cast<unsigned long>(made));
+        return false;
+    }
+    return true;
+}
 
 bool Backend::start(gpu::Device* device) {
     stop();
@@ -188,20 +263,77 @@ bool Backend::start(gpu::Device* device) {
         delete state;
         return false;
     }
+    // Opacity micromaps (5.3 G-2): DXR 1.2, and the opt-in for the tracer's ray queries (Shader Model 6.6) taken: the
+    // micromap pass's pipeline is made with it here (a runtime without the flag refuses it, and none are made).
+    D3D12_FEATURE_DATA_D3D12_OPTIONS5 options5{};
+    if (SUCCEEDED(state->device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &options5, sizeof(options5))) &&
+        options5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_2) {
+        const RtShaderBytes code = rt_shader(RtShader::Omm);
+        D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};
+        desc.pRootSignature = state->pass_root.Get();
+        desc.CS = {code.data, code.size};
+        desc.Flags = D3D12_PIPELINE_STATE_FLAG_RAYQUERY_ALLOW_OPACITY_MICROMAPS_ON_PRE_SM69_SHADERS;
+        const auto omm = static_cast<unsigned>(RtShader::Omm);
+        state->micromaps = code.size != 0u && SUCCEEDED(state->device->CreateComputePipelineState(&desc, IID_PPV_ARGS(&state->pipelines[omm])));
+        state->pipeline_flags = state->micromaps ? desc.Flags : D3D12_PIPELINE_STATE_FLAG_NONE;
+    }
+    std::fprintf(stderr, "[rt] d3d12: raytracing tier %u.%u; opacity micromaps %s\n", static_cast<unsigned>(options5.RaytracingTier) / 10u,
+                 static_cast<unsigned>(options5.RaytracingTier) % 10u, state->micromaps ? "on" : "off");
+    // Every pass's pipeline now, the micromaps' opt-in settled (plan 26: a pass's first use in a frame never waits on
+    // the driver's compile).
+    const auto making = std::chrono::steady_clock::now();
+    unsigned made = 0u, wanted = 0u;
+    for (unsigned index = 0; index < static_cast<unsigned>(RtShader::Count); ++index) {
+        if (index == static_cast<unsigned>(RtShader::Omm) && !state->micromaps) {
+            continue;
+        }
+        ++wanted;
+        made += state->pipelines[index] != nullptr || state->make_pipeline(index) ? 1u : 0u;
+    }
+    std::fprintf(stderr, "[rt] passes: %u of %u pipelines made at the start in %.1f ms\n", made, wanted,
+                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - making).count());
+    D3D12_QUERY_HEAP_DESC times_desc{};
+    times_desc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+    times_desc.Count = 2u * kTimedStretches * kFramesInFlight;
+    if (SUCCEEDED(state->device->CreateQueryHeap(&times_desc, IID_PPV_ARGS(&state->times)))) {
+        state->times_read = state->buffer(std::uint64_t{times_desc.Count} * 8u, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST,
+                                          D3D12_RESOURCE_FLAG_NONE, L"Nebula RT Times");
+        void* mapped = nullptr;
+        if (state->times_read == nullptr || FAILED(state->times_read->Map(0, nullptr, &mapped))) {
+            state->times.Reset();
+            state->times_read.Reset();
+        } else {
+            state->times_mapped = static_cast<const std::uint64_t*>(mapped);
+        }
+    }
     state_ = state;
     return true;
 }
 
-// The passes' root signature: b0 constants, t0 the scene, t1-t4 buffers (root descriptors); t5-t12 textures and
-// u0-u3 images (tables); u4 the counters, u5 a buffer written (root descriptors).
+// The passes' root signature: b0 constants, t0 the scene, t1-t4 buffers (root descriptors); t5-t20 textures and
+// u0-u7 images (tables); u8 the counters, u9 a buffer written, t21 up the mesh memory (root descriptors); the renderer's
+// textures (a table); b1 the pass's constants (root descriptor).
 bool Backend::State::make_passes() {
-    D3D12_DESCRIPTOR_RANGE ranges[2]{};
+    D3D12_DESCRIPTOR_RANGE ranges[3]{};
+    // Every texture of the renderer's (t0 up in space1, as the draws' programs see them) and one sampler (s0).
+    ranges[2].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    ranges[2].NumDescriptors = UINT_MAX;
+    ranges[2].RegisterSpace = 1u;
     ranges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     ranges[0].NumDescriptors = kPassTextures + kPassReads;
     ranges[0].BaseShaderRegister = 1u + kPassBuffers;
     ranges[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
     ranges[1].NumDescriptors = kPassWrites;
-    D3D12_ROOT_PARAMETER params[10]{};
+    D3D12_ROOT_PARAMETER params[12u + kPassMeshBuffers]{};
+    params[10u + kPassMeshBuffers].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    params[10u + kPassMeshBuffers].DescriptorTable.NumDescriptorRanges = 1;
+    params[10u + kPassMeshBuffers].DescriptorTable.pDescriptorRanges = &ranges[2];
+    D3D12_STATIC_SAMPLER_DESC sampler{};
+    sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    sampler.AddressU = sampler.AddressV = sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+    sampler.MaxLOD = D3D12_FLOAT32_MAX;
+    sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     for (unsigned i = 0; i < 1u + kPassBuffers; ++i) {
         params[1u + i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
@@ -216,8 +348,17 @@ bool Backend::State::make_passes() {
     params[8].Descriptor.ShaderRegister = kPassWrites;
     params[9].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
     params[9].Descriptor.ShaderRegister = kPassWrites + 1u;
+    // t21 up: the mesh memory (root descriptors: buffers of the renderer's, by address).
+    for (unsigned i = 0; i < kPassMeshBuffers; ++i) {
+        params[10u + i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+        params[10u + i].Descriptor.ShaderRegister = 1u + kPassBuffers + kPassTextures + kPassReads + i;
+    }
+    params[11u + kPassMeshBuffers].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    params[11u + kPassMeshBuffers].Descriptor.ShaderRegister = 1u;
     D3D12_ROOT_SIGNATURE_DESC desc{};
-    desc.NumParameters = 10;
+    desc.NumParameters = 12u + kPassMeshBuffers;
+    desc.NumStaticSamplers = 1;
+    desc.pStaticSamplers = &sampler;
     desc.pParameters = params;
     ComPtr<ID3DBlob> blob, errors;
     if (FAILED(D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &errors)) ||
@@ -253,10 +394,13 @@ void Backend::stop() noexcept {
 }
 
 BuildSizes Backend::sizes(const TriangleInput& input, BuildKind kind) const {
-    const D3D12_RAYTRACING_GEOMETRY_DESC geometry = geometry_of(input, state_->own_address(input));
+    D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC triangles{};
+    D3D12_RAYTRACING_GEOMETRY_OMM_LINKAGE_DESC linkage{};
+    const D3D12_RAYTRACING_GEOMETRY_DESC geometry =
+        geometry_of(input, state_->own_address(input), triangles, linkage, state_->micromap_indices(input));
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{};
     inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-    inputs.Flags = flags_of(kind);
+    inputs.Flags = flags_of(kind, input);
     inputs.NumDescs = 1;
     inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
     inputs.pGeometryDescs = &geometry;
@@ -300,7 +444,9 @@ Structure Backend::make_structure(const Range& range, bool) {
 
 void Backend::free_structure(Structure& structure) noexcept { structure = Structure{}; }
 
-void Backend::frame(unsigned) noexcept {}
+void Backend::frame(unsigned) noexcept {
+    state_->counters_bound = false;  // the frame's first pass that counts zeroes them
+}
 
 void Backend::begin(void* commands, unsigned frame_slot, void* descriptors) noexcept {
     state_->commands.Reset();
@@ -311,10 +457,13 @@ void Backend::begin(void* commands, unsigned frame_slot, void* descriptors) noex
 }
 
 void Backend::build(const TriangleInput& input, BuildKind kind, const Structure& to, const Range& scratch, bool refit) {
-    const D3D12_RAYTRACING_GEOMETRY_DESC geometry = geometry_of(input, state_->own_address(input));
+    D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC triangles{};
+    D3D12_RAYTRACING_GEOMETRY_OMM_LINKAGE_DESC linkage{};
+    const D3D12_RAYTRACING_GEOMETRY_DESC geometry =
+        geometry_of(input, state_->own_address(input), triangles, linkage, state_->micromap_indices(input));
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC desc{};
     desc.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-    desc.Inputs.Flags = flags_of(kind);
+    desc.Inputs.Flags = flags_of(kind, input);
     desc.Inputs.NumDescs = 1;
     desc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
     desc.Inputs.pGeometryDescs = &geometry;
@@ -403,27 +552,31 @@ constexpr DXGI_FORMAT format_of(ImageFormat format) noexcept {
     case ImageFormat::R8: return DXGI_FORMAT_R8_UNORM;
     case ImageFormat::R32f: return DXGI_FORMAT_R32_FLOAT;
     case ImageFormat::Rgb10a2: return DXGI_FORMAT_R10G10B10A2_UNORM;
+    case ImageFormat::Rgba32ui: return DXGI_FORMAT_R32G32B32A32_UINT;
+    case ImageFormat::Rgba32f: return DXGI_FORMAT_R32G32B32A32_FLOAT;
+    case ImageFormat::Rg16ui: return DXGI_FORMAT_R16G16_UINT;
     }
     return DXGI_FORMAT_UNKNOWN;
 }
 
 }  // namespace
 
-std::uint32_t Backend::make_image(ImageFormat format, std::uint32_t width, std::uint32_t height, const char* name) {
+std::uint32_t Backend::make_image(ImageFormat format, std::uint32_t width, std::uint32_t height, const char* name, std::uint32_t depth) {
     D3D12_HEAP_PROPERTIES heap{};
     heap.Type = D3D12_HEAP_TYPE_DEFAULT;
     D3D12_RESOURCE_DESC rd{};
-    rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    rd.Dimension = depth > 1u ? D3D12_RESOURCE_DIMENSION_TEXTURE3D : D3D12_RESOURCE_DIMENSION_TEXTURE2D;
     rd.Width = width;
     rd.Height = height;
-    rd.DepthOrArraySize = 1;
+    rd.DepthOrArraySize = static_cast<UINT16>(depth > 1u ? depth : 1u);
     rd.MipLevels = 1;
     rd.Format = format_of(format);
     rd.SampleDesc.Count = 1;
     rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     State::Image image;
     image.format = rd.Format;
-    if (width == 0u || height == 0u ||
+    image.depth = depth > 1u ? depth : 1u;
+    if (width == 0u || height == 0u || depth > 2048u ||
         FAILED(create_texture(state_->device.Get(), &heap, D3D12_HEAP_FLAG_NONE, &rd, gpu::Use::ComputeRead, nullptr,
                               IID_PPV_ARGS(&image.texture)))) {
         return kNoImage;
@@ -447,6 +600,27 @@ void Backend::free_image(std::uint32_t image) noexcept {
     }
 }
 
+Backend::Live Backend::live() const noexcept {
+    Live live;
+    if (state_ == nullptr) {
+        return live;
+    }
+    for (const State::Image& image : state_->images) {
+        if (image.texture != nullptr) {
+            const D3D12_RESOURCE_DESC desc = image.texture->GetDesc();
+            ++live.images;
+            live.image_bytes += state_->device->GetResourceAllocationInfo(0u, 1u, &desc).SizeInBytes;
+        }
+    }
+    for (const State::OwnBuffer& buffer : state_->buffers) {
+        if (buffer.buffer != nullptr) {
+            ++live.buffers;
+            live.buffer_bytes += buffer.buffer->GetDesc().Width;
+        }
+    }
+    return live;
+}
+
 void* Backend::image_to_copy(std::uint32_t image) {
     if (image >= state_->images.size() || state_->images[image].texture == nullptr) {
         return nullptr;
@@ -459,23 +633,26 @@ void* Backend::image_to_copy(std::uint32_t image) {
     return target.texture.Get();
 }
 
+void* Backend::image_to_sample(std::uint32_t image) {
+    if (image >= state_->images.size() || state_->images[image].texture == nullptr) {
+        return nullptr;
+    }
+    State::Image& target = state_->images[image];
+    BarriersD3D12 uses{state_->commands.Get()};
+    uses.texture(target.texture.Get(), target.use, gpu::Use::ShaderRead);
+    uses.issue();
+    target.use = gpu::Use::ShaderRead;
+    return target.texture.Get();
+}
+
 void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t groups_x, std::uint32_t groups_y) {
     State& s = *state_;
     const auto index = static_cast<unsigned>(shader);
     if (index >= static_cast<unsigned>(RtShader::Count) || s.refused[index] || s.descriptors == nullptr || groups_x == 0u || groups_y == 0u) {
         return;
     }
-    if (s.pipelines[index] == nullptr) {
-        const RtShaderBytes code = rt_shader(shader);
-        D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};
-        desc.pRootSignature = s.pass_root.Get();
-        desc.CS = {code.data, code.size};
-        const HRESULT made = code.size != 0u ? s.device->CreateComputePipelineState(&desc, IID_PPV_ARGS(&s.pipelines[index])) : E_FAIL;
-        if (FAILED(made)) {
-            s.refused[index] = true;
-            std::fprintf(stderr, "[rt] pass %u: no pipeline (%08lx); the pass is left out\n", index, static_cast<unsigned long>(made));
-            return;
-        }
+    if (s.pipelines[index] == nullptr && !s.make_pipeline(index)) {
+        return;  // made at the start; here only after a refusal there
     }
     ID3D12GraphicsCommandList4* const list = s.commands.Get();
     const auto image_of = [&](std::uint32_t image) -> State::Image* {
@@ -519,8 +696,12 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
         views = views || binds.textures[i].texture != nullptr;
     }
     for (unsigned i = 0; i < kPassReads; ++i) {
-        views = views || image_of(binds.reads[i]) != nullptr || image_of(binds.writes[i]) != nullptr;
+        views = views || image_of(binds.reads[i]) != nullptr;
     }
+    for (unsigned i = 0; i < kPassWrites; ++i) {
+        views = views || image_of(binds.writes[i]) != nullptr;
+    }
+    views = views || binds.write_texture.texture != nullptr;
     const UINT step = s.device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     const DescriptorRing::Table table = views ? s.descriptors->allocate(kViews) : DescriptorRing::Table{};
     const auto cpu = [&](unsigned i) {
@@ -545,17 +726,34 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
     }
     for (unsigned i = 0; views && i < kPassReads; ++i) {
         if (const State::Image* image = image_of(binds.reads[i])) {
-            read.Format = image->format;
-            s.device->CreateShaderResourceView(image->texture.Get(), &read, cpu(kPassTextures + i));
+            D3D12_SHADER_RESOURCE_VIEW_DESC own = read;
+            own.Format = image->format;
+            if (image->depth > 1u) {
+                own.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
+                own.Texture3D = {};
+                own.Texture3D.MipLevels = 1;
+            }
+            s.device->CreateShaderResourceView(image->texture.Get(), &own, cpu(kPassTextures + i));
         }
     }
-    D3D12_UNORDERED_ACCESS_VIEW_DESC write{};
-    write.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
     for (unsigned i = 0; views && i < kPassWrites; ++i) {
         if (const State::Image* image = image_of(binds.writes[i])) {
+            D3D12_UNORDERED_ACCESS_VIEW_DESC write{};
             write.Format = image->format;
+            write.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+            if (image->depth > 1u) {
+                write.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE3D;
+                write.Texture3D.WSize = image->depth;
+            }
             s.device->CreateUnorderedAccessView(image->texture.Get(), nullptr, &write, cpu(kPassTextures + kPassReads + i));
         }
+    }
+    if (views && binds.write_texture.texture != nullptr) {
+        D3D12_UNORDERED_ACCESS_VIEW_DESC write{};
+        write.Format = static_cast<DXGI_FORMAT>(binds.write_texture.format);
+        write.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+        s.device->CreateUnorderedAccessView(static_cast<ID3D12Resource*>(binds.write_texture.texture), nullptr, &write,
+                                            cpu(kPassTextures + kPassReads + kPassWrites - 1u));
     }
 
     list->SetComputeRootSignature(s.pass_root.Get());
@@ -563,6 +761,9 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
     s.descriptors->bind(list);
     if (binds.constants.at != 0u) {
         list->SetComputeRootConstantBufferView(0, binds.constants.at);
+    }
+    if (binds.pass_constants.at != 0u) {
+        list->SetComputeRootConstantBufferView(11u + kPassMeshBuffers, binds.pass_constants.at);
     }
     if (binds.scene.name != 0u) {
         list->SetComputeRootShaderResourceView(1, binds.scene.name);
@@ -572,6 +773,12 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
             list->SetComputeRootShaderResourceView(2u + i, binds.buffers[i].at);
         }
     }
+    for (unsigned i = 0; i < kPassMeshBuffers; ++i) {
+        if (binds.mesh[i].at != 0u) {
+            list->SetComputeRootShaderResourceView(10u + i, binds.mesh[i].at);
+        }
+    }
+    list->SetComputeRootDescriptorTable(10u + kPassMeshBuffers, s.descriptors->texture_gpu_start());
     if (views) {
         list->SetComputeRootDescriptorTable(6, gpu_at(0u));
         list->SetComputeRootDescriptorTable(7, gpu_at(kPassTextures + kPassReads));
@@ -593,11 +800,34 @@ void Backend::end_counters() {
     s.transition(s.counters.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
     s.commands->CopyResource(s.counters_read[s.frame_slot].Get(), s.counters.Get());
     s.transition(s.counters.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    s.counters_bound = false;
 }
 
 void Backend::read_counters(unsigned frame_slot, std::uint32_t out[kCounters]) const {
     std::memcpy(out, state_->counters_mapped[frame_slot % kFramesInFlight], std::size_t{kCounters} * 4u);
+}
+
+void Backend::time_mark(unsigned stretch, bool end) {
+    State& s = *state_;
+    if (s.times == nullptr || stretch >= kTimedStretches) {
+        return;
+    }
+    const UINT at = (s.frame_slot * kTimedStretches + stretch) * 2u;
+    s.commands->EndQuery(s.times.Get(), D3D12_QUERY_TYPE_TIMESTAMP, at + (end ? 1u : 0u));
+    if (end) {
+        s.commands->ResolveQueryData(s.times.Get(), D3D12_QUERY_TYPE_TIMESTAMP, at, 2u, s.times_read.Get(), std::uint64_t{at} * 8u);
+        s.timed[s.frame_slot][stretch] = true;
+    }
+}
+
+std::uint64_t Backend::timed_ticks(unsigned stretch, unsigned frame_slot) const {
+    State& s = *state_;
+    const unsigned slot = frame_slot % kFramesInFlight;
+    if (s.times_mapped == nullptr || stretch >= kTimedStretches || !s.timed[slot][stretch]) {
+        return 0u;
+    }
+    s.timed[slot][stretch] = false;
+    const std::uint64_t* const at = s.times_mapped + std::size_t{slot * kTimedStretches + stretch} * 2u;
+    return at[1] > at[0] ? at[1] - at[0] : 0u;
 }
 
 std::uint32_t Backend::make_buffer(std::uint64_t bytes, const char* name) {
@@ -641,6 +871,59 @@ void Backend::buffer_for(std::uint32_t buffer, bool builds) {
 BufferView Backend::view_of(gpu::Address at, std::uint64_t bytes, std::uint32_t& offset) const {
     offset = 0u;
     return {at, bytes};
+}
+
+// Opacity micromaps (5.3 G-2): DXR 1.2's micromap arrays, one micromap a triangle, in the structures' pages (128-byte
+// aligned at least: ranges are 256). A micromap's name and handle are its address.
+bool Backend::micromaps() const noexcept { return state_ != nullptr && state_->micromaps; }
+
+BuildSizes Backend::micromap_sizes(const MicromapInput& input) const {
+    D3D12_RAYTRACING_OPACITY_MICROMAP_HISTOGRAM_ENTRY histogram{};
+    D3D12_RAYTRACING_OPACITY_MICROMAP_ARRAY_DESC array{};
+    // A real address the query never reads (l87): the input's own buffer where it exists, else the first page.
+    const State& s = *state_;
+    std::uint64_t named = 0u;
+    if (input.buffer < s.buffers.size() && s.buffers[input.buffer].buffer != nullptr) {
+        named = s.buffers[input.buffer].buffer->GetGPUVirtualAddress();
+    } else if (!s.pages.empty()) {
+        named = s.pages[0].address;
+    }
+    if (named == 0u) {
+        return {};
+    }
+    const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = micromap_inputs(input, named, histogram, array);
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
+    state_->device->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &info);
+    return {info.ResultDataMaxSizeInBytes, info.ScratchDataSizeInBytes, 0u};
+}
+
+Structure Backend::make_micromap(const Range& range) {
+    Structure out;
+    out.range = range;
+    out.name = state_->pages[range.page].address + range.offset;
+    out.handle = out.name;
+    return out;
+}
+
+void Backend::free_micromap(Structure& micromap) noexcept { micromap = Structure{}; }
+
+void Backend::build_micromap(const MicromapInput& input, const Structure& to, const Range& scratch) {
+    State& s = *state_;
+    if (input.buffer >= s.buffers.size() || s.buffers[input.buffer].buffer == nullptr) {
+        return;
+    }
+    // The pass's writes before the build reads them (the buffer becomes a build input, as the structure's build reads
+    // its indices too), and the scratch's last use by a build before this one.
+    buffer_for(input.buffer, true);
+    barrier();
+    D3D12_RAYTRACING_OPACITY_MICROMAP_HISTOGRAM_ENTRY histogram{};
+    D3D12_RAYTRACING_OPACITY_MICROMAP_ARRAY_DESC array{};
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC desc{};
+    desc.Inputs = micromap_inputs(input, s.buffers[input.buffer].buffer->GetGPUVirtualAddress(), histogram, array);
+    desc.DestAccelerationStructureData = to.name;
+    desc.ScratchAccelerationStructureData = s.pages[scratch.page].address + scratch.offset;
+    s.commands->BuildRaytracingAccelerationStructure(&desc, 0, nullptr);
+    barrier();  // whole for the structure built over it next
 }
 
 }  // namespace galaxy::render::rt
