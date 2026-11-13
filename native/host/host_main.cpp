@@ -32,6 +32,9 @@
 #include "galaxy/crash_report.h"
 #include "galaxy/game_module.h"
 #include "galaxy/luma_guard_host.h"
+#if defined(_WIN32)
+#include "crash_watch.h"
+#endif
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
 #include "galaxy/hidden_start.h"
 #endif
@@ -1080,10 +1083,42 @@ DWORD gCrashThread;
 std::atomic<int> gCrashing{0};
 std::atomic<DWORD> gCrashWriterThread{0};
 
+// After the dump: the report beside it, the progress written, the crashed thread let go, and the process ended.
+[[noreturn]] void finish_crash_report(const fs::path& dump) {
+    report_crash_facts(dump);
+#if defined(NEBULA_HOST_RENDERER)
+    flush_progress_bounded(1500u);
+#endif
+    SetEvent(gCrashDone);
+    // The dump and report are written: whatever the crashed thread still does (a flush behind a lock another thread
+    // held when it stopped) never keeps the process alive.
+    Sleep(5000);
+    TerminateProcess(GetCurrentProcess(), 4);
+    std::_Exit(4);
+}
+
 void crash_writer() {
     gCrashWriterThread.store(GetCurrentThreadId());
+    // Stacks and what they point at (the module's data segments would add its half-gigabyte image window).
+    const unsigned dump_type = MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithThreadInfo;
     for (;;) {
         WaitForSingleObject(gCrashRequest, INFINITE);
+        // The watcher writes the dump from outside (crash_watch.h), asked with no heap and no lock of this process.
+        static wchar_t watched[1024];
+        DWORD watch_error = 0;
+        const galaxy::crash_watch::Result watch = galaxy::crash_watch::write_dump(
+            gCrashThread, gCrashInfo, dump_type, watched, sizeof(watched) / sizeof(watched[0]), &watch_error, 30000u);
+        if (watch != galaxy::crash_watch::Result::kNoWatcher) {
+            const fs::path path(watched);
+            char text[MAX_PATH + 64];
+            if (watch == galaxy::crash_watch::Result::kWritten) {
+                std::snprintf(text, sizeof(text), "minidump %ls", path.filename().c_str());
+            } else {
+                std::snprintf(text, sizeof(text), "minidump failed (0x%08lX): %ls", watch_error, path.filename().c_str());
+            }
+            log_line("crash:", text);
+            finish_crash_report(path);
+        }
         const fs::path folder = crash_folder();
         std::error_code ignored;
         fs::create_directories(folder, ignored);
@@ -1100,10 +1135,9 @@ void crash_writer() {
                                : nullptr;
         const HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (write != nullptr && file != INVALID_HANDLE_VALUE) {
+            // No watcher (it could not start): written here, which can stop on a lock a suspended thread holds.
             MINIDUMP_EXCEPTION_INFORMATION exception{gCrashThread, gCrashInfo, FALSE};
-            // Stacks and what they point at (the module's data segments would add its half-gigabyte image window).
-            const auto type = static_cast<MINIDUMP_TYPE>(MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithThreadInfo);
-            const BOOL ok = write(GetCurrentProcess(), GetCurrentProcessId(), file, type,
+            const BOOL ok = write(GetCurrentProcess(), GetCurrentProcessId(), file, static_cast<MINIDUMP_TYPE>(dump_type),
                                   gCrashInfo != nullptr ? &exception : nullptr, nullptr, nullptr);
             char text[MAX_PATH + 32];
             std::snprintf(text, sizeof(text), "%s %ls", ok ? "minidump" : "minidump failed:", fs::path(path).filename().c_str());
@@ -1112,15 +1146,7 @@ void crash_writer() {
         if (file != INVALID_HANDLE_VALUE) {
             CloseHandle(file);
         }
-        report_crash_facts(fs::path(path));
-#if defined(NEBULA_HOST_RENDERER)
-        flush_progress_bounded(1500u);
-#endif
-        SetEvent(gCrashDone);
-        // The dump and report are written: whatever the crashed thread still does (a flush behind a lock another thread
-        // held when it stopped) never keeps the process alive.
-        Sleep(5000);
-        TerminateProcess(GetCurrentProcess(), 4);
+        finish_crash_report(fs::path(path));
     }
 }
 
@@ -1490,6 +1516,7 @@ int show_crash_report_dialog() {
 void install_crash_reporter() {
     gCrashRequest = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     gCrashDone = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    galaxy::crash_watch::start(crash_folder());
     std::thread(crash_writer).detach();
     AddVectoredExceptionHandler(0, crash_handler);  // last: the module's own handlers (division, stack guards) first
     SetUnhandledExceptionFilter(unhandled_filter);  // whatever no frame handled, C++ exceptions included
@@ -4209,6 +4236,12 @@ void read_launch_args(int argc, char** argv) {
 }  // namespace
 
 int main(int argc, char** argv) {
+#if defined(_WIN32)
+    // The crash watcher's own run (crash_watch.h): before anything of the game's.
+    if (argc >= 4 && std::strcmp(argv[1], galaxy::crash_watch::kSwitch) == 0) {
+        return galaxy::crash_watch::run(argc, argv);
+    }
+#endif
 #if defined(NEBULA_HOST_APPLE)
     // An app has no command line: the app's own layout names the game, the saves and the module.
     galaxy::apple::launch_arguments(argc, argv);

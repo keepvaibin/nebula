@@ -176,6 +176,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/mod_plugins.cpp
     ${rt}/game_module.cpp
     ${nebula_root}/native/host/luma_guard.cpp
+    ${nebula_root}/native/host/crash_watch.cpp
     ${rt}/mods.cpp
     ${rt}/mod_consent.cpp
     ${rt}/texture_categories.cpp
