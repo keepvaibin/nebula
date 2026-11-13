@@ -24,16 +24,14 @@
     <!-- Plan 2.9: what mods' services need, which no mod can add after release. Each is used only once the player
          allowed a mod that service (consent), and the dangerous ones are asked for then, never at the start.
          Sockets (net.local, net.internet); whether there is a network; the local network's broadcast and multicast
-         (finding a peer); the microphone (capture.audio); the camera (capture.video). -->
+         (finding a peer). -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.CAMERA" />
 
-    <!-- LumaCore's capture services (plan 8.2 c): asked of the player only when a mod that declares the permission
-         is consented to and opens the device (runtime/src/luma_capture.cpp may_use, through SDL's request); neither
-         is required to install. -->
+    <!-- LumaCore's capture services (plan 8.2 c), audio.microphone and capture.camera: asked of the player only when a
+         mod that declares the permission is consented to and opens the device (runtime/src/luma_capture.cpp may_use,
+         through SDL's request); neither is required to install. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
