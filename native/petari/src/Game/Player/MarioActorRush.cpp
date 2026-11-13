@@ -157,7 +157,9 @@ void MarioActor::beginRush() {
     stopEffect("スピンライト");
     bool spinCatch = selectSpinCatchInRush(mRushSensor->mHost->mName);
     if (mPlayerMode == PlayerMode_Bee && selectHideFlyMeter(mRushSensor)) {
-        MR::getGameSceneLayoutHolder()->changeLifeMeterModeGround();
+        if (!mExtra) {
+            MR::getGameSceneLayoutHolder()->changeLifeMeterModeGround();
+        }
     }
 
     if (isFixJumpRushSensor(mRushSensor) || spinCatch) {
@@ -383,7 +385,9 @@ void MarioActor::endRush(const RushEndInfo* pInfo) {
         }
 
         if (mPlayerMode == PlayerMode_Bee) {
+            if (!mExtra) {
             MR::getGameSceneLayoutHolder()->changeLifeMeterModeBee();
+        }
         }
 
         if (launched) {

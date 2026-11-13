@@ -95,6 +95,24 @@ namespace MR {
 
     bool testFpViewOutTrigger();
 
+    // The controller the getPlayer* reads below take: PLAYER_1, or an extra player's while it moves (-1: none, the
+    // reads give nothing pressed).
+    s32 getPlayerChannel();
+    // getPlayerChannel is `channel` for the scope (an extra player's control), then what it was.
+    class PlayerChannelScope {
+    public:
+        explicit PlayerChannelScope(s32 channel);
+        ~PlayerChannelScope();
+
+    private:
+        s32 mBefore;
+    };
+    // The co-star's reads (the second controller's pointer jump and spin) are the scene's player's: no extra player
+    // is driven by that controller.
+    bool isCoStarFree();
+    // An extra player takes (true) or gives back (false) the second controller; counted.
+    void takeCoStar(bool take);
+
     f32 getPlayerStickX();
 
     f32 getPlayerStickY();

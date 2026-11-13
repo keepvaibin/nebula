@@ -423,16 +423,24 @@ Vec3f& MarioModule::getCamDirZ() const {
 void MarioModule::startPadVib(u32 strength) {
     switch (strength) {
     case 1:
-        MR::tryRumblePadVeryWeak(mActor, PLAYER_1);
+        if (mActor->mInputChannel >= 0) {
+            MR::tryRumblePadVeryWeak(mActor, mActor->mInputChannel);
+        }
         return;
     case 0:
-        MR::tryRumblePadWeak(mActor, PLAYER_1);
+        if (mActor->mInputChannel >= 0) {
+            MR::tryRumblePadWeak(mActor, mActor->mInputChannel);
+        }
         return;
     case 2:
-        MR::tryRumblePadMiddle(mActor, PLAYER_1);
+        if (mActor->mInputChannel >= 0) {
+            MR::tryRumblePadMiddle(mActor, mActor->mInputChannel);
+        }
         return;
     case 3:
-        MR::tryRumblePadStrong(mActor, PLAYER_1);
+        if (mActor->mInputChannel >= 0) {
+            MR::tryRumblePadStrong(mActor, mActor->mInputChannel);
+        }
         return;
     default:
         return;
@@ -440,7 +448,9 @@ void MarioModule::startPadVib(u32 strength) {
 }
 
 void MarioModule::startPadVib(const char* pStrength) {
-    MR::tryRumblePad(mActor, pStrength, PLAYER_1);
+    if (mActor->mInputChannel >= 0) {
+        MR::tryRumblePad(mActor, pStrength, mActor->mInputChannel);
+    }
 }
 
 f32 MarioModule::getStickX() const {

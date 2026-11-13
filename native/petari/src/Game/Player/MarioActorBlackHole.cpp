@@ -40,6 +40,10 @@ void MarioActor::initBlackHoleOut() {
 }
 
 void MarioActor::exeGameOverBlackHole2() {
+    if (respawnExtra()) {
+        return;
+    }
+
     if (MR::isFirstStep(this)) {
         MR::setCubeBgmChangeInvalid();
         MR::clearBgmQueue();

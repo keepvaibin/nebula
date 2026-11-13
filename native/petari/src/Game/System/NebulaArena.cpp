@@ -16,6 +16,7 @@ extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/System/LumaDrawInst.hpp"
 #include "Game/System/LumaDrawView.hpp"
 #include "Game/System/LumaAnim.hpp"
+#include "Game/System/LumaPlayer.hpp"
 #include "Game/System/LumaUi.hpp"
 #include "Game/System/LumaCore.hpp"
 
@@ -176,6 +177,8 @@ void NebulaArena::destroy(NebulaArena* pArena) {
     // The mods' screens made in it (ui): ended, never touched again.
     luma::ui::released(pArena->mStart, pArena->mEnd);
     luma::anim::released(pArena->mStart, pArena->mEnd);
+    // The mods' extra players made in it (player): forgotten.
+    luma::player::released(pArena->mStart, pArena->mEnd);
 
     // Its objects first: one that owns a child arena destroys it itself.
     pArena->destroyOwned();

@@ -69,7 +69,8 @@ extern bool gIsLuigi;  // set by MarioActor::init2 from MR::isPlayerLuigi
 
 class MarioActor : public LiveActor {
 public:
-    MarioActor(const char*);
+    // extra: an extra player of LumaCore's player service (not the scene's player: no HUD, camera or game over).
+    MarioActor(const char*, bool extra = false);
 
     virtual ~MarioActor();
     virtual void init(const TableIter&);
@@ -91,6 +92,14 @@ public:
     virtual void getFrontVec(Vec3f*) const;
 
     void init2(const Vec3f&, const Vec3f&, s32);
+    // An extra player (LumaCore's player service), not the scene's.
+    bool isExtraPlayer() const { return mExtra; }
+    // An extra player's death or fall: it stands again at its home with its life full (true). The scene's player:
+    // false, nothing done.
+    bool respawnExtra();
+    // The player service's remove: what it holds is let go, its states end, and it is killed.
+    void endExtra();
+    void declarePlayerCameras();
     void initAfterOpeningDemo();
     void calcBaseFrontVec(const Vec3f&);
     void playSound(const char*, s32);
@@ -886,6 +895,10 @@ public:
     MatrixValueGetter* mFaceHeightTable;  // the characters' heights (getFaceLookHeight)
     bool mAttacking;  // an attack is being sent: enemy attacks wait (receiveMsgEnemyAttack)
     bool mTrampling;  // a trample is being sent: enemy attacks wait
+    bool mExtra;  // an extra player of LumaCore's player service (isExtraPlayer)
+    s32 mInputChannel;  // the controller its own reads take: PLAYER_1; an extra PLAYER_2, or -1 nothing
+    Vec3f mExtraHome;  // an extra's place: where it stands again after a fall or a death
+    Vec3f mExtraHomeRotate;  // and its turn there
 };
 
 // header defined since these actually get defined in CamHeliEffector

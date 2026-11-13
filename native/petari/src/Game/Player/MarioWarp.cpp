@@ -178,7 +178,9 @@ void Mario::doCubeWarp() {
             return;
         }
 
-        pWarpCubeMgr->startEventCamera(pWarpCube);
+        if (!mActor->isExtraPlayer()) {
+            pWarpCubeMgr->startEventCamera(pWarpCube);
+        }
 
         Vec3f cubePos;
         MR::calcCubePos(pPairCube, &cubePos);
@@ -235,7 +237,9 @@ bool Mario::doPointWarpRecovery(const Vec3f& rTarget, const Vec3f& rEndFront) {
 
     stopJump();
 
-    MR::startGlobalEventCameraNoTarget("引き戻し");
+    if (!mActor->isExtraPlayer()) {
+        MR::startGlobalEventCameraNoTarget("引き戻し");
+    }
 
     return true;
 }
@@ -363,7 +367,7 @@ bool MarioWarp::update() {
             }
         }
 
-        if (mPod != nullptr) {
+        if (mPod != nullptr && !mActor->isExtraPlayer()) {
             MR::getWarpPodManager()->startEventCamera(mPod);
         }
 

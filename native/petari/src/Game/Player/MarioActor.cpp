@@ -3,6 +3,7 @@
 #include "Game/System/NebulaMods.hpp"
 #include "Game/Animation/XanimeCore.hpp"
 #include "Game/Camera/CameraTargetArg.hpp"
+#include "Game/LiveActor/ActorLightCtrl.hpp"
 #include "Game/Enemy/KarikariDirector.hpp"
 #include "Game/Gravity/GravityInfo.hpp"
 #include "Game/LiveActor/Binder.hpp"
@@ -41,6 +42,7 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
@@ -60,9 +62,13 @@ namespace {
 
 bool gIsLuigi;
 
-MarioActor::MarioActor(const char* pName) : LiveActor(pName), mFlashFogColor(0xFFFFFFFF) {
+MarioActor::MarioActor(const char* pName, bool extra) : LiveActor(pName), mFlashFogColor(0xFFFFFFFF) {
     lumacore::setClass(this, lumacore::kClassId< MarioActor >);
     initMember();
+    mExtra = extra;
+    mInputChannel = extra ? -1 : PLAYER_1;
+    mExtraHome.zero();
+    mExtraHomeRotate.zero();
     mMario = new Mario(this);
     mRushSensorCount = 0;
     mTakeCount = 0;
@@ -270,7 +276,13 @@ void MarioActor::init2(const Vec3f& rA, const Vec3f& rB, s32 initialAnimation) {
     mGlobalJointMtx = new Mtx[MR::getJointNum(this)];
 
     MR::connectToScene(this, MR::MovementType_Player, MR::CalcAnimType_Player, MR::DrawBufferType_Player, MR::DrawType_Player);
-    MR::initLightCtrlForPlayer(this);
+    if (mExtra) {
+        // Lit as the player is, but the scene's player's light is the one the light director follows.
+        initActorLightCtrl();
+        mActorLightCtrl->init(-1, false);
+    } else {
+        MR::initLightCtrlForPlayer(this);
+    }
     mMarioAnim = new MarioAnimator(this);
     mMarioEffect = new MarioEffect(this);
     mCollisionShadow = new CollisionShadow(100.0f, 40.0f);
@@ -313,25 +325,24 @@ void MarioActor::init2(const Vec3f& rA, const Vec3f& rB, s32 initialAnimation) {
     addToSoundObjHolder();
     initParts();
     initMorphStringTable();
-    MR::declareGlobalEventCameraAbyss("奈落カメラ");
-    MR::declareBlackHoleCamera("ブラックホール");
-    MR::declareGlobalEventCameraDead("昇天カメラ", 0.35f, 0x78, 0x3C);
-    MR::declareGlobalEventCamera("水中フォロー");
-    MR::declareGlobalEventCamera("水中プラネット");
-    MR::declareGlobalEventCamera("水上フォロー");
-    MR::declareGlobalEventCamera("引き戻し");
-    MR::declareEventCameraProgrammable("変身初出カメラ");
+    if (!mExtra) {
+        declarePlayerCameras();
+    }
     mBeePoseHeadPos = mPosition;
     mBeePoseTrans.zero();
     mBeePoseVelocity.zero();
     setupSensors();
-    MR::getMarioHolder()->setMarioActor(this);
+    if (!mExtra) {
+        MR::getMarioHolder()->setMarioActor(this);
+    }
     mMessenger = new MarioMessenger(getSensor("dummy"));
     mCameraUpTarget = mMario->mHeadVec;
     mUpVec = mCameraUpTarget;
     mCameraUpTimer = 0;
     mCameraLiftTimer = 0;
-    MR::setGameCameraTargetToPlayer();
+    if (!mExtra) {
+        MR::setGameCameraTargetToPlayer();
+    }
     mWallShadeOn = 0;
     mFootPrint = new FootPrint("足跡", 0x100, -1);
     mFootPrint->setTexture(MR::getTexFromArc("Footprint.bti", this));
@@ -377,6 +388,18 @@ void MarioActor::init2(const Vec3f& rA, const Vec3f& rB, s32 initialAnimation) {
     mMoveFrontVec.set(1.0f, 0.0f, 0.0f);
 
     mInitializing = 0;  // is this to indicate that we are in the process of initialization?
+}
+
+// The scene's player's event cameras (the scene's camera; an extra player declares none).
+void MarioActor::declarePlayerCameras() {
+    MR::declareGlobalEventCameraAbyss("奈落カメラ");
+    MR::declareBlackHoleCamera("ブラックホール");
+    MR::declareGlobalEventCameraDead("昇天カメラ", 0.35f, 0x78, 0x3C);
+    MR::declareGlobalEventCamera("水中フォロー");
+    MR::declareGlobalEventCamera("水中プラネット");
+    MR::declareGlobalEventCamera("水上フォロー");
+    MR::declareGlobalEventCamera("引き戻し");
+    MR::declareEventCameraProgrammable("変身初出カメラ");
 }
 
 void MarioActor::initAfterPlacement() {
@@ -844,6 +867,12 @@ void MarioActor::movement() {
 }
 
 void MarioActor::control() {
+    // Its own reads take its controller (an extra player's, or none).
+    const MR::PlayerChannelScope channel(mInputChannel);
+    // An extra player in a death area stands again at its home (the scene's death areas look at the scene's player).
+    if (mExtra && MR::isInDeath(mPosition) && respawnExtra()) {
+        return;
+    }
     if (mSuperKinokoCollected) {
         if (MR::tryStartDemoWithoutCinemaFrame(this, "マリオスーパー化")) {  // 6-up camera
             mSuperKinokoCollected = false;
@@ -852,7 +881,9 @@ void MarioActor::control() {
                 changeMaxLife(lifeUpHealth);
             }
             MR::stopAnimFrame(this);
-            MR::requestPowerUpHPMeter();
+            if (!mExtra) {
+                MR::requestPowerUpHPMeter();
+            }
             mMario->startPadVib("マリオ[変身]");
             MR::startSystemSE("SE_SY_SUPER_KINOKO_GET");
             mMorphEndTimer = 0x5a;
@@ -1101,9 +1132,11 @@ bool MarioActor::doRush() {
 
                 if (initial == 2) {
                     mWaterLife = ::cWaterAir;
-                    MR::getGameSceneLayoutHolder()->changeLifeMeterModeGround();
+                    if (!mExtra) {
+                        MR::getGameSceneLayoutHolder()->changeLifeMeterModeGround();
+                    }
                     mMario->forceExitSwim();
-                } else if (initial == 0) {
+                } else if (initial == 0 && !mExtra) {
                     MR::getGameSceneLayoutHolder()->changeLifeMeterModeWater();
                 }
             }
@@ -1424,7 +1457,7 @@ void MarioActor::decLife(u16 amt) {
         return;
     }
 
-    if (NebulaMods::fire(NEBULA_MOD_EVENT_PLAYER_DAMAGE, 1) == 0) {
+    if (!mExtra && NebulaMods::fire(NEBULA_MOD_EVENT_PLAYER_DAMAGE, 1) == 0) {
         mLifeDamageQueue = 0;
         return;
     }
@@ -1735,7 +1768,7 @@ void MarioActor::calcAnimInMovement() {
                 MR::calcFrontVec(&frontVec, this);
             }
 
-            if (mFirstMorphCameraOn == 0) {
+            if (mFirstMorphCameraOn == 0 && !mExtra) {
                 MR::zoomInTargetGameCamera();
                 CameraTargetArg camera(nullptr, nullptr, nullptr, this);
                 MR::startGlobalEventCamera("変身初出カメラ", camera, 60);
@@ -2684,7 +2717,9 @@ void MarioActor::setPress(u8 kind, s32 frames) {
         decLife(0);
     }
 
-    MR::startStarPointerModeDemoMarioDeath(this);
+    if (!mExtra) {
+        MR::startStarPointerModeDemoMarioDeath(this);
+    }
 }
 
 XanimeResourceTable* MarioActor::getResourceTable() const {
@@ -2720,6 +2755,10 @@ bool MarioActor::isEnableNerveChange() const {
 }
 
 void MarioActor::forceGameOver() {
+    if (respawnExtra()) {
+        return;
+    }
+
     if (!isEnableNerveChange()) {
         return;
     }
@@ -2728,6 +2767,10 @@ void MarioActor::forceGameOver() {
 }
 
 void MarioActor::forceGameOverAbyss() {
+    if (respawnExtra()) {
+        return;
+    }
+
     if (!isEnableNerveChange()) {
         return;
     }
@@ -2736,6 +2779,10 @@ void MarioActor::forceGameOverAbyss() {
 }
 
 void MarioActor::forceGameOverBlackHole() {
+    if (respawnExtra()) {
+        return;
+    }
+
     if (!isEnableNerveChange()) {
         return;
     }
@@ -2744,6 +2791,10 @@ void MarioActor::forceGameOverBlackHole() {
 }
 
 void MarioActor::forceGameOverNonStop() {
+    if (respawnExtra()) {
+        return;
+    }
+
     if (!isEnableNerveChange()) {
         return;
     }
@@ -2752,6 +2803,10 @@ void MarioActor::forceGameOverNonStop() {
 }
 
 void MarioActor::forceGameOverSink() {
+    if (respawnExtra()) {
+        return;
+    }
+
     if (!isEnableNerveChange()) {
         return;
     }
