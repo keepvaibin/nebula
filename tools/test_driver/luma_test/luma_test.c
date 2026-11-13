@@ -66,6 +66,7 @@ static const LumaFunction* get_seed;        /* u32 MR::getFixedRandomSeed() */
 
 static int32_t field_name = -1;      /* NameObj.mName */
 static int32_t field_position = -1; /* LiveActor.mPosition */
+static int32_t field_gravity = -1;  /* LiveActor.mGravity */
 static int32_t field_is_mario = -1; /* GameDataHolder.mIsMario */
 static int32_t field_user = -1;     /* GameDataHolder.mUser */
 static int32_t field_handler = -1; /* SaveDataHandleSequence.mSaveDataHandler (optional: file copy) */
@@ -972,8 +973,15 @@ static void setup_player(const Words* w) {
                 return;
             }
             const Vec3* const at = (const Vec3*)((const char*)object + field_position);
+            /* Above the object by its own gravity (it may stand on another planet than the player); the player's
+               when the object has none (no gravity of its own, zero). */
+            const Vec3* own = field_gravity >= 0 ? (const Vec3*)((const char*)object + field_gravity) : 0;
             const Vec3* down = 0;
-            call0(player_gravity, &down);
+            if (own != 0 && own->x * own->x + own->y * own->y + own->z * own->z > 0.25f) {
+                down = own;
+            } else {
+                call0(player_gravity, &down);
+            }
             const Vec3 g = down != 0 ? *down : (Vec3){0.0f, -1.0f, 0.0f};
             place.x = at->x - g.x * 150.0f;
             place.y = at->y - g.y * 150.0f;
@@ -1517,6 +1525,7 @@ static const LumaImport imports[] = {
     LUMA_FUNCTION(save_busy, "GameSequenceFunction::isActiveSaveDataHandleSequence", "bool()"),
     LUMA_FIELD(field_name, "NameObj.mName", "const char *"),
     LUMA_FIELD(field_position, "LiveActor.mPosition", "Vec3f"),
+    LUMA_FIELD(field_gravity, "LiveActor.mGravity", "Vec3f"),
     /* Optional: a class outside the game's object tree may have no fields by name yet (census D3, task 1.2); the item
        that needs one then fails, naming it. */
     {LUMA_IMPORT_FIELD, LUMA_OPTIONAL, "GameDataHolder.mIsMario", "bool", &field_is_mario, 0, 0, 0},
