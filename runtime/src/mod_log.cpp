@@ -956,6 +956,13 @@ std::string cook_fact_mod(const std::vector<std::string>& f, const std::vector<s
         path.remove_prefix(5);
         return std::string(path.substr(0, path.find('/')));
     }
+    // A patch the cook refused or noted is named patch/<id>/<its file in the mod> (overlay_patches, overlay.rs).
+    if (std::string_view path = f[1]; path.substr(0, 6) == "patch/") {
+        path.remove_prefix(6);
+        if (const std::size_t slash = path.find('/'); slash != std::string_view::npos && slash != 0) {
+            return std::string(path.substr(0, slash));
+        }
+    }
     return {};
 }
 
