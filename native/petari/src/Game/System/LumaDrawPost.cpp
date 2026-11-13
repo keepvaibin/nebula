@@ -237,8 +237,14 @@ namespace luma {
                         report(pMod, pWhere, 104u, most);
                         return LUMA_E_LIMIT;
                     }
-                    char path[224];
-                    nebula_snprintf(path, sizeof(path), pName[0] == '/' ? "%s.post" : "/post/%s.post", pName);
+                    // The mod's own Luma/<id>/post/<name>.post, as the cook writes it (cook/post_shader.rs); a name from the
+                    // store's root ("/Luma/<other>/post/<name>") as given.
+                    char path[288];
+                    if (pName[0] == '/') {
+                        nebula_snprintf(path, sizeof(path), "%s.post", pName);
+                    } else {
+                        nebula_snprintf(path, sizeof(path), "/Luma/%s/post/%s.post", sKernel->mod_id(pMod), pName);
+                    }
                     const s32 entry = GameAssets::find(path);
                     GameAssets::File file;
                     file.mEntry = -1;
