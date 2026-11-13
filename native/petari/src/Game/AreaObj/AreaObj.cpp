@@ -50,11 +50,11 @@ void AreaObj::init(const TableIter& rIter) {
         mIsValid = false;
     }
 
-    // The manager by the name the factory made the object with, before the placement's name replaces it. A game area
-    // is made under its placed name, so the two are the same; a mod's area class is made by its maker row
-    // (LumaAreaCube, LumaAreaSphere, LumaAreaCylinder: manager LumaArea) and placed under the name its mod aliased,
-    // which no manager's name heads.
-    AreaObjMgr* const pManager = MR::getAreaObjManager(getManagerName());
+    // The manager by the placed name, as the game takes it (a game area is made under its Japanese name, which no
+    // manager's name heads). A mod's area class is made by its maker row (LumaAreaCube, LumaAreaSphere,
+    // LumaAreaCylinder: manager LumaArea) and placed under the name its mod aliased, which no manager's name heads:
+    // its manager is the one the name it was made with heads.
+    AreaObjMgr* const pMadeManager = MR::getAreaObjManager(getManagerName());
 
     const char* name;
 
@@ -62,6 +62,8 @@ void AreaObj::init(const TableIter& rIter) {
         setName(name);
     }
 
+    AreaObjMgr* const pPlacedManager = MR::getAreaObjManager(getManagerName());
+    AreaObjMgr* const pManager = pPlacedManager != nullptr ? pPlacedManager : pMadeManager;
     pManager->entry(this);
     SleepControlFunc::addSleepControl(this, rIter);
 }
