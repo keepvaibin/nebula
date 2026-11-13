@@ -352,7 +352,7 @@ void Mario::checkKeyLock() {
         mMovementStates.inputLocked = false;
     }
 
-    if (MR::isHeldCamera(PLAYER_1)) {
+    if (MR::getPlayerHeldCamera()) {
         mDrawStates.stickLocked = true;
     }
 }
@@ -1631,7 +1631,8 @@ void Mario::update() {
 
     mFpViewChangeFailed = false;
 
-    if (MR::testFpViewStartTrigger()) {
+    // The first-person view is the scene's camera: the scene's player's only.
+    if (!mActor->isExtraPlayer() && MR::testFpViewStartTrigger()) {
         if (MR::isPossibleToShiftToFirstPersonCamera()) {
             tryFpViewMode();
         } else if (!MR::isDemoActive()) {

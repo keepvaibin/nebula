@@ -223,7 +223,7 @@ def read_test(folder, types=None):
     t = load_json(folder / "test.json")
     keys_known(t, "", {"harness", "name", "about", "proves", "mods", "code", "language", "seed", "continue_from",
                        "renderers", "region", "limit_seconds", "bare", "save", "stage", "player", "steps", "expect",
-                       "faults", "hide_game_files", "safe_start"})
+                       "faults", "hide_game_files", "safe_start", "device", "ends"})
     for key in ("harness", "name", "about", "proves", "steps", "expect"):
         if key not in t:
             raise HarnessError("the test has no %s" % key)
@@ -239,6 +239,10 @@ def read_test(folder, types=None):
         if capability not in known:
             raise HarnessError("proves names %s, which is not in tools/lumacore/capabilities.json" % capability)
     bare = boolean(t, "bare", "") if "bare" in t else False
+    # Player 1's device: the keyboard (the default) or a controller whose motor the harness reads (fact input.motor).
+    device = text(t, "device", "") if "device" in t else "keyboard"
+    if device not in ("keyboard", "pad"):
+        raise HarnessError("device is keyboard or pad")
     code = text(t, "code", "") if "code" in t else "allow"
     if code not in ("allow", "deny", "ask"):
         raise HarnessError("code must be allow, deny or ask")
@@ -314,13 +318,21 @@ def read_test(folder, types=None):
         if not isinstance(t["hide_game_files"], list):
             raise HarnessError("hide_game_files must be a list")
         hidden = [hidden_path(h, "hide_game_files[%d]" % i) for i, h in enumerate(t["hide_game_files"])]
+    # How the run must end (revision 10): "end", at its end step by the harness (the default); or "crash", by the
+    # host's crash reporter before the end step (a test of a fault that must never be resumed, guard 2). A crash test
+    # names the crash line it expects: at least one log expectation reading the host's "crash: " line.
+    ends = text(t, "ends", "") if "ends" in t else "end"
+    if ends not in ("end", "crash"):
+        raise HarnessError("ends must be end or crash")
     setup = read_setup(t, bare, seed, language, classes)
     steps = read_steps(t, bare, classes)
     expect = read_expect(t, bare, steps)
+    if ends == "crash" and not any(c["kind"] == "log" and c["pattern"].startswith("crash: ") for c in expect):
+        raise HarnessError("a test that ends in a crash expects its crash line: a log expectation starting \"crash: \"")
     return {"folder": folder, "raw": t, "name": t["name"], "proves": t["proves"], "bare": bare, "mods": mods,
             "language": language, "seed": seed, "renderers": renderers, "region": t.get("region"), "limit": limit,
             "continue_from": continue_from, "faults": faults, "setup": setup, "steps": steps, "expect": expect,
-            "has_stage": "stage" in t, "hidden": hidden, "safe_start": safe_start}
+            "has_stage": "stage" in t, "hidden": hidden, "safe_start": safe_start, "device": device, "ends": ends}
 
 
 def read_setup(t, bare, seed, language, classes):
@@ -447,7 +459,7 @@ def read_steps(t, bare, classes):
     ends = 0
     pictures = set()
     actions = {"hold", "stick", "shake", "pointer", "key", "text", "settings", "picture", "call", "read", "stage", "wait",
-               "end", "take_out"}
+               "end", "take_out", "copy_file", "load_file", "erase_file", "new_file"}
     for i, s in enumerate(steps):
         path = "steps[%d]" % i
         if not isinstance(s, dict):
@@ -469,7 +481,7 @@ def read_steps(t, bare, classes):
         else:
             a = s["after"]
             keys_known(a, path + ".after", {"fact", "log", "is", "is_not", "less", "at_most", "more", "at_least",
-                                            "near", "within", "exists", "absent", "has"})
+                                            "near", "within", "exists", "absent", "has", "when"})
             if ("fact" in a) == ("log" in a):
                 raise HarnessError("%s.after needs fact or log" % path)
             if "log" in a:
@@ -478,13 +490,17 @@ def read_steps(t, bare, classes):
                     re.compile(pattern)
                 except re.error:
                     raise HarnessError("%s.after.log is not a regular expression" % path)
-                if any(k in a for k in FACT_OPS):
+                if any(k in a for k in FACT_OPS) or "when" in a:
                     raise HarnessError("%s.after: a log condition takes no check" % path)
                 step["after"] = ("log", pattern)
             else:
                 key = fact_key(a["fact"], path + ".after.fact")
                 op, value, within = read_check(a, path + ".after", {"within"})
-                step["after"] = ("fact", key, op, value, within)
+                # Revision 8: "when": "next": the check holds on a write made after the wait began (a fact already
+                # written, as the mod's "done" of an earlier stage run, does not meet it).
+                if "when" in a and a["when"] != "next":
+                    raise HarnessError("%s.after.when takes \"next\" (the check is made on a write after the wait began)" % path)
+                step["after"] = ("fact", key, op, value, within, "when" in a)
             if "timeout" in s:
                 step["timeout"] = whole(s, "timeout", path, 1)
         needs = {"hold": {"frames"}, "stick": {"frames"}, "pointer": {"frames"}, "call": {"signature"},
@@ -549,6 +565,20 @@ def read_steps(t, bare, classes):
             if not isinstance(wait, bool):
                 raise HarnessError("%s.wait takes true or false" % path)
             step["line"] = "take_out %s %d" % (mod_id, 1 if wait else 0)
+        elif action in ("copy_file", "load_file", "erase_file", "new_file"):
+            # Revision 8 (services-save 5, kit-progress): the file select's own operations on the run's own saves, on
+            # the game's save path (GameSequenceFunction); the step is answered when the save sequence has ended and
+            # writes file.copied / file.loaded / file.erased / file.created.
+            if action == "copy_file":
+                if not (isinstance(v, list) and len(v) == 2 and all(isinstance(n, int) and not isinstance(n, bool) and 1 <= n <= 3 for n in v)
+                        and v[0] != v[1]):
+                    raise HarnessError("%s.copy_file is [from, to]: two different user files, each 1 to 3" % path)
+                step["line"] = "game file copy %d %d" % (v[0], v[1])
+            else:
+                n = whole(s, action, path, 1)
+                if n > 3:
+                    raise HarnessError("%s.%s is a user file, 1 to 3" % (path, action))
+                step["line"] = "game file %s %d" % (action[:-len("_file")], n)
         elif action == "call":
             name = plain(text(s, "call", path), path + ".call")
             sig = text(s, "signature", path)
@@ -628,6 +658,9 @@ def call_arg(value, param, path, classes):
             raise HarnessError("%s must be a string with no tab or line end" % path)
         return value
     if param in VEC_TYPES:
+        # Revision 8: a live actor's place, `object:<name>#<n>` or `class:<Class>#<n>` (its position as the game holds it).
+        if isinstance(value, str) and value != "player":
+            return object_ref(value, path, classes)
         if not (isinstance(value, list) and len(value) == 3 and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in value)):
             raise HarnessError("%s must be [x, y, z]" % path)
         return " ".join(repr(float(v)) for v in value)
@@ -963,6 +996,8 @@ def plan_text(test, out):
     lines = ["harness 1", "out %s" % out, "bare %d" % (1 if test["bare"] else 0)]
     if not test["has_stage"]:
         lines.append("clock title")
+    if test.get("device", "keyboard") == "pad":
+        lines.append("device pad")
     lines += test["setup"]
     for s in test["steps"]:
         if s["at"] is not None:
@@ -973,8 +1008,8 @@ def plan_text(test, out):
             if a[0] == "log":
                 lines.append("cond log %s" % a[1])
             else:
-                _, key, op, value, within = a
-                lines.append("cond fact %s %s %s %s" % (key, op, "-" if within is None else repr(float(within)),
+                _, key, op, value, within, fresh = a
+                lines.append("cond %s %s %s %s %s" % ("next" if fresh else "fact", key, op, "-" if within is None else repr(float(within)),
                                                         json.dumps(value if op not in ("exists", "absent") else True,
                                                                    ensure_ascii=False, separators=(",", ":"))))
             lines.append("timeout %d" % s["timeout"])
@@ -1012,6 +1047,17 @@ def run_one(test, renderer, args, run_folder, previous):
                  bin_folder / HOST["importer"]):
         if not need.is_file():
             raise HarnessError("the bin folder has no %s" % need.name)
+    # The pak must be of this tree's store version (the host refuses another at its start: "need importing again").
+    pak = pathlib.Path(bin_folder.joinpath("pak.path").read_text(encoding="utf-8").strip())
+    wanted = int((TREE / "runtime" / "include" / "galaxy" / "store_version.inc").read_text(encoding="utf-8").strip())
+    try:
+        with open(pak, "rb") as f:
+            head = f.read(12)
+    except OSError as error:
+        raise HarnessError("pak.path names %s, which does not open: %s" % (pak, error))
+    if head[:8] != b"NBSTORE" + bytes(1) or int.from_bytes(head[8:12], "little") != wanted:
+        raise HarnessError("pak.path names %s, store version %s; this tree's store_version.inc is %d: import with this "
+                           "tree's nebula-import or name another pak" % (pak, int.from_bytes(head[8:12], "little") if head[:8] == b"NBSTORE" + bytes(1) else "none (not a store)", wanted))
     if run_folder.exists():
         shutil.rmtree(run_folder)
     for sub in ("bin", "pictures", "saves", "settings", "appdata"):
@@ -1065,6 +1111,12 @@ def run_one(test, renderer, args, run_folder, previous):
             continue
         mod_id = install(settings, m["path"], m["code"] == "allow", i + 1, kept=previous is not None,
                          permissions="ask" if m["code"] == "ask" else m["permissions"], broken_ok=not m["loads"])
+        # A mod with no code (luma.json has no "code": content only) is never started, so the host writes no start
+        # or refusal line for it and there is no mod.<id>.loaded fact: its test's own facts show its content.
+        try:
+            m["has_code"] = "code" in load_json(settings / "mods" / mod_id / "luma.json")
+        except HarnessError:
+            m["has_code"] = True
         mod_ids.append((mod_id, m))
         for lib in sorted((settings / "mods" / mod_id).rglob("*" + HOST["ending"])):
             frozen["mods/%s/%s" % (mod_id, lib.relative_to(settings / "mods" / mod_id).as_posix())] = sha256(lib)
@@ -1106,6 +1158,9 @@ def run_one(test, renderer, args, run_folder, previous):
     command = [str(run_folder / "bin" / exe.name), "--pak", pak, "--saves", str(run_folder / "saves"),
                "--seconds", str(int(math.ceil(test["limit"]))), "--settings", str(settings),
                "--crash-dumps", str(run_folder), "--extension", str(run_folder / "bin" / HOST["extension"])] + imports
+    if args.diagnostics:
+        # A stress or record the whole run is made under (--diagnostics ring-stress): the game's own switch.
+        command += ["--diagnostics", args.diagnostics]
     hidden = {}
     if platform.system() == "Windows":
         startup = subprocess.STARTUPINFO()
@@ -1216,28 +1271,45 @@ def evaluate(test, renderer, run_folder, ran):
     dumps = sorted(p.name for p in run_folder.glob("*.dmp"))
     stop = by_key.get("harness.stop", [])
     end = by_key.get("harness.end", [])
+    crash_lines = [line for line in log_lines if CRASH_LINE.match(line)]
+    crashed = bool(dumps or crash_lines)
+    # A test that must end in a crash (ends "crash") that crashed is judged by its checks, as any run that ended.
+    meant = test["ends"] == "crash" and crashed
     verdict, reason = None, None
     declined = [line for line in log_lines if "fatal: --extension" in line or "extension: test extension:" in line]
-    if declined and not dumps:
+    # The host could not open the bin folder's game.pak (host_main.cpp open_pak: another store version, or unreadable).
+    unopened = [line for line in log_lines if "import: The game files need importing again" in line]
+    if unopened and not dumps:
+        verdict = "harness-error"
+        reason = "the bin folder's game.pak did not open (another store version than this build's store_version.inc, or unreadable): %s" % unopened[0]
+    elif declined and not dumps:
         # The extension refused the run's folders: the runner's fault, not the game's.
         verdict = "harness-error"
         reason = "the test extension declined the run: %s" % " | ".join(declined)
-    elif dumps or any(CRASH_LINE.match(line) for line in log_lines):
+    elif crashed and not meant:
         verdict = "crashed"
         reason = "dump %s; last lines: %s" % (", ".join(dumps) or "none", " | ".join(log_lines[-5:]))
     elif stop:
         verdict = stop[-1]["value"].get("verdict", "fail")
         reason = stop[-1]["value"].get("reason", "")
-    elif not end:
+    elif not end and not meant:
         verdict = "timeout"
         reason = "the run did not reach its end step within limit_seconds (%s s)" % test["limit"]
     # Always checked (3.7).
     end_step = next(s for s in test["steps"] if s["action"] == "end")
-    if end:
-        frame = end[-1]["value"].get("frame")
-        add("the run ended at its end step", end_step["at"] is None or frame == end_step["at"], frame)
-    add("no crash dump", not dumps, dumps)
-    add("the game quit by itself with exit 0", ran.get("code") == 0, ran.get("code"))
+    if test["ends"] == "crash":
+        # The crash is the run's end: before the end step, by the host's crash reporter (its line, a dump, the game
+        # gone with a code that is not 0, not killed at the limit).
+        add("the game ended in a crash before its end step", crashed and not end,
+            (crash_lines[:1] or dumps) if not end else end[-1]["value"].get("frame"))
+        add("a crash dump was written", bool(dumps), dumps)
+        add("the game ended with a code other than 0", ran.get("code") not in (0, None), ran.get("code"))
+    else:
+        if end:
+            frame = end[-1]["value"].get("frame")
+            add("the run ended at its end step", end_step["at"] is None or frame == end_step["at"], frame)
+        add("no crash dump", not dumps, dumps)
+        add("the game quit by itself with exit 0", ran.get("code") == 0, ran.get("code"))
     # The game says this once when it cannot give a refusal in words (mod_plugins.cpp validate_message): the importer's
     # library did not load or has no luma_validate_message. Every refusal of the run is then codes only.
     coded = [line for line in log_lines if "refusals are given as codes" in line]
@@ -1247,12 +1319,15 @@ def evaluate(test, renderer, run_folder, ran):
     if not test["bare"]:
         loaded = by_key.get("mod.%s.loaded" % GAME_HALF_ID, [])
         add("the game half loaded", bool(loaded) and loaded[-1]["value"] is True, loaded[-1]["value"] if loaded else None)
-        add("every setup item verified", bool(by_key.get("setup.done")),
+        # A crash test's fault may come before the setup's last item (a hook on the first frame of play): its items
+        # are those the run verified before the crash (one that failed stops the run: harness.stop, above).
+        add("every setup item verified" + (" before the crash" if meant else ""),
+            bool(by_key.get("setup.done")) or (meant and not stop),
             [f["key"] for f in facts if f.get("key", "").startswith("setup.")])
     for mod_id, m in ran["mods"]:
         loaded = by_key.get("mod.%s.loaded" % mod_id, [])
         value = loaded[-1]["value"] if loaded else None
-        if m["loads"]:
+        if m["loads"] and m["has_code"]:
             add("the mod %s loaded" % mod_id, value is True, value)
     guards = [f for f in facts if f.get("key", "").startswith("guard.")]
     for g in guards:
@@ -1517,6 +1592,8 @@ def main():
     run.add_argument("--who", default="?")
     run.add_argument("--module", default="hooks", choices=("hooks", "plain"))
     run.add_argument("--commit", default="unknown")
+    run.add_argument("--diagnostics", default=os.environ.get("LUMA_TEST_DIAGNOSTICS"),
+                     help="the game's --diagnostics for every run (or LUMA_TEST_DIAGNOSTICS), e.g. ring-stress")
     run.add_argument("--lock", default=os.environ.get("LUMA_TEST_LOCK"),
                      help="the run lock file (or LUMA_TEST_LOCK); the runner refuses to start while it exists")
     refs = sub.add_parser("refs")

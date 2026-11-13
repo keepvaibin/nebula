@@ -1,9 +1,11 @@
 #include "Game/System/LumaServices.hpp"
 
+#include "Game/System/LumaGuard.hpp"
 #include "Game/System/LumaHook.hpp"
 #include "Game/System/LumaContentFx.hpp"
 #include "Game/System/LumaContentModel.hpp"
 #include "Game/System/LumaAnim.hpp"
+#include "Game/System/LumaPlayer.hpp"
 #include "Game/System/LumaUi.hpp"
 #include "Game/System/LumaDrawLight.hpp"
 #include "Game/System/LumaDraw.hpp"
@@ -55,6 +57,7 @@ namespace luma {
                 {"draw.post", 1, 0, nullptr, "draw"},
                 {"draw.native", 1, 0, "native", "draw"},
                 {"anim", 1, 1, nullptr, "animation"},
+                {"player", 1, 0, nullptr, "services-player"},
                 {"save", 1, 0, nullptr, "services-save"},
                 {"save.global", 1, 0, nullptr, "services-save"},
                 {"save.game", 1, 0, "save.game", "services-save"},
@@ -63,7 +66,7 @@ namespace luma {
                 {"net.local", 1, 4, "net.local", "services-net"},
                 {"net.internet", 1, 4, "net.internet", "services-net"},
                 {"assets", 1, 1, nullptr, "services-assets"},
-                {"input", 1, 1, nullptr, "services-input"},
+                {"input", 1, 2, nullptr, "services-input"},
                 {"input.inject", 1, 0, "input.inject", "services-input"},
                 {"input.dev", 1, 0, "input.devices", "services-input"},
                 {"audio", 1, 0, nullptr, "services-audio"},
@@ -396,9 +399,14 @@ namespace luma {
                 if (pRecord == nullptr || isGone(pRecord)) {
                     return LUMA_E_CANCELLED;
                 }
-                // The guard (plan 1.6) wraps this call when it exists: a fault in fn is the mod's, caught there and named
-                // "<service> event <kind>" in the mod log (services-registry 6.1, J S-7).
-                fn(pUser, pEvent);
+                // Through the guard (plan 1.6): a fault in fn is the mod's, caught there and named "<service> event <kind>"
+                // in the mod log (services-registry 6.1, J S-7). A mod off after a fault is not called.
+                char where[96];
+                nebula_snprintf(where, sizeof(where), "%s event %u", pService, pEvent->kind);
+                if (!guard::run(const_cast<LumaMod*>(pMod), LUMA_GUARD_EVENT, where, reinterpret_cast<const void*>(fn),
+                                reinterpret_cast<uintptr_t>(pUser), reinterpret_cast<uintptr_t>(pEvent), 0, 0, nullptr)) {
+                    return LUMA_E_CANCELLED;
+                }
                 return LUMA_OK;
             }
 
@@ -665,6 +673,7 @@ namespace luma {
             (void)provide(luma::draw::post::provider());
             (void)provide(luma::draw::native::provider());
             (void)provide(luma::anim::provider());
+            (void)provide(luma::player::provider());
             (void)provide(luma::save::provider());
             (void)provide(luma::save::globalProvider());
             (void)provide(luma::save::gameProvider());

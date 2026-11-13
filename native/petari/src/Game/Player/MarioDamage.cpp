@@ -250,7 +250,7 @@ bool Mario::damageFloorCheck() {
 
         break;
     case CollisionFloorCode_Death:
-        MarioAccess::forceKill(3, 0);
+        mActor->forceKill(3);
         return true;
     case CollisionFloorCode_DamageFire:
         if (checkCurrentFloorCodeSevere(CollisionFloorCode_DamageFire) && doFireDanceWithInitialDamage(1)) {
@@ -336,7 +336,7 @@ bool Mario::damagePolygonCheck(const Triangle* pTriangle) {
 
         break;
     case CollisionFloorCode_Death:
-        MarioAccess::forceKill(3, 0);
+        mActor->forceKill(3);
         return true;
     case CollisionFloorCode_DamageFire:
         if (doFireDanceWithInitialDamage(1)) {

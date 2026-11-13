@@ -30,6 +30,7 @@ namespace NebulaMenuFocus {
     Direction readPress(Repeat* pRepeat);  // a press this frame, or a repeat of a held one
     void holdCurrent(Repeat* pRepeat);     // what is held now is not a press (the stick that was walking as a menu opens)
 
+    void cover();                                         // before update: a mod's menu on top has this frame's pad
     void update();                                        // GameSystem::update, once a frame, before the menus run
     void offer(ButtonPaneController* pButton);            // a button its menu takes input on this frame
     void offerTarget(const void* pKey, const Vec2f& rScreenPos);  // anything else, where it is on screen this frame

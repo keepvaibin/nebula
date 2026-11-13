@@ -114,12 +114,24 @@ def main():
         return fail('no setup screen on a first install')
     if not pick_file(disc):
         return fail('the file picker does not show ' + disc)
-    if not wait_for('Set up', 120):
+    if not wait_for('Set up', 120, tap=False):
         return fail('the disc image was not accepted')
     started = time.time()
-    time.sleep(3)
-    if 'text="Allow"' in screen_text():
-        wait_for('Allow', 5)
+    # The button shows before it takes a tap (the screen still settling): tapped again until setup starts, as a person
+    # would, and the notification question Android asks then answered.
+    begun = False
+    while time.time() - started < 60:
+        text = screen_text()
+        if 'Setting up' in text or 'text="Play"' in text:
+            begun = True
+            break
+        if 'text="Allow"' in text:
+            wait_for('Allow', 5)
+        elif 'text="Set up"' in text:
+            wait_for('Set up', 1)
+        time.sleep(3)
+    if not begun:
+        return fail('setup did not start')
     if not wait_for('Play', 1500):
         return fail('setup did not finish')
     print('setup %d s' % (time.time() - started))

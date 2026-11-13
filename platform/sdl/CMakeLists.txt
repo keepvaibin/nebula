@@ -175,6 +175,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/mod_start_check.cpp
     ${rt}/mod_plugins.cpp
     ${rt}/game_module.cpp
+    ${nebula_root}/native/host/luma_guard.cpp
     ${rt}/mods.cpp
     ${rt}/mod_consent.cpp
     ${rt}/texture_categories.cpp
@@ -235,6 +236,11 @@ set(SDL_STATIC OFF CACHE BOOL "" FORCE)
 set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
 set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
 add_subdirectory("${NEBULA_SDL_DIR}" SDL3 EXCLUDE_FROM_ALL)
+if(ANDROID)
+    # luma_capture.cpp asks the player for a microphone or camera through SDL (SDL_RequestAndroidPermission, plan
+    # 8.2 c): SDL's headers here; the function comes with libSDL3.so, which main links.
+    target_link_libraries(galaxy_render_vk PRIVATE SDL3::Headers)
+endif()
 
 # The native game's host on SDL (native/host/host_main.cpp with NEBULA_HOST_SDL): libmain.so on Android (SDL's
 # activity calls its SDL_main), an executable elsewhere.

@@ -2328,6 +2328,10 @@ void Mario::doLanding() {
         const u32 landingType = mMovementStates.launchKind;
         if (landingType == 2) {
             getPlayer()->mMovementStates.launchKind = 0;
+            // The scenario starter leaves the rail's pitch in the pose. The landing animation starts upright.
+            if (!MR::isNearZero(mAirGravityVec)) {
+                forceSetHeadVecKeepSide(-mAirGravityVec);
+            }
             stopWalk();
             playSound("重い着地");
             playSound("声ステージイン着地");

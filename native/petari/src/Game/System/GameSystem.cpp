@@ -253,6 +253,10 @@ void GameSystem::update() {
     SingletonHolder< GameSystemRestartProcess >::get()->movement();
     mSceneController->checkRequestAndChangeScene();
     mObjHolder->update();
+    // A mod's menu on top (LumaUi) has the pad: the game's menus under it move no highlight (ui::frame takes the presses).
+    if (luma::ui::takesControls()) {
+        NebulaMenuFocus::cover();
+    }
     NebulaMenuFocus::update();
     NebulaPrepare::update();
     luma::takeOutRequested();  // mods asked to be taken out (reload.md 2); one load when none is

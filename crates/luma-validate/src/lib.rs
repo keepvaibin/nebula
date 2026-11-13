@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 pub use names::Names;
-pub use rules::{cooked_source, save_problem};
+pub use rules::{cooked_source, save_problem, SOURCE_ENDINGS};
 pub use saved::{About, Saved};
 
 /// The validator's version: `<format major>.<rules minor>` (validator contract 6).

@@ -53,17 +53,21 @@ void MarioActor::initDrawAndModel() {
     }
 
     mShadowDrawer = new DrawAdaptor(MR::Functor(this, &MarioActor::drawShadow), MR::DrawType_AlphaShadow);
-    // The scene holds each drawer (a NameObj).
+    // The scene holds each drawer (a NameObj). The screen's own (wipe, blur, the indirect pass) are the scene's
+    // player's.
     new DrawAdaptor(MR::Functor(this, &MarioActor::drawSilhouette), MR::DrawType_PlayerSilhouette);
-    new DrawAdaptor(MR::Functor(this, &MarioActor::drawPreWipe), MR::DrawType_CometScreenFilter);
-    new DrawAdaptor(MR::Functor(this, &MarioActor::drawScreenBlend), MR::DrawType_CenterScreenBlur);
-    new DrawAdaptor(MR::Functor(this, &MarioActor::drawIndirect), MR::DrawType_PlayerIndirect);
+    if (!mExtra) {
+        new DrawAdaptor(MR::Functor(this, &MarioActor::drawPreWipe), MR::DrawType_CometScreenFilter);
+        new DrawAdaptor(MR::Functor(this, &MarioActor::drawScreenBlend), MR::DrawType_CenterScreenBlur);
+        new DrawAdaptor(MR::Functor(this, &MarioActor::drawIndirect), MR::DrawType_PlayerIndirect);
 
-    // MarioAnime's material animations are bound to this player's model, also when a ghost's model used the archive first
-    // or the other player's did before a restart of the same stage.
-    ResourceHolder* const pPlayerHolder = MR::createAndAddResourceHolder(gIsLuigi ? "Luigi" : "Mario");
-    MR::createAndAddResourceHolder("MarioAnime")
-        ->bindMaterialAnimations(static_cast< ModelData* >(pPlayerHolder->mModelResTable->getRes(gIsLuigi ? "luigi" : "mario")));
+        // MarioAnime's material animations are bound to this player's model, also when a ghost's model used the
+        // archive first or the other player's did before a restart of the same stage. An extra player is the same
+        // brother: the scene's player bound them.
+        ResourceHolder* const pPlayerHolder = MR::createAndAddResourceHolder(gIsLuigi ? "Luigi" : "Mario");
+        MR::createAndAddResourceHolder("MarioAnime")
+            ->bindMaterialAnimations(static_cast< ModelData* >(pPlayerHolder->mModelResTable->getRes(gIsLuigi ? "luigi" : "mario")));
+    }
 
     if (gIsLuigi) {
         initModelManagerWithAnm("Luigi", "MarioAnime", true);
@@ -1002,7 +1006,9 @@ void MarioActor::copyMaterial(Model* pModel, u32 materialNo, s32 packetIndex) {
         end = static_cast< u32 >(packetIndex);
     }
 
-    for (u32 i = start; i <= end; i++) {
+    // A part model a mod hid (no meshes or materials, models contract 2) has no entries to take the body's material.
+    const ModelData* part = pModel->getModelData();
+    for (u32 i = start; i <= end && i < part->getMeshCount() && i < part->getMaterialCount(); i++) {
         MaterialEntry* matPacket = pModel->getMaterialEntry(i);
         matPacket->mMaterial = modelData->getMaterialAt(materialIndex);
         MeshEntry* shapePacket = pModel->getMeshEntry(i);

@@ -166,11 +166,16 @@ namespace MR {
     }
 
     const char* getArchiveModelName(const char* pName) {
-        const char* const pColon = strchr(pName, ':');
-        if (pColon == nullptr) {
+        // A mod's model by "<id>:<path>" or by its store path "Luma/<id>/<path>" (no game archive name has either):
+        // the archive holds <leaf>.bmd.
+        const char* pLeaf;
+        if (const char* const pColon = strchr(pName, ':'); pColon != nullptr) {
+            pLeaf = pColon + 1;
+        } else if (strncmp(pName, "Luma/", 5) == 0) {
+            pLeaf = pName + 5;
+        } else {
             return pName;
         }
-        const char* pLeaf = pColon + 1;
         for (const char* p = pLeaf; *p != 0; p++) {
             if (*p == '/') {
                 pLeaf = p + 1;

@@ -598,6 +598,9 @@ pub fn write_cooked_pak(
         let item = StoreItem { path: String::new(), order: 0, bytes: Some(text.as_bytes().to_vec()) };
         placed.extend(place(&mut pak, &mut at, path, vec![item], stats)?);
     }
+    // Nebula's placeholder model, the object archive a mod's missing class draws (contract references 4).
+    let item = StoreItem { path: PLACEHOLDER_MODEL.to_string(), order: 0, bytes: Some(placeholder_model()?) };
+    placed.extend(place(&mut pak, &mut at, PLACEHOLDER_ARCHIVE, vec![item], stats)?);
     let at = store::write_index(&mut pak, at, &placed, system.bytes[..8].try_into().unwrap())?;
     pak.set_len(at)?;
     pak.sync_all().context("game.pak cannot be flushed to storage")?;
@@ -610,6 +613,28 @@ const RT_STAGES_PATH: &str = "NebulaData/RtStages.tsv";
 const RT_EFFECTS_PATH: &str = "NebulaData/RtEffects.tsv";
 const RT_STAGES: &str = include_str!("../../data/rt_stages.tsv");
 const RT_EFFECTS: &str = include_str!("../../data/rt_effects.tsv");
+
+/// Nebula's placeholder archive in the store (contract references 4): the game draws its model for a mod's missing class
+/// (LumaRefs.cpp), and the start check (3.13, mod_start_check.cpp) turns mods off when a store lacks it.
+pub const PLACEHOLDER_ARCHIVE: &str = "ObjectData/NebulaPlaceholder.arc";
+/// The model in it, as the game's model manager finds an archive's model by the archive's name.
+pub const PLACEHOLDER_MODEL: &str = "NebulaPlaceholder.bmd";
+
+/// The placeholder's cooked model, from data/placeholder/model.gltf and its face.png (make_placeholder.py writes both),
+/// carried in the importer so every import cooks the same bytes.
+pub fn placeholder_model() -> Result<Vec<u8>> {
+    let mut source: serde_json::Value =
+        serde_json::from_slice(include_bytes!("../../../../data/placeholder/model.gltf")).context("the placeholder's model.gltf")?;
+    let face = include_bytes!("../../../../data/placeholder/face.png");
+    for image in source["images"].as_array_mut().context("the placeholder's model.gltf has no images")? {
+        if image["uri"] != "face.png" {
+            bail!("the placeholder's model.gltf names an image other than face.png");
+        }
+        image["uri"] = serde_json::Value::String(format!("data:image/png;base64,{}", gltf::base64_text(face)));
+    }
+    let (model, _) = gltf::to_files(&serde_json::to_vec(&source)?, None, "NebulaPlaceholder").context("the placeholder's model")?;
+    Ok(model)
+}
 
 /// main.dol in a system area (its header's sections give its length).
 fn system_dol(system: &SystemArea) -> Result<&[u8]> {
@@ -691,6 +716,15 @@ pub fn cook_content(input: &Path, output: &Path, progress: &mut dyn FnMut(u64, u
 
 #[cfg(test)]
 mod disc_record_tests {
+    #[test]
+    fn the_placeholder_model_cooks_from_nebulas_data() {
+        assert_eq!([&b"Man"[..], b"Ma", b"M", b""].map(super::gltf::base64_text), ["TWFu", "TWE=", "TQ==", ""]);
+        let model = super::placeholder_model().unwrap();
+        assert!(model.len() > 1024, "{} bytes", model.len());
+        // The same bytes each time: every import cooks the same placeholder.
+        assert_eq!(model, super::placeholder_model().unwrap());
+    }
+
     #[test]
     fn the_disc_record_reads_back_by_path() {
         let rows = vec![("StageData/A.arc".to_string(), 12u64, 0x0123_4567_89ab_cdefu64), ("sys/main.dol".to_string(), 4, 7)];

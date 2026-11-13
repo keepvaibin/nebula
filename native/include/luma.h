@@ -121,7 +121,9 @@ typedef struct LumaClassDef {
     const char* name;         /* the class's name (1 to 63 bytes): a stage places its objects by it. No game class,
                                  factory row or other mod's class may have it; names compare with ASCII case
                                  folded, as the game's factory does */
-    const char* base;         /* the game class it derives from ("JetTurtle"): polymorphic, with a row */
+    const char* base;         /* the game class it derives from ("JetTurtle"): polymorphic, with a row. "PlanetGravity":
+                                 a gravity class, its objects made by LumaCore.make_gravity only (maker and replaces
+                                 null; no stage places it, no alias names it) */
     const char* maker;        /* the factory row that makes the base ("JetTurtle"); null: the one named as the base */
     const char* replaces;     /* null, or a name the game's stages place: its objects are made as this class instead */
     uint32_t data_size;       /* its own data per object, zeroed before `made`; 0: none */
@@ -148,6 +150,29 @@ typedef struct LumaMakePlace {
     int32_t args[8];  /* Obj_arg0 to 7; -1: not given (the placement file names what each class reads) */
 } LumaMakePlace;
 #define LUMA_MAKE_DEAD 1u /* made, then dead (makeActorDead) until something makes it appear; actors only */
+
+/* Where a stage placed an object (classes contract, "placement"): the scene's main stage, the zone (a stage's name;
+   the main stage's own for its objects), the layer ("Common", "LayerA" to "LayerAE") and the object's index among
+   that zone's placements of that layer (its Placement files, then its MapParts files, in the stage archive's order,
+   each file's rows in order). The same on every machine with the same game and mods. */
+typedef struct LumaPlacement {
+    uint32_t size;      /* sizeof(LumaPlacement) */
+    const char* stage;  /* placement_of: valid while the scene lives. placed_at: null, or the main stage's name */
+    const char* zone;
+    const char* layer;
+    uint32_t index;
+} LumaPlacement;
+
+/* A gravity LumaCore.make_gravity makes (classes contract, "gravity"): PlanetGravity's own fields, which the scene's
+   gravity manager sorts and filters by. */
+typedef struct LumaGravityPlace {
+    uint32_t size;     /* sizeof(LumaGravityPlace) */
+    float range;       /* mRange: below 0, everywhere; else what PlanetGravity::isInRangeDistance compares with (an
+                          override that wants a range calls it, as the game's gravities do) */
+    int32_t priority;  /* mPriority: only the highest priority that pulls at a point counts; equal ones add */
+    uint32_t types;    /* mGravityType bits: 1 normal, 2 shadow, 4 magnet, 8 launcher; 0: 1 */
+    uint32_t inverse;  /* nonzero: mIsInverse, the pull reversed */
+} LumaGravityPlace;
 
 /* A table of the game's data as LumaCore.table gives it (numbers contract, plan 1.5). */
 typedef struct LumaTable {
@@ -260,7 +285,8 @@ typedef struct LumaCore {
        from 1, in source order; luma_numbers.json lists them all), and every file's number constant by its name, with
        signature "" and place 0. A null signature asks for the only function of that name with a number at that place.
        number: its address and, in *kind, its kind (1 f32, 2 f64, 3 s8, 4 u8, 5 s16, 6 u16, 7 s32, 8 u32, 9 s64,
-       10 u64), or null and kind 0: no such number, or several (give the signature); said in the log. Any thread. */
+       10 u64, 11 bool: a file's constant, 0 or 1), or null and kind 0: no such number, or several (give the
+       signature); said in the log. Any thread. */
     void* (*number)(const LumaMod* mod, const char* name, const char* signature, uint32_t place, uint32_t* kind);
     /* Sets one to `value` for the mod. When the mod goes, every number it set is again what the mods still here set
        last, or the game's own (a write through number's address is not put back). 0: set; -1: no such number, several,
@@ -281,16 +307,40 @@ typedef struct LumaCore {
 
     /* Objects (classes contract, "make"): `count` objects by a name the factory makes (a game object's, a mod class's,
        a mod's object: as a stage places it, its changes and replacements applied), each made and initialised as a
-       placed one, at `place[i]` (null: the origin, unturned, scale 1, every argument -1). Only while the scene makes
-       its objects (from a hook that runs then: after StageDataHolder::initPlacementMario, a class's init); they stand
-       in the main stage and live as long as the scene; made inside another object's init, they join that
-       placement's view group. Flags: LUMA_MAKE_DEAD. Each object's address in objects[i] (objects may be null).
+       placed one, at `place[i]` (null: the origin, unturned, scale 1, every argument -1). While the scene makes its
+       objects (from a hook that runs then: after StageDataHolder::initPlacementMario, a class's init) or once it is
+       made (during play: each object then takes its after-placement step in this call); they stand in the main stage
+       and live as long as the scene; made inside another object's init, they join that placement's view group. Flags: LUMA_MAKE_DEAD. Each object's address in objects[i] (objects may be null).
        Returns the count made (fewer when a creator makes nothing, said), or -1 the factory makes nothing by that
-       name, -2 its files are not in this game, -3 not on the game thread or not while the scene makes its objects,
+       name, -2 its files are not in this game, -3 not on the game thread, no scene, or the scene is starting,
        -4 a bad argument (count not 1 to 1024, a place smaller than LumaMakePlace or not finite, an unknown flag) or no
        memory. Every refusal is said in the log with the name. */
     int32_t (*make)(const LumaMod* mod, const char* name, uint32_t count, const LumaMakePlace* place, uint32_t flags,
                     void** objects);
+    /* Another name for a mod's class (classes contract, "alias"): a stage that places `name`, and make by it, make an
+       object of the live mod class `class_name` (any mod's), whose placement argument i (Obj_arg0 to 7) reads as
+       args[i] while it initialises, where args[i] is not -1 (-1: the placement's own). The alias is the calling mod's:
+       it goes when that mod goes or the class does. Called again for a name the mod aliased, it changes that alias.
+       0: the alias stands; -1 a bad argument (null, a name empty or over 63 bytes, null args), -2 the name is taken (a
+       game class's, a factory row's, a mod class's or another mod's alias), -3 not on the game thread, -5 class_name
+       is no live mod class. Every refusal is said in the log with the name. */
+    int32_t (*alias_class)(const LumaMod* mod, const char* name, const char* class_name, const int32_t args[8]);
+    /* The placement a stage made `object` from (classes contract, "placement"): 0 and *out, or -1 none (no scene, an
+       object made by code or by make, or not one the stage's placements made), -3 not on the game thread, -4 a null
+       object or out, or out smaller than LumaPlacement (said). The scene's objects live as long as the scene. */
+    int32_t (*placement_of)(const LumaMod* mod, const void* object, LumaPlacement* out);
+    /* The object the scene made from a placement (`place`'s zone, layer, index; its stage null or the main stage's
+       name; names compare with ASCII case folded), or null: no such placement in this scene, its creator made
+       nothing, it is not made yet, not on the game thread, or a null place or one smaller than LumaPlacement (said). */
+    void* (*placed_at)(const LumaMod* mod, const LumaPlacement* place);
+    /* A gravity of the live mod class `class_name`, whose base is PlanetGravity (classes contract, "gravity"): made
+       with `place`'s fields, its data zeroed and its `made` run, then registered with the scene's gravity manager,
+       which asks its calcOwnGravityVector (the class's override: pDest the pull's direction, pScalar the distance
+       it falls off with) at every point any object asks its gravity at. It lives as long as the scene (`gone` with
+       a null object when the scene goes); when its mod goes it pulls nowhere. Null: not on the game thread, or said
+       (no such live class, not a gravity class, no scene with gravities, no memory, a null place or one smaller than
+       LumaGravityPlace, a range that is not a number, a type bit above 8). */
+    void* (*make_gravity)(const LumaMod* mod, const char* class_name, const LumaGravityPlace* place);
 } LumaCore;
 
 /* report's own codes (D3-1). */

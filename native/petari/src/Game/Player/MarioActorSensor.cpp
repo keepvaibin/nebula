@@ -53,7 +53,7 @@ void MarioActor::updateHitSensor(HitSensor* pSensor) {
     case ATYPE_PLAYER:
         if (mMario->isStatusActive(MarioStatus_Hang)) {
             getRealPos("Spine1", &pSensor->mPosition);
-            pSensor->mRadius = 60.0f;
+            pSensor->mRadius = mConst->getTable()->mSensorRadius * 60.0f / 100.0f;
             return;
         }
 
@@ -62,7 +62,7 @@ void MarioActor::updateHitSensor(HitSensor* pSensor) {
             pSensor->mPosition.add(mMario->mJumpVec);
         }
 
-        pSensor->mRadius = 100.0f;
+        pSensor->mRadius = mConst->getTable()->mSensorRadius;
         return;
     case ATYPE_PUSH:
         pSensor->setType(ATYPE_EYE);

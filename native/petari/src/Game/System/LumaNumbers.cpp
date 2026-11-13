@@ -222,8 +222,8 @@ namespace luma {
             }
 
             u32 sizeOf(u32 kind) {
-                static const u8 kSizes[11] = {0, 4, 8, 1, 1, 2, 2, 4, 4, 8, 8};
-                return kind < 11 ? kSizes[kind] : 0;
+                static const u8 kSizes[12] = {0, 4, 8, 1, 1, 2, 2, 4, 4, 8, 8, 1};
+                return kind < 12 ? kSizes[kind] : 0;
             }
 
             u64 read(const Number* pNumber) {
@@ -251,6 +251,13 @@ namespace luma {
                 }
                 if (kind == 2) {
                     __builtin_memcpy(pBits, &value, 8);
+                    return true;
+                }
+                if (kind == 11) {
+                    if (value != 0.0 && value != 1.0) {
+                        return false;
+                    }
+                    *pBits = value == 1.0 ? 1u : 0u;
                     return true;
                 }
                 // Whole kinds: the range first (low included, high excluded: both exact as doubles), so no cast is out of
@@ -351,11 +358,14 @@ namespace luma {
             }
             u64 bits = 0;
             if (!encode(pNumber->kind, value, &bits)) {
-                static const char* const kKinds[11] = {"?", "f32", "f64", "s8", "u8", "s16", "u16", "s32", "u32", "s64", "u64"};
+                static const char* const kKinds[12] = {"?", "f32", "f64", "s8", "u8", "s16", "u16", "s32", "u32", "s64", "u64",
+                                                       "bool"};
                 char name[320];
                 nameOf(name, sizeof(name), pNumber->name, pNumber->signature, pNumber->place);
-                const char* const pKind = kKinds[pNumber->kind < 11 ? pNumber->kind : 0];
-                if (!(value == value)) {
+                const char* const pKind = kKinds[pNumber->kind < 12 ? pNumber->kind : 0];
+                if (pNumber->kind == 11) {
+                    say(pMod, "set_number %s: a bool is 0 or 1", name);
+                } else if (!(value == value)) {
                     say(pMod, "set_number %s: NaN is no %s", name, pKind);
                 } else if (pNumber->kind >= 3 && value > -1e15 && value < 1e15 && __builtin_trunc(value) != value) {
                     say(pMod, "set_number %s: %.6f is no whole number (%s)", name, value, pKind);

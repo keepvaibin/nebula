@@ -8,6 +8,9 @@
 #include "Game/System/GameAssets.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
+#include "Game/System/InputButtons.hpp"
+#include "Game/System/PlayerInput.hpp"
+#include "Game/System/PlayerInputs.hpp"
 #include "Game/System/LumaModLog.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
@@ -1052,16 +1055,12 @@ namespace luma {
                 nullptr,
                 registered,
             };
-            // The newest shown screen with a menu takes the player's controls this frame (F's rules, 2026-11-12): the
-            // game's own reading after the bindings (its pad's press edges, its pointer and touch). Nothing while a
-            // host menu is open. A row taken stays menu_chosen's until the next reading: this runs after the mods'
-            // frame handlers (GameSystem: services::frameStart, then ui::frame), so the next frame's handlers, the
-            // step's hooks between and the mods' tasks each see it once.
-            void menuFrame() {
+
+            // The newest shown screen with a menu, none while a host menu is open.
+            Screen* topMenu() {
                 Screen* pTop = nullptr;
                 for (u32 i = 0; i < sHigh; i++) {
                     Screen& rScreen = sScreens[i];
-                    rScreen.menu.chosen = -1;
                     if (rScreen.handle == 0 || rScreen.menu.count == 0u || rScreen.made == nullptr) {
                         continue;
                     }
@@ -1073,7 +1072,20 @@ namespace luma {
                         pTop = &rScreen;
                     }
                 }
-                if (pTop == nullptr || NebulaSettingsMenu::isShown()) {
+                return pTop == nullptr || NebulaSettingsMenu::isShown() ? nullptr : pTop;
+            }
+
+            // The newest shown screen with a menu takes the player's controls this frame (F's rules, 2026-11-12): the
+            // game's own reading after the bindings (its pad's press edges, its pointer and touch). Nothing while a
+            // host menu is open. A row taken stays menu_chosen's until the next reading: this runs after the mods'
+            // frame handlers (GameSystem: services::frameStart, then ui::frame), so the next frame's handlers, the
+            // step's hooks between and the mods' tasks each see it once.
+            void menuFrame() {
+                for (u32 i = 0; i < sHigh; i++) {
+                    sScreens[i].menu.chosen = -1;
+                }
+                Screen* const pTop = topMenu();
+                if (pTop == nullptr) {
                     return;
                 }
                 Menu& rMenu = pTop->menu;
@@ -1103,8 +1115,15 @@ namespace luma {
                 if (MR::isPressedJump(PLAYER_1) && !pointedOff && rMenu.focus >= 0 && rMenu.on[rMenu.focus]) {
                     rMenu.chosen = rMenu.focus;
                 }
+                // The presses were this menu's: the game's menus under it and the player read none this frame (with
+                // NebulaMenuFocus::cover, which GameSystem gave it before the menus' focus moved).
+                MR::getPlayerInput(PLAYER_1)->mButton->takePresses();
             }
         }  // namespace
+
+        bool takesControls() {
+            return sLive != 0 && topMenu() != nullptr;
+        }
 
         void frame() {
             if (sLive == 0) {

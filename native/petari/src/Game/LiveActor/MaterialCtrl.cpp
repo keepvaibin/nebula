@@ -19,7 +19,7 @@ void MaterialCtrl::update() {
     }
 }
 
-FogCtrl::FogCtrl(Model* pModel, bool useAllMaterials) : MaterialCtrl(pModel, nullptr), mNumMaterials(), mMaterials() {
+FogCtrl::FogCtrl(Model* pModel, bool useAllMaterials) : MaterialCtrl(pModel, nullptr), mFogInfo(), mNumMaterials(), mMaterials() {
     ModelData* pModelData = pModel->getModelData();
     Material* firstMaterial = nullptr;
     for (u32 i = 0; i < pModelData->getMaterialCount(); i++) {
@@ -33,11 +33,15 @@ FogCtrl::FogCtrl(Model* pModel, bool useAllMaterials) : MaterialCtrl(pModel, nul
         }
     }
 
-    if (!firstMaterial) {
+    // A model with no materials (a hidden one: `{"hide": true}`, models contract 2) has no fog to keep: none, and
+    // nothing for update() to touch.
+    if (!firstMaterial && pModelData->getMaterialCount() != 0) {
         firstMaterial = pModelData->getMaterialAt(0);
     }
 
-    mFogInfo = *firstMaterial->getFog();
+    if (firstMaterial) {
+        mFogInfo = *firstMaterial->getFog();
+    }
     if (mNumMaterials > 0) {
         mMaterials = new Material*[mNumMaterials];
         s32 materialCount = 0;

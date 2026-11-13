@@ -24,6 +24,8 @@ void frame(const NebulaExtensionFrame& frame) noexcept;
 
 // Game thread, at each sample: the controls the extensions hold, together. False when none gives controls.
 [[nodiscard]] bool controls(const NebulaExtensionFrame& frame, NebulaExtensionControls& controls) noexcept;
+// Game thread, at each sample: player 1's motor strength now, given to the extensions that take it when it changes.
+void motor(std::uint8_t strength) noexcept;
 
 // Render thread: whether any extension keeps pictures, and the file the first one names for this present (null: none).
 [[nodiscard]] bool keeps_pictures() noexcept;

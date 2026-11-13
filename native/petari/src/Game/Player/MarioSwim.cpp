@@ -482,7 +482,9 @@ bool MarioSwim::start() {
 
     updateLifeByTime();
     if (!getPlayer()->mHitStates.swimLifeDrain) {
+        if (!mActor->isExtraPlayer()) {
         MR::getGameSceneLayoutHolder()->changeLifeMeterModeWater();
+    }
     }
 
     mNextAction = EXIT_ACTION_NONE;
@@ -1740,7 +1742,9 @@ bool MarioSwim::close() {
     mSwimState = SWIM_STATE_NONE;
 
     mActor->resetWaterLife();
-    MR::getGameSceneLayoutHolder()->changeLifeMeterModeGround();
+    if (!mActor->isExtraPlayer()) {
+        MR::getGameSceneLayoutHolder()->changeLifeMeterModeGround();
+    }
 
     mBlurOffset = 0.0f;
     if (mJetTimer != 0) {

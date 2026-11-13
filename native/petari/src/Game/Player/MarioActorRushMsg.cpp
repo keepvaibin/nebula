@@ -404,7 +404,9 @@ void MarioActor::tryRushInRush() {
         mRushSensor = target;
 
         if (mPlayerMode == 4 && selectHideFlyMeter(target)) {
+            if (!mExtra) {
             MR::getGameSceneLayoutHolder()->changeLifeMeterModeGround();
+        }
         }
     } else {
         mRushSensors[0] = target;

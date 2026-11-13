@@ -1460,10 +1460,13 @@ namespace luma {
                 }
                 const NebulaArena::CurrentScope scope(pScene);
                 const ResourceHolder* const pHolder = MR::createAndAddResourceHolder(pName);
-                if (pHolder == nullptr || pHolder->mModelResTable == nullptr || pHolder->mModelResTable->getRes(pName) == nullptr) {
+                // The archive by its name, the model in it by the model's: a mod's "Luma/<id>/<path>" holds <leaf>.bmd
+                // (as ModelManager::init).
+                const char* const pResName = MR::getArchiveModelName(pName);
+                if (pHolder == nullptr || pHolder->mModelResTable == nullptr || pHolder->mModelResTable->getRes(pResName) == nullptr) {
                     return &rMesh;
                 }
-                Model* const pModel = MR::createModel(pHolder, pName, ModelFlag_None);
+                Model* const pModel = MR::createModel(pHolder, pResName, ModelFlag_None);
                 if (pModel == nullptr) {
                     return &rMesh;
                 }

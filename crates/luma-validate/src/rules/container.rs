@@ -9,7 +9,7 @@ pub const MAX_NAME_BYTES: usize = 240;
 pub const MAX_FILE: u64 = 4 << 30;
 pub const MAX_TOTAL: u64 = 64 << 30;
 
-const TOP: [(&str, bool); 8] = [
+const TOP: [(&str, bool); 9] = [
     ("luma.json", false),
     ("layers", true),
     ("code", true),
@@ -17,6 +17,8 @@ const TOP: [(&str, bool); 8] = [
     ("saves", true),
     ("kit", true),
     ("source", true),
+    // The mod's own tests (tests/**/test.json, run by `lumalink test`): carried as source is, never read by the game.
+    ("tests", true),
     // TLS roots a net permission adds (services-net 7).
     ("certs", true),
 ];

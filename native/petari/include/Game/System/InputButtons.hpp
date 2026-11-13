@@ -12,6 +12,10 @@ public:
     /// @brief Updates the state of the player's buttons.
     void update();
 
+    /// @brief This frame's presses and releases were taken (a mod's menu on top, LumaUi): nothing later this frame
+    /// reads them. Holds stay; a press withheld for a later step goes too.
+    void takePresses();
+
     /// @brief Determines if up on the +Control Pad is pressed.
     /// @return `true` if up is pressed, `false` otherwise.
     bool testButtonUp() const;

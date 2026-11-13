@@ -33,7 +33,9 @@ bool MarioActor::canTakePowerUp(s32 playerMode) const {
 }
 
 void MarioActor::setPlayerMode(u16 playerMode, bool withMorph) {
-    playerMode = static_cast< u16 >(NebulaMods::fire(NEBULA_MOD_EVENT_POWER_UP, playerMode));
+    if (!mExtra) {
+        playerMode = static_cast< u16 >(NebulaMods::fire(NEBULA_MOD_EVENT_POWER_UP, playerMode));
+    }
 
     // A mod's power-up: the player is in the game's form it acts like, so every table read by his form sees one of the
     // game's; the mod's own form is kept beside it.
@@ -127,7 +129,9 @@ void MarioActor::setPlayerMode(u16 playerMode, bool withMorph) {
         stopAnimation("ハチ飛行中");
 
         if (!mMario->isSwimming()) {
+            if (!mExtra) {
             MR::getGameSceneLayoutHolder()->changeLifeMeterModeGround();
+        }
         }
 
         mBeeModel->kill();
@@ -284,7 +288,9 @@ void MarioActor::setPlayerMode(u16 playerMode, bool withMorph) {
         break;
 
     case 4:
-        MR::getGameSceneLayoutHolder()->changeLifeMeterModeBee();
+        if (!mExtra) {
+            MR::getGameSceneLayoutHolder()->changeLifeMeterModeBee();
+        }
 
         rushDropThrowMemoSensor();
 

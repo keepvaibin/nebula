@@ -180,10 +180,11 @@ void XanimeCore::doFreeze() {
 }
 
 void XanimeCore::setBck(u32 index, Clip* pAnm) {
-    // A clip made for another skeleton: joint j reads tracks j*9 on, with nothing marking the clip's end, so a short
-    // clip walked what lies past it as keys (a model shaking, or standing off the ground, by junk translations).
-    // Such a clip does not play: the model keeps its pose and the log names the mismatch.
-    if (pAnm != nullptr && pAnm->jointCapacity() != mJointCount) {
+    // A clip with more joints than the model is made for another skeleton: it does not play, the model keeps its pose
+    // and the log names the mismatch. One with fewer plays on the joints it has: a model that replaces a game model
+    // keeps the game's joints first and its extra joints after (models contract 4), which keep their rest places
+    // (Clip::getTransform reads no track past the clip's end).
+    if (pAnm != nullptr && pAnm->jointCapacity() > mJointCount) {
         nebula_log("Xanime: a clip of %u joints set on a model of %u; it does not play\n",
                    static_cast< unsigned >(pAnm->jointCapacity()), static_cast< unsigned >(mJointCount));
         mTrackList[index].mClip = nullptr;
@@ -218,7 +219,9 @@ void XanimeCore::blendTracks(u32 joint, f32 totalWeight, Vec3f* pScale, Vec3f* p
         const XanimeTrack* pTrack = &mTrackList[i];
 
         if (pTrack->mClip != nullptr && pTrack->mWeight != 0.0f) {
-            pTrack->mClip->getTransform(joint, &transform);
+            if (!pTrack->mClip->getTransform(joint, &transform)) {
+                transform = Skeleton::mModel->getModelData()->getJointAt(joint)->getTransformInfo();
+            }
             Quaternion trackRotation;
             eulerRadiansToQuat(transform.mRotation.x, transform.mRotation.y, transform.mRotation.z, &trackRotation);
 
@@ -299,7 +302,9 @@ void XanimeCore::calcSingle(Vec3f* pScale, Vec3f* pTranslate) {
         return;
     }
 
-    mTrackList[0].mClip->getTransform(joint, &transform);
+    if (!mTrackList[0].mClip->getTransform(joint, &transform)) {
+        transform = Skeleton::mModel->getModelData()->getJointAt(joint)->getTransformInfo();
+    }
     eulerRadiansToQuat(transform.mRotation.x, transform.mRotation.y, transform.mRotation.z, &rotation);
     *pScale = reinterpret_cast< const Vec3f& >(transform.mScale);
     *pTranslate = reinterpret_cast< const Vec3f& >(transform.mTranslate);

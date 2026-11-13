@@ -6,6 +6,8 @@
 //   out <folder>                   where facts.jsonl and pictures/ go (the rest of the line)
 //   bare 0|1                       1: no game half
 //   clock title                    a test with no stage: frame 0 is not before the title screen ("boot: title screen")
+//   device pad                     the controls are a controller's (NEBULA_EXT_CONTROLS_PAD); its motor is the fact
+//                                  input.motor (0 to 255) at each change
 //   setup <item ...>               given to the game half in order ("setup save.spin 1", ..., "setup done")
 //   step <at|after> <action ...>   a step; `at` a frame of the test clock, or `after` with the cond lines below it
 //   cond fact <key> <op> <within|-> <JSON>   the step above waits for this fact (its newest value) to hold
@@ -25,6 +27,7 @@
 #include <luma_harness.h>
 
 #include <cctype>
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -338,7 +341,7 @@ bool equal(const Json& a, const Json& b) {
     return false;
 }
 
-std::string quoted(std::string_view text) {
+std::string json_string(std::string_view text) {
     std::string out = "\"";
     for (const char c : text) {
         switch (c) {
@@ -371,6 +374,8 @@ struct Cond {
     Json value;
     std::regex pattern;       // a log line's
     std::string source;       // as written, for the reason
+    bool next = false;        // revision 8: the fact's check holds on a write made after the wait began
+    std::uint64_t writes_at_arm = 0u;
 };
 
 struct Step {
@@ -413,6 +418,7 @@ struct State {
     bool on = false;
     bool bare = false;
     bool clock_title = false;     // frame 0 waits for the title screen
+    bool as_pad = false;          // `device pad`
     bool title_seen = false;
     bool setup_finished = false;  // "setup done" answered
     std::string out;
@@ -434,6 +440,9 @@ struct State {
     std::map<std::string, std::string> latest;  // each fact's newest value, as JSON text
     std::map<std::string, std::uint64_t> writes;  // how often each fact was written
     std::string last_log;                         // the game's last log line, for a step that waits in vain
+    // The log lines since a step last ran (cleared there, kept to 4096): an after step armed later matches its log
+    // conditions against them, so a line its step before wrote (a take-out's mod saying it went) is not missed.
+    std::deque<std::string> since_step;
     std::vector<std::regex*> log_watch;
     bool finished = false;
 } g;
@@ -452,11 +461,11 @@ void write_fact(const std::string& key, const std::string& json, std::optional<s
     }
     const std::string at = std::to_string(frame.value_or(test_frame()));
     if (!parse(json)) {
-        const std::string bad = "{\"key\":" + quoted(key) + ",\"value\":" + quoted(json) + "}";
+        const std::string bad = "{\"key\":" + json_string(key) + ",\"value\":" + json_string(json) + "}";
         g.facts << "{\"frame\":" << at << ",\"key\":\"harness.bad_fact\",\"value\":" << bad << "}\n" << std::flush;
         return;
     }
-    g.facts << "{\"frame\":" << at << ",\"key\":" << quoted(key) << ",\"value\":" << json << "}\n" << std::flush;
+    g.facts << "{\"frame\":" << at << ",\"key\":" << json_string(key) << ",\"value\":" << json << "}\n" << std::flush;
     g.latest[key] = json;
     ++g.writes[key];
 }
@@ -477,7 +486,7 @@ void finish(const std::string& verdict, const std::string& reason) {
     if (verdict.empty()) {
         write_fact("harness.end", "{\"frame\":" + std::to_string(test_frame()) + "}");
     } else {
-        write_fact("harness.stop", "{\"verdict\":" + quoted(verdict) + ",\"reason\":" + quoted(reason) + "}");
+        write_fact("harness.stop", "{\"verdict\":" + json_string(verdict) + ",\"reason\":" + json_string(reason) + "}");
     }
     if (g.facts.is_open()) {
         g.facts.close();
@@ -576,6 +585,14 @@ bool read_line(const std::string& line, std::string& why) {
             return false;
         }
         g.clock_title = true;
+        return true;
+    }
+    if (w[0] == "device") {
+        if (w.size() != 2u || w[1] != "pad") {
+            why = "a device line is `device pad`";
+            return false;
+        }
+        g.as_pad = true;
         return true;
     }
     if (w[0] == "bare") {
@@ -707,7 +724,8 @@ bool read_line(const std::string& line, std::string& why) {
                 why = "step " + std::to_string(s.number) + ": the log pattern is not a regular expression";
                 return false;
             }
-        } else if (w.size() >= 5u && w[1] == "fact") {
+        } else if (w.size() >= 5u && (w[1] == "fact" || w[1] == "next")) {
+            c.next = w[1] == "next";
             c.key = w[2];
             c.op = w[3];
             if (w[4] != "-") {
@@ -794,6 +812,7 @@ bool holds(const Cond& c) {
 }
 
 void run_step(Step& s, std::int64_t now) {
+    g.since_step.clear();
     switch (s.action) {
     case Action::Hold: g.inputs.push_back({now, s.frames, s.buttons, false, false, false, 0.0f, 0.0f}); break;
     case Action::Shake: g.inputs.push_back({now, s.frames, 0u, true, false, false, 0.0f, 0.0f}); break;
@@ -1065,10 +1084,23 @@ void frame(std::uint64_t game_frames) {
             } else if (before_done) {
                 if (!s.armed) {
                     s.armed = now;
+                    for (Cond& c : s.conds) {
+                        const auto written = g.writes.find(c.key);
+                        c.writes_at_arm = written != g.writes.end() ? written->second : 0u;
+                    }
+                    // A log line written since the step before ran meets a log condition as one written from now.
+                    for (auto it = s.conds.begin(); it != s.conds.end();) {
+                        const bool met = it->log && std::any_of(g.since_step.begin(), g.since_step.end(), [&](const std::string& line) {
+                                             return std::regex_search(line, it->pattern);
+                                         });
+                        it = met ? s.conds.erase(it) : it + 1;
+                    }
                 }
                 bool all = true;
                 for (const Cond& c : s.conds) {
-                    all = all && (c.log ? false : holds(c));
+                    const auto written = g.writes.find(c.key);
+                    const bool fresh = !c.next || (written != g.writes.end() && written->second > c.writes_at_arm);
+                    all = all && (c.log ? false : fresh && holds(c));
                 }
                 // A log condition is met by log_line (it clears the cond); none left means met.
                 for (const Cond& c : s.conds) {
@@ -1144,6 +1176,10 @@ void log_line(const char* tag, const char* line) {
     }
     const std::string text = std::string(tag) + " " + line;
     g.last_log = text;
+    g.since_step.push_back(text);
+    if (g.since_step.size() > 4096u) {
+        g.since_step.pop_front();
+    }
     if (text.compare(0, 18u, "boot: title screen") == 0) {
         g.title_seen = true;
     }
@@ -1166,7 +1202,7 @@ void log_line(const char* tag, const char* line) {
             if (key_ok && parse(json)) {
                 write_fact("mod." + id + "." + key, json);
             } else {
-                write_fact("harness.bad_fact", quoted(text));
+                write_fact("harness.bad_fact", json_string(text));
             }
         }
     }
@@ -1181,7 +1217,7 @@ void log_line(const char* tag, const char* line) {
             if (tail == "started") {
                 write_fact("mod." + id + ".loaded", "true");
             } else if (tail.compare(0, 13u, "not started: ") == 0) {
-                write_fact("mod." + id + ".loaded", quoted(tail.substr(13u)));
+                write_fact("mod." + id + ".loaded", json_string(tail.substr(13u)));
             }
         } else {
             // "mods: <id>: <why>": a mod refused before its code was started (the Mods page's reason, in capitals) or
@@ -1194,7 +1230,7 @@ void log_line(const char* tag, const char* line) {
                 capitals = capitals && !(c >= 'a' && c <= 'z');
             }
             if (!id.empty() && id.find(' ') == std::string::npos && (capitals || why.compare(0, 18u, "its code isn't run") == 0)) {
-                write_fact("mod." + id + ".loaded", quoted(why));
+                write_fact("mod." + id + ".loaded", json_string(why));
             }
         }
     }
@@ -1219,6 +1255,17 @@ const void* service(const char* name, std::uint32_t major, std::uint32_t minor) 
         return nullptr;
     }
     return &g_service;
+}
+
+bool as_pad() {
+    return g.on && g.as_pad;
+}
+
+void motor(std::uint8_t strength) {
+    if (!g.on) {
+        return;
+    }
+    write_fact("input.motor", std::to_string(strength));
 }
 
 }  // namespace harness

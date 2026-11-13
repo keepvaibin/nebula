@@ -40,6 +40,7 @@ namespace {
     s32 sGapFrames = 0;
     Direction sPress = NebulaMenuFocus::Direction_None;    // this frame's
     Direction sUnmoved = NebulaMenuFocus::Direction_None;  // this frame's, with nothing that way
+    bool sCovered = false;  // this frame's pad is a mod's menu's (cover)
 
     f32 absolute(f32 value) {
         return value < 0.0f ? -value : value;
@@ -215,9 +216,15 @@ namespace NebulaMenuFocus {
         pRepeat->mHeldFrames = 0;
     }
 
+    void cover() {
+        sCovered = true;
+    }
+
     void update() {
         sPress = Direction_None;
         sUnmoved = Direction_None;
+        const bool covered = sCovered;
+        sCovered = false;
         sEntryCount = 0;
         Entry* const pEntries = sEntries.room(sOfferedCount);
         for (s32 i = 0; i < sOfferedCount; i++) {
@@ -262,6 +269,11 @@ namespace NebulaMenuFocus {
             return;
         }
 
+        // A mod's menu over these takes the pad (LumaUi): no move here, and what it holds is no press once it closes.
+        if (covered) {
+            holdCurrent(&sRepeat);
+            return;
+        }
         const Direction press = readPress(&sRepeat);
         if (press == Direction_None) {
             return;

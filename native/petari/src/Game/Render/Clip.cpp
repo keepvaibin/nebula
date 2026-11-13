@@ -132,7 +132,10 @@ u8 Clip::colorByte(const NebulaClipTrack& rTrack) const {
     return color > 255.0f ? 255 : nebula_f32_to_u8(color);
 }
 
-void Clip::getTransform(u32 joint, TransformInfo* pOut) const {
+bool Clip::getTransform(u32 joint, TransformInfo* pOut) const {
+    if (joint >= jointCapacity()) {
+        return false;
+    }
     const NebulaClipTrack* p = tracks() + joint * 9u;
     pOut->mScale.x = value(p[0], 1.0f);
     pOut->mRotation.x = rotation(p[1]);
@@ -143,6 +146,7 @@ void Clip::getTransform(u32 joint, TransformInfo* pOut) const {
     pOut->mScale.z = value(p[6], 1.0f);
     pOut->mRotation.z = rotation(p[7]);
     pOut->mTranslate.z = value(p[8], 0.0f);
+    return true;
 }
 
 void Clip::getTextureTransform(u32 entry, TextureTransform* pOut) const {

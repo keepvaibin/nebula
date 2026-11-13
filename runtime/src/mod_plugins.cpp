@@ -4,6 +4,7 @@
 
 #include "galaxy/luma.h"
 #include "galaxy/host_extension.h"
+#include "galaxy/luma_guard_host.h"
 #include "galaxy/luma_services_host.h"
 #include <luma_host.h>
 
@@ -328,6 +329,11 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
     // A mod taken out while the game runs (reload.md 2) is told to the host, which forgets it as started.
     if (const auto told = reinterpret_cast<LumaSetTakenOut>(find_symbol != nullptr ? find_symbol("luma_set_taken_out") : nullptr)) {
         told([](const char* mod_id) { taken_out(mod_id); });
+    }
+    // The guard (plan 1.6): its fault handler before any mod's code runs. Off, a fault in a mod's code reaches the crash
+    // report, which names the mod.
+    if (!plugins.empty() && !galaxy::luma_guard::install(find_symbol)) {
+        if (g_log != nullptr) g_log("mods: the guard is off (the game module or the system did not take it); a fault in a mod's code ends the game with its report");
     }
     // LumaCore's services: the module's own, the host's, then the extensions' test ones (services-registry 13).
     if (!plugins.empty()) {

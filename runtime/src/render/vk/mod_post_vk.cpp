@@ -249,8 +249,17 @@ void RendererVk::record_mod_post(const ModPostProgram& program, ModPostConstants
                 resolve_scene_depth(commands_);
             }
             depth = scene_.depth.get();
-        } else if (alt_scene_.depth && (alt_scene_.samples <= 1u || !alt_scene_.depth_dirty)) {
-            depth = alt_scene_.depth.get();
+        } else if (alt_scene_.depth) {
+            // The scene ended with its samples' depth unresolved (begin_output_scene carries its colour only): that
+            // set in place for its resolve, then the output scene target back.
+            if (alt_scene_.samples > 1u && alt_scene_.depth_dirty) {
+                swap_scene_sets();
+                resolve_scene_depth(commands_);
+                swap_scene_sets();
+            }
+            if (alt_scene_.samples <= 1u || !alt_scene_.depth_dirty) {
+                depth = alt_scene_.depth.get();
+            }
         }
     }
     const vk::Texture* motion = nullptr;

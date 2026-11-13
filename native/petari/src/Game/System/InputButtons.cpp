@@ -27,6 +27,13 @@ void InputButtons::update() {
     }
 }
 
+void InputButtons::takePresses() {
+    mTrigger = 0;
+    mRelease = 0;
+    mCarriedTrigger = 0;
+    mCarriedRelease = 0;
+}
+
 bool InputButtons::testButtonUp() const {
     return (mHold & NEBULA_BUTTON_UP) != 0;
 }

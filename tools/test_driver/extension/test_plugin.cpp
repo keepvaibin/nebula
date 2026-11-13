@@ -436,9 +436,10 @@ void read_events() {
             Teleport t{};
             bool good = parts.size() == 4u;
             for (std::size_t i = 0u; good && i < 3u; ++i) {
-                const char* const end = parts[i].data() + parts[i].size();
-                const std::from_chars_result read = std::from_chars(parts[i].data(), end, t.xyz[i]);
-                good = read.ec == std::errc{} && read.ptr == end;
+                // strtof, not std::from_chars: libc++ (Android) has no floating-point from_chars.
+                char* end = nullptr;
+                t.xyz[i] = std::strtof(parts[i].c_str(), &end);
+                good = !parts[i].empty() && end == parts[i].c_str() + parts[i].size();
             }
             t.frame = good ? number(parts[3], kNone) : kNone;
             if (good && t.frame != kNone) {

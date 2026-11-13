@@ -84,7 +84,7 @@ bool MarioActor::isRequestSpin() const {
         return false;
     }
 
-    if (isJumping() && mMario->mAirTimer > 6 && MR::isStarPointerPointing2P(this, "弱", true, false) && MR::isPressedJump(1)) {
+    if (isJumping() && mMario->mAirTimer > 6 && !mExtra && MR::isCoStarFree() && MR::isStarPointerPointing2P(this, "弱", true, false) && MR::isPressedJump(1)) {
         return true;
     }
 
@@ -120,7 +120,7 @@ bool MarioActor::isRequestJump2P() const {
         return false;
     }
 
-    if (MR::isStarPointerPointing2P(this, "弱", true, false) && MR::isPressedJump(1)) {
+    if (!mExtra && MR::isCoStarFree() && MR::isStarPointerPointing2P(this, "弱", true, false) && MR::isPressedJump(1)) {
         return true;
     }
 
@@ -140,7 +140,8 @@ bool MarioActor::isKeepJump2P() const {
         return false;
     }
 
-    return MR::isHeldJump(1);
+    // The co-star's: none for an extra player, nor while one is driven by the second controller.
+    return !mExtra && MR::isCoStarFree() && MR::isHeldJump(1);
 }
 
 bool MarioActor::checkButtonType(u16 type, bool isObeyDisable) const {
@@ -281,7 +282,8 @@ void MarioActor::updateControllerSwing() {
     bool F20 = mMainSpinHeld;
     mMainSpinTrigger = false;
 
-    bool isMainSpin = !mMario->isSwimming() ? MR::isMainSpin(0) : MR::isMainSpinPressed(0);
+    const s32 channel = MR::getPlayerChannel();
+    bool isMainSpin = channel >= 0 && (!mMario->isSwimming() ? MR::isMainSpin(channel) : MR::isMainSpinPressed(channel));
     mMainSpinHeld = isMainSpin;
 
     if (mMainSpinBlock != 0) {
@@ -303,7 +305,8 @@ void MarioActor::updateControllerSwingLeft() {
     bool F21 = mSubSpinHeld;
     mSubSpinTrigger = false;
 
-    bool isSubSpin = MR::isSubSpin(0);
+    const s32 channel = MR::getPlayerChannel();
+    bool isSubSpin = channel >= 0 && MR::isSubSpin(channel);
     mSubSpinHeld = isSubSpin;
 
     if (mSubSpinBlock != 0) {
@@ -357,7 +360,7 @@ bool MarioActor::isRequestSpinJump2P() const {
         return false;
     }
 
-    if (isJumping() && mMario->mAirTimer > 6 && MR::isStarPointerPointing2P(this, "弱", true, false) && MR::isPressedJump(1)) {
+    if (isJumping() && mMario->mAirTimer > 6 && !mExtra && MR::isCoStarFree() && MR::isStarPointerPointing2P(this, "弱", true, false) && MR::isPressedJump(1)) {
         return true;
     }
 

@@ -112,6 +112,7 @@ K_CALL_EXPR = 103
 # The kernel's own units: their numbers and tables are not the game's data.
 KERNEL_PREFIX = 'Game/System/Luma'
 SC_STATIC = 3
+T_BOOL = 3
 T_ENUM_KIND = 106
 # Whole numbers (bool and the character types too: a const one may be a constant expression)
 T_WHOLE = (3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19)
@@ -476,6 +477,8 @@ class Unit:
             if all(name for name, _, _ in scope):
                 owner = '::' + owner
         local = api.linkage(cursor) == LINKAGE_INTERNAL or any(kind == K_CLASS and self.defined_here(c) for _, kind, c in scope)
+        if local and self.label is None:
+            return None  # gen_types' header pass: a unit's own function is named by its file, which that pass has not
         name = f'{self.label}#{qualified}' if local else qualified
 
         edits = []
@@ -884,7 +887,8 @@ class Unit:
             return None
         if parent.kind in (K_STRUCT, K_UNION, K_CLASS) and api.access(definition) in (2, 3):
             return None
-        kind = number_kind(vtype.kind, api.sizeOf(vtype))
+        # A file's bool constant is a switch a mod may set (kind 11, 0 or 1); a bool written in code is no number.
+        kind = 11 if vtype.kind == T_BOOL and api.sizeOf(vtype) == 1 else number_kind(vtype.kind, api.sizeOf(vtype))
         initializer = api.varInitializer(definition)
         if kind is None or api.isNull(initializer):
             return None
@@ -1167,6 +1171,8 @@ class Unit:
         qualified = '::'.join([name for name, _, _ in scope if name] + [self.string(api.spelling(cursor))])
         member_of = bool(scope) and scope[-1][1] == K_CLASS and cursor.kind != K_FUNCTION
         local = api.linkage(cursor) == LINKAGE_INTERNAL or any(kind == K_CLASS and self.defined_here(c) for _, kind, c in scope)
+        if local and self.label is None:
+            return None  # gen_types' header pass: a unit's own function is named by its file, which that pass has not
         name = f'{self.label}#{qualified}' if local else qualified
         fntype = api.type(cursor)
         texts = [self.type_text(api.argType(fntype, i)) for i in range(api.numArgs(cursor))]
@@ -1784,7 +1790,8 @@ def number_value(written, floating):
 
 
 def number_kind(type_kind, size):
-    """luma::Number's kind (luma_hook.h): 1 f32, 2 f64, 3 s8, 4 u8, 5 s16, 6 u16, 7 s32, 8 u32, 9 s64, 10 u64; None
+    """luma::Number's kind (luma_hook.h): 1 f32, 2 f64, 3 s8, 4 u8, 5 s16, 6 u16, 7 s32, 8 u32, 9 s64, 10 u64 (11 bool:
+    a file's constant only, constant_key); None
     for any other type."""
     if type_kind == 21 and size == 4:
         return 1

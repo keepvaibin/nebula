@@ -31,6 +31,7 @@
 #include "galaxy/save_files.h"
 #include "galaxy/crash_report.h"
 #include "galaxy/game_module.h"
+#include "galaxy/luma_guard_host.h"
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
 #include "galaxy/hidden_start.h"
 #endif
@@ -44,6 +45,7 @@
 #include "galaxy/render/host_window.h"
 #include "galaxy/mod_log.h"
 #include "galaxy/mod_screens.h"
+#include "galaxy/mod_start_check.h"
 #include "galaxy/mod_plugins.h"
 #include "galaxy/render/mod_post.h"
 #include "galaxy/render/mod_shaders.h"
@@ -566,6 +568,20 @@ struct Pak {
     fs::path store_file;
 };
 Pak gPak;
+// A part of the game a start with mods needs, found missing at step 1 (contract start-check 2): every mod is off.
+std::optional<galaxy::startcheck::MissingPart> gMissingPart;
+
+// The harness's own game half (luma-test, placed by tools/lumacore/luma_test.py in a harness run, which sets
+// LUMA_HARNESS_PLAN) is the test's instrument, not a player's mod: a start that turns every mod off (a safe start, a
+// missing part) leaves it on, or no such start could be run as a test (it gives the setup and the steps, and ends the run).
+bool is_harness_half(const std::string& mod_id) {
+#if defined(_WIN32)
+    const bool harness_run = GetEnvironmentVariableA("LUMA_HARNESS_PLAN", nullptr, 0) != 0;
+#else
+    const bool harness_run = std::getenv("LUMA_HARNESS_PLAN") != nullptr;
+#endif
+    return harness_run && mod_id == "luma-test";
+}
 
 bool open_pak(const fs::path& path) {
     gPak.store_file = path;
@@ -1164,6 +1180,14 @@ __declspec(noinline) const char* plugin_in_fault(const EXCEPTION_POINTERS* info,
 
 // The crash's mod, when a plugin's code was running (gCrashFacts after gather_crash_facts).
 void note_crash_plugin(const EXCEPTION_POINTERS* info) noexcept {
+    // A fault the guard saw in a mod's code and did not resume (plan 1.6): its sentence, and the mod is the guard's.
+    if (const char* guard = galaxy::luma_guard::note_text(info->ExceptionRecord->ExceptionAddress)) {
+        log_line("crash: guard:", guard);
+        std::snprintf(gCrashPlugin, sizeof(gCrashPlugin), "%s", galaxy::luma_guard::note_mod());
+        gCrashFacts.plugin_mod = gCrashPlugin;
+        gCrashFacts.in_plugin = true;
+        return;
+    }
     bool in_plugin = false;
     if (const char* mod = plugin_in_fault(info, &in_plugin)) {
         std::snprintf(gCrashPlugin, sizeof(gCrashPlugin), "%s", mod);
@@ -2914,7 +2938,9 @@ bool input_device_missing(bool wii_remote) {
 // mod's when stronger (input.rumble).
 galaxy::input::PlayerInput controls_input() {
     const int32_t mode = gStarPointerMode.load(std::memory_order_relaxed);
-    galaxy::host::native_game_rumble(std::max(gMotor.load(std::memory_order_relaxed), galaxy::luma_input::mod_rumble(0)), mode);
+    const uint8_t strength = std::max(gMotor.load(std::memory_order_relaxed), galaxy::luma_input::mod_rumble(0));
+    galaxy::host::native_game_rumble(strength, mode);
+    galaxy::extensions::motor(strength);
     return galaxy::host::native_game_input(gGameFrames.load(std::memory_order_relaxed), mode,
                                            static_cast<uint8_t>(gTiltSection.load(std::memory_order_relaxed)));
 }
@@ -2943,6 +2969,9 @@ uint32_t main_device_kind(bool remote) {
     if (remote) {
         return LUMA_INPUT_DEVICE_MOTION;
     }
+    if ((galaxy::extensions::flags() & NEBULA_EXT_CONTROLS_PAD) != 0u) {
+        return LUMA_INPUT_DEVICE_PAD;  // a test extension's controller (its motor the extension's)
+    }
     const std::optional<galaxy::input::DeviceKey> last = galaxy::host::last_input_device();
     if (!last || last->scheme == galaxy::input::ControlScheme::Keyboard) {
         return galaxy::host::touch_controls_present() ? LUMA_INPUT_DEVICE_TOUCH : LUMA_INPUT_DEVICE_KEYBOARD_MOUSE;
@@ -2951,8 +2980,12 @@ uint32_t main_device_kind(bool remote) {
 }
 
 // Whether a mod's rumble reaches player 1's device: a controller whose motor the host drives (the controller worker on
-// Windows, SDL's gamepads elsewhere), or a real Wii Remote (its motor bit). None for the keyboard or a phone's screen.
+// Windows, SDL's gamepads elsewhere; a test extension's, NEBULA_EXT_CONTROLS_PAD), or a real Wii Remote (its motor bit).
+// None for the keyboard or a phone's screen.
 bool main_motor(uint32_t device) {
+    if (device == LUMA_INPUT_DEVICE_PAD && (galaxy::extensions::flags() & NEBULA_EXT_CONTROLS_PAD) != 0u) {
+        return true;
+    }
 #if defined(NEBULA_REAL_WIIMOTE)
     if (device == LUMA_INPUT_DEVICE_MOTION) {
         return true;
@@ -3637,6 +3670,8 @@ void svc_mods_start(void*) {
 #endif
                                 },
                                 [](const char* text) { log_line("mods:", text); });
+    // The start check's one line when a part was missing (every mod off this session).
+    if (gMissingPart) galaxy::startcheck::report(*gMissingPart);
     // Each mod whose code did not start, in the mod log as the Mods page says it.
     galaxy::modlog::add_not_started();
     // Each placed package through the validator, its findings in the mod log (kept: nothing runs when nothing changed).
@@ -3691,6 +3726,28 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
 void prepare_mod_files(const fs::path& settings_folder, const std::string& game_id, std::vector<galaxy::mods::ModInfo> mods) {
     const std::string language = galaxy::mods::language_folder(
         game_id, static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language)));
+    // Step 1 of a start with mods (contract start-check 1, 2): with a mod on, the game's own parts the mods need. One
+    // missing: every mod is off this session, with one mod-log line; nothing of the mods runs. No mod on: no check.
+    if (std::any_of(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) { return mod.enabled; })) {
+        // The cook writes about what the mods bring: their files' bytes are the estimate.
+        std::uint64_t bring = 0;
+        for (const galaxy::mods::ModInfo& mod : mods) {
+            if (!mod.enabled) continue;
+            std::error_code walk_error;
+            for (fs::recursive_directory_iterator it(mod.path, walk_error), end; !walk_error && it != end; it.increment(walk_error)) {
+                std::error_code size_error;
+                if (it->is_regular_file(size_error)) bring += it->file_size(size_error);
+            }
+        }
+        if (const std::optional<galaxy::startcheck::MissingPart> part =
+                galaxy::startcheck::missing_part(gPak.store, settings_folder / "mods" / ".cooked", bring)) {
+            log_line("mods:", ("a part a start with mods needs is missing (" + part->why + "): every mod is off this time").c_str());
+            gMissingPart = part;  // said in the mod log once it exists (start_mods)
+            for (galaxy::mods::ModInfo& mod : mods) {
+                if (!is_harness_half(mod.id)) mod.enabled = false;
+            }
+        }
+    }
     gStartPackages.clear();
     for (const galaxy::mods::ModInfo& mod : mods) {
         if (mod.package) gStartPackages.push_back({mod.id, mod.path, mod.enabled});
@@ -4430,15 +4487,9 @@ int main(int argc, char** argv) {
                 log_line("mods:", safe == galaxy::mods::SafeStart::kAsked
                                       ? "safe start: every mod is off for this start"
                                       : "safe start: the last run crashed with mods on; every mod is off for this start");
-                // The harness's own game half (luma-test, placed by tools/lumacore/luma_test.py in a harness run) is the
-                // test's instrument, not a player's mod: it stays on, or no safe start could be run as a test.
-#if defined(_WIN32)
-                const bool harness_run = GetEnvironmentVariableA("LUMA_HARNESS_PLAN", nullptr, 0) != 0;
-#else
-                const bool harness_run = std::getenv("LUMA_HARNESS_PLAN") != nullptr;
-#endif
+                // The harness's own game half stays on (is_harness_half).
                 for (galaxy::mods::ModInfo& mod : mods) {
-                    if (!(harness_run && mod.id == "luma-test")) mod.enabled = false;
+                    if (!is_harness_half(mod.id)) mod.enabled = false;
                 }
             } else if (std::any_of(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) { return mod.enabled; })) {
                 // A crash from here on (the cook, the packs, the game) makes the next start safe; svc_mods_start

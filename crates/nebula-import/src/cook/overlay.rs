@@ -240,7 +240,7 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         let skeleton = super::gltf::skeleton_gltf(&game, &block).ok_or_else(|| refuse("Cook.Model.HideNoGame", &[("file", change.path.clone())]))?;
         let file = stem.rsplit('/').next().unwrap_or(stem);
         let name = file.split('.').next().unwrap_or(file);
-        let (model, _, made) = super::gltf::to_files_for(&skeleton, None, name, Some(&game))?;
+        let (model, made) = super::gltf::hidden_files_for(&skeleton, name, &game)?;
         super::refuse::record(super::refuse::CookFact::Model { path: native_path.clone(), source: change.path.clone(), facts: made });
         return Ok(vec![(native_path, model, true)]);
     }

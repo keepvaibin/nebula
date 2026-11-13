@@ -10,6 +10,7 @@
 
 #include "galaxy/input/mod_actions.h"
 #include "galaxy/input_bindings.h"
+#include "galaxy/pointer_control.h"
 #include "galaxy/mods.h"
 
 #include <luma_input.h>
@@ -64,6 +65,9 @@ constexpr std::size_t kReportsKept = 64u;
 std::atomic<const LumaServiceKernel*> g_kernel{nullptr};
 void (*g_log)(const char*) = nullptr;  // set by providers() before the first mod
 bool g_declared = false;              // game thread: the session's actions are declared (at the first mod's begin)
+// Game thread, from declare: (mod, a mod it needs) for each started mod, so a library reads the actions of the mods that
+// need it (a kit's move started by its user's action).
+std::vector<std::pair<std::string, std::string>> g_needs;
 
 // Anything a mod asked for that game_read must look at (an injection, a rumble, a watch, an open text request): with
 // none, game_read only records and returns.
@@ -712,6 +716,11 @@ void declare() {
         if (!mod.enabled) {
             continue;
         }
+        if (mod.luma) {
+            for (const galaxy::luma::Dependency& need : mod.luma->needs) {
+                g_needs.emplace_back(mod.id, need.id);
+            }
+        }
         for (const galaxy::mods::ModInfo::Action& action : mod.actions) {
             const std::optional<galaxy::input::GameInput> follows = galaxy::input::parse_game_input(action.follows);
             if (!follows) {
@@ -729,14 +738,30 @@ void declare() {
     galaxy::input::mod_actions::declare(std::move(actions), g_log);
 }
 
-// The action `handle` names when it is one of `mod`'s: its index, or -1.
+// The action `handle` names when `mod` may read it: one of its own, or of a mod that needs it (a library reads its
+// users' actions); its index, or -1.
 std::int32_t index_of(const LumaMod* mod, LumaInputAction handle) {
     if (handle == 0u || handle > 0x7FFFFFFFu) {
         return -1;
     }
     const std::int32_t index = static_cast<std::int32_t>(handle - 1u);
     const char* const id = kernel()->mod_id(mod);
-    return id != nullptr && galaxy::input::mod_actions::owner(index) == std::string_view(id) ? index : -1;
+    if (id == nullptr) {
+        return -1;
+    }
+    const std::string_view owner = galaxy::input::mod_actions::owner(index);
+    if (owner.empty()) {
+        return -1;
+    }
+    if (owner == std::string_view(id)) {
+        return index;
+    }
+    for (const std::pair<std::string, std::string>& need : g_needs) {
+        if (need.first == owner && need.second == id) {
+            return index;
+        }
+    }
+    return -1;
 }
 
 std::int32_t input_action(const LumaMod* mod, const char* id, LumaInputAction* out) {
@@ -993,6 +1018,52 @@ std::int32_t input_rumble(const LumaMod* mod, std::uint32_t player, float streng
     record->rumble[player] = strength;
     record->rumble_until[player] = g_players[player].reads + static_cast<std::uint64_t>(std::ceil(seconds * kReadsPerSecond));
     g_active.store(true, std::memory_order_release);
+    return LUMA_OK;
+}
+
+// ---- input 1.2: what aims the pointer --------------------------------------------------------------------------------
+
+// The mod's choice for the main player (game thread writes; the live controls read at each sample) and what the
+// live controls saw could aim it.
+std::atomic<std::uint32_t> g_pointer_source{0};
+std::atomic<float> g_pointer_gyro_scale{1.0f};
+std::atomic<std::uint32_t> g_pointer_sources{0};
+const LumaMod* g_pointer_mod = nullptr;  // game thread: the mod whose choice holds
+
+std::int32_t input_pointer_source(const LumaMod* mod, LumaInputPad pad, LumaInputPointerSource kind, float sensitivity) {
+    const char* const where = "input.pointer_source";
+    if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
+        return status;
+    }
+    if (static_cast<std::uint32_t>(pad) >= LUMA_INPUT_PLAYERS) {
+        return argument(mod, where, "pad");
+    }
+    using galaxy::input::PointerSource;
+    PointerSource source = PointerSource::None;
+    switch (kind) {
+    case LUMA_INPUT_POINTER_SOURCE_PLAYER: source = PointerSource::None; break;
+    case LUMA_INPUT_POINTER_SOURCE_INFRARED: source = PointerSource::None; break;  // the Wii Remote aims itself
+    case LUMA_INPUT_POINTER_SOURCE_GYRO: source = PointerSource::Gyro; break;
+    case LUMA_INPUT_POINTER_SOURCE_MOUSE: source = PointerSource::Mouse; break;
+    case LUMA_INPUT_POINTER_SOURCE_STICK: source = PointerSource::Stick; break;
+    default: return argument(mod, where, "kind");
+    }
+    if (kind == LUMA_INPUT_POINTER_SOURCE_GYRO && !(sensitivity > 0.0f && sensitivity <= 8.0f)) {
+        return argument(mod, where, "sensitivity");
+    }
+    if (pad != LUMA_INPUT_PAD_MAIN && kind != LUMA_INPUT_POINTER_SOURCE_PLAYER) {
+        return LUMA_E_ABSENT;  // an answer: the co-star's pointer follows its own controller
+    }
+    const std::uint32_t seen = g_pointer_sources.load(std::memory_order_acquire);
+    const bool has = kind == LUMA_INPUT_POINTER_SOURCE_PLAYER ||
+                     (kind == LUMA_INPUT_POINTER_SOURCE_INFRARED ? g_players[0].device == LUMA_INPUT_DEVICE_MOTION
+                                                                : (seen & (1u << static_cast<unsigned>(source))) != 0u);
+    if (!has) {
+        return LUMA_E_ABSENT;  // an answer: the player has no such device now
+    }
+    g_pointer_gyro_scale.store(kind == LUMA_INPUT_POINTER_SOURCE_GYRO ? sensitivity : 1.0f, std::memory_order_relaxed);
+    g_pointer_source.store(static_cast<std::uint32_t>(source), std::memory_order_release);
+    g_pointer_mod = source == PointerSource::None ? nullptr : mod;
     return LUMA_OK;
 }
 
@@ -1281,6 +1352,11 @@ void mod_begin(void*, const LumaMod*) {
 // Game thread, after the mod's stop: its watch, rumble, injections, text request and devices end (the inject and dev
 // providers have no hooks of their own: this one, which every mod with either also has, ends them all).
 void mod_gone(void*, const LumaMod* mod) {
+    if (g_pointer_mod == mod) {
+        // Its choice of the pointer's source ends with it: the player's controls choose again.
+        g_pointer_source.store(0u, std::memory_order_release);
+        g_pointer_mod = nullptr;
+    }
     for (Injection& injection : g_injections) {
         if (injection.mod == mod) {
             injection = Injection{};
@@ -1338,6 +1414,7 @@ const LumaInputService kInput = {
     input_text_peek,
     input_text_cancel,
     input_rumble,
+    input_pointer_source,
 };
 
 const LumaInputInjectService kInject = {
@@ -1421,6 +1498,15 @@ void game_read(std::uint32_t player, NebulaInputSample* sample, std::uint32_t de
         }
     }
 }
+
+PointerChoice pointer_choice() noexcept {
+    PointerChoice choice;
+    choice.source = static_cast<std::uint8_t>(g_pointer_source.load(std::memory_order_acquire));
+    choice.gyro_scale = g_pointer_gyro_scale.load(std::memory_order_relaxed);
+    return choice;
+}
+
+void set_pointer_sources(std::uint32_t bits) noexcept { g_pointer_sources.store(bits, std::memory_order_release); }
 
 std::uint8_t mod_rumble(std::uint32_t player) noexcept {
     if (player >= LUMA_INPUT_PLAYERS || !g_active.load(std::memory_order_acquire)) {

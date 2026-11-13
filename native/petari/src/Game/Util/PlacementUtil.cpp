@@ -1,6 +1,7 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaClasses.hpp"
 
 bool MR::getObjectName(const char** pName, const TableIter& rIter) {
     if (!rIter.isValid()) {
@@ -80,6 +81,12 @@ bool MR::isObjectName(const TableIter& rIter, const char* pName) {
 
 namespace {
     bool getPlacementArgNoInit(const TableIter& rIter, const char* pName, s32* pOut) {
+        // An object an alias placed (LumaClasses, classes contract "alias") reads the alias's arguments while it
+        // initialises; -1 there leaves the placement's own.
+        if (luma::classes::placementArg(rIter.mInfo, rIter.mIndex, pName, pOut)) {
+            return true;
+        }
+
         s32 arg;
 
         if (!rIter.getValue(pName, &arg)) {

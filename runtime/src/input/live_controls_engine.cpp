@@ -343,6 +343,22 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
     const float gyro_threshold = s_pointer_owner.owner == galaxy::input::PointerSource::Mouse
         ? kGyroTakesMouseUnitsPerSecond
         : kGyroActiveUnitsPerSecond;
+    // A mod's choice of what aims the pointer (input 1.2 pointer_source): only that source moves it; the gyro turns
+    // by the mod's sensitivity. What could aim it now goes to the service for its next answer.
+    const galaxy::luma_input::PointerChoice mod_choice = galaxy::luma_input::pointer_choice();
+    const auto chosen = static_cast<galaxy::input::PointerSource>(mod_choice.source);
+    {
+        const auto bit = [](galaxy::input::PointerSource source) { return 1u << static_cast<unsigned>(source); };
+        const bool any_pad = use_pads && std::any_of(live_pads.begin(), live_pads.end(),
+                                                     [](const LivePad& pad) { return pad.sample.connected; });
+        galaxy::luma_input::set_pointer_sources((allow_absolute_pointer && use_keyboard ? bit(galaxy::input::PointerSource::Mouse) : 0u) |
+                                                (pad_gyro_pointing ? bit(galaxy::input::PointerSource::Gyro) : 0u) |
+                                                (any_pad ? bit(galaxy::input::PointerSource::Stick) : 0u));
+    }
+    if (chosen == galaxy::input::PointerSource::Gyro) {
+        gyro_x *= mod_choice.gyro_scale;
+        gyro_y *= mod_choice.gyro_scale;
+    }
     const float gyro_motion = std::sqrt(gyro_x * gyro_x + gyro_y * gyro_y);
     galaxy::input::PointerActivity activity{};
     activity.mouse = mouse_moved;
@@ -350,6 +366,11 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
     activity.stick = stick_velocity.x != 0.0f || stick_velocity.y != 0.0f;
     activity.gyro = pad_gyro_pointing && dt > 0.0f && gyro_motion > gyro_threshold * dt;
     activity.touch = pad_touch_pointing && std::fabs(touch_x) + std::fabs(touch_y) > 0.0f;
+    if (chosen != galaxy::input::PointerSource::None) {
+        activity = {};
+        s_pointer_owner.owner = chosen;
+        s_pointer_owner.last_active_us = now_us;
+    }
     // Recenter (pointer_control.h RecenterHold): the press gives the pointer to the recentering device
     // at the picture centre. While the button is held, the pointer stays there and that device keeps it.
     const bool recenter_held = held(GameInput::PointerRecenter);

@@ -93,7 +93,7 @@ namespace luma {
 
     // A number written in a function's code, or a file's number constant (1.5; instrument.py names them): the
     // function's row name and signature and the number's place in its code (from 1), or the constant's name, "" and 0.
-    // kind: 1 f32, 2 f64, 3 s8, 4 u8, 5 s16, 6 u16, 7 s32, 8 u32, 9 s64, 10 u64.
+    // kind: 1 f32, 2 f64, 3 s8, 4 u8, 5 s16, 6 u16, 7 s32, 8 u32, 9 s64, 10 u64, 11 bool (a file's constant).
     struct Number {
         const char* name;
         const char* signature;

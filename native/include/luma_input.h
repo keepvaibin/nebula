@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* LumaCore's input services (contract services-input).
 
-   `input` 1.1, no permission: LUMA_SERVICE(slot, "input", "1.1").
+   `input` 1.2, no permission: LUMA_SERVICE(slot, "input", "1.2").
    - The mod's own actions (1.0), which the player binds in Controls. An action is a `key` option of the mod's
      luma.json (luma-format revision 5): its `key` is the action's id, its `name` what Controls shows, its `default`
      the game control it follows until the player binds it (one of input_bindings.cpp's kTargetIds: "c" follows the
@@ -9,6 +9,7 @@
      while the mod is off or removed.
    - What the game gets from a player's controller this frame, the kind of device the player uses and an event when
      it changes, text typed with the system keyboard, and rumble (1.1).
+   - What aims the main player's pointer (1.2).
 
    `input.inject` 1.0, permission "input.inject" (the Mods page says the mod moves the player): the mod supplies a
    player's controller.
@@ -27,7 +28,7 @@ extern "C" {
 
 #define LUMA_INPUT_NAME "input"
 #define LUMA_INPUT_MAJOR 1u
-#define LUMA_INPUT_MINOR 1u
+#define LUMA_INPUT_MINOR 2u
 
 /* The most actions one mod has (its key options; luma-format allows 64 options of every kind). */
 #define LUMA_INPUT_ACTIONS_MOST 64u
@@ -35,6 +36,21 @@ extern "C" {
 #define LUMA_INPUT_PLAYERS 2u
 /* The longest text a text request takes, in code points. */
 #define LUMA_INPUT_TEXT_MOST 4096u
+
+/* A controller port (1.2; LUMA_INPUT_PLAYERS of them). 4 bytes, a C enum. */
+typedef enum LumaInputPad {
+    LUMA_INPUT_PAD_MAIN = 0,   /* the main player's */
+    LUMA_INPUT_PAD_CO_STAR = 1 /* the co-star's, the second controller */
+} LumaInputPad;
+
+/* What aims a player's pointer (1.2, pointer_source). */
+typedef enum LumaInputPointerSource {
+    LUMA_INPUT_POINTER_SOURCE_PLAYER = 0,   /* the player's own controls: the source that moved last (the default) */
+    LUMA_INPUT_POINTER_SOURCE_INFRARED = 1, /* a Wii Remote's camera, as the player aims it */
+    LUMA_INPUT_POINTER_SOURCE_GYRO = 2,     /* a controller's gyro, turned `sensitivity` times as far as the setting */
+    LUMA_INPUT_POINTER_SOURCE_MOUSE = 3,    /* the mouse, where it points on the picture */
+    LUMA_INPUT_POINTER_SOURCE_STICK = 4     /* the pointer stick (the right stick, as bound in Controls) */
+} LumaInputPointerSource;
 
 /* One of the mod's actions, as `action` gives it. Never 0; the same for the session. */
 typedef LumaHandle LumaInputAction;
@@ -126,9 +142,9 @@ typedef struct LumaInputService {
        mod's luma.json has no key option of that key (an answer, not reported); a null id or out: LUMA_E_ARGUMENT,
        reported (Service.Argument). */
     int32_t (*action)(const LumaMod* mod, const char* id, LumaInputAction* out);
-    /* 1.0. Game thread. The action's state this game frame into *out. LUMA_OK; an action that is not one of this mod's:
-       LUMA_E_HANDLE, reported (Service.Handle); a null out: LUMA_E_ARGUMENT, a size below 1.0's: LUMA_E_ARGUMENT
-       (Service.StructSize), both reported. While the player is in a menu of the host (Settings, the HOME menu) every
+    /* 1.0. Game thread. The action's state this game frame into *out. LUMA_OK; an action that is neither this mod's nor
+       one of a mod that needs it (a library reads its users' actions): LUMA_E_HANDLE, reported (Service.Handle); a null
+       out: LUMA_E_ARGUMENT, a size below 1.0's: LUMA_E_ARGUMENT (Service.StructSize), both reported. While the player is in a menu of the host (Settings, the HOME menu) every
        action reads up. */
     int32_t (*read)(const LumaMod* mod, LumaInputAction action, LumaInputState* out);
     /* 1.1. Game thread. What the game got from `player`'s controller at its last read, after the player's bindings and
@@ -171,6 +187,14 @@ typedef struct LumaInputService {
        device has no motor (a keyboard, a phone's screen) or the host drives none; a bad player, a strength or seconds
        not a number, below 0 or past their most: LUMA_E_ARGUMENT, reported. */
     int32_t (*rumble)(const LumaMod* mod, uint32_t player, float strength, float seconds);
+    /* 1.2. Game thread. What aims `pad`'s pointer from the next read: only `kind` moves it (the others are not
+       read for it), until a mod sets another, LUMA_INPUT_POINTER_SOURCE_PLAYER gives it back to the player's
+       controls, or the mod that set it stops. `sensitivity` (above 0, at most 8) for GYRO, else ignored. The
+       player's settings (invert, speeds, recenter) still apply. LUMA_OK; LUMA_E_ABSENT when the player has no
+       such device now (no Wii Remote for INFRARED, no controller with a gyro for GYRO, no mouse for MOUSE, no
+       controller for STICK), or for pad 1 (the co-star's pointer follows its own controller); a pad past 1, an
+       unknown kind or a GYRO sensitivity out of range: LUMA_E_ARGUMENT, reported. */
+    int32_t (*pointer_source)(const LumaMod* mod, LumaInputPad pad, LumaInputPointerSource kind, float sensitivity);
 } LumaInputService;
 
 /* ---- input.inject 1.0 (permission "input.inject") ---------------------------------------------------------------- */

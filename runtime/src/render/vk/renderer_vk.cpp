@@ -1697,8 +1697,11 @@ void RendererVk::shutdown() {
 void RendererVk::grow_rings() {
     // A ring whose frames took over half their budget (or spilled) grows; one whose last 600 frames stayed under a quarter of it
     // gives half of its memory back.
+    // --diagnostics ring-stress: made again (at the size each wants) every kRingStressFrames frames.
+    const bool ring_stress =
+        ::galaxy::diagnosing(::galaxy::kDiagnoseRingStress) && frame_index_ % ::galaxy::kRingStressFrames == 0u;
     if (ring_growth_failed_ ||
-        (!vertex_ring_.wants_growth() && !index_ring_.wants_growth() && !constant_ring_.wants_growth() &&
+        (!ring_stress && !vertex_ring_.wants_growth() && !index_ring_.wants_growth() && !constant_ring_.wants_growth() &&
          !matrix_ring_.wants_growth() && !vertex_ring_.wants_shrink() && !index_ring_.wants_shrink() &&
          !constant_ring_.wants_shrink() && !matrix_ring_.wants_shrink())) {
         return;

@@ -153,6 +153,11 @@ void report(const MissingPart& part) {
     values.emplace_back("part", std::string("R:") + (part.row != nullptr ? part.row : "Start.Part.Importer"));
     if (!part.needed.empty()) values.emplace_back("needed", part.needed);
     galaxy::modlog::add_row(LUMA_MODLOG_COOK, LUMA_MODLOG_ERROR, "nebula", 0u, "", "Start.PartMissing", values);
+    // The harness's record of the check (contract start-check 6: no `startcheck` fact when no mod is on).
+    std::string json = "{\"part\":\"";
+    json += part.row != nullptr ? part.row : "Start.Part.Importer";
+    json += "\",\"needed\":\"" + part.needed + "\"}";
+    galaxy::modlog::fact("startcheck", json);
 }
 
 }  // namespace galaxy::startcheck

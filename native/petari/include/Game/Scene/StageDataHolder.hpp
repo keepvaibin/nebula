@@ -65,6 +65,13 @@ public:
 
     Table* attachJmpInfoToArray(Table* pInfo, const char* pDirectory);
 
+    // Nebula (classes contract, "placement"): the layer name and the index among this zone's placements of that
+    // layer (its Placement files, then its MapParts files, each file's rows in order) of row `entry` of pTable.
+    // False: pTable is no placement table of this zone.
+    bool findPlacementKey(const Table* pTable, s32 entry, const char** ppLayer, u32* pIndex) const;
+    // The placement row of this zone by layer name (ASCII case folded) and index. False: none.
+    bool findPlacementRow(const char* pLayer, u32 index, TableIter* pOut) const;
+
     MR::AssignableArray< Table > mPlacementObjs;
     MR::AssignableArray< Table > mStartObjs;
     MR::AssignableArray< Table > mGeneralPosObjs;
@@ -88,6 +95,9 @@ public:
     PlacementInfoOrdered* mScenarioNormalOrder;
     PlacementInfoOrdered* mAfterScenarioOrder;
     unsigned mPlacementStage = 0;
+    // The layers mCommonPlacements and mScenarioPlacements were read with (findPlacementKey).
+    u32 mCommonLayerMask = 0;
+    u32 mScenarioLayerMask = 0;
 };
 
 namespace MR {

@@ -59,6 +59,7 @@ namespace luma {
                     char joint[32];      // JOINT: the joint's name
                     f32 nearZ;           // the near plane; 0: the game's (MR::getRenderNearZ)
                     u32 drawn;           // frames drawn
+                    bool black;          // its target has a picture: the first black one, or one drawn
                     u32 facts;
                 };
 
@@ -279,16 +280,27 @@ namespace luma {
                     SceneFunction::executeDrawBufferListNormalOpaBeforeSilhouette();
                     Frame::setPassAlpha(false);  // as GameScene::draw3D from its main opaque lists on
                     SceneFunction::executeDrawBufferListNormalOpa();
+                    SceneFunction::executeDrawListOpa();  // the draw-type lists: the player (DrawType_Player), plants, fur
                     SceneFunction::executeDrawBufferListNormalXlu();
+                    SceneFunction::executeDrawListXlu();
 
                     ModelSys::mViewOverride = nullptr;
                     MR::setCameraViewMtx(contextView);
                     NebulaMtxCopy(sceneView, ModelSys::mViewMtx);
                     ModelSys::mViewRole = sceneRole;
-                    Frame::targetEnd(pTarget->image(), NEBULA_TARGET_RGBA);
+                    // The view's picture is opaque: the game writes its own destination alpha in these lists (setPassAlpha,
+                    // the silhouettes' and the bloom's masks), which is no picture's coverage, so it is read as one.
+                    Frame::targetEnd(pTarget->image(), NEBULA_TARGET_RGB);
                     Frame::setProjectionv(projection);
                     Frame::setViewport(viewport[0], viewport[1], viewport[2], viewport[3], viewport[4], viewport[5]);
                     Frame::setScissor(sx, sy, sw, sh);
+                }
+
+                // A view with no camera yet: its target cleared once to opaque black, the picture it shows until drawn.
+                void blackOut(View& rView, GameTexture* pTarget) {
+                    Frame::targetBeginPixels(pTarget->image(), rView.width, rView.height, 0x000000FFu);
+                    Frame::targetEnd(pTarget->image(), NEBULA_TARGET_RGB);
+                    rView.black = true;
                 }
 
                 // ---- Calls ----
@@ -707,6 +719,9 @@ namespace luma {
                     if (drawn) {
                         drawView(rView, pTarget);
                         rView.drawn++;
+                        rView.black = true;
+                    } else if (!rView.black && pTarget != nullptr && sKernel->mod_live(rView.mod) != 0) {
+                        blackOut(rView, pTarget);
                     }
                     if (facts && rView.facts < kFactFrames) {
                         rView.facts++;

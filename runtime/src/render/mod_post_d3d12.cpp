@@ -161,8 +161,17 @@ void RendererD3D12::record_mod_post(const ModPostProgram& program, ModPostConsta
                 resolve_scene(true, false);
             }
             depth = scene_depth_.Get();
-        } else if (alt_scene_.depth && (alt_scene_.msaa.samples <= 1u || !alt_scene_.msaa.depth_dirty)) {
-            depth = alt_scene_.depth.Get();
+        } else if (alt_scene_.depth) {
+            // The scene ended with its samples' depth unresolved (begin_output_scene carries its colour only): that
+            // set in place for its resolve, then the output scene target back.
+            if (alt_scene_.msaa.samples > 1u && alt_scene_.msaa.depth_dirty) {
+                swap_scene_sets();
+                resolve_scene(true, false);
+                swap_scene_sets();
+            }
+            if (alt_scene_.msaa.samples <= 1u || !alt_scene_.msaa.depth_dirty) {
+                depth = alt_scene_.depth.Get();
+            }
         }
     }
     // The motion target, when this frame's scene wrote it (a temporal scene), in pixels: where the surface was minus

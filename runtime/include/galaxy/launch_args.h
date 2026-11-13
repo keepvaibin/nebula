@@ -40,6 +40,8 @@ enum Diagnostic : unsigned {
     kDiagnoseRtNoMicromaps = 1u << 25u,  // rt-no-micromaps: a test: no opacity micromaps (alpha-tested surfaces asked at every hit)
     kDiagnoseProgramsDrawn = 1u << 26u,  // programs-drawn: each program pair a draw asks for, once (a stage compiles only those)
     kDiagnoseRtAbsent = 1u << 27u,       // rt-absent: a test: the device is taken as one without ray tracing (9.8)
+    kDiagnoseRingStress = 1u << 28u,     // ring-stress: the upload rings made again every kRingStressFrames frames (a test
+                                         // of their retirement: the old rings must outlive every frame that reads them)
 };
 
 // The names --diagnostics takes, each one item or a set. "1" is the launcher's recording.
@@ -78,6 +80,7 @@ inline constexpr DiagnosticName kDiagnosticNames[] = {
     {"rt-no-micromaps", kDiagnoseRtNoMicromaps},
     {"programs-drawn", kDiagnoseProgramsDrawn},
     {"rt-absent", kDiagnoseRtAbsent},
+    {"ring-stress", kDiagnoseRingStress},
     {"frames", kDiagnoseFrames},
     {"gpu", kDiagnoseGpuPasses},
     {"threads", kDiagnoseThreadCpu | kDiagnoseProfile},
@@ -139,6 +142,10 @@ inline LaunchArgs g_launch_args;
 [[nodiscard]] inline const LaunchArgs& launch_args() noexcept {
     return g_launch_args;
 }
+
+// ring-stress: how often the upload rings are made again (frames): often enough that a run of a test's length makes
+// them again hundreds of times, with frames in flight on both sides of each.
+inline constexpr unsigned kRingStressFrames = 5u;
 
 // Whether this run records any of `what` (Diagnostic bits).
 [[nodiscard]] inline bool diagnosing(unsigned what) noexcept {

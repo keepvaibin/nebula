@@ -27,7 +27,9 @@
 #include "Game/Util/MtxUtil.hpp"
 
 void MarioActor::init2D() {
-    MR::getGameSceneLayoutHolder()->initLifeCount(mMaxHealth);
+    if (!mExtra) {
+        MR::getGameSceneLayoutHolder()->initLifeCount(mMaxHealth);
+    }
 
     mTrampleCounter = new CollectCounter("マリオ連続踏み");
 
@@ -396,6 +398,10 @@ void MarioActor::updateFairyStar() {
 }
 
 void MarioActor::update2D() {
+    // The life meter is the scene's player's.
+    if (mExtra) {
+        return;
+    }
     GameSceneLayoutHolder* layoutHolder = MR::getGameSceneLayoutHolder();
     layoutHolder->setLifeCount(mHealth);
 

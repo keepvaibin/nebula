@@ -417,7 +417,9 @@ void XanimePlayer::getMainAnimationTrans(u32 joint, Vec3f* pOut) const {
     }
 
     TransformInfo info;
-    pTracks[index].mClip->getTransform(joint, &info);
+    if (!pTracks[index].mClip->getTransform(joint, &info)) {
+        info = mModelData->getJointAt(joint)->getTransformInfo();
+    }
     pOut->set(info.mTranslate);
 }
 

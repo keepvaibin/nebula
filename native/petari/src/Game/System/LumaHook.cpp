@@ -1,5 +1,7 @@
 #include "Game/System/LumaHook.hpp"
 
+#include "Game/System/LumaGuard.hpp"
+
 #include <nebula_module.h>
 #include <stdlib.h>
 
@@ -453,6 +455,25 @@ namespace luma {
         return true;
     }
 
+    const char cKernelOwner = 0;
+
+    namespace {
+        // A hook's callback, through the guard when a mod owns it (plan 1.6). False: the guard caught a fault in it, or
+        // its mod is off after one; *pAnswer is then 0 (a before does not skip).
+        bool callHook(const Hook& rHook, Call* pCall, u32 boundary, s32* pAnswer) {
+            if (rHook.owner == &cKernelOwner) {
+                *pAnswer = rHook.callback(pCall, rHook.user);
+                return true;
+            }
+            u64 answer = 0;
+            const bool ran = guard::run(const_cast<LumaMod*>(static_cast<const LumaMod*>(rHook.owner)), boundary, pCall->function->name,
+                                        reinterpret_cast<const void*>(rHook.callback), reinterpret_cast<uintptr_t>(pCall),
+                                        reinterpret_cast<uintptr_t>(rHook.user), 0, 0, &answer);
+            *pAnswer = static_cast<s32>(static_cast<u32>(answer));
+            return ran;
+        }
+    }
+
     void proceed(Call* pCall) {
         const Chain* const pChain = static_cast<const Chain*>(pCall->chain);
         for (u32 i = pCall->next; pChain != nullptr && i < pChain->count; i++) {
@@ -460,7 +481,14 @@ namespace luma {
                 pCall->next = i + 1;
                 // Wraps are entered outermost first, so the last one recorded is the deepest entered (D2-1).
                 pCall->ran = (pCall->ran & 1u) | ((i + 1u) << 1);
-                pChain->hooks[i].callback(pCall, pChain->hooks[i].user);
+                s32 answer = 0;
+                if (!callHook(pChain->hooks[i], pCall, LUMA_GUARD_WRAP, &answer) && (pCall->ran & 1u) == 0 &&
+                    (pCall->ran >> 1) == i + 1u) {
+                    // Its mod's code failed (or is off) before it proceeded and before any wrap inside it was entered:
+                    // the call goes on as if it had proceeded, to the next wrap or the function's own code.
+                    pCall->next = i + 1;
+                    proceed(pCall);
+                }
                 pCall->next = i;
                 return;
             }
@@ -479,7 +507,9 @@ namespace luma {
         const void* pSkipper = nullptr;
         for (u32 i = 0; i < count && !skip; i++) {
             if (pChain->hooks[i].kind == Hook_Before) {
-                skip = pChain->hooks[i].callback(&call, pChain->hooks[i].user) != 0;
+                s32 answer = 0;
+                callHook(pChain->hooks[i], &call, LUMA_GUARD_BEFORE, &answer);
+                skip = answer != 0;
                 // A fixed result is never left unbuilt: the function runs (loader contract 4).
                 if (skip && resultKind(pFunction) == kFixed) {
                     if (gSkipRefused != nullptr) {
@@ -512,7 +542,8 @@ namespace luma {
         }
         for (u32 i = count; i-- > 0;) {
             if (pChain->hooks[i].kind == Hook_After) {
-                pChain->hooks[i].callback(&call, pChain->hooks[i].user);
+                s32 answer = 0;
+                callHook(pChain->hooks[i], &call, LUMA_GUARD_AFTER, &answer);
             }
         }
     }
@@ -522,7 +553,8 @@ namespace luma {
         const Chain* const pChain = hold.chain;
         Call call = {pFunction, pArgs, nullptr, 0, 0, pChain};
         for (u32 i = 0; pChain != nullptr && i < pChain->count; i++) {
-            pChain->hooks[i].callback(&call, pChain->hooks[i].user);
+            s32 answer = 0;
+            callHook(pChain->hooks[i], &call, LUMA_GUARD_TELL, &answer);
         }
     }
 }
