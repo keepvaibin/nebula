@@ -23,8 +23,15 @@ void nebula_run_constructors(void) {
     }
 }
 
-/* Thread-local storage: the directory Windows reads to give each thread its copy of the image's thread variables. */
-unsigned long _tls_index = 0;
+/* Thread-local storage: the directory Windows reads to give each thread its copy of the image's thread variables.
+   Windows gives a library loaded at run time its thread storage (writes its index to _tls_index, makes each thread's
+   copy) only when the image has imports: with none it left _tls_index unwritten, so the module's thread variables lay
+   in the slot of index 0, the host executable's own, and each side overwrote the other's (rootcause/1.6-guard.md).
+   One import keeps the module in that pass. The index starts at one no slot has: a loader that still gives none ends
+   the game at the module's first thread variable, never in another image's storage. */
+__declspec(dllimport) unsigned long __stdcall GetCurrentThreadId(void);
+void* const nebula_loader_import = (void*)&GetCurrentThreadId;
+unsigned long _tls_index = 0xFFFFFFFFul;
 __attribute__((section(".tls"))) char _tls_start = 0;
 __attribute__((section(".tls$ZZZ"))) char _tls_end = 0;
 __attribute__((section(".CRT$XLA"), used)) static void* const sThreadCallbacksBegin = 0;
