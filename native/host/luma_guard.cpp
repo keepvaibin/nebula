@@ -245,6 +245,9 @@ int32_t code_range(void* library, std::uintptr_t* base, std::uintptr_t* begin, s
 DWORD g_slot = TLS_OUT_OF_INDEXES;
 
 int32_t thread_enter(LumaGuardThread* thread) {
+    // Leave room for the vectored handler and crash reporter when a mod exhausts this thread's stack.
+    ULONG stack_bytes = 64 * 1024;
+    SetThreadStackGuarantee(&stack_bytes);
     return g_slot != TLS_OUT_OF_INDEXES && TlsSetValue(g_slot, thread) ? 0 : -1;
 }
 

@@ -27,7 +27,7 @@ namespace luma {
         // A mod's library from the host's half: its image's base and its code (all 0 when there is none: its faults are
         // never resumed).
         void codeRange(void* pLibrary, uintptr_t* pBase, uintptr_t* pBegin, uintptr_t* pEnd);
-        // In a harness run only (facts on), once, before the first mod starts: the fact guard.cost, the boundary's time
+        // In a harness run only (facts on), once, before the first mod starts: the fact kernel.guard_cost, the boundary's time
         // against a plain call and the cost of the clock's pair of reads in each boundary (contract guard 4). Nothing
         // otherwise.
         void measureForHarness();
