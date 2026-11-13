@@ -1682,16 +1682,19 @@ void RenderCore::walk_post(const NebulaFrameList& list, const NebulaFramePass& p
     constants.frame = list.game_frame;
     std::memcpy(constants.params, list.instance_rows + pass.first_item, sizeof(constants.params));
     // Distance along the view axis from the depth target's value D (scene_depth_view: the host's clip z is
-    // z z_scale + z_offset with z_scale = -E k, z_offset = -F k, w = -z; reversed, the far plane at 0):
-    // ndc = (D - min) / (max - min) = k (E - F / distance), so distance = F k (max - min) / (E k (max - min) + min - D).
+    // z z_scale + z_offset, w = -z; reversed, the far plane at 0). With distance = -z,
+    // ndc = (D - min) / (max - min) = z_offset / distance - z_scale, so
+    // distance = z_offset (max - min) / (D - min + z_scale (max - min)). GX's perspective has E = -n / (f - n) and
+    // F = -f n / (f - n), so z_scale = -E k and z_offset = -F k are both positive: the numerator is positive and so is
+    // the denominator for every depth the scene drew (D 0, the far plane, gives z_offset / z_scale = f).
     bool depth = false;
     constants.depth_terms[3] = 3.0e38f;
     if (post_scene_known_ && !post_scene_ortho_ && (program->reads & kModPostReadsDepth) != 0u) {
         const RtView& v = post_scene_view_;
         const float range = v.max_depth - v.min_depth;
-        constants.depth_terms[0] = -v.z_offset * range;
-        constants.depth_terms[1] = -1.0f;
-        constants.depth_terms[2] = -v.z_scale * range + v.min_depth;
+        constants.depth_terms[0] = v.z_offset * range;
+        constants.depth_terms[1] = 1.0f;
+        constants.depth_terms[2] = v.z_scale * range - v.min_depth;
         // The far plane: F / E (ndc 0); an infinite one (E 0) the largest number.
         constants.depth_terms[3] = v.z_scale != 0.0f ? std::min(v.z_offset / v.z_scale, 3.0e38f) : 3.0e38f;
         depth = constants.depth_terms[0] > 0.0f && constants.depth_terms[3] > 0.0f;

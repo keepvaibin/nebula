@@ -280,7 +280,9 @@ namespace luma {
                     SceneFunction::executeDrawBufferListNormalOpaBeforeSilhouette();
                     Frame::setPassAlpha(false);  // as GameScene::draw3D from its main opaque lists on
                     SceneFunction::executeDrawBufferListNormalOpa();
+                    SceneFunction::executeDrawListOpa();  // the draw-type lists: the player (DrawType_Player), plants, fur
                     SceneFunction::executeDrawBufferListNormalXlu();
+                    SceneFunction::executeDrawListXlu();
 
                     ModelSys::mViewOverride = nullptr;
                     MR::setCameraViewMtx(contextView);
