@@ -30,6 +30,7 @@ void nebula_run_constructors(void) {
    One import keeps the module in that pass. The index starts at one no slot has: a loader that still gives none ends
    the game at the module's first thread variable, never in another image's storage. */
 __declspec(dllimport) unsigned long __stdcall GetCurrentThreadId(void);
+#pragma comment(linker, "/include:nebula_loader_import")
 void* const nebula_loader_import = (void*)&GetCurrentThreadId;
 unsigned long _tls_index = 0xFFFFFFFFul;
 __attribute__((section(".tls"))) char _tls_start = 0;
