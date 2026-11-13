@@ -117,7 +117,7 @@
         <!-- The game, in its own process: one run per process (the native game starts once). -->
         <activity
             android:name=".GameActivity"
-            android:exported="false"
+            android:exported="${gameExported}"
             android:process=":game"
             android:theme="@style/Theme.Nebula.Game"
             android:screenOrientation="fullUser"

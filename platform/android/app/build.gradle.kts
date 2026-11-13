@@ -30,6 +30,7 @@ android {
         targetSdk = 36
         versionCode = 25
         versionName = "2.0.15-test.12"
+        manifestPlaceholders["gameExported"] = "false"
         ndk {
             abiFilters += ((project.findProperty("nebulaAbis") as String?) ?: "arm64-v8a").split(",")
         }
@@ -57,6 +58,9 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
             isDebuggable = project.hasProperty("nebula.debuggable")
+            // A debuggable test build's game screen starts from the shell (the test harness's runs, GameActivity's
+            // nebula.harness); a shipped build's only from the launcher.
+            manifestPlaceholders["gameExported"] = if (project.hasProperty("nebula.debuggable")) "true" else "false"
         }
     }
 
