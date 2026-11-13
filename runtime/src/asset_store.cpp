@@ -4,6 +4,7 @@
 #include <array>
 #include <cctype>
 #include <cstring>
+#include <fstream>
 
 #if defined(_WIN32)
 #include "galaxy/windows_api.h"
@@ -520,6 +521,13 @@ std::vector<std::string> AssetStore::language_folders() const {
         }
     }
     return folders;
+}
+
+std::string store_game_id(const std::filesystem::path& path) {
+    std::ifstream file(path, std::ios::binary);
+    char header[64];
+    if (!file.read(header, sizeof(header)) || std::memcmp(header, kStoreMagic, sizeof(kStoreMagic)) != 0) return {};
+    return std::string(header + 48, 6);
 }
 
 }  // namespace galaxy::assets

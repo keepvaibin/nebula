@@ -183,6 +183,7 @@ add_library(galaxy_native_host STATIC
     runtime/src/mod_xml.cpp
     runtime/src/luma.cpp
     runtime/src/mod_log.cpp
+    runtime/src/mod_check.cpp
     runtime/src/mod_screens.cpp
     runtime/src/mod_start_check.cpp
     runtime/src/luma_system.cpp

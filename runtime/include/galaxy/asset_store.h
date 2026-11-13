@@ -113,6 +113,10 @@ private:
 
 // The store's first bytes hold this.
 inline constexpr char kStoreMagic[8] = {'N', 'B', 'S', 'T', 'O', 'R', 'E', '\0'};
+
+// The disc's game id ("RMGE01") in the header of the store at `path`, read without opening the store; empty when the
+// file is not a store (or cannot be read).
+[[nodiscard]] std::string store_game_id(const std::filesystem::path& path);
 // The store's contents' form (store_version.inc, which the importer writes): a store of another version needs
 // importing again.
 inline constexpr std::uint32_t kStoreVersion =

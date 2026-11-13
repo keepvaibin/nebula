@@ -38,7 +38,7 @@ object ModImport {
     // Paths and the answer cross as UTF-8 bytes: JNI's own strings are modified UTF-8, which spells a character past
     // U+FFFF (an emoji in a file's name) differently from the file system.
     @JvmStatic
-    private external fun importFile(source: ByteArray, data: ByteArray, progress: Progress?): ByteArray
+    private external fun importFile(source: ByteArray, data: ByteArray, pak: ByteArray, progress: Progress?): ByteArray
 
     /** [onProgress] gets the copy's share (0 to 0.5) and then the unpacking's (0.5 to 1). */
     fun import(context: Context, uri: Uri, onProgress: (Float) -> Unit): ModImportResult {
@@ -63,7 +63,8 @@ object ModImport {
                     }
                 }
             }
-            val answer = String(importFile(copy.path.toByteArray(Charsets.UTF_8), data.path.toByteArray(Charsets.UTF_8)) { done, total ->
+            val answer = String(importFile(copy.path.toByteArray(Charsets.UTF_8), data.path.toByteArray(Charsets.UTF_8),
+                GameFiles.pak(context).path.toByteArray(Charsets.UTF_8)) { done, total ->
                 if (total > 0) onProgress(0.5f + 0.5f * minOf(done, total) / total)
                 true
             }, Charsets.UTF_8).split('\n', limit = 5)

@@ -4019,10 +4019,9 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
 // The game id from Setup's game.pak, read without mapping it; false (and nothing changed) for a file that is not one:
 // the tools then work without it.
 bool read_game_id(const fs::path& path, std::string& id) {
-    std::ifstream file(path, std::ios::binary);
-    char header[64];
-    if (!file.read(header, sizeof(header)) || std::memcmp(header, galaxy::assets::kStoreMagic, 8) != 0) return false;
-    id.assign(header + 48, 6);
+    std::string found = galaxy::assets::store_game_id(path);
+    if (found.empty()) return false;
+    id = std::move(found);
     return true;
 }
 

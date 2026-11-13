@@ -32,13 +32,8 @@
 #include "galaxy/runtime_settings.h"
 #endif
 #include <luma.h>
-#include "../../crates/nebula-import/include/luma_validate.h"
+#include "mod_check.h"
 
-#if defined(_WIN32)
-#include <windows.h>
-#elif !defined(__APPLE__)
-#include <dlfcn.h>
-#endif
 
 namespace galaxy::modlog {
 namespace {
@@ -416,61 +411,13 @@ void entry_fact(std::string_view mod, std::uint32_t pages, std::string_view text
 
 namespace {
 
-// The validator's C functions, from the importer's library (as mod_plugins.cpp's validate_message finds it): on Apple
-// the importer is linked into the program.
-struct Validator {
-    LumaReport* (*validate)(const LumaValidateInput*) = nullptr;
-    std::int32_t (*state)(const LumaReport*) = nullptr;
-    const char* (*invalid)(const LumaReport*) = nullptr;
-    std::uint32_t (*count)(const LumaReport*) = nullptr;
-    const LumaFinding* (*at)(const LumaReport*, std::uint32_t, const char*) = nullptr;
-    const std::uint8_t* (*kept)(const LumaReport*, std::uint64_t*) = nullptr;
-    void (*release)(LumaReport*) = nullptr;
-    // A kept report read as it is, and the id it names (null: the package was refused). Optional: without them every
-    // kept report counts as naming its id.
-    LumaReport* (*read_kept)(const std::uint8_t*, std::uint64_t) = nullptr;
-    const char* (*id)(const LumaReport*) = nullptr;
-};
-
-const Validator* validator() {
-    static Validator found;
-    static bool looked = false;
-    static bool ok = false;
-    if (looked) return ok ? &found : nullptr;
-    looked = true;
-#if defined(__APPLE__)
-    found = {&luma_validate, &luma_report_state, &luma_report_invalid, &luma_report_count, &luma_report_at,
-             &luma_report_kept, &luma_report_free, &luma_report_read_kept, &luma_report_id};
-#else
-#if defined(_WIN32)
-    void* const library =
-        LoadLibraryExW(L"nebula_import.dll", nullptr, LOAD_LIBRARY_SEARCH_APPLICATION_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
-    const auto symbol = [library](const char* name) {
-        return reinterpret_cast<void*>(GetProcAddress(static_cast<HMODULE>(library), name));
-    };
-#else
-    void* const library = dlopen("libnebula_import.so", RTLD_NOW | RTLD_LOCAL);
-    const auto symbol = [library](const char* name) { return dlsym(library, name); };
-#endif
-    if (library == nullptr) {
-        std::fprintf(stderr, "[modlog] the start's check did not run: the importer's library did not load\n");
-        return nullptr;
-    }
-    found.validate = reinterpret_cast<decltype(found.validate)>(symbol("luma_validate"));
-    found.state = reinterpret_cast<decltype(found.state)>(symbol("luma_report_state"));
-    found.invalid = reinterpret_cast<decltype(found.invalid)>(symbol("luma_report_invalid"));
-    found.count = reinterpret_cast<decltype(found.count)>(symbol("luma_report_count"));
-    found.at = reinterpret_cast<decltype(found.at)>(symbol("luma_report_at"));
-    found.kept = reinterpret_cast<decltype(found.kept)>(symbol("luma_report_kept"));
-    found.release = reinterpret_cast<decltype(found.release)>(symbol("luma_report_free"));
-    found.read_kept = reinterpret_cast<decltype(found.read_kept)>(symbol("luma_report_read_kept"));
-    found.id = reinterpret_cast<decltype(found.id)>(symbol("luma_report_id"));
-#endif
-    ok = found.validate != nullptr && found.state != nullptr && found.invalid != nullptr && found.count != nullptr &&
-         found.at != nullptr && found.kept != nullptr && found.release != nullptr;
-    if (!ok) std::fprintf(stderr, "[modlog] the start's check did not run: the importer's library lacks luma_validate\n");
-    return ok ? &found : nullptr;
-}
+// The validator, a finding as kept and one call of it: mod_check.h, shared with the Android launcher's import.
+using check::Kept;
+using check::read_file;
+using check::validate_package;
+using check::Validator;
+using check::validator;
+using CheckGame = check::Game;
 
 // FNV-1a, 64 bits: the stamps' hash (no secret; a change of any byte changes it).
 std::uint64_t fnv(std::uint64_t h, std::string_view bytes) {
@@ -533,17 +480,6 @@ std::string content_hash(const std::filesystem::path& folder) {
     return hex(h);
 }
 
-// One finding as kept: code, level, line, column, file, played text, English text (tabs and line breaks escaped).
-struct Kept {
-    std::uint32_t code = 0;
-    std::uint32_t level = 0;
-    std::uint32_t line = 0;
-    std::uint32_t column = 0;
-    std::string file;
-    std::string played;
-    std::string english;
-};
-
 std::string escape(std::string_view text) {
     std::string out;
     for (const char c : text) {
@@ -579,14 +515,6 @@ std::vector<std::string> split_tabs(const std::string& line) {
         start = tab + 1;
     }
     return parts;
-}
-
-std::string read_file(const std::filesystem::path& path) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) return {};
-    std::ostringstream text;
-    text << in.rdbuf();
-    return text.str();
 }
 
 bool write_file(const std::filesystem::path& path, std::string_view bytes) {
@@ -669,67 +597,7 @@ struct StartResult {
 std::mutex g_start_lock;
 std::vector<StartResult> g_start_results;
 
-// What a check's findings and kept reports depend on beyond the package: the platform with its processor
-// ("windows-x64", luma-format 6), the disc ("RMGE01"; empty: none) and the played language folder.
-struct CheckGame {
-    std::string platform;
-    std::string region;
-    std::string played;
-};
 CheckGame g_check_game;  // the last start's check's, for check_import; under g_start_lock
-
-// One luma_validate call on the package in `folder`: `installed` the other packages (with `kept_in` empty: every rule,
-// alone), `position` its place among them (UINT32_MAX alone). Its kept report into `kept_out`, its findings (when
-// asked) in English and the played language. False: the validator did not run (no library, or the package unreadable).
-bool validate_package(const Validator* v, std::string_view id, const std::filesystem::path& folder, const CheckGame& game,
-                      const std::vector<LumaInstalledMod>& installed, std::uint32_t position, const std::string& kept_in,
-                      std::string& kept_out, std::vector<Kept>* findings) {
-    if (v == nullptr) return false;
-    const std::string path = folder.string();
-    LumaValidateInput input{};
-    input.size = sizeof(input);
-    input.path = path.c_str();
-    input.platform = game.platform.c_str();
-    input.nebula = NEBULA_VERSION;
-    input.region = game.region.empty() ? nullptr : game.region.c_str();
-    input.luma_api = LUMA_API;
-    input.installed = installed.empty() ? nullptr : installed.data();
-    input.installed_count = static_cast<std::uint32_t>(installed.size());
-    input.position = position;
-    input.kept = kept_in.empty() ? nullptr : reinterpret_cast<const std::uint8_t*>(kept_in.data());
-    input.kept_size = kept_in.size();
-    LumaReport* const report = v->validate(&input);
-    if (v->state(report) < 0) {
-        const char* why = v->invalid(report);
-        std::fprintf(stderr, "[modlog] %.*s: the check did not run: %s\n", static_cast<int>(id.size()), id.data(),
-                     why != nullptr ? why : "?");
-        v->release(report);
-        return false;
-    }
-    std::uint64_t size = 0;
-    const std::uint8_t* bytes = v->kept(report, &size);
-    kept_out.assign(reinterpret_cast<const char*>(bytes), bytes != nullptr ? static_cast<std::size_t>(size) : 0u);
-    if (findings != nullptr) {
-        findings->clear();
-        const std::uint32_t count = v->count(report);
-        for (std::uint32_t i = 0; i < count; ++i) {
-            Kept k;
-            const LumaFinding* f = v->at(report, i, "UsEnglish");
-            if (f == nullptr) break;
-            k.code = f->code;
-            k.level = f->level;
-            k.line = f->line;
-            k.column = f->column;
-            k.file = f->file != nullptr ? f->file : "";
-            k.english = f->text != nullptr ? f->text : "";
-            f = v->at(report, i, game.played.c_str());
-            k.played = f != nullptr && f->text != nullptr ? f->text : k.english;
-            findings->push_back(std::move(k));
-        }
-    }
-    v->release(report);
-    return true;
-}
 
 void add_kept(std::string_view mod, const Kept& k) {
     const std::string mod_id(mod);
@@ -1082,9 +950,6 @@ bool package_refused(std::string_view id) {
 }
 
 ImportCheck check_import(const std::filesystem::path& folder, const std::vector<StartPackage>& others) {
-    ImportCheck out;
-    const Validator* const v = validator();
-    if (v == nullptr) return out;
     CheckGame side;
     {
         const std::lock_guard<std::mutex> lock(g_start_lock);
@@ -1102,48 +967,7 @@ ImportCheck check_import(const std::filesystem::path& folder, const std::vector<
         if (!played.empty()) side.played = std::move(played);
 #endif
     }
-    // The packages placed now, each by its kept report: the last start's, else (placed since, or before any start's
-    // check) one made now, alone. On as the list has it, but off when it would not start: refused at the last start, a
-    // report made now with an Error, or a report naming no id (the validator takes those only off).
-    const std::filesystem::path validate = galaxy::mods::mods_folder() / ".cooked" / "validate";
-    std::vector<std::string> ids;
-    std::vector<std::string> reports;
-    std::vector<bool> on;
-    for (const StartPackage& p : others) {
-        std::string report = read_file(validate / (p.id + ".kept"));
-        bool starts = p.on && !package_refused(p.id);
-        if (report.empty()) {
-            std::vector<Kept> alone;
-            if (!validate_package(v, p.id, p.folder, side, {}, UINT32_MAX, {}, report, &alone) || report.empty()) continue;
-            starts = starts && std::none_of(alone.begin(), alone.end(), [](const Kept& k) { return k.level == 0; });
-        }
-        if (starts && v->read_kept != nullptr && v->id != nullptr) {
-            LumaReport* const read = v->read_kept(reinterpret_cast<const std::uint8_t*>(report.data()), report.size());
-            const char* const named = v->state(read) == 2 ? v->id(read) : "";
-            starts = named != nullptr && named[0] != 0;
-            v->release(read);
-        }
-        ids.push_back(p.id);
-        reports.push_back(std::move(report));
-        on.push_back(starts);
-    }
-    std::vector<LumaInstalledMod> installed(ids.size());
-    for (std::size_t i = 0; i < ids.size(); ++i) {
-        installed[i].file = ids[i].c_str();
-        installed[i].on = on[i] ? 1u : 0u;
-        installed[i].kept = reinterpret_cast<const std::uint8_t*>(reports[i].data());
-        installed[i].kept_size = reports[i].size();
-    }
-    // One call at import (validator 2: no kept report of its own, every rule), last in the list, against them all.
-    std::string kept;
-    std::vector<Kept> findings;
-    if (!validate_package(v, "import", folder, side, installed, UINT32_MAX, {}, kept, &findings)) return out;
-    out.ran = true;
-    for (const Kept& k : findings) {
-        out.findings.push_back({k.code, k.level == 0, k.file, k.played, k.line, k.column});
-        out.refused = out.refused || k.level == 0;
-    }
-    return out;
+    return check::import(folder, others, side, [](std::string_view id) { return package_refused(id); });
 }
 
 const char* refused_sentence() {
