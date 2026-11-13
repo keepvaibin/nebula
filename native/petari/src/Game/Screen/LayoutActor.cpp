@@ -125,6 +125,10 @@ void LayoutActor::initLayoutManager(const char* pName, u32 rootPaneAnimLayerNum)
     mLayoutManager = new LayoutManager(pName, true, rootPaneAnimLayerNum, 0x100);
 }
 
+void LayoutActor::initLayoutManagerKeepText(const char* pName, u32 rootPaneAnimLayerNum) {
+    mLayoutManager = new LayoutManager(pName, true, rootPaneAnimLayerNum, 0x100, true);
+}
+
 void LayoutActor::initLayoutManagerNoConvertFilename(const char* pName, u32 rootPaneAnimLayerNum) {
     mLayoutManager = new LayoutManager(pName, false, rootPaneAnimLayerNum, 0x100);
 }

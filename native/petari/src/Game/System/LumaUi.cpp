@@ -63,7 +63,8 @@ namespace luma {
                     } else {
                         MR::connectToSceneLayout(this);
                     }
-                    initLayoutManager(pLayout, 1);  // one animation layer on the root: ui.play
+                    // One animation layer on the root (ui.play); text boxes keep the layout's text until set_text.
+                    initLayoutManagerKeepText(pLayout, 1);
                 }
             };
 

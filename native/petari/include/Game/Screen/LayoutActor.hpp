@@ -38,6 +38,8 @@ public:
     void initLayoutManager(const char*, u32);
     void initLayoutManagerNoConvertFilename(const char*, u32);
     void initLayoutManagerWithTextBoxBufferLength(const char*, u32, u32);
+    // As initLayoutManager, but a text box with no message keeps the text its layout file gives (a screen a mod opens).
+    void initLayoutManagerKeepText(const char*, u32);
     void initNerve(const Nerve*);
     void initEffectKeeper(int, const char*, const EffectSystem*);
     void initPointingTarget(int);

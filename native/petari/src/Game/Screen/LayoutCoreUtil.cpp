@@ -34,7 +34,7 @@ namespace LayoutCoreUtil {
         return pTextBox->SetString(buffer, 0, length);
     }
 
-    void initTextBoxPane(Ui::TextBox* pTextBox, const char* pMessageId, u32 allocSize) {
+    void initTextBoxPane(Ui::TextBox* pTextBox, const char* pMessageId, u32 allocSize, bool keepLayoutText) {
         CustomTagProcessor* processor = new CustomTagProcessor(pTextBox);
 
         if (MR::isEqualStringPrefix(pTextBox->mName, "Sha")) {
@@ -65,6 +65,16 @@ namespace LayoutCoreUtil {
         if (message != nullptr) {
             reallocateTextBoxMessage(pTextBox, MR::getStringLengthWithMessageTag(message));
             setTextBoxMessage(pTextBox, message);
+        } else if (keepLayoutText && pTextBox->mTextBuf != nullptr && pTextBox->mTextLen != 0) {
+            // A mod's screen shows the words its layout gives (contract layout: a text pane's `text` is the words as they
+            // show) until the mod sets others. Copied first: the box's buffer may be replaced as it is made room for.
+            const u32 length = pTextBox->mTextLen;
+            MR::Text16 layoutText;
+            char16_t* const copy = layoutText.room(length + 1);
+            memcpy(copy, pTextBox->mTextBuf, length * sizeof(char16_t));
+            copy[length] = u'\0';
+            reallocateTextBoxMessage(pTextBox, length > allocSize - 1 ? length : allocSize - 1);
+            setTextBoxMessage(pTextBox, copy);
         } else {
             reallocateTextBoxMessage(pTextBox, allocSize - 1);
             const char16_t* message = ::sDefaultMsg;

@@ -7,7 +7,9 @@
 namespace LayoutCoreUtil {
     const char* getPaneUserData(const Ui::Pane*, char*);
     u32 setTextBoxMessage(Ui::TextBox* pTextBox, const char16_t* pMsg);
-    void initTextBoxPane(Ui::TextBox* pTextBox, const char* pStr, u32 allocSize);
+    // No message (pStr null or not found): the game's placeholder XXXXXXXX, or with keepLayoutText the text the layout file
+    // gave the box when it has one.
+    void initTextBoxPane(Ui::TextBox* pTextBox, const char* pStr, u32 allocSize, bool keepLayoutText = false);
     void reallocateTextBoxMessage(Ui::TextBox* pTextBox, u32 allocSize);
 };  // namespace LayoutCoreUtil
 

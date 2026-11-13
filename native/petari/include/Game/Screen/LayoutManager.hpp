@@ -33,7 +33,8 @@ struct LayoutPaneState {
 
 class LayoutManager {
 public:
-    LayoutManager(const char*, bool, u32, u32);
+    // keepLayoutText: a text box with no message keeps its layout file's text (not the game's XXXXXXXX).
+    LayoutManager(const char*, bool, u32, u32, bool keepLayoutText = false);
 
     void movement();
     void calcAnim();
@@ -72,7 +73,7 @@ public:
     void initArc(const char*, const char*);
     void initDrawInfo();
     void initGroupCtrlList();
-    void initTextBoxRecursive(Ui::Pane*, Ui::Pane*, const char*, u32);
+    void initTextBoxRecursive(Ui::Pane*, Ui::Pane*, const char*, u32, bool keepLayoutText);
     // Controls and group controls in tree order, each pane's own animations after its controls'.
     void animatePanes();
     // The first pane in tree order whose name matches pName's first 16 characters (Ui::detail::EqualsResName); the root

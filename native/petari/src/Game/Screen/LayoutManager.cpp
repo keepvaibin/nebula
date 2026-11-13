@@ -137,7 +137,8 @@ namespace {
     };  // namespace Local
 };  // namespace
 
-LayoutManager::LayoutManager(const char* pLayoutName, bool useArchiveNamePrefix, u32 rootPaneAnimLayerNum, u32 textBoxBufferLength)
+LayoutManager::LayoutManager(const char* pLayoutName, bool useArchiveNamePrefix, u32 rootPaneAnimLayerNum, u32 textBoxBufferLength,
+                             bool keepLayoutText)
     : mLayoutHolder(), mLayout(), mAnimTransList(), mDrawInfo(), mIsScreenHidden(), mParentAnimValid(true), mIndDummyTexMap(), mGroupCtrlCount(),
       mGroupCtrlList(), mLayoutName() {
     // pLayoutName points into fileNameWithoutExtension below, so it lives as long as the constructor
@@ -169,7 +170,7 @@ LayoutManager::LayoutManager(const char* pLayoutName, bool useArchiveNamePrefix,
     initArc(archiveName.c_str(), pLayoutName);
     initGroupCtrlList();
     initDrawInfo();
-    initTextBoxRecursive(mLayout->mpRootPane, nullptr, mLayoutName, textBoxBufferLength);
+    initTextBoxRecursive(mLayout->mpRootPane, nullptr, mLayoutName, textBoxBufferLength, keepLayoutText);
     replaceIndDummyTexture();
 
     if (rootPaneAnimLayerNum != 0) {
@@ -540,7 +541,8 @@ void LayoutManager::initGroupCtrlList() {
     }
 }
 
-void LayoutManager::initTextBoxRecursive(Ui::Pane* pPane, Ui::Pane* pUserDataPane, const char* pLayoutName, u32 textBoxBufferLength) {
+void LayoutManager::initTextBoxRecursive(Ui::Pane* pPane, Ui::Pane* pUserDataPane, const char* pLayoutName, u32 textBoxBufferLength,
+                                         bool keepLayoutText) {
     Ui::TextBox* pTextBox = Ui::PaneCast< Ui::TextBox >(pPane);
 
     char userData[9];  // the layout file's 8-byte user data field and the terminator
@@ -557,13 +559,13 @@ void LayoutManager::initTextBoxRecursive(Ui::Pane* pPane, Ui::Pane* pUserDataPan
             MR::getLayoutMessageID(messageID, pLayoutName, userData);
             LayoutCoreUtil::initTextBoxPane(pTextBox, messageID.c_str(), 0x100);
         } else {
-            LayoutCoreUtil::initTextBoxPane(pTextBox, nullptr, textBoxBufferLength);
+            LayoutCoreUtil::initTextBoxPane(pTextBox, nullptr, textBoxBufferLength, keepLayoutText);
         }
     }
 
     Ui::PaneList& rPaneList = pPane->mChildList;
     for (Ui::Pane* pChild : rPaneList) {
-        initTextBoxRecursive(pChild, pUserDataPane, pLayoutName, textBoxBufferLength);
+        initTextBoxRecursive(pChild, pUserDataPane, pLayoutName, textBoxBufferLength, keepLayoutText);
     }
 }
 
