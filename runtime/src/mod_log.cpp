@@ -28,6 +28,9 @@
 
 #include "galaxy/luma.h"
 #include "galaxy/mods.h"
+#if defined(NEBULA_HOST_RENDERER)
+#include "galaxy/runtime_settings.h"
+#endif
 #include <luma.h>
 #include "../../crates/nebula-import/include/luma_validate.h"
 
@@ -1087,7 +1090,18 @@ ImportCheck check_import(const std::filesystem::path& folder, const std::vector<
         const std::lock_guard<std::mutex> lock(g_start_lock);
         side = g_check_game;
     }
-    if (side.platform.empty()) side = CheckGame{std::string(galaxy::luma::plugin_target()), {}, "UsEnglish"};
+    // Before any start's check (an import as the game starts, Open with or --import, and the mods tool): the game the
+    // start's check reads, from where it reads it: this build's platform, the mods folder's game id, the played
+    // language. Without the game id the rules on the game's files would go unchecked at import and refuse the mod
+    // only at the next start.
+    if (side.platform.empty()) {
+        side = CheckGame{std::string(galaxy::luma::plugin_target()), galaxy::mods::mods_game_id(), "UsEnglish"};
+#if defined(NEBULA_HOST_RENDERER)  // a headless host has no language setting: its words stay in English
+        std::string played = galaxy::mods::language_folder(
+            side.region, static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language)));
+        if (!played.empty()) side.played = std::move(played);
+#endif
+    }
     // The packages placed now, each by its kept report: the last start's, else (placed since, or before any start's
     // check) one made now, alone. On as the list has it, but off when it would not start: refused at the last start, a
     // report made now with an Error, or a report naming no id (the validator takes those only off).
