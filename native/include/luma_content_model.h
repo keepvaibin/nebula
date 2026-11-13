@@ -43,8 +43,8 @@ typedef struct LumaPlayerPart {
 
 typedef struct LumaContentModelService {
     LumaServiceTable base;
-    /* 1.0. Game thread. The model `model` drawn with `actor`, following as `follow` says: the joint `joint` for
-       LUMA_CONTENT_MODEL_JOINT (null: the actor's base), offset and turned by `place` (null: none; ignored by
+    /* 1.0. Game thread. The model `model` drawn with `actor`, following as `follow` says: the joint `joint` (null: the
+       actor's base) for LUMA_CONTENT_MODEL_JOINT, offset and turned by `place` (null: none; ignored by
        LUMA_CONTENT_MODEL_SKELETON). It is drawn as the game draws its own models (the game's lights, shadows and
        draw order), hidden while the actor is hidden or clipped. LUMA_OK and *out. A model in no store: the placeholder
        model, LUMA_OK, and Content.MissingModel in the mod log; a joint the actor's model lacks: its base, LUMA_OK, and
