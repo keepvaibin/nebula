@@ -1343,10 +1343,18 @@ def evaluate(test, renderer, run_folder, ran):
         value = loaded[-1]["value"] if loaded else None
         if m["loads"] and m["has_code"]:
             add("the mod %s loaded" % mod_id, value is True, value)
-    guards = [f for f in facts if f.get("key", "").startswith("guard.")]
-    for g in guards:
-        mod = g["key"][len("guard."):]
-        add("guard event in %s is listed in faults" % mod, mod in test["faults"], g["value"])
+    # A guard event is the mod log's entry from the guard (LumaModLog source "guard", LumaGuard.cpp caught()): a mod
+    # whose code faulted and was caught. A test passes with one only when it names that mod in faults, and a mod it
+    # names there must have faulted.
+    guarded = {}
+    for f in by_key.get("modlog", []):
+        v = f.get("value")
+        if isinstance(v, dict) and v.get("source") == "guard":
+            guarded.setdefault(str(v.get("mod")), v.get("text"))
+    for mod, said in sorted(guarded.items()):
+        add("guard event in %s is listed in faults" % mod, mod in test["faults"], said)
+    for mod in test["faults"]:
+        add("the listed fault in %s happened (a guard event)" % mod, mod in guarded, None)
     # The test's own checks.
     for c in test["expect"]:
         if c["kind"] == "fact":
