@@ -1025,6 +1025,52 @@ def plan_text(test, out):
     return "\n".join(lines) + "\n"
 
 
+def place_mods(test, settings, previous, frozen):
+    """The test's mods into the run's settings, in order, each one's libraries frozen, and the safe start asked or left
+    from a crash. Returns the placed mods ((id, mod) pairs) and the game's extra arguments (--import, --safe-start).
+    Every platform's adapter places them so (run_one; the Android suite, agents/luma d/platforms/android)."""
+    mod_ids, imports = [], []
+    for i, m in enumerate(test["mods"]):
+        if not (m["path"] / "luma.json").is_file():
+            raise HarnessError("the mod %s has no luma.json" % m["path"])
+        if m["install"] == "import":
+            # Not placed: the game imports it as "Open with" starts it (--import, task 6.1), through the validator;
+            # each line of its result page is the fact import.<file name> (4).
+            if m["loads"]:
+                raise HarnessError("the imported mod %s: an import adds it for the next start, so it takes loads false"
+                                   % m["path"])
+            imports += ["--import", str(m["path"].resolve())]
+            continue
+        mod_id = install(settings, m["path"], m["code"] == "allow", i + 1, kept=previous is not None,
+                         permissions="ask" if m["code"] == "ask" else m["permissions"], broken_ok=not m["loads"])
+        # A mod with no code (luma.json has no "code": content only) is never started, so the host writes no start
+        # or refusal line for it and there is no mod.<id>.loaded fact: its test's own facts show its content.
+        try:
+            m["has_code"] = "code" in load_json(settings / "mods" / mod_id / "luma.json")
+        except HarnessError:
+            m["has_code"] = True
+        mod_ids.append((mod_id, m))
+        for lib in sorted((settings / "mods" / mod_id).rglob("*" + HOST["ending"])):
+            frozen["mods/%s/%s" % (mod_id, lib.relative_to(settings / "mods" / mod_id).as_posix())] = sha256(lib)
+    if test["safe_start"] == "asked":
+        imports += ["--safe-start", "1"]
+    elif test["safe_start"] == "crash":
+        (settings / "mods").mkdir(parents=True, exist_ok=True)
+        (settings / "mods" / ".safe_start").write_bytes(b"")
+    return mod_ids, imports
+
+
+def write_run_settings(test, settings):
+    """The run's settings file: the window's size and the test's language (tools/verify/settings_args.py)."""
+    assignments = ["GALAXY_WINDOW_WIDTH=1280", "GALAXY_WINDOW_HEIGHT=720"]
+    if test["language"] is not None:
+        if LANGUAGES[test["language"]] is None:
+            raise HarnessError("language %s: not built yet (the language packs' setting, task 3.8)" % test["language"])
+        assignments.append("GALAXY_LANGUAGE=%s" % LANGUAGES[test["language"]])
+    subprocess.run([sys.executable, "-I", str(TREE / "tools" / "verify" / "settings_args.py"), str(settings)] + assignments,
+                   check=True, capture_output=True)
+
+
 def run_one(test, renderer, args, run_folder, previous):
     """Starts the game for one test and renderer; returns what the checks need."""
     if renderer not in EXES:
@@ -1097,39 +1143,9 @@ def run_one(test, renderer, args, run_folder, previous):
     if not test["bare"]:
         frozen[HOST["half"]] = sha256(bin_folder / HOST["half"])
         install_game_half(settings, bin_folder)
-    imports = []
-    for i, m in enumerate(test["mods"]):
-        if not (m["path"] / "luma.json").is_file():
-            raise HarnessError("the mod %s has no luma.json" % m["path"])
-        if m["install"] == "import":
-            # Not placed: the game imports it as "Open with" starts it (--import, task 6.1), through the validator;
-            # each line of its result page is the fact import.<file name> (4).
-            if m["loads"]:
-                raise HarnessError("the imported mod %s: an import adds it for the next start, so it takes loads false"
-                                   % m["path"])
-            imports += ["--import", str(m["path"].resolve())]
-            continue
-        mod_id = install(settings, m["path"], m["code"] == "allow", i + 1, kept=previous is not None,
-                         permissions="ask" if m["code"] == "ask" else m["permissions"], broken_ok=not m["loads"])
-        # A mod with no code (luma.json has no "code": content only) is never started, so the host writes no start
-        # or refusal line for it and there is no mod.<id>.loaded fact: its test's own facts show its content.
-        try:
-            m["has_code"] = "code" in load_json(settings / "mods" / mod_id / "luma.json")
-        except HarnessError:
-            m["has_code"] = True
-        mod_ids.append((mod_id, m))
-        for lib in sorted((settings / "mods" / mod_id).rglob("*" + HOST["ending"])):
-            frozen["mods/%s/%s" % (mod_id, lib.relative_to(settings / "mods" / mod_id).as_posix())] = sha256(lib)
-    if test["safe_start"] == "asked":
-        imports += ["--safe-start", "1"]
-    elif test["safe_start"] == "crash":
-        (settings / "mods").mkdir(parents=True, exist_ok=True)
-        (settings / "mods" / ".safe_start").write_bytes(b"")
-    assignments = ["GALAXY_WINDOW_WIDTH=1280", "GALAXY_WINDOW_HEIGHT=720"]
-    if test["language"] is not None:
-        assignments.append("GALAXY_LANGUAGE=%s" % LANGUAGES[test["language"]])
-    subprocess.run([sys.executable, "-I", str(TREE / "tools" / "verify" / "settings_args.py"), str(settings)] + assignments,
-                   check=True, capture_output=True)
+    placed, imports = place_mods(test, settings, previous, frozen)
+    mod_ids += placed
+    write_run_settings(test, settings)
     plan = run_folder / "plan.txt"
     plan.write_text(plan_text(test, run_folder.as_posix()), encoding="utf-8", newline="\n")
     pak = (bin_folder / "pak.path").read_text(encoding="utf-8").strip()
