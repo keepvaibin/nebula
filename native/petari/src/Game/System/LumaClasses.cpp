@@ -7,6 +7,7 @@
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/Util/SingletonHolder.hpp"
+#include "Game/System/LumaGuard.hpp"
 #include "Game/System/LumaHook.hpp"
 #include "Game/System/LumaLoader.hpp"
 #include "Game/System/LumaTypes.hpp"
@@ -111,8 +112,6 @@ namespace luma {
             u32 sMaking = 0;  // makes between the maker and `made` (modGone waits for none)
 
             // The kernel's own hooks (the factory, NameObj's destructor): an owner no mod is.
-            // The kernel's own hooks (the factory, NameObj's destructor): an owner no mod is.
-            const char sKernelOwner = 0;
             bool sHooked = false;
             // The factory asked by the kernel itself: the game's own answer, never a mod class's.
             LUMA_THREAD bool tResolving = false;
@@ -255,7 +254,9 @@ namespace luma {
             // memory went with it.
             void callGone(const ClassRow* pRow, const void* pObject, void* pData) {
                 if (pRow->gone != nullptr) {
-                    pRow->gone(const_cast<void*>(pObject), pData, pRow->user);
+                    guard::run(const_cast<LumaMod*>(pRow->mod), LUMA_GUARD_CLASS, pRow->name, reinterpret_cast<const void*>(pRow->gone),
+                               reinterpret_cast<uintptr_t>(pObject), reinterpret_cast<uintptr_t>(pData),
+                               reinterpret_cast<uintptr_t>(pRow->user), 0, nullptr);
                 }
             }
 
@@ -371,7 +372,9 @@ namespace luma {
                                 unlock();
                                 core()->free(pRow->mod, pData);
                             } else if (pRow->made != nullptr) {
-                                pRow->made(const_cast<void*>(pComplete), pData, pRow->user);
+                                guard::run(const_cast<LumaMod*>(pRow->mod), LUMA_GUARD_CLASS, pRow->name,
+                                           reinterpret_cast<const void*>(pRow->made), reinterpret_cast<uintptr_t>(pComplete),
+                                           reinterpret_cast<uintptr_t>(pData), reinterpret_cast<uintptr_t>(pRow->user), 0, nullptr);
                             }
                         }
                     }
@@ -439,12 +442,12 @@ namespace luma {
                     return false;
                 }
                 // The factory's answer is the kernel's before any mod's after sees it (afters run the highest order first).
-                if (addHook(pFactory, Hook_After, factoryHook, nullptr, &sKernelOwner, 0x7FFFFFFF) != HookResult_Added) {
+                if (addHook(pFactory, Hook_After, factoryHook, nullptr, &cKernelOwner, 0x7FFFFFFF) != HookResult_Added) {
                     nebula_log("LumaCore: the factory's hook was refused; no mod can define a class\n");
                     return false;
                 }
-                if (addHook(pDestroyed, Hook_Before, destroyedHook, nullptr, &sKernelOwner, 0x7FFFFFFF) != HookResult_Added) {
-                    removeHook(pFactory, Hook_After, factoryHook, nullptr, &sKernelOwner);
+                if (addHook(pDestroyed, Hook_Before, destroyedHook, nullptr, &cKernelOwner, 0x7FFFFFFF) != HookResult_Added) {
+                    removeHook(pFactory, Hook_After, factoryHook, nullptr, &cKernelOwner);
                     nebula_log("LumaCore: NameObj's destructor's hook was refused; no mod can define a class\n");
                     return false;
                 }
@@ -1013,7 +1016,9 @@ namespace luma {
                         pWhy = "no table of its own (said above)";
                     } else {
                         if (pRow->made != nullptr) {
-                            pRow->made(pGravity, pData, pRow->user);
+                            guard::run(const_cast<LumaMod*>(pRow->mod), LUMA_GUARD_CLASS, pRow->name,
+                                       reinterpret_cast<const void*>(pRow->made), reinterpret_cast<uintptr_t>(pGravity),
+                                       reinterpret_cast<uintptr_t>(pData), reinterpret_cast<uintptr_t>(pRow->user), 0, nullptr);
                         }
                         MR::registerGravity(pGravity);
                     }
@@ -1096,8 +1101,13 @@ namespace luma {
             // wrap does (LumaHook proceed).
             if (!pRow->live) {
                 proceed(&call);
-            } else {
-                (void)pOverride->hook(reinterpret_cast<LumaCall*>(&call), pOverride->user);
+            } else if (!guard::run(const_cast<LumaMod*>(pRow->mod), LUMA_GUARD_CLASS, pOriginal->name,
+                                   reinterpret_cast<const void*>(pOverride->hook), reinterpret_cast<uintptr_t>(&call),
+                                   reinterpret_cast<uintptr_t>(pOverride->user), 0, 0, nullptr) &&
+                       call.ran == 0) {
+                // Its code failed (or its mod is off) before it proceeded (the base's own code not run): the call goes on
+                // as if it had (LumaHook proceed does the same for a wrap).
+                proceed(&call);
             }
         }
 

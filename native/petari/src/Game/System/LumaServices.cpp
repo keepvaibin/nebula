@@ -1,5 +1,6 @@
 #include "Game/System/LumaServices.hpp"
 
+#include "Game/System/LumaGuard.hpp"
 #include "Game/System/LumaHook.hpp"
 #include "Game/System/LumaContentFx.hpp"
 #include "Game/System/LumaContentModel.hpp"
@@ -398,9 +399,14 @@ namespace luma {
                 if (pRecord == nullptr || isGone(pRecord)) {
                     return LUMA_E_CANCELLED;
                 }
-                // The guard (plan 1.6) wraps this call when it exists: a fault in fn is the mod's, caught there and named
-                // "<service> event <kind>" in the mod log (services-registry 6.1, J S-7).
-                fn(pUser, pEvent);
+                // Through the guard (plan 1.6): a fault in fn is the mod's, caught there and named "<service> event <kind>"
+                // in the mod log (services-registry 6.1, J S-7). A mod off after a fault is not called.
+                char where[96];
+                nebula_snprintf(where, sizeof(where), "%s event %u", pService, pEvent->kind);
+                if (!guard::run(const_cast<LumaMod*>(pMod), LUMA_GUARD_EVENT, where, reinterpret_cast<const void*>(fn),
+                                reinterpret_cast<uintptr_t>(pUser), reinterpret_cast<uintptr_t>(pEvent), 0, 0, nullptr)) {
+                    return LUMA_E_CANCELLED;
+                }
                 return LUMA_OK;
             }
 
