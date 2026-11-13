@@ -423,6 +423,44 @@ void test_movie_room() {
     expect(movie.room() == 0u && !movie.push(nullptr, 0u), "a full queue has no room");
 }
 
+// Output continues at a fixed latency after the last movie sample. The final picture must reach the end even
+// though the device keeps asking for silence. A later frame after an underrun waits for that silence to pass too.
+void test_movie_output_clock() {
+    galaxy::audio::MovieAudio movie;
+    movie.open(false);
+    const auto record = thp_record(100u, 2048, -2048);
+    expect(movie.push(record.data(), record.size()), "clock: first frame queues");
+    expect(movie.push(record.data(), record.size()), "clock: second frame queues");
+    std::vector<float> out(2u * 320u, 0.0f);
+    movie.set_unplayed(80u);
+    movie.pull(out.data(), 200u);
+    expect(near(movie.position(), 1.2, 1e-9), "clock: last frame is still in output", movie.position());
+    movie.pull(out.data(), 80u);
+    expect(near(movie.position(), 2.0, 1e-9), "clock: silence drains the final output delay", movie.position());
+    movie.pull(out.data(), 320u);
+    expect(near(movie.position(), 2.0, 1e-9), "clock: silence adds no movie frames", movie.position());
+
+    expect(movie.push(record.data(), record.size()), "clock: frame after underrun queues");
+    movie.set_unplayed(100u);
+    movie.pull(out.data(), 50u);
+    expect(near(movie.position(), 2.0, 1e-9), "clock: underrun silence precedes the new frame", movie.position());
+    movie.pull(out.data(), 50u);
+    expect(near(movie.position(), 2.0, 1e-9), "clock: new frame has just reached output", movie.position());
+    movie.pull(out.data(), 50u);
+    expect(near(movie.position(), 2.5, 1e-9), "clock: half the new frame is heard", movie.position());
+    movie.pull(out.data(), 50u);
+    expect(near(movie.position(), 3.0, 1e-9), "clock: new frame finishes", movie.position());
+
+    movie.reset();
+    expect(near(movie.position(), 0.0, 1e-9), "clock: reset starts a new timeline", movie.position());
+    expect(movie.push(record.data(), record.size()), "clock: first frame after reset queues");
+    movie.pull(out.data(), 320u);
+    expect(near(movie.position(), 0.0, 1e-9), "clock: startup still waits for two frames", movie.position());
+    expect(movie.push(record.data(), record.size()), "clock: second frame after reset queues");
+    movie.pull(out.data(), 320u);
+    expect(near(movie.position(), 2.0, 1e-9), "clock: final partial block drains", movie.position());
+}
+
 // The movie's sound at 48 kHz: its level through the player's volume (a square law), and silent until the frame
 // after the current one is decoded too.
 void test_stream() {
@@ -493,6 +531,7 @@ int main() {
     test_categories();
     test_movie_record();
     test_movie_room();
+    test_movie_output_clock();
     test_stream();
     test_forced_stop();
     if (g_failures != 0) {

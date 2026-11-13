@@ -46,17 +46,21 @@ private:
         std::size_t read{};
     };
 
+    struct FrameSpan {
+        std::int64_t begin;
+        std::int64_t end;
+    };
+
     mutable std::mutex mutex_;
     std::deque<Frame> queue_;
     bool open_{};
     bool started_{};
-    // Where each frame given to pull ends, in samples pulled, up to where the output has reached.
-    std::deque<std::int64_t> ends_;
+    // Each frame's place on the output timeline, including silence between frames after an underrun.
+    std::deque<FrameSpan> ends_;
     std::int64_t queued_end_{};
-    std::int64_t pulled_{};
+    std::int64_t pulled_{};  // output samples since playback started, including trailing silence
     std::size_t unplayed_{};
     std::int32_t heard_{};
-    std::int64_t heard_end_{};
     bool mono_{};
     float volume_{127.0f};
     float target_{127.0f};

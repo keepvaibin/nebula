@@ -26,7 +26,6 @@ void MovieAudio::open(bool mono) {
     pulled_ = 0;
     unplayed_ = 0u;
     heard_ = 0;
-    heard_end_ = 0;
     volume_ = target_ = 127.0f;
     ramp_ = 0;
     resuming_ = false;
@@ -44,7 +43,6 @@ void MovieAudio::close() {
     pulled_ = 0;
     unplayed_ = 0u;
     heard_ = 0;
-    heard_end_ = 0;
 }
 
 void MovieAudio::reset() {
@@ -56,7 +54,6 @@ void MovieAudio::reset() {
     pulled_ = 0;
     unplayed_ = 0u;
     heard_ = 0;
-    heard_end_ = 0;
     volume_ = target_;
     ramp_ = 0;
 }
@@ -98,8 +95,9 @@ bool MovieAudio::push(const std::uint8_t* record, std::size_t size) {
     Frame frame;
     frame.samples.resize(static_cast<std::size_t>(samples) * 2u);
     std::memcpy(frame.samples.data(), record + sizeof(samples), frame.samples.size() * sizeof(std::int16_t));
-    queued_end_ += samples;
-    ends_.push_back(queued_end_);
+    const std::int64_t begin = std::max(queued_end_, pulled_);
+    queued_end_ = begin + samples;
+    ends_.push_back({begin, queued_end_});
     queue_.push_back(std::move(frame));
     return true;
 }
@@ -112,15 +110,15 @@ void MovieAudio::set_unplayed(std::size_t samples) {
 double MovieAudio::position() {
     std::lock_guard<std::mutex> lock(mutex_);
     const std::int64_t reached = pulled_ - static_cast<std::int64_t>(unplayed_);
-    while (!ends_.empty() && ends_.front() <= reached) {
-        heard_end_ = ends_.front();
+    while (!ends_.empty() && ends_.front().end <= reached) {
         ends_.pop_front();
         ++heard_;
     }
-    if (ends_.empty() || reached <= heard_end_) {
+    if (ends_.empty() || reached <= ends_.front().begin) {
         return heard_;
     }
-    return heard_ + static_cast<double>(reached - heard_end_) / static_cast<double>(ends_.front() - heard_end_);
+    return heard_ + static_cast<double>(reached - ends_.front().begin) /
+                        static_cast<double>(ends_.front().end - ends_.front().begin);
 }
 
 std::size_t MovieAudio::room() const {
@@ -149,6 +147,9 @@ void MovieAudio::pull(float* out, std::size_t count) {
         return;
     }
     started_ = true;
+    // The output keeps running after the queue empties: its silence lets the last movie samples pass through
+    // the device's latency. Counting only movie samples would leave position() forever short of the end.
+    pulled_ += static_cast<std::int64_t>(count);
     while (count != 0u && !queue_.empty()) {
         Frame& frame = queue_.front();
         const std::size_t available = (frame.samples.size() - frame.read) / 2u;
@@ -180,7 +181,6 @@ void MovieAudio::pull(float* out, std::size_t count) {
             out += 2;
             frame.read += 2u;
         }
-        pulled_ += static_cast<std::int64_t>(n);
         count -= n;
         if (frame.read >= frame.samples.size()) {
             queue_.pop_front();
