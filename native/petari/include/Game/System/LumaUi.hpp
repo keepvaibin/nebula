@@ -12,6 +12,9 @@ namespace luma {
         // GameSystem::update, right after the services' frame start: the harness's ui.screen facts. One load while no
         // mod has a screen open.
         void frame();
+        // GameSystem::update, before NebulaMenuFocus::update: a mod's shown screen with a menu is on top (as frame()
+        // reads it), so it takes this frame's pad and the game's menus under it take none.
+        bool takesControls();
         // NebulaArena::destroy, before its memory goes: screens made in [pStart, pEnd) end ("scene"), never touched
         // again. One load while no screen was ever made.
         void released(const void* pStart, const void* pEnd);
