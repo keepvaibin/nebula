@@ -189,6 +189,11 @@ namespace RenderTexture {
                 pEntry->mId = registerRecord(pRecord);
                 pEntry->mSize = pRecord->size;
             }
+        } else if (pEntry->mId != 0 && pEntry->mSize != 0 && !pEntry->mTarget) {
+            // A linear image (linear(): raw pixels, no record) written again since its upload (rewritten): its pixels
+            // as they are now, at the size it was registered with. A mod's texture from pixels and texture_update, and
+            // the draw service's missing-texture checker, are written after linear() registers them.
+            pHost->texture_update(pHost->user, pEntry->mId, pImage, pEntry->mSize);
         } else if (pEntry->mId == 0) {
             pEntry->mId = pHost->texture_target(pHost->user);
             pEntry->mTarget = true;
