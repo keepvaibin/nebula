@@ -733,12 +733,11 @@ namespace luma {
                     report(pMod, pWhere, 101u, "text", nullptr);
                     return LUMA_E_ARGUMENT;
                 }
-                // A box's buffer holds its 0 as well; 1.0 promises LUMA_UI_TEXT_MOST units. Every box gets the same
-                // text, so the smallest buffer cuts it.
+                // 1.0 promises LUMA_UI_TEXT_MOST units. Every box gets the same text, so the smallest buffer cuts it
+                // (GetStringBufferLength: the units a box holds, its 0 aside: a layout's `length`).
                 u32 most = LUMA_UI_TEXT_MOST;
                 for (u32 i = 0; i < boxCount; i++) {
-                    const u32 buffer = boxes[i]->GetStringBufferLength();
-                    const u32 holds = buffer == 0 ? 0u : buffer - 1u;
+                    const u32 holds = boxes[i]->GetStringBufferLength();
                     if (holds < most) {
                         most = holds;
                     }
