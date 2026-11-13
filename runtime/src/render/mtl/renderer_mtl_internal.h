@@ -42,7 +42,4 @@ inline constexpr NSUInteger kWriteRgb = MTLColorWriteMaskRed | MTLColorWriteMask
 // Sampler slots a frame may add: the sampler array starts again between frames when fewer than this are free.
 [[nodiscard]] inline unsigned sampler_frame_room(unsigned slots) noexcept { return slots >= 2048u ? 512u : slots / 4u; }
 
-// A test capture's pixels as a binary PPM, written off the render thread.
-void write_ppm_async(std::string path, std::vector<std::uint8_t> rgb, unsigned width, unsigned height);
-
 }  // namespace galaxy::render::mtl_detail

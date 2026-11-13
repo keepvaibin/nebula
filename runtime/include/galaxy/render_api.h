@@ -77,6 +77,10 @@ void render_frame(bool present_swap_chain = true, bool black = false);
 // Blocks until the render queue and every in-flight render chunk are idle.
 void wait_for_render_idle();
 
+// At a host's exit that ends the process without the renderer's shutdown: the pictures handed to an extension are
+// taken from the GPU and written first. False when the render thread did not answer within `limit_ms`.
+bool finish_pictures(std::uint32_t limit_ms);
+
 
 // The services' registries and texture store; any thread.
 [[nodiscard]] core::Registries& registries() noexcept;

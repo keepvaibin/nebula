@@ -22,18 +22,6 @@ namespace galaxy::render {
 
 using namespace mtl_detail;
 
-namespace mtl_detail {
-
-void write_ppm_async(std::string path, std::vector<std::uint8_t> rgb, unsigned width, unsigned height) {
-    std::thread([path = std::move(path), rgb = std::move(rgb), width, height] {
-        std::ofstream out(path, std::ios::binary | std::ios::trunc);
-        out << "P6\n" << width << ' ' << height << "\n255\n";
-        out.write(reinterpret_cast<const char*>(rgb.data()), static_cast<std::streamsize>(rgb.size()));
-    }).detach();
-}
-
-}  // namespace mtl_detail
-
 namespace {
 
 constexpr SamplerKey kDefaultSamplerKey{1u | (1u << 2u) | (1u << 4u) | (5u << 5u), 0.0f, 32.0f, 0.0f};
@@ -569,6 +557,13 @@ const float* RendererMtl::screen_probes_finished(std::size_t slot) {
 
 // ---- test captures ----
 
+void RendererMtl::finish_pictures() {
+    wait_for_gpu_idle();
+    debug_log_readback();
+    debug_log_backbuffer_readback();
+    wait_picture_files();
+}
+
 void RendererMtl::set_debug_capture_paths(std::string scene_ppm_path, std::string backbuffer_ppm_path) {
     scene_capture_path_ = std::move(scene_ppm_path);
     backbuffer_capture_path_ = std::move(backbuffer_ppm_path);
@@ -600,7 +595,7 @@ void write_rgb(std::string path, const std::uint8_t* rgba, unsigned width, unsig
         rgb[i * 3u + 1u] = rgba[i * 4u + 1u];
         rgb[i * 3u + 2u] = rgba[i * 4u + 2u];
     }
-    mtl_detail::write_ppm_async(std::move(path), std::move(rgb), width, height);
+    write_ppm_async(std::move(path), std::move(rgb), width, height);
 }
 
 }  // namespace

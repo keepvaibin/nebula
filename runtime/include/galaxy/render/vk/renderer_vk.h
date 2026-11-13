@@ -137,6 +137,9 @@ public:
     [[nodiscard]] Kept take_apart_lost_device();
     void keep(const Kept& kept, bool) noexcept { window_ = kept.window; }
     void shutdown();
+    // The pictures handed to an extension, taken from the GPU and written (render thread; RenderCore::finish_pictures,
+    // at a host's exit that skips shutdown).
+    void finish_pictures();
     [[nodiscard]] UploadBuffer create_upload_buffer(std::size_t bytes, const char* name);
 
     // SMAA or FXAA of the 3D scene in the scene target before the 2D layer draws (PostProcessorVk).

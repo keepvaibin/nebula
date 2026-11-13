@@ -602,6 +602,41 @@ void RenderCore::render_frame(bool present_swap_chain, bool black) {
     galaxy::timeline::record(galaxy::timeline::Event::SubmitEnd, 0u, 0u);
 }
 
+void RenderCore::finish_pictures_here() {
+    try {
+        renderer_.finish_pictures();
+    } catch (const std::exception& error) {
+        std::cerr << "[render] the pictures at exit: " << error.what() << '\n';
+    } catch (...) {
+        std::cerr << "[render] the pictures at exit: an unknown error\n";
+    }
+    pictures_finish_asked_.store(false, std::memory_order_relaxed);
+    {
+        const std::lock_guard<std::mutex> lock(queue_mutex_);
+        pictures_finished_ = true;
+    }
+    pictures_finished_cv_.notify_all();
+}
+
+bool RenderCore::finish_pictures(std::chrono::milliseconds limit) {
+    if (!initialized_) {
+        return true;
+    }
+    if (render_thread_.get_id() == std::this_thread::get_id()) {
+        pictures_finish_asked_.store(true, std::memory_order_relaxed);
+        finish_pictures_here();
+        return true;
+    }
+    std::unique_lock<std::mutex> lock(queue_mutex_);
+    if (!render_thread_.joinable() || stop_render_thread_ || render_thread_error_ != nullptr) {
+        return false;
+    }
+    pictures_finished_ = false;
+    pictures_finish_asked_.store(true, std::memory_order_release);
+    queue_cv_.notify_all();
+    return pictures_finished_cv_.wait_for(lock, limit, [this] { return pictures_finished_; });
+}
+
 void RenderCore::wait_for_render_idle() {
     if (!initialized_) {
         return;
@@ -1538,6 +1573,9 @@ void RenderCore::render_loop() {
             fail_queued_utilities(std::current_exception());
             break;
         }
+        if (pictures_finish_asked_.load(std::memory_order_acquire)) {
+            finish_pictures_here();
+        }
         // Out of sight (minimised: the host stopped the game; covered: the game goes on and its frames are drawn but not presented,
         // RendererD3D12::present_to_swap_chain): no picture of its own is presented, no generated frame is made, and nothing
         // polls. A covered window is looked at every 100 ms to see whether the OS shows it again; the device and its
@@ -1590,7 +1628,7 @@ void RenderCore::render_loop() {
                 const std::int64_t remaining_us = interp_remaining_us();
                 if (remaining_us > 2000) {
                     queue_cv_.wait_for(lock, std::chrono::microseconds(remaining_us - 1500), [this] {
-                        return stop_render_thread_ || !frame_queue_.empty();
+                        return stop_render_thread_ || !frame_queue_.empty() || pictures_finish_asked_.load(std::memory_order_relaxed);
                     });
                 } else if (remaining_us > 0) {
                     lock.unlock();
@@ -1602,7 +1640,7 @@ void RenderCore::render_loop() {
                 const std::int64_t remaining_us = (overlay_idle_due_qpc_ - galaxy::qpc_now()) * 1'000'000 / frequency;
                 if (remaining_us > 2000) {
                     queue_cv_.wait_for(lock, std::chrono::microseconds(remaining_us - 1500), [this] {
-                        return stop_render_thread_ || !frame_queue_.empty();
+                        return stop_render_thread_ || !frame_queue_.empty() || pictures_finish_asked_.load(std::memory_order_relaxed);
                     });
                 } else if (remaining_us > 0) {
                     lock.unlock();
@@ -1613,12 +1651,12 @@ void RenderCore::render_loop() {
                 // Fences are polled at the top of the loop, outside queue_mutex_:
                 // park for at most 1 ms, woken early by new work or a stop.
                 queue_cv_.wait_for(lock, std::chrono::milliseconds(1), [this] {
-                    return stop_render_thread_ || !frame_queue_.empty();
+                    return stop_render_thread_ || !frame_queue_.empty() || pictures_finish_asked_.load(std::memory_order_relaxed);
                 });
             } else {
                 // A service waiting for a new card can't reach this thread any other way (DeviceGate).
                 queue_cv_.wait_for(lock, std::chrono::milliseconds(hidden ? 100 : 250), [this] {
-                    return stop_render_thread_ || !frame_queue_.empty();
+                    return stop_render_thread_ || !frame_queue_.empty() || pictures_finish_asked_.load(std::memory_order_relaxed);
                 });
             }
             // A due slot goes before queued chunks, so presents keep their

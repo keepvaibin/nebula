@@ -68,6 +68,10 @@ public:
         bool black,
         bool present_swap_chain = true);
     void wait_for_render_idle();
+    // At a host's exit, which ends the process without the renderer's shutdown: every picture handed to an extension
+    // (present_snapshot_path) taken from the GPU and written, on the render thread. False when it did not answer
+    // within `limit` (stopped, or its device gone).
+    bool finish_pictures(std::chrono::milliseconds limit);
     void set_frame_end_presents(bool enabled) noexcept {
         frame_end_presents_.store(enabled, std::memory_order_relaxed);
     }
@@ -986,6 +990,11 @@ private:
     ao::ObjectCollector ao_objects_;
     bool collect_ao_objects_ = false;
     bool stop_render_thread_ = false;
+    // finish_pictures: asked (the render thread's next turn writes them), answered under queue_mutex_.
+    std::atomic<bool> pictures_finish_asked_{false};
+    void finish_pictures_here();  // the render thread's turn: the renderer's finish_pictures, then the answer
+    bool pictures_finished_ = false;
+    std::condition_variable pictures_finished_cv_;
     std::exception_ptr render_thread_error_;
     MonotonicCadenceAccumulator picture_made_cadence_{};
     MonotonicCadenceAccumulator new_picture_shown_cadence_{};

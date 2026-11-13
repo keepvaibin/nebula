@@ -275,6 +275,9 @@ public:
         same_card_only_ = same_card;
     }
     void shutdown();                // full GPU drain, then release
+    // The pictures handed to an extension, taken from the GPU and written (render thread; RenderCore::finish_pictures,
+    // at a host's exit that skips shutdown).
+    void finish_pictures();
     // A persistently mapped upload buffer; empty when it cannot be created.
     [[nodiscard]] UploadBuffer create_upload_buffer(std::size_t bytes, const char* name);
     // A texture's place in the draws' texture array: its view's index; the null view's place for an empty handle.
@@ -645,7 +648,7 @@ private:
     // one refresh.
     [[nodiscard]] UINT present_sync_interval(unsigned configured, float max_fps);
     void refresh_display_rate();
-    void wait_for_gpu();            // shutdown/resize only
+    void wait_for_gpu();            // shutdown, resize and finish_pictures only
     // Applies a pending window resize (the extent mailbox in renderer_d3d12.cpp).
     // Called only from begin_frame(), between command-list recordings.
     void apply_pending_resize();

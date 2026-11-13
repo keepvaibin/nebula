@@ -445,6 +445,8 @@ struct State {
     std::deque<std::string> since_step;
     std::vector<std::regex*> log_watch;
     bool finished = false;
+    // The end step's frame while a picture it follows is still to be taken by a present (picture_path ends the run).
+    std::optional<std::int64_t> end_at;
 } g;
 
 std::recursive_mutex g_lock;
@@ -484,7 +486,7 @@ void finish(const std::string& verdict, const std::string& reason) {
     }
     g.finished = true;
     if (verdict.empty()) {
-        write_fact("harness.end", "{\"frame\":" + std::to_string(test_frame()) + "}");
+        write_fact("harness.end", "{\"frame\":" + std::to_string(g.end_at.value_or(test_frame())) + "}");
     } else {
         write_fact("harness.stop", "{\"verdict\":" + json_string(verdict) + ",\"reason\":" + json_string(reason) + "}");
     }
@@ -842,7 +844,15 @@ void run_step(Step& s, std::int64_t now) {
         break;
     case Action::Picture: g.pictures.push_back({g.game_frame, s.text}); break;
     case Action::Wait: break;
-    case Action::End: finish({}, {}); return;
+    case Action::End:
+        // A picture asked before the end and not yet taken (the render thread draws behind the game) is the run's
+        // too: the run ends when a present takes the last one (picture_path), its end the end step's frame.
+        if (!g.pictures.empty()) {
+            g.end_at = now;
+            break;
+        }
+        finish({}, {});
+        return;
     case Action::Game:
         s.waiting = true;
         g.game_queue.push_back(s.number);
@@ -1163,6 +1173,9 @@ const char* picture_path(std::uint64_t game_frame, std::uint32_t kind) {
     g.picture_file = g.out + "/pictures/" + p.name + ".ppm";
     write_fact("picture." + p.name, "{\"game_frame\":" + std::to_string(game_frame) + ",\"asked_at\":" +
                                         std::to_string(static_cast<long long>(p.game_frame) - static_cast<long long>(g.base.value_or(0u))) + "}");
+    if (g.end_at && g.pictures.empty()) {
+        finish({}, {});
+    }
     return g.picture_file.c_str();
 }
 
