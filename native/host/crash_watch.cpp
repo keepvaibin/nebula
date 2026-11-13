@@ -25,9 +25,10 @@ struct Block {
     DWORD type;        // MINIDUMP_TYPE
     LONG written;      // the answer: 1 written, 0 not
     DWORD error;       // why not (a Windows error code)
+    DWORD snapshot;    // PssCaptureSnapshot's answer: 0, the dump read a snapshot; else why not (it read the live process)
     wchar_t path[1024];
 };
-constexpr DWORD kVersion = 1u;
+constexpr DWORD kVersion = 2u;
 
 // The game's side.
 HANDLE g_process = nullptr;  // the watcher
@@ -58,17 +59,20 @@ BOOL CALLBACK snapshot_callback(PVOID, const PMINIDUMP_CALLBACK_INPUT input, PMI
 // The dump of the game's process as it is now, read from a snapshot: its address space cloned (copy on write), its
 // threads and their contexts, its handles. The game's other threads run on while the dump is written, a driver's among
 // them; read live, a fault in a graphics driver stopped the dump at ERROR_PARTIAL_COPY with nothing in it (p0479
-// kit-replay, p0480 3511: its memory freed while it was read), MiniDumpIgnoreInaccessibleMemory or not. No snapshot
-// (the system refuses one): the live process, as before.
+// kit-replay, p0480 3511: its memory freed while it was read), MiniDumpIgnoreInaccessibleMemory or not. The clone
+// breaks away from the game's job when the job allows it: PSS_CREATE_BREAKAWAY_OPTIONAL is taken only with
+// PSS_CREATE_BREAKAWAY (alone, the system refuses every snapshot with ERROR_INVALID_PARAMETER: until intm10 no dump
+// read one, p0482 3206's driver fault among them). No snapshot: the live process, and *snapshot_error says why.
 BOOL write_dump(decltype(&MiniDumpWriteDump) write, HANDLE game, DWORD pid, HANDLE file, MINIDUMP_TYPE type,
-                MINIDUMP_EXCEPTION_INFORMATION* exception) {
+                MINIDUMP_EXCEPTION_INFORMATION* exception, DWORD* snapshot_error) {
     HPSS snapshot = nullptr;
     const auto flags = static_cast<PSS_CAPTURE_FLAGS>(
         PSS_CAPTURE_VA_CLONE | PSS_CAPTURE_HANDLES | PSS_CAPTURE_HANDLE_NAME_INFORMATION | PSS_CAPTURE_HANDLE_BASIC_INFORMATION |
         PSS_CAPTURE_HANDLE_TYPE_SPECIFIC_INFORMATION | PSS_CAPTURE_HANDLE_TRACE | PSS_CAPTURE_THREADS | PSS_CAPTURE_THREAD_CONTEXT |
-        PSS_CAPTURE_THREAD_CONTEXT_EXTENDED | PSS_CREATE_BREAKAWAY_OPTIONAL | PSS_CREATE_USE_VM_ALLOCATIONS |
+        PSS_CAPTURE_THREAD_CONTEXT_EXTENDED | PSS_CREATE_BREAKAWAY | PSS_CREATE_BREAKAWAY_OPTIONAL | PSS_CREATE_USE_VM_ALLOCATIONS |
         PSS_CREATE_RELEASE_SECTION);
-    if (PssCaptureSnapshot(game, flags, CONTEXT_ALL, &snapshot) != ERROR_SUCCESS) {
+    *snapshot_error = PssCaptureSnapshot(game, flags, CONTEXT_ALL, &snapshot);
+    if (*snapshot_error != ERROR_SUCCESS) {
         return write(game, pid, file, type, exception, nullptr, nullptr);
     }
     MINIDUMP_CALLBACK_INFORMATION callback{snapshot_callback, nullptr};
@@ -127,18 +131,21 @@ int run(int argc, char** argv) {
         const HANDLE file = CreateFileW(block->path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
         BOOL ok = FALSE;
         DWORD error = 0;
+        DWORD snapshot = ERROR_NOT_READY;  // no file: no dump tried
         if (file == INVALID_HANDLE_VALUE) {
             error = GetLastError();
         } else {
             MINIDUMP_EXCEPTION_INFORMATION exception{block->thread,
                                                      reinterpret_cast<EXCEPTION_POINTERS*>(static_cast<std::uintptr_t>(block->pointers)),
                                                      TRUE};
-            ok = write_dump(write, game, pid, file, static_cast<MINIDUMP_TYPE>(block->type), block->pointers != 0 ? &exception : nullptr);
+            ok = write_dump(write, game, pid, file, static_cast<MINIDUMP_TYPE>(block->type), block->pointers != 0 ? &exception : nullptr,
+                            &snapshot);
             // MiniDumpWriteDump's failure is an HRESULT in the last error.
             error = ok ? 0u : GetLastError();
             CloseHandle(file);
         }
         block->error = error;
+        block->snapshot = snapshot;
         block->written = ok ? 1 : 0;
         SetEvent(done);
     }
@@ -187,8 +194,9 @@ void start(const std::filesystem::path& folder) {
 }
 
 Result write_dump(DWORD thread, EXCEPTION_POINTERS* pointers, unsigned type, wchar_t* path, std::size_t size, DWORD* error,
-                  DWORD wait_ms, const wchar_t* kind) noexcept {
+                  DWORD* snapshot, DWORD wait_ms, const wchar_t* kind) noexcept {
     *error = 0;
+    *snapshot = ERROR_NOT_READY;
     if (size != 0) path[0] = 0;
     if (g_process == nullptr || g_block == nullptr || WaitForSingleObject(g_process, 0) != WAIT_TIMEOUT ||
         WaitForSingleObject(g_ready, 0) != WAIT_OBJECT_0) {
@@ -211,6 +219,7 @@ Result write_dump(DWORD thread, EXCEPTION_POINTERS* pointers, unsigned type, wch
     g_block->type = type;
     g_block->written = 0;
     g_block->error = 0;
+    g_block->snapshot = ERROR_NOT_READY;
     std::size_t copied = 0;
     if (size != 0) {
         path[0] = 0;
@@ -224,6 +233,7 @@ Result write_dump(DWORD thread, EXCEPTION_POINTERS* pointers, unsigned type, wch
         return Result::kFailed;
     }
     *error = g_block->error;
+    *snapshot = g_block->snapshot;
     return g_block->written != 0 ? Result::kWritten : Result::kFailed;
 }
 

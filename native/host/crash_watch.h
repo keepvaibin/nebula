@@ -38,10 +38,12 @@ enum class Result { kNoWatcher, kWritten, kFailed };
 // The game's side, at a crash (any thread but the crashed one): the watcher writes the dump of this process with
 // `thread`'s exception `pointers` (null: no exception) of MINIDUMP_TYPE `type` and names it in `path` (`size`
 // characters with its NUL). kNoWatcher: none runs (the caller writes the dump itself); kFailed: *error says why
-// (a Windows error code), and `path` is still the file it tried. Waits for the watcher at most `wait_ms`. `kind` begins
-// the file's name: nebula-native for a crash, nebula-hang for a game that stopped making frames (a test run's stall).
+// (a Windows error code), and `path` is still the file it tried. *snapshot: 0 when the dump read a snapshot of the
+// process (the game's threads ran on unseen), else why it read the live process (ERROR_NOT_READY: no dump was tried).
+// Waits for the watcher at most `wait_ms`. `kind` begins the file's name: nebula-native for a crash, nebula-hang for a
+// game that stopped making frames (a test run's stall).
 Result write_dump(DWORD thread, EXCEPTION_POINTERS* pointers, unsigned type, wchar_t* path, std::size_t size, DWORD* error,
-                  DWORD wait_ms, const wchar_t* kind = L"nebula-native") noexcept;
+                  DWORD* snapshot, DWORD wait_ms, const wchar_t* kind = L"nebula-native") noexcept;
 
 }  // namespace galaxy::crash_watch
 #endif

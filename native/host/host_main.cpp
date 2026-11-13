@@ -1114,8 +1114,9 @@ void crash_writer() {
         // The watcher writes the dump from outside (crash_watch.h), asked with no heap and no lock of this process.
         static wchar_t watched[1024];
         DWORD watch_error = 0;
+        DWORD watch_snapshot = 0;
         const galaxy::crash_watch::Result watch = galaxy::crash_watch::write_dump(
-            gCrashThread, gCrashInfo, dump_type, watched, sizeof(watched) / sizeof(watched[0]), &watch_error, 30000u);
+            gCrashThread, gCrashInfo, dump_type, watched, sizeof(watched) / sizeof(watched[0]), &watch_error, &watch_snapshot, 30000u);
         if (watch != galaxy::crash_watch::Result::kNoWatcher) {
             const fs::path path(watched);
             char text[MAX_PATH + 64];
@@ -1123,6 +1124,13 @@ void crash_writer() {
                 std::snprintf(text, sizeof(text), "minidump %ls", path.filename().c_str());
             } else {
                 std::snprintf(text, sizeof(text), "minidump failed (0x%08lX): %ls", watch_error, path.filename().c_str());
+            }
+            log_line("crash:", text);
+            // How it was read: a snapshot (the process held still), or the live process and why no snapshot.
+            if (watch_snapshot == 0) {
+                std::snprintf(text, sizeof(text), "the dump read a snapshot of the process");
+            } else {
+                std::snprintf(text, sizeof(text), "the dump read the live process: no snapshot (0x%08lX)", watch_snapshot);
             }
             log_line("crash:", text);
             finish_crash_report(path);
@@ -4945,15 +4953,16 @@ int main(int argc, char** argv) {
             stall_dumped = true;
             static wchar_t hang[1024];
             DWORD hang_error = 0;
+            DWORD hang_snapshot = 0;
             const galaxy::crash_watch::Result written = galaxy::crash_watch::write_dump(
                 GetCurrentThreadId(), nullptr,
                 MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithThreadInfo | MiniDumpIgnoreInaccessibleMemory, hang,
-                sizeof(hang) / sizeof(hang[0]), &hang_error, 30000u, L"nebula-hang");
-            char text[MAX_PATH + 128];
-            std::snprintf(text, sizeof(text), "the game made no frame for %lld s at frame %u: %s %ls (0x%08lX)",
+                sizeof(hang) / sizeof(hang[0]), &hang_error, &hang_snapshot, 30000u, L"nebula-hang");
+            char text[MAX_PATH + 160];
+            std::snprintf(text, sizeof(text), "the game made no frame for %lld s at frame %u: %s %ls (0x%08lX, snapshot 0x%08lX)",
                           static_cast<long long>(kStall.count()), frames,
                           written == galaxy::crash_watch::Result::kWritten ? "every thread's stack in" : "no stall dump",
-                          fs::path(hang).filename().c_str(), hang_error);
+                          fs::path(hang).filename().c_str(), hang_error, hang_snapshot);
             log_line("host:", text);
         }
 #endif
