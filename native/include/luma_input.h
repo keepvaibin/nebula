@@ -179,22 +179,25 @@ typedef struct LumaInputService {
 #define LUMA_INPUT_INJECT_MAJOR 1u
 #define LUMA_INPUT_INJECT_MINOR 0u
 
+/* One mod's supply of one player's controller (begin to end). */
+typedef LumaHandle LumaInputInject;
+
 typedef struct LumaInputInjectService {
     LumaServiceTable base;
     /* Game thread. From the game's next read on, the mod supplies `player`'s controller: *out the injection.
        LUMA_OK; LUMA_E_BUSY when a mod injects that player already (an answer); a bad player or a null out:
        LUMA_E_ARGUMENT, reported. */
-    int32_t (*begin)(const LumaMod* mod, uint32_t player, LumaHandle* out);
+    int32_t (*begin)(const LumaMod* mod, uint32_t player, LumaInputInject* out);
     /* Game thread. What the game reads at its next read of that player: buttons (bits past LUMA_INPUT_BUTTONS_ALL are
        dropped), stick, pointer and shake; `device` and `injected` are not read. A read the mod set nothing for gets a
        controller at rest, not the last one (a mod that stops calling holds no button). A stick or pointer value that is
        not a number reads 0 and one past 1 reads 1, said once a call (Service.Argument), the call still LUMA_OK.
        LUMA_OK; an injection that is not this mod's open one: LUMA_E_HANDLE; a null state or a size below 1.1's
        LumaInputGame: LUMA_E_ARGUMENT; both reported. */
-    int32_t (*set)(const LumaMod* mod, LumaHandle injection, const LumaInputGame* state);
+    int32_t (*set)(const LumaMod* mod, LumaInputInject injection, const LumaInputGame* state);
     /* Game thread. The player's own controller again from the next read. LUMA_OK; LUMA_E_HANDLE as set. A mod taken
        out ends its injections. */
-    int32_t (*end)(const LumaMod* mod, LumaHandle injection);
+    int32_t (*end)(const LumaMod* mod, LumaInputInject injection);
 } LumaInputInjectService;
 
 /* ---- input.dev 1.0 (permission "input.devices") ------------------------------------------------------------------- */

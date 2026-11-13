@@ -52,6 +52,17 @@ void ScenePlayingResult::incCoin(int num) {
     ::requestOneUpIfNeed(prevNum, currNum, ::getCoinStepNum());
 }
 
+// Coins spent (a shop, a toll): fewer than num held, or num below 0, pays nothing. No 1-up, no life, no coin stat
+// (those are for coins taken).
+bool ScenePlayingResult::payCoin(s32 num) {
+    const s32 held = getCoinNum();
+    if (num < 0 || num > held) {
+        return false;
+    }
+    mCoinNum = held - num;
+    return true;
+}
+
 s32 ScenePlayingResult::getCoinNum() const {
     return MR::clamp(mCoinNum, ::cCoinNumMin, ::getCoinNumMax());
 }
