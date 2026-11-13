@@ -1081,6 +1081,10 @@ EXCEPTION_POINTERS* gCrashInfo;
 DWORD gCrashThread;
 std::atomic<int> gCrashing{0};
 std::atomic<DWORD> gCrashWriterThread{0};
+// The fault is outside the host and the game module (a graphics driver, a system library, a jump to no code): its
+// dump keeps the process's private memory too, the heaps where that code's objects live (driver-pso-crash.md: a
+// driver object's table read 0xFF, which stacks alone cannot explain). Set before gCrashRequest.
+bool gCrashForeign = false;
 
 // After the dump: the report beside it, the progress written, the crashed thread let go, and the process ended.
 [[noreturn]] void finish_crash_report(const fs::path& dump) {
@@ -1098,10 +1102,12 @@ std::atomic<DWORD> gCrashWriterThread{0};
 
 void crash_writer() {
     gCrashWriterThread.store(GetCurrentThreadId());
-    // Stacks and what they point at (the module's data segments would add its half-gigabyte image window).
-    const unsigned dump_type = MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithThreadInfo;
     for (;;) {
         WaitForSingleObject(gCrashRequest, INFINITE);
+        // Stacks and what they point at (the module's data segments would add its half-gigabyte image window); for a
+        // fault outside our code, the private memory and the handles as well.
+        const unsigned dump_type = MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithThreadInfo |
+                                   (gCrashForeign ? MiniDumpWithPrivateReadWriteMemory | MiniDumpWithHandleData : 0u);
         // The watcher writes the dump from outside (crash_watch.h), asked with no heap and no lock of this process.
         static wchar_t watched[1024];
         DWORD watch_error = 0;
@@ -1424,6 +1430,7 @@ LONG WINAPI unhandled_filter(EXCEPTION_POINTERS* info) {
     if (!cpp) {
         note_crash_plugin(info);
     }
+    gCrashForeign = !cpp && owner != GetModuleHandleW(nullptr) && owner != static_cast<HMODULE>(gModule.module);
     report_crash(info);
     TerminateProcess(GetCurrentProcess(), 4);
     std::_Exit(4);
