@@ -227,12 +227,17 @@ def find_libclang(named, compiler):
 def own_resource_dir(libclang, compiler):
     """libclang takes its built-in headers (stdarg.h and the like) from beside the compiler the command names. A libclang
     that is not that compiler's own (a cross build: Android's NDK has none) is given its own folder, or it looks for
-    its version's headers in the compiler's tree (seen: the NDK's lib/clang/22 for LLVM 22's libclang)."""
-    own = pathlib.Path(libclang).resolve().parent
+    its version's headers in the compiler's tree (seen: the NDK's lib/clang/22 for LLVM 22's libclang). Both the folder
+    the library is named in and the one it is are searched: a distribution's LLVM tree links its libclang from the
+    system's library folder (Ubuntu: /usr/lib/llvm-18/lib/libclang.so.1 is /usr/lib/x86_64-linux-gnu/libclang-18.so.18,
+    the headers in /usr/lib/llvm-18/lib/clang/18)."""
+    named = pathlib.Path(libclang).absolute()
+    own = named.resolve().parent
     if own == pathlib.Path(compiler).resolve().parent:
         return None
-    candidates = sorted((d for base in (own.parent / 'lib' / 'clang', own / 'clang') if base.is_dir() for d in base.iterdir()
-                         if (d / 'include' / 'stdarg.h').exists()), key=lambda d: [int(x) for x in d.name.split('.') if x.isdigit()])
+    bases = dict.fromkeys(base for folder in (named.parent, own) for base in (folder.parent / 'lib' / 'clang', folder / 'clang'))
+    candidates = sorted((d for base in bases if base.is_dir() for d in base.iterdir() if (d / 'include' / 'stdarg.h').exists()),
+                        key=lambda d: [int(x) for x in d.name.split('.') if x.isdigit()])
     if not candidates:
         sys.exit(f'instrument.py: no built-in headers (lib/clang/<version>/include) beside {libclang}')
     return str(candidates[-1])
