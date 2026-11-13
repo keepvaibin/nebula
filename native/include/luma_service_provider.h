@@ -89,6 +89,11 @@ typedef struct LumaServiceProvider {
     /* Game thread, once, when luma_provide_service accepts the provider: the kernel it uses from then on (a provider
        outside the game module, a host extension's, has no other way to it). May be null. */
     void (*registered)(void* user, const LumaServiceKernel* kernel);
+    /* Game thread, at each frame's start before the frame's events are given, in the harness's deterministic mode only
+       (the kernel calls it nowhere else): a provider whose answers come from another thread brings in what this
+       process already sent itself (one socket to another), so it is given on the same frame every run. Returns when
+       that is posted, or after a bound it names in the log. May be null; a provider built before it has no field. */
+    void (*frame_start)(void* user);
 } LumaServiceProvider;
 
 /* The game module's exports for the host, found by name as luma_load_mod is.

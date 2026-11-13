@@ -485,6 +485,13 @@ struct Socket {
     Kind kind = Kind::Connecting;
     Sock sock = kNoSock;         // closed by the I/O thread only
     std::uint16_t port = 0;      // a listener's
+    // Its ends (I/O thread, g_lock; read once each, ends_of_locked) and what another socket of this process sent it and
+    // it has not read: deterministic mode's frame_start waits for that to come in.
+    std::uint16_t local_port = 0;  // its own port
+    std::uint16_t peer_port = 0;   // the other end's, when that is a loopback address (0: not, or not connected)
+    std::uint8_t ends_known = 0;   // 1 local_port read, 2 peer_port read
+    std::uint64_t own_due = 0;     // datagrams (UDP) or bytes (a stream) on their way here from this process
+    std::uint16_t connect_port = 0;  // a stream's connect: its target's port when that is a loopback address (else 0)
     std::chrono::steady_clock::time_point started{};  // a connect's start; from close() on, the close's
     // What the I/O thread found, for the next delivery (g_lock).
     bool posted = false;         // the node is queued with the kernel
@@ -571,8 +578,132 @@ const Socket* g_delivering = nullptr;  // g_lock: the socket whose deliver runs 
 struct Io {
     std::condition_variable ready;  // with g_lock: a socket exists
     bool started = false;
+    // The wake: a UDP socket on the loopback address connected to itself, in every poll. A byte sent there ends the
+    // poll's wait at once: a send queued, a socket made or closed while the thread waits (without it each waited up to
+    // kPollMs, every message 5 ms late on average).
+    Sock wake = kNoSock;
+    std::atomic<bool> wake_sent{false};  // a byte is on its way and not drained: another wake sends none
+    // Deterministic mode (frame_start), with g_lock: the game thread's asks, the I/O thread's answers.
+    std::uint64_t settle_asked = 0;
+    std::uint64_t settle_done = 0;
+    std::uint64_t settle_polled = 0;  // the I/O thread's: the ask its last pass polled for (a first pass waits 0 ms)
+    std::condition_variable settled;
 };
 Io* g_io = nullptr;  // game thread makes it
+
+// Any thread, g_io made: the I/O thread's wait ends now (its condition variable when it holds no socket, its poll when
+// it does).
+void wake_io() noexcept {
+    g_io->ready.notify_one();
+    if (g_io->wake != kNoSock && !g_io->wake_sent.exchange(true, std::memory_order_acq_rel)) {
+        const char byte = 1;
+        (void)send_system(g_io->wake, &byte, 1u);
+    }
+}
+
+// The wake socket (Io::wake): bound to the loopback address, connected to itself, non-blocking. kNoSock when the
+// system gives none (the thread then waits kPollMs at most, as before).
+Sock make_wake() noexcept {
+    if (!system_ready()) {
+        return kNoSock;
+    }
+    const Sock s = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (s == kNoSock) {
+        return kNoSock;
+    }
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    socklen_t length = static_cast<socklen_t>(sizeof(address));
+    if (::bind(s, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) != 0 ||
+        ::getsockname(s, reinterpret_cast<sockaddr*>(&address), &length) != 0 ||
+        ::connect(s, reinterpret_cast<const sockaddr*>(&address), length) != 0 || !make_nonblocking(s)) {
+        close_system(s);
+        return kNoSock;
+    }
+    return s;
+}
+
+// A loopback address's port (0: not a loopback address).
+std::uint16_t loopback_port(const sockaddr_storage& address) noexcept {
+    if (address.ss_family == AF_INET) {
+        const auto& v4 = reinterpret_cast<const sockaddr_in&>(address);
+        return (ntohl(v4.sin_addr.s_addr) >> 24) == 127u ? ntohs(v4.sin_port) : 0u;
+    }
+    if (address.ss_family == AF_INET6) {
+        const auto& v6 = reinterpret_cast<const sockaddr_in6&>(address);
+        return IN6_IS_ADDR_LOOPBACK(&v6.sin6_addr) ? ntohs(v6.sin6_port) : 0u;
+    }
+    return 0u;
+}
+
+// With g_lock, I/O thread: the socket's own port and its loopback peer's, each read from the system once it is there.
+void ends_of_locked(Socket* socket) noexcept {
+    if (socket->sock == kNoSock || socket->system_closed || socket->ends_known == 3u) {
+        return;
+    }
+    sockaddr_storage address{};
+    socklen_t length = static_cast<socklen_t>(sizeof(address));
+    if ((socket->ends_known & 1u) == 0u &&
+        ::getsockname(socket->sock, reinterpret_cast<sockaddr*>(&address), &length) == 0) {
+        socket->local_port = address.ss_family == AF_INET    ? ntohs(reinterpret_cast<const sockaddr_in&>(address).sin_port)
+                             : address.ss_family == AF_INET6 ? ntohs(reinterpret_cast<const sockaddr_in6&>(address).sin6_port)
+                                                             : 0u;
+        socket->ends_known |= socket->local_port != 0u ? 1u : 0u;
+    }
+    length = static_cast<socklen_t>(sizeof(address));
+    if ((socket->ends_known & 2u) == 0u && (socket->kind == Kind::Open || (socket->udp && socket->tied)) &&
+        ::getpeername(socket->sock, reinterpret_cast<sockaddr*>(&address), &length) == 0) {
+        socket->peer_port = loopback_port(address);
+        socket->ends_known |= 2u;  // connected: its peer is known, a loopback one or not
+    }
+}
+
+// With g_lock, I/O thread: the socket of this process a datagram to the loopback `port` comes to (null: none).
+Socket* own_udp_locked(std::uint16_t port) noexcept {
+    if (port == 0u) {
+        return nullptr;
+    }
+    for (Socket* other : g_sockets) {
+        if (other->udp && other->kind == Kind::Udp && !other->system_closed) {
+            ends_of_locked(other);
+            if (other->local_port == port) {
+                return other;
+            }
+        }
+    }
+    return nullptr;
+}
+
+// With g_lock: this process's listener on `port` (null: none).
+const Socket* own_listener_locked(std::uint16_t port) noexcept {
+    if (port == 0u) {
+        return nullptr;
+    }
+    for (const Socket* other : g_sockets) {
+        if (other->kind == Kind::Listener && !other->udp && !other->closing && !other->system_closed && other->port == port) {
+            return other;
+        }
+    }
+    return nullptr;
+}
+
+// With g_lock, I/O thread: the other end of a stream when it is a socket of this process (null: not, or not yet known).
+Socket* own_stream_end_locked(Socket* socket) noexcept {
+    ends_of_locked(socket);
+    if (socket->peer_port == 0u || socket->local_port == 0u) {
+        return nullptr;
+    }
+    for (Socket* other : g_sockets) {
+        if (other != socket && !other->udp && other->kind == Kind::Open && !other->system_closed && !is_pipe(other)) {
+            ends_of_locked(other);
+            if (other->local_port == socket->peer_port && other->peer_port == socket->local_port) {
+                return other;
+            }
+        }
+    }
+    return nullptr;
+}
 
 void io_loop();
 
@@ -583,6 +714,10 @@ bool io_started() {
     g_io = new (std::nothrow) Io();
     if (g_io == nullptr) {
         return false;
+    }
+    g_io->wake = make_wake();
+    if (g_io->wake == kNoSock && g_log != nullptr) {
+        g_log("LumaCore net: the I/O thread has no wake socket; a send waits up to 10 ms for it");
     }
     try {
         std::thread(io_loop).detach();
@@ -994,6 +1129,7 @@ void udp_turn_locked(Socket* socket, short revents) {
                 }
                 break;  // none waiting (or an error the next poll shows again)
             }
+            const std::uint16_t from_port = loopback_port(datagram.address);
             try {
                 datagram.bytes.assign(g_datagram->data(), static_cast<std::size_t>(got));
                 socket->datagrams_in.push_back(std::move(datagram));
@@ -1001,6 +1137,9 @@ void udp_turn_locked(Socket* socket, short revents) {
                 break;  // no memory: this one is lost, as the network may lose it
             }
             socket->datagrams_in_bytes += static_cast<std::size_t>(got);
+            if (socket->own_due != 0u && own_udp_locked(from_port) != nullptr) {
+                socket->own_due--;  // one of those another socket of this process sent here
+            }
         }
         if (!socket->datagrams_in.empty()) {
             post_locked(socket);
@@ -1014,6 +1153,12 @@ void udp_turn_locked(Socket* socket, short revents) {
                                socket->tied ? nullptr : &datagram.address, socket->tied ? 0 : datagram.length);
             if (put < 0 && would_block(system_error())) {
                 break;  // the system's buffer is full: the next POLLOUT
+            }
+            if (put >= 0) {
+                ends_of_locked(socket);
+                if (Socket* to = own_udp_locked(socket->tied ? socket->peer_port : loopback_port(datagram.address))) {
+                    to->own_due++;  // deterministic mode's frame_start waits for it there
+                }
             }
             // Sent, or refused by the system (no route, too large for the path): either way it left the queue, and
             // UDP never tells whether a datagram arrived.
@@ -1054,6 +1199,7 @@ bool read_stream_locked(Socket* socket, std::string& in, std::size_t most, bool*
         const int got = receive_system(socket->sock, in.data() + before, room);
         in.resize(before + (got > 0 ? static_cast<std::size_t>(got) : 0u));
         if (got > 0) {
+            socket->own_due -= std::min<std::uint64_t>(socket->own_due, static_cast<std::uint64_t>(got));
             continue;
         }
         if (got == 0) {
@@ -1077,6 +1223,9 @@ std::int64_t write_stream_locked(Socket* socket, std::string& out) {
         const int put = send_system(socket->sock, out.data() + done, out.size() - done);
         if (put > 0) {
             done += static_cast<std::size_t>(put);
+            if (Socket* to = own_stream_end_locked(socket)) {
+                to->own_due += static_cast<std::uint64_t>(put);
+            }
             continue;
         }
         if (put < 0 && !would_block(system_error())) {
@@ -2336,6 +2485,7 @@ void turn_locked(Socket* socket, short revents) {
             const int got = receive_system(socket->sock, socket->received.data() + before, room);
             socket->received.resize(before + (got > 0 ? static_cast<std::size_t>(got) : 0u));
             if (got > 0) {
+                socket->own_due -= std::min<std::uint64_t>(socket->own_due, static_cast<std::uint64_t>(got));
                 continue;
             }
             if (got == 0) {
@@ -2357,6 +2507,9 @@ void turn_locked(Socket* socket, short revents) {
             const int put = send_system(socket->sock, socket->outgoing.data() + done, socket->outgoing.size() - done);
             if (put > 0) {
                 done += static_cast<std::size_t>(put);
+                if (Socket* to = own_stream_end_locked(socket)) {
+                    to->own_due += static_cast<std::uint64_t>(put);
+                }
                 continue;
             }
             if (put < 0 && !would_block(system_error())) {
@@ -2405,6 +2558,41 @@ short stream_events(const Socket* socket) {
     return static_cast<short>((in ? POLLIN : 0) | (out ? POLLOUT : 0));
 }
 
+// With g_lock, I/O thread, at a pass's end: a settle asked before the pass began is answered when nothing this process
+// sent itself is on its way (frame_start).
+void settle_check_locked(std::uint64_t asked) {
+    if (asked <= g_io->settle_done) {
+        return;
+    }
+    for (Socket* socket : g_sockets) {
+        if (socket->system_closed) {
+            continue;
+        }
+        if (socket->own_due != 0u) {
+            return;  // sent here by this process, not read yet
+        }
+        if (!socket->udp && socket->kind == Kind::Connecting && socket->failed == LUMA_OK &&
+            own_listener_locked(socket->connect_port) != nullptr) {
+            return;  // connecting to a listener of this process
+        }
+        if (!socket->udp && socket->kind == Kind::Open && !socket->peer_closed && !is_pipe(socket) &&
+            socket->connect_port != 0u && own_listener_locked(socket->connect_port) != nullptr &&
+            own_stream_end_locked(socket) == nullptr) {
+            return;  // connected there, and the listener has not accepted it yet
+        }
+        if (!socket->outgoing.empty() && own_stream_end_locked(socket) != nullptr) {
+            return;  // queued for a socket of this process, not sent yet
+        }
+        for (const Datagram& datagram : socket->datagrams_out) {
+            if (own_udp_locked(socket->tied ? socket->peer_port : loopback_port(datagram.address)) != nullptr) {
+                return;
+            }
+        }
+    }
+    g_io->settle_done = asked;
+    g_io->settled.notify_all();
+}
+
 void io_loop() {
     std::vector<Socket*> polled;
     std::vector<PollFd> fds;
@@ -2412,11 +2600,15 @@ void io_loop() {
     for (;;) {
         polled.clear();
         fds.clear();
+        std::uint64_t asked = 0;  // the settle asked when this pass began
+        bool settling = false;    // and not answered yet
         {
             std::unique_lock<std::mutex> lock(g_lock);
             g_io->ready.wait(lock, [] {
                 return std::any_of(g_sockets.begin(), g_sockets.end(), [](const Socket* s) { return !s->system_closed; });
             });
+            asked = g_io->settle_asked;
+            settling = asked > g_io->settle_done;
             try {
                 for (Socket* socket : g_sockets) {
                     if (socket->system_closed || is_pipe(socket)) {
@@ -2457,16 +2649,33 @@ void io_loop() {
                     polled.push_back(socket);
                     fds.push_back(fd);
                 }
+                if (g_io->wake != kNoSock) {
+                    PollFd fd{};
+                    fd.fd = g_io->wake;
+                    fd.events = POLLIN;
+                    fds.push_back(fd);  // last: no socket's, so `polled` has no entry for it
+                }
             } catch (...) {
                 polled.clear();
                 fds.clear();
             }
         }
-        // Outside the lock: the descriptors stay open (only this thread closes them).
+        // Outside the lock: the descriptors stay open (only this thread closes them). While a settle waits, what this
+        // process sent itself may still be in the system's loopback: looked at again within a millisecond.
+        const int wait_ms = !settling ? kPollMs : asked != g_io->settle_polled ? 0 : 1;
+        g_io->settle_polled = asked;
         if (!fds.empty()) {
-            poll_system(fds.data(), fds.size(), kPollMs);
+            poll_system(fds.data(), fds.size(), wait_ms);
         } else {
-            std::this_thread::sleep_for(std::chrono::milliseconds(kPollMs));
+            std::this_thread::sleep_for(std::chrono::milliseconds(wait_ms));
+        }
+        if (fds.size() > polled.size() && (fds.back().revents & POLLIN) != 0) {
+            // Drained, then open to the next wake: a wake between the two found the flag set and sent nothing, and
+            // this pass reads the state it woke for (changed under g_lock before it woke).
+            char drained[64];
+            while (receive_system(g_io->wake, drained, sizeof(drained)) > 0) {
+            }
+            g_io->wake_sent.store(false, std::memory_order_release);
         }
         working.clear();
         {
@@ -2494,6 +2703,9 @@ void io_loop() {
             } catch (...) {
                 working.clear();  // no memory now: the next round
             }
+            if (working.empty()) {
+                settle_check_locked(asked);
+            }
         }
         if (working.empty()) {
             continue;
@@ -2518,6 +2730,43 @@ void io_loop() {
                 tls_settle_locked(socket);
             }
         }
+        settle_check_locked(asked);
+    }
+}
+
+// Deterministic mode (luma_service_provider.h frame_start), game thread, at each frame's start: what this process's
+// sockets sent each other comes in and is posted before the frame's events are taken, so it is given on the same frame
+// every run (the I/O thread runs in real time, the frames as fast as the game makes them).
+constexpr auto kSettleMost = std::chrono::seconds(1);
+void frame_start(void*) {
+    if (g_io == nullptr || !g_io->started) {
+        return;
+    }
+    std::unique_lock<std::mutex> lock(g_lock);
+    if (std::none_of(g_sockets.begin(), g_sockets.end(), [](const Socket* s) { return !s->system_closed; })) {
+        return;  // the I/O thread waits for a socket: nothing on its way
+    }
+    const std::uint64_t ask = ++g_io->settle_asked;
+    wake_io();
+    if (g_io->settled.wait_for(lock, kSettleMost, [ask] { return g_io->settle_done >= ask; })) {
+        return;
+    }
+    // Lost on the way (a full loopback buffer drops a datagram): not waited for again.
+    std::uint64_t due = 0;
+    for (Socket* socket : g_sockets) {
+        due += socket->own_due;
+        socket->own_due = 0;
+    }
+    g_io->settle_done = std::max(g_io->settle_done, ask);
+    lock.unlock();
+    static bool said = false;
+    if (!said && g_log != nullptr) {
+        said = true;
+        char line[200];
+        std::snprintf(line, sizeof(line),
+                      "LumaCore net: %llu datagrams or bytes this process sent itself had not come after 1 s; the frame went on",
+                      static_cast<unsigned long long>(due));
+        g_log(line);
     }
 }
 
@@ -2799,7 +3048,7 @@ std::int32_t join(Socket* socket, LumaHandle* out) {
         }
         socket->owner->open++;
     }
-    g_io->ready.notify_one();
+    wake_io();
     *out = socket->handle;
     return LUMA_OK;
 }
@@ -2881,6 +3130,7 @@ std::int32_t local_connect(const LumaMod* mod, const char* where, bool udp, cons
             return LUMA_E_MEMORY;
         }
         socket->tied = udp;
+        socket->connect_port = udp ? 0u : loopback_port(address);
         socket->kind = Kind::Connecting;  // a UDP connect only sets the peer: CONNECTED at the I/O thread's next turn
         socket->started = std::chrono::steady_clock::now();
         if (!udp) {
@@ -3227,7 +3477,7 @@ std::int32_t send_on(const LumaMod* mod, const char* where, bool internet, LumaH
             return LUMA_E_MEMORY;
         }
     }
-    g_io->ready.notify_one();
+    wake_io();
     return LUMA_OK;
 }
 
@@ -3645,7 +3895,7 @@ void deliver_ws(Socket* socket, const LumaMod* mod) {
             socket->closing = true;   // the close queued is still sent (I/O thread), then the connection ends
             socket->started = std::chrono::steady_clock::now();
         }
-        g_io->ready.notify_one();
+        wake_io();
         if (end_error) {
             if (report_code != 0u && socket->where != nullptr) {
                 report_with(mod, socket->where, report_code, report_a, report_b);  // why, before the ERROR
@@ -3661,7 +3911,7 @@ void deliver_ws(Socket* socket, const LumaMod* mod) {
     }
     g_delivering = nullptr;
     reap_locked();
-    g_io->ready.notify_one();  // a pong queued: the I/O thread sends it
+    wake_io();  // a pong queued: the I/O thread sends it
 }
 
 // The protocols asked, as tokens separated by ","; false: not that form (or past LUMA_NET_PROTOCOL_MOST).
@@ -3824,7 +4074,7 @@ std::int32_t ws_send_on(const LumaMod* mod, const char* where, bool internet, Lu
             return LUMA_E_MEMORY;
         }
     }
-    g_io->ready.notify_one();
+    wake_io();
     return LUMA_OK;
 }
 
@@ -3866,7 +4116,7 @@ std::int32_t close_on(const LumaMod* mod, const char* where, bool internet, Luma
         socket->accepted.clear();
         reap_locked();
     }
-    g_io->ready.notify_one();
+    wake_io();
     return LUMA_OK;
 }
 
@@ -3923,7 +4173,7 @@ std::int32_t net_send_to(const LumaMod* mod, LumaHandle handle, const char* host
             socket->datagrams_out.push_back(std::move(datagram));
             socket->datagrams_out_bytes += static_cast<std::size_t>(bytes);
         }
-        g_io->ready.notify_one();
+        wake_io();
         return LUMA_OK;
     } catch (...) {
         return LUMA_E_MEMORY;
@@ -4330,7 +4580,7 @@ void look_up(Socket* socket, std::string host, std::uint16_t port) {
         socket->looked_up = true;
         socket->resolving = false;
     }
-    g_io->ready.notify_one();
+    wake_io();
 }
 
 // tcp_connect and udp_connect of net.internet: the host's name looked up, then a stream or a datagram socket tied to
@@ -4408,7 +4658,7 @@ std::int32_t internet_connect(const LumaMod* mod, const char* where, bool udp, c
             socket->looked_up = true;
             socket->lookup_status = LUMA_E_IO;  // no thread: the I/O thread gives the ERROR
         }
-        g_io->ready.notify_one();
+        wake_io();
         *out = socket->handle;
         return LUMA_PENDING;
     } catch (...) {
@@ -4741,7 +4991,7 @@ void mod_gone(void*, const LumaMod* mod) {
         reap_locked();
     }
     if (g_io != nullptr) {
-        g_io->ready.notify_one();
+        wake_io();
     }
 }
 
@@ -4850,7 +5100,7 @@ const LumaServiceRow kLocalRows[] = {
 };
 const LumaServiceProvider kLocalProvider = {
     sizeof(LumaServiceProvider), LUMA_NET_LOCAL_NAME, &kLocal.base, nullptr, kLocalRows,
-    sizeof(kLocalRows) / sizeof(kLocalRows[0]), nullptr, mod_begin, mod_gone, mod_end, registered,
+    sizeof(kLocalRows) / sizeof(kLocalRows[0]), nullptr, mod_begin, mod_gone, mod_end, registered, frame_start,
 };
 
 const LumaNetInternetService kInternet = {
@@ -4883,6 +5133,7 @@ const LumaServiceRow kInternetRows[] = {
 const LumaServiceProvider kInternetProvider = {
     sizeof(LumaServiceProvider), LUMA_NET_INTERNET_NAME, &kInternet.base, nullptr, kInternetRows,
     sizeof(kInternetRows) / sizeof(kInternetRows[0]), nullptr, mod_begin, mod_gone, mod_end, registered,
+    nullptr,  // net.local's frame_start settles the sockets of both
 };
 const LumaServiceProvider* const kProviders[] = {&kLocalProvider, &kInternetProvider};
 

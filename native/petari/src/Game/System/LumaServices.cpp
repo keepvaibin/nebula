@@ -85,6 +85,9 @@ namespace luma {
             };
             Entry sEntries[kMostServices];
             u32 sEntryCount = 0;  // written on the game thread before sSealed, with release; read with acquire
+            // Deterministic mode's providers with a frame_start (game thread), called at each frame's start.
+            const LumaServiceProvider* sFrameStarts[kMostServices];
+            u32 sFrameStartCount = 0;
             bool sSealed = false; // a mod began: no more registrations (game thread)
             bool sOpened = false; // luma_services_open ran: the module's own are registered (game thread)
 
@@ -614,6 +617,11 @@ namespace luma {
                     pProvider->registered != nullptr) {
                     pProvider->registered(pProvider->user, &sKernel);
                 }
+                // frame_start likewise, and only in deterministic mode (the host's test_frame_step): never in play.
+                if (pProvider->size >= offsetof(LumaServiceProvider, frame_start) + sizeof(pProvider->frame_start) &&
+                    pProvider->frame_start != nullptr && nebula_host()->test_frame_step != nullptr) {
+                    sFrameStarts[sFrameStartCount++] = pProvider;
+                }
                 return 0;
             }
         }
@@ -838,6 +846,10 @@ namespace luma {
         }
 
         void frameStart() {
+            // Deterministic mode only (none registered otherwise): what the process sent itself is posted first.
+            for (u32 i = 0; i < sFrameStartCount; i++) {
+                sFrameStarts[i]->frame_start(sFrameStarts[i]->user);
+            }
             // One relaxed load a frame while nobody woke it (a FORGET is the host's, from any thread).
             if (__atomic_load_n(&sSaveWake, __ATOMIC_RELAXED) != nullptr) {
                 sSaveWork = __atomic_exchange_n(&sSaveWake, nullptr, __ATOMIC_ACQUIRE);

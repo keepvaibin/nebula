@@ -1106,8 +1106,10 @@ void crash_writer() {
     for (;;) {
         WaitForSingleObject(gCrashRequest, INFINITE);
         // Stacks and what they point at (the module's data segments would add its half-gigabyte image window); for a
-        // fault outside our code, the private memory and the handles as well.
-        const unsigned dump_type = MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithThreadInfo |
+        // fault outside our code, the private memory and the handles as well. A region that cannot be read (freed or
+        // made inaccessible while the dump is written) is left out, not the end of the dump: without it a wide dump
+        // stopped at ERROR_PARTIAL_COPY with no module list (p0479 kit-replay).
+        const unsigned dump_type = MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithThreadInfo | MiniDumpIgnoreInaccessibleMemory |
                                    (gCrashForeign ? MiniDumpWithPrivateReadWriteMemory | MiniDumpWithHandleData : 0u);
         // The watcher writes the dump from outside (crash_watch.h), asked with no heap and no lock of this process.
         static wchar_t watched[1024];
