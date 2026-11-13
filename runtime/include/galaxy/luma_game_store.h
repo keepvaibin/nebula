@@ -9,7 +9,8 @@
 // The AssetStore stays open and unchanged while the view is used; one thread at a time, as a report.
 #pragma once
 
-#include "luma_validate.h"
+// The importer's C header, by its place in the tree (as mod_check.h takes it): every target that checks mods builds this.
+#include "../../../crates/nebula-import/include/luma_validate.h"
 
 #include <cstdint>
 #include <string>

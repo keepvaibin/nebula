@@ -17,6 +17,10 @@ namespace galaxy::mods {
 struct ModInfo;
 }
 
+namespace galaxy::assets {
+class AssetStore;
+}
+
 namespace galaxy::modlog {
 
 // Once a session, before the mods' code starts: finds the module's exports (`find_symbol`, as start_plugins takes it)
@@ -53,6 +57,11 @@ struct StartPackage {
 // program, platform, language) or the other packages changed; otherwise its findings are read back. Nothing at all
 // with no package.
 void check_packages(const std::vector<StartPackage>& packages, std::string_view program, std::string_view language);
+
+// The game's own files for every check after this (the start's and the import's): the rules on game paths, rows and
+// folders, as LumaLink's --game checks them. Set where the store is opened, before the first check; the store stays
+// open and unchanged while checks run (null: those rules go unchecked).
+void set_check_store(const galaxy::assets::AssetStore* store);
 
 // One finding of an import's check, worded in the played language.
 struct ImportFinding {

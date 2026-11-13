@@ -172,6 +172,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/luma.cpp
     ${rt}/mod_log.cpp
     ${rt}/mod_check.cpp
+    ${rt}/luma_game_store.cpp
     ${rt}/mod_screens.cpp
     ${rt}/mod_start_check.cpp
     ${rt}/mod_plugins.cpp
@@ -284,6 +285,7 @@ if(ANDROID)
         ${rt}/mii_formats.cpp
         ${rt}/mod_import.cpp
         ${rt}/mod_check.cpp
+        ${rt}/luma_game_store.cpp
         ${rt}/mods.cpp
         ${rt}/mod_consent.cpp
         ${rt}/mod_xml.cpp

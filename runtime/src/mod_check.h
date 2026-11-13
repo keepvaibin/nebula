@@ -16,6 +16,10 @@
 #include <string_view>
 #include <vector>
 
+namespace galaxy::assets {
+class AssetStore;
+}
+
 namespace galaxy::modlog::check {
 
 // The validator's C functions, from the importer's library (as mod_plugins.cpp's validate_message finds it): on Apple
@@ -38,13 +42,20 @@ struct Validator {
 const Validator* validator();
 
 // What a check's findings and kept reports depend on beyond the package: the platform with its processor
-// ("windows-x64", luma-format 6), the disc ("RMGE01"; empty: none, and the rules on the game's files go unchecked)
-// and the played language folder.
+// ("windows-x64", luma-format 6), the disc ("RMGE01"; empty: none, and the rules on the game's files go unchecked),
+// the played language folder, and the game's own files (validator contract item 8: the rules on game paths, rows and
+// folders, L302 and L4xx, as LumaLink's --game checks them; null: those rules go unchecked). Each check reads the
+// store through a view of its own (luma_game_store.h), so checks on two threads never share one.
 struct Game {
     std::string platform;
     std::string region;
     std::string played;
+    const galaxy::assets::AssetStore* store = nullptr;
 };
+
+// What identifies a store's content for a kept report (LumaValidateInput.store_key): its version and the game it came
+// from. A kept report made with another (or with none) is made again.
+std::string store_key(const galaxy::assets::AssetStore& store);
 
 // One finding as kept: code, level (0 an error), line, column, file, played text, English text.
 struct Kept {

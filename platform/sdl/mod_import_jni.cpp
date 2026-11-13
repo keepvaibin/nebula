@@ -39,10 +39,15 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_dev_nebula_galaxy_ModImport_importF
     std::string answer;
     try {
         const fs::path folder = fs::path(text_of(env, data));
-        const std::string game_id = galaxy::assets::store_game_id(fs::path(text_of(env, pak)));
+        const fs::path pak_path = fs::path(text_of(env, pak));
+        const std::string game_id = galaxy::assets::store_game_id(pak_path);
         galaxy::mods::set_mods_folder(folder / "mods", folder / "mods.ini", game_id);
+        // The game's own files for the rules on game paths, as the game's check reads them (not a store: unchecked).
+        galaxy::assets::AssetStore store;
+        const bool opened = !game_id.empty() && store.open(pak_path);
         // The launcher's words are English: the findings too, until the launcher speaks the game's languages.
-        const galaxy::modlog::check::Game game{std::string(galaxy::luma::plugin_target()), game_id, "UsEnglish"};
+        const galaxy::modlog::check::Game game{std::string(galaxy::luma::plugin_target()), game_id, "UsEnglish",
+                                               opened ? &store : nullptr};
         const galaxy::mods::ImportCheck check = [&game](const fs::path& staged, const std::string& id,
                                                         galaxy::mods::ImportResult& result) {
             std::vector<galaxy::modlog::StartPackage> others;

@@ -354,7 +354,7 @@ endif()
 # The mods' virtual disc (galaxy::mods) serves this host's disc reads as the windowed host's.
 add_executable(nebula_native_host host/host_main.cpp ../runtime/src/host_extension.cpp ../runtime/src/luma_services_host.cpp ../runtime/src/luma_system.cpp ../runtime/src/luma_mods.cpp ../runtime/src/luma_fs.cpp ../runtime/src/luma_net.cpp ../runtime/src/luma_assets.cpp ../runtime/src/luma_audio.cpp ../runtime/src/luma_capture.cpp
     ../runtime/src/luma_input.cpp ../runtime/src/input/mod_actions.cpp ../runtime/src/input_bindings.cpp
-    ../runtime/src/mod_log.cpp ../runtime/src/mod_check.cpp ../runtime/src/mod_screens.cpp ../runtime/src/mod_start_check.cpp ../runtime/src/mod_plugins.cpp ../runtime/src/game_module.cpp host/luma_guard.cpp host/crash_watch.cpp
+    ../runtime/src/mod_log.cpp ../runtime/src/mod_check.cpp ../runtime/src/luma_game_store.cpp ../runtime/src/mod_screens.cpp ../runtime/src/mod_start_check.cpp ../runtime/src/mod_plugins.cpp ../runtime/src/game_module.cpp host/luma_guard.cpp host/crash_watch.cpp
     ../runtime/src/luma.cpp ../runtime/src/mods.cpp ../runtime/src/mod_consent.cpp ../runtime/src/texture_categories.cpp ../runtime/src/dolphin_pack.cpp ../runtime/src/mod_xml.cpp ../runtime/src/atomic_file.cpp ../runtime/src/save_files.cpp ../runtime/src/asset_store.cpp
     ../runtime/src/crash_report.cpp ../runtime/src/discord_presence.cpp ../runtime/src/mii_import.cpp
     ../runtime/src/mii_formats.cpp ../runtime/src/pointer_control.cpp

@@ -598,6 +598,7 @@ std::mutex g_start_lock;
 std::vector<StartResult> g_start_results;
 
 CheckGame g_check_game;  // the last start's check's, for check_import; under g_start_lock
+std::atomic<const galaxy::assets::AssetStore*> g_check_store{nullptr};  // set_check_store's
 
 void add_kept(std::string_view mod, const Kept& k) {
     const std::string mod_id(mod);
@@ -617,10 +618,15 @@ void add_kept(std::string_view mod, const Kept& k) {
 
 }  // namespace
 
+void set_check_store(const galaxy::assets::AssetStore* store) {
+    g_check_store.store(store, std::memory_order_release);
+}
+
 void check_packages(const std::vector<StartPackage>& packages, std::string_view program, std::string_view language) {
     // luma-format's platform names carry the processor ("windows-x64"), as a package's code does.
     const CheckGame side{std::string(galaxy::luma::plugin_target()), std::string(program),
-                         language.empty() ? std::string("UsEnglish") : std::string(language)};
+                         language.empty() ? std::string("UsEnglish") : std::string(language),
+                         g_check_store.load(std::memory_order_acquire)};
     {
         const std::lock_guard<std::mutex> lock(g_start_lock);
         g_start_results.clear();
@@ -633,7 +639,7 @@ void check_packages(const std::vector<StartPackage>& packages, std::string_view 
     const std::string& played = side.played;
     // What a kept report and a finding's words depend on beyond the package's own files.
     const std::string game = std::string(NEBULA_VERSION) + "\t" + region + "\t" + platform + "\t" + played + "\t" +
-                             std::to_string(LUMA_API);
+                             std::to_string(LUMA_API) + "\t" + (side.store != nullptr ? check::store_key(*side.store) : "-");
 
     // Pass 1: each package's kept report (its own rules), validated only when its bytes changed: the names, sizes and
     // times first; their content hashed only when those changed.
@@ -960,7 +966,8 @@ ImportCheck check_import(const std::filesystem::path& folder, const std::vector<
     // language. Without the game id the rules on the game's files would go unchecked at import and refuse the mod
     // only at the next start.
     if (side.platform.empty()) {
-        side = CheckGame{std::string(galaxy::luma::plugin_target()), galaxy::mods::mods_game_id(), "UsEnglish"};
+        side = CheckGame{std::string(galaxy::luma::plugin_target()), galaxy::mods::mods_game_id(), "UsEnglish",
+                         g_check_store.load(std::memory_order_acquire)};
 #if defined(NEBULA_HOST_RENDERER)  // a headless host has no language setting: its words stay in English
         std::string played = galaxy::mods::language_folder(
             side.region, static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language)));

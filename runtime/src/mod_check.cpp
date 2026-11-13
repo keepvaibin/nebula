@@ -3,6 +3,8 @@
 
 #include "mod_check.h"
 
+#include "galaxy/asset_store.h"
+#include "galaxy/luma_game_store.h"
 #include "galaxy/mods.h"
 
 #include <luma.h>
@@ -10,6 +12,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <fstream>
+#include <optional>
 #include <sstream>
 
 #if defined(_WIN32)
@@ -66,6 +69,10 @@ const Validator* validator() {
     return ok ? &found : nullptr;
 }
 
+std::string store_key(const galaxy::assets::AssetStore& store) {
+    return "store " + std::to_string(galaxy::assets::kStoreVersion) + " " + std::string(store.game_id());
+}
+
 std::string read_file(const std::filesystem::path& path) {
     std::ifstream in(path, std::ios::binary);
     if (!in) return {};
@@ -91,6 +98,15 @@ bool validate_package(const Validator* v, std::string_view id, const std::filesy
     input.position = position;
     input.kept = kept_in.empty() ? nullptr : reinterpret_cast<const std::uint8_t*>(kept_in.data());
     input.kept_size = kept_in.size();
+    // The game's own files, through a view for this call alone.
+    std::optional<galaxy::LumaGameStoreView> view;
+    std::string key;
+    if (game.store != nullptr) {
+        view.emplace(*game.store);
+        key = store_key(*game.store);
+        input.store = view->get();
+        input.store_key = key.c_str();
+    }
     LumaReport* const report = v->validate(&input);
     if (v->state(report) < 0) {
         const char* why = v->invalid(report);

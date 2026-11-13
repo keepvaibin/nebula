@@ -4099,6 +4099,7 @@ int run_mods_tool() {
 #endif
     std::string game_id = "RMGE01";
     std::vector<fs::path> sources;
+    fs::path pak;
     const bool list = !args.empty() && args[0] == "--list-mods";
     const bool remove = !args.empty() && args[0] == "--remove-mod";
     for (std::size_t i = 1; i < args.size(); ++i) {
@@ -4106,7 +4107,8 @@ int run_mods_tool() {
             game_id = utf8_of(args[++i]);
         } else if (args[i] == "--pak" && i + 1u < args.size()) {
             std::string id;
-            if (read_game_id(args[++i], id)) {
+            pak = args[++i];
+            if (read_game_id(pak, id)) {
                 game_id = id;
             }
         } else if (is_tool_folder_option(utf8_of(args[i])) && i + 1u < args.size()) {
@@ -4123,6 +4125,12 @@ int run_mods_tool() {
     std::error_code error;
     fs::create_directories(settings_folder / "mods", error);
     galaxy::mods::set_mods_folder(settings_folder / "mods", settings_folder / "mods.ini", game_id);
+    // The import's check reads the game's own files, as the game's does (a store that does not open: unchecked).
+    galaxy::assets::AssetStore store;
+    struct Unset {
+        ~Unset() { galaxy::modlog::set_check_store(nullptr); }
+    } unset;
+    if (!pak.empty() && store.open(pak)) galaxy::modlog::set_check_store(&store);
     if (remove) {
         std::string message;
         const bool ok = !sources.empty() &&
@@ -4471,6 +4479,7 @@ int main(int argc, char** argv) {
     if (!open_pak(pak)) return 2;
     galaxy::luma_assets::set_store(&gPak.store);  // the assets service reads it (services-assets)
     galaxy::luma_audio::set_store(&gPak.store);   // and the audio service a mod's cooked sounds (services-audio)
+    galaxy::modlog::set_check_store(&gPak.store);  // and the validator, at the start's check and at import
     boot_mark("disc opened");
     {
         // Two modules (plan 1.7, contract modules): the plain one unless a mod's code needs the rows. --module names the
