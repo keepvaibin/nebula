@@ -1086,11 +1086,16 @@ namespace luma {
 
         void* apiPlacedAt(const LumaMod* pMod, const LumaPlacement* pPlace) { return luma::make::placedAt(pMod, pPlace); }
 
+        // Gravity classes (classes contract, "gravity").
+        void* apiMakeGravity(const LumaMod* pMod, const char* pClass, const LumaGravityPlace* pPlace) {
+            return luma::classes::makeGravity(pMod, pClass, pPlace);
+        }
+
         const LumaCore sCore = {
             sizeof(LumaCore), LUMA_API, apiLog, apiFunction, apiFunctionAt, apiHook, apiProceed, apiField, apiSizeOf, apiClassOf, apiIsA, apiService,
             apiGameThread, apiUnhook, apiAlloc, apiFree, apiReport, apiOwnClass, apiAsClass, apiMethod, apiOverrider, apiCallMethod,
             apiKeep, apiKept, apiDefineClass, apiClassData, apiNumber, apiSetNumber, apiTable, apiSetTable, apiMake,
-            apiAliasClass, apiPlacementOf, apiPlacedAt,
+            apiAliasClass, apiPlacementOf, apiPlacedAt, apiMakeGravity,
         };
 
         // One import: its function (functions and hooks) or number (fields, sizes, classes). False: the game has none,

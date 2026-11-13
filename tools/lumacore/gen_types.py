@@ -947,7 +947,7 @@ class Reader:
 
         # Contract classes, overrides by slot: the header pass's virtuals of the records the factory makes get the code a
         # mod class's table takes in their slot (slot_code).
-        slot_records = descends_from_nameobj(self.records) if not unit and getattr(self, "vtables", None) is not None else set()
+        slot_records = class_bases(self.records) if not unit and getattr(self, "vtables", None) is not None else set()
         n = 0
         for name in sorted(self.records):
             r = self.records[name]
@@ -1371,9 +1371,14 @@ def slot_code(n, k, v):
     ]
 
 
+def class_bases(records):
+    """Contract classes: the records a mod class may take as its base, so its table copy and its overrides by slot
+    stand on them: NameObj's line (the factory makes them) and PlanetGravity (LumaCore.make_gravity makes it)."""
+    return descends_from_nameobj(records) | ({"PlanetGravity"} & set(records))
+
+
 def descends_from_nameobj(records):
-    """Contract classes: NameObj and each record whose base at offset 0 (not virtual) is one; a mod class's base is one
-    of them, so its table copy and its overrides by slot stand on this chain."""
+    """Contract classes: NameObj and each record whose base at offset 0 (not virtual) is one."""
     memo = {}
 
     def walk(name, depth):
@@ -1460,10 +1465,24 @@ def vtable_layouts(raw, records, unit):
     compiler lays out the record's tables) and is compiled with the build's own command and -fdump-vtable-layouts (the
     code is thrown away). A unit that does not compile stops the build. Returns {record: (prefix, count)}; a record not
     there has no layout the dump gives, and no mod class takes it as its base (said at define)."""
-    names = sorted(n for n in descends_from_nameobj(records) if records[n].get("polymorphic"))
+    names = sorted(n for n in class_bases(records) if records[n].get("polymorphic"))
+    line = descends_from_nameobj(records)
     path = OUT / "luma_vtables_unit.cpp"
+
+    def use(i, n):
+        # NameObj's destructor is virtual: its call lays the table out. A record with no virtual destructor
+        # (PlanetGravity) gets it laid out by a pointer to one of its virtuals (the slot is in the pointer).
+        if n in line:
+            return "void lumaVt%d(V%d* p) { p->~V%d(); }\n" % (i, i, i)
+        v = next((v for v in records[n].get("virtuals", ()) if v.get("call")), None)
+        if v is None:
+            return ""
+        c = v["call"]
+        return "void lumaVt%d() { (void)static_cast<%s (V%d::*)(%s)%s>(&V%d::%s); }\n" % (
+            i, c["result"], i, ", ".join(c["params"]), " const" if c["const"] else "", i, c["spelling"])
+
     text = unit.read_text(encoding="utf-8") + "".join(
-        "using V%d = ::%s;\nvoid lumaVt%d(V%d* p) { p->~V%d(); }\n" % (i, n, i, i, i) for i, n in enumerate(names))
+        "using V%d = ::%s;\n%s" % (i, n, use(i, n)) for i, n in enumerate(names))
     path.write_text(text, encoding="utf-8")
     args = [a for a in I.parse_arguments(raw, path) if a != "-fsyntax-only"][:-1]
     args += ["-Xclang", "-fno-access-control", "-Xclang", "-fdump-vtable-layouts", "-c", str(path), "-o", os.devnull]

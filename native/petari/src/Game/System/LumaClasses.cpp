@@ -1,6 +1,7 @@
 // Mods' own classes (LumaClasses.hpp; contract classes, plan 1.4).
 #include "Game/System/LumaClasses.hpp"
 
+#include "Game/Gravity/PlanetGravity.hpp"
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/NameObj/NameObjFactory.hpp"
 #include "Game/System/GameSystem.hpp"
@@ -9,6 +10,8 @@
 #include "Game/System/LumaHook.hpp"
 #include "Game/System/LumaLoader.hpp"
 #include "Game/System/LumaTypes.hpp"
+#include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/Util/GravityUtil.hpp"
 
 #include <nebula_format.h>
 #include <nebula_module.h>
@@ -71,6 +74,7 @@ namespace luma {
                 void** table;
                 u32 tableCount;  // the base's: all entries, the prefix's too
                 bool saidTable;  // a table problem: said once
+                bool gravity;    // its base is PlanetGravity: make_gravity makes its objects, no stage or alias
             };
 
             ClassRow* sRows[kMaxClasses];
@@ -273,7 +277,7 @@ namespace luma {
                 }
                 for (u32 r = 0; r < sRowCount; r++) {
                     const ClassRow* const pRow = sRows[r];
-                    if (pRow->live && (same(pRow->name, pName) || (pRow->replaces[0] != 0 && same(pRow->replaces, pName)))) {
+                    if (pRow->live && !pRow->gravity && (same(pRow->name, pName) || (pRow->replaces[0] != 0 && same(pRow->replaces, pName)))) {
                         return static_cast<s32>(r);
                     }
                 }
@@ -453,7 +457,10 @@ namespace luma {
                     return true;
                 }
                 lock();
-                const bool taken = rowForPlacement(pName) >= 0;
+                bool taken = rowForPlacement(pName) >= 0;
+                for (u32 r = 0; !taken && r < sRowCount; r++) {
+                    taken = sRows[r]->live && sRows[r]->gravity && same(sRows[r]->name, pName);
+                }
                 unlock();
                 return taken;
             }
@@ -665,12 +672,19 @@ namespace luma {
             }
             const TypeRow* const pBase = findType(pDef->base);
             const TypeRow* const pNameObj = findType("NameObj");
+            // A gravity class: PlanetGravity itself (the kernel makes it; no factory row makes a gravity alone).
+            const bool gravity = pBase != nullptr && pBase == findType("PlanetGravity");
             u32 nameObjAt = 1;
-            if (pBase == nullptr || pBase->typeInfo == nullptr || !baseOffset(pBase, pNameObj, &nameObjAt) || nameObjAt != 0) {
+            if (pBase == nullptr || pBase->typeInfo == nullptr ||
+                (!gravity && (!baseOffset(pBase, pNameObj, &nameObjAt) || nameObjAt != 0))) {
                 say(pMod, "define_class %s: base %s is %s", pName, pDef->base,
                     pBase == nullptr             ? "no class the game has a row for"
                     : pBase->typeInfo == nullptr ? "not polymorphic"
-                                                 : "not an object the factory makes (NameObj is not at its start)");
+                                                 : "not an object the factory makes (NameObj is not at its start) and not PlanetGravity");
+                return -1;
+            }
+            if (gravity && (pDef->maker != nullptr || pDef->replaces != nullptr)) {
+                say(pMod, "define_class %s: a gravity class is made by make_gravity only: no maker, nothing it replaces", pName);
                 return -1;
             }
             if (sRowCount == kMaxClasses) {
@@ -694,9 +708,9 @@ namespace luma {
                     return -5;
                 }
             }
-            const char* const pMakerName = pDef->maker != nullptr ? pDef->maker : pDef->base;
-            const CreatorFuncPtr pMaker = gameCreator(pMakerName);
-            if (pMaker == nullptr) {
+            const char* const pMakerName = gravity ? "" : pDef->maker != nullptr ? pDef->maker : pDef->base;
+            const CreatorFuncPtr pMaker = gravity ? nullptr : gameCreator(pMakerName);
+            if (!gravity && pMaker == nullptr) {
                 say(pMod, "define_class %s: the factory has no row %s to make its base%s", pName, pMakerName,
                     inScene() ? "" : " (before a scene only its own table is known; a stage's planet names are not)");
                 return -5;
@@ -784,14 +798,20 @@ namespace luma {
             pRow->overrides = pOverrides;
             pRow->overrideCount = pDef->override_count;
             pRow->tableCount = pBase->vtableCount;
+            pRow->gravity = gravity;
             lock();
             sRows[row] = pRow;
             sRowCount = row + 1;
             sLiveCount++;
             unlock();
-            say(pMod, "class %s: from %s (made by the factory's %s%s%s), %u bytes of its own, %u overrides", pName, pBase->name, pMakerName,
-                pDef->replaces != nullptr ? "; in place of " : "", pDef->replaces != nullptr ? pDef->replaces : "", pDef->data_size,
-                pDef->override_count);
+            if (gravity) {
+                say(pMod, "class %s: a gravity (made by make_gravity), %u bytes of its own, %u overrides", pName, pDef->data_size,
+                    pDef->override_count);
+            } else {
+                say(pMod, "class %s: from %s (made by the factory's %s%s%s), %u bytes of its own, %u overrides", pName, pBase->name,
+                    pMakerName, pDef->replaces != nullptr ? "; in place of " : "", pDef->replaces != nullptr ? pDef->replaces : "",
+                    pDef->data_size, pDef->override_count);
+            }
             return static_cast<s32>(classCount() + row);
         }
 
@@ -877,6 +897,10 @@ namespace luma {
                 say(pMod, "alias_class %s: %s is no live mod class", pName, pClass);
                 return -5;
             }
+            if (sRows[target]->gravity) {
+                say(pMod, "alias_class %s: %s is a gravity class: make_gravity makes its objects, no stage places them", pName, pClass);
+                return -5;
+            }
             if (pOwn != nullptr ? pOwn->mod != pMod : nameTaken(pName)) {
                 say(pMod, "alias_class %s: the name is a game class's, a factory row's, a mod class's or another mod's alias", pName);
                 return -2;
@@ -915,6 +939,99 @@ namespace luma {
             say(pMod, "alias %s: places %s (arguments %d %d %d %d %d %d %d %d; -1 the placement's own)", pName, sRows[target]->name, pArgs[0],
                 pArgs[1], pArgs[2], pArgs[3], pArgs[4], pArgs[5], pArgs[6], pArgs[7]);
             return 0;
+        }
+
+        void* makeGravity(const LumaMod* pMod, const char* pClass, const LumaGravityPlace* pPlace) {
+            if (!onGameThread()) {
+                return nullptr;
+            }
+            const char* const pShown = pClass != nullptr ? pClass : "(no name)";
+            if (pPlace == nullptr || pPlace->size < sizeof(LumaGravityPlace) || pPlace->range != pPlace->range || pPlace->types > 15u) {
+                say(pMod, "make_gravity %s: %s", pShown,
+                    pPlace == nullptr                           ? "no place"
+                    : pPlace->size < sizeof(LumaGravityPlace)   ? "the place is smaller than luma.h's LumaGravityPlace"
+                    : pPlace->range != pPlace->range            ? "the range is not a number"
+                                                                : "a type bit above 8 (1 normal, 2 shadow, 4 magnet, 8 launcher)");
+                return nullptr;
+            }
+            lock();
+            s32 r = -1;
+            for (u32 i = 0; pClass != nullptr && i < sRowCount; i++) {
+                if (sRows[i]->live && same(sRows[i]->name, pClass)) {
+                    r = static_cast<s32>(i);
+                    break;
+                }
+            }
+            ClassRow* const pRow = r >= 0 ? sRows[r] : nullptr;
+            const bool gravity = pRow != nullptr && pRow->gravity;
+            if (gravity) {
+                sMaking++;
+            }
+            unlock();
+            if (!gravity) {
+                say(pMod, "make_gravity %s: %s", pShown, pRow == nullptr ? "no live mod class of that name" : "the class's base is not PlanetGravity");
+                return nullptr;
+            }
+            PlanetGravity* pGravity = nullptr;
+            const char* pWhy = nullptr;
+            void* pData = nullptr;
+            if (!inScene() || !MR::isExistSceneObj(SceneObj_PlanetGravityManager)) {
+                pWhy = "no scene with gravities is running";
+            } else if ((pGravity = new PlanetGravity()) == nullptr) {
+                pWhy = "no memory for the gravity";
+            } else if (pRow->dataSize != 0 && (pData = core()->alloc(pRow->mod, pRow->dataSize, pRow->dataAlign)) == nullptr) {
+                pWhy = "no memory for its data";
+            } else {
+                if (pData != nullptr) {
+                    __builtin_memset(pData, 0, pRow->dataSize);
+                }
+                pGravity->mRange = pPlace->range;
+                pGravity->mPriority = pPlace->priority;
+                pGravity->mGravityType = pPlace->types != 0 ? pPlace->types : static_cast<u32>(GravityType_Normal);
+                pGravity->mIsInverse = pPlace->inverse != 0;
+                Instance replaced;
+                lock();
+                const bool kept = insertLocked(pGravity, pData, static_cast<u32>(r), &replaced);
+                unlock();
+                if (!kept) {
+                    pWhy = "no memory to keep one more object";
+                } else {
+                    if (replaced.object != nullptr) {
+                        // An object at this address went without its destructor seen: its class's gone, then its data.
+                        callGone(sRows[replaced.row], nullptr, replaced.data);
+                        if (replaced.data != nullptr) {
+                            core()->free(sRows[replaced.row]->mod, replaced.data);
+                        }
+                    }
+                    if (pRow->overrideCount != 0 && !takeTable(pRow, pGravity)) {
+                        lock();
+                        const s32 at = findLocked(pGravity);
+                        if (at >= 0 && sSlots[at].row == static_cast<u32>(r)) {
+                            removeAtLocked(static_cast<u32>(at));
+                        }
+                        unlock();
+                        pWhy = "no table of its own (said above)";
+                    } else {
+                        if (pRow->made != nullptr) {
+                            pRow->made(pGravity, pData, pRow->user);
+                        }
+                        MR::registerGravity(pGravity);
+                    }
+                }
+            }
+            if (pWhy != nullptr) {
+                say(pMod, "make_gravity %s: %s; nothing is made", pShown, pWhy);
+                if (pData != nullptr) {
+                    core()->free(pRow->mod, pData);
+                }
+                // PlanetGravity's destructor is trivial and not virtual: its memory goes back as new took it.
+                ::operator delete(static_cast< void* >(pGravity));
+                pGravity = nullptr;
+            }
+            lock();
+            sMaking--;
+            unlock();
+            return pGravity;
         }
 
         AliasPlacing::AliasPlacing(const char* pName, const void* pTable, s32 entry)

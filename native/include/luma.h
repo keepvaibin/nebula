@@ -121,7 +121,9 @@ typedef struct LumaClassDef {
     const char* name;         /* the class's name (1 to 63 bytes): a stage places its objects by it. No game class,
                                  factory row or other mod's class may have it; names compare with ASCII case
                                  folded, as the game's factory does */
-    const char* base;         /* the game class it derives from ("JetTurtle"): polymorphic, with a row */
+    const char* base;         /* the game class it derives from ("JetTurtle"): polymorphic, with a row. "PlanetGravity":
+                                 a gravity class, its objects made by LumaCore.make_gravity only (maker and replaces
+                                 null; no stage places it, no alias names it) */
     const char* maker;        /* the factory row that makes the base ("JetTurtle"); null: the one named as the base */
     const char* replaces;     /* null, or a name the game's stages place: its objects are made as this class instead */
     uint32_t data_size;       /* its own data per object, zeroed before `made`; 0: none */
@@ -160,6 +162,17 @@ typedef struct LumaPlacement {
     const char* layer;
     uint32_t index;
 } LumaPlacement;
+
+/* A gravity LumaCore.make_gravity makes (classes contract, "gravity"): PlanetGravity's own fields, which the scene's
+   gravity manager sorts and filters by. */
+typedef struct LumaGravityPlace {
+    uint32_t size;     /* sizeof(LumaGravityPlace) */
+    float range;       /* mRange: below 0, everywhere; else what PlanetGravity::isInRangeDistance compares with (an
+                          override that wants a range calls it, as the game's gravities do) */
+    int32_t priority;  /* mPriority: only the highest priority that pulls at a point counts; equal ones add */
+    uint32_t types;    /* mGravityType bits: 1 normal, 2 shadow, 4 magnet, 8 launcher; 0: 1 */
+    uint32_t inverse;  /* nonzero: mIsInverse, the pull reversed */
+} LumaGravityPlace;
 
 /* A table of the game's data as LumaCore.table gives it (numbers contract, plan 1.5). */
 typedef struct LumaTable {
@@ -319,6 +332,14 @@ typedef struct LumaCore {
        name; names compare with ASCII case folded), or null: no such placement in this scene, its creator made
        nothing, it is not made yet, not on the game thread, or a null place or one smaller than LumaPlacement (said). */
     void* (*placed_at)(const LumaMod* mod, const LumaPlacement* place);
+    /* A gravity of the live mod class `class_name`, whose base is PlanetGravity (classes contract, "gravity"): made
+       with `place`'s fields, its data zeroed and its `made` run, then registered with the scene's gravity manager,
+       which asks its calcOwnGravityVector (the class's override: pDest the pull's direction, pScalar the distance
+       it falls off with) at every point any object asks its gravity at. It lives as long as the scene (`gone` with
+       a null object when the scene goes); when its mod goes it pulls nowhere. Null: not on the game thread, or said
+       (no such live class, not a gravity class, no scene with gravities, no memory, a null place or one smaller than
+       LumaGravityPlace, a range that is not a number, a type bit above 8). */
+    void* (*make_gravity)(const LumaMod* mod, const char* class_name, const LumaGravityPlace* place);
 } LumaCore;
 
 /* report's own codes (D3-1). */
