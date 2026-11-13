@@ -51,6 +51,7 @@
 #endif
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <mstcpip.h>
 #pragma comment(lib, "ws2_32.lib")
 #else
 #include <arpa/inet.h>
@@ -100,6 +101,25 @@ bool refused(int error) noexcept {
     return error == WSAECONNREFUSED || error == WSAENETUNREACH || error == WSAEHOSTUNREACH;
 }
 void close_system(Sock s) noexcept { closesocket(s); }
+// A TCP connect to this machine (127.0.0.0/8, ::1): Windows answers a refusing port's reset by sending the SYN again
+// (about 10 s before WSAECONNREFUSED); this machine's refusal is final, so its connect fails at once, as it does on
+// Linux, macOS and Android. Other destinations keep the system's retries (a lost SYN on a real network).
+void refuse_fast(Sock s, const sockaddr_storage& to) noexcept {
+    bool loopback = false;
+    if (to.ss_family == AF_INET) {
+        loopback = (ntohl(reinterpret_cast<const sockaddr_in&>(to).sin_addr.s_addr) >> 24) == 127u;
+    } else if (to.ss_family == AF_INET6) {
+        loopback = IN6_IS_ADDR_LOOPBACK(&reinterpret_cast<const sockaddr_in6&>(to).sin6_addr) != 0;
+    }
+    if (!loopback) {
+        return;
+    }
+    TCP_INITIAL_RTO_PARAMETERS parameters{};
+    parameters.Rtt = TCP_INITIAL_RTO_UNSPECIFIED_RTT;
+    parameters.MaxSynRetransmissions = TCP_INITIAL_RTO_NO_SYN_RETRANSMISSIONS;
+    DWORD bytes = 0;
+    WSAIoctl(s, SIO_TCP_INITIAL_RTO, &parameters, sizeof(parameters), nullptr, 0, &bytes, nullptr, nullptr);
+}
 int poll_system(PollFd* fds, std::size_t count, int ms) noexcept { return WSAPoll(fds, static_cast<ULONG>(count), ms); }
 bool make_nonblocking(Sock s) noexcept {
     u_long on = 1;
@@ -141,6 +161,7 @@ using PollFd = pollfd;
 int system_error() noexcept { return errno; }
 bool would_block(int error) noexcept { return error == EWOULDBLOCK || error == EAGAIN || error == EINTR; }
 bool connecting(int error) noexcept { return error == EINPROGRESS || error == EINTR; }
+void refuse_fast(Sock, const sockaddr_storage&) noexcept {}  // a refusal is final here already
 bool address_in_use(int error) noexcept { return error == EADDRINUSE || error == EACCES; }
 bool refused(int error) noexcept { return error == ECONNREFUSED || error == ENETUNREACH || error == EHOSTUNREACH; }
 void close_system(Sock s) noexcept { ::close(s); }
@@ -685,6 +706,9 @@ bool start_next_locked(Socket* socket) {
         socket->sock = sock;
         const socklen_t length =
             static_cast<socklen_t>(address.ss_family == AF_INET ? sizeof(sockaddr_in) : sizeof(sockaddr_in6));
+        if (!socket->udp) {
+            refuse_fast(sock, address);
+        }
         if (::connect(sock, reinterpret_cast<const sockaddr*>(&address), length) == 0 || connecting(system_error())) {
             return true;
         }
@@ -2052,6 +2076,7 @@ void start_redirect_locked(Socket* socket) {
     setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char*>(&on), sizeof(on));
     socket->sock = sock;
     socket->kind = Kind::Connecting;
+    refuse_fast(sock, address);
     if (::connect(sock, reinterpret_cast<const sockaddr*>(&address), length) != 0) {
         const int error = system_error();
         if (!connecting(error)) {
@@ -2858,6 +2883,9 @@ std::int32_t local_connect(const LumaMod* mod, const char* where, bool udp, cons
         socket->tied = udp;
         socket->kind = Kind::Connecting;  // a UDP connect only sets the peer: CONNECTED at the I/O thread's next turn
         socket->started = std::chrono::steady_clock::now();
+        if (!udp) {
+            refuse_fast(socket->sock, address);
+        }
         if (::connect(socket->sock, reinterpret_cast<const sockaddr*>(&address), length) != 0) {
             const int error = system_error();
             if (!connecting(error)) {
