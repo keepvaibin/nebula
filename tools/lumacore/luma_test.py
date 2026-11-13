@@ -1031,16 +1031,21 @@ def place_mods(test, settings, previous, frozen):
     Every platform's adapter places them so (run_one; the Android suite, agents/luma d/platforms/android)."""
     mod_ids, imports = [], []
     for i, m in enumerate(test["mods"]):
-        if not (m["path"] / "luma.json").is_file():
-            raise HarnessError("the mod %s has no luma.json" % m["path"])
         if m["install"] == "import":
-            # Not placed: the game imports it as "Open with" starts it (--import, task 6.1), through the validator;
-            # each line of its result page is the fact import.<file name> (4).
+            # Not placed: the game imports it as "Open with" starts it (--import, task 6.1), a .luma file or a folder,
+            # through the validator; each line of its result page is the fact import.<file name> (4).
             if m["loads"]:
                 raise HarnessError("the imported mod %s: an import adds it for the next start, so it takes loads false"
                                    % m["path"])
+            if not (m["path"].is_file() if m["path"].suffix == ".luma" else (m["path"] / "luma.json").is_file()):
+                raise HarnessError("the imported mod %s is not there (a .luma file or a folder with luma.json)" % m["path"])
             imports += ["--import", str(m["path"].resolve())]
             continue
+        if m["path"].suffix == ".luma":
+            raise HarnessError("the mod %s: a .luma is installed by the game's import (install \"import\"); a placed mod "
+                               "is its folder" % m["path"])
+        if not (m["path"] / "luma.json").is_file():
+            raise HarnessError("the mod %s has no luma.json" % m["path"])
         mod_id = install(settings, m["path"], m["code"] == "allow", i + 1, kept=previous is not None,
                          permissions="ask" if m["code"] == "ask" else m["permissions"], broken_ok=not m["loads"])
         # A mod with no code (luma.json has no "code": content only) is never started, so the host writes no start
@@ -1082,8 +1087,6 @@ def run_one(test, renderer, args, run_folder, previous):
     for m in test["mods"]:
         if m["options"]:
             raise HarnessError("mod options: not built yet (the Mods screen's options, task 6.3)")
-        if m["path"].suffix == ".luma":
-            raise HarnessError("a .luma file: not readable before the luma-format reader (task 3.1); give the mod's folder")
     if test["language"] is not None and LANGUAGES[test["language"]] is None:
         raise HarnessError("language %s: not built yet (the language packs' setting, task 3.8)" % test["language"])
     bin_folder = pathlib.Path(args.bin).resolve()
