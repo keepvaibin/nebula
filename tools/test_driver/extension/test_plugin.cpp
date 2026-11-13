@@ -808,4 +808,4 @@ const LumaImport kImports[] = {
 
 // The library as a LumaCore mod (loader contract 1): its imports bound by name, whole or not at all, then start.
 LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {
-    sizeof(LumaModInfo), LUMA_API, kImports, sizeof(kImports) / sizeof(kImports[0]), start, nullptr, nullptr, nullptr, nullptr, 0u, nullptr};
+    sizeof(LumaModInfo), LUMA_API, kImports, sizeof(kImports) / sizeof(kImports[0]), start, nullptr, nullptr, nullptr, nullptr, 0u, nullptr, nullptr};

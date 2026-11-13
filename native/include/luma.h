@@ -380,6 +380,8 @@ typedef struct LumaModInfo {
        before its grace, on the game thread. It drops what it keeps for that mod (callbacks into its code). May be
        null. */
     void (*dependent_gone)(const LumaMod* dependent);
+    /* The mod's when.code layers (F-2): after begin, before start and before content loads. Writes the chosen layer names into buf, each with its NUL, and returns the bytes they need (a size too small: nothing written; called again with that size). Null: none chosen. */
+    int64_t (*layers)(const LumaCore* core, const LumaMod* mod, char* buf, uint64_t size);
 } LumaModInfo;
 
 #if defined(_WIN32)
@@ -637,16 +639,16 @@ typedef void (*LumaCtor)(void);
 
 #define LUMA_MOD(imports, start, stop) \
     LUMA_RUNTIME                       \
-    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, imports, sizeof(imports) / sizeof(imports[0]), start, stop, luma_begin, luma_finish, 0, 0, 0}
+    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, imports, sizeof(imports) / sizeof(imports[0]), start, stop, luma_begin, luma_finish, 0, 0, 0, 0}
 /* A mod that binds no name of the game (it finds what it needs through the core at start). */
 #define LUMA_MOD_NO_IMPORTS(start, stop) \
     LUMA_RUNTIME                         \
-    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, 0, 0, start, stop, luma_begin, luma_finish, 0, 0, 0}
+    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, 0, 0, start, stop, luma_begin, luma_finish, 0, 0, 0, 0}
 /* A library mod (loader D3-3): its exports (LUMA_EXPORT_FUNCTION rows, sorted by name) and what it does when a mod that
    needs it is taken out. */
 #define LUMA_LIBRARY_MOD(imports, start, stop, exports, dependent_gone) \
     LUMA_RUNTIME                                                        \
-    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, imports, sizeof(imports) / sizeof(imports[0]), start, stop, luma_begin, luma_finish, exports, sizeof(exports) / sizeof(exports[0]), dependent_gone}
+    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, imports, sizeof(imports) / sizeof(imports[0]), start, stop, luma_begin, luma_finish, exports, sizeof(exports) / sizeof(exports[0]), dependent_gone, 0}
 
 /* An argument of a hooked call, and its result. */
 #define LUMA_ARG(call, n, type) (*(type*)(call)->args[n])
