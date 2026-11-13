@@ -57,4 +57,9 @@ void set_save_half(const SaveHalf& half) noexcept;
 // memory. Given by luma_services_host at the services' start; null until then (or with a module without them).
 void set_chunk_half(LumaSaveKept kept_ids, LumaSaveForget forget) noexcept;
 
+// Any thread, before the process ends (the host's finish): waits, at most `wait_ms`, until the record of mods' numbers
+// holds every change (the writer writes off the game thread; an end that does not wait loses the session's numbers,
+// and the next session derives them again, in the order they are asked). Logs when the wait runs out.
+void flush_ids(unsigned wait_ms) noexcept;
+
 }  // namespace galaxy::luma_mods
