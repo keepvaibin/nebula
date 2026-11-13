@@ -33,7 +33,7 @@ struct LayoutPaneState {
 
 class LayoutManager {
 public:
-    // keepLayoutText: a text box with no message keeps its layout file's text (not the game's XXXXXXXX).
+    // keepLayoutText: a text box with no message stays as its layout file made it (not the game's XXXXXXXX in 0x100).
     LayoutManager(const char*, bool, u32, u32, bool keepLayoutText = false);
 
     void movement();

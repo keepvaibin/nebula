@@ -362,6 +362,10 @@ namespace MR {
         incPlayerLife(term);
     }
 
+    bool payCoin(s32 num) {
+        return ::getScenePlayingResult()->payCoin(num);
+    }
+
     void incPurpleCoin() {
         ::getScenePlayingResult()->incPurpleCoin();
     }

@@ -200,7 +200,8 @@ namespace {
             return;
         }
         MR::Text16 row;
-        getText(row, rSlot.kind == KindSummary ? "ModLog.Summary" : "ModLog.More");
+        // One problem has its own words (a language says "1 problem", not "1 problems").
+        getText(row, rSlot.kind != KindSummary ? "ModLog.More" : rSlot.count == 1u ? "ModLog.SummaryOne" : "ModLog.Summary");
         withCount(pDst, room, row.c_str(), rSlot.count);
     }
 

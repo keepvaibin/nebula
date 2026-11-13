@@ -34,6 +34,8 @@ public:
     virtual ~CustomTagProcessor();
     virtual Operation Process(u16, ContextType*) override;
     virtual Operation CalcRect(Ui::Rect*, u16, ContextType*) override;
+    virtual void BeginPrint(const char16_t* pStr) override;
+    virtual bool NextCharAlpha(u8* pAlpha) override;
 
     void setArgNumber(s32, s32);
     void setArgString(const char16_t*, s32);

@@ -1586,6 +1586,12 @@ class Unit:
                 stop(f'{mark} with LUMA_KEPT')
         declared = api.type(parameter)
         pointer = api.canonical(declared)
+        # An identity the game only compares (a gravity's host, calcGravityVector's pHost) and lets be null: LUMA_IN with
+        # LUMA_NULLABLE on a `const void *`; a script passes none only (nothing of it is read). No other mark on void.
+        if pointer.kind == T_POINTER and way == 'LUMA_IN' and 'LUMA_NULLABLE' in arguments and not count and not fixed:
+            pointee = api.pointeeType(pointer)
+            if api.canonical(pointee).kind == T_VOID and api.isConstType(pointee):
+                return {'way': 'in', 'count': None, 'fixed': None, 'nullable': True}
         # A kept address is the game's to read later, whatever it points at (a matrix, a struct): the mark says only that
         # the caller keeps it alive. The other ways read or write values the mod sees, so those are numbers or vectors.
         if pointer.kind != T_POINTER or (way != 'LUMA_KEPT' and not self.markable(api.canonical(api.pointeeType(pointer)))):
