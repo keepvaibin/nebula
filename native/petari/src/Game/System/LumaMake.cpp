@@ -280,10 +280,11 @@ namespace luma {
             // While the scene makes its objects (its player, then its placements; the scene then gives every object its
             // after-placement step), or once it is made (during play: this call gives that step, as LumaPlayer gives an
             // extra player's). Not between the two, while the scene runs the after-placement steps.
-            const bool placing = MR::isInitializeStatePlacementSomething();
-            if (!MR::isExistSceneObj(SceneObj_StageDataHolder) || !MR::isExistSceneObj(SceneObj_AllLiveActorGroup) ||
-                !MR::isExistSceneObj(SceneObj_PlacementStateChecker) || Arenas::scene() == nullptr ||
-                !(placing || MR::isInitializeStateEnd())) {
+            // The scene's state is asked only once there is a scene (before it, no scene controller answers).
+            const bool scene = MR::isExistSceneObj(SceneObj_StageDataHolder) && MR::isExistSceneObj(SceneObj_AllLiveActorGroup) &&
+                               MR::isExistSceneObj(SceneObj_PlacementStateChecker) && Arenas::scene() != nullptr;
+            const bool placing = scene && MR::isInitializeStatePlacementSomething();
+            if (!scene || !(placing || MR::isInitializeStateEnd())) {
                 say(pMod, "make %s: only while the scene makes its objects or once it is made (no scene, or it is starting)", pName);
                 return -3;
             }
