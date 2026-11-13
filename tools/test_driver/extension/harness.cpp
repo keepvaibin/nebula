@@ -341,7 +341,7 @@ bool equal(const Json& a, const Json& b) {
     return false;
 }
 
-std::string quoted(std::string_view text) {
+std::string json_string(std::string_view text) {
     std::string out = "\"";
     for (const char c : text) {
         switch (c) {
@@ -461,11 +461,11 @@ void write_fact(const std::string& key, const std::string& json, std::optional<s
     }
     const std::string at = std::to_string(frame.value_or(test_frame()));
     if (!parse(json)) {
-        const std::string bad = "{\"key\":" + quoted(key) + ",\"value\":" + quoted(json) + "}";
+        const std::string bad = "{\"key\":" + json_string(key) + ",\"value\":" + json_string(json) + "}";
         g.facts << "{\"frame\":" << at << ",\"key\":\"harness.bad_fact\",\"value\":" << bad << "}\n" << std::flush;
         return;
     }
-    g.facts << "{\"frame\":" << at << ",\"key\":" << quoted(key) << ",\"value\":" << json << "}\n" << std::flush;
+    g.facts << "{\"frame\":" << at << ",\"key\":" << json_string(key) << ",\"value\":" << json << "}\n" << std::flush;
     g.latest[key] = json;
     ++g.writes[key];
 }
@@ -486,7 +486,7 @@ void finish(const std::string& verdict, const std::string& reason) {
     if (verdict.empty()) {
         write_fact("harness.end", "{\"frame\":" + std::to_string(test_frame()) + "}");
     } else {
-        write_fact("harness.stop", "{\"verdict\":" + quoted(verdict) + ",\"reason\":" + quoted(reason) + "}");
+        write_fact("harness.stop", "{\"verdict\":" + json_string(verdict) + ",\"reason\":" + json_string(reason) + "}");
     }
     if (g.facts.is_open()) {
         g.facts.close();
@@ -1202,7 +1202,7 @@ void log_line(const char* tag, const char* line) {
             if (key_ok && parse(json)) {
                 write_fact("mod." + id + "." + key, json);
             } else {
-                write_fact("harness.bad_fact", quoted(text));
+                write_fact("harness.bad_fact", json_string(text));
             }
         }
     }
@@ -1217,7 +1217,7 @@ void log_line(const char* tag, const char* line) {
             if (tail == "started") {
                 write_fact("mod." + id + ".loaded", "true");
             } else if (tail.compare(0, 13u, "not started: ") == 0) {
-                write_fact("mod." + id + ".loaded", quoted(tail.substr(13u)));
+                write_fact("mod." + id + ".loaded", json_string(tail.substr(13u)));
             }
         } else {
             // "mods: <id>: <why>": a mod refused before its code was started (the Mods page's reason, in capitals) or
@@ -1230,7 +1230,7 @@ void log_line(const char* tag, const char* line) {
                 capitals = capitals && !(c >= 'a' && c <= 'z');
             }
             if (!id.empty() && id.find(' ') == std::string::npos && (capitals || why.compare(0, 18u, "its code isn't run") == 0)) {
-                write_fact("mod." + id + ".loaded", quoted(why));
+                write_fact("mod." + id + ".loaded", json_string(why));
             }
         }
     }
