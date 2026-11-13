@@ -1,4 +1,4 @@
-//! L300-L308: layers and the paths in them (luma-format 4, 5).
+//! L300-L309: layers and the paths in them (luma-format 4, 5).
 
 use super::{p, t, Ctx};
 use crate::zip::EntryKind;
@@ -37,6 +37,14 @@ fn replaced(path: &str) -> String {
     }
 }
 
+/// A `merge/<game path>` the import's cook can add to (overlay.rs apply_merges): a table or a message file in its
+/// JSON form (`.json`: `<Table>.bcsv.json`, `message.bmg.json`, `MessageData/messages.json`, a particle file's
+/// `.jpc.json`), a particle file (`.jpc`), or ray tracing's rows (`NebulaData/RtStages.tsv`, `RtEffects.tsv`).
+fn mergeable(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    lower.ends_with(".json") || lower.ends_with(".jpc") || lower == "nebuladata/rtstages.tsv" || lower == "nebuladata/rteffects.tsv"
+}
+
 pub(crate) fn check(ctx: &mut Ctx) {
     let listed: Vec<(String, crate::json::Pos, String)> = ctx.facts.layers.clone();
     let mut folders: BTreeSet<String> = BTreeSet::new();
@@ -62,8 +70,11 @@ pub(crate) fn check(ctx: &mut Ctx) {
             let lower = r.to_ascii_lowercase();
             is_folder_entry || lower.ends_with(".png") || lower.ends_with(".dds")
         });
-        if !matches!(part, "files" | "patches" | "assets" | "textures") || (rest.is_none() && !is_folder_entry) || (part == "textures" && rest.is_some() && !texture_ok) {
+        if !matches!(part, "files" | "patches" | "merge" | "assets" | "textures") || (rest.is_none() && !is_folder_entry) || (part == "textures" && rest.is_some() && !texture_ok) {
             ctx.add(306, &item.name, None, None, vec![("entry", t(item.name.clone()))]);
+        } else if part == "merge" && !is_folder_entry && rest.is_some_and(|r| !mergeable(r)) {
+            // L309: merge/ adds to a file of the game's (the import's cook, overlay.rs apply_merges): only what it can add to.
+            ctx.add(309, &item.name, None, None, vec![("entry", t(item.name.clone()))]);
         }
     }
     // A layer whose whole content is the previous engine's rows (`pre_standard.layers.<name>`, OLD-ROWS) has no folder:

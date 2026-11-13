@@ -100,6 +100,9 @@ fn a_correct_mod_passes_with_nothing_to_say() {
             // A texture pack's texture, by the game's name or Dolphin's (decision 3 of the one form).
             file("layers/base/textures/Kuribo/KuriboBody.png", b"p"),
             file("layers/base/textures/tex1_32x32_0000000000001111_14.dds", b"d"),
+            // What merge/ adds to (the import's cook, overlay.rs apply_merges): every language's lines, a table's rows.
+            file("layers/base/merge/MessageData/messages.json", br#"{"lines": {"Mod_Hello": {"default": "Hello"}}}"#),
+            file("layers/base/merge/ObjectData/Things.arc/Things.bcsv.json", br#"{"rows": [{"name": "A"}]}"#),
         ],
     );
     let report = check(&bytes, &Setup { game: Some(&game), ..NO_GAME });
@@ -452,6 +455,7 @@ fn every_rule_has_a_broken_mod() {
         (305, luma(&layer, &[file("layers/base/files/ObjectData/Kuribo.arc", b"x")]), Setup { game: Some(&game), installed: std::slice::from_ref(&replacing), ..NO_GAME }),
         (306, luma(&layer, &[file("layers/base/other/a.wav", b"x")]), NO_GAME),
         (306, luma(&layer, &[file("layers/base/textures/Kuribo/notes.txt", b"x")]), NO_GAME),
+        (309, luma(&layer, &[file("layers/base/merge/ObjectData/Kuribo.arc/notes.txt", b"x")]), NO_GAME),
         (307, luma(&[("layers", r#"[{"name": "base", "when": {"code": true}}]"#)], &[file("layers/base/files/a.wav", b"x")]), NO_GAME),
         (308, luma(&layer, &[file("layers/base/files/ObjectData/Kuribo.arc/Nothing.bdl.model.json", br#"{"hide": true}"#)]), Setup { game: Some(&game), ..NO_GAME }),
         (400, luma(&layer, &[file(patch_file, b"{}")]), with_game_ref(&game)),
