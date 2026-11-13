@@ -1092,6 +1092,12 @@ def run_one(test, renderer, args, run_folder, previous):
             continue
         mod_id = install(settings, m["path"], m["code"] == "allow", i + 1, kept=previous is not None,
                          permissions="ask" if m["code"] == "ask" else m["permissions"], broken_ok=not m["loads"])
+        # A mod with no code (luma.json has no "code": content only) is never started, so the host writes no start
+        # or refusal line for it and there is no mod.<id>.loaded fact: its test's own facts show its content.
+        try:
+            m["has_code"] = "code" in load_json(settings / "mods" / mod_id / "luma.json")
+        except HarnessError:
+            m["has_code"] = True
         mod_ids.append((mod_id, m))
         for lib in sorted((settings / "mods" / mod_id).rglob("*" + HOST["ending"])):
             frozen["mods/%s/%s" % (mod_id, lib.relative_to(settings / "mods" / mod_id).as_posix())] = sha256(lib)
@@ -1279,7 +1285,7 @@ def evaluate(test, renderer, run_folder, ran):
     for mod_id, m in ran["mods"]:
         loaded = by_key.get("mod.%s.loaded" % mod_id, [])
         value = loaded[-1]["value"] if loaded else None
-        if m["loads"]:
+        if m["loads"] and m["has_code"]:
             add("the mod %s loaded" % mod_id, value is True, value)
     guards = [f for f in facts if f.get("key", "").startswith("guard.")]
     for g in guards:
