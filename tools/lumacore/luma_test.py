@@ -1178,6 +1178,20 @@ def run_one(test, renderer, args, run_folder, previous):
     return {"code": code, "seconds": seconds, "frozen": frozen, "mods": mod_ids, "exe": exe.name}
 
 
+def remove_binary(path):
+    """A run's copy of a binary, removed once the run is over. The game's crash watcher (native/host/crash_watch.h), a
+    second instance of the executable, ends when the game does and may still hold the file for a moment: tried again
+    for up to 5 s."""
+    for attempt in range(50):
+        try:
+            path.unlink()
+            return
+        except PermissionError:
+            if attempt == 49:
+                raise
+            time.sleep(0.1)
+
+
 def read_facts(run_folder):
     facts = []
     path = run_folder / "facts.jsonl"
@@ -1525,7 +1539,7 @@ def run_tests(args):
                     for p in (run_folder / "bin").iterdir():
                         if p.is_file() and (p.suffix in (".exe", ".dll", ".pdb", ".so") or p.name in EXES.values()
                                             or p.name == HOST["importer_exe"]):
-                            p.unlink()
+                            remove_binary(p)
                 setup = {f["key"]: f["value"] for f in facts if f.get("key", "").startswith("setup.")}
                 report(run_folder, test["name"], test["proves"], renderer, verdict, reason, checks, args,
                        {"setup": setup, "frames": max([f.get("frame", -1) for f in facts] or [-1]),
