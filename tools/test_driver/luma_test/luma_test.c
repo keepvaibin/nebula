@@ -50,6 +50,10 @@ static const LumaFunction* file_created;    /* bool UserFile::isCreated() const 
 static const LumaFunction* load_file;       /* void GameSequenceFunction::startGameDataLoadSequence(int, bool) */
 static const LumaFunction* create_file;     /* void GameSequenceFunction::startCreateUserFileSequence(int) */
 static const LumaFunction* save_busy;       /* bool GameSequenceFunction::isActiveSaveDataHandleSequence() */
+static const LumaFunction* save_success;    /* bool GameSequenceFunction::isSuccessSaveDataHandleSequence() */
+static const LumaFunction* delete_file;     /* void GameSequenceFunction::startDeleteUserFileSequence(int) */
+static const LumaFunction* copy_file;       /* void GameSequenceFunction::startCopyUserFileSequence(int to, int from) */
+static const LumaFunction* store_file;      /* void SaveDataHandler::storeUserFile(const UserFile *) (optional: file copy) */
 static const LumaFunction* arena_of;        /* NebulaArena *NebulaArena::findFromRoot(void *) */
 static const LumaFunction* set_seed;        /* void MR::setFixedRandomSeed(u32) */
 static const LumaFunction* get_seed;        /* u32 MR::getFixedRandomSeed() */
@@ -64,6 +68,7 @@ static int32_t field_name = -1;      /* NameObj.mName */
 static int32_t field_position = -1; /* LiveActor.mPosition */
 static int32_t field_is_mario = -1; /* GameDataHolder.mIsMario */
 static int32_t field_user = -1;     /* GameDataHolder.mUser */
+static int32_t field_handler = -1; /* SaveDataHandleSequence.mSaveDataHandler (optional: file copy) */
 static int32_t field_mode = -1;     /* MarioActor.mPlayerMode */
 static int32_t field_health = -1;   /* MarioActor.mHealth */
 static int32_t class_live_actor = -1; /* LiveActor's class number (is_a) */
@@ -524,8 +529,14 @@ static const char* missing_text(const char* lead, const char* ref) {
 
 /* --- What a line asks ------------------------------------------------------------------------------------------------ */
 
-typedef enum Pending { Pending_None, Pending_Stage, Pending_File } Pending;
+typedef enum Pending { Pending_None, Pending_Stage, Pending_File, Pending_FileStep } Pending;
 static Pending pending;
+/* A file step (`file copy|load|erase|new`, harness 3.6): which, and the files; file_mario is the character a file is
+   read as (save.character's; Mario until it is set). */
+typedef enum FileOp { FileOp_Copy, FileOp_Load, FileOp_Erase, FileOp_New } FileOp;
+static FileOp file_op;
+static int32_t file_from, file_to;
+static int file_mario = 1;
 static char pending_stage[64];
 static int32_t pending_scenario;
 static int32_t pending_file; /* the user file `setup file` made current; 0 before one */
@@ -662,6 +673,136 @@ static void file_tick(void) {
     finish(created, "file: the game's new-file path left the file not created");
 }
 
+/* `file copy <from> <to>`, `file load <n>`, `file erase <n>`, `file new <n>`: the file select's operations on the saves of
+   this run, through the game's own GameSequenceFunction; answered when the save sequence has ended, the result read
+   back (file_step_tick). Copy first puts the current file into its slot when it is the source, as the first step of
+   the game's own save does (SaveDataHandleSequence::exeSave), so the copy holds what the game and the mods set on it. */
+static void do_file(const Words* w) {
+    const char* const verb = w->word[1];
+    const int copy = same(verb, "copy");
+    if (!copy && !same(verb, "load") && !same(verb, "erase") && !same(verb, "new")) {
+        finish(0, "file: copy, load, erase or new");
+        return;
+    }
+    if (w->count != (copy ? 4u : 3u)) {
+        finish(0, copy ? "file copy takes two user files" : "file load, erase and new take one user file");
+        return;
+    }
+    int g1 = 0, g2 = 1;
+    const int64_t a = to_int(w->word[2], &g1);
+    const int64_t b = copy ? to_int(w->word[3], &g2) : a;
+    if (!g1 || !g2 || a < 1 || a > 3 || b < 1 || b > 3) {
+        finish(0, "file: a user file is 1, 2 or 3");
+        return;
+    }
+    if (copy && a == b) {
+        finish(0, "file copy: from and to are the same file");
+        return;
+    }
+    if (the_current_file() == 0) {
+        finish(0, "file: the game has no current user file yet");
+        return;
+    }
+    int32_t from = (int32_t)a, to = (int32_t)b;
+    file_from = from;
+    file_to = to;
+    if (copy) {
+        file_op = FileOp_Copy;
+        void* holder = 0;
+        call0(game_data, &holder);
+        if (holder != 0 && field_user >= 0 && *(const int32_t*)((const char*)holder + field_user) == from) {
+            void* sequence = 0;
+            call0(save_sequence, &sequence);
+            void* handler = sequence != 0 && field_handler >= 0 ? *(void* const*)((const char*)sequence + field_handler) : 0;
+            if (handler == 0 || store_file == 0) {
+                finish(0, "file copy: the game has no SaveDataHandler::storeUserFile by name to put the current file into its slot");
+                return;
+            }
+            void* current = the_current_file();
+            void* store_args[] = {handler, &current};
+            store_file->invoke(store_args, 0);
+        }
+        void* args[] = {0, &to, &from};
+        copy_file->invoke(args, 0);
+    } else if (same(verb, "load")) {
+        file_op = FileOp_Load;
+        unsigned char mario = (unsigned char)file_mario;
+        void* args[] = {0, &from, &mario};
+        load_file->invoke(args, 0);
+    } else if (same(verb, "erase")) {
+        file_op = FileOp_Erase;
+        void* args[] = {0, &from};
+        delete_file->invoke(args, 0);
+    } else {
+        file_op = FileOp_New;
+        void* args[] = {0, &from};
+        create_file->invoke(args, 0);
+    }
+    pending_frames = 0;
+    pending = Pending_FileStep;
+}
+
+/* The file step's end: the save sequence has stopped, and its answer and the current file say what the step did. The
+   fact: file.copied {"from","to"}, file.loaded n, file.erased n, file.created n. */
+static void file_step_tick(void) {
+    unsigned char busy = 1;
+    call0(save_busy, &busy);
+    if (busy != 0) {
+        if (++pending_frames > 60u * 60u) {
+            pending = Pending_None;
+            finish(0, "file: the save sequence did not end within 3,600 frames");
+        }
+        return;
+    }
+    pending = Pending_None;
+    unsigned char success = 0;
+    call0(save_success, &success);
+    void* const file = the_current_file();
+    void* holder = 0;
+    call0(game_data, &holder);
+    const int32_t held = holder != 0 && field_user >= 0 ? *(const int32_t*)((const char*)holder + field_user) : file_from;
+    const int created = file != 0 && file_is_created(file);
+    Out o;
+    out_empty(&o);
+    switch (file_op) {
+    case FileOp_Copy:
+        if (!success) {
+            finish(0, "file copy: the game's save sequence did not end done");
+            return;
+        }
+        put(&o, "{\"from\":");
+        put_int(&o, file_from);
+        put(&o, ",\"to\":");
+        put_int(&o, file_to);
+        put(&o, "}");
+        fact("file.copied", &o);
+        break;
+    case FileOp_Load:
+        if (held != file_from || !success) {
+            finish(0, "file load: the game did not make that file the current one");
+            return;
+        }
+        fact_int("file.loaded", file_from);
+        break;
+    case FileOp_Erase:
+        /* The current file is the one read back: an erase of another file is told by the sequence's answer. */
+        if (!success || (held == file_from && created)) {
+            finish(0, "file erase: the file is still there, or the game's save sequence did not end done");
+            return;
+        }
+        fact_int("file.erased", file_from);
+        break;
+    default:
+        if (!success || !created || held != file_from) {
+            finish(0, "file new: the game's new-file path left the file not created, or not current");
+            return;
+        }
+        fact_int("file.created", file_from);
+        break;
+    }
+    finish(1, 0);
+}
+
 static void start_stage(const char* name, const char* scenario_text, int is_step) {
     int good = 0;
     const int64_t scenario = to_int(scenario_text, &good);
@@ -720,6 +861,7 @@ static void setup_save(const Words* w) {
             return;
         }
         *(unsigned char*)((char*)holder + field_is_mario) = same(w->word[2], "luigi") ? 0u : 1u;
+        file_mario = !same(w->word[2], "luigi");
         /* The holder's user file: the one `setup file` made current; else as the load set it. */
         if (pending_file != 0) {
             *(int32_t*)((char*)holder + field_user) = pending_file;
@@ -996,13 +1138,29 @@ static void do_call(const char* key, const char* rest) {
         } else if (same(type, "const Vec3f &") || same(type, "const TVec3f &") || same(type, "Vec3f *") || same(type, "const Vec3f *") ||
                    same(type, "Vec3f") || same(type, "TVec3f")) {
             static Words xyz;
-            split(&xyz, text, ' ');
             int g1 = 0, g2 = 0, g3 = 0;
-            good = xyz.count == 3u && xyz.over == 0u;
-            values[i].v.x = good ? to_float(xyz.word[0], &g1) : 0.0f;
-            values[i].v.y = good ? to_float(xyz.word[1], &g2) : 0.0f;
-            values[i].v.z = good ? to_float(xyz.word[2], &g3) : 0.0f;
-            good = good && g1 && g2 && g3;
+            if (after_prefix(text, "object:") != 0 || after_prefix(text, "class:") != 0) {
+                /* A live actor's place (harness revision 8): its position as the game holds it. */
+                void* const object = object_of(text);
+                if (object == 0) {
+                    finish(-1, missing_text("call: ", text));
+                    return;
+                }
+                if (!object_is(object, class_live_actor)) {
+                    finish(0, "call: an argument is no actor (it has no position), and the parameter takes a place");
+                    return;
+                }
+                values[i].v = *(const Vec3*)((const char*)object + field_position);
+                g1 = g2 = g3 = 1;
+                good = 1;
+            } else {
+                split(&xyz, text, ' ');
+                good = xyz.count == 3u && xyz.over == 0u;
+                values[i].v.x = good ? to_float(xyz.word[0], &g1) : 0.0f;
+                values[i].v.y = good ? to_float(xyz.word[1], &g2) : 0.0f;
+                values[i].v.z = good ? to_float(xyz.word[2], &g3) : 0.0f;
+                good = good && g1 && g2 && g3;
+            }
             vec_pointers[i] = &values[i].v;
             /* A pointer parameter: args[n] points at the pointer. A reference or a value: at the vector itself (luma.h). */
             const int pointer = same(type, "Vec3f *") || same(type, "const Vec3f *");
@@ -1253,6 +1411,10 @@ static void do_line(const char* line) {
         start_stage(w.word[1], w.word[2], 1);
         return;
     }
+    if (same(w.word[0], "file") && w.count >= 3u) {
+        do_file(&w);
+        return;
+    }
     if (same(w.word[0], "call") && w.count >= 3u) {
         /* The rest after "call <fact> ": tab-separated. */
         const char* rest = line + 5 + length(w.word[1]) + 1;
@@ -1272,6 +1434,12 @@ static int32_t on_frame(LumaCall* call, void* user) {
     if (pending == Pending_File) {
         file_tick();
         if (pending == Pending_File) {
+            return 0;
+        }
+    }
+    if (pending == Pending_FileStep) {
+        file_step_tick();
+        if (pending == Pending_FileStep) {
             return 0;
         }
     }
@@ -1341,6 +1509,11 @@ static const LumaImport imports[] = {
     LUMA_FUNCTION(file_created, "UserFile::isCreated", "bool() const"),
     LUMA_FUNCTION(load_file, "GameSequenceFunction::startGameDataLoadSequence", "void(int, bool)"),
     LUMA_FUNCTION(create_file, "GameSequenceFunction::startCreateUserFileSequence", "void(int)"),
+    LUMA_FUNCTION(delete_file, "GameSequenceFunction::startDeleteUserFileSequence", "void(int)"),
+    LUMA_FUNCTION(copy_file, "GameSequenceFunction::startCopyUserFileSequence", "void(int, int)"),
+    LUMA_FUNCTION(save_success, "GameSequenceFunction::isSuccessSaveDataHandleSequence", "bool()"),
+    {LUMA_IMPORT_FUNCTION, LUMA_OPTIONAL, "SaveDataHandler::storeUserFile", "void(const UserFile *)", &store_file, 0, 0, 0},
+    {LUMA_IMPORT_FIELD, LUMA_OPTIONAL, "SaveDataHandleSequence.mSaveDataHandler", "SaveDataHandler *", &field_handler, 0, 0, 0},
     LUMA_FUNCTION(save_busy, "GameSequenceFunction::isActiveSaveDataHandleSequence", "bool()"),
     LUMA_FIELD(field_name, "NameObj.mName", "const char *"),
     LUMA_FIELD(field_position, "LiveActor.mPosition", "Vec3f"),

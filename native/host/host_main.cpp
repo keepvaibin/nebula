@@ -569,6 +569,18 @@ Pak gPak;
 // A part of the game a start with mods needs, found missing at step 1 (contract start-check 2): every mod is off.
 std::optional<galaxy::startcheck::MissingPart> gMissingPart;
 
+// The harness's own game half (luma-test, placed by tools/lumacore/luma_test.py in a harness run, which sets
+// LUMA_HARNESS_PLAN) is the test's instrument, not a player's mod: a start that turns every mod off (a safe start, a
+// missing part) leaves it on, or no such start could be run as a test (it gives the setup and the steps, and ends the run).
+bool is_harness_half(const std::string& mod_id) {
+#if defined(_WIN32)
+    const bool harness_run = GetEnvironmentVariableA("LUMA_HARNESS_PLAN", nullptr, 0) != 0;
+#else
+    const bool harness_run = std::getenv("LUMA_HARNESS_PLAN") != nullptr;
+#endif
+    return harness_run && mod_id == "luma-test";
+}
+
 bool open_pak(const fs::path& path) {
     gPak.store_file = path;
     if (!gPak.store.open(path)) {
@@ -3664,7 +3676,9 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
                 galaxy::startcheck::missing_part(gPak.store, settings_folder / "mods" / ".cooked", bring)) {
             log_line("mods:", ("a part a start with mods needs is missing (" + part->why + "): every mod is off this time").c_str());
             gMissingPart = part;  // said in the mod log once it exists (start_mods)
-            for (galaxy::mods::ModInfo& mod : mods) mod.enabled = false;
+            for (galaxy::mods::ModInfo& mod : mods) {
+                if (!is_harness_half(mod.id)) mod.enabled = false;
+            }
         }
     }
     gStartPackages.clear();
@@ -4404,15 +4418,9 @@ int main(int argc, char** argv) {
                 log_line("mods:", safe == galaxy::mods::SafeStart::kAsked
                                       ? "safe start: every mod is off for this start"
                                       : "safe start: the last run crashed with mods on; every mod is off for this start");
-                // The harness's own game half (luma-test, placed by tools/lumacore/luma_test.py in a harness run) is the
-                // test's instrument, not a player's mod: it stays on, or no safe start could be run as a test.
-#if defined(_WIN32)
-                const bool harness_run = GetEnvironmentVariableA("LUMA_HARNESS_PLAN", nullptr, 0) != 0;
-#else
-                const bool harness_run = std::getenv("LUMA_HARNESS_PLAN") != nullptr;
-#endif
+                // The harness's own game half stays on (is_harness_half).
                 for (galaxy::mods::ModInfo& mod : mods) {
-                    if (!(harness_run && mod.id == "luma-test")) mod.enabled = false;
+                    if (!is_harness_half(mod.id)) mod.enabled = false;
                 }
             } else if (std::any_of(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) { return mod.enabled; })) {
                 // A crash from here on (the cook, the packs, the game) makes the next start safe; svc_mods_start

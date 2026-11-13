@@ -371,6 +371,8 @@ struct Cond {
     Json value;
     std::regex pattern;       // a log line's
     std::string source;       // as written, for the reason
+    bool next = false;        // revision 8: the fact's check holds on a write made after the wait began
+    std::uint64_t writes_at_arm = 0u;
 };
 
 struct Step {
@@ -707,7 +709,8 @@ bool read_line(const std::string& line, std::string& why) {
                 why = "step " + std::to_string(s.number) + ": the log pattern is not a regular expression";
                 return false;
             }
-        } else if (w.size() >= 5u && w[1] == "fact") {
+        } else if (w.size() >= 5u && (w[1] == "fact" || w[1] == "next")) {
+            c.next = w[1] == "next";
             c.key = w[2];
             c.op = w[3];
             if (w[4] != "-") {
@@ -1065,10 +1068,16 @@ void frame(std::uint64_t game_frames) {
             } else if (before_done) {
                 if (!s.armed) {
                     s.armed = now;
+                    for (Cond& c : s.conds) {
+                        const auto written = g.writes.find(c.key);
+                        c.writes_at_arm = written != g.writes.end() ? written->second : 0u;
+                    }
                 }
                 bool all = true;
                 for (const Cond& c : s.conds) {
-                    all = all && (c.log ? false : holds(c));
+                    const auto written = g.writes.find(c.key);
+                    const bool fresh = !c.next || (written != g.writes.end() && written->second > c.writes_at_arm);
+                    all = all && (c.log ? false : fresh && holds(c));
                 }
                 // A log condition is met by log_line (it clears the cond); none left means met.
                 for (const Cond& c : s.conds) {

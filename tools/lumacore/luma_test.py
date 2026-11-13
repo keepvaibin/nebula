@@ -447,7 +447,7 @@ def read_steps(t, bare, classes):
     ends = 0
     pictures = set()
     actions = {"hold", "stick", "shake", "pointer", "key", "text", "settings", "picture", "call", "read", "stage", "wait",
-               "end", "take_out"}
+               "end", "take_out", "copy_file", "load_file", "erase_file", "new_file"}
     for i, s in enumerate(steps):
         path = "steps[%d]" % i
         if not isinstance(s, dict):
@@ -469,7 +469,7 @@ def read_steps(t, bare, classes):
         else:
             a = s["after"]
             keys_known(a, path + ".after", {"fact", "log", "is", "is_not", "less", "at_most", "more", "at_least",
-                                            "near", "within", "exists", "absent", "has"})
+                                            "near", "within", "exists", "absent", "has", "when"})
             if ("fact" in a) == ("log" in a):
                 raise HarnessError("%s.after needs fact or log" % path)
             if "log" in a:
@@ -478,13 +478,17 @@ def read_steps(t, bare, classes):
                     re.compile(pattern)
                 except re.error:
                     raise HarnessError("%s.after.log is not a regular expression" % path)
-                if any(k in a for k in FACT_OPS):
+                if any(k in a for k in FACT_OPS) or "when" in a:
                     raise HarnessError("%s.after: a log condition takes no check" % path)
                 step["after"] = ("log", pattern)
             else:
                 key = fact_key(a["fact"], path + ".after.fact")
                 op, value, within = read_check(a, path + ".after", {"within"})
-                step["after"] = ("fact", key, op, value, within)
+                # Revision 8: "when": "next": the check holds on a write made after the wait began (a fact already
+                # written, as the mod's "done" of an earlier stage run, does not meet it).
+                if "when" in a and a["when"] != "next":
+                    raise HarnessError("%s.after.when takes \"next\" (the check is made on a write after the wait began)" % path)
+                step["after"] = ("fact", key, op, value, within, "when" in a)
             if "timeout" in s:
                 step["timeout"] = whole(s, "timeout", path, 1)
         needs = {"hold": {"frames"}, "stick": {"frames"}, "pointer": {"frames"}, "call": {"signature"},
@@ -549,6 +553,20 @@ def read_steps(t, bare, classes):
             if not isinstance(wait, bool):
                 raise HarnessError("%s.wait takes true or false" % path)
             step["line"] = "take_out %s %d" % (mod_id, 1 if wait else 0)
+        elif action in ("copy_file", "load_file", "erase_file", "new_file"):
+            # Revision 8 (services-save 5, kit-progress): the file select's own operations on the run's own saves, on
+            # the game's save path (GameSequenceFunction); the step is answered when the save sequence has ended and
+            # writes file.copied / file.loaded / file.erased / file.created.
+            if action == "copy_file":
+                if not (isinstance(v, list) and len(v) == 2 and all(isinstance(n, int) and not isinstance(n, bool) and 1 <= n <= 3 for n in v)
+                        and v[0] != v[1]):
+                    raise HarnessError("%s.copy_file is [from, to]: two different user files, each 1 to 3" % path)
+                step["line"] = "game file copy %d %d" % (v[0], v[1])
+            else:
+                n = whole(s, action, path, 1)
+                if n > 3:
+                    raise HarnessError("%s.%s is a user file, 1 to 3" % (path, action))
+                step["line"] = "game file %s %d" % (action[:-len("_file")], n)
         elif action == "call":
             name = plain(text(s, "call", path), path + ".call")
             sig = text(s, "signature", path)
@@ -628,6 +646,9 @@ def call_arg(value, param, path, classes):
             raise HarnessError("%s must be a string with no tab or line end" % path)
         return value
     if param in VEC_TYPES:
+        # Revision 8: a live actor's place, `object:<name>#<n>` or `class:<Class>#<n>` (its position as the game holds it).
+        if isinstance(value, str) and value != "player":
+            return object_ref(value, path, classes)
         if not (isinstance(value, list) and len(value) == 3 and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in value)):
             raise HarnessError("%s must be [x, y, z]" % path)
         return " ".join(repr(float(v)) for v in value)
@@ -973,8 +994,8 @@ def plan_text(test, out):
             if a[0] == "log":
                 lines.append("cond log %s" % a[1])
             else:
-                _, key, op, value, within = a
-                lines.append("cond fact %s %s %s %s" % (key, op, "-" if within is None else repr(float(within)),
+                _, key, op, value, within, fresh = a
+                lines.append("cond %s %s %s %s %s" % ("next" if fresh else "fact", key, op, "-" if within is None else repr(float(within)),
                                                         json.dumps(value if op not in ("exists", "absent") else True,
                                                                    ensure_ascii=False, separators=(",", ":"))))
             lines.append("timeout %d" % s["timeout"])
