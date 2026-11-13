@@ -14,6 +14,7 @@
 #include "Game/Scene/PlacementInfoOrdered.hpp"
 #include "Game/Scene/StageDataHolder.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/System/Arenas.hpp"
 #include "Game/System/LumaClasses.hpp"
 #include "Game/System/LumaCore.hpp"
 #include "Game/System/LumaHook.hpp"
@@ -276,13 +277,28 @@ namespace luma {
                     return -4;
                 }
             }
-            // While the scene makes its objects (its player, then its placements): after it, nothing would give the
-            // objects their after-placement init.
+            // While the scene makes its objects (its player, then its placements; the scene then gives every object its
+            // after-placement step), or once it is made (during play: this call gives that step, as LumaPlayer gives an
+            // extra player's). Not between the two, while the scene runs the after-placement steps.
+            const bool placing = MR::isInitializeStatePlacementSomething();
             if (!MR::isExistSceneObj(SceneObj_StageDataHolder) || !MR::isExistSceneObj(SceneObj_AllLiveActorGroup) ||
-                !MR::isExistSceneObj(SceneObj_PlacementStateChecker) || !MR::isInitializeStatePlacementSomething()) {
-                say(pMod, "make %s: not while the scene makes its objects (call it from a hook that runs then)", pName);
+                !MR::isExistSceneObj(SceneObj_PlacementStateChecker) || Arenas::scene() == nullptr ||
+                !(placing || MR::isInitializeStateEnd())) {
+                say(pMod, "make %s: only while the scene makes its objects or once it is made (no scene, or it is starting)", pName);
                 return -3;
             }
+            // During play the frame's arena is the permanent one: the table and the objects are the scene's, gone with it.
+            struct SceneArena {
+                NebulaArena* mPrevious;
+                explicit SceneArena(bool playing) : mPrevious(playing ? Arenas::scene()->makeCurrent() : nullptr) {}
+                ~SceneArena() {
+                    if (mPrevious != nullptr) {
+                        mPrevious->makeCurrent();
+                    }
+                }
+                SceneArena(const SceneArena&) = delete;
+                SceneArena& operator=(const SceneArena&) = delete;
+            } sceneArena(!placing);
             const CreatorFuncPtr pCreator = NameObjFactory::getCreator(pName);
             if (pCreator == nullptr) {
                 say(pMod, "make %s: the factory makes nothing by that name", pName);
@@ -321,6 +337,9 @@ namespace luma {
                         const luma::classes::AliasPlacing alias(pName, iter.mInfo, iter.mIndex);
                         while (!pObject->initStep(iter, UINT64_MAX)) {
                         }
+                    }
+                    if (!placing) {
+                        pObject->initAfterPlacement();
                     }
                     if (dead) {
                         if (lumacore::isA(lumacore::classOf(pObject), lumacore::kClassId< LiveActor >)) {

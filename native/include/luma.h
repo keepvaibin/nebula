@@ -306,12 +306,12 @@ typedef struct LumaCore {
 
     /* Objects (classes contract, "make"): `count` objects by a name the factory makes (a game object's, a mod class's,
        a mod's object: as a stage places it, its changes and replacements applied), each made and initialised as a
-       placed one, at `place[i]` (null: the origin, unturned, scale 1, every argument -1). Only while the scene makes
-       its objects (from a hook that runs then: after StageDataHolder::initPlacementMario, a class's init); they stand
-       in the main stage and live as long as the scene; made inside another object's init, they join that
-       placement's view group. Flags: LUMA_MAKE_DEAD. Each object's address in objects[i] (objects may be null).
+       placed one, at `place[i]` (null: the origin, unturned, scale 1, every argument -1). While the scene makes its
+       objects (from a hook that runs then: after StageDataHolder::initPlacementMario, a class's init) or once it is
+       made (during play: each object then takes its after-placement step in this call); they stand in the main stage
+       and live as long as the scene; made inside another object's init, they join that placement's view group. Flags: LUMA_MAKE_DEAD. Each object's address in objects[i] (objects may be null).
        Returns the count made (fewer when a creator makes nothing, said), or -1 the factory makes nothing by that
-       name, -2 its files are not in this game, -3 not on the game thread or not while the scene makes its objects,
+       name, -2 its files are not in this game, -3 not on the game thread, no scene, or the scene is starting,
        -4 a bad argument (count not 1 to 1024, a place smaller than LumaMakePlace or not finite, an unknown flag) or no
        memory. Every refusal is said in the log with the name. */
     int32_t (*make)(const LumaMod* mod, const char* name, uint32_t count, const LumaMakePlace* place, uint32_t flags,
