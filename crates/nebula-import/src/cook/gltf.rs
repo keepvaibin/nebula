@@ -1918,8 +1918,9 @@ pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) 
                     let width = if p.four { 4 } else { 1 };
                     for (k, &given) in value.iter().enumerate() {
                         let v = if k < width { given } else { 0.0 };
+                        // Place 0 to 2 is register 1 to 3: registers[0] to [2] (NEBULA_ROW_REGISTER, Material::fillRow).
                         if place < 3 {
-                            made.registers[usize::from(place) + 1][k] = (v * 255.0).round() as i16;
+                            made.registers[usize::from(place)][k] = (v * 255.0).round() as i16;
                         } else {
                             made.constants[usize::from(place) - 3][k] = (v * 255.0).round().clamp(0.0, 255.0) as u8;
                         }

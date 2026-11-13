@@ -220,8 +220,10 @@ fn a_material_naming_a_shader_is_lit_through_its_surface() {
     assert_eq!(sf.uv, [true, false]);
     // The stages read none of the places: speed register 1, tint register 2, glow register 3 (its values in 255ths).
     assert_eq!(sf.params, [("speed".into(), false, 0), ("tint".into(), true, 1), ("glow".into(), false, 2)]);
-    assert_eq!(m.registers[1][0], 510);
-    assert_eq!(m.registers[2], [255, 51, 26, 255]);
+    // Register n is registers[n - 1], as Material::fillRow and set_param read it (place 0 is registers[0]).
+    assert_eq!(m.registers[0][0], 510);
+    assert_eq!(m.registers[1], [255, 51, 26, 255]);
+    assert_eq!(m.registers[3], [0; 4]);
     assert_eq!(sf.textures.len(), 1);
     // `<model>.params` beside the model, as content.model set_param reads it.
     let (_, files, _) = crate::cook::gltf::to_files_for(&bytes, Some(&folder), "Cube", None).unwrap();
