@@ -3315,8 +3315,11 @@ void RendererD3D12::begin_frame() {
             temporal_interp_suspended_ = false;
         }
         // A ring whose frames took over half their budget (or spilled) grows before the next frame; one whose last 600 frames
-        // stayed under a quarter of it gives half of its memory back.
-        if (!ring_growth_failed_ && (vertex_ring_.wants_growth() || index_ring_.wants_growth() || constant_ring_.wants_growth() ||
+        // stayed under a quarter of it gives half of its memory back. --diagnostics ring-stress makes them again (at the
+        // size each wants) every kRingStressFrames frames.
+        const bool ring_stress =
+            ::galaxy::diagnosing(::galaxy::kDiagnoseRingStress) && frame_index_ % ::galaxy::kRingStressFrames == 0u;
+        if (!ring_growth_failed_ && (ring_stress || vertex_ring_.wants_growth() || index_ring_.wants_growth() || constant_ring_.wants_growth() ||
                                      matrix_ring_.wants_growth() || vertex_ring_.wants_shrink() || index_ring_.wants_shrink() ||
                                      constant_ring_.wants_shrink() || matrix_ring_.wants_shrink())) {
             // No wait for the GPU: a ring is made again as a new buffer (the same size when only its segments change), and the old

@@ -30,6 +30,8 @@ enum Diagnostic : unsigned {
     kDiagnoseRtCheck = 1u << 15u,        // rt-check: the tracer's scene against the depth the game drew, coloured and counted
     kDiagnoseDeviceFaults = 1u << 16u,   // device-faults: a lost device's breadcrumbs and the driver's fault data
     kDiagnoseTelemetry = 1u << 17u,      // telemetry: frame counts in shared memory each second (tools/telemetry)
+    kDiagnoseRingStress = 1u << 18u,     // ring-stress: the upload rings made again every kRingStressFrames frames (a test
+                                         // of their retirement: the old rings must outlive every frame that reads them)
 };
 
 // The names --diagnostics takes, each one item or a set. "1" is the launcher's recording.
@@ -58,6 +60,7 @@ inline constexpr DiagnosticName kDiagnosticNames[] = {
     {"rt-check", kDiagnoseRtCheck},
     {"device-faults", kDiagnoseDeviceFaults},
     {"telemetry", kDiagnoseTelemetry},
+    {"ring-stress", kDiagnoseRingStress},
     {"frames", kDiagnoseFrames},
     {"gpu", kDiagnoseGpuPasses},
     {"threads", kDiagnoseThreadCpu | kDiagnoseProfile},
@@ -119,6 +122,10 @@ inline LaunchArgs g_launch_args;
 [[nodiscard]] inline const LaunchArgs& launch_args() noexcept {
     return g_launch_args;
 }
+
+// ring-stress: how often the upload rings are made again (frames): often enough that a run of a test's length makes
+// them again hundreds of times, with frames in flight on both sides of each.
+inline constexpr unsigned kRingStressFrames = 5u;
 
 // Whether this run records any of `what` (Diagnostic bits).
 [[nodiscard]] inline bool diagnosing(unsigned what) noexcept {

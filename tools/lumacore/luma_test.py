@@ -1158,6 +1158,9 @@ def run_one(test, renderer, args, run_folder, previous):
     command = [str(run_folder / "bin" / exe.name), "--pak", pak, "--saves", str(run_folder / "saves"),
                "--seconds", str(int(math.ceil(test["limit"]))), "--settings", str(settings),
                "--crash-dumps", str(run_folder), "--extension", str(run_folder / "bin" / HOST["extension"])] + imports
+    if args.diagnostics:
+        # A stress or record the whole run is made under (--diagnostics ring-stress): the game's own switch.
+        command += ["--diagnostics", args.diagnostics]
     hidden = {}
     if platform.system() == "Windows":
         startup = subprocess.STARTUPINFO()
@@ -1589,6 +1592,8 @@ def main():
     run.add_argument("--who", default="?")
     run.add_argument("--module", default="hooks", choices=("hooks", "plain"))
     run.add_argument("--commit", default="unknown")
+    run.add_argument("--diagnostics", default=os.environ.get("LUMA_TEST_DIAGNOSTICS"),
+                     help="the game's --diagnostics for every run (or LUMA_TEST_DIAGNOSTICS), e.g. ring-stress")
     run.add_argument("--lock", default=os.environ.get("LUMA_TEST_LOCK"),
                      help="the run lock file (or LUMA_TEST_LOCK); the runner refuses to start while it exists")
     refs = sub.add_parser("refs")
