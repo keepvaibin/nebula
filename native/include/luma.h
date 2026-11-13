@@ -149,6 +149,18 @@ typedef struct LumaMakePlace {
 } LumaMakePlace;
 #define LUMA_MAKE_DEAD 1u /* made, then dead (makeActorDead) until something makes it appear; actors only */
 
+/* Where a stage placed an object (classes contract, "placement"): the scene's main stage, the zone (a stage's name;
+   the main stage's own for its objects), the layer ("Common", "LayerA" to "LayerAE") and the object's index among
+   that zone's placements of that layer (its Placement files, then its MapParts files, in the stage archive's order,
+   each file's rows in order). The same on every machine with the same game and mods. */
+typedef struct LumaPlacement {
+    uint32_t size;      /* sizeof(LumaPlacement) */
+    const char* stage;  /* placement_of: valid while the scene lives. placed_at: null, or the main stage's name */
+    const char* zone;
+    const char* layer;
+    uint32_t index;
+} LumaPlacement;
+
 /* A table of the game's data as LumaCore.table gives it (numbers contract, plan 1.5). */
 typedef struct LumaTable {
     const void* data;  /* as the game reads it now; written only through set_table */
@@ -291,6 +303,22 @@ typedef struct LumaCore {
        memory. Every refusal is said in the log with the name. */
     int32_t (*make)(const LumaMod* mod, const char* name, uint32_t count, const LumaMakePlace* place, uint32_t flags,
                     void** objects);
+    /* Another name for a mod's class (classes contract, "alias"): a stage that places `name`, and make by it, make an
+       object of the live mod class `class_name` (any mod's), whose placement argument i (Obj_arg0 to 7) reads as
+       args[i] while it initialises, where args[i] is not -1 (-1: the placement's own). The alias is the calling mod's:
+       it goes when that mod goes or the class does. Called again for a name the mod aliased, it changes that alias.
+       0: the alias stands; -1 a bad argument (null, a name empty or over 63 bytes, null args), -2 the name is taken (a
+       game class's, a factory row's, a mod class's or another mod's alias), -3 not on the game thread, -5 class_name
+       is no live mod class. Every refusal is said in the log with the name. */
+    int32_t (*alias_class)(const LumaMod* mod, const char* name, const char* class_name, const int32_t args[8]);
+    /* The placement a stage made `object` from (classes contract, "placement"): 0 and *out, or -1 none (no scene, an
+       object made by code or by make, or not one the stage's placements made), -3 not on the game thread, -4 a null
+       object or out, or out smaller than LumaPlacement (said). The scene's objects live as long as the scene. */
+    int32_t (*placement_of)(const LumaMod* mod, const void* object, LumaPlacement* out);
+    /* The object the scene made from a placement (`place`'s zone, layer, index; its stage null or the main stage's
+       name; names compare with ASCII case folded), or null: no such placement in this scene, its creator made
+       nothing, it is not made yet, not on the game thread, or a null place or one smaller than LumaPlacement (said). */
+    void* (*placed_at)(const LumaMod* mod, const LumaPlacement* place);
 } LumaCore;
 
 /* report's own codes (D3-1). */

@@ -1075,10 +1075,22 @@ namespace luma {
             return luma::make::make(pMod, pName, count, pPlace, flags, ppObjects);
         }
 
+        s32 apiAliasClass(const LumaMod* pMod, const char* pName, const char* pClass, const s32* pArgs) {
+            return luma::classes::alias(pMod, pName, pClass, pArgs);
+        }
+
+        // Placements (classes contract, "placement").
+        s32 apiPlacementOf(const LumaMod* pMod, const void* pObject, LumaPlacement* pOut) {
+            return luma::make::placementOf(pMod, pObject, pOut);
+        }
+
+        void* apiPlacedAt(const LumaMod* pMod, const LumaPlacement* pPlace) { return luma::make::placedAt(pMod, pPlace); }
+
         const LumaCore sCore = {
             sizeof(LumaCore), LUMA_API, apiLog, apiFunction, apiFunctionAt, apiHook, apiProceed, apiField, apiSizeOf, apiClassOf, apiIsA, apiService,
             apiGameThread, apiUnhook, apiAlloc, apiFree, apiReport, apiOwnClass, apiAsClass, apiMethod, apiOverrider, apiCallMethod,
             apiKeep, apiKept, apiDefineClass, apiClassData, apiNumber, apiSetNumber, apiTable, apiSetTable, apiMake,
+            apiAliasClass, apiPlacementOf, apiPlacedAt,
         };
 
         // One import: its function (functions and hooks) or number (fields, sizes, classes). False: the game has none,

@@ -77,6 +77,22 @@ namespace luma {
             u32 sRowCount = 0;
             u32 sLiveCount = 0;
 
+            // Aliases (contract classes, "alias"): a name the factory answers with a live class's maker, its placements'
+            // arguments as the alias gives them. A dead alias's row is used again; rows are never freed (read under
+            // sLock, written on the game thread only). A live alias's class is live: modGone ends both together.
+            constexpr u32 kMaxAliases = 4096;
+            struct AliasRow {
+                bool live;
+                const LumaMod* mod;
+                char name[kNameBytes];
+                u32 row;  // the class's
+                s32 args[8];
+            };
+            AliasRow* sAliases[kMaxAliases];
+            u32 sAliasCount = 0;
+            // The placements initialising objects an alias placed, innermost first (AliasPlacing).
+            LUMA_THREAD AliasPlacing* tPlacing = nullptr;
+
             // The objects of the live classes, by the whole object's address: open addressing, linear probing, removal by
             // backward shift. Under sLock, as are the rows' `live` and the makes in progress.
             struct Instance {
@@ -239,7 +255,18 @@ namespace luma {
                 }
             }
 
-            // A live row by the name the factory is asked for: its own name, or the name it replaces. -1: none.
+            // Under sLock. The live alias of the name, or null.
+            AliasRow* aliasLocked(const char* pName) {
+                for (u32 a = 0; pName != nullptr && a < sAliasCount; a++) {
+                    if (sAliases[a]->live && same(sAliases[a]->name, pName)) {
+                        return sAliases[a];
+                    }
+                }
+                return nullptr;
+            }
+
+            // A live row by the name the factory is asked for: its own name, the name it replaces, or an alias of it.
+            // -1: none.
             s32 rowForPlacement(const char* pName) {
                 if (pName == nullptr) {
                     return -1;
@@ -250,7 +277,8 @@ namespace luma {
                         return static_cast<s32>(r);
                     }
                 }
-                return -1;
+                const AliasRow* const pAlias = aliasLocked(pName);
+                return pAlias != nullptr ? static_cast<s32>(pAlias->row) : -1;
             }
 
             // A scene is running: its objects (the planet map's creators among them) can be asked for.
@@ -824,6 +852,121 @@ namespace luma {
 
         bool isModNumber(s32 number) { return number >= static_cast<s32>(classCount()); }
 
+        s32 alias(const LumaMod* pMod, const char* pName, const char* pClass, const s32* pArgs) {
+            if (!onGameThread()) {
+                return -3;
+            }
+            const char* const pShown = pName != nullptr ? pName : "";
+            const u32 nameLength = textLength(pShown);
+            if (pMod == nullptr || nameLength == 0 || nameLength >= kNameBytes || pClass == nullptr || pArgs == nullptr) {
+                say(pMod, "alias_class %s: the name is empty or over 63 bytes, or the class or the arguments are null",
+                    nameLength < kNameBytes ? pShown : "(over 63 bytes)");
+                return -1;
+            }
+            lock();
+            s32 target = -1;
+            for (u32 r = 0; r < sRowCount; r++) {
+                if (sRows[r]->live && same(sRows[r]->name, pClass)) {
+                    target = static_cast<s32>(r);
+                    break;
+                }
+            }
+            AliasRow* const pOwn = aliasLocked(pName);
+            unlock();
+            if (target < 0) {
+                say(pMod, "alias_class %s: %s is no live mod class", pName, pClass);
+                return -5;
+            }
+            if (pOwn != nullptr ? pOwn->mod != pMod : nameTaken(pName)) {
+                say(pMod, "alias_class %s: the name is a game class's, a factory row's, a mod class's or another mod's alias", pName);
+                return -2;
+            }
+            // The game thread is the only writer: a row found dead here stays dead until it is filled.
+            AliasRow* pRow = pOwn;
+            if (pRow == nullptr) {
+                lock();
+                for (u32 a = 0; pRow == nullptr && a < sAliasCount; a++) {
+                    pRow = sAliases[a]->live ? nullptr : sAliases[a];
+                }
+                unlock();
+            }
+            if (pRow == nullptr) {
+                if (sAliasCount == kMaxAliases) {
+                    say(pMod, "alias_class %s: the session's %u aliases are all standing", pName, kMaxAliases);
+                    return -1;
+                }
+                pRow = static_cast<AliasRow*>(::calloc(1, sizeof(AliasRow)));
+                if (pRow == nullptr) {
+                    say(pMod, "alias_class %s: no memory for the alias", pName);
+                    return -1;
+                }
+                lock();
+                sAliases[sAliasCount] = pRow;
+                sAliasCount++;
+                unlock();
+            }
+            lock();
+            pRow->mod = pMod;
+            copyName(pRow->name, pName);
+            pRow->row = static_cast<u32>(target);
+            __builtin_memcpy(pRow->args, pArgs, sizeof(pRow->args));
+            pRow->live = true;
+            unlock();
+            say(pMod, "alias %s: places %s (arguments %d %d %d %d %d %d %d %d; -1 the placement's own)", pName, sRows[target]->name, pArgs[0],
+                pArgs[1], pArgs[2], pArgs[3], pArgs[4], pArgs[5], pArgs[6], pArgs[7]);
+            return 0;
+        }
+
+        AliasPlacing::AliasPlacing(const char* pName, const void* pTable, s32 entry)
+            : mTable(pTable), mEntry(entry), mArgs(), mOuter(nullptr), mSet(false) {
+            if (__atomic_load_n(&sAliasCount, __ATOMIC_RELAXED) == 0 || pName == nullptr) {
+                return;
+            }
+            lock();
+            const AliasRow* const pAlias = aliasLocked(pName);
+            if (pAlias != nullptr) {
+                __builtin_memcpy(mArgs, pAlias->args, sizeof(mArgs));
+                mSet = true;
+            }
+            unlock();
+            if (mSet) {
+                mOuter = tPlacing;
+                tPlacing = this;
+            }
+        }
+
+        AliasPlacing::~AliasPlacing() {
+            if (mSet) {
+                tPlacing = mOuter;
+            }
+        }
+
+        bool placementArg(const void* pTable, s32 entry, const char* pColumn, s32* pOut) {
+            const AliasPlacing* pPlacing = tPlacing;
+            if (pPlacing == nullptr || pColumn == nullptr) {
+                return false;
+            }
+            constexpr char cPrefix[] = "Obj_arg";
+            for (u32 i = 0; i + 1 < sizeof(cPrefix); i++) {
+                if (pColumn[i] != cPrefix[i]) {
+                    return false;
+                }
+            }
+            const char digit = pColumn[sizeof(cPrefix) - 1];
+            if (digit < '0' || digit > '7' || pColumn[sizeof(cPrefix)] != 0) {
+                return false;
+            }
+            // The innermost placing of this row (an alias's object's init may make another alias's object).
+            while (pPlacing != nullptr && (pPlacing->mTable != pTable || pPlacing->mEntry != entry)) {
+                pPlacing = pPlacing->mOuter;
+            }
+            if (pPlacing == nullptr || pPlacing->mArgs[digit - '0'] == -1) {
+                return false;
+            }
+            *pOut = pPlacing->mArgs[digit - '0'];
+            return true;
+        }
+
         void slotCall(const Function* pOriginal, void** args, void* result) {  // luma::slotCall
             // Only the kernel's tables hold an entry, so the object's table is one: its head says the class.
             ClassRow* const pRow = rowOfTable(args[0]);
@@ -860,7 +1003,8 @@ namespace luma {
                 return;
             }
             // Its classes end first, so no new make starts for them; then a make already past the factory finishes
-            // (it calls the mod's `made`, whose library closes only after the grace).
+            // (it calls the mod's `made`, whose library closes only after the grace). Its aliases end with them, and
+            // every alias of its classes.
             u32 ended = 0;
             lock();
             for (u32 r = 0; r < sRowCount; r++) {
@@ -868,6 +1012,11 @@ namespace luma {
                     sRows[r]->live = false;
                     sLiveCount--;
                     ended++;
+                }
+            }
+            for (u32 a = 0; a < sAliasCount; a++) {
+                if (sAliases[a]->live && (sAliases[a]->mod == pMod || !sRows[sAliases[a]->row]->live)) {
+                    sAliases[a]->live = false;
                 }
             }
             unlock();

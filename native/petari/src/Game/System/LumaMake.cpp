@@ -11,7 +11,10 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/NameObj/NameObjFactory.hpp"
+#include "Game/Scene/PlacementInfoOrdered.hpp"
+#include "Game/Scene/StageDataHolder.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/System/LumaClasses.hpp"
 #include "Game/System/LumaCore.hpp"
 #include "Game/System/LumaHook.hpp"
 #include "Game/System/LumaLoader.hpp"
@@ -156,6 +159,98 @@ namespace luma {
             };
         }  // namespace
 
+        namespace {
+            // The main stage's placement lists (every zone's placements are in them), null when no scene has them.
+            StageDataHolder* mainStage() {
+                return MR::isExistSceneObj(SceneObj_StageDataHolder) ? MR::getStageDataHolder() : nullptr;
+            }
+
+            template < class Each >
+            bool eachOrder(const StageDataHolder* pMain, Each each) {
+                const PlacementInfoOrdered* const orders[] = {pMain->mCommonPriorityOrder, pMain->mScenarioPriorityOrder,
+                                                              pMain->mCommonNormalOrder, pMain->mScenarioNormalOrder,
+                                                              pMain->mAfterScenarioOrder};
+                for (const PlacementInfoOrdered* const pOrder : orders) {
+                    if (pOrder != nullptr && each(pOrder)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            // The main stage and each zone's holder.
+            template < class Each >
+            bool eachZone(StageDataHolder* pMain, Each each) {
+                if (each(pMain)) {
+                    return true;
+                }
+                for (s32 i = 0; i < pMain->mStageDataHolderCount; i++) {
+                    if (each(pMain->mStageDataArray[i])) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        }  // namespace
+
+        s32 placementOf(const LumaMod* pMod, const void* pObject, LumaPlacement* pOut) {
+            if (!onGameThread()) {
+                return -3;
+            }
+            if (pObject == nullptr || pOut == nullptr || pOut->size < sizeof(LumaPlacement)) {
+                say(pMod, "placement_of: %s", pObject == nullptr ? "no object" : pOut == nullptr ? "no out" : "out is smaller than luma.h's LumaPlacement");
+                return -4;
+            }
+            StageDataHolder* const pMain = mainStage();
+            if (pMain == nullptr) {
+                return -1;
+            }
+            TableIter iter;
+            if (!eachOrder(pMain, [&](const PlacementInfoOrdered* pOrder) { return pOrder->findPlaced(pObject, &iter); })) {
+                return -1;
+            }
+            const char* pLayer = nullptr;
+            u32 index = 0;
+            const StageDataHolder* pZone = nullptr;
+            if (!eachZone(pMain, [&](const StageDataHolder* pHolder) {
+                    pZone = pHolder;
+                    return pHolder->findPlacementKey(iter.mInfo, iter.mIndex, &pLayer, &index);
+                })) {
+                return -1;
+            }
+            pOut->stage = pMain->mStageName;
+            pOut->zone = pZone->mStageName;
+            pOut->layer = pLayer;
+            pOut->index = index;
+            return 0;
+        }
+
+        void* placedAt(const LumaMod* pMod, const LumaPlacement* pPlace) {
+            if (!onGameThread()) {
+                return nullptr;
+            }
+            if (pPlace == nullptr || pPlace->size < sizeof(LumaPlacement) || pPlace->zone == nullptr || pPlace->layer == nullptr) {
+                say(pMod, "placed_at: %s", pPlace == nullptr ? "no place" : pPlace->size < sizeof(LumaPlacement) ? "the place is smaller than luma.h's LumaPlacement" : "no zone or layer");
+                return nullptr;
+            }
+            StageDataHolder* const pMain = mainStage();
+            if (pMain == nullptr || (pPlace->stage != nullptr && !MR::isEqualStringCase(pPlace->stage, pMain->mStageName))) {
+                return nullptr;
+            }
+            TableIter iter;
+            if (!eachZone(pMain, [&](const StageDataHolder* pHolder) {
+                    return MR::isEqualStringCase(pHolder->mStageName, pPlace->zone) && pHolder->findPlacementRow(pPlace->layer, pPlace->index, &iter);
+                })) {
+                return nullptr;
+            }
+            NameObj* pMade = nullptr;
+            eachOrder(pMain, [&](const PlacementInfoOrdered* pOrder) {
+                pMade = pOrder->findMade(iter.mInfo, iter.mIndex);
+                return pMade != nullptr;
+            });
+            return pMade;
+        }
+
         bool isMadeTable(const TableData* pData) {
             return pData != nullptr && pData->mReserved[0] == kMark0 && pData->mReserved[1] == kMark1;
         }
@@ -221,7 +316,11 @@ namespace luma {
                         break;
                     }
                     const TableIter iter(pTable, static_cast<s32>(made));
-                    while (!pObject->initStep(iter, UINT64_MAX)) {
+                    {
+                        // Made by a name a mod aliased: the alias's arguments over the place's (classes, "alias").
+                        const luma::classes::AliasPlacing alias(pName, iter.mInfo, iter.mIndex);
+                        while (!pObject->initStep(iter, UINT64_MAX)) {
+                        }
                     }
                     if (dead) {
                         if (lumacore::isA(lumacore::classOf(pObject), lumacore::kClassId< LiveActor >)) {

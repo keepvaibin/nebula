@@ -36,6 +36,7 @@ public:
         }
 
         TableIter mInfoIter;
+        NameObj* mMade = nullptr;  // Nebula: the object its creator made (placement_of, placed_at)
     };
 
     class SameIdSet : public Identifier {
@@ -66,6 +67,10 @@ public:
     void attach(const Table*, PlacementInfoOrdered*);
     // The entries attach() sends to its after-scenario list.
     static s32 countAfterScenario(const Table*);
+    // Nebula (classes contract, "placement"): the object made from the row (pTable, entry), or null.
+    NameObj* findMade(const Table* pTable, s32 entry) const;
+    // The row an object was made from. False: none of this list's.
+    bool findPlaced(const void* pObject, TableIter* pOut) const;
 
     Index* mIndexArray;
     u32 mIndexCount;

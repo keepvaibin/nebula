@@ -44,6 +44,7 @@
 #include "galaxy/render/host_window.h"
 #include "galaxy/mod_log.h"
 #include "galaxy/mod_screens.h"
+#include "galaxy/mod_start_check.h"
 #include "galaxy/mod_plugins.h"
 #include "galaxy/render/mod_post.h"
 #include "galaxy/render/mod_shaders.h"
@@ -565,6 +566,8 @@ struct Pak {
     fs::path store_file;
 };
 Pak gPak;
+// A part of the game a start with mods needs, found missing at step 1 (contract start-check 2): every mod is off.
+std::optional<galaxy::startcheck::MissingPart> gMissingPart;
 
 bool open_pak(const fs::path& path) {
     gPak.store_file = path;
@@ -3588,6 +3591,8 @@ void svc_mods_start(void*) {
 #endif
                                 },
                                 [](const char* text) { log_line("mods:", text); });
+    // The start check's one line when a part was missing (every mod off this session).
+    if (gMissingPart) galaxy::startcheck::report(*gMissingPart);
     // Each mod whose code did not start, in the mod log as the Mods page says it.
     galaxy::modlog::add_not_started();
     // Each placed package through the validator, its findings in the mod log (kept: nothing runs when nothing changed).
@@ -3642,6 +3647,26 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
 void prepare_mod_files(const fs::path& settings_folder, const std::string& game_id, std::vector<galaxy::mods::ModInfo> mods) {
     const std::string language = galaxy::mods::language_folder(
         game_id, static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language)));
+    // Step 1 of a start with mods (contract start-check 1, 2): with a mod on, the game's own parts the mods need. One
+    // missing: every mod is off this session, with one mod-log line; nothing of the mods runs. No mod on: no check.
+    if (std::any_of(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) { return mod.enabled; })) {
+        // The cook writes about what the mods bring: their files' bytes are the estimate.
+        std::uint64_t bring = 0;
+        for (const galaxy::mods::ModInfo& mod : mods) {
+            if (!mod.enabled) continue;
+            std::error_code walk_error;
+            for (fs::recursive_directory_iterator it(mod.path, walk_error), end; !walk_error && it != end; it.increment(walk_error)) {
+                std::error_code size_error;
+                if (it->is_regular_file(size_error)) bring += it->file_size(size_error);
+            }
+        }
+        if (const std::optional<galaxy::startcheck::MissingPart> part =
+                galaxy::startcheck::missing_part(gPak.store, settings_folder / "mods" / ".cooked", bring)) {
+            log_line("mods:", ("a part a start with mods needs is missing (" + part->why + "): every mod is off this time").c_str());
+            gMissingPart = part;  // said in the mod log once it exists (start_mods)
+            for (galaxy::mods::ModInfo& mod : mods) mod.enabled = false;
+        }
+    }
     gStartPackages.clear();
     for (const galaxy::mods::ModInfo& mod : mods) {
         if (mod.package) gStartPackages.push_back({mod.id, mod.path, mod.enabled});
