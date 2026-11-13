@@ -1011,7 +1011,7 @@ std::int32_t input_pointer_source(const LumaMod* mod, LumaInputPad pad, LumaInpu
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (pad >= LUMA_INPUT_PLAYERS) {
+    if (static_cast<std::uint32_t>(pad) >= LUMA_INPUT_PLAYERS) {
         return argument(mod, where, "pad");
     }
     using galaxy::input::PointerSource;
@@ -1027,7 +1027,7 @@ std::int32_t input_pointer_source(const LumaMod* mod, LumaInputPad pad, LumaInpu
     if (kind == LUMA_INPUT_POINTER_SOURCE_GYRO && !(sensitivity > 0.0f && sensitivity <= 8.0f)) {
         return argument(mod, where, "sensitivity");
     }
-    if (pad != 0u && kind != LUMA_INPUT_POINTER_SOURCE_PLAYER) {
+    if (pad != LUMA_INPUT_PAD_MAIN && kind != LUMA_INPUT_POINTER_SOURCE_PLAYER) {
         return LUMA_E_ABSENT;  // an answer: the co-star's pointer follows its own controller
     }
     const std::uint32_t seen = g_pointer_sources.load(std::memory_order_acquire);

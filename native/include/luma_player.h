@@ -33,7 +33,7 @@ typedef enum LumaPlayerInput {
 typedef struct LumaPlayerInit {
     uint32_t size;         /* sizeof(LumaPlayerInit) as the mod was built */
     LumaPlayerInput input; /* 4 bytes, a C enum */
-    uint32_t pad;          /* LUMA_PLAYER_INPUT_PAD: 1, the game's second controller (input's LumaInputPad 1); NONE: 0 */
+    uint32_t pad;          /* LUMA_PLAYER_INPUT_PAD: 1, the game's second controller (input's LUMA_INPUT_PAD_CO_STAR); NONE: 0 */
     float pos[3];          /* where it stands, in the main stage's space; also where it comes back after a fall or a
                               death */
     float rot[3];          /* its turn in degrees, as a placement's */

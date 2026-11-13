@@ -37,8 +37,11 @@ extern "C" {
 /* The longest text a text request takes, in code points. */
 #define LUMA_INPUT_TEXT_MOST 4096u
 
-/* A controller port (1.2): 0 the main player's, 1 the co-star's (LUMA_INPUT_PLAYERS). */
-typedef uint32_t LumaInputPad;
+/* A controller port (1.2; LUMA_INPUT_PLAYERS of them). 4 bytes, a C enum. */
+typedef enum LumaInputPad {
+    LUMA_INPUT_PAD_MAIN = 0,   /* the main player's */
+    LUMA_INPUT_PAD_CO_STAR = 1 /* the co-star's, the second controller */
+} LumaInputPad;
 
 /* What aims a player's pointer (1.2, pointer_source). */
 typedef enum LumaInputPointerSource {
