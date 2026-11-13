@@ -142,9 +142,9 @@ typedef struct LumaInputService {
        mod's luma.json has no key option of that key (an answer, not reported); a null id or out: LUMA_E_ARGUMENT,
        reported (Service.Argument). */
     int32_t (*action)(const LumaMod* mod, const char* id, LumaInputAction* out);
-    /* 1.0. Game thread. The action's state this game frame into *out. LUMA_OK; an action that is not one of this mod's:
-       LUMA_E_HANDLE, reported (Service.Handle); a null out: LUMA_E_ARGUMENT, a size below 1.0's: LUMA_E_ARGUMENT
-       (Service.StructSize), both reported. While the player is in a menu of the host (Settings, the HOME menu) every
+    /* 1.0. Game thread. The action's state this game frame into *out. LUMA_OK; an action that is neither this mod's nor
+       one of a mod that needs it (a library reads its users' actions): LUMA_E_HANDLE, reported (Service.Handle); a null
+       out: LUMA_E_ARGUMENT, a size below 1.0's: LUMA_E_ARGUMENT (Service.StructSize), both reported. While the player is in a menu of the host (Settings, the HOME menu) every
        action reads up. */
     int32_t (*read)(const LumaMod* mod, LumaInputAction action, LumaInputState* out);
     /* 1.1. Game thread. What the game got from `player`'s controller at its last read, after the player's bindings and

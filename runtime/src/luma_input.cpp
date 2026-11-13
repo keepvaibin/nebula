@@ -65,6 +65,9 @@ constexpr std::size_t kReportsKept = 64u;
 std::atomic<const LumaServiceKernel*> g_kernel{nullptr};
 void (*g_log)(const char*) = nullptr;  // set by providers() before the first mod
 bool g_declared = false;              // game thread: the session's actions are declared (at the first mod's begin)
+// Game thread, from declare: (mod, a mod it needs) for each started mod, so a library reads the actions of the mods that
+// need it (a kit's move started by its user's action).
+std::vector<std::pair<std::string, std::string>> g_needs;
 
 // Anything a mod asked for that game_read must look at (an injection, a rumble, a watch, an open text request): with
 // none, game_read only records and returns.
@@ -713,6 +716,11 @@ void declare() {
         if (!mod.enabled) {
             continue;
         }
+        if (mod.luma) {
+            for (const galaxy::luma::Dependency& need : mod.luma->needs) {
+                g_needs.emplace_back(mod.id, need.id);
+            }
+        }
         for (const galaxy::mods::ModInfo::Action& action : mod.actions) {
             const std::optional<galaxy::input::GameInput> follows = galaxy::input::parse_game_input(action.follows);
             if (!follows) {
@@ -730,14 +738,30 @@ void declare() {
     galaxy::input::mod_actions::declare(std::move(actions), g_log);
 }
 
-// The action `handle` names when it is one of `mod`'s: its index, or -1.
+// The action `handle` names when `mod` may read it: one of its own, or of a mod that needs it (a library reads its
+// users' actions); its index, or -1.
 std::int32_t index_of(const LumaMod* mod, LumaInputAction handle) {
     if (handle == 0u || handle > 0x7FFFFFFFu) {
         return -1;
     }
     const std::int32_t index = static_cast<std::int32_t>(handle - 1u);
     const char* const id = kernel()->mod_id(mod);
-    return id != nullptr && galaxy::input::mod_actions::owner(index) == std::string_view(id) ? index : -1;
+    if (id == nullptr) {
+        return -1;
+    }
+    const std::string_view owner = galaxy::input::mod_actions::owner(index);
+    if (owner.empty()) {
+        return -1;
+    }
+    if (owner == std::string_view(id)) {
+        return index;
+    }
+    for (const std::pair<std::string, std::string>& need : g_needs) {
+        if (need.first == owner && need.second == id) {
+            return index;
+        }
+    }
+    return -1;
 }
 
 std::int32_t input_action(const LumaMod* mod, const char* id, LumaInputAction* out) {
