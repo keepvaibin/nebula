@@ -1115,6 +1115,12 @@ fn scene_tree(root: &Value, scene_number: usize) -> Result<SceneTree> {
 
 /// A glTF document as the model that stands in for `game` (None: a new model), its clips and what was made.
 pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) -> Result<(ModelIr, Clips, ModelFacts)> {
+    ir_for(bytes, folder, game, false)
+}
+
+/// The model of `bytes`; `hidden`: a hidden model (skeleton_gltf's), whose joints are all it has, so no triangles is
+/// what it is and not a refusal.
+fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden: bool) -> Result<(ModelIr, Clips, ModelFacts)> {
     let document = Document::parse(bytes, folder)?;
     let root = &document.root;
     required_extensions(root)?;
@@ -1782,7 +1788,7 @@ pub fn to_ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>) 
             note("Cook.Model.Unweighted", &[("mesh", name.clone()), ("count", unweighted.to_string())]);
         }
     }
-    if ir.shapes.is_empty() {
+    if ir.shapes.is_empty() && !hidden {
         return Err(refuse("Cook.Model.NoTriangles", &[]));
     }
     // Textures an animation swaps in, which no material shows to begin with.
@@ -2119,6 +2125,13 @@ pub fn to_files_for(bytes: &[u8], folder: Option<&Path>, stem: &str, game: Optio
     let (ir, clips, facts) = to_ir_for(bytes, folder, game)?;
     let model = super::model_write::write(&ir, stem, &super::programs::written_or_unknown())?;
     Ok((model, clips.iter().map(|(name, c)| (format!("{name}.{}", clip_extension(c.kind)), super::clip::write(c))).collect(), facts))
+}
+
+/// The hidden model of `game` (`<path>.model.json` holding `{"hide": true}`): `skeleton` (skeleton_gltf's) as the
+/// model block at the game model's place, every joint of the game's and nothing drawn, and what was made.
+pub fn hidden_files_for(skeleton: &[u8], stem: &str, game: &GameModel) -> Result<(Vec<u8>, ModelFacts)> {
+    let (ir, _, facts) = ir_for(skeleton, None, Some(game), true)?;
+    Ok((super::model_write::write(&ir, stem, &super::programs::written_or_unknown())?, facts))
 }
 
 /// An animation file (`<archive>.arc/<any>.anim.glb`, animation contract 2): animations only, each a clip of `game`
@@ -3242,6 +3255,25 @@ mod tests {
         assert_eq!((facts.replaced.as_str(), facts.joints, facts.clips, facts.meshes), ("ObjectData/Kuribo.arc/Kuribo.bdl", 3, 1, 0));
         // Without the game's parents (an older reader) nothing is checked against them.
         assert_eq!(clip_files(&arm(false, [0.0, 1.0], half), &arm_model(&[])).unwrap().0, from_model);
+    }
+
+    #[test]
+    fn a_hidden_model_keeps_every_joint_and_draws_nothing() {
+        // The game's model: the arm with its triangle, as the store keeps it.
+        let game = arm_model(&[None, Some(0), Some(1)]);
+        let (block, _, _) = to_files_for(&serde_json::to_vec(&arm(true, [0.0, 1.0], 0.5)).unwrap(), None, "Kuribo", None).unwrap();
+        let read = GameModel::read(&game.path, &block).unwrap();
+        assert_eq!(read.joints, game.joints);
+        // Hidden: the same joints in the same order, no meshes or materials (header words 4, 11, 12: nebula_model.h).
+        let skeleton = skeleton_gltf(&read, &block).unwrap();
+        let (hidden, facts) = hidden_files_for(&skeleton, "Kuribo", &read).unwrap();
+        assert_eq!(GameModel::read(&game.path, &hidden).unwrap().joints, game.joints);
+        let word = |at: usize| u32::from_le_bytes(hidden[at * 4..at * 4 + 4].try_into().unwrap());
+        assert_eq!((word(4), word(11), word(12)), (3, 0, 0));
+        assert_eq!((facts.joints, facts.extra_joints, facts.meshes), (3, 0, 0));
+        // An ordinary model with no triangles is still refused.
+        let bare = to_files_for(&skeleton, None, "Kuribo", Some(&read)).err().unwrap();
+        assert_eq!(refused(&bare).0, "Cook.Model.NoTriangles");
     }
 
     #[test]
