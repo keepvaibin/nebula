@@ -1228,6 +1228,26 @@ void RenderCore::walk_scene_begin(const NebulaFramePass& pass) {
 }
 
 void RenderCore::walk_opaque_end(const NebulaFramePass& pass) {
+    // The scene's camera as its opaque end gives it (MR::sceneOpaqueEnd, with the scene's projection loaded): the scene
+    // begins before the game loads its projection (GameScene::draw3D), so its begin pass may carry the 2-D one. The
+    // passes after the scene (draw.post's depth, draw.native's matrices) and the upscaler read this one.
+    if (scene_phase_ && pass.scene_view != NEBULA_NONE32 && pass.scene_camera != NEBULA_NONE32) {
+        const NebulaFrameList& list = *walk_.now->list;
+        const NebulaFrameView& view = list.views[pass.scene_view];
+        const ScaledViewport viewport = viewport_pixels(view.viewport, renderer_.frame_map());
+        if (viewport.valid()) {
+            post_scene_view_ = scene_depth_view(walk_view_terms_[pass.scene_view].data(), viewport);
+            std::memcpy(post_scene_camera_.data(), walk_cameras_[pass.scene_camera].data(), sizeof(post_scene_camera_));
+            post_scene_ortho_ = view.orthographic != 0u;
+            post_scene_target_[0] = static_cast<float>(renderer_.frame_map().width);
+            post_scene_target_[1] = static_cast<float>(renderer_.frame_map().height);
+            post_scene_known_ = true;
+        }
+        if (view.orthographic == 0u) {
+            const std::array<float, 6>& terms = walk_view_terms_[pass.scene_view];
+            renderer_.set_scene_camera(terms[5] / (terms[4] - 1.0f), terms[5] / terms[4], 2.0f * std::atan(1.0f / std::fabs(terms[2])));
+        }
+    }
     if (rt_backend_.started() && scene_phase_ && pass.scene_view != NEBULA_NONE32 &&
         ::galaxy::diagnosing(::galaxy::kDiagnoseRtView | ::galaxy::kDiagnoseRtCheck)) {
         rt_view(pass);

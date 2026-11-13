@@ -524,10 +524,6 @@ void GameScene::draw3D() const {
     f32 sceneCamera[4][4];
     MotionSignal::sceneCamera(sceneCamera);
     NebulaHost::gameStage(MR::getCurrentStageName());
-    // The scene's own projection and viewport before its begin pass, which records them as the scene's view
-    // (draw.post's depth, draw.native's matrices, the upscaler's camera); the sky clear below sets its own.
-    MR::loadProjectionMtx();
-    MR::setDefaultViewportAndScissor();
     Frame::sceneBegin(sceneCamera);
     GameLightSignal::frame();
     CategoryList::execute(MR::DrawType_AstroDomeSkyClear);
