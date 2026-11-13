@@ -10,7 +10,7 @@ use std::collections::HashMap;
 
 pub const MAGIC: u32 = 0x4C44_4D4E;
 pub const VERSION: u32 = 11;
-pub const HEADER_WORDS: usize = 33;
+pub const HEADER_WORDS: usize = 31;
 pub const HIT_BYTES: usize = 120;
 pub const STAGE_BYTES: usize = 36;
 pub const JOINT_BYTES: usize = 96;
@@ -1415,6 +1415,68 @@ pub fn material_measures(ir: &ModelIr, stem: &str) -> Vec<f32> {
     measures.iter().map(Measure::thickness).collect()
 }
 
+/// One NebulaModelHit (nebula_model.h), whichever kind of material the reading came from; its stages follow later,
+/// at the place this returns (the record's stages_at, 0 until they are written).
+fn write_hit(b: &mut Blob, r: &super::hit_record::Reading, flags: u8, stages: usize, swaps: &[[u8; 4]; 4], glow: [f32; 4]) -> usize {
+    let start = b.0.len();
+    b.u8(r.class as u8);
+    b.u8(stages as u8);
+    b.u8(flags);
+    b.u8(r.glow_source);
+    b.f32(r.roughness);
+    b.f32(r.metal);
+    b.f32(r.ior);
+    b.f32(r.transmission);
+    b.fs(&r.base);
+    b.fs(&r.emission);
+    b.f32(r.signals.environment_share);
+    let stages_slot = b.0.len();
+    b.u32(0);
+    for table in swaps {
+        for &c in table {
+            b.u8(c);
+        }
+    }
+    b.f32(r.thickness);
+    b.fs(&glow);
+    b.fs(&r.env_tint);
+    b.u8(r.env_map);
+    b.u8(0);
+    b.u8(0);
+    b.u8(0);
+    b.f32(r.body);
+    b.f32(r.shine);
+    b.f32(r.tint_keep);
+    b.f32(0.0);
+    debug_assert_eq!(b.0.len() - start, HIT_BYTES);
+    stages_slot
+}
+
+/// A model texture's level 0, as texels.
+fn level0(ir: &ModelIr, texture: u32) -> Option<(u32, u32, Vec<[u8; 4]>)> {
+    ir.textures.get(texture as usize).and_then(|t| ir.records.get(t.record)).and_then(|bytes| super::texture::record_level0(bytes))
+}
+
+/// What a glTF material's maps and mesh add to its factors: the metal-roughness map's mean blue and green (linear), the
+/// emissive map's mean colour (sRGB texels, as linear light), and whether its mesh's colours multiply the base.
+fn pbr_means(ir: &ModelIr, m: &MaterialIr, p: &super::model_ir::PbrMaterial) -> super::hit_record::PbrMeans {
+    use super::model_ir::{PBR_EMISSIVE, PBR_METAL_ROUGH};
+    let mut means = super::hit_record::PbrMeans { vertex_colour: m.channels[0].material_source != 0, ..Default::default() };
+    let mean = |texels: &[[u8; 4]], c: usize, decode: fn(f32) -> f32| -> f32 {
+        texels.iter().map(|t| f64::from(decode(f32::from(t[c]) / 255.0))).sum::<f64>() as f32 / texels.len().max(1) as f32
+    };
+    let linear = |v: f32| v;
+    let srgb = |v: f32| if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) };
+    if let Some((_, _, texels)) = level0(ir, p.maps[PBR_METAL_ROUGH]).filter(|(_, _, t)| !t.is_empty()) {
+        means.roughness = mean(&texels, 1, linear);
+        means.metal = mean(&texels, 2, linear);
+    }
+    if let Some((_, _, texels)) = level0(ir, p.maps[PBR_EMISSIVE]).filter(|(_, _, t)| !t.is_empty()) {
+        means.emissive = [0, 1, 2].map(|c| mean(&texels, c, srgb));
+    }
+    means
+}
+
 /// A reading as the cook finishes it (hit_record::finish, then the art's numbers): the painted reflection's map gives
 /// its colour and, for metal and gloss, the roughness.
 pub fn finish_reading(ir: &ModelIr, stem: &str, material: usize, thickness: f32, r: &mut super::hit_record::Reading) {
@@ -1465,6 +1527,10 @@ pub fn finish_reading(ir: &ModelIr, stem: &str, material: usize, thickness: f32,
     super::hit_record::finish(stem, &m.name, thickness, r);
     // c83 (3.5): a far twin looks as its near model does.
     super::hit_record::follow_twin(stem, &m.name, r);
+    // A glTF material is read from its own numbers (pbr_reading): no painted sheen, face rule or metal kind by name.
+    if !ir.pbr.is_empty() {
+        return;
+    }
     // c77 (7.6): a character's face part (a skinned mesh's, by its name) is a plain surface and never a sheen body.
     let face = super::programs::mesh_skinned(ir, m) && super::hit_record::face_kind(&m.name) != 0;
     // c49: the body under a painted sheen mirrors for real (the sheen is not drawn while tracing).
@@ -1889,24 +1955,6 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
         b.u32(t.levels);
         b.fs(&[t.min_lod, t.max_lod, t.lod_bias]);
     }
-    // Version 5's lit table (materials.md): one NebulaModelLit per material, or none.
-    if !ir.lits.is_empty() && ir.lits.len() != ir.materials.len() {
-        anyhow::bail!("{} lit records for {} materials", ir.lits.len(), ir.materials.len());
-    }
-    b.align(4);
-    let lits_at = if ir.lits.is_empty() { 0 } else { b.at() };
-    for lit in &ir.lits {
-        let start = b.0.len();
-        b.fs(&lit.base_color);
-        b.fs(&lit.emissive);
-        b.fs(&[lit.metal, lit.roughness, lit.normal_scale, lit.occlusion_strength, lit.alpha_cutoff]);
-        for &map in &lit.maps {
-            b.u32(map);
-        }
-        b.0.extend_from_slice(&lit.coords);
-        b.0.extend_from_slice(&[lit.alpha_mode, lit.flags, 0, 0, 0, 0, 0]);
-        debug_assert_eq!(b.0.len() - start, super::model_ir::LIT_BYTES);
-    }
     // Names.
     let mut placed: HashMap<String, u32> = HashMap::new();
     for (slot, text) in &strings {
@@ -2045,53 +2093,26 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
     let mut stage_slots = Vec::new();
     let paint_holds_shadows = painted.holds_shadows();
     for (i, m) in ir.materials.iter().enumerate() {
-        let mut r = super::hit_record::read(m);
+        // A glTF material says its numbers itself (MOD-MATERIALS-FC.md 2); the game's are read from their stages.
+        let (mut r, stages) = match ir.pbr.get(i) {
+            Some(p) => (super::hit_record::pbr_reading(p, &pbr_means(ir, m, p)), 0),
+            None => (super::hit_record::read(m), (m.pixel_stage_count as usize).min(m.stages.len())),
+        };
         finish_reading(ir, stem, i, measures[i].thickness(), &mut r);
         let s = &r.signals;
-        let stages = (m.pixel_stage_count as usize).min(m.stages.len());
-        b.u8(r.class as u8);
-        b.u8(stages as u8);
-        b.u8(u8::from(s.lit)
+        let flags = u8::from(s.lit)
             | u8::from(s.two_sided) << 1
             | u8::from(s.alpha_test) << 2
             | u8::from(s.vertex_colour) << 3
             | u8::from(s.environment) << 4
             | u8::from(super::hit_record::drawn_shadow(stem, &m.name, r.class)) << 5
             | u8::from(paint_holds_shadows && s.vertex_colour && !s.lit) << 6
-            | u8::from(r.traced_hidden  // the review's stand-in (FB b85), as a sheen over a body (c49)
-                       || matches!(super::hit_record::sheen_roles_kept(ir, stem).get(i),
-                                   Some(super::hit_record::SheenRole::Sheen { body: Some(_) }))) << 7);
-        // c81 (L1): bits 5-7 what made it a light (hit_record.rs GLOW_*).
-        b.u8(r.glow_source | super::hit_record::glow_with_rule(stem, &m.name, &r).1 << 5);
-        b.f32(r.roughness);
-        b.f32(r.metal);
-        b.f32(r.ior);
-        b.f32(r.transmission);
-        b.fs(&r.base);
-        b.fs(&r.emission);
-        b.f32(s.environment_share);
-        stage_slots.push(b.0.len());
-        b.u32(0);
-        for table in &m.swaps {
-            for &c in table {
-                b.u8(c);
-            }
-        }
-        b.f32(r.thickness);
-        b.fs(&super::hit_record::glow_of(stem, &m.name, &r));
-        b.fs(&r.env_tint);
-        b.u8(r.env_map);
-        b.u8(0);
-        b.u8(0);
-        // c90: NebulaModelHit.through, the share of the sun its far side takes x 255.
-        b.u8((r.through.clamp(0.0, 1.0) * 255.0).round() as u8);
-        b.f32(r.body);
-        b.f32(r.shine);
-        b.f32(r.tint_keep);
-        b.f32(0.0);
+            | u8::from(ir.pbr.is_empty() && matches!(super::hit_record::sheen_roles_kept(ir, stem).get(i),
+                                Some(super::hit_record::SheenRole::Sheen { body: Some(_) }))) << 7;
+        let glow = super::hit_record::glow_of(stem, &m.name, &r);
+        stage_slots.push((write_hit(&mut b, &r, flags, stages, &m.swaps, glow), stages));
     }
-    for (m, &slot) in ir.materials.iter().zip(&stage_slots) {
-        let stages = (m.pixel_stage_count as usize).min(m.stages.len());
+    for (m, &(slot, stages)) in ir.materials.iter().zip(&stage_slots) {
         if stages == 0 {
             continue;
         }
@@ -2199,9 +2220,6 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
     if ir.materials_only {
         flags |= 1 << 5;
     }
-    if !ir.lits.is_empty() {
-        flags |= 1 << 6;
-    }
     let header: [u32; HEADER_WORDS] = [
         MAGIC,
         VERSION,
@@ -2234,9 +2252,6 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
         hits_at,
         paint_lights_at,
         glow_shapes_at,
-        // The lit table (materials.md).
-        ir.lits.len() as u32,
-        lits_at,
     ];
     for (i, &v) in header.iter().enumerate() {
         b.patch32(i * 4, v);

@@ -273,29 +273,28 @@ pub struct ModelIr {
     /// By record of a disc model: its source's palette hash (texture::source_palette_hash), for its name. Empty for a
     /// model never on the disc (a mod's glTF).
     pub record_palettes: Vec<u64>,
-    /// Version 5's lit table (materials.md): one per material (material n's at n), or none (every game model).
-    pub lits: Vec<LitIr>,
+    /// A glTF model's materials as glTF says them, one per material (material n's at n); none for a game model. The
+    /// cook reads them for what a ray meets (hit_record::pbr_reading); the block holds no table of them.
+    pub pbr: Vec<PbrMaterial>,
 }
 
-/// NebulaModelLit's alpha modes and flags (nebula_model.h).
-pub const LIT_OPAQUE: u8 = 0;
-pub const LIT_MASK: u8 = 1;
-pub const LIT_BLEND: u8 = 2;
-pub const LIT_DOUBLE_SIDED: u8 = 1 << 0;
-pub const LIT_UNLIT: u8 = 1 << 1;
-/// sizeof(NebulaModelLit).
-pub const LIT_BYTES: usize = 80;
-/// The maps of a lit material, in NebulaModelLit's order.
-pub const LIT_BASE: usize = 0;
-pub const LIT_METAL_ROUGH: usize = 1;
-pub const LIT_NORMAL: usize = 2;
-pub const LIT_EMISSIVE: usize = 3;
-pub const LIT_OCCLUSION: usize = 4;
+/// A glTF material's alpha modes and flags.
+pub const PBR_OPAQUE: u8 = 0;
+pub const PBR_MASK: u8 = 1;
+pub const PBR_BLEND: u8 = 2;
+pub const PBR_DOUBLE_SIDED: u8 = 1 << 0;
+pub const PBR_UNLIT: u8 = 1 << 1;
+/// The maps of a glTF material, in PBR_MAPS' order (gltf.rs).
+pub const PBR_BASE: usize = 0;
+pub const PBR_METAL_ROUGH: usize = 1;
+pub const PBR_NORMAL: usize = 2;
+pub const PBR_EMISSIVE: usize = 3;
+pub const PBR_OCCLUSION: usize = 4;
 
-/// A material's lit part (materials.md, nebula_model.h NebulaModelLit): glTF 2.0's metallic-roughness material as the
-/// cook read it. Colours linear; `maps` model texture numbers (NONE: none), each read through `coords`.
+/// A glTF material (glTF 2.0's metallic-roughness model and the KHR_materials extensions the cook takes) as the cook
+/// read it. Colours linear; `maps` model texture numbers (NONE: none), each read through `coords`.
 #[derive(Clone, Debug, PartialEq)]
-pub struct LitIr {
+pub struct PbrMaterial {
     pub base_color: [f32; 4],
     pub emissive: [f32; 3],
     pub metal: f32,
@@ -303,17 +302,21 @@ pub struct LitIr {
     pub normal_scale: f32,
     pub occlusion_strength: f32,
     pub alpha_cutoff: f32,
-    /// LIT_BASE, LIT_METAL_ROUGH, LIT_NORMAL, LIT_EMISSIVE, LIT_OCCLUSION.
+    /// KHR_materials_ior's index (1.5 without it).
+    pub ior: f32,
+    /// KHR_materials_transmission's factor, if the material has the extension.
+    pub transmission: Option<f32>,
+    /// PBR_BASE, PBR_METAL_ROUGH, PBR_NORMAL, PBR_EMISSIVE, PBR_OCCLUSION.
     pub maps: [u32; 5],
     pub coords: [u8; 5],
     pub alpha_mode: u8,
     pub flags: u8,
 }
 
-impl Default for LitIr {
+impl Default for PbrMaterial {
     /// glTF 2.0's default material: white, fully metal and rough, no maps.
-    fn default() -> LitIr {
-        LitIr {
+    fn default() -> PbrMaterial {
+        PbrMaterial {
             base_color: [1.0; 4],
             emissive: [0.0; 3],
             metal: 1.0,
@@ -321,9 +324,11 @@ impl Default for LitIr {
             normal_scale: 1.0,
             occlusion_strength: 1.0,
             alpha_cutoff: 0.0,
+            ior: 1.5,
+            transmission: None,
             maps: [NONE; 5],
             coords: [0; 5],
-            alpha_mode: LIT_OPAQUE,
+            alpha_mode: PBR_OPAQUE,
             flags: 0,
         }
     }

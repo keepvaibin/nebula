@@ -11,8 +11,8 @@ extern "C" {
 #endif
 
 #define NEBULA_MODEL_MAGIC 0x4C444D4Eu /* "NMDL" */
-#define NEBULA_MODEL_VERSION 11u /* 9: the hit record's bump fields (c67); 10: glow_shapes_at (c86); 11: the
-                                    lits (plan 3.3) with the hits in one header */
+#define NEBULA_MODEL_VERSION 11u /* 9: the hit record's bump fields (c67); 10: glow_shapes_at (c86); 11: a glTF
+                                    material's hit record from its own numbers (plan 3.3) */
 #define NEBULA_MODEL_NONE NEBULA_NONE32
 
 enum { NEBULA_SCALE_BASIC = 0, NEBULA_SCALE_SOFTIMAGE = 1, NEBULA_SCALE_MAYA = 2 };
@@ -21,7 +21,6 @@ enum { NEBULA_SCALE_BASIC = 0, NEBULA_SCALE_SOFTIMAGE = 1, NEBULA_SCALE_MAYA = 2
 enum {
     NEBULA_MODEL_HAS_BILLBOARD = 1u << 4,
     NEBULA_MODEL_MATERIALS_ONLY = 1u << 5, /* a material table for another model: no joints or meshes */
-    NEBULA_MODEL_HAS_LIT = 1u << 6,        /* lit_count == material_count: each material has its NebulaModelLit */
 };
 
 /* A pipeline's fixed state as one word, in one canonical form: what does nothing is zero. NEBULA_BLEND_*, NEBULA_FACTOR_*,
@@ -62,7 +61,6 @@ typedef struct NebulaModelHeader {
     uint32_t paint_lights_at; /* mesh_count NebulaModelPaintLight, in the meshes' order; 0: none */
     uint32_t glow_shapes_at;  /* version 10 on: mesh_count NebulaModelGlowSpan, then the NebulaModelGlowShape records;
                                  0: none (c86, PLAN-LIGHTS L2) */
-    uint32_t lit_count, lits_at;         /* 0, or material_count NebulaModelLit (material n's at n) */
 } NebulaModelHeader;
 
 /* A glowing mesh's light as shapes (c86, PLAN-LIGHTS L2), in its model's space (units), each piece at most 6 m long:
@@ -292,32 +290,6 @@ typedef struct NebulaModelMaterial {
     uint32_t coords_at, slots_at, matrices_at, warps_at, forms_at;
 } NebulaModelMaterial;
 
-/* A material's lit part (plan 3.3, contracts/materials.md): glTF 2.0's metallic-roughness material as the cook read it,
-   for the lit program. A model without NEBULA_MODEL_HAS_LIT draws as the game's materials do. The material's own
-   record (NebulaModelMaterial) still holds its pipeline state, cull and blend; this record holds what lighting reads.
-   Colours are linear. Maps are model texture numbers (NEBULA_MODEL_NONE none) read through coordinate set *_coord;
-   base_map and emissive_map hold sRGB-encoded texels, the others linear. metal_rough_map is glTF's: roughness in G,
-   metal in B. */
-enum { NEBULA_LIT_OPAQUE = 0, NEBULA_LIT_MASK = 1, NEBULA_LIT_BLEND = 2 };
-enum {
-    NEBULA_LIT_DOUBLE_SIDED = 1u << 0,
-    NEBULA_LIT_UNLIT = 1u << 1, /* KHR_materials_unlit: base colour only, no light */
-};
-typedef struct NebulaModelLit {
-    float base_color[4];      /* baseColorFactor, RGBA; multiplies base_map */
-    float emissive[3];        /* glow: emissiveFactor x KHR_materials_emissive_strength, RGB, may exceed 1 */
-    float metal;              /* metallicFactor, 0..1; multiplies metal_rough_map.B */
-    float roughness;          /* roughnessFactor, 0..1; multiplies metal_rough_map.G */
-    float normal_scale;       /* normalTexture.scale */
-    float occlusion_strength; /* occlusionTexture.strength, 0..1 */
-    float alpha_cutoff;       /* NEBULA_LIT_MASK: a pixel below it is dropped; 0 otherwise */
-    uint32_t base_map, metal_rough_map, normal_map, emissive_map, occlusion_map;
-    uint8_t base_coord, metal_rough_coord, normal_coord, emissive_coord, occlusion_coord;
-    uint8_t alpha_mode; /* NEBULA_LIT_* */
-    uint8_t flags;      /* NEBULA_LIT_DOUBLE_SIDED, NEBULA_LIT_UNLIT */
-    uint8_t reserved[5];
-} NebulaModelLit;
-
 /* What a ray reads of a material where it meets it (crates/nebula-import/src/cook/hit_record.rs): its class, from
    the material's own data, the numbers that class takes, and the material's stages as data, for a shader that cannot
    run the material's program (a ray's hit is not a pixel of its draw). */
@@ -407,8 +379,7 @@ static_assert(sizeof(NebulaModelMeshCoord) == 4);
 static_assert(sizeof(NebulaModelSlot) == 8);
 static_assert(sizeof(NebulaModelStep) == 8);
 static_assert(sizeof(NebulaModelDrawMatrix) == 8);
-static_assert(sizeof(NebulaModelHeader) == 33 * 4);
-static_assert(sizeof(NebulaModelLit) == 80);
+static_assert(sizeof(NebulaModelHeader) == 31 * 4);
 static_assert(sizeof(NebulaModelStage) == 36);
 static_assert(sizeof(NebulaModelHit) == 120);
 static_assert(sizeof(NebulaModelJoint) == 96);

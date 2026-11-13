@@ -6,7 +6,7 @@
 //! the surface shows with no light at all (emission), what light adds (its base colour).
 //! `nebula-import rt-materials CONTENT OUT.tsv` writes the table for every material of the game (or a mod's files).
 
-use super::model_ir::{read_file, MaterialIr, ModelIr, Source, StageIr, NONE};
+use super::model_ir::{read_file, MaterialIr, ModelIr, PbrMaterial, Source, StageIr, NONE, PBR_BLEND, PBR_DOUBLE_SIDED, PBR_MASK, PBR_UNLIT};
 use super::Stats;
 use anyhow::{Context, Result};
 use std::collections::BTreeMap;
@@ -1347,6 +1347,87 @@ fn clear_kind(stem: &str, name: &str) -> (f32, Option<f32>) {
     }
 }
 
+/// What the cook adds to a glTF material's factors from its maps and mesh (model_write: the maps' level 0).
+#[derive(Clone, Copy, Debug)]
+pub struct PbrMeans {
+    /// The metal-roughness map's mean blue (metal) and green (roughness), 0 to 1; 1 without the map.
+    pub metal: f32,
+    pub roughness: f32,
+    /// The emissive map's mean colour, linear; white without the map.
+    pub emissive: [f32; 3],
+    /// Its mesh's colours (COLOR_0) multiply its base colour.
+    pub vertex_colour: bool,
+}
+
+impl Default for PbrMeans {
+    fn default() -> PbrMeans {
+        PbrMeans { metal: 1.0, roughness: 1.0, emissive: [1.0; 3], vertex_colour: false }
+    }
+}
+
+/// What a ray reads of a glTF material (agents/rt/coord/MOD-MATERIALS-FC.md 2): glTF says each number itself, so
+/// nothing is evaluated. The tracer reads no metal-roughness map: each factor is cooked times its map's mean. The base
+/// colour is the factor alone: the tracer multiplies it by texture 0 at the hit.
+pub fn pbr_reading(p: &PbrMaterial, means: &PbrMeans) -> Reading {
+    let unlit = p.flags & PBR_UNLIT != 0;
+    let blend = p.alpha_mode == PBR_BLEND;
+    let base = [p.base_color[0], p.base_color[1], p.base_color[2]].map(|v| v.clamp(0.0, 1.0));
+    let metal = (p.metal * means.metal).clamp(0.0, 1.0);
+    let roughness = (p.roughness * means.roughness).clamp(0.0, 1.0);
+    // KHR_materials_unlit: the base colour is what it shows, with no light.
+    let emission = if unlit { base } else { [0, 1, 2].map(|k| (p.emissive[k] * means.emissive[k]).max(0.0)) };
+    let transmission = p.transmission.unwrap_or(if blend { 1.0 - p.base_color[3].clamp(0.0, 1.0) } else { 0.0 });
+    // The emissive carries the look: unlit, or its glow at least as bright as what light shows of its base.
+    let glows = unlit || (luminance(emission) > 0.05 && luminance(emission) >= luminance(base));
+    let (class, rule) = if blend && p.transmission.is_some_and(|t| t > 0.0) {
+        (Class::Glass, "glTF: blended, with KHR_materials_transmission")
+    } else if blend {
+        (Class::Translucent, "glTF: blended")
+    } else if metal >= 0.5 {
+        (Class::Metal, "glTF: metallic 0.5 or more")
+    } else if glows {
+        (Class::Emissive, "glTF: unlit, or its emissive carries the look")
+    } else if roughness <= 0.4 {
+        (Class::Gloss, "glTF: roughness 0.4 or less")
+    } else {
+        (Class::Dielectric, "glTF: rough, not metal")
+    };
+    let signals = Signals {
+        lit: !unlit,
+        vertex_colour: means.vertex_colour,
+        alpha_test: p.alpha_mode == PBR_MASK,
+        blend: u8::from(blend),
+        two_sided: p.flags & PBR_DOUBLE_SIDED != 0,
+        depth_write: !blend,
+        unlit: emission,
+        lit_gain: if unlit { [0.0; 3] } else { base },
+        ..Signals::default()
+    };
+    Reading {
+        class,
+        signals,
+        base,
+        emission,
+        roughness,
+        metal,
+        ior: p.ior,
+        transmission,
+        rule,
+        glow_source: 0,
+        glow_lit: [0.0; 3],
+        shown: None,
+        thickness: 0.0,
+        env_tint: [0.0; 3],
+        env_map: 0xFF,
+        body: -1.0,
+        shine: -1.0,
+        tint_keep: -1.0,
+        traced_hidden: false,
+        metal_kind: 255, // its colour as the file gives it (c88's `art`)
+        through: 0.0,
+    }
+}
+
 fn falling_water(name: &str) -> bool {
     let name = name.to_ascii_lowercase();
     name.contains("fallmat") || name.contains("fallback") || name.starts_with("taki")
@@ -2475,5 +2556,46 @@ mod tests {
         }
         assert!((roughness_of_map(4, 4, &checker).unwrap() - 0.03).abs() < 1e-6, "every texel an edge: chrome");
         assert_eq!(mean_colour(&[[255, 128, 0, 255]]).unwrap()[0], 1.0);
+    }
+
+    /// MOD-MATERIALS-FC.md 2's classes, in its order, and the numbers each reading takes from glTF.
+    #[test]
+    fn a_gltf_material_is_classed_as_the_ray_tracing_page_says() {
+        use super::super::model_ir::PBR_OPAQUE;
+        let means = PbrMeans::default();
+        let of = |edit: &dyn Fn(&mut PbrMaterial)| {
+            let mut p = PbrMaterial { metal: 0.0, roughness: 0.8, ..PbrMaterial::default() };
+            edit(&mut p);
+            pbr_reading(&p, &means)
+        };
+        // glTF's default material is fully metal.
+        assert_eq!(pbr_reading(&PbrMaterial::default(), &means).class, Class::Metal);
+        let glass = of(&|p| {
+            p.alpha_mode = PBR_BLEND;
+            p.transmission = Some(1.0);
+            p.ior = 1.33;
+        });
+        assert_eq!((glass.class, glass.transmission, glass.ior, glass.signals.blend), (Class::Glass, 1.0, 1.33, 1));
+        let see_through = of(&|p| {
+            p.alpha_mode = PBR_BLEND;
+            p.base_color[3] = 0.25;
+        });
+        assert_eq!((see_through.class, see_through.transmission), (Class::Translucent, 0.75));
+        assert_eq!(of(&|p| p.metal = 0.5).class, Class::Metal);
+        let unlit = of(&|p| {
+            p.flags = PBR_UNLIT;
+            p.base_color = [0.2, 0.4, 0.6, 1.0];
+        });
+        assert_eq!((unlit.class, unlit.emission, unlit.signals.lit), (Class::Emissive, [0.2, 0.4, 0.6], false));
+        assert_eq!(of(&|p| p.emissive = [1.0, 1.0, 1.0]).class, Class::Emissive);
+        assert_eq!(of(&|p| p.roughness = 0.4).class, Class::Gloss);
+        let rough = of(&|p| p.alpha_mode = PBR_OPAQUE);
+        assert_eq!((rough.class, rough.env_map, rough.env_tint, rough.transmission), (Class::Dielectric, 0xFF, [0.0; 3], 0.0));
+        // The maps' means scale the factors; a mask tests alpha.
+        let mapped = pbr_reading(
+            &PbrMaterial { metal: 1.0, roughness: 0.5, alpha_mode: PBR_MASK, ..PbrMaterial::default() },
+            &PbrMeans { metal: 0.25, roughness: 0.5, ..PbrMeans::default() },
+        );
+        assert_eq!((mapped.class, mapped.metal, mapped.roughness, mapped.signals.alpha_test), (Class::Gloss, 0.25, 0.25, true));
     }
 }
