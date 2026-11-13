@@ -441,7 +441,24 @@ static inline void luma_bits_set(void* object, int32_t position, uint32_t width,
 #else
 #define LUMA_OWN __attribute__((visibility("hidden")))
 #endif
+/* Apple's code generator zeroes memory (`= {0}`, a memset of 0) by calling the system's own entry, not memset: bzero
+   on arm64, __bzero on x86-64. */
+#if defined(__APPLE__) && defined(__x86_64__)
+#define LUMA_ZERO_NAME __bzero
+#elif defined(__APPLE__)
+#define LUMA_ZERO_NAME bzero
+#endif
+#if defined(LUMA_ZERO_NAME)
+#define LUMA_ZERO                                                                                                     \
+    LUMA_C LUMA_OWN __attribute__((no_builtin, used)) void LUMA_ZERO_NAME(void* to, __SIZE_TYPE__ n) {                \
+        unsigned char* t = (unsigned char*)to;                                                                        \
+        while (n-- != 0) *t++ = 0;                                                                                    \
+    }
+#else
+#define LUMA_ZERO
+#endif
 #define LUMA_MEMORY                                                                                                   \
+    LUMA_ZERO                                                                                                         \
     LUMA_C LUMA_OWN __attribute__((no_builtin, used)) void* memcpy(void* to, const void* from, __SIZE_TYPE__ n) {     \
         unsigned char* t = (unsigned char*)to;                                                                        \
         const unsigned char* f = (const unsigned char*)from;                                                          \
