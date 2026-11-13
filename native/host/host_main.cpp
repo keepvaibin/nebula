@@ -1061,8 +1061,10 @@ HANDLE gCrashDone;
 EXCEPTION_POINTERS* gCrashInfo;
 DWORD gCrashThread;
 std::atomic<int> gCrashing{0};
+std::atomic<DWORD> gCrashWriterThread{0};
 
 void crash_writer() {
+    gCrashWriterThread.store(GetCurrentThreadId());
     for (;;) {
         WaitForSingleObject(gCrashRequest, INFINITE);
         const fs::path folder = crash_folder();
@@ -1323,22 +1325,49 @@ void abort_handler(int) {
 // line or dump.
 LONG WINAPI unhandled_filter(EXCEPTION_POINTERS* info) {
     if (gCrashing.exchange(1) != 0) {
+        // Another thread's fault is being written: this one waits for the dump and the report (the process ends
+        // after them), so the first fault's dump is whole. Passed on, the system would end the process mid-write (an
+        // empty dump). The writer's own fault is passed on: nothing would be left to wait for.
+        if (GetCurrentThreadId() != gCrashWriterThread.load() && gCrashDone != nullptr) {
+            char line[96];
+            std::snprintf(line, sizeof(line), "another fault 0x%08lX (thread %lu) waits for the dump",
+                          info->ExceptionRecord->ExceptionCode, GetCurrentThreadId());
+            log_line("crash:", line);
+            WaitForSingleObject(gCrashDone, 60000);
+            Sleep(INFINITE);
+        }
         return EXCEPTION_CONTINUE_SEARCH;
+    }
+    HMODULE owner = nullptr;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                       static_cast<LPCWSTR>(info->ExceptionRecord->ExceptionAddress), &owner);
+    // The module the fault is in and its offset, so a line names the place without the dump (a system module's
+    // fault reads as d3d12core.dll+0x1810, not as a bare address that moves every start).
+    char place[MAX_PATH + 32] = "";
+    if (owner != nullptr) {
+        wchar_t module[MAX_PATH];
+        const DWORD n = GetModuleFileNameW(owner, module, MAX_PATH);
+        const wchar_t* name = module;
+        for (DWORD i = 0; i < n; i++) {
+            if (module[i] == L'\\' || module[i] == L'/') {
+                name = module + i + 1;
+            }
+        }
+        std::snprintf(place, sizeof(place), " (%ls+0x%llX)", n != 0 ? name : L"?",
+                      static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(info->ExceptionRecord->ExceptionAddress) -
+                                                      reinterpret_cast<uintptr_t>(owner)));
     }
     char text[512];
     const bool cpp = info->ExceptionRecord->ExceptionCode == 0xE06D7363u;
     if (cpp) {
         describe_cpp_exception(info->ExceptionRecord, text, sizeof(text));
     } else {
-        std::snprintf(text, sizeof(text), "unhandled exception 0x%08lX at 0x%p", info->ExceptionRecord->ExceptionCode,
-                      info->ExceptionRecord->ExceptionAddress);
+        std::snprintf(text, sizeof(text), "unhandled exception 0x%08lX at 0x%p%s", info->ExceptionRecord->ExceptionCode,
+                      info->ExceptionRecord->ExceptionAddress, place);
     }
     char line[640];
     std::snprintf(line, sizeof(line), "%s (thread %lu)", text, GetCurrentThreadId());
     log_line("crash:", line);
-    HMODULE owner = nullptr;
-    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                       static_cast<LPCWSTR>(info->ExceptionRecord->ExceptionAddress), &owner);
     gather_crash_facts(cpp ? galaxy::crash::Facts::Kind::Exception : galaxy::crash::Facts::Kind::Fault, line,
                        !cpp && owner != nullptr && owner == static_cast<HMODULE>(gModule.module),
                        info->ExceptionRecord->ExceptionCode == EXCEPTION_STACK_OVERFLOW);
