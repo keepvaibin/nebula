@@ -27,6 +27,7 @@
 #include <luma_harness.h>
 
 #include <cctype>
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -439,6 +440,9 @@ struct State {
     std::map<std::string, std::string> latest;  // each fact's newest value, as JSON text
     std::map<std::string, std::uint64_t> writes;  // how often each fact was written
     std::string last_log;                         // the game's last log line, for a step that waits in vain
+    // The log lines since a step last ran (cleared there, kept to 4096): an after step armed later matches its log
+    // conditions against them, so a line its step before wrote (a take-out's mod saying it went) is not missed.
+    std::deque<std::string> since_step;
     std::vector<std::regex*> log_watch;
     bool finished = false;
 } g;
@@ -808,6 +812,7 @@ bool holds(const Cond& c) {
 }
 
 void run_step(Step& s, std::int64_t now) {
+    g.since_step.clear();
     switch (s.action) {
     case Action::Hold: g.inputs.push_back({now, s.frames, s.buttons, false, false, false, 0.0f, 0.0f}); break;
     case Action::Shake: g.inputs.push_back({now, s.frames, 0u, true, false, false, 0.0f, 0.0f}); break;
@@ -1083,6 +1088,13 @@ void frame(std::uint64_t game_frames) {
                         const auto written = g.writes.find(c.key);
                         c.writes_at_arm = written != g.writes.end() ? written->second : 0u;
                     }
+                    // A log line written since the step before ran meets a log condition as one written from now.
+                    for (auto it = s.conds.begin(); it != s.conds.end();) {
+                        const bool met = it->log && std::any_of(g.since_step.begin(), g.since_step.end(), [&](const std::string& line) {
+                                             return std::regex_search(line, it->pattern);
+                                         });
+                        it = met ? s.conds.erase(it) : it + 1;
+                    }
                 }
                 bool all = true;
                 for (const Cond& c : s.conds) {
@@ -1164,6 +1176,10 @@ void log_line(const char* tag, const char* line) {
     }
     const std::string text = std::string(tag) + " " + line;
     g.last_log = text;
+    g.since_step.push_back(text);
+    if (g.since_step.size() > 4096u) {
+        g.since_step.pop_front();
+    }
     if (text.compare(0, 18u, "boot: title screen") == 0) {
         g.title_seen = true;
     }
