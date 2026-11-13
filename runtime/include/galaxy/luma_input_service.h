@@ -24,6 +24,16 @@ void game_read(std::uint32_t player, NebulaInputSample* sample, std::uint32_t de
 // drives the stronger of it and the game's.
 [[nodiscard]] std::uint8_t mod_rumble(std::uint32_t player) noexcept;
 
+// What aims the main player's pointer (input 1.2 pointer_source), for the live controls at each sample (any thread):
+// `source` a galaxy::input::PointerSource (None: the player's controls choose), `gyro_scale` the gyro's turn.
+struct PointerChoice {
+    std::uint8_t source = 0;
+    float gyro_scale = 1.0f;
+};
+[[nodiscard]] PointerChoice pointer_choice() noexcept;
+// The live controls, at each sample: what could aim the main player's pointer now (bits 1 << PointerSource).
+void set_pointer_sources(std::uint32_t bits) noexcept;
+
 // Text entry. The host that has it says so once (a window host at its window's creation); without it text_request
 // answers LUMA_E_ABSENT. The rest from the window's thread (any thread): text_open while a request is open, then each
 // typed code point (the input method's results included) and each editing key; a lost keyboard focus cancels.

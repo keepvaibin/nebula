@@ -63,7 +63,7 @@ namespace luma {
                 {"net.local", 1, 4, "net.local", "services-net"},
                 {"net.internet", 1, 4, "net.internet", "services-net"},
                 {"assets", 1, 1, nullptr, "services-assets"},
-                {"input", 1, 1, nullptr, "services-input"},
+                {"input", 1, 2, nullptr, "services-input"},
                 {"input.inject", 1, 0, "input.inject", "services-input"},
                 {"input.dev", 1, 0, "input.devices", "services-input"},
                 {"audio", 1, 0, nullptr, "services-audio"},
