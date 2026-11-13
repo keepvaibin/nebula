@@ -1039,6 +1039,17 @@ def run_one(test, renderer, args, run_folder, previous):
                  bin_folder / HOST["importer"]):
         if not need.is_file():
             raise HarnessError("the bin folder has no %s" % need.name)
+    # The pak must be of this tree's store version (the host refuses another at its start: "need importing again").
+    pak = pathlib.Path(bin_folder.joinpath("pak.path").read_text(encoding="utf-8").strip())
+    wanted = int((TREE / "runtime" / "include" / "galaxy" / "store_version.inc").read_text(encoding="utf-8").strip())
+    try:
+        with open(pak, "rb") as f:
+            head = f.read(12)
+    except OSError as error:
+        raise HarnessError("pak.path names %s, which does not open: %s" % (pak, error))
+    if head[:8] != b"NBSTORE" + bytes(1) or int.from_bytes(head[8:12], "little") != wanted:
+        raise HarnessError("pak.path names %s, store version %s; this tree's store_version.inc is %d: import with this "
+                           "tree's nebula-import or name another pak" % (pak, int.from_bytes(head[8:12], "little") if head[:8] == b"NBSTORE" + bytes(1) else "none (not a store)", wanted))
     if run_folder.exists():
         shutil.rmtree(run_folder)
     for sub in ("bin", "pictures", "saves", "settings", "appdata"):
@@ -1251,7 +1262,12 @@ def evaluate(test, renderer, run_folder, ran):
     end = by_key.get("harness.end", [])
     verdict, reason = None, None
     declined = [line for line in log_lines if "fatal: --extension" in line or "extension: test extension:" in line]
-    if declined and not dumps:
+    # The host could not open the bin folder's game.pak (host_main.cpp open_pak: another store version, or unreadable).
+    unopened = [line for line in log_lines if "import: The game files need importing again" in line]
+    if unopened and not dumps:
+        verdict = "harness-error"
+        reason = "the bin folder's game.pak did not open (another store version than this build's store_version.inc, or unreadable): %s" % unopened[0]
+    elif declined and not dumps:
         # The extension refused the run's folders: the runner's fault, not the game's.
         verdict = "harness-error"
         reason = "the test extension declined the run: %s" % " | ".join(declined)

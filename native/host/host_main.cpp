@@ -31,6 +31,7 @@
 #include "galaxy/save_files.h"
 #include "galaxy/crash_report.h"
 #include "galaxy/game_module.h"
+#include "galaxy/luma_guard_host.h"
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
 #include "galaxy/hidden_start.h"
 #endif
@@ -1178,6 +1179,14 @@ __declspec(noinline) const char* plugin_in_fault(const EXCEPTION_POINTERS* info,
 
 // The crash's mod, when a plugin's code was running (gCrashFacts after gather_crash_facts).
 void note_crash_plugin(const EXCEPTION_POINTERS* info) noexcept {
+    // A fault the guard saw in a mod's code and did not resume (plan 1.6): its sentence, and the mod is the guard's.
+    if (const char* guard = galaxy::luma_guard::note_text(info->ExceptionRecord->ExceptionAddress)) {
+        log_line("crash: guard:", guard);
+        std::snprintf(gCrashPlugin, sizeof(gCrashPlugin), "%s", galaxy::luma_guard::note_mod());
+        gCrashFacts.plugin_mod = gCrashPlugin;
+        gCrashFacts.in_plugin = true;
+        return;
+    }
     bool in_plugin = false;
     if (const char* mod = plugin_in_fault(info, &in_plugin)) {
         std::snprintf(gCrashPlugin, sizeof(gCrashPlugin), "%s", mod);
