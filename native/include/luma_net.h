@@ -102,8 +102,8 @@ typedef struct LumaNetHeader {
 } LumaNetHeader;
 
 /* 1.3: what http sends. Everything is copied before http returns. */
-typedef struct LumaNetRequest {
-    uint32_t size;                 /* sizeof(LumaNetRequest) */
+typedef struct LumaNetHttpRequest {
+    uint32_t size;                 /* sizeof(LumaNetHttpRequest) */
     uint32_t timeout_ms;           /* the whole request, redirects included; 0: LUMA_NET_TIMEOUT_DEFAULT_MS */
     const char* method;            /* "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE" or "OPTIONS"; null: "GET" */
     const char* url;               /* "http://" or "https://", the host as the service's tcp_connect takes it (an
@@ -114,7 +114,7 @@ typedef struct LumaNetRequest {
     uint32_t flags;                /* LUMA_NET_HTTP_* */
     const void* body;              /* body_bytes of it (may be null with 0); sent with Content-Length */
     uint64_t body_bytes;
-} LumaNetRequest;
+} LumaNetHttpRequest;
 
 #define LUMA_NET_HTTP_NO_REDIRECT 1u  /* a 3xx answer is the answer (HEADERS with its status), not followed */
 #define LUMA_NET_HTTP_RAW 2u          /* no Accept-Encoding sent and the body given as it came */
@@ -222,7 +222,7 @@ typedef struct LumaNetLocalService {
        Accept-Encoding: gzip (without LUMA_NET_HTTP_RAW), Connection: close and User-Agent: Nebula/<version> <mod
        id> unless the mod names one. */
     /* events: HEADERS(socket, value, data), DATA(socket, data), DONE(socket, value), ERROR(socket, status, value) */
-    int32_t (*http)(const LumaMod* mod, const LumaNetRequest* request, LumaEventFn fn, void* user, LumaHandle* out);
+    int32_t (*http)(const LumaMod* mod, const LumaNetHttpRequest* request, LumaEventFn fn, void* user, LumaHandle* out);
     /* 1.4. A WebSocket client to `url` ("ws://" or "wss://", then as http's url; the host as tcp_connect's), asking
        for `protocol` (null: none; else 1 to LUMA_NET_PROTOCOL_MOST bytes of tokens separated by ", ", sent as
        Sec-WebSocket-Protocol). LUMA_PENDING and *out: CONNECTED once the server answered 101 with the right
@@ -310,7 +310,7 @@ typedef struct LumaNetInternetService {
                           const char* key, LumaEventFn fn, void* user, LumaHandle* out);
     /* 1.3. As net.local's http, to the hosts luma.json names (tcp_connect's rules; each redirect's host too). */
     /* events: HEADERS(socket, value, data), DATA(socket, data), DONE(socket, value), ERROR(socket, status, value) */
-    int32_t (*http)(const LumaMod* mod, const LumaNetRequest* request, LumaEventFn fn, void* user, LumaHandle* out);
+    int32_t (*http)(const LumaMod* mod, const LumaNetHttpRequest* request, LumaEventFn fn, void* user, LumaHandle* out);
     /* 1.4. As net.local's, to the hosts luma.json names (tcp_connect's rules). */
     /* events: CONNECTED(socket, data), MESSAGE(socket, data, flags), SENT(socket, value), CLOSED(socket, status,
        value, data), ERROR(socket, status, value) */

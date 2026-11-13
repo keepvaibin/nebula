@@ -4696,12 +4696,12 @@ constexpr std::string_view kServiceHeaders[] = {"host", "content-length", "trans
 
 // http of both services: the request checked and copied, then a connect (net.internet's: luma.json's hosts) that
 // sends it.
-std::int32_t http_on(const LumaMod* mod, const char* where, bool internet, const LumaNetRequest* request,
+std::int32_t http_on(const LumaMod* mod, const char* where, bool internet, const LumaNetHttpRequest* request,
                      LumaEventFn fn, void* user, LumaHandle* out) noexcept {
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (request == nullptr || request->size != sizeof(LumaNetRequest)) {
+    if (request == nullptr || request->size != sizeof(LumaNetHttpRequest)) {
         return argument(mod, where, "request");
     }
     if (request->url == nullptr) {
@@ -4827,11 +4827,11 @@ std::int32_t http_on(const LumaMod* mod, const char* where, bool internet, const
     }
 }
 
-std::int32_t net_http(const LumaMod* mod, const LumaNetRequest* request, LumaEventFn fn, void* user,
+std::int32_t net_http(const LumaMod* mod, const LumaNetHttpRequest* request, LumaEventFn fn, void* user,
                       LumaHandle* out) noexcept {
     return http_on(mod, "net.local.http", false, request, fn, user, out);
 }
-std::int32_t internet_http(const LumaMod* mod, const LumaNetRequest* request, LumaEventFn fn, void* user,
+std::int32_t internet_http(const LumaMod* mod, const LumaNetHttpRequest* request, LumaEventFn fn, void* user,
                            LumaHandle* out) noexcept {
     return http_on(mod, "net.internet.http", true, request, fn, user, out);
 }
