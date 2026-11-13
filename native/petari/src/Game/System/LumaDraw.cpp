@@ -15,6 +15,7 @@
 #include "Game/Render/RenderTexture.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Screen/MessageTagSkipTagProcessor.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include "Game/System/GameAssets.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
@@ -1728,9 +1729,11 @@ namespace luma {
             if (pFont == nullptr) {
                 return;
             }
-            u32 length = 0;
-            while (length < LUMA_DRAW_TEXT_BYTES_MOST && pText[length] != 0) {
-                length++;
+            // The length as the game measures a message: a tag's data may hold a zero unit, so the words end where the
+            // tags say, not at the first zero.
+            u32 length = static_cast< u32 >(MR::getStringLengthWithMessageTag(pText));
+            if (length > LUMA_DRAW_TEXT_BYTES_MOST) {
+                length = LUMA_DRAW_TEXT_BYTES_MOST;
             }
             LumaDrawScreen screen;
             screenNow(screen, LUMA_DRAW_HUD_AFTER);

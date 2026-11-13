@@ -156,12 +156,10 @@ namespace Ui {
         CharStrmReader reader = GetFont()->GetCharStrmReader();
         reader.Set(str);
 
-        CustomTagProcessor* processor = nullptr;
+        // The processor's own fade (CustomTagProcessor's): any other processor (a mod's subtitle skips the game's tags
+        // with MessageTagSkipTagProcessor) leaves the writer's alpha alone.
         const u8 alpha = GetAlpha();
-        if (&mDefaultTagProcessor != mTagProcessor) {
-            processor = static_cast< CustomTagProcessor* >(mTagProcessor);
-            processor->reset(str);
-        }
+        mTagProcessor->BeginPrint(str);
 
         for (CharCode code = reader.Next(); reinterpret_cast< StreamType >(reader.GetCurrentPos()) - str <= length;) {
             if (code < ' ')
@@ -225,9 +223,8 @@ namespace Ui {
             } else
 
             {
-                if (processor) {
-                    SetAlpha(processor->mAlphaCtrl.alpha());
-                    processor->mAlphaCtrl.mCharIndex++;
+                if (u8 charAlpha = 0; mTagProcessor->NextCharAlpha(&charAlpha)) {
+                    SetAlpha(charAlpha);
                 }
 
                 const f32 baseY = GetCursorY();
@@ -291,9 +288,7 @@ namespace Ui {
             MoveCursorY(yCursorAdj);
         }
 
-        if (processor) {
-            SetAlpha(alpha);
-        }
+        SetAlpha(alpha);
 
         return textWidth;
     }
@@ -335,6 +330,16 @@ CustomTagProcessor::Operation CustomTagProcessor::CalcRect(Ui::Rect* rect, u16 c
 
     context->str += tag.getSkipLength();
     return operation;
+}
+
+void CustomTagProcessor::BeginPrint(const char16_t* pStr) {
+    reset(pStr);
+}
+
+bool CustomTagProcessor::NextCharAlpha(u8* pAlpha) {
+    *pAlpha = mAlphaCtrl.alpha();
+    mAlphaCtrl.mCharIndex++;
+    return true;
 }
 
 CustomTagProcessor::Operation CustomTagProcessor::Process(u16 code, ContextType* context) {
