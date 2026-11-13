@@ -70,6 +70,12 @@ namespace luma {
             End sEnds[kMostEnds];
             // The store path the player holds while it plays (MoviePlayerSimple keeps the pointer).
             char sPath[300];
+            // A skipped movie ends as the game's in-stage ones (MoviePlayingSequence: PrologueA, FinalBattle, EpilogueB,
+            // EndingB): the fade forced closed, kSkipEndWait frames on the black screen, then the fade opened in its
+            // own time. The scene's player names the scene the wait belongs to (a new scene opens its own wipe).
+            const s32 kSkipEndWait = 60;
+            s32 sSkipWaitLeft = 0;
+            const MoviePlayerSimple* sSkipWaitPlayer = nullptr;
 
             void report(const LumaMod* pMod, const char* pWhere, u32 code, const char* pArg0) {
                 const char* args[1] = {pArg0};
@@ -443,6 +449,13 @@ namespace luma {
         }  // namespace
 
         void frame() {
+            if (sSkipWaitLeft > 0) {
+                if (scenePlayer() != sSkipWaitPlayer) {
+                    sSkipWaitLeft = 0;  // the scene ended on the black screen: the next one opens its own wipe
+                } else if (--sSkipWaitLeft == 0) {
+                    MR::openWipeFade(-1);
+                }
+            }
             if (sPlaying.handle == 0) {
                 return;
             }
@@ -459,6 +472,8 @@ namespace luma {
                 finish(LUMA_OK, "skip");
                 pPlayer->stopMovie();
                 MR::forceCloseWipeFade();
+                sSkipWaitLeft = kSkipEndWait;
+                sSkipWaitPlayer = pPlayer;
             }
         }
 
