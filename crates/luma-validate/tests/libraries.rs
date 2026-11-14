@@ -354,6 +354,49 @@ fn a_needed_mod_s_exports_bind_its_imports() {
 }
 
 #[test]
+fn a_mod_of_another_runtime_layout_than_the_mod_it_calls_is_refused() {
+    // LumaModInfo's last field, read when its size covers it: a library mod of layout 1, kept in its report; a mod of
+    // layout 2 that calls one of its functions is L513 (before the signature, as the kernel refuses it), one of
+    // layout 1 or of none (0, a mod built before the field) binds. A mod that calls a library of layout 0 binds too.
+    for (platform, folder, ext, library) in [
+        ("windows-x64", "pe-x64", "dll", "pe-x64/library_mod_layout1.dll"),
+        ("linux-x64", "elf-x64", "so", "elf-x64/library_mod_layout1.so"),
+        ("macos-arm64", "macho-arm64", "dylib", "macho-arm64/library_mod_layout1.dylib"),
+        ("macos-arm64", "macho-arm64", "dylib", "macho-arm64-chained/library_mod_layout1.dylib"),
+    ] {
+        let kit = check_among(&needing_mod(platform, &lib(library), "lumakit"), platform, &[]);
+        assert!(kit.findings.is_empty(), "{library}: {:?}", kit.findings);
+        assert_eq!(kit.touches.runtime_layouts, vec![format!("{platform}\u{1f}1")], "{library}");
+        let kept = luma_validate::Saved::from_report(&kit, "game");
+        let again = luma_validate::Saved::parse(&kept.to_bytes()).unwrap();
+        let installed = [again.installed("lumakit.luma", true).unwrap()];
+        assert_eq!(installed[0].touches.runtime_layouts, kit.touches.runtime_layouts);
+        let importer = |variant: &str, installed: &[luma_validate::Installed]| {
+            check_among(&needing_mod(platform, &lib(&format!("{folder}/{variant}.{ext}")), "test.mod"), platform, installed)
+        };
+        let r = importer("mod_function_layout2", &installed);
+        assert_eq!(codes(&r), vec![513], "{library}: {:?}", r.findings);
+        assert_eq!(
+            english(&r, 513),
+            format!(
+                "test.mod: code/{platform}/{}: test.mod is built with LumaScript runtime layout 2 and lumakit, whose hud.meter it calls, with layout 1. Rebuild the older one with a current LumaLink, or update it.",
+                entry_name(platform)
+            )
+        );
+        for variant in ["mod_function_layout1", "mod_function"] {
+            let r = importer(variant, &installed);
+            assert!(r.findings.is_empty(), "{library} {variant}: {:?}", r.findings);
+        }
+        // The library of no layout: every importer binds.
+        let plain = check_among(&needing_mod(platform, &lib(&format!("{}/library_mod.{ext}", library.split('/').next().unwrap())), "lumakit"), platform, &[]);
+        assert!(plain.touches.runtime_layouts.is_empty(), "{library}: {:?}", plain.touches.runtime_layouts);
+        let plain = [luma_validate::Saved::parse(&luma_validate::Saved::from_report(&plain, "game").to_bytes()).unwrap().installed("lumakit.luma", true).unwrap()];
+        let r = importer("mod_function_layout2", &plain);
+        assert!(r.findings.is_empty(), "{library}: {:?}", r.findings);
+    }
+}
+
+#[test]
 fn a_service_import_is_checked_against_the_game_s_catalog() {
     use luma_validate::names::Services;
     let w = "windows-x64";

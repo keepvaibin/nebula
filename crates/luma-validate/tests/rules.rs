@@ -558,7 +558,7 @@ fn every_rule_has_a_broken_mod() {
         }
     }
     // The rules no broken mod here can reach yet, each with why (`libraries.rs` covers the code rules on libraries).
-    let elsewhere: [(u16, &str); 12] = [
+    let elsewhere: [(u16, &str); 13] = [
         (407, "table_keys.rs"),
         (503, "libraries.rs"),
         (504, "libraries.rs"),
@@ -567,6 +567,7 @@ fn every_rule_has_a_broken_mod() {
         (508, "libraries.rs"),
         (510, "libraries.rs"),
         (512, "libraries.rs"),
+        (513, "libraries.rs"),
         (805, "libraries.rs"),
         (511, "libraries.rs"),
         (806, "renderer.rs"),
@@ -689,6 +690,9 @@ fn a_start_takes_the_whole_file_findings_from_the_kept_report_and_runs_the_rest(
     // Nor a form 3 report (before `exports` touches): a library mod's exports would be read as none.
     let form3 = String::from_utf8(kept_form(&full, 3)).unwrap();
     assert!(Saved::parse(form3.as_bytes()).is_none());
+    // Nor a form 4 report (before `runtime_layouts` touches): a library mod's runtime layout would be read as none.
+    let form4 = String::from_utf8(kept_form(&full, 4)).unwrap();
+    assert!(Saved::parse(form4.as_bytes()).is_none());
     assert!(Saved::parse(b"not a kept report").is_none());
     // Cut at any byte, or any byte changed: it does not read.
     let kept = Saved::from_report(&full, "game").to_bytes();
@@ -704,7 +708,7 @@ fn a_start_takes_the_whole_file_findings_from_the_kept_report_and_runs_the_rest(
 fn kept_form1(full: &Report) -> Vec<u8> {
     let text = String::from_utf8(Saved::from_report(full, "game").to_bytes()).unwrap();
     let body: String = text.lines().filter(|l| !l.starts_with("end\t") && !l.starts_with("need\t")).map(|l| format!("{l}\n")).collect();
-    let body = body.replacen("luma-saved\t4\n", "luma-saved\t1\n", 1);
+    let body = body.replacen("luma-saved\t5\n", "luma-saved\t1\n", 1);
     sign(body)
 }
 
@@ -712,7 +716,7 @@ fn kept_form1(full: &Report) -> Vec<u8> {
 fn kept_form(full: &Report, form: u32) -> Vec<u8> {
     let text = String::from_utf8(Saved::from_report(full, "game").to_bytes()).unwrap();
     let body: String = text.lines().filter(|l| !l.starts_with("end\t")).map(|l| format!("{l}\n")).collect();
-    sign(body.replacen("luma-saved\t4\n", &format!("luma-saved\t{form}\n"), 1))
+    sign(body.replacen("luma-saved\t5\n", &format!("luma-saved\t{form}\n"), 1))
 }
 
 fn sign(body: String) -> Vec<u8> {

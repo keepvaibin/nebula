@@ -101,7 +101,7 @@ static LumaImport imports[] = {
     LUMA_FUNCTION(get_pos, "MR::getPlayerPos", "Vec3f *()"),
 };
 LUMA_FLOATS
-LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API + 1, imports, 1, start, 0};
+LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API + 1, imports, 1, start, 0, 0, 0, 0, 0, 0, 0, 0};
 #elif defined(SHORT_INFO)
 /* A luma_mod that was not made by luma.h: shorter than LumaModInfo. */
 LUMA_EXPORT const uint32_t luma_mod[2] = {8, LUMA_API};
@@ -133,7 +133,13 @@ LUMA_MOD(imports, start, 0);
 static LumaImport imports[] = {
     {6, 0, "lumakit/hud.meter", "lumi1:0123456789abcdef", &get_pos, 0, 0, 0},
 };
+#if defined(RUNTIME_LAYOUT)
+/* Built with a LumaScript runtime layout (L513), the last field of LumaModInfo; the macros write 0. */
+LUMA_RUNTIME
+LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, imports, 1, start, 0, luma_begin, luma_finish, 0, 0, 0, 0, RUNTIME_LAYOUT};
+#else
 LUMA_MOD(imports, start, 0);
+#endif
 #elif defined(MOD_FUNCTION_BAD)
 static LumaImport imports[] = {
     {6, 0, "hud.meter", "lumi1:0123456789abcdef", &get_pos, 0, 0, 0},
@@ -166,7 +172,12 @@ static const LumaExport exports[] = {
 static LumaImport imports[] = {
     LUMA_FUNCTION(get_pos, "MR::getPlayerPos", "Vec3f *()"),
 };
+#if defined(RUNTIME_LAYOUT)
+LUMA_RUNTIME
+LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, imports, 1, start, 0, luma_begin, luma_finish, exports, 2, 0, 0, RUNTIME_LAYOUT};
+#else
 LUMA_LIBRARY_MOD(imports, start, 0, exports, 0);
+#endif
 #elif defined(METHOD)
 /* Objects 10: a virtual call (kind 8) by the declaring class's name, and a class's number (kind 3) of any record. */
 static LumaImport imports[] = {

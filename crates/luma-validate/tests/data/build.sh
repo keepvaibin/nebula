@@ -42,7 +42,8 @@ elf="-shared -fPIC -fuse-ld=lld -Wl,--build-id=none -Wl,-T,$ctors"
 "$cc" --target=x86_64-unknown-linux-gnu $common $elf -DGOOD -o elf-x64/good.so lib.c
 "$cc" --target=x86_64-unknown-linux-gnu $common $elf -DMISSING -o elf-x64/missing.so lib.c
 "$cc" --target=x86_64-unknown-linux-gnu $common $elf -DNO_EXPORT -o elf-x64/no_export.so lib.c
-"$cc" --target=x86_64-unknown-linux-gnu $common $elf -Wl,-soname,extra.so -DEXTRA -o elf-x64/extra.so lib.c
+# The extra library is no mod: it has no runners, and no .data for luma_ctors.ld to follow.
+"$cc" --target=x86_64-unknown-linux-gnu $common -shared -fPIC -fuse-ld=lld -Wl,--build-id=none -Wl,-soname,extra.so -DEXTRA -o elf-x64/extra.so lib.c
 "$cc" --target=x86_64-unknown-linux-gnu $common $elf -DUSES_EXTRA -o elf-x64/uses_extra.so lib.c elf-x64/extra.so
 "$cc" --target=x86_64-unknown-linux-gnu $common $elf -Wl,-z,pack-relative-relocs -DGOOD -o elf-x64-relr/good.so lib.c
 "$cc" --target=aarch64-unknown-linux-gnu $common $elf -DGOOD -o elf-arm64/good.so lib.c
@@ -76,6 +77,18 @@ done
 "$cc" --target=arm64-apple-macos11 $common $macho -Wl,-no_fixup_chains -DUSES_EXTRA -DEXTRA_BY_POINTER -o macho-arm64/uses_extra.dylib lib.c macho-arm64/extra.dylib
 "$cc" --target=arm64-apple-macos13 $common $macho -Wl,-fixup_chains -DUSES_EXTRA -DEXTRA_BY_POINTER -o macho-arm64-chained/uses_extra.dylib lib.c macho-arm64/extra.dylib
 "$cc" --target=arm64-apple-macos11 $common $macho -Wl,-no_fixup_chains -Wl,-needed_library,macho-arm64/extra.dylib -DGOOD -o macho-arm64/needs_extra.dylib lib.c
+
+# A LumaScript runtime layout in LumaModInfo (L513): a library mod of layout 1, and mods importing from it of layout 2
+# (refused) and 1 (bound), on each format.
+"$cc" --target=x86_64-pc-windows-msvc -shared $common $win -Wl,/NOIMPLIB -DLIBRARY_MOD -DRUNTIME_LAYOUT=1 -o pe-x64/library_mod_layout1.dll lib.c
+"$cc" --target=x86_64-unknown-linux-gnu $common $elf -DLIBRARY_MOD -DRUNTIME_LAYOUT=1 -o elf-x64/library_mod_layout1.so lib.c
+"$cc" --target=arm64-apple-macos11 $common $macho -Wl,-no_fixup_chains -DLIBRARY_MOD -DRUNTIME_LAYOUT=1 -o macho-arm64/library_mod_layout1.dylib lib.c
+"$cc" --target=arm64-apple-macos13 $common $macho -Wl,-fixup_chains -DLIBRARY_MOD -DRUNTIME_LAYOUT=1 -o macho-arm64-chained/library_mod_layout1.dylib lib.c
+for n in 1 2; do
+    "$cc" --target=x86_64-pc-windows-msvc -shared $common $win -Wl,/NOIMPLIB -DMOD_FUNCTION -DRUNTIME_LAYOUT=$n -o pe-x64/mod_function_layout$n.dll lib.c
+    "$cc" --target=x86_64-unknown-linux-gnu $common $elf -DMOD_FUNCTION -DRUNTIME_LAYOUT=$n -o elf-x64/mod_function_layout$n.so lib.c
+    "$cc" --target=arm64-apple-macos11 $common $macho -Wl,-no_fixup_chains -DMOD_FUNCTION -DRUNTIME_LAYOUT=$n -o macho-arm64/mod_function_layout$n.dylib lib.c
+done
 
 rm -rf tmp
 find . -type f ! -name '*.c' ! -name '*.sh' | sort | while read -r f; do

@@ -777,6 +777,9 @@ pub struct ModInfo {
     /// A library mod's functions for the mods that need it (LumaExport rows), in the library's order; none when its
     /// `size` does not reach `export_count` or `exports` is null, as the kernel reads them.
     pub exports: Vec<ExportRow>,
+    /// The LumaScript runtime layout the mod was built with; 0 when it has none or its `size` does not cover the
+    /// field (a LumaModInfo older than it), as the kernel reads it.
+    pub runtime_layout: u32,
 }
 
 /// One LumaExport: a name and its signature (None: a null signature, which no import matches).
@@ -802,6 +805,9 @@ const EXPORTS_AT: u64 = 56;
 const EXPORT_COUNT_AT: u64 = 64;
 const EXPORTS_END: u32 = 68;
 const EXPORT_SIZE: u64 = 24;
+/// LumaModInfo's `runtime_layout` (64-bit layout, the last field) and the size that covers it.
+const RUNTIME_LAYOUT_AT: u64 = 88;
+const RUNTIME_LAYOUT_END: u32 = 92;
 pub const MAX_IMPORTS: u32 = 65_536;
 
 /// Reads `luma_mod`; Err is a phrase saying what in it cannot be read. An address past the 64-bit range is a field that
@@ -857,5 +863,6 @@ pub fn mod_info(lib: &Library, at: u64) -> Result<ModInfo, &'static str> {
             }
         }
     }
-    Ok(ModInfo { size, api, imports, exports })
+    let runtime_layout = if size >= RUNTIME_LAYOUT_END { lib.u32_at_address(field(at, RUNTIME_LAYOUT_AT, info)?).ok_or(info)? } else { 0 };
+    Ok(ModInfo { size, api, imports, exports, runtime_layout })
 }

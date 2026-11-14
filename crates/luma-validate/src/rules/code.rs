@@ -305,6 +305,12 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
             ctx.facts.touches.exports.push(export);
         }
     }
+    if info.runtime_layout != 0 {
+        let layout = format!("{plat}{SEP}{}", info.runtime_layout);
+        if !ctx.facts.touches.runtime_layouts.contains(&layout) {
+            ctx.facts.touches.runtime_layouts.push(layout);
+        }
+    }
     let (mut any_service, mut services_unchecked) = (false, false);
     for (i, row) in info.imports.iter().enumerate() {
         if row.kind >= IMPORT_KINDS || (row.kind == 4 && row.hook_kind >= HOOK_KINDS) || row.name.is_empty() {
@@ -352,7 +358,9 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
             // Another mod's function (D3-3, lumakit R-1): "<mod id>/<export name>", that mod among `needs` (the kernel
             // binds only from a needed mod that is loaded: L505 with the same phrase), then bound as the kernel's
             // modExport binds it against the needed mod's exports on this platform (its report's `exports`): the first
-            // of the name, its signature the same text. A needed mod not installed is L800's.
+            // of the name, its signature the same text. A needed mod not installed is L800's. Found by name, a needed
+            // mod whose LumaScript runtime layout is another non-zero number than this one's is L513, before the
+            // signature (whose text differs for the same reason), as the kernel refuses it.
             6 => {
                 let parts = row.name.split_once('/').filter(|(m, e)| !m.is_empty() && !e.is_empty()).map(|(m, e)| (m.to_string(), e.to_string()));
                 let Some((m, export)) = parts else {
@@ -365,8 +373,19 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
                 let kind = if !ctx.facts.needs.iter().any(|(id, _)| *id == m) {
                     Some("Name.ModFunction")
                 } else if let Some(other) = ctx.input.installed.iter().find(|o| o.id == m) {
+                    let theirs = runtime_layout(&other.touches.runtime_layouts, plat);
                     match exported(&other.touches.exports, plat, &export) {
                         None => Some("Name.ModFunction"),
+                        Some(_) if info.runtime_layout != 0 && theirs != 0 && info.runtime_layout != theirs => {
+                            let args = vec![
+                                ("version", t(info.runtime_layout.to_string())),
+                                ("other", t(m.clone())),
+                                ("value", t(theirs.to_string())),
+                                ("name", t(export.clone())),
+                            ];
+                            ctx.add(513, &name, None, None, args);
+                            continue;
+                        }
                         Some(sig) if sig.is_none() || sig != row.signature.as_deref() => Some("Name.FunctionSig"),
                         Some(_) => None,
                     }
@@ -489,6 +508,11 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
         ctx.not_checked(505, "Missing.Services");
         ctx.not_checked(506, "Missing.Services");
     }
+}
+
+/// A mod's LumaScript runtime layout on `plat` (`Touches::runtime_layouts`), 0 when it gives none.
+fn runtime_layout(layouts: &[String], plat: &str) -> u32 {
+    layouts.iter().find_map(|l| l.split_once(SEP).filter(|(p, _)| *p == plat).and_then(|(_, n)| n.parse().ok())).unwrap_or(0)
 }
 
 /// The signature of `export` among a mod's exports on `plat` (`Touches::exports`): the first of the name, as the

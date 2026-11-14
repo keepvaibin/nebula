@@ -257,6 +257,9 @@ pub struct Touches {
     /// library's in its order: platform, name and signature, joined by U+001F (platform and name alone for a null
     /// signature). A mod that imports one (kind 6) has it bound against them (L505), as the kernel binds it.
     pub exports: Vec<String>,
+    /// Each platform's LumaScript runtime layout (LumaModInfo's `runtime_layout`) when it is not 0: platform and number,
+    /// joined by U+001F. A mod of another non-zero layout that imports one of its functions is refused (L513).
+    pub runtime_layouts: Vec<String>,
 }
 
 /// The layers of a zone, and the folders whose tables the game links by key across them (contract table-keys 13).
@@ -617,5 +620,5 @@ pub fn level_of(code: u16) -> Level {
 pub const CODES: &[u16] = &[
     100, 101, 102, 103, 104, 105, 106, 107, 108, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213,
     214, 215, 216, 217, 218, 219, 220, 221, 300, 301, 302, 303, 304, 305, 306, 307, 308, 309, 400, 401, 402, 403, 404, 405, 406, 407, 500, 501,
-    502, 503, 504, 505, 506, 507, 508, 509, 510, 511, 512, 700, 701, 702, 800, 801, 802, 803, 804, 805, 806,
+    502, 503, 504, 505, 506, 507, 508, 509, 510, 511, 512, 513, 700, 701, 702, 800, 801, 802, 803, 804, 805, 806,
 ];
