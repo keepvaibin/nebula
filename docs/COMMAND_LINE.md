@@ -38,7 +38,8 @@ The GPU is a setting: `gpu=` in `config.ini`, chosen in Nebula Settings (empty: 
 
 | Command | |
 |---|---|
-| `--send-report <benchmark.json> [--with-log 1]` | Seals the benchmark result (and with `--with-log 1` the last log's tail, paths and names stripped) to the developer's key and sends it once. Exit 0 sent, 2 uploads off in this build, 3 the file is refused, 4 no connection, 5 the server refused. |
+| `--send-report <benchmark.json> [--with-log 1]` | Seals the benchmark result (and with `--with-log 1` the last log's tail, paths and names stripped) to the developer's key and sends it once. Exit 0 sent, 2 uploads off in this build, 3 the file is refused, 4 no connection, 5 the server refused, 8 sent before. |
+| `--send-report <file> [--with-log 1] --preview 1` | Prints exactly the report that would be sealed. |
 | `--send-report <file> --save-sealed <out> [--public-key <hex>]` | Writes the sealed report to `<out>` instead of sending it. |
 | `--report-enabled 1` | Exit 0 when this build can send reports, 2 when not (the apps hide the choice). |
 | `--open-report <file> --key <private key file>` | The developer's tool: prints the opened report (exit 7: not a report, another key or changed). |

@@ -51,7 +51,8 @@ loaded when needed (without it the send fails with exit 4 and `--save-sealed` st
 
 | command | exit codes |
 |---|---|
-| `--send-report <benchmark.json> [--with-log 1]` | 0 sent; 1 usage; 2 uploads off in this build; 3 the file is refused (unreadable, schema, size); 4 network (no connection, timeout, TLS, no HTTPS client); 5 the server refused (the status is printed) |
+| `--send-report <benchmark.json> [--with-log 1]` | 0 sent (and `<file>.sent` written beside it); 1 usage; 2 uploads off in this build; 3 the file is refused (unreadable, schema, size); 4 network (no connection, timeout, TLS, no HTTPS client); 5 the server refused (the status is printed); 8 this result was sent before |
+| `--send-report <file> [--with-log 1] --preview 1` | 0 and exactly the text that would be sealed on stdout (the apps' "Show the full report"); 3 refused |
 | `--send-report <file> --save-sealed <out> [--public-key <64 hex>]` | 0 written; 2 no key; 3 refused; 6 not written |
 | `--report-enabled 1` | 0 this build can send; 2 it cannot |
 | `--open-report <file> --key <private key file>` | 0 the report on stdout; 3 opened but not in the schema; 7 not a report, another key, or changed |

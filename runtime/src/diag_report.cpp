@@ -844,6 +844,23 @@ namespace {
 
 // The report a file makes, sealed to `key`; the error line when it cannot.
 SendResult seal_file(const std::filesystem::path& file, bool with_log, const Key& key, Bytes& envelope) {
+    std::string report;
+    if (SendResult built = report_preview(file, with_log, report); built.exit != kOk) return built;
+    envelope = seal_report(report, key);
+    if (envelope.empty()) return {kInvalid, "the report could not be sealed"};
+    return {kOk, std::string()};
+}
+
+std::filesystem::path sent_marker(const std::filesystem::path& file) {
+    std::filesystem::path marker = file;
+    marker += ".sent";
+    return marker;
+}
+
+}  // namespace
+
+SendResult report_preview(const std::filesystem::path& file, bool with_log, std::string& report) {
+    report.clear();
     std::string benchmark;
     if (!read_file(file, kEnvelopeMax, benchmark)) return {kInvalid, "the benchmark result cannot be read"};
     if (std::string error = schema_error(benchmark); !error.empty()) {
@@ -854,21 +871,22 @@ SendResult seal_file(const std::filesystem::path& file, bool with_log, const Key
         const std::filesystem::path log = last_log();
         if (!log.empty()) lines = log_tail(read_tail(log, 256u * 1024u), identifying_names());
     }
-    const std::string report = make_report(benchmark, lines, with_log);
-    if (std::string error = report_error(report); !error.empty()) return {kInvalid, "refused: " + error};
-    envelope = seal_report(report, key);
-    if (envelope.empty()) return {kInvalid, "the report could not be sealed"};
+    std::string built = make_report(benchmark, lines, with_log);
+    if (std::string error = report_error(built); !error.empty()) return {kInvalid, "refused: " + error};
+    report = std::move(built);
     return {kOk, std::string()};
 }
-
-}  // namespace
 
 SendResult send_report_file(const std::filesystem::path& file, bool with_log) {
     Key key{};
     if (!uploads_enabled() || !build_key(key)) return {kDisabled, "uploads are off in this build"};
+    std::error_code error;
+    if (std::filesystem::exists(sent_marker(file), error)) return {kAlreadySent, "this report was sent before"};
     Bytes envelope;
     if (SendResult sealed = seal_file(file, with_log, key, envelope); sealed.exit != kOk) return sealed;
-    return post_envelope(kEndpoint, envelope);
+    SendResult result = post_envelope(kEndpoint, envelope);
+    if (result.exit == kOk) write_file(sent_marker(file), "", 0u);
+    return result;
 }
 
 int run_command_line(int argc, char** argv) {
@@ -890,11 +908,13 @@ int run_command_line(int argc, char** argv) {
     };
     std::filesystem::path report, sealed_out, opened, key_file, keygen;
     std::string public_key;
-    bool with_log = false, enabled_query = false, usage = (argc - 1) % 2 != 0;
+    bool with_log = false, enabled_query = false, preview = false, usage = (argc - 1) % 2 != 0;
     for (int i = 1; i + 1 < argc; i += 2) {
         const std::string_view key = argv[i];
         if (key == "--send-report") {
             report = path_at(i + 1);
+        } else if (key == "--preview") {
+            preview = std::strcmp(argv[i + 1], "1") == 0;
         } else if (key == "--with-log") {
             with_log = std::strcmp(argv[i + 1], "1") == 0;
         } else if (key == "--save-sealed") {
@@ -917,7 +937,7 @@ int run_command_line(int argc, char** argv) {
     if (wide != nullptr) LocalFree(wide);
 #endif
     if (usage) {
-        return print(kUsage, "usage: --send-report <benchmark.json> [--with-log 1] [--save-sealed <out> [--public-key <hex>]]"
+        return print(kUsage, "usage: --send-report <benchmark.json> [--with-log 1] [--preview 1 | --save-sealed <out> [--public-key <hex>]]"
                              " | --report-enabled 1 | --open-report <file> --key <private key file>"
                              " | --report-keygen <folder> (docs/DIAGNOSTICS_UPLOAD.md)");
     }
@@ -973,6 +993,14 @@ int run_command_line(int argc, char** argv) {
         return kOk;
     }
     if (report.empty()) return print(kUsage, "--send-report <benchmark.json> names the benchmark result");
+    if (preview) {
+        std::string text;
+        if (SendResult built = report_preview(report, with_log, text); built.exit != kOk) return print(built.exit, built.line);
+        std::fwrite(text.data(), 1u, text.size(), stdout);
+        std::fputc('\n', stdout);
+        std::fflush(stdout);
+        return kOk;
+    }
     if (!sealed_out.empty()) {
         Key key{};
         if (!(public_key.empty() ? build_key(key) : key_from_hex(public_key, key))) {

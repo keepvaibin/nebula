@@ -73,12 +73,17 @@ std::string hex(const std::uint8_t* data, std::size_t size);
 // True when this build names an endpoint and a valid public key (diag_endpoint.h); apps hide the choice otherwise.
 bool uploads_enabled();
 
-enum Exit : int { kOk = 0, kUsage = 1, kDisabled = 2, kInvalid = 3, kNetwork = 4, kRefused = 5, kWrite = 6, kNotOpened = 7 };
+enum Exit : int {
+    kOk = 0, kUsage = 1, kDisabled = 2, kInvalid = 3, kNetwork = 4, kRefused = 5, kWrite = 6, kNotOpened = 7, kAlreadySent = 8
+};
 struct SendResult {
     int exit = kUsage;
     std::string line;  // the one result line, without the "[diag] " prefix
 };
+// Exactly the text --send-report would seal (the "Show the full report" view); exit kInvalid when refused.
+SendResult report_preview(const std::filesystem::path& file, bool with_log, std::string& report);
 // --send-report's work, for an app that calls it in its own process (on a worker thread: it blocks up to 10 s).
+// Once per result: a sent report leaves <file>.sent beside it, and a second send answers kAlreadySent.
 SendResult send_report_file(const std::filesystem::path& file, bool with_log);
 // One HTTPS POST of an envelope (10 s, no redirects, no retry). allow_loopback_http is for the unit tests only:
 // http://127.0.0.1 is then accepted.

@@ -2,6 +2,8 @@
 #include "galaxy/diag_report.h"
 
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -336,6 +338,18 @@ int main() {
 #if defined(_WIN32)
         posting();
 #endif
+        {
+            const std::filesystem::path file = std::filesystem::temp_directory_path() / "diag_report_tests_benchmark.json";
+            { std::ofstream(file, std::ios::binary) << kBenchmark; }
+            std::string preview;
+            check(diag::report_preview(file, false, preview).exit == diag::kOk &&
+                      preview == diag::make_report(kBenchmark, {}, false),
+                  "the preview is the report that would be sealed");
+            { std::ofstream(file, std::ios::binary) << replaced(kBenchmark, "\"schema\":1", "\"schema\":1,\"x\":1"); }
+            check(diag::report_preview(file, false, preview).exit == diag::kInvalid && preview.empty(),
+                  "a refused result has no preview");
+            std::filesystem::remove(file);
+        }
         check(!diag::uploads_enabled(), "the sources name no endpoint: uploads are off");
         check(diag::send_report_file("missing.json", false).exit == diag::kDisabled, "--send-report refuses without one");
     } catch (const std::exception& failure) {
