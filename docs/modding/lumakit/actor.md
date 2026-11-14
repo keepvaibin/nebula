@@ -36,10 +36,10 @@ pub fn move_toward_player(a: LiveActor, speed: f32)
 pub fn turn_toward(a: LiveActor, at: vec3, degrees_per_frame: f32)
 pub fn sees_player(a: LiveActor, distance: f32, degrees: f32) -> bool
 pub fn shockwave(a: LiveActor, radius: f32, effect: effect, speed: f32 = 20.0, height: f32 = 60.0)
-pub fn attach(to: LiveActor, look: model, joint: text, offset: mat34? = none) -> Attached   // idea 25
+pub fn attach(to: LiveActor, look: model, joint: text, offset: mat34? = none) -> Attached
 pub fn placement(a: LiveActor) -> PlacementKey?          // P-15: stable across machines with the same mods
 pub fn find_placed(key: PlacementKey) -> LiveActor?
-pub fn spawn_game(name: text, at: vec3) -> LiveActor?     // a game class by name, its files loaded first (idea 194)
+pub fn spawn_game(name: text, at: vec3) -> LiveActor?     // a game class by name, its files loaded first
 ```
 
 Data `kit/actor/<name>.json`: a kind without code (fields but `fn`). Built on: `K.derive`, `K.hook`, `K.call`

@@ -31,7 +31,7 @@ pub enum Ended { Timer, Damage, Replaced, Ended, ModStopped }
 pub struct FormId { fn give(self); fn is_current(self) -> bool; fn id(self) -> text }
 pub fn define(f: Form) -> FormId
 pub fn find(id: text) -> FormId?              // a form of this mod defined in kit/player.form
-pub fn game(f: GameForm) -> FormId            // the game's own forms, given like a mod's (idea 14)
+pub fn game(f: GameForm) -> FormId            // the game's own forms, given like a mod's
 pub fn current() -> FormId?
 pub fn frames_left() -> u32?
 pub fn end()                                  // back to Normal, Ended.Ended

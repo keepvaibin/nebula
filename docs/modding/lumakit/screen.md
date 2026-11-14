@@ -8,8 +8,8 @@ pub fn choose(title: text, rows: list<text>) -> pending<int?>  // none: the play
 pub struct List { title: text, rows: list<text>, on_choose: fn(int)? = none, closes: bool = false }
 pub struct ListScreen { fn set_rows(self, rows: list<text>); fn close(self); fn alive(self) -> bool }
 pub fn list(l: List) -> ListScreen
-pub fn layout(l: layout, pauses: bool = true) -> ui.Open   // a mod's layout as a screen (ideas 81, 131)
-pub fn loading(tips: list<text>, picture: draw.Texture? = none)   // shown while stages load (idea 124)
+pub fn layout(l: layout, pauses: bool = true) -> ui.Open   // a mod's layout as a screen
+pub fn loading(tips: list<text>, picture: draw.Texture? = none)   // shown while stages load
 ```
 
 Built on: `ui`, `draw` (the loading point: "one on every presented frame, loading included"), `input`, `time`

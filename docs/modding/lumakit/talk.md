@@ -6,7 +6,7 @@ Gives: lines and choices from an actor in the game's balloon, dialogue trees, vo
 pub fn say(who: ref<LiveActor>, line: text) -> pending
 pub fn ask(who: ref<LiveActor>, line: text, choices: list<text>) -> pending<int>
 pub fn run(who: ref<LiveActor>, tree: text) -> pending<text?>  // a tree of kit/talk; its end node's name
-pub fn voice(line: text, s: sound)          // the sound played when the line is shown (idea 114)
+pub fn voice(line: text, s: sound)          // the sound played when the line is shown
 ```
 
 Data `kit/talk/<tree>.json`: nodes of a line, choices, each choice's next node and a per-file flag it sets (through

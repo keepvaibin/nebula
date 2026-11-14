@@ -398,7 +398,7 @@ task find_task() {
     let choice = wait screen.choose(text "Balloon.Pick", list.map(fn(h: Hidden) -> text { return h.hint }))
     guard let i = choice else { return }
     hunting = list[i]
-    placed = ref(balloon_kind.spawn(at: list[i].at))       // a mod's actor made mid-stage (idea 194's check)
+    placed = ref(balloon_kind.spawn(at: list[i].at))       // a mod's actor made mid-stage
     hunt_start = time.frame()
     hud.timer(hud.Corner.TopRight).follow(fn() -> u64 { return time.frame() - hunt_start })
 }
@@ -801,7 +801,7 @@ use svc.draw
 use svc.input
 
 // The second player is a second instance of the game's own player, updated with the player globals switched
-// around it (the sm64coopdx method, idea 195); kit.player.character gives that instance and its pad.
+// around it (the sm64coopdx method); kit.player.character gives that instance and its pad.
 let second = character.second_player(character.Second { look: model "LuigiCoop", pad: input.pad(2) })
 let view = draw.view(draw.View {                         // draw.view (DECISIONS 3)
     camera: camera.follow(second.view(), distance: 1200.0)
@@ -995,9 +995,8 @@ data file read at build, checked), `font "..."`, `movie "..."`, `sound_named(...
   should say the parameter types may be omitted when the override's name has one virtual.
 - P-8: a game function returning `Vec3f *` (`MR::getPlayerPos`) gives a `vec3` copy (B.29, A.5); section 7.2 lists
   pointers to vectors only as `var` arguments. Add results.
-- P-9 (against the idea corpus, not the language): idea 167 (rumble) needs no `input.dev`: the game's own
-  `MR::tryRumblePad*` calls rumble the player's pad through the host. Row 167 becomes Yes; `input.dev` keeps 119, 166,
-  168, 175 (motion, touchpads, HID/MIDI) and rumble beyond the game's patterns.
+- P-9 (not the language): rumble needs no `input.dev`: the game's own `MR::tryRumblePad*` calls rumble the player's
+  pad through the host. `input.dev` keeps motion, touchpads, HID/MIDI and rumble beyond the game's patterns.
 - P-10: B.122 cannot hide counters already shown without a function the game lacks; the program applies its option
   from the next appearance. Not a language gap; 1.x may find the HUD's own hide path.
 - P-11: `on draw <point>`, `on layers`, `data "<file>"`, `font`, `movie`, `sound_named` are used and not in the

@@ -15,10 +15,10 @@ pub fn text(at: Corner, s: text, frames: u32? = none) -> Text   // frames: remov
 pub fn meter(at: Corner, max: int, label: text? = none) -> Meter
 pub fn picture(at: Corner, tex: draw.Texture, size: vec2) -> Picture
 pub fn counter(at: Corner, value: i64, icon: draw.Texture? = none) -> Counter
-pub fn above(of: LiveActor, s: text, height: f32 = 150.0) -> Text   // follows the actor (idea 54)
-pub fn float_text(at: vec3, s: text, frames: u32 = 60) // rises and fades (idea 135)
-pub fn popup(title: text, line: text, icon: draw.Texture? = none)  // the achievement popup (idea 127)
-pub fn subtitle(line: text, speaker: text? = none, frames: u32 = 180)   // idea 172
+pub fn above(of: LiveActor, s: text, height: f32 = 150.0) -> Text   // follows the actor
+pub fn float_text(at: vec3, s: text, frames: u32 = 60) // rises and fades
+pub fn popup(title: text, line: text, icon: draw.Texture? = none)  // the achievement popup
+pub fn subtitle(line: text, speaker: text? = none, frames: u32 = 180)
 pub enum GamePart { Lives, Coins, StarBits, Stars, Health, All }
 pub fn hide_game(part: GamePart, hidden: bool)
 ```

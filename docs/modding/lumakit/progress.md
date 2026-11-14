@@ -7,14 +7,14 @@ what a star gives, new-file rules.
 pub fn stars() -> u32                                  // the game's and every mod's, on this file
 pub fn has_star(galaxy: text, scenario: u32) -> bool
 pub fn give_star(galaxy: text, scenario: u32)
-pub fn on_star(f: fn(text, u32) -> StarGet)       // (galaxy, scenario)   // what getting a star does (ideas 64, 65)
+pub fn on_star(f: fn(text, u32) -> StarGet)       // (galaxy, scenario)   // what getting a star does
 pub enum StarGet { Star, Nothing, Instead(item.Gives) }
-pub fn add_comet(galaxy: text, scenario: u32, comet: stage.Comet)   // ideas 77, 78, 82
+pub fn add_comet(galaxy: text, scenario: u32, comet: stage.Comet)
 pub struct Flag { fn get(self) -> bool; fn set(self, on: bool) }
 pub struct Number { fn get(self) -> i64; fn set(self, v: i64); fn add(self, d: i64) -> i64 }
-pub fn flag(id: text) -> Flag                          // per file, following its copy and erase (idea 197)
-pub fn number(id: text) -> Number                      // experience, achievements (ideas 55, 127)
-pub fn on_new_file(f: fn())                            // New Game+ (idea 83)
+pub fn flag(id: text) -> Flag                          // per file, following its copy and erase
+pub fn number(id: text) -> Number                      // experience, achievements
+pub fn on_new_file(f: fn())                            // New Game+
 ```
 
 Built on: `save` (per-file values following copy and erase), `K.hook` (star counting, the comet table,

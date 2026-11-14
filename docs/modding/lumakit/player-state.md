@@ -27,7 +27,7 @@ pub struct StateId { fn enter(self) -> bool; fn is_current(self) -> bool }
 pub fn define(s: State) -> StateId
 pub fn find(id: text) -> StateId?
 pub fn current() -> StateId?
-pub fn tune(t: Tuning) -> Tuned                // a handle; end() puts the constants back (idea 28)
+pub fn tune(t: Tuning) -> Tuned                // a handle; end() puts the constants back
 pub struct Tuned { fn end(self); fn alive(self) -> bool }
 ```
 

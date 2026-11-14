@@ -12,7 +12,7 @@ pub enum Widget { Button(label: text, on_press: fn()), Slider(label: text, min: 
 pub struct Panel { title: text? = none, widgets: list<Widget>, at: hud.Corner? = none, pauses: bool = false }
 pub struct Open { fn set(self, index: int, w: Widget); fn close(self); fn alive(self) -> bool }
 pub fn open(p: Panel) -> Open
-pub fn touch_layout(buttons: list<(input.Action, vec2, f32)>)   // on-screen buttons where the platform has touch (idea 170)
+pub fn touch_layout(buttons: list<(input.Action, vec2, f32)>)   // on-screen buttons where the platform has touch
 ```
 
 Built on: `draw`, `ui`, `input` (text entry, touch, inject), `draw.view`† (ModelView). Conformance: each widget by pad,

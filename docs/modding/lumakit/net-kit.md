@@ -7,7 +7,7 @@ HTTP and WebSocket server for a page (a phone as a controller).
 pub struct Link { fn send(self, to: u8, data: bytes); fn send_all(self, data: bytes); fn peers(self) -> list<u8>;
                   fn close(self) }                // events: net_kit.received(link, from, data), net_kit.peer(link, id, joined)
 pub fn reliable(over: net.Datagrams) -> Link   // needs: net
-pub fn clock(l: Link) -> pending<f64>          // the host's time minus ours, in seconds (idea 141)
+pub fn clock(l: Link) -> pending<f64>          // the host's time minus ours, in seconds
 pub struct Page { fn url(self) -> text; fn close(self) }   // events: net_kit.page_message(page, data)
 pub fn serve_page(port: u16, files: list<data>) -> Page   // needs: net (listen)
 ```

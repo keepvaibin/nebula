@@ -20,7 +20,7 @@ pub struct ItemId { fn spawn(self, at: vec3) -> LiveActor; fn give(self); fn car
                     fn use_one(self) -> bool }
 pub fn define(i: Item) -> ItemId
 pub fn find(id: text) -> ItemId?
-pub fn carried_all() -> list<(ItemId, u32)>  // the inventory, in the order first carried (idea 56's wheel)
+pub fn carried_all() -> list<(ItemId, u32)>  // the inventory, in the order first carried
 ```
 
 `form.Form` refers to `item.ItemId` and `item.Gives` to `form.FormId`: the two are one library and the cycle is

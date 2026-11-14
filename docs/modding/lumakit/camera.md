@@ -6,12 +6,12 @@ A rig is a `draw.ViewCamera` (svc.draw), so the same rig drives the main camera 
 ```lumascript skip a listing from the part's contract, not a module that builds alone
 pub struct Control { fn end(self); fn alive(self) -> bool }
 pub fn take(rig: draw.ViewCamera) -> Control      // the main camera follows the rig until end()
-pub fn free(speed: f32 = 40.0) -> Control         // a free camera moved with the sticks (ideas 85, 88, 137, 161)
+pub fn free(speed: f32 = 40.0) -> Control         // a free camera moved with the sticks
 pub fn follow(target: LiveActor, distance: f32, height: f32 = 300.0) -> draw.ViewCamera
-pub fn eye(of: LiveActor, joint: text = "Head", near: f32 = 5.0) -> draw.ViewCamera   // first person (idea 18)
-pub fn side(normal: vec3, distance: f32) -> draw.ViewCamera                          // 2D sections (idea 76)
-pub fn stereo(rig: draw.ViewCamera, eye_distance: f32) -> (draw.ViewCamera, draw.ViewCamera)   // VR (idea 92)
-pub fn mirror(on: bool)                            // the image and the stick's x flipped (ideas 66, 191)
+pub fn eye(of: LiveActor, joint: text = "Head", near: f32 = 5.0) -> draw.ViewCamera   // first person
+pub fn side(normal: vec3, distance: f32) -> draw.ViewCamera                          // 2D sections
+pub fn stereo(rig: draw.ViewCamera, eye_distance: f32) -> (draw.ViewCamera, draw.ViewCamera)   // VR
+pub fn mirror(on: bool)                            // the image and the stick's x flipped
 pub fn fov(degrees: f32?)                          // none: the game's own
 pub fn shake(strength: f32, frames: u32)
 pub fn now() -> draw.Eye                           // where the main camera is

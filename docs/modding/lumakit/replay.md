@@ -26,7 +26,7 @@ pub struct Puppet { fn pose(self, t: Track, frame: u32); fn set_pose(self, p: Po
 pub fn record(w: What) -> Recorder
 pub fn current_pose(w: What) -> Pose
 pub fn puppet(look: model) -> Puppet                  // lit as the player (up to 15, P-19)
-pub fn play_inputs(t: Track) -> pending               // What.Inputs, each frame injected (idea 157)
+pub fn play_inputs(t: Track) -> pending               // What.Inputs, each frame injected
 pub fn seed(n: u32)                                   // the game's random numbers from n (MR::getRandom)
 pub struct Rewind { fn back(self, frames: u32) -> u32; fn end(self) }
 pub fn rewind(what: list<What>, seconds: f32) -> Rewind

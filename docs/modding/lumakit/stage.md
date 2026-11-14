@@ -15,11 +15,11 @@ pub struct DomeDef { name: text, title: text, unlock: Unlock = Unlock.Always }
 pub fn define_galaxy(g: Galaxy) -> GalaxyId
 pub fn define_dome(d: DomeDef)
 pub fn find(name: text) -> GalaxyId?
-pub fn go_to(galaxy: text, scenario: u32)            // MR::requestChangeStageInGameMoving (idea 63)
+pub fn go_to(galaxy: text, scenario: u32)            // MR::requestChangeStageInGameMoving
 pub fn appear_star(at: vec3, scenario: u32)
-pub fn music(galaxy: text, scenario: u32?, s: sound)  // idea 110
-pub fn hub(stage: text)                               // the hub replaced (idea 79)
-pub fn build(name: text, make: fn(var Builder))      // a stage made in code when it loads (ideas 70, 71)
+pub fn music(galaxy: text, scenario: u32?, s: sound)
+pub fn hub(stage: text)                               // the hub replaced
+pub fn build(name: text, make: fn(var Builder))      // a stage made in code when it loads
 pub struct Builder { fn place(var self, kind: text, at: vec3, rotation: vec3 = vec3(0, 0, 0), args: list<int> = []);
                      fn planet(var self, look: model, collision: model, at: vec3); fn gravity(var self, f: gravity.Field) }
 ```

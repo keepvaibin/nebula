@@ -9,10 +9,10 @@ pub fn world() -> (vec3, vec3)?                   // the map point and normal un
 pub enum Cost { StarBits(u32), Coins(u32), Free }
 pub struct Throw { shot: fn(vec3, vec3) -> projectile.Shot, cost: Cost = Cost.StarBits(1) }   // (from, toward)
 pub struct ThrowSet { fn end(self) }
-pub fn set_throw(t: Throw) -> ThrowSet            // what B throws (idea 40); end(): star bits again
+pub fn set_throw(t: Throw) -> ThrowSet            // what B throws; end(): star bits again
 pub fn on_grab(f: fn(LiveActor) -> bool) -> ThrowSet   // A on a pointed actor
 pub enum Source { Infrared, Gyro(sensitivity: f32), Mouse, Stick }
-pub fn source(pad: input.Pad, s: Source)          // idea 166
+pub fn source(pad: input.Pad, s: Source)
 ```
 
 Built on: `K.hook` (`StarPieceDirector`'s shot, `StarPointerController`), `K.call` (`MR::getStarPointerScreenPosition`,

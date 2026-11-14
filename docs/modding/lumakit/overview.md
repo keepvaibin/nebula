@@ -118,7 +118,7 @@ pub enum Ended { Timer, Damage, Replaced, Ended, ModStopped }
 pub struct FormId { fn give(self); fn is_current(self) -> bool; fn id(self) -> text }
 pub fn define(f: Form) -> FormId
 pub fn find(id: text) -> FormId?              // a form of this mod defined in kit/player.form
-pub fn game(f: GameForm) -> FormId            // the game's own forms, given like a mod's (idea 14)
+pub fn game(f: GameForm) -> FormId            // the game's own forms, given like a mod's
 pub fn current() -> FormId?
 pub fn frames_left() -> u32?
 pub fn end()                                  // back to Normal, Ended.Ended
@@ -161,7 +161,7 @@ pub struct StateId { fn enter(self) -> bool; fn is_current(self) -> bool }
 pub fn define(s: State) -> StateId
 pub fn find(id: text) -> StateId?
 pub fn current() -> StateId?
-pub fn tune(t: Tuning) -> Tuned                // a handle; end() puts the constants back (idea 28)
+pub fn tune(t: Tuning) -> Tuned                // a handle; end() puts the constants back
 pub struct Tuned { fn end(self); fn alive(self) -> bool }
 ```
 
@@ -191,15 +191,15 @@ pub struct CharacterId { fn play(self); fn is_current(self) -> bool }
 pub fn define(c: Character) -> CharacterId
 pub fn find(id: text) -> CharacterId?
 pub fn current() -> CharacterId?              // none: the game's own Mario or Luigi
-pub fn mario() -> CharacterId                 // the game's own, to switch back (idea 4)
+pub fn mario() -> CharacterId                 // the game's own, to switch back
 pub struct Second { look: model, pad: input.Pad, character: CharacterId? = none }
 pub struct SecondPlayer { fn view(self) -> MarioActor; fn remove(self); fn alive(self) -> bool }
-pub fn second_player(s: Second) -> SecondPlayer    // a second instance of the game's player (idea 89, 140)
+pub fn second_player(s: Second) -> SecondPlayer    // a second instance of the game's player
 ```
 
 Data `kit/player.character/<id>.json`: all fields. Built on: `K.derive` and `K.hook` (the player object and the
-globals it reads, idea 195's method), `K.data`, `C.skin`, `C.anim`, `C.sound`, `C.text`, `assets` (a model made at
-run time, idea 151), `input`. Conformance: a character from data with its own clips and voice, switching mid-level and
+globals it reads, the sm64coopdx method), `K.data`, `C.skin`, `C.anim`, `C.sound`, `C.text`, `assets` (a model made at
+run time), `input`. Conformance: a character from data with its own clips and voice, switching mid-level and
 back, Luigi's checks with `as_luigi`, a downloaded model (assets, checked by the validator) as a character, a second
 player on pad 2 moving on a planet beside the first, the mod off while playing it (the game's Mario again).
 
@@ -225,7 +225,7 @@ pub struct ItemId { fn spawn(self, at: vec3) -> LiveActor; fn give(self); fn car
                     fn use_one(self) -> bool }
 pub fn define(i: Item) -> ItemId
 pub fn find(id: text) -> ItemId?
-pub fn carried_all() -> list<(ItemId, u32)>  // the inventory, in the order first carried (idea 56's wheel)
+pub fn carried_all() -> list<(ItemId, u32)>  // the inventory, in the order first carried
 ```
 
 `form.Form` refers to `item.ItemId` and `item.Gives` to `form.FormId`: the two are one library and the cycle is
@@ -304,10 +304,10 @@ pub fn move_toward_player(a: LiveActor, speed: f32)
 pub fn turn_toward(a: LiveActor, at: vec3, degrees_per_frame: f32)
 pub fn sees_player(a: LiveActor, distance: f32, degrees: f32) -> bool
 pub fn shockwave(a: LiveActor, radius: f32, effect: effect, speed: f32 = 20.0, height: f32 = 60.0)
-pub fn attach(to: LiveActor, look: model, joint: text, offset: mat34? = none) -> Attached   // idea 25
+pub fn attach(to: LiveActor, look: model, joint: text, offset: mat34? = none) -> Attached
 pub fn placement(a: LiveActor) -> PlacementKey?          // P-15: stable across machines with the same mods
 pub fn find_placed(key: PlacementKey) -> LiveActor?
-pub fn spawn_game(name: text, at: vec3) -> LiveActor?     // a game class by name, its files loaded first (idea 194)
+pub fn spawn_game(name: text, at: vec3) -> LiveActor?     // a game class by name, its files loaded first
 ```
 
 Data `kit/actor/<name>.json`: a kind without code (fields but `fn`). Built on: `K.derive`, `K.hook`, `K.call`
@@ -327,9 +327,9 @@ Gives: new kinds of area, placed like the game's, with what happens inside.
 pub struct Kind {
     name: text
     shape_from_placement: bool = true         // the placement's own shape (box, cylinder, sphere), as AreaObj
-    player_speed: f32 = 1.0                   // a zone that makes the player slow (idea 75)
-    player_force: vec3? = none                // wind, along the area's own axes (idea 68)
-    camera: draw.ViewCamera? = none           // the main camera while the player is inside (idea 76)
+    player_speed: f32 = 1.0                   // a zone that makes the player slow
+    player_force: vec3? = none                // wind, along the area's own axes
+    camera: draw.ViewCamera? = none           // the main camera while the player is inside
     on_enter: fn(MarioActor)? = none
     on_inside: fn(MarioActor)? = none          // each frame
     on_leave: fn(MarioActor)? = none
@@ -354,7 +354,7 @@ pub struct Override { fn end(self); fn alive(self) -> bool }
 pub fn override_player(f: Field, frames: u32? = none) -> Override
 pub struct Shape { name: text, vector: fn(vec3) -> vec3?, range: f32 = 1000.0, priority: int = 0 }
 pub struct ShapeId { fn name(self) -> text }
-pub fn define_shape(s: Shape) -> ShapeId          // placed in stages by name (idea 73)
+pub fn define_shape(s: Shape) -> ShapeId          // placed in stages by name
 pub fn at(p: vec3) -> vec3
 ```
 
@@ -371,12 +371,12 @@ A rig is a `draw.ViewCamera` (svc.draw), so the same rig drives the main camera 
 ```lumascript skip a listing from the part's contract, not a module that builds alone
 pub struct Control { fn end(self); fn alive(self) -> bool }
 pub fn take(rig: draw.ViewCamera) -> Control      // the main camera follows the rig until end()
-pub fn free(speed: f32 = 40.0) -> Control         // a free camera moved with the sticks (ideas 85, 88, 137, 161)
+pub fn free(speed: f32 = 40.0) -> Control         // a free camera moved with the sticks
 pub fn follow(target: LiveActor, distance: f32, height: f32 = 300.0) -> draw.ViewCamera
-pub fn eye(of: LiveActor, joint: text = "Head", near: f32 = 5.0) -> draw.ViewCamera   // first person (idea 18)
-pub fn side(normal: vec3, distance: f32) -> draw.ViewCamera                          // 2D sections (idea 76)
-pub fn stereo(rig: draw.ViewCamera, eye_distance: f32) -> (draw.ViewCamera, draw.ViewCamera)   // VR (idea 92)
-pub fn mirror(on: bool)                            // the image and the stick's x flipped (ideas 66, 191)
+pub fn eye(of: LiveActor, joint: text = "Head", near: f32 = 5.0) -> draw.ViewCamera   // first person
+pub fn side(normal: vec3, distance: f32) -> draw.ViewCamera                          // 2D sections
+pub fn stereo(rig: draw.ViewCamera, eye_distance: f32) -> (draw.ViewCamera, draw.ViewCamera)   // VR
+pub fn mirror(on: bool)                            // the image and the stick's x flipped
 pub fn fov(degrees: f32?)                          // none: the game's own
 pub fn shake(strength: f32, frames: u32)
 pub fn now() -> draw.Eye                           // where the main camera is
@@ -408,10 +408,10 @@ pub fn text(at: Corner, s: text, frames: u32? = none) -> Text   // frames: remov
 pub fn meter(at: Corner, max: int, label: text? = none) -> Meter
 pub fn picture(at: Corner, tex: draw.Texture, size: vec2) -> Picture
 pub fn counter(at: Corner, value: i64, icon: draw.Texture? = none) -> Counter
-pub fn above(of: LiveActor, s: text, height: f32 = 150.0) -> Text   // follows the actor (idea 54)
-pub fn float_text(at: vec3, s: text, frames: u32 = 60) // rises and fades (idea 135)
-pub fn popup(title: text, line: text, icon: draw.Texture? = none)  // the achievement popup (idea 127)
-pub fn subtitle(line: text, speaker: text? = none, frames: u32 = 180)   // idea 172
+pub fn above(of: LiveActor, s: text, height: f32 = 150.0) -> Text   // follows the actor
+pub fn float_text(at: vec3, s: text, frames: u32 = 60) // rises and fades
+pub fn popup(title: text, line: text, icon: draw.Texture? = none)  // the achievement popup
+pub fn subtitle(line: text, speaker: text? = none, frames: u32 = 180)
 pub enum GamePart { Lives, Coins, StarBits, Stars, Health, All }
 pub fn hide_game(part: GamePart, hidden: bool)
 ```
@@ -432,8 +432,8 @@ pub fn choose(title: text, rows: list<text>) -> pending<int?>  // none: the play
 pub struct List { title: text, rows: list<text>, on_choose: fn(int)? = none, closes: bool = false }
 pub struct ListScreen { fn set_rows(self, rows: list<text>); fn close(self); fn alive(self) -> bool }
 pub fn list(l: List) -> ListScreen
-pub fn layout(l: layout, pauses: bool = true) -> ui.Open   // a mod's layout as a screen (ideas 81, 131)
-pub fn loading(tips: list<text>, picture: draw.Texture? = none)   // shown while stages load (idea 124)
+pub fn layout(l: layout, pauses: bool = true) -> ui.Open   // a mod's layout as a screen
+pub fn loading(tips: list<text>, picture: draw.Texture? = none)   // shown while stages load
 ```
 
 Built on: `ui`, `draw` (the loading point: "one on every presented frame, loading included"), `input`, `time`
@@ -443,7 +443,7 @@ with pad, keyboard and touch; a list updated while open; a screen open when its 
 ### 2.12 `menu`
 
 Gives: entries in the game's pause menu. (A mod's settings are its `luma.json` options on the Mods screen, read with
-`option` and `on option`: ideas 27 and 86 are options, not menu entries; one way, language rule 5.)
+`option` and `on option`: a setting is an option, not a menu entry; one way, language rule 5.)
 
 ```lumascript skip a listing from the part's contract, not a module that builds alone
 pub struct Entry { fn set_label(self, s: text); fn enable(self, on: bool); fn remove(self) }
@@ -479,7 +479,7 @@ Gives: lines and choices from an actor in the game's balloon, dialogue trees, vo
 pub fn say(who: ref<LiveActor>, line: text) -> pending
 pub fn ask(who: ref<LiveActor>, line: text, choices: list<text>) -> pending<int>
 pub fn run(who: ref<LiveActor>, tree: text) -> pending<text?>  // a tree of kit/talk; its end node's name
-pub fn voice(line: text, s: sound)          // the sound played when the line is shown (idea 114)
+pub fn voice(line: text, s: sound)          // the sound played when the line is shown
 ```
 
 Data `kit/talk/<tree>.json`: nodes of a line, choices, each choice's next node and a per-file flag it sets (through
@@ -519,11 +519,11 @@ pub struct DomeDef { name: text, title: text, unlock: Unlock = Unlock.Always }
 pub fn define_galaxy(g: Galaxy) -> GalaxyId
 pub fn define_dome(d: DomeDef)
 pub fn find(name: text) -> GalaxyId?
-pub fn go_to(galaxy: text, scenario: u32)            // MR::requestChangeStageInGameMoving (idea 63)
+pub fn go_to(galaxy: text, scenario: u32)            // MR::requestChangeStageInGameMoving
 pub fn appear_star(at: vec3, scenario: u32)
-pub fn music(galaxy: text, scenario: u32?, s: sound)  // idea 110
-pub fn hub(stage: text)                               // the hub replaced (idea 79)
-pub fn build(name: text, make: fn(var Builder))      // a stage made in code when it loads (ideas 70, 71)
+pub fn music(galaxy: text, scenario: u32?, s: sound)
+pub fn hub(stage: text)                               // the hub replaced
+pub fn build(name: text, make: fn(var Builder))      // a stage made in code when it loads
 pub struct Builder { fn place(var self, kind: text, at: vec3, rotation: vec3 = vec3(0, 0, 0), args: list<int> = []);
                      fn planet(var self, look: model, collision: model, at: vec3); fn gravity(var self, f: gravity.Field) }
 ```
@@ -544,14 +544,14 @@ what a star gives, new-file rules.
 pub fn stars() -> u32                                  // the game's and every mod's, on this file
 pub fn has_star(galaxy: text, scenario: u32) -> bool
 pub fn give_star(galaxy: text, scenario: u32)
-pub fn on_star(f: fn(text, u32) -> StarGet)       // (galaxy, scenario)   // what getting a star does (ideas 64, 65)
+pub fn on_star(f: fn(text, u32) -> StarGet)       // (galaxy, scenario)   // what getting a star does
 pub enum StarGet { Star, Nothing, Instead(item.Gives) }
-pub fn add_comet(galaxy: text, scenario: u32, comet: stage.Comet)   // ideas 77, 78, 82
+pub fn add_comet(galaxy: text, scenario: u32, comet: stage.Comet)
 pub struct Flag { fn get(self) -> bool; fn set(self, on: bool) }
 pub struct Number { fn get(self) -> i64; fn set(self, v: i64); fn add(self, d: i64) -> i64 }
-pub fn flag(id: text) -> Flag                          // per file, following its copy and erase (idea 197)
-pub fn number(id: text) -> Number                      // experience, achievements (ideas 55, 127)
-pub fn on_new_file(f: fn())                            // New Game+ (idea 83)
+pub fn flag(id: text) -> Flag                          // per file, following its copy and erase
+pub fn number(id: text) -> Number                      // experience, achievements
+pub fn on_new_file(f: fn())                            // New Game+
 ```
 
 Built on: `save` (per-file values following copy and erase), `K.hook` (star counting, the comet table,
@@ -567,7 +567,7 @@ HTTP and WebSocket server for a page (a phone as a controller).
 pub struct Link { fn send(self, to: u8, data: bytes); fn send_all(self, data: bytes); fn peers(self) -> list<u8>;
                   fn close(self) }                // events: net_kit.received(link, from, data), net_kit.peer(link, id, joined)
 pub fn reliable(over: net.Datagrams) -> Link   // needs: net
-pub fn clock(l: Link) -> pending<f64>          // the host's time minus ours, in seconds (idea 141)
+pub fn clock(l: Link) -> pending<f64>          // the host's time minus ours, in seconds
 pub struct Page { fn url(self) -> text; fn close(self) }   // events: net_kit.page_message(page, data)
 pub fn serve_page(port: u16, files: list<data>) -> Page   // needs: net (listen)
 ```
@@ -612,7 +612,7 @@ pub struct Puppet { fn pose(self, t: Track, frame: u32); fn set_pose(self, p: Po
 pub fn record(w: What) -> Recorder
 pub fn current_pose(w: What) -> Pose
 pub fn puppet(look: model) -> Puppet                  // lit as the player (up to 15, P-19)
-pub fn play_inputs(t: Track) -> pending               // What.Inputs, each frame injected (idea 157)
+pub fn play_inputs(t: Track) -> pending               // What.Inputs, each frame injected
 pub fn seed(n: u32)                                   // the game's random numbers from n (MR::getRandom)
 pub struct Rewind { fn back(self, frames: u32) -> u32; fn end(self) }
 pub fn rewind(what: list<What>, seconds: f32) -> Rewind
@@ -637,7 +637,7 @@ pub enum Widget { Button(label: text, on_press: fn()), Slider(label: text, min: 
 pub struct Panel { title: text? = none, widgets: list<Widget>, at: hud.Corner? = none, pauses: bool = false }
 pub struct Open { fn set(self, index: int, w: Widget); fn close(self); fn alive(self) -> bool }
 pub fn open(p: Panel) -> Open
-pub fn touch_layout(buttons: list<(input.Action, vec2, f32)>)   // on-screen buttons where the platform has touch (idea 170)
+pub fn touch_layout(buttons: list<(input.Action, vec2, f32)>)   // on-screen buttons where the platform has touch
 ```
 
 Built on: `draw`, `ui`, `input` (text entry, touch, inject), `draw.view`† (ModelView). Conformance: each widget by pad,
@@ -683,10 +683,10 @@ pub fn world() -> (vec3, vec3)?                   // the map point and normal un
 pub enum Cost { StarBits(u32), Coins(u32), Free }
 pub struct Throw { shot: fn(vec3, vec3) -> projectile.Shot, cost: Cost = Cost.StarBits(1) }   // (from, toward)
 pub struct ThrowSet { fn end(self) }
-pub fn set_throw(t: Throw) -> ThrowSet            // what B throws (idea 40); end(): star bits again
+pub fn set_throw(t: Throw) -> ThrowSet            // what B throws; end(): star bits again
 pub fn on_grab(f: fn(LiveActor) -> bool) -> ThrowSet   // A on a pointed actor
 pub enum Source { Infrared, Gyro(sensitivity: f32), Mouse, Stick }
-pub fn source(pad: input.Pad, s: Source)          // idea 166
+pub fn source(pad: input.Pad, s: Source)
 ```
 
 Built on: `K.hook` (`StarPieceDirector`'s shot, `StarPointerController`), `K.call` (`MR::getStarPointerScreenPosition`,

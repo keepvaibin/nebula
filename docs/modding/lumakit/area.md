@@ -6,9 +6,9 @@ Gives: new kinds of area, placed like the game's, with what happens inside.
 pub struct Kind {
     name: text
     shape_from_placement: bool = true         // the placement's own shape (box, cylinder, sphere), as AreaObj
-    player_speed: f32 = 1.0                   // a zone that makes the player slow (idea 75)
-    player_force: vec3? = none                // wind, along the area's own axes (idea 68)
-    camera: draw.ViewCamera? = none           // the main camera while the player is inside (idea 76)
+    player_speed: f32 = 1.0                   // a zone that makes the player slow
+    player_force: vec3? = none                // wind, along the area's own axes
+    camera: draw.ViewCamera? = none           // the main camera while the player is inside
     on_enter: fn(MarioActor)? = none
     on_inside: fn(MarioActor)? = none          // each frame
     on_leave: fn(MarioActor)? = none
