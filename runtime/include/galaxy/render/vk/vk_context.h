@@ -384,6 +384,14 @@ private:
 // Throws std::runtime_error naming `what` when `result` is an error.
 void check(VkResult result, const char* what);
 
+// The driver's pipeline cache the program pipelines are made with (core/pipelines_vk.cpp): read from the cache file the first
+// time and written back with it. A pipeline made outside the program table passes it too, so a later start loads that pipeline
+// from the file instead of compiling it. Internally synchronised (no VK_PIPELINE_CACHE_CREATE_EXTERNALLY_SYNCHRONIZED_BIT).
+[[nodiscard]] VkPipelineCache shared_pipeline_cache();
+// Writes the shared cache to its file and destroys it (Context::shutdown, before the device goes): a device made later, as
+// after a failed start or a lost device, gets a cache of its own.
+void release_shared_pipeline_cache() noexcept;
+
 // The calling thread's CPU time (nanoseconds; 0 where the platform has no per-thread clock).
 [[nodiscard]] std::int64_t thread_cpu_ns() noexcept;
 // CPU time spent inside driver calls since the last take (a driver that spins where it should sleep shows here):

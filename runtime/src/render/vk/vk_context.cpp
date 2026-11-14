@@ -1238,6 +1238,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
 void Context::shutdown() noexcept {
     if (device_ != VK_NULL_HANDLE) {
         vkDeviceWaitIdle(device_);
+        release_shared_pipeline_cache();
     }
 #if defined(_WIN32)
     streamline_vk::shutdown();

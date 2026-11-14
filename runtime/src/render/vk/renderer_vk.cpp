@@ -1419,7 +1419,7 @@ VkPipeline RendererVk::create_utility_pipeline(VkRenderPass pass, VkPipelineLayo
     info.layout = layout;
     info.renderPass = pass;
     VkPipeline pipeline = VK_NULL_HANDLE;
-    const VkResult result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &pipeline);
+    const VkResult result = vkCreateGraphicsPipelines(device, vk::shared_pipeline_cache(), 1, &info, nullptr, &pipeline);
     vkDestroyShaderModule(device, vs, nullptr);
     vkDestroyShaderModule(device, ps, nullptr);
     vk::check(result, "utility pipeline");
@@ -1442,7 +1442,7 @@ bool RendererVk::create_utility_pipelines() {
         info.stage.module = module;
         info.stage.pName = "main";
         info.layout = probe_layout_;
-        const VkResult result = vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &probe_pipeline_);
+        const VkResult result = vkCreateComputePipelines(device, vk::shared_pipeline_cache(), 1, &info, nullptr, &probe_pipeline_);
         vkDestroyShaderModule(device, module, nullptr);
         vk::check(result, "screen probe pipeline");
     }
@@ -1554,7 +1554,7 @@ VkPipeline RendererVk::probe_test_pipeline() {
     info.pDynamicState = &dynamic;
     info.layout = utility_layout_;
     info.renderPass = pass;
-    const VkResult result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &pipeline);
+    const VkResult result = vkCreateGraphicsPipelines(device, vk::shared_pipeline_cache(), 1, &info, nullptr, &pipeline);
     vkDestroyShaderModule(device, vs, nullptr);
     vkDestroyShaderModule(device, ps, nullptr);
     if (result != VK_SUCCESS) {
