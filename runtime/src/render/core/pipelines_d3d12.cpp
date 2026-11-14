@@ -16,6 +16,7 @@
 #include <filesystem>
 #include <fstream>
 #include <mutex>
+#include <shared_mutex>
 #include <system_error>
 #include <vector>
 
@@ -59,6 +60,9 @@ struct DriverCache {
     std::filesystem::path file;
     D3d12CacheIdentity identity;
     std::mutex lock;
+    // The library itself: loads hold it shared, so they run side by side; StorePipeline, GetSerializedSize, Serialize and
+    // the release hold it alone. Taken after a name's stripe and before `lock`.
+    std::shared_mutex use;
     bool opened = false;
     bool changed = false;
 };
@@ -67,6 +71,9 @@ DriverCache gCache;
 // in it unsafely (CreatePipelineLibrary, Thread Safety). A draw can ask for a pipeline while a worker loads its prepared
 // job, and two ids with one description share a name, so a name's load and store hold its hash's stripe; other names
 // load side by side, and a miss compiles outside the stripe (a duplicate store of one name fails harmlessly).
+// A store or a serialization running beside other names' loads crashed inside one driver's library (an access violation
+// in StorePipeline while other workers loaded, on a cold start), so those take the library alone (DriverCache::use) and
+// loads share it.
 std::array<std::mutex, 256> gNameLocks;
 
 ID3D12PipelineLibrary* driver_cache(gpu::Device* device) {
@@ -96,14 +103,15 @@ ID3D12PipelineLibrary* driver_cache(gpu::Device* device) {
     return gCache.library.Get();
 }
 
-// Serializing needs no name lock (only loads of one name do), so the workers and draws keep going while a copy goes out;
-// one writer at a time.
+// Serializing needs no name lock (only loads of one name do), but it takes the library alone: loads and stores wait for
+// the copy, and the file is written after; one writer at a time.
 std::size_t write_driver_cache() noexcept {
     static std::mutex writing;
     std::lock_guard one(writing);
     std::vector<char> bytes;
     std::filesystem::path file;
     {
+        const std::unique_lock alone(gCache.use);
         std::lock_guard guard(gCache.lock);
         if (gCache.library == nullptr || !gCache.changed) {
             return 0u;
@@ -127,6 +135,7 @@ std::size_t write_driver_cache() noexcept {
 
 void release_driver_cache() noexcept {
     write_driver_cache();
+    const std::unique_lock alone(gCache.use);
     std::lock_guard guard(gCache.lock);
     gCache.library.Reset();
     gCache.blob.clear();
@@ -455,12 +464,14 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
         std::mutex& named = gNameLocks[hash % gNameLocks.size()];
         {
             const std::lock_guard held(named);
+            const std::shared_lock shared(gCache.use);
             hr = cache->LoadGraphicsPipeline(name.data(), &pd, IID_PPV_ARGS(&pipeline));
         }
         if (FAILED(hr)) {
             hr = device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&pipeline));
             if (SUCCEEDED(hr)) {
                 const std::lock_guard held(named);
+                const std::unique_lock alone(gCache.use);
                 const std::lock_guard guard(gCache.lock);
                 gCache.changed = SUCCEEDED(cache->StorePipeline(name.data(), pipeline.Get())) || gCache.changed;
             }
