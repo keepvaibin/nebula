@@ -10,6 +10,7 @@
 #if defined(_WIN32)
 #include "galaxy/windows_api.h"
 #include "galaxy/windows_paths.h"
+#include "galaxy/windows_child.h"
 #endif
 #if defined(_WIN32) && defined(NEBULA_HOST_RENDERER) && !defined(NEBULA_HOST_SDL)
 #include <dwmapi.h>
@@ -4269,12 +4270,11 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
         const fs::path cooker = fs::path(::galaxy::windows::executable_path()).parent_path() / "nebula-import.exe";
         std::wstring command = L"\"" + cooker.wstring() + L"\" overlay \"" + plan_file.wstring() + L"\" --output \"" +
                                overlay.wstring() + L"\"";
-        STARTUPINFOW startup{};
-        startup.cb = sizeof(startup);
         PROCESS_INFORMATION process{};
         DWORD exit_code = 1;
-        if (CreateProcessW(cooker.c_str(), command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr,
-                           &startup, &process)) {
+        // It ends with the game however the game ends (windows_child.h); a start-again comes only after it ended.
+        ::galaxy::windows::child_note().store([](const char* text) { log_line("mods:", text); });
+        if (::galaxy::windows::start_child(cooker.c_str(), command, CREATE_NO_WINDOW, process) != ::galaxy::windows::ChildStart::NotStarted) {
             WaitForSingleObject(process.hProcess, INFINITE);
             GetExitCodeProcess(process.hProcess, &exit_code);
             CloseHandle(process.hThread);

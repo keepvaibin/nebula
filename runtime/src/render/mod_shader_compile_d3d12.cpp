@@ -4,6 +4,7 @@
 #include "galaxy/render/mod_shaders.h"
 
 #include "galaxy/windows_api.h"
+#include "galaxy/windows_child.h"
 #include "galaxy/windows_paths.h"
 
 #include <atomic>
@@ -47,11 +48,8 @@ std::string mod_shader_compiler_missing(const std::filesystem::path& cache_folde
     }
     const fs::path compiler = folder / "dxc.exe";
     std::wstring command = L"\"" + compiler.wstring() + L"\" --version";
-    STARTUPINFOW startup{};
-    startup.cb = sizeof(startup);
     PROCESS_INFORMATION process{};
-    if (!CreateProcessW(compiler.c_str(), command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &startup,
-                        &process)) {
+    if (windows::start_child(compiler.c_str(), command, CREATE_NO_WINDOW, process) == windows::ChildStart::NotStarted) {
         return "dxc\\dxc.exe did not start (error " + std::to_string(GetLastError()) + ")";
     }
     constexpr DWORD kVersionMs = 30000u;
@@ -108,12 +106,11 @@ std::vector<std::uint8_t> compile_mod_shader_stage(const std::string& source, co
     messages += ".txt";
     command += L" -I \"" + includes.wstring() + L"\" -Fo \"" + output.wstring() + L"\" -Fe \"" + messages.wstring() + L"\" \"" +
                input.wstring() + L"\"";
-    STARTUPINFOW startup{};
-    startup.cb = sizeof(startup);
     PROCESS_INFORMATION process{};
     DWORD exit_code = 1;
     bool timed_out = false;
-    if (CreateProcessW(compiler.c_str(), command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process)) {
+    // A child that ends with the game (windows_child.h): a game that ends mid-compile leaves no compiler running.
+    if (windows::start_child(compiler.c_str(), command, CREATE_NO_WINDOW, process) != windows::ChildStart::NotStarted) {
         // A compiler that hangs ends here, not the conversion with it.
         constexpr DWORD kCompileMs = 120000u;
         if (WaitForSingleObject(process.hProcess, kCompileMs) == WAIT_OBJECT_0) {
