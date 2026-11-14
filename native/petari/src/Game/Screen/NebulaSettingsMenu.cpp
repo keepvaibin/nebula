@@ -2017,6 +2017,9 @@ void NebulaSettingsScreen::fillHome(s32 homeView) {
         fillLauncher(homeView);
         return;
     }
+    if (mHomeView >= 0 && (mHomeView & cLauncherView) != 0) {
+        mHomeView = -1;  // the HOME Menu opened over the launcher's screen: its texts all again
+    }
     // HOME reuses the modal, but never its progress bar or controller-pairing illustration.
     mProgressTrack->SetVisible(false);
     mProgressFill->SetVisible(false);
