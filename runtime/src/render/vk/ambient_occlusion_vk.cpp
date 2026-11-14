@@ -15,12 +15,17 @@ namespace galaxy::render::vk {
 namespace {
 
 constexpr VkFormat kDistanceFormat = VK_FORMAT_R32_SFLOAT;
-constexpr VkFormat kOcclusionFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+// Occlusion and eye distance: two channels where the device takes R16G16 float storage images
+// (storage_extended_formats), else four.
+constexpr VkFormat kOcclusionRg = VK_FORMAT_R16G16_SFLOAT;
+constexpr VkFormat kOcclusionRgba = VK_FORMAT_R16G16B16A16_SFLOAT;
 // The multiplier: one channel, a colour target (every device draws R8; a tile GPU keeps it compressed); no storage format
 // feature needed.
 constexpr VkFormat kScaleFormat = VK_FORMAT_R8_UNORM;
 // module()'s shaders after the compute passes'.
 constexpr unsigned kApplyVs = 4u, kApplyPs = 5u, kUpsamplePs = 6u;
+// The occlusion, SSAO and denoise passes writing R16G16 float.
+constexpr unsigned kOcclusionRgCs = 7u, kSsaoRgCs = 8u, kDenoiseRgCs = 9u;
 constexpr VkShaderStageFlags kStages =
     VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
@@ -42,8 +47,9 @@ VkShaderModule AmbientOcclusionVk::module(unsigned index) const {
     static constexpr UtilitySpirv kShaders[] = {UtilitySpirv::AoDistanceCs, UtilitySpirv::AoOcclusionCs,
                                                 UtilitySpirv::AoDenoiseCs,  UtilitySpirv::AoSsaoCs,
                                                 UtilitySpirv::AoApplyVs,    UtilitySpirv::AoApplyPs,
-                                                UtilitySpirv::AoUpsamplePs};
-    static_assert(kPassCount == kApplyVs && kUpsamplePs + 1u == std::size(kShaders));
+                                                UtilitySpirv::AoUpsamplePs, UtilitySpirv::AoOcclusionRgCs,
+                                                UtilitySpirv::AoSsaoRgCs,   UtilitySpirv::AoDenoiseRgCs};
+    static_assert(kPassCount == kApplyVs && kDenoiseRgCs + 1u == std::size(kShaders));
     const std::span<const std::uint32_t> code = utility_spirv(kShaders[index]);
     VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
     info.codeSize = code.size_bytes();
@@ -76,8 +82,11 @@ bool AmbientOcclusionVk::initialize() {
         return false;
     }
     static constexpr const char* kEntries[kPassCount] = {"DepthCS", "AoCS", "DenoiseCS", "SsaoCS"};
+    const bool rg = Context::get().storage_extended_formats();
+    occlusion_format_ = rg ? kOcclusionRg : kOcclusionRgba;
+    static constexpr unsigned kRgModules[kPassCount] = {kDistance, kOcclusionRgCs, kDenoiseRgCs, kSsaoRgCs};
     for (unsigned i = 0; i < kPassCount; ++i) {
-        const VkShaderModule shader = module(i);
+        const VkShaderModule shader = module(rg ? kRgModules[i] : i);
         if (shader == VK_NULL_HANDLE) {
             shutdown();
             return false;
@@ -362,8 +371,8 @@ bool AmbientOcclusionVk::prepare(VkCommandBuffer commands, const Texture& depth,
     const unsigned height = (depth.height + divisor - 1u) / divisor;
     if (!ao::make_constants(view, width, height, divisor, ssao, constants_) ||
         !ensure(distance_, width, height, kDistanceFormat, "occlusion distance") ||
-        !ensure(raw_, width, height, kOcclusionFormat, "occlusion") ||
-        !ensure(denoised_, width, height, kOcclusionFormat, "occlusion denoised") ||
+        !ensure(raw_, width, height, occlusion_format_, "occlusion") ||
+        !ensure(denoised_, width, height, occlusion_format_, "occlusion denoised") ||
         !ensure_scale(depth.width, depth.height)) {
         return false;
     }

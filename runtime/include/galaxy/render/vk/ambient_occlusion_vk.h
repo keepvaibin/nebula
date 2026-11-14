@@ -68,6 +68,7 @@ private:
     std::array<VkRenderPass, 4> apply_pass_{};
     VkRenderPass upsample_pass_ = VK_NULL_HANDLE;  // the multiplier: its one R8 target, not loaded, stored
     VkPipeline upsample_ = VK_NULL_HANDLE;
+    VkFormat occlusion_format_ = VK_FORMAT_R16G16B16A16_SFLOAT;  // raw_ and denoised_ (initialize: R16G16 where allowed)
     std::shared_ptr<Texture> distance_;
     std::shared_ptr<Texture> raw_;
     std::shared_ptr<Texture> denoised_;

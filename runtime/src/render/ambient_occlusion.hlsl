@@ -26,6 +26,21 @@ cbuffer AoConstants : register(b0) {
     uint4 g_size;         // occlusion target width, height; scene target pixels per occlusion pixel; 1: show the occlusion
 };
 
+// The occlusion passes writing a two-channel (R16G16 float) target where a storage image of that format is allowed
+// (Vulkan: shaderStorageImageExtendedFormats; the others always).
+#if defined(AO_PASS_occlusion_rg_cs) || defined(AO_PASS_ssao_rg_cs) || defined(AO_PASS_denoise_rg_cs)
+#define AO_OCCLUSION_RG16F 1
+#endif
+#ifdef AO_PASS_occlusion_rg_cs
+#define AO_PASS_occlusion_cs 1
+#endif
+#ifdef AO_PASS_ssao_rg_cs
+#define AO_PASS_ssao_cs 1
+#endif
+#ifdef AO_PASS_denoise_rg_cs
+#define AO_PASS_denoise_cs 1
+#endif
+
 #if defined(AO_PASS_distance_cs) || defined(AO_PASS_occlusion_cs) || defined(AO_PASS_ssao_cs) || defined(AO_PASS_denoise_cs) || defined(AO_PASS_upsample_cs)
 #ifndef AO_COMPUTE
 #define AO_COMPUTE 1
@@ -45,6 +60,8 @@ Texture2D<float> t_distance : register(t2);    // DepthCS's eye distance
 AO_FORMAT(r32f) RWTexture2D<float> u_distance : register(u0);
 #elif defined(AO_PASS_upsample_cs)
 AO_FORMAT(rgba8) RWTexture2D<float4> u_scale : register(u0);
+#elif defined(AO_COMPUTE) && defined(AO_OCCLUSION_RG16F)
+AO_FORMAT(rg16f) RWTexture2D<float4> u_occlusion : register(u0);
 #elif defined(AO_COMPUTE)
 AO_FORMAT(rgba16f) RWTexture2D<float4> u_occlusion : register(u0);
 #endif
