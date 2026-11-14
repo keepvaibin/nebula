@@ -36,6 +36,7 @@
 #include <cstring>
 #include <deque>
 #include <fstream>
+#include <iterator>
 #include <map>
 #include <mutex>
 #include <optional>
@@ -730,6 +731,13 @@ bool read_line(const std::string& line, std::string& why) {
             c.next = w[1] == "next";
             c.key = w[2];
             c.op = w[3];
+            // Every check an after step can make (the runner's FACT_OPS but count, a check of the whole run): any other
+            // would never hold, so it is refused here by name.
+            static const char* const ops[] = {"is", "is_not", "less", "at_most", "more", "at_least", "near", "exists", "absent", "has"};
+            if (std::none_of(std::begin(ops), std::end(ops), [&](const char* op) { return c.op == op; })) {
+                why = "step " + std::to_string(s.number) + ": the half has no check \"" + c.op + "\"";
+                return false;
+            }
             if (w[4] != "-") {
                 double within = 0.0;
                 if (!number(w[4], within)) {
@@ -755,7 +763,34 @@ bool read_line(const std::string& line, std::string& why) {
     return false;
 }
 
-// Whether a fact condition holds on the newest value.
+// `has`: every member of `want` is in `actual` (an object) with the same value; a member that is an object is itself
+// had, member by member (the runner's has_value). A name given twice counts its last value, as equal() does.
+bool has(const Json& actual, const Json& want) {
+    if (actual.kind != Json::Object || want.kind != Json::Object) {
+        return false;
+    }
+    const auto last = [](const Json& o, const std::string& name) -> const Json* {
+        const Json* found = nullptr;
+        for (const auto& [n, value] : o.members) {
+            if (n == name) found = &value;
+        }
+        return found;
+    };
+    for (const auto& [name, value] : want.members) {
+        const Json* const wanted = last(want, name);
+        const Json* const other = last(actual, name);
+        if (other == nullptr) {
+            return false;
+        }
+        if (wanted->kind == Json::Object ? !has(*other, *wanted) : !equal(*other, *wanted)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Whether a fact condition holds on the newest value: a value written before the wait began counts as one written
+// during it (`exists`, `has` and the rest hold at once); only `next` asks for a write after the wait began.
 bool holds(const Cond& c) {
     const auto found = g.latest.find(c.key);
     if (c.op == "absent") {
@@ -776,6 +811,9 @@ bool holds(const Cond& c) {
     }
     if (c.op == "is_not") {
         return !equal(*v, c.value);
+    }
+    if (c.op == "has") {
+        return has(*v, c.value);
     }
     if (c.op == "near") {
         const double within = c.within.value_or(0.0);
@@ -1010,6 +1048,8 @@ bool start(const NebulaHostForExtension* host, const std::string& plan, void (*l
             break;
         }
     }
+    // A line that does not read is the reason given, not what its missing rest makes of the plan after it.
+    const std::string unread = why;
     if (g.out.empty() && why.empty()) {
         why = "the plan has no out line";
     }
@@ -1034,6 +1074,9 @@ bool start(const NebulaHostForExtension* host, const std::string& plan, void (*l
     }
     if (why.empty() && ends != 1u) {
         why = "the plan has " + std::to_string(ends) + " end steps; it needs exactly one";
+    }
+    if (!unread.empty()) {
+        why = unread;
     }
     if (!why.empty()) {
         log("harness: " + why);
