@@ -162,6 +162,14 @@ struct LumaMod {
     uintptr_t codeEnd;
     u32 faulted;
     u32 costSlot;  // its code-time slot (LumaGuard.cpp): 0 none, else index + 1
+    // Between luma_begin_mod and luma_start_begun (or luma_drop_begun): bound and begun, not started. `hostId` and
+    // `hostFile` are the host's strings, copied whole, for a refusal of its start.
+    bool waiting;
+    char* hostId;
+    char* hostFile;
+    // What its layers call answered (luma.h LumaModInfo.layers): each name with its NUL. Null: no call or no name.
+    char* chosen;
+    u64 chosenBytes;
 };
 
 namespace luma {
@@ -177,6 +185,9 @@ namespace luma {
         const u32 cInfoLeast = static_cast<u32>(offsetof(LumaModInfo, begin));
         LumaMod* sMods[cMaxMods];
         u32 sModCount = 0;
+        // Begun and not started yet (luma_begin_mod): later mods bind to their exports; they count toward cMaxMods.
+        LumaMod* sWaiting[cMaxMods];
+        u32 sWaitingCount = 0;
         // Mods taken out (or refused after their code ran) whose grace has not ended.
         LumaMod* sGone = nullptr;
         u32 sStartedCount = 0;
@@ -1232,11 +1243,16 @@ namespace luma {
             return pB[length] == 0;
         }
 
-        // A loaded mod by id; null when none is loaded.
+        // A loaded mod by id, started or begun and waiting for its start; null when none is.
         LumaMod* loadedMod(const char* pId, u32 length) {
             for (u32 i = 0; i < sModCount; i++) {
                 if (sameUpTo(pId, length, sMods[i]->name)) {
                     return sMods[i];
+                }
+            }
+            for (u32 i = 0; i < sWaitingCount; i++) {
+                if (sameUpTo(pId, length, sWaiting[i]->name)) {
+                    return sWaiting[i];
                 }
             }
             return nullptr;
@@ -1371,6 +1387,9 @@ namespace luma {
             }
             ::free(pMod->granted);
             ::free(pMod->uses);
+            ::free(pMod->hostId);
+            ::free(pMod->hostFile);
+            ::free(pMod->chosen);
             delete pMod;
         }
 
@@ -1415,8 +1434,98 @@ namespace luma {
         }
     }
 
+    // Binds and begins a mod; `asked`: then its layers call. Null: refused (and ended).
+    LumaMod* beginOne(const LumaModInfo* pInfo, const char* pId, const char* pFile, s32 order, void* pLibrary, LumaCloseLibrary close,
+                      const char* const* pGranted, u32 grantedCount, LumaRefusal* pRefusal, bool asked);
+
+    namespace {
+        // After the mod's code ran (its begin, its layers call or its start) and it will not run: the hooks its code added
+        // itself go, the mods it imported from are told, and it ends after the grace when any hook was published.
+        void endBegun(LumaMod* pMod) {
+            pMod->going = true;
+            removeHooks(pMod);
+            luma::classes::modGone(pMod);
+            luma::numbers::modGone(pMod);
+            tellDependentGone(pMod);
+            luma::services::modGone(pMod);
+            endMod(pMod);
+        }
+
+        // A waiting mod by its info; `take` takes it off the waiting list.
+        LumaMod* waitingMod(const LumaModInfo* pInfo, bool take) {
+            for (u32 i = 0; i < sWaitingCount; i++) {
+                LumaMod* const pMod = sWaiting[i];
+                if (pMod->info != pInfo) {
+                    continue;
+                }
+                if (take) {
+                    for (u32 j = i + 1; j < sWaitingCount; j++) {
+                        sWaiting[j - 1] = sWaiting[j];
+                    }
+                    sWaitingCount--;
+                    pMod->waiting = false;
+                }
+                return pMod;
+            }
+            return nullptr;
+        }
+
+        // Its layers call (luma.h LumaModInfo.layers): asked for the bytes, then for the names, again while the answer
+        // grows between the two calls. False: the guard caught a fault in it.
+        bool askLayers(LumaMod* pMod) {
+            const LumaModInfo* const pInfo = pMod->info;
+            if (!covers(pInfo, offsetof(LumaModInfo, layers) + sizeof(pInfo->layers)) || pInfo->layers == nullptr || luma::guard::faulted(pMod)) {
+                return true;
+            }
+            u64 size = 0;
+            char* pBuffer = nullptr;
+            for (u32 tries = 0; tries < 4; tries++) {
+                u64 result = 0;
+                if (!luma::guard::run(pMod, LUMA_GUARD_START, "layers", reinterpret_cast<const void*>(pInfo->layers), reinterpret_cast<uintptr_t>(&sCore),
+                                      reinterpret_cast<uintptr_t>(pMod), reinterpret_cast<uintptr_t>(pBuffer), size, &result)) {
+                    ::free(pBuffer);
+                    return false;
+                }
+                const s64 needed = static_cast<s64>(result);
+                if (needed <= 0) {
+                    ::free(pBuffer);
+                    return true;  // no name chosen
+                }
+                if (pBuffer != nullptr && static_cast<u64>(needed) <= size) {
+                    // Names end with their NUL: a last byte that is not one is cut there.
+                    pBuffer[needed - 1] = 0;
+                    pMod->chosen = pBuffer;
+                    pMod->chosenBytes = static_cast<u64>(needed);
+                    return true;
+                }
+                ::free(pBuffer);
+                size = static_cast<u64>(needed);
+                pBuffer = size <= (u64(1) << 20) ? static_cast<char*>(::malloc(static_cast<size_t>(size))) : nullptr;
+                if (pBuffer == nullptr) {
+                    nebula_log("[mod %s] its layers call asked for %llu bytes; no layer is chosen\n", pMod->name, static_cast<unsigned long long>(size));
+                    return true;
+                }
+            }
+            ::free(pBuffer);
+            nebula_log("[mod %s] its layers call gave a longer answer each time it was asked; no layer is chosen\n", pMod->name);
+            return true;
+        }
+    }
+
+    bool beginMod(const LumaModInfo* pInfo, const char* pId, const char* pFile, s32 order, void* pLibrary, LumaCloseLibrary close,
+                  const char* const* pGranted, u32 grantedCount, LumaRefusal* pRefusal) {
+        return beginOne(pInfo, pId, pFile, order, pLibrary, close, pGranted, grantedCount, pRefusal, true) != nullptr;
+    }
+
     bool loadMod(const LumaModInfo* pInfo, const char* pId, const char* pFile, s32 order, void* pLibrary, LumaCloseLibrary close,
                  const char* const* pGranted, u32 grantedCount, LumaRefusal* pRefusal) {
+        // A reload: content does not change while the game runs, so its layers call is not asked.
+        return beginOne(pInfo, pId, pFile, order, pLibrary, close, pGranted, grantedCount, pRefusal, false) != nullptr &&
+               startMod(pInfo, pRefusal);
+    }
+
+    LumaMod* beginOne(const LumaModInfo* pInfo, const char* pId, const char* pFile, s32 order, void* pLibrary, LumaCloseLibrary close,
+                      const char* const* pGranted, u32 grantedCount, LumaRefusal* pRefusal, bool asked) {
         if (pRefusal != nullptr) {
             pRefusal->code = 0;
             pRefusal->count = 0;
@@ -1424,8 +1533,10 @@ namespace luma {
         if (!onGameThread()) {
             NEBULA_PANIC("a LumaCore mod was loaded off the game thread");
         }
-        // The type rows are sorted here, before any mod's code runs, so later lookups from any thread only read.
+        // The type and function rows are sorted here, before any mod's code runs, so later lookups from any thread only
+        // read.
         prepareTypes();
+        (void)functionCount();
         gSkipRefused = skipRefused;
         gNoResult = noResult;
         LumaMod* const pMod = new LumaMod();
@@ -1467,7 +1578,7 @@ namespace luma {
         } else if (pInfo->import_count != 0 && pInfo->imports == nullptr) {
             refuse.start(512);
             refuse.put("why", 'P', "Lib.ImportsUnreadable");
-        } else if (sModCount == cMaxMods) {
+        } else if (sModCount + sWaitingCount == cMaxMods) {
             refuse.start(500);
             refuse.put("why", 'P', "Lib.TooManyMods");
             refuse.number("count", LUMA_MAX_MODS);
@@ -1665,7 +1776,7 @@ namespace luma {
         if (refused) {
             // None of its code ran: the library closes now.
             finishMod(pMod);
-            return false;
+            return nullptr;
         }
 
         // Pass 3: the slots, then its begin and start; its rows' hooks are published only after start agrees.
@@ -1730,8 +1841,70 @@ namespace luma {
         luma::services::modBegin(pMod, pMod->name, order, pMod->granted, pMod->grantedCount);
         if (covers(pInfo, offsetof(LumaModInfo, begin) + sizeof(pInfo->begin)) && pInfo->begin != nullptr) {
             pMod->begun = true;
-            luma::guard::run(pMod, LUMA_GUARD_START, "begin", reinterpret_cast<const void*>(pInfo->begin), reinterpret_cast<uintptr_t>(&sCore), reinterpret_cast<uintptr_t>(pMod), 0, 0, nullptr);
+            // A fault in its begin (a global constructor) refuses it as a fault in its start does: none of its code
+            // runs again, so it must not be listed as on.
+            if (!luma::guard::run(pMod, LUMA_GUARD_START, "begin", reinterpret_cast<const void*>(pInfo->begin), reinterpret_cast<uintptr_t>(&sCore),
+                                  reinterpret_cast<uintptr_t>(pMod), 0, 0, nullptr)) {
+                pMod->startRefused = true;
+                refuse.start(512);
+                refuse.put("why", 'P', "Lib.StartFaulted");
+                endBegun(pMod);
+                return nullptr;
+            }
         }
+        pMod->hostId = keepText(pId);
+        pMod->hostFile = keepText(pFile);
+        // A fault in its layers call refuses it as a fault in its start does (the guard's line names "layers").
+        if (asked && !askLayers(pMod)) {
+            pMod->startRefused = true;
+            refuse.start(512);
+            refuse.put("why", 'P', "Lib.StartFaulted");
+            endBegun(pMod);
+            return nullptr;
+        }
+        pMod->waiting = true;
+        sWaiting[sWaitingCount++] = pMod;
+        return pMod;
+    }
+
+    const char* chosenLayers(const LumaModInfo* pInfo, u64* pBytes) {
+        LumaMod* pMod = waitingMod(pInfo, false);
+        for (u32 i = 0; i < sModCount && pMod == nullptr; i++) {
+            if (sMods[i]->info == pInfo) {
+                pMod = sMods[i];
+            }
+        }
+        *pBytes = pMod != nullptr ? pMod->chosenBytes : 0;
+        return pMod != nullptr ? pMod->chosen : nullptr;
+    }
+
+    void dropMod(const LumaModInfo* pInfo) {
+        if (!onGameThread()) {
+            NEBULA_PANIC("a LumaCore mod was dropped off the game thread");
+        }
+        LumaMod* const pMod = waitingMod(pInfo, true);
+        if (pMod == nullptr) {
+            return;
+        }
+        nebula_log("[mod %s] begun and not started: a mod it needs did not start\n", pMod->name);
+        pMod->startRefused = true;
+        endBegun(pMod);
+    }
+
+    bool startMod(const LumaModInfo* pInfo, LumaRefusal* pRefusal) {
+        if (pRefusal != nullptr) {
+            pRefusal->code = 0;
+            pRefusal->count = 0;
+        }
+        if (!onGameThread()) {
+            NEBULA_PANIC("a LumaCore mod was started off the game thread");
+        }
+        LumaMod* const pMod = waitingMod(pInfo, true);
+        if (pMod == nullptr) {
+            NEBULA_PANIC("LumaCore: a mod was started that was not begun");
+        }
+        Refuse refuse = {pRefusal, pMod->hostId, pMod->hostFile};
+        const s32 order = pMod->order;
         if (pInfo->start != nullptr) {
             pMod->inStart = true;
             u64 result = 0;
@@ -1755,15 +1928,7 @@ namespace luma {
                     refuse.put("why", 'P', "Lib.StartRefused");
                     refuse.number("found", answer);
                 }
-                // Hooks its start added itself go; the mods it imported from are told; it ends after the grace when any
-                // was published.
-                pMod->going = true;
-                removeHooks(pMod);
-                luma::classes::modGone(pMod);
-                luma::numbers::modGone(pMod);
-                tellDependentGone(pMod);
-                luma::services::modGone(pMod);
-                endMod(pMod);
+                endBegun(pMod);
                 return false;
             }
         }
@@ -1938,6 +2103,28 @@ extern "C" {
 NEBULA_GAME_API int32_t luma_load_mod(const LumaModInfo* info, const char* mod_id, const char* file, int32_t order, void* library,
                                       LumaCloseLibrary close, const char* const* granted, uint32_t granted_count, LumaRefusal* refusal) {
     return luma::loadMod(info, mod_id, file, order, library, close, granted, granted_count, refusal) ? 1 : 0;
+}
+
+NEBULA_GAME_API int32_t luma_begin_mod(const LumaModInfo* info, const char* mod_id, const char* file, int32_t order, void* library,
+                                       LumaCloseLibrary close, const char* const* granted, uint32_t granted_count, LumaRefusal* refusal) {
+    return luma::beginMod(info, mod_id, file, order, library, close, granted, granted_count, refusal) ? 1 : 0;
+}
+
+NEBULA_GAME_API const char* luma_mod_layers(const LumaModInfo* info, uint64_t* bytes) {
+    u64 kept = 0;
+    const char* const names = luma::chosenLayers(info, &kept);
+    if (bytes != nullptr) {
+        *bytes = kept;
+    }
+    return names;
+}
+
+NEBULA_GAME_API int32_t luma_start_begun(const LumaModInfo* info, LumaRefusal* refusal) {
+    return luma::startMod(info, refusal) ? 1 : 0;
+}
+
+NEBULA_GAME_API void luma_drop_begun(const LumaModInfo* info) {
+    luma::dropMod(info);
 }
 
 NEBULA_GAME_API void luma_unload_mod(const LumaModInfo* info) {

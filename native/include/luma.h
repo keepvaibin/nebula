@@ -389,7 +389,13 @@ typedef struct LumaModInfo {
        before its grace, on the game thread. It drops what it keeps for that mod (callbacks into its code). May be
        null. */
     void (*dependent_gone)(const LumaMod* dependent);
-    /* The mod's when.code layers (F-2): after begin, before start and before content loads. Writes the chosen layer names into buf, each with its NUL, and returns the bytes they need (a size too small: nothing written; called again with that size). Null: none chosen. */
+    /* Which of the mod's layers with `"when": {"code": true}` are on. Called once a start, on the game thread, after
+       every mod's begin and before any mod's start; not called when the mod is loaded again while the game runs.
+       Writes the chosen layer names into buf, each with its NUL, and returns the bytes they need; first called with
+       buf null and size 0, and when size is too small it writes nothing and is called again with the size it returned.
+       0 or less: none chosen. A name that is not one of the mod's code layers is left out and said in the mod log.
+       The game's content is cooked with the answer: an answer that differs from the one the content was cooked with
+       starts the game again once, before it reads any content. Null: none of its code layers is on. */
     int64_t (*layers)(const LumaCore* core, const LumaMod* mod, char* buf, uint64_t size);
 } LumaModInfo;
 

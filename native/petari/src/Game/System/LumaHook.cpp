@@ -77,7 +77,8 @@ namespace luma {
         u32 sEpoch = 0;
         u32 sReaders[2] = {0, 0};
         u32 sSequence = 0;
-        bool sPrepared = false;
+        // 0: not sorted, 1: one thread sorting, 2: sorted (atomic). The rows are read only once it is 2, from any thread.
+        u32 sPrepared = 0;
         LUMA_THREAD bool tGameThread = false;
 
         s32 compare(const char* pA, const char* pB) {
@@ -112,11 +113,24 @@ namespace luma {
             }
         }
 
+        void sortRows();
+
+        // The first caller sorts; a caller on another thread meanwhile waits for it, so no thread reads half a table.
         void prepare() {
-            if (sPrepared) {
+            if (__atomic_load_n(&sPrepared, __ATOMIC_ACQUIRE) == 2u) {
                 return;
             }
-            sPrepared = true;
+            u32 expected = 0;
+            if (__atomic_compare_exchange_n(&sPrepared, &expected, 1u, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+                sortRows();
+                __atomic_store_n(&sPrepared, 2u, __ATOMIC_RELEASE);
+                return;
+            }
+            while (__atomic_load_n(&sPrepared, __ATOMIC_ACQUIRE) != 2u) {
+            }
+        }
+
+        void sortRows() {
             const u32 rows = static_cast<u32>(rowsEnd() - rowsBegin());
             const u32 flags = static_cast<u32>(flagsEnd() - flagsBegin());
             sSorted = new const Function*[rows + 1];

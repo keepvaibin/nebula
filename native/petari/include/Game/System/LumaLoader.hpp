@@ -17,6 +17,17 @@ namespace luma {
     // validator's code and parameters). The kernel closes pLibrary with `close` when none of its code can run any more.
     bool loadMod(const LumaModInfo* pInfo, const char* pId, const char* pFile, s32 order, void* pLibrary, LumaCloseLibrary close,
                  const char* const* pGranted, u32 grantedCount, LumaRefusal* pRefusal);
+    // loadMod in two steps, for the start: beginMod binds the slots, runs its begin and then its layers call, and keeps
+    // the mod waiting (later mods bind to its exports); startMod runs its start and publishes its hooks; dropMod ends a
+    // waiting mod that will not start (a mod it needs did not start), as a refused start ends. The layers call's answer
+    // stays readable through chosenLayers until the mod ends. False: refused, pRefusal says why.
+    bool beginMod(const LumaModInfo* pInfo, const char* pId, const char* pFile, s32 order, void* pLibrary, LumaCloseLibrary close,
+                  const char* const* pGranted, u32 grantedCount, LumaRefusal* pRefusal);
+    bool startMod(const LumaModInfo* pInfo, LumaRefusal* pRefusal);
+    void dropMod(const LumaModInfo* pInfo);
+    // The names a waiting or started mod's layers call answered, each with its NUL, and their bytes; null when it has no
+    // layers call, chose none, or is not loaded.
+    const char* chosenLayers(const LumaModInfo* pInfo, u64* pBytes);
     // Takes its hooks out and runs its stop; after the grace, its finish, its memory and its library (LR-5).
     void unloadMod(const LumaModInfo* pInfo);
     // Once a frame on the game thread: replaced hook lists and taken-out mods whose grace is over are let go.
