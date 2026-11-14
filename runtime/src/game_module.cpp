@@ -20,7 +20,7 @@ std::filesystem::path plain_beside(const std::filesystem::path& rows_module) {
 
 std::filesystem::path choose(const std::filesystem::path& rows_module, const std::filesystem::path& mods_folder,
                              const std::filesystem::path& mods_file, const std::string& game_id, bool need_rows,
-                             std::string* why) {
+                             bool safe, const std::string& kept, std::string* why) {
     std::string reason;
     if (need_rows) {
         reason = "--luma-describe reads the rows";
@@ -36,7 +36,9 @@ std::filesystem::path choose(const std::filesystem::path& rows_module, const std
                 reason.clear();
                 break;
             }
-            reason = "mod " + mod.id + " has code";
+            // A safe start turns every mod off for this start (host_main.cpp), all but `kept`.
+            if (safe && mod.id != kept) continue;
+            reason = safe ? "safe start: only mod " + mod.id + "'s code starts" : "mod " + mod.id + " has code";
             break;
         }
     }
@@ -44,7 +46,7 @@ std::filesystem::path choose(const std::filesystem::path& rows_module, const std
     if (reason.empty()) {
         std::error_code error;
         if (std::filesystem::is_regular_file(plain, error)) {
-            if (why != nullptr) *why = "plain (no mod with code on)";
+            if (why != nullptr) *why = safe ? "plain (safe start: no mod's code starts)" : "plain (no mod with code on)";
             return plain;
         }
         if (why != nullptr) *why = "rows (no mod with code on, but " + plain.filename().string() + " is not there)";

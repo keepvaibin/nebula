@@ -174,8 +174,8 @@ enum class SafeStart : std::uint8_t { kNo, kAsked, kAfterCrash };
 // The file whose presence makes the next start safe (in the mods folder; empty before set_mods_folder). A crash writes
 // it empty (kAfterCrash); anything else in it is kAsked.
 [[nodiscard]] std::filesystem::path safe_start_file();
-// At the start, once, after set_mods_folder: whether this start is safe (`asked` from the launch, else the file),
-// removing the file so the start after is not. Remembered for safe_start().
+// At the start, after set_mods_folder: whether this start is safe (`asked` from the launch, else the file), removing
+// the file so the start after is not. Remembered for safe_start(); a later call returns the first call's answer.
 SafeStart take_safe_start(bool asked);
 // This run's safe start (kNo before take_safe_start).
 [[nodiscard]] SafeStart safe_start() noexcept;

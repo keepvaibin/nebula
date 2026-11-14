@@ -1060,6 +1060,7 @@ std::string mods_game_id() {
 namespace {
 std::atomic<bool> s_code_off_after_crash{false};
 std::atomic<SafeStart> s_safe_start{SafeStart::kNo};
+std::atomic<bool> s_safe_start_taken{false};
 }
 
 void set_code_off_after_crash() noexcept {
@@ -1072,6 +1073,10 @@ std::filesystem::path safe_start_file() {
 }
 
 SafeStart take_safe_start(bool asked) {
+    // Once a process: the host takes it before it chooses the game module, and its mods start reads the same answer.
+    if (s_safe_start_taken.exchange(true, std::memory_order_relaxed)) {
+        return s_safe_start.load(std::memory_order_relaxed);
+    }
     SafeStart safe = asked ? SafeStart::kAsked : SafeStart::kNo;
     const std::filesystem::path file = safe_start_file();
     std::error_code error;

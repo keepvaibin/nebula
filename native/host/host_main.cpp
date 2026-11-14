@@ -586,6 +586,15 @@ bool is_harness_half(const std::string& mod_id) {
     return harness_run && mod_id == "luma-test";
 }
 
+// A safe start asked at launch (task 6.6): --safe-start 1, or Shift held as Nebula starts (Windows, a visible start).
+bool safe_start_asked() {
+    bool asked = ::galaxy::launch_args().safe_start;
+#if defined(_WIN32)
+    asked = asked || (!::galaxy::launch_args().started_hidden && (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0);
+#endif
+    return asked;
+}
+
 bool open_pak(const fs::path& path) {
     gPak.store_file = path;
     if (!gPak.store.open(path)) {
@@ -4745,10 +4754,17 @@ int main(int argc, char** argv) {
             galaxy::mods::apply_pending_updates(settings_folder / "mods");
             mods_folder = settings_folder / "mods";
         }
+        // The safe start is taken before the choice (and read again at the mods below): with every mod off no mod's
+        // code starts, so the plain module loads; the harness's own game half stays on and keeps the rows.
+        bool safe = false;
+        if (!mods_folder.empty()) {
+            galaxy::mods::set_mods_folder(mods_folder, settings_folder / "mods.ini", std::string(gPak.store.game_id()));
+            safe = galaxy::mods::take_safe_start(safe_start_asked()) != galaxy::mods::SafeStart::kNo;
+        }
         std::string why;
         const fs::path rows_module = module;
         module = galaxy::game_module::choose(rows_module, mods_folder, settings_folder / "mods.ini", std::string(gPak.store.game_id()),
-                                             false, &why);
+                                             false, safe, is_harness_half("luma-test") ? "luma-test" : "", &why);
         galaxy::game_module::set_plain_loaded(module != rows_module);
         log_line("game module:", why.c_str());
 #else
@@ -4823,11 +4839,7 @@ int main(int argc, char** argv) {
             galaxy::mods::set_played_language(scanned_in);
             std::vector<galaxy::mods::ModInfo> mods = galaxy::mods::scan_mods(game_id);
             // Safe start (task 6.6): every mod off for this start only (the copy planned; mods.ini stays the player's).
-            bool safe_asked = ::galaxy::launch_args().safe_start;
-#if defined(_WIN32)
-            safe_asked = safe_asked || (!::galaxy::launch_args().started_hidden && (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0);
-#endif
-            if (const galaxy::mods::SafeStart safe = galaxy::mods::take_safe_start(safe_asked);
+            if (const galaxy::mods::SafeStart safe = galaxy::mods::take_safe_start(safe_start_asked());
                 safe != galaxy::mods::SafeStart::kNo) {
                 log_line("mods:", safe == galaxy::mods::SafeStart::kAsked
                                       ? "safe start: every mod is off for this start"
