@@ -129,14 +129,16 @@ if(NEBULA_LUMA_HOOKS)
     endif()
     # The reference a modder reads, generated from the same description: every row on exactly one page
     # (--check fails the build otherwise). The folder is written whole each time, so a name the game no longer has
-    # leaves no page behind. Output under the build, never committed.
+    # leaves no page behind. Output under the build, never committed. It waits on the two lists it reads, not only on
+    # the table: the generator leaves the table untouched when only a function is new, and the pages would stay old.
     set(luma_reference "${CMAKE_CURRENT_BINARY_DIR}/luma_docs/reference")
     set(luma_reference_tool "${CMAKE_CURRENT_SOURCE_DIR}/../tools/lumacore/docs/gen_reference.py")
     add_custom_command(OUTPUT "${luma_reference}/search.json"
         COMMAND "${CMAKE_COMMAND}" -E rm -rf "${luma_reference}"
         COMMAND "${Python3_EXECUTABLE}" -X utf8 -I "${luma_reference_tool}" --types "${luma_types}/luma_types.json"
                 --functions "${luma_types}/luma_functions.json" --out "${luma_reference}" --check
-        DEPENDS "${luma_types}/luma_types_table.cpp" "${luma_reference_tool}" VERBATIM)
+        DEPENDS "${luma_types}/luma_types_table.cpp" "${luma_types}/luma_types.json"
+                "${luma_types}/luma_functions.json" "${luma_reference_tool}" VERBATIM)
     add_custom_target(luma_reference ALL DEPENDS "${luma_reference}/search.json")
     # The self-description (docs/modding/language/game-description.md): one file beside the module saying everything
     # a mod can name, from the generator's outputs; a cross build makes it too (no run of the module is needed).
