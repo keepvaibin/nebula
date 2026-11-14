@@ -822,3 +822,108 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/vk/device_quirks_vk.cpp runtime/src/render/vk/vk_libraries.cpp
         LIBS nebula_vulkan_deps)
 endif()
+
+# The Direct3D 11 backend (runtime/include/galaxy/render/d3d11/renderer_d3d11.h): NebulaNativeD11, for the Windows
+# adapters Direct3D 12 passes over. The API-neutral renderer sources (the Vulkan library's), the Direct3D 11 renderer and
+# its parts, the programs for shader model 5.0 (compile_programs.py dxbc) and the utility shaders (utility_shaders sm50).
+option(NEBULA_D3D11 "Build the Direct3D 11 backend" OFF)
+if(NEBULA_D3D11)
+    galaxy_program_blob(galaxy_programs_dxbc dxbc)
+    set(galaxy_utility_sm50_dir "${galaxy_utility_shader_dir}/sm50")
+    file(MAKE_DIRECTORY "${galaxy_utility_sm50_dir}")
+    add_custom_command(OUTPUT "${galaxy_utility_sm50_dir}/utility_shaders_dxbc.h"
+        COMMAND galaxy_utility_shaders "${galaxy_utility_sm50_dir}/utility_shaders_dxbc.h" sm50
+        DEPENDS galaxy_utility_shaders VERBATIM)
+    file(GLOB galaxy_render_d3d11_backend CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/d3d11/*.cpp")
+    add_library(galaxy_render_d3d11 STATIC
+        runtime/src/render/render_api.cpp
+        runtime/src/render/render_config.cpp
+        runtime/src/render/host_window_win32.cpp
+        runtime/src/ui/native_settings.cpp
+        runtime/src/ui/settings_model.cpp
+        runtime/src/ui/settings_system_page.cpp
+        runtime/src/ui/settings_advanced_page.cpp
+        runtime/src/ui/settings_display_page.cpp
+        runtime/src/ui/settings_general_page.cpp
+        runtime/src/ui/settings_graphics_page.cpp
+        runtime/src/ui/settings_save_model.cpp
+        runtime/src/render/vblank_clock_win32.cpp
+        runtime/src/render/renderer_common.cpp
+        runtime/src/render/gpu_upload_ring.cpp
+        runtime/src/render/window_owner.cpp
+        runtime/src/render/texture_store.cpp
+        runtime/src/render/texture_pack.cpp
+        runtime/src/render/texture_pack_codecs.cpp
+        runtime/src/render/movie_playback.cpp
+        runtime/src/movie_video.cpp
+        runtime/src/render/frame_pass.cpp
+        runtime/src/render/post_process_settings.cpp
+        runtime/src/render/display_modes.cpp
+        runtime/src/render/render_core.cpp
+        runtime/src/render/affine.cpp
+        runtime/src/render/core/compose.cpp
+        runtime/src/render/core/draw_walker.cpp
+        runtime/src/render/core/rt_walk.cpp
+        runtime/src/render/core/rt_bounce.cpp
+        runtime/src/render/core/rt_pass_indirect.cpp
+        runtime/src/render/core/rt_pass_reflect.cpp
+        runtime/src/render/core/rt_pass_volume.cpp
+        runtime/src/render/core/pairing.cpp
+        runtime/src/render/core/pipelines.cpp
+        runtime/src/render/core/program_table.cpp
+        runtime/src/render/core/registries.cpp
+        runtime/src/render/core/world_lights.cpp
+        runtime/src/render/core/pipelines_d3d11.cpp
+        runtime/src/render/galaxy_select.cpp
+        runtime/src/render/frame_interpolation.cpp
+        runtime/src/render/rt_materials.cpp
+        runtime/src/render/rt_caps.cpp
+        runtime/src/render/rt/rt_geometry.cpp
+        runtime/src/render/rt/rt_scene.cpp
+        runtime/src/render/streamline_bridge.cpp
+        runtime/src/render/xess_library.cpp
+        runtime/src/frame_telemetry.cpp
+        runtime/src/perf_hint.cpp
+        runtime/src/render/mod_shaders.cpp
+        runtime/src/render/mod_shader_build.cpp
+        ${galaxy_render_d3d11_backend}
+        "${galaxy_utility_sm50_dir}/utility_shaders_dxbc.h"
+        ${galaxy_post_headers}
+        ${galaxy_ao_headers}
+        ${galaxy_camera_headers}
+        ${galaxy_bloom_headers})
+    target_include_directories(galaxy_render_d3d11 PUBLIC runtime/include runtime/src)
+    target_include_directories(galaxy_render_d3d11 PRIVATE "${galaxy_utility_shader_dir}" runtime/src/render "${galaxy_post_dir}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/smaa" "${CMAKE_CURRENT_SOURCE_DIR}/native/include")
+    target_include_directories(galaxy_render_d3d11 SYSTEM PRIVATE third_party/xess/include "${GALAXY_STREAMLINE_SDK}/include")
+    target_compile_features(galaxy_render_d3d11 PUBLIC cxx_std_20)
+    target_compile_definitions(galaxy_render_d3d11 PUBLIC NEBULA_GPU_D3D11=1)
+    target_link_libraries(galaxy_render_d3d11
+        PUBLIC
+            galaxy_asset_store
+            galaxy_native_host
+            galaxy_runtime_abi
+            galaxy_runtime_settings
+            galaxy_host_pointer_events
+            d3d11
+            dxgi
+            dxguid
+        PRIVATE
+            mfplat mfreadwrite mfuuid)
+    if(MSVC)
+        target_compile_options(galaxy_render_d3d11 PRIVATE /GS- /GR- /Oi /favor:INTEL64 /W4 /WX /permissive- /EHsc)
+    endif()
+
+    add_executable(NebulaNativeD11 native/host/host_main.cpp runtime/src/frame_phase.cpp)
+    nebula_file_details(NebulaNativeD11 NebulaNative.exe "Super Mario Galaxy on PC" ICON "${CMAKE_CURRENT_SOURCE_DIR}/installer/assets/nebula.ico" DPI_MANIFEST)
+    target_sources(NebulaNativeD11 PRIVATE ${galaxy_programs_dxbc})
+    target_include_directories(NebulaNativeD11 PRIVATE native/include runtime/include)
+    target_compile_definitions(NebulaNativeD11 PRIVATE NEBULA_HOST_RENDERER=1 _CRT_SECURE_NO_WARNINGS)
+    target_compile_features(NebulaNativeD11 PRIVATE cxx_std_20)
+    target_link_libraries(NebulaNativeD11 PRIVATE dwmapi galaxy_render_d3d11 galaxy_save_files galaxy_asset_store)
+    if(MSVC)
+        target_sources(NebulaNativeD11 PRIVATE native/host/nebula_host.manifest)
+        target_compile_options(NebulaNativeD11 PRIVATE /Zi)
+        target_link_options(NebulaNativeD11 PRIVATE /DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:NebulaNativeD11.pdb)
+    endif()
+endif()

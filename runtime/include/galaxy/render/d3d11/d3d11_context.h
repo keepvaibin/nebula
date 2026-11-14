@@ -95,7 +95,7 @@ struct Pipeline {
     ComPtr<ID3D11VertexShader> vertex;
     ComPtr<ID3D11PixelShader> pixel;  // null: depth only
     ComPtr<ID3D11InputLayout> input;
-    ComPtr<ID3D11BlendState> blend;
+    ComPtr<ID3D11BlendState1> blend;
     ComPtr<ID3D11RasterizerState1> rasterizer;
     ComPtr<ID3D11DepthStencilState> depth_stencil;
     D3D11_PRIMITIVE_TOPOLOGY topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;

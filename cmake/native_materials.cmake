@@ -21,6 +21,13 @@ function(galaxy_program_blob out_var backend)
                 "${Python3_EXECUTABLE}" "${galaxy_programs_root}/tools/dev/compile_programs.py" dxil "${blob}"
             DEPENDS ${sources} "${galaxy_programs_root}/tools/dev/compile_programs.py"
             VERBATIM)
+    elseif(backend STREQUAL "dxbc")
+        # Direct3D 11: shader model 5.0 by fxc (the Windows SDK's, GALAXY_FXC).
+        add_custom_command(OUTPUT "${blob}"
+            COMMAND ${CMAKE_COMMAND} -E env "GALAXY_FXC=${GALAXY_FXC}"
+                "${Python3_EXECUTABLE}" "${galaxy_programs_root}/tools/dev/compile_programs.py" dxbc "${blob}"
+            DEPENDS ${sources} "${galaxy_programs_root}/tools/dev/compile_programs.py"
+            VERBATIM)
     else()
         add_custom_command(OUTPUT "${blob}"
             COMMAND "${Python3_EXECUTABLE}" "${galaxy_programs_root}/tools/dev/compile_programs.py" spirv "${blob}"

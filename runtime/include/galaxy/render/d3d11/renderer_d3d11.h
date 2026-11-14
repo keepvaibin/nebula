@@ -42,6 +42,7 @@
 #include <cstdint>
 #include <deque>
 #include <memory>
+#include <mutex>
 #include <span>
 #include <string>
 #include <unordered_map>
@@ -195,7 +196,8 @@ public:
                      unsigned rect_y = 0, unsigned rect_w = 0, unsigned rect_h = 0, std::uint8_t pixel_format = 0);
     // What the walker draws through. Aux targets beside the scene target: none on Direct3D 11 (no temporal upscaler).
     [[nodiscard]] gpu::Encoder& encoder() noexcept { return encoder_; }
-    void set_draw_aux(unsigned) {}
+    // Opens the scene pass when no pass is open (aux is always 0 here).
+    void set_draw_aux(unsigned aux);
     void note_scene_draw(std::uint32_t state) {
         scene_drawn_ = true;
         constexpr std::uint32_t depth_write = (1u << 10u) | (1u << 14u);
@@ -231,7 +233,7 @@ public:
     [[nodiscard]] bool begin_cleared_motion_scene(std::uint32_t) { return false; }
     [[nodiscard]] bool defer_scene_depth_clear(std::uint32_t) { return false; }
     void reset_temporal_history() noexcept {}
-    void set_present_game_frame(bool) noexcept {}
+    void set_present_game_frame(bool game_frame) noexcept { present_game_frame_ = game_frame; }
     // A present rate above 60.
     [[nodiscard]] bool interpolation_mode() const { return false; }
     void take_generated_gpu_ms(double& total_ms, std::uint64_t& samples) noexcept {
@@ -304,10 +306,11 @@ private:
         // A draw's own tables this frame: reused each frame.
         std::deque<d3d11::BoundTable> tables;
         std::size_t tables_used = 0;
-        // GPU timestamps of the frame's passes (a disjoint query and a pair a pass), read once the fence passed.
+        // The frame's GPU time: a disjoint query and the timestamps at its start and end, read once the fence passed.
         d3d11::ComPtr<ID3D11Query> disjoint;
-        std::array<std::array<d3d11::ComPtr<ID3D11Query>, 2>, static_cast<std::size_t>(GpuPass::Count)> pass_time{};
-        bool pass_timed = false;
+        std::array<d3d11::ComPtr<ID3D11Query>, 2> frame_time{};
+        bool timed = false;
+        bool scene_drawn = false;
     };
     struct FramePassTarget {
         gpu::TextureRef texture;
@@ -328,8 +331,14 @@ private:
         gpu::TextureRef ms_depth;
         bool depth_dirty = false;
         bool color_dirty = false;  // the multisampled colour holds draws its resolve has not taken
-        std::uint64_t depth_serial = 0;
         bool wide = false;         // the wide scene's colour (kSceneVariantHdr), over the scene target's own depth
+        // The views the scene pass draws into: the multisampled ones with MSAA.
+        [[nodiscard]] ID3D11RenderTargetView* rtv() const noexcept {
+            return samples > 1u && ms_color ? ms_color->target.Get() : color ? color->target.Get() : nullptr;
+        }
+        [[nodiscard]] ID3D11DepthStencilView* dsv() const noexcept {
+            return samples > 1u && ms_depth ? ms_depth->depth.Get() : depth ? depth->depth.Get() : nullptr;
+        }
     };
     struct TargetSlot {
         SceneSet set;
@@ -343,12 +352,30 @@ private:
         gpu::TextureRef viewed;
         std::uint32_t width = 0, height = 0;  // frame units, the size draws sample it at
         std::uint8_t channels = 0;
-        d3d11::ComPtr<ID3D11ShaderResourceView> sampled;  // the view reading `channels` (null: the texture's own)
+        // The picture with its channels as the other renderers' views give them (a copy: Direct3D 11 views cannot
+        // repeat a channel); null when the texture's own channels are the picture's.
+        gpu::TextureRef sampled;
     };
-    // The renderer's own full-screen draws (blits, conversions, depth clears, probes).
-    enum class Utility : std::uint8_t { Blit, Convert, ClearDepth, Probe, Count };
+    // The renderer's own full-screen draws (utility_shader_table.inc compiled for shader model 5.0, and the depth clear).
+    enum class Utility : std::uint8_t { Blit, Clear, ClearDepth, DepthResolve, Convert, DisplayFilter, Count };
+    // How one of them treats depth and stencil.
+    enum class DepthUse : std::uint8_t { None, Clear, Resolve, Count };
+    class GpuPassScope {
+    public:
+        GpuPassScope(RendererD3D11& renderer, GpuPass pass) : renderer_(renderer), outer_(renderer.current_pass_) {
+            renderer_.gpu_pass(pass);
+        }
+        ~GpuPassScope() { renderer_.gpu_pass(outer_); }
+        GpuPassScope(const GpuPassScope&) = delete;
+        GpuPassScope& operator=(const GpuPassScope&) = delete;
+
+    private:
+        RendererD3D11& renderer_;
+        GpuPass outer_;
+    };
 
     bool create_device();
+    bool create_states();
     bool create_swap_chain();
     bool resize_swap_chain(std::uint32_t width, std::uint32_t height);
     void report_adapter();
@@ -360,45 +387,73 @@ private:
     void resolve_scene_color();
     void resolve_scene_depth();
     void apply_window_size();
+    [[nodiscard]] FrameMap output_frame_for_window() const;
+    void swap_scene_sets();
+    void swap_target_set();
+    bool publish_picture(std::uint64_t key, std::uint32_t width, std::uint32_t height, gpu::TextureRef texture,
+                         std::uint8_t channels, TextureStore& textures);
+    void drop_picture(Picture& picture, TextureStore& textures);
+    void record_conversion_blit(d3d11::Texture& dest, unsigned dest_w, unsigned dest_h, std::uint8_t copy_format, float src_x,
+                                float src_y, float step_x, float step_y);
+    // `source` drawn into `dest` through the conversion shader (the scene target's copies, a picture's channels).
+    void conversion_draw(ID3D11ShaderResourceView* source, d3d11::Texture& dest, unsigned dest_w, unsigned dest_h,
+                         std::uint8_t copy_format, float src_x, float src_y, float step_x, float step_y);
+    // The output scene target at `output`'s size (single-sample), made when it is not that already.
+    [[nodiscard]] bool ensure_output_set(const FrameMap& output);
+    // The open scene pass's targets, viewport and scissor bound again (after one of the renderer's own draws or a part).
+    void bind_pass_targets();
+    [[nodiscard]] std::uint64_t target_idle_frames() const noexcept { return kTargetIdleFrames; }
 
     // Frame recording.
     void begin_scene_pass(const char* caller = __builtin_FUNCTION());
     void end_scene_pass(const char* caller = __builtin_FUNCTION());
     // The recorded draws run: the upload memory they read reaches the GPU, then the ops replay on the immediate context.
     void flush_draws();
-    void bind_scene_targets();
+    void bind_constants(unsigned slot, gpu::Address address, bool vertex, bool pixel);
+    void bind_rows(gpu::Address rows, gpu::Address instances);
     void reset_draw_bindings() noexcept;
     void sync_post_process();
     [[nodiscard]] bool wants_vsync() const;
     [[nodiscard]] bool wants_hdr() const;
+    [[nodiscard]] unsigned present_sync_interval(unsigned configured, float max_fps);
     void retire(gpu::TextureRef texture);
     void write_table(d3d11::BoundTable& table, const TextureHandle* handles, unsigned count, const TextureStore& cache);
     [[nodiscard]] ID3D11SamplerState* sampler_for(const SamplerKey& key, const RenderConfig& cfg);
+    void reset_sampler_frame();
+    // One of the renderer's own full-screen triangles into the bound targets: `rect` cuts it, `write_mask` the channels it
+    // writes (D3D11_COLOR_WRITE_ENABLE_*), `source` its t0.
     void utility_draw(Utility shader, ID3D11ShaderResourceView* source, const void* constants, std::size_t constant_bytes,
-                      const D3D11_VIEWPORT& viewport);
+                      const D3D11_VIEWPORT& viewport, const gpu::Rect& rect, std::uint8_t write_mask = 0xFu,
+                      DepthUse depth = DepthUse::None);
     void refresh_display_rate();
     void follow_window_and_resize();
-    void report_present_stats();
+    void report_present_stats(double pace_wait_ms, double present_ms);
     void grow_rings();
     void gpu_pass(GpuPass pass);
-    // The picture as the window shows it, drawn into the swap chain's buffer: black, the picture in its content
-    // rectangle through the post chain's last pass or the plain blit.
-    void draw_presented_picture(const d3d11::Texture& picture, unsigned width, unsigned height,
+    // The picture as the window shows it, drawn into `target`: black, the picture in its content rectangle through the
+    // post chain or the plain blit.
+    void draw_presented_picture(ID3D11RenderTargetView* target, const d3d11::Texture& picture, unsigned width, unsigned height,
                                 const galaxy::ContentViewport& content);
 
     WindowOwner* window_owner_ = nullptr;
     host_window::NativeWindow window_ = nullptr;
     bool window_shown_ = false;
+    bool keep_window_ = false;
     bool occluded_ = false;
+    TextureStore* mirrored_store_ = nullptr;
 
     // The swap chain.
     d3d11::ComPtr<IDXGISwapChain3> swap_chain_;
     HANDLE frame_latency_waitable_ = nullptr;
-    d3d11::ComPtr<ID3D11RenderTargetView> backbuffer_rtv_;  // the current buffer's (flip model: buffer 0 is always it)
+    d3d11::ComPtr<ID3D11RenderTargetView> backbuffer_rtv_;  // buffer 0 (flip model: always the one drawn next)
     std::uint32_t swap_width_ = 0u, swap_height_ = 0u;
     DXGI_FORMAT swap_format_ = DXGI_FORMAT_R8G8B8A8_UNORM;
-    bool swap_hdr_ = false;
+    bool swap_vsync_ = false;
     bool tearing_ = false;
+    bool swap_dirty_ = false;
+    bool presented_ = false;  // the backbuffer holds this frame's picture (present drew it)
+    std::unique_lock<std::timed_mutex> surface_lock_;
+    static constexpr unsigned kSwapChainBuffers = 3u;
 
     std::array<Frame, kFramesInFlight> frames_{};
     unsigned frame_slot_ = 0;
@@ -410,17 +465,19 @@ private:
     d3d11::RenderLayout draw_layout_{};
     d3d11::ComPtr<ID3D11SamplerState> linear_clamp_;
     d3d11::ComPtr<ID3D11SamplerState> point_clamp_;
-    d3d11::ComPtr<ID3D11Buffer> root_constants_;      // b3: the draw's DrawRoot, written per change
-    d3d11::ComPtr<ID3D11Buffer> utility_constants_;   // the renderer's own draws' constants
+    d3d11::ComPtr<ID3D11Buffer> root_constants_;     // b3: the draw's DrawRoot, written per change (dynamic)
+    d3d11::ComPtr<ID3D11Buffer> utility_constants_;  // the renderer's own draws' b0 (dynamic)
     std::array<d3d11::ComPtr<ID3D11PixelShader>, static_cast<std::size_t>(Utility::Count)> utility_ps_{};
     d3d11::ComPtr<ID3D11VertexShader> full_screen_vs_;
     d3d11::ComPtr<ID3D11ComputeShader> probe_cs_;
+    d3d11::ComPtr<ID3D11RasterizerState> utility_raster_;
+    std::array<d3d11::ComPtr<ID3D11BlendState>, 16> write_masks_{};  // by D3D11_COLOR_WRITE_ENABLE_* mask
+    std::array<d3d11::ComPtr<ID3D11DepthStencilState>, static_cast<std::size_t>(DepthUse::Count)> depth_uses_{};
 
     // The scene target.
     FrameMap scene_map_{};
     SceneSet scene_;
     SceneSet wide_scene_;
-    std::uint64_t scene_depth_serial_ = 0;
     SceneSet alt_scene_;
     FrameMap alt_scene_map_{};
     std::unordered_map<std::uint64_t, Picture> pictures_;
@@ -439,8 +496,10 @@ private:
     bool scene_view_known_ = false;
     float scene_lens_[3]{1.0f, 100000.0f, 1.0f};
     bool present_black_ = false;
+    bool present_game_frame_ = false;
     std::uint64_t wide_scene_used_frame_ = 0u;
     std::uint64_t output_scene_used_frame_ = 0u;
+    std::int64_t camera_metered_qpc_ = 0;
 
     // The renderer's parts (fx_d3d11.h).
     d3d11::PostProcessor post_;
@@ -464,8 +523,6 @@ private:
     std::uint32_t zero_stream_bytes_ = 0u;
     gpu::Address zero_stream_address_ = 0u;
     gpu::BufferRef zero_vertices_;
-    unsigned history_segment_ = 0u;
-    std::array<std::uint64_t, kRingSegments> history_segment_fence_{};
     bool ring_growth_failed_ = false;
     // The open pass's recorded draws (gpu::Encoder writes them; flush_draws replays them).
     std::vector<gpu::DrawOp> pass_ops_;
@@ -494,14 +551,17 @@ private:
 
     // Screen probes: a slot's points (written here) and values (the dispatch writes, read back), fenced with its frame.
     struct ProbeSlot {
-        gpu::BufferRef points;
-        d3d11::ComPtr<ID3D11Buffer> values;    // written by the probe dispatch
+        d3d11::ComPtr<ID3D11Buffer> points;  // the frame pixels to read (uint2), dynamic
+        d3d11::ComPtr<ID3D11ShaderResourceView> points_view;
+        d3d11::ComPtr<ID3D11Buffer> values;  // written by the probe dispatch
+        d3d11::ComPtr<ID3D11UnorderedAccessView> values_view;
         d3d11::ComPtr<ID3D11Buffer> readback;  // D3D11_USAGE_STAGING
         std::uint64_t capacity = 0;  // points they hold
-        std::uint64_t fence = 0;     // 0: idle
+        std::uint64_t fence = 0;     // 0: idle; kProbesInFrame: recorded in the frame being built
         std::uint32_t count = 0;
         std::vector<float> answers;
     };
+    static constexpr std::uint64_t kProbesInFrame = ~std::uint64_t{0};
     std::vector<ProbeSlot> probe_slots_;
 
     // Captures and telemetry.
@@ -521,17 +581,25 @@ private:
     unsigned display_capture_height_ = 0;
     std::atomic<double> measured_present_hz_{0.0};
     double display_refresh_hz_ = 0.0;
+    bool variable_refresh_ = false;
+    unsigned display_refresh_checks_ = 0u;
+    unsigned latency_timeouts_ = 0u;
     std::int64_t swap_present_qpc_ = 0;
     std::int64_t measured_present_window_qpc_ = 0;
     std::uint64_t measured_present_count_ = 0;
+    struct PresentStats {
+        std::int64_t window_start_qpc = 0;
+        std::int64_t last_present_qpc = 0;
+        std::uint64_t presents = 0, intervals = 0, gpu_samples = 0;
+        double interval_ms = 0.0, interval_max_ms = 0.0, pace_wait_ms = 0.0, pace_wait_max_ms = 0.0;
+        double present_ms = 0.0, present_max_ms = 0.0, gpu_ms = 0.0;
+    } stats_;
     PresentPacer present_pacer_;
     double native_scene_gpu_ema_ms_ = 0.0;
     bool scene_drawn_ = false;
-    std::array<bool, kFramesInFlight> frame_scene_drawn_{};
     GpuPass current_pass_ = GpuPass::Scene;
-    bool profile_frame_ = false;
     std::atomic<bool> gpu_timing_wanted_{false};
-    std::array<std::atomic<float>, static_cast<std::size_t>(GpuPass::Count)> pass_ema_ms_{};
+    std::atomic<float> frame_gpu_ema_ms_{0.0f};
 };
 
 using Renderer = RendererD3D11;

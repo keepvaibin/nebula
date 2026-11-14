@@ -5,7 +5,7 @@
 #include "galaxy/platform_time.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/renderer_common.h"
-#if !defined(NEBULA_GPU_VULKAN) && !defined(NEBULA_GPU_METAL)
+#if !defined(NEBULA_GPU_VULKAN) && !defined(NEBULA_GPU_METAL) && !defined(NEBULA_GPU_D3D11)
 #include "barriers_d3d12.h"
 #include "galaxy/render/renderer_d3d12.h"
 #endif
@@ -235,7 +235,7 @@ const DisplayTexture* DisplayPictures::picture(std::uint32_t slot) const {
 
 }  // namespace galaxy::render
 
-#if !defined(NEBULA_GPU_VULKAN) && !defined(NEBULA_GPU_METAL)
+#if !defined(NEBULA_GPU_VULKAN) && !defined(NEBULA_GPU_METAL) && !defined(NEBULA_GPU_D3D11)
 namespace galaxy::render::gpu {
 
 TextureRef create_render_texture(Device* device, std::uint32_t width, std::uint32_t height) {

@@ -11,7 +11,7 @@
 #include <string>
 
 
-#if !defined(NEBULA_GPU_VULKAN) && !defined(NEBULA_GPU_METAL)
+#if !defined(NEBULA_GPU_VULKAN) && !defined(NEBULA_GPU_METAL) && !defined(NEBULA_GPU_D3D11)
 #include "galaxy/windows_api.h"
 #include <d3d12.h>
 #endif
@@ -237,7 +237,7 @@ UploadRing::Allocation UploadRing::allocate(std::size_t size, std::size_t alignm
 
 }  // namespace galaxy::render
 
-#if !defined(NEBULA_GPU_VULKAN) && !defined(NEBULA_GPU_METAL)
+#if !defined(NEBULA_GPU_VULKAN) && !defined(NEBULA_GPU_METAL) && !defined(NEBULA_GPU_D3D11)
 namespace galaxy::render::gpu {
 
 bool device_removed(Device* device) noexcept {
