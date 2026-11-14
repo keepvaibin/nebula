@@ -205,7 +205,7 @@ bool RenderCore::initialize(int w, int h) {
     boot_step("pipelines");
     rt_start();
 
-    // The first start (no config.ini, and no back end chose for it): the table's height now, measured in the first 3D scene.
+    // The first start (no config.ini, and no back end chose for it): a conservative height now, measured in the first 3D scene.
     if (const RenderConfig chosen = get_render_config_chosen();
         render_config_first_start() && chosen.upscaler == 0u && chosen.internal_height == 0u && start_frame.height > 0u) {
 #if defined(NEBULA_GPU_METAL)
