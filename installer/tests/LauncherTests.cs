@@ -964,16 +964,18 @@ namespace Nebula.Launcher
             foreach (string backup in Directory.GetDirectories(parent, "saves-backup-*")) FileUtil.DeleteTree(backup);
         }
 
-        // UpdateCheck's rules on the test's data root: what a cached answer offers, Skip this version, the channel, a
-        // damaged or missing cache, and a refresh that fails (offline) keeping the last answer.
+        // The offer's rules on the test's data root (UpdateService, UpdateCheck): what a kept answer offers, Skip this
+        // version, the channel, the service off, a damaged or missing answer, a check that fails (offline) keeping the
+        // last answer, and the settings window's banner. The timing against a server is in UpdateFlowTests.
         static void UpdateServiceCases()
         {
             var session = new LaunchSession();
-            string cache = UpdateCheck.CachePath;
+            string cache = UpdateService.CachePath;
             if (File.Exists(cache)) File.Delete(cache);
+            UpdateService.Reset();
             Check(UpdateCheck.Pending(session) == null, "no check yet: nothing is offered");
             var newer = new ReleaseInfo { Version = "9.9.9", Tag = "v9.9.9", Notes = "notes", SetupUrl = "https://example.org/s", SignatureUrl = "https://example.org/s.sig", SetupSize = 5 };
-            UpdateCheck.WriteCache(newer, DateTime.UtcNow);
+            UpdateService.WriteCache(newer, DateTime.UtcNow);
             var pending = UpdateCheck.Pending(session);
             Check(pending != null && pending.Version == "9.9.9" && pending.Notes == "notes" && pending.SetupSize == 5, "the last check's newer release is offered at start");
             session.SkippedUpdate = "9.9.9";
@@ -982,15 +984,27 @@ namespace Nebula.Launcher
             Check(UpdateCheck.Pending(session) != null, "a version newer than the skipped one is");
             session.SkippedUpdate = null;
             session.AskAboutUpdates = false;
-            Check(UpdateCheck.Pending(session) == null, "the service turned off offers nothing");
+            Check(UpdateCheck.Pending(session) == null && !UpdateCheck.OfferBeforeLaunch(session), "the service turned off offers nothing");
             session.AskAboutUpdates = true;
-            UpdateCheck.WriteCache(new ReleaseInfo { Version = "0.0.0-test", SetupUrl = "https://example.org/s", SignatureUrl = "https://example.org/s.sig" }, DateTime.UtcNow);
-            Check(UpdateCheck.Pending(session) == null, "a cached release no newer than this install is not offered");
-            UpdateCheck.WriteCache(new ReleaseInfo { Version = "9.9.9-beta.1", SetupUrl = "https://example.org/s", SignatureUrl = "https://example.org/s.sig" }, DateTime.UtcNow);
+
+            // The settings window: the banner from the kept answer, its prompt only when pressed.
+            using (var form = new SettingsForm(new LaunchSession()))
+            {
+                CreateHandles(form);
+                form.GetType().GetMethod("WatchForUpdate", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).Invoke(form, null);
+                var banner = (Button)Private(form, "updateBanner");
+                var offered = (ReleaseInfo)Private(form, "pendingUpdate");
+                Check(offered != null && offered.Version == "9.9.9" && banner.Text.StartsWith("Nebula 9.9.9 is available") && form.ActiveControl != banner,
+                      "the settings window shows a newer release in its banner, without taking the focus");
+            }
+
+            UpdateService.WriteCache(new ReleaseInfo { Version = "0.0.0-test", SetupUrl = "https://example.org/s", SignatureUrl = "https://example.org/s.sig" }, DateTime.UtcNow);
+            Check(UpdateCheck.Pending(session) == null, "a kept release no newer than this install is not offered");
+            UpdateService.WriteCache(new ReleaseInfo { Version = "9.9.9-beta.1", SetupUrl = "https://example.org/s", SignatureUrl = "https://example.org/s.sig" }, DateTime.UtcNow);
             Check(UpdateCheck.Pending(session) == null, "a release of the other channel is not offered");
             File.WriteAllText(cache, "{ not json");
-            Check(UpdateCheck.Pending(session) == null, "a damaged cache offers nothing");
-            UpdateCheck.WriteCache(newer, DateTime.UtcNow.AddDays(-1));
+            Check(UpdateCheck.Pending(session) == null, "a damaged answer offers nothing");
+            UpdateService.WriteCache(newer, DateTime.UtcNow.AddDays(-1));
             string listing = Updater.ReleasesUrl;
             var closed = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
             closed.Start();
@@ -998,10 +1012,14 @@ namespace Nebula.Launcher
             closed.Stop();
             Updater.ReleasesUrl = "http://127.0.0.1:" + port + "/releases";
             var clock = System.Diagnostics.Stopwatch.StartNew();
-            UpdateCheck.Refresh(session);
+            UpdateService.Begin();
+            pending = UpdateService.Offer(UpdateService.FreshBudgetMilliseconds, null);
+            long waited = clock.ElapsedMilliseconds;
+            UpdateService.Finish();
             Updater.ReleasesUrl = listing;
-            pending = UpdateCheck.Pending(session);
-            Check(pending != null && pending.Version == "9.9.9", "offline, a refresh keeps the last answer (" + clock.ElapsedMilliseconds + " ms)");
+            Check(pending != null && pending.Version == "9.9.9" && waited < UpdateService.FreshBudgetMilliseconds,
+                  "offline, a start offers the last answer without waiting out the budget (" + waited + " ms)");
+            UpdateService.Reset();
             File.Delete(cache);
         }
 

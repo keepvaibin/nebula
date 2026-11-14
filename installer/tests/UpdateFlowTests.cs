@@ -31,6 +31,7 @@ namespace Nebula.Setup
         static volatile string setupMode = "ok";      // ok, truncated, slow, missing
         static volatile int releasesDelayMs;
         static int setupRequests;
+        static int releasesRequests;
         static int port;
         // Setup stand-ins built by the run script, each carrying a product version (setup-<version>.exe).
         static string stubs;
@@ -101,6 +102,7 @@ namespace Nebula.Setup
                     string path = requestLine.Split(' ').Length > 1 ? requestLine.Split(' ')[1] : "/";
                     if (path.StartsWith("/releases"))
                     {
+                        Interlocked.Increment(ref releasesRequests);
                         if (releasesDelayMs > 0) Thread.Sleep(releasesDelayMs);
                         Reply(stream, 200, Encoding.UTF8.GetBytes(releasesJson), 0, -1);
                     }
@@ -528,6 +530,102 @@ namespace Nebula.Setup
                   "the newest two copies stay");
         }
 
+        // UpdateService on the server: the check begun as the launcher starts, taken before the game starts within
+        // FreshBudgetMilliseconds, else the kept answer; a late answer kept for the next start; offline costing no wait;
+        // no request within the hour after an answer; a failed check keeping the last answer and its time.
+        static void CheckService()
+        {
+            int budget = UpdateService.FreshBudgetMilliseconds;
+            setupBytes = SetupPayload("9.9.9-beta.1", 1000, 7);
+            signatureText = Sign(setupBytes);
+            releasesJson = Release("9.9.9-beta.1", "fresh");
+            releasesDelayMs = 0;
+            if (File.Exists(UpdateService.CachePath)) File.Delete(UpdateService.CachePath);
+
+            UpdateService.Reset();
+            int before = releasesRequests;
+            var clock = Stopwatch.StartNew();
+            UpdateService.Begin();
+            ReleaseInfo offered = UpdateService.Offer(budget, null);
+            long waited = clock.ElapsedMilliseconds;
+            Check(offered != null && offered.Version == "9.9.9-beta.1" && offered.Notes == "fresh" && waited < budget,
+                  "a fresh answer inside the budget is offered at this start (" + waited + " ms of " + budget + ")");
+            UpdateService.Finish();
+            Check(releasesRequests == before + 1, "one start, one request");
+            Check(UpdateService.Offer(budget, "9.9.9-beta.1") == null, "a skipped version is not offered");
+
+            UpdateService.Reset();
+            clock.Restart();
+            UpdateService.Begin();
+            offered = UpdateService.Offer(budget, null);
+            waited = clock.ElapsedMilliseconds;
+            Check(UpdateService.Running == null && releasesRequests == before + 1 && offered != null && offered.Notes == "fresh" && waited < 100,
+                  "within the hour after an answer a start makes no request and offers the kept answer at once (" + waited + " ms)");
+
+            // The last answer two hours old and nothing newer; the server answers after the budget.
+            UpdateService.WriteCache(null, DateTime.UtcNow.AddHours(-2));
+            releasesJson = Release("9.9.9-beta.1", "late");
+            releasesDelayMs = 1500;
+            UpdateService.Reset();
+            clock.Restart();
+            UpdateService.Begin();
+            offered = UpdateService.Offer(budget, null);
+            waited = clock.ElapsedMilliseconds;
+            Check(offered == null && waited >= budget - 20 && waited < budget + 250,
+                  "an answer after the budget is waited for no longer than the budget; the kept answer (nothing newer) stands (" + waited + " ms)");
+            UpdateService.Finish();
+            releasesDelayMs = 0;
+            int afterLate = releasesRequests;
+            UpdateService.Reset();
+            clock.Restart();
+            UpdateService.Begin();
+            offered = UpdateService.Offer(budget, null);
+            waited = clock.ElapsedMilliseconds;
+            Check(offered != null && offered.Notes == "late" && UpdateService.Running == null && releasesRequests == afterLate && waited < 100,
+                  "the late answer, kept once the game started, is offered at the next start with no request (" + waited + " ms)");
+
+            // Offline: a port nothing listens on (Windows tries the request's connection again for two seconds; the
+            // probe's ends the wait), a name that does not resolve. The budget is not spent; the kept answer is offered
+            // and keeps its time.
+            ReleaseInfo kept;
+            DateTime keptUtc;
+            UpdateService.ReadCache(out kept, out keptUtc);
+            DateTime stale = DateTime.UtcNow.AddHours(-2);
+            var closed = new TcpListener(IPAddress.Loopback, 0);
+            closed.Start();
+            int closedPort = ((IPEndPoint)closed.LocalEndpoint).Port;
+            closed.Stop();
+            string listing = Updater.ReleasesUrl;
+            foreach (string offline in new[] { "http://127.0.0.1:" + closedPort + "/releases", "http://nebula-update-check.invalid/releases" })
+            {
+                UpdateService.WriteCache(kept, stale);
+                Updater.ReleasesUrl = offline;
+                UpdateService.Reset();
+                clock.Restart();
+                UpdateService.Begin();
+                offered = UpdateService.Offer(budget, null);
+                waited = clock.ElapsedMilliseconds;
+                Check(UpdateService.Running != null && offered != null && offered.Notes == "late" && waited < budget,
+                      "offline (" + offline + "): the wait ends with the failure, not the budget; the kept answer is offered (" + waited + " ms)");
+                UpdateService.Finish();
+                ReleaseInfo after;
+                DateTime afterUtc;
+                Check(UpdateService.ReadCache(out after, out afterUtc) && after != null && after.Notes == "late" && Math.Abs((afterUtc - stale).TotalSeconds) < 1,
+                      "a failed check keeps the last answer and its time, so the next start checks again");
+            }
+            Updater.ReleasesUrl = listing;
+
+            // A last answer dated in the future (the clock was wrong then, or is now): checked again.
+            UpdateService.WriteCache(kept, DateTime.UtcNow.AddDays(3));
+            UpdateService.Reset();
+            int beforeFuture = releasesRequests;
+            UpdateService.Begin();
+            UpdateService.Finish();
+            Check(releasesRequests == beforeFuture + 1, "a last answer dated after now is checked again");
+            UpdateService.Reset();
+            File.Delete(UpdateService.CachePath);
+        }
+
         public static int Main(string[] args)
         {
             scratch = args[0];
@@ -544,6 +642,7 @@ namespace Nebula.Setup
             try
             {
                 CheckDownloads();
+                CheckService();
                 CheckRollback();
                 CheckFormatRollback();
                 CheckRememberedSourceAndSnapshot();

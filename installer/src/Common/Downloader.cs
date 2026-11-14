@@ -132,11 +132,15 @@ namespace Nebula
             using (var reader = new StreamReader(response.GetResponseStream()))
             {
                 // A release listing is a few hundred kilobytes; a portal or proxy page that never ends is not one.
-                var text = new char[MaxListingChars + 1];
-                int length = 0, read;
-                while (length <= MaxListingChars && (read = reader.Read(text, length, text.Length - length)) > 0) length += read;
-                if (length > MaxListingChars) throw new InvalidDataException("The release list is too large.");
-                return new string(text, 0, length);
+                var text = new System.Text.StringBuilder();
+                var piece = new char[16384];
+                int read;
+                while ((read = reader.Read(piece, 0, piece.Length)) > 0)
+                {
+                    if (text.Length + read > MaxListingChars) throw new InvalidDataException("The release list is too large.");
+                    text.Append(piece, 0, read);
+                }
+                return text.ToString();
             }
         }
     }

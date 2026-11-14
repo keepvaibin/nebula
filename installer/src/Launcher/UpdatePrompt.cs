@@ -1,8 +1,6 @@
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
-using System.Globalization;
 using System.IO;
 using System.Threading;
 using System.Windows.Forms;
@@ -10,44 +8,39 @@ using System.Windows.Forms;
 namespace Nebula.Launcher
 {
     /// <summary>
-    /// The update service. Nothing touches the network before the game starts: a start offers the newer release an
-    /// earlier check found (update-check.json in the data folder), and once the game has started the launcher reads
-    /// the release list behind it for the next start (at most once an hour; offline, a captive portal, a rate limit
-    /// or a malformed answer leave the last answer as it was). Update downloads the release's Setup, checks its
-    /// signature and version and runs it, which installs the release and starts the game; Not now asks again at the
-    /// next start; Skip this version asks again for a newer one. The launcher's Advanced tab turns the service off.
+    /// The update offer (UpdateService decides when Nebula looks and what it offers). A start offers the newer release
+    /// the check found, fresh or from the last start, before the game starts; with the settings open it shows as a
+    /// banner there. Update downloads the release's Setup, checks its signature and version and runs it, which
+    /// installs the release (and starts the game when offered at a start); Not now asks again at the next start; Skip
+    /// this version asks again for a newer one. The launcher's Advanced tab turns the service off.
     /// </summary>
     internal static class UpdateCheck
     {
-        private const int CheckMilliseconds = 15000;
-        private static readonly TimeSpan CheckInterval = TimeSpan.FromHours(1);
+        internal static bool Enabled(LaunchSession session) { return !session.Portable && session.AskAboutUpdates; }
 
-        internal static string CachePath { get { return Path.Combine(NebulaPaths.DataRoot, "update-check.json"); } }
-
-        /// <summary>The release to offer at this start, from the last check; null for none.</summary>
+        /// <summary>The release to offer now without waiting: the check's answer if it has come, else the last one.</summary>
         internal static ReleaseInfo Pending(LaunchSession session)
         {
-            if (session.Portable || !session.AskAboutUpdates) return null;
-            ReleaseInfo release;
-            DateTime checkedUtc;
-            if (!ReadCache(out release, out checkedUtc) || release == null) return null;
-            // A check made by an older install, or on the other channel, offers nothing this install would take.
-            if (Updater.CompareVersions(release.Version, BuildInfo.Version) <= 0 ||
-                Updater.IsBetaVersion(release.Version) != Updater.IsBetaVersion(BuildInfo.Version)) return null;
-            if (!string.IsNullOrEmpty(session.SkippedUpdate) && Updater.CompareVersions(release.Version, session.SkippedUpdate) <= 0) return null;
-            return release;
+            return Enabled(session) ? UpdateService.Offer(0, session.SkippedUpdate) : null;
         }
 
         /// <summary>True when an update was started: it starts the game itself once installed.</summary>
         public static bool OfferBeforeLaunch(LaunchSession session)
         {
-            ReleaseInfo release = Pending(session);
+            if (!Enabled(session)) return false;
+            return Prompt(session, UpdateService.Offer(UpdateService.FreshBudgetMilliseconds, session.SkippedUpdate), null, true);
+        }
+
+        /// <summary>Shows the offer of <paramref name="release"/>; true when its Setup was started (with
+        /// <paramref name="launch"/>, it starts the game once installed).</summary>
+        public static bool Prompt(LaunchSession session, ReleaseInfo release, IWin32Window owner, bool launch)
+        {
             if (release == null) return false;
             UpdateChoice choice;
             bool prepareRayTracing;
             using (var prompt = new UpdatePromptForm(release))
             {
-                prompt.ShowDialog();
+                if (owner != null) prompt.ShowDialog(owner); else prompt.ShowDialog();
                 choice = prompt.Choice;
                 prepareRayTracing = prompt.PrepareRayTracing;
             }
@@ -61,73 +54,15 @@ namespace Nebula.Launcher
             string setup;
             using (var download = new UpdateDownloadForm(release, new InstallLayout(session.Root).Staging))
             {
-                if (download.ShowDialog() != DialogResult.OK) return false;
+                if ((owner != null ? download.ShowDialog(owner) : download.ShowDialog()) != DialogResult.OK) return false;
                 setup = download.SetupPath;
             }
             if (prepareRayTracing) RayTracingPreparation.Request();
-            Process.Start(new ProcessStartInfo(setup, "--apply-update --launch --root " + ProcessRunner.Quote(session.Root))
+            Process.Start(new ProcessStartInfo(setup, "--apply-update " + (launch ? "--launch " : "") + "--root " + ProcessRunner.Quote(session.Root))
             {
                 UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(setup)
             });
             return true;
-        }
-
-        /// <summary>
-        /// Reads the release list and keeps the answer for the next start; called once the game has started or while
-        /// the settings are open, never before Play. A check dated after now (a clock set wrong) is checked again.
-        /// </summary>
-        public static void Refresh(LaunchSession session)
-        {
-            if (session.Portable || !session.AskAboutUpdates) return;
-            try
-            {
-                ReleaseInfo cached;
-                DateTime checkedUtc, now = DateTime.UtcNow;
-                if (ReadCache(out cached, out checkedUtc) && checkedUtc <= now && now - checkedUtc < CheckInterval) return;
-                WriteCache(Updater.FindNewer(CheckMilliseconds), now);
-            }
-            catch (Exception) { }
-        }
-
-        internal static void WriteCache(ReleaseInfo release, DateTime checkedUtc)
-        {
-            var values = new Dictionary<string, object> { { "checkedUtc", checkedUtc.ToString("o", CultureInfo.InvariantCulture) } };
-            if (release != null)
-            {
-                values["version"] = release.Version;
-                values["tag"] = release.Tag;
-                values["notes"] = release.Notes;
-                values["setupUrl"] = release.SetupUrl;
-                values["signatureUrl"] = release.SignatureUrl;
-                values["setupSize"] = release.SetupSize;
-                values["prerelease"] = release.Prerelease;
-            }
-            Json.Save(CachePath, values);
-        }
-
-        // False without a readable cache; release null when the last check found nothing newer.
-        internal static bool ReadCache(out ReleaseInfo release, out DateTime checkedUtc)
-        {
-            release = null;
-            checkedUtc = DateTime.MinValue;
-            try
-            {
-                if (!File.Exists(CachePath)) return false;
-                var values = Json.Load(CachePath);
-                if (!DateTime.TryParse(Json.Str(values, "checkedUtc"), CultureInfo.InvariantCulture,
-                                       DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out checkedUtc)) return false;
-                string version = Json.Str(values, "version");
-                if (string.IsNullOrEmpty(version)) return true;
-                release = new ReleaseInfo
-                {
-                    Version = version, Tag = Json.Str(values, "tag"), Notes = Json.Str(values, "notes") ?? "",
-                    SetupUrl = Json.Str(values, "setupUrl"), SignatureUrl = Json.Str(values, "signatureUrl"),
-                    SetupSize = Json.Long(values, "setupSize"), Prerelease = Json.Bool(values, "prerelease")
-                };
-                if (release.SetupUrl == null || release.SignatureUrl == null) release = null;
-                return true;
-            }
-            catch (Exception) { return false; }
         }
     }
 
