@@ -11,6 +11,9 @@
 #                 [-FfxShaders <FidelityFX's Vulkan shader headers, made already>]
 #                 [-Debuggable: the APK can be debugged (run-as) on a test device]
 #                 [-Plain: no ThinLTO for the game module and host; links in a fraction of the time, for development]
+#                 [-ReleaseKey <the release key's private XML>: Nebula.apk.sig, the release-key signature the app's
+#                  updates check (Updates.kt); default the Windows setups' key at its usual place, '' for none]
+#   A release publishes the two as Nebula-Android.apk and Nebula-Android.apk.sig (a beta: Nebula-Beta-Android.apk).
 param(
     [Parameter(Mandatory = $true)][string]$Deps,
     [Parameter(Mandatory = $true)][string]$Work,
@@ -20,7 +23,8 @@ param(
     [string]$Abis = "arm64-v8a,x86_64",
     [string]$FfxShaders = "",
     [switch]$Debuggable,
-    [switch]$Plain
+    [switch]$Plain,
+    [string]$ReleaseKey = (Join-Path $env:USERPROFILE '.nebula-release-key\nebula-release-private.xml')
 )
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path "$PSScriptRoot\..\..").Path
@@ -142,3 +146,17 @@ try {
 $apk = Join-Path $android "app\build\outputs\apk\release\app-release.apk"
 Copy-Item $apk (Join-Path $Work "Nebula.apk") -Force
 "apk: $(Join-Path $Work 'Nebula.apk') ($([math]::Round((Get-Item $apk).Length / 1MB, 1)) MB)"
+# The release-key signature over the whole APK (RSA SHA-256, base64), as build-native-setup.ps1 signs the setup.
+$signed = Join-Path $Work "Nebula.apk"
+if ($ReleaseKey -and (Test-Path -LiteralPath $ReleaseKey)) {
+    $publicKey = (Get-Content -LiteralPath (Join-Path $root "installer\release-public-key.xml") -Raw).Trim()
+    $rsa = New-Object System.Security.Cryptography.RSACryptoServiceProvider
+    $rsa.PersistKeyInCsp = $false
+    $rsa.FromXmlString((Get-Content -LiteralPath $ReleaseKey -Raw))
+    if ($rsa.ToXmlString($false) -ne $publicKey) { throw "The release key does not match installer/release-public-key.xml." }
+    $signature = $rsa.SignData([IO.File]::ReadAllBytes($signed), [Security.Cryptography.CryptoConfig]::MapNameToOID("SHA256"))
+    [IO.File]::WriteAllText("$signed.sig", [Convert]::ToBase64String($signature))
+    "signed: $signed.sig"
+} elseif ($ReleaseKey) {
+    Write-Warning "No release key at $ReleaseKey`: Nebula.apk has no .sig and its updates will not install it."
+}

@@ -178,7 +178,13 @@ namespace Nebula.Launcher
             new PadNavigator(this);
             UiScale.Apply(this);
             Shown += delegate { Start(); };
+            // Closed by its X, Alt+F4 or Cancel before the download ended: the download stops (its partial file stays
+            // for the next start, which offers the update again).
+            FormClosing += delegate { if (DialogResult != DialogResult.OK) cancel.Cancel(); };
         }
+
+        /// <summary>The download thread, ended or not, by the time the window has closed (tests).</summary>
+        internal Thread Worker { get; private set; }
 
         private void Start()
         {
@@ -189,14 +195,15 @@ namespace Nebula.Launcher
                     string path = Updater.Download(release, folder, bytes =>
                     {
                         if (release.SetupSize <= 0) return;
-                        BeginInvoke((Action)delegate { bar.Value = (int)Math.Min(1000, bytes * 1000 / release.SetupSize); });
+                        int value = (int)Math.Min(1000, bytes * 1000 / release.SetupSize);
+                        UiThread.Post(this, delegate { bar.Value = value; });
                     }, cancel.Token);
-                    BeginInvoke((Action)delegate { SetupPath = path; DialogResult = DialogResult.OK; Close(); });
+                    UiThread.Post(this, delegate { SetupPath = path; DialogResult = DialogResult.OK; Close(); });
                 }
                 catch (Exception error)
                 {
                     bool canceled = cancel.IsCancellationRequested;
-                    BeginInvoke((Action)delegate
+                    UiThread.Post(this, delegate
                     {
                         if (!canceled)
                             MessageBox.Show(this, NebulaText.Of("Couldn't download the update.") + "\r\n\r\n" + error.Message,
@@ -207,7 +214,28 @@ namespace Nebula.Launcher
                 }
             });
             thread.IsBackground = true;
+            Worker = thread;
             thread.Start();
+        }
+    }
+
+    /// <summary>
+    /// A worker thread's step on a window's own thread: queued while the window lives, dropped (false) once it has
+    /// closed or is closing, including when it closes between the check and the queueing. The step itself runs only
+    /// while the window is not disposed.
+    /// </summary>
+    internal static class UiThread
+    {
+        public static bool Post(Control target, Action action)
+        {
+            if (target.IsDisposed || target.Disposing || !target.IsHandleCreated) return false;
+            try
+            {
+                target.BeginInvoke((Action)delegate { if (!target.IsDisposed && !target.Disposing) action(); });
+                return true;
+            }
+            // The handle went meanwhile (ObjectDisposedException is one of these).
+            catch (InvalidOperationException) { return false; }
         }
     }
 }

@@ -470,6 +470,7 @@ struct Check {
     std::mutex mutex;
     std::condition_variable changed;
     bool done = false;
+    bool kept = false;         // the answer is in update-check.json too (or there was none to keep)
     bool failed = false;
     bool unreachable = false;  // the probe's verdict, when it came first
     std::optional<Release> release;
@@ -477,6 +478,8 @@ struct Check {
 
 struct Service {
     std::mutex mutex;
+    // Held while update-check.json is written (persist_kept), never with `mutex`: offer() never waits on the disk.
+    std::mutex file_mutex;
     std::string installed;
     std::string asset;
     std::shared_ptr<Check> check;
@@ -586,8 +589,7 @@ Kept read_kept(Service& s) {
     return kept;
 }
 
-void write_kept(Service& s, const Kept& kept) {
-    const std::filesystem::path path = cache_path(s);
+void write_kept(const std::filesystem::path& path, const Kept& kept) {
     if (path.empty()) return;
     std::string out = "{\n  \"checkedUtc\": ";
     write_json_string(out, format_time(kept.checked));
@@ -615,6 +617,21 @@ void write_kept(Service& s, const Kept& kept) {
     std::error_code ignored;
     std::filesystem::create_directories(path.parent_path(), ignored);
     (void)io::write_file_atomically(path, out);
+}
+
+// The kept answer as it is now to update-check.json, outside `mutex`. Writers queue on file_mutex and each takes the
+// state when its turn comes, so the file ends as the latest state whatever order the writers ran in.
+void persist_kept(Service& s) {
+    std::lock_guard file_lock(s.file_mutex);
+    Kept snapshot;
+    std::filesystem::path path;
+    {
+        std::lock_guard lock(s.mutex);
+        if (!s.kept) return;
+        snapshot = *s.kept;
+        path = cache_path(s);
+    }
+    write_kept(path, snapshot);
 }
 
 bool offered(const std::optional<Release>& release, std::string_view installed, std::string_view skipped) {
@@ -666,19 +683,26 @@ void begin(std::string_view installed_version) {
         if (status == 200) release = select_newer(body, installed, asset, is_list);
         Service& owner = service();
         if (is_list) {
-            // Kept as the next start's answer; a failed check (offline, portal, rate limit) keeps the last one.
+            // Kept as the next start's answer (in memory now, on disk below); a failed check (offline, portal, rate
+            // limit) keeps the last one. begin read the file, so `kept` is set.
             std::lock_guard service_lock(owner.mutex);
-            Kept next = owner.kept ? *owner.kept : read_kept(owner);
+            Kept next = owner.kept ? *owner.kept : Kept{};
             next.release = release;
             next.checked = now_seconds();
             next.readable = true;
-            write_kept(owner, next);
             owner.kept = std::move(next);
         }
+        {
+            // The answer first: offer() takes it within its budget whatever the disk does next.
+            std::lock_guard check_lock(check->mutex);
+            check->done = true;
+            check->failed = !is_list;
+            check->release = release;
+            check->changed.notify_all();
+        }
+        if (is_list) persist_kept(owner);
         std::lock_guard check_lock(check->mutex);
-        check->done = true;
-        check->failed = !is_list;
-        check->release = std::move(release);
+        check->kept = true;
         check->changed.notify_all();
     });
     s.probe = std::thread([check, transport] {
@@ -719,13 +743,14 @@ std::optional<Release> poll() { return offer(0); }
 
 void skip(std::string_view version) {
     Service& s = service();
-    std::lock_guard lock(s.mutex);
+    std::unique_lock lock(s.mutex);
     Kept kept = s.kept ? *s.kept : read_kept(s);
     if (!kept.readable) kept.checked = 0;  // no answer yet: the next start checks
     if (!kept.skipped.empty() && compare_versions(kept.skipped, version) >= 0) return;
     kept.skipped = std::string(version);
-    write_kept(s, kept);
     s.kept = std::move(kept);
+    lock.unlock();
+    persist_kept(s);
 }
 
 void finish() {
@@ -737,7 +762,7 @@ void finish() {
     }
     if (!check) return;
     std::unique_lock lock(check->mutex);
-    check->changed.wait_for(lock, std::chrono::milliseconds(kCheckTimeoutMs + 1000), [&] { return check->done; });
+    check->changed.wait_for(lock, std::chrono::milliseconds(kCheckTimeoutMs + 1000), [&] { return check->kept; });
 }
 
 // ---- The install ----

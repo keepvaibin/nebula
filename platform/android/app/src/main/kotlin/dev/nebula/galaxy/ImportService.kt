@@ -151,7 +151,10 @@ class ImportService : Service() {
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(getString(R.string.import_notification_title))
-            .setContentText(if (total > 0) "$percent% · ${formatBytes(done)} of ${formatBytes(total)}" else "Reading the disc image")
+            .setContentText(
+                if (total > 0) getString(R.string.nebula_import_progress, percent.toString(), formatBytes(done), formatBytes(total))
+                else getString(R.string.nebula_reading_disc_plain),
+            )
             .setProgress(100, percent, total == 0L)
             .setOngoing(true)
             .setOnlyAlertOnce(true)

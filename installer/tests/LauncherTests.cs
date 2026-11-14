@@ -188,6 +188,181 @@ namespace Nebula.Launcher
             }
         }
 
+        // The Performance page on perf/bench's contract: progress lines, the result file (schema 1 only), the game's
+        // arguments, the rows that differ named as the window names them, and Apply on the rows and in config.ini (the
+        // other keys untouched); a run that ends without a result says so.
+        // The update's download window closed (X, Alt+F4) while it downloads: no exception on the download thread (the
+        // launcher would end), the download stops, its partial file stays for the next start.
+        static void DownloadCloseCases(string scratch)
+        {
+            var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+            listener.Start();
+            int port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+            const int size = 4 << 20;
+            new Thread(() =>
+            {
+                while (true)
+                {
+                    System.Net.Sockets.TcpClient client;
+                    try { client = listener.AcceptTcpClient(); }
+                    catch (System.Net.Sockets.SocketException) { return; }
+                    new Thread(() =>
+                    {
+                        try
+                        {
+                            using (client)
+                            using (var stream = client.GetStream())
+                            {
+                                var reader = new StreamReader(stream, Encoding.ASCII);
+                                string request = reader.ReadLine() ?? "";
+                                while (!string.IsNullOrEmpty(reader.ReadLine())) { }
+                                bool signature = request.Contains("/setup.sig");
+                                long length = signature ? 8 : size;
+                                byte[] head = Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Length: " + length + "\r\nConnection: close\r\n\r\n");
+                                stream.Write(head, 0, head.Length);
+                                if (signature) { stream.Write(Encoding.ASCII.GetBytes("AAAAAAA="), 0, 8); return; }
+                                var piece = new byte[4096];
+                                for (long sent = 0; sent < size; sent += piece.Length) { stream.Write(piece, 0, piece.Length); Thread.Sleep(20); }
+                            }
+                        }
+                        catch (IOException) { }
+                        catch (ObjectDisposedException) { }
+                    }) { IsBackground = true }.Start();
+                }
+            }) { IsBackground = true }.Start();
+            Exception unhandled = null;
+            UnhandledExceptionEventHandler watch = (sender, e) => { unhandled = e.ExceptionObject as Exception; };
+            AppDomain.CurrentDomain.UnhandledException += watch;
+            try
+            {
+                string folder = Path.Combine(scratch, "download-close");
+                var release = new ReleaseInfo
+                {
+                    Version = "99.0.0", Tag = "v99.0.0", Notes = "", SetupSize = size,
+                    SetupUrl = "http://127.0.0.1:" + port + "/setup", SignatureUrl = "http://127.0.0.1:" + port + "/setup.sig",
+                };
+                string partial = Path.Combine(folder, "update-99.0.0", "Nebula-Setup.exe.partial");
+                Thread worker;
+                using (var form = new UpdateDownloadForm(release, folder))
+                {
+                    form.StartPosition = FormStartPosition.Manual;
+                    form.Location = new Point(-20000, -20000);
+                    form.ShowInTaskbar = false;
+                    form.TopMost = false;
+                    form.Show();
+                    var clock = System.Diagnostics.Stopwatch.StartNew();
+                    while (!(File.Exists(partial) && new FileInfo(partial).Length > 64 * 1024) && clock.ElapsedMilliseconds < 15000)
+                    {
+                        Application.DoEvents();
+                        Thread.Sleep(10);
+                    }
+                    Check(File.Exists(partial), "download close: the download is under way");
+                    worker = form.Worker;
+                    form.Close();   // as its X or Alt+F4: no OK result
+                    Application.DoEvents();
+                }
+                // The thread's progress and failure posts after the window has gone.
+                var after = System.Diagnostics.Stopwatch.StartNew();
+                while (worker.IsAlive && after.ElapsedMilliseconds < 10000) { Application.DoEvents(); Thread.Sleep(10); }
+                Application.DoEvents();
+                Check(!worker.IsAlive, "download close: the download stops when its window closes");
+                Check(unhandled == null, "download close: no exception on the download thread" + (unhandled != null ? ": " + unhandled : ""));
+                Check(File.Exists(partial) && new FileInfo(partial).Length < size, "download close: the partial file stays for the next start");
+                Check(!File.Exists(Path.Combine(folder, "update-99.0.0", "Nebula-Setup.exe")), "download close: no setup is left to run");
+            }
+            finally
+            {
+                AppDomain.CurrentDomain.UnhandledException -= watch;
+                listener.Stop();
+            }
+        }
+
+        static void BenchmarkCases(LaunchSession session)
+        {
+            int step, steps;
+            Check(Benchmark.Progress("[benchmark] 12 steps", out step, out steps) && step == 0 && steps == 12, "benchmark: step count line");
+            Check(Benchmark.Progress("[benchmark] 3/12 gpu Gusty Garden", out step, out steps) && step == 3 && steps == 12, "benchmark: step line");
+            Check(!Benchmark.Progress("[benchmark] complete: fits", out step, out steps) && !Benchmark.Progress(null, out step, out steps), "benchmark: other lines are no progress");
+            const string json = "{\"schema\":1,\"status\":\"complete\",\"failure\":\"\",\"summary\":{\"verdict\":\"below_target\"}," +
+                "\"recommendation\":{\"fits\":true,\"cpu_bound\":false,\"cpu_thread\":\"main\",\"settings\":[" +
+                "{\"key\":\"internal_height\",\"current\":1080,\"recommended\":720},{\"key\":\"msaa_samples\",\"current\":4,\"recommended\":2}," +
+                "{\"key\":\"ambient_occlusion\",\"current\":1,\"recommended\":0},{\"key\":\"enhanced_lighting\",\"current\":1,\"recommended\":0}," +
+                "{\"key\":\"aa\",\"current\":1,\"recommended\":1},{\"key\":\"smaa_quality\",\"current\":3,\"recommended\":2}," +
+                "{\"key\":\"bloom\",\"current\":100,\"recommended\":60},{\"key\":\"ray_tracing\",\"current\":1,\"recommended\":0}]}}";
+            var parsed = BenchmarkResult.Parse(json);
+            Check(parsed != null && parsed.Complete && parsed.Settings.Count == 7 && parsed.Changes.Count == 6,
+                  "benchmark: schema 1 parsed, unknown keys dropped, six rows differ");
+            Check(parsed != null && parsed.VerdictText == "These settings keep 60 frames per second on this device.", "benchmark: fits verdict");
+            Check(BenchmarkResult.Parse(json.Replace("\"schema\":1", "\"schema\":2")) == null && BenchmarkResult.Parse("{") == null,
+                  "benchmark: another schema or a broken file is no result");
+            var failed = BenchmarkResult.Parse("{\"schema\":1,\"status\":\"failed\",\"failure\":\"device lost\",\"summary\":{\"verdict\":\"none\"},\"recommendation\":null}");
+            Check(failed != null && !failed.Complete && failed.Changes.Count == 0 && failed.VerdictText == "The benchmark did not finish. device lost",
+                  "benchmark: a failed run recommends nothing");
+            var start = Benchmark.Create(session.App, session.Content, @"C:\x y\r.json");
+            Check(start.FileName == Path.Combine(session.App, "NebulaNative.exe") && start.Arguments.Contains(" --benchmark 1 --benchmark-out \"C:\\x y\\r.json\"")
+                  && start.Arguments.StartsWith("--pak ") && start.RedirectStandardOutput, "benchmark: the game's arguments");
+
+            string file = Benchmark.ResultPath;
+            Directory.CreateDirectory(Path.GetDirectoryName(file));
+            File.WriteAllText(file, json);
+            Check(Benchmark.Read(3, file) == null && Benchmark.Read(0, file) != null, "benchmark: a failed exit reads no result");
+            var before = GraphicsSettings.Load();
+            before.InternalHeight = 1080; before.Msaa = 2; before.AmbientOcclusion = true; before.AmbientOcclusionSsao = true;
+            before.EnhancedLighting = true; before.PerPixelLighting = true; before.AntiAliasing = 1; before.Quality = 3; before.Bloom = 100;
+            before.Sharpness = 7;
+            before.Save();
+            try
+            {
+                using (var form = new SettingsForm(session))
+                {
+                    form.StartPosition = FormStartPosition.Manual;
+                    form.Location = new Point(-20000, -20000);
+                    form.ShowInTaskbar = false;
+                    form.Show();
+                    form.Controls.OfType<TabControl>().Single().SelectedTab = (TabPage)form.benchmarkApply.Parent;
+                    Application.DoEvents();
+                    var rows = form.benchmarkRows.Items.Cast<ListViewItem>().Select(i => i.SubItems[0].Text + "|" + i.SubItems[1].Text + "|" + i.SubItems[2].Text).ToList();
+                    Check(rows.Count == 6 && rows[0] == "Internal resolution|1080p|720p" && rows[1] == "MSAA|4x|2x" && rows[2] == "Ambient occlusion|On|Off"
+                          && rows[4] == "Anti-aliasing quality|Ultra|High" && rows[5] == "Bloom|100%|60%" && form.benchmarkApply.Visible,
+                          "benchmark: the last result's differing rows, current and recommended: " + string.Join("; ", rows));
+                    form.ApplyBenchmark();
+                    Check(((ComboBox)Private(form, "internalResolution")).SelectedIndex == 5 && ((ComboBox)Private(form, "msaa")).SelectedIndex == 1
+                          && ((ComboBox)Private(form, "occlusionMode")).SelectedIndex == 0 && ((ComboBox)Private(form, "lighting")).SelectedIndex == 1
+                          && ((ComboBox)Private(form, "aaQuality")).SelectedIndex == 2 && ((NumericUpDown)Private(form, "bloom")).Value == 60
+                          && !form.benchmarkApply.Enabled, "benchmark: Apply sets the window's rows");
+                }
+                var after = GraphicsSettings.Load();
+                Check(after.InternalHeight == 720 && after.Msaa == 1 && !after.AmbientOcclusion && after.AmbientOcclusionSsao && !after.EnhancedLighting
+                      && after.PerPixelLighting && after.AntiAliasing == 1 && after.Quality == 2 && after.Bloom == 60 && after.Sharpness == 7,
+                      "benchmark: Apply writes the recommended keys to config.ini, the others untouched");
+
+                // The stub game exits 0 without writing a result: the page says the run did not finish.
+                string marker = Path.Combine(session.App, "stub-launch.txt");
+                if (File.Exists(marker)) File.Delete(marker);
+                using (var form = new SettingsForm(session))
+                {
+                    form.StartPosition = FormStartPosition.Manual;
+                    form.Location = new Point(-20000, -20000);
+                    form.ShowInTaskbar = false;
+                    form.Show();
+                    Application.DoEvents();
+                    form.Controls.OfType<TabControl>().Single().SelectedTab = (TabPage)form.benchmarkButton.Parent;
+                    Application.DoEvents();
+                    form.benchmarkButton.PerformClick();
+                    Check(!form.benchmarkButton.Enabled && !File.Exists(file), "benchmark: a run starts, the old result goes");
+                    var clock = System.Diagnostics.Stopwatch.StartNew();
+                    while (!form.benchmarkButton.Enabled && clock.ElapsedMilliseconds < 15000) { Application.DoEvents(); Thread.Sleep(10); }
+                    Check(form.benchmarkButton.Enabled && form.benchmarkVerdict.Text == "The benchmark did not finish." && !form.benchmarkRows.Visible,
+                          "benchmark: a run without a result: " + form.benchmarkVerdict.Text);
+                    Check(File.Exists(marker) && File.ReadAllLines(marker).Contains("--benchmark-out"), "benchmark: the game got the benchmark arguments");
+                }
+            }
+            finally
+            {
+                if (File.Exists(file)) File.Delete(file);
+            }
+        }
+
         // The settings window with a controller: from the page tabs, Down walks every row of every page that takes the
         // focus and comes back; Left and Right change a choice, a number and the page; A ticks a box; B returns to the tabs.
         static void SettingsPadCases(LaunchSession session)
@@ -1256,6 +1431,8 @@ namespace Nebula.Launcher
                 GpuFormCases(later, outDir);
                 SettingsPadCases(later);
                 StartListsCases(later);
+                BenchmarkCases(later);
+                DownloadCloseCases(outDir);
                 RecordingEncodingCases(later.App);
 
                 // TryLaunch starts <App>\NebulaNative.exe, here a stub that records its arguments.
