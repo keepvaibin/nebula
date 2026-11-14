@@ -17,6 +17,7 @@
 #define NOMINMAX
 #include <windows.h>
 
+#include <chrono>
 #include <cstddef>
 #include <filesystem>
 
@@ -26,12 +27,15 @@ namespace galaxy::crash_watch {
 inline constexpr const char* kSwitch = "--crash-watch";
 
 // The watcher's whole run: waits for the game's request or its end, writes the dump asked for, ends when the game
-// does. Returns the process's exit code.
+// does. A game that ended with a fault's status (0xC0000409 of a fast fail, which no handler in the process sees, or
+// any other the game's handlers did not end it with) gets crash lines in the game's log from here. Returns the
+// process's exit code.
 int run(int argc, char** argv);
 
-// The game's side, at its start: starts the watcher (dumps go to `folder`, made when the first is written). A
-// watcher that cannot start leaves write_dump answering kNoWatcher.
-void start(const std::filesystem::path& folder);
+// The game's side, at its start: starts the watcher (dumps go to `folder`, made when the first is written; its lines
+// go to this process's standard output, timed from `log_zero` as the game's own). A watcher that cannot start leaves
+// write_dump answering kNoWatcher.
+void start(const std::filesystem::path& folder, std::chrono::steady_clock::time_point log_zero);
 
 enum class Result { kNoWatcher, kWritten, kFailed };
 

@@ -1135,6 +1135,7 @@ std::atomic<DWORD> gCrashWriterThread{0};
 // dump keeps the process's private memory too, the heaps where that code's objects live (driver-pso-crash.md: a
 // driver object's table read 0xFF, which stacks alone cannot explain). Set before gCrashRequest.
 bool gCrashForeign = false;
+constexpr DWORD kHeapCorruption = 0xC0000374u;  // STATUS_HEAP_CORRUPTION (ntstatus.h, which windows.h leaves out)
 
 // After the dump: the report beside it, the progress written, the crashed thread let go, and the process ended.
 [[noreturn]] void finish_crash_report(const fs::path& dump) {
@@ -1387,6 +1388,28 @@ LONG CALLBACK crash_handler(EXCEPTION_POINTERS* info) {
         }
         return EXCEPTION_CONTINUE_SEARCH;
     }
+    // STATUS_HEAP_CORRUPTION: a heap found its own records broken. ntdll raises it inside its own __except, whose
+    // filter ends the process without calling the unhandled-exception filter, so this handler is the only code of the
+    // process that sees it. It is raised from ntdll whichever code broke the heap, and the process ends after it
+    // whoever handles it: reported here for any module, with the private memory (the heaps) in the dump.
+    if (code == kHeapCorruption) {
+        HMODULE owner = nullptr;
+        if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                static_cast<LPCWSTR>(info->ExceptionRecord->ExceptionAddress), &owner)) {
+            owner = GetModuleHandleW(L"ntdll.dll");
+        }
+        if (gCrashing.exchange(1) != 0) {
+            // Another fault is being written: passed on, this one would end the process mid-write. The writer's own
+            // is passed on (nothing would be left to wait for).
+            if (GetCurrentThreadId() != gCrashWriterThread.load() && gCrashDone != nullptr) {
+                WaitForSingleObject(gCrashDone, 60000);
+                Sleep(INFINITE);
+            }
+            return EXCEPTION_CONTINUE_SEARCH;
+        }
+        gCrashForeign = true;
+        report_fatal_exception(info, owner);
+    }
     if (code != EXCEPTION_ACCESS_VIOLATION && code != EXCEPTION_ILLEGAL_INSTRUCTION && code != EXCEPTION_PRIV_INSTRUCTION &&
         code != EXCEPTION_STACK_OVERFLOW && code != EXCEPTION_INT_DIVIDE_BY_ZERO && code != EXCEPTION_INT_OVERFLOW &&
         code != EXCEPTION_IN_PAGE_ERROR) {
@@ -1582,7 +1605,7 @@ int show_crash_report_dialog() {
 void install_crash_reporter() {
     gCrashRequest = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     gCrashDone = CreateEventW(nullptr, FALSE, FALSE, nullptr);
-    galaxy::crash_watch::start(crash_folder());
+    galaxy::crash_watch::start(crash_folder(), kStart);
     std::thread(crash_writer).detach();
     AddVectoredExceptionHandler(0, crash_handler);  // last: the module's own handlers (division, stack guards) first
     SetUnhandledExceptionFilter(unhandled_filter);  // whatever no frame handled, C++ exceptions included
