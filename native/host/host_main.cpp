@@ -573,6 +573,9 @@ galaxy::mods::ModRows gModRows;
 bool gModsChangeGame = false;
 // The mods on this session (the scan's enabled ones): the mod log is made only when there are any.
 std::uint32_t gModsOn = 0;
+// Those of them a player turned on: every one but the harness's own game half (is_harness_half). With none the game's
+// check of placements after the start is not called (luma_refs.h).
+std::uint32_t gPlayersModsOn = 0;
 // The placed packages of this start, for the start's check (modlog::check_packages).
 std::vector<galaxy::modlog::StartPackage> gStartPackages;
 
@@ -4187,8 +4190,9 @@ void svc_mods_start(void*) {
                                 [](const char* text) { log_line("mods:", text); }, layers_chosen);
     // After the last mod's start, before the title (luma_refs.h), on the game thread: each placement of a class only
     // code makes, from the start's check, looked up in the game's factory now that the mods' code has made its classes.
-    // One nobody makes is named in the mod log and placed as the placeholder object.
-    {
+    // One nobody makes is named in the mod log and placed as the placeholder object. With no mod a player turned on
+    // (the harness's own game half alone) it is not called.
+    if (gPlayersModsOn != 0) {
 #if defined(_WIN32)
         const auto check = reinterpret_cast<LumaRefsCheckAfterStart>(
             GetProcAddress(static_cast<HMODULE>(gModule.module), "luma_refs_check_after_start"));
@@ -4310,6 +4314,9 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
     }
     gModsOn = static_cast<std::uint32_t>(
         std::count_if(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) { return mod.enabled; }));
+    gPlayersModsOn = static_cast<std::uint32_t>(std::count_if(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) {
+        return mod.enabled && !is_harness_half(mod.id);
+    }));
     // The answers the plan's granted lists come from: a declined permission's L506 is then the player's choice (consent 2.3).
     galaxy::modlog::keep_permission_answers(mods);
     // A mod whose code may choose layers: the scan is kept to plan again with a changed answer. No such mod, no copy.
