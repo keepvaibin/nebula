@@ -7,6 +7,7 @@
 #include "Game/System/Arenas.hpp"
 #include "Game/System/GameAssets.hpp"
 #include "Game/System/GameSystem.hpp"
+#include "Game/System/GameSystemFontHolder.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/System/InputButtons.hpp"
 #include "Game/System/PlayerInput.hpp"
@@ -257,11 +258,17 @@ namespace luma {
                 return pCopy;
             }
 
-            // A scene that runs: its objects' arena and lists are there and it is past its start.
+            // A scene that runs: its objects' arena and lists are there, it is past its start, and the game's fonts are
+            // the system archive's. Before GameSystem::initAfterSystemArchiveLoaded the message font is the one built into
+            // the program (ErrorMessageArchive's MessageFont26, without digits), and making the file fonts deletes it: a
+            // layout made then keeps that font and its next draw goes through freed memory.
             bool sceneRunning() {
-                const GameSystemSceneController* const pController = SingletonHolder< GameSystem >::get()->mSceneController;
+                const GameSystem* const pSystem = SingletonHolder< GameSystem >::get();
+                const GameSystemSceneController* const pController = pSystem->mSceneController;
+                const GameSystemFontHolder* const pFonts = pSystem->mFontHolder;
                 return Arenas::scene() != nullptr && pController != nullptr && pController->isExistSceneObjHolder() &&
-                       pController->isNerveNormal();
+                       pController->isNerveNormal() && pFonts != nullptr && pFonts->mMessageFont != nullptr &&
+                       pFonts->mEmbeddedMessageFont == nullptr;
             }
 
             Screen* screenOf(const LumaMod* pMod, LumaHandle handle) {
