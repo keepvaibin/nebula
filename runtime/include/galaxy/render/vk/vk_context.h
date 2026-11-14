@@ -154,6 +154,8 @@ public:
     [[nodiscard]] bool sampler_anisotropy() const noexcept { return sampler_anisotropy_; }
     // shaderImageGatherExtended: a gather of one chosen channel (FSR 1 EASU's GatherRed/Green/Blue).
     [[nodiscard]] bool gather_extended() const noexcept { return gather_extended_; }
+    // shaderStorageImageExtendedFormats, enabled where offered: storage images of R16G16 float, R8 and the like.
+    [[nodiscard]] bool storage_extended_formats() const noexcept { return storage_extended_formats_; }
     // pipelineStatisticsQuery: --diagnostics gpu-passes' shader invocation counts.
     [[nodiscard]] bool pipeline_statistics() const noexcept { return pipeline_statistics_; }
     [[nodiscard]] bool depth_clamp() const noexcept { return depth_clamp_; }
@@ -328,6 +330,7 @@ private:
     bool sample_rate_shading_ = false;
     bool sampler_anisotropy_ = false;
     bool gather_extended_ = false;
+    bool storage_extended_formats_ = false;
     bool pipeline_statistics_ = false;
     bool bc_textures_ = false;
     bool astc_textures_ = false;
