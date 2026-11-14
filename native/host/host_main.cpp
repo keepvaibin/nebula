@@ -77,6 +77,7 @@
 #include "galaxy/render/texture_store.h"
 #if defined(NEBULA_HOST_RENDERER)
 #include "render/core/frame_core.h"
+#include "galaxy/ui/launcher.h"
 #endif
 #include <nebula_frame_list.h>
 #include "galaxy/render/rt_materials.h"
@@ -520,6 +521,29 @@ void finish() {
 std::vector<galaxy::mods::PluginFile> gPlugins;
 galaxy::mods::ModRows gModRows;
 bool gModsChangeGame = false;
+
+#if defined(_WIN32) && defined(_M_X64)
+// The level of the module beside the program, x86-64-v3: AVX, AVX2, FMA3, F16C, MOVBE, BMI1, BMI2, LZCNT, with the OS
+// saving the AVX registers. A CPU without it runs the x86-64-v2 build in the folder of that name (native/build.ps1).
+#if defined(__clang__)
+__attribute__((target("xsave")))
+#endif
+bool cpu_runs_x86_64_v3() {
+    int registers[4]{};
+    __cpuid(registers, 0);
+    if (registers[0] < 7) return false;
+    __cpuid(registers, 1);
+    constexpr int kLeaf1 = (1 << 12) | (1 << 22) | (1 << 27) | (1 << 28) | (1 << 29);
+    if ((registers[2] & kLeaf1) != kLeaf1 || (_xgetbv(0) & 0x6u) != 0x6u) return false;
+    __cpuidex(registers, 7, 0);
+    constexpr int kLeaf7 = (1 << 3) | (1 << 5) | (1 << 8);
+    if ((registers[1] & kLeaf7) != kLeaf7) return false;
+    __cpuid(registers, static_cast<int>(0x80000000u));
+    if (static_cast<unsigned>(registers[0]) < 0x80000001u) return false;
+    __cpuid(registers, static_cast<int>(0x80000001u));
+    return (registers[2] & (1 << 5)) != 0;
+}
+#endif
 
 void load_module(const fs::path& path) {
 #if defined(_WIN32)
@@ -3067,6 +3091,26 @@ void svc_audio_control(void*, uint32_t what, uint32_t value) {
 
 int svc_home_menu(void*, uint32_t what, uint32_t value) {
 #if defined(NEBULA_HOST_RENDERER)
+    // Launcher mode's home screen is drawn as this menu while the HOME Menu itself is closed.
+    const bool launcher = galaxy::ui::launcher_visible() && !galaxy::render::home_menu_visible();
+    switch (what) {
+    case NEBULA_HOME_MENU_LAUNCHER_OPEN:
+        return galaxy::ui::launcher_open() ? 1 : 0;
+    case NEBULA_HOME_MENU_LAUNCHER_POLL:
+        return galaxy::ui::launcher_poll();
+    case NEBULA_HOME_MENU_LAUNCHER_TEXT:
+        return static_cast<int>(galaxy::ui::launcher_text(value >> 16, value & 0xFFFFu));
+    default:
+        break;
+    }
+    if (launcher && (what == NEBULA_HOME_MENU_VIEW || what == NEBULA_HOME_MENU_POINT || what == NEBULA_HOME_MENU_CHOOSE)) {
+        if (what == NEBULA_HOME_MENU_POINT) {
+            galaxy::ui::launcher_point(value);
+        } else if (what == NEBULA_HOME_MENU_CHOOSE) {
+            galaxy::ui::launcher_choose(value);
+        }
+        return what == NEBULA_HOME_MENU_VIEW ? galaxy::ui::launcher_view() : 0;
+    }
     switch (what) {
     case NEBULA_HOME_MENU_OPEN:
         galaxy::render::home_menu_open();
@@ -3871,6 +3915,7 @@ int main(int argc, char** argv) {
         return fs::path(argv[index]);
     };
     double seconds = 0;
+    [[maybe_unused]] int home = -1;  // --home: the launcher's home screen at the title's hold; -1 the platform's default
     for (int i = 1; i + 1 < argc; i += 2) {
         const std::string key = argv[i];
         if (key == "--pak") {
@@ -3885,6 +3930,8 @@ int main(int argc, char** argv) {
             // Read above, before anything uses them.
         } else if (key == "--seconds") {
             seconds = std::atof(argv[i + 1]);
+        } else if (key == "--home") {
+            home = std::atoi(argv[i + 1]) != 0 ? 1 : 0;
         } else {
             die("unknown option %s", key.c_str());
         }
@@ -3894,7 +3941,14 @@ int main(int argc, char** argv) {
     }
     if (module.empty()) {
 #if defined(_WIN32)
-        module = arg_path(0).parent_path() / "smg_game.dll";
+        module = arg_path(0).parent_path();
+#if defined(_M_X64)
+        if (!cpu_runs_x86_64_v3()) {
+            module /= "x86-64-v2";
+            log_line("host:", "the CPU lacks x86-64-v3: the x86-64-v2 game module");
+        }
+#endif
+        module /= "smg_game.dll";
 #elif defined(__APPLE__)
         module = fs::path(argv[0]).parent_path() / "libsmg_game.dylib";
 #else
@@ -4167,8 +4221,19 @@ int main(int argc, char** argv) {
         [](std::uint64_t after) noexcept { return galaxy::render::poll_host_pointer_transition(after); });
     galaxy::host::install_native_keyboard_capture_provider([]() noexcept { return galaxy::render::native_window_input_captured(); });
     galaxy::host::install_native_settings_pad_hooks(
-        []() noexcept { return galaxy::render::native_settings_overlay_visible() || galaxy::render::home_menu_visible(); },
+        []() noexcept {
+            return galaxy::render::native_settings_overlay_visible() || galaxy::render::home_menu_visible() ||
+                galaxy::ui::launcher_visible();
+        },
         [](std::uintptr_t key) noexcept { galaxy::render::native_settings_post_key(key); });
+#if defined(__APPLE__) || (defined(__linux__) && !defined(__ANDROID__))
+    constexpr bool kHomeByDefault = true;  // no launcher app: the home screen is where a start begins
+#else
+    constexpr bool kHomeByDefault = false;  // the Windows and Android launcher apps are the home screen there
+#endif
+    // Tests (a hidden start, a timed run) start straight into the game unless they ask for it.
+    galaxy::ui::launcher_enable(home >= 0 ? home == 1
+                                          : kHomeByDefault && !::galaxy::launch_args().started_hidden && seconds <= 0);
 #endif
     if (gModule.attach(&services) != NEBULA_GAME_API_VERSION) {
         die("the game module's API version differs from the host's (%u)", NEBULA_GAME_API_VERSION);

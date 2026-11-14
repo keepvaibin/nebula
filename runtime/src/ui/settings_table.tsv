@@ -1,0 +1,100 @@
+# Every setting Nebula reads, and which settings app offers it. tools/settings_table.py --check compares this table with
+# the engine's readers (render_config.cpp, runtime_settings.cpp, input_bindings.cpp), the Windows launcher
+# (installer/src/Launcher), the Android launcher (platform/android/app) and the game's own menu (runtime/src/ui), and
+# exits 1 on any difference. Linux has no separate app: its settings app is the game's menu (the game column).
+#
+# key       the key in its file; tune.*.<name> is one per control scheme, bind.*.* every binding
+# file      config (config.ini), runtime (runtime_settings.ini), android (the Android app's "controls" preferences)
+# field     the C++ member that holds it (RenderConfig, RuntimeSettings, RuntimeAudioSettings, SchemeTuning); - none
+# type      bool, int, float, enum, set, text, state (written by the game for itself, never offered)
+# values    bool 0|1; enum the file's names, the n-th name stored as n; set the allowed numbers; int and float lo..hi/step
+# default   the engine's default when the key is absent (apple= on Apple's systems; scheme: per control scheme)
+# page      the page a settings app shows it on: Display, Graphics, Audio, Controls, General, Performance; - not offered
+# windows android game macos
+#           y offered; n missing (an open defect); s shown as a status only; - not on that platform or not a setting
+# capability when an app offers it (an app hides it, never shows a choice the device cannot run)
+# label     the English name (the launchers' text row in localization/NebulaText.tsv; the game's menu shows it in capitals)
+key	file	field	type	values	default	page	windows	android	game	macos	capability	label
+display_mode	config	display_mode	enum	windowed|borderless|fullscreen	1	Display	y	-	y	y	desktop; fullscreen (2) is read but opens borderless	Display mode
+monitor	config	monitor	text	-	-	Display	y	-	y	y	desktop, more than one display	Monitor
+window_width	config	window_width	int	1..2147483647	854	Display	y	-	y	y	desktop, windowed	Resolution
+window_height	config	window_height	int	1..2147483647	480	Display	y	-	y	y	desktop, windowed	Resolution
+aspect	config	aspect_mode	enum	auto|4:3|3:2|16:10|16:9|21:9|32:9	0	Display	y	-	y	y	-	Aspect ratio
+vsync_interval	config	vsync_interval	int	0..2	0;apple=1	Display	y	-	y	y	apps offer 0 and 1	Vertical sync
+hdr	config	hdr	bool	0|1	0	Display	n	-	y	y	the display reports HDR	HDR
+paper_white	config	paper_white	int	80..500/10	200	Display	n	-	y	y	HDR on	Paper white
+hud_output_resolution	config	hud_output_resolution	bool	0|1	0	Display	y	-	y	y	-	HUD at display resolution
+gpu	config	gpu	text	-	-	Display	y	-	s	-	more than one GPU; applies at the next start	Graphics card
+upscaler	config	upscaler	enum	bilinear|fsr|fsr3|dlss|xess|sgsr2|metalfx	0	Graphics	y	-	y	y	D3D12 0-4 (DLSS on NVIDIA RTX), Vulkan 0-5, Metal 0,1,6	Upscaling
+internal_height	config	internal_height	set	0|144|240|360|480|720|1080|1440|2160	0	Graphics	y	-	y	y	upscaling off	Internal resolution
+temporal_quality	config	temporal_quality	enum	native|quality|balanced|performance|ultra_performance|ultra_quality	1	Graphics	y	-	y	y	a temporal upscaler; DLSS has no ultra_quality	Upscaler quality
+spatial_quality	config	spatial_quality	enum	manual|quality|balanced|performance|ultra_performance|ultra_quality	0	Graphics	y	-	y	y	FSR 1	Upscaler quality
+sharpness	config	sharpness	int	0..100/10	0	Graphics	y	-	y	y	-	Sharpening (0-100)
+aa	config	aa_mode	enum	off|smaa|auto|fxaa	0	Graphics	y	-	y	y	no temporal upscaler	Anti-aliasing
+smaa_quality	config	smaa_quality	enum	low|medium|high|ultra	2	Graphics	y	-	y	y	aa smaa or auto	Anti-aliasing quality
+msaa_samples	config	msaa_samples	set	1|2|4|8	1	Graphics	y	-	y	y	no temporal upscaler, no ray tracing	MSAA
+frame_generation	config	frame_generation	int	0..5	0	Graphics	y	-	y	y	1 DLSS on NVIDIA RTX, 2 FSR on a display of 119 Hz or more	Interpolation
+max_fps	config	max_fps	float	0..1000	60	Graphics	y	-	y	y	0 the display's rate; without interpolation 30 or 60	Frame rate limit
+anisotropic_filtering	config	anisotropic_filtering	set	1|2|4|8|16	1	Graphics	y	-	y	y	-	Texture filtering
+enhanced_mipmaps	config	enhanced_mipmaps	bool	0|1	0	Graphics	y	-	y	y	-	Generated mipmaps
+curved_surfaces	config	curved_surfaces	bool	0|1	1	Graphics	n	-	y	y	the renderer offers it (curved_surfaces_offered)	Curved surfaces
+per_pixel_lighting	config	per_pixel_lighting	bool	0|1	0	Graphics	y	-	y	y	no ray tracing; one Lighting choice with enhanced_lighting	Lighting
+enhanced_lighting	config	enhanced_lighting	bool	0|1	0	Graphics	y	-	y	y	no ray tracing; one Lighting choice with per_pixel_lighting	Lighting
+ambient_occlusion	config	ambient_occlusion	bool	0|1	0	Graphics	y	-	y	y	no ray tracing; one choice with ambient_occlusion_ssao	Ambient occlusion
+ambient_occlusion_ssao	config	ambient_occlusion_ssao	bool	0|1	0	Graphics	n	-	y	y	no ray tracing; one choice with ambient_occlusion	Ambient occlusion
+bloom	config	bloom	int	0..200/10	100	Graphics	n	-	y	y	-	Bloom
+texture_packs	config	texture_packs	bool	0|1	1	Graphics	n	-	y	y	one choice with texture_pack_preload	Texture packs
+texture_pack_preload	config	texture_pack_preload	bool	0|1	0	Graphics	n	-	y	y	one choice with texture_packs	Texture packs
+texture_dump	config	texture_dump	bool	0|1	0	Graphics	n	-	y	y	-	Dump textures
+texture_pack_budget_mb	config	texture_pack_budget_mb	int	64..65536	2048	-	-	-	-	-	-	-
+texture_lod_bias	config	texture_lod_bias	int	0..8	0	-	-	-	-	-	read by the Metal renderer only	-
+wide_scene	config	wide_scene	bool	0|1	1	-	-	-	-	-	-	-
+post_process	config	post_process	bool	0|1	1	-	-	-	s	-	-	-
+frame_rate_decouple	config	frame_rate_decouple	bool	0|1	0	-	-	-	-	-	read, always off	-
+taa_enabled	config	taa_enabled	bool	0|1	0	-	-	-	-	-	read, always off	-
+ray_tracing_enabled	config	ray_tracing_enabled	bool	0|1	0	Graphics	y	-	y	-	the GPU traces (rt_caps.h kRayTracingRowOffered)	Ray tracing
+rt_quality	config	rt_quality	enum	medium|high|low|reference|custom	0	Graphics	y	-	y	-	ray tracing on	Ray tracing quality
+rt_sun	config	rt_parts	enum	off|low|medium|high	2	Graphics	-	-	y	-	ray tracing on	-
+rt_lights	config	rt_parts	enum	off|low|medium|high	2	Graphics	-	-	y	-	ray tracing on	-
+rt_indirect	config	rt_parts	enum	off|low|medium|high	2	Graphics	-	-	y	-	ray tracing on	-
+rt_reflect	config	rt_parts	enum	off|low|medium|high	2	Graphics	-	-	y	-	ray tracing on	-
+rt_transmit	config	rt_parts	enum	off|low|medium|high	2	Graphics	-	-	y	-	ray tracing on	-
+rt_volume	config	rt_parts	enum	off|low|medium|high	2	Graphics	-	-	y	-	ray tracing on	-
+rt_lens_bloom	config	rt_lens_bloom	bool	0|1	1	Graphics	-	-	y	-	ray tracing on	-
+rt_probe_ms	config	rt_probe_ms	state	0..1000	0	-	-	-	-	-	-	-
+rt_chosen	config	rt_chosen	state	0|1	0	-	-	-	-	-	-	-
+input_mode	runtime	input_mode	enum	auto|keyboard_mouse|controller|real_wiimote|phone|wiimote_motion	auto	Controls	y	-	y	y	real_wiimote, wiimote_motion where a Wii Remote can connect; phone on Android	Input
+co_star	runtime	co_star	bool	0|1	0	Controls	n	-	n	y	-	Co-Star
+audio_master_gain	runtime	master	float	0..2/0.05	1	Audio	y	-	y	y	the engine accepts up to 4 in a file	Master
+audio_music_gain	runtime	music	float	0..2/0.05	1	Audio	y	-	y	y	-	Music
+audio_sfx_gain	runtime	sfx	float	0..2/0.05	1	Audio	y	-	y	y	-	Sound effects
+audio_voice_gain	runtime	voice	float	0..2/0.05	1	Audio	y	-	y	y	-	Voices
+audio_ambience_gain	runtime	ambience	float	0..2/0.05	1	Audio	y	-	y	y	-	Ambience
+audio_cutscene_gain	runtime	cutscene	float	0..2/0.05	1	Audio	y	-	y	y	-	Cutscenes
+audio_wiimote_speaker_gain	runtime	wiimote_speaker	float	0..2/0.05	0	Audio	y	-	y	y	-	Wiimote sounds
+audio_sound_output	runtime	sound_output	enum	mono|stereo|surround	stereo	Audio	n	-	y	y	-	Sound output
+text_speed	runtime	text_speed	int	1..4	1	General	y	-	y	y	-	Text speed
+language	runtime	language	enum	auto|english|german|french|spanish|italian|dutch|japanese	auto	General	y	-	y	y	languages the game's data holds	Language
+button_icons	runtime	button_icons	enum	auto|game|xbox|nintendo|playstation|keyboard	auto	General	n	-	y	y	-	Button icons
+menu_text_size	runtime	menu_text_size	int	0..200	0	General	n	-	y	y	0 automatic, else 70..200	Menu text size
+focus_loss	runtime	focus_loss	enum	keep|pause|mute	keep	General	n	-	y	y	desktop	When the window loses focus
+discord_status	runtime	discord_status	bool	0|1	1	General	n	-	y	y	desktop	Discord status
+controls_version	runtime	-	state	-	-	-	y	-	-	-	-	-
+tune.*.stick_deadzone	runtime	stick_deadzone	float	0..0.9	scheme	Controls	y	-	y	y	-	Stick deadzone %
+tune.*.pointer_deadzone	runtime	pointer_deadzone	float	0..0.9	scheme	Controls	y	-	y	y	-	Pointer stick deadzone %
+tune.*.pointer_speed	runtime	pointer_speed	float	0.1..10	scheme	Controls	y	-	y	y	-	Pointer speed
+tune.*.invert_pointer_y	runtime	invert_pointer_y	bool	0|1	scheme	Controls	y	-	y	y	-	Invert pointer Y
+tune.*.gyro_pointer	runtime	gyro_pointer	bool	0|1	scheme	Controls	y	-	y	y	the pad has a gyroscope	Gyro pointer (right stick: camera)
+tune.*.gyro_sensitivity	runtime	gyro_sensitivity	float	0.2..5	scheme	Controls	y	-	y	y	the pad has a gyroscope	Gyro sensitivity
+tune.*.touch_pointer	runtime	touch_pointer	bool	0|1	scheme	Controls	n	-	y	y	the pad has a touchpad	Touchpad pointer
+tune.*.touch_sensitivity	runtime	touch_sensitivity	float	0.2..5	scheme	Controls	n	-	y	y	the pad has a touchpad	Touchpad sensitivity
+tune.*.pointer_hide_seconds	runtime	pointer_hide_seconds	float	0..60	scheme	Controls	y	-	y	y	-	Hide idle pointer (s)
+tune.*.pointer_hide_radius	runtime	pointer_hide_radius	float	0..0.5	scheme	-	y	-	-	-	-	-
+tune.*.shake_sensitivity	runtime	shake_sensitivity	int	1..5	scheme	Controls	y	-	y	y	-	Shake sensitivity
+tune.*.motion	runtime	motion_shake	enum	off|remote|nunchuk	scheme	Controls	y	-	y	y	the pad has motion sensors	Motion
+tune.*.vibration	runtime	vibration	bool	0|1	scheme	Controls	y	-	y	y	the pad vibrates	Vibration
+tune.*.rumble	runtime	rumble	int	0..100	scheme	Controls	y	-	y	y	the pad vibrates	Vibration strength
+bind.*.*	runtime	-	text	-	scheme	Controls	y	-	y	y	-	Bound to
+opacity	android	-	float	0.2..1	0.6	Controls	-	-	y	-	Android	On-screen controls opacity
+haptics	android	-	bool	0|1	1	Controls	-	-	y	-	Android	On-screen controls vibration
+

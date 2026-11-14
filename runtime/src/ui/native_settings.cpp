@@ -25,6 +25,7 @@
 #include "galaxy/platform_time.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/ui/home_menu_model.h"
+#include "galaxy/ui/launcher.h"
 #include "galaxy/ui/settings_model.h"
 #include "galaxy/ui/settings_graphics_page.h"
 #include "galaxy/ui/settings_general_page.h"
@@ -1706,7 +1707,7 @@ bool handle_native_settings_key(std::uintptr_t key, bool was_down, bool from_pad
         return true;
     }
     if (!s_native_settings_visible.load(std::memory_order_relaxed)) {
-        return false;
+        return galaxy::ui::launcher_key(key, was_down, accept);
     }
     expire_display_confirmation();
     if (mods_page_key(key, accept, was_down)) {
@@ -3763,7 +3764,7 @@ bool sharp_2d_requested() noexcept {
 
 bool native_window_input_captured() noexcept {
     return s_native_settings_visible.load(std::memory_order_relaxed) ||
-        s_home_menu.visible.load(std::memory_order_relaxed) ||
+        s_home_menu.visible.load(std::memory_order_relaxed) || galaxy::ui::launcher_visible() ||
         host_window::window_modal_active();
 }
 

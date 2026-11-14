@@ -58,14 +58,14 @@ namespace Nebula.Setup
         /// <summary>The content format nebula-import's cook command converts from; a version of it reads only version 2 saves.</summary>
         internal const int CookableContentFormatVersion = 1;
 
-        /// <summary>The instruction set NebulaNative.exe and smg_game.dll are built for (the module: x86-64-v3, which every
-        /// AVX2 CPU runs; native/CMakeLists.txt, NEBULA_CPU_LEVEL).</summary>
-        private const string NativeIsa = "AVX2";
+        /// <summary>The lowest CPU level the package's NebulaNative.exe and game modules are built for: smg_game.dll is
+        /// x86-64-v3 and x86-64-v2\smg_game.dll x86-64-v2 (the host loads the one the CPU runs; native/build.ps1).</summary>
+        private const string NativeIsa = "x86-64-v2";
 
         /// <summary>What a version folder holds (each from the package, by its published name).</summary>
         private static readonly string[] NativeFiles =
         {
-            "NebulaNative.exe", "smg_game.dll", "nebula_import.dll", "nebula-import.exe", @"dxc\dxc.exe", @"dxc\dxcompiler.dll", @"dxc\dxil.dll", @"dxc\LICENSE-MS.txt", @"dxc\LICENCE-MIT.txt", @"dxc\LICENSE-LLVM.txt", "material-names.tsv", "rt-materials.tsv", "rt-suns.tsv",
+            "NebulaNative.exe", "smg_game.dll", @"x86-64-v2\smg_game.dll", "nebula_import.dll", "nebula-import.exe", @"dxc\dxc.exe", @"dxc\dxcompiler.dll", @"dxc\dxil.dll", @"dxc\LICENSE-MS.txt", @"dxc\LICENCE-MIT.txt", @"dxc\LICENSE-LLVM.txt", "material-names.tsv", "rt-materials.tsv", "rt-suns.tsv",
             "Nebula.exe", "NebulaSettings.exe", "LICENSE", "THIRD-PARTY-NOTICES.md", "README.md"
         };
 
@@ -108,9 +108,10 @@ namespace Nebula.Setup
             var problems = new List<string>();
             if (!Environment.Is64BitOperatingSystem) problems.Add("Nebula needs 64-bit Windows 10 or 11.");
             if (Environment.OSVersion.Version.Major < 10) problems.Add("Nebula needs Windows 10 or 11.");
-            // Without AVX2 the game would stop at its first AVX2 instruction (an illegal-instruction fault), not here.
-            if (!HostSupportsAvx2())
-                problems.Add(NebulaText.Of("This package's runtime was built for AVX2, which this CPU does not expose."));
+            // The lowest CPU level the package is built for, x86-64-v2 (SSE4.2; the host picks the AVX2 game module where it
+            // runs): without it the game would stop at its first such instruction, not here.
+            if (!HostSupportsSse42())
+                problems.Add(NebulaText.Of("This package's runtime needs SSE4.2, which this CPU does not expose."));
             try
             {
                 string fs = FileUtil.FileSystemName(installRoot);
@@ -124,10 +125,10 @@ namespace Nebula.Setup
             return problems;
         }
 
-        /// <summary>PF_AVX2_INSTRUCTIONS_AVAILABLE: the CPU and the OS support AVX2.</summary>
-        private static bool HostSupportsAvx2()
+        /// <summary>PF_SSE4_2_INSTRUCTIONS_AVAILABLE: the CPU supports SSE4.2 (every such CPU also has POPCNT).</summary>
+        private static bool HostSupportsSse42()
         {
-            try { return IsProcessorFeaturePresent(40); }
+            try { return IsProcessorFeaturePresent(38); }
             catch (Exception) { return false; }
         }
 

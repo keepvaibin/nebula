@@ -12,7 +12,7 @@ B="$W/bin"
 mkdir -p "$B/tables" "$W/raw"
 rm -f "$W"/raw/*.profraw
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$T/native/build.ps1" -Petari "$T/native/petari" -Build "$W/build" \
-    -ProfileFlags -fprofile-instr-generate || exit 1
+    -ProfileFlags -fprofile-instr-generate -NoBaseline || exit 1
 cp "$H/NebulaNative.exe" "$B/"
 cp "$H"/tables/* "$B/tables/"
 cp "$W/build/smg_game.dll" "$B/"

@@ -13,6 +13,7 @@
 #include "galaxy/native_settings_pad.h"
 #include "galaxy/render_api.h"
 #include "galaxy/render/host_window.h"
+#include "galaxy/ui/launcher.h"
 #include <deque>
 #include "sdl_host.h"
 
@@ -1252,7 +1253,8 @@ void pump_events(int timeout_ms) noexcept {
             // The unified buttons are the menu's, by their labels (Nintendo's A is the right face button), as on Windows.
             const std::uint16_t buttons = galaxy::input::settings_pad_buttons(sample.scheme, sample.buttons);
             const galaxy::input::NativeSettingsPadStep step = galaxy::input::native_settings_pad_step(
-                g_menu_pad, buttons, sample.axes[0], sample.axes[1], galaxy::render::native_settings_overlay_visible(), galaxy::steady_ms());
+                g_menu_pad, buttons, sample.axes[0], sample.axes[1],
+                galaxy::render::native_settings_overlay_visible() || galaxy::ui::launcher_visible(), galaxy::steady_ms());
             for (std::size_t i = 0; i < step.key_count; ++i) {
                 galaxy::render::native_settings_post_key(step.keys[i]);
             }

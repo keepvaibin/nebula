@@ -80,6 +80,8 @@ struct RenderLayout {
     // A whole-target depth clear opening the pass: the colour loaded, the depth cleared, the stencil loaded ([0]: as the
     // depth-clearing draw keeps it) or cleared ([1]: as vkCmdClearAttachments clears it).
     std::array<std::array<std::array<VkRenderPass, 4>, 2>, 2> depth_clear_passes{};
+    // The same depth clears where the opening replaces the whole colour (discard_color_passes' colour, never loaded).
+    std::array<std::array<std::array<VkRenderPass, 4>, 2>, 2> discard_depth_clear_passes{};
     // A texture target's pass (kSceneVariantTarget): RGBA8, one sample.
     VkRenderPass target_pass = VK_NULL_HANDLE;
     VkRenderPass target_pass_clear = VK_NULL_HANDLE;
@@ -760,6 +762,9 @@ private:
     FrameMap target_scene_map_{};
     bool target_pass_active_ = false;
     bool output_scene_active_ = false;
+    // The scene target's colour, which the output scene's first draw sampled, waits in the sampling layout until
+    // end_output_scene gives it back its attachment layout.
+    bool output_source_sampled_ = false;
     [[nodiscard]] FrameMap output_frame_for_window() const;
     bool enter_output_scene(const FrameMap& output);
     void swap_scene_sets();
@@ -819,6 +824,8 @@ private:
     }
     void settle_depth_clear();
     void clear_depth_in_pass(float reversed_depth, const VkRect2D& rect);
+    void clear_depth_alone(float reversed_depth, unsigned mode);
+    std::array<std::array<VkRenderPass, 4>, 2> depth_alone_passes_{};  // [stencil cleared][log2 samples]
     // The upscaler takes the generated frames (and the frame at t = 1) instead of the game frames.
     bool temporal_interp_ = false;
     // suspend_temporal_interpolation, and the settings it was decided at.
@@ -853,8 +860,9 @@ private:
     VkPipelineLayout probe_layout_ = VK_NULL_HANDLE;
     VkPipeline probe_pipeline_ = VK_NULL_HANDLE;
     // The renderer's own draws into the scene target pass, per scene target sample count (log2), made at first use: masked clears,
-    // and whole-colour and depth clears as draws (DeviceQuirks::clear_with_draw only; null otherwise).
-    enum class SceneUtility : unsigned { ClearRgb, ClearAlpha, ClearRgba, ClearDepth, Count };
+    // and whole-colour and depth clears as draws (DeviceQuirks::clear_with_draw only; null otherwise), and the output scene's
+    // first draw, the scene resampled as conversion_pipeline_ and display_filter_pipeline_ do (enter_output_scene).
+    enum class SceneUtility : unsigned { ClearRgb, ClearAlpha, ClearRgba, ClearDepth, Conversion, DisplayFilter, Count };
     std::array<std::array<VkPipeline, kSceneVariantCount>, static_cast<std::size_t>(SceneUtility::Count)> scene_utility_pipelines_{};
     [[nodiscard]] VkPipeline scene_utility_pipeline(SceneUtility kind);
     // A compared probe's test in the open scene target pass (by the pass's aux target, 0 to 3, and scene variant): the
@@ -1101,7 +1109,10 @@ private:
         AoDistance, AoOcclusion, AoDenoise, AoUpsample, AoApply, Count
     };
     static constexpr unsigned kGpuPassSlots = 512;
+    static constexpr unsigned kNoPassMark = ~0u;
     void gpu_pass(GpuPass pass);
+    [[nodiscard]] unsigned gpu_pass_mark(GpuPass pass, bool pass_begins);
+    void gpu_pass_restore(GpuPass outer);
     void read_gpu_passes();
     void prepare_gpu_pass_queries();
     bool profile_frame_ = false;
@@ -1111,7 +1122,7 @@ private:
         GpuPassScope(RendererVk& renderer, GpuPass pass) : renderer_(renderer), outer_(renderer.current_pass_) {
             renderer_.gpu_pass(pass);
         }
-        ~GpuPassScope() { renderer_.gpu_pass(outer_); }
+        ~GpuPassScope() { renderer_.gpu_pass_restore(outer_); }
         GpuPassScope(const GpuPassScope&) = delete;
         GpuPassScope& operator=(const GpuPassScope&) = delete;
     private:
@@ -1119,6 +1130,7 @@ private:
         GpuPass outer_;
     };
     VkQueryPool pass_queries_ = VK_NULL_HANDLE;
+    unsigned open_pass_mark_ = kNoPassMark;  // the mark written as the open scene pass began
     // The frame's shader invocations (gpu-stats): vertex, clipped
     // primitives, fragment and compute, in VkQueryPipelineStatisticFlagBits' order.
     VkQueryPool stats_queries_ = VK_NULL_HANDLE;

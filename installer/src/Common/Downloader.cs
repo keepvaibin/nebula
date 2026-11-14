@@ -12,15 +12,18 @@ namespace Nebula
         {
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | (SecurityProtocolType)12288; // TLS 1.3 when available
             ServicePointManager.DefaultConnectionLimit = 8;
+            // A proxy that asks who is calling gets the signed-in user (WinINet's proxy settings are the default proxy).
+            if (WebRequest.DefaultWebProxy != null) WebRequest.DefaultWebProxy.Credentials = CredentialCache.DefaultNetworkCredentials;
         }
 
         public const string UserAgent = "Nebula";
 
         /// <summary>
         /// Download <paramref name="url"/> to <paramref name="path"/>. An existing
-        /// file is reused; a partial file resumes.
+        /// file is reused; a partial file resumes. A transfer that grows past <paramref name="maxBytes"/> (a server
+        /// answering with something else: a captive portal's page, a wrong file) is dropped.
         /// </summary>
-        public static void Fetch(string url, string path, Action<long> onBytes, CancellationToken cancel)
+        public static void Fetch(string url, string path, Action<long> onBytes, CancellationToken cancel, long maxBytes = long.MaxValue)
         {
             if (File.Exists(path))
             {
@@ -33,7 +36,7 @@ namespace Nebula
             {
                 try
                 {
-                    Transfer(url, partial, onBytes, cancel);
+                    Transfer(url, partial, onBytes, cancel, maxBytes);
                     if (File.Exists(path)) File.Delete(path);
                     File.Move(partial, path);
                     return;
@@ -42,6 +45,10 @@ namespace Nebula
                 catch (WebException error)
                 {
                     if (cancel.IsCancellationRequested) throw;
+                    // A partial file the server cannot continue (416: it is as long as the file or longer, from a file
+                    // replaced since) starts again.
+                    var response = error.Response as HttpWebResponse;
+                    if (response != null && (int)response.StatusCode == 416 && File.Exists(partial)) File.Delete(partial);
                     // A missing file stays missing; other failures may be a passing network fault.
                     bool missing = IsMissing(error);
                     if (missing || attempt >= 4)
@@ -49,12 +56,19 @@ namespace Nebula
                             error.Message, error, error.Status, error.Response);
                     Thread.Sleep(2000 * attempt);
                 }
-                catch (IOException)
+                catch (IOException error)
                 {
-                    if (attempt >= 4 || cancel.IsCancellationRequested) throw;
+                    // A full disk stays full: no retry.
+                    if (attempt >= 4 || cancel.IsCancellationRequested || DiskFull(error)) throw;
                     Thread.Sleep(2000 * attempt);
                 }
             }
+        }
+
+        private static bool DiskFull(IOException error)
+        {
+            int code = System.Runtime.InteropServices.Marshal.GetHRForException(error) & 0xFFFF;
+            return code == 112 || code == 39;  // ERROR_DISK_FULL, ERROR_HANDLE_DISK_FULL
         }
 
         private static bool IsMissing(WebException error)
@@ -69,9 +83,14 @@ namespace Nebula
             return Uri.UnescapeDataString(segments[segments.Length - 1].TrimEnd('/'));
         }
 
-        private static void Transfer(string url, string partial, Action<long> onBytes, CancellationToken cancel)
+        private static void Transfer(string url, string partial, Action<long> onBytes, CancellationToken cancel, long maxBytes)
         {
             long existing = File.Exists(partial) ? new FileInfo(partial).Length : 0;
+            if (existing > maxBytes)
+            {
+                File.Delete(partial);
+                existing = 0;
+            }
             var request = (HttpWebRequest)WebRequest.Create(url);
             request.UserAgent = UserAgent;
             request.AllowAutoRedirect = true;
@@ -91,13 +110,16 @@ namespace Nebula
                     while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
                     {
                         if (cancel.IsCancellationRequested) throw new OperationCanceledByUserException();
-                        output.Write(buffer, 0, read);
                         total += read;
+                        if (total > maxBytes) throw new InvalidDataException("The download of " + DisplayName(url) + " is larger than the release says.");
+                        output.Write(buffer, 0, read);
                         if (onBytes != null) onBytes(total);
                     }
                 }
             }
         }
+
+        private const int MaxListingChars = 8 << 20;
 
         public static string GetString(string url, string accept, int timeoutMilliseconds = 30000)
         {
@@ -108,7 +130,18 @@ namespace Nebula
             if (accept != null) request.Accept = accept;
             using (var response = request.GetResponse())
             using (var reader = new StreamReader(response.GetResponseStream()))
-                return reader.ReadToEnd();
+            {
+                // A release listing is a few hundred kilobytes; a portal or proxy page that never ends is not one.
+                var text = new System.Text.StringBuilder();
+                var piece = new char[16384];
+                int read;
+                while ((read = reader.Read(piece, 0, piece.Length)) > 0)
+                {
+                    if (text.Length + read > MaxListingChars) throw new InvalidDataException("The release list is too large.");
+                    text.Append(piece, 0, read);
+                }
+                return text.ToString();
+            }
         }
     }
 }

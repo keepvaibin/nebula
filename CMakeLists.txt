@@ -39,48 +39,29 @@ if(MSVC)
     endforeach()
     # Sources and narrow literals are UTF-8 whatever the build machine's code page.
     add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/utf-8>)
-    # AUTO builds for AVX2 when the build machine and its OS run it (Setup refuses CPUs without it), else SSE2.
-    set(GALAXY_NATIVE_ISA "AUTO" CACHE STRING "Native CPU target: AUTO, SSE2, or AVX2")
-    set_property(CACHE GALAXY_NATIVE_ISA PROPERTY STRINGS AUTO SSE2 AVX2)
+    # The host's CPU level, whatever machine builds it: SSE4.2 (x86-64-v2, which Setup requires) runs on every CPU the
+    # package accepts. The game module is built for x86-64-v3 and again for x86-64-v2; the host loads the one this CPU
+    # runs (native/build.ps1, host_main.cpp). Code that gains from AVX2 or FMA picks it at run time
+    # (fused_multiply_add.h, movie_video.cpp). AVX2 is for a build that never leaves its machine.
+    set(GALAXY_NATIVE_ISA "SSE4.2" CACHE STRING "Host CPU target: SSE2, SSE4.2, or AVX2")
+    set_property(CACHE GALAXY_NATIVE_ISA PROPERTY STRINGS SSE2 SSE4.2 AVX2)
     string(TOUPPER "${GALAXY_NATIVE_ISA}" GALAXY_NATIVE_ISA)
-    if(NOT GALAXY_NATIVE_ISA MATCHES "^(AUTO|SSE2|AVX2)$")
-        message(FATAL_ERROR "GALAXY_NATIVE_ISA must be AUTO, SSE2, or AVX2")
+    if(NOT GALAXY_NATIVE_ISA MATCHES "^(SSE2|SSE4\\.2|AVX2)$")
+        message(FATAL_ERROR "GALAXY_NATIVE_ISA must be SSE2, SSE4.2, or AVX2")
     endif()
-    set(galaxy_native_isa_effective "${GALAXY_NATIVE_ISA}")
-    if(GALAXY_NATIVE_ISA STREQUAL "AUTO")
-        if(CMAKE_CROSSCOMPILING)
-            set(galaxy_native_isa_effective "SSE2")
-        else()
-            include(CheckCXXSourceRuns)
-            check_cxx_source_runs(
-                "#include <intrin.h>
-                int main() {
-                    int cpu[4] = {};
-                    __cpuid(cpu, 0);
-                    if (cpu[0] < 7) return 1;
-                    __cpuidex(cpu, 1, 0);
-                    constexpr int required_ecx = (1 << 12) | (1 << 27) | (1 << 28);
-                    if ((cpu[2] & required_ecx) != required_ecx) return 2;
-                    if ((_xgetbv(0) & 0x6u) != 0x6u) return 3;
-                    __cpuidex(cpu, 7, 0);
-                    return (cpu[1] & (1 << 5)) != 0 ? 0 : 4;
-                }"
-                GALAXY_HOST_CAN_RUN_AVX2_FMA
-            )
-            if(GALAXY_HOST_CAN_RUN_AVX2_FMA)
-                set(galaxy_native_isa_effective "AVX2")
-            else()
-                set(galaxy_native_isa_effective "SSE2")
-            endif()
-        endif()
-    endif()
-    message(STATUS "Nebula CPU target: ${galaxy_native_isa_effective} (requested ${GALAXY_NATIVE_ISA})")
-    if(galaxy_native_isa_effective STREQUAL "AVX2")
-        # clang-cl takes the GCC spelling.
+    message(STATUS "Nebula host CPU target: ${GALAXY_NATIVE_ISA}")
+    # clang-cl takes the GCC spelling.
+    if(GALAXY_NATIVE_ISA STREQUAL "AVX2")
         if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
             add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:-mavx2>)
         else()
             add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/arch:AVX2>)
+        endif()
+    elseif(GALAXY_NATIVE_ISA STREQUAL "SSE4.2")
+        if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+            add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:-msse4.2> $<$<COMPILE_LANGUAGE:C,CXX>:-mpopcnt>)
+        else()
+            add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/arch:SSE4.2>)
         endif()
     endif()
 endif()
@@ -279,6 +260,7 @@ function(galaxy_post_shader name pass preset library stage entry)
 endfunction()
 galaxy_post_shader(post_fullscreen_vs PASS_RESAMPLE - none vs_5_0 VSMain)
 galaxy_post_shader(post_resample_ps PASS_RESAMPLE - none ps_5_0 PSMain)
+galaxy_post_shader(post_copy_ps PASS_COPY - none ps_5_0 PSMain)
 galaxy_post_shader(post_fxaa_ps PASS_FXAA - none ps_5_0 PSMain)
 galaxy_post_shader(post_fsr_easu_ps PASS_FSR_EASU - fsr ps_5_0 PSMain)
 galaxy_post_shader(post_fsr_rcas_ps PASS_FSR_RCAS - fsr ps_5_0 PSMain)
@@ -391,6 +373,7 @@ add_library(galaxy_render STATIC
     runtime/src/render/render_config.cpp
 runtime/src/render/host_window_win32.cpp
     runtime/src/ui/native_settings.cpp
+    runtime/src/ui/launcher.cpp
     runtime/src/ui/settings_model.cpp
     runtime/src/ui/settings_system_page.cpp
     runtime/src/ui/settings_advanced_page.cpp
@@ -615,6 +598,7 @@ galaxy_test(galaxy_test_data_paths_tests SOURCES ${rt}/test_data_paths_tests.cpp
 target_include_directories(galaxy_test_data_paths_tests PRIVATE tools/test_driver/extension)
 
 galaxy_test(galaxy_home_menu_model_tests SOURCES ${rt}/home_menu_model_tests.cpp)
+galaxy_test(galaxy_launcher_model_tests SOURCES ${rt}/ui/launcher_model_tests.cpp)
 
 galaxy_test(galaxy_settings_model_tests SOURCES ${rt}/ui/settings_model_tests.cpp ${rt}/ui/settings_model.cpp)
 
@@ -699,6 +683,7 @@ if(NEBULA_VULKAN)
             runtime/src/render/render_config.cpp
 runtime/src/render/host_window_win32.cpp
     runtime/src/ui/native_settings.cpp
+    runtime/src/ui/launcher.cpp
     runtime/src/ui/settings_model.cpp
     runtime/src/ui/settings_system_page.cpp
     runtime/src/ui/settings_advanced_page.cpp
