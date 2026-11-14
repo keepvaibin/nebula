@@ -224,7 +224,7 @@ def read_test(folder, types=None):
     t = load_json(folder / "test.json")
     keys_known(t, "", {"harness", "name", "about", "proves", "mods", "code", "language", "seed", "continue_from",
                        "renderers", "region", "limit_seconds", "bare", "save", "stage", "player", "steps", "expect",
-                       "faults", "hide_game_files", "safe_start", "device", "ends", "starts"})
+                       "faults", "hide_game_files", "safe_start", "device", "ends", "starts", "fresh"})
     for key in ("harness", "name", "about", "proves", "steps", "expect"):
         if key not in t:
             raise HarnessError("the test has no %s" % key)
@@ -240,6 +240,9 @@ def read_test(folder, types=None):
         if capability not in known:
             raise HarnessError("proves names %s, which is not in tools/lumacore/capabilities.json" % capability)
     bare = boolean(t, "bare", "") if "bare" in t else False
+    # A test of the first start ("fresh": true) runs with an empty app data folder even when the run is given a warm one
+    # (run --warm): no pipeline library from an earlier start.
+    fresh = boolean(t, "fresh", "") if "fresh" in t else False
     # Player 1's device: the keyboard (the default) or a controller whose motor the harness reads (fact input.motor).
     device = text(t, "device", "") if "device" in t else "keyboard"
     if device not in ("keyboard", "pad"):
@@ -362,7 +365,7 @@ def read_test(folder, types=None):
             "language": language, "seed": seed, "renderers": renderers, "region": t.get("region"), "limit": limit,
             "continue_from": continue_from, "faults": faults, "setup": setup, "steps": steps, "expect": expect,
             "has_stage": "stage" in t, "hidden": hidden, "safe_start": safe_start, "device": device, "ends": ends,
-            "starts": starts}
+            "starts": starts, "fresh": fresh}
 
 
 def read_setup(t, bare, seed, language, classes):
@@ -1308,6 +1311,10 @@ def run_one(test, renderer, args, run_folder, previous):
         shutil.rmtree(run_folder)
     for sub in ("bin", "pictures", "saves", "settings", "appdata"):
         (run_folder / sub).mkdir(parents=True)
+    # --warm: the app data an earlier start of the same bins on this machine left (its pipeline library), so this start
+    # loads its pipelines instead of building every one again. Not for a test of the first start, nor a continued run.
+    if getattr(args, "warm", None) and not test["fresh"] and previous is None:
+        shutil.copytree(args.warm, run_folder / "appdata", dirs_exist_ok=True)
     settings = run_folder / "settings"
     if previous is not None:
         for sub in ("saves", "settings"):
@@ -2097,6 +2104,8 @@ def main():
     run.add_argument("--who", default="?")
     run.add_argument("--module", default="hooks", choices=("hooks", "plain"))
     run.add_argument("--commit", default="unknown")
+    run.add_argument("--warm", help="a folder copied into each run's app data first (a pipeline library an earlier start "
+                     "of these bins wrote); a test with \"fresh\": true starts without it")
     run.add_argument("--diagnostics", default=os.environ.get("LUMA_TEST_DIAGNOSTICS"),
                      help="the game's --diagnostics for every run (or LUMA_TEST_DIAGNOSTICS), e.g. ring-stress")
     run.add_argument("--lock", default=os.environ.get("LUMA_TEST_LOCK"),
