@@ -194,6 +194,7 @@ add_library(galaxy_native_host STATIC
     runtime/src/luma_mods.cpp
     runtime/src/luma_fs.cpp
     runtime/src/luma_net.cpp
+    runtime/src/luma_net_reach.cpp
     runtime/src/luma_assets.cpp
     runtime/src/luma_audio.cpp
     runtime/src/luma_capture.cpp
@@ -618,6 +619,7 @@ galaxy_test(galaxy_frame_telemetry_tests SOURCES ${rt}/frame_telemetry_tests.cpp
 galaxy_test(galaxy_mii_import_tests SOURCES ${rt}/mii_import_tests.cpp ${rt}/mii_import.cpp ${rt}/mii_formats.cpp
     LIBS galaxy_atomic_file)
 galaxy_test(galaxy_luma_tests SOURCES ${rt}/luma_tests.cpp ${rt}/luma.cpp)
+galaxy_test(galaxy_luma_net_reach_tests SOURCES ${rt}/luma_net_reach_tests.cpp ${rt}/luma_net_reach.cpp)
 galaxy_test(galaxy_mods_tests SOURCES ${rt}/mods_tests.cpp ${rt}/mod_xml.cpp ${rt}/mods.cpp ${rt}/mod_consent.cpp ${rt}/luma.cpp
     ${rt}/mod_import.cpp ${rt}/texture_categories.cpp ${rt}/dolphin_pack.cpp ${rt}/asset_store.cpp LIBS galaxy_atomic_file nebula_archive)
 # The consent store (contracts/consent.md 1.5): answers, digests and their round trip through the mod settings.

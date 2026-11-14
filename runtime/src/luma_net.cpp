@@ -15,6 +15,7 @@
 // settles what came of it under the lock again; the game thread never waits on cryptography.
 
 #include "galaxy/luma_net_service.h"
+#include "galaxy/luma_net_reach.h"
 
 #include "galaxy/luma.h"
 #include "galaxy/mods.h"
@@ -207,21 +208,6 @@ bool system_ready() noexcept { return true; }
 
 // ---- What a mod may reach (layer 1: this machine and the local network, by address) --------------------------------
 
-bool local_v4(const in_addr& address) noexcept {
-    const std::uint32_t a = ntohl(address.s_addr);
-    return (a >> 24u) == 127u || (a >> 24u) == 10u || (a >> 20u) == 0xAC1u /* 172.16/12 */ ||
-           (a >> 16u) == 0xC0A8u /* 192.168/16 */ || (a >> 16u) == 0xA9FEu /* 169.254/16 */;
-}
-
-bool local_v6(const in6_addr& address) noexcept {
-    const unsigned char* b = address.s6_addr;
-    static const unsigned char loopback[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
-    if (std::memcmp(b, loopback, 16) == 0) {
-        return true;
-    }
-    return (b[0] & 0xFEu) == 0xFCu /* fc00::/7 */ || (b[0] == 0xFEu && (b[1] & 0xC0u) == 0x80u) /* fe80::/10 */;
-}
-
 // The address of `host` (text, never a name looked up: layer 1) and port into *out; false when it is not local.
 bool local_address(const char* host, std::uint16_t port, sockaddr_storage* out, socklen_t* length) noexcept {
     std::memset(out, 0, sizeof(*out));
@@ -231,28 +217,30 @@ bool local_address(const char* host, std::uint16_t port, sockaddr_storage* out, 
     }
     const std::string copy(text);
     sockaddr_in v4{};
-    if (inet_pton(AF_INET, copy.c_str(), &v4.sin_addr) == 1) {
-        if (!local_v4(v4.sin_addr)) {
+    sockaddr_in6 v6{};
+    static const unsigned char kMapped[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFFu, 0xFFu};
+    bool is_v4 = inet_pton(AF_INET, copy.c_str(), &v4.sin_addr) == 1;
+    if (!is_v4) {
+        if (inet_pton(AF_INET6, copy.c_str(), &v6.sin6_addr) != 1) {
             return false;
         }
+        if (std::memcmp(v6.sin6_addr.s6_addr, kMapped, 12) == 0) {
+            std::memcpy(&v4.sin_addr.s_addr, v6.sin6_addr.s6_addr + 12, 4);  // ::ffff:a.b.c.d is a.b.c.d
+            is_v4 = true;
+        }
+    }
+    if (is_v4) {
         v4.sin_family = AF_INET;
         v4.sin_port = htons(port);
         std::memcpy(out, &v4, sizeof(v4));
         *length = static_cast<socklen_t>(sizeof(v4));
-        return true;
-    }
-    sockaddr_in6 v6{};
-    if (inet_pton(AF_INET6, copy.c_str(), &v6.sin6_addr) == 1) {
-        if (!local_v6(v6.sin6_addr)) {
-            return false;
-        }
+    } else {
         v6.sin6_family = AF_INET6;
         v6.sin6_port = htons(port);
         std::memcpy(out, &v6, sizeof(v6));
         *length = static_cast<socklen_t>(sizeof(v6));
-        return true;
     }
-    return false;
+    return reach_local(*out);  // the address connected to is the address judged: no name is looked up here
 }
 
 // ---- Sockets -------------------------------------------------------------------------------------------------------
@@ -545,6 +533,10 @@ struct Socket {
     bool done_event = false;        // DONE to give, once the body is taken
     std::uint64_t body_total = 0;
     std::unique_ptr<Ws> ws;         // a WebSocket's (minor 4; set at its making, never changed): the game thread's
+    // A listener's or udp_open socket's peers outside this machine and the local network (g_lock): refused, counted;
+    // the first is said once in the mod log (Net.PeerRefused), at the next delivery.
+    std::uint64_t peers_refused = 0;
+    bool peer_report = false;
 };
 
 bool is_pipe(const Socket* socket) noexcept {
@@ -750,6 +742,15 @@ void post_locked(Socket* socket) {
     const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
     if (kernel != nullptr && kernel->post(&socket->node.event) == LUMA_OK) {
         socket->posted = true;
+    }
+}
+
+// With g_lock, I/O thread: a peer outside this machine and the local network was refused on `socket`. Counted; the
+// first is posted for one mod-log line, so a flood of them grows no log and no queue.
+void refuse_peer_locked(Socket* socket) {
+    if (socket->peers_refused++ == 0u) {
+        socket->peer_report = true;
+        post_locked(socket);
     }
 }
 
@@ -1128,6 +1129,10 @@ void udp_turn_locked(Socket* socket, short revents) {
                     continue;  // an answer to an earlier send ("port unreachable"): UDP tells the mod nothing
                 }
                 break;  // none waiting (or an error the next poll shows again)
+            }
+            if (!socket->tied && !reach_local(datagram.address)) {
+                refuse_peer_locked(socket);  // udp_open hears this machine and the local network only: dropped
+                continue;
             }
             const std::uint16_t from_port = loopback_port(datagram.address);
             try {
@@ -2399,6 +2404,11 @@ void turn_locked(Socket* socket, short revents) {
             if (got == kNoSock) {
                 return;  // none waiting (or an error the next poll shows again)
             }
+            if (!socket->ipc && !socket->internet && !reach_local(from)) {
+                close_system(got);  // a peer outside this machine and the local network: never the mod's (no event)
+                refuse_peer_locked(socket);
+                continue;
+            }
             if (socket->closing || socket->owner->open >= LUMA_NET_SOCKETS_MOST || !make_nonblocking(got)) {
                 close_system(got);  // full: the other side sees its connection end at once
                 continue;
@@ -2821,6 +2831,7 @@ void deliver(LumaEventNode* node) {
     std::uint32_t report_code = 0;
     std::string report_a;
     std::string report_b;
+    bool peer_report = false;
     LumaEventFn fn = nullptr;
     void* user = nullptr;
     LumaHandle handle = 0;
@@ -2836,6 +2847,7 @@ void deliver(LumaEventNode* node) {
         fn = socket->fn;
         user = socket->user;
         handle = socket->handle;
+        peer_report = std::exchange(socket->peer_report, false);
         connected = std::exchange(socket->connected, false);
         failed = std::exchange(socket->failed, LUMA_OK);
         try {
@@ -2874,6 +2886,12 @@ void deliver(LumaEventNode* node) {
         const std::lock_guard<std::mutex> lock(g_lock);
         return !socket->closing;  // the mod may close it inside a call
     };
+    if (peer_report) {
+        // No address of the peer: the line says only that one came from outside and was refused.
+        if (const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire)) {
+            kernel->report(mod, socket->where != nullptr ? socket->where : LUMA_NET_LOCAL_NAME, 254u, nullptr, 0u);
+        }
+    }
     if (connected) {
         call(mod, service, fn, user, LUMA_NET_EVENT_CONNECTED, handle, LUMA_OK, 0u);
     }
@@ -5097,6 +5115,7 @@ const LumaServiceRow kLocalRows[] = {
     {251u, "Net.CertificateRefused", {"where", "host", "reason", nullptr}},
     {252u, "Net.RedirectRefused", {"where", "url", nullptr, nullptr}},
     {253u, "Net.FileRefused", {"where", "path", nullptr, nullptr}},
+    {254u, "Net.PeerRefused", {"where", nullptr, nullptr, nullptr}},
 };
 const LumaServiceProvider kLocalProvider = {
     sizeof(LumaServiceProvider), LUMA_NET_LOCAL_NAME, &kLocal.base, nullptr, kLocalRows,

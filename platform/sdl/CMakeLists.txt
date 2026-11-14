@@ -143,6 +143,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/luma_mods.cpp
     ${rt}/luma_fs.cpp
     ${rt}/luma_net.cpp
+    ${rt}/luma_net_reach.cpp
     ${rt}/luma_assets.cpp
     ${rt}/luma_audio.cpp
     ${rt}/luma_capture.cpp

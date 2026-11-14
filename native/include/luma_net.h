@@ -130,7 +130,9 @@ typedef struct LumaNetLocalService {
     int32_t (*tcp_connect)(const LumaMod* mod, const char* host, uint16_t port, LumaEventFn fn, void* user,
                            LumaHandle* out);
     /* 1.0. Listens on `port` (0: one the system picks; `port` gives it), on this machine only (`local_network` 0) or
-       on the local network too (1). LUMA_OK and *out at once; each connection is an ACCEPTED event. A port in use:
+       on the local network too (1). LUMA_OK and *out at once; each connection is an ACCEPTED event. A connection from
+       outside this machine and the local network is closed with no event (the first one said once in the mod log,
+       Net.PeerRefused). A port in use:
        LUMA_E_EXISTS (an answer, not reported); a local_network other than 0 or 1, a null fn or out: LUMA_E_ARGUMENT,
        reported; a 17th socket: LUMA_E_LIMIT, reported. */
     /* events: ACCEPTED(socket), DATA(socket, data), SENT(socket, value), CLOSED(socket, status, value, data) */
@@ -153,7 +155,8 @@ typedef struct LumaNetLocalService {
        reported. */
     int32_t (*close)(const LumaMod* mod, LumaHandle handle);
     /* 1.1. A UDP socket on `port` (0: one the system picks; `port` gives it), on this machine only (`local_network`
-       0) or the local network too (1), IPv4. LUMA_OK and *out at once; anyone there may send to it (DATAGRAM); it
+       0) or the local network too (1), IPv4. LUMA_OK and *out at once; anyone there may send to it (DATAGRAM: a
+       datagram from outside this machine and the local network is dropped, as tcp_listen's connections); it
        sends with send_to (`send` on it: LUMA_E_HANDLE, reported). A port in use: LUMA_E_EXISTS (an answer); a
        local_network other than 0 or 1, a null fn or out: LUMA_E_ARGUMENT, reported; a 17th socket: LUMA_E_LIMIT,
        reported. */
