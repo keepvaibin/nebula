@@ -797,6 +797,64 @@ fn stage_lines(p: &mut Pixel, registers: &Registers) -> Result<bool> {
     Ok(tested)
 }
 
+/// A map sampled at the same varying coordinate by more than one stage: one tap, taken once before the stages, in the
+/// raster forms. Each such sample becomes `TAP(name, sample)`; ray tracing's forms read the sample itself (TAP's
+/// definition, `TAP_DEFINE`), so their compiled bytes stay as they were. A varying is never written in a pixel stage and
+/// no stage branches, so the tap and its derivatives are the ones each stage took. Returns the taps' declarations.
+fn shared_taps(lines: &mut [String]) -> Vec<String> {
+    const OPEN: &str = "TEX(";
+    let mut found: Vec<(String, usize)> = Vec::new();
+    for line in lines.iter() {
+        let mut from = 0;
+        while let Some(at) = line[from..].find(OPEN).map(|x| x + from) {
+            from = at + OPEN.len();
+            let Some(expr) = plain_sample(&line[at..]) else { continue };
+            match found.iter_mut().find(|(e, _)| *e == expr) {
+                Some(entry) => entry.1 += 1,
+                None => found.push((expr, 1)),
+            }
+        }
+    }
+    let mut declarations = Vec::new();
+    for (expr, count) in found {
+        if count < 2 {
+            continue;
+        }
+        let name = format!("tap{}", declarations.len());
+        for line in lines.iter_mut() {
+            *line = line.replace(&expr, &format!("TAP({name}, {expr})"));
+        }
+        declarations.push(format!("    const float4 {name} = {expr};"));
+    }
+    declarations
+}
+
+/// `TEX(n).Sample(SAMP(n), c)` at the start of `text` with c a varying as it is (`i.uvK`, maybe over a constant
+/// `float2(a, b)`): the whole expression.
+fn plain_sample(text: &str) -> Option<String> {
+    let rest = text.strip_prefix("TEX(")?;
+    let digits = rest.find(|c: char| !c.is_ascii_digit())?;
+    let n = &rest[..digits];
+    let rest = rest[digits..].strip_prefix(").Sample(SAMP(")?.strip_prefix(n)?.strip_prefix("), i.uv")?;
+    let uv = rest.find(|c: char| !c.is_ascii_digit())?;
+    if uv == 0 {
+        return None;
+    }
+    let mut tail = &rest[uv..];
+    if let Some(divided) = tail.strip_prefix(" / float2(") {
+        let close = divided.find(')')?;
+        if !divided[..close].chars().all(|c| c.is_ascii_digit() || c == '.' || c == ',' || c == ' ') {
+            return None;
+        }
+        tail = &divided[close + 1..];
+    }
+    tail.strip_prefix(')')?;
+    Some(text[..text.len() - tail.len() + 1].to_string())
+}
+
+/// TAP(name, sample) of shared_taps: the tap in the raster forms, the sample in ray tracing's.
+const TAP_DEFINE: &str = "#if NATIVE_TRACED || NATIVE_PREPASS\n#define TAP(name, sample) (sample)\n#else\n#define TAP(name, sample) name\n#endif\n";
+
 /// Whether the material's alpha test passes every value round(prev.a * 255) can take (`range`, inclusive) with its own
 /// references: then the program needs no discard.
 fn alpha_test_passes(m: &MaterialIr, (lo, hi): (u32, u32)) -> bool {
@@ -1210,6 +1268,10 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
     }
     pixel.push_str(&p.rows.declare(2, "MaterialPixel"));
     pixel.push_str(&vary);
+    let taps = shared_taps(&mut p.lines);
+    if !taps.is_empty() {
+        pixel.push_str(TAP_DEFINE);
+    }
     pixel.push_str("NativeOut program_ps(Varyings i) {\n");
     if form.lit {
         pixel.push_str("    g_enh = enh_begin(i.lit_eye, i.lit_nrm);\n");
@@ -1227,6 +1289,14 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
         }
     } else if form.lit && form.replace == 0 {
         pixel.push_str("    if (enh_on()) enh_key_highlight(i.lit_light, g_enh, i.lit_eye);\n");
+    }
+    if !taps.is_empty() {
+        pixel.push_str("#if !(NATIVE_TRACED || NATIVE_PREPASS)\n");
+        for l in &taps {
+            pixel.push_str(l);
+            pixel.push('\n');
+        }
+        pixel.push_str("#endif\n");
     }
     for l in &p.lines {
         pixel.push_str(l);
@@ -1612,6 +1682,30 @@ mod tests {
 
     fn tested(alpha_comp0: u8, alpha_op: u8, alpha_comp1: u8, alpha_ref0: u8, alpha_ref1: u8) -> MaterialIr {
         MaterialIr { alpha_comp0, alpha_op, alpha_comp1, alpha_ref0, alpha_ref1, ..MaterialIr::default() }
+    }
+
+    #[test]
+    fn shared_taps_only_for_the_same_plain_sample() {
+        let mut lines: Vec<String> = [
+            "    const float4 t = TEX(1).Sample(SAMP(1), i.uv1).rgba;",
+            "    const float4 t = TEX(1).Sample(SAMP(1), i.uv1 / float2(2.0, 1.0)).rgba;",
+            "    const float4 t = TEX(2).Sample(SAMP(2), tevcoord / m[2].zw).rgba;",
+            "    const float4 t = TEX(1).Sample(SAMP(1), i.uv12).rgba;",
+            "    const float4 t = TEX(1).Sample(SAMP(1), i.uv1).rgba;",
+            "    const float4 t = TEX(2).Sample(SAMP(2), tevcoord / m[2].zw).rgba;",
+            "    const float4 t = TEX(1).Sample(SAMP(1), (i.uv1 * m[3].xy) / m[4].zw).rgba;",
+        ]
+        .iter()
+        .map(|l| l.to_string())
+        .collect();
+        let taps = shared_taps(&mut lines);
+        assert_eq!(taps, vec!["    const float4 tap0 = TEX(1).Sample(SAMP(1), i.uv1);".to_string()]);
+        assert_eq!(lines[0], "    const float4 t = TAP(tap0, TEX(1).Sample(SAMP(1), i.uv1)).rgba;");
+        assert_eq!(lines[4], lines[0]);
+        // A divided coordinate, another varying, a warp and a scaled coordinate stay as they were.
+        for i in [1, 2, 3, 5, 6] {
+            assert!(!lines[i].contains("TAP"), "{}", lines[i]);
+        }
     }
 
     #[test]
