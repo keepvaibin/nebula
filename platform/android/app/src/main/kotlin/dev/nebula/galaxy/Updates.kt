@@ -6,6 +6,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
+import android.content.pm.PackageManager
+import android.net.Uri
 import android.util.Base64
 import androidx.core.content.IntentCompat
 import org.json.JSONArray
@@ -53,6 +55,7 @@ object Updates {
     private const val MAX_LISTING_CHARS = 8 shl 20
     private const val MAX_SIGNATURE_BYTES = 64L * 1024L
     private const val MAX_APK_BYTES = 2L shl 30
+    private const val APK_TYPE = "application/vnd.android.package-archive"
     private const val NOTES_LIMIT = 4000
     private const val PREFS = "updates"
     private const val ASK = "ask_at_start"
@@ -76,12 +79,23 @@ object Updates {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(ASK, on).apply()
     }
 
+    /**
+     * A store installed this app (it then updates it): the installing package is none of the ways an APK file gets
+     * installed by hand, named by no list: not this app itself (an update it installed), not the shell (adb, by its
+     * uid), and not a system app that the system resolves as a handler of an APK file (the device's package installer,
+     * whoever made it). No installer recorded: installed by hand.
+     */
     fun fromStore(context: Context): Boolean = runCatching {
-        val source = context.packageManager.getInstallSourceInfo(context.packageName)
-        val installer = source.installingPackageName ?: source.initiatingPackageName
-        // A sideloaded APK: the system's package installer (or adb) installed it.
-        installer != null && installer != "com.google.android.packageinstaller" && installer != "com.android.packageinstaller" &&
-            installer != "com.android.shell" && installer != context.packageName
+        val manager = context.packageManager
+        val source = manager.getInstallSourceInfo(context.packageName)
+        val installer = source.installingPackageName ?: source.initiatingPackageName ?: return@runCatching false
+        if (installer == context.packageName) return@runCatching false
+        // The shell's app id (AID_SHELL, 2000) in any user (a user's uids are 100000 apart).
+        if (manager.getPackageUid(installer, 0) % 100_000 == 2000) return@runCatching false
+        val apk = Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse("content://nebula/update.apk"), APK_TYPE)
+        @Suppress("DEPRECATION")
+        val handlers = manager.queryIntentActivities(apk, PackageManager.MATCH_SYSTEM_ONLY).map { it.activityInfo.packageName }
+        installer !in handlers
     }.getOrDefault(false)
 
     /**
