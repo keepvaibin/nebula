@@ -5577,16 +5577,13 @@ NativeSettingsView native_settings_view() {
     return host_window::build_native_settings_view();
 }
 
-// Whether the menu asks the player something: a question over the page, a mod's request, an import's result waiting for
-// its Done, the consent question, or changes not applied (closing would ask first).
+// Whether the menu asks the player something: a question over the page, changes not applied (closing would ask first),
+// or a screen of the Mods page (an import running or its result waiting for its Done, a file dialog, a mod's request,
+// the consent question).
 static bool native_settings_asking() {
-    if (s_settings_leave_asking || s_joycon_pairing || galaxy::host::touch_arranging() || settings_display_confirming() ||
-        restart_asking() || vendor_prompting() || mod_question_up() || request_screen_up() ||
-        s_import_page_open.load(std::memory_order_acquire) || pending_settings_changes() != 0u) {
-        return true;
-    }
-    const std::lock_guard<std::mutex> lock(s_mods_mutex);
-    return s_consent_open;
+    return s_settings_leave_asking || s_joycon_pairing || galaxy::host::touch_arranging() || settings_display_confirming() ||
+           restart_asking() || vendor_prompting() || mod_question_up() || pending_settings_changes() != 0u ||
+           screens_screen_up();
 }
 
 void native_settings_input(NativeSettingsInput input, int arg) {
