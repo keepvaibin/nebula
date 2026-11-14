@@ -436,8 +436,8 @@ void RendererVk::begin_scene_pass_with(unsigned aux, const SceneClearValues* cle
     if (depth_clear_pending()) {
         if (clear != nullptr && (clear_depth != 0u || !discard_color || aux != 0u)) {
             pending_depth_clear_ = 0u;  // this opening clears the depth itself
-        } else if (clear == nullptr && aux == 0u && !discard_color) {
-            clear = &pending_depth_values_;  // the colour loads, the depth clears
+        } else if (clear == nullptr && aux == 0u && (!discard_color || !target_pass_active_)) {
+            clear = &pending_depth_values_;  // the colour loads (or is replaced unread), the depth clears
             clear_depth = std::exchange(pending_depth_clear_, 0u);
         } else {
             // No variant of this pass clears only the depth: one that does opens and ends first.
@@ -457,7 +457,8 @@ void RendererVk::begin_scene_pass_with(unsigned aux, const SceneClearValues* cle
         begin.renderPass = draw_layout_.discard_color_passes[scene_.wide ? 1u : 0u][scene_samples_log2()];
     }
     if (clear_depth != 0u && clear != nullptr && aux == 0u && !target_pass_active_) {
-        begin.renderPass = draw_layout_.depth_clear_passes[clear_depth - 1u][scene_.wide ? 1u : 0u][scene_samples_log2()];
+        const auto& passes = discard_color ? draw_layout_.discard_depth_clear_passes : draw_layout_.depth_clear_passes;
+        begin.renderPass = passes[clear_depth - 1u][scene_.wide ? 1u : 0u][scene_samples_log2()];
     }
     begin.framebuffer = aux == kAuxPrepass ? VK_NULL_HANDLE : aux != 0u ? motion_framebuffer(aux) : scene_framebuffer();
     const bool items = aux == kAuxPrepass;
@@ -485,7 +486,7 @@ void RendererVk::begin_scene_pass_with(unsigned aux, const SceneClearValues* cle
         begin.pClearValues = item_clear_pending_ ? values : nullptr;
         item_clear_pending_ = false;
     }
-    gpu_pass(current_pass_);
+    open_pass_mark_ = gpu_pass_mark(current_pass_, true);
     vkCmdBeginRenderPass(commands, &begin,
                          secondary ? VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS : VK_SUBPASS_CONTENTS_INLINE);
     scene_pass_open_ = true;
@@ -520,6 +521,7 @@ void RendererVk::end_scene_pass(const char* caller) {
     }
     vkCmdEndRenderPass(commands_);
     scene_pass_open_ = false;
+    open_pass_mark_ = kNoPassMark;
     scene_pass_closed_by_ = caller;
     if (!held_probe_slots_.empty()) {
         read_held_probes();
@@ -1249,8 +1251,40 @@ void RendererVk::settle_depth_clear() {
     }
     const SceneClearValues values = pending_depth_values_;
     const unsigned mode = std::exchange(pending_depth_clear_, 0u);
+    if (!target_pass_active_) {
+        clear_depth_alone(values.reversed_depth, mode);
+        return;
+    }
     begin_scene_pass_with(0u, &values, false, "settle_depth_clear", mode);
     end_scene_pass("settle_depth_clear");
+}
+
+// With no pass open: a pass over the scene's depth target alone clears it (mode 1 keeps the stencil, 2 clears it), so the
+// colour is neither loaded nor stored as a scene pass opened for the clear would.
+void RendererVk::clear_depth_alone(float reversed_depth, unsigned mode) {
+    vk::Texture& depth = scene_.samples > 1u ? *scene_.ms_depth : *scene_.depth;
+    const unsigned samples_log2 = scene_samples_log2();
+    if (depth.framebuffer == VK_NULL_HANDLE) {
+        VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
+        info.renderPass = depth_alone_passes_[0][samples_log2];
+        info.attachmentCount = 1;
+        info.pAttachments = &depth.target_view;
+        info.width = depth.width;
+        info.height = depth.height;
+        info.layers = 1;
+        vk::check(vkCreateFramebuffer(vk::Context::get().device(), &info, nullptr, &depth.framebuffer), "depth framebuffer");
+    }
+    VkClearValue value{};
+    value.depthStencil = {reversed_depth, 0u};  // reversed-Z, as clear_scene's
+    VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+    begin.renderPass = depth_alone_passes_[mode - 1u][samples_log2];
+    begin.framebuffer = depth.framebuffer;
+    begin.renderArea = {{0, 0}, {depth.width, depth.height}};
+    begin.clearValueCount = 1;
+    begin.pClearValues = &value;
+    vkCmdBeginRenderPass(commands_, &begin, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdEndRenderPass(commands_);
+    scene_.depth_dirty |= scene_.samples > 1u;
 }
 
 bool RendererVk::begin_cleared_motion_scene(std::uint32_t clear_rgba) {

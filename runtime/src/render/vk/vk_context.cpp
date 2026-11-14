@@ -519,10 +519,12 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
                                   : "descriptor indexing limits below the texture and sampler arrays";
     }
     {
-        // A bound table's maps: what the per-stage image, sampler and resource limits leave beside the three constants
-        // buffers and two storage buffers of set 0.
+        // A bound table's maps: the per-stage image and sampler limits, and what maxPerStageResources leaves in the fragment
+        // stage beside set 0's three constants buffers and two storage buffers and at most four colour attachments (which
+        // count there). Samplers do not count against maxPerStageResources.
         const VkPhysicalDeviceLimits& limits = properties_.limits;
-        const std::uint32_t by_resources = limits.maxPerStageResources > 16u ? (limits.maxPerStageResources - 16u) / 2u : 0u;
+        constexpr std::uint32_t kBesideMaps = 3u + 2u + 4u;
+        const std::uint32_t by_resources = limits.maxPerStageResources > kBesideMaps ? limits.maxPerStageResources - kBesideMaps : 0u;
         table_slots_ = std::min({limits.maxPerStageDescriptorSampledImages, limits.maxPerStageDescriptorSamplers, by_resources});
     }
     std::vector<float> queue_priorities(1u, priority);

@@ -578,6 +578,14 @@ bool RendererVk::create_layouts() {
             attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             vk::check(vkCreateRenderPass(device, &info, nullptr,
                 &draw_layout_.depth_clear_passes[1][wide ? 1u : 0u][samples_log2]), "depth and stencil clearing render pass");
+            attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            vk::check(vkCreateRenderPass(device, &info, nullptr,
+                &draw_layout_.discard_depth_clear_passes[1][wide ? 1u : 0u][samples_log2]),
+                "colour replacement, depth and stencil clearing render pass");
+            attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+            vk::check(vkCreateRenderPass(device, &info, nullptr,
+                &draw_layout_.discard_depth_clear_passes[0][wide ? 1u : 0u][samples_log2]),
+                "colour replacement and depth clearing render pass");
         }
         attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -588,6 +596,44 @@ bool RendererVk::create_layouts() {
                                      : samples_log2 != 0u ? &draw_layout_.ms_passes_clear[samples_log2]
                                                          : &draw_layout_.scene_pass_clear),
                   "scene target clearing render pass");
+    }
+    // The scene depth cleared alone (settle_depth_clear with no pass open): the depth target only, so the colour is neither
+    // loaded nor stored. [0] keeps the stencil, [1] clears it, as depth_clear_passes.
+    for (unsigned samples_log2 = 0u; (1u << samples_log2) <= msaa_max_samples_; ++samples_log2) {
+        VkAttachmentDescription attachment{};
+        attachment.format = depth_format_;
+        attachment.samples = static_cast<VkSampleCountFlagBits>(1u << samples_log2);
+        attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
+        attachment.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        attachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        const VkAttachmentReference depth{0, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
+        VkSubpassDescription subpass{};
+        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpass.pDepthStencilAttachment = &depth;
+        VkSubpassDependency dependencies[2]{};
+        dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+        dependencies[0].dstSubpass = 0;
+        dependencies[0].srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        dependencies[0].dstStageMask = dependencies[0].srcStageMask;
+        dependencies[0].srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        dependencies[0].dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        dependencies[1] = dependencies[0];
+        dependencies[1].srcSubpass = 0;
+        dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+        VkRenderPassCreateInfo info{VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
+        info.attachmentCount = 1;
+        info.pAttachments = &attachment;
+        info.subpassCount = 1;
+        info.pSubpasses = &subpass;
+        info.dependencyCount = 2;
+        info.pDependencies = dependencies;
+        for (const unsigned stencil : {0u, 1u}) {
+            attachment.stencilLoadOp = stencil != 0u ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
+            vk::check(vkCreateRenderPass(device, &info, nullptr, &depth_alone_passes_[stencil][samples_log2]),
+                      "depth clearing render pass (depth alone)");
+        }
     }
     // The effects layer needs its format drawn and blended, and four colour attachments with independent blending.
     {
@@ -1653,7 +1699,8 @@ void RendererVk::shutdown() {
         }
         wide_base_sampled_ = false;
         for (auto* group : {&draw_layout_.discard_color_passes, &draw_layout_.depth_clear_passes[0],
-                            &draw_layout_.depth_clear_passes[1]}) {
+                            &draw_layout_.depth_clear_passes[1], &draw_layout_.discard_depth_clear_passes[0],
+                            &draw_layout_.discard_depth_clear_passes[1], &depth_alone_passes_}) {
             for (auto& passes : *group) {
                 for (VkRenderPass& pass : passes) {
                     if (pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, pass, nullptr);
@@ -2349,6 +2396,22 @@ constexpr const char* kPassTimeNames[] = {"scene", "resolve", "frame read", "dis
 }  // namespace
 
 void RendererVk::gpu_pass(GpuPass pass) {
+    (void)gpu_pass_mark(pass, false);
+}
+
+// A scope ends. A scene pass it opened and leaves open goes on with the outer work (the scene's geometry after the camera's
+// widen or the bloom's composite); no timestamp splits a pass on a tiled GPU, so that whole pass is billed to the outer.
+void RendererVk::gpu_pass_restore(GpuPass outer) {
+    if (scene_pass_open_ && open_pass_mark_ < pass_mark_count_[frame_slot_] &&
+        pass_marks_[frame_slot_][open_pass_mark_] == current_pass_) {
+        pass_marks_[frame_slot_][open_pass_mark_] = outer;
+    }
+    gpu_pass(outer);
+}
+
+// The mark's index, or kNoPassMark. A scene pass's beginning always takes a mark of its own, so gpu_pass_restore can relabel
+// the pass alone.
+unsigned RendererVk::gpu_pass_mark(GpuPass pass, bool pass_begins) {
     const bool changed = pass != current_pass_;
     current_pass_ = pass;
     unsigned& marks = pass_mark_count_[frame_slot_];
@@ -2363,12 +2426,13 @@ void RendererVk::gpu_pass(GpuPass pass) {
     // Tiled GPUs execute a render pass tile by tile. Interior timestamps do not delimit whole-image work;
     // record only at existing pass boundaries, never split a pass to measure it.
     if (scene_pass_open_ || pass_queries_ == VK_NULL_HANDLE || !pass_recording_ || commands_ != commands ||
-        marks + 1u >= kGpuPassSlots || (marks != 0u && pass_marks_[frame_slot_][marks - 1u] == pass)) {
-        return;
+        marks + 1u >= kGpuPassSlots || (!pass_begins && marks != 0u && pass_marks_[frame_slot_][marks - 1u] == pass)) {
+        return kNoPassMark;
     }
     vkCmdWriteTimestamp(commands, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, pass_queries_,
                         frame_slot_ * kGpuPassSlots + marks);
-    pass_marks_[frame_slot_][marks++] = pass;
+    pass_marks_[frame_slot_][marks] = pass;
+    return marks++;
 }
 
 std::size_t RendererVk::gpu_pass_times(GpuPassTime* out, std::size_t capacity) const noexcept {
