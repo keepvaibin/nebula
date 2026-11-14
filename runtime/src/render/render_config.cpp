@@ -2,6 +2,7 @@
 #include "galaxy/portable.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/atomic_file.h"
+#include "galaxy/benchmark.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/platform_paths.h"
 
@@ -47,6 +48,8 @@ static std::atomic<std::uint64_t> s_config_generation{1u};
 static std::uint64_t s_config_write_time = 0u;
 // The gpu config.ini named when this process last read or wrote it (next_start_gpu).
 static std::array<char, 32> s_file_gpu{};
+// No config.ini when the process started (render_config_first_start).
+static std::atomic<bool> s_first_start{false};
 
 static std::uint64_t file_write_time(const std::filesystem::path& path) noexcept {
 #if defined(_WIN32)
@@ -521,6 +524,8 @@ void load_render_config_from_file() {
 
     const std::filesystem::path path = config_path();
     const std::uint64_t write_time = file_write_time(path);
+    std::error_code missing;
+    s_first_start.store(!path.empty() && !std::filesystem::exists(path, missing) && !missing, std::memory_order_relaxed);
     if (!path.empty()) {
         FILE* f = galaxy::open_path(path, "r");
         if (f != nullptr) {
@@ -541,6 +546,34 @@ void load_render_config_from_file() {
     s_config_write_time = write_time;
     s_file_gpu = file_gpu;
     s_lock.unlock();
+}
+
+bool render_config_first_start() noexcept {
+    return s_first_start.load(std::memory_order_relaxed);
+}
+
+unsigned first_start_internal_height(bool shared_memory, unsigned output_lines) noexcept {
+    const unsigned height = shared_memory ? 480u : 1080u;
+    return output_lines > height ? height : 0u;
+}
+
+void apply_performance_preset(RenderConfig& cfg) noexcept {
+    cfg.internal_height = 480u;
+    cfg.upscaler = 0u;
+    cfg.frame_generation = 0u;
+    cfg.aa_mode = 0u;
+    cfg.msaa_samples = 1u;
+    cfg.sharpness = 0u;
+    cfg.ambient_occlusion = false;
+    cfg.bloom = 0u;
+    cfg.enhanced_lighting = false;
+    cfg.per_pixel_lighting = false;
+    cfg.enhanced_mipmaps = false;
+    cfg.anisotropic_filtering = 1u;
+    cfg.hud_output_resolution = false;
+    cfg.ray_tracing_enabled = false;
+    cfg.hdr = false;
+    cfg.max_fps = static_cast<float>(kGameStepsPerSecond);
 }
 
 bool reload_render_config_if_changed() {
@@ -578,6 +611,9 @@ bool reload_render_config_if_changed() {
 }
 
 bool save_render_config_to_file() {
+    if (galaxy::bench::running()) {
+        return false;  // a benchmark's settings are its own, never the player's file
+    }
     s_lock.lock_shared();
     RenderConfig cfg = s_config;
     std::array<char, 32> gpu = s_file_gpu;
@@ -683,9 +719,23 @@ std::string next_start_gpu() {
     return gpu.data();
 }
 
+namespace {
+std::mutex s_adapter_lock;
+RenderAdapter s_adapter;
+}  // namespace
+
+RenderAdapter render_adapter() {
+    const std::lock_guard<std::mutex> lock(s_adapter_lock);
+    return s_adapter;
+}
+
 void record_render_adapter(const char* description, unsigned vendor_id, unsigned device_id,
                            unsigned subsys_id, bool ray_tracing) noexcept {
     try {
+        {
+            const std::lock_guard<std::mutex> lock(s_adapter_lock);
+            s_adapter = {description != nullptr ? description : "", vendor_id, device_id};
+        }
         const std::filesystem::path config = config_path();
         if (config.empty() || description == nullptr) {
             return;

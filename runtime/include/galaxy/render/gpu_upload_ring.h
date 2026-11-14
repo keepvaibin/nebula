@@ -76,6 +76,8 @@ public:
     // next frame boundary. `alignment` must be a nonzero power of two. Exhausting both goes to a chunk (a ring made with
     // `chunks`), else throws rather than dropping geometry. A rejected request consumes nothing.
     Allocation allocate(std::size_t size, std::size_t alignment);
+    // allocate's placement without its throws: an empty Allocation (cpu null) where allocate would throw, consuming nothing.
+    [[nodiscard]] Allocation try_allocate(std::size_t size, std::size_t alignment) noexcept;
 
     // The peak since the last call (diagnostics windows).
     [[nodiscard]] std::size_t take_peak_bytes_per_frame() noexcept {
@@ -146,7 +148,11 @@ private:
         std::size_t size = 0;
         std::size_t used = 0;
     };
-    [[nodiscard]] Allocation allocate_in_chunk(std::size_t size, std::size_t alignment);
+    // Empty when no chunk could be made (`wanted`: the bytes asked of the device).
+    [[nodiscard]] Allocation allocate_in_chunk(std::size_t size, std::size_t alignment, std::size_t& wanted);
+    enum class Miss : unsigned char { None, NotReady, Alignment, Exhausted, NoChunk };
+    // The placement both allocate and try_allocate make; `out` is set only with Miss::None.
+    [[nodiscard]] Miss take(std::size_t size, std::size_t alignment, Allocation& out, std::size_t& wanted);
 
     gpu::Device* device_ = nullptr;
     gpu::UploadPlace place_ = gpu::UploadPlace::Host;

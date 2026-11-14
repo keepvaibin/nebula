@@ -139,10 +139,12 @@ float3 FinalWrite(float3 color, int2 p) {
     }
     const float3 level = color * 255.0;
     const float3 between = step(0.02, abs(level - round(level)));
-    if (max(between.r, max(between.g, between.b)) == 0.0) {
-        return color;
+    // A real branch, not a select: a group of pixels all on levels (black, flat 8-bit colours) skips the two hashes.
+    float3 written = color;
+    [branch] if (max(between.r, max(between.g, between.b)) != 0.0) {
+        written = saturate((level + TriangularNoise(p) * between) / 255.0);
     }
-    return saturate((level + TriangularNoise(p) * between) / 255.0);
+    return written;
 }
 
 #if defined(PASS_SMAA_EDGES) || defined(PASS_SMAA_WEIGHTS) || defined(PASS_SMAA_BLEND) || defined(PASS_SMAA_BLEND_KEEP)
@@ -161,9 +163,14 @@ float3 FinalWrite(float3 color, int2 p) {
 #define SMAAGather(tex, coord) tex.Gather(LinearSampler, coord)
 #endif
 
-#if defined(PASS_FSR_EASU) || defined(PASS_FSR_RCAS) || defined(PASS_FSR_RCAS_SCALED)
+#if defined(PASS_FSR_EASU) || defined(PASS_FSR_EASU_HALF) || defined(PASS_FSR_RCAS) || defined(PASS_FSR_RCAS_SCALED)
 #define A_GPU 1
 #define A_HLSL 1
+#endif
+// EASU's packed 16-bit form: min16float, for a Direct3D device that reports 16-bit minimum precision (its taps then run
+// two to a 32-bit lane where the GPU packs them).
+#if defined(PASS_FSR_EASU_HALF)
+#define A_HALF 1
 #endif
 
 #elif POST_SECTION == 2
@@ -181,6 +188,13 @@ AF4 FsrEasuRF(AF2 p) { return SourceGather(p, 0u); }
 AF4 FsrEasuGF(AF2 p) { return SourceGather(p, 1u); }
 AF4 FsrEasuBF(AF2 p) { return SourceGather(p, 2u); }
 #define FSR_EASU_F 1
+#endif
+
+#if defined(PASS_FSR_EASU_HALF)
+AH4 FsrEasuRH(AF2 p) { return AH4(inputTex.GatherRed(LinearSampler, p)); }
+AH4 FsrEasuGH(AF2 p) { return AH4(inputTex.GatherGreen(LinearSampler, p)); }
+AH4 FsrEasuBH(AF2 p) { return AH4(inputTex.GatherBlue(LinearSampler, p)); }
+#define FSR_EASU_H 1
 #endif
 
 #if defined(PASS_FSR_RCAS)
@@ -298,6 +312,15 @@ float4 PSMain(FullscreenOut i) : SV_Target {
 }
 #endif
 
+#if defined(PASS_FSR_EASU_HALF)
+FullscreenOut VSMain(uint id : SV_VertexID) { return FullscreenTriangle(id); }
+float4 PSMain(FullscreenOut i) : SV_Target {
+    AH3 color;
+    FsrEasuH(color, AU2(ViewportPixel(i.pos)), g_con0, g_con1, g_con2, g_con3);
+    return float4(FinalWrite(AF3(color), ViewportPixel(i.pos)), 1.0);
+}
+#endif
+
 #if defined(PASS_FSR_RCAS) || defined(PASS_FSR_RCAS_SCALED)
 FullscreenOut VSMain(uint id : SV_VertexID) { return FullscreenTriangle(id); }
 float4 PSMain(FullscreenOut i) : SV_Target {
@@ -316,7 +339,9 @@ float4 PSMain(FullscreenOut i) : SV_Target {
 Texture2D inputTex : register(t0);
 float FxaaLuma(float3 c) { return dot(c, float3(0.299, 0.587, 0.114)); }
 float FxaaLumaAt(float2 uv) { return FxaaLuma(inputTex.SampleLevel(LinearSampler, uv, 0).rgb); }
-float FxaaLumaOff(float2 uv, int2 o) { return FxaaLuma(inputTex.SampleLevel(PointSampler, uv, 0, o).rgb); }
+// The neighbour (x, y) texels away: literal offsets at each use, so the SPIR-V carries ConstOffset (a variable offset is
+// an Offset operand, which needs shaderImageGatherExtended).
+#define FxaaLumaOff(uv, x, y) FxaaLuma(inputTex.SampleLevel(PointSampler, uv, 0, int2(x, y)).rgb)
 FullscreenOut VSMain(uint id : SV_VertexID) { return FullscreenTriangle(id); }
 float4 PSMain(FullscreenOut i) : SV_Target {
     const float2 texel = g_rt_metrics.xy;
@@ -325,18 +350,18 @@ float4 PSMain(FullscreenOut i) : SV_Target {
     const float4 centre = inputTex.SampleLevel(PointSampler, uv, 0);
     const float3 center = centre.rgb;
     const float lc = FxaaLuma(center);
-    const float ln = FxaaLumaOff(uv, int2(0, -1));
-    const float ls = FxaaLumaOff(uv, int2(0, 1));
-    const float lw = FxaaLumaOff(uv, int2(-1, 0));
-    const float le = FxaaLumaOff(uv, int2(1, 0));
+    const float ln = FxaaLumaOff(uv, 0, -1);
+    const float ls = FxaaLumaOff(uv, 0, 1);
+    const float lw = FxaaLumaOff(uv, -1, 0);
+    const float le = FxaaLumaOff(uv, 1, 0);
     const float lmax = max(lc, max(max(ln, ls), max(lw, le)));
     const float lmin = min(lc, min(min(ln, ls), min(lw, le)));
     const float range = lmax - lmin;
     if (range < max(0.0312, lmax * 0.125)) return centre;
-    const float lnw = FxaaLumaOff(uv, int2(-1, -1));
-    const float lne = FxaaLumaOff(uv, int2(1, -1));
-    const float lsw = FxaaLumaOff(uv, int2(-1, 1));
-    const float lse = FxaaLumaOff(uv, int2(1, 1));
+    const float lnw = FxaaLumaOff(uv, -1, -1);
+    const float lne = FxaaLumaOff(uv, 1, -1);
+    const float lsw = FxaaLumaOff(uv, -1, 1);
+    const float lse = FxaaLumaOff(uv, 1, 1);
     // Edge orientation from second differences of the 3x3 block: a horizontal edge changes down the columns.
     const float horizontal = abs(lnw + lsw - 2.0 * lw) + 2.0 * abs(ln + ls - 2.0 * lc) + abs(lne + lse - 2.0 * le);
     const float vertical = abs(lnw + lne - 2.0 * ln) + 2.0 * abs(lw + le - 2.0 * lc) + abs(lsw + lse - 2.0 * ls);

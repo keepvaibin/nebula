@@ -17,7 +17,10 @@ namespace galaxy::render::mtl {
 namespace {
 
 constexpr Format kDistanceFormat = Format::R32f;
-constexpr Format kOcclusionFormat = Format::Rgba16f;
+// Occlusion and eye distance: the two channels the passes use (a shader write keeps x and y).
+constexpr Format kOcclusionFormat = Format::Rg16f;
+// The denoised occlusion at one occlusion pixel per scene target pixel: the multiply reads its occlusion alone.
+constexpr Format kDenoisedFullFormat = Format::R16f;
 // The multiplier: one channel (a shader write takes R of the value whatever the format).
 constexpr Format kScaleFormat = Format::R8;
 // ambient_occlusion.hlsl's registers (vk/utility_spirv_sources.h kAoBindings): t0-t2 at textures 0-2, u0 at 3, the
@@ -26,7 +29,10 @@ constexpr NSUInteger kObjectsBuffer = 4u;
 constexpr NSUInteger kTilesBuffer = 5u;
 constexpr UtilityShader kShaders[] = {UtilityShader::AoDistanceCs, UtilityShader::AoOcclusionCs, UtilityShader::AoDenoiseCs,
                                       UtilityShader::AoUpsampleCs, UtilityShader::AoSsaoCs,      UtilityShader::AoApplyVs,
-                                      UtilityShader::AoApplyPs};
+                                      UtilityShader::AoApplyPs,    UtilityShader::AoApplyFusedPs};
+// kShaders' graphics functions.
+constexpr unsigned kApplyVs = 5u, kApplyPs = 6u, kApplyFusedPs = 7u;
+static_assert(std::size(kShaders) == kApplyFusedPs + 1u);
 
 [[nodiscard]] id<MTLDevice> device() noexcept {
     return (__bridge id<MTLDevice>)Context::get().device();
@@ -113,15 +119,15 @@ void AmbientOcclusion::shutdown() noexcept {
 Object AmbientOcclusion::apply_pipeline(Format color_format, unsigned samples) {
     Apply* free_slot = nullptr;
     for (Apply& apply : apply_) {
-        if (apply.pipeline != nullptr && apply.color == color_format && apply.samples == samples) {
+        if (apply.pipeline != nullptr && apply.color == color_format && apply.samples == samples && apply.fused == fused_) {
             return apply.pipeline;
         }
         if (apply.pipeline == nullptr && free_slot == nullptr) {
             free_slot = &apply;
         }
     }
-    const Object vs = function(5u);
-    const Object ps = function(6u);
+    const Object vs = function(kApplyVs);
+    const Object ps = function(fused_ ? kApplyFusedPs : kApplyPs);
     if (free_slot == nullptr || vs == nullptr || ps == nullptr) {
         return nullptr;
     }
@@ -149,13 +155,13 @@ Object AmbientOcclusion::apply_pipeline(Format color_format, unsigned samples) {
                          error != nil ? error.localizedDescription.UTF8String : "");
             return nullptr;
         }
-        *free_slot = Apply{color_format, samples, own(state)};
+        *free_slot = Apply{color_format, samples, fused_, own(state)};
     }
     return free_slot->pipeline;
 }
 
 bool AmbientOcclusion::ensure(std::shared_ptr<Texture>& target, unsigned width, unsigned height, Format format, const char* name) {
-    if (target && target->width == width && target->height == height) {
+    if (target && target->width == width && target->height == height && target->format == format) {
         return true;
     }
     target = Context::get().create_texture(width, height, 1u, format, kUseWrite | kUseSample, Storage::Private, name);
@@ -196,11 +202,17 @@ bool AmbientOcclusion::prepare(Object commands, const Texture& depth, const RtVi
     const unsigned divisor = ao::occlusion_divisor(depth.height);
     const unsigned width = (depth.width + divisor - 1u) / divisor;
     const unsigned height = (depth.height + divisor - 1u) / divisor;
+    fused_ = divisor <= 1u;
+    target_width_ = depth.width;
+    target_height_ = depth.height;
+    if (fused_) {
+        scale_.reset();  // a command buffer that names it keeps it
+    }
     if (!ao::make_constants(view, width, height, divisor, ssao, constants_) ||
         !ensure(distance_, width, height, kDistanceFormat, "occlusion distance") ||
         !ensure(raw_, width, height, kOcclusionFormat, "occlusion") ||
-        !ensure(denoised_, width, height, kOcclusionFormat, "occlusion denoised") ||
-        !ensure(scale_, depth.width, depth.height, kScaleFormat, "occlusion scale")) {
+        !ensure(denoised_, width, height, fused_ ? kDenoisedFullFormat : kOcclusionFormat, "occlusion denoised") ||
+        (!fused_ && !ensure(scale_, depth.width, depth.height, kScaleFormat, "occlusion scale"))) {
         return false;
     }
     ao::bin_objects(objects, constants_, object_values_, object_tiles_, object_scratch_);
@@ -226,8 +238,10 @@ bool AmbientOcclusion::prepare(Object commands, const Texture& depth, const RtVi
         dispatch(encoder, ssao ? kSsao : kOcclusion, depth, *denoised_, *distance_, *raw_, width, height);
         if (mark) mark(Stage::Denoise);
         dispatch(encoder, kDenoise, depth, *raw_, *distance_, *denoised_, width, height);
-        if (mark) mark(Stage::Upsample);
-        dispatch(encoder, kUpsample, depth, *denoised_, *distance_, *scale_, depth.width, depth.height);
+        if (!fused_) {
+            if (mark) mark(Stage::Upsample);
+            dispatch(encoder, kUpsample, depth, *denoised_, *distance_, *scale_, depth.width, depth.height);
+        }
         [compute endEncoding];
     }
     return true;
@@ -235,7 +249,8 @@ bool AmbientOcclusion::prepare(Object commands, const Texture& depth, const RtVi
 
 void AmbientOcclusion::finish(Object encoder, Format color_format, unsigned samples) {
     const Object pipeline = apply_pipeline(color_format, samples);
-    if (pipeline == nullptr || !scale_) {
+    const Texture* const read = fused_ ? denoised_.get() : scale_.get();
+    if (pipeline == nullptr || read == nullptr) {
         return;
     }
     id<MTLRenderCommandEncoder> const pass = (__bridge id<MTLRenderCommandEncoder>)encoder;
@@ -245,9 +260,10 @@ void AmbientOcclusion::finish(Object encoder, Format color_format, unsigned samp
     [pass setTriangleFillMode:MTLTriangleFillModeFill];
     [pass setDepthClipMode:MTLDepthClipModeClip];
     [pass setDepthBias:0.0f slopeScale:0.0f clamp:0.0f];
-    // Only the multiplier is read; every slot holds a texture.
+    // Only t1 is read: the multiplier, or with fused_ the denoised occlusion (the shader reads its depth slot only at more
+    // than one scene target pixel per occlusion pixel). Every slot holds a texture.
     for (unsigned i = 0; i < 3u; ++i) {
-        [pass setFragmentTexture:metal(*scale_) atIndex:i];
+        [pass setFragmentTexture:metal(*read) atIndex:i];
     }
     [pass setVertexBytes:&constants_ length:sizeof(constants_) atIndex:kUtilityPushBuffer];
     [pass setFragmentBytes:&constants_ length:sizeof(constants_) atIndex:kUtilityPushBuffer];
@@ -255,8 +271,8 @@ void AmbientOcclusion::finish(Object encoder, Format color_format, unsigned samp
         [pass setFragmentBuffer:(__bridge id<MTLBuffer>)objects_buffer_ offset:objects_offset_ atIndex:kObjectsBuffer];
         [pass setFragmentBuffer:(__bridge id<MTLBuffer>)tiles_buffer_ offset:tiles_offset_ atIndex:kTilesBuffer];
     }
-    [pass setViewport:MTLViewport{0.0, 0.0, static_cast<double>(scale_->width), static_cast<double>(scale_->height), 0.0, 1.0}];
-    [pass setScissorRect:MTLScissorRect{0u, 0u, scale_->width, scale_->height}];
+    [pass setViewport:MTLViewport{0.0, 0.0, static_cast<double>(target_width_), static_cast<double>(target_height_), 0.0, 1.0}];
+    [pass setScissorRect:MTLScissorRect{0u, 0u, target_width_, target_height_}];
     [pass drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
 }
 

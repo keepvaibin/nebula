@@ -82,6 +82,51 @@ def read(path):
         return f.read().replace("\r\n", "\n")
 
 
+def included_shaders(text, seen):
+    """The .hlsl files a source includes from the materials folder (recursively, each once), as one text: the .hlsli are
+    in every stage's key already."""
+    out = ""
+    for name in re.findall(r'^\s*#\s*include\s+"([^"]+\.hlsl)"', text, re.M):
+        if name not in seen:
+            seen.add(name)
+            inner = read(os.path.join(MATERIALS, name))
+            out += "\0" + name + "\0" + inner + included_shaders(inner, seen)
+    return out
+
+
+def spirv_tool_id():
+    """What decides galaxy_native_spirv's output, not its bytes (an MSVC link is not reproducible, and the host's CPU
+    flags cannot change SPIR-V): the tool's own sources with every header of the repository they include, and the
+    glslang, SPIRV-Tools and SPIRV-Headers archives cmake/vulkan_deps.cmake pins (with the build options it gives
+    them). The SDL builds run the Windows Vulkan build's tool (platform/sdl/CMakeLists.txt NEBULA_HOST_TOOLS)."""
+    parts = []
+    pending = [os.path.join(ROOT, "tools", "dev", "native_spirv.cpp"),
+               os.path.join(ROOT, "runtime", "src", "render", "vk", "shader_compile_vk.cpp")]
+    seen = set()
+    while pending:
+        path = os.path.normpath(pending.pop(0))
+        if path in seen:
+            continue
+        seen.add(path)
+        text = read(path)
+        parts.append(os.path.relpath(path, ROOT).replace("\\", "/") + "\0" + text)
+        for name in re.findall(r'^\s*#\s*include\s+"([^"]+)"', text, re.M):
+            for base in (os.path.dirname(path), os.path.join(ROOT, "runtime", "include")):
+                candidate = os.path.join(base, name)
+                if os.path.isfile(candidate):
+                    pending.append(candidate)
+                    break
+            else:
+                raise SystemExit(f"compile_programs.py: {path} includes {name}, found in neither its folder nor runtime/include")
+    deps = read(os.path.join(ROOT, "cmake", "vulkan_deps.cmake"))
+    # Each pinned archive of the compiler (URL and its SHA-256), and the options its build is given.
+    pins = re.findall(r"(https://\S*(?:glslang|SPIRV)\S*)\s+(?:URL_HASH\s+SHA256=)?([0-9a-f]{64})", deps)
+    if len(pins) != 3:
+        raise SystemExit(f"compile_programs.py: cmake/vulkan_deps.cmake pins {len(pins)} compiler archives, not glslang, SPIRV-Tools and SPIRV-Headers")
+    options = re.findall(r"^set\(((?:ENABLE|GLSLANG|SPIRV)_\w+ .*)\)$", deps, re.M)
+    return "\0".join(sorted(parts) + [" ".join(p) for p in pins] + options)
+
+
 def main():
     backend, out = sys.argv[1], sys.argv[2]
     args = sys.argv[3:]
@@ -89,11 +134,10 @@ def main():
     cache = out + ".stages"
     os.makedirs(cache, exist_ok=True)
     headers = "".join(read(os.path.join(MATERIALS, n)) for n in sorted(os.listdir(MATERIALS)) if n.endswith(".hlsli"))
-    tool_id = backend + (DXC if backend == "dxil" else FXC if backend == "dxbc" else spirv_tool or "")
-    if backend == "spirv" and spirv_tool:
-        # Compiler location/binding rewrites affect bytes even with unchanged HLSL.
-        with open(spirv_tool, "rb") as compiler:
-            tool_id += hashlib.sha256(compiler.read()).hexdigest()
+    # A stage's key: the compiler, every .hlsli of the materials folder, the source with the .hlsl it includes, the stage,
+    # entry and defines; the compiler's options are fixed here (compile_job) or in its sources (spirv_tool_id).
+    tool_id = backend + (DXC if backend == "dxil" else FXC if backend == "dxbc" else
+                         hashlib.sha256(spirv_tool_id().encode()).hexdigest())
 
     # (stage, id) -> {variant index: job}
     jobs = {}
@@ -102,6 +146,7 @@ def main():
     coords = {}
 
     def add(stage, row, source, text, entry, defines, variant, bound_form=True):
+        text = text + included_shaders(text, set())
         if backend == "dxbc":
             # Both stages declare the tables (program.hlsli); only a pixel program reads its stored bound form.
             defines = defines + DXBC_TABLE
@@ -204,12 +249,15 @@ def main():
         print(len(failed), "of", len(jobs), "failed")
         return 1
 
-    # Two programs compiling the same mean the set's dedupe missed: the build fails.
+    # Two programs compiling the same in every form mean the set's dedupe missed: the build fails. (Two may share a base
+    # form where another form differs: build_programs.py keeps a text whose base leaves out what other forms keep apart.)
     seen = {}
     for stage, row in groups.values():
-        forms = rows[(stage, row)]
-        with open(os.path.join(cache, forms[0] if 0 in forms else forms[BOUND_OFFSET]), "rb") as f:
-            digest = (stage, hashlib.sha256(f.read()).digest())
+        digest = hashlib.sha256()
+        for variant, key in sorted(rows[(stage, row)].items()):
+            with open(os.path.join(cache, key), "rb") as f:
+                digest.update(struct.pack("<I", variant) + hashlib.sha256(f.read()).digest())
+        digest = (stage, digest.digest())
         # fxc folds texts dxc keeps apart into the same bytes: the set's dedupe is judged on the other backends.
         if digest in seen and backend != "dxbc":
             print(f"programs {seen[digest]:016x} and {row:016x} compile the same")

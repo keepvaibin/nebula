@@ -136,6 +136,143 @@ namespace Nebula.Launcher
                 "pad: what is held as a dialog opens does nothing, even held on");
             Check(opened.Step(none, 2100) == PadMenuInput.Action.None && opened.Step(confirm, 2110) == PadMenuInput.Action.Confirm,
                 "pad: released and pressed again, it acts");
+
+            // The settings window's rows: Up and Down move, Left and Right change, the shoulders change the page.
+            var rows = new PadMenuInput(true);
+            rows.HoldCurrent(none);
+            Check(rows.Step(up, 0) == PadMenuInput.Action.Previous && rows.Step(none, 10) == PadMenuInput.Action.None &&
+                  rows.Step(new PadState { Down = true }, 20) == PadMenuInput.Action.Next, "rows: up and down move between rows");
+            Check(rows.Step(new PadState { Left = true }, 30) == PadMenuInput.Action.Decrease &&
+                  rows.Step(right, 40) == PadMenuInput.Action.Increase && rows.Step(right, 340) == PadMenuInput.Action.Increase,
+                  "rows: left and right change the value, and repeat when held");
+            Check(rows.Step(new PadState { PageNext = true }, 400) == PadMenuInput.Action.PageNext &&
+                  rows.Step(new PadState { PageNext = true }, 900) == PadMenuInput.Action.None &&
+                  rows.Step(new PadState { PagePrevious = true }, 910) == PadMenuInput.Action.PagePrevious,
+                  "rows: a shoulder button changes the page once per press");
+            Check(input.Step(new PadState { PageNext = true }, 600) == PadMenuInput.Action.PageNext && input.Step(right, 610) == PadMenuInput.Action.Next,
+                  "dialogs keep left and right as previous and next");
+        }
+
+        // The settings window lists the GPUs once, off the UI thread when begun at the start (StartLists); a later
+        // window lists them afresh.
+        static void StartListsCases(LaunchSession session)
+        {
+            var original = GpuAdapters.Source;
+            var threads = new List<int>();
+            GpuAdapters.Source = () =>
+            {
+                lock (threads) threads.Add(Thread.CurrentThread.ManagedThreadId);
+                return new List<GpuAdapter> { Gpu(Rtx), Gpu(Integrated) };
+            };
+            try
+            {
+                int ui = Thread.CurrentThread.ManagedThreadId;
+                StartLists.Begin();
+                using (var form = new SettingsForm(session))
+                {
+                    CreateHandles(form);
+                    Check(threads.Count == 1 && threads[0] != ui && ((ComboBox)Private(form, "gpuBox")).Items.Count == 3,
+                          "begun at the start, the GPUs are listed once, off the UI thread, and the window takes them");
+                    ((ComboBox)Private(form, "gpuBox")).SelectedIndex = 2;
+                    ((ComboBox)Private(form, "gpuBox")).SelectedIndex = 1;
+                    Check(threads.Count == 1, "choosing another GPU lists nothing again");
+                }
+                using (var form = new SettingsForm(session))
+                {
+                    Check(threads.Count == 2 && threads[1] == ui, "a later window lists them afresh");
+                }
+            }
+            finally
+            {
+                GpuAdapters.Source = original;
+            }
+        }
+
+        // The settings window with a controller: from the page tabs, Down walks every row of every page that takes the
+        // focus and comes back; Left and Right change a choice, a number and the page; A ticks a box; B returns to the tabs.
+        static void SettingsPadCases(LaunchSession session)
+        {
+            using (var form = new SettingsForm(session))
+            {
+                form.StartPosition = FormStartPosition.Manual;
+                form.Location = new Point(-20000, -20000);
+                form.ShowInTaskbar = false;
+                form.Show();
+                Application.DoEvents();
+                var pad = form.padNavigator;
+                var tabs = form.Controls.OfType<TabControl>().Single();
+                Func<Control> focused = () =>
+                {
+                    Control a = form.ActiveControl;
+                    while (a is ContainerControl && !(a is UpDownBase) && ((ContainerControl)a).ActiveControl != null) a = ((ContainerControl)a).ActiveControl;
+                    return a;
+                };
+                for (int page = 0; page < tabs.TabCount; page++)
+                {
+                    tabs.SelectedIndex = page;
+                    tabs.Focus();
+                    Application.DoEvents();
+                    var reached = new HashSet<Control>();
+                    for (int i = 0; i < 400; i++)
+                    {
+                        pad.Act(PadMenuInput.Action.Next);
+                        Control now = focused();
+                        if (now == tabs) break;
+                        if (now != null) reached.Add(now);
+                    }
+                    var expected = new List<Control>();
+                    Action<Control> walk = null;
+                    walk = c =>
+                    {
+                        foreach (Control child in c.Controls)
+                        {
+                            if (child.CanSelect && child.TabStop && !(child.Parent is UpDownBase)) expected.Add(child);
+                            if (!(child is UpDownBase)) walk(child);
+                        }
+                    };
+                    walk(tabs.SelectedTab);
+                    foreach (Control c in form.Controls) if (c != tabs && c.CanSelect && c.TabStop) expected.Add(c);
+                    var missed = expected.Where(c => !reached.Contains(c)).Select(c => c.GetType().Name + " '" + c.Text + "'").ToList();
+                    Check(focused() == tabs && missed.Count == 0,
+                          "pad: Down reaches every row of the " + tabs.SelectedTab.Text + " page (" + expected.Count + ") and returns to the tabs" +
+                          (missed.Count == 0 ? "" : "; missed " + string.Join(", ", missed)));
+                }
+
+                tabs.SelectedIndex = 0;
+                tabs.Focus();
+                pad.Act(PadMenuInput.Action.Increase);
+                Check(tabs.SelectedIndex == 1, "pad: Right on the tabs opens the next page");
+                pad.Act(PadMenuInput.Action.PagePrevious);
+                Check(tabs.SelectedIndex == 0 && focused() == tabs, "pad: the left shoulder goes back a page");
+                pad.Act(PadMenuInput.Action.PagePrevious);
+                Check(tabs.SelectedIndex == 0, "pad: the first page stays the first");
+
+                var occlusion = (ComboBox)Private(form, "occlusionMode");
+                tabs.SelectedTab = (TabPage)occlusion.Parent;
+                occlusion.Focus();
+                occlusion.SelectedIndex = 0;
+                pad.Act(PadMenuInput.Action.Increase);
+                pad.Act(PadMenuInput.Action.Increase);
+                pad.Act(PadMenuInput.Action.Increase);
+                Check(occlusion.SelectedIndex == 2, "pad: Right steps a choice and stops at its last");
+                pad.Act(PadMenuInput.Action.Decrease);
+                Check(occlusion.SelectedIndex == 1, "pad: Left steps it back");
+
+                var bloom = (NumericUpDown)Private(form, "bloom");
+                bloom.Focus();
+                decimal before = bloom.Value;
+                pad.Act(PadMenuInput.Action.Increase);
+                Check(focused() == bloom && bloom.Value == Math.Min(bloom.Maximum, before + bloom.Increment), "pad: Right raises a number by its step");
+
+                var curved = (CheckBox)Private(form, "curvedSurfaces");
+                curved.Focus();
+                bool was = curved.Checked;
+                pad.Act(PadMenuInput.Action.Confirm);
+                Check(curved.Checked == !was, "pad: A ticks a box");
+                pad.Act(PadMenuInput.Action.Back);
+                Check(focused() == tabs, "pad: B returns to the page tabs");
+                form.Close();
+            }
         }
 
         // A form that is never shown creates no child windows; reading Handle creates them.
@@ -722,6 +859,47 @@ namespace Nebula.Launcher
             return pak;
         }
 
+        // The rows added from the game's menu (settings_table.tsv): the engine's defaults for a file without them, the
+        // file's values in the runtime's spellings, a save that writes them back and keeps every other line.
+        static void AddedRowsCases()
+        {
+            string config = GraphicsSettings.ConfigPath, runtime = AudioSettings.SettingsPath;
+            if (File.Exists(config)) File.Delete(config);
+            if (File.Exists(runtime)) File.Delete(runtime);
+            var g = GraphicsSettings.Load();
+            var a = AudioSettings.Load();
+            var gen = GeneralSettings.Load();
+            Check(!g.Hdr && g.PaperWhite == 200 && g.CurvedSurfaces && g.Bloom == 100 && g.OcclusionMode == 0 && g.TexturePackMode == 1 && !g.TextureDump &&
+                  a.SoundOutput == 1 && gen.ButtonIcons == 0 && gen.MenuTextSize == 0 && gen.FocusLoss == 0 && gen.DiscordStatus &&
+                  !ControlsSettings.Load().CoStar,
+                  "the added rows start at the engine's defaults (render_config.h, runtime_settings.h)");
+            File.WriteAllText(config, "hdr=1\npaper_white=900\nbloom=140\nambient_occlusion=1\nambient_occlusion_ssao=true\ncurved_surfaces=0\n" +
+                                      "texture_packs=1\ntexture_pack_preload=1\ntexture_dump=on\nkeep_me=1\n");
+            File.WriteAllText(runtime, "audio_sound_output=SURROUND\nbutton_icons=wii\nmenu_text_size=75\nfocus_loss=mute\ndiscord_status=0\nco_star=1\n");
+            g = GraphicsSettings.Load();
+            a = AudioSettings.Load();
+            gen = GeneralSettings.Load();
+            Check(g.Hdr && g.PaperWhite == 500 && g.Bloom == 140 && g.OcclusionMode == 1 && !g.CurvedSurfaces && g.TexturePackMode == 2 && g.TextureDump,
+                  "config.ini's added keys read as the runtime reads them (paper white clamped to 500)");
+            Check(a.SoundOutput == 2 && gen.ButtonIcons == 1 && gen.MenuTextSize == 75 && gen.FocusLoss == 2 && !gen.DiscordStatus && ControlsSettings.Load().CoStar,
+                  "runtime_settings.ini's added keys read in any case, the old wii icons as the game's");
+            g.OcclusionMode = 2;
+            g.TexturePackMode = 0;
+            g.Bloom = 0;
+            g.Save();
+            string saved = File.ReadAllText(config);
+            Check(saved.Contains("ambient_occlusion=1") && saved.Contains("ambient_occlusion_ssao=0") && saved.Contains("texture_packs=0") &&
+                  saved.Contains("texture_pack_preload=0") && saved.Contains("bloom=0") && saved.Contains("keep_me=1") && saved.Contains("paper_white=900"),
+                  "a save writes the changed keys (GTAO, packs off, bloom off) and keeps the unchanged ones as the file had them");
+            gen.FocusLoss = 1;
+            gen.Save();
+            saved = File.ReadAllText(runtime);
+            Check(saved.Contains("focus_loss=pause") && saved.Contains("menu_text_size=75") && saved.Contains("co_star=1"), "runtime_settings.ini likewise");
+            Check(Directory.GetFiles(Path.GetDirectoryName(runtime), "*.tmp*").Length == 0, "an atomic save leaves no temporary file");
+            File.Delete(config);
+            File.Delete(runtime);
+        }
+
         static void GeneralCases()
         {
             string path = AudioSettings.SettingsPath;
@@ -1011,8 +1189,10 @@ namespace Nebula.Launcher
             int port = ((System.Net.IPEndPoint)closed.LocalEndpoint).Port;
             closed.Stop();
             Updater.ReleasesUrl = "http://127.0.0.1:" + port + "/releases";
-            var clock = System.Diagnostics.Stopwatch.StartNew();
+            // The start's wait is Offer's: Begin runs at process start, before the window, and here reads the answer
+            // file just written (which a virus scanner may hold for a while on its first read).
             UpdateService.Begin();
+            var clock = System.Diagnostics.Stopwatch.StartNew();
             pending = UpdateService.Offer(UpdateService.FreshBudgetMilliseconds, null);
             long waited = clock.ElapsedMilliseconds;
             UpdateService.Finish();
@@ -1039,6 +1219,7 @@ namespace Nebula.Launcher
                 PadMenuCases();
                 AudioCases();
                 GeneralCases();
+                AddedRowsCases();
                 SharedFileCases();
                 AspectNameCases();
                 SaveArchiveCases(outDir);
@@ -1073,6 +1254,8 @@ namespace Nebula.Launcher
                 GpuCases();
                 DisplayNoticeCases();
                 GpuFormCases(later, outDir);
+                SettingsPadCases(later);
+                StartListsCases(later);
                 RecordingEncodingCases(later.App);
 
                 // TryLaunch starts <App>\NebulaNative.exe, here a stub that records its arguments.

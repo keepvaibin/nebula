@@ -1,0 +1,107 @@
+#pragma once
+
+// The GPU's time a frame as a line in the 3D scene's pixels (gpu_ms = a + b x pixels) and the internal height it
+// recommends. One fit for every caller: the first start's calibration (render_core.cpp) and the benchmark. Pure.
+
+#include <cstddef>
+#include <cstdint>
+
+#include "galaxy/render/render_config.h"
+
+namespace galaxy::render {
+
+struct GpuTimeFit {
+    double a_ms = 0.0;            // the part no pixel count moves
+    double b_ms_per_pixel = 0.0;  // never below 0
+    bool valid = false;           // at least two distinct pixel counts, finite times
+};
+
+// The least-squares line through `count` samples (pixels[i], ms[i]).
+[[nodiscard]] inline GpuTimeFit fit_gpu_time(const double* pixels, const double* ms, std::size_t count) noexcept {
+    GpuTimeFit fit;
+    if (count < 2u) {
+        return fit;
+    }
+    double mean_p = 0.0, mean_t = 0.0;
+    for (std::size_t i = 0; i < count; ++i) {
+        if (!(pixels[i] >= 0.0) || !(ms[i] >= 0.0) || pixels[i] > 1e12 || ms[i] > 1e6) {
+            return fit;
+        }
+        mean_p += pixels[i];
+        mean_t += ms[i];
+    }
+    mean_p /= static_cast<double>(count);
+    mean_t /= static_cast<double>(count);
+    double spread = 0.0, together = 0.0;
+    for (std::size_t i = 0; i < count; ++i) {
+        spread += (pixels[i] - mean_p) * (pixels[i] - mean_p);
+        together += (pixels[i] - mean_p) * (ms[i] - mean_t);
+    }
+    // One pixel count alone (or counts closer than a pixel apart) fixes no slope.
+    if (!(spread >= static_cast<double>(count))) {
+        return fit;
+    }
+    fit.b_ms_per_pixel = together > 0.0 ? together / spread : 0.0;
+    fit.a_ms = mean_t - fit.b_ms_per_pixel * mean_p;
+    if (fit.a_ms < 0.0) {
+        fit.a_ms = 0.0;
+    }
+    fit.valid = true;
+    return fit;
+}
+
+[[nodiscard]] inline double predicted_gpu_ms(const GpuTimeFit& fit, double pixels) noexcept {
+    return fit.a_ms + fit.b_ms_per_pixel * pixels;
+}
+
+// The 3D scene's pixels at internal height `height` (0: match display) on a `width` x `lines` output, as the renderer sizes
+// it (internal_extent).
+[[nodiscard]] inline double scene_pixels(unsigned height, unsigned width, unsigned lines, unsigned max_dimension = 16384u) {
+    const auto [w, h] = internal_extent(width, lines, height, max_dimension);
+    return static_cast<double>(w) * static_cast<double>(h);
+}
+
+// The heights a fit chooses among, lightest first: the INTERNAL RESOLUTION row's steps from 480 below the output's lines,
+// match display (0), then the steps above the output's lines up to `max_height` (a caller that may render above the panel:
+// the benchmark). The output's own height is match display, never a step of its own.
+inline constexpr unsigned kFitLowestHeight = 480u;
+// The share of the display's frame time the GPU may take (the rest: the compositor, frame-to-frame swings).
+inline constexpr double kFitFrameShare = 0.8;
+// The frame a choice must fit: that share of the game step. The game presents one picture a 60 Hz step unless interpolation
+// adds frames, whatever the display's rate (0.8 x 16.67 = 13.3 ms).
+[[nodiscard]] inline double fit_budget_ms() noexcept {
+    return kFitFrameShare * 1000.0 / static_cast<double>(kGameStepsPerSecond);
+}
+// A measurement made in a light scene (the first start's: the title), scaled to the heaviest stages' (board rc.md, item 6).
+// The benchmark times the stages themselves and passes its own worst-to-measured ratio.
+inline constexpr double kFitHeavyStage = 2.5;
+
+// The largest of those heights whose predicted time x `heavy_factor` stays within `budget_ms`; 480 when none does (the
+// floor the game is meant to hold), 0 when the output has no more lines than 480 and `max_height` allows none above.
+[[nodiscard]] inline unsigned largest_fitting_height(const GpuTimeFit& fit, unsigned width, unsigned lines, double heavy_factor,
+                                                     double budget_ms, unsigned max_height = 0u) {
+    const auto fits = [&](unsigned height) {
+        return predicted_gpu_ms(fit, scene_pixels(height, width, lines)) * heavy_factor <= budget_ms;
+    };
+    unsigned chosen = lines <= kFitLowestHeight ? 0u : kFitLowestHeight;
+    if (!fit.valid) {
+        return chosen;
+    }
+    for (const unsigned height : kInternalHeights) {
+        if (height >= kFitLowestHeight && height < lines && fits(height)) {
+            chosen = height;
+        }
+    }
+    if (!fits(0u)) {
+        return chosen;
+    }
+    chosen = 0u;
+    for (const unsigned height : kInternalHeights) {
+        if (height > lines && height <= max_height && fits(height)) {
+            chosen = height;
+        }
+    }
+    return chosen;
+}
+
+}  // namespace galaxy::render

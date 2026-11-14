@@ -23,7 +23,11 @@ namespace {
 
 // AoConstants (ambient_occlusion.hlsl).
 using ao::Constants;
-constexpr DXGI_FORMAT kOcclusionFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
+// Occlusion and eye distance: the two channels the passes write and read (a typed store to R16G16 is in every
+// feature level 11_0 device; the shaders' float4 writes keep x and y).
+constexpr DXGI_FORMAT kOcclusionFormat = DXGI_FORMAT_R16G16_FLOAT;
+// The denoised occlusion at one occlusion pixel per scene target pixel: the multiply reads its occlusion alone.
+constexpr DXGI_FORMAT kDenoisedFullFormat = DXGI_FORMAT_R16_FLOAT;
 constexpr DXGI_FORMAT kDistanceFormat = DXGI_FORMAT_R32_FLOAT;
 D3D12_SHADER_BYTECODE code(const void* bytes, std::size_t size) {
     return {bytes, size};
@@ -152,7 +156,7 @@ bool AmbientOcclusion::ensure_target(Target& target, DXGI_FORMAT format, unsigne
     retired_.erase(std::remove_if(retired_.begin(), retired_.end(),
                                   [&](const Retired& r) { return frame_index > r.release_after_frame; }),
                    retired_.end());
-    if (target.resource && target.width == width && target.height == height) {
+    if (target.resource && target.width == width && target.height == height && target.format == format) {
         target.used_frame = frame_index;
         return true;
     }
@@ -179,6 +183,7 @@ bool AmbientOcclusion::ensure_target(Target& target, DXGI_FORMAT format, unsigne
     target.resource->SetName(L"ambient occlusion");
     target.width = width;
     target.height = height;
+    target.format = format;
     target.use = gpu::Use::ComputeRead;
     target.used_frame = frame_index;
     return true;
@@ -214,11 +219,12 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
     const unsigned divisor = ao::occlusion_divisor(in.height);
     const unsigned width = (in.width + divisor - 1u) / divisor;
     const unsigned height = (in.height + divisor - 1u) / divisor;
+    const DXGI_FORMAT denoised_format = divisor <= 1u ? kDenoisedFullFormat : kOcclusionFormat;
     Constants c{};
     if (apply == nullptr || in.objects == nullptr || in.ring == nullptr || !ao::make_constants(in.view, width, height, divisor, in.ssao, c) ||
         !ensure_target(distance_, kDistanceFormat, width, height, frame_index, frames_in_flight) ||
         !ensure_target(raw_, kOcclusionFormat, width, height, frame_index, frames_in_flight) ||
-        !ensure_target(denoised_, kOcclusionFormat, width, height, frame_index, frames_in_flight)) {
+        !ensure_target(denoised_, denoised_format, width, height, frame_index, frames_in_flight)) {
         return false;
     }
 
@@ -238,6 +244,10 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
     uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
     D3D12_UNORDERED_ACCESS_VIEW_DESC distance_uav = uav;
     distance_uav.Format = kDistanceFormat;
+    D3D12_SHADER_RESOURCE_VIEW_DESC denoised_view = occlusion_view;
+    denoised_view.Format = denoised_format;
+    D3D12_UNORDERED_ACCESS_VIEW_DESC denoised_uav = uav;
+    denoised_uav.Format = denoised_format;
     const UINT increment = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     const DescriptorRing::Table table = ring.allocate(9u);
     const auto cpu = [&](unsigned i) {
@@ -252,14 +262,14 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
     };
     // 0-2: reads the denoised occlusion (the multiply too); 3-5: the raw.
     device->CreateShaderResourceView(in.depth, &depth_view, cpu(0));
-    device->CreateShaderResourceView(denoised_.resource.Get(), &occlusion_view, cpu(1));
+    device->CreateShaderResourceView(denoised_.resource.Get(), &denoised_view, cpu(1));
     device->CreateShaderResourceView(distance_.resource.Get(), &distance_view, cpu(2));
     device->CreateShaderResourceView(in.depth, &depth_view, cpu(3));
     device->CreateShaderResourceView(raw_.resource.Get(), &occlusion_view, cpu(4));
     device->CreateShaderResourceView(distance_.resource.Get(), &distance_view, cpu(5));
     device->CreateUnorderedAccessView(distance_.resource.Get(), nullptr, &distance_uav, cpu(6));
     device->CreateUnorderedAccessView(raw_.resource.Get(), nullptr, &uav, cpu(7));
-    device->CreateUnorderedAccessView(denoised_.resource.Get(), nullptr, &uav, cpu(8));
+    device->CreateUnorderedAccessView(denoised_.resource.Get(), nullptr, &denoised_uav, cpu(8));
 
     list->SetComputeRootSignature(root_signature_.Get());
     list->SetComputeRoot32BitConstants(0, sizeof(Constants) / 4u, &c, 0);

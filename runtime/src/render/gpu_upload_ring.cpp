@@ -147,7 +147,7 @@ void UploadRing::begin_frame(unsigned frame_slot) {
 
 // A request past the segment and the spill: a chunk of this frame slot (the newest if it has room, else a new buffer at least
 // twice the one before, and at least the request), counted into the frame's use so the ring grows at the next boundary.
-UploadRing::Allocation UploadRing::allocate_in_chunk(std::size_t size, std::size_t alignment) {
+UploadRing::Allocation UploadRing::allocate_in_chunk(std::size_t size, std::size_t alignment, std::size_t& wanted) {
     std::vector<Chunk>& chunks = chunk_slots_[active_slot_];
     const auto place = [&](Chunk& chunk) -> Allocation {
         const std::size_t at = chunk.used + ((std::size_t{0} - chunk.used) & (alignment - 1u));
@@ -163,12 +163,11 @@ UploadRing::Allocation UploadRing::allocate_in_chunk(std::size_t size, std::size
         }
     }
     constexpr std::size_t kFirstChunk = std::size_t{4} << 20u;
-    const std::size_t wanted = std::max({size + alignment, kFirstChunk, chunks.empty() ? std::size_t{0} : chunks.back().size * 2u});
+    wanted = std::max({size + alignment, kFirstChunk, chunks.empty() ? std::size_t{0} : chunks.back().size * 2u});
     Chunk chunk;
     chunk.memory = gpu::create_upload_memory(device_, wanted, name_, place_);
     if (!chunk.memory) {
-        throw std::runtime_error(std::string("UploadRing '") + name_ + "' out of upload memory for a chunk of " +
-                                 std::to_string(wanted) + " B");
+        return {};
     }
     chunk.size = wanted;
     chunk_bytes_made_ += wanted;
@@ -178,11 +177,45 @@ UploadRing::Allocation UploadRing::allocate_in_chunk(std::size_t size, std::size
 }
 
 UploadRing::Allocation UploadRing::allocate(std::size_t size, std::size_t alignment) {
-    if (!frame_ready_) {
+    Allocation out;
+    std::size_t wanted = 0u;
+    switch (take(size, alignment, out, wanted)) {
+    case Miss::None:
+        return out;
+    case Miss::NotReady:
         throw std::runtime_error("UploadRing allocation before begin_frame");
+    case Miss::Alignment:
+        throw std::runtime_error("UploadRing alignment is not a nonzero power of two");
+    case Miss::NoChunk:
+        throw std::runtime_error(std::string("UploadRing '") + name_ + "' out of upload memory for a chunk of " +
+                                 std::to_string(wanted) + " B");
+    case Miss::Exhausted:
+        break;
+    }
+    throw std::runtime_error(
+        std::string("UploadRing '") + name_ + "' exhausted: request " +
+        std::to_string(size) + " B at frame-used " +
+        std::to_string(cursor_ - segment_base_ + frame_spill_) + "/" +
+        std::to_string(bytes_per_frame_) + " B and spill " +
+        std::to_string(capacity_ - spill_base()) + " B");
+}
+
+UploadRing::Allocation UploadRing::try_allocate(std::size_t size, std::size_t alignment) noexcept {
+    try {
+        Allocation out;
+        std::size_t wanted = 0u;
+        return take(size, alignment, out, wanted) == Miss::None ? out : Allocation{};
+    } catch (...) {
+        return {};
+    }
+}
+
+UploadRing::Miss UploadRing::take(std::size_t size, std::size_t alignment, Allocation& out, std::size_t& wanted) {
+    if (!frame_ready_) {
+        return Miss::NotReady;
     }
     if (alignment == 0u || (alignment & (alignment - 1u)) != 0u) {
-        throw std::runtime_error("UploadRing alignment is not a nonzero power of two");
+        return Miss::Alignment;
     }
     // Padding by unsigned negation cannot overflow; padding and payload are checked before any address is formed.
     const auto fits = [&](std::size_t at, std::size_t end) {
@@ -201,16 +234,14 @@ UploadRing::Allocation UploadRing::allocate(std::size_t size, std::size_t alignm
         frame_spill_ += aligned + size - spill_cursor_;
         spill_cursor_ = aligned + size;
     } else if (chunks_ && device_ != nullptr && active_slot_ < chunk_slots_.size()) {
-        chunked = allocate_in_chunk(size, alignment);
+        chunked = allocate_in_chunk(size, alignment, wanted);
+        if (chunked.cpu == nullptr) {
+            return Miss::NoChunk;
+        }
         chunk_resource = chunked.resource;
         frame_spill_ += size + alignment;
     } else {
-        throw std::runtime_error(
-            std::string("UploadRing '") + name_ + "' exhausted: request " +
-            std::to_string(size) + " B at frame-used " +
-            std::to_string(cursor_ - segment_base_ + frame_spill_) + "/" +
-            std::to_string(bytes_per_frame_) + " B and spill " +
-            std::to_string(capacity_ - spill_base()) + " B");
+        return Miss::Exhausted;
     }
     // Bytes this frame has handed out: the floor for its budget.
     const std::size_t frame_used = cursor_ - segment_base_ + frame_spill_;
@@ -225,14 +256,16 @@ UploadRing::Allocation UploadRing::allocate(std::size_t size, std::size_t alignm
         segment_allocation_pending_ = false;
     }
     if (chunk_resource != nullptr) {
-        return chunked;
+        out = chunked;
+        return Miss::None;
     }
-    return Allocation{
+    out = Allocation{
         mapped_ + aligned,
         gpu_base_ + static_cast<gpu::Address>(aligned),
         aligned,
         nullptr
     };
+    return Miss::None;
 }
 
 }  // namespace galaxy::render

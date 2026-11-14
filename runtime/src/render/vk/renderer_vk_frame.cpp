@@ -117,12 +117,10 @@ bool RendererVk::create_scene_set(SceneSet& set, const FrameMap& map, unsigned s
     };
     const VkImageView single[2] = {color->target_view, depth->target_view};
     VkFramebuffer framebuffer = VK_NULL_HANDLE;
-    VkFramebuffer resolve_framebuffer = VK_NULL_HANDLE;
     if (samples > 1u) {
         const VkImageView multi[3] = {ms_color->target_view, ms_depth->target_view, color->target_view};
         framebuffer = make_framebuffer(draw_layout_.pass_for(static_cast<unsigned>(std::countr_zero(samples)), false),
                                        multi);
-        resolve_framebuffer = make_framebuffer(draw_layout_.scene_pass, single);
     } else {
         framebuffer = make_framebuffer(target ? draw_layout_.target_pass : draw_layout_.scene_pass, single);
     }
@@ -146,7 +144,6 @@ bool RendererVk::create_scene_set(SceneSet& set, const FrameMap& map, unsigned s
     set.color = std::move(color);
     set.depth = std::move(depth);
     set.framebuffer = framebuffer;
-    set.resolve_framebuffer = resolve_framebuffer;
     set.ms_color = std::move(ms_color);
     set.ms_depth = std::move(ms_depth);
     set.samples = samples;
@@ -177,14 +174,10 @@ bool RendererVk::create_scene_set(SceneSet& set, const FrameMap& map, unsigned s
 // stay allocated for the next create_scene_set).
 void RendererVk::destroy_scene_set(SceneSet& set) {
     const VkDevice device = vk::Context::get().device();
-    // The wide set borrows the base set's depth-resolve framebuffer.
-    if (set.wide) set.resolve_framebuffer = VK_NULL_HANDLE;
-    for (VkFramebuffer* framebuffer : {&set.framebuffer, &set.resolve_framebuffer}) {
-        if (*framebuffer != VK_NULL_HANDLE) {
-            const VkFramebuffer retired = *framebuffer;
-            vk::Context::get().defer([device, retired] { vkDestroyFramebuffer(device, retired, nullptr); });
-            *framebuffer = VK_NULL_HANDLE;
-        }
+    if (set.framebuffer != VK_NULL_HANDLE) {
+        const VkFramebuffer retired = set.framebuffer;
+        vk::Context::get().defer([device, retired] { vkDestroyFramebuffer(device, retired, nullptr); });
+        set.framebuffer = VK_NULL_HANDLE;
     }
     retire(std::move(set.color));
     retire(std::move(set.depth));
@@ -232,10 +225,28 @@ void RendererVk::resolve_scene_depth(VkCommandBuffer commands) {
                   VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
     const std::uint32_t width = scene_map_.width;
     const std::uint32_t height = scene_map_.height;
+    // The single-sample depth target alone (clear_depth_alone's pass: depth cleared, stencil loaded and stored). The draw
+    // writes every pixel's depth with the compare ALWAYS, so the clear never survives; the scene colour is neither loaded
+    // nor stored, as the scene pass did. A wide set shares this depth target (ensure_wide_set).
+    vk::Texture& depth = *set.depth;
+    if (depth.framebuffer == VK_NULL_HANDLE) {
+        VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
+        info.renderPass = depth_alone_passes_[0][0];
+        info.attachmentCount = 1;
+        info.pAttachments = &depth.target_view;
+        info.width = depth.width;
+        info.height = depth.height;
+        info.layers = 1;
+        vk::check(vkCreateFramebuffer(vk::Context::get().device(), &info, nullptr, &depth.framebuffer), "depth framebuffer");
+    }
+    VkClearValue clear{};
+    clear.depthStencil = {0.0f, 0u};
     VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-    begin.renderPass = draw_layout_.scene_pass;
-    begin.framebuffer = set.wide ? set.resolve_framebuffer : scene_framebuffer(true);
+    begin.renderPass = depth_alone_passes_[0][0];
+    begin.framebuffer = depth.framebuffer;
     begin.renderArea = {{0, 0}, {width, height}};
+    begin.clearValueCount = 1;
+    begin.pClearValues = &clear;
     vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
     const VkViewport viewport{0.0f, static_cast<float>(height), static_cast<float>(width),
                               -static_cast<float>(height), 0.0f, 1.0f};
@@ -877,8 +888,9 @@ bool RendererVk::temporal_mode() const {
         return true;
     }
 #endif
+    // SGSR 2's motion pass blends the scene colour apart from the motion target: independent blending.
     return (upscaler == 2u && fsr3_available() && vk::Context::get().temporal_upscaling()) ||
-           (upscaler == 4u && vk::Context::get().xess_upscaling()) || upscaler == 5u;
+           (upscaler == 4u && vk::Context::get().xess_upscaling()) || (upscaler == 5u && vk::Context::get().independent_blend());
 }
 
 bool RendererVk::motion_pass_only() const {
@@ -1908,11 +1920,10 @@ void RendererVk::record_scene_ao() {
     reset_draw_bindings();
 }
 
-// The wide colour targets for the live scene target's size and samples, over its depth; its resolve framebuffer too, since
-// the depth resolve writes depth alone. False when the device cannot make them: the scene stays in the scene target.
+// The wide colour targets for the live scene target's size and samples, over its depth (the depth resolve writes that
+// depth alone). False when the device cannot make them: the scene stays in the scene target.
 bool RendererVk::ensure_wide_set(SceneSet& set) {
     if (set.color && set.depth_serial == scene_.depth_serial && set.samples == scene_.samples) {
-        set.resolve_framebuffer = scene_.samples > 1u ? scene_framebuffer(true) : VK_NULL_HANDLE;
         return true;
     }
     vk::Context& context = vk::Context::get();
@@ -1966,7 +1977,6 @@ bool RendererVk::ensure_wide_set(SceneSet& set) {
     set.depth = scene_.depth;
     set.ms_depth = scene_.ms_depth;
     set.ms_depth_source = scene_.ms_depth_source;
-    set.resolve_framebuffer = scene_.samples > 1u ? scene_framebuffer(true) : VK_NULL_HANDLE;
     set.samples = scene_.samples;
     set.depth_serial = scene_.depth_serial;
     set.wide = true;
@@ -2674,7 +2684,13 @@ gpu::Table RendererVk::sampler_table_for(const SamplerKey* keys, unsigned count)
     if (const auto it = sampler_tables_.find(table_key); it != sampler_tables_.end()) {
         return gpu::Table{reinterpret_cast<std::uint64_t>(it->second)};
     }
-    const VkDescriptorSet set = allocate_persistent_set(draw_layout_.sets[2]);
+    VkDescriptorSet set = VK_NULL_HANDLE;
+    if (!free_sampler_tables_.empty()) {
+        set = free_sampler_tables_.back();
+        free_sampler_tables_.pop_back();
+    } else {
+        set = allocate_persistent_set(draw_layout_.sets[2]);
+    }
     std::array<VkDescriptorImageInfo, vk::kBoundTableSlots> samplers{};
     for (unsigned i = 0; i < vk::kBoundTableSlots; ++i) {
         samplers[i] = {sampler_for(i < count ? keys[i] : kDefaultSamplerKey, cfg), VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED};
@@ -2690,20 +2706,39 @@ gpu::Table RendererVk::sampler_table_for(const SamplerKey* keys, unsigned count)
     return gpu::Table{reinterpret_cast<std::uint64_t>(set)};
 }
 
-// Between frames: the samplers made again when the settings change, which also makes the walker ask for its lists or tables
-// again. With descriptor indexing the sampler array starts again when it is nearly full too, slot 0 the default sampler
+// Between frames: the samplers made again when the settings change or too many have been made, which also makes the walker
+// ask for its lists or tables again. With descriptor indexing the sampler array starts again when it is nearly full too, slot 0 the default sampler
 // (wrap, linear, mip point, every level) and the slots written once the GPU is past the frames that read them; else the
 // default table of draws without samplers of their own is made again.
 void RendererVk::reset_sampler_frame() {
     const RenderConfig cfg = get_render_config();
     const std::uint32_t config = sampler_config_key(cfg);
+    // Samplers are made per key the game uses (its LOD bias holds the output height's mip lines, so each window height
+    // adds a set) and per settings configuration, against the device's maxSamplerAllocationCount (4000 on the Android
+    // baselines and on some desktop drivers). After a settings change, or with half of that limit made, once the GPU is
+    // past every frame that read them: the old configuration's samplers (all of them when crowded) are destroyed, and the
+    // tables and slots are written again as the walker asks for them (sampler_generation). The same samplers come back.
+    const bool crowded = samplers_.size() >= vk::Context::get().properties().limits.maxSamplerAllocationCount / 2u;
+    const auto drop_other_configs = [this, config, crowded] {
+        const VkDevice device = vk::Context::get().device();
+        std::erase_if(samplers_, [&](const auto& entry) {
+            if (entry.first.config == config && !crowded) {
+                return false;
+            }
+            vkDestroySampler(device, entry.second, nullptr);
+            return true;
+        });
+    };
     if (bindless_) {
         const bool full = sampler_slots_.used() + vk_detail::kSamplerFrameRoom > kSamplerHeapSlots;
-        if (sampler_slots_ready_ && config == sampler_config_ && !full) {
+        if (sampler_slots_ready_ && config == sampler_config_ && !full && !crowded) {
             return;
         }
         if (sampler_slots_ready_ && last_submitted_ != 0u) {
             wait_for_fence_value(last_submitted_);
+        }
+        if (sampler_slots_ready_ && (config != sampler_config_ || crowded)) {
+            drop_other_configs();  // the array is filled again below: no slot keeps an old sampler
         }
         sampler_slots_.reset();
         sampler_slots_ready_ = true;
@@ -2712,8 +2747,20 @@ void RendererVk::reset_sampler_frame() {
         fill_sampler_array(sampler_for(kDefaultSamplerKey, cfg));
         return;
     }
-    if (default_sampler_table_.ptr != 0u && config == sampler_config_) {
+    if (default_sampler_table_.ptr != 0u && config == sampler_config_ && !crowded) {
         return;
+    }
+    if (default_sampler_table_.ptr != 0u) {
+        // Every table made so far is written again as it is asked for (sampler_generation makes the walker ask), in the
+        // same sets.
+        if (last_submitted_ != 0u) {
+            wait_for_fence_value(last_submitted_);
+        }
+        for (const auto& [key, set] : sampler_tables_) {
+            free_sampler_tables_.push_back(set);
+        }
+        sampler_tables_.clear();
+        drop_other_configs();
     }
     std::array<SamplerKey, vk::kBoundTableSlots> keys{};
     keys.fill(kDefaultSamplerKey);
@@ -2967,23 +3014,21 @@ gpu::TextureRef RendererVk::swap_scene_color(gpu::TextureRef fresh) {
     return handed;
 }
 
-VkFramebuffer RendererVk::scene_framebuffer(bool resolved) {
+VkFramebuffer RendererVk::scene_framebuffer() {
     const bool multisampled = scene_.samples > 1u;
     if (!scene_.turned) {
-        return resolved && multisampled ? scene_.resolve_framebuffer : scene_.framebuffer;
+        return scene_.framebuffer;
     }
     vk::Texture& color = *scene_.color;
     if (color.scene_framebuffer == VK_NULL_HANDLE || color.scene_depth_serial != scene_.depth_serial) {
         const VkDevice device = vk::Context::get().device();
-        for (auto* stored : {&color.scene_framebuffer, &color.scene_resolve_framebuffer}) {
-            if (*stored != VK_NULL_HANDLE) {
-                const auto old = *stored;
-                vk::Context::get().defer([device, old] { vkDestroyFramebuffer(device, old, nullptr); });
-                *stored = VK_NULL_HANDLE;
-            }
+        if (color.scene_framebuffer != VK_NULL_HANDLE) {
+            const auto old = color.scene_framebuffer;
+            vk::Context::get().defer([device, old] { vkDestroyFramebuffer(device, old, nullptr); });
+            color.scene_framebuffer = VK_NULL_HANDLE;
         }
-        const auto make = [&](bool resolve) {
-            const bool ms = multisampled && !resolve;
+        const auto make = [&] {
+            const bool ms = multisampled;
             const VkImageView views[] = {ms ? scene_.ms_color->target_view : color.target_view,
                 ms ? scene_.ms_depth->target_view : scene_.depth->target_view, color.target_view};
             VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
@@ -2998,11 +3043,10 @@ VkFramebuffer RendererVk::scene_framebuffer(bool resolved) {
             vk::check(vkCreateFramebuffer(device, &info, nullptr, &made), "scene framebuffer (handed over)");
             return made;
         };
-        color.scene_framebuffer = make(false);
-        if (multisampled) color.scene_resolve_framebuffer = make(true);
+        color.scene_framebuffer = make();
         color.scene_depth_serial = scene_.depth_serial;
     }
-    return resolved && multisampled ? color.scene_resolve_framebuffer : color.scene_framebuffer;
+    return color.scene_framebuffer;
 }
 
 VkDescriptorSet RendererVk::scene_color_source() {

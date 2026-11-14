@@ -161,9 +161,7 @@ void PostProcessorVk::set_present_pass(VkRenderPass pass) {
     to_present_ = {};
     present_pass_ = pass;
     if (built_ && present_pass_ != VK_NULL_HANDLE) {
-        if (Context::get().gather_extended()) {
-            to_present_.easu = create_pipeline(kFullscreenVs, kEasuPs, present_pass_, kRgba, 0);
-        }
+        to_present_.easu = create_pipeline(kFullscreenVs, kEasuPs, present_pass_, kRgba, 0);
         to_present_.rcas = create_pipeline(kFullscreenVs, kRcasPs, present_pass_, kRgba, 0);
         to_present_.rcas_scaled = create_pipeline(kFullscreenVs, kRcasScaledPs, present_pass_, kRgba, 0);
         to_present_.resample = create_pipeline(kFullscreenVs, kResamplePs, present_pass_, kRgba, 0);
@@ -297,13 +295,10 @@ bool PostProcessorVk::build_pipelines() {
         allocate.pSetLayouts = &sampler_layout_;
         check(vkAllocateDescriptorSets(device, &allocate, &sampler_set_), "post-process sampler set");
     }
-    // The scaling passes are required (EASU where the device gathers single channels: without it enlarging is the
-    // box filter's); each AA pass is optional and only reported when it cannot be built.
-    easu_ = Context::get().gather_extended();
-    if (easu_) {
-        to_color_.easu = create_pipeline(kFullscreenVs, kEasuPs, color_pass_, kRgba, 0);
-        to_window_.easu = create_pipeline(kFullscreenVs, kEasuPs, window_pass_, kRgba, 0);
-    }
+    // The scaling passes are required (EASU's single-channel gathers carry no offset: core SPIR-V, no device feature);
+    // each AA pass is optional and only reported when it cannot be built.
+    to_color_.easu = create_pipeline(kFullscreenVs, kEasuPs, color_pass_, kRgba, 0);
+    to_window_.easu = create_pipeline(kFullscreenVs, kEasuPs, window_pass_, kRgba, 0);
     to_color_.resample = create_pipeline(kFullscreenVs, kResamplePs, color_pass_, kRgba, 0);
     to_window_.rcas = create_pipeline(kFullscreenVs, kRcasPs, window_pass_, kRgba, 0);
     to_window_.rcas_scaled = create_pipeline(kFullscreenVs, kRcasScaledPs, window_pass_, kRgba, 0);
@@ -312,7 +307,7 @@ bool PostProcessorVk::build_pipelines() {
     built_ = true;
     const VkRenderPass present = std::exchange(present_pass_, VK_NULL_HANDLE);
     set_present_pass(present);
-    if ((easu_ && (to_color_.easu == VK_NULL_HANDLE || to_window_.easu == VK_NULL_HANDLE)) ||
+    if (to_color_.easu == VK_NULL_HANDLE || to_window_.easu == VK_NULL_HANDLE ||
         to_color_.resample == VK_NULL_HANDLE || to_window_.rcas == VK_NULL_HANDLE ||
         to_window_.rcas_scaled == VK_NULL_HANDLE || to_window_.resample == VK_NULL_HANDLE ||
         to_window_.copy == VK_NULL_HANDLE) {
@@ -688,9 +683,6 @@ PostProcessorVk::PresentStep PostProcessorVk::prepare_present(VkCommandBuffer co
     // The scene was antialiased before the 2D layer (prepare_scene_aa).
     PostProcessSettings scaling = settings_;
     scaling.aa = PostProcessSettings::Aa::kOff;
-    if (!easu_) {
-        scaling.upscaler = PostProcessSettings::Upscaler::kBilinear;
-    }
     PostProcessPlan plan = plan_post_process(source_width, source_height, target_width, target_height, scaling,
                                              status_.smaa_ok, status_.fxaa_ok);
     PresentStep step{};

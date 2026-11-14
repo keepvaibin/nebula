@@ -38,11 +38,7 @@ namespace Nebula.Launcher
                 if (index >= 0) lines[index] = line;
                 else lines.Add(line);
             }
-            Directory.CreateDirectory(Path.GetDirectoryName(path));
-            string temp = path + ".tmp";
-            File.WriteAllText(temp, string.Join("\n", lines) + "\n", new UTF8Encoding(false));
-            if (File.Exists(path)) File.Replace(temp, path, null);
-            else File.Move(temp, path);
+            FileUtil.WriteAllTextAtomic(path, string.Join("\n", lines) + "\n");
         }
 
         private static string Key(string line)

@@ -13,3 +13,10 @@ anyhow = "1.0"
 sha1 = "0.10"
 tempfile = "3.20"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_IO", "Win32_System_Ioctl"] }
+
+# The importer and the mods' cooker (Setup, the Android app, the game's start after a mod change): one code unit and
+# inlining across crates for the disc reader, the decoders and the hashes. Panics still unwind: c_api.rs, jni.rs and
+# the cooker catch them.
+[profile.release]
+codegen-units = 1
+lto = "fat"

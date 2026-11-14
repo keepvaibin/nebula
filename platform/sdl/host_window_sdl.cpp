@@ -87,6 +87,7 @@ std::mutex g_input_mutex;
 InputState g_input;                 // guarded by g_input_mutex
 SDL_Window* g_window = nullptr;
 std::atomic<bool> g_background{false};
+std::atomic<bool> g_low_memory{false};
 std::atomic<bool> g_menu_context{false};
 std::atomic<bool> g_title_screen{false};
 std::atomic<bool> g_direct_touch{false};
@@ -1119,6 +1120,9 @@ void pump_events(int timeout_ms) noexcept {
         case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
             galaxy::render::host_window::quit_request.store(true, std::memory_order_release);
             break;
+        case SDL_EVENT_LOW_MEMORY:
+            g_low_memory.store(true, std::memory_order_release);
+            break;
         case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
             update_window_size();
             galaxy::render::host_window::pending_resize_extent.store(
@@ -1254,7 +1258,8 @@ void pump_events(int timeout_ms) noexcept {
             const std::uint16_t buttons = galaxy::input::settings_pad_buttons(sample.scheme, sample.buttons);
             const galaxy::input::NativeSettingsPadStep step = galaxy::input::native_settings_pad_step(
                 g_menu_pad, buttons, sample.axes[0], sample.axes[1],
-                galaxy::render::native_settings_overlay_visible() || galaxy::ui::launcher_visible(), galaxy::steady_ms());
+                galaxy::render::native_settings_overlay_visible() || galaxy::render::home_menu_visible() ||
+                    galaxy::ui::launcher_visible(), galaxy::steady_ms());
             for (std::size_t i = 0; i < step.key_count; ++i) {
                 galaxy::render::native_settings_post_key(step.keys[i]);
             }
@@ -1314,6 +1319,10 @@ void set_direct_touch(bool direct) noexcept {
 
 bool in_background() noexcept {
     return g_background.load(std::memory_order_acquire);
+}
+
+bool take_low_memory() noexcept {
+    return g_low_memory.exchange(false, std::memory_order_acq_rel);
 }
 
 InputState input_state() noexcept {

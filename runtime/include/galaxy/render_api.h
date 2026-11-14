@@ -293,6 +293,10 @@ void set_gpu_timing(bool on) noexcept;
 // The passes that have a time, at most `capacity`; how many.
 [[nodiscard]] std::size_t gpu_pass_times(GpuPassTime* out, std::size_t capacity) noexcept;
 
+// The process's use of the GPU's memory and the system's budget for it, in bytes (false before the renderer starts or where
+// the device cannot say). The render thread: the renderer keeps its last reading unguarded.
+[[nodiscard]] bool video_memory(std::uint64_t& usage, std::uint64_t& budget) noexcept;
+
 // The frames the game has shown (display copies) and how the presents met them.
 [[nodiscard]] std::uint64_t pictures_made() noexcept;
 [[nodiscard]] DisplayPresentStats display_present_stats() noexcept;

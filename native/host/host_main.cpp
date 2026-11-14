@@ -42,6 +42,7 @@
 #include "galaxy/pointer_control.h"
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/experimental_ultrawide_aspect.h"
+#include "galaxy/benchmark.h"
 #include "galaxy/frame_timeline.h"
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
 #include "galaxy/controller_hid.h"
@@ -148,6 +149,7 @@ inline bool perf_hint_on_battery() noexcept { return false; }
 #include <intrin.h>
 #include <dbghelp.h>
 #include <psapi.h>
+#include "cpu_level_x86.h"
 #else
 #include <dlfcn.h>
 #include <fcntl.h>
@@ -155,6 +157,9 @@ inline bool perf_hint_on_battery() noexcept { return false; }
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#if defined(__ANDROID__)
+#include <malloc.h>
+#endif
 #endif
 
 namespace fs = std::filesystem;
@@ -522,30 +527,41 @@ std::vector<galaxy::mods::PluginFile> gPlugins;
 galaxy::mods::ModRows gModRows;
 bool gModsChangeGame = false;
 
-#if defined(_WIN32) && defined(_M_X64)
-// The level of the module beside the program, x86-64-v3: AVX, AVX2, FMA3, F16C, MOVBE, BMI1, BMI2, LZCNT, with the OS
-// saving the AVX registers. A CPU without it runs the x86-64-v2 build in the folder of that name (native/build.ps1).
-#if defined(__clang__)
-__attribute__((target("xsave")))
-#endif
-bool cpu_runs_x86_64_v3() {
-    int registers[4]{};
-    __cpuid(registers, 0);
-    if (registers[0] < 7) return false;
-    __cpuid(registers, 1);
-    constexpr int kLeaf1 = (1 << 12) | (1 << 22) | (1 << 27) | (1 << 28) | (1 << 29);
-    if ((registers[2] & kLeaf1) != kLeaf1 || (_xgetbv(0) & 0x6u) != 0x6u) return false;
-    __cpuidex(registers, 7, 0);
-    constexpr int kLeaf7 = (1 << 3) | (1 << 5) | (1 << 8);
-    if ((registers[1] & kLeaf7) != kLeaf7) return false;
-    __cpuid(registers, static_cast<int>(0x80000000u));
-    if (static_cast<unsigned>(registers[0]) < 0x80000001u) return false;
-    __cpuid(registers, static_cast<int>(0x80000001u));
-    return (registers[2] & (1 << 5)) != 0;
+// The two folders the host reads from (board/cpu.md W9-h, the package layout):
+// - the program's folder (program_directory(), executable_path()): one for both CPU levels, since NebulaNative.exe and
+//   NebulaNative-x86-64-v2.exe lie side by side. Tables, dxc\, nebula-import.exe, the launcher, the restart's and the
+//   crash report's program come from there.
+// - module_folder(): the folder of the game module actually loaded (the program's folder, x86-64-v2\ on a CPU without
+//   x86-64-v3, or --module's folder). Everything that belongs to one build of the module is read from here, never from
+//   the program's folder: each CPU folder holds its own module and the files made with it.
+fs::path gModuleFolder;
+
+[[maybe_unused]] const fs::path& module_folder() {
+    return gModuleFolder;
 }
+
+// The module beside the program for this CPU: x86-64-v2\ holds the build for a CPU without x86-64-v3 (native/build.ps1).
+fs::path default_module_path(const fs::path& program_folder) {
+#if defined(_WIN32)
+    fs::path module = program_folder;
+#if defined(_M_X64)
+    if (!cpu_runs_x86_64_v3()) {
+        module /= "x86-64-v2";
+        log_line("host:", "the CPU lacks x86-64-v3: the x86-64-v2 game module");
+    }
 #endif
+    return module / "smg_game.dll";
+#elif defined(__APPLE__)
+    return program_folder / "libsmg_game.dylib";
+#else
+    return program_folder / "libsmg_game.so";
+#endif
+}
 
 void load_module(const fs::path& path) {
+    std::error_code absolute_error;
+    const fs::path absolute = fs::absolute(path, absolute_error);
+    gModuleFolder = (absolute_error ? path : absolute).parent_path();
 #if defined(_WIN32)
     void* module = LoadLibraryW(path.wstring().c_str());
 #else
@@ -1638,6 +1654,7 @@ int svc_achievement(void*, const char* id, uint16_t* name, uint32_t capacity) {
     (void)id, (void)name, (void)capacity;
     return 0;
 #else
+    if (galaxy::bench::running()) return 0;  // a benchmark unlocks nothing
     const galaxy::achievements::Info* info = id != nullptr ? galaxy::achievements::find(id) : nullptr;
     if (info == nullptr || !galaxy::achievements::unlock(id)) return 0;
     uint32_t i = 0;
@@ -1698,7 +1715,7 @@ int32_t svc_mod_achievement_unlocked(void*) {
 // The all-time counters the achievement board shows (stats.ini). The headless host keeps none.
 void svc_stat_add(void*, const char* name, uint64_t delta) {
 #if defined(NEBULA_HOST_RENDERER)
-    if (name != nullptr) galaxy::stats::add(name, delta);
+    if (name != nullptr && !galaxy::bench::running()) galaxy::stats::add(name, delta);  // a benchmark counts nothing
 #else
     (void)name, (void)delta;
 #endif
@@ -2588,6 +2605,13 @@ std::condition_variable gSavesDone;
 
 void svc_save_request(void*, const NebulaSaveRequest* request) {
     gSaveOps.fetch_add(1, std::memory_order_relaxed);
+#if defined(NEBULA_HOST_RENDERER)
+    if (galaxy::bench::running()) {  // a benchmark's blank save, in memory: the player's files are not opened
+        *request->status = galaxy::bench::save_request(static_cast<int>(request->op), request->name != nullptr ? request->name : "",
+                                                       request->buffer, request->size, request->length);
+        return;
+    }
+#endif
     *request->status = NEBULA_SAVE_PENDING;
     gSavesPending.fetch_add(1, std::memory_order_acq_rel);
     const NebulaSaveRequest r = *request;
@@ -2787,6 +2811,21 @@ uint32_t svc_input_players(void*) {
 }
 
 uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, NebulaInputSample* sample) {
+#if defined(NEBULA_HOST_RENDERER)
+    if (galaxy::bench::running()) {  // a benchmark plays nothing: player 1's remote connected and at rest
+        if (device != nullptr) {
+            *device = {};
+            device->connected = player == kHostPlayerMain ? 1 : 0;
+            device->nunchuk = device->connected;
+            device->battery = device->connected != 0 ? 4 : 0;
+        }
+        if (player != kHostPlayerMain || sample == nullptr) return 0;
+        *sample = rest_input_sample();
+        gInputRead.store(true, std::memory_order_release);
+        gInputRead.notify_one();
+        return 1;
+    }
+#endif
     if (device != nullptr) {
         *device = {};
 #if defined(NEBULA_HOST_RENDERER)
@@ -3231,6 +3270,7 @@ void attach_extensions() {
 // and the Grand Stars with the Observatory they power.
 int svc_galaxy_travel(void*, char* stage, uint32_t capacity, int32_t* star) {
 #if defined(NEBULA_HOST_RENDERER)
+    if (galaxy::bench::running()) return galaxy::bench::scene_frame(gSceneStage, stage, capacity, star);
     std::size_t index = 0u;
     std::uint32_t chosen = 0u;
     if (galaxy::render::take_galaxy_travel(index, chosen)) {
@@ -3301,6 +3341,7 @@ void hold_runtime_lease() {
     game_profile::finish();
 #endif
 #if defined(NEBULA_HOST_RENDERER)
+    galaxy::bench::at_exit();  // a benchmark that did not finish writes its result as aborted
     // --diagnostics pipelines: the pipelines this run created (tools/dev/site_pipelines.py merges them).
     if (::galaxy::diagnosing(::galaxy::kDiagnosePipelines)) {
         if (const fs::path folder = galaxy::nebula_diagnostics_directory(); !folder.empty()) {
@@ -3915,6 +3956,8 @@ int main(int argc, char** argv) {
         return fs::path(argv[index]);
     };
     double seconds = 0;
+    [[maybe_unused]] bool benchmark = false;  // --benchmark 1: benchmark.h's run, then exit
+    fs::path benchmark_out;
     [[maybe_unused]] int home = -1;  // --home: the launcher's home screen at the title's hold; -1 the platform's default
     for (int i = 1; i + 1 < argc; i += 2) {
         const std::string key = argv[i];
@@ -3932,27 +3975,31 @@ int main(int argc, char** argv) {
             seconds = std::atof(argv[i + 1]);
         } else if (key == "--home") {
             home = std::atoi(argv[i + 1]) != 0 ? 1 : 0;
+        } else if (key == "--benchmark") {
+            benchmark = std::atoi(argv[i + 1]) != 0;
+        } else if (key == "--benchmark-out") {
+            benchmark_out = arg_path(i + 1);
         } else {
             die("unknown option %s", key.c_str());
         }
     }
-    if (pak.empty() || saves.empty()) {
+#if defined(NEBULA_HOST_RENDERER)
+    if (benchmark) {
+        // No save folder: the game's saves stay in memory. Straight to the title, no time limit (it quits when done).
+        saves.clear();
+        home = 0;
+        seconds = 0;
+        galaxy::bench::start({pak.parent_path(), benchmark_out});
+    }
+#endif
+    if (pak.empty() || (saves.empty() && !benchmark)) {
         die("usage: nebula_native_host --pak <game.pak> --saves <dir> [--module <smg_game.dll>] [--seconds N] (docs/COMMAND_LINE.md)");
     }
     if (module.empty()) {
 #if defined(_WIN32)
-        module = arg_path(0).parent_path();
-#if defined(_M_X64)
-        if (!cpu_runs_x86_64_v3()) {
-            module /= "x86-64-v2";
-            log_line("host:", "the CPU lacks x86-64-v3: the x86-64-v2 game module");
-        }
-#endif
-        module /= "smg_game.dll";
-#elif defined(__APPLE__)
-        module = fs::path(argv[0]).parent_path() / "libsmg_game.dylib";
+        module = default_module_path(arg_path(0).parent_path());
 #else
-        module = fs::path(argv[0]).parent_path() / "libsmg_game.so";
+        module = default_module_path(fs::path(argv[0]).parent_path());
 #endif
     }
     gSaveRoot = saves;
@@ -3966,7 +4013,7 @@ int main(int argc, char** argv) {
 #if defined(_WIN32)
     hold_runtime_lease();
 #endif
-    {
+    if (!galaxy::bench::running()) {  // a benchmark's game has no Miis: their library is in the save folder
         // Mii import: the files in the import folder (next to the settings: any Mii files, mii_formats.h)
         // join the library before the game reads it; the settings import more while it runs.
         const fs::path settings_folder = galaxy::runtime_settings_folder();
@@ -4002,8 +4049,8 @@ int main(int argc, char** argv) {
         const galaxy::saves::SaveFolders save_folders = galaxy::saves::save_folders(std::string_view(gPak.id, 4));
         gOldSaveDataPath = save_folders.earlier;
         gSaveDataPath = save_folders.current;
-        fs::create_directories(gSaveRoot / gSaveDataPath.substr(1), error);  // the release's own save folder
-        if (!settings_folder.empty()) {
+        if (!gSaveRoot.empty()) fs::create_directories(gSaveRoot / gSaveDataPath.substr(1), error);  // the release's own save folder
+        if (!settings_folder.empty() && !galaxy::bench::running()) {  // benchmark implies safe start (no mods)
             fs::create_directories(settings_folder / "mods", error);
             // Updates imported while their mod's folder was in use take its place before anything reads the mods.
             galaxy::mods::apply_pending_updates(settings_folder / "mods");
@@ -4302,6 +4349,15 @@ int main(int argc, char** argv) {
             gSuspendWake.notify_all();
             gAudio->set_paused(away);
             log_line("host:", away ? "suspended (out of sight)" : "resumed");
+        }
+        // Android's onTrimMemory: what comes back by itself goes. The store's view pages return from the file cache on
+        // the next read; the C heap's free pages are new pages when used again.
+        if (galaxy::sdl::take_low_memory()) {
+            gPak.store.release_pages();
+#if defined(__ANDROID__)
+            (void)mallopt(M_PURGE, 0);
+#endif
+            log_line("host:", "the system asked for memory: the store's pages and the C heap's free pages released");
         }
 #else
         // Until a message, a change of the window or the game's end (gHostWake), or the once-a-second report.

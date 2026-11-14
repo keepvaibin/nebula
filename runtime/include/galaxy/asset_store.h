@@ -47,6 +47,9 @@ public:
     // had. Ended by unmap_private, or kept while the store is open.
     [[nodiscard]] std::uint8_t* map_private(std::uint64_t position, std::size_t size) const;
     void unmap_private(void* data, std::size_t size) const;
+    // The system wants memory: the read-only view's pages leave this process (Linux, Android; they stay in the file
+    // cache and come back on the next read, the same bytes at the same addresses). Windows trims a view by itself.
+    void release_pages() const noexcept;
 
     [[nodiscard]] std::optional<Entry> entry(std::int32_t index) const;
     [[nodiscard]] std::optional<Entry> find(std::string_view path) const;

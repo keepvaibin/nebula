@@ -357,6 +357,14 @@ void load_render_config_from_file();
 // Writes the implemented settings to the same config.ini; unimplemented ones are omitted.
 bool save_render_config_to_file();
 
+// load_render_config_from_file found no config.ini: this is the first start, and nothing the player chose exists yet.
+[[nodiscard]] bool render_config_first_start() noexcept;
+// The first start's internal height before it is measured (render_core.cpp's calibration): 480 on a GPU that shares the
+// system's memory, else 1080; 0 (match display) when the output has no more lines than that.
+[[nodiscard]] unsigned first_start_internal_height(bool shared_memory, unsigned output_lines) noexcept;
+// The PERFORMANCE preset: the 3D scene at 480 lines and the present, with every optional pass off.
+void apply_performance_preset(RenderConfig& cfg) noexcept;
+
 // A GPU's identity in config.ini's gpu key: PCI vendor, device and subsystem id in lowercase hex,
 // "vvvv:dddd:ssssssss". The subsystem tells two boards of the same chip apart.
 std::string gpu_identity(unsigned vendor_id, unsigned device_id, unsigned subsys_id);
@@ -371,6 +379,13 @@ std::string next_start_gpu();
 // Nebula's ray tracing.
 void record_render_adapter(const char* description, unsigned vendor_id, unsigned device_id,
                            unsigned subsys_id, bool ray_tracing) noexcept;
+// The adapter record_render_adapter was last given (empty before the renderer starts).
+struct RenderAdapter {
+    std::string description;
+    unsigned vendor_id = 0u;
+    unsigned device_id = 0u;
+};
+[[nodiscard]] RenderAdapter render_adapter();
 // When config.ini changed on disk since this process last read or wrote it (Nebula Settings saved it while the game
 // runs), reads it over the live settings, as the in-game menu would apply them, and returns true.
 bool reload_render_config_if_changed();

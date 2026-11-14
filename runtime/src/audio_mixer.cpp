@@ -1,4 +1,5 @@
 #include "galaxy/audio_mixer.h"
+#include "galaxy/benchmark.h"
 #include "galaxy/loss_report.h"
 
 #include <algorithm>
@@ -218,6 +219,7 @@ void AudioMixer::mix(float gain, std::uint32_t used) {
     if (!configured()) {
         return;
     }
+    galaxy::bench::note_audio_thread();
     const auto begin = std::chrono::steady_clock::now();
     ++stats_.subframes;
     ++frame_subframes_;
@@ -283,8 +285,6 @@ std::span<const float> AudioMixer::end_frame() {
         return out;
     }
     ++stats_.stream_frames;
-    std::vector<float> stream(static_cast<std::size_t>(stream_frames) * 2u, 0.0f);
-    movie_.pull(stream.data(), stream_frames);
     // History: taps - 1 earlier samples' room, then the new ones; outputs from position taps/2 - 1.
     const std::size_t taps = stream_kernel_.taps();
     const std::size_t keep = taps + 1u;
@@ -293,8 +293,11 @@ std::span<const float> AudioMixer::end_frame() {
         stream_running_ = true;
         stream_place_ = 0.0;
     }
-    std::vector<float> x(stream_history_);
-    x.insert(x.end(), stream.begin(), stream.end());
+    // The history, then this frame's samples (zero where the movie gives none), in one buffer kept from frame to frame.
+    std::vector<float>& x = stream_input_;
+    x.assign(stream_history_.begin(), stream_history_.end());
+    x.resize(stream_history_.size() + static_cast<std::size_t>(stream_frames) * 2u, 0.0f);
+    movie_.pull(x.data() + stream_history_.size(), stream_frames);
     // The output's rate exactly: a block's whole outputs do not fall on whole 32 kHz samples, the remainder carries over.
     const double step = 1.0 / authored_ratio_;
     const double origin = static_cast<double>(taps / 2u) + stream_place_;
