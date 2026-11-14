@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* LumaCore's ui service (plan 2.4 layer 4 on 3.8 layer 1; contract ui): a screen layout of the mod's or the game's,
+/* LumaCore's ui service (docs/modding/services/ui.md): a screen layout of the mod's or the game's,
    shown over the game as the game shows its own (the game's layout drawer: picture and text panes, its fonts, its
    16:9 widening), its panes found by name, their text, visibility, scale and place set. Import: LUMA_SERVICE(slot,
    "ui", "1.3") for set_position, share_rows, shared_focus and play_pane ("1.2" menu_rows and menu_chosen, "1.1"

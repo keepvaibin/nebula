@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* LumaCore's draw.post service (plan 2.4 layer 8; contract draw 15): a mod's full-screen pixel programs over the frame.
+/* LumaCore's draw.post service (docs/modding/services/draw.md): a mod's full-screen pixel programs over the frame.
    Import: LUMA_SERVICE(slot, "draw.post", "1.0"). No permission.
 
    A post program is cooked from the mod's assets/post/<name>.hlsl and post/<name>.json into <name>.post (LumaLink's

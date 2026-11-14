@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* LumaCore's draw.view service (plan 2.4 layer 7; contract draw): the scene from another camera into a texture of the
+/* LumaCore's draw.view service (docs/modding/services/draw.md): the scene from another camera into a texture of the
    mod's: mirrors, picture in picture, replay cameras, minimaps. Import: LUMA_SERVICE(slot, "draw.view", "1.0").
 
    What a view shows: the scene's models (every list the game draws its world's models from: the map, objects, the

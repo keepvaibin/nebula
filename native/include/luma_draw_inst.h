@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* LumaCore's draw.inst service (plan 2.4 layer 5; contract draw): per-instance overrides on an actor's drawn model,
+/* LumaCore's draw.inst service (docs/modding/services/draw.md): per-instance overrides on an actor's drawn model,
    seen on that one actor and on no other of its model. A colour over every material, a material's colour by name, a
    part hidden, a scale: the Gold Flower's gold Mario is this (a colour on Mario), not a feature. An override lives until
    release, the mod's end, the actor's death or its scene's end; then the model draws as the game made it again.

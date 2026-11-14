@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* The guard (plan 1.6, contract guard): between the game's LumaCore kernel and the host; not for mods.
+/* The guard: between the game's LumaCore kernel and the host; not for mods.
 
    At every place the kernel runs a mod's code (a boundary) it pushes a frame on the thread's stack of frames and calls
    the mod's function through luma_guard_call, which saves the registers the platform's calling convention keeps across
@@ -96,7 +96,7 @@ typedef struct LumaGuardHost {
 /* The game module's export "luma_guard_install": 1 taken; 0 not (a host struct too small). */
 typedef int32_t (*LumaGuardInstall)(const LumaGuardHost* host);
 
-/* The game module's export "luma_guard_cost" (the director's order of 11-11; J's CODE TIME on a mod's page): the time
+/* The game module's export "luma_guard_cost" (CODE TIME on a mod's page in Mods): the time
    the mod's code took per frame over its last 120 frames (each boundary's own time, less the boundaries nested in it:
    another mod's hook its call reached), in ns: the average frame and the worst one. Any thread. 0: found; -1: no such
    mod this session, or the clock not yet scaled (the first quarter second). A mod taken out keeps its last values. */

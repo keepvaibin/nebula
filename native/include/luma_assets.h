@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* LumaCore's assets service (contract services-assets; plan 2.8). Layer 1: the game's files as the game reads them,
+/* LumaCore's assets service (docs/modding/services/assets.md). Layer 1: the game's files as the game reads them,
    by path: what is there, its bytes, a folder's entries, with the mods' files over the game's or the game's own under
    them. No permission: every mod may read the game. Every call is the game thread's and returns at once (the store is
    mapped for the whole session: no call waits on the drive; the first read of a file's bytes may, as the game's own

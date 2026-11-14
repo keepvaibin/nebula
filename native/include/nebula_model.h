@@ -12,7 +12,7 @@ extern "C" {
 
 #define NEBULA_MODEL_MAGIC 0x4C444D4Eu /* "NMDL" */
 #define NEBULA_MODEL_VERSION 11u /* 9: the hit record's bump fields (c67); 10: glow_shapes_at (c86); 11: a glTF
-                                    material's hit record from its own numbers (plan 3.3) */
+                                    material's hit record from its own numbers */
 #define NEBULA_MODEL_NONE NEBULA_NONE32
 
 enum { NEBULA_SCALE_BASIC = 0, NEBULA_SCALE_SOFTIMAGE = 1, NEBULA_SCALE_MAYA = 2 };
@@ -77,7 +77,7 @@ typedef struct NebulaModelGlowShape {
     uint8_t kind, two_sided, reserved[2];
 } NebulaModelGlowShape;
 
-/* A painted mesh whose paint is one light (ray tracing's Physical style, RT-MASTER-PLAN 14.6): its vertex light fitted
+/* A painted mesh whose paint is one light (ray tracing's Physical style): its vertex light fitted
    as a + b max(n.d, 0); the share b / (a + b) (0: the mesh stays as painted) and d in the model's space, octahedral,
    signed 16-bit (x, y; -32767 to 32767 for -1 to 1). */
 typedef struct NebulaModelPaintLight {
@@ -319,7 +319,7 @@ enum {
                                            traces shadows neither draws it nor lets it cast one */
     NEBULA_HIT_PAINTED_SHADOW = 1u << 6, /* painted (vertex colour, not lit) on a model whose paint holds the shadows
                                             things cast on it (the cooker's study of its vertex light): a renderer that
-                                            traces shadows lets only lit things shadow it (RT-MASTER-PLAN 14.6) */
+                                            traces shadows lets only lit things shadow it */
     NEBULA_HIT_DRAWN_SHEEN = 1u << 7,  /* a painted sheen drawn as an added layer over a body that mirrors (c49): a
                                           renderer that traces reflections neither draws it nor lets a ray meet it */
 };

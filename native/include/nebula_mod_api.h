@@ -2,7 +2,7 @@
 /* The rows of mods that are not code (luma.json), as the host hands them to the game module: galaxies, text, music,
    progression, object changes, power-ups, sounds, player animations and constants, story, tunables, and the events an
    achievement waits for. A mod's code is a LumaCore mod (luma.h); the old plugin interface, the script interpreter
-   and its toolkit are gone (plan 1.10).
+   and its toolkit are gone.
 
    Passing null where a call needs a name makes the call do nothing and return -1. Passing NaN or infinity as a value
    also does nothing. */

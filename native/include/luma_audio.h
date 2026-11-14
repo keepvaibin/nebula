@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* LumaCore's audio service (contract services-audio; plan 2.6). `audio` 1.0, no permission: a mod plays its cooked
+/* LumaCore's audio service (docs/modding/services/audio.md). `audio` 1.0, no permission: a mod plays its cooked
    sound effects (3.7's NSFX: `layers/<l>/assets/<path>.sound.json`, cooked at the game's start) and pushes sound it
    makes itself (a synthesiser, a decoded movie, a voice chat) as a stream. Both go into the game's own mixer, after
    the game's voices, on four buses that follow the game's volume settings: effects and ui (Sound effects), voice

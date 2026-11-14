@@ -61,12 +61,12 @@ typedef struct LumaModsService {
        LUMA_E_ARGUMENT, reported. */
     int32_t (*find)(const LumaMod* mod, const char* id, LumaModsInfo* out);
     /* 1.0. Game thread. The calling mod's own option `key` (luma.json `options[].key`) as the player has it now, as
-       UTF-8 text with a NUL into buf (director's DECISION 11-11 23:0x, contract section 8):
+       UTF-8 text with a NUL into buf (docs/modding/services/mods.md):
          choice: the chosen value ("off" when the player turned an optional choice off);
          number: the number as the Mods page shows it, shortest decimal ("0.5", "12");
          toggle: "1" on, "0" off;
          text:   the player's text (the manifest's `default` until the player types one);
-         key:    the control's name as input's store has it (plan 2.5; the manifest's `default` until the player
+         key:    the control's name as input's store has it (the manifest's `default` until the player
                  binds another), one of the names luma.json takes (input_bindings kTargetIds).
        Returns the text's length in bytes without the NUL. A null buf with size 0 asks the length only (not reported).
        Mistakes, each reported and nothing written: a null key, or a key that is not one of this mod's options:

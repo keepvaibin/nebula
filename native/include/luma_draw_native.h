@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* LumaCore's draw.native service (plan 2.4 layer 9; contract draw 16): a mod's own GPU commands at a draw point, with
+/* LumaCore's draw.native service (docs/modding/services/draw.md): a mod's own GPU commands at a draw point, with
    the device's own handles. Import: LUMA_SERVICE(slot, "draw.native", "1.0"); permission `native` (services-registry
    5.1): a mod the player did not grant it cannot bind the service.
 

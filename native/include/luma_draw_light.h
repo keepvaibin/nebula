@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* LumaCore's draw.light service (plan 2.4 layer 6; contract draw): a mod's own lights in the world. A light is a
+/* LumaCore's draw.light service (docs/modding/services/draw.md): a mod's own lights in the world. A light is a
    glowing body at a place, of a colour and an intensity in candela. Traced (ray tracing on), it is an emitter like
    the game's lamps: it lights what it sees, casts shadows where `casts` says, and is seen in reflections. Not traced,
    it joins the game's own light set as the game's lamps do (a Luma's glow, a fireball's): the game lights with one

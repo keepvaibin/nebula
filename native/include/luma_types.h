@@ -1,9 +1,9 @@
 #pragma once
-// The type rows (contract types, plan 1.2): every record, field, base and global of the game that a mod may name. Written
+// The type rows (docs/modding/language/types.md): every record, field, base and global of the game that a mod may name. Written
 // by tools/lumacore/gen_types.py; the numbers are the compiler's own (sizeof, alignof, offsetof, -fno-access-control),
 // so they are this platform's. Rows sit in linker sections beside the function rows and are read only when a mod binds:
 // no code runs for them at start.
-// plan 1.3 (contract objects): a polymorphic record's row holds its type_info, the RTTI data the module with rows is
+// Objects (docs/modding/language/objects.md): a polymorphic record's row holds its type_info, the RTTI data the module with rows is
 // built with (typeid of a type is a constant address). Nothing here calls into the C++ runtime, which the module has
 // none of on Windows: the kernel compares addresses.
 #include <luma_hook.h>

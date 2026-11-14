@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* LumaCore's capture services (contract services-audio 7; plan 2.6 layers 5 and 6): the player's microphone
+/* LumaCore's capture services (docs/modding/services/audio.md): the player's microphone
    (`audio.microphone` 1.0) and camera (`capture.camera` 1.0), each its own permission of the same name, granted on
    the consent screen and checked when the mod binds (services-registry 5.2). The game's own picture and mix need no
    permission: they are draw's and audio.tap's. Every call is the game thread's and never blocks: the device opens

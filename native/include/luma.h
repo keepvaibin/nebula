@@ -111,7 +111,7 @@ typedef struct LumaImport {
 
 typedef struct LumaMod LumaMod;
 
-/* A mod's own class (classes contract, plan 1.4): derived from a game class, made by the game's own factory, its
+/* A mod's own class (docs/modding/language/classes.md): derived from a game class, made by the game's own factory, its
    overrides hooks that run for its objects only, with data of its own per object. */
 typedef struct LumaOverride {
     const char* name;      /* a virtual of the base class as `method` names it: "JetTurtle::control" or the class that
@@ -180,7 +180,7 @@ typedef struct LumaGravityPlace {
     uint32_t inverse;  /* nonzero: mIsInverse, the pull reversed */
 } LumaGravityPlace;
 
-/* A table of the game's data as LumaCore.table gives it (numbers contract, plan 1.5). */
+/* A table of the game's data as LumaCore.table gives it (docs/modding/language/numbers.md). */
 typedef struct LumaTable {
     const void* data;  /* as the game reads it now; written only through set_table */
     const char* type;  /* its element's type, the compiler's spelling ("unsigned int", "const char *", "MR::ActorMoveParam") */
@@ -275,7 +275,7 @@ typedef struct LumaCore {
        or not in start; *size 0). Valid until start returns; once read, they are gone. */
     const void* (*kept)(const LumaMod* mod, uint32_t* size);
 
-    /* Classes (classes contract, plan 1.4). Defines a mod's class: its number (>= 0; class_of, own_class, as_class and
+    /* Classes (docs/modding/language/classes.md). Defines a mod's class: its number (>= 0; class_of, own_class, as_class and
        is_a know it), or -1 the definition is not whole (null, size, empty or long name, base not a polymorphic class
        with a row, data_align), -2 the name (or `replaces`) is taken, -3 not on the game thread, -4 an override names
        no virtual of the base, or one the base runs with no row (inline, implicit), or one whose hook is refused, -5 no
@@ -287,7 +287,7 @@ typedef struct LumaCore {
        thread. */
     void* (*class_data)(const LumaMod* mod, const void* object, int32_t class_number);
 
-    /* Numbers in the game's code (numbers contract, plan 1.5): every number written in a function's code that the game
+    /* Numbers in the game's code (docs/modding/language/numbers.md): every number written in a function's code that the game
        reads at run time, named by the function's row name, its signature, and its place there (the k-th named number,
        from 1, in source order; luma_numbers.json lists them all), and every file's number constant by its name, with
        signature "" and place 0. A null signature asks for the only function of that name with a number at that place.
@@ -301,7 +301,7 @@ typedef struct LumaCore {
        -3: not on the game thread. */
     int32_t (*set_number)(const LumaMod* mod, const char* name, const char* signature, uint32_t place, double value);
 
-    /* Tables of the game's data (numbers contract, plan 1.5): every file-scope or class-static array or plain record
+    /* Tables of the game's data (docs/modding/language/numbers.md): every file-scope or class-static array or plain record
        with an initializer, by its name (`File.cpp#name` when only its file sees it; luma_numbers.json "tables" lists
        them with their types). table: 0 and *out filled (data as the game reads it now, its element type,
        the size in bytes, the count of elements, 1 for a record), or -1: no such table, or no memory (said). Any

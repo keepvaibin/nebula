@@ -1,11 +1,11 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* LumaCore's net services (contract services-net; plan 2.7). Layer 1: `net.local` TCP on this machine and the local
+/* LumaCore's net services (docs/modding/services/net.md). Layer 1: `net.local` TCP on this machine and the local
    network, permission "net.local". Layer 2: `net.internet` TCP to the hosts the mod's luma.json names, by name or
    address, permission "net.internet" (the player sees the hosts). Every call is the game thread's, never blocks, and
    what waits is an event at a frame's start (services-registry 6). Both share the events, the limits and the
    socket calls' rules; a handle belongs to the service that made it. Minor 1 of both adds UDP: a socket open to
    anyone on this machine or the local network (net.local's udp_open), one tied to a single peer (udp_connect,
-   both services), datagrams sent whole and taken whole. Minor 2 adds local endpoints by name (plan 2.7's net.ipc,
+   both services), datagrams sent whole and taken whole. Minor 2 adds local endpoints by name (net.ipc,
    under net.local's permission: "programs on this device"): named pipes on Windows, Unix sockets elsewhere, the
    stream calls and events of TCP. Minor 3 adds TLS (1.2 and 1.3; the game's one library on every platform):
    tls_connect checks the host's certificate against the root list shipped with the game plus the roots the mod's

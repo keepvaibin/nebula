@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* LumaCore's movie service (plan 3.10; contracts movies, references 6): a mod's own movie played by the game's movie
+/* LumaCore's movie service (docs/modding/guides/a-video-in-a-galaxy.md): a mod's own movie played by the game's movie
    player, as the game plays its own (full screen at the movie's own shape, its sound the clock, input held while it
    plays). The movie is the cook's: layers/<l>/assets/<path>.movie.json becomes Luma/<id>/<path>.nmov (AV1, decoded by
    dav1d where the build has it, NEBULA_AV1). A movie that replaces a game movie needs no call: the game plays it.

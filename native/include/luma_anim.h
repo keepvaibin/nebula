@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* LumaCore's anim service (plan 3.6 run time; contract animation 7): a clip of an actor's model played as the game
+/* LumaCore's anim service (docs/modding/content/animation.md): a clip of an actor's model played as the game
    plays its own (its joint, texture, colour, texture-swap and visibility clips of one name started together), from a
    frame, at a rate, once or looping, blended from the pose it had; its frame read; frames of it marked, each mark an
    event as the clip passes it; its end an event. The clip is the model's own (a mod model's glTF animations, a game
