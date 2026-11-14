@@ -28,6 +28,8 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Render/Model.hpp"
+#include "Game/Util/StringUtil.hpp"
+#include <nebula_module.h>
 #include "Game/System/LumaCore.hpp"
 
 LiveActor::LiveActor(const char* pName)
@@ -439,6 +441,15 @@ void LiveActor::initActorCollisionParts(const char* pName, HitSensor* pSensor, R
         scaleType = MR::CollisionScaleType_AutoEqualScale;
     } else {
         scaleType = MR::CollisionScaleType_Default;
+    }
+
+    // The collision is the archive's <name>.kcl. An archive without it (a mod's model with no collision beside it)
+    // gives the actor no collision, said once here, and the game runs on: the file is never read through.
+    const ResourceHolder* const pFrom = pResHolder != nullptr ? pResHolder : MR::getResourceHolder(this);
+    if (pFrom == nullptr || !pFrom->mFileInfoTable->isExistRes(MR::FormattedName("%s.kcl", pName).c_str())) {
+        nebula_log("actor %s: its collision %s.kcl is not in its archive; it has no collision\n", mName != nullptr ? mName : "",
+                   pName != nullptr ? pName : "");
+        return;
     }
 
     if (pResHolder != nullptr) {

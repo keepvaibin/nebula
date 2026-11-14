@@ -2329,6 +2329,10 @@ namespace MR {
     }
 
     void validateCollisionParts(LiveActor* pActor) {
+        // An actor whose archive had no collision has none (LiveActor::initActorCollisionParts said so).
+        if (pActor->mCollisionParts == nullptr) {
+            return;
+        }
         validateCollisionParts(pActor->mCollisionParts);
         CollisionParts* pParts = pActor->mCollisionParts;
 
@@ -2350,6 +2354,9 @@ namespace MR {
     }
 
     void invalidateCollisionParts(LiveActor* pActor) {
+        if (pActor->mCollisionParts == nullptr) {
+            return;
+        }
         invalidateCollisionParts(pActor->mCollisionParts);
     }
 
