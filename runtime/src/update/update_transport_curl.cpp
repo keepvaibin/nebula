@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The update check's HTTP on Linux: the system's libcurl (its TLS and certificate store, its proxy variables), loaded
-// with dlopen so Nebula starts and plays on a system without it (the check then reports no answer). Only the handful
-// of curl's stable entry points and option numbers below are used (curl.h's values, unchanged since curl 7.32).
+// The update check's HTTP on Linux (and the diagnostics report's one POST): the system's libcurl (its TLS and
+// certificate store, its proxy variables), loaded with dlopen so Nebula starts and plays on a system without it (the
+// check then reports no answer). Only the handful of curl's stable entry points and option numbers below are used
+// (curl.h's values, unchanged since curl 7.32).
 #include "update_internal.h"
 
 #include <cstdio>
@@ -29,6 +30,7 @@ constexpr int kOptWriteFunction = 20011, kOptXferInfoFunction = 20219;
 constexpr int kOptNoProgress = 43, kOptFollowLocation = 52, kOptNoSignal = 99, kOptMaxRedirs = 68, kOptRedirProtocols = 182;
 constexpr int kOptTimeoutMs = 155, kOptConnectTimeoutMs = 156, kOptLowSpeedLimit = 19, kOptLowSpeedTime = 20;
 constexpr int kOptResumeFromLarge = 30116;
+constexpr int kOptPost = 47, kOptPostFields = 10015, kOptPostFieldSizeLarge = 30120, kOptProtocols = 181;
 constexpr int kInfoResponseCode = 0x200000 + 2;
 constexpr long kGlobalDefault = 3;  // CURL_GLOBAL_SSL | CURL_GLOBAL_WIN32
 constexpr long kProtoHttps = 2;
@@ -185,6 +187,36 @@ public:
     }
 
     bool unreachable(const std::string& url) override { return !proxied() && posix_unreachable(url, 1000); }
+
+    int post(const std::string& url, std::string_view content_type, std::span<const std::uint8_t> body,
+             int timeout_ms) override {
+        const Curl& c = curl();
+        if (!c.loaded) return -1;
+        CurlHandle* handle = c.init();
+        if (handle == nullptr) return -1;
+        const std::string type = "Content-Type: " + std::string(content_type);
+        CurlList* headers = c.slist_append(nullptr, type.c_str());
+        Sink sink;  // the answer's body is counted, never kept
+        sink.limit = 64u * 1024u;
+        c.setopt(handle, kOptUrl, url.c_str());
+        c.setopt(handle, kOptProtocols, kProtoHttps);
+        c.setopt(handle, kOptUserAgent, "Nebula");
+        c.setopt(handle, kOptHttpHeader, headers);
+        c.setopt(handle, kOptPost, 1L);
+        c.setopt(handle, kOptPostFields, static_cast<const void*>(body.data()));
+        c.setopt(handle, kOptPostFieldSizeLarge, static_cast<long long>(body.size()));
+        c.setopt(handle, kOptNoSignal, 1L);
+        c.setopt(handle, kOptConnectTimeoutMs, static_cast<long>(timeout_ms));
+        c.setopt(handle, kOptTimeoutMs, static_cast<long>(timeout_ms));
+        c.setopt(handle, kOptWriteFunction, &write_body);
+        c.setopt(handle, kOptWriteData, &sink);
+        const int result = c.perform(handle);
+        long status = 0;
+        c.getinfo(handle, kInfoResponseCode, &status);
+        c.cleanup(handle);
+        c.slist_free(headers);
+        return result != 0 && status == 0 ? -1 : static_cast<int>(status);
+    }
 };
 
 }  // namespace

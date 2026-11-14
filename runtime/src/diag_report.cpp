@@ -24,7 +24,6 @@
 #pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "shell32.lib")
 #else
-#include <dlfcn.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -32,6 +31,8 @@
 #if defined(__ANDROID__)
 #include <SDL3/SDL_system.h>
 #include <jni.h>
+#elif defined(NEBULA_UPDATE_CHECK)
+#include "update/update_internal.h"
 #endif
 
 namespace galaxy::diag {
@@ -484,14 +485,13 @@ bool build_key(Key& key) { return key_from_hex(kPublicKey, key); }
 // ---- the one POST, per platform ----
 
 constexpr char kContentType[] = "application/x-nebula-report";
-constexpr char kUserAgent[] = "Nebula";
 
 SendResult answered(long status, std::size_t bytes) {
     if (status >= 200 && status < 300) return {kOk, "sent: " + std::to_string(bytes) + " bytes"};
     return {kRefused, "the server refused the report (HTTP " + std::to_string(status) + ")"};
 }
 
-bool loopback_http(std::string_view url) { return url.rfind("http://127.0.0.1:", 0) == 0 || url.rfind("http://127.0.0.1/", 0) == 0; }
+[[maybe_unused]] bool loopback_http(std::string_view url) { return url.rfind("http://127.0.0.1:", 0) == 0 || url.rfind("http://127.0.0.1/", 0) == 0; }
 
 #if defined(_WIN32)
 SendResult post(std::string_view url, const Bytes& body, bool allow_http) {
@@ -580,7 +580,7 @@ SendResult post(std::string_view url, const Bytes& body, bool allow_http) {
                             env->NewStringUTF("Content-Type"), env->NewStringUTF(kContentType));
         env->CallVoidMethod(connection,
                             env->GetMethodID(http_class, "setRequestProperty", "(Ljava/lang/String;Ljava/lang/String;)V"),
-                            env->NewStringUTF("User-Agent"), env->NewStringUTF(kUserAgent));
+                            env->NewStringUTF("User-Agent"), env->NewStringUTF("Nebula"));
         if (failed()) break;
         jbyteArray bytes = env->NewByteArray(static_cast<jsize>(body.size()));
         if (failed() || bytes == nullptr) break;
@@ -603,74 +603,17 @@ SendResult post(std::string_view url, const Bytes& body, bool allow_http) {
     env->PopLocalFrame(nullptr);
     return result;
 }
-#else
-// libcurl, loaded when asked for: on every desktop Linux distribution and every macOS (/usr/lib), with the system's
-// trust store; no build dependency. The option numbers are libcurl's stable ABI (curl.h).
+#elif defined(NEBULA_UPDATE_CHECK)
+// The update check's transport (update_internal.h): libcurl on Linux, NSURLSession on macOS.
 SendResult post(std::string_view url, const Bytes& body, bool allow_http) {
-    if (url.rfind("https://", 0) != 0 && !(allow_http && loopback_http(url))) return {kUsage, "the endpoint is not https"};
-#if defined(__APPLE__)
-    void* curl = dlopen("/usr/lib/libcurl.4.dylib", RTLD_NOW | RTLD_LOCAL);
-#else
-    void* curl = dlopen("libcurl.so.4", RTLD_NOW | RTLD_LOCAL);
-    if (curl == nullptr) curl = dlopen("libcurl-gnutls.so.4", RTLD_NOW | RTLD_LOCAL);
-#endif
-    if (curl == nullptr) return {kNetwork, "no HTTPS client (libcurl not found); --save-sealed writes the report instead"};
-    using Init = int (*)(long);
-    using Easy = void* (*)();
-    using SetOpt = int (*)(void*, int, ...);
-    using Perform = int (*)(void*);
-    using GetInfo = int (*)(void*, int, ...);
-    using Cleanup = void (*)(void*);
-    using Append = void* (*)(void*, const char*);
-    using FreeList = void (*)(void*);
-    const auto global_init = reinterpret_cast<Init>(dlsym(curl, "curl_global_init"));
-    const auto easy_init = reinterpret_cast<Easy>(dlsym(curl, "curl_easy_init"));
-    const auto setopt = reinterpret_cast<SetOpt>(dlsym(curl, "curl_easy_setopt"));
-    const auto perform = reinterpret_cast<Perform>(dlsym(curl, "curl_easy_perform"));
-    const auto getinfo = reinterpret_cast<GetInfo>(dlsym(curl, "curl_easy_getinfo"));
-    const auto cleanup = reinterpret_cast<Cleanup>(dlsym(curl, "curl_easy_cleanup"));
-    const auto append = reinterpret_cast<Append>(dlsym(curl, "curl_slist_append"));
-    const auto free_list = reinterpret_cast<FreeList>(dlsym(curl, "curl_slist_free_all"));
-    if (global_init == nullptr || easy_init == nullptr || setopt == nullptr || perform == nullptr || getinfo == nullptr ||
-        cleanup == nullptr || append == nullptr || free_list == nullptr || global_init(3L) != 0) {
-        dlclose(curl);
-        return {kNetwork, "no HTTPS client (libcurl incomplete)"};
-    }
-    constexpr int kOptUrl = 10002, kOptPostFields = 10015, kOptUserAgent = 10018, kOptHeaders = 10023,
-                  kOptWriteFunction = 20011, kOptPostFieldSize = 30120, kOptPost = 47, kOptFollow = 52,
-                  kOptNoSignal = 99, kOptTimeoutMs = 155, kOptConnectMs = 156, kOptProtocols = 181;
-    constexpr int kInfoResponseCode = 0x200000 + 2;
-    constexpr long kProtoHttp = 1, kProtoHttps = 2;
-    using Write = std::size_t (*)(char*, std::size_t, std::size_t, void*);
-    const Write discard = [](char*, std::size_t size, std::size_t count, void*) { return size * count; };
-    SendResult result{kNetwork, "no HTTPS client"};
-    if (void* easy = easy_init()) {
-        const std::string url_text(url);
-        void* headers = append(nullptr, "Content-Type: application/x-nebula-report");
-        setopt(easy, kOptUrl, url_text.c_str());
-        setopt(easy, kOptProtocols, allow_http ? kProtoHttps | kProtoHttp : kProtoHttps);
-        setopt(easy, kOptPost, 1L);
-        setopt(easy, kOptPostFields, static_cast<const void*>(body.data()));
-        setopt(easy, kOptPostFieldSize, static_cast<long long>(body.size()));
-        setopt(easy, kOptHeaders, headers);
-        setopt(easy, kOptUserAgent, kUserAgent);
-        setopt(easy, kOptFollow, 0L);
-        setopt(easy, kOptNoSignal, 1L);
-        setopt(easy, kOptConnectMs, 5000L);
-        setopt(easy, kOptTimeoutMs, 10000L);
-        setopt(easy, kOptWriteFunction, discard);
-        const int code = perform(easy);
-        long status = 0;
-        if (code == 0 && getinfo(easy, kInfoResponseCode, &status) == 0 && status > 0) {
-            result = answered(status, body.size());
-        } else {
-            result = {kNetwork, "no answer (libcurl error " + std::to_string(code) + ")"};
-        }
-        cleanup(easy);
-        free_list(headers);
-    }
-    return result;  // libcurl stays loaded: it keeps process-wide state after curl_global_init
+    (void)allow_http;
+    if (url.rfind("https://", 0) != 0) return {kUsage, "the endpoint is not https"};
+    const int status = update::detail::platform_transport().post(std::string(url), kContentType, body, 10000);
+    if (status <= 0) return {kNetwork, "no answer (no connection, timeout or no HTTPS client)"};
+    return answered(status, body.size());
 }
+#else
+SendResult post(std::string_view, const Bytes&, bool) { return {kNetwork, "no HTTPS client in this build"}; }
 #endif
 
 const char* open_result_text(OpenResult result) {

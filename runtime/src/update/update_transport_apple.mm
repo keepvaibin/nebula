@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The update check's HTTP on Apple's systems: NSURLSession (the system's TLS, certificate trust and proxy settings).
-// Each call runs one task and waits for it on the calling thread (always a thread of the update core's own).
+// Each call runs one task and waits for it on the calling thread (a thread of the update core's own, or the diagnostics
+// report's send).
 #include "update_internal.h"
 
 #import <CFNetwork/CFNetwork.h>
@@ -20,6 +21,7 @@ using galaxy::update::detail::Transport;
 @property(nonatomic) BOOL over;
 @property(nonatomic) BOOL failed;
 @property(nonatomic) BOOL restarted;   // a 200 answer to a range request: the file starts again
+@property(nonatomic) BOOL noRedirect;  // a POST follows no redirect
 @property(nonatomic) NSInteger status;
 @property(nonatomic) const std::atomic_bool* cancel;
 @property(nonatomic) const std::function<void(std::uint64_t)>* progress;
@@ -86,7 +88,7 @@ using galaxy::update::detail::Transport;
     (void)task;
     (void)response;
     // A redirect never leaves HTTPS (GitHub's assets redirect to its storage over HTTPS).
-    completion([request.URL.scheme isEqualToString:@"https"] ? request : nil);
+    completion(!self.noRedirect && [request.URL.scheme isEqualToString:@"https"] ? request : nil);
 }
 
 - (void)URLSession:(NSURLSession*)session task:(NSURLSessionTask*)task didCompleteWithError:(NSError*)error {
@@ -101,10 +103,11 @@ namespace galaxy::update::detail {
 
 namespace {
 
-int run(NSString* address, NebulaUpdateReceiver* receiver, std::uint64_t resume_from, int timeout_ms, bool download) {
+int run(NSString* address, NebulaUpdateReceiver* receiver, std::uint64_t resume_from, int timeout_ms, bool download,
+        const std::span<const std::uint8_t>* post_body = nullptr, NSString* content_type = nil) {
     @autoreleasepool {
         NSURL* url = [NSURL URLWithString:address];
-        if (url == nil) return -1;
+        if (url == nil || (post_body != nullptr && ![url.scheme isEqualToString:@"https"])) return -1;
         NSURLSessionConfiguration* configuration = [NSURLSessionConfiguration ephemeralSessionConfiguration];
         configuration.timeoutIntervalForRequest = download ? 30.0 : timeout_ms / 1000.0;  // a download: until it stalls 30 s
         if (!download) configuration.timeoutIntervalForResource = timeout_ms / 1000.0;
@@ -115,6 +118,12 @@ int run(NSString* address, NebulaUpdateReceiver* receiver, std::uint64_t resume_
         if (resume_from > 0) {
             [request setValue:[NSString stringWithFormat:@"bytes=%llu-", static_cast<unsigned long long>(resume_from)]
                 forHTTPHeaderField:@"Range"];
+        }
+        if (post_body != nullptr) {
+            request.HTTPMethod = @"POST";
+            request.HTTPBody = [NSData dataWithBytes:post_body->data() length:post_body->size()];
+            [request setValue:content_type forHTTPHeaderField:@"Content-Type"];
+            receiver.noRedirect = YES;
         }
         NSURLSessionDataTask* task = [session dataTaskWithRequest:request];
         [task resume];
@@ -172,6 +181,15 @@ public:
     }
 
     bool unreachable(const std::string& url) override { return !proxied() && posix_unreachable(url, 1000); }
+
+    int post(const std::string& url, std::string_view content_type, std::span<const std::uint8_t> body,
+             int timeout_ms) override {
+        NebulaUpdateReceiver* receiver = [[NebulaUpdateReceiver alloc] init];
+        receiver.limit = 64u * 1024u;  // the answer's body is counted, never kept
+        const std::string type(content_type);
+        return run([NSString stringWithUTF8String:url.c_str()], receiver, 0, timeout_ms, false, &body,
+                   [NSString stringWithUTF8String:type.c_str()]);
+    }
 };
 
 }  // namespace

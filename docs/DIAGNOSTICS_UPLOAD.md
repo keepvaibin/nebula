@@ -44,8 +44,9 @@ HPKE (RFC 9180) base mode, suite DHKEM(X25519, HKDF-SHA256) 0x0020, HKDF-SHA256 
 info `Nebula diagnostics report v1`; aad = bytes 0 to 47, so a changed header fails the tag; one message, sequence 0.
 An envelope is at most 256 KiB; an opened report at most 1 MiB (larger is refused, never truncated).
 Sent as one `POST` with `Content-Type: application/x-nebula-report`, HTTPS only, 10 seconds, no redirect, no retry,
-no cookie. Windows: WinHTTP; Android: java.net.HttpURLConnection through JNI; Linux and macOS: the system's libcurl,
-loaded when needed (without it the send fails with exit 4 and `--save-sealed` still writes the report).
+no cookie. Windows: WinHTTP; Android: java.net.HttpURLConnection through JNI; Linux and macOS: the update check's
+transport (`runtime/src/update`: the system's libcurl loaded when needed, NSURLSession). Without libcurl the send fails
+with exit 4 and `--save-sealed` still writes the report.
 
 ## Host modes
 
