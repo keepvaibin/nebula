@@ -77,7 +77,8 @@ public:
                         unsigned quarter_turns = 0u);
     // The chain's pipelines into the present pass exist (an HDR10 swap chain needs them: nothing else writes its encoding).
     [[nodiscard]] bool present_ready() const noexcept {
-        return to_present_.rcas != VK_NULL_HANDLE && to_present_.rcas_scaled != VK_NULL_HANDLE && to_present_.resample != VK_NULL_HANDLE;
+        return to_present_.rcas != VK_NULL_HANDLE && to_present_.rcas_scaled != VK_NULL_HANDLE && to_present_.resample != VK_NULL_HANDLE &&
+               to_present_.copy != VK_NULL_HANDLE;
     }
 
 private:
@@ -100,6 +101,7 @@ private:
         VkPipeline rcas = VK_NULL_HANDLE;
         VkPipeline rcas_scaled = VK_NULL_HANDLE;
         VkPipeline resample = VK_NULL_HANDLE;
+        VkPipeline copy = VK_NULL_HANDLE;  // the resample at 1:1 (PostProcessPlan::copy)
     };
 
     VkShaderModule module(Program program) const;

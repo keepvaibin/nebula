@@ -562,7 +562,7 @@ PostProcessor::PresentStep PostProcessor::prepare_present(Object commands, const
         step.constants.params[2] = static_cast<float>(target_width);
         step.constants.params[3] = static_cast<float>(target_height);
         if (plan.resample_to_target) {
-            step.pipeline = pipeline(kFullscreenVs, kResamplePs, target_format, Format::None, kRgba);
+            step.pipeline = pipeline(kFullscreenVs, plan.copy ? kCopyPs : kResamplePs, target_format, Format::None, kRgba);
             return step;
         }
         @autoreleasepool {

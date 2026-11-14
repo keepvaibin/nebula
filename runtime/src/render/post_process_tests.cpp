@@ -164,7 +164,7 @@ void plans() {
     expect(p.aa_wanted && !p.fxaa && !p.smaa, "a failed fxaa is not replaced by smaa");
     // 6x (3840x2736) into 2560x1440: supersampled on both axes.
     p = plan_post_process(3840, 2736, 2560, 1440, with(Aa::kAuto));
-    expect(p.supersampled && !p.aa_wanted && !p.smaa && p.resample && p.resample_to_target, "auto skips supersampled");
+    expect(p.supersampled && !p.aa_wanted && !p.smaa && p.resample && p.resample_to_target && !p.copy, "auto skips supersampled");
     p = plan_post_process(3840, 2736, 2560, 1440, with(Aa::kSmaa));
     expect(p.smaa && p.resample, "forced smaa on a supersampled image");
     // 6x into 3840x2160: 1.0x horizontally, so not supersampled.
@@ -172,16 +172,20 @@ void plans() {
     expect(!p.supersampled && p.smaa && !p.easu && p.resample, "6x into 4K is not supersampled");
     // Same size: RCAS alone writes the window; without RCAS the copy does.
     p = plan_post_process(1280, 720, 1280, 720, with(Aa::kOff, 20));
-    expect(p.rcas && !p.resample && !p.easu, "same size + rcas");
+    expect(p.rcas && !p.resample && !p.easu && !p.copy, "same size + rcas");
     p = plan_post_process(1280, 720, 1280, 720, with(Aa::kOff, 0));
-    expect(!p.rcas && p.resample && p.resample_to_target, "same size copy");
+    expect(!p.rcas && p.resample && p.resample_to_target && p.copy, "same size copy");
     // Enlarging with RCAS: EASU into the intermediate, RCAS to the window.
     p = plan_post_process(640, 456, 1920, 1080, with(Aa::kOff, 20));
     expect(p.easu && p.rcas && !p.resample, "easu then rcas");
     PostProcessSettings bilinear = with(Aa::kOff, 0);
     bilinear.upscaler = PostProcessSettings::Upscaler::kBilinear;
     p = plan_post_process(640, 456, 1920, 1080, bilinear);
-    expect(!p.easu && p.resample && p.resample_to_target, "bilinear enlargement");
+    expect(!p.easu && p.resample && p.resample_to_target && !p.copy, "bilinear enlargement");
+    p = plan_post_process(1280, 720, 1280, 720, bilinear);
+    expect(!p.easu && p.resample && p.resample_to_target && p.copy, "same size copy with bilinear");
+    p = plan_post_process(1280, 720, 1280, 721, bilinear);
+    expect(p.resample_to_target && !p.copy, "one row taller is a resample");
     p = plan_post_process(0, 456, 1920, 1080, with(Aa::kSmaa));
     expect(!p.aa_wanted && !p.smaa && !p.resample, "empty source draws nothing");
 }

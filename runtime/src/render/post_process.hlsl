@@ -404,4 +404,14 @@ float4 PSMain(FullscreenOut i) : SV_Target {
 }
 #endif
 
+#if defined(PASS_COPY)
+// The resample at the picture's own size: its one bilinear tap falls on the texel's centre and returns that texel.
+Texture2D inputTex : register(t0);
+FullscreenOut VSMain(uint id : SV_VertexID) { return FullscreenTriangle(id); }
+float4 PSMain(FullscreenOut i) : SV_Target {
+    const int2 p = ViewportPixel(i.pos);
+    return float4(FinalWrite(inputTex.Load(int3(p, 0)).rgb, p), 1.0);
+}
+#endif
+
 #endif

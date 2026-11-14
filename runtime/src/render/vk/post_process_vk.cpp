@@ -153,7 +153,7 @@ void PostProcessorVk::set_present_pass(VkRenderPass pass) {
     }
     const VkDevice device = Context::get().device();
     for (VkPipeline pipeline :
-         {to_present_.easu, to_present_.rcas, to_present_.rcas_scaled, to_present_.resample}) {
+         {to_present_.easu, to_present_.rcas, to_present_.rcas_scaled, to_present_.resample, to_present_.copy}) {
         if (pipeline != VK_NULL_HANDLE) {
             Context::get().defer([device, pipeline] { vkDestroyPipeline(device, pipeline, nullptr); });
         }
@@ -167,6 +167,7 @@ void PostProcessorVk::set_present_pass(VkRenderPass pass) {
         to_present_.rcas = create_pipeline(kFullscreenVs, kRcasPs, present_pass_, kRgba, 0);
         to_present_.rcas_scaled = create_pipeline(kFullscreenVs, kRcasScaledPs, present_pass_, kRgba, 0);
         to_present_.resample = create_pipeline(kFullscreenVs, kResamplePs, present_pass_, kRgba, 0);
+        to_present_.copy = create_pipeline(kFullscreenVs, kCopyPs, present_pass_, kRgba, 0);
     }
 }
 
@@ -307,12 +308,14 @@ bool PostProcessorVk::build_pipelines() {
     to_window_.rcas = create_pipeline(kFullscreenVs, kRcasPs, window_pass_, kRgba, 0);
     to_window_.rcas_scaled = create_pipeline(kFullscreenVs, kRcasScaledPs, window_pass_, kRgba, 0);
     to_window_.resample = create_pipeline(kFullscreenVs, kResamplePs, window_pass_, kRgba, 0);
+    to_window_.copy = create_pipeline(kFullscreenVs, kCopyPs, window_pass_, kRgba, 0);
     built_ = true;
     const VkRenderPass present = std::exchange(present_pass_, VK_NULL_HANDLE);
     set_present_pass(present);
     if ((easu_ && (to_color_.easu == VK_NULL_HANDLE || to_window_.easu == VK_NULL_HANDLE)) ||
         to_color_.resample == VK_NULL_HANDLE || to_window_.rcas == VK_NULL_HANDLE ||
-        to_window_.rcas_scaled == VK_NULL_HANDLE || to_window_.resample == VK_NULL_HANDLE) {
+        to_window_.rcas_scaled == VK_NULL_HANDLE || to_window_.resample == VK_NULL_HANDLE ||
+        to_window_.copy == VK_NULL_HANDLE) {
         return false;
     }
     if (stencil_format_ != VK_FORMAT_UNDEFINED) {
@@ -349,8 +352,8 @@ void PostProcessorVk::destroy_pipelines() noexcept {
     }
     for (VkPipeline pipeline : {smaa_edges_, smaa_weights_, smaa_blend_, smaa_blend_rgb_, fxaa_, fxaa_rgb_,
                                 to_color_.easu, to_color_.resample, to_window_.easu, to_window_.rcas,
-                                to_window_.rcas_scaled, to_window_.resample, to_present_.easu, to_present_.rcas,
-                                to_present_.rcas_scaled, to_present_.resample}) {
+                                to_window_.rcas_scaled, to_window_.resample, to_window_.copy, to_present_.easu,
+                                to_present_.rcas, to_present_.rcas_scaled, to_present_.resample, to_present_.copy}) {
         if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
     }
     smaa_edges_ = smaa_weights_ = smaa_blend_ = smaa_blend_rgb_ = fxaa_ = fxaa_rgb_ = VK_NULL_HANDLE;
@@ -712,7 +715,7 @@ PostProcessorVk::PresentStep PostProcessorVk::prepare_present(VkCommandBuffer co
         step.constants.params[2] = static_cast<float>(target_width);
         step.constants.params[3] = static_cast<float>(target_height);
         if (plan.resample_to_target) {
-            step.pipeline = last.resample;
+            step.pipeline = plan.copy ? last.copy : last.resample;
             return step;
         }
         begin_pass(commands, color_pass_, scaled_, false);

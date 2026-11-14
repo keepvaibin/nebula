@@ -162,14 +162,17 @@ private:
     // Into the window (8 bits, dithered), and into a picture for a pass after it (the scene's format).
     Microsoft::WRL::ComPtr<ID3D12PipelineState> easu_window_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> resample_window_;
+    // The resample at 1:1 (PostProcessPlan::copy).
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> copy_window_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> rcas_;
     // Bilinear enlargement and RCAS in one pass (no window-sized intermediate).
     Microsoft::WRL::ComPtr<ID3D12PipelineState> rcas_scaled_;
-    // The same four last writes into an R10G10B10A2 HDR10 swap chain buffer (prepare_hdr).
+    // The same last writes into an R10G10B10A2 HDR10 swap chain buffer (prepare_hdr).
     Microsoft::WRL::ComPtr<ID3D12PipelineState> easu_hdr_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> rcas_hdr_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> rcas_scaled_hdr_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> resample_hdr_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> copy_hdr_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> resample_;
     Microsoft::WRL::ComPtr<ID3D12Resource> area_texture_;
     Microsoft::WRL::ComPtr<ID3D12Resource> search_texture_;
