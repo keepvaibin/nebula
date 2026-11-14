@@ -23,6 +23,24 @@ void CollisionCategorizedKeeper::movement() {
 
     for (CollisionZone** pZone = mZones.begin(); pZone != mZones.end(); pZone++) {
         s32 count = (*pZone)->mParts.size();
+#if defined(LUMA_HOOK)
+        // The module with hook points (its copy of this file starts with luma_hook.h) makes the game's calls.
+        for (int i = 0; i < count; i++) {
+            pParts = (*pZone)->mParts[i];
+
+            if (pParts->mIsValid) {
+                if (mCategory == pParts->mKeeperIndex) {
+                    pParts->updateMtx();
+                }
+
+                if (mUpdateZoneBounds) {
+                    (*pZone)->calcMinMaxAndRadius();
+                } else if (pParts->mStillCount == 0) {
+                    (*pZone)->calcMinMaxAndRadiusIfMoveOuter(pParts);
+                }
+            }
+        }
+#else
         // The global zone (the first) has no bounds: every query takes its parts without a zone test, and addParts
         // never makes them. The others' first bounds are made once, from every part's new matrix (as the last of a
         // remake per valid part left them).
@@ -52,6 +70,7 @@ void CollisionCategorizedKeeper::movement() {
         if (remake) {
             (*pZone)->calcMinMaxAndRadius();
         }
+#endif
     }
 
     mUpdateZoneBounds = false;
