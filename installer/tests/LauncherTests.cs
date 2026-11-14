@@ -318,6 +318,10 @@ namespace Nebula.Launcher
                 vsync["vsync_interval"] = "1";
                 Check(parsed.StateNow(changed, adapter, "1.0", "1.0") == BenchmarkState.Stale && parsed.StateNow(vsync, adapter, "1.0", "1.0") == BenchmarkState.Stale,
                       "benchmark: a setting changed since the run makes it stale");
+                var saved = new Dictionary<string, string>(config);
+                saved["per_pixel_lighting"] = "1";
+                Check(parsed.StateNow(saved, adapter, "1.0", "1.0") == BenchmarkState.Current,
+                      "benchmark: per_pixel_lighting written by Save while enhanced lighting is on leaves it current");
                 var applied = new Dictionary<string, string>(config);
                 applied["internal_height"] = "720"; applied["msaa_samples"] = "2"; applied["ambient_occlusion"] = "0";
                 applied["enhanced_lighting"] = "0"; applied["smaa_quality"] = "high"; applied["bloom"] = "60";

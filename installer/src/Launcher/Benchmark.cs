@@ -149,8 +149,13 @@ namespace Nebula.Launcher
             if (!Complete || RanWith.Count == 0 || ranBy != version) return BenchmarkState.Stale;
             if (adapter != null && !SameAdapter(adapter)) return BenchmarkState.Stale;
             bool current = true, applied = true;
+            // With enhanced lighting or ray tracing on, the engine lights at the pixel whatever per_pixel_lighting holds
+            // (render_config.h lights_at_pixel), and the settings window's Save writes it from the Lighting row: it is
+            // not compared then. A run with either key different already fails on that key.
+            bool perPixelInert = ConfigValue(config, "enhanced_lighting") == 1 || ConfigValue(config, "ray_tracing_enabled") == 1;
             foreach (var pair in RanWith)
             {
+                if (pair.Key == "per_pixel_lighting" && perPixelInert) continue;
                 double? now = ConfigValue(config, pair.Key);
                 if (now == null) continue;   // a key the launcher cannot read stays out of the check
                 var row = Settings.FirstOrDefault(s => s.Key == pair.Key);
