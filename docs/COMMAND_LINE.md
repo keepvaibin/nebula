@@ -17,6 +17,7 @@ and a value. The launcher passes `--pak` and `--saves`; the Android app also pas
 | `--dump-tunables <file>` | Every tuning number a mod can set (luma.json `tunables`), one `<key>\t<kind>\t<game's number>` line each, written there as the game module starts. docs/modding/TUNABLES.md is the same list from the source. |
 | `--timeline <file>` | Where the recorded timeline goes; default `diagnostics/timeline-<process id>.bin` in the data folder. |
 | `--seconds <n>` | End the game after n seconds. |
+| `--home 0\|1` | 1: the home screen (Play, Settings, Quit, an update's notice) before the title, in the game's menus; 0: straight into the game. Default 1 on macOS and Linux, 0 on Windows and Android (their launchers are the home screen) and in a hidden or `--seconds` run. |
 | `--gpu-start-retry <n>` | Set by the game itself when it starts again because no graphics memory was free: the tries so far (5 at most). |
 
 The GPU is a setting: `gpu=` in `config.ini`, chosen in Nebula Settings (empty: the high-performance GPU).

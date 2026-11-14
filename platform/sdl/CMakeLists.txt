@@ -69,6 +69,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/render_api.cpp
     ${rt}/render/render_config.cpp
     ${rt}/ui/native_settings.cpp
+    ${rt}/ui/launcher.cpp
     ${rt}/ui/settings_model.cpp
     ${rt}/ui/settings_system_page.cpp
     ${rt}/ui/settings_advanced_page.cpp
