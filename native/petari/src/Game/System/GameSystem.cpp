@@ -72,7 +72,7 @@ namespace {
 
 // The game thread's entry; the native platform layer starts it.
 extern "C" void nebula_game_main(void) {
-    // Mods start here and hooks change only here (LumaCore.game_thread, docs/modding/language/compiled-form.md).
+    // Mods start here and hooks change only here (LumaCore.game_thread, docs/modding/lumalink/loader.md).
     luma::markGameThread();
     NebulaArena::create(nullptr);
     Ui::LytInit();

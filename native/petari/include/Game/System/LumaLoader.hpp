@@ -12,7 +12,7 @@ typedef const void* (*LumaServiceFinder)(const char* name, uint32_t major, uint3
 namespace luma {
     const LumaCore* core();
 
-    // Binds a mod whole or not at all (docs/modding/language/compiled-form.md): every name, then every hook as `hook`
+    // Binds a mod whole or not at all (docs/modding/lumalink/loader.md, Binding): every name, then every hook as `hook`
     // would take it, then the slots, its begin and its start; only then its hooks. False: refused, pRefusal says why
     // (the validator's code and parameters). The kernel closes pLibrary with `close` when none of its code can run any
     // more.

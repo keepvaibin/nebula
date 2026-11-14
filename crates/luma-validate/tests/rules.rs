@@ -725,7 +725,7 @@ fn sign(body: String) -> Vec<u8> {
     format!("{body}end\t{sum}\n").into_bytes()
 }
 
-/// L800's cycle (compiled-form.md): the game starts a needed mod first, so mods that need each other round a circle
+/// L800's cycle (lumalink/loader.md): the game starts a needed mod first, so mods that need each other round a circle
 /// cannot start. The check sees this mod's needs and the kept needs of the mods that are on.
 #[test]
 fn a_cycle_of_needs_through_the_mod_is_refused_and_named() {
