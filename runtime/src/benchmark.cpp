@@ -565,6 +565,9 @@ std::string number(double value) {
     if (!std::isfinite(value)) return "null";
     char text[32];
     std::snprintf(text, sizeof(text), "%.3f", value);
+    for (char* p = text; *p != '\0'; ++p) {
+        if (*p == ',') *p = '.';  // a process locale with a decimal comma (set by a toolkit or a plugin): JSON has '.'
+    }
     return text;
 }
 
