@@ -141,7 +141,6 @@ private:
     bool built_ = false;
     bool to_build_ = false;  // initialized: poll_ready makes the pipelines
     unsigned spirv_quality_ = 0;  // the SMAA quality module() takes the quality-dependent programs at
-    bool easu_ = false;  // the device has EASU's single-channel gathers
     VkRenderPass scene_pass_ = VK_NULL_HANDLE;
     VkRenderPass color_pass_ = VK_NULL_HANDLE;
     VkRenderPass window_pass_ = VK_NULL_HANDLE;
