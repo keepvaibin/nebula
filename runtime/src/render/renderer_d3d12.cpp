@@ -12,6 +12,7 @@
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/render_api.h"
 #include "galaxy/render/galaxy_select.h"
+#include "galaxy/render/game_bloom_shape.h"
 #include "barriers_d3d12.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/rt/rt_backend.h"
@@ -2759,6 +2760,12 @@ void RendererD3D12::shutdown() {
     conv_scene_source_table_.reset();
     conv_scene_tables_.clear();
     conv_scene_table_ = ~std::size_t{0};
+    for (SceneTargetSet* set : {&alt_scene_, &target_scene_, &fg_hudless_scene_target_, &hdr_scene_scene_}) {
+        set->conv_ring = ~std::size_t{0};
+    }
+    for (auto& entry : target_slots_) {
+        entry.second.set.conv_ring = ~std::size_t{0};
+    }
     probe_pipeline_.Reset();
     probe_root_signature_.Reset();
     probe_slots_ = {};
@@ -4396,6 +4403,7 @@ void RendererD3D12::trim_idle_effect_targets() {
         retired_targets_[frame_slot_].push_back(std::move(alt_scene_.color));
         retired_targets_[frame_slot_].push_back(std::move(alt_scene_.depth));
         alt_scene_.map = FrameMap{};
+        release_conv_table(alt_scene_.conv_ring);
     }
     if (hdr_scene_scene_.color && !scene_hdr_ && !output_scene_active_ && !target_pass_active_ &&
         frame_index_ > wide_scene_used_frame_ + kIdleFrames) {
@@ -4405,6 +4413,7 @@ void RendererD3D12::trim_idle_effect_targets() {
         }
         hdr_scene_scene_.depth.Reset();  // the scene target's own depth, held by the scene target too
         hdr_scene_scene_.map = FrameMap{};
+        release_conv_table(hdr_scene_scene_.conv_ring);
     }
 }
 
@@ -4847,6 +4856,7 @@ bool RendererD3D12::ensure_output_scene(const FrameMap& map) {
         retired_targets_[frame_slot_].push_back(std::move(alt_scene_.color));
         retired_targets_[frame_slot_].push_back(std::move(alt_scene_.depth));
     }
+    release_conv_table(alt_scene_.conv_ring);  // its views are written below
     alt_scene_.color.Reset();
     alt_scene_.depth.Reset();
     alt_scene_.map = FrameMap{};
@@ -4952,6 +4962,7 @@ bool RendererD3D12::create_scene_set(
     set.color.Reset();
     set.depth.Reset();
     set.map = FrameMap{};
+    release_conv_table(set.conv_ring);
     if (!rtv_heap) {
         D3D12_DESCRIPTOR_HEAP_DESC dhd{};
         dhd.NumDescriptors = 1;
@@ -5008,7 +5019,6 @@ bool RendererD3D12::create_scene_set(
     } else {
         // The caller writes views into the frame's descriptor segment per use.
         set.conv_table.reset();
-        release_conv_table(set.conv_ring);
     }
     set.map = map;
     return true;
@@ -5126,6 +5136,7 @@ void RendererD3D12::retire_target_slot(TargetSlot& slot) {
     retire(slot.set.depth);
     retire(slot.set.msaa.color);
     retire(slot.set.msaa.depth);
+    release_conv_table(slot.set.conv_ring);
 }
 
 void RendererD3D12::sweep_target_slots() {
@@ -5799,6 +5810,19 @@ void RendererD3D12::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_
             p.ring_x = p.ring_y = 1.0f;
         }
         p.strength = static_cast<float>(std::min(get_render_config().bloom, kMaxBloom)) / 100.0f;
+        if (scene_msaa_.samples <= 1u &&
+            bloom::adds_nothing(p.threshold, kind == NEBULA_PASS_BLOOM_NORMAL ? 0u : p.channel, p.tap1, p.intensity,
+                                p.strength)) {
+            // The bloom adds nothing: the simple one leaves the frame as it is; the normal one's scene, kept by a trade,
+            // trades back (else apply draws it back).
+            if (kind == NEBULA_PASS_BLOOM_SIMPLE) {
+                return;
+            }
+            if (game_bloom_.kept_by_trade(in)) {
+                game_bloom_.set_aside(swap_scene_color(game_bloom_.take_kept_back(command_list_.Get())), in);
+                return;
+            }
+        }
         // The simple bloom's source is the frame: the scene and the source trade places instead of the scene being
         // copied, where the composite then writes the whole target from it (as the bloom hold's trade).
         if (kind == NEBULA_PASS_BLOOM_SIMPLE && scene_msaa_.samples <= 1u &&

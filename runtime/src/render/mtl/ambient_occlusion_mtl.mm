@@ -18,7 +18,8 @@ namespace {
 
 constexpr Format kDistanceFormat = Format::R32f;
 constexpr Format kOcclusionFormat = Format::Rgba16f;
-constexpr Format kScaleFormat = Format::Rgba8;
+// The multiplier: one channel (a shader write takes R of the value whatever the format).
+constexpr Format kScaleFormat = Format::R8;
 // ambient_occlusion.hlsl's registers (vk/utility_spirv_sources.h kAoBindings): t0-t2 at textures 0-2, u0 at 3, the
 // models at buffer 4 and their tiles at 5, the constants pushed.
 constexpr NSUInteger kObjectsBuffer = 4u;

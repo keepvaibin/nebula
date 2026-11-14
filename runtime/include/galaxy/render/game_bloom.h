@@ -77,6 +77,12 @@ public:
                                                                          std::uint64_t frame_index,
                                                                          unsigned frames_in_flight);
     void keep_picture(Microsoft::WRL::ComPtr<ID3D12Resource> picture, const Inputs& in);
+    // A normal bloom that adds nothing (bloom::adds_nothing) over a scene kept by a trade: the kept picture becomes the
+    // scene target's colour again (take_kept_back, kept_by_trade first: same size, format and flags as the scene target),
+    // and the image the glowing models were drawn on waits for the next trade (set_aside).
+    [[nodiscard]] bool kept_by_trade(const Inputs& in) const;
+    [[nodiscard]] Microsoft::WRL::ComPtr<ID3D12Resource> take_kept_back(ID3D12GraphicsCommandList* list);
+    void set_aside(Microsoft::WRL::ComPtr<ID3D12Resource> image, const Inputs& in);
     // The simple bloom's source without a copy: the scene target continues on the image this returns (null: it makes one),
     // and give_source takes the scene's picture as the source; apply() copies nothing then, and with nothing else to draw
     // draws the frame back from it. Only where the composite covers the whole target, which it then writes from the
