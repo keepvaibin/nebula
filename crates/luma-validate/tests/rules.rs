@@ -1159,3 +1159,16 @@ fn every_source_ending_is_cooked_or_has_a_place() {
         assert!(cooked != placed, "{ending}: cooked {cooked}, placed {placed}");
     }
 }
+
+#[test]
+fn only_what_the_players_game_knows_is_left_to_its_start() {
+    // pack refuses while a rule waits for an input LumaLink can be given; the ones only the player's game knows (a
+    // class a mod's code makes, the player's device, another installed mod's rows) are said and packed.
+    let said = |because: &'static str| luma_validate::NotChecked { code: 0, because, places: 1 };
+    for because in luma_validate::CHECKED_BY_THE_GAME {
+        assert!(!said(because).needs_input(), "{because}");
+    }
+    for because in ["Missing.Store", "Missing.Game", "Missing.Classes", "Missing.SelfDescription", "Missing.RendererFeatures", "Missing.Load"] {
+        assert!(said(because).needs_input(), "{because}");
+    }
+}

@@ -74,8 +74,9 @@ pub struct Finding {
     pub args: Vec<(&'static str, Arg)>,
 }
 
-/// A rule that could not be checked because an input it needs is absent (LumaLink with no imported game): named,
-/// never skipped silently (validator contract 2). `pack` refuses while any remain.
+/// A rule that could not be checked because an input it needs is absent: named, never skipped silently (validator
+/// contract 2). `pack` refuses while any remain that an input LumaLink can be given would check (the imported game, the
+/// mod folder); the ones only the player's game can check (`CHECKED_BY_THE_GAME`) are said and checked at its start.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NotChecked {
     pub code: u16,
@@ -83,6 +84,17 @@ pub struct NotChecked {
     pub because: &'static str,
     /// How many places the rule would have been checked.
     pub places: u32,
+}
+
+/// What only the player's game knows, so no input of LumaLink's checks it: the classes the mods' code makes once
+/// started (L403), the player's device and its renderer's features (L806), another installed mod's rows (L401).
+pub const CHECKED_BY_THE_GAME: [&str; 3] = ["Missing.AfterStart", "Missing.Device", "Missing.OtherModRows"];
+
+impl NotChecked {
+    /// Whether an input LumaLink can be given would check it; `pack` refuses while any such remains.
+    pub fn needs_input(&self) -> bool {
+        !CHECKED_BY_THE_GAME.contains(&self.because)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

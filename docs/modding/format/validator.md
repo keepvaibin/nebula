@@ -24,7 +24,10 @@
 | Options | the defaults | the player's values |
 
 Checks that need an input that is absent (LumaLink with no imported game) are reported as **not checked**, each
-named, never silently skipped; `pack` refuses until they are checked.
+named, never silently skipped; `pack` refuses until they are checked. Three only the player's game can check, and
+`pack` packs with them said: a placed class no list of the game names, which a mod's code may make (L403,
+`Missing.AfterStart`), renderer features against the player's device (L806, `Missing.Device`), and a patch of another
+mod's file (L401, `Missing.OtherModRows`). The game checks them at its start.
 
 **When the game runs it.** Two calls of the same library (rule 7), split by what each check depends on:
 
