@@ -267,7 +267,7 @@ pub fn check_words(key: &str, text: &str) -> Result<()> {
             };
             let numbers = matches!(t.arg, Arg::Unit | Arg::Tag | Arg::High | Arg::Index);
             if words.len() - 1 == wanted && numbers {
-                if let Some(bad) = words[1..].iter().find(|w| number(w).is_none_or(|v| v > t.most)) {
+                if let Some(bad) = words[1..].iter().find(|w| number(w).map_or(true, |v| v > t.most)) {
                     return Err(super::refuse::refuse("Cook.Text.TagNumber", &args(vec![("value", bad.to_string()), ("most", t.most.to_string())])));
                 }
             }

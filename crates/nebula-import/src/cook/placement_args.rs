@@ -104,7 +104,7 @@ impl ObjectArgs {
                     None => column.clone(),
                     // The class's own read with a field first, then a base's, then Arg<n>.
                     Some(a) => {
-                        let own = |r: &&&Value| r.get("from").and_then(Value::as_str).is_none_or(|f| f == class);
+                        let own = |r: &&&Value| r.get("from").and_then(Value::as_str).map_or(true, |f| f == class);
                         let generic = format!("Arg{a}");
                         reads.iter().filter(own).chain(reads.iter().filter(|r| !own(r)))
                             .map(|r| modder_name(r.get("target").and_then(Value::as_str), a))
