@@ -607,7 +607,8 @@ struct Pak {
     fs::path store_file;
 };
 Pak gPak;
-// A part of the game a start with mods needs, found missing at step 1 (contract start-check 2): every mod is off.
+// A part of the game a start with mods needs, found missing at the start check's first step: every mod is off
+// (docs/modding/lumalink/start-check.md).
 std::optional<galaxy::startcheck::MissingPart> gMissingPart;
 
 // The harness's own game half (luma-test, placed by tools/lumacore/luma_test.py in a harness run, which sets

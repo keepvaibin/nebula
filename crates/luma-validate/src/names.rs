@@ -1,9 +1,8 @@
-//! What the game has, by name: the self-description (plan 1.8) as far as it exists. Until 1.8's file is signed, the
-//! function rows come from the kernel's `.rows` files (one line per function: name, signature, `hook`, `tell` or
-//! `call`, source line; `tell` rows are constructors and destructors, which take `before` and `after` only, and
-//! variadic functions, which take `before` only; a `call` row is a constexpr function, called but never hooked:
-//! contract varargs 3 and 4), and the records,
-//! fields and globals from the types file `luma_types.json` (plan 1.2, contract types draft 2).
+//! What the game has, by name, from its self-description folder: the function rows from the kernel's `.rows` files
+//! (one line per function: name, signature, `hook`, `tell` or `call`, source line; `tell` rows are constructors and
+//! destructors, which take `before` and `after` only, and variadic functions, which take `before` only; a `call` row
+//! is a constexpr function, called but never hooked: docs/modding/language/varargs.md), and the records, fields and
+//! globals from the types file `luma_types.json` (docs/modding/language/types.md).
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

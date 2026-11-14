@@ -85,8 +85,8 @@ foreach(source IN LISTS game_sources)
     endif()
 endforeach()
 
-# The type rows (contract types, plan 1.2): every record, field, base, alias and global of the game's headers, from one
-# libclang parse of all of them with a game unit's command (tools/lumacore/gen_types.py). The numbers are the
+# The type rows (docs/modding/language/types.md): every record, field, base, alias and global of the game's headers,
+# from one libclang parse of all of them with a game unit's command (tools/lumacore/gen_types.py). The numbers are the
 # compiler's own: the table is compiled here, with no access check, since offsetof names private fields. A global gets a
 # row only when a unit defines it (the copies' .globals lists); what a .cpp defines is in its copy's .types.
 if(NEBULA_LUMA_HOOKS)
@@ -127,7 +127,7 @@ if(NEBULA_LUMA_HOOKS)
             VERBATIM)
         add_custom_target(luma_services_file ALL DEPENDS "${luma_types}/luma_services.json")
     endif()
-    # The reference a modder reads (plan 10.1), generated from the same description: every row on exactly one page
+    # The reference a modder reads, generated from the same description: every row on exactly one page
     # (--check fails the build otherwise). The folder is written whole each time, so a name the game no longer has
     # leaves no page behind. Output under the build, never committed.
     set(luma_reference "${CMAKE_CURRENT_BINARY_DIR}/luma_docs/reference")
@@ -138,8 +138,8 @@ if(NEBULA_LUMA_HOOKS)
                 --functions "${luma_types}/luma_functions.json" --out "${luma_reference}" --check
         DEPENDS "${luma_types}/luma_types_table.cpp" "${luma_reference_tool}" VERBATIM)
     add_custom_target(luma_reference ALL DEPENDS "${luma_reference}/search.json")
-    # The self-description (plan 1.8, contract self-description): one file beside the module saying everything a mod
-    # can name, from the generator's outputs; a cross build makes it too (no run of the module is needed).
+    # The self-description (docs/modding/language/game-description.md): one file beside the module saying everything
+    # a mod can name, from the generator's outputs; a cross build makes it too (no run of the module is needed).
     string(TOLOWER "${CMAKE_SYSTEM_NAME}" luma_os)
     if(luma_os STREQUAL "darwin")
         set(luma_os "macos")
@@ -166,8 +166,8 @@ if(NEBULA_LUMA_HOOKS)
         DEPENDS smg_game "${luma_types}/luma_types_table.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/../tools/lumacore/self_description.py"
                 "${CMAKE_CURRENT_SOURCE_DIR}/include/luma.h"
         VERBATIM)
-    # The placement facts (plan 1.8 places): the factory's rows and each class's placement argument reads, from the
-    # copies' .places parts, for the stage cook (G's 3.9).
+    # The placement facts: the factory's rows and each class's placement argument reads, from the copies' .places
+    # parts, for the stage cook.
     set(luma_placement "${CMAKE_CURRENT_BINARY_DIR}/smg_game.luma-placement.json")
     add_custom_command(OUTPUT "${luma_placement}"
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../tools/lumacore/placement.py"
@@ -177,8 +177,8 @@ if(NEBULA_LUMA_HOOKS)
     add_custom_target(luma_self_description ALL DEPENDS "${luma_self}" "${luma_placement}")
 endif()
 
-# Two modules (plan 1.7, contract modules): smg_game with every row (the instrumented copies above, the type table,
-# RTTI data, every function exported) and smg_game_plain, the source as written with none of it. The host loads the
+# Two modules (docs/modding/lumalink/modules.md): smg_game with every row (the instrumented copies above, the type
+# table, RTTI data, every function exported) and smg_game_plain, the source as written with none of it. The host loads the
 # plain one when no enabled mod has code (runtime/src/game_module.cpp). Everything else about them is the same, in
 # smg_game_common. OFF: one module, as before (a build that needs only the rows one).
 option(NEBULA_LUMA_PLAIN_MODULE "Also build smg_game_plain, the game without rows, for a start with no mod code" ON)
@@ -296,8 +296,9 @@ target_compile_options(smg_game_common INTERFACE
     # a unit seeing just a declaration would use another size than its callers.
     $<$<AND:$<PLATFORM_ID:Windows>,$<COMPILE_LANGUAGE:CXX>>:-fcomplete-member-pointers>
     -Wno-c++11-narrowing)
-# The module with rows carries RTTI data, so the kernel finds an object's own class from its vtable (contract objects,
-# plan 1.3); the game never uses typeid on an object or dynamic_cast. The module without rows has none.
+# The module with rows carries RTTI data, so the kernel finds an object's own class from its vtable
+# (docs/modding/language/objects.md); the game never uses typeid on an object or dynamic_cast. The module without
+# rows has none.
 target_compile_options(smg_game PRIVATE $<$<COMPILE_LANGUAGE:CXX>:$<IF:$<BOOL:${NEBULA_LUMA_HOOKS}>,-frtti,-fno-rtti>>)
 if(TARGET smg_game_plain)
     target_compile_options(smg_game_plain PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>)
@@ -322,8 +323,8 @@ elseif(APPLE)
         -Wl,-unexported_symbol,__ZT?St* -Wl,-unexported_symbol,__ZT?NSt* -Wl,-unexported_symbol,___cxa* -Wl,-unexported_symbol,___gxx*)
 else()
     target_link_options(smg_game_common INTERFACE -Wl,-Bsymbolic -Wl,-z,now)
-    # A symbol the module names and nothing defines (a class's type_info whose key function has no body: contract
-    # objects M-2) fails the link here, as the NDK's own flags make it fail on Android, never the game's start. A
+    # A symbol the module names and nothing defines (a class's type_info whose key function has no body)
+    # fails the link here, as the NDK's own flags make it fail on Android, never the game's start. A
     # sanitizer's runtime is the executable's, so its build leaves them to the loader.
     if(NOT ANDROID AND NOT NEBULA_SANITIZE)
         target_link_options(smg_game_common INTERFACE -Wl,--no-undefined)
