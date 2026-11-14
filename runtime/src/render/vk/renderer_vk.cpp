@@ -317,15 +317,20 @@ bool RendererVk::create_layouts() {
     const VkDevice device = context.device();
     // Scene depth: 32-bit float with stencil (the shadow volumes), where reversed Z keeps its precision; D24S8 where the
     // device lacks it (Vulkan guarantees one of the two) or its D32F clears are broken (DeviceQuirks::depth_d24).
-    const auto usable = [&context](VkFormat candidate) {
+    const auto usable = [&context](VkFormat candidate, VkFormatFeatureFlags needed) {
         VkFormatProperties format{};
         vkGetPhysicalDeviceFormatProperties(context.physical_device(), candidate, &format);
-        constexpr VkFormatFeatureFlags kNeeded = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
-        return (format.optimalTilingFeatures & kNeeded) == kNeeded;
+        return (format.optimalTilingFeatures & needed) == needed;
     };
-    depth_format_ = !context.quirks().depth_d24 && usable(VK_FORMAT_D32_SFLOAT_S8_UINT) ? VK_FORMAT_D32_SFLOAT_S8_UINT
-                    : usable(VK_FORMAT_D24_UNORM_S8_UINT)                                ? VK_FORMAT_D24_UNORM_S8_UINT
-                                                                                         : VK_FORMAT_D32_SFLOAT_S8_UINT;
+    constexpr VkFormatFeatureFlags kSampledDepth = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
+    // Neither sampled: the one the spec promises as an attachment (D32FS8 when its attachment bit is not reported).
+    depth_format_ = !context.quirks().depth_d24 && usable(VK_FORMAT_D32_SFLOAT_S8_UINT, kSampledDepth) ? VK_FORMAT_D32_SFLOAT_S8_UINT
+                    : usable(VK_FORMAT_D24_UNORM_S8_UINT, kSampledDepth)                                ? VK_FORMAT_D24_UNORM_S8_UINT
+                    : usable(VK_FORMAT_D24_UNORM_S8_UINT, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) ? VK_FORMAT_D24_UNORM_S8_UINT
+                                                                                                        : VK_FORMAT_D32_SFLOAT_S8_UINT;
+    if (!usable(depth_format_, kSampledDepth)) {
+        std::fprintf(stderr, "[vulkan] neither D32FS8 nor D24S8 is a sampled depth format here; the depth reads are undefined\n");
+    }
 
     const VkShaderStageFlags stage_passes = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     // Descriptor indexing, or each draw's own tables (shader_compile_vk.h kBoundTableSlots); the programs, loaded by the form
