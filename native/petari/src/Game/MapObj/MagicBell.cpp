@@ -172,7 +172,11 @@ bool MagicBell::tryRing() {
     Vec3f hitDir;
     MR::getStarPointerWorldVelocityDirection(&hitDir, 0);
     if (MR::isNearZero(hitDir)) {
-        hitDir.set(MR::getRandom(-1.0f, 1.0f), MR::getRandom(-1.0f, 1.0f), MR::getRandom(-1.0f, 1.0f));
+        // Drawn z, y, x: the console's right-to-left order of the arguments (as the Windows build's), on every platform.
+        const f32 z = MR::getRandom(-1.0f, 1.0f);
+        const f32 y = MR::getRandom(-1.0f, 1.0f);
+        const f32 x = MR::getRandom(-1.0f, 1.0f);
+        hitDir.set(x, y, z);
         if (MR::isNearZero(hitDir)) {
             hitDir.set(1.0f, 0.0f, 0.0f);
         } else {

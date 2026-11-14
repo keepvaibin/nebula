@@ -866,7 +866,11 @@ void StarPiece::launch(const Vec3f& rPosition, f32 randomRange, f32 speed, bool 
         trySetGravityAndFront(mGravity);
     }
 
-    Vec3f randVec(MR::getRandom(-randomRange, randomRange), MR::getRandom(-randomRange, randomRange), MR::getRandom(-randomRange, randomRange));
+    // Drawn z, y, x: the console's right-to-left order of the arguments (as the Windows build's), on every platform.
+    const f32 randZ = MR::getRandom(-randomRange, randomRange);
+    const f32 randY = MR::getRandom(-randomRange, randomRange);
+    const f32 randX = MR::getRandom(-randomRange, randomRange);
+    Vec3f randVec(randX, randY, randZ);
     mVelocity.set(-mGravity * speed);
     mVelocity += randVec;
     launchCommon(rPosition, notCheckInWater, isForceEffectLight);
@@ -876,7 +880,11 @@ void StarPiece::launch(const Vec3f& rPosition, const Vec3f& rUp, f32 randomRange
     mPosition.set(rPosition);
     trySetGravityAndFront(-rUp);
 
-    Vec3f randVec(MR::getRandom(-randomRange, randomRange), MR::getRandom(-randomRange, randomRange), MR::getRandom(-randomRange, randomRange));
+    // Drawn z, y, x: the console's right-to-left order of the arguments (as the Windows build's), on every platform.
+    const f32 randZ = MR::getRandom(-randomRange, randomRange);
+    const f32 randY = MR::getRandom(-randomRange, randomRange);
+    const f32 randX = MR::getRandom(-randomRange, randomRange);
+    Vec3f randVec(randX, randY, randZ);
     mVelocity.set(rUp * speed);
     mVelocity += randVec;
     launchCommon(rPosition, notCheckInWater, isForceEffectLight);

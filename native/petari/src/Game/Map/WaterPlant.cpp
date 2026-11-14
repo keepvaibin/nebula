@@ -221,8 +221,10 @@ void WaterPlant::initPlantAfterPlacement() {
         f32 randomBounds = mAreaRadius;
         Vec3f* pPlantPos = &rPlant.mPosition;
         for (int j = 0; j < ::cPlantAddTime; j++) {
-            pPlantPos->set< f32 >(MR::getRandom(-randomBounds, randomBounds) + mPosition.x, ::cGroundProbeHeight + mPosition.y,
-                                  MR::getRandom(-randomBounds, randomBounds) + mPosition.z);
+            // Drawn z, then x: the console's right-to-left order of the arguments (as the Windows build's), on every platform.
+            const f32 offsetZ = MR::getRandom(-randomBounds, randomBounds);
+            const f32 offsetX = MR::getRandom(-randomBounds, randomBounds);
+            pPlantPos->set< f32 >(offsetX + mPosition.x, ::cGroundProbeHeight + mPosition.y, offsetZ + mPosition.z);
 
             if (MR::calcMapGround(*pPlantPos, pPlantPos, ::cGroundProbeLength)) {
                 break;
