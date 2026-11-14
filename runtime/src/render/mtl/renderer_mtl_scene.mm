@@ -473,7 +473,18 @@ void RendererMtl::begin_scene_pass_with(unsigned aux, const SceneClearValues* cl
     @autoreleasepool {
         MTLRenderPassDescriptor* const descriptor = (__bridge_transfer MTLRenderPassDescriptor*)scene_pass_descriptor(
             aux, clear, discard_color, clear_depth, pass_visibility_ ? pass_visibility_->buffer : nullptr);
-        id<MTLRenderCommandEncoder> const pass = [commands_of(commands_) renderCommandEncoderWithDescriptor:descriptor];
+        id<MTLRenderCommandEncoder> pass = nil;
+        if (parallel_scene_pass_) {
+            id<MTLParallelRenderCommandEncoder> const parallel =
+                [commands_of(commands_) parallelRenderCommandEncoderWithDescriptor:descriptor];
+            if (parallel != nil) {
+                parallel.label = @(caller);
+                scene_parallel_ = own(parallel);
+                pass = [parallel renderCommandEncoder];
+            }
+        } else {
+            pass = [commands_of(commands_) renderCommandEncoderWithDescriptor:descriptor];
+        }
         if (pass == nil) {
             throw std::runtime_error("the scene pass could not begin");
         }
@@ -493,6 +504,11 @@ void RendererMtl::begin_scene_pass_with(unsigned aux, const SceneClearValues* cl
             break;
         }
     }
+    attach_scene_encoder();
+}
+
+void RendererMtl::attach_scene_encoder() {
+    const unsigned aux = scene_pass_aux_;
     if (bindless_ && mirrored_store_ != nullptr) {
         // Every texture a draw may read through the array is named to the pass, but those it draws into.
         const mtl::Object targets[] = {scene_.color->texture,
@@ -536,6 +552,10 @@ void RendererMtl::end_scene_pass(const char* caller) {
     }
     [pass_of(pass_) endEncoding];
     drop(pass_);
+    if (scene_parallel_ != nullptr) {
+        [(__bridge id<MTLParallelRenderCommandEncoder>)scene_parallel_ endEncoding];
+        drop(scene_parallel_);
+    }
     encoder_.attach(nullptr, 0u, 0u);
     scene_pass_open_ = false;
     scene_pass_closed_by_ = caller;

@@ -322,6 +322,12 @@ bool RendererMtl::parallel_record_begin(const std::uint8_t* chunk_aux, unsigned 
     if (chunk_count == 0u || record_passes_ >= kMaxRecordPasses) {
         return false;
     }
+    // A tile-based GPU stores the targets at a pass's end and loads them at the next one's start: there every scene pass
+    // is a parallel one from now on, and chunks of the pass's own targets run inside it.
+    parallel_scene_pass_ = mtl::Context::get().caps().apple_gpu;
+    if (parallel_scene_pass_ && parallel_record_in_pass(chunk_aux, chunk_count)) {
+        return true;
+    }
     // The pass the walk had open ran its draws before; the chunks run in passes of their own.
     end_scene_pass("parallel recording");
     if (depth_clear_pending()) {
@@ -369,6 +375,48 @@ bool RendererMtl::parallel_record_begin(const std::uint8_t* chunk_aux, unsigned 
     return true;
 }
 
+bool RendererMtl::parallel_record_in_pass(const std::uint8_t* chunk_aux, unsigned chunk_count) {
+    const unsigned aux = effective_draw_aux(chunk_aux[0]);
+    for (unsigned chunk = 1; chunk < chunk_count; ++chunk) {
+        if (effective_draw_aux(chunk_aux[chunk]) != aux) {
+            return false;
+        }
+    }
+    // Held probes read the depth as it stands before the chunks, and a pass opened before parallel_scene_pass_ is a
+    // plain one: either ends here. begin_scene_pass_with keeps an open pass of these targets and settles a waiting
+    // depth clear as any opening does.
+    if (scene_pass_open_ && (!held_probe_slots_.empty() || depth_clear_pending() || scene_parallel_ == nullptr)) {
+        end_scene_pass("parallel recording");
+    }
+    begin_scene_pass_with(aux, nullptr, false, "parallel recording");
+    if (scene_parallel_ == nullptr) {
+        return false;
+    }
+    record_aux_.assign(chunk_aux, chunk_aux + chunk_count);
+    record_encoders_.assign(chunk_count, nullptr);
+    record_runs_.clear();
+    record_width_ = scene_.color->width;
+    record_height_ = scene_.color->height;
+    // The encoders run in the order they are made: the draws before, the chunks, then pass_ again for those after.
+    if (mirrored_store_ != nullptr) {
+        mirrored_store_->backend().set_open_pass(nullptr);
+    }
+    [pass_of(pass_) endEncoding];
+    drop(pass_);
+    @autoreleasepool {
+        id<MTLParallelRenderCommandEncoder> const parallel = (__bridge id<MTLParallelRenderCommandEncoder>)scene_parallel_;
+        for (mtl::Object& encoder : record_encoders_) {
+            encoder = own([parallel renderCommandEncoder]);
+        }
+        pass_ = own([parallel renderCommandEncoder]);
+    }
+    if (pass_ == nullptr) {
+        throw std::runtime_error("the scene pass could not go on after its chunks");
+    }
+    attach_scene_encoder();
+    return true;
+}
+
 void RendererMtl::parallel_record_chunk(unsigned chunk, const gpu::DrawOp* ops, std::size_t count) {
     @autoreleasepool {
         const mtl::Object pass = record_encoders_[chunk];
@@ -403,12 +451,14 @@ void RendererMtl::parallel_record_end() {
             drop(pass);
         }
     }
+    if (!record_runs_.empty()) {
+        scene_pass_closed_by_ = "parallel recording";
+    }
     for (RecordRun& run : record_runs_) {
         [(__bridge id<MTLParallelRenderCommandEncoder>)run.parallel endEncoding];
         drop(run.parallel);
     }
     record_runs_.clear();
-    scene_pass_closed_by_ = "parallel recording";
     reset_draw_bindings();
 }
 

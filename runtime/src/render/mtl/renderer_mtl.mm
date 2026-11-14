@@ -333,6 +333,11 @@ void RendererMtl::shutdown() {
             drop(run.parallel);
         }
         record_runs_.clear();
+        if (scene_parallel_ != nullptr) {
+            [(__bridge id<MTLParallelRenderCommandEncoder>)scene_parallel_ endEncoding];
+            drop(scene_parallel_);
+        }
+        parallel_scene_pass_ = false;
         wait_for_gpu_idle();
         if (mirrored_store_ != nullptr) {
             mirrored_store_->backend().set_open_pass(nullptr);
