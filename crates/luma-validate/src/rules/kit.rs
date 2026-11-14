@@ -121,7 +121,14 @@ pub(crate) fn check(ctx: &mut Ctx) {
         versions.dedup();
         let Some(schema) = schema else {
             let expected = if versions.is_empty() { p("Kit.NoModuleData") } else { t(versions.iter().map(i64::to_string).collect::<Vec<_>>().join(", ")) };
-            ctx.add(702, "luma.json", Some(at), Some(&pointer), vec![("module", t(key.clone())), ("found", t(version.to_string())), ("expected", expected)]);
+            // The library named, so the words say what to update.
+            ctx.add(
+                702,
+                "luma.json",
+                Some(at),
+                Some(&pointer),
+                vec![("module", t(key.clone())), ("found", t(version.to_string())), ("expected", expected), ("library", t(library.clone()))],
+            );
             continue;
         };
         // Each data file against the schema of the version named.

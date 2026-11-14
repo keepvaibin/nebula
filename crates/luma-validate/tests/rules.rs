@@ -1017,7 +1017,23 @@ fn a_library_s_data_is_checked_against_the_schema_it_gives() {
     // A version the library does not give: the versions it does.
     let other_version = check(&luma(&[over[0], ("kit", r#"{"lib.mod.shop": 2}"#)], &[file("kit/shop/items.json", br#"{"price": 1}"#)]), &with_lib);
     let f = other_version.findings.iter().find(|f| f.code == 702).expect("L702");
-    assert!(message(f, "UsEnglish").contains('1'), "{}", message(f, "UsEnglish"));
+    let words = message(f, "UsEnglish");
+    assert!(
+        words.contains("needs lib.mod.shop data version 2; the installed lib.mod gives: 1. Update lib.mod, or install a version of "),
+        "{words}"
+    );
+    assert!(unfilled(f).is_none(), "{:?}", unfilled(f));
+
+    // A library that gives no schema for the module (one built before it gave any): the player is told to update it.
+    let bare = [other("lib.mod")];
+    let no_schema = check(&luma(&over, &[file("kit/shop/items.json", br#"{"price": 1}"#)]), &Setup { installed: &bare, ..NO_GAME });
+    let f = no_schema.findings.iter().find(|f| f.code == 702).expect("L702");
+    let words = message(f, "UsEnglish");
+    assert!(words.contains("the installed lib.mod gives: none. Update lib.mod, or install a version of "), "{words}");
+    for language in ["UsFrench", "EuGerman", "JpJapanese", "CnSimpChinese"] {
+        let f = no_schema.findings.iter().find(|f| f.code == 702).unwrap();
+        assert!(message(f, language).matches("lib.mod").count() >= 3, "{}", message(f, language));
+    }
 
     // A library that is not installed: L800 says so, and its data is not judged without its schema.
     let alone = check(&luma(&over, &[file("kit/shop/items.json", br#"{"price": -1}"#)]), &NO_GAME);
