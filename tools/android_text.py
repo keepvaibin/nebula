@@ -145,7 +145,8 @@ def main():
     files, errors = generate()
     errors += key_errors()
     for path, text in sorted(files.items()):
-        current = open(path, encoding='utf-8', newline='').read() if os.path.exists(path) else None
+        # A checkout may turn the line ends into CRLF: the text is what is compared.
+        current = open(path, encoding='utf-8', newline='').read().replace('\r\n', '\n') if os.path.exists(path) else None
         if current == text:
             continue
         if check:
