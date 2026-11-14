@@ -188,7 +188,7 @@ code/<platform>/<library file>        each extra library named in code.libraries
 | `ios-arm64` | `mod.dylib` | Unsigned; signed on the device |
 
 - The entry library exports `luma_mod` (`luma.h`) and imports nothing from the system but what the platform's
-  loader contract allows (kernel contract, 1.1, which lists each platform's forced imports from evidence; the
+  loader allows (lumalink/loader.md, which lists each platform's forced imports from evidence; the
   compiler's own `memcpy`/`memset` calls are given by `luma.h`); the validator reads its import list and refuses any
   other, naming it. It may import from the mod's extra libraries.
 - An extra library (a physics or XR library) imports from the system by nature. It is allowed

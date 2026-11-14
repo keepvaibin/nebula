@@ -318,7 +318,7 @@ Between the host and the game module, and between the module's own services and 
 
 ```c
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* Providing a LumaCore service (services-registry contract 6.2, 7, 8): between the game module's kernel and the
+/* Providing a LumaCore service (docs/modding/services/registry.md): between the game module's kernel and the
    services it or the host provides. Not for mods. */
 #ifndef LUMA_SERVICE_PROVIDER_H
 #define LUMA_SERVICE_PROVIDER_H
@@ -373,7 +373,7 @@ typedef struct LumaServiceKernel {
     /* Queues `node` for its mod (from any thread). LUMA_OK: queued, or queued already; LUMA_E_CANCELLED: the mod is
        gone or unknown, nothing queued (the node stays the provider's); LUMA_E_ARGUMENT: a null node, mod or deliver. */
     int32_t (*post)(LumaEventNode* node);
-    /* Game thread, from a node's deliver: calls fn(user, event) for the mod (through the guard, plan 1.6, which names
+    /* Game thread, from a node's deliver: calls fn(user, event) for the mod (through the guard, which names
        "<service> event <kind>" if fn faults). LUMA_OK: called; LUMA_E_CANCELLED: the mod is gone (not called);
        LUMA_E_THREAD, LUMA_E_ARGUMENT: a provider bug, logged. */
     int32_t (*call)(const LumaMod* mod, const char* service, LumaEventFn fn, void* user, const LumaEvent* event);

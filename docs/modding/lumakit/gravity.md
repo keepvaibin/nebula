@@ -15,4 +15,4 @@ pub fn at(p: vec3) -> vec3
 Built on: `K.derive` (`PlanetGravity`, overriding `calcOwnGravityVector`), `K.call` (`MR::registerGravity`, `GravityCreator`,
 `MR::calcGravityVector`), `K.hook` (the player's gravity), `C.stage`. Conformance: a parallel override flipped and
 ended, an override that ends by its frames, a new shape placed with the game's own beside it (priority), two mods'
-overrides (rule 7). Corpus: 51, 73, 74. B: F. A: G.
+overrides (rule 7).

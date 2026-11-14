@@ -55,7 +55,7 @@ Mods page says of the two permissions).
 
 ```c
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* LumaCore's system services (contract services-system): facts and the display (`system`), the clipboard
+/* LumaCore's system services (docs/modding/services/system.md): facts and the display (`system`), the clipboard
    (`system.clipboard`, permission system.clipboard) and web pages (`system.links`, permission system.links). */
 #ifndef LUMA_SYSTEM_H
 #define LUMA_SYSTEM_H

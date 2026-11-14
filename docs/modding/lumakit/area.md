@@ -21,4 +21,4 @@ pub fn find(name: text) -> KindId?
 Data `kit/area/<name>.json`. Built on: `K.derive` (`AreaObj`), `K.hook` (`AreaObjMgr`), `K.call`, `C.stage`. Its
 `camera` takes the main camera through `kit.camera` (rule 7). Conformance: an area placed in three shapes with enter,
 inside and leave each once in order, slow and wind presets, a side camera in and out, two areas overlapping. Corpus:
-29, 50, 68, 75, 76. B: F. A: G.
+29, 50, 68, 75, 76.

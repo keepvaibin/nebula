@@ -43,5 +43,4 @@ Data `kit/player.form/<id>.json`: every field above but the `fn` ones and `physi
 `draw.inst`† (opacity), `audio`, `input`, `ui` (the meter). Conformance: a form given by an item and by code, its look
 on Mario and on Luigi, its timer and meter ending it, damage ending it, `on_spin` and `on_act` called once per press,
 `scale` 0.5 and 2 (collision and camera follow), a game form given from code, two mods' forms (rule 7: the newer
-holds, the older returns when it ends), the mod turned off while its form is on (Normal again, no crash). Corpus: 1,
-2, 7, 8, 14, 19, 23. B: G. A: F.
+holds, the older returns when it ends), the mod turned off while its form is on (Normal again, no crash).

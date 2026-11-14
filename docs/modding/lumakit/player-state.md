@@ -36,4 +36,4 @@ Data `kit/player.state/<id>.json`: the fields but the `fn` ones; `motion` as fix
 the self-description), `K.field`, `K.data` (`MarioConst`, `MarioConstTable`), `C.anim`, `input`. Conformance: a double
 jump (once per air), a glide ending on ground, a dive started by an action in the air, a ground pound shock wave
 (`attack`), `tune` doubling run speed and `end` restoring it exactly, two mods' states on different actions, the mod
-off mid-move. Corpus: 2, 6, 20, 22, 28. B: G. A: F.
+off mid-move.

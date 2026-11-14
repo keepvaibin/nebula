@@ -11,4 +11,4 @@ pub fn open(s: Shop) -> pending<Ware?>      // none: left without buying
 
 Data `kit/shop/<id>.json`. Built on: `kit.screen`, `kit.item`, `kit.talk`, `K.call` (`MR::incCoin`, `incStarPiece`
 with negative counts, read from the game's counters), `save` (stock per file). Conformance: buy, too poor, out of
-stock, stock kept across a reload. Corpus: 42. B: G. A: F.
+stock, stock kept across a reload.

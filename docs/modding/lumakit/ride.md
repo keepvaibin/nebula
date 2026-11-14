@@ -25,4 +25,4 @@ pub fn dismount()
 
 Data `kit/ride/<name>.json`. Built on: `K.derive` (`LiveActor`), `K.hook` (the player's control while mounted),
 `kit.player.state`, `kit.actor`, `C.skin`, `C.anim`, `input`. Conformance: mount, ride on a planet, jump, a mounted
-move, damage throwing the rider off, dismount; the mod off while riding. Corpus: 44, 45. B: G (proposed). A: F.
+move, damage throwing the rider off, dismount; the mod off while riding.

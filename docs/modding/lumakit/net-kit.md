@@ -14,7 +14,7 @@ pub fn serve_page(port: u16, files: list<data>) -> Page   // needs: net (listen)
 
 Built on: `net` (datagrams, STUN, listening), `time`. Conformance: messages in order with 20% of
 datagrams dropped, a peer leaving, the clock within one frame on a local link, a page served and its messages
-received. Corpus: 65, 81, 116, 138, 140, 141, 142, 147. B: F. A: G.
+received.
 
 As built (11-12): `reliable(port: u16, local_network: bool) -> Link` and `connect(l, host,
 port) -> bool` (no net.Datagrams type); module functions `send/send_all -> bool`, `peers`, `id`, `port`, `close`,

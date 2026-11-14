@@ -15,4 +15,3 @@ pub fn loading(tips: list<text>, picture: draw.Texture? = none)   // shown while
 Built on: `ui`, `draw` (the loading point: "one on every presented frame, loading included"), `input`, `time`
 (the game held while a screen pauses), `C.layout`, `C.text`. Conformance: each kind opened, answered and backed out of
 with pad, keyboard and touch; a list updated while open; a screen open when its mod stops (closed, the game resumed).
-Corpus: 81, 124, 131, 138. B: G. A: F.

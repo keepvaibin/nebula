@@ -17,4 +17,3 @@ pub fn touch_layout(buttons: list<(input.Action, vec2, f32)>)   // on-screen but
 
 Built on: `draw`, `ui`, `input` (text entry, touch, inject), `draw.view`† (ModelView). Conformance: each widget by pad,
 mouse and touch; a text field through the platform keyboard; a wheel choosing an item; a panel whose mod stops.
-Corpus: 26, 56, 103, 126, 132, 149, 170, 171. B: F. A: G.

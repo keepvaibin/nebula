@@ -110,7 +110,7 @@ given a name they do not find:
 | 626 | `Content.MissingJoint` | `{mod}: {model} has no joint "{found}"; its root is used.` | model, found |
 | 627 | `Content.MissingAnimation` | `{mod}: {model} has no animation "{found}".` | model, found |
 | 628 | `Content.MissingProgram` | `{mod}: the material "{found}" has no program for {renderer}; it is drawn plainly.` | found, renderer |
-| 640-669 | effects | contract effects (3.5) | |
+| 640-669 | effects | content/effects.md | |
 | 670 | `Content.EventPastEnd` | `{mod}: the event "{found}" of {clip} is at frame {frame}, after its last frame {last}; it never comes.` | found, clip, frame, last |
 | 671 | `Content.MissingParam` | `{mod}: the material "{material}" of {model} has no shader parameter "{found}".` | model, found, material |
 | 672 | `Content.MissingFont` | `{mod}: the font {found} is not there or cannot be read; the message font is used instead.` | found |

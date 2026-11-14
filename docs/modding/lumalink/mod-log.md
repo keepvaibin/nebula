@@ -20,7 +20,7 @@ typedef enum LumaModLogSource {
     LUMA_MODLOG_CODE = 3,       /* LumaCore.report: the kernel's codes 1-99, a service's 100-899, lumart's 900-9999 */
     LUMA_MODLOG_CONTENT = 4,    /* the game's content at run time: a reference not found, a placeholder, an effect
                                    that draws nothing (contracts references, effects) */
-    LUMA_MODLOG_GUARD = 5       /* a fault caught in the mod's code (plan 1.6) */
+    LUMA_MODLOG_GUARD = 5       /* a fault caught in the mod's code (lumalink/guard.md) */
 } LumaModLogSource;
 
 typedef struct LumaModLogEntry {

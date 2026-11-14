@@ -49,5 +49,4 @@ Data `kit/actor/<name>.json`: a kind without code (fields but `fn`). Built on: `
 `C.anim`, `C.stage` (placement), `assets` (`spawn_game`'s files), `mods` (names). Conformance: a kind from
 data placed in a stage, the same kind spawned mid-stage, each sensor kind, each `Attack` defeating it, drops, a talk
 callback, a hat on Mario's head joint and on a Goomba's, `placement`/`find_placed` equal on two runs, a game class
-spawned that the stage did not load, two mods' kinds of one short name (rule 7). Corpus: 5, 25, 31, 32, 41, 43, 46,
-47, 50, 52, 57, 81, 91, 194. B: F. A: G.
+spawned that the stage did not load, two mods' kinds of one short name (rule 7).

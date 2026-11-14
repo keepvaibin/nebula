@@ -27,5 +27,4 @@ Data `kit/player.character/<id>.json`: all fields. Built on: `K.derive` and `K.h
 globals it reads, idea 195's method), `K.data`, `C.skin`, `C.anim`, `C.sound`, `C.text`, `assets` (a model made at
 run time, idea 151), `input`. Conformance: a character from data with its own clips and voice, switching mid-level and
 back, Luigi's checks with `as_luigi`, a downloaded model (assets, checked by the validator) as a character, a second
-player on pad 2 moving on a planet beside the first, the mod off while playing it (the game's Mario again). Corpus: 3,
-4, 24, 151 (89, 140 through `second_player`). B: G. A: F.
+player on pad 2 moving on a planet beside the first, the mod off while playing it (the game's Mario again).

@@ -41,7 +41,7 @@
 
 ```c
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* LumaCore's time service (contract services-time): frames and world steps, the real clocks, the world clock's
+/* LumaCore's time service (docs/modding/services/time.md): frames and world steps, the real clocks, the world clock's
    rate, hold and step, timers, frame and step handlers. Import: LUMA_SERVICE(slot, "time", "1.0"). */
 #ifndef LUMA_TIME_H
 #define LUMA_TIME_H

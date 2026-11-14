@@ -28,7 +28,7 @@ struct PermissionFacts {
     std::string hosts;               // net.internet: the hosts joined by ", "; "*" -> the row Permission.net.internet.Any
     std::string why;                 // the mod's own line
     Answer answer = Answer::NotAsked;
-    bool changed = false;            // answered before, for a declaration that differs now (asked again: plan 6.4)
+    bool changed = false;            // answered before, for a declaration that differs now (asked again)
     bool required = false;           // the entry library imports its service without LUMA_OPTIONAL; `native` always
 };
 

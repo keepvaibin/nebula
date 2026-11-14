@@ -18,4 +18,4 @@ pub fn source(pad: input.Pad, s: Source)          // idea 166
 Built on: `K.hook` (`StarPieceDirector`'s shot, `StarPointerController`), `K.call` (`MR::getStarPointerScreenPosition`,
 `MR::getFirstPolyOnLineToMap`), `input` (`input.dev`† motion), `kit.projectile`. Conformance: B throwing coins at a
 cost, out of coins (nothing thrown, the game's sound), a grab, gyro aim on a pad with motion and its refusal on one
-without (named), a world point under the pointer on a planet. Corpus: 40, 71, 162, 166. B: G (proposed). A: F.
+without (named), a world point under the pointer on a planet.

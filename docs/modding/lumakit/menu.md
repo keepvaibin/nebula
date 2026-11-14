@@ -11,4 +11,4 @@ pub fn close_pause()                                   // the game's pause menu 
 
 Built on: `K.hook` (`PauseMenu`), `ui`, `C.text`. Conformance: entries of two mods in list order, chosen, disabled,
 removed; an entry whose mod stops; the pause menu closed from an entry. An entry is changed or removed only by its
-mod. Corpus: 14, 27, 62, 63, 86, 112, 125, 133, 162. B: G. A: F.
+mod.

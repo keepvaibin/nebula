@@ -14,4 +14,4 @@ pub fn find(id: text) -> Scene?            // a scene of this mod from kit/cutsc
 
 Data `kit/cutscene/<id>.json` (actors by placement name). Built on: `kit.camera` (`take`), `K.call`
 (`MR::startEventCamera`, `CinemaFrame`), `kit.talk` (lines), `time` (hold), `audio`, `C.text`. Conformance: a scene of
-each shot kind, skipped and run through, a scene whose actor dies in it, letterbox. Corpus: 32, 57. B: G. A: F.
+each shot kind, skipped and run through, a scene whose actor dies in it, letterbox.

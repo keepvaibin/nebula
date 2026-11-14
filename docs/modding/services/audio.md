@@ -2,7 +2,7 @@
 
 ## 1. Voices (layer 1)
 
-`play(mod, name, how, fn, user, &voice)` plays a cooked sound effect (contract sound.md 4, the NSFX the game's start
+`play(mod, name, how, fn, user, &voice)` plays a cooked sound effect (content/sound.md, the NSFX the game's start
 cooks from `layers/<l>/assets/<path>.sound.json`): `"<path>"` is the mod's own (`Luma/<id>/<path>.nsfx`),
 `"<id>:<path>"` another mod's. The file is read in place from the store's mapping; nothing is copied. A name no file
 has plays the placeholder chime instead (`nebula:placeholder/sound`, 120 ms, with `how`): LUMA_OK and the voice, and

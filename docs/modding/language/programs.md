@@ -545,8 +545,8 @@ that they are virtual); `states` reading `isState`; `kit.stage.define_galaxy`, `
 
 ### A.7 The changes nebula-coop makes, one by one
 
-Not yet written: nebula-coop (github NebulaCoop/nebula-coop, a host-authoritative online fork, per the owner's note of
-11-11) has no copy on this machine. Its changes must be listed from its source, each as a hook or call that exists,
+Not yet written: nebula-coop (github NebulaCoop/nebula-coop, a host-authoritative online fork)
+has no copy on this machine. Its changes must be listed from its source, each as a hook or call that exists,
 before this section can be written. Open item P-2 (part D).
 
 ### A.8 Two unrelated mods together

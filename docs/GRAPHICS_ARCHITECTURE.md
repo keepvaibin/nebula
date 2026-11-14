@@ -71,10 +71,10 @@ in (`pipeline_use.tsv` in the shader cache folder, written at shutdown) and warm
 ## No fixed caps
 
 A count of things (textures, tables, lights, layers, draws, uploads, descriptors, pads, monitors, files) never refuses or stalls at a
-fixed number. A limit read from the device or the API is fine; each is named with the query that gives it. `helpers/runtime_caps.tsv`
-(agents/native-progress) lists every constant of runtime/src and runtime/include that bounds a count, with its class: **B** budget
+fixed number. A limit read from the device or the API is fine; each is named with the query that gives it. A table
+lists every constant of runtime/src and runtime/include that bounds a count, with its class: **B** budget
 (a number someone chose: 23 rows, all fixed or growing except the SDL host's pad arrays and the model format's limits, which are
-Q's), **D** design (58: page sizes, rings of frames, policy, algorithm constants, bounds on untrusted input and on a format's field) and
+fixed by the hardware and the format), **D** design (58: page sizes, rings of frames, policy, algorithm constants, bounds on untrusted input and on a format's field) and
 **H** hardware or API (10).
 
 - **Upload rings** (vertices, indices, constants, matrix rows): a ring grows into a new buffer between frames when a frame took over half
@@ -235,7 +235,7 @@ restarts generated frames from a new sequence, as after a minimise.
 asks for efficiency (`PROCESS_POWER_THROTTLING_EXECUTION_SPEED` and `IGNORE_TIMER_RESOLUTION` set, EcoQoS) while the window is behind
 another or minimised, or while the game has had no button, stick, spin or pointer movement for 60 s and no cutscene (movie sound within
 2 s); it goes back to the opt-out of the start as soon as any of that ends. The device's audio thread opts out of it on its own
-(`set_current_thread_efficiency(false)`, which the OS honours over the process; Lane Q's line, helpers/q01.md). `SetThreadExecutionState(
+(`set_current_thread_efficiency(false)`, which the OS honours over the process). `SetThreadExecutionState(
 ES_CONTINUOUS | ES_DISPLAY_REQUIRED)` holds the display on only while the window is in front and an input came in the last 3 minutes or a
 cutscene plays; never in the background. Log lines `[power] efficiency requested (away or idle)`, `[power] full speed (playing)`,
 `[power] display held on (playing)`, `[power] display left to the OS's timers`.

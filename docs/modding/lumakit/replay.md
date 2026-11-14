@@ -29,13 +29,13 @@ pub fn puppet(look: model) -> Puppet                  // lit as the player (up t
 pub fn play_inputs(t: Track) -> pending               // What.Inputs, each frame injected (idea 157)
 pub fn seed(n: u32)                                   // the game's random numbers from n (MR::getRandom)
 pub struct Rewind { fn back(self, frames: u32) -> u32; fn end(self) }
-pub fn rewind(what: list<What>, seconds: f32) -> Rewind   // idea 155; the whole world is plan 17's limit
+pub fn rewind(what: list<What>, seconds: f32) -> Rewind
 ```
 
 Built on: `K.field`, `K.hook` (`MR::getRandom`, the player's pose), `K.call`, `input` (inject), `time.ctl`† (step),
 `draw.inst`† (puppet opacity), `C.skin`, `C.anim`. Conformance: a recorded run played back pose for pose (difference
 0 on the same build), a track decoded on another platform, 15 puppets, inputs replayed giving the same end position,
-rewind of the player 5 s. Corpus: 136, 137, 140, 141, 155, 157. B: F. A: G.
+rewind of the player 5 s.
 
 
 Recording, playback and rewinds take only the steps in which the game plays (time state Play): a pause menu or the

@@ -28,4 +28,4 @@ pub fn throw(s: Shot) -> ref<LiveActor>
 Built on: `K.derive` (`LiveActor`), `K.call` (`MR::addHitSensor`, `MR::getFirstPolyOnLineToMap`, `MR::calcGravity`,
 `MR::emitEffect`, `MR::startSound`), `C.model`, `C.fx`, `C.sound`. Conformance: a ball bouncing three times then
 bursting, `on_hit` choosing each `Then`, falling shots along a planet's gravity, 64 at once without a frame over its
-budget, the thrower's mod off (all its shots killed). Corpus: 1, 19, 40. B: F. A: G.
+budget, the thrower's mod off (all its shots killed).

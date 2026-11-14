@@ -34,7 +34,7 @@ Only `luma_mod` is exported (`LUMA_EXPORT`); every other symbol is hidden.
 | `macos-arm64`, `macos-x64` | `arm64-` / `x86_64-apple-macos<the game's deployment target>` | ld64.lld `-dylib -undefined error -no_uuid` |
 | `ios-arm64` | `arm64-apple-ios<the game's deployment target>` | the same; the device signs it when the mod is installed |
 
-- The libraries import nothing but what `luma.h` and 1.1's loader contract allow (the compiler's `memcpy`,
+- The libraries import nothing but what `luma.h` and the loader (lumalink/loader.md) allow (the compiler's `memcpy`,
   `memset`, `memmove` and, on the MSVC targets, the stack probe, all given by `luma.h`'s freestanding helpers; F,
   1.1). A LumaScript mod with C sources is held to the same: its C may not call the C library either (no `malloc`,
   no `printf`); it has the run-time support's functions (section 7) and `luma.h`.

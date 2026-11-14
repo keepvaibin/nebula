@@ -130,8 +130,7 @@ Data `kit/player.form/<id>.json`: every field above but the `fn` ones and `physi
 `draw.inst`† (opacity), `audio`, `input`, `ui` (the meter). Conformance: a form given by an item and by code, its look
 on Mario and on Luigi, its timer and meter ending it, damage ending it, `on_spin` and `on_act` called once per press,
 `scale` 0.5 and 2 (collision and camera follow), a game form given from code, two mods' forms (rule 7: the newer
-holds, the older returns when it ends), the mod turned off while its form is on (Normal again, no crash). Corpus: 1,
-2, 7, 8, 14, 19, 23. B: G. A: F.
+holds, the older returns when it ends), the mod turned off while its form is on (Normal again, no crash).
 
 ### 2.2 `player.state`
 
@@ -171,7 +170,7 @@ Data `kit/player.state/<id>.json`: the fields but the `fn` ones; `motion` as fix
 the self-description), `K.field`, `K.data` (`MarioConst`, `MarioConstTable`), `C.anim`, `input`. Conformance: a double
 jump (once per air), a glide ending on ground, a dive started by an action in the air, a ground pound shock wave
 (`attack`), `tune` doubling run speed and `end` restoring it exactly, two mods' states on different actions, the mod
-off mid-move. Corpus: 2, 6, 20, 22, 28. B: G. A: F.
+off mid-move.
 
 ### 2.3 `player.character`
 
@@ -202,8 +201,7 @@ Data `kit/player.character/<id>.json`: all fields. Built on: `K.derive` and `K.h
 globals it reads, idea 195's method), `K.data`, `C.skin`, `C.anim`, `C.sound`, `C.text`, `assets` (a model made at
 run time, idea 151), `input`. Conformance: a character from data with its own clips and voice, switching mid-level and
 back, Luigi's checks with `as_luigi`, a downloaded model (assets, checked by the validator) as a character, a second
-player on pad 2 moving on a planet beside the first, the mod off while playing it (the game's Mario again). Corpus: 3,
-4, 24, 151 (89, 140 through `second_player`). B: G. A: F.
+player on pad 2 moving on a planet beside the first, the mod off while playing it (the game's Mario again).
 
 ### 2.4 `item`
 
@@ -234,7 +232,7 @@ pub fn carried_all() -> list<(ItemId, u32)>  // the inventory, in the order firs
 between types of one build. Data `kit/item/<id>.json`. Built on: `K.derive` (`LiveActor`), `K.call` (`MR::incCoin`,
 `incStarPiece`, `incPlayerLife`, `MR::addHitSensor`), `C.model`, `C.fx`, `C.sound`, `save` (the inventory per file).
 Conformance: an item placed by name and one spawned, each kind of `Gives`, both containers, an inventory kept across
-a save and reload, an item of a mod that is off (not made, logged). Corpus: 1, 38, 39, 51, 56. B: F. A: G.
+a save and reload, an item of a mod that is off (not made, logged).
 
 ### 2.5 `projectile`
 
@@ -266,7 +264,7 @@ pub fn throw(s: Shot) -> ref<LiveActor>
 Built on: `K.derive` (`LiveActor`), `K.call` (`MR::addHitSensor`, `MR::getFirstPolyOnLineToMap`, `MR::calcGravity`,
 `MR::emitEffect`, `MR::startSound`), `C.model`, `C.fx`, `C.sound`. Conformance: a ball bouncing three times then
 bursting, `on_hit` choosing each `Then`, falling shots along a planet's gravity, 64 at once without a frame over its
-budget, the thrower's mod off (all its shots killed). Corpus: 1, 19, 40. B: F. A: G.
+budget, the thrower's mod off (all its shots killed).
 
 ### 2.6 `actor`
 
@@ -319,8 +317,7 @@ Data `kit/actor/<name>.json`: a kind without code (fields but `fn`). Built on: `
 `C.anim`, `C.stage` (placement), `assets` (`spawn_game`'s files), `mods` (names). Conformance: a kind from
 data placed in a stage, the same kind spawned mid-stage, each sensor kind, each `Attack` defeating it, drops, a talk
 callback, a hat on Mario's head joint and on a Goomba's, `placement`/`find_placed` equal on two runs, a game class
-spawned that the stage did not load, two mods' kinds of one short name (rule 7). Corpus: 5, 25, 31, 32, 41, 43, 46,
-47, 50, 52, 57, 81, 91, 194. B: F. A: G.
+spawned that the stage did not load, two mods' kinds of one short name (rule 7).
 
 ### 2.7 `area`
 
@@ -345,7 +342,7 @@ pub fn find(name: text) -> KindId?
 Data `kit/area/<name>.json`. Built on: `K.derive` (`AreaObj`), `K.hook` (`AreaObjMgr`), `K.call`, `C.stage`. Its
 `camera` takes the main camera through `kit.camera` (rule 7). Conformance: an area placed in three shapes with enter,
 inside and leave each once in order, slow and wind presets, a side camera in and out, two areas overlapping. Corpus:
-29, 50, 68, 75, 76. B: F. A: G.
+29, 50, 68, 75, 76.
 
 ### 2.8 `gravity`
 
@@ -364,7 +361,7 @@ pub fn at(p: vec3) -> vec3
 Built on: `K.derive` (`PlanetGravity`, overriding `calcOwnGravityVector`), `K.call` (`MR::registerGravity`, `GravityCreator`,
 `MR::calcGravityVector`), `K.hook` (the player's gravity), `C.stage`. Conformance: a parallel override flipped and
 ended, an override that ends by its frames, a new shape placed with the game's own beside it (priority), two mods'
-overrides (rule 7). Corpus: 51, 73, 74. B: F. A: G.
+overrides (rule 7).
 
 ### 2.9 `camera`
 
@@ -389,8 +386,7 @@ Built on: `K.hook` (`CameraDirector`), `K.call` (`MR::startEventCamera`, `MR::hi
 (`draw.view`†, `draw.post`† for mirror), `input`, `time` (`time.ctl`† for photo mode's hold, used by the mod).
 Request R-7: `draw.ViewCamera.Look(fn() -> draw.Eye)`, a camera computed each frame. Conformance: take and end with
 the game's camera back at its own state, free camera, first person (model hidden, near plane), side camera, mirror
-(image and controls), a rig in a `draw.view` region, two mods taking the camera (rule 7). Corpus: 5, 18, 66, 76, 85,
-88, 89, 90, 92, 137, 161, 176, 191. B: F. A: G.
+(image and controls), a rig in a `draw.view` region, two mods taking the camera (rule 7).
 As built (FB, 11-12): data rigs (`view.Camera { rig: view.Rig.Fixed|Follow|Joint|World, ... }`)
 replace R-7's `Look(fn)`; a computed camera calls `aim(c, e: view.Eye)` each frame (draw.view `main_eye`, held while
 the world is held). `end(c)` and `alive(c)` are module functions too.
@@ -423,8 +419,8 @@ pub fn hide_game(part: GamePart, hidden: bool)
 Built on: `ui` (layouts), `draw` (2D at the HUD point, text in the game's font), `C.layout`, `C.font`, `C.text`,
 `K.hook` (the game's counters, `CounterLayoutController`). Text drawn with the disc's message font; a
 mod's text is checked against it by `nfnt_glyphs.py` and by the validator. Conformance: each element in
-each corner, stacking, removal, `follow`, the game's lives hidden, a popup at the owner's 1.3x, a mod off with five
-elements up (all gone). Corpus: 13, 23, 32, 53, 54, 55, 78, 93, 120, 121, 127, 135, 136, 144, 172. B: G. A: F.
+each corner, stacking, removal, `follow`, the game's lives hidden, a popup at 1.3x, a mod off with five
+elements up (all gone).
 
 ### 2.11 `screen`
 
@@ -443,7 +439,6 @@ pub fn loading(tips: list<text>, picture: draw.Texture? = none)   // shown while
 Built on: `ui`, `draw` (the loading point: "one on every presented frame, loading included"), `input`, `time`
 (the game held while a screen pauses), `C.layout`, `C.text`. Conformance: each kind opened, answered and backed out of
 with pad, keyboard and touch; a list updated while open; a screen open when its mod stops (closed, the game resumed).
-Corpus: 81, 124, 131, 138. B: G. A: F.
 
 ### 2.12 `menu`
 
@@ -456,7 +451,7 @@ pub fn add_pause_entry(label: text, on_choose: fn()) -> Entry
 ```
 
 Built on: `K.hook` (`PauseMenu`), `ui`, `C.text`. Conformance: entries of two mods in list order, chosen, disabled,
-removed; an entry whose mod stops. Corpus: 14, 27, 62, 63, 86, 112, 125, 133, 162. B: G. A: F.
+removed; an entry whose mod stops.
 
 ### 2.13 `cutscene`
 
@@ -474,7 +469,7 @@ pub fn find(id: text) -> Scene?            // a scene of this mod from kit/cutsc
 
 Data `kit/cutscene/<id>.json` (actors by placement name). Built on: `kit.camera` (`take`), `K.call`
 (`MR::startEventCamera`, `CinemaFrame`), `kit.talk` (lines), `time` (hold), `audio`, `C.text`. Conformance: a scene of
-each shot kind, skipped and run through, a scene whose actor dies in it, letterbox. Corpus: 32, 57. B: G. A: F.
+each shot kind, skipped and run through, a scene whose actor dies in it, letterbox.
 
 ### 2.14 `talk`
 
@@ -490,7 +485,7 @@ pub fn voice(line: text, s: sound)          // the sound played when the line is
 Data `kit/talk/<tree>.json`: nodes of a line, choices, each choice's next node and a per-file flag it sets (through
 `kit.progress`). Built on: `K.call` (`MR::createTalkCtrl`, `tryTalkNearPlayer`, `TalkMessageCtrl`), `C.text`,
 `C.sound`, `kit.progress`. Conformance: say, ask with two and four choices, a tree with a loop and a flag, a voiced
-line, the speaker killed mid-line. Corpus: 41, 114, 130. B: G. A: F.
+line, the speaker killed mid-line.
 
 ### 2.15 `shop`
 
@@ -505,7 +500,7 @@ pub fn open(s: Shop) -> pending<Ware?>      // none: left without buying
 
 Data `kit/shop/<id>.json`. Built on: `kit.screen`, `kit.item`, `kit.talk`, `K.call` (`MR::incCoin`, `incStarPiece`
 with negative counts, read from the game's counters), `save` (stock per file). Conformance: buy, too poor, out of
-stock, stock kept across a reload. Corpus: 42. B: G. A: F.
+stock, stock kept across a reload.
 
 ### 2.16 `stage`
 
@@ -538,7 +533,7 @@ Data `kit/stage/<name>.json`: galaxies and domes. Built on: `C.stage`, `C.text`,
 `ScenarioSelectLayout`, `ScenarioSelectScene`, `MR::startStageBGM`), `K.call` (`MR::requestChangeStageInGameMoving`, `MR::requestAppearPowerStar`,
 `PowerStarEventKeeper`), `kit.progress`. Conformance: a galaxy listed in its dome after 20 stars, its stars got and
 counted, a comet star, warp, music, a stage built in code with a planet and two objects, a downloaded stage (through
-`svc.mods` offer for one start, P-18) as a galaxy. Corpus: 57, 61, 70, 71, 72, 79, 110. B: F. A: G.
+`svc.mods` offer for one start, P-18) as a galaxy.
 
 ### 2.17 `progress`
 
@@ -561,8 +556,7 @@ pub fn on_new_file(f: fn())                            // New Game+ (idea 83)
 
 Built on: `save` (per-file values following copy and erase), `K.hook` (star counting, the comet table,
 `GameDataFunction`), `K.call`, `kit.stage` (comet kinds). Conformance: stars counted past 120, `on_star` giving an
-item instead, a comet added, flags and numbers following a file copy and erase, a new file rule. Corpus: 55, 57, 60,
-61, 62, 64, 65, 77, 78, 82, 83, 127, 197. B: F. A: G.
+item instead, a comet added, flags and numbers following a file copy and erase, a new file rule.
 
 ### 2.18 `net.kit`
 
@@ -580,7 +574,7 @@ pub fn serve_page(port: u16, files: list<data>) -> Page   // needs: net (listen)
 
 Built on: `net` (datagrams, STUN, listening), `time`. Conformance: messages in order with 20% of
 datagrams dropped, a peer leaving, the clock within one frame on a local link, a page served and its messages
-received. Corpus: 65, 81, 116, 138, 140, 141, 142, 147. B: F. A: G.
+received.
 
 As built (11-12): `reliable(port: u16, local_network: bool) -> Link` and `connect(l, host,
 port) -> bool` (no net.Datagrams type); module functions `send/send_all -> bool`, `peers`, `id`, `port`, `close`,
@@ -621,13 +615,13 @@ pub fn puppet(look: model) -> Puppet                  // lit as the player (up t
 pub fn play_inputs(t: Track) -> pending               // What.Inputs, each frame injected (idea 157)
 pub fn seed(n: u32)                                   // the game's random numbers from n (MR::getRandom)
 pub struct Rewind { fn back(self, frames: u32) -> u32; fn end(self) }
-pub fn rewind(what: list<What>, seconds: f32) -> Rewind   // idea 155; the whole world is plan 17's limit
+pub fn rewind(what: list<What>, seconds: f32) -> Rewind
 ```
 
 Built on: `K.field`, `K.hook` (`MR::getRandom`, the player's pose), `K.call`, `input` (inject), `time.ctl`† (step),
 `draw.inst`† (puppet opacity), `C.skin`, `C.anim`. Conformance: a recorded run played back pose for pose (difference
 0 on the same build), a track decoded on another platform, 15 puppets, inputs replayed giving the same end position,
-rewind of the player 5 s. Corpus: 136, 137, 140, 141, 155, 157. B: F. A: G.
+rewind of the player 5 s.
 
 ### 2.20 `ui.kit`
 
@@ -648,7 +642,6 @@ pub fn touch_layout(buttons: list<(input.Action, vec2, f32)>)   // on-screen but
 
 Built on: `draw`, `ui`, `input` (text entry, touch, inject), `draw.view`† (ModelView). Conformance: each widget by pad,
 mouse and touch; a text field through the platform keyboard; a wheel choosing an item; a panel whose mod stops.
-Corpus: 26, 56, 103, 126, 132, 149, 170, 171. B: F. A: G.
 
 ### 2.21 `ride` (DECISIONS 3)
 
@@ -677,7 +670,7 @@ pub fn dismount()
 
 Data `kit/ride/<name>.json`. Built on: `K.derive` (`LiveActor`), `K.hook` (the player's control while mounted),
 `kit.player.state`, `kit.actor`, `C.skin`, `C.anim`, `input`. Conformance: mount, ride on a planet, jump, a mounted
-move, damage throwing the rider off, dismount; the mod off while riding. Corpus: 44, 45. B: G (proposed). A: F.
+move, damage throwing the rider off, dismount; the mod off while riding.
 
 ### 2.22 `pointer` (DECISIONS 3)
 
@@ -699,7 +692,7 @@ pub fn source(pad: input.Pad, s: Source)          // idea 166
 Built on: `K.hook` (`StarPieceDirector`'s shot, `StarPointerController`), `K.call` (`MR::getStarPointerScreenPosition`,
 `MR::getFirstPolyOnLineToMap`), `input` (`input.dev`† motion), `kit.projectile`. Conformance: B throwing coins at a
 cost, out of coins (nothing thrown, the game's sound), a grab, gyro aim on a pad with motion and its refusal on one
-without (named), a world point under the pointer on a planet. Corpus: 40, 71, 162, 166. B: G (proposed). A: F.
+without (named), a world point under the pointer on a planet.
 
 ### 3. Coverage (the check of 5.1's condition)
 

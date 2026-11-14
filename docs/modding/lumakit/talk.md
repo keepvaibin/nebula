@@ -12,4 +12,4 @@ pub fn voice(line: text, s: sound)          // the sound played when the line is
 Data `kit/talk/<tree>.json`: nodes of a line, choices, each choice's next node and a per-file flag it sets (through
 `kit.progress`). Built on: `K.call` (`MR::createTalkCtrl`, `tryTalkNearPlayer`, `TalkMessageCtrl`), `C.text`,
 `C.sound`, `kit.progress`. Conformance: say, ask with two and four choices, a tree with a loop and a flag, a voiced
-line, the speaker killed mid-line. Corpus: 41, 114, 130. B: G. A: F.
+line, the speaker killed mid-line.
