@@ -1603,6 +1603,10 @@ bool folders_open() noexcept {
 
 UpscalerCaps upscaler_caps() noexcept {
     UpscalerCaps caps;
+#if defined(NEBULA_GPU_D3D11)
+    // The Direct3D 11 renderer runs no temporal upscaler and no frame generation (renderer_d3d11.cpp report_adapter):
+    // none is offered, even with a vendor's library installed for the Direct3D 12 renderer.
+#else
     caps.xess = xess_library::available();
     caps.dlss = streamline::dlss_supported();
     caps.frame_generation = streamline::frame_generation_supported();
@@ -1613,6 +1617,7 @@ UpscalerCaps upscaler_caps() noexcept {
     if (get_render_config().frame_generation == 2u) {
         caps.frames_presented = frame_generation_running() && frame_generation_allowed() ? 2u : 1u;
     }
+#endif
     return caps;
 }
 
@@ -1652,7 +1657,13 @@ vendor_download::Package vendor_package(unsigned upscaler) {
 }  // namespace
 
 unsigned vendor_megabytes(unsigned upscaler) {
+#if defined(NEBULA_GPU_D3D11)
+    // Nothing a vendor's download brings runs on the Direct3D 11 renderer: no download is offered.
+    (void)upscaler;
+    return 0u;
+#else
     return vendor_download::download_megabytes(vendor_package(upscaler));
+#endif
 }
 
 bool start_vendor_install(unsigned upscaler) {

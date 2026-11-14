@@ -1512,7 +1512,7 @@ void RenderCore::drop_device_state() {
 bool RenderCore::restart_renderer(const FrameMap& frame, bool same_card) {
     Renderer::Kept kept = renderer_.take_apart_lost_device();
     std::destroy_at(&renderer_);
-#if !defined(NEBULA_GPU_VULKAN) && !defined(NEBULA_GPU_METAL)
+#if !defined(NEBULA_GPU_VULKAN) && !defined(NEBULA_GPU_METAL) && !defined(NEBULA_GPU_D3D11)
     Renderer::list_live_objects(kept);
 #endif
     std::construct_at(&renderer_);
@@ -2237,7 +2237,7 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
         }
         retired_tables_.clear();
         registries_.forget_textures(freed_textures_, retired_tables_);
-#if defined(NEBULA_GPU_VULKAN) || defined(NEBULA_GPU_METAL)
+#if defined(NEBULA_GPU_VULKAN) || defined(NEBULA_GPU_METAL) || defined(NEBULA_GPU_D3D11)
         // Draws with texture lists keep no tables: their lists are written each walk.
         if (!renderer_.bindless()) {
             for (const gpu::Table table : retired_tables_) {
@@ -2258,7 +2258,7 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
             table_sweep_at_ = frame_index_ + core::Registries::kTableSweepFrames * per_game_frame;
             retired_tables_.clear();
             registries_.retire_idle_tables(frame_index_, retired_tables_, core::Registries::kTableIdleFrames * per_game_frame);
-#if defined(NEBULA_GPU_VULKAN) || defined(NEBULA_GPU_METAL)
+#if defined(NEBULA_GPU_VULKAN) || defined(NEBULA_GPU_METAL) || defined(NEBULA_GPU_D3D11)
             if (!renderer_.bindless()) {
                 for (const gpu::Table table : retired_tables_) {
                     renderer_.retire_texture_table(table);
@@ -2272,7 +2272,7 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
             const core::Registries::TableCounts tables = registries_.table_counts();
             std::fprintf(stderr, "[render] texture tables: %u live, %u retired (%llu released since the start)\n", tables.live,
                          tables.retired, static_cast<unsigned long long>(tables.retirements));
-#if !defined(NEBULA_GPU_VULKAN) && !defined(NEBULA_GPU_METAL)
+#if !defined(NEBULA_GPU_VULKAN) && !defined(NEBULA_GPU_METAL) && !defined(NEBULA_GPU_D3D11)
             // The same 600 frames: where the process's video memory is (the renderer adds its own targets, rings and heaps).
             Renderer::VideoMemoryOutside outside;
             const PlacedTextureAllocator::Stats texture_heap = texture_store_.backend().heap_stats();

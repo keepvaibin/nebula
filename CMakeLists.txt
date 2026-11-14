@@ -100,25 +100,26 @@ endfunction()
 # The Windows x64 host's two builds (GALAXY_NATIVE_ISA above). The AVX2 program enters at nebula_host_entry, compiled
 # without the AVX2 option and without buffer security checks, which tests the CPU before the C runtime starts and runs
 # <program>-x86-64-v2.exe where the CPU lacks x86-64-v3. The SSE4.2 tree names its program so; it needs no test.
+# Every x64 host links the file: its nebula_run_sibling is also the Direct3D 12 host's hand-off to NebulaNativeD11.
 function(nebula_host_cpu_entry target)
     if(NOT MSVC OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8 OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|x86_64)$")
         return()
     endif()
+    if(NOT TARGET nebula_host_entry)
+        add_library(nebula_host_entry OBJECT native/host/host_entry_win32.cpp)
+        target_include_directories(nebula_host_entry PRIVATE runtime/include)
+        get_target_property(entry_options nebula_host_entry COMPILE_OPTIONS)
+        list(FILTER entry_options EXCLUDE REGEX "arch:AVX2|-mavx2")
+        list(APPEND entry_options /GS- /Zi)
+        set_property(TARGET nebula_host_entry PROPERTY COMPILE_OPTIONS "${entry_options}")
+    endif()
+    target_link_libraries(${target} PRIVATE nebula_host_entry)
     if(NEBULA_HOST_BASELINE)
         set_target_properties(${target} PROPERTIES OUTPUT_NAME "${target}-x86-64-v2")
         get_target_property(link_options ${target} LINK_OPTIONS)
         list(TRANSFORM link_options REPLACE "^/PDBALTPATH:.*$" "/PDBALTPATH:${target}-x86-64-v2.pdb")
         set_property(TARGET ${target} PROPERTY LINK_OPTIONS "${link_options}")
     elseif(GALAXY_NATIVE_ISA STREQUAL "AVX2")
-        if(NOT TARGET nebula_host_entry)
-            add_library(nebula_host_entry OBJECT native/host/host_entry_win32.cpp)
-            target_include_directories(nebula_host_entry PRIVATE runtime/include)
-            get_target_property(entry_options nebula_host_entry COMPILE_OPTIONS)
-            list(FILTER entry_options EXCLUDE REGEX "arch:AVX2|-mavx2")
-            list(APPEND entry_options /GS- /Zi)
-            set_property(TARGET nebula_host_entry PROPERTY COMPILE_OPTIONS "${entry_options}")
-        endif()
-        target_link_libraries(${target} PRIVATE nebula_host_entry)
         target_link_options(${target} PRIVATE /ENTRY:nebula_host_entry)
     endif()
 endfunction()
@@ -903,11 +904,124 @@ runtime/src/render/host_window_win32.cpp
         LIBS nebula_vulkan_deps)
 endif()
 
-# AV1 movies (plan 3.10: a mod's movie, NMOV codec 1): dav1d 1.5.1 built in-tree (cmake/dav1d.cmake), for both renderers.
+# The Direct3D 11 backend (runtime/include/galaxy/render/d3d11/renderer_d3d11.h): NebulaNativeD11, for the Windows
+# adapters Direct3D 12 passes over. The API-neutral renderer sources (the Vulkan library's), the Direct3D 11 renderer and
+# its parts, the programs for shader model 5.0 (compile_programs.py dxbc) and the utility shaders (utility_shaders sm50).
+option(NEBULA_D3D11 "Build the Direct3D 11 backend" OFF)
+if(NEBULA_D3D11)
+    galaxy_program_blob(galaxy_programs_dxbc dxbc)
+    set(galaxy_utility_sm50_dir "${galaxy_utility_shader_dir}/sm50")
+    file(MAKE_DIRECTORY "${galaxy_utility_sm50_dir}")
+    add_custom_command(OUTPUT "${galaxy_utility_sm50_dir}/utility_shaders_dxbc.h"
+        COMMAND galaxy_utility_shaders "${galaxy_utility_sm50_dir}/utility_shaders_dxbc.h" sm50
+        DEPENDS galaxy_utility_shaders VERBATIM)
+    file(GLOB galaxy_render_d3d11_backend CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/d3d11/*.cpp")
+    add_library(galaxy_render_d3d11 STATIC
+        runtime/src/render/render_api.cpp
+        runtime/src/render/render_config.cpp
+        runtime/src/render/host_window_win32.cpp
+        runtime/src/ui/native_settings.cpp
+        runtime/src/ui/settings_model.cpp
+        runtime/src/ui/settings_system_page.cpp
+        runtime/src/ui/settings_advanced_page.cpp
+        runtime/src/ui/settings_display_page.cpp
+        runtime/src/ui/settings_general_page.cpp
+        runtime/src/ui/settings_graphics_page.cpp
+        runtime/src/ui/settings_save_model.cpp
+        runtime/src/ui/launcher.cpp
+        runtime/src/render/vblank_clock_win32.cpp
+        runtime/src/render/renderer_common.cpp
+        runtime/src/render/gpu_upload_ring.cpp
+        runtime/src/render/window_owner.cpp
+        runtime/src/render/texture_store.cpp
+        runtime/src/render/texture_pack.cpp
+        runtime/src/render/texture_pack_codecs.cpp
+        runtime/src/render/movie_playback.cpp
+        runtime/src/movie_video.cpp
+        runtime/src/render/frame_pass.cpp
+        runtime/src/render/post_process_settings.cpp
+        runtime/src/render/display_modes.cpp
+        runtime/src/render/render_core.cpp
+        runtime/src/render/affine.cpp
+        runtime/src/render/core/compose.cpp
+        runtime/src/render/core/draw_walker.cpp
+        runtime/src/render/core/rt_walk.cpp
+        runtime/src/render/core/rt_bounce.cpp
+        runtime/src/render/core/rt_pass_indirect.cpp
+        runtime/src/render/core/rt_pass_reflect.cpp
+        runtime/src/render/core/rt_pass_transmit.cpp
+        runtime/src/render/core/rt_pass_volume.cpp
+        runtime/src/render/core/pairing.cpp
+        runtime/src/render/core/pipelines.cpp
+        runtime/src/render/core/program_table.cpp
+        runtime/src/render/core/registries.cpp
+        runtime/src/render/core/world_lights.cpp
+        runtime/src/render/core/pipelines_d3d11.cpp
+        runtime/src/render/galaxy_select.cpp
+        runtime/src/benchmark_recommend.cpp
+        runtime/src/benchmark.cpp
+        runtime/src/render/frame_interpolation.cpp
+        runtime/src/render/rt_materials.cpp
+        runtime/src/render/rt_caps.cpp
+        runtime/src/render/rt/rt_geometry.cpp
+        runtime/src/render/rt/rt_scene.cpp
+        runtime/src/render/streamline_bridge.cpp
+        runtime/src/render/xess_library.cpp
+        runtime/src/frame_telemetry.cpp
+        runtime/src/perf_hint.cpp
+        runtime/src/render/mod_shaders.cpp
+        runtime/src/render/mod_shader_build.cpp
+        runtime/src/render/mod_post.cpp
+        ${galaxy_render_d3d11_backend}
+        "${galaxy_utility_sm50_dir}/utility_shaders_dxbc.h"
+        ${galaxy_post_headers}
+        ${galaxy_ao_headers}
+        ${galaxy_camera_headers}
+        ${galaxy_bloom_headers})
+    target_include_directories(galaxy_render_d3d11 PUBLIC runtime/include runtime/src)
+    target_include_directories(galaxy_render_d3d11 PRIVATE "${galaxy_utility_shader_dir}" runtime/src/render "${galaxy_post_dir}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/smaa" "${CMAKE_CURRENT_SOURCE_DIR}/native/include")
+    target_include_directories(galaxy_render_d3d11 SYSTEM PRIVATE third_party/xess/include "${GALAXY_STREAMLINE_SDK}/include")
+    target_compile_features(galaxy_render_d3d11 PUBLIC cxx_std_20)
+    target_compile_definitions(galaxy_render_d3d11 PUBLIC NEBULA_GPU_D3D11=1)
+    target_link_libraries(galaxy_render_d3d11
+        PUBLIC
+            galaxy_asset_store
+            galaxy_native_host
+            galaxy_runtime_abi
+            galaxy_runtime_settings
+            galaxy_host_pointer_events
+            d3d11
+            dxgi
+            dxguid
+        PRIVATE
+            mfplat mfreadwrite mfuuid)
+    if(MSVC)
+        target_compile_options(galaxy_render_d3d11 PRIVATE /GS- /GR- /Oi /favor:INTEL64 /W4 /WX /permissive- /EHsc)
+    endif()
+
+    add_executable(NebulaNativeD11 native/host/host_main.cpp runtime/src/frame_phase.cpp)
+    nebula_file_details(NebulaNativeD11 NebulaNative.exe "Super Mario Galaxy on PC" ICON "${CMAKE_CURRENT_SOURCE_DIR}/installer/assets/nebula.ico" DPI_MANIFEST)
+    target_sources(NebulaNativeD11 PRIVATE ${galaxy_programs_dxbc})
+    target_include_directories(NebulaNativeD11 PRIVATE native/include runtime/include)
+    target_compile_definitions(NebulaNativeD11 PRIVATE NEBULA_HOST_RENDERER=1 _CRT_SECURE_NO_WARNINGS)
+    target_compile_features(NebulaNativeD11 PRIVATE cxx_std_20)
+    target_link_libraries(NebulaNativeD11 PRIVATE dwmapi galaxy_render_d3d11 galaxy_save_files galaxy_asset_store)
+    if(MSVC)
+        target_sources(NebulaNativeD11 PRIVATE native/host/nebula_host.manifest)
+        target_compile_options(NebulaNativeD11 PRIVATE /Zi)
+        target_link_options(NebulaNativeD11 PRIVATE /DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:NebulaNativeD11.pdb)
+    endif()
+    # Both CPU levels like the other hosts (NebulaNativeD11-x86-64-v2.exe from the baseline tree).
+    nebula_host_cpu_entry(NebulaNativeD11)
+    nebula_host_delay_loads(NebulaNativeD11)
+endif()
+
+# AV1 movies (plan 3.10: a mod's movie, NMOV codec 1): dav1d 1.5.1 built in-tree (cmake/dav1d.cmake), for every renderer.
 option(NEBULA_AV1 "Decode AV1 movies with dav1d (plan 3.10)" ON)
 if(NEBULA_AV1)
     include(cmake/dav1d.cmake)
-    foreach(target galaxy_render galaxy_render_vk)
+    foreach(target galaxy_render galaxy_render_vk galaxy_render_d3d11)
         if(TARGET ${target})
             target_link_libraries(${target} PRIVATE nebula_dav1d)
             target_compile_definitions(${target} PRIVATE NEBULA_AV1=1)

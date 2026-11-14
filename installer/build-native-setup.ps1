@@ -9,7 +9,8 @@ with the in-box C# compiler, and embeds them with the given game binaries. A fir
 player's disc image with nebula-import. An update keeps the packed game, the saves and the settings, installs this
 version and removes the recompiled game of earlier installs, its compiler and its source (InstallEngine.Install).
 
-  -Bin    NebulaNative.exe, NebulaNative-x86-64-v2.exe (the host's NEBULA_HOST_BASELINE build), smg_game.dll,
+  -Bin    NebulaNative.exe, NebulaNative-x86-64-v2.exe (the host's NEBULA_HOST_BASELINE build), NebulaNativeD11.exe and
+          NebulaNativeD11-x86-64-v2.exe (the same two with NEBULA_D3D11), smg_game.dll,
           smg_game_plain.dll, x86-64-v2\smg_game.dll and x86-64-v2\smg_game_plain.dll (native\build.ps1 with both
           targets) and D3D12\ (the Agility SDK's runtime the build put beside it), as tested; tables\material-names.tsv,
           rt-materials.tsv and rt-suns.tsv (the ray tracer's tables, made by nebula-import rt-materials on the ray
@@ -61,7 +62,7 @@ try {
         if (-not (Test-Path -LiteralPath (Join-Path $Dxc $name))) { throw "The compiler folder has no $name" }
     }
     if ((& git -C $repo status --porcelain).Length -ne 0) { Write-Warning 'The tree has uncommitted changes; the package records HEAD.' }
-    foreach ($name in 'NebulaNative.exe', 'NebulaNative-x86-64-v2.exe', 'smg_game.dll', 'smg_game_plain.dll', 'x86-64-v2\smg_game.dll', 'x86-64-v2\smg_game_plain.dll', 'D3D12\D3D12Core.dll', 'D3D12\LICENSE.txt') {
+    foreach ($name in 'NebulaNative.exe', 'NebulaNative-x86-64-v2.exe', 'NebulaNativeD11.exe', 'NebulaNativeD11-x86-64-v2.exe', 'smg_game.dll', 'smg_game_plain.dll', 'x86-64-v2\smg_game.dll', 'x86-64-v2\smg_game_plain.dll', 'D3D12\D3D12Core.dll', 'D3D12\LICENSE.txt') {
         if (-not (Test-Path -LiteralPath (Join-Path $Bin $name))) { throw "The bin folder has no $name" }
     }
     foreach ($name in 'lumalink.exe', 'lumalink-gui.exe') {
@@ -158,6 +159,7 @@ namespace Nebula
         'NebulaNative.exe' = (Join-Path $Bin 'NebulaNative.exe'); 'smg_game.dll' = (Join-Path $Bin 'smg_game.dll')
         'smg_game_plain.dll' = (Join-Path $Bin 'smg_game_plain.dll'); 'luma.zip' = $lumaZip
         'NebulaNative-x86-64-v2.exe' = (Join-Path $Bin 'NebulaNative-x86-64-v2.exe')
+        'NebulaNativeD11.exe' = (Join-Path $Bin 'NebulaNativeD11.exe'); 'NebulaNativeD11-x86-64-v2.exe' = (Join-Path $Bin 'NebulaNativeD11-x86-64-v2.exe')
         'x86-64-v2\smg_game.dll' = (Join-Path $Bin 'x86-64-v2\smg_game.dll'); 'x86-64-v2\smg_game_plain.dll' = (Join-Path $Bin 'x86-64-v2\smg_game_plain.dll')
         'lumalink\lumalink.exe' = (Join-Path $LumaLink 'lumalink.exe'); 'lumalink\lumalink-gui.exe' = (Join-Path $LumaLink 'lumalink-gui.exe')
         'D3D12\D3D12Core.dll' = (Join-Path $Bin 'D3D12\D3D12Core.dll'); 'D3D12\LICENSE.txt' = (Join-Path $Bin 'D3D12\LICENSE.txt')

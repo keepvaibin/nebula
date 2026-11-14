@@ -114,6 +114,10 @@ struct RenderConfig {
     // count. Width follows the current content aspect, including a fold or window resize. Ignored with an upscaler on
     // (render_internal_height).
     unsigned internal_height     = 0;
+    // Dynamic resolution (resolution_governor.h): the 3D scene drawn in a part of its targets, from internal_height's size
+    // down to half its lines, as the GPU's measured time asks. Off: every picture as without it. Taken only where the back
+    // end offers it (dynamic_resolution_offered).
+    bool     dynamic_resolution  = false;
     // RCAS strength 0-100; 0 skips the pass.
     unsigned sharpness           = 0;
     // HDR10 output (post_process_settings.h): offered only while the display reports HDR mode, and written only then
@@ -361,6 +365,10 @@ inline void rt_apply_preset(RenderConfig& cfg) noexcept {
 // RenderConfig::curved_surfaces takes effect.
 void set_curved_surfaces_offered(bool offered) noexcept;
 [[nodiscard]] bool curved_surfaces_offered() noexcept;
+// Whether the renderer draws the scene in a part of its targets: the DYNAMIC RESOLUTION row is offered and
+// RenderConfig::dynamic_resolution takes effect.
+void set_dynamic_resolution_offered(bool offered) noexcept;
+[[nodiscard]] bool dynamic_resolution_offered() noexcept;
 
 // The scene target scale config.ini keeps for the next start. The overlay sets it with the live value so config.ini and the
 // running renderer agree.

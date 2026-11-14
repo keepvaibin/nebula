@@ -26,6 +26,7 @@ and a value. The launcher passes `--pak` and `--saves`; the Android app also pas
 | `--benchmark-return 1` | Set by the home screen's Benchmark (with `--benchmark 1`): when the run ends, the game starts again on the home screen with `--benchmark-result`. |
 | `--benchmark-result <file>` | Set by that start: the result's recommended settings open in the settings menu as changes to apply. |
 | `--gpu-start-retry <n>` | Set by the game itself when it starts again because no graphics memory was free: the tries so far (5 at most). |
+| `--renderer d3d12\|d3d11` | Windows, `NebulaNative`: `d3d11` runs `NebulaNativeD11` (the build of the same CPU level) in its place without starting Direct3D 12; `d3d12` never falls back. Not given: Direct3D 11 runs when no adapter can run Direct3D 12. One process lifetime and exit code either way. |
 
 The GPU is a setting: `gpu=` in `config.ini`, chosen in Nebula Settings (empty: the high-performance GPU).
 

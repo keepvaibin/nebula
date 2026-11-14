@@ -47,7 +47,7 @@ GAME_HALF_ID = "luma-test"
 # The platform the runner drives: its game by renderer, its game module, test extension, importer (library and program)
 # and game half by file name, and where a mod's code lies (luma-format 6: code/<platform>/mod.<ending>).
 HOSTS = {
-    "Windows": {"platform": "windows-x64", "exes": {"d3d12": "NebulaNative.exe", "vulkan": "NebulaNativeVk.exe"},
+    "Windows": {"platform": "windows-x64", "exes": {"d3d12": "NebulaNative.exe", "vulkan": "NebulaNativeVk.exe", "d3d11": "NebulaNativeD11.exe"},
                 "game": "smg_game.dll", "plain": "smg_game_plain.dll", "extension": "nebula_test_extension.dll", "importer": "nebula_import.dll",
                 "importer_exe": "nebula-import.exe", "half": "luma-test.dll", "ending": ".dll"},
     "Linux": {"platform": "linux-x64", "exes": {"vulkan": "nebula"}, "game": "libsmg_game.so", "plain": "libsmg_game_plain.so",
@@ -340,8 +340,8 @@ def read_test(folder, types=None):
         if not isinstance(t["renderers"], list) or not t["renderers"]:
             raise HarnessError("renderers must be a list")
         for r in t["renderers"]:
-            if r not in ("d3d12", "vulkan", "metal", "gl"):
-                raise HarnessError("renderers: %s is not d3d12, vulkan, metal or gl" % json.dumps(r))
+            if r not in ("d3d12", "vulkan", "d3d11", "metal", "gl"):
+                raise HarnessError("renderers: %s is not d3d12, vulkan, d3d11, metal or gl" % json.dumps(r))
         renderers = t["renderers"]
     if "region" in t and text(t, "region", "") not in ("RMGE01", "RMGP01", "RMGJ01"):
         raise HarnessError("region must be RMGE01, RMGP01 or RMGJ01")

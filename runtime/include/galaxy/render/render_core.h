@@ -12,6 +12,8 @@
 #include "galaxy/render/vk/renderer_vk.h"
 #elif defined(NEBULA_GPU_METAL)
 #include "galaxy/render/mtl/renderer_mtl.h"
+#elif defined(NEBULA_GPU_D3D11)
+#include "galaxy/render/d3d11/renderer_d3d11.h"
 #else
 #include "galaxy/render/renderer_d3d12.h"
 #endif
@@ -260,7 +262,7 @@ private:
     void walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_t& first);
     std::vector<TextureHandle> walk_handles_;
     std::vector<std::uint32_t> walk_pairs_;
-#if defined(NEBULA_GPU_VULKAN) || defined(NEBULA_GPU_METAL)
+#if defined(NEBULA_GPU_VULKAN) || defined(NEBULA_GPU_METAL) || defined(NEBULA_GPU_D3D11)
     // Vulkan without descriptor indexing: the table's descriptor sets, as many maps as a bound table holds.
     void walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::Table& samplers);
     std::vector<SamplerKey> walk_keys_;

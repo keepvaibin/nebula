@@ -14,7 +14,7 @@
 
 #if defined(_WIN32)
 #include "galaxy/windows_api.h"
-#include <dxgi.h>
+#include <dxgi1_6.h>
 #include <wrl/client.h>
 #include <xess/xess_vk.h>
 #endif
@@ -132,6 +132,31 @@ std::uint32_t dxgi_subsystem(std::uint64_t luid) {
             if (adapter_luid == luid) {
                 return description.SubSysId;
             }
+        }
+    }
+}
+// Each adapter's place in Windows' order for performance (IDXGIFactory6::EnumAdapterByGpuPreference with
+// DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE: external GPUs, then discrete, then integrated, and the player's choice in
+// Windows' graphics settings), by LUID, so Vulkan takes the GPU Direct3D takes. Empty where DXGI 1.6 is missing.
+std::vector<std::uint64_t> dxgi_performance_order() {
+    std::vector<std::uint64_t> order;
+    const HMODULE module = LoadLibraryExW(L"dxgi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    using Create = HRESULT(WINAPI*)(REFIID, void**);
+    const auto create = module != nullptr ? reinterpret_cast<Create>(GetProcAddress(module, "CreateDXGIFactory1")) : nullptr;
+    Microsoft::WRL::ComPtr<IDXGIFactory6> factory;
+    if (create == nullptr || FAILED(create(IID_PPV_ARGS(&factory)))) {
+        return order;
+    }
+    for (UINT index = 0u;; ++index) {
+        Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
+        if (FAILED(factory->EnumAdapterByGpuPreference(index, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&adapter)))) {
+            return order;
+        }
+        DXGI_ADAPTER_DESC1 description{};
+        std::uint64_t luid = 0u;
+        if (SUCCEEDED(adapter->GetDesc1(&description)) && (description.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) == 0u) {
+            std::memcpy(&luid, &description.AdapterLuid, sizeof(luid));
+            order.push_back(luid);
         }
     }
 }
@@ -389,18 +414,61 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     vkEnumeratePhysicalDevices(instance_, &count, nullptr);
     std::vector<VkPhysicalDevice> devices(count);
     vkEnumeratePhysicalDevices(instance_, &count, devices.data());
-    const VkPhysicalDeviceType wanted = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
+    // The automatic order: on Windows, Windows' order for performance (dxgi_performance_order); else and after it, a
+    // discrete GPU, then an integrated one, a virtual one, any other, and a software renderer
+    // last; among GPUs of one kind the one with the most memory of its own (a laptop's or desktop's stronger GPU),
+    // then the driver's order. The GPU chosen in the settings comes before all of them.
     {
-        std::vector<std::pair<unsigned, VkPhysicalDevice>> ranked;
+        const auto kind_rank = [](VkPhysicalDeviceType type) -> std::uint64_t {
+            switch (type) {
+                case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: return 4u;
+                case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: return 3u;
+                case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU: return 2u;
+                case VK_PHYSICAL_DEVICE_TYPE_CPU: return 0u;
+                default: return 1u;
+            }
+        };
+        struct Rank {
+            bool chosen;
+            std::uint64_t windows_place;  // its place in Windows' order for performance; ~0: not in it
+            std::uint64_t kind;
+            VkDeviceSize own_memory;
+        };
+#if defined(_WIN32)
+        const std::vector<std::uint64_t> windows_order = dxgi_performance_order();
+#endif
+        std::vector<std::pair<Rank, VkPhysicalDevice>> ranked;
         ranked.reserve(devices.size());
         for (const VkPhysicalDevice device : devices) {
             VkPhysicalDeviceProperties properties{};
             vkGetPhysicalDeviceProperties(device, &properties);
-            const bool chosen = !chosen_gpu.empty() && adapter_of(device).identity == chosen_gpu;
-            ranked.emplace_back((chosen ? 2u : 0u) + (properties.deviceType == wanted ? 1u : 0u), device);
+            VkPhysicalDeviceMemoryProperties memory{};
+            vkGetPhysicalDeviceMemoryProperties(device, &memory);
+            VkDeviceSize own = 0u;
+            for (std::uint32_t h = 0; h < memory.memoryHeapCount; ++h) {
+                if ((memory.memoryHeaps[h].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0u) {
+                    own = std::max(own, memory.memoryHeaps[h].size);
+                }
+            }
+            const Adapter adapter = adapter_of(device);
+            const bool chosen = !chosen_gpu.empty() && adapter.identity == chosen_gpu;
+            std::uint64_t place = ~std::uint64_t{0};
+#if defined(_WIN32)
+            for (std::size_t i = 0; i < windows_order.size() && adapter.luid != 0u; ++i) {
+                if (windows_order[i] == adapter.luid) {
+                    place = i;
+                    break;
+                }
+            }
+#endif
+            ranked.push_back({Rank{chosen, place, kind_rank(properties.deviceType), own}, device});
         }
-        std::stable_sort(ranked.begin(), ranked.end(),
-                         [](const auto& a, const auto& b) { return a.first > b.first; });
+        std::stable_sort(ranked.begin(), ranked.end(), [](const auto& a, const auto& b) {
+            if (a.first.chosen != b.first.chosen) return a.first.chosen;
+            if (a.first.windows_place != b.first.windows_place) return a.first.windows_place < b.first.windows_place;
+            if (a.first.kind != b.first.kind) return a.first.kind > b.first.kind;
+            return a.first.own_memory > b.first.own_memory;
+        });
         for (std::size_t i = 0; i < ranked.size(); ++i) {
             devices[i] = ranked[i].second;
         }
