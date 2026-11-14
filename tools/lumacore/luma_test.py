@@ -1255,7 +1255,7 @@ def plan_text(test, out):
 def place_mods(test, settings, previous, frozen):
     """The test's mods into the run's settings, in order, each one's libraries frozen, and the safe start asked or left
     from a crash. Returns the placed mods ((id, mod) pairs) and the game's extra arguments (--import, --safe-start).
-    Every platform's adapter places them so (run_one; the Android suite, agents/luma d/platforms/android)."""
+    Every platform's adapter places them so (run_one, and the Android adapter)."""
     mod_ids, imports = [], []
     for i, m in enumerate(test["mods"]):
         if m["install"] == "import":
@@ -1877,7 +1877,7 @@ def evaluate(test, renderer, run_folder, ran):
         reason = "the run did not reach its end step within limit_seconds (%s s)" % test["limit"]
         stalled = [line for line in log_lines if "the game made no frame for" in line]
         if stalled:
-            reason += "; %s (agents/luma d/tools/read_dump.py)" % stalled[0].split("host: ", 1)[-1]
+            reason += "; %s" % stalled[0].split("host: ", 1)[-1]
     # Always checked (3.7).
     if ran.get("unwatched"):
         add("every process the game started in its place was watched to its end", False, ran["unwatched"])
