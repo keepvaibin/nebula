@@ -217,14 +217,15 @@ void strip_debug_names(std::vector<std::uint32_t>& spirv) {
     spirv = std::move(out);
 }
 
-// The bindless form's texture and sampler arrays (program.hlsli: gTextures[], gSamplers[] in descriptor set 1) as
-// OpTypeRuntimeArray. glslang's HLSL front end never marks an unsized array as variably indexed (its GLSL one does), so at
-// link it takes the size its constant indices imply: 1 for arrays indexed only through draw_tables, and every draw then
-// indexes a one-element OpTypeArray past its end (out of bounds in SPIR-V 2.16: drivers may clamp or fold the index). An
-// array of images or samplers in set 1 of length 1 is made run-time sized, with the capability and extension glslang adds
-// for an unsized array that survives linking (RuntimeDescriptorArray, SPV_EXT_descriptor_indexing: core only in SPIR-V
-// 1.5). The bound-table form (fixed tables of kBoundTableSlots) and modules with no such array are left as they are. The
-// index stays dynamically uniform (one draw_tables entry per draw), so no NonUniform decoration is needed.
+// The bindless form's texture and sampler arrays (program.hlsli: gTextures[] and gVolumes[] in descriptor set 1,
+// gSamplers[] in set 2, kDrawBindings) as OpTypeRuntimeArray. glslang's HLSL front end never marks an unsized array as
+// variably indexed (its GLSL one does), so at link it takes the size its constant indices imply: 1 for arrays indexed only
+// through draw_tables, and every draw then indexes a one-element OpTypeArray past its end (out of bounds in SPIR-V 2.16:
+// drivers may clamp or fold the index). An array of images or samplers in set 1 or 2 of length 1 is made run-time sized,
+// with the capability and extension glslang adds for an unsized array that survives linking (RuntimeDescriptorArray,
+// SPV_EXT_descriptor_indexing: core only in SPIR-V 1.5). The bound-table form (fixed tables of kBoundTableSlots) and
+// modules with no such array are left as they are. The index stays dynamically uniform (one draw_tables entry per draw),
+// so no NonUniform decoration is needed.
 void make_bindless_arrays_runtime(std::vector<std::uint32_t>& spirv) {
     constexpr std::uint32_t kOpExtension = 10;
     constexpr std::uint32_t kOpCapability = 17;
@@ -240,7 +241,8 @@ void make_bindless_arrays_runtime(std::vector<std::uint32_t>& spirv) {
     constexpr std::uint32_t kDecorationDescriptorSet = 34;
     constexpr std::uint32_t kStorageUniformConstant = 0;
     constexpr std::uint32_t kCapabilityRuntimeDescriptorArray = 5302;
-    constexpr std::uint32_t kBindlessSet = 1;
+    constexpr std::uint32_t kImageSet = 1;    // kDrawBindings: t0 space1 and t0 space2
+    constexpr std::uint32_t kSamplerSet = 2;  // kDrawBindings: s0 space1
     constexpr char kExtension[] = "SPV_EXT_descriptor_indexing";
     // The extension's name as literal string words (nul-terminated, padded with zeros).
     std::vector<std::uint32_t> extension_words((sizeof(kExtension) + 3u) / 4u, 0u);
@@ -285,7 +287,7 @@ void make_bindless_arrays_runtime(std::vector<std::uint32_t>& spirv) {
     for (const auto& [pointer, variable] : variables) {
         const auto set = set_of.find(variable);
         const auto type = pointee.find(pointer);
-        if (set == set_of.end() || set->second != kBindlessSet || type == pointee.end()) {
+        if (set == set_of.end() || (set->second != kImageSet && set->second != kSamplerSet) || type == pointee.end()) {
             continue;
         }
         const auto array = array_at.find(type->second);
