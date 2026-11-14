@@ -709,7 +709,10 @@ private:
         std::uint64_t free_from = 0u;
     };
     std::vector<ConvSceneTable> conv_scene_tables_;
+    // The live set's entry (each set keeps its own: swap_scene_with and the other set swaps trade it); an entry a set
+    // holds is never free.
     std::size_t conv_scene_table_ = ~std::size_t{0};
+    void release_conv_table(std::size_t& entry);
     // Presents so far.
     std::uint64_t presented_frames_ = 0;
     bool create_root_signature();
@@ -900,6 +903,7 @@ private:
         // The conversion views' persistent indices (srv_ring_.gpu_at turns one into a handle of the current heap).
         std::uint32_t conv_color_index = DescriptorRing::kNoPersistent;
         std::uint32_t conv_depth_index = DescriptorRing::kNoPersistent;
+        std::size_t conv_ring = ~std::size_t{0};  // the conv_scene_tables_ entry its views are in after a swap_scene_color
     };
     SceneTargetSet alt_scene_;
     // The open target pass's set (begin_target_pass) while the scene target holds it, and each key's set between passes

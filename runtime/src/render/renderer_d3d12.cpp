@@ -1371,7 +1371,16 @@ void RendererD3D12::refresh_scene_conversion_source_views() {
     if (!conv_scene_source_table_) {
         conv_scene_source_table_ = allocate_persistent_descriptors(2u);
     }
+    release_conv_table(conv_scene_table_);
     write_scene_conversion_views(*conv_scene_source_table_);
+}
+
+// A set's views left a ring entry: free once the frames that could read it are done.
+void RendererD3D12::release_conv_table(std::size_t& entry) {
+    if (entry < conv_scene_tables_.size()) {
+        conv_scene_tables_[entry].free_from = frame_index_ + kFramesInFlight + 1u;
+    }
+    entry = ~std::size_t{0};
 }
 
 void RendererD3D12::write_scene_conversion_views(const DescriptorRing::Persistent& table) {
@@ -1477,7 +1486,7 @@ gpu::TextureRef RendererD3D12::swap_scene_color(gpu::TextureRef fresh) {
         D3D12_HEAP_PROPERTIES heap{};
         heap.Type = D3D12_HEAP_TYPE_DEFAULT;
         D3D12_CLEAR_VALUE clear{};
-        clear.Format = kSceneColorFormat;
+        clear.Format = desc.Format;  // the wide scene's too
         clear.Color[3] = 1.0f;
         d3d_check(create_texture(device_.Get(), &heap, D3D12_HEAP_FLAG_NONE, &desc,
                                                    gpu::Use::ColorWrite, &clear, IID_PPV_ARGS(&fresh)),
@@ -1490,20 +1499,19 @@ gpu::TextureRef RendererD3D12::swap_scene_color(gpu::TextureRef fresh) {
     gpu::TextureRef picture = std::move(scene_color_);
     scene_color_ = std::move(fresh);
     // RTVs are copied when recorded: the scene target's slot takes the new target now. Its conversion views, which the GPU reads
-    // when it runs, go to the next table in turn (a frame in flight still reads the one before).
+    // when it runs, go to a free table (a frame in flight still reads the one before; a set put aside keeps its own).
     if (scene_msaa_.samples <= 1u) {
         device_->CreateRenderTargetView(scene_color_.Get(), nullptr, scene_rtv_);
     }
-    if (conv_scene_table_ < conv_scene_tables_.size()) {
-        conv_scene_tables_[conv_scene_table_].free_from = frame_index_ + kFramesInFlight + 1u;
-    }
+    release_conv_table(conv_scene_table_);
     std::size_t table = 0u;
-    while (table < conv_scene_tables_.size() && (table == conv_scene_table_ || frame_index_ < conv_scene_tables_[table].free_from)) {
+    while (table < conv_scene_tables_.size() && frame_index_ < conv_scene_tables_[table].free_from) {
         ++table;
     }
     if (table == conv_scene_tables_.size()) {
         conv_scene_tables_.push_back({allocate_persistent_descriptors(2u)});
     }
+    conv_scene_tables_[table].free_from = ~std::uint64_t{0};
     conv_scene_table_ = table;
     write_scene_conversion_views(conv_scene_tables_[table].table);
     bind_scene();
@@ -4926,6 +4934,7 @@ void RendererD3D12::write_scene_set_views(SceneTargetSet& set, const DescriptorR
     view.Format = kSceneDepthSrvFormat;
     device_->CreateShaderResourceView(set.depth.Get(), &view, depth_cpu);
     srv_ring_.commit(table, 2u);
+    release_conv_table(set.conv_ring);
     set.conv_table = table;
     set.conv_color_index = table.index;
     set.conv_depth_index = table.index + 1u;
@@ -4999,6 +5008,7 @@ bool RendererD3D12::create_scene_set(
     } else {
         // The caller writes views into the frame's descriptor segment per use.
         set.conv_table.reset();
+        release_conv_table(set.conv_ring);
     }
     set.map = map;
     return true;
@@ -5015,6 +5025,7 @@ void RendererD3D12::swap_scene_with(SceneTargetSet& other) {
     std::swap(conv_scene_source_table_, other.conv_table);
     std::swap(conv_scene_color_index_, other.conv_color_index);
     std::swap(conv_scene_depth_index_, other.conv_depth_index);
+    std::swap(conv_scene_table_, other.conv_ring);
     invalidate_draw_bindings();
 }
 
@@ -5029,6 +5040,7 @@ void RendererD3D12::swap_scene_sets() {
     std::swap(conv_scene_source_table_, alt_scene_.conv_table);
     std::swap(conv_scene_color_index_, alt_scene_.conv_color_index);
     std::swap(conv_scene_depth_index_, alt_scene_.conv_depth_index);
+    std::swap(conv_scene_table_, alt_scene_.conv_ring);
     output_scene_active_ = !output_scene_active_;
     invalidate_draw_bindings();
     bind_scene();
@@ -5047,6 +5059,7 @@ void RendererD3D12::swap_target_set() {
     std::swap(conv_scene_source_table_, target_scene_.conv_table);
     std::swap(conv_scene_color_index_, target_scene_.conv_color_index);
     std::swap(conv_scene_depth_index_, target_scene_.conv_depth_index);
+    std::swap(conv_scene_table_, target_scene_.conv_ring);
     target_pass_active_ = !target_pass_active_;
     invalidate_draw_bindings();
     bind_scene();
@@ -5754,9 +5767,10 @@ void RendererD3D12::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_
     in.frame_width = std::min(frame_.width, static_cast<unsigned>(desc.Width));
     in.frame_height = std::min(frame_.height, static_cast<unsigned>(desc.Height));
     if (kind == NEBULA_PASS_BLOOM_HOLD) {
-        if (scene_msaa_.samples <= 1u && !scene_hdr_) {
-            // The scene and the bloom's image trade places instead of the scene being copied. The game draws the
-            // bloom's objects on black into the new target, over the same depth.
+        if (scene_msaa_.samples <= 1u) {
+            // The scene and the bloom's image trade places instead of the scene being copied (the wide scene's too: its
+            // set keeps its own conversion table). The game draws the bloom's objects on black into the new target, over
+            // the same depth.
             gpu::TextureRef picture =
                 swap_scene_color(game_bloom_.take_kept_image(command_list_.Get(), in, frame_index_, kFramesInFlight));
             game_bloom_.keep_picture(std::move(picture), in);
@@ -5786,8 +5800,8 @@ void RendererD3D12::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_
         }
         p.strength = static_cast<float>(std::min(get_render_config().bloom, kMaxBloom)) / 100.0f;
         // The simple bloom's source is the frame: the scene and the source trade places instead of the scene being
-        // copied, where the composite then writes the whole target from it (as the bloom hold's trade, not the HDR scene).
-        if (kind == NEBULA_PASS_BLOOM_SIMPLE && scene_msaa_.samples <= 1u && !scene_hdr_ &&
+        // copied, where the composite then writes the whole target from it (as the bloom hold's trade).
+        if (kind == NEBULA_PASS_BLOOM_SIMPLE && scene_msaa_.samples <= 1u &&
             in.frame_width == desc.Width && in.frame_height == desc.Height && game_bloom_.can_take_source(in)) {
             game_bloom_.give_source(
                 swap_scene_color(game_bloom_.take_source_image(command_list_.Get(), in, frame_index_, kFramesInFlight)), in);
