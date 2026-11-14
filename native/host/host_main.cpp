@@ -1597,14 +1597,6 @@ void submit_frame_unchecked(bool present, bool black) {
 }
 
 [[noreturn]] void finish_and_exit(bool restart);
-// Whether finish_and_exit(true) starts the game again on this host (Windows: a new process; Android: the activity's
-// restartGame). Where it does not, it only ends the game, so a caller that would start again goes on instead.
-constexpr bool kHostStartsAgain =
-#if defined(_WIN32) || (defined(__ANDROID__) && defined(NEBULA_HOST_RENDERER))
-    true;
-#else
-    false;
-#endif
 
 // The card has no memory free at the start: another program holds it for a moment. A new process tries again
 // (--gpu-start-retry counts the tries), up to five times, two seconds apart; after that it is a fault to report.
@@ -3587,6 +3579,14 @@ void hold_runtime_lease() {
 }
 #endif
 
+// Whether finish_and_exit(true) starts the game again on this host (Windows: a new process; Android: the activity's
+// restartGame). Where it does not, it only ends the game, so a caller that would start again goes on instead.
+constexpr bool kHostStartsAgain =
+#if defined(_WIN32) || (defined(__ANDROID__) && defined(NEBULA_HOST_RENDERER))
+    true;
+#else
+    false;
+#endif
 [[noreturn]] void finish_and_exit(bool restart) {
 #if defined(_WIN32)
     game_profile::finish();
