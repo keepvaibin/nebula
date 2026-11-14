@@ -46,6 +46,12 @@ pub struct Library<'d> {
     /// R3-A, A-1): ELF DT_FINI or DT_FINI_ARRAY, a Mach-O term section. A PE's entry point and TLS callbacks run at
     /// both and are in `runs_at_load`.
     pub runs_at_close: Vec<String>,
+    /// Mach-O: the system it is built for, as LC_BUILD_VERSION's platform numbers it (1 macOS, 2 iOS, 7 the iOS
+    /// simulator...; LC_VERSION_MIN_MACOSX gives 1, LC_VERSION_MIN_IPHONEOS 2, LC_VERSION_MIN_TVOS 3,
+    /// LC_VERSION_MIN_WATCHOS 4); None when it says none.
+    pub apple_platform: Option<u32>,
+    /// Mach-O: LC_ENCRYPTION_INFO or LC_ENCRYPTION_INFO_64 with a non-zero cryptid (the store's encryption).
+    pub encrypted: bool,
     data: &'d [u8],
     /// Address ranges to file offsets: (address, size in file, file offset).
     maps: Vec<(u64, u64, u64)>,
@@ -176,6 +182,8 @@ fn read_pe(d: &[u8]) -> Option<Library<'_>> {
         needed: Vec::new(),
         runs_at_load: Vec::new(),
         runs_at_close: Vec::new(),
+        apple_platform: None,
+        encrypted: false,
         data: d,
         maps,
         fixups: HashMap::new(),
@@ -293,6 +301,8 @@ fn read_elf(d: &[u8]) -> Option<Library<'_>> {
         needed: Vec::new(),
         runs_at_load: Vec::new(),
         runs_at_close: Vec::new(),
+        apple_platform: None,
+        encrypted: false,
         data: d,
         maps,
         fixups: HashMap::new(),
@@ -449,6 +459,8 @@ fn read_macho(d: &[u8]) -> Option<Library<'_>> {
         needed: Vec::new(),
         runs_at_load: Vec::new(),
         runs_at_close: Vec::new(),
+        apple_platform: None,
+        encrypted: false,
         data: d,
         maps: Vec::new(),
         fixups: HashMap::new(),
@@ -497,6 +509,12 @@ fn read_macho(d: &[u8]) -> Option<Library<'_>> {
                 }
             }
             0x1a => lib.runs_at_load.push("LC_ROUTINES_64".to_string()),
+            0x32 => lib.apple_platform = Some(u32_at(d, at + 8)?),
+            0x24 => lib.apple_platform = lib.apple_platform.or(Some(1)),
+            0x25 => lib.apple_platform = lib.apple_platform.or(Some(2)),
+            0x2f => lib.apple_platform = lib.apple_platform.or(Some(3)),
+            0x30 => lib.apple_platform = lib.apple_platform.or(Some(4)),
+            0x21 | 0x2c => lib.encrypted |= u32_at(d, at + 16)? != 0,
             0x2 => symtab = Some((u32_at(d, at + 8)? as usize, u32_at(d, at + 12)? as usize, u32_at(d, at + 16)? as usize)),
             0xc | 0x8000_0018 | 0x8000_001f | 0x20 => {
                 let name_off = u32_at(d, at + 8)? as usize;

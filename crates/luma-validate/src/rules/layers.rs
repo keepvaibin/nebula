@@ -2,7 +2,77 @@
 
 use super::{p, t, Ctx};
 use crate::zip::EntryKind;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
+
+/// Where each source ending the cook does not make at a game path belongs instead (L304's `expected`, as the cook in
+/// nebula-import overlay.rs reads them): every ending of SOURCE_ENDINGS is cooked there or listed here (a test holds
+/// it). A font, movie or MIDI file is read by a `.font.json`, `.movie.json` or `.sound.json` in a layer's assets/; a
+/// buffer or image only by the model that names it; a `.dds` also as a texture pack's texture.
+pub const WHERE: [(&str, &str); 11] = [
+    (".bin", "Where.ModelPart"),
+    (".jpg", "Where.ModelPart"),
+    (".jpeg", "Where.ModelPart"),
+    (".ktx2", "Where.ModelPart"),
+    (".dds", "Where.Texture"),
+    (".mid", "Where.Music"),
+    (".json", "Where.Table"),
+    (".ttf", "Where.Font"),
+    (".otf", "Where.Font"),
+    (".webm", "Where.Movie"),
+    (".mp4", "Where.Movie"),
+];
+
+/// The most of a model file read to find the files it names.
+const MAX_MODEL: u64 = 1 << 30;
+
+/// The files (paths under the layer's `files/`, as spelled) that a `.gltf` or `.glb` of the layer names by a buffer's or
+/// an image's `uri`: a path relative to the model's folder, not `data:`, not leaving the folder (the cook, gltf.rs
+/// read_uri, reads each from beside the model and refuses the others by name).
+fn model_parts(ctx: &mut Ctx, layer: &str) -> BTreeSet<String> {
+    let prefix = format!("layers/{layer}/files/");
+    let models: Vec<(usize, String)> = ctx
+        .m
+        .items
+        .iter()
+        .enumerate()
+        .filter(|(_, i)| i.kind == EntryKind::File)
+        .filter_map(|(n, i)| i.name.strip_prefix(&prefix).map(|path| (n, path.to_string())))
+        .filter(|(_, path)| {
+            let lower = path.to_ascii_lowercase();
+            lower.ends_with(".gltf") || lower.ends_with(".glb")
+        })
+        .collect();
+    let mut parts = BTreeSet::new();
+    for (index, path) in models {
+        // A model that cannot be read is the container's finding (L105, L106) or the cook's (L804).
+        let Ok(bytes) = ctx.m.read(index, MAX_MODEL) else { continue };
+        let json = if path.to_ascii_lowercase().ends_with(".glb") { glb_json(&bytes) } else { Some(&bytes[..]) };
+        let Some(Ok(root)) = json.map(crate::json::parse) else { continue };
+        let folder = path.rsplit_once('/').map_or("", |(f, _)| f);
+        for list in ["buffers", "images"] {
+            for item in root.get(list).map(|l| l.items().to_vec()).unwrap_or_default() {
+                let Some(uri) = item.get("uri").and_then(|u| u.as_str()) else { continue };
+                if uri.starts_with("data:") || uri.contains("..") || uri.starts_with('/') || uri.contains(':') || uri.contains('\\') {
+                    continue;
+                }
+                let mut at: Vec<&str> = if folder.is_empty() { Vec::new() } else { folder.split('/').collect() };
+                at.extend(uri.split('/').filter(|s| !s.is_empty() && *s != "."));
+                parts.insert(at.join("/"));
+            }
+        }
+    }
+    parts
+}
+
+/// The JSON chunk of a binary glTF (`glTF`, version 2, then a chunk of type `JSON`).
+fn glb_json(bytes: &[u8]) -> Option<&[u8]> {
+    let word = |at: usize| bytes.get(at..at + 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
+    if bytes.get(0..4)? != b"glTF" || word(4)? != 2 || word(16)? != 0x4E4F_534A {
+        return None;
+    }
+    let length = usize::try_from(word(12)?).ok()?;
+    bytes.get(20..20usize.checked_add(length)?)
+}
 
 /// Source endings a whole file may have instead of the game format's (luma-format 5).
 pub const SOURCE_ENDINGS: [&str; 16] =
@@ -120,6 +190,7 @@ pub(crate) fn check(ctx: &mut Ctx) {
 
     // L302-L304: whole files at game paths, against the player's game.
     let store = ctx.game().and_then(|g| g.store);
+    let mut parts_of: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for item in ctx.m.items.clone() {
         if item.kind != EntryKind::File {
             continue;
@@ -164,11 +235,19 @@ pub(crate) fn check(ctx: &mut Ctx) {
                         let table = source.and_then(|e| store.path(&lower[..lower.len() - e.len()])).filter(|g| store.table(g).is_some());
                         if let Some(game_path) = table {
                             ctx.add(303, &item.name, None, None, vec![("found", t(game_path))]);
-                        } else if source.is_some() && !cooked_source(&lower) {
-                            // A source standing in for a game file of another ending: what it may stand in for is
-                            // each content kind's contract (3.2 to 3.10), checked by that kind's rules; the kinds the
-                            // cook makes are the cook's (L804), the others not yet defined.
-                            ctx.not_checked(304, "Missing.KindContract");
+                        } else if let Some(ending) = source.filter(|_| !cooked_source(&lower)) {
+                            // A source of a kind the cook does not make at a game path: a file a model of the layer
+                            // names is that model's (read by its cook, L804); anything else is placed where the game
+                            // never reads it, so it is named with where it belongs.
+                            let layer = parts[1].to_string();
+                            if !parts_of.contains_key(&layer) {
+                                let found = model_parts(ctx, &layer);
+                                parts_of.insert(layer.clone(), found);
+                            }
+                            if !parts_of[&layer].contains(path) {
+                                let expected = WHERE.iter().find(|(e, _)| e == ending).map_or("Where.ModelPart", |(_, phrase)| phrase);
+                                ctx.add(304, &item.name, None, None, vec![("kind", t(*ending)), ("found", t(path)), ("expected", p(expected))]);
+                            }
                         } else if !store.may_be_new(&lower) {
                             ctx.add(302, &item.name, None, None, vec![("found", t(path))]);
                         }

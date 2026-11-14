@@ -15,7 +15,7 @@
 //! about	<id>	<version>
 //! conflict	<id>
 //! need	<id>
-//! touch	replaces|cells|adds|removes|assets|functions|links|scenarios|services	<value>
+//! touch	replaces|cells|adds|removes|assets|functions|links|scenarios|services|after_start|kit_schemas	<value>
 //! finding	<code>	<file>	<line>|-	<column>|-	<pointer>|-	<mod id>|-	(<name>=T:<text> | <name>=P:<phrase id>)...
 //! not-checked	<code>	<phrase id>	<places>
 //! end	<SHA-1 of every byte before this line, hex>
@@ -53,8 +53,9 @@ pub struct Saved {
 }
 
 const MAGIC: &str = "luma-saved";
-// 2: `need` lines. A form 1 report does not read, so a mod checked before them is checked in full again.
-const FORM: u32 = 2;
+// 2: `need` lines; 3: `touch kit_schemas`. A report of an earlier form does not read, so a mod checked before is checked
+// in full again.
+const FORM: u32 = 3;
 const MAX_SAVED: usize = 64 << 20;
 
 fn esc(s: &str) -> String {
@@ -99,7 +100,7 @@ fn opt(v: Option<&str>) -> String {
     v.map_or_else(|| "-".to_string(), esc)
 }
 
-fn touch_lists(t: &Touches) -> [(&'static str, &Vec<String>); 10] {
+fn touch_lists(t: &Touches) -> [(&'static str, &Vec<String>); 11] {
     [
         ("replaces", &t.replaces),
         ("cells", &t.cells),
@@ -111,6 +112,7 @@ fn touch_lists(t: &Touches) -> [(&'static str, &Vec<String>); 10] {
         ("scenarios", &t.scenarios),
         ("services", &t.services),
         ("after_start", &t.after_start),
+        ("kit_schemas", &t.kit_schemas),
     ]
 }
 
@@ -221,6 +223,7 @@ impl Saved {
                         "scenarios" => t.scenarios.push(v),
                         "services" => t.services.push(v),
                         "after_start" => t.after_start.push(v),
+                        "kit_schemas" => t.kit_schemas.push(v),
                         _ => return None,
                     }
                 }

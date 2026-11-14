@@ -4,6 +4,7 @@
 
 pub mod json;
 pub mod names;
+pub mod schema;
 pub mod semver;
 pub mod zip;
 
@@ -17,7 +18,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 pub use names::Names;
-pub use rules::{cooked_source, save_problem, SOURCE_ENDINGS};
+pub use rules::{cooked_source, save_problem, SOURCE_ENDINGS, WHERE};
 pub use saved::{About, Saved};
 
 /// The validator's version: `<format major>.<rules minor>` (validator contract 6).
@@ -247,6 +248,10 @@ pub struct Touches {
     /// U+001F, one per placement. The host gives them to the module after the last mod's start (luma_refs.h), which
     /// looks each up in the factory. Filled by the placement rules of the stages' contract.
     pub after_start: Vec<String>,
+    /// The data schemas this mod gives as a library, one per module and version it reads (`code/<id>.kit/<module>/
+    /// <version>.json`): the module key (`<id>.<module>`), the version and the schema's text, joined by U+001F. A mod
+    /// that names the module in its `kit` has its data checked against them (L701, L702).
+    pub kit_schemas: Vec<String>,
 }
 
 /// The layers of a zone, and the folders whose tables the game links by key across them (contract table-keys 13).

@@ -28,6 +28,25 @@ fn platform(name: &str) -> Option<(&'static str, Format, Machine)> {
     })
 }
 
+/// A Mach-O platform number as Apple names the system (LC_BUILD_VERSION, PLATFORM_*).
+fn apple_platform_name(n: u32) -> String {
+    match n {
+        1 => "macOS".into(),
+        2 => "iOS".into(),
+        3 => "tvOS".into(),
+        4 => "watchOS".into(),
+        5 => "bridgeOS".into(),
+        6 => "Mac Catalyst".into(),
+        7 => "iOS Simulator".into(),
+        8 => "tvOS Simulator".into(),
+        9 => "watchOS Simulator".into(),
+        10 => "DriverKit".into(),
+        11 => "visionOS".into(),
+        12 => "visionOS Simulator".into(),
+        n => format!("PLATFORM {n}"),
+    }
+}
+
 /// The entry library's path in a mod for a platform.
 pub(crate) fn entry_path(plat: &str) -> Option<String> {
     platform(plat).map(|(entry, _, _)| format!("code/{plat}/{entry}"))
@@ -69,8 +88,10 @@ pub(crate) fn check(ctx: &mut Ctx) {
         .map(|l| l.members().iter().map(|m| (m.key.clone(), m.value.items().iter().filter_map(|x| x.as_str().map(str::to_string)).collect())).collect())
         .unwrap_or_default();
 
-    // The folders under code/: each a known platform, listed; nothing else under code/ but the mod's own .lumi.
+    // The folders under code/: each a known platform, listed; nothing else under code/ but the mod's own .lumi and its
+    // data schemas.
     let own_lumi: Option<String> = root.as_ref().and_then(|r| r.get("id")).and_then(|v| v.as_str()).map(|id| format!("{id}.lumi"));
+    let own_kit: Option<String> = root.as_ref().and_then(|r| r.get("id")).and_then(|v| v.as_str()).map(|id| format!("{id}.kit"));
     let mut found: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for item in ctx.m.items.clone() {
         let Some(rest) = item.name.strip_prefix("code/") else { continue };
@@ -80,6 +101,10 @@ pub(crate) fn check(ctx: &mut Ctx) {
         // A library mod's interface (`code/<id>.lumi`, written by `lumalink build`; a mod that uses the library reads
         // it): the one file beside the platform folders.
         if file.is_none() && item.kind == EntryKind::File && own_lumi.as_deref() == Some(folder.as_str()) {
+            continue;
+        }
+        // A library mod's data schemas (`code/<id>.kit/<module>/<version>.json`): kit.rs reads each.
+        if own_kit.as_deref() == Some(folder.as_str()) {
             continue;
         }
         if platform(&folder).is_none() {
@@ -127,10 +152,6 @@ pub(crate) fn check(ctx: &mut Ctx) {
         }
         if !extras.is_empty() && !permissions.contains("native") {
             ctx.add(509, "luma.json", None, None, vec![("why", p("Code.ExtraWithoutNative")), ("found", t(extras.join(", ")))]);
-        }
-        if plat == "ios-arm64" && !extras.is_empty() {
-            // Which extra libraries iOS signing allows is plan 8.3's, not written yet.
-            ctx.not_checked(511, "Missing.SigningRules");
         }
         for f in files.iter().filter(|f| *f == entry_name || extras.contains(f)) {
             library(ctx, plat, f, f == entry_name, format, machine, &extras);
@@ -188,6 +209,19 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
         return;
     }
     let is_apple = format == Format::MachO;
+    // L511: a library (the mod's own or an extra one) iOS will not load once the device has signed it with the
+    // player's certificate: one built for another system (dyld refuses a library of another platform), or one
+    // encrypted by a store (it cannot be signed again).
+    if plat == "ios-arm64" {
+        if lib.encrypted {
+            ctx.add(511, &name, None, None, vec![("why", p("Lib.Encrypted"))]);
+        }
+        match lib.apple_platform {
+            Some(2) => {}
+            Some(n) => ctx.add(511, &name, None, None, vec![("why", p("Lib.NotIos")), ("found", t(apple_platform_name(n)))]),
+            None => ctx.add(511, &name, None, None, vec![("why", p("Lib.NoIos"))]),
+        }
+    }
     if !is_entry {
         // L510: every system import of an extra library, listed by library.
         let mut by_library: BTreeMap<String, Vec<String>> = BTreeMap::new();

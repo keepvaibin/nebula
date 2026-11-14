@@ -549,3 +549,52 @@ fn service_imports_follow_the_grammar_and_optional_rules() {
     // The root may carry other keys: it is the self-description.
     assert!(Services::from_json(br#"{"self": 1, "services": []}"#).is_ok());
 }
+
+/// The offset of the first load command `cmd` of a 64-bit Mach-O.
+fn load_command(d: &[u8], cmd: u32) -> usize {
+    let word = |at: usize| u32::from_le_bytes(d[at..at + 4].try_into().unwrap());
+    let mut at = 32;
+    for _ in 0..word(16) {
+        if word(at) == cmd {
+            return at;
+        }
+        at += word(at + 4) as usize;
+    }
+    panic!("no load command {cmd:#x}");
+}
+
+/// L511 on every library of an iOS mod: built for iOS devices (LC_BUILD_VERSION platform 2), and not encrypted.
+#[test]
+fn a_library_ios_will_not_load_is_refused_with_why() {
+    let ios = "ios-arm64";
+    let mac = lib("macho-arm64/good.dylib");
+    let at = load_command(&mac, 0x32);
+    let mut phone = mac.clone();
+    phone[at + 8..at + 12].copy_from_slice(&2u32.to_le_bytes());
+
+    // Built for iOS devices: no L511, as the mod's own library and as an extra one.
+    let r = check(&code_mod(ios, &phone, &[("helper.dylib", phone.clone())], true), ios, true);
+    assert!(!codes(&r).contains(&511), "{:?}", r.findings);
+
+    // A macOS build: named with the system it is for.
+    let r = check(&code_mod(ios, &phone, &[("helper.dylib", mac.clone())], true), ios, true);
+    let text = english(&r, 511);
+    assert!(text.contains("helper.dylib") && text.contains("macOS"), "{text}");
+    let r = check(&code_mod(ios, &mac, &[], false), ios, true);
+    assert!(english(&r, 511).contains("mod.dylib"), "{:?}", r.findings);
+
+    // The iOS Simulator is another platform (7).
+    let mut sim = mac.clone();
+    sim[at + 8..at + 12].copy_from_slice(&7u32.to_le_bytes());
+    let r = check(&code_mod(ios, &phone, &[("helper.dylib", sim)], true), ios, true);
+    assert!(english(&r, 511).contains("iOS Simulator"), "{:?}", r.findings);
+
+    // No platform said, and encrypted: the build version command turned into LC_ENCRYPTION_INFO_64 with a crypt id.
+    let mut sealed = mac.clone();
+    sealed[at..at + 4].copy_from_slice(&0x2Cu32.to_le_bytes());
+    sealed[at + 16..at + 20].copy_from_slice(&1u32.to_le_bytes());
+    let r = check(&code_mod(ios, &phone, &[("helper.dylib", sealed)], true), ios, true);
+    let texts: Vec<String> = r.findings.iter().filter(|f| f.code == 511).map(|f| message(f, "UsEnglish")).collect();
+    assert_eq!(texts.len(), 2, "{texts:?}");
+    assert!(texts.iter().any(|t| t.contains("encrypted")) && texts.iter().any(|t| t.contains("does not say")), "{texts:?}");
+}

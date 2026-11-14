@@ -40,6 +40,7 @@ mod tests {
     fn phrase_ids() -> Vec<String> {
         let sources = [
             include_str!("json.rs"),
+            include_str!("schema.rs"),
             include_str!("lib.rs"),
             include_str!("zip.rs"),
             include_str!("binary.rs"),

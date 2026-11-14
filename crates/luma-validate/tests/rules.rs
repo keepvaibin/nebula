@@ -396,6 +396,8 @@ fn every_rule_has_a_broken_mod() {
     let mut setting = other("other.mod");
     setting.touches.cells = vec!["stage/table.bcsv\u{1f}Alpha\u{1f}count".into()];
     let same_id = other("test.mod");
+    let shop_lib = kit_library();
+    let needs_lib = ("needs", r#"[{"id": "lib.mod", "version": ">=1.0.0"}]"#);
 
     let set_alpha = br#"{"patch": 1, "key": ["name"], "set": [{"where": {"name": "Alpha"}, "values": {"count": 3}}]}"#;
 
@@ -452,6 +454,9 @@ fn every_rule_has_a_broken_mod() {
         (303, luma(&layer, &[file("layers/base/files/Stage/Table.bcsv", b"x")]), Setup { game: Some(&game), ..NO_GAME }),
         // The same table in its JSON form (audit 7.1 E-2).
         (303, luma(&layer, &[file("layers/base/files/Stage/Table.bcsv.json", b"{}")]), Setup { game: Some(&game), ..NO_GAME }),
+        // A source the cook does not make at a game path: a font in files/, a model's buffer no model names.
+        (304, luma(&layer, &[file("layers/base/files/FontData/Mine.ttf", b"x")]), with_game_ref(&game)),
+        (304, luma(&layer, &[file("layers/base/files/ObjectData/Ball.bin", b"x")]), with_game_ref(&game)),
         (305, luma(&layer, &[file("layers/base/files/ObjectData/Kuribo.arc", b"x")]), Setup { game: Some(&game), installed: std::slice::from_ref(&replacing), ..NO_GAME }),
         (306, luma(&layer, &[file("layers/base/other/a.wav", b"x")]), NO_GAME),
         (306, luma(&layer, &[file("layers/base/textures/Kuribo/notes.txt", b"x")]), NO_GAME),
@@ -485,6 +490,15 @@ fn every_rule_has_a_broken_mod() {
         (509, luma(&[("code", r#"{"platforms": ["windows-x64"], "libraries": {"windows-x64": ["extra.dll"]}}"#)], &[file("code/windows-x64/mod.dll", b"MZ"), file("code/windows-x64/extra.dll", b"MZ")]), NO_GAME),
         (700, luma(&[("kit", r#"{"luma.shop": 1}"#)], &[]), NO_GAME),
         (700, luma(&[], &[file("kit/luma.shop/items.json", b"{}")]), NO_GAME),
+        (700, luma(&[needs_lib, ("kit", r#"{"lib.mod.shop": 1}"#)], &[file("kit/shop/notes.txt", b"x")]), Setup { installed: std::slice::from_ref(&shop_lib), ..NO_GAME }),
+        (700, luma(&[needs_lib, ("kit", r#"{"lib.mod.Shop": 1}"#)], &[file("kit/Shop/items.json", b"{}")]), Setup { installed: std::slice::from_ref(&shop_lib), ..NO_GAME }),
+        (700, luma(&[], &[file("code/test.mod.kit/shop/first.json", b"{}")]), NO_GAME),
+        (700, luma(&[], &[file("code/test.mod.kit/shop/1.json", b"{")]), NO_GAME),
+        (700, luma(&[], &[file("code/test.mod.kit/shop/1.json", br#"{"if": {}}"#)]), NO_GAME),
+        (701, luma(&[needs_lib, ("kit", r#"{"lib.mod.shop": 1}"#)], &[file("kit/shop/items.json", br#"{"price": -1}"#)]), Setup { installed: std::slice::from_ref(&shop_lib), ..NO_GAME }),
+        (701, luma(&[needs_lib, ("kit", r#"{"lib.mod.shop": 1}"#)], &[file("kit/shop/items.json", b"{")]), Setup { installed: std::slice::from_ref(&shop_lib), ..NO_GAME }),
+        (702, luma(&[needs_lib, ("kit", r#"{"lib.mod.shop": 2}"#)], &[file("kit/shop/items.json", br#"{"price": 1}"#)]), Setup { installed: std::slice::from_ref(&shop_lib), ..NO_GAME }),
+        (702, luma(&[needs_lib, ("kit", r#"{"lib.mod.cart": 1}"#)], &[file("kit/cart/items.json", br#"{"price": 1}"#)]), Setup { installed: std::slice::from_ref(&shop_lib), ..NO_GAME }),
         (800, luma(&[("needs", r#"[{"id": "other.mod", "version": ">=1.0.0"}]"#)], &[]), NO_GAME),
         (801, luma(&[], &[]), Setup { installed: std::slice::from_ref(&conflicting), ..NO_GAME }),
         (802, luma(&[], &[]), Setup { installed: std::slice::from_ref(&same_id), ..NO_GAME }),
@@ -544,8 +558,7 @@ fn every_rule_has_a_broken_mod() {
         }
     }
     // The rules no broken mod here can reach yet, each with why (`libraries.rs` covers the code rules on libraries).
-    let elsewhere: [(u16, &str); 13] = [
-        (304, "what a source may stand in for is each content kind's contract (3.2 to 3.10)"),
+    let elsewhere: [(u16, &str); 12] = [
         (407, "table_keys.rs"),
         (503, "libraries.rs"),
         (504, "libraries.rs"),
@@ -553,14 +566,14 @@ fn every_rule_has_a_broken_mod() {
         (506, "libraries.rs"),
         (508, "libraries.rs"),
         (510, "libraries.rs"),
-        (511, "the iOS signing rules (8.3)"),
         (512, "libraries.rs"),
         (805, "libraries.rs"),
+        (511, "libraries.rs"),
         (806, "renderer.rs"),
-        (701, "the LumaKit schemas (5.x); 702 likewise, and 804 is the cooker's (3.x)"),
+        (804, "the cook's refusals: a_cook_refusal_says_its_reason_as_its_text and nebula-import's overlay tests"),
     ];
     for code in luma_validate::CODES {
-        let skip = elsewhere.iter().any(|(c, _)| c == code) || matches!(code, 702 | 804);
+        let skip = elsewhere.iter().any(|(c, _)| c == code);
         if !skip && !seen.contains(code) {
             failures.push(format!("L{code}: no case gives it"));
         }
@@ -669,6 +682,10 @@ fn a_start_takes_the_whole_file_findings_from_the_kept_report_and_runs_the_rest(
     // A form 1 report (before `need` lines), whole and signed, does not read: its needs would be read as none.
     let form1 = String::from_utf8(kept_form1(&full)).unwrap();
     assert!(Saved::parse(form1.as_bytes()).is_none());
+    // A form 2 report (before `kit_schemas` touches), whole and signed, does not read: a library's schemas would be
+    // read as none.
+    let form2 = String::from_utf8(kept_form(&full, 2)).unwrap();
+    assert!(Saved::parse(form2.as_bytes()).is_none());
     assert!(Saved::parse(b"not a kept report").is_none());
     // Cut at any byte, or any byte changed: it does not read.
     let kept = Saved::from_report(&full, "game").to_bytes();
@@ -684,7 +701,18 @@ fn a_start_takes_the_whole_file_findings_from_the_kept_report_and_runs_the_rest(
 fn kept_form1(full: &Report) -> Vec<u8> {
     let text = String::from_utf8(Saved::from_report(full, "game").to_bytes()).unwrap();
     let body: String = text.lines().filter(|l| !l.starts_with("end\t") && !l.starts_with("need\t")).map(|l| format!("{l}\n")).collect();
-    let body = body.replacen("luma-saved\t2\n", "luma-saved\t1\n", 1);
+    let body = body.replacen("luma-saved\t3\n", "luma-saved\t1\n", 1);
+    sign(body)
+}
+
+/// `full`'s kept report with the form number `form`, signed.
+fn kept_form(full: &Report, form: u32) -> Vec<u8> {
+    let text = String::from_utf8(Saved::from_report(full, "game").to_bytes()).unwrap();
+    let body: String = text.lines().filter(|l| !l.starts_with("end\t")).map(|l| format!("{l}\n")).collect();
+    sign(body.replacen("luma-saved\t3\n", &format!("luma-saved\t{form}\n"), 1))
+}
+
+fn sign(body: String) -> Vec<u8> {
     use sha1::{Digest, Sha1};
     let sum: String = Sha1::digest(body.as_bytes()).iter().map(|b| format!("{b:02x}")).collect();
     format!("{body}end\t{sum}\n").into_bytes()
@@ -951,4 +979,110 @@ fn an_archive_with_backslashes_throughout_is_read_with_slashes_and_said() {
     // A mix of the two is read as written: the backslash is refused, no note.
     let got = codes(&[file(r"layers\base\assets\x.bin", b"x"), file("media/a.png", b"x")]);
     assert!(got.contains(&102) && !got.contains(&108), "{got:?}");
+}
+
+// ---------------------------------------------------------------- data for a library (L700-L702)
+
+const SHOP_SCHEMA: &str = r#"{"type": "object", "properties": {"price": {"type": "integer", "minimum": 0}, "name": {"type": "string", "maxLength": 8}}, "required": ["price"], "additionalProperties": false}"#;
+
+/// An installed library `lib.mod` whose report gives version 1 of its `shop` module's data schema.
+fn kit_library() -> Installed {
+    let mut lib = other("lib.mod");
+    lib.touches.kit_schemas = vec![format!("lib.mod.shop\u{1f}1\u{1f}{SHOP_SCHEMA}")];
+    lib
+}
+
+#[test]
+fn a_library_s_data_is_checked_against_the_schema_it_gives() {
+    let lib = [kit_library()];
+    let with_lib = Setup { installed: &lib, ..NO_GAME };
+    let over = [("needs", r#"[{"id": "lib.mod", "version": ">=1.0.0"}]"#), ("kit", r#"{"lib.mod.shop": 1}"#)];
+    let english = |r: &Report| -> Vec<String> { r.findings.iter().map(|f| message(f, "UsEnglish")).collect() };
+
+    // Data the schema allows: nothing to say.
+    let good = check(&luma(&over, &[file("kit/shop/items.json", br#"{"price": 3, "name": "Hat"}"#)]), &with_lib);
+    assert!(good.findings.is_empty(), "{:?}", english(&good));
+
+    // Each fault named at its place in the data, in the schema's words.
+    let bad = check(&luma(&over, &[file("kit/shop/items.json", b"{\"price\": -1,\n \"name\": \"A long hat\", \"colour\": 1}")]), &with_lib);
+    let found: Vec<(u16, Option<&str>, Option<u32>)> = bad.findings.iter().map(|f| (f.code, f.pointer.as_deref(), f.line)).collect();
+    assert_eq!(found, vec![(701, Some("/price"), Some(1)), (701, Some("/name"), Some(2)), (701, Some("/colour"), Some(2))], "{:?}", english(&bad));
+    for f in &bad.findings {
+        assert!(unfilled(f).is_none(), "{:?}", unfilled(f));
+    }
+
+    // A version the library does not give: the versions it does.
+    let other_version = check(&luma(&[over[0], ("kit", r#"{"lib.mod.shop": 2}"#)], &[file("kit/shop/items.json", br#"{"price": 1}"#)]), &with_lib);
+    let f = other_version.findings.iter().find(|f| f.code == 702).expect("L702");
+    assert!(message(f, "UsEnglish").contains('1'), "{}", message(f, "UsEnglish"));
+
+    // A library that is not installed: L800 says so, and its data is not judged without its schema.
+    let alone = check(&luma(&over, &[file("kit/shop/items.json", br#"{"price": -1}"#)]), &NO_GAME);
+    let codes: Vec<u16> = alone.findings.iter().map(|f| f.code).collect();
+    assert_eq!(codes, vec![800]);
+
+    // A key that names no library this mod needs.
+    let unneeded = check(&luma(&[("kit", r#"{"other.lib.shop": 1}"#)], &[file("kit/shop/items.json", b"{}")]), &NO_GAME);
+    assert!(unneeded.findings.iter().any(|f| f.code == 700 && f.pointer.as_deref() == Some("/kit/other.lib.shop")), "{:?}", english(&unneeded));
+}
+
+#[test]
+fn a_library_keeps_the_schemas_it_gives_and_checks_its_own_data_by_them() {
+    let over = [("kit", r#"{"test.mod.shop": 1}"#)];
+    let bytes = luma(&over, &[file("code/test.mod.kit/shop/1.json", SHOP_SCHEMA.as_bytes()), file("kit/shop/items.json", br#"{"price": "free"}"#)]);
+    let report = check(&bytes, &NO_GAME);
+    assert_eq!(report.touches.kit_schemas, vec![format!("test.mod.shop\u{1f}1\u{1f}{SHOP_SCHEMA}")]);
+    let codes: Vec<u16> = report.findings.iter().map(|f| f.code).filter(|c| *c != 500).collect();
+    assert_eq!(codes, vec![701]);
+    // The kept report carries the schemas to the checks of the mods that use the library.
+    let saved = Saved::parse(&Saved::from_report(&report, "game").to_bytes()).unwrap();
+    assert_eq!(saved.touches.kit_schemas, report.touches.kit_schemas);
+}
+
+// ---------------------------------------------------------------- sources in files/ (L304)
+
+#[test]
+fn a_file_a_model_names_is_the_model_s_and_any_other_source_is_named_with_where_it_belongs() {
+    let store = FakeStore { case_insensitive: false };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: None, store: Some(&store) };
+    let gltf = br#"{"asset": {"version": "2.0"}, "buffers": [{"uri": "Ball.bin"}], "images": [{"uri": "./tex/Ball.jpg"}, {"uri": "data:image/png;base64,AA=="}]}"#;
+    let json = br#"{"asset": {"version": "2.0"}, "buffers": [{"uri": "Spin.bin"}]}"#;
+    let mut glb = b"glTF".to_vec();
+    let chunk_len = json.len().div_ceil(4) * 4;
+    glb.extend(2u32.to_le_bytes());
+    glb.extend(u32::try_from(20 + chunk_len).unwrap().to_le_bytes());
+    glb.extend(u32::try_from(chunk_len).unwrap().to_le_bytes());
+    glb.extend(0x4E4F_534Au32.to_le_bytes());
+    glb.extend(json);
+    glb.resize(20 + chunk_len, b' ');
+    let bytes = luma(
+        &[("layers", r#"[{"name": "base"}]"#)],
+        &[
+            file("layers/base/files/ObjectData/Ball.gltf", gltf),
+            file("layers/base/files/ObjectData/Ball.bin", b"x"),
+            file("layers/base/files/ObjectData/tex/Ball.jpg", b"x"),
+            file("layers/base/files/ObjectData/Spin.glb", &glb),
+            file("layers/base/files/ObjectData/Spin.bin", b"x"),
+            file("layers/base/files/ObjectData/Stray.bin", b"x"),
+            file("layers/base/files/MovieData/Intro.webm", b"x"),
+            file("layers/base/files/SystemData/Notes.json", b"{}"),
+        ],
+    );
+    let report = check(&bytes, &with_game_ref(&game));
+    let named: Vec<(&str, String)> = report.findings.iter().filter(|f| f.code == 304).map(|f| (f.file.as_str(), message(f, "UsEnglish"))).collect();
+    let files: Vec<&str> = named.iter().map(|(f, _)| *f).collect();
+    assert_eq!(files, vec!["layers/base/files/MovieData/Intro.webm", "layers/base/files/ObjectData/Stray.bin", "layers/base/files/SystemData/Notes.json"], "{named:?}");
+    for f in report.findings.iter().filter(|f| f.code == 304) {
+        assert!(unfilled(f).is_none(), "{:?}", unfilled(f));
+    }
+}
+
+/// Every source ending is one the cook makes at a game path or one L304 says where it belongs.
+#[test]
+fn every_source_ending_is_cooked_or_has_a_place() {
+    for ending in luma_validate::SOURCE_ENDINGS {
+        let cooked = luma_validate::cooked_source(&format!("a{ending}"));
+        let placed = luma_validate::WHERE.iter().any(|(e, _)| *e == ending);
+        assert!(cooked != placed, "{ending}: cooked {cooked}, placed {placed}");
+    }
 }
