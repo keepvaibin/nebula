@@ -2006,8 +2006,7 @@ void RenderCore::cap_texture_packs() {
     // The settings are compared again at the next frame.
     texture_pack_settings_applied_ = false;
     if (budget != 0u) {
-        std::fprintf(stderr, "[texture-pack] replacements up to %llu MB on this device (half its %llu MB budget)
-",
+        std::fprintf(stderr, "[texture-pack] replacements up to %llu MB on this device (half its %llu MB budget)\n",
                      static_cast<unsigned long long>(texture_pack_cap_bytes_ >> 20u), static_cast<unsigned long long>(budget >> 20u));
     }
 }
