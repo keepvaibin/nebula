@@ -36,7 +36,7 @@ Materials and shaders: content/materials.md.
 
 ### 3. Space and units
 
-- `UNITS_PER_METRE` = 100: glTF's metre is 100 game units, for models and collision alike (G-M12; the placeholder
+- `UNITS_PER_METRE` = 100: glTF's metre is 100 game units, for models and collision alike (the placeholder
   cube of references 4 is 1 m).
 - Axes as glTF: +Y up, the model faces +Z, right-handed, as the game's models are. No axis is turned.
 - Winding: glTF triangles wind counter-clockwise and the game's clockwise; the cook turns each triangle, so a modder
@@ -88,13 +88,16 @@ Materials and shaders: content/materials.md.
 
 ### 6. Levels of detail and sockets
 
-- Levels of detail as the game names and picks them (LodCtrl: `/ObjectData/<Name>Middle`, `/ObjectData/<Name>Low`,
-  picked by the actor's distance).
+- Levels of detail as the game names them (`/ObjectData/<Name>Middle`, `/ObjectData/<Name>Low`). The game picks by
+  the level's view cubes, not by distance: an object in a view group draws its `Low` model while the player stands in
+  that group's far cube. No object draws a `Middle` model.
   - A replacing level is another replacing model: `files/ObjectData/<Name>Low.arc/<Name>Low.glb` (and `Middle`),
     by section 2, with no rule of its own.
   - A new model's levels are `assets/<path>Middle.glb` and `assets/<path>Low.glb`, cooked as blocks at
-    `<id>:<path>Middle` and `<id>:<path>Low`. The game does not pick among them: an attached new model always
-    draws its base, and no rule refuses an `attach` that names a level file. A level whose base model is missing is
+    `<id>:<path>Middle` and `<id>:<path>Low`. They are drawn as the game draws its own levels: a model attached
+    to an object that has a far model shows its `Low` while that object shows its own, and a mod's placed object
+    whose new model has a `Low` switches as a game object of its class does. `attach` refuses a level's name
+    (`LUMA_E_ARGUMENT`, Service.Argument for `model`). A level whose base model is missing is
     `Cook.Model.LevelAlone` {file, base}. The endings `Middle` and `Low` are matched with their capitals,
   as LodCtrl writes them (so `yellow.glb` is no level of `yel`).
 - Sockets. A glTF node named `socket:<name>` with no mesh always becomes an extra joint named `<name>`
@@ -145,8 +148,10 @@ typedef struct LumaPlayerPart {
 - Follow. With `LUMA_MODEL_FOLLOW_SKELETON` a joint of the model with no same name on the actor follows its own
   parent. `LUMA_MODEL_FOLLOW_JOINT` on a joint the actor lacks is `Content.MissingJoint` and the model follows the
   actor's base.
-- Levels. An attached new model is drawn at its base level at every distance; its `Middle` and `Low` files are cooked
-  but not drawn.
+- Levels. An attached model takes its host's level: its `Low` part is drawn while the host's view cube shows the
+  host's far model, its base otherwise. A host with no far model (the player, an object in no view group) draws the
+  base. The `Low` follows as the base does; `show`, `set_param`, `detach` and the mod's take-out act on both.
+  `model.level.<handle>` {"frame", "level": "base" or "Low"} is written when the level changes.
 - Every way a handle ends. `detach`; the actor's end (no dangling draw); a scene change; the mod's end (take-out,
   loader 1.11: its models detach before its library closes). A call on a handle already ended is `LUMA_E_HANDLE`,
   never a crash.
@@ -183,6 +188,9 @@ model).
 | 3209 | the actor's end ends the handle |
 | 3210 | the 65th attach of a mod: LUMA_E_LIMIT |
 | 3211 | a scene change ends the handle |
+| 3212 | an attach naming a level block (`jm-levels:lvLow`): LUMA_E_ARGUMENT, Service.Argument |
+| 3213 | a two-level model on Toy Time's 8-bit planet: base, then `Low` in the planet's far view cube, then base in its near cube |
+| 3214 | the same at its `Low`, then the mod taken out: the handle ends "mod", neither level draws |
 
 No game run shows a replaced game model's clips, a socket or a level.
 
@@ -191,10 +199,10 @@ Facts the tests read, for the harness table (consent 2.6's way), written only wh
   {"why": "detach"|"actor"|"scene"|"mod"} when it ends (3203, 3204, 3206, 3208);
 - `model.joints.<handle>` {"frame", "joints": [{"name", "matrix": [12 numbers]}], "actor": [the same, the actor's
   same-named joints]} once a frame while a test asks for it with the step `{"facts": "model.joints"}` (3203 and 3204
-  compare the two lists; F adds the step with the keys);
+  compare the two lists);
 - `cook.model` (section 9), and no `model.*` fact at all with no mod (3206).
 
-### 7 as built (this wins over section 7's code where they differ)
+### 7a. The service in the game (this holds where section 7's code differs)
 
 - Header: native/include/luma_content_model.h is the form. `LumaContentModelFollow` is a typed enum, ACTOR 0, JOINT 1,
   SKELETON 2 (not section 7's order). `attach(mod, actor, model, follow, joint, place, out)` takes a `LumaPlace`
@@ -207,77 +215,80 @@ Facts the tests read, for the harness table (consent 2.6's way), written only wh
   rest. Hidden with its actor, hidden or clipped. A dead part is used again for the same actor, model, follow and
   joint.
 - Facts (harness only), instead of `model.joints`: `model.attach.<h>` {mod, model, follow, joint, placeholder, drawn,
-  joints, mapped, reused}; `model.pose.<h>` for the first 120 frames (tunable pose.1) {frame, at, host_at, gap, worst,
+  joints, mapped, reused, levels}; `model.level.<h>` {frame, level} when the level changes; `model.pose.<h>` for the first 120 frames (tunable pose.1) {frame, at, host_at, gap, worst,
   shown}, where `gap` is joint 0 against what it follows and `worst` is the largest distance between a skeleton's
   joints and the actor's same-named joints; `model.end.<h>` {why}.
-- Tests as built: 3201 to 3207 and 3209 to 3211 (a Coin on HandR, a missing model, a missing joint, refusals, Luigi
+- Tests: 3201 to 3207 and 3209 to 3211 (a Coin on HandR, a missing model, a missing joint, refusals, Luigi
   by skeleton, place/show/detach/reuse, the player's parts, the actor's end, the limit, a scene change); 3208 a mod's
   own model, 1 m over the player's base. No test shows a socket or a level in a game run.
 
-Read against the cook that exists: Sections 1, 3 and 7 to 8 agreed but for the points below.
+### 8a. What the cook does today and the rule that replaces it
 
-- G-M1 (section 2, the name). Today a mod's `X.bdl.glb` becomes `X.bdl`, `X.bmd.glb` becomes `X.bmd`, and a plain
+Sections 1, 3 and 7 to 8 describe the cook as it is. For the others, each point below says what the cook does
+today and the rule that replaces it.
+
+- Section 2, the name: Today a mod's `X.bdl.glb` becomes `X.bdl`, `X.bmd.glb` becomes `X.bmd`, and a plain
   `X.glb` becomes `X.bmd` (modern_files; its test pins `ObjectData/Test.arc/test.gltf` to `test.bmd`). `X.kcl.glb` is
   collision (`X.kcl` and `X.pa`) and `X.canm.glb` a camera.
-  - Proposed: a plain `<Name>.glb` (or `.gltf`) replaces whichever of `<Name>.bdl` and `<Name>.bmd` the game's archive
+  - A plain `<Name>.glb` (or `.gltf`) replaces whichever of `<Name>.bdl` and `<Name>.bmd` the game's archive
     has.
   - If the archive has neither, it is L804 `Cook.Model.NoGameModel`, naming the archive's models. `files/` stands in
     for game files; a new model goes in `assets/`.
   - If it has both, it is L804 `Cook.Model.TwoGameModels`, asking for `.bdl.glb` or `.bmd.glb`.
   - The explicit forms and `.kcl.glb`/`.canm.glb` stay as they are.
-- G-M2 (section 4, joints by name: new cook work). Today joints are numbered by the skin's list in scene order, with a
+- Section 4, joints by name: Today joints are numbered by the skin's list in scene order, with a
   `root` joint added when there are several roots. No game model is read. The cook gains the game model, from the
   store's NMDL (`NebulaModelJoint.name_at`), when the source replaces one.
   - When the game model has one joint (props, most map parts), the source's root is joint 0 whatever its name. A
     modder should not have to rename a node to match a name no tool shows.
   - When the cook adds a root, it takes the game's joint 0 name.
-- G-M3 (section 4, skins: today silent, must be said).
-  - Today a `JOINTS_1`/`WEIGHTS_1` set is ignored silently. Proposed: refused with `Cook.Model.WeightsOver4` {mesh,
+- Section 4, skins: each case that is silent today is reported.
+  - Today a `JOINTS_1`/`WEIGHTS_1` set is ignored silently. The rule: refused with `Cook.Model.WeightsOver4` {mesh,
     count of vertices} when any of its weights is over 0.001.
-  - Today a skinned node whose primitive lacks `JOINTS_0`/`WEIGHTS_0` is drawn unskinned silently. Proposed:
+  - Today a skinned node whose primitive lacks `JOINTS_0`/`WEIGHTS_0` is drawn unskinned silently.
     `Cook.Model.SkinNoWeights` {mesh}.
-  - Today a vertex whose weights are all 0.001 or less goes on joint 0 silently. Proposed: a Note
+  - Today a vertex whose weights are all 0.001 or less goes on joint 0 silently. The rule: a Note
     `Cook.Model.Unweighted` {mesh, count}, the vertices on the skin's root.
-  - Today a second skin fails as "a vertex's joint isn't in the skin". Proposed: `Cook.Model.TwoSkins` {mesh, mesh}.
+  - Today a second skin fails as "a vertex's joint isn't in the skin". The rule: `Cook.Model.TwoSkins` {mesh, mesh}.
   - Weights are renormalised, as today.
-- G-M4 (section 5). Today every mode but 4 is refused. Strips (5) and fans (6) will be made into triangles in glTF's
+- Section 5: Today every mode but 4 is refused. Strips (5) and fans (6) will be made into triangles in glTF's
   vertex order. Points and lines (0 to 3) stay refused, as `Cook.Model.NotTriangles` {mesh, mode}.
-- G-M5 (normals). Today a missing NORMAL becomes (0, 1, 0) silently. Proposed: flat normals, as glTF 2.0 says a reader
+- Normals: Today a missing NORMAL becomes (0, 1, 0) silently. The rule: flat normals, as glTF 2.0 says a reader
   must make, with a Note `Cook.Model.FlatNormals` {mesh}.
-- G-M6 (tangents). Today the block's tangent and binormal are the normal's number, a stand-in. With a normal map ,
+- Tangents: Today the block's tangent and binormal are the normal's number, a stand-in. With a normal map,
   TANGENT is read from the file (w gives the binormal's side); without one, it is computed with MikkTSpace, the
   generator glTF names, written natively in the cook.
-- G-M7 (colours). Today COLOR_0 is not read (`color: [0; 2]`).
-  - Proposed: COLOR_0 and COLOR_1 are read into the block's two colour words. That is two sets, not one: the block has
+- Colours: Today COLOR_0 is not read (`color: [0; 2]`).
+  - COLOR_0 and COLOR_1 are read into the block's two colour words. That is two sets, not one: the block has
     MESH_COLOR0 and MESH_COLOR1.
   - Accepted types are vec3 or vec4, float or normalised u8/u16.
   - glTF's linear values are written in the game's 8-bit colour space, as the game's own vertex colours are. COLOR_2
     and up are `Cook.Model.ColorSets`.
-- G-M8 (coordinates). The limit is `MATERIAL_SLOTS` from the native header (limits.rs reads it), not a written 8.
+- Coordinates: The limit is `MATERIAL_SLOTS` from the native header (limits.rs reads it), not a written 8.
   `Cook.Model.CoordSets` {mesh, n, limit}.
-- G-M9 (billboard). The cook's extras already live under `extras.nebula` (a material's `extras.nebula.textures`). So:
+- Billboard: The cook's extras already live under `extras.nebula` (a material's `extras.nebula.textures`). So:
   a node's `"extras": {"nebula": {"billboard": "y"}}` (or `"xy"`), not a `"nebula:billboard"` key. Another value is
   `Cook.Model.Billboard` {node, value}.
-- G-M10 (sockets). Today a meshless node that is not in the skin is not a joint, so a socket would be dropped.
-  - Proposed: a `socket:<name>` node always becomes an extra joint, parented to its nearest joint ancestor (the root
+- Sockets: Today a meshless node that is not in the skin is not a joint, so a socket would be dropped.
+  - A `socket:<name>` node always becomes an extra joint, parented to its nearest joint ancestor (the root
     if none), with `socket:` taken off.
   - Two sockets with one name are `Cook.Model.SocketTwice` {name}.
   - A socket's name equal to a joint's is `Cook.Model.SocketIsJoint` {name}.
-- G-M11. Today each glTF animation is cooked beside the model as the game's clip files (`<animation name>.bck` for
+- Animations: Today each glTF animation is cooked beside the model as the game's clip files (`<animation name>.bck` for
   joints, `.btk` texture matrices, `.btp` texture swaps, `.bpk` colours; to_files and clip_extension). A clip named as
-  one of the game's replaces it; the game's other clips stay. Section 2 or 5 should say so.
-- G-M12 (section 3, winding and the unit). glTF triangles wind counter-clockwise and the game's clockwise. The cook
+  one of the game's replaces it; the game's other clips stay.
+- Section 3, winding and the unit: glTF triangles wind counter-clockwise and the game's clockwise. The cook
   turns each triangle (measured in gltf.rs on Kuribo, Coin and Mario), so a modder exports as glTF says. "The game's
   unit is a centimetre" is a reading; the rule is `UNITS_PER_METRE` = 100, for models and collision alike.
-- G-M13 (section 4, rotation). The block's rotation is the quaternion as X, Y, Z angles composed Z·Y·X (gltf.rs
+- Section 4, rotation: The block's rotation is the quaternion as X, Y, Z angles composed Z·Y·X (gltf.rs
   `angles`), the order the game composes a joint's rotation in.
-- G-M14 (section 6). A replacing low model is another file path, `files/ObjectData/<Name>Low.arc/<Name>Low.glb` by
-  G-M1, with no rule of its own. `assets/<path>.lod1.glb` is a level, not a model: the cook does not write it as a
+- Section 6: A replacing low model is another file path, `files/ObjectData/<Name>Low.arc/<Name>Low.glb` by
+  section 2's name rule, with no rule of its own. `assets/<path>.lod1.glb` is a level, not a model: the cook does not write it as a
   model of its own.
-- G-M15 (L804's text is English only). L804's `{text}` is the cooker's English words (anyhow's message), so a player
-  reading Japanese sees English. Proposed, for the model cook:
+- L804's text is English only: L804's `{text}` is the cooker's English words (anyhow's message), so a player
+  reading Japanese sees English. For the model cook:
   - Every refusal above is a phrase `Cook.Model.<Kind>` with its arguments, rendered in the 14 languages.
-  - L804 gains a `why` phrase argument (mine).
+  - L804 gains a `why` phrase argument.
   - The cooker's other refusals (collision, camera, tables, images) move the same way, in the same revision.
 
 ### 9. Cook half
@@ -303,7 +314,7 @@ Read against the cook that exists: Sections 1, 3 and 7 to 8 agreed but for the p
   - from section 4: MissingJoint, WeightsOver4, SkinNoWeights, TwoSkins, Unweighted (a Note);
   - from section 5: NotTriangles, FlatNormals (a Note), ColorSets, CoordSets;
   - from section 6: Billboard, SocketTwice, SocketIsJoint;
-  - from G-M1: NoGameModel, TwoGameModels;
+  - from section 2: NoGameModel, TwoGameModels;
   - Leaves, Extension, the limits above, and the reading errors: a cut-off `.glb`, a view past its buffer, an accessor
     past its view, a triangle naming a vertex past the mesh, a node the scene lacks, a skin naming a node outside the
     scene, no triangles at all.
@@ -334,7 +345,7 @@ Read against the cook that exists: Sections 1, 3 and 7 to 8 agreed but for the p
   - A socket.
   - A clip replacing a game clip by name.
 
-### 2 and 6 as built
+### 2 and 6 in the cook
 
 - A new model is an object archive of its own. A model outside an archive (a mod's `assets/<path>.glb`, the store's
   `Luma/<id>/<path>.glb` by luma-format 5) is cooked as `Luma/<id>/<path>.arc/<leaf>.bmd` (`.bdl` when named

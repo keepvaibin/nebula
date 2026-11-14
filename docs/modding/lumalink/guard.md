@@ -6,7 +6,6 @@
 
 Headers: `native/include/luma_guard.h` (kernel and host; not for mods), `native/petari/include/Game/System/LumaGuard.hpp`
 (kernel), `runtime/include/galaxy/luma_guard_host.h` (host). Code: `Game/System/LumaGuard.cpp`, `native/host/luma_guard.cpp`.
-Branch f/1.6-guard. Reviewer: H, after it compiles and has run (R2).
 
 ### 1. Boundaries
 
@@ -72,8 +71,8 @@ worst_ns}, as the export gives it).
 
 Each fault kind in each boundary kind; the nested case; the not-resumed cases ending with their message; the perf line
 (no mod: 0; with a mod: the boundary's cost in ticks against a plain call, and of that the clock's pair of reads,
-measured). Tests 1601-1631 and 1634 (code time: guard-nest-a's and the game half's `kernel.guard_time`, found 0)
-(suite f/tests/guard), 1632-1633 (suite f/tests/guard-crash: the game must end).
+measured). Tests 1601-1631 and 1634 (code time: guard-nest-a's and the game half's `kernel.guard_time`, found 0),
+1632-1633 (the game must end).
 
 ### 5. Known limits
 

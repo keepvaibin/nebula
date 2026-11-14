@@ -29,10 +29,10 @@ lumalink add option place balloon-world --kind key --default dpad_down --name "P
 
 ## 2. The balloon
 
-`tools/make_balloon.py` writes the model from shapes in code:
+`source/make_balloon.py` writes the model from shapes in code:
 
 ```sh
-python tools/make_balloon.py
+python source/make_balloon.py
 ```
 
 It writes `layers/base/assets/Balloon.glb`: a red balloon 80 units across on a string, 130 units tall, its origin at
@@ -495,8 +495,8 @@ fn escape(t: text) -> text {
   the stage's gravity.
 - The ground under Mario is `MR::getFirstPolyOnLineToMap`: a line from 50 units above his feet, 1000 units along his
   gravity. With no ground (over a pit) the balloon is not placed and the clock runs on.
-- `menu.add_pause_entry` adds the two entries to the pause menu. The clock starts there but runs only in play: it
-  counts world steps (`on step`), which stop while the game is paused or a screen holds it.
+- `menu.add_pause_entry` adds the two entries to the pause menu, and `menu.close_pause` closes it when one is chosen.
+  The clock counts world steps (`on step`), which stop while a screen holds the world.
 - The hint is typed with the system keyboard (`input.text_request`); Enter sends it, Escape sends the balloon with
   no hint.
 - `screen.choose` lists the hints; `screen.message` shows each result until A or B.
@@ -546,7 +546,7 @@ lumalink pack balloon-world
 ```
 
 Drop `balloon-world.luma` on the game's window, switch it on, allow what it asks for and set Balloon server on the
-Mods screen. In a stage, press + and choose Hide a balloon or Find a balloon, then go back to the game: the clock
+Mods screen. In a stage, press + and choose Hide a balloon or Find a balloon: the pause menu closes and the clock
 starts.
 
 ## See also

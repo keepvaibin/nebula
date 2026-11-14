@@ -46,7 +46,7 @@ start) is refused for now. The game's own tables are never written.
   their objects are the base's again (each gets the base's table back; a call already in an entry runs the base's code). Logged `its <n> classes ended; their <m> objects are the game's own now`. The
   objects' data is the mod's memory, freed with it after the grace (counted in `takeout.<id>`).
 - A class number is never reused in a session.
-- gone (LumaClassDef's last field): `void (*gone)(void* object, void* data, void* user)`, called once for each object the class kept (whose `made` ran), before the kernel frees its data, through the guard as `made` is: in NameObj's destructor (object: its address, only its NameObj part still whole: read `data`), at the scene's destruction (object null: the scene's memory went with it), and when an object is made at an address one of the class's had without its destructor seen (object null). On the thread that runs them. Not called when the mod goes (its memory goes whole). A definition whose `size` ends before `gone` (offsetof) is taken as before, with none; smaller than that is refused as before. Tests f/tests/gone 1405 (once each, its own data, through a scene change) and 1406 (a definition without it: never called).
+- gone (LumaClassDef's last field): `void (*gone)(void* object, void* data, void* user)`, called once for each object the class kept (whose `made` ran), before the kernel frees its data, through the guard as `made` is: in NameObj's destructor (object: its address, only its NameObj part still whole: read `data`), at the scene's destruction (object null: the scene's memory went with it), and when an object is made at an address one of the class's had without its destructor seen (object null). On the thread that runs them. Not called when the mod goes (its memory goes whole). A definition whose `size` ends before `gone` (offsetof) is taken as before, with none; smaller than that is refused as before. Tests gone 1405 (once each, its own data, through a scene change) and 1406 (a definition without it: never called).
 
 ## make
 
@@ -69,7 +69,7 @@ steps): -3, said, as off the game thread. Clipping system info: when no placemen
 another placement's init they get that placement's, as the objects it makes. LUMA_MAKE_DEAD: makeActorDead after init
 (actors only; another object is made alive and that is said). Returns the count made (fewer when a creator makes
 nothing, said); -1 no factory row by the name; -2 its files are not in this game (NebulaMods::isMissingFiles); -4 a bad
-argument (count, a place smaller than LumaPlace or not finite, an unknown flag) or no scene memory. Test f/tests/make
+argument (count, a place smaller than LumaPlace or not finite, an unknown flag) or no scene memory. Test
 1407 (eight Kuribo with their pos, scale and Obj_arg0, of class Kuribo, alive; one dead that appears; one made during
 play; the refusals).
 

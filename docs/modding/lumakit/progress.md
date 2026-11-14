@@ -22,5 +22,6 @@ Built on: `save` (per-file values following copy and erase), `K.hook` (star coun
 item instead, a comet added, flags and numbers following a file copy and erase, a new file rule.
 
 LumaKit saves every kit value itself, in its own part of each save file under the owning mod's id: a value follows the
-file as the game's progress does, stays while its mod is off or removed, and stays when the player forgets the mod,
-until LumaKit is forgotten.
+file as the game's progress does, stays while its mod is off or removed, and goes when the player forgets the mod
+(in every file). A flag or number is set only by the mod it belongs to: a `Flag` or `Number` naming another mod's
+value is not set, and the mod log says so.

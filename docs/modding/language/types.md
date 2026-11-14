@@ -76,7 +76,7 @@ a template with no instance, a dependent type, a local class, a field of an anon
 ### 4. What a mod binds (luma.h)
 
 - `LUMA_IMPORT_FIELD` (kind 1): any record's field, `"Type.field"` or `"Type.outer.inner"`. The signature is its type
-  text. Z-4: a different type text refuses the mod, as today (L505 `Name.FieldSig`). A field in a base is found
+  text. A different type text refuses the mod, as today (L505 `Name.FieldSig`). A field in a base is found
   through the record's bases, nearest first, and its offset includes the base's.
 - `LUMA_IMPORT_SIZE` (kind 2): any record's size.
 - `LUMA_IMPORT_CLASS` (kind 3): stays the NameObj class number, for `is_a`. Any polymorphic record's class number is
@@ -99,7 +99,7 @@ a template with no instance, a dependent type, a local class, a field of an anon
   - a bit-field read and set;
   - an array field's element `count - 1`;
   - a global read (`MR::` or a manager's static) and written, seen by the game;
-  - Z-4: a field with the wrong type text gives L505 Name.FieldSig, and a global with the wrong type gives
+  - A field with the wrong type text gives L505 Name.FieldSig, and a global with the wrong type gives
     Name.GlobalSig, each said once;
   - the size of a struct that is no NameObj.
 - Coverage: the self-description's `left_out` for types is listed with counts by reason in the run's report. G
@@ -129,7 +129,7 @@ a template with no instance, a dependent type, a local class, a field of an anon
 
 ---
 
-- TY-1 taken: `reachable`, one answer for "Type.field".
+- `reachable`: one answer for "Type.field".
   - The generator writes `reachable` for every record. It lists every field name a mod may write for the record,
     own and inherited, each with its type text, its offset from the start of the record, and the record that
     declares it. Lookup is C++'s. A name the record declares hides every base's. Otherwise each direct non-virtual
@@ -143,7 +143,7 @@ a template with no instance, a dependent type, a local class, a field of an anon
   - The build compares, for every record and every name in `reachable` and `left_out`, the kernel's answer (through
     `--luma-describe`) with the generator's. A difference fails the build. The validator reads `reachable` and does
     no walk of its own.
-- TY-2 taken: one name per template instance, every other spelling an alias.
+- One name per template instance, every other spelling an alias.
   - The row's name is the qualified template name with each argument printed from its canonical type. Builtin
     arithmetic types are written as the game's fixed-width names: f32, f64, s8, u8, s16, u16, s32, u32, s64, u64
     (`long` and `unsigned long` by their width on the platform), with bool and char kept. So it is
@@ -152,15 +152,15 @@ a template with no instance, a dependent type, a local class, a field of an anon
   - Every typedef or alias of the instance in the game's files is an alias row (`of`), and so is every other
     spelling written in a field's or function's type (`JGeometry::TVec3<float>`). Kind 1 and kind 2 resolve an alias
     to its record, so `TVec3f.x`, `JGeometry::TVec3<float>.x` and `JGeometry::TVec3<f32>.x` are one field.
-- TY-3 taken: the exact type text is instrument.py's `type_text`. It is clang_getTypeSpelling with
+- The exact type text is instrument.py's `type_text`. It is clang_getTypeSpelling with
   "(anonymous namespace)::" removed, the text 1.1's function rows use, from one function in tools/lumacore that both
   generators import. A bit-field is that text, " : " and the width (`u32 : 3`). An array field is its element's
   text, with `count` and `extents` as separate facts. A type the function refuses (unnamed, lambda, dependent) leaves
   the field out as "a type with no name a mod can write".
-- TY-4 taken. LUMA_BITS_GET and LUMA_BITS_SET read and write the bytes `position / 8` to
+- LUMA_BITS_GET and LUMA_BITS_SET read and write the bytes `position / 8` to
   `(position + width - 1) / 8` one by one, never a wider access. SET is for the game thread. The test puts a
   bit-field in the last byte of an object placed so that it ends at the end of a page whose next page has no access.
-- TY-5 taken. native/petari, native/math, native/include's game headers. luma.h, luma_hook.h, luma_host.h,
+- The described headers are native/petari, native/math and native/include's game headers. luma.h, luma_hook.h, luma_host.h,
   luma_harness.h and luma_types.h are left out as "the kernel's own". The `left_out` reasons are a fixed list of
   phrases, and the run report counts by them:
   - "the kernel's own";
@@ -172,13 +172,13 @@ a template with no instance, a dependent type, a local class, a field of an anon
   - "through the virtual base {name}";
   - "a type with no name a mod can write";
   - "a template not used with these arguments".
-- TY-6 taken. Each platform's build writes its own describe output. One merge step (tools/lumacore, mine) writes
+- Each platform's build writes its own describe output. One merge step (tools/lumacore) writes
   the self-description with one value per fact, plus a per-platform value only where one differs. A LumaScript module
   built for several platforms takes such a value as a build error naming the constant and its values.
-- TY-7: yours, as written. The record list for kind 2 and `reachable` for kind 1 are in the self-description
+- The record list for kind 2 and `reachable` for kind 1 are in the self-description
   that 1.2 builds. Kind 7 against `globals`.
-- TY-8 taken. Section 5 gains:
-  - the validator gives the same L505 as the kernel for each Z-4 conformance mod, on the real self-description;
+- Section 5 gains:
+  - the validator gives the same L505 as the kernel for each field-type conformance mod, on the real self-description;
   - a derived class's field hides its base's field of the same name;
   - an ambiguous name and a name through a virtual base are refused by both and named in `left_out`.
 - The per-unit pass (instrument.py), found while answering: a record or global a .cpp makes through a macro
@@ -186,7 +186,7 @@ a template with no instance, a dependent type, a local class, a field of an anon
   by the expansion location: 60 units give 129 records and 137 globals (it gave 0 by the spelling location). Its
   rows name the .cpp, not the macro's header.
 
-- TY-9: a type text names every record, enum and alias by its row's name.
+- A type text names every record, enum and alias by its row's name.
   - Texts are clang_getFullyQualifiedName's (instrument.py type_text), the same for fields, globals, aliases' `of`,
     enums' `underlying` and the function rows' signatures. Named parts inside an array's element and a function type's
     result and parameters (which clang leaves as written) are put in their qualified form too. Typedef names stay
@@ -204,7 +204,7 @@ a template with no instance, a dependent type, a local class, a field of an anon
   - The build checks it: every type text's outer name (past pointers, references, arrays, cv, keywords and a
     bit-field's width; function types and pointers to members are the checker's to split) is a row, a built-in or left
     out. Otherwise the generator stops, listing every such text.
-- TY-10: two facts per record, each checked by the compiler.
+- Two facts per record, each checked by the compiler.
   - `trivial_copy`: trivially copyable, so a bit copy is the C++ copy.
   - `trivial_destroy`: trivially destructible, so dropping one frees nothing.
   - The generator works them out from libclang: special members of its own (not defaulted, not deleted), the vtable,
@@ -215,7 +215,7 @@ a template with no instance, a dependent type, a local class, a field of an anon
     copy constructors for plain data (TVec3, SoundID), which is why the two differ.
 - The checker takes a record by value only when both hold.
 
-- TY-10b: a third fact per record, `no_copy`: no copy or move constructor and no copy or move assignment can be called
+- A third fact per record, `no_copy`: no copy or move constructor and no copy or move assignment can be called
   (each deleted, declared or implicitly).
   - Why: clang's `__is_trivially_copyable` holds for a record whose every copy and move is deleted (clang does not
     apply CWG1734). The game has 113 such records on l12, among them NebulaListLink<T>, NebulaList<T>, Ui::Layout,
@@ -227,11 +227,11 @@ a template with no instance, a dependent type, a local class, a field of an anon
   - Checked by the compiler: the table (built without access control) asserts both ways with `__is_constructible` and
     `__is_assignable` from `const T &` and `T &&`. A unit's rows and an in-class claim, whose traits see public
     members only, assert that a no_copy record has none.
-- TY-9b: the build's check reads every name a text holds outside template arguments, not only the outermost: a
+- The build's check reads every name a text holds outside template arguments, not only the outermost: a
   function pointer's result and parameters, a member pointer's class. An instance is one name with its arguments, and
   with a member after it (`A<x>::B<y>::C`). The generator describes what such places name, as it does for fields.
 - The fixture is in the tree: tools/lumacore/types_fixture_test.py, with 62 driver checks against the compiler, the
-  comparison as built and planted, the three TY-10 facts on ten records, and the name reader.
+  comparison as built and planted, the three facts of the tests on ten records, and the name reader.
 - A named member of an anonymous type keeps its fields (+29).
 
 ### The old table against the rows (before 1.10 retires lumacore_fields.cpp)

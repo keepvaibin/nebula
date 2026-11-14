@@ -2,6 +2,12 @@
 
 One row a rule, from the validator's own table (`crates/luma-validate`): the code, whether it refuses the mod (Error) or only tells (Note), and the words the modder sees. `{name}` is filled with the finding's own value.
 
+The validator has 73 codes in seven groups: L1xx the `.luma` container, L2xx `luma.json`, L3xx layers and files,
+L4xx table patches, L5xx code, L7xx data for a library, L8xx the cook, the loader and the other mods. `lumalink check`
+and the game's start check say the same codes with the same words. A `{why}`, `{what}` or `{kind}` is itself a phrase
+in the player's language, listed in format/validator.md. `lumalink explain L505` prints a code's words and what to do.
+
+
 ## L100: The container
 
 | Code | Level | Words |
@@ -92,6 +98,27 @@ read by a `.font.json`. A `.bin` or `.jpg` is fine beside the `.gltf` or `.glb` 
 | L511 | Error | {mod}: {file} cannot run on iOS: {why}. |
 | L512 | Error | {mod}: {file}: luma_mod cannot be used: {why}. |
 | L513 | Error | {mod}: {file}: {mod} is built with LumaScript runtime layout {version} and {other}, whose {name} it calls, with layout {value}. Rebuild the older one with a current LumaLink, or update it. |
+
+L505 names what the game lacks: a function, a virtual function, a field, a global variable, a type, a class, a
+service at a version, or another mod's function. When the name is there with other signatures, the words list them,
+so the fix is read off the message:
+
+```text
+moon-jump: code/windows-x64/mod.dll: the game has no function "MR::isNear" with the signature
+"(const LiveActor *, s32)" (its signatures: (const LiveActor *, const LiveActor *, f32), (const LiveActor *, const Vec3f &, f32)).
+```
+
+An import that names no signature binds a name with one function; a name with several is `single function "{found}":
+the import names no signature and it has several ({has})`.
+
+L509 also refuses a mod's own library that the system would run code from when it loads it, before the mod is
+started, or when it closes it, after the mod's memory is freed: a PE entry point or TLS callbacks; ELF `DT_INIT`,
+`DT_INIT_ARRAY`, `DT_PREINIT_ARRAY`, `DT_FINI`, `DT_FINI_ARRAY`; Mach-O init or term function sections or
+`LC_ROUTINES_64`. `lumalink build` makes none of them: C++ constructors and destructors of a mod run from `begin` and
+after `stop` (lumalink/loader.md).
+
+L513: a mod that calls another mod's function needs both built with one LumaScript runtime layout. The layout is
+written into each mod's `luma_mod` by LumaLink; rebuild the older mod with a current LumaLink.
 
 L511 checks every library of an iOS mod, its own one included. Each must be built for iOS devices (not macOS or the
 Simulator) and must not be encrypted.

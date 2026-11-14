@@ -4,10 +4,10 @@
 
 ### Services-registry
 
-Read with: loader.md (D3-2: kind 5, L505 `Name.Service`, L506, `service(mod, ...)`, `granted` in `luma_load_mod`;
-D3-1: `report`), luma-format.md (section 4 `permissions`), validator.md (L211, L505, L506), lumascript-language.md 12
-and D4.14 (`use svc.<name>`, `optional`, events, `pending`), lumascript-abi.md 7.4 (tasks run from the frame
-handler).
+Read with: lumalink/loader.md (services: kind 5, L505 `Name.Service`, L506, `service(mod, ...)`, `granted` in
+`luma_load_mod`; `report`), format/luma.md (section 4 `permissions`), format/validator.md (L211, L505, L506),
+language/language.md 12 and D4.14 (`use svc.<name>`, `optional`, events, `pending`), language/compiled-form.md 7.4
+(tasks run from the frame handler).
 
 ### 1. What is decided here, in one list
 
@@ -187,11 +187,11 @@ with `uint32_t size`, which the mod sets to `sizeof` as it was built:
    returns `LUMA_E_THREAD` and is reported (`Service.Thread`). The check is one thread-local read.
 3. A mod's mistakes are reported, the world's answers are returned. `LUMA_E_ARGUMENT`, `LUMA_E_THREAD`,
    `LUMA_E_HANDLE`, `LUMA_E_LIMIT` and a struct-size error are mistakes in the mod: each is returned and reported
-   through the kernel's report (loader D3-1: kept for the Mods page and the mod log in the player's language, said
+   through the kernel's report (loader.md `report`: kept for the Mods page and the mod log in the player's language, said
    once in the log, repeats counted), with the service, the function and what was wrong. Every other error is an
    answer from the world (a file that is not there, a refused connection, an absent device): returned, and named by
    the service's event or result, never reported by itself, since the mod is expected to handle it. LumaScript's
-   generated code reports an error result its script does not handle (lumascript-abi), so no error is silent.
+   generated code reports an error result its script does not handle (language/compiled-form.md), so no error is silent.
 4. No call blocks. A function returns within the frame. Work that waits (a file read, a connection, a device)
    returns `LUMA_PENDING` and a request id or handle, and its answer is an event. A contract may allow a small
    synchronous form only where it states a size cap.
@@ -246,7 +246,7 @@ with `uint32_t size`, which the mod sets to `sizeof` as it was built:
 ### 5.2 Where a permission is declared, granted and checked
 
 - Declared in `luma.json` `permissions` (luma-format 4): `name` from the list above, `why` one line; `hosts` with
-  `net.internet` only (required there). Request to G (validator L211): the names are this list; the old `net` is
+  `net.internet` only (required there). The validator (L211) takes the names of this list; the old `net` is
   refused with L211 naming the list; `hosts` entries as section 5.1 says.
 - Checked statically by the validator: an import row of kind 5 whose service is permissioned needs that permission in
   `permissions` (L506), read from the catalog in the self-description (section 9). A permission declared and never
@@ -464,7 +464,7 @@ none), the contract that defines it. The catalog is the only list (rule 4, "gene
 making the self-description and the validator read this one list rather than a copy).
 
 - The self-description gains `"services": [{"name": "fs", "major": 1, "minor": 0, "permission": null}, ...]` , exactly
-  as G R-4 settles it:
+  so:
   - one row per catalogued service, sorted by name in byte order; `permission` null or the service's own name;
   - The key is always present, empty while the catalog is. Absent means an older game: kind 5 stays
     `Missing.Services`, not checked. Present and empty means no service, so every non-optional kind 5 import is L505;
@@ -521,50 +521,25 @@ record, the mod log's CODE entries (names and values as the record gives them, `
 and the self-description's row list read rows so.
 
 The provider gives the kernel its rows (`LumaServiceProvider.rows`); the kernel's report path finds a code's row
-there. Request to F (section 12, d).
+there. (section 12, d).
 
-### 12. What this asks of the kernel: revision request, exact text
+### 12. Where the kernel calls the registry
 
-Each is small; all are in files F claims, so they are requested, not made. H writes `LumaServices.cpp/.hpp` and the
-headers; F applies these lines when merging.
+`LumaServices.hpp` declares `modBegin`, `modGone`, `modEnd`, `rowOf`, `find`, `frameStart` and `provideOwn` in
+`namespace luma::services`; the loader and the game's frame call them at these points:
 
-(a) `LumaLoader.cpp`, `loadMod`, pass 3, just before `if (covers(pInfo, offsetof(LumaModInfo, begin) ...`:
-```cpp
-        luma::services::modBegin(pMod, pMod->name, order, pMod->granted, pMod->grantedCount);
-```
-(b) the start-refused path, after `tellDependentGone(pMod);` and before `endMod(pMod);`; and `unloadMod`, after
-`tellDependentGone(pMod);` and before `endMod(pMod);`:
-```cpp
-        luma::services::modGone(pMod);
-```
-(c) `finishMod`, after the `finish()` call and before `freeAll(pMod);`:
-```cpp
-        luma::services::modEnd(pMod);
-```
-(d) `rowOf`: before the `900` test,
-```cpp
-            if (code >= 100u && code <= 899u) {
-                return luma::services::rowOf(code, pId, size, ppNames);
-            }
-```
-with `OwnRow.names` widened to 4 and `englishOf`'s `i < 2` to `i < 4`; `rowOf` gives the names array
-(`const char* const ppNames`) instead of `const OwnRow`. The Mods page's rendering takes the same lookup.
-(e) `findService`: ask the registry first, the host's finder after (the harness's extension services, which need no
-permission):
-```cpp
-            *ppPermission = nullptr;
-            if (const void* const pTable = luma::services::find(pName, major, minor, ppPermission)) {
-                return pTable;
-            }
-            return pName != nullptr && sServiceFinder != nullptr ? sServiceFinder(pName, major, minor, ppPermission) : nullptr;
-```
-(f) `GameSystem.cpp`, `GameSystem::update`, right after `luma::frame();`:
-```cpp
-    luma::services::frameStart();  // the services' events, then time's frame handlers; one load when nothing waits
-```
-
-`LumaServices.hpp` declares `modBegin`, `modGone`, `modEnd`, `rowOf`, `find`, `frameStart`, `provideOwn` in
-`namespace luma::services`, and is included by LumaLoader.cpp and GameSystem.cpp.
+(a) A mod's load (`LumaLoader.cpp`, `loadMod`, pass 3), just before its `begin` runs:
+`modBegin(mod, name, order, granted, grantedCount)`.
+(b) A mod whose start is refused, and a mod taken out (`unloadMod`), after its dependents are told it is gone and
+before it ends: `modGone(mod)`.
+(c) A mod's finish (`finishMod`), after its `finish()` and before its memory is freed: `modEnd(mod)`.
+(d) A report's row (`rowOf`): a code from 100 to 899 is the services' and its row comes from
+`luma::services::rowOf(code, id, size, names)`, before the kernel's own codes from 900. A row has up to 4 names, and
+the Mods page renders through the same lookup.
+(e) A service import (`findService`): the registry is asked first (`luma::services::find`, which also gives the
+permission); the host's finder after it, for the harness's extension services, which need no permission.
+(f) The frame (`GameSystem::update`), right after `luma::frame()`: `frameStart()`, which delivers the services'
+events, then time's frame handlers; one load when nothing waits.
 
 ### 13. The host's side
 
@@ -585,8 +560,8 @@ permission):
 
 Test services. The registry's own cases need services whose versions and permission a test controls. A host
 extension (the harness's host half, `--extension`) may provide services whose name starts with `test.`: never in
-the catalog, permission none or a name starting with `test.`. Request to F (nebula_host_extension.h revision,
-appended at the end of `NebulaHostExtension`): `const LumaServiceProvider* const* luma_providers; uint32_t
+the catalog, permission none or a name starting with `test.`. `nebula_host_extension.h` gives them
+at the end of `NebulaHostExtension`: `const LumaServiceProvider* const* luma_providers; uint32_t
 luma_provider_count;`, registered by the host through `luma_provide_service` before the first mod loads, exactly as
 its own (a name not starting with `test.` from an extension: the extension is refused at attach, its error naming the extension and the service, and the run does not start). The harness's host half
 provides `test.svc` 1.3 (no permission) and `test.secret` 1.0 (permission `test.secret`), and the mod entry's own `permissions` key (harness 3.1.1: `"allow"`, `"deny"` or per name) decides, and the
@@ -616,11 +591,3 @@ facts:
 | 2116 | a struct with `size` 4 where the first minor's is 16 | `LUMA_E_ARGUMENT`, `Service.StructSize` with 4 and 16 |
 | 2117 | the self-description's `services` | equals the catalog, row for row |
 | 2118 | the validator on a mod importing the first catalogued permissioned service without declaring it | L506 in LumaLink check and at import, the same text |
-
-F-M1, F-M2 (with 2 x LUMA_MAX_MODS and its reason) and F-S1 (unknown_mod) are in the text as asked. R2-7 agreed;
-applied at the merge with R2-1 to R2-5.
-
-- F-M3 (must, one sentence; section 8): a full slot array is a failure the text must name, since load and unload in
-  one grace can outrun 2 x LUMA_MAX_MODS. Add after "...begins).":
-
-Nothing else changed.

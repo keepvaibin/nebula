@@ -19,9 +19,9 @@ pub fn now() -> draw.Eye                           // where the main camera is
 
 Built on: `K.hook` (`CameraDirector`), `K.call` (`MR::startEventCamera`, `MR::hidePlayer`, `showPlayer`), `draw`
 (`draw.view`†, `draw.post`† for mirror), `input`, `time` (`time.ctl`† for photo mode's hold, used by the mod).
-Request R-7: `draw.ViewCamera.Look(fn() -> draw.Eye)`, a camera computed each frame. Conformance: take and end with
+Conformance: take and end with
 the game's camera back at its own state, free camera, first person (model hidden, near plane), side camera, mirror
 (image and controls), a rig in a `draw.view` region, two mods taking the camera (rule 7).
-As built (FB, 11-12): data rigs (`view.Camera { rig: view.Rig.Fixed|Follow|Joint|World, ... }`)
-replace R-7's `Look(fn)`; a computed camera calls `aim(c, e: view.Eye)` each frame (draw.view `main_eye`, held while
+A camera is a data rig (`view.Camera { rig: view.Rig.Fixed|Follow|Joint|World, ... }`)
+or a computed camera, which calls `aim(c, e: view.Eye)` each frame (draw.view `main_eye`, held while
 the world is held). `end(c)` and `alive(c)` are module functions too.

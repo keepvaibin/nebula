@@ -1,6 +1,6 @@
 """make_balloon.py: writes the mod's balloon, layers/base/assets/Balloon.glb, from shapes in code.
 
-    python -X utf8 -I tools/make_balloon.py
+    python -X utf8 -I source/make_balloon.py
 
 A red balloon 80 units across on a string 40 units long, 130 units tall in all, standing on its string's end (the
 model's origin). Binary glTF 2.0: positions, normals, texture coordinates, two metal-roughness materials, a two-joint

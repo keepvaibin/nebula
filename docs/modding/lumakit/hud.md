@@ -23,6 +23,9 @@ pub enum GamePart { Lives, Coins, StarBits, Stars, Health, All }
 pub fn hide_game(part: GamePart, hidden: bool)
 ```
 
+`text`: a HUD line is one line of at most 64 characters and is cut beyond that; longer text belongs in
+`screen.message`.
+
 Built on: `ui` (layouts), `draw` (2D at the HUD point, text in the game's font), `C.layout`, `C.font`, `C.text`,
 `K.hook` (the game's counters, `CounterLayoutController`). Text drawn with the disc's message font; a
 mod's text is checked against it by `nfnt_glyphs.py` and by the validator. Conformance: each element in

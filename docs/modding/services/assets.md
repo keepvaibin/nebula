@@ -12,7 +12,7 @@ Layer 1 is reading (1.0). Layer 2, providers (1.1): a mod's files given to the g
 the host's asset functions (host_main `svc_asset_*`). Layer 3, cook (1.1): a file as the disc has it cooked at run time
 by the game's own cooker (nebula_import) and provided. The cooker's refusal is the check of
 the content (the one validator checks packages at install; a file cooked at run time is checked by the code that cooks
-it). Code: `h/2.8-provide`.
+it).
 
 ### 1. What is decided here, in one list
 
@@ -120,6 +120,5 @@ must be safe for that, or luma_cook_entry takes the importer's own lock. A file 
 gives (new pipelines for the renderer's cache, a program the game was not built with) is refused with words saying
 so, never cooked half.
 
-State: 1.0 WRITTEN (compiles; mods built). 1.1 WRITTEN (h/2.8-provide: luma_assets.cpp, host_main svc_asset_*,
-catalog assets 1.1, capabilities services.assets.provide/.cook; mods built, tests 2804-2807 written, unrun). 2807 also
-waits on section 4 in nebula_import. PROVEN waits on a run on luma-int.
+1.1 is luma_assets.cpp, host_main's svc_asset_*, the catalog row assets 1.1 and the capabilities
+services.assets.provide/.cook; its tests are 2804-2807, and 2807 needs section 4 in nebula_import.

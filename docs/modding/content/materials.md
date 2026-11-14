@@ -22,7 +22,7 @@
    LUMA_E_ARGUMENT. Fact content.model.param.<h> {material, param, register, rgba}. Capability
    content.model.set_param.
 
-### 3.4 as built (layer 1 cook)
+### 3.4 layer 1: the cook
 
 Code: crates/nebula-import/src/cook/surface_shader.rs (reading, checks, places, the check's compile), gltf.rs (the
 material), programs.rs (surface_globals, surface_head_lines, surface_tail_lines), model_ir.rs SurfaceIr.
@@ -79,7 +79,7 @@ material), programs.rs (surface_globals, surface_head_lines, surface_tail_lines)
     Direct3D 12).
   - No check bounds a shader's loops: the cook and the check accept a loop that never ends.
 
-### 3.4 layer 2 as built (FB; every renderer)
+### 3.4 layer 2: every renderer
 
 Code: surface_shader.rs (check_compile, find_glslang, vulkan_text, first_error), vk/shader_compile_vk.cpp
 `compile_mod_stage`, vk/mod_shader_compile_vk.cpp, mtl/mod_shader_compile_mtl.cpp, platform/apple/metal.cmake.
@@ -124,7 +124,7 @@ Code: surface_shader.rs (check_compile, find_glslang, vulkan_text, first_error),
     a stand-in TargetConditionals.h for the Metal one.
   - Not run: a Mac build. The Metal path is checked only as C++ here, and no game was run.
 
-### 3.4 layer 3 as built (FC; the ray-hit form)
+### 3.4 layer 3: the ray-hit form
 
 Code: surface_shader.rs (`ray`, the check), programs.rs `ray_hit_form`, hit_record.rs `apply_ray_rows`, model_write.rs
 (the record), gltf.rs `ray_hit_table`, model_ir.rs RayRows.

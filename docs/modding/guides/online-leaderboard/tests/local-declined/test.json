@@ -1,7 +1,7 @@
 {
   "harness": 1,
   "name": "leaderboard-local-declined",
-  "about": "The player declined net.local and allowed net.internet; the server option is the test server on this computer (tests/board/server): the board says this mod may not reach this computer or the local network, a star's time is not sent and the line over the game says why, the server hears nothing (no request went out through net.internet in its place), and the game goes on",
+  "about": "The player declined net.local and allowed net.internet; the server option is the test server on this computer (tests/board/server): the board says this mod may not reach this computer or the local network, a star's time is not sent and the message says why, the server hears nothing (no request went out through net.internet in its place), and the game goes on",
   "proves": ["services.net.local", "services.net.http", "services.permissions", "consent.choose"],
   "mods": [
     "../../../lumakit",

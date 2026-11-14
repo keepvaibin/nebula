@@ -29,4 +29,4 @@ Data `kit/stage/<name>.json`: galaxies and domes. Built on: `C.stage`, `C.text`,
 `ScenarioSelectLayout`, `ScenarioSelectScene`, `MR::startStageBGM`), `K.call` (`MR::requestChangeStageInGameMoving`, `MR::requestAppearPowerStar`,
 `PowerStarEventKeeper`), `kit.progress`. Conformance: a galaxy listed in its dome after 20 stars, its stars got and
 counted, a comet star, warp, music, a stage built in code with a planet and two objects, a downloaded stage (through
-`svc.mods` offer for one start, P-18) as a galaxy.
+`svc.mods` offer for one start) as a galaxy.

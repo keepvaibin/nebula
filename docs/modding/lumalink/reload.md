@@ -119,5 +119,5 @@ a test of what happens during the grace.
 memory goes and before anything in it is reused. The objects in [pStart, pEnd) die there without their destructors
 (a stage's NameObjs). `released` is a function row like any other, empty in the source, so a before hook sees each
 release on the rows module. It is kept, with this signature, for as long as arenas free without destructors. A mod
-holding addresses (lumart's ref slots) empties them there. If the kernel later delivers this itself (lumascript-abi
-A-4), it calls `lumart_refs_release(lo, hi)`.
+holding addresses (lumart's ref slots) empties them there. If the kernel later delivers this itself (language/compiled-form.md),
+it calls `lumart_refs_release(lo, hi)`.

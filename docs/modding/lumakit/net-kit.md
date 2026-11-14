@@ -22,4 +22,4 @@ port) -> bool` (no net.Datagrams type); module functions `send/send_all -> bool`
 u8, bool))`, `on_page_message(p, fn(Page, bytes))` in place of events; `pub task clock(l) -> f64`; `PageFile { path,
 body }` for `files`; `page_send(p, data, binary)`, `page_port`, `page_alive`, `close_page`; `url` from net.local 1.4
 `address`. A star of up to 32 over UDP, the page server's WebSocket on tcp_listen.
-Source k/mods/lumakit/source/net/kit.lum; conformance h/mods/kit-net.kit, h/tests/kit-net.kit.
+Source `source/net/kit.lum`; conformance mod and test kit-net.kit.

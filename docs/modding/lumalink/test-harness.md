@@ -98,6 +98,7 @@ where a number belongs is `harness-error` naming the key.
 |---|---|---|
 | `path` | required | As a plain entry |
 | `options` | the mod's defaults | The mod's options by name, set as the Mods screen sets them (6.3) |
+| `options.<key>: {"free_port": "<name>"}` | | A number option given a TCP port free on this computer for the run; every option naming the same `<name>` (lowercase letters, digits and `-`, up to 32) gets the same port, so tests of a fixed-port service run side by side |
 | `code` | the test's `code` | Consent to this mod's code |
 | `permissions` | `"allow"` | `"allow"` or `"deny"` every permission the mod asks for, or `{"<name>": "allow" or "deny"}` per permission (2.1). A permission named here that the mod does not ask for is `harness-error` |
 | `install` | `"placed"` | `"placed"`: the runner puts the mod into the run's mods folder as an installed mod. `"import"`: the file goes through the game's own import (as a file dropped on the window, 6.1), so the game's validator checks it; each line of the import screen's result is a fact `import.<file name>` (4) |
@@ -268,7 +269,7 @@ Planned additions under `harness: 1` (nobody waits for them):
 | A `sound` check against a reference file | 3.7 |
 | `servers`: loopback fixtures the runner starts before the game and stops after (`tcp-echo`, `udp-echo`, `http-static`, `websocket-echo`, standard-library Python), their ports given to the test as facts, so network tests need no outside network | 2.7 |
 
-### Revisions
+### Changes to the sections above
 
 - 1: `proves`; mod entries as objects (`options`, `code`, `permissions`, `install`, `loads`); `import`, `modlog`,
   `modscreen` facts; `language`; `seed`; `continue_from`; `after` on a log line; building is not the runner's job;
@@ -285,19 +286,18 @@ Planned additions under `harness: 1` (nobody waits for them):
   runs with a JP bin.
 
 - Note: 3.3 holds as written, but run 7's 04a picture still shows the Welcome layout at frame 90 with isDemoActive
-  false: that layout is no demo, see RUNS run 7)
+  false: that layout is no demo.
 
 - 3.3, the ready sentence reads: "... and no demo runs (`MR::isDemoActive` false) and the player takes input
   (`MarioModule::isInputDisable` false on the player's Mario)." Run 8 (04d): at test frame 60 every MarioActor
   spin gate was open and `isDemoActive` false, yet the shake did nothing; `Mario::checkKeyLock` holds input for the
   player's first 75 frames on a stage (and in the landing and stage-in animations, a remote demo). The game half
   takes the Mario from its own `Mario::checkKeyLock` (after hook) and asks the game's function; no frame count of
-  ours. Built: Nebula-LH 5730300d6, luma-test.dll c0a71f13ea7c5025.
+  ours.
 - 9, test 4a's shake at 60 is then 60 frames after the player takes input, as written.
 
-- G:
 
-R3-1: a stage that never becomes ready says which condition held it. Today the 7,200-frame timeout says
+A stage that never becomes ready says which condition held it. Today the 7,200-frame timeout says
 "the stage was not ready within 7,200 frames" for any of seven conditions (stage name, scenario, opening camera,
 scenario start, demo, no player, input disabled). The refusal names the first condition still unmet at the timeout and
 its value ("ready: MarioModule::isInputDisable still true", "ready: stage EggStarGalaxy expected, found
@@ -323,7 +323,7 @@ AstroGalaxy"), as every refusal names what was expected.
    than 16-bit PCM stereo, naming it.
 7. `save.character` sets `GameDataHolder.mUser` only to the file `setup file` made current.
 
-Built:
+The harness service:
 
 1. The service `harness` is minor 1 (`LUMA_HARNESS_MINOR`, luma_harness.h). A mod asking for a later minor is not
    given it: its import is filled as for an absent service (refused when required, null when optional). Test 1112.
@@ -334,28 +334,28 @@ Built:
 3. Why: a harness run ticks the sound on the game thread, so nothing calls a hooked function off it; a test of what a
    hook sees off the game thread (1116) makes that call itself, the same way on every platform.
 
-- R6-1: a mod's own facts are `mod.<id>.<key>`, not `<id>.<key>`, so no game key can be a mod's (a mod "modlog"
+- A mod's own facts are `mod.<id>.<key>`, not `<id>.<key>`, so no game key can be a mod's (a mod "modlog"
   logging `fact notice` wrote `modlog.notice`). `loaded` is the game half's own (`mod.<id>.loaded`): a mod logging
   `fact loaded ...` gets `harness.bad_fact` naming it. The runner reads a test's `fact` keys as written; every test
   generator writes the new form, and every suite runs again with the commit that brings it.
-- R6-2: section 4's table gains (the tasks that write them: 3.12 and 3.13): `modlog` with mod-log 4.3's fields;
+- Section 4's table gains: `modlog` with mod-log 4.3's fields;
   `modlog.notice`, `modlog.state`, `modlog.page` (the Log page, once per opening; `modscreen.log` is retired);
   `refs.after_start` (references 3: each class looked up after the last mod's start, with its answer); `placeholder`
   (a placement's stand-in made for a class the check found missing: class, file, line); `startcheck` (`{"part",
   "why"}`, once at start-check step 1, none with no mod on).
-- R6-3: a `settings` step: `{"settings": <page>}` opens the host's own Settings on that page at `at` (MODS is 5), the
+- A `settings` step: `{"settings": <page>}` opens the host's own Settings on that page at `at` (MODS is 5), the
   cursor on the page's last list row (the test extension's existing open, which GALAXY_TEST_SETTINGS_OPEN used in runs
   21 and 21b); then `key` steps move in it. `space` presses the selected button, `enter` is Apply on this page, `esc`
   closes. `{"settings": 5}`, then `down` once (the LOG row, below the last mod row), then `space` (its OPEN), each
   step 60 frames apart or more.
-- R6-4: `hide_game_files`, a list of paths relative to the game's folder: the runner leaves them out of the run's own
+- `hide_game_files`, a list of paths relative to the game's folder: the runner leaves them out of the run's own
   copy of the game (runs/<test>/<renderer>/bin, section 6), so nothing of the person's install is moved; a path not in
   the source folder is `setup-failed` naming it.
-- R6-5 (run 22h): a `class:<Class>#<n>` argument beside `object:<name>#<n>`: the n-th live object (creation order)
+- A `class:<Class>#<n>` argument beside `object:<name>#<n>`: the n-th live object (creation order)
   whose own class is `<Class>` or one made from it (is_a), for stages whose placements name objects in Japanese.
   Wherever `object:` is taken (call arguments, `of`, `player.at`).
 
-- R8-1, save-file steps (services-save 5; kit-progress): four step kinds on the run's own saves, through the game's
+- Save-file steps (services-save 5; kit-progress): four step kinds on the run's own saves, through the game's
   own `GameSequenceFunction` (the file select's operations), each answered when the game's save sequence has ended and
   its result been read back; a step that did not take is `fail` naming it. Files are 1 to 3.
 
@@ -366,23 +366,23 @@ Built:
   | `{"erase_file": n}` | file `n` erased; the current file is then the erased one, not created | `file.erased` `n` |
   | `{"new_file": n}` | file `n` made through the new-file path (`startCreateUserFileSequence`); it is then the current file | `file.created` `n` |
 
-- R8-2, `after` with `"when": "next"`: `{"after": {"fact": k, <check>, "when": "next"}}` is met by a write of `k`
+- `after` with `"when": "next"`: `{"after": {"fact": k, <check>, "when": "next"}}` is met by a write of `k`
   made after the wait began, not by a value written earlier (a mod's `done` of a first stage run does not meet the
   `after` of the second). Without `when` the newest value counts, as before. `when` is for fact conditions only
   (a log condition takes none); any other value is `harness-error`.
-- R8-3, a place argument: a `Vec3f`, `TVec3f`, `Vec3f *` or `const Vec3f &` parameter of a `call` also takes
+- A place argument: a `Vec3f`, `TVec3f`, `Vec3f *` or `const Vec3f &` parameter of a `call` also takes
   `"object:<name>#<n>"` or `"class:<Class>#<n>"`: the position of that live actor as the game holds it (not raised
   by 150 like `player.at`). A missing object is `setup-failed` as for an object argument; an object that is no actor
   (no position) is `fail`.
-- R8-4, no top-level `permissions`: `permissions` belongs to a mod entry (3.1.1), where the default is `"allow"`;
+- No top-level `permissions`: `permissions` belongs to a mod entry (3.1.1), where the default is `"allow"`;
   `code` is the only consent default of the test. A test that wants every permission allowed writes nothing.
 
-- R9-1, `device`: a test's top-level `"device"` is `"keyboard"` (the default, as before) or `"pad"`. The host gives
+- `device`: a test's top-level `"device"` is `"keyboard"` (the default, as before) or `"pad"`. The host gives
   the extension the motor's strength (0 to 255, the game's or a mod's, the stronger) at each change
   (`NebulaHostExtension.motor`, appended; its `size` versions it), and the harness writes it as the fact
   `input.motor`. Any other value is `harness-error`.
 
-- R10-1, `ends`: a test's top-level `"ends"` is `"end"` (the default, as before) or `"crash"`. With `crash` the
+- `ends`: a test's top-level `"ends"` is `"end"` (the default, as before) or `"crash"`. With `crash` the
   run must end in the host's crash reporter (its `crash: ` line) before the end step, and the harness judges it as
   a run that ended: the verdict is `pass` when every check passes, not `crashed`. The always-checked items for such
   a test are "the game ended in a crash before its end step", "a crash dump was written", "the game ended with a code
@@ -391,22 +391,22 @@ Built:
   must have a `log` expectation whose pattern starts with `crash: ` (else `harness-error`). Any other value is
   `harness-error`. A crash in a test without it stays `crashed`. f/guard/judge-crash.py now only reads the verdict.
 
-- R11-1, a check's `scope`: a `fact` or `log`/`no_log` check may say `"scope": "installation"`: it reads what every
+- A check's `scope`: a `fact` or `log`/`no_log` check may say `"scope": "installation"`: it reads what every
   installed mod adds to, not only the test's own mods. These are the Mods screen's lines and pages (`modscreen.*`,
   reached by position), the mod log's notices, pages, entries and state (`modlog.notice`, `modlog.page`,
   `modlog.entry`, `modlog.state`), `startcheck`, a `modlog` check that names no mod, and a `modlog` check judged on
   the last entry of the whole log. The harness judges it like any other check. A run that installs other mods beside
   the test's leaves the check to the test's own run and lists it
   (`<pairs>/left-to-alone.tsv`). Any other value is `harness-error`. Absent: the check is about the test's own mods.
-- R11-2, a mod entry's `folder`: the folder the mod is placed in under the run's mods folder; without it the folder
+- A mod entry's `folder`: the folder the mod is placed in under the run's mods folder; without it the folder
   is the mod's id, as before. It places a second copy of a mod, one id in two folders, as a player can install it.
   The game then refuses both by name (validator L802, one mod log entry each). Lowercase letters, digits, `-` and `.`,
   up to 64; anything else is `harness-error`. Two entries placed in one folder stay `harness-error`.
-- R11-3, a held binary: after a run, the harness removes the run's copies of the binaries and tries each for up to
+- A held binary: after a run, the harness removes the run's copies of the binaries and tries each for up to
   30 s. A copy still held is left in place and the run's log names the holder (Windows' Restart Manager). The verdict
   and `result.json` do not depend on the removal. Before this revision a copy held for more than 5 s stopped the
   harness before it wrote `result.json`.
-- R11-4, a menu over the setup: a menu the boot's close hid with its question standing (an `"install": "import"`
+- A menu over the setup: a menu the boot's close hid with its question standing (an `"install": "import"`
   mod's result, a consent question) opens again at the first frame of a 3D scene that no extension holds
   (`NebulaHostExtension.holds_menus`, appended). The harness holds it until frame 0 is fixed, since an open menu
   holds the scene and with it the setup's save and stage sequences. The question is up at frame 0, as a player

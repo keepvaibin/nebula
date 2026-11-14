@@ -2,14 +2,47 @@
   "harness": 1,
   "name": "livesplit-reset",
   "about": "Back to the title screen during a run: LiveSplit is told to reset, and the title's load sends no pause",
-  "proves": ["services.net.local", "kernel.hook.before"],
-  "mods": ["../run/server", "../.."],
-  "stage": { "name": "EggStarGalaxy", "scenario": 1 },
+  "proves": [
+    "services.net.local",
+    "kernel.hook.before"
+  ],
+  "mods": [
+    {
+      "path": "../run/server",
+      "options": {
+        "port": {
+          "free_port": "livesplit"
+        }
+      }
+    },
+    {
+      "path": "../..",
+      "options": {
+        "port": {
+          "free_port": "livesplit"
+        }
+      }
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
   "steps": [
-    { "at": 60, "call": "MR::requestChangeSceneTitle", "signature": "void()" },
-    { "at": 600, "end": true }
+    {
+      "at": 60,
+      "call": "MR::requestChangeSceneTitle",
+      "signature": "void()"
+    },
+    {
+      "at": 600,
+      "end": true
+    }
   ],
   "expect": [
-    { "fact": "mod.livesplit-server.said", "is": "starttimer\r\ninitgametime\r\npausegametime\r\nunpausegametime\r\npausegametime\r\nunpausegametime\r\nreset\r\n" }
+    {
+      "fact": "mod.livesplit-server.said",
+      "is": "starttimer\r\ninitgametime\r\npausegametime\r\nunpausegametime\r\npausegametime\r\nunpausegametime\r\nreset\r\n"
+    }
   ]
 }

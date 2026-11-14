@@ -5,13 +5,13 @@
 ### Loader
 
 What the game's loader does with a mod's code library, what `luma.h` promises a library, and how a refusal is said.
-`native/include/luma.h`, `native/petari/src/Game/System/LumaLoader.cpp`, `runtime/src/mod_plugins.cpp`), audited by G.
-It gathers what earlier audits carried here: Z-2, Z-3, Z-9 to Z-12, the validator's L504/L506/L512/L805 inputs,
-lumascript-abi 7.1/7.3 and language 16's requests, audit 4.1's A-2 and A-4.
+Code: `native/include/luma.h`, `native/petari/src/Game/System/LumaLoader.cpp`, `runtime/src/mod_plugins.cpp`.
+What the compiler emits for the same library is in language/compiled-form.md; this page is how the game looks a library up, binds it
+and starts it.
 
 ### 1. Order: one rule
 
-The Mods list, top first. The mod higher in the list wins a file, a cell and a replace (DECISIONS; table-keys 12;
+The Mods list, top first. The mod higher in the list wins a file, a cell and a replace (table-keys 12;
 validator r2 item 9). The loader therefore binds mods from the top of the list down:
 
 - a function's `LUMA_REPLACE`: the first bound (the highest mod) holds it; a lower mod's replace of the same function
@@ -42,8 +42,8 @@ Today the base binds bottom-up (mods.cpp 1666, run 3e): 1.1 turns it, and run 3e
 
 The loader produces (code, parameters), never English sentences: the same codes and templates as the
 validator (section 5, the `Validator.L5xx`/`L805` rows). The game renders them through the
-validator's own text (the rows are not in the game's table: nebula_text.py `NOT_THE_GAMES`), so request to G:
-`luma_validate.h` gains `const char* luma_validate_message(uint16_t code, const char* const* names, const char* const*
+validator's own text (the rows are not in the game's table: nebula_text.py `NOT_THE_GAMES`), so
+`luma_validate.h` gives `const char* luma_validate_message(uint16_t code, const char* const* names, const char* const*
 values, uint32_t count, const char* language)` (the text valid until the next call from that thread). The log gets
 the English line; the Mods page the player's language. The host adds no words of its own.
 
@@ -70,14 +70,14 @@ the English line; the Mods page the player's language. The host adds no words of
   their counts are under that mod's lock (LumaLoader record, two passes, the text copied outside it), and the line
   goes through the host's log, which takes lines from every thread. So a compiled hook off the game thread may report
   (code 901, once per place, repeats counted) and leave.
-- `hook` and `unhook` (abi 7.3). New: `int32_t (*unhook)(const LumaMod*, const LumaFunction*, uint32_t
+- `hook` and `unhook` (language/compiled-form.md 7.3). New: `int32_t (*unhook)(const LumaMod*, const LumaFunction*, uint32_t
   kind, LumaHook, void* user)` (0 removed, -1 no such hook of that mod). Both are called on the game thread only
   (others: -3, nothing changes). A chain is never changed in place: the kernel builds the new chain and publishes it
   with one atomic pointer store; the old one is kept on a retire list and freed when the mod list changes (stop,
   reload) or the game ends, so a call already inside it on any thread finishes safely. Hook and unhook are rare (a
   handle table's destructor hook is added once); the retire list is counted in the Mods page's memory.
 
-### 5. Memory for mods (lumascript-abi 7.1)
+### 5. Memory for mods (language/compiled-form.md 7.1)
 
 New at the end of `LumaCore`: `void* (*alloc)(const LumaMod* mod, uint64_t size, uint64_t align)` and
 `void (*free)(const LumaMod* mod, void* p)`. Counted per mod (the Mods page shows it); null when out of memory (the
@@ -112,8 +112,8 @@ Apple deployment targets for mod libraries: those of the game, `platform/apple/t
 
 ### 9. Fields and classes (carried, not 1.1)
 
-Z-4 (a field's type checked against the mod's) is 1.2's; Z-7 (`is_a` on an object that is not a NameObj) is 1.3's;
-Z-5 (the module's 38,697 exports) is 1.10's. Listed so nothing is lost.
+A field's type checked against the mod's is 1.2's; `is_a` on an object that is not a NameObj is 1.3's; the module's
+38,697 exports are 1.10's.
 
 ### 10. luma.h's `LUMA_API` and size
 
@@ -136,7 +136,7 @@ after a stage change); a 64 KiB frame mod with no imports; every refusal's text 
   per-object lookup.
 - One name: `game_thread`.
 
-- Section 4, Z-2, noSkip (changed). A bind cannot know whether a before will skip, so instead: (a) the kernel learns
+- Section 4, noSkip (changed). A bind cannot know whether a before will skip, so instead: (a) the kernel learns
   noSkip from the result type itself: each function's invoke answers when called with `luma::kAskNoSkip` as its
   arguments (`Result<R>::kNoSkip`); noSkip is a reference result (145 hookable rows), a class with no default
   constructor, or one with a destructor (the function's value is built over the storage, so a default there would
@@ -164,8 +164,8 @@ Each chain has `gameUsers` (plain, the game thread's calls in it); other threads
 before reading a chain; the slot store is seq_cst. `luma::reclaim()` runs on the game thread each frame
 (GameSystem::update, after lumascript::beginFrame) and at a mod's unload: up to two flips, each only when the counter
 it leaves has drained; a retired chain is freed when two flips came after it was retired and its `gameUsers` is 0.
-Nothing retired: one pointer test a frame. `luma::retiredCount()` is the fact LR-8's 600-frame test reads.
-- LR-1, section 4 replaced. A function's invoke, asked with `luma::kAskNoSkip`, answers its result's kind: plain
+Nothing retired: one pointer test a frame. `luma::retiredCount()` is the fact the 600-frame test reads.
+- Section 4, replaced. A function's invoke, asked with `luma::kAskNoSkip`, answers its result's kind: plain
   (zeroed, then default-constructed before the chain), reference (the slot is a pointer, null before the chain), or
   fixed (a class with no default constructor, or with a destructor). After the befores and the wraps, a reference
   result still null means no hook wrote it and none proceeded: the kernel calls the function itself, the caller gets
@@ -174,12 +174,12 @@ Nothing retired: one pointer test a frame. `luma::retiredCount()` is the fact LR
   `P:Hook.NoDefaultResult`), and a before's skip on one is not taken (reported once). The rows of each kind are
   counted as a fact in 1.1's run. "{mod}: a hook on {found} gave no result, so the function ran"; `Hook.SkipRefused`
   likewise for a fixed result).
-- LR-2, section 2 (how "whole or not at all" is made). Bind is three passes on the game thread: (1) every row
+- Section 2 (how "whole or not at all" is made). Bind is three passes on the game thread: (1) every row
   resolved; (2) every hook row checked against what `hook` would refuse (a constructor's wrap, a fixed result, a
   replace another mod holds, a kind out of range); (3) the slots filled and `start` run. Only when all three pass are
   the mod's hook rows published (one chain store per function). A refusal in any pass publishes nothing; hooks `start`
   added itself through `core->hook` are taken out and wait for the grace.
-- LR-5, sections 4 and 5 (a mod's end). Stop is: unbind (chains without the mod published), the mod's `stop` (on the
+- Sections 4 and 5 (a mod's end). Stop is: unbind (chains without the mod published), the mod's `stop` (on the
   game thread; other threads may still be in its hooks until the grace ends, so `stop` frees nothing they read), then
   the grace (the retire list's: two flips after the unbind and no chain retired by it still held), then its C++
   globals' destructors (`LumaModInfo.finish`), then everything `alloc` gave it, then its library is closed. The kernel
@@ -189,7 +189,7 @@ Nothing retired: one pointer test a frame. `luma::retiredCount()` is the fact LR
   returns null and logs one line naming the mod and the arguments; `free` of a pointer the mod does not hold (another
   mod's, freed twice, not from `alloc`: each block carries its mod and a check word) logs one line and does nothing.
   At the game's end nothing is unloaded (the process ends).
-- LR-6, section 8 (C++ in a mod). Proven to link and run: a C++ file with a global with a constructor and destructor,
+- Section 8 (C++ in a mod). Proven to link and run: a C++ file with a global with a constructor and destructor,
   a static local, a virtual destructor and `new`/`delete` links with no imports for Windows x64 and arm64 (MSVC
   target) and Android arm64 and x86_64 (NDK 28 clang, lld), and a loader on Windows shows its constructor not run at
   load, run by luma.h's runner, and `new`/`delete` working. How each goes:
@@ -222,7 +222,7 @@ Nothing retired: one pointer test a frame. `luma::retiredCount()` is the fact LR
   call). On Windows the host loads `nebula_import.dll` (the crate's cdylib, beside the exe) for it; when it is
   missing, the log gets the code and every parameter as given, never nothing.
 
-### , as built (not built)
+### Build flags and the frame point
 
 - Build flags (section 8), final. These flags go with the ones above:
   - ELF: `-Wl,--version-script=luma_mod.map` (shipped beside luma.h: `{ global: luma_mod; local: *; }; `) and
@@ -251,7 +251,7 @@ Nothing retired: one pointer test a frame. `luma::retiredCount()` is the fact LR
   - L505: `kind`, `found`, `sig`
   - L805: `found`, `sig`, `other`
   - The first refusal found is the one given.
-  - Rows G adds (14 languages): `Validator.Lib.NotLumaH`, `Validator.Lib.TooManyMods` ({count}),
+  - The validator's rows (14 languages): `Validator.Lib.NotLumaH`, `Validator.Lib.TooManyMods` ({count}),
     `Validator.Lib.StartRefused` ({found}), `Validator.Hook.NoDefaultResult` ({found}). The run-time lines (a
     reference no hook wrote, a skip not taken) go to the log in English until `report` and its rows exist.
 - Loading off the game thread is the host's programming error, so it stops the game with a crash report
@@ -259,10 +259,10 @@ Nothing retired: one pointer test a frame. `luma::retiredCount()` is the fact LR
 - The frame point: `luma::frame()` (GameSystem::update, after lumascript::beginFrame). It runs `reclaim` and then ends
   the mods whose grace is over. With nothing retired and no mod waiting, it is one test.
 
-### D3-1 `report` (section 6), exactly
+### `report` (section 6)
 - `LumaCore.report(mod, file, line, code, args, arg_count)` is at the end of LumaCore and can be called from any
   thread. The `code` picks a row:
-  - 900 to 9999: `Script.S%04u` (lumart's, lumascript-abi), with args `{0}`, `{1}`, ... in order.
+  - 900 to 9999: `Script.S%04u` (the run time's, language/compiled-form.md), with args `{0}`, `{1}`, ... in order.
   - 1 to 99: the kernel's and luma.h's own rows, args by the row's names. 1 is `Hook.OutOfMemory`: args[0] is
     `{size}`, and the kernel fills `{mod}`.
   - Any other code is a bug in the caller: one log line naming the code, and it is counted.
@@ -275,22 +275,22 @@ Nothing retired: one pointer test a frame. `luma::retiredCount()` is the fact LR
 - The kernel's run-time lines (Hook.SkipRefused, Hook.NoResult) go through the same path with `{mod}`/`{found}`.
   Their `file` is the hooked function's name and their line is 0.
 - luma.h: a throwing `new` with no memory calls `report(mod, "luma.h", 0, LUMA_REPORT_OUT_OF_MEMORY, {size})` and
-  then traps. The trap stops the game with its crash report, as agreed.
+  then traps. The trap stops the game with its crash report.
 
-### D3-2 Services (section 2), exactly
+### Services (section 2)
 - The game keeps one table of services: name, major, minor, table, and permission (null when none is needed).
   Phase 2's services add themselves before any mod loads. Today the table is empty.
 - An import of kind 5 (`LUMA_IMPORT_SERVICE`) gives `name` and `signature` "major.minor", and its slot receives
   the table:
   - no such service, a different major, or an older minor: L505 with `kind` `P:Name.Service`, `found` the
-    name and `sig` the asked "major.minor". Request to G: the row `Validator.Name.Service` ("service").
+    name and `sig` the asked "major.minor". The row is `Validator.Name.Service` ("service").
   - a permissioned service the player has not granted: L506 {service} {permission}.
   - `LUMA_OPTIONAL`: the slot stays null and nothing is refused.
 - `luma_load_mod` gains `const char* const* granted, uint32_t granted_count`: the permission names the player
-  granted this mod. Until phase 6's consent screen the host grants none, so every permissioned service is refused
-  by name, never allowed by omission. `LumaCore.service()` checks the same grants.
+  granted this mod. A service the player has not granted is refused by name, never allowed by
+  omission. `LumaCore.service()` checks the same grants.
 
-### D3-4 Small
+### Small rules
 - luma.h's `alloc` comment says "up to 65536". It said 4096.
 - Section 11 gains the tests:
   - a report of each kind, repeats counted (1, 10, 100), args cut at 8 and named;
@@ -299,25 +299,25 @@ Nothing retired: one pointer test a frame. `luma::retiredCount()` is the fact LR
   - the needs order with the list order kept for hooks;
   - dependent_gone before the library's grace.
 
-- D3-2, services come from the host's finder (0.3's `luma_set_service_finder`), not from a table in the game.
+- Services come from the host's finder (0.3's `luma_set_service_finder`), not from a table in the game.
   - The finder now also gives each service's permission: `(name, major, minor, const char permission)`, null when none
     is needed. The harness's service needs none.
   - `LumaCore.service` takes the mod first: `service(mod, name, major, minor)`, so it can check the grants.
     luma_test.c passes its mod. Nothing is released, so the change costs only a rebuild of the harness's DLL, which
     the 1.1 build does anyway.
-- D3-1, the kernel's codes are fixed:
+- The kernel's codes are fixed:
   - 1 Hook.OutOfMemory {size};
   - 2 Hook.NoResult {found};
   - 3 Hook.SkipRefused {found};
-  - 4 Hook.ServiceNotGranted {service} {permission}: a service() call for a permission not granted. Row request to G
+  - 4 Hook.ServiceNotGranted {service} {permission}: a service() call for a permission not granted. Its row
     (14 languages): "{mod} may not use {service}: the \"{permission}\" permission was not granted".
   - For codes 2 and 3, {found} is "<function> <signature>", and the line has no file:line part.
-- T-2 confirmed: finishMod runs `finish` only for a mod whose `begin` ran (`begun`). A refusal in the bind passes runs
+- finishMod runs `finish` only for a mod whose `begin` ran (`begun`). A refusal in the bind passes runs
   none, and a refusal in `start` runs it.
 - Until its row table is regenerated, the game's log shows the row's id with every arg. The stand-in core showed
   `report luma.h:0 code 1 n 1 arg0 549755813888` from a failed `new`, then the trap.
 
-Run 18 (RUNS) proves the tests named below; nothing else here is claimed as run.
+A run proves the tests named below; nothing else here is claimed as run.
 
 - luma.h. `LumaExport { const char* name; const char* signature; const void* address; }`. `LumaModInfo` ends with
   `exports`, `export_count`, `dependent_gone`, after `finish`. `LUMA_MOD` and `LUMA_MOD_NO_IMPORTS` write 0 for all
@@ -325,7 +325,7 @@ Run 18 (RUNS) proves the tests named below; nothing else here is claimed as run.
   `LUMA_MOD_FUNCTION(slot, "<mod id>/<export>", signature)` (a kind 6 row, slot `const void*`),
   `LUMA_EXPORT_FUNCTION(name, signature, fn)` (one export row) and
   `LUMA_LIBRARY_MOD(imports, start, stop, exports, dependent_gone)`. The C form of an exported function (`caller`,
-  `file`, `line` first, abi item 4) is the library's ABI; the kernel only binds the address.
+  `file`, `line` first, language/compiled-form.md item 4) is the library's ABI; the kernel only binds the address.
 - Binding (kernel). The name splits at its first `/`. The mod is found among the loaded mods by its whole id, the
   export by its whole name read in order (the validator checks the sort), then the two signatures are compared as
   strings. No such mod loaded, a mod built before `exports`, or no such export: L505 `kind` P:Name.ModFunction (1125).

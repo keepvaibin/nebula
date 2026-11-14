@@ -1,7 +1,7 @@
 {
   "harness": 1,
   "name": "leaderboard-unresolvable",
-  "about": "Both permissions allowed and the server option left at its default, https://example.invalid/board: the request goes through net.internet, the name has no address (.invalid never resolves), so the board and the line over the game say the server cannot be reached, and the game goes on",
+  "about": "Both permissions allowed and the server option left at its default, https://example.invalid/board: the request goes through net.internet, the name has no address (.invalid never resolves), so the board and the message say the server cannot be reached, and the game goes on",
   "proves": ["services.net.internet", "services.net.http"],
   "mods": [
     "../../../lumakit",

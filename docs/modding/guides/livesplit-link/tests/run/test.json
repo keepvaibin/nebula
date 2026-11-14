@@ -2,17 +2,59 @@
   "harness": 1,
   "name": "livesplit-run",
   "about": "With a listener where LiveSplit's server listens: a file chosen starts the timer, a galaxy's load pauses and unpauses game time, a star splits",
-  "proves": ["services.net.local", "kernel.hook.before", "kernel.hook.after"],
-  "mods": ["server", "../.."],
-  "stage": { "name": "EggStarGalaxy", "scenario": 1 },
+  "proves": [
+    "services.net.local",
+    "kernel.hook.before",
+    "kernel.hook.after"
+  ],
+  "mods": [
+    {
+      "path": "server",
+      "options": {
+        "port": {
+          "free_port": "livesplit"
+        }
+      }
+    },
+    {
+      "path": "../..",
+      "options": {
+        "port": {
+          "free_port": "livesplit"
+        }
+      }
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
   "steps": [
-    { "at": 60, "call": "GameSceneFunction::requestPowerStarGetDemo", "signature": "void()" },
-    { "at": 200, "end": true }
+    {
+      "at": 60,
+      "call": "GameSceneFunction::requestPowerStarGetDemo",
+      "signature": "void()"
+    },
+    {
+      "at": 200,
+      "end": true
+    }
   ],
   "expect": [
-    { "fact": "mod.livesplit-server.listening", "is": true },
-    { "fact": "mod.livesplit-server.accepted", "is": true },
-    { "fact": "mod.livesplit-server.said", "is": "starttimer\r\ninitgametime\r\npausegametime\r\nunpausegametime\r\npausegametime\r\nunpausegametime\r\nsplit\r\n" },
-    { "log": "connected to LiveSplit on port 16834" }
+    {
+      "fact": "mod.livesplit-server.listening",
+      "is": true
+    },
+    {
+      "fact": "mod.livesplit-server.accepted",
+      "is": true
+    },
+    {
+      "fact": "mod.livesplit-server.said",
+      "is": "starttimer\r\ninitgametime\r\npausegametime\r\nunpausegametime\r\npausegametime\r\nunpausegametime\r\nsplit\r\n"
+    },
+    {
+      "log": "connected to LiveSplit on port [0-9]+"
+    }
   ]
 }

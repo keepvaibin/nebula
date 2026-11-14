@@ -6,7 +6,7 @@
 
 - A Rust library crate in Nebula: `crates/luma-validate`. No unsafe code, no panics on any input, no network, no
   writing to disk.
-- LumaLink links it as a Rust dependency, at the same Nebula commit as the cooker (DECISIONS 2).
+- LumaLink links it as a Rust dependency, at the same Nebula commit as the cooker.
 - The game reaches it through the cooker library it already carries (`crates/nebula-import`, built as `cdylib` with a
   C interface `c_api.rs` and `jni.rs` for Android), which links `luma-validate` and exports the C interface of section
   3. One build of the library per platform; the game's import screen and loader call it. On iOS the cooker library
@@ -188,7 +188,7 @@ A code is never reused for another meaning.
    Option<&BTreeMap>, position: Option<usize> }`; `Game { nebula, region, extra_languages, names: Option<&Names>,
    store: Option<&dyn Store> }`; `Store { path(lower) -> Option<String>, table(path) -> Option<Table>,
    may_be_new(path) -> bool }`; `Table { key, columns: (name, Int{min,max} | Float | Text), rows: Option<HashSet>,
-   case_insensitive }`. `position` is how many of `installed` (load order) load before this mod; an update leaves the
+   case_insensitive }`. `installed` is the mod list, the top first, and `position` how many mods are above this one; an update leaves the
    mod it replaces out of `installed`.
 4. `Installed { id, version, on, file, conflicts, touches }` and `Touches { replaces, cells, adds, removes, assets,
    functions }` (files replaced, cells set, rows added and removed, the mod's assets, the functions its code
@@ -202,7 +202,7 @@ A code is never reused for another meaning.
 5. `pub fn recheck(input, saved: Option<&Saved>, game: &str) -> Report`, and `Saved` (section 2 below).
 6. C: Beyond them: `LumaValidateInput` (size-checked; path, platform, release, region, extra languages, the names as
    `.rows` text with LUMA_API until 1.8's file, the services' permissions, the store as three functions plus a
-   `store_key`, the other mods by their kept reports in load order with `position`, the options, this mod's kept
+   `store_key`, the other mods by their kept reports in list order, the top first, with `position`, the options, this mod's kept
    report); `luma_report_state` (0 full, 1 a start's check, -1 the input was not valid) with `luma_report_invalid`
    (why, English, for the developer's log); `luma_report_errors`; `luma_report_not_checked_count/at`;
    `luma_report_kept`; `luma_report_id/version`. `luma_report_at` returns a finding valid until the next call on that

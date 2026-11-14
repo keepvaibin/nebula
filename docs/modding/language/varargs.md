@@ -6,7 +6,7 @@
 
 Header: `native/include/luma.h` (signatures as before; `va_list` and `...` now appear in them). Code:
 `tools/lumacore/instrument.py` (rows), `Game/System/LumaHook.cpp` (a row's kinds), `tools/lumacore/luma_test.py` (call
-refusals). Branch f/1.9-varargs. Reviewer: H, after it compiles and has run (R2). G and K: what LumaScript takes.
+refusals).
 
 ### 1. What is left out today (l22, 85 functions) and what each becomes
 
@@ -62,8 +62,8 @@ The body is found from the head's spelling location, not its expansion; the row 
 
 ### 6. Proof
 
-- Build: the left-out report lists only templates and allocation (counted in RUNS); the functions file has the 47.
-- Tests 1901-1906 (suite f/tests/varargs, with a C test mod): a mod calls MR::formatTextV with its own va_list
+- Build: the left-out report lists only templates and allocation (counted); the functions file has the 47.
+- Tests 1901-1906 (with a C test mod): a mod calls MR::formatTextV with its own va_list
   (`%d`) and reads the text; a before hook on MR::isExistFileInArc reads its va_list (the name formatted) and the function still answers; a wrap
   on FormattedName::vformat changes every formatted name, the variadic callers included; `after` on a variadic
   refused with Hook.Variadic; a call of a constexpr function (CubeGravity's encodeRegion) answers as the source does;

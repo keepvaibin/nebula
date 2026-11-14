@@ -2,11 +2,8 @@
 
 ## More rules
 
-The builders are as ASSIGNMENTS phase 5 gives them; `ride` and `pointer` (added by DECISIONS 3) are proposed for G,
-which makes eleven modules each.
-
 This file fixes the names, types and data each module offers so the programs and the corpus can be checked against
-them now. Game names cited were checked in `Nebula-LG/native/petari/include` (grep).
+them now. Game names cited were checked against the game's headers (`native/petari/include`).
 
 ### 0. Rules every module keeps
 
@@ -17,7 +14,7 @@ them now. Game names cited were checked in `Nebula-LG/native/petari/include` (gr
    copy is loaded however many mods use it, so state the game has one of (the player's form, the main camera, the
    pause menu, the HUD corners) has one owner that settles between mods (rule 7).
 2. How a call binds. Each `pub fn` of a library mod's module is exported by its library under its ABI name
-   (`lm_<module>__<fn>`, abi section 2, `.` in a module name written `_`), with a hash of its LumaScript signature. A
+   (`lm_<module>__<fn>`, language/compiled-form.md section 2, `.` in a module name written `_`), with a hash of its LumaScript signature. A
    mod calling it gets one import row of a new kind, `LUMA_IMPORT_MOD_FUNCTION` (mod id, version range, symbol,
    signature hash), which the loader binds at load to the library's address: a direct native call, no lookup per call,
    nothing translated. A wrong hash (a library built from another interface) stops the calling mod's load naming the
@@ -25,7 +22,7 @@ them now. Game names cited were checked in `Nebula-LG/native/petari/include` (gr
    the library's interface file (`lumakit.lumi`, written by the build next to the libraries; LumaLink reads it from
    the needed `.luma`), so both sides have one layout.
 3. Values across the boundary. Plain values (numbers, vectors, structs and enums of them) pass by value. `text`,
-   `bytes` and containers a module keeps are copied into LumaKit's memory when kept (abi 7.1: each mod's `alloc` is
+   `bytes` and containers a module keeps are copied into LumaKit's memory when kept (language/compiled-form.md 7.1: each mod's `alloc` is
    its own, and a caller's memory is freed when it stops). A closure given to a module (`on_spin`, `on_choose`) is
    kept with the mod that gave it; the module calls it only while that mod is on. Views (`LiveActor`) are never kept:
    a module turns a view it must keep into a `ref` (language 6.1, 6.2).
@@ -35,7 +32,7 @@ them now. Game names cited were checked in `Nebula-LG/native/petari/include` (gr
    behind; actors of its kinds are killed with the game's own `kill`, and a kind placed in a stage that no mod defines
    any more is not made (the stage loads without it; the log names the kind, the stage and the mod).
 5. Public parts only. A module uses the kernel (K.*), the services (svc.*), content (C.*), the game by name through
-   `K.call`/`K.hook`, and the parts DECISIONS 3 added (†). Nothing else exists for it: LumaKit is built with the same
+   `K.call`/`K.hook`, and the parts marked (†). Nothing else exists for it: LumaKit is built with the same
    LumaLink, checked by the same validator, and its `luma.json` declares its permissions like any mod. Each module's
    "Built on" line lists what it uses, and section 3's check confirms every id there is a public part.
 6. Permissions are the caller's. A module function that uses a service needing a permission (`net`, `fs` exchange,
@@ -48,7 +45,7 @@ them now. Game names cited were checked in `Nebula-LG/native/petari/include` (gr
    (top first), each mod's in the order made. A clash of names (two mods defining the actor kind `LumaBalloon`) is not
    possible: kinds, items and forms are named `<mod id>/<name>` to the game (allocated through `svc.mods`, unique and
    stable across sessions), and a stage places the short name only from its own mod's layers or with the full name.
-8. Failures are named. A wrong call is a script error at the caller's line (language 9, abi 6), its text naming the
+8. Failures are named. A wrong call is a script error at the caller's line (language 9, language/compiled-form.md 6), its text naming the
    module, the function and what was expected ("kit.hud.meter: max is 0; a meter needs max of 1 or more"). Data in
    `kit/<module>/` is checked when the mod is checked or packed (5.3), with the validator's codes. Nothing a module
    does fails silently; a module that cannot do what was asked returns `none` or `false` where its interface says so,
@@ -305,7 +302,7 @@ pub fn turn_toward(a: LiveActor, at: vec3, degrees_per_frame: f32)
 pub fn sees_player(a: LiveActor, distance: f32, degrees: f32) -> bool
 pub fn shockwave(a: LiveActor, radius: f32, effect: effect, speed: f32 = 20.0, height: f32 = 60.0)
 pub fn attach(to: LiveActor, look: model, joint: text, offset: mat34? = none) -> Attached
-pub fn placement(a: LiveActor) -> PlacementKey?          // P-15: stable across machines with the same mods
+pub fn placement(a: LiveActor) -> PlacementKey?          // stable across machines with the same mods
 pub fn find_placed(key: PlacementKey) -> LiveActor?
 pub fn spawn_game(name: text, at: vec3) -> LiveActor?     // a game class by name, its files loaded first
 ```
@@ -341,8 +338,7 @@ pub fn find(name: text) -> KindId?
 
 Data `kit/area/<name>.json`. Built on: `K.derive` (`AreaObj`), `K.hook` (`AreaObjMgr`), `K.call`, `C.stage`. Its
 `camera` takes the main camera through `kit.camera` (rule 7). Conformance: an area placed in three shapes with enter,
-inside and leave each once in order, slow and wind presets, a side camera in and out, two areas overlapping. Corpus:
-29, 50, 68, 75, 76.
+inside and leave each once in order, slow and wind presets, a side camera in and out, two areas overlapping.
 
 ### 2.8 `gravity`
 
@@ -384,11 +380,11 @@ pub fn now() -> draw.Eye                           // where the main camera is
 
 Built on: `K.hook` (`CameraDirector`), `K.call` (`MR::startEventCamera`, `MR::hidePlayer`, `showPlayer`), `draw`
 (`draw.view`†, `draw.post`† for mirror), `input`, `time` (`time.ctl`† for photo mode's hold, used by the mod).
-Request R-7: `draw.ViewCamera.Look(fn() -> draw.Eye)`, a camera computed each frame. Conformance: take and end with
+Conformance: take and end with
 the game's camera back at its own state, free camera, first person (model hidden, near plane), side camera, mirror
 (image and controls), a rig in a `draw.view` region, two mods taking the camera (rule 7).
-As built (FB, 11-12): data rigs (`view.Camera { rig: view.Rig.Fixed|Follow|Joint|World, ... }`)
-replace R-7's `Look(fn)`; a computed camera calls `aim(c, e: view.Eye)` each frame (draw.view `main_eye`, held while
+A camera is a data rig (`view.Camera { rig: view.Rig.Fixed|Follow|Joint|World, ... }`)
+or a computed camera, which calls `aim(c, e: view.Eye)` each frame (draw.view `main_eye`, held while
 the world is held). `end(c)` and `alive(c)` are module functions too.
 
 ### 2.10 `hud`
@@ -533,7 +529,7 @@ Data `kit/stage/<name>.json`: galaxies and domes. Built on: `C.stage`, `C.text`,
 `ScenarioSelectLayout`, `ScenarioSelectScene`, `MR::startStageBGM`), `K.call` (`MR::requestChangeStageInGameMoving`, `MR::requestAppearPowerStar`,
 `PowerStarEventKeeper`), `kit.progress`. Conformance: a galaxy listed in its dome after 20 stars, its stars got and
 counted, a comet star, warp, music, a stage built in code with a planet and two objects, a downloaded stage (through
-`svc.mods` offer for one start, P-18) as a galaxy.
+`svc.mods` offer for one start) as a galaxy.
 
 ### 2.17 `progress`
 
@@ -582,7 +578,7 @@ port) -> bool` (no net.Datagrams type); module functions `send/send_all -> bool`
 u8, bool))`, `on_page_message(p, fn(Page, bytes))` in place of events; `pub task clock(l) -> f64`; `PageFile { path,
 body }` for `files`; `page_send(p, data, binary)`, `page_port`, `page_alive`, `close_page`; `url` from net.local 1.4
 `address`. A star of up to 32 over UDP, the page server's WebSocket on tcp_listen.
-Source k/mods/lumakit/source/net/kit.lum; conformance h/mods/kit-net.kit, h/tests/kit-net.kit.
+Source `source/net/kit.lum`; conformance mod and test kit-net.kit.
 
 ### 2.19 `replay`
 
@@ -611,7 +607,7 @@ pub struct Puppet { fn pose(self, t: Track, frame: u32); fn set_pose(self, p: Po
                     fn remove(self); fn alive(self) -> bool }   // view() after remove(): a script error (rule 13)
 pub fn record(w: What) -> Recorder
 pub fn current_pose(w: What) -> Pose
-pub fn puppet(look: model) -> Puppet                  // lit as the player (up to 15, P-19)
+pub fn puppet(look: model) -> Puppet                  // lit as the player (up to 15)
 pub fn play_inputs(t: Track) -> pending               // What.Inputs, each frame injected
 pub fn seed(n: u32)                                   // the game's random numbers from n (MR::getRandom)
 pub struct Rewind { fn back(self, frames: u32) -> u32; fn end(self) }
@@ -643,7 +639,7 @@ pub fn touch_layout(buttons: list<(input.Action, vec2, f32)>)   // on-screen but
 Built on: `draw`, `ui`, `input` (text entry, touch, inject), `draw.view`† (ModelView). Conformance: each widget by pad,
 mouse and touch; a text field through the platform keyboard; a wheel choosing an item; a panel whose mod stops.
 
-### 2.21 `ride` (DECISIONS 3)
+### 2.21 `ride`
 
 Gives: mounts and vehicles: getting on and off, their moves, the player posed on them.
 
@@ -672,7 +668,7 @@ Data `kit/ride/<name>.json`. Built on: `K.derive` (`LiveActor`), `K.hook` (the p
 `kit.player.state`, `kit.actor`, `C.skin`, `C.anim`, `input`. Conformance: mount, ride on a planet, jump, a mounted
 move, damage throwing the rider off, dismount; the mod off while riding.
 
-### 2.22 `pointer` (DECISIONS 3)
+### 2.22 `pointer`
 
 Gives: the star pointer: where it points on screen and in the world, what B throws and what it costs, grabbing, the
 source that aims it (IR, gyro, mouse, stick), a co-star pointer.
@@ -694,7 +690,7 @@ Built on: `K.hook` (`StarPieceDirector`'s shot, `StarPointerController`), `K.cal
 cost, out of coins (nothing thrown, the game's sound), a grab, gyro aim on a pad with motion and its refusal on one
 without (named), a world point under the pointer on a planet.
 
-### 3. Coverage (the check of 5.1's condition)
+### 3. Coverage
 
 1. a module named in a corpus row's LumaKit cell without a section here, or a section's "Corpus" line missing a row
    that names it, or naming a row that does not;
@@ -702,16 +698,16 @@ without (named), a world point under the pointer on a planet.
 3. an id in a "Built on" line that is not a part of corpus section 1 (K.*, a service, C.*, a † part) or another
    LumaKit module;
 
-| Id | To | What |
+| Id | Part | What |
 |---|---|---|
-| R-1 | F, kernel 1.1 (loader) | `LUMA_IMPORT_MOD_FUNCTION`: a mod's import of another mod's exported function (mod id, version range, symbol), bound at load from the needed mod's export list; a missing or mismatched one stops the load naming both |
-| R-2 | G, lumascript-abi | the export list of a library mod and the interface file (`.lumi`) the compiler reads for `use <mod>.<module>` (rule 2) |
-| R-3 | F, kernel 1.1 | a library mod is told when a mod that needs it stops or reloads, before that mod's library is unloaded (rule 4) |
-| R-4 | F, services 2.x | a service call made by a library for a mod that needs it is checked against, and logged as, that mod's permissions (rule 6); the kernel checks the needs graph |
-| R-5 | G, validator | L700 range: `kit/<module>/` data against the module's schema (5.3), naming the file, the line and the schema's expectation |
-| R-6 | F, `mods` 2.x | a library mod reads the `kit/<its module>/` files of each enabled mod that needs it |
-| R-7 | F, `draw` 2.x | `draw.ViewCamera.Look(fn() -> draw.Eye)` and `draw.Eye { eye: vec3, at: vec3, up: vec3, fov: f32 }` |
-| R-8 | G, validator | a mod's `C.text` rows checked against the message font of each disc its regions name (as a rule) |
+| R-1 | lumalink/loader.md | `LUMA_IMPORT_MOD_FUNCTION`: a mod's import of another mod's exported function (mod id, version range, symbol), bound at load from the needed mod's export list; a missing or mismatched one stops the load naming both |
+| R-2 | language/compiled-form.md | the export list of a library mod and the interface file (`.lumi`) the compiler reads for `use <mod>.<module>` (rule 2) |
+| R-3 | lumalink/loader.md | a library mod is told when a mod that needs it stops or reloads, before that mod's library is unloaded (rule 4) |
+| R-4 | services 2.x | a service call made by a library for a mod that needs it is checked against, and logged as, that mod's permissions (rule 6); the kernel checks the needs graph |
+| R-5 | validator | L700 range: `kit/<module>/` data against the module's schema (5.3), naming the file, the line and the schema's expectation |
+| R-6 | `mods` 2.x | a library mod reads the `kit/<its module>/` files of each enabled mod that needs it |
+| R-7 | `draw` 2.x | `draw.ViewCamera.Look(fn() -> draw.Eye)` and `draw.Eye { eye: vec3, at: vec3, up: vec3, fov: f32 }` |
+| R-8 | validator | a mod's `C.text` rows checked against the message font of each disc its regions name (as a rule) |
 
 Three interfaces that read the player said nothing for a moment with no player (the title, a stage's loading, after a
 death):
@@ -720,16 +716,16 @@ death):
 - `actor.sees_player(...)` gives `false` with no player.
 - `gravity.override_player(...)` holds with no player and acts on the next one; `end()` works either way.
 No other function of the 22 modules takes or gives the player without a handle that can be tested. The coverage check,
-run again: 0 findings on the board, 3 of 3 on its own broken program (g/tests/lumakit-coverage.out).
+run again: 0 findings, 3 of 3 on its own broken program.
 
----
+### 4. Changes to the sections above
 
-Each item replaces the text it names.
+Each item replaces or adds to the text it names.
 
-K-1, rule 12. "(a `match` over an open enum needs `_`)" becomes "(a `match` over an open enum needs an
+Rule 12. "(a `match` over an open enum needs `_`)" becomes "(a `match` over an open enum needs an
 `else =>` arm, language D5.2)".
 
-K-2, rule 2 and R-1. The import row is kind 6, `LUMA_IMPORT_MOD_FUNCTION` (5 is `LUMA_IMPORT_SERVICE`). Added to rule
+Rule 2 and R-1. The import row is kind 6, `LUMA_IMPORT_MOD_FUNCTION` (5 is `LUMA_IMPORT_SERVICE`). Added to rule
 2:
 - Needs order. A needed library mod is loaded and started before every mod that needs it, and stopped after them. This
   order comes from `needs` alone, and the mod list's order does not change it.
@@ -737,10 +733,10 @@ K-2, rule 2 and R-1. The import row is kind 6, `LUMA_IMPORT_MOD_FUNCTION` (5 is 
 - A needs cycle refuses each mod in it (L800's family).
 R-1's row reads "kind 6" and "loaded and started before, stopped after, the mods that need it".
 
-K-3, rule 7. After "the newest request holds it": requests made in one frame take effect in the mod list's
+Rule 7. After "the newest request holds it": requests made in one frame take effect in the mod list's
 order, the lowest mod's first. So of two requests in one frame, the higher mod's is the newest and holds.
 
-K-4 and K-8, 2.4 `item` and 2.6 `actor`.
+2.4 `item` and 2.6 `actor`.
 - `Gives` effects, in 2.4's "Built on":
   - `Coins(n)`: `MR::incCoin(n)`, the game's own coin, with its heal, 1-up steps and event;
   - `StarBits(n)`: `MR::addStarPiece(n)` (EventUtil.hpp:19). It adds to the stocked count in the hub and the galaxy's
@@ -753,7 +749,7 @@ K-4 and K-8, 2.4 `item` and 2.6 `actor`.
     Lives, Health or Carry");
   - The data form takes the same names.
 
-K-5, 2.1 `GameForm`. The game's own names and numbers, as the code and its data use them
+2.1 `GameForm`. The game's own names and numbers, as the code and its data use them
 (MarioActor.hpp:56):
 `pub enum GameForm { Normal = 0, Invincible = 1, Fire = 2, Ice = 3, Bee = 4, Hopper = 5, Teresa = 6, Foo = 7,
 Tornado = 9 }`.
@@ -768,11 +764,11 @@ Tornado = 9 }`.
   - A form whose model is missing (`canTakePowerUp` false: a costume mod's player without it) is refused, as
     S0914 "kit.player.form.give: form is Tornado; it must be a form the player's models have".
 
-K-6 (must), 2.15 `shop` and 2.22 `Cost.Coins`: spending coins.
+2.15 `shop` and 2.22 `Cost.Coins`: spending coins.
 - `MR::incCoin(-price)` is wrong. SceneUtil.cpp:360 passes the count to `incPlayerLife(u32)`, so a negative price
   becomes a heal of about 4 billion, clamped at full health, with the heal sound. It also fires the old coin event
   with a negative count.
-- One detail in K-6 does not hold: `NebulaAchievements::countStat` adds only positive counts
+- One detail of the 2.15 item above does not hold: `NebulaAchievements::countStat` adds only positive counts
   (NebulaAchievements.cpp:768). A debit counts no coins in either path.
 - The kit's debit path: `ScenePlayingResult::incCoin(-price)` on `MR::getSceneObj` for `SceneObj_ScenePlayingResult`
   (through `K.call`: `MR::getSceneObjHolder`, `SceneObjHolder::getObj`). It is clamped at `cCoinNumMin`, gives no
@@ -790,7 +786,7 @@ K-6 (must), 2.15 `shop` and 2.22 `Cost.Coins`: spending coins.
   collected (the stat unchanged); a coin shop in the hub is refused, named; star bits are bought in the hub from
   the stock.
 
-K-7, 2.19 `replay.seed`. `seed(n)` sets `GameSystemObjHolder::mRandom` (a FastRandom, made with 0,
+2.19 `replay.seed`. `seed(n)` sets `GameSystemObjHolder::mRandom` (a FastRandom, made with 0,
 GameSystemObjHolder.cpp:24), which `MR::getRandom` reads (MathUtil.cpp:51), through `K.field`.
 - It takes effect at the next stage start, for recording and playback alike, so a recording and its playback start
   from one state.
@@ -799,17 +795,17 @@ GameSystemObjHolder.cpp:24), which `MR::getRandom` reads (MathUtil.cpp:51), thro
 - Two mods seeding follow rule 7: the newest holds until it ends.
 - "Built on" drops `K.hook (MR::getRandom)` for `K.field (GameSystemObjHolder::mRandom)`.
 
-K-9, 2.9 `camera`. `MR::startEventCamera` takes an `ActorCameraInfo` from a placed camera (CameraUtil.hpp:133),
+2.9 `camera`. `MR::startEventCamera` takes an `ActorCameraInfo` from a placed camera (CameraUtil.hpp:133),
 so it cannot drive a rig made in code.
 - `take`, `free` and the cutscene's shots go through the `CameraDirector` hook alone.
 - 2.9's "Built on" drops `MR::startEventCamera`. A stage's own placed cameras are 2.13 `cutscene`'s, by their
   camera name, and that one call is listed there.
 
-K-10, rule 3 and R-3. Added to rule 3: when a mod that needs LumaKit stops or reloads, LumaKit drops that mod's
+Rule 3 and R-3. Added to rule 3: when a mod that needs LumaKit stops or reloads, LumaKit drops that mod's
 closures (`on_frame`, `on_touch_player`, `on_spin`, the hud's follow, every `fn` it gave) at the unbind, before
 the grace. No closure of a stopping mod is called after its unbind, so no library mod calls into code
 being unloaded.
-- R-3 becomes: a library mod is told at a needing mod's unbind, before its `stop`. F puts the notification in 1.1
-  part 4 (`dependent_gone`).
+- R-3 becomes: a library mod is told at a needing mod's unbind, before its `stop`, through the kernel's
+  `dependent_gone`.
 
 Every LumaKit wrong call is S0914, and an ended handle is S0913 (rule 13), so no module has text of its own.

@@ -37,7 +37,7 @@ typedef struct LumaModLogEntry {
     const char* names[LUMA_MODLOG_ARGS];   /* the message's parameter names, in the row's order */
     const char* values[LUMA_MODLOG_ARGS];  /* VALIDATOR, LOADER, COOK: "T:<text>" a literal, "P:<phrase id>" a phrase
                                               (validator.md rev 2 item 1). CODE, CONTENT, GUARD: the values as given,
-                                              plain UTF-8 (loader D3-1's args); nothing is stripped from them */
+                                              plain UTF-8 (loader.md `report`'s args); nothing is stripped from them */
     uint32_t count;              /* how many of names/values; at most LUMA_MODLOG_ARGS */
     const char* text;            /* the line in the played language, already rendered by the source; null: the log renders
                                     it (section 3) */
@@ -64,8 +64,8 @@ types (`LumaModLogAdd`, `LumaModLogSession`), so `luma_host.h` does not change. 
   returns beside its report (null when the log's limits kept none). A repeat calls `luma::modlog::counted(entry,
   count)` with record's own count, also after the lock: one atomic (the entry's count becomes `count` when that is
   more), no lock, no lookup, nothing copied; null does nothing. Its log lines ("[mod x] ...", powers of ten) stay as
-  they are; the mod log writes none for CODE entries (one line per fault in the game's log, not two). (F-S1; The held
-  pointer makes a repeat one atomic.)
+  they are; the mod log writes none for CODE entries (one line per fault in the game's log, not two). The held
+  pointer makes a repeat one atomic.
 - Limits. At most 256 entries a mod (as the kernel's `record` keeps) and 1,024 a session of all mods together; each
   mod's first 16 entries are kept even past the session's 1,024 (so at most 1,024 + 16 a mod in all), so one mod's
   many problems never hide another mod's first ones. Past either limit for a mod, one Note for that mod
@@ -176,8 +176,8 @@ The code that shows a line writes it as a fact as it shows it (`modlog`):
 - each notice when it is drawn the first time: `modlog.notice {"mod", "code", "text"}` (the text as cut on screen);
 - each row of the log page once each time the page opens: `modlog.page {"row", "label", "value"}` (the host's; not `modscreen.log`, which is the facts of a mod whose id is `log`).
 - each entry opened whole: `modlog.entry {"mod", "pages", "text"}` (the host's; the whole text the window holds).
-This adds fields to harness `modlog` (source, level, code, column, english, count) and the fact `modlog.notice`:
-a revision request to F, section 9.
+This adds fields to harness `modlog` (source, level, code, column, english, count) and the fact `modlog.notice`
+(test-harness.md section 9).
 
 ### 5. No mod, no cost
 

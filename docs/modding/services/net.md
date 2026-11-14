@@ -8,8 +8,7 @@ Code: Header `native/include/luma_net.h` (this page says what it decides and why
 `runtime/src/luma_net.cpp`, host call `runtime/include/galaxy/luma_net_service.h`.
 
 Layer 1 is `net.local`; layer 2 is `net.internet` (section 4); UDP is minor 1 of both
-(section 5); endpoints on this device are minor 2 (section 6, branch
-`h/2.7-ipc`). Then TLS + HTTP and WebSocket; none changes 1.0.
+(section 5); endpoints on this device are minor 2 (section 6). Then TLS + HTTP and WebSocket; none changes 1.0.
 
 ### 1. What is decided here, in one list
 
@@ -63,8 +62,8 @@ Layer 1 is `net.local`; layer 2 is `net.internet` (section 4); UDP is minor 1 of
 | 2704-udp | UDP 1.1 over loopback: udp_open and udp_connect sockets, "ping" and an empty datagram one way, "pong:ping" back by send_to to the sender, sender address and port, SENT on each; send on udp_open, send_to on udp_connect, take on UDP, take_datagram outside a call: HANDLE; a far or v6 host: ARGUMENT; 65508 bytes: TOO_LARGE; net.internet udp_open and send_to: DENIED, its udp_connect to a loopback name: ERROR DENIED |
 | 2705-ipc | 1.2: ipc_listen on the mod's endpoint and ipc_connect to it, ping and pong:ping both ways, the client's close is the server's CLOSED 0; the same endpoint again: EXISTS; port on it: HANDLE; a wrong or 65-byte name: ARGUMENT; net.internet's ipc calls: DENIED; an endpoint nobody listens on: ERROR NOT_FOUND |
 
-State: WRITTEN (Windows MSVC /Zs clean; the POSIX branch is checked with the NDK's clang for aarch64-linux-android,
--Wall -Wextra -Wshadow, clean). PROVEN waits on a run on luma-int. A connect to a public host succeeding is not in
+It compiles clean with MSVC /Zs on Windows; the POSIX branch with the NDK's clang for aarch64-linux-android,
+-Wall -Wextra -Wshadow. A connect to a public host succeeding is not in
 the suite: a test run reaches no public host; that path is net.local's connect (the same Connecting and Open code)
 reached through the lookup's addresses.
 
@@ -188,8 +187,8 @@ library serves the loader's mod signatures (part 5).
    languages in NebulaText.tsv.
 8. Tests. 2706-net-tls, 2707-net-http (section 3's table grows with them).
 
-State: WRITTEN when h/2.7-tls is READY (compiles: MSVC /Zs with the host's flags, clang with the native host's,
-NDK clang aarch64 -Wall -Wextra -Wshadow). PROVEN waits on its run on luma-int.
+It compiles with MSVC /Zs and the host's flags, clang with the native host's, and NDK clang aarch64 -Wall -Wextra
+-Wshadow. It is proven when its tests have run.
 
 ### 8. WebSocket clients: minor 4 of net.local and net.internet (layer 5)
 
@@ -214,7 +213,7 @@ NDK clang aarch64 -Wall -Wextra -Wshadow). PROVEN waits on its run on luma-int.
   at every delivery (so its 1 MiB cap pauses nothing).
 - `send` and `take` on a WebSocket: LUMA_E_HANDLE, reported.
 
-Tests: h/tests/net 2708 (ws-local: the mod's own WebSocket server on tcp_listen, the client's messages both ways,
+Tests: net 2708 (ws-local: the mod's own WebSocket server on tcp_listen, the client's messages both ways,
 ping, close codes).
 
 ### 9. This machine's address: `address`, net.local 1.4 (h/net-address; net.kit's page url)
@@ -228,4 +227,4 @@ ping, close codes).
   short buf: LUMA_E_TOO_LARGE (an answer, nothing written); a null buf with size: LUMA_E_ARGUMENT, reported.
 - net.internet has no `address`: a public address is not this machine's to tell (a router's NAT decides it).
 
-Tests: h/tests/net 2709 (net-address).
+Tests: net 2709 (net-address).

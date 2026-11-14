@@ -9,10 +9,6 @@ The `mods` services: the list of mods in this session as a mod's code may read i
 `<mod id>/<name>`, unique across mods and the same in every session. Inherits services-registry whole:
 calling rules (4), events (6), a mod's life (8), no cost with no mod (10), messages (11), permissions (5).
 
-Reviewers: F (the host's session list and import path, the loader's mod exports this does not duplicate), G (the
-self-description rows, LumaScript's `mods`, the validator for spaces named in luma.json), J (the import screen's
-request path 6.1, the Mods page's line for reserved numbers, the mod log rows).
-
 ### 1. What is decided here, in one list
 
 1. Three services, each its own catalog row: `mods` 1.0 (the list; no permission), `mods.ids` 1.0 (numbers; no
@@ -89,11 +85,11 @@ typedef enum LumaModsState {
 typedef struct LumaModsInfo {
     uint32_t size;       /* sizeof(LumaModsInfo) as the mod was built */
     uint32_t order;      /* its place in the list from the top, from 1 */
-    LumaModsKind kind;   /* 4 bytes, a C enum on MSVC, GCC and Clang (G-SM5) */
+    LumaModsKind kind;   /* 4 bytes, a C enum on MSVC, GCC and Clang */
     LumaModsState state;
     uint32_t has_code;   /* 1: code for this platform, 0: none */
     uint32_t reserved;   /* 0 */
-    char id[68];         /* registry 3: NUL-terminated UTF-8, cut at a character's end (R-5c) */
+    char id[68];         /* registry 3: NUL-terminated UTF-8, cut at a character's end */
     char name[132];
     char version[36];    /* luma.json `version`, "" when it has none */
 } LumaModsInfo;          /* 1.0: 260 bytes */
@@ -149,8 +145,7 @@ typedef struct LumaModsInstallService {
 No `switch` space. Global stage switches (numbers 1000 up, StageSwitch.cpp) are game data: the game has
 no by-number path (`SwitchIdInfo(s32, const TableIter&)` is its only constructor; `StageSwitchContainer::
 mGlobalSwitches` is a ZoneSwitch), and a service for switches would be engine code knowing a concept. A mod reaches
-them by the game's functions and fields by name (1.5); a missing row for `mGlobalSwitches` is 1.5's gap (F takes
-it). The census of the global numbers the discs' stages use is still written for the docs (section 7), not for 1.0.
+them by the game's functions and fields by name (1.5); a missing row for `mGlobalSwitches` is 1.5's gap. The census of the global numbers the discs' stages use is still written for the docs (section 7), not for 1.0.
 
 Not spaces at all, and where they are: event flags and save-flag names are named, saved by a 16-bit hash of the name
 (GameEventFlagTable getSaveHash): a mod's own flags are `save`'s per-file values (services-save); effect and sound
@@ -186,7 +181,7 @@ bits of a stage's collision data (3.9). A space is added to this table with its 
 | 166 | `Mods.OptionNotOwn` | {mod} asked for {key}, another mod's option; a mod reads only its own. | Error |
 | 167 | `Mods.OptionBufferShort` | {mod} gave {size} bytes for its option {key}, which needs {needed}. | Error |
 
-### 6. Tests (builds and runs: DECISIONS 7)
+### 6. Tests
 
 | Test | Must show |
 |---|---|
@@ -207,28 +202,29 @@ bits of a stage's collision data (3.9). A space is added to this table with its 
 | 2255 | mistakes: an unknown key, "<other mod>/<key>", a short buf: NOT_FOUND, DENIED, TOO_LARGE, each its row, nothing written |
 | 2256 | hostile text values typed on the page: 256 code points, every script the fonts carry, a NUL typed, control characters: `option` gives the page's text byte for byte |
 
-### 7. Owed (none blocks 1.0)
+### 7. Still to come (none blocks 1.0)
 
 - For the docs (section 3): the census of global switch numbers the three discs' stages use (every placement's
   SW_* fields at 1000 and up), by a script over the extracted stages (`lumalink extract`), its output in census/.
-- J: the import screen's entry for a request from code (6.1), and the REMOVED MODS line.
-- G: the self-description rows for the three services; whether LumaScript's `mods` reads `LumaModsInfo` as a record.
+- The import screen's entry for a request from code (6.1), and the REMOVED MODS line.
+- The self-description rows for the three services; whether LumaScript's `mods` reads `LumaModsInfo` as a record.
 
-- G-SM1: `LumaModsInstallEvent` with `LUMA_MODS_INSTALL_EVENT_DONE = 1` (section 2), commented in the form.
-- G-SM2: LUMA_E_CANCELLED dropped. Closing the screen without answering is the player's no (`LUMA_E_DENIED`);
-  `cancel`, a mod's stop and the game's end send nothing (item 9).
-- G-SM3: the sensor row names the character group and the pairs it meets; 2252 shows a hit with the player's sensor.
-- G-SM4: item 6 says numbers after a meeting depend on asking order; co-op sends keys.
-- G-SM5: `kind` and `state` typed `LumaModsKind` and `LumaModsState`; `has_code` stays `uint32_t` 0 or 1.
-- J, all in: J-SM1 ask_install's exact form (section 4); J-SM2 LUMA_OK starts at the next start; J-SM3 BUSY across
-  mods; J-SM4 DON'T ASK AGAIN (`install.ask`); J-SM5 copied, NOT_FOUND unreported, FORMAT when changed; J-SM6 no
-  CANCELLED; J-SM7 one REMOVED MODS line, kept/forget calls, 162 `Mods.Forgotten`; J-SM8 IdMoved's English; J-SM9 the
-  name in the player's language; J-SM10 the platform clause out; J-SM11 the file's name only; J-SM12 takes_over moves
-  the keys (164 `Mods.TookOver`, shared with services-save).
+### 7a. More rules
 
-- F-SM1:
-- F-SM2: no `switch` space; switches are game data by name (1.5); the census stays for the docs (sections 3, 7).
-- F-SM3: item 3 says `state` changes between frames only.
+- `LumaModsInstallEvent` has `LUMA_MODS_INSTALL_EVENT_DONE = 1` (section 2).
+- There is no LUMA_E_CANCELLED. Closing the screen without answering is the player's no (`LUMA_E_DENIED`); `cancel`,
+  a mod's stop and the game's end send nothing (item 9).
+- The sensor row names the character group and the pairs it meets; 2252 shows a hit with the player's sensor.
+- Numbers after a meeting depend on asking order (item 6); co-op sends keys.
+- `kind` and `state` are typed `LumaModsKind` and `LumaModsState`; `has_code` is a `uint32_t` 0 or 1.
+- `ask_install` has the form of section 4. LUMA_OK takes effect at the next start. BUSY holds across mods. The
+  player's DON'T ASK AGAIN is `install.ask`. The file is copied; NOT_FOUND is not reported; FORMAT is given when the
+  file changed.
+- One REMOVED MODS line, with the kept and forget calls and row 162 `Mods.Forgotten`. A mod's name is shown in the
+  player's language, and a file by its name only.
+- `takes_over` moves the keys (row 164 `Mods.TookOver`, shared with services/save.md).
+- There is no `switch` space: switches are game data by name (1.5).
+- `state` changes between frames only (item 3).
 
 ### As written
 
@@ -274,7 +270,7 @@ only grows at its end, registry 3).
   any number is safe; one that is no running mod is refused like a mod that does not need the asker.
 - Who may ask: `of` running, and `of` is the asking mod itself or needs it. Otherwise LUMA_E_DENIED and
   Mods.KitNotNeeded (168) once in the asker's log (the kernel counts repeats); LumaScript gives empty / none. Inside a
-  library's export, services see the caller as the mod (lumascript-abi 6), so a module reading the data of `caller()`
+  library's export, services see the caller as the mod (language/compiled-form.md 6), so a module reading the data of `caller()`
   there reads that mod's own; at the library's own frame or start, it reads the mods `needing()` gives.
 - `module` and `name`: 1 to 64 of `a-z 0-9 _ - .`, not starting with a dot, no `..`: no path part can be in them;
   another is LUMA_E_ARGUMENT, Service.Argument (a script error at the caller's line). A file whose stem is not such a
@@ -290,7 +286,7 @@ only grows at its end, registry 3).
   Mods.KitTooLarge `{mod}: {where} found {file} of {size} bytes, past the 4 MiB a kit file may have; it read
   nothing.`, both Error, 14 languages in NebulaText.tsv.
 
-### 11. A caller's place in the list (lumakit 2.12 rule 7; h/mods-of on h/roll4)
+### 11. A caller's place in the list (lumakit 2.12 rule 7)
 
 `of_mod(mod, which, out)`, at the end of mods 1.0 (unreleased, so in place as section 10): `which` is a caller()
 number (the LumaMod pointer as LumaScript holds it); *out is that mod's LumaModsInfo as `at` gives it, so

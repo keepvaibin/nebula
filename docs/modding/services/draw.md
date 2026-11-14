@@ -19,7 +19,7 @@
     - Calls appended:
       - `rig(mod, view, camera)`: the view follows the rig each frame.
       - `eye_of(mod, camera, out eye)`: where the rig's eye is this frame (what the kit gives the main camera).
-    - A rig whose actor died keeps its last eye. R-7's `Look(fn() -> Eye)` is a script that computes an Eye each frame
+    - A rig whose actor died keeps its last eye. A `Look(fn() -> Eye)` is a script that computes an Eye each frame
       and calls `camera` with it; no closure crosses.
 15. draw.post (layer 8; `luma_draw_post.h`, service `draw.post` 1.0, no permission). A post program is a full-screen
     pixel program over the frame.

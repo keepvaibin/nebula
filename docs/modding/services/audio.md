@@ -88,7 +88,7 @@ Header `native/include/luma_capture.h`, host `runtime/src/luma_capture.cpp`. Eac
 
 Platforms: Windows (WASAPI shared capture of the default endpoint; Media Foundation's first video source through its
 video processor) and Android (AAudio's default input; the first camera through Camera2, YUV 4:2:0 converted to RGBA).
-Linux, macOS and iOS have no capture backend: there `open` answers LUMA_E_ABSENT. Tests: h/tests/audio 2606-2607.
+Linux, macOS and iOS have no capture backend: there `open` answers LUMA_E_ABSENT. Tests: audio 2606-2607.
 
 ## 8. Places and the game's own sounds (layer 1b)
 
@@ -113,7 +113,7 @@ Linux, macOS and iOS have no capture backend: there `open` answers LUMA_E_ABSENT
   `luma_game_listener`); a host without all of them answers game_play LUMA_E_ABSENT and hears placed voices as voices
   with no place.
 
-Tests: h/tests/audio 2608 (audio-place), 2609 (audio-game).
+Tests: audio 2608 (audio-place), 2609 (audio-game).
 
 ## 8a. Game sounds a mod's sound stands in for (layer 1c)
 
@@ -136,7 +136,7 @@ Tests: h/tests/audio 2608 (audio-place), 2609 (audio-game).
   lower than all of them is not played, and the game's stays silent too.
 - Facts in a harness run: `audio.replacing {count}` at the start; `audio.replaced {name, mod, level, placed}` for each
   voice started.
-- Test: h/tests/audio 2610-audio-replace (unrun).
+- Test: audio 2610-audio-replace.
 - Not yet: the note to the losing mod's log (needs a row in 14 languages); a mod turned off mid-session keeps its
   replacements until the next start.
 

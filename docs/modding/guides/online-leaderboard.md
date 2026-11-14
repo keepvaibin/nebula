@@ -169,7 +169,8 @@ task ask_name() {
         return
     }
     while typing {
-        hud.set_text(prompt, text "Board.AskName"(name: input.text_peek(r) ?? ""))
+        let (so_far, caret) = input.text_peek(r)
+        hud.set_text(prompt, text "Board.AskName"(name: so_far))
         wait 1 frames
     }
     hud.remove_text(prompt)
@@ -198,11 +199,12 @@ task submit(on_star: text, frames: u32) {
     }
 }
 
-// A line over the game for five seconds, and in the mod log.
+// Why a time was not sent, on a message screen until the player closes it (A or B), and in the mod log. A HUD line
+// holds 64 characters; the message's pane holds the whole sentence.
 fn say(line: text) {
     log line
     log fact "said" line
-    hud.text(hud.Corner.Top, line, 300)
+    screen.message(line)
 }
 
 // ---- The board, from the pause menu.
@@ -546,8 +548,9 @@ What each part does:
   is typed so far (`input.text_peek`). Enter takes the name; Esc, Android's Back or a lost window focus takes none,
   and that star's time is not sent. The
   name is kept with `save.global`, so it is asked once, not once a game file.
-- Sending. `submit` posts the time as JSON. A time that is not sent gives one line over the game for 5 seconds
-  (`say`) that says why.
+- Sending. `submit` posts the time as JSON. When a time is not sent, `say` shows why with `screen.message`, which
+  stays until the player presses A or B. A HUD line holds at most 64 characters, so `hud.text` keeps only the short
+  name prompt.
 - The board. `menu.add_pause_entry` adds Leaderboard to the pause menu. `screen.list` shows the board with
   Loading... while the server answers, then the ten times and the player's place in its title. When the request
   fails, `screen.message` says why. B closes it.
@@ -596,9 +599,9 @@ lumalink test online-leaderboard
   Backspace, `o` and Enter type Mario, and the server gets the star, the name and a time of more than 600 steps as
   JSON. In the galaxy again, PLUS and A on Leaderboard show the ten times with `Your place: 11` in the title, and B
   closes it. A second star is sent under Mario with no prompt.
-- `tests/no-name`: Esc on the prompt. Nothing is sent and the line over the game says no name was typed; the next
+- `tests/no-name`: Esc on the prompt. Nothing is sent and the message says no name was typed; the next
   star asks again.
-- `tests/local-declined`: `net.local` refused, `net.internet` allowed. The board and the line over the game say the
+- `tests/local-declined`: `net.local` refused, `net.internet` allowed. The board and the message say the
   mod may not reach this computer, and the server gets no request.
 - `tests/internet-declined`: `net.internet` refused, the server `https://board.invalid/board`. The board and the line
   over the game say the mod may not reach the internet.

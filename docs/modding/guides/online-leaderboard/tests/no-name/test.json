@@ -1,7 +1,7 @@
 {
   "harness": 1,
   "name": "leaderboard-no-name",
-  "about": "With the test server on this computer, the player closes the name prompt with Esc: the star's time is not sent, the line over the game says no name was typed, and the next star asks again; there Mario and Enter send that star's time",
+  "about": "With the test server on this computer, the player closes the name prompt with Esc: the star's time is not sent, the message says no name was typed, and the next star asks again; there Mario and Enter send that star's time",
   "proves": ["services.input", "services.save.global"],
   "mods": [
     "../../../lumakit",
@@ -16,7 +16,9 @@
     { "at": 650, "key": "esc" },
     { "after": { "fact": "mod.online-leaderboard.said", "exists": true }, "wait": true, "timeout": 300 },
     { "at": 700, "picture": "said" },
-    { "after": { "fact": "mod.online-leaderboard.said", "exists": true }, "stage": { "name": "EggStarGalaxy", "scenario": 1 }, "timeout": 300 },
+    { "at": 710, "hold": ["A"], "frames": 4 },
+    { "at": 740, "picture": "said-closed" },
+    { "at": 760, "stage": { "name": "EggStarGalaxy", "scenario": 1 } },
     { "after": { "fact": "stage.ready", "exists": true, "when": "next" }, "wait": true, "timeout": 1500 },
     { "at": 2000, "call": "GameSceneFunction::requestPowerStarGetDemo", "signature": "void()" },
     { "at": 2040, "picture": "asked-again" },

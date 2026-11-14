@@ -123,14 +123,6 @@ fn begin_attempt() {
     }
 }
 
-// The ghost's figure: the game's Cosmic Mario model (ObjectData/GhostMario), as a kit puppet.
-fn ghost_puppet() -> replay.Puppet? {
-    if let look = model_named("GhostMario") {
-        return replay.puppet(look)
-    }
-    return none
-}
-
 task load_ghost(file: text) {
     guard let data = wait fs.read(file), let track = replay.decode(data) else {
         return
@@ -140,7 +132,7 @@ task load_ghost(file: text) {
         return
     }
     ghost_track = track
-    ghost = ghost_puppet()
+    ghost = replay.puppet(model "GhostMario")           // the game's Cosmic Mario model (ObjectData/GhostMario)
     log fact "ghost" track.frames
 }
 
@@ -268,7 +260,7 @@ task watch(track: replay.Track) {
     watching = true
     MR::offPlayerControl()
     MR::hidePlayer()
-    let p = ghost_puppet()
+    let p = replay.puppet(model "GhostMario")
     let bar = hud.text(hud.Corner.Bottom, "")
     view_puppet = p
     view_camera = camera.free()
@@ -290,9 +282,7 @@ task watch(track: replay.Track) {
                 speed -= 1
                 log fact "speed" speed_names[speed]
             }
-            if let q = p {
-                replay.pose(q, track, at as u32)
-            }
+            replay.pose(p, track, at as u32)
             hud.set_text(bar, "{speed_names[speed]}   {clock(at as u32)} / {clock(track.frames)}")
             at += speeds[speed]
         }

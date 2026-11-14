@@ -1,7 +1,7 @@
 {
   "harness": 1,
   "name": "leaderboard-server-down",
-  "about": "The server option is an address on this computer where no server listens (http://127.0.0.1:47614/board): the board and the line over the game say the server cannot be reached, and the game goes on",
+  "about": "The server option is an address on this computer where no server listens (http://127.0.0.1:47614/board): the board and the message say the server cannot be reached, and the game goes on",
   "proves": ["services.net.local", "services.net.http"],
   "mods": [
     "../../../lumakit",

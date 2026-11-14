@@ -84,11 +84,11 @@ page and in the mod log. There is no third state.
 | `Start.Part.Space` | `Space for mod files ({needed} free needed)` | needed |
 | `Start.ModOffCook` | `Off: its files could not be prepared (see Mods > Log)` | |
 
-### 5. Requests
+### 5. Where the game does it
 
-- F: the order of section 1 in `start_plugins` and the mod scan; the installer's check of section 2's parts; harness
-  `setup-failed` when a part is missing.
-- H: `draw.native`'s capability names are the list of 3.
+- `start_plugins` and the mod scan follow section 1's order; the installer checks section 2's parts; the harness
+  reports `setup-failed` when a part is missing.
+- `draw.native`'s capability names are the list of 3.
 
 ### 6. Tests
 

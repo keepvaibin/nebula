@@ -98,7 +98,8 @@ task ask_name() {
         return
     }
     while typing {
-        hud.set_text(prompt, text "Board.AskName"(name: input.text_peek(r) ?? ""))
+        let (so_far, caret) = input.text_peek(r)
+        hud.set_text(prompt, text "Board.AskName"(name: so_far))
         wait 1 frames
     }
     hud.remove_text(prompt)
@@ -127,11 +128,12 @@ task submit(on_star: text, frames: u32) {
     }
 }
 
-// A line over the game for five seconds, and in the mod log.
+// Why a time was not sent, on a message screen until the player closes it (A or B), and in the mod log. A HUD line
+// holds 64 characters; the message's pane holds the whole sentence.
 fn say(line: text) {
     log line
     log fact "said" line
-    hud.text(hud.Corner.Top, line, 300)
+    screen.message(line)
 }
 
 // ---- The board, from the pause menu.

@@ -65,8 +65,7 @@ D12 maps a 0/1 u32; if it does not, the header's `recursive` stays u32 and the e
 
 - `save.game`'s offer and `mods.install` read a file the mod names in its data folder: `find_data_file(id, path,
   &out)` (worker or other non-game thread), `path_in_rule` at the call. `mods.install` checks its path with
-  `path_in_rule` plus a ".luma" ending. Both call find_data_file on the game thread (h/6.1-wire,
-  h/2271-offer): a few metadata reads for a request the player answers on a screen that pauses the game; offer
+  `path_in_rule` plus a ".luma" ending. Both call find_data_file on the game thread: a few metadata reads for a request the player answers on a screen that pauses the game; offer
   then reads the file (at most 4 MiB) there too.
 - REMOVED MODS (services-mods 8), wired: `data_ids` adds a mod with only a data folder, `has_data_folder`
   and `data_bytes(id)` fill the line (`KeptMod.data_bytes`), FORGET calls `forget_data(id)` (queued on the worker
@@ -100,6 +99,3 @@ D12 maps a 0/1 u32; if it does not, the header's `recursive` stays u32 and the e
 | 2310, 2310b | fs.exchange declined (consent class) / undeclared L506 |
 | 2311 | data folders are per mod, Exchange is shared |
 | 2312 | 256 MiB full LIMIT said once, remove "" |
-
-Run hf1d: 12/13; 2310 is the consent class. Tip c8f5652d5 adds the later
-commits above; they change no answer the tests check.

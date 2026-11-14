@@ -88,7 +88,7 @@ fn hit(shot: projectile.Hit) -> projectile.Then {
     return projectile.Then.Burst
 }
 
-task flash(e: ref<LiveActor>) {                         // draw.inst (DECISIONS 3)
+task flash(e: ref<LiveActor>) {                         // draw.inst
     for f in 0..flash_frames {
         let fade = 1.0 - f as f32 / flash_frames as f32
         if let a = e.get() { draw.tint(a, multiply: #FFFFFF, add: #FFD700 * fade) } else { stop }
@@ -236,7 +236,7 @@ on start { connect() }
 
 fn connect() {
     link = if use_pipe and system.platform() == system.Platform.Windows {
-        net.pipe_open("LiveSplit")                      // net.ipc (DECISIONS 3)
+        net.pipe_open("LiveSplit")                      // net.ipc
     } else {
         net.tcp_connect("127.0.0.1", port as u16)
     }
@@ -329,8 +329,7 @@ fn pad2(n: u32) -> text { return if n < 10 { "0{n}" } else { "{n}" } }
 ```
 
 Needs: `http.get/post` (waited), `net.url_escape`, `input.text` (waited, cancellable), `save.global_text`,
-`kit.screen.list` with rows updated, tuples `(int, Entry)` with `.0 .1` (in the definition: section 3 is amended to
-list tuples, finding P-1 below).
+`kit.screen.list` with rows updated, tuples `(int, Entry)` with `.0 .1` (language.md section 3 lists tuples).
 
 ### A.5 Balloon World
 
@@ -545,9 +544,7 @@ that they are virtual); `states` reading `isState`; `kit.stage.define_galaxy`, `
 
 ### A.7 The changes nebula-coop makes, one by one
 
-Not yet written: nebula-coop (github NebulaCoop/nebula-coop, a host-authoritative online fork)
-has no copy on this machine. Its changes must be listed from its source, each as a hook or call that exists,
-before this section can be written. Open item P-2 (part D).
+Written out after section D, below.
 
 ### A.8 Two unrelated mods together
 
@@ -562,7 +559,7 @@ of phase 9 shows, with a third mod written to conflict).
 
 ### B. Twenty ideas drawn at random
 
-Drawn by `random.Random(20261111).sample(sorted(rows), 20)` over ideas.md version 2's 198 rows:
+Drawn by `random.Random(20261111).sample(sorted(rows), 20)` over the 198 rows of the ideas list:
 11, 19, 29, 30, 37, 41, 47, 65, 69, 74, 81, 89, 93, 114, 118, 122, 123, 150, 167, 193. Row 81 is Balloon World (A.5).
 
 ### B.11 Moon jump (Gecko)
@@ -803,7 +800,7 @@ use svc.input
 // The second player is a second instance of the game's own player, updated with the player globals switched
 // around it (the sm64coopdx method); kit.player.character gives that instance and its pad.
 let second = character.second_player(character.Second { look: model "LuigiCoop", pad: input.pad(2) })
-let view = draw.view(draw.View {                         // draw.view (DECISIONS 3)
+let view = draw.view(draw.View {                         // draw.view
     camera: camera.follow(second.view(), distance: 1200.0)
     region: draw.Region { x: 0.5, y: 0.0, w: 0.5, h: 1.0 }  // right half
 })
@@ -872,8 +869,8 @@ hook before CoinCounter::appear() { if hide { skip } }
 ```
 
 A change of the option applies from the next time the HUD appears (a counter already shown stays until it goes):
-the game has no "hide every counter now" function, and the language does not invent one. Finding P-10: say in the
-mod's option text that it applies from the next appearance, or find the HUD's own hide path in 1.x.
+the game has no "hide every counter now" function, and the language does not invent one. The mod's option text
+says it applies from the next appearance.
 
 ### B.123 A custom title screen and logo
 
@@ -882,7 +879,7 @@ and `layers/base/patches/LayoutData/Title.arc/Title.brlyt.json` moving panes by 
 
 ### B.150 Cloud save sync
 
-`luma.json`: permissions `net` (hosts: the mod's server) and `save.game` (DECISIONS 3).
+`luma.json`: permissions `net` (hosts: the mod's server) and `save.game`.
 
 ```lumascript skip a listing from the part's contract, not a module that builds alone
 use svc.save.game
@@ -981,37 +978,33 @@ Besides these, the language's own: `same`, `ref`, `hash32`, `min`/`max`/`cross`,
 data file read at build, checked), `font "..."`, `movie "..."`, `sound_named(...)` (the one run-time content lookup),
 `on layers` (the kernel's `layers` call), `on draw <point>`.
 
-### D. Findings against the definition
+### D. What the programs use beyond the first definition
 
-- P-1: tuples (`(int, Entry)`, `.0`, `.1`) are used by `indexed()` and are not in section 3. Add them.
-- P-2: nebula-coop's source is not on this machine; A.7 waits for a survey of its changes.
-- P-3: `guard let x = ... else { }` is used in A.2, A.4, A.5 and is not in section 4. Add it.
-- P-4: `color * f32` and `color + color` (A.1) are not in section 3's operators. Add them.
-- P-5: `same_stream(a, b)` in A.3 shows that identity of service handles (streams) needs `same`; section 3 gives
-  `same` for views only. Extend it to handles.
-- P-6: `wait <expression>` that yields a value (`let reply = wait http.get(...)`) is used everywhere and section 11.1
-  lists only `wait event`. Define `wait` on a pending result as an expression whose value is the result.
-- P-7: overrides in a `class` (A.6) call the game's own virtuals by their names with the base's signature; section 5.5
-  should say the parameter types may be omitted when the override's name has one virtual.
-- P-8: a game function returning `Vec3f *` (`MR::getPlayerPos`) gives a `vec3` copy (B.29, A.5); section 7.2 lists
-  pointers to vectors only as `var` arguments. Add results.
-- P-9 (not the language): rumble needs no `input.dev`: the game's own `MR::tryRumblePad*` calls rumble the player's
-  pad through the host. `input.dev` keeps motion, touchpads, HID/MIDI and rumble beyond the game's patterns.
-- P-10: B.122 cannot hide counters already shown without a function the game lacks; the program applies its option
-  from the next appearance. Not a language gap; 1.x may find the HUD's own hide path.
-- P-11: `on draw <point>`, `on layers`, `data "<file>"`, `font`, `movie`, `sound_named` are used and not in the
-  definition (sections 10, 12). Add them.
-- P-12:
+language.md defines each of these; the programs above use them as it does.
+- Tuples (`(int, Entry)`, `.0`, `.1`), which `indexed()` gives (section 3).
+- `guard let x = ... else { }` (section 4), used in A.2, A.4 and A.5.
+- `color * f32` and `color + color` (section 3's operators), used in A.1.
+- `same(a, b)` on service handles (streams) as well as views (section 3); A.3 compares two streams with it.
+- `wait` on a pending result is an expression whose value is the result (`let reply = wait http.get(...)`), beside
+  `wait event` (section 11.1).
+- An override in a `class` (A.6) names the game's virtual by its name; the parameter types may be omitted when the
+  name has one virtual (section 5.5).
+- A game function returning `Vec3f *` (`MR::getPlayerPos`) gives a `vec3` copy (section 7.2), used in B.29 and A.5.
+- `on draw <point>`, `on layers`, `data "<file>"`, `font`, `movie` and `sound_named` (sections 10 and 12).
 
-P-2 (nebula-coop) and P-9, P-10 (not language) stay open here.
+Two rules outside the language:
+- Rumble needs no `input.dev`: the game's own `MR::tryRumblePad*` calls rumble the player's pad through the host.
+  `input.dev` keeps motion, touchpads, HID/MIDI and rumble beyond the game's patterns.
+- B.122 cannot hide counters already shown, since the game has no function for it; the program applies its option
+  from the next appearance.
 
 ---------------------------------------------------------------------------------------------------------------------
 
 ### A.7: the changes nebula-coop makes, one by one
 
-Replaces the placeholder A.7 above and closes P-2. Source surveyed: github.com/NebulaCoop/nebula-coop (a fork of the
+Source surveyed: github.com/NebulaCoop/nebula-coop (a fork of the
 whole game, 3,399 commits; read on the web, nothing downloaded), its `docs/COOP_PLAN.md` and folder list. A name the
-program needs that no row, kit module or service gives is a finding (part D2 below), never written as if it existed.
+program needs that no row, kit module or service gave when it was written is listed in D2 below.
 
 One mod, `coop`, in several files of one module. Host-authoritative: the host's game decides the shared world; each
 guest runs its own game and sends only its own player and its own hits.
@@ -1035,7 +1028,7 @@ struct Peer { id: u8, name: text, character: text, pose: replay.Pose?, puppet: r
 struct Room { host: bool, peers: map<u8, Peer>, me: u8, mods: list<text>, cheats: bool, rewind_ms: u32 }
 
 var room: Room? = none
-var link: net.Datagrams? = none          // P-13: svc.net has tcp, websocket and http only
+var link: net.Datagrams? = none          // datagrams (D2)
 var current: LiveActor? = none           // the actor whose movement is running (2.5 below)
 ```
 
@@ -1071,7 +1064,7 @@ fn open_coop_menu() {
 }
 
 // Each room plays on its own save set, kept apart from the player's own files.
-fn use_room_saves(id: text) { save.use_set("coop/{id}") }     // P-17: svc.save has no save sets
+fn use_room_saves(id: text) { save.use_set("coop/{id}") }     // save sets (D2)
 
 // The character a player chose; the game's one question about it.
 hook after MR::isPlayerLuigi() -> luigi {
@@ -1090,13 +1083,13 @@ A host's room names the mods it plays with; a guest lacking one is offered it.
 fn join_room_mods(r: Room) {
     for id in r.mods {
         if !mods.installed(id) {
-            // P-18: a mods service that fetches a .luma, runs the validator on it, and asks the player, naming
+            // a mods service that fetches a .luma, runs the validator on it, and asks the player, naming
             // its permissions (a mod with `native` code above all), before it is installed for this room only.
             let offer = wait mods.offer_for_session(id, from: host_address())
             if !offer.accepted { leave(text "Coop.ModRefused"); return }
         }
     }
-    wait mods.use_for_session(r.mods)           // P-18: the set for one start, the player's list untouched
+    wait mods.use_for_session(r.mods)           // the set for one start, the player's list untouched
 }
 ```
 
@@ -1105,8 +1098,8 @@ fn join_room_mods(r: Room) {
 ```lumascript skip a listing from the part's contract, not a module that builds alone
 // The world does not stop for one player: while the pause menu is up, the scene still moves.
 hook after GameScene::exePauseMenu() {
-    if room != none { self.exeSceneAction() }   // written, not proven: the 1.x run shows whether the scene's
-}                                               // action may run under the pause menu (P-21)
+    if room != none { self.exeSceneAction() }   // not yet shown by a run: whether the scene's
+}                                               // action may run under the pause menu (D2)
 
 // Galaxy select and the grand stars only when the room allows cheats.
 hook before GameSceneFunction::requestShowGalaxyMap() { if let r = room, !r.cheats { skip } }
@@ -1126,13 +1119,13 @@ is that: Mario's model and animations, posed from data, drawn in the player's li
 ```lumascript skip a listing from the part's contract, not a module that builds alone
 fn pose_peer(p: Peer, pose: replay.Pose) {
     let puppet = p.puppet ?? replay.puppet(model p.character == "luigi" ? "Luigi" : "Mario")
-    puppet.set_pose(pose)                       // P-19: one pose, not only a track's frame
+    puppet.set_pose(pose)                       // one pose, not only a track's frame
     p.puppet = puppet
 }
 
 on frame {
     guard let r = room, let l = link else { return }
-    let mine = replay.current_pose(replay.What.Player)   // P-19
+    let mine = replay.current_pose(replay.What.Player)
     l.send_all(encode_pose(r.me, mine))
 }
 ```
@@ -1196,7 +1189,7 @@ fn phase(boss: NerveExecutor, class: text, step: text) {
     guard let r = room else { return }
     if r.host { tell_all("phase {class} {step}") }
     else if let want = host_phase(class), want != step {
-        boss.setNerve(nerve "{class}.{want}")      // P-14: nerves by name; only `const Nerve *` addresses exist
+        boss.setNerve(nerve "{class}.{want}")      // nerves by name (D2)
     }
 }
 ```
@@ -1233,12 +1226,12 @@ hook after CometEventExecutorTimeLimit::getTimeLimit() -> limit {
 
 ```lumascript skip a listing from the part's contract, not a module that builds alone
 // Every object the host has is named the same on every machine by its placement.
-fn object_id(a: LiveActor) -> actor.PlacementKey { return actor.placement(a) }  // P-15: stable placement ids
+fn object_id(a: LiveActor) -> actor.PlacementKey { return actor.placement(a) }  // stable placement keys (D2)
 
 hook after LiveActor::makeActorDead() {
     if let r = room, r.host { tell_all("dead {object_id(self)}") }
 }
-fn apply_dead(key: actor.PlacementKey) { if let a = actor.find_placed(key) { a.makeActorDead() } }   // P-15
+fn apply_dead(key: actor.PlacementKey) { if let a = actor.find_placed(key) { a.makeActorDead() } }
 
 // The rabbits' chase is shared (nebula-coop's DemoRabbit, RunawayRabbitCollect); switches are each player's own:
 // SwitchArea and ClipFieldSwitch are not hooked.
@@ -1259,7 +1252,7 @@ wrap every override of LiveActor::movement() {
 }
 
 hook after MR::getPlayerPos() -> p {
-    if let r = room, let a = current { result = nearest_player(r, a.mPosition) }   // P-20: a changed pointer result
+    if let r = room, let a = current { result = nearest_player(r, a.mPosition) }   // a changed pointer result (D2)
 }
 hook after `MR::calcDistanceToPlayer(const LiveActor *)`(a) -> d {
     if let r = room { result = length(nearest_player(r, a.mPosition) - a.mPosition) }
@@ -1279,8 +1272,8 @@ learn the address a router gives, and NebulaNet's relay when the two ends cannot
 
 ```lumascript skip a listing from the part's contract, not a module that builds alone
 fn host() {
-    link = net.datagrams_bind(port: option("coop_port"))       // P-13
-    let outside = wait net.stun(option("coop_stun"))           // P-13: the address and port seen from outside
+    link = net.datagrams_bind(port: option("coop_port"))
+    let outside = wait net.stun(option("coop_stun"))           // the address and port seen from outside
     room = Room { host: true, peers: {}, me: 0, mods: mods.list_on().map(fn(m) { return m.id }),
                   cheats: option("coop_cheats"), rewind_ms: option("coop_rewind_ms") }
     screen.message(text "Coop.Hosting", outside)
@@ -1301,7 +1294,7 @@ fn host_phase(class: text) -> text? { return said_text("phase {class}") }
 fn host_time_left() -> u32 { return said_number("comet") as u32 }
 fn any_peer_alive() -> bool { return room?.peers.values().any(fn(p: Peer) -> bool { return p.pose?.alive ?? false }) ?? false }
 fn nearest_player(r: Room, from: vec3) -> vec3 {
-    var best = MR::getPlayerPos()        // the local player: P-22 (a hook calling the function it hooks)
+    var best = MR::getPlayerPos()        // the local player: a hook's own call is not hooked again
     for p in r.peers.values() {
         if let pose = p.pose, length(pose.position - from) < length(best - from) { best = pose.position }
     }
@@ -1318,41 +1311,38 @@ of the same kind (bytes in and out with the standard `bytes` module, part C), no
 `kit.replay.Pose`, `current_pose`, `Puppet.set_pose`; `screen.choose` with a `Choice`; `time.real_seconds`,
 `time.game_version`.
 
-### D2. Findings from A.7
+### D2. What A.7 needs beyond the programs before it
 
-- P-2 closed: A.7 is written from nebula-coop's own plan and folders; every game name it uses is a row.
-- P-13 (svc.net): datagrams (`datagrams_bind`, `send_to`, `send_all`, `received`) and a STUN request; a relay for two
-  ends that cannot meet is a server the mod names, not a game part. Every program before A.7 needed only tcp,
-  websocket and http. Permission: the same `net` permission, the player shown the port.
-- P-14 (self-description 1.8): nerves by name (`nerve "DinoPackunVs1.BattleLv2"`, a compile-time check that the class
-  has it), so a mod can set a phase on another machine. Today only `const Nerve *` addresses, which differ per build
-  and platform.
-- P-15 (kit.actor, kernel K.actor): a stable key for a placed object (zone, layer, index in its placement list) and a
-  lookup from the key, the same on every machine with the same mods. `PlacementId` exists in the game only as a value
-  built from a `TableIter`, not callable from LumaScript (7.2).
-- P-16: none needed for the current actor: `wrap every override of LiveActor::movement()` gives it (cost: one wrap per
-  moving actor per frame, only while the mod is on; measured with phase 1's hook cost).
-- P-17 (svc.save): save sets: a mod may switch the game's save files to a folder of its own (`coop/<room>`) and back,
-  the player's own files untouched.
-- P-18 (svc.mods): the list of mods on (`list_on`, `installed`); fetching a mod for one start (`offer_for_session`)
-  runs the validator on it and asks the player, naming every permission, before it is used; `use_for_session` loads a
-  set for one start. Security: a fetched mod's `native` permission is shown as such; nothing installs silently.
-- P-19 (kit.replay): a single pose (`Pose`), the player's pose now (`current_pose`) and `Puppet.set_pose`, beside
-  tracks; up to 15 puppets lit as Mario.
-- P-20 (language 8): `result =` in an `after` hook of a function returning `Vec3f *`: where the written vector lives.
-- P-21 (kernel 1.x run): `GameScene::exeSceneAction` called from `exePauseMenu` must be shown to move the scene
-  without breaking the pause menu, or the scene's pause needs a general switch (the game's `isPermitToPauseMenu` says
-  when a pause may start, not whether the scene stops).
-- P-22 (kernel K.hook, language 8): a hook that calls the function it hooks (A.7.13's `nearest_player` calls
-  `MR::getPlayerPos` from inside its `after`). Proposal: a mod's own hooks are not run again for calls made from
-  inside them (each other mod's hooks are); the 1.1 run proves it with a hook that calls its own function. Until then
-  A.7.13 is written, not proven.
+A.7 names every game part by a row. Beyond that it needs:
+- svc.net: datagrams (`datagrams_bind`, `send_to`, `send_all`, `received`) and a STUN request. A relay for two ends
+  that cannot meet is a server the mod names, not a game part. The permission is `net`, as for tcp, websocket and
+  http, and the player is shown the port.
+- Nerves by name (`nerve "DinoPackunVs1.BattleLv2"`, checked at compile time against the class), so a mod can set a
+  phase on another machine; a `const Nerve *` address differs per build and platform.
+- kit.actor: a stable key for a placed object (zone, layer, index in its placement list) and a lookup from the key,
+  the same on every machine with the same mods. The game's `PlacementId` is built from a `TableIter` and is not
+  callable from LumaScript (7.2).
+- The current actor needs no new part: `wrap every override of LiveActor::movement()` gives it, at one wrap per moving
+  actor per frame while the mod is on.
+- svc.save: save sets. A mod may switch the game's save files to a folder of its own (`coop/<room>`) and back; the
+  player's own files are untouched.
+- svc.mods: the list of mods on (`list_on`, `installed`); fetching a mod for one start (`offer_for_session`) runs the
+  validator on it and asks the player, naming every permission, before it is used; `use_for_session` loads a set for
+  one start. A fetched mod's `native` permission is shown as such; nothing installs silently.
+- kit.replay: a single pose (`Pose`), the player's pose now (`current_pose`) and `Puppet.set_pose`, beside tracks; up
+  to 15 puppets lit as Mario.
+- `result =` in an `after` hook of a function returning `Vec3f *` writes the hook's own vector (language.md
+  section 8).
+- `GameScene::exeSceneAction` called from `exePauseMenu` has to move the scene without breaking the pause menu, or
+  the scene's pause needs a general switch: the game's `isPermitToPauseMenu` says when a pause may start, not whether
+  the scene stops.
+- A hook that calls the function it hooks (A.7.13's `nearest_player` calls `MR::getPlayerPos` inside its `after`):
+  a mod's own hooks are not run again for calls made from inside them; each other mod's hooks are (language.md
+  section 8).
 
 ### A.7 corrections
 
-Checked against lumascript-language.md after appending A.7: the lines below broke the definition. Each is replaced as
-shown; A.7 reads with these replacements. (the name checker does not check syntax. 4.8's test suite parses every
-program of this file, which would have found them.)
+A.7 reads with these replacements, each for a line that broke a rule of language.md.
 
 | A.7 part | As written | Replaced by | Rule |
 |---|---|---|---|
@@ -1364,10 +1354,10 @@ program of this file, which would have found them.)
 | 7.14 | `.map(fn(m) { return m.id })` | `.map(fn(m: mods.Mod) -> text { return m.id })` | 5.4: closure parameters are typed |
 | 7.4 to 7.12 | `if let r = room, not r.host {` | stays | `if let` takes the same list as `guard` |
 
-- P-23 (language): the programs (A.1 to A.7, B) call container functions (`len get contains push remove map indexed
-  values any sum`) that section 3 does not list.
+The programs (A.1 to A.7, B) call the container functions `len get contains push remove map indexed values any sum`
+(language.md).
 
-### Revision from 5.1
+### Revisions from the LumaKit interfaces
 
 The LumaKit interfaces fix these uses. A block whose first line is `// replaces <id>` stands
 in for that program's block; `// amends <id>` changes only the part shown.
@@ -1436,18 +1426,16 @@ on frame {
 }
 ```
 
-A.7.2's `screen.message(text "Coop.Hosting", outside)` waits on the language's way of filling a text row's
+A.7.14's `screen.message(text "Coop.Hosting", outside)` needs the language's way of filling a text row's
 placeholders.
 
-Correction: the `screen.message(text "Coop.Hosting", outside)` above is A.7.14's (line 1300), not A.7.2's.
+### A.7.13, revised
 
-### Changes (D5.E)
-
-A.7.13 now reads:
+A.7.13 reads:
 
 ```lumascript skip a listing from the part's contract, not a module that builds alone
 // The actor whose movement runs. An override that calls its base runs this wrap again inside it, so each wrap puts
-// back what it found (D-9). The player's own actor asks for itself: `none`, the local player.
+// back what it found. The player's own actor asks for itself: `none`, the local player.
 wrap every override of LiveActor::movement() {
     let was = current
     current = if is_mine(self) { none } else { self }
@@ -1459,9 +1447,9 @@ fn is_mine(a: LiveActor) -> bool {
     return false
 }
 
-// Where the player is, chosen by meaning (D-8; g/tools/player_rows.py lists the rows with each one's reason).
+// Where the player is, chosen by meaning (the rows, each with its reason, follow this listing).
 hook after MR::getPlayerPos() -> p {
-    if let r = room, let a = current, let local = p { result = nearest(r, a.mPosition, local) }   // P-20
+    if let r = room, let a = current, let local = p { result = nearest(r, a.mPosition, local) }
 }
 hook after MR::getPlayerCenterPos() -> c {
     if let r = room, let a = current, let me = MarioAccess::getPlayerActor() {
@@ -1497,7 +1485,7 @@ Messages an actor sends from its movement (its attack sensor, LiveActor.cpp:137 
 while `current` is the sender. A receiver asking where the player is gets the player nearest the sender, which is
 what the sender's hit means.
 
-Left for the run (A.7 is written, not proven): an actor that acts on the local player with a place it read
+Not yet shown by a run: an actor that acts on the local player with a place it read
 in the same movement (NoteFairy.cpp:278 turns the local player towards the fairy from the place it read) uses the
 nearest peer's place. The co-op test by playing is what shows whether any such actor looks wrong; each found is
 then wrapped like the talk range.

@@ -9,10 +9,6 @@ region, the player's locale), the game window's display and safe areas, the clip
 a web page in the system browser. Inherits services-registry whole: calling rules (section 4), events (6),
 a mod's life (8), no cost with no mod (10), messages (11), permissions (5).
 
-Reviewers: F (the host files, the platform layers, the harness's deterministic mode), G (LumaScript's `system`, the
-self-description rows, the validator's L506 for the two permissions), J (the mod log's Note for a link, what the
-Mods page says of the two permissions).
-
 ### 1. What is decided here, in one list
 
 1. Three tables, each its own service (registry 4: a permissioned service's name is its permission's name):
@@ -37,7 +33,7 @@ Mods page says of the two permissions).
    host), and an ASCII host (an internationalized name in its `xn--` form). Opened only while the game is in
    front; at most one a mod in 10 seconds (`LUMA_E_BUSY`, an answer). Every link the system opened is written to
    the mod log as a Note naming its site (`System.LinkOpened`, source CODE, level NOTE, through the host's
-   `galaxy::modlog::add_row`; shown as a notice, J-SS5), when the platform answers OK: the player always sees
+   `galaxy::modlog::add_row`; shown as a notice), when the platform answers OK: the player always sees
    which mod opened a page where. The whole URL goes to the game's log (`nebula.log`) only.
 8. Deterministic mode (the harness's `test_frame_step`) never touches the machine's clipboard or browser: the
    clipboard is a private one in the process (empty at start), a link is "opened" by writing its Note only; the
@@ -394,7 +390,7 @@ the codes or the tests' facts.
   that host calls `apple_window_changed`. With no snapshot ever given (`changes` 0) the window counts as in front
   for the clipboard and links (the game runs only in front there), so requests are not BUSY for good.
 
-### J: row 141 in the 14 languages (columns and forms of address as row 140's table)
+### Row 141 in the 14 languages (columns and forms of address as row 140's table)
 
 | Column | Text |
 |---|---|

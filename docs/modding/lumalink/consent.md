@@ -32,7 +32,7 @@ struct PermissionFacts {
     bool required = false;           // the entry library imports its service without LUMA_OPTIONAL; `native` always
 };
 
-// One question per mod (J C-3): its code and its permissions together.
+// One question per mod: its code and its permissions together.
 struct ModConsent {
     bool code = false;               // it has code for this platform
     bool code_changed = false;       // answered before, for other libraries than these
@@ -68,11 +68,11 @@ thread that owns the mod list (the Mods page's, as `code_allowed` is today), and
 on the Mods page applies at the next start.
 
 `ModInfo` gains `code_declined`, `code_changed`, `permission_answers` (name -> {granted, digest} as stored) and
-`required_permissions` (below); `PluginFile` gains `granted`. Code on h/2.1-registry: mod_consent.h/.cpp, mods.cpp
+`required_permissions` (below); `PluginFile` gains `granted`. Code: mod_consent.h/.cpp, mods.cpp
 (settings lines), luma.cpp (Manifest.permissions).
 
 `required` is read from the validator's kept report of the mod's entry library for this platform (its
-kind 5 rows and their flags, kept since validator 6e8452c5d), matched to permissions through the catalog
+kind 5 rows and their flags), matched to permissions through the catalog
 (services-registry 9: one list, read by the validator, LumaScript and this). The host never loads a library to find
 out. The host code that reads the kept report fills `ModInfo::required_permissions`; until it
 does, only `native` is required. A mod whose kept report has no import rows (refused before the check) has no permission `required` but

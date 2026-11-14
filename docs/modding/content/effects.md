@@ -58,7 +58,7 @@ typedef struct LumaContentFxService {
        built name (section 2). */
     int32_t (*start)(const LumaMod* mod, LumaActor actor, LumaEffectName name, const char* joint,
                      const LumaPlace* place, int32_t follow, LumaHandle* out);
-    /* The same on a model the mod attached (models 7), at its joint or socket `socket` (F-FX-2). An ended model
+    /* The same on a model the mod attached (models 7), at its joint or socket `socket`. An ended model
        handle is LUMA_E_HANDLE; an unknown socket Content.MissingJoint, the effect at the model's root. */
     int32_t (*start_on_model)(const LumaMod* mod, LumaHandle model, LumaEffectName name, const char* socket,
                               const LumaPlace* place, int32_t follow, LumaHandle* out);
@@ -131,34 +131,21 @@ Facts the tests read, for the harness table, written only while the harness runs
 - the check of section 2 as its mod-log entry (`modlog` fact, row `Content.EffectEmpty`, 3504, 3504b);
 - `cook.effect` (section 7); no `fx.*` fact with no mod (3507).
 
-### 7. Source form and cook
+### 6a. Rules the source form keeps
 
-Source form and cook" below, is this section, with 7a's answers:
-
-Read against Nebula-LG 6f20cd2ef: cook/particle_json.rs, overlay.rs (the `.jpc.json` and ParticleNames merges),
-merge.rs `add_particles`. Sections 1 to 6 are agreed except for the points below.
-
-- G-E1 (section 1, "a mod that replaces a game actor's effect by `like`"). `like` starts a particle *from* a game
-  particle: it copies its records, and the result is a new particle numbered after the game's. Today `add_particles`
-  only adds, so nothing replaces a game particle in place.
-  - Replacing needs its own word: `"replaces": "<game particle name>"`. The cooked particle takes that game particle's
-    number and its name row stays, so the game's tables (AutoEffectList) start it with nothing to add.
-  - Two mods replacing one particle follow the overlay order, like two mods' files at one path: the higher wins, and
-    the lower is named in the overlap fact.
-- G-E2 (section 2, EffectEmpty's window). An emitter may start late on purpose: DYNAMICS `first_frame` (0x68) is its
-  first frame. Proposed:
-  - The 60 frames count from `first_frame`, not from the start call.
-  - An effect stopped before its window ends is not checked.
-  - Otherwise a delayed effect is flagged although nothing is wrong.
-- G-E3 (roles: a fourth). G-1 named three roles. The records point into the texture list at four places: SHAPE
-  `texture_index` (0x50), CHILD `texture_index` (0x45), EXTEX `second_texture` (0x1A) and EXTEX `indirect_texture`
-  (0x19). The child's sprite is the fourth: role `child`. Section 7 has all four.
-- G-E4 (the names file, done by hand today). Today a mod's new particles need `ParticleNames.bcsv.json` beside
-  `Particles.jpc.json`, kept in the same order by hand (overlay.rs: "new particles need their names"). A particle
-  already accepts a `"name"` key, which nothing reads. Section 7 makes the name a part of the particle, so the cook
-  writes the rows; the names file is no longer the modder's.
-- G-E5 (section 3). `LumaEffectName` is lifted, so the validator checks a literal name against the mod's effects file
-  and the game's names before any run. MissingEffect at the call is left for built names only.
+- `like` starts a particle from a game particle: it copies its records, and the result is a new particle numbered
+  after the game's. `"replaces": "<game particle name>"` replaces a game particle in place: the cooked particle takes
+  that particle's number and its name row stays, so the game's tables (AutoEffectList) start it with nothing to add.
+  Two mods replacing one particle follow the overlay order, as two mods' files at one path do: the higher wins, and
+  the lower is named in the overlap fact.
+- An emitter may start late on purpose (DYNAMICS `first_frame`, 0x68). EffectEmpty's 60 frames count from
+  `first_frame`, not from the start call, and an effect stopped before its window ends is not checked.
+- The records point into the texture list at four places, the four roles: SHAPE `texture_index` (0x50, `sprite`),
+  CHILD `texture_index` (0x45, `child`), EXTEX `second_texture` (0x1A, `second`) and EXTEX `indirect_texture`
+  (0x19, `indirect`).
+- A particle's name is part of the particle, so the cook writes the name rows; a mod has no names file.
+- The validator checks a literal effect name against the mod's effects file and the game's names before any run;
+  MissingEffect at the call is left for names built while running.
 
 ### 7. Source form and cook
 
@@ -256,10 +243,10 @@ Tests (in nebula-import).
 - Two emitters named `#1`.
 - extract then cook gives the same bytes for every game particle (all of them, one test).
 
-G-1's change to the Gold Flower source is mine with it. The placeholder (`data/placeholder/effect.json`) is one
+The placeholder (`data/placeholder/effect.json`) is one
 effect `placeholder`, one plain particle.
 
-- G-E6 (section 7): a table row naming a particle no one has. After the overlay merge of
+- A table row naming a particle no one has. After the overlay merge of
   `ParticleData/Effect.arc/AutoEffectList.bcsv` (every mod's patch in list order), the cook reads each row a mod's
   patch added or changed, splits its EffectName by 7a, and refuses
   - a list word that is a particle in neither the game's names nor the merged ones, and
@@ -268,9 +255,9 @@ effect `placeholder`, one plain particle.
     overlay order that wrote the cell). Game rows no mod touched are not read. Words joined by the game's own rows
     stay the game's.
 
-F and G re-read these lines only.
+### 7b. How the service plays an effect
 
-- D4-1 (section 1): not the actor's EffectKeeper. The keeper's size is fixed when the actor is made
+- not the actor's EffectKeeper. The keeper's size is fixed when the actor is made
   (EffectKeeper's constructor: the table's effects plus the class's extra count), so a mod's effect cannot be
   registered on any actor. content.fx owns it: the game's MultiEmitter with an AutoEffectInfo of its own, as a table's
   effect has (flags AFFECT_TRANS/ROTATE/SCALE at its making, FOLLOW_* too while `follow`; offset; draw order), so the
@@ -278,22 +265,24 @@ F and G re-read these lines only.
   at the actor's death `playCalcAndDeleteForeverEmitter` (EffectKeeper::clear), on the clip
   `stopEmitterOnClipped`/`playEmitterOffClipped`. Both are seen at the frame's start (GameSystem::update, after the
   services' events), so they act one frame after the game's own.
-- D4-2 (section 3): the place. A joint's matrix, else the actor's base matrix (with the actor's scale, as the
+- the place. A joint's matrix, else the actor's base matrix (with the actor's scale, as the
   table's), else its position and rotation. A turn composes `source x turn` each frame while it follows (once when
   not); the offset stays in the joint's space (the turn's inverse applied first).
-- D4-3 (section 3): values. `follow` and `now` other than 0 or 1: LUMA_E_ARGUMENT, reported. `tint`'s scale not
+- values. `follow` and `now` other than 0 or 1: LUMA_E_ARGUMENT, reported. `tint`'s scale not
   above 0 or not finite: LUMA_E_ARGUMENT, reported. A dead actor, or one whose class is not LiveActor's: argument
   "actor". Open handles: 256 a mod (`LUMA_CONTENT_FX_MOST`), 4096 for all mods together.
-- D4-4 (section 2): the placeholder is `nebula:placeholder/effect` (references 4). When the store lacks it too,
+- the placeholder is `nebula:placeholder/effect` (references 4). When the store lacks it too,
   nothing shows; the handle works (stop, tint) and fx.start says `"placeholder": true`.
-- D4-5 (section 2): Content.EffectEmpty is code 640 (references 6's effects block), row in 14 languages.
-- D4-6: fx.alive without a step. Written each frame for a handle's first 120 frames while the harness
+- Content.EffectEmpty is code 640 (references 6's effects block), row in 14 languages.
+- fx.alive without a step. Written each frame for a handle's first 120 frames while the harness
   runs (no step to add to the harness); fx.start gains `"placeholder"`. fx.end's `why` is `stop`, `actor`, `scene` or
   `mod` (`model` with models 7).
-- D4-7 (section 4): the group, read from the cook's `Luma/<id>/effects.txt` (below, test 3509).
-- D4-8 (start_on_model): on a model handle from content.model (below, test 3510).
+- the group, read from the cook's `Luma/<id>/effects.txt` (below, test 3509).
+- start_on_model: on a model handle from content.model (below, test 3510).
 
-D4-1 to D4-8 read; nothing in them changes section 7.
+
+### 7c. The effects list
+
 - Path: `Luma/<id>/effects.txt` in the mod's store (the overlay the cook writes for the mod; a plain file, no
   archive), looked up with the store's file lookup. It is absent when the mod has no `effects.json`.
 - Form: UTF-8, LF line ends, no header, no blank line. One line per effect of the mod's effects.json, sorted by name
@@ -302,24 +291,23 @@ D4-1 to D4-8 read; nothing in them changes section 7.
   so the reader may treat any other line as a damaged store: say Content.EffectEmpty's sibling for a bad file once per
   mod, naming the line, and draw group 0.
 
-- D5-1: `typedef LumaHandle LumaContentFxEffect;` in luma_content_fx.h; start's out is `LumaContentFxEffect* out`,
+- `typedef LumaHandle LumaContentFxEffect;` in luma_content_fx.h; start's out is `LumaContentFxEffect* out`,
   stop's and tint's parameter `LumaContentFxEffect effect`. start_on_model's model stays `LumaHandle` until models 7
   names content.model's kind; then it takes that kind (a 1.0 change before any release).
-- D5-2: `follow` and `now` are `bool` (stdbool). The service's 0-or-1 checks are gone (a C++ bool is 0 or 1).
-- D5-3: every member's comment names every status it returns: LUMA_OK, LUMA_E_ARGUMENT, LUMA_E_HANDLE, LUMA_E_LIMIT,
+- `follow` and `now` are `bool` (stdbool). The service's 0-or-1 checks are gone (a C++ bool is 0 or 1).
+- every member's comment names every status it returns: LUMA_OK, LUMA_E_ARGUMENT, LUMA_E_HANDLE, LUMA_E_LIMIT,
   LUMA_E_THREAD, LUMA_E_CANCELLED as each can.
-- D5-4:
-- D5-5: the group comes from `Luma/<id>/effects.txt` as G wrote it above; a line outside the form: one
+- The group comes from `Luma/<id>/effects.txt` as written above; a line outside the form: one
   Content.EffectEmpty-sibling note per mod naming the line, group 0.
 
-### As built: the effects list reader, D5-5
+### 7d. The effects list reader
 
 - A mod effect `<id>:<name>` takes its group from `Luma/<id>/effects.txt`, read once a session per mod; no list: group
   0.
 - start_on_model: the model handle from content.model; its joints are the sockets; the effect ends "model" when the
   model's handle ends. fx.start facts carry `model` (0: on an actor). Test 3510.
 
-### As built: section 7 on Nebula g/3.2-cook 32e58338b, LumaLink g/4.2-f dc25efb
+### 7e. Section 7 as the cook does it
 
 Where section 7 above says otherwise, this holds:
 - Place. `layers/<layer>/assets/effects.json` (the one form has no content at the mod's root). luma-format 5: a
@@ -332,14 +320,14 @@ Where section 7 above says otherwise, this holds:
 - Texture list. It starts as the start particle's list (so an unchanged particle is the same bytes), and a role naming
   a texture not in it adds it. The sprite role may not be null; child, second and indirect may (taken away). RoleOff
   (a Note) also covers `child` with no child record.
-- Effects list. `Luma/<id>/effects.txt` as written at 18:55; absent when the mod has no effect of its own (only
+- Effects list. `Luma/<id>/effects.txt` as 7c writes it; absent when the mod has no effect of its own (only
   replacements).
 - Phrases. Every refusal is L804, `why` a `Cook.Effect.<Kind>` phrase and `where` the value's JSON pointer in the file
   (it names the effect and the emitter: `/effects/aura/particles/1/emitter/rate`). Added to the list above: Kind
   {where, expected: phrase Is.Number / Is.Whole / Is.Bool / Is.Text / Is.List / Is.Object}, Length, Missing,
   TextureName, FilePath, FileMissing, Overlap (Note), OldForm (a `.jpc.json` merge), TableNoFirst. A bad JSON file is
   `Cook.Model.Json` {line, column}. 33 rows, 14 languages.
-- G-E6 as written, with the phrase split by 7a's rule: `TableNoFirst` {where, word} (numbered, no `<word>00`) and
+- A table row naming an unknown particle, with the phrase split by 7a's rule: `TableNoFirst` {where, word} (numbered, no `<word>00`) and
   `TableUnknown` {where, word} (a list word); `where` is the cell's pointer in the patch. The patch is left out before
   the patches apply, after every mod's effects are cooked (a mod's table row may start its own effect).
 - Facts. `cook.effect` in the facts file: `other` = `<id>:<name>` (or the replaced game particle), then
@@ -347,7 +335,7 @@ Where section 7 above says otherwise, this holds:
 - LumaLink. check and pack cook every layer's effects.json (with `--game`, against its particles; without, any game
   name passes) and report the findings on the last layer's file. `extract` of ParticleData/Effect.arc writes the
   particles as an effects.json: each under `replace` by name, every value, textures by role.
-- Tests (nebula-import, 186 pass; LumaLink 83): one per phrase; roles over like; frames; written-and-replaced gives
+- Tests (nebula-import and LumaLink): one per phrase; roles over like; frames; written-and-replaced gives
   the same particle; extract then cook; numbering and names; later layer wins; a plan through write_overlay (list,
-  particles, names, facts, refused mod isolated, overlap); G-E6 through write_overlay. The extract-then-cook test runs
+  particles, names, facts, refused mod isolated, overlap); the table row check through write_overlay. The extract-then-cook test runs
   on fixture particles: all of the game's 1:1 needs the game's store.

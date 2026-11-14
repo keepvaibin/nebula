@@ -47,7 +47,7 @@ provider, the host call `binding_name` it asked for), J (Controls rows), G (luma
 10. Not in layer 1 (next layers, PLANS-UNSTARTED 2.5): the Controls rows to list and bind actions (layer 1b, rows in
     14 languages), the host call `binding_name(mod, action)`, a harness step for a physical key, ui.focus and menu
     entries.
-11. Tests (mods from f/mods-src/input): 2501 follow (A held 30 frames: one press, one release, 25+ frames; the start's
+11. Tests: 2501 follow (A held 30 frames: one press, one release, 25+ frames; the start's
     refusals and answers), 2502 own handles (only its own of handles 1 to 8 reads), 2503 host menu (A held with
     Settings open gives no press; after Esc, one).
 12. Controls rows (layer 1b). CONTROLS lists each declared action after the game's bindings, a row each in the
@@ -67,20 +67,20 @@ host feeds in `runtime/include/galaxy/luma_input_service.h`. Catalog rows: `{"in
 "input.inject"}`, `{"input.dev",1,0,"input.devices"}`; the permission rows (`Permission.input.inject`,
 `Permission.input.devices`, 14 languages) were already in NebulaText.tsv. No mod: one atomic load at each game read.
 
-D2-1. What the game read (layer 2, `game`, `game_raw`). The host calls `game_read(player, sample, device, motor)`
+1. What the game read (layer 2, `game`, `game_raw`). The host calls `game_read(player, sample, device, motor)`
    at each of the game's reads (`svc_input_read`: the controls path, the real Wii Remote, the co-star, headless).
    `LumaInputGame` (28 bytes) is the read after bindings and any injection; `game_raw` the player's own controller
    (the same unless a mod injects). Player 1 (the co-star) answers LUMA_E_ABSENT until the game has read it.
-D2-2. Device kind (layer 2, `device`, `watch_device`). NONE, KEYBOARD_MOUSE, PAD, TOUCH, MOTION from the host's
+2. Device kind (layer 2, `device`, `watch_device`). NONE, KEYBOARD_MOUSE, PAD, TOUCH, MOTION from the host's
    main device (Win32: the chosen device; SDL: pad or touch; the real Wii Remote: MOTION; headless: NONE). The watch
    event (kind 1) comes at a frame's start with the latest kind; one watch a mod.
-D2-3. Rumble (layer 2). A mod's ask (0-1, at most 10 s of game time) merges with the game's motor as the
+3. Rumble (layer 2). A mod's ask (0-1, at most 10 s of game time) merges with the game's motor as the
    stronger, scaled by the player's Vibration setting: Win32 controls path and SDL pads, the real Wii Remote's motor.
    LUMA_E_ABSENT on a keyboard, a phone's screen, with rumble output off, or in headless.
-D2-4. Injection (layer 3, `input.inject`, permission). One injecting mod a player (else LUMA_E_BUSY). Each read
+4. Injection (layer 3, `input.inject`, permission). One injecting mod a player (else LUMA_E_BUSY). Each read
    takes what the mod set since the last read, or a controller at rest; NaN/out-of-range stick and pointer values
    are held (0, or the bound) and noted with 101, the call still OK. Taking the mod out ends its injections.
-D2-5. Text entry (layer 4, `text_request`, `text_peek`, `text_cancel`). One request open in the game; a new one
+5. Text entry (layer 4, `text_request`, `text_peek`, `text_cancel`). One request open in the game; a new one
    ends the open one CANCELLED. While open the game reads a controller at rest and every action reads up
    (`live_controls_engine` treats it as a host menu). Kinds ANY, NUMBER (digits, one leading minus, one point), NAME
    (no control characters). Hosts: Win32 window (WM_CHAR with surrogate pairs, so the system input method's
@@ -88,20 +88,20 @@ D2-5. Text entry (layer 4, `text_request`, `text_peek`, `text_cancel`). One requ
    cancels); SDL (Linux, Android, macOS): SDL text input started exactly while a request is open (the phone's
    system keyboard, the desktop input method), SDL_EVENT_TEXT_INPUT as UTF-8, the same keys plus Android Back as
    Escape, focus lost cancels. Headless: LUMA_E_ABSENT. iOS is not built.
-D2-6. Raw devices (layer 5, `input.dev`, permission `input.devices`). Windows: HID devices by SetupDi, the
+6. Raw devices (layer 5, `input.dev`, permission `input.devices`). Windows: HID devices by SetupDi, the
    system's keyboards and mice left out; `open` only a path `list` gives (else NOT_FOUND), a reader thread a device,
    64 reports kept between frames (the oldest dropped and counted), at most 8 open a mod, LUMA_E_CLOSED once when
    unplugged; a mod taken out closes its own. Other platforms: LUMA_E_ABSENT (Linux hidraw and Android USB host are
    not built: missing general parts, PLANS-UNSTARTED).
-D2-7. Harness step `text` (layer 4's proof): `{"text": "..."}` types through the host's text entry
+7. Harness step `text` (layer 4's proof): `{"text": "..."}` types through the host's text entry
    (`NebulaHostForExtension.type_text`, the same `text_utf8` SDL feeds); while a request is open, `key` enter, esc,
    backspace, left, right edit it.
-D2-8. Tests (unrun; mods in.c CASE 3, 4, 6, 7): 2505 game (read, device, rumble absent
+8. Tests (mods in.c CASE 3, 4, 6, 7): 2505 game (read, device, rumble absent
    on the keyboard, refusals), 2506 inject (120 frames of stick up move Mario, a dropped button, NaN noted, raw stays
    the player's, the end), 2507 inject declined, 2508 inject undeclared (L506), 2509 inject taken out, 2510 text (cut
    initial, peek, second request cancels the first, A held at rest, cancel, typed NUMBER "-12.59"), 2511 dev (list,
    refusals, unknown path; nothing opened), 2512 dev declined.
-D2-9. Open: a device change cannot be made in a test (2505 asserts no event); rumble on a pad is not proven by a
+9. Open: a device change cannot be made in a test (2505 asserts no event); rumble on a pad is not proven by a
    run (no motor to read back). Both need a missing general part: a harness step that sets the host's device kind.
 
 ### Pointer source (D; kit K4)
@@ -109,7 +109,7 @@ D2-9. Open: a device change cannot be made in a test (2505 asserts no event); ru
 `input` 1.2 (catalog row `{"input",1,2}`). New `LumaInputPad` (uint32: 0 the main player, 1 the co-star) and
 `LumaInputPointerSource` (PLAYER 0, INFRARED 1, GYRO 2, MOUSE 3, STICK 4).
 
-D3-1. pointer_source(mod, pad, kind, sensitivity), game thread. From the next sample only `kind` aims the main
+1. pointer_source(mod, pad, kind, sensitivity), game thread. From the next sample only `kind` aims the main
    player's pointer (the live controls' other sources are not read for it); the player's invert, speeds and
    recenter still apply. GYRO turns `sensitivity` (above 0, at most 8) times the setting. PLAYER gives the choice
    back; the mod's stop gives it back too. INFRARED is OK when the player's device is a Wii Remote (it aims itself;
@@ -117,4 +117,4 @@ D3-1. pointer_source(mod, pad, kind, sensitivity), game thread. From the next sa
    sample: mouse when absolute pointing and the keyboard are on, gyro when a pad's gyro points, stick when a pad is
    connected), or any kind but PLAYER for pad 1. LUMA_E_ARGUMENT, reported: pad past 1, an unknown kind, a GYRO
    sensitivity out of range.
-D3-2. Kit: `input.Pad`, `input.PointerSource`, `input.pointer_source(pad, kind, sensitivity) -> Status`.
+2. Kit: `input.Pad`, `input.PointerSource`, `input.pointer_source(pad, kind, sensitivity) -> Status`.

@@ -199,16 +199,20 @@ lumalink check livesplit-link
 ## 4. Test it
 
 A test needs something that listens where LiveSplit would. `tests/run/server/` is a second small mod that listens on
-port 16834 and writes everything it is sent as the fact `said`; `lumalink test` builds it with the test:
+its `port` option and writes everything it is sent as the fact `said`; `lumalink test` builds it with the test. Each
+test gives both mods the same port, one the harness finds free for the run (`{"port": {"free_port": "livesplit"}}`),
+so two runs side by side never reach each other's listener:
 
 ```lumascript skip the test's listener, built by lumalink test as a mod of its own
 use svc.net.local as local
+
+option port: int
 
 var listener: local.Request? = none
 var said: text = ""
 
 on start {
-    listener = local.tcp_listen(16834, 0, fn(e: local.Event) {
+    listener = local.tcp_listen(port as u16, 0, fn(e: local.Event) {
         match e {
             local.Event.Accepted(socket) => log fact "accepted" true
             local.Event.Data(socket, data) => {

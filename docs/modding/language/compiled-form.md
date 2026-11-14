@@ -6,7 +6,7 @@
 
 | Input | Where from |
 |---|---|
-| `source//*.lum`, `source//*.c`, `.cpp`, `.h` | the mod |
+| `source/**/*.lum`, `source/**/*.c`, `.cpp`, `.h` | the mod |
 | `luma.json` (`id`, `options`, `permissions`, `code.platforms`) | the mod |
 | the self-description (1.8) of each game version in `luma.json`'s `nebula` range | carried by LumaLink, one per released game version; the newest also downloadable as a file the player names (never fetched silently) |
 
@@ -150,7 +150,7 @@ depends on another mod's), freestanding: no C library, no OS call, nothing impor
 ### 7.1 Memory
 
 - Where it comes from: LumaCore has no allocator today, and a library that imports nothing cannot reach the
-  system's. Request to F (1.1): `void* (*alloc)(const LumaMod* mod, uint64_t size, uint64_t align)` and
+  system's. LumaCore gives `void* (*alloc)(const LumaMod* mod, uint64_t size, uint64_t align)` and
   `void (*free)(const LumaMod* mod, void* p)` at the end of `LumaCore` (its `size` field makes the addition safe),
   counted per mod so the Mods screen can show each mod's memory and the kernel frees what is left when a mod is
   taken out (1.11's reload). Until then a LumaScript mod cannot be built: the compiler refuses with
@@ -185,8 +185,8 @@ that text is never kept).
 - An object's death is learnt from the destructor rows (`LUMA_TELL` on `NameObj::~NameObj` and every derived
   destructor): the mod's library adds a `before` hook on `NameObj::~NameObj` only while its table holds a slot
   (added with `core->hook` when the first `ref` is made, the rule "no cost when a mod holds no handle"), which clears
-  the object's slot and bumps its generation. Removing a hook after loading has no call in luma.h today: request
-  to F (1.1): `int32_t (*unhook)(const LumaMod*, const LumaFunction*, uint32_t kind, LumaHook, void* user)`; until
+  the object's slot and bumps its generation. Removing a hook after loading needs a call luma.h does not have today,
+  `int32_t (*unhook)(const LumaMod*, const LumaFunction*, uint32_t kind, LumaHook, void* user)`; until
   then the hook stays once added and returns at once when the table is empty.
 - `get()` on an empty handle gives `none`; `h!.get()` on one is a script error.
 
@@ -227,13 +227,13 @@ that C is the guard's (1.6), not a script error.
 4. Cost: a mod with one empty `before` hook on a function called every frame, against the same game with no mod (the
    mod's cost measured and printed).
 
-| To | What |
+| Part | What |
 |---|---|
-| F, kernel 1.1 | `alloc` and `free` per mod in `LumaCore` (7.1); `unhook` (7.3, 8); the script error report call (language 16); the Apple deployment targets (1.1) |
-| F, self-description 1.8 | nerves by name; every override of each virtual (`every override of`) |
-| F, `time` 2.2 | the frame event at the frame's start; game time |
+| kernel 1.1 (lumalink/loader.md) | `alloc` and `free` per mod in `LumaCore` (7.1); `unhook` (7.3, 8); the script error report call (language 16); the Apple deployment targets (1.1) |
+| self-description 1.8 | nerves by name; every override of each virtual (`every override of`) |
+| `time` 2.2 | the frame event at the frame's start; game time |
 
-### Checked before handing
+### Checked
 
 - 1.1 Mach-O link (macOS and iOS) adds `-install_name @rpath/mod.dylib`: without it the dylib holds the path
   it was written to (LC_ID_DYLIB) and two builds in two folders differ; with it they are identical.
@@ -253,7 +253,7 @@ that C is the guard's (1.6), not a script error.
 - Section 7.3, handles. `lumart` keeps each live handle's address; on the kernel's arena-release fact it empties every
   handle in the range, as it does for a destructor row. `ref<C>` of a class not derived from `NameObj` is refused by
   the compiler.
-- Section 10, tests. The test suite parses every block of lumascript-programs.md with D4.E's changes , and adds: a
+- Section 10, tests. The test suite parses every block of language/programs.md, and adds: a
   `ref` across a stage change is empty; a recursive hooked function re-enters every mod's hooks; a replace's script
   error gives the game's result once.
 
@@ -338,7 +338,7 @@ different order in another language (Japanese puts S0904's `{1}` first).
 6. Closures. A closure given to another mod (`on_spin`) is passed as `{fn, env, owner}`. Its `fn` is a
    trampoline in the owner's library that acts as section 4's boundary for it: it reports the owner's own errors and
    returns 2. A library that gets 1 or 2 from a closure stops that call only, and the closure's mod gets the report.
-   K-10: the library drops a mod's closures in `dependent_gone`, so no closure is called after that mod's
+   The library drops a mod's closures in `dependent_gone`, so no closure is called after that mod's
    `stop`.
 7. The interface file `<mod id>.lumi`, written by the build next to the libraries and packed in the `.luma`:
    - the module tree;
@@ -375,7 +375,7 @@ different order in another language (Japanese puts S0904's `{1}` first).
   parameter is read-only to the script: writing it is a compile error (4.2's checker).
 - Tested in 4.8: a call and a hook each on a `const Vec3f &`, a `Vec3f &` and a `Vec3f *` parameter.
 
-- AB3-1 A `T &&` parameter is as `T &` (luma_hook.h's Bare strips both): `args[n]` is the object's address. A script
+- A `T &&` parameter is as `T &` (luma_hook.h's Bare strips both): `args[n]` is the object's address. A script
   call gives it a temporary of the calling function, as for `const T &` (it needs no `var`); a hook may read and write
   it as the caller's object.
 - `args[n]` is a `T `, and a call takes a pointer value for it. The game's rows keep the parameter as written
@@ -418,10 +418,10 @@ on another that has the same names and types.
 - Text the game gives a script (a `const char *` result, field or global read as `text`) is copied into a script
   `text` when read: the script never holds a pointer into the game's memory, so text the game frees later is never
   read.
-- Erratum to addition 5: a bit-field write that should keep the low bits uses `low_bits<T>(...)` (language D4.11);
-  `wrap(...)` as a conversion is withdrawn.
+- Addition 5, corrected: a bit-field write that should keep the low bits uses `low_bits<T>(...)` (language D4.11);
+  `wrap(...)` is not a conversion.
 
-Read against GA-3: both ways are as asked, and the scratch only for a parameter C-6 marks not kept. When 1.11 adds
+The scratch is only for a parameter C-6 marks not kept. When 1.11 adds
 unloading, the loader frees a reloaded mod's image and text store only at the next stage change (where the game's
 objects are rebuilt) or at the game's end, never at the unload itself; the reload test reads a kept label after the
 reload.

@@ -35,7 +35,7 @@
   that a record row declares, defined or not ("LiveActor::control", "void()"; "LiveActor::getBaseMtx",
   "MtxPtr() const"). Its `invoke(args, result)` takes args[0] as the object seen as that class (`as_class` gives
   it), and the compiler's own dispatch runs what the object's own class runs. That function's row runs its hooks.
-  A virtual call is not itself hooked (`hooked` null). Hooking every override is K.vhook (DECISIONS 3), later.
+  A virtual call is not itself hooked (`hooked` null). Hooking every override is K.vhook, later.
 - `const LumaFunction* overrider(const void* object, const char* name, const char* signature)`: the function row
   the object's own class runs for that virtual. Null when that function has no row (inline in a header, implicit),
   or when object or name is not known.
@@ -107,8 +107,8 @@
   - Itanium: the Android x86_64 module's flags. The driver is linked static and run on a Linux
     kernel: `wsl.exe -d docker-desktop -e`, which runs a static bionic binary. types_fixture_test.py gained
     `--run-with` and `--path-map` for this, and `--libclang` (the NDK has none beside its clang).
-- The Android run found a 1.2 fault, now fixed in gen_types.py: bionic's `uintptr_t` is `__uintptr_t`, so TY-9
-  stopped the generator. A foreign alias's own text is now named in turn until nothing is new (Darwin's size_t,
+- The Android run found a 1.2 fault, now fixed in gen_types.py: bionic's `uintptr_t` is `__uintptr_t`, so the
+  type-text rule (types.md) stopped the generator. A foreign alias's own text is now named in turn until nothing is new (Darwin's size_t,
   `__darwin_size_t`, is the same case).
 - -frtti makes MSVC-ABI clang emit the vftable of a base class the game never makes alone. Three virtuals had a
   declaration and no body, and the module stopped linking:
@@ -153,7 +153,7 @@
   module with rows; 1.7's module without rows keeps -fno-rtti.
 - Still to do in 1.3: overrider; the LumaCore calls and kind 8; describe and compare_types counting the method rows
   against the JSON's (section 4's thunk count); the game tests.
-- O-3, sharpened: the types file lists records in the generator's walk order, and the kernel sorts its rows by name
+- The types file lists records in the generator's walk order, and the kernel sorts its rows by name
   (byte order, strcmp). "Index in the types file" would need a reader to know the walk. Proposal: a class number is
   the record's index among the record rows sorted by name in byte order, the kernel's own sTypes order. The validator
   and LumaLink get it by sorting the JSON's record names the same way (records only: not aliases or enums). It is

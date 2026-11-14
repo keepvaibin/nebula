@@ -4,7 +4,120 @@
   "version": "1.0.0",
   "name": "LiveSplit server stand-in",
   "summary": "Listens where LiveSplit's server listens and writes every command it is sent as a fact.",
-  "authors": ["you"],
-  "game": { "id": "RMG" },
-  "permissions": [ { "name": "net.local", "why": "Listens on this computer for the LiveSplit Link mod." } ]
+  "authors": [
+    "you"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "options": [
+    {
+      "key": "port",
+      "kind": "number",
+      "default": 16834,
+      "min": 1,
+      "max": 65535,
+      "step": 1,
+      "name": "Port to listen on"
+    }
+  ],
+  "permissions": [
+    {
+      "name": "net.local",
+      "why": "Listens on this computer for the LiveSplit Link mod."
+    }
+  ],
+  "text": {
+    "EuEnglish": {
+      "options": {
+        "port": {
+          "name": "Port to listen on"
+        }
+      }
+    },
+    "UsFrench": {
+      "options": {
+        "port": {
+          "name": "Port d'écoute"
+        }
+      }
+    },
+    "EuFrench": {
+      "options": {
+        "port": {
+          "name": "Port d'écoute"
+        }
+      }
+    },
+    "UsSpanish": {
+      "options": {
+        "port": {
+          "name": "Puerto de escucha"
+        }
+      }
+    },
+    "EuSpanish": {
+      "options": {
+        "port": {
+          "name": "Puerto de escucha"
+        }
+      }
+    },
+    "EuGerman": {
+      "options": {
+        "port": {
+          "name": "Port zum Lauschen"
+        }
+      }
+    },
+    "EuItalian": {
+      "options": {
+        "port": {
+          "name": "Porta di ascolto"
+        }
+      }
+    },
+    "EuDutch": {
+      "options": {
+        "port": {
+          "name": "Poort om op te luisteren"
+        }
+      }
+    },
+    "UsPortuguese": {
+      "options": {
+        "port": {
+          "name": "Porta de escuta"
+        }
+      }
+    },
+    "JpJapanese": {
+      "options": {
+        "port": {
+          "name": "待ち受けポート"
+        }
+      }
+    },
+    "KrKorean": {
+      "options": {
+        "port": {
+          "name": "수신 포트"
+        }
+      }
+    },
+    "CnSimpChinese": {
+      "options": {
+        "port": {
+          "name": "监听端口"
+        }
+      }
+    },
+    "TwTradChinese": {
+      "options": {
+        "port": {
+          "name": "監聽連接埠"
+        }
+      }
+    }
+  }
 }

@@ -30,5 +30,5 @@ Conformance: an item placed by name and one spawned, each kind of `Gives`, both 
 a save and reload, an item of a mod that is off (not made, logged).
 
 LumaKit saves every kit value itself, in its own part of each save file under the owning mod's id: a value follows the
-file as the game's progress does, stays while its mod is off or removed, and stays when the player forgets the mod,
-until LumaKit is forgotten.
+file as the game's progress does, stays while its mod is off or removed, and goes when the player forgets the mod
+(in every file).

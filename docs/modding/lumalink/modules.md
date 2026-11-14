@@ -5,8 +5,7 @@
 ### Two modules and the choice at start
 
 Header: `runtime/include/galaxy/game_module.h` (host). Code: `native/CMakeLists.txt` (the two targets),
-`runtime/src/game_module.cpp` (the choice), `native/host/host_main.cpp` (its one call), the packaging lists. Branch
-f/1.7-modules. Reviewer: H, after it compiles and has run (R2). G reads the perf runs.
+`runtime/src/game_module.cpp` (the choice), `native/host/host_main.cpp` (its one call), the packaging lists.
 
 ### 1. The two modules
 
@@ -47,7 +46,7 @@ reads the manifests once more before the module loads (one scan; its time is log
 
 - Build: both modules link on Windows; the plain module's size is back to l12's (no RTTI data)
   and it has no row section; Android x64 builds both.
-- Tests 1701-1702 (suite f/tests/modules): a bare test (no mods, no game half) logs `game module: plain`; a test with
+- Tests 1701-1702: a bare test (no mods, no game half) logs `game module: plain`; a test with
   a code mod logs `game module: rows (mod <id> has code)` and the mod's hook runs.
 - Perf: a no-mod tour on the plain module against the rows module, and against an OFF build; plain
   equals OFF within the noise.

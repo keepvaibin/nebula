@@ -9,9 +9,6 @@ mod's own values kept for the player across files (written at once), and the gam
 (export) or offered back (import, only through the game's screen and the player's answer). Inherits
 services-registry whole.
 
-Reviewers: F (the game module's save chunk and SaveDataHandler; the deterministic mode), G (self-description rows,
-LumaScript's `save`), J (6.5: a removed mod's data inert, a renamed mod taking over; the import screen half).
-
 ### 1. What is decided here, in one list
 
 1. Three services: `save` 1.0 (per-file values; no permission), `save.global` 1.0 (values across files; no
@@ -58,7 +55,11 @@ LumaScript's `save`), J (6.5: a removed mod's data inert, a renamed mod taking o
 7. Global values (`save.global`): `<save root>/<code>/luma/<mod id>.bin` (beside Nebula.sav, so a backup of the
    saves has them), the same entry form as item 3 for one mod, written whole and renamed into place
    (galaxy/atomic_file.h) on the file thread at the end of the frame a value was set (one write a frame a mod at
-   most). Limit 1 MiB a mod. Read once at the mod's first get.
+   most). Limit 1 MiB a mod. Read once at the mod's first get. A write the system refuses is tried again after a
+   wait that doubles from 60 frames to 3600, with one Error `Save.GlobalWriteFailed` for each run of refusals; the
+   mod's stop writes at once whatever the wait. A file that does not read is first copied to
+   `luma/<mod id>.bin.broken` (the Error `Save.GlobalBroken` names it), and `luma/<mod id>.bin` is written over only
+   after that copy is down; if the copy is refused, every call answers `LUMA_E_IO` and the file is never written over.
 8. The game's file (`save.game`): `export(mod, file, fn, user, &h)`: the event gives the bytes of user file `file`
    (1-6) as the game would write them now (its GameDataHolder binary for the active character, then config),
    `take` in the event's call as clipboard's take. `offer(mod, path, fn, user, &h)`: a file in the mod's data folder
@@ -69,7 +70,7 @@ LumaScript's `save`), J (6.5: a removed mod's data inert, a renamed mod taking o
    play" and not pickable; the player picks a file, then "Replace file {n}? Its progress goes." REPLACE / KEEP.
    `LUMA_OK` (value: the file) replaced, `LUMA_E_DENIED` no, Escape, B or the menu closed. Before replacing, the old
    file's bytes go to `<save root>/<code>/luma/replaced/<date>-file<n>.bin` (the confirm's help says the old file is
-   kept in the save folder; J-SV5). The replacement goes through the module: `SaveDataHandler::setFile` of each of
+   kept in the save folder). The replacement goes through the module: `SaveDataHandler::setFile` of each of
    that user file's kinds (Mario, Luigi, config) with the offered bytes, as `copyUserFileMemory` does, then
    `requestSaveSaveData`, queued to the start of a frame when no save is running (`mSaveRequest->isDone()`) and the
    game's own save sequence (SaveDataHandleSequence) does not hold the handler: requestSaveSaveData `init()`s the
@@ -77,7 +78,7 @@ LumaScript's `save`), J (6.5: a removed mod's data inert, a renamed mod taking o
    SaveDataHandler.cpp: requestSaveSaveData
    writes `mFiles` as they are and only `storeUserFile` puts a loaded file's holders in, so the loaded file's unsaved
    progress is not written and the game's next save, which stores only the loaded file, keeps the new one.
-   One offer at a time across mods; `LUMA_E_BUSY` while any screen waiting on the player is up (J-SV8, services-mods
+   One offer at a time across mods; `LUMA_E_BUSY` while any screen waiting on the player is up (services/mods.md
    9). No LUMA_E_CANCELLED: `cancel`, a mod's stop and the game's end send nothing.
 9. Deterministic mode: values work as written; the game's saves go where the harness says (its own save folder
    per run); `offer` answers through the harness's screen step.
@@ -96,7 +97,7 @@ typedef struct LumaSaveService {
     LumaServiceTable base;
     /* 1.0. Game thread. The value of `key` in the file the game has loaded now, for this mod. Copies min(length,
        size) bytes into buf and returns the value's whole length (>= 0), also when it is over `size`, so a caller can
-       ask again with room (G-SV3); buf may be null with size 0. LUMA_E_NOT_FOUND when not set, LUMA_E_ABSENT when
+       ask again with room; buf may be null with size 0. LUMA_E_NOT_FOUND when not set, LUMA_E_ABSENT when
        no file is loaded (title, file select). A bad key, or a null buf with size > 0: LUMA_E_ARGUMENT, reported. */
     int64_t (*get)(const LumaMod* mod, const char* key, void* buf, uint64_t size);
     /* 1.0. Game thread. Sets the value (written by the game's next save). LUMA_OK; LUMA_E_ABSENT with no file
@@ -104,7 +105,7 @@ typedef struct LumaSaveService {
     int32_t (*set)(const LumaMod* mod, const char* key, const void* value, uint64_t bytes);
     /* 1.0. Game thread. LUMA_OK removed, LUMA_E_NOT_FOUND not set. */
     int32_t (*remove)(const LumaMod* mod, const char* key);
-    /* 1.0. Game thread. The loaded file: 1-6 in *number and 0 Mario / 1 Luigi in *character (outs, R-5d);
+    /* 1.0. Game thread. The loaded file: 1-6 in *number and 0 Mario / 1 Luigi in *character (outs);
        LUMA_E_ABSENT when none; a null out: LUMA_E_ARGUMENT, reported. */
     int32_t (*file)(const LumaMod* mod, uint32_t* number, uint32_t* character);
 } LumaSaveService;
@@ -142,7 +143,7 @@ typedef struct LumaSaveGameService {
        open (any mod's), any screen waiting on the player, a time hold or a cutscene now: LUMA_E_BUSY (an answer,
        not reported); a path naming no file: LUMA_E_NOT_FOUND, not reported; LUMA_E_IO the file could not be read;
        LUMA_E_ABSENT a host without the offer screen; a path outside the data folder, a null fn or out:
-       LUMA_E_ARGUMENT, reported. (Draft 6.) */
+       LUMA_E_ARGUMENT, reported. */
     int32_t (*offer)(const LumaMod* mod, const char* path, LumaEventFn fn, void* user, LumaHandle* out);
     /* 1.0. Game thread. Ends a request: no event for it after this returns (registry 4.8); an open question closes
        as no, nothing replaced. LUMA_OK; a handle that is not this mod's open request: LUMA_E_HANDLE, reported. */
@@ -159,7 +160,7 @@ typedef struct LumaSaveGameService {
   item 4's (b) and (c), and the offer's queued write (item 8);
 - Host: `<save root>/<code>/luma/` through galaxy::saves (`save_files.h`: a `luma` sub-folder, plain names `<mod
   id>.bin`), the file thread's writer.
-- J: the offer screen (8) and the REMOVED MODS line (5) drawn; the import screen's takes_over line (6).
+- Screens: the offer screen (8) and the REMOVED MODS line (5) drawn; the import screen's takes_over line (6).
 
 ### 4. Messages (codes 180-199)
 
@@ -189,19 +190,22 @@ typedef struct LumaSaveGameService {
 | 2272 | takes_over: the old id removed, the new mod installed: its entries, global file and ids under the new id, Mods.TookOver; the old one installed and off: no move, the Note; installed and on: L213 at import |
 | 2273 | FORGET of a removed mod: luma/<id>.bin gone at once, its entries gone after the next save, its numbers gone from mod-ids.json, Mods.Forgotten |
 
-- G-SV1: `LumaSaveGameEvent` with EXPORT = 1 (value: the length) and OFFER = 2 (value: the file replaced).
-- G-SV2: export_file, take, offer and cancel commented (version, thread, each result, whether an event follows).
-- G-SV3: `get` returns the value's whole length when over `size` (null buf with size 0 asks the length).
-- G-SV4: item 10 says the 16 bytes are in every player's file and the Wii's save never sees them.
-- J, all in: J-SV1 one REMOVED MODS line (item 5); J-SV2 the id rule; J-SV3 takes_over as the player's answer, only
-  when the old id is gone, entries + global file + ids, never consent; J-SV4 the offer screen is Nebula's, over the
-  game, replacement through the module and the save handler's write from memory; J-SV5 the replaced file kept; J-SV6
-  183 `Save.Replaced`; J-SV7 no CANCELLED; J-SV8 BUSY across mods. Tests 2272 (takes_over), 2273 (FORGET) added.
-- Question 6: taken as G answered: the service stays bytes; LumaScript types it (json data, `get<bytes>` raw).
-- G R-5d: agreed;
+### 6. More rules
 
-- F-SV1 (make buffer grows, serialize bounded), F-SV2 (the read buffer regrows on TOO_LARGE, else a grown file reads
-  as corrupted) and F-SV3 (1 MiB a file) are item 4. Row 184 `Save.ChunkTooBig` added.
+- `LumaSaveGameEvent` kinds: EXPORT = 1 (value: the length) and OFFER = 2 (value: the file replaced).
+- `get` returns the value's whole length when it is over `size`; a null buf with size 0 asks the length.
+- The 16 bytes of item 10 are in every player's file; the Wii's save never sees them.
+- The offer screen is Nebula's own, over the game. There is no CANCELLED status. `takes_over` is the player's answer:
+  only when the old id is gone, its entries, global file and ids move to the new mod, never through consent.
+- `export_file`, `take`, `offer` and `cancel` are commented in the header: version, thread, each result, and whether
+  an event follows.
+- One REMOVED MODS line (item 5). The replacement goes through the module and the save handler's write from memory;
+  the replaced file is kept, and row 183 `Save.Replaced` says so. BUSY holds across mods. Tests 2272 (takes_over) and
+  2273 (FORGET).
+- The service holds bytes; LumaScript types them (`json` data, `get<bytes>` raw).
+- The write buffer grows as a mod's values grow, and what is written is bounded; the read buffer grows again on
+  TOO_LARGE, so a grown file never reads as damaged. A file holds at most 1 MiB of mods' data (item 4; over it,
+  `Save.ChunkTooBig`, 184).
 - Item 8: the replacement is queued to a frame's start when no save runs and the game's save sequence is idle; 2271
   loads file N in the same run too.
 
@@ -213,12 +217,11 @@ typedef struct LumaSaveGameService {
   file not created gives LUMA_E_NOT_FOUND. offer reads this form.
 - EXPORT's status adds LUMA_E_MEMORY (no memory for the bytes). The limit for export_file is 4 open requests a mod
   (and 32 in all: Service.Limit names whichever was reached).
-- offer answered LUMA_E_ABSENT after its argument checks until fs 2.3.
 - The chunk's numbers (item 3) are host order like every chunk of a version-3 save, not big-endian.
 
-### Offer wired (on h/roll2; R1: code first, not yet run)
+### 7. The offer
 
-- `data_file`, `ask_offer`, `close_offer`; a host without them answers LUMA_E_ABSENT). The file is read at the call on
+- The host gives `data_file`, `ask_offer` and `close_offer` (a host without them answers LUMA_E_ABSENT). The file is read at the call on
   the game thread; at most 4 MiB, else it is not a game file.
 - Parsed before any screen (SaveDataHandler::splitExport: "NSAV", version 1, 3 parts framed exactly; then the config
   and the last character's game data must load, and the other character's when it has bytes). A bad file: the call is
@@ -238,5 +241,5 @@ typedef struct LumaSaveGameService {
   at the start, no-save mode, a damaged save): LUMA_E_IO, nothing replaced. The file loaded meanwhile: LUMA_E_DENIED.
 - cancel and the mod's stop: the open screen closes (close_asks) with no event; after REPLACE the replacement still
   goes through, without an event. One handle count for export and offer requests.
-- Test 2271-offer (h/tests/save; save-g k 18-20 now imports fs): missing, broken, busy, REPLACE twice (the second
-  keeps the old file), cancel. 2270a's offer of a missing file is now LUMA_E_NOT_FOUND.
+- Test 2271-offer: a missing file, a broken one, busy, REPLACE twice (the second keeps the old file), cancel. An
+  offer of a missing file is LUMA_E_NOT_FOUND.
