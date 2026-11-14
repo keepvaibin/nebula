@@ -3,8 +3,10 @@
 //! class neither the game's factory list (the self-description's placement facts) nor the game's planet table names
 //! cannot be checked before the mods' code runs: it is kept as an `after_start` touch (class, file, line), which the
 //! host gives the game module after the last mod's start (luma_refs.h), and said as not checked here (L403,
-//! Missing.AfterStart; Missing.Classes when the factory list was not given, and every placement waits). A class no
-//! mod made is then Content.MissingClass (620) and the placeholder object stands there.
+//! Missing.AfterStart; Missing.Classes when the factory list was not given, and every placement but a planet's
+//! waits). A class no mod made is then Content.MissingClass (620) and the placeholder object stands there. The game's
+//! check runs before any scene, when the planet table (a scene's object) is not there to ask: a planet's name is
+//! known here, from the store's table, whether or not the factory list is given.
 
 use super::patches::{MAX_PATCH, SEP};
 use super::Ctx;
@@ -26,7 +28,8 @@ pub(crate) fn is_placement_table(path: &str) -> bool {
 }
 
 /// The classes known before any mod's code runs, in lowercase: the factory's (None when the self-description gives
-/// none: then no class is known and every placement is left to the check after start) and the game's planets.
+/// none: then no factory class is known and those placements are left to the check after start, which asks the
+/// factory) and the game's planets (whenever the store is given: the check after start cannot ask for them).
 struct Known {
     factory: Option<HashSet<String>>,
     planets: HashSet<String>,
@@ -37,12 +40,10 @@ impl Known {
         let game = ctx.game();
         let factory = game.and_then(|g| g.names).and_then(|n| n.factory.clone());
         let mut planets = HashSet::new();
-        if factory.is_some() {
-            if let Some(store) = game.and_then(|g| g.store) {
-                if let Some(table) = store.path(PLANET_TABLE).and_then(|p| store.table(&p)) {
-                    if let (Some(rows), Some(at)) = (table.cells.as_ref(), table.columns.iter().position(|(c, _)| same_column(c, "PlanetName"))) {
-                        planets.extend(rows.iter().filter_map(|r| r.get(at)).map(|n| n.to_lowercase()));
-                    }
+        if let Some(store) = game.and_then(|g| g.store) {
+            if let Some(table) = store.path(PLANET_TABLE).and_then(|p| store.table(&p)) {
+                if let (Some(rows), Some(at)) = (table.cells.as_ref(), table.columns.iter().position(|(c, _)| same_column(c, "PlanetName"))) {
+                    planets.extend(rows.iter().filter_map(|r| r.get(at)).map(|n| n.to_lowercase()));
                 }
             }
         }

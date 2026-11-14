@@ -325,5 +325,10 @@ bool PlanetMapCreatorFunction::isLoadArchiveAfterScenarioSelected(const char* pA
 }
 
 bool PlanetMapCreatorFunction::isRegisteredObj(const char* pArchive) {
+    // The planet table is a game scene's object. Before any scene (the factory asked at the mods' start: a mod class's
+    // base, the after-start check) and in a scene without it there is no table, and no name is one of its planets.
+    if (!MR::isExistSceneObj(SceneObj_PlanetMapCreator)) {
+        return false;
+    }
     return MR::getSceneObj< PlanetMapCreator >(SceneObj_PlanetMapCreator)->getTableData(pArchive) != nullptr;
 }

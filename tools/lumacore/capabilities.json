@@ -115,6 +115,8 @@
     "modlog.page": "Mods > Log lists each mod's entries with place and count, reached by pad and keys (3.12)",
     "modlog.entry": "An entry opens whole: its source, its place and all its text, in pages (3.12)",
     "refs.nocost": "With no mod the references check is never called and no placeholder is made (3.12)",
+    "refs.after_start": "The host gives the game the placements of classes no list of the game names once the mods have started, before any scene; the game answers each there and says how many no mod makes (references 3)",
+    "refs.missing_class": "A placement of a class no mod makes is Content.MissingClass (620) once, and the placeholder object stands at its place; the stage plays on (references 3, 4)",
     "startcheck.part": "A game part missing (the shader compiler) is said in one line naming it (3.13)",
     "startcheck.allmodsoff": "With a game part missing every mod is off and the title is still reached (3.13)",
     "startcheck.nocost": "With no mod none of the game's parts is checked: no line, no notice (3.13)",
