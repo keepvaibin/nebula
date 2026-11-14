@@ -669,6 +669,14 @@ def call_arg(value, param, path, classes):
     raise HarnessError("%s: the harness cannot pass a parameter of type %s" % (path, param))
 
 
+def scope_of(c, path):
+    """A check's `scope`: absent (the test's own mods) or "installation" (it reads what every installed mod adds to: the
+    Mods screen's lines and pages, the mod log's notices, pages and last entry, a count of mods). Judged here like any
+    check; a run that installs other mods beside the test's (two tests together) leaves it to the test's own run."""
+    if "scope" in c and c["scope"] != "installation":
+        raise HarnessError("%s.scope is \"installation\" or absent" % path)
+
+
 def read_expect(t, bare, steps):
     expect = t["expect"]
     if not isinstance(expect, list):
@@ -680,7 +688,8 @@ def read_expect(t, bare, steps):
         if not isinstance(c, dict):
             raise HarnessError("%s is not an object" % path)
         if "fact" in c:
-            keys_known(c, path, {"fact", "when", "frames", "within", "matching", "field"} | FACT_OPS)
+            keys_known(c, path, {"fact", "when", "frames", "within", "matching", "field", "scope"} | FACT_OPS)
+            scope_of(c, path)
             if bare:
                 raise HarnessError("%s: a bare test checks only the log, pictures and sound" % path)
             op, value, within = read_check(c, path, {"within", "count"})
@@ -712,7 +721,8 @@ def read_expect(t, bare, steps):
                         "within": within, "when": when, "frames": frames, "matching": matching, "field": field,
                         "source": c})
         elif "log" in c or "no_log" in c:
-            keys_known(c, path, {"log", "no_log", "times"})
+            keys_known(c, path, {"log", "no_log", "times", "scope"})
+            scope_of(c, path)
             if ("log" in c) == ("no_log" in c):
                 raise HarnessError("%s: log and no_log are separate checks" % path)
             key = "log" if "log" in c else "no_log"
