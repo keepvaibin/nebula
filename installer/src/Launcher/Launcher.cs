@@ -25,20 +25,27 @@ namespace Nebula.Launcher
         private static int Main(string[] args)
         {
             NativeMethods.SetProcessDpiAwarenessContext(new IntPtr(-4));
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
             try
             {
+                // The in-game menu runs this: a restart once the game has exited (--record: a diagnostics run).
+                int restartAfter = 0;
+                bool restarting = args.Length > 1 && string.Equals(args[0], "--restart-after", StringComparison.OrdinalIgnoreCase) &&
+                                  int.TryParse(args[1], out restartAfter);
+                // The update check, first: it runs behind everything below and is taken before the game starts
+                // (UpdateService). A restart from the game's menu offers nothing.
+                LaunchSession session = restarting ? null : new LaunchSession();
+                if (session != null && UpdateCheck.Enabled(session)) UpdateService.Begin();
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
                 // A .luma opened from Explorer: the Mods page, with it being imported.
-                if (args.Length > 1 && string.Equals(args[0], "--open-mod", StringComparison.OrdinalIgnoreCase))
+                if (!restarting && args.Length > 1 && string.Equals(args[0], "--open-mod", StringComparison.OrdinalIgnoreCase))
                 {
-                    Application.Run(new SettingsForm(new LaunchSession(), args[1]));
+                    var importing = new SettingsForm(session, args[1]);
+                    Application.Run(importing);
+                    if (!importing.UpdateStarted) UpdateService.Finish();
                     return 0;
                 }
-                // The in-game menu runs this: a restart once the game has exited (--record: a diagnostics run).
-                int restartAfter;
-                if (args.Length > 1 && string.Equals(args[0], "--restart-after", StringComparison.OrdinalIgnoreCase) &&
-                    int.TryParse(args[1], out restartAfter))
+                if (restarting)
                 {
                     WaitForExit(restartAfter);
                     var restart = new LaunchSession();
@@ -49,15 +56,22 @@ namespace Nebula.Launcher
                     MessageBox.Show(restartError, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return 1;
                 }
-                var session = new LaunchSession();
                 if (!OpensSettings(args, session))
                 {
                     if (UpdateCheck.OfferBeforeLaunch(session)) return 0;
                     string error = session.TryLaunch();
-                    if (error == null) return 0;
+                    if (error == null)
+                    {
+                        // The game is up; a check still running ends here, behind it, and is kept for the next start.
+                        UpdateService.Finish();
+                        return 0;
+                    }
                     MessageBox.Show(error, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
-                Application.Run(new SettingsForm(session));
+                var settings = new SettingsForm(session);
+                Application.Run(settings);
+                // A check still running is kept for the next start, unless an update's Setup waits for this to close.
+                if (!settings.UpdateStarted) UpdateService.Finish();
                 return 0;
             }
             catch (Exception error)
@@ -99,6 +113,7 @@ namespace Nebula.Launcher
         public bool SetupComplete;
         public RecordingMode Recording = RecordingMode.None;
         public bool AskAboutUpdates = true;  // a newer release is offered at each start (UpdateCheck)
+        public string SkippedUpdate;         // the release Skip this version passed over; only newer ones are offered
 
         public string SettingsFile { get { return Portable ? Path.Combine(App, "portable-settings.json") : NebulaPaths.SettingsFile; } }
 
@@ -121,6 +136,7 @@ namespace Nebula.Launcher
                 if (Json.Long(settings, "settingsVersion") >= 4 && recording >= 0 && recording <= 2)
                     Recording = (RecordingMode)recording;
                 if (settings.ContainsKey("askAboutUpdates")) AskAboutUpdates = Json.Bool(settings, "askAboutUpdates");
+                SkippedUpdate = Json.Str(settings, "skippedUpdate");
             }
             catch (Exception) { }
         }
@@ -130,7 +146,7 @@ namespace Nebula.Launcher
             Json.Save(SettingsFile, new Dictionary<string, object>
             {
                 { "settingsVersion", 4 }, { "content", Content }, { "recording", (int)Recording },
-                { "askAboutUpdates", AskAboutUpdates }
+                { "askAboutUpdates", AskAboutUpdates }, { "skippedUpdate", SkippedUpdate }
             });
             SetupComplete = true;
         }
@@ -284,6 +300,11 @@ namespace Nebula.Launcher
     internal sealed class SettingsForm : Form
     {
         private readonly LaunchSession session;
+        // A newer release, in the bottom row beside Save (WatchForUpdate); its prompt opens only when pressed.
+        private readonly Button updateBanner = new Button();
+        private ReleaseInfo pendingUpdate;
+        /// <summary>True once an update's Setup was started from this window (it closes for Setup to replace it).</summary>
+        public bool UpdateStarted { get; private set; }
         private readonly List<MonitorEntry> monitors = DisplayInfo.Enumerate();
         private GraphicsSettings graphics = GraphicsSettings.Load();
         private AudioSettings audio = AudioSettings.Load();
@@ -645,11 +666,19 @@ namespace Nebula.Launcher
             save.Visible = !firstRun;
 #endif
 
+            updateBanner.Location = new Point(12, 628);
+            updateBanner.Size = new Size(470, 38);
+            updateBanner.AutoEllipsis = true;
+            updateBanner.TextAlign = ContentAlignment.MiddleLeft;
+            updateBanner.Visible = false;
+            updateBanner.Click += delegate { OpenUpdate(); };
+            Controls.Add(updateBanner);
+
             LoadValues();
+            Shown += delegate { WatchForUpdate(); };
             monitor.SelectedIndexChanged += delegate
             {
                 if (loading) return;
-                graphics.FullscreenWidth = graphics.FullscreenHeight = graphics.FullscreenRefresh = 0;
                 FillInterpolationChoices();
                 RefreshDisplayChoices();
                 RefreshDisplayNotice();
@@ -719,6 +748,47 @@ namespace Nebula.Launcher
             using (var g = CreateGraphics()) tabs.ItemSize = new Size((int)(98 * g.DpiX / 96f), (int)(28 * g.DpiY / 96f));
             // After scaling: the notice moves the rows below it by its measured height.
             RefreshDisplayNotice();
+        }
+
+        // The offer of a newer release: at once from the answer already in (this start's check, else the last one), and
+        // when this start's check answers while the window is open. It shows the banner and takes no focus.
+        private void WatchForUpdate()
+        {
+            if (!UpdateCheck.Enabled(session)) return;
+            ShowUpdate(UpdateCheck.Pending(session));
+            var check = UpdateService.Running;
+            if (check == null || check.IsCompleted) return;
+            check.ContinueWith(delegate
+            {
+                try
+                {
+                    if (!IsDisposed && IsHandleCreated)
+                        BeginInvoke((Action)delegate { if (!IsDisposed) ShowUpdate(UpdateCheck.Pending(session)); });
+                }
+                catch (InvalidOperationException) { }   // the window closed meanwhile
+            });
+        }
+
+        private void ShowUpdate(ReleaseInfo release)
+        {
+            pendingUpdate = release;
+            if (release != null) updateBanner.Text = NebulaText.Of("Nebula {0} is available", release.Version) + "  ·  " + NebulaText.Of("Update");
+            updateBanner.Visible = release != null;
+        }
+
+        // The prompt, from the banner. An update started keeps the edits made here and closes the window, so Setup
+        // can replace the launcher; Skip this version hides the banner.
+        private void OpenUpdate()
+        {
+            if (pendingUpdate == null) return;
+            if (!UpdateCheck.Prompt(session, pendingUpdate, this, false))
+            {
+                ShowUpdate(UpdateCheck.Pending(session));
+                return;
+            }
+            UpdateStarted = true;
+            Commit();
+            Close();
         }
 
         private int Scheme { get { return Math.Max(0, editScheme.SelectedIndex); } }

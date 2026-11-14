@@ -178,8 +178,8 @@ namespace Nebula.Launcher
         public string Monitor = "";
         // The GPU the game renders on (GpuAdapter.Id); empty chooses automatically.
         public string Gpu = "";
-        public int WindowWidth = 1280, WindowHeight = 720;
-        public int FullscreenWidth = 0, FullscreenHeight = 0, FullscreenRefresh = 0;
+        // The runtime's defaults (render_config.h) for a file without the keys.
+        public int WindowWidth = 854, WindowHeight = 480;
         public int Aspect = 0;
         public bool VSync = false;
         public int FrameRate = 60;
@@ -242,9 +242,6 @@ namespace Nebula.Launcher
             if (values.TryGetValue("gpu", out gpu)) settings.Gpu = gpu.Trim().ToLowerInvariant();
             settings.WindowWidth = Choice(values, "window_width", 65536, settings.WindowWidth);
             settings.WindowHeight = Choice(values, "window_height", 65536, settings.WindowHeight);
-            settings.FullscreenWidth = Choice(values, "fullscreen_width", 16385, 0);
-            settings.FullscreenHeight = Choice(values, "fullscreen_height", 16385, 0);
-            settings.FullscreenRefresh = Choice(values, "fullscreen_refresh_hz", 1001, 0);
             settings.Aspect = AspectChoice(values, settings.Aspect);
             string vsync;
             if (values.TryGetValue("vsync_interval", out vsync)) settings.VSync = vsync.Trim() != "0";
@@ -301,9 +298,6 @@ namespace Nebula.Launcher
                 new KeyValuePair<string, string>("gpu", Gpu ?? ""),
                 new KeyValuePair<string, string>("window_width", n(WindowWidth)),
                 new KeyValuePair<string, string>("window_height", n(WindowHeight)),
-                new KeyValuePair<string, string>("fullscreen_width", n(FullscreenWidth)),
-                new KeyValuePair<string, string>("fullscreen_height", n(FullscreenHeight)),
-                new KeyValuePair<string, string>("fullscreen_refresh_hz", n(FullscreenRefresh)),
                 new KeyValuePair<string, string>("aspect", AspectNames[Math.Max(0, Math.Min(Aspect, AspectNames.Length - 1))]),
                 new KeyValuePair<string, string>("vsync_interval", VSync ? "1" : "0"),
                 new KeyValuePair<string, string>("max_fps", n(FrameRate)),

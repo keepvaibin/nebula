@@ -4,6 +4,9 @@ param([string]$Setup = '')
 # (-Setup adds a built Setup). Writes PNGs to the scratch folder.
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+# The one list of settings (runtime/src/ui/settings_table.tsv) against the launchers, the game's menu and the engine.
+& python (Join-Path $repo 'tools\settings_table.py') --check
+if ($LASTEXITCODE -ne 0) { throw 'settings_table.py: the settings table and the code disagree.' }
 $scratch = Join-Path $env:TEMP ('nebula-launcher-tests-' + [guid]::NewGuid().ToString('N'))
 $app = Join-Path $scratch 'root\versions\test'
 $localAppData = Join-Path $scratch 'localappdata'

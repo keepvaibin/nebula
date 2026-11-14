@@ -60,10 +60,6 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     var screen by mutableStateOf(if (install != null) Screen.Home else Screen.Welcome)
     var disc by mutableStateOf<DiscPick?>(null)
         private set
-    var graphics by mutableStateOf(GraphicsSettings.read(app))
-        private set
-    var controls by mutableStateOf(ControlsSettings.read(app))
-        private set
     var gameExit by mutableStateOf<GameExit?>(null)
     var freeBytes by mutableStateOf(Storage.freeBytes(app))
         private set
@@ -301,16 +297,6 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     fun importRetry() {
         Imports.acknowledge()
         screen = Screen.Disc
-    }
-
-    fun updateGraphics(value: GraphicsSettings) {
-        graphics = value
-        value.write(app)
-    }
-
-    fun updateControls(value: ControlsSettings) {
-        controls = value
-        value.write(app)
     }
 
     fun removeGame() {
