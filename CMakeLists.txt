@@ -81,6 +81,17 @@ function(galaxy_host_options target)
     endif()
 endfunction()
 
+# Libraries only a movie (Media Foundation, D3D11 for its decoder), a download (WinHTTP) and the XeSS library's signature
+# check (WinTrust) call: loaded at that first call instead of before main. A library a back end does not import is
+# skipped by the linker (LNK4199).
+function(nebula_host_delay_loads target)
+    if(MSVC)
+        target_link_options(${target} PRIVATE /DELAYLOAD:MFPlat.dll /DELAYLOAD:MFReadWrite.dll /DELAYLOAD:d3d11.dll
+            /DELAYLOAD:winhttp.dll /DELAYLOAD:wintrust.dll /IGNORE:4199)
+        target_link_libraries(${target} PRIVATE delayimp)
+    endif()
+endfunction()
+
 # The Windows x64 host's two builds (GALAXY_NATIVE_ISA above). The AVX2 program enters at nebula_host_entry, compiled
 # without the AVX2 option and without buffer security checks, which tests the CPU before the C runtime starts and runs
 # <program>-x86-64-v2.exe where the CPU lacks x86-64-v3. The SSE4.2 tree names its program so; it needs no test.
@@ -534,6 +545,7 @@ if(MSVC)
     target_link_options(NebulaNative PRIVATE /DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:NebulaNative.pdb)
 endif()
 nebula_host_cpu_entry(NebulaNative)
+nebula_host_delay_loads(NebulaNative)
 
 option(NEBULA_HOST_IPO "Optimize the host libraries across source files in Release builds" ON)
 set(nebula_host_ipo_effective OFF)
@@ -833,6 +845,7 @@ runtime/src/render/host_window_win32.cpp
         target_link_options(NebulaNativeVk PRIVATE /DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:NebulaNativeVk.pdb)
     endif()
     nebula_host_cpu_entry(NebulaNativeVk)
+    nebula_host_delay_loads(NebulaNativeVk)
 
     # The Vulkan pipeline cache file name (device_quirks_vk.cpp driver_key).
     galaxy_test(galaxy_vk_driver_key_tests SOURCES runtime/src/render/vk/driver_key_tests.cpp
