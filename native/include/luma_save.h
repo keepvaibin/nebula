@@ -2,7 +2,10 @@
 /* LumaCore's save services (contract services-save): a mod's own values kept in the player's game file (`save`,
    written when the game saves, copied and erased with the file), its values across files (`save.global`, written at
    once), and the game's own file handed out or offered back through the game's screen (`save.game`, permission
-   `save.game`). A key is 1 to 64 of a-z 0-9 _ - .; a value 0 to 64 KiB. */
+   `save.game`). A key is a name, 1 to 64 of a-z 0-9 _ - .; a value 0 to 64 KiB.
+   1.1, `save` only: a key may also be "<mod id>/<name>", a value this mod keeps in the file for that mod (a library's
+   value for each mod that uses it). Forgetting that mod on the Mods page removes every such value, in every mod's part
+   of every user file, with no call of the library's. save.global takes names alone. */
 #ifndef LUMA_SAVE_H
 #define LUMA_SAVE_H
 
@@ -14,7 +17,7 @@ extern "C" {
 
 #define LUMA_SAVE_NAME "save"
 #define LUMA_SAVE_MAJOR 1u
-#define LUMA_SAVE_MINOR 0u
+#define LUMA_SAVE_MINOR 1u
 #define LUMA_SAVE_GLOBAL_NAME "save.global"
 #define LUMA_SAVE_GLOBAL_MAJOR 1u
 #define LUMA_SAVE_GLOBAL_MINOR 0u
@@ -22,7 +25,7 @@ extern "C" {
 #define LUMA_SAVE_GAME_MAJOR 1u
 #define LUMA_SAVE_GAME_MINOR 0u
 
-#define LUMA_SAVE_KEY_MOST 64u          /* bytes of a key */
+#define LUMA_SAVE_KEY_MOST 64u          /* bytes of a key's name (a key kept for a mod: the id, "/" and the name) */
 #define LUMA_SAVE_VALUE_MOST 65536u     /* bytes of a value */
 #define LUMA_SAVE_MOD_MOST 262144u      /* one mod's entries in one file, keys and values with their lengths */
 #define LUMA_SAVE_GLOBAL_MOST 1048576u  /* one mod's global file */

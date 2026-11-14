@@ -116,6 +116,10 @@ typedef struct NebulaHostForExtension {
        method type through; nothing while none is open. While one is open, menu_key's enter, esc, backspace, left and
        right edit it instead of reaching a menu. Null in a host without text entry. */
     void (*type_text)(void* host, const char* utf8);
+    /* FORGET on the Mods page's REMOVED MODS line for `mod_id`, as the player chooses it: what the removed mod kept is
+       dropped and every running mod watching (mods.watch_mods) gets FORGOTTEN. An id the line does not list: nothing,
+       and one log line. Null in a host without mods. */
+    void (*forget_mod)(void* host, const char* mod_id);
 } NebulaHostForExtension;
 
 /* What the extension offers. Each function may be null. */

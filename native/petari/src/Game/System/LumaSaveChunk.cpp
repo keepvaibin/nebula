@@ -55,18 +55,39 @@ namespace {
         return true;
     }
 
-    // A key (item 4): 1 to 64 of a-z 0-9 _ - .
-    bool validKeyBytes(const u8* pKey, u32 length) {
+    // A key's name (item 4): 1 to 64 of a-z 0-9 _ - .
+    bool validNameBytes(const u8* pName, u32 length) {
         if (length == 0 || length > LumaSaveChunk::cKeyMost) {
             return false;
         }
         for (u32 i = 0; i < length; i++) {
-            const u8 c = pKey[i];
+            const u8 c = pName[i];
             if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.')) {
                 return false;
             }
         }
         return true;
+    }
+
+    // A key (items 4 and 5): a name, or "<mod id>/<name>", a value kept for that mod (forgetting the mod removes it
+    // from every mod's values).
+    bool validKeyBytes(const u8* pKey, u32 length) {
+        for (u32 i = 0; i < length; i++) {
+            if (pKey[i] == '/') {
+                return validIdBytes(pKey, i) && validNameBytes(pKey + i + 1, length - i - 1);
+            }
+        }
+        return validNameBytes(pKey, length);
+    }
+
+    // The length of the mod id a key is kept for ("<mod id>/<name>"), 0 for a key of a name alone.
+    u32 forIdLength(const u8* pKey, u32 length) {
+        for (u32 i = 0; i < length; i++) {
+            if (pKey[i] == '/') {
+                return i;
+            }
+        }
+        return 0;
     }
 
     // One Error in the mod log about a file's chunk (no mod's: the data of every mod in it).
@@ -436,13 +457,79 @@ u32 LumaSaveChunk::getModBytes(const char* pModId) const {
     return modAt >= 0 ? modBytes(static_cast< u32 >(modAt)) : 0;
 }
 
-void LumaSaveChunk::forgetMod(const char* pModId) {
-    const s32 modAt = findMod(pModId);
-    if (modAt < 0) {
+u32 LumaSaveChunk::entrySize(u32 at) const {
+    return 1 + mData[at] + 4 + MR::loadSaveU32(mData + at + 1 + mData[at]);
+}
+
+bool LumaSaveChunk::isKeptFor(u32 at, const char* pModId, u32 idLength) const {
+    return forIdLength(mData + at + 1, mData[at]) == idLength && sameBytes(mData + at + 1, pModId, idLength);
+}
+
+u32 LumaSaveChunk::getForBytes(const char* pModId) const {
+    if (mNewer) {
+        return 0;
+    }
+    const u32 idLength = textLength(pModId);
+    u32 bytes = 0;
+    for (u32 modAt = 0; modAt < mSize; modAt += 1 + mData[modAt] + 4 + modBytes(modAt)) {
+        const u32 first = modAt + 1 + mData[modAt] + 4;
+        const u32 end = first + modBytes(modAt);
+        for (u32 at = first; at < end; at += entrySize(at)) {
+            if (isKeptFor(at, pModId, idLength)) {
+                bytes += entrySize(at);
+            }
+        }
+    }
+    return bytes;
+}
+
+void LumaSaveChunk::forEachFor(void (*pFn)(void* pUser, const char* pId, u32 idLength, u32 bytes), void* pUser) const {
+    if (mNewer) {
         return;
     }
-    (void)splice(static_cast< u32 >(modAt), 1 + mData[modAt] + 4 + modBytes(static_cast< u32 >(modAt)), 0);
-    mMods--;
+    for (u32 modAt = 0; modAt < mSize; modAt += 1 + mData[modAt] + 4 + modBytes(modAt)) {
+        const u32 first = modAt + 1 + mData[modAt] + 4;
+        const u32 end = first + modBytes(modAt);
+        for (u32 at = first; at < end; at += entrySize(at)) {
+            const u32 idLength = forIdLength(mData + at + 1, mData[at]);
+            if (idLength != 0) {
+                pFn(pUser, reinterpret_cast< const char* >(mData + at + 1), idLength, entrySize(at));
+            }
+        }
+    }
+}
+
+void LumaSaveChunk::forgetMod(const char* pModId) {
+    if (mNewer) {
+        return;
+    }
+    const s32 ownAt = findMod(pModId);
+    if (ownAt >= 0) {
+        (void)splice(static_cast< u32 >(ownAt), 1 + mData[ownAt] + 4 + modBytes(static_cast< u32 >(ownAt)), 0);
+        mMods--;
+    }
+    // Then what every other mod keeps for it ("<id>/" keys); a mod left with no values has no block.
+    const u32 idLength = textLength(pModId);
+    for (u32 modAt = 0; modAt < mSize;) {
+        const u32 first = modAt + 1 + mData[modAt] + 4;
+        u32 end = first + modBytes(modAt);
+        for (u32 at = first; at < end;) {
+            const u32 size = entrySize(at);
+            if (isKeptFor(at, pModId, idLength)) {
+                (void)splice(at, size, 0);  // shrinking never allocates
+                setModBytes(modAt, modBytes(modAt) - size);
+                end -= size;
+            } else {
+                at += size;
+            }
+        }
+        if (modBytes(modAt) == 0) {
+            (void)splice(modAt, 1 + mData[modAt] + 4, 0);
+            mMods--;
+        } else {
+            modAt = end;
+        }
+    }
 }
 
 LumaSaveChunk::Result LumaSaveChunk::renameMod(const char* pOldId, const char* pNewId) {

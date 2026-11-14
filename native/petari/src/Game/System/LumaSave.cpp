@@ -64,9 +64,17 @@ namespace luma {
                 return LUMA_OK;
             }
 
-            bool checkKey(const LumaMod* pMod, const char* pWhere, const char* pKey) {
+            // A key by the rule (item 4). A key kept for a mod ("<mod id>/<name>", item 5) is the user files' only: a
+            // global file is not read at a FORGET, so save.global takes names alone.
+            bool checkKey(const LumaMod* pMod, const char* pWhere, const char* pKey, bool keptFor = true) {
                 if (LumaSaveChunk::isValidKey(pKey)) {
-                    return true;
+                    bool slash = false;
+                    for (const char* p = pKey; *p != '\0'; p++) {
+                        slash = slash || *p == '/';
+                    }
+                    if (keptFor || !slash) {
+                        return true;
+                    }
                 }
                 report(pMod, pWhere, 101u, "key");
                 return false;
@@ -464,7 +472,7 @@ namespace luma {
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
                 }
-                if (!checkKey(pMod, pWhere, pKey)) {
+                if (!checkKey(pMod, pWhere, pKey, false)) {
                     return LUMA_E_ARGUMENT;
                 }
                 if (pBuf == nullptr && size != 0) {
@@ -485,7 +493,7 @@ namespace luma {
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
                 }
-                if (!checkKey(pMod, pWhere, pKey)) {
+                if (!checkKey(pMod, pWhere, pKey, false)) {
                     return LUMA_E_ARGUMENT;
                 }
                 if (pValue == nullptr && bytes != 0) {
@@ -518,7 +526,7 @@ namespace luma {
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
                 }
-                if (!checkKey(pMod, pWhere, pKey)) {
+                if (!checkKey(pMod, pWhere, pKey, false)) {
                     return LUMA_E_ARGUMENT;
                 }
                 GlobalStore* pStore = nullptr;
@@ -743,21 +751,26 @@ namespace luma {
                 LumaSaveChunk values(nullptr);
                 if (values.parse(pFile + at + BinaryDataChunk::cDataOffset, chunkSize - BinaryDataChunk::cDataOffset) ==
                     LumaSaveChunk::Result_Ok) {
-                    values.forEachMod([](void* pUser, const char*, u32, u32) { (*static_cast< u32* >(pUser))++; }, &count);
+                    // A row per mod with values, and per value another mod keeps for a mod ("<id>/" keys): the
+                    // REMOVED MODS line lists a mod whose only data is what a library keeps for it, and luma_save_kept
+                    // adds its rows up by id.
+                    const auto counted = [](void* pUser, const char*, u32, u32) { (*static_cast< u32* >(pUser))++; };
+                    values.forEachMod(counted, &count);
+                    values.forEachFor(counted, &count);
                     pRows = count != 0 ? new KeptRow[count] : nullptr;
                     if (pRows != nullptr) {
                         RowsFill fill = {pRows, 0};
-                        values.forEachMod(
-                            [](void* pUser, const char* pId, u32 idLength, u32 bytes) {
-                                RowsFill& rFill = *static_cast< RowsFill* >(pUser);
-                                KeptRow& rRow = rFill.mRows[rFill.mCount++];
-                                for (u32 i = 0; i < idLength; i++) {
-                                    rRow.mId[i] = pId[i];
-                                }
-                                rRow.mId[idLength] = '\0';
-                                rRow.mBytes = bytes;
-                            },
-                            &fill);
+                        const auto filled = [](void* pUser, const char* pId, u32 idLength, u32 bytes) {
+                            RowsFill& rFill = *static_cast< RowsFill* >(pUser);
+                            KeptRow& rRow = rFill.mRows[rFill.mCount++];
+                            for (u32 i = 0; i < idLength; i++) {
+                                rRow.mId[i] = pId[i];
+                            }
+                            rRow.mId[idLength] = '\0';
+                            rRow.mBytes = bytes;
+                        };
+                        values.forEachMod(filled, &fill);
+                        values.forEachFor(filled, &fill);
                     } else {
                         count = 0;  // no memory: this file's mods are not counted until it is stored again
                     }

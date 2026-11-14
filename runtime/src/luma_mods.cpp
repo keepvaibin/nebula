@@ -1036,12 +1036,18 @@ struct StopNode {
     StopWatch* owner;     // its entry in g_stop_watches (never erased, so it stays put)
 };
 
-// A running mod watching others stop: the ids stopped since its last delivery, in order.
+// What a watcher is told: a mod stopped, or a removed mod's data was forgotten.
+struct Told {
+    std::int32_t kind;  // LUMA_MODS_EVENT_STOPPED or LUMA_MODS_EVENT_FORGOTTEN
+    std::string id;
+};
+
+// A running mod watching others stop and be forgotten: what happened since its last delivery, in order.
 struct StopWatch {
     const LumaMod* watcher = nullptr;
     LumaEventFn fn = nullptr;
     void* user = nullptr;
-    std::vector<std::string> stopped;
+    std::vector<Told> stopped;
     StopNode node{};
 };
 
@@ -1052,7 +1058,7 @@ void deliver_stopped(LumaEventNode* node) {
     const LumaMod* mod = nullptr;
     LumaEventFn fn = nullptr;
     void* user = nullptr;
-    std::vector<std::string> stopped;
+    std::vector<Told> stopped;
     {
         const std::lock_guard<std::mutex> lock(g_options_lock);
         if (owner->fn == nullptr) {
@@ -1064,13 +1070,13 @@ void deliver_stopped(LumaEventNode* node) {
         stopped.swap(owner->stopped);
     }
     const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
-    for (const std::string& id : stopped) {
+    for (const Told& told : stopped) {
         LumaEvent event{};
         event.size = sizeof(event);
-        event.kind = LUMA_MODS_EVENT_STOPPED;
+        event.kind = told.kind;
         event.status = LUMA_OK;
-        event.data = id.c_str();
-        event.data_size = id.size();
+        event.data = told.id.c_str();
+        event.data_size = told.id.size();
         if (kernel == nullptr || kernel->call(mod, LUMA_MODS_NAME, fn, user, &event) != LUMA_OK) {
             return;  // the watcher is gone
         }
@@ -1122,6 +1128,21 @@ std::int32_t mods_watch_mods(const LumaMod* mod, LumaEventFn fn, void* user) {
     return LUMA_OK;
 }
 
+// Under g_options_lock, any thread: every running mod watching (watch_mods) is told `id` with `kind`, at its next frame.
+void tell_watchers_locked(const LumaServiceKernel* kernel, std::int32_t kind, std::string_view id) {
+    for (const std::unique_ptr<StopWatch>& watch : g_stop_watches) {
+        if (watch->fn == nullptr || watch->watcher == nullptr || kernel->mod_live(watch->watcher) == 0) {
+            continue;
+        }
+        try {
+            watch->stopped.push_back({kind, std::string(id)});
+        } catch (...) {
+            continue;  // no memory: this watcher misses the event
+        }
+        (void)kernel->post(&watch->node.event);  // queued already: the new one goes with it
+    }
+}
+
 // Game thread, after the mod's stop: no event for it from now on (a node already queued is dropped by the kernel); every
 // other running mod watching (watch_mods) is told its id.
 void options_mod_gone(void*, const LumaMod* mod) {
@@ -1144,19 +1165,8 @@ void options_mod_gone(void*, const LumaMod* mod) {
             watch->stopped.clear();
         }
     }
-    if (gone_id == nullptr) {
-        return;
-    }
-    for (const std::unique_ptr<StopWatch>& watch : g_stop_watches) {
-        if (watch->fn == nullptr || watch->watcher == nullptr || kernel->mod_live(watch->watcher) == 0) {
-            continue;
-        }
-        try {
-            watch->stopped.emplace_back(gone_id);
-        } catch (...) {
-            continue;  // no memory: this watcher misses the event
-        }
-        (void)kernel->post(&watch->node.event);  // queued already: the new id goes with it
+    if (gone_id != nullptr) {
+        tell_watchers_locked(kernel, LUMA_MODS_EVENT_STOPPED, gone_id);
     }
 }
 
@@ -1662,6 +1672,11 @@ void forget(std::string_view id) {
             g_chunk_forget(std::string(id).c_str());
         }
         galaxy::luma_fs::forget_data(id);  // its data folder, after every fs request queued before
+        // Every running mod watching (watch_mods) is told, so a library drops what it holds for the id elsewhere.
+        if (const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire)) {
+            const std::lock_guard<std::mutex> lock(g_options_lock);
+            tell_watchers_locked(kernel, LUMA_MODS_EVENT_FORGOTTEN, id);
+        }
     }
     galaxy::modlog::add_row(LUMA_MODLOG_CODE, LUMA_MODLOG_NOTE, id, 162u, "", "Mods.Forgotten", {});
 }

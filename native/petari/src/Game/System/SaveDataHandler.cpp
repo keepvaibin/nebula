@@ -285,7 +285,7 @@ bool SaveDataHandler::forgetLumaMod(const char* pId) {
             LumaSaveChunk values(nullptr);
             if (values.parse(pFile->mData + at + BinaryDataChunk::cDataOffset, chunkSize - BinaryDataChunk::cDataOffset) !=
                     LumaSaveChunk::Result_Ok ||
-                values.getModBytes(pId) == 0) {
+                (values.getModBytes(pId) == 0 && values.getForBytes(pId) == 0)) {
                 continue;
             }
             held = true;

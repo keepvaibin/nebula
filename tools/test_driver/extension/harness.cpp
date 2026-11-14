@@ -366,7 +366,7 @@ std::string json_string(std::string_view text) {
 
 // --- The plan ------------------------------------------------------------------------------------------------------
 
-enum class Action { Hold, Stick, Shake, Pointer, Key, Text, Settings, Picture, Wait, End, Game, TakeOut };
+enum class Action { Hold, Stick, Shake, Pointer, Key, Text, Settings, Picture, Wait, End, Game, TakeOut, Forget };
 
 struct Cond {
     bool log = false;
@@ -390,7 +390,7 @@ struct Step {
     std::int64_t frames = 0;
     std::vector<Cond> conds;
     std::int64_t timeout = 600;
-    std::string mod;          // take_out's mod id
+    std::string mod;          // take_out's or forget's mod id
     bool wait_fact = false;   // take_out waits for takeout.<id> (reload.md G-RL4)
     // While running.
     bool done = false;
@@ -695,6 +695,10 @@ bool read_line(const std::string& line, std::string& why) {
             s.action = Action::TakeOut;
             s.mod = args[0];
             s.wait_fact = args[1] == "1";
+        } else if (a == "forget" && args.size() == 1u) {
+            // The Mods page's FORGET of a removed mod (services-mods 8), as the player chooses it.
+            s.action = Action::Forget;
+            s.mod = args[0];
         } else {
             why = "step " + std::to_string(s.number) + ": not an action this host half knows: " + a;
             return false;
@@ -911,6 +915,14 @@ void run_step(Step& s, std::int64_t now) {
         }
         break;
     }
+    case Action::Forget:
+        if (g.host == nullptr || g.host->size < offsetof(NebulaHostForExtension, forget_mod) + sizeof(g.host->forget_mod) ||
+            g.host->forget_mod == nullptr) {
+            finish("harness-error", "step " + std::to_string(s.number) + ": this host cannot forget a mod");
+            return;
+        }
+        g.host->forget_mod(g.host->host, s.mod.c_str());
+        break;
     }
     s.done = true;
 }

@@ -19,7 +19,7 @@ public:
     static const u32 cValueMost = 65536;
     static const u32 cModMost = 262144;
     static const u32 cChunkMost = 1048576 - 12;
-    static const u32 cKeyMost = 64;
+    static const u32 cKeyMost = 64;  // a key's name; a key kept for a mod is "<mod id>/<name>", at most 129 bytes
     static const u32 cIdMost = 64;
 
     // What set and the kept-data calls answer.
@@ -65,7 +65,10 @@ public:
     Result remove(const char* pModId, const char* pKey);
     // A removed mod's kept data (services-mods 8, services-save 5): its entries' bytes here, 0 when none.
     u32 getModBytes(const char* pModId) const;
-    // FORGET: the mod's entries go (written at the file's next save by the game).
+    // The bytes of the entries any mod keeps for `pModId` (its "<id>/" keys), 0 when none.
+    u32 getForBytes(const char* pModId) const;
+    // FORGET: the mod's entries go, and every other mod's "<id>/" entries for it (written at the file's next save by
+    // the game).
     void forgetMod(const char* pModId);
     // takes_over (item 6): the old id's entries move to the new id, unless the new id has entries already.
     Result renameMod(const char* pOldId, const char* pNewId);
@@ -78,6 +81,9 @@ public:
     // Each mod's block with entries in order: its id (not terminated) and length, and its entries' bytes (a block of 0
     // bytes, which this game never writes, is passed over).
     void forEachMod(void (*pFn)(void* pUser, const char* pId, u32 idLength, u32 bytes), void* pUser) const;
+    // Each entry kept for a mod ("<id>/<name>", in any mod's block): that id (not terminated) and length, and the
+    // entry's bytes; one call per entry.
+    void forEachFor(void (*pFn)(void* pUser, const char* pId, u32 idLength, u32 bytes), void* pUser) const;
 
 private:
     // The offset of the mod's block (its id length byte) in mData, or -1.
@@ -85,6 +91,10 @@ private:
     // The offset of the entry (its key length byte) in the mod's block at modAt, or -1.
     s32 findEntry(u32 modAt, const char* pKey) const;
     u32 modBytes(u32 modAt) const;
+    // The whole entry at `at` (its key length byte): key, value and both lengths.
+    u32 entrySize(u32 at) const;
+    // The entry at `at` is kept for the mod `pModId` (its key starts "<id>/").
+    bool isKeptFor(u32 at, const char* pModId, u32 idLength) const;
     void setModBytes(u32 modAt, u32 bytes);
     // Replaces mData[at, at + removed) with `inserted` bytes of room (written by the caller); false when no memory.
     bool splice(u32 at, u32 removed, u32 inserted);

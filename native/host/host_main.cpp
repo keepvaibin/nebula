@@ -3540,6 +3540,22 @@ void extension_take_out_mod(void*, const char* mod_id) {
     }
 }
 
+// The Mods page's FORGET (native_settings.cpp) for an id its REMOVED MODS line lists, and only then.
+void extension_forget_mod(void*, const char* mod_id) {
+    if (mod_id == nullptr) {
+        return;
+    }
+    std::vector<galaxy::luma_mods::KeptMod> kept;
+    galaxy::luma_mods::kept(kept);
+    const bool listed = std::any_of(kept.begin(), kept.end(),
+                                    [mod_id](const galaxy::luma_mods::KeptMod& row) { return row.id == mod_id; });
+    if (!listed) {
+        log_line("mods:", (std::string(mod_id) + " is not on the REMOVED MODS line: nothing to forget").c_str());
+        return;
+    }
+    galaxy::luma_mods::forget(mod_id);
+}
+
 void attach_extensions() {
     const std::vector<fs::path>& files = ::galaxy::launch_args().extensions;
     if (files.empty()) {
@@ -3551,6 +3567,7 @@ void attach_extensions() {
     host.log = extension_log;
     host.quit = extension_quit;
     host.take_out_mod = extension_take_out_mod;
+    host.forget_mod = extension_forget_mod;
 #if defined(NEBULA_HOST_RENDERER)
     host.menu_key = extension_menu_key;
     host.menu_open = extension_menu_open;

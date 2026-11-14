@@ -514,7 +514,7 @@ def read_steps(t, bare, classes):
     ends = 0
     pictures = set()
     actions = {"hold", "stick", "shake", "pointer", "key", "text", "settings", "picture", "call", "read", "stage", "wait",
-               "end", "take_out", "copy_file", "load_file", "erase_file", "new_file"}
+               "end", "take_out", "forget", "copy_file", "load_file", "erase_file", "new_file"}
     for i, s in enumerate(steps):
         path = "steps[%d]" % i
         if not isinstance(s, dict):
@@ -620,6 +620,13 @@ def read_steps(t, bare, classes):
             if not isinstance(wait, bool):
                 raise HarnessError("%s.wait takes true or false" % path)
             step["line"] = "take_out %s %d" % (mod_id, 1 if wait else 0)
+        elif action == "forget":
+            # The Mods page's FORGET of a removed mod (services-mods 8): the mod is on the REMOVED MODS line (removed by
+            # this run's "remove": true over a continue_from), else the host logs that and forgets nothing.
+            mod_id = text(s, "forget", path)
+            if not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", mod_id) or len(mod_id.encode("utf-8")) > 63:
+                raise HarnessError("%s.forget must be a mod id ([a-z0-9][a-z0-9._-]*, at most 63 bytes)" % path)
+            step["line"] = "forget %s" % mod_id
         elif action in ("copy_file", "load_file", "erase_file", "new_file"):
             # Revision 8 (services-save 5, kit-progress): the file select's own operations on the run's own saves, on
             # the game's save path (GameSequenceFunction); the step is answered when the save sequence has ended and
