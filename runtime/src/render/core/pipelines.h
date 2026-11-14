@@ -57,9 +57,10 @@ public:
         return made;
     }
 
-    // Queues `id` for every target kind and aux set of the settings, for the background threads: with `motion`, aux 1 and
-    // either 4 (`one_pass`: the scene's draws share the motion pass) or 2 and, with `layer`, 3.
-    // With `traced` (ray tracing on), also the prepass of an opaque entry and a lit program's traced forms.
+    // Queues `id` for every target kind and aux set of the settings, for the background threads: with `motion`, the aux a
+    // scene draw of its state can take (scene_aux; 4 for every other with `one_pass`, 3 only with `layer`), and while the
+    // wide variant is listed the narrow variant's left for after the first scene (defer). With `traced` (ray tracing on),
+    // aux 1 and either 4 or 2 and 3 whatever the state, the prepass of an opaque entry and a lit program's traced forms.
     void prepare(std::uint32_t id, const PipelineEntry& entry, const std::vector<unsigned>& variants, bool motion, bool layer,
                  bool one_pass, bool traced = false);
     [[nodiscard]] std::uint32_t pending() const noexcept { return pending_.load(std::memory_order_relaxed); }
@@ -198,6 +199,9 @@ private:
 // Whether the tracer's second prepass draws this entry: a surface blended over the scene by its alpha (water, glass,
 // crystal). Not what adds its own light to the picture, nor a stencil's marks.
 [[nodiscard]] bool blended_prepass_draws(std::uint32_t state) noexcept;
+// Which targets a draw of the 3D scene writes beside the colour: an opaque surface the motion, a blended draw the reactive
+// mask, and in a layer window a blended draw whose factors never read the scene the effects layer too.
+[[nodiscard]] std::uint8_t scene_aux(std::uint32_t state, bool layer_window) noexcept;
 
 // Writes `bytes` beside `file` and renames it over, so a crash mid-write leaves the old cache whole.
 bool replace_file(const std::filesystem::path& file, const char* bytes, std::size_t size) noexcept;

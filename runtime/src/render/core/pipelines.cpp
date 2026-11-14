@@ -196,6 +196,21 @@ bool blended_prepass_draws(std::uint32_t state) noexcept {
            ((state >> 15u) & 3u) != NEBULA_CULL_ALL;
 }
 
+std::uint8_t scene_aux(std::uint32_t state, bool layer_window) noexcept {
+    if ((state & NEBULA_STATE_COLOR_WRITE) == 0u) {
+        return 0u;
+    }
+    const std::uint32_t op = state & 3u;
+    if (op == NEBULA_BLEND_REPLACE) {
+        return (state & (1u << 10u)) != 0u ? 1u : 0u;  // depth tested
+    }
+    const std::uint32_t src = (state >> 2u) & 15u;
+    if (layer_window && (op == NEBULA_BLEND_SUBTRACT || (src != NEBULA_FACTOR_DST_COLOR && src != NEBULA_FACTOR_INV_DST_COLOR))) {
+        return 3u;
+    }
+    return 2u;
+}
+
 void Pipelines::prepare(std::uint32_t id, const PipelineEntry& entry, const std::vector<unsigned>& variants, bool motion, bool layer,
                         bool one_pass, bool traced) {
     const auto add = [&](unsigned variant, unsigned aux) {
@@ -235,6 +250,37 @@ void Pipelines::prepare(std::uint32_t id, const PipelineEntry& entry, const std:
                 }
             }
             if (!motion || !scene) {
+                continue;
+            }
+            if (!traced) {
+                // The motion forms a scene draw of this state can take (draw_walker: scene_aux, which one pass for the scene
+                // turns into 4 unless it is the motion), out of a layer window and, with `layer`, in one; aux 0 is above.
+                const auto scene_form = [&](bool layer_window) -> unsigned {
+                    const unsigned aux = scene_aux(entry.desc.state, layer_window);
+                    return one_pass && aux != 1u ? 4u : aux;
+                };
+                const unsigned out_of_window = scene_form(false);
+                const unsigned in_window = layer ? scene_form(true) : out_of_window;
+                // With the wide variant listed, walk_scene_begin draws every scene wide unless the wide targets cannot be
+                // had (begin_wide_scene: memory, the camera pass): the narrow variant's motion forms are left for after the
+                // first scene, made then or by such a draw.
+                const bool left = (variant & kSceneVariantHdr) == 0u &&
+                                  std::any_of(variants.begin(), variants.end(),
+                                              [](unsigned listed) { return (listed & kSceneVariantHdr) != 0u; });
+                const auto motion_form = [&](unsigned aux) {
+                    if (aux == 0u) {
+                        return;
+                    }
+                    if (left) {
+                        left_jobs_.push_back(Job{id, entry, variant, aux, false, true});
+                    } else {
+                        add(variant, aux);
+                    }
+                };
+                motion_form(out_of_window);
+                if (in_window != out_of_window) {
+                    motion_form(in_window);
+                }
                 continue;
             }
             add(variant, 1u);

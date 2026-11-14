@@ -26,9 +26,6 @@ using core::WalkTime;
 namespace {
 
 // The state word's fields (nebula_model.h).
-constexpr std::uint32_t blend_op(std::uint32_t s) noexcept { return s & 3u; }
-constexpr std::uint32_t blend_src(std::uint32_t s) noexcept { return (s >> 2u) & 15u; }
-constexpr bool state_depth_test(std::uint32_t s) noexcept { return (s & (1u << 10u)) != 0u; }
 constexpr bool state_stencil(std::uint32_t s) noexcept { return ((s >> 20u) & 3u) != 0u; }
 constexpr bool state_color_write(std::uint32_t s) noexcept { return (s & NEBULA_STATE_COLOR_WRITE) != 0u; }
 
@@ -36,22 +33,6 @@ constexpr bool state_color_write(std::uint32_t s) noexcept { return (s & NEBULA_
 // Two constants entries are one material when they are one entry or name one registered slot.
 inline bool same_material(const NebulaFrameList& list, std::uint32_t a, std::uint32_t b) noexcept {
     return a == b || (list.constants[a].slot != NEBULA_NONE32 && list.constants[a].slot == list.constants[b].slot);
-}
-
-// Which targets a draw of the 3D scene writes beside the colour: an opaque surface the motion, a blended draw the reactive
-// mask, and a blended draw whose factors never read the scene the effects layer too.
-std::uint8_t scene_aux(std::uint32_t state, bool layer_window) noexcept {
-    if (!state_color_write(state)) {
-        return 0u;
-    }
-    const std::uint32_t op = blend_op(state);
-    if (op == 0u) {
-        return state_depth_test(state) ? 1u : 0u;
-    }
-    if (layer_window && (op == NEBULA_BLEND_SUBTRACT || (blend_src(state) != NEBULA_FACTOR_DST_COLOR && blend_src(state) != NEBULA_FACTOR_INV_DST_COLOR))) {
-        return 3u;
-    }
-    return 2u;
 }
 
 inline Affine34 affine_of(const float (*rows)[4]) noexcept {
@@ -1078,7 +1059,7 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
             continue;
         }
         // With one pass for the scene, a draw that writes no motion stays in the motion draws' pass (aux 4).
-        std::uint8_t aux = scene_layer && motion_scene_ ? scene_aux(state, layer_window) : 0u;
+        std::uint8_t aux = scene_layer && motion_scene_ ? core::scene_aux(state, layer_window) : 0u;
         if (scene_layer && motion_scene_ && one_pass && aux != 1u) {
             aux = 4u;
         }
