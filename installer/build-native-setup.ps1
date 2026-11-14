@@ -82,12 +82,18 @@ try {
     foreach ($name in 'luma_types\luma_types.json', 'luma_types\luma_functions.json', 'luma_types\luma_numbers.json', 'smg_game.luma-placement.json', 'smg_game.luma-self.json') {
         Copy-Item -LiteralPath (Join-Path $Names $name) -Destination $luma
     }
-    # The game module logs on stderr while it attaches.
-    $ErrorActionPreference = 'Continue'
-    try {
-        Invoke-Checked (Join-Path $Bin 'NebulaNative.exe') @('--luma-services', (Join-Path $luma 'luma_services.json'), '--module', (Join-Path $Bin 'smg_game.dll'))
-    } finally {
-        $ErrorActionPreference = 'Stop'
+    # The services list: the build's (luma_types\luma_services.json), else the game module writes it.
+    $services = Join-Path $Names 'luma_types\luma_services.json'
+    if (Test-Path -LiteralPath $services) {
+        Copy-Item -LiteralPath $services -Destination $luma
+    } else {
+        # The game module logs on stderr while it attaches.
+        $ErrorActionPreference = 'Continue'
+        try {
+            Invoke-Checked (Join-Path $Bin 'NebulaNative.exe') @('--luma-services', (Join-Path $luma 'luma_services.json'), '--module', (Join-Path $Bin 'smg_game.dll'))
+        } finally {
+            $ErrorActionPreference = 'Stop'
+        }
     }
     if (-not @(Get-ChildItem -LiteralPath $luma -Recurse -Filter '*.rows').Count) { throw 'The names folder has no function rows under luma\' }
     Add-Type -AssemblyName System.IO.Compression.FileSystem
