@@ -293,8 +293,12 @@ struct NativeSettingsView {
 // The menu as it stands. The first call hands the drawing to the game: the overlay draws nothing of its own after.
 [[nodiscard]] NativeSettingsView native_settings_view();
 // The pointer's input to the menu (the game's own menu takes the pointer; the window thread the keyboard and pads).
-enum class NativeSettingsInput : unsigned { Open = 1, Close, SelectPage, SelectRow, Change, Apply, Revert, Press, MoveMod, SetValue };
+// CloseUnseen is the host's own: the game's close where it shows no menu (before its first 3D scene, the boot). It
+// closes a menu that asks nothing; one that asks is hidden as it stands, nothing answered, until
+// native_settings_reopen_held at the game's first 3D scene opens it again.
+enum class NativeSettingsInput : unsigned { Open = 1, Close, SelectPage, SelectRow, Change, Apply, Revert, Press, MoveMod, SetValue, CloseUnseen };
 void native_settings_input(NativeSettingsInput input, int arg);
+void native_settings_reopen_held();
 
 // GPU time by pass (the settings overlay's SYSTEM page): off at every start; while it is on, the renderer writes a timestamp at
 // each pass boundary of every frame and reads them back a frame later; while it is off it records and reads nothing. A pass's
