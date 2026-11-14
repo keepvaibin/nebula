@@ -28,9 +28,14 @@ cbuffer AoConstants : register(b0) {
 };
 
 // The occlusion passes writing a two-channel (R16G16 float) target where a storage image of that format is allowed
-// (Vulkan: shaderStorageImageExtendedFormats; the others always).
+// (Vulkan: shaderStorageImageExtendedFormats; the others always). The denoise writing one channel (R16 float): at one
+// occlusion pixel per scene target pixel only the multiply reads its output, and only the occlusion.
 #if defined(AO_PASS_occlusion_rg_cs) || defined(AO_PASS_ssao_rg_cs) || defined(AO_PASS_denoise_rg_cs)
 #define AO_OCCLUSION_RG16F 1
+#endif
+#ifdef AO_PASS_denoise_r_cs
+#define AO_OCCLUSION_R16F 1
+#define AO_PASS_denoise_cs 1
 #endif
 #ifdef AO_PASS_occlusion_rg_cs
 #define AO_PASS_occlusion_cs 1
@@ -63,6 +68,8 @@ AO_FORMAT(r32f) RWTexture2D<float> u_distance : register(u0);
 AO_FORMAT(rgba8) RWTexture2D<float4> u_scale : register(u0);
 #elif defined(AO_COMPUTE) && defined(AO_OCCLUSION_RG16F)
 AO_FORMAT(rg16f) RWTexture2D<float4> u_occlusion : register(u0);
+#elif defined(AO_COMPUTE) && defined(AO_OCCLUSION_R16F)
+AO_FORMAT(r16f) RWTexture2D<float4> u_occlusion : register(u0);
 #elif defined(AO_COMPUTE)
 AO_FORMAT(rgba16f) RWTexture2D<float4> u_occlusion : register(u0);
 #endif

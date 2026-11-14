@@ -58,13 +58,15 @@ private:
     [[nodiscard]] VkDescriptorSet set_of(const SetAllocator& allocate, VkImageView depth, VkImageLayout depth_layout,
                                          const Texture& sampled1, const Texture& sampled2, const Texture& storage,
                                          VkImageLayout sampled1_layout = VK_IMAGE_LAYOUT_GENERAL);
-    void dispatch(VkCommandBuffer commands, Pass pass, VkDescriptorSet set, unsigned width, unsigned height) const;
+    void dispatch(VkCommandBuffer commands, VkPipeline pipeline, VkDescriptorSet set, unsigned width, unsigned height) const;
     void draw(VkCommandBuffer commands, VkPipeline pipeline, VkDescriptorSet set, unsigned width, unsigned height) const;
 
     bool ready_ = false;
     VkDescriptorSetLayout set_layout_ = VK_NULL_HANDLE;
     VkPipelineLayout layout_ = VK_NULL_HANDLE;
     std::array<VkPipeline, kPassCount> compute_{};
+    // The denoise writing R16 float (where R16G16 storage is allowed), at one occlusion pixel per scene target pixel.
+    VkPipeline denoise_r_ = VK_NULL_HANDLE;
     // The multiply per sample count: [0] reads the multiplier, [1] makes it from the denoised occlusion (fused_).
     std::array<std::array<VkPipeline, 4>, 2> apply_{};
     std::array<std::array<VkRenderPass, 4>, 2> apply_pass_{};

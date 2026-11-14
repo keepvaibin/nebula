@@ -26,8 +26,10 @@ constexpr VkFormat kScaleFormat = VK_FORMAT_R8_UNORM;
 constexpr unsigned kApplyVs = 4u, kApplyPs = 5u, kUpsamplePs = 6u;
 // The occlusion, SSAO and denoise passes writing R16G16 float.
 constexpr unsigned kOcclusionRgCs = 7u, kSsaoRgCs = 8u, kDenoiseRgCs = 9u;
-// The multiply making the multiplier from the denoised occlusion (one occlusion pixel per scene target pixel).
-constexpr unsigned kApplyFusedPs = 10u;
+// The multiply making the multiplier from the denoised occlusion (one occlusion pixel per scene target pixel), and the
+// denoise writing R16 float for it (the multiply reads the occlusion alone).
+constexpr unsigned kApplyFusedPs = 10u, kDenoiseRCs = 11u;
+constexpr VkFormat kDenoisedFull = VK_FORMAT_R16_SFLOAT;
 constexpr VkShaderStageFlags kStages =
     VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
@@ -51,8 +53,8 @@ VkShaderModule AmbientOcclusionVk::module(unsigned index) const {
                                                 UtilitySpirv::AoApplyVs,    UtilitySpirv::AoApplyPs,
                                                 UtilitySpirv::AoUpsamplePs, UtilitySpirv::AoOcclusionRgCs,
                                                 UtilitySpirv::AoSsaoRgCs,   UtilitySpirv::AoDenoiseRgCs,
-                                                UtilitySpirv::AoApplyFusedPs};
-    static_assert(kPassCount == kApplyVs && kApplyFusedPs + 1u == std::size(kShaders));
+                                                UtilitySpirv::AoApplyFusedPs, UtilitySpirv::AoDenoiseRCs};
+    static_assert(kPassCount == kApplyVs && kDenoiseRCs + 1u == std::size(kShaders));
     const std::span<const std::uint32_t> code = utility_spirv(kShaders[index]);
     VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
     info.codeSize = code.size_bytes();
@@ -88,23 +90,26 @@ bool AmbientOcclusionVk::initialize() {
     const bool rg = Context::get().storage_extended_formats();
     occlusion_format_ = rg ? kOcclusionRg : kOcclusionRgba;
     static constexpr unsigned kRgModules[kPassCount] = {kDistance, kOcclusionRgCs, kDenoiseRgCs, kSsaoRgCs};
-    for (unsigned i = 0; i < kPassCount; ++i) {
-        const VkShaderModule shader = module(rg ? kRgModules[i] : i);
+    // The pipelines: the four passes, and with R16G16 storage the R16 denoise (kPassCount).
+    for (unsigned i = 0; i < kPassCount + (rg ? 1u : 0u); ++i) {
+        const VkShaderModule shader = module(i == kPassCount ? kDenoiseRCs : rg ? kRgModules[i] : i);
         if (shader == VK_NULL_HANDLE) {
             shutdown();
             return false;
         }
+        VkPipeline& made = i == kPassCount ? denoise_r_ : compute_[i];
+        const char* const entry = i == kPassCount ? kEntries[kDenoise] : kEntries[i];
         VkComputePipelineCreateInfo info{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
         info.stage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
         info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
         info.stage.module = shader;
-        info.stage.pName = kEntries[i];
+        info.stage.pName = entry;
         info.layout = layout_;
-        const VkResult result = vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &compute_[i]);
+        const VkResult result = vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &made);
         vkDestroyShaderModule(device, shader, nullptr);
         if (result != VK_SUCCESS) {
-            compute_[i] = VK_NULL_HANDLE;
-            std::cerr << "[ambient-occlusion] Vulkan pass " << kEntries[i] << " failed\n";
+            made = VK_NULL_HANDLE;
+            std::cerr << "[ambient-occlusion] Vulkan pass " << entry << " failed\n";
             shutdown();
             return false;
         }
@@ -167,6 +172,8 @@ void AmbientOcclusionVk::shutdown() noexcept {
         if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
         pipeline = VK_NULL_HANDLE;
     }
+    if (denoise_r_ != VK_NULL_HANDLE) vkDestroyPipeline(device, denoise_r_, nullptr);
+    denoise_r_ = VK_NULL_HANDLE;
     for (std::array<VkPipeline, 4>& kind : apply_) {
         for (VkPipeline& pipeline : kind) {
             if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
@@ -274,7 +281,7 @@ VkPipeline AmbientOcclusionVk::graphics_pipeline(VkRenderPass pass, unsigned sam
 
 bool AmbientOcclusionVk::ensure(std::shared_ptr<Texture>& target, unsigned width, unsigned height, VkFormat format,
                                 const char* name) {
-    if (target && target->width == width && target->height == height) {
+    if (target && target->width == width && target->height == height && target->format == format) {
         return true;
     }
     target = Context::get().create_texture(width, height, 1u, format,
@@ -345,9 +352,9 @@ VkDescriptorSet AmbientOcclusionVk::set_of(const SetAllocator& allocate, VkImage
     return set;
 }
 
-void AmbientOcclusionVk::dispatch(VkCommandBuffer commands, Pass pass, VkDescriptorSet set, unsigned width,
+void AmbientOcclusionVk::dispatch(VkCommandBuffer commands, VkPipeline pipeline, VkDescriptorSet set, unsigned width,
                                   unsigned height) const {
-    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_COMPUTE, compute_[pass]);
+    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
     vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_COMPUTE, layout_, 0, 1, &set, 0, nullptr);
     vkCmdPushConstants(commands, layout_, kStages, 0, sizeof(ao::Constants), &constants_);
     vkCmdDispatch(commands, (width + 7u) / 8u, (height + 7u) / 8u, 1u);
@@ -384,10 +391,11 @@ bool AmbientOcclusionVk::prepare(VkCommandBuffer commands, const Texture& depth,
     if (fused_) {
         scale_.reset();  // through the context's deferred destruction, behind any submission naming it
     }
+    const bool denoise_r = fused_ && denoise_r_ != VK_NULL_HANDLE;
     if (!ao::make_constants(view, width, height, divisor, ssao, constants_) ||
         !ensure(distance_, width, height, kDistanceFormat, "occlusion distance") ||
         !ensure(raw_, width, height, occlusion_format_, "occlusion") ||
-        !ensure(denoised_, width, height, occlusion_format_, "occlusion denoised") ||
+        !ensure(denoised_, width, height, denoise_r ? kDenoisedFull : occlusion_format_, "occlusion denoised") ||
         (!fused_ && !ensure_scale(depth.width, depth.height))) {
         return false;
     }
@@ -406,11 +414,12 @@ bool AmbientOcclusionVk::prepare(VkCommandBuffer commands, const Texture& depth,
     objects_ = {reinterpret_cast<VkBuffer>(ring.resource_of(objects_at)), objects_at.offset, object_bytes};
     tiles_ = {reinterpret_cast<VkBuffer>(ring.resource_of(tiles_at)), tiles_at.offset, tile_bytes};
     if (mark) mark(Stage::Distance);
-    dispatch(commands, kDistance, set_of(allocate, depth.view, depth_layout, *denoised_, *distance_, *distance_), width, height);
+    dispatch(commands, compute_[kDistance], set_of(allocate, depth.view, depth_layout, *denoised_, *distance_, *distance_), width, height);
     if (mark) mark(Stage::Occlusion);
-    dispatch(commands, ssao ? kSsao : kOcclusion, set_of(allocate, depth.view, depth_layout, *denoised_, *distance_, *raw_), width, height);
+    dispatch(commands, compute_[ssao ? kSsao : kOcclusion], set_of(allocate, depth.view, depth_layout, *denoised_, *distance_, *raw_), width, height);
     if (mark) mark(Stage::Denoise);
-    dispatch(commands, kDenoise, set_of(allocate, depth.view, depth_layout, *raw_, *distance_, *denoised_), width, height);
+    dispatch(commands, denoise_r ? denoise_r_ : compute_[kDenoise],
+             set_of(allocate, depth.view, depth_layout, *raw_, *distance_, *denoised_), width, height);
     if (fused_) {
         return true;  // the multiply reads the denoised occlusion (dispatch's barrier covers fragment reads)
     }

@@ -61,6 +61,7 @@ private:
         Microsoft::WRL::ComPtr<ID3D12Resource> resource;
         unsigned width = 0;
         unsigned height = 0;
+        DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
         gpu::Use use = gpu::Use::ComputeRead;
         std::uint64_t used_frame = 0;   // the last frame record() asked for it
     };

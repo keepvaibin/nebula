@@ -19,6 +19,8 @@ namespace {
 constexpr Format kDistanceFormat = Format::R32f;
 // Occlusion and eye distance: the two channels the passes use (a shader write keeps x and y).
 constexpr Format kOcclusionFormat = Format::Rg16f;
+// The denoised occlusion at one occlusion pixel per scene target pixel: the multiply reads its occlusion alone.
+constexpr Format kDenoisedFullFormat = Format::R16f;
 // The multiplier: one channel (a shader write takes R of the value whatever the format).
 constexpr Format kScaleFormat = Format::R8;
 // ambient_occlusion.hlsl's registers (vk/utility_spirv_sources.h kAoBindings): t0-t2 at textures 0-2, u0 at 3, the
@@ -159,7 +161,7 @@ Object AmbientOcclusion::apply_pipeline(Format color_format, unsigned samples) {
 }
 
 bool AmbientOcclusion::ensure(std::shared_ptr<Texture>& target, unsigned width, unsigned height, Format format, const char* name) {
-    if (target && target->width == width && target->height == height) {
+    if (target && target->width == width && target->height == height && target->format == format) {
         return true;
     }
     target = Context::get().create_texture(width, height, 1u, format, kUseWrite | kUseSample, Storage::Private, name);
@@ -209,7 +211,7 @@ bool AmbientOcclusion::prepare(Object commands, const Texture& depth, const RtVi
     if (!ao::make_constants(view, width, height, divisor, ssao, constants_) ||
         !ensure(distance_, width, height, kDistanceFormat, "occlusion distance") ||
         !ensure(raw_, width, height, kOcclusionFormat, "occlusion") ||
-        !ensure(denoised_, width, height, kOcclusionFormat, "occlusion denoised") ||
+        !ensure(denoised_, width, height, fused_ ? kDenoisedFullFormat : kOcclusionFormat, "occlusion denoised") ||
         (!fused_ && !ensure(scale_, depth.width, depth.height, kScaleFormat, "occlusion scale"))) {
         return false;
     }
