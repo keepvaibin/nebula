@@ -308,6 +308,15 @@ void NameObjExecuteHolder::disconnectToDraw(NameObj* pObj) {
     }
 }
 
+// Each acts only on a pending connect, so the pending run that comes later finds nothing for it.
+void NameObjExecuteHolder::connectNow(NameObj* pObj) {
+    NameObjExecuteInfo* pInfo = getConnectToSceneInfo(pObj);
+    if (pInfo != nullptr) {
+        pInfo->executeRequirementConnectMovement();
+        pInfo->executeRequirementConnectDraw();
+    }
+}
+
 bool NameObjExecuteHolder::isConnectToDraw(const NameObj* pObj) const {
     const NameObjExecuteInfo* pInfo = getConnectToSceneInfo(pObj);
     return pInfo != nullptr && pInfo->mDrawState == NameObjConnect_Connected;
@@ -372,6 +381,10 @@ namespace MR {
 
     void disconnectToDrawTemporarily(NameObj* pObj) {
         ::getNameObjExecuteHolder()->disconnectToDraw(pObj);
+    }
+
+    void connectNow(NameObj* pObj) {
+        ::getNameObjExecuteHolder()->connectNow(pObj);
     }
 
     bool isConnectToDrawTemporarily(const NameObj* pObj) {

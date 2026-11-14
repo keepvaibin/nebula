@@ -22,6 +22,7 @@
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/HashUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
+#include "Game/NameObj/NameObjExecuteHolder.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include <luma_modlog.h>
@@ -634,6 +635,9 @@ namespace luma {
                     pMade->layer = placed;
                     // No game file at the path: a mod's own layout (one replacing the game's is the game's).
                     pMade->actor = new ScreenActor(pMade->layout, placed, GameAssets::findGame(path.c_str()) < 0);
+                    // Made after the scene's connecting, its connects are requests that run at the next movement
+                    // run's start, which a stopped scene (the pause) never reaches: they run now, on either layer.
+                    MR::connectNow(pMade->actor);
                     pMade->next = sMade;
                     sMade = pMade;
                     sMadeCount++;
@@ -1156,7 +1160,8 @@ namespace luma {
                 const LayoutActor* const pActor = rScreen.made->actor;
                 char json[96];
                 nebula_snprintf(json, sizeof(json), "{\"alive\":%s,\"hidden\":%s,\"drawn\":%s}", MR::isDead(pActor) ? "false" : "true",
-                                MR::isHiddenLayout(pActor) ? "true" : "false", MR::isExecuteDrawLayout(pActor) ? "true" : "false");
+                                MR::isHiddenLayout(pActor) ? "true" : "false",
+                                MR::isExecuteDrawLayout(pActor) && MR::isConnectToDrawTemporarily(pActor) ? "true" : "false");
                 char key[48];
                 nebula_snprintf(key, sizeof(key), "ui.screen.%llu", static_cast< unsigned long long >(rScreen.handle));
                 luma::modlog::fact(key, json);

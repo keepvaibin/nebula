@@ -59,6 +59,8 @@ public:
     void initConnectting();
     void connectToScene(NameObj*);
     void connectToDraw(NameObj*);
+    // Its pending connects (movement and draw) now, not at the next movement run's start (which a stopped scene skips).
+    void connectNow(NameObj*);
     void disconnectToScene(NameObj*);
     void disconnectToDraw(NameObj*);
     bool isConnectToDraw(const NameObj*) const;
@@ -99,6 +101,7 @@ namespace MR {
     void connectToSceneTemporarily(NameObj*);
     void disconnectToSceneTemporarily(NameObj*);
     void connectToDrawTemporarily(NameObj*);
+    void connectNow(NameObj*);
     void disconnectToDrawTemporarily(NameObj*);
     bool isConnectToDrawTemporarily(const NameObj*);
     bool isDrawnFarWhenClipped(const NameObj*, bool hasRun);
