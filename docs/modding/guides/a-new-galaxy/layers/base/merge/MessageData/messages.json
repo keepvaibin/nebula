@@ -1,0 +1,34 @@
+{
+  "lines": {
+    "OrbKingGalaxy": {
+      "default": "Orb King Galaxy",
+      "UsFrench": "Galaxie du Roi Orbe",
+      "EuFrench": "Galaxie du Roi Orbe",
+      "UsSpanish": "Galaxia del Rey Orbe",
+      "EuSpanish": "Galaxia del Rey Orbe",
+      "EuGerman": "Kugelkönig-Galaxie",
+      "EuItalian": "Galassia del Re Sfera",
+      "EuDutch": "Bolkoningsterrenstelsel",
+      "UsPortuguese": "Galáxia do Rei Orbe",
+      "JpJapanese": "オーブキングギャラクシー",
+      "KrKorean": "오브 킹 갤럭시",
+      "CnSimpChinese": "球王银河",
+      "TwTradChinese": "球王銀河"
+    },
+    "OrbKingGalaxy_Star1": {
+      "default": "Topple the Orb King",
+      "UsFrench": "Renversez le Roi Orbe",
+      "EuFrench": "Renversez le Roi Orbe",
+      "UsSpanish": "Derriba al Rey Orbe",
+      "EuSpanish": "Derriba al Rey Orbe",
+      "EuGerman": "Stürze den Kugelkönig",
+      "EuItalian": "Abbatti il Re Sfera",
+      "EuDutch": "Versla de Bolkoning",
+      "UsPortuguese": "Derrube o Rei Orbe",
+      "JpJapanese": "オーブキングをたおせ",
+      "KrKorean": "오브 킹을 쓰러뜨려라",
+      "CnSimpChinese": "打倒球王",
+      "TwTradChinese": "打倒球王"
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "columns": {
+    "pos_x": "float",
+    "pos_y": "float",
+    "pos_z": "float",
+    "dir_x": "float",
+    "dir_y": "float",
+    "dir_z": "float",
+    "scale_x": "float",
+    "scale_y": "float",
+    "scale_z": "float"
+  },
+  "rows": [
+    {
+      "name": "Mario",
+      "pos_x": 0.0,
+      "pos_y": 1150.0,
+      "pos_z": 0.0,
+      "dir_x": 0.0,
+      "dir_y": 0.0,
+      "dir_z": 0.0,
+      "scale_x": 1.0,
+      "scale_y": 1.0,
+      "scale_z": 1.0,
+      "MarioNo": 0,
+      "Camera_id": -1
+    }
+  ]
+}

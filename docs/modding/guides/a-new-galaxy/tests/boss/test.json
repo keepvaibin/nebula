@@ -1,0 +1,19 @@
+{
+  "harness": 1,
+  "name": "orb-galaxy-boss",
+  "about": "Walking round the planet wakes the Orb King: its scene plays, then its meter shows three and its music starts",
+  "proves": ["kit.actor", "kit.cutscene", "kit.hud", "services.audio.music"],
+  "mods": ["../../../lumakit", "../.."],
+  "stage": { "name": "OrbKingGalaxy", "scenario": 1 },
+  "limit_seconds": 300,
+  "steps": [
+    { "at": 60, "stick": [0, 1], "frames": 240 },
+    { "at": 330, "picture": "scene" },
+    { "at": 520, "picture": "fight" },
+    { "at": 530, "end": true }
+  ],
+  "expect": [
+    { "log": "the Orb King wakes" },
+    { "picture": "fight", "box": [920, 40, 320, 30], "mean_rgb": [230, 185, 70], "within": 60 }
+  ]
+}

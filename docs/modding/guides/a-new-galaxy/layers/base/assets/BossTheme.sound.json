@@ -1,0 +1,7 @@
+{
+  "kind": "effect",
+  "file": "BossTheme.wav",
+  "bus": "music",
+  "positioned": false,
+  "loop": true
+}

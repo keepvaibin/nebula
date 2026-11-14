@@ -1,0 +1,22 @@
+option hide: bool
+
+// The game shows the HUD when a level starts. Put it away on the first frame it is up.
+on frame {
+    if hide and MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder as i32) and MR::isActiveDefaultGameLayout() {
+        MR::deactivateDefaultGameLayout()
+    }
+}
+
+// The game brings the HUD back after each cutscene through this function.
+hook before GameSceneLayoutHolder::activateDefaultGameLayout() {
+    if hide {
+        skip
+    }
+}
+
+// The option turned off during play: the HUD comes back at once.
+on option hide {
+    if not hide and MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder as i32) and not MR::isDemoActive() {
+        MR::activateDefaultGameLayout()
+    }
+}

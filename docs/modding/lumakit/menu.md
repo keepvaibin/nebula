@@ -1,0 +1,12 @@
+# LumaKit: menu
+
+Gives: entries in the game's pause menu. (A mod's settings are its `luma.json` options on the Mods screen, read with
+`option` and `on option`: ideas 27 and 86 are options, not menu entries; one way, language rule 5.)
+
+```lumascript skip a listing from the part's contract, not a module that builds alone
+pub struct Entry { fn set_label(self, s: text); fn enable(self, on: bool); fn remove(self) }
+pub fn add_pause_entry(label: text, on_choose: fn()) -> Entry
+```
+
+Built on: `K.hook` (`PauseMenu`), `ui`, `C.text`. Conformance: entries of two mods in list order, chosen, disabled,
+removed; an entry whose mod stops. Corpus: 14, 27, 62, 63, 86, 112, 125, 133, 162. B: G. A: F.

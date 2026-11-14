@@ -1,0 +1,18 @@
+{
+  "harness": 1,
+  "name": "orb-galaxy-visit",
+  "about": "Entering the galaxy: Mario stands on the mossy planet, Spikerolls near, and the galaxy's own music plays",
+  "proves": ["kit.stage", "kit.actor", "services.audio.music"],
+  "mods": ["../../../lumakit", "../.."],
+  "stage": { "name": "OrbKingGalaxy", "scenario": 1 },
+  "limit_seconds": 240,
+  "steps": [
+    { "at": 90, "picture": "start" },
+    { "at": 100, "end": true }
+  ],
+  "expect": [
+    { "fact": "stage.ready", "has": { "name": "OrbKingGalaxy" } },
+    { "log": "kit.stage: music orb-galaxy:NebulaTheme over OrbKingGalaxy" },
+    { "picture": "start", "box": [440, 480, 400, 160], "mean_rgb": [100, 170, 120], "within": 60 }
+  ]
+}

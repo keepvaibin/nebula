@@ -1,0 +1,25 @@
+{
+  "harness": 1,
+  "name": "galaxy-screen",
+  "about": "Good Egg, star 1: the screen stands in front of the start; walking up to it plays the mod's movie full screen with its sound; + skips it and the game goes on",
+  "proves": ["kit.actor", "movie.play", "movie.skip", "movie.av1", "model.mod_model"],
+  "mods": ["../../../lumakit", "../.."],
+  "save": { "spin": true },
+  "stage": { "name": "EggStarGalaxy", "scenario": 1 },
+  "limit_seconds": 200,
+  "steps": [
+    { "at": 40, "picture": "screen" },
+    { "at": 60, "stick": [0, 1], "frames": 100 },
+    { "after": { "fact": "mod.galaxy-screen.playing", "is": true }, "wait": true, "timeout": 900 },
+    { "at": 200, "picture": "movie" },
+    { "at": 260, "hold": ["PLUS"], "frames": 4 },
+    { "after": { "fact": "mod.galaxy-screen.playing", "is": false }, "picture": "after", "timeout": 900 },
+    { "after": { "fact": "mod.galaxy-screen.playing", "is": false }, "end": true, "timeout": 900 }
+  ],
+  "expect": [
+    { "fact": "mod.galaxy-screen.playing", "is": true, "when": "first" },
+    { "fact": "mod.galaxy-screen.playing", "is": false, "when": "last" },
+    { "sound": [205, 255], "rms": [-50, 0] },
+    { "no_log": "script error" }
+  ]
+}

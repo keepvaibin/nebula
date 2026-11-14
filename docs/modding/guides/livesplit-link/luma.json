@@ -1,0 +1,154 @@
+{
+  "format": "1.0",
+  "id": "livesplit-link",
+  "version": "0.1.0",
+  "name": "LiveSplit Link",
+  "summary": "Starts, splits and resets LiveSplit, and pauses its game time while the game loads.",
+  "text": {
+    "EuEnglish": {
+      "name": "LiveSplit Link",
+      "summary": "Starts, splits and resets LiveSplit, and pauses its game time while the game loads.",
+      "options": {
+        "port": {
+          "name": "LiveSplit server port"
+        }
+      }
+    },
+    "UsFrench": {
+      "name": "Lien LiveSplit",
+      "summary": "Démarre, découpe et réinitialise LiveSplit, et met son temps de jeu en pause pendant les chargements.",
+      "options": {
+        "port": {
+          "name": "Port du serveur LiveSplit"
+        }
+      }
+    },
+    "EuFrench": {
+      "name": "Lien LiveSplit",
+      "summary": "Démarre, découpe et réinitialise LiveSplit, et met son temps de jeu en pause pendant les chargements.",
+      "options": {
+        "port": {
+          "name": "Port du serveur LiveSplit"
+        }
+      }
+    },
+    "UsSpanish": {
+      "name": "Enlace con LiveSplit",
+      "summary": "Inicia, divide y reinicia LiveSplit, y pausa su tiempo de juego mientras el juego carga.",
+      "options": {
+        "port": {
+          "name": "Puerto del servidor de LiveSplit"
+        }
+      }
+    },
+    "EuSpanish": {
+      "name": "Enlace con LiveSplit",
+      "summary": "Inicia, divide y reinicia LiveSplit, y pausa su tiempo de juego mientras el juego carga.",
+      "options": {
+        "port": {
+          "name": "Puerto del servidor de LiveSplit"
+        }
+      }
+    },
+    "EuGerman": {
+      "name": "LiveSplit-Verbindung",
+      "summary": "Startet, splittet und setzt LiveSplit zurück und hält seine Spielzeit an, während das Spiel lädt.",
+      "options": {
+        "port": {
+          "name": "Port des LiveSplit-Servers"
+        }
+      }
+    },
+    "EuItalian": {
+      "name": "Collegamento LiveSplit",
+      "summary": "Avvia, divide e azzera LiveSplit e mette in pausa il tempo di gioco durante i caricamenti.",
+      "options": {
+        "port": {
+          "name": "Porta del server LiveSplit"
+        }
+      }
+    },
+    "EuDutch": {
+      "name": "LiveSplit-koppeling",
+      "summary": "Start, splitst en reset LiveSplit en pauzeert de speeltijd terwijl het spel laadt.",
+      "options": {
+        "port": {
+          "name": "Poort van de LiveSplit-server"
+        }
+      }
+    },
+    "UsPortuguese": {
+      "name": "Conexão com o LiveSplit",
+      "summary": "Inicia, divide e reinicia o LiveSplit e pausa o tempo de jogo enquanto o jogo carrega.",
+      "options": {
+        "port": {
+          "name": "Porta do servidor do LiveSplit"
+        }
+      }
+    },
+    "JpJapanese": {
+      "name": "LiveSplit連携",
+      "summary": "LiveSplitの開始、スプリット、リセットを行い、読み込み中はゲーム時間を止めます。",
+      "options": {
+        "port": {
+          "name": "LiveSplitサーバーのポート"
+        }
+      }
+    },
+    "KrKorean": {
+      "name": "LiveSplit 연결",
+      "summary": "LiveSplit을 시작, 스플릿, 리셋하고 로딩 중에는 게임 시간을 멈춥니다.",
+      "options": {
+        "port": {
+          "name": "LiveSplit 서버 포트"
+        }
+      }
+    },
+    "CnSimpChinese": {
+      "name": "LiveSplit 连接",
+      "summary": "启动、分段和重置 LiveSplit，并在游戏读取时暂停游戏时间。",
+      "options": {
+        "port": {
+          "name": "LiveSplit 服务器端口"
+        }
+      }
+    },
+    "TwTradChinese": {
+      "name": "LiveSplit 連線",
+      "summary": "啟動、分段和重設 LiveSplit，並在遊戲讀取時暫停遊戲時間。",
+      "options": {
+        "port": {
+          "name": "LiveSplit 伺服器連接埠"
+        }
+      }
+    }
+  },
+  "authors": [
+    "you"
+  ],
+  "game": {
+    "id": "RMG",
+    "regions": [
+      "RMGE01",
+      "RMGP01",
+      "RMGJ01"
+    ]
+  },
+  "options": [
+    {
+      "default": 16834,
+      "key": "port",
+      "kind": "number",
+      "max": 65535,
+      "min": 1,
+      "name": "LiveSplit server port",
+      "step": 1
+    }
+  ],
+  "permissions": [
+    {
+      "name": "net.local",
+      "why": "Talks to LiveSplit's server on this computer."
+    }
+  ]
+}

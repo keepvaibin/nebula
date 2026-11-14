@@ -1,0 +1,18 @@
+use svc.net.local as local
+
+var listener: local.Request? = none
+var said: text = ""
+
+on start {
+    listener = local.tcp_listen(16834, 0, fn(e: local.Event) {
+        match e {
+            local.Event.Accepted(socket) => log fact "accepted" true
+            local.Event.Data(socket, data) => {
+                said = "{said}{data.text() ?? "?"}"
+                log fact "said" said
+            }
+            else => return
+        }
+    })
+    log fact "listening" listener != none
+}

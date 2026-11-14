@@ -1,0 +1,17 @@
+{
+  "harness": 1,
+  "name": "jump-counter",
+  "about": "One jump in a galaxy shows 1 in the top left corner",
+  "proves": ["script.build", "kit.hud"],
+  "mods": ["../../../lumakit", "../.."],
+  "stage": { "name": "EggStarGalaxy", "scenario": 1 },
+  "steps": [
+    { "at": 20, "picture": "before" },
+    { "at": 30, "hold": ["A"], "frames": 8 },
+    { "at": 120, "picture": "after" },
+    { "at": 130, "end": true }
+  ],
+  "expect": [
+    { "log": "jump 1" }
+  ]
+}

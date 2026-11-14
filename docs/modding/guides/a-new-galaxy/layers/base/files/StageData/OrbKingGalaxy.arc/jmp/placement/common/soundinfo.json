@@ -1,0 +1,14 @@
+{
+  "columns": {
+    "pos_x": "float",
+    "pos_y": "float",
+    "pos_z": "float",
+    "dir_x": "float",
+    "dir_y": "float",
+    "dir_z": "float",
+    "scale_x": "float",
+    "scale_y": "float",
+    "scale_z": "float"
+  },
+  "rows": []
+}

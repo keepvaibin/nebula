@@ -1,0 +1,7 @@
+{
+  "kind": "effect",
+  "file": "NebulaTheme.wav",
+  "bus": "music",
+  "positioned": false,
+  "loop": true
+}

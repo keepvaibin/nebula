@@ -1,0 +1,179 @@
+{
+  "harness": 1,
+  "name": "keeper-talk",
+  "about": "Good Egg, star 1: the Keeper stands on the ground in front of the start with his model, materials and Wait clip; Mario walks up, and A every 50 frames starts the talk, turns his first line to the question, takes Yes and closes his answer; the pictures hello and hello_whole show his first line with the player's name (Mario) where the line has [player]",
+  "proves": [
+    "kit.actor",
+    "kit.talk",
+    "model.mod_model"
+  ],
+  "mods": [
+    "../../../lumakit",
+    "../.."
+  ],
+  "save": {
+    "spin": true
+  },
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 200,
+  "steps": [
+    {
+      "at": 60,
+      "picture": "keeper"
+    },
+    {
+      "at": 60,
+      "stick": [
+        0,
+        1
+      ],
+      "frames": 22
+    },
+    {
+      "at": 110,
+      "picture": "near"
+    },
+    {
+      "at": 112,
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "at": 160,
+      "picture": "ask"
+    },
+    {
+      "at": 162,
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "at": 200,
+      "picture": "hello"
+    },
+    {
+      "at": 212,
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "at": 250,
+      "picture": "hello_whole"
+    },
+    {
+      "at": 262,
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "at": 312,
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "at": 362,
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "at": 412,
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "after": {
+        "fact": "mod.luma-keeper.answer",
+        "exists": true
+      },
+      "picture": "thanks",
+      "timeout": 600
+    },
+    {
+      "at": 462,
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "at": 512,
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "at": 562,
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "at": 612,
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "at": 662,
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "at": 712,
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "at": 762,
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "after": {
+        "fact": "mod.luma-keeper.talked",
+        "is": true
+      },
+      "end": true,
+      "timeout": 900
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.luma-keeper.answer",
+      "is": 0
+    },
+    {
+      "fact": "mod.luma-keeper.talked",
+      "is": true
+    },
+    {
+      "no_log": "script error"
+    }
+  ]
+}

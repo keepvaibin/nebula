@@ -1,0 +1,25 @@
+use kit.actor
+use svc.movie
+
+var playing: movie.Movie? = none
+
+fn ended(e: movie.Event) {
+    playing = none
+    log fact "playing" false
+}
+
+fn near(screen: LiveActor) {
+    if playing != none { return }
+    // Full screen with its sound; + skips it.
+    playing = movie.play((movie "movies/Trailer").name(), ended)
+    log fact "playing" playing != none
+}
+
+on start {
+    actor.define(actor.Kind {
+        name: "LumaScreen"                     // placed in a stage as "galaxy-screen/LumaScreen"
+        look: model "Screen"
+        sensors: [actor.Sensor.Body(150.0)]
+        on_touch_player: near
+    })
+}

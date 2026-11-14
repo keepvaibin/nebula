@@ -1,0 +1,10 @@
+{
+  "format": "1.0",
+  "id": "livesplit-server",
+  "version": "1.0.0",
+  "name": "LiveSplit server stand-in",
+  "summary": "Listens where LiveSplit's server listens and writes every command it is sent as a fact.",
+  "authors": ["you"],
+  "game": { "id": "RMG" },
+  "permissions": [ { "name": "net.local", "why": "Listens on this computer for the LiveSplit Link mod." } ]
+}

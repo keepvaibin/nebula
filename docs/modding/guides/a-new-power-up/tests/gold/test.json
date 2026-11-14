@@ -1,0 +1,188 @@
+{
+  "harness": 1,
+  "name": "gold-flower",
+  "about": "Good Egg, star 1: the flower stands in front of the start; walking into it turns Mario gold, drawn as the mod's figure on his skeleton with its glow. A Goomba of a later planet is put on the start planet ahead of him; he faces it and spins: gold balls (at most two at once) fly, one hits the Goomba, which flashes and drops coins. A second Goomba put on him hurts him and ends the form.",
+  "proves": [
+    "kit.item",
+    "kit.player.form",
+    "kit.projectile",
+    "model.mod_model",
+    "model.skeleton_follow",
+    "fx.start"
+  ],
+  "mods": [
+    "../../../lumakit",
+    "../.."
+  ],
+  "save": {
+    "spin": true
+  },
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 240,
+  "steps": [
+    {
+      "at": 60,
+      "picture": "flower"
+    },
+    {
+      "at": 60,
+      "stick": [
+        0,
+        1
+      ],
+      "frames": 90
+    },
+    {
+      "after": {
+        "fact": "mod.gold-flower.gold",
+        "is": true
+      },
+      "picture": "gold",
+      "timeout": 900
+    },
+    {
+      "at": 190,
+      "call": "MR::resetPosition",
+      "signature": "void(LiveActor *, const Vec3f &)",
+      "args": [
+        "object:クリボー#0",
+        [
+          -4449.0,
+          -12800.0,
+          -16532.0
+        ]
+      ]
+    },
+    {
+      "call": "MR::setPlayerFrontTargetVec",
+      "signature": "void(const Vec3f &, s32)",
+      "args": [
+        "object:クリボー#0",
+        1
+      ],
+      "at": 205
+    },
+    {
+      "at": 208,
+      "shake": 10
+    },
+    {
+      "at": 209,
+      "read": "LiveActor.mPosition",
+      "of": "object:クリボー#0",
+      "type": "Vec3f",
+      "fact": "goomba_at"
+    },
+    {
+      "at": 209,
+      "call": "MR::getPlayerPos",
+      "signature": "Vec3f *()",
+      "args": [],
+      "fact": "player_at"
+    },
+    {
+      "at": 215,
+      "picture": "thrown"
+    },
+    {
+      "after": {
+        "fact": "mod.gold-flower.defeated",
+        "is": true
+      },
+      "picture": "hit",
+      "timeout": 900
+    },
+    {
+      "call": "MR::setPlayerFrontTargetVec",
+      "signature": "void(const Vec3f &, s32)",
+      "args": [
+        "object:クリボー#0",
+        1
+      ],
+      "at": 240
+    },
+    {
+      "at": 243,
+      "shake": 10
+    },
+    {
+      "call": "MR::setPlayerFrontTargetVec",
+      "signature": "void(const Vec3f &, s32)",
+      "args": [
+        "object:クリボー#0",
+        1
+      ],
+      "at": 275
+    },
+    {
+      "at": 278,
+      "shake": 10
+    },
+    {
+      "call": "MR::setPlayerFrontTargetVec",
+      "signature": "void(const Vec3f &, s32)",
+      "args": [
+        "object:クリボー#0",
+        1
+      ],
+      "at": 310
+    },
+    {
+      "at": 313,
+      "shake": 10
+    },
+    {
+      "at": 700,
+      "call": "MR::resetPosition",
+      "signature": "void(LiveActor *, const Vec3f &)",
+      "args": [
+        "object:クリボー#1",
+        [
+          -4449.0,
+          -12800.0,
+          -16532.0
+        ]
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.gold-flower.gold",
+        "is": false
+      },
+      "picture": "ended",
+      "timeout": 600
+    },
+    {
+      "at": 1100,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.gold-flower.gold",
+      "is": true,
+      "when": "first"
+    },
+    {
+      "fact": "mod.gold-flower.balls_out",
+      "at_most": 2,
+      "when": "all"
+    },
+    {
+      "fact": "mod.gold-flower.defeated",
+      "is": true,
+      "when": "first"
+    },
+    {
+      "fact": "mod.gold-flower.gold",
+      "is": false,
+      "when": "last"
+    },
+    {
+      "no_log": "script error"
+    }
+  ]
+}

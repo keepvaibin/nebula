@@ -1,0 +1,122 @@
+use kit.stage
+use kit.actor
+use kit.cutscene
+use kit.hud
+use kit.item
+use svc.audio
+
+let galaxy = "OrbKingGalaxy"
+let king_most: i32 = 3
+
+// The Orb King's fight: its health, the meter showing it, what it is doing and for how many frames.
+var health: i32 = 3
+var meter: hud.Meter? = none
+var awake = false
+var mood = "Wait"
+var mood_frames: u32 = 0
+
+on start {
+    stage.define_galaxy(stage.Galaxy { name: galaxy, title: text "OrbKingGalaxy", dome: stage.Dome.Terrace,
+        stars: [stage.Star { scenario: 1, title: text "OrbKingGalaxy_Star1" }] })
+    stage.music(galaxy, none, sound "NebulaTheme")
+    actor.define(actor.Kind { name: "Spikeroll", look: model "Spikeroll", idle_action: "Wait",
+        sensors: [actor.Sensor.Body(70.0), actor.Sensor.Attack(85.0)],
+        defeated_by: [actor.Attack.Spin, actor.Attack.Trample, actor.Attack.HipDrop, actor.Attack.StarBit],
+        drops: item.Gives.Coins(3), on_frame: roll })
+    actor.define(actor.Kind { name: "OrbKing", look: model "OrbKing", idle_action: "Wait",
+        sensors: [actor.Sensor.Body(240.0), actor.Sensor.Attack(250.0)],
+        defeated_by: [actor.Attack.Trample, actor.Attack.HipDrop], on_frame: king_step, on_attacked: king_hit })
+    stage.build(galaxy, fn(b: stage.Builder) {
+        stage.planet(b, model "NebulaPlanet", model "NebulaPlanet", vec3(0.0, 0.0, 0.0))
+        stage.place(b, "orb-galaxy/Spikeroll", vec3(800.0, 600.0, 0.0))
+        stage.place(b, "orb-galaxy/Spikeroll", vec3(-800.0, 600.0, 0.0))
+        stage.place(b, "orb-galaxy/Spikeroll", vec3(0.0, 600.0, -800.0))
+        stage.place(b, "orb-galaxy/OrbKing", vec3(0.0, -1000.0, 0.0), vec3(180.0, 0.0, 0.0))
+    })
+}
+
+// A Spikeroll rolls at Mario once he is near.
+fn roll(a: LiveActor) {
+    if actor.near_player(a, 900.0) {
+        MR::tryStartAction(a, "Roll")
+        actor.move_toward_player(a, 0.4)
+    } else {
+        MR::tryStartAction(a, "Wait")
+    }
+}
+
+fn set_mood(k: LiveActor, to: text) {
+    mood = to
+    mood_frames = 0
+    MR::tryStartAction(k, to)
+}
+
+// The Orb King wakes when Mario comes near: its scene, then the fight with its own music and meter.
+task wake(k: ref<LiveActor>) {
+    log "the Orb King wakes"
+    let watched = wait cutscene.play(cutscene.Scene { shots: [
+        cutscene.Shot.Look(k, vec3(0.0, 500.0, 1400.0), 90),
+        cutscene.Shot.Action(k, "Slam"),
+        cutscene.Shot.Wait(40)] })
+    let m = hud.meter(hud.Corner.TopRight, king_most)
+    hud.set_meter(m, health)
+    meter = m
+    audio.music("BossTheme", 500)
+    mood_frames = 0
+}
+
+// It walks toward Mario, charges at him, then sits dizzy: the time to stomp it.
+fn king_step(k: LiveActor) {
+    if not awake {
+        if actor.near_player(k, 1500.0) {
+            awake = true
+            start wake(ref(k))
+        }
+        return
+    }
+    if cutscene.active() {
+        return
+    }
+    mood_frames += 1
+    if mood == "Wait" {
+        actor.move_toward_player(k, 0.3)
+        if mood_frames >= 180 {
+            set_mood(k, "Slam")
+        }
+    } else if mood == "Slam" {
+        actor.move_toward_player(k, 1.6)
+        if mood_frames >= 60 {
+            set_mood(k, "Dizzy")
+        }
+    } else if mood == "Dizzy" {
+        if mood_frames >= 150 {
+            set_mood(k, "Wait")
+        }
+    } else if mood_frames >= 40 {
+        set_mood(k, "Wait")
+    }
+}
+
+// A stomp while it is dizzy costs it one health; the third beats it and its star appears.
+fn king_hit(k: LiveActor, attack: actor.Attack) -> bool {
+    if mood != "Dizzy" {
+        return true
+    }
+    health -= 1
+    log fact "king_health" health
+    if let m = meter {
+        hud.set_meter(m, health)
+    }
+    if health > 0 {
+        set_mood(k, "Hurt")
+        return true
+    }
+    if let m = meter {
+        hud.remove_meter(m)
+    }
+    meter = none
+    audio.music("NebulaTheme", 1000)
+    stage.appear_star(k.mPosition, 1)
+    log "the Orb King is beaten"
+    return false
+}

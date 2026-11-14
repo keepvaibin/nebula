@@ -1,0 +1,8 @@
+{
+  "effects": {
+    "gold_aura": { "particles": [ { "like": "CoinFlowerGlow00", "shape": { "primary": "ffd040ff" } } ] },
+    "gold_flower_shine": { "particles": [ { "like": "CommonGlow00", "shape": { "primary": "ffe070ff" } } ] },
+    "gold_ball_trail": { "particles": [ { "like": "FireBall00", "shape": { "primary": "ffc830ff" } } ] },
+    "gold_ball_burst": { "particles": [ { "like": "FireBallBreak00", "shape": { "primary": "ffd040ff" } } ] }
+  }
+}

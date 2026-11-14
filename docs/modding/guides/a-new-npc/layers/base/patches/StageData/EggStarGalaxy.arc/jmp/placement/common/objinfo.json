@@ -1,0 +1,15 @@
+{
+  "patch": 1,
+  "key": ["l_id"],
+  "add": [
+    {
+      "name": "luma-keeper/LumaKeeper",
+      "l_id": 9412,
+      "pos_x": -3439.8, "pos_y": -13081.3, "pos_z": -15575.5,
+      "dir_x": 0.0, "dir_y": 0.0, "dir_z": 0.0,
+      "scale_x": 1.0, "scale_y": 1.0, "scale_z": 1.0,
+      "Obj_arg0": -1, "Obj_arg1": -1, "Obj_arg2": -1, "Obj_arg3": -1,
+      "Obj_arg4": -1, "Obj_arg5": -1, "Obj_arg6": -1, "Obj_arg7": -1
+    }
+  ]
+}

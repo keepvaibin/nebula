@@ -1,0 +1,26 @@
+use kit.actor
+use kit.talk
+
+fn chat(keeper: LiveActor) {
+    start chat_task(ref(keeper))
+}
+
+task chat_task(k: ref<LiveActor>) {
+    let answer = wait talk.ask(k, text "Keeper_Hello", [text "Keeper_Yes", text "Keeper_No"])
+    log fact "answer" answer
+    match answer {
+        0 => wait talk.say(k, text "Keeper_Thanks")
+        else => wait talk.say(k, text "Keeper_Bye")
+    }
+    log fact "talked" true
+}
+
+on start {
+    actor.define(actor.Kind {
+        name: "LumaKeeper"                     // placed in a stage as "luma-keeper/LumaKeeper"
+        look: model "Keeper"                   // its materials and textures are cooked from the glTF
+        idle_action: "Wait"                    // the model's own clip, looped
+        sensors: [actor.Sensor.Body(70.0)]
+        on_talk: chat
+    })
+}

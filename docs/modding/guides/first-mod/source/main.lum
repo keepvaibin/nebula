@@ -1,0 +1,16 @@
+use kit.hud
+
+var jumps: i64 = 0
+var counter: hud.Counter? = none
+
+on start {
+    counter = hud.counter(hud.Corner.TopLeft, 0)
+}
+
+hook before Mario::tryJump() {
+    jumps += 1
+    if let c = counter {
+        hud.set_counter(c, jumps)
+    }
+    log "jump {jumps}"
+}

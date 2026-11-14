@@ -1,0 +1,152 @@
+use svc.net.local as local
+use svc.time
+
+option port: int
+
+var link: local.Request? = none
+var connected = false
+var waiting: list<text> = []
+var running = false
+var loading = false
+var by_pipe = false
+
+// LiveSplit's server: TCP on the option's port, or on Windows its named pipe "LiveSplit". Each failed try goes on to
+// the other one.
+fn connect() {
+    connected = false
+    if by_pipe {
+        link = local.ipc_connect("LiveSplit", heard)
+    } else {
+        link = local.tcp_connect("127.0.0.1", port as u16, heard)
+    }
+    if link == none {
+        lost()
+    }
+}
+
+fn heard(e: local.Event) {
+    match e {
+        local.Event.Connected(socket, data) => {
+            connected = true
+            if by_pipe {
+                log "connected to LiveSplit's pipe"
+            } else {
+                log "connected to LiveSplit on port {port}"
+            }
+            let lines = waiting
+            waiting = []
+            for line in lines {
+                say(line)
+            }
+        }
+        local.Event.Error(socket, status, value) => lost()
+        local.Event.Closed(socket, status, value, data) => lost()
+        else => return
+    }
+}
+
+fn lost() {
+    link = none
+    connected = false
+    by_pipe = not by_pipe
+    if by_pipe {
+        connect()
+        return
+    }
+    log "no LiveSplit server on port {port} or pipe; trying again in 5 seconds"
+    start retry()
+}
+
+task retry() {
+    let again = time.monotonic_ns() + 5_000_000_000
+    wait until time.monotonic_ns() >= again
+    if link == none {
+        connect()
+    }
+}
+
+// One command of LiveSplit's server, kept until the link is up.
+fn say(command: text) {
+    if connected {
+        if let l = link {
+            local.send(l, "{command}\r\n".bytes())
+            return
+        }
+    }
+    if waiting.len() < 32 {
+        waiting.push(command)
+    }
+}
+
+fn begin() {
+    if running {
+        say("reset")
+    }
+    say("starttimer")
+    say("initgametime")
+    if loading {
+        say("pausegametime")
+    }
+    running = true
+}
+
+on start {
+    connect()
+}
+
+on option port {
+    if let l = link {
+        local.close(l)
+    }
+    link = none
+    by_pipe = false
+    connect()
+}
+
+// Game time stops while the game loads a scene.
+on frame {
+    let now_loading = time.now().state == time.State.Loading
+    if now_loading != loading {
+        loading = now_loading
+        if running {
+            if loading {
+                say("pausegametime")
+            } else {
+                say("unpausegametime")
+            }
+        }
+    }
+}
+
+// A file chosen on the file select starts the run.
+hook after GameSequenceFunction::startGameDataLoadSequence(file, first) {
+    begin()
+}
+
+hook before GameSceneFunction::requestPowerStarGetDemo() {
+    if running {
+        say("split")
+    }
+}
+
+hook before GameSceneFunction::requestGrandStarGetDemo() {
+    if running {
+        say("split")
+    }
+}
+
+// The last split: the credits start.
+hook before GameSceneFunction::requestStaffRoll() {
+    if running {
+        say("split")
+        running = false
+    }
+}
+
+// Back to the title screen: the run is over.
+hook before MR::requestChangeSceneTitle() {
+    if running {
+        say("reset")
+        running = false
+    }
+}
