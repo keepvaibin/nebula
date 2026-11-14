@@ -548,57 +548,83 @@ SendResult post(std::string_view url, const Bytes& body, bool allow_http) {
     if (url.rfind("https://", 0) != 0 && !(allow_http && loopback_http(url))) return {kUsage, "the endpoint is not https"};
     auto* env = static_cast<JNIEnv*>(SDL_GetAndroidJNIEnv());
     if (env == nullptr || env->PushLocalFrame(32) != 0) return {kNetwork, "no HTTPS client"};
+    // Every call is checked: a pending Java exception ends the send, and no JNI call is made while one is pending.
     const auto failed = [env]() {
         if (!env->ExceptionCheck()) return false;
         env->ExceptionClear();
         return true;
     };
+    const auto text = [&](const char* value) {
+        jstring s = env->NewStringUTF(value);
+        return failed() ? nullptr : s;
+    };
+    const auto method = [&](jclass type, const char* name, const char* signature) {
+        jmethodID id = env->GetMethodID(type, name, signature);
+        return failed() ? nullptr : id;
+    };
+    const auto call = [&](jobject object, jclass type, const char* name, const char* signature, auto... args) {
+        const jmethodID id = method(type, name, signature);
+        if (id == nullptr) return false;
+        env->CallVoidMethod(object, id, args...);
+        return !failed();
+    };
     SendResult result{kNetwork, "no answer"};
     do {
         jclass url_class = env->FindClass("java/net/URL");
+        if (failed() || url_class == nullptr) break;
         jclass http_class = env->FindClass("java/net/HttpURLConnection");
+        if (failed() || http_class == nullptr) break;
         jclass stream_class = env->FindClass("java/io/OutputStream");
-        if (failed() || url_class == nullptr || http_class == nullptr || stream_class == nullptr) break;
+        if (failed() || stream_class == nullptr) break;
         const std::string url_text(url);
-        jobject url_object = env->NewObject(url_class, env->GetMethodID(url_class, "<init>", "(Ljava/lang/String;)V"),
-                                            env->NewStringUTF(url_text.c_str()));
-        if (failed()) break;
-        jobject connection =
-            env->CallObjectMethod(url_object, env->GetMethodID(url_class, "openConnection", "()Ljava/net/URLConnection;"));
+        jstring address = text(url_text.c_str());
+        jstring post_method = address != nullptr ? text("POST") : nullptr;
+        jstring type_key = post_method != nullptr ? text("Content-Type") : nullptr;
+        jstring type_value = type_key != nullptr ? text(kContentType) : nullptr;
+        jstring agent_key = type_value != nullptr ? text("User-Agent") : nullptr;
+        jstring agent_value = agent_key != nullptr ? text("Nebula") : nullptr;
+        if (agent_value == nullptr) break;
+        const jmethodID make_url = method(url_class, "<init>", "(Ljava/lang/String;)V");
+        if (make_url == nullptr) break;
+        jobject url_object = env->NewObject(url_class, make_url, address);
+        if (failed() || url_object == nullptr) break;
+        const jmethodID open = method(url_class, "openConnection", "()Ljava/net/URLConnection;");
+        if (open == nullptr) break;
+        jobject connection = env->CallObjectMethod(url_object, open);
         if (failed() || connection == nullptr || !env->IsInstanceOf(connection, http_class)) break;
-        env->CallVoidMethod(connection, env->GetMethodID(http_class, "setRequestMethod", "(Ljava/lang/String;)V"),
-                            env->NewStringUTF("POST"));
-        env->CallVoidMethod(connection, env->GetMethodID(http_class, "setInstanceFollowRedirects", "(Z)V"), JNI_FALSE);
-        env->CallVoidMethod(connection, env->GetMethodID(http_class, "setUseCaches", "(Z)V"), JNI_FALSE);
-        env->CallVoidMethod(connection, env->GetMethodID(http_class, "setDoOutput", "(Z)V"), JNI_TRUE);
-        env->CallVoidMethod(connection, env->GetMethodID(http_class, "setConnectTimeout", "(I)V"), 5000);
-        env->CallVoidMethod(connection, env->GetMethodID(http_class, "setReadTimeout", "(I)V"), 5000);
-        env->CallVoidMethod(connection, env->GetMethodID(http_class, "setFixedLengthStreamingMode", "(I)V"),
-                            static_cast<jint>(body.size()));
-        env->CallVoidMethod(connection,
-                            env->GetMethodID(http_class, "setRequestProperty", "(Ljava/lang/String;Ljava/lang/String;)V"),
-                            env->NewStringUTF("Content-Type"), env->NewStringUTF(kContentType));
-        env->CallVoidMethod(connection,
-                            env->GetMethodID(http_class, "setRequestProperty", "(Ljava/lang/String;Ljava/lang/String;)V"),
-                            env->NewStringUTF("User-Agent"), env->NewStringUTF("Nebula"));
-        if (failed()) break;
+        constexpr const char* kSetProperty = "(Ljava/lang/String;Ljava/lang/String;)V";
+        if (!call(connection, http_class, "setRequestMethod", "(Ljava/lang/String;)V", post_method) ||
+            !call(connection, http_class, "setInstanceFollowRedirects", "(Z)V", JNI_FALSE) ||
+            !call(connection, http_class, "setUseCaches", "(Z)V", JNI_FALSE) ||
+            !call(connection, http_class, "setDoOutput", "(Z)V", JNI_TRUE) ||
+            !call(connection, http_class, "setConnectTimeout", "(I)V", static_cast<jint>(5000)) ||
+            !call(connection, http_class, "setReadTimeout", "(I)V", static_cast<jint>(5000)) ||
+            !call(connection, http_class, "setFixedLengthStreamingMode", "(I)V", static_cast<jint>(body.size())) ||
+            !call(connection, http_class, "setRequestProperty", kSetProperty, type_key, type_value) ||
+            !call(connection, http_class, "setRequestProperty", kSetProperty, agent_key, agent_value)) {
+            break;
+        }
         jbyteArray bytes = env->NewByteArray(static_cast<jsize>(body.size()));
         if (failed() || bytes == nullptr) break;
         env->SetByteArrayRegion(bytes, 0, static_cast<jsize>(body.size()), reinterpret_cast<const jbyte*>(body.data()));
-        jobject stream =
-            env->CallObjectMethod(connection, env->GetMethodID(http_class, "getOutputStream", "()Ljava/io/OutputStream;"));
+        const jmethodID output = method(http_class, "getOutputStream", "()Ljava/io/OutputStream;");
+        if (output == nullptr) break;
+        jobject stream = env->CallObjectMethod(connection, output);
         if (failed() || stream == nullptr) {
             result.line = "cannot connect";
             break;
         }
-        env->CallVoidMethod(stream, env->GetMethodID(stream_class, "write", "([B)V"), bytes);
-        env->CallVoidMethod(stream, env->GetMethodID(stream_class, "close", "()V"));
-        if (failed()) break;
-        const jint status = env->CallIntMethod(connection, env->GetMethodID(http_class, "getResponseCode", "()I"));
-        const bool status_failed = failed();
-        env->CallVoidMethod(connection, env->GetMethodID(http_class, "disconnect", "()V"));
-        failed();
-        if (!status_failed && status > 0) result = answered(status, body.size());
+        const bool written = call(stream, stream_class, "write", "([B)V", bytes);
+        const bool closed = call(stream, stream_class, "close", "()V");
+        jint status = 0;
+        if (written && closed) {
+            if (const jmethodID code = method(http_class, "getResponseCode", "()I"); code != nullptr) {
+                status = env->CallIntMethod(connection, code);
+                if (failed()) status = 0;
+            }
+        }
+        call(connection, http_class, "disconnect", "()V");
+        if (status > 0) result = answered(status, body.size());
     } while (false);
     env->PopLocalFrame(nullptr);
     return result;
