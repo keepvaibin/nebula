@@ -153,6 +153,7 @@ struct LumaMod {
     bool stopped;       // its stop ran
     bool inStop;        // inside its stop: keep answers
     bool inStart;       // inside its start: kept answers
+    bool going;         // its hooks, classes and numbers were taken out: its stop and finish add none (they would stay)
     u32 startedAt;      // its place in the start order, from 1 (a mod starts after every mod it uses)
     // The guard (plan 1.6): its library's image, and 1 once a fault was caught in its code (atomic): none of its code
     // runs again, its stop and finish included.
@@ -282,9 +283,19 @@ namespace luma {
 
         const LumaFunction* apiFunctionAt(u32 index) { return asPublic(functionAt(index)); }
 
+        // A mod being taken out (its stop, its finish, or a start it refused) adds nothing the kernel keeps for it: its
+        // hooks, classes and numbers were already taken out, and what it added now would outlive its library. Said.
+        bool refusedWhileGoing(const LumaMod* pMod, const char* pWhat) {
+            if (pMod == nullptr || !pMod->going) {
+                return false;
+            }
+            nebula_log("[mod %s] %s refused: the mod is being taken out, and nothing it adds now would go with it\n", pMod->name, pWhat);
+            return true;
+        }
+
         s32 apiHook(const LumaMod* pConstMod, const LumaFunction* pFunction, u32 kind, LumaHook pHook, void* pUser) {
             LumaMod* const pMod = const_cast<LumaMod*>(pConstMod);
-            if (pMod == nullptr) {
+            if (pMod == nullptr || refusedWhileGoing(pMod, "hook")) {
                 return HookResult_Refused;
             }
             const HookResult result =
@@ -1057,7 +1068,9 @@ namespace luma {
         void noResult(const Function* pFunction, const void* pOwner) { mended(pFunction, pOwner, kCodeNoResult); }
 
         // Classes (classes contract, plan 1.4).
-        s32 apiDefineClass(const LumaMod* pMod, const LumaClassDef* pDef) { return luma::classes::define(pMod, pDef); }
+        s32 apiDefineClass(const LumaMod* pMod, const LumaClassDef* pDef) {
+            return refusedWhileGoing(pMod, "define_class") ? -1 : luma::classes::define(pMod, pDef);
+        }
 
         void* apiClassData(const LumaMod*, const void* pObject, s32 number) { return luma::classes::data(pObject, number); }
 
@@ -1067,7 +1080,7 @@ namespace luma {
         }
 
         s32 apiSetNumber(const LumaMod* pMod, const char* pName, const char* pSignature, u32 place, f64 value) {
-            return luma::numbers::set(pMod, pName, pSignature, place, value);
+            return refusedWhileGoing(pMod, "set_number") ? -1 : luma::numbers::set(pMod, pName, pSignature, place, value);
         }
 
         s32 apiTable(const LumaMod* pMod, const char* pName, LumaTable* pOut) {
@@ -1075,7 +1088,7 @@ namespace luma {
         }
 
         s32 apiSetTable(const LumaMod* pMod, const char* pName, u32 offset, const void* pBytes, u32 size) {
-            return luma::numbers::setTable(pMod, pName, offset, pBytes, size);
+            return refusedWhileGoing(pMod, "set_table") ? -1 : luma::numbers::setTable(pMod, pName, offset, pBytes, size);
         }
 
         // Objects made by name (classes contract, "make").
@@ -1084,7 +1097,7 @@ namespace luma {
         }
 
         s32 apiAliasClass(const LumaMod* pMod, const char* pName, const char* pClass, const s32* pArgs) {
-            return luma::classes::alias(pMod, pName, pClass, pArgs);
+            return refusedWhileGoing(pMod, "alias_class") ? -1 : luma::classes::alias(pMod, pName, pClass, pArgs);
         }
 
         // Placements (classes contract, "placement").
@@ -1096,7 +1109,7 @@ namespace luma {
 
         // Gravity classes (classes contract, "gravity").
         void* apiMakeGravity(const LumaMod* pMod, const char* pClass, const LumaGravityPlace* pPlace) {
-            return luma::classes::makeGravity(pMod, pClass, pPlace);
+            return refusedWhileGoing(pMod, "make_gravity") ? nullptr : luma::classes::makeGravity(pMod, pClass, pPlace);
         }
 
         const LumaCore sCore = {
@@ -1744,6 +1757,7 @@ namespace luma {
                 }
                 // Hooks its start added itself go; the mods it imported from are told; it ends after the grace when any
                 // was published.
+                pMod->going = true;
                 removeHooks(pMod);
                 luma::classes::modGone(pMod);
                 luma::numbers::modGone(pMod);
@@ -1794,6 +1808,7 @@ namespace luma {
             sMods[i] = sMods[--sModCount];
             // Unbind, its stop, the mods it imported from told, then after the grace its destructors, memory and
             // library (LR-5, D3-3).
+            pMod->going = true;
             removeHooks(pMod);
             luma::classes::modGone(pMod);
             luma::numbers::modGone(pMod);

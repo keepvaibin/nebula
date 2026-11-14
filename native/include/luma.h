@@ -367,7 +367,9 @@ typedef struct LumaModInfo {
     /* After every slot is filled. Non-zero: the mod could not start and is left off. May be null. */
     int32_t (*start)(const LumaCore* core, const LumaMod* mod);
     /* When the mod is taken out, after its hooks are: other threads may still be inside one until the game's grace
-       ends, so it frees nothing they read (memory from `alloc` and its globals go after the grace). May be null. */
+       ends, so it frees nothing they read (memory from `alloc` and its globals go after the grace). From stop and
+       finish (and after a start that refused), hook, define_class, alias_class, set_number, set_table and make_gravity
+       refuse (-1, or null), said in the log: what the mod added then would outlive it. May be null. */
     void (*stop)(void);
     /* luma.h's, filled by LUMA_MOD: before `start`, it keeps the core for `new` and runs the C++ globals' constructors
        (the system's loader runs none: loader contract 8, LR-6). */
