@@ -9,7 +9,7 @@ mod it `needs`, or in something code makes at start (a derived class).
 
 The rule. A reference that does not resolve never stops the game: the mod stays on, the thing it named is replaced by
 a placeholder of its kind where section 4 has one, and the mod log has one Error entry naming the mod, the file, the
-line (or JSON pointer), the kind and the name, and what was expected. Sounds, texts and object classes have no
+line (or JSON pointer), the kind and the name, and what was expected. Sounds and texts have no
 placeholder (section 4).
 
 ### 2. The kinds, and who resolves each
@@ -23,7 +23,7 @@ placeholder (section 4).
 | animation | an actor's animation by name (3.6) | the model's archive | validator, L670-L679 |
 | sound | a sound by name (3.7) | the game's sound table, the mod's sounds | validator, L680-L689 |
 | text | a message id (3.8; a placement's message, a layout's text) | the game's message tables in each language, the mod's added lines | validator, L690-L699 |
-| object class | a placement row's class name (3.9) | the game's factory (self-description) and classes mods make (1.4) | validator, L900-L929 (stages' half), with section 3's after-start step |
+| object class | a placement row's class name (3.9) | the game's factory (self-description) and classes mods make (1.4) | validator (an `after_start` row for a class no game list names), then the game after the mods' start (section 3) |
 | file | a whole file or patch target (luma-format 5) | the game's store | validator, L302 (exists) |
 | a name code passes at run time | `assets`, `draw`, `audio`, LumaKit calls taking a name | as its kind | the call itself (section 5), and the validator for names the compiler lifts (section 5.2) |
 
@@ -38,9 +38,16 @@ to replace, without a second check.
   summary). A start's check reads the kept report for the rules that read the whole `.luma`; reference rules that read
   the store or other mods run again at every start, so a game update or another mod's removal that breaks a reference
   is found then.
-- Object classes are not checked. A placement row naming a class no mod makes is left out of the stage, with no
-  mod-log entry and no placeholder: the validator writes no `after_start` rows, so the host's after-start check (the
-  module's `luma_refs_check_after_start`, luma_refs.h) is given none and `Content.MissingClass` (620) is never said.
+- After start: object classes. A row of a stage's placement table (`jmp/Placement/<layer>/` or
+  `jmp/MapParts/<layer>/`, not the zone list `StageObjInfo`; a patch's `add`, `rows`, `set` and `select`, or a whole
+  table in `files/`) names its object's class. A class that neither the game's factory list (the placement facts
+  beside the game module) nor its planet table names, and that is not made by its shape (`ShapeModelNo` other than
+  -1), may be one a mod's code makes. The validator keeps it in the mod's report as an `after_start` row (class,
+  file, and the line of `name` in a patch or the row's number from 1 in a whole table) and counts it as not checked
+  (L403, `Missing.AfterStart`; `Missing.Classes` when the factory list was not given, and then every placement
+  waits). After the last mod's start the host gives every mod's rows to the game module's
+  `luma_refs_check_after_start` (luma_refs.h), once. A class no mod made is `Content.MissingClass` (620) in the mod
+  log, and each placement of it makes the placeholder object.
 - Nothing is resolved lazily for content: by the title every content reference of every mod on is either resolved or
   has its placeholder decided. A stage loaded later reads the decision, it does not look again.
 
@@ -62,7 +69,7 @@ that name.
 | animation | the model's bind pose (a mod's new actor) or the game's own animation of that name (a replacement) | the game, at the animation's start |
 | sound | none: the audio service answers a name it does not find with LUMA_E_NOT_FOUND and plays nothing | |
 | text | none: a missing message id is not replaced | |
-| object class | none: the placement is left out (section 3) | |
+| object class | the placeholder object with `nebula:placeholder/model` (section 3) | the game, after the mods' start (620) |
 
 - The placeholder assets are Nebula's own data: sources under `data/placeholder/` in Nebula, cooked into the
   store with the rest of Nebula's data by the importer. Their absence is a start-up error (3.13), so a

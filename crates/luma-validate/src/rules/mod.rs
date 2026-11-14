@@ -1,5 +1,6 @@
 //! The rules, by block of codes. Each block reports every finding it can; none stops at the first.
 
+mod after_start;
 mod code;
 mod container;
 mod kit;

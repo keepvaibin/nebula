@@ -53,6 +53,7 @@ mod tests {
             include_str!("rules/code.rs"),
             include_str!("rules/kit.rs"),
             include_str!("rules/mods.rs"),
+            include_str!("rules/after_start.rs"),
         ];
         let mut ids = Vec::new();
         for source in sources {

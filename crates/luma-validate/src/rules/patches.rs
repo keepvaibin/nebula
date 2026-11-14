@@ -149,7 +149,10 @@ pub(crate) fn check(ctx: &mut Ctx) {
     lists.push(own);
     lists.extend(installed[..position].iter().rev().map(theirs));
     ctx.facts.scenario_cells = crate::scenario_order(lists);
+    // The placements of classes only code can make, from whole tables and from patches (references 3).
+    super::after_start::whole_tables(ctx);
     for (name, target, root) in parsed {
+        super::after_start::patch(ctx, &name, &target, &root);
         let mut pc = P { ctx, file: name };
         one(&mut pc, &root, &target);
     }

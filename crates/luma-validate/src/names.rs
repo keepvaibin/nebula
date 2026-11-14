@@ -52,6 +52,25 @@ pub const SERVICES_FILE: &str = "luma_services.json";
 /// self-description's (luma-format revision 4), so the same reader takes either.
 pub const RENDERER_FILE: &str = "luma_renderer.json";
 
+/// The game's placement facts in a folder of names (beside the game module, at the folder's top): their `factory`
+/// rows name every class a placement can make without a mod.
+pub const PLACEMENT_FILE: &str = "smg_game.luma-placement.json";
+
+/// The class names of the game's object factory (`factory`, each row's `name`) from its placement facts, in lowercase:
+/// the game looks a placement's class up without case.
+pub fn factory_from_json(bytes: &[u8]) -> Result<std::collections::HashSet<String>, TypesError> {
+    let root = crate::json::parse(bytes)
+        .map_err(|e| TypesError::Json { line: e.pos.line, column: e.pos.column, what: e.what, detail: e.detail })?;
+    let bad = |at: String, why: &str| TypesError::Row { at, why: why.to_string() };
+    let list = root.get("factory").filter(|v| v.is_array()).ok_or_else(|| bad("factory".into(), "missing, or not a list"))?;
+    let mut out = std::collections::HashSet::new();
+    for (i, row) in list.items().iter().enumerate() {
+        let name = row.get("name").and_then(|n| n.as_str()).filter(|n| !n.is_empty()).ok_or_else(|| bad(format!("factory[{i}].name"), "missing, or not a name"))?;
+        out.insert(name.to_lowercase());
+    }
+    Ok(out)
+}
+
 /// At most this many names in the renderer's list and in a mod's `renderer.features`.
 pub const MAX_FEATURES: usize = 64;
 
@@ -217,6 +236,9 @@ pub struct Names {
     pub renderer_features: Option<std::collections::BTreeSet<String>>,
     /// The LumaCore version mods are checked against (`LUMA_API`).
     pub api: u32,
+    /// The classes the game's object factory makes, in lowercase (the placement facts' `factory`); None when not
+    /// given: every placement's class is then left to the game's check after the mods' start.
+    pub factory: Option<std::collections::HashSet<String>>,
 }
 
 impl Names {
@@ -255,6 +277,9 @@ impl Names {
                     }
                     let bytes = std::fs::read(&path).map_err(|error| RowsError::Read { path: path.clone(), error })?;
                     names.services = Some(Services::from_json(&bytes).map_err(|error| RowsError::Types { path: path.clone(), error })?);
+                } else if dir == folder && path.file_name().is_some_and(|n| n == PLACEMENT_FILE) {
+                    let bytes = std::fs::read(&path).map_err(|error| RowsError::Read { path: path.clone(), error })?;
+                    names.factory = Some(factory_from_json(&bytes).map_err(|error| RowsError::Types { path: path.clone(), error })?);
                 } else if path.file_name().is_some_and(|n| n == RENDERER_FILE) {
                     if names.renderer_features.is_some() {
                         let why = format!("a second {RENDERER_FILE} under {}", folder.display());
