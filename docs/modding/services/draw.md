@@ -70,10 +70,10 @@
         char* error, uint32_t error_capacity)`: NEBULA_POST_OK 0 and *program (never 0); NEBULA_POST_COMPILE 1 and the
         compiler's first error in `error`; NEBULA_POST_NO_MOTION 2 (reads motion, no motion vectors).
       - `void (*post_free)(void* user, uint32_t program)`.
-      - The pass draws one full-screen triangle with the program into a new picture (D3D12 and Vulkan). It binds the
+      - The pass draws one full-screen triangle with the program into a new picture (D3D12, Vulkan and D3D11). It binds the
         frame so far, depth and motion as `reads` asks.
       - The constant block is the host's (galaxy/render/mod_post.h): 8 rows, 128 bytes (D3D12 root constants b0,
-        Vulkan push constants): {size.xy, inv_size.xy}, {time (game_frame / 60 s), frame, flags, 0}, depth_terms
+        Vulkan push constants, D3D11 constant buffer b0): {size.xy, inv_size.xy}, {time (game_frame / 60 s), frame, flags, 0}, depth_terms
         (distance = x / (d * y + z), w the far plane's distance), {motion_scale.xy, 0, 0} (the host's motion target is
         in pixels toward the previous position), params[4] (the pass's 4 rows). The game sends only the program id and
         the 4 rows.
@@ -85,7 +85,8 @@
     - Calls:
       - `at(mod, point, fn, user)`: points 0 to 2 in the scene's target with its depth; 6 present, the output picture
         without depth; others LUMA_E_ARGUMENT. fn null removes.
-      - `backend(mod, out)`: 1 D3D12, 2 Vulkan; the same all session.
+      - `backend(mod, out)`: 1 D3D12, 2 Vulkan, 3 D3D11; the same all session. 0 on Metal: no native draw is called
+        there.
       - A mod without `native` granted cannot bind the service (services-registry 5.2).
     - The callback `void fn(void* user, const LumaDrawNativeFrame* frame)`:
       - It runs on the host's render thread when the host reaches that place in the frame list, once for each picture
@@ -104,6 +105,11 @@
       - or `vulkan` {instance, physical_device, device, queue, queue_family, get_instance_proc_addr, command_buffer
         (recording, outside any render pass), target_image, target_view, target_format (VkFormat), target_layout,
         depth_image, depth_view, depth_format, depth_layout (0 at 6)}.
+      - or `d3d11` {device (ID3D11Device1*), context (ID3D11DeviceContext1*, the immediate context: the host's thread
+        only, during the call), target (ID3D11Texture2D*), target_rtv (ID3D11RenderTargetView*), target_format
+        (DXGI_FORMAT), depth_format (0 at 6), depth, depth_dsv (null at 6)}. The call runs on a context state of its
+        own (`ID3D11DeviceContext1::SwapDeviceContextState`): it starts with nothing bound and binds what it draws
+        with; the host's state comes back after it.
     - What the mod leaves: the target and depth in the states and layouts given, no render pass open, nothing
       submitted on the host's queue. The host sets its own state again after every call.
     - Game side (FB). The game appends `NEBULA_PASS_NATIVE` at the point: `first_item` is the call's index in the
@@ -115,6 +121,6 @@
       - NebulaFrameList gains `const NebulaNativeCall* native_calls; uint32_t native_call_count;`.
       - `NebulaNativeFrame` is LumaDrawNativeFrame (a typedef in nebula_frame_list.h, which includes
         luma_draw_native.h): one struct.
-      - `NEBULA_OPTION_GRAPHICS_BACKEND` (1 D3D12, 2 Vulkan) answers draw.native.backend.
+      - `NEBULA_OPTION_GRAPHICS_BACKEND` (1 D3D12, 2 Vulkan, 3 D3D11) answers draw.native.backend.
       - At the pass the host ends its render pass (Vulkan) or keeps the list open (D3D12), fills the frame, calls, and
         restores its state.

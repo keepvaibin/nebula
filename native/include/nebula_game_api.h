@@ -391,7 +391,7 @@ enum {
     NEBULA_OPTION_DIAGNOSE_SCENE_LOADS, /* --diagnostics scene-loads: 1 logs what each scene change loads */
     NEBULA_OPTION_TOUCH_POINTER,       /* 0 no touch screen, 1 one, 2 the finger has the pointer, 3 and the game is on a
                                           menu: no pointer shows under a finger there */
-    NEBULA_OPTION_GRAPHICS_BACKEND,    /* the renderer's backend, the same all session: 1 D3D12, 2 Vulkan (draw.native) */
+    NEBULA_OPTION_GRAPHICS_BACKEND,    /* the renderer's backend, the same all session: 1 D3D12, 2 Vulkan, 3 D3D11 (draw.native) */
     NEBULA_OPTION_RAY_TRACING,         /* what ray tracing asks of the game now (NEBULA_RAY_TRACING_*); 0: nothing */
 };
 

@@ -2929,6 +2929,8 @@ uint32_t svc_option(void*, uint32_t what) {
         // none yet (0: draw.native's functions are not called).
 #if defined(NEBULA_HOST_RENDERER) && defined(NEBULA_HOST_D3D12)
         return 1u;
+#elif defined(NEBULA_HOST_RENDERER) && defined(NEBULA_GPU_D3D11)
+        return 3u;
 #elif defined(NEBULA_HOST_RENDERER) && !defined(__APPLE__)
         return 2u;
 #else
