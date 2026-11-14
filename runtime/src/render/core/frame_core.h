@@ -154,6 +154,7 @@ struct TextureTable {
     float samplers_mip_lines = 0.0f, samplers_scene_bias = 0.0f;
     bool has_target = false;
     std::uint64_t walk_stamp = 0u;
+    std::uint64_t pictures_moved = 0u;  // RenderCore::pictures_moved_ when its target's pictures were named
     // The last frame (RenderCore::frame_index_) a walk named the table; a table idle for kTableIdleFrames gives up what was built
     // for it (retire_idle_tables) and is `retired` until a walk names it again.
     std::uint64_t last_frame = 0u;
@@ -408,7 +409,12 @@ private:
     void place_slot(const float (*rows)[4], std::uint32_t vertex_rows, std::uint32_t pixel_rows);
     std::uint32_t material_register_locked(const float (*rows)[4], std::uint32_t vertex_rows, std::uint32_t pixel_rows);
     std::uint32_t take_mesh_ids(std::uint32_t count);
+    static std::uint64_t make_serial() noexcept;
 
+    // This object among every Registries a process has made (texture_table's per-thread answers name it), and how many
+    // times forget_textures has dropped registered lists: an answer given before a drop is asked again.
+    const std::uint64_t serial_ = make_serial();
+    std::atomic<std::uint64_t> tables_dropped_{0u};
     gpu::Device* device_ = nullptr;
     DeviceGate* gate_ = nullptr;
     std::mutex lock_;
@@ -474,6 +480,14 @@ private:
     std::vector<std::uint32_t> next_in_slot_;
     std::vector<std::uint8_t> used_;
     std::vector<std::uint32_t> next_item_;
+    // The last list's items by identity (slot, generation, part): the first of each, `next_item_` chaining the rest.
+    struct ItemEntry {
+        std::uint32_t stamp = 0u;
+        std::uint32_t slot = 0u, generation = 0u, part = 0u;
+        std::uint32_t head = NEBULA_NONE32;
+    };
+    std::vector<ItemEntry> item_table_;
+    std::uint32_t item_stamp_ = 0u;
     // OTHER-role cameras pair by the nearest view matrix: every (now, before) candidate, closest first.
     struct CameraCandidate {
         float distance;

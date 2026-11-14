@@ -59,7 +59,7 @@ bool SceneCameraVk::initialize() {
     info.stage.module = shader;
     info.stage.pName = "MeterCS";
     info.layout = layout_;
-    const VkResult result = vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &meter_);
+    const VkResult result = vkCreateComputePipelines(device, shared_pipeline_cache(), 1, &info, nullptr, &meter_);
     vkDestroyShaderModule(device, shader, nullptr);
     if (result != VK_SUCCESS) {
         meter_ = VK_NULL_HANDLE;
@@ -159,7 +159,7 @@ VkPipeline SceneCameraVk::pipeline(Kind kind, VkRenderPass pass, unsigned sample
         info.pDynamicState = &dynamic;
         info.layout = layout_;
         info.renderPass = pass;
-        if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &out) != VK_SUCCESS) {
+        if (vkCreateGraphicsPipelines(device, shared_pipeline_cache(), 1, &info, nullptr, &out) != VK_SUCCESS) {
             out = VK_NULL_HANDLE;
             std::cerr << "[scene-camera] pipeline failed for " << (1u << samples_log2) << " samples\n";
         }

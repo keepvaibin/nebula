@@ -53,6 +53,9 @@ public:
     // process can replace them. Views given out by map_private are the caller's to unmap. Nothing may read the store
     // after; the process ends next.
     void let_go_of_files() noexcept;
+    // The system wants memory: the read-only view's pages leave this process (Linux, Android; they stay in the file
+    // cache and come back on the next read, the same bytes at the same addresses). Windows trims a view by itself.
+    void release_pages() const noexcept;
 
     [[nodiscard]] std::optional<Entry> entry(std::int32_t index) const;
     [[nodiscard]] std::optional<Entry> find(std::string_view path) const;

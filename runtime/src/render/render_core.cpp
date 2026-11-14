@@ -16,6 +16,7 @@
 #include <immintrin.h>
 #endif
 #endif
+#include "galaxy/benchmark.h"
 #include "galaxy/loss_report.h"
 #include "galaxy/crash_report.h"
 #include "galaxy/host_extension.h"
@@ -27,6 +28,11 @@
 #include "galaxy/portable.h"
 #include "galaxy/render/render_core.h"
 #include "galaxy/render/host_window.h"
+#include "galaxy/render/resolution_fit.h"
+#include "galaxy/render/rt_caps.h"
+#if defined(NEBULA_GPU_METAL)
+#include "galaxy/render/mtl/mtl_context.h"
+#endif
 
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/content_viewport.h"
@@ -199,6 +205,33 @@ bool RenderCore::initialize(int w, int h) {
     pipelines_.initialize(renderer_.device(), renderer_.pipeline_root(), renderer_.pipeline_backend());
     boot_step("pipelines");
     rt_start();
+    cap_texture_packs();
+
+    // The first start (no config.ini, and no back end chose for it): a conservative height now, measured in the first 3D scene.
+    // Not in a benchmark (it sets every height itself; bench::start runs before this, with the arguments).
+    if (const RenderConfig chosen = get_render_config_chosen();
+        render_config_first_start() && chosen.upscaler == 0u && chosen.internal_height == 0u && start_frame.height > 0u &&
+        !galaxy::bench::running()) {
+#if defined(NEBULA_GPU_METAL)
+        const bool shared = mtl::Context::get().caps().unified_memory;
+#else
+        const bool shared = rt_caps().unified_memory;
+#endif
+        calibration_ = {};
+        // The picture's size on the window (the renderer's output, which internal_extent scales).
+        calibration_.width = start_frame.width;
+        calibration_.lines = start_frame.height;
+        calibration_.start = first_start_internal_height(shared, calibration_.lines);
+        // The other height timed: 480 lines against 1080 or the panel.
+        calibration_.heights[0] = calibration_.start;
+        calibration_.heights[1] = calibration_.start == kFitLowestHeight ? (calibration_.lines > 1080u ? 1080u : 0u) : kFitLowestHeight;
+        calibration_.stage = calibration_.lines > kFitLowestHeight ? 1u : 0u;
+        RenderConfig start = chosen;
+        start.internal_height = calibration_.start;
+        set_render_config(start);
+        std::fprintf(stderr, "[settings] first start: %s memory, %ux%u: internal height %u until measured\n",
+                     shared ? "shared" : "dedicated", calibration_.width, calibration_.lines, calibration_.start);
+    }
 
     initialized_ = true;
     stop_render_thread_ = false;
@@ -489,6 +522,7 @@ void RenderCore::note_picture_shown(
     last_presented_picture_.store(
         texture.picture_number, std::memory_order_relaxed);
     ++stat_presents_;
+    pipelines_.picture_shown();
     if (texture.last_shown_number == texture.picture_number) {
         ++stat_pictures_shown_again_;
         return;
@@ -496,6 +530,7 @@ void RenderCore::note_picture_shown(
     texture.last_shown_number = texture.picture_number;
     ++stat_new_pictures_shown_;
     record_monotonic_cadence_sample(new_picture_shown_cadence_);
+    galaxy::bench::note_new_picture(new_picture_shown_cadence_.last_sample_ns);
     report_frame_tail_window();
     trace_memory();
 }
@@ -577,18 +612,6 @@ void RenderCore::render_frame(bool present_swap_chain, bool black) {
         }
         if (render_thread_error_ != nullptr) {
             // Rethrow the render thread's failure here rather than leave a frozen display.
-            std::exception_ptr error = render_thread_error_;
-            render_thread_error_ = nullptr;
-            std::rethrow_exception(error);
-        }
-        if (stop_render_thread_) {
-            return;
-        }
-    }
-
-    {
-        std::unique_lock<std::mutex> lock(queue_mutex_);
-        if (render_thread_error_ != nullptr) {
             std::exception_ptr error = render_thread_error_;
             render_thread_error_ = nullptr;
             std::rethrow_exception(error);
@@ -1533,6 +1556,7 @@ bool RenderCore::restart_device() {
         registries_.restart(renderer_.device());
         pipelines_.initialize(renderer_.device(), renderer_.pipeline_root(), renderer_.pipeline_backend());
         rt_start();
+        cap_texture_packs();
         device_gate_.end_rebuild(rebuilding);
     } catch (...) {
         device_gate_.give_up();
@@ -1746,10 +1770,6 @@ void RenderCore::render_loop() {
                     }
                     render_frame_on_thread(chunk);
                     run_pending_interp_start();
-                    {
-                        std::lock_guard<std::mutex> lock(queue_mutex_);
-                        render_chunk_started_ns_ = 0u;
-                    }
                 }
             } else if (idle_present) {
                 present_latest_frame_on_thread();
@@ -1792,6 +1812,7 @@ void RenderCore::render_loop() {
             queue_space_cv_.notify_all();
         } else if (have_chunk) {
             std::lock_guard<std::mutex> lock(queue_mutex_);
+            render_chunk_started_ns_ = 0u;
             if (render_chunks_in_flight_ != 0u) {
                 --render_chunks_in_flight_;
             }
@@ -1952,6 +1973,25 @@ RenderCore::ListEntry& RenderCore::list_arrived(FrameChunk& chunk) {
         entry->data.item_before = std::move(kept.item_before);
         entry->data.joint_motion = std::move(kept.joint_motion);
         entry->data.motions = std::move(kept.motions);
+        // The rest keep their memory too, emptied: each is what a new list's empty table is but for its capacity.
+        const auto emptied = [](auto& to, auto& from) {
+            to = std::move(from);
+            to.clear();
+        };
+        emptied(entry->data.camera_before, kept.camera_before);
+        emptied(entry->data.camera_motion, kept.camera_motion);
+        emptied(entry->data.motion_first, kept.motion_first);
+        emptied(entry->data.constants_before, kept.constants_before);
+        emptied(entry->data.view_before, kept.view_before);
+        emptied(entry->data.light_set_before, kept.light_set_before);
+        emptied(entry->data.eye_motions, kept.eye_motions);
+        emptied(entry->data.early_targets, kept.early_targets);
+        emptied(entry->data.early_probes, kept.early_probes);
+        emptied(entry->data.late_depth_clears, kept.late_depth_clears);
+        emptied(entry->data.block_camera, kept.block_camera);
+        emptied(entry->data.light_camera, kept.light_camera);
+        emptied(entry->data.block_world_wanted, kept.block_world_wanted);
+        emptied(entry->data.view_terms, kept.view_terms);
     } else {
         entry = std::make_unique<ListEntry>();
     }
@@ -1977,6 +2017,8 @@ RenderCore::ListEntry& RenderCore::list_arrived(FrameChunk& chunk) {
 // A list is read while it is the newest walked or the one before the newest walked.
 void RenderCore::release_lists_before(const ListEntry& entry) noexcept {
     while (lists_.size() > 1u && lists_.front().get() != entry.before && lists_.front().get() != &entry) {
+        // The game writes the list's memory again once it sees the flag: every read of it comes first, on every CPU.
+        std::atomic_thread_fence(std::memory_order_release);
         lists_.front()->data.list->released = 1u;
         lists_[1]->before = nullptr;
         free_lists_.push_back(std::move(lists_.front()));
@@ -1990,6 +2032,27 @@ void RenderCore::release_lists_before(const ListEntry& entry) noexcept {
 // enforce_budget). A host extension's vram_budget_mb replaces the budget with that many megabytes of the same reading.
 // One line when the budget or what is left out changes (looked at once a second), and one an hour (at 60 frames a second) whatever
 // changed.
+// Half the device's memory budget: the replacements stand beside the game's own textures (kept for when one is evicted), the
+// scene targets, meshes, rings and staging, and on a shared-memory device beside the game's and the host's RAM too (board
+// rc.md, item 4). A dedicated card's budget (4 GB and up) leaves the 2 GB default as it is.
+void RenderCore::cap_texture_packs() {
+    std::uint64_t usage = 0u;
+    std::uint64_t budget = 0u;
+    if (!renderer_.video_memory(usage, budget)) {
+        budget = 0u;
+    }
+    if (const std::uint64_t asked = galaxy::extensions::vram_budget_bytes(); asked != 0u) {
+        budget = asked;
+    }
+    texture_pack_cap_bytes_ = budget / 2u;
+    // The settings are compared again at the next frame.
+    texture_pack_settings_applied_ = false;
+    if (budget != 0u) {
+        std::fprintf(stderr, "[texture-pack] replacements up to %llu MB on this device (half its %llu MB budget)\n",
+                     static_cast<unsigned long long>(texture_pack_cap_bytes_ >> 20u), static_cast<unsigned long long>(budget >> 20u));
+    }
+}
+
 void RenderCore::enforce_video_memory() {
     std::uint64_t usage = 0u;
     std::uint64_t budget = 0u;
@@ -2036,13 +2099,22 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
     // ring. Include all eye/world rows, even rows a particular program omits.
     const NebulaFrameList& list = *entry.data.list;
     std::size_t matrix_bytes = std::size_t{list.item_count} * 16u + 32u;
+    // The frame's incoming models (a load's) by id, sorted once: an id's first entry, the one a search from the front finds.
+    const auto& models = entry.registry_ops.models;
+    std::vector<std::pair<std::uint32_t, std::uint32_t>> incoming;
+    if (!models.empty()) {
+        incoming.reserve(models.size());
+        for (std::uint32_t i = 0; i < models.size(); ++i) {
+            incoming.emplace_back(models[i].first, i);
+        }
+        std::sort(incoming.begin(), incoming.end());
+    }
     for (std::uint32_t b = 0; b < list.block_count; ++b) {
         const auto& block = list.blocks[b];
         std::size_t matrices = block.joint_count;
         if (block.model != 0u) {
-            const auto incoming = std::find_if(entry.registry_ops.models.begin(), entry.registry_ops.models.end(),
-                [&](const auto& m) { return m.first == block.model; });
-            matrices = incoming != entry.registry_ops.models.end() ? incoming->second.draw_matrices.size()
+            const auto found = std::lower_bound(incoming.begin(), incoming.end(), std::pair{block.model, 0u});
+            matrices = found != incoming.end() && found->first == block.model ? models[found->second].second.draw_matrices.size()
                 : registries_.model(block.model).draw_matrices.size();
         }
         matrix_bytes += matrices * core::kRowsPerMatrix * 16u * 2u;
@@ -2084,28 +2156,42 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
     }
     display_pictures_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
     texture_store_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
+    texture_store_.follow_settings(render);
     enforce_video_memory();
     // New textures upload through this frame's command list.
     renderer_.attach_texture_uploads(texture_store_);
     {
+        bool mods_moved = false;
         if (const std::uint64_t generation = texture_pack_mod_folders_generation();
             generation != texture_pack_mods_generation_) {
             texture_pack_mods_generation_ = generation;
             texture_pack_mod_folders_ = texture_pack_mod_folders();
             texture_pack_mod_categories_off_ = texture_pack_mod_categories_off();
+            mods_moved = true;
         }
+        std::uint64_t budget_bytes = static_cast<std::uint64_t>(render.texture_pack_budget_mb) << 20u;
+        if (texture_pack_cap_bytes_ != 0u && budget_bytes > texture_pack_cap_bytes_) {
+            budget_bytes = texture_pack_cap_bytes_;
+        }
+        // The settings are built and compared only when something they are made of may have changed.
+        const bool moved = !texture_pack_settings_applied_ || mods_moved ||
+                           texture_pack_settings_.enabled != render.texture_packs ||
+                           texture_pack_settings_.preload != render.texture_pack_preload ||
+                           texture_pack_settings_.dump != render.texture_dump ||
+                           texture_pack_settings_.budget_bytes != budget_bytes;
         static const std::filesystem::path dumps = texture_dump_directory();
         TexturePackSettings settings{};
         settings.enabled = render.texture_packs;
         settings.preload = render.texture_pack_preload;
         settings.dump = render.texture_dump;
-        // Each mod's pack, the lowest in the mods list first (the last wins a texture).
-        settings.packs.insert(settings.packs.end(), texture_pack_mod_folders_.begin(), texture_pack_mod_folders_.end());
-        settings.pack_categories_off.insert(settings.pack_categories_off.end(), texture_pack_mod_categories_off_.begin(),
-                                            texture_pack_mod_categories_off_.end());
-        settings.dumps = dumps;
-        settings.budget_bytes = static_cast<std::uint64_t>(render.texture_pack_budget_mb) << 20u;
-        if (!texture_pack_settings_applied_ || !(settings == texture_pack_settings_)) {
+        settings.budget_bytes = budget_bytes;
+        if (moved) {
+            // Each mod's pack, the lowest in the mods list first (the last wins a texture).
+            settings.packs = texture_pack_mod_folders_;
+            settings.pack_categories_off = texture_pack_mod_categories_off_;
+            settings.dumps = dumps;
+        }
+        if (moved && (!texture_pack_settings_applied_ || !(settings == texture_pack_settings_))) {
             texture_store_.configure_texture_packs(settings);
             texture_pack_settings_ = std::move(settings);
             texture_pack_settings_applied_ = true;
@@ -2402,7 +2488,12 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     render_movie_content_ = entry.prerecorded_movie;
     render_movie_frame_ = entry.movie_frame;
     begin_walk_frame(entry);
+    const std::int64_t walk_began = calibration_.stage != 0u ? galaxy::qpc_now() : 0;
     walk_list(entry.data, entry.before != nullptr ? &entry.before->data : nullptr, core::WalkTime{});
+    if (calibration_.stage != 0u) [[unlikely]] {
+        calibrate_first_start((list.flags & NEBULA_FRAME_HAS_SCENE) != 0u,
+                              static_cast<double>(galaxy::qpc_now() - walk_began) * 1000.0 / static_cast<double>(galaxy::qpc_frequency()));
+    }
 
     const bool frame_end_present = !chunk.present_swap_chain && picture_made_in_chunk_ && frame_end_presents_.load(std::memory_order_relaxed) &&
                               !interp_on_ && !black_shown_ && !native_settings_overlay_visible() && !renderer_.temporal_mode() &&
@@ -2454,6 +2545,127 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     release_lists_before(entry);
 }
 
+
+// The first start's calibration, once a real list: in its first 3D scene, once the start's pipelines are made, each of two
+// internal heights is shown kCalibrationSettle frames (the resize and the pass timers' 0.1 average settle) and timed
+// kCalibrationSamples frames (the pass timers' sum); the fit's largest height that fits a heavy stage is kept. What is kept:
+//   no GPU timestamps, the CPU the limit, no fit      the start's height
+//   a height of the INTERNAL RESOLUTION row fits      the largest that does (match display when the panel's own fits)
+//   even 480 lines is over the budget                 the PERFORMANCE preset (apply_performance_preset)
+void RenderCore::calibrate_first_start(bool scene, double walk_ms) {
+    constexpr unsigned kCalibrationSettle = 45u;  // 0.9^45: under 1 % of the height before left in the timers' average
+    constexpr unsigned kCalibrationSamples = 30u;
+    FirstStartCalibration& c = calibration_;
+    if (galaxy::bench::running()) [[unlikely]] {
+        end_first_start_calibration(0u, nullptr);  // a benchmark's heights are its own: nothing set, nothing saved
+        return;
+    }
+    const RenderConfig chosen = get_render_config_chosen();
+    const unsigned shown = c.stage >= 2u ? c.heights[c.stage - 2u] : c.start;
+    if (chosen.upscaler != 0u || normalized_internal_height(chosen.internal_height) != shown) {
+        // The player chose (the menu, Nebula Settings): theirs stands.
+        end_first_start_calibration(0u, nullptr);
+        return;
+    }
+    if (!scene) {
+        return;
+    }
+    if (c.stage == 1u) {
+        if (pipelines_.pending() != 0u) {
+            return;
+        }
+        c.timing_was_on = renderer_.gpu_timing_on();
+        renderer_.set_gpu_timing(true);
+        c.stage = 2u;
+        c.frames = 0u;
+        return;
+    }
+    // A pipeline made during the timing costs GPU time that is not the height's: the height starts over.
+    if (pipelines_.pending() != 0u) {
+        c.frames = 0u;
+        return;
+    }
+    const std::int64_t now = galaxy::qpc_now();
+    const std::uint64_t wait = game_wait_qpc_.load(std::memory_order_relaxed);
+    const double game_ms = c.list_qpc != 0
+                               ? static_cast<double>((now - c.list_qpc) - static_cast<std::int64_t>(wait - c.list_wait)) * 1000.0 /
+                                     static_cast<double>(galaxy::qpc_frequency())
+                               : 0.0;
+    c.list_qpc = now;
+    c.list_wait = wait;
+    if (++c.frames <= kCalibrationSettle) {
+        return;
+    }
+    GpuPassTime passes[32];
+    const std::size_t count = renderer_.gpu_pass_times(passes, std::size(passes));
+    double gpu_ms = 0.0;
+    for (std::size_t i = 0; i < count; ++i) {
+        gpu_ms += passes[i].ms;
+    }
+    if (gpu_ms <= 0.0) {
+        end_first_start_calibration(c.start, "no GPU timestamps");
+        return;
+    }
+    // One new picture a game step (the presents between show it again) with interpolation off, as a first start's defaults
+    // leave it: the step is the GPU's period (resolution_fit.h's budget, the benchmark's too).
+    constexpr double frame_ms = 1000.0 / galaxy::kGameStepsPerSecond;
+    // The scene target as the renderer made it: a size it refused (the video memory check) shows as no spread, so no fit.
+    c.pixels.push_back(static_cast<double>(renderer_.frame_map().width) * static_cast<double>(renderer_.frame_map().height));
+    c.ms.push_back(gpu_ms);
+    // The CPU's part: the walk near the step, or the game thread late on its own (its list period, less its waits on the
+    // render thread, past 1.5 steps: note_game_frame_cadence's rule; the host's pacing sleep is in the period).
+    c.cpu_over += walk_ms > kFitFrameShare * frame_ms || game_ms > 1.5 * frame_ms ? 1.0 : 0.0;
+    if (c.frames < kCalibrationSettle + kCalibrationSamples) {
+        return;
+    }
+    if (c.stage == 2u) {
+        RenderConfig next = chosen;
+        next.internal_height = c.heights[1];
+        set_render_config(next);
+        c.stage = 3u;
+        c.frames = 0u;
+        c.list_qpc = 0;
+        return;
+    }
+    // Most frames with the walk near the frame time or the game late on its own: the CPU sets the rate, not the pixels.
+    if (c.cpu_over * 2.0 > static_cast<double>(c.ms.size())) {
+        end_first_start_calibration(c.start, "the CPU is the limit");
+        return;
+    }
+    const GpuTimeFit fit = fit_gpu_time(c.pixels.data(), c.ms.data(), c.ms.size());
+    const double budget_ms = kFitFrameShare * frame_ms;
+    const unsigned height = largest_fitting_height(fit, c.width, c.lines, kFitHeavyStage, budget_ms);
+    std::fprintf(stderr, "[settings] first start measured: gpu ms = %.3f + %.3f a million pixels (%zu frames), a frame %.2f ms\n",
+                 fit.a_ms, fit.b_ms_per_pixel * 1e6, c.ms.size(), frame_ms);
+    if (fit.valid && c.lines > kFitLowestHeight &&
+        predicted_gpu_ms(fit, scene_pixels(kFitLowestHeight, c.width, c.lines)) * kFitHeavyStage > budget_ms) {
+        end_first_start_calibration(kFitLowestHeight, "even 480 lines is over the budget: the PERFORMANCE preset", true);
+        return;
+    }
+    end_first_start_calibration(fit.valid ? height : c.start, fit.valid ? "measured" : "no fit");
+}
+
+// `why` null: the player chose meanwhile, and nothing is set or saved. `performance`: the PERFORMANCE preset, at `height`.
+void RenderCore::end_first_start_calibration(unsigned height, const char* why, bool performance) {
+    FirstStartCalibration& c = calibration_;
+    if (c.stage >= 2u && !c.timing_was_on) {
+        renderer_.set_gpu_timing(false);
+    }
+    c.stage = 0u;
+    c.pixels = {};
+    c.ms = {};
+    if (why == nullptr) {
+        return;
+    }
+    RenderConfig chosen = get_render_config_chosen();
+    if (performance) {
+        apply_performance_preset(chosen);
+    }
+    chosen.internal_height = height;
+    set_render_config(chosen);
+    (void)save_render_config_to_file();
+    std::fprintf(stderr, "[settings] first start: internal height %u kept (%s)\n", height, why);
+}
 
 void boot_step(const char* step) noexcept {
     static std::chrono::steady_clock::time_point last = std::chrono::steady_clock::now();

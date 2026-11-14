@@ -5,7 +5,8 @@
 // command encoder, the scene pass; a scene target copy, screen probe or present ends that encoder, and the next scene
 // target operation begins another, loading what the last stored. kFramesInFlight frames are recorded ahead of the GPU.
 // A frame is a row of command buffers committed in order: the frame's texture uploads (a blit encoder), then its
-// draws; a pass recorded on several threads (parallel_record_*) is a command buffer of its own in that row.
+// draws; a pass recorded on several threads (parallel_record_*) runs inside the scene pass on a tile-based GPU, else in a
+// command buffer of its own in that row.
 //
 // Draw bindings follow gpu::Encoder (core/gpu_encoder.h, mtl/shader_msl.h). Addresses (gpu::Address) name a buffer
 // and an offset (mtl::Context::resolve). Metal's clip space is Direct3D's: nothing is turned over.
@@ -446,9 +447,13 @@ private:
 
     // Frame recording.
     void begin_scene_pass(const SceneClearValues* clear = nullptr, const char* caller = __builtin_FUNCTION());
-    // `parallel`: the pass is a parallel one whose chunks have encoders of their own (parallel_record_begin).
+    // With parallel_scene_pass_ the pass is a parallel encoder and pass_ its encoder for the draws in order.
     void begin_scene_pass_with(unsigned aux, const SceneClearValues* clear = nullptr, bool discard_color = false,
                                const char* caller = __builtin_FUNCTION(), unsigned clear_depth = 0u);
+    // pass_, new in the open scene pass: the textures its draws read, the walker's encoder, the scene's rectangles.
+    void attach_scene_encoder();
+    // The chunks as encoders of the open parallel scene pass, between the draws before them and those after.
+    [[nodiscard]] bool parallel_record_in_pass(const std::uint8_t* chunk_aux, unsigned chunk_count);
     // The scene pass's descriptor (an MTLRenderPassDescriptor*, the caller's to release) for the live set.
     [[nodiscard]] mtl::Object scene_pass_descriptor(unsigned aux, const SceneClearValues* clear, bool discard_color,
                                                     unsigned clear_depth, mtl::Object visibility);
@@ -491,6 +496,11 @@ private:
     Frame* frame_ = &frames_[0];
     mtl::Object commands_ = nullptr;  // id<MTLCommandBuffer> where work records (frame_->lists.back())
     mtl::Object pass_ = nullptr;      // id<MTLRenderCommandEncoder>: the open scene pass
+    // id<MTLParallelRenderCommandEncoder>: the open scene pass when it is a parallel one (pass_ is then one of its
+    // encoders). A tile-based GPU's scene passes are, once a walk has recorded a pass in chunks: the chunks then run in
+    // the pass, where a pass of their own stored the targets and loaded them again before and after.
+    mtl::Object scene_parallel_ = nullptr;
+    bool parallel_scene_pass_ = false;
     std::uint64_t frame_index_ = 0;
     std::uint64_t last_submitted_ = 0;
 

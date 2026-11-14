@@ -37,6 +37,18 @@
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
+    <!-- Updates for an install from Nebula's releases (Updates.kt): the release list and the signed APK (INTERNET, above),
+         then Android's installer, which asks the player. An install from a store updates through the store and checks nothing. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!-- Updates.fromStore: the system's handlers of an APK file (whoever installed this app by hand). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/vnd.android.package-archive" />
+        </intent>
+    </queries>
+
     <application
         android:label="@string/app_name"
         android:localeConfig="@xml/locales_config"
@@ -123,6 +135,11 @@
             android:resizeableActivity="true"
             android:preferMinimalPostProcessing="true"
             android:configChanges="layoutDirection|locale|grammaticalGender|fontScale|fontWeightAdjustment|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation|density" />
+
+        <!-- Android's installer's answer to an update (Updates.install): its confirmation screen. -->
+        <receiver
+            android:name=".UpdateInstallReceiver"
+            android:exported="false" />
 
         <service
             android:name=".ImportService"

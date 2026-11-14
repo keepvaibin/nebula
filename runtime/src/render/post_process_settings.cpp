@@ -220,6 +220,7 @@ PostProcessPlan plan_post_process(
     // the plain copy when neither EASU nor RCAS writes the window.
     plan.resample = !plan.easu && !(same_size && plan.rcas);
     plan.resample_to_target = plan.resample && !plan.rcas;
+    plan.copy = plan.resample_to_target && same_size;
     return plan;
 }
 

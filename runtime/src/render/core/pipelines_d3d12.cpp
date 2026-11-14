@@ -65,6 +65,9 @@ struct DriverCache {
     std::shared_mutex use;
     bool opened = false;
     bool changed = false;
+    std::uint64_t accepted = 0u;  // the hash of the data the library was made from at the start (0: none, or refused)
+    std::uint64_t on_disk = 0u;   // the hash of the data the file holds; kept when the cache is released
+    bool stale = false;           // the last write failed: the file lacks pipelines the library has
 };
 DriverCache gCache;
 // The library synchronizes itself except when two threads load the same pipeline, which can change that pipeline's state
@@ -88,17 +91,28 @@ ID3D12PipelineLibrary* driver_cache(gpu::Device* device) {
     }
     gCache.identity = adapter_identity(device);
     gCache.file = shader_cache_directory() / d3d12_cache_file_name(gCache.identity);
+    std::uint64_t file_hash = 0u;
     if (std::ifstream in(gCache.file, std::ios::binary | std::ios::ate); in) {
         std::vector<char> file(static_cast<std::size_t>(in.tellg()));
         in.seekg(0);
         in.read(file.data(), static_cast<std::streamsize>(file.size()));
         gCache.blob = unwrap_d3d12_cache(gCache.identity, file);
+        if (!gCache.blob.empty()) {
+            D3d12CacheHeader header{};  // unwrap checked it: its hash is the blob's
+            std::memcpy(&header, file.data(), sizeof(header));
+            file_hash = header.hash;
+        }
     }
+    gCache.on_disk = file_hash;
+    gCache.stale = false;
+    gCache.accepted = 0u;
     if (gCache.blob.empty() || FAILED(device1->CreatePipelineLibrary(gCache.blob.data(), gCache.blob.size(), IID_PPV_ARGS(&gCache.library)))) {
         gCache.blob.clear();
         if (FAILED(device1->CreatePipelineLibrary(nullptr, 0u, IID_PPV_ARGS(&gCache.library)))) {
             gCache.library.Reset();
         }
+    } else {
+        gCache.accepted = file_hash;
     }
     return gCache.library.Get();
 }
@@ -119,6 +133,7 @@ std::size_t write_driver_cache() noexcept {
         const std::size_t blob_size = gCache.library->GetSerializedSize();
         std::vector<char> blob(blob_size);
         if (blob_size == 0u || FAILED(gCache.library->Serialize(blob.data(), blob_size))) {
+            gCache.stale = true;
             return 0u;
         }
         bytes = wrap_d3d12_cache(gCache.identity, blob.data(), blob.size());
@@ -128,8 +143,14 @@ std::size_t write_driver_cache() noexcept {
     if (!replace_file(file, bytes.data(), bytes.size())) {
         std::lock_guard guard(gCache.lock);
         gCache.changed = true;
+        gCache.stale = true;
         return 0u;
     }
+    D3d12CacheHeader header{};
+    std::memcpy(&header, bytes.data(), sizeof(header));
+    std::lock_guard guard(gCache.lock);
+    gCache.on_disk = header.hash;
+    gCache.stale = false;
     return bytes.size();
 }
 
@@ -480,6 +501,9 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
         hr = device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&pipeline));
     }
     if (FAILED(hr)) {
+        if (hr == E_OUTOFMEMORY) {
+            note_pipeline_out_of_memory();
+        }
         std::fprintf(stderr, "[pipelines] create failed %08lx: %llx %llx state %08x variant %u aux %u\n", static_cast<unsigned long>(hr),
                      static_cast<unsigned long long>(desc.vertex), static_cast<unsigned long long>(desc.pixel), state, variant, aux);
         return nullptr;
@@ -503,6 +527,21 @@ void Pipelines::destroy_all() noexcept {
 
 std::size_t Pipelines::save_cache() noexcept {
     return write_driver_cache();
+}
+
+bool Pipelines::cache_file_state(std::filesystem::path& file, std::uint64_t& accepted) {
+    if (driver_cache(device_) == nullptr) {
+        return false;
+    }
+    std::lock_guard guard(gCache.lock);
+    file = gCache.file;
+    accepted = gCache.accepted;
+    return true;
+}
+
+std::uint64_t Pipelines::cache_file_hash() noexcept {
+    std::lock_guard guard(gCache.lock);
+    return gCache.stale ? 0u : gCache.on_disk;
 }
 
 }  // namespace galaxy::render::core

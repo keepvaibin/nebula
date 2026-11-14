@@ -100,6 +100,10 @@ std::size_t gpu_pass_times(GpuPassTime* out, std::size_t capacity) noexcept {
     return backend().gpu_pass_times(out, capacity);
 }
 
+bool video_memory(std::uint64_t& usage, std::uint64_t& budget) noexcept {
+    return backend().video_memory(usage, budget);
+}
+
 std::uint64_t pictures_made() noexcept {
     return backend().pictures_made();
 }

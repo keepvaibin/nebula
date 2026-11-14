@@ -141,21 +141,43 @@ void meter_traced() {
     u_exposure[uint2(1u, 0u)] = pow(abs(adapted), 1.0f / 2.2f);
 }
 
-[numthreads(1, 1, 1)]
-void MeterCS() {
+// Light past white at a grid point; nothing for the sky.
+float light_at(uint column, uint row) {
+    const float2 place = (float2(column, row) + 0.5f) / float2(kMeterColumns, kMeterRows) * g_size;
+    float light = 0.0f;
+    if (t_depth.Load(int3(int2(place), 0)) > 1e-5f) {
+        const float3 wide = t_wide.Load(int3(int2(place), 0)).rgb;
+        light = max(pow(max(max(wide.r, wide.g), max(wide.b, 0.0f)), 2.2f) - 1.0f, 0.0f);
+    }
+    return light;
+}
+
+// One thread per two grid points (columns c and c + 8 of a row): 72 threads, within every Vulkan device's 128
+// invocations a group, the grid's loads in flight together rather than one after another; the first thread sums the
+// points in the grid's row order, as one thread looping over them would.
+groupshared float gs_over[kMeterRows * kMeterColumns];
+
+[numthreads(8, 9, 1)]
+void MeterCS(uint3 cell : SV_GroupThreadID) {
+    // The traced finish meters on one thread; the whole group leaves here (g_finish is a constant: the branch is uniform).
     [branch] if (g_finish > 0.5f) {
-        meter_traced();
+        if (cell.x == 0u && cell.y == 0u) {
+            meter_traced();
+        }
         return;
     }
+    const uint column = cell.x;
+    const uint row = cell.y;
+    gs_over[row * kMeterColumns + column] = light_at(column, row);
+    gs_over[row * kMeterColumns + column + kMeterColumns / 2u] = light_at(column + kMeterColumns / 2u, row);
+    GroupMemoryBarrierWithGroupSync();
+    if (row != 0u || column != 0u) {
+        return;
+    }
+    // Adding the sky's +0 leaves the sum as it was (every term is at least +0).
     float over = 0.0f;
-    for (uint row = 0u; row < kMeterRows; ++row) {
-        for (uint column = 0u; column < kMeterColumns; ++column) {
-            const float2 place = (float2(column, row) + 0.5f) / float2(kMeterColumns, kMeterRows) * g_size;
-            if (t_depth.Load(int3(int2(place), 0)) > 1e-5f) {
-                const float3 wide = t_wide.Load(int3(int2(place), 0)).rgb;
-                over += max(pow(max(max(wide.r, wide.g), max(wide.b, 0.0f)), 2.2f) - 1.0f, 0.0f);
-            }
-        }
+    for (uint i = 0u; i < kMeterRows * kMeterColumns; ++i) {
+        over += gs_over[i];
     }
     over /= float(kMeterColumns * kMeterRows);
     const float target = max(1.0f / (1.0f + over / kOverRange), kLeastExposure);

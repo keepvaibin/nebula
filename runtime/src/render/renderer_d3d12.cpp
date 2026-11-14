@@ -12,6 +12,7 @@
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/render_api.h"
 #include "galaxy/render/galaxy_select.h"
+#include "galaxy/render/game_bloom_shape.h"
 #include "barriers_d3d12.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/rt/rt_backend.h"
@@ -1397,7 +1398,16 @@ void RendererD3D12::refresh_scene_conversion_source_views() {
     if (!conv_scene_source_table_) {
         conv_scene_source_table_ = allocate_persistent_descriptors(2u);
     }
+    release_conv_table(conv_scene_table_);
     write_scene_conversion_views(*conv_scene_source_table_);
+}
+
+// A set's views left a ring entry: free once the frames that could read it are done.
+void RendererD3D12::release_conv_table(std::size_t& entry) {
+    if (entry < conv_scene_tables_.size()) {
+        conv_scene_tables_[entry].free_from = frame_index_ + kFramesInFlight + 1u;
+    }
+    entry = ~std::size_t{0};
 }
 
 void RendererD3D12::write_scene_conversion_views(const DescriptorRing::Persistent& table) {
@@ -1503,7 +1513,7 @@ gpu::TextureRef RendererD3D12::swap_scene_color(gpu::TextureRef fresh) {
         D3D12_HEAP_PROPERTIES heap{};
         heap.Type = D3D12_HEAP_TYPE_DEFAULT;
         D3D12_CLEAR_VALUE clear{};
-        clear.Format = kSceneColorFormat;
+        clear.Format = desc.Format;  // the wide scene's too
         clear.Color[3] = 1.0f;
         d3d_check(create_texture(device_.Get(), &heap, D3D12_HEAP_FLAG_NONE, &desc,
                                                    gpu::Use::ColorWrite, &clear, IID_PPV_ARGS(&fresh)),
@@ -1516,20 +1526,19 @@ gpu::TextureRef RendererD3D12::swap_scene_color(gpu::TextureRef fresh) {
     gpu::TextureRef picture = std::move(scene_color_);
     scene_color_ = std::move(fresh);
     // RTVs are copied when recorded: the scene target's slot takes the new target now. Its conversion views, which the GPU reads
-    // when it runs, go to the next table in turn (a frame in flight still reads the one before).
+    // when it runs, go to a free table (a frame in flight still reads the one before; a set put aside keeps its own).
     if (scene_msaa_.samples <= 1u) {
         device_->CreateRenderTargetView(scene_color_.Get(), nullptr, scene_rtv_);
     }
-    if (conv_scene_table_ < conv_scene_tables_.size()) {
-        conv_scene_tables_[conv_scene_table_].free_from = frame_index_ + kFramesInFlight + 1u;
-    }
+    release_conv_table(conv_scene_table_);
     std::size_t table = 0u;
-    while (table < conv_scene_tables_.size() && (table == conv_scene_table_ || frame_index_ < conv_scene_tables_[table].free_from)) {
+    while (table < conv_scene_tables_.size() && frame_index_ < conv_scene_tables_[table].free_from) {
         ++table;
     }
     if (table == conv_scene_tables_.size()) {
         conv_scene_tables_.push_back({allocate_persistent_descriptors(2u)});
     }
+    conv_scene_tables_[table].free_from = ~std::uint64_t{0};
     conv_scene_table_ = table;
     write_scene_conversion_views(conv_scene_tables_[table].table);
     bind_scene();
@@ -1805,6 +1814,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         // A software adapter is never selected.
         ComPtr<IDXGIAdapter1> adapter;
         DXGI_ADAPTER_DESC1 adapter_desc{};
+        std::string refused;  // the last adapter passed over for what the renderer needs, and why
         auto try_adapter = [&](IDXGIAdapter1* candidate) {
             DXGI_ADAPTER_DESC1 description{};
             if (candidate == nullptr ||
@@ -1818,6 +1828,23 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             const HRESULT made = agility ? agility->CreateDevice(candidate, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&candidate_device))
                                          : D3D12CreateDevice(candidate, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&candidate_device));
             if (FAILED(made)) {
+                return false;
+            }
+            // What no draw runs without: every texture and sampler in one unbounded table each, indexed by heap slot
+            // (create_draw_root_signature; tier 1 gives a stage 128 views and 16 samplers), and the programs' DXIL
+            // (shader model 6.0). An adapter without them is passed over, so the next one can be taken.
+            D3D12_FEATURE_DATA_D3D12_OPTIONS options{};
+            D3D12_FEATURE_DATA_SHADER_MODEL model{D3D_SHADER_MODEL_6_0};
+            const bool bindless =
+                SUCCEEDED(candidate_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options))) &&
+                options.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_2;
+            const bool dxil =
+                SUCCEEDED(candidate_device->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &model, sizeof(model))) &&
+                model.HighestShaderModel >= D3D_SHADER_MODEL_6_0;
+            if (!bindless || !dxil) {
+                refused = narrow_utf8(description.Description) +
+                          (!bindless ? ": resource binding tier 1, tier 2 needed" : ": no shader model 6.0");
+                std::cout << "[gpu] passed over " << refused << '\n';
                 return false;
             }
             adapter = candidate;
@@ -1927,8 +1954,8 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             streamline_start.join();
         }
         if (!adapter || !device_) {
-            throw std::runtime_error(
-                "No hardware D3D12 adapter supports feature level 11_0");
+            throw std::runtime_error(refused.empty() ? std::string("No hardware D3D12 adapter supports feature level 11_0")
+                                                     : "No hardware D3D12 adapter can run the renderer (" + refused + ")");
         }
         if (!expect_rtx && rtx(adapter_desc)) {
             (void)streamline::startup(streamline::default_directory(), frame_generation);
@@ -2773,6 +2800,12 @@ void RendererD3D12::shutdown() {
     conv_scene_source_table_.reset();
     conv_scene_tables_.clear();
     conv_scene_table_ = ~std::size_t{0};
+    for (SceneTargetSet* set : {&alt_scene_, &target_scene_, &fg_hudless_scene_target_, &hdr_scene_scene_}) {
+        set->conv_ring = ~std::size_t{0};
+    }
+    for (auto& entry : target_slots_) {
+        entry.second.set.conv_ring = ~std::size_t{0};
+    }
     probe_pipeline_.Reset();
     probe_root_signature_.Reset();
     probe_slots_ = {};
@@ -4416,6 +4449,7 @@ void RendererD3D12::trim_idle_effect_targets() {
         retired_targets_[frame_slot_].push_back(std::move(alt_scene_.color));
         retired_targets_[frame_slot_].push_back(std::move(alt_scene_.depth));
         alt_scene_.map = FrameMap{};
+        release_conv_table(alt_scene_.conv_ring);
     }
     if (hdr_scene_scene_.color && !scene_hdr_ && !output_scene_active_ && !target_pass_active_ &&
         frame_index_ > wide_scene_used_frame_ + kIdleFrames) {
@@ -4425,6 +4459,7 @@ void RendererD3D12::trim_idle_effect_targets() {
         }
         hdr_scene_scene_.depth.Reset();  // the scene target's own depth, held by the scene target too
         hdr_scene_scene_.map = FrameMap{};
+        release_conv_table(hdr_scene_scene_.conv_ring);
     }
 }
 
@@ -4867,6 +4902,7 @@ bool RendererD3D12::ensure_output_scene(const FrameMap& map) {
         retired_targets_[frame_slot_].push_back(std::move(alt_scene_.color));
         retired_targets_[frame_slot_].push_back(std::move(alt_scene_.depth));
     }
+    release_conv_table(alt_scene_.conv_ring);  // its views are written below
     alt_scene_.color.Reset();
     alt_scene_.depth.Reset();
     alt_scene_.map = FrameMap{};
@@ -4954,6 +4990,7 @@ void RendererD3D12::write_scene_set_views(SceneTargetSet& set, const DescriptorR
     view.Format = kSceneDepthSrvFormat;
     device_->CreateShaderResourceView(set.depth.Get(), &view, depth_cpu);
     srv_ring_.commit(table, 2u);
+    release_conv_table(set.conv_ring);
     set.conv_table = table;
     set.conv_color_index = table.index;
     set.conv_depth_index = table.index + 1u;
@@ -4971,6 +5008,7 @@ bool RendererD3D12::create_scene_set(
     set.color.Reset();
     set.depth.Reset();
     set.map = FrameMap{};
+    release_conv_table(set.conv_ring);
     if (!rtv_heap) {
         D3D12_DESCRIPTOR_HEAP_DESC dhd{};
         dhd.NumDescriptors = 1;
@@ -5043,6 +5081,7 @@ void RendererD3D12::swap_scene_with(SceneTargetSet& other) {
     std::swap(conv_scene_source_table_, other.conv_table);
     std::swap(conv_scene_color_index_, other.conv_color_index);
     std::swap(conv_scene_depth_index_, other.conv_depth_index);
+    std::swap(conv_scene_table_, other.conv_ring);
     invalidate_draw_bindings();
 }
 
@@ -5057,6 +5096,7 @@ void RendererD3D12::swap_scene_sets() {
     std::swap(conv_scene_source_table_, alt_scene_.conv_table);
     std::swap(conv_scene_color_index_, alt_scene_.conv_color_index);
     std::swap(conv_scene_depth_index_, alt_scene_.conv_depth_index);
+    std::swap(conv_scene_table_, alt_scene_.conv_ring);
     output_scene_active_ = !output_scene_active_;
     invalidate_draw_bindings();
     bind_scene();
@@ -5075,6 +5115,7 @@ void RendererD3D12::swap_target_set() {
     std::swap(conv_scene_source_table_, target_scene_.conv_table);
     std::swap(conv_scene_color_index_, target_scene_.conv_color_index);
     std::swap(conv_scene_depth_index_, target_scene_.conv_depth_index);
+    std::swap(conv_scene_table_, target_scene_.conv_ring);
     target_pass_active_ = !target_pass_active_;
     invalidate_draw_bindings();
     bind_scene();
@@ -5141,6 +5182,7 @@ void RendererD3D12::retire_target_slot(TargetSlot& slot) {
     retire(slot.set.depth);
     retire(slot.set.msaa.color);
     retire(slot.set.msaa.depth);
+    release_conv_table(slot.set.conv_ring);
 }
 
 void RendererD3D12::sweep_target_slots() {
@@ -5381,11 +5423,16 @@ void RendererD3D12::record_scene_aa() {
         static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
         aspect ? aspect->content_aspect : galaxy::kDesignContentAspect);
     const D3D12_RESOURCE_DESC desc = scene_color_->GetDesc();
+    // A scene target whose image may change hands (take_scene's) trades it to the passes instead of copying it.
+    PostProcessor::SceneTrade trade;
+    if (can_take_scene()) {
+        trade = [this](gpu::TextureRef spare) { return swap_scene_color(std::move(spare)); };
+    }
     static_cast<void>(post_process_.record_scene_aa(
         command_list_.Get(), srv_ring_, scene_color_.Get(), scene_rtv_, static_cast<unsigned>(desc.Width),
         desc.Height, frame_.width, frame_.height,
         static_cast<unsigned>(std::max(content.width, 1)), static_cast<unsigned>(std::max(content.height, 1)),
-        frame_index_, kFramesInFlight, scene_msaa_.samples));
+        frame_index_, kFramesInFlight, scene_msaa_.samples, trade));
     if (scene_msaa_.samples > 1u) {
         scene_msaa_.color_dirty = true;
     }
@@ -5753,7 +5800,9 @@ void RendererD3D12::record_scene_ao() {
     in.view = scene_ao_view_;
     in.ssao = get_render_config().ambient_occlusion_ssao;
     in.objects = &scene_ao_objects_;
-    in.ring = &matrix_ring_;
+    // Read in this frame alone: the constant ring, whose chunks take any count of occluders (the matrix ring holds the
+    // walk's rows, sized before the walk, and throws past its spill).
+    in.ring = &constant_ring_;
     static_cast<void>(ambient_occlusion_.record(command_list_.Get(), srv_ring_, in, frame_index_, kFramesInFlight));
     uses.undo();
     if (scene_msaa_.samples > 1u) {
@@ -5783,9 +5832,10 @@ void RendererD3D12::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_
     in.frame_width = std::min(frame_.width, static_cast<unsigned>(desc.Width));
     in.frame_height = std::min(frame_.height, static_cast<unsigned>(desc.Height));
     if (kind == NEBULA_PASS_BLOOM_HOLD) {
-        if (scene_msaa_.samples <= 1u && !scene_hdr_) {
-            // The scene and the bloom's image trade places instead of the scene being copied. The game draws the
-            // bloom's objects on black into the new target, over the same depth.
+        if (scene_msaa_.samples <= 1u) {
+            // The scene and the bloom's image trade places instead of the scene being copied (the wide scene's too: its
+            // set keeps its own conversion table). The game draws the bloom's objects on black into the new target, over
+            // the same depth.
             gpu::TextureRef picture =
                 swap_scene_color(game_bloom_.take_kept_image(command_list_.Get(), in, frame_index_, kFramesInFlight));
             game_bloom_.keep_picture(std::move(picture), in);
@@ -5814,6 +5864,27 @@ void RendererD3D12::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_
             p.ring_x = p.ring_y = 1.0f;
         }
         p.strength = static_cast<float>(std::min(get_render_config().bloom, kMaxBloom)) / 100.0f;
+        if (scene_msaa_.samples <= 1u &&
+            bloom::adds_nothing(p.threshold, kind == NEBULA_PASS_BLOOM_NORMAL ? 0u : p.channel, p.tap1, p.intensity,
+                                p.strength)) {
+            // The bloom adds nothing: the simple one leaves the frame as it is; the normal one's scene, kept by a trade,
+            // trades back (else apply draws it back).
+            if (kind == NEBULA_PASS_BLOOM_SIMPLE) {
+                return;
+            }
+            if (game_bloom_.kept_by_trade(in)) {
+                game_bloom_.set_aside(swap_scene_color(game_bloom_.take_kept_back(command_list_.Get())), in);
+                return;
+            }
+        }
+        // The simple bloom's source is the frame: the scene and the source trade places instead of the scene being
+        // copied, where the composite then writes the whole target from it (as the bloom hold's trade).
+        if (kind == NEBULA_PASS_BLOOM_SIMPLE && scene_msaa_.samples <= 1u &&
+            in.frame_width == desc.Width && in.frame_height == desc.Height && game_bloom_.can_take_source(in)) {
+            game_bloom_.give_source(
+                swap_scene_color(game_bloom_.take_source_image(command_list_.Get(), in, frame_index_, kFramesInFlight)), in);
+            in.scene_target = scene_color_.Get();
+        }
         if (!game_bloom_.apply(command_list_.Get(), srv_ring_, in, p, frame_index_, kFramesInFlight)) {
             return;
         }
@@ -5836,7 +5907,7 @@ bool RendererD3D12::begin_output_scene(bool resolve_msaa_only) {
     // Nebula's screens with small text are drawn at the window's resolution whatever the HUD's (sharp_2d): at the
     // internal scale their letters would lose strokes on a wide or large window. Otherwise the game's layouts keep at
     // least the design's density on a window wider than 16:9 or narrower than 4:3, never above the window's.
-    const bool full = resolve_msaa_only || temporal || (get_render_config().hud_output_resolution || render_internal_height(get_render_config()) != 0u) || sharp_2d_requested();
+    const bool full = resolve_msaa_only || temporal || render_hud_at_output(get_render_config()) || sharp_2d_requested();
     if (output_scene_active_ || !full) {
         return false;
     }

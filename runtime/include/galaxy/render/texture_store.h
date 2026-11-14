@@ -13,6 +13,7 @@
 #include "galaxy/render/texture_sampler.h"
 
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <nebula_cooked_texture.h>
@@ -26,6 +27,8 @@ struct NebulaTexture;
 struct NebulaTextureImage;
 
 namespace galaxy::render {
+
+struct RenderConfig;
 
 struct RGBA8 {
     std::uint8_t r = 0;
@@ -61,6 +64,16 @@ public:
     [[nodiscard]] static constexpr bool is_target(std::uint32_t id) noexcept { return (id & kTargetBit) != 0u; }
     // Whether a sampler reads the cook's generated levels of `handle`.
     [[nodiscard]] static bool samples_generated(const TextureSampler& mode, const TextureHandle& handle);
+    // Whether anything can read the cook's generated levels with these settings: the enhanced-mipmaps option's samplers
+    // (samples_generated) or ray tracing's hits, which pick a level by their footprint. Without either a draw's sampler keeps
+    // to the first level (draw_walker), and only that level is staged: the pictures are a function of the settings alone.
+    [[nodiscard]] static bool wants_generated_levels(const RenderConfig& render) noexcept;
+    // Whether every texture holds the levels wants_generated_levels(render) asks for: follow_settings has seen it and the
+    // remakes it asked for have landed (take_ops). The tracer starts only then (rt_follow_setting).
+    [[nodiscard]] bool generated_levels_landed(const RenderConfig& render) const noexcept;
+    // Render thread, each frame after begin_frame: on a change of wants_generated_levels, the textures with generated levels
+    // are made again with them or without them (the old texture draws until then).
+    void follow_settings(const RenderConfig& render);
 
     struct Ops;
 
@@ -158,8 +171,12 @@ private:
         Staged staged;
         PackName name;
         bool generated = false;
+        // `trimmed`: a record's first level alone, its generated levels left out (nothing reads them: wants_generated_levels).
+        // `full_levels`: the levels the image has.
+        bool trimmed = false;
+        std::uint32_t full_levels = 1u;
         // A Create with `resize` makes an existing id's texture again with its `drop` top levels left out (0: whole). It is
-        // dropped if the id is gone or already has that many dropped.
+        // dropped if the id is gone or already has that many dropped and is trimmed as it is.
         bool resize = false;
         std::uint32_t drop = 0u;
     };
@@ -182,6 +199,7 @@ private:
         std::uint64_t demanded_at = ~std::uint64_t{0};  // the frame a walk last wanted it whole with no room for it
         std::uint32_t dropped = 0u;
         std::uint32_t full_levels = 0u;
+        bool trimmed = false;  // its generated levels left out (Op::trimmed)
     };
     struct ResizeRequest {
         std::uint32_t id = 0u;
@@ -217,6 +235,8 @@ private:
     void make_own(Entry& entry, const Op& op, bool once);
     void update_entry(Op& op);
     void resize_entry(Op& op);
+    // An entry whose generated levels are not as generated_levels_ says (staged while that changed): made again.
+    void follow_generated_levels(std::uint32_t id, Entry& entry);
     void free_entry(std::uint32_t id);
     void apply_built_in(Op& op);
     void dump_base_level(const Staged& staged, const PackName& name);
@@ -237,6 +257,8 @@ private:
     std::unordered_map<std::uint32_t, Source> sources_;
     std::unordered_map<std::uint32_t, const void*> built_ins_;
     std::vector<ResizeRequest> resize_requests_;  // the budget's: staged by the next take_ops
+    // wants_generated_levels as the render thread last saw it, for the calling threads' staging.
+    std::atomic<bool> generated_levels_wanted_{false};
     DeviceGate* gate_ = nullptr;
     ChunkRef arena_chunk_;
     std::uint64_t arena_used_ = 0u;
@@ -248,6 +270,7 @@ private:
     // Render thread. Ids are never used again, so a table naming a freed image reads nothing, not another image.
     std::vector<std::unique_ptr<Entry>> entries_;
     std::uint64_t revision_ = 1u;
+    bool generated_levels_ = false;  // wants_generated_levels, as generated_levels_wanted_ was last set
     // Budget: frames begun, bytes of replaced textures still held by frames in flight, the bytes a walk may still ask to have
     // back this frame, the frame the next batch of reductions may start, and the counts since the start. (Render thread.)
     std::uint64_t frame_ = 0u;
@@ -265,6 +288,8 @@ private:
 
     TexturePacks packs_;
     bool stager_set_ = false;
+    // Whether textures are dumped (packs_.dumping()), for the calling threads' stage: set by configure_texture_packs.
+    std::atomic<bool> dumping_{false};
     std::unordered_map<std::uint32_t, std::vector<std::uint32_t>> pack_waiters_;
     std::vector<std::pair<std::uint32_t, TexturePackPixels>> pack_uploads_;
     std::vector<std::vector<TextureBackend::UploadChunk>> pack_staging_;

@@ -55,8 +55,9 @@ done
 host_tree=
 for arch in $ordered; do
     common="-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=$here/toolchain.cmake -DNEBULA_APPLE_LLVM=$tools/toolchain/llvm -DNEBULA_APPLE_LIBCXX=$tools/toolchain/libcxx -DNEBULA_APPLE_PLATFORM=macos -DNEBULA_APPLE_ARCH=$arch -DNEBULA_APPLE_SDK=$sdk"
+    # The players' build: ThinLTO for the game module (native/CMakeLists.txt NEBULA_LTO; plain where the linker cannot).
     # shellcheck disable=SC2086
-    cmake -S "$root/native" -B "$work/macos-$arch/game" $common
+    cmake -S "$root/native" -B "$work/macos-$arch/game" $common -DNEBULA_LTO=ON
     # shellcheck disable=SC2086
     # Both game modules (plan 1.7): the host loads libsmg_game_plain.dylib unless a mod's code needs the rows.
     cmake --build "$work/macos-$arch/game" --target smg_game smg_game_plain $jobs

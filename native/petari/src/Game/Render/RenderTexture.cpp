@@ -253,4 +253,100 @@ namespace RenderTexture {
             }
         }
     }
+
+#if defined(NEBULA_PLAIN_MODULE)
+    namespace {
+        // The range holding `at`, as an index into pRanges, or count: pByStart lists the ranges by start.
+        u32 rangeOf(uintptr_t at, const Range* pRanges, const u32* pByStart, u32 count) {
+            u32 low = 0;
+            u32 high = count;
+            while (low < high) {
+                const u32 middle = low + (high - low) / 2;
+                if (pRanges[pByStart[middle]].mStart <= at) {
+                    low = middle + 1;
+                } else {
+                    high = middle;
+                }
+            }
+            return low != 0 && at < pRanges[pByStart[low - 1]].mEnd ? pByStart[low - 1] : count;
+        }
+
+        void siftByStart(u32* pIndex, u32 root, u32 end, const Range* pRanges) {
+            for (u32 child = 2 * root + 1; child < end; child = 2 * root + 1) {
+                if (child + 1 < end && pRanges[pIndex[child]].mStart < pRanges[pIndex[child + 1]].mStart) {
+                    child++;
+                }
+                if (!(pRanges[pIndex[root]].mStart < pRanges[pIndex[child]].mStart)) {
+                    return;
+                }
+                const u32 held = pIndex[root];
+                pIndex[root] = pIndex[child];
+                pIndex[child] = held;
+                root = child;
+            }
+        }
+    }  // namespace
+
+    void forget(const Range* pRanges, u32 count) {
+        const NebulaHostServices* pHost = nebula_host();
+        // pByStart[count], pFirst[count + 1] (where each range's images begin in pOrder), pOrder[sRoom].
+        u32* const pBuffer = count > 1 && sRoom != 0 ? static_cast< u32* >(pHost->heap_alloc(pHost->user, (2 * count + 1 + sRoom) * sizeof(u32)))
+                                                     : nullptr;
+        if (pBuffer == nullptr) {
+            for (u32 k = 0; k < count; k++) {
+                forget(pRanges[k].mStart, pRanges[k].mEnd);
+            }
+            return;
+        }
+        u32* const pByStart = pBuffer;
+        u32* const pFirst = pBuffer + count;
+        u32* const pOrder = pFirst + count + 1;
+
+        for (u32 k = 0; k < count; k++) {
+            pByStart[k] = k;
+            pFirst[k] = 0;
+        }
+        pFirst[count] = 0;
+        for (u32 i = count / 2; i-- > 0;) {
+            siftByStart(pByStart, i, count, pRanges);
+        }
+        for (u32 end = count; end-- > 1;) {
+            const u32 held = pByStart[0];
+            pByStart[0] = pByStart[end];
+            pByStart[end] = held;
+            siftByStart(pByStart, 0, end, pRanges);
+        }
+
+        // Count each range's images, then place them by range in table order: forget(range 0), forget(range 1), ...
+        const auto live = [](const Entry& rEntry) {
+            return rEntry.mImage != nullptr && rEntry.mImage != cGone;
+        };
+        for (u32 i = 0; i < sRoom; i++) {
+            if (live(sTable[i])) {
+                const u32 k = rangeOf(reinterpret_cast< uintptr_t >(sTable[i].mImage), pRanges, pByStart, count);
+                if (k != count) {
+                    pFirst[k + 1]++;
+                }
+            }
+        }
+        for (u32 k = 0; k < count; k++) {
+            pFirst[k + 1] += pFirst[k];
+        }
+        const u32 total = pFirst[count];
+        for (u32 i = 0; i < sRoom; i++) {
+            if (live(sTable[i])) {
+                const u32 k = rangeOf(reinterpret_cast< uintptr_t >(sTable[i].mImage), pRanges, pByStart, count);
+                if (k != count) {
+                    pOrder[pFirst[k]++] = i;
+                }
+            }
+        }
+        for (u32 n = 0; n < total; n++) {
+            Entry& rEntry = sTable[pOrder[n]];
+            pHost->texture_free(pHost->user, rEntry.mId);
+            rEntry.mImage = cGone;
+        }
+        pHost->heap_free(pHost->user, pBuffer);
+    }
+#endif
 }  // namespace RenderTexture

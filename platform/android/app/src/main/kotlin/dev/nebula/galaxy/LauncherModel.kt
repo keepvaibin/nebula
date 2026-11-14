@@ -60,10 +60,6 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     var screen by mutableStateOf(if (install != null) Screen.Home else Screen.Welcome)
     var disc by mutableStateOf<DiscPick?>(null)
         private set
-    var graphics by mutableStateOf(GraphicsSettings.read(app))
-        private set
-    var controls by mutableStateOf(ControlsSettings.read(app))
-        private set
     var gameExit by mutableStateOf<GameExit?>(null)
     var freeBytes by mutableStateOf(Storage.freeBytes(app))
         private set
@@ -222,6 +218,192 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         if (Imports.state.value is ImportState.Running) screen = Screen.Import
     }
 
+    /** A newer release to offer (Updates), over the launcher until the player answers. */
+    var update by mutableStateOf<Release?>(null)
+        private set
+
+    /** The update's download and hand-over under way: its share done (0 to 1), or null. */
+    var updateProgress by mutableStateOf<Float?>(null)
+        private set
+
+    /** Why the last Update did not reach Android's installer, shown in the prompt. */
+    var updateFailure by mutableStateOf<UpdateFailure?>(null)
+        private set
+
+    /** Android lets no app install packages until the player allows it for Nebula. */
+    var updateNeedsPermission by mutableStateOf(false)
+        private set
+
+    /** The check at start (Settings, Updates); on unless the player turns it off. */
+    var updatesAtStart by mutableStateOf(Updates.enabled(application))
+        private set
+
+    private val updateCanceled = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    // Not now (or Skip) answered: no other prompt in this run.
+    private var updateAnswered = false
+
+    // Handed to Android's installer, waiting on its answer (onInstallAnswered).
+    private var installing: Release? = null
+
+    init {
+        // The kept answer at once, the check's when it comes; it never holds up Play (a late answer is kept and
+        // offered at the next start).
+        offerUpdate(Updates.pending(app))
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
+        Updates.begin(app) { release -> main.post { offerUpdate(release) } }
+        Updates.installAnswered = { failure -> onInstallAnswered(failure) }
+    }
+
+    // The installer did not install (declined, refused, blocked, no room, failed): the prompt again, with why. The
+    // release stays kept, so the next start offers it too.
+    private fun onInstallAnswered(failure: UpdateFailure?) {
+        val release = installing ?: return
+        installing = null
+        if (failure == null) return
+        updateAnswered = false
+        updateNeedsPermission = false
+        update = release
+        updateFailure = failure
+    }
+
+    override fun onCleared() {
+        Updates.installAnswered = null
+        super.onCleared()
+    }
+
+    private fun offerUpdate(release: Release?) {
+        // Installing replaces the app and ends a game running in its process: never offered meanwhile.
+        if (release == null || updateAnswered || updateProgress != null || SaveTransfer.gameRunning(app)) return
+        update = release
+    }
+
+    fun updateLater() {
+        updateAnswered = true
+        update = null
+        updateFailure = null
+        updateNeedsPermission = false
+    }
+
+    fun updateSkip() {
+        update?.let { Updates.skip(app, it.version) }
+        updateLater()
+    }
+
+    fun updateCancel() {
+        updateCanceled.set(true)
+    }
+
+    fun updateNow() {
+        val release = update ?: return
+        if (updateProgress != null || SaveTransfer.gameRunning(app)) return
+        if (!Updates.canInstall(app)) {
+            updateNeedsPermission = true
+            return
+        }
+        updateNeedsPermission = false
+        updateFailure = null
+        updateCanceled.set(false)
+        updateProgress = 0f
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
+        Thread({
+            var shown = -1
+            val result = runCatching {
+                val apk = Updates.download(app, release, { bytes ->
+                    // A step per percent reaches the screen, not one per piece read.
+                    val percent = if (release.apkBytes > 0L) (bytes * 100L / release.apkBytes).toInt().coerceIn(0, 100) else 0
+                    if (percent != shown) {
+                        shown = percent
+                        main.post { if (updateProgress != null) updateProgress = percent / 100f }
+                    }
+                }, updateCanceled::get)
+                Updates.install(app, apk)
+            }
+            main.post {
+                updateProgress = null
+                result.onSuccess {
+                    // Android's installer asks the player now (UpdateInstallReceiver) and replaces the app, or answers
+                    // why not (onInstallAnswered).
+                    installing = release
+                    updateAnswered = true
+                    update = null
+                }
+                result.onFailure { error ->
+                    if (!updateCanceled.get()) updateFailure = (error as? UpdateException)?.failure ?: UpdateFailure.Download
+                }
+            }
+        }, "nebula-update").start()
+    }
+
+    /** The system's "install unknown apps" switch for Nebula. */
+    fun openInstallPermission(context: Context) {
+        context.startActivity(
+            Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${app.packageName}"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
+
+    fun updateUpdatesAtStart(on: Boolean) {
+        updatesAtStart = on
+        Updates.setEnabled(app, on)
+        if (!on && updateProgress == null) update = null
+    }
+
+    /** The last benchmark's result (Settings, Performance); null before the first or after a run without one. */
+    var benchmark by mutableStateOf(Benchmark.read(application))
+        private set
+
+    /** The run that just ended wrote no result. */
+    var benchmarkUnfinished by mutableStateOf(false)
+        private set
+
+    /** Apply pressed for this result: config.ini has its values. */
+    var benchmarkApplied by mutableStateOf(false)
+        private set
+
+    /** Apply could not write config.ini. */
+    var benchmarkApplyFailed by mutableStateOf(false)
+        private set
+
+    /** From the launcher's activity, like Play: the game runs the benchmark and ends back here (resumed reads it). */
+    fun startBenchmark(activity: Context) {
+        if (install == null || SaveTransfer.gameRunning(app)) return
+        Benchmark.clear(app)
+        benchmark = null
+        benchmarkUnfinished = false
+        benchmarkApplied = false
+        benchmarkApplyFailed = false
+        GameFiles.controls(app).edit()
+            .putLong(LAUNCHED_AT, System.currentTimeMillis())
+            .putBoolean(BENCHMARK_RAN, true)
+            .commit()
+        activity.startActivity(Intent(activity, GameActivity::class.java).putExtra(Benchmark.EXTRA, true))
+    }
+
+    fun applyBenchmark() {
+        val result = benchmark ?: return
+        if (SaveTransfer.gameRunning(app)) return
+        val ok = Benchmark.apply(app, result)
+        benchmarkApplied = ok
+        benchmarkApplyFailed = !ok
+    }
+
+    // Back from a benchmark run: its result, or that it did not finish.
+    private fun checkBenchmark() {
+        val prefs = GameFiles.controls(app)
+        if (!prefs.getBoolean(BENCHMARK_RAN, false)) return
+        // The file is written whole before the game exits; without it, a game process still ending is waited for
+        // (the next return here reads it).
+        val result = Benchmark.read(app)
+        if (result == null && SaveTransfer.gameRunning(app)) return
+        prefs.edit().remove(BENCHMARK_RAN).apply()
+        benchmark = result
+        benchmarkUnfinished = result == null
+        benchmarkApplied = false
+        benchmarkApplyFailed = false
+        screen = Screen.Settings
+    }
+
     fun back(): Boolean {
         screen = when (screen) {
             Screen.Disc -> if (install != null) Screen.Settings else Screen.Welcome
@@ -244,6 +426,9 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             withContext(Dispatchers.Main) { saveBytes = saves }
         }
         if (install == null && screen == Screen.Home) screen = Screen.Welcome
+        // Back from the system's settings with installing allowed: the prompt offers Update again.
+        if (updateNeedsPermission && Updates.canInstall(app)) updateNeedsPermission = false
+        checkBenchmark()
         checkLastRun()
     }
 
@@ -305,16 +490,6 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         screen = Screen.Disc
     }
 
-    fun updateGraphics(value: GraphicsSettings) {
-        graphics = value
-        value.write(app)
-    }
-
-    fun updateControls(value: ControlsSettings) {
-        controls = value
-        value.write(app)
-    }
-
     fun removeGame() {
         Storage.removeGame(app)
         install = null
@@ -354,5 +529,6 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
 
     companion object {
         private const val LAUNCHED_AT = "launchedAt"
+        private const val BENCHMARK_RAN = "benchmarkRan"
     }
 }

@@ -69,6 +69,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/render_api.cpp
     ${rt}/render/render_config.cpp
     ${rt}/ui/native_settings.cpp
+    ${rt}/ui/launcher.cpp
     ${rt}/ui/settings_model.cpp
     ${rt}/ui/settings_system_page.cpp
     ${rt}/ui/settings_advanced_page.cpp
@@ -103,6 +104,8 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/core/pipelines_vk.cpp
     ${rt}/render/core/encoder_vk.cpp
     ${rt}/render/galaxy_select.cpp
+    ${rt}/benchmark_recommend.cpp
+    ${rt}/benchmark.cpp
     ${rt}/render/frame_interpolation.cpp
     ${rt}/render/rt_materials.cpp
     ${rt}/render/rt_caps.cpp
@@ -256,6 +259,7 @@ set(host_sources
     "${CMAKE_CURRENT_SOURCE_DIR}/audio_device_sdl.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/display_clock.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/thread_sampler.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/crash_log.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/native_game_host_sdl.cpp")
 if(ANDROID)
     # A real Wii Remote on a DolphinBar (wiimote_hid.h over wiimote_link_android.cpp).
@@ -277,6 +281,18 @@ target_include_directories(main PRIVATE "${nebula_root}/native/include" "${nebul
 target_compile_definitions(main PRIVATE NEBULA_HOST_RENDERER=1 NEBULA_HOST_SDL=1)
 target_include_directories(main PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(main PRIVATE galaxy_render_vk SDL3::SDL3)
+# The diagnostics report modes (diag_report.h): zlib from the archive libraries.
+if(NOT IOS)
+    target_sources(main PRIVATE ${rt}/diag_report.cpp ${rt}/diag_seal.cpp)
+    target_compile_definitions(main PRIVATE NEBULA_DIAG_REPORTS=1)
+endif()
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT ANDROID)
+    # The update check and install of the home screen (runtime/include/galaxy/update.h): libcurl is opened at run time.
+    target_sources(main PRIVATE ${rt}/update/update.cpp ${rt}/update/update_crypto.cpp ${rt}/update/update_transport_curl.cpp
+        ${rt}/update/update_install_linux.cpp ${rt}/update/update_probe_posix.cpp)
+    target_compile_definitions(main PRIVATE NEBULA_UPDATE_CHECK=1)
+    target_link_libraries(main PRIVATE ${CMAKE_DL_LIBS})
+endif()
 
 # The launcher's mod and Mii import on Android (libnebula_mods.so): the game's own importers, in the launcher's process.
 if(ANDROID)
@@ -301,3 +317,19 @@ if(ANDROID)
     target_link_options(nebula_mods PRIVATE "-Wl,--gc-sections")
 endif()
 
+
+# Release builds optimise the host's own code across source files, as the Windows host does (CMakeLists.txt
+# NEBULA_HOST_IPO): ThinLTO, so the render thread's small calls from file to file are inlined. Clang only: it fuses a
+# multiply and an add only within one expression as written (-ffp-contract=on), so inlining across files changes no
+# result; a compiler that fuses across statements could. CMake links a test library first and leaves the build plain
+# where the toolchain cannot.
+option(NEBULA_HOST_IPO "Optimize the host's code across source files in Release builds" ON)
+if(NEBULA_HOST_IPO AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT nebula_host_ipo_supported OUTPUT nebula_host_ipo_error LANGUAGES C CXX)
+    if(nebula_host_ipo_supported)
+        set_property(TARGET galaxy_render_vk main PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+    else()
+        message(STATUS "Host IPO unavailable: ${nebula_host_ipo_error}")
+    endif()
+endif()

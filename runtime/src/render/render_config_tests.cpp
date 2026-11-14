@@ -1,4 +1,5 @@
 #include "galaxy/render/render_config.h"
+#include "galaxy/render/resolution_fit.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/test_temp.h"
 #include "galaxy/experimental_ultrawide_aspect.h"
@@ -654,6 +655,89 @@ int main() {
         terminated.reflex.reason.back() == '\0' && terminated.dlss_super_resolution.reason.back() == '\0' &&
         terminated.dlss_frame_generation.reason.back() == '\0',
         "direct capability strings are always terminated before UI snapshots");
+
+    {
+        // The first start: no config.ini; a saved file ends it.
+        const std::filesystem::path root = galaxy::test_temp_path("galaxy_first_start_tests");
+        std::filesystem::remove_all(root);
+        const ScopedSettingsFolder config_folder(root);
+        galaxy::render::set_render_config(galaxy::render::RenderConfig{});
+        galaxy::render::load_render_config_from_file();
+        passed &= expect(galaxy::render::render_config_first_start(), "no config.ini is the first start");
+        passed &= expect(galaxy::render::save_render_config_to_file(), "the first start's settings save");
+        galaxy::render::load_render_config_from_file();
+        passed &= expect(!galaxy::render::render_config_first_start(), "a saved config.ini is no first start");
+        std::filesystem::remove_all(root);
+    }
+    passed &= expect(galaxy::render::first_start_internal_height(true, 2400u) == 480u &&
+                         galaxy::render::first_start_internal_height(true, 480u) == 0u &&
+                         galaxy::render::first_start_internal_height(false, 2160u) == 1080u &&
+                         galaxy::render::first_start_internal_height(false, 1080u) == 0u,
+                     "the first start's table: 480 lines shared, 1080 dedicated, match display on outputs no taller");
+    {
+        galaxy::render::RenderConfig preset{};
+        preset.upscaler = 2u;
+        preset.aa_mode = 1u;
+        preset.msaa_samples = 4u;
+        preset.ambient_occlusion = true;
+        preset.bloom = 150u;
+        preset.enhanced_lighting = true;
+        preset.max_fps = 144.0f;
+        preset.vsync_interval = 1u;
+        preset.curved_surfaces = true;
+        galaxy::render::apply_performance_preset(preset);
+        passed &= expect(preset.internal_height == 480u && preset.upscaler == 0u && preset.aa_mode == 0u && preset.msaa_samples == 1u &&
+                             !preset.ambient_occlusion && preset.bloom == 0u && !preset.enhanced_lighting && !preset.per_pixel_lighting &&
+                             preset.max_fps == 60.0f && preset.frame_generation == 0u && !preset.ray_tracing_enabled && !preset.hdr &&
+                             preset.sharpness == 0u && preset.anisotropic_filtering == 1u && !preset.enhanced_mipmaps,
+                         "the performance preset turns every optional pass off at 480 lines");
+        passed &= expect(!preset.hud_output_resolution && preset.hud_internal_resolution && !galaxy::render::render_hud_at_output(preset),
+                         "the performance preset draws the 2D layer at 480 lines and enlarges once at present");
+        galaxy::render::RenderConfig exact{};
+        exact.internal_height = 720u;
+        const bool before = galaxy::render::render_hud_at_output(exact);
+        exact.hud_internal_resolution = true;
+        const bool internal = galaxy::render::render_hud_at_output(exact);
+        exact.hud_output_resolution = true;
+        const bool asked = galaxy::render::render_hud_at_output(exact);
+        exact = {};
+        exact.hud_internal_resolution = true;
+        passed &= expect(before && !internal && asked && !galaxy::render::render_hud_at_output(exact),
+                         "an internal height takes the window-size 2D layer unless HUD at internal; DISPLAY wins");
+        passed &= expect(preset.vsync_interval == 1u && preset.curved_surfaces && preset.post_process,
+                         "the performance preset keeps the present path and choices that are no pass");
+    }
+    {
+        using galaxy::render::GpuTimeFit;
+        // gpu ms = 2 + 4 a million pixels, sampled at 480 and 1080 lines of a 1920x1080 output.
+        const double p480 = galaxy::render::scene_pixels(480u, 1920u, 1080u), p1080 = galaxy::render::scene_pixels(0u, 1920u, 1080u);
+        const double pixels[] = {p480, p480, p1080, p1080};
+        const double ms[] = {2.0 + 4e-6 * p480, 2.0 + 4e-6 * p480, 2.0 + 4e-6 * p1080, 2.0 + 4e-6 * p1080};
+        const GpuTimeFit fit = galaxy::render::fit_gpu_time(pixels, ms, 4u);
+        passed &= expect(fit.valid && std::fabs(fit.a_ms - 2.0) < 1e-9 && std::fabs(fit.b_ms_per_pixel - 4e-6) < 1e-12,
+                         "the fit finds the line through its samples");
+        passed &= expect(!galaxy::render::fit_gpu_time(pixels, ms, 2u).valid, "one pixel count fixes no fit");
+        passed &= expect(p480 == 853.0 * 480.0 || p480 == 854.0 * 480.0, "480 lines of 16:9 are about 854 x 480 pixels");
+        // A budget of 0.8 x 16.67 = 13.3 ms. 480 lines: 2 + 1.64 = 3.64 ms; 720: 2 + 3.69 = 5.69; 1080: 2 + 8.29 = 10.3.
+        // x 2.5: 9.1, 14.2, 25.7, so 480; x 2: 7.3, 11.4, 20.6, so 720; x 1: all fit, so match display.
+        const double budget = galaxy::render::kFitFrameShare * 1000.0 / 60.0;
+        passed &= expect(galaxy::render::largest_fitting_height(fit, 1920u, 1080u, galaxy::render::kFitHeavyStage, budget) == 480u,
+                         "a slow GPU's fit keeps 480 lines");
+        passed &= expect(galaxy::render::largest_fitting_height(fit, 1920u, 1080u, 2.0, budget) == 720u &&
+                             galaxy::render::largest_fitting_height(fit, 1920u, 1080u, 1.0, budget) == 0u,
+                         "the largest offered height under the budget is chosen");
+        GpuTimeFit fast = fit;
+        fast.b_ms_per_pixel = 1e-7;
+        passed &= expect(galaxy::render::largest_fitting_height(fast, 1920u, 1080u, galaxy::render::kFitHeavyStage, budget) == 0u,
+                         "a fast GPU's fit matches the display");
+        passed &= expect(galaxy::render::largest_fitting_height(GpuTimeFit{}, 1920u, 1080u, 1.0, budget) == 480u &&
+                             galaxy::render::largest_fitting_height(fast, 854u, 480u, 1.0, budget) == 0u,
+                         "no fit keeps 480 lines; an output of 480 lines matches the display");
+        passed &= expect(galaxy::render::largest_fitting_height(fast, 1920u, 1080u, galaxy::render::kFitHeavyStage, budget, 2160u) == 2160u &&
+                             galaxy::render::largest_fitting_height(fast, 1920u, 1080u, galaxy::render::kFitHeavyStage, budget, 1440u) == 1440u &&
+                             galaxy::render::largest_fitting_height(fit, 1920u, 1080u, 1.0, budget, 2160u) == 0u,
+                         "above the output only up to max_height, and only what fits");
+    }
 
     if (!passed) {
         return 1;

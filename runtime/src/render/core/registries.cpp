@@ -4,9 +4,12 @@
 #include "render/core/frame_core.h"
 
 #include <algorithm>
+#include <array>
+#include <atomic>
 #include <cstring>
 #include <fstream>
 #include <map>
+#include <memory>
 #include <iterator>
 #include <stdexcept>
 #include <unordered_set>
@@ -16,6 +19,8 @@ namespace galaxy::render::core {
 
 namespace {
 
+// Mesh pages: the first 8 MB, each further one twice the largest held, up to 64 MB.
+constexpr std::size_t kFirstArenaPage = 8ull << 20u;
 constexpr std::size_t kArenaPage = 64ull << 20u;
 constexpr std::size_t kSlotPage = 1ull << 20u;
 constexpr std::size_t kSlotAlign = 256u;
@@ -32,6 +37,37 @@ std::uint64_t hash_bytes(const void* data, std::size_t size, std::uint64_t hash 
     }
     return hash;
 }
+
+// A texture list's hash, eight bytes a step (three a texture), the bits mixed at the end so the low ones index a table.
+std::uint64_t hash_textures(const NebulaFrameTexture* list, std::uint32_t count) noexcept {
+    static_assert(sizeof(NebulaFrameTexture) == 24u);
+    std::uint64_t hash = 14695981039346656037ull ^ count;
+    const auto* p = reinterpret_cast<const std::byte*>(list);
+    for (std::size_t i = 0; i < std::size_t{count} * 3u; ++i) {
+        std::uint64_t word;
+        std::memcpy(&word, p + i * 8u, 8u);
+        hash = (hash ^ word) * 0x9E3779B97F4A7C15ull;
+    }
+    hash ^= hash >> 32u;
+    hash *= 0xD6E8FEB86659FD93ull;
+    return hash ^ (hash >> 32u);
+}
+
+// texture_table's last answers on this thread, by the list's hash: one stands while its registries are the same and
+// none of their lists has been dropped since (Registries::tables_dropped_). Lists of more textures are not kept.
+constexpr std::uint32_t kTableMemos = 64u;
+constexpr std::uint32_t kTableMemoTextures = 8u;
+struct TableMemo {
+    std::uint64_t hash = 0u;
+    std::uint64_t owner = 0u;
+    std::uint64_t dropped = 0u;
+    std::uint32_t id = 0u, count = 0u;
+    NebulaFrameTexture list[kTableMemoTextures];
+};
+// Made by a thread's first texture_table: the threads that never ask hold nothing.
+thread_local std::unique_ptr<std::array<TableMemo, kTableMemos>> t_table_memos;
+
+std::atomic<std::uint64_t> s_registries_made{0u};
 
 // A mesh's bounds under each of its draw matrices, for the occluders.
 void object_slots_of(const NebulaModelMesh& mesh, const std::byte* positions, const std::byte* matrices,
@@ -181,7 +217,14 @@ Registries::Placed Registries::place(std::size_t bytes) {
             break;
         }
     }
-    const std::size_t page = std::max(bytes, kArenaPage);
+    // Twice the largest page held (kFirstArenaPage when none), as large as the range needs, at most kArenaPage; a range
+    // larger than that has a page of its own size.
+    std::size_t page = kFirstArenaPage;
+    for (const Arena& held : arenas_) {
+        if (held.memory) page = std::max(page, held.bytes * 2u);
+    }
+    while (page < bytes && page < kArenaPage) page *= 2u;
+    page = std::max(std::min(page, kArenaPage), bytes);
     // Geometry is written once, in order, and read by the GPU every frame it draws: video memory where the device maps it.
     gpu::UploadMemory memory = gpu::create_upload_memory(device_, page, "Nebula Meshes", gpu::UploadPlace::GpuLocal);
     if (!memory) {
@@ -235,9 +278,9 @@ void Registries::give_back(std::uint32_t index, std::size_t offset, std::size_t 
     if (arena.live != 0u) {
         return;
     }
-    // The page is empty (the GPU is past everything that read it: reclaim runs after the retiring fence). A page of an
-    // unusual size, or a second empty one, gives its memory back; one empty page stays for the next scene.
-    bool release = arena.bytes != kArenaPage;
+    // The page is empty (the GPU is past everything that read it: reclaim runs after the retiring fence). A page of its own
+    // for one large range, or a second empty one, gives its memory back; one empty page stays for the next scene.
+    bool release = arena.bytes > kArenaPage;
     for (std::uint32_t other = 0; other < arenas_.size() && !release; ++other) {
         release = other != index && arenas_[other].memory && arenas_[other].live == 0u;
     }
@@ -331,6 +374,8 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes)
     model.tables.draw_matrix_count = header.draw_matrix_count;
     model.tables.joint_count = header.joint_count;
     model.tables.has_billboard = (header.flags & NEBULA_MODEL_HAS_BILLBOARD) != 0u;
+    model.tables.has_weighted = std::any_of(model.draw_matrices.begin(), model.draw_matrices.end(),
+                                            [](const NebulaModelDrawMatrix& matrix) { return matrix.weighted != 0u; });
     model.mesh_count = header.mesh_count;
 
     meshes.resize(header.mesh_count);
@@ -766,23 +811,53 @@ void Registries::write_pipeline_list(const std::filesystem::path& path) {
     }
 }
 
+std::uint64_t Registries::make_serial() noexcept {
+    return s_registries_made.fetch_add(1u, std::memory_order_relaxed) + 1u;
+}
+
 std::uint32_t Registries::texture_table(const NebulaFrameTexture* list, std::uint32_t count) {
-    const std::uint64_t hash = hash_bytes(list, count * sizeof(NebulaFrameTexture), count);
-    const std::lock_guard guard(lock_);
-    auto& bucket = table_by_hash_[hash];
-    for (const TableKey& key : bucket) {
-        if (key.count == count && std::memcmp(key.list.data(), list, count * sizeof(NebulaFrameTexture)) == 0) {
-            return key.id;
+    const std::size_t bytes = std::size_t{count} * sizeof(NebulaFrameTexture);
+    const std::uint64_t hash = hash_textures(list, count);
+    // Read before the lookup: a drop after it leaves this answer's memo unused, never wrong.
+    const std::uint64_t dropped = tables_dropped_.load(std::memory_order_acquire);
+    if (t_table_memos == nullptr) {
+        t_table_memos = std::make_unique<std::array<TableMemo, kTableMemos>>();
+    }
+    TableMemo& memo = (*t_table_memos)[hash % kTableMemos];
+    if (memo.hash == hash && memo.owner == serial_ && memo.dropped == dropped && memo.count == count &&
+        (bytes == 0u || std::memcmp(memo.list, list, bytes) == 0)) {
+        return memo.id;
+    }
+    std::uint32_t id = 0u;
+    {
+        const std::lock_guard guard(lock_);
+        auto& bucket = table_by_hash_[hash];
+        const auto found = std::find_if(bucket.begin(), bucket.end(), [&](const TableKey& key) {
+            return key.count == count && std::memcmp(key.list.data(), list, bytes) == 0;
+        });
+        if (found != bucket.end()) {
+            id = found->id;
+        } else {
+            id = next_table_++;
+            TableKey& key = bucket.emplace_back();
+            key.id = id;
+            key.count = count;
+            key.list.assign(list, list + count);
+            TextureTable& table = incoming_.tables.emplace_back();
+            table.count = count;
+            table.list = key.list;
         }
     }
-    const std::uint32_t id = next_table_++;
-    TableKey& key = bucket.emplace_back();
-    key.id = id;
-    key.count = count;
-    key.list.assign(list, list + count);
-    TextureTable& table = incoming_.tables.emplace_back();
-    table.count = count;
-    table.list = key.list;
+    if (count <= kTableMemoTextures) {
+        memo.hash = hash;
+        memo.owner = serial_;
+        memo.dropped = dropped;
+        memo.id = id;
+        memo.count = count;
+        if (bytes != 0u) {
+            std::memcpy(memo.list, list, bytes);
+        }
+    }
     return id;
 }
 
@@ -881,6 +956,9 @@ void Registries::forget_textures(std::span<const std::uint32_t> freed, std::vect
                 return false;
             });
             it = it->second.empty() ? table_by_hash_.erase(it) : std::next(it);
+        }
+        if (!dropped.empty()) {
+            tables_dropped_.fetch_add(1u, std::memory_order_release);
         }
     }
     for (const std::uint32_t id : dropped) {

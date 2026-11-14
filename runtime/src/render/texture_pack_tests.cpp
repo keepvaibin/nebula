@@ -6,6 +6,7 @@
 
 #include "galaxy/windows_api.h"
 
+#include "galaxy/render/block4_astc.h"
 #include "galaxy/render/render_core.h"
 #include "galaxy/render/texture_store.h"
 #include "galaxy/render/texture_pack.h"
@@ -157,6 +158,14 @@ void test_png(const std::filesystem::path& root) {
                pixels.height == 5u && pixels.levels.size() == 3u && pixels.levels[0] == rgba &&
                pixels.levels[1].size() == 3u * 2u * 4u && pixels.levels[2].size() == 4u,
            "PNG round trip, levels down to 1x1");
+    // Generated levels, exact: an opaque box (rounded mean), a mixed-alpha box (alpha-weighted colour), then a 2x1 to 1x1 edge.
+    const std::vector<std::uint8_t> boxes{10, 20, 30, 255, 14, 24, 34, 255, 255, 0, 0, 128, 0, 255, 0, 0,
+                                          12, 22, 32, 255, 16, 26, 36, 255, 0, 0, 255, 64, 0, 0, 0, 0};
+    expect(write_png(root / "boxes.png", 4u, 2u, boxes.data()), "PNG written");
+    expect(load_texture_pack_image(root / "boxes.png", false, pixels, &error) && pixels.levels.size() == 3u &&
+               pixels.levels[1] == std::vector<std::uint8_t>{13, 23, 33, 255, 170, 0, 85, 48} &&
+               pixels.levels[2] == std::vector<std::uint8_t>{38, 19, 41, 152},
+           "generated levels box the level above exactly");
     { std::ofstream out(root / "bad.png"); out << "not a png"; }
     expect(!load_texture_pack_image(root / "bad.png", false, pixels, &error) && !error.empty(),
            "a broken PNG is refused with a reason");
@@ -526,6 +535,49 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
 
 }  // namespace
 
+// BLOCK4 blocks as ASTC 4x4: two blocks against bytes an independent decoder of the ASTC specification decodes to the
+// record's colours (within the header's bound), and every block back to itself.
+void test_block4_astc() {
+    namespace astc = galaxy::render::block4_astc;
+    const std::uint8_t four[8] = {0x00, 0xF8, 0x1F, 0x00, 0xE4, 0xE4, 0xE4, 0xE4};
+    const std::uint8_t four_astc[16] = {0x43, 0x00, 0xFF, 0x01, 0x00, 0x00, 0x00, 0xFE,
+                                        0x01, 0x00, 0x40, 0x39, 0x8D, 0x70, 0xA4, 0x70};
+    const std::uint8_t three[8] = {0x1F, 0x00, 0x00, 0xF8, 0x24, 0x49, 0x92, 0x24};
+    const std::uint8_t three_astc[16] = {0x51, 0x00, 0x01, 0xFE, 0x01, 0x00, 0xFE, 0x01,
+                                         0x00, 0x00, 0x00, 0x00, 0x00, 0x63, 0xE4, 0x1E};
+    std::uint8_t out[16];
+    astc::from_block4(four, out);
+    expect(std::memcmp(out, four_astc, 16) == 0, "a four-colour block as ASTC");
+    astc::from_block4(three, out);
+    expect(std::memcmp(out, three_astc, 16) == 0, "a three-colour block as ASTC");
+    std::uint32_t state = 12345u;
+    bool round_trip = true;
+    for (unsigned n = 0; n < 20000u; ++n) {
+        std::uint8_t block[8];
+        for (auto& byte : block) {
+            state = state * 1664525u + 1013904223u;
+            byte = static_cast<std::uint8_t>(state >> 24);
+        }
+        if (n % 4u == 0u) {
+            block[2] = block[0];
+            block[3] = block[1];
+        }
+        // The record's blocks are opaque (texture.rs blocks_opaque): a three-colour block has no index 3.
+        const unsigned c0 = block[0] | block[1] << 8, c1 = block[2] | block[3] << 8;
+        if (c0 <= c1) {
+            for (unsigned k = 4; k < 8u; ++k) {
+                const unsigned threes = block[k] & block[k] >> 1 & 0x55u;
+                block[k] = static_cast<std::uint8_t>(block[k] & ~threes);
+            }
+        }
+        std::uint8_t back[8];
+        astc::from_block4(block, out);
+        astc::to_block4(out, back);
+        round_trip = round_trip && std::memcmp(back, block, 8) == 0;
+    }
+    expect(round_trip, "every block back to itself");
+}
+
 // A category off leaves its textures out of a pack's index; the others stay.
 void test_categories_off() {
     const std::filesystem::path root = galaxy::test_temp_path("nebula_pack_categories");
@@ -558,6 +610,7 @@ int main() {
     test_png(root);
     test_pack_pictures();
     test_sampler_shift();
+    test_block4_astc();
     test_priority(root);
     Gpu gpu;
     if (!gpu.create()) {

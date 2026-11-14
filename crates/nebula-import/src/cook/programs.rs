@@ -141,12 +141,15 @@ impl Range {
 pub struct Registers {
     pub color: [Range; 3],
     pub alpha: [Range; 3],
+    /// The alpha test's references are the material's (a model's: Material.cpp fills them from its file); a layout's come
+    /// from its own data.
+    pub alpha_refs: bool,
 }
 
 impl Registers {
     pub fn of(m: &MaterialIr) -> Registers {
         let value = |r: usize, c: usize| Range::one(m.registers[r][c] as f32 / 255.0);
-        let mut out = Registers { color: [Range::UNIT; 3], alpha: [Range::UNIT; 3] };
+        let mut out = Registers { color: [Range::UNIT; 3], alpha: [Range::UNIT; 3], alpha_refs: true };
         for r in 0..3 {
             out.color[r] = value(r, 0).hull(value(r, 1)).hull(value(r, 2));
             out.alpha[r] = value(r, 3);
@@ -776,6 +779,8 @@ fn stage_lines(p: &mut Pixel, registers: &Registers) -> Result<bool> {
         state[s.color_out as usize & 3][0] = color_range;
         state[s.alpha_out as usize & 3][1] = alpha_range;
     }
+    // What round(prev.a * 255) can be: prev.a is the last stage's alpha, through its low 8 bits unless its range keeps them.
+    let mut tested_range = (0u32, 256u32);
     match last {
         Some(s) => {
             let (c, a) = (s.color_out as usize & 3, s.alpha_out as usize & 3);
@@ -785,22 +790,33 @@ fn stage_lines(p: &mut Pixel, registers: &Registers) -> Result<bool> {
             } else {
                 p.lines.push(format!("    prev = low8({value});"));
             }
+            if state[a][1].stays() {
+                tested_range = ((state[a][1].0 * 255.0).floor() as u32, (state[a][1].1 * 255.0).ceil() as u32);
+            }
         }
-        None => {}
+        None => tested_range = (255, 255),
     }
     // A glTF material's light after its last stage, when no glow follows it (MaterialIr pbr).
     let lines = std::mem::take(&mut p.pbr_lines);
     p.lines.extend(lines);
-    Ok(alpha_test_lines(p))
+    let always = registers.alpha_refs && alpha_test_passes(p.m, tested_range);
+    Ok(alpha_test_lines(p, always))
 }
 
 /// The material's alpha test on prev (its two comparisons and their logic), when it has one: whether it has.
-fn alpha_test_lines(p: &mut Pixel) -> bool {
+/// always: its own references pass every value prev.a can take (stage_lines' ranges); false where prev.a is unknown.
+fn alpha_test_lines(p: &mut Pixel, always: bool) -> bool {
     let m = p.m;
     let (comp0, op, comp1) = (m.alpha_comp0, m.alpha_op, m.alpha_comp1);
     let mut tested = false;
     if !(comp0 == 7 && comp1 == 7) && !(op == 1 && (comp0 == 7 || comp1 == 7)) {
         tested = true;
+        // A test its own references pass for every value prev.a can take discards nothing: the raster forms leave it
+        // out (early depth stays on). Ray tracing's forms and the per-sample form keep it (their compiled bytes, and the
+        // per-sample form's presence that marks a cutout, stay as they were); so does the material's alpha-test flag.
+        if always {
+            p.lines.push("#if NATIVE_TRACED || NATIVE_PREPASS || NATIVE_SAMPLE".into());
+        }
         let logic = ["&&", "||", "!=", "=="][op as usize & 3];
         let refs = p.rows.at(ROW_ALPHA_REF);
         let c0 = COMPARE[comp0 as usize & 7].replace("r8", &format!("round({refs}.x * 255.0)"));
@@ -809,6 +825,9 @@ fn alpha_test_lines(p: &mut Pixel) -> bool {
         p.lines.push(format!("    if (!(({c0}) {logic} ({c1}))) {{"));
         p.lines.push("        discard;".into());
         p.lines.push("    }".into());
+        if always {
+            p.lines.push("#endif".into());
+        }
     }
     tested
 }
@@ -1005,10 +1024,100 @@ fn surface_tail_lines(p: &mut Pixel, fog_type: u8) -> bool {
     p.lines.push("        prev.rgb = pbr_finish(prev.rgb, surf_metal, surf_rough, pbr_ao, pbr_env.rgb);".into());
     p.lines.push("    }".into());
     p.lines.push("    prev.rgb += max(s.emission, 0.0);".into());
-    let tested = alpha_test_lines(p);
+    let tested = alpha_test_lines(p, false);
     let fog = fog_lines(fog_type, &mut p.rows);
     p.lines.extend(fog);
     tested
+}
+
+/// A map sampled at the same varying coordinate by more than one stage: one tap, taken once before the stages, in the
+/// raster forms. Each such sample becomes `TAP(name, sample)`; ray tracing's forms read the sample itself (TAP's
+/// definition, `TAP_DEFINE`), so their compiled bytes stay as they were. A varying is never written in a pixel stage and
+/// no stage branches, so the tap and its derivatives are the ones each stage took. Returns the taps' declarations.
+fn shared_taps(lines: &mut [String]) -> Vec<String> {
+    const OPEN: &str = "TEX(";
+    let mut found: Vec<(String, usize)> = Vec::new();
+    for line in lines.iter() {
+        let mut from = 0;
+        while let Some(at) = line[from..].find(OPEN).map(|x| x + from) {
+            from = at + OPEN.len();
+            let Some(expr) = plain_sample(&line[at..]) else { continue };
+            match found.iter_mut().find(|(e, _)| *e == expr) {
+                Some(entry) => entry.1 += 1,
+                None => found.push((expr, 1)),
+            }
+        }
+    }
+    let mut declarations = Vec::new();
+    for (expr, count) in found {
+        if count < 2 {
+            continue;
+        }
+        let name = format!("tap{}", declarations.len());
+        for line in lines.iter_mut() {
+            *line = line.replace(&expr, &format!("TAP({name}, {expr})"));
+        }
+        declarations.push(format!("    const float4 {name} = {expr};"));
+    }
+    declarations
+}
+
+/// `TEX(n).Sample(SAMP(n), c)` at the start of `text` with c a varying as it is (`i.uvK`, maybe over a constant
+/// `float2(a, b)`): the whole expression.
+fn plain_sample(text: &str) -> Option<String> {
+    let rest = text.strip_prefix("TEX(")?;
+    let digits = rest.find(|c: char| !c.is_ascii_digit())?;
+    let n = &rest[..digits];
+    let rest = rest[digits..].strip_prefix(").Sample(SAMP(")?.strip_prefix(n)?.strip_prefix("), i.uv")?;
+    let uv = rest.find(|c: char| !c.is_ascii_digit())?;
+    if uv == 0 {
+        return None;
+    }
+    let mut tail = &rest[uv..];
+    if let Some(divided) = tail.strip_prefix(" / float2(") {
+        let close = divided.find(')')?;
+        if !divided[..close].chars().all(|c| c.is_ascii_digit() || c == '.' || c == ',' || c == ' ') {
+            return None;
+        }
+        tail = &divided[close + 1..];
+    }
+    tail.strip_prefix(')')?;
+    Some(text[..text.len() - tail.len() + 1].to_string())
+}
+
+/// TAP(name, sample) of shared_taps: the tap in the raster forms, the sample in ray tracing's.
+const TAP_DEFINE: &str = "#if NATIVE_TRACED || NATIVE_PREPASS\n#define TAP(name, sample) (sample)\n#else\n#define TAP(name, sample) name\n#endif\n";
+
+/// Whether the material's alpha test passes every value round(prev.a * 255) can take (`range`, inclusive) with its own
+/// references: then the program needs no discard.
+fn alpha_test_passes(m: &MaterialIr, (lo, hi): (u32, u32)) -> bool {
+    // Some(pass) when the compare's answer is the same over the whole range.
+    let compare = |function: u8, r: u32| -> Option<bool> {
+        let (yes, no) = match function & 7 {
+            0 => (false, true),
+            1 => (hi < r, lo >= r),
+            2 => (lo == r && hi == r, r < lo || r > hi),
+            3 => (hi <= r, lo > r),
+            4 => (lo > r, hi <= r),
+            5 => (r < lo || r > hi, lo == r && hi == r),
+            6 => (lo >= r, hi < r),
+            _ => (true, false),
+        };
+        if yes {
+            Some(true)
+        } else if no {
+            Some(false)
+        } else {
+            None
+        }
+    };
+    let (a, b) = (compare(m.alpha_comp0, u32::from(m.alpha_ref0)), compare(m.alpha_comp1, u32::from(m.alpha_ref1)));
+    match m.alpha_op & 3 {
+        0 => a == Some(true) && b == Some(true),
+        1 => a == Some(true) || b == Some(true),
+        2 => matches!((a, b), (Some(true), Some(false)) | (Some(false), Some(true))),
+        _ => matches!((a, b), (Some(true), Some(true)) | (Some(false), Some(false))),
+    }
 }
 
 /// One channel's lines in the vertex stage, or its body in a lit pixel stage: `target.part = ...` with what it reads.
@@ -1281,7 +1390,15 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
     } else {
         alpha_test |= stage_lines(&mut p, registers)?;
         if form.lit && pbr.is_none() {
-            p.lines.push("    if (enh_on()) prev.rgb = enh_finish(prev.rgb, g_enh);".into());
+            // A highlight comes from a lit colour channel the stages read (its sky reflection and first light) or, with no
+            // channel lit, from the environment's key light (enh_key_highlight).
+            let highlights = !lit_channels
+                || (0..2).any(|ch| p.color_read[ch] && ch < m.channel_count as usize && m.channels[2 * ch].enable != 0);
+            p.lines.push(if highlights {
+                "    if (enh_on()) prev.rgb = enh_finish(prev.rgb, g_enh);".into()
+            } else {
+                "    if (enh_on()) prev.rgb = enh_finish_bare(prev.rgb);".into()
+            });
         }
         let fog = fog_lines(fog_type, &mut p.rows);
         p.lines.extend(fog);
@@ -1569,6 +1686,10 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
     };
     pixel.push_str(&p.rows.declare(2, "MaterialPixel"));
     pixel.push_str(&vary);
+    let taps = shared_taps(&mut p.lines);
+    if !taps.is_empty() {
+        pixel.push_str(TAP_DEFINE);
+    }
     pixel.push_str(&surface_text);
     pixel.push_str("NativeOut program_ps(Varyings i) {\n");
     if form.lit {
@@ -1604,6 +1725,14 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
         }
     } else if form.lit && form.replace == 0 {
         pixel.push_str("    if (enh_on()) enh_key_highlight(i.lit_light, g_enh, i.lit_eye);\n");
+    }
+    if !taps.is_empty() {
+        pixel.push_str("#if !(NATIVE_TRACED || NATIVE_PREPASS)\n");
+        for l in &taps {
+            pixel.push_str(l);
+            pixel.push('\n');
+        }
+        pixel.push_str("#endif\n");
     }
     for l in &p.lines {
         pixel.push_str(l);
@@ -1782,7 +1911,7 @@ pub fn material_from_program(p: &super::material::LayoutProgram) -> MaterialIr {
 
 /// Registers a layout's materials and animations can write: unknown.
 pub fn layout_registers() -> Registers {
-    Registers { color: [Range::UNKNOWN; 3], alpha: [Range::UNKNOWN; 3] }
+    Registers { color: [Range::UNKNOWN; 3], alpha: [Range::UNKNOWN; 3], alpha_refs: false }
 }
 
 /// The first 64 bits of a text's SHA-1: how the store names a program.
@@ -1910,7 +2039,7 @@ impl Written {
     pub fn registers(&self, m: &MaterialIr) -> Registers {
         let mut out = Registers::of(m);
         if self.1 {
-            return Registers { color: [Range::UNKNOWN; 3], alpha: [Range::UNKNOWN; 3] };
+            return Registers { color: [Range::UNKNOWN; 3], alpha: [Range::UNKNOWN; 3], alpha_refs: true };
         }
         if let Some(row) = self.0.get(m.name.as_bytes()) {
             for r in 0..3 {
@@ -2022,4 +2151,59 @@ pub fn write_set(input: &Path, output: &Path) -> Result<()> {
     table.flush()?;
     println!("{} texts", seen.len());
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tested(alpha_comp0: u8, alpha_op: u8, alpha_comp1: u8, alpha_ref0: u8, alpha_ref1: u8) -> MaterialIr {
+        MaterialIr { alpha_comp0, alpha_op, alpha_comp1, alpha_ref0, alpha_ref1, ..MaterialIr::default() }
+    }
+
+    #[test]
+    fn shared_taps_only_for_the_same_plain_sample() {
+        let mut lines: Vec<String> = [
+            "    const float4 t = TEX(1).Sample(SAMP(1), i.uv1).rgba;",
+            "    const float4 t = TEX(1).Sample(SAMP(1), i.uv1 / float2(2.0, 1.0)).rgba;",
+            "    const float4 t = TEX(2).Sample(SAMP(2), tevcoord / m[2].zw).rgba;",
+            "    const float4 t = TEX(1).Sample(SAMP(1), i.uv12).rgba;",
+            "    const float4 t = TEX(1).Sample(SAMP(1), i.uv1).rgba;",
+            "    const float4 t = TEX(2).Sample(SAMP(2), tevcoord / m[2].zw).rgba;",
+            "    const float4 t = TEX(1).Sample(SAMP(1), (i.uv1 * m[3].xy) / m[4].zw).rgba;",
+        ]
+        .iter()
+        .map(|l| l.to_string())
+        .collect();
+        let taps = shared_taps(&mut lines);
+        assert_eq!(taps, vec!["    const float4 tap0 = TEX(1).Sample(SAMP(1), i.uv1);".to_string()]);
+        assert_eq!(lines[0], "    const float4 t = TAP(tap0, TEX(1).Sample(SAMP(1), i.uv1)).rgba;");
+        assert_eq!(lines[4], lines[0]);
+        // A divided coordinate, another varying, a warp and a scaled coordinate stay as they were.
+        for i in [1, 2, 3, 5, 6] {
+            assert!(!lines[i].contains("TAP"), "{}", lines[i]);
+        }
+    }
+
+    #[test]
+    fn alpha_test_passes_only_when_every_value_does() {
+        // "alpha >= 0" and always: every value.
+        assert!(alpha_test_passes(&tested(6, 0, 7, 0, 0), (0, 256)));
+        // "alpha > 0": 0 fails, unless the stages keep alpha at 1 or more.
+        assert!(!alpha_test_passes(&tested(4, 0, 7, 0, 0), (0, 255)));
+        assert!(alpha_test_passes(&tested(4, 0, 7, 0, 0), (1, 255)));
+        // "alpha < 128" over an alpha that stays 255 (no stages): never; with "or always": every value.
+        assert!(!alpha_test_passes(&tested(1, 0, 7, 128, 0), (255, 255)));
+        assert!(alpha_test_passes(&tested(1, 1, 7, 128, 0), (255, 255)));
+        // A compare answered both ways over the range is not folded, even where the two together always pass.
+        assert!(!alpha_test_passes(&tested(1, 1, 4, 128, 127), (0, 256)));
+        // Exclusive or of a pass and a fail; equivalence of two fails.
+        assert!(alpha_test_passes(&tested(7, 2, 0, 0, 0), (0, 256)));
+        assert!(alpha_test_passes(&tested(0, 3, 0, 0, 0), (0, 256)));
+        assert!(!alpha_test_passes(&tested(7, 3, 0, 0, 0), (0, 256)));
+        // Equal and not equal over a single value.
+        assert!(alpha_test_passes(&tested(2, 0, 7, 200, 0), (200, 200)));
+        assert!(alpha_test_passes(&tested(5, 0, 7, 10, 0), (20, 255)));
+        assert!(!alpha_test_passes(&tested(5, 0, 7, 10, 0), (0, 255)));
+    }
 }

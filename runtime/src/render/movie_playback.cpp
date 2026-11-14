@@ -308,6 +308,14 @@ void convert_i420_to_movie_planes(const std::uint8_t* y, std::int32_t y_pitch, c
 #if defined(_WIN32)
 namespace {
 
+// Media Foundation is delay-loaded: on a Windows edition without it the first call into it would raise the loader's
+// exception instead of failing, so everything that calls it asks here first (its two libraries, loaded once).
+bool media_foundation_present() {
+    static const bool present = LoadLibraryExW(L"mfplat.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32) != nullptr &&
+                                LoadLibraryExW(L"mfreadwrite.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32) != nullptr;
+    return present;
+}
+
 // The GPU's video decoder for every movie: Media Foundation uses it only through a D3D device manager. Made once, ahead
 // of the first movie (MoviePlayback::configure), so a movie's first frames are not held up by it; null where the
 // GPU has no D3D11 video device (the movies decode in software).
@@ -316,6 +324,9 @@ Microsoft::WRL::ComPtr<IMFDXGIDeviceManager> video_device_manager() {
     static Microsoft::WRL::ComPtr<ID3D11Device> device;
     static Microsoft::WRL::ComPtr<IMFDXGIDeviceManager> manager;
     std::call_once(once, [] {
+        if (!media_foundation_present()) {
+            return;
+        }
         UINT reset_token = 0;
         Microsoft::WRL::ComPtr<IMFDXGIDeviceManager> made;
         if (FAILED(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
@@ -451,7 +462,7 @@ private:
         // A crash while this movie plays names it (NEB-V01).
         const galaxy::crash::ScopedActivity activity(galaxy::crash::Activity::Movie, file_);
         const HRESULT com = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-        const bool mf = SUCCEEDED(MFStartup(MF_VERSION, MFSTARTUP_LITE));
+        const bool mf = media_foundation_present() && SUCCEEDED(MFStartup(MF_VERSION, MFSTARTUP_LITE));
         decode(mf);
         if (mf) MFShutdown();
         if (SUCCEEDED(com)) CoUninitialize();

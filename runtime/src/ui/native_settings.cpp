@@ -31,6 +31,7 @@
 #include "galaxy/platform_time.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/ui/home_menu_model.h"
+#include "galaxy/ui/launcher.h"
 #include "galaxy/ui/settings_model.h"
 #include "galaxy/ui/settings_graphics_page.h"
 #include "galaxy/ui/settings_general_page.h"
@@ -629,6 +630,7 @@ unsigned pending_settings_changes() {
     changes += d.ambient_occlusion_ssao != live.ambient_occlusion_ssao;
     changes += d.bloom != live.bloom;
     changes += d.hud_output_resolution != live.hud_output_resolution;
+    changes += d.hud_internal_resolution != live.hud_internal_resolution;
     changes += d.ray_tracing_enabled != live.ray_tracing_enabled;
     changes += d.rt_quality != live.rt_quality;
     changes += d.rt_parts != live.rt_parts;
@@ -645,6 +647,7 @@ unsigned pending_settings_changes() {
 
 enum class ControlsRow {
     InputMode,
+    CoStar,  // runtime_settings co_star: the last of two or more controllers is a second player (Windows' host only)
     Device,
     Binding,
     PointerSpeed,
@@ -765,6 +768,11 @@ std::vector<ControlsRowInfo> controls_rows() {
         joycons.lefts + joycons.rights != 0u) {
         rows.push_back({ControlsRow::PairJoyCon});
     }
+#if defined(_WIN32)
+    // Co-Star: one setting for every controller, so it sits with the input mode. Only the Windows host runs a second
+    // player (host_input.cpp update_co_star; the other hosts' native_game_co_star have none yet).
+    rows.push_back({ControlsRow::CoStar});
+#endif
     if (galaxy::is_wii_remote_mode(s_input_mode_draft)) {
         rows.push_back({ControlsRow::WiimoteStatus});
         return rows;
@@ -1103,6 +1111,7 @@ void apply_native_settings_draft() {
     applied.ambient_occlusion_ssao = next.ambient_occlusion_ssao;
     applied.bloom = next.bloom;
     applied.hud_output_resolution = next.hud_output_resolution;
+    applied.hud_internal_resolution = next.hud_internal_resolution;
     applied.ray_tracing_enabled = next.ray_tracing_enabled;
     applied.rt_quality = next.rt_quality;
     applied.rt_parts = next.rt_parts;
@@ -1284,6 +1293,12 @@ void adjust_native_setting_unlogged(int delta) {
         case ControlsRow::ModAction:
             if (delta > 0) start_controls_capture_at(kModCaptureBase + info.action);
             return;
+        case ControlsRow::CoStar: {
+            // A runtime setting: drafted with the others and applied with them (runtime_draft_changes).
+            RuntimeSettings& runtime = s_runtime_draft;
+            runtime.co_star = !runtime.co_star;
+            return;
+        }
         case ControlsRow::PointerSpeed:
             tuning.pointer_speed = step_float(tuning.pointer_speed, 0.2f, 0.2f, 6.0f);
             return;
@@ -1855,7 +1870,7 @@ bool handle_native_settings_key(std::uintptr_t key, bool was_down, bool from_pad
         return true;
     }
     if (!s_native_settings_visible.load(std::memory_order_relaxed)) {
-        return false;
+        return galaxy::ui::launcher_key(key, was_down, accept);
     }
     expire_display_confirmation();
     if (mods_page_key(key, accept, was_down)) {
@@ -4515,6 +4530,8 @@ std::string native_settings_row_text(
             if (bound.size() > 34u) bound = bound.substr(0, 32u) + "..";
             return line + bound;
         }
+        case ControlsRow::CoStar:
+            return std::string("CO-STAR: ") + on_off(s_runtime_draft.co_star);
         case ControlsRow::PointerSpeed:
             std::snprintf(text, sizeof(text), "POINTER SPEED: %.1f", static_cast<double>(tuning.pointer_speed));
             return text;
@@ -5173,6 +5190,15 @@ void open_native_settings(unsigned page) {
     set_native_settings_visible(true);
 }
 
+void open_native_settings_draft(unsigned page, const RenderConfig& draft) {
+    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+    open_native_settings(page);
+    s_settings_draft = draft;
+    sanitize_settings_draft(s_settings_draft);
+    std::cerr << "[settings] opened with " << pending_settings_changes() << " recommended change"
+              << (pending_settings_changes() == 1u ? "" : "s") << '\n';
+}
+
 void native_settings_present() {
     poll_dlss_download();
 }
@@ -5341,6 +5367,7 @@ NativeSettingsView build_native_settings_view() {
             }
             if (row == view.selected) {
                 switch (info.kind) {
+                case ControlsRow::CoStar: view.help = "A SECOND CONTROLLER AIMS A SECOND POINTER THAT COLLECTS STAR BITS"; break;
                 case ControlsRow::TouchSize:
                     view.help = "REMEMBERED FOR EACH SIZE AND TURN OF THE SCREEN. AUTO: FOR THIS SCREEN'S SIZE";
                     break;
@@ -5473,7 +5500,7 @@ bool sharp_2d_requested() noexcept {
 
 bool native_window_input_captured() noexcept {
     return s_native_settings_visible.load(std::memory_order_relaxed) ||
-        s_home_menu.visible.load(std::memory_order_relaxed) ||
+        s_home_menu.visible.load(std::memory_order_relaxed) || galaxy::ui::launcher_visible() ||
         host_window::window_modal_active();
 }
 

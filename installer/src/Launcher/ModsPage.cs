@@ -330,9 +330,17 @@ namespace Nebula.Launcher
 
         private readonly List<Action> afterRead = new List<Action>();
 
-        // Runs on the window's thread (never after the tab is gone).
+        // Runs on the window's thread (never after the tab is gone): through the window once it has a handle, dropped once
+        // it has closed; before any handle exists (the page is built before its window is shown) the thread's context
+        // queues it.
         private void Post(Action action)
         {
+            Control target = page.TopLevelControl ?? page;
+            if (target.IsHandleCreated || target.IsDisposed || target.Disposing)
+            {
+                UiThread.Post(target, delegate { Safe(action); });
+                return;
+            }
             window.Post(delegate { Safe(action); }, null);
         }
 

@@ -194,6 +194,18 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
         if (record && !isProfileRun()) {
             prefs.edit().remove(GameFiles.RECORD_NEXT_RUN).commit();
         }
+        // The launcher's Benchmark (Benchmark.kt, perf/bench's contract): no saves, the result file in their place;
+        // the game shows its steps and exits by itself.
+        if (getIntent().getBooleanExtra(Benchmark.EXTRA, false) && !isProfileRun()) {
+            return new String[] {
+                "--data", nativeData().getPath(),
+                "--pak", GameFiles.pak(this).getPath(),
+                "--module", getApplicationInfo().nativeLibraryDir + "/libsmg_game.so",
+                "--diagnostics", "0",
+                "--benchmark", "1",
+                "--benchmark-out", Benchmark.INSTANCE.resultFile(this).getPath(),
+            };
+        }
         // The native game's settings, saves and log: the app's private storage.
         return new String[] {
             "--data", nativeData().getPath(),

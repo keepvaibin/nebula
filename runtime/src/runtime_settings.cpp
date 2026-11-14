@@ -1,6 +1,7 @@
 #include "galaxy/portable.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/atomic_file.h"
+#include "galaxy/benchmark.h"
 #include "galaxy/input_bindings.h"
 #include "galaxy/input/mod_actions.h"
 #include "galaxy/launch_args.h"
@@ -519,6 +520,9 @@ void load_runtime_settings_from_file() {
 }
 
 bool save_runtime_settings_to_file() {
+    if (galaxy::bench::running()) {
+        return false;  // a benchmark's settings are its own, never the player's file
+    }
     try {
         const RuntimeSettings settings = get_runtime_settings();
         const std::filesystem::path path = settings_path();

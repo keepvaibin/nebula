@@ -2,6 +2,7 @@
 // helpers.
 
 #include "galaxy/render/frame_pass.h"
+#include "galaxy/platform_time.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/renderer_common.h"
 #if !defined(NEBULA_GPU_VULKAN) && !defined(NEBULA_GPU_METAL)
@@ -21,8 +22,9 @@ namespace galaxy::render {
 namespace {
 
 constexpr std::size_t kMaxIdleDisplayTextures = 8u;
-// Three pictures: the one being drawn, the one shown and the one before it, which a present may still read.
-constexpr std::uint32_t kPictures = 3u;
+// A picture idle this long is freed: in a steady frame every pooled picture is taken again within a few frames, so
+// only sizes the frame no longer has (a resize, a scale change) and one-off uses wait this long.
+constexpr std::uint64_t kIdleTextureMs = 5000u;
 
 }  // namespace
 
@@ -33,7 +35,7 @@ bool DisplayPictures::initialize(gpu::Device* device, const FrameMap& map) {
 }
 
 void DisplayPictures::shutdown() {
-    registry_.clear();
+    registry_ = {};
     retired_textures_.clear();
     idle_textures_.clear();
     has_latest_ = false;
@@ -78,12 +80,19 @@ void DisplayPictures::retire_texture(DisplayTexture& texture) {
 
 void DisplayPictures::recycle_retired_textures(unsigned frame_slot) {
     auto& retired = retired_textures_[frame_slot];
+    const std::uint64_t now = galaxy::steady_ms();
+    // Idle textures are past their fence and kept oldest first: those idle too long go.
+    const auto stale = std::find_if(idle_textures_.begin(), idle_textures_.end(), [now](const PooledTexture& pooled) {
+        return now - pooled.idle_since_ms < kIdleTextureMs;
+    });
+    idle_textures_.erase(idle_textures_.begin(), stale);
     for (auto& texture : retired) {
         if (texture.texture) {
             if (idle_textures_.size() >= kMaxIdleDisplayTextures) {
-                // Idle textures are past their fence; the oldest goes so unused sizes do not accumulate.
+                // The oldest goes so unused sizes do not accumulate.
                 idle_textures_.erase(idle_textures_.begin());
             }
+            texture.idle_since_ms = now;
             idle_textures_.push_back(std::move(texture));
         }
     }
@@ -128,28 +137,18 @@ DisplayTexture* DisplayPictures::acquire_display(
     const std::uint32_t wanted_w = extent.width;
     const std::uint32_t wanted_h = extent.height;
 
-    auto it = registry_.find(slot);
-    if (it != registry_.end()) {
-        DisplayTexture& entry = it->second;
-        // A failed allocation can leave an entry with matching dimensions
-        // but no resource. Retry allocation instead of returning that entry.
-        if (entry.width == wanted_w && entry.height == wanted_h &&
-            entry.texture) {
-            return &entry;
-        }
-        // Size changed: drop the old texture and recreate it below.
-        if (entry.texture) {
-            retire_texture(entry);
-        }
-        entry.rtv = {};
-        entry.rtv_valid = false;
-    } else {
-        auto [ins_it, ok] = registry_.emplace(slot, DisplayTexture{});
-        (void)ok;
-        it = ins_it;
+    DisplayTexture& entry = registry_[slot];
+    // A failed allocation can leave an entry with matching dimensions
+    // but no resource. Retry allocation instead of returning that entry.
+    if (entry.width == wanted_w && entry.height == wanted_h &&
+        entry.texture) {
+        return &entry;
+    }
+    // Size changed: drop the old texture and recreate it below.
+    if (entry.texture) {
+        retire_texture(entry);
     }
 
-    DisplayTexture& entry = it->second;
     entry.slot        = slot;
     entry.width       = wanted_w;
     entry.height      = wanted_h;
@@ -214,11 +213,7 @@ const DisplayTexture* DisplayPictures::latest() const {
 }
 
 const DisplayTexture* DisplayPictures::picture(std::uint32_t slot) const {
-    const auto it = registry_.find(slot);
-    if (it == registry_.end()) {
-        return nullptr;
-    }
-    return it->second.presentable ? &it->second : nullptr;
+    return slot < kPictures && registry_[slot].presentable ? &registry_[slot] : nullptr;
 }
 
 

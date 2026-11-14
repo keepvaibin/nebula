@@ -220,6 +220,123 @@ void strip_debug_names(std::vector<std::uint32_t>& spirv) {
     spirv = std::move(out);
 }
 
+// The bindless form's texture and sampler arrays (program.hlsli: gTextures[] and gVolumes[] in descriptor set 1,
+// gSamplers[] in set 2, kDrawBindings) as OpTypeRuntimeArray. glslang's HLSL front end never marks an unsized array as
+// variably indexed (its GLSL one does), so at link it takes the size its constant indices imply: 1 for arrays indexed only
+// through draw_tables, and every draw then indexes a one-element OpTypeArray past its end (out of bounds in SPIR-V 2.16:
+// drivers may clamp or fold the index). An array of images or samplers in set 1 or 2 of length 1 is made run-time sized,
+// with the capability and extension glslang adds for an unsized array that survives linking (RuntimeDescriptorArray,
+// SPV_EXT_descriptor_indexing: core only in SPIR-V 1.5). The bound-table form (fixed tables of kBoundTableSlots) and
+// modules with no such array are left as they are. The index stays dynamically uniform (one draw_tables entry per draw),
+// so no NonUniform decoration is needed.
+void make_bindless_arrays_runtime(std::vector<std::uint32_t>& spirv) {
+    constexpr std::uint32_t kOpExtension = 10;
+    constexpr std::uint32_t kOpCapability = 17;
+    constexpr std::uint32_t kOpTypeImage = 25;
+    constexpr std::uint32_t kOpTypeSampler = 26;
+    constexpr std::uint32_t kOpTypeSampledImage = 27;
+    constexpr std::uint32_t kOpTypeArray = 28;
+    constexpr std::uint32_t kOpTypeRuntimeArray = 29;
+    constexpr std::uint32_t kOpTypePointer = 32;
+    constexpr std::uint32_t kOpConstant = 43;
+    constexpr std::uint32_t kOpVariable = 59;
+    constexpr std::uint32_t kOpDecorate = 71;
+    constexpr std::uint32_t kDecorationDescriptorSet = 34;
+    constexpr std::uint32_t kStorageUniformConstant = 0;
+    constexpr std::uint32_t kCapabilityRuntimeDescriptorArray = 5302;
+    constexpr std::uint32_t kImageSet = 1;    // kDrawBindings: t0 space1 and t0 space2
+    constexpr std::uint32_t kSamplerSet = 2;  // kDrawBindings: s0 space1
+    constexpr char kExtension[] = "SPV_EXT_descriptor_indexing";
+    // The extension's name as literal string words (nul-terminated, padded with zeros).
+    std::vector<std::uint32_t> extension_words((sizeof(kExtension) + 3u) / 4u, 0u);
+    std::memcpy(extension_words.data(), kExtension, sizeof(kExtension));
+
+    std::set<std::uint32_t> resource_types;
+    std::map<std::uint32_t, std::size_t> array_at;      // OpTypeArray result -> its word
+    std::map<std::uint32_t, std::uint32_t> pointee;     // UniformConstant pointer type -> pointee
+    std::map<std::uint32_t, std::uint32_t> constant;    // 32-bit constant -> value
+    std::map<std::uint32_t, std::uint32_t> set_of;      // variable -> descriptor set
+    std::vector<std::pair<std::uint32_t, std::uint32_t>> variables;  // (pointer type, variable), UniformConstant
+    bool has_capability = false;
+    bool has_extension = false;
+    for (std::size_t at = 5; at < spirv.size();) {
+        const std::uint32_t count = spirv[at] >> 16u;
+        const std::uint32_t op = spirv[at] & 0xffffu;
+        if (count == 0u || at + count > spirv.size()) {
+            return;  // malformed: the validator reports it
+        }
+        const std::uint32_t* words = spirv.data() + at;
+        if (op == kOpCapability && count >= 2u && words[1] == kCapabilityRuntimeDescriptorArray) {
+            has_capability = true;
+        } else if (op == kOpExtension && count - 1u == extension_words.size() &&
+                   std::equal(extension_words.begin(), extension_words.end(), words + 1)) {
+            has_extension = true;
+        } else if ((op == kOpTypeImage || op == kOpTypeSampler || op == kOpTypeSampledImage) && count >= 2u) {
+            resource_types.insert(words[1]);
+        } else if (op == kOpTypeArray && count == 4u) {
+            array_at[words[1]] = at;
+        } else if (op == kOpTypePointer && count == 4u && words[2] == kStorageUniformConstant) {
+            pointee[words[1]] = words[3];
+        } else if (op == kOpConstant && count == 4u) {
+            constant[words[2]] = words[3];
+        } else if (op == kOpVariable && count >= 4u && words[3] == kStorageUniformConstant) {
+            variables.emplace_back(words[1], words[2]);
+        } else if (op == kOpDecorate && count >= 4u && words[2] == kDecorationDescriptorSet) {
+            set_of[words[1]] = words[3];
+        }
+        at += count;
+    }
+    std::set<std::size_t> rewrite;  // the words of the OpTypeArray instructions to make run-time sized
+    for (const auto& [pointer, variable] : variables) {
+        const auto set = set_of.find(variable);
+        const auto type = pointee.find(pointer);
+        if (set == set_of.end() || (set->second != kImageSet && set->second != kSamplerSet) || type == pointee.end()) {
+            continue;
+        }
+        const auto array = array_at.find(type->second);
+        if (array == array_at.end()) {
+            continue;
+        }
+        const std::uint32_t* words = spirv.data() + array->second;
+        const auto length = constant.find(words[3]);
+        if (resource_types.count(words[2]) != 0u && length != constant.end() && length->second == 1u) {
+            rewrite.insert(array->second);
+        }
+    }
+    if (rewrite.empty()) {
+        return;
+    }
+    std::vector<std::uint32_t> out(spirv.begin(), spirv.begin() + 5);
+    out.reserve(spirv.size() + 2u + extension_words.size());
+    // Logical layout (SPIR-V 2.4): every OpCapability, then every OpExtension, then the rest.
+    bool capability_placed = has_capability;
+    bool extension_placed = has_extension;
+    for (std::size_t at = 5; at < spirv.size();) {
+        const std::uint32_t count = spirv[at] >> 16u;
+        const std::uint32_t op = spirv[at] & 0xffffu;
+        if (!capability_placed && op != kOpCapability) {
+            out.push_back((2u << 16u) | kOpCapability);
+            out.push_back(kCapabilityRuntimeDescriptorArray);
+            capability_placed = true;
+        }
+        if (!extension_placed && op != kOpCapability && op != kOpExtension) {
+            out.push_back((static_cast<std::uint32_t>(extension_words.size() + 1u) << 16u) | kOpExtension);
+            out.insert(out.end(), extension_words.begin(), extension_words.end());
+            extension_placed = true;
+        }
+        if (rewrite.count(at) != 0u) {
+            out.push_back((3u << 16u) | kOpTypeRuntimeArray);
+            out.push_back(spirv[at + 1u]);  // result
+            out.push_back(spirv[at + 2u]);  // element type
+        } else {
+            out.insert(out.end(), spirv.begin() + static_cast<std::ptrdiff_t>(at),
+                       spirv.begin() + static_cast<std::ptrdiff_t>(at + count));
+        }
+        at += count;
+    }
+    spirv = std::move(out);
+}
+
 EShLanguage language(ShaderStage stage) {
     switch (stage) {
     case ShaderStage::Vertex: return EShLangVertex;
@@ -355,8 +472,11 @@ std::vector<std::uint32_t> compile_hlsl(std::string_view hlsl, ShaderStage stage
     }
     shader.setPreamble(preamble.c_str());
     shader.setEnvInput(glslang::EShSourceHlsl, lang, glslang::EShClientVulkan, 100);
-    shader.setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_1);
-    shader.setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_3);
+    // Vulkan 1.0's environment, SPIR-V 1.0: the one every Vulkan device takes (a 1.0 device accepts nothing later), so the
+    // modules built ahead of time serve them all. Storage buffers come out as Uniform + BufferBlock rather than the
+    // StorageBuffer class; the operations are the same.
+    shader.setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_0);
+    shader.setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_0);
     // Semantics on stage variables (assign_semantic_locations), removed again before the module is used; a compute
     // shader has none, and would keep the extension.
     if (stage != ShaderStage::Compute) {
@@ -394,13 +514,16 @@ std::vector<std::uint32_t> compile_hlsl(std::string_view hlsl, ShaderStage stage
     if (stage != ShaderStage::Compute && !assign_semantic_locations(spirv, stage, error)) {
         return {};
     }
+    if (!compile_options.bound_tables) {
+        make_bindless_arrays_runtime(spirv);
+    }
     if (!compile_options.keep_names) {
         strip_debug_names(spirv);
     }
     std::string messages_out = logger.getAllMessages();
     if (compile_options.validate) {
-        // The module as it is used for a Vulkan 1.1 device.
-        spv_context context = spvContextCreate(SPV_ENV_VULKAN_1_1);
+        // The module as a Vulkan 1.0 device takes it (later versions accept every 1.0 module).
+        spv_context context = spvContextCreate(SPV_ENV_VULKAN_1_0);
         spv_diagnostic diagnostic = nullptr;
         if (spvValidateBinary(context, spirv.data(), spirv.size(), &diagnostic) != SPV_SUCCESS) {
             messages_out += diagnostic != nullptr && diagnostic->error != nullptr ? diagnostic->error

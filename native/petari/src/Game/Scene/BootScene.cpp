@@ -7,6 +7,7 @@
 #include "Game/System/GameFrame.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
+#include "Game/Screen/NebulaLauncher.hpp"
 #include "Game/Screen/NebulaPrepare.hpp"
 
 #include "Game/Util/NerveUtil.hpp"
@@ -76,9 +77,14 @@ void BootScene::exeMountGameData() {
     setNerve(GET_NERVE_ANON(BootSceneWaitPreparation));
 }
 
-// What's prepared before the title (NebulaPrepare): the title waits for it and its screen.
+// What's prepared before the title (NebulaPrepare): the title waits for it and its screen, and for launcher mode's
+// home screen (NebulaLauncher), which shows meanwhile.
 void BootScene::exeWaitPreparation() {
-    if (!NebulaPrepare::isHolding()) {
+    if (MR::isFirstStep(this)) {
+        NebulaLauncher::open();
+    }
+    NebulaLauncher::update();
+    if (!NebulaPrepare::isHolding() && !NebulaLauncher::isHolding()) {
         setNerve(GET_NERVE_ANON(BootSceneDeactive));
     }
 }

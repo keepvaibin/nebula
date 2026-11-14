@@ -1,0 +1,167 @@
+{
+ "schema": 1,
+ "app": {
+  "version": "1.0.0",
+  "commit": null
+ },
+ "created_utc": "2026-11-13T20:00:00Z",
+ "status": "complete",
+ "failure": "",
+ "backend": "d3d12",
+ "device": {
+  "gpu": "Intel(R) UHD Graphics 600",
+  "vendor_id": 32902,
+  "device_id": 12677,
+  "driver_version": null,
+  "api_level": null,
+  "shared_memory": true,
+  "gpu_budget_mb": 2048,
+  "cpu": "Intel(R) Celeron(R) N4000 CPU @ 1.10GHz",
+  "logical_cores": 2,
+  "ram_mb": 4096,
+  "os": "Windows 10.0.19045",
+  "output": [
+   1366,
+   768
+  ],
+  "refresh_hz": 60.0
+ },
+ "mods_loaded": false,
+ "settings": {
+  "internal_height": 0,
+  "upscaler": 0,
+  "msaa_samples": 1,
+  "ambient_occlusion": 0,
+  "ambient_occlusion_ssao": 0,
+  "enhanced_lighting": 0,
+  "per_pixel_lighting": 0,
+  "aa": 0,
+  "smaa_quality": 2,
+  "bloom": 100,
+  "vsync_interval": 1,
+  "max_fps": 60.0,
+  "frame_generation": 0,
+  "ray_tracing_enabled": 0,
+  "display_mode": 0
+ },
+ "measured_with": {
+  "internal_height": 0,
+  "upscaler": 0,
+  "msaa_samples": 1,
+  "ambient_occlusion": 0,
+  "ambient_occlusion_ssao": 0,
+  "enhanced_lighting": 0,
+  "per_pixel_lighting": 0,
+  "aa": 0,
+  "smaa_quality": 2,
+  "bloom": 100,
+  "vsync_interval": 0,
+  "max_fps": 60.0,
+  "frame_generation": 0,
+  "ray_tracing_enabled": 0,
+  "display_mode": 0
+ },
+ "limits": [
+  "draws and triangles: no back-end-neutral counter"
+ ],
+ "scenes": [
+  {
+   "stage": "CosmosGardenGalaxy",
+   "scenario": 1,
+   "grand_stars": 0,
+   "load_ms": 2301.5,
+   "frames": 540,
+   "pixels": 1049088.0,
+   "settings_held": true,
+   "interval_ms": {
+    "p50": 21.1,
+    "p95": 30.4,
+    "p99": 41.0,
+    "worst": 66.7,
+    "over_16_7": 300,
+    "over_33_3": 4
+   },
+   "gpu_ms": 19.25,
+   "gpu_pass_ms": {
+    "scene": 15.0,
+    "bloom": 2.25,
+    "post": 2.0
+   },
+   "cpu_ms": {
+    "game": 4.1,
+    "render": 6.2,
+    "audio": 0.4,
+    "process": 12.0
+   },
+   "draws": null,
+   "triangles": null,
+   "gpu_memory_peak_mb": 900,
+   "process_peak_mb": 1200
+  }
+ ],
+ "probe": {
+  "stage": "BattleShipGalaxy",
+  "runs": [
+   {
+    "case": "480 base",
+    "load_ms": null,
+    "frames": 300,
+    "pixels": 409920.0,
+    "settings_held": true,
+    "interval_ms": {
+     "p50": 12.0,
+     "p95": 14.0,
+     "p99": 15.0,
+     "worst": 20.0,
+     "over_16_7": 0,
+     "over_33_3": 0
+    },
+    "gpu_ms": 9.0,
+    "gpu_pass_ms": {
+     "scene": 8.0
+    },
+    "cpu_ms": {
+     "game": 3.0,
+     "render": 4.0,
+     "audio": null,
+     "process": 9.0
+    },
+    "draws": null,
+    "triangles": null,
+    "gpu_memory_peak_mb": 800,
+    "process_peak_mb": 1100
+   }
+  ],
+  "fit": {
+   "valid": true,
+   "fixed_ms": 2.0,
+   "ms_per_mpixel": 17.0
+  },
+  "price_ms_per_mpixel": {
+   "ambient occlusion": 4.0,
+   "msaa 4": null
+  }
+ },
+ "thermal": null,
+ "recommendation": {
+  "budget_ms": 13.333,
+  "predicted_ms": 12.9,
+  "fits": true,
+  "cpu_bound": false,
+  "cpu_thread": null,
+  "height_left_out": false,
+  "settings": [
+   {
+    "key": "internal_height",
+    "current": 0,
+    "recommended": 480
+   }
+  ]
+ },
+ "summary": {
+  "verdict": "fits",
+  "worst_stage": "CosmosGardenGalaxy",
+  "worst_gpu_ms": 19.25,
+  "worst_p95_ms": 30.4
+ }
+}

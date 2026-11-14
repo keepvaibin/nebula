@@ -130,6 +130,9 @@ public:
         return renderer_.gpu_pass_times(out, capacity);
     }
     [[nodiscard]] std::uint64_t pictures_made() const noexcept;
+    [[nodiscard]] bool video_memory(std::uint64_t& usage, std::uint64_t& budget) const noexcept {
+        return renderer_.video_memory(usage, budget);
+    }
     [[nodiscard]] DisplayPresentStats display_present_stats() const noexcept;
 
 private:
@@ -315,6 +318,7 @@ private:
     std::uint32_t rt_image_failures_ = 0u;  // walks running whose light images could not be made
     bool rt_gave_up_ = false;               // stopped for want of memory, until the setting is turned on again
     std::uint32_t rt_toggle_walks_ = 0u;
+    std::uint32_t rt_levels_waits_ = 0u;  // walks the tracer's start has waited for the textures' generated levels
     void rt_want(std::uint32_t id, const core::GpuMesh& mesh);
     void rt_want_form(std::uint32_t id, const core::GpuMesh& mesh, bool refined);
     void rt_frame(const NebulaFrameList& list);
@@ -752,11 +756,17 @@ private:
 
     WalkState walk_{};
     std::uint64_t walk_serial_ = 0u;
+    // Counts the frame captures and takes that published a target's picture in another image (a new view): a table naming
+    // a target, written earlier in the walk, names it again after one.
+    std::uint64_t pictures_moved_ = 0u;
     std::vector<Affine34> walk_cameras_;
     std::vector<std::uint32_t> walk_block_rows_, walk_block_world_, walk_previous_;
     std::vector<std::uint32_t> walk_light_rows_;  // per light set: its header row in this walk's rows
     std::vector<float> walk_rows_, walk_joints_, walk_lerped_;
+    std::vector<float> walk_skin_;            // a weighted block's joint products (core::ComposeInput::skin)
+    std::vector<std::uint8_t> walk_skin_made_;
     std::vector<std::array<float, 6>> walk_view_terms_, walk_view_previous_;
+    std::vector<std::array<float, 16>> walk_view_planes_;  // item_culled's four side planes a view: normal, length
     std::vector<WalkView> walk_views_;
     std::vector<core::StaticSlot> walk_constants_;
     std::vector<std::uint8_t> walk_constants_known_;
@@ -862,6 +872,23 @@ private:
     // ticks: the generated frames' share of it tells their misses from the game's own.
     std::atomic<std::uint64_t> game_wait_qpc_{0};
     std::uint64_t interp_cadence_wait_seen_ = 0;
+    // The first start's resolution calibration (render_core.cpp calibrate_first_start): the GPU's time at two internal
+    // heights in the first 3D scene, fitted and turned into the height kept in config.ini.
+    struct FirstStartCalibration {
+        unsigned stage = 0u;          // 0 off, 1 waiting for a scene with the start's pipelines made, 2 and 3 timing heights[0], [1]
+        unsigned heights[2]{};
+        unsigned start = 0u;          // the table's height, kept when nothing can be measured or the CPU is the limit
+        unsigned frames = 0u;         // frames of the current height
+        unsigned width = 0u, lines = 0u;
+        bool timing_was_on = false;
+        std::vector<double> pixels, ms;
+        double cpu_over = 0.0;        // samples with the walk near the frame time or the game late on its own
+        std::int64_t list_qpc = 0;
+        std::uint64_t list_wait = 0u;
+    };
+    FirstStartCalibration calibration_;
+    void calibrate_first_start(bool scene, double walk_ms);
+    void end_first_start_calibration(unsigned height, const char* why, bool performance = false);
     std::uint64_t interp_cadence_wait_qpc_ = 0;   // in the window
     // The render thread's time rendering generated frames (advance_interp_sequence), in QPC ticks.
     std::uint64_t interp_generated_qpc_ = 0;
@@ -1020,6 +1047,10 @@ private:
     // Texture-pack settings last applied (render config and the mods' folders, polled at frame begin).
     TexturePackSettings texture_pack_settings_{};
     bool texture_pack_settings_applied_ = false;
+    // The most a texture pack's replacements may hold on this device (0: no limit known): a share of the memory budget its
+    // back end reports, taken at start and after a device change (cap_texture_packs). texture_pack_budget_mb applies below it.
+    std::uint64_t texture_pack_cap_bytes_ = 0u;
+    void cap_texture_packs();
     std::uint64_t texture_pack_mods_generation_ = ~0ull;
     std::vector<std::filesystem::path> texture_pack_mod_folders_;
     std::vector<std::uint32_t> texture_pack_mod_categories_off_;

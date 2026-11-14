@@ -15,6 +15,7 @@
 #include "galaxy/render/host_window.h"
 #include "galaxy/luma_system_platform.h"
 #include "galaxy/luma_input_service.h"
+#include "galaxy/ui/launcher.h"
 #include <deque>
 #include "sdl_host.h"
 
@@ -88,6 +89,7 @@ std::mutex g_input_mutex;
 InputState g_input;                 // guarded by g_input_mutex
 SDL_Window* g_window = nullptr;
 std::atomic<bool> g_background{false};
+std::atomic<bool> g_low_memory{false};
 std::atomic<bool> g_menu_context{false};
 std::atomic<bool> g_title_screen{false};
 std::atomic<bool> g_direct_touch{false};
@@ -166,6 +168,7 @@ std::atomic<float> g_touch_slop_px{0.0f};
 void forward_output_to_logcat() {
     static int pipe_fds[2];
     if (pipe(pipe_fds) != 0) {
+        install_crash_log(-1);
         return;
     }
     std::FILE* file = nullptr;
@@ -179,6 +182,8 @@ void forward_output_to_logcat() {
     setvbuf(stderr, nullptr, _IONBF, 0);
     dup2(pipe_fds[1], STDOUT_FILENO);
     dup2(pipe_fds[1], STDERR_FILENO);
+    // A crash's report goes to the file itself: the thread below stops with the rest when the system dumps the process.
+    install_crash_log(file != nullptr ? fileno(file) : -1);
     std::thread([file] {
         char line[1024];
         std::size_t used = 0;
@@ -986,6 +991,8 @@ bool start() noexcept {
     g_sdl_thread = std::this_thread::get_id();
 #if defined(__ANDROID__)
     forward_output_to_logcat();
+#else
+    install_crash_log(-1);
 #endif
     // Landscape either way up: the game lays out for shapes from 4:3 wide; taller ones come with Vert+ framing.
     SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
@@ -1145,6 +1152,9 @@ void pump_events(int timeout_ms) noexcept {
         case SDL_EVENT_QUIT:
         case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
             galaxy::render::host_window::quit_request.store(true, std::memory_order_release);
+            break;
+        case SDL_EVENT_LOW_MEMORY:
+            g_low_memory.store(true, std::memory_order_release);
             break;
         case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
             update_window_size();
@@ -1311,7 +1321,9 @@ void pump_events(int timeout_ms) noexcept {
             // The unified buttons are the menu's, by their labels (Nintendo's A is the right face button), as on Windows.
             const std::uint16_t buttons = galaxy::input::settings_pad_buttons(sample.scheme, sample.buttons);
             const galaxy::input::NativeSettingsPadStep step = galaxy::input::native_settings_pad_step(
-                g_menu_pad, buttons, sample.axes[0], sample.axes[1], galaxy::render::native_settings_overlay_visible(), galaxy::steady_ms());
+                g_menu_pad, buttons, sample.axes[0], sample.axes[1],
+                galaxy::render::native_settings_overlay_visible() || galaxy::render::home_menu_visible() ||
+                    galaxy::ui::launcher_visible(), galaxy::steady_ms());
             for (std::size_t i = 0; i < step.key_count; ++i) {
                 galaxy::render::native_settings_post_key(step.keys[i]);
             }
@@ -1371,6 +1383,10 @@ void set_direct_touch(bool direct) noexcept {
 
 bool in_background() noexcept {
     return g_background.load(std::memory_order_acquire);
+}
+
+bool take_low_memory() noexcept {
+    return g_low_memory.exchange(false, std::memory_order_acq_rel);
 }
 
 InputState input_state() noexcept {

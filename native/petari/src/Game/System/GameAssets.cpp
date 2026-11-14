@@ -172,7 +172,48 @@ namespace GameAssets {
         return nullptr;
     }
 
+#if defined(NEBULA_PLAIN_MODULE)
+    namespace {
+        // The views the loop in unloadArena would release, in its order, with one pass over the texture table for all of
+        // them (a scene's files are hundreds of views; a pass each was a scan of the whole table each). Each view's images
+        // are still freed before the view is unmapped. False, with nothing done, for fewer than two views or no memory.
+        bool releaseViews(const NebulaArena* pArena) {
+            u32 count = 0;
+            for (u32 i = 0; i < sMappedCount; i++) {
+                count += sMapped[i].mArena == pArena ? 1u : 0u;
+            }
+            const NebulaHostServices* const host = nebula_host();
+            void* const pBuffer = count > 1 ? host->heap_alloc(host->user, count * (sizeof(Mapped) + sizeof(RenderTexture::Range))) : nullptr;
+            if (pBuffer == nullptr) {
+                return false;
+            }
+            Mapped* const pGone = static_cast< Mapped* >(pBuffer);
+            RenderTexture::Range* const pRanges = reinterpret_cast< RenderTexture::Range* >(pGone + count);
+            u32 gone = 0;
+            for (u32 i = 0; i < sMappedCount;) {
+                if (sMapped[i].mArena == pArena) {
+                    const uintptr_t start = reinterpret_cast< uintptr_t >(sMapped[i].mData);
+                    pRanges[gone] = {start, start + sMapped[i].mSize};
+                    pGone[gone++] = sMapped[i];
+                    sMapped[i] = sMapped[--sMappedCount];
+                } else {
+                    i++;
+                }
+            }
+            RenderTexture::forget(pRanges, gone);
+            for (u32 g = 0; g < gone; g++) {
+                host->asset_unmap(host->user, pGone[g].mData, pGone[g].mSize);
+            }
+            host->heap_free(host->user, pBuffer);
+            return true;
+        }
+    }  // namespace
+#endif
+
     void unloadArena(const NebulaArena* pArena) {
+#if defined(NEBULA_PLAIN_MODULE)
+        if (!releaseViews(pArena))
+#endif
         for (u32 i = 0; i < sMappedCount;) {
             if (sMapped[i].mArena == pArena) {
                 release(sMapped[i]);

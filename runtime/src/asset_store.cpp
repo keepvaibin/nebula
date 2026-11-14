@@ -272,6 +272,18 @@ const std::uint8_t* AssetStore::map(std::uint64_t position, std::size_t size) co
     return data;
 }
 
+void AssetStore::release_pages() const noexcept {
+#if !defined(_WIN32)
+    // PROT_READ and MAP_PRIVATE: no page of the view was ever written, so nothing is lost.
+    if (view_ != nullptr) {
+        (void)madvise(const_cast<std::uint8_t*>(view_), static_cast<std::size_t>(size_), MADV_DONTNEED);
+    }
+#endif
+    if (overlay_ != nullptr) {
+        overlay_->release_pages();
+    }
+}
+
 // A view starts where the system's granularity allows, at most 64 KB before the file; the bytes before it are the store's.
 // Where a view of the store can start: 64 KB on Windows, a page elsewhere (where mmap returns a page, whatever the file
 // offset). map_private and unmap_private round by the same value, as unmap_private has only the address to go on.

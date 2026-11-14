@@ -23,6 +23,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Screen/NebulaHomeMenu.hpp"
+#include "Game/Screen/NebulaLauncher.hpp"
 #include <cstdio>
 #include <cstring>
 #include <nebula_game_api.h>
@@ -134,7 +135,7 @@ namespace {
     const u32 cButtonText = 0x505050FF;
 
     enum { FooterApply, FooterBack, FooterNum };
-    enum { ChoiceNum = 3 };
+    enum { ChoiceNum = 4 };  // the most answers a screen shows: the launcher's four rows
 
     // What the hints and buttons name a key or button for. KeyPress: a row's button (IMPORT, OPEN) is pressed with
     // Space or the bottom button.
@@ -251,6 +252,17 @@ namespace {
     const char* const cHomeAnswers[] = {"HomeMenuNo", "HomeMenuYes"};
     const s32 cHomeRowNum = sizeof(cHomeRows) / sizeof(cHomeRows[0]);
     const s32 cHomeAnswerNum = sizeof(cHomeAnswers) / sizeof(cHomeAnswers[0]);
+    // Launcher mode's home screen (NEBULA_HOME_MENU_LAUNCHER_*), drawn as the HOME Menu: views with bit 16; its rows,
+    // on page 1 an update's notice ("{v}": its version) and its notes over Back, on page 2 the benchmark's message
+    // (it gave no recommendation) over Back.
+    const s32 cLauncherView = 1 << 16;
+    // In the host's order (LauncherModel::Row); without Benchmark where the view has bit 17 (the host cannot start it).
+    const char* const cLauncherRows[] = {"LauncherPlay", "SettingsTitle", "LauncherBenchmark", "Quit"};
+    const char* const cLauncherRowsNoBenchmark[] = {"LauncherPlay", "SettingsTitle", "Quit"};
+    const s32 cLauncherRowNum = sizeof(cLauncherRows) / sizeof(cLauncherRows[0]);
+    const s32 cLauncherNoBenchmark = 1 << 17;
+    const s32 cLauncherVersionUnits = 64;  // the host's limits (runtime/src/ui/launcher.cpp)
+    const s32 cLauncherNotesUnits = 400;
 
     // One of a row's buttons: its word, whether it is unavailable, and where it was drawn.
     struct RowButton {
@@ -955,6 +967,7 @@ private:
     void placeModPicture(bool shown, f32 width, f32 top, f32 bottom);
     void paintJoyCon(u32 budgetMicros, f32* pPixelsX, f32* pPixelsY) const;
     void fillHome(s32 homeView);
+    void fillLauncher(s32 view);
     void readPointer(const NebulaSettingsView& rView);
     void readHomePointer(f32 x, f32 y);
     void clickRow(const NebulaSettingsView& rView, s32 row);
@@ -2011,6 +2024,13 @@ void NebulaSettingsScreen::setQuestion(s32 question) {
 
 // The HOME Menu as the host has it: its title and rows, or "are you sure?" and its answers; the selected one focused.
 void NebulaSettingsScreen::fillHome(s32 homeView) {
+    if ((homeView & cLauncherView) != 0) {
+        fillLauncher(homeView);
+        return;
+    }
+    if (mHomeView >= 0 && (mHomeView & cLauncherView) != 0) {
+        mHomeView = -1;  // the HOME Menu opened over the launcher's screen: its texts all again
+    }
     // HOME reuses the modal, but never its progress bar or controller-pairing illustration.
     mProgressTrack->SetVisible(false);
     mProgressFill->SetVisible(false);
@@ -2058,6 +2078,78 @@ void NebulaSettingsScreen::fillHome(s32 homeView) {
     }
     mHomeView = homeView;
     const s32 selected = homeView & 0xFF;
+    mFocusButton = selected < mChoiceCount ? &mChoices[selected] : nullptr;
+}
+
+// Launcher mode's home screen as the host has it: its title over its rows, or an update's notice or the benchmark's
+// message over Back; the selected one focused. Placed as the HOME Menu (placeHome: page 0 its list, others a question).
+void NebulaSettingsScreen::fillLauncher(s32 view) {
+    mProgressTrack->SetVisible(false);
+    mProgressFill->SetVisible(false);
+    mJoyCon->SetVisible(false);
+    mQuestionText->SetVisible(true);
+    setAnchor(mQuestionText, 4);
+    const bool notice = (view >> 8 & 0xFF) != 0;
+    const bool threeRows = (view & cLauncherNoBenchmark) != 0;
+    const char* const* const pRows = threeRows ? cLauncherRowsNoBenchmark : cLauncherRows;
+    const s32 rowNum = threeRows ? cLauncherRowNum - 1 : cLauncherRowNum;
+    if (mHomeView < 0 || (view >> 8) != (mHomeView >> 8)) {
+        MR::Text16 text;
+        f32 width = 0.0f;
+        f32 height = 0.0f;
+        if (!notice) {
+            getText(text, "LauncherTitle");
+            setTextSize(mQuestionText, cTitleSize);
+        } else if ((view >> 8 & 0xFF) == 2) {
+            // The benchmark this start returned from gave no recommendation.
+            getText(text, "LauncherBenchmarkNone");
+            setTextSize(mQuestionText, cTextSize + 1.0f);
+        } else {
+            // "Nebula {v} is available", then the notes.
+            MR::Text16 pattern;
+            const s32 patternLength = getText(pattern, "LauncherUpdate");
+            char16_t version[cLauncherVersionUnits + 1];
+            const s32 versionLength = NebulaLauncher::readText(0, version, cLauncherVersionUnits + 1);
+            char16_t* const pText = text.room(static_cast< u32 >(patternLength + versionLength + 1 + cLauncherNotesUnits + 1));
+            s32 length = 0;
+            for (const char16_t* p = pattern.c_str(); *p != 0; p++) {
+                if (p[0] == u'{' && p[1] == u'v' && p[2] == u'}') {
+                    for (s32 k = 0; k < versionLength; k++) {
+                        pText[length++] = version[k];
+                    }
+                    p += 2;
+                    continue;
+                }
+                pText[length++] = *p;
+            }
+            pText[length++] = u'\n';
+            NebulaLauncher::readText(1, pText + length, cLauncherNotesUnits + 1);
+            setTextSize(mQuestionText, cTextSize + 1.0f);
+        }
+        setText(mQuestionText, text.c_str());
+        measure(mQuestionText, (notice ? cQuestionWidth : cHomeWidth) - 48.0f, &width, &height);
+        mChoiceCount = notice ? 1 : rowNum;
+        for (s32 i = 0; i < ChoiceNum; i++) {
+            Button& rChoice = mChoices[i];
+            rChoice.mChip.mRoot->SetVisible(i < mChoiceCount);
+            rChoice.mChip.mFocusLevel = 0.0f;
+            if (i < mChoiceCount) {
+                fillButton(rChoice, notice ? "SettingsBack" : pRows[i]);
+                fillKeyCap(rChoice.mKey, -1, 0, false);
+            }
+        }
+        // The notice's window holds its text above its answer, the question's margins around them.
+        const f32 panelWidth = notice ? cQuestionWidth : cHomeWidth;
+        const f32 noticeHeight = height + cPad * 2.0f + cQuestionMargin + cButtonHeight;
+        const f32 panelHeight = notice ? (noticeHeight > cQuestionHeight ? noticeHeight : cQuestionHeight)
+                                       : cPad * 2.0f + cTitleSize + 18.0f + cButtonHeight * rowNum +
+                                             cHomeGap * (rowNum - 1);
+        mQuestionPanel->mSize = Ui::Size(panelWidth, panelHeight);
+        mQuestionShadow->mSize = Ui::Size(panelWidth, panelHeight);
+        mQuestion->SetVisible(true);
+    }
+    mHomeView = view;
+    const s32 selected = view & 0xFF;
     mFocusButton = selected < mChoiceCount ? &mChoices[selected] : nullptr;
 }
 
@@ -3460,8 +3552,9 @@ namespace NebulaSettingsMenu {
         NebulaHost::settingsView(&sView);
         // Not during the boot (the logos): asked for there, it closes at once. The title and the file select open it
         // (F1, the file select's Settings button), over everything they draw.
+        // Launcher mode's home screen opens it there.
         if (sView.open && !sScreen->isShown() && !GameSystemFunction::isOccurredSystemWarning() &&
-            MR::isCurrentScene(SceneKind_Boot)) {
+            MR::isCurrentScene(SceneKind_Boot) && !NebulaLauncher::isHolding()) {
             NebulaHost::settingsInput(NEBULA_SETTINGS_CLOSE, 0);
             sView.open = 0;
         }

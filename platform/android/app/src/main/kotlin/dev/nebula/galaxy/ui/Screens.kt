@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -53,6 +54,7 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Face
 import androidx.compose.material.icons.rounded.Upload
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.Tune
@@ -85,13 +87,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.nebula.galaxy.BuildConfig
-import dev.nebula.galaxy.ControlsSettings
 import dev.nebula.galaxy.DisplayRate
-import dev.nebula.galaxy.GraphicsSettings
 import dev.nebula.galaxy.ImportState
 import dev.nebula.galaxy.Imports
 import dev.nebula.galaxy.LauncherModel
 import dev.nebula.galaxy.R
+import dev.nebula.galaxy.UpdateFailure
 import dev.nebula.galaxy.Screen
 import dev.nebula.galaxy.Storage
 import dev.nebula.galaxy.formatBytes
@@ -228,6 +229,76 @@ fun NebulaApp(model: LauncherModel, onShareLog: () -> Unit) {
             } else null,
         )
     }
+    model.update?.let { release -> UpdateDialog(model, release) }
+}
+
+/** A newer release (Updates): its notes and size, then Update, Skip this version or Not now; the download's progress. */
+@Composable
+private fun UpdateDialog(model: LauncherModel, release: dev.nebula.galaxy.Release) {
+    val context = LocalContext.current
+    val progress = model.updateProgress
+    AlertDialog(
+        onDismissRequest = { if (progress == null) model.updateLater() },
+        icon = { Icon(Icons.Rounded.Download, contentDescription = null, tint = Night.Lavender) },
+        title = { Text(stringResource(R.string.nebula_update_available, release.version)) },
+        text = {
+            Column {
+                if (progress != null) {
+                    Text(stringResource(R.string.nebula_update_downloading, release.version))
+                    Gap(12.dp)
+                    LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+                } else {
+                    val failure = model.updateFailure
+                    if (model.updateNeedsPermission) {
+                        Text(stringResource(R.string.nebula_update_allow), color = Night.Lavender)
+                        Gap(12.dp)
+                    } else if (failure != null) {
+                        val reason = when (failure) {
+                            UpdateFailure.Download -> R.string.nebula_update_failed
+                            UpdateFailure.Rejected -> R.string.nebula_update_rejected
+                            UpdateFailure.NoRoom -> R.string.nebula_update_no_room
+                            UpdateFailure.Declined -> R.string.nebula_update_declined
+                            UpdateFailure.Refused -> R.string.nebula_update_refused
+                            UpdateFailure.Blocked -> R.string.nebula_update_blocked
+                            UpdateFailure.InstallFailed -> R.string.nebula_update_install_failed
+                        }
+                        Text(stringResource(reason), color = Night.Error)
+                        Gap(12.dp)
+                    }
+                    if (release.notes.isNotEmpty()) {
+                        Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
+                            Text(release.notes, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                    if (release.apkBytes > 0L) {
+                        Gap(12.dp)
+                        Text(
+                            stringResource(R.string.nebula_update_size, formatBytes(release.apkBytes)),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Night.TextDim,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            when {
+                progress != null -> TextButton(onClick = model::updateCancel) { Text(stringResource(R.string.nebula_update_cancel)) }
+                model.updateNeedsPermission -> TextButton(onClick = { model.openInstallPermission(context) }) {
+                    Text(stringResource(R.string.nebula_update_open_settings))
+                }
+                else -> TextButton(onClick = model::updateNow) { Text(stringResource(R.string.nebula_update_update)) }
+            }
+        },
+        dismissButton = if (progress == null) {
+            {
+                Row {
+                    TextButton(onClick = model::updateSkip) { Text(stringResource(R.string.nebula_update_skip)) }
+                    TextButton(onClick = model::updateLater) { Text(stringResource(R.string.nebula_update_not_now)) }
+                }
+            }
+        } else null,
+    )
 }
 
 /** Over the launcher while a file is dragged across it: what letting go does. */
@@ -547,6 +618,96 @@ private fun controllerNames(): List<String> = InputDevice.getDeviceIds().toList(
     if (pad && !device.isVirtual) device.name else null
 }.distinct()
 
+/**
+ * Settings, Performance: the last benchmark's verdict (or that the run did not finish), the recommended settings that
+ * differ from the ones it ran with, current then recommended, and Apply (Benchmark.apply, config.ini).
+ */
+@Composable
+private fun BenchmarkRows(model: LauncherModel) {
+    val result = model.benchmark
+    val verdict = when {
+        model.benchmarkUnfinished -> stringResource(R.string.nebula_benchmark_unfinished)
+        result == null -> return
+        !result.complete -> stringResource(R.string.nebula_benchmark_unfinished) + if (result.failure.isNotEmpty()) " " + result.failure else ""
+        result.cpuBound || result.verdict == "cpu_bound" -> stringResource(R.string.nebula_benchmark_cpu)
+        result.fits || result.verdict == "fits" -> stringResource(R.string.nebula_benchmark_fits)
+        else -> stringResource(R.string.nebula_benchmark_below)
+    }
+    Text(verdict, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+    val changes = result?.changes.orEmpty()
+    if (changes.isEmpty()) return
+    Text(
+        stringResource(R.string.nebula_benchmark_recommended),
+        style = MaterialTheme.typography.titleSmall,
+        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp),
+    )
+    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp)) {
+        Spacer(Modifier.weight(1f))
+        Text(stringResource(R.string.nebula_benchmark_current), Modifier.width(112.dp), style = MaterialTheme.typography.labelMedium)
+        Text(stringResource(R.string.nebula_benchmark_recommended_value), Modifier.width(112.dp), style = MaterialTheme.typography.labelMedium)
+    }
+    for (change in changes) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(benchmarkLabel(change.key), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+            Text(
+                benchmarkValue(change.key, change.current),
+                Modifier.width(112.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(benchmarkValue(change.key, change.recommended), Modifier.width(112.dp), style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+        TextButton(onClick = { model.applyBenchmark() }, enabled = !model.benchmarkApplied) { Text(stringResource(R.string.nebula_apply)) }
+    }
+    if (model.benchmarkApplyFailed) {
+        Text(
+            stringResource(R.string.nebula_settings_not_saved, "config.ini"),
+            color = Night.Error,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
+        )
+    }
+}
+
+@Composable
+private fun benchmarkLabel(key: String): String = when (key) {
+    "internal_height" -> stringResource(R.string.nebula_setting_internal_resolution)
+    "msaa_samples" -> "MSAA"
+    "ambient_occlusion" -> stringResource(R.string.nebula_setting_ambient_occlusion)
+    "enhanced_lighting" -> stringResource(R.string.nebula_setting_lighting)
+    "aa" -> stringResource(R.string.nebula_setting_aa)
+    "smaa_quality" -> stringResource(R.string.nebula_setting_aa_quality)
+    "bloom" -> stringResource(R.string.nebula_setting_bloom)
+    else -> key
+}
+
+// A config.ini value as the game's menu names it (the contract: internal_height 0 matches the display, aa 1 is SMAA).
+@Composable
+private fun benchmarkValue(key: String, value: Int): String = when (key) {
+    "internal_height" -> if (value == 0) stringResource(R.string.nebula_match_display) else "${value}p"
+    "msaa_samples" -> if (value <= 1) stringResource(R.string.nebula_off) else "${value}x"
+    "ambient_occlusion" -> stringResource(if (value != 0) R.string.nebula_on else R.string.nebula_off)
+    "enhanced_lighting" -> stringResource(if (value != 0) R.string.nebula_lighting_enhanced else R.string.nebula_lighting_per_pixel)
+    "aa" -> when (value) {
+        0 -> stringResource(R.string.nebula_off)
+        1 -> "SMAA"
+        2 -> stringResource(R.string.nebula_aa_auto)
+        3 -> "FXAA"
+        else -> value.toString()
+    }
+    "smaa_quality" -> when (value) {
+        0 -> stringResource(R.string.nebula_quality_low)
+        1 -> stringResource(R.string.nebula_quality_medium)
+        2 -> stringResource(R.string.nebula_quality_high)
+        3 -> stringResource(R.string.nebula_quality_ultra)
+        else -> value.toString()
+    }
+    "bloom" -> "$value%"
+    else -> value.toString()
+}
+
 /** The file pickers: saves exported to a new .zip or imported from a file, Miis from any number of files. */
 private class SaveActions(val export: () -> Unit, val import: () -> Unit, val miis: () -> Unit)
 
@@ -561,7 +722,6 @@ private fun SettingsScreen(
     var confirmRemove by remember { mutableStateOf(false) }
     var confirmImport by remember { mutableStateOf(false) }
     LaunchedEffect(model.saveBytes) { model.refreshMiis() }
-    val controls = model.controls
     Column(Modifier.fillMaxSize()) {
         TopBar(stringResource(R.string.Settings)) { model.back() }
         Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), contentAlignment = Alignment.TopCenter) {
@@ -634,6 +794,28 @@ private fun SettingsScreen(
                             progress = { progress },
                             modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 14.dp),
                         )
+                    }
+                }
+
+                if (model.install != null) {
+                    SectionTitle(stringResource(R.string.nebula_performance))
+                    GlassCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp), padding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp)) {
+                        val activity = LocalContext.current
+                        NavigationRow(
+                            Icons.Rounded.Speed,
+                            stringResource(R.string.nebula_benchmark),
+                            stringResource(R.string.nebula_benchmark_about),
+                        ) { model.startBenchmark(activity) }
+                        BenchmarkRows(model)
+                    }
+                }
+
+                // A store's install updates through the store: no check to turn on or off.
+                val appContext = LocalContext.current
+                if (!remember(appContext) { dev.nebula.galaxy.Updates.fromStore(appContext) }) {
+                    SectionTitle(stringResource(R.string.nebula_updates))
+                    GlassCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp), padding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp)) {
+                        SwitchRow(stringResource(R.string.nebula_updates_at_start), null, model.updatesAtStart) { model.updateUpdatesAtStart(it) }
                     }
                 }
 

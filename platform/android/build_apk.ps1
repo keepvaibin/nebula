@@ -10,6 +10,10 @@
 #                 [-SeedTool <vk_shader_seed.exe>] [-Signing <signing.properties>] [-Abis arm64-v8a,x86_64]
 #                 [-FfxShaders <FidelityFX's Vulkan shader headers, made already>]
 #                 [-Debuggable: the APK can be debugged (run-as) on a test device]
+#                 [-Plain: no ThinLTO for the game module and host; links in a fraction of the time, for development]
+#                 [-ReleaseKey <the release key's private XML>: Nebula.apk.sig, the release-key signature the app's
+#                  updates check (Updates.kt); default the Windows setups' key at its usual place, '' for none]
+#   A release publishes the two as Nebula-Android.apk and Nebula-Android.apk.sig (a beta: Nebula-Beta-Android.apk).
 param(
     [Parameter(Mandatory = $true)][string]$Deps,
     [Parameter(Mandatory = $true)][string]$Work,
@@ -18,7 +22,9 @@ param(
     [string]$Signing = "",
     [string]$Abis = "arm64-v8a,x86_64",
     [string]$FfxShaders = "",
-    [switch]$Debuggable
+    [switch]$Debuggable,
+    [switch]$Plain,
+    [string]$ReleaseKey = (Join-Path $env:USERPROFILE '.nebula-release-key\nebula-release-private.xml')
 )
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path "$PSScriptRoot\..\..").Path
@@ -37,6 +43,8 @@ $hostToolsSlash = $HostTools -replace '\\', '/'
 $ffxArgs = @()
 if (Test-Path "$Deps\ffx-src\FidelityFX-SDK-1.1.4\sdk") { $ffxArgs += "-DFETCHCONTENT_SOURCE_DIR_FIDELITYFX_SDK=$depsSlash/ffx-src/FidelityFX-SDK-1.1.4" }
 if ($FfxShaders) { $ffxArgs += "-DNEBULA_FFX_VK_SHADERS=$($FfxShaders -replace '\\', '/')" }
+# The players' build: ThinLTO for the game module (native/CMakeLists.txt NEBULA_LTO) and the host (NEBULA_HOST_IPO).
+$lto = if ($Plain) { "OFF" } else { "ON" }
 New-Item -ItemType Directory -Force $Work | Out-Null
 # Plan 2.9: every platform's release items (permissions, usage texts, file and link associations) are in the tree.
 & python (Join-Path $root "tools\check_platform_items.py") $root
@@ -65,14 +73,14 @@ foreach ($abi in $Abis -split ",") {
     $module = "$Work/module-$abi" -replace '\\', '/'
     Invoke-Logged "$Work\module-$abi.log" {
         cmake -G Ninja -S "$root/native" -B $module "-DCMAKE_TOOLCHAIN_FILE=$toolchain" "-DANDROID_ABI=$abi" `
-            "-DANDROID_PLATFORM=android-31" -DCMAKE_BUILD_TYPE=Release "-DNEBULA_PETARI_DIR=$root/native/petari"
+            "-DANDROID_PLATFORM=android-31" -DCMAKE_BUILD_TYPE=Release "-DNEBULA_PETARI_DIR=$root/native/petari" "-DNEBULA_LTO=$lto"
         # Both game modules (plan 1.7): the host loads libsmg_game_plain.so unless a mod's code needs the rows.
         if ($LASTEXITCODE -eq 0) { cmake --build $module --target smg_game smg_game_plain }
     }
     $hostBuild = "$Work/host-$abi" -replace '\\', '/'
     Invoke-Logged "$Work\host-$abi.log" {
         cmake -G Ninja -S "$root/platform/sdl" -B $hostBuild "-DCMAKE_TOOLCHAIN_FILE=$toolchain" "-DANDROID_ABI=$abi" `
-            "-DANDROID_PLATFORM=android-31" -DCMAKE_BUILD_TYPE=Release "-DNEBULA_DEPS=$depsSlash" "-DNEBULA_HOST_TOOLS=$hostToolsSlash" @ffxArgs
+            "-DANDROID_PLATFORM=android-31" -DCMAKE_BUILD_TYPE=Release "-DNEBULA_DEPS=$depsSlash" "-DNEBULA_HOST_TOOLS=$hostToolsSlash" "-DNEBULA_HOST_IPO=$lto" @ffxArgs
         if ($LASTEXITCODE -eq 0) { cmake --build $hostBuild --target main nebula_mods }
     }
     $upper = ($triple -replace '-', '_').ToUpper()
@@ -91,12 +99,12 @@ foreach ($abi in $Abis -split ",") {
         "-ffile-prefix-map=$($_[0])=$($_[1]) -ffile-prefix-map=$($_[0] -replace '\\', '/')=$($_[1])" }) -join " ")
     Invoke-Logged "$Work\import-$abi.log" {
         Push-Location $root
-        try { cargo build --release --locked -p nebula-import --lib --target $triple } finally { Pop-Location }
+        try { cargo build --profile dist --locked -p nebula-import --lib --target $triple } finally { Pop-Location }
     }
     $dest = Join-Path $jni $abi
     New-Item -ItemType Directory -Force $dest | Out-Null
     Copy-Item "$module/libsmg_game.so", "$module/libsmg_game_plain.so", "$hostBuild/libmain.so", "$hostBuild/libnebula_mods.so", "$hostBuild/SDL3/libSDL3.so",
-        "$Work\cargo\$triple\release\libnebula_import.so" $dest -Force
+        "$Work\cargo\$triple\dist\libnebula_import.so" $dest -Force
 }
 
 # The license texts the About screen opens (assets/licenses; the list is app/src/main/kotlin/.../Licenses.kt).
@@ -142,3 +150,17 @@ try {
 $apk = Join-Path $android "app\build\outputs\apk\release\app-release.apk"
 Copy-Item $apk (Join-Path $Work "Nebula.apk") -Force
 "apk: $(Join-Path $Work 'Nebula.apk') ($([math]::Round((Get-Item $apk).Length / 1MB, 1)) MB)"
+# The release-key signature over the whole APK (RSA SHA-256, base64), as build-native-setup.ps1 signs the setup.
+$signed = Join-Path $Work "Nebula.apk"
+if ($ReleaseKey -and (Test-Path -LiteralPath $ReleaseKey)) {
+    $publicKey = (Get-Content -LiteralPath (Join-Path $root "installer\release-public-key.xml") -Raw).Trim()
+    $rsa = New-Object System.Security.Cryptography.RSACryptoServiceProvider
+    $rsa.PersistKeyInCsp = $false
+    $rsa.FromXmlString((Get-Content -LiteralPath $ReleaseKey -Raw))
+    if ($rsa.ToXmlString($false) -ne $publicKey) { throw "The release key does not match installer/release-public-key.xml." }
+    $signature = $rsa.SignData([IO.File]::ReadAllBytes($signed), [Security.Cryptography.CryptoConfig]::MapNameToOID("SHA256"))
+    [IO.File]::WriteAllText("$signed.sig", [Convert]::ToBase64String($signature))
+    "signed: $signed.sig"
+} elseif ($ReleaseKey) {
+    Write-Warning "No release key at $ReleaseKey`: Nebula.apk has no .sig and its updates will not install it."
+}

@@ -4,6 +4,7 @@
 
 class SensorGroup;
 class HitSensor;
+class LiveActor;
 
 class SensorHitChecker : public NameObj {
 public:
@@ -26,6 +27,14 @@ public:
     SensorGroup* mCharacterGroup;
 };
 
+// A sensor as the pair test reads it: its place and radius beside it, so the pairs walk one array instead of each
+// sensor and its actor once per partner.
+struct SensorHitEntry {
+    f32 mX, mY, mZ, mRadius;
+    const LiveActor* mHost;
+    HitSensor* mSensor;
+};
+
 class SensorGroup {
 public:
     explicit SensorGroup(int maxSensors);
@@ -33,10 +42,15 @@ public:
     void add(HitSensor*);
     void remove(HitSensor*);
     void clear() const;
+    void gatherActive();
 
     s32 mMaxSensors;
     s32 mSensorCount;
     HitSensor** mSensors;
+    // This frame's active sensors (valid, host not clipped), in mSensors' order; mMaxSensors entries, made and grown
+    // with mSensors in their arena. Null in the module with hook points, which tests the pairs as the game does.
+    s32 mActiveCount;
+    SensorHitEntry* mActive;
 };
 
 namespace MR {

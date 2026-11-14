@@ -46,9 +46,6 @@ using core::WalkTime;
 namespace {
 
 // The state word's fields (nebula_model.h).
-constexpr std::uint32_t blend_op(std::uint32_t s) noexcept { return s & 3u; }
-constexpr std::uint32_t blend_src(std::uint32_t s) noexcept { return (s >> 2u) & 15u; }
-constexpr bool state_depth_test(std::uint32_t s) noexcept { return (s & (1u << 10u)) != 0u; }
 constexpr bool state_stencil(std::uint32_t s) noexcept { return ((s >> 20u) & 3u) != 0u; }
 constexpr bool state_color_write(std::uint32_t s) noexcept { return (s & NEBULA_STATE_COLOR_WRITE) != 0u; }
 
@@ -56,22 +53,6 @@ constexpr bool state_color_write(std::uint32_t s) noexcept { return (s & NEBULA_
 // Two constants entries are one material when they are one entry or name one registered slot.
 inline bool same_material(const NebulaFrameList& list, std::uint32_t a, std::uint32_t b) noexcept {
     return a == b || (list.constants[a].slot != NEBULA_NONE32 && list.constants[a].slot == list.constants[b].slot);
-}
-
-// Which targets a draw of the 3D scene writes beside the colour: an opaque surface the motion, a blended draw the reactive
-// mask, and a blended draw whose factors never read the scene the effects layer too.
-std::uint8_t scene_aux(std::uint32_t state, bool layer_window) noexcept {
-    if (!state_color_write(state)) {
-        return 0u;
-    }
-    const std::uint32_t op = blend_op(state);
-    if (op == 0u) {
-        return state_depth_test(state) ? 1u : 0u;
-    }
-    if (layer_window && (op == NEBULA_BLEND_SUBTRACT || (blend_src(state) != NEBULA_FACTOR_DST_COLOR && blend_src(state) != NEBULA_FACTOR_INV_DST_COLOR))) {
-        return 3u;
-    }
-    return 2u;
 }
 
 inline Affine34 affine_of(const float (*rows)[4]) noexcept {
@@ -199,6 +180,17 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
         in.scale_flags = block.scale_flags;
         in.model = block.model != 0u ? &registries_.model(block.model).tables : nullptr;
         in.joint_count = block.joint_count;
+        if (in.model != nullptr && in.model->has_weighted) {
+            // Each joint's product made once for the block's eye and world rows (the envelopes' joints are the model's).
+            const std::size_t joints = in.model->joint_count;
+            if (walk_skin_made_.size() < joints) {
+                walk_skin_.resize(joints * 12u);
+                walk_skin_made_.resize(joints);
+            }
+            std::memset(walk_skin_made_.data(), 0, joints);
+            in.skin = reinterpret_cast<float (*)[4]>(walk_skin_.data());
+            in.skin_made = walk_skin_made_.data();
+        }
         in.normal_scale = block.normal_scale;
         const std::uint32_t camera = now.block_camera[b];
         const bool eye_block = block.camera == NEBULA_NONE32;
@@ -303,8 +295,8 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
     now.rows_walk = walk_.serial;
 
     // The instance table: one entry per item, in draw order. An instanced draw's light base is its first instance's
-    // row.
-    const UploadRing::Allocation instances = matrix_ring.allocate(std::size_t{list.item_count} * 16u + 16u, 16u);
+    // row. Vulkan binds it at its offset, which must be a multiple of minStorageBufferOffsetAlignment (at most 256).
+    const UploadRing::Allocation instances = matrix_ring.allocate(std::size_t{list.item_count} * 16u + 16u, 256u);
     walk_.instances = instances.gpu;
     {
         auto* out = reinterpret_cast<std::uint32_t*>(instances.cpu);
@@ -408,6 +400,23 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
         }
     }
     now.view_terms = walk_view_terms_;
+    // Each view's four side planes in eye space, from x and y against w = -z, with the jitter's room: normal and length.
+    walk_view_planes_.resize(list.view_count);
+    for (std::uint32_t v = 0; v < list.view_count; ++v) {
+        const std::array<float, 6>& terms = walk_view_terms_[v];
+        const float x_slack = std::fabs(terms[0]) * 0.01f + 0.01f, y_slack = std::fabs(terms[2]) * 0.01f + 0.01f;
+        const float a = terms[0], b = terms[1], c = terms[2], d = terms[3];
+        const float sides[4][3] = {{a, 0.0f, b - 1.0f - x_slack}, {-a, 0.0f, -b - 1.0f - x_slack},
+                                   {0.0f, c, d - 1.0f - y_slack}, {0.0f, -c, -d - 1.0f - y_slack}};
+        std::array<float, 16>& planes = walk_view_planes_[v];
+        for (unsigned k = 0; k < 4u; ++k) {
+            const float nx = sides[k][0], ny = sides[k][1], nz = sides[k][2];
+            planes[k * 4u] = nx;
+            planes[k * 4u + 1u] = ny;
+            planes[k * 4u + 2u] = nz;
+            planes[k * 4u + 3u] = std::sqrt(nx * nx + ny * ny + nz * nz);
+        }
+    }
     walk_views_.assign(list.view_count, WalkView{});
     walk_constants_.assign(list.constants_count, core::StaticSlot{});
     walk_constants_known_.assign(list.constants_count, 0u);
@@ -728,7 +737,8 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_
     // A list written earlier in this walk stands unless the generation moved since (the sampler array started again, or
     // the Vulkan image array grew and its null slot moved): then it is written again.
     const auto generation = renderer_.sampler_generation();
-    if (table.walk_stamp == walk_.serial && table.samplers_generation == generation) {
+    if (table.walk_stamp == walk_.serial && table.samplers_generation == generation &&
+        (!table.has_target || table.pictures_moved == pictures_moved_)) {
         lists = table.lists;
         first = table.list_first;
         return;
@@ -793,6 +803,8 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_
         walk_pairs_[2u * i + 1u] = table.sampler_slots[i];
     }
     renderer_.write_texture_list(walk_pairs_.data(), count, table.lists, table.list_first);
+    table.has_target = has_target;
+    table.pictures_moved = pictures_moved_;
     if (count > table.count && !table.clamp_logged) {
         table.clamp_logged = true;
         std::fprintf(stderr, "[textures] test: a list of %u maps walked as a run of %u (first entry %u)\n", table.count, count,
@@ -823,7 +835,7 @@ void RenderCore::walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::
         return table.count == 0u ? none : table.list[std::min(i, table.count - 1u)];
     };
     const bool stale = table.textures.ptr == 0u || table.textures_revision != texture_store_.revision();
-    const bool per_walk = table.has_target && table.walk_stamp != walk_.serial;
+    const bool per_walk = table.has_target && (table.walk_stamp != walk_.serial || table.pictures_moved != pictures_moved_);
     const float mip_lines = walk_.mip_lines;  // taken once in prepare_walk
     const auto generation = renderer_.sampler_generation();
     const bool samplers_stale = table.samplers.ptr == 0u || table.samplers_generation != generation ||
@@ -851,6 +863,7 @@ void RenderCore::walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::
                 // A target's picture changes from frame to frame: the table lives for this frame.
                 table.textures = renderer_.texture_table_for(handles.data(), count, texture_store_);
                 table.walk_stamp = walk_.serial;
+                table.pictures_moved = pictures_moved_;
             } else {
                 table.textures = renderer_.persistent_texture_table(handles.data(), count, texture_store_, table.textures);
             }
@@ -927,16 +940,12 @@ bool RenderCore::item_culled(const NebulaFrameItem& item, const NebulaFramePass&
     if (!std::isfinite(radius) || !std::isfinite(centre[0] + centre[1] + centre[2])) {
         return false;
     }
-    // The four side planes in eye space, from x and y against w = -z, with the jitter's room.
-    const std::array<float, 6>& terms = walk_view_terms_[item.view];
-    const float x_slack = std::fabs(terms[0]) * 0.01f + 0.01f, y_slack = std::fabs(terms[2]) * 0.01f + 0.01f;
-    const auto outside = [&](float nx, float ny, float nz) {
-        const float length = std::sqrt(nx * nx + ny * ny + nz * nz);
-        return nx * centre[0] + ny * centre[1] + nz * centre[2] < -radius * length;
+    // The view's side planes (prepare_walk).
+    const float* planes = walk_view_planes_[item.view].data();
+    const auto outside = [&](const float* plane) {
+        return plane[0] * centre[0] + plane[1] * centre[1] + plane[2] * centre[2] < -radius * plane[3];
     };
-    const float a = terms[0], b = terms[1], c = terms[2], d = terms[3];
-    return outside(a, 0.0f, b - 1.0f - x_slack) || outside(-a, 0.0f, -b - 1.0f - x_slack) ||
-           outside(0.0f, c, d - 1.0f - y_slack) || outside(0.0f, -c, -d - 1.0f - y_slack);
+    return outside(planes) || outside(planes + 4) || outside(planes + 8) || outside(planes + 12);
 }
 
 namespace {
@@ -1142,7 +1151,7 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
             continue;
         }
         // With one pass for the scene, a draw that writes no motion stays in the motion draws' pass (aux 4).
-        std::uint8_t aux = scene_layer && motion_scene_ ? scene_aux(state, layer_window) : 0u;
+        std::uint8_t aux = scene_layer && motion_scene_ ? core::scene_aux(state, layer_window) : 0u;
         if (scene_layer && motion_scene_ && one_pass && aux != 1u) {
             aux = 4u;
         }
@@ -1508,6 +1517,7 @@ void RenderCore::walk_opaque_end(const NebulaFramePass& pass) {
 
 void RenderCore::walk_scene_end() {
     rt_program_signal();  // signals S and A: the scene as the programs drew it, before anything after the scene
+    pipelines_.scene_drawn();
     rt_reactive();
     // The camera's finish (scene_camera.hlsl g_finish): 1 traced with the relight in the sun (form above 0,
     // rt_look_[0]; 0 is Painted), 2 traced with the relight and no sun (l95: the eye may open), 0 none.
@@ -1893,7 +1903,9 @@ void RenderCore::walk_pass(ListData& now, std::uint32_t p, std::uint32_t& target
                 note_generated_written(pass.target);
             }
             request.channels = pass.channels < kCopyLayoutDisplay ? static_cast<std::uint8_t>(pass.channels) : 0u;
-            (void)renderer_.draw_frame_pass(request, texture_store_);
+            if (renderer_.draw_frame_pass(request, texture_store_)) {
+                ++pictures_moved_;
+            }
             break;
         }
         case NEBULA_PASS_TAKE_FRAME: {
@@ -1907,12 +1919,16 @@ void RenderCore::walk_pass(ListData& now, std::uint32_t p, std::uint32_t& target
                 const auto width = static_cast<std::uint32_t>(map.width);
                 const auto height = static_cast<std::uint32_t>(map.height);
                 gpu::TextureRef released;
-                (void)renderer_.take_scene(key, display_pictures_.take_idle_texture(width, height), texture_store_, released);
+                if (renderer_.take_scene(key, display_pictures_.take_idle_texture(width, height), texture_store_, released)) {
+                    ++pictures_moved_;
+                }
                 display_pictures_.release_texture(std::move(released), width, height);
             } else {
                 FramePassRequest request{};
                 request.key = key;
-                (void)renderer_.draw_frame_pass(request, texture_store_);
+                if (renderer_.draw_frame_pass(request, texture_store_)) {
+                    ++pictures_moved_;
+                }
             }
             break;
         }

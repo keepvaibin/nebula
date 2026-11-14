@@ -5,6 +5,7 @@
 #include "galaxy/render/texture_store.h"
 
 #include "galaxy/loss_report.h"
+#include "galaxy/render/block4_astc.h"
 #include "galaxy/render/render_config.h"
 #include "nebula_cooked_texture.h"
 #include "nebula_game_api.h"
@@ -25,8 +26,9 @@ namespace {
 
 constexpr std::uint64_t kStagingChunkBytes = 16ull << 20u;
 constexpr std::size_t kFreeChunksKept = 4u;
-// Frames without a staging request before a spare chunk goes (one more for every kStagingTrimFrames after that): a scene's
-// load keeps its chunks for the next scene's, and a run that has stopped loading gives them back.
+// Frames without a staging request before a spare chunk goes (one more for every kStagingTrimFrames after that, the chunk
+// being filled last): a scene's load keeps its chunks for the next scene's, and a run that has stopped loading gives them
+// all back.
 constexpr unsigned kStagingIdleFrames = 600u;
 constexpr unsigned kStagingTrimFrames = 120u;
 
@@ -117,11 +119,53 @@ bool TextureStore::samples_generated(const TextureSampler& mode, const TextureHa
     return get_render_config().enhanced_mipmaps;
 }
 
+bool TextureStore::wants_generated_levels(const RenderConfig& render) noexcept {
+    return render.enhanced_mipmaps || render.ray_tracing_enabled;
+}
+
+bool TextureStore::generated_levels_landed(const RenderConfig& render) const noexcept {
+    if (wants_generated_levels(render) != generated_levels_) {
+        return false;
+    }
+    // follow_generated_levels' test: a whole texture with generated levels still made the other way.
+    for (const std::unique_ptr<Entry>& entry : entries_) {
+        if (entry != nullptr && entry->texture && entry->own.generated_mips && entry->dropped == 0u && entry->full_levels > 1u &&
+            entry->trimmed == generated_levels_) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void TextureStore::follow_settings(const RenderConfig& render) {
+    const bool wanted = wants_generated_levels(render);
+    if (wanted == generated_levels_) {
+        return;
+    }
+    generated_levels_ = wanted;
+    generated_levels_wanted_.store(wanted, std::memory_order_relaxed);
+    for (std::uint32_t id = 0; id < entries_.size(); ++id) {
+        if (Entry* const entry = entries_[id].get(); entry != nullptr && entry->texture) {
+            follow_generated_levels(id, *entry);
+        }
+    }
+}
+
+void TextureStore::follow_generated_levels(std::uint32_t id, Entry& entry) {
+    // A reduced texture is made from the record's lower levels as it is; its whole one follows the setting when it comes back.
+    if (entry.own.generated_mips && entry.dropped == 0u && entry.full_levels > 1u && entry.trimmed == generated_levels_) {
+        request_resize(id, entry, 0u);
+    }
+}
+
 bool TextureStore::initialize(gpu::Device* device, DeviceGate& gate) {
     gate_ = &gate;
     next_srv_index_ = 0u;
     free_srv_indices_.clear();
     queued_ = std::make_shared<Ops>();
+    // Images staged before the first frame follow the settings as they are now.
+    generated_levels_ = wants_generated_levels(get_render_config());
+    generated_levels_wanted_.store(generated_levels_, std::memory_order_relaxed);
     return backend_.initialize(device, kViewPageSize);
 }
 
@@ -221,10 +265,20 @@ TextureStore::Staged TextureStore::stage(const std::uint8_t* texels, std::uint32
     switch (layout) {
     case NEBULA_TEXTURE_L8: staged.format = TexelFormat::R8; break;
     case NEBULA_TEXTURE_LA8: staged.format = TexelFormat::Rg8; break;
-    case NEBULA_TEXTURE_BLOCK4: staged.format = TextureBackend::supports_bc1() ? TexelFormat::Bc1 : TexelFormat::Rgba8; break;
+    // Without BC1: ASTC 4x4 where the GPU samples it (block4_astc.h: the colours as close as it states); without either,
+    // 16-bit R5G6B5 (each texel the nearest such colour: within 4.10 of a 255th in red and blue, 2.00 in green; the
+    // record's blocks are opaque), RGBA8 while textures are dumped (a dump holds the record's own colours).
+    case NEBULA_TEXTURE_BLOCK4:
+        staged.format = TextureBackend::supports_bc1()       ? TexelFormat::Bc1
+                        : TextureBackend::supports_astc4x4() ? TexelFormat::Astc4x4
+                        : TextureBackend::supports_rgb565() && !dumping_.load(std::memory_order_relaxed)
+                            ? TexelFormat::Rgb565
+                            : TexelFormat::Rgba8;
+        break;
     default: staged.format = TexelFormat::Rgba8; break;
     }
-    const bool expand = staged.format == TexelFormat::Rgba8 && layout != NEBULA_TEXTURE_RGBA8;
+    const bool expand =
+        (staged.format == TexelFormat::Rgba8 && layout != NEBULA_TEXTURE_RGBA8) || staged.format == TexelFormat::Rgb565;
     std::uint64_t bytes = 0u;
     for (std::uint32_t l = 0; l < levels; ++l) {
         const std::uint32_t lw = std::max(1u, width >> l);
@@ -245,8 +299,32 @@ TextureStore::Staged TextureStore::stage(const std::uint8_t* texels, std::uint32
         if (expand) {
             expanded.resize(std::size_t{lw} * lh);
             detail::expand_record_level(layout, source, lw, lh, expanded.data());
-            for (std::uint32_t y = 0; y < lh; ++y) {
-                std::memcpy(out + std::size_t{y} * staged.pitches[l], expanded.data() + std::size_t{y} * lw, std::size_t{lw} * 4u);
+            if (staged.format == TexelFormat::Rgb565) {
+                // The nearest 5/6/5-bit value: round(v * 31 / 255) (v * 62 is even, 255 * odd is not: no ties), and 63.
+                for (std::uint32_t y = 0; y < lh; ++y) {
+                    std::uint8_t* const row = out + std::size_t{y} * staged.pitches[l];
+                    for (std::uint32_t x = 0; x < lw; ++x) {
+                        const RGBA8& c = expanded[std::size_t{y} * lw + x];
+                        const unsigned packed = (c.r * 31u + 127u) / 255u << 11 | (c.g * 63u + 127u) / 255u << 5 |
+                                                (c.b * 31u + 127u) / 255u;
+                        row[2u * x] = static_cast<std::uint8_t>(packed);
+                        row[2u * x + 1u] = static_cast<std::uint8_t>(packed >> 8);
+                    }
+                }
+            } else {
+                for (std::uint32_t y = 0; y < lh; ++y) {
+                    std::memcpy(out + std::size_t{y} * staged.pitches[l], expanded.data() + std::size_t{y} * lw,
+                                std::size_t{lw} * 4u);
+                }
+            }
+        } else if (staged.format == TexelFormat::Astc4x4) {
+            const std::uint32_t across = (lw + 3u) / 4u;
+            const std::uint32_t rows = texel_rows(staged.format, lh);
+            for (std::uint32_t y = 0; y < rows; ++y) {
+                std::uint8_t* const row = out + std::size_t{y} * staged.pitches[l];
+                for (std::uint32_t x = 0; x < across; ++x) {
+                    block4_astc::from_block4(source + (std::size_t{y} * across + x) * 8u, row + std::size_t{x} * block4_astc::kBlockBytes);
+                }
             }
         } else {
             const std::uint32_t row = texel_row_bytes(staged.format, lw);
@@ -294,7 +372,11 @@ bool TextureStore::stage_image(Op& op, const void* bytes, std::uint32_t size, st
         op.staged = stage(kept, level_width, level_height, record->levels - drop, record->layout);
         return true;
     }
-    op.staged = stage(texels, record->width, record->height, record->levels, record->layout);
+    // Levels the cook generated are staged only when something can read them (wants_generated_levels): a quarter of such an
+    // image's memory and upload, on a GPU without BC1 a quarter of its texels expanded to RGBA8.
+    op.trimmed = op.generated && record->levels > 1u && !generated_levels_wanted_.load(std::memory_order_relaxed);
+    op.full_levels = record->levels;
+    op.staged = stage(texels, record->width, record->height, op.trimmed ? 1u : record->levels, record->layout);
     if (record->source_format != NEBULA_TEXTURE_MADE && record->name_hash != 0u) {
         op.name.format = record->source_format;
         op.name.hash = record->name_hash;
@@ -468,12 +550,18 @@ void TextureStore::begin_frame(unsigned frame_slot, unsigned frames_in_flight) {
     kept_[frame_slot].clear();
     {
         // Spare chunks (idle: only this list holds them, and the frames that read them are past) go one at a time once no scene
-        // has staged a texture for a while; the chunk being filled stays.
+        // has staged a texture for a while, then the chunk being filled once nothing staged in it is still in flight (only the
+        // store holds it; a holder elsewhere only lets go, and a new one needs lock_). The next staging makes a chunk again.
         const std::lock_guard guard(lock_);
         if (std::exchange(staging_requested_, false)) {
             staging_idle_frames_ = 0u;
-        } else if (++staging_idle_frames_ >= kStagingIdleFrames && !free_chunks_.empty()) {
-            free_chunks_.pop_back();
+        } else if (++staging_idle_frames_ >= kStagingIdleFrames) {
+            if (!free_chunks_.empty()) {
+                free_chunks_.pop_back();
+            } else if (arena_chunk_ != nullptr && arena_chunk_.use_count() == 1) {
+                arena_chunk_.reset();
+                arena_used_ = 0u;
+            }
             staging_idle_frames_ = kStagingIdleFrames - kStagingTrimFrames;
         }
     }
@@ -565,9 +653,11 @@ void TextureStore::make_own(Entry& entry, const Op& op, bool once) {
     entry.bytes = allocation;
     // A whole texture is what the budget measures a reduced one against.
     entry.dropped = op.drop;
+    entry.trimmed = op.trimmed;
     if (op.drop == 0u) {
         entry.full_bytes = allocation;
-        entry.full_levels = op.staged.levels;
+        // The record's levels, generated ones too: the budget leaves top levels out of those.
+        entry.full_levels = std::max(op.full_levels, op.staged.levels);
     }
     backend_.record_upload(gpu::raw(entry.texture), false, *op.staged.chunk, op.staged.offset, op.staged.width, op.staged.height,
                            op.staged.levels, op.staged.offsets.data(), op.staged.pitches.data());
@@ -598,6 +688,7 @@ void TextureStore::create_entry(Op& op) {
         }
     }
     look_up(op.id, *entry);
+    follow_generated_levels(op.id, *entry);
     entries_[op.id] = std::move(entry);
 }
 
@@ -628,6 +719,7 @@ void TextureStore::update_entry(Op& op) {
             entry.current = own;
         }
         ++revision_;
+        follow_generated_levels(op.id, entry);
     }
     // New texels have a new name: what stood in for the old ones goes.
     entry.name = op.name;
@@ -640,12 +732,14 @@ void TextureStore::update_entry(Op& op) {
 // The budget's resize: the texture of a live id made again from the game's image with `op.drop` top levels left out (0: whole).
 // The old texture goes to the retired list, so frames in flight and this frame's draws read it until they finish: a texture is
 // never blank. The game's size stays in `own` (packs are matched by it, and the samplers take the smaller texture's own levels).
+// A whole one is also made again with or without its generated levels (follow_generated_levels).
 void TextureStore::resize_entry(Op& op) {
     Entry* const found = op.id < entries_.size() ? entries_[op.id].get() : nullptr;
-    if (found == nullptr || !found->texture || found->dropped == op.drop) {
+    if (found == nullptr || !found->texture || (found->dropped == op.drop && found->trimmed == op.trimmed)) {
         return;
     }
     Entry& entry = *found;
+    const bool budget = entry.dropped != op.drop;
     const std::uint32_t game_width = entry.own.width;
     const std::uint32_t game_height = entry.own.height;
     const std::uint32_t previous_view = entry.own.srv_index;
@@ -668,16 +762,19 @@ void TextureStore::resize_entry(Op& op) {
     entry.own.height = game_height;
     const std::uint64_t freed = held > entry.bytes ? held - entry.bytes : 0u;
     retire(std::move(previous), previous_view, freed);
-    if (freed != 0u) {
-        ++reductions_;
-        freed_bytes_total_ += freed;
-    } else {
-        ++restores_;
+    if (budget) {
+        if (freed != 0u) {
+            ++reductions_;
+            freed_bytes_total_ += freed;
+        } else {
+            ++restores_;
+        }
     }
     if (showing_own) {
         entry.current = entry.own;
     }
     ++revision_;  // the tables naming it read the new texture
+    follow_generated_levels(op.id, entry);
 }
 
 void TextureStore::free_entry(std::uint32_t id) {
@@ -705,12 +802,30 @@ void TextureStore::dump_base_level(const Staged& staged, const PackName& name) {
         for (std::uint32_t y = 0; y < height; ++y) {
             std::memcpy(pixels.data() + std::size_t{y} * width, base + std::size_t{y} * staged.pitches[0], std::size_t{width} * 4u);
         }
+    } else if (staged.format == TexelFormat::Rgb565) {
+        // Staged before dumping began (stage takes RGBA8 while dumping): the 16-bit colours widened.
+        for (std::uint32_t y = 0; y < height; ++y) {
+            const std::uint8_t* const row = base + std::size_t{y} * staged.pitches[0];
+            for (std::uint32_t x = 0; x < width; ++x) {
+                const unsigned c = row[2u * x] | row[2u * x + 1u] << 8;
+                const unsigned r = c >> 11, g = (c >> 5) & 63u, b = c & 31u;
+                pixels[std::size_t{y} * width + x] =
+                    RGBA8{static_cast<std::uint8_t>(r << 3 | r >> 2), static_cast<std::uint8_t>(g << 2 | g >> 4),
+                          static_cast<std::uint8_t>(b << 3 | b >> 2), 0xFFu};
+            }
+        }
     } else {
         const std::uint32_t row = texel_row_bytes(staged.format, width);
         const std::uint32_t rows = texel_rows(staged.format, height);
         std::vector<std::uint8_t> packed(std::size_t{row} * rows);
         for (std::uint32_t y = 0; y < rows; ++y) {
             std::memcpy(packed.data() + std::size_t{y} * row, base + std::size_t{y} * staged.pitches[0], row);
+        }
+        if (staged.format == TexelFormat::Astc4x4) {
+            // The record's blocks back, so the dump holds the texture's own colours.
+            for (std::size_t b = 0; b < packed.size() / block4_astc::kBlockBytes; ++b) {
+                block4_astc::to_block4(packed.data() + b * block4_astc::kBlockBytes, packed.data() + b * 8u);
+            }
         }
         detail::expand_record_level(staged.layout, packed.data(), width, height, pixels.data());
     }
@@ -972,6 +1087,7 @@ void TextureStore::configure_texture_packs(const TexturePackSettings& settings) 
         stager_set_ = true;
     }
     packs_.configure(settings);
+    dumping_.store(packs_.dumping(), std::memory_order_relaxed);
 }
 
 void TextureStore::apply_texture_packs() {

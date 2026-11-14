@@ -9,9 +9,11 @@ with the in-box C# compiler, and embeds them with the given game binaries. A fir
 player's disc image with nebula-import. An update keeps the packed game, the saves and the settings, installs this
 version and removes the recompiled game of earlier installs, its compiler and its source (InstallEngine.Install).
 
-  -Bin    NebulaNative.exe, smg_game.dll, smg_game_plain.dll and D3D12\ (the Agility SDK's runtime the build put
-          beside it), as tested; tables\material-names.tsv, rt-materials.tsv and rt-suns.tsv (the ray tracer's tables,
-          made by nebula-import rt-materials on the ray tracing branch) when there: Setup installs without them else
+  -Bin    NebulaNative.exe, NebulaNative-x86-64-v2.exe (the host's NEBULA_HOST_BASELINE build), smg_game.dll,
+          smg_game_plain.dll, x86-64-v2\smg_game.dll and x86-64-v2\smg_game_plain.dll (native\build.ps1 with both
+          targets) and D3D12\ (the Agility SDK's runtime the build put beside it), as tested; tables\material-names.tsv,
+          rt-materials.tsv and rt-suns.tsv (the ray tracer's tables, made by nebula-import rt-materials on the ray
+          tracing branch) when there: Setup installs without them else
   -Names  the game build folder of those binaries (the folder LumaLink's --names takes): its function rows (luma\),
           luma_types\luma_types.json, luma_functions.json, luma_numbers.json and the placement facts
           (smg_game.luma-placement.json, smg_game.luma-self.json). They are installed as luma\ beside the game, with the
@@ -59,7 +61,7 @@ try {
         if (-not (Test-Path -LiteralPath (Join-Path $Dxc $name))) { throw "The compiler folder has no $name" }
     }
     if ((& git -C $repo status --porcelain).Length -ne 0) { Write-Warning 'The tree has uncommitted changes; the package records HEAD.' }
-    foreach ($name in 'NebulaNative.exe', 'smg_game.dll', 'smg_game_plain.dll', 'D3D12\D3D12Core.dll', 'D3D12\LICENSE.txt') {
+    foreach ($name in 'NebulaNative.exe', 'NebulaNative-x86-64-v2.exe', 'smg_game.dll', 'smg_game_plain.dll', 'x86-64-v2\smg_game.dll', 'x86-64-v2\smg_game_plain.dll', 'D3D12\D3D12Core.dll', 'D3D12\LICENSE.txt') {
         if (-not (Test-Path -LiteralPath (Join-Path $Bin $name))) { throw "The bin folder has no $name" }
     }
     foreach ($name in 'lumalink.exe', 'lumalink-gui.exe') {
@@ -109,7 +111,7 @@ try {
     $ErrorActionPreference = 'Continue'
     try {
         # The program (Setup's import and cook) and the library (the game cooks mods' files with it).
-        & $cargo build --release --locked -p nebula-import --bin nebula-import --lib `
+        & $cargo build --profile dist --locked -p nebula-import --bin nebula-import --lib `
             --config "target.x86_64-pc-windows-msvc.rustflags=['-C','target-feature=+crt-static']"
         if ($LASTEXITCODE -ne 0) { throw "cargo failed with exit code $LASTEXITCODE" }
     } finally {
@@ -117,8 +119,8 @@ try {
         Pop-Location
     }
     $targetDir = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $repo 'target' }
-    $importer = Join-Path $targetDir 'release\nebula-import.exe'
-    $cooker = Join-Path $targetDir 'release\nebula_import.dll'
+    $importer = Join-Path $targetDir 'dist\nebula-import.exe'
+    $cooker = Join-Path $targetDir 'dist\nebula_import.dll'
 
     $publicKey = (Get-Content -LiteralPath (Join-Path $installer 'release-public-key.xml') -Raw).Trim()
     # The store version the importer writes and the game reads (one file for all of them).
@@ -155,6 +157,8 @@ namespace Nebula
     $resources = [ordered]@{
         'NebulaNative.exe' = (Join-Path $Bin 'NebulaNative.exe'); 'smg_game.dll' = (Join-Path $Bin 'smg_game.dll')
         'smg_game_plain.dll' = (Join-Path $Bin 'smg_game_plain.dll'); 'luma.zip' = $lumaZip
+        'NebulaNative-x86-64-v2.exe' = (Join-Path $Bin 'NebulaNative-x86-64-v2.exe')
+        'x86-64-v2\smg_game.dll' = (Join-Path $Bin 'x86-64-v2\smg_game.dll'); 'x86-64-v2\smg_game_plain.dll' = (Join-Path $Bin 'x86-64-v2\smg_game_plain.dll')
         'lumalink\lumalink.exe' = (Join-Path $LumaLink 'lumalink.exe'); 'lumalink\lumalink-gui.exe' = (Join-Path $LumaLink 'lumalink-gui.exe')
         'D3D12\D3D12Core.dll' = (Join-Path $Bin 'D3D12\D3D12Core.dll'); 'D3D12\LICENSE.txt' = (Join-Path $Bin 'D3D12\LICENSE.txt')
         'Nebula.exe' = $launcher; 'NebulaSettings.exe' = $settingsApp; 'nebula-import.exe' = $importer

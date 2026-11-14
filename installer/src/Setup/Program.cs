@@ -45,10 +45,12 @@ namespace Nebula.Setup
                 if (options.ContainsKey("uninstall")) { Integration.Uninstall(layout, options.ContainsKey("remove-user-data")); return 0; }
                 if (options.ContainsKey("rollback")) { Integration.Rollback(layout); return 0; }
                 var current = InstalledInfo.Read(layout);
+                if (options.ContainsKey("apply-update") && current != null &&
+                    InstallIntent.ForPackage(current.Version, BuildInfo.Version) != InstallMode.Update)
+                    throw new InvalidOperationException("Nebula " + BuildInfo.Version + " is not newer than the installed " + current.Version + ".");
                 var request = new InstallRequest
                 {
-                    Mode = current == null ? InstallMode.Install :
-                        (options.ContainsKey("apply-update") ? InstallMode.Update : InstallIntent.ForPackage(current.Version, BuildInfo.Version)),
+                    Mode = current == null ? InstallMode.Install : InstallIntent.ForPackage(current.Version, BuildInfo.Version),
                     GameInput = options.ContainsKey("input") ? options["input"] : null,
                     InstallRoot = root,
                     DesktopShortcut = options.ContainsKey("desktop-shortcut")

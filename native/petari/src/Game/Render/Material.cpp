@@ -107,6 +107,8 @@ void CoordMatrix::calc() {
 
 namespace {
     f32 sAmbient[2][4];
+    // Raised when an ambient colour takes another value: rows filled under one generation read the same colours.
+    u32 sAmbientGeneration = 1;
 
     void setColor(f32* pOut, NebulaColor8 color) {
         pOut[0] = color.r / 255.0f;
@@ -118,11 +120,21 @@ namespace {
 
 namespace MaterialAmbient {
     void set(u32 channel, NebulaColor8 color) {
-        setColor(sAmbient[channel & 1], color);
+        f32 value[4];
+        setColor(value, color);
+        f32* pAmbient = sAmbient[channel & 1];
+        if (memcmp(pAmbient, value, sizeof(value)) != 0) {
+            memcpy(pAmbient, value, sizeof(value));
+            sAmbientGeneration++;
+        }
     }
 
     const f32* get(u32 channel) {
         return sAmbient[channel & 1];
+    }
+
+    u32 generation() {
+        return sAmbientGeneration;
     }
 }  // namespace MaterialAmbient
 
@@ -728,9 +740,15 @@ u32 MaterialDraw::constantsOf(s32 formIndex, const NebulaModelForm& rForm) {
         return Frame::addConstants(pState->mSlot, rForm.vertex_row_count, rForm.pixel_row_count, nullptr, pState->mCoordRows, pState->mCoordRowCount);
     }
 
-    // Moved or edited: rows in the frame, once a frame while they stay the same.
-    if (plain && pState->mConstantsFrame == Frame::number() && pState->mConstantsStamp == pMaterial->mStamp &&
-        !pState->mReadsAmbient) {
+    // Moved, edited or lit by the ambient colours: rows in the frame, once a frame while they stay the same (for a form
+    // that reads the ambient colours, while those are the ones its rows were filled with; in the plain module only: a
+    // module with hook points fills such a form's rows at every draw).
+#if defined(NEBULA_PLAIN_MODULE)
+    const bool ambientKept = !pState->mReadsAmbient || pState->mConstantsAmbient == MaterialAmbient::generation();
+#else
+    const bool ambientKept = !pState->mReadsAmbient;
+#endif
+    if (plain && pState->mConstantsFrame == Frame::number() && pState->mConstantsStamp == pMaterial->mStamp && ambientKept) {
         return pState->mConstantsIndex;
     }
     f32 (*pRows)[4] = static_cast< f32 (*)[4] >(Frame::arena(rowCount * 16, 16));
@@ -744,6 +762,7 @@ u32 MaterialDraw::constantsOf(s32 formIndex, const NebulaModelForm& rForm) {
         pState->mConstantsFrame = Frame::number();
         pState->mConstantsStamp = pMaterial->mStamp;
         pState->mConstantsIndex = index;
+        pState->mConstantsAmbient = MaterialAmbient::generation();
     }
     return index;
 }

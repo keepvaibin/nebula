@@ -70,6 +70,20 @@ VkRect2D turned_rect(VkSurfaceTransformFlagBitsKHR transform, int width, int hei
     }
 }
 
+// Clockwise quarter turns of `transform` (turned_rect's three; any other is drawn upright, as there).
+unsigned quarter_turns(VkSurfaceTransformFlagBitsKHR transform) {
+    switch (transform) {
+    case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:
+        return 1u;
+    case VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR:
+        return 2u;
+    case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:
+        return 3u;
+    default:
+        return 0u;
+    }
+}
+
 }  // namespace
 
 VkDescriptorPool vk_detail::create_pool(VkDevice device, std::uint32_t sets, const PoolSizes& counts) {
@@ -305,15 +319,20 @@ bool RendererVk::create_layouts() {
     const VkDevice device = context.device();
     // Scene depth: 32-bit float with stencil (the shadow volumes), where reversed Z keeps its precision; D24S8 where the
     // device lacks it (Vulkan guarantees one of the two) or its D32F clears are broken (DeviceQuirks::depth_d24).
-    const auto usable = [&context](VkFormat candidate) {
+    const auto usable = [&context](VkFormat candidate, VkFormatFeatureFlags needed) {
         VkFormatProperties format{};
         vkGetPhysicalDeviceFormatProperties(context.physical_device(), candidate, &format);
-        constexpr VkFormatFeatureFlags kNeeded = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
-        return (format.optimalTilingFeatures & kNeeded) == kNeeded;
+        return (format.optimalTilingFeatures & needed) == needed;
     };
-    depth_format_ = !context.quirks().depth_d24 && usable(VK_FORMAT_D32_SFLOAT_S8_UINT) ? VK_FORMAT_D32_SFLOAT_S8_UINT
-                    : usable(VK_FORMAT_D24_UNORM_S8_UINT)                                ? VK_FORMAT_D24_UNORM_S8_UINT
-                                                                                         : VK_FORMAT_D32_SFLOAT_S8_UINT;
+    constexpr VkFormatFeatureFlags kSampledDepth = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
+    // Neither sampled: the one the spec promises as an attachment (D32FS8 when its attachment bit is not reported).
+    depth_format_ = !context.quirks().depth_d24 && usable(VK_FORMAT_D32_SFLOAT_S8_UINT, kSampledDepth) ? VK_FORMAT_D32_SFLOAT_S8_UINT
+                    : usable(VK_FORMAT_D24_UNORM_S8_UINT, kSampledDepth)                                ? VK_FORMAT_D24_UNORM_S8_UINT
+                    : usable(VK_FORMAT_D24_UNORM_S8_UINT, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) ? VK_FORMAT_D24_UNORM_S8_UINT
+                                                                                                        : VK_FORMAT_D32_SFLOAT_S8_UINT;
+    if (!usable(depth_format_, kSampledDepth)) {
+        std::fprintf(stderr, "[vulkan] neither D32FS8 nor D24S8 is a sampled depth format here; the depth reads are undefined\n");
+    }
 
     const VkShaderStageFlags stage_passes = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     // Descriptor indexing, or each draw's own tables (shader_compile_vk.h kBoundTableSlots); the programs, loaded by the form
@@ -566,6 +585,14 @@ bool RendererVk::create_layouts() {
             attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             vk::check(vkCreateRenderPass(device, &info, nullptr,
                 &draw_layout_.depth_clear_passes[1][wide ? 1u : 0u][samples_log2]), "depth and stencil clearing render pass");
+            attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            vk::check(vkCreateRenderPass(device, &info, nullptr,
+                &draw_layout_.discard_depth_clear_passes[1][wide ? 1u : 0u][samples_log2]),
+                "colour replacement, depth and stencil clearing render pass");
+            attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+            vk::check(vkCreateRenderPass(device, &info, nullptr,
+                &draw_layout_.discard_depth_clear_passes[0][wide ? 1u : 0u][samples_log2]),
+                "colour replacement and depth clearing render pass");
         }
         attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -576,6 +603,44 @@ bool RendererVk::create_layouts() {
                                      : samples_log2 != 0u ? &draw_layout_.ms_passes_clear[samples_log2]
                                                          : &draw_layout_.scene_pass_clear),
                   "scene target clearing render pass");
+    }
+    // The scene depth cleared alone (settle_depth_clear with no pass open): the depth target only, so the colour is neither
+    // loaded nor stored. [0] keeps the stencil, [1] clears it, as depth_clear_passes.
+    for (unsigned samples_log2 = 0u; (1u << samples_log2) <= msaa_max_samples_; ++samples_log2) {
+        VkAttachmentDescription attachment{};
+        attachment.format = depth_format_;
+        attachment.samples = static_cast<VkSampleCountFlagBits>(1u << samples_log2);
+        attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
+        attachment.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        attachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        const VkAttachmentReference depth{0, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
+        VkSubpassDescription subpass{};
+        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpass.pDepthStencilAttachment = &depth;
+        VkSubpassDependency dependencies[2]{};
+        dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+        dependencies[0].dstSubpass = 0;
+        dependencies[0].srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        dependencies[0].dstStageMask = dependencies[0].srcStageMask;
+        dependencies[0].srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        dependencies[0].dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        dependencies[1] = dependencies[0];
+        dependencies[1].srcSubpass = 0;
+        dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+        VkRenderPassCreateInfo info{VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
+        info.attachmentCount = 1;
+        info.pAttachments = &attachment;
+        info.subpassCount = 1;
+        info.pSubpasses = &subpass;
+        info.dependencyCount = 2;
+        info.pDependencies = dependencies;
+        for (const unsigned stencil : {0u, 1u}) {
+            attachment.stencilLoadOp = stencil != 0u ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
+            vk::check(vkCreateRenderPass(device, &info, nullptr, &depth_alone_passes_[stencil][samples_log2]),
+                      "depth clearing render pass (depth alone)");
+        }
     }
     // The effects layer needs its format drawn and blended, and four colour attachments with independent blending.
     {
@@ -818,8 +883,8 @@ bool RendererVk::create_swapchain() {
             }
         }
     }
-    // HDR10 where it is asked for and the surface lists it; a surface turned from its natural orientation ends in a blit that
-    // knows only the 8-bit write.
+    // HDR10 where it is asked for and the surface lists it; a surface turned from its natural orientation stays on the 8-bit
+    // write (its blit, drawn while the post chain is not ready, knows only that one).
     const bool hdr_asked = wants_hdr();
     const bool surface_turned = (caps.currentTransform == VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR ||
                                  caps.currentTransform == VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR ||
@@ -1294,7 +1359,7 @@ VkShaderModule RendererVk::utility_module(vk::UtilitySpirv shader) {
 VkPipeline RendererVk::create_utility_pipeline(VkRenderPass pass, VkPipelineLayout layout, vk::UtilitySpirv vs_shader,
                                                vk::UtilitySpirv ps_shader, VkColorComponentFlags write_mask,
                                                bool blend, bool strip, bool depth_write,
-                                               VkSampleCountFlagBits samples) {
+                                               VkSampleCountFlagBits samples, bool color_attachment) {
     const VkDevice device = vk::Context::get().device();
     const VkShaderModule vs = utility_module(vs_shader);
     const VkShaderModule ps = utility_module(ps_shader);
@@ -1335,8 +1400,9 @@ VkPipeline RendererVk::create_utility_pipeline(VkRenderPass pass, VkPipelineLayo
         target.alphaBlendOp = VK_BLEND_OP_ADD;
     }
     VkPipelineColorBlendStateCreateInfo blend_info{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-    blend_info.attachmentCount = 1;
-    blend_info.pAttachments = &target;
+    // A pass with no colour attachment (the depth resolve's) takes no attachment blend state.
+    blend_info.attachmentCount = color_attachment ? 1u : 0u;
+    blend_info.pAttachments = color_attachment ? &target : nullptr;
     const VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo dynamic{VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
     dynamic.dynamicStateCount = 2;
@@ -1355,7 +1421,7 @@ VkPipeline RendererVk::create_utility_pipeline(VkRenderPass pass, VkPipelineLayo
     info.layout = layout;
     info.renderPass = pass;
     VkPipeline pipeline = VK_NULL_HANDLE;
-    const VkResult result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &pipeline);
+    const VkResult result = vkCreateGraphicsPipelines(device, vk::shared_pipeline_cache(), 1, &info, nullptr, &pipeline);
     vkDestroyShaderModule(device, vs, nullptr);
     vkDestroyShaderModule(device, ps, nullptr);
     vk::check(result, "utility pipeline");
@@ -1378,7 +1444,7 @@ bool RendererVk::create_utility_pipelines() {
         info.stage.module = module;
         info.stage.pName = "main";
         info.layout = probe_layout_;
-        const VkResult result = vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &probe_pipeline_);
+        const VkResult result = vkCreateComputePipelines(device, vk::shared_pipeline_cache(), 1, &info, nullptr, &probe_pipeline_);
         vkDestroyShaderModule(device, module, nullptr);
         vk::check(result, "screen probe pipeline");
     }
@@ -1386,9 +1452,10 @@ bool RendererVk::create_utility_pipelines() {
         (void)scene_utility_pipeline(static_cast<SceneUtility>(kind));
     }
     if (msaa_max_samples_ > 1u) {
-        depth_resolve_pipeline_ = create_utility_pipeline(draw_layout_.scene_pass, utility_layout_,
+        // The single-sample depth target's pass alone (resolve_scene_depth): the resolve writes depth only.
+        depth_resolve_pipeline_ = create_utility_pipeline(depth_alone_passes_[0][0], utility_layout_,
                                                           vk::UtilitySpirv::BlitVs, vk::UtilitySpirv::DepthResolvePs, 0u, false,
-                                                          false, true);
+                                                          false, true, VK_SAMPLE_COUNT_1_BIT, false);
     }
     blit_pipeline_ = create_utility_pipeline(present_pass_, utility_layout_, vk::UtilitySpirv::PresentVs, vk::UtilitySpirv::BlitPs,
                                              kAll, false, false, false);
@@ -1422,6 +1489,13 @@ VkPipeline RendererVk::scene_utility_pipeline(SceneUtility kind) {
     case SceneUtility::ClearDepth:
         pipeline = create_utility_pipeline(pass, utility_layout_, vk::UtilitySpirv::BlitVs,
                                            vk::UtilitySpirv::ClearDepthPs, 0u, false, false, true, samples);
+        break;
+    case SceneUtility::Conversion:
+    case SceneUtility::DisplayFilter:
+        pipeline = create_utility_pipeline(pass, utility_layout_, vk::UtilitySpirv::BlitVs,
+                                           kind == SceneUtility::Conversion ? vk::UtilitySpirv::SceneConversionPs
+                                                                            : vk::UtilitySpirv::DisplayFilterPs,
+                                           kRgb | VK_COLOR_COMPONENT_A_BIT, false, false, false, samples);
         break;
     case SceneUtility::Count:
         break;
@@ -1489,7 +1563,7 @@ VkPipeline RendererVk::probe_test_pipeline() {
     info.pDynamicState = &dynamic;
     info.layout = utility_layout_;
     info.renderPass = pass;
-    const VkResult result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &pipeline);
+    const VkResult result = vkCreateGraphicsPipelines(device, vk::shared_pipeline_cache(), 1, &info, nullptr, &pipeline);
     vkDestroyShaderModule(device, vs, nullptr);
     vkDestroyShaderModule(device, ps, nullptr);
     if (result != VK_SUCCESS) {
@@ -1568,7 +1642,6 @@ void RendererVk::shutdown() {
         release_mod_post();
         post_.shutdown();
         bloom_.shutdown();
-        oriented_.reset();
         hdr_capture_.reset();
         fg_hudless_scene_color_.reset();
         fg_hudless_display_.reset();
@@ -1596,6 +1669,7 @@ void RendererVk::shutdown() {
         if (utility_pool_ != VK_NULL_HANDLE) vkDestroyCommandPool(device, utility_pool_, nullptr);
         utility_pool_ = VK_NULL_HANDLE;
         output_scene_active_ = false;
+        output_source_sampled_ = false;
         for (ProbeSlot& slot : probe_slots_) {
             if (slot.queries != VK_NULL_HANDLE) vkDestroyQueryPool(device, slot.queries, nullptr);
         }
@@ -1636,7 +1710,8 @@ void RendererVk::shutdown() {
         }
         wide_base_sampled_ = false;
         for (auto* group : {&draw_layout_.discard_color_passes, &draw_layout_.depth_clear_passes[0],
-                            &draw_layout_.depth_clear_passes[1]}) {
+                            &draw_layout_.depth_clear_passes[1], &draw_layout_.discard_depth_clear_passes[0],
+                            &draw_layout_.discard_depth_clear_passes[1], &depth_alone_passes_}) {
             for (auto& passes : *group) {
                 for (VkRenderPass& pass : passes) {
                     if (pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, pass, nullptr);
@@ -2337,6 +2412,22 @@ constexpr const char* kPassTimeNames[] = {"scene", "resolve", "frame read", "dis
 }  // namespace
 
 void RendererVk::gpu_pass(GpuPass pass) {
+    (void)gpu_pass_mark(pass, false);
+}
+
+// A scope ends. A scene pass it opened and leaves open goes on with the outer work (the scene's geometry after the camera's
+// widen or the bloom's composite); no timestamp splits a pass on a tiled GPU, so that whole pass is billed to the outer.
+void RendererVk::gpu_pass_restore(GpuPass outer) {
+    if (scene_pass_open_ && open_pass_mark_ < pass_mark_count_[frame_slot_] &&
+        pass_marks_[frame_slot_][open_pass_mark_] == current_pass_) {
+        pass_marks_[frame_slot_][open_pass_mark_] = outer;
+    }
+    gpu_pass(outer);
+}
+
+// The mark's index, or kNoPassMark. A scene pass's beginning always takes a mark of its own, so gpu_pass_restore can relabel
+// the pass alone.
+unsigned RendererVk::gpu_pass_mark(GpuPass pass, bool pass_begins) {
     const bool changed = pass != current_pass_;
     current_pass_ = pass;
     unsigned& marks = pass_mark_count_[frame_slot_];
@@ -2351,12 +2442,13 @@ void RendererVk::gpu_pass(GpuPass pass) {
     // Tiled GPUs execute a render pass tile by tile. Interior timestamps do not delimit whole-image work;
     // record only at existing pass boundaries, never split a pass to measure it.
     if (scene_pass_open_ || pass_queries_ == VK_NULL_HANDLE || !pass_recording_ || commands_ != commands ||
-        marks + 1u >= kGpuPassSlots || (marks != 0u && pass_marks_[frame_slot_][marks - 1u] == pass)) {
-        return;
+        marks + 1u >= kGpuPassSlots || (!pass_begins && marks != 0u && pass_marks_[frame_slot_][marks - 1u] == pass)) {
+        return kNoPassMark;
     }
     vkCmdWriteTimestamp(commands, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, pass_queries_,
                         frame_slot_ * kGpuPassSlots + marks);
-    pass_marks_[frame_slot_][marks++] = pass;
+    pass_marks_[frame_slot_][marks] = pass;
+    return marks++;
 }
 
 std::size_t RendererVk::gpu_pass_times(GpuPassTime* out, std::size_t capacity) const noexcept {
@@ -2775,48 +2867,15 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
         present_fg_hudless(*source, content);
     }
 
-    // The post chain's passes before the swap chain's: the picture scaled (and sharpened) to its size on screen. A
-    // turned swap chain takes it through `oriented_` and the blit, which turns it.
+    // The post chain's passes before the swap chain's: the picture scaled (and sharpened) to its size on screen. The last
+    // one writes the swap chain image, turned or not: on a turned image each pixel takes the picture's turned-back one, the
+    // pixel the blit of an upright copy would show there.
     const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_frame_set(layout); };
     vk::PostProcessorVk::PresentStep step{};
-    const vk::Texture* picture = shown;
     if (post_.ready() && !present_black_) {
-        const bool turned = swapchain_.transform != VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-        const auto width = static_cast<std::uint32_t>(content.width);
-        const auto height = static_cast<std::uint32_t>(content.height);
-        step = post_.prepare_present(commands, *shown, shown->width, shown->height, width, height, !turned,
-                                     allocate);
-        if (turned && step.pipeline != VK_NULL_HANDLE) {
-            if (!oriented_ || oriented_->width != width || oriented_->height != height) {
-                oriented_ = context.create_texture(width, height, 1u, VK_FORMAT_R8G8B8A8_UNORM,
-                                                   VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                                                   true, "post-process picture");
-                VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
-                info.renderPass = rgba8_pass_;
-                info.attachmentCount = 1;
-                info.width = width;
-                info.height = height;
-                info.layers = 1;
-                if (oriented_) {
-                    info.pAttachments = &oriented_->target_view;
-                    if (vkCreateFramebuffer(context.device(), &info, nullptr, &oriented_->framebuffer) != VK_SUCCESS) {
-                        oriented_.reset();
-                    }
-                }
-            }
-            if (oriented_) {
-                VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-                begin.renderPass = rgba8_pass_;
-                begin.framebuffer = oriented_->framebuffer;
-                begin.renderArea = {{0, 0}, {width, height}};
-                vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
-                post_.finish_present(commands, step, {{0, 0}, {width, height}}, allocate);
-                vkCmdEndRenderPass(commands);
-                oriented_->layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-                picture = oriented_.get();
-            }
-            step = {};
-        }
+        step = post_.prepare_present(commands, *shown, shown->width, shown->height,
+                                     static_cast<std::uint32_t>(content.width), static_cast<std::uint32_t>(content.height),
+                                     true, allocate);
     }
 
     VkClearValue clear{};
@@ -2835,16 +2894,7 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
     }
 
     // The picture, aspect-fitted (D3D-style viewport: y flipped by a negative height), turned into a pre-rotated image:
-    // the post chain's last pass, or the blit of the display picture (or of the chain's turned picture).
-    const VkDescriptorSet set = allocate_frame_set(utility_set_layout_);
-    const VkDescriptorImageInfo image_info{VK_NULL_HANDLE, picture->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-    VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-    write.dstSet = set;
-    write.dstBinding = 0;
-    write.descriptorCount = 1;
-    write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-    write.pImageInfo = &image_info;
-    vkUpdateDescriptorSets(context.device(), 1, &write, 0, nullptr);
+    // the post chain's last pass, or the blit of the display picture.
     const VkRect2D scissor =
         turned_rect(swapchain_.transform, bb_w, bb_h, content.left, content.top, content.width, content.height);
     const VkViewport viewport{static_cast<float>(scissor.offset.x),
@@ -2854,8 +2904,18 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
     vkCmdSetViewport(commands, 0, 1, &viewport);
     vkCmdSetScissor(commands, 0, 1, &scissor);
     if (step.pipeline != VK_NULL_HANDLE) {
-        post_.finish_present(commands, step, scissor, allocate, swapchain_.hdr ? hdr_output_ : PostOutput{});
+        post_.finish_present(commands, step, scissor, allocate, swapchain_.hdr ? hdr_output_ : PostOutput{},
+                             quarter_turns(swapchain_.transform));
     } else {
+        const VkDescriptorSet set = allocate_frame_set(utility_set_layout_);
+        const VkDescriptorImageInfo image_info{VK_NULL_HANDLE, shown->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+        VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+        write.dstSet = set;
+        write.dstBinding = 0;
+        write.descriptorCount = 1;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        write.pImageInfo = &image_info;
+        vkUpdateDescriptorSets(context.device(), 1, &write, 0, nullptr);
         vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, blit_pipeline_);
         vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, utility_layout_, 0, 1, &set, 0, nullptr);
         const std::uint32_t transform = static_cast<std::uint32_t>(swapchain_.transform);

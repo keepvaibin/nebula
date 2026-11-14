@@ -348,6 +348,8 @@ struct Modules {
     std::filesystem::path cache_file;
     std::unordered_map<const void*, VkShaderModule> modules;
     std::uint64_t on_disk = 0u;  // the hash of the bytes the file holds: an unchanged cache is not written again
+    std::uint64_t accepted = 0u; // the hash of the data the cache was made from at the start (0: none, or refused)
+    bool stale = false;          // the last write failed: the file lacks pipelines the cache has
     bool file_read = false;      // the cache file has been read since the device came up (once, even when creating fails)
     std::vector<char> initial;   // its data until the cache exists
 };
@@ -448,12 +450,21 @@ std::size_t write_driver_cache() noexcept {
         on_disk = gModules.on_disk;
     }
     std::size_t size = 0u;
-    if (cache == VK_NULL_HANDLE || vk::Context::get().quirks().no_cache_file ||
-        vkGetPipelineCacheData(device, cache, &size, nullptr) != VK_SUCCESS || size == 0u) {
+    if (cache == VK_NULL_HANDLE || vk::Context::get().quirks().no_cache_file) {
         return 0u;
+    }
+    if (vkGetPipelineCacheData(device, cache, &size, nullptr) != VK_SUCCESS) {
+        std::lock_guard guard(gModules.lock);
+        gModules.stale = true;
+        return 0u;
+    }
+    if (size == 0u) {
+        return 0u;  // nothing made: nothing the file lacks
     }
     std::vector<char> bytes(size);
     if (vkGetPipelineCacheData(device, cache, &size, bytes.data()) != VK_SUCCESS) {
+        std::lock_guard guard(gModules.lock);
+        gModules.stale = true;
         return 0u;
     }
     bytes.resize(size);
@@ -463,10 +474,13 @@ std::size_t write_driver_cache() noexcept {
     }
     const std::vector<char> out = wrap_vk_cache(cache_identity(), bytes.data(), bytes.size());
     if (!replace_file(file, out.data(), out.size())) {
+        std::lock_guard guard(gModules.lock);
+        gModules.stale = true;
         return 0u;
     }
     std::lock_guard guard(gModules.lock);
     gModules.on_disk = hash;
+    gModules.stale = false;
     return bytes.size();
 }
 
@@ -507,14 +521,18 @@ VkPipelineCache driver_cache(VkDevice device) {
             gModules.initial = unwrap_cache_file(file);
         }
         gModules.on_disk = gModules.initial.empty() ? 0u : bytes_hash(gModules.initial);
+        gModules.stale = false;
     }
     VkPipelineCacheCreateInfo info{VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO};
     info.initialDataSize = gModules.initial.size();
     info.pInitialData = gModules.initial.empty() ? nullptr : gModules.initial.data();
+    gModules.accepted = 0u;
     if (vkCreatePipelineCache(device, &info, nullptr, &gModules.cache) != VK_SUCCESS) {
         info.initialDataSize = 0u;
         info.pInitialData = nullptr;
         vkCreatePipelineCache(device, &info, nullptr, &gModules.cache);
+    } else if (!gModules.initial.empty()) {
+        gModules.accepted = gModules.on_disk;
     }
     if (gModules.cache != VK_NULL_HANDLE) {
         std::vector<char>().swap(gModules.initial);
@@ -874,6 +892,9 @@ gpu::Pipeline* Pipelines::build_vk(const PipelineEntry& entry, unsigned variant,
         result = vkCreateGraphicsPipelines(device, cache, 1u, &info, nullptr, &pipeline);
     }
     if (result != VK_SUCCESS) {
+        if (result == VK_ERROR_OUT_OF_HOST_MEMORY || result == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
+            note_pipeline_out_of_memory();
+        }
         std::fprintf(stderr, "[pipelines] create failed %d: %llx %llx state %08x variant %u aux %u\n", static_cast<int>(result),
                      static_cast<unsigned long long>(desc.vertex), static_cast<unsigned long long>(desc.pixel), state, variant, aux);
         return nullptr;
@@ -920,4 +941,38 @@ std::size_t Pipelines::save_cache() noexcept {
     return write_driver_cache();
 }
 
+bool Pipelines::cache_file_state(std::filesystem::path& file, std::uint64_t& accepted) {
+    if (vk::Context::get().quirks().no_cache_file || driver_cache(device_) == VK_NULL_HANDLE) {
+        return false;
+    }
+    std::lock_guard guard(gModules.lock);
+    file = gModules.cache_file;
+    accepted = gModules.accepted;
+    return true;
+}
+
+std::uint64_t Pipelines::cache_file_hash() noexcept {
+    std::lock_guard guard(gModules.lock);
+    return gModules.stale ? 0u : gModules.on_disk;
+}
+
 }  // namespace galaxy::render::core
+
+namespace galaxy::render::vk {
+
+VkPipelineCache shared_pipeline_cache() {
+    return core::driver_cache(Context::get().device());
+}
+
+void release_shared_pipeline_cache() noexcept {
+    (void)core::write_driver_cache();
+    std::lock_guard guard(core::gModules.lock);
+    if (core::gModules.cache != VK_NULL_HANDLE) {
+        vkDestroyPipelineCache(core::gModules.device, core::gModules.cache, nullptr);
+        core::gModules.cache = VK_NULL_HANDLE;
+    }
+    core::gModules.file_read = false;
+    std::vector<char>().swap(core::gModules.initial);
+}
+
+}  // namespace galaxy::render::vk

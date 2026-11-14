@@ -36,13 +36,24 @@ cmake --build build\host --target NebulaNative
 `-DNEBULA_VULKAN=ON` also builds `NebulaNativeVk.exe`; `-DNEBULA_FSR3=OFF` leaves out FSR 3. DLSS uses NVIDIA's
 signed Streamline libraries, which the host loads at run time from the vendor folder.
 
+The host is built for AVX2. For CPUs without it, build it again in a second folder:
+
+```powershell
+cmake -S . -B build\host-v2 -G Ninja -DCMAKE_BUILD_TYPE=Release -DNEBULA_HOST_BASELINE=ON
+cmake --build build\host-v2 --target NebulaNative
+```
+
+This gives `NebulaNative-x86-64-v2.exe` (SSE4.2), which goes beside `NebulaNative.exe`. `NebulaNative.exe` starts it
+on a CPU without AVX2.
+
 ## 3. Game module
 
 ```powershell
 .\native\build.ps1 -Petari native\petari -Build build\game
 ```
 
-Builds `build\game\smg_game.dll` with clang and Ninja.
+Builds `build\game\smg_game.dll` with clang and Ninja, and `build\game\x86-64-v2\smg_game.dll` for CPUs without
+AVX2 (`-NoBaseline` leaves it out).
 
 A build for players adds `-Pgo`: ThinLTO with the profile in `native/pgo` (`tools/verify/pgo_profile.sh` makes it). It takes longer to link and spends about 17 % less CPU on the game.
 
@@ -81,7 +92,7 @@ sh native/tests/run_tests.sh
 ## Setup
 
 ```powershell
-.\installer\build-native-setup.ps1 -Version <version> -Dxc <unpacked DirectX Shader Compiler release> -Bin <folder with NebulaNative.exe and smg_game.dll>
+.\installer\build-native-setup.ps1 -Version <version> -Dxc <unpacked DirectX Shader Compiler release> -Bin <folder with both host programs, smg_game.dll and x86-64-v2\smg_game.dll>
 ```
 
 Builds the disc import tool, the launcher and Setup, and writes `Nebula-Setup.exe` with the host and game module

@@ -320,8 +320,18 @@ void RenderCore::rt_follow_setting(const RenderConfig& render) {
     }
     if (rt_setting_ < 0 || now == rt_setting_) {
         rt_setting_ = now;  // the device started as the setting said
+        rt_levels_waits_ = 0u;
         return;
     }
+    // Turned on: its hits pick texture levels by their footprint, so the tracer starts once the textures staged with their
+    // first level alone are made again with their generated levels (follow_settings, later in this walk, asks for that; the
+    // remakes land through take_ops), or after 120 walks if one cannot be made (out of memory: it is traced at its first level).
+    constexpr std::uint32_t kLevelsWaitWalks = 120u;
+    if (wanted && !rt_backend_.started() && rt_capable(rt_caps()) && !texture_store_.generated_levels_landed(render) &&
+        rt_levels_waits_++ < kLevelsWaitWalks) {
+        return;
+    }
+    rt_levels_waits_ = 0u;
     rt_setting_ = now;
     renderer_.rt_wait_idle();
     if (!wanted) {
