@@ -781,7 +781,7 @@ private:
     };
     FirstStartCalibration calibration_;
     void calibrate_first_start(bool scene, double walk_ms);
-    void end_first_start_calibration(unsigned height, const char* why);
+    void end_first_start_calibration(unsigned height, const char* why, bool performance = false);
     std::uint64_t interp_cadence_wait_qpc_ = 0;   // in the window
     // The render thread's time rendering generated frames (advance_interp_sequence), in QPC ticks.
     std::uint64_t interp_generated_qpc_ = 0;

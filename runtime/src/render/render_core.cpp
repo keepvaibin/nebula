@@ -2502,7 +2502,10 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
 
 // The first start's calibration, once a real list: in its first 3D scene, once the start's pipelines are made, each of two
 // internal heights is shown kCalibrationSettle frames (the resize and the pass timers' 0.1 average settle) and timed
-// kCalibrationSamples frames (the pass timers' sum); the fit's largest height that fits a heavy stage is kept.
+// kCalibrationSamples frames (the pass timers' sum); the fit's largest height that fits a heavy stage is kept. What is kept:
+//   no GPU timestamps, the CPU the limit, no fit      the start's height
+//   a height of the INTERNAL RESOLUTION row fits      the largest that does (match display when the panel's own fits)
+//   even 480 lines is over the budget                 the PERFORMANCE preset (apply_performance_preset)
 void RenderCore::calibrate_first_start(bool scene, double walk_ms) {
     constexpr unsigned kCalibrationSettle = 45u;  // 0.9^45: under 1 % of the height before left in the timers' average
     constexpr unsigned kCalibrationSamples = 30u;
@@ -2580,14 +2583,20 @@ void RenderCore::calibrate_first_start(bool scene, double walk_ms) {
         return;
     }
     const GpuTimeFit fit = fit_gpu_time(c.pixels.data(), c.ms.data(), c.ms.size());
-    const unsigned height = largest_fitting_height(fit, c.width, c.lines, kFitHeavyStage, kFitFrameShare * frame_ms);
+    const double budget_ms = kFitFrameShare * frame_ms;
+    const unsigned height = largest_fitting_height(fit, c.width, c.lines, kFitHeavyStage, budget_ms);
     std::fprintf(stderr, "[settings] first start measured: gpu ms = %.3f + %.3f a million pixels (%zu frames), a frame %.2f ms\n",
                  fit.a_ms, fit.b_ms_per_pixel * 1e6, c.ms.size(), frame_ms);
+    if (fit.valid && c.lines > kFitLowestHeight &&
+        predicted_gpu_ms(fit, scene_pixels(kFitLowestHeight, c.width, c.lines)) * kFitHeavyStage > budget_ms) {
+        end_first_start_calibration(kFitLowestHeight, "even 480 lines is over the budget: the PERFORMANCE preset", true);
+        return;
+    }
     end_first_start_calibration(fit.valid ? height : c.start, fit.valid ? "measured" : "no fit");
 }
 
-// `why` null: the player chose meanwhile, and nothing is set or saved.
-void RenderCore::end_first_start_calibration(unsigned height, const char* why) {
+// `why` null: the player chose meanwhile, and nothing is set or saved. `performance`: the PERFORMANCE preset, at `height`.
+void RenderCore::end_first_start_calibration(unsigned height, const char* why, bool performance) {
     FirstStartCalibration& c = calibration_;
     if (c.stage >= 2u && !c.timing_was_on) {
         renderer_.set_gpu_timing(false);
@@ -2599,6 +2608,9 @@ void RenderCore::end_first_start_calibration(unsigned height, const char* why) {
         return;
     }
     RenderConfig chosen = get_render_config_chosen();
+    if (performance) {
+        apply_performance_preset(chosen);
+    }
     chosen.internal_height = height;
     set_render_config(chosen);
     (void)save_render_config_to_file();
