@@ -413,6 +413,8 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
 /// against the game's store `base` as the overlay cooks it: how many game files it makes; 0 when its kind is none the
 /// cook makes (luma_validate's `cooked_source` lists those), an error (a refusal, L804) when the cook refuses it.
 pub fn cook_source(path: &str, source: &Path, bytes: &[u8], base: Option<&Path>) -> Result<usize> {
+    // Its caller takes what the cook notes (a mod's check).
+    let _reading = super::refuse::reading();
     let change = Change { path: path.trim_start_matches('/').to_string(), source: source.to_path_buf(), merge: false };
     let waves = base.and_then(|base| store::read_file(base, WAVE_LAYOUT).ok()).and_then(|b| audio_data::parse_layout_text(&String::from_utf8_lossy(&b)).ok()).unwrap_or_default();
     match cook_one(&change, bytes.to_vec(), &waves, base, &mut Stats::default()) {
@@ -427,6 +429,8 @@ pub fn cook_source(path: &str, source: &Path, bytes: &[u8], base: Option<&Path>)
 /// against the game's store `base` and the mod's own files at game paths (the rest of `changes`, cooked as the start
 /// cooks them): what each merge came to, in the start's order.
 pub fn check_merges<'c>(changes: &'c [Change], base: &Path) -> Vec<(&'c Change, MergeOutcome)> {
+    // Its own takes read what the cooks note (the check says the outcomes, not the notes).
+    let _reading = super::refuse::reading();
     let own = |path: &str| -> Option<Vec<u8>> {
         let change = changes.iter().rev().filter(|c| !c.merge).find(|c| {
             let at = c.path.trim_start_matches('/');
@@ -1027,6 +1031,8 @@ pub fn cook_plan(plan: &Path, output: &Path) -> Result<(Stats, Vec<(String, Stri
     let facts_file = output.with_extension("facts");
     fs::remove_file(&facts_file).ok();
     let mut facts = Vec::new();
+    // Each file's notes and the facts are taken on this thread, the last when the facts file is written.
+    let _reading = super::refuse::reading();
     super::refuse::take_facts();
     super::refuse::take_notes();
     let cooked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| cook_plan_inner(plan, output, &mut facts)))
@@ -1194,6 +1200,8 @@ mod tests {
 
     #[test]
     fn a_layout_is_the_archives_layout_file_and_its_textures_are_the_mods() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         use super::super::refuse::said;
         let dir = tempfile::tempdir().unwrap();
         let archive = dir.path().join("LayoutData/Hud.arc");
@@ -1247,6 +1255,8 @@ mod tests {
 
     #[test]
     fn a_mods_font_is_cooked_as_the_games_fonts_with_its_kerning_and_fallback_beside_it() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         use super::super::refuse::{said, take_facts, CookFact};
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("Title.ttf"), super::super::font_cook::tests::plain_font()).unwrap();
@@ -1267,6 +1277,8 @@ mod tests {
 
     #[test]
     fn a_clips_events_go_beside_it_checked_against_the_games_clip() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         use super::super::refuse::{said, said_notes, take_facts, CookFact};
         use super::super::table::TableIr;
         let dir = tempfile::tempdir().unwrap();
@@ -1305,6 +1317,8 @@ mod tests {
 
     #[test]
     fn an_animation_file_makes_clips_of_its_archives_model() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         use super::super::refuse::refusal_of;
         let dir = tempfile::tempdir().unwrap();
         // The game's Kuribo: body with head under it.
@@ -1343,6 +1357,8 @@ mod tests {
 
     #[test]
     fn a_model_takes_the_place_and_joints_of_the_games_model() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         use super::super::refuse::{refusal_of, take_notes};
         let dir = tempfile::tempdir().unwrap();
         // The game's Kuribo: joints body and head.
@@ -1424,6 +1440,8 @@ mod tests {
 
     #[test]
     fn modern_models_can_replace_either_native_model_ending() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         let bytes = br#"{"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[0]}],"nodes":[{"mesh":0}],
             "meshes":[{"primitives":[{"attributes":{"POSITION":0},"indices":1}]}],
             "accessors":[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3"},{"bufferView":1,"componentType":5123,"count":3,"type":"SCALAR"}],
@@ -1507,6 +1525,8 @@ mod tests {
 
     #[test]
     fn messages_merge_into_every_language_then_one() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         let dir = tempfile::tempdir().unwrap();
         let base = dir.path().join("game.pak");
         let (file, ids) = super::super::message_merge::tests::game();
@@ -1556,6 +1576,8 @@ mod tests {
 
     #[test]
     fn a_failed_merge_loses_no_other_and_both_names_of_a_table_are_one() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         let dir = tempfile::tempdir().unwrap();
         let base = dir.path().join("game.pak");
         let table = super::super::table::TableIr::from_json(br#"{"rows":[{"name":"Game"}]}"#).unwrap().to_ntbl();
@@ -1610,6 +1632,8 @@ mod tests {
     /// (refused, nothing of the file applied), and a remove or change matching no row (said, the rest applied).
     #[test]
     fn the_check_says_of_each_merge_what_the_start_says() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         let dir = tempfile::tempdir().unwrap();
         let base = things_store(dir.path());
         let file = |name: &str, text: &str| {
@@ -1726,6 +1750,8 @@ mod tests {
 
     #[test]
     fn a_member_file_is_cooked_by_what_it_is_and_a_console_file_is_refused() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         let dir = std::env::temp_dir().join(format!("nebula_overlay_members_{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let table = dir.join("objinfo");
@@ -1775,6 +1801,8 @@ mod tests {
 
     #[test]
     fn a_mods_effects_join_the_games_particles_and_its_list_is_beside_them() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         use super::super::effects::{tests as fx, PARTICLES, PARTICLE_NAMES};
         let dir = tempfile::tempdir().unwrap();
         let (ir, _) = fx::game();
@@ -1824,6 +1852,8 @@ mod tests {
 
     #[test]
     fn an_effect_table_patch_naming_no_particle_is_left_out() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         use super::super::effects::{tests as fx, EFFECT_TABLE, PARTICLES, PARTICLE_NAMES};
         use super::super::overlay_patches::PatchLine;
         let dir = tempfile::tempdir().unwrap();

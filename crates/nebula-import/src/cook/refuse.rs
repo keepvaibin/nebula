@@ -1,11 +1,14 @@
 //! A cook's refusals and notes as the validator names them (models contract 9, G-M15): L804 with a `why` phrase
 //! (`Cook.Model.<Kind>`, rows `Validator.Cook.*` in localization/NebulaText.tsv) and the phrase's arguments, so LumaLink
 //! and the Mods screen say them in the player's language. A refusal is an error that stops the file's cook (never a
-//! half model); a note is said and the cook goes on. Notes are gathered for the file being cooked, on its thread.
+//! half model); a note is said and the cook goes on. Notes are gathered for the file being cooked, on its thread: a
+//! cook whose notes are read holds a `Reading` on that thread, and a note or fact said on a thread with none stops a
+//! test or a debug build.
 
 use super::patch::Refusal;
 use luma_validate::{Arg, Finding, Level};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+use std::marker::PhantomData;
 
 /// The validator's rule for a file the game expects to cook that did not cook.
 pub const COOK_FAILED: u16 = 804;
@@ -35,10 +38,38 @@ pub fn invalid(pointer: String) -> anyhow::Error {
 
 thread_local! {
     static NOTES: RefCell<Vec<Finding>> = const { RefCell::new(Vec::new()) };
+    /// The `Reading`s standing on this thread.
+    static READ_HERE: Cell<u32> = const { Cell::new(0) };
+}
+
+/// This thread's notes and facts are taken by the cook that holds it (cook_plan per file, cook_source's and an
+/// effects cook's callers, cook_c): a note or fact is said only while one stands. A thread a cook starts for its work
+/// has none, so a note said there, which no take would read, is a fault found by the tests, never a note lost.
+#[must_use]
+pub struct Reading(PhantomData<*const ()>);
+
+/// Marks this thread as one whose notes and facts are taken, until the result is dropped.
+pub fn reading() -> Reading {
+    READ_HERE.with(|n| n.set(n.get() + 1));
+    Reading(PhantomData)
+}
+
+impl Drop for Reading {
+    fn drop(&mut self) {
+        READ_HERE.with(|n| n.set(n.get() - 1));
+    }
+}
+
+fn read_here(what: &str) {
+    if cfg!(any(test, debug_assertions)) {
+        let thread = std::thread::current();
+        assert!(READ_HERE.with(Cell::get) > 0, "a cook's {what} on a thread no take reads ({:?}): hold refuse::reading()", thread.name());
+    }
 }
 
 /// Said about the file, which still cooks.
 pub fn note(why: &'static str, args: &[(&'static str, String)]) {
+    read_here("note");
     NOTES.with(|notes| notes.borrow_mut().push(finding(why, Level::Note, args)));
 }
 
@@ -106,6 +137,7 @@ thread_local! {
 }
 
 pub fn record(fact: CookFact) {
+    read_here("fact");
     FACTS.with(|facts| facts.borrow_mut().push(fact));
 }
 
@@ -256,6 +288,22 @@ fn said_finding(finding: &Finding) -> (&'static str, Vec<(&'static str, String)>
         })
         .collect();
     (why, rest)
+}
+
+#[cfg(test)]
+mod tests {
+    /// A note on a thread a cook started, which no take reads, stops the test rather than being lost.
+    #[test]
+    fn a_note_on_a_thread_no_take_reads_stops_the_test() {
+        let reading = super::reading();
+        super::note("Cook.ToolFile", &[("file", "a".to_string())]);
+        assert_eq!(super::take_notes().len(), 1);
+        let worker = std::thread::spawn(|| super::note("Cook.ToolFile", &[("file", "b".to_string())]));
+        assert!(worker.join().is_err());
+        drop(reading);
+        assert!(std::panic::catch_unwind(|| super::note("Cook.ToolFile", &[("file", "c".to_string())])).is_err());
+        assert!(super::take_notes().is_empty());
+    }
 }
 
 /// The notes said so far on this thread, as `said` gives a refusal.

@@ -3017,6 +3017,8 @@ mod tests {
 
     #[test]
     fn a_triangle_is_a_model() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         let (model, clips) = to_files(&triangle(1), None, "Triangle").unwrap();
         assert_eq!(u32::from_le_bytes(model[0..4].try_into().unwrap()), super::super::model_write::MAGIC);
         assert!(clips.is_empty());
@@ -3034,6 +3036,8 @@ mod tests {
 
     #[test]
     fn two_meshes_of_one_material_both_draw() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         let (ir, _) = to_ir(&triangle(2), None).unwrap();
         assert_eq!(ir.shapes.len(), 2);
         assert_eq!(ir.materials.len(), 2);
@@ -3045,6 +3049,8 @@ mod tests {
 
     #[test]
     fn more_vertices_than_sixteen_bits_count() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         let bytes = many_triangles(24_000);
         let (ir, _) = to_ir(&bytes, None).unwrap();
         assert_eq!(ir.arrays.positions.len() > 0x1_0000, true);
@@ -3054,6 +3060,8 @@ mod tests {
 
     #[test]
     fn an_animation_plays_as_its_extras_say() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         let mut keys = Vec::new();
         for v in [0.0f32, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0] {
             keys.extend_from_slice(&v.to_le_bytes());
@@ -3089,6 +3097,8 @@ mod tests {
 
     #[test]
     fn triangles_wind_as_the_games_do() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         let (ir, _) = to_ir(&triangle(1), None).unwrap();
         assert_eq!(ir.shapes[0].groups[0].indices, vec![0, 2, 1]);
     }
@@ -3115,6 +3125,8 @@ mod tests {
 
     #[test]
     fn twelve_texture_layers_cook_without_losing_slots_or_coordinates() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         let mut document: Value = serde_json::from_slice(&triangle(1)).unwrap();
         document["images"] = serde_json::json!((0..12).map(|_| serde_json::json!({"uri": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGP4DwQACfsD/fteaysAAAAASUVORK5CYII="})).collect::<Vec<_>>());
         document["textures"] = serde_json::json!((0..12).map(|i| serde_json::json!({"source": i})).collect::<Vec<_>>());
@@ -3300,6 +3312,8 @@ mod tests {
 
     #[test]
     fn a_material_s_colour_scroll_and_swaps_cook_as_the_games() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         let mut document = textured(serde_json::json!({ "scale": [2.0, 2.0], "rotation": 0.5, "offset": [0.25, 0.0] }));
         let a = add_floats(&mut document, &[
             (2, "SCALAR", vec![0.0, 1.0]),
@@ -3357,6 +3371,8 @@ mod tests {
 
     #[test]
     fn what_a_material_animation_cannot_be_says_so() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         let error = |document: &Value| refused(&to_ir(&serde_json::to_vec(document).unwrap(), None).err().expect("it cooked"));
         // Turned with uneven scales: glTF and the game scale and turn in different orders.
         let uneven = textured(serde_json::json!({ "scale": [2.0, 1.0], "rotation": 0.5 }));
@@ -3514,6 +3530,8 @@ mod tests {
 
     #[test]
     fn strips_and_fans_are_triangles_as_gltf_says() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         assert_eq!(triangles_of(5, &[0, 1, 2, 3, 4], "").unwrap(), [0, 1, 2, 1, 3, 2, 2, 3, 4]);
         assert_eq!(triangles_of(6, &[0, 1, 2, 3], "").unwrap(), [1, 2, 0, 2, 3, 0]);
         assert_eq!(triangles_of(4, &[0, 1, 2, 3], "").unwrap(), [0, 1, 2]);
@@ -3527,6 +3545,8 @@ mod tests {
 
     #[test]
     fn a_mesh_with_no_normals_is_flat_and_says_so() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         notes();
         let (_, _, facts) = cook(&document_of(&triangle(2)), None).unwrap();
         // Once for the mesh, though both its primitives (each a mesh of the model) lack them.
@@ -3536,6 +3556,8 @@ mod tests {
 
     #[test]
     fn vertex_colours_are_srgb_bytes_and_three_sets_are_refused() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         let mut document = document_of(&triangle(1));
         let a = add_floats(&mut document, &[(3, "VEC4", vec![1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0]), (3, "VEC3", vec![0.5; 9])]);
         document["meshes"][0]["primitives"][0]["attributes"]["COLOR_0"] = a[0].into();
@@ -3595,6 +3617,8 @@ mod tests {
 
     #[test]
     fn sockets_billboards_and_joint_names() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         let (ir, _, facts) = cook(&with_nodes(&[("head", Value::Null), ("socket:hand", Value::Null)]), None).unwrap();
         let names: Vec<&str> = ir.joints.iter().map(|j| j.name.as_str()).collect();
         assert_eq!(names, ["body", "head", "hand"]);
@@ -3616,6 +3640,8 @@ mod tests {
     /// ray-hit forms in UTF-8. A mesh's name is not kept, and a texture is named by its image's number.
     #[test]
     fn a_name_the_model_cannot_keep_is_refused() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         let joint = cook(&with_nodes(&[("tête", Value::Null)]), None).err().unwrap();
         assert_eq!(refused(&joint), ("Cook.Model.JointName", vec![own(("joint", "tête"))]));
         let mut material = document_of(&triangle(1));
@@ -3638,6 +3664,8 @@ mod tests {
 
     #[test]
     fn joints_are_numbered_as_the_game_model_has_them() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         let document = with_nodes(&[("tail", Value::Null), ("head", Value::Null)]);
         let (ir, _, facts) = cook(&document, Some(&game(&["body", "head"]))).unwrap();
         let names: Vec<&str> = ir.joints.iter().map(|j| j.name.as_str()).collect();
@@ -3686,6 +3714,8 @@ mod tests {
 
     #[test]
     fn an_animation_file_makes_the_clips_its_model_would() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         let half = std::f32::consts::FRAC_PI_4.sin();
         let game = arm_model(&[None, Some(0), Some(1)]);
         // The same skeleton and animation cooked inside a model standing in for the game's: the clip is the same bytes.
@@ -3700,6 +3730,8 @@ mod tests {
 
     #[test]
     fn a_hidden_model_keeps_every_joint_and_draws_nothing() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         // The game's model: the arm with its triangle, as the store keeps it.
         let game = arm_model(&[None, Some(0), Some(1)]);
         let (block, _, _) = to_files_for(&serde_json::to_vec(&arm(true, [0.0, 1.0], 0.5)).unwrap(), None, "Kuribo", None).unwrap();
@@ -3833,6 +3865,8 @@ mod tests {
 
     #[test]
     fn a_clip_that_is_no_number_or_too_long_is_refused() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         let half = std::f32::consts::FRAC_PI_4.sin();
         let game = arm_model(&[None, Some(0), Some(1)]);
         // A key that is NaN, in an animation file and in a model alike.
@@ -3853,6 +3887,8 @@ mod tests {
 
     #[test]
     fn a_cooked_model_reads_back_as_a_game_model() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         let (model, _) = to_files(&serde_json::to_vec(&with_nodes(&[("head", Value::Null)])).unwrap(), None, "Kuribo").unwrap();
         let read = GameModel::read("ObjectData/Kuribo.arc/Kuribo.bdl", &model).unwrap();
         assert_eq!(read.joints, ["body", "head"]);
@@ -3863,6 +3899,8 @@ mod tests {
 
     #[test]
     fn skins_are_one_and_weigh_four() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         let mut document = with_nodes(&[("head", Value::Null)]);
         document["skins"] = serde_json::json!([{ "joints": [0, 1] }, { "joints": [1] }]);
         document["nodes"][0]["skin"] = 0.into();
@@ -3900,6 +3938,8 @@ mod tests {
 
     #[test]
     fn a_lit_material_keeps_every_factor_and_map() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         let (ir, _, _) = cook(&lit_document(), None).unwrap();
         assert_eq!(ir.pbr.len(), ir.materials.len());
         let lit = &ir.pbr[0];
@@ -3942,6 +3982,8 @@ mod tests {
 
     #[test]
     fn a_lit_material_is_drawn_by_the_pbr_template() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         // Plan 3.3 (J): the lit template (program_pbr.hlsli) lights the stages' base colour by metal and roughness, in
         // every form, before the glow; its maps are slots of their own, an ORM texture one slot.
         use super::super::programs::{generate, forms_of, Registers};
@@ -4032,6 +4074,8 @@ mod tests {
 
     #[test]
     fn a_glow_is_one_more_stage_and_factors_are_srgb() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         // MOD-MATERIALS-FC.md 1: the raster's glTF material is stages; the glow adds emissive texture x constant 1.
         let (ir, _, _) = cook(&lit_document(), None).unwrap();
         let m = &ir.materials[0];
@@ -4081,6 +4125,8 @@ mod tests {
 
     #[test]
     fn a_normal_map_turns_the_lit_form_s_pixel_normal() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         use super::super::programs::{forms_of, generate, Input, Registers};
         // MOD-MATERIALS-FC.md 1: inside generate(), behind the material's normal map; no second generator.
         let (ir, _, _) = cook(&lit_document(), None).unwrap();
@@ -4112,6 +4158,8 @@ mod tests {
 
     #[test]
     fn a_vertex_coloured_mesh_s_animated_factor_is_its_constant_colour() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         // The factor of a vertex-coloured mesh is constant colour 0 (its channel takes the vertex's colour): an animated
         // factor is a register animation's constant 0 too, by the same name, beside the material colour's.
         let mut document = textured(serde_json::json!({ "offset": [0.0, 0.0] }));
@@ -4145,6 +4193,8 @@ mod tests {
 
     #[test]
     fn a_lit_material_says_what_it_cannot_be() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         let shell = || own(("material", "Shell"));
         let mut missing = lit_document();
         missing["textures"][1]["source"] = 9.into();
@@ -4216,6 +4266,8 @@ mod tests {
 
     #[test]
     fn a_normal_map_has_tangents_from_the_file_or_mikktspace() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         // No normals, no tangents: flat normals and MikkTSpace's frame, u along x. A v that runs down y turns the
         // bitangent (glTF 2.0: bitangent = cross(normal, tangent) x w).
         let (ir, _, _) = cook(&normal_mapped([0.0, 0.0, 1.0, 0.0, 0.0, 1.0]), None).unwrap();
@@ -4241,6 +4293,8 @@ mod tests {
 
     #[test]
     fn a_mirroring_node_keeps_its_faces_and_normals_outward() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         let (plain, _, _) = cook(&document_of(&triangle(1)), None).unwrap();
         let mut mirrored = document_of(&triangle(1));
         mirrored["nodes"][0]["scale"] = serde_json::json!([-1.0, 1.0, 1.0]);

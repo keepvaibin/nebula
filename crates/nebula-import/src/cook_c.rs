@@ -57,11 +57,13 @@ unsafe fn cook_one(name: *const c_char, bytes: *const u8, size: u64) -> LumaCook
 
     let _cook = cook::COOK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut stats = Stats::default();
+    let reading = refuse::reading();
     let result = cook::cook_entry(name, data, &mut stats);
     let added = std::mem::take(&mut stats.pipelines).into_records();
     // What the cook noted for an install's report is not this call's.
     refuse::take_facts();
     refuse::take_notes();
+    drop(reading);
     let mut items = match result {
         Ok(items) => items,
         Err(error) => return LumaCooked::failed(&words_of(&error)),

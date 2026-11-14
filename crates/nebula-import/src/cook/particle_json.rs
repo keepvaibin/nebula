@@ -1128,6 +1128,8 @@ pub(crate) mod tests {
 
     #[test]
     fn roles_make_the_texture_list() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
         let (ir, names) = sparkle_game();
         let game = Game { particles: &ir, names: &names, any_name: false };
         // Over `like`, a role changes that role only: Sparkle's list keeps its Ring, Other is added for the sprite.

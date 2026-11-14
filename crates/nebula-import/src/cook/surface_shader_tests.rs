@@ -209,6 +209,8 @@ pub(crate) fn shader_mod(json: &Value, code: &str) -> (tempfile::TempDir, std::p
 
 #[test]
 fn a_material_naming_a_shader_is_lit_through_its_surface() {
+    // The test takes what the cook notes (refuse::reading).
+    let _reading = crate::cook::refuse::reading();
     use crate::cook::programs::{forms_of, generate, Registers};
     let (_dir, folder) = shader_mod(&stripes_json(), STRIPES);
     let doc = shader_document(serde_json::json!({"shader": "shaders/Stripes", "params": {"speed": 2.0}, "textures": {"paint": 0}}));
@@ -279,6 +281,8 @@ fn a_material_and_its_shader_must_agree() {
 /// nothing (it builds the programs itself).
 #[test]
 fn a_check_without_a_compiler_says_the_shader_was_not_compiled() {
+    // The test takes what the cook notes (refuse::reading).
+    let _reading = crate::cook::refuse::reading();
     let (_dir, folder) = shader_mod(&stripes_json(), STRIPES);
     let bytes = serde_json::to_vec(&shader_document(serde_json::json!({"shader": "shaders/Stripes", "textures": {"paint": 0}}))).unwrap();
     let mut ir = crate::cook::gltf::to_ir_for(&bytes, Some(&folder), None).unwrap().0;
@@ -340,6 +344,8 @@ fn a_shaders_ray_rows_are_checked_and_replace_its_factors() {
 
 #[test]
 fn a_shader_material_has_a_ray_hit_form_beside_its_model() {
+    // The test takes what the cook notes (refuse::reading).
+    let _reading = crate::cook::refuse::reading();
     let mut json = stripes_json();
     json["reads"] = serde_json::json!(["time", "normal", "view"]);
     json["ray"] = serde_json::json!({"class": "gloss"});

@@ -106,6 +106,8 @@ fn json_of(bytes: &[u8]) -> Result<Value> {
 /// A mod's effects files (one a layer, in order) cooked over `game`. `image` reads a mod path's file, `None` when the
 /// mod has none.
 pub fn cook(files: &[Vec<u8>], image: &mut dyn FnMut(&str) -> Option<Vec<u8>>, game: &Game) -> Result<Cooked> {
+    // Its caller takes what the cook notes (cook_plan, a mod's check).
+    let _reading = super::refuse::reading();
     let mut parts: [BTreeMap<String, Value>; 3] = Default::default();
     const PARTS: [&str; 3] = ["textures", "effects", "replace"];
     for bytes in files {

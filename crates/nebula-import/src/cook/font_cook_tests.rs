@@ -209,6 +209,8 @@ fn a_fonts_glyphs_become_the_games_font_form() {
 
 #[test]
 fn characters_the_font_lacks_are_noted_and_left_to_the_fallback() {
+    // The test takes what the cook notes (refuse::reading).
+    let _reading = crate::cook::refuse::reading();
     said_notes();
     let json = r#"{"file":"Title.ttf","glyphs":{"chars":"AЖ","ranges":[["U+0400","U+0401"]]},"fallback":"MenuFont64"}"#;
     let (files, facts) = cook_with(json, plain_font()).unwrap();

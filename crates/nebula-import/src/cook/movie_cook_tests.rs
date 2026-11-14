@@ -214,6 +214,8 @@ fn an_ivf_movie_round_trips_to_nmov() {
 /// the replaced game movie are written beside it.
 #[test]
 fn a_webm_movie_round_trips_with_its_sound_and_subtitles() {
+    // The test takes what the cook notes (refuse::reading).
+    let _reading = crate::cook::refuse::reading();
     let s = seq(32, 32);
     let blocks = vec![obu(6, &[0x10, 9]), obu(6, &[0x30, 8]), obu(6, &[0x30, 7]), obu(6, &[0x30, 6])];
     // 25 frames a second; one second of sound at 16 kHz.

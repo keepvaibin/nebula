@@ -105,6 +105,8 @@ fn a_sequence_loops_between_its_markers() {
 /// Outside the subset is left out and named; an eighth note at once on a channel is too.
 #[test]
 fn what_the_game_does_not_play_is_named() {
+    // The test takes what the cook notes (refuse::reading).
+    let _reading = crate::cook::refuse::reading();
     // Eight keys at once, let go 10 ticks later: the eighth has no slot.
     let chord: Vec<(u32, Vec<u8>)> = (0..8u8)
         .map(|k| (0, vec![0x90, 40 + k, 90]))
