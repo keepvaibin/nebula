@@ -31,5 +31,8 @@ const void* service(const char* name, std::uint32_t major, std::uint32_t minor);
 [[nodiscard]] bool as_pad();
 // Game thread: the controller's motor strength at a change (the fact input.motor).
 void motor(std::uint8_t strength);
+// Game thread: the setup is not done yet (frame 0 not fixed), so a menu the boot hid stays hidden: the setup's save and
+// stage sequences run only while the scene goes, which an open menu holds.
+[[nodiscard]] bool holds_menus();
 
 }  // namespace harness

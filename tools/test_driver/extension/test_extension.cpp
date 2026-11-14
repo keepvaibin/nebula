@@ -857,6 +857,7 @@ NEBULA_EXTENSION_EXPORT const NebulaHostExtension* nebula_extension_attach(const
         // The registry's test services (services-registry 14): only in a harness run.
         e.luma_providers = test_services::providers(&e.luma_provider_count);
         e.motor = [](void*, std::uint8_t strength) { harness::motor(strength); };
+        e.holds_menus = [](void*) -> std::uint32_t { return harness::holds_menus() ? 1u : 0u; };
     }
     log("test extension attached");
     return &e;

@@ -216,8 +216,9 @@ std::atomic<bool> s_settings_drawn_by_game{false};
 // Leaving with changes not applied asks first: apply them, discard them, or stay. Under s_native_settings_mutex.
 bool s_settings_leave_asking = false;
 // Hidden by the game's close where it shows no menu (the boot) with a question standing: nothing answered, nothing
-// discarded; it opens again where the game first shows a menu (native_settings_reopen_held). Under s_native_settings_mutex.
-bool s_settings_held = false;
+// discarded; it opens again where the game first shows a menu (native_settings_reopen_held). Written under
+// s_native_settings_mutex; atomic for reopen's check before the lock.
+std::atomic<bool> s_settings_held{false};
 // Apply saved mod changes this session did not start with: the menu asks whether to restart now.
 std::atomic<bool> s_mods_restart_ask{false};
 // RAY TRACING turned on (applied) before its shaders are prepared: the menu asks to restart, which prepares them.
@@ -5625,6 +5626,8 @@ static bool native_settings_asking() {
 }
 
 void native_settings_reopen_held() {
+    // Asked at every frame of a 3D scene: one load while nothing is held.
+    if (!s_settings_held.load(std::memory_order_relaxed)) return;
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
     if (!s_settings_held) return;
     s_settings_held = false;

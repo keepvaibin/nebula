@@ -295,7 +295,8 @@ struct NativeSettingsView {
 // The pointer's input to the menu (the game's own menu takes the pointer; the window thread the keyboard and pads).
 // CloseUnseen is the host's own: the game's close where it shows no menu (before its first 3D scene, the boot). It
 // closes a menu that asks nothing; one that asks is hidden as it stands, nothing answered, until
-// native_settings_reopen_held at the game's first 3D scene opens it again.
+// native_settings_reopen_held at the game's first 3D scene opens it again (asked at each scene frame: the first one no
+// host extension holds, galaxy::extensions::holds_menus).
 enum class NativeSettingsInput : unsigned { Open = 1, Close, SelectPage, SelectRow, Change, Apply, Revert, Press, MoveMod, SetValue, CloseUnseen };
 void native_settings_input(NativeSettingsInput input, int arg);
 void native_settings_reopen_held();

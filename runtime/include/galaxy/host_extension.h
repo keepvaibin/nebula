@@ -37,6 +37,8 @@ void sound(const float* samples, std::uint32_t frames, std::uint32_t channels, s
 
 // Game thread: an extension takes the mods as changed.
 [[nodiscard]] bool mods_changed() noexcept;
+// Game thread: an extension prepares the game unseen (a test's setup), so a menu waiting since the boot stays hidden.
+[[nodiscard]] bool holds_menus() noexcept;
 
 // The process ends now (`again`: the game starts again after it): each extension's `ending`, once.
 void ending(bool again) noexcept;

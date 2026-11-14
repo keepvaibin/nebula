@@ -1336,4 +1336,9 @@ void motor(std::uint8_t strength) {
     write_fact("input.motor", std::to_string(strength));
 }
 
+bool holds_menus() {
+    std::lock_guard<std::recursive_mutex> hold(g_lock);
+    return g.on && !g.finished && !g.base;
+}
+
 }  // namespace harness
