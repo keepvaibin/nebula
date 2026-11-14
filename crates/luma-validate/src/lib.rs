@@ -494,7 +494,7 @@ pub fn message(f: &Finding, language: &str) -> String {
 
 /// Why the finding was made, without where (its `why` or `found` phrase, filled with its parameters), in one of the
 /// game's languages: what a screen that names the mod and the file itself puts after them (the Mods screen's
-/// Mods.Patch.Failed, F INBOX-G 18). A finding with neither phrase gives its whole message.
+/// Mods.Patch.Failed). A finding with neither phrase gives its whole message.
 pub fn reason(f: &Finding, language: &str) -> String {
     let lang = LANGUAGES.iter().position(|&l| l == language).unwrap_or(0);
     match f.args.iter().find(|(n, _)| *n == "why" || *n == "found") {

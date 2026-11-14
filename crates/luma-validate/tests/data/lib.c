@@ -224,8 +224,8 @@ int __stdcall dll_entry(void* module, unsigned long reason, void* reserved) {
 #endif
 
 #if defined(RUNS_AT_CLOSE) || defined(FINI_FUNCTION)
-/* Code the system runs when it closes the library, after LumaCore has freed the mod's memory (an audit of R3-A,
-   A-1): a destructor the compiler does not register with atexit (ELF .fini_array, Mach-O __mod_term_func), or the
+/* Code the system runs when it closes the library, after LumaCore has freed the mod's memory:
+   a destructor the compiler does not register with atexit (ELF .fini_array, Mach-O __mod_term_func), or the
    function the linker's -fini names (ELF DT_FINI). */
 static volatile int closed;
 #if defined(RUNS_AT_CLOSE) && defined(__APPLE__)

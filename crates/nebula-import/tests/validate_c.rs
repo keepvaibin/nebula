@@ -500,7 +500,7 @@ fn the_c_store_lists_folders_and_reads_tables_as_the_rust_one() {
     let bad = c_store((&*junk as *const CTable).cast_mut().cast());
     assert!(nebula_import::validate_c::store_for_tests(&bad).table(TABLE).is_none());
 
-    // Which files may be new is the library's own list, the one LumaLink's PakStore reads (F INBOX-G 46).
+    // Which files may be new is the library's own list, the one LumaLink's PakStore reads.
     for path in ["ObjectData/Nokotaro.arc", "/objectdata/kuribo.arc/kuribo_new.btk", "StageData/MyGalaxy/MyGalaxyMap.arc", "AudioRes/Stream/new.ast", "ObjectData/new.bcsv"] {
         assert_eq!(store.may_be_new(path), nebula_import::store_view::may_be_new(path), "{path}");
     }

@@ -42,8 +42,8 @@ pub struct Library<'d> {
     //(docs/modding/language/compiled-form.md): a / PE entry point or TLS callbacks, ELF DT_INIT, DT_INIT_ARRAY or
     //DT_PREINIT_ARRAY, a Mach-O init section or / LC_ROUTINES_64. Each named as the format names it.
     pub runs_at_load: Vec<String>,
-    /// What the system would run when it closes the library, after LumaCore has freed the mod's memory (an audit of
-    /// R3-A, A-1): ELF DT_FINI or DT_FINI_ARRAY, a Mach-O term section. A PE's entry point and TLS callbacks run at
+    /// What the system would run when it closes the library, after LumaCore has freed the mod's memory:
+    /// ELF DT_FINI or DT_FINI_ARRAY, a Mach-O term section. A PE's entry point and TLS callbacks run at
     /// both and are in `runs_at_load`.
     pub runs_at_close: Vec<String>,
     /// Mach-O: the system it is built for, as LC_BUILD_VERSION's platform numbers it (1 macOS, 2 iOS, 7 the iOS

@@ -229,7 +229,7 @@ impl Store for CStore {
         // Read here, as LumaLink's pak store reads it: the game's store gives only its own tables.
         crate::store_view::view_of_bytes(path, bytes)
     }
-    // The kinds the game finds by name are this library's own list, as LumaLink's PakStore reads it (F INBOX-G 46).
+    // The kinds the game finds by name are this library's own list, as LumaLink's PakStore reads it.
     fn may_be_new(&self, path: &str) -> bool {
         crate::store_view::may_be_new(path)
     }
