@@ -218,7 +218,7 @@ typedef struct LumaNetLocalService {
                           const char* key, LumaEventFn fn, void* user, LumaHandle* out);
     /* 1.3. Sends an HTTP/1.1 request to a host of this machine or the local network (as tcp_connect's). LUMA_PENDING
        and *out (the request's handle): HEADERS, DATA, then DONE, or ERROR. `close` on it cancels it (no event after).
-       A request of the wrong size, a url not http(s) or past LUMA_NET_URL_MOST, a host outside those, a method not
+       A request smaller than 1.3's, a url not http(s) or past LUMA_NET_URL_MOST, a host outside those, a method not
        listed, a header the service writes or of the wrong form, more than LUMA_NET_REQUEST_HEADERS_MOST, a timeout
        past LUMA_NET_TIMEOUT_MOST_MS, an unknown flag, a null request, url, fn or out: LUMA_E_ARGUMENT, reported; a
        9th request or a 17th socket: LUMA_E_LIMIT, reported. The service sends Host, Content-Length (with a body),

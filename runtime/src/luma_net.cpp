@@ -4709,6 +4709,9 @@ std::int32_t internet_tls_listen(const LumaMod* mod, std::uint16_t, std::uint32_
 // ---- Requests (minor 3) --------------------------------------------------------------------------------------------
 
 constexpr std::string_view kMethods[] = {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"};
+// A request of 1.0 or of a later minor (a larger struct whose first fields are these): only a smaller one is refused.
+constexpr std::uint32_t kHttpRequestLeast = static_cast<std::uint32_t>(sizeof(LumaNetHttpRequest));  // 1.0's whole struct
+static_assert(sizeof(void*) != 8 || sizeof(LumaNetHttpRequest) == 56u, "LumaNetHttpRequest 1.0 is 56 bytes (luma_net.h)");
 constexpr std::string_view kServiceHeaders[] = {"host", "content-length", "transfer-encoding", "connection",
                                                 "accept-encoding"};
 
@@ -4719,7 +4722,7 @@ std::int32_t http_on(const LumaMod* mod, const char* where, bool internet, const
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (request == nullptr || request->size != sizeof(LumaNetHttpRequest)) {
+    if (request == nullptr || request->size < kHttpRequestLeast) {
         return argument(mod, where, "request");
     }
     if (request->url == nullptr) {
