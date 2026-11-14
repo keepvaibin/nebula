@@ -472,6 +472,19 @@ namespace luma {
             *pAnswer = static_cast<s32>(static_cast<u32>(answer));
             return ran;
         }
+
+        // Runs the function's own code: tBody tells its entry check to run the body instead of the hooks. Its entry
+        // clears tBody only while its flag is set, and the arguments are built after tBody is set (a by-value
+        // parameter's constructor may reach another hooked function, whose own entry clears tBody). So tBody is put
+        // back as it was once the call returns: a flag cleared meanwhile (the last hook taken out from a before) leaves
+        // no stale tBody to skip the hooks of the function's next call, and a call whose arguments are still being
+        // built keeps its own.
+        void enterBody(const Function* pFunction, void** pArgs, void* pResult) {
+            const Function* const pPending = tBody;
+            tBody = pFunction;
+            pFunction->invoke(pArgs, pResult);
+            tBody = pPending;
+        }
     }
 
     void proceed(Call* pCall) {
@@ -494,8 +507,7 @@ namespace luma {
             }
         }
         pCall->ran |= 1u;
-        tBody = pCall->function;
-        pCall->function->invoke(pCall->args, pCall->result);
+        enterBody(pCall->function, pCall->args, pCall->result);
     }
 
     void run(const Function* pFunction, void** pArgs, void* pResult) {
@@ -537,8 +549,7 @@ namespace luma {
                 gNoResult(pFunction, pOwner);
             }
             call.ran |= 1u;
-            tBody = pFunction;
-            pFunction->invoke(pArgs, pResult);
+            enterBody(pFunction, pArgs, pResult);
         }
         for (u32 i = count; i-- > 0;) {
             if (pChain->hooks[i].kind == Hook_After) {
