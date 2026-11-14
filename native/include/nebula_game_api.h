@@ -338,6 +338,14 @@ enum {
     NEBULA_HOME_MENU_VIEW,
     NEBULA_HOME_MENU_POINT,    /* value: the answer under the pointer, selected */
     NEBULA_HOME_MENU_CHOOSE,   /* value: the answer clicked */
+    /* Launcher mode's home screen (docs/COMMAND_LINE.md --home), opened at the boot's title hold: 1 when the host opened
+       it. While it is open and the HOME Menu is not, VIEW, POINT and CHOOSE are its own: the view has bit 16 set, bits
+       0-7 the selected answer and bits 8-15 the page (0 the rows Play, Settings, Quit; 1 an update's notice, whose
+       answer is Back). */
+    NEBULA_HOME_MENU_LAUNCHER_OPEN,
+    NEBULA_HOME_MENU_LAUNCHER_POLL, /* its choice: -1 none yet, 0 play (the boot goes on to the title), 1 quit */
+    NEBULA_HOME_MENU_LAUNCHER_TEXT, /* value: bits 16-31 which (0 the update's version, 1 its notes), bits 0-15 a
+                                       position: its UTF-16 unit there, 0 past the end */
 };
 
 /* What the settings' galaxy select asks of the scene (galaxy_travel). */

@@ -5,6 +5,7 @@
 
 #include "Game/Screen/LayoutActor.hpp"
 #include "Game/Screen/LayoutManager.hpp"
+#include "Game/Screen/NebulaLauncher.hpp"
 #include "Game/Screen/NebulaPaneKit.hpp"
 #include "Game/Screen/NebulaUi.hpp"
 #include "Game/System/NebulaText.hpp"
@@ -77,7 +78,8 @@ public:
             return;
         }
         if (mFrame == 0) {
-            if (phase != PhaseCompiling || ++mWaited < cShowAfter) {
+            // Behind launcher mode's home screen it waits, and shows after Play if still running.
+            if (phase != PhaseCompiling || NebulaLauncher::isHolding() || ++mWaited < cShowAfter) {
                 return;
             }
             fill();

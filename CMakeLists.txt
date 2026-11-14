@@ -392,6 +392,7 @@ add_library(galaxy_render STATIC
     runtime/src/render/render_config.cpp
 runtime/src/render/host_window_win32.cpp
     runtime/src/ui/native_settings.cpp
+    runtime/src/ui/launcher.cpp
     runtime/src/ui/settings_model.cpp
     runtime/src/ui/settings_system_page.cpp
     runtime/src/ui/settings_advanced_page.cpp
@@ -616,6 +617,7 @@ galaxy_test(galaxy_test_data_paths_tests SOURCES ${rt}/test_data_paths_tests.cpp
 target_include_directories(galaxy_test_data_paths_tests PRIVATE tools/test_driver/extension)
 
 galaxy_test(galaxy_home_menu_model_tests SOURCES ${rt}/home_menu_model_tests.cpp)
+galaxy_test(galaxy_launcher_model_tests SOURCES ${rt}/ui/launcher_model_tests.cpp)
 
 galaxy_test(galaxy_settings_model_tests SOURCES ${rt}/ui/settings_model_tests.cpp ${rt}/ui/settings_model.cpp)
 
@@ -700,6 +702,7 @@ if(NEBULA_VULKAN)
             runtime/src/render/render_config.cpp
 runtime/src/render/host_window_win32.cpp
     runtime/src/ui/native_settings.cpp
+    runtime/src/ui/launcher.cpp
     runtime/src/ui/settings_model.cpp
     runtime/src/ui/settings_system_page.cpp
     runtime/src/ui/settings_advanced_page.cpp
