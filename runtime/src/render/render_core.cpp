@@ -1915,6 +1915,25 @@ RenderCore::ListEntry& RenderCore::list_arrived(FrameChunk& chunk) {
         entry->data.item_before = std::move(kept.item_before);
         entry->data.joint_motion = std::move(kept.joint_motion);
         entry->data.motions = std::move(kept.motions);
+        // The rest keep their memory too, emptied: each is what a new list's empty table is but for its capacity.
+        const auto emptied = [](auto& to, auto& from) {
+            to = std::move(from);
+            to.clear();
+        };
+        emptied(entry->data.camera_before, kept.camera_before);
+        emptied(entry->data.camera_motion, kept.camera_motion);
+        emptied(entry->data.motion_first, kept.motion_first);
+        emptied(entry->data.constants_before, kept.constants_before);
+        emptied(entry->data.view_before, kept.view_before);
+        emptied(entry->data.light_set_before, kept.light_set_before);
+        emptied(entry->data.eye_motions, kept.eye_motions);
+        emptied(entry->data.early_targets, kept.early_targets);
+        emptied(entry->data.early_probes, kept.early_probes);
+        emptied(entry->data.late_depth_clears, kept.late_depth_clears);
+        emptied(entry->data.block_camera, kept.block_camera);
+        emptied(entry->data.light_camera, kept.light_camera);
+        emptied(entry->data.block_world_wanted, kept.block_world_wanted);
+        emptied(entry->data.view_terms, kept.view_terms);
     } else {
         entry = std::make_unique<ListEntry>();
     }
