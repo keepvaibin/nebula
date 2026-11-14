@@ -191,6 +191,92 @@ namespace Nebula.Launcher
         // The Performance page on perf/bench's contract: progress lines, the result file (schema 1 only), the game's
         // arguments, the rows that differ named as the window names them, and Apply on the rows and in config.ini (the
         // other keys untouched); a run that ends without a result says so.
+        // The update's download window closed (X, Alt+F4) while it downloads: no exception on the download thread (the
+        // launcher would end), the download stops, its partial file stays for the next start.
+        static void DownloadCloseCases(string scratch)
+        {
+            var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+            listener.Start();
+            int port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+            const int size = 4 << 20;
+            new Thread(() =>
+            {
+                while (true)
+                {
+                    System.Net.Sockets.TcpClient client;
+                    try { client = listener.AcceptTcpClient(); }
+                    catch (System.Net.Sockets.SocketException) { return; }
+                    new Thread(() =>
+                    {
+                        try
+                        {
+                            using (client)
+                            using (var stream = client.GetStream())
+                            {
+                                var reader = new StreamReader(stream, Encoding.ASCII);
+                                string request = reader.ReadLine() ?? "";
+                                while (!string.IsNullOrEmpty(reader.ReadLine())) { }
+                                bool signature = request.Contains("/setup.sig");
+                                long length = signature ? 8 : size;
+                                byte[] head = Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Length: " + length + "\r\nConnection: close\r\n\r\n");
+                                stream.Write(head, 0, head.Length);
+                                if (signature) { stream.Write(Encoding.ASCII.GetBytes("AAAAAAA="), 0, 8); return; }
+                                var piece = new byte[4096];
+                                for (long sent = 0; sent < size; sent += piece.Length) { stream.Write(piece, 0, piece.Length); Thread.Sleep(20); }
+                            }
+                        }
+                        catch (IOException) { }
+                        catch (ObjectDisposedException) { }
+                    }) { IsBackground = true }.Start();
+                }
+            }) { IsBackground = true }.Start();
+            Exception unhandled = null;
+            UnhandledExceptionEventHandler watch = (sender, e) => { unhandled = e.ExceptionObject as Exception; };
+            AppDomain.CurrentDomain.UnhandledException += watch;
+            try
+            {
+                string folder = Path.Combine(scratch, "download-close");
+                var release = new ReleaseInfo
+                {
+                    Version = "99.0.0", Tag = "v99.0.0", Notes = "", SetupSize = size,
+                    SetupUrl = "http://127.0.0.1:" + port + "/setup", SignatureUrl = "http://127.0.0.1:" + port + "/setup.sig",
+                };
+                string partial = Path.Combine(folder, "update-99.0.0", "Nebula-Setup.exe.partial");
+                Thread worker;
+                using (var form = new UpdateDownloadForm(release, folder))
+                {
+                    form.StartPosition = FormStartPosition.Manual;
+                    form.Location = new Point(-20000, -20000);
+                    form.ShowInTaskbar = false;
+                    form.TopMost = false;
+                    form.Show();
+                    var clock = System.Diagnostics.Stopwatch.StartNew();
+                    while (!(File.Exists(partial) && new FileInfo(partial).Length > 64 * 1024) && clock.ElapsedMilliseconds < 15000)
+                    {
+                        Application.DoEvents();
+                        Thread.Sleep(10);
+                    }
+                    Check(File.Exists(partial), "download close: the download is under way");
+                    worker = form.Worker;
+                    form.Close();   // as its X or Alt+F4: no OK result
+                    Application.DoEvents();
+                }
+                // The thread's progress and failure posts after the window has gone.
+                var after = System.Diagnostics.Stopwatch.StartNew();
+                while (worker.IsAlive && after.ElapsedMilliseconds < 10000) { Application.DoEvents(); Thread.Sleep(10); }
+                Application.DoEvents();
+                Check(!worker.IsAlive, "download close: the download stops when its window closes");
+                Check(unhandled == null, "download close: no exception on the download thread" + (unhandled != null ? ": " + unhandled : ""));
+                Check(File.Exists(partial) && new FileInfo(partial).Length < size, "download close: the partial file stays for the next start");
+                Check(!File.Exists(Path.Combine(folder, "update-99.0.0", "Nebula-Setup.exe")), "download close: no setup is left to run");
+            }
+            finally
+            {
+                AppDomain.CurrentDomain.UnhandledException -= watch;
+                listener.Stop();
+            }
+        }
+
         static void BenchmarkCases(LaunchSession session)
         {
             int step, steps;
@@ -1346,6 +1432,7 @@ namespace Nebula.Launcher
                 SettingsPadCases(later);
                 StartListsCases(later);
                 BenchmarkCases(later);
+                DownloadCloseCases(outDir);
                 RecordingEncodingCases(later.App);
 
                 // TryLaunch starts <App>\NebulaNative.exe, here a stub that records its arguments.

@@ -976,11 +976,7 @@ namespace Nebula.Launcher
 
         private void Post(Action action)
         {
-            try
-            {
-                if (!IsDisposed && IsHandleCreated) BeginInvoke(action);
-            }
-            catch (InvalidOperationException) { }   // the window closed meanwhile
+            UiThread.Post(this, action);
         }
 
         private void FinishBenchmark(Process run)
@@ -1124,15 +1120,7 @@ namespace Nebula.Launcher
             ShowUpdate(UpdateCheck.Pending(session));
             var check = UpdateService.Running;
             if (check == null || check.IsCompleted) return;
-            check.ContinueWith(delegate
-            {
-                try
-                {
-                    if (!IsDisposed && IsHandleCreated)
-                        BeginInvoke((Action)delegate { if (!IsDisposed) ShowUpdate(UpdateCheck.Pending(session)); });
-                }
-                catch (InvalidOperationException) { }   // the window closed meanwhile
-            });
+            check.ContinueWith(delegate { Post(() => ShowUpdate(UpdateCheck.Pending(session))); });
         }
 
         private void ShowUpdate(ReleaseInfo release)
