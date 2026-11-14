@@ -490,6 +490,8 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     independent_blend_ = available.independentBlend == VK_TRUE;
     enabled.shaderImageGatherExtended = available.shaderImageGatherExtended;
     enabled.pipelineStatisticsQuery = available.pipelineStatisticsQuery;
+    enabled.shaderStorageImageExtendedFormats = available.shaderStorageImageExtendedFormats;
+    storage_extended_formats_ = available.shaderStorageImageExtendedFormats == VK_TRUE;
     sampler_anisotropy_ = available.samplerAnisotropy == VK_TRUE;
     bc_textures_ = available.textureCompressionBC == VK_TRUE;
     gather_extended_ = available.shaderImageGatherExtended == VK_TRUE;
