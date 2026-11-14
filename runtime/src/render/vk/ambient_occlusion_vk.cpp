@@ -105,7 +105,7 @@ bool AmbientOcclusionVk::initialize() {
         info.stage.module = shader;
         info.stage.pName = entry;
         info.layout = layout_;
-        const VkResult result = vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &made);
+        const VkResult result = vkCreateComputePipelines(device, shared_pipeline_cache(), 1, &info, nullptr, &made);
         vkDestroyShaderModule(device, shader, nullptr);
         if (result != VK_SUCCESS) {
             made = VK_NULL_HANDLE;
@@ -270,7 +270,7 @@ VkPipeline AmbientOcclusionVk::graphics_pipeline(VkRenderPass pass, unsigned sam
         info.pDynamicState = &dynamic;
         info.layout = layout_;
         info.renderPass = pass;
-        if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &pipeline) != VK_SUCCESS) {
+        if (vkCreateGraphicsPipelines(device, shared_pipeline_cache(), 1, &info, nullptr, &pipeline) != VK_SUCCESS) {
             pipeline = VK_NULL_HANDLE;
         }
     }
