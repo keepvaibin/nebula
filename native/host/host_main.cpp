@@ -173,6 +173,7 @@ inline bool perf_hint_on_battery() noexcept { return false; }
 #elif defined(__linux__)
 #include <sys/syscall.h>
 #endif
+#include <sys/wait.h>
 #endif
 
 namespace fs = std::filesystem;
@@ -1566,6 +1567,69 @@ void start_again() {
         execv(self.c_str(), argv.data());
         _exit(127);
     }
+}
+#endif
+
+#if defined(NEBULA_HOST_START_AGAIN) && defined(NEBULA_DIAG_REPORTS)
+// The home screen's upload question (diag_report.h, docs/DIAGNOSTICS_UPLOAD.md): the result it asks about.
+fs::path gUploadFile;
+
+// A file in the desktop's own viewer (open / xdg-open), in a process of its own that this one does not wait for.
+void show_file(const fs::path& file) {
+#if defined(__APPLE__)
+    const char* const tool = "/usr/bin/open";
+#else
+    const char* const tool = "xdg-open";
+#endif
+    std::string path = file.string();
+    std::string name = tool;
+    char* const argv[] = {name.data(), path.data(), nullptr};
+    const pid_t child = fork();
+    if (child == 0) {
+        if (fork() == 0) {  // the viewer's opener, adopted by init: no child of the game is left behind
+            for (int fd = 3; fd < 1024; ++fd) close(fd);
+            execvp(tool, argv);
+        }
+        _exit(0);
+    }
+    if (child > 0) (void)waitpid(child, nullptr, 0);
+}
+
+// The question's answers (the window's thread): 0 the full report, exactly what a send seals; 1 the send, once.
+void upload_answer(int what) {
+    if (what == 0) {
+        std::string report;
+        const galaxy::diag::SendResult preview = galaxy::diag::report_preview(gUploadFile, false, report);
+        fs::path shown = gUploadFile;
+        shown += ".report.json";
+        if (preview.exit == galaxy::diag::kOk && galaxy::io::write_file_atomically(shown, report)) {
+            show_file(shown);
+        } else {
+            log_line("diag:", preview.line.c_str());
+        }
+        return;
+    }
+    std::thread([] {
+        const galaxy::diag::SendResult sent = galaxy::diag::send_report_file(gUploadFile, false);
+        log_line("diag:", sent.line.c_str());
+        galaxy::ui::launcher_upload_finished(sent.exit == galaxy::diag::kOk || sent.exit == galaxy::diag::kAlreadySent);
+    }).detach();
+}
+
+// Whether the home screen may ask: the build has an endpoint, the run completed or failed (not closed by the player),
+// and the result was not sent.
+bool upload_offered(const fs::path& result) {
+    if (!galaxy::diag::uploads_enabled()) return false;
+    std::error_code error;
+    fs::path sent = result;
+    sent += ".sent";
+    if (fs::exists(sent, error)) return false;
+    std::ifstream in(result, std::ios::binary);
+    std::string head(4096, '\0');
+    in.read(head.data(), static_cast<std::streamsize>(head.size()));
+    head.resize(static_cast<std::size_t>(in.gcount()));
+    return head.starts_with("{\"schema\":1,") &&
+           (head.find("\"status\":\"complete\"") != std::string::npos || head.find("\"status\":\"failed\"") != std::string::npos);
 }
 #endif
 
@@ -4411,6 +4475,12 @@ int main(int argc, char** argv) {
         } else {
             galaxy::ui::launcher_offer_message();  // it did not finish, or measured nothing usable
         }
+#if defined(NEBULA_HOST_START_AGAIN) && defined(NEBULA_DIAG_REPORTS)
+        if (upload_offered(benchmark_result)) {
+            gUploadFile = benchmark_result;
+            galaxy::ui::launcher_offer_upload(upload_answer);
+        }
+#endif
     }
     const bool home_screen =
         home >= 0 ? home == 1 : kHomeByDefault && !::galaxy::launch_args().started_hidden && seconds <= 0;

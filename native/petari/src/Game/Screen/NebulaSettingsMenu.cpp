@@ -250,8 +250,12 @@ namespace {
     const s32 cHomeAnswerNum = sizeof(cHomeAnswers) / sizeof(cHomeAnswers[0]);
     // Launcher mode's home screen (NEBULA_HOME_MENU_LAUNCHER_*), drawn as the HOME Menu: views with bit 16; its rows,
     // on page 1 an update's notice ("{v}": its version) and its notes over Back, on page 2 the benchmark's message
-    // (it gave no recommendation) over Back.
+    // (it gave no recommendation) over Back, on page 3 the benchmark report's upload question over its three answers
+    // (cLauncherUpload), on pages 4-6 the send's state (sending, sent, not sent) over Back.
     const s32 cLauncherView = 1 << 16;
+    const char* const cLauncherUpload[] = {"Diag.DontSend", "Diag.ShowReport", "Diag.Send"};
+    const char* const cLauncherQuestion[] = {"Diag.Question", "Diag.Why", "Diag.WhatSent", "Diag.NeverSent"};
+    const char* const cLauncherSend[] = {"LauncherDiagSending", "Diag.Done", "Diag.Failed"};
     // In the host's order (LauncherModel::Row); without Benchmark where the view has bit 17 (the host cannot start it).
     const char* const cLauncherRows[] = {"LauncherPlay", "SettingsTitle", "LauncherBenchmark", "Quit"};
     const char* const cLauncherRowsNoBenchmark[] = {"LauncherPlay", "SettingsTitle", "Quit"};
@@ -2082,7 +2086,8 @@ void NebulaSettingsScreen::fillLauncher(s32 view) {
     mJoyCon->SetVisible(false);
     mQuestionText->SetVisible(true);
     setAnchor(mQuestionText, 4);
-    const bool notice = (view >> 8 & 0xFF) != 0;
+    const s32 page = view >> 8 & 0xFF;
+    const bool notice = page != 0;
     const bool threeRows = (view & cLauncherNoBenchmark) != 0;
     const char* const* const pRows = threeRows ? cLauncherRowsNoBenchmark : cLauncherRows;
     const s32 rowNum = threeRows ? cLauncherRowNum - 1 : cLauncherRowNum;
@@ -2093,9 +2098,26 @@ void NebulaSettingsScreen::fillLauncher(s32 view) {
         if (!notice) {
             getText(text, "LauncherTitle");
             setTextSize(mQuestionText, cTitleSize);
-        } else if ((view >> 8 & 0xFF) == 2) {
+        } else if (page == 2) {
             // The benchmark this start returned from gave no recommendation.
             getText(text, "LauncherBenchmarkNone");
+            setTextSize(mQuestionText, cTextSize + 1.0f);
+        } else if (page == 3) {
+            // The upload question: what it asks, why, what a report holds and what it never does, one under another.
+            u32 used = static_cast< u32 >(getText(text, cLauncherQuestion[0]));
+            for (u32 k = 1; k < sizeof(cLauncherQuestion) / sizeof(cLauncherQuestion[0]); k++) {
+                MR::Text16 part;
+                const u32 partLength = static_cast< u32 >(getText(part, cLauncherQuestion[k]));
+                char16_t* const pText = text.grow(used + 1, used + 1 + partLength + 1);
+                pText[used] = u'\n';
+                for (u32 c = 0; c <= partLength; c++) {
+                    pText[used + 1 + c] = part.c_str()[c];
+                }
+                used += 1 + partLength;
+            }
+            setTextSize(mQuestionText, cTextSize);
+        } else if (page >= 4 && page <= 6) {
+            getText(text, cLauncherSend[page - 4]);
             setTextSize(mQuestionText, cTextSize + 1.0f);
         } else {
             // "Nebula {v} is available", then the notes.
@@ -2121,13 +2143,13 @@ void NebulaSettingsScreen::fillLauncher(s32 view) {
         }
         setText(mQuestionText, text.c_str());
         measure(mQuestionText, (notice ? cQuestionWidth : cHomeWidth) - 48.0f, &width, &height);
-        mChoiceCount = notice ? 1 : rowNum;
+        mChoiceCount = page == 3 ? 3 : notice ? 1 : rowNum;
         for (s32 i = 0; i < ChoiceNum; i++) {
             Button& rChoice = mChoices[i];
             rChoice.mChip.mRoot->SetVisible(i < mChoiceCount);
             rChoice.mChip.mFocusLevel = 0.0f;
             if (i < mChoiceCount) {
-                fillButton(rChoice, notice ? "SettingsBack" : pRows[i]);
+                fillButton(rChoice, page == 3 ? cLauncherUpload[i] : notice ? "SettingsBack" : pRows[i]);
                 fillKeyCap(rChoice.mKey, -1, 0, false);
             }
         }

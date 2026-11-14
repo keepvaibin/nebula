@@ -23,6 +23,12 @@ void launcher_offer_benchmark(bool on) noexcept;
 void launcher_show_draft(const galaxy::render::RenderConfig& draft);
 // Before the game starts: the benchmark this start returned from gave no recommendation; the home screen says so once.
 void launcher_offer_message() noexcept;
+// Before the game starts: the benchmark's result may be sent (the host checked the build's endpoint, the result's
+// status and that it was not sent). The question shows once, Don't send selected; `act` is called on the window's
+// thread with 0 (show the full report) or 1 (send it, once; the host answers with launcher_upload_finished). The
+// recommendation's draft opens when the question is left.
+void launcher_offer_upload(void (*act)(int what)) noexcept;
+void launcher_upload_finished(bool sent) noexcept;
 // The game's request at the title's hold: true once, when launcher mode is on.
 [[nodiscard]] bool launcher_open() noexcept;
 [[nodiscard]] bool launcher_visible() noexcept;

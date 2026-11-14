@@ -97,6 +97,62 @@ int main() {
         back.click(Model::RowPlay);
         back.open();
         check(!back.message_page && back.notice_page, "the message shows once, the notice on every open");
+
+        Model up;
+        up.offer_upload();
+        up.offer_notice();
+        up.open();
+        check(up.view() == static_cast<int>(Model::kUploadPage | Model::UploadNo | Model::kLauncherView),
+              "the upload question shows first, Don't send selected");
+        check(up.key(LauncherAction::Accept, true) == Model::Effect::None && up.upload_page == 3u, "accept does not repeat");
+        up.key(LauncherAction::Next, false);
+        check(up.view() == static_cast<int>(Model::kUploadPage | Model::UploadShow | Model::kLauncherView) &&
+                  up.row == Model::RowPlay,
+              "its answers move, the rows' selection stays");
+        check(up.key(LauncherAction::Accept, false) == Model::Effect::ShowReport && up.upload_page == 3u,
+              "the full report: the question stays");
+        up.upload_finished(true);
+        check(up.upload_page == 3u, "an answer before a send changes nothing");
+        check(up.click(Model::UploadSend) == Model::Effect::SendReport &&
+                  up.view() == static_cast<int>(Model::kSendingPage | Model::kLauncherView),
+              "send: the sending page");
+        check(up.click(1u) == Model::Effect::None && up.key(LauncherAction::Next, false) == Model::Effect::None &&
+                  up.upload_page == 4u,
+              "the sending page has one answer");
+        up.upload_finished(false);
+        check(up.view() == static_cast<int>(Model::kNotSentPage | Model::kLauncherView), "a failed send says so");
+        check(up.key(LauncherAction::Back, false) == Model::Effect::UploadLeft &&
+                  up.view() == static_cast<int>(Model::kNoticePage | Model::kLauncherView),
+              "back: the draft may open, then the notice");
+        up.click(0u);
+        up.click(Model::RowPlay);
+        up.open();
+        check(up.upload_page == 0u, "the question shows once");
+
+        Model no;
+        no.offer_upload();
+        no.open();
+        check(no.key(LauncherAction::Accept, false) == Model::Effect::UploadLeft && no.upload_page == 0u &&
+                  no.view() == static_cast<int>(Model::kLauncherView),
+              "Enter on the question is Don't send");
+        Model esc;
+        esc.offer_message();
+        esc.offer_upload();
+        esc.open();
+        check(esc.key(LauncherAction::Back, false) == Model::Effect::None && esc.upload_page == 3u,
+              "the message comes before the question");
+        esc.key(LauncherAction::Next, false);
+        esc.key(LauncherAction::Next, false);
+        check(esc.key(LauncherAction::Back, false) == Model::Effect::UploadLeft && esc.upload_page == 0u,
+              "Back on the question is Don't send, whatever is selected");
+        Model late;
+        late.offer_upload();
+        late.open();
+        late.click(Model::UploadSend);
+        late.key(LauncherAction::Back, false);
+        late.upload_finished(true);
+        check(late.upload_page == 0u && late.view() == static_cast<int>(Model::kLauncherView),
+              "a send's answer after the player left changes nothing");
     } catch (const std::exception& failure) {
         std::cerr << "launcher_model_tests: " << failure.what() << '\n';
         return 1;
