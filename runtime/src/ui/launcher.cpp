@@ -2,11 +2,13 @@
 #include "galaxy/ui/launcher.h"
 
 #include "galaxy/render/host_window.h"
+#include "galaxy/render/render_config.h"
 #include "galaxy/ui/launcher_model.h"
 
 #include <atomic>
 #include <cstddef>
 #include <mutex>
+#include <optional>
 #include <string>
 
 namespace galaxy::ui {
@@ -33,6 +35,8 @@ std::atomic<bool> s_opened{false};
 std::mutex s_text_mutex;
 std::u16string s_version;
 std::u16string s_notes;
+std::optional<galaxy::render::RenderConfig> s_draft;  // under s_text_mutex
+constexpr unsigned kGraphicsPage = 1u;                // native_settings.cpp kNativeSettingsTabNames
 
 // UTF-8 as UTF-16, at most `limit` units and `lines` lines, without control characters but line breaks; a malformed
 // sequence becomes U+FFFD.
@@ -84,11 +88,33 @@ void launcher_enable(bool on) noexcept {
     s_enabled.store(on, std::memory_order_relaxed);
 }
 
+void launcher_offer_benchmark(bool on) noexcept {
+    const std::lock_guard<std::mutex> lock(s_model.mutex);
+    s_model.benchmark = on;
+}
+
+void launcher_offer_message() noexcept {
+    s_model.offer_message();
+}
+
+void launcher_show_draft(const galaxy::render::RenderConfig& draft) {
+    const std::lock_guard<std::mutex> lock(s_text_mutex);
+    s_draft = draft;
+}
+
 bool launcher_open() noexcept {
     if (!s_enabled.load(std::memory_order_relaxed) || s_opened.exchange(true, std::memory_order_relaxed)) {
         return false;
     }
     s_model.open();
+    std::optional<galaxy::render::RenderConfig> draft;
+    {
+        const std::lock_guard<std::mutex> lock(s_text_mutex);
+        draft.swap(s_draft);
+    }
+    if (draft) {
+        galaxy::render::host_window::open_native_settings_draft(kGraphicsPage, *draft);
+    }
     return true;
 }
 

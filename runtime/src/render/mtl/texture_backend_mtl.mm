@@ -29,6 +29,7 @@ mtl::Format format_of(TexelFormat format) noexcept {
     return format == TexelFormat::R8    ? mtl::Format::R8
            : format == TexelFormat::Rg8 ? mtl::Format::Rg8
            : format == TexelFormat::Bc1 ? mtl::Format::Bc1
+           : format == TexelFormat::Astc4x4 ? mtl::Format::Astc4x4
                                         : mtl::Format::Rgba8;
 }
 
@@ -257,6 +258,10 @@ bool TextureBackend::supports_bc1() {
     return mtl::Context::get().caps().bc_textures;
 }
 
+bool TextureBackend::supports_astc4x4() {
+    return mtl::Context::get().caps().apple_gpu;
+}
+
 // A texture of `descriptor` (an MTLTextureDescriptor*) from a heap with room, else from a new heap.
 mtl::Object TextureBackend::allocate(void* descriptor, mtl::Object& heap_out) {
     MTLTextureDescriptor* const wanted = (__bridge MTLTextureDescriptor*)descriptor;
@@ -380,7 +385,7 @@ void TextureBackend::record_upload(mtl::Texture* texture, bool, const UploadChun
     id<MTLBlitCommandEncoder> const blit = (__bridge id<MTLBlitCommandEncoder>)upload_list_;
     id<MTLBuffer> const source = (__bridge id<MTLBuffer>)staging.resource->buffer;
     id<MTLTexture> const target = (__bridge id<MTLTexture>)texture->texture;
-    const bool blocks = texture->format == mtl::Format::Bc1;
+    const bool blocks = texture->format == mtl::Format::Bc1 || texture->format == mtl::Format::Astc4x4;
     for (unsigned level = 0; level < levels; ++level) {
         const std::uint32_t level_width = std::max<std::uint32_t>(1u, width >> level);
         const std::uint32_t level_height = std::max<std::uint32_t>(1u, height >> level);

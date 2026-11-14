@@ -343,7 +343,8 @@ enum {
        0-7 the selected answer and bits 8-15 the page (0 the rows Play, Settings, Quit; 1 an update's notice, whose
        answer is Back). */
     NEBULA_HOME_MENU_LAUNCHER_OPEN,
-    NEBULA_HOME_MENU_LAUNCHER_POLL, /* its choice: -1 none yet, 0 play (the boot goes on to the title), 1 quit */
+    NEBULA_HOME_MENU_LAUNCHER_POLL, /* its choice: -1 none yet, 0 play (the boot goes on to the title), 1 quit, 2 the
+                                       benchmark (the game quits; the host starts again into it) */
     NEBULA_HOME_MENU_LAUNCHER_TEXT, /* value: bits 16-31 which (0 the update's version, 1 its notes), bits 0-15 a
                                        position: its UTF-16 unit there, 0 past the end */
 };

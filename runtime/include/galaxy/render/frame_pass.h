@@ -15,6 +15,7 @@
 
 #include <nebula_game_api.h>
 
+#include <array>
 #include <cmath>
 #include <algorithm>
 #include <cstddef>
@@ -191,9 +192,9 @@ public:
     // video memory breakdown).
     template <typename Visit>
     void for_each_texture(Visit&& visit) const {
-        for (const auto& entry : registry_) {
-            if (entry.second.texture) {
-                visit(gpu::raw(entry.second.texture));
+        for (const DisplayTexture& entry : registry_) {
+            if (entry.texture) {
+                visit(gpu::raw(entry.texture));
             }
         }
         for (const std::vector<PooledTexture>& frame : retired_textures_) {
@@ -217,6 +218,8 @@ public:
 
 
 private:
+    // Three pictures: the one being drawn, the one shown and the one before it, which a present may still read.
+    static constexpr std::uint32_t kPictures = 3u;
     struct PooledTexture {
         gpu::TextureRef texture;
         std::uint32_t width = 0;
@@ -228,7 +231,7 @@ private:
     [[nodiscard]] gpu::TextureRef
         acquire_idle_texture(std::uint32_t width, std::uint32_t height);
 
-    std::unordered_map<std::uint32_t, DisplayTexture> registry_;
+    std::array<DisplayTexture, kPictures> registry_{};  // by slot
     std::uint32_t latest_slot_ = 0;
     std::uint32_t next_slot_ = 0;
     std::uint64_t next_picture_number_ = 1;

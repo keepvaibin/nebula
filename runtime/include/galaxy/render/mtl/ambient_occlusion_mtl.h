@@ -33,7 +33,8 @@ public:
     void shutdown() noexcept;
     [[nodiscard]] bool ready() const noexcept { return ready_; }
     // With no encoder open on `commands` (an id<MTLCommandBuffer>), from the scene's single-sample depth: the colour
-    // multiplier of each scene target pixel. False: nothing to multiply.
+    // multiplier of each scene target pixel (at one occlusion pixel per scene target pixel the multiply makes it from the
+    // denoised occlusion itself). False: nothing to multiply.
     bool prepare(Object commands, const Texture& depth, const RtView& view, bool ssao, std::span<const ao::ObjectOccluder> objects,
                  UploadRing& ring, const StageMarker& mark = {});
     // Inside a scene pass `encoder` (an id<MTLRenderCommandEncoder>) whose colour is `color_format` over `samples`
@@ -52,15 +53,21 @@ private:
 
     bool ready_ = false;
     Format depth_format_ = Format::Depth32fStencil8;
-    std::array<Object, 7> functions_{};            // id<MTLFunction>
+    std::array<Object, 8> functions_{};            // id<MTLFunction>
     std::array<Object, kPassCount> compute_{};     // id<MTLComputePipelineState>
     Object no_depth_ = nullptr;                    // id<MTLDepthStencilState>: the multiply's
     struct Apply {
         Format color = Format::None;
         unsigned samples = 0;
+        bool fused = false;         // makes the multiplier from the denoised occlusion (AO_PASS_apply_ps)
         Object pipeline = nullptr;  // id<MTLRenderPipelineState>
     };
-    std::array<Apply, 8> apply_{};
+    std::array<Apply, 16> apply_{};
+    // This frame's occlusion is one pixel per scene target pixel: no multiplier image or pass; the multiply reads the
+    // denoised occlusion.
+    bool fused_ = false;
+    unsigned target_width_ = 0u;  // the scene target's size at the last prepare()
+    unsigned target_height_ = 0u;
     std::shared_ptr<Texture> distance_;
     std::shared_ptr<Texture> raw_;
     std::shared_ptr<Texture> denoised_;

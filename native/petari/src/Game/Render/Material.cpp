@@ -769,9 +769,14 @@ u32 MaterialDraw::constantsOf(s32 formIndex, const NebulaModelForm& rForm) {
     }
 
     // Moved, edited or lit by the ambient colours: rows in the frame, once a frame while they stay the same (for a form
-    // that reads the ambient colours, while those are the ones its rows were filled with).
-    if (plain && pState->mConstantsFrame == Frame::number() && pState->mConstantsStamp == pMaterial->mStamp &&
-        (!pState->mReadsAmbient || pState->mConstantsAmbient == MaterialAmbient::generation())) {
+    // that reads the ambient colours, while those are the ones its rows were filled with; in the plain module only: a
+    // module with hook points fills such a form's rows at every draw).
+#if defined(NEBULA_PLAIN_MODULE)
+    const bool ambientKept = !pState->mReadsAmbient || pState->mConstantsAmbient == MaterialAmbient::generation();
+#else
+    const bool ambientKept = !pState->mReadsAmbient;
+#endif
+    if (plain && pState->mConstantsFrame == Frame::number() && pState->mConstantsStamp == pMaterial->mStamp && ambientKept) {
         return pState->mConstantsIndex;
     }
     f32 (*pRows)[4] = static_cast< f32 (*)[4] >(Frame::arena(rowCount * 16, 16));

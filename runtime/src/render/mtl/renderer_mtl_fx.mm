@@ -3,6 +3,7 @@
 // anti-aliasing and the wide scene with its camera. As the same functions of vk/renderer_vk_frame.cpp.
 #include "renderer_mtl_internal.h"
 
+#include "galaxy/render/game_bloom_shape.h"
 #include "galaxy/render/texture_store.h"
 
 #include <nebula_frame_list.h>
@@ -27,11 +28,18 @@ void RendererMtl::record_scene_aa() {
     // The picture the display copy takes, against its size on screen, decides AUTO.
     const FrameMap shown = output_frame_for_window();
     end_scene_pass();
-    const mtl::Texture& color = *scene_.color;
-    const AaRun ran = post_.prepare_scene_aa(commands_, color, color.width, color.height, scene_map_.width, scene_map_.height,
-                                             std::max(shown.width, 1u), std::max(shown.height, 1u));
-    begin_scene_pass();
-    post_.finish_scene_aa(pass_, ran, color.width, color.height, scene_.samples);
+    const unsigned width = scene_.color->width;
+    const unsigned height = scene_.color->height;
+    // A scene target whose image may change hands (take_scene's) trades it to the passes instead of copying it; the
+    // image that takes its place is then written whole, so the pass opens without loading it.
+    mtl::PostProcessor::SceneTrade trade;
+    if (can_take_scene()) {
+        trade = [this](gpu::TextureRef spare) { return swap_scene_color(std::move(spare)); };
+    }
+    const AaRun ran = post_.prepare_scene_aa(commands_, *scene_.color, width, height, scene_map_.width, scene_map_.height,
+                                             std::max(shown.width, 1u), std::max(shown.height, 1u), trade);
+    begin_scene_pass_with(0u, nullptr, post_.scene_traded(), "record_scene_aa");
+    post_.finish_scene_aa(pass_, ran, width, height, scene_.samples);
     reset_draw_bindings();
 }
 
@@ -60,6 +68,11 @@ void RendererMtl::record_scene_ao() {
 void RendererMtl::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t b) {
     if (!bloom_.ready() || !scene_.color || target_pass_active_) {
         return;
+    }
+    const float strength = static_cast<float>(std::min(get_render_config().bloom, kMaxBloom)) / 100.0f;
+    if (kind == NEBULA_PASS_BLOOM_SIMPLE && scene_.samples <= 1u &&
+        bloom::adds_nothing(a & 0xFFu, (a >> 8u) & 0xFFu, (a >> 16u) & 0xFFu, a >> 24u, strength)) {
+        return;  // a simple bloom that adds nothing leaves the frame, and its pass open
     }
     const GpuPassScope scope{*this, GpuPass::Bloom};
     end_scene_pass();
@@ -96,11 +109,7 @@ void RendererMtl::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t 
         if (!(p.ring_x > 0.0f && p.ring_x < 16.0f) || !(p.ring_y > 0.0f && p.ring_y < 16.0f)) {
             p.ring_x = p.ring_y = 1.0f;
         }
-        p.strength = static_cast<float>(std::min(get_render_config().bloom, kMaxBloom)) / 100.0f;
-        if (p.strength <= 0.0f) {
-            // Turned off: the kept scene alone comes back, and none of the chain's passes run.
-            p.kind = mtl::GameBloom::Kind::Restore;
-        }
+        p.strength = strength;
         const bool whole = in.frame_width == scene_.color->width && in.frame_height == scene_.color->height;
         const mtl::Format color_format = scene_.wide ? draw_layout_.wide_color : draw_layout_.scene_color;
         // As RendererVk::game_bloom: the simple bloom's source is the frame, traded with the scene instead of copied where

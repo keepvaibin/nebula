@@ -294,8 +294,8 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
     now.rows_walk = walk_.serial;
 
     // The instance table: one entry per item, in draw order. An instanced draw's light base is its first instance's
-    // row.
-    const UploadRing::Allocation instances = matrix_ring.allocate(std::size_t{list.item_count} * 16u + 16u, 16u);
+    // row. Vulkan binds it at its offset, which must be a multiple of minStorageBufferOffsetAlignment (at most 256).
+    const UploadRing::Allocation instances = matrix_ring.allocate(std::size_t{list.item_count} * 16u + 16u, 256u);
     walk_.instances = instances.gpu;
     {
         auto* out = reinterpret_cast<std::uint32_t*>(instances.cpu);

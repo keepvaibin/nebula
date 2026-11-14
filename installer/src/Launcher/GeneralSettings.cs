@@ -34,6 +34,18 @@ namespace Nebula.Launcher
             return offered;
         }
 
+        // runtime_settings.cpp button_icons_key, focus_loss_key; the game's menu's steps for the text size (0 automatic).
+        public static readonly string[] ButtonIconKeys = { "auto", "game", "xbox", "nintendo", "playstation", "keyboard" };
+        public static readonly string[] ButtonIconNames = { NebulaText.Of("Auto"), NebulaText.Of("Wii"), NebulaText.Of("Xbox"), NebulaText.Of("Nintendo Switch"), NebulaText.Of("PlayStation"), NebulaText.Of("Keyboard and mouse") };
+        public static readonly string[] FocusLossKeys = { "keep", "pause", "mute" };
+        public static readonly string[] FocusLossNames = { NebulaText.Of("Keep running"), NebulaText.Of("Pause"), NebulaText.Of("Mute") };
+        public static readonly int[] MenuTextSizes = { 0, 80, 90, 100, 110, 120, 130, 140, 150, 160, 180, 200 };
+
+        public int ButtonIcons = 0, FocusLoss = 0;
+        /// <summary>0 automatic, else 70 to 200 percent.</summary>
+        public int MenuTextSize = 0;
+        public bool DiscordStatus = true;
+
         /// <summary>Steps of dialogue text revealed per frame, 1 to 3; 4 shows each page at once.</summary>
         public int TextSpeed = 1;
 
@@ -61,6 +73,21 @@ namespace Nebula.Launcher
                     int index = Array.FindIndex(LanguageKeys, k => string.Equals(k, value, StringComparison.OrdinalIgnoreCase));
                     if (index >= 0) settings.Language = index;
                 }
+                if (key == "button_icons")
+                {
+                    int index = Array.FindIndex(ButtonIconKeys, k => string.Equals(k, value, StringComparison.OrdinalIgnoreCase));
+                    if (string.Equals(value, "wii", StringComparison.OrdinalIgnoreCase)) index = 1;
+                    if (index >= 0) settings.ButtonIcons = index;
+                }
+                if (key == "focus_loss")
+                {
+                    int index = Array.FindIndex(FocusLossKeys, k => string.Equals(k, value, StringComparison.OrdinalIgnoreCase));
+                    if (index >= 0) settings.FocusLoss = index;
+                }
+                int size;
+                if (key == "menu_text_size" && int.TryParse(value, out size))
+                    settings.MenuTextSize = size <= 0 ? 0 : Math.Max(70, Math.Min(size, 200));
+                if (key == "discord_status" && value.Length > 0) settings.DiscordStatus = value[0] != '0';
             }
             settings.read = SettingsFile.Snapshot(settings.Values());
             return settings;
@@ -75,6 +102,10 @@ namespace Nebula.Launcher
             {
                 new KeyValuePair<string, string>("text_speed", Math.Max(1, Math.Min(TextSpeed, 4)).ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 new KeyValuePair<string, string>("language", LanguageKeys[Math.Max(0, Math.Min(Language, LanguageKeys.Length - 1))]),
+                new KeyValuePair<string, string>("button_icons", ButtonIconKeys[Math.Max(0, Math.Min(ButtonIcons, ButtonIconKeys.Length - 1))]),
+                new KeyValuePair<string, string>("menu_text_size", (MenuTextSize <= 0 ? 0 : Math.Max(70, Math.Min(MenuTextSize, 200))).ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new KeyValuePair<string, string>("focus_loss", FocusLossKeys[Math.Max(0, Math.Min(FocusLoss, FocusLossKeys.Length - 1))]),
+                new KeyValuePair<string, string>("discord_status", DiscordStatus ? "1" : "0"),
             };
         }
 

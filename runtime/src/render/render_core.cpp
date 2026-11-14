@@ -208,15 +208,16 @@ bool RenderCore::initialize(int w, int h) {
 
     // The first start (no config.ini, and no back end chose for it): the table's height now, measured in the first 3D scene.
     if (const RenderConfig chosen = get_render_config_chosen();
-        render_config_first_start() && chosen.upscaler == 0u && chosen.internal_height == 0u && h > 0) {
+        render_config_first_start() && chosen.upscaler == 0u && chosen.internal_height == 0u && start_frame.height > 0u) {
 #if defined(NEBULA_GPU_METAL)
         const bool shared = mtl::Context::get().caps().unified_memory;
 #else
         const bool shared = rt_caps().unified_memory;
 #endif
         calibration_ = {};
-        calibration_.width = static_cast<unsigned>(std::max(w, 1));
-        calibration_.lines = static_cast<unsigned>(h);
+        // The picture's size on the window (the renderer's output, which internal_extent scales).
+        calibration_.width = start_frame.width;
+        calibration_.lines = start_frame.height;
         calibration_.start = first_start_internal_height(shared, calibration_.lines);
         // The other height timed: 480 lines against 1080 or the panel.
         calibration_.heights[0] = calibration_.start;
@@ -2529,9 +2530,13 @@ void RenderCore::calibrate_first_start(bool scene, double walk_ms) {
         return;
     }
     const double frame_ms = 1000.0 / present_frame_rate(presented_max_fps(chosen), chosen.vsync_interval, renderer_.display_refresh_hz());
-    c.pixels.push_back(scene_pixels(shown, c.width, c.lines));
+    // The scene target as the renderer made it: a size it refused (the video memory check) shows as no spread, so no fit.
+    c.pixels.push_back(static_cast<double>(renderer_.frame_map().width) * static_cast<double>(renderer_.frame_map().height));
     c.ms.push_back(gpu_ms);
-    c.cpu_over += walk_ms > kFitFrameShare * frame_ms || game_ms > kFitFrameShare * frame_ms ? 1.0 : 0.0;
+    // The CPU's part: the walk near the frame time, or the game thread late on its own (its list period, less its waits on
+    // the render thread, past 1.5 steps: note_game_frame_cadence's rule; the host's pacing sleep is in the period).
+    constexpr double kGameStepMs = 1000.0 / galaxy::kGameStepsPerSecond;
+    c.cpu_over += walk_ms > kFitFrameShare * frame_ms || game_ms > 1.5 * kGameStepMs ? 1.0 : 0.0;
     if (c.frames < kCalibrationSettle + kCalibrationSamples) {
         return;
     }
@@ -2544,7 +2549,7 @@ void RenderCore::calibrate_first_start(bool scene, double walk_ms) {
         c.list_qpc = 0;
         return;
     }
-    // Most frames with the game's or the walk's own time near the frame time: the CPU sets the rate, not the pixels.
+    // Most frames with the walk near the frame time or the game late on its own: the CPU sets the rate, not the pixels.
     if (c.cpu_over * 2.0 > static_cast<double>(c.ms.size())) {
         end_first_start_calibration(c.start, "the CPU is the limit");
         return;
