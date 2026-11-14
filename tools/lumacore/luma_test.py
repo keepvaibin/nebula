@@ -1,4 +1,4 @@
-"""luma_test.py: the proof harness's runner (contract `harness`, revision 1; plan task 0.3). Python 3, standard library.
+"""luma_test.py: the proof harness's runner (docs/modding/lumalink/test-harness.md). Python 3, standard library.
 
     luma_test.py run <test folder | suite.json> --bin <folder> [--renderer r] [--work <folder>] [--who F|G]
                  [--module hooks|plain] [--gpu vendor:device:subsystem]
@@ -972,7 +972,7 @@ def permission_digest(declared):
     hosts = ["".join(chr(ord(c) + 32) if "A" <= c <= "Z" else c for c in host) for host in declared.get("hosts", [])]
     for host in sorted(hosts, key=lambda text: text.encode("utf-8")):
         h = fnv(h, host.encode("utf-8") + b"\0")
-    # net.roots (consent 1.2): "roots" and each file as written, sorted in byte order, when there are any.
+    # net.roots (consent.md 1.2): "roots" and each file as written, sorted in byte order, when there are any.
     roots = declared.get("roots", [])
     if roots:
         h = fnv(h, b"roots\0")

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* The harness's game half (contract `harness` r1, section 2): a LumaCore mod that uses only what any mod can use
+/* The harness's game half (test-harness.md section 2): a LumaCore mod that uses only what any mod can use
    (functions, fields and hooks by name) plus the harness service the test extension offers in a harness run
    (luma_harness.h). Once a game frame it asks the host half for its next lines and does each: the save, the stage, the
    player, calls and reads by name. Each is read back through the game's own query and reported as facts; one that does
@@ -532,8 +532,8 @@ static const char* missing_text(const char* lead, const char* ref) {
 
 typedef enum Pending { Pending_None, Pending_Stage, Pending_File, Pending_FileStep } Pending;
 static Pending pending;
-/* A file step (`file copy|load|erase|new`, harness 3.6): which, and the files; file_mario is the character a file is
-   read as (save.character's; Mario until it is set). */
+/* A file step (`file copy|load|erase|new`, test-harness.md 3.6): which, and the files; file_mario is the character a
+   file is read as (save.character's; Mario until it is set). */
 typedef enum FileOp { FileOp_Copy, FileOp_Load, FileOp_Erase, FileOp_New } FileOp;
 static FileOp file_op;
 static int32_t file_from, file_to;

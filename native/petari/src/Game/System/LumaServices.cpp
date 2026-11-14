@@ -925,7 +925,8 @@ NEBULA_GAME_API const LumaServiceKernel* luma_services_open(void) {
     return luma::services::open();
 }
 
-// The catalog as JSON (luma_service_provider.h): the rows in registry 9's order, read only, so any thread and no attach.
+// The catalog as JSON (luma_service_provider.h): the rows in services/registry.md 9's order, read only, so any thread
+// and no attach.
 NEBULA_GAME_API void luma_services_describe(LumaServicesDescribeWrite write, void* user) {
     using luma::services::CatalogRow;
     if (write == nullptr) {
@@ -973,7 +974,7 @@ NEBULA_GAME_API void luma_services_describe(LumaServicesDescribeWrite write, voi
         } while (value != 0);
         write(user, digits + at, static_cast<uint32_t>(sizeof(digits) - at));
     };
-    // Names and permissions are of registry 2's grammar ([a-z0-9.]): nothing in them needs escaping.
+    // Names and permissions are of services/registry.md 2's grammar ([a-z0-9.]): nothing in them needs escaping.
     text("{\"services\": [");
     for (u32 i = 0; i < count; i++) {
         text(i == 0 ? "\n {\"name\": \"" : ",\n {\"name\": \"");

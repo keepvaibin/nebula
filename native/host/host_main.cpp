@@ -3015,7 +3015,7 @@ void forget_save(std::string_view id) {
 std::atomic<int> gSavesPending{0};
 // The facts file of the mods' store attached this run (cook_mod_files), read into the mod log at the mods' start.
 fs::path gCookFacts;
-// Each planned file's store path and its mod: the cook's facts name the mod by it (mod-log 9).
+// Each planned file's store path and its mod: the cook's facts name the mod by it (mod-log.md 9).
 std::vector<std::pair<std::string, std::string>> gCookOwners;
 // The exit waits here for the saves still on the worker.
 std::mutex gSavesMutex;
@@ -4656,7 +4656,8 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
     gPlayersModsOn = static_cast<std::uint32_t>(std::count_if(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) {
         return mod.enabled && !is_harness_half(mod.id);
     }));
-    // The answers the plan's granted lists come from: a declined permission's L506 is then the player's choice (consent 2.3).
+    // The answers the plan's granted lists come from: a declined permission's L506 is then the player's choice
+    // (consent.md 2.3).
     galaxy::modlog::keep_permission_answers(mods);
     // A mod whose code may choose layers: the scan is kept to plan again with a changed answer. No such mod, no copy.
     if (std::any_of(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) {

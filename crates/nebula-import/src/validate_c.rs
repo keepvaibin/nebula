@@ -75,7 +75,7 @@ pub struct LumaValidateInput {
     /// The renderer's feature names (JSON with a `renderer` key, luma.md revision 4); null: L806 is not checked.
     pub renderer: *const c_char,
     pub renderer_size: u64,
-    /// The features this device's graphics have (start-check 3); null: L806 is not checked.
+    /// The features this device's graphics have (start-check.md 3); null: L806 is not checked.
     pub device_features: *const *const c_char,
     pub device_feature_count: u32,
     /// The game's placement facts (smg_game.luma-placement.json, read for its `factory`); null: every placement's
@@ -442,7 +442,7 @@ fn from_touches(about: Option<&luma_validate::About>, touches: &luma_validate::T
     (id, version, required, after_start)
 }
 
-/// A mod's kept report read as it is, no rule run (start-check F-S2: the scan's required permissions, before the
+/// A mod's kept report read as it is, no rule run (start-check.md: the scan's required permissions, before the
 /// start's check): id, version, required services and after-start rows answer on it; count 0, kept null. Kept bytes
 /// that do not read (another form, cut short, changed: the end line's SHA-1) give state -1 and why. Never null; give
 /// it back to luma_report_free.
@@ -665,7 +665,7 @@ pub unsafe extern "C" fn luma_report_id(report: *const LumaReport) -> *const c_c
 
 /// The name of the service number `index` that the entry library for `platform` imports without LUMA_OPTIONAL
 /// (kind 5), in import order, each once; null past the last, or for a platform the mod has no code for. The same from
-/// a start's check that took the kept report (consent 1.3: the host maps each to its permission by name).
+/// a start's check that took the kept report (consent.md 1.3: the host maps each to its permission by name).
 ///
 /// # Safety
 /// As luma_report_state; `platform` is null or a NUL-terminated string.

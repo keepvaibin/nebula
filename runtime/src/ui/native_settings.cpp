@@ -2103,7 +2103,7 @@ bool s_mods_scanned = false;
 std::string s_mod_focus;    // the mod last selected in a list: the buttons' Options act on it
 std::string s_mod_held;     // a mod picked up to move with the arrows (empty: none)
 std::string s_mod_options;  // the mod whose page shows instead of the lists (empty: none)
-bool s_mod_log_open = false;  // the log page shows instead of the lists (mod-log 4.2)
+bool s_mod_log_open = false;  // the log page shows instead of the lists (mod-log.md 4.2)
 bool s_mod_log_facts = false; // its rows were written as harness facts since it opened
 // The consent question: a page of rows shown instead of the lists while a mod on waits for an
 // answer (first_code_to_allow_locked), so the menu's own rows, scrolling and input drive it. `choosing`: permission by
@@ -2115,11 +2115,11 @@ bool s_consent_focus = false;
 std::map<std::string, bool> s_consent_chosen;
 std::string s_consent_facts_for;
 
-// The Mods screen's lines about each mod as the harness facts `modscreen.<id>` (harness 4): its line in its list, and
-// each row of its page while that shows, written when what they say changes (a page each time it opens). `wanted`: a
-// harness run with the menu on this tab (read once per build of the page); `shown`: per place and mod ("list:<id>",
-// "page:<id>") a hash of the lines last written; `pending`: the facts to write once s_mods_mutex is let go. Under
-// s_mods_mutex.
+// The Mods screen's lines about each mod as the harness facts `modscreen.<id>` (test-harness.md 4): its line in its
+// list, and each row of its page while that shows, written when what they say changes (a page each time it opens).
+// `wanted`: a harness run with the menu on this tab (read once per build of the page); `shown`: per place and mod
+// ("list:<id>", "page:<id>") a hash of the lines last written; `pending`: the facts to write once s_mods_mutex is let
+// go. Under s_mods_mutex.
 std::atomic<bool> s_modscreen_wanted{false};
 std::map<std::string, std::size_t> s_modscreen_shown;
 std::vector<std::pair<std::string, std::string>> s_modscreen_pending;
@@ -2395,7 +2395,7 @@ void open_consent_locked() {
 
 enum class ConsentAnswer { Allow, Chosen, NotNow };
 
-// The player's answer for the mod the question shows (consent 2.3): Allow grants its code and every permission and
+// The player's answer for the mod the question shows (consent.md 2.3): Allow grants its code and every permission and
 // keeps it on; Chosen grants its code, the required permissions and the ones chosen; Not now records the code's no for
 // this token, leaves the permissions not asked and turns it off. Then the next mod's question, or the restart.
 void answer_consent(ConsentAnswer answer) {
@@ -2485,7 +2485,7 @@ void refresh_overlaps_locked() {
 // With s_mods_mutex held: mod `id` into the list of mods on at `index` (0 the top), or off (`on` false: among the
 // others by name). The draft only.
 // Why the mod's code did not start this run, as its rows say it: a required permission the player declined is their
-// choice, Consent.OffDeclined as the mod log says it (consent 2.3), not the loader's L506.
+// choice, Consent.OffDeclined as the mod log says it (consent.md 2.3), not the loader's L506.
 galaxy::mods::NotStartedText mod_not_started_text(const std::string& id) {
     const std::string declined = galaxy::modlog::declined_at_start(id);
     if (declined.empty()) return galaxy::mods::plugin_not_started_text(id);
@@ -2800,10 +2800,10 @@ const char* import_outcome_word(const galaxy::mods::ImportResult& result) {
     return result.replaced ? "UPDATED" : "IMPORTED";
 }
 
-// In a harness run, each line the result page shows for a file as the fact import.<file name> (harness 4), in the
-// page's order: line 1 what happened {"line": 1, "text": the outcome word, "title", "id" ("" when nothing was added),
-// "checked", "refused"}; then each finding {"line", "text", "code", "file", "at" ("<line>:<column>", when it names
-// one), "error"}.
+// In a harness run, each line the result page shows for a file as the fact import.<file name> (test-harness.md 4), in
+// the page's order: line 1 what happened {"line": 1, "text": the outcome word, "title", "id" ("" when nothing was
+// added), "checked", "refused"}; then each finding {"line", "text", "code", "file", "at" ("<line>:<column>", when it
+// names one), "error"}.
 void write_import_facts() {
     std::vector<ImportOutcome> outcomes;
     {
@@ -3191,12 +3191,12 @@ SettingsRow mod_log_row() {
     return row;
 }
 
-// The consent question for `mod` as rows (consent 2.2): its name and version; the code's warning (and that this version
-// changes the code); each declared permission in the manifest's order (`native` first): its short name (new when
-// asked again), whether the mod needs it to start, and as the help line what it does with the hosts and the mod's own
-// words; then Allow, Choose (with an optional permission) and Not now, the focus on Not now. Choosing, each optional
-// permission turns between allowed and not allowed, and Done records them. Every word is in the played language
-// (row_words), shown as it is. With s_mods_mutex held.
+// The consent question for `mod` as rows (consent.md 2.2): its name and version; the code's warning (and that this
+// version changes the code); each declared permission in the manifest's order (`native` first): its short name (new
+// when asked again), whether the mod needs it to start, and as the help line what it does with the hosts and the mod's
+// own words; then Allow, Choose (with an optional permission) and Not now, the focus on Not now. Choosing, each
+// optional permission turns between allowed and not allowed, and Done records them. Every word is in the played
+// language (row_words), shown as it is. With s_mods_mutex held.
 std::vector<SettingsRow> consent_page(const galaxy::mods::ModInfo& mod) {
     std::vector<SettingsRow> rows;
     const galaxy::mods::ModConsent facts = galaxy::mods::consent_facts(mod);
@@ -3253,7 +3253,7 @@ std::vector<SettingsRow> consent_page(const galaxy::mods::ModInfo& mod) {
         SettingsRow row{label, value, std::move(change), help};
         row.names = 1u | 2u | 4u;
         rows.push_back(std::move(row));
-        // The harness's view of the row (consent 2.6).
+        // The harness's view of the row (consent.md 2.6).
         if (!fact_rows.empty()) fact_rows += ',';
         fact_rows += "{\"name\":";
         galaxy::modlog::append_json_text(fact_rows, permission.name);
@@ -3407,7 +3407,8 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
         rows.push_back(std::move(may));
     }
     // The player's answers for its code and permissions, each turned with left and right; a draft like any setting,
-    // applied at the next start (consent 2.3). Code not allowed turns the mod off. Shown once the question was answered.
+    // applied at the next start (consent.md 2.3). Code not allowed turns the mod off. Shown once the question was
+    // answered.
     const galaxy::mods::ModConsent consent = galaxy::mods::consent_facts(mod);
     if (consent.code && consent.code_answer != galaxy::mods::Answer::NotAsked) {
         const auto answer_words = [&id](bool allowed) {
@@ -4236,7 +4237,7 @@ bool mods_page_key(std::uintptr_t key, bool accept, bool was_down) {
             asking = s_consent_open;
         }
         if (asking) {
-            // The consent question: Escape, Backspace or B is Not now (consent 2.4); the rest are the rows' own.
+            // The consent question: Escape, Backspace or B is Not now (consent.md 2.4); the rest are the rows' own.
             if (key != VK_ESCAPE && key != VK_BACK) return false;
             if (!was_down) answer_consent(ConsentAnswer::NotNow);
             return true;
@@ -5662,7 +5663,7 @@ void native_settings_input(NativeSettingsInput input, int arg) {
         if (visible) (void)handle_native_settings_key(VK_ESCAPE, false, true);
         return;
     case NativeSettingsInput::CloseUnseen:
-        // The game's close where it shows no menu (consent 2.1: the player answers the question). One that asks
+        // The game's close where it shows no menu (consent.md 2.1: the player answers the question). One that asks
         // nothing closes as Escape closes it. One that asks is hidden as it stands, its question unanswered and its
         // draft kept, so the game goes on; it opens again where the game first shows a menu.
         if (!visible) return;

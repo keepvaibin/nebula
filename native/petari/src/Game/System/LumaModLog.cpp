@@ -462,7 +462,7 @@ namespace luma {
 
             // One block: the entry, its played text (UTF-16), then its mod, file, played text (UTF-8), English and code
             // name.
-            // The Notes shown as a notice as an Error is (mod-log 4.1, draft 7): a page a mod opened outside the game
+            // The Notes shown as a notice as an Error is (mod-log.md 4.1): a page a mod opened outside the game
             // (services/system.md J-SS5), so the player coming back sees which mod it was.
             const char* const cShownNotes[] = {"System.LinkOpened"};
 
@@ -655,7 +655,8 @@ namespace luma {
                 jsonString(pPart, room, pEntry->english);
                 put(pPart);
                 if (pEntry->row[0] != 0) {
-                    // The row its words came from, so a test names the line it means whatever the language (mod-log 4.3).
+                    // The row its words came from, so a test names the line it means whatever the language (mod-log.md
+                    // 4.3).
                     put(",\"row\":");
                     jsonString(pPart, room, pEntry->row);
                     put(pPart);

@@ -616,8 +616,8 @@ namespace luma {
             return luma::modlog::add(entry, known ? id : nullptr);
         }
 
-        // The arguments' part of a report's key (mod-log 2): the same mistake again is a repeat; another mistake at the
-        // same place ("wrong flags" after "wrong path", both from assets.find) is a report of its own.
+        // The arguments' part of a report's key (mod-log.md 2): the same mistake again is a repeat; another mistake at
+        // the same place ("wrong flags" after "wrong path", both from assets.find) is a report of its own.
         bool sameArgs(const Report& rReport, const char* const* ppArgs, u32 argCount) {
             if ((argCount < kReportArgs ? argCount : kReportArgs) != rReport.argCount || (argCount > kReportArgs) != rReport.cut) {
                 return false;

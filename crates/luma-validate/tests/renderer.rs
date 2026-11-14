@@ -1,5 +1,5 @@
 //! luma.md revision 4: a mod's `renderer.features` (its form, the game's list of feature names) and L806, a
-//! feature this device's graphics lack (start-check 3), at import and at a start's check.
+//! feature this device's graphics lack (start-check.md 3), at import and at a start's check.
 
 use luma_validate::names::{feature_name_ok, renderer_features_from_json, Names, RENDERER_FILE};
 use luma_validate::semver::Version;
@@ -165,7 +165,7 @@ fn l806_is_not_checked_without_the_list_or_the_device() {
     // LumaLink: the list, no device.
     let r = check(&bytes, Some(LIST), None);
     assert_eq!((codes(&r), not_checked(&r)), (vec![], vec![(806, "Missing.Device")]));
-    // No list (whatever the device says): the rule is not checked, as start-check 3 says.
+    // No list (whatever the device says): the rule is not checked, as start-check.md 3 says.
     for device in [None, Some(&[][..]), Some(&["ray_tracing"][..])] {
         let r = check(&bytes, None, device);
         assert_eq!((codes(&r), not_checked(&r)), (vec![], vec![(806, "Missing.RendererFeatures")]), "{device:?}");

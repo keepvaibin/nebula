@@ -865,7 +865,7 @@ std::int32_t clipboard_set_image(const LumaMod* mod, const std::uint8_t* rgba, s
     if (height == 0u || height > kSideMost || bytes > kPixelsMost) {
         return argument(mod, where, "height");
     }
-    // The buffer's own length (registry 3, G R-5d): a script passes bytes, and the pixels are never read past it.
+    // The buffer's own length (services/registry.md 3): a script passes bytes, and the pixels are never read past it.
     if (size != bytes) {
         return argument(mod, where, "size");
     }
@@ -903,7 +903,7 @@ std::int32_t clipboard_set_image(const LumaMod* mod, const std::uint8_t* rgba, s
     return LUMA_PENDING;
 }
 
-// Both services' cancel (registry 4.8): no event for the request after this returns.
+// Both services' cancel (services/registry.md 4.8): no event for the request after this returns.
 std::int32_t cancel_request(const LumaMod* mod, LumaHandle handle, bool links, const char* where) {
     if (const std::int32_t status = enter(mod, where, false); status != LUMA_OK) {
         return status;

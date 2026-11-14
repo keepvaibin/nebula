@@ -211,8 +211,8 @@ pub struct Game<'a> {
     pub extra_languages: &'a [String],
     /// The self-description: rows, fields, classes, services and their permissions, the LumaCore version.
     pub names: Option<&'a Names>,
-    /// The renderer features this device's graphics have (`draw.native`'s capability query, start-check 3), absent in
-    /// LumaLink: L806 reads them against a mod's `renderer.features`.
+    /// The renderer features this device's graphics have (`draw.native`'s capability query, start-check.md 3), absent
+    /// in LumaLink: L806 reads them against a mod's `renderer.features`.
     pub device_features: Option<&'a [String]>,
     pub store: Option<&'a dyn Store>,
 }
@@ -256,7 +256,7 @@ pub struct Touches {
     pub scenarios: Vec<String>,
     /// The services each platform's entry library imports without LUMA_OPTIONAL (kind 5): platform, service name and
     /// "major.minor", joined by U+001F, in import order, each once. The host's consent question reads which declared
-    /// permissions are required from them (consent 1.3: a permissioned service's permission is its name).
+    /// permissions are required from them (consent.md 1.3: a permissioned service's permission is its name).
     pub services: Vec<String>,
     /// The classes only code can make that a placement uses (references.md 3): class, file and line, joined by
     /// U+001F, one per placement. The host gives them to the module after the last mod's start (luma_refs.h), which

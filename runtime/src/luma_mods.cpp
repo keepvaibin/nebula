@@ -100,7 +100,7 @@ std::int32_t struct_size(const LumaMod* mod, const char* where, std::uint32_t fo
     return LUMA_E_ARGUMENT;
 }
 
-// `text` into `out` (`size` bytes with its NUL), cut at a character's end (registry 3, R-5c).
+// `text` into `out` (`size` bytes with its NUL), cut at a character's end (services/registry.md 3).
 void copy_text(char* out, std::size_t size, std::string_view text) noexcept {
     std::size_t length = std::min(text.size(), size - 1u);
     if (length < text.size()) {
@@ -183,7 +183,7 @@ void make_list() {
     }
 }
 
-// The 1.0 fields into the mod's struct: whole fields only, none past its size (registry 3's size rule).
+// The 1.0 fields into the mod's struct: whole fields only, none past its size (services/registry.md 3's size rule).
 void give(const LumaModsInfo& info, LumaModsInfo* out) {
     const std::uint32_t size = out->size;
     std::memcpy(out, &info, std::min<std::size_t>(size, sizeof(info)));

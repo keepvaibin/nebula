@@ -367,7 +367,7 @@ bool let_go(std::string_view mod) {
     if (ask == nullptr) return false;
     const std::string id(mod);
     if (ask(id.c_str()) != 1) return false;
-    // The player's act, not the mod's mistake: a Note worded by its row (mod-log 3.1, draft 7: the host's row keeps the
+    // The player's act, not the mod's mistake: a Note worded by its row (mod-log.md 3.1: the host's row keeps the
     // level), a service's code (121) so the page names it by the row, not as a validator's L-code.
     add_row(LUMA_MODLOG_CODE, LUMA_MODLOG_NOTE, id, 121u, "", "Time.LetGo", {});
     return true;

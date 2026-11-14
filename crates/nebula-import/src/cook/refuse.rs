@@ -94,7 +94,7 @@ impl<T> OrInvalid<T> for Option<T> {
     }
 }
 
-/// What the cook says about one file of a mod, for the facts file beside the store (mod-log 9: COOK entries).
+/// What the cook says about one file of a mod, for the facts file beside the store (mod-log.md 9: COOK entries).
 #[derive(Clone, Debug, PartialEq)]
 pub enum CookFact {
     /// The file was refused: nothing of it is in the store.

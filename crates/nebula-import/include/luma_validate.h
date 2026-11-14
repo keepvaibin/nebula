@@ -108,7 +108,7 @@ typedef struct LumaReport LumaReport;
 
 /* Never null; give it back to luma_report_free. */
 LumaReport* luma_validate(const LumaValidateInput* input);
-/* A mod's kept report read as it is, no rule run (start-check 1a, F-S2): luma_report_id, _version,
+/* A mod's kept report read as it is, no rule run (start-check.md 1a): luma_report_id, _version,
    _required_service and _after_start answer on it; count 0, kept null. State 2; -1 when the bytes do not read (another
    form, cut short, changed), luma_report_invalid saying why. Never null; give it back to luma_report_free. */
 LumaReport* luma_report_read_kept(const uint8_t* kept, uint64_t kept_size);

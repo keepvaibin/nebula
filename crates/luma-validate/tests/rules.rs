@@ -808,9 +808,9 @@ fn a_revision_1_net_with_hosts_is_one_finding() {
     assert!(message(&r.findings[0], "UsEnglish").contains("only net.internet takes hosts"), "{:?}", r.findings);
 }
 
-/// A permission's `why` in each language (consent 1.1): the text block's `permissions`, keyed by the permission's name
-/// as `permissions` writes it, in an object of its own, so an option of the same name never meets it. A reason for a
-/// permission the mod does not ask is an unknown key (L202); a reason is a line of 1 to 200 characters.
+/// A permission's `why` in each language (consent.md 1.1): the text block's `permissions`, keyed by the permission's
+/// name as `permissions` writes it, in an object of its own, so an option of the same name never meets it. A reason for
+/// a permission the mod does not ask is an unknown key (L202); a reason is a line of 1 to 200 characters.
 #[test]
 fn the_text_block_carries_each_permissions_why() {
     let said = |permissions: &str, text: &str| -> Vec<(u16, String)> {

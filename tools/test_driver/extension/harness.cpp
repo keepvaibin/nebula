@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The proof harness's host half (harness.h; contract `harness`, revision 1).
+// The proof harness's host half (harness.h; docs/modding/lumalink/test-harness.md).
 //
 // The plan (written by tools/lumacore/luma_test.py, one item a line, UTF-8):
 //   harness 1

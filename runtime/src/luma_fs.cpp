@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // LumaCore's file services (docs/modding/services/fs.md): `fs` (the mod's data folder and its own installed files) and
 // `fs.exchange` (the Exchange folder, permission fs.exchange). A request is checked on the game thread, done on one
-// worker thread in the order made (started at the first request, registry 10), and answered at a frame's start.
+// worker thread in the order made (started at the first request, services/registry.md 10), and answered at a frame's
+// start.
 
 #include "galaxy/luma_fs_service.h"
 

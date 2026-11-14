@@ -405,7 +405,8 @@ fn a_service_import_is_checked_against_the_game_s_catalog() {
         n.services = Some(Services::from_json(format!(r#"{{"services": {rows}}}"#).as_bytes()).unwrap());
         n
     };
-    // service.dll asks for net 1.0 (not optional): the same major and a minor at least that binds (registry 2).
+    // service.dll asks for net 1.0 (not optional): the same major and a minor at least that binds (services/registry.md
+    // 2).
     let bytes = code_mod(w, &lib("pe-x64/service.dll"), &[], false);
     for (rows, want) in [
         (r#"[{"name": "net", "major": 1, "minor": 0, "permission": null}]"#, vec![]),
@@ -419,7 +420,7 @@ fn a_service_import_is_checked_against_the_game_s_catalog() {
         let r = check_with(&bytes, w, Some(&n));
         assert_eq!(codes(&r), want, "{rows}: {:?}", r.findings);
         assert!(r.not_checked.is_empty(), "{rows}: {:?}", r.not_checked);
-        // What the host's consent question reads (consent 1.3), and the C accessor's source.
+        // What the host's consent question reads (consent.md 1.3), and the C accessor's source.
         assert_eq!(r.touches.services, vec!["windows-x64\u{1f}net\u{1f}1.0".to_string()], "{rows}");
     }
     let r = check_with(&bytes, w, Some(&with(r#"[{"name": "net", "major": 1, "minor": 0, "permission": "net"}]"#)));
@@ -438,7 +439,8 @@ fn a_service_import_is_checked_against_the_game_s_catalog() {
     let r = check(&luma(&[("code", code.as_str()), ("permissions", r#"[{"name": "native", "why": "Its own helper."}]"#)], &[file(&format!("code/{w}/mod.dll"), &lib("pe-x64/good.dll"))]), w, true);
     assert_eq!(codes(&r), vec![218], "{:?}", r.findings);
 
-    // The catalog's own form (registry 9): anything else does not read, so a wrong file is never a game with fewer services.
+    // The catalog's own form (services/registry.md 9): anything else does not read, so a wrong file is never a game
+    // with fewer services.
     for bad in [
         r#"{}"#,
         r#"{"services": [{"name": "Net", "major": 1, "minor": 0, "permission": null}]}"#,

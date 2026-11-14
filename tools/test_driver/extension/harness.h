@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The proof harness's host half (contract `harness`, revision 1): reads the plan the runner (tools/lumacore/luma_test.py)
-// wrote, keeps the test clock, drives the controls and menu keys, keeps the pictures asked for, and writes facts.jsonl.
-// It offers the game half (tools/test_driver/luma_test, a LumaCore mod) the service "harness" (luma_harness.h).
+// The proof harness's host half (docs/modding/lumalink/test-harness.md): reads the plan the runner
+// (tools/lumacore/luma_test.py) wrote, keeps the test clock, drives the controls and menu keys, keeps the pictures
+// asked for, and writes facts.jsonl. It offers the game half (tools/test_driver/luma_test, a LumaCore mod) the service
+// "harness" (luma_harness.h).
 #pragma once
 
 #include <nebula_host_extension.h>

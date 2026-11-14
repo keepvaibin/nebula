@@ -1298,7 +1298,7 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
             }
         }
         if (mod.package) {
-            // The answers as read, whatever the manifest does this start: one not read keeps them (consent 1.2).
+            // The answers as read, whatever the manifest does this start: one not read keeps them (consent.md 1.2).
             if (s != nullptr) mod.permission_answers = s->permissions;
             std::optional<luma::Manifest> manifest = luma::read_manifest(dir);
             // What refuses a mod is the validator's (its report at the start check); this reads what the game uses.
@@ -1749,7 +1749,7 @@ bool save_mod_settings(std::span<const ModInfo> mods) {
         if (mod.install_ask_never) out << "install.ask=no\n";
         // Answers for the permissions it declares now, with the digest each was given for (a stale one is asked again);
         // an answer for a permission it no longer declares is dropped here. A mod whose manifest was not read this start
-        // keeps every answer as read (consent 1.2).
+        // keeps every answer as read (consent.md 1.2).
         const auto write_answer = [&out](const std::string& name, const PermissionAnswer& answer) {
             out << "permission." << escape_key(name) << '=' << (answer.granted ? "yes " : "no ") << answer.digest << '\n';
         };

@@ -570,7 +570,7 @@ fn the_required_services_are_read_per_platform_and_after_a_start_s_check() {
     let mut other = Call::new(&path, "windows-x64");
     other.services = br#"{"services": [{"name": "net", "major": 1, "minor": 1, "permission": null}]}"#.to_vec();
     assert_eq!(c_call(Some(&other.input(Some(&full.kept)))).state, 0);
-    // A catalog not in registry 9's form is the caller's fault, said; one without names likewise.
+    // A catalog not in services/registry.md 9's form is the caller's fault, said; one without names likewise.
     other.services = br#"{"services": [{"name": "Net", "major": 1, "minor": 0, "permission": null}]}"#.to_vec();
     let got = c_call(Some(&other.input(None)));
     assert_eq!(got.state, -1);
@@ -632,7 +632,7 @@ fn renderer_features_and_the_device_s_reach_l806() {
     assert!(c_call(Some(&nulls.input(None))).invalid.unwrap().contains("device_features[0] is null"));
 }
 
-/// start-check F-S2 and references.md 3: luma_report_read_kept reads a kept report with no rule run (state 2; id,
+/// start-check.md and references.md 3: luma_report_read_kept reads a kept report with no rule run (state 2; id,
 /// version, required services and after-start rows answer; count 0, kept null); bytes that do not read are -1 with
 /// why. luma_report_after_start gives the rows on either kind of report.
 #[test]

@@ -815,7 +815,7 @@ pub const MAX_ROOT_BYTES: u64 = 64 << 10;
 
 /// A host `net.internet` may reach (services/registry.md 5.1): `*` alone, a name (`api.example.org`), a name
 /// under a domain (`*.example.org`), or an IPv4 address in dotted digits. No port, no IPv6 literal. Letters of either
-/// case: the host lowercases them (consent 1.2).
+/// case: the host lowercases them (consent.md 1.2).
 pub fn permission_host_ok(host: &str) -> bool {
     if host == "*" {
         return true;
@@ -969,7 +969,7 @@ fn roots(m: &mut M, name: &str, r: &Value, rp: &str) {
 
 /// `renderer` (luma.md revision 4): `{"features": [...]}`, the renderer features the mod cannot do without, 1 to 64
 /// names, each once. With the game's list (the self-description's `renderer.features`) a name not on it is L204; with
-/// it and this device's features (start-check 3), a feature the device lacks is L806 and the mod is off. Without the
+/// it and this device's features (start-check.md 3), a feature the device lacks is L806 and the mod is off. Without the
 /// list L806 is not checked; without the device's features (LumaLink) it is not checked either: the game checks it
 /// at every start.
 fn renderer(m: &mut M, root: &Value) {

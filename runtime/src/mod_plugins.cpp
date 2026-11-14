@@ -254,7 +254,7 @@ void not_started(const PluginFile& file, const std::string& logged, std::string 
 
 // A mod's code was refused by the loader or the order: the refusal said in the played language, and kept whole.
 void not_started(const PluginFile& file, const LumaRefusal& refusal) {
-    // An L506 for a permission the player declined is their choice, not a fault: the log says so (consent 2.3).
+    // An L506 for a permission the player declined is their choice, not a fault: the log says so (consent.md 2.3).
     std::string declined;
     if (refusal.code == 506u) {
         const std::uint32_t named = refusal.count < LUMA_REFUSAL_MOST ? refusal.count : LUMA_REFUSAL_MOST;
@@ -671,7 +671,7 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
             }
             LumaRefusal refusal{};
             const std::string library = file.path.filename().string();
-            // The permissions the player granted, for the declarations as they are now (consent 1.4): a permissioned
+            // The permissions the player granted, for the declarations as they are now (consent.md 1.4): a permissioned
             // service the mod imports without one is refused by name, never allowed by omission (compiled-form.md).
             std::vector<const char*> granted;
             granted.reserve(file.granted.size());

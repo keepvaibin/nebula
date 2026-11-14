@@ -58,7 +58,7 @@ galaxy::mods::ModInfo* find(std::vector<galaxy::mods::ModInfo>& mods) {
 
 bool digest() {
     bool ok = true;
-    // Independent: FNV-1a 64 over "net.internet\0api.example.org\0b.example.org\0" (Python, consent 1.2).
+    // Independent: FNV-1a 64 over "net.internet\0api.example.org\0b.example.org\0" (Python, consent.md 1.2).
     const galaxy::luma::Permission net{"net.internet", "Uploads times.", {"b.example.org", "API.example.org"}};
     ok &= expect(galaxy::mods::permission_digest(net) == "d84e3483f8dee40f", "digest: lowercased, sorted, 0 after each");
     const galaxy::luma::Permission reworded{"net.internet", "Another reason.", {"api.example.org", "B.EXAMPLE.ORG"}};
@@ -101,7 +101,7 @@ bool facts() {
     ok &= expect(galaxy::mods::consent_facts(mod).permissions[1].required, "required from the kept report's list");
 
     galaxy::mods::record_code_answer(mod, false);
-    mod.enabled = false;  // Not now turns it off (consent 2.3)
+    mod.enabled = false;  // Not now turns it off (consent.md 2.3)
     ok &= expect(galaxy::mods::consent_facts(mod).code_answer == Answer::Declined && !galaxy::mods::consent_needed(mod),
                  "code Not now: declined, off, not asked again");
     mod.enabled = true;
@@ -184,7 +184,7 @@ bool store() {
     mod = find(mods);
     if (mod == nullptr) return false;
     galaxy::mods::record_code_answer(*mod, false);
-    mod->enabled = false;  // Not now turns it off (consent 2.3)
+    mod->enabled = false;  // Not now turns it off (consent.md 2.3)
     ok &= expect(galaxy::mods::save_mod_settings(mods) && read_all(root / "mods.ini").find("code_no=" + mod->code_token + "\n") != std::string::npos,
                  "code_no stored");
     mods = galaxy::mods::scan_mods();

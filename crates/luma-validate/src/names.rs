@@ -119,7 +119,7 @@ pub fn service_name_ok(name: &str) -> bool {
     name.len() <= 31 && name.split('.').all(|part| part.as_bytes().first().is_some_and(u8::is_ascii_lowercase) && part.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()))
 }
 
-/// A kind 5 row's version text (services/registry.md 2, G R-4): `<major>.<minor>`, each a decimal number from 0 to
+/// A kind 5 row's version text (services/registry.md 2): `<major>.<minor>`, each a decimal number from 0 to
 /// 65535 with no leading zero, nothing else.
 pub fn service_version(text: &str) -> Option<(u16, u16)> {
     let number = |s: &str| -> Option<u16> {
@@ -176,9 +176,10 @@ pub struct Services {
 }
 
 impl Services {
-    /// Reads an object with a `services` key (the self-description, or luma_services.json). A row not in registry 9's
-    /// form is an error naming it: a name outside section 2's grammar, a major or minor that is no whole number from 0
-    /// to 65535, a permission that is not null, the service's own name or one of PERMISSIONS, a row out of order or given twice.
+    /// Reads an object with a `services` key (the self-description, or luma_services.json). A row not in
+    /// services/registry.md 9's form is an error naming it: a name outside section 2's grammar, a major or minor that
+    /// is no whole number from 0 to 65535, a permission that is not null, the service's own name or one of PERMISSIONS,
+    /// a row out of order or given twice.
     pub fn from_json(bytes: &[u8]) -> Result<Services, TypesError> {
         use crate::json::{Kind, Value};
         let root = crate::json::parse(bytes)

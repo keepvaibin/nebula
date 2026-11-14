@@ -319,7 +319,8 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
         }
         match row.kind {
             // A service (docs/modding/services/registry.md): `signature` is "major.minor", bound against the game's
-            // catalog (the self-description's `services`, registry 9) when it is given; not checked without it.
+            // catalog (the self-description's `services`, services/registry.md 9) when it is given; not checked without
+            // it.
             5 => {
                 any_service = true;
                 let optional = row.flags & LUMA_OPTIONAL != 0;
@@ -340,7 +341,7 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
                 match names.and_then(|n| n.services.as_ref()) {
                     None => services_unchecked = true,
                     Some(catalog) => match catalog.find(&row.name, major, minor) {
-                        // An optional import of a service the game lacks is `none` (registry 2).
+                        // An optional import of a service the game lacks is `none` (services/registry.md 2).
                         None if optional => {}
                         None => ctx.add(505, &name, None, None, vec![("kind", p("Name.Service")), ("found", t(row.name.clone())), ("sig", t(sig))]),
                         // Optional or not: without the permission declared it is never granted.
