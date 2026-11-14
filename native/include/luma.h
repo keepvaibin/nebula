@@ -88,8 +88,9 @@ enum {
     LUMA_IMPORT_CLASS = 3,    /* name "Class"; slot: int32_t* (its number, for is_a) */
     LUMA_IMPORT_HOOK = 4,     /* a hook on the function `name` with `signature`: `hook`, `hook_kind`, `user` */
     LUMA_IMPORT_SERVICE = 5,  /* a service: `name`, `signature` its "major.minor"; slot: const void** (its table) */
-    LUMA_IMPORT_MOD_FUNCTION = 6, /* another mod's function (loader D3-3): `name` "<mod id>/<export name>", `signature`
-                                    the export's ("lumi1:" and 16 hex digits, lumascript-abi R-2); slot: const void**.
+    LUMA_IMPORT_MOD_FUNCTION = 6, /* another mod's function (a library mod's export): `name` "<mod id>/<export name>",
+                                    `signature` the export's ("lumi1:" and 16 hex digits, docs/modding/language/
+                                    compiled-form.md, "A mod's functions for other mods"); slot: const void**.
                                     That mod is among this one's `needs`, so it is loaded first */
     LUMA_IMPORT_GLOBAL = 7,   /* a global the game defines (types 1.2): `name` qualified ("SoundEngine::sEngine"),
                                  `signature` its type text; slot: void** (its address; const void** for a const one) */
@@ -350,14 +351,15 @@ typedef struct LumaCore {
     void* (*make_gravity)(const LumaMod* mod, const char* class_name, const LumaGravityPlace* place);
 } LumaCore;
 
-/* report's own codes (D3-1). */
+/* report's own codes (docs/modding/lumalink/loader.md, `report`). */
 #define LUMA_REPORT_OUT_OF_MEMORY 1u /* Hook.OutOfMemory: args[0] the size; luma.h's `new` then stops the game */
 /* The kernel's own, said for a mod by LumaCore (not passed to report): 2 Hook.NoResult and 3 Hook.SkipRefused (a hook's
    result), 4 Hook.ServiceNotGranted, and the objects contract's 5 Object.NoRow (found: the class's type_info name as
    the ABI writes it), 6 Object.NotReadable (where: the call), 7 Object.Ambiguous (where, found: the class). */
 
-/* One function a library mod gives the mods that need it (loader D3-3). Names "<module>.<fn>" and the signature form
-   are lumascript-abi R-2's; the kernel compares both strings and nothing else. Sorted by name. */
+/* One function a library mod gives the mods that need it. Names "<module>.<fn>" and the signature form are
+   docs/modding/language/compiled-form.md's ("A mod's functions for other mods"); the kernel compares both strings and
+   nothing else. Sorted by name. */
 typedef struct LumaExport {
     const char* name;
     const char* signature;
@@ -681,7 +683,7 @@ typedef void (*LumaCtor)(void);
 #define LUMA_MOD_NO_IMPORTS(start, stop) \
     LUMA_RUNTIME                         \
     LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, 0, 0, start, stop, luma_begin, luma_finish, 0, 0, 0, 0, 0}
-/* A library mod (loader D3-3): its exports (LUMA_EXPORT_FUNCTION rows, sorted by name) and what it does when a mod that
+/* A library mod: its exports (LUMA_EXPORT_FUNCTION rows, sorted by name) and what it does when a mod that
    needs it is taken out. */
 #define LUMA_LIBRARY_MOD(imports, start, stop, exports, dependent_gone) \
     LUMA_RUNTIME                                                        \
@@ -733,7 +735,7 @@ extern "C" const LumaMod* luma_rt_self;
     static void* luma_new(__SIZE_TYPE__ size, __SIZE_TYPE__ align, bool must) {                                       \
         void* const p = luma_rt_core != 0 ? luma_rt_core->alloc(luma_rt_self, size != 0 ? size : 1, align < 16 ? 16 : align) : 0; \
         if (p == 0 && must) {                                                                                         \
-            /* Hook.OutOfMemory through report (D3-1), then the game stops with its crash report (D2-7). */           \
+            /* Hook.OutOfMemory through report, then the game stops with its crash report. */                         \
             if (luma_rt_core != 0) {                                                                                  \
                 char digits[24];                                                                                      \
                 char* at = digits + sizeof(digits) - 1;                                                               \
