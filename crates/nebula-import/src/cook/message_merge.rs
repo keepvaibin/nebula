@@ -2,9 +2,9 @@
 //! `<Language>/MessageData/Message.arc`), which the game then reads as its own: MessageData finds a new line by its id,
 //! TalkNodeCtrl walks a new flow, nothing is looked up from mods while playing.
 //!
-//! The words are the game's text with its message tags in brackets, as Nebula reads them everywhere
-//! (native/include/nebula_text_tags.h): `[wait 30]` `[page]` `[center]` `[sound SE_NAME]` `[icon 7]` `[small]` `[normal]`
-//! `[large]` `[player]` `[color 1]`, and `[tag G T u...]` for any other tag; `[[` is one `[`. [`decode_text`] writes a
+//! The words are the game's text with its message tags in brackets, as Nebula reads them everywhere: the words of
+//! [`TAG_WORDS`], the SDK's table (native/include/luma_text_tags.h), and `[tag G T u...]` for any other tag; `[[` is one
+//! `[`. [`decode_text`] writes a
 //! game message in those words, so one read out and put back is the game's own.
 //!
 //! A merge file (`merge/<Language>/MessageData/Message.arc/message.bmg.json` for one language,
@@ -79,29 +79,106 @@ pub fn decode_text(units: &[u16]) -> String {
     out
 }
 
-fn tag_words(group: u16, id: u16, params: &[u16]) -> String {
-    let is_sound_name = |units: &[u16]| {
-        !units.is_empty() && units.len() <= TAG_UNITS_MAX && units.iter().all(|u| (0x21..0x7F).contains(u) && *u != u16::from(b'[') && *u != u16::from(b']'))
-    };
-    match (group, id, params) {
-        (1, 0, [frames]) => format!("[wait {frames}]"),
-        (1, 1, []) => "[page]".to_string(),
-        (1, 3, []) => "[center]".to_string(),
-        (2, 0, name) if is_sound_name(name) => format!("[sound {}]", String::from_utf16_lossy(name)),
-        (3, picture, []) => format!("[icon {picture}]"),
-        (4, 0, []) => "[small]".to_string(),
-        (4, 1, []) => "[normal]".to_string(),
-        (4, 2, []) => "[large]".to_string(),
-        (5, 0, [0]) => "[player]".to_string(),
-        (255, 0, [colour]) if colour & 0xFF == 0 => format!("[color {}]", colour >> 8),
-        _ => {
-            let mut words = format!("[tag {group} {id}");
-            for unit in params {
-                words.push_str(&format!(" {unit}"));
+/// What follows a tag's word, and what it becomes (luma_text_tags.h LumaTextArg).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Arg {
+    /// No word, no parameter.
+    None,
+    /// A number: one parameter unit.
+    Unit,
+    /// A number: the tag number itself.
+    Tag,
+    /// A name of printable ASCII without brackets: one unit a character.
+    Name,
+    /// A number: one unit, the value in its high byte.
+    High,
+    /// No word; one parameter unit 0.
+    Zero,
+    /// Two numbers: the tag number, then which of the game's arguments (units 0, 0, 0, n).
+    Index,
+}
+
+/// One row of the message tags' table: word, group, tag number, argument, the argument's largest value, what it does.
+pub struct TagWord {
+    pub word: &'static str,
+    pub group: u16,
+    pub tag: u16,
+    pub arg: Arg,
+    pub most: u16,
+    pub means: &'static str,
+}
+
+const fn row(word: &'static str, group: u16, tag: u16, arg: Arg, most: u16, means: &'static str) -> TagWord {
+    TagWord { word, group, tag, arg, most, means }
+}
+
+/// The SDK's table (native/include/luma_text_tags.h), row for row; a test reads the header and fails on any difference.
+pub const TAG_WORDS: [TagWord; 17] = [
+    row("wait", 1, 0, Arg::Unit, 0xFFFF, "stops the text for n frames"),
+    row("page", 1, 1, Arg::None, 0, "ends the box; the rest comes on the next press"),
+    row("middle", 1, 2, Arg::None, 0, "centres the text in the box from top to bottom"),
+    row("center", 1, 3, Arg::None, 0, "centres the line"),
+    row("sound", 2, 0, Arg::Name, TAG_UNITS_MAX as u16, "plays the system sound NAME when the text reaches it"),
+    row("icon", 3, 0, Arg::Tag, 0xFFFF, "picture n of the game's picture font (buttons, stars, coins)"),
+    row("small", 4, 0, Arg::None, 0, "text three quarters of its size from here"),
+    row("normal", 4, 1, Arg::None, 0, "text at its own size from here"),
+    row("large", 4, 2, Arg::None, 0, "text one and a half times its size from here"),
+    row("player", 5, 0, Arg::Zero, 0, "the player's name (Mario or Luigi)"),
+    row("player_name", 5, 0, Arg::High, 0xFF, "the player's name message n (System_PlayerName0n, 1n for Luigi)"),
+    row("number", 6, 0, Arg::Index, 0xFFFF, "the game's number argument i; tag t 5 to 9 pads it to 2 to 6 digits"),
+    row("string", 7, 0, Arg::Index, 0xFFFF, "the game's text argument i"),
+    row("race_time", 9, 5, Arg::None, 0, "the time of the race being run"),
+    row("best_time", 9, 0, Arg::Tag, 0xFFFF, "the best time of race n"),
+    row("font", 10, 0, Arg::Name, TAG_UNITS_MAX as u16, "the text in the game's font NAME from here"),
+    row("color", 255, 0, Arg::High, 0xFF, "the game's text colour n from here; 0 goes back to the text's own"),
+];
+
+fn name_unit(unit: u16) -> bool {
+    (0x21..0x7F).contains(&unit) && unit != u16::from(b'[') && unit != u16::from(b']')
+}
+
+/// The table's row of a tag (luma_text_tags.h luma_text_tag_row): an exact row first, else the group's row whose
+/// argument is the tag number.
+fn row_of(group: u16, id: u16, params: &[u16]) -> Option<&'static TagWord> {
+    let mut by_tag = None;
+    for t in TAG_WORDS.iter().filter(|t| t.group == group) {
+        let exact = match t.arg {
+            Arg::None => t.tag == id && params.is_empty(),
+            Arg::Zero => t.tag == id && params == [0],
+            Arg::Unit => t.tag == id && params.len() == 1 && params[0] <= t.most,
+            Arg::High => t.tag == id && params.len() == 1 && params[0] & 0xFF == 0 && params[0] >> 8 <= t.most,
+            Arg::Name => t.tag == id && !params.is_empty() && params.len() <= usize::from(t.most) && params.iter().all(|u| name_unit(*u)),
+            Arg::Index => params.len() == 4 && params[..3] == [0, 0, 0] && params[3] <= t.most,
+            Arg::Tag => {
+                if params.is_empty() && id <= t.most {
+                    by_tag = Some(t);
+                }
+                false
             }
-            words.push(']');
-            words
+        };
+        if exact {
+            return Some(t);
         }
+    }
+    by_tag
+}
+
+fn tag_words(group: u16, id: u16, params: &[u16]) -> String {
+    let Some(t) = row_of(group, id, params) else {
+        let mut words = format!("[tag {group} {id}");
+        for unit in params {
+            words.push_str(&format!(" {unit}"));
+        }
+        words.push(']');
+        return words;
+    };
+    match t.arg {
+        Arg::None | Arg::Zero => format!("[{}]", t.word),
+        Arg::Unit => format!("[{} {}]", t.word, params[0]),
+        Arg::High => format!("[{} {}]", t.word, params[0] >> 8),
+        Arg::Tag => format!("[{} {id}]", t.word),
+        Arg::Index => format!("[{} {id} {}]", t.word, params[3]),
+        Arg::Name => format!("[{} {}]", t.word, String::from_utf16_lossy(params)),
     }
 }
 
@@ -116,36 +193,36 @@ fn number(word: &str) -> Option<u16> {
 
 /// The tag a bracket's words name: (group, tag, parameter units); None where they name none.
 fn tag_of(words: &[&str]) -> Option<(u16, u16, Vec<u16>)> {
-    let name = words.first()?.to_ascii_lowercase();
-    Some(match (name.as_str(), &words[1..]) {
-        ("wait", [frames]) => (1, 0, vec![number(frames)?]),
-        ("page", []) => (1, 1, vec![]),
-        ("center", []) => (1, 3, vec![]),
-        ("sound", [name]) if name.len() <= TAG_UNITS_MAX && name.is_ascii() => (2, 0, name.bytes().map(u16::from).collect()),
-        ("icon", [picture]) => (3, number(picture)?, vec![]),
-        ("small", []) => (4, 0, vec![]),
-        ("normal", []) => (4, 1, vec![]),
-        ("large", []) => (4, 2, vec![]),
-        ("player", []) => (5, 0, vec![0]),
-        ("color", [colour]) => {
-            let colour = number(colour)?;
-            if colour > 0xFF {
-                return None;
-            }
-            (255, 0, vec![colour << 8])
+    let first = words.first()?.to_ascii_lowercase();
+    if first == "tag" {
+        let [_, group, id, units @ ..] = words else { return None };
+        let group = number(group)?;
+        if group > 0xFF || units.len() > TAG_UNITS_MAX - 1 {
+            return None;
         }
-        ("tag", [group, id, units @ ..]) => {
-            let group = number(group)?;
-            if group > 0xFF || units.len() > TAG_UNITS_MAX - 1 {
-                return None;
+        return Some((group, number(id)?, units.iter().map(|u| number(u)).collect::<Option<Vec<_>>>()?));
+    }
+    let t = TAG_WORDS.iter().find(|t| t.word == first)?;
+    Some(match (t.arg, &words[1..]) {
+        (Arg::None, []) => (t.group, t.tag, vec![]),
+        (Arg::Zero, []) => (t.group, t.tag, vec![0]),
+        (Arg::Name, [name]) if name.len() <= usize::from(t.most) && name.bytes().all(|b| name_unit(u16::from(b))) => {
+            (t.group, t.tag, name.bytes().map(u16::from).collect())
+        }
+        (Arg::Index, [tag, index]) => (t.group, number(tag)?, vec![0, 0, 0, number(index).filter(|i| *i <= t.most)?]),
+        (Arg::Unit | Arg::Tag | Arg::High, [value]) => {
+            let value = number(value).filter(|v| *v <= t.most)?;
+            match t.arg {
+                Arg::Tag => (t.group, value, vec![]),
+                Arg::High => (t.group, t.tag, vec![value << 8]),
+                _ => (t.group, t.tag, vec![value]),
             }
-            (group, number(id)?, units.iter().map(|u| number(u)).collect::<Option<Vec<_>>>()?)
         }
         _ => return None,
     })
 }
 
-/// Mod text as the game's units, as Nebula reads it (nebula_text_tags.h encode): without the 0.
+/// Mod text as the game's units, as Nebula reads it (luma_text_tags.h luma_text_tag_encode): without the 0.
 pub fn encode_text(text: &str) -> Vec<u16> {
     let mut out = Vec::with_capacity(text.len());
     let mut rest = text;
@@ -654,5 +731,100 @@ pub(crate) mod tests {
         file.extend(encode_text("B"));
         assert_eq!(decode_text(units_at(&file, 0)), "[color 1]A[color 0]");
         assert_eq!(units_at(&file, file.len()), &[] as &[u16]);
+    }
+
+    /// The game's own messages, every language on the disc, read out as words and cooked back: the same units, so
+    /// the same file; and every tag they hold has a word of the table. NEBULA_DISC_FILES: an extracted disc's files
+    /// folder. cargo test -p nebula-import --lib disc_messages_read_out_and_cook_back -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn disc_messages_read_out_and_cook_back() {
+        use crate::cook::archive;
+        let files = std::env::var("NEBULA_DISC_FILES").expect("NEBULA_DISC_FILES");
+        let mut languages = 0;
+        let mut entries: Vec<_> = std::fs::read_dir(&files).unwrap().map(|e| e.unwrap().path()).collect();
+        entries.sort();
+        for dir in entries {
+            let arc = dir.join("MessageData/Message.arc");
+            let Ok(raw) = std::fs::read(&arc) else { continue };
+            let bytes = if archive::is_compressed(&raw) { archive::expand(&raw).unwrap() } else { raw };
+            let member = archive::members(&bytes).unwrap().into_iter().find(|m| m.path.ends_with("message.bmg")).unwrap();
+            let nmsg = Nmsg::from_disc(&member.bytes).unwrap();
+            let mut text = Vec::with_capacity(nmsg.text.len());
+            let (mut tags, mut unnamed) = (0, Vec::new());
+            for (index, message) in nmsg.messages.iter().enumerate() {
+                let units = units_at(&nmsg.text, message.text as usize);
+                let words = decode_text(units);
+                tags += units.iter().filter(|u| **u == TAG).count();
+                unnamed.extend(words.match_indices("[tag ").map(|(at, _)| words[at..].split(']').next().unwrap_or("").to_string()));
+                let again = encode_text(&words);
+                assert_eq!(again, units, "{} message {index}: {words}", dir.display());
+                if text.len() == message.text as usize {
+                    text.extend(again);
+                    text.push(0);
+                }
+            }
+            assert_eq!(text, nmsg.text[..text.len()], "{}", dir.display());
+            unnamed.sort();
+            unnamed.dedup();
+            assert!(unnamed.is_empty(), "{}: tags of no word: {unnamed:?}", dir.display());
+            println!("{}: {} messages, {} tags, the same units", dir.display(), nmsg.messages.len(), tags);
+            languages += 1;
+        }
+        assert!(languages > 0, "no MessageData/Message.arc under {files}");
+    }
+
+    /// The cook's words are the SDK's: native/include/luma_text_tags.h's table, which the game's mod API and
+    /// LumaScript's runtime use, row for row (word, group, tag, argument, largest value, words); and each row's word
+    /// cooks to its tag, reads back as written, and past its largest value stays as written.
+    #[test]
+    fn tag_words_are_the_sdk_table() {
+        let header = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../native/include/luma_text_tags.h")).unwrap();
+        let body = header.split("luma_text_tags[] = {").nth(1).unwrap().split("};").next().unwrap();
+        let rows: Vec<&str> = body.lines().map(str::trim).filter(|l| l.starts_with("{\"")).collect();
+        assert_eq!(rows.len(), TAG_WORDS.len(), "the header has {} rows, the cook {}", rows.len(), TAG_WORDS.len());
+        for (line, t) in rows.iter().zip(TAG_WORDS.iter()) {
+            let inner = line.trim_start_matches('{').trim_end_matches("},");
+            let (fields, means) = inner.rsplit_once(", \"").unwrap();
+            let f: Vec<&str> = fields.split(", ").collect();
+            let arg = match f[3] {
+                "LUMA_TEXT_ARG_NONE" => Arg::None,
+                "LUMA_TEXT_ARG_UNIT" => Arg::Unit,
+                "LUMA_TEXT_ARG_TAG" => Arg::Tag,
+                "LUMA_TEXT_ARG_NAME" => Arg::Name,
+                "LUMA_TEXT_ARG_HIGH" => Arg::High,
+                "LUMA_TEXT_ARG_ZERO" => Arg::Zero,
+                "LUMA_TEXT_ARG_INDEX" => Arg::Index,
+                other => panic!("{other} is no argument kind"),
+            };
+            let most = match f[4] {
+                "LUMA_TEXT_TAG_UNITS_MOST" => TAG_UNITS_MAX as u16,
+                hex if hex.starts_with("0x") => u16::from_str_radix(&hex[2..], 16).unwrap(),
+                n => n.parse().unwrap(),
+            };
+            let want = (f[0].trim_matches('"'), f[1].parse::<u16>().unwrap(), f[2].parse::<u16>().unwrap(), arg, most, means.trim_end_matches('"'));
+            assert_eq!(want, (t.word, t.group, t.tag, t.arg, t.most, t.means), "row {line}");
+
+            let unit = |count: u16| (6 + 2 * count) | (t.group << 8);
+            let (text, units): (String, Vec<u16>) = match t.arg {
+                Arg::None => (format!("[{}]", t.word), vec![0x1A, unit(0), t.tag]),
+                Arg::Zero => (format!("[{}]", t.word), vec![0x1A, unit(1), t.tag, 0]),
+                Arg::Unit => (format!("[{} 7]", t.word), vec![0x1A, unit(1), t.tag, 7]),
+                Arg::High => (format!("[{} 3]", t.word), vec![0x1A, unit(1), t.tag, 3 << 8]),
+                Arg::Tag => (format!("[{} 7]", t.word), vec![0x1A, unit(0), 7]),
+                Arg::Name => (format!("[{} AB_1]", t.word), vec![0x1A, unit(4), t.tag, 0x41, 0x42, 0x5F, 0x31]),
+                Arg::Index => (format!("[{} 5 2]", t.word), vec![0x1A, unit(4), 5, 0, 0, 0, 2]),
+            };
+            assert_eq!(encode_text(&text), units, "{text}");
+            assert_eq!(decode_text(&units), text, "{text}");
+            if matches!(t.arg, Arg::Unit | Arg::High | Arg::Tag) && t.most < 0xFFFF {
+                let past = format!("[{} {}]", t.word, u32::from(t.most) + 1);
+                assert_eq!(encode_text(&past), past.encode_utf16().collect::<Vec<_>>(), "{past}");
+            }
+            if !matches!(t.arg, Arg::None | Arg::Zero) {
+                let bare = format!("[{}]", t.word);
+                assert_eq!(encode_text(&bare), bare.encode_utf16().collect::<Vec<_>>(), "{bare}");
+            }
+        }
     }
 }
