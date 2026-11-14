@@ -3587,6 +3587,46 @@ constexpr bool kHostStartsAgain =
 #else
     false;
 #endif
+#if defined(_WIN32)
+// The environment variable a start-again gives the new process: the old process's id and creation time.
+constexpr const wchar_t* kStartAgainOf = L"NEBULA_START_AGAIN_OF";
+
+// A process started again (finish_and_exit) waits here for the one that started it to end, at most 60 seconds: until
+// then that one still holds the files it had open (the cooked mods.pak among them), which this one's cook replaces.
+// The id is checked against its creation time, so a process that took a freed id is never waited for.
+void wait_for_process_before() {
+    wchar_t text[64] = {};
+    const DWORD length = GetEnvironmentVariableW(kStartAgainOf, text, 64);
+    if (length == 0 || length >= 64) return;
+    SetEnvironmentVariableW(kStartAgainOf, nullptr);  // not passed on to a later start-again of this process
+    const std::wstring words(text, length);
+    const size_t space = words.find(L' ');
+    if (space == std::wstring::npos) return;
+    unsigned long pid = 0;
+    unsigned long long created = 0;
+    try {
+        pid = std::stoul(words.substr(0, space));
+        created = std::stoull(words.substr(space + 1));
+    } catch (const std::exception&) {
+        return;
+    }
+    const HANDLE before = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (before == nullptr) return;  // ended already
+    FILETIME made{}, ended{}, kernel{}, user{};
+    if (GetProcessTimes(before, &made, &ended, &kernel, &user) &&
+        ((static_cast<unsigned long long>(made.dwHighDateTime) << 32u) | made.dwLowDateTime) == created) {
+        const auto began = std::chrono::steady_clock::now();
+        const bool done = WaitForSingleObject(before, 60000) == WAIT_OBJECT_0;
+        const long long waited =
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - began).count();
+        const std::string said = done ? "waited " + std::to_string(waited) + " ms for the process before it to end"
+                                      : "the process before it had not ended after 60 s; this one goes on";
+        log_line("host: started again:", said.c_str());
+    }
+    CloseHandle(before);
+}
+#endif
+
 [[noreturn]] void finish_and_exit(bool restart) {
 #if defined(_WIN32)
     game_profile::finish();
@@ -3671,6 +3711,16 @@ constexpr bool kHostStartsAgain =
             PROCESS_INFORMATION process{};
             std::wstring command = GetCommandLineW();
             command += gRestartArguments;
+            // The new process waits for this one to end before it touches the mods folder (wait_for_process_before):
+            // this one's id and creation time, in its environment only.
+            {
+                FILETIME created{}, ended{}, kernel{}, user{};
+                if (GetProcessTimes(GetCurrentProcess(), &created, &ended, &kernel, &user)) {
+                    const unsigned long long when = (static_cast<unsigned long long>(created.dwHighDateTime) << 32u) | created.dwLowDateTime;
+                    const std::wstring self = std::to_wstring(GetCurrentProcessId()) + L" " + std::to_wstring(when);
+                    SetEnvironmentVariableW(kStartAgainOf, self.c_str());
+                }
+            }
             if (CreateProcessW(path.c_str(), command.data(), nullptr, nullptr, passed != 0u ? TRUE : FALSE,
                                passed != 0u ? EXTENDED_STARTUPINFO_PRESENT : 0u, nullptr, nullptr, &startup.StartupInfo, &process)) {
                 // Where crash reports go (--crash-dumps), `restarted` names the process that took over, so a tool
@@ -4684,6 +4734,9 @@ int main(int argc, char** argv) {
         // rows module; the plain one is beside it. Updates imported while a mod was in use land first, as below.
         // A headless host (no NEBULA_HOST_RENDERER) is the test host: no settings folder, no player's mods, and the
         // harness's extensions hook and call by name, so it keeps the module --module names (the rows one).
+#if defined(_WIN32)
+        wait_for_process_before();  // a start-again: nothing reads or writes the mods folder before the old one ends
+#endif
 #if defined(NEBULA_HOST_RENDERER)
         fs::path mods_folder;
         const fs::path settings_folder = galaxy::runtime_settings_folder();
