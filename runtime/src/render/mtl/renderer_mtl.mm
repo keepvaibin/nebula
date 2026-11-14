@@ -3,6 +3,7 @@
 // copies and screen probes are renderer_mtl_scene.mm and renderer_mtl_draw.mm.
 #include "renderer_mtl_internal.h"
 
+#include "galaxy/benchmark.h"
 #include "galaxy/content_viewport.h"
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/launch_args.h"
@@ -231,8 +232,10 @@ void RendererMtl::read_display_hdr() {
 // Apple GPU keep the display's own pixels: the Radeon Pro 560 draws the heavier galaxies at 3360 by 1856 in 7.9 ms.
 void RendererMtl::choose_first_start_scale() {
 #if TARGET_OS_OSX
-    if (!galaxy::ordinary_start()) {
-        return;  // a hidden, timed or extension-driven start (a test's, a tool's): the first start stays the player's
+    if (!galaxy::ordinary_start() || galaxy::bench::running()) {
+        // A hidden, timed or extension-driven start (a test's, a tool's), or a benchmark, which measures the settings
+        // as they are: the first start stays the player's.
+        return;
     }
     std::error_code ignored;
     const std::filesystem::path settings = render_config_path();
