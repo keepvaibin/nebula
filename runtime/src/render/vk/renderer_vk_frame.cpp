@@ -1558,25 +1558,42 @@ bool RendererVk::begin_output_scene(bool resolve_msaa_only) {
     return enter_output_scene(output);
 }
 
-// The whole scene scene target resampled into the output scene target with the display copy's identity settings (no filter, gamma 1.0,
-// alpha kept), which then takes the scene target's place with its depth cleared to the far plane.
+// The output scene target takes the scene target's place, its pass opening cleared (colour, depth to the far plane,
+// stencil) with the whole scene target resampled into it as the first draw, with the display copy's identity settings
+// (no filter, gamma 1.0, alpha kept; record_conversion_blit's shaders and constants). On a tiled GPU the resampled
+// picture stays in tile memory for the 2D layer, where a copy pass of its own stored it and the scene pass loaded it.
 bool RendererVk::enter_output_scene(const FrameMap& output) {
     if (!ensure_output_set(output, false)) {
         return false;
     }
-    const unsigned width = output.width;
-    const unsigned height = output.height;
-    const FramePassGeometry sampling = frame_pass_geometry(width, height, scene_map_);
-    record_conversion_blit(*alt_scene_.color, width, height, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
+    const FramePassGeometry sampling = frame_pass_geometry(output.width, output.height, scene_map_);
+    const bool display_filter = sampling.step_x == 1.0f && sampling.step_y == 1.0f;
+    const SceneConversionShaderConstants constants =
+        make_scene_conversion_constants(kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
     end_scene_pass();
-    image_barrier(commands_, alt_scene_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                  VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                  VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
-    alt_scene_.color->layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    transition_scene_for_sampling(commands_, false);
+    const VkDescriptorSet source = scene_color_source();
     swap_scene_sets();
+    output_source_sampled_ = true;
+    // Every pixel is drawn: what the output scene target held is dropped.
+    image_barrier(commands_, scene_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                  VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_TRANSFER_BIT |
+                      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                  VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                  VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+    scene_.color->layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     bind_scene();
-    clear_scene(0u, false, false, true);
+    const SceneClearValues clear = make_scene_clear_values(0u, 0u);
+    begin_scene_pass(&clear, "enter_output_scene");
+    const VkCommandBuffer commands = commands_;
+    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                      scene_utility_pipeline(display_filter ? SceneUtility::DisplayFilter : SceneUtility::Conversion));
+    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, utility_layout_, 0, 1, &source, 0, nullptr);
+    vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(constants), &constants);
+    vkCmdDraw(commands, 3, 1, 0, 0);
+    reset_draw_bindings();
+    bind_scene();
     return true;
 }
 
@@ -1586,6 +1603,9 @@ void RendererVk::end_output_scene() {
     }
 
     swap_scene_sets();
+    if (std::exchange(output_source_sampled_, false)) {
+        transition_scene_to_attachment(commands_, false);
+    }
     bind_scene();
 }
 

@@ -1435,6 +1435,13 @@ VkPipeline RendererVk::scene_utility_pipeline(SceneUtility kind) {
         pipeline = create_utility_pipeline(pass, utility_layout_, vk::UtilitySpirv::BlitVs,
                                            vk::UtilitySpirv::ClearDepthPs, 0u, false, false, true, samples);
         break;
+    case SceneUtility::Conversion:
+    case SceneUtility::DisplayFilter:
+        pipeline = create_utility_pipeline(pass, utility_layout_, vk::UtilitySpirv::BlitVs,
+                                           kind == SceneUtility::Conversion ? vk::UtilitySpirv::SceneConversionPs
+                                                                            : vk::UtilitySpirv::DisplayFilterPs,
+                                           kRgb | VK_COLOR_COMPONENT_A_BIT, false, false, false, samples);
+        break;
     case SceneUtility::Count:
         break;
     }
@@ -1605,6 +1612,7 @@ void RendererVk::shutdown() {
         if (utility_pool_ != VK_NULL_HANDLE) vkDestroyCommandPool(device, utility_pool_, nullptr);
         utility_pool_ = VK_NULL_HANDLE;
         output_scene_active_ = false;
+        output_source_sampled_ = false;
         for (ProbeSlot& slot : probe_slots_) {
             if (slot.queries != VK_NULL_HANDLE) vkDestroyQueryPool(device, slot.queries, nullptr);
         }

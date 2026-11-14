@@ -1026,20 +1026,30 @@ bool RendererMtl::begin_output_scene(bool resolve_msaa_only) {
     return enter_output_scene(output);
 }
 
-// The whole scene target resampled into the output scene target with the display copy's identity settings (no
-// filter, gamma 1.0, alpha kept), which then takes the scene target's place with its depth cleared to the far plane.
+// The output scene target takes the scene target's place, its pass opening cleared (colour, depth to the far plane,
+// stencil) with the whole scene target resampled into it as the first draw, with the display copy's identity settings
+// (no filter, gamma 1.0, alpha kept; record_conversion_blit's shaders and constants). The resampled picture stays in
+// tile memory for the 2D layer, where a copy pass of its own stored it and the scene pass loaded it.
 bool RendererMtl::enter_output_scene(const FrameMap& output) {
     if (!ensure_output_set(output, false)) {
         return false;
     }
-    const unsigned width = output.width;
-    const unsigned height = output.height;
-    const FramePassGeometry sampling = frame_pass_geometry(width, height, scene_map_);
-    record_conversion_blit(*alt_scene_.color, width, height, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x,
-                           sampling.step_y);
+    const FramePassGeometry sampling = frame_pass_geometry(output.width, output.height, scene_map_);
+    const bool display_filter = sampling.step_x == 1.0f && sampling.step_y == 1.0f;
+    const SceneConversionShaderConstants constants =
+        make_scene_conversion_constants(kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
     swap_scene_sets();
     bind_scene();
-    clear_scene(0u, false, false, true);
+    const SceneClearValues clear = make_scene_clear_values(0u, 0u);
+    begin_scene_pass(&clear, "enter_output_scene");
+    utility_draw(pass_,
+                 scene_pass_pipeline(display_filter ? mtl::UtilityShader::DisplayFilterPs : mtl::UtilityShader::SceneConversionPs,
+                                     static_cast<std::uint8_t>(kWriteAll)),
+                 DepthUse::None, pass_width_, pass_height_,
+                 gpu::rect(0, 0, static_cast<std::int32_t>(pass_width_), static_cast<std::int32_t>(pass_height_)), &constants,
+                 sizeof(constants), alt_scene_.color->texture);
+    reset_draw_bindings();
+    bind_scene();
     return true;
 }
 
