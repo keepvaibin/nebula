@@ -21,6 +21,7 @@ RENDER = [
     ("GALAXY_ENHANCED_LIGHTING", "enhanced_lighting"), ("GALAXY_AMBIENT_OCCLUSION", "ambient_occlusion"),
     ("GALAXY_BLOOM", "bloom"), ("GALAXY_WIDE_SCENE", "wide_scene"), ("GALAXY_AO_SSAO", "ambient_occlusion_ssao"),
     ("GALAXY_POST_PROCESS", "post_process"), ("GALAXY_HUD_OUTPUT_RESOLUTION", "hud_output_resolution"),
+    ("GALAXY_HUD_INTERNAL_RESOLUTION", "hud_internal_resolution"),
     ("GALAXY_AA", "aa"), ("GALAXY_SMAA_QUALITY", "smaa_quality"), ("GALAXY_UPSCALER", "upscaler"),
     ("GALAXY_FRAME_GENERATION", "frame_generation"), ("GALAXY_TEMPORAL_QUALITY", "temporal_quality"),
     ("GALAXY_SPATIAL_QUALITY", "spatial_quality"), ("GALAXY_SHARPNESS", "sharpness"), ("GALAXY_HDR", "hdr"),

@@ -326,7 +326,7 @@ public:
     // `black`: the frame is presented black (the pass clears; the display picture is not drawn).
     bool present(const DisplayTexture* source, bool capture_backbuffer = false, bool black = false);
 
-    // The 2D layer at the window's resolution (hud_output_resolution): at the scene's end the scene target is resampled into
+    // The 2D layer at the window's resolution (render_hud_at_output): at the scene's end the scene target is resampled into
     // an scene target at the window's scale, which the 2D layer and the display copy then use, until end_output_scene.
     [[nodiscard]] bool begin_output_scene(bool resolve_msaa_only = false);
     // A pass into texture target `key` (E-07): its target, `width` x `height` game units at the scene target's scale, takes

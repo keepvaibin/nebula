@@ -1018,7 +1018,7 @@ bool RendererMtl::begin_output_scene(bool resolve_msaa_only) {
     }
     const FrameMap output = temporal && !upscale_output_.empty() ? upscale_output_ : output_frame_for_window();
     // Nebula's screens with small text are drawn at the window's resolution whatever the HUD's.
-    const bool full = temporal || (get_render_config().hud_output_resolution || render_internal_height(get_render_config()) != 0u) ||
+    const bool full = temporal || render_hud_at_output(get_render_config()) ||
                       sharp_2d_requested();
     if (!full || output.empty() || output.width < scene_map_.width || (!temporal && output.width == scene_map_.width)) {
         return false;
