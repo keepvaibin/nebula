@@ -2173,6 +2173,29 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                         plan.patches.push_back({mod.id, entry, relative.substr(0, relative.size() - 5u), file});
                     }
                 }
+                // Texture pack pictures, for the cooker to read as the pack reader does. A Dolphin pack's file (tex1_)
+                // is converted first, and a converted pack's own folder holds no pictures of the mod's.
+                if (const std::optional<fs::path> textures = child_any_case(mod.path / fs::path(from_utf8(layer.path)), "textures", true)) {
+                    std::error_code walk_error;
+                    std::error_code status_error;
+                    std::vector<fs::path> found;
+                    for (auto walk = fs::recursive_directory_iterator(*textures, walk_error);
+                         !walk_error && walk != fs::recursive_directory_iterator(); walk.increment(walk_error)) {
+                        if (walk->is_directory(status_error) && lower(utf8_name(walk->path())) == ".dolphin") {
+                            walk.disable_recursion_pending();
+                        } else if (walk->is_regular_file(status_error)) {
+                            found.push_back(walk->path());
+                        }
+                    }
+                    if (walk_error) note(layer.path + "/textures: the folder could not be read in full");
+                    std::sort(found.begin(), found.end());
+                    for (const fs::path& file : found) {
+                        const std::string ending = lower(utf8_name(file.extension()));
+                        if ((ending != ".png" && ending != ".dds") || galaxy::textures::is_dolphin_pack_name(utf8_name(file.stem()))) continue;
+                        const std::string relative = galaxy::path_text(file.lexically_relative(*textures).generic_string());
+                        plan.textures.push_back({mod.id, layer.path + "/" + utf8_name(*textures) + "/" + relative, std::string(), file});
+                    }
+                }
                 const std::optional<fs::path> files = child_any_case(mod.path / fs::path(from_utf8(layer.path)), "files", true);
                 if (!files) continue;
                 const Loader loader{*files, *files};
@@ -2308,6 +2331,11 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
         plan.notes.push_back(patch.mod_id + ": " + galaxy::path_text(patch.host) + " is not used: its name holds a tab or a line end");
         return true;
     });
+    std::erase_if(plan.textures, [&](const ModPlan::Patch& texture) {
+        if (plain(texture.entry) && plain(galaxy::path_text(texture.host))) return false;
+        plan.notes.push_back(texture.mod_id + ": " + galaxy::path_text(texture.host) + " is not checked: its name holds a tab or a line end");
+        return true;
+    });
     {
         Session& s = session();
         const std::lock_guard<std::mutex> lock(s.mutex);
@@ -2340,6 +2368,9 @@ std::string plan_text(const ModPlan& plan, const std::string& game_id) {
     }
     for (const ModPlan::Patch& patch : plan.patches) {
         text += "%patch\t" + patch.mod_id + "\t" + patch.entry + "\t" + patch.disc + "\t" + galaxy::path_text(patch.host) + "\n";
+    }
+    for (const ModPlan::Patch& texture : plan.textures) {
+        text += "%texture\t" + texture.mod_id + "\t" + texture.entry + "\t" + galaxy::path_text(texture.host) + "\n";
     }
     return text;
 }
@@ -2379,6 +2410,13 @@ std::string plan_signature(const ModPlan& plan, const std::string& game_id) {
         const auto size = fs::file_size(patch.host, ec);
         const auto time = fs::last_write_time(patch.host, ec).time_since_epoch().count();
         text += "%patch\t" + patch.mod_id + "\t" + patch.entry + "\t" + patch.disc + "\t" + galaxy::path_text(patch.host) + "\t" +
+                std::to_string(size) + "\t" + std::to_string(static_cast<long long>(time)) + "\n";
+    }
+    for (const ModPlan::Patch& texture : plan.textures) {
+        std::error_code ec;
+        const auto size = fs::file_size(texture.host, ec);
+        const auto time = fs::last_write_time(texture.host, ec).time_since_epoch().count();
+        text += "%texture\t" + texture.mod_id + "\t" + texture.entry + "\t" + galaxy::path_text(texture.host) + "\t" +
                 std::to_string(size) + "\t" + std::to_string(static_cast<long long>(time)) + "\n";
     }
     return text;

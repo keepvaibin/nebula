@@ -252,6 +252,9 @@ struct ModPlan {
         std::filesystem::path host;
     };
     std::vector<Patch> patches;
+    // A .luma's texture pack pictures (`layers/<layer>/textures/**.png`, `.dds`; `disc` empty): the cooker reads each as
+    // the pack reader does and names one it will not take.
+    std::vector<Patch> textures;
     // Every mod whose content is used, by id, bottom of the list first (the applier's mod order).
     std::vector<std::string> used;
     // The .luma mods in use, bottom of the list first, for their shaders.
