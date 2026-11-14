@@ -65,10 +65,12 @@ def main():
         return 1
     groups = {}
     for n in names:
-        # A text whose alpha test only ray tracing's and the per-sample forms keep (programs.rs stage_lines) compiles
-        # its base form without it: it stays its own program, so those forms stay its own.
+        # A text whose base form leaves out what other forms keep (programs.rs: an alpha test only ray tracing's and
+        # the per-sample forms keep, stage_lines; taps ray tracing's forms take in each stage, shared_taps) stays its own
+        # program, so those forms stay its own.
         with open(os.path.join(texts, n + ".hlsl"), encoding="utf-8", errors="replace") as f:
-            own = n if "#if NATIVE_TRACED || NATIVE_PREPASS || NATIVE_SAMPLE" in f.read() else None
+            text = f.read()
+        own = n if "#if NATIVE_TRACED || NATIVE_PREPASS || NATIVE_SAMPLE" in text or "#define TAP(" in text else None
         groups.setdefault((n[0], key_of(os.path.join(ll, n + ".ll")), own), []).append(n)
     vertex = sum(1 for k in groups if k[0] == "v")
     pixel = sum(1 for k in groups if k[0] == "p")

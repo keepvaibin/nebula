@@ -228,11 +228,15 @@ def main():
         print(len(failed), "of", len(jobs), "failed")
         return 1
 
-    # Two programs compiling the same mean the set's dedupe missed: the build fails.
+    # Two programs compiling the same in every form mean the set's dedupe missed: the build fails. (Two may share a base
+    # form where another form differs: build_programs.py keeps a text whose base leaves out what other forms keep apart.)
     seen = {}
     for stage, row in groups.values():
-        with open(os.path.join(cache, rows[(stage, row)][0]), "rb") as f:
-            digest = (stage, hashlib.sha256(f.read()).digest())
+        digest = hashlib.sha256()
+        for variant, key in sorted(rows[(stage, row)].items()):
+            with open(os.path.join(cache, key), "rb") as f:
+                digest.update(struct.pack("<I", variant) + hashlib.sha256(f.read()).digest())
+        digest = (stage, digest.digest())
         if digest in seen:
             print(f"programs {seen[digest]:016x} and {row:016x} compile the same")
             return 1
