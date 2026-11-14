@@ -35,7 +35,7 @@
 #if defined(_WIN32)
 #include "crash_watch.h"
 #endif
-#if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
+#if (defined(NEBULA_HOST_RENDERER) && defined(_WIN32)) || (defined(NEBULA_HOST_SDL) && !defined(__ANDROID__) && !defined(NEBULA_HOST_APPLE))
 #include "galaxy/hidden_start.h"
 #endif
 #include "galaxy/discord_presence.h"
@@ -216,6 +216,34 @@ void log_line(const char* tag, const char* text) {
     std::fflush(stdout);
     galaxy::extensions::log_line(tag, text);
 }
+
+#if !defined(_WIN32)
+// A crash report line from a fault handler (luma_guard_host.h set_crash_line): log_line's form with write only.
+void crash_line_from_signal(const char* tag, const char* text) noexcept {
+    const long long ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - kStart).count();
+    char line[640];
+    std::size_t at = 0;
+    const auto add = [&](char c) {
+        if (at + 1 < sizeof(line)) line[at++] = c;
+    };
+    char digits[24];
+    int n = 0;
+    for (long long s = ms / 1000; n == 0 || s != 0; s /= 10) digits[n++] = static_cast<char>('0' + s % 10);
+    add('[');
+    for (int pad = n; pad < 5; ++pad) add(' ');
+    while (n > 0) add(digits[--n]);
+    add('.');
+    add(static_cast<char>('0' + ms / 100 % 10));
+    add(static_cast<char>('0' + ms / 10 % 10));
+    add(static_cast<char>('0' + ms % 10));
+    add(']');
+    for (const char* parts[] = {" ", tag, " ", text}; const char* part : parts) {
+        for (; part != nullptr && *part != '\0'; ++part) add(*part);
+    }
+    add('\n');
+    (void)!write(1, line, at);
+}
+#endif
 
 // The start, step by step ("boot:" lines, milliseconds from the process's creation): the black screen before the
 // title is their sum.
@@ -4612,6 +4640,7 @@ void read_launch_args(int argc, char** argv) {
 int main(int argc, char** argv) {
 #if !defined(_WIN32)
     gArgv = argv;
+    galaxy::luma_guard::set_crash_line(crash_line_from_signal);
 #endif
 #if defined(_WIN32)
     // The crash watcher's own run (crash_watch.h): before anything of the game's.

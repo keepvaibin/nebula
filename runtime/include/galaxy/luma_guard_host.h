@@ -14,4 +14,10 @@ bool install(void* (*find_symbol)(const char*)) noexcept;
 [[nodiscard]] const char* note_text(const void* pc) noexcept;
 [[nodiscard]] const char* note_mod() noexcept;
 
+// Linux and macOS: the host's writer of a crash report line (its log's form, "[time] <tag> <text>"), called from the
+// fault handler for a fault no other handler takes, so it may only use what a signal handler may. Without one the
+// lines go to standard error. The default action of the signal follows the report (the process ends with it).
+using CrashLine = void (*)(const char* tag, const char* text) noexcept;
+void set_crash_line(CrashLine line) noexcept;
+
 }  // namespace galaxy::luma_guard

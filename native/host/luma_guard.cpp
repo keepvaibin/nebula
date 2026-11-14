@@ -360,6 +360,30 @@ void resume_at(ucontext_t* context, LumaGuardFrame* frame) noexcept {
 #endif
 }
 
+CrashLine g_crash_line = nullptr;
+
+// The crash report of a fault no handler before the guard's takes: what it was and where, and the guard's sentence
+// when it saw the fault in a mod's code and did not resume it. Only what a signal handler may use.
+void report_fault(int signal, siginfo_t* info, void* raw) noexcept {
+    const Registers regs = registers_of(static_cast<const ucontext_t*>(raw));
+    char line[160];
+    std::size_t at = 0;
+    put(line, sizeof(line), &at, signal == SIGSEGV ? "SIGSEGV" : signal == SIGBUS ? "SIGBUS" : signal == SIGILL ? "SIGILL" : "SIGFPE");
+    put(line, sizeof(line), &at, " at ");
+    put_hex(line, sizeof(line), &at, regs.pc);
+    put(line, sizeof(line), &at, ", address ");
+    put_hex(line, sizeof(line), &at, reinterpret_cast<std::uintptr_t>(info->si_addr));
+    const bool noted = g_noted.load(std::memory_order_acquire) != 0u;
+    if (g_crash_line != nullptr) {
+        g_crash_line("crash:", line);
+        if (noted) g_crash_line("crash: guard:", g_note);
+        return;
+    }
+    put(line, sizeof(line), &at, "\n");
+    (void)!write(2, "crash: ", 7);
+    (void)!write(2, line, at);
+}
+
 void pass_on(int signal, siginfo_t* info, void* context) noexcept {
     for (int i = 0; i < 4; ++i) {
         if (kSignals[i] != signal) continue;
@@ -372,12 +396,19 @@ void pass_on(int signal, siginfo_t* info, void* context) noexcept {
             previous.sa_handler(signal);
             return;
         }
-        // The default: put it back and return; the instruction faults again and the process ends with the signal.
+        // The default: the report, then the signal's default action at once, from here. Returning to fault again
+        // left a Linux game running to a test's time limit after a mod's stack overflow.
+        report_fault(signal, info, context);
         struct sigaction fallback{};
         fallback.sa_handler = SIG_DFL;
         sigemptyset(&fallback.sa_mask);
         sigaction(signal, &fallback, nullptr);
-        return;
+        sigset_t only;
+        sigemptyset(&only);
+        sigaddset(&only, signal);
+        pthread_sigmask(SIG_UNBLOCK, &only, nullptr);
+        raise(signal);
+        _exit(128 + signal);
     }
 }
 
@@ -460,6 +491,14 @@ const char* note_text(const void* pc) noexcept {
 
 const char* note_mod() noexcept {
     return g_noted.load(std::memory_order_acquire) != 0u ? g_note_mod : nullptr;
+}
+
+void set_crash_line(CrashLine line) noexcept {
+#if defined(LUMA_GUARD_HANDLER) && !defined(_WIN32)
+    g_crash_line = line;
+#else
+    (void)line;
+#endif
 }
 
 }  // namespace galaxy::luma_guard
