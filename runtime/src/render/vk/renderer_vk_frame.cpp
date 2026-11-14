@@ -12,6 +12,7 @@
 #include "galaxy/content_viewport.h"
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/render/host_window.h"
+#include "galaxy/render/game_bloom_shape.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/vk/streamline_vk.h"
 #if defined(_WIN32)
@@ -1805,8 +1806,8 @@ void RendererVk::rt_copy_to_scene(void* image) {
     after.issue();
 }
 
-// The occlusion of the opaque scene: the scene target pass ends for its compute passes, which read the depth, and the
-// multiply draws in it again.
+// The occlusion of the opaque scene: the scene target pass ends for its compute passes and the multiplier's pass, which
+// read the depth, and the multiply draws in it again.
 void RendererVk::record_scene_ao() {
     if (!ao_.ready() || !scene_.color || !scene_.depth) {
         return;
@@ -1821,7 +1822,8 @@ void RendererVk::record_scene_ao() {
     const VkImageAspectFlags aspects = depth_aspects(depth_format_);
     image_barrier(commands_, scene_.depth->image, aspects, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                   kDepthSampleLayout, VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-                  VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                  VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                  VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
                   VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
     const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_frame_set(layout); };
     const vk::AmbientOcclusionVk::StageMarker mark = profile_frame_
@@ -1834,7 +1836,8 @@ void RendererVk::record_scene_ao() {
                                   scene_ao_objects_, constant_ring_, allocate, mark);  // read in this frame alone; chunks take any count
     gpu_pass(GpuPass::AoApply);
     image_barrier(commands_, scene_.depth->image, aspects, kDepthSampleLayout,
-                  VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_NONE,
+                  VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                  VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_NONE,
                   VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
                   VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
     begin_scene_pass();
@@ -2049,6 +2052,11 @@ void RendererVk::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t b
     if (!bloom_.ready() || !scene_.color) {
         return;
     }
+    const float strength = static_cast<float>(std::min(get_render_config().bloom, kMaxBloom)) / 100.0f;
+    if (kind == NEBULA_PASS_BLOOM_SIMPLE && scene_.samples <= 1u &&
+        bloom::adds_nothing(a & 0xFFu, (a >> 8u) & 0xFFu, (a >> 16u) & 0xFFu, a >> 24u, strength)) {
+        return;  // a simple bloom that adds nothing leaves the frame, and its pass open
+    }
     const GpuPassScope pass{*this, GpuPass::Bloom};
     end_scene_pass();
     vk::GameBloomVk::Inputs in{};
@@ -2086,7 +2094,7 @@ void RendererVk::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t b
         if (!(p.ring_x > 0.0f && p.ring_x < 16.0f) || !(p.ring_y > 0.0f && p.ring_y < 16.0f)) {
             p.ring_x = p.ring_y = 1.0f;
         }
-        p.strength = static_cast<float>(std::min(get_render_config().bloom, kMaxBloom)) / 100.0f;
+        p.strength = strength;
         const bool whole = in.frame_width == scene_.color->width && in.frame_height == scene_.color->height;
         const VkRenderPass scene_pass = draw_layout_.pass_for(scene_variant(), false);
         // The simple bloom's source is the frame: the scene and the source trade places instead of the scene being

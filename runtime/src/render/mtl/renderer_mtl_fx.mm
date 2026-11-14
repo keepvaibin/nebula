@@ -3,6 +3,7 @@
 // anti-aliasing and the wide scene with its camera. As the same functions of vk/renderer_vk_frame.cpp.
 #include "renderer_mtl_internal.h"
 
+#include "galaxy/render/game_bloom_shape.h"
 #include "galaxy/render/texture_store.h"
 
 #include <nebula_frame_list.h>
@@ -61,6 +62,11 @@ void RendererMtl::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t 
     if (!bloom_.ready() || !scene_.color || target_pass_active_) {
         return;
     }
+    const float strength = static_cast<float>(std::min(get_render_config().bloom, kMaxBloom)) / 100.0f;
+    if (kind == NEBULA_PASS_BLOOM_SIMPLE && scene_.samples <= 1u &&
+        bloom::adds_nothing(a & 0xFFu, (a >> 8u) & 0xFFu, (a >> 16u) & 0xFFu, a >> 24u, strength)) {
+        return;  // a simple bloom that adds nothing leaves the frame, and its pass open
+    }
     const GpuPassScope scope{*this, GpuPass::Bloom};
     end_scene_pass();
     mtl::GameBloom::Inputs in{};
@@ -96,11 +102,7 @@ void RendererMtl::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t 
         if (!(p.ring_x > 0.0f && p.ring_x < 16.0f) || !(p.ring_y > 0.0f && p.ring_y < 16.0f)) {
             p.ring_x = p.ring_y = 1.0f;
         }
-        p.strength = static_cast<float>(std::min(get_render_config().bloom, kMaxBloom)) / 100.0f;
-        if (p.strength <= 0.0f) {
-            // Turned off: the kept scene alone comes back, and none of the chain's passes run.
-            p.kind = mtl::GameBloom::Kind::Restore;
-        }
+        p.strength = strength;
         const bool whole = in.frame_width == scene_.color->width && in.frame_height == scene_.color->height;
         const mtl::Format color_format = scene_.wide ? draw_layout_.wide_color : draw_layout_.scene_color;
         // As RendererVk::game_bloom: the simple bloom's source is the frame, traded with the scene instead of copied where
