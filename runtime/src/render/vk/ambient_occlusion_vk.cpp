@@ -26,6 +26,8 @@ constexpr VkFormat kScaleFormat = VK_FORMAT_R8_UNORM;
 constexpr unsigned kApplyVs = 4u, kApplyPs = 5u, kUpsamplePs = 6u;
 // The occlusion, SSAO and denoise passes writing R16G16 float.
 constexpr unsigned kOcclusionRgCs = 7u, kSsaoRgCs = 8u, kDenoiseRgCs = 9u;
+// The multiply making the multiplier from the denoised occlusion (one occlusion pixel per scene target pixel).
+constexpr unsigned kApplyFusedPs = 10u;
 constexpr VkShaderStageFlags kStages =
     VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
@@ -48,8 +50,9 @@ VkShaderModule AmbientOcclusionVk::module(unsigned index) const {
                                                 UtilitySpirv::AoDenoiseCs,  UtilitySpirv::AoSsaoCs,
                                                 UtilitySpirv::AoApplyVs,    UtilitySpirv::AoApplyPs,
                                                 UtilitySpirv::AoUpsamplePs, UtilitySpirv::AoOcclusionRgCs,
-                                                UtilitySpirv::AoSsaoRgCs,   UtilitySpirv::AoDenoiseRgCs};
-    static_assert(kPassCount == kApplyVs && kDenoiseRgCs + 1u == std::size(kShaders));
+                                                UtilitySpirv::AoSsaoRgCs,   UtilitySpirv::AoDenoiseRgCs,
+                                                UtilitySpirv::AoApplyFusedPs};
+    static_assert(kPassCount == kApplyVs && kApplyFusedPs + 1u == std::size(kShaders));
     const std::span<const std::uint32_t> code = utility_spirv(kShaders[index]);
     VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
     info.codeSize = code.size_bytes();
@@ -139,7 +142,7 @@ bool AmbientOcclusionVk::initialize() {
         shutdown();
         return false;
     }
-    upsample_ = graphics_pipeline(upsample_pass_, 0u, false);
+    upsample_ = graphics_pipeline(upsample_pass_, 0u, kUpsamplePs);
     if (upsample_ == VK_NULL_HANDLE) {
         std::cerr << "[ambient-occlusion] Vulkan pass UpsamplePS failed\n";
         shutdown();
@@ -164,9 +167,11 @@ void AmbientOcclusionVk::shutdown() noexcept {
         if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
         pipeline = VK_NULL_HANDLE;
     }
-    for (VkPipeline& pipeline : apply_) {
-        if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
-        pipeline = VK_NULL_HANDLE;
+    for (std::array<VkPipeline, 4>& kind : apply_) {
+        for (VkPipeline& pipeline : kind) {
+            if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
+            pipeline = VK_NULL_HANDLE;
+        }
     }
     apply_pass_ = {};
     if (upsample_ != VK_NULL_HANDLE) vkDestroyPipeline(device, upsample_, nullptr);
@@ -182,24 +187,28 @@ void AmbientOcclusionVk::shutdown() noexcept {
 // The multiply: the shader's output times the scene target's colour (RGB; the game's alpha stays), no depth.
 VkPipeline AmbientOcclusionVk::apply_pipeline(VkRenderPass pass, unsigned samples_log2) {
     samples_log2 = std::min(samples_log2, 3u);
-    if (apply_[samples_log2] != VK_NULL_HANDLE && apply_pass_[samples_log2] == pass) {
-        return apply_[samples_log2];
+    const unsigned kind = fused_ ? 1u : 0u;
+    VkPipeline& pipeline = apply_[kind][samples_log2];
+    VkRenderPass& made_for = apply_pass_[kind][samples_log2];
+    if (pipeline != VK_NULL_HANDLE && made_for == pass) {
+        return pipeline;
     }
-    if (apply_[samples_log2] != VK_NULL_HANDLE) {
+    if (pipeline != VK_NULL_HANDLE) {
         const VkDevice device = Context::get().device();
-        const VkPipeline old = apply_[samples_log2];
+        const VkPipeline old = pipeline;
         Context::get().defer([device, old] { vkDestroyPipeline(device, old, nullptr); });
-        apply_[samples_log2] = VK_NULL_HANDLE;
+        pipeline = VK_NULL_HANDLE;
     }
-    apply_[samples_log2] = graphics_pipeline(pass, samples_log2, true);
-    apply_pass_[samples_log2] = pass;
-    return apply_[samples_log2];
+    pipeline = graphics_pipeline(pass, samples_log2, fused_ ? kApplyFusedPs : kApplyPs);
+    made_for = pass;
+    return pipeline;
 }
 
-VkPipeline AmbientOcclusionVk::graphics_pipeline(VkRenderPass pass, unsigned samples_log2, bool multiply) const {
+VkPipeline AmbientOcclusionVk::graphics_pipeline(VkRenderPass pass, unsigned samples_log2, unsigned shader) const {
+    const bool multiply = shader != kUpsamplePs;
     const VkDevice device = Context::get().device();
     const VkShaderModule vs = module(kApplyVs);
-    const VkShaderModule ps = module(multiply ? kApplyPs : kUpsamplePs);
+    const VkShaderModule ps = module(shader);
     VkPipeline pipeline = VK_NULL_HANDLE;
     if (vs != VK_NULL_HANDLE && ps != VK_NULL_HANDLE) {
         VkPipelineShaderStageCreateInfo stages[2]{};
@@ -369,11 +378,17 @@ bool AmbientOcclusionVk::prepare(VkCommandBuffer commands, const Texture& depth,
     const unsigned divisor = ao::occlusion_divisor(depth.height);
     const unsigned width = (depth.width + divisor - 1u) / divisor;
     const unsigned height = (depth.height + divisor - 1u) / divisor;
+    fused_ = divisor <= 1u;
+    target_width_ = depth.width;
+    target_height_ = depth.height;
+    if (fused_) {
+        scale_.reset();  // through the context's deferred destruction, behind any submission naming it
+    }
     if (!ao::make_constants(view, width, height, divisor, ssao, constants_) ||
         !ensure(distance_, width, height, kDistanceFormat, "occlusion distance") ||
         !ensure(raw_, width, height, occlusion_format_, "occlusion") ||
         !ensure(denoised_, width, height, occlusion_format_, "occlusion denoised") ||
-        !ensure_scale(depth.width, depth.height)) {
+        (!fused_ && !ensure_scale(depth.width, depth.height))) {
         return false;
     }
     for (Texture* target : {distance_.get(), raw_.get(), denoised_.get()}) {
@@ -396,6 +411,9 @@ bool AmbientOcclusionVk::prepare(VkCommandBuffer commands, const Texture& depth,
     dispatch(commands, ssao ? kSsao : kOcclusion, set_of(allocate, depth.view, depth_layout, *denoised_, *distance_, *raw_), width, height);
     if (mark) mark(Stage::Denoise);
     dispatch(commands, kDenoise, set_of(allocate, depth.view, depth_layout, *raw_, *distance_, *denoised_), width, height);
+    if (fused_) {
+        return true;  // the multiply reads the denoised occlusion (dispatch's barrier covers fragment reads)
+    }
     if (mark) mark(Stage::Upsample);
     // The storage slot holds an image it does not write (the multiplier is the pass's colour target).
     const VkDescriptorSet upsample_set = set_of(allocate, depth.view, depth_layout, *denoised_, *distance_, *raw_);
@@ -416,10 +434,13 @@ void AmbientOcclusionVk::finish(VkCommandBuffer commands, VkRenderPass pass, uns
     if (pipeline == VK_NULL_HANDLE) {
         return;
     }
-    // Only the multiplier (t1) is read; every slot holds a valid image in the layout it is in.
-    const VkDescriptorSet set = set_of(allocate, scale_->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, *scale_,
-                                       *denoised_, *denoised_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    draw(commands, pipeline, set, scale_->width, scale_->height);
+    // Only t1 is read: the multiplier, or with fused_ the denoised occlusion (the shader reads its depth slot only at more
+    // than one scene target pixel per occlusion pixel). Every slot holds a valid image in the layout it is in.
+    const VkDescriptorSet set =
+        fused_ ? set_of(allocate, denoised_->view, VK_IMAGE_LAYOUT_GENERAL, *denoised_, *denoised_, *denoised_)
+               : set_of(allocate, scale_->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, *scale_, *denoised_, *denoised_,
+                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    draw(commands, pipeline, set, target_width_, target_height_);
 }
 
 }  // namespace galaxy::render::vk

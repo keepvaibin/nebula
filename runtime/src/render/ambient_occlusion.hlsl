@@ -14,9 +14,10 @@
 // samples, each darkening by how far it stands above the surface's plane, falling off to nothing at the radius.
 // DenoiseCS: the depth-weighted tent of t1 into u0.
 // UpsampleCS (Metal), UpsamplePS (Vulkan): per scene target pixel the denoised occlusion (depth-weighted bilinear) as the
-// colour multiplier, into an 8-bit image.
+// colour multiplier, into an 8-bit image (Vulkan and Metal at more than one scene target pixel per occlusion pixel).
 // ApplyVS/ApplyPS: that multiplier in a multiplicative blend; it reads no depth, so it can draw in the scene's own pass
-// (Direct3D 12: it makes the multiplier itself, below).
+// (Direct3D 12 and 11, and Vulkan and Metal at one occlusion pixel per scene target pixel: it makes the multiplier itself,
+// below).
 
 cbuffer AoConstants : register(b0) {
     float4 g_ray;         // an scene target pixel's eye ray at distance 1: x = px * x + y, y = py * z + w (z = -1)
@@ -510,9 +511,10 @@ float4 multiply(float scale) {
 }
 
 #ifdef AO_PASS_apply_ps
-// Direct3D 12 (its fxc build alone defines AO_PASS_apply_ps): the multiply reads the depth and the denoised occlusion
-// itself, as no pass holds the depth as an attachment there, so no full-size multiplier image is written and read. Its
-// value is the 8-bit level that image held (round to nearest, as the UNORM store converts).
+// Direct3D 12 and 11 (their fxc build defines AO_PASS_apply_ps): the multiply reads the depth and the denoised occlusion
+// itself, as no pass holds the depth as an attachment there, so no full-size multiplier image is written and read.
+// Vulkan and Metal (AoApplyFusedPs) at one occlusion pixel per scene target pixel, where ao_multiplier reads no depth: the
+// same, inside the scene pass. Its value is the 8-bit level that image held (round to nearest, as the UNORM store converts).
 float4 ApplyPS(ApplyOut i) : SV_Target {
     return multiply(round(ao_multiplier(int2(i.position.xy)) * 255.0f) / 255.0f);
 }
