@@ -51,7 +51,8 @@ const char* const kSpaces[] = {LUMA_MODS_SPACE_MESSAGE, LUMA_MODS_SPACE_SENSOR};
 std::atomic<const LumaServiceKernel*> g_kernel{nullptr};
 void (*g_log)(const char*) = nullptr;  // set by providers() before the first mod
 
-// ---- Calling rules (services-registry 4) ---------------------------------------------------------------------------
+// ---- Calling rules (services/registry.md 4)
+// ---------------------------------------------------------------------------
 
 void report(const LumaMod* mod, const char* where, std::uint32_t code, const char* a = nullptr, const char* b = nullptr,
             const char* c = nullptr) noexcept {
@@ -643,7 +644,7 @@ std::int32_t ids_of(const LumaMod* mod, const char* space, const char* mod_id, c
 
 // ---- mods.install (item 9) -----------------------------------------------------------------------------------------
 
-// A path of fs's rule (services-fs 4: inside the mod's data folder, the same on every platform) ending ".luma".
+// A path of fs's rule (services/fs.md 4: inside the mod's data folder, the same on every platform) ending ".luma".
 bool valid_install_path(std::string_view path) noexcept {
     return path.size() > 5u && path.substr(path.size() - 5u) == ".luma" && galaxy::luma_fs::path_in_rule(path, false);
 }
@@ -724,7 +725,7 @@ std::int32_t install_request(const LumaMod* mod, const char* path, LumaEventFn f
     if (g_install != nullptr || galaxy::mods::player_screen_up()) {
         return LUMA_E_BUSY;
     }
-    // The file at the call (J-SM5): a short walk of the mod's own data folder, no link followed (services-fs 5).
+    // The file at the call (J-SM5): a short walk of the mod's own data folder, no link followed (services/fs.md 5).
     std::filesystem::path file;
     if (galaxy::luma_fs::find_data_file(id, path, &file) != LUMA_OK) {
         return LUMA_E_NOT_FOUND;
@@ -1587,7 +1588,7 @@ void kept(std::vector<KeptMod>& out) {
     if (unreadable) {
         unreadable_error();
     }
-    // Everything a removed mod keeps (services-mods 8): ids with numbers, and ids the save halves keep values for.
+    // Everything a removed mod keeps (services/mods.md 8): ids with numbers, and ids the save halves keep values for.
     std::map<std::string, std::uint64_t> chunk_bytes;
     if (g_chunk_kept != nullptr) {
         g_chunk_kept([](void* user, const char* id, std::uint64_t bytes) {
@@ -1608,7 +1609,7 @@ void kept(std::vector<KeptMod>& out) {
             }
         }
     }
-    // And ids with a data folder of fs (services-fs 3).
+    // And ids with a data folder of fs (services/fs.md 3).
     {
         std::vector<std::string> data;
         galaxy::luma_fs::data_ids(data);

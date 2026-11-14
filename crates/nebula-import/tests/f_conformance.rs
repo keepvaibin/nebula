@@ -256,7 +256,7 @@ fn f09_an_added_l_id_must_be_new_to_the_zone_in_every_layer() {
     // (the other table's call names it).
     let o = call_on(OBJINFO, &objinfo().to_ntbl(), size(), &[("high", "h.json", &b)], &[(layer_a, other.to_ntbl(), vec![("low", "l.json", &a)])], &["low", "high"]);
     assert!(o.table.unwrap().rows.iter().any(|r| r[0] == Cell::Bits(60)), "the higher's row stays");
-    // An l_id new to the zone is added, with the kind's usual values for what it leaves out (table-keys 10.4).
+    // An l_id new to the zone is added, with the kind's usual values for what it leaves out (table-keys.md 10.4).
     let o = call(OBJINFO, &objinfo().to_ntbl(), size(), &[("ok", "o.json", &add(70, "New"))], &[(layer_a, other.to_ntbl(), vec![])]);
     let t = o.table.unwrap();
     assert_eq!(arg0(&t, 70), Some(u32::MAX), "Obj_arg0's usual value is -1");
@@ -293,7 +293,8 @@ fn f11_a_disc_path_with_its_archive_is_the_store_path() {
 
 #[test]
 fn f12_a_place_table_refuses_remove_and_checks_every_place() {
-    // table-keys 3: rows by place; remove refused (L402), a place past the game's rows refused (L402), rows replaces.
+    // table-keys.md 3: rows by place; remove refused (L402), a place past the game's rows refused (L402), rows
+    // replaces.
     let rail = "ObjectData/Kuribo/Kuribo.arc/Kuribo.pa";
     let t = TableIr { columns: vec![col("frame", Kind::Int), col("value", Kind::Float)], rows: (0..3u32).map(|i| vec![Cell::Bits(i), Cell::Bits(0)]).collect() };
     let o = call(rail, &t.to_ntbl(), size(), &[("r", "r.json", r##"{"patch": 1, "remove": [{"#": 1}]}"##)], &[]);

@@ -24,7 +24,7 @@ pub use saved::{About, Saved};
 
 /// The validator's version: `<format major>.<rules minor>` (validator.md section 6).
 pub const VERSION: (u32, u32) = (1, 0);
-/// The highest format minor this validator reads (luma-format 8).
+/// The highest format minor this validator reads (luma.md 8).
 pub const FORMAT: (u32, u32) = (1, 0);
 
 /// The game's 14 languages, in the order of `localization/NebulaText.tsv`.
@@ -33,13 +33,13 @@ pub const LANGUAGES: [&str; 14] = [
     "UsPortuguese", "JpJapanese", "KrKorean", "CnSimpChinese", "TwTradChinese",
 ];
 
-/// The platforms a mod's code may be built for (luma-format 6).
+/// The platforms a mod's code may be built for (luma.md 6).
 pub const PLATFORMS: [&str; 9] = [
     "windows-x64", "windows-arm64", "linux-x64", "linux-arm64", "macos-arm64", "macos-x64", "android-arm64",
     "android-x64", "ios-arm64",
 ];
 
-/// The three programs of the game (luma-format 4, `game.regions`).
+/// The three programs of the game (luma.md 4, `game.regions`).
 pub const REGIONS: [&str; 3] = ["RMGE01", "RMGP01", "RMGJ01"];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -137,14 +137,15 @@ pub enum Source<'a> {
 /// A game path's rows, as the content system defines them (luma.md 5.1; table-keys.md).
 #[derive(Default)]
 pub struct Table {
-    /// The columns that make a row's key, in order; `["#"]` for a table whose rows are named by place (table-keys 3).
+    /// The columns that make a row's key, in order; `["#"]` for a table whose rows are named by place
+    /// (table-keys.md 3).
     pub key: Vec<String>,
     /// Every column and its type. A column whose name is not known is `0x` and the 8 hex digits of its hash (the
     /// game's x31 of the name): a patch's name for it then matches by hash.
     pub columns: Vec<(String, ColumnType)>,
     /// The key values of each row the game has, joined by U+001F, when known; for `#`, "0" to the last row's place.
     pub rows: Option<std::collections::HashSet<String>>,
-    /// Keys the game itself gives more than one row (table-keys 4), with how many.
+    /// Keys the game itself gives more than one row (table-keys.md 4), with how many.
     pub repeated: std::collections::HashMap<String, usize>,
     /// Each row's values as text (the same text as `rows`' parts), in `columns`' order, when known: for L407.
     pub cells: Option<Vec<Vec<String>>>,
@@ -257,7 +258,7 @@ pub struct Touches {
     /// "major.minor", joined by U+001F, in import order, each once. The host's consent question reads which declared
     /// permissions are required from them (consent 1.3: a permissioned service's permission is its name).
     pub services: Vec<String>,
-    /// The classes only code can make that a placement uses (references 3, G-2): class, file and line, joined by
+    /// The classes only code can make that a placement uses (references.md 3): class, file and line, joined by
     /// U+001F, one per placement. The host gives them to the module after the last mod's start (luma_refs.h), which
     /// looks each up in the factory. Filled by the placement rules of the stages' contract.
     pub after_start: Vec<String>,
@@ -430,9 +431,9 @@ pub fn zone_layer_sets(store: &dyn Store, zone: &str, cells: &[ScenarioCell]) ->
     Some(out)
 }
 
-/// Whether the game meets a key of the link group table at `layer` among the group's table at `other` (table-keys 13.3,
-/// 13.6): always for `l_id` kinds (`by_scenario` false); for start and generalpos when either is common, both are one
-/// layer, or some scenario turns both on (`sets`; None: the scenario tables are not known, so common and the same
+/// Whether the game meets a key of the link group table at `layer` among the group's table at `other` (table-keys.md
+/// 13.3, 13.6): always for `l_id` kinds (`by_scenario` false); for start and generalpos when either is common, both are
+/// one layer, or some scenario turns both on (`sets`; None: the scenario tables are not known, so common and the same
 /// layer only). The validator and the applier's cook both ask this.
 pub fn layers_meet(by_scenario: bool, layer: usize, other: usize, sets: Option<&[LayerSet]>) -> bool {
     if !by_scenario || layer == 0 || other == 0 || other == layer {
@@ -528,8 +529,8 @@ fn given(value: &str) -> Val {
 /// The message of rule `code` with its parameters by name, values as `args_text` writes them, in one of the game's
 /// languages (an unknown one gives `UsEnglish`): what the loader and the cook refuse with, said as the validator says
 /// its own findings (docs/modding/language/compiled-form.md). The place is given by the names `mod`, `file`, `line` and
-//`column`. A name / the template has and the parameters lack stays in the text as `{name}`, so a missing one is seen,
-//never dropped.
+/// `column`. A name the template has and the parameters lack stays in the text as `{name}`, so a missing one is seen,
+/// never dropped.
 pub fn message_of(code: u16, args: &[(&str, &str)], language: &str) -> String {
     let lang = LANGUAGES.iter().position(|&l| l == language).unwrap_or(0);
     // `text` missing: the `why` phrase is the text (as `message` takes it).

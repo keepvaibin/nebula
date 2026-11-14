@@ -8,14 +8,14 @@
 
 namespace luma {
     namespace time {
-        // GameSystem::frameLoop, right after the frame's wait: the world steps this frame runs (services-time 3, 4).
+        // GameSystem::frameLoop, right after the frame's wait: the world steps this frame runs (services/time.md 3, 4).
         // 1 while no mod has set a rate, a hold or steps: one load.
         u32 beginFrame();
         // GameSystem::updateSceneController: false when this frame holds the world (its first update runs no step).
         bool isStepAllowed();
         // GameSystem::frameLoop, before each extra world step (a rate above real time): false once this frame's steps
         // changed what the game is doing (it holds the scene, a scene change or reset is asked, a movie or the skip
-        // began): the rest of the frame's steps are dropped, as the clock is suspended there (services-time 4).
+        // began): the rest of the frame's steps are dropped, as the clock is suspended there (services/time.md 4).
         bool canStepAgain();
         // PlayerInputs and InputStick, each read: true in a frame the world clock gives no step because of a rate below
         // real time (not a hold, not the game's own hold): its presses are carried to the next step (J22-3). One load.
@@ -26,11 +26,11 @@ namespace luma {
         // The rate the game's sound follows now, in thousandths (1000 real time; 0 the world's sound held). Any thread
         // (the sound engine's tick reads it on the audio clock's thread).
         u32 soundRate();
-        // Game thread: some mod holds the world clock (services-time 4). One load.
+        // Game thread: some mod holds the world clock (services/time.md 4). One load.
         bool isWorldHeld();
 
         // LumaServices' frame start: before the events, the due timers' events are posted; after them, the frame
-        // handlers run (services-registry 6.1, services-time 3 step 3).
+        // handlers run (services/registry.md 6.1, services/time.md 3 step 3).
         void framePost();
         void frameHandlers();
 

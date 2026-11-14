@@ -1,6 +1,6 @@
 #pragma once
 
-// The service registry and the services' event queue (services-registry contract): the one place a mod's service
+// The service registry and the services' event queue (services/registry.md contract): the one place a mod's service
 // import and LumaCore.service are answered, and the frame's start point where answers from the outside world reach the
 // mods.
 
@@ -9,7 +9,7 @@
 
 namespace luma {
     namespace services {
-        // One row of the catalog: a service the game defines (services-registry 9). Null name: past the last.
+        // One row of the catalog: a service the game defines (services/registry.md 9). Null name: past the last.
         struct CatalogRow {
             const char* name;
             u16 major;
@@ -27,8 +27,9 @@ namespace luma {
         // null when the registry has none. Any thread.
         const void* find(const char* pName, u32 major, u32 minor, const char** ppPermission);
 
-        // A mod's life (services-registry 8), on the game thread, called by the loader: begin before the mod's begin and
-        // start; gone after its stop (or its refused start); end after its grace and finish, before its memory goes.
+        // A mod's life (services/registry.md 8), on the game thread, called by the loader: begin before the mod's begin
+        // and start; gone after its stop (or its refused start); end after its grace and finish, before its memory
+        // goes.
         void modBegin(const LumaMod* pMod, const char* pId, s32 order, const char* const* ppGranted, u32 grantedCount);
         void modGone(const LumaMod* pMod);
         void modEnd(const LumaMod* pMod);

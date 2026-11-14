@@ -1,4 +1,4 @@
-//! Reads a zip's directory and its entries without unpacking anything to disk (luma-format 2). The directory is read
+//! Reads a zip's directory and its entries without unpacking anything to disk (luma.md 2). The directory is read
 //! by hand, not through a zip library, so that every rule of section 2 can be checked and named: links and devices
 //! (from the Unix mode in the external attributes), encryption, multi-disk, Zip64, sizes that lie, entries whose
 //! data overlap (a zip bomb). Never panics: every offset is checked against the file's length.

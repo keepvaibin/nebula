@@ -1015,7 +1015,7 @@ pub fn skeleton_gltf(game: &GameModel, block: &[u8]) -> Option<Vec<u8>> {
 }
 
 /// The game's joint angles (X, Y, Z radians composed Z·Y·X, models.md section 4) as a quaternion: what [`angles`] reads
-//back.
+/// back.
 fn quaternion_of(r: [f32; 3]) -> [f32; 4] {
     let (sx, cx) = (r[0] / 2.0).sin_cos();
     let (sy, cy) = (r[1] / 2.0).sin_cos();

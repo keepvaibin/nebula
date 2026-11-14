@@ -379,7 +379,7 @@ void report(const LumaMod* mod, const char* where, std::uint32_t code, const cha
     }
 }
 
-// The mod known and live, then the thread (services-registry 5). LUMA_OK or the status to return.
+// The mod known and live, then the thread (services/registry.md 5). LUMA_OK or the status to return.
 std::int32_t enter(const LumaMod* mod, const char* where, bool any_thread) noexcept {
     const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
     if (kernel == nullptr) {

@@ -76,7 +76,8 @@ std::atomic<bool> g_active{false};
 // A mod with code began this session: before it, game_read is one load and a return.
 std::atomic<bool> g_mods{false};
 
-// ---- Calling rules (services-registry 4) ---------------------------------------------------------------------------
+// ---- Calling rules (services/registry.md 4)
+// ---------------------------------------------------------------------------
 
 const LumaServiceKernel* kernel() noexcept {
     return g_kernel.load(std::memory_order_acquire);

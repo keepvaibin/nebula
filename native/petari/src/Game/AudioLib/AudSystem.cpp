@@ -562,10 +562,10 @@ void AudSystem::holdForSettingsMenu(bool hold, bool stayFaded) {
     }
 }
 
-// LumaCore's world clock (services-time 7). Held: as for the settings menu, the music fades and then pauses, the game's
-// sounds end and the system's play on. Under the pause menu, the HOME Menu or the settings menu only the flag is kept:
-// that menu holds the sound already, and its close leaves it held while the flag is up. Let go: everything returns as
-// it was, unless one of those menus still holds it (its close restores it).
+// LumaCore's world clock (services/time.md 7). Held: as for the settings menu, the music fades and then pauses, the
+// game's sounds end and the system's play on. Under the pause menu, the HOME Menu or the settings menu only the flag is
+// kept: that menu holds the sound already, and its close leaves it held while the flag is up. Let go: everything
+// returns as it was, unless one of those menus still holds it (its close restores it).
 void AudSystem::holdForWorld(bool hold) {
     if (hold == mWorldHeld) {
         return;

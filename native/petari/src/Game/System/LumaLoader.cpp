@@ -351,7 +351,7 @@ namespace luma {
         // The host's finder (luma_set_service_finder): the harness's extension services, which need no permission.
         LumaServiceFinder sServiceFinder = nullptr;
 
-        // A service and the permission it needs (null: none), or null: the registry's first (services-registry 12e),
+        // A service and the permission it needs (null: none), or null: the registry's first (services/registry.md 12e),
         // then the host's finder.
         const void* findService(const char* pName, u32 major, u32 minor, const char** ppPermission) {
             *ppPermission = nullptr;
@@ -454,7 +454,7 @@ namespace luma {
         const u32 kCodeObjectAmbiguous = 7;
 
         // The row a code says, into pId, and the names of its args (null: positional); false when the code is no row
-        // (a bug in the reporting runtime). 100 to 899 are the services' (services-registry 12d).
+        // (a bug in the reporting runtime). 100 to 899 are the services' (services/registry.md 12d).
         bool rowOf(u32 code, char* pId, u32 size, const char* const** pppNames) {
             *pppNames = nullptr;
             for (u32 i = 0; i < sizeof(cOwnRows) / sizeof(cOwnRows[0]); i++) {
@@ -1317,7 +1317,7 @@ namespace luma {
             }
         }
 
-        // A service import's version (services-registry 2, validator revision 5): "<major>.<minor>", each a decimal
+        // A service import's version (services/registry.md 2, validator revision 5): "<major>.<minor>", each a decimal
         // number from 0 to 65535 with no leading zero, nothing else; false when it is not that.
         bool versionOf(const char* pText, u32* pMajor, u32* pMinor) {
             u32 parts[2] = {0, 0};
@@ -1344,7 +1344,7 @@ namespace luma {
             return part == 1 && digits[1] != 0;
         }
 
-        // A service name (services-registry 2): parts [a-z][a-z0-9]* joined by '.', at most 31 bytes.
+        // A service name (services/registry.md 2): parts [a-z][a-z0-9]* joined by '.', at most 31 bytes.
         bool serviceNameOk(const char* pName) {
             u32 length = 0;
             bool partStart = true;

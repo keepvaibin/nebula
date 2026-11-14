@@ -36,7 +36,7 @@
 namespace luma {
     namespace services {
         namespace {
-            // The catalog: every service the game defines (services-registry 9). A row is added with the code of its
+            // The catalog: every service the game defines (services/registry.md 9). A row is added with the code of its
             // service once that service is defined; none is yet.
             const CatalogRow cCatalog[] = {
                 {"time", 1, 0, nullptr, "services-time"},
@@ -97,7 +97,7 @@ namespace luma {
             // One mod, from its begin to its end. Slots are reused only after an end; a mod taken out waits for its
             // grace in its slot, so there are twice as many slots as mods may be on.
             const u32 kMostRecords = LUMA_MAX_MODS * 2u;
-            // A mod's id and its 0: luma-format 2 allows 3 to 64 characters.
+            // A mod's id and its 0: luma.md 2 allows 3 to 64 characters.
             const u32 kIdBytes = 64u + 1u;
             struct Record {
                 const LumaMod* mod;  // null: a free slot. Stored with release on the game thread; loaded with acquire
@@ -151,7 +151,7 @@ namespace luma {
                 return true;
             }
 
-            // Parts of [a-z][a-z0-9]* joined by '.', at most 31 bytes (services-registry 2).
+            // Parts of [a-z][a-z0-9]* joined by '.', at most 31 bytes (services/registry.md 2).
             bool validName(const char* pName) {
                 u32 length = 0;
                 bool partStart = true;
@@ -171,7 +171,7 @@ namespace luma {
                 return length != 0 && length <= 31 && !partStart;
             }
 
-            // A service's block of report codes (services-registry 11), by the name's first part. False: none.
+            // A service's block of report codes (services/registry.md 11), by the name's first part. False: none.
             struct RowBlock {
                 const char* service;
                 u16 first;
@@ -181,8 +181,8 @@ namespace luma {
                 {"time", 120, 139},    {"system", 140, 159},  {"mods", 160, 179},  {"save", 180, 199},
                 {"fs", 200, 249},      {"net", 250, 299},     {"input", 300, 349}, {"audio", 350, 399},
                 {"capture", 400, 419}, {"assets", 420, 469},  {"draw", 470, 569},  {"ui", 570, 619},
-                // Content at run time (services-registry 11: 620 to 699, shared by the content services; contracts
-                // references 6, effects, models, animation, movies 6).
+                // Content at run time (services/registry.md 11: 620 to 699, shared by the content services; contracts
+                // references.md 6, effects, models, animation, movies 6).
                 {"content", 620, 699}, {"anim", 620, 699},    {"movie", 620, 699},
             };
             bool rowBlock(const char* pName, u32* pFirst, u32* pLast) {
@@ -243,7 +243,7 @@ namespace luma {
 
             bool isGone(const Record* pRecord) { return __atomic_load_n(&pRecord->gone, __ATOMIC_ACQUIRE) != 0; }
 
-            // The registry's own rows (services-registry 11).
+            // The registry's own rows (services/registry.md 11).
             struct OwnRow {
                 u32 code;
                 const char* id;
@@ -265,8 +265,8 @@ namespace luma {
             }
 
             // A caller's bug said once a place and counted (said again at 10, 100, 1000...), so a bad call every frame
-            // does not fill the log (services-registry 4.1). Any thread: slots are claimed by compare-and-swap on the
-            // place's key and never freed.
+            // does not fill the log (services/registry.md 4.1). Any thread: slots are claimed by compare-and-swap on
+            // the place's key and never freed.
             struct Said {
                 u64 key;  // 0: free
                 u64 count;
@@ -351,9 +351,9 @@ namespace luma {
                     sayCounted(pWhere, "a report without its mod (a provider bug); not kept");
                     return;
                 }
-                // Every service row names {where} first (services-registry 11): the kernel puts the place there, so no
-                // provider can leave it out and shift the rest. LumaCore.report keeps it under (file, line, code): the
-                // place is "<service>.<function>", line 0; it keeps at most 8 arguments.
+                // Every service row names {where} first (services/registry.md 11): the kernel puts the place there, so
+                // no provider can leave it out and shift the rest. LumaCore.report keeps it under (file, line, code):
+                // the place is "<service>.<function>", line 0; it keeps at most 8 arguments.
                 const char* const pPlace = pWhere != nullptr ? pWhere : "";
                 const char* ppAll[8] = {pPlace};
                 u32 count = 1;
@@ -403,7 +403,7 @@ namespace luma {
                     return LUMA_E_CANCELLED;
                 }
                 // Through the guard: a fault in fn is the mod's, caught there and named "<service> event <kind>"
-                // in the mod log (services-registry 6.1, J S-7). A mod off after a fault is not called.
+                // in the mod log (services/registry.md 6.1, J S-7). A mod off after a fault is not called.
                 char where[96];
                 nebula_snprintf(where, sizeof(where), "%s event %u", pService, pEvent->kind);
                 if (!guard::run(const_cast<LumaMod*>(pMod), LUMA_GUARD_EVENT, where, reinterpret_cast<const void*>(fn),
@@ -517,8 +517,8 @@ namespace luma {
                 pRecord->grantedCount = 0;
             }
 
-            // Every catalogued service has a table on every platform (services-registry 1, item 3): checked once, when
-            // the first mod begins, after the module's and the host's registrations.
+            // Every catalogued service has a table on every platform (services/registry.md 1, item 3): checked once,
+            // when the first mod begins, after the module's and the host's registrations.
             void checkCatalogComplete() {
                 for (const CatalogRow* pRow = cCatalog; pRow->name != nullptr; pRow++) {
                     bool found = false;
@@ -631,7 +631,7 @@ namespace luma {
             return index < count ? &cCatalog[index] : nullptr;
         }
 
-        // The permissions a mod may ask for (luma-format revision 3, services-registry 5.1): the closed list the
+        // The permissions a mod may ask for (luma.md revision 3, services/registry.md 5.1): the closed list the
         // validator checks a manifest against (crates/luma-validate rules/manifest.rs PERMISSIONS). Most are the name
         // of the one service that needs them; `native` (draw.native, and a mod's extra libraries) and
         // `input.devices` (input.dev) are not.
@@ -650,8 +650,8 @@ namespace luma {
         }
 
         void provideOwn() {
-            // The catalog's own check (services-registry 9): names by section 2's grammar, one row per name and major, a
-            // permission of the format's list. The resolution rule against the headers' member names is the
+            // The catalog's own check (services/registry.md 9): names by section 2's grammar, one row per name and
+            // major, a permission of the format's list. The resolution rule against the headers' member names is the
             // crates' mirror test (it reads the headers). A bad catalog is a build fault: the game stops naming it.
             for (const CatalogRow* pRow = cCatalog; pRow->name != nullptr; pRow++) {
                 if (!validName(pRow->name)) {
@@ -667,7 +667,7 @@ namespace luma {
                     }
                 }
             }
-            // The module's own services, each once it is defined: time (services-time), content.fx (effects),
+            // The module's own services, each once it is defined: time (services/time.md), content.fx (effects),
             // content.model (models).
             (void)provide(luma::time::provider());
             (void)provide(luma::content::fx::provider());

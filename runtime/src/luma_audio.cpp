@@ -46,9 +46,9 @@ constexpr std::uint32_t kRampMs = 10u;  // every volume change and every stop: n
 constexpr std::uint32_t kRowNotASound = 350u;
 constexpr std::uint32_t kRowDropped = 351u;
 constexpr std::uint32_t kRowNotANumber = 352u;
-// Content.MissingSound (references 6): a name no store file has, answered with the placeholder.
+// Content.MissingSound (references.md 6): a name no store file has, answered with the placeholder.
 constexpr std::uint32_t kMissingSoundCode = 624u;
-// Nebula's placeholder sound (references 4, nebula:placeholder/sound): a 120 ms soft two-note chime the importer
+// Nebula's placeholder sound (references.md 4, nebula:placeholder/sound): a 120 ms soft two-note chime the importer
 // cooks into every store from data/placeholder/sound.wav; the start check (3.13) turns the mods off when a store lacks
 // it, so a mod's sound can never be silently missing.
 constexpr const char* kPlaceholderSound = "NebulaData/PlaceholderSound.nsfx";
@@ -650,7 +650,7 @@ bool read_sound(const std::uint8_t* bytes, std::uint64_t length, Sound& sound) n
     return true;
 }
 
-// "<path>" (the mod's own) or "<id>:<path>" as the store's Luma/<id>/<path>.nsfx (luma-format 5, sound.md 1).
+// "<path>" (the mod's own) or "<id>:<path>" as the store's Luma/<id>/<path>.nsfx (luma.md 5, sound.md 1).
 bool store_path(const char* id, std::string_view given, std::string& path) {
     const std::size_t colon = given.find(':');
     path = "Luma/";
@@ -667,7 +667,7 @@ bool store_path(const char* id, std::string_view given, std::string& path) {
     return true;
 }
 
-// A sound name the store has no file for: the placeholder's file (nebula:placeholder/sound, references 4 and 5.1),
+// A sound name the store has no file for: the placeholder's file (nebula:placeholder/sound, references.md 4 and 5.1),
 // said in the mod log as Content.MissingSound (one CONTENT Error a name, counted on every call) and, the first time
 // the mod names it, as the harness's placeholder fact. None when the store lacks the placeholder too: a store older
 // than it, which the start check (3.13) does not let mods run on.

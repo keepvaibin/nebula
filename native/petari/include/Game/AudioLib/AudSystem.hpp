@@ -81,7 +81,7 @@ public:
     void silenceSeForCutsceneSkip(bool silent);
     void fadeOutForQuit();
     void holdForSettingsMenu(bool hold, bool stayFaded);
-    // LumaCore's world clock (services-time 7): the world's sound held (a mod holds the world, or its rate is beyond
+    // LumaCore's world clock (services/time.md 7): the world's sound held (a mod holds the world, or its rate is beyond
     // what the sound follows) or given back.
     void holdForWorld(bool hold);
     void updateWorldHold();

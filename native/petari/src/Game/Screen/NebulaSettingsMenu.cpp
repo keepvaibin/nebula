@@ -227,7 +227,7 @@ namespace {
          {"SettingsChoiceRemove", "SettingsChoiceKeep", nullptr},
          {NEBULA_SETTINGS_APPLY, NEBULA_SETTINGS_CLOSE, 0},
          {KeyApply, KeyBack, 0}},
-        // A removed mod's kept numbers and saved data (services-mods 8): its id above the question (fillTexts).
+        // A removed mod's kept numbers and saved data (services/mods.md 8): its id above the question (fillTexts).
         {NEBULA_SETTINGS_STATUS_MOD_FORGET_ASK, "SettingsModForgetAsk", "SettingsModForgetAsk", 2,
          {"SettingsChoiceForget", "SettingsChoiceKeep", nullptr},
          {NEBULA_SETTINGS_APPLY, NEBULA_SETTINGS_CLOSE, 0},

@@ -1,10 +1,10 @@
-//! L700-L702: data for library mods such as LumaKit (`kit/<module>/`, luma-format 3 and 4), checked against the schema
+//! L700-L702: data for library mods such as LumaKit (`kit/<module>/`, luma.md 3 and 4), checked against the schema
 //! the library gives for that module's data (crate::schema).
 //!
 //! - A library gives its schemas at `code/<id>.kit/<module>/<version>.json`; they go into its report
 //!   (`Touches::kit_schemas`), from which the checks of the mods that use it read them.
 //! - A mod's `kit` names `<library id>.<module>` and the data version; its data is `kit/<module>/<name>.json`, the
-//!   files the library's code reads (services-mods 10: `kit_names` and `kit_read`).
+//!   files the library's code reads (services/mods.md 10: `kit_names` and `kit_read`).
 
 use super::{p, t, Ctx};
 use crate::json::Pos;
@@ -44,8 +44,8 @@ pub(crate) fn check(ctx: &mut Ctx) {
         .and_then(|r| r.get("kit"))
         .map(|k| k.members().iter().map(|m| (m.key.clone(), m.value.as_i64(), m.key_pos)).collect())
         .unwrap_or_default();
-    // A key is `<library id>.<module>` (luma-format 4: "lumakit.player.form"); its data is in `kit/<module>/`
-    // (luma-format 3; the library asks the `mods` service for `module`). The library is a mod this one needs, or itself.
+    // A key is `<library id>.<module>` (luma.md 4: "lumakit.player.form"); its data is in `kit/<module>/`
+    // (luma.md 3; the library asks the `mods` service for `module`). The library is a mod this one needs, or itself.
     let libraries: Vec<String> = ctx.facts.needs.iter().map(|(id, _)| id.clone()).chain(own_id.clone()).collect();
     let library_of = |key: &str| -> Option<(String, String)> {
         libraries

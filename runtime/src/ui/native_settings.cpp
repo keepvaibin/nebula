@@ -348,7 +348,7 @@ galaxy::input::DeviceKey s_controls_device{};
 galaxy::input::DeviceList s_controls_devices{};
 std::uint64_t s_controls_devices_ms = 0u;
 std::size_t s_capture_target = galaxy::input::kGameInputCount;
-// The mods' input actions (services-input 6): a row each after the game's bindings, bound per scheme
+// The mods' input actions (services/input.md 6): a row each after the game's bindings, bound per scheme
 // as those are. The draft holds, per scheme, only the actions edited since it was taken, by "<mod id>/<action id>"; the
 // rest show their live bindings. A capture for action i waits as s_capture_target kModCaptureBase + i.
 constexpr std::size_t kModCaptureBase = galaxy::input::kGameInputCount + 1u;
@@ -529,7 +529,7 @@ std::string menu_bindings(galaxy::input::ControlScheme scheme, const galaxy::inp
 
 unsigned controls_changes();
 
-// The declared actions on the scheme being edited (none until the first code mod begins: services-input 3).
+// The declared actions on the scheme being edited (none until the first code mod begins: services/input.md 3).
 std::vector<galaxy::input::mod_actions::Listed> mod_action_list() {
     if (!galaxy::input::mod_actions::any()) return {};
     return galaxy::input::mod_actions::list(s_controls_scheme);
@@ -679,7 +679,7 @@ enum class ControlsRow {
     TouchOpacity,
     TouchVibration,
     TouchPlaces,
-    ModAction,  // a mod's input action (services-input): `action` is its place in mod_actions::list
+    ModAction,  // a mod's input action (services/input.md): `action` is its place in mod_actions::list
     Reset,
 };
 
@@ -1514,7 +1514,7 @@ void set_native_settings_visible(bool visible) {
         settle_native_settings_row();
     }
     if (!visible) {
-        // A mod's request screen left unanswered is the player's no (services-mods 9, services-save 8).
+        // A mod's request screen left unanswered is the player's no (services/mods.md 9, services/save.md 8).
         deny_asks();
         end_text_edit(false);
         // Closing discards an unapplied draft, an unconfirmed display, an
@@ -2179,8 +2179,8 @@ std::optional<ModAbout> s_mod_about;
 std::string s_mod_remove_ask;
 // The removed mod whose kept data the menu asks to forget (empty: none). Under s_mods_mutex.
 std::string s_mod_forget_ask;
-// The removed mods' kept data for the REMOVED MODS line (services-mods 8): read when the page first lists the mods and
-// again after a rescan or a FORGET, never each frame. Under s_mods_mutex.
+// The removed mods' kept data for the REMOVED MODS line (services/mods.md 8): read when the page first lists the mods
+// and again after a rescan or a FORGET, never each frame. Under s_mods_mutex.
 std::vector<galaxy::luma_mods::KeptMod> s_mods_kept;
 bool s_mods_kept_read = false;
 
@@ -2234,8 +2234,9 @@ std::shared_ptr<const NativeSettingsPicture> read_menu_picture(const std::filesy
 }
 
 // With s_mods_mutex held.
-// The packages this start's check refused (modlog::check_packages, validator 2) say so on their rows, as the start did:
-// the list's own pass leaves the validator's findings to it. The check ran before the game started; read only after.
+// The packages this start's check refused (modlog::check_packages, validator.md 2) say so on their rows, as the start
+// did: the list's own pass leaves the validator's findings to it. The check ran before the game started; read only
+// after.
 void mark_refused(std::vector<galaxy::mods::ModInfo>& mods) {
     for (galaxy::mods::ModInfo& mod : mods) {
         if (mod.package && mod.problem.empty() && galaxy::modlog::package_refused(mod.id)) {
@@ -2262,7 +2263,7 @@ void apply_live_mods() {
     set_movie_mod_folders(galaxy::mods::movie_folders(s_mods_saved));
 }
 
-// With s_mods_mutex held: the list's order, then mods.ini. A mod whose options changed is told (services-mods 8.2:
+// With s_mods_mutex held: the list's order, then mods.ini. A mod whose options changed is told (services/mods.md 8.2:
 // options_applied takes the new values and posts its OPTION events for the next frame's start).
 void save_mods() {
     for (std::size_t i = 0; i < s_mods.size(); ++i) {
@@ -2527,7 +2528,7 @@ std::string s_mod_import_message;  // the outcome, the row's help
 std::atomic<bool> s_mod_import_busy{false};
 std::atomic<bool> s_mod_dialog_open{false};
 
-// The last batch's outcomes for the result page (task 6.1): the same page after a drop, the picker, Open with or a
+// The last batch's outcomes for the result page: the same page after a drop, the picker, Open with or a
 // link. Under s_mod_import_mutex; the page shows from the batch's end until Done.
 struct ImportOutcome {
     std::string source;   // the file or folder's name
@@ -2539,7 +2540,7 @@ struct ImportOutcome {
     bool refused = false;
     std::vector<galaxy::mods::ImportResult::Finding> findings;
     // Its takes_over ids with no mod of theirs in the mods folder: what they kept moves to it at its first start
-    // (services-save 6), and the page says so under it ("Takes over what {old} kept"; installing is the answer).
+    // (services/save.md 6), and the page says so under it ("Takes over what {old} kept"; installing is the answer).
     std::vector<std::string> takes_over;
 };
 std::vector<ImportOutcome> s_import_outcomes;
@@ -2613,7 +2614,7 @@ void finish_install_ask(const std::vector<ImportOutcome>& outcomes) {
     answer_install_locked(status);
 }
 
-// ---- A text option typed in (services-mods 8.4) ----
+// ---- A text option typed in (services/mods.md 8.4) ----
 // The row being typed in: keys and typed text go to it until Enter (kept in the draft, applied as any option) or
 // Escape (dropped). A pad edits the last character: up and down change it, right adds one, left or X deletes one,
 // A or Y keeps, B drops. Under s_text_mutex, taken last: nothing else is locked while it is held.
@@ -2842,7 +2843,7 @@ void write_import_facts() {
     }
 }
 
-// The validator on a package before it is placed (validator 2 "at import"), against the packages placed now but the
+// The validator on a package before it is placed (validator.md 2 "at import"), against the packages placed now but the
 // one it replaces. Off the UI thread: takes s_mods_mutex only to copy the list.
 bool check_import_package(const std::filesystem::path& staged, const std::string& id, galaxy::mods::ImportResult& result) {
     std::vector<galaxy::modlog::StartPackage> others;
@@ -3136,7 +3137,7 @@ std::vector<SettingsRow> log_page(const std::vector<galaxy::mods::ModInfo>& mods
     return rows;
 }
 
-// The imports' result (task 6.1), one page whatever started them: under each source's mod (its name, as is) what
+// The imports' result, one page whatever started them: under each source's mod (its name, as is) what
 // happened, its file or folder as the value and the importer's line as the help; then each of the validator's
 // findings in the played language (as is), the entry inside the mod as the value; Done goes back to the lists.
 // With s_mods_mutex held.
@@ -3361,7 +3362,7 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
         if (not_started.as_is) status.names |= 4u;
     }
     rows.push_back(std::move(status));
-    // It takes over a mod that is still installed (services-save 6): nothing moves while that one is there.
+    // It takes over a mod that is still installed (services/save.md 6): nothing moves while that one is there.
     if (mod.luma != nullptr) {
         for (const std::string& old : mod.luma->takes_over) {
             if (mod_by_id_locked(old) == nullptr) continue;
@@ -3370,8 +3371,8 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
             rows.push_back(std::move(still));
         }
     }
-    // The mod changes the game's speed or holds it (services-time 10): shown, and the player's last word, LET GO, which
-    // clears its rate, hold and owed steps from the next frame (the row goes when the clock is back to normal).
+    // The mod changes the game's speed or holds it (services/time.md 10): shown, and the player's last word, LET GO,
+    // which clears its rate, hold and owed steps from the next frame (the row goes when the clock is back to normal).
     if (const std::optional<galaxy::modlog::ModClock> clock = galaxy::modlog::mod_clock(id);
         clock.has_value() && (clock->held || clock->rate != 1000u)) {
         rows.push_back(button_row("TIME: " + (clock->held ? std::string("HELD") : clock_rate_text(clock->rate)), {"LET GO"},
@@ -3392,7 +3393,7 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
         cost.names = 2u | 4u;
         rows.push_back(std::move(cost));
     }
-    // The player's DON'T ASK AGAIN to its install requests (services-mods 9, J-SM4), undone here at once.
+    // The player's DON'T ASK AGAIN to its install requests (services/mods.md 9, J-SM4), undone here at once.
     if (mod.install_ask_never) {
         SettingsRow may{galaxy::modlog::row_words("Mods.InstallMayAsk", id, {}),
                         galaxy::modlog::row_words("Consent.Denied", id, {}),
@@ -3470,7 +3471,7 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
         fact("WEBSITE", mods_ui_text(mod.luma->homepage, 60u), {});
     }
     fact("FOLDER", mods_ui_text(mod.id, 60u), {});
-    // Key options are the mod's input actions, bound in CONTROLS (services-input 2), not here.
+    // Key options are the mod's input actions, bound in CONTROLS (services/input.md 2), not here.
     if (std::any_of(mod.options.begin(), mod.options.end(), [](const galaxy::mods::ModOption& o) { return o.kind != "key"; })) {
         SettingsRow heading{"OPTIONS", {}, nullptr, {}, true};
         rows.push_back(std::move(heading));
@@ -3587,8 +3588,8 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
         choice.names = option.selected != 0u ? 3u : 1u;
         rows.push_back(std::move(choice));
     }
-    // Its input actions (the manifest's key options, services-input 2): the record CONTROLS binds, on the scheme shown
-    // there, read here (its own inputs, else the game control it follows); changed in CONTROLS only.
+    // Its input actions (the manifest's key options, services/input.md 2): the record CONTROLS binds, on the scheme
+    // shown there, read here (its own inputs, else the game control it follows); changed in CONTROLS only.
     bool actions_heading = false;
     for (const galaxy::input::mod_actions::Listed& action : mod_action_list()) {
         if (action.mod_id != id) continue;
@@ -3738,7 +3739,8 @@ SettingsRow mods_buttons_row() {
     SettingsRow row = button_row(
         {}, {"IMPORT FILE", "IMPORT FOLDER", details ? "DETAILS" : "-DETAILS", "OPEN FOLDER", "RESCAN", "EXCHANGE FOLDER"},
         [](RenderConfig&, unsigned button) {
-            // The Exchange folder (services-fs 1): the player's and every mod's allowed fs.exchange, made if missing.
+            // The Exchange folder (services/fs.md 1): the player's and every mod's allowed fs.exchange, made if
+            // missing.
             if (button == 5u) {
                 const std::filesystem::path exchange = galaxy::luma_fs::exchange_folder();
                 std::error_code ec;
@@ -3794,9 +3796,9 @@ std::string kept_size_text(std::uint64_t bytes, const std::string& id) {
     return galaxy::modlog::row_words(row, id, {{"n", std::to_string(n)}});
 }
 
-// The REMOVED MODS line (services-mods 8, services-save 5): a mod whose folder is gone keeps its numbers and saved data
-// for when it returns. One row each, "{mod}: kept for when it returns", its numbers and bytes as the help, and FORGET
-// behind a question (mod_question_key). Nothing when no removed mod keeps anything. With s_mods_mutex held.
+// The REMOVED MODS line (services/mods.md 8, services/save.md 5): a mod whose folder is gone keeps its numbers and
+// saved data for when it returns. One row each, "{mod}: kept for when it returns", its numbers and bytes as the help,
+// and FORGET behind a question (mod_question_key). Nothing when no removed mod keeps anything. With s_mods_mutex held.
 void add_kept_rows_locked(std::vector<SettingsRow>& rows) {
     if (!s_mods_kept_read) {
         galaxy::luma_mods::kept(s_mods_kept);
@@ -3846,8 +3848,8 @@ std::string offer_file_words(const galaxy::mods::OfferFile& file, const std::str
                                      {{"character", character}, {"stars", std::to_string(file.stars)}, {"date", date}});
 }
 
-// mods.install's screen (services-mods 9): who asks, the file's name (never its path), and the answers; the line under
-// the buttons says an installed mod starts at the next start (J-SM2). With s_ask_mutex held.
+// mods.install's screen (services/mods.md 9): who asks, the file's name (never its path), and the answers; the line
+// under the buttons says an installed mod starts at the next start (J-SM2). With s_ask_mutex held.
 std::vector<SettingsRow> install_page_locked() {
     const InstallAsk& ask = *s_install_ask;
     std::vector<SettingsRow> rows;
@@ -3905,7 +3907,7 @@ std::vector<SettingsRow> install_page_locked() {
     return rows;
 }
 
-// save.game's offer screen (services-save 8): the offered file, then the six to pick from, then the confirm for the
+// save.game's offer screen (services/save.md 8): the offered file, then the six to pick from, then the confirm for the
 // one picked. With s_ask_mutex held.
 std::vector<SettingsRow> offer_page_locked() {
     const OfferAsk& ask = *s_offer_ask;
@@ -4058,7 +4060,7 @@ std::vector<SettingsRow> mods_page_rows(const RenderConfig&) {
     for (galaxy::mods::ModInfo& mod : mods) {
         (void)galaxy::mods::update_pack_categories(mod);
     }
-    // A mod's request first (services-mods 9, services-save 8): the game waits on the player's answer.
+    // A mod's request first (services/mods.md 9, services/save.md 8): the game waits on the player's answer.
     {
         const std::lock_guard<std::mutex> ask_lock(s_ask_mutex);
         if (s_offer_ask) {
@@ -5047,8 +5049,8 @@ bool mod_question_key(std::uintptr_t key, bool was_down) {
         return true;
     }
     if (!s_mod_forget_ask.empty()) {
-        // FORGET's: Enter, Space or Y drops what the removed mod kept (services-mods 8: its numbers at once, its saved
-        // data at each file's next save; one Note Mods.Forgotten), Escape, Backspace, B or F1 keeps it.
+        // FORGET's: Enter, Space or Y drops what the removed mod kept (services/mods.md 8: its numbers at once, its
+        // saved data at each file's next save; one Note Mods.Forgotten), Escape, Backspace, B or F1 keeps it.
         if (was_down) return true;
         if (key == VK_RETURN || key == VK_SPACE) {
             const std::string id = s_mod_forget_ask;

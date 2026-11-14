@@ -27,7 +27,7 @@
 namespace luma {
     namespace movie {
         namespace {
-            // Content.MissingMovie (references 6, the content block 620-699).
+            // Content.MissingMovie (references.md 6, the content block 620-699).
             const u32 cMissingMovieCode = 673u;
             // The service's own rows, in the content block: no scene with a movie player; a file that is no movie.
             const u32 cNoSceneCode = 674u;

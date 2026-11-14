@@ -4,7 +4,7 @@
 //! decides (two mods changing one cell, a row another mod removed) is a [`Fact`] for the Mods screen, never silent.
 //! The last given wins: the mod higher in the list, as for whole files. A table of a kind (cook::table_columns) that
 //! has no rows takes its kind's columns first, and a row a mod adds starts from the value most of the game's rows have
-//! in each column (table-keys 10).
+//! in each column (table-keys.md 10).
 
 use super::table::{Cell, Column, Kind, TableIr};
 use super::table_columns::{columns_of, widen_empty, KindColumn};
@@ -97,8 +97,8 @@ fn found(v: &Value) -> Arg {
     }
 }
 
-/// Another table of a table's link group (table-keys 13): one zone's tables of one kind in its other layers, with the
-/// patches of the mods that are on for it, in the order a table's are given.
+/// Another table of a table's link group (table-keys.md 13): one zone's tables of one kind in its other layers, with
+/// the patches of the mods that are on for it, in the order a table's are given.
 pub struct Link<'a> {
     pub path: &'a str,
     pub table: &'a TableIr,
@@ -146,7 +146,7 @@ pub fn apply(path: &str, table: &mut TableIr, patches: &[ModPatch]) -> Result<Ve
     apply_linked(path, table, patches, &[], &[])
 }
 
-/// `apply` for a table of a link group (table-keys 13), given the group's other tables with their patches and every
+/// `apply` for a table of a link group (table-keys.md 13), given the group's other tables with their patches and every
 /// mod that is on from the bottom of the list up. A key a patch adds that the game has in another layer leaves that
 /// patch out (L402 Patch.KeyInGroup, as the validator); a key a higher mod adds to another layer leaves this row out
 /// (a conflict fact, the higher's row stays); a key the same mod adds to another layer leaves the patch out too.
@@ -507,7 +507,7 @@ impl Applier<'_> {
             }
             let id = self.fold(parts.join("\u{1f}"));
             let found: Vec<usize> = (0..self.table.rows.len()).filter(|&r| self.row_id(r) == id).collect();
-            // The game repeats a few keys (table-keys 4); a where then means the first, as the game reads it.
+            // The game repeats a few keys (table-keys.md 4); a where then means the first, as the game reads it.
             if let Some(&at) = found.first() {
                 return Ok(Some(at));
             }

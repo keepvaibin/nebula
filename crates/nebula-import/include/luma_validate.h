@@ -134,7 +134,7 @@ const char* luma_report_version(const LumaReport* report);
    import order, each once: its name; null past the last. The same after a start's check that took the kept report. A
    permissioned service's permission is its name (services-registry 9). */
 const char* luma_report_required_service(const LumaReport* report, const char* platform, uint32_t index);
-/* After-start row `index` (0 first; references 3): 1 with the class only code makes that a placement uses, its file
+/* After-start row `index` (0 first; references.md 3): 1 with the class only code makes that a placement uses, its file
    and its line; 0 past the last. Strings valid until luma_report_free. */
 uint32_t luma_report_after_start(const LumaReport* report, uint32_t index, const char** class_name, const char** file,
                                  uint32_t* line);

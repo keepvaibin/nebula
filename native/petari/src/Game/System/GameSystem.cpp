@@ -181,7 +181,7 @@ void GameSystem::frameLoop() {
     NebulaLoadTrace::frame();
     // The frame's wait comes before its update, so the input it reads is drawn at once, not a frame later.
     NebulaFrameClock::sleepUntilFrame();
-    // The world clock (services-time 3, 4): this frame's world steps; 1 with no mod using time.
+    // The world clock (services/time.md 3, 4): this frame's world steps; 1 with no mod using time.
     const u32 worldSteps = luma::time::beginFrame();
     update();
     calcAnim();
@@ -264,7 +264,7 @@ void GameSystem::update() {
     luma::services::frameStart();  // the services' events, then time's frame handlers; one load when nothing waits
     luma::content::fx::frame();    // the mods' open effects: their actors' ends and clipping; one load when none is open
     luma::content::model::frame(); // the mods' attached models: their actors' ends; one load when none is attached
-    luma::anim::frame();           // the mods' plays: ends, marks (animation 7); one load when none is going
+    luma::anim::frame();           // the mods' plays: ends, marks (animation.md 7); one load when none is going
     luma::ui::frame();    // the mods' open screens' facts (harness); one load when none is open
     luma::draw::frame();  // textures the mods freed leave the renderer; one load when none was
     luma::movie::frame(); // the mods' movie ended (its end, the scene's, another movie); one load when none plays
@@ -308,7 +308,7 @@ void GameSystem::updateSceneController() {
         isSceneUpdate = false;
     }
     // A frame the world clock gives no step (a mod holds the world, or a rate below real time): the scene holds as under
-    // the HOME Menu, the system runs on (services-time 3).
+    // the HOME Menu, the system runs on (services/time.md 3).
     if (!luma::time::isStepAllowed()) {
         isSceneUpdate = false;
     }

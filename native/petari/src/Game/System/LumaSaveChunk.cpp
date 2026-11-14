@@ -40,7 +40,7 @@ namespace {
         return true;
     }
 
-    // A mod id's characters (luma-format, the validator's id_ok: a-z 0-9 - .), 1 to 64 of them. The full id rule is the
+    // A mod id's characters (luma.md, the validator's id_ok: a-z 0-9 - .), 1 to 64 of them. The full id rule is the
     // validator's; this only keeps a chunk from naming what no mod can be.
     bool validIdBytes(const u8* pId, u32 length) {
         if (length == 0 || length > LumaSaveChunk::cIdMost) {

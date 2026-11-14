@@ -42,7 +42,7 @@ namespace luma {
         namespace {
             const u32 kMostOpen = LUMA_ANIM_MOST_PLAYS * 8u;  // across mods
             const u32 kMostEvents = kMostOpen * 4u;          // marks and ends waiting or being given, across mods
-            const u32 cMissingAnimationCode = 627;            // content's block (references 6)
+            const u32 cMissingAnimationCode = 627;            // content's block (references.md 6)
             const u32 cEventPastEndCode = 670;
             const u32 kClipMost = 128;                        // a clip name's bytes with its 0
 
@@ -104,7 +104,7 @@ namespace luma {
                 sKernel->report(pMod, pWhere, code, args, count);
             }
 
-            // A CONTENT entry of the mod (references 6).
+            // A CONTENT entry of the mod (references.md 6).
             void sayContent(const LumaMod* pMod, u32 code, const char* pRow, u32 column, const char* pName0,
                             const char* pValue0, const char* pName1, const char* pValue1) {
                 LumaModLogEntry entry = {};
@@ -495,7 +495,7 @@ namespace luma {
                     report(pMod, pWhere, 101u, pWrong, nullptr, nullptr);
                     return LUMA_E_ARGUMENT;
                 }
-                // The kinds of the clip the model has (references 6: none, Content.MissingAnimation).
+                // The kinds of the clip the model has (references.md 6: none, Content.MissingAnimation).
                 u8 kinds = 0;
                 u32 lead = kKinds;
                 for (u32 kind = 0; kind < kKinds; kind++) {
@@ -587,7 +587,7 @@ namespace luma {
                     rPlay.eventRows = 0;
                 } else {
                     // A row past the lead's last frame never comes (the cook checks a game clip's, not a mod's own:
-                    // animation 2a): Content.EventPastEnd, each start of such a play.
+                    // animation.md 2a): Content.EventPastEnd, each start of such a play.
                     ::Table table;
                     table.attach(rPlay.events);
                     const s32 last = static_cast< s32 >(ctrlOf(pActor, lead)->getEnd());

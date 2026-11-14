@@ -1,4 +1,4 @@
-//! Reads a mod's library without loading it (luma-format 6): its format and machine, its exports, what it imports
+//! Reads a mod's library without loading it (luma.md 6): its format and machine, its exports, what it imports
 //! from where, and the words of its data with the loader's fixups applied, so `luma_mod` and the import list it
 //! points at can be read as the game's loader will see them. PE (Windows), ELF (Linux, Android), Mach-O (macOS, iOS).
 //! Every read is bounds-checked; a malformed file gives a phrase, never a panic.
@@ -39,8 +39,8 @@ pub struct Library<'d> {
     /// Every library it names (with or without symbols).
     pub needed: Vec<String>,
     /// What the system's loader would run in it when it loads, before LumaCore's `begin`
-    //(docs/modding/language/compiled-form.md): a / PE entry point or TLS callbacks, ELF DT_INIT, DT_INIT_ARRAY or
-    //DT_PREINIT_ARRAY, a Mach-O init section or / LC_ROUTINES_64. Each named as the format names it.
+    /// (docs/modding/language/compiled-form.md): a PE entry point or TLS callbacks, ELF DT_INIT, DT_INIT_ARRAY or
+    /// DT_PREINIT_ARRAY, a Mach-O init section or LC_ROUTINES_64. Each named as the format names it.
     pub runs_at_load: Vec<String>,
     /// What the system would run when it closes the library, after LumaCore has freed the mod's memory:
     /// ELF DT_FINI or DT_FINI_ARRAY, a Mach-O term section. A PE's entry point and TLS callbacks run at

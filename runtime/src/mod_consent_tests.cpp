@@ -46,7 +46,7 @@ std::string manifest(std::string_view permissions) {
            R"("permissions":)" + std::string(permissions) + "}";
 }
 
-// The entry library of this platform in the mod's folder (luma-format 6).
+// The entry library of this platform in the mod's folder (luma.md 6).
 fs::path entry_library(const fs::path& folder) {
     return folder / fs::path(galaxy::luma::code_entry(galaxy::luma::plugin_target()));
 }

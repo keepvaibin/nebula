@@ -336,7 +336,7 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
     if (!plugins.empty() && !galaxy::luma_guard::install(find_symbol)) {
         if (g_log != nullptr) g_log("mods: the guard is off (the game module or the system did not take it); a fault in a mod's code ends the game with its report");
     }
-    // LumaCore's services: the module's own, the host's, then the extensions' test ones (services-registry 13).
+    // LumaCore's services: the module's own, the host's, then the extensions' test ones (services/registry.md 13).
     if (!plugins.empty()) {
         galaxy::luma_services::provide_all(find_symbol, log, {});
     }

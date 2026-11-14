@@ -1,4 +1,4 @@
-//! luma-format revision 4: a mod's `renderer.features` (its form, the game's list of feature names) and L806, a
+//! luma.md revision 4: a mod's `renderer.features` (its form, the game's list of feature names) and L806, a
 //! feature this device's graphics lack (start-check 3), at import and at a start's check.
 
 use luma_validate::names::{feature_name_ok, renderer_features_from_json, Names, RENDERER_FILE};

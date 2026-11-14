@@ -108,7 +108,7 @@ std::int32_t argument(const LumaMod* mod, const char* where, const char* name) n
 }
 
 // The checks every call makes: the mod, the thread, the path and the flags. LUMA_OK and `path` in the store's form: a
-// mod path `<id>:<path>` (luma-format 5) is the mod's store folder Luma/<id>/<path> (mods.cpp plan_mod_changes).
+// mod path `<id>:<path>` (luma.md 5) is the mod's store folder Luma/<id>/<path> (mods.cpp plan_mod_changes).
 std::int32_t begin(const LumaMod* mod, const char* where, const char* text, std::uint32_t flags,
                    std::string& path) noexcept {
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
@@ -739,7 +739,7 @@ std::int32_t assets_entry(const LumaMod* mod, const char* text, std::uint32_t fl
 //
 // The game's cooker (nebula_import, the same one the start's cook runs, part of the game) turns a file
 // as the disc has it into the game's form: luma_cook_entry, the importer's cook_entry behind a C call (contract
-// services-assets 6). One thread cooks, one file at a time, in the order asked; the answer is posted to the mod and
+// services/assets.md 6). One thread cooks, one file at a time, in the order asked; the answer is posted to the mod and
 // provided on the game thread when it is delivered, so the table's rules apply to the game as it is then.
 
 struct Cooker {

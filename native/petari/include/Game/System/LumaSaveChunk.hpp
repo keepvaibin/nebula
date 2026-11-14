@@ -32,7 +32,7 @@ public:
     };
 
     // A file's chunk (its holder names the file in messages), or with a null holder one mod's values across files
-    // (services-save item 7: save.global's store, its own limits, never a chunk of a holder).
+    // (services/save.md item 7: save.global's store, its own limits, never a chunk of a holder).
     explicit LumaSaveChunk(const GameDataHolder* pHolder, u32 modMost = cModMost, u32 chunkMost = cChunkMost);
     virtual ~LumaSaveChunk();
 
@@ -63,7 +63,7 @@ public:
     s64 get(const char* pModId, const char* pKey, void* pOut, u32 room) const;
     Result set(const char* pModId, const char* pKey, const void* pValue, u32 length);
     Result remove(const char* pModId, const char* pKey);
-    // A removed mod's kept data (services-mods 8, services-save 5): its entries' bytes here, 0 when none.
+    // A removed mod's kept data (services/mods.md 8, services/save.md 5): its entries' bytes here, 0 when none.
     u32 getModBytes(const char* pModId) const;
     // The bytes of the entries any mod keeps for `pModId` (its "<id>/" keys), 0 when none.
     u32 getForBytes(const char* pModId) const;

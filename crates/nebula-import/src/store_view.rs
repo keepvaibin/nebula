@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 
 const NODE: usize = 40;
 
-/// Disc paths (lower case) that may be new, the kinds the game finds by name (luma-format 5): each with why. A kind's
+/// Disc paths (lower case) that may be new, the kinds the game finds by name (luma.md 5): each with why. A kind's
 /// rules add their own here. The game's check reads the same list (`may_be_new`, through the C validator), so the
 /// game and LumaLink cannot differ on it.
 const NEW: [(&str, &str); 4] = [
@@ -164,7 +164,7 @@ pub(crate) fn column_type(c: &Column) -> ColumnType {
 }
 
 /// A table as the validator knows it: keyed by its rule, every value as text; an empty one with its kind's columns,
-/// as the applier patches it (table-keys 10).
+/// as the applier patches it (table-keys.md 10).
 pub fn table_view(path: &str, ir: &TableIr) -> Table {
     let mut wide;
     let ir = if ir.rows.is_empty() {

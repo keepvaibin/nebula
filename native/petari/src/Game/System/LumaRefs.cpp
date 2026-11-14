@@ -56,8 +56,8 @@ namespace luma {
                 return pCopy;
             }
 
-            // The placeholder object (references 4): the placeholder model at the placement's position; no behaviour, no
-            // collision, no sensor.
+            // The placeholder object (references.md 4): the placeholder model at the placement's position; no
+            // behaviour, no collision, no sensor.
             class PlaceholderObj : public LiveActor {
             public:
                 PlaceholderObj(const char* pName) : LiveActor(pName) {}

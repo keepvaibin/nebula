@@ -696,7 +696,7 @@ bool read_line(const std::string& line, std::string& why) {
             s.mod = args[0];
             s.wait_fact = args[1] == "1";
         } else if (a == "forget" && args.size() == 1u) {
-            // The Mods page's FORGET of a removed mod (services-mods 8), as the player chooses it.
+            // The Mods page's FORGET of a removed mod (services/mods.md 8), as the player chooses it.
             s.action = Action::Forget;
             s.mod = args[0];
         } else {

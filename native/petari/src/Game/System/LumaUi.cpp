@@ -638,8 +638,8 @@ namespace luma {
                     report(pMod, pWhere, 104u, text, nullptr);
                     return LUMA_E_LIMIT;
                 }
-                // The layout: the mod's cooked one or the game's, LayoutData/<layout>.arc in a store (references 4: a
-                // screen has no placeholder; nothing is drawn).
+                // The layout: the mod's cooked one or the game's, LayoutData/<layout>.arc in a store (references.md 4:
+                // a screen has no placeholder; nothing is drawn).
                 MR::FormattedName path;
                 if (!MR::makeLayoutArchiveFileNameFromPrefix(path, pLayout, false)) {
                     say(pMod, cMissingLayoutCode, "Ui.MissingLayout", MR::getHashCode(pLayout), "found", pLayout, nullptr, nullptr);
@@ -1230,7 +1230,7 @@ namespace luma {
                 svcPlayPane,
             };
 
-            // The service's rows (services-registry 11: ui's block, 570-619).
+            // The service's rows (services/registry.md 11: ui's block, 570-619).
             const LumaServiceRow cRows[] = {
                 {cNotTextCode, "Ui.NotText", {"where", "pane", nullptr, nullptr}},
                 {cNoSceneCode, "Ui.NoScene", {"where", nullptr, nullptr, nullptr}},

@@ -1,4 +1,4 @@
-//! L400-L407: patches by key and by selector (luma-format 5.1).
+//! L400-L407: patches by key and by selector (luma.md 5.1).
 
 use super::{p, seg, t, Ctx};
 use crate::json::{self, Kind, Value};
@@ -28,7 +28,7 @@ impl P<'_, '_, '_> {
 }
 
 /// A cell's value as text for row ids: strings as they are, numbers as written, a word given as
-/// `{ "bytes": "<hex>" }` as its text when that is UTF-8 and `{bytes:<hex>}` when not (table-keys 5).
+/// `{ "bytes": "<hex>" }` as its text when that is UTF-8 and `{bytes:<hex>}` when not (table-keys.md 5).
 fn cell_text(v: &Value) -> Option<String> {
     match &v.kind {
         Kind::String(s) => Some(s.clone()),
@@ -149,7 +149,7 @@ pub(crate) fn check(ctx: &mut Ctx) {
     lists.push(own);
     lists.extend(installed[..position].iter().rev().map(theirs));
     ctx.facts.scenario_cells = crate::scenario_order(lists);
-    // The placements of classes only code can make, from whole tables and from patches (references 3), with the
+    // The placements of classes only code can make, from whole tables and from patches (references.md 3), with the
     // planets as this mod's files and patches leave the planet table.
     let planets = super::after_start::mod_planets(ctx, &parsed);
     super::after_start::whole_tables(ctx, &planets);
@@ -161,7 +161,7 @@ pub(crate) fn check(ctx: &mut Ctx) {
 }
 
 /// A new galaxy's own scenario table, brought whole (`files/StageData/<galaxy>Scenario/ScenarioData.bcsv`, or its source
-/// form with `.json`; luma-format 5, `stagedata/**` may be new): every row's whole-number cells. A table at a path the
+/// form with `.json`; luma.md 5, `stagedata/**` may be new): every row's whole-number cells. A table at a path the
 /// game has is L303's, not read here.
 fn new_scenario_tables(ctx: &mut Ctx, store: &dyn crate::Store) -> Vec<crate::ScenarioCell> {
     let mut out = Vec::new();
@@ -245,7 +245,7 @@ fn layer_sets(pc: &mut P, own: &str) -> Option<Vec<crate::LayerSet>> {
     sets
 }
 
-/// A key added to a table of a link group (table-keys 13) must be new to the tables the game finds it among: for
+/// A key added to a table of a link group (table-keys.md 13) must be new to the tables the game finds it among: for
 /// `l_id` (placement, mapparts, childobj) every layer of the zone; for start and generalpos common and the layers
 /// some scenario turns on together with this one. Both in the game and in this mod's own files. Recorded as touches,
 /// for two mods adding one key (L404): the group with `*` for `l_id`; for start and generalpos the table's layer (all
@@ -307,9 +307,9 @@ fn link_add(pc: &mut P, row: &Value, rp: &str, target: &str, id: &str) {
 }
 
 /// A patch of a game layout by pane name (docs/modding/content/screens.md section 5): `{"patch": 1, "panes": {"<pane>":
-//{...}}}`. Its panes / and their fields are checked by the cook against the layout the game start patches
-//(overlay_patches), which names / a patch that cannot apply in the store's left-out file; here the file's form and that
-//the game has the layout.
+/// {...}}}`. Its panes and their fields are checked by the cook against the layout the game start patches
+/// (overlay_patches), which names a patch that cannot apply in the store's left-out file; here the file's form and that
+/// the game has the layout.
 fn layout(pc: &mut P, root: &Value, target: &str) {
     for m in root.members() {
         if m.key != "patch" && m.key != "panes" {
@@ -561,7 +561,7 @@ fn one(pc: &mut P, root: &Value, target: &str) {
                 continue;
             }
             if by_place {
-                // A row added to a table named by place goes at the end (table-keys 3): it has no key to give.
+                // A row added to a table named by place goes at the end (table-keys.md 3): it has no key to give.
                 check_values(pc, row, &rp);
                 pc.ctx.facts.touches.adds.push(format!("{target_shown}{SEP}+{i}"));
                 continue;

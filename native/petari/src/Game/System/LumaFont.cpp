@@ -16,7 +16,7 @@
 
 namespace luma::font {
     namespace {
-        const u32 cMissingFontCode = 672;  // content's block (references 6)
+        const u32 cMissingFontCode = 672;  // content's block (references.md 6)
         const u32 kMostName = 200;
         const u32 kMostKerns = 65536;      // a pair of any two codes of a full font's commonest set
 

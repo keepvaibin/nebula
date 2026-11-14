@@ -97,7 +97,7 @@ bool attach(std::span<const std::filesystem::path> files, const NebulaHostForExt
         }
         NebulaHostExtension kept{};
         std::memcpy(&kept, given, std::min<std::size_t>(given->size, sizeof(kept)));
-        // Its LumaCore providers: "test." services only, each whole (services-registry 14).
+        // Its LumaCore providers: "test." services only, each whole (services/registry.md 14).
         if (kept.luma_provider_count != 0u && kept.luma_providers == nullptr) {
             error = name + ": it lists " + std::to_string(kept.luma_provider_count) + " LumaCore services and gives none";
             return false;

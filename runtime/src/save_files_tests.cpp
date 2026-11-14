@@ -74,13 +74,13 @@ int main() {
                          read(folder, "GameData.bin", buffer.data(), kBufferSize, &length) == kNoFile,
                      "a deleted save is gone");
 
-    // Mods' global files (services-save 7): "luma/<plain name>" only, and written without backups.
+    // Mods' global files (services/save.md 7): "luma/<plain name>" only, and written without backups.
     passed &= expect(mod_file_name("luma/gold-flower.bin") == "gold-flower.bin", "a mod's file name is its plain name");
     for (const char* name : {"luma/", "luma", "luma/../Nebula.sav", "luma/a/b.bin", "Luma/a.bin", "lumax/a.bin",
                              "GameData.bin", "luma/.."}) {
         passed &= expect(mod_file_name(name).empty(), name);
     }
-    // save.game's offer (services-save 8): the replaced file's copy, "luma/replaced/<plain name>" only.
+    // save.game's offer (services/save.md 8): the replaced file's copy, "luma/replaced/<plain name>" only.
     passed &= expect(replaced_file_name("luma/replaced/2026-11-12-031500-file2.bin") == "2026-11-12-031500-file2.bin",
                      "a replaced file's name is its plain name");
     passed &= expect(mod_file_name("luma/replaced/a.bin").empty(), "a replaced file is not a mod's global file");

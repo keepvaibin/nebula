@@ -253,7 +253,7 @@ std::string text_field(const Value& value, std::string_view key) {
     return text != nullptr ? *text : std::string();
 }
 
-// The validator's id (id_ok, luma-format 4): 3 to 64 of a-z 0-9 - ., a letter first, no "..", no "." at the end. It
+// The validator's id (id_ok, luma.md 4): 3 to 64 of a-z 0-9 - ., a letter first, no "..", no "." at the end. It
 // names a folder on every device, so neither may its first part be a name Windows keeps for itself (con, com1...): a
 // gap the validator does not check yet (named to G).
 bool valid_id(std::string_view id) {
@@ -493,7 +493,7 @@ bool read_rows(const Value& from, Rows& out) {
 
 // ---- pre_standard: the previous engine's rows ----
 // Each key here is read as before until its general replacement is proven; then it leaves this reader, and at the v1
-// gate the reader is gone. Not part of luma-format: the validator only notes each key a mod still uses.
+// gate the reader is gone. Not part of luma.md: the validator only notes each key a mod still uses.
 
 // A layer's old keys: pre_standard.layers.<name>.
 bool read_old_layer(const Value& entry, Layer& layer) {
@@ -851,8 +851,8 @@ void read_options(const Value& root, Manifest& out) {
             out.options.push_back(std::move(option));
             continue;
         } else if (kind == "key") {
-            // An input action (services-input 2): in keys for Controls and the input service, and an option too, so
-            // that mods.option reads its default control's name as text (services-mods 8). The validator keeps the
+            // An input action (services/input.md 2): in keys for Controls and the input service, and an option too, so
+            // that mods.option reads its default control's name as text (services/mods.md 8). The validator keeps the
             // default one of kTargetIds (L210 Option.KeyDefaultUnknown); the input service checks it again.
             option.fallback = start != nullptr ? when_value(*start) : std::string();
             if (!option.id.empty()) {
@@ -1043,7 +1043,7 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
     }
     if (out.save_tag.empty()) out.save_tag = out.id;
 
-    // luma-format 6: code/<platform>/mod.<ending>, found by that path alone (the one route for a mod's code).
+    // luma.md 6: code/<platform>/mod.<ending>, found by that path alone (the one route for a mod's code).
     if (const Value* code = root->get("code"); code != nullptr) {
         if (code->object() == nullptr) return std::nullopt;
         Plugin plugin;
@@ -1095,7 +1095,7 @@ std::optional<Manifest> read_manifest(const std::filesystem::path& folder) {
     if (!in) return std::nullopt;
     const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     std::optional<Manifest> manifest = parse_manifest(text);
-    // No "layers": the one layer "base" when layers/base is there (luma-format 4).
+    // No "layers": the one layer "base" when layers/base is there (luma.md 4).
     std::error_code base_error;
     if (manifest && !manifest->layers_listed && std::filesystem::is_directory(folder / "layers" / "base", base_error)) {
         Layer base;
@@ -1228,7 +1228,7 @@ bool when_holds(const When& when, const Situation& situation) {
     if (!when.regions.empty() && !contains(when.regions, situation.region)) return false;
     if (!when.versions.empty() && !contains(when.versions, situation.version)) return false;
     if (!when.languages.empty() && !contains(when.languages, situation.language)) return false;
-    // A platform as luma-format names it (windows-x64), or an operating system's name alone for each of its machines.
+    // A platform as luma.md names it (windows-x64), or an operating system's name alone for each of its machines.
     if (!when.platforms.empty() && std::none_of(when.platforms.begin(), when.platforms.end(), [&](const std::string& platform) {
             return platform == situation.platform || (situation.platform.size() > platform.size() &&
                                                       situation.platform.compare(0, platform.size(), platform) == 0 &&

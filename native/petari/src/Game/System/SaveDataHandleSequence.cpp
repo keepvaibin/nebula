@@ -96,7 +96,7 @@ void SaveDataHandleSequence::startCreateUserFile(int index) {
     mCurrentUserFile->setCreated();
     mCurrentUserFile->updateLastModified();
     mSaveDataHandler->initializeUserFileMemory(index, mCurrentUserFile);
-    luma::save::fileLoaded();  // the new file is the one in play, as a picked one is (services-save 1)
+    luma::save::fileLoaded();  // the new file is the one in play, as a picked one is (services/save.md 1)
     setNerve(GET_NERVE_ANON(SaveDataHandleSequenceSaveAllWithoutKeyWait));
 }
 

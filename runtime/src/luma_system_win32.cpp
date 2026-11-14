@@ -26,7 +26,7 @@
 namespace galaxy::luma_system {
 namespace {
 
-constexpr std::uint64_t kTextMost = 16ull << 20u;       // services-system 1 item 5
+constexpr std::uint64_t kTextMost = 16ull << 20u;       // services/system.md 1 item 5
 constexpr std::uint32_t kSideMost = 8192u;              // item 4
 constexpr std::uint64_t kPixelsMost = 64ull << 20u;
 constexpr std::uint64_t kEncodedMost = 80ull << 20u;    // a PNG of a picture within the limits, with room for its headers

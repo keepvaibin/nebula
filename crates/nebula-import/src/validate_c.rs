@@ -57,7 +57,7 @@ pub struct LumaValidateInput {
     pub names: *const c_char,
     pub names_size: u64,
     pub luma_api: u32,
-    /// The game's services catalog (JSON with a `services` key, services-registry 9); null: kind 5 is not checked.
+    /// The game's services catalog (JSON with a `services` key, services/registry.md 9); null: kind 5 is not checked.
     pub services: *const c_char,
     pub services_size: u64,
     pub store: *const LumaGameStore,
@@ -72,7 +72,7 @@ pub struct LumaValidateInput {
     /// The game's luma_types.json; null: kinds 1, 2 and 7 are not checked.
     pub types: *const c_char,
     pub types_size: u64,
-    /// The renderer's feature names (JSON with a `renderer` key, luma-format revision 4); null: L806 is not checked.
+    /// The renderer's feature names (JSON with a `renderer` key, luma.md revision 4); null: L806 is not checked.
     pub renderer: *const c_char,
     pub renderer_size: u64,
     /// The features this device's graphics have (start-check 3); null: L806 is not checked.
@@ -108,7 +108,7 @@ pub struct LumaReport {
     version: Option<CString>,
     /// Touches.services: each platform and the name of a service its entry library requires, in import order.
     required: Vec<(String, CString)>,
-    /// Touches.after_start: class, file and line, one per placement (references 3).
+    /// Touches.after_start: class, file and line, one per placement (references.md 3).
     after_start: Vec<(CString, CString, u32)>,
     /// Made by luma_report_read_kept: no rule ran (luma_report_state 2).
     from_kept: bool,
@@ -397,7 +397,7 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
     };
     let platforms = [platform.as_str()];
     let position = (input.position != u32::MAX).then_some(input.position as usize);
-    // A placed mod is a folder laid out as the .luma is (luma-format 1); its kept report never stands for it (no
+    // A placed mod is a folder laid out as the .luma is (luma.md 1); its kept report never stands for it (no
     // fingerprint), so every rule runs.
     let source = if path.is_dir() { Source::Folder(&path) } else { Source::File(&path) };
     let report = recheck(

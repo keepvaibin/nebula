@@ -19,7 +19,7 @@ struct FakeStore {
     case_insensitive: bool,
 }
 
-/// Two layers of one zone's objects: a link group (table-keys 13).
+/// Two layers of one zone's objects: a link group (table-keys.md 13).
 const COMMON: &str = "StageData/Zone/jmp/Placement/Common/ObjInfo";
 const LAYER_A: &str = "StageData/Zone/jmp/Placement/LayerA/ObjInfo";
 /// A game layout, patched by pane name (docs/modding/content/screens.md section 5).
@@ -97,7 +97,7 @@ fn a_correct_mod_passes_with_nothing_to_say() {
         &[
             file("layers/base/patches/stage/table.bcsv.json", patch),
             deflated("layers/base/files/ObjectData/Kuribo.arc", &[7; 4096]),
-            // A texture pack's texture, by the game's name or Dolphin's (decision 3 of the one form).
+            // A texture pack's texture, by the game's name or Dolphin's (luma.md 5).
             file("layers/base/textures/Kuribo/KuriboBody.png", b"p"),
             file("layers/base/textures/tex1_32x32_0000000000001111_14.dds", b"d"),
             // What merge/ adds to (the import's cook, overlay.rs apply_merges): every language's lines, a table's rows.
@@ -215,7 +215,7 @@ impl Store for ScenarioStore {
 }
 
 /// Validator revision 4: a new galaxy's own scenario table, brought whole, and the installed mods' scenario cells
-/// join the layer sets (table-keys 13.6).
+/// join the layer sets (table-keys.md 13.6).
 #[test]
 fn a_new_galaxy_s_table_and_other_mods_cells_say_which_layers_are_on_together() {
     let store = ScenarioStore { listed: true };
@@ -726,7 +726,7 @@ fn sign(body: String) -> Vec<u8> {
 }
 
 /// L800's cycle (compiled-form.md): the game starts a needed mod first, so mods that need each other round a circle
-//cannot / start. The check sees this mod's needs and the kept needs of the mods that are on.
+/// cannot start. The check sees this mod's needs and the kept needs of the mods that are on.
 #[test]
 fn a_cycle_of_needs_through_the_mod_is_refused_and_named() {
     let needing = |id: &str, needs: &[&str]| {

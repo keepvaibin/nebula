@@ -153,8 +153,8 @@ unsafe fn run(input: *const LumaPatchInput) -> Result<LumaPatched, String> {
     }
     let patches: Vec<ModPatch> = owned.iter().map(|(mod_id, file, patch)| ModPatch { mod_id, file, patch }).collect();
 
-    // The group's other tables (table-keys 13). A link patch that is not JSON adds nothing here: its own table's call
-    // names it.
+    // The group's other tables (table-keys.md 13). A link patch that is not JSON adds nothing here: its own table's
+    // call names it.
     let mut link_owned: Vec<(String, TableIr, Vec<OwnedPatch>)> = Vec::new();
     for (i, l) in slice(input.links, input.link_count, "links")?.iter().enumerate() {
         let link_path = text(l.path).ok_or_else(|| format!("link {i}: its path is null or not UTF-8"))?.to_string();

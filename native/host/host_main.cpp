@@ -2968,7 +2968,7 @@ static_assert(int{galaxy::saves::kDone} == NEBULA_SAVE_DONE && int{galaxy::saves
                   int{galaxy::saves::kFailed} == NEBULA_SAVE_FAILED,
               "save results are the game's");
 
-// The save half of the Mods page's REMOVED MODS line (services-save 5, services-mods 8): the mods' global files,
+// The save half of the Mods page's REMOVED MODS line (services/save.md 5, services/mods.md 8): the mods' global files,
 // luma/<id>.bin in the save folder. Any thread: a removed mod runs nothing, so its file is only read or deleted here.
 fs::path mod_files_folder() {
     fs::path folder;
@@ -3040,9 +3040,9 @@ void svc_save_request(void*, const NebulaSaveRequest* request) {
         fs::path folder;
         galaxy::saves::Result result = galaxy::saves::kFailed;
         if (save_folder_path(name.starts_with("GameData.bin") ? gOldSaveDataPath.c_str() : gSaveDataPath.c_str(), &folder)) {
-            // A mod's global file (services-save 7): "luma/<id>.bin" in the luma folder, made at its first write, kept
-            // without backups; a file save.game's offer replaced (services-save 8): "luma/replaced/<name>", written
-            // only. Any other name is the game's own file, a plain name in the save folder.
+            // A mod's global file (services/save.md 7): "luma/<id>.bin" in the luma folder, made at its first write,
+            // kept without backups; a file save.game's offer replaced (services/save.md 8): "luma/replaced/<name>",
+            // written only. Any other name is the game's own file, a plain name in the save folder.
             std::string_view file = name;
             galaxy::saves::Backups backups = galaxy::saves::Backups::kKeep;
             bool placed = true;
@@ -4181,7 +4181,7 @@ void start_again_on_d3d11(const char* why) {
     galaxy::achievements::flush();
     galaxy::stats::flush();
 #endif
-    // The record of mods' numbers (services-mods 7), written off the game thread.
+    // The record of mods' numbers (services/mods.md 7), written off the game thread.
     galaxy::luma_mods::flush_ids(2000u);
     // The extensions' files complete (a test's sound dump); the start that takes over is told it is one, by its count.
     galaxy::extensions::ending(restart);
@@ -4643,7 +4643,7 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
     for (const galaxy::mods::ModInfo& mod : mods) {
         if (mod.package) gStartPackages.push_back({mod.id, mod.path, mod.enabled});
     }
-    // The validator's errors refuse a package at each start as at import (one reading, validator 2); its findings go
+    // The validator's errors refuse a package at each start as at import (one reading, validator.md 2); its findings go
     // to the mod log once the log exists (add_start_findings).
     galaxy::modlog::check_packages(gStartPackages, game_id, language);
     for (galaxy::mods::ModInfo& mod : mods) {
@@ -4786,7 +4786,7 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
     const fs::path overlay = folder / "mods.pak";
     const fs::path signature_file = folder / "mods.signature";
     // Another build's shader interface or shader compiler means their shaders are built again; another cooker, that
-    // the mods are cooked again (table-keys 9: cached by the mod list, the game and the applier).
+    // the mods are cooked again (table-keys.md 9: cached by the mod list, the game and the applier).
     const auto signature_of = [game_id](const galaxy::mods::ModPlan& planned) {
         return galaxy::mods::plan_signature(planned, game_id) + galaxy::render::program_interface() + " " +
                std::to_string(galaxy::render::mod_shader_compiler_revision()) + "\n" + cooker_identity();
@@ -5060,7 +5060,7 @@ int run_mods_tool() {
     }
     int failed = 0;
     std::string out = "{\"results\":[";
-    // The same check as the game's own imports (task 6.1, validator 2 "at import"): against the packages placed now.
+    // The same check as the game's own imports (validator.md 2 "at import"): against the packages placed now.
     const galaxy::mods::ImportCheck check = [](const fs::path& staged, const std::string& id, galaxy::mods::ImportResult& result) {
         std::vector<galaxy::modlog::StartPackage> others;
         for (const galaxy::mods::ModInfo& mod : galaxy::mods::scan_mods()) {
@@ -5416,8 +5416,8 @@ int main(int argc, char** argv) {
     gSaveRoot = saves;
     std::error_code error;
     if (!open_pak(pak)) return 2;
-    galaxy::luma_assets::set_store(&gPak.store);  // the assets service reads it (services-assets)
-    galaxy::luma_audio::set_store(&gPak.store);   // and the audio service a mod's cooked sounds (services-audio)
+    galaxy::luma_assets::set_store(&gPak.store);  // the assets service reads it (services/assets.md)
+    galaxy::luma_audio::set_store(&gPak.store);   // and the audio service a mod's cooked sounds (services/audio.md)
     galaxy::modlog::set_check_store(&gPak.store);  // and the validator, at the start's check and at import
     boot_mark("disc opened");
     {
@@ -5630,7 +5630,7 @@ int main(int argc, char** argv) {
     services.take_pause_request = svc_take_pause_request;
     services.post_register = svc_post_register;
     services.post_free = svc_post_free;
-    // A mod's request screen pauses the game as Start does (services-mods 9, services-save 8).
+    // A mod's request screen pauses the game as Start does (services/mods.md 9, services/save.md 8).
     galaxy::mods::set_screen_pause([] { gPauseRequest.store(true, std::memory_order_release); });
     services.test_frame_step = deterministic_mode() ? svc_test_frame_step : nullptr;
     services.texture_hd = svc_texture_hd;

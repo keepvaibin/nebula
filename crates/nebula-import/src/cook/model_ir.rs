@@ -239,7 +239,7 @@ pub struct SurfaceIr {
     /// The emission it starts from: the glTF emissive factor, display-encoded.
     pub emission: [f32; 3],
     /// What its shader.json `ray` gives a ray in place of the reading of its factors (materials.md section 3.4, layer
-    //3).
+    /// 3).
     pub ray: RayRows,
 }
 

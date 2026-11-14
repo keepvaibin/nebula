@@ -136,7 +136,7 @@ private:
     /// @brief The combination of buttons just released.
     u32 mRelease;
     // Presses and releases in frames the world clock gave no step (a rate below real time), given with the next
-    // step's, so no tap is lost; the system's screens read each frame's own (services-time 4, J22-3).
+    // step's, so no tap is lost; the system's screens read each frame's own (services/time.md 4, J22-3).
     u32 mCarriedTrigger;
     u32 mCarriedRelease;
 

@@ -581,7 +581,7 @@ fn the_required_services_are_read_per_platform_and_after_a_start_s_check() {
     assert!(got.invalid.unwrap().contains("services given without names"));
 }
 
-/// luma-format revision 4 through the C input: the renderer's list and the device's features give L806 (an error, the
+/// luma.md revision 4 through the C input: the renderer's list and the device's features give L806 (an error, the
 /// mod off), both are part of the game's key, and a list or device name not in form is the caller's fault.
 #[test]
 fn renderer_features_and_the_device_s_reach_l806() {
@@ -632,7 +632,7 @@ fn renderer_features_and_the_device_s_reach_l806() {
     assert!(c_call(Some(&nulls.input(None))).invalid.unwrap().contains("device_features[0] is null"));
 }
 
-/// start-check F-S2 and references 3: luma_report_read_kept reads a kept report with no rule run (state 2; id,
+/// start-check F-S2 and references.md 3: luma_report_read_kept reads a kept report with no rule run (state 2; id,
 /// version, required services and after-start rows answer; count 0, kept null); bytes that do not read are -1 with
 /// why. luma_report_after_start gives the rows on either kind of report.
 #[test]

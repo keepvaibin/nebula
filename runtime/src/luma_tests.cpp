@@ -243,7 +243,7 @@ int main() {
         check(!layer_used(m.layers[6], s), "a name it only starts with is not it");
     }
 
-    // luma-format 6: code/<platform>/mod.<ending>, by `code.platforms` alone; the one route for code.
+    // luma.md 6: code/<platform>/mod.<ending>, by `code.platforms` alone; the one route for code.
     {
         const std::string here(plugin_target());
         const auto coded_with = [](const std::string& code) { return parse_manifest(one_form("abc", R"(,"layers":[],)" + code)); };

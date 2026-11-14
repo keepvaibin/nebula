@@ -69,7 +69,7 @@ pub fn columns_of(path: &str) -> Option<&'static [KindColumn]> {
     all().get(kind_of(path)?.as_str()).map(Vec::as_slice)
 }
 
-/// An empty table of a kind with every column of its kind (table-keys 10): what the applier gives a table no row has
+/// An empty table of a kind with every column of its kind (table-keys.md 10): what the applier gives a table no row has
 /// filled before it applies patches, and what the validator checks a patch against.
 pub fn widen_empty(path: &str, table: &mut super::table::TableIr) {
     if !table.rows.is_empty() {

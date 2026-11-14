@@ -32,13 +32,13 @@ struct Giving {
     LumaProvideService provide;
 };
 
-// The system's wall clock for the module's time service (services-time 11). std::chrono::system_clock counts from
+// The system's wall clock for the module's time service (services/time.md 11). std::chrono::system_clock counts from
 // 1970-01-01 UTC on every platform since C++20.
 int64_t utc_ns() noexcept {
     return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
-// save.game's offered file (services-save 8): found as mods.install finds its file (no link followed), read whole.
+// save.game's offered file (services/save.md 8): found as mods.install finds its file (no link followed), read whole.
 int32_t data_file(const char* id, const char* path, void* buf, uint32_t size, uint32_t* length) noexcept {
     if (id == nullptr || path == nullptr || length == nullptr || (buf == nullptr && size != 0u)) {
         return LUMA_E_ARGUMENT;
@@ -136,7 +136,7 @@ bool provide_all(void* (*find_symbol)(const char*), void (*log)(const char*),
     for (const LumaServiceProvider* const provider : own) {
         provide(provider);
     }
-    // The system services (services-system 10), after the host's own.
+    // The system services (services/system.md 10), after the host's own.
     const auto monotonic = reinterpret_cast<LumaServicesMonotonic>(find_symbol("luma_services_monotonic_ns"));
     if (monotonic == nullptr && log != nullptr) {
         log("LumaCore services: the game module has no luma_services_monotonic_ns; a link's spacing uses the system's clock");
@@ -144,7 +144,7 @@ bool provide_all(void* (*find_symbol)(const char*), void (*log)(const char*),
     for (const LumaServiceProvider* const provider : galaxy::luma_system::providers(log, monotonic)) {
         provide(provider);
     }
-    // The mods services (services-mods 4), and the module's half of the REMOVED MODS line (services-save 5).
+    // The mods services (services/mods.md 4), and the module's half of the REMOVED MODS line (services/save.md 5).
     for (const LumaServiceProvider* const provider : galaxy::luma_mods::providers(log)) {
         provide(provider);
     }
@@ -154,29 +154,29 @@ bool provide_all(void* (*find_symbol)(const char*), void (*log)(const char*),
         log("LumaCore services: the game module has no luma_save_kept or luma_save_forget; REMOVED MODS counts no file values");
     }
     galaxy::luma_mods::set_chunk_half(kept, forget);
-    // The file services (services-fs 10).
+    // The file services (services/fs.md 10).
     for (const LumaServiceProvider* const provider : galaxy::luma_fs::providers(log)) {
         provide(provider);
     }
-    // The net services (services-net; layer 1: net.local).
+    // The net services (services/net.md; layer 1: net.local).
     for (const LumaServiceProvider* const provider : galaxy::luma_net::providers(log)) {
         provide(provider);
     }
-    // The assets service (services-assets; layer 1: the game's files by path).
+    // The assets service (services/assets.md; layer 1: the game's files by path).
     for (const LumaServiceProvider* const provider : galaxy::luma_assets::providers(log)) {
         provide(provider);
     }
-    // The input service (services-input): every host has it; a host that samples no controls leaves every action up.
+    // The input service (services/input.md): every host has it; a host that samples no controls leaves every action up.
     for (const LumaServiceProvider* const provider : galaxy::luma_input::providers(log)) {
         provide(provider);
     }
-    // The audio service (services-audio): a mod's cooked sounds, its streams, music, taps; the game's own sounds and
+    // The audio service (services/audio.md): a mod's cooked sounds, its streams, music, taps; the game's own sounds and
     // the camera's place from the module.
     galaxy::luma_audio::set_game(find_symbol);
     for (const LumaServiceProvider* const provider : galaxy::luma_audio::providers(log)) {
         provide(provider);
     }
-    // The capture services (services-audio 7; layers 5-6: the microphone and the camera, each its permission).
+    // The capture services (services/audio.md 7; layers 5-6: the microphone and the camera, each its permission).
     for (const LumaServiceProvider* const provider : galaxy::luma_capture::providers(log)) {
         provide(provider);
     }

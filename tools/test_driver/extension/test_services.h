@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The harness's test services for LumaCore's registry (luma_test_services.h; services-registry 14).
+// The harness's test services for LumaCore's registry (luma_test_services.h; services/registry.md 14).
 #pragma once
 
 #include <luma_service_provider.h>

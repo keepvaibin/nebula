@@ -1,4 +1,4 @@
-//! L200-L219 and L806: `luma.json` (luma-format 4), `media/` (3, 4) and `saves/` (6.1).
+//! L200-L219 and L806: `luma.json` (luma.md 4), `media/` (3, 4) and `saves/` (6.1).
 
 use super::{p, seg, t, Ctx};
 use crate::json::{self, Kind, Value};
@@ -73,7 +73,7 @@ const GAME_CONTROLS: [&str; 25] = [
 pub const MAX_OPTIONS: usize = 64;
 pub const MAX_PICTURES: usize = 8;
 
-/// An id: 3 to 64 of lowercase letters, digits, `-` and `.`, starting with a letter, without `..` (luma-format 4),
+/// An id: 3 to 64 of lowercase letters, digits, `-` and `.`, starting with a letter, without `..` (luma.md 4),
 /// whose part before the first `.` is no name Windows keeps (con, prn, aux, nul, com1-9, lpt1-9: a folder of that
 /// name cannot be made there; the host's valid_id refuses the same).
 pub fn id_ok(id: &str) -> bool {
@@ -807,13 +807,13 @@ fn text(m: &mut M, root: &Value, facts: &Facts) {
 
 pub use crate::names::PERMISSIONS;
 
-/// The most hosts `net.internet` may list (services-registry 5.1).
+/// The most hosts `net.internet` may list (services/registry.md 5.1).
 pub const MAX_HOSTS: usize = 32;
-/// The most TLS roots a net permission may add, and the most bytes of each file (services-net 7).
+/// The most TLS roots a net permission may add, and the most bytes of each file (services/net.md 7).
 pub const MAX_ROOTS: usize = 8;
 pub const MAX_ROOT_BYTES: u64 = 64 << 10;
 
-/// A host `net.internet` may reach (services-registry 5.1, G R-2): `*` alone, a name (`api.example.org`), a name
+/// A host `net.internet` may reach (services/registry.md 5.1): `*` alone, a name (`api.example.org`), a name
 /// under a domain (`*.example.org`), or an IPv4 address in dotted digits. No port, no IPv6 literal. Letters of either
 /// case: the host lowercases them (consent 1.2).
 pub fn permission_host_ok(host: &str) -> bool {
@@ -859,7 +859,7 @@ fn permissions(m: &mut M, root: &Value, facts: &mut Facts) {
             m.at(211, obj, &ptr, vec![("key", t(name.clone())), ("why", p("Perm.Twice"))]);
         }
         // The closed list; the `net` of revision 1 became two permissions (revision 3). A `test.` name is a test
-        // service's (services-registry 14), which only a test run provides: a Note, L219.
+        // service's (services/registry.md 14), which only a test run provides: a Note, L219.
         let test = name.starts_with("test.") && crate::names::service_name_ok(&name);
         let known = test || PERMISSIONS.contains(&name.as_str());
         if name == "net" {
@@ -915,9 +915,9 @@ fn permissions(m: &mut M, root: &Value, facts: &mut Facts) {
     }
 }
 
-/// A net permission's `roots` (services-net 7): 1 to MAX_ROOTS files of the package under `certs/`, each once, each at
-/// most MAX_ROOT_BYTES and holding a PEM certificate: the TLS roots the mod adds for its own hosts. Only on `net.local`
-/// and `net.internet`. Every fault is L211, the file named.
+/// A net permission's `roots` (services/net.md 7): 1 to MAX_ROOTS files of the package under `certs/`, each once, each
+/// at most MAX_ROOT_BYTES and holding a PEM certificate: the TLS roots the mod adds for its own hosts. Only on
+/// `net.local` and `net.internet`. Every fault is L211, the file named.
 fn roots(m: &mut M, name: &str, r: &Value, rp: &str) {
     let fail = |m: &mut M, v: &Value, at: &str, why: &'static str, entry: &str| {
         m.at(211, v, at, vec![("key", t(name.to_string())), ("why", p(why)), ("entry", t(entry.to_string()))]);
@@ -967,7 +967,7 @@ fn roots(m: &mut M, name: &str, r: &Value, rp: &str) {
     }
 }
 
-/// `renderer` (luma-format revision 4): `{"features": [...]}`, the renderer features the mod cannot do without, 1 to 64
+/// `renderer` (luma.md revision 4): `{"features": [...]}`, the renderer features the mod cannot do without, 1 to 64
 /// names, each once. With the game's list (the self-description's `renderer.features`) a name not on it is L204; with
 /// it and this device's features (start-check 3), a feature the device lacks is L806 and the mod is off. Without the
 /// list L806 is not checked; without the device's features (LumaLink) it is not checked either: the game checks it
@@ -1057,7 +1057,7 @@ fn pre_standard(m: &mut M, root: &Value) {
 
 fn layers(m: &mut M, root: &Value, facts: &mut Facts) {
     let Some(v) = root.get("layers") else {
-        // Default: one layer "base" when layers/base exists (luma-format 4).
+        // Default: one layer "base" when layers/base exists (luma.md 4).
         if m.ctx.m.items.iter().any(|i| i.name.starts_with("layers/base/") || i.name == "layers/base") {
             facts.layers.push(("base".into(), root.pos, String::new()));
         }
@@ -1102,7 +1102,7 @@ fn layers(m: &mut M, root: &Value, facts: &mut Facts) {
                         m.ctx.add(301, FILE, Some(member.key_pos), Some(&mp), vec![("layer", t(name.clone())), ("why", p("Layer.NoSuchOption")), ("value", t(member.key.clone()))]);
                         continue;
                     };
-                    // The mod reads its text and key options itself (services-mods); they choose no layer.
+                    // The mod reads its text and key options itself (services/mods.md); they choose no layer.
                     if option.kind == "text" || option.kind == "key" {
                         m.ctx.add(301, FILE, Some(member.key_pos), Some(&mp), vec![("layer", t(name.clone())), ("why", p("Layer.OptionNotChoosing")), ("value", t(member.key.clone()))]);
                         continue;
@@ -1444,7 +1444,7 @@ mod tests {
         assert_eq!(image_size(&jpeg), Some(("jpeg", 200, 100)));
     }
 
-    /// GAME_CONTROLS is the input bindings' kTargetIds, in order (luma-format revision 5).
+    /// GAME_CONTROLS is the input bindings' kTargetIds, in order (luma.md revision 5).
     #[test]
     fn the_controls_are_the_input_bindings_own() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../runtime/src/input_bindings.cpp");

@@ -94,8 +94,8 @@ pub(crate) fn check(ctx: &mut Ctx) {
                 ctx.add(805, &file, None, None, vec![("other", t(other.id.clone())), ("found", t(name)), ("sig", t(sig))]);
             }
         }
-        // Two mods adding one key: to one table, or (table-keys 13) to one zone's link group in any layers. The higher
-        // mod's row stays (the applier's conflict fact). Rows added by place (`+n`) are not keys.
+        // Two mods adding one key: to one table, or (table-keys.md 13) to one zone's link group in any layers. The
+        // higher mod's row stays (the applier's conflict fact). Rows added by place (`+n`) are not keys.
         let same_table = touches.adds.iter().filter(|r| other.touches.adds.contains(r)).filter(|r| {
             let mut parts = r.split(SEP);
             let (table, first) = (parts.next().unwrap_or(""), parts.next().unwrap_or(""));

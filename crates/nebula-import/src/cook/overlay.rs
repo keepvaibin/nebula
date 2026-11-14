@@ -50,10 +50,10 @@ pub fn read_plan(text: &str) -> Result<(String, Vec<Change>)> {
 }
 
 /// Where a mod's model file goes and the game model it stands in for (docs/modding/content/models.md section 2):
-//`X.bdl.glb` and / `X.bmd.glb` that file; a plain `X.glb` in an archive whichever of `X.bdl` and `X.bmd` the game's
-//archive has. A model / outside an archive is a new model, standing in for nothing (a mod's `assets/<path>.glb`, the
-//store's / `Luma/<id>/<path>.glb`): it becomes an object archive of its own laid out as the game's, `<path>.arc/X.bmd`
-//(or / `X.bdl` when named so), its clips inside, which the game loads as it loads its own. Without the game's store the
+/// `X.bdl.glb` and `X.bmd.glb` that file; a plain `X.glb` in an archive whichever of `X.bdl` and `X.bmd` the game's
+/// archive has. A model outside an archive is a new model, standing in for nothing (a mod's `assets/<path>.glb`, the
+/// store's `Luma/<id>/<path>.glb`): it becomes an object archive of its own laid out as the game's, `<path>.arc/X.bmd`
+/// (or `X.bdl` when named so), its clips inside, which the game loads as it loads its own. Without the game's store the
 /// place is the one its name gives and its joints are not numbered by the game's (a Note says so).
 fn model_place(change: &Change, base: Option<&Path>) -> Result<(String, Option<super::gltf::GameModel>)> {
     use super::refuse::{note, refuse};

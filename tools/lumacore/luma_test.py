@@ -45,7 +45,7 @@ TREE = pathlib.Path(__file__).resolve().parents[2]
 CAPABILITIES = TREE / "tools" / "lumacore" / "capabilities.json"
 GAME_HALF_ID = "luma-test"
 # The platform the runner drives: its game by renderer, its game module, test extension, importer (library and program)
-# and game half by file name, and where a mod's code lies (luma-format 6: code/<platform>/mod.<ending>).
+# and game half by file name, and where a mod's code lies (luma.md 6: code/<platform>/mod.<ending>).
 HOSTS = {
     "Windows": {"platform": "windows-x64", "exes": {"d3d12": "NebulaNative.exe", "vulkan": "NebulaNativeVk.exe", "d3d11": "NebulaNativeD11.exe"},
                 "game": "smg_game.dll", "plain": "smg_game_plain.dll", "extension": "nebula_test_extension.dll", "importer": "nebula_import.dll",
@@ -97,7 +97,7 @@ FACT_OPS = {"is", "is_not", "less", "at_most", "more", "at_least", "near", "exis
 # them (runtime/src/ui/native_settings.cpp kNativeSettingsTabNames), and the number the host opens each by.
 SETTINGS_PAGES = {"display": 0, "graphics": 1, "controls": 2, "audio": 3, "general": 4, "mods": 5, "system": 6,
                   "advanced": 7}
-# Revision 6: a mod's own fact is mod.<id>.<key>; the id is luma-format's (3 to 64 of a-z 0-9 - .,
+# Revision 6: a mod's own fact is mod.<id>.<key>; the id is luma.md's (3 to 64 of a-z 0-9 - .,
 # no "..", no trailing "."), the key [a-z0-9_]+, split at the last dot.
 MOD_ID = re.compile(r"[a-z0-9.-]{3,64}")
 MOD_KEY = re.compile(r"[a-z0-9_]+")
@@ -621,14 +621,14 @@ def read_steps(t, bare, classes):
                 raise HarnessError("%s.wait takes true or false" % path)
             step["line"] = "take_out %s %d" % (mod_id, 1 if wait else 0)
         elif action == "forget":
-            # The Mods page's FORGET of a removed mod (services-mods 8): the mod is on the REMOVED MODS line (removed by
-            # this run's "remove": true over a continue_from), else the host logs that and forgets nothing.
+            # The Mods page's FORGET of a removed mod (services/mods.md 8): the mod is on the REMOVED MODS line (removed
+            # by this run's "remove": true over a continue_from), else the host logs that and forgets nothing.
             mod_id = text(s, "forget", path)
             if not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", mod_id) or len(mod_id.encode("utf-8")) > 63:
                 raise HarnessError("%s.forget must be a mod id ([a-z0-9][a-z0-9._-]*, at most 63 bytes)" % path)
             step["line"] = "forget %s" % mod_id
         elif action in ("copy_file", "load_file", "erase_file", "new_file"):
-            # Revision 8 (services-save 5, kit-progress): the file select's own operations on the run's own saves, on
+            # Revision 8 (services/save.md 5, kit-progress): the file select's own operations on the run's own saves, on
             # the game's save path (GameSequenceFunction); the step is answered when the save sequence has ended and
             # writes file.copied / file.loaded / file.erased / file.created.
             if action == "copy_file":
@@ -1102,9 +1102,9 @@ def remove_kept(settings, mod_folder, folder=None):
 
 
 # What a restart keeps of Nebula's data folder (platform_paths.h nebula_data_directory: a run's is in <run>/appdata,
-# run_data_folder): every mod's own data folder, mod-data/<id> (services-fs 2;
-# a removed mod's stays until the player forgets it, services-mods 8), and the Exchange folder, the player's and the
-# granted mods' (services-fs 2). The shader cache and diagnostics are not carried: each run makes its own.
+# run_data_folder): every mod's own data folder, mod-data/<id> (services/fs.md 2;
+# a removed mod's stays until the player forgets it, services/mods.md 8), and the Exchange folder, the player's and the
+# granted mods' (services/fs.md 2). The shader cache and diagnostics are not carried: each run makes its own.
 CARRIED_DATA = ("mod-data", "Exchange")
 
 
@@ -1159,7 +1159,7 @@ def install(settings, mod_folder, code_allowed, order, kept=False, permissions="
         raise HarnessError("%s/luma.json: format must be \"1.0\", a string (docs/modding/format/manifest.md)"
                            % mod_folder)
     libraries = []
-    # luma-format 6: code/<platform>/mod.<ending> by `code.platforms` alone. A mod whose code is for other platforms
+    # luma.md 6: code/<platform>/mod.<ending> by `code.platforms` alone. A mod whose code is for other platforms
     # only has no library here: the game says it has no version for this device.
     code = manifest.get("code")
     platforms = code.get("platforms") if isinstance(code, dict) else None
@@ -1303,7 +1303,7 @@ def place_mods(test, settings, previous, frozen, ports=None):
         ports = free_ports(test)
     for i, m in enumerate(test["mods"]):
         if m["install"] == "import":
-            # Not placed: the game imports it as "Open with" starts it (--import, task 6.1), a .luma file or a folder,
+            # Not placed: the game imports it as "Open with" starts it (--import), a .luma file or a folder,
             # through the validator; each line of its result page is the fact import.<file name> (4).
             if m["loads"]:
                 raise HarnessError("the imported mod %s: an import adds it for the next start, so it takes loads false"

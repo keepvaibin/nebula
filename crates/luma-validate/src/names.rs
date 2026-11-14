@@ -45,11 +45,11 @@ pub const TYPES_FILE: &str = "luma_types.json";
 pub const FUNCTIONS_FILE: &str = "luma_functions.json";
 
 /// The services catalog's file name in a folder of names: an object whose `services` key is the self-description's
-/// (services-registry 9), so the same reader takes either.
+/// (services/registry.md 9), so the same reader takes either.
 pub const SERVICES_FILE: &str = "luma_services.json";
 
 /// The renderer's feature list's file name in a folder of names: an object whose `renderer` key is the
-/// self-description's (luma-format revision 4), so the same reader takes either.
+/// self-description's (luma.md revision 4), so the same reader takes either.
 pub const RENDERER_FILE: &str = "luma_renderer.json";
 
 /// The game's placement facts in a folder of names (beside the game module, at the folder's top): their `factory`
@@ -74,7 +74,7 @@ pub fn factory_from_json(bytes: &[u8]) -> Result<std::collections::HashSet<Strin
 /// At most this many names in the renderer's list and in a mod's `renderer.features`.
 pub const MAX_FEATURES: usize = 64;
 
-/// A renderer feature name (luma-format revision 4): `[a-z][a-z0-9_]*`, at most 32 bytes, no `__`, not ending in `_`.
+/// A renderer feature name (luma.md revision 4): `[a-z][a-z0-9_]*`, at most 32 bytes, no `__`, not ending in `_`.
 pub fn feature_name_ok(name: &str) -> bool {
     let b = name.as_bytes();
     b.len() <= 32
@@ -114,12 +114,12 @@ pub fn renderer_features_from_json(bytes: &[u8]) -> Result<std::collections::BTr
     Ok(out)
 }
 
-/// A service name (services-registry 2): parts `[a-z][a-z0-9]*` joined by `.`, at most 31 bytes.
+/// A service name (services/registry.md 2): parts `[a-z][a-z0-9]*` joined by `.`, at most 31 bytes.
 pub fn service_name_ok(name: &str) -> bool {
     name.len() <= 31 && name.split('.').all(|part| part.as_bytes().first().is_some_and(u8::is_ascii_lowercase) && part.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()))
 }
 
-/// A kind 5 row's version text (services-registry 2, G R-4): `<major>.<minor>`, each a decimal number from 0 to
+/// A kind 5 row's version text (services/registry.md 2, G R-4): `<major>.<minor>`, each a decimal number from 0 to
 /// 65535 with no leading zero, nothing else.
 pub fn service_version(text: &str) -> Option<(u16, u16)> {
     let number = |s: &str| -> Option<u16> {
@@ -132,7 +132,7 @@ pub fn service_version(text: &str) -> Option<(u16, u16)> {
     Some((number(a)?, number(b)?))
 }
 
-/// The permissions a mod may ask for (luma-format revision 3, services-registry 5.1): a closed list, the kernel's
+/// The permissions a mod may ask for (luma.md revision 3, services/registry.md 5.1): a closed list, the kernel's
 /// cPermissions (LumaServices.cpp). Most are the name of the one service that needs them; `native` is asked by extra
 /// libraries and by draw.native (docs/modding/services/draw.md), `input.devices` by input.dev (services/input.md).
 pub const PERMISSIONS: [&str; 11] = [
@@ -159,7 +159,7 @@ pub fn service_permission(name: &str) -> &str {
     }
 }
 
-/// One catalogued service (services-registry 9).
+/// One catalogued service (services/registry.md 9).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Service {
     pub name: String,
@@ -226,12 +226,12 @@ pub struct Names {
     /// The game's records, fields and globals (kinds 1, 2 and 7); None when the types file was not given.
     pub types: Option<Types>,
     /// Each function row's facts (docs/modding/language/types.md): what it is, its record, virtual and const; None when
-    //the folder has / no facts file.
+    /// the folder has no facts file.
     pub function_facts: Option<FunctionFacts>,
-    /// The game's services catalog (services-registry 9, the self-description's `services`); None when not given:
+    /// The game's services catalog (services/registry.md 9, the self-description's `services`); None when not given:
     /// kind 5 imports are not checked.
     pub services: Option<Services>,
-    /// The renderer's feature names (the self-description's `renderer.features`, luma-format revision 4); None when
+    /// The renderer's feature names (the self-description's `renderer.features`, luma.md revision 4); None when
     /// not given: a mod's `renderer.features` is read for its form only, and L806 is not checked.
     pub renderer_features: Option<std::collections::BTreeSet<String>>,
     /// The LumaCore version mods are checked against (`LUMA_API`).

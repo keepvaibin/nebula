@@ -1,4 +1,4 @@
-//! L500-L512: a mod's code (luma-format 6; F-1).
+//! L500-L512: a mod's code (luma.md 6; F-1).
 
 use super::{p, t, Ctx};
 use crate::binary::{self, Format, Machine};
@@ -164,8 +164,8 @@ pub(crate) fn check(ctx: &mut Ctx) {
             library(ctx, plat, f, f == entry_name, format, machine, &extras);
         }
     }
-    // L218: a permission asked for that nothing of the mod needs (services-registry 5.2, a Note): `native` with no extra
-    // library and no import of draw.native; any other when no entry library imports its service
+    // L218: a permission asked for that nothing of the mod needs (services/registry.md 5.2, a Note): `native` with no
+    // extra library and no import of draw.native; any other when no entry library imports its service
     // (names::service_permission: the permission each imported service shows in use).
     // Said only when every entry library's imports were read (one that was not is an error already).
     let native_used = libraries.values().any(|l| !l.is_empty());

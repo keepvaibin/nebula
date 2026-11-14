@@ -48,9 +48,9 @@
 // gone, so a mod starting one effect every frame keeps one shell per effect alive at a time. NebulaArena::destroy tells
 // released() first, and nothing in that range is touched after.
 //
-// No cost with no mod (effects 5): frame() and released() are one load each while no effect was started.
+// No cost with no mod (effects.md 5): frame() and released() are one load each while no effect was started.
 
-  // EffectEmpty's window after an emitter's first frame (effects 2)
+  // EffectEmpty's window after an emitter's first frame (effects.md 2)
  // fx.alive facts a handle writes, from its start (harness only)
 
 namespace luma {
@@ -58,7 +58,8 @@ namespace luma {
         namespace fx {
             namespace {
                 const u32 kMostEffects = LUMA_CONTENT_FX_MOST * 16u;  // across mods
-                // The placeholder effect (references 4): Nebula's data/placeholder/effect.json, cooked into the store.
+                // The placeholder effect (references.md 4): Nebula's data/placeholder/effect.json, cooked into the
+                // store.
                 const char cPlaceholder[] = "nebula:placeholder/effect";
                 const u32 cMissingEffectCode = 623;
                 const u32 cMissingJointCode = 626;
@@ -134,7 +135,7 @@ namespace luma {
                     return LUMA_OK;
                 }
 
-                // A CONTENT entry of the mod (effects 2; references 6). The column keeps two names two entries.
+                // A CONTENT entry of the mod (effects.md 2; references.md 6). The column keeps two names two entries.
                 void sayContent(const LumaMod* pMod, u32 code, const char* pRow, u32 column, const char* pName0,
                                 const char* pValue0, const char* pName1, const char* pValue1) {
                     LumaModLogEntry entry = {};
@@ -158,8 +159,8 @@ namespace luma {
 
                 // ---- Names ----
 
-                // Every particle the name resolves to exists, by the game's rule (effects 7a; MultiEmitter::allocateEmitter):
-                // a numbered name has at least its <name>00; a list has each word.
+                // Every particle the name resolves to exists, by the game's rule (effects.md 7a;
+                // MultiEmitter::allocateEmitter): a numbered name has at least its <name>00; a list has each word.
                 bool resolves(const char* pName) {
                     u16 index = 0;
                     if (!MR::hasStringSpace(pName) && !MR::isDigitStringTail(pName, 2)) {
@@ -182,7 +183,7 @@ namespace luma {
                     return true;
                 }
 
-                // ---- Draw groups (effects 4) ----
+                // ---- Draw groups (effects.md 4) ----
 
                 // A mod's effects list as the cook writes it (docs/modding/content/effects.md): Luma/<id>/effects.txt,
                 // one line an effect sorted by name, `<name>\t<group>\t<emitters>\n`. Read once a session per mod,
@@ -329,8 +330,8 @@ namespace luma {
                     return pGroups;
                 }
 
-                // The draw group (effects 4) of an effect: a mod's (`<id>:<name>`) from its list, the game's own 0 (3D,
-                // the game's default for one with no AutoEffectList row).
+                // The draw group (effects.md 4) of an effect: a mod's (`<id>:<name>`) from its list, the game's own 0
+                // (3D, the game's default for one with no AutoEffectList row).
                 s32 drawGroupOf(const char* pName) {
                     const char* const pColon = strchr(pName, ':');
                     if (pColon == nullptr) {
@@ -564,8 +565,8 @@ namespace luma {
                     luma::modlog::fact(key, json);
                 }
 
-                // The handle ends (effects 3): why is "stop", "actor", "model", "scene" or "mod". The caller has already
-                // stopped the emitter as the reason says (or must not touch it: "scene").
+                // The handle ends (effects.md 3): why is "stop", "actor", "model", "scene" or "mod". The caller has
+                // already stopped the emitter as the reason says (or must not touch it: "scene").
                 void end(Effect& rEffect, const char* pWhy) {
                     if (luma::modlog::facts()) {
                         char key[48];

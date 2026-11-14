@@ -1,5 +1,5 @@
 //! A strict JSON reader that keeps where every value is. `luma.json` and patches are read with it so that each
-//! finding names its line and column (luma-format 7). Strict: UTF-8 only, no byte-order mark, no comments, no
+//! finding names its line and column (luma.md 7). Strict: UTF-8 only, no byte-order mark, no comments, no
 //! trailing commas, no duplicate keys, nesting at most `MAX_DEPTH` deep. Never panics on any input.
 
 /// Where a value starts: line and column, both from 1; the column counts characters, not bytes.

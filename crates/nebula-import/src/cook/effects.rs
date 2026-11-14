@@ -1,5 +1,5 @@
 //! A mod's effects (docs/modding/content/effects.md section 7): `layers/<layer>/assets/effects.json`, which the host
-//! hands the cook as the change `+Luma/<id>/effects.json`, one a layer in layer order (luma-format 5: a layer's assets
+//! hands the cook as the change `+Luma/<id>/effects.json`, one a layer in layer order (luma.md 5: a layer's assets
 //! are the store's `Luma/<id>/<mod path>`). The cook adds their particles to the game's particle file and names, and
 //! writes the mod's list of effects, `Luma/<id>/effects.txt`, from which the run time takes each one's draw group.
 //!

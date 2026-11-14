@@ -273,7 +273,7 @@ fn service_and_other_mod_imports_are_read_and_checked_as_far_as_the_mod_shows() 
         assert_eq!(left(&r), vec![(505, "Missing.Services"), (506, "Missing.Services")], "{path}");
     }
     let w = "windows-x64";
-    // A version text other than "<major>.<minor>" is L505 with `sig` as found (services-registry 2).
+    // A version text other than "<major>.<minor>" is L505 with `sig` as found (services/registry.md 2).
     let r = check(&code_mod(w, &lib("pe-x64/service_bad.dll"), &[], false), w, true);
     assert_eq!(codes(&r), vec![505]);
     assert!(english(&r, 505).contains("service \"net\" at version one"), "{}", english(&r, 505));

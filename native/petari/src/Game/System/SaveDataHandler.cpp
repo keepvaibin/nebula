@@ -265,7 +265,7 @@ void SaveDataHandler::setFile(SaveFileId file, const u8* pData, u32 size) {
 
     memcpy(pFile->mData, pData, size);
     pFile->mSize = size;
-    // The REMOVED MODS line's count of mods' values in memory (services-save 5).
+    // The REMOVED MODS line's count of mods' values in memory (services/save.md 5).
     if (file.mKind != SaveFileId::Kind_Config) {
         luma::save::fileStored(static_cast< u32 >(file.mUser - 1) * 2 + file.mKind, pFile->mData, pFile->mSize);
     }

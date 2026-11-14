@@ -463,7 +463,7 @@ namespace luma {
             // One block: the entry, its played text (UTF-16), then its mod, file, played text (UTF-8), English and code
             // name.
             // The Notes shown as a notice as an Error is (mod-log 4.1, draft 7): a page a mod opened outside the game
-            // (services-system J-SS5), so the player coming back sees which mod it was.
+            // (services/system.md J-SS5), so the player coming back sees which mod it was.
             const char* const cShownNotes[] = {"System.LinkOpened"};
 
             bool shownNote(const char* pRowId) {
@@ -735,7 +735,7 @@ namespace luma {
                 return nullptr;
             }
             // Section 3.1: the module's own sources are Errors (the log's own lines are as they say, and so are the host's
-            // entries that give their row: luma_modlog.h `row`, e.g. services-system's System.LinkOpened Note).
+            // entries that give their row: luma_modlog.h `row`, e.g. services/system.md's System.LinkOpened Note).
             if (rEntry.source >= LUMA_MODLOG_CODE && !own && rowOf(rEntry) == nullptr && rEntry.level != LUMA_MODLOG_ERROR) {
                 nebula_log("LumaCore: mod-log entry %s %s %u given as a Note; kept as an Error (a bug in its caller)\n", rEntry.mod,
                            sourceName(rEntry.source), rEntry.code);

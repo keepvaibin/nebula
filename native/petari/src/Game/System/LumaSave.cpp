@@ -48,7 +48,7 @@ namespace luma {
                 report(pMod, pWhere, 104u, text);
             }
 
-            // The mod known and live, on the game thread (services-registry 4). LUMA_OK, or the status to return.
+            // The mod known and live, on the game thread (services/registry.md 4). LUMA_OK, or the status to return.
             s32 enter(const LumaMod* pMod, const char* pWhere) {
                 if (pMod == nullptr || sKernel->mod_id(pMod) == nullptr) {
                     sKernel->unknown_mod(pWhere);

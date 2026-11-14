@@ -27,8 +27,8 @@ extern "C" const NebulaHostServices* nebula_host(void);
 // The time service (docs/modding/services/time.md). Everything here runs on the game thread except monotonic_ns, wall
 // and soundRate, which read only the host's clocks and one atomic.
 //
-// No cost with no mod (services-time 8): beginFrame is an increment and one load (sAnyControl) while no mod has set a
-// rate, a hold or steps; beginStep an increment and one load (sStepHandlers); the frame start's time hooks are set in
+// No cost with no mod (services/time.md 8): beginFrame is an increment and one load (sAnyControl) while no mod has set
+// a rate, a hold or steps; beginStep an increment and one load (sStepHandlers); the frame start's time hooks are set in
 // LumaServices only while a mod has a timer or a frame handler; the sound engine reads one atomic.
 
 namespace luma {
@@ -38,8 +38,8 @@ namespace luma {
             const u64 kNsPerSecond = 1000000000ull;
             // 2000-01-01 00:00 minus 1970-01-01 00:00, seconds: the calendar counts from 2000, UTC from 1970.
             const s64 kSeconds1970To2000 = 946684800ll;
-            // The exact product of the mods' rates (services-time 4, G-T1): 32-bit limbs; each factor is below 2^14 and
-            // there are at most kMostClocks of them.
+            // The exact product of the mods' rates (services/time.md 4, G-T1): 32-bit limbs; each factor is below 2^14
+            // and there are at most kMostClocks of them.
             const u32 kRateLimbs = (kMostClocks * 14u) / 32u + 2u;
 
             struct Clock;
@@ -91,7 +91,7 @@ namespace luma {
 
             // The world clock.
             bool sAnyControl = false;  // some mod has a rate other than 1000, a hold or owed steps
-            u32 sWorldRate = LUMA_TIME_REAL;  // the clamped product (services-time 4)
+            u32 sWorldRate = LUMA_TIME_REAL;  // the clamped product (services/time.md 4)
             u32 sHolders = 0;
             u32 sAcc = 0;                    // thousandths of a step carried to the next frame
             u32 sStepsThisFrame = 1;
@@ -131,7 +131,7 @@ namespace luma {
 
             int64_t (*sUtcNs)() = nullptr;
 
-            // ---- The table's functions' common checks (services-registry 4) ----
+            // ---- The table's functions' common checks (services/registry.md 4) ----
 
             Clock* findClock(const LumaMod* pMod) {
                 for (u32 i = 0; i < sClockHigh; i++) {
@@ -168,7 +168,7 @@ namespace luma {
                 return LUMA_OK;
             }
 
-            // The least size of a struct (services-registry 3: the first minor's whole struct).
+            // The least size of a struct (services/registry.md 3: the first minor's whole struct).
             s32 checkSize(const LumaMod* pMod, const char* pWhere, const char* pStruct, const void* p, u32 least) {
                 if (p == nullptr) {
                     report(pMod, pWhere, 101u, "out", nullptr, nullptr);
@@ -312,7 +312,7 @@ namespace luma {
                 sAnyControl = sWorldRate != LUMA_TIME_REAL || holders != 0 || owed;
             }
 
-            // What the game is doing (services-time 5), found once a frame when asked.
+            // What the game is doing (services/time.md 5), found once a frame when asked.
             u32 findState() {
                 GameSystem* const pSystem = SingletonHolder< GameSystem >::get();
                 GameSystemSceneController* const pController = pSystem != nullptr ? pSystem->mSceneController : nullptr;
@@ -347,7 +347,7 @@ namespace luma {
                 return sState;
             }
 
-            // Before the first scene, loading, a movie, the skip: the world clock is 1000 (services-time 4, F-M2).
+            // Before the first scene, loading, a movie, the skip: the world clock is 1000 (services/time.md 4, F-M2).
             bool clockSuspended(u32 s) {
                 return s == LUMA_TIME_BOOT || s == LUMA_TIME_LOADING || s == LUMA_TIME_MOVIE || s == LUMA_TIME_SKIP;
             }
@@ -362,7 +362,7 @@ namespace luma {
                 if (__atomic_load_n(&sSoundRate, __ATOMIC_RELAXED) != rate) {
                     __atomic_store_n(&sSoundRate, rate, __ATOMIC_RELAXED);
                 }
-                // The world's sound held (services-time 7): through AudSystem, composed with the menus' own holds.
+                // The world's sound held (services/time.md 7): through AudSystem, composed with the menus' own holds.
                 const bool held = rate == 0;
                 if (held != sWorldSoundHeld) {
                     // Only once the audio system can take it, so a later frame asks again (J22-10).
@@ -492,7 +492,7 @@ namespace luma {
                 if (!timerBusy(*pTimer)) {
                     freeTimer(pTimer);
                 }
-                // Queued: its deliver sees it closed, calls nothing and frees it (services-registry 4.8).
+                // Queued: its deliver sees it closed, calls nothing and frees it (services/registry.md 4.8).
             }
 
             void timerDeliver(LumaEventNode* pNode) {
@@ -1150,7 +1150,7 @@ NEBULA_GAME_API int32_t luma_time_clock_of(const char* id, uint32_t* rate, int32
 }
 
 // The host's facts (luma_services_facts.h), once before the first mod: the UTC clock for time.wall; the offered file
-// and the offer screen for save.game (services-save 8).
+// and the offer screen for save.game (services/save.md 8).
 NEBULA_GAME_API void luma_services_facts(const LumaServicesFacts* facts) {
     if (facts != nullptr && facts->size >= offsetof(LumaServicesFacts, utc_ns) + sizeof(facts->utc_ns)) {
         luma::time::setUtcClock(facts->utc_ns);
@@ -1163,8 +1163,8 @@ NEBULA_GAME_API uint64_t luma_services_monotonic_ns(void) {
     return static_cast<uint64_t>(luma::time::monotonic());
 }
 
-// The player's "Let go" (services-time 1 item 10), any thread (J22-6): the mod's rate, hold and owed steps cleared at
-// the next frame's start. The page writes the mod log's Note Time.LetGo. 1: asked; 0: time does not know the mod (or
+// The player's "Let go" (services/time.md 1 item 10), any thread (J22-6): the mod's rate, hold and owed steps cleared
+// at the next frame's start. The page writes the mod log's Note Time.LetGo. 1: asked; 0: time does not know the mod (or
 // eight requests already wait for the next frame).
 NEBULA_GAME_API int32_t luma_time_let_go(const char* id) {
     uint32_t rate = 0;
