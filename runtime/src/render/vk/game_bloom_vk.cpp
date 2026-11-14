@@ -141,7 +141,7 @@ bool GameBloomVk::build() {
         info.stage.module = shader;
         info.stage.pName = entries[i];
         info.layout = layout_;
-        const VkResult result = vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &compute_[i]);
+        const VkResult result = vkCreateComputePipelines(device, shared_pipeline_cache(), 1, &info, nullptr, &compute_[i]);
         vkDestroyShaderModule(device, shader, nullptr);
         if (result != VK_SUCCESS) {
             compute_[i] = VK_NULL_HANDLE;
@@ -238,7 +238,7 @@ VkPipeline GameBloomVk::composite_pipeline(VkRenderPass pass, unsigned samples_l
         info.pDynamicState = &dynamic;
         info.layout = layout_;
         info.renderPass = pass;
-        if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &pipeline) != VK_SUCCESS) {
+        if (vkCreateGraphicsPipelines(device, shared_pipeline_cache(), 1, &info, nullptr, &pipeline) != VK_SUCCESS) {
             pipeline = VK_NULL_HANDLE;
             std::cerr << "[bloom] composite pipeline failed for " << (1u << samples_log2) << " samples\n";
         }
@@ -401,6 +401,20 @@ bool GameBloomVk::prepare(VkCommandBuffer commands, const Inputs& in, const Para
         pending_ = true;
         return true;
     }
+    if (bloom::adds_nothing(p.threshold, normal ? 0u : p.channel, p.tap1, p.intensity, p.strength)) {
+        // The scene alone (kind 0), no level made: the kept scene, or a copy of the frame (multisampled, where the
+        // composite writes every sample from the resolved frame). A given source is drawn back by the caller.
+        if (!normal && (given || !copy_frame(commands, in, source_, "bloom source"))) {
+            return false;
+        }
+        if (!ensure_unused_slot(commands)) {
+            return false;
+        }
+        const Texture* const scene = normal ? keep_.get() : source_.get();
+        composite_inputs_[0] = composite_inputs_[1] = composite_inputs_[2] = scene;
+        pending_ = true;
+        return true;
+    }
     const bloom::Shape s = bloom::shape_of(in.frame_width, in.frame_height, in.scale);
     const unsigned blurs1 = normal ? 2u : 1u;
     bool made = ensure(dummy_, 1u, 1u, kWorkFormat, true, "bloom unused slot") &&
@@ -549,9 +563,10 @@ bool GameBloomVk::prepare(VkCommandBuffer commands, const Inputs& in, const Para
 }
 
 bool GameBloomVk::prepare_draw_back(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2) {
-    if (!ready_ || composite_pipeline(pass, samples_log2) == VK_NULL_HANDLE) {
-        return false;
-    }
+    return ready_ && composite_pipeline(pass, samples_log2) != VK_NULL_HANDLE && ensure_unused_slot(commands);
+}
+
+bool GameBloomVk::ensure_unused_slot(VkCommandBuffer commands) {
     if (dummy_ && dummy_->layout == VK_IMAGE_LAYOUT_GENERAL) {
         return true;
     }

@@ -132,6 +132,16 @@ inline void name_current_thread(const wchar_t* name) noexcept {
     (void)pthread_setname_np(pthread_self(), narrow);
 #endif
 }
+// Background work (the pipeline workers): the frame's threads run first wherever a core is contended. Apple: the class for
+// long work nobody waits on (the frame's threads are user-interactive, perf_hint.cpp). Linux and Android: nice 10 (Android's
+// THREAD_PRIORITY_BACKGROUND), about a tenth of a core's time beside a frame thread at nice 0 when both want it.
+inline void lower_current_thread_priority() noexcept {
+#if defined(__APPLE__)
+    (void)pthread_set_qos_class_self_np(QOS_CLASS_UTILITY, 0);
+#else
+    (void)setpriority(PRIO_PROCESS, static_cast<id_t>(syscall(SYS_gettid)), 10);
+#endif
+}
 inline void opt_out_of_power_throttling_process() noexcept {}
 }  // namespace galaxy::host
 #endif

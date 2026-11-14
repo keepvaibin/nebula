@@ -217,6 +217,9 @@ void TexturePacks::submit(std::function<void()> job) {
 
 void TexturePacks::worker_main() {
     galaxy::host::name_current_thread(L"Nebula Texture Pack");
+    // Nothing the frame waits on (replacements reach the renderer through ready_queue_ when done): below the frame's
+    // threads where a core is contended.
+    galaxy::host::lower_current_thread_priority();
     for (;;) {
         std::function<void()> job;
         {

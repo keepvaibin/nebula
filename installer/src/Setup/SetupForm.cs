@@ -54,8 +54,10 @@ namespace Nebula.Setup
             {
                 if (options.ContainsKey("uninstall")) { modeUninstall.Checked = true; }
                 if (options.ContainsKey("update")) CheckForUpdate();
-                // An update that needs the disc stays on this page, which asks for it.
-                else if (options.ContainsKey("apply-update") && installed != null && InstallEngine.RetainedGameValid(layout)) { modeRepair.Checked = true; StartWork(InstallMode.Update); }
+                // An update that needs the disc stays on this page, which asks for it; a package no newer than the
+                // installed version is never applied as an update (no downgrade by --apply-update).
+                else if (options.ContainsKey("apply-update") && installed != null && InstallEngine.RetainedGameValid(layout) &&
+                         InstallIntent.ForPackage(installed.Version, BuildInfo.Version) == InstallMode.Update) { modeRepair.Checked = true; StartWork(InstallMode.Update); }
             };
         }
 

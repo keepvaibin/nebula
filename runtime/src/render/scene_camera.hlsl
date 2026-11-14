@@ -46,17 +46,29 @@ Texture2D<float> t_exposure : register(t1);
 Texture2D<float> t_depth : register(t2);  // reversed: 0 at the far plane
 CAMERA_FORMAT(r32f) RWTexture2D<float> u_exposure : register(u0);
 
-[numthreads(1, 1, 1)]
-void MeterCS() {
+// One thread per grid point (kMeterColumns x kMeterRows), so the grid's loads are in flight together rather than one
+// after another; the first thread sums the points in the grid's row order, as one thread looping over them would.
+groupshared float gs_over[kMeterRows * kMeterColumns];
+
+[numthreads(16, 9, 1)]
+void MeterCS(uint3 cell : SV_GroupThreadID) {
+    const uint column = cell.x;
+    const uint row = cell.y;
+    const float2 place = (float2(column, row) + 0.5f) / float2(kMeterColumns, kMeterRows) * g_size;
+    float light = 0.0f;  // light past white here; nothing for the sky
+    if (t_depth.Load(int3(int2(place), 0)) > 1e-5f) {
+        const float3 wide = t_wide.Load(int3(int2(place), 0)).rgb;
+        light = max(pow(max(max(wide.r, wide.g), max(wide.b, 0.0f)), 2.2f) - 1.0f, 0.0f);
+    }
+    gs_over[row * kMeterColumns + column] = light;
+    GroupMemoryBarrierWithGroupSync();
+    if (row != 0u || column != 0u) {
+        return;
+    }
+    // Adding the sky's +0 leaves the sum as it was (every term is at least +0).
     float over = 0.0f;
-    for (uint row = 0u; row < kMeterRows; ++row) {
-        for (uint column = 0u; column < kMeterColumns; ++column) {
-            const float2 place = (float2(column, row) + 0.5f) / float2(kMeterColumns, kMeterRows) * g_size;
-            if (t_depth.Load(int3(int2(place), 0)) > 1e-5f) {
-                const float3 wide = t_wide.Load(int3(int2(place), 0)).rgb;
-                over += max(pow(max(max(wide.r, wide.g), max(wide.b, 0.0f)), 2.2f) - 1.0f, 0.0f);
-            }
-        }
+    for (uint i = 0u; i < kMeterRows * kMeterColumns; ++i) {
+        over += gs_over[i];
     }
     over /= float(kMeterColumns * kMeterRows);
     const float target = max(1.0f / (1.0f + over / kOverRange), kLeastExposure);

@@ -25,8 +25,6 @@ constexpr std::size_t kMaxIdleDisplayTextures = 8u;
 // A picture idle this long is freed: in a steady frame every pooled picture is taken again within a few frames, so
 // only sizes the frame no longer has (a resize, a scale change) and one-off uses wait this long.
 constexpr std::uint64_t kIdleTextureMs = 5000u;
-// Three pictures: the one being drawn, the one shown and the one before it, which a present may still read.
-constexpr std::uint32_t kPictures = 3u;
 
 }  // namespace
 
@@ -37,7 +35,7 @@ bool DisplayPictures::initialize(gpu::Device* device, const FrameMap& map) {
 }
 
 void DisplayPictures::shutdown() {
-    registry_.clear();
+    registry_ = {};
     retired_textures_.clear();
     idle_textures_.clear();
     has_latest_ = false;
@@ -139,28 +137,18 @@ DisplayTexture* DisplayPictures::acquire_display(
     const std::uint32_t wanted_w = extent.width;
     const std::uint32_t wanted_h = extent.height;
 
-    auto it = registry_.find(slot);
-    if (it != registry_.end()) {
-        DisplayTexture& entry = it->second;
-        // A failed allocation can leave an entry with matching dimensions
-        // but no resource. Retry allocation instead of returning that entry.
-        if (entry.width == wanted_w && entry.height == wanted_h &&
-            entry.texture) {
-            return &entry;
-        }
-        // Size changed: drop the old texture and recreate it below.
-        if (entry.texture) {
-            retire_texture(entry);
-        }
-        entry.rtv = {};
-        entry.rtv_valid = false;
-    } else {
-        auto [ins_it, ok] = registry_.emplace(slot, DisplayTexture{});
-        (void)ok;
-        it = ins_it;
+    DisplayTexture& entry = registry_[slot];
+    // A failed allocation can leave an entry with matching dimensions
+    // but no resource. Retry allocation instead of returning that entry.
+    if (entry.width == wanted_w && entry.height == wanted_h &&
+        entry.texture) {
+        return &entry;
+    }
+    // Size changed: drop the old texture and recreate it below.
+    if (entry.texture) {
+        retire_texture(entry);
     }
 
-    DisplayTexture& entry = it->second;
     entry.slot        = slot;
     entry.width       = wanted_w;
     entry.height      = wanted_h;
@@ -225,11 +213,7 @@ const DisplayTexture* DisplayPictures::latest() const {
 }
 
 const DisplayTexture* DisplayPictures::picture(std::uint32_t slot) const {
-    const auto it = registry_.find(slot);
-    if (it == registry_.end()) {
-        return nullptr;
-    }
-    return it->second.presentable ? &it->second : nullptr;
+    return slot < kPictures && registry_[slot].presentable ? &registry_[slot] : nullptr;
 }
 
 

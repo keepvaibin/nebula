@@ -57,19 +57,13 @@ final class GameFiles {
         return new File(data(context), "last_error.txt");
     }
 
-    static File renderConfig(Context context) {
-        return new File(data(context), "config.ini");
-    }
-
     static boolean installed(Context context) {
         return install(context).isFile() && pak(context).isFile();
     }
 
-    // The on-screen controls' settings (the launcher writes them; the game's process reads them when it starts).
+    // The on-screen controls' settings (the game's menu writes them; the game's process reads them when it starts).
     static final String CONTROLS = "controls";
-    static final String CONTROLS_MODE = "mode";          // "auto" (hidden while a controller is used), "always", "never"
     static final String CONTROLS_OPACITY = "opacity";    // 0.2 .. 1
-    static final String CONTROLS_SCALE = "scale";        // 0.75 .. 1.4
     static final String CONTROLS_HAPTICS = "haptics";
     static final String RECORD_NEXT_RUN = "recordNextRun";  // the next run records diagnostics in its log
 

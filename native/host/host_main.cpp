@@ -150,6 +150,7 @@ inline bool perf_hint_on_battery() noexcept { return false; }
 #include <intrin.h>
 #include <dbghelp.h>
 #include <psapi.h>
+#include "cpu_level_x86.h"
 #else
 #include <dlfcn.h>
 #include <fcntl.h>
@@ -157,6 +158,9 @@ inline bool perf_hint_on_battery() noexcept { return false; }
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#if defined(__ANDROID__)
+#include <malloc.h>
+#endif
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
 #include <mach-o/dyld.h>
@@ -530,7 +534,41 @@ std::vector<galaxy::mods::PluginFile> gPlugins;
 galaxy::mods::ModRows gModRows;
 bool gModsChangeGame = false;
 
+// The two folders the host reads from (board/cpu.md W9-h, the package layout):
+// - the program's folder (program_directory(), executable_path()): one for both CPU levels, since NebulaNative.exe and
+//   NebulaNative-x86-64-v2.exe lie side by side. Tables, dxc\, nebula-import.exe, the launcher, the restart's and the
+//   crash report's program come from there.
+// - module_folder(): the folder of the game module actually loaded (the program's folder, x86-64-v2\ on a CPU without
+//   x86-64-v3, or --module's folder). Everything that belongs to one build of the module is read from here, never from
+//   the program's folder: each CPU folder holds its own module and the files made with it.
+fs::path gModuleFolder;
+
+[[maybe_unused]] const fs::path& module_folder() {
+    return gModuleFolder;
+}
+
+// The module beside the program for this CPU: x86-64-v2\ holds the build for a CPU without x86-64-v3 (native/build.ps1).
+fs::path default_module_path(const fs::path& program_folder) {
+#if defined(_WIN32)
+    fs::path module = program_folder;
+#if defined(_M_X64)
+    if (!cpu_runs_x86_64_v3()) {
+        module /= "x86-64-v2";
+        log_line("host:", "the CPU lacks x86-64-v3: the x86-64-v2 game module");
+    }
+#endif
+    return module / "smg_game.dll";
+#elif defined(__APPLE__)
+    return program_folder / "libsmg_game.dylib";
+#else
+    return program_folder / "libsmg_game.so";
+#endif
+}
+
 void load_module(const fs::path& path) {
+    std::error_code absolute_error;
+    const fs::path absolute = fs::absolute(path, absolute_error);
+    gModuleFolder = (absolute_error ? path : absolute).parent_path();
 #if defined(_WIN32)
     void* module = LoadLibraryW(path.wstring().c_str());
 #else
@@ -4033,11 +4071,9 @@ int main(int argc, char** argv) {
     }
     if (module.empty()) {
 #if defined(_WIN32)
-        module = arg_path(0).parent_path() / "smg_game.dll";
-#elif defined(__APPLE__)
-        module = fs::path(argv[0]).parent_path() / "libsmg_game.dylib";
+        module = default_module_path(arg_path(0).parent_path());
 #else
-        module = fs::path(argv[0]).parent_path() / "libsmg_game.so";
+        module = default_module_path(fs::path(argv[0]).parent_path());
 #endif
     }
     gSaveRoot = saves;
@@ -4397,6 +4433,15 @@ int main(int argc, char** argv) {
             gSuspendWake.notify_all();
             gAudio->set_paused(away);
             log_line("host:", away ? "suspended (out of sight)" : "resumed");
+        }
+        // Android's onTrimMemory: what comes back by itself goes. The store's view pages return from the file cache on
+        // the next read; the C heap's free pages are new pages when used again.
+        if (galaxy::sdl::take_low_memory()) {
+            gPak.store.release_pages();
+#if defined(__ANDROID__)
+            (void)mallopt(M_PURGE, 0);
+#endif
+            log_line("host:", "the system asked for memory: the store's pages and the C heap's free pages released");
         }
 #else
         // Until a message, a change of the window or the game's end (gHostWake), or the once-a-second report.
