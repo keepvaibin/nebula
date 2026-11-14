@@ -91,4 +91,7 @@ namespace NebulaMods {
     const char* objectLike(const char* pName);
     // What a model named by an object of that class comes from.
     const char* modelFor(const char* pObjectName, const char* pModelName);
+    // The archive of the model named `pResName` in an object of that class's archive: the class's archive when its model
+    // is that one (a mod's "<id>:<path>" holds <leaf>.bmd), else the name itself.
+    const char* archiveOf(const char* pObjectName, const char* pResName);
 }  // namespace NebulaMods

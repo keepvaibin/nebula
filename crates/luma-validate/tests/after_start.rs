@@ -97,14 +97,14 @@ fn a_placement_of_a_class_no_list_names_waits_for_the_check_after_start() {
     let kept = Saved::parse(&Saved::from_report(&r, "game").to_bytes()).unwrap();
     assert_eq!(kept.touches.after_start, r.touches.after_start);
 
-    // Without the factory list no class is known: every placement waits, the planet's and the factory's too; the
-    // shaped row still does not.
+    // Without the factory list no factory class is known: those placements wait, the factory's too; the planet's
+    // does not (the game's check comes before any scene, with no planet table to ask), nor the shaped row.
     let r = check(&luma(&layer, &[file(PATCH, &patch())]), Some(&Names::default()));
     let classes: Vec<&str> = r.touches.after_start.iter().map(|row| row.split('\u{1f}').next().unwrap()).collect();
-    assert_eq!(classes, vec!["kuribo", "ModThing", "GoldPlanet", "ModOther"]);
-    assert_eq!((waiting(&r), waiting_for(&r, "Missing.Classes")), (0, 4));
+    assert_eq!(classes, vec!["kuribo", "ModThing", "ModOther"]);
+    assert_eq!((waiting(&r), waiting_for(&r, "Missing.Classes")), (0, 3));
     let r = check(&luma(&layer, &[file(PATCH, &patch())]), None);
-    assert_eq!(r.touches.after_start.len(), 4);
+    assert_eq!(r.touches.after_start.len(), 3);
 
     // A zone list names zones, not classes; a table outside jmp/Placement and jmp/MapParts names no class.
     let zones = br#"{"patch": 1, "key": ["l_id"], "add": [{"l_id": 5, "name": "NewZone"}]}"#;

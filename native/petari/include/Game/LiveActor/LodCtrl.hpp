@@ -34,4 +34,9 @@ public:
 class LodCtrlFunction {
 public:
     static bool isExistLodLowModel(const char*);
+    // The archive pArchive's level ("Middle", "Low") is in the store: a game archive's in ObjectData, a mod's new model's
+    // ("<id>:<path>") beside it.
+    static bool isExistLevel(const char* pArchive, const char* pLevel);
+    // The LodCtrl of the actor in a view group (only those can draw a far model), or null.
+    static const LodCtrl* findOf(const LiveActor* pActor);
 };

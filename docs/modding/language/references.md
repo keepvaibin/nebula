@@ -44,10 +44,12 @@ to replace, without a second check.
   beside the game module) nor its planet table names, and that is not made by its shape (`ShapeModelNo` other than
   -1), may be one a mod's code makes. The validator keeps it in the mod's report as an `after_start` row (class,
   file, and the line of `name` in a patch or the row's number from 1 in a whole table) and counts it as not checked
-  (L403, `Missing.AfterStart`; `Missing.Classes` when the factory list was not given, and then every placement
-  waits). After the last mod's start the host gives every mod's rows to the game module's
-  `luma_refs_check_after_start` (luma_refs.h), once. A class no mod made is `Content.MissingClass` (620) in the mod
-  log, and each placement of it makes the placeholder object.
+  (L403, `Missing.AfterStart`; `Missing.Classes` when the factory list was not given, and then every placement but
+  a planet's waits). After the last mod's start, before any scene, the host gives every mod's rows to the game
+  module's `luma_refs_check_after_start` (luma_refs.h), once; the game asks its factory (with every mod's classes)
+  for each. The planet table is a scene's, so planets are the validator's to know: it reads them from the store's
+  table whether or not the factory list is given. A class no mod made is `Content.MissingClass` (620) in the mod log,
+  and each placement of it makes the placeholder object.
 - Nothing is resolved lazily for content: by the title every content reference of every mod on is either resolved or
   has its placeholder decided. A stage loaded later reads the decision, it does not look again.
 
@@ -119,6 +121,7 @@ No mod: no reference is read, no placeholder loaded (they are in the store, read
 |---|---|---|
 | 3131 | a new object whose glTF names a missing image | at import and start the validator's L6xx finding; in play the object with the checker; one `placeholder` fact; one mod-log Error, the same text as LumaLink `check` |
 | 3132 | a placement of a class no mod makes | `Content.MissingClass` after start; the placeholder cube at the place; the stage plays on |
+| 3139 | the same mod, no stage | the check answered before any scene: one `Content.MissingClass`, `refs.after_start` missing 1, the title reached; no `placeholder` fact |
 | 3133 | an effect bound to a joint the model lacks | L65x at start; the effect at the root joint in play |
 | 3134 | a script that starts the effect "GoldAuraa" (a typo, literal) | listed at import from the lifted names (5.2), before play; in play the placeholder sparks; one report counted on every call |
 | 3135 | a script that starts an effect by a name built at run time that does not exist | no finding at import; in play the placeholder and one `Content.MissingEffect` with the script's file and line |

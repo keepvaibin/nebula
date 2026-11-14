@@ -1,6 +1,8 @@
 #include "Game/System/LumaContentModel.hpp"
 
 #include "Game/LiveActor/LiveActor.hpp"
+#include "Game/LiveActor/LodCtrl.hpp"
+#include "Game/LiveActor/ModelObj.hpp"
 #include "Game/LiveActor/ModelManager.hpp"
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/Render/Model.hpp"
@@ -40,6 +42,12 @@
 // after the scene started connects as any late object (NameObjExecuteHolder::registerActor). A part whose handle ended
 // is dead and is used again for the same host, model, follow and joint.
 //
+// Levels (models 6): the game draws an object's Low model where the level's view cube asks for its view group's far
+// level (LodCtrl). An attached model is drawn with its host, so it takes its host's level: with a host whose LodCtrl
+// has a far model and a model that has a Low archive (LodCtrlFunction::isExistLevel), the Low is a second part made
+// with the base, following as the base does, alive exactly while the host's far model is (the host then hides
+// its own model, and the base part with it). No Middle is drawn: the game draws none for any object.
+//
 // No cost with no mod: frame() and released() are one load each while no model was attached.
 
   // model.pose facts a handle writes, from its attach (harness only)
@@ -71,6 +79,8 @@ namespace luma {
                     s16* parent;
                     u16* order;
                     Mtx* own;
+                    Part* low;              // the model's Low level, made with it; null: none
+                    const LodCtrl* hostLod;  // the host's LodCtrl with its far model (with `low`)
                 };
 
                 struct Attached {
@@ -80,6 +90,7 @@ namespace luma {
                     Part* part;         // null: neither the model nor the placeholder is in the store: nothing shows
                     u32 frame;          // frames the frame has seen it
                     bool reused;        // its part was a dead one used again (harness fact)
+                    s8 level;           // the level last written as a fact: -1 none yet, 0 the base, 1 Low
                 };
 
                 const LumaServiceKernel* sKernel = nullptr;
@@ -288,27 +299,11 @@ namespace luma {
 
                 // ---- Parts ----
 
-                // A dead part for this host, model, follow and joint, or a new one, placed by `rOffset` and `rTurn`.
-                Part* partFor(LiveActor* pHost, const char* pArchive, u32 follow, const char* pJoint, const Vec3f& rOffset,
-                              const Vec3f& rTurn, bool* pReused) {
-                    *pReused = false;
-                    for (Part* p = sParts; p != nullptr; p = p->next) {
-                        if (!p->busy && p->host == pHost && p->follow == follow && strcmp(p->archive, pArchive) == 0 &&
-                            sameText(p->joint, pJoint)) {
-                            p->actor->mFixedPosition->mLocalTrans = rOffset;
-                            p->actor->mFixedPosition->mLocalRotate = rTurn;
-                            p->actor->makeActorAppeared();
-                            MR::showModelIfHidden(p->actor);
-                            *pReused = true;
-                            return p;
-                        }
-                    }
-                    NebulaArena* pArena = NebulaArena::findFromRoot(pHost);
-                    if (pArena == nullptr) {
-                        pArena = NebulaArena::current();
-                    }
-                    const NebulaArena::CurrentScope scope(pArena);
+                // A part of `pArchive` drawn with `pHost`, in the open arena scope.
+                Part* makePart(LiveActor* pHost, const char* pArchive, u32 follow, const char* pJoint, const Vec3f& rOffset,
+                               const Vec3f& rTurn) {
                     Part* const pPart = new Part();
+                    pPart->next = nullptr;
                     pPart->host = pHost;
                     pPart->archive = copyText(pArchive);
                     pPart->joint = copyText(pJoint);
@@ -320,6 +315,8 @@ namespace luma {
                     pPart->parent = nullptr;
                     pPart->order = nullptr;
                     pPart->own = nullptr;
+                    pPart->low = nullptr;
+                    pPart->hostLod = nullptr;
                     // With the player, its decorations' lists (after the player's pose); else the map objects' (after
                     // every enemy's, NPC's and object's pose: SceneFunction::executeCalcAnimList).
                     const int drawBuffer = pHost == MR::getPlayerDemoActor() ? static_cast< int >(MR::DrawBufferType_PlayerDecoration) : -1;
@@ -336,6 +333,48 @@ namespace luma {
                     pActor->initFixedPosition(rOffset, rTurn, pPart->joint);
                     pActor->initWithoutIter();
                     MR::initLightCtrl(pActor);
+                    return pPart;
+                }
+
+                // A dead part for this host, model, follow and joint, or a new one, placed by `rOffset` and `rTurn`.
+                Part* partFor(LiveActor* pHost, const char* pArchive, u32 follow, const char* pJoint, const Vec3f& rOffset,
+                              const Vec3f& rTurn, bool* pReused) {
+                    *pReused = false;
+                    for (Part* p = sParts; p != nullptr; p = p->next) {
+                        if (!p->busy && p->host == pHost && p->follow == follow && strcmp(p->archive, pArchive) == 0 &&
+                            sameText(p->joint, pJoint)) {
+                            p->actor->mFixedPosition->mLocalTrans = rOffset;
+                            p->actor->mFixedPosition->mLocalRotate = rTurn;
+                            p->actor->makeActorAppeared();
+                            MR::showModelIfHidden(p->actor);
+                            if (p->low != nullptr) {
+                                // Dead until the frame finds the host's far model drawn.
+                                p->low->actor->mFixedPosition->mLocalTrans = rOffset;
+                                p->low->actor->mFixedPosition->mLocalRotate = rTurn;
+                                MR::showModelIfHidden(p->low->actor);
+                            }
+                            *pReused = true;
+                            return p;
+                        }
+                    }
+                    NebulaArena* pArena = NebulaArena::findFromRoot(pHost);
+                    if (pArena == nullptr) {
+                        pArena = NebulaArena::current();
+                    }
+                    const NebulaArena::CurrentScope scope(pArena);
+                    Part* const pPart = makePart(pHost, pArchive, follow, pJoint, rOffset, rTurn);
+                    // The Low level, only where the host can draw a far model: a host in no view group (the player, an
+                    // object placed without one or made during play) draws its base at every place, and so does its part.
+                    const LodCtrl* const pLod = LodCtrlFunction::findOf(pHost);
+                    if (pLod != nullptr && pLod->mFarModel != nullptr && LodCtrlFunction::isExistLevel(pArchive, "Low")) {
+                        const MR::FormattedName low("%sLow", pArchive);
+                        Part* const pLow = makePart(pHost, low.c_str(), follow, pJoint, rOffset, rTurn);
+                        // Drawn while the host hides its own model for its far one.
+                        pLow->actor->mIsShownWhileHostHidden = true;
+                        pLow->actor->makeActorDead();
+                        pPart->low = pLow;
+                        pPart->hostLod = pLod;
+                    }
                     pPart->next = sParts;
                     sParts = pPart;
                     return pPart;
@@ -366,7 +405,7 @@ namespace luma {
                     char json[1024];
                     nebula_snprintf(json, sizeof(json),
                                     "{\"mod\":%s,\"model\":%s,\"follow\":\"%s\",\"joint\":%s,\"placeholder\":%s,\"drawn\":%s,\"joints\":%u,"
-                                    "\"mapped\":%u,\"reused\":%s}",
+                                    "\"mapped\":%u,\"reused\":%s,\"levels\":[%s]}",
                                     mod, name, followName(follow), joint, placeholder ? "true" : "false", pPart != nullptr ? "true" : "false",
                                     pPart != nullptr ? MR::getModelData(pPart->actor)->getJointCount() : 0u, [pPart]() {
                                         u32 mapped = 0;
@@ -375,7 +414,7 @@ namespace luma {
                                         }
                                         return mapped;
                                     }(),
-                                    rAttached.reused ? "true" : "false");
+                                    rAttached.reused ? "true" : "false", pPart != nullptr && pPart->low != nullptr ? "\"Low\"" : "");
                     char key[48];
                     nebula_snprintf(key, sizeof(key), "model.attach.%llu", static_cast< unsigned long long >(rAttached.handle));
                     luma::modlog::fact(key, json);
@@ -446,6 +485,9 @@ namespace luma {
                         if (stop && !MR::isDead(pPart->actor)) {
                             pPart->actor->makeActorDead();
                         }
+                        if (stop && pPart->low != nullptr && !MR::isDead(pPart->low->actor)) {
+                            pPart->low->actor->makeActorDead();
+                        }
                         pPart->busy = false;
                     }
                     rAttached = Attached();
@@ -453,6 +495,30 @@ namespace luma {
                     while (sHigh > 0 && sAttached[sHigh - 1].handle == 0) {
                         sHigh--;
                     }
+                }
+
+                // The host's level this frame: the Low part alive exactly while the host's far model is (LodCtrl::update makes
+                // it appear for the view cube's far level), drawn when the host is in view as any part; the base part is
+                // hidden with the host meanwhile (PartsModel::movement). A fact when it changes.
+                void followLevel(Attached& rAttached, bool facts) {
+                    const Part* const pPart = rAttached.part;
+                    const ModelObj* const pFar = pPart->hostLod->mFarModel;
+                    const bool far = !MR::isDead(pFar);
+                    PartsModel* const pLow = pPart->low->actor;
+                    if (far && MR::isDead(pLow)) {
+                        pLow->makeActorAppeared();
+                    } else if (!far && !MR::isDead(pLow)) {
+                        pLow->makeActorDead();
+                    }
+                    const s8 level = far ? 1 : 0;
+                    if (facts && level != rAttached.level) {
+                        char key[48];
+                        nebula_snprintf(key, sizeof(key), "model.level.%llu", static_cast< unsigned long long >(rAttached.handle));
+                        char json[64];
+                        nebula_snprintf(json, sizeof(json), "{\"frame\":%u,\"level\":\"%s\"}", rAttached.frame, far ? "Low" : "base");
+                        luma::modlog::fact(key, json);
+                    }
+                    rAttached.level = level;
                 }
 
                 // ---- The service ----
@@ -547,6 +613,7 @@ namespace luma {
                     rAttached.handle = ++sNextHandle;
                     rAttached.mod = pMod;
                     rAttached.host = pHost;
+                    rAttached.level = -1;
                     if (pArchive != nullptr) {
                         Part* const pPart = partFor(pHost, pArchive, followed, pFollowed, offset, turn, &rAttached.reused);
                         pPart->busy = true;
@@ -588,10 +655,12 @@ namespace luma {
                         return LUMA_E_HANDLE;
                     }
                     if (Part* const pPart = pAttached->part; pPart != nullptr) {
-                        if (on) {
-                            MR::showModelIfHidden(pPart->actor);
-                        } else {
-                            MR::hideModelIfShown(pPart->actor);
+                        for (Part* p = pPart; p != nullptr; p = p == pPart ? pPart->low : nullptr) {
+                            if (on) {
+                                MR::showModelIfHidden(p->actor);
+                            } else {
+                                MR::hideModelIfShown(p->actor);
+                            }
                         }
                     }
                     return LUMA_OK;
@@ -684,6 +753,43 @@ namespace luma {
                     return -1;
                 }
 
+                // The parameter written into the actor's own copy of the material (Model::ownMaterial: the same model file's
+                // others keep theirs). The place written, or -1: the model `pName` has no such material or parameter.
+                s32 writeParam(LiveActor* pActor, const char* pName, const char* pMaterial, const char* pParam, const float* pRgba) {
+                    Model* const pModel = MR::getModel(pActor);
+                    const s32 place = paramPlace(MR::getModelResourceHolder(pActor), pName, pMaterial, pParam);
+                    const ModelData* const pData = pModel->getModelData();
+                    u32 index = pData->getMaterialCount();
+                    for (u32 i = 0; i < pData->getMaterialCount(); i++) {
+                        if (strcmp(pData->getMaterialName(i), pMaterial) == 0) {
+                            index = i;
+                            break;
+                        }
+                    }
+                    if (place < 0 || index == pData->getMaterialCount()) {
+                        return -1;
+                    }
+                    Material* const pOwn = pModel->ownMaterial(index);
+                    const auto held = [](f32 value, f32 low, f32 high) {
+                        const f32 steps = std::round(value * 255.0f);
+                        return steps < low ? low : steps > high ? high : steps;
+                    };
+                    if (place < 3) {
+                        NebulaColor16* const pColor = pOwn->getRegisterColor(static_cast< u32 >(place));
+                        pColor->r = static_cast< s16 >(held(pRgba[0], -1024.0f, 1023.0f));
+                        pColor->g = static_cast< s16 >(held(pRgba[1], -1024.0f, 1023.0f));
+                        pColor->b = static_cast< s16 >(held(pRgba[2], -1024.0f, 1023.0f));
+                        pColor->a = static_cast< s16 >(held(pRgba[3], -1024.0f, 1023.0f));
+                    } else {
+                        NebulaColor8* const pColor = pOwn->getConstantColor(static_cast< u32 >(place - 3));
+                        pColor->r = static_cast< u8 >(held(pRgba[0], 0.0f, 255.0f));
+                        pColor->g = static_cast< u8 >(held(pRgba[1], 0.0f, 255.0f));
+                        pColor->b = static_cast< u8 >(held(pRgba[2], 0.0f, 255.0f));
+                        pColor->a = static_cast< u8 >(held(pRgba[3], 0.0f, 255.0f));
+                    }
+                    return place;
+                }
+
                 int32_t svcSetParam(const LumaMod* pMod, LumaContentModel model, const char* pMaterial, const char* pParam,
                                     const float* pRgba) {
                     const char* const pWhere = "content.model.set_param";
@@ -714,37 +820,17 @@ namespace luma {
                         sayMissingParam(pMod, "-", pMaterial, pParam);
                         return LUMA_E_NOT_FOUND;
                     }
-                    const s32 place = paramPlace(pHolder, pName, pMaterial, pParam);
-                    const ModelData* const pData = pModel->getModelData();
-                    u32 index = pData->getMaterialCount();
-                    for (u32 i = 0; i < pData->getMaterialCount(); i++) {
-                        if (strcmp(pData->getMaterialName(i), pMaterial) == 0) {
-                            index = i;
-                            break;
-                        }
-                    }
-                    if (place < 0 || index == pData->getMaterialCount()) {
+                    const s32 place = writeParam(pActor, pName, pMaterial, pParam, pRgba);
+                    if (place < 0) {
                         sayMissingParam(pMod, pName, pMaterial, pParam);
                         return LUMA_E_NOT_FOUND;
                     }
-                    // The model's own copy of the material (Model::ownMaterial): the same model file's others keep theirs.
-                    Material* const pOwn = pModel->ownMaterial(index);
-                    const auto held = [](f32 value, f32 low, f32 high) {
-                        const f32 steps = std::round(value * 255.0f);
-                        return steps < low ? low : steps > high ? high : steps;
-                    };
-                    if (place < 3) {
-                        NebulaColor16* const pColor = pOwn->getRegisterColor(static_cast< u32 >(place));
-                        pColor->r = static_cast< s16 >(held(pRgba[0], -1024.0f, 1023.0f));
-                        pColor->g = static_cast< s16 >(held(pRgba[1], -1024.0f, 1023.0f));
-                        pColor->b = static_cast< s16 >(held(pRgba[2], -1024.0f, 1023.0f));
-                        pColor->a = static_cast< s16 >(held(pRgba[3], -1024.0f, 1023.0f));
-                    } else {
-                        NebulaColor8* const pColor = pOwn->getConstantColor(static_cast< u32 >(place - 3));
-                        pColor->r = static_cast< u8 >(held(pRgba[0], 0.0f, 255.0f));
-                        pColor->g = static_cast< u8 >(held(pRgba[1], 0.0f, 255.0f));
-                        pColor->b = static_cast< u8 >(held(pRgba[2], 0.0f, 255.0f));
-                        pColor->a = static_cast< u8 >(held(pRgba[3], 0.0f, 255.0f));
+                    // The Low level takes the same value where its own model has that material and parameter.
+                    if (const Part* const pLow = pAttached->part->low; pLow != nullptr) {
+                        const ResourceHolder* const pLowHolder = MR::getModelResourceHolder(pLow->actor);
+                        if (pLowHolder != nullptr && pLowHolder->getModelName() != nullptr) {
+                            (void)writeParam(pLow->actor, pLowHolder->getModelName(), pMaterial, pParam, pRgba);
+                        }
                     }
                     if (luma::modlog::facts()) {
                         char material[160];
@@ -818,6 +904,9 @@ namespace luma {
                     if (MR::isDead(rAttached.host)) {
                         end(rAttached, "actor", true);
                         continue;
+                    }
+                    if (rAttached.part != nullptr && rAttached.part->low != nullptr) {
+                        followLevel(rAttached, facts);
                     }
                     if (facts && rAttached.part != nullptr && rAttached.frame < static_cast< u32 >(120)) {
                         poseFact(rAttached);

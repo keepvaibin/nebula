@@ -2,6 +2,9 @@
 #include "Game/LiveActor/ClippingDirector.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
+#include "Game/LiveActor/ViewGroupCtrl.hpp"
+#include "Game/LiveActor/ClippingActorHolder.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
@@ -12,15 +15,15 @@
 namespace {
     const bool sOff = false;
 
+    // The archive the actor's model comes from: its model's name, or a mod's class's archive holding it.
+    const char* archiveOf(const LiveActor* pActor) {
+        return NebulaMods::archiveOf(pActor->mName, MR::getModelResName(pActor));
+    }
+
     // The levels place view cubes for the actors that ship distance models, and only those follow them.
     bool hasDistanceModels(const LiveActor* pActor) {
-        const char* res = MR::getModelResName(pActor);
-        MR::FormattedName buf("/ObjectData/%sMiddle", res);
-        if (MR::isFileExist(buf.c_str(), false)) {
-            return true;
-        }
-        buf.format("/ObjectData/%sLow", res);
-        return MR::isFileExist(buf.c_str(), false);
+        const char* pArchive = archiveOf(pActor);
+        return LodCtrlFunction::isExistLevel(pArchive, "Middle") || LodCtrlFunction::isExistLevel(pArchive, "Low");
     }
 };  // namespace
 
@@ -59,12 +62,11 @@ void LodCtrl::createFarModel(int drawBufferType, int movementType, int calcAnimT
     if (mViewGroupID < 0) {
         return;
     }
-    const char* res = MR::getModelResName(mActor);
-    MR::FormattedName path("/ObjectData/%sLow", res);
-    if (!MR::isFileExist(path.c_str(), false)) {
+    const char* pArchive = archiveOf(mActor);
+    if (!LodCtrlFunction::isExistLevel(pArchive, "Low")) {
         return;
     }
-    MR::FormattedName name("%sLow", res);
+    MR::FormattedName name("%sLow", pArchive);
     const size_t size = strlen(name.c_str()) + 1;
     char* pObjName = new char[size];
     memcpy(pObjName, name.c_str(), size);
@@ -127,6 +129,27 @@ void LodCtrl::setViewCtrlPtr(const bool* pNear, const bool* pFar, const bool* pH
 }
 
 bool LodCtrlFunction::isExistLodLowModel(const char* pName) {
-    MR::FormattedName buf("/ObjectData/%sLow", pName);
-    return MR::isFileExist(buf.c_str(), false);
+    return isExistLevel(pName, "Low");
+}
+
+bool LodCtrlFunction::isExistLevel(const char* pArchive, const char* pLevel) {
+    MR::FormattedName name("%s%s", pArchive, pLevel);
+    // A mod's new model "<id>:<path>": its levels are archives beside it in the mod's folder (the cook writes
+    // <path>Low.arc next to <path>.arc).
+    if (strchr(pArchive, ':') != nullptr) {
+        MR::FormattedName path;
+        return MR::makeObjectArchiveFileName(path, name.c_str());
+    }
+    MR::FormattedName path("/ObjectData/%s", name.c_str());
+    return MR::isFileExist(path.c_str(), false);
+}
+
+const LodCtrl* LodCtrlFunction::findOf(const LiveActor* pActor) {
+    const ViewGroupCtrl* const pCtrl = MR::getClippingDirector()->mActorHolder->mViewGroupCtrl;
+    for (s32 i = 0; i < pCtrl->mViewCtrlCount; i++) {
+        if (pCtrl->mLodCtrls[i]->mActor == pActor) {
+            return pCtrl->mLodCtrls[i];
+        }
+    }
+    return nullptr;
 }
