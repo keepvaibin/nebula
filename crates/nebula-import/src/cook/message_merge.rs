@@ -222,6 +222,62 @@ fn tag_of(words: &[&str]) -> Option<(u16, u16, Vec<u16>)> {
     })
 }
 
+/// How a tag's word is written, for a refusal that names it: `[wait n]`, `[number t i]`.
+pub fn tag_syntax(t: &TagWord) -> String {
+    match t.arg {
+        Arg::None | Arg::Zero => format!("[{}]", t.word),
+        Arg::Unit | Arg::Tag | Arg::High => format!("[{} n]", t.word),
+        Arg::Name => format!("[{} NAME]", t.word),
+        Arg::Index => format!("[{} t i]", t.word),
+    }
+}
+
+/// A line's words checked as the cook reads them: every `[` opens a tag of the table (or `[tag G T u...]`) or is
+/// written `[[`. `key` names the line in the refusal; a column counts characters from 1.
+pub fn check_words(key: &str, text: &str) -> Result<()> {
+    let column = |at: usize| (text[..at].chars().count() + 1).to_string();
+    let mut at = 0;
+    while let Some(found) = text[at..].find('[') {
+        let open = at + found;
+        if text[open + 1..].starts_with('[') {
+            at = open + 2;
+            continue;
+        }
+        let Some(end) = text[open + 1..].find(['[', ']']).map(|e| open + 1 + e).filter(|e| text.as_bytes()[*e] == b']') else {
+            return Err(super::refuse::refuse("Cook.Text.Unclosed", &[("key", key.to_string()), ("column", column(open))]));
+        };
+        let words: Vec<&str> = text[open + 1..end].split([' ', '\t']).filter(|w| !w.is_empty()).collect();
+        if tag_of(&words).is_none() {
+            let first = words.first().copied().unwrap_or("").to_ascii_lowercase();
+            let args = |more: Vec<(&'static str, String)>| {
+                let mut all = vec![("key", key.to_string()), ("column", column(open)), ("word", first.clone())];
+                all.extend(more);
+                all
+            };
+            if first == "tag" {
+                return Err(super::refuse::refuse("Cook.Text.TagArguments", &args(vec![("syntax", "[tag G T u...]".to_string())])));
+            }
+            let Some(t) = TAG_WORDS.iter().find(|t| t.word == first) else {
+                return Err(super::refuse::refuse("Cook.Text.UnknownTag", &args(vec![])));
+            };
+            let wanted = match t.arg {
+                Arg::None | Arg::Zero => 0,
+                Arg::Index => 2,
+                _ => 1,
+            };
+            let numbers = matches!(t.arg, Arg::Unit | Arg::Tag | Arg::High | Arg::Index);
+            if words.len() - 1 == wanted && numbers {
+                if let Some(bad) = words[1..].iter().find(|w| number(w).is_none_or(|v| v > t.most)) {
+                    return Err(super::refuse::refuse("Cook.Text.TagNumber", &args(vec![("value", bad.to_string()), ("most", t.most.to_string())])));
+                }
+            }
+            return Err(super::refuse::refuse("Cook.Text.TagArguments", &args(vec![("syntax", tag_syntax(t))])));
+        }
+        at = end + 1;
+    }
+    Ok(())
+}
+
 /// Mod text as the game's units, as Nebula reads it (luma_text_tags.h luma_text_tag_encode): without the 0.
 pub fn encode_text(text: &str) -> Vec<u16> {
     let mut out = Vec::with_capacity(text.len());
@@ -446,6 +502,7 @@ impl Flows<'_> {
                         for (key, answer) in [("yes", "Yes"), ("no", "No")] {
                             let words = choices.get(key).with_context(|| format!("choices need {key}"))?;
                             let words = words_in(words, self.language)?.with_context(|| format!("choices: {key} has no words for {}: give it a default", self.language))?;
+                            check_words(&format!("choices {key} ({})", self.language), words)?;
                             self.add_line(&format!("Select_Nebula{node}_{answer}"), words);
                         }
                         param = SELECT_OWN_CHOICES;
@@ -578,6 +635,7 @@ pub fn merge(message_file: &[u8], id_table: &[u8], json: &[u8], language: &str) 
         }
         match (words, existing) {
             (Some(words), _) => {
+                check_words(&format!("{id} ({language})"), words)?;
                 record.text = nmsg.text.len() as u32;
                 nmsg.text.extend(encode_text(words));
                 nmsg.text.push(0);
@@ -772,6 +830,45 @@ pub(crate) mod tests {
             languages += 1;
         }
         assert!(languages > 0, "no MessageData/Message.arc under {files}");
+    }
+
+    /// A line's brackets that are no tag are refused, each with its cause, the line and the column; `[[` writes a
+    /// bracket of the text.
+    #[test]
+    fn a_wrong_tag_is_named() {
+        let said = |text: &str| -> Option<Vec<String>> {
+            let error = check_words("Mod_Line (UsEnglish)", text).err()?;
+            let refusal = error.downcast_ref::<super::super::patch::Refusal>().expect("a named refusal");
+            Some(
+                refusal
+                    .0
+                    .args
+                    .iter()
+                    .map(|(name, value)| match value {
+                        luma_validate::Arg::Phrase(p) => format!("{name}={p}"),
+                        luma_validate::Arg::Text(t) => format!("{name}={t}"),
+                    })
+                    .collect(),
+            )
+        };
+        assert_eq!(said("Hi [player]! [[sic] [color 3]Star[color 0][number 5 1][tag 6 5 0 1 2]"), None);
+        assert_eq!(said("Hi [player"), Some(vec!["why=Cook.Text.Unclosed".into(), "key=Mod_Line (UsEnglish)".into(), "column=4".into()]));
+        assert_eq!(said("é [wait [page]").unwrap()[2], "column=3");
+        assert_eq!(said("[plyer]").unwrap(), ["why=Cook.Text.UnknownTag", "key=Mod_Line (UsEnglish)", "column=1", "word=plyer"]);
+        assert_eq!(said("a []").unwrap()[0], "why=Cook.Text.UnknownTag");
+        assert_eq!(said("[wait]").unwrap()[4], "syntax=[wait n]");
+        assert_eq!(said("[player 1]").unwrap()[4], "syntax=[player]");
+        assert_eq!(said("[number 5]").unwrap()[4], "syntax=[number t i]");
+        assert_eq!(said("[sound A[B]").unwrap()[0], "why=Cook.Text.Unclosed");
+        assert_eq!(said("[tag 300 1]").unwrap()[4], "syntax=[tag G T u...]");
+        assert_eq!(said("[color 256]").unwrap()[3..], ["word=color".to_string(), "value=256".into(), "most=255".into()]);
+        assert_eq!(said("[wait x]").unwrap()[4], "value=x");
+        assert_eq!(said("[WAIT 0x10000]").unwrap()[4], "value=0x10000");
+        // In a merge the line's id and language are named.
+        let (file, ids) = game();
+        let error = merge(&file, &ids, br#"{"lines":{"Mod_New":"Hi [plyer]"}}"#, "UsEnglish").unwrap_err();
+        let refusal = error.downcast_ref::<super::super::patch::Refusal>().expect("a named refusal");
+        assert!(refusal.0.args.iter().any(|(n, v)| *n == "key" && *v == luma_validate::Arg::Text("Mod_New (UsEnglish)".into())));
     }
 
     /// The cook's words are the SDK's: native/include/luma_text_tags.h's table, which the game's mod API and
