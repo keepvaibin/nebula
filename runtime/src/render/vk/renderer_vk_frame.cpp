@@ -2232,6 +2232,9 @@ void RendererVk::attach_texture_uploads(TextureStore& cache) {
 // A set of `slots` image slots from a pool of its own (a pool is freed whole, so an old set goes with its pool).
 void RendererVk::install_texture_array(TextureStore& cache, std::uint32_t slots) {
     const VkDevice device = vk::Context::get().device();
+    if (texture_array_whole_) {
+        slots = texture_array_limit_;  // the room of the layout's bound is taken whatever the length (renderer_vk.cpp)
+    }
     VkDescriptorPool pool = VK_NULL_HANDLE;
     const VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, slots};
     VkDescriptorPoolCreateInfo pool_info{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};

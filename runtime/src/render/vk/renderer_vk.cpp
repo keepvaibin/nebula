@@ -344,6 +344,7 @@ bool RendererVk::create_layouts() {
                                                    VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT;
     const VkDescriptorBindingFlags image_flags = sampler_flags | VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT;
     texture_array_limit_ = 0u;
+    texture_array_whole_ = false;
     if (bindless_) {
         // The device's answer for the image layout: whether it can be made and how long its variable binding may be.
         const VkDescriptorSetLayoutBinding binding{0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, context.texture_array_max(),
@@ -396,7 +397,7 @@ bool RendererVk::create_layouts() {
         // every sampler, written while bound or in use by earlier frames, with slots left empty; the image binding is the
         // last of its set and takes its length when a set is allocated (at most texture_array_limit_); else a table of
         // one draw.
-        for (unsigned set = 1; set <= 2; ++set) {
+        const auto make_layout = [&](unsigned set) {
             const bool images = set == 1;
             VkDescriptorSetLayoutBindingFlagsCreateInfo flag_info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO};
             flag_info.bindingCount = 1;
@@ -414,6 +415,42 @@ bool RendererVk::create_layouts() {
                 info.pNext = &flag_info;
             }
             vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &draw_layout_.sets[set]), images ? "set 1 layout" : "set 2 layout");
+        };
+        make_layout(1);
+        make_layout(2);
+        // A set of kBindlessTextureSlotsMin images from a pool of exactly that room: a conformant driver gives it (the
+        // variable length decides the room); a driver that takes the room from the layout's bound refuses it, and gets a
+        // layout of kBindlessTextureSlotsWhole with every set allocated whole (install_texture_array).
+        const auto variable_set_fits = [&](std::uint32_t slots) {
+            const VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, slots};
+            VkDescriptorPoolCreateInfo pool_info{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+            pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+            pool_info.maxSets = 1;
+            pool_info.poolSizeCount = 1;
+            pool_info.pPoolSizes = &size;
+            VkDescriptorPool pool = VK_NULL_HANDLE;
+            vk::check(vkCreateDescriptorPool(device, &pool_info, nullptr, &pool), "image array probe pool");
+            VkDescriptorSetVariableDescriptorCountAllocateInfo variable{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO};
+            variable.descriptorSetCount = 1;
+            variable.pDescriptorCounts = &slots;
+            VkDescriptorSetAllocateInfo allocate{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+            allocate.pNext = &variable;
+            allocate.descriptorPool = pool;
+            allocate.descriptorSetCount = 1;
+            allocate.pSetLayouts = &draw_layout_.sets[1];
+            VkDescriptorSet set = VK_NULL_HANDLE;
+            const VkResult made = vkAllocateDescriptorSets(device, &allocate, &set);
+            vkDestroyDescriptorPool(device, pool, nullptr);
+            return made == VK_SUCCESS;
+        };
+        if (bindless_ && texture_array_limit_ > vk::kBindlessTextureSlotsMin && !variable_set_fits(vk::kBindlessTextureSlotsMin)) {
+            vkDestroyDescriptorSetLayout(device, draw_layout_.sets[1], nullptr);
+            draw_layout_.sets[1] = VK_NULL_HANDLE;
+            texture_array_limit_ = std::min(texture_array_limit_, vk::kBindlessTextureSlotsWhole);
+            texture_array_whole_ = true;
+            make_layout(1);
+            std::fprintf(stderr, "[vulkan] textures: the driver sizes an image set by its layout's bound; the array is %u slots, "
+                                 "allocated whole\n", texture_array_limit_);
         }
     }
     if (bindless_) {

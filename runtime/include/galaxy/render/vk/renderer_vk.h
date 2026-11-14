@@ -937,6 +937,9 @@ private:
     std::uint32_t null_texture_slot_ = 0u;
     std::uint32_t texture_array_slots_ = 0u;
     std::uint32_t texture_array_limit_ = 0u;
+    // The driver takes a variable-length set's room from its layout's upper bound, not from the length asked for (probed
+    // when the layouts are made): the layout is kBindlessTextureSlotsWhole long and every image set has its full length.
+    bool texture_array_whole_ = false;
     const void* mirrored_backend_ = nullptr;
     TextureStore* mirrored_store_ = nullptr;
     TextureStore* uploads_store_ = nullptr;  // the store whose uploads the transfer queue may take (attach_texture_uploads)

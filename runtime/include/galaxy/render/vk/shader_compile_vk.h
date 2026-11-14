@@ -34,6 +34,10 @@ inline constexpr std::uint32_t kBindlessTextureSlotsMin = 4096u;
 // The texture array's first size: it doubles as the views in use reach it.
 inline constexpr std::uint32_t kBindlessTextureSlotsFirst = 64u;
 inline constexpr std::uint32_t kBindlessTextureSlotsCap = 1u << 20u;
+// The layout's upper bound on a driver that sizes a variable-length set by that bound (Qualcomm's Adreno driver 512.676
+// answers VK_ERROR_OUT_OF_POOL_MEMORY for a set shorter than its layout from a pool sized for the set): every set is then
+// allocated whole, so the bound is what the views of a game with texture packs and mods need, not the device's limit.
+inline constexpr std::uint32_t kBindlessTextureSlotsWhole = 1u << 16u;
 // The sampler array: one slot per distinct sampler (SamplerSlotCache, which holds kSamplerHeapSlots = this), the default
 // sampler in slot 0. Its length is the cache's own number, so the set is fixed-size.
 inline constexpr std::uint32_t kBindlessSamplerSlots = 2048u;
