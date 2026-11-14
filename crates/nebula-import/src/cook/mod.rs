@@ -5,6 +5,7 @@
 
 pub mod archive;
 pub mod audio_data;
+pub mod beside;
 pub mod distance;
 pub mod dol;
 pub mod ghost;

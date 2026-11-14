@@ -120,18 +120,18 @@ pub fn find(folder: Option<&Path>, material: &str, name: &str) -> Result<(String
     }
     let wanted = format!("assets/{name}.shader.json");
     let missing = || refuse("Cook.Shader.Missing", &[("material", material.to_string()), ("name", name.to_string()), ("file", wanted.clone())]);
-    let root = folder.and_then(|f| f.ancestors().find(|a| a.join("luma.json").is_file())).ok_or_else(missing)?;
-    let mut layers: Vec<_> = std::fs::read_dir(root.join("layers")).map_err(|_| missing())?.flatten().map(|e| e.path()).collect();
+    let root = folder.and_then(|f| f.ancestors().find(|a| super::beside::is_file(&a.join("luma.json")))).ok_or_else(missing)?;
+    let mut layers = super::beside::list(&root.join("layers")).map_err(|_| missing())?;
     layers.sort();
     for layer in layers {
         let json = layer.join("assets").join(format!("{name}.shader.json"));
-        if !json.is_file() {
+        if !super::beside::is_file(&json) {
             continue;
         }
         let hlsl_file = format!("assets/{name}.hlsl");
-        let hlsl = std::fs::read(layer.join("assets").join(format!("{name}.hlsl")))
+        let hlsl = super::beside::read(&layer.join("assets").join(format!("{name}.hlsl")))
             .map_err(|_| refuse("Cook.Shader.Missing", &[("material", material.to_string()), ("name", name.to_string()), ("file", hlsl_file.clone())]))?;
-        let json = std::fs::read(&json).map_err(|_| missing())?;
+        let json = super::beside::read(&json).map_err(|_| missing())?;
         return Ok((hlsl_file, json, hlsl));
     }
     Err(missing())

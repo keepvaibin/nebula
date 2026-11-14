@@ -85,7 +85,7 @@ fn read_uri(uri: &str, folder: Option<&Path>, pointer: &str) -> Result<Vec<u8>> 
     };
     let unreadable = || refuse("Cook.Model.Unreadable", &[("uri", uri.to_string())]);
     let folder = folder.ok_or_else(unreadable)?;
-    std::fs::read(file.split('/').fold(folder.to_path_buf(), |at, part| at.join(part))).map_err(|_| unreadable())
+    super::beside::read(&file.split('/').fold(folder.to_path_buf(), |at, part| at.join(part))).map_err(|_| unreadable())
 }
 
 impl Document {
