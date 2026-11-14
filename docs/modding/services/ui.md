@@ -49,3 +49,12 @@
   frame after the mods' frame handlers), 0 for none. Fact `ui.share.<pane>` {screen, pane, focused, chosen} when
   either changes.
 - Test 3815-ui-share (mod ju-share). Capability ui.share.
+- `set_text` on a game layout's pane (one of the game's own, or a mod's file replacing it): every text box that has a
+  buffer grows to the text, as the game's own setting does, up to LUMA_UI_TEXT_MOST; a mod's own layout keeps each
+  box's `length` as the cut. A pause button's label is read whole. Test 3816-ui-label (mod ju-label). Capability
+  ui.text_grows.
+- `play_pane(mod, screen, pane, animation, loop, fn, user)`: the animation on that pane and the panes under it only,
+  as the game plays a button's ButtonSelectIn and ButtonSelectOut, so one button of a screen lights alone (play plays
+  the root's and lights every button). Its end as play's (LUMA_UI_EVENT_ANIMATION_END, handle the pane); another
+  play_pane on the pane or the screen's end cancels it. On the root pane it is play. Fact `ui.play_pane.<pane>`
+  {animation, loop, frames}. Test 3817-ui-play-pane (mod ju-light). Capability ui.play_pane.
