@@ -188,6 +188,7 @@
     "services.mods": "The session's list of mods: order, id, name, version, kind, code, and state as the player and the check left it (2.2)",
     "services.mods.ids": "Numbers in the game's message and sensor spaces by <mod id>/<name>, derived alike on every machine, kept and never reused (2.2)",
     "services.player": "player makes extra players while a scene with a player runs (LUMA_E_STATE before), at most LUMA_PLAYER_MOST_EXTRA standing, removes only the mod's own (services-player)",
+    "services.player.unposed": "An extra player made or removed at any point of a frame, a draw-time hook included, draws nothing until its first calc has posed it (services-player)",
     "services.registry.acting": "A library calls a permissioned service through its own bound table (its own grant) naming a mod that called it: the handle is that mod's and ends with it; named itself, the handle is the library's and outlives the caller (services-registry)",
     "services.mods.stopped": "watch_mods gives a STOPPED event with the stopped mod's id each time another mod stops while the watcher runs (2.2)",
     "services.mods.install": "A mod's request to install a .luma through the import screen and the player's answer (2.2)",
