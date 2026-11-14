@@ -288,7 +288,17 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
         ctx.not_checked(508, "Missing.SelfDescription");
     }
     ctx.facts.entries_read += 1;
-    let (mut any_service, mut services_unchecked, mut mod_functions) = (false, false, false);
+    // What it gives the mods that need it, for their checks (as the game keeps it in this mod's report).
+    for e in &info.exports {
+        let export = match &e.signature {
+            Some(sig) => format!("{plat}{SEP}{}{SEP}{sig}", e.name),
+            None => format!("{plat}{SEP}{}", e.name),
+        };
+        if !ctx.facts.touches.exports.contains(&export) {
+            ctx.facts.touches.exports.push(export);
+        }
+    }
+    let (mut any_service, mut services_unchecked) = (false, false);
     for (i, row) in info.imports.iter().enumerate() {
         if row.kind >= IMPORT_KINDS || (row.kind == 4 && row.hook_kind >= HOOK_KINDS) || row.name.is_empty() {
             ctx.add(512, &name, None, None, vec![("why", p("Lib.ImportRowBad")), ("row", t(i.to_string()))]);
@@ -333,16 +343,31 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
                 continue;
             }
             // Another mod's function (D3-3, lumakit R-1): "<mod id>/<export name>", that mod among `needs` (the kernel
-            // binds only from a needed mod that is loaded: L505 with the same phrase). Its export list is the needed
-            // mod's library's: said below.
+            // binds only from a needed mod that is loaded: L505 with the same phrase), then bound as the kernel's
+            // modExport binds it against the needed mod's exports on this platform (its report's `exports`): the first
+            // of the name, its signature the same text. A needed mod not installed is L800's.
             6 => {
-                let needed = row.name.split_once('/').filter(|(m, e)| !m.is_empty() && !e.is_empty()).map(|(m, _)| m.to_string());
-                match needed {
-                    None => ctx.add(512, &name, None, None, vec![("why", p("Lib.ImportRowBad")), ("row", t(i.to_string()))]),
-                    Some(m) if row.flags & LUMA_OPTIONAL == 0 && !ctx.facts.needs.iter().any(|(id, _)| *id == m) => {
-                        ctx.add(505, &name, None, None, vec![("kind", p("Name.ModFunction")), ("found", t(row.name.clone())), ("sig", t(row.signature.clone().unwrap_or_default()))]);
+                let parts = row.name.split_once('/').filter(|(m, e)| !m.is_empty() && !e.is_empty()).map(|(m, e)| (m.to_string(), e.to_string()));
+                let Some((m, export)) = parts else {
+                    ctx.add(512, &name, None, None, vec![("why", p("Lib.ImportRowBad")), ("row", t(i.to_string()))]);
+                    continue;
+                };
+                if row.flags & LUMA_OPTIONAL != 0 {
+                    continue;
+                }
+                let kind = if !ctx.facts.needs.iter().any(|(id, _)| *id == m) {
+                    Some("Name.ModFunction")
+                } else if let Some(other) = ctx.input.installed.iter().find(|o| o.id == m) {
+                    match exported(&other.touches.exports, plat, &export) {
+                        None => Some("Name.ModFunction"),
+                        Some(sig) if sig.is_none() || sig != row.signature.as_deref() => Some("Name.FunctionSig"),
+                        Some(_) => None,
                     }
-                    Some(_) => mod_functions = true,
+                } else {
+                    None
+                };
+                if let Some(kind) = kind {
+                    ctx.add(505, &name, None, None, vec![("kind", p(kind)), ("found", t(row.name.clone())), ("sig", t(row.signature.clone().unwrap_or_default()))]);
                 }
                 continue;
             }
@@ -457,9 +482,15 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
         ctx.not_checked(505, "Missing.Services");
         ctx.not_checked(506, "Missing.Services");
     }
-    if mod_functions {
-        ctx.not_checked(505, "Missing.ModExports");
-    }
+}
+
+/// The signature of `export` among a mod's exports on `plat` (`Touches::exports`): the first of the name, as the
+/// kernel finds it; None when it exports no such name, Some(None) for a null signature.
+fn exported<'a>(exports: &'a [String], plat: &str, export: &str) -> Option<Option<&'a str>> {
+    exports.iter().find_map(|e| {
+        let mut parts = e.splitn(3, SEP);
+        (parts.next() == Some(plat) && parts.next() == Some(export)).then(|| parts.next())
+    })
 }
 
 /// The game's signatures for a name, as L505's `has` gives them: each quoted, in byte order, joined by ", ".

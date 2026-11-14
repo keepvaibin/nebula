@@ -8,14 +8,14 @@
 //! `%09`, `%0D`, `%0A`:
 //!
 //! ```text
-//! luma-saved	2
+//! luma-saved	4
 //! validator	<major>.<minor>
 //! fingerprint	<hex>|-
 //! game	<the game's key>
 //! about	<id>	<version>
 //! conflict	<id>
 //! need	<id>
-//! touch	replaces|cells|adds|removes|assets|functions|links|scenarios|services|after_start|kit_schemas	<value>
+//! touch	replaces|cells|adds|removes|assets|functions|links|scenarios|services|after_start|kit_schemas|exports	<value>
 //! finding	<code>	<file>	<line>|-	<column>|-	<pointer>|-	<mod id>|-	(<name>=T:<text> | <name>=P:<phrase id>)...
 //! not-checked	<code>	<phrase id>	<places>
 //! end	<SHA-1 of every byte before this line, hex>
@@ -53,9 +53,9 @@ pub struct Saved {
 }
 
 const MAGIC: &str = "luma-saved";
-// 2: `need` lines; 3: `touch kit_schemas`. A report of an earlier form does not read, so a mod checked before is checked
-// in full again.
-const FORM: u32 = 3;
+// 2: `need` lines; 3: `touch kit_schemas`; 4: `touch exports`. A report of an earlier form does not read, so a mod
+// checked before is checked in full again.
+const FORM: u32 = 4;
 const MAX_SAVED: usize = 64 << 20;
 
 fn esc(s: &str) -> String {
@@ -100,7 +100,7 @@ fn opt(v: Option<&str>) -> String {
     v.map_or_else(|| "-".to_string(), esc)
 }
 
-fn touch_lists(t: &Touches) -> [(&'static str, &Vec<String>); 11] {
+fn touch_lists(t: &Touches) -> [(&'static str, &Vec<String>); 12] {
     [
         ("replaces", &t.replaces),
         ("cells", &t.cells),
@@ -113,6 +113,7 @@ fn touch_lists(t: &Touches) -> [(&'static str, &Vec<String>); 11] {
         ("services", &t.services),
         ("after_start", &t.after_start),
         ("kit_schemas", &t.kit_schemas),
+        ("exports", &t.exports),
     ]
 }
 
@@ -224,6 +225,7 @@ impl Saved {
                         "services" => t.services.push(v),
                         "after_start" => t.after_start.push(v),
                         "kit_schemas" => t.kit_schemas.push(v),
+                        "exports" => t.exports.push(v),
                         _ => return None,
                     }
                 }

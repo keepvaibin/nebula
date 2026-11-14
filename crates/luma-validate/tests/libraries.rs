@@ -280,20 +280,76 @@ fn service_and_other_mod_imports_are_read_and_checked_as_far_as_the_mod_shows() 
     let r = check(&code_mod(w, &lib("pe-x64/mod_function_bad.dll"), &[], false), w, true);
     assert_eq!(codes(&r), vec![512]);
 
-    // Another mod's function: refused as the kernel refuses it unless the mod needs that mod; then its exports are
-    // the needed mod's.
+    // Another mod's function: refused as the kernel refuses it unless the mod needs that mod (then bound against the
+    // needed mod's exports: a_needed_mod_s_exports_bind_its_imports).
     for (path, platform) in [("pe-x64/mod_function.dll", "windows-x64"), ("elf-x64/mod_function.so", "linux-x64")] {
         let r = check(&code_mod(platform, &lib(path), &[], false), platform, true);
         assert_eq!(codes(&r), vec![505], "{path}: {:?}", r.findings);
         let text = english(&r, 505);
         assert!(text.contains("\"lumakit/hud.meter\"") && text.contains("of a mod that is on"), "{text}");
+    }
+}
 
-        let code = format!(r#"{{"platforms": ["{platform}"]}}"#);
-        let needs = r#"[{"id": "lumakit", "version": "^1"}]"#;
-        let bytes = luma(&[("code", code.as_str()), ("needs", needs)], &[file(&format!("code/{platform}/{}", entry_name(platform)), &lib(path))]);
-        let r = check(&bytes, platform, true);
-        assert!(!codes(&r).contains(&505), "{path}: {:?}", r.findings);
-        assert!(left(&r).contains(&(505, "Missing.ModExports")), "{path}: {:?}", r.not_checked);
+/// A mod for `platform` with the library `entry`, needing `lumakit` (or being it, `id`).
+fn needing_mod(platform: &str, entry: &[u8], id: &str) -> Vec<u8> {
+    let code = format!(r#"{{"platforms": ["{platform}"]}}"#);
+    let id = format!("\"{id}\"");
+    let needs = if id == "\"lumakit\"" { "-" } else { r#"[{"id": "lumakit", "version": ">=1.0.0"}]"# };
+    luma(&[("id", id.as_str()), ("code", code.as_str()), ("needs", needs)], &[file(&format!("code/{platform}/{}", entry_name(platform)), entry)])
+}
+
+/// `bytes` checked with the other installed mods `installed`.
+fn check_among(bytes: &[u8], platform: &str, installed: &[luma_validate::Installed]) -> Report {
+    let names = names();
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: Some(&names), store: None };
+    let platforms = [platform];
+    validate(&Input { source: Source::Bytes(bytes, "test.luma"), game: Some(&game), installed, platforms: &platforms, options: None, position: None })
+}
+
+#[test]
+fn a_needed_mod_s_exports_bind_its_imports() {
+    // Each format's library mod and the mods importing from it: the exports are read from LumaModInfo through the
+    // format's relocations (PE base relocations, ELF RELA, Mach-O rebase opcodes and chained fixups), kept in the
+    // library's report, and each import is bound against them as the kernel's modExport binds it.
+    for (platform, folder, ext, library) in [
+        ("windows-x64", "pe-x64", "dll", "pe-x64/library_mod.dll"),
+        ("linux-x64", "elf-x64", "so", "elf-x64/library_mod.so"),
+        ("macos-arm64", "macho-arm64", "dylib", "macho-arm64/library_mod.dylib"),
+        ("macos-arm64", "macho-arm64", "dylib", "macho-arm64-chained/library_mod.dylib"),
+    ] {
+        let kit = check_among(&needing_mod(platform, &lib(library), "lumakit"), platform, &[]);
+        assert!(kit.findings.is_empty(), "{library}: {:?}", kit.findings);
+        let sep = '\u{1f}';
+        assert_eq!(
+            kit.touches.exports,
+            vec![format!("{platform}{sep}hud.bar{sep}lumi1:aaaaaaaaaaaaaaaa"), format!("{platform}{sep}hud.meter{sep}lumi1:0123456789abcdef")],
+            "{library}"
+        );
+        // As the game keeps it in the library's report, and as LumaLink takes it from the mod folder.
+        let kept = luma_validate::Saved::from_report(&kit, "game");
+        let again = luma_validate::Saved::parse(&kept.to_bytes()).unwrap();
+        let installed = [again.installed("lumakit.luma", true).unwrap()];
+        assert_eq!(installed[0].touches.exports, kit.touches.exports);
+
+        let importer = |variant: &str| check_among(&needing_mod(platform, &lib(&format!("{folder}/{variant}.{ext}")), "test.mod"), platform, &installed);
+        // Exported with that signature: bound; nothing left unchecked.
+        let r = importer("mod_function");
+        assert!(r.findings.is_empty(), "{library}: {:?}", r.findings);
+        assert!(!r.not_checked.iter().any(|n| n.code == 505), "{library}: {:?}", r.not_checked);
+        // Exported with another signature.
+        let r = importer("mod_function_other_signature");
+        assert_eq!(codes(&r), vec![505], "{library}: {:?}", r.findings);
+        assert_eq!(
+            english(&r, 505),
+            format!("test.mod: code/{platform}/{}: the game has no function \"lumakit/hud.meter\" with the signature \"lumi1:ffffffffffffffff\".", entry_name(platform))
+        );
+        // Not exported (the optional one is left unbound, as the kernel leaves it).
+        let r = importer("mod_function_missing");
+        assert_eq!(codes(&r), vec![505], "{library}: {:?}", r.findings);
+        assert!(english(&r, 505).contains("\"lumakit/hud.dial\" of a mod that is on"), "{}", english(&r, 505));
+        // The needed mod not installed: L800, not a guess about its exports.
+        let alone = check_among(&needing_mod(platform, &lib(&format!("{folder}/mod_function_missing.{ext}")), "test.mod"), platform, &[]);
+        assert_eq!(codes(&alone), vec![800], "{library}: {:?}", alone.findings);
     }
 }
 

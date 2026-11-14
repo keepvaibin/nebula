@@ -139,6 +139,34 @@ static LumaImport imports[] = {
     {6, 0, "hud.meter", "lumi1:0123456789abcdef", &get_pos, 0, 0, 0},
 };
 LUMA_MOD(imports, start, 0);
+#elif defined(MOD_FUNCTION_OTHER_SIGNATURE)
+/* A function the needed mod exports, asked with another signature; and one it does not export. */
+static LumaImport imports[] = {
+    {6, 0, "lumakit/hud.meter", "lumi1:ffffffffffffffff", &get_pos, 0, 0, 0},
+};
+LUMA_MOD(imports, start, 0);
+#elif defined(MOD_FUNCTION_MISSING)
+static LumaImport imports[] = {
+    {6, 0, "lumakit/hud.dial", "lumi1:0123456789abcdef", &get_pos, 0, 0, 0},
+    {6, LUMA_OPTIONAL, "lumakit/hud.gauge", "lumi1:0123456789abcdef", &get_pos, 0, 0, 0},
+};
+LUMA_MOD(imports, start, 0);
+#elif defined(LIBRARY_MOD)
+/* A library mod (loader D3-3): the functions it gives the mods that need it, sorted by name. */
+static int32_t hud_bar(void) {
+    return 1;
+}
+static int32_t hud_meter(void) {
+    return 2;
+}
+static const LumaExport exports[] = {
+    LUMA_EXPORT_FUNCTION("hud.bar", "lumi1:aaaaaaaaaaaaaaaa", hud_bar),
+    LUMA_EXPORT_FUNCTION("hud.meter", "lumi1:0123456789abcdef", hud_meter),
+};
+static LumaImport imports[] = {
+    LUMA_FUNCTION(get_pos, "MR::getPlayerPos", "Vec3f *()"),
+};
+LUMA_LIBRARY_MOD(imports, start, 0, exports, 0);
 #elif defined(METHOD)
 /* Objects 10: a virtual call (kind 8) by the declaring class's name, and a class's number (kind 3) of any record. */
 static LumaImport imports[] = {

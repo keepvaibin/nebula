@@ -253,6 +253,10 @@ pub struct Touches {
     /// <version>.json`): the module key (`<id>.<module>`), the version and the schema's text, joined by U+001F. A mod
     /// that names the module in its `kit` has its data checked against them (L701, L702).
     pub kit_schemas: Vec<String>,
+    /// The functions this mod gives as a library mod (its LumaModInfo exports, loader D3-3), each platform's entry
+    /// library's in its order: platform, name and signature, joined by U+001F (platform and name alone for a null
+    /// signature). A mod that imports one (kind 6) has it bound against them (L505), as the kernel binds it.
+    pub exports: Vec<String>,
 }
 
 /// The layers of a zone, and the folders whose tables the game links by key across them (contract table-keys 13).

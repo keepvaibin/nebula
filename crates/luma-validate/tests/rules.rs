@@ -686,6 +686,9 @@ fn a_start_takes_the_whole_file_findings_from_the_kept_report_and_runs_the_rest(
     // read as none.
     let form2 = String::from_utf8(kept_form(&full, 2)).unwrap();
     assert!(Saved::parse(form2.as_bytes()).is_none());
+    // Nor a form 3 report (before `exports` touches): a library mod's exports would be read as none.
+    let form3 = String::from_utf8(kept_form(&full, 3)).unwrap();
+    assert!(Saved::parse(form3.as_bytes()).is_none());
     assert!(Saved::parse(b"not a kept report").is_none());
     // Cut at any byte, or any byte changed: it does not read.
     let kept = Saved::from_report(&full, "game").to_bytes();
@@ -701,7 +704,7 @@ fn a_start_takes_the_whole_file_findings_from_the_kept_report_and_runs_the_rest(
 fn kept_form1(full: &Report) -> Vec<u8> {
     let text = String::from_utf8(Saved::from_report(full, "game").to_bytes()).unwrap();
     let body: String = text.lines().filter(|l| !l.starts_with("end\t") && !l.starts_with("need\t")).map(|l| format!("{l}\n")).collect();
-    let body = body.replacen("luma-saved\t3\n", "luma-saved\t1\n", 1);
+    let body = body.replacen("luma-saved\t4\n", "luma-saved\t1\n", 1);
     sign(body)
 }
 
@@ -709,7 +712,7 @@ fn kept_form1(full: &Report) -> Vec<u8> {
 fn kept_form(full: &Report, form: u32) -> Vec<u8> {
     let text = String::from_utf8(Saved::from_report(full, "game").to_bytes()).unwrap();
     let body: String = text.lines().filter(|l| !l.starts_with("end\t")).map(|l| format!("{l}\n")).collect();
-    sign(body.replacen("luma-saved\t3\n", &format!("luma-saved\t{form}\n"), 1))
+    sign(body.replacen("luma-saved\t4\n", &format!("luma-saved\t{form}\n"), 1))
 }
 
 fn sign(body: String) -> Vec<u8> {

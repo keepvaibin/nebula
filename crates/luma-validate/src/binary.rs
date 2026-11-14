@@ -774,6 +774,16 @@ pub struct ModInfo {
     pub size: u32,
     pub api: u32,
     pub imports: Vec<ImportRow>,
+    /// A library mod's functions for the mods that need it (LumaExport rows), in the library's order; none when its
+    /// `size` does not reach `export_count` or `exports` is null, as the kernel reads them.
+    pub exports: Vec<ExportRow>,
+}
+
+/// One LumaExport: a name and its signature (None: a null signature, which no import matches).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExportRow {
+    pub name: String,
+    pub signature: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -787,6 +797,11 @@ pub struct ImportRow {
 
 pub const MOD_INFO_SIZE: u32 = 40;
 const IMPORT_SIZE: u64 = 56;
+/// LumaModInfo's `exports` and `export_count` (64-bit layout), and the size that reaches past the count.
+const EXPORTS_AT: u64 = 56;
+const EXPORT_COUNT_AT: u64 = 64;
+const EXPORTS_END: u32 = 68;
+const EXPORT_SIZE: u64 = 24;
 pub const MAX_IMPORTS: u32 = 65_536;
 
 /// Reads `luma_mod`; Err is a phrase saying what in it cannot be read. An address past the 64-bit range is a field that
@@ -822,5 +837,25 @@ pub fn mod_info(lib: &Library, at: u64) -> Result<ModInfo, &'static str> {
             imports.push(ImportRow { kind, flags, name, signature, hook_kind });
         }
     }
-    Ok(ModInfo { size, api, imports })
+    // A library mod's exports (loader D3-3), as the kernel's modExport reads them: a row with a null name is skipped.
+    let mut exports = Vec::new();
+    if size >= EXPORTS_END {
+        let list = lib.pointer_at(field(at, EXPORTS_AT, info)?).ok_or(info)?;
+        let count = lib.u32_at_address(field(at, EXPORT_COUNT_AT, info)?).ok_or(info)?;
+        if list != 0 {
+            for i in 0..u64::from(count) {
+                let row = field(list, i * EXPORT_SIZE, info)?;
+                let name = match lib.pointer_at(row).ok_or(info)? {
+                    0 => continue,
+                    p => lib.string_at(p, 1024).ok_or(info)?,
+                };
+                let signature = match lib.pointer_at(field(row, 8, info)?) {
+                    Some(0) | None => None,
+                    Some(p) => Some(lib.string_at(p, 1024).ok_or(info)?),
+                };
+                exports.push(ExportRow { name, signature });
+            }
+        }
+    }
+    Ok(ModInfo { size, api, imports, exports })
 }

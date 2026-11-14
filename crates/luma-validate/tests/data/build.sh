@@ -17,7 +17,7 @@ mkdir -p pe-x64 pe-arm64 elf-x64 elf-arm64 elf-x64-relr macho-arm64 macho-arm64-
 
 common="-O2 -nostdlib -ffreestanding -fno-stack-protector -fvisibility=hidden -Wall -Wextra -Werror -I $inc"
 win="-fuse-ld=lld -Wl,/NOENTRY -Wl,/Brepro"
-variants="GOOD MISSING WRONG_SIGNATURE NO_SIGNATURE OPTIONAL_MISSING CONSTRUCTOR_WRAP CONSTRUCTOR_AFTER REPLACE BAD_ROW NEWER SHORT_INFO NO_IMPORTS NO_EXPORT SERVICE SERVICE_BAD SERVICE_MORE MOD_FUNCTION MOD_FUNCTION_BAD METHOD METHOD_BAD"
+variants="GOOD MISSING WRONG_SIGNATURE NO_SIGNATURE OPTIONAL_MISSING CONSTRUCTOR_WRAP CONSTRUCTOR_AFTER REPLACE BAD_ROW NEWER SHORT_INFO NO_IMPORTS NO_EXPORT SERVICE SERVICE_BAD SERVICE_MORE MOD_FUNCTION MOD_FUNCTION_BAD MOD_FUNCTION_OTHER_SIGNATURE MOD_FUNCTION_MISSING LIBRARY_MOD METHOD METHOD_BAD"
 lower() { echo "$1" | tr 'A-Z' 'a-z'; }
 
 # Windows x64: every variant, an extra library pair, and a program.
@@ -36,7 +36,9 @@ done
 "$cc" --target=x86_64-pc-windows-msvc -shared $common $win -Wl,/NOIMPLIB -Wl,/INCLUDE:_tls_used -DGOOD -DTLS_CALLBACK -o pe-x64/tls_callback.dll lib.c
 
 # ELF: x64 with RELA relocations, x64 with RELR (packed relative), arm64; an extra library pair on x64.
-elf="-shared -fPIC -fuse-ld=lld -Wl,--build-id=none"
+# luma.h's runners read the bounds of luma_ctors and luma_dtors, which luma_ctors.ld makes.
+ctors=$(cygpath -m "$root/native/include/luma_ctors.ld" 2>/dev/null || echo "$root/native/include/luma_ctors.ld")
+elf="-shared -fPIC -fuse-ld=lld -Wl,--build-id=none -Wl,-T,$ctors"
 "$cc" --target=x86_64-unknown-linux-gnu $common $elf -DGOOD -o elf-x64/good.so lib.c
 "$cc" --target=x86_64-unknown-linux-gnu $common $elf -DMISSING -o elf-x64/missing.so lib.c
 "$cc" --target=x86_64-unknown-linux-gnu $common $elf -DNO_EXPORT -o elf-x64/no_export.so lib.c
@@ -49,6 +51,10 @@ elf="-shared -fPIC -fuse-ld=lld -Wl,--build-id=none"
 "$cc" --target=x86_64-unknown-linux-gnu $common $elf -DGOOD -DRUNS_AT_CLOSE -o elf-x64/runs_at_close.so lib.c
 "$cc" --target=x86_64-unknown-linux-gnu $common $elf -DSERVICE -o elf-x64/service.so lib.c
 "$cc" --target=x86_64-unknown-linux-gnu $common $elf -DMOD_FUNCTION -o elf-x64/mod_function.so lib.c
+# A library mod's exports and the mods importing from it (L505), on each format.
+for v in MOD_FUNCTION_OTHER_SIGNATURE MOD_FUNCTION_MISSING LIBRARY_MOD; do
+    "$cc" --target=x86_64-unknown-linux-gnu $common $elf -D$v -o "elf-x64/$(lower $v).so" lib.c
+done
 "$cc" --target=x86_64-unknown-linux-gnu $common $elf -Wl,-fini,fini_function -DGOOD -DFINI_FUNCTION -o elf-x64/fini.so lib.c
 
 # Mach-O: arm64 with the classic rebase opcodes, arm64 with chained fixups, x64.
@@ -60,6 +66,10 @@ macho="-shared -fuse-ld=lld -Wl,-undefined,error"
 "$cc" --target=arm64-apple-macos11 $common $macho -Wl,-no_fixup_chains -DGOOD -DRUNS_AT_LOAD -o macho-arm64/runs_at_load.dylib lib.c
 "$cc" --target=arm64-apple-macos13 $common $macho -Wl,-fixup_chains -DGOOD -DRUNS_AT_LOAD -o macho-arm64-chained/runs_at_load.dylib lib.c
 "$cc" --target=arm64-apple-macos11 $common $macho -Wl,-no_fixup_chains -DGOOD -DRUNS_AT_CLOSE -o macho-arm64/runs_at_close.dylib lib.c
+for v in MOD_FUNCTION MOD_FUNCTION_OTHER_SIGNATURE MOD_FUNCTION_MISSING LIBRARY_MOD; do
+    "$cc" --target=arm64-apple-macos11 $common $macho -Wl,-no_fixup_chains -D$v -o "macho-arm64/$(lower $v).dylib" lib.c
+done
+"$cc" --target=arm64-apple-macos13 $common $macho -Wl,-fixup_chains -DLIBRARY_MOD -o macho-arm64-chained/library_mod.dylib lib.c
 # A library that needs another (L504): an extra library; one that binds a symbol of it, in the bind table and in the
 # chained fixups' imports; one that only loads it.
 "$cc" --target=arm64-apple-macos11 $common $macho -Wl,-no_fixup_chains -Wl,-install_name,@loader_path/extra.dylib -DEXTRA -o macho-arm64/extra.dylib lib.c
