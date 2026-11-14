@@ -242,22 +242,28 @@ mtl::Object function_of(const ProgramBytes& program, bool pixel) {
         }
     }
     if (ProgramRecord record; record_of(program, record)) {
-        // Compiled when the app was built: the function is there to take.
-        const std::lock_guard<std::mutex> guard(gPrograms.lock);
-        const auto [at, inserted] = gPrograms.functions.emplace(program.data, nullptr);
-        if (inserted) {
-            @autoreleasepool {
-                const std::uint64_t began = now_us();
-                id<MTLFunction> const function = [program_library(record.library) newFunctionWithName:@(record.name)];
-                gFunctionUs.fetch_add(now_us() - began, std::memory_order_relaxed);
-                gFunctionCount.fetch_add(1u, std::memory_order_relaxed);
-                if (function == nil && gPrograms.failures_told.fetch_add(1u) < 8u) {
-                    std::fprintf(stderr, "[pipelines] the app's Metal library %u has no function %s\n", record.library, record.name);
-                }
-                at->second = function != nil ? (__bridge_retained void*)function : nullptr;
-            }
+        // Compiled when the app was built: the function is there to take. Taken outside the lock (a library makes
+        // functions on any thread), as a text is compiled; of two threads that take the same one, one result is kept.
+        id<MTLLibrary> library = nil;
+        {
+            const std::lock_guard<std::mutex> guard(gPrograms.lock);
+            library = program_library(record.library);
         }
-        return at->second;
+        @autoreleasepool {
+            const std::uint64_t began = now_us();
+            id<MTLFunction> const function = [library newFunctionWithName:@(record.name)];
+            gFunctionUs.fetch_add(now_us() - began, std::memory_order_relaxed);
+            gFunctionCount.fetch_add(1u, std::memory_order_relaxed);
+            if (function == nil && gPrograms.failures_told.fetch_add(1u) < 8u) {
+                std::fprintf(stderr, "[pipelines] the app's Metal library %u has no function %s\n", record.library, record.name);
+            }
+            const std::lock_guard<std::mutex> guard(gPrograms.lock);
+            const auto [at, inserted] = gPrograms.functions.emplace(program.data, nullptr);
+            if (inserted && function != nil) {
+                at->second = (__bridge_retained void*)function;
+            }
+            return at->second;
+        }
     }
     @autoreleasepool {
         MTLCompileOptions* const options = [MTLCompileOptions new];
