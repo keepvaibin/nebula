@@ -56,6 +56,29 @@ int main() {
         check(play.poll() == Model::kChoicePlay && !play.visible, "play closes");
         play.open();
         check(play.poll() == -1 && play.row == Model::RowPlay && play.notice_page, "open starts again, notice first");
+
+        Model bench;
+        bench.open();
+        bench.key(LauncherAction::Next, false);
+        bench.key(LauncherAction::Next, false);
+        check(bench.row == Model::RowBenchmark, "benchmark is the row after settings");
+        check(bench.key(LauncherAction::Accept, false) == Model::Effect::None && bench.poll() == Model::kChoiceBenchmark &&
+                  !bench.visible,
+              "benchmark closes with its own choice");
+        bench.open();
+        bench.click(Model::RowBenchmark);
+        check(bench.poll() == Model::kChoiceBenchmark, "a click on benchmark chooses it");
+
+        Model three;
+        three.benchmark = false;
+        three.open();
+        check(three.view() == static_cast<int>(Model::kLauncherView | Model::kNoBenchmark), "no benchmark: the view says so");
+        three.key(LauncherAction::Previous, false);
+        check(three.row == 2u && three.row_at(three.row) == Model::RowQuit, "no benchmark: three rows, quit last");
+        three.click(2u);
+        check(three.poll() == Model::kChoiceQuit, "no benchmark: the third answer quits");
+        three.open();
+        check(three.click(3u) == Model::Effect::None && three.visible, "no benchmark: no fourth answer");
     } catch (const std::exception& failure) {
         std::cerr << "launcher_model_tests: " << failure.what() << '\n';
         return 1;

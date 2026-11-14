@@ -4,14 +4,23 @@
 #include <cstdint>
 #include <string_view>
 
-// Launcher mode (docs/COMMAND_LINE.md `--home`): the boot holds the title on a home screen (Play, Settings, Quit, and
-// an update's notice when one is offered) in the menus' own look. The host keeps it (launcher_model.h: its keys and
+namespace galaxy::render {
+struct RenderConfig;
+}
+
+// Launcher mode (docs/COMMAND_LINE.md `--home`): the boot holds the title on a home screen (Play, Settings, Benchmark,
+// Quit, and an update's notice when one is offered) in the menus' own look. The host keeps it (launcher_model.h: its keys and
 // controllers' buttons); the game opens it at the title's hold and draws it as the HOME Menu's screen
 // (NEBULA_HOME_MENU_LAUNCHER_*), and goes on to the title after Play.
 namespace galaxy::ui {
 
 // Before the game starts: whether the game's request opens the home screen.
 void launcher_enable(bool on) noexcept;
+// Before the game starts: whether the rows offer the benchmark (the host can start itself again with it).
+void launcher_offer_benchmark(bool on) noexcept;
+// Before the game starts: settings the settings menu shows as its unapplied draft when the home screen opens (a
+// benchmark's recommendation, --benchmark-result); its Apply keeps them.
+void launcher_show_draft(const galaxy::render::RenderConfig& draft);
 // The game's request at the title's hold: true once, when launcher mode is on.
 [[nodiscard]] bool launcher_open() noexcept;
 [[nodiscard]] bool launcher_visible() noexcept;

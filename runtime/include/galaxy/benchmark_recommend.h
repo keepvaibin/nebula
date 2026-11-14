@@ -2,7 +2,7 @@
 #pragma once
 
 // The benchmark's recommended settings: a pure function of its measurements and the device (benchmark.h runs them).
-// Settings are named by the settings model's keys (runtime/src/ui/settings_table.tsv) so every app shows and applies them.
+// Settings are named by their config.ini keys (render_config.cpp's reader) so every app shows and applies them.
 
 #include "galaxy/render/resolution_fit.h"
 

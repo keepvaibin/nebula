@@ -20,7 +20,7 @@ namespace {
     };
     // The host's view (NEBULA_HOME_MENU_LAUNCHER_OPEN): bit 16 marks the home screen's, bits 8-15 its page.
     const s32 cLauncherView = 1 << 16;
-    enum { cChoicePlay = 0, cChoiceQuit = 1 };
+    enum { cChoicePlay = 0, cChoiceQuit = 1, cChoiceBenchmark = 2 };
 
     bool sHolding = false;
     bool sLeaving = false;
@@ -63,7 +63,8 @@ namespace NebulaLauncher {
             play(cSoundReturnApp);
             sHolding = false;
             break;
-        case cChoiceQuit: {
+        case cChoiceQuit:
+        case cChoiceBenchmark: {  // the host starts again into the benchmark when the game has left
             play(cSoundGotoMenu);
             sLeaving = true;
             AudSystem* const pAudio = AudWrap::getSystem();
