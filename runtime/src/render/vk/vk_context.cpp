@@ -187,7 +187,7 @@ Texture::~Texture() {
     const VkImage image_handle = image;
     VmaAllocation_T* const allocation_handle = allocation;
     const VkImageView views[2] = {view, target_view};
-    const VkFramebuffer framebuffers[3] = {framebuffer, scene_framebuffer, scene_resolve_framebuffer};
+    const VkFramebuffer framebuffers[2] = {framebuffer, scene_framebuffer};
     context.defer([=] {
         for (const VkFramebuffer f : framebuffers) {
             if (f != VK_NULL_HANDLE) {

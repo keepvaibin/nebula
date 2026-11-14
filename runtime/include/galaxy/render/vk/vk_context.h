@@ -53,7 +53,6 @@ struct Texture : std::enable_shared_from_this<Texture> {
     // The scene target pass's framebuffer with this image as the scene target's colour (a display copy's hand-over, E-10) and the scene target
     // depth target whose serial is scene_depth_serial.
     VkFramebuffer scene_framebuffer = VK_NULL_HANDLE;
-    VkFramebuffer scene_resolve_framebuffer = VK_NULL_HANDLE;
     std::uint64_t scene_depth_serial = 0;
     VkFormat format = VK_FORMAT_UNDEFINED;
     VkImageUsageFlags usage = 0;

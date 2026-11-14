@@ -1357,7 +1357,7 @@ VkShaderModule RendererVk::utility_module(vk::UtilitySpirv shader) {
 VkPipeline RendererVk::create_utility_pipeline(VkRenderPass pass, VkPipelineLayout layout, vk::UtilitySpirv vs_shader,
                                                vk::UtilitySpirv ps_shader, VkColorComponentFlags write_mask,
                                                bool blend, bool strip, bool depth_write,
-                                               VkSampleCountFlagBits samples) {
+                                               VkSampleCountFlagBits samples, bool color_attachment) {
     const VkDevice device = vk::Context::get().device();
     const VkShaderModule vs = utility_module(vs_shader);
     const VkShaderModule ps = utility_module(ps_shader);
@@ -1398,8 +1398,9 @@ VkPipeline RendererVk::create_utility_pipeline(VkRenderPass pass, VkPipelineLayo
         target.alphaBlendOp = VK_BLEND_OP_ADD;
     }
     VkPipelineColorBlendStateCreateInfo blend_info{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-    blend_info.attachmentCount = 1;
-    blend_info.pAttachments = &target;
+    // A pass with no colour attachment (the depth resolve's) takes no attachment blend state.
+    blend_info.attachmentCount = color_attachment ? 1u : 0u;
+    blend_info.pAttachments = color_attachment ? &target : nullptr;
     const VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo dynamic{VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
     dynamic.dynamicStateCount = 2;
@@ -1449,9 +1450,10 @@ bool RendererVk::create_utility_pipelines() {
         (void)scene_utility_pipeline(static_cast<SceneUtility>(kind));
     }
     if (msaa_max_samples_ > 1u) {
-        depth_resolve_pipeline_ = create_utility_pipeline(draw_layout_.scene_pass, utility_layout_,
+        // The single-sample depth target's pass alone (resolve_scene_depth): the resolve writes depth only.
+        depth_resolve_pipeline_ = create_utility_pipeline(depth_alone_passes_[0][0], utility_layout_,
                                                           vk::UtilitySpirv::BlitVs, vk::UtilitySpirv::DepthResolvePs, 0u, false,
-                                                          false, true);
+                                                          false, true, VK_SAMPLE_COUNT_1_BIT, false);
     }
     blit_pipeline_ = create_utility_pipeline(present_pass_, utility_layout_, vk::UtilitySpirv::PresentVs, vk::UtilitySpirv::BlitPs,
                                              kAll, false, false, false);
