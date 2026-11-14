@@ -26,8 +26,9 @@ namespace {
 
 constexpr std::uint64_t kStagingChunkBytes = 16ull << 20u;
 constexpr std::size_t kFreeChunksKept = 4u;
-// Frames without a staging request before a spare chunk goes (one more for every kStagingTrimFrames after that): a scene's
-// load keeps its chunks for the next scene's, and a run that has stopped loading gives them back.
+// Frames without a staging request before a spare chunk goes (one more for every kStagingTrimFrames after that, the chunk
+// being filled last): a scene's load keeps its chunks for the next scene's, and a run that has stopped loading gives them
+// all back.
 constexpr unsigned kStagingIdleFrames = 600u;
 constexpr unsigned kStagingTrimFrames = 120u;
 
@@ -503,12 +504,18 @@ void TextureStore::begin_frame(unsigned frame_slot, unsigned frames_in_flight) {
     kept_[frame_slot].clear();
     {
         // Spare chunks (idle: only this list holds them, and the frames that read them are past) go one at a time once no scene
-        // has staged a texture for a while; the chunk being filled stays.
+        // has staged a texture for a while, then the chunk being filled once nothing staged in it is still in flight (only the
+        // store holds it; a holder elsewhere only lets go, and a new one needs lock_). The next staging makes a chunk again.
         const std::lock_guard guard(lock_);
         if (std::exchange(staging_requested_, false)) {
             staging_idle_frames_ = 0u;
-        } else if (++staging_idle_frames_ >= kStagingIdleFrames && !free_chunks_.empty()) {
-            free_chunks_.pop_back();
+        } else if (++staging_idle_frames_ >= kStagingIdleFrames) {
+            if (!free_chunks_.empty()) {
+                free_chunks_.pop_back();
+            } else if (arena_chunk_ != nullptr && arena_chunk_.use_count() == 1) {
+                arena_chunk_.reset();
+                arena_used_ = 0u;
+            }
             staging_idle_frames_ = kStagingIdleFrames - kStagingTrimFrames;
         }
     }
