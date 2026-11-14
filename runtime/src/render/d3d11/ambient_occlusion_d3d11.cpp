@@ -23,6 +23,8 @@ using ao::Constants;
 // Occlusion and eye distance: the two channels the passes write and read (a typed store to R16G16 is in every
 // feature level 11_0 device; the shaders' float4 writes keep x and y).
 constexpr DXGI_FORMAT kOcclusionFormat = DXGI_FORMAT_R16G16_FLOAT;
+// The denoised occlusion at one occlusion pixel per scene target pixel: the multiply reads its occlusion alone.
+constexpr DXGI_FORMAT kDenoisedFullFormat = DXGI_FORMAT_R16_FLOAT;
 constexpr DXGI_FORMAT kDistanceFormat = DXGI_FORMAT_R32_FLOAT;
 constexpr std::uint64_t kIdleFrames = 600u;
 
@@ -99,7 +101,7 @@ void AmbientOcclusion::shutdown() noexcept {
 
 bool AmbientOcclusion::ensure(std::shared_ptr<Texture>& target, DXGI_FORMAT format, unsigned width, unsigned height,
                               const char* name) {
-    if (target && target->width == width && target->height == height) {
+    if (target && target->width == width && target->height == height && target->format == format) {
         return true;
     }
     target = Context::get().create_texture(width, height, 1u, format,
@@ -183,7 +185,7 @@ bool AmbientOcclusion::record(ID3D11DeviceContext1* context, const Inputs& in) {
     if (!ao::make_constants(in.view, width, height, divisor, in.ssao, c) ||
         !ensure(distance_, kDistanceFormat, width, height, "occlusion distance") ||
         !ensure(raw_, kOcclusionFormat, width, height, "occlusion") ||
-        !ensure(denoised_, kOcclusionFormat, width, height, "occlusion denoised")) {
+        !ensure(denoised_, divisor <= 1u ? kDenoisedFullFormat : kOcclusionFormat, width, height, "occlusion denoised")) {
         return false;
     }
     ao::bin_objects(*in.objects, c, object_values_, object_tiles_, object_scratch_);
