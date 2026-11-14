@@ -2508,15 +2508,49 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
 // kCalibrationSamples frames (the pass timers' sum); the fit's largest height that fits a heavy stage is kept. What is kept:
 //   no GPU timestamps, the CPU the limit, no fit      the start's height
 //   a height of the INTERNAL RESOLUTION row fits      the largest that does (match display when the panel's own fits)
-//   even 480 lines is over the budget                 the PERFORMANCE preset (apply_performance_preset)
+//   even 480 lines is over the budget                 the PERFORMANCE preset (apply_performance_preset); 480 lines alone
+//                                                     when any setting changed since the start
+// Only the height is written, onto the settings as they are then.
 void RenderCore::calibrate_first_start(bool scene, double walk_ms) {
     constexpr unsigned kCalibrationSettle = 45u;  // 0.9^45: under 1 % of the height before left in the timers' average
+    // Timings started again for changed settings before the start's height is left and nothing is measured: each costs at
+    // most two heights' 75 frames, and ray tracing's own measurement after the player turns it on is one of them.
+    constexpr unsigned kCalibrationRestarts = 3u;
     constexpr unsigned kCalibrationSamples = 30u;
     FirstStartCalibration& c = calibration_;
     const RenderConfig chosen = get_render_config_chosen();
     if (!(chosen == c.armed)) {
-        // The player chose (the menu, Nebula Settings), in any setting: theirs stands, and nothing is set or saved.
-        end_first_start_calibration(0u, nullptr);
+        if (chosen.internal_height != c.armed.internal_height || chosen.upscaler != c.armed.upscaler) {
+            // The player chose the resolution (the menu, Nebula Settings): theirs stands, and nothing is set or saved.
+            end_first_start_calibration(0u, nullptr);
+            return;
+        }
+        // Another setting (the player's, or ray tracing's measurement after the player turned it on) is taken in. The
+        // pictures timed so far were another config's: timed again from the first height.
+        c.armed = chosen;
+        c.changed = true;
+        if (c.stage >= 2u) {
+            if (!c.timing_was_on) {
+                renderer_.set_gpu_timing(false);
+            }
+            ++c.restarts;
+            c.stage = 1u;
+            c.first_height = chosen.internal_height == c.heights[0];
+            c.frames = 0u;
+            c.pixels.clear();
+            c.ms.clear();
+            c.cpu_over = 0.0;
+            c.list_qpc = 0;
+            if (c.restarts <= kCalibrationRestarts) {
+                std::fprintf(stderr, "[settings] first start: a setting changed while measuring: measured again (%u of %u)\n",
+                             c.restarts, kCalibrationRestarts);
+            }
+        }
+    }
+    // The settings menu over the scene: its pictures are not the scene's alone, and a height set while it is open would not
+    // be the one its draft holds (an apply would write the draft's back as the player's). Held, then settled again.
+    if (native_settings_overlay_visible()) {
+        c.frames = 0u;
         return;
     }
     if (!scene) {
@@ -2524,6 +2558,22 @@ void RenderCore::calibrate_first_start(bool scene, double walk_ms) {
     }
     if (c.stage == 1u) {
         if (pipelines_.pending() != 0u) {
+            return;
+        }
+        if (!c.first_height) {
+            RenderConfig first = chosen;
+            first.internal_height = c.heights[0];
+            set_render_config(first);
+            c.armed = get_render_config_chosen();
+            c.first_height = true;
+            return;
+        }
+        if (c.restarts > kCalibrationRestarts) {
+            std::fprintf(stderr,
+                         "[settings] first start: settings changed %u times while measuring: internal height %u stays, "
+                         "nothing saved\n",
+                         c.restarts, c.start);
+            end_first_start_calibration(0u, nullptr);
             return;
         }
         c.timing_was_on = renderer_.gpu_timing_on();
@@ -2598,8 +2648,9 @@ void RenderCore::calibrate_first_start(bool scene, double walk_ms) {
     end_first_start_calibration(fit.valid ? height : c.start, fit.valid ? "measured" : "no fit");
 }
 
-// `why` null: the player chose meanwhile, and nothing is set or saved. `performance`: the PERFORMANCE preset, at `height`.
-// Either way only from the settings as the calibration set them: if the player changed any field since, theirs stand.
+// `why` null: nothing is set or saved (the player chose the resolution, a benchmark runs, settings changed too often).
+// Otherwise `height` alone is written onto the settings as they are now, every other field the player's; `performance`:
+// the PERFORMANCE preset with it, only when no setting changed since the calibration armed.
 void RenderCore::end_first_start_calibration(unsigned height, const char* why, bool performance) {
     FirstStartCalibration& c = calibration_;
     if (c.stage >= 2u && !c.timing_was_on) {
@@ -2612,17 +2663,19 @@ void RenderCore::end_first_start_calibration(unsigned height, const char* why, b
         return;
     }
     RenderConfig chosen = get_render_config_chosen();
-    if (!(chosen == c.armed)) {
-        std::fprintf(stderr, "[settings] first start: the player chose, nothing kept\n");
+    if (chosen.internal_height != c.armed.internal_height || chosen.upscaler != c.armed.upscaler) {
+        std::fprintf(stderr, "[settings] first start: the player chose the resolution, nothing kept\n");
         return;
     }
-    if (performance) {
+    const bool preset = performance && !c.changed && chosen == c.armed;
+    if (preset) {
         apply_performance_preset(chosen);
     }
     chosen.internal_height = height;
     set_render_config(chosen);
     (void)save_render_config_to_file();
-    std::fprintf(stderr, "[settings] first start: internal height %u kept (%s)\n", height, why);
+    std::fprintf(stderr, "[settings] first start: internal height %u kept (%s%s)\n", height, why,
+                 performance && !preset ? "; a setting changed since the start: the height alone" : "");
 }
 
 void boot_step(const char* step) noexcept {
