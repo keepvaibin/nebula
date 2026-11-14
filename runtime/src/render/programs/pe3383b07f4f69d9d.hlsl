@@ -24,18 +24,19 @@ NativeOut program_ps(Varyings i) {
         const float2 off = float2(dot(m[2].xyz, sv), dot(m[3].xyz, sv));
         tevcoord = texel + off;
         const float4 t = TEX(1).Sample(SAMP(1), tevcoord / m[1].zw).rgba;
-        const float3 k = m[4].rgb;
         const float ka = m[4].a;
-        const float3 rc = saturate((k.rgb + lerp(t.rgb, float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0))));
+        const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(float3(0.0, 0.0, 0.0), low8(r0.rgb), t.rgb)));
         const float ra = saturate((r0.a + lerp(0.0, ka, t.a)));
         prev.rgb = rc;
         prev.a = ra;
         NATIVE_STAGE(0, float4(rc, ra))
     }
     prev = float4(prev.rgb, prev.a);
+#if NATIVE_TRACED || NATIVE_PREPASS || NATIVE_SAMPLE
     const float a8 = round(prev.a * 255.0);
     if (!((a8 >= round(m[5].x * 255.0)) && (a8 <= round(m[5].y * 255.0)))) {
         discard;
     }
+#endif
     PROGRAM_RETURN(saturate(prev));
 }
