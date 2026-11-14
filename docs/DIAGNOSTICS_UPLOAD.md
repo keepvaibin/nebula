@@ -25,8 +25,11 @@ the player ticks "Include the last game log": the last 200 lines (32 KiB at most
    `@` with a dot after it; `<address>` when it is four dot-separated numbers.
 4. The line is cut at 200 bytes.
 
-Never sent: saves, Miis, settings files, mods, file paths, user or computer names, serial numbers, the IP address
-(the server does not store it), anything when the player does not press Send.
+Never in a report: saves, Miis, settings files, mods, file paths, user or computer names, serial numbers. Nothing
+is sent when the player does not press Send. The IP address: the server sees it while it receives a report (an
+HTTPS request cannot hide it) and uses it only as the per-address rate limiter's key, as
+HMAC-SHA256(ADDRESS_SALT, address) with a secret salt of the deployment; the limiter keeps that key in memory for
+its 60 s period; the address and the key are not stored or logged (tools/telemetry/worker/README.md).
 
 ## Envelope, version 1
 

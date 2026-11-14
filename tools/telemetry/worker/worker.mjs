@@ -1,6 +1,8 @@
 // Nebula's diagnostics drop (docs/DIAGNOSTICS_UPLOAD.md): one POST route that stores sealed reports. It cannot read
 // them (they are sealed to the developer's key) and has no route to read, list or delete them. The client's address
-// is used only as a hashed rate-limit key and is never stored or logged.
+// is seen while a report is received and used only as the rate limiter's key, as an HMAC-SHA256 under the deployment's
+// secret ADDRESS_SALT (an unsalted hash of an IPv4 address is reversed by trying all 2^32); the limiter keeps that key
+// in memory for its 60 s period; nothing stores or logs the address or its key.
 
 const PATH = "/v1/report";
 const CONTENT_TYPE = "application/x-nebula-report";
@@ -39,9 +41,14 @@ async function readCapped(request) {
   return body;
 }
 
-async function addressKey(request) {
+// The deployment's salt: a secret of at least 32 characters (`wrangler secret put ADDRESS_SALT`, README.md).
+const MIN_SALT = 32;
+
+async function addressKey(request, salt) {
   const address = request.headers.get("cf-connecting-ip") ?? "";
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(address));
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey("raw", encoder.encode(salt), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const digest = await crypto.subtle.sign("HMAC", key, encoder.encode(address));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
@@ -50,7 +57,10 @@ export default {
     const url = new URL(request.url);
     if (request.method !== "POST" || url.pathname !== PATH || url.search !== "") return answer(404);
     if ((request.headers.get("content-type") ?? "").toLowerCase() !== CONTENT_TYPE) return answer(415);
-    const { success } = await env.PER_ADDRESS.limit({ key: await addressKey(request) });
+    // No salt, no service: the limiter is never keyed by something an address can be recovered from.
+    const salt = typeof env.ADDRESS_SALT === "string" ? env.ADDRESS_SALT : "";
+    if (salt.length < MIN_SALT) return answer(503);
+    const { success } = await env.PER_ADDRESS.limit({ key: await addressKey(request, salt) });
     if (!success) return answer(429);
     const body = await readCapped(request);
     if (body === null) return answer(413);

@@ -1,8 +1,16 @@
 # Diagnostics drop (Cloudflare Worker)
 
 Stores the sealed reports players choose to send after a benchmark (docs/DIAGNOSTICS_UPLOAD.md). It accepts one
-`POST /v1/report`, checks type, size (256 KiB) and magic, rate-limits per address (hashed, never stored) and per day,
-writes the body to R2 and answers 204. No route reads, lists or deletes; every other request is 404.
+`POST /v1/report`, checks type, size (256 KiB) and magic, rate-limits per address and per day, writes the body to R2
+and answers 204. No route reads, lists or deletes; every other request is 404.
+
+What it does with the sender's address (the game's consent text says the same): the address reaches the Worker with
+every request (an HTTPS connection cannot hide it). The Worker uses it only as the per-address rate limiter's key,
+and only as HMAC-SHA256(ADDRESS_SALT, address): the salt is a secret of this deployment, so the key cannot be turned
+back into an address by trying every IPv4 address. The Rate Limiting binding keeps that key in memory, per Cloudflare
+location, for its period (60 s, wrangler.toml); nothing else sees it. The report's storage name is the UTC date and a
+random UUID; the daily counter keeps a number only; request logs are off (`[observability] enabled = false`). Without
+a salt of at least 32 characters every report is refused with 503.
 
 ## Once
 
@@ -14,7 +22,9 @@ writes the body to R2 and answers 204. No route reads, lists or deletes; every o
    `wrangler r2 bucket create nebula-diag-reports`, then
    `wrangler r2 bucket lifecycle add nebula-diag-reports expire-180 --expire-days 180` (or in the dashboard: R2 >
    nebula-diag-reports > Settings > Object lifecycle rules > delete after 180 days).
-4. Deploy, from this folder: `wrangler deploy`. Put the printed URL plus `/v1/report`
+4. The address salt, once, never shown again: `openssl rand -hex 32 | wrangler secret put ADDRESS_SALT` (any 32+
+   random characters; a new salt only changes which counter an address hits).
+5. Deploy, from this folder: `wrangler deploy`. Put the printed URL plus `/v1/report`
    (`https://nebula-diag.<account>.workers.dev/v1/report`) in `diag_endpoint.h` (`kEndpoint`) and build the release.
 
 Fetch reports with an R2 API token (Account > R2 > Manage API tokens, Object Read only) and any S3 client, e.g.
@@ -41,4 +51,5 @@ KV free: 1 GB, 1,000 writes a day (keep `DAILY_CAP` at 1000 or below). Fetch wit
 
 ## Tests
 
-`node --test tools/telemetry/worker/worker.test.mjs` (Node 18+, no packages): routes, limits, cap, storage keys.
+`node --test tools/telemetry/worker/worker.test.mjs` (Node 18+, no packages): routes, limits, cap, storage keys, the
+salted limiter key and the refusal without a salt.
