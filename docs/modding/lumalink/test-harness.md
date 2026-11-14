@@ -406,3 +406,8 @@ Built:
   30 s. A copy still held is left in place and the run's log names the holder (Windows' Restart Manager). The verdict
   and `result.json` do not depend on the removal. Before this revision a copy held for more than 5 s stopped the
   harness before it wrote `result.json`.
+- R11-4, a menu over the setup: a menu the boot's close hid with its question standing (an `"install": "import"`
+  mod's result, a consent question) opens again at the first frame of a 3D scene that no extension holds
+  (`NebulaHostExtension.holds_menus`, appended). The harness holds it until frame 0 is fixed, since an open menu
+  holds the scene and with it the setup's save and stage sequences. The question is up at frame 0, as a player
+  finds it at the title.

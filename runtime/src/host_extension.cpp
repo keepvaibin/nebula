@@ -263,6 +263,15 @@ bool mods_changed() noexcept {
     return changed;
 }
 
+bool holds_menus() noexcept {
+    for (std::size_t i = 0; i < g_count; ++i) {
+        if (g_extensions[i].holds_menus != nullptr && g_extensions[i].holds_menus(g_extensions[i].user) != 0u) {
+            return true;
+        }
+    }
+    return false;
+}
+
 std::atomic<bool> g_ended{false};
 
 void ending(bool again) noexcept {

@@ -164,6 +164,10 @@ typedef struct NebulaHostExtension {
        `again` nonzero: the game starts again after it, with the same arguments and environment and
        NEBULA_STARTED_AGAIN=<starts so far> (an exec in the same process on Linux and macOS). */
     void (*ending)(void* user, uint32_t again);
+    /* Game thread, at each frame of a 3D scene while a menu waits: nonzero while the extension prepares the game unseen
+       (a test's setup, before the test's first frame). A menu the boot's close hid with its question standing opens
+       again at the first 3D scene that no extension holds, so what the extension prepares runs with the scene going. */
+    uint32_t (*holds_menus)(void* user);
 } NebulaHostExtension;
 
 typedef const NebulaHostExtension* (*NebulaExtensionAttach)(const NebulaHostForExtension* host);

@@ -2339,8 +2339,10 @@ void svc_texture_hd(void*, uint32_t texture, const void* hd) {
 void svc_submit_frame(void*, NebulaFrameList* list) {
     if ((list->flags & NEBULA_FRAME_HAS_SCENE) != 0u) {
         // The first 3D scene (the title's, or a test's galaxy) is where the game first shows a menu: one the boot's
-        // close hid with a question standing opens again (svc_settings_input).
-        if (gSceneBegins.fetch_add(1, std::memory_order_relaxed) == 0u) galaxy::render::native_settings_reopen_held();
+        // close hid with a question standing opens again (svc_settings_input). An extension preparing the game unseen
+        // (a test's setup, which needs the scene and its sequences going) holds it until it is done.
+        gSceneBegins.fetch_add(1, std::memory_order_relaxed);
+        if (!galaxy::extensions::holds_menus()) galaxy::render::native_settings_reopen_held();
         end_boot_fast("first 3D scene");
     }
     list->game_frame = gGameFrames.load(std::memory_order_relaxed);
