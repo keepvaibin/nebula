@@ -3,8 +3,8 @@
 docs/modding/language/types.md: the module's type rows (DESCRIBED, what nebula_game_luma_describe wrote: the host's
 --luma-describe or native/tools/luma_describe.c) against the generator's luma_types.json (GENERATED: libclang's numbers,
 and `reachable` and `left_out` by C++'s lookup). Every record, field, base, alias and global with a row, and for every
-record every name its bases give it: bound with the same position, or refused for the same reason and names (TY-1,
-TY2-1); and the kernel's left rows against left_out (TY-7). Any difference fails, naming the row; exit 1. Exit 0 prints
+record every name its bases give it: bound with the same position, or refused for the same reason and names;
+and the kernel's left rows against left_out. Any difference fails, naming the row; exit 1. Exit 0 prints
 the counts compared.
 """
 import json

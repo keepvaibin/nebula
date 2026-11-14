@@ -382,11 +382,11 @@ class Reader:
         return "::".join(reversed(parts)) if parts else None
 
     def type_text(self, t):
-        """TY-3: instrument.py's text, the one 1.1's function rows use; None for a type no mod can write."""
+        """instrument.py's text, the one 1.1's function rows use; None for a type no mod can write."""
         return self.unit.type_text(t)
 
     def instance_name(self, t):
-        """TY-2: a template instance's one name: its canonical spelling, arguments in fixed-width names."""
+        """A template instance's one name: its canonical spelling, arguments in fixed-width names."""
         text = self.text(self.api.typeSpelling(self.api.canonical(t)))
         at = text.find("<")
         return text if at < 0 else text[:at] + fixed_width(text[at:])
@@ -601,7 +601,7 @@ class Reader:
         return found
 
     def trivial(self, t):
-        """TY-10: (trivially copyable, trivially destructible, a copy or move constructor can be called, a copy or move
+        """(Trivially copyable, trivially destructible, a copy or move constructor can be called, a copy or move
         assignment can be called, the destructor is not deleted), as the compiler says; the compiled rows check the
         first four.
         - Numbers, enums, pointers and references are all four (a reference or const field is the owner's business).
@@ -729,7 +729,7 @@ class Reader:
 
     def want(self, t):
         """A template instance, or a record nested in one, that a type names (by value, pointer, reference or array,
-        as a function pointer's result or parameter, as a member pointer's class: TY-9) is a row of its own; else it
+        as a function pointer's result or parameter, as a member pointer's class) is a row of its own; else it
         would be named by texts and described nowhere."""
         if self.unit_pass:
             # A template's instance is the header pass's row; one only a .cpp names is left out there by its name.
@@ -760,7 +760,7 @@ class Reader:
 
     def want_signature(self, c):
         """The result and parameter types of a function or method (header pass): what its signature names is described
-        as a field's type is (TY-9)."""
+        as a field's type is."""
         if self.unit_pass:
             return
         t = self.api.type(c)
@@ -772,7 +772,7 @@ class Reader:
 
     def member_alias(self, t):
         """A typedef or using of a template instance that a type names (`NebulaList<AudMe>::Link`): an alias row, as a
-        class's own are (an instance's cursor has no children for record() to walk). TY-9."""
+        class's own are (an instance's cursor has no children for record() to walk)."""
         api = self.api
         while True:
             if t.kind == T_ELABORATED:
@@ -1142,7 +1142,7 @@ class Reader:
         return records, globals_
 
     def reach(self):
-        """TY-1: each record's inherited names by C++'s lookup. A name the record declares hides its bases'; otherwise
+        """Each record's inherited names by C++'s lookup. A name the record declares hides its bases'; otherwise
         it must be found in exactly one base subobject, not through a virtual base. Writes row["reachable"] (the
         inherited rows; own fields are the record's `fields`) and the left-out names."""
         memo = {}
@@ -1198,7 +1198,7 @@ class Reader:
             yield e["name"] or "(anonymous enum)", e["underlying"]
 
     def foreign_aliases(self):
-        """TY-9: a typedef from outside the game's trees (<stdint.h>'s uint32_t) that a text names is an alias row, as
+        """A typedef from outside the game's trees (<stdint.h>'s uint32_t) that a text names is an alias row, as
         the game's own s32 is: the name a modder reads, with no record. One may name another (bionic's uintptr_t is
         __uintptr_t, Darwin's size_t __darwin_size_t): each alias row's text is named too, until none is new."""
         while True:
@@ -1214,7 +1214,7 @@ class Reader:
                                       "file": None, "line": None}
 
     def unnamed(self):
-        """TY-9's check: every name a text holds outside template arguments (past pointers, references, arrays, cv
+        """The check: every name a text holds outside template arguments (past pointers, references, arrays, cv
         and a bit-field's width, in a function pointer's result and parameters, a member pointer's class) is a row, a
         built-in word or left out. An instance is one name with its arguments. Returns the texts that are not, as
         (where, text, name)."""

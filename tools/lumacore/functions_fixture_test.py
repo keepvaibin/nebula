@@ -8,7 +8,7 @@ the real tools with a game unit's flags (Game/System/LumaLoader.cpp's command):
      overrides and whether that is a row);
   3. gen_types.py stops, naming the fault, on planted ones: a unit without .functions, a row without facts, an owner
      that is no record, an override with no name, facts without "marks";
-  4. C-6's marks: each row's "marks" are the expected ones (step 2), and instrument.py stops, naming the file, line and
+  4. The parameter marks: each row's "marks" are the expected ones (step 2), and instrument.py stops, naming the file, line and
      fault, on each planted wrong mark.
 Exit 0 only when all four hold.
 """

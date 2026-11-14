@@ -6,7 +6,7 @@ base, an instance only an alias names, anonymous members, globals) through the r
 the real kernel (LumaTypes.cpp) and the real comparison (compare_types.py):
   1. gen_types.py writes the fixture's table and JSON;
   2. the table, the kernel and the driver are compiled with a game unit's flags and run: each answer against the
-     compiler's (offsetof, the bit-field's own access, a guard page for TY-4; objects.md: the own class,
+     compiler's (offsetof, the bit-field's own access, a guard page; objects.md: the own class,
      subobjects, virtual calls and overriders against typeid, dynamic_cast and the compiler's own calls), then the
      kernel's description;
   3. compare_types.py passes on that description, and fails, naming the row, on a copy of the JSON with one offset

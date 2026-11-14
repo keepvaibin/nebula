@@ -17,7 +17,7 @@ OUTPUT.functions (each row's facts, in the rows' order: gen_types.py merges them
   "virtual", "pure", "const"
   "overrides"            for a virtual, each function it overrides directly (clang_getOverriddenCursors), by the
                          name and signature its own row has or would have
-  "marks"                C-6: one entry per declared parameter (a method's `this` not counted): null, or
+  "marks"                one entry per declared parameter (a method's `this` not counted): null, or
                          {"way": "in"|"out"|"inout"|"kept", "count": index|null, "fixed": n|null, "nullable": bool},
                          from the LUMA_ marks (native/petari/include/Game/LumaMarks.hpp) any declaration of it carries
 
