@@ -55,6 +55,9 @@ void start(const Options& options);
 // Game thread, once a scene frame (svc_galaxy_travel): the travel to ask of the scene now (NEBULA_GALAXY_TRAVEL_*), with
 // `stage` and `star` filled for one. `current_stage` is the stage the game last reported (svc_game_stage).
 [[nodiscard]] int scene_frame(std::string_view current_stage, char* stage, std::uint32_t capacity, std::int32_t* star);
+// Game thread, at each scene's start (svc_presence from GameScene::start; not the file select's): a travel to the
+// stage the game is on has arrived when its new scene starts.
+void scene_started() noexcept;
 
 // The game's save files while the benchmark runs (svc_save_request): in memory only. `op` is NEBULA_SAVE_READ, _WRITE or
 // _DELETE; the result a NEBULA_SAVE_* value (galaxy::saves::Result).

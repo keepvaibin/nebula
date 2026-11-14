@@ -75,7 +75,9 @@ constexpr std::uint32_t kArriveFrames = 900u;    // scene frames a travel may go
 constexpr std::uint32_t kAsks = 3u;              // asks before the run fails
 constexpr std::uint32_t kPipelineFrames = 1200u; // the longest wait for a settings change's pipelines
 constexpr std::uint32_t kSettleFrames = 10u;     // frames after a settings change before its pipelines are counted
-constexpr std::int64_t kLoadGapNs = 200'000'000; // a pause in scene frames this long after a travel is its load
+// A travel unanswered this long fails the run, scene frames or not: a load that never ends, or a screen that is not a
+// GameScene, gives scene_frame no frame to count kArriveFrames with.
+constexpr std::int64_t kArriveTimeoutNs = 120'000'000'000;
 
 struct Stage {
     std::string id;
@@ -357,8 +359,8 @@ struct Run {
     std::uint32_t phase_frames = 0u;
     std::uint32_t asks = 0u;
     std::string stage_at_ask;
-    bool saw_gap = false;
-    std::int64_t asked_ns = 0, last_frame_ns = 0;
+    bool saw_start = false;  // a scene started since the ask (scene_started): a travel to the stage it is on arrived
+    std::int64_t asked_ns = 0;
     std::string failure;
 
     bool configured = false;
@@ -387,6 +389,10 @@ std::atomic<bool> g_measuring{false};
 std::atomic<std::uint64_t> g_gpu_peak{0u};
 std::atomic<std::uint64_t> g_gpu_budget{0u};
 std::uint32_t g_memory_count = 0u;
+// When the travel asked last fails the run (steady_ns; 0: no travel waits), checked by the render thread at each picture,
+// which the game shows while it loads; past it the game is asked to quit and at_exit writes the run as failed.
+std::atomic<std::int64_t> g_arrive_deadline_ns{0};
+std::atomic<bool> g_stalled{false};
 
 // The game's saves while it runs.
 std::mutex g_save_mutex;
@@ -396,6 +402,10 @@ void on_picture(std::uint64_t ns) {
     if (!g_render.known.load(std::memory_order_acquire)) {
         g_render.clock = this_thread_clock();
         g_render.known.store(true, std::memory_order_release);
+    }
+    const std::int64_t deadline = g_arrive_deadline_ns.load(std::memory_order_relaxed);
+    if (deadline != 0 && steady_ns() > deadline && !g_stalled.exchange(true, std::memory_order_relaxed)) {
+        render::host_window::quit_request.store(true, std::memory_order_release);
     }
     if (g_measuring.load(std::memory_order_relaxed)) {
         {
@@ -810,6 +820,7 @@ void configure_once() {
 void finish(bool complete) {
     Run& r = g_run;
     g_measuring.store(false, std::memory_order_relaxed);
+    g_arrive_deadline_ns.store(0, std::memory_order_relaxed);
     if (!complete) r.phase = Phase::Failed;
     write_result(complete);
     if (r.configured) {
@@ -839,8 +850,9 @@ int ask_travel(char* stage, std::uint32_t capacity, std::int32_t* star, std::str
     std::snprintf(stage, capacity, "%s", s.id.c_str());
     *star = s.grand ? 6 : static_cast<std::int32_t>(s.scenario);
     r.stage_at_ask = std::string(current);
-    r.saw_gap = false;
+    r.saw_start = false;
     r.asked_ns = steady_ns();
+    g_arrive_deadline_ns.store(r.asked_ns + kArriveTimeoutNs, std::memory_order_relaxed);
     ++r.asks;
     enter(Phase::Arrive);
     return s.grand ? NEBULA_GALAXY_TRAVEL_GRAND_STARS : NEBULA_GALAXY_TRAVEL_STAGE;
@@ -896,10 +908,6 @@ int scene_frame(std::string_view current_stage, char* stage, std::uint32_t capac
     }
     configure_once();
     const std::int64_t now = steady_ns();
-    if (r.last_frame_ns != 0 && now - r.last_frame_ns >= kLoadGapNs && r.phase == Phase::Arrive) {
-        r.saw_gap = true;
-    }
-    r.last_frame_ns = now;
     ++r.phase_frames;
     switch (r.phase) {
     case Phase::Title:
@@ -920,7 +928,9 @@ int scene_frame(std::string_view current_stage, char* stage, std::uint32_t capac
         break;
     case Phase::Arrive: {
         const std::string& target = r.items[r.index].stage.id;
-        if (current_stage == target && (r.saw_gap || r.stage_at_ask != target)) {
+        // Another stage: its name is reported only from its own scene's draws. The stage it is on: its new scene's start.
+        if (current_stage == target && (r.saw_start || r.stage_at_ask != target)) {
+            g_arrive_deadline_ns.store(0, std::memory_order_relaxed);
             r.results.emplace_back();
             r.results.back().load_ms = static_cast<double>(now - r.asked_ns) / 1e6;
             enter(Phase::Skip);
@@ -967,6 +977,15 @@ int scene_frame(std::string_view current_stage, char* stage, std::uint32_t capac
     return NEBULA_GALAXY_TRAVEL_NONE;
 }
 
+void scene_started() noexcept {
+    if (!running()) return;
+    try {
+        const std::lock_guard<std::mutex> lock(g_run_mutex);
+        if (g_run.phase == Phase::Arrive) g_run.saw_start = true;
+    } catch (...) {
+    }
+}
+
 std::int32_t save_request(int op, std::string_view name, void* buffer, std::uint32_t size, std::uint32_t* length) noexcept {
     try {
         const std::lock_guard<std::mutex> lock(g_save_mutex);
@@ -997,6 +1016,13 @@ void at_exit() noexcept {
     if (!running()) return;
     try {
         const std::lock_guard<std::mutex> lock(g_run_mutex);
+        Run& r = g_run;
+        if (g_stalled.load(std::memory_order_relaxed) && r.phase == Phase::Arrive && r.index < r.items.size()) {
+            // The quit on_picture asked for: the travel nothing answered fails the run.
+            r.phase = Phase::Failed;
+            r.failure = "the game did not enter " + r.items[r.index].stage.id + " in " +
+                        std::to_string(kArriveTimeoutNs / 1'000'000'000) + " s";
+        }
         write_result(false);
     } catch (...) {
     }
@@ -1009,9 +1035,10 @@ std::filesystem::path result_file() {
 bool returns_home() noexcept {
     if (!running() || !g_run.options.return_home) return false;
     try {
-        // A run that ended (complete or failed); a window the player closed ends the game.
+        // A run that ended (complete or failed, or a travel nothing answered: at_exit, which runs after this, writes
+        // it as failed); a window the player closed ends the game.
         const std::lock_guard<std::mutex> lock(g_run_mutex);
-        return g_run.phase == Phase::Done || g_run.phase == Phase::Failed;
+        return g_run.phase == Phase::Done || g_run.phase == Phase::Failed || g_stalled.load(std::memory_order_relaxed);
     } catch (...) {
         return false;
     }
