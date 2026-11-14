@@ -115,7 +115,7 @@ pub fn service_version(text: &str) -> Option<(u16, u16)> {
 
 /// The permissions a mod may ask for (luma-format revision 3, services-registry 5.1): a closed list, the kernel's
 /// cPermissions (LumaServices.cpp). Most are the name of the one service that needs them; `native` is asked by extra
-/// libraries (F-1) and by draw.native (contract draw 16), `input.devices` by input.dev (services-input).
+/// libraries and by draw.native (docs/modding/services/draw.md), `input.devices` by input.dev (services/input.md).
 pub const PERMISSIONS: [&str; 11] = [
     "native",
     "fs.exchange",
@@ -290,7 +290,7 @@ impl Names {
     }
 }
 
-/// The game's types by name, as the types file (`luma_types.json`, contract types draft 2) gives them: what a mod's
+/// The game's types by name, as the types file (`luma_types.json`, docs/modding/language/types.md) gives them: what a mod's
 /// kind 1, 2 and 7 imports bind. The validator walks nothing itself (TY-1): a record's fields are its own and the
 /// generator's `reachable`, and what the generator left out keeps its reason, so the kernel and the validator give
 /// one answer.
@@ -313,7 +313,7 @@ pub struct Types {
     pub anonymous_enums: Vec<Enum>,
     /// Every alias and spelling row, a record's or not (`s8` to `signed char`, `Vec3f` to `Vec3<f32>`), to its `of`.
     pub typedefs: HashMap<String, String>,
-    /// Every global row, defined or not, with what the compiler needs beside the type text (types draft 2).
+    /// Every global row, defined or not, with what the compiler needs beside the type text.
     pub global_facts: HashMap<String, Global>,
     /// Each virtual function a record declares (its `virtuals`, objects 7a), by name and signature, to whether it has a
     /// row the kernel binds (import kind 8, LumaCore.method). None when no record carries `virtuals` (a file of before
@@ -362,8 +362,8 @@ pub struct Base {
     pub is_virtual: bool,
 }
 
-/// A record's own field (types draft 2, section 2). The offsets serve messages and the build report only: a mod
-/// reaches a field through the import row the loader binds (abi section 3, checker audit C42-3).
+/// A record's own field (docs/modding/language/types.md). The offsets serve messages and the build report only: a mod
+/// reaches a field through the import row the loader binds.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Field {
     pub name: String,
@@ -680,7 +680,7 @@ pub enum LeftOutKind {
 }
 
 /// Why a types file does not read (English, as a tool says it): the JSON's own error, or the row that is not in the
-/// form draft 2 gives.
+/// types file's form.
 #[derive(Debug, PartialEq, Eq)]
 pub enum TypesError {
     /// Not JSON: at line and column, the reader's phrase id and its detail.
@@ -702,7 +702,7 @@ impl std::fmt::Display for TypesError {
 impl std::error::Error for TypesError {}
 
 impl Types {
-    /// Reads a types file. Anything not in draft 2's form is an error naming the row: a wrong file must never read
+    /// Reads a types file. Anything not in the types file's form is an error naming the row: a wrong file must never read
     /// as a game with fewer names.
     pub fn from_json(bytes: &[u8]) -> Result<Types, TypesError> {
         use crate::json::Value;
