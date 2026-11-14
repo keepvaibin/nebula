@@ -3,6 +3,8 @@
 // the gpu:: functions gpu_types.h declares for every back end.
 #include "galaxy/render/d3d11/d3d11_context.h"
 
+#include "galaxy/render/render_config.h"
+
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -81,12 +83,16 @@ bool Context::initialize(const std::string& chosen_gpu, bool debug_layer) {
             adapter.Reset();
         }
     }
-    // The chosen adapter first, when the settings name one.
+    // The chosen adapter first, when the settings name one (config.ini gpu=, as gpu_identity writes it: Direct3D 12's
+    // and Vulkan's rule).
     if (!chosen_gpu.empty()) {
-        std::stable_partition(adapters.begin(), adapters.end(), [&](const ComPtr<IDXGIAdapter1>& a) {
+        const auto chosen = [&](const ComPtr<IDXGIAdapter1>& a) {
             DXGI_ADAPTER_DESC1 d{};
-            return SUCCEEDED(a->GetDesc1(&d)) && narrow(d.Description) == chosen_gpu;
-        });
+            return SUCCEEDED(a->GetDesc1(&d)) && gpu_identity(d.VendorId, d.DeviceId, d.SubSysId) == chosen_gpu;
+        };
+        const bool present = std::any_of(adapters.begin(), adapters.end(), chosen);
+        std::stable_partition(adapters.begin(), adapters.end(), chosen);
+        std::cout << "[gpu] chosen " << chosen_gpu << (present ? " first" : " not present; choosing automatically") << '\n';
     }
     std::string refused;
     for (const ComPtr<IDXGIAdapter1>& adapter : adapters) {
