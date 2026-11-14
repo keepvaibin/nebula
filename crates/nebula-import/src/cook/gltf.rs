@@ -3228,7 +3228,12 @@ mod tests {
     fn a_damaged_model_is_refused_by_name_never_a_panic() {
         let collision = |doc: &[u8]| refused(&to_collision(doc, None).unwrap_err()).0;
         // Solid ground whose triangles name vertices past the model's (found by fuzzing the cook).
-        for case in [&include_bytes!("../../data/solid-vertex-past.kcl.glb")[..], &include_bytes!("../../data/solid-vertex-past-2.kcl.glb")[..]] {
+        for case in [
+            &include_bytes!("../../data/solid-vertex-past.kcl.glb")[..],
+            &include_bytes!("../../data/solid-vertex-past-2.kcl.glb")[..],
+            &include_bytes!("../../data/solid-vertex-past-3.kcl.glb")[..],
+            &include_bytes!("../../data/solid-vertex-past-4.kcl.glb")[..],
+        ] {
             assert_eq!(collision(case), "Cook.Model.VertexPast");
         }
         let base: Value = serde_json::from_slice(&triangle(1)).unwrap();

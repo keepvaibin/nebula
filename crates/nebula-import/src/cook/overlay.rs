@@ -416,13 +416,24 @@ pub fn cook_source(path: &str, source: &Path, bytes: &[u8], base: Option<&Path>)
     // Its caller takes what the cook notes (a mod's check).
     let _reading = super::refuse::reading();
     let change = Change { path: path.trim_start_matches('/').to_string(), source: source.to_path_buf(), merge: false };
-    let waves = base.and_then(|base| store::read_file(base, WAVE_LAYOUT).ok()).and_then(|b| audio_data::parse_layout_text(&String::from_utf8_lossy(&b)).ok()).unwrap_or_default();
+    // The game's wave layout lays out a wave archive only (cook_change): read for one, so a mod of many other files
+    // is not one read and parse of the layout for each of them.
+    let waves = if reads_wave_layout(&change.path) {
+        base.and_then(|base| store::read_file(base, WAVE_LAYOUT).ok()).and_then(|b| audio_data::parse_layout_text(&String::from_utf8_lossy(&b)).ok()).unwrap_or_default()
+    } else {
+        BTreeMap::new()
+    };
     match cook_one(&change, bytes.to_vec(), &waves, base, &mut Stats::default()) {
         Ok(made) => Ok(made.len()),
         // Every reason the cook gives is said as a finding (L804): its own refusal, or its words for any other fault.
         Err(error) if super::refuse::refusal_of(&error).is_some() => Err(error),
         Err(error) => Err(super::refuse::refuse("Cook.Failed", &[("detail", format!("{error:#}"))])),
     }
+}
+
+/// Whether cooking the file at `path` reads the game's wave layout: a wave archive (`.aw`), as cook_change lays it out.
+fn reads_wave_layout(path: &str) -> bool {
+    path.to_ascii_lowercase().ends_with(".aw")
 }
 
 /// A mod's merge/ files (`merge: true`) applied as the game's start applies them (run_merges, the one function),
@@ -515,7 +526,7 @@ fn cook_change(change: &Change, bytes: Vec<u8>, waves: &BTreeMap<String, Vec<aud
     if bytes.is_empty() {
         return Err(refuse("Cook.EmptyFile", &file()));
     }
-    if !change.path.to_ascii_lowercase().ends_with(".aw") {
+    if !reads_wave_layout(&change.path) {
         return cook_entry(&change.path, bytes, stats);
     }
     let places = waves
@@ -1190,6 +1201,30 @@ mod tests {
             assert!(!luma_validate::cooked_source(&path.to_lowercase()), "{path}");
             assert_eq!(cook_source(path, &dir.path().join("x"), b"not this", None).unwrap(), 1, "{path}");
         }
+    }
+
+    #[test]
+    fn only_a_wave_archive_reads_the_game_s_wave_layout() {
+        // A mod's check cooks each file alone (cook_source): the layout is read and parsed for a wave archive only,
+        // so a mod of thousands of other files (found by fuzzing the container: 20000 empty files) is not that many
+        // reads of the store.
+        for path in ["AudioRes/Waves/Wave_0.aw", "AudioRes/Waves/WAVE_1.AW"] {
+            assert!(reads_wave_layout(path), "{path}");
+        }
+        for path in ["layers/base/files/f0.bin", "AudioRes/Waves/Wave_0.aw.json", "ObjectData/Kuribo.arc", "AudioRes/aw"] {
+            assert!(!reads_wave_layout(path), "{path}");
+        }
+        // A wave archive still needs the layout: without a store whose layout reads, it is refused for that.
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().join("game.pak");
+        std::fs::write(&store, b"not a store").unwrap();
+        let error = cook_source("AudioRes/Waves/Wave_0.aw", &dir.path().join("x"), b"wave bytes", Some(&store)).unwrap_err();
+        let (phrase, args) = super::super::refuse::said(&error);
+        assert_eq!(phrase, "Cook.Failed");
+        assert!(args.iter().any(|(name, value)| *name == "detail" && value.contains("wave layout is not known")), "{args:?}");
+        // Any other file is cooked the same with or without the store's layout.
+        let said = |base: Option<&Path>| super::super::refuse::said(&cook_source("Luma/m/Notes.bin", &dir.path().join("x"), b"", base).unwrap_err()).0;
+        assert_eq!(said(Some(&store)), said(None));
     }
 
     #[test]
