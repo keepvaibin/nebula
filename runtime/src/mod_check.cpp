@@ -303,7 +303,7 @@ ImportCheck import(const std::filesystem::path& folder, const std::vector<StartP
         installed[i].kept = reinterpret_cast<const std::uint8_t*>(reports[i].data());
         installed[i].kept_size = reports[i].size();
     }
-    // One call at import (validator 2: no kept report of its own, every rule), last in the list, against them all.
+    // One call at import (validator.md 2: no kept report of its own, every rule), last in the list, against them all.
     std::string kept;
     std::vector<Kept> findings;
     if (!validate_package(v, "import", folder, game, installed, UINT32_MAX, {}, kept, &findings)) return out;

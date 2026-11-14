@@ -1,4 +1,4 @@
-"""luma_test.py: the proof harness's runner (contract `harness`, revision 1; plan task 0.3). Python 3, standard library.
+"""luma_test.py: the proof harness's runner (docs/modding/lumalink/test-harness.md). Python 3, standard library.
 
     luma_test.py run <test folder | suite.json> --bin <folder> [--renderer r] [--work <folder>] [--who F|G]
                  [--module hooks|plain] [--gpu vendor:device:subsystem]
@@ -12,11 +12,11 @@ test and renderer; exit 0 only when every verdict is `pass`.
 `refs` writes a run's pictures as the references a test names, after the person running it has looked at them.
 
 The bin folder holds NebulaNative.exe (and NebulaNativeVk.exe for Vulkan), smg_game.dll (and smg_game_plain.dll, which
-the game loads when no mod has code: contract modules), nebula_test_extension.dll, luma-test.dll (the game half),
+the game loads when no mod has code), nebula_test_extension.dll, luma-test.dll (the game half),
 nebula_import.dll (a refusal's words; without it the game gives codes) and nebula-import.exe, pak.path, dxc/, and
 smg_game.luma-placement.json (the placement facts a stage patch's arguments by name need).
 Nothing outside the work folder is written but the run's own files.
-On Linux (plan 8.1, the container suite) the same with the platform's names: nebula (Vulkan only: give --renderer
+On Linux (the container suite) the same with the platform's names: nebula (Vulkan only: give --renderer
 vulkan), libsmg_game.so (and libsmg_game_plain.so), libnebula_test_extension.so, luma-test.so, libnebula_import.so and
 nebula-import; the mods' code is code/linux-x64/mod.so, and the game runs on whatever X display DISPLAY names (a
 virtual one in the container).
@@ -45,7 +45,7 @@ TREE = pathlib.Path(__file__).resolve().parents[2]
 CAPABILITIES = TREE / "tools" / "lumacore" / "capabilities.json"
 GAME_HALF_ID = "luma-test"
 # The platform the runner drives: its game by renderer, its game module, test extension, importer (library and program)
-# and game half by file name, and where a mod's code lies (luma-format 6: code/<platform>/mod.<ending>).
+# and game half by file name, and where a mod's code lies (luma.md 6: code/<platform>/mod.<ending>).
 HOSTS = {
     "Windows": {"platform": "windows-x64", "exes": {"d3d12": "NebulaNative.exe", "vulkan": "NebulaNativeVk.exe", "d3d11": "NebulaNativeD11.exe"},
                 "game": "smg_game.dll", "plain": "smg_game_plain.dll", "extension": "nebula_test_extension.dll", "importer": "nebula_import.dll",
@@ -93,15 +93,15 @@ VEC_TYPES = {"const Vec3f &", "const TVec3f &", "Vec3f *", "const Vec3f *", "Vec
 OBJECT_TYPES = {"LiveActor *", "const LiveActor *", "NameObj *", "const NameObj *", "MarioActor *"}
 READ_TYPES = {"f32", "s32", "u32", "u16", "s16", "u8", "bool", "TVec3f", "Vec3f", "const char *"}
 FACT_OPS = {"is", "is_not", "less", "at_most", "more", "at_least", "near", "exists", "absent", "has", "count"}
-# Revision 6 (R6-3, G-H6-3): the host's Settings pages by name, lower case, as the Settings screen's own list keeps
+# Revision 6: the host's Settings pages by name, lower case, as the Settings screen's own list keeps
 # them (runtime/src/ui/native_settings.cpp kNativeSettingsTabNames), and the number the host opens each by.
 SETTINGS_PAGES = {"display": 0, "graphics": 1, "controls": 2, "audio": 3, "general": 4, "mods": 5, "system": 6,
                   "advanced": 7}
-# Revision 6 (R6-1, G-H6-1): a mod's own fact is mod.<id>.<key>; the id is luma-format's (3 to 64 of a-z 0-9 - .,
+# Revision 6: a mod's own fact is mod.<id>.<key>; the id is luma.md's (3 to 64 of a-z 0-9 - .,
 # no "..", no trailing "."), the key [a-z0-9_]+, split at the last dot.
 MOD_ID = re.compile(r"[a-z0-9.-]{3,64}")
 MOD_KEY = re.compile(r"[a-z0-9_]+")
-# Revision 6 (R6-5): an object by name or by class, the n-th live one.
+# Revision 6: an object by name or by class, the n-th live one.
 OBJECT_REF = re.compile(r"(object:[^\s#]+|class:[^\s#]+)#\d+")
 
 
@@ -183,7 +183,7 @@ def plain(value, path):
 
 
 def fact_key(value, path):
-    """A fact key a test names: plain, and a mod's own (mod.<id>.<key>) split at its last dot (G-H6-1)."""
+    """A fact key a test names: plain, and a mod's own (mod.<id>.<key>) split at its last dot."""
     key = plain(value, path)
     if key.startswith("mod."):
         mod_id, dot, own = key[4:].rpartition(".")
@@ -210,7 +210,7 @@ GPU = None
 
 
 def object_ref(value, path, classes):
-    """`object:<name>#<n>` or `class:<Class>#<n>` (R6-5); a class the types file lacks is a harness-error (G-H6-2)."""
+    """`object:<name>#<n>` or `class:<Class>#<n>`; a class the types file lacks is a harness-error."""
     if not (isinstance(value, str) and OBJECT_REF.fullmatch(value)):
         raise HarnessError("%s must be \"player\", \"object:<name>#<n>\" or \"class:<Class>#<n>\"" % path)
     if value.startswith("class:"):
@@ -223,7 +223,7 @@ def object_ref(value, path, classes):
 
 
 def hidden_path(value, path):
-    """A hide_game_files path (R6-4, G-H6-4): relative to the game's folder, no drive, no leading slash, no `..`."""
+    """A hide_game_files path: relative to the game's folder, no drive, no leading slash, no `..`."""
     if not isinstance(value, str) or not value or any(c in value for c in "\t\r\n"):
         raise HarnessError("%s must be a path" % path)
     if (value[0] in "/\\" or re.match(r"[A-Za-z]:", value) or pathlib.PureWindowsPath(value).is_absolute()
@@ -301,7 +301,7 @@ def read_test(folder, types=None):
                     raise HarnessError("%s.folder: lowercase letters, digits, - and ., up to 64" % path)
             if "code" in entry:
                 mod["code"] = text(entry, "code", path)
-                # "ask" (J, consent tests): nothing answered, so the game asks (the consent question shows).
+                # "ask" (the consent tests): nothing answered, so the game asks (the consent question shows).
                 if mod["code"] not in ("allow", "deny", "ask"):
                     raise HarnessError("%s.code must be allow, deny or ask" % path)
             if "loads" in entry:
@@ -398,7 +398,7 @@ def read_setup(t, bare, seed, language, classes):
             if key in t:
                 raise HarnessError("a bare test has no %s" % key)
         return lines
-    # User file 1 first (contract harness 3.2): created through the game's new-file path, or, continuing from an
+    # User file 1 first: created through the game's new-file path, or, continuing from an
     # earlier test, loaded from the saves that test left, as the file select does.
     lines.append("setup file 1")
     if "save" in t:
@@ -481,7 +481,7 @@ def read_check(c, path, keys):
     within = None
     if op in ("exists", "absent") and value is not True:
         raise HarnessError("%s.%s takes true" % (path, op))
-    # Revision 7 (J's R-6): `has` an object whose every key the fact's value holds with that value (an object inside
+    # Revision 7: `has` an object whose every key the fact's value holds with that value (an object inside
     # is checked the same way, any other value with `is`); `count` the number of times the key was written.
     if op == "has" and not isinstance(value, dict):
         raise HarnessError("%s.has takes an object" % path)
@@ -621,14 +621,14 @@ def read_steps(t, bare, classes):
                 raise HarnessError("%s.wait takes true or false" % path)
             step["line"] = "take_out %s %d" % (mod_id, 1 if wait else 0)
         elif action == "forget":
-            # The Mods page's FORGET of a removed mod (services-mods 8): the mod is on the REMOVED MODS line (removed by
-            # this run's "remove": true over a continue_from), else the host logs that and forgets nothing.
+            # The Mods page's FORGET of a removed mod (services/mods.md 8): the mod is on the REMOVED MODS line (removed
+            # by this run's "remove": true over a continue_from), else the host logs that and forgets nothing.
             mod_id = text(s, "forget", path)
             if not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", mod_id) or len(mod_id.encode("utf-8")) > 63:
                 raise HarnessError("%s.forget must be a mod id ([a-z0-9][a-z0-9._-]*, at most 63 bytes)" % path)
             step["line"] = "forget %s" % mod_id
         elif action in ("copy_file", "load_file", "erase_file", "new_file"):
-            # Revision 8 (services-save 5, kit-progress): the file select's own operations on the run's own saves, on
+            # Revision 8 (services/save.md 5, kit-progress): the file select's own operations on the run's own saves, on
             # the game's save path (GameSequenceFunction); the step is answered when the save sequence has ended and
             # writes file.copied / file.loaded / file.erased / file.created.
             if action == "copy_file":
@@ -751,7 +751,7 @@ def read_expect(t, bare, steps):
         if not isinstance(c, dict):
             raise HarnessError("%s is not an object" % path)
         if "systems" in c:
-            # A check of what a contract gives on some systems only (a service a platform answers ABSENT): it holds
+            # A check of what a service gives on some systems only (one a platform answers ABSENT): it holds
             # where its system is named and is listed as not checked elsewhere.
             systems = c["systems"]
             if (not isinstance(systems, list) or not systems or not all(isinstance(s, str) for s in systems)
@@ -767,14 +767,14 @@ def read_expect(t, bare, steps):
             if bare:
                 raise HarnessError("%s: a bare test checks only the log, pictures and sound" % path)
             op, value, within = read_check(c, path, {"within", "count"})
-            # `matching` (J): only the writes whose value has it (as `has` reads) are checked, so `count`, `absent`
+            # `matching`: only the writes whose value has it (as `has` reads) are checked, so `count`, `absent`
             # and the rest speak of one mod's or one word's writes of a key many write ("modlog", "fx.*").
             matching = None
             if "matching" in c:
                 matching = c["matching"]
                 if not isinstance(matching, dict) or not matching:
                     raise HarnessError("%s.matching takes an object with at least one key" % path)
-            # `field` (J): the check reads one member of each write's object value, a dotted path ("particles",
+            # `field`: the check reads one member of each write's object value, a dotted path ("particles",
             # "at.x"); a write without it reads as no value, which no comparison takes.
             field = None
             if "field" in c:
@@ -972,7 +972,7 @@ def permission_digest(declared):
     hosts = ["".join(chr(ord(c) + 32) if "A" <= c <= "Z" else c for c in host) for host in declared.get("hosts", [])]
     for host in sorted(hosts, key=lambda text: text.encode("utf-8")):
         h = fnv(h, host.encode("utf-8") + b"\0")
-    # net.roots (consent 1.2): "roots" and each file as written, sorted in byte order, when there are any.
+    # net.roots (consent.md 1.2): "roots" and each file as written, sorted in byte order, when there are any.
     roots = declared.get("roots", [])
     if roots:
         h = fnv(h, b"roots\0")
@@ -1102,9 +1102,9 @@ def remove_kept(settings, mod_folder, folder=None):
 
 
 # What a restart keeps of Nebula's data folder (platform_paths.h nebula_data_directory: a run's is in <run>/appdata,
-# run_data_folder): every mod's own data folder, mod-data/<id> (services-fs 2;
-# a removed mod's stays until the player forgets it, services-mods 8), and the Exchange folder, the player's and the
-# granted mods' (services-fs 2). The shader cache and diagnostics are not carried: each run makes its own.
+# run_data_folder): every mod's own data folder, mod-data/<id> (services/fs.md 2;
+# a removed mod's stays until the player forgets it, services/mods.md 8), and the Exchange folder, the player's and the
+# granted mods' (services/fs.md 2). The shader cache and diagnostics are not carried: each run makes its own.
 CARRIED_DATA = ("mod-data", "Exchange")
 
 
@@ -1154,12 +1154,12 @@ def install(settings, mod_folder, code_allowed, order, kept=False, permissions="
     # The previous runtime's form would install with no code and fail far from here: named at once instead.
     if "plugins" in manifest:
         raise HarnessError("%s/luma.json has \"plugins\": a mod's code is code/<platform>/mod.<ending> with "
-                           "\"code\": {\"platforms\": [...]} (board/contracts/manifest-one-form.md)" % mod_folder)
+                           "\"code\": {\"platforms\": [...]} (docs/modding/format/manifest.md)" % mod_folder)
     if not isinstance(manifest.get("format"), str):
-        raise HarnessError("%s/luma.json: format must be \"1.0\", a string (board/contracts/manifest-one-form.md)"
+        raise HarnessError("%s/luma.json: format must be \"1.0\", a string (docs/modding/format/manifest.md)"
                            % mod_folder)
     libraries = []
-    # luma-format 6: code/<platform>/mod.<ending> by `code.platforms` alone. A mod whose code is for other platforms
+    # luma.md 6: code/<platform>/mod.<ending> by `code.platforms` alone. A mod whose code is for other platforms
     # only has no library here: the game says it has no version for this device.
     code = manifest.get("code")
     platforms = code.get("platforms") if isinstance(code, dict) else None
@@ -1303,7 +1303,7 @@ def place_mods(test, settings, previous, frozen, ports=None):
         ports = free_ports(test)
     for i, m in enumerate(test["mods"]):
         if m["install"] == "import":
-            # Not placed: the game imports it as "Open with" starts it (--import, task 6.1), a .luma file or a folder,
+            # Not placed: the game imports it as "Open with" starts it (--import), a .luma file or a folder,
             # through the validator; each line of its result page is the fact import.<file name> (4).
             if m["loads"]:
                 raise HarnessError("the imported mod %s: an import adds it for the next start, so it takes loads false"
@@ -1398,7 +1398,7 @@ def run_one(test, renderer, args, run_folder, previous):
             shutil.copytree(previous / sub, run_folder / sub)
         carry_data(previous, run_folder)
     frozen = {}
-    # The plain module when the bin folder has it (plan 1.7): without it the game loads the rows module and says so.
+    # The plain module when the bin folder has it: without it the game loads the rows module and says so.
     plain = (HOST["plain"],) if (bin_folder / HOST["plain"]).is_file() else ()
     for name in (exe.name, HOST["game"]) + plain + (HOST["extension"],):
         shutil.copy2(bin_folder / name, run_folder / "bin" / name)  # copy2: the program keeps its mode on Linux
@@ -1415,7 +1415,7 @@ def run_one(test, renderer, args, run_folder, previous):
     # gets refusals as codes, so it is frozen with the rest.
     shutil.copyfile(bin_folder / HOST["importer"], run_folder / "bin" / HOST["importer"])
     frozen[HOST["importer"]] = sha256(run_folder / "bin" / HOST["importer"])
-    # R6-4: the test's hidden files are left out of the run's own copy (the bin folder itself is never touched).
+    # The test's hidden files are left out of the run's own copy (the bin folder itself is never touched).
     for hidden in test["hidden"]:
         if not (bin_folder / hidden).is_file():
             raise SetupFailed("hide_game_files: the game's folder has no %s" % hidden)
@@ -2220,7 +2220,7 @@ def report(run_folder, name, proves, renderer, verdict, reason, checks, args, ex
               "commit": args.commit, "module": args.module, "verdict": verdict, "reason": reason, "checks": checks}
     test_json = extra.pop("test_json", None)
     result.update(extra)
-    # Every result has contract 5's fields; a test refused before it ran has them empty (audit 0.3 H-15).
+    # Every result has the same fields; a test refused before it ran has them empty.
     for key, empty in (("setup", {}), ("frames", None), ("seconds", None), ("pictures", [])):
         result.setdefault(key, empty)
     (run_folder / "result.json").write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -2259,7 +2259,7 @@ def main():
     # to takes them as UTF-8, whatever the system's code page.
     for stream in (sys.stdout, sys.stderr):
         stream.reconfigure(encoding="utf-8", errors="backslashreplace")
-    parser = argparse.ArgumentParser(description="The proof harness's runner (contract harness, revision 1).")
+    parser = argparse.ArgumentParser(description="The proof harness's runner.")
     sub = parser.add_subparsers(dest="command", required=True)
     run = sub.add_parser("run")
     run.add_argument("target")

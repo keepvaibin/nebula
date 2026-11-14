@@ -1,6 +1,6 @@
 #pragma once
 
-// LumaCore's `ui` service (plan 2.4 layer 4 on 3.8 layer 1; contract ui): a mod's or the game's screen layout shown
+// LumaCore's `ui` service (docs/modding/services/ui.md): a mod's or the game's screen layout shown
 // over the game by the game's layout drawer, its panes found by name, their text and visibility set. The harness facts
 // ui.open, ui.pane, ui.text, ui.screen, ui.end.
 

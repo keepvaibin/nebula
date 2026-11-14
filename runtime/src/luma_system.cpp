@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// LumaCore's system services (contract services-system): `system` (facts and the display), `system.clipboard` and
-// `system.links`. The tables, the checks, the requests, the mod log's Notes, the deterministic clipboard and the codecs;
-// the machine's clipboard and browser are the platform layer's (luma_system_platform.h).
+// LumaCore's system services (docs/modding/services/system.md): `system` (facts and the display), `system.clipboard`
+// and `system.links`. The tables, the checks, the requests, the mod log's Notes, the deterministic clipboard and the
+// codecs; the machine's clipboard and browser are the platform layer's (luma_system_platform.h).
 
 #include "galaxy/luma_system_platform.h"
 
@@ -65,8 +65,8 @@ constexpr std::size_t kUrlMost = 2048u;                    // bytes of a link (i
 constexpr std::uint64_t kLinkSpacingNs = 10'000'000'000ull; // one link a mod in 10 seconds
 constexpr std::uint32_t kFactsLeast = static_cast<std::uint32_t>(sizeof(LumaSystemFacts));    // 1.0's whole struct
 constexpr std::uint32_t kDisplayLeast = static_cast<std::uint32_t>(sizeof(LumaSystemDisplay)); // 1.0's whole struct
-static_assert(sizeof(LumaSystemFacts) == 320u, "LumaSystemFacts 1.0 is 320 bytes (contract section 2)");
-static_assert(sizeof(LumaSystemDisplay) == 56u, "LumaSystemDisplay 1.0 is 56 bytes (contract section 2)");
+static_assert(sizeof(LumaSystemFacts) == 320u, "LumaSystemFacts 1.0 is 320 bytes (system.md section 2)");
+static_assert(sizeof(LumaSystemDisplay) == 56u, "LumaSystemDisplay 1.0 is 56 bytes (system.md section 2)");
 
 const char* const kClipboardName = LUMA_SYSTEM_CLIPBOARD_NAME;
 const char* const kLinksName = LUMA_SYSTEM_LINKS_NAME;
@@ -379,7 +379,7 @@ void report(const LumaMod* mod, const char* where, std::uint32_t code, const cha
     }
 }
 
-// The mod known and live, then the thread (services-registry 5). LUMA_OK or the status to return.
+// The mod known and live, then the thread (services/registry.md 5). LUMA_OK or the status to return.
 std::int32_t enter(const LumaMod* mod, const char* where, bool any_thread) noexcept {
     const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
     if (kernel == nullptr) {
@@ -865,7 +865,7 @@ std::int32_t clipboard_set_image(const LumaMod* mod, const std::uint8_t* rgba, s
     if (height == 0u || height > kSideMost || bytes > kPixelsMost) {
         return argument(mod, where, "height");
     }
-    // The buffer's own length (registry 3, G R-5d): a script passes bytes, and the pixels are never read past it.
+    // The buffer's own length (services/registry.md 3): a script passes bytes, and the pixels are never read past it.
     if (size != bytes) {
         return argument(mod, where, "size");
     }
@@ -903,7 +903,7 @@ std::int32_t clipboard_set_image(const LumaMod* mod, const std::uint8_t* rgba, s
     return LUMA_PENDING;
 }
 
-// Both services' cancel (registry 4.8): no event for the request after this returns.
+// Both services' cancel (services/registry.md 4.8): no event for the request after this returns.
 std::int32_t cancel_request(const LumaMod* mod, LumaHandle handle, bool links, const char* where) {
     if (const std::int32_t status = enter(mod, where, false); status != LUMA_OK) {
         return status;

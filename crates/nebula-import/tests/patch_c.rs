@@ -121,7 +121,7 @@ fn the_c_call_gives_the_rust_applier_table_and_facts() {
         let conflict = (0..n).find(|&i| (*luma_patched_fact_at(r, i)).kind == LUMA_PATCH_CONFLICT).unwrap();
         assert!(luma_patched_fact_reason(r, conflict, null()).is_null());
         assert_eq!((*luma_patched_fact_at(r, conflict)).code, 0);
-        // The column by the name the patch wrote (P-2), not its hash.
+        // The column by the name the patch wrote, not its hash.
         assert_eq!(s((*luma_patched_fact_at(r, conflict)).column).as_deref(), Some("Obj_arg0"));
         luma_patched_free(r);
     }
@@ -210,7 +210,7 @@ fn a_link_key_is_new_to_the_zone_through_the_c_call() {
     let common_path = CString::new(OBJINFO).unwrap();
     // A disc path names the same table (its archive is a folder of the store).
     let a_path = CString::new("StageData/AstroGalaxy/AstroGalaxy.arc/jmp/Placement/LayerA/ObjInfo").unwrap();
-    // Every mod with a patch here, from the bottom of the list up (F3.11-1: one it leaves out is refused below).
+    // Every mod with a patch here, from the bottom of the list up (one it leaves out is refused below).
     let ids = [CString::new("low").unwrap(), CString::new("taken").unwrap(), CString::new("high").unwrap()];
     let mods: Vec<*const c_char> = ids.iter().map(|m| m.as_ptr()).collect();
     let input = |path: &CString, table: &[u8], patches: &[LumaTablePatch], links: &[LumaLinkTable]| LumaPatchInput {
@@ -253,7 +253,7 @@ fn a_link_key_is_new_to_the_zone_through_the_c_call() {
         assert_eq!(ids_of(std::slice::from_raw_parts(luma_patched_table(r, &mut size), size as usize)), vec![1, 2, 70]);
         luma_patched_free(r);
 
-        // A mod the list does not name cannot be ordered: -1, naming it, and the game's table stands (F3.11-1).
+        // A mod the list does not name cannot be ordered: -1, naming it, and the game's table stands.
         let short = LumaPatchInput { mod_count: 1, ..input(&common_path, &common, &low_c, &links) };
         let r = luma_patch_table(&short);
         assert_eq!(luma_patched_state(r), -1);

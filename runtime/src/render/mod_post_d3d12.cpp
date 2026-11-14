@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// draw.post and draw.native on D3D12 (LumaCore plan 2.4 layers 8 and 9; contract draw 15 and 16): a mod's post
+// draw.post and draw.native on D3D12 (docs/modding/services/draw.md): a mod's post
 // program drawn full screen over the frame (RenderCore::walk_post), and a mod's native function given the device, the
 // open command list and the target at its draw point (RenderCore::walk_native).
 #include "galaxy/render/renderer_d3d12.h"

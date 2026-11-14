@@ -348,7 +348,7 @@ galaxy::input::DeviceKey s_controls_device{};
 galaxy::input::DeviceList s_controls_devices{};
 std::uint64_t s_controls_devices_ms = 0u;
 std::size_t s_capture_target = galaxy::input::kGameInputCount;
-// The mods' input actions (services-input 6): a row each after the game's bindings, bound per scheme
+// The mods' input actions (services/input.md 6): a row each after the game's bindings, bound per scheme
 // as those are. The draft holds, per scheme, only the actions edited since it was taken, by "<mod id>/<action id>"; the
 // rest show their live bindings. A capture for action i waits as s_capture_target kModCaptureBase + i.
 constexpr std::size_t kModCaptureBase = galaxy::input::kGameInputCount + 1u;
@@ -529,7 +529,7 @@ std::string menu_bindings(galaxy::input::ControlScheme scheme, const galaxy::inp
 
 unsigned controls_changes();
 
-// The declared actions on the scheme being edited (none until the first code mod begins: services-input 3).
+// The declared actions on the scheme being edited (none until the first code mod begins: services/input.md 3).
 std::vector<galaxy::input::mod_actions::Listed> mod_action_list() {
     if (!galaxy::input::mod_actions::any()) return {};
     return galaxy::input::mod_actions::list(s_controls_scheme);
@@ -679,7 +679,7 @@ enum class ControlsRow {
     TouchOpacity,
     TouchVibration,
     TouchPlaces,
-    ModAction,  // a mod's input action (services-input): `action` is its place in mod_actions::list
+    ModAction,  // a mod's input action (services/input.md): `action` is its place in mod_actions::list
     Reset,
 };
 
@@ -1514,7 +1514,7 @@ void set_native_settings_visible(bool visible) {
         settle_native_settings_row();
     }
     if (!visible) {
-        // A mod's request screen left unanswered is the player's no (services-mods 9, services-save 8).
+        // A mod's request screen left unanswered is the player's no (services/mods.md 9, services/save.md 8).
         deny_asks();
         end_text_edit(false);
         // Closing discards an unapplied draft, an unconfirmed display, an
@@ -2103,9 +2103,9 @@ bool s_mods_scanned = false;
 std::string s_mod_focus;    // the mod last selected in a list: the buttons' Options act on it
 std::string s_mod_held;     // a mod picked up to move with the arrows (empty: none)
 std::string s_mod_options;  // the mod whose page shows instead of the lists (empty: none)
-bool s_mod_log_open = false;  // the log page shows instead of the lists (mod-log 4.2)
+bool s_mod_log_open = false;  // the log page shows instead of the lists (mod-log.md 4.2)
 bool s_mod_log_facts = false; // its rows were written as harness facts since it opened
-// The consent question (contract consent 2): a page of rows shown instead of the lists while a mod on waits for an
+// The consent question: a page of rows shown instead of the lists while a mod on waits for an
 // answer (first_code_to_allow_locked), so the menu's own rows, scrolling and input drive it. `choosing`: permission by
 // permission (Choose), `chosen` the answers so far by name; `focus`: put the focus on Not now when it next builds
 // (2.2 item 5); `facts_for`: the mod whose question was written as a harness fact. Under s_mods_mutex.
@@ -2115,11 +2115,11 @@ bool s_consent_focus = false;
 std::map<std::string, bool> s_consent_chosen;
 std::string s_consent_facts_for;
 
-// The Mods screen's lines about each mod as the harness facts `modscreen.<id>` (harness 4): its line in its list, and
-// each row of its page while that shows, written when what they say changes (a page each time it opens). `wanted`: a
-// harness run with the menu on this tab (read once per build of the page); `shown`: per place and mod ("list:<id>",
-// "page:<id>") a hash of the lines last written; `pending`: the facts to write once s_mods_mutex is let go. Under
-// s_mods_mutex.
+// The Mods screen's lines about each mod as the harness facts `modscreen.<id>` (test-harness.md 4): its line in its
+// list, and each row of its page while that shows, written when what they say changes (a page each time it opens).
+// `wanted`: a harness run with the menu on this tab (read once per build of the page); `shown`: per place and mod
+// ("list:<id>", "page:<id>") a hash of the lines last written; `pending`: the facts to write once s_mods_mutex is let
+// go. Under s_mods_mutex.
 std::atomic<bool> s_modscreen_wanted{false};
 std::map<std::string, std::size_t> s_modscreen_shown;
 std::vector<std::pair<std::string, std::string>> s_modscreen_pending;
@@ -2179,8 +2179,8 @@ std::optional<ModAbout> s_mod_about;
 std::string s_mod_remove_ask;
 // The removed mod whose kept data the menu asks to forget (empty: none). Under s_mods_mutex.
 std::string s_mod_forget_ask;
-// The removed mods' kept data for the REMOVED MODS line (services-mods 8): read when the page first lists the mods and
-// again after a rescan or a FORGET, never each frame. Under s_mods_mutex.
+// The removed mods' kept data for the REMOVED MODS line (services/mods.md 8): read when the page first lists the mods
+// and again after a rescan or a FORGET, never each frame. Under s_mods_mutex.
 std::vector<galaxy::luma_mods::KeptMod> s_mods_kept;
 bool s_mods_kept_read = false;
 
@@ -2234,8 +2234,9 @@ std::shared_ptr<const NativeSettingsPicture> read_menu_picture(const std::filesy
 }
 
 // With s_mods_mutex held.
-// The packages this start's check refused (modlog::check_packages, validator 2) say so on their rows, as the start did:
-// the list's own pass leaves the validator's findings to it. The check ran before the game started; read only after.
+// The packages this start's check refused (modlog::check_packages, validator.md 2) say so on their rows, as the start
+// did: the list's own pass leaves the validator's findings to it. The check ran before the game started; read only
+// after.
 void mark_refused(std::vector<galaxy::mods::ModInfo>& mods) {
     for (galaxy::mods::ModInfo& mod : mods) {
         if (mod.package && mod.problem.empty() && galaxy::modlog::package_refused(mod.id)) {
@@ -2262,7 +2263,7 @@ void apply_live_mods() {
     set_movie_mod_folders(galaxy::mods::movie_folders(s_mods_saved));
 }
 
-// With s_mods_mutex held: the list's order, then mods.ini. A mod whose options changed is told (services-mods 8.2:
+// With s_mods_mutex held: the list's order, then mods.ini. A mod whose options changed is told (services/mods.md 8.2:
 // options_applied takes the new values and posts its OPTION events for the next frame's start).
 void save_mods() {
     for (std::size_t i = 0; i < s_mods.size(); ++i) {
@@ -2394,7 +2395,7 @@ void open_consent_locked() {
 
 enum class ConsentAnswer { Allow, Chosen, NotNow };
 
-// The player's answer for the mod the question shows (consent 2.3): Allow grants its code and every permission and
+// The player's answer for the mod the question shows (consent.md 2.3): Allow grants its code and every permission and
 // keeps it on; Chosen grants its code, the required permissions and the ones chosen; Not now records the code's no for
 // this token, leaves the permissions not asked and turns it off. Then the next mod's question, or the restart.
 void answer_consent(ConsentAnswer answer) {
@@ -2484,7 +2485,7 @@ void refresh_overlaps_locked() {
 // With s_mods_mutex held: mod `id` into the list of mods on at `index` (0 the top), or off (`on` false: among the
 // others by name). The draft only.
 // Why the mod's code did not start this run, as its rows say it: a required permission the player declined is their
-// choice, Consent.OffDeclined as the mod log says it (consent 2.3), not the loader's L506.
+// choice, Consent.OffDeclined as the mod log says it (consent.md 2.3), not the loader's L506.
 galaxy::mods::NotStartedText mod_not_started_text(const std::string& id) {
     const std::string declined = galaxy::modlog::declined_at_start(id);
     if (declined.empty()) return galaxy::mods::plugin_not_started_text(id);
@@ -2527,7 +2528,7 @@ std::string s_mod_import_message;  // the outcome, the row's help
 std::atomic<bool> s_mod_import_busy{false};
 std::atomic<bool> s_mod_dialog_open{false};
 
-// The last batch's outcomes for the result page (task 6.1): the same page after a drop, the picker, Open with or a
+// The last batch's outcomes for the result page: the same page after a drop, the picker, Open with or a
 // link. Under s_mod_import_mutex; the page shows from the batch's end until Done.
 struct ImportOutcome {
     std::string source;   // the file or folder's name
@@ -2539,7 +2540,7 @@ struct ImportOutcome {
     bool refused = false;
     std::vector<galaxy::mods::ImportResult::Finding> findings;
     // Its takes_over ids with no mod of theirs in the mods folder: what they kept moves to it at its first start
-    // (services-save 6), and the page says so under it ("Takes over what {old} kept"; installing is the answer).
+    // (services/save.md 6), and the page says so under it ("Takes over what {old} kept"; installing is the answer).
     std::vector<std::string> takes_over;
 };
 std::vector<ImportOutcome> s_import_outcomes;
@@ -2613,7 +2614,7 @@ void finish_install_ask(const std::vector<ImportOutcome>& outcomes) {
     answer_install_locked(status);
 }
 
-// ---- A text option typed in (services-mods 8.4) ----
+// ---- A text option typed in (services/mods.md 8.4) ----
 // The row being typed in: keys and typed text go to it until Enter (kept in the draft, applied as any option) or
 // Escape (dropped). A pad edits the last character: up and down change it, right adds one, left or X deletes one,
 // A or Y keeps, B drops. Under s_text_mutex, taken last: nothing else is locked while it is held.
@@ -2799,10 +2800,10 @@ const char* import_outcome_word(const galaxy::mods::ImportResult& result) {
     return result.replaced ? "UPDATED" : "IMPORTED";
 }
 
-// In a harness run, each line the result page shows for a file as the fact import.<file name> (harness 4), in the
-// page's order: line 1 what happened {"line": 1, "text": the outcome word, "title", "id" ("" when nothing was added),
-// "checked", "refused"}; then each finding {"line", "text", "code", "file", "at" ("<line>:<column>", when it names
-// one), "error"}.
+// In a harness run, each line the result page shows for a file as the fact import.<file name> (test-harness.md 4), in
+// the page's order: line 1 what happened {"line": 1, "text": the outcome word, "title", "id" ("" when nothing was
+// added), "checked", "refused"}; then each finding {"line", "text", "code", "file", "at" ("<line>:<column>", when it
+// names one), "error"}.
 void write_import_facts() {
     std::vector<ImportOutcome> outcomes;
     {
@@ -2842,7 +2843,7 @@ void write_import_facts() {
     }
 }
 
-// The validator on a package before it is placed (validator 2 "at import"), against the packages placed now but the
+// The validator on a package before it is placed (validator.md 2 "at import"), against the packages placed now but the
 // one it replaces. Off the UI thread: takes s_mods_mutex only to copy the list.
 bool check_import_package(const std::filesystem::path& staged, const std::string& id, galaxy::mods::ImportResult& result) {
     std::vector<galaxy::modlog::StartPackage> others;
@@ -3044,7 +3045,7 @@ galaxy::mods::ModInfo* mod_by_id_locked(const std::string& id) {
     return it != s_mods.end() ? &*it : nullptr;
 }
 
-// The mod log on the MODS page (contract mod-log 4.2): what was said about the mods this session, kept by the game
+// The mod log on the MODS page: what was said about the mods this session, kept by the game
 // module and read through galaxy::modlog. Its words come in the played language already (names 1, 2 and 4).
 
 // A log row's value: where in the mod, and how many times it was said.
@@ -3099,7 +3100,7 @@ void add_log_rows(std::vector<SettingsRow>& rows, const std::vector<galaxy::modl
 
 // The log page: the entries grouped under each mod, in the MODS lists' order (the mods the lists do not have, a
 // .luma that could not be read or Nebula's own lines, after them, in the log's order); Done goes back. In a harness
-// run its rows are written as facts once each time it opens (contract 4.3). With s_mods_mutex held.
+// run its rows are written as facts once each time it opens. With s_mods_mutex held.
 std::vector<SettingsRow> log_page(const std::vector<galaxy::mods::ModInfo>& mods) {
     std::vector<SettingsRow> rows;
     const std::vector<galaxy::modlog::PageEntry> entries = galaxy::modlog::entries();
@@ -3136,7 +3137,7 @@ std::vector<SettingsRow> log_page(const std::vector<galaxy::mods::ModInfo>& mods
     return rows;
 }
 
-// The imports' result (task 6.1), one page whatever started them: under each source's mod (its name, as is) what
+// The imports' result, one page whatever started them: under each source's mod (its name, as is) what
 // happened, its file or folder as the value and the importer's line as the help; then each of the validator's
 // findings in the played language (as is), the entry inside the mod as the value; Done goes back to the lists.
 // With s_mods_mutex held.
@@ -3190,12 +3191,12 @@ SettingsRow mod_log_row() {
     return row;
 }
 
-// The consent question for `mod` as rows (consent 2.2): its name and version; the code's warning (and that this version
-// changes the code); each declared permission in the manifest's order (`native` first): its short name (new when
-// asked again), whether the mod needs it to start, and as the help line what it does with the hosts and the mod's own
-// words; then Allow, Choose (with an optional permission) and Not now, the focus on Not now. Choosing, each optional
-// permission turns between allowed and not allowed, and Done records them. Every word is in the played language
-// (row_words), shown as it is. With s_mods_mutex held.
+// The consent question for `mod` as rows (consent.md 2.2): its name and version; the code's warning (and that this
+// version changes the code); each declared permission in the manifest's order (`native` first): its short name (new
+// when asked again), whether the mod needs it to start, and as the help line what it does with the hosts and the mod's
+// own words; then Allow, Choose (with an optional permission) and Not now, the focus on Not now. Choosing, each
+// optional permission turns between allowed and not allowed, and Done records them. Every word is in the played
+// language (row_words), shown as it is. With s_mods_mutex held.
 std::vector<SettingsRow> consent_page(const galaxy::mods::ModInfo& mod) {
     std::vector<SettingsRow> rows;
     const galaxy::mods::ModConsent facts = galaxy::mods::consent_facts(mod);
@@ -3252,7 +3253,7 @@ std::vector<SettingsRow> consent_page(const galaxy::mods::ModInfo& mod) {
         SettingsRow row{label, value, std::move(change), help};
         row.names = 1u | 2u | 4u;
         rows.push_back(std::move(row));
-        // The harness's view of the row (consent 2.6).
+        // The harness's view of the row (consent.md 2.6).
         if (!fact_rows.empty()) fact_rows += ',';
         fact_rows += "{\"name\":";
         galaxy::modlog::append_json_text(fact_rows, permission.name);
@@ -3343,8 +3344,8 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
     const std::string id = mod.id;
     const std::size_t on = static_cast<std::size_t>(
         std::count_if(s_mods.begin(), s_mods.end(), [](const galaxy::mods::ModInfo& m) { return m.enabled; }));
-    // Why its code did not start this run (Z-10): a refusal is already in the played language, shown as is. On the list
-    // but its code not running says so in the value (Z-13): "On, not running (2 of 2)".
+    // Why its code did not start this run: a refusal is already in the played language, shown as is. On the list
+    // but its code not running says so in the value: "On, not running (2 of 2)".
     const galaxy::mods::NotStartedText not_started =
         mod.problem.empty() ? mod_not_started_text(mod.id) : galaxy::mods::NotStartedText{};
     const std::string place = " (" + std::to_string(mod.order) + " OF " + std::to_string(on) + ")";
@@ -3361,7 +3362,7 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
         if (not_started.as_is) status.names |= 4u;
     }
     rows.push_back(std::move(status));
-    // It takes over a mod that is still installed (services-save 6): nothing moves while that one is there.
+    // It takes over a mod that is still installed (services/save.md 6): nothing moves while that one is there.
     if (mod.luma != nullptr) {
         for (const std::string& old : mod.luma->takes_over) {
             if (mod_by_id_locked(old) == nullptr) continue;
@@ -3370,14 +3371,14 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
             rows.push_back(std::move(still));
         }
     }
-    // The mod changes the game's speed or holds it (services-time 10): shown, and the player's last word, LET GO, which
-    // clears its rate, hold and owed steps from the next frame (the row goes when the clock is back to normal).
+    // The mod changes the game's speed or holds it (services/time.md 10): shown, and the player's last word, LET GO,
+    // which clears its rate, hold and owed steps from the next frame (the row goes when the clock is back to normal).
     if (const std::optional<galaxy::modlog::ModClock> clock = galaxy::modlog::mod_clock(id);
         clock.has_value() && (clock->held || clock->rate != 1000u)) {
         rows.push_back(button_row("TIME: " + (clock->held ? std::string("HELD") : clock_rate_text(clock->rate)), {"LET GO"},
                                   [id](RenderConfig&, unsigned) { galaxy::modlog::let_go(id); }, {}));
     }
-    // What its code costs (guard 3b, plan 6.7): the time per frame its hooks, events and calls took over the last 2
+    // What its code costs (the guard's timing): the time per frame its hooks, events and calls took over the last 2
     // seconds, average and worst, against the 16.7 ms a frame has at 60 a second. Shown once its code ran.
     if (const std::optional<galaxy::modlog::CodeTime> time = galaxy::modlog::code_time(id); time.has_value()) {
         const auto ms = [](std::uint64_t ns) {
@@ -3392,7 +3393,7 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
         cost.names = 2u | 4u;
         rows.push_back(std::move(cost));
     }
-    // The player's DON'T ASK AGAIN to its install requests (services-mods 9, J-SM4), undone here at once.
+    // The player's DON'T ASK AGAIN to its install requests (services/mods.md 9, J-SM4), undone here at once.
     if (mod.install_ask_never) {
         SettingsRow may{galaxy::modlog::row_words("Mods.InstallMayAsk", id, {}),
                         galaxy::modlog::row_words("Consent.Denied", id, {}),
@@ -3406,7 +3407,8 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
         rows.push_back(std::move(may));
     }
     // The player's answers for its code and permissions, each turned with left and right; a draft like any setting,
-    // applied at the next start (consent 2.3). Code not allowed turns the mod off. Shown once the question was answered.
+    // applied at the next start (consent.md 2.3). Code not allowed turns the mod off. Shown once the question was
+    // answered.
     const galaxy::mods::ModConsent consent = galaxy::mods::consent_facts(mod);
     if (consent.code && consent.code_answer != galaxy::mods::Answer::NotAsked) {
         const auto answer_words = [&id](bool allowed) {
@@ -3470,7 +3472,7 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
         fact("WEBSITE", mods_ui_text(mod.luma->homepage, 60u), {});
     }
     fact("FOLDER", mods_ui_text(mod.id, 60u), {});
-    // Key options are the mod's input actions, bound in CONTROLS (services-input 2), not here.
+    // Key options are the mod's input actions, bound in CONTROLS (services/input.md 2), not here.
     if (std::any_of(mod.options.begin(), mod.options.end(), [](const galaxy::mods::ModOption& o) { return o.kind != "key"; })) {
         SettingsRow heading{"OPTIONS", {}, nullptr, {}, true};
         rows.push_back(std::move(heading));
@@ -3587,8 +3589,8 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
         choice.names = option.selected != 0u ? 3u : 1u;
         rows.push_back(std::move(choice));
     }
-    // Its input actions (the manifest's key options, services-input 2): the record CONTROLS binds, on the scheme shown
-    // there, read here (its own inputs, else the game control it follows); changed in CONTROLS only.
+    // Its input actions (the manifest's key options, services/input.md 2): the record CONTROLS binds, on the scheme
+    // shown there, read here (its own inputs, else the game control it follows); changed in CONTROLS only.
     bool actions_heading = false;
     for (const galaxy::input::mod_actions::Listed& action : mod_action_list()) {
         if (action.mod_id != id) continue;
@@ -3655,7 +3657,7 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
                                   },
                                   {}));
     }
-    // What the mod log has of this mod (contract mod-log 4.2), under its options.
+    // What the mod log has of this mod, under its options.
     for (const galaxy::modlog::PageMod& said : galaxy::modlog::mods()) {
         if (said.id != mod.id) continue;
         SettingsRow heading{"LOG", {}, nullptr, {}, true};
@@ -3738,7 +3740,8 @@ SettingsRow mods_buttons_row() {
     SettingsRow row = button_row(
         {}, {"IMPORT FILE", "IMPORT FOLDER", details ? "DETAILS" : "-DETAILS", "OPEN FOLDER", "RESCAN", "EXCHANGE FOLDER"},
         [](RenderConfig&, unsigned button) {
-            // The Exchange folder (services-fs 1): the player's and every mod's allowed fs.exchange, made if missing.
+            // The Exchange folder (services/fs.md 1): the player's and every mod's allowed fs.exchange, made if
+            // missing.
             if (button == 5u) {
                 const std::filesystem::path exchange = galaxy::luma_fs::exchange_folder();
                 std::error_code ec;
@@ -3794,9 +3797,9 @@ std::string kept_size_text(std::uint64_t bytes, const std::string& id) {
     return galaxy::modlog::row_words(row, id, {{"n", std::to_string(n)}});
 }
 
-// The REMOVED MODS line (services-mods 8, services-save 5): a mod whose folder is gone keeps its numbers and saved data
-// for when it returns. One row each, "{mod}: kept for when it returns", its numbers and bytes as the help, and FORGET
-// behind a question (mod_question_key). Nothing when no removed mod keeps anything. With s_mods_mutex held.
+// The REMOVED MODS line (services/mods.md 8, services/save.md 5): a mod whose folder is gone keeps its numbers and
+// saved data for when it returns. One row each, "{mod}: kept for when it returns", its numbers and bytes as the help,
+// and FORGET behind a question (mod_question_key). Nothing when no removed mod keeps anything. With s_mods_mutex held.
 void add_kept_rows_locked(std::vector<SettingsRow>& rows) {
     if (!s_mods_kept_read) {
         galaxy::luma_mods::kept(s_mods_kept);
@@ -3846,8 +3849,8 @@ std::string offer_file_words(const galaxy::mods::OfferFile& file, const std::str
                                      {{"character", character}, {"stars", std::to_string(file.stars)}, {"date", date}});
 }
 
-// mods.install's screen (services-mods 9): who asks, the file's name (never its path), and the answers; the line under
-// the buttons says an installed mod starts at the next start (J-SM2). With s_ask_mutex held.
+// mods.install's screen (services/mods.md 9): who asks, the file's name (never its path), and the answers; the line
+// under the buttons says an installed mod starts at the next start (J-SM2). With s_ask_mutex held.
 std::vector<SettingsRow> install_page_locked() {
     const InstallAsk& ask = *s_install_ask;
     std::vector<SettingsRow> rows;
@@ -3905,7 +3908,7 @@ std::vector<SettingsRow> install_page_locked() {
     return rows;
 }
 
-// save.game's offer screen (services-save 8): the offered file, then the six to pick from, then the confirm for the
+// save.game's offer screen (services/save.md 8): the offered file, then the six to pick from, then the confirm for the
 // one picked. With s_ask_mutex held.
 std::vector<SettingsRow> offer_page_locked() {
     const OfferAsk& ask = *s_offer_ask;
@@ -4058,7 +4061,7 @@ std::vector<SettingsRow> mods_page_rows(const RenderConfig&) {
     for (galaxy::mods::ModInfo& mod : mods) {
         (void)galaxy::mods::update_pack_categories(mod);
     }
-    // A mod's request first (services-mods 9, services-save 8): the game waits on the player's answer.
+    // A mod's request first (services/mods.md 9, services/save.md 8): the game waits on the player's answer.
     {
         const std::lock_guard<std::mutex> ask_lock(s_ask_mutex);
         if (s_offer_ask) {
@@ -4100,7 +4103,7 @@ std::vector<SettingsRow> mods_page_rows(const RenderConfig&) {
                                        : "NEBULA CLOSED UNEXPECTEDLY WITH MODS ON. EVERY MOD IS OFF UNTIL THE NEXT START",
                                    {}, nullptr, {}, true});
     }
-    // A part of the game that mods need was missing at this start (contract start-check 2): the log's line for it on
+    // A part of the game that mods need was missing at this start (mod_start_check.h): the log's line for it on
     // top, as the notice said it. Nebula's own lines are under the mod "nebula"; the entries are read only then.
     const std::vector<galaxy::modlog::PageMod> said = galaxy::modlog::mods();
     if (std::any_of(said.begin(), said.end(), [](const galaxy::modlog::PageMod& m) { return m.id == "nebula"; })) {
@@ -4234,7 +4237,7 @@ bool mods_page_key(std::uintptr_t key, bool accept, bool was_down) {
             asking = s_consent_open;
         }
         if (asking) {
-            // The consent question: Escape, Backspace or B is Not now (consent 2.4); the rest are the rows' own.
+            // The consent question: Escape, Backspace or B is Not now (consent.md 2.4); the rest are the rows' own.
             if (key != VK_ESCAPE && key != VK_BACK) return false;
             if (!was_down) answer_consent(ConsentAnswer::NotNow);
             return true;
@@ -5047,8 +5050,8 @@ bool mod_question_key(std::uintptr_t key, bool was_down) {
         return true;
     }
     if (!s_mod_forget_ask.empty()) {
-        // FORGET's: Enter, Space or Y drops what the removed mod kept (services-mods 8: its numbers at once, its saved
-        // data at each file's next save; one Note Mods.Forgotten), Escape, Backspace, B or F1 keeps it.
+        // FORGET's: Enter, Space or Y drops what the removed mod kept (services/mods.md 8: its numbers at once, its
+        // saved data at each file's next save; one Note Mods.Forgotten), Escape, Backspace, B or F1 keeps it.
         if (was_down) return true;
         if (key == VK_RETURN || key == VK_SPACE) {
             const std::string id = s_mod_forget_ask;
@@ -5660,7 +5663,7 @@ void native_settings_input(NativeSettingsInput input, int arg) {
         if (visible) (void)handle_native_settings_key(VK_ESCAPE, false, true);
         return;
     case NativeSettingsInput::CloseUnseen:
-        // The game's close where it shows no menu (consent 2.1: the player answers the question). One that asks
+        // The game's close where it shows no menu (consent.md 2.1: the player answers the question). One that asks
         // nothing closes as Escape closes it. One that asks is hidden as it stands, its question unanswered and its
         // draft kept, so the game goes on; it opens again where the game first shows a menu.
         if (!visible) return;

@@ -1006,7 +1006,7 @@ void MarioActor::copyMaterial(Model* pModel, u32 materialNo, s32 packetIndex) {
         end = static_cast< u32 >(packetIndex);
     }
 
-    // A part model a mod hid (no meshes or materials, models contract 2) has no entries to take the body's material.
+    // A part model a mod hid (no meshes or materials, models.md section 2) has no entries to take the body's material.
     const ModelData* part = pModel->getModelData();
     for (u32 i = start; i <= end && i < part->getMeshCount() && i < part->getMaterialCount(); i++) {
         MaterialEntry* matPacket = pModel->getMaterialEntry(i);

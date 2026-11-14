@@ -51,7 +51,7 @@ std::unique_ptr<std::atomic<bool>[]> g_achievement_done;
 bool (*g_achievement_store)(std::string_view key) = nullptr;
 std::mutex g_unlocked_mutex;
 std::vector<std::int32_t> g_unlocked;
-// Z-10: each mod whose code did not start, and why; written by start_plugins, read by the Mods page.
+// Each mod whose code did not start, and why; written by start_plugins, read by the Mods page.
 std::mutex g_not_started_mutex;
 std::vector<NotStarted> g_not_started;
 
@@ -148,13 +148,13 @@ void* symbol_in(void* module, const char* name) {
 #endif
 }
 
-// The game's loader closes a LumaCore mod's library itself, when none of its code can run any more (loader contract
-// LR-5).
+// The game's loader closes a LumaCore mod's library itself, when none of its code can run any more
+// (docs/modding/language/compiled-form.md).
 extern "C" void close_luma_library(void* module) {
     close_library(module);
 }
 
-// A LumaCore refusal in the validator's own words (loader contract 3): luma_validate_message from the importer's
+// A LumaCore refusal in the validator's own words: luma_validate_message from the importer's
 // library (nebula_import.dll beside the game on Windows, libnebula_import.so in the app on Android and Linux; on Apple
 // the importer is linked into the program, platform/apple/metal.cmake, and called directly). Without
 // it the line gives the code and every parameter as the loader gave them, never nothing, and the log says once why.
@@ -215,7 +215,7 @@ std::string refusal_text(const LumaRefusal& refusal) {
     return text;
 }
 
-// Z-10: a record kept for the Mods page, once per mod (the first reason is the one the log said).
+// A record kept for the Mods page, once per mod (the first reason is the one the log said).
 void keep_not_started(NotStarted record) {
     const std::lock_guard<std::mutex> lock(g_not_started_mutex);
     for (const NotStarted& kept : g_not_started) {
@@ -254,7 +254,7 @@ void not_started(const PluginFile& file, const std::string& logged, std::string 
 
 // A mod's code was refused by the loader or the order: the refusal said in the played language, and kept whole.
 void not_started(const PluginFile& file, const LumaRefusal& refusal) {
-    // An L506 for a permission the player declined is their choice, not a fault: the log says so (consent 2.3).
+    // An L506 for a permission the player declined is their choice, not a fault: the log says so (consent.md 2.3).
     std::string declined;
     if (refusal.code == 506u) {
         const std::uint32_t named = refusal.count < LUMA_REFUSAL_MOST ? refusal.count : LUMA_REFUSAL_MOST;
@@ -318,7 +318,8 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
     g_log = log;
     g_find_symbol = find_symbol;
     // LumaCore.service: the module asks the host, which asks its extensions (the harness's own service while a test runs).
-    // An extension's service (the harness's) needs no permission; phase 2's services name theirs here (loader D3-2).
+    // An extension's service (the harness's) needs no permission; the other services name theirs here
+    // (compiled-form.md).
     using ServiceFinder = const void* (*)(const char*, std::uint32_t, std::uint32_t, const char**);
     if (const auto give = reinterpret_cast<void (*)(ServiceFinder)>(find_symbol != nullptr ? find_symbol("luma_set_service_finder") : nullptr)) {
         give([](const char* name, std::uint32_t major, std::uint32_t minor, const char** permission) -> const void* {
@@ -330,12 +331,12 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
     if (const auto told = reinterpret_cast<LumaSetTakenOut>(find_symbol != nullptr ? find_symbol("luma_set_taken_out") : nullptr)) {
         told([](const char* mod_id) { taken_out(mod_id); });
     }
-    // The guard (plan 1.6): its fault handler before any mod's code runs. Off, a fault in a mod's code reaches the crash
+    // The guard: its fault handler before any mod's code runs. Off, a fault in a mod's code reaches the crash
     // report, which names the mod.
     if (!plugins.empty() && !galaxy::luma_guard::install(find_symbol)) {
         if (g_log != nullptr) g_log("mods: the guard is off (the game module or the system did not take it); a fault in a mod's code ends the game with its report");
     }
-    // LumaCore's services: the module's own, the host's, then the extensions' test ones (services-registry 13).
+    // LumaCore's services: the module's own, the host's, then the extensions' test ones (services/registry.md 13).
     if (!plugins.empty()) {
         galaxy::luma_services::provide_all(find_symbol, log, {});
     }
@@ -442,7 +443,7 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
                 say(constant.mod_id + ": the player has no number " + constant.name);
             }
         }
-        // The tunables lift is gone (plan 1.5): a number is named by LumaCore's number() and set by set_number() from a
+        // The tunables lift is gone: a number is named by LumaCore's number() and set by set_number() from a
         // mod's code. Each old row is said, never dropped unsaid.
         for (const TunableToSet& tunable : rows.tunables) {
             say(tunable.mod_id + ": " + tunable.key + " is not set: tuning numbers are set by a mod's code (LumaCore set_number)");
@@ -498,8 +499,9 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
         const std::lock_guard<std::mutex> lock(g_not_started_mutex);
         g_not_started.clear();
     }
-    // The needs order (loader D3-3): a mod's needed mods start before it; otherwise the list's order. `index` stays the
-    // mod's place in the list, its order for hooks and who wins. A cycle starts none of its mods, each named (L800).
+    // The needs order (compiled-form.md): a mod's needed mods start before it; otherwise the list's order. `index`
+    // stays the mod's place in the list, its order for hooks and who wins. A cycle starts none of its mods, each named
+    // (L800).
     std::vector<std::size_t> sequence;
     std::vector<bool> placed(plugins.size(), false);
     const auto listed = [&plugins](const std::string& id) {
@@ -658,7 +660,8 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
         }
         // A LumaCore mod (luma.h): the game binds what it lists by name, whole or not at all. `plugins` is top of the
         // list first, so `index` is the mod's order: 0 binds first, holds a replace, runs its befores first and its
-        // afters last, and its wrap is outermost (loader contract 1). From the call on, the game closes the library.
+        // afters last, and its wrap is outermost (docs/modding/language/compiled-form.md). From the call on, the game
+        // closes the library.
         if (const void* const info = symbol_in(module, "luma_mod"); info != nullptr) {
             if (begin == nullptr || answered == nullptr || start == nullptr || drop == nullptr) {
                 // The game module is this build's: it always has the loader. Said, never silent.
@@ -668,8 +671,8 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
             }
             LumaRefusal refusal{};
             const std::string library = file.path.filename().string();
-            // The permissions the player granted, for the declarations as they are now (consent 1.4): a permissioned
-            // service the mod imports without one is refused by name, never allowed by omission (loader D3-2).
+            // The permissions the player granted, for the declarations as they are now (consent.md 1.4): a permissioned
+            // service the mod imports without one is refused by name, never allowed by omission (compiled-form.md).
             std::vector<const char*> granted;
             granted.reserve(file.granted.size());
             for (const std::string& permission : file.granted) granted.push_back(permission.c_str());
@@ -685,7 +688,7 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
             begun.push_back({index, static_cast<const LumaModInfo*>(info), module, library});
             continue;
         }
-        // Code that is not a LumaCore mod (no luma_mod): the old plugin entry, nebula_plugin_start, is gone (plan 1.10a).
+        // Code that is not a LumaCore mod (no luma_mod): the old plugin entry, nebula_plugin_start, is gone.
         not_started(file, name + " not started: it is not a LumaCore mod (no luma_mod); rebuild it with luma.h",
                     "ITS CODE DID NOT START. IT WAS BUILT FOR AN OLDER NEBULA");
         close_library(module);

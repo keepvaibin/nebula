@@ -2,8 +2,8 @@
 
 #include "Game/NameObj/NameObjFactory.hpp"
 
-// Contract references: the classes the after-start check found missing (luma_refs.h), and the placeholder object that
-// stands at each of their placements.
+// References (docs/modding/language/references.md): the classes the after-start check found missing (luma_refs.h), and
+// the placeholder object that stands at each of their placements.
 namespace luma {
     namespace refs {
         // The placeholder object's creator when `pClassName` is a class the after-start check found missing (case as

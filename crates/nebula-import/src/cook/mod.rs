@@ -1,4 +1,4 @@
-//! The cooker (D-01): the game's files converted once, at import or on update, into what the native game reads.
+//! The cooker: the game's files converted once, at import or on update, into what the native game reads.
 //! Compressed files and archives are expanded, and every texture is a texture record (texture.rs, formats.rs). The
 //! result is written as game.pak again: the partition's system files at their places, the file table with the cooked
 //! files' new places and sizes, the files after it.
@@ -592,7 +592,7 @@ pub fn write_cooked_pak(
     // A folder lists its files in the file table's order, whatever order their bytes are in.
     placed.sort_by_key(|(node, _)| *node);
     let mut placed: Vec<store::Placed> = placed.into_iter().map(|(_, file)| file).collect();
-    // The tables main.dol holds, as files of their own folder (B-05).
+    // The tables main.dol holds, as files of their own folder.
     let dol = system_dol(system)?;
     disc_rows.push(("sys/main.dol".to_string(), dol.len() as u64, texture::xxh64(dol)));
     let item = StoreItem { path: String::new(), order: 0, bytes: Some(disc_files_table(&disc_rows)) };
@@ -617,10 +617,11 @@ pub fn write_cooked_pak(
         let item = StoreItem { path: String::new(), order: 0, bytes: Some(text.as_bytes().to_vec()) };
         placed.extend(place(&mut pak, &mut at, path, vec![item], stats)?);
     }
-    // Nebula's placeholder model, the object archive a mod's missing class draws (contract references 4).
+    // Nebula's placeholder model, the object archive a mod's missing class draws (docs/modding/language/references.md
+    // section 4).
     let item = StoreItem { path: PLACEHOLDER_MODEL.to_string(), order: 0, bytes: Some(placeholder_model()?) };
     placed.extend(place(&mut pak, &mut at, PLACEHOLDER_ARCHIVE, vec![item], stats)?);
-    // And its chime, which a mod's sound name no file has plays (contract references 4 and 5.1).
+    // And its chime, which a mod's sound name no file has plays (references.md sections 4 and 5.1).
     let item = StoreItem { path: String::new(), order: 0, bytes: Some(placeholder_sound()?) };
     placed.extend(place(&mut pak, &mut at, PLACEHOLDER_SOUND, vec![item], stats)?);
     let at = store::write_index(&mut pak, at, &placed, system.bytes[..8].try_into().unwrap())?;
@@ -636,15 +637,15 @@ const RT_EFFECTS_PATH: &str = "NebulaData/RtEffects.tsv";
 const RT_STAGES: &str = include_str!("../../data/rt_stages.tsv");
 const RT_EFFECTS: &str = include_str!("../../data/rt_effects.tsv");
 
-/// Nebula's placeholder archive in the store (contract references 4): the game draws its model for a mod's missing class
-/// (LumaRefs.cpp), and the start check (3.13, mod_start_check.cpp) turns mods off when a store lacks it.
+/// Nebula's placeholder archive in the store (references.md section 4): the game draws its model for a mod's missing
+/// class (LumaRefs.cpp), and the start check (3.13, mod_start_check.cpp) turns mods off when a store lacks it.
 pub const PLACEHOLDER_ARCHIVE: &str = "ObjectData/NebulaPlaceholder.arc";
 /// The model in it, as the game's model manager finds an archive's model by the archive's name.
 pub const PLACEHOLDER_MODEL: &str = "NebulaPlaceholder.bmd";
 
-/// Nebula's placeholder sound in the store (contract references 4, `nebula:placeholder/sound`): the audio service plays it
-/// for a mod's sound name no file has (runtime/src/luma_audio.cpp kPlaceholderSound), and the start check (3.13) turns
-/// mods off when a store lacks it.
+/// Nebula's placeholder sound in the store (references.md section 4, `nebula:placeholder/sound`): the audio service
+/// plays it for a mod's sound name no file has (runtime/src/luma_audio.cpp kPlaceholderSound), and the start check
+/// (3.13) turns mods off when a store lacks it.
 pub const PLACEHOLDER_SOUND: &str = "NebulaData/PlaceholderSound.nsfx";
 
 /// The placeholder's chime as the mixer plays a mod's effect (NSFX), from data/placeholder/sound.wav (make_placeholder.py

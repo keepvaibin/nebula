@@ -1,16 +1,16 @@
 """types_fixture_test.py --commands COMPILE_COMMANDS [--out DIR] [--libclang PATH] [--run-with "PREFIX" --path-map FROM=TO]
 
-Contract types TY-8, on the fixture (tools/lumacore/tests/types_fixture): what the game's headers have too little of
+types.md, on the fixture (tools/lumacore/tests/types_fixture): what the game's headers have too little of
 (a name hidden by a derived class's, one two bases up, ambiguous ones, one through a virtual base, bit-fields through a
 base, an instance only an alias names, anonymous members, globals) through the real generator (gen_types.py --tree),
 the real kernel (LumaTypes.cpp) and the real comparison (compare_types.py):
   1. gen_types.py writes the fixture's table and JSON;
   2. the table, the kernel and the driver are compiled with a game unit's flags and run: each answer against the
-     compiler's (offsetof, the bit-field's own access, a guard page for TY-4; contract objects: the own class,
+     compiler's (offsetof, the bit-field's own access, a guard page; objects.md: the own class,
      subobjects, virtual calls and overriders against typeid, dynamic_cast and the compiler's own calls), then the
      kernel's description;
   3. compare_types.py passes on that description, and fails, naming the row, on a copy of the JSON with one offset
-     planted wrong (and on copies with a polymorphic flag and a method row planted wrong: contract objects).
+     planted wrong (and on copies with a polymorphic flag and a method row planted wrong: objects.md).
 Exit 0 only when all three hold.
 
 The commands may be another platform's (an Android module's: the driver is linked static for its target). --run-with
@@ -95,7 +95,7 @@ def main():
                        ("Ui::NameText<17> [2]", ["Ui::NameText<17>"])):
         if gen_types.type_names(text) != want:
             failed.append("type_names(%r) is %s, not %s" % (text, gen_types.type_names(text), want))
-    # TY-9: every name a text holds is a row (record, enum, alias), a built-in word or left out.
+    # Every name a text holds is a row (record, enum, alias), a built-in word or left out.
     known = set(rows) | {x["name"] for x in data["left_out"]}
     words = {"const", "volatile", "signed", "unsigned", "char", "short", "int", "long", "float", "double", "bool", "void"}
     texts = [(r["name"] + "." + f["name"], f["type"]) for r in data["types"] for f in r.get("fields", [])]
@@ -110,7 +110,7 @@ def main():
             failed.append("TY-9: %s has no row" % n)
     if ("FxAnon.named", "a type with no name a mod can write") not in left:
         failed.append("TY-9: FxAnon.named is not left out")
-    # TY-10: each record says both, as the compiler's traits (the table's static_asserts) say.
+    # Each record says both, as the compiler's traits (the table's static_asserts) say.
     keys = ("trivial_copy", "trivial_destroy", "no_copy")
     for n, want in (("FxBase", (True, True, False)), ("FxL", (False, True, False)), ("FxOwns", (False, False, False)),
                     ("FxCopies", (False, True, False)), ("FxDefaulted", (True, True, False)),
@@ -123,12 +123,12 @@ def main():
         have = None if r is None else tuple(r.get(k) for k in keys)
         if have != want:
             failed.append("TY-10: %s should be %s %s; it is %s" % (n, keys, want, have))
-    # Self-description (plan 1.8): a virtual's calls, read from its body.
+    # Self-description: a virtual's calls, read from its body.
     calls = [v.get("calls") for v in rows.get("FcNerve", {}).get("virtuals", []) if v["name"] == "FcNerve::execute"]
     want_calls = [{"name": "FcOwner::exeGo", "signature": "void()"}, {"name": "FcOwner::helper", "signature": "s32(s32) const"}]
     if calls != [want_calls]:
         failed.append("self-description: FcNerve::execute's calls are %s, not %s" % (calls, want_calls))
-    # Contract objects: polymorphic through a base that is an instance named only as a base.
+    # objects.md: polymorphic through a base that is an instance named only as a base.
     if not rows.get("FoHolder", {}).get("polymorphic"):
         failed.append("objects: FoHolder (a base FoGroup<FoB> : FoV) is not said polymorphic")
     missing = [r["name"] for r in data["types"] if r.get("kind") in ("struct", "class", "union")
@@ -151,7 +151,7 @@ def main():
                (FIXTURE / "types_fixture_driver.cpp", [])]
     compiler = raw[0]
     for source, extra in sources:
-        # The module with rows is built with RTTI data (contract objects): the game unit's flags may predate it.
+        # The module with rows is built with RTTI data (objects.md): the game unit's flags may predate it.
         args = [a for a in I.parse_arguments(raw, source)
                 if a not in ("-fsyntax-only", "-Wno-everything", "-fno-rtti", str(source))] + ["-frtti"]
         obj = out / (source.stem + ".o")
@@ -193,7 +193,7 @@ def main():
     print("compare, planted:", se.strip()[-600:])
     if code == 0 or "field FxMid.y" not in se:
         failed.append("compare_types.py did not name the planted difference (field FxMid.y)")
-    # Contract objects: a record said not polymorphic, and a virtual the module has a row for said to have none.
+    # objects.md: a record said not polymorphic, and a virtual the module has a row for said to have none.
     for what, plant, named in (
             ("polymorphic", lambda t: t["FoB"].update(polymorphic=False), "record FoB: polymorphic"),
             ("method", lambda t: t["FoD"]["virtuals"][-1].update(row=False), "method FoD::secret s32(s32) const")):

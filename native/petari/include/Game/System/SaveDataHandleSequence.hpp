@@ -23,7 +23,7 @@ public:
     void startSave(bool, bool);
     void startSaveBackup(bool, bool);
     void startSaveAll();
-    // LumaCore's FORGET (services-save 5): the stored files written as they are in memory, no window, no sound, no
+    // LumaCore's FORGET (services/save.md 5): the stored files written as they are in memory, no window, no sound, no
     // question. False, nothing started: a sequence is running, the save was not read yet, or saves are off.
     bool startQuietSave();
     // True when startQuietSave never writes: the start read nothing usable, saves are off, or the save is damaged.

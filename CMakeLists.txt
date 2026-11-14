@@ -666,7 +666,7 @@ galaxy_test(galaxy_luma_tests SOURCES ${rt}/luma_tests.cpp ${rt}/luma.cpp)
 galaxy_test(galaxy_luma_net_reach_tests SOURCES ${rt}/luma_net_reach_tests.cpp ${rt}/luma_net_reach.cpp)
 galaxy_test(galaxy_mods_tests SOURCES ${rt}/mods_tests.cpp ${rt}/mod_xml.cpp ${rt}/mods.cpp ${rt}/mod_consent.cpp ${rt}/luma.cpp
     ${rt}/mod_import.cpp ${rt}/texture_categories.cpp ${rt}/dolphin_pack.cpp ${rt}/asset_store.cpp LIBS galaxy_atomic_file nebula_archive)
-# The consent store (contracts/consent.md 1.5): answers, digests and their round trip through the mod settings.
+# The consent store (docs/modding/lumalink/consent.md): answers, digests and their round trip through the mod settings.
 galaxy_test(galaxy_mod_consent_tests SOURCES ${rt}/mod_consent_tests.cpp ${rt}/mod_consent.cpp ${rt}/mods.cpp ${rt}/mod_xml.cpp
     ${rt}/luma.cpp ${rt}/mod_import.cpp ${rt}/texture_categories.cpp ${rt}/dolphin_pack.cpp ${rt}/asset_store.cpp
     LIBS galaxy_atomic_file nebula_archive)
@@ -1017,8 +1017,8 @@ if(NEBULA_D3D11)
     nebula_host_delay_loads(NebulaNativeD11)
 endif()
 
-# AV1 movies (plan 3.10: a mod's movie, NMOV codec 1): dav1d 1.5.1 built in-tree (cmake/dav1d.cmake), for every renderer.
-option(NEBULA_AV1 "Decode AV1 movies with dav1d (plan 3.10)" ON)
+# AV1 movies (a mod's movie, NMOV codec 1): dav1d 1.5.1 built in-tree (cmake/dav1d.cmake), for every renderer.
+option(NEBULA_AV1 "Decode AV1 movies with dav1d" ON)
 if(NEBULA_AV1)
     include(cmake/dav1d.cmake)
     foreach(target galaxy_render galaxy_render_vk galaxy_render_d3d11)

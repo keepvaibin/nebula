@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The proof harness's host half (harness.h; contract `harness`, revision 1).
+// The proof harness's host half (harness.h; docs/modding/lumalink/test-harness.md).
 //
 // The plan (written by tools/lumacore/luma_test.py, one item a line, UTF-8):
 //   harness 1
@@ -63,7 +63,7 @@ struct Json {
     std::vector<JsonMember> members;  // an object's, as written
 };
 // A member by name. Not std::pair<std::string, Json>: a pair needs Json whole where Json declares its members, which
-// libstdc++ refuses (Linux, plan 8.1); a vector of a type declared here only is allowed (C++17).
+// libstdc++ refuses (Linux); a vector of a type declared here only is allowed (C++17).
 struct JsonMember {
     std::string first;
     Json second;
@@ -135,7 +135,7 @@ private:
                 case 't': out += '\t'; break;
                 case 'u': {
                     // Decoded to UTF-8, a surrogate pair to its one character, so "\u30de" and the mod's own UTF-8
-                    // are one string (audit 0.3 H-3). A lone surrogate is not text.
+                    // are one string. A lone surrogate is not text.
                     std::optional<std::uint32_t> unit = hex4();
                     if (!unit) {
                         return std::nullopt;
@@ -675,7 +675,7 @@ bool read_line(const std::string& line, std::string& why) {
                 return false;
             }
         } else if (a == "settings" && args.size() == 1u) {
-            // Revision 6 (R6-3): the host's own Settings opened on that page (the runner gives its number).
+            // Revision 6: the host's own Settings opened on that page (the runner gives its number).
             s.action = Action::Settings;
             if (!number(args[0], value) || value < 0.0 || value > 255.0 || value != std::floor(value)) {
                 why = "step " + std::to_string(s.number) + ": settings takes a page number";
@@ -696,7 +696,7 @@ bool read_line(const std::string& line, std::string& why) {
             s.mod = args[0];
             s.wait_fact = args[1] == "1";
         } else if (a == "forget" && args.size() == 1u) {
-            // The Mods page's FORGET of a removed mod (services-mods 8), as the player chooses it.
+            // The Mods page's FORGET of a removed mod (services/mods.md 8), as the player chooses it.
             s.action = Action::Forget;
             s.mod = args[0];
         } else {
@@ -1022,7 +1022,7 @@ void service_done(std::int32_t ok, const char* why) {
     if (ok == 0) {
         finish("fail", "step " + std::to_string(s.number) + " (" + s.text + "): " + reason);
     } else if (ok < 0) {
-        // Revision 7 (G-H6-2): the player or a live object the step names is not there.
+        // Revision 7: the player or a live object the step names is not there.
         finish("setup-failed", "step " + std::to_string(s.number) + " (" + s.text + "): " + reason);
     }
 }
@@ -1261,7 +1261,7 @@ void log_line(const char* tag, const char* line) {
             const std::size_t space = rest.find(' ');
             const std::string key = space == std::string::npos ? rest : rest.substr(0, space);
             const std::string json = space == std::string::npos ? std::string() : rest.substr(space + 1u);
-            // Revision 6 (R6-1, G-H6-1): a mod's key is [a-z0-9_]+ and not `loaded` (the host's); it is the fact
+            // Revision 6: a mod's key is [a-z0-9_]+ and not `loaded` (the host's); it is the fact
             // mod.<id>.<key>, which the runner splits at its last dot (an id may hold dots, a key never).
             bool key_ok = !key.empty() && key != "loaded";
             for (const char c : key) {

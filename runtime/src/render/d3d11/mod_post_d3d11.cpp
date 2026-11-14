@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// draw.post and draw.native on Direct3D 11 (contract draw 15 and 16): a mod's post program drawn full screen over the
-// frame (RenderCore::walk_post), and a mod's native function given the device, the immediate context and the target at
-// its draw point (RenderCore::walk_native).
+// draw.post and draw.native on Direct3D 11 (docs/modding/services/draw.md): a mod's post program drawn full screen over
+// the frame (RenderCore::walk_post), and a mod's native function given the device, the immediate context and the target
+// at its draw point (RenderCore::walk_native).
 #include "galaxy/render/d3d11/renderer_d3d11.h"
 
 #include "galaxy/render/mod_post.h"

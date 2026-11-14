@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // A mod's glTF material (glTF 2.0 metallic-roughness) in a program's lit form: the template the generator writes for a
-// material with MaterialIr pbr (crates/nebula-import/src/cook/programs.rs pbr_*; plan 3.3, contract materials). The
-// material's stages make its base colour (factor x base map x vertex colour, display-encoded, as G's cook writes them);
-// this lights it: the light set's ambient and lights summed as the game's lit channel sums them (each light by its
-// traced share in the traced form, the ambient by AMBIENT_TERM: MOD-MATERIALS-FC.md 1), Lambert for the diffuse part,
-// GGX with the material's roughness for the first light's highlight, and a reflection of the stage along the mirrored
-// view: the stage's light as an environment (its fill as the sky about the player's up, its ambient as the ground),
-// through ENV_FETCH, so where the tracer owns the pixel the traced scene stands in its place (program.hlsli env_fetch).
-// Metal from the factor and the map's blue, roughness from the factor and its green, occlusion on the indirect light.
+// material with MaterialIr pbr (crates/nebula-import/src/cook/programs.rs pbr_*; docs/modding/content/materials.md).
+// The material's stages make its base colour (factor x base map x vertex colour, display-encoded, as the cook writes
+// them); this lights it: the light set's ambient and lights summed as the game's lit channel sums them (each light by
+// its traced share in the traced form, the ambient by AMBIENT_TERM: MOD-MATERIALS-FC.md 1), Lambert for the diffuse
+// part, GGX with the material's roughness for the first light's highlight, and a reflection of the stage along the
+// mirrored view: the stage's light as an environment (its fill as the sky about the player's up, its ambient as the
+// ground), through ENV_FETCH, so where the tracer owns the pixel the traced scene stands in its place (program.hlsli
+// env_fetch). Metal from the factor and the map's blue, roughness from the factor and its green, occlusion on the
+// indirect light.
 
 #ifndef PROGRAM_PBR_HLSLI
 #define PROGRAM_PBR_HLSLI

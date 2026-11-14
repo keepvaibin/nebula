@@ -1,6 +1,6 @@
 #pragma once
 
-// The guard's kernel half (plan 1.6, contract guard, luma_guard.h): every place the kernel runs a mod's code calls it
+// The guard's kernel half (luma_guard.h): every place the kernel runs a mod's code calls it
 // through run(), which pushes a frame the host's fault handler can resume at and calls the mod's function itself. No
 // mod: nothing here runs.
 
@@ -28,7 +28,7 @@ namespace luma {
         // never resumed).
         void codeRange(void* pLibrary, uintptr_t* pBase, uintptr_t* pBegin, uintptr_t* pEnd);
         // In a harness run only (facts on), once, before the first mod starts: the fact kernel.guard_cost, the boundary's time
-        // against a plain call and the cost of the clock's pair of reads in each boundary (contract guard 4). Nothing
+        // against a plain call and the cost of the clock's pair of reads in each boundary. Nothing
         // otherwise.
         void measureForHarness();
         // Each mod's code time (luma_guard_cost): a slot from its load (game thread; a mod of the same id loaded again

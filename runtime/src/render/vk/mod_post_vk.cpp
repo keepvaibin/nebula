@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// draw.post and draw.native on Vulkan (LumaCore plan 2.4 layers 8 and 9; contract draw 15 and 16; the D3D12 side is
+// draw.post and draw.native on Vulkan (docs/modding/services/draw.md; the D3D12 side is
 // mod_post_d3d12.cpp). A post program draws in a pass of its own over the scene target's colour alone: the scene's pass
 // holds the depth as an attachment, which the program samples. A native function gets the command buffer between
 // passes.

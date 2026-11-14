@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* Patches by key, as the game applies them (contract table-keys): one game table and the patches of every mod that is
+/* Patches by key, as the game applies them (table-keys.md): one game table and the patches of every mod that is
    on, from the bottom of the mod list up, make the table the game reads: the last given (the mod higher in the list)
    wins, as for whole files. The same applier LumaLink's checks are made against.
 
@@ -26,7 +26,7 @@ typedef struct LumaTablePatch {
     uint64_t json_size;
 } LumaTablePatch;
 
-/* Another table of the table's link group (contract table-keys 13): the same zone and kind in another layer
+/* Another table of the table's link group (table-keys.md section 13): the same zone and kind in another layer
    (StageData/<zone>/jmp/Placement|MapParts|ChildObj|Start|GeneralPos/<layer>/<file>, layer Common or LayerA to
    LayerP), with the patches of the mods that are on for it, as the input's own. */
 typedef struct LumaLinkTable {
@@ -52,7 +52,7 @@ typedef struct LumaPatchInput {
        table of no group; read only when the table has a patch). For Placement, MapParts and ChildObj (l_id) every
        other layer of the zone; for Start and GeneralPos (MarioNo; PosName and Obj_ID) Common and the layers some
        scenario turns on together with this table's, by the galaxies' scenario tables after their own patches
-       (contract table-keys T-4). A key a patch adds must be new to those: one the game has there leaves the patch out
+       (table-keys.md). A key a patch adds must be new to those: one the game has there leaves the patch out
        (LUMA_PATCH_FAILED, L402), one a higher mod adds there leaves this row out (LUMA_PATCH_CONFLICT, the higher's
        row stays). */
     const LumaLinkTable* links;

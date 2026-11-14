@@ -1,9 +1,10 @@
-//! Patches by key (luma-format 5.1, contract table-keys; plan 3.11): a game table and the patches of every mod that is
+//! Patches by key (luma.md 5.1, docs/modding/format/table-keys.md): a game table and the patches of every mod that is
 //! on, from the bottom of the mod list up, make the table the game reads. Each mod's patch applies in this order: `rows` (a whole `#`
 //! table), `remove`, `set`, `add`, `select`. Patches reach here checked by the validator; what only the mod list
 //! decides (two mods changing one cell, a row another mod removed) is a [`Fact`] for the Mods screen, never silent.
-//! The last given wins: the mod higher in the list, as for whole files (F, INBOX-G 13). A table of a kind (cook::table_columns) that has no rows takes its kind's columns
-//! first, and a row a mod adds starts from the value most of the game's rows have in each column (table-keys 10).
+//! The last given wins: the mod higher in the list, as for whole files. A table of a kind (cook::table_columns) that
+//! has no rows takes its kind's columns first, and a row a mod adds starts from the value most of the game's rows have
+//! in each column (table-keys.md 10).
 
 use super::table::{Cell, Column, Kind, TableIr};
 use super::table_columns::{columns_of, widen_empty, KindColumn};
@@ -37,7 +38,7 @@ pub enum Fact {
 }
 
 /// Why a patch cannot apply, as the validator names the same fault (its L400, L402, L403 and L406 with the same
-/// phrases and parameters), so the Mods screen says it in the player's language (F, INBOX-G 18). The applier's only
+/// phrases and parameters), so the Mods screen says it in the player's language. The applier's only
 /// error kind for a patch; any other error is about the game's table and goes to the caller.
 #[derive(Debug)]
 pub struct Refusal(pub Finding);
@@ -96,8 +97,8 @@ fn found(v: &Value) -> Arg {
     }
 }
 
-/// Another table of a table's link group (table-keys 13): one zone's tables of one kind in its other layers, with the
-/// patches of the mods that are on for it, in the order a table's are given.
+/// Another table of a table's link group (table-keys.md 13): one zone's tables of one kind in its other layers, with
+/// the patches of the mods that are on for it, in the order a table's are given.
 pub struct Link<'a> {
     pub path: &'a str,
     pub table: &'a TableIr,
@@ -145,14 +146,14 @@ pub fn apply(path: &str, table: &mut TableIr, patches: &[ModPatch]) -> Result<Ve
     apply_linked(path, table, patches, &[], &[])
 }
 
-/// `apply` for a table of a link group (table-keys 13), given the group's other tables with their patches and every
+/// `apply` for a table of a link group (table-keys.md 13), given the group's other tables with their patches and every
 /// mod that is on from the bottom of the list up. A key a patch adds that the game has in another layer leaves that
 /// patch out (L402 Patch.KeyInGroup, as the validator); a key a higher mod adds to another layer leaves this row out
 /// (a conflict fact, the higher's row stays); a key the same mod adds to another layer leaves the patch out too.
 pub fn apply_linked(path: &str, table: &mut TableIr, patches: &[ModPatch], links: &[Link], mods: &[&str]) -> Result<Vec<Fact>> {
     let mut group = Group { rank: mods.iter().enumerate().map(|(i, m)| (m.to_string(), i)).collect(), ..Group::default() };
     if !patches.is_empty() {
-        // Which of two mods adding one key in the group is higher comes from `mods` alone (F3.11-1): a patch of a mod
+        // Which of two mods adding one key in the group is higher comes from `mods` alone: a patch of a mod
         // it does not name cannot be ordered, so the input is not valid, never guessed.
         if links.iter().any(|l| !l.patches.is_empty()) {
             let unnamed = patches.iter().map(|p| (p.mod_id, path)).chain(links.iter().flat_map(|l| l.patches.iter().map(move |p| (p.mod_id, l.path))));
@@ -265,7 +266,7 @@ impl Applier<'_> {
             Some(v) if v.as_u64() != Some(1) => return Err(shape("Patch.Version", v.to_string())),
             Some(_) => {}
         }
-        // A stage's placement rows may give their objects' arguments by name (stages contract 1).
+        // A stage's placement rows may give their objects' arguments by name (stages.md section 1).
         let expanded = self.placement_rows(root)?;
         let root = expanded.as_ref().unwrap_or(root);
         if let Some(rows) = root.get("rows") {
@@ -467,7 +468,7 @@ impl Applier<'_> {
         })
     }
 
-    /// `values` are the patch's, which `cells` came from: a conflict names the column as the patch wrote it (P-2).
+    /// `values` are the patch's, which `cells` came from: a conflict names the column as the patch wrote it.
     fn write(&mut self, at: usize, cells: &[(usize, Cell)], values: &Map<String, Value>, mod_id: &str) {
         let id = self.row_id(at);
         for (c, cell) in cells {
@@ -506,7 +507,7 @@ impl Applier<'_> {
             }
             let id = self.fold(parts.join("\u{1f}"));
             let found: Vec<usize> = (0..self.table.rows.len()).filter(|&r| self.row_id(r) == id).collect();
-            // The game repeats a few keys (table-keys 4); a where then means the first, as the game reads it.
+            // The game repeats a few keys (table-keys.md 4); a where then means the first, as the game reads it.
             if let Some(&at) = found.first() {
                 return Ok(Some(at));
             }
@@ -662,7 +663,7 @@ mod tests {
         assert!(!facts.iter().any(|f| matches!(f, Fact::Conflict { .. } | Fact::Missing { .. })), "{facts:?}");
     }
 
-    /// Stages contract 1: `args` by name in a placement table's `add` and `set`; a wrong name fails that patch alone.
+    /// stages.md section 1: `args` by name in a placement table's `add` and `set`; a wrong name fails that patch alone.
     #[test]
     fn placement_rows_take_arguments_by_name() {
         let _file = super::super::placement_args::TEST_FILE.lock().unwrap_or_else(|e| e.into_inner());

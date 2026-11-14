@@ -51,7 +51,7 @@ public:
     bool isStopSound() const;
     bool isReadyToStartScene() const;
     bool isFirstUpdateSceneNerveNormal() const;
-    // A scene runs (not being built, taken down or waited for): LumaCore's time state (services-time 5).
+    // A scene runs (not being built, taken down or waited for): LumaCore's time state (services/time.md 5).
     bool isNerveNormal() const;
     void startScene();
     void updateScene();

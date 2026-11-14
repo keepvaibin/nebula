@@ -196,7 +196,7 @@ fn each_broken_library_gives_its_finding() {
 
 #[test]
 fn a_library_the_system_runs_code_from_at_load_is_refused() {
-    // Loader contract D2-6: the system's loader would run it before LumaCore's `begin`, so a C++ constructor there
+    // The system's loader would run it before LumaCore's `begin`, so a C++ constructor there
     // finds no core. Each form names what the format calls it.
     for (path, platform, what) in [
         ("pe-x64/runs_at_load.dll", "windows-x64", "AddressOfEntryPoint"),
@@ -215,7 +215,7 @@ fn a_library_the_system_runs_code_from_at_load_is_refused() {
 
 #[test]
 fn a_library_the_system_runs_code_from_when_it_closes_it_is_refused() {
-    // F's audit of R3-A, A-1: the kernel closes the library after `finish`, when the mod's memory is freed.
+    // The kernel closes the library after `finish`, when the mod's memory is freed.
     for (path, platform, what) in [
         ("elf-x64/runs_at_close.so", "linux-x64", "DT_FINI_ARRAY"),
         ("elf-x64/fini.so", "linux-x64", "DT_FINI"),
@@ -265,7 +265,7 @@ fn a_mach_o_segment_with_more_sections_than_it_holds_is_not_read_in_part() {
 
 #[test]
 fn service_and_other_mod_imports_are_read_and_checked_as_far_as_the_mod_shows() {
-    // Loader D3-2 and D3-3: kinds 5 and 6. What is left to the host (its services, the needed mod's exports) is said.
+    // Kinds 5 and 6. What is left to the host (its services, the needed mod's exports) is said.
     let left = |r: &Report| r.not_checked.iter().map(|n| (n.code, n.because)).collect::<Vec<_>>();
     for (path, platform) in [("pe-x64/service.dll", "windows-x64"), ("elf-x64/service.so", "linux-x64")] {
         let r = check(&code_mod(platform, &lib(path), &[], false), platform, true);
@@ -273,7 +273,7 @@ fn service_and_other_mod_imports_are_read_and_checked_as_far_as_the_mod_shows() 
         assert_eq!(left(&r), vec![(505, "Missing.Services"), (506, "Missing.Services")], "{path}");
     }
     let w = "windows-x64";
-    // A version text other than "<major>.<minor>" is L505 with `sig` as found (services-registry 2).
+    // A version text other than "<major>.<minor>" is L505 with `sig` as found (services/registry.md 2).
     let r = check(&code_mod(w, &lib("pe-x64/service_bad.dll"), &[], false), w, true);
     assert_eq!(codes(&r), vec![505]);
     assert!(english(&r, 505).contains("service \"net\" at version one"), "{}", english(&r, 505));
@@ -405,7 +405,8 @@ fn a_service_import_is_checked_against_the_game_s_catalog() {
         n.services = Some(Services::from_json(format!(r#"{{"services": {rows}}}"#).as_bytes()).unwrap());
         n
     };
-    // service.dll asks for net 1.0 (not optional): the same major and a minor at least that binds (registry 2).
+    // service.dll asks for net 1.0 (not optional): the same major and a minor at least that binds (services/registry.md
+    // 2).
     let bytes = code_mod(w, &lib("pe-x64/service.dll"), &[], false);
     for (rows, want) in [
         (r#"[{"name": "net", "major": 1, "minor": 0, "permission": null}]"#, vec![]),
@@ -419,7 +420,7 @@ fn a_service_import_is_checked_against_the_game_s_catalog() {
         let r = check_with(&bytes, w, Some(&n));
         assert_eq!(codes(&r), want, "{rows}: {:?}", r.findings);
         assert!(r.not_checked.is_empty(), "{rows}: {:?}", r.not_checked);
-        // What the host's consent question reads (consent 1.3), and the C accessor's source.
+        // What the host's consent question reads (consent.md 1.3), and the C accessor's source.
         assert_eq!(r.touches.services, vec!["windows-x64\u{1f}net\u{1f}1.0".to_string()], "{rows}");
     }
     let r = check_with(&bytes, w, Some(&with(r#"[{"name": "net", "major": 1, "minor": 0, "permission": "net"}]"#)));
@@ -438,7 +439,8 @@ fn a_service_import_is_checked_against_the_game_s_catalog() {
     let r = check(&luma(&[("code", code.as_str()), ("permissions", r#"[{"name": "native", "why": "Its own helper."}]"#)], &[file(&format!("code/{w}/mod.dll"), &lib("pe-x64/good.dll"))]), w, true);
     assert_eq!(codes(&r), vec![218], "{:?}", r.findings);
 
-    // The catalog's own form (registry 9): anything else does not read, so a wrong file is never a game with fewer services.
+    // The catalog's own form (services/registry.md 9): anything else does not read, so a wrong file is never a game
+    // with fewer services.
     for bad in [
         r#"{}"#,
         r#"{"services": [{"name": "Net", "major": 1, "minor": 0, "permission": null}]}"#,
@@ -696,9 +698,9 @@ fn a_virtual_call_and_a_class_number_are_checked_against_the_types_file() {
     assert_eq!(Types::from_json(twice.as_bytes()).unwrap_err().to_string(), "types[1].virtuals[0]: a second virtual \"A::f\" \"void()\"");
 }
 
-/// F's AP-4 (audit 3.1-perm): registry 2's grammar is L505 whatever the flags; an optional import of a service the
+/// Registry 2's grammar is L505 whatever the flags; an optional import of a service the
 /// game lacks gives nothing; an optional import of a permissioned service the mod does not declare is L506 and is not
-/// a required service. AP-2: a catalog row with a key other than the four does not read.
+/// a required service. A catalog row with a key other than the four does not read.
 #[test]
 fn service_imports_follow_the_grammar_and_optional_rules() {
     use luma_validate::names::Services;

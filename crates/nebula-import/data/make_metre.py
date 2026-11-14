@@ -1,4 +1,4 @@
-"""The 1 m model of J's 3208-model-metre (models contract 3: a glTF metre is 100 game units).
+"""The 1 m model of the 3208-model-metre test (content/models.md section 3: a glTF metre is 100 game units).
 
 One node, `metre`, 1 m up from the origin (its translation [0, 1, 0]), carrying a 1 m cube that hangs below it to the
 origin (x and z -0.5..0.5, y -1..0). Cooked as a new model it is one joint: joint 0 is the node, standing 100 units

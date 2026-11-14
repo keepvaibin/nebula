@@ -172,8 +172,8 @@ public:
     // updateAll in its two halves: every slot's update (envelopes, pitch, volumes), then one tick of the mix.
     void updateSlots();
     void mix();
-    // The world clock's tape (services-time 7): every voice's playback rate times `scale` (1 at real time). The audio
-    // clock's thread only; takes effect at each slot's next update.
+    // The world clock's tape (services/time.md 7): every voice's playback rate times `scale` (1 at real time). The
+    // audio clock's thread only; takes effect at each slot's next update.
     static void setRateScale(f32 scale);
     // Every playing slot's note gone (the reset's end).
     void dropActive();

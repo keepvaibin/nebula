@@ -48,7 +48,8 @@ pub(crate) fn check(ctx: &mut Ctx) {
         }
     }
     // L800: a cycle of needs through this mod, among the mods that are on. The game starts a needed mod before the mods
-    // that need it, so in a cycle none can start first; the host refuses each mod in one with this finding (loader D3-3).
+    // that need it, so in a cycle none can start first; the host refuses each mod in one with this finding
+    // (compiled-form.md).
     if let Some(chain) = need_cycle(&own, &ctx.facts.needs.iter().map(|(id, _)| id.clone()).collect::<Vec<_>>(), installed) {
         ctx.add(800, "luma.json", None, None, vec![("other", t(chain[1].clone())), ("expected", t("")), ("found", p("Need.Cycle")), ("chain", t(chain.join(" -> ")))]);
     }
@@ -65,7 +66,7 @@ pub(crate) fn check(ctx: &mut Ctx) {
         }
     }
     // L305 and L404 (Notes): the same file replaced, or the same cell changed, by another mod that is on. The mod higher
-    // in the list wins, for everything (F, INBOX-G 13): installed mods are given in list order, the top first, and
+    // in the list wins, for everything: installed mods are given in list order, the top first, and
     // `position` says how many are above this one.
     let position = ctx.input.position.unwrap_or(installed.len());
     let touches = ctx.facts.touches.clone();
@@ -93,8 +94,8 @@ pub(crate) fn check(ctx: &mut Ctx) {
                 ctx.add(805, &file, None, None, vec![("other", t(other.id.clone())), ("found", t(name)), ("sig", t(sig))]);
             }
         }
-        // Two mods adding one key: to one table, or (table-keys 13) to one zone's link group in any layers. The higher
-        // mod's row stays (the applier's conflict fact). Rows added by place (`+n`) are not keys.
+        // Two mods adding one key: to one table, or (table-keys.md 13) to one zone's link group in any layers. The
+        // higher mod's row stays (the applier's conflict fact). Rows added by place (`+n`) are not keys.
         let same_table = touches.adds.iter().filter(|r| other.touches.adds.contains(r)).filter(|r| {
             let mut parts = r.split(SEP);
             let (table, first) = (parts.next().unwrap_or(""), parts.next().unwrap_or(""));

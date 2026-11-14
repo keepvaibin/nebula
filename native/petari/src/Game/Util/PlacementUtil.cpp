@@ -81,7 +81,7 @@ bool MR::isObjectName(const TableIter& rIter, const char* pName) {
 
 namespace {
     bool getPlacementArgNoInit(const TableIter& rIter, const char* pName, s32* pOut) {
-        // An object an alias placed (LumaClasses, classes contract "alias") reads the alias's arguments while it
+        // An object an alias placed (LumaClasses, classes.md, "alias") reads the alias's arguments while it
         // initialises; -1 there leaves the placement's own.
         if (luma::classes::placementArg(rIter.mInfo, rIter.mIndex, pName, pOut)) {
             return true;

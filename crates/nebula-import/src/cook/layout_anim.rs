@@ -1,4 +1,4 @@
-//! A mod layout's animations (plan 3.8 layer 3, layout contract 2b): `animations` in `<Name>.layout.json`, each a
+//! A mod layout's animations (docs/modding/content/screens.md section 2b): `animations` in `<Name>.layout.json`, each a
 //! named set of tracks on its panes, written as the game's own layout animation file
 //! `<archive>/anim/<Name>_<animation>.brlan` (pai1: pane transforms RLPA, vertex colours and alpha RLVC, visibility
 //! RLVI), which the store cooks as the game's (ui_layout::read_animation) and `ui.play` plays by name.

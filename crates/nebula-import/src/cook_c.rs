@@ -1,4 +1,4 @@
-//! The cook as C calls for the game's run time (plan 2.8 layer 3; contracts/services-assets.md 4): the `assets` service
+//! The cook as C calls for the game's run time (docs/modding/services/assets.md section 4): the `assets` service
 //! gives one file as the disc has it and takes back what the store would hold for it, as `cook::cook_entry` makes it at
 //! install. Resolved by name from nebula_import (Windows, Linux, Android) or linked weakly (Apple).
 //!

@@ -1,7 +1,7 @@
 """gen_types.py --commands COMPILE_COMMANDS --out DIR [--entry FILE] [--defined DIR] [--depfile FILE] [--libclang PATH]
                 [--tree DIR]
 
-Plan 1.2 (contract types): the type rows of every record, field, base, enum, alias and global the game's headers declare.
+The type rows of every record, field, base, enum, alias and global the game's headers declare (language/types.md).
 One unit includes every game header (native/petari/include, native/math/include, native/include) and is parsed by libclang
 with a game unit's own compile command (--entry, default the first game unit), so target, defines and platform headers
 are the build's. Writes:
@@ -11,7 +11,7 @@ are the build's. Writes:
                             `left_out` (libclang's numbers: the build compares them with the module's --luma-describe)
   DIR/luma_types.left       what has no row, and why
   DIR/luma_vtables_unit.cpp the unit whose compile (-fdump-vtable-layouts) gives the table at the start of each record
-                            the factory makes (contract classes, overrides by slot): rewritten each run
+                            the factory makes (docs/modding/language/classes.md, overrides by slot): rewritten each run
   DIR/luma_functions.json   with --defined: every function row's facts (kind, owner, virtual, pure, const, what it
                             overrides), the units' .functions merged (merge_functions); a row without facts, facts
                             without a row, an owner that is no record of the types file or an override with no name
@@ -48,10 +48,10 @@ def option(flag, default=None):
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 GAME_INCLUDES = [ROOT / "native" / "petari" / "include", ROOT / "native" / "math" / "include", ROOT / "native" / "include"]
 GAME_TREES = [ROOT / "native" / "petari", ROOT / "native" / "math", ROOT / "native" / "include"]
-# TY-5: the kernel's own headers declare nothing a mod binds through these rows.
+# The kernel's own headers declare nothing a mod binds through these rows.
 KERNEL_FILES = re.compile(r"^native/(include/luma[a-z_]*\.h|petari/include/Game/System/Luma[A-Za-z]*\.hpp)$")
 
-# The left_out reasons (TY-5): a fixed list, so the run's report counts by them and G's rows translate them.
+# The left_out reasons: a fixed list, so the run's report counts by them and LumaLink's rows translate them.
 R_KERNEL = "the kernel's own"
 R_INTERNAL = "internal linkage: no name a mod can bind"
 R_THREAD = "thread-local: one per thread, no one address"
@@ -66,7 +66,7 @@ R_UNDEFINED = "declared, defined nowhere in the game"
 R_TEMPLATE_MEMBER = "a static member of a class template"
 R_UNIT_INSTANCE = "a template instance only a .cpp names"
 R_ALIAS_TWICE = "a name .cpp files give to different types: "
-# Each reason's id, the words LumaLink's rows give it (LeftOut.*, contract types TY-7): the kernel's left rows carry the
+# Each reason's id, the words LumaLink's rows give it (LeftOut.*, types.md): the kernel's left rows carry the
 # id, so a mod refused at load reads the validator's L505. A reason with a prefix carries its names as `what`.
 REASON_IDS = {R_KERNEL: "LeftOut.KernelOwn", R_INTERNAL: "LeftOut.InternalLinkage", R_THREAD: "LeftOut.ThreadLocal",
               R_NO_NAME: "LeftOut.NoName", R_NO_SIZE: "LeftOut.NoSize", R_NO_TYPE_NAME: "LeftOut.TypeNoName",
@@ -116,7 +116,7 @@ BUILTIN = re.compile(r"\b(unsigned long long|long long|unsigned long|long double
 
 
 def fixed_width(text):
-    """A template instance's argument text with builtin arithmetic types as the game's fixed-width names (TY-2)."""
+    """A template instance's argument text with builtin arithmetic types as the game's fixed-width names."""
     names = {"unsigned long long": "u64", "long long": "s64", "unsigned int": "u32", "unsigned": "u32",
              "unsigned short": "u16", "unsigned char": "u8", "signed char": "s8", "short": "s16", "int": "s32",
              "float": "f32", "double": "f64", "long double": "long double",
@@ -262,7 +262,7 @@ def main():
 
 
 def set_target(raw):
-    """`long`'s width (TY-2) from a compile command's target: 32 on Windows (LLP64), 64 elsewhere (LP64)."""
+    """`long`'s width from a compile command's target: 32 on Windows (LLP64), 64 elsewhere (LP64)."""
     global LONG_BITS
     triple = next((a.split("=", 1)[1] for a in raw if a.startswith("--target=")), None)
     if triple is None and "-target" in raw:
@@ -302,10 +302,10 @@ class Reader:
             unit.tu = tu
             unit.label = None  # no file: a local function (identity()'s "file#...") has no row name here
         self.unit = unit
-        self.foreign = {}   # typedefs outside the game's trees at file scope (<stdint.h>'s): name -> cursor (TY-9)
-        self.named_instances = set()  # unit pass: the instances (and their members) its types name (TY-9)
-        self.trivial_memo = {}  # TY-10: canonical spelling -> trivial
-        self.polymorphic_types = {}  # contract objects: canonical spelling -> declares or inherits a virtual
+        self.foreign = {}   # typedefs outside the game's trees at file scope (<stdint.h>'s): name -> cursor
+        self.named_instances = set()  # unit pass: the instances (and their members) its types name
+        self.trivial_memo = {}  # canonical spelling -> trivial
+        self.polymorphic_types = {}  # objects.md: canonical spelling -> declares or inherits a virtual
         self.seen = set()
         self.records = {}   # name -> row
         self.enums = {}
@@ -382,17 +382,17 @@ class Reader:
         return "::".join(reversed(parts)) if parts else None
 
     def type_text(self, t):
-        """TY-3: instrument.py's text, the one 1.1's function rows use; None for a type no mod can write."""
+        """instrument.py's text, the one 1.1's function rows use; None for a type no mod can write."""
         return self.unit.type_text(t)
 
     def instance_name(self, t):
-        """TY-2: a template instance's one name: its canonical spelling, arguments in fixed-width names."""
+        """A template instance's one name: its canonical spelling, arguments in fixed-width names."""
         text = self.text(self.api.typeSpelling(self.api.canonical(t)))
         at = text.find("<")
         return text if at < 0 else text[:at] + fixed_width(text[at:])
 
     def spelling_alias(self, t):
-        """Another spelling of a template instance written in the game's types (TY-2): an alias row to its name. The
+        """Another spelling of a template instance written in the game's types: an alias row to its name. The
         header pass's only: two units could write the same spelling."""
         if self.unit_pass:
             return
@@ -429,7 +429,7 @@ class Reader:
         for c in self.unit.children(cursor):
             k = c.kind
             if 500 <= k <= 503:
-                continue  # the preprocessing record's cursors (instrument.py parses with it for C-6's marks)
+                continue  # the preprocessing record's cursors (instrument.py parses with it for the parameter marks)
             if k in (I.K_NAMESPACE, I.K_LINKAGE, I.K_UNEXPOSED_DECL):
                 self.walk(c)
                 continue
@@ -549,7 +549,7 @@ class Reader:
         return self.polymorphic_types[key]
 
     def virtual(self, row, m, instance):
-        """Contract objects: a virtual function (a destructor or conversion too) makes the record polymorphic; each one
+        """objects.md: a virtual function (a destructor or conversion too) makes the record polymorphic; each one
         but a destructor is a method row, its thunk called with the compiler's dispatch (method). The name and signature
         are instrument.py's identity(), the function rows' own rule (an instance's: the record's row name and
         identity_signature). A virtual whose name or types no mod can write is in the JSON with "row": false."""
@@ -572,7 +572,7 @@ class Reader:
         if v["row"]:
             v["call"] = {"spelling": spelling, "params": params, "result": result, "const": bool(ua.isConst(m))}
             v["params"] = "(%s)%s" % (", ".join(params), " const" if v["call"]["const"] else "")
-        # Self-description (plan 1.8): the functions a body written in the class calls, in the order written, by their
+        # Self-description: the functions a body written in the class calls, in the order written, by their
         # row names (a nerve's execute names its owner's exe function), when its definition is in this parse.
         body = ua.definition(m)
         if not ua.isNull(body):
@@ -601,7 +601,7 @@ class Reader:
         return found
 
     def trivial(self, t):
-        """TY-10: (trivially copyable, trivially destructible, a copy or move constructor can be called, a copy or move
+        """(Trivially copyable, trivially destructible, a copy or move constructor can be called, a copy or move
         assignment can be called, the destructor is not deleted), as the compiler says; the compiled rows check the
         first four.
         - Numbers, enums, pointers and references are all four (a reference or const field is the owner's business).
@@ -697,7 +697,7 @@ class Reader:
             for n in extents:
                 count *= n
             bits = self.api.bitWidth(m) if self.api.isBitField(m) else None
-            text = self.type_text(element if extents else ft)  # an array: its element's text (TY-3)
+            text = self.type_text(element if extents else ft)  # an array: its element's text
             decl = self.api.declaration(self.api.canonical(element))
             nested = decl.kind in RECORDS and self.api.anonymous(decl) and not extents
             if text is None:
@@ -729,7 +729,7 @@ class Reader:
 
     def want(self, t):
         """A template instance, or a record nested in one, that a type names (by value, pointer, reference or array,
-        as a function pointer's result or parameter, as a member pointer's class: TY-9) is a row of its own; else it
+        as a function pointer's result or parameter, as a member pointer's class) is a row of its own; else it
         would be named by texts and described nowhere."""
         if self.unit_pass:
             # A template's instance is the header pass's row; one only a .cpp names is left out there by its name.
@@ -751,7 +751,7 @@ class Reader:
             self.pending.append(decl)
         elif decl.kind == K_ENUM and self.in_instance(decl) is not None and self.name(decl) not in self.enums:
             # An enum of a template instance (`Ui::TagProcessorBase<char16_t>::Operation`): an instance's cursor has no
-            # children for record() to walk. Its own row, by its instance's name (TY-9).
+            # children for record() to walk. Its own row, by its instance's name.
             self.enum(decl, again=True)
         elif decl.kind in RECORDS and self.api.sizeOf(t) < 0:
             # Declared, defined nowhere (an opaque handle, `typedef struct NebulaActor NebulaActor`): record() leaves it
@@ -760,7 +760,7 @@ class Reader:
 
     def want_signature(self, c):
         """The result and parameter types of a function or method (header pass): what its signature names is described
-        as a field's type is (TY-9)."""
+        as a field's type is."""
         if self.unit_pass:
             return
         t = self.api.type(c)
@@ -772,7 +772,7 @@ class Reader:
 
     def member_alias(self, t):
         """A typedef or using of a template instance that a type names (`NebulaList<AudMe>::Link`): an alias row, as a
-        class's own are (an instance's cursor has no children for record() to walk). TY-9."""
+        class's own are (an instance's cursor has no children for record() to walk)."""
         api = self.api
         while True:
             if t.kind == T_ELABORATED:
@@ -846,7 +846,7 @@ class Reader:
         self.aliases[name] = {"name": name, "kind": "alias", "of": self.type_text(under), "record": record,
                               "file": self.label(file), "line": line}
         self.spelling_alias(under)
-        self.want(under)  # an instance named only by an alias (Vec2s, Box2f) is a record a mod may size (TY-2)
+        self.want(under)  # an instance named only by an alias (Vec2s, Box2f) is a record a mod may size
 
     def global_(self, c):
         # The unit pass first: a static member's declaration in its class is not the definition, and must not take
@@ -946,7 +946,7 @@ class Reader:
             else:
                 lines.append("%sconst luma::%s %s%s = %s;" % (section, kind, name, array, text))
 
-        # Contract classes, overrides by slot: the header pass's virtuals of the records the factory makes get the code a
+        # classes.md, overrides by slot: the header pass's virtuals of the records the factory makes get the code a
         # mod class's table takes in their slot (slot_code).
         slot_records = class_bases(self.records) if not unit and getattr(self, "vtables", None) is not None else set()
         n = 0
@@ -973,7 +973,7 @@ class Reader:
                 else:
                     field_rows.append("{%s, offsetof(R%d, %s), %du, 0, 0}" % (q, n, f["name"], f["count"]))
             base_rows = ['{"%s", %du, %du}' % (cstr(b["name"]), b["offset"], int(b["virtual"])) for b in r["bases"]]
-            # TY-10: the generator's claim, checked by the compiler.
+            # The generator's claim, checked by the compiler.
             claim = ('static_assert(__is_trivially_copyable(%%s) == %s && __is_trivially_destructible(%%s) == %s, '
                      '"TY-10: the generator says %s is %strivially copyable and %strivially destructible");') % (
                 "true" if r.get("trivial_copy") else "false", "true" if r.get("trivial_destroy") else "false", cstr(name),
@@ -1022,7 +1022,7 @@ class Reader:
                 member("", "TypeField", "kF%d" % n, "{%s}" % ", ".join(field_rows), "[]")
             if base_rows:
                 member("", "TypeBase", "kB%d" % n, "{%s}" % ", ".join(base_rows), "[]")
-            # Contract objects: a polymorphic record's type_info (the RTTI data, -frtti), which the kernel finds from an
+            # objects.md: a polymorphic record's type_info (the RTTI data, -frtti), which the kernel finds from an
             # object's vtable. typeid of a type is a constant address, never a call into the C++ runtime.
             vtable = r.get("vtable") or {"prefix": 0, "count": 0}
             member("LUMA_TYPE_SECTION ", "TypeRow", "kT%d" % n, '{"%s", sizeof(::%s), alignof(::%s), %s, %du, %s, %du, %s, %du, %du}' % (
@@ -1046,7 +1046,7 @@ class Reader:
                 member("LUMA_METHOD_SECTION ", "MethodRow", "kM%d_%d" % (n, k), "{&%skF%d_%d, %s%s}" % (
                     scope, n, k, method_names(name, v), slot))
             n += 1
-        # Aliases and other spellings of a record (TY-2): kind 1 and kind 2 find the record through them. The header
+        # Aliases and other spellings of a record: kind 1 and kind 2 find the record through them. The header
         # pass's alone, the units' merged (merge_units): a row names its record by name, wherever its row is.
         a = 0
         records = {} if unit else set(self.records) | set(getattr(self, "unit_records", {}))
@@ -1063,7 +1063,7 @@ class Reader:
             inline = row.pop("inline", False)
             row["defined"] = defined is True or inline or defined is not None and row["mangled"] in defined
             if not row["defined"]:
-                # A constant with a known value is read from the self-description and binds nothing (contract types,
+                # A constant with a known value is read from the self-description and binds nothing (types.md,
                 # section 2); any other is left out.
                 if row["value"] is None and defined is not None:
                     self.left.append(("global", name, row["file"], row["line"], R_UNDEFINED))
@@ -1142,7 +1142,7 @@ class Reader:
         return records, globals_
 
     def reach(self):
-        """TY-1: each record's inherited names by C++'s lookup. A name the record declares hides its bases'; otherwise
+        """Each record's inherited names by C++'s lookup. A name the record declares hides its bases'; otherwise
         it must be found in exactly one base subobject, not through a virtual base. Writes row["reachable"] (the
         inherited rows; own fields are the record's `fields`) and the left-out names."""
         memo = {}
@@ -1198,7 +1198,7 @@ class Reader:
             yield e["name"] or "(anonymous enum)", e["underlying"]
 
     def foreign_aliases(self):
-        """TY-9: a typedef from outside the game's trees (<stdint.h>'s uint32_t) that a text names is an alias row, as
+        """A typedef from outside the game's trees (<stdint.h>'s uint32_t) that a text names is an alias row, as
         the game's own s32 is: the name a modder reads, with no record. One may name another (bionic's uintptr_t is
         __uintptr_t, Darwin's size_t __darwin_size_t): each alias row's text is named too, until none is new."""
         while True:
@@ -1214,7 +1214,7 @@ class Reader:
                                       "file": None, "line": None}
 
     def unnamed(self):
-        """TY-9's check: every name a text holds outside template arguments (past pointers, references, arrays, cv
+        """The check: every name a text holds outside template arguments (past pointers, references, arrays, cv
         and a bit-field's width, in a function pointer's result and parameters, a member pointer's class) is a row, a
         built-in word or left out. An instance is one name with its arguments. Returns the texts that are not, as
         (where, text, name)."""
@@ -1231,7 +1231,7 @@ class Reader:
         inherited = self.reach()
         missing = self.unnamed()
         if missing:
-            sys.exit("gen_types.py: type texts that name no row, built-in or left-out name (contract types TY-9):\n  " +
+            sys.exit("gen_types.py: type texts that name no row, built-in or left-out name (language/types.md):\n  " +
                      "\n  ".join("%s: %s (%s)" % m for m in sorted(missing)[:200]) +
                      ("\n  ... %d in all" % len(missing) if len(missing) > 200 else ""))
         g = self.global_rows
@@ -1335,7 +1335,7 @@ def thunk(v, self_type):
 
 
 def slot_code(n, k, v):
-    """Contract classes, overrides by slot: for the virtual v of record row n (alias R<n>), the code a mod class's table
+    """classes.md, overrides by slot: for the virtual v of record row n (alias R<n>), the code a mod class's table
     takes in its slot and what its proceed calls.
       kSe<n>_<k>::call  the entry: a member function with the virtual's parameters and result (so its calling convention
                         is the slot's), handing the call to luma::slotCall with the arguments as an invoke takes them
@@ -1373,13 +1373,13 @@ def slot_code(n, k, v):
 
 
 def class_bases(records):
-    """Contract classes: the records a mod class may take as its base, so its table copy and its overrides by slot
+    """classes.md: the records a mod class may take as its base, so its table copy and its overrides by slot
     stand on them: NameObj's line (the factory makes them) and PlanetGravity (LumaCore.make_gravity makes it)."""
     return descends_from_nameobj(records) | ({"PlanetGravity"} & set(records))
 
 
 def descends_from_nameobj(records):
-    """Contract classes: NameObj and each record whose base at offset 0 (not virtual) is one."""
+    """classes.md: NameObj and each record whose base at offset 0 (not virtual) is one."""
     memo = {}
 
     def walk(name, depth):
@@ -1461,7 +1461,7 @@ def read_vtable_dump(dump, records, names):
 
 
 def vtable_layouts(raw, records, unit):
-    """Contract classes, overrides by slot: the table at the start of each polymorphic record the factory makes, as the
+    """classes.md, overrides by slot: the table at the start of each polymorphic record the factory makes, as the
     compiler lays it out. A unit of the headers calls each one's destructor through a pointer (a virtual call: the
     compiler lays out the record's tables) and is compiled with the build's own command and -fdump-vtable-layouts (the
     code is thrown away). A unit that does not compile stops the build. Returns {record: (prefix, count)}; a record not

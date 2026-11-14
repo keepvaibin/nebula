@@ -1,6 +1,6 @@
 #pragma once
 
-// LumaCore's `player` service (contract services-player): extra players, each a MarioActor of the game's own beside the
+// LumaCore's `player` service: extra players, each a MarioActor of the game's own beside the
 // scene's player, driven by the second controller or by nothing.
 
 #include <luma_service_provider.h>

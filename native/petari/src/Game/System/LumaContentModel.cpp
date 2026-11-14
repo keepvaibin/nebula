@@ -31,8 +31,8 @@
 #include <cmath>
 #include <cstring>
 
-// The content.model service (plan 3.2; contract models 7). Game thread throughout: the service's calls, the frame, the
-// provider; NebulaArena::destroy is the scene end's, on the game thread as well.
+// The content.model service (docs/modding/content/models.md section 7). Game thread throughout: the service's calls,
+// the frame, the provider; NebulaArena::destroy is the scene end's, on the game thread as well.
 //
 // An attached model is the game's own PartsModel: an actor that draws a model with its host, made in the host's arena
 // (so it goes with the host's scene), drawn by the game's draw buffers with the game's lights, hidden while its host is
@@ -42,7 +42,7 @@
 // after the scene started connects as any late object (NameObjExecuteHolder::registerActor). A part whose handle ended
 // is dead and is used again for the same host, model, follow and joint.
 //
-// Levels (models 6): the game draws an object's Low model where the level's view cube asks for its view group's far
+// Levels (models.md 6): the game draws an object's Low model where the level's view cube asks for its view group's far
 // level (LodCtrl). An attached model is drawn with its host, so it takes its host's level: with a host whose LodCtrl
 // has a far model and a model that has a Low archive (LodCtrlFunction::isExistLevel), the Low is a second part made
 // with the base, following as the base does, alive exactly while the host's far model is (the host then hides
@@ -57,7 +57,8 @@ namespace luma {
         namespace model {
             namespace {
                 const u32 kMostModels = LUMA_CONTENT_MODEL_MOST * 16u;  // across mods
-                // The placeholder model (references 4): Nebula's data/placeholder/model.gltf, an object archive in the store.
+                // The placeholder model (references.md 4): Nebula's data/placeholder/model.gltf, an object archive in
+                // the store.
                 const char cPlaceholder[] = "NebulaPlaceholder";
                 const u32 cMissingModelCode = 621;
                 const u32 cMissingJointCode = 626;
@@ -100,7 +101,7 @@ namespace luma {
                 LumaHandle sNextHandle = 0;
                 Part* sParts = nullptr;
 
-                // The player's parts (models 7): models of their own the game draws at the body's joints
+                // The player's parts (models.md 7): models of their own the game draws at the body's joints
                 // (MarioActorDraw.cpp updates each at the body joint's matrix, MarioActor.cpp 1471; MarioActorShadow.cpp).
                 struct PlayerPartRow {
                     const char* name;
@@ -142,7 +143,7 @@ namespace luma {
                     return LUMA_OK;
                 }
 
-                // A CONTENT entry of the mod (references 6). The column keeps two names two entries.
+                // A CONTENT entry of the mod (references.md 6). The column keeps two names two entries.
                 void sayContent(const LumaMod* pMod, u32 code, const char* pRow, u32 column, const char* pName0,
                                 const char* pValue0, const char* pName1, const char* pValue1) {
                     LumaModLogEntry entry = {};
@@ -189,10 +190,11 @@ namespace luma {
                     return strcmp(pA, pB) == 0;
                 }
 
-                // A new model's level block (models 6): "<id>:<path>Middle" or "<id>:<path>Low" in the store beside its base
-                // "<id>:<path>". It is a level of that model, not a model to attach. The endings are matched with their
-                // capitals and need a name before them in the last segment, as the cook finds levels (overlay.rs
-                // level_alone). A game archive's name (no ':') is never one: the game's own Low archives are models.
+                // A new model's level block (models.md 6): "<id>:<path>Middle" or "<id>:<path>Low" in the store beside
+                // its base "<id>:<path>". It is a level of that model, not a model to attach. The endings are matched
+                // with their capitals and need a name before them in the last segment, as the cook finds levels
+                // (overlay.rs level_alone). A game archive's name (no ':') is never one: the game's own Low archives
+                // are models.
                 bool isLevelBlock(const char* pName) {
                     if (strchr(pName, ':') == nullptr) {
                         return false;
@@ -576,7 +578,7 @@ namespace luma {
                         return LUMA_E_LIMIT;
                     }
 
-                    // The model (references 4): a name in no store has the placeholder in its place.
+                    // The model (references.md 4): a name in no store has the placeholder in its place.
                     const char* pArchive = name;
                     bool placeholder = false;
                     if (!MR::isExistObjectOrLayoutArchive(name)) {
@@ -699,7 +701,7 @@ namespace luma {
                     return LUMA_OK;
                 }
 
-                // Content.MissingParam (references 6): the model, the parameter and its material.
+                // Content.MissingParam (references.md 6): the model, the parameter and its material.
                 void sayMissingParam(const LumaMod* pMod, const char* pModel, const char* pMaterial, const char* pParam) {
                     char column[300];
                     nebula_snprintf(column, sizeof(column), "%s/%s/%s", pModel, pMaterial, pParam);

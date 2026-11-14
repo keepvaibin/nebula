@@ -1,5 +1,5 @@
-// The type and global rows the linker gathered (luma_types.h; contract types, plan 1.2), found by name when a mod binds.
-// Nothing runs at start: prepareTypes sorts them once, on the game thread, when the first mod loads.
+// The type and global rows the linker gathered (luma_types.h; docs/modding/language/types.md), found by name when a mod
+// binds. Nothing runs at start: prepareTypes sorts them once, on the game thread, when the first mod loads.
 #include "Game/System/LumaTypes.hpp"
 
 #include <luma.h>
@@ -249,7 +249,7 @@ namespace luma {
             return sLeft[kLeftTemplate].find(pName, plain);
         }
 
-        // A record by its row's name, else by an alias's (TY-2: "TVec3f" and "JGeometry::TVec3<float>" name the row
+        // A record by its row's name, else by an alias's ("TVec3f" and "JGeometry::TVec3<float>" name the row
         // "JGeometry::TVec3<f32>"). An alias names its record directly: there is no chain to follow.
         const TypeRow* typeNamed(const char* pName, u32 length) {
             prepareTypes();
@@ -260,7 +260,7 @@ namespace luma {
             return pAlias != nullptr ? sTypes.find(pAlias->record, textLength(pAlias->record)) : nullptr;
         }
 
-        // C++'s lookup of a field name (types.md TY-1, the rule gen_types.py's `reach` writes as `reachable`): a name
+        // C++'s lookup of a field name (types.md, the rule gen_types.py's `reach` writes as `reachable`): a name
         // a record declares hides its bases'; otherwise each base subobject that has it is one finding. Bound only when
         // exactly one subobject has it and the path to it crosses no virtual base (a virtual base's place depends on
         // the most derived object).
@@ -441,7 +441,7 @@ namespace luma {
     static FieldBind bindField(const char* pTypeName, u32 typeLength, const char* pField, const char* pSignature);
 
     namespace {
-        // Contract objects: the polymorphic rows by their type_info's address, sorted (built by prepareTypes).
+        // objects.md: the polymorphic rows by their type_info's address, sorted (built by prepareTypes).
         const TypeRow** sByTypeInfo = nullptr;
         u32 sByTypeInfoCount = 0;
 
@@ -556,7 +556,7 @@ namespace luma {
             if (pLocator == nullptr || (reinterpret_cast<__UINTPTR_TYPE__>(pLocator) & 3) != 0 || pLocator->signature != 1) {
                 return nullptr;
             }
-            // The locator's own offset leads to its image: a module begins "MZ" (S-1: a vtable with no locator is
+            // The locator's own offset leads to its image: a module begins "MZ" (a vtable with no locator is
             // refused, not followed).
             const char* const pImage = reinterpret_cast<const char*>(pLocator) - pLocator->self;
             if (pImage[0] != 'M' || pImage[1] != 'Z') {
@@ -576,7 +576,7 @@ namespace luma {
 
         // Depth first through the bases' rows from pType (at `at` in the whole object): how many pTarget subobjects,
         // and where the first is. A virtual base is not followed: its place is the whole object's, and no record of the
-        // game has one (contract objects, section 0).
+        // game has one (docs/modding/language/objects.md).
         void findBase(const TypeRow* pType, const TypeRow* pTarget, u32 at, u32* pCount, u32* pFirst, u32 depth) {
             if (pType == pTarget) {
                 if ((*pCount)++ == 0) {
@@ -768,7 +768,7 @@ namespace luma {
         }
         // The subobject pObject is: by its offset in the complete object. When pObject is no pDeclaring subobject (it
         // points at the complete object, or another base) and there is more than one, which runs is not decided: the
-        // answer is none, said as ambiguous, as asClass says it (contract objects M-1).
+        // answer is none, said as ambiguous, as asClass says it (objects.md).
         Overriders found = {};
         found.want = static_cast<u32>(static_cast<const char*>(pObject) - static_cast<const char*>(own.complete));
         overridersIn(own.type, pDeclaring, pTarget, 0, nullptr, &found, 0);
@@ -854,7 +854,7 @@ namespace luma {
 #else
         // The Itanium C++ ABI's std::type_info: its vtable pointer, then the mangled name ("9LiveActor"). GCC and Clang
         // put a '*' before the name of a class that is not unique in the program (internal linkage); the symbols do
-        // not have it, so it is left out (G's O10-1).
+        // not have it, so it is left out.
         const char* pName;
         __builtin_memcpy(&pName, static_cast<const char*>(pTypeInfo) + sizeof(void*), sizeof(pName));
         if (pName == nullptr) {
@@ -917,7 +917,7 @@ namespace luma {
         if (look.count == 0 || look.tooDeep) {
             return out;  // not found: the validator's left_out gives a reason if the name has one
         }
-        // TY2-1: refused with left_out's own reason, "through the virtual base V" or "ambiguous: A::x, B::x" (the
+        // Refused with left_out's own reason, "through the virtual base V" or "ambiguous: A::x, B::x" (the
         // declaring records sorted by bytes, as the generator sorts them).
         if (look.pVirtual != nullptr || look.count > 1) {
             u32 at = 0;
@@ -945,7 +945,7 @@ namespace luma {
         const TypeField* const pRow = look.pField;
         const u32 offset = look.offset;
         out.found = true;
-        // Z-4: the type text whole. A bit-field's row already reads "<type> : <width>" (TY-3), so its position in bits
+        // The type text whole. A bit-field's row already reads "<type> : <width>", so its position in bits
         // is never taken for a byte offset.
         out.sameType = pSignature != nullptr && sameText(pSignature, pRow->type);
         out.value = pRow->bits != 0 ? static_cast<s32>(offset * 8 + pRow->bit) : static_cast<s32>(offset);
@@ -1040,7 +1040,7 @@ namespace luma {
                 out.number(rType.bases[i].offset);
                 out.raw(rType.bases[i].isVirtual != 0 ? ", \"virtual\": true}" : ", \"virtual\": false}");
             }
-            // The kernel's own answer for each name the bases give (TY-1): what kind 1 binds or refuses.
+            // The kernel's own answer for each name the bases give: what kind 1 binds or refuses.
             Names names;
             gather(&rType, &names, 0);
             u32 bound = 0;

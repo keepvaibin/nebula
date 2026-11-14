@@ -1,4 +1,4 @@
-//! A mod's sound effect (plan 3.7 layer 1, contract board/contracts/sound.md): `<name>.sound.json` in a layer's
+//! A mod's sound effect (docs/modding/content/sound.md): `<name>.sound.json` in a layer's
 //! assets (the store's `Luma/<id>/<path>`) names a WAV, FLAC or Ogg Vorbis file beside it; the cook writes
 //! `Luma/<id>/<name>.nsfx`, the sound in the one form the game's mixer plays a mod's effect from (48 kHz, 16-bit,
 //! interleaved, its loop sample-exact in that rate), with how it plays. Loudness (EBU R 128) is measured and said in

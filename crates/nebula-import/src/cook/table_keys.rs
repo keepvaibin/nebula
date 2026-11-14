@@ -1,7 +1,7 @@
-//! What identifies a row of each game table (contract table-keys, F-4): `data/table-keys.tsv`, compiled in. A game path
-//! (its store path, any case) takes the first pattern that matches; the last pattern takes every path, so no table is
-//! without a rule. The patch applier (cook::patch), the validator's view of the game (store_view) and LumaLink read
-//! keys only from here.
+//! What identifies a row of each game table (docs/modding/format/table-keys.md): `data/table-keys.tsv`, compiled in. A
+//! game path (its store path, any case) takes the first pattern that matches; the last pattern takes every path, so no
+//! table is without a rule. The patch applier (cook::patch), the validator's view of the game (store_view) and LumaLink
+//! read keys only from here.
 
 use std::sync::OnceLock;
 
@@ -12,7 +12,7 @@ const TEXT: &str = include_str!("../../data/table-keys.tsv");
 pub enum Key {
     /// By these columns' values (names as the game spells them; tables keep their hashes).
     Columns(Vec<String>),
-    /// By place: `#` 0 is the game's first row (contract table-keys 3).
+    /// By place: `#` 0 is the game's first row (table-keys.md section 3).
     Position,
 }
 

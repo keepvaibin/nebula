@@ -1,4 +1,4 @@
-# AV1 decoding for movies (plan 3.10: a mod's movie cooked to NMOV with AV1 frames, galaxy/render/movie_playback.h):
+# AV1 decoding for movies (a mod's movie cooked to NMOV with AV1 frames, galaxy/render/movie_playback.h):
 # dav1d 1.5.1 from third_party/dav1d (BSD-2-Clause, see THIRD-PARTY-NOTICES.md), 8-bit only, built in-tree as the
 # static library `nebula_dav1d`. Its C functions only for now: the hand-written x86 (NASM) and Arm (.S) kernels are a
 # later speed step and are not vendored yet. config.h is written here from the target, as dav1d's meson would.

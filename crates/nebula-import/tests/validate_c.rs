@@ -500,7 +500,7 @@ fn the_c_store_lists_folders_and_reads_tables_as_the_rust_one() {
     let bad = c_store((&*junk as *const CTable).cast_mut().cast());
     assert!(nebula_import::validate_c::store_for_tests(&bad).table(TABLE).is_none());
 
-    // Which files may be new is the library's own list, the one LumaLink's PakStore reads (F INBOX-G 46).
+    // Which files may be new is the library's own list, the one LumaLink's PakStore reads.
     for path in ["ObjectData/Nokotaro.arc", "/objectdata/kuribo.arc/kuribo_new.btk", "StageData/MyGalaxy/MyGalaxyMap.arc", "AudioRes/Stream/new.ast", "ObjectData/new.bcsv"] {
         assert_eq!(store.may_be_new(path), nebula_import::store_view::may_be_new(path), "{path}");
     }
@@ -570,7 +570,7 @@ fn the_required_services_are_read_per_platform_and_after_a_start_s_check() {
     let mut other = Call::new(&path, "windows-x64");
     other.services = br#"{"services": [{"name": "net", "major": 1, "minor": 1, "permission": null}]}"#.to_vec();
     assert_eq!(c_call(Some(&other.input(Some(&full.kept)))).state, 0);
-    // A catalog not in registry 9's form is the caller's fault, said; one without names likewise.
+    // A catalog not in services/registry.md 9's form is the caller's fault, said; one without names likewise.
     other.services = br#"{"services": [{"name": "Net", "major": 1, "minor": 0, "permission": null}]}"#.to_vec();
     let got = c_call(Some(&other.input(None)));
     assert_eq!(got.state, -1);
@@ -581,7 +581,7 @@ fn the_required_services_are_read_per_platform_and_after_a_start_s_check() {
     assert!(got.invalid.unwrap().contains("services given without names"));
 }
 
-/// luma-format revision 4 through the C input: the renderer's list and the device's features give L806 (an error, the
+/// luma.md revision 4 through the C input: the renderer's list and the device's features give L806 (an error, the
 /// mod off), both are part of the game's key, and a list or device name not in form is the caller's fault.
 #[test]
 fn renderer_features_and_the_device_s_reach_l806() {
@@ -597,7 +597,7 @@ fn renderer_features_and_the_device_s_reach_l806() {
     let f = &got.findings[0];
     assert_eq!((f.0, f.1, f.3.as_str(), f.6.as_deref()), (806, 0, "luma.json", Some("/renderer/features/0")));
     assert_eq!(f.7, "test.mod needs ray_tracing, which this device's graphics do not have.");
-    // A device that has it: nothing. The device is not part of the game's key (F's AR-1): another GPU takes the kept
+    // A device that has it: nothing. The device is not part of the game's key: another GPU takes the kept
     // report (state 1) and L806 is said from the manifest's rules, which run at every start.
     let mut has = Call::new(&path, "windows-x64");
     has.renderer = call.renderer.clone();
@@ -632,7 +632,7 @@ fn renderer_features_and_the_device_s_reach_l806() {
     assert!(c_call(Some(&nulls.input(None))).invalid.unwrap().contains("device_features[0] is null"));
 }
 
-/// start-check F-S2 and references 3: luma_report_read_kept reads a kept report with no rule run (state 2; id,
+/// start-check.md and references.md 3: luma_report_read_kept reads a kept report with no rule run (state 2; id,
 /// version, required services and after-start rows answer; count 0, kept null); bytes that do not read are -1 with
 /// why. luma_report_after_start gives the rows on either kind of report.
 #[test]

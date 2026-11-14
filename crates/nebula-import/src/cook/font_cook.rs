@@ -1,8 +1,8 @@
-//! A mod's font (plan 3.8 layer 2, layout contract 2a): `Luma/<id>/<path>.font.json` names a TrueType or OpenType
+//! A mod's font (docs/modding/content/screens.md section 2a): `Luma/<id>/<path>.font.json` names a TrueType or OpenType
 //! file beside it. The cook draws the characters it asks for into the game's own font form, a BRFNT with intensity
 //! sheets, which the store then cooks as it cooks the game's fonts (single-channel distance sheets, NFNT). Beside it go
 //! `<path>.kern`, the font's pair kerning, and `<path>.fallback`, the game font that draws what the font lacks (the
-//! files J's run time reads, ui contract 10).
+//! files the run time reads, docs/modding/services/ui.md).
 //!
 //! How a cell sits (CustomTagProcessor's PrintImpl and CharWriter::PrintGlyph): the cursor stands on the line's
 //! baseline, the font's ascent below the line's top; a cell is drawn with its top its baseline row above the cursor,
@@ -35,7 +35,7 @@ const LATIN: [(u32, u32); 5] = [(0x20, 0x7E), (0xA0, 0x24F), (0x2010, 0x2027), (
 const KERN_BELOW: u32 = 0x3000;
 /// Characters a Missing note lists.
 const LISTED: usize = 20;
-/// The most kerning pairs the run time reads (ui contract 10).
+/// The most kerning pairs the run time reads (docs/modding/services/ui.md).
 pub const MOST_KERNS: usize = 65_536;
 const PARTS: [&str; 4] = ["file", "size", "glyphs", "fallback"];
 const GLYPH_PARTS: [&str; 3] = ["chars", "ranges", "all"];

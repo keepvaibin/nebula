@@ -60,7 +60,7 @@ namespace {
 
 // Stage, scenario, kind (stage: measured at the player's settings; grand6: the same with the Observatory's six Grand
 // Stars, so its domes are built; probe: the stage the probe enters again for each configuration) and measured frames.
-// Why each: docs in board/bench.md (one per cost class: open planets, bloom, water, particles, the hub).
+// Why each: one per cost class (open planets, bloom, water, particles, the hub).
 constexpr const char* kBuiltInStages =
     "CosmosGardenGalaxy\t1\tstage\t540\n"
     "BattleShipGalaxy\t1\tstage\t540\n"

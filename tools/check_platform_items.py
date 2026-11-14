@@ -1,9 +1,9 @@
-"""check_platform_items.py: plan 2.9. The things a platform package must declare at release, because no mod can
+"""check_platform_items.py: the things a platform package must declare at release, because no mod can
 add them afterwards: permissions, usage texts, file and link associations. One row an item; each row names the
 service that needs it. Reads a Nebula source tree and prints PRESENT or MISSING per row; exit 1 if any required
 row is missing. Run: python check_platform_items.py <tree> [--tsv out.tsv]
 The package builds run it and stop on a missing row: installer/build-native-setup.ps1, platform/apple/build_macos.sh,
-platform/android/build_apk.ps1 (the director's table, agents/luma/d/platform_items; this copy is the build's).
+platform/android/build_apk.ps1 (this copy of the table is the build's).
 
 A row: platform, item, why (the service or screen that cannot work without it), file (glob in the tree), pattern
 (a regular expression that must match in one of the files), required (yes, or "when <service> ships")."""

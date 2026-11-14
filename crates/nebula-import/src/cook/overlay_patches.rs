@@ -1,11 +1,12 @@
-//! Patches by key in the mods' store (plan 3.12, contract table-keys 9, 12, 13): the plan's `%mods` line gives every
+//! Patches by key in the mods' store (docs/modding/format/table-keys.md): the plan's `%mods` line gives every
 //! mod whose content is used, from the bottom of the list up, and each `%patch` line one patch file
 //! (`mod<TAB>entry in the mod<TAB>game path<TAB>file`), bottom of the list first, then layer and file order. Each
 //! patched table starts from what the game would read without the patches (a mod's file of it in this store, else the
 //! game's) and is written whole into the store with every patch applied by the applier (cook::patch), the scenario
 //! tables first, so a start or generalpos table meets its key among the layers the patched scenario tables turn on
 //! together (13.6). What the applier says goes in the facts, one line each in `<store>.facts`. A patch of a game
-//! layout (`<archive>/blyt/<Name>.brlyt`, layout contract 5) goes to that layout by pane name (layout_patch) instead.
+//! layout (`<archive>/blyt/<Name>.brlyt`, screens.md section 5) goes to that layout by pane name (layout_patch)
+//! instead.
 
 use super::patch::{apply_linked, unreadable, Fact, Link, ModPatch};
 use super::table::{TableIr, MAGIC};
@@ -252,7 +253,7 @@ pub fn apply_patches(plan: &PlanPatches, base: Option<&Path>, pak: &mut File, te
             Ok(bytes) => {
                 let value = serde_json::from_slice(&bytes).ok();
                 if value.is_none() {
-                    // Named as the store holds the table, as every other fact (C-2); the mod's case when no store has it.
+                    // Named as the store holds the table, as every other fact; the mod's case when no store has it.
                     let path = store::store_path(&p.path);
                     let table = view.path(&path.to_ascii_lowercase()).unwrap_or(path);
                     facts.push(unreadable(&table, &p.mod_id, &p.entry, &bytes));
@@ -372,7 +373,7 @@ pub fn apply_patches(plan: &PlanPatches, base: Option<&Path>, pak: &mut File, te
     Ok(())
 }
 
-/// A patch of a game layout (layout contract 5): its target is the layout file, `<archive>/blyt/<Name>.brlyt`.
+/// A patch of a game layout (screens.md section 5): its target is the layout file, `<archive>/blyt/<Name>.brlyt`.
 fn is_layout(path: &str) -> bool {
     path.to_ascii_lowercase().ends_with(".brlyt")
 }
@@ -386,7 +387,7 @@ fn field(text: &str) -> String {
 /// tab-separated, a field empty where the fact has none (luma_patch.h's LumaPatchFact, with the table). Kinds:
 /// conflict (mod is the higher, used; other the lower), missing (other removed the row, or empty), selected, failed
 /// (code is the validator's rule, why in English for the log). A `failed` line goes on with the refusal's parameters,
-/// one a field, `name=T:<text>` or `name=P:<phrase id>` (audit 3.12 C-1): with code, mod and file they are what
+/// one a field, `name=T:<text>` or `name=P:<phrase id>`: with code, mod and file they are what
 /// luma_validate_reason says in the player's language.
 pub fn facts_text(facts: &[Fact]) -> String {
     let mut out = String::new();
@@ -455,7 +456,7 @@ pub fn facts_text(facts: &[Fact]) -> String {
 }
 
 /// A mod's patch of a stage's placement table (`<game path>` as the mod writes it) whose rows give arguments by name,
-/// applied alone to the game's table in `store` as the game's start applies it (LumaLink's check, stages contract 1):
+/// applied alone to the game's table in `store` as the game's start applies it (LumaLink's check, stages.md section 1):
 /// the refusal of a name the object lacks (L804), None when the patch gives no `args` or they all read. Every other
 /// fault of a patch is the validator's (L400-L407), so it is not said twice.
 pub fn placement_args_finding(store: &PakStore, path: &str, mod_id: &str, file: &str, patch: &serde_json::Value) -> Result<Option<luma_validate::Finding>> {
@@ -563,7 +564,7 @@ mod tests {
             facts.iter().any(|f| f.starts_with("failed\tStageData/Zone/jmp/Start/LayerB/StartInfo\tlow\tlayers/base/patches/") && f.contains("\t402\t")),
             "{facts:?}"
         );
-        // Its parameters follow (C-1), and the validator says it from them in every language.
+        // Its parameters follow, and the validator says it from them in every language.
         let failed = facts.iter().find(|f| f.starts_with("failed\tStageData/Zone/jmp/Start/LayerB/")).unwrap();
         let fields: Vec<&str> = failed.split('\t').collect();
         assert_eq!(fields[11], "why=P:Patch.KeyInGroup", "{failed}");

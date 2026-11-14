@@ -49,12 +49,12 @@ Mod* mod_of(const LumaMod* mod) {
 }
 
 void report(const LumaMod* mod, const char* where, std::uint32_t code, std::initializer_list<const char*> args) {
-    // The kernel puts `where` first itself (the rows name it first, services-registry 11).
+    // The kernel puts `where` first itself (the rows name it first, services/registry.md 11).
     const std::vector<const char*> all(args);
     g_kernel->report(mod, where, code, all.data(), static_cast<std::uint32_t>(all.size()));
 }
 
-// Each function's first checks (services-registry 4.1, 4.2): the mod, known to the kernel (any thread); a mod being
+// Each function's first checks (services/registry.md 4.1, 4.2): the mod, known to the kernel (any thread); a mod being
 // taken out (after its stop) gets LUMA_E_CANCELLED and nothing is done; then the thread.
 int32_t enter(const LumaMod* mod, const char* where) {
     if (mod == nullptr || g_kernel->mod_id(mod) == nullptr) {
@@ -118,7 +118,7 @@ void deliver(LumaEventNode* raw) {
     const bool again = node->again;
     node->again = false;
     if (again) {
-        // Queued from inside its own delivery: the kernel gives it at the next frame's start (services-registry 8).
+        // Queued from inside its own delivery: the kernel gives it at the next frame's start (services/registry.md 8).
         node->value = owner->next_value++;
         ++owner->stats.posted;
         if (g_kernel->post(raw) != LUMA_OK) {
@@ -173,7 +173,7 @@ int32_t post_events(const LumaMod* mod, std::uint32_t count, LumaEventFn fn, voi
         return LUMA_E_ARGUMENT;
     }
     if (count > LUMA_TEST_SVC_MOST_EVENTS) {
-        // Service.Limit's {count} is the limit reached (services-registry 11).
+        // Service.Limit's {count} is the limit reached (services/registry.md 11).
         const std::string limit = std::to_string(LUMA_TEST_SVC_MOST_EVENTS);
         report(mod, where, 104u, {limit.c_str()});
         return LUMA_E_LIMIT;
@@ -261,7 +261,7 @@ int32_t stats(const LumaMod* mod, const char* mod_id, LumaTestSvcStats* out) {
         report(mod, where, 101u, {mod_id == nullptr ? "mod_id" : "out"});
         return LUMA_E_ARGUMENT;
     }
-    // stats came in 1.3 with every field: the whole struct is the least (services-registry 3).
+    // stats came in 1.3 with every field: the whole struct is the least (services/registry.md 3).
     if (out->size < sizeof(LumaTestSvcStats)) {
         const std::string found = std::to_string(out->size);
         const std::string expected = std::to_string(sizeof(LumaTestSvcStats));

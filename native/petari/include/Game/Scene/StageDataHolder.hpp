@@ -65,7 +65,7 @@ public:
 
     Table* attachJmpInfoToArray(Table* pInfo, const char* pDirectory);
 
-    // Nebula (classes contract, "placement"): the layer name and the index among this zone's placements of that
+    // Nebula (classes.md, "placement"): the layer name and the index among this zone's placements of that
     // layer (its Placement files, then its MapParts files, each file's rows in order) of row `entry` of pTable.
     // False: pTable is no placement table of this zone.
     bool findPlacementKey(const Table* pTable, s32 entry, const char** ppLayer, u32* pIndex) const;

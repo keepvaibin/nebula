@@ -1,4 +1,4 @@
-//! L500-L512: a mod's code (luma-format 6; F-1).
+//! L500-L512: a mod's code (luma.md 6; F-1).
 
 use super::{p, t, Ctx};
 use crate::binary::{self, Format, Machine};
@@ -164,8 +164,8 @@ pub(crate) fn check(ctx: &mut Ctx) {
             library(ctx, plat, f, f == entry_name, format, machine, &extras);
         }
     }
-    // L218: a permission asked for that nothing of the mod needs (services-registry 5.2, a Note): `native` with no extra
-    // library and no import of draw.native; any other when no entry library imports its service
+    // L218: a permission asked for that nothing of the mod needs (services/registry.md 5.2, a Note): `native` with no
+    // extra library and no import of draw.native; any other when no entry library imports its service
     // (names::service_permission: the permission each imported service shows in use).
     // Said only when every entry library's imports were read (one that was not is an error already).
     let native_used = libraries.values().any(|l| !l.is_empty());
@@ -248,12 +248,12 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
         ctx.add(503, &name, None, None, vec![]);
         return;
     };
-    // Code the system's loader would run before LumaCore's `begin` gives the core (loader contract D2-6): a C++
-    // constructor there would find no core, and nothing would say why.
+    // Code the system's loader would run before LumaCore's `begin` gives the core
+    // (docs/modding/language/compiled-form.md): a C++ constructor there would find no core, and nothing would say why.
     for what in &lib.runs_at_load {
         ctx.add(509, &name, None, None, vec![("why", p("Lib.RunsAtLoad")), ("found", t(what.clone()))]);
     }
-    // And code it would run when it closes the library, after the mod's memory is freed (F's audit of R3-A, A-1).
+    // And code it would run when it closes the library, after the mod's memory is freed.
     for what in &lib.runs_at_close {
         ctx.add(509, &name, None, None, vec![("why", p("Lib.RunsAtClose")), ("found", t(what.clone()))]);
     }
@@ -318,8 +318,9 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
             continue;
         }
         match row.kind {
-            // A service (loader D3-2, services-registry 2): `signature` is "major.minor", bound against the game's
-            // catalog (the self-description's `services`, registry 9) when it is given; not checked without it.
+            // A service (docs/modding/services/registry.md): `signature` is "major.minor", bound against the game's
+            // catalog (the self-description's `services`, services/registry.md 9) when it is given; not checked without
+            // it.
             5 => {
                 any_service = true;
                 let optional = row.flags & LUMA_OPTIONAL != 0;
@@ -340,7 +341,7 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
                 match names.and_then(|n| n.services.as_ref()) {
                     None => services_unchecked = true,
                     Some(catalog) => match catalog.find(&row.name, major, minor) {
-                        // An optional import of a service the game lacks is `none` (registry 2).
+                        // An optional import of a service the game lacks is `none` (services/registry.md 2).
                         None if optional => {}
                         None => ctx.add(505, &name, None, None, vec![("kind", p("Name.Service")), ("found", t(row.name.clone())), ("sig", t(sig))]),
                         // Optional or not: without the permission declared it is never granted.
@@ -355,7 +356,7 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
                 }
                 continue;
             }
-            // Another mod's function (D3-3, lumakit R-1): "<mod id>/<export name>", that mod among `needs` (the kernel
+            // Another mod's function: "<mod id>/<export name>", that mod among `needs` (the kernel
             // binds only from a needed mod that is loaded: L505 with the same phrase), then bound as the kernel's
             // modExport binds it against the needed mod's exports on this platform (its report's `exports`): the first
             // of the name, its signature the same text. A needed mod not installed is L800's. Found by name, a needed
@@ -416,8 +417,8 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
                     None if list.len() == 1 => list.first(),
                     None => None,
                 });
-                // A constexpr function's row is called, never hooked (contract varargs 4); a variadic function's
-                // takes before hooks only (varargs 3: its va_list sibling takes every kind).
+                // A constexpr function's row is called, never hooked (docs/modding/language/varargs.md section 4); a
+                // variadic function's takes before hooks only (varargs 3: its va_list sibling takes every kind).
                 if let (4, Some((sig, _))) = (row.kind, matched) {
                     if n.call_only.contains(&(row.name.clone(), sig.clone())) {
                         ctx.add(512, &name, None, None, vec![("why", p("Hook.Constexpr")), ("found", t(row.name.clone()))]);
@@ -444,7 +445,7 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
                 (if row.signature.is_some() { "Name.FunctionSig" } else { "Name.Function" }, matched.is_some())
             }
             // A record's size (kind 2), its field (kind 1), a global (kind 7): against the types file, as the kernel
-            // binds them (LumaTypes.cpp). A name the generator left out is refused with its reason (TY2-1).
+            // binds them (LumaTypes.cpp). A name the generator left out is refused with its reason.
             1 | 2 | 7 => {
                 let Some(types) = &n.types else {
                     ctx.not_checked(505, "Missing.Types");
@@ -543,7 +544,7 @@ enum Typed<'a> {
 }
 
 /// Kind 1 "Type.field" (the record by its name or another spelling, then its own and reachable fields), kind 2 a
-/// record, kind 7 a global; a signature is the type text whole (Z-4: a bit-field's reads "u32 : 3", so one named with
+/// record, kind 7 a global; a signature is the type text whole (a bit-field's reads "u32 : 3", so one named with
 /// its plain type is refused). As LumaTypes.cpp's findType, findField and findGlobal answer.
 fn typed<'a>(types: &'a crate::names::Types, kind: u32, name: &str, signature: Option<&str>) -> Typed<'a> {
     use crate::names::LeftOutKind;
@@ -619,7 +620,7 @@ fn left_out_reason(reason: &str) -> Vec<(&'static str, crate::Arg)> {
     if let Some(base) = reason.strip_prefix("through the virtual base ") {
         return vec![("why", p("LeftOut.VirtualBase")), ("what", t(base))];
     }
-    // A file-local typedef two .cpp files give to different types (A-TY7-1): "<record> (<file>), ...".
+    // A file-local typedef two .cpp files give to different types: "<record> (<file>), ...".
     if let Some(types) = reason.strip_prefix("a name .cpp files give to different types: ") {
         return vec![("why", p("LeftOut.AliasTwice")), ("what", t(types))];
     }
@@ -692,7 +693,7 @@ mod types_tests {
         assert_eq!(types.globals.keys().collect::<Vec<_>>(), vec!["MR::sCount"]);
         assert_eq!(types.left_out(LeftOutKind::Field, "LiveActor.mWide"), Some("a bit-field wider than 32 bits"));
         assert_eq!(types.left_out(LeftOutKind::Enum, ""), Some("no name a mod can write"));
-        // The first reason of a name is kept, a second other one recorded (A-TY7-3).
+        // The first reason of a name is kept, a second other one recorded.
         assert_eq!(types.left_out_again, vec![(LeftOutKind::Field, "LiveActor.mWide".to_string(), "a second reason, not kept".to_string())]);
     }
 
@@ -704,7 +705,7 @@ mod types_tests {
         assert_eq!((actor.kind, actor.align, actor.polymorphic, actor.is_abstract), (RecordKind::Class, 4, true, false));
         assert_eq!((actor.trivial_copy, actor.trivial_destroy), (false, false));
         assert!(types.records["TVec3<f32>"].trivial_copy && types.records["TVec3<f32>"].trivial_destroy);
-        // TY-10b: the third fact, read as the file gives it.
+        // The third fact, read as the file gives it.
         assert!(types.records["Both"].no_copy && !types.records["TVec3<f32>"].no_copy && !actor.no_copy);
         assert_eq!(actor.bases, vec![Base { name: "NameObj".into(), offset: 0, is_virtual: false }]);
         assert_eq!(actor.reached, vec![Reached { name: "mName".into(), from: "NameObj".into(), offset: 4, ty: "const char *".into() }]);
@@ -926,7 +927,7 @@ mod types_tests {
             assert_eq!(typed(&types, 7, name, Some(ty)), Typed::Bound, "{name}");
         }
         eprintln!("{path}: {} records, {} aliases, {} globals, {} left out", types.records.len(), types.aliases.len(), types.globals.len(), types.left_out.len());
-        // A name left out twice with two reasons keeps the first, as the kernel does (A-TY7-3); each is shown.
+        // A name left out twice with two reasons keeps the first, as the kernel does; each is shown.
         for (kind, name, reason) in &types.left_out_again {
             eprintln!("left out again, not kept: {kind:?} {name}: {reason} (kept: {})", types.left_out(*kind, name).unwrap_or_default());
         }

@@ -272,7 +272,7 @@ bool setting_overlaps() {
     return ok;
 }
 
-// Patches by key (luma-format 5.1) go to the cooker with their mod, file and game path, bottom of the list first, then
+// Patches by key (luma.md 5.1) go to the cooker with their mod, file and game path, bottom of the list first, then
 // layer and file order, with the mod order; a file that is not <game path>.json is named, not used. A mod of patches
 // only changes the game.
 bool patches_by_key_in_the_plan() {
@@ -468,7 +468,7 @@ bool luma_import() {
     fs::rename(root / "mods" / "kaizo", root / "mods" / "My Kaizo", ec);
     write(root / "mods" / "kaizo" / "riivolution" / "other.xml", "<wiidisc version=\"1\"><id game=\"RMG\"/></wiidisc>");
     {
-        // The install screen's read (services-mods 9): the archive's id and version, and the installed one of its id
+        // The install screen's read (services/mods.md 9): the archive's id and version, and the installed one of its id
         // found in a folder of another name; nothing installed for an id no folder holds.
         const galaxy::mods::ImportPeek peek = galaxy::mods::peek_import(root / "Kaizo v2.luma", root / "mods");
         ok &= expect(peek.id == "kaizo" && peek.version == "1.1.0" && peek.installed == "1.0.0",
@@ -580,7 +580,7 @@ bool luma_rules() {
     ok &= expect(problem("A").empty() && problem("A copy").empty(), "another copy is the validator's (L802)");
     ok &= expect(problem("C2").empty() && problem("C1").empty(), "what a mod needs is the validator's (L800)");
     ok &= expect(problem("X").empty() && problem("Y").empty(), "what a mod can't run with is the validator's (L801)");
-    // The Mods page's draft says them as the player changes the list (mark_needs, plan 6.3): the chain loses its end
+    // The Mods page's draft says them as the player changes the list (mark_needs): the chain loses its end
     // and its start with it; the mod naming the conflict is the one off; another copy stays the validator's.
     {
         std::vector<galaxy::mods::ModInfo> draft = mods;
@@ -805,7 +805,7 @@ bool texture_names() {
 
 namespace {
 
-// A text option's value as mods.ini keeps it (services-mods 8.4): UTF-8, no control character, at most max_length
+// A text option's value as mods.ini keeps it (services/mods.md 8.4): UTF-8, no control character, at most max_length
 // code points.
 bool text_options() {
     using galaxy::mods::text_option_fits;

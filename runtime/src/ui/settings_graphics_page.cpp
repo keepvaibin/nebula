@@ -148,7 +148,7 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                         "TRACED SHADOWS, SKY AND BOUNCE LIGHT, GLOWS THAT LIGHT THE WORLD"});
     }
     if (rt_on) {
-        // The preset sets every part (plan 19.1); a part changed by itself makes it CUSTOM. All switch live.
+        // The preset sets every part; a part changed by itself makes it CUSTOM. All switch live.
         static constexpr unsigned kOrder[] = {2u, 0u, 1u, kRtPresetReference};  // low, medium, high, reference
         static constexpr const char* kNames[] = {"MEDIUM", "HIGH", "LOW", "REFERENCE", "CUSTOM"};
         rows.push_back({"RAY TRACING QUALITY", kNames[std::min(render.rt_quality, kRtPresetCustom)],

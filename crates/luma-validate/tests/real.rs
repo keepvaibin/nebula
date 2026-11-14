@@ -87,7 +87,8 @@ fn file_entry(name: &str, data: &[u8]) -> E {
 
 #[test]
 fn speed_of_a_large_luma() {
-    // Validator contract 7.6: LUMA_SPEED names a large .luma; the full check and a start's check are timed.
+    // docs/modding/format/validator.md section 7: LUMA_SPEED names a large .luma; the full check and a start's check
+    // are timed.
     let Ok(path) = std::env::var("LUMA_SPEED") else {
         eprintln!("LUMA_SPEED not set: nothing to time");
         return;

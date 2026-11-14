@@ -1,7 +1,7 @@
 #pragma once
-// The type-rows fixture (contract types TY-8): what the game's headers have too little of to prove, each kind once.
-// tools/lumacore/types_fixture_test.py runs gen_types.py on this folder alone, compiles its table with the kernel
-// (LumaTypes.cpp) and a driver, and checks the kernel's answers and the build's comparison (compare_types.py).
+// The type-rows fixture (docs/modding/language/types.md): what the game's headers have too little of to prove, each
+// kind once. tools/lumacore/types_fixture_test.py runs gen_types.py on this folder alone, compiles its table with the
+// kernel (LumaTypes.cpp) and a driver, and checks the kernel's answers and the build's comparison (compare_types.py).
 #include <nebula_types.h>
 
 // A name the record declares hides its bases' (FxDerived.x is its own); one two bases up is found (FxDerived.shared).
@@ -83,7 +83,7 @@ struct FxAnon {
     } named;
 };
 
-// TY-9: every name a text holds is a row, a built-in or left out: a foreign typedef (an alias row), an instance only
+// Every name a text holds is a row, a built-in or left out: a foreign typedef (an alias row), an instance only
 // a pointer names and one only a function pointer's parameter names (rows of their own), a pointer to an array.
 struct FxNames {
     uintptr_t address;
@@ -92,7 +92,7 @@ struct FxNames {
     FxMid& (*pick)(FxBase*, FxBox<u16>&);
 };
 
-// TY-10: a bit copy is the C++ copy (trivial_copy) and dropping one frees nothing (trivial_destroy).
+// A bit copy is the C++ copy (trivial_copy) and dropping one frees nothing (trivial_destroy).
 struct FxOwns {  // its own destructor: neither
     s32* p;
     ~FxOwns() {}
@@ -153,7 +153,7 @@ struct FxHoldsOwner {  // a field that frees: neither
 struct FxPoly {  // a vtable: destructible only
     virtual void f() {}
 };
-// Self-description (plan 1.8): what a virtual's body calls, once each in the order written, as a nerve's execute calls
+// Self-description: what a virtual's body calls, once each in the order written, as a nerve's execute calls
 // its owner's exe function.
 struct FcOwner {
     void exeGo() { g = 1; }
@@ -168,7 +168,8 @@ struct FcNerve {
     }
 };
 
-// Contract objects (plan 1.3): an object's own class from its vtable, through primary and secondary bases.
+// Objects (docs/modding/language/objects.md): an object's own class from its vtable, through primary and secondary
+// bases.
 struct FoA {
     virtual ~FoA() {}
     virtual s32 fa() { return 1; }
@@ -197,7 +198,7 @@ struct FoV {  // polymorphic by its destructor alone: a type_info, no method row
 };
 struct FoX : FoA {};
 struct FoAmb : FoC, FoX {};  // two FoA subobjects: as FoA, ambiguous
-// One class reached twice, with no virtual base: each subobject has its own final overrider (contract objects M-1).
+// One class reached twice, with no virtual base: each subobject has its own final overrider (objects.md).
 struct FoTA {
     virtual s32 f() { return 10; }
     s32 ta = 0;

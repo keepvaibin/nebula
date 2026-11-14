@@ -1,4 +1,4 @@
-//! F's conformance tests for 3.11 (auditor's, from luma_patch.h, table-keys and DECISIONS 5; not from the applier's
+//! Conformance tests for patches by key (an auditor's, from luma_patch.h and table-keys.md; not from the applier's
 //! code). Only the C interface is called; TableIr builds and reads the cooked tables.
 //! Run: copy into crates/nebula-import/tests/ of a copy of the branch and `cargo test --test f_conformance`.
 
@@ -256,7 +256,7 @@ fn f09_an_added_l_id_must_be_new_to_the_zone_in_every_layer() {
     // (the other table's call names it).
     let o = call_on(OBJINFO, &objinfo().to_ntbl(), size(), &[("high", "h.json", &b)], &[(layer_a, other.to_ntbl(), vec![("low", "l.json", &a)])], &["low", "high"]);
     assert!(o.table.unwrap().rows.iter().any(|r| r[0] == Cell::Bits(60)), "the higher's row stays");
-    // An l_id new to the zone is added, with the kind's usual values for what it leaves out (table-keys 10.4).
+    // An l_id new to the zone is added, with the kind's usual values for what it leaves out (table-keys.md 10.4).
     let o = call(OBJINFO, &objinfo().to_ntbl(), size(), &[("ok", "o.json", &add(70, "New"))], &[(layer_a, other.to_ntbl(), vec![])]);
     let t = o.table.unwrap();
     assert_eq!(arg0(&t, 70), Some(u32::MAX), "Obj_arg0's usual value is -1");
@@ -293,14 +293,15 @@ fn f11_a_disc_path_with_its_archive_is_the_store_path() {
 
 #[test]
 fn f12_a_place_table_refuses_remove_and_checks_every_place() {
-    // table-keys 3: rows by place; remove refused (L402), a place past the game's rows refused (L402), rows replaces.
+    // table-keys.md 3: rows by place; remove refused (L402), a place past the game's rows refused (L402), rows
+    // replaces.
     let rail = "ObjectData/Kuribo/Kuribo.arc/Kuribo.pa";
     let t = TableIr { columns: vec![col("frame", Kind::Int), col("value", Kind::Float)], rows: (0..3u32).map(|i| vec![Cell::Bits(i), Cell::Bits(0)]).collect() };
     let o = call(rail, &t.to_ntbl(), size(), &[("r", "r.json", r##"{"patch": 1, "remove": [{"#": 1}]}"##)], &[]);
     let f = o.facts.iter().find(|f| f.kind == LUMA_PATCH_FAILED).expect("remove refused");
     assert_eq!(f.code, 402);
     // A place past the table's rows: the validator's L402 is against the game's count; the applier's table may be a
-    // mod's whole file (DECISIONS 5), so here it is a row that is not there, named, never silent.
+    // mod's whole file, so here it is a row that is not there, named, never silent.
     let o = call(rail, &t.to_ntbl(), size(), &[("p", "p.json", r##"{"patch": 1, "set": [{"where": {"#": 3}, "values": {"frame": 9}}]}"##)], &[]);
     assert!(o.facts.iter().any(|f| f.kind == LUMA_PATCH_MISSING && f.row.as_deref() == Some("#3") && f.mod_id.as_deref() == Some("p")));
     assert_eq!(o.table.unwrap(), t);
@@ -312,7 +313,7 @@ fn f12_a_place_table_refuses_remove_and_checks_every_place() {
 
 #[test]
 fn f13_a_link_patch_of_a_mod_the_list_does_not_name_is_refused_never_guessed() {
-    // F's finding F3.11-1: which of two mods adding one l_id in two layers is higher comes from `mods`. A link patch
+    // Which of two mods adding one l_id in two layers is higher comes from `mods`. A link patch
     // whose mod `mods` does not name (or no `mods` at all) cannot be ordered: the input is not valid (-1, the mod
     // named), never both rows kept without a word (a duplicate l_id in the zone, which the game links wrongly).
     let layer_a = "StageData/AstroGalaxy/jmp/Placement/LayerA/ObjInfo";

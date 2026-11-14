@@ -1,4 +1,4 @@
-"""The model of the conformance test metal-smooth (materials contract): a 1 m sphere, metal 1, roughness 0.05.
+"""The model of the conformance test metal-smooth (content/materials.md): a 1 m sphere, metal 1, roughness 0.05.
 
 One node, `sphere`, half a metre up from the origin (translation [0, 0.5, 0]), carrying a UV sphere of radius 0.5 m
 centred on it, so the sphere rests on the model's origin. Smooth normals (the sphere's own directions), counter-

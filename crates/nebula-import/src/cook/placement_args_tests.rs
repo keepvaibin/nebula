@@ -13,7 +13,7 @@ fn objects() -> ObjectArgs {
         ],
         "placement": 1,
         "placement_args": {
-            // F's form: a base's rows merged with their "from", a helper's read without a target, a column by name.
+            // The form: a base's rows merged with their "from", a helper's read without a target, a column by name.
             "SpinningBlock": [
                 {"arg": 0, "field": "Obj_arg0", "target": null, "type": "s32", "from": "SpinningBlock", "via": ["getDomeIdFromArg0"]},
                 {"arg": 0, "field": "Obj_arg0", "target": "mDomeId", "type": "s32", "from": "MapObjActor", "via": []},

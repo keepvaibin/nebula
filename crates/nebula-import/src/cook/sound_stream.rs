@@ -1,4 +1,4 @@
-//! A mod's stream (plan 3.7 layer 3, contract board/contracts/sound.md section 8): `<name>.sound.json` of kind `stream`
+//! A mod's stream (docs/modding/content/sound.md section 8): `<name>.sound.json` of kind `stream`
 //! names a WAV, FLAC, Ogg Vorbis, BRSTM, BCSTM or BFSTM file beside it; the cook writes `Luma/<id>/<name>.ast`, the
 //! game's stream form (NSTR, StreamPlayer.hpp's Header, then each channel's PCM16 samples in turn), its loop
 //! sample-exact. With `replace`, the same file also takes a game stream's place (`AudioRes/Stream/<name>.ast`).

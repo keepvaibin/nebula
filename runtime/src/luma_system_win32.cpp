@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// LumaCore's system services on Windows (contract services-system 3 to 6): the facts, the display snapshot from the
+// LumaCore's system services on Windows (docs/modding/services/system.md): the facts, the display snapshot from the
 // game window's procedure, the clipboard through one worker thread that owns a message-only window, and links through
 // the shell on the same thread. The worker starts at the first clipboard or link request (no cost with no mod).
 
@@ -26,7 +26,7 @@
 namespace galaxy::luma_system {
 namespace {
 
-constexpr std::uint64_t kTextMost = 16ull << 20u;       // services-system 1 item 5
+constexpr std::uint64_t kTextMost = 16ull << 20u;       // services/system.md 1 item 5
 constexpr std::uint32_t kSideMost = 8192u;              // item 4
 constexpr std::uint64_t kPixelsMost = 64ull << 20u;
 constexpr std::uint64_t kEncodedMost = 80ull << 20u;    // a PNG of a picture within the limits, with room for its headers

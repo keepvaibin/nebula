@@ -1,4 +1,4 @@
-//! L300-L309: layers and the paths in them (luma-format 4, 5).
+//! L300-L309: layers and the paths in them (luma.md 4, 5).
 
 use super::{p, t, Ctx};
 use crate::zip::EntryKind;
@@ -71,7 +71,7 @@ fn glb_json(bytes: &[u8]) -> Option<&[u8]> {
     bytes.get(20..20usize.checked_add(length)?)
 }
 
-/// Source endings a whole file may have instead of the game format's (luma-format 5).
+/// Source endings a whole file may have instead of the game format's (luma.md 5).
 pub const SOURCE_ENDINGS: [&str; 16] =
     [".gltf", ".glb", ".bin", ".png", ".jpg", ".jpeg", ".ktx2", ".dds", ".wav", ".ogg", ".mid", ".json", ".ttf", ".otf", ".webm", ".mp4"];
 
@@ -91,7 +91,7 @@ pub fn cooked_source(lower: &str) -> bool {
 
 /// The game path a file at `layers/<l>/files/<path>` stands at, as kept for L305: lowercase, and a source form with
 /// `.json` added to a file name that has its own ending (`scenariodata.bcsv.json`) is that file, so two mods bringing
-/// one file in either form are named (V4-2).
+/// one file in either form are named.
 fn replaced(path: &str) -> String {
     let lower = path.to_lowercase();
     // A hidden model replaces the model it names.
@@ -137,7 +137,7 @@ pub(crate) fn check(ctx: &mut Ctx) {
         let Some(part) = part else { continue };
         let rest = parts.next();
         // textures/: the game's textures replaced by their names (`<model>/<texture>.png` or `.dds`, or Dolphin's
-        // `tex1_` names, which the game names at install), as a texture pack (luma-format 5, decision 3 of the one form).
+        // `tex1_` names, which the game names at install), as a texture pack (luma.md 5).
         let texture_ok = rest.is_some_and(|r| {
             let lower = r.to_ascii_lowercase();
             is_folder_entry || lower.ends_with(".png") || lower.ends_with(".dds")

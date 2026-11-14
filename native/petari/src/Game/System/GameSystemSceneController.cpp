@@ -182,7 +182,8 @@ void GameSystemSceneController::destroyScene() {
     } else {
         Arenas::destroyScene();
     }
-    // Mods' objects went with the scene (contract classes): forgotten, their data freed. Nothing when there are none.
+    // Mods' objects went with the scene (docs/modding/language/classes.md): forgotten, their data freed. Nothing when
+    // there are none.
     luma::classes::sceneGone();
 }
 

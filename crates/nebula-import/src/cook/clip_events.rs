@@ -1,4 +1,4 @@
-//! A clip's frame events (plan 3.6 layer 3, contract board/contracts/animation.md section 5): `<clip>.anim.json` in a
+//! A clip's frame events (docs/modding/content/animation.md section 2a): `<clip>.anim.json` in a
 //! game archive (`ObjectData/Kuribo.arc/Walk.anim.json`) names events at frames of the archive's clip `<clip>`:
 //!
 //! ```json
@@ -7,9 +7,9 @@
 //!
 //! The cook writes `<archive>/<clip>.events`, a table (NTBL) of the columns `frame` (int) and `event` (text), its rows
 //! sorted by frame (rows of one frame in the file's order). The anim service gives each row to a play of the clip as a
-//! mark after the play's own (J, anim 1.1). Refused by name: a file outside a game archive, no events, more than 64,
-//! a frame that is not a whole number from 0 to 65,534 or past the game clip's last frame, an event name that is not
-//! 1 to 63 of `A-Z a-z 0-9 _ .`, the same event twice at one frame, any other key.
+//! mark after the play's own (docs/modding/content/animation.md). Refused by name: a file outside a game archive, no
+//! events, more than 64, a frame that is not a whole number from 0 to 65,534 or past the game clip's last frame, an
+//! event name that is not 1 to 63 of `A-Z a-z 0-9 _ .`, the same event twice at one frame, any other key.
 
 use super::particle_json::{as_int, at_index, at_key, list, missing, object, only, text};
 use super::refuse::refuse;
@@ -23,9 +23,9 @@ pub const MOST_EVENTS: usize = 64;
 pub const MOST_NAME: usize = 63;
 /// The longest clip name the anim service plays, in bytes (its names are under 128).
 pub const MOST_CLIP: usize = 127;
-/// The last frame any clip has: clip files count frames in 16 bits (animation contract 3).
+/// The last frame any clip has: clip files count frames in 16 bits (animation.md).
 pub const LAST_FRAME: i64 = 65_534;
-/// The clip kinds a play starts, in the order the first present leads (animation contract 7).
+/// The clip kinds a play starts, in the order the first present leads (animation.md).
 pub const CLIP_ENDINGS: [&str; 6] = ["bck", "btk", "brk", "bpk", "btp", "bva"];
 const ENDING: &str = ".anim.json";
 

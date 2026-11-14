@@ -580,17 +580,17 @@ void GameScene::draw2D() const {
     luma::draw::point(LUMA_DRAW_HUD_BEFORE);  // the mods' hud.before, under the game's HUD (one load with none)
     if (isPlayMovie()) {
         SceneFunction::executeDrawList2DMovie();
-        luma::movie::drawSubtitles();  // a mod's lines (<movie>.subs) over the movie (plan 3.10 layer 4)
+        luma::movie::drawSubtitles();  // a mod's lines (<movie>.subs) over the movie
     } else {
         SceneFunction::executeDrawList2DNormal();
     }
 
     CategoryList::execute(MR::DrawType_CameraCover);
-    // The mods' hud.after: over the HUD, under the mod log's notice and the pause screens (plan 2.4).
+    // The mods' hud.after: over the HUD, under the mod log's notice and the pause screens.
     luma::draw::point(LUMA_DRAW_HUD_AFTER);
     luma::draw::post::stage(LUMA_DRAW_POST_FRAME);  // over the HUD, under the notice and the pause screens
     // The mod log's notice over the game and under the pause screens (and the settings menu, drawn later), so it never
-    // covers a choice the player must read (contract mod-log 4.1).
+    // covers a choice the player must read.
     if (MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder)) {
         NebulaModLogNotice::draw();
     }

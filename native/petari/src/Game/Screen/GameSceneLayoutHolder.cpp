@@ -59,7 +59,7 @@ GameSceneLayoutHolder::GameSceneLayoutHolder()
 
     mAchievementToast = new NebulaAchievementToast();
     mAchievementToast->initWithoutIter();
-    // The mod log's notice: only when the session has mods or something was said (contract mod-log 5).
+    // The mod log's notice: only when the session has mods or something was said.
     NebulaModLogNotice::make();
     mAchievementBoard = nullptr;
     if (NebulaAchievementLuma::isHere()) {

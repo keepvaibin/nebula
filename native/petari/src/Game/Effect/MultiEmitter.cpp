@@ -48,8 +48,8 @@ namespace {
     }
 
     // `pWord` names no particle: the game's log once; with a mod's prefix ("<id>:"), that mod's Content.MissingEffect
-    // (references 6, code 623; one entry a word: the word's hash is its column, so two words are two entries); while the
-    // harness runs, the fact `fx.particle_missing {"word", "mod"}`. Game data never does it; a mod's table can.
+    // (references.md 6, code 623; one entry a word: the word's hash is its column, so two words are two entries); while
+    // the harness runs, the fact `fx.particle_missing {"word", "mod"}`. Game data never does it; a mod's table can.
     void sayMissingParticle(const char* pWord) {
         const u32 hash = hashOf(pWord);
         if (saidBefore(pWord, hash)) {

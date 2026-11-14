@@ -67,7 +67,7 @@ public:
     void attach(const Table*, PlacementInfoOrdered*);
     // The entries attach() sends to its after-scenario list.
     static s32 countAfterScenario(const Table*);
-    // Nebula (classes contract, "placement"): the object made from the row (pTable, entry), or null.
+    // Nebula (docs/modding/language/classes.md, "placement"): the object made from the row (pTable, entry), or null.
     NameObj* findMade(const Table* pTable, s32 entry) const;
     // The row an object was made from. False: none of this list's.
     bool findPlaced(const void* pObject, TableIter* pOut) const;

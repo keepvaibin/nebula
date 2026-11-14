@@ -1,7 +1,7 @@
-//! The validator as C functions, for the game (validator contract 3): `include/luma_validate.h` declares them. The
-//! game calls `luma_validate` with no kept report at import (every rule) and with the mod's kept report at each start
-//! (the rules that read the whole `.luma` are taken from it when it is for the same `.luma` and the same game). The
-//! findings and their text are those of `luma_validate::validate`, field for field.
+//! The validator as C functions, for the game (docs/modding/format/validator.md section 3): `include/luma_validate.h`
+//! declares them. The game calls `luma_validate` with no kept report at import (every rule) and with the mod's kept
+//! report at each start (the rules that read the whole `.luma` are taken from it when it is for the same `.luma` and
+//! the same game). The findings and their text are those of `luma_validate::validate`, field for field.
 
 use luma_validate::{message, message_of, phrase, reason_of, recheck, Game, Input, Installed, Level, Names, Report, Saved, Source, Store, Table};
 use std::cell::RefCell;
@@ -57,7 +57,7 @@ pub struct LumaValidateInput {
     pub names: *const c_char,
     pub names_size: u64,
     pub luma_api: u32,
-    /// The game's services catalog (JSON with a `services` key, services-registry 9); null: kind 5 is not checked.
+    /// The game's services catalog (JSON with a `services` key, services/registry.md 9); null: kind 5 is not checked.
     pub services: *const c_char,
     pub services_size: u64,
     pub store: *const LumaGameStore,
@@ -72,10 +72,10 @@ pub struct LumaValidateInput {
     /// The game's luma_types.json; null: kinds 1, 2 and 7 are not checked.
     pub types: *const c_char,
     pub types_size: u64,
-    /// The renderer's feature names (JSON with a `renderer` key, luma-format revision 4); null: L806 is not checked.
+    /// The renderer's feature names (JSON with a `renderer` key, luma.md revision 4); null: L806 is not checked.
     pub renderer: *const c_char,
     pub renderer_size: u64,
-    /// The features this device's graphics have (start-check 3); null: L806 is not checked.
+    /// The features this device's graphics have (start-check.md 3); null: L806 is not checked.
     pub device_features: *const *const c_char,
     pub device_feature_count: u32,
     /// The game's placement facts (smg_game.luma-placement.json, read for its `factory`); null: every placement's
@@ -108,7 +108,7 @@ pub struct LumaReport {
     version: Option<CString>,
     /// Touches.services: each platform and the name of a service its entry library requires, in import order.
     required: Vec<(String, CString)>,
-    /// Touches.after_start: class, file and line, one per placement (references 3).
+    /// Touches.after_start: class, file and line, one per placement (references.md 3).
     after_start: Vec<(CString, CString, u32)>,
     /// Made by luma_report_read_kept: no rule ran (luma_report_state 2).
     from_kept: bool,
@@ -229,7 +229,7 @@ impl Store for CStore {
         // Read here, as LumaLink's pak store reads it: the game's store gives only its own tables.
         crate::store_view::view_of_bytes(path, bytes)
     }
-    // The kinds the game finds by name are this library's own list, as LumaLink's PakStore reads it (F INBOX-G 46).
+    // The kinds the game finds by name are this library's own list, as LumaLink's PakStore reads it.
     fn may_be_new(&self, path: &str) -> bool {
         crate::store_view::may_be_new(path)
     }
@@ -354,7 +354,7 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
     let store = (!input.store.is_null()).then(|| CStore(input.store));
     let store_key = text(input.store_key).unwrap_or_default();
     // What identifies the game for a kept report: a change in any of it checks every rule again. The device's
-    // features are not in it (F's AR-1): L806 is a manifest rule, run at every start, and a laptop that switches GPUs
+    // features are not in it: L806 is a manifest rule, run at every start, and a laptop that switches GPUs
     // keeps its kept reports.
     let game_key = format!(
         "nebula {nebula}; region {}; platform {platform}; languages {}; api {}; names {}; types {}; services {}; renderer {}; placement {}; store {}",
@@ -397,7 +397,7 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
     };
     let platforms = [platform.as_str()];
     let position = (input.position != u32::MAX).then_some(input.position as usize);
-    // A placed mod is a folder laid out as the .luma is (luma-format 1); its kept report never stands for it (no
+    // A placed mod is a folder laid out as the .luma is (luma.md 1); its kept report never stands for it (no
     // fingerprint), so every rule runs.
     let source = if path.is_dir() { Source::Folder(&path) } else { Source::File(&path) };
     let report = recheck(
@@ -442,7 +442,7 @@ fn from_touches(about: Option<&luma_validate::About>, touches: &luma_validate::T
     (id, version, required, after_start)
 }
 
-/// A mod's kept report read as it is, no rule run (start-check F-S2: the scan's required permissions, before the
+/// A mod's kept report read as it is, no rule run (start-check.md: the scan's required permissions, before the
 /// start's check): id, version, required services and after-start rows answer on it; count 0, kept null. Kept bytes
 /// that do not read (another form, cut short, changed: the end line's SHA-1) give state -1 and why. Never null; give
 /// it back to luma_report_free.
@@ -665,7 +665,7 @@ pub unsafe extern "C" fn luma_report_id(report: *const LumaReport) -> *const c_c
 
 /// The name of the service number `index` that the entry library for `platform` imports without LUMA_OPTIONAL
 /// (kind 5), in import order, each once; null past the last, or for a platform the mod has no code for. The same from
-/// a start's check that took the kept report (consent 1.3: the host maps each to its permission by name).
+/// a start's check that took the kept report (consent.md 1.3: the host maps each to its permission by name).
 ///
 /// # Safety
 /// As luma_report_state; `platform` is null or a NUL-terminated string.

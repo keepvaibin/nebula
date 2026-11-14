@@ -31,7 +31,7 @@ done
 "$cc" --target=aarch64-pc-windows-msvc -shared $common $win -Wl,/NOIMPLIB -DGOOD -o pe-arm64/good.dll lib.c
 # Code the system runs at load (an entry point), refused (L509 Lib.RunsAtLoad); likewise for ELF and Mach-O below.
 "$cc" --target=x86_64-pc-windows-msvc -shared $common -fuse-ld=lld -Wl,/ENTRY:dll_entry -Wl,/Brepro -Wl,/NOIMPLIB -DGOOD -DRUNS_AT_LOAD -o pe-x64/runs_at_load.dll lib.c
-# A TLS directory: data alone loads; a callback runs at load and close and is refused (A-3).
+# A TLS directory: data alone loads; a callback runs at load and close and is refused.
 "$cc" --target=x86_64-pc-windows-msvc -shared $common $win -Wl,/NOIMPLIB -Wl,/INCLUDE:_tls_used -DGOOD -DTLS_DATA -o pe-x64/tls_data.dll lib.c
 "$cc" --target=x86_64-pc-windows-msvc -shared $common $win -Wl,/NOIMPLIB -Wl,/INCLUDE:_tls_used -DGOOD -DTLS_CALLBACK -o pe-x64/tls_callback.dll lib.c
 
@@ -48,7 +48,7 @@ elf="-shared -fPIC -fuse-ld=lld -Wl,--build-id=none -Wl,-T,$ctors"
 "$cc" --target=x86_64-unknown-linux-gnu $common $elf -Wl,-z,pack-relative-relocs -DGOOD -o elf-x64-relr/good.so lib.c
 "$cc" --target=aarch64-unknown-linux-gnu $common $elf -DGOOD -o elf-arm64/good.so lib.c
 "$cc" --target=x86_64-unknown-linux-gnu $common $elf -DGOOD -DRUNS_AT_LOAD -o elf-x64/runs_at_load.so lib.c
-# Code the system runs when it closes the library (A-1): DT_FINI_ARRAY, DT_FINI; Mach-O __mod_term_func below.
+# Code the system runs when it closes the library: DT_FINI_ARRAY, DT_FINI; Mach-O __mod_term_func below.
 "$cc" --target=x86_64-unknown-linux-gnu $common $elf -DGOOD -DRUNS_AT_CLOSE -o elf-x64/runs_at_close.so lib.c
 "$cc" --target=x86_64-unknown-linux-gnu $common $elf -DSERVICE -o elf-x64/service.so lib.c
 "$cc" --target=x86_64-unknown-linux-gnu $common $elf -DMOD_FUNCTION -o elf-x64/mod_function.so lib.c

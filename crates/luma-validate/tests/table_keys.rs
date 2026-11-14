@@ -1,6 +1,6 @@
-//! Patches against tables as contract table-keys gives them: keys the game repeats, tables named by place (`#`),
-//! whole tables (`rows`), words given as bytes, columns known only by hash, and selectors checked against the game's
-//! values (L407). Every finding here is also filled in all 14 languages.
+//! Patches against tables as docs/modding/format/table-keys.md gives them: keys the game repeats, tables named by place
+//! (`#`), whole tables (`rows`), words given as bytes, columns known only by hash, and selectors checked against the
+//! game's values (L407). Every finding here is also filled in all 14 languages.
 
 use luma_validate::semver::Version;
 use luma_validate::{column_hash, validate, Arg, ColumnType, Finding, Game, Input, Source, Store, Table};
@@ -152,7 +152,7 @@ fn a_table_named_by_place() {
     let seen = check(POINTS, &format!(r#"{{{H}, "rows": {{"x": 1}}}}"#));
     assert_eq!(said(&seen), one(400, "Patch.NotArray"));
 
-    // The key a table is named by is the contract's.
+    // The key a table is named by is table-keys.md's.
     let seen = check(POINTS, &format!(r#"{{{K}, "set": [{{"where": {{"name": "a"}}, "values": {{"x": 4}}}}]}}"#));
     assert!(seen.findings.iter().any(|f| f.code == 401), "{:?}", seen.findings);
 }

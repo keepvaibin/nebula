@@ -14,15 +14,15 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Contract references, section 3 ("After start") and 4 (the object class's placeholder). The host's one call makes one
-// block, published by one release store: the game thread reads it with an acquire load and no lock. It lives until the
-// module unloads.
+// docs/modding/language/references.md, section 3 ("After start") and 4 (the object class's placeholder). The host's one
+// call makes one block, published by one release store: the game thread reads it with an acquire load and no lock. It
+// lives until the module unloads.
 
 namespace luma {
     namespace refs {
         namespace {
             // The placeholder model, cooked from Nebula's data/placeholder/model.gltf into the store as an object archive
-            // (references 4; G's cook list). 3.13 refuses a start without it.
+            // (references.md section 4; the cook's list). The start check refuses a start without it.
             const char cPlaceholderArchive[] = "NebulaPlaceholder";
             const char cMissingClassRow[] = "Content.MissingClass";
             const u32 cMissingClassCode = 620;
@@ -56,8 +56,8 @@ namespace luma {
                 return pCopy;
             }
 
-            // The placeholder object (references 4): the placeholder model at the placement's position; no behaviour, no
-            // collision, no sensor.
+            // The placeholder object (references.md 4): the placeholder model at the placement's position; no
+            // behaviour, no collision, no sensor.
             class PlaceholderObj : public LiveActor {
             public:
                 PlaceholderObj(const char* pName) : LiveActor(pName) {}

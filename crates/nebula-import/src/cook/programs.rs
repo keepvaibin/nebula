@@ -853,7 +853,7 @@ fn pbr_factor_lines(p: &mut Pixel, shade: &PbrShading, indent: &str) -> Vec<Stri
     out
 }
 
-/// A hand-written surface shader's file-scope text (MaterialIr surface; contract materials 3.4): SurfaceIn with what
+/// A hand-written surface shader's file-scope text (MaterialIr surface; materials.md section 3.4): SurfaceIn with what
 /// it reads, Surface, its parameters as globals of their names, a function per texture, then its code under its own
 /// file's lines.
 fn surface_globals(p: &mut Pixel, sf: &SurfaceIr) -> String {
@@ -883,7 +883,7 @@ fn surface_globals(p: &mut Pixel, sf: &SurfaceIr) -> String {
     out
 }
 
-/// A surface shader's ray-hit form (contract materials 3.4 layer 3): the same `surface` run at a ray's hit, in a
+/// A surface shader's ray-hit form (materials.md section 3.4, layer 3): the same `surface` run at a ray's hit, in a
 /// namespace of its own (`RT_MOD_SURFACE_NS`, `rt_mod` unless the includer names another), so the tracer can include
 /// every mod material's form in one program. The includer gives, before it:
 /// - `struct RtModHit { float2 uv; float4 color; float3 normal; float3 world_position; float3 view; float time; float lod; }`:

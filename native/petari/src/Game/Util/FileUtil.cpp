@@ -134,7 +134,7 @@ namespace MR {
     }
 
     bool makeObjectArchiveFileName(FormattedName& rDst, const char* pName) {
-        // A mod's model (references 4): no game archive name has a ':'.
+        // A mod's model (references.md 4): no game archive name has a ':'.
         if (const char* const pColon = strchr(pName, ':'); pColon != nullptr) {
             char id[128];
             const u32 length = static_cast< u32 >(pColon - pName);

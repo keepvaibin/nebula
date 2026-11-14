@@ -1,7 +1,7 @@
-//! A mod's effects (effects contract 7): `layers/<layer>/assets/effects.json`, which the host hands the cook as the
-//! change `+Luma/<id>/effects.json`, one a layer in layer order (luma-format 5: a layer's assets are the store's
-//! `Luma/<id>/<mod path>`). The cook adds their particles to the game's particle file and names, and writes the mod's
-//! list of effects, `Luma/<id>/effects.txt`, from which the run time takes each one's draw group.
+//! A mod's effects (docs/modding/content/effects.md section 7): `layers/<layer>/assets/effects.json`, which the host
+//! hands the cook as the change `+Luma/<id>/effects.json`, one a layer in layer order (luma.md 5: a layer's assets
+//! are the store's `Luma/<id>/<mod path>`). The cook adds their particles to the game's particle file and names, and
+//! writes the mod's list of effects, `Luma/<id>/effects.txt`, from which the run time takes each one's draw group.
 //!
 //! ```json
 //! { "textures": { "GoldSpark": "textures/gold_spark.png" },
@@ -30,7 +30,7 @@ use std::collections::BTreeMap;
 pub const PARTICLES: &str = "ParticleData/Effect.arc/Particles.jpc";
 pub const PARTICLE_NAMES: &str = "ParticleData/Effect.arc/ParticleNames.bcsv";
 
-/// The six draw groups an actor's effect takes (effects contract 4), by the game's names; the number is the place.
+/// The six draw groups an actor's effect takes (effects.md section 4), by the game's names; the number is the place.
 pub const GROUPS: [&str; 6] = ["3D", "PAUSE_IGNORE", "INDIRECT", "AFTER_INDIRECT", "BLOOM_EFFECT", "AFTER_IMAGE_EFFECT"];
 /// Emitters an effect may have (MultiEmitter's list holds 32).
 pub const MOST_EMITTERS: usize = 16;
@@ -48,13 +48,13 @@ pub fn asset_path(id: &str, path: &str) -> String {
     format!("Luma/{id}/{path}")
 }
 
-/// The mod's list of effects (J's run time reads it: `<name>\t<group>\t<emitters>\n`, sorted by name).
+/// The mod's list of effects (the run time reads it: `<name>\t<group>\t<emitters>\n`, sorted by name).
 pub fn list_path(id: &str) -> String {
     asset_path(id, "effects.txt")
 }
 
 /// `[a-z][a-z0-9_]*`, at most 64 long, not ending in two digits (that would make the game read it as one particle's
-/// exact name, effects contract 7a).
+/// exact name, effects.md section 7).
 fn effect_name_ok(name: &str) -> bool {
     let b = name.as_bytes();
     !b.is_empty()
@@ -236,7 +236,7 @@ pub fn apply(id: &str, cooked: &Cooked, particles: &[u8], names: &[u8]) -> Resul
     Ok(Applied { particles: super::particles::write(&merged), names: table.to_ntbl(), facts })
 }
 
-/// The game's table of the effects actors start by name (effects contract 7, G-E6).
+/// The game's table of the effects actors start by name (effects.md section 7).
 pub const EFFECT_TABLE: &str = "ParticleData/Effect.arc/AutoEffectList.bcsv";
 
 /// G-E6: an EffectName a patch of the effect table writes that would start no emitter, read by 7a's rule. A name with

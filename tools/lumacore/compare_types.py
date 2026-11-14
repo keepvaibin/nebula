@@ -1,10 +1,10 @@
 """compare_types.py GENERATED DESCRIBED
 
-Contract types, section 3: the module's type rows (DESCRIBED, what nebula_game_luma_describe wrote: the host's
+docs/modding/language/types.md: the module's type rows (DESCRIBED, what nebula_game_luma_describe wrote: the host's
 --luma-describe or native/tools/luma_describe.c) against the generator's luma_types.json (GENERATED: libclang's numbers,
 and `reachable` and `left_out` by C++'s lookup). Every record, field, base, alias and global with a row, and for every
-record every name its bases give it: bound with the same position, or refused for the same reason and names (TY-1,
-TY2-1); and the kernel's left rows against left_out (TY-7). Any difference fails, naming the row; exit 1. Exit 0 prints
+record every name its bases give it: bound with the same position, or refused for the same reason and names;
+and the kernel's left rows against left_out. Any difference fails, naming the row; exit 1. Exit 0 prints
 the counts compared.
 """
 import json
@@ -59,7 +59,7 @@ def main():
         compared["bases"] += len(want_bases)
         if want_bases != got_bases:
             differ(f"record {name}: bases {want_bases} by libclang, {got_bases} in the module")
-        # TY-1: each inherited name, bound at the same place (a bit-field: its position in bits).
+        # Each inherited name, bound at the same place (a bit-field: its position in bits).
         want_reach = {}
         for h in r["reachable"]:
             declared = next((f for f in records.get(h["from"], {}).get("fields", []) if f["name"] == h["name"]), None)
@@ -75,7 +75,7 @@ def main():
                        f"{got_reach.get(n)} by the kernel's")
         for h in k["refused"]:
             compared["refused"] += 1
-    # TY2-1: every name left out as ambiguous or through a virtual base is refused by the kernel with that reason.
+    # Every name left out as ambiguous or through a virtual base is refused by the kernel with that reason.
     want_refused = {}
     for x in generated["left_out"]:
         if x["kind"] != "field":
@@ -94,7 +94,7 @@ def main():
     for n in sorted(set(want_aliases) | set(got_aliases)):
         if want_aliases.get(n) != got_aliases.get(n):
             differ(f"alias {n}: names {want_aliases.get(n)} in the generator's JSON, {got_aliases.get(n)} in the module")
-    # TY-7: the kernel's left rows are left_out's, one per group and name, with the reason's id (the validator's words).
+    # The kernel's left rows are left_out's, one per group and name, with the reason's id (the validator's words).
     want_left = {(g, n): (rid, what) for g, n, rid, what in gen_types.left_rows(
         [(x["kind"], x["name"], x["file"], x["line"], x["reason"]) for x in generated["left_out"]])}
     got_left = {(x["group"], x["name"]): (x["why"], x.get("what")) for x in described["left_out"]}
@@ -108,7 +108,7 @@ def main():
     for n in sorted(set(want_globals) | set(got_globals)):
         if want_globals.get(n) != got_globals.get(n):
             differ(f"global {n}: {want_globals.get(n)} in the generator's JSON, {got_globals.get(n)} in the module")
-    # Contract objects: one method row (a virtual call) per virtual the generator gave a row, and no other.
+    # objects.md: one method row (a virtual call) per virtual the generator gave a row, and no other.
     want_methods = {(v["name"], v["signature"], r["name"], v["call"]["spelling"], v["params"])
                     for r in generated["types"] for v in r.get("virtuals", ()) if v["row"]}
     got_methods = [(m["name"], m["signature"], m["record"], m["own"], m["params"]) for m in described["methods"]]

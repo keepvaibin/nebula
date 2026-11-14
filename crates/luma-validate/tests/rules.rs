@@ -19,10 +19,10 @@ struct FakeStore {
     case_insensitive: bool,
 }
 
-/// Two layers of one zone's objects: a link group (table-keys 13).
+/// Two layers of one zone's objects: a link group (table-keys.md 13).
 const COMMON: &str = "StageData/Zone/jmp/Placement/Common/ObjInfo";
 const LAYER_A: &str = "StageData/Zone/jmp/Placement/LayerA/ObjInfo";
-/// A game layout, patched by pane name (layout contract 5).
+/// A game layout, patched by pane name (docs/modding/content/screens.md section 5).
 const HUD: &str = "LayoutData/Hud.arc/blyt/Hud.brlyt";
 
 impl Store for FakeStore {
@@ -97,7 +97,7 @@ fn a_correct_mod_passes_with_nothing_to_say() {
         &[
             file("layers/base/patches/stage/table.bcsv.json", patch),
             deflated("layers/base/files/ObjectData/Kuribo.arc", &[7; 4096]),
-            // A texture pack's texture, by the game's name or Dolphin's (decision 3 of the one form).
+            // A texture pack's texture, by the game's name or Dolphin's (luma.md 5).
             file("layers/base/textures/Kuribo/KuriboBody.png", b"p"),
             file("layers/base/textures/tex1_32x32_0000000000001111_14.dds", b"d"),
             // What merge/ adds to (the import's cook, overlay.rs apply_merges): every language's lines, a table's rows.
@@ -158,7 +158,7 @@ fn a_link_key_is_new_to_the_whole_zone() {
 }
 
 /// A zone whose start has MarioNo 0 in LayerB and LayerC, which no scenario turns on together: scenario 1 turns on
-/// LayerA and LayerB (mask 3), scenario 2 LayerA and LayerC (mask 5); LayerD is never on (F's dandelionhillzone case).
+/// LayerA and LayerB (mask 3), scenario 2 LayerA and LayerC (mask 5); LayerD is never on (the dandelionhillzone case).
 struct ScenarioStore {
     listed: bool,
 }
@@ -215,7 +215,7 @@ impl Store for ScenarioStore {
 }
 
 /// Validator revision 4: a new galaxy's own scenario table, brought whole, and the installed mods' scenario cells
-/// join the layer sets (table-keys 13.6).
+/// join the layer sets (table-keys.md 13.6).
 #[test]
 fn a_new_galaxy_s_table_and_other_mods_cells_say_which_layers_are_on_together() {
     let store = ScenarioStore { listed: true };
@@ -264,7 +264,7 @@ fn a_new_galaxy_s_table_and_other_mods_cells_say_which_layers_are_on_together() 
     assert_eq!(in_group(&run(&mine, std::slice::from_ref(&galaxy_mod), Some(0))), 1);
 
 
-    // V4-1, the cook's rule: the highest whole table is the base, and every mod's patch cells edit it, lowest first,
+    // The cook's rule: the highest whole table is the base, and every mod's patch cells edit it, lowest first,
     // whoever brought the table. A patch on another mod's galaxy is `patches/@<id>/<its path>.json`.
     let patch = |mask: u32| format!(r#"{{"patch": 1, "key": ["ScenarioNo"], "set": [{{"where": {{"ScenarioNo": 1}}, "values": {{"DandelionHillZone": {mask}}}}}]}}"#).into_bytes();
     let on_moon = "layers/base/patches/@moon.mod/StageData/MoonGalaxyScenario/ScenarioData.bcsv.json";
@@ -284,7 +284,7 @@ fn a_new_galaxy_s_table_and_other_mods_cells_say_which_layers_are_on_together() 
     assert_eq!(in_group(&run(&mine_two, std::slice::from_ref(&galaxy_mod), Some(1))), 0, "the higher's table has no scenario 2");
     assert_eq!(in_group(&run(&mine_two, std::slice::from_ref(&galaxy_mod), Some(0))), 1);
 
-    // V4-2: two mods bringing one new galaxy whole are named (L305), in either form.
+    // Two mods bringing one new galaxy whole are named (L305), in either form.
     let r = run(&[file(&format!("{new_galaxy}.json"), &table(10))], std::slice::from_ref(&galaxy_mod), Some(1));
     let named: Vec<String> = r.findings.iter().filter(|f| f.code == 305).map(|f| message(f, "UsEnglish")).collect();
     assert_eq!(named.len(), 1, "{:?}", r.findings);
@@ -379,7 +379,7 @@ fn every_rule_has_a_broken_mod() {
     bzip.method = 12;
     let mut link = file("media/a.png", b"/etc/passwd");
     link.unix_mode = Some(0o120777);
-    // A link whose record says MS-DOS made it, with a Unix link mode all the same (director's fuzz, 53 cases).
+    // A link whose record says MS-DOS made it, with a Unix link mode all the same (found by fuzzing, 53 cases).
     let mut dos_link = file("media/a.png", b"../../../../luma.json");
     dos_link.unix_mode = Some(0o120777);
     dos_link.made_by = Some(20);
@@ -452,7 +452,7 @@ fn every_rule_has_a_broken_mod() {
         (301, luma(&[("layers", r#"[{"name": "base", "when": {"option": {"nope": true}}}]"#)], &[file("layers/base/files/a.wav", b"x")]), NO_GAME),
         (302, luma(&layer, &[file("layers/base/files/ObjectData/Nothing.arc", b"x")]), Setup { game: Some(&game), ..NO_GAME }),
         (303, luma(&layer, &[file("layers/base/files/Stage/Table.bcsv", b"x")]), Setup { game: Some(&game), ..NO_GAME }),
-        // The same table in its JSON form (audit 7.1 E-2).
+        // The same table in its JSON form.
         (303, luma(&layer, &[file("layers/base/files/Stage/Table.bcsv.json", b"{}")]), Setup { game: Some(&game), ..NO_GAME }),
         // A source the cook does not make at a game path: a font in files/, a model's buffer no model names.
         (304, luma(&layer, &[file("layers/base/files/FontData/Mine.ttf", b"x")]), with_game_ref(&game)),
@@ -532,7 +532,7 @@ fn every_rule_has_a_broken_mod() {
         }
         let start = recheck_with(bytes, setup, Some(&saved), "game");
         // Said again from its carried parameters (the facts file, the loader's refusals): the same words in every
-        // language (audit 3.12 C-1, loader contract 3).
+        // language (docs/modding/language/compiled-form.md).
         for f in &report.findings {
             let carried = luma_validate::args_text(f);
             let mut args: Vec<(String, String)> = carried.iter().filter_map(|a| a.split_once('=')).map(|(n, v)| (n.to_string(), v.to_string())).collect();
@@ -725,8 +725,8 @@ fn sign(body: String) -> Vec<u8> {
     format!("{body}end\t{sum}\n").into_bytes()
 }
 
-/// L800's cycle (loader D3-3): the game starts a needed mod first, so mods that need each other round a circle cannot
-/// start. The check sees this mod's needs and the kept needs of the mods that are on.
+/// L800's cycle (compiled-form.md): the game starts a needed mod first, so mods that need each other round a circle
+/// cannot start. The check sees this mod's needs and the kept needs of the mods that are on.
 #[test]
 fn a_cycle_of_needs_through_the_mod_is_refused_and_named() {
     let needing = |id: &str, needs: &[&str]| {
@@ -769,7 +769,7 @@ fn a_cycle_of_needs_through_the_mod_is_refused_and_named() {
     assert_eq!(kept.installed("test.luma", true).unwrap().needs, vec!["b.mod".to_string()]);
 }
 
-/// The mod higher in the list wins a file and a cell (F, INBOX-G 13): installed mods come top first, and `position`
+/// The mod higher in the list wins a file and a cell: installed mods come top first, and `position`
 /// is how many are above the mod checked.
 #[test]
 fn the_mod_higher_in_the_list_wins() {
@@ -795,7 +795,7 @@ fn the_mod_higher_in_the_list_wins() {
     assert!(above.iter().all(|(_, m)| m.contains("; test.mod's") && m.ends_with("(it is higher in the list).")), "{above:?}");
 }
 
-/// F's AP-1 (audit 3.1-perm): a revision-1 `net` with hosts is one finding, Perm.NetSplit, not NetSplit and
+/// A revision-1 `net` with hosts is one finding, Perm.NetSplit, not NetSplit and
 /// HostsOnlyNet; another name with hosts still gets HostsOnlyNet.
 #[test]
 fn a_revision_1_net_with_hosts_is_one_finding() {
@@ -808,9 +808,9 @@ fn a_revision_1_net_with_hosts_is_one_finding() {
     assert!(message(&r.findings[0], "UsEnglish").contains("only net.internet takes hosts"), "{:?}", r.findings);
 }
 
-/// A permission's `why` in each language (consent 1.1): the text block's `permissions`, keyed by the permission's name
-/// as `permissions` writes it, in an object of its own, so an option of the same name never meets it. A reason for a
-/// permission the mod does not ask is an unknown key (L202); a reason is a line of 1 to 200 characters.
+/// A permission's `why` in each language (consent.md 1.1): the text block's `permissions`, keyed by the permission's
+/// name as `permissions` writes it, in an object of its own, so an option of the same name never meets it. A reason for
+/// a permission the mod does not ask is an unknown key (L202); a reason is a line of 1 to 200 characters.
 #[test]
 fn the_text_block_carries_each_permissions_why() {
     let said = |permissions: &str, text: &str| -> Vec<(u16, String)> {
@@ -837,8 +837,8 @@ fn the_text_block_carries_each_permissions_why() {
     assert_eq!(said(asked, &long).len(), 1);
 }
 
-/// H's TLS roots (services-net 7): a net permission's `roots` name PEM files under certs/; every fault is L211 naming
-/// the file, and certs/ is a folder a `.luma` may have.
+/// TLS roots (docs/modding/services/net.md): a net permission's `roots` name PEM files under certs/; every fault is
+/// L211 naming the file, and certs/ is a folder a `.luma` may have.
 #[test]
 fn a_net_permissions_roots_are_pem_files_in_certs() {
     let pem = b"-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n";
@@ -916,7 +916,7 @@ fn the_previous_engines_keys_name_their_replacement() {
     assert_eq!(report.findings.iter().map(|f| f.level).collect::<Vec<_>>(), [luma_validate::Level::Note]);
 }
 
-/// Text and key options (director's decision 23:0x: a mod reads them itself, key options are input actions).
+/// Text and key options (a mod reads them itself, key options are input actions).
 #[test]
 fn text_and_key_options_are_whole_and_choose_no_layer() {
     let said = |options: &str, layers: Option<&str>| -> Vec<(u16, String, String)> {
@@ -999,7 +999,7 @@ fn a_cook_refusal_says_its_reason_as_its_text() {
     assert!(!kept.contains('{') && kept.contains("archive"), "{kept}");
 }
 
-/// The director's decision of 2026-11-12: an archive with "\" between folders throughout (.NET Framework's ZipFile,
+/// An archive with "\" between folders throughout (.NET Framework's ZipFile,
 /// Compress-Archive) is read with "/", said in a note (L108), and every name rule runs on the names as read.
 #[test]
 fn an_archive_with_backslashes_throughout_is_read_with_slashes_and_said() {

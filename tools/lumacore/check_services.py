@@ -1,6 +1,6 @@
 """check_services.py luma_services.json INCLUDE_DIR: the services catalog the game module wrote (luma_describe
 --services, the host's --luma-services) against the services the SDK's headers declare (each LUMA_<X>_NAME with its
-_MAJOR and _MINOR in INCLUDE_DIR/luma_*.h). Exit 0 when the file is in the validator's form (services-registry 9:
+_MAJOR and _MINOR in INCLUDE_DIR/luma_*.h). Exit 0 when the file is in the validator's form (services/registry.md 9:
 {"services": [{"name", "major", "minor", "permission"}]}, by name in byte order then major, each once) and lists
 every header's service at the header's version, and nothing the headers lack; else 1, each difference named.
 

@@ -1,8 +1,8 @@
-//! A placement row's arguments by name (plan 3.9 layer 1, contract board/contracts/stages.md): a mod's row of a
+//! A placement row's arguments by name (docs/modding/content/stages.md section 1): a mod's row of a
 //! stage's placement table (`<Stage>.arc/jmp/placement/<layer>/objinfo.json`, whole or as a patch by key) may give
 //! `"args": {"ShotInterval": 120, "Rotate": true}` instead of `Obj_arg0` to `Obj_arg7`. The names are the game's own:
 //! for each object of the factory, the field each `MR::getPlacementArgN` call of its class fills, from the game's
-//! `smg_game.luma-placement.json`, which the build writes beside the game module from its source (F, 1.8 places): the
+//! `smg_game.luma-placement.json`, which the build writes beside the game module from its source: the
 //! factory's objects and their classes, and per class every placement read of it and its bases (`from`), with the
 //! field it fills: `mShotInterval` is `ShotInterval`. One name per argument: a read with a field in the class itself,
 //! else in a base, else `Arg<n>`. A column read by its own name (`getPlacementArgNoInit(iter, "RotateSpeed", &v)`,

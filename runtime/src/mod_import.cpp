@@ -552,7 +552,7 @@ ImportResult import_mod(const fs::path& source, const fs::path& mods_folder,
         result.message = "ALREADY IN YOUR MODS: " + result.title;
         return result;
     }
-    // A package passes the check before anything is placed (validator 2 "at import"): refused, nothing is added.
+    // A package passes the check before anything is placed (validator.md 2 "at import"): refused, nothing is added.
     if (manifest && check && !check(writer.staging, result.id, result) && result.refused) {
         fs::remove_all(writer.staging, error);
         result.ok = false;

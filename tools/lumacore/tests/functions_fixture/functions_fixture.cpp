@@ -40,7 +40,7 @@ void fnDefined(LUMA_OUT FnVec* out) { out->y = 2; }
 void FnMarked::get(FnVec* out) const { out->z = 3; }
 void fnByMacro(float* v) { *v = 1; }
 
-// Self-description (plan 1.8): an array table's keys, each row's leading string; none when a row has none.
+// Self-description: an array table's keys, each row's leading string; none when a row has none.
 struct FnKeyRow {
     const char* name;
     int value;
@@ -50,8 +50,8 @@ struct FnKeyRow {
 [[maybe_unused]] static FnKeyRow sFnUnkeyed[] = {{"A", 1}, {nullptr, 2}};
 [[maybe_unused]] static FnKeyRow sFnShort[3] = {{"A", 1}, {"B", 2}};
 
-// 1.9 (contract varargs): a va_list function, a variadic one handing its rest to it, one handing them to another
-// variadic one, a constexpr one (a call row after it), a head that begins with a macro.
+// Variadic functions (docs/modding/language/varargs.md): a va_list function, a variadic one handing its rest to it, one
+// handing them to another variadic one, a constexpr one (a call row after it), a head that begins with a macro.
 #include <cstdarg>
 int fnVaList(const char* pFormat, va_list args) {
     int n = 0;

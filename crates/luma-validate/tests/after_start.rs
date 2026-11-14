@@ -1,4 +1,4 @@
-//! Placements of classes only code can make (references 3): a placement row whose class neither the game's factory
+//! Placements of classes only code can make (references.md 3): a placement row whose class neither the game's factory
 //! list nor its planet table names is kept as an `after_start` touch (class, file, line) for the game's check after
 //! the mods' start, and counted as not checked (L403, Missing.AfterStart).
 

@@ -8,7 +8,7 @@ the real tools with a game unit's flags (Game/System/LumaLoader.cpp's command):
      overrides and whether that is a row);
   3. gen_types.py stops, naming the fault, on planted ones: a unit without .functions, a row without facts, an owner
      that is no record, an override with no name, facts without "marks";
-  4. C-6's marks: each row's "marks" are the expected ones (step 2), and instrument.py stops, naming the file, line and
+  4. The parameter marks: each row's "marks" are the expected ones (step 2), and instrument.py stops, naming the file, line and
      fault, on each planted wrong mark.
 Exit 0 only when all four hold.
 """
@@ -44,7 +44,7 @@ def mark(way, count=None, fixed=None, nullable=False):
 
 
 EXPECTED = [
-    # 1.9 (contract varargs)
+    # Variadic functions (docs/modding/language/varargs.md)
     fact("fnVaList", "int(const char *, va_list)", "free", None),
     fact("fnVariadic", "int(const char *, ...)", "free", None, marks=[None]),
     fact("fnVariadicAgain", "int(int, const char *, ...)", "free", None, marks=[None, None]),
@@ -82,7 +82,7 @@ EXPECTED = [
     fact("fnByMacro", "void(float *)", "free", None, marks=[mark("out")]),
 ]
 
-# C-6's refusals: (what, the unit's text after its first line `#include "Game/LumaMarks.hpp"`, what the stop names
+# The marks' refusals: (what, the unit's text after its first line `#include "Game/LumaMarks.hpp"`, what the stop names
 # after the unit's path; {f} is that path)
 REFUSED = [
     ("a mark on an int", "void f(LUMA_OUT int x);",
@@ -173,7 +173,7 @@ def main():
     if extra or len(have) != len(EXPECTED):
         failed.append("rows not in the expected list, or counted twice: %s (%d rows)" % (extra, len(have)))
 
-    # Self-description (plan 1.8): table keys
+    # Self-description: table keys
     tables = {t["name"].rpartition("#")[2]: t for t in
               json.loads((out / "gen" / "luma_numbers.json").read_text(encoding="utf-8"))["tables"]}
     for name, want in (("sFnKeyed", ["Alpha", "Beta"]), ("sFnNames", ["One", "Two", "Three"]), ("sFnUnkeyed", None),
@@ -216,7 +216,7 @@ def main():
         failed.append("gen_types.py did not stop naming facts without marks")
     facts_file.write_text(good, encoding="utf-8")
 
-    # 4. C-6's refusals, each a unit of its own with LumaLoader.cpp's command
+    # 4. The marks' refusals, each a unit of its own with LumaLoader.cpp's command
     planted_dir = out / "planted"
     planted_dir.mkdir()
     for n, (what, text, named) in enumerate(REFUSED, 1):

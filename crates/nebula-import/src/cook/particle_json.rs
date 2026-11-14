@@ -609,7 +609,7 @@ const EXTEX_SECOND: usize = 0x1A;
 const EXTEX_INDIRECT_ON: usize = 0x1B;
 const EXTEX_SECOND_ON: usize = 0x1C;
 
-/// The places a particle's records point into its texture list (effects contract 7, G-E3).
+/// The places a particle's records point into its texture list (effects.md section 7).
 pub const ROLES: [&str; 4] = ["sprite", "child", "second", "indirect"];
 
 /// The textures a particle draws, by role, and its sprite animation: from these the cook makes its texture list.

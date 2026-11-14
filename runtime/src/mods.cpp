@@ -1298,7 +1298,7 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
             }
         }
         if (mod.package) {
-            // The answers as read, whatever the manifest does this start: one not read keeps them (consent 1.2).
+            // The answers as read, whatever the manifest does this start: one not read keeps them (consent.md 1.2).
             if (s != nullptr) mod.permission_answers = s->permissions;
             std::optional<luma::Manifest> manifest = luma::read_manifest(dir);
             // What refuses a mod is the validator's (its report at the start check); this reads what the game uses.
@@ -1322,7 +1322,7 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                     mod.problem = "THIS MOD HAS NO VERSION FOR THIS DEVICE";
                     std::fprintf(stderr, "[mods] %s: %s\n", mod.id.c_str(), mod.problem.c_str());
                 }
-                // Scripts for the interpreter plan 1.10b removed: none of them runs, so the mod does not, and says why.
+                // Scripts for the removed interpreter: none of them runs, so the mod does not, and says why.
                 // LumaLink builds a mod's scripts into its code now.
                 if (mod.problem.empty() &&
                     std::any_of(manifest->layers.begin(), manifest->layers.end(), [](const luma::Layer& layer) { return layer.old_scripts; })) {
@@ -1396,7 +1396,7 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                     }
                     mod.options.push_back(std::move(option));
                 }
-                // Text options' typed values (mods.ini text.<key>, services-mods 8.4). One that no longer fits (an
+                // Text options' typed values (mods.ini text.<key>, services/mods.md 8.4). One that no longer fits (an
                 // update shortened max_length) is dropped: the manifest's default stands.
                 if (s != nullptr && !s->texts.empty()) {
                     for (const luma::Option& entry : manifest->options) {
@@ -1454,7 +1454,7 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                     if (std::optional<fs::path> files = child_any_case(place, "files", true)) {
                         mod.luma_changes_game = true;
                         list_files(*files, std::string(), changed_paths[mod.id]);
-                        // A movie is a file at its game path (G's decision 3 of the one form, luma-format 5): the
+                        // A movie is a file at its game path (the one form, luma.md 5): the
                         // movie player looks in files/MovieData for <name>.<video kind> (movie_playback.cpp find).
                         if (std::optional<fs::path> movie_data = child_any_case(*files, "MovieData", true)) {
                             mod.luma_movies.push_back(*movie_data);
@@ -1749,7 +1749,7 @@ bool save_mod_settings(std::span<const ModInfo> mods) {
         if (mod.install_ask_never) out << "install.ask=no\n";
         // Answers for the permissions it declares now, with the digest each was given for (a stale one is asked again);
         // an answer for a permission it no longer declares is dropped here. A mod whose manifest was not read this start
-        // keeps every answer as read (consent 1.2).
+        // keeps every answer as read (consent.md 1.2).
         const auto write_answer = [&out](const std::string& name, const PermissionAnswer& answer) {
             out << "permission." << escape_key(name) << '=' << (answer.granted ? "yes " : "no ") << answer.digest << '\n';
         };
@@ -1766,7 +1766,7 @@ bool save_mod_settings(std::span<const ModInfo> mods) {
         }
         for (const ModOption& o : mod.options) {
             if (o.kind == "text" || o.kind == "key") {
-                // A key option is bound in input's store (plan 2.5), not here; an empty text is the default's.
+                // A key option is bound in input's store, not here; an empty text is the default's.
                 if (o.kind == "text" && !o.text.empty()) out << "text." << escape_key(o.key) << '=' << escape_key(o.text) << '\n';
                 continue;
             }
@@ -1971,8 +1971,9 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                                                   achievement.event_value});
             }
             const luma::Situation situation = situation_of(mod, game_id, language);
-            // The mods' code binds from the top of the list down (loader contract 1): this loop goes bottom up, so
-            // each mod's libraries go in front of the lower mods' already listed, in the mod's own order.
+            // The mods' code binds from the top of the list down (docs/modding/language/compiled-form.md): this loop
+            // goes bottom up, so each mod's libraries go in front of the lower mods' already listed, in the mod's own
+            // order.
             const std::size_t lower_mods = plan.plugins.size();
             for (const luma::Plugin& plugin : mod.luma->plugins) {
                 const auto binary = plugin.binaries.find(std::string(luma::plugin_target()));
@@ -2132,9 +2133,9 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                         plan.merges.push_back({galaxy::path_text(file.lexically_relative(*merge).generic_string()), file, mod.id});
                     }
                 }
-                // A layer's assets/ goes into the mod's own store at Luma/<id>/<path> (luma-format 5, G's decision of
-                // 2026-11-11): one plan line a file, a later layer's same path winning as files/ does. assets/effects.json
-                // is each layer's change instead, merged by the cook in layer order (contracts/effects.md).
+                // A layer's assets/ goes into the mod's own store at Luma/<id>/<path> (luma.md 5): one plan line a
+                // file, a later layer's same path winning as files/ does. assets/effects.json is each layer's change
+                // instead, merged by the cook in layer order (docs/modding/content/effects.md).
                 if (const std::optional<fs::path> assets = child_any_case(mod.path / fs::path(from_utf8(layer.path)), "assets", true)) {
                     std::error_code walk_error;
                     std::error_code status_error;
@@ -2155,7 +2156,7 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                         }
                     }
                 }
-                // Patches by key: the cooker applies them to the game's tables (contract table-keys).
+                // Patches by key: the cooker applies them to the game's tables (docs/modding/format/table-keys.md).
                 if (const std::optional<fs::path> patches = child_any_case(mod.path / fs::path(from_utf8(layer.path)), "patches", true)) {
                     std::error_code walk_error;
                     std::error_code status_error;

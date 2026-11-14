@@ -120,7 +120,7 @@ void KinopioAstro::init(const TableIter& rIter) {
     }
 
     if (MR::isEqualStageName("PeachCastleFinalGalaxy")) {
-        // No message board (B-31, Q5), no letter from the staff.
+        // No message board, no letter from the staff.
         return;
     }
 

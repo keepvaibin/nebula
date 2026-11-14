@@ -87,7 +87,7 @@ namespace {
     const f32 cQuestionHeight = 180.0f;
     const f32 cQuestionMargin = 22.0f;  // the answers from the window's sides and foot
     const f32 cQuestionRing = 6.4f;     // the window's white ring (measured), inside its edges
-    // The Pair Joy-Con question: the letters L and R, the halves (the owner's drawing, cJoyConUnit of the menu's units
+    // The Pair Joy-Con question: the letters L and R, the halves (its drawing, cJoyConUnit of the menu's units
     // to its each; NebulaIcons paints them), its text and its answer, as far from each other as the answer is from the
     // window's ring.
     const f32 cJoyConUnit = 3.4f;
@@ -227,7 +227,7 @@ namespace {
          {"SettingsChoiceRemove", "SettingsChoiceKeep", nullptr},
          {NEBULA_SETTINGS_APPLY, NEBULA_SETTINGS_CLOSE, 0},
          {KeyApply, KeyBack, 0}},
-        // A removed mod's kept numbers and saved data (services-mods 8): its id above the question (fillTexts).
+        // A removed mod's kept numbers and saved data (services/mods.md 8): its id above the question (fillTexts).
         {NEBULA_SETTINGS_STATUS_MOD_FORGET_ASK, "SettingsModForgetAsk", "SettingsModForgetAsk", 2,
          {"SettingsChoiceForget", "SettingsChoiceKeep", nullptr},
          {NEBULA_SETTINGS_APPLY, NEBULA_SETTINGS_CLOSE, 0},

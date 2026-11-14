@@ -41,7 +41,7 @@ void* LayoutHolder::GetResource(u32 resourceKind, const char* pName, u32* pResou
 }
 
 Ui::Font* LayoutHolder::GetFont(const char* pName) {
-    // A mod's own font (Luma/<id>/<path>.brfnt, plan 3.8 layer 2).
+    // A mod's own font (Luma/<id>/<path>.brfnt, docs/modding/content/screens.md section 2a).
     if (Ui::Font* pModFont = luma::font::find(pName)) {
         return pModFont;
     }

@@ -1,4 +1,4 @@
-"""harness_wait_test.py: the host half's after-step waits (contract harness, "after"), without the game.
+"""harness_wait_test.py: the host half's after-step waits ("after"), without the game.
 
 python -X utf8 -I tools/lumacore/tests/harness_wait_test.py [--work <folder>]
 

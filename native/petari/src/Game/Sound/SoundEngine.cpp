@@ -169,7 +169,7 @@ void SoundEngine::tick() {
     if (mResetting) {
         resetStep();
     }
-    // The world clock's tape (services-time 7): at a rate other than real time the logic (the voices' updates, the
+    // The world clock's tape (services/time.md 7): at a rate other than real time the logic (the voices' updates, the
     // tracks, the streams) runs rate/1000 times a tick, rounded down with the rest carried, and every voice plays
     // rate/1000 as fast; the output stays one tick, so music, sequences, effects and streams change speed and pitch
     // together. 0 is the world's sound held, which AudSystem does as the pause menu does: the engine runs at real time.

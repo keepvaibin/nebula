@@ -285,8 +285,8 @@ private:
     f32 mMixerGain = 4.0f;
     u32 mOutputMode = 1;
     u32 mFramesAsked = 0;
-    // The world clock's tape (services-time 7): the rate followed now (thousandths) and the thousandths of a logic tick
-    // carried to the next output tick. The audio clock's thread only.
+    // The world clock's tape (services/time.md 7): the rate followed now (thousandths) and the thousandths of a logic
+    // tick carried to the next output tick. The audio clock's thread only.
     u32 mTapeRate = 1000;
     u32 mTapeAcc = 0;
 

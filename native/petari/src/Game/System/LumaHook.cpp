@@ -14,7 +14,7 @@ namespace luma {
     extern unsigned char sFlagsStart __asm("section$start$__DATA$lumaflg");
     extern unsigned char sFlagsStop __asm("section$end$__DATA$lumaflg");
 #elif !defined(_WIN32)
-    // Weak: the linker defines them only when the section exists, and the module without rows (plan 1.7) has none;
+    // Weak: the linker defines them only when the section exists, and the module without rows has none;
     // both are then null, so there are no rows.
     extern "C" __attribute__((weak, visibility("hidden"))) const Function __start_lumafn[];
     extern "C" __attribute__((weak, visibility("hidden"))) const Function __stop_lumafn[];
@@ -139,7 +139,7 @@ namespace luma {
                 if (pRow->name == nullptr) {
                     continue;
                 }
-                // A row with no flag is a call row (contract varargs 4: constexpr): found and called, never hooked.
+                // A row with no flag is a call row (varargs.md section 4: constexpr): found and called, never hooked.
                 if (pRow->signature == nullptr ||
                     (pRow->hooked != nullptr && (pRow->hooked < flagsBegin() || pRow->hooked >= flagsEnd()))) {
                     nebula_log("[luma] the function rows are not as the build wrote them; no function can be hooked\n");
@@ -472,7 +472,7 @@ namespace luma {
     const char cKernelOwner = 0;
 
     namespace {
-        // A hook's callback, through the guard when a mod owns it (plan 1.6). False: the guard caught a fault in it, or
+        // A hook's callback, through the guard when a mod owns it. False: the guard caught a fault in it, or
         // its mod is off after one; *pAnswer is then 0 (a before does not skip).
         bool callHook(const Hook& rHook, Call* pCall, u32 boundary, s32* pAnswer) {
             if (rHook.owner == &cKernelOwner) {
@@ -506,7 +506,7 @@ namespace luma {
         for (u32 i = pCall->next; pChain != nullptr && i < pChain->count; i++) {
             if (wraps(pChain->hooks[i].kind)) {
                 pCall->next = i + 1;
-                // Wraps are entered outermost first, so the last one recorded is the deepest entered (D2-1).
+                // Wraps are entered outermost first, so the last one recorded is the deepest entered.
                 pCall->ran = (pCall->ran & 1u) | ((i + 1u) << 1);
                 s32 answer = 0;
                 if (!callHook(pChain->hooks[i], pCall, LUMA_GUARD_WRAP, &answer) && (pCall->ran & 1u) == 0 &&
@@ -536,7 +536,7 @@ namespace luma {
                 s32 answer = 0;
                 callHook(pChain->hooks[i], &call, LUMA_GUARD_BEFORE, &answer);
                 skip = answer != 0;
-                // A fixed result is never left unbuilt: the function runs (loader contract 4).
+                // A fixed result is never left unbuilt: the function runs (docs/modding/language/compiled-form.md).
                 if (skip && resultKind(pFunction) == kFixed) {
                     if (gSkipRefused != nullptr) {
                         gSkipRefused(pFunction, pChain->hooks[i].owner);
@@ -552,9 +552,9 @@ namespace luma {
             proceed(&call);
         }
         // The function's own code did not run (a skip, or a wrap that did not proceed): a reference nothing wrote is
-        // filled by the function itself (LR-1). A plain result already holds its default.
+        // filled by the function itself. A plain result already holds its default.
         if ((call.ran & 1u) == 0 && resultKind(pFunction) == kReference && *static_cast<void**>(pResult) == nullptr) {
-            // The skipping before's mod, else the deepest wrap entered: every wrap outside it proceeded (D2-1).
+            // The skipping before's mod, else the deepest wrap entered: every wrap outside it proceeded.
             const void* pOwner = pSkipper;
             if (pOwner == nullptr && (call.ran >> 1) != 0) {
                 pOwner = pChain->hooks[(call.ran >> 1) - 1].owner;

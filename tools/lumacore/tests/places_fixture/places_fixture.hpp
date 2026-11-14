@@ -1,4 +1,4 @@
-// The placement facts' fixture (tools/lumacore/places_fixture_test.py, plan 1.8 places): reads into a field, a local
+// The placement facts' fixture (tools/lumacore/places_fixture_test.py): reads into a field, a local
 // and through this->, a base's reads inherited, a read through a free helper, a column read by its own name, and the
 // factory's three kinds of creator (NameObj/NameObjFactory.cpp).
 #pragma once

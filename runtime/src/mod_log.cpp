@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The mod log's host half (contract mod-log 1, 3, 9; runtime/include/galaxy/mod_log.h).
+// The mod log's host half (runtime/include/galaxy/mod_log.h).
 
 #include "galaxy/mod_log.h"
 
@@ -46,7 +46,7 @@ std::atomic<LumaModLogNext> g_next{nullptr};
 std::atomic<LumaModLogNextMod> g_next_mod{nullptr};
 std::atomic<LumaModLogWords> g_words{nullptr};
 std::atomic<LumaModLogRowWords> g_row_words{nullptr};
-// The world clock's page exports (services-time 11, native/include/luma_time.h), found with g_add; any thread.
+// The world clock's page exports (services/time.md 11, native/include/luma_time.h), found with g_add; any thread.
 using LumaTimeClockOf = std::int32_t (*)(const char* id, std::uint32_t* rate, std::int32_t* holds);
 using LumaTimeLetGo = std::int32_t (*)(const char* id);
 std::atomic<LumaTimeClockOf> g_clock_of{nullptr};
@@ -367,7 +367,7 @@ bool let_go(std::string_view mod) {
     if (ask == nullptr) return false;
     const std::string id(mod);
     if (ask(id.c_str()) != 1) return false;
-    // The player's act, not the mod's mistake: a Note worded by its row (mod-log 3.1, draft 7: the host's row keeps the
+    // The player's act, not the mod's mistake: a Note worded by its row (mod-log.md 3.1: the host's row keeps the
     // level), a service's code (121) so the page names it by the row, not as a validator's L-code.
     add_row(LUMA_MODLOG_CODE, LUMA_MODLOG_NOTE, id, 121u, "", "Time.LetGo", {});
     return true;
@@ -625,7 +625,7 @@ void set_check_store(const galaxy::assets::AssetStore* store) {
 }
 
 void check_packages(const std::vector<StartPackage>& packages, std::string_view program, std::string_view language) {
-    // luma-format's platform names carry the processor ("windows-x64"), as a package's code does.
+    // luma.md's platform names carry the processor ("windows-x64"), as a package's code does.
     const CheckGame side{std::string(galaxy::luma::plugin_target()), std::string(program),
                          language.empty() ? std::string("UsEnglish") : std::string(language),
                          g_check_store.load(std::memory_order_acquire)};

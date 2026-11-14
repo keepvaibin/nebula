@@ -24,11 +24,11 @@ public:
     void copyUserFile(UserFile* pDst, const UserFile* pSrc);
     bool isDone();
     SaveRequest::Result getLastResult() const;
-    // FORGET (services-save 5): `pId`'s values out of each game-data file in memory (written by the next save). True
+    // FORGET (services/save.md 5): `pId`'s values out of each game-data file in memory (written by the next save). True
     // when a file held some.
     bool forgetLumaMod(const char* pId);
 
-    // save.game's export (services-save 8): user file `user` (1 to 6) in the export form, cExportMagic, u16 version
+    // save.game's export (services/save.md 8): user file `user` (1 to 6) in the export form, cExportMagic, u16 version
     // 1, u16 parts 3, then Mario's game data, Luigi's and the config, each u32 length and its bytes; the frame's
     // numbers little-endian, each part as Nebula.sav holds it. The loaded file's game data for its character and its
     // config (pLoaded: the loaded user file, else null) as the game's next save would write them, every other part as
@@ -41,7 +41,7 @@ public:
     static const u32 cExportHead = 8;
     static const char cExportMagic[5];
     ExportResult makeExport(int user, const UserFile* pLoaded, u8** ppBytes, u32* pLength);
-    // save.game's offer (services-save 8): the export form's parts (Mario's game data, Luigi's, the config) in
+    // save.game's offer (services/save.md 8): the export form's parts (Mario's game data, Luigi's, the config) in
     // ppParts and pSizes, each pointing into pBytes (never null). False: not the form (the magic, version 1, 3 parts,
     // the lengths framing exactly `length` bytes).
     static bool splitExport(const u8* pBytes, u32 length, const u8* ppParts[], u32 pSizes[]);
@@ -62,7 +62,7 @@ private:
     // Null for a user past the last.
     File* findFile(SaveFileId) const;
     void setFile(SaveFileId, const u8*, u32);
-    // mMake made big enough for pUserFile's game data: the fixed part's room and its mods' values (services-save).
+    // mMake made big enough for pUserFile's game data: the fixed part's room and its mods' values (services/save.md).
     void fitMake(const UserFile* pUserFile);
     // A request still with the host finished first: mBuffer is the host's until then (a sequence that takes over from
     // the quiet save starts its own request at once).

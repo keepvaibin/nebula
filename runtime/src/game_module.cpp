@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The choice between the two game modules at start (plan 1.7, contract modules; game_module.h).
+// The choice between the two game modules at start (game_module.h).
 #include "galaxy/game_module.h"
 
 #include "galaxy/mods.h"

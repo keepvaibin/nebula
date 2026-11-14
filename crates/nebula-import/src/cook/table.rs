@@ -332,7 +332,7 @@ impl TableIr {
     }
 
     /// A cell of `column` holding a mod's value. A word may be `{ "bytes": "<hex>" }` for one that is not UTF-8
-    /// (contract table-keys 5).
+    /// (docs/modding/format/table-keys.md section 5).
     pub(crate) fn cell(column: &Column, key: &str, value: &Value) -> Result<Cell> {
         use super::refuse::refuse;
         let name = || [("name", key.to_string())];

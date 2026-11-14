@@ -34,7 +34,7 @@
 #include <nebula_module.h>
 #include <cstring>
 
-// The ui service (plan 2.4 layer 4 on 3.8 layer 1; contract ui). Game thread throughout: the service's calls, the frame,
+// The ui service (docs/modding/services/ui.md). Game thread throughout: the service's calls, the frame,
 // the provider; NebulaArena::destroy is the scene end's, on the game thread as well.
 //
 // A screen is the game's own LayoutActor: made in the scene's arena (so it goes with the scene), connected as the game
@@ -71,7 +71,7 @@ namespace luma {
                         MR::connectToSceneLayout(this);
                     }
                     // One animation layer on the root (ui.play). A mod's own layout keeps its text boxes as its cook made
-                    // them (contract layout: `text`, and `length` where set_text cuts); the game's are set up as the game
+                    // them (screens.md: `text`, and `length` where set_text cuts); the game's are set up as the game
                     // sets them (its code sets every box).
                     if (modLayout) {
                         initLayoutManagerKeepText(pLayout, 1);
@@ -638,8 +638,8 @@ namespace luma {
                     report(pMod, pWhere, 104u, text, nullptr);
                     return LUMA_E_LIMIT;
                 }
-                // The layout: the mod's cooked one or the game's, LayoutData/<layout>.arc in a store (references 4: a
-                // screen has no placeholder; nothing is drawn).
+                // The layout: the mod's cooked one or the game's, LayoutData/<layout>.arc in a store (references.md 4:
+                // a screen has no placeholder; nothing is drawn).
                 MR::FormattedName path;
                 if (!MR::makeLayoutArchiveFileNameFromPrefix(path, pLayout, false)) {
                     say(pMod, cMissingLayoutCode, "Ui.MissingLayout", MR::getHashCode(pLayout), "found", pLayout, nullptr, nullptr);
@@ -1230,7 +1230,7 @@ namespace luma {
                 svcPlayPane,
             };
 
-            // The service's rows (services-registry 11: ui's block, 570-619).
+            // The service's rows (services/registry.md 11: ui's block, 570-619).
             const LumaServiceRow cRows[] = {
                 {cNotTextCode, "Ui.NotText", {"where", "pane", nullptr, nullptr}},
                 {cNoSceneCode, "Ui.NoScene", {"where", nullptr, nullptr, nullptr}},
@@ -1293,7 +1293,7 @@ namespace luma {
                 return pTop == nullptr || NebulaSettingsMenu::isShown() ? nullptr : pTop;
             }
 
-            // The newest shown screen with a menu takes the player's controls this frame (F's rules, 2026-11-12): the
+            // The newest shown screen with a menu takes the player's controls this frame: the
             // game's own reading after the bindings (its pad's press edges, its pointer and touch). Nothing while a
             // host menu is open. A row taken stays menu_chosen's until the next reading: this runs after the mods'
             // frame handlers (GameSystem: services::frameStart, then ui::frame), so the next frame's handlers, the

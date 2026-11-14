@@ -1,7 +1,8 @@
 #pragma once
 
-// What a function does with a pointer parameter, for LumaCore's self-description (contracts/self-description.md,
-// revision C-6). Written before the parameter's type in a header's declaration: `void getPlayerFrontVec(LUMA_OUT Vec3f*);`.
+// What a function does with a pointer parameter, for LumaCore's self-description
+// (docs/modding/language/game-description.md). Written before the parameter's type in a header's declaration:
+// `void getPlayerFrontVec(LUMA_OUT Vec3f*);`.
 // Each mark expands to nothing for every compiler: the module's code is the same with or without them.
 // tools/lumacore/instrument.py reads them and gives each function row its "marks" (luma_functions.json); it stops the
 // build, naming the file and line, on a mark of the wrong form. A parameter is marked only from the function's body.

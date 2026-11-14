@@ -1,4 +1,4 @@
-// Mods' own classes (LumaClasses.hpp; contract classes, plan 1.4).
+// Mods' own classes (LumaClasses.hpp; docs/modding/language/classes.md).
 #include "Game/System/LumaClasses.hpp"
 
 #include "Game/Gravity/PlanetGravity.hpp"
@@ -82,7 +82,7 @@ namespace luma {
             u32 sRowCount = 0;
             u32 sLiveCount = 0;
 
-            // Aliases (contract classes, "alias"): a name the factory answers with a live class's maker, its placements'
+            // Aliases (classes.md, "alias"): a name the factory answers with a live class's maker, its placements'
             // arguments as the alias gives them. A dead alias's row is used again; rows are never freed (read under
             // sLock, written on the game thread only). A live alias's class is live: modGone ends both together.
             constexpr u32 kMaxAliases = 4096;
@@ -248,7 +248,7 @@ namespace luma {
                 sInstanceCount--;
             }
 
-            // The mod's `gone` for one object of row pRow's class, before the kernel frees its data (contract classes,
+            // The mod's `gone` for one object of row pRow's class, before the kernel frees its data (classes.md,
             // "gone"): once for every object the class kept, whose `made` ran just after. `pObject` is the object's
             // address while its NameObj part is still whole (its own parts' destructors have run); null when the scene's
             // memory went with it.
@@ -653,7 +653,7 @@ namespace luma {
             if (!onGameThread()) {
                 return -3;
             }
-            // A definition from before `gone` (contract classes, "gone") ends at override_count: taken, with no gone.
+            // A definition from before `gone` (classes.md, "gone") ends at override_count: taken, with no gone.
             constexpr u32 cBeforeGone = __builtin_offsetof(LumaClassDef, gone);
             if (pMod == nullptr || pDef == nullptr || pDef->size < cBeforeGone) {
                 say(pMod, "define_class: %s", pDef == nullptr ? "no definition" : "the definition is smaller than luma.h's LumaClassDef");

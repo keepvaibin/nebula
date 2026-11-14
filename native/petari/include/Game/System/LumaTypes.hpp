@@ -1,5 +1,5 @@
 #pragma once
-// The kernel's lookups over the type and global rows (luma_types.h; contract types, plan 1.2).
+// The kernel's lookups over the type and global rows (luma_types.h; docs/modding/language/types.md).
 #include "luma_types.h"
 #include <luma_hook.h>
 #include <nebula_game_api.h>
@@ -12,9 +12,9 @@ namespace luma {
 
     struct FieldBind {
         bool found;     // the type declares the field, or exactly one base subobject has it with no virtual base on the way
-        bool sameType;  // the mod's signature is the field's type text (Z-4)
+        bool sameType;  // the mod's signature is the field's type text
         s32 value;      // its offset in bytes from the type's start; a bit-field's position in bits
-        // TY2-1: why a name some base has is refused (left_out's reason): kNone when found or when no record has it.
+        // Why a name some base has is refused (left_out's reason): kNone when found or when no record has it.
         enum : u8 { kNone = 0, kAmbiguous = 1, kThroughVirtualBase = 2 } why;
         // kAmbiguous: "A::x, B::x" (at most 8, sorted); kThroughVirtualBase: "V". Cut to fit, always ends in a 0.
         char whyNames[256];
@@ -27,22 +27,22 @@ namespace luma {
     FieldBind findField(const char* pType, const char* pField, const char* pSignature);
     // A global by its qualified name (kind 7); null when the module defines none.
     const GlobalRow* findGlobal(const char* pName);
-    // Why the generator left out the name a kind 1, 2 or 7 import gives (contract types TY-7, as the validator answers):
+    // Why the generator left out the name a kind 1, 2 or 7 import gives (types.md, as the validator answers):
     // kind 1 a field of a record ("<row>.<field>") or the record's own reason, kind 2 the type's or its template's,
     // kind 7 the global's. Null: no reason (no such name).
     const LeftRow* leftOut(u32 kind, const char* pName);
     // The rows as JSON, with the kernel's answer for every name a record's bases give it (nebula_game_luma_describe).
     void describeTypes(NebulaDescribeWrite write, void* user);
 
-    // Contract objects (plan 1.3): an object's own class, read from its vtable's RTTI data. pObject is a game object of
-    // a polymorphic class or any polymorphic subobject of one.
+    // Objects (docs/modding/language/objects.md): an object's own class, read from its vtable's RTTI data. pObject is a
+    // game object of a polymorphic class or any polymorphic subobject of one.
     struct OwnClass {
         const TypeRow* type;   // the own class's row; null when it has none (`typeInfo` still says which class it is)
         const void* complete;  // the whole object: pObject less its subobject's offset
         const void* typeInfo;  // the own class's type_info (MSVC: its type descriptor)
     };
     OwnClass ownClass(const void* pObject);
-    // A class's number (contract objects 10, O-3): its record's index among the record rows sorted by name in byte
+    // A class's number (objects.md section 10): its record's index among the record rows sorted by name in byte
     // order, the order these lookups keep. -1 for null. LumaCore's class_of, own_class, as_class and kind 3 give it.
     s32 classNumber(const TypeRow* pType);
     // The record of a class number; null when there is none.
@@ -66,15 +66,15 @@ namespace luma {
     const Function* methodAt(u32 index);
     // The method row of the declaration the object's own class runs for that virtual ("FoA::fa", "s32()" on a FoD
     // gives FoC's fa): for the declaring class's subobject pObject points at, the most derived record on that
-    // subobject's path that declares one of that name and parameters (contract objects M-1: D : B1, B2 from A gives
+    // subobject's path that declares one of that name and parameters (objects.md: D : B1, B2 from A gives
     // B1's or B2's by the A pObject is). Null: no row for the virtual, the own class has none, or pObject is no
     // subobject of the declaring class and it has more than one, with *pAmbiguous set (as asClass).
     const MethodRow* overrider(const void* pObject, const char* pName, const char* pSignature, bool* pAmbiguous);
     // The same from an own class already read and the virtual's row (findMethodRow); null for a null row.
     const MethodRow* overrider(const OwnClass& rOwn, const void* pObject, const MethodRow* pTarget, bool* pAmbiguous);
 
-    // Contract classes (plan 1.4). The record rows' count: a game class's number is below it, a mod class's at or
-    // above it.
+    // Classes (docs/modding/language/classes.md). The record rows' count: a game class's number is below it, a mod
+    // class's at or above it.
     u32 classCount();
     // The type_info of the object's own class and the whole object, read from the vtable as ownClass reads them, with
     // no row looked up (a mod class's override asks on every call); null when the object cannot be read.

@@ -497,8 +497,9 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
     snapshot.shake = shake_pressed;
     snapshot.nunchuk_shake = held(GameInput::NunchukShake) || motion_shake_nunchuk;
 
-    // The mods' actions (services-input): their own bindings on the keyboard and the pads, else the game control each
-    // follows as the game gets it this sample (the player's bindings and the extensions' buttons). Nothing with none.
+    // The mods' actions (services/input.md): their own bindings on the keyboard and the pads, else the game control
+    // each follows as the game gets it this sample (the player's bindings and the extensions' buttons). Nothing with
+    // none.
     if (galaxy::input::mod_actions::any()) {
         std::uint32_t game_held = logic.pressed;
         const auto also = [&game_held](bool on, GameInput target) {

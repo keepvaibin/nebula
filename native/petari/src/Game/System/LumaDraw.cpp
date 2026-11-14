@@ -44,7 +44,7 @@
 #include <cstdlib>
 #include <cstring>
 
-// The draw service (plan 2.4 layers 1 and 2; contract draw). Game thread throughout: the calls, the points, the frame,
+// The draw service (docs/modding/services/draw.md). Game thread throughout: the calls, the points, the frame,
 // the provider.
 //
 // A point calls the functions mods set for it, the bottom of the Mods list first, each through the kernel's call (the
@@ -70,7 +70,7 @@ namespace luma {
             const u32 cNoGlyphCode = 472;
             const u32 cTextCutCode = 473;
             const u32 cNothingPushedCode = 474;
-            const u32 cMissingTextureCode = 622;  // content's block (references 6)
+            const u32 cMissingTextureCode = 622;  // content's block (references.md 6)
             const u32 cMissingFontCode = 672;
             const u32 cScreenSize = 48u;          // LumaDrawScreen in 1.0
 
@@ -1410,7 +1410,7 @@ namespace luma {
             const u32 kMeshesMost = 32;    // models made a scene, all mods together
             const u32 kMeshName = 248;
             const u32 kMeshColours = 8;    // a material's: material 0 1, ambient 0 1, constant 0 to 3
-            const u32 cMissingModelCode = 621;  // content's block (references 4)
+            const u32 cMissingModelCode = 621;  // content's block (references.md 4)
 
             struct MeshModel {
                 u32 hash;                  // the name's; 0: a free slot
@@ -1654,7 +1654,7 @@ namespace luma {
                 svcBillboard,
             };
 
-            // The service's rows (services-registry 11: draw's block, 470-569).
+            // The service's rows (services/registry.md 11: draw's block, 470-569).
             const LumaServiceRow cRows[] = {
                 {cOutsideCode, "Draw.Outside", {"where", nullptr, nullptr, nullptr}},
                 {cNotUtf8Code, "Draw.NotUtf8", {"where", nullptr, nullptr, nullptr}},

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The validator as the game calls it (validator 2): its C functions from the importer's library, one luma_validate
+// The validator as the game calls it (validator.md 2): its C functions from the importer's library, one luma_validate
 // call on a package, and the check at import against the packages placed. One copy for every caller: the start's
 // and the import's checks in the game (mod_log.cpp), the mods tool (host_main.cpp, through mod_log.cpp) and the
 // Android launcher's import (platform/sdl/mod_import_jni.cpp), so a mod is judged the same at every door.
@@ -36,7 +36,7 @@ struct Validator {
     // kept report counts as naming its id.
     LumaReport* (*read_kept)(const std::uint8_t*, std::uint64_t) = nullptr;
     const char* (*id)(const LumaReport*) = nullptr;
-    // A report's after-start rows (references 3). Optional: without it no placement is checked after the start.
+    // A report's after-start rows (references.md 3). Optional: without it no placement is checked after the start.
     std::uint32_t (*after_start)(const LumaReport*, std::uint32_t, const char**, const char**, std::uint32_t*) = nullptr;
 };
 
@@ -44,9 +44,9 @@ struct Validator {
 const Validator* validator();
 
 // What a check's findings and kept reports depend on beyond the package: the platform with its processor
-// ("windows-x64", luma-format 6), the disc ("RMGE01"; empty: none, and the rules on the game's files go unchecked),
-// the played language folder, and the game's own files (validator contract item 8: the rules on game paths, rows and
-// folders, L302 and L4xx, as LumaLink's --game checks them; null: those rules go unchecked). Each check reads the
+// ("windows-x64", luma.md 6), the disc ("RMGE01"; empty: none, and the rules on the game's files go unchecked),
+// the played language folder, and the game's own files (docs/modding/format/validator.md: the rules on game paths, rows
+// and folders, L302 and L4xx, as LumaLink's --game checks them; null: those rules go unchecked). Each check reads the
 // store through a view of its own (luma_game_store.h), so checks on two threads never share one.
 struct Game {
     std::string platform;
@@ -94,7 +94,7 @@ bool validate_package(const Validator* v, std::string_view id, const std::filesy
 // A file's bytes; empty when it cannot be read.
 std::string read_file(const std::filesystem::path& path);
 
-// The check at import (validator 2: every rule) of the package staged in `folder`, last in the list, against the
+// The check at import (validator.md 2: every rule) of the package staged in `folder`, last in the list, against the
 // packages placed now (`others`), each by its kept report in the mods folder's .cooked/validate (else one made now,
 // alone). A placed package counts as off when `refused_at_start(id)` (the last start refused it), when a report made
 // now has an error, or when its report names no id.

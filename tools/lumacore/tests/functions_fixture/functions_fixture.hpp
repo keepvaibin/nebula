@@ -1,6 +1,6 @@
 // The function facts' fixture (tools/lumacore/functions_fixture_test.py, the checker design's C-1): each kind of row,
 // virtual, pure and const, and overrides through one base, two bases, a destructor and a template's instance; and
-// C-6's parameter marks, one function per mark.
+// The parameter marks, one function per mark.
 #pragma once
 
 #include "Game/LumaMarks.hpp"
@@ -39,7 +39,7 @@ struct Inner {
 }  // namespace FnNs
 int fnFree(int);
 
-// C-6: the marks (Game/LumaMarks.hpp) on numbers, an enum and vectors (a plain one, a template's instance, one through a
+// The marks (Game/LumaMarks.hpp) on numbers, an enum and vectors (a plain one, a template's instance, one through a
 // base). The unit's definitions are unmarked, but fnDefined's, which only its definition marks.
 enum FnColor { FnRed, FnBlue };
 struct FnVec { float x, y, z; };

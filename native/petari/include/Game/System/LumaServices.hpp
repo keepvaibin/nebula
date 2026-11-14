@@ -1,6 +1,6 @@
 #pragma once
 
-// The service registry and the services' event queue (services-registry contract): the one place a mod's service
+// The service registry and the services' event queue (docs/modding/services/registry.md): the one place a mod's service
 // import and LumaCore.service are answered, and the frame's start point where answers from the outside world reach the
 // mods.
 
@@ -9,13 +9,13 @@
 
 namespace luma {
     namespace services {
-        // One row of the catalog: a service the game defines (services-registry 9). Null name: past the last.
+        // One row of the catalog: a service the game defines (services/registry.md 9). Null name: past the last.
         struct CatalogRow {
             const char* name;
             u16 major;
             u16 minor;
             const char* permission;  // null: none
-            const char* contract;    // the board contract that defines it
+            const char* contract;    // the page that defines it
         };
         // The catalog's row `index`, or null past the last (the self-description writes them in order).
         const CatalogRow* catalogAt(u32 index);
@@ -27,8 +27,9 @@ namespace luma {
         // null when the registry has none. Any thread.
         const void* find(const char* pName, u32 major, u32 minor, const char** ppPermission);
 
-        // A mod's life (services-registry 8), on the game thread, called by the loader: begin before the mod's begin and
-        // start; gone after its stop (or its refused start); end after its grace and finish, before its memory goes.
+        // A mod's life (services/registry.md 8), on the game thread, called by the loader: begin before the mod's begin
+        // and start; gone after its stop (or its refused start); end after its grace and finish, before its memory
+        // goes.
         void modBegin(const LumaMod* pMod, const char* pId, s32 order, const char* const* ppGranted, u32 grantedCount);
         void modGone(const LumaMod* pMod);
         void modEnd(const LumaMod* pMod);
@@ -41,11 +42,12 @@ namespace luma {
         // list order, then time's frame handlers. With nothing posted and no time hook, one atomic load and two plain.
         void frameStart();
 
-        // The time service's two passes (contract services-time 3): `post` before the events (due timers), `after` once
-        // they are given (frame handlers). Each null while no mod needs it, so a frame with no mod pays nothing for them.
+        // The time service's two passes (docs/modding/services/time.md): `post` before the events (due timers), `after`
+        // once they are given (frame handlers). Each null while no mod needs it, so a frame with no mod pays nothing
+        // for them.
         void setTimeHooks(void (*pPost)(), void (*pAfter)());
 
-        // The save's work at the frame's start, first (contract services-save 7: a change's write, a finished write
+        // The save's work at the frame's start, first (save.md: a change's write, a finished write
         // let go; 5: a FORGET's quiet save). Null while there is none.
         void setSaveHook(void (*pWork)());
         // Any thread: pWork becomes the save hook at the next frame's start (the host's FORGET, off the game thread).

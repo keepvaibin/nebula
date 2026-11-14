@@ -238,8 +238,8 @@ void NativeGameAudio::frame() {
     const std::size_t at = s.pending.size();
     s.pending.resize(at + frames * 2u);
     const std::span<float> out(s.pending.data() + at, frames * 2u);
-    // The mods' sound (LumaCore audio, services-audio) joins the game's front left and right before the master volume,
-    // each bus at the player's volume for it: effects and ui follow Sound effects.
+    // The mods' sound (LumaCore audio, services/audio.md) joins the game's front left and right before the master
+    // volume, each bus at the player's volume for it: effects and ui follow Sound effects.
     const float buses[4] = {audio.sfx, audio.sfx, audio.voice, audio.music};
     s.mods.assign(frames * 2u, 0.0f);
     const bool mods = galaxy::luma_audio::mix(s.mods.data(), frames, s.mixer->rate(), buses);

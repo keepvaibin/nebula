@@ -1,4 +1,4 @@
-// Objects a mod makes by name (LumaMake.hpp; contract classes "make", plan 1.3).
+// Objects a mod makes by name (LumaMake.hpp; docs/modding/language/classes.md "make").
 //
 // Made as PlacementInfoOrdered makes a placed object: the factory's creator for the name (a mod's class, a mod's object
 // and a mod's change of the placed name as for a placement), then its init with a placement row. The row is a table the
@@ -94,7 +94,7 @@ namespace luma {
             // The rows' table in the scene's memory: a TableData as the importer cooks one, then its Table. Null: none
             // left. Its result is written const void* (the game's ::Table): this function's hook row is generated
             // inside namespace luma, where the type text "const Table *" names luma::Table, and the row did not
-            // compile (the integration build, 11-12).
+            // compile.
             const void* writeTable(const char* pName, u32 count, const LumaMakePlace* pPlace) {
                 u32 nameBytes = 0;
                 while (pName[nameBytes] != 0) {

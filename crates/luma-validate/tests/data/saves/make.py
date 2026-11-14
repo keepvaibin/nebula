@@ -1,4 +1,4 @@
-"""The save corpus (validator contract revision 2, item 13): save files the game's import and the validator are both
+"""The save corpus (docs/modding/format/validator.md): save files the game's import and the validator are both
 run on, with the answer each must give in expected.txt (`<file> <answer>`, the answer one of the game's
 NebulaSaveFormat::Error names: None, Short, EncryptedExport, Version, Length, Table, Chunk, Checksum).
 

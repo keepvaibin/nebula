@@ -48,7 +48,8 @@ public:
     void bind(const ModelData* pModelData);
 
     // Joint clips. A joint past the clip's last has no tracks (an extra joint of a model that replaces a game model
-    // plays no game animation, models contract 4): false, and *pOut is left as it was (it then takes the joint's rest).
+    // plays no game animation, models.md section 4): false, and *pOut is left as it was (it then takes the joint's
+    // rest).
     bool getTransform(u32 joint, TransformInfo* pOut) const;
 
     // Texture matrix clips, entry by entry.

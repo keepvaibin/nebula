@@ -14,8 +14,8 @@
 
 using namespace NebulaUi;
 
-// Contract mod-log 4.1. The lines on screen are kept here (file scope), not in the scene's actor, so a scene change
-// does not lose one already taken from the log: the next scene's actor shows them on.
+// The mod log's notice on screen (galaxy/mod_log.h). The lines on screen are kept here (file scope), not in the scene's
+// actor, so a scene change does not lose one already taken from the log: the next scene's actor shows them on.
 
 namespace {
     // Screen units (NebulaUi::readScreen): the text's size, the window's padding around it, the space between lines,
@@ -33,7 +33,7 @@ namespace {
     const u32 cFill = 0x141A2CD8;
     const u32 cRing = 0xD9534FFF;
     const u32 cText = 0xFFFFFFFF;
-    // Frames at 60 a second: in, held (6 s, contract 4.1), out (0.3 s); and the share of the way a line moves to its
+    // Frames at 60 a second: in, held (6 s), out (0.3 s); and the share of the way a line moves to its
     // place each frame when the lines below it go.
     const s32 cInFrames = 8;
     const s32 cHoldFrames = 360;
@@ -91,7 +91,7 @@ namespace {
         rSlot.told = false;
     }
 
-    // What the log has for the notice, while a line is free (contract 4.1). Free lines show the oldest at once. Lines
+    // What the log has for the notice, while a line is free. Free lines show the oldest at once. Lines
     // that waited behind full ones: when more than three wait as a line frees, the oldest fold into one "{count} more"
     // line, so the newest two still show.
     void intake() {
@@ -185,7 +185,7 @@ namespace {
                 }
             }
             if (!begins) {
-                // A mod id is ASCII (luma-format); a file name standing in for one may not be: each byte as it is
+                // A mod id is ASCII (luma.md); a file name standing in for one may not be: each byte as it is
                 // would be wrong, so a non-ASCII byte shows as '?'.
                 for (; *pMod != 0 && at + 3 < room; pMod++) {
                     pDst[at++] = static_cast< unsigned char >(*pMod) < 0x80u ? static_cast< char16_t >(*pMod) : u'?';
@@ -211,7 +211,7 @@ namespace {
     char sFactText[6 * sizeof(sFactShown) + 3];
     char sFactJson[sizeof(sFactText) + 256 + 96];
 
-    // As the screen shows it: modlog.notice {"mod", "code", "text"} (contract 4.3), the text as cut.
+    // As the screen shows it: modlog.notice {"mod", "code", "text"}, the text as cut.
     void noticeFact(const Slot& rSlot, const char16_t* pShown) {
         if (!luma::modlog::facts()) {
             return;
@@ -268,11 +268,11 @@ public:
         if (!mBuilt) {
             return;
         }
-        // Nothing changed and nothing on screen: one read of the revision (contract 5).
+        // Nothing changed and nothing on screen: one read of the revision.
         const u32 revision = luma::modlog::revision();
         const bool any = activeCount() != 0;
         if (!sSummaryTaken) {
-            // The first notice of the session: what was said before it is one line (contract 4.1).
+            // The first notice of the session: what was said before it is one line.
             sSummaryTaken = true;
             const u32 summary = luma::modlog::takeSummary();
             if (summary != 0) {
@@ -448,9 +448,9 @@ namespace {
     // This scene's notice; null when the scene has none. Every game scene sets it (make), so it never names the last
     // scene's.
     NebulaModLogNoticeScreen* sScreen = nullptr;
-    // The frame the notice last stepped. Its lines count frames shown, not world steps (services-time 1, item 4: Nebula's
-    // own screens are never moved by the world clock): a frame of several steps steps it once, a held world (no scene
-    // update) steps it from the draw.
+    // The frame the notice last stepped. Its lines count frames shown, not world steps (services/time.md 1, item 4:
+    // Nebula's own screens are never moved by the world clock): a frame of several steps steps it once, a held world
+    // (no scene update) steps it from the draw.
     u32 sSteppedFrame = 0;
 
     void stepOncePerFrame() {
@@ -469,7 +469,7 @@ namespace NebulaModLogNotice {
             sScreen = new NebulaModLogNoticeScreen();
             sScreen->initWithoutIter();
         }
-        // No mod, nothing said: no actor (contract 5). A harness run reads which.
+        // No mod, nothing said: no actor. A harness run reads which.
         if (luma::modlog::facts()) {
             char json[64];
             nebula_snprintf(json, sizeof(json), "{\"allocated\":%s,\"notice\":%s}", luma::modlog::allocated() ? "true" : "false",

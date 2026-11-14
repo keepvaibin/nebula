@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* The validator of a .luma, as the game calls it (validator contract, section 3). One library with LumaLink's: the
-   same rules, the same findings, the same text in every language.
+/* The validator of a .luma, as the game calls it (docs/modding/format/validator.md section 3). One library with
+   LumaLink's: the same rules, the same findings, the same text in every language.
 
    At import: luma_validate with `kept` null runs every rule; keep luma_report_kept's bytes beside the mod.
    At each start, and each change of the mod list or options: luma_validate with the mod's kept bytes. When they are for
@@ -23,7 +23,7 @@ extern "C" {
    `is_folder` non-zero when it is a folder. The name is read only during the call. */
 typedef void (*LumaFolderSink)(void* sink_context, const char* name, uint32_t is_folder);
 
-/* The player's game files (validator contract, revision 3): all three functions are given (which files may be new is
+/* The player's game files (validator.md): all three functions are given (which files may be new is
    the library's own list, as LumaLink's; F INBOX-G 46). Rust reads each table from
    its cooked bytes, so the game's check and LumaLink's build one view with one code (table-keys 11). */
 typedef struct LumaGameStore {
@@ -78,7 +78,7 @@ typedef struct LumaValidateInput {
     uint32_t option_count;
     const uint8_t* kept;    /* this mod's kept report; null at import */
     uint64_t kept_size;
-    const char* types;      /* the game's luma_types.json (types contract); null: kinds 1, 2 and 7 are not checked */
+    const char* types;      /* the game's luma_types.json (types.md); null: kinds 1, 2 and 7 are not checked */
     uint64_t types_size;
     const char* renderer;   /* the renderer's feature names: JSON with the self-description's "renderer" key, as
                                luma_renderer.json (luma-format revision 4); null: L806 is not checked */
@@ -108,7 +108,7 @@ typedef struct LumaReport LumaReport;
 
 /* Never null; give it back to luma_report_free. */
 LumaReport* luma_validate(const LumaValidateInput* input);
-/* A mod's kept report read as it is, no rule run (start-check 1a, F-S2): luma_report_id, _version,
+/* A mod's kept report read as it is, no rule run (start-check.md 1a): luma_report_id, _version,
    _required_service and _after_start answer on it; count 0, kept null. State 2; -1 when the bytes do not read (another
    form, cut short, changed), luma_report_invalid saying why. Never null; give it back to luma_report_free. */
 LumaReport* luma_report_read_kept(const uint8_t* kept, uint64_t kept_size);
@@ -134,13 +134,13 @@ const char* luma_report_version(const LumaReport* report);
    import order, each once: its name; null past the last. The same after a start's check that took the kept report. A
    permissioned service's permission is its name (services-registry 9). */
 const char* luma_report_required_service(const LumaReport* report, const char* platform, uint32_t index);
-/* After-start row `index` (0 first; references 3): 1 with the class only code makes that a placement uses, its file
+/* After-start row `index` (0 first; references.md 3): 1 with the class only code makes that a placement uses, its file
    and its line; 0 past the last. Strings valid until luma_report_free. */
 uint32_t luma_report_after_start(const LumaReport* report, uint32_t index, const char** class_name, const char** file,
                                  uint32_t* line);
 void luma_report_free(LumaReport* report);
 
-/* A refusal said as the validator says its findings (loader contract 3; the cook's `failed` facts): rule `code`'s
+/* A refusal said as the validator says its findings (the cook's `failed` facts): rule `code`'s
    message with its parameters, names[i] = values[i]. A value "T:<text>" (or one with neither prefix) is a literal,
    "P:<phrase id>" a phrase, itself translated; the place goes in as "mod", "file", "line", "column". A parameter the
    text needs and the call lacks shows as {name}. `language` as luma_report_at. Never null; valid until the next

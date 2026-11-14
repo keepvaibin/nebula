@@ -10,10 +10,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Contract mod-log. The store is made by the first add (one compare-and-swap of sStore, section 2) and lives until the
-// module unloads. Entries and mods are lists that only grow: each is made whole outside the lock and published by one
-// release store of the list's last `next`, so the screen walks them with acquire loads and no lock. The lock is held
-// only to look up a key, count, and link (no allocation under it).
+// The mod log (galaxy/mod_log.h). The store is made by the first add (one compare-and-swap of sStore, section 2) and
+// lives until the module unloads. Entries and mods are lists that only grow: each is made whole outside the lock and
+// published by one release store of the list's last `next`, so the screen walks them with acquire loads and no lock.
+// The lock is held only to look up a key, count, and link (no allocation under it).
 
 namespace luma {
     namespace modlog {
@@ -205,7 +205,7 @@ namespace luma {
             }
 
             // The row's words with {mod} and the entry's {names} filled; a {name} the entry does not give stays as it is
-            // (loader D3-1: visible, never blank). `english`: the row is the English one (a value "R:<row>" follows it).
+            // (visible, never blank). `english`: the row is the English one (a value "R:<row>" follows it).
             // Into pDst when it is not null; the units, without a terminator.
             u32 fill(char16_t* pDst, const char16_t* pTemplate, const LumaModLogEntry& rEntry, bool english, u32 depth) {
                 u32 at = 0;
@@ -418,7 +418,7 @@ namespace luma {
                     ::free(pTemplate);
                     return;
                 }
-                // No words: the code and every value, the same in both (contract 3).
+                // No words: the code and every value, the same in both.
                 pWords->bare = true;
                 pWords->englishBytes = bare(nullptr, rEntry, pRowId);
                 pWords->english = static_cast< char* >(::malloc(pWords->englishBytes + 1));
@@ -436,7 +436,7 @@ namespace luma {
                 pWords->played[pWords->playedUnits] = 0;
             }
 
-            // The code as the page names it (contract 4.2): the host's sources "L<code>"; the module's their row id
+            // The code as the page names it: the host's sources "L<code>"; the module's their row id
             // ("Hook.NoResult"; a script's "S0901" without "Script."), or the number when there is no row; "" for code 0
             // (the log's own lines, a host sentence).
             void codeNameOf(const LumaModLogEntry& rEntry, const char* pRowId, char* pDst, u32 size) {
@@ -462,8 +462,8 @@ namespace luma {
 
             // One block: the entry, its played text (UTF-16), then its mod, file, played text (UTF-8), English and code
             // name.
-            // The Notes shown as a notice as an Error is (mod-log 4.1, draft 7): a page a mod opened outside the game
-            // (services-system J-SS5), so the player coming back sees which mod it was.
+            // The Notes shown as a notice as an Error is (mod-log.md 4.1): a page a mod opened outside the game
+            // (services/system.md J-SS5), so the player coming back sees which mod it was.
             const char* const cShownNotes[] = {"System.LinkOpened"};
 
             bool shownNote(const char* pRowId) {
@@ -619,7 +619,7 @@ namespace luma {
                 return false;
             }
 
-            // The JSON of a kept entry for the harness (contract 4.3), at its count.
+            // The JSON of a kept entry for the harness, at its count.
             void entryFact(const Entry* pEntry, u32 count) {
                 if (!facts() || !claimFact(&const_cast< Entry* >(pEntry)->factCount, count)) {
                     return;
@@ -655,7 +655,8 @@ namespace luma {
                 jsonString(pPart, room, pEntry->english);
                 put(pPart);
                 if (pEntry->row[0] != 0) {
-                    // The row its words came from, so a test names the line it means whatever the language (mod-log 4.3).
+                    // The row its words came from, so a test names the line it means whatever the language (mod-log.md
+                    // 4.3).
                     put(",\"row\":");
                     jsonString(pPart, room, pEntry->row);
                     put(pPart);
@@ -735,7 +736,7 @@ namespace luma {
                 return nullptr;
             }
             // Section 3.1: the module's own sources are Errors (the log's own lines are as they say, and so are the host's
-            // entries that give their row: luma_modlog.h `row`, e.g. services-system's System.LinkOpened Note).
+            // entries that give their row: luma_modlog.h `row`, e.g. services/system.md's System.LinkOpened Note).
             if (rEntry.source >= LUMA_MODLOG_CODE && !own && rowOf(rEntry) == nullptr && rEntry.level != LUMA_MODLOG_ERROR) {
                 nebula_log("LumaCore: mod-log entry %s %s %u given as a Note; kept as an Error (a bug in its caller)\n", rEntry.mod,
                            sourceName(rEntry.source), rEntry.code);

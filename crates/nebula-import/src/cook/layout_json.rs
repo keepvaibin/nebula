@@ -1,4 +1,4 @@
-//! A mod's screen layout, `<Name>.layout.json` in an archive (plan 3.8, contract board/contracts/layout.md), as the
+//! A mod's screen layout, `<Name>.layout.json` in an archive (docs/modding/content/screens.md), as the
 //! game's own layout file beside it: `<archive>/blyt/<Name>.brlyt`, which the store then cooks as it cooks the game's
 //! layouts (ui_layout) and the game's layout loader reads (LayoutManager::initArc). Panes, pictures, text and
 //! bounding panes, their tree, materials, fonts and groups are written as the game's layout tool wrote them (the
@@ -93,7 +93,7 @@ struct Reader<'a> {
 
 /// A text's font as the layout file names it: one of the game's (`FONTS`), or a mod's own, `Luma/<id>/<path>` (its
 /// `assets/<path>.font.json`; a `.font.json` or `.brfnt` ending may be written), whose cooked font the game finds in
-/// the store by that name (layout contract 2a).
+/// the store by that name (screens.md section 2a).
 fn font_name(v: &Value, at: &str) -> Result<String> {
     if let Some(text) = v.as_str().filter(|t| t.len() > 5 && t[..5].eq_ignore_ascii_case("luma/")) {
         let lower = text.to_ascii_lowercase();

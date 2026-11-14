@@ -21,13 +21,13 @@
 #include <cmath>
 #include <cstring>
 
-// The anim service (plan 3.6 run time; contract animation 7). Game thread throughout: the service's calls, the frame,
-// the provider; NebulaArena::destroy is the scene end's, on the game thread as well.
+// The anim service (docs/modding/content/animation.md section 7). Game thread throughout: the service's calls, the
+// frame, the provider; NebulaArena::destroy is the scene end's, on the game thread as well.
 //
-// A clip's own events (1.1, animation 7.3): G's cook puts the rows of <clip>.anim.json beside the clip as <clip>.events,
-// a table (frame int, event text) in the model's archive. A play keeps the table's place in the archive (the actor's
-// resources outlive the play: the play ends with the actor or its scene) and gives a row as the mark mark_count + row,
-// its name copied into the event.
+// A clip's own events (1.1, animation.md 7.3): the cook puts the rows of <clip>.anim.json beside the clip as
+// <clip>.events, a table (frame int, event text) in the model's archive. A play keeps the table's place in the archive
+// (the actor's resources outlive the play: the play ends with the actor or its scene) and gives a row as the mark
+// mark_count + row, its name copied into the event.
 //
 // A play starts the clip as the game's own code does (MR::startBck and the material starts): the actor's ModelManager
 // runs it in the actor's movement, its effect and sound keepers follow the joint clip as for the game's clips. The
@@ -42,7 +42,7 @@ namespace luma {
         namespace {
             const u32 kMostOpen = LUMA_ANIM_MOST_PLAYS * 8u;  // across mods
             const u32 kMostEvents = kMostOpen * 4u;          // marks and ends waiting or being given, across mods
-            const u32 cMissingAnimationCode = 627;            // content's block (references 6)
+            const u32 cMissingAnimationCode = 627;            // content's block (references.md 6)
             const u32 cEventPastEndCode = 670;
             const u32 kClipMost = 128;                        // a clip name's bytes with its 0
 
@@ -104,7 +104,7 @@ namespace luma {
                 sKernel->report(pMod, pWhere, code, args, count);
             }
 
-            // A CONTENT entry of the mod (references 6).
+            // A CONTENT entry of the mod (references.md 6).
             void sayContent(const LumaMod* pMod, u32 code, const char* pRow, u32 column, const char* pName0,
                             const char* pValue0, const char* pName1, const char* pValue1) {
                 LumaModLogEntry entry = {};
@@ -495,7 +495,7 @@ namespace luma {
                     report(pMod, pWhere, 101u, pWrong, nullptr, nullptr);
                     return LUMA_E_ARGUMENT;
                 }
-                // The kinds of the clip the model has (references 6: none, Content.MissingAnimation).
+                // The kinds of the clip the model has (references.md 6: none, Content.MissingAnimation).
                 u8 kinds = 0;
                 u32 lead = kKinds;
                 for (u32 kind = 0; kind < kKinds; kind++) {
@@ -587,7 +587,7 @@ namespace luma {
                     rPlay.eventRows = 0;
                 } else {
                     // A row past the lead's last frame never comes (the cook checks a game clip's, not a mod's own:
-                    // animation 2a): Content.EventPastEnd, each start of such a play.
+                    // animation.md 2a): Content.EventPastEnd, each start of such a play.
                     ::Table table;
                     table.attach(rPlay.events);
                     const s32 last = static_cast< s32 >(ctrlOf(pActor, lead)->getEnd());

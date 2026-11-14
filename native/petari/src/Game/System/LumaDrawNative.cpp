@@ -9,7 +9,7 @@
 #include <nebula_format.h>
 #include <nebula_frame_list.h>
 
-// The draw.native service (plan 2.4 layer 9; contract draw 16). The calls, the provider and point() run on the game
+// The draw.native service (docs/modding/services/draw.md). The calls, the provider and point() run on the game
 // thread; trampoline() runs on the host's render thread.
 //
 // A function is a slot of one table across mods, never moved, so a pass names it by its slot and the slot's generation

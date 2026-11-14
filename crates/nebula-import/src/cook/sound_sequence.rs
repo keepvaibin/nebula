@@ -1,4 +1,4 @@
-//! A mod's sequence (plan 3.7 layer 5, contract board/contracts/sound.md section 10): `<name>.sound.json` of kind
+//! A mod's sequence (docs/modding/content/sound.md section 10): `<name>.sound.json` of kind
 //! `sequence` names a Standard MIDI file beside it and maps its programs to the game's instruments. The cook writes the
 //! song as a program of the game's sequence operations (the BMS operations sound.rs reads), then cooks that as the
 //! game's own sequences are cooked: `Luma/<id>/<name>.nseq`, and with `replace` the same in place of a game sequence.

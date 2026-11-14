@@ -62,11 +62,12 @@ namespace luma {
     const void* replacedBy(const Function* pFunction);
     // A function's result kind (luma_hook.h kPlain, kReference, kFixed; a constructor or destructor: kPlain). On a
     // fixed result a before's skip is not taken (the function runs; reported) and no wrap or replace binds; a
-    // reference no hook wrote is filled by the function itself (reported) (loader contract 4, LR-1).
+    // reference no hook wrote is filled by the function itself (reported) (docs/modding/language/compiled-form.md).
     unsigned resultKind(const Function* pFunction);
     // A constructor or destructor: its hooks are told (before and after only).
     inline bool isTell(const Function* pFunction) { return pFunction->invoke == nullptr; }
-    // A function with `...` (contract varargs 3): a tell whose signature ends in "...)" (" const" after it for a method).
+    // A function with `...` (docs/modding/language/varargs.md section 3): a tell whose signature ends in "...)" ("
+    // const" after it for a method).
     inline bool isVariadic(const Function* pFunction) {
         const char* const pSignature = pFunction->signature;
         const char* pEnd = pSignature;
@@ -78,18 +79,19 @@ namespace luma {
         }
         return isTell(pFunction) && pEnd - pSignature >= 4 && __builtin_memcmp(pEnd - 4, "...)", 4) == 0;
     }
-    // A function with no flag (contract varargs 4: constexpr): called by name, never hooked.
+    // A function with no flag (varargs.md section 4: constexpr): called by name, never hooked.
     inline bool isUnhookable(const Function* pFunction) { return pFunction->hooked == nullptr; }
     // The hook lists replaced so far that no call can be inside any more, freed; the rest wait for a later call. On the
     // game thread, once a frame (GameSystem::update) and when a mod is taken out. A list is freed when the game
     // thread has no call in it and two flips of the other threads' counters (SRCU), each made once the calls counted
-    // on the side it leaves have ended, came after it was replaced (loader contract 4, INBOX-F 37).
+    // on the side it leaves have ended, came after it was replaced (docs/modding/language/compiled-form.md).
     // `waiting`: something else waits on the grace (a mod taken out), so the counters flip even with no list retired.
     void reclaim(bool waiting = false);
     // The lists replaced and not yet freed (a fact for 1.1's tests: bounded, 0 once no call holds one).
     u32 retiredCount();
     // A grace: marked after the hooks are taken out; over when no call on any thread can still be in a list replaced
-    // before the mark (two flips since, and no such list still held by the game thread) (loader contract LR-5).
+    // before the mark (two flips since, and no such list still held by the game thread)
+    // (docs/modding/language/compiled-form.md).
     u32 graceMark();
     bool graceOver(u32 mark);
     // From a wrap: runs the wraps after it and then the function.

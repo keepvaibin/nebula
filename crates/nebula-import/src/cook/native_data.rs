@@ -1,4 +1,4 @@
-//! The disc's data files in the host's byte order (requirement B-02: the game reads its data natively, with no swap at
+//! The disc's data files in the host's byte order (the game reads its data natively, with no swap at
 //! access). Each converter turns every field the game reads into little-endian and marks the file, so the game can
 //! refuse a file that was not cooked.
 //!

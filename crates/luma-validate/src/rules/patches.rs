@@ -1,4 +1,4 @@
-//! L400-L407: patches by key and by selector (luma-format 5.1).
+//! L400-L407: patches by key and by selector (luma.md 5.1).
 
 use super::{p, seg, t, Ctx};
 use crate::json::{self, Kind, Value};
@@ -6,7 +6,7 @@ use crate::{same_column, Arg, ColumnType, Table};
 
 pub const MAX_PATCH: u64 = 64 << 20;
 const KEYS: [&str; 7] = ["patch", "key", "set", "add", "remove", "select", "rows"];
-/// The key of a table whose rows are named by place (contract table-keys 3).
+/// The key of a table whose rows are named by place (docs/modding/format/table-keys.md section 3).
 const PLACE: &str = "#";
 const MATCH_KINDS: [&str; 3] = ["equals", "prefix", "glob"];
 /// The separator of key values in a row id (`Table::rows`, `Touches`).
@@ -28,7 +28,7 @@ impl P<'_, '_, '_> {
 }
 
 /// A cell's value as text for row ids: strings as they are, numbers as written, a word given as
-/// `{ "bytes": "<hex>" }` as its text when that is UTF-8 and `{bytes:<hex>}` when not (table-keys 5).
+/// `{ "bytes": "<hex>" }` as its text when that is UTF-8 and `{bytes:<hex>}` when not (table-keys.md 5).
 fn cell_text(v: &Value) -> Option<String> {
     match &v.kind {
         Kind::String(s) => Some(s.clone()),
@@ -125,8 +125,8 @@ pub(crate) fn check(ctx: &mut Ctx) {
     if let Some(store) = ctx.game().and_then(|g| g.store) {
         own = new_scenario_tables(ctx, store);
         for (_, target, root) in &parsed {
-            // A game galaxy's table, or another mod's new galaxy's (F-3: `@<id>/StageData/<g>Scenario/ScenarioData.bcsv`,
-            // its source form too), which V4-1 lets any mod patch from anywhere in the list.
+            // A game galaxy's table, or another mod's new galaxy's (`@<id>/StageData/<g>Scenario/ScenarioData.bcsv`,
+            // its source form too), which the cook's rule lets any mod patch from anywhere in the list.
             let galaxy = match target.strip_prefix('@') {
                 Some(rest) => rest.split_once('/').and_then(|(_, path)| {
                     let lower = path.to_lowercase();
@@ -140,7 +140,7 @@ pub(crate) fn check(ctx: &mut Ctx) {
     }
     ctx.facts.touches.scenarios = own.iter().map(crate::ScenarioCell::kept).collect();
     // With the installed mods' that are on, lowest first: those below it, then this one, then those above it.
-    // `position` says how many are above. The cook's rule orders them (V4-1).
+    // `position` says how many are above. The cook's rule orders them.
     let mod_id = ctx.mod_id.clone().unwrap_or_default();
     let installed: Vec<&crate::Installed> = ctx.input.installed.iter().filter(|m| m.on && m.id != mod_id).collect();
     let position = ctx.input.position.unwrap_or(installed.len()).min(installed.len());
@@ -149,7 +149,7 @@ pub(crate) fn check(ctx: &mut Ctx) {
     lists.push(own);
     lists.extend(installed[..position].iter().rev().map(theirs));
     ctx.facts.scenario_cells = crate::scenario_order(lists);
-    // The placements of classes only code can make, from whole tables and from patches (references 3), with the
+    // The placements of classes only code can make, from whole tables and from patches (references.md 3), with the
     // planets as this mod's files and patches leave the planet table.
     let planets = super::after_start::mod_planets(ctx, &parsed);
     super::after_start::whole_tables(ctx, &planets);
@@ -161,7 +161,7 @@ pub(crate) fn check(ctx: &mut Ctx) {
 }
 
 /// A new galaxy's own scenario table, brought whole (`files/StageData/<galaxy>Scenario/ScenarioData.bcsv`, or its source
-/// form with `.json`; luma-format 5, `stagedata/**` may be new): every row's whole-number cells. A table at a path the
+/// form with `.json`; luma.md 5, `stagedata/**` may be new): every row's whole-number cells. A table at a path the
 /// game has is L303's, not read here.
 fn new_scenario_tables(ctx: &mut Ctx, store: &dyn crate::Store) -> Vec<crate::ScenarioCell> {
     let mut out = Vec::new();
@@ -245,8 +245,8 @@ fn layer_sets(pc: &mut P, own: &str) -> Option<Vec<crate::LayerSet>> {
     sets
 }
 
-/// A key added to a table of a link group (table-keys 13) must be new to the tables the game finds it among: for
-/// `l_id` (placement, mapparts, childobj) every layer of the zone; for start and generalpos (T-4) common and the layers
+/// A key added to a table of a link group (table-keys.md 13) must be new to the tables the game finds it among: for
+/// `l_id` (placement, mapparts, childobj) every layer of the zone; for start and generalpos common and the layers
 /// some scenario turns on together with this one. Both in the game and in this mod's own files. Recorded as touches,
 /// for two mods adding one key (L404): the group with `*` for `l_id`; for start and generalpos the table's layer (all
 /// 17 for common) and each scenario that turns it on (`@<galaxy>#<ScenarioNo>`), so two adds overlap exactly when
@@ -306,9 +306,10 @@ fn link_add(pc: &mut P, row: &Value, rp: &str, target: &str, id: &str) {
     }
 }
 
-/// A patch of a game layout by pane name (layout contract 5): `{"patch": 1, "panes": {"<pane>": {...}}}`. Its panes
-/// and their fields are checked by the cook against the layout the game start patches (overlay_patches), which names
-/// a patch that cannot apply in the store's left-out file; here the file's form and that the game has the layout.
+/// A patch of a game layout by pane name (docs/modding/content/screens.md section 5): `{"patch": 1, "panes": {"<pane>":
+/// {...}}}`. Its panes and their fields are checked by the cook against the layout the game start patches
+/// (overlay_patches), which names a patch that cannot apply in the store's left-out file; here the file's form and that
+/// the game has the layout.
 fn layout(pc: &mut P, root: &Value, target: &str) {
     for m in root.members() {
         if m.key != "patch" && m.key != "panes" {
@@ -367,7 +368,7 @@ fn one(pc: &mut P, root: &Value, target: &str) {
         }
     }
 
-    // Another mod's file (F-3): `patches/@<id>/<mod path>.json`; the mod must be a need.
+    // Another mod's file: `patches/@<id>/<mod path>.json`; the mod must be a need.
     if let Some(rest) = target.strip_prefix('@') {
         let other = rest.split('/').next().unwrap_or("");
         if !pc.ctx.facts.needs.iter().any(|(id, _)| id == other) {
@@ -437,8 +438,9 @@ fn one(pc: &mut P, root: &Value, target: &str) {
     // Touches compare paths in lower case; messages show the path as the mod writes it.
     let target_shown = target.to_lowercase();
     // Values against the column types (L403), every column named existing.
-    // A stage's placement row may give its object's arguments by name, an object (stages contract 1): the cook turns
-    // them into Obj_arg0-7 from the game's placement facts and refuses a name the object lacks (L804).
+    // A stage's placement row may give its object's arguments by name, an object (docs/modding/content/stages.md
+    // section 1): the cook turns them into Obj_arg0-7 from the game's placement facts and refuses a name the object
+    // lacks (L804).
     let placement = target.to_ascii_lowercase().contains("/jmp/");
     let check_value = |pc: &mut P, m: &json::Member, vp: &str| {
         if table.is_none() {
@@ -559,7 +561,7 @@ fn one(pc: &mut P, root: &Value, target: &str) {
                 continue;
             }
             if by_place {
-                // A row added to a table named by place goes at the end (table-keys 3): it has no key to give.
+                // A row added to a table named by place goes at the end (table-keys.md 3): it has no key to give.
                 check_values(pc, row, &rp);
                 pc.ctx.facts.touches.adds.push(format!("{target_shown}{SEP}+{i}"));
                 continue;

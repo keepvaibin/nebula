@@ -1,7 +1,7 @@
 //! The validator's view of an imported game: `luma_validate::Store` over a game.pak (cook::store's format), so LumaLink
 //! checks a mod's layer files and patches against the player's own game (L302, L303, L401-L407). Tables are the store's
-//! cooked tables (NTBL); each is keyed as contract table-keys says (cook::table_keys), its columns known by hash, its
-//! rows and values given as the patch rules and the applier (cook::patch) both write them.
+//! cooked tables (NTBL); each is keyed as docs/modding/format/table-keys.md says (cook::table_keys), its columns known
+//! by hash, its rows and values given as the patch rules and the applier (cook::patch) both write them.
 
 use crate::cook::patch::cell_text;
 use crate::cook::store::{read_header, store_path};
@@ -17,8 +17,8 @@ use std::path::{Path, PathBuf};
 
 const NODE: usize = 40;
 
-/// Disc paths (lower case) that may be new, the kinds the game finds by name (luma-format 5): each with why. A kind's
-/// contract adds its own here. The game's check reads the same list (`may_be_new`, through the C validator), so the
+/// Disc paths (lower case) that may be new, the kinds the game finds by name (luma.md 5): each with why. A kind's
+/// rules add their own here. The game's check reads the same list (`may_be_new`, through the C validator), so the
 /// game and LumaLink cannot differ on it.
 const NEW: [(&str, &str); 4] = [
     ("objectdata/*.arc", "an object's archive: the game loads ObjectData/<name>.arc by the object's name"),
@@ -164,7 +164,7 @@ pub(crate) fn column_type(c: &Column) -> ColumnType {
 }
 
 /// A table as the validator knows it: keyed by its rule, every value as text; an empty one with its kind's columns,
-/// as the applier patches it (table-keys 10).
+/// as the applier patches it (table-keys.md 10).
 pub fn table_view(path: &str, ir: &TableIr) -> Table {
     let mut wide;
     let ir = if ir.rows.is_empty() {

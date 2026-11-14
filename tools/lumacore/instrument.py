@@ -17,7 +17,7 @@ OUTPUT.functions (each row's facts, in the rows' order: gen_types.py merges them
   "virtual", "pure", "const"
   "overrides"            for a virtual, each function it overrides directly (clang_getOverriddenCursors), by the
                          name and signature its own row has or would have
-  "marks"                C-6: one entry per declared parameter (a method's `this` not counted): null, or
+  "marks"                one entry per declared parameter (a method's `this` not counted): null, or
                          {"way": "in"|"out"|"inout"|"kept", "count": index|null, "fixed": n|null, "nullable": bool},
                          from the LUMA_ marks (native/petari/include/Game/LumaMarks.hpp) any declaration of it carries
 
@@ -79,16 +79,16 @@ T_UNEXPOSED, T_POINTER, T_BLOCK_POINTER, T_RECORD, T_ENUM, T_TYPEDEF = 1, 101, 1
 T_FUNCTION_NO_PROTO, T_FUNCTION_PROTO, T_CONSTANT_ARRAY, T_INCOMPLETE_ARRAY, T_VARIABLE_ARRAY = 110, 111, 112, 114, 115
 T_DEPENDENT_ARRAY, T_MEMBER_POINTER, T_ELABORATED, T_ATTRIBUTED = 116, 117, 119, 163
 T_FLOAT = 21
-# C-6 (audit A18M-1): the numbers LumaScript crosses with one width on every system. A count: UChar, Char16, Char32,
+# The numbers LumaScript crosses with one width on every system. A count: UChar, Char16, Char32,
 # UShort, UInt, ULongLong, SChar, Short, Int, LongLong. A pointee: those, Bool, Float and Double. Never plain char (a
 # buffer, or text when const), long, unsigned long, wchar_t (4 bytes on Windows, 8 or 4 elsewhere), long double,
 # __int128 or a half.
 T_INTEGERS = (5, 6, 7, 8, 9, 11, 14, 16, 17, 19)
 T_NUMBERS = T_INTEGERS + (3, 21, 22)
-# C-6's marks (Game/LumaMarks.hpp); a way is one of the first four
+# The parameter marks (Game/LumaMarks.hpp); a way is one of the first four
 WAYS = ('LUMA_IN', 'LUMA_OUT', 'LUMA_INOUT', 'LUMA_KEPT')
 MARKS = WAYS + ('LUMA_COUNT', 'LUMA_COUNT_FIXED', 'LUMA_NULLABLE')
-# CXTranslationUnit_DetailedPreprocessingRecord: the macro expansions, where C-6's marks are
+# CXTranslationUnit_DetailedPreprocessingRecord: the macro expansions, where the parameter marks are
 PARSE_OPTIONS = 0x01
 # A #define whose own text names a mark (A18M-4): the record keeps only the outermost expansion, so such a mark would
 # mark nothing.
@@ -110,7 +110,7 @@ K_CALL = 103  # CXCursor_CallExpr
 # 1.5's tables: the canonical types of an array with a size and of a record
 T_CONSTANT_ARRAY, T_RECORD = 112, 105
 K_MEMBER_REF_EXPR = 102
-# The self-description's table keys (plan 1.8): a row that begins with a string literal
+# The self-description's table keys: a row that begins with a string literal
 K_STRING_LITERAL, K_INIT_LIST = 109, 119
 # 1.9's variadic check: a call
 K_CALL_EXPR = 103
@@ -202,7 +202,7 @@ def load(path):
     api.definition = fn('clang_getCursorDefinition', CXCursor, CXCursor)
     api.inclusions = fn('clang_getInclusions', None, c_void_p, INCLUSION, c_void_p)
     api.fileName = fn('clang_getFileName', CXString, c_void_p)
-    # A type's text with every name qualified (TY-9): LLVM 21 and later (too_old).
+    # A type's text with every name qualified: LLVM 21 and later (too_old).
     api.fullyQualified = fn('clang_getFullyQualifiedName', CXString, CXType, c_void_p, c_uint)
     api.printingPolicy = fn('clang_getCursorPrintingPolicy', c_void_p, CXCursor)
     api.pointeeType = fn('clang_getPointeeType', CXType, CXType)
@@ -305,13 +305,13 @@ class Unit:
         # 1.5's tables: the candidates (table_candidate), the variables a file-scope initializer reads (a table read
         # there stays as it is: made writable, its reader would be initialized at run time), the rows, the reasons
         self.table_candidates = []
-        # 1.8 places (G's 3.9): the placement argument reads and helper calls of each function with a row, and the
-        # object factory's rows when this unit is NameObjFactory.cpp (OUTPUT.places)
+        # Places (the cook reads them): the placement argument reads and helper calls of each function with a row, and
+        # the object factory's rows when this unit is NameObjFactory.cpp (OUTPUT.places)
         self.places_part = {'functions': [], 'factory': None}
         self.init_reads = set()
         self.tables = []
         self.table_skips = {}
-        self.constexpr_rows = 0  # contract varargs 4: luma_cx_<n>, one per constexpr function's call row
+        self.constexpr_rows = 0  # varargs.md section 4: luma_cx_<n>, one per constexpr function's call row
 
     def string(self, cx):
         raw = self.api.cstring(cx)
@@ -413,17 +413,17 @@ class Unit:
                 # A scope a macro opens in this file (`extern "C"` in one) holds this file's functions too.
                 self.walk(child)
 
-    # Contract varargs 1: what may have no row. Any other reason stops the build, naming the function.
+    # varargs.md section 1: what may have no row. Any other reason stops the build, naming the function.
     LEFT_OUT_REASONS = ('in a template or an unnamed class', 'a template specialization', 'an allocation function')
 
     def leave(self, name, line, why):
         if why not in self.LEFT_OUT_REASONS:
             sys.exit(f'instrument.py: {self.label}:{line}: {name} would have no row ({why}); every function but a '
-                     "template's and an allocation function has one (contract varargs 1)")
+                     "template's and an allocation function has one (docs/modding/language/varargs.md section 1)")
         self.left.append(f'{name}\t{line}\t{why}')
 
     def type_text(self, cxtype):
-        """A type as the rows write it (contract types TY-3, TY-9): every record, enum and alias by its qualified name,
+        """A type as the rows write it (language/types.md): every record, enum and alias by its qualified name,
         the one its own row has (`Mario::MovementStates &`, not `MovementStates &`), so no reader repeats C++'s lookup;
         an alias stays an alias (`u32`, `uint32_t`). None for a type no mod can write."""
         policy = self.__dict__.get('policy')
@@ -440,7 +440,7 @@ class Unit:
                 qualified = named[written]
                 text = re.sub(r'(?<![\w:])' + re.escape(written) + r'(?![\w])', lambda _: qualified, text)
         text = text.replace('(anonymous namespace)::', '')
-        # 1.9 (contract varargs 2): a va_list, whole, is `va_list` on every platform, whatever the compiler's type is (a
+        # varargs.md section 2: a va_list, whole, is `va_list` on every platform, whatever the compiler's type is (a
         # char*, a one-element array that a parameter decays to a pointer to, a struct); any other use of it is not
         # a type a mod writes.
         if re.fullmatch(r'(std::)?va_list|__builtin_va_list|(struct )?__va_list_tag \*|std::__va_list', text):
@@ -487,24 +487,24 @@ class Unit:
         if len(body) != 1:
             return self.leave(qualified, line, 'no plain body')
         at = self.offset(api.rangeStart(api.extent(body[0])))
-        # Contract varargs 5: a head that begins with a macro (NEBULA_GAME_API) is read from where the macro is written.
+        # varargs.md: a head that begins with a macro (NEBULA_GAME_API) is read from where the macro is written.
         start = self.expansion_offset(api.rangeStart(api.extent(cursor)))
         if at is None or start is None or start > at or self.text[at:at + 1] != b'{':
             return self.leave(qualified, line, 'written by a macro')
         head = self.text[start:at].decode('utf-8', 'replace')
         if re.search(r'\b(consteval|noreturn|naked)\b', head):
             sys.exit(f'instrument.py: {self.label}:{line}: {qualified} is consteval, noreturn or naked: no row is made for '
-                     'it, and every function has one (contract varargs 1)')
+                     'it, and every function has one (docs/modding/language/varargs.md section 1)')
         constexpr = bool(re.search(r'\bconstexpr\b', head))
         fntype = api.type(cursor)
         variadic = bool(api.variadic(fntype))
         if constexpr and (variadic or cursor.kind in (K_CONSTRUCTOR, K_DESTRUCTOR)):
             sys.exit(f'instrument.py: {self.label}:{line}: {qualified} is a constexpr constructor, destructor or variadic '
-                     'function: a call row cannot call it (contract varargs 4)')
+                     'function: a call row cannot call it (docs/modding/language/varargs.md section 4)')
         if variadic and not self.calls_va_list(body[0]):
-            # Contract varargs 3: a variadic function's work is done by a va_list sibling, which has the full row.
+            # varargs.md section 3: a variadic function's work is done by a va_list sibling, which has the full row.
             sys.exit(f'instrument.py: {self.label}:{line}: {qualified} takes a variable number of arguments and calls no '
-                     'function with a va_list parameter or `...`: move its work into a va_list sibling (contract varargs 3)')
+                     'function with a va_list parameter or `...`: move its work into a va_list sibling (varargs.md section 3)')
 
         # The class the function belongs to, as the function's own code names it.
         owner = None
@@ -538,7 +538,7 @@ class Unit:
         signature_args = ', '.join(text for text, _ in params)
         pointers = ', '.join(f'(void*)&{identifier}' for _, identifier in params)
         if variadic:
-            # Contract varargs 3: before hooks only, told with the fixed parameters and a va_list of the rest.
+            # varargs.md section 3: before hooks only, told with the fixed parameters and a va_list of the rest.
             if not params:
                 sys.exit(f'instrument.py: {self.label}:{line}: {qualified} takes only `...`: no parameter to start a '
                          'va_list from')
@@ -587,12 +587,12 @@ class Unit:
                      f'({", ".join(given)}), ({first}{", " + pointers if pointers else ""}))')
             kind = 'hook'
             if constexpr:
-                # Contract varargs 4: the row after the function's end, at the scope it is defined in; nothing in its
+                # varargs.md section 4: the row after the function's end, at the scope it is defined in; nothing in its
                 # body (a constexpr function holds no static, and its numbers stay written: the compiler may evaluate it).
                 end = self.offset(api.rangeEnd(api.extent(cursor)))
                 if end is None or alias or member:
                     sys.exit(f'instrument.py: {self.label}:{line}: {qualified}: a constexpr method, one whose result type '
-                             'holds a comma, or one whose end a macro writes has no call row (contract varargs 4)')
+                             'holds a comma, or one whose end a macro writes has no call row (varargs.md section 4)')
                 if self.identity(cursor) != (name, signature):
                     sys.exit(f'instrument.py: {self.label}:{line}: the row {name} {signature} is named '
                              f'{self.identity(cursor)} by identity()')
@@ -620,7 +620,7 @@ class Unit:
     # constant) is read from one unit-local record, luma_numbers, which the copy defines before the source with the
     # numbers as written: so the build is the source's, number for number, and a mod changes one by its name.
     def calls_va_list(self, body):
-        # True when the body calls a function with a va_list parameter, or another variadic one (contract varargs 3).
+        # True when the body calls a function with a va_list parameter, or another variadic one (varargs.md section 3).
         api = self.api
         found = []
 
@@ -1123,7 +1123,7 @@ class Unit:
             self.tables.append(row)
 
     def table_keys(self, initializer, count):
-        """The self-description's keys of an array table (plan 1.8): each row's string, when every one of the `count`
+        """The self-description's keys of an array table: each row's string, when every one of the `count`
         rows is written and each is a plain string literal or a braced row whose first value is one (the event flags'
         names, the factory's object names); else None. A literal with an escape, or one a macro writes, makes None."""
         def bare(cursor):
@@ -1215,7 +1215,7 @@ class Unit:
         if None in texts:
             return None
         if api.variadic(fntype):
-            texts.append('...')  # contract varargs 3: the signature is written with its `...`
+            texts.append('...')  # varargs.md section 3: the signature is written with its `...`
         if cursor.kind in (K_CONSTRUCTOR, K_DESTRUCTOR):
             return name, f'({", ".join(texts)})'
         result = self.type_text(api.resultType(fntype))
@@ -1250,8 +1250,8 @@ class Unit:
                 'const': role == 'method' and bool(api.isConst(cursor)), 'overrides': overrides,
                 'marks': self.marks_of(cursor)})
 
-    # 1.8 places (contract self-description, places; G's 3.9 cooks a stage's placement arguments by name): what each
-    # function this unit gives a row does with a placement iterator, read from its body, nothing matched by name:
+    # Places (docs/modding/language/game-description.md; the cook reads a stage's placement arguments by name): what
+    # each function this unit gives a row does with a placement iterator, read from its body, nothing matched by name:
     #   reads    each MR::getPlacementArgN{NoInit,WithInit}(iter, &target): the argument, the overload's type, the field
     #            or local it sets (as written), the line;
     #   helpers  each call to another function taking a placement iterator (getDomeIdFromArg0(rIter)): placement.py
@@ -1444,7 +1444,7 @@ class Unit:
                 made = news[0]
         return {'name': name, 'class': made, 'creator': label}
 
-    # C-6 (contracts/self-description.md): the parameter marks of Game/LumaMarks.hpp. Each expands to nothing, so the
+    # game-description.md: the parameter marks of Game/LumaMarks.hpp. Each expands to nothing, so the
     # declarations do not show them; the parse's detailed preprocessing record keeps each expansion with its place.
     def spelled(self, location):
         """(file, offset, line) where a location is written."""
@@ -1597,7 +1597,7 @@ class Unit:
                              f'macro ({define.group(1).decode()}): a mark is written in the declaration itself')
 
     def mark_entry(self, d, i, names, file):
-        """One parameter's marks as the functions file has them (C-6): None, or {"way", "count", "fixed", "nullable"}."""
+        """One parameter's marks as the functions file has them: None, or {"way", "count", "fixed", "nullable"}."""
         if not names:
             return None
         api = self.api
@@ -1687,7 +1687,7 @@ class Unit:
         return flat(t) and names in (['x', 'y'], ['x', 'y', 'z'], ['x', 'y', 'z', 'w'])
 
     def marks_of(self, cursor):
-        """A row's "marks" (C-6): its function's merged list, or one null per parameter."""
+        """A row's "marks": its function's merged list, or one null per parameter."""
         api = self.api
         count = max(api.numArgs(cursor), 0)
         if self.marks:

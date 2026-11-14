@@ -1,4 +1,4 @@
-//! Placements of classes only code can make (references 3): a stage's placement row names its object's class, which
+//! Placements of classes only code can make (references.md 3): a stage's placement row names its object's class, which
 //! the game's factory makes (PlacementInfoOrdered, NameObjFactory::getCreator) or a mod's code makes at its start. A
 //! class neither the game's factory list (the self-description's placement facts) nor the game's planet table names
 //! cannot be checked before the mods' code runs: it is kept as an `after_start` touch (class, file, line), which the

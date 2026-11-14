@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// LumaCore's file services (contract services-fs): `fs` (the mod's data folder and its own installed files) and
+// LumaCore's file services (docs/modding/services/fs.md): `fs` (the mod's data folder and its own installed files) and
 // `fs.exchange` (the Exchange folder, permission fs.exchange). A request is checked on the game thread, done on one
-// worker thread in the order made (started at the first request, registry 10), and answered at a frame's start.
+// worker thread in the order made (started at the first request, services/registry.md 10), and answered at a frame's
+// start.
 
 #include "galaxy/luma_fs_service.h"
 
@@ -34,12 +35,12 @@ namespace {
 
 namespace stdfs = std::filesystem;
 
-constexpr std::size_t kPathMost = 255u;              // bytes of a path (contract 4)
+constexpr std::size_t kPathMost = 255u;              // bytes of a path (the path rule)
 constexpr std::size_t kPartsMost = 16u;              // parts of a path
 constexpr std::size_t kPartMost = 64u;               // bytes of a part
 constexpr std::size_t kIdMost = 64u;                 // a .luma's id (luma.cpp valid_id)
 constexpr std::uint64_t kFileMost = LUMA_FS_FILE_MOST;
-constexpr std::uint64_t kDataSpace = 256ull << 20u;  // a mod's data folder (contract 5)
+constexpr std::uint64_t kDataSpace = 256ull << 20u;  // a mod's data folder
 constexpr std::uint64_t kExchangeSpace = 1ull << 30u; // the Exchange folder
 constexpr std::uint64_t kListBytesMost = 1ull << 20u;
 constexpr std::size_t kListEntriesMost = 65536u;
@@ -51,7 +52,7 @@ const char* const kExchangeName = LUMA_FS_EXCHANGE_NAME;
 std::atomic<const LumaServiceKernel*> g_kernel{nullptr};
 void (*g_log)(const char*) = nullptr;  // set by providers() before the first mod
 
-// ---- The path rule (contract 4) ------------------------------------------------------------------------------------
+// ---- The path rule (fs.md) -----------------------------------------------------------------------------------------
 
 char fold(char c) noexcept {
     return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c;
@@ -161,7 +162,7 @@ Kind kind_of(const stdfs::path& path) noexcept {
 }
 
 // A root (the data folder, the Exchange folder, the installed folder) as the player made it: a link or junction there
-// is followed, once (contract 5: a player may point the Exchange folder elsewhere). Below a root, kind_of.
+// is followed, once (a player may point the Exchange folder elsewhere). Below a root, kind_of.
 Kind root_kind_of(const stdfs::path& path) noexcept {
     std::error_code error;
     const stdfs::file_status status = stdfs::status(path, error);
@@ -215,7 +216,7 @@ bool other_spelled(const stdfs::path& folder, const std::string& name, const std
     return false;
 }
 
-// The child of `folder` named `name` up to letter case (contract 4): the exact name first, else, where the system's
+// The child of `folder` named `name` up to letter case (fs.md): the exact name first, else, where the system's
 // names keep case (Linux, Android, a case-sensitive Apple volume), the folder's entry of that name up to case. On
 // Windows a miss of the exact name is a miss of every case. `spelled`: as the folder spells it (a scan where the system
 // ignores case), for a write that keeps the file's case. Empty when there is none.
@@ -370,7 +371,7 @@ std::int32_t read_file(const stdfs::path& path, std::string* out) {
     }
     std::ifstream file(path, std::ios::binary);
     if (!file) {
-        return LUMA_E_DENIED;  // the system refused to open it (contract 6)
+        return LUMA_E_DENIED;  // the system refused to open it
     }
     try {
         out->resize(static_cast<std::size_t>(size));
@@ -478,7 +479,7 @@ std::vector<std::unique_ptr<ModState>> g_mods;  // game thread
 std::atomic<LumaHandle> g_next_handle{1};
 Request* g_in_call = nullptr;  // game thread: the request whose event's call runs
 
-// The worker: one thread, its queue taken in order (contract 6). Made at the first request and never freed, so a
+// The worker: one thread, its queue taken in order. Made at the first request and never freed, so a
 // request still queued at the process's end meets no destroyed lock.
 struct Worker {
     std::mutex lock;
@@ -838,7 +839,7 @@ void work(Request* request) {
     {
         const std::lock_guard<std::mutex> lock(g_lock);
         // A read or list nobody waits for is not done; a write, remove or move keeps its place in the order whatever
-        // happened to its mod (contract 6).
+        // happened to its mod.
         skip = (request->owner == nullptr || request->cancelled) && (request->op == Op::Read || request->op == Op::List);
     }
     std::int32_t status = LUMA_E_CANCELLED;

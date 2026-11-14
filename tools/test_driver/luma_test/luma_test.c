@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* The harness's game half (contract `harness` r1, section 2): a LumaCore mod that uses only what any mod can use
+/* The harness's game half (test-harness.md section 2): a LumaCore mod that uses only what any mod can use
    (functions, fields and hooks by name) plus the harness service the test extension offers in a harness run
    (luma_harness.h). Once a game frame it asks the host half for its next lines and does each: the save, the stage, the
    player, calls and reads by name. Each is read back through the game's own query and reported as facts; one that does
@@ -113,11 +113,11 @@ static void put(Out* out, const char* text) {
         out->text[out->at++] = *text++;
     }
     if (*text != 0) {
-        /* A cut text says so at its end (audit 0.3 H-13): a fact that is cut is not written (fact), a message is. */
+        /* A cut text says so at its end: a fact that is cut is not written (fact), a message is. */
         static const char said[] = " (cut)";
         out->cut = 1u;
         out->at = (uint32_t)(sizeof(out->text) - sizeof(said));
-        /* Never half a character (audit 0.3 H-14): a UTF-8 character the cut falls in is dropped whole, so the
+        /* Never half a character: a UTF-8 character the cut falls in is dropped whole, so the
            runner's UTF-8 read of the message holds. text[at] is the first byte dropped; while it continues a
            character (10xxxxxx), that character began earlier. */
         while (out->at > 0u && ((unsigned char)out->text[out->at] & 0xC0u) == 0x80u) {
@@ -150,7 +150,7 @@ static void put_int(Out* out, int64_t value) {
 }
 
 /* A number as JSON, to 1/1000 (enough for positions in game units and for factors); an f64 is taken whole, never
-   through float (audit 0.3 H-12). */
+   through float. */
 static void put_float(Out* out, double value) {
     double v = value;
     /* NaN, the infinities and anything past 2^63 (whose whole part does not fit the conversion below) are null. */
@@ -500,7 +500,7 @@ static void* object_of(const char* ref) {
 }
 
 /* Why a reference found nothing, as the test names it: "no live object <name>#<n>" or "no live object of class
-   <Class> #<n>" (G-H6-2: a typo is told from a stage without the object), after `lead`. */
+   <Class> #<n>" (a typo is told from a stage without the object), after `lead`. */
 static const char* missing_text(const char* lead, const char* ref) {
     static Out why;
     out_empty(&why);
@@ -532,8 +532,8 @@ static const char* missing_text(const char* lead, const char* ref) {
 
 typedef enum Pending { Pending_None, Pending_Stage, Pending_File, Pending_FileStep } Pending;
 static Pending pending;
-/* A file step (`file copy|load|erase|new`, harness 3.6): which, and the files; file_mario is the character a file is
-   read as (save.character's; Mario until it is set). */
+/* A file step (`file copy|load|erase|new`, test-harness.md 3.6): which, and the files; file_mario is the character a
+   file is read as (save.character's; Mario until it is set). */
 typedef enum FileOp { FileOp_Copy, FileOp_Load, FileOp_Erase, FileOp_New } FileOp;
 static FileOp file_op;
 static int32_t file_from, file_to;
@@ -1307,7 +1307,7 @@ static void do_read(const Words* w) {
     void* const object = object_of(w->word[2]);
     const int32_t offset = cf.count == 2u ? core->field(cf.word[0], cf.word[1], type) : -1;
     if (object == 0) {
-        // Revision 7 (G-H6-2): the object a step names is not there: the test is not set up, not failed.
+        // Revision 7: the object a step names is not there: the test is not set up, not failed.
         finish(-1, same(w->word[2], "player") ? "read: there is no player" : missing_text("read: ", w->word[2]));
         return;
     }

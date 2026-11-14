@@ -21,7 +21,7 @@ namespace {
         if (const CreationFuncPtr creator = NameObjFactory::getCreator(rIdentifier.mName)) {
             return creator;
         }
-        // A class a mod places that no mod made (references 3, after start): the placeholder object stands there.
+        // A class a mod places that no mod made (references.md 3, after start): the placeholder object stands there.
         return luma::refs::placeholderFor(rIdentifier.mName);
     }
 
@@ -125,7 +125,7 @@ bool PlacementInfoOrdered::initPlacementStep(uint64_t deadline) {
             MR::initLiveActorSystemInfo(iter);
             bool ready;
             {
-                // A name a mod aliased (classes contract, "alias"): its arguments while the object initialises.
+                // A name a mod aliased (classes.md, "alias"): its arguments while the object initialises.
                 const luma::classes::AliasPlacing alias(set->mName, iter.mInfo, iter.mIndex);
                 ready = mInitializing->initStep(iter, deadline);
             }

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The game's own parts a start with mods needs (contract start-check, section 2; mod_start_check.h).
+// The game's own parts a start with mods needs (mod_start_check.h).
 
 #include "galaxy/mod_start_check.h"
 
@@ -33,9 +33,9 @@ namespace fs = std::filesystem;
 
 using StoreVersion = std::uint32_t (*)();
 
-// The placeholder data the game itself loads (contract references 4), as store paths: the model a missing class
-// draws and the chime a missing sound plays. The cooker's own placeholders (the checker texture) are the cook's to
-// check; the effect joins this list with 3.5.
+// The placeholder data the game itself loads (docs/modding/language/references.md), as store paths: the model a missing
+// class draws and the chime a missing sound plays. The cooker's own placeholders (the checker texture) are the cook's
+// to check; the effect joins this list with 3.5.
 constexpr const char* kPlaceholders[] = {"/ObjectData/NebulaPlaceholder.arc", "/NebulaData/PlaceholderSound.nsfx"};
 
 constexpr std::uint64_t kSpareBytes = 64ull * 1024ull * 1024ull;
@@ -154,7 +154,7 @@ void report(const MissingPart& part) {
     values.emplace_back("part", std::string("R:") + (part.row != nullptr ? part.row : "Start.Part.Importer"));
     if (!part.needed.empty()) values.emplace_back("needed", part.needed);
     galaxy::modlog::add_row(LUMA_MODLOG_COOK, LUMA_MODLOG_ERROR, "nebula", 0u, "", "Start.PartMissing", values);
-    // The harness's record of the check (contract start-check 6: no `startcheck` fact when no mod is on).
+    // The harness's record of the check (no `startcheck` fact when no mod is on).
     std::string json = "{\"part\":\"";
     json += part.row != nullptr ? part.row : "Start.Part.Importer";
     json += "\",\"needed\":\"" + part.needed + "\"}";

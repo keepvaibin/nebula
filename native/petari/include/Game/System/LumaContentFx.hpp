@@ -1,7 +1,7 @@
 #pragma once
 
-// LumaCore's `content.fx` service (contract effects, section 3): particle effects a mod starts on an actor, followed,
-// stopped and tinted; the failures made loud (section 2: Content.MissingEffect, Content.MissingJoint,
+// LumaCore's `content.fx` service (docs/modding/content/effects.md, section 3): particle effects a mod starts on an
+// actor, followed, stopped and tinted; the failures made loud (section 2: Content.MissingEffect, Content.MissingJoint,
 // Content.EffectEmpty); the harness facts fx.start, fx.end, fx.alive.
 
 #include <luma_service_provider.h>

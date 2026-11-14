@@ -31,7 +31,7 @@ GROUPS = {
     "jsystem": r"jsystem",
     "nw4r": r"nw4r",
     "rfl": r"\bRFL[A-Z_]|\brfl[A-Z_]|MiiLib",
-    # Batch 7 (N-63): archives are found or loaded when asked for, so the loaders, archive lists and mounts are gone.
+    # Archives are found or loaded when asked for, so the loaders, archive lists and mounts are gone.
     "loading": r"\bStationed|makeArchiveList|mountArchive|\bFileLoader\b|\bStageFileLoader|\bArchiveHolder\b|\bFileHolder\b|\brequestMount|\bisLoadedFile|\breceiveFile|ArchiveListCollector|\bmountAsync|\bloadToMainRAM|\bisReadResourceFromStore",
     # GX/GP calls and the command FIFO; not a name that starts with "GPU" (D3D12's GPUUploadHeapSupported) or Vulkan's
     # FIFO present mode.

@@ -1,4 +1,5 @@
-//! The columns of each table kind (contract table-keys 10), from a real imported game: LUMA_GAME_PAK=<game.pak>,
+//! The columns of each table kind (docs/modding/format/table-keys.md section 10), from a real imported game:
+//! LUMA_GAME_PAK=<game.pak>,
 //! --ignored --nocapture. With LUMA_WRITE_TABLE_COLUMNS=<file> it writes `data/table-columns.tsv`; without, it checks
 //! the compiled file against the game (every kind's columns, forms and usual values).
 

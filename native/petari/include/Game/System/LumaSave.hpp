@@ -1,6 +1,6 @@
 #pragma once
 
-// LumaCore's `save` service (contract services-save, items 2 to 4): a mod's values in the game file loaded now, kept in
+// LumaCore's `save` service (docs/modding/services/save.md): a mod's values in the game file loaded now, kept in
 // its game data's LUMA chunk (LumaSaveChunk) and written by the game's own saves.
 
 #include <luma_service_provider.h>

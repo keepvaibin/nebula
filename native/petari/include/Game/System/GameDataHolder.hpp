@@ -64,7 +64,7 @@ public:
     void resetAllData();
     u32 makeFileBinary(u8*, u32);
     bool loadFromFileBinary(SaveFileId, const u8*, u32);
-    // Mods' values in this file (services-save): its chunk, and the bytes it adds to the file, header included.
+    // Mods' values in this file (services/save.md): its chunk, and the bytes it adds to the file, header included.
     LumaSaveChunk* getLumaChunk() const { return mLumaChunk; }
     u32 getLumaChunkRoom() const;
     SaveFileId getFileId() const {

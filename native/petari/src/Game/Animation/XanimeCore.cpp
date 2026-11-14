@@ -182,7 +182,7 @@ void XanimeCore::doFreeze() {
 void XanimeCore::setBck(u32 index, Clip* pAnm) {
     // A clip with more joints than the model is made for another skeleton: it does not play, the model keeps its pose
     // and the log names the mismatch. One with fewer plays on the joints it has: a model that replaces a game model
-    // keeps the game's joints first and its extra joints after (models contract 4), which keep their rest places
+    // keeps the game's joints first and its extra joints after (models.md section 4), which keep their rest places
     // (Clip::getTransform reads no track past the clip's end).
     if (pAnm != nullptr && pAnm->jointCapacity() > mJointCount) {
         nebula_log("Xanime: a clip of %u joints set on a model of %u; it does not play\n",

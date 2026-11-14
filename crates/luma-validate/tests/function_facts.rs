@@ -1,9 +1,10 @@
-//! luma_functions.json's reader (types TY-11): a file in its form reads, every fault is an error naming the row.
+//! luma_functions.json's reader (docs/modding/language/types.md): a file in its form reads, every fault is an error
+//! naming the row.
 
 use luma_validate::names::{signature_params, FunctionFacts, FunctionKind, Mark, TypesError, Way};
 
 fn row(name: &str, sig: &str, kind: &str, owner: &str, flags: (bool, bool, bool), overrides: &str) -> String {
-    // No marks: one null per parameter (C-6).
+    // No marks: one null per parameter.
     let marks = vec!["null"; signature_params(sig).unwrap()].join(", ");
     marked(name, sig, kind, owner, flags, overrides, &marks)
 }
@@ -29,7 +30,7 @@ fn refused(rows: &[String]) -> String {
     }
 }
 
-/// K's fault on l16 (G, 2026-11-11): a function returning a pointer to an array read `(*)` as its list, so its one
+/// A fault found on build l16: a function returning a pointer to an array read `(*)` as its list, so its one
 /// row refused the whole file.
 #[test]
 fn a_declarator_before_the_list_is_no_list() {
@@ -104,7 +105,7 @@ fn mark(way: &str, count: &str, fixed: &str, nullable: bool) -> String {
 
 #[test]
 fn marks_in_their_form_read() {
-    // C-6's example: `void f(LUMA_IN LUMA_COUNT(n) const f32* p, s32 n, LUMA_OUT LUMA_NULLABLE Vec3f* out)`.
+    // The marks' example: `void f(LUMA_IN LUMA_COUNT(n) const f32* p, s32 n, LUMA_OUT LUMA_NULLABLE Vec3f* out)`.
     let sig = "void(const f32 *, s32, Vec3f *)";
     let marks = [mark("in", "1", "null", false), "null".into(), mark("out", "null", "null", true)].join(", ");
     let m = marked("R::get", "void(Vec3f *, f32 *) const", "method", "\"R\"", (false, false, true), "", &[mark("inout", "null", "null", false), mark("kept", "null", "null", false)].join(", "));
@@ -163,7 +164,7 @@ fn a_signatures_parameters_are_counted() {
     assert!(names.call_only.contains(&("A::f".to_string(), "s32(s32)".to_string())));
     assert_eq!(names.functions["A::g"], vec![("void(const char *, ...)".to_string(), true)]);
     assert_eq!(names.add_rows("A::h\tvoid()\tjump\t1\n"), Err(1));
-    // A declarator's parentheses before the list (Ui::detail::GetDrawMtx in l16's luma_functions.json, K's fault).
+    // A declarator's parentheses before the list (Ui::detail::GetDrawMtx in l16's luma_functions.json).
     assert_eq!(signature_params("const f32 (*)[4]()"), Some(0));
     assert_eq!(signature_params("const f32 (*)[4](int, char) const"), Some(2));
     assert_eq!(signature_params("void (*)(int)"), Some(1));

@@ -1,6 +1,6 @@
 """placement.py --types luma_types.json --defined DIR --out smg_game.luma-placement.json
 
-The placement facts (plan 1.8, contract self-description "places"; G's 3.9 cooks a stage's placement arguments by name),
+The placement facts (docs/modding/language/game-description.md; the cook reads a stage's placement arguments by name),
 made by the build beside the module from instrument.py's .places parts (DIR: the folder of its copies), never by hand:
 
   factory          the object factory's rows in its order (NameObjFactory.cpp cCreateTable): {name, class, creator};
@@ -49,7 +49,7 @@ def main():
     bases = {}
     for t in read_json(a.types)["types"]:
         # A record with no name (an anonymous struct or union inside a class) is no class a placement can make, and
-        # sorted(bases) cannot order None among names (the integration build, 11-12).
+        # sorted(bases) cannot order None among names.
         if t["name"] is None:
             continue
         bases[t["name"]] = [b["name"] for b in t.get("bases", ()) if b["name"] is not None]

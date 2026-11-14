@@ -12,9 +12,10 @@ typedef const void* (*LumaServiceFinder)(const char* name, uint32_t major, uint3
 namespace luma {
     const LumaCore* core();
 
-    // Binds a mod whole or not at all (loader contract 2, LR-2): every name, then every hook as `hook` would take it,
-    // then the slots, its begin and its start; only then its hooks. False: refused, pRefusal says why (the
-    // validator's code and parameters). The kernel closes pLibrary with `close` when none of its code can run any more.
+    // Binds a mod whole or not at all (docs/modding/language/compiled-form.md): every name, then every hook as `hook`
+    // would take it, then the slots, its begin and its start; only then its hooks. False: refused, pRefusal says why
+    // (the validator's code and parameters). The kernel closes pLibrary with `close` when none of its code can run any
+    // more.
     bool loadMod(const LumaModInfo* pInfo, const char* pId, const char* pFile, s32 order, void* pLibrary, LumaCloseLibrary close,
                  const char* const* pGranted, u32 grantedCount, LumaRefusal* pRefusal);
     // loadMod in two steps, for the start: beginMod binds the slots, runs its begin and then its layers call, and keeps
@@ -28,7 +29,7 @@ namespace luma {
     // The names a waiting or started mod's layers call answered, each with its NUL, and their bytes; null when it has no
     // layers call, chose none, or is not loaded.
     const char* chosenLayers(const LumaModInfo* pInfo, u64* pBytes);
-    // Takes its hooks out and runs its stop; after the grace, its finish, its memory and its library (LR-5).
+    // Takes its hooks out and runs its stop; after the grace, its finish, its memory and its library.
     void unloadMod(const LumaModInfo* pInfo);
     // Once a frame on the game thread: replaced hook lists and taken-out mods whose grace is over are let go.
     void frame();

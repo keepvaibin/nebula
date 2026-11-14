@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// LumaCore's mods services (contract services-mods): `mods` (the session's list), `mods.ids` (numbers in the game's
-// numbered spaces, kept in the record <settings>/mod-ids.json) and `mods.install` (the import screen's request; no fs
-// yet, so LUMA_E_ABSENT after its checks).
+// LumaCore's mods services (docs/modding/services/mods.md): `mods` (the session's list), `mods.ids` (numbers in the
+// game's numbered spaces, kept in the record <settings>/mod-ids.json) and `mods.install` (the import screen's request;
+// no fs yet, so LUMA_E_ABSENT after its checks).
 
 #include "galaxy/luma_mods_service.h"
 
@@ -43,7 +43,7 @@ constexpr std::size_t kNameMost = 64u;        // a name: 1 to 64 of a-z 0-9 _ - 
 constexpr std::size_t kModIdMost = 64u;       // a .luma's id (luma.cpp valid_id)
 constexpr std::uint64_t kRecordMost = 16u << 20u;  // a record bigger than this is not ours
 constexpr std::uint32_t kInfoLeast = static_cast<std::uint32_t>(sizeof(LumaModsInfo));  // 1.0's whole struct
-static_assert(sizeof(LumaModsInfo) == 260u, "LumaModsInfo 1.0 is 260 bytes (contract section 2)");
+static_assert(sizeof(LumaModsInfo) == 260u, "LumaModsInfo 1.0 is 260 bytes (mods.md section 2)");
 static_assert(sizeof(LumaModsKind) == 4u && sizeof(LumaModsState) == 4u, "the enums of LumaModsInfo are 4 bytes");
 
 const char* const kSpaces[] = {LUMA_MODS_SPACE_MESSAGE, LUMA_MODS_SPACE_SENSOR};
@@ -51,7 +51,8 @@ const char* const kSpaces[] = {LUMA_MODS_SPACE_MESSAGE, LUMA_MODS_SPACE_SENSOR};
 std::atomic<const LumaServiceKernel*> g_kernel{nullptr};
 void (*g_log)(const char*) = nullptr;  // set by providers() before the first mod
 
-// ---- Calling rules (services-registry 4) ---------------------------------------------------------------------------
+// ---- Calling rules (services/registry.md 4)
+// ---------------------------------------------------------------------------
 
 void report(const LumaMod* mod, const char* where, std::uint32_t code, const char* a = nullptr, const char* b = nullptr,
             const char* c = nullptr) noexcept {
@@ -99,7 +100,7 @@ std::int32_t struct_size(const LumaMod* mod, const char* where, std::uint32_t fo
     return LUMA_E_ARGUMENT;
 }
 
-// `text` into `out` (`size` bytes with its NUL), cut at a character's end (registry 3, R-5c).
+// `text` into `out` (`size` bytes with its NUL), cut at a character's end (services/registry.md 3).
 void copy_text(char* out, std::size_t size, std::string_view text) noexcept {
     std::size_t length = std::min(text.size(), size - 1u);
     if (length < text.size()) {
@@ -182,7 +183,7 @@ void make_list() {
     }
 }
 
-// The 1.0 fields into the mod's struct: whole fields only, none past its size (registry 3's size rule).
+// The 1.0 fields into the mod's struct: whole fields only, none past its size (services/registry.md 3's size rule).
 void give(const LumaModsInfo& info, LumaModsInfo* out) {
     const std::uint32_t size = out->size;
     std::memcpy(out, &info, std::min<std::size_t>(size, sizeof(info)));
@@ -643,13 +644,13 @@ std::int32_t ids_of(const LumaMod* mod, const char* space, const char* mod_id, c
 
 // ---- mods.install (item 9) -----------------------------------------------------------------------------------------
 
-// A path of fs's rule (services-fs 4: inside the mod's data folder, the same on every platform) ending ".luma".
+// A path of fs's rule (services/fs.md 4: inside the mod's data folder, the same on every platform) ending ".luma".
 bool valid_install_path(std::string_view path) noexcept {
     return path.size() > 5u && path.substr(path.size() - 5u) == ".luma" && galaxy::luma_fs::path_in_rule(path, false);
 }
 
-// The one open request (J's screen shows one at a time: a second is LUMA_E_BUSY). Game thread only: the request, the
-// screen's answer (run_screen_answers) and the delivery all run there.
+// The one open request (the import screen shows one at a time: a second is LUMA_E_BUSY). Game thread only: the request,
+// the screen's answer (run_screen_answers) and the delivery all run there.
 struct InstallRequest;
 struct InstallNode {
     LumaEventNode event;     // first, and both plain members: the kernel's node is the InstallNode
@@ -724,7 +725,7 @@ std::int32_t install_request(const LumaMod* mod, const char* path, LumaEventFn f
     if (g_install != nullptr || galaxy::mods::player_screen_up()) {
         return LUMA_E_BUSY;
     }
-    // The file at the call (J-SM5): a short walk of the mod's own data folder, no link followed (services-fs 5).
+    // The file at the call (J-SM5): a short walk of the mod's own data folder, no link followed (services/fs.md 5).
     std::filesystem::path file;
     if (galaxy::luma_fs::find_data_file(id, path, &file) != LUMA_OK) {
         return LUMA_E_NOT_FOUND;
@@ -746,8 +747,8 @@ std::int32_t install_request(const LumaMod* mod, const char* path, LumaEventFn f
     request->user = user;
     const LumaHandle handle = request->handle;
     g_install = request;
-    // J's screen answers on the game thread at a frame's start, never inside this call. The answer finds the request
-    // by its handle: one closed meanwhile (cancel, the mod gone) or already answered takes none.
+    // The import screen answers on the game thread at a frame's start, never inside this call. The answer finds the
+    // request by its handle: one closed meanwhile (cancel, the mod gone) or already answered takes none.
     std::int32_t status = LUMA_E_MEMORY;
     try {
         status = galaxy::mods::ask_install(file, request->asker, [handle](std::int32_t answer) {
@@ -875,7 +876,7 @@ std::string option_text(const galaxy::luma::Option& entry, const galaxy::mods::M
         return chosen->text;
     }
     if (entry.kind == "key") {
-        return entry.fallback;  // input's store (plan 2.5, F): its binding_name once it exists
+        return entry.fallback;  // input's store: its binding_name once it exists
     }
     if (entry.kind == "number") {
         // The Mods page keeps only values of the range (scan_mods put a kept value outside it back to the default).
@@ -1028,7 +1029,7 @@ std::int32_t mods_watch_options(const LumaMod* mod, LumaEventFn fn, void* user) 
     return LUMA_OK;
 }
 
-// ---- mods: other mods stopping (watch_mods; director 08:2x, LumaKit rule 4) ---------------------------------------
+// ---- mods: other mods stopping (watch_mods; LumaKit rule 4) ---------------------------------------------------------
 
 struct StopWatch;
 struct StopNode {
@@ -1587,7 +1588,7 @@ void kept(std::vector<KeptMod>& out) {
     if (unreadable) {
         unreadable_error();
     }
-    // Everything a removed mod keeps (services-mods 8): ids with numbers, and ids the save halves keep values for.
+    // Everything a removed mod keeps (services/mods.md 8): ids with numbers, and ids the save halves keep values for.
     std::map<std::string, std::uint64_t> chunk_bytes;
     if (g_chunk_kept != nullptr) {
         g_chunk_kept([](void* user, const char* id, std::uint64_t bytes) {
@@ -1608,7 +1609,7 @@ void kept(std::vector<KeptMod>& out) {
             }
         }
     }
-    // And ids with a data folder of fs (services-fs 3).
+    // And ids with a data folder of fs (services/fs.md 3).
     {
         std::vector<std::string> data;
         galaxy::luma_fs::data_ids(data);

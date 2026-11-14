@@ -1,4 +1,4 @@
-//! The one validator of a `.luma` (contracts `luma-format` and `validator`, revision 1; plan 3.1, rule 7).
+//! The one validator of a `.luma` (docs/modding/format/luma.md and validator.md).
 //! LumaLink runs it before packing and the game runs it at import and at each start; what passes one passes the
 //! other, with the same findings. It reads, never writes, never touches the network, and never panics on any input.
 
@@ -22,9 +22,9 @@ pub use names::Names;
 pub use rules::{cooked_source, mergeable, save_problem, MERGE_TABLES, SOURCE_ENDINGS, WHERE};
 pub use saved::{About, Saved};
 
-/// The validator's version: `<format major>.<rules minor>` (validator contract 6).
+/// The validator's version: `<format major>.<rules minor>` (validator.md section 6).
 pub const VERSION: (u32, u32) = (1, 0);
-/// The highest format minor this validator reads (luma-format 8).
+/// The highest format minor this validator reads (luma.md 8).
 pub const FORMAT: (u32, u32) = (1, 0);
 
 /// The game's 14 languages, in the order of `localization/NebulaText.tsv`.
@@ -33,13 +33,13 @@ pub const LANGUAGES: [&str; 14] = [
     "UsPortuguese", "JpJapanese", "KrKorean", "CnSimpChinese", "TwTradChinese",
 ];
 
-/// The platforms a mod's code may be built for (luma-format 6).
+/// The platforms a mod's code may be built for (luma.md 6).
 pub const PLATFORMS: [&str; 9] = [
     "windows-x64", "windows-arm64", "linux-x64", "linux-arm64", "macos-arm64", "macos-x64", "android-arm64",
     "android-x64", "ios-arm64",
 ];
 
-/// The three programs of the game (luma-format 4, `game.regions`).
+/// The three programs of the game (luma.md 4, `game.regions`).
 pub const REGIONS: [&str; 3] = ["RMGE01", "RMGP01", "RMGJ01"];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -74,8 +74,8 @@ pub struct Finding {
     pub args: Vec<(&'static str, Arg)>,
 }
 
-/// A rule that could not be checked because an input it needs is absent: named, never skipped silently (validator
-/// contract 2). `pack` refuses while any remain that an input LumaLink can be given would check (the imported game, the
+/// A rule that could not be checked because an input it needs is absent: named, never skipped silently (validator.md
+/// section 2). `pack` refuses while any remain that an input LumaLink can be given would check (the imported game, the
 /// mod folder); the ones only the player's game can check (`CHECKED_BY_THE_GAME`) are said and checked at its start.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NotChecked {
@@ -134,17 +134,18 @@ pub enum Source<'a> {
     Folder(&'a Path),
 }
 
-/// A game path's rows, as the content system defines them (luma-format 5.1; contract table-keys).
+/// A game path's rows, as the content system defines them (luma.md 5.1; table-keys.md).
 #[derive(Default)]
 pub struct Table {
-    /// The columns that make a row's key, in order; `["#"]` for a table whose rows are named by place (table-keys 3).
+    /// The columns that make a row's key, in order; `["#"]` for a table whose rows are named by place
+    /// (table-keys.md 3).
     pub key: Vec<String>,
     /// Every column and its type. A column whose name is not known is `0x` and the 8 hex digits of its hash (the
     /// game's x31 of the name): a patch's name for it then matches by hash.
     pub columns: Vec<(String, ColumnType)>,
     /// The key values of each row the game has, joined by U+001F, when known; for `#`, "0" to the last row's place.
     pub rows: Option<std::collections::HashSet<String>>,
-    /// Keys the game itself gives more than one row (table-keys 4), with how many.
+    /// Keys the game itself gives more than one row (table-keys.md 4), with how many.
     pub repeated: std::collections::HashMap<String, usize>,
     /// Each row's values as text (the same text as `rows`' parts), in `columns`' order, when known: for L407.
     pub cells: Option<Vec<Vec<String>>>,
@@ -210,8 +211,8 @@ pub struct Game<'a> {
     pub extra_languages: &'a [String],
     /// The self-description: rows, fields, classes, services and their permissions, the LumaCore version.
     pub names: Option<&'a Names>,
-    /// The renderer features this device's graphics have (`draw.native`'s capability query, start-check 3), absent in
-    /// LumaLink: L806 reads them against a mod's `renderer.features`.
+    /// The renderer features this device's graphics have (`draw.native`'s capability query, start-check.md 3), absent
+    /// in LumaLink: L806 reads them against a mod's `renderer.features`.
     pub device_features: Option<&'a [String]>,
     pub store: Option<&'a dyn Store>,
 }
@@ -255,17 +256,17 @@ pub struct Touches {
     pub scenarios: Vec<String>,
     /// The services each platform's entry library imports without LUMA_OPTIONAL (kind 5): platform, service name and
     /// "major.minor", joined by U+001F, in import order, each once. The host's consent question reads which declared
-    /// permissions are required from them (consent 1.3: a permissioned service's permission is its name).
+    /// permissions are required from them (consent.md 1.3: a permissioned service's permission is its name).
     pub services: Vec<String>,
-    /// The classes only code can make that a placement uses (references 3, G-2): class, file and line, joined by
+    /// The classes only code can make that a placement uses (references.md 3): class, file and line, joined by
     /// U+001F, one per placement. The host gives them to the module after the last mod's start (luma_refs.h), which
-    /// looks each up in the factory. Filled by the placement rules of the stages' contract.
+    /// looks each up in the factory. Filled by the placement rules of docs/modding/content/stages.md.
     pub after_start: Vec<String>,
     /// The data schemas this mod gives as a library, one per module and version it reads (`code/<id>.kit/<module>/
     /// <version>.json`): the module key (`<id>.<module>`), the version and the schema's text, joined by U+001F. A mod
     /// that names the module in its `kit` has its data checked against them (L701, L702).
     pub kit_schemas: Vec<String>,
-    /// The functions this mod gives as a library mod (its LumaModInfo exports, loader D3-3), each platform's entry
+    /// The functions this mod gives as a library mod (its LumaModInfo exports), each platform's entry
     /// library's in its order: platform, name and signature, joined by U+001F (platform and name alone for a null
     /// signature). A mod that imports one (kind 6) has it bound against them (L505), as the kernel binds it.
     pub exports: Vec<String>,
@@ -274,14 +275,14 @@ pub struct Touches {
     pub runtime_layouts: Vec<String>,
 }
 
-/// The layers of a zone, and the folders whose tables the game links by key across them (contract table-keys 13).
+/// The layers of a zone, and the folders whose tables the game links by key across them (table-keys.md section 13).
 pub const LINK_LAYERS: [&str; 17] = [
     "common", "layera", "layerb", "layerc", "layerd", "layere", "layerf", "layerg", "layerh", "layeri", "layerj", "layerk", "layerl", "layerm",
     "layern", "layero", "layerp",
 ];
 const LINK_FOLDERS: [&str; 5] = ["placement", "mapparts", "childobj", "start", "generalpos"];
 /// The kinds whose key the game finds only among the layers one scenario turns on (`start`: MarioNo; `generalpos`:
-/// PosName and Obj_ID), not across the whole group as `l_id` (contract table-keys, T-4).
+/// PosName and Obj_ID), not across the whole group as `l_id` (table-keys.md).
 const SCENARIO_FOLDERS: [&str; 2] = ["start", "generalpos"];
 
 /// A link group table's zone, folder, layer (0 common, 1 to 16 LayerA to LayerP) and file, in lowercase.
@@ -339,7 +340,7 @@ pub struct ScenarioCell {
     pub column: String,
     pub value: i64,
     /// A row of a table the mod brings whole (the base: the highest mod's whole table wins), not a patch's cell
-    /// (which edits whatever base there is). `scenario_order` (V4-1).
+    /// (which edits whatever base there is). `scenario_order`.
     pub whole: bool,
 }
 
@@ -362,7 +363,7 @@ impl ScenarioCell {
     }
 }
 
-/// The scenario cells of the mods that are on, as the cook applies tables (V4-1, DECISIONS): `lists` holds each mod's
+/// The scenario cells of the mods that are on, as the cook applies tables: `lists` holds each mod's
 /// cells, the lowest in the list first. A galaxy's whole table is the base, the highest mod's that brings one; then
 /// every mod's patch cells edit it, lowest first, whoever brought the table. Whole cells come first, each galaxy's
 /// from one mod only, so `zone_layer_sets` (a later cell wins) gives the game's sets.
@@ -430,9 +431,9 @@ pub fn zone_layer_sets(store: &dyn Store, zone: &str, cells: &[ScenarioCell]) ->
     Some(out)
 }
 
-/// Whether the game meets a key of the link group table at `layer` among the group's table at `other` (table-keys 13.3,
-/// 13.6): always for `l_id` kinds (`by_scenario` false); for start and generalpos when either is common, both are one
-/// layer, or some scenario turns both on (`sets`; None: the scenario tables are not known, so common and the same
+/// Whether the game meets a key of the link group table at `layer` among the group's table at `other` (table-keys.md
+/// 13.3, 13.6): always for `l_id` kinds (`by_scenario` false); for start and generalpos when either is common, both are
+/// one layer, or some scenario turns both on (`sets`; None: the scenario tables are not known, so common and the same
 /// layer only). The validator and the applier's cook both ask this.
 pub fn layers_meet(by_scenario: bool, layer: usize, other: usize, sets: Option<&[LayerSet]>) -> bool {
     if !by_scenario || layer == 0 || other == 0 || other == layer {
@@ -467,7 +468,7 @@ pub fn validate(input: &Input) -> Report {
     finish(rules::run(input, None))
 }
 
-/// The check at each start (validator contract 2): when `saved` is this `.luma`'s kept report, made by this validator
+/// The check at each start (validator.md section 2): when `saved` is this `.luma`'s kept report, made by this validator
 /// against the game `game` identifies, the rules that read the whole `.luma` are not run again and their findings are
 /// taken from it; every other rule runs. Otherwise every rule runs, as `validate`. Never panics.
 pub fn recheck(input: &Input, saved: Option<&Saved>, game: &str) -> Report {
@@ -494,7 +495,7 @@ pub fn message(f: &Finding, language: &str) -> String {
 
 /// Why the finding was made, without where (its `why` or `found` phrase, filled with its parameters), in one of the
 /// game's languages: what a screen that names the mod and the file itself puts after them (the Mods screen's
-/// Mods.Patch.Failed, F INBOX-G 18). A finding with neither phrase gives its whole message.
+/// Mods.Patch.Failed). A finding with neither phrase gives its whole message.
 pub fn reason(f: &Finding, language: &str) -> String {
     let lang = LANGUAGES.iter().position(|&l| l == language).unwrap_or(0);
     match f.args.iter().find(|(n, _)| *n == "why" || *n == "found") {
@@ -527,8 +528,9 @@ fn given(value: &str) -> Val {
 
 /// The message of rule `code` with its parameters by name, values as `args_text` writes them, in one of the game's
 /// languages (an unknown one gives `UsEnglish`): what the loader and the cook refuse with, said as the validator says
-/// its own findings (loader contract 3). The place is given by the names `mod`, `file`, `line` and `column`. A name
-/// the template has and the parameters lack stays in the text as `{name}`, so a missing one is seen, never dropped.
+/// its own findings (docs/modding/language/compiled-form.md). The place is given by the names `mod`, `file`, `line` and
+/// `column`. A name the template has and the parameters lack stays in the text as `{name}`, so a missing one is seen,
+/// never dropped.
 pub fn message_of(code: u16, args: &[(&str, &str)], language: &str) -> String {
     let lang = LANGUAGES.iter().position(|&l| l == language).unwrap_or(0);
     // `text` missing: the `why` phrase is the text (as `message` takes it).
@@ -620,7 +622,7 @@ fn fill_by(template: &str, look: &dyn Fn(&str) -> Option<Val>, lang: usize, dept
     out
 }
 
-/// The level of each code (validator contract 5): the Notes, everything else an Error.
+/// The level of each code (validator.md section 5): the Notes, everything else an Error.
 pub fn level_of(code: u16) -> Level {
     match code {
         108 | 208 | 218 | 219 | 221 | 305 | 404 | 407 | 507 | 510 => Level::Note,

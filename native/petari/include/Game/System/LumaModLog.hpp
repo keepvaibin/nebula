@@ -1,6 +1,6 @@
 #pragma once
 
-// The on-screen mod log's store (contract mod-log): every entry said about a mod this session, kept once with a count
+// The on-screen mod log's store: every entry said about a mod this session, kept once with a count
 // of its repeats, its words rendered once in the played language and in English. Read by the notice
 // (NebulaModLogNotice) and the LOG page. No mod: never allocated.
 
@@ -21,7 +21,7 @@ namespace luma {
             u32 line;
             u32 column;
             u32 count;               // repeats included; atomic
-            u32 reload;              // the mod's reload number when it was added (plan 1.11); 0 before any
+            u32 reload;              // the mod's reload number when it was added; 0 before any
             u32 shown;               // 1: shown as a notice (an Error, or a Note of a row in cShownNotes); set at make
             const char* mod;
             const char* file;        // "" when none
@@ -33,7 +33,7 @@ namespace luma {
             Entry* next;             // in added order; atomic
             Entry* nextOfMod;        // the same mod's next entry, for the repeat lookup; under the store's lock
             u32 factCount;           // the highest count a fact was written at (one fact a count); atomic
-            u64 argsKey;             // FNV-1a of the entry's values and given words: part of the key (contract 2), so
+            u64 argsKey;             // FNV-1a of the entry's values and given words: part of the key, so
                                      // another mistake at the same place is its own line, not a repeat of the first
         };
 
@@ -55,7 +55,7 @@ namespace luma {
         // host's entries (luma_modlog_add) carry their own words. Returns the entry kept for this key (the new one, or the
         // one it repeats), null when the limits kept none: the caller may hold it to count repeats with `counted`.
         const Entry* add(const LumaModLogEntry& rEntry, const char* pRowId);
-        // A repeat its caller counts itself (the kernel's record, contract 2): the entry's count becomes `count` when that
+        // A repeat its caller counts itself (the kernel's record): the entry's count becomes `count` when that
         // is more. One atomic: no lock, no lookup, nothing copied; any thread. Null does nothing.
         void counted(const Entry* pEntry, u32 count);
         // luma_modlog_session.

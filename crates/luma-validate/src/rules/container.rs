@@ -1,4 +1,4 @@
-//! L100-L107: the container (luma-format 2) and its top level (3).
+//! L100-L107: the container (luma.md 2) and its top level (3).
 
 use super::{p, t, Ctx};
 use crate::source::Backing;
@@ -19,11 +19,11 @@ const TOP: [(&str, bool); 9] = [
     ("source", true),
     // The mod's own tests (tests/**/test.json, run by `lumalink test`): carried as source is, never read by the game.
     ("tests", true),
-    // TLS roots a net permission adds (services-net 7).
+    // TLS roots a net permission adds (services/net.md 7).
     ("certs", true),
 ];
 
-/// The phrase for what is wrong with an entry name, if anything (luma-format 2, "Names").
+/// The phrase for what is wrong with an entry name, if anything (luma.md 2, "Names").
 pub fn name_problem(name: &str) -> Option<&'static str> {
     if name.len() > MAX_NAME_BYTES {
         return Some("Name.TooLong");
@@ -76,7 +76,7 @@ pub fn name_problem(name: &str) -> Option<&'static str> {
 }
 
 /// Combining marks and conjoining jamo: a name with one has a decomposed twin that macOS treats as the same name,
-/// so names must be written precomposed (luma-format 2, revision 1 draft 3).
+/// so names must be written precomposed (luma.md 2, revision 1 draft 3).
 fn is_combining(c: char) -> bool {
     matches!(c as u32,
         0x0300..=0x036f | 0x0483..=0x0489 | 0x0591..=0x05bd | 0x0610..=0x061a | 0x064b..=0x065f | 0x0e31 | 0x0e34..=0x0e3a
@@ -172,7 +172,7 @@ pub(crate) fn check(ctx: &mut Ctx) {
         }
     }
 
-    // The top level (luma-format 3), each unknown name once.
+    // The top level (luma.md 3), each unknown name once.
     let mut unknown: BTreeMap<String, ()> = BTreeMap::new();
     for item in &ctx.m.items {
         let top = item.name.split('/').next().unwrap_or("");

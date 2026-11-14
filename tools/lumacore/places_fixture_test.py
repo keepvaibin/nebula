@@ -1,6 +1,6 @@
 """places_fixture_test.py --commands COMPILE_COMMANDS [--out DIR]
 
-The placement facts (plan 1.8 places, contract self-description), on the fixture (tools/lumacore/tests/places_fixture),
+The placement facts (docs/modding/language/game-description.md), on the fixture (tools/lumacore/tests/places_fixture),
 through the real tools with a game unit's flags (Game/System/LumaLoader.cpp's command):
   1. instrument.py writes each fixture unit's copy and its .places part;
   2. gen_types.py (--tree the fixture, --defined the copies' folder) writes the types file the classes' bases come from;

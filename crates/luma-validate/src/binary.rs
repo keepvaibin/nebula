@@ -1,4 +1,4 @@
-//! Reads a mod's library without loading it (luma-format 6): its format and machine, its exports, what it imports
+//! Reads a mod's library without loading it (luma.md 6): its format and machine, its exports, what it imports
 //! from where, and the words of its data with the loader's fixups applied, so `luma_mod` and the import list it
 //! points at can be read as the game's loader will see them. PE (Windows), ELF (Linux, Android), Mach-O (macOS, iOS).
 //! Every read is bounds-checked; a malformed file gives a phrase, never a panic.
@@ -38,12 +38,12 @@ pub struct Library<'d> {
     pub imports: Vec<Import>,
     /// Every library it names (with or without symbols).
     pub needed: Vec<String>,
-    /// What the system's loader would run in it when it loads, before LumaCore's `begin` (loader contract D2-6): a
-    /// PE entry point or TLS callbacks, ELF DT_INIT, DT_INIT_ARRAY or DT_PREINIT_ARRAY, a Mach-O init section or
-    /// LC_ROUTINES_64. Each named as the format names it.
+    /// What the system's loader would run in it when it loads, before LumaCore's `begin`
+    /// (docs/modding/language/compiled-form.md): a PE entry point or TLS callbacks, ELF DT_INIT, DT_INIT_ARRAY or
+    /// DT_PREINIT_ARRAY, a Mach-O init section or LC_ROUTINES_64. Each named as the format names it.
     pub runs_at_load: Vec<String>,
-    /// What the system would run when it closes the library, after LumaCore has freed the mod's memory (F's audit of
-    /// R3-A, A-1): ELF DT_FINI or DT_FINI_ARRAY, a Mach-O term section. A PE's entry point and TLS callbacks run at
+    /// What the system would run when it closes the library, after LumaCore has freed the mod's memory:
+    /// ELF DT_FINI or DT_FINI_ARRAY, a Mach-O term section. A PE's entry point and TLS callbacks run at
     /// both and are in `runs_at_load`.
     pub runs_at_close: Vec<String>,
     /// Mach-O: the system it is built for, as LC_BUILD_VERSION's platform numbers it (1 macOS, 2 iOS, 7 the iOS
@@ -230,7 +230,7 @@ fn read_pe(d: &[u8]) -> Option<Library<'_>> {
     if u32_at(d, opt, 16)? != 0 {
         lib.runs_at_load.push("AddressOfEntryPoint".to_string());
     }
-    // TLS (A-3): the data alone runs nothing; the callbacks run at load and close. IMAGE_TLS_DIRECTORY holds
+    // TLS: the data alone runs nothing; the callbacks run at load and close. IMAGE_TLS_DIRECTORY holds
     // AddressOfCallBacks, an address (ImageBase added) at +24 (PE32+) or +12 (PE32), of an array that ends with a null.
     let (tls, _) = dir(9)?;
     if tls != 0 {
@@ -635,7 +635,7 @@ fn read_macho(d: &[u8]) -> Option<Library<'_>> {
                     lib.base = vmaddr;
                 }
                 lib.maps.push((vmaddr, filesize, fileoff));
-                // The sections are inside the command (A-2): more than its size holds is not a readable library.
+                // The sections are inside the command: more than its size holds is not a readable library.
                 let nsects = u32z(d, at, 64)?;
                 if nsects.checked_mul(80)?.checked_add(72)? > size {
                     return None;
@@ -843,7 +843,8 @@ pub fn mod_info(lib: &Library, at: u64) -> Result<ModInfo, &'static str> {
             imports.push(ImportRow { kind, flags, name, signature, hook_kind });
         }
     }
-    // A library mod's exports (loader D3-3), as the kernel's modExport reads them: a row with a null name is skipped.
+    // A library mod's exports (compiled-form.md), as the kernel's modExport reads them: a row with a null name is
+    // skipped.
     let mut exports = Vec::new();
     if size >= EXPORTS_END {
         let list = lib.pointer_at(field(at, EXPORTS_AT, info)?).ok_or(info)?;
