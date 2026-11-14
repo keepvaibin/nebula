@@ -95,12 +95,20 @@ inline Widths widths_of(bool normal, const Shape& s, unsigned frame_width, unsig
     return w;
 }
 
-// The chain adds exactly zero to every pixel (the composite's scene plus bloom is then the scene, bit for bit): no
-// intensity or strength, no weight on level 1 (the normal bloom's level 2 is made from it), or a threshold no selection
-// passes (it keeps a value above the threshold; the intensity's 8-bit value of colours at most 1 is at most 235, a
-// channel's 255). `channel` as the selection reads it: 0 (the normal bloom's) the intensity, else a channel.
+// The selection's largest 8-bit value (game_bloom.hlsl BoxCS): DownCS clamps every texel to 1 before its box, the wide
+// scene's too, and the boxes after it average, so the selection reads colours of at most 1; the intensity of white,
+// 220 * 255 / 256 + 16 = 235.14, rounds to 235; a channel's to 255.
+inline constexpr unsigned kLargestIntensity = 235u;
+inline constexpr unsigned kLargestChannel = 255u;
+static_assert(static_cast<unsigned>((66.0 + 129.0 + 25.0) * (255.0 / 256.0) + 16.0 + 0.5) == kLargestIntensity);
+
+// The chain adds exactly zero to every pixel: no intensity or strength, no weight on level 1 (the normal bloom's level 2
+// is made from it), or a threshold no selection passes (it keeps a value above the threshold). The composite then writes
+// the scene back unchanged: its colour is the scene plus a bloom term of +0 (no clamp or scale of the sum), its alpha the
+// scene's. `channel` as the selection reads it: 0 (the normal bloom's) the intensity, else a channel.
 inline bool adds_nothing(unsigned threshold, unsigned channel, unsigned tap1, unsigned intensity, float strength) {
-    return intensity == 0u || !(strength > 0.0f) || tap1 == 0u || threshold >= (channel == 0u ? 235u : 255u);
+    return intensity == 0u || !(strength > 0.0f) || tap1 == 0u ||
+           threshold >= (channel == 0u ? kLargestIntensity : kLargestChannel);
 }
 
 }  // namespace galaxy::render::bloom
