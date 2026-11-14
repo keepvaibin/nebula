@@ -372,7 +372,12 @@ private:
     void place_slot(const float (*rows)[4], std::uint32_t vertex_rows, std::uint32_t pixel_rows);
     std::uint32_t material_register_locked(const float (*rows)[4], std::uint32_t vertex_rows, std::uint32_t pixel_rows);
     std::uint32_t take_mesh_ids(std::uint32_t count);
+    static std::uint64_t make_serial() noexcept;
 
+    // This object among every Registries a process has made (texture_table's per-thread answers name it), and how many
+    // times forget_textures has dropped registered lists: an answer given before a drop is asked again.
+    const std::uint64_t serial_ = make_serial();
+    std::atomic<std::uint64_t> tables_dropped_{0u};
     gpu::Device* device_ = nullptr;
     DeviceGate* gate_ = nullptr;
     std::mutex lock_;

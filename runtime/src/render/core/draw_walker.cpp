@@ -1332,6 +1332,7 @@ void RenderCore::walk_opaque_end(const NebulaFramePass& pass) {
 }
 
 void RenderCore::walk_scene_end() {
+    pipelines_.scene_drawn();
     rt_reactive();
     rt_light_end();
     scene_phase_ = false;
