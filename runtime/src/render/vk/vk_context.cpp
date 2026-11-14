@@ -488,13 +488,14 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     enabled.depthClamp = available.depthClamp;
     enabled.independentBlend = available.independentBlend;
     independent_blend_ = available.independentBlend == VK_TRUE;
+    // No module of Nebula's own gathers with a run-time offset (FXAA's taps are ConstOffset, EASU's gathers carry none);
+    // enabled where offered for a mod's shader that does.
     enabled.shaderImageGatherExtended = available.shaderImageGatherExtended;
     enabled.pipelineStatisticsQuery = available.pipelineStatisticsQuery;
     enabled.shaderStorageImageExtendedFormats = available.shaderStorageImageExtendedFormats;
     storage_extended_formats_ = available.shaderStorageImageExtendedFormats == VK_TRUE;
     sampler_anisotropy_ = available.samplerAnisotropy == VK_TRUE;
     bc_textures_ = available.textureCompressionBC == VK_TRUE;
-    gather_extended_ = available.shaderImageGatherExtended == VK_TRUE;
     pipeline_statistics_ = available.pipelineStatisticsQuery == VK_TRUE;
 
     const float priority = 1.0f;
