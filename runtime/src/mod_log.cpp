@@ -790,7 +790,7 @@ void add_start_findings() {
     }
     // A number option's kept value outside its range or off its steps: it reads its default.
     for (const galaxy::mods::OptionReset& reset : galaxy::mods::option_resets()) {
-        add_row(LUMA_MODLOG_CODE, LUMA_MODLOG_NOTE, reset.mod_id, 170u, "mods.ini", "Mods.OptionNumberReset",
+        add_row(LUMA_MODLOG_CODE, LUMA_MODLOG_NOTE, reset.mod_id, 172u, "mods.ini", "Mods.OptionNumberReset",
                 {{"key", reset.key}, {"value", reset.kept}, {"default", reset.fallback}});
     }
 }
