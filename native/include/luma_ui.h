@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* LumaCore's ui service (plan 2.4 layer 4 on 3.8 layer 1; contract ui): a screen layout of the mod's or the game's,
    shown over the game as the game shows its own (the game's layout drawer: picture and text panes, its fonts, its
-   16:9 widening), its panes found by name, their text, visibility and scale set. Import: LUMA_SERVICE(slot, "ui",
-   "1.1") (alive and set_scale; "1.0" for the rest). */
+   16:9 widening), its panes found by name, their text, visibility, scale and place set. Import: LUMA_SERVICE(slot,
+   "ui", "1.3") for set_position ("1.2" menu_rows and menu_chosen, "1.1" alive and set_scale, "1.0" the rest). */
 #ifndef LUMA_UI_H
 #define LUMA_UI_H
 
@@ -17,7 +17,7 @@ extern "C" {
 
 #define LUMA_UI_NAME "ui"
 #define LUMA_UI_MAJOR 1u
-#define LUMA_UI_MINOR 2u
+#define LUMA_UI_MINOR 3u
 
 /* Screens one mod has open at once, and panes it has found across them. */
 #define LUMA_UI_MOST_SCREENS 16u
@@ -121,6 +121,14 @@ typedef struct LumaUiService {
        handlers see it. LUMA_OK; an ended screen: LUMA_E_HANDLE,
        reported; a null row: LUMA_E_ARGUMENT, reported. Thread and taking out as open. */
     int32_t (*menu_chosen)(const LumaMod* mod, LumaUiScreen screen, int32_t* row);
+    /* 1.3. Game thread. The pane placed with its origin at x across and y up from its parent's origin, in layout units
+       in the parent's space (the parent's scale and turn apply), with the panes under it: the layout's own place of the
+       pane is replaced, not added to, so copies of one pane stand where the mod puts each. Kept until it is set again
+       or an animation that moves the pane's place plays; such an animation places it every frame from then, stopped or
+       ended too, until a play of another animation on the screen (set it again after that play). LUMA_OK; a number not
+       finite or past 4096 either way: LUMA_E_ARGUMENT, reported; an ended pane: LUMA_E_HANDLE, reported. Thread and
+       taking out as open. */
+    int32_t (*set_position)(const LumaMod* mod, LumaUiPane pane, float x, float y);
 } LumaUiService;
 
 #ifdef __cplusplus

@@ -27,3 +27,13 @@
 - Input: the game's own reading after the bindings (MR::isPressedUp/Down/Jump, MR::isStarPointerPointingPane, the
   game's buttons' test).
 - Test 3811-ui-menu (mod ju-menu, ui.c case 10). Used by kit.menu and kit.screen's list.
+
+## ui 1.3
+
+- `set_position(mod, pane, x, y)`: the pane and the panes under it placed with its origin at x across and y up from
+  its parent's origin, in layout units in the parent's space. It replaces the layout's place of the pane (not an
+  offset from it), so copies of one button stand where the mod puts each. Kept until set again or an animation that
+  moves the pane's place plays; that animation places it every frame from then, stopped or ended too, until another
+  play on the screen. Not finite or past 4096 either way: LUMA_E_ARGUMENT (Service.Argument with x or y). Pane facts
+  gain `x`, `y` (layout units); set_position writes `ui.position.<pane>`.
+- Test 3814-ui-position (mod ju-position). Capability ui.position.

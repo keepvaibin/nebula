@@ -377,14 +377,18 @@ namespace luma {
                     const u32 used = static_cast< u32 >(std::strlen(text));
                     nebula_snprintf(text + used, sizeof(text) - used, ",\"boxes\":%u", boxCount);
                 }
-                char json[1500];
+                char json[1700];
                 // The scale in thousandths (set_scale's; 1000 as the layout has it).
                 const s32 scaleX = static_cast< s32 >(rPane.pane->mScale.x * 1000.0f + (rPane.pane->mScale.x < 0.0f ? -0.5f : 0.5f));
                 const s32 scaleY = static_cast< s32 >(rPane.pane->mScale.y * 1000.0f + (rPane.pane->mScale.y < 0.0f ? -0.5f : 0.5f));
+                // The place in layout units from the parent's origin (set_position's; the layout's own until set).
                 nebula_snprintf(json, sizeof(json),
-                                "{\"screen\":%llu,\"pane\":%s,\"kind\":%u,\"visible\":%s,\"scale_x\":%d,\"scale_y\":%d%s}",
+                                "{\"screen\":%llu,\"pane\":%s,\"kind\":%u,\"visible\":%s,\"scale_x\":%d,\"scale_y\":%d,\"x\":%.3f,"
+                                "\"y\":%.3f%s}",
                                 static_cast< unsigned long long >(rPane.screen), name, static_cast< u32 >(rPane.pane->mKind),
-                                rPane.pane->IsVisible() ? "true" : "false", scaleX, scaleY, text);
+                                rPane.pane->IsVisible() ? "true" : "false", scaleX, scaleY,
+                                static_cast< double >(rPane.pane->mTranslate.x), static_cast< double >(rPane.pane->mTranslate.y),
+                                text);
                 char key[48];
                 nebula_snprintf(key, sizeof(key), "ui.%s.%llu", pWhat, static_cast< unsigned long long >(rPane.handle));
                 luma::modlog::fact(key, json);
@@ -947,6 +951,35 @@ namespace luma {
                 return LUMA_OK;
             }
 
+            int32_t svcSetPosition(const LumaMod* pMod, LumaUiPane pane, float x, float y) {
+                const char* const pWhere = "ui.set_position";
+                if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
+                    return status;
+                }
+                // NaN fails both comparisons; the infinities are past 4096.
+                if (!(x >= -4096.0f && x <= 4096.0f)) {
+                    report(pMod, pWhere, 101u, "x", nullptr);
+                    return LUMA_E_ARGUMENT;
+                }
+                if (!(y >= -4096.0f && y <= 4096.0f)) {
+                    report(pMod, pWhere, 101u, "y", nullptr);
+                    return LUMA_E_ARGUMENT;
+                }
+                Pane* const pPane = paneOf(pMod, pane);
+                if (pPane == nullptr) {
+                    report(pMod, pWhere, 102u, nullptr, nullptr);
+                    return LUMA_E_HANDLE;
+                }
+                // The translate the layout gave (and an animation's tracks write): replaced, its depth kept. The
+                // pane's matrix is built again when it changes (Ui::Pane::CalculateMtxSelf).
+                pPane->pane->mTranslate.x = x;
+                pPane->pane->mTranslate.y = y;
+                if (luma::modlog::facts()) {
+                    paneFact(*pPane, "position");
+                }
+                return LUMA_OK;
+            }
+
             int32_t svcMenuRows(const LumaMod* pMod, LumaUiScreen screen, const LumaUiMenuRow* pRows, uint32_t count) {
                 const char* const pWhere = "ui.menu_rows";
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
@@ -1021,6 +1054,7 @@ namespace luma {
                 svcSetScale,
                 svcMenuRows,
                 svcMenuChosen,
+                svcSetPosition,
             };
 
             // The service's rows (services-registry 11: ui's block, 570-619).
