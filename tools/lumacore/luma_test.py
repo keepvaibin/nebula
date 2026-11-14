@@ -55,6 +55,9 @@ HOSTS = {
 }
 HOST = HOSTS.get(platform.system(), HOSTS["Windows"])
 HOST["code"] = "code/%s/mod%s" % (HOST["platform"], HOST["ending"])
+# The system a check's "systems" names (read_expect): the platform's first part.
+SYSTEMS = {"windows", "linux", "macos", "android", "ios"}
+HOST_SYSTEM = HOST["platform"].split("-")[0]
 
 
 def library_in(pattern):
@@ -368,14 +371,14 @@ def read_test(folder, types=None):
         raise HarnessError("starts must be 1 or more")
     setup = read_setup(t, bare, seed, language, classes)
     steps = read_steps(t, bare, classes)
-    expect = read_expect(t, bare, steps)
+    expect, not_here = read_expect(t, bare, steps)
     if ends == "crash" and not any(c["kind"] == "log" and c["pattern"].startswith("crash: ") for c in expect):
         raise HarnessError("a test that ends in a crash expects its crash line: a log expectation starting \"crash: \"")
     return {"folder": folder, "raw": t, "name": t["name"], "proves": t["proves"], "bare": bare, "mods": mods,
             "language": language, "seed": seed, "renderers": renderers, "region": t.get("region"), "limit": limit,
             "continue_from": continue_from, "faults": faults, "setup": setup, "steps": steps, "expect": expect,
             "has_stage": "stage" in t, "hidden": hidden, "safe_start": safe_start, "device": device, "ends": ends,
-            "starts": starts, "fresh": fresh}
+            "starts": starts, "fresh": fresh, "not_here": not_here}
 
 
 def read_setup(t, bare, seed, language, classes):
@@ -726,10 +729,22 @@ def read_expect(t, bare, steps):
         raise HarnessError("expect must be a list")
     pictures = {s["picture"] for s in steps if "picture" in s}
     out = []
+    not_here = []
     for i, c in enumerate(expect):
         path = "expect[%d]" % i
         if not isinstance(c, dict):
             raise HarnessError("%s is not an object" % path)
+        if "systems" in c:
+            # A check of what a contract gives on some systems only (a service a platform answers ABSENT): it holds
+            # where its system is named and is listed as not checked elsewhere.
+            systems = c["systems"]
+            if (not isinstance(systems, list) or not systems or not all(isinstance(s, str) for s in systems)
+                    or not set(systems) <= SYSTEMS):
+                raise HarnessError("%s.systems is a list of %s" % (path, ", ".join(sorted(SYSTEMS))))
+            c = {k: v for k, v in c.items() if k != "systems"}
+            if HOST_SYSTEM not in systems:
+                not_here.append({"check": path, "systems": systems})
+                continue
         if "fact" in c:
             keys_known(c, path, {"fact", "when", "frames", "within", "matching", "field", "scope"} | FACT_OPS)
             scope_of(c, path)
@@ -817,7 +832,7 @@ def read_expect(t, bare, steps):
             out.append({"kind": "sound", "frames": s, "rms": r, "source": c})
         else:
             raise HarnessError("%s is not a check this harness knows (fact, log, no_log, picture, sound)" % path)
-    return out
+    return out, not_here
 
 
 # --- Pictures (PPM in, PNG out and in) ---------------------------------------------------------------------------------
@@ -2118,7 +2133,7 @@ def run_tests(args):
                        {"setup": setup, "frames": max([f.get("frame", -1) for f in facts] or [-1]),
                         "seconds": round(ran.get("seconds", 0.0), 2), "pictures": pictures,
                         "binaries": ran.get("frozen", {}), "exit": ran.get("code"), "starts": ran.get("starts"),
-                        "test_json": test["raw"]})
+                        "not_on_this_system": test["not_here"], "test_json": test["raw"]})
     finally:
         lock.unlink()
     return 0 if all_pass else 1
