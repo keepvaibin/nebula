@@ -2017,11 +2017,7 @@ void svc_settings_view(void*, NebulaSettingsView* view) {
 // The pointer's input to the settings menu: NEBULA_SETTINGS_* are galaxy::render::NativeSettingsInput's values.
 void svc_settings_input(void*, uint32_t action, int32_t arg) {
 #if defined(NEBULA_HOST_RENDERER)
-    if (action == NEBULA_SETTINGS_CLOSE && gSceneBegins.load(std::memory_order_relaxed) == 0u) {
-        // Before the game's first 3D scene the game shows no menu (its boot closes one asked for there): this close is
-        // the game's, not the player's, and answers no question the player has not seen.
-        galaxy::render::native_settings_input(galaxy::render::NativeSettingsInput::CloseUnseen, arg);
-    } else if (action >= NEBULA_SETTINGS_OPEN && action <= NEBULA_SETTINGS_SET_VALUE) {
+    if (action >= NEBULA_SETTINGS_OPEN && action <= NEBULA_SETTINGS_SET_VALUE) {
         galaxy::render::native_settings_input(static_cast<galaxy::render::NativeSettingsInput>(action), arg);
     }
 #else
