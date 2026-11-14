@@ -20,6 +20,7 @@
 #include <fstream>
 #include <iterator>
 #include <limits>
+#include <mutex>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -573,7 +574,9 @@ const char* picture_path(void*, std::uint64_t game_frame, std::uint32_t kind) {
 // --- Sound ---------------------------------------------------------------------------------------------------------
 
 // GALAXY_AUDIO_WAV_DUMP=<file>: the mix as a 16-bit stereo WAV file, 15 s or GALAXY_AUDIO_WAV_DUMP_SECONDS (up to an
-// hour). A rate change starts a new file beside it (<name>.rate-<hz>.part-<n>.wav).
+// hour). A rate change starts a new file beside it (<name>.rate-<hz>.part-<n>.wav). The run's end ends the dump for
+// good: the mixes of the shutdown after it are not written (opening the file again would empty it). The mix calls
+// add on the audio thread and the end comes on another, so both take the dump's lock.
 class WavDump {
 public:
     void start(std::filesystem::path base, std::uint32_t seconds) {
@@ -583,11 +586,12 @@ public:
     [[nodiscard]] bool on() const { return !base_.empty() && !failed_; }
 
     void add(const float* samples, std::uint32_t frames, std::uint32_t channels, std::uint32_t rate) {
-        if (!on() || channels != 2u) {
+        const std::lock_guard<std::mutex> hold(lock_);
+        if (!on() || ended_ || channels != 2u) {
             return;
         }
         if (out_.is_open() && rate != rate_) {
-            finish();
+            close();
             ++part_;
         }
         if (!out_.is_open() && !open(rate)) {
@@ -610,7 +614,15 @@ public:
         }
     }
 
-    void finish() {
+    // The run's end: the file is complete and nothing opens it again.
+    void end() {
+        const std::lock_guard<std::mutex> hold(lock_);
+        close();
+        ended_ = true;
+    }
+
+private:
+    void close() {
         if (!out_.is_open()) {
             return;
         }
@@ -623,7 +635,6 @@ public:
         bytes_ = 0u;
     }
 
-private:
     bool open(std::uint32_t rate) {
         path_ = base_;
         if (part_ != 0u) {
@@ -671,7 +682,8 @@ private:
     std::ofstream out_;
     std::vector<char> block_;
     std::uint32_t seconds_ = 15u, rate_ = 0u, bytes_ = 0u, part_ = 0u;
-    bool failed_ = false;
+    bool failed_ = false, ended_ = false;
+    std::mutex lock_;
 } g_wav;
 
 void sound(void*, const float* samples, std::uint32_t frames, std::uint32_t channels, std::uint32_t rate) {
@@ -687,7 +699,7 @@ NebulaHostExtension g_extension{};
 
 // The harness's end: the sound file closed, then the run ends as closing the window ends it.
 void harness_quit() {
-    g_wav.finish();
+    g_wav.end();
     if (HOST_HAS(quit)) {
         g_host->quit(g_host->host);
     }
@@ -711,7 +723,7 @@ NEBULA_EXTENSION_EXPORT void nebula_test_scene_frame(std::uint64_t scene_frames,
 
 // The tour's end: the run ends as closing the window ends it.
 NEBULA_EXTENSION_EXPORT void nebula_test_done() {
-    g_wav.finish();
+    g_wav.end();
     if (HOST_HAS(quit)) {
         g_host->quit(g_host->host);
     }
