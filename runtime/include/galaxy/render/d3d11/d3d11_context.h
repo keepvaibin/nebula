@@ -6,12 +6,13 @@
 // Every call on the immediate context is the render thread's (Direct3D 11 contexts are single-threaded). The other
 // threads (texture decoding, pipeline workers) create objects on the device, which is free-threaded.
 //
-// Upload memory (gpu::create_upload_memory) is a buffer in video memory and a copy of it in system memory, which the CPU
-// writes through the mapped pointer as on the other back ends; before the draws that read it run, the bytes written since
-// the last upload reach the buffer (Context::upload_written: UpdateSubresource1 of each written range, with
-// D3D11_COPY_NO_OVERWRITE, since a range written in a frame is never one a frame in flight still reads). Written ranges are
-// marked by the writer where it knows them (the upload rings: Buffer::mark) and found by the memory manager's write watch
-// elsewhere (the resident geometry and the material slots), so the shared code needs no call of its own.
+// Upload memory (gpu::create_upload_memory) is system memory the CPU writes through the mapped pointer as on the other back
+// ends (VirtualAlloc with MEM_WRITE_WATCH), and the buffers in video memory draws read. Direct3D 11 fixes a buffer's binds
+// when it is made, and a constant buffer can be nothing else, so a Buffer has one video-memory buffer for each way draws
+// bind it (BufferUse), made at the first such bind from the whole copy. Before the draws that read it run, the pages written
+// since the last upload reach each of them (Context::upload_written: GetWriteWatch, then UpdateSubresource1 of each run of
+// pages with D3D11_COPY_NO_OVERWRITE: a range written in a frame is never one a frame in flight still reads). The shared code
+// needs no call of its own.
 #pragma once
 
 #include "galaxy/render/gpu_types.h"
@@ -26,6 +27,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace galaxy::render::d3d11 {
@@ -50,32 +52,36 @@ struct Texture : std::enable_shared_from_this<Texture> {
     std::uint32_t levels = 1u;
     std::uint32_t samples = 1u;
     std::uint64_t allocation_bytes = 0u;
+    // A store texture staged as one or two channels (1: R8, 2: Rg8) and kept as RGBA8, widened when written: Direct3D 11
+    // views cannot repeat a channel as the other renderers' do (R8 read as rrrr, Rg8 as rrrg).
+    std::uint8_t widened = 0u;
 
     Texture() = default;
     Texture(const Texture&) = delete;
     Texture& operator=(const Texture&) = delete;
 };
 
-// What a buffer is bound as. Direct3D 11 fixes a buffer's binds when it is made, and a constant buffer can be nothing
-// else: the renderer makes each upload buffer for the binds its users need.
+// How draws bind a buffer.
 enum class BufferUse : std::uint8_t {
-    Geometry,   // vertices and indices (the vertex ring, the index ring, the resident geometry)
+    Geometry,   // vertices and indices
     Constants,  // constant buffers bound at an offset (VSSetConstantBuffers1: 256-byte steps)
-    Rows,       // structured buffers of 16-byte elements read by draws (the composed rows, the instance table)
+    Rows,       // structured buffers of 16-byte elements (t16 the composed rows, t17 the instance table)
+    Count
 };
 
-// A buffer in video memory, its system-memory copy when the CPU writes it (upload memory), and its address range.
+// Upload memory: the copy the CPU writes, its address range, and its video-memory buffers by use.
 struct Buffer {
-    ComPtr<ID3D11Buffer> buffer;
-    std::byte* shadow = nullptr;  // the copy the CPU writes (VirtualAlloc, with MEM_WRITE_WATCH when `watched`); null: none
-    std::uint64_t size = 0u;
+    std::byte* shadow = nullptr;  // VirtualAlloc with MEM_WRITE_WATCH
+    std::uint64_t size = 0u;      // a multiple of 256
     std::uint64_t address = 0u;   // its first byte in the address space (gpu::Address)
-    BufferUse use = BufferUse::Geometry;
-    bool watched = false;         // its written pages are found by GetWriteWatch, not marked
-    // Ranges written since the last upload, in bytes from the start (marked by their writer; merged when they touch).
-    std::mutex marks_mutex;
-    std::vector<std::array<std::uint64_t, 2>> marks;
-    void mark(std::uint64_t offset, std::uint64_t bytes);
+    std::array<ComPtr<ID3D11Buffer>, static_cast<std::size_t>(BufferUse::Count)> gpu{};
+    // The video-memory buffer for `use`, made now from the whole copy if there is none (render thread).
+    [[nodiscard]] ID3D11Buffer* bound(BufferUse use);
+    // A structured view of 16-byte elements from `offset` to the end (render thread; kept until the buffer goes, the
+    // oldest dropped past kRowViews).
+    [[nodiscard]] ID3D11ShaderResourceView* rows_view(std::uint64_t offset);
+    static constexpr std::size_t kRowViews = 64u;
+    std::vector<std::pair<std::uint64_t, ComPtr<ID3D11ShaderResourceView>>> row_views;
 
     Buffer() = default;
     Buffer(const Buffer&) = delete;
@@ -123,7 +129,6 @@ struct DeviceCaps {
     bool tearing = false;               // DXGI_FEATURE_PRESENT_ALLOW_TEARING
     bool flip_model = false;            // DXGI 1.4+: FLIP_DISCARD swap chains
     bool unified_memory = false;        // the adapter has no video memory of its own (DXGI: DedicatedVideoMemory small)
-    bool map_default_buffers = false;   // D3D11_FEATURE_D3D11_OPTIONS1 MapOnDefaultBuffers
     unsigned max_samples = 1u;          // the most samples a pixel the scene's formats take (MSAA)
     std::uint64_t dedicated_bytes = 0u;
     std::uint32_t vendor = 0u;
@@ -159,10 +164,8 @@ public:
     [[nodiscard]] std::shared_ptr<Texture> create_texture(std::uint32_t width, std::uint32_t height, std::uint32_t levels,
                                                           DXGI_FORMAT format, std::uint32_t bind, const char* name,
                                                           std::uint32_t samples = 1u);
-    // A buffer of `size` bytes for `use`; `cpu`: with a system-memory copy the CPU writes (upload memory); `watched`:
-    // its written pages are found by the write watch.
-    [[nodiscard]] std::shared_ptr<Buffer> create_buffer(std::uint64_t size, BufferUse use, bool cpu, bool watched,
-                                                        const char* name);
+    // Upload memory of `size` bytes (zeroed), with its address range. Null when the memory cannot be had.
+    [[nodiscard]] std::shared_ptr<Buffer> create_buffer(std::uint64_t size, const char* name);
     // Every upload buffer's bytes written since the last call reach the GPU (render thread, before draws that read them).
     void upload_written();
 
@@ -190,6 +193,7 @@ private:
     struct AddressPage {
         std::array<std::atomic<Buffer*>, kAddressPageSize> slots{};
     };
+    friend struct Buffer;  // its destructor leaves the upload list
     [[nodiscard]] std::uint64_t register_address(Buffer* buffer);
 
     ComPtr<IDXGIFactory2> factory_;
