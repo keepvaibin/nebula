@@ -306,7 +306,10 @@ if(TARGET smg_game_plain)
     target_compile_options(smg_game_plain PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>)
 endif()
 
-set_source_files_properties(math/src/nebula_libm.c math/src/nebula_libc.c math/src/nebula_runtime_win.c PROPERTIES COMPILE_OPTIONS -fno-builtin)
+# Outside ThinLTO as well: the code generator calls strlen, memcpy, sinf and the like after link-time optimization
+# has run, so their definitions must be machine code in the link, not bitcode the optimizer may drop as unused
+# (in the module without rows, where they are hidden, it did: "undefined hidden symbol: strlen").
+set_source_files_properties(math/src/nebula_libm.c math/src/nebula_libc.c math/src/nebula_runtime_win.c PROPERTIES COMPILE_OPTIONS "-fno-builtin;-fno-lto")
 target_compile_definitions(smg_game_common INTERFACE _USE_STD_VECTOR_ALGORITHMS=0 _ACRTIMP=)
 # No system library: everything the module uses it defines or asks the host for. A sanitizer's runtime and the profile counters' need the C runtime.
 if(WIN32 AND NOT NEBULA_SANITIZE AND NOT CMAKE_CXX_FLAGS MATCHES "fprofile-instr-generate")
