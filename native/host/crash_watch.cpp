@@ -37,6 +37,9 @@ HANDLE g_done = nullptr;
 HANDLE g_ready = nullptr;  // set once the watcher has the game's process open
 Block* g_block = nullptr;
 wchar_t g_folder[1024];  // where dumps go, kept from the start (no heap at the crash)
+// One request at a time: the block and the two events are one request's. A crash while the stall's dump is written
+// (or the reverse) waits for it, within its own wait.
+volatile LONG g_asking = 0;
 
 void name_of(wchar_t* out, std::size_t size, const wchar_t* base, const wchar_t* what) {
     std::swprintf(out, size, L"%ls-%ls", base, what);
@@ -195,6 +198,9 @@ void start(const std::filesystem::path& folder) {
     }
 }
 
+static Result ask(DWORD thread, EXCEPTION_POINTERS* pointers, unsigned type, wchar_t* path, std::size_t size, DWORD* error,
+                  DWORD* snapshot, DWORD wait_ms, const wchar_t* kind) noexcept;
+
 Result write_dump(DWORD thread, EXCEPTION_POINTERS* pointers, unsigned type, wchar_t* path, std::size_t size, DWORD* error,
                   DWORD* snapshot, DWORD wait_ms, const wchar_t* kind) noexcept {
     *error = 0;
@@ -204,6 +210,24 @@ Result write_dump(DWORD thread, EXCEPTION_POINTERS* pointers, unsigned type, wch
         WaitForSingleObject(g_ready, 0) != WAIT_OBJECT_0) {
         return Result::kNoWatcher;
     }
+    const ULONGLONG asked = GetTickCount64();
+    while (InterlockedCompareExchange(&g_asking, 1, 0) != 0) {
+        const ULONGLONG waited = GetTickCount64() - asked;
+        if (waited >= wait_ms) {
+            *error = ERROR_BUSY;
+            return Result::kFailed;
+        }
+        Sleep(10);
+    }
+    const ULONGLONG waited = GetTickCount64() - asked;
+    wait_ms = waited >= wait_ms ? 0u : wait_ms - static_cast<DWORD>(waited);
+    const Result result = ask(thread, pointers, type, path, size, error, snapshot, wait_ms, kind);
+    InterlockedExchange(&g_asking, 0);
+    return result;
+}
+
+static Result ask(DWORD thread, EXCEPTION_POINTERS* pointers, unsigned type, wchar_t* path, std::size_t size, DWORD* error,
+                  DWORD* snapshot, DWORD wait_ms, const wchar_t* kind) noexcept {
     // The file name is fixed width (the kind, a date, a time and a process id); the folder is any length.
     SYSTEMTIME now;
     GetLocalTime(&now);

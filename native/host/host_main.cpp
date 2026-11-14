@@ -5226,7 +5226,8 @@ int main(int argc, char** argv) {
         if (frames != stall_frames || frames == 0u || gSuspended) {
             stall_frames = frames;
             stall_since = Clock::now();
-        } else if (watch_stalls && !stall_dumped && Clock::now() - stall_since >= kStall) {
+        } else if (watch_stalls && !stall_dumped && gCrashing.load() == 0 && Clock::now() - stall_since >= kStall) {
+            // A crash being written is no stall: its threads wait for the crash's dump.
             stall_dumped = true;
             static wchar_t hang[1024];
             DWORD hang_error = 0;
