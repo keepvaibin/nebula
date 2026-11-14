@@ -137,6 +137,7 @@ android {
         versionCode = 25
         versionName = "2.0.15-test.12"
         manifestPlaceholders["gameExported"] = "false"
+        manifestPlaceholders["appLabel"] = "@string/app_name"
         ndk {
             abiFilters += ((project.findProperty("nebulaAbis") as String?) ?: "arm64-v8a").split(",")
         }
@@ -167,6 +168,12 @@ android {
             // A debuggable test build's game screen starts from the shell (the test harness's runs, GameActivity's
             // nebula.harness); a shipped build's only from the launcher.
             manifestPlaceholders["gameExported"] = if (project.hasProperty("nebula.debuggable")) "true" else "false"
+            // A test build is its own app beside the installed game: its own id (its own data folder, file provider and
+            // saves) and name, so installing it can never replace the game or reach its saves.
+            if (project.hasProperty("nebula.debuggable")) {
+                applicationIdSuffix = ".test"
+                manifestPlaceholders["appLabel"] = "Nebula test"
+            }
         }
     }
 
