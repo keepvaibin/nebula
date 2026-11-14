@@ -66,8 +66,9 @@ NativeOut program_ps(Varyings i) {
     }
     {
         const float4 t = TAP(tap0, TEX(0).Sample(SAMP(0), i.uv0)).rgba;
+        const float ka = 1.0;
         const float3 rc = saturate((prev.rgb + lerp(float3(0.0, 0.0, 0.0), prev.aaa, prev.aaa)));
-        const float ra = (t.a + lerp(0.0, 0.0, 0.0));
+        const float ra = (0.0 + lerp(0.0, ka, t.a));
         prev.rgb = rc;
         prev.a = ra;
         NATIVE_STAGE(2, float4(rc, ra))
