@@ -111,10 +111,13 @@ __asm__(".text\n"
 #define LUMA_GUARD_SYM(name) "_" #name
 #define LUMA_GUARD_HIDE(name) ".private_extern _" #name "\n"
 #define LUMA_GUARD_TYPE(name) LUMA_GUARD_HIDE(name)
+// A label inside a function: Mach-O cuts the text at each global label unless it is the function's alternate entry.
+#define LUMA_GUARD_INSIDE(name) ".alt_entry _" #name "\n"
 #else
 #define LUMA_GUARD_SYM(name) #name
 #define LUMA_GUARD_HIDE(name) ".hidden " #name "\n"
 #define LUMA_GUARD_TYPE(name) ".type " #name ", @function\n" LUMA_GUARD_HIDE(name)
+#define LUMA_GUARD_INSIDE(name) ""
 #endif
 // sysv-x64: pushes rbx (the frame across the call), which also aligns the call; its CFI says so.
 __asm__(".text\n"
@@ -143,7 +146,7 @@ __asm__(".text\n"
         "    movq 280(%rbx), %rdx\n"
         "    movq 288(%rbx), %rcx\n"
         "    callq *256(%rbx)\n"
-        ".globl " LUMA_GUARD_SYM(luma_guard_call_return) "\n" LUMA_GUARD_HIDE(luma_guard_call_return)
+        ".globl " LUMA_GUARD_SYM(luma_guard_call_return) "\n" LUMA_GUARD_HIDE(luma_guard_call_return) LUMA_GUARD_INSIDE(luma_guard_call_return)
         LUMA_GUARD_SYM(luma_guard_call_return) ":\n"
         "    movq %rax, 296(%rbx)\n"
         "    popq %rbx\n"
@@ -172,10 +175,13 @@ __asm__(".text\n"
 #define LUMA_GUARD_SYM(name) "_" #name
 #define LUMA_GUARD_HIDE(name) ".private_extern _" #name "\n"
 #define LUMA_GUARD_TYPE(name) LUMA_GUARD_HIDE(name)
+// A label inside a function: Mach-O cuts the text at each global label unless it is the function's alternate entry.
+#define LUMA_GUARD_INSIDE(name) ".alt_entry _" #name "\n"
 #else
 #define LUMA_GUARD_SYM(name) #name
 #define LUMA_GUARD_HIDE(name) ".hidden " #name "\n"
 #define LUMA_GUARD_TYPE(name) ".type " #name ", %function\n" LUMA_GUARD_HIDE(name)
+#define LUMA_GUARD_INSIDE(name) ""
 #endif
 // aarch64: a 32-byte frame (fp, lr, x19 holding the frame across the call); its CFI says so. The resume returns with
 // `ret` through x30, which branch target checks do not apply to.
@@ -210,7 +216,7 @@ __asm__(".text\n"
         "    ldp x2, x3, [x19, #280]\n"
         "    ldr x16, [x19, #256]\n"
         "    blr x16\n"
-        ".globl " LUMA_GUARD_SYM(luma_guard_call_return) "\n" LUMA_GUARD_HIDE(luma_guard_call_return)
+        ".globl " LUMA_GUARD_SYM(luma_guard_call_return) "\n" LUMA_GUARD_HIDE(luma_guard_call_return) LUMA_GUARD_INSIDE(luma_guard_call_return)
         LUMA_GUARD_SYM(luma_guard_call_return) ":\n"
         "    str x0, [x19, #296]\n"
         "    ldr x19, [sp, #16]\n"
