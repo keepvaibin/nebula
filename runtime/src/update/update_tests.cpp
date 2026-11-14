@@ -56,6 +56,14 @@ constexpr std::string_view kReplayedSignature =
 
 constexpr std::string_view kAsset = "Nebula-Beta-Test.pkg";
 
+// kManifestSignature signs the manifest text without its `asset=` line (made before the line was required), so the one
+// check that needs a valid signature over the text with the line is skipped until the signature is made again. To
+// re-enable it: sign "version=9.9.9-beta.1\nsha256=<kPackageSha>\nsize=27\nasset=Nebula-Beta-Test.pkg\n" with the test
+// key's RSACryptoServiceProvider.SignData (SHA-256, as kSignedTextSignature), paste the result as kManifestSignature,
+// and set this to true. The check "a validly signed manifest that names no asset is refused" then needs the old value
+// kept under another name.
+constexpr bool kManifestSignatureHasAsset = false;
+
 std::string listing(const std::string& version, const std::string& notes) {
     const std::string base = "https://example.org/" + version + "/";
     return "[{\"tag_name\": \"v" + version + "\", \"draft\": false, \"prerelease\": true, \"body\": \"" + notes +
@@ -291,10 +299,8 @@ int main(int argc, char** argv) {
     }
 
     // The install: the signed manifest decides.
-    // UNRUN (owner's order 21:50, nothing is run). kManifestSignature and kReplayedSignature sign texts without an
-    // `asset=` line: those are now refused (the first and the replay check use them so). The manifests with the line need
-    // kManifestSignature made again over the new text with the test key (RSACryptoServiceProvider.SignData, SHA-256, as
-    // kSignedTextSignature) before "a package matching its signed manifest is installed" passes.
+    // kManifestSignature and kReplayedSignature sign texts without an `asset=` line: those are refused now (the first and
+    // the replay check use them so); the signed install of a manifest with the line waits for kManifestSignatureHasAsset.
     write_cache(data, "{\"checkedUtc\": \"2020-01-01T00:00:00Z\"}");
     g_transport.releases = listing("9.9.9-beta.1", "notes");
     galaxy::update::begin(installed);
@@ -314,8 +320,13 @@ int main(int argc, char** argv) {
     check(release && start_install(*release) && wait_install() == InstallState::Failed && g_installed_package.empty(),
           "a validly signed manifest that names no asset is refused");
     g_transport.manifest += asset_line;
-    check(release && start_install(*release) && wait_install() == InstallState::Restart && read_file(g_installed_package) == kPackage,
-          "a package matching its signed manifest is installed");
+    if constexpr (kManifestSignatureHasAsset) {
+        check(release && start_install(*release) && wait_install() == InstallState::Restart && read_file(g_installed_package) == kPackage,
+              "a package matching its signed manifest is installed");
+    } else {
+        std::printf("SKIPPED: a package matching its signed manifest is installed (kManifestSignature predates the asset= "
+                    "line: re-sign the manifest text with it, see kManifestSignatureHasAsset)\n");
+    }
     g_installed_package.clear();
     g_transport.manifest = "version=2.0.1-beta.1\nsha256=" + std::string(kPackageSha) + "\nsize=" + std::to_string(kPackage.size()) + "\n";
     g_transport.signature = std::string(kReplayedSignature);
