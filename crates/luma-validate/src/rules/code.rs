@@ -208,7 +208,6 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
         ctx.add(502, &name, None, None, vec![("expected", t(expected)), ("found", found), ("kind", t(kind_phrase(lib.format, lib.machine)))]);
         return;
     }
-    let is_apple = format == Format::MachO;
     // L511: a library (the mod's own or an extra one) iOS will not load once the device has signed it with the
     // player's certificate: one built for another system (dyld refuses a library of another platform), or one
     // encrypted by a store (it cannot be signed again).
@@ -252,30 +251,25 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
         ctx.add(509, &name, None, None, vec![("why", p("Lib.RunsAtClose")), ("found", t(what.clone()))]);
     }
     let from_extra = |library: &str| extras.iter().any(|e| e.eq_ignore_ascii_case(library) || library.ends_with(&format!("/{e}")));
-    if is_apple {
-        // What the linker forces into a -nostdlib dylib is the kernel loader contract's list (1.1), from evidence.
-        if lib.imports.iter().any(|i| !from_extra(&i.library)) || lib.needed.iter().any(|n| !from_extra(n)) {
-            ctx.not_checked(504, "Missing.LoaderContract");
+    // A -nostdlib library of every format imports nothing and loads no library (on the five Apple targets, ld64.lld
+    // writes only LC_ID_DYLIB, empty bind tables and no chained imports); whatever else it takes is from the system.
+    let mut reported = std::collections::BTreeSet::new();
+    for i in &lib.imports {
+        if from_extra(&i.library) {
+            continue;
         }
-    } else {
-        let mut reported = std::collections::BTreeSet::new();
-        for i in &lib.imports {
-            if from_extra(&i.library) {
-                continue;
-            }
-            // An ELF symbol names no library: allowed only when an extra library is loaded to give it, which the
-            // validator cannot see from here; with no extra library it comes from the system.
-            if i.library.is_empty() && !extras.is_empty() {
-                continue;
-            }
-            if reported.insert((i.library.clone(), i.symbol.clone())) {
-                ctx.add(504, &name, None, None, vec![("found", t(format!("\"{}\"", i.symbol))), ("library", library_arg(&i.library))]);
-            }
+        // An ELF symbol (or a Mach-O flat or weak lookup) names no library: allowed only when an extra library is
+        // loaded to give it, which the validator cannot see from here; with no extra library it comes from the system.
+        if i.library.is_empty() && !extras.is_empty() {
+            continue;
         }
-        for n in &lib.needed {
-            if !from_extra(n) && !lib.imports.iter().any(|i| &i.library == n) {
-                ctx.add(504, &name, None, None, vec![("found", p("Lib.WholeLibrary")), ("library", library_arg(n))]);
-            }
+        if reported.insert((i.library.clone(), i.symbol.clone())) {
+            ctx.add(504, &name, None, None, vec![("found", t(format!("\"{}\"", i.symbol))), ("library", library_arg(&i.library))]);
+        }
+    }
+    for n in &lib.needed {
+        if !from_extra(n) && !lib.imports.iter().any(|i| &i.library == n) {
+            ctx.add(504, &name, None, None, vec![("found", p("Lib.WholeLibrary")), ("library", library_arg(n))]);
         }
     }
     let info = match binary::mod_info(&lib, info_at) {

@@ -365,8 +365,14 @@ fn without_the_game_s_names_the_name_rules_say_they_were_not_checked() {
 
 #[test]
 fn a_library_that_needs_another_names_it_unless_the_mod_ships_it() {
-    // Windows names the library a symbol comes from; ELF names only the libraries needed.
-    for (platform, entry, extra) in [("windows-x64", "pe-x64/uses_extra.dll", "pe-x64/extra.dll"), ("linux-x64", "elf-x64/uses_extra.so", "elf-x64/extra.so")] {
+    // Windows and Mach-O name the library a symbol comes from; ELF names only the libraries needed. Mach-O binds it
+    // through the bind table or the chained fixups' imports.
+    for (platform, entry, extra) in [
+        ("windows-x64", "pe-x64/uses_extra.dll", "pe-x64/extra.dll"),
+        ("linux-x64", "elf-x64/uses_extra.so", "elf-x64/extra.so"),
+        ("macos-arm64", "macho-arm64/uses_extra.dylib", "macho-arm64/extra.dylib"),
+        ("macos-arm64", "macho-arm64-chained/uses_extra.dylib", "macho-arm64/extra.dylib"),
+    ] {
         let extra_name = extra.rsplit('/').next().unwrap();
         let r = check(&code_mod(platform, &lib(entry), &[], false), platform, true);
         assert!(!r.findings.is_empty() && codes(&r).iter().all(|&c| c == 504), "{entry}: {:?}", r.findings);
@@ -383,6 +389,62 @@ fn a_library_that_needs_another_names_it_unless_the_mod_ships_it() {
     }
 }
 
+/// `data` with the external undefined symbol `name` of its Mach-O symbol table made local, so only what dyld reads (the
+/// bind tables, the chained fixups' imports) still says it is bound.
+fn macho_symbol_hidden(data: &[u8], name: &str) -> Vec<u8> {
+    let u32_at = |d: &[u8], at: usize| u32::from_le_bytes(d[at..at + 4].try_into().unwrap()) as usize;
+    let mut d = data.to_vec();
+    let mut at = 32;
+    for _ in 0..u32_at(&d, 16) {
+        if u32_at(&d, at) == 2 {
+            let (symoff, nsyms, stroff) = (u32_at(&d, at + 8), u32_at(&d, at + 12), u32_at(&d, at + 16));
+            for i in 0..nsyms {
+                let s = symoff + i * 16;
+                let strx = stroff + u32_at(&d, s);
+                let end = d[strx..].iter().position(|&b| b == 0).unwrap();
+                if &d[strx..strx + end] == name.as_bytes() && d[s + 4] == 0x01 {
+                    d[s + 4] = 0x00;
+                    return d;
+                }
+            }
+        }
+        at += u32_at(&d, at + 4);
+    }
+    panic!("no undefined {name}");
+}
+
+#[test]
+fn a_mach_o_library_that_loads_or_binds_from_another_names_it() {
+    let m = "macos-arm64";
+    // Only loaded (LC_LOAD_DYLIB, no symbol): loaded as a whole.
+    let r = check(&code_mod(m, &lib("macho-arm64/needs_extra.dylib"), &[], false), m, true);
+    assert_eq!(codes(&r), vec![504], "{:?}", r.findings);
+    assert_eq!(english(&r, 504), "test.mod: code/macos-arm64/mod.dylib needs @loader_path/extra.dylib (loaded as a whole); a mod's own library may need nothing from the system.");
+    // Bound by the bind table or the chained fixups' imports alone, the symbol table not saying so.
+    for path in ["macho-arm64/uses_extra.dylib", "macho-arm64-chained/uses_extra.dylib"] {
+        let bound = macho_symbol_hidden(&lib(path), "_extra_value");
+        let r = check(&code_mod(m, &bound, &[], false), m, true);
+        assert_eq!(codes(&r), vec![504], "{path}: {:?}", r.findings);
+        assert!(english(&r, 504).contains("\"extra_value\"") && english(&r, 504).contains("@loader_path/extra.dylib"), "{path}: {:?}", r.findings);
+        // Shipped as an extra library with the native permission, it is the mod's own.
+        let r = check(&code_mod(m, &bound, &[("extra.dylib", lib("macho-arm64/extra.dylib"))], true), m, true);
+        assert!(r.findings.is_empty(), "{path}: {:?}", r.findings);
+    }
+}
+
+#[test]
+fn a_library_whose_offsets_pass_the_end_does_not_read() {
+    // A section header table at 2^64 - 1: the library does not read. A program header's file offset of 2^64 - 1 on
+    // the segment that holds luma_mod: luma_mod does not read. A sum past the 64-bit range is never a panic.
+    let a = "android-x64";
+    let r = check(&code_mod(a, &lib("elf-x64/sections_past_end.so"), &[], false), a, true);
+    assert_eq!(codes(&r), vec![502], "{:?}", r.findings);
+    assert_eq!(r.findings[0].args.iter().find(|(k, _)| *k == "found").map(|(_, v)| format!("{v:?}")), Some("Phrase(\"Lib.BadElf\")".to_string()));
+    let r = check(&code_mod(a, &lib("elf-x64/segment_past_end.so"), &[], false), a, true);
+    assert_eq!(codes(&r), vec![512], "{:?}", r.findings);
+    assert_eq!(format!("{:?}", r.findings[0].args), "[(\"why\", Phrase(\"Lib.InfoUnreadable\"))]");
+}
+
 #[test]
 fn an_extra_library_lists_what_it_needs() {
     let w = "windows-x64";
@@ -396,7 +458,15 @@ fn an_extra_library_lists_what_it_needs() {
 fn no_damaged_byte_of_a_library_makes_it_panic() {
     // Every byte of each form's headers and luma_mod changed three ways; the validator reports or passes, never
     // panics or loops.
-    for (path, platform) in [GOOD[0], GOOD[2], GOOD[3], GOOD[6], GOOD[7]] {
+    for (path, platform) in [
+        GOOD[0],
+        GOOD[2],
+        GOOD[3],
+        GOOD[6],
+        GOOD[7],
+        ("macho-arm64/uses_extra.dylib", "macos-arm64"),
+        ("macho-arm64-chained/uses_extra.dylib", "macos-arm64"),
+    ] {
         let good = lib(path);
         let span = good.len().min(4096);
         for at in 0..span {
@@ -404,6 +474,16 @@ fn no_damaged_byte_of_a_library_makes_it_panic() {
                 let mut bad = good.clone();
                 bad[at] = v;
                 let _ = check(&code_mod(platform, &bad, &[], false), platform, true);
+            }
+        }
+        // And every aligned 32- and 64-bit field set to all ones: an offset, size or count at its largest.
+        for at in (0..span).step_by(4) {
+            for width in [4usize, 8] {
+                if at + width <= good.len() {
+                    let mut bad = good.clone();
+                    bad[at..at + width].fill(0xff);
+                    let _ = check(&code_mod(platform, &bad, &[], false), platform, true);
+                }
             }
         }
         for cut in (0..good.len()).step_by(7) {

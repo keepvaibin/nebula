@@ -60,6 +60,12 @@ macho="-shared -fuse-ld=lld -Wl,-undefined,error"
 "$cc" --target=arm64-apple-macos11 $common $macho -Wl,-no_fixup_chains -DGOOD -DRUNS_AT_LOAD -o macho-arm64/runs_at_load.dylib lib.c
 "$cc" --target=arm64-apple-macos13 $common $macho -Wl,-fixup_chains -DGOOD -DRUNS_AT_LOAD -o macho-arm64-chained/runs_at_load.dylib lib.c
 "$cc" --target=arm64-apple-macos11 $common $macho -Wl,-no_fixup_chains -DGOOD -DRUNS_AT_CLOSE -o macho-arm64/runs_at_close.dylib lib.c
+# A library that needs another (L504): an extra library; one that binds a symbol of it, in the bind table and in the
+# chained fixups' imports; one that only loads it.
+"$cc" --target=arm64-apple-macos11 $common $macho -Wl,-no_fixup_chains -Wl,-install_name,@loader_path/extra.dylib -DEXTRA -o macho-arm64/extra.dylib lib.c
+"$cc" --target=arm64-apple-macos11 $common $macho -Wl,-no_fixup_chains -DUSES_EXTRA -DEXTRA_BY_POINTER -o macho-arm64/uses_extra.dylib lib.c macho-arm64/extra.dylib
+"$cc" --target=arm64-apple-macos13 $common $macho -Wl,-fixup_chains -DUSES_EXTRA -DEXTRA_BY_POINTER -o macho-arm64-chained/uses_extra.dylib lib.c macho-arm64/extra.dylib
+"$cc" --target=arm64-apple-macos11 $common $macho -Wl,-no_fixup_chains -Wl,-needed_library,macho-arm64/extra.dylib -DGOOD -o macho-arm64/needs_extra.dylib lib.c
 
 rm -rf tmp
 find . -type f ! -name '*.c' ! -name '*.sh' | sort | while read -r f; do

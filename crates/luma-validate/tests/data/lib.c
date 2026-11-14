@@ -31,6 +31,12 @@ int entry(void) {
 
 #if defined(USES_EXTRA)
 int extra_value(void);
+#if defined(EXTRA_BY_POINTER)
+/* Called through a pointer the loader binds: a Mach-O call to another library otherwise goes through a lazy stub,
+   which needs the system's dyld_stub_binder. */
+static int (*volatile extra_at)(void) = extra_value;
+#define extra_value() extra_at()
+#endif
 #endif
 
 __attribute__((unused)) static int32_t start(const LumaCore* core, const LumaMod* mod) {
