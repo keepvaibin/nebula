@@ -182,6 +182,9 @@ set(game_modules smg_game)
 if(NEBULA_LUMA_HOOKS AND NEBULA_LUMA_PLAIN_MODULE)
     add_library(smg_game_plain SHARED ${game_sources} ${game_runtime_sources})
     target_link_libraries(smg_game_plain PRIVATE smg_game_common)
+    # The module no mod's code runs with: code may take a path here that skips a call to a named game function. The
+    # module with rows never defines it, so a hook on that function sees every call the game's own code makes.
+    target_compile_definitions(smg_game_plain PRIVATE NEBULA_PLAIN_MODULE=1)
     list(APPEND game_modules smg_game_plain)
 endif()
 
