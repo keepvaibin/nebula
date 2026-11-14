@@ -114,8 +114,11 @@ int run(int argc, char** argv) {
         block->version != kVersion) {
         return 3;
     }
-    // Idle until needed: below the game, so it never takes the game's time.
-    SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);
+    // Started below the game (its start is the only work it does unasked). From here it only waits, which takes no
+    // time at any priority, and what wakes it must be done at once: a dump the crashed game waits for, or its own
+    // end when the game ends (its executable stays open until then). Below normal on a busy machine, a woken thread
+    // waits seconds for a processor.
+    SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS);
     SetEvent(ready);
     const HANDLE waits[2] = {game, ask};
     for (;;) {
@@ -123,7 +126,6 @@ int run(int argc, char** argv) {
         if (woke != WAIT_OBJECT_0 + 1) {
             return 0;  // the game ended (or the wait failed): nothing left to watch
         }
-        SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS);
         block->path[sizeof(block->path) / sizeof(block->path[0]) - 1] = 0;
         const std::filesystem::path path(block->path);
         std::error_code ignored;
