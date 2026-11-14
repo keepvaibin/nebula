@@ -75,7 +75,9 @@ constexpr std::uint32_t kArriveFrames = 900u;    // scene frames a travel may go
 constexpr std::uint32_t kAsks = 3u;              // asks before the run fails
 constexpr std::uint32_t kPipelineFrames = 1200u; // the longest wait for a settings change's pipelines
 constexpr std::uint32_t kSettleFrames = 10u;     // frames after a settings change before its pipelines are counted
-constexpr std::int64_t kLoadGapNs = 200'000'000; // a pause in scene frames this long after a travel is its load
+// A travel unanswered this long fails the run, scene frames or not: a load that never ends, or a screen that is not a
+// GameScene, gives scene_frame no frame to count kArriveFrames with.
+constexpr std::int64_t kArriveTimeoutNs = 120'000'000'000;
 
 struct Stage {
     std::string id;
@@ -334,7 +336,9 @@ struct Result {
     std::uint64_t gpu_memory_peak = 0u, gpu_budget = 0u, process_peak = 0u;
     double p50 = 0.0, p95 = 0.0, p99 = 0.0, worst = 0.0;
     std::uint32_t over_16 = 0u, over_33 = 0u;
-    double pixels = 0.0;     // the scene's pixels at the item's settings
+    double pixels = 0.0;     // the scene's pixels at the item's settings and the output below
+    unsigned output_w = 0u, output_h = 0u;  // the output (back buffer) when its window began
+    bool output_moved = false;              // the output's size changed inside its window
     bool applied = true;     // the settings asked for are the ones that ran (a pass the device cannot run is clamped)
 };
 
@@ -357,8 +361,8 @@ struct Run {
     std::uint32_t phase_frames = 0u;
     std::uint32_t asks = 0u;
     std::string stage_at_ask;
-    bool saw_gap = false;
-    std::int64_t asked_ns = 0, last_frame_ns = 0;
+    bool saw_start = false;  // a scene started since the ask (scene_started): a travel to the stage it is on arrived
+    std::int64_t asked_ns = 0;
     std::string failure;
 
     bool configured = false;
@@ -387,6 +391,10 @@ std::atomic<bool> g_measuring{false};
 std::atomic<std::uint64_t> g_gpu_peak{0u};
 std::atomic<std::uint64_t> g_gpu_budget{0u};
 std::uint32_t g_memory_count = 0u;
+// When the travel asked last fails the run (steady_ns; 0: no travel waits), checked by the render thread at each picture,
+// which the game shows while it loads; past it the game is asked to quit and at_exit writes the run as failed.
+std::atomic<std::int64_t> g_arrive_deadline_ns{0};
+std::atomic<bool> g_stalled{false};
 
 // The game's saves while it runs.
 std::mutex g_save_mutex;
@@ -396,6 +404,10 @@ void on_picture(std::uint64_t ns) {
     if (!g_render.known.load(std::memory_order_acquire)) {
         g_render.clock = this_thread_clock();
         g_render.known.store(true, std::memory_order_release);
+    }
+    const std::int64_t deadline = g_arrive_deadline_ns.load(std::memory_order_relaxed);
+    if (deadline != 0 && steady_ns() > deadline && !g_stalled.exchange(true, std::memory_order_relaxed)) {
+        render::host_window::quit_request.store(true, std::memory_order_release);
     }
     if (g_measuring.load(std::memory_order_relaxed)) {
         {
@@ -435,9 +447,9 @@ unsigned output_lines() {
                : 480u;
 }
 
-// The scene's pixels at a configuration: the internal height (0: the panel's), or an upscaler's ratio of the output.
-double scene_pixels(const render::RenderConfig& cfg) {
-    const unsigned width = output_width(), lines = output_lines();
+// The scene's pixels at a configuration on a `width` x `lines` output: the internal height (0: the panel's), or an
+// upscaler's ratio of the output.
+double scene_pixels(const render::RenderConfig& cfg, unsigned width, unsigned lines) {
     if (cfg.upscaler == 0u) {
         return render::scene_pixels(render::render_internal_height(cfg), width, lines);
     }
@@ -517,6 +529,7 @@ void sample_frame(Result& result) {
 void end_window(Result& result) {
     Run& r = g_run;
     g_measuring.store(false, std::memory_order_relaxed);
+    result.output_moved = output_width() != result.output_w || output_lines() != result.output_h;
     std::vector<std::uint64_t> pictures;
     {
         const std::lock_guard<std::mutex> lock(g_picture_mutex);
@@ -617,12 +630,34 @@ const char* status_name(bool complete) {
     return complete ? "complete" : g_run.phase == Phase::Failed ? "failed" : "aborted";
 }
 
-// The recommendation's inputs from the results.
+// The items whose window ended. A run that ends mid-item (a quit while its scene loads, skips or is measured) leaves out
+// that item's result: it has no averages yet (end_window).
+std::size_t finished_items() {
+    return std::min({g_run.results.size(), g_run.items.size(), g_run.index});
+}
+
+// Every finished step measured at one output size, unchanged inside each window: that size in `width` x `lines`.
+// False (no recommendation: its pixels would mix sizes) when a step's differs from the first's or moved in its window;
+// true with 0 x 0 when no step finished.
+bool output_held(unsigned& width, unsigned& lines) {
+    width = 0u;
+    lines = 0u;
+    for (std::size_t i = 0; i < finished_items(); ++i) {
+        const Result& r = g_run.results[i];
+        if (i == 0u) {
+            width = r.output_w;
+            lines = r.output_h;
+        }
+        if (r.output_moved || r.output_w != width || r.output_h != lines) return false;
+    }
+    return true;
+}
+
+// The recommendation's inputs from the results, at the output size the steps were measured at (output_held).
 Measured measured_inputs() {
     Run& run = g_run;
     Measured m;
-    m.output_width = output_width();
-    m.output_lines = output_lines();
+    (void)output_held(m.output_width, m.output_lines);
     const render::RenderConfig& c = run.chosen;
     m.current.internal_height = c.internal_height;
     m.current.msaa_samples = c.msaa_samples;
@@ -632,10 +667,10 @@ Measured measured_inputs() {
     m.current.smaa_quality = c.smaa_quality;
     m.current.bloom = c.bloom;
     m.upscaler = c.upscaler != 0u;
-    m.current_pixels = scene_pixels(run.phase1);
+    m.current_pixels = scene_pixels(run.phase1, m.output_width, m.output_lines);
     const Result* worst = nullptr;
     const Result* probe[static_cast<std::size_t>(ProbeCase::Count)] = {};
-    for (std::size_t i = 0; i < run.items.size() && i < run.results.size(); ++i) {
+    for (std::size_t i = 0; i < finished_items(); ++i) {
         const Result& r = run.results[i];
         if (run.items[i].kind == Kind::Scene) {
             if (worst == nullptr || r.gpu_ms > worst->gpu_ms) worst = &r;
@@ -697,9 +732,15 @@ void write_result(bool complete) {
         // Never set up: no config.ini when the process started. The game's defaults stand as the player's.
         out << ",\"no config.ini yet: settings are the game's defaults (a first start's height calibration has not run)\"";
     }
+    unsigned held_width = 0u, held_lines = 0u;
+    const bool held = output_held(held_width, held_lines);
+    if (!held) {
+        out << ",\"the output size changed during the run: its steps were measured at different sizes, so there is no "
+               "recommendation\"";
+    }
     out << "],\"scenes\":[";
     bool first = true;
-    for (std::size_t i = 0; i < run.results.size() && i < run.items.size(); ++i) {
+    for (std::size_t i = 0; i < finished_items(); ++i) {
         if (run.items[i].kind != Kind::Scene) continue;
         out << (first ? "" : ",") << "{\"stage\":" << quoted(run.items[i].stage.id) << ",\"scenario\":"
             << run.items[i].stage.scenario << ",\"grand_stars\":" << (run.items[i].stage.grand ? 6 : 0) << ",";
@@ -709,7 +750,7 @@ void write_result(bool complete) {
     }
     out << "],\"probe\":{\"stage\":" << quoted(run.probe_stage.id) << ",\"runs\":[";
     first = true;
-    for (std::size_t i = 0; i < run.results.size() && i < run.items.size(); ++i) {
+    for (std::size_t i = 0; i < finished_items(); ++i) {
         if (run.items[i].kind != Kind::Probe) continue;
         out << (first ? "" : ",") << "{\"case\":" << quoted(kProbeNames[static_cast<std::size_t>(run.items[i].probe)]) << ",";
         result_json(out, run.results[i]);
@@ -727,7 +768,7 @@ void write_result(bool complete) {
     out << "}},\"thermal\":";
     const Result* first_scene = nullptr;
     const Result* last_scene = nullptr;
-    for (std::size_t i = 0; i < run.results.size() && i < run.items.size(); ++i) {
+    for (std::size_t i = 0; i < finished_items(); ++i) {
         if (run.items[i].kind == Kind::Scene && first_scene == nullptr) first_scene = &run.results[i];
         if (run.items[i].kind == Kind::Thermal) last_scene = &run.results[i];
     }
@@ -740,7 +781,7 @@ void write_result(bool complete) {
         out << "null";
     }
     out << ",\"recommendation\":";
-    const Recommendation rec = complete ? recommend(m) : Recommendation{};
+    const Recommendation rec = complete && held ? recommend(m) : Recommendation{};
     if (!rec.valid) {
         out << "null";
     } else {
@@ -771,7 +812,7 @@ void write_result(bool complete) {
     const char* verdict = !rec.valid ? "none" : rec.cpu_bound ? "cpu_bound" : rec.fits ? "fits" : "below_target";
     std::string worst_stage;
     double worst_gpu = -1.0, worst_p95 = 0.0;
-    for (std::size_t i = 0; i < run.results.size() && i < run.items.size(); ++i) {
+    for (std::size_t i = 0; i < finished_items(); ++i) {
         if (run.items[i].kind == Kind::Scene && run.results[i].gpu_ms > worst_gpu) {
             worst_gpu = run.results[i].gpu_ms;
             worst_p95 = run.results[i].p95;
@@ -810,6 +851,7 @@ void configure_once() {
 void finish(bool complete) {
     Run& r = g_run;
     g_measuring.store(false, std::memory_order_relaxed);
+    g_arrive_deadline_ns.store(0, std::memory_order_relaxed);
     if (!complete) r.phase = Phase::Failed;
     write_result(complete);
     if (r.configured) {
@@ -839,8 +881,9 @@ int ask_travel(char* stage, std::uint32_t capacity, std::int32_t* star, std::str
     std::snprintf(stage, capacity, "%s", s.id.c_str());
     *star = s.grand ? 6 : static_cast<std::int32_t>(s.scenario);
     r.stage_at_ask = std::string(current);
-    r.saw_gap = false;
+    r.saw_start = false;
     r.asked_ns = steady_ns();
+    g_arrive_deadline_ns.store(r.asked_ns + kArriveTimeoutNs, std::memory_order_relaxed);
     ++r.asks;
     enter(Phase::Arrive);
     return s.grand ? NEBULA_GALAXY_TRAVEL_GRAND_STARS : NEBULA_GALAXY_TRAVEL_STAGE;
@@ -896,10 +939,6 @@ int scene_frame(std::string_view current_stage, char* stage, std::uint32_t capac
     }
     configure_once();
     const std::int64_t now = steady_ns();
-    if (r.last_frame_ns != 0 && now - r.last_frame_ns >= kLoadGapNs && r.phase == Phase::Arrive) {
-        r.saw_gap = true;
-    }
-    r.last_frame_ns = now;
     ++r.phase_frames;
     switch (r.phase) {
     case Phase::Title:
@@ -920,7 +959,9 @@ int scene_frame(std::string_view current_stage, char* stage, std::uint32_t capac
         break;
     case Phase::Arrive: {
         const std::string& target = r.items[r.index].stage.id;
-        if (current_stage == target && (r.saw_gap || r.stage_at_ask != target)) {
+        // Another stage: its name is reported only from its own scene's draws. The stage it is on: its new scene's start.
+        if (current_stage == target && (r.saw_start || r.stage_at_ask != target)) {
+            g_arrive_deadline_ns.store(0, std::memory_order_relaxed);
             r.results.emplace_back();
             r.results.back().load_ms = static_cast<double>(now - r.asked_ns) / 1e6;
             enter(Phase::Skip);
@@ -939,7 +980,9 @@ int scene_frame(std::string_view current_stage, char* stage, std::uint32_t capac
             Result& result = r.results.back();
             const render::RenderConfig asked = item_config(r.items[r.index]);
             result.applied = config_holds(asked);
-            result.pixels = scene_pixels(asked);
+            result.output_w = output_width();
+            result.output_h = output_lines();
+            result.pixels = scene_pixels(asked, result.output_w, result.output_h);
             begin_window();
             enter(Phase::Measure);
         }
@@ -965,6 +1008,15 @@ int scene_frame(std::string_view current_stage, char* stage, std::uint32_t capac
         break;
     }
     return NEBULA_GALAXY_TRAVEL_NONE;
+}
+
+void scene_started() noexcept {
+    if (!running()) return;
+    try {
+        const std::lock_guard<std::mutex> lock(g_run_mutex);
+        if (g_run.phase == Phase::Arrive) g_run.saw_start = true;
+    } catch (...) {
+    }
 }
 
 std::int32_t save_request(int op, std::string_view name, void* buffer, std::uint32_t size, std::uint32_t* length) noexcept {
@@ -997,6 +1049,13 @@ void at_exit() noexcept {
     if (!running()) return;
     try {
         const std::lock_guard<std::mutex> lock(g_run_mutex);
+        Run& r = g_run;
+        if (g_stalled.load(std::memory_order_relaxed) && r.phase == Phase::Arrive && r.index < r.items.size()) {
+            // The quit on_picture asked for: the travel nothing answered fails the run.
+            r.phase = Phase::Failed;
+            r.failure = "the game did not enter " + r.items[r.index].stage.id + " in " +
+                        std::to_string(kArriveTimeoutNs / 1'000'000'000) + " s";
+        }
         write_result(false);
     } catch (...) {
     }
@@ -1009,9 +1068,10 @@ std::filesystem::path result_file() {
 bool returns_home() noexcept {
     if (!running() || !g_run.options.return_home) return false;
     try {
-        // A run that ended (complete or failed); a window the player closed ends the game.
+        // A run that ended (complete or failed, or a travel nothing answered: at_exit, which runs after this, writes
+        // it as failed); a window the player closed ends the game.
         const std::lock_guard<std::mutex> lock(g_run_mutex);
-        return g_run.phase == Phase::Done || g_run.phase == Phase::Failed;
+        return g_run.phase == Phase::Done || g_run.phase == Phase::Failed || g_stalled.load(std::memory_order_relaxed);
     } catch (...) {
         return false;
     }
