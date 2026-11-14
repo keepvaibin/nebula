@@ -226,6 +226,7 @@ bool RenderCore::initialize(int w, int h) {
         RenderConfig start = chosen;
         start.internal_height = calibration_.start;
         set_render_config(start);
+        calibration_.armed = get_render_config_chosen();
         std::fprintf(stderr, "[settings] first start: %s memory, %ux%u: internal height %u until measured\n",
                      shared ? "shared" : "dedicated", calibration_.width, calibration_.lines, calibration_.start);
     }
@@ -2511,9 +2512,8 @@ void RenderCore::calibrate_first_start(bool scene, double walk_ms) {
     constexpr unsigned kCalibrationSamples = 30u;
     FirstStartCalibration& c = calibration_;
     const RenderConfig chosen = get_render_config_chosen();
-    const unsigned shown = c.stage >= 2u ? c.heights[c.stage - 2u] : c.start;
-    if (chosen.upscaler != 0u || normalized_internal_height(chosen.internal_height) != shown) {
-        // The player chose (the menu, Nebula Settings): theirs stands.
+    if (!(chosen == c.armed)) {
+        // The player chose (the menu, Nebula Settings), in any setting: theirs stands, and nothing is set or saved.
         end_first_start_calibration(0u, nullptr);
         return;
     }
@@ -2572,6 +2572,7 @@ void RenderCore::calibrate_first_start(bool scene, double walk_ms) {
         RenderConfig next = chosen;
         next.internal_height = c.heights[1];
         set_render_config(next);
+        c.armed = get_render_config_chosen();
         c.stage = 3u;
         c.frames = 0u;
         c.list_qpc = 0;
@@ -2596,6 +2597,7 @@ void RenderCore::calibrate_first_start(bool scene, double walk_ms) {
 }
 
 // `why` null: the player chose meanwhile, and nothing is set or saved. `performance`: the PERFORMANCE preset, at `height`.
+// Either way only from the settings as the calibration set them: if the player changed any field since, theirs stand.
 void RenderCore::end_first_start_calibration(unsigned height, const char* why, bool performance) {
     FirstStartCalibration& c = calibration_;
     if (c.stage >= 2u && !c.timing_was_on) {
@@ -2608,6 +2610,10 @@ void RenderCore::end_first_start_calibration(unsigned height, const char* why, b
         return;
     }
     RenderConfig chosen = get_render_config_chosen();
+    if (!(chosen == c.armed)) {
+        std::fprintf(stderr, "[settings] first start: the player chose, nothing kept\n");
+        return;
+    }
     if (performance) {
         apply_performance_preset(chosen);
     }

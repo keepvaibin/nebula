@@ -779,6 +779,8 @@ private:
         double cpu_over = 0.0;        // samples with the walk near the frame time or the game late on its own
         std::int64_t list_qpc = 0;
         std::uint64_t list_wait = 0u;
+        // The chosen settings as the calibration last set them: any other change, in any field, is the player's.
+        RenderConfig armed{};
     };
     FirstStartCalibration calibration_;
     void calibrate_first_start(bool scene, double walk_ms);
