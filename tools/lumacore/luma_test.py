@@ -1298,8 +1298,67 @@ def run_one(test, renderer, args, run_folder, previous):
                                    **hidden)
         except subprocess.TimeoutExpired:
             code = None
+    starts = 1
+    if code is not None:
+        code, starts = follow_start_again(run_folder, code, test["limit"] + 60)
     seconds = time.time() - began
-    return {"code": code, "seconds": seconds, "frozen": frozen, "mods": mod_ids, "exe": exe.name}
+    return {"code": code, "seconds": seconds, "frozen": frozen, "mods": mod_ids, "exe": exe.name, "starts": starts}
+
+
+def follow_start_again(run_folder, code, limit):
+    """The game started again (the host's start-again: mods cooked, a mod's code chose other layers): it writes the new
+    process id to <crash dumps>/restarted, the run folder here, and the new process writes to the same run.log. Waits
+    for each new process in turn, `limit` seconds each; its exit code is the run's. A run with no start-again returns
+    at once, as before. Returns (code, processes run); code None when one did not end in time."""
+    marker = run_folder / "restarted"
+    followed = set()
+    starts = 1
+    while marker.is_file():
+        try:
+            pid = int(marker.read_text(encoding="utf-8").strip())
+        except ValueError:
+            break
+        if pid in followed or len(followed) == 4:
+            break
+        followed.add(pid)
+        starts += 1
+        code = wait_for_process(pid, limit)
+        if code is None:
+            return None, starts
+    return code, starts
+
+
+def wait_for_process(pid, limit):
+    """Waits up to `limit` seconds for a process this harness did not start; its exit code (0 when it had ended before
+    it could be opened), or None when it is still running."""
+    if platform.system() == "Windows":
+        import ctypes
+        from ctypes import wintypes
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.OpenProcess.restype = wintypes.HANDLE
+        kernel.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+        kernel.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+        kernel.GetExitCodeProcess.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
+        kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
+        handle = kernel.OpenProcess(0x00100000 | 0x1000, False, pid)  # SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return 0
+        try:
+            if kernel.WaitForSingleObject(handle, int(limit * 1000)) != 0:
+                return None
+            exit_code = wintypes.DWORD(0)
+            kernel.GetExitCodeProcess(handle, ctypes.byref(exit_code))
+            return exit_code.value
+        finally:
+            kernel.CloseHandle(handle)
+    deadline = time.time() + limit
+    while time.time() < deadline:
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            return 0
+        time.sleep(0.1)
+    return None
 
 
 def file_holders(path):
