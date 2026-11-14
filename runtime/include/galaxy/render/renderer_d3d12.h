@@ -900,9 +900,6 @@ private:
         // The conversion views' persistent indices (srv_ring_.gpu_at turns one into a handle of the current heap).
         std::uint32_t conv_color_index = DescriptorRing::kNoPersistent;
         std::uint32_t conv_depth_index = DescriptorRing::kNoPersistent;
-        // conv_scene_tables_ and conv_scene_table_ while another set is live: a swap's views stay with the set they name.
-        std::vector<ConvSceneTable> conv_tables;
-        std::size_t conv_table_at = ~std::size_t{0};
     };
     SceneTargetSet alt_scene_;
     // The open target pass's set (begin_target_pass) while the scene target holds it, and each key's set between passes

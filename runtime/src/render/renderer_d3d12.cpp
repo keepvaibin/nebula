@@ -1477,7 +1477,7 @@ gpu::TextureRef RendererD3D12::swap_scene_color(gpu::TextureRef fresh) {
         D3D12_HEAP_PROPERTIES heap{};
         heap.Type = D3D12_HEAP_TYPE_DEFAULT;
         D3D12_CLEAR_VALUE clear{};
-        clear.Format = desc.Format;  // the live set's: the wide scene's is kSceneHdrColorFormat
+        clear.Format = kSceneColorFormat;
         clear.Color[3] = 1.0f;
         d3d_check(create_texture(device_.Get(), &heap, D3D12_HEAP_FLAG_NONE, &desc,
                                                    gpu::Use::ColorWrite, &clear, IID_PPV_ARGS(&fresh)),
@@ -5015,8 +5015,6 @@ void RendererD3D12::swap_scene_with(SceneTargetSet& other) {
     std::swap(conv_scene_source_table_, other.conv_table);
     std::swap(conv_scene_color_index_, other.conv_color_index);
     std::swap(conv_scene_depth_index_, other.conv_depth_index);
-    std::swap(conv_scene_tables_, other.conv_tables);
-    std::swap(conv_scene_table_, other.conv_table_at);
     invalidate_draw_bindings();
 }
 
@@ -5031,8 +5029,6 @@ void RendererD3D12::swap_scene_sets() {
     std::swap(conv_scene_source_table_, alt_scene_.conv_table);
     std::swap(conv_scene_color_index_, alt_scene_.conv_color_index);
     std::swap(conv_scene_depth_index_, alt_scene_.conv_depth_index);
-    std::swap(conv_scene_tables_, alt_scene_.conv_tables);
-    std::swap(conv_scene_table_, alt_scene_.conv_table_at);
     output_scene_active_ = !output_scene_active_;
     invalidate_draw_bindings();
     bind_scene();
@@ -5051,8 +5047,6 @@ void RendererD3D12::swap_target_set() {
     std::swap(conv_scene_source_table_, target_scene_.conv_table);
     std::swap(conv_scene_color_index_, target_scene_.conv_color_index);
     std::swap(conv_scene_depth_index_, target_scene_.conv_depth_index);
-    std::swap(conv_scene_tables_, target_scene_.conv_tables);
-    std::swap(conv_scene_table_, target_scene_.conv_table_at);
     target_pass_active_ = !target_pass_active_;
     invalidate_draw_bindings();
     bind_scene();
