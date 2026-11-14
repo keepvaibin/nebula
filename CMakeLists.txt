@@ -613,6 +613,9 @@ galaxy_test(galaxy_movie_video_tests SOURCES ${rt}/movie_video_tests.cpp ${rt}/m
 # draw.post's registry (mod_post.cpp) without a device.
 galaxy_test(galaxy_mod_post_tests SOURCES ${rt}/render/mod_post_tests.cpp ${rt}/render/mod_post.cpp)
 galaxy_test(galaxy_windows_power_tests SOURCES ${rt}/windows_power_tests.cpp)
+if(WIN32)
+    galaxy_test(galaxy_windows_child_tests SOURCES ${rt}/windows_child_tests.cpp)
+endif()
 galaxy_test(galaxy_power_policy_tests SOURCES ${rt}/power_policy_tests.cpp)
 galaxy_test(galaxy_frame_phase_tests SOURCES ${rt}/frame_phase_tests.cpp ${rt}/frame_phase.cpp)
 galaxy_test(galaxy_frame_telemetry_tests SOURCES ${rt}/frame_telemetry_tests.cpp ${rt}/frame_telemetry.cpp)
