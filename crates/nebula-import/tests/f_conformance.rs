@@ -300,7 +300,7 @@ fn f12_a_place_table_refuses_remove_and_checks_every_place() {
     let f = o.facts.iter().find(|f| f.kind == LUMA_PATCH_FAILED).expect("remove refused");
     assert_eq!(f.code, 402);
     // A place past the table's rows: the validator's L402 is against the game's count; the applier's table may be a
-    // mod's whole file (DECISIONS 5), so here it is a row that is not there, named, never silent.
+    // mod's whole file, so here it is a row that is not there, named, never silent.
     let o = call(rail, &t.to_ntbl(), size(), &[("p", "p.json", r##"{"patch": 1, "set": [{"where": {"#": 3}, "values": {"frame": 9}}]}"##)], &[]);
     assert!(o.facts.iter().any(|f| f.kind == LUMA_PATCH_MISSING && f.row.as_deref() == Some("#3") && f.mod_id.as_deref() == Some("p")));
     assert_eq!(o.table.unwrap(), t);

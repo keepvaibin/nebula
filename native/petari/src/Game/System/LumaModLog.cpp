@@ -10,10 +10,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Contract mod-log. The store is made by the first add (one compare-and-swap of sStore, section 2) and lives until the
-// module unloads. Entries and mods are lists that only grow: each is made whole outside the lock and published by one
-// release store of the list's last `next`, so the screen walks them with acquire loads and no lock. The lock is held
-// only to look up a key, count, and link (no allocation under it).
+// The mod log (galaxy/mod_log.h). The store is made by the first add (one compare-and-swap of sStore, section 2) and
+// lives until the module unloads. Entries and mods are lists that only grow: each is made whole outside the lock and
+// published by one release store of the list's last `next`, so the screen walks them with acquire loads and no lock.
+// The lock is held only to look up a key, count, and link (no allocation under it).
 
 namespace luma {
     namespace modlog {

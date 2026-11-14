@@ -549,7 +549,7 @@ class Reader:
         return self.polymorphic_types[key]
 
     def virtual(self, row, m, instance):
-        """Contract objects: a virtual function (a destructor or conversion too) makes the record polymorphic; each one
+        """objects.md: a virtual function (a destructor or conversion too) makes the record polymorphic; each one
         but a destructor is a method row, its thunk called with the compiler's dispatch (method). The name and signature
         are instrument.py's identity(), the function rows' own rule (an instance's: the record's row name and
         identity_signature). A virtual whose name or types no mod can write is in the JSON with "row": false."""
@@ -946,7 +946,7 @@ class Reader:
             else:
                 lines.append("%sconst luma::%s %s%s = %s;" % (section, kind, name, array, text))
 
-        # Contract classes, overrides by slot: the header pass's virtuals of the records the factory makes get the code a
+        # classes.md, overrides by slot: the header pass's virtuals of the records the factory makes get the code a
         # mod class's table takes in their slot (slot_code).
         slot_records = class_bases(self.records) if not unit and getattr(self, "vtables", None) is not None else set()
         n = 0
@@ -1022,7 +1022,7 @@ class Reader:
                 member("", "TypeField", "kF%d" % n, "{%s}" % ", ".join(field_rows), "[]")
             if base_rows:
                 member("", "TypeBase", "kB%d" % n, "{%s}" % ", ".join(base_rows), "[]")
-            # Contract objects: a polymorphic record's type_info (the RTTI data, -frtti), which the kernel finds from an
+            # objects.md: a polymorphic record's type_info (the RTTI data, -frtti), which the kernel finds from an
             # object's vtable. typeid of a type is a constant address, never a call into the C++ runtime.
             vtable = r.get("vtable") or {"prefix": 0, "count": 0}
             member("LUMA_TYPE_SECTION ", "TypeRow", "kT%d" % n, '{"%s", sizeof(::%s), alignof(::%s), %s, %du, %s, %du, %s, %du, %du}' % (
@@ -1335,7 +1335,7 @@ def thunk(v, self_type):
 
 
 def slot_code(n, k, v):
-    """Contract classes, overrides by slot: for the virtual v of record row n (alias R<n>), the code a mod class's table
+    """classes.md, overrides by slot: for the virtual v of record row n (alias R<n>), the code a mod class's table
     takes in its slot and what its proceed calls.
       kSe<n>_<k>::call  the entry: a member function with the virtual's parameters and result (so its calling convention
                         is the slot's), handing the call to luma::slotCall with the arguments as an invoke takes them
@@ -1373,13 +1373,13 @@ def slot_code(n, k, v):
 
 
 def class_bases(records):
-    """Contract classes: the records a mod class may take as its base, so its table copy and its overrides by slot
+    """classes.md: the records a mod class may take as its base, so its table copy and its overrides by slot
     stand on them: NameObj's line (the factory makes them) and PlanetGravity (LumaCore.make_gravity makes it)."""
     return descends_from_nameobj(records) | ({"PlanetGravity"} & set(records))
 
 
 def descends_from_nameobj(records):
-    """Contract classes: NameObj and each record whose base at offset 0 (not virtual) is one."""
+    """classes.md: NameObj and each record whose base at offset 0 (not virtual) is one."""
     memo = {}
 
     def walk(name, depth):
@@ -1461,7 +1461,7 @@ def read_vtable_dump(dump, records, names):
 
 
 def vtable_layouts(raw, records, unit):
-    """Contract classes, overrides by slot: the table at the start of each polymorphic record the factory makes, as the
+    """classes.md, overrides by slot: the table at the start of each polymorphic record the factory makes, as the
     compiler lays it out. A unit of the headers calls each one's destructor through a pointer (a virtual call: the
     compiler lays out the record's tables) and is compiled with the build's own command and -fdump-vtable-layouts (the
     code is thrown away). A unit that does not compile stops the build. Returns {record: (prefix, count)}; a record not

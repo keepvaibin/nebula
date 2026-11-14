@@ -14,8 +14,8 @@
 
 using namespace NebulaUi;
 
-// Contract mod-log 4.1. The lines on screen are kept here (file scope), not in the scene's actor, so a scene change
-// does not lose one already taken from the log: the next scene's actor shows them on.
+// The mod log's notice on screen (galaxy/mod_log.h). The lines on screen are kept here (file scope), not in the scene's
+// actor, so a scene change does not lose one already taken from the log: the next scene's actor shows them on.
 
 namespace {
     // Screen units (NebulaUi::readScreen): the text's size, the window's padding around it, the space between lines,

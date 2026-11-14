@@ -1789,8 +1789,8 @@ namespace luma {
                 break;
             }
             if (rImport.kind == LUMA_IMPORT_FUNCTION && isTell(pFunction)) {
-                // Contract varargs 3: a call goes through the row's invoke, which a constructor, a destructor or a
-                // function with `...` has none of.
+                // docs/modding/language/varargs.md section 3: a call goes through the row's invoke, which a
+                // constructor, a destructor or a function with `...` has none of.
                 refuse.start(512);
                 refuse.put("why", 'P', "Lib.CallTell");
                 refuse.put("found", 'T', rImport.name);

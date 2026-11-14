@@ -1,6 +1,6 @@
 """compare_types.py GENERATED DESCRIBED
 
-Contract types, section 3: the module's type rows (DESCRIBED, what nebula_game_luma_describe wrote: the host's
+docs/modding/language/types.md: the module's type rows (DESCRIBED, what nebula_game_luma_describe wrote: the host's
 --luma-describe or native/tools/luma_describe.c) against the generator's luma_types.json (GENERATED: libclang's numbers,
 and `reachable` and `left_out` by C++'s lookup). Every record, field, base, alias and global with a row, and for every
 record every name its bases give it: bound with the same position, or refused for the same reason and names (TY-1,
@@ -108,7 +108,7 @@ def main():
     for n in sorted(set(want_globals) | set(got_globals)):
         if want_globals.get(n) != got_globals.get(n):
             differ(f"global {n}: {want_globals.get(n)} in the generator's JSON, {got_globals.get(n)} in the module")
-    # Contract objects: one method row (a virtual call) per virtual the generator gave a row, and no other.
+    # objects.md: one method row (a virtual call) per virtual the generator gave a row, and no other.
     want_methods = {(v["name"], v["signature"], r["name"], v["call"]["spelling"], v["params"])
                     for r in generated["types"] for v in r.get("virtuals", ()) if v["row"]}
     got_methods = [(m["name"], m["signature"], m["record"], m["own"], m["params"]) for m in described["methods"]]

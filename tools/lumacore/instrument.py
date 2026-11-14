@@ -413,7 +413,7 @@ class Unit:
                 # A scope a macro opens in this file (`extern "C"` in one) holds this file's functions too.
                 self.walk(child)
 
-    # Contract varargs 1: what may have no row. Any other reason stops the build, naming the function.
+    # varargs.md section 1: what may have no row. Any other reason stops the build, naming the function.
     LEFT_OUT_REASONS = ('in a template or an unnamed class', 'a template specialization', 'an allocation function')
 
     def leave(self, name, line, why):
@@ -487,7 +487,7 @@ class Unit:
         if len(body) != 1:
             return self.leave(qualified, line, 'no plain body')
         at = self.offset(api.rangeStart(api.extent(body[0])))
-        # Contract varargs 5: a head that begins with a macro (NEBULA_GAME_API) is read from where the macro is written.
+        # varargs.md: a head that begins with a macro (NEBULA_GAME_API) is read from where the macro is written.
         start = self.expansion_offset(api.rangeStart(api.extent(cursor)))
         if at is None or start is None or start > at or self.text[at:at + 1] != b'{':
             return self.leave(qualified, line, 'written by a macro')
@@ -502,7 +502,7 @@ class Unit:
             sys.exit(f'instrument.py: {self.label}:{line}: {qualified} is a constexpr constructor, destructor or variadic '
                      'function: a call row cannot call it (docs/modding/language/varargs.md section 4)')
         if variadic and not self.calls_va_list(body[0]):
-            # Contract varargs 3: a variadic function's work is done by a va_list sibling, which has the full row.
+            # varargs.md section 3: a variadic function's work is done by a va_list sibling, which has the full row.
             sys.exit(f'instrument.py: {self.label}:{line}: {qualified} takes a variable number of arguments and calls no '
                      'function with a va_list parameter or `...`: move its work into a va_list sibling (varargs.md section 3)')
 
@@ -538,7 +538,7 @@ class Unit:
         signature_args = ', '.join(text for text, _ in params)
         pointers = ', '.join(f'(void*)&{identifier}' for _, identifier in params)
         if variadic:
-            # Contract varargs 3: before hooks only, told with the fixed parameters and a va_list of the rest.
+            # varargs.md section 3: before hooks only, told with the fixed parameters and a va_list of the rest.
             if not params:
                 sys.exit(f'instrument.py: {self.label}:{line}: {qualified} takes only `...`: no parameter to start a '
                          'va_list from')
@@ -587,7 +587,7 @@ class Unit:
                      f'({", ".join(given)}), ({first}{", " + pointers if pointers else ""}))')
             kind = 'hook'
             if constexpr:
-                # Contract varargs 4: the row after the function's end, at the scope it is defined in; nothing in its
+                # varargs.md section 4: the row after the function's end, at the scope it is defined in; nothing in its
                 # body (a constexpr function holds no static, and its numbers stay written: the compiler may evaluate it).
                 end = self.offset(api.rangeEnd(api.extent(cursor)))
                 if end is None or alias or member:

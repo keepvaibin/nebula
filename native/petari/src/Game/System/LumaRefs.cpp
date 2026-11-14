@@ -14,9 +14,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Contract references, section 3 ("After start") and 4 (the object class's placeholder). The host's one call makes one
-// block, published by one release store: the game thread reads it with an acquire load and no lock. It lives until the
-// module unloads.
+// docs/modding/language/references.md, section 3 ("After start") and 4 (the object class's placeholder). The host's one
+// call makes one block, published by one release store: the game thread reads it with an acquire load and no lock. It
+// lives until the module unloads.
 
 namespace luma {
     namespace refs {

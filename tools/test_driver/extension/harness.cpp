@@ -135,7 +135,7 @@ private:
                 case 't': out += '\t'; break;
                 case 'u': {
                     // Decoded to UTF-8, a surrogate pair to its one character, so "\u30de" and the mod's own UTF-8
-                    // are one string (audit 0.3 H-3). A lone surrogate is not text.
+                    // are one string. A lone surrogate is not text.
                     std::optional<std::uint32_t> unit = hex4();
                     if (!unit) {
                         return std::nullopt;

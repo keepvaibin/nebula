@@ -387,7 +387,7 @@ fn field(text: &str) -> String {
 /// tab-separated, a field empty where the fact has none (luma_patch.h's LumaPatchFact, with the table). Kinds:
 /// conflict (mod is the higher, used; other the lower), missing (other removed the row, or empty), selected, failed
 /// (code is the validator's rule, why in English for the log). A `failed` line goes on with the refusal's parameters,
-/// one a field, `name=T:<text>` or `name=P:<phrase id>` (audit 3.12 C-1): with code, mod and file they are what
+/// one a field, `name=T:<text>` or `name=P:<phrase id>`: with code, mod and file they are what
 /// luma_validate_reason says in the player's language.
 pub fn facts_text(facts: &[Fact]) -> String {
     let mut out = String::new();

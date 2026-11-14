@@ -113,11 +113,11 @@ static void put(Out* out, const char* text) {
         out->text[out->at++] = *text++;
     }
     if (*text != 0) {
-        /* A cut text says so at its end (audit 0.3 H-13): a fact that is cut is not written (fact), a message is. */
+        /* A cut text says so at its end: a fact that is cut is not written (fact), a message is. */
         static const char said[] = " (cut)";
         out->cut = 1u;
         out->at = (uint32_t)(sizeof(out->text) - sizeof(said));
-        /* Never half a character (audit 0.3 H-14): a UTF-8 character the cut falls in is dropped whole, so the
+        /* Never half a character: a UTF-8 character the cut falls in is dropped whole, so the
            runner's UTF-8 read of the message holds. text[at] is the first byte dropped; while it continues a
            character (10xxxxxx), that character began earlier. */
         while (out->at > 0u && ((unsigned char)out->text[out->at] & 0xC0u) == 0x80u) {
@@ -150,7 +150,7 @@ static void put_int(Out* out, int64_t value) {
 }
 
 /* A number as JSON, to 1/1000 (enough for positions in game units and for factors); an f64 is taken whole, never
-   through float (audit 0.3 H-12). */
+   through float. */
 static void put_float(Out* out, double value) {
     double v = value;
     /* NaN, the infinities and anything past 2^63 (whose whole part does not fit the conversion below) are null. */

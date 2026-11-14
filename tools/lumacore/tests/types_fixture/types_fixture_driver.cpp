@@ -239,7 +239,7 @@ int main(int argc, char** argv) {
             check(ok, what);
         }
     }
-    // Contract objects: the own class and the subobjects, against the compiler's typeid and dynamic_cast (this driver
+    // objects.md: the own class and the subobjects, against the compiler's typeid and dynamic_cast (this driver
     // has the C++ runtime; the module never calls it).
     {
         struct DriverOnly : FoD {};  // a class with no row: the kernel names its type_info, no row
@@ -302,7 +302,7 @@ int main(int argc, char** argv) {
         p = luma::asClass(static_cast<FoB*>(&only), pD, &ambiguous);
         check(p == nullptr && !ambiguous, "asClass of a class with no row is null");
         check(luma::ownClass(nullptr).type == nullptr && luma::ownClass(nullptr).typeInfo == nullptr, "ownClass of null");
-        // Contract objects S-1: a pointer not aligned as an object's, and an object whose first word is no vtable
+        // objects.md: a pointer not aligned as an object's, and an object whose first word is no vtable
         // (a plain struct's data, a misaligned word), are no class: none, nothing read past them.
         {
             alignas(8) static unsigned char bytes[32] = {};
@@ -354,7 +354,7 @@ int main(int argc, char** argv) {
             const char* want;  // the overrider's function name; null: none
         };
         static FoX x;
-        // Contract objects M-1: FoTA reached twice; each subobject's overrider is its own path's, as the compiler
+        // objects.md: FoTA reached twice; each subobject's overrider is its own path's, as the compiler
         // calls it; from a pointer that is no FoTA (FoTE's FoV at offset 0), none, said as ambiguous.
         static FoTD td;
         static FoTE te;

@@ -1,6 +1,6 @@
 """types_fixture_test.py --commands COMPILE_COMMANDS [--out DIR] [--libclang PATH] [--run-with "PREFIX" --path-map FROM=TO]
 
-Contract types TY-8, on the fixture (tools/lumacore/tests/types_fixture): what the game's headers have too little of
+types.md, on the fixture (tools/lumacore/tests/types_fixture): what the game's headers have too little of
 (a name hidden by a derived class's, one two bases up, ambiguous ones, one through a virtual base, bit-fields through a
 base, an instance only an alias names, anonymous members, globals) through the real generator (gen_types.py --tree),
 the real kernel (LumaTypes.cpp) and the real comparison (compare_types.py):
@@ -128,7 +128,7 @@ def main():
     want_calls = [{"name": "FcOwner::exeGo", "signature": "void()"}, {"name": "FcOwner::helper", "signature": "s32(s32) const"}]
     if calls != [want_calls]:
         failed.append("self-description: FcNerve::execute's calls are %s, not %s" % (calls, want_calls))
-    # Contract objects: polymorphic through a base that is an instance named only as a base.
+    # objects.md: polymorphic through a base that is an instance named only as a base.
     if not rows.get("FoHolder", {}).get("polymorphic"):
         failed.append("objects: FoHolder (a base FoGroup<FoB> : FoV) is not said polymorphic")
     missing = [r["name"] for r in data["types"] if r.get("kind") in ("struct", "class", "union")
@@ -193,7 +193,7 @@ def main():
     print("compare, planted:", se.strip()[-600:])
     if code == 0 or "field FxMid.y" not in se:
         failed.append("compare_types.py did not name the planted difference (field FxMid.y)")
-    # Contract objects: a record said not polymorphic, and a virtual the module has a row for said to have none.
+    # objects.md: a record said not polymorphic, and a virtual the module has a row for said to have none.
     for what, plant, named in (
             ("polymorphic", lambda t: t["FoB"].update(polymorphic=False), "record FoB: polymorphic"),
             ("method", lambda t: t["FoD"]["virtuals"][-1].update(row=False), "method FoD::secret s32(s32) const")):

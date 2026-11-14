@@ -441,7 +441,7 @@ namespace luma {
     static FieldBind bindField(const char* pTypeName, u32 typeLength, const char* pField, const char* pSignature);
 
     namespace {
-        // Contract objects: the polymorphic rows by their type_info's address, sorted (built by prepareTypes).
+        // objects.md: the polymorphic rows by their type_info's address, sorted (built by prepareTypes).
         const TypeRow** sByTypeInfo = nullptr;
         u32 sByTypeInfoCount = 0;
 

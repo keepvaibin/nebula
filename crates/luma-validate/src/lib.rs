@@ -362,7 +362,7 @@ impl ScenarioCell {
     }
 }
 
-/// The scenario cells of the mods that are on, as the cook applies tables (V4-1, DECISIONS): `lists` holds each mod's
+/// The scenario cells of the mods that are on, as the cook applies tables: `lists` holds each mod's
 /// cells, the lowest in the list first. A galaxy's whole table is the base, the highest mod's that brings one; then
 /// every mod's patch cells edit it, lowest first, whoever brought the table. Whole cells come first, each galaxy's
 /// from one mod only, so `zone_layer_sets` (a later cell wins) gives the game's sets.
