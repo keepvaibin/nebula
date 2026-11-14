@@ -64,7 +64,7 @@ rt_lens_bloom	config	rt_lens_bloom	bool	0|1	1	Graphics	-	-	y	-	ray tracing on	-
 rt_probe_ms	config	rt_probe_ms	state	0..1000	0	-	-	-	-	-	-	-
 rt_chosen	config	rt_chosen	state	0|1	0	-	-	-	-	-	-	-
 input_mode	runtime	input_mode	enum	auto|keyboard_mouse|controller|real_wiimote|phone|wiimote_motion	auto	Controls	y	-	y	y	real_wiimote, wiimote_motion where a Wii Remote can connect; phone on Android	Input
-co_star	runtime	co_star	bool	0|1	0	Controls	y	-	n	y	-	Co-Star
+co_star	runtime	co_star	bool	0|1	0	Controls	y	-	y	-	Windows' host (the others run no second player yet)	Co-Star
 audio_master_gain	runtime	master	float	0..2/0.05	1	Audio	y	-	y	y	the engine accepts up to 4 in a file	Master
 audio_music_gain	runtime	music	float	0..2/0.05	1	Audio	y	-	y	y	-	Music
 audio_sfx_gain	runtime	sfx	float	0..2/0.05	1	Audio	y	-	y	y	-	Sound effects
