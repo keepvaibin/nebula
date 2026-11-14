@@ -31,6 +31,7 @@
 #include "post_smaa_blend_ps.h"
 #include "post_smaa_blend_keep_ps.h"
 #include "post_fsr_easu_ps.h"
+#include "post_fsr_easu_half_ps.h"
 #include "post_fsr_rcas_ps.h"
 #include "post_fsr_rcas_scaled_ps.h"
 #include "post_resample_ps.h"
@@ -67,6 +68,15 @@ bool make(ID3D11Device1* device, ShaderBytes code, ComPtr<ID3D11VertexShader>& o
 
 bool make(ID3D11Device1* device, ShaderBytes code, ComPtr<ID3D11PixelShader>& out) {
     return SUCCEEDED(device->CreatePixelShader(code.data, code.size, nullptr, &out));
+}
+
+// EASU in its packed 16-bit form where the device runs min16float at 16 bits in the pixel stage, else at 32.
+ShaderBytes easu_shader(ID3D11Device1* device) noexcept {
+    D3D11_FEATURE_DATA_SHADER_MIN_PRECISION_SUPPORT precision{};
+    const bool half = SUCCEEDED(device->CheckFeatureSupport(D3D11_FEATURE_SHADER_MIN_PRECISION_SUPPORT, &precision,
+                                                            sizeof(precision))) &&
+                      (precision.PixelShaderMinPrecision & D3D11_SHADER_MIN_PRECISION_16_BIT) != 0;
+    return half ? bytes(g_post_fsr_easu_half_ps) : bytes(g_post_fsr_easu_ps);
 }
 
 template <std::size_t N>
@@ -186,7 +196,7 @@ bool PostProcessor::initialize(ID3D11Device1* device, ID3D11DeviceContext1* cont
         SUCCEEDED(device_->CreateSamplerState(&point, &point_)) &&
         SUCCEEDED(device_->CreateRasterizerState(&rd, &rasterizer_)) &&
         make(device_, bytes(g_post_fullscreen_vs), fullscreen_vs_) &&
-        make(device_, bytes(g_post_fsr_easu_ps), easu_) &&
+        make(device_, easu_shader(device_), easu_) &&
         make(device_, bytes(g_post_fsr_rcas_ps), rcas_) &&
         make(device_, bytes(g_post_fsr_rcas_scaled_ps), rcas_scaled_) &&
         make(device_, bytes(g_post_resample_ps), resample_) &&
