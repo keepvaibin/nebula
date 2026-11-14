@@ -83,7 +83,7 @@ None of these are in 1.0.2. They are in this branch and change until 2.0 is rele
   (RMGP01) and Japan (RMGJ01) too in 2.0 (in development)
 - Windows 10 (version 1803 or newer) or Windows 11, 64-bit
 - A GPU with Direct3D 12 support
-- A CPU with AVX2 (2.0)
+- A CPU with SSE4.2 (2.0; AVX2 CPUs run a build for them)
 - 8 GB of RAM; for 1.0.2, 16 GB of free disk space and an internet connection during installation, about 5.5 GB
   afterwards
 
