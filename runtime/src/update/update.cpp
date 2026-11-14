@@ -809,7 +809,7 @@ bool file_sha256(const std::filesystem::path& path, std::string& hex, std::uint6
     return true;
 }
 
-void install(Release release, std::string installed, detail::Transport* transport, std::filesystem::path staging) {
+void install(Release release, std::string installed, std::string asset, detail::Transport* transport, std::filesystem::path staging) {
     Service& s = service();
     const auto canceled = [&] { return s.cancel.load(std::memory_order_relaxed); };
     // The signed manifest first: what it names is the only package this install takes.
@@ -824,22 +824,15 @@ void install(Release release, std::string installed, detail::Transport* transpor
         set_progress(InstallState::Failed, 0, release.package_bytes, "the manifest is not signed by the Nebula release key");
         return;
     }
-    std::map<std::string, std::string, std::less<>> fields;
-    {
-        std::istringstream lines(manifest);
-        std::string line;
-        while (std::getline(lines, line)) {
-            if (!line.empty() && line.back() == '\r') line.pop_back();
-            const std::size_t equals = line.find('=');
-            if (equals != std::string::npos) fields[line.substr(0, equals)] = line.substr(equals + 1u);
-        }
-    }
-    const std::string version = fields["version"], sha = fields["sha256"];
-    std::uint64_t size = 0;
-    try { size = std::stoull(fields["size"]); } catch (...) { size = 0; }
-    // Monotonic: the signed version is this release's and newer than the running one (no replay, no downgrade).
-    if (version != release.version || compare_versions(version, installed) <= 0 || sha.size() != 64u || size == 0u || size > kMaxPackageBytes) {
-        set_progress(InstallState::Failed, 0, size, "the signed manifest names another version");
+    const detail::Manifest signed_for = detail::parse_manifest(manifest);
+    const std::string& version = signed_for.version;
+    const std::string& sha = signed_for.sha256;
+    const std::uint64_t size = signed_for.size;
+    // Monotonic: the signed version is this release's and newer than the running one (no replay, no downgrade), and
+    // the package is this platform's (one key signs every platform's manifest).
+    if (!detail::manifest_takes(signed_for, release.version, installed, asset)) {
+        set_progress(InstallState::Failed, 0, size,
+                     signed_for.asset != asset ? "the signed manifest is for another package" : "the signed manifest names another version");
         return;
     }
     std::error_code error;
@@ -886,11 +879,34 @@ bool start_install(const Release& release) {
     s.installing = true;
     s.cancel.store(false, std::memory_order_relaxed);
     s.progress = {InstallState::Downloading, 0, release.package_bytes, {}};
-    s.installer = std::thread(install, release, s.installed, &transport_of(s), data / "update-staging");
+    s.installer = std::thread(install, release, s.installed, s.asset, &transport_of(s), data / "update-staging");
     return true;
 }
 
 namespace detail {
+
+Manifest parse_manifest(std::string_view text) {
+    std::map<std::string, std::string, std::less<>> fields;
+    std::istringstream lines{std::string(text)};
+    std::string line;
+    while (std::getline(lines, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        const std::size_t equals = line.find('=');
+        if (equals != std::string::npos) fields[line.substr(0, equals)] = line.substr(equals + 1u);
+    }
+    Manifest manifest;
+    manifest.version = fields["version"];
+    manifest.sha256 = fields["sha256"];
+    manifest.asset = fields["asset"];
+    try { manifest.size = std::stoull(fields["size"]); } catch (...) { manifest.size = 0; }
+    return manifest;
+}
+
+bool manifest_takes(const Manifest& manifest, std::string_view version, std::string_view installed, std::string_view asset) {
+    return !manifest.version.empty() && manifest.version == version && compare_versions(manifest.version, installed) > 0 &&
+           manifest.sha256.size() == 64u && manifest.size != 0u && manifest.size <= kMaxPackageBytes && !asset.empty() &&
+           manifest.asset == asset;
+}
 
 void set_transport_for_tests(Transport* transport) { service().transport = transport; }
 void set_data_directory_for_tests(const std::filesystem::path& directory) { service().data = directory; }

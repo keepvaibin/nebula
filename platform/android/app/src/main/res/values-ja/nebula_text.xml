@@ -29,6 +29,8 @@
     <string name="nebula_benchmark_below">最も低い設定でも、この端末では毎秒60フレームを保てない場合があります。</string>
     <string name="nebula_benchmark_cpu">ここではプロセッサーがフレームレートを制限しています。グラフィック設定を下げても上がりません。</string>
     <string name="nebula_benchmark_unfinished">ベンチマークは完了しませんでした。</string>
+    <string name="nebula_benchmark_stale">この計測の後に設定、Nebula、またはグラフィックスカードが変わりました。おすすめを得るにはベンチマークをもう一度実行してください。</string>
+    <string name="nebula_benchmark_in_use">おすすめの設定を使用しています。</string>
     <string name="nebula_apply">てきよう</string>
     <string name="nebula_settings_not_saved">設定を保存できませんでした: %1$s</string>
     <string name="nebula_setting_internal_resolution">内部かいぞうど</string>

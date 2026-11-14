@@ -379,6 +379,9 @@ namespace Nebula.Launcher
             read = SettingsFile.Snapshot(values);
         }
 
+        /// <summary>config.ini's (or another such file's) keys and their texts as written, the last line of a key.</summary>
+        internal static Dictionary<string, string> ReadValues(string path) { return Read(path).Item2; }
+
         private static Tuple<List<string>, Dictionary<string, string>> Read(string path)
         {
             var lines = new List<string>();

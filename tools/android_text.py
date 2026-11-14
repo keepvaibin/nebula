@@ -49,6 +49,8 @@ TEXT = [
     ('nebula_benchmark_below', 'Even the lowest settings may not keep 60 frames per second on this device.'),
     ('nebula_benchmark_cpu', 'The processor limits the frame rate here: lower graphics settings will not raise it.'),
     ('nebula_benchmark_unfinished', 'The benchmark did not finish.'),
+    ('nebula_benchmark_stale', 'Settings, Nebula or the graphics card changed since this run. Run the benchmark again for a recommendation.'),
+    ('nebula_benchmark_in_use', 'The recommended settings are in use.'),
     ('nebula_apply', 'Apply'),
     ('nebula_settings_not_saved', 'Settings could not be saved: {0}'),
     ('nebula_setting_internal_resolution', 'Internal resolution'),

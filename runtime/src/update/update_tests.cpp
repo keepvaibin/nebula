@@ -273,7 +273,28 @@ int main(int argc, char** argv) {
     check(!poll() && g_transport.requests == before_future + 1, "the check turned off offers nothing and asks nothing");
     detail::reset_for_tests();
 
+    // The signed manifest's rules without a signature (detail::manifest_takes): the asset ties it to this build.
+    {
+        const std::string sha(kPackageSha);
+        const std::string ok_text = "version=9.9.9-beta.1\r\nsha256=" + sha + "\r\nsize=27\r\nasset=Nebula-Beta-Test.pkg\r\n";
+        const detail::Manifest ok = detail::parse_manifest(ok_text);
+        check(ok.version == "9.9.9-beta.1" && ok.sha256 == sha && ok.size == 27u && ok.asset == kAsset,
+              "a manifest's version, SHA-256, size and asset are read (CR LF lines)");
+        check(detail::manifest_takes(ok, "9.9.9-beta.1", installed, kAsset), "a manifest of this release and this build's asset is taken");
+        check(!detail::manifest_takes(ok, "9.9.9-beta.1", installed, "Nebula-Test.pkg"),
+              "a manifest signed for another asset (platform or channel) is refused");
+        check(!detail::manifest_takes(detail::parse_manifest("version=9.9.9-beta.1\nsha256=" + sha + "\nsize=27\n"), "9.9.9-beta.1", installed, kAsset),
+              "a manifest without an asset is refused");
+        check(!detail::manifest_takes(ok, "9.9.9-beta.1", installed, ""), "no asset for this build takes no manifest");
+        check(!detail::manifest_takes(ok, "9.9.9-beta.2", installed, kAsset) && !detail::manifest_takes(ok, "9.9.9-beta.1", "9.9.9-beta.1", kAsset),
+              "a manifest of another or a not newer version is refused");
+    }
+
     // The install: the signed manifest decides.
+    // UNRUN (owner's order 21:50, nothing is run). kManifestSignature and kReplayedSignature sign texts without an
+    // `asset=` line: those are now refused (the first and the replay check use them so). The manifests with the line need
+    // kManifestSignature made again over the new text with the test key (RSACryptoServiceProvider.SignData, SHA-256, as
+    // kSignedTextSignature) before "a package matching its signed manifest is installed" passes.
     write_cache(data, "{\"checkedUtc\": \"2020-01-01T00:00:00Z\"}");
     g_transport.releases = listing("9.9.9-beta.1", "notes");
     galaxy::update::begin(installed);
@@ -286,9 +307,13 @@ int main(int argc, char** argv) {
         }
         return InstallState::Idle;
     };
+    const std::string asset_line = "asset=" + std::string(kAsset) + "\n";
     g_transport.manifest = "version=9.9.9-beta.1\nsha256=" + std::string(kPackageSha) + "\nsize=" + std::to_string(kPackage.size()) + "\n";
     g_transport.signature = std::string(kManifestSignature) + "\n";
     g_transport.package = std::string(kPackage);
+    check(release && start_install(*release) && wait_install() == InstallState::Failed && g_installed_package.empty(),
+          "a validly signed manifest that names no asset is refused");
+    g_transport.manifest += asset_line;
     check(release && start_install(*release) && wait_install() == InstallState::Restart && read_file(g_installed_package) == kPackage,
           "a package matching its signed manifest is installed");
     g_installed_package.clear();
@@ -296,7 +321,7 @@ int main(int argc, char** argv) {
     g_transport.signature = std::string(kReplayedSignature);
     check(release && start_install(*release) && wait_install() == InstallState::Failed && g_installed_package.empty(),
           "a signed manifest of an older version under this release is refused (replay, downgrade)");
-    g_transport.manifest = "version=9.9.9-beta.1\nsha256=" + std::string(kPackageSha) + "\nsize=" + std::to_string(kPackage.size()) + "\n";
+    g_transport.manifest = "version=9.9.9-beta.1\nsha256=" + std::string(kPackageSha) + "\nsize=" + std::to_string(kPackage.size()) + "\n" + asset_line;
     g_transport.signature = std::string(kManifestSignature);
     g_transport.package = "nebula package 9.9.9-beta.X";
     check(release && start_install(*release) && wait_install() == InstallState::Failed && g_installed_package.empty(),

@@ -136,15 +136,28 @@ int run(NSString* address, NebulaUpdateReceiver* receiver, std::uint64_t resume_
     }
 }
 
+// An enable key of the system's proxy settings by its value: the dictionary holds the key with 0 when the proxy is off.
+bool turned_on(CFDictionaryRef settings, CFStringRef key) {
+    const void* value = CFDictionaryGetValue(settings, key);
+    if (value == nullptr || CFGetTypeID(value) != CFNumberGetTypeID()) return false;
+    int on = 0;
+    return CFNumberGetValue(static_cast<CFNumberRef>(value), kCFNumberIntType, &on) && on != 0;
+}
+
+// A proxy the HTTPS request may go through: then only the request can tell whether the server is reachable.
 bool proxied() {
     CFDictionaryRef settings = CFNetworkCopySystemProxySettings();
     if (settings == nullptr) return false;
-    const auto* enabled = static_cast<CFNumberRef>(CFDictionaryGetValue(settings, kCFNetworkProxiesHTTPSEnable));
-    int on = 0;
-    if (enabled != nullptr) CFNumberGetValue(enabled, kCFNumberIntType, &on);
-    const bool automatic = CFDictionaryGetValue(settings, kCFNetworkProxiesProxyAutoConfigEnable) != nullptr;
+#if TARGET_OS_OSX
+    const bool on = turned_on(settings, kCFNetworkProxiesHTTPSEnable) || turned_on(settings, kCFNetworkProxiesSOCKSEnable) ||
+                    turned_on(settings, kCFNetworkProxiesProxyAutoConfigEnable) ||
+                    turned_on(settings, kCFNetworkProxiesProxyAutoDiscoveryEnable);
+#else
+    // iOS has one proxy for HTTP and HTTPS, and automatic configuration.
+    const bool on = turned_on(settings, kCFNetworkProxiesHTTPEnable) || turned_on(settings, kCFNetworkProxiesProxyAutoConfigEnable);
+#endif
     CFRelease(settings);
-    return on != 0 || automatic;
+    return on;
 }
 
 class AppleTransport final : public Transport {
