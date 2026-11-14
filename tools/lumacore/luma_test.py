@@ -255,11 +255,27 @@ def read_test(folder, types=None):
             path = "mods[%d]" % i
             if isinstance(entry, str):
                 entry = {"path": entry}
-            keys_known(entry, path, {"path", "options", "code", "permissions", "install", "loads", "folder"})
+            keys_known(entry, path, {"path", "options", "code", "permissions", "install", "loads", "folder", "enabled",
+                                     "remove"})
             if "path" not in entry:
                 raise HarnessError("%s has no path" % path)
             mod = {"path": (folder / text(entry, "path", path)).resolve(), "code": code, "loads": True,
-                   "install": "placed", "permissions": "allow", "options": {}, "folder": None}
+                   "install": "placed", "permissions": "allow", "options": {}, "folder": None, "enabled": True,
+                   "remove": False}
+            # "enabled": false: installed and switched off, as the Mods screen keeps a mod turned off (enabled=0 in
+            # its mods.ini section); a kept mod (continue_from) is switched off or on in place. "remove": true: a mod
+            # kept from the test before is taken away as a player deleting its folder. Neither starts, so neither is
+            # among the mods every run checks as loaded.
+            if "enabled" in entry:
+                mod["enabled"] = boolean(entry, "enabled", path)
+            if "remove" in entry:
+                mod["remove"] = boolean(entry, "remove", path)
+                if mod["remove"] and len(entry) != 2:
+                    raise HarnessError("%s: a removed mod's entry has its path and remove, nothing else" % path)
+            if not mod["enabled"] or mod["remove"]:
+                if entry.get("loads") is True:
+                    raise HarnessError("%s: a mod switched off or removed does not load" % path)
+                mod["loads"] = False
             if "folder" in entry:
                 # The folder the mod is placed in under the game's mods folder, its id when absent: a second copy of a
                 # mod (one id in two folders, as a player can install it) is placed under another name.
@@ -308,6 +324,8 @@ def read_test(folder, types=None):
     if limit <= 0:
         raise HarnessError("limit_seconds must be more than 0")
     continue_from = text(t, "continue_from", "") if "continue_from" in t else None
+    if continue_from is None and any(m["remove"] for m in mods):
+        raise HarnessError("remove takes a mod kept from the test this one continues from (continue_from)")
     faults = []
     if "faults" in t:
         if not isinstance(t["faults"], list):
@@ -1004,7 +1022,43 @@ def keep_options(ini, mod_id, lines):
     ini.write_text("\n".join(out) + "\n", encoding="utf-8")
 
 
-def install(settings, mod_folder, code_allowed, order, kept=False, permissions="allow", broken_ok=False, folder=None, options=None):
+def keep_enabled(ini, place, enabled):
+    """A kept mod switched on or off in place (a test continuing from another): its section's enabled line, as the
+    Mods screen writes it (enabled=1 or enabled=0); the other lines and sections stay."""
+    old = ini.read_text(encoding="utf-8").splitlines() if ini.exists() else []
+    head = "[%s]" % ini_escaped(place)
+    if head not in old:
+        raise HarnessError("the kept mod %s has no section in mods.ini" % place)
+    want = "enabled=%d" % (1 if enabled else 0)
+    out, inside, written = [], False, False
+    for line in old:
+        if line.startswith("[") and line.endswith("]"):
+            if inside and not written:
+                out.append(want)
+            inside, written = line == head, False
+        elif inside and line.startswith("enabled="):
+            line, written = want, True
+        out.append(line)
+    if inside and not written:
+        out.append(want)
+    ini.write_text("\n".join(out) + "\n", encoding="utf-8")
+
+
+def remove_kept(settings, mod_folder, folder=None):
+    """A mod kept from the test before taken away as a player deletes it: its folder under the run's mods goes; what
+    the game keeps about it elsewhere (its mods.ini section, its saved data) stays, as it would for the player.
+    Returns its id."""
+    manifest = load_json(mod_folder / "luma.json")
+    mod_id = manifest.get("id")
+    target = settings / "mods" / (folder or mod_id)
+    if not target.is_dir():
+        raise HarnessError("remove: %s is not installed (it must be kept from the test this one continues from)" % mod_id)
+    shutil.rmtree(target)
+    return mod_id
+
+
+def install(settings, mod_folder, code_allowed, order, kept=False, permissions="allow", broken_ok=False, folder=None, options=None,
+            enabled=True):
     """A mod folder holding luma.json (the base's form, as examples/luma-hello) into the run's mods, on, in order.
     kept: the mods an earlier test left (continue_from) stay as they are, with their data; only new ids are added.
     permissions: "allow", "deny" or {name: "allow"|"deny"}: each declared permission's answer, as the consent screen
@@ -1051,11 +1105,12 @@ def install(settings, mod_folder, code_allowed, order, kept=False, permissions="
         if kept:
             if options:
                 keep_options(settings / "mods.ini", place, option_lines(mod_folder, manifest, options))
+            keep_enabled(settings / "mods.ini", place, enabled)
             return mod_id
         raise HarnessError("two mods have the id %s (a second copy takes \"folder\")" % mod_id)
     shutil.copytree(mod_folder, target)
     ini = settings / "mods.ini"
-    lines = "[%s]\nenabled=1\norder=%d\n" % (place, order)
+    lines = "[%s]\nenabled=%d\norder=%d\n" % (place, 1 if enabled else 0, order)
     if code_allowed and libraries:
         lines += "code_ok=%s\n" % code_token(target / libraries[0])
     # The player's answers as the consent screen records them (consent.md 1.2): every declared permission answered.
@@ -1158,9 +1213,13 @@ def place_mods(test, settings, previous, frozen):
                                "is its folder" % m["path"])
         if not (m["path"] / "luma.json").is_file():
             raise HarnessError("the mod %s has no luma.json" % m["path"])
+        if m["remove"]:
+            mod_ids.append((remove_kept(settings, m["path"], m["folder"]), dict(m, has_code=False)))
+            continue
         mod_id = install(settings, m["path"], m["code"] == "allow", i + 1, kept=previous is not None,
-                         permissions="ask" if m["code"] == "ask" else m["permissions"], broken_ok=not m["loads"],
-                         folder=m["folder"], options=m["options"])
+                         permissions="ask" if m["code"] == "ask" else m["permissions"],
+                         broken_ok=not m["loads"] and m["enabled"], folder=m["folder"], options=m["options"],
+                         enabled=m["enabled"])
         # A mod with no code (luma.json has no "code": content only) is never started, so the host writes no start
         # or refusal line for it and there is no mod.<id>.loaded fact: its test's own facts show its content.
         try:
