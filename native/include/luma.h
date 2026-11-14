@@ -16,6 +16,10 @@
 extern "C" {
 #endif
 
+/* The layout version. A struct with a `size` field grows only at its end, and each side reads only what both sizes
+   cover. A struct without one (LumaFunction, LumaCall, LumaImport, LumaExport, LumaOverride, LumaTable) keeps its
+   layout for every mod whose LumaModInfo.api is 1; a game that changes one reads and writes the old layout for
+   such a mod. Enum values and LumaCore's order never change. */
 #define LUMA_API 1u
 /* The most mods with code that may be on at once (loader contract 2). */
 #define LUMA_MAX_MODS 256u
@@ -197,7 +201,8 @@ typedef struct LumaCore {
     /* Adds a hook after loading. 0: added; -1: refused (a constructor or destructor takes before and after only, a
        function whose result has no default takes no skipping hook, and a virtual call from `method` is not one
        function: hook its rows' own functions, `overrider` names them); -2: another mod replaces the function already;
-       -3: not on the game thread (nothing changes). A call already running keeps the hooks it started with. */
+       -3: not on the game thread (nothing changes). A call already running keeps the hooks it started with. The same
+       function, kind, hook and user added twice is two hooks: each runs, and unhook takes out one. */
     int32_t (*hook)(const LumaMod* mod, const LumaFunction* function, uint32_t kind, LumaHook hook, void* user);
     /* From a wrap or a replace: runs the wraps after it, then the function. */
     void (*proceed)(LumaCall* call);
