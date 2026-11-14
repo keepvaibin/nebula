@@ -20,7 +20,8 @@ enum class Feature : unsigned { Msaa, Ao, Enhanced, Smaa, Bloom, Count };
 inline constexpr std::size_t kFeatureCount = static_cast<std::size_t>(Feature::Count);
 
 // The settings a choice sets, by key: internal_height (0: the panel's lines), msaa_samples, ambient_occlusion,
-// enhanced_lighting, aa (0 off, 1 SMAA), smaa_quality, bloom (percent).
+// enhanced_lighting, aa (0 off, 1 SMAA, 2 auto, 3 FXAA; a recommendation writes 0 or 1; FXAA, a few taps, carries
+// no price), smaa_quality, bloom (percent).
 struct Choice {
     unsigned internal_height = 0u;
     unsigned msaa_samples = 1u;

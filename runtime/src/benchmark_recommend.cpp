@@ -24,7 +24,7 @@ bool on(const Choice& c, Feature feature) {
     case Feature::Msaa: return c.msaa_samples > 1u;
     case Feature::Ao: return c.ambient_occlusion;
     case Feature::Enhanced: return c.enhanced_lighting;
-    case Feature::Smaa: return c.aa != 0u;
+    case Feature::Smaa: return c.aa == 1u || c.aa == 2u;  // SMAA, or auto (SMAA below 1.5x the window); FXAA unpriced
     case Feature::Bloom: return c.bloom != 0u;
     case Feature::Count: break;
     }

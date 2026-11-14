@@ -103,6 +103,18 @@ int main() {
             check(!bench::recommend(m).valid, "no probe line, no recommendation");
         }
         {
+            // A player on FXAA is not priced as SMAA (the heavy factor would shrink); auto is.
+            const bench::Measured m = device(1.0, 1.0, 0.5, 0.5, 0.5, 2.0, 0.5);
+            bench::Choice fxaa = m.current, smaa_auto = m.current, smaa = m.current;
+            fxaa.aa = 3u;
+            smaa_auto.aa = 2u;
+            smaa.aa = 1u;
+            check(bench::probe_ms(m, fxaa, m.current_pixels) == bench::probe_ms(m, m.current, m.current_pixels) &&
+                      bench::probe_ms(m, smaa_auto, m.current_pixels) == bench::probe_ms(m, smaa, m.current_pixels) &&
+                      bench::probe_ms(m, smaa, m.current_pixels) > bench::probe_ms(m, m.current, m.current_pixels),
+                  "FXAA carries no SMAA price, auto does");
+        }
+        {
             // The result reader takes what write_result writes, and nothing else.
             const std::string head = "{\"schema\":1,\"app\":{\"version\":\"2.0.0\",\"commit\":null},\"status\":\"complete\",";
             const std::string rec =
