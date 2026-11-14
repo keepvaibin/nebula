@@ -5,7 +5,6 @@
 //! names (nebula_frame_list.h NEBULA_PIPELINE_FILE_MAGIC).
 
 use std::collections::BTreeSet;
-use std::sync::Mutex;
 
 use super::model_write::{further_stride, MeshStreams, MESH_COLOR0, MESH_COLOR1, MESH_GAIN, MESH_NORMAL, MESH_TANGENTS};
 
@@ -24,29 +23,10 @@ const STATE_ALPHA_PASS: u32 = 1 << 19;
 const STATE_STENCIL_OWN: u32 = 1 << 24;
 const STATE_STENCIL_MASK: u32 = 0xF << 20;
 
-static LIST: Mutex<BTreeSet<Vec<u8>>> = Mutex::new(BTreeSet::new());
-
-pub fn reset() {
-    LIST.lock().unwrap().clear();
-}
-
-/// What `f` adds to the list, apart from it: the list holds after it what it held before (a cook outside the store's,
-/// cook_c). Hold cook::COOK_LOCK around it.
-pub fn added_by<T>(f: impl FnOnce() -> T) -> (T, Vec<Vec<u8>>) {
-    // Put back however `f` ends (a fault in a cook unwinds through here).
-    struct Held(Option<BTreeSet<Vec<u8>>>);
-    impl Drop for Held {
-        fn drop(&mut self) {
-            if let Some(held) = self.0.take() {
-                *LIST.lock().unwrap_or_else(|e| e.into_inner()) = held;
-            }
-        }
-    }
-    let mut held = Held(Some(std::mem::take(&mut *LIST.lock().unwrap_or_else(|e| e.into_inner()))));
-    let out = f();
-    let added = std::mem::replace(&mut *LIST.lock().unwrap_or_else(|e| e.into_inner()), held.0.take().unwrap_or_default());
-    (out, added.into_iter().collect())
-}
+/// The pipelines one cook's files draw with. Each cook holds its own (in its Stats, a disc cook's workers each theirs,
+/// merged as each file is written), so two cooks in one process never see each other's.
+#[derive(Default, Debug)]
+pub struct Pipelines(BTreeSet<Vec<u8>>);
 
 /// The (vertex, pixel) programs of `records` the renderer was not built with: neither written (tools/dev/
 /// compile_programs.py) nor in its table.
@@ -119,17 +99,71 @@ fn record(vertex: u64, pixel: u64, state: u32, inputs: &[u8], m: &MeshStreams) -
     out
 }
 
-/// A mesh under one form. A material's state word holds what the pass decides as two bits: stencil is the pass's
-/// (none, unless a pass asks: the site list holds those), alpha either.
-pub fn add_form(vertex: u64, pixel: u64, state: u32, inputs: &[u8], m: &MeshStreams) {
-    let plain = if state & STATE_STENCIL_OWN != 0 { state & !STATE_STENCIL_OWN } else { state & !STATE_STENCIL_MASK };
-    let mut list = LIST.lock().unwrap();
-    if plain & STATE_ALPHA_PASS != 0 {
-        let off = plain & !STATE_ALPHA_PASS;
-        list.insert(record(vertex, pixel, off, inputs, m));
-        list.insert(record(vertex, pixel, off | STATE_ALPHA_WRITE, inputs, m));
-    } else {
-        list.insert(record(vertex, pixel, plain, inputs, m));
+impl Pipelines {
+    /// A mesh under one form. A material's state word holds what the pass decides as two bits: stencil is the pass's
+    /// (none, unless a pass asks: the site list holds those), alpha either.
+    pub fn add_form(&mut self, vertex: u64, pixel: u64, state: u32, inputs: &[u8], m: &MeshStreams) {
+        let plain = if state & STATE_STENCIL_OWN != 0 { state & !STATE_STENCIL_OWN } else { state & !STATE_STENCIL_MASK };
+        if plain & STATE_ALPHA_PASS != 0 {
+            let off = plain & !STATE_ALPHA_PASS;
+            self.0.insert(record(vertex, pixel, off, inputs, m));
+            self.0.insert(record(vertex, pixel, off | STATE_ALPHA_WRITE, inputs, m));
+        } else {
+            self.0.insert(record(vertex, pixel, plain, inputs, m));
+        }
+    }
+
+    /// Every pipeline a particle file's draws can take, with the pass's alpha written and not: each base shape's draw
+    /// (corners with the extra coordinates under an indirect or second texture or a projection, as setPTev's flags)
+    /// and the child's (setCTev: none).
+    pub fn add_particles(&mut self, ir: &super::particles::ParticleIr) {
+        for r in &ir.resources {
+            let shape = &r.shape.record;
+            let state = particle_state(shape);
+            let extras = shape[SHAPE_PROJECTED] != 0
+                || r.extex.as_ref().is_some_and(|e| e[EXTEX_USE_INDIRECT] != 0 || e[EXTEX_USE_SECOND] != 0);
+            for alpha in [0, STATE_ALPHA_WRITE] {
+                particle_draw(&mut self.0, state | alpha, shape[SHAPE_TYPE], extras);
+                if let Some(child) = &r.child {
+                    particle_draw(&mut self.0, state | alpha, child[0], false);
+                }
+            }
+        }
+    }
+
+    /// Another cook's (a file cooked on a thread of its own) added to this one.
+    pub fn merge(&mut self, other: Pipelines) {
+        self.0.extend(other.0);
+    }
+
+    /// The files' own records, without the sites': what a cook outside the store's added (cook_c).
+    pub fn into_records(self) -> Vec<Vec<u8>> {
+        self.0.into_iter().collect()
+    }
+
+    /// The whole list, in a stable order, with the sites'.
+    fn records(&self) -> Vec<Vec<u8>> {
+        let mut list = self.0.clone();
+        for line in include_str!("../../data/site_pipelines.txt").lines() {
+            if let Some(record) = parse_line(line) {
+                list.insert(record);
+            }
+        }
+        println!("pipelines: {}", list.len());
+        list.into_iter().collect()
+    }
+
+    pub fn bytes(&self) -> Vec<u8> {
+        file(&self.records())
+    }
+
+    /// A base-game import must only name the programs shipped with the renderer. Mods use their own compiler path.
+    pub fn checked_bytes(&self) -> anyhow::Result<Vec<u8>> {
+        let records = self.records();
+        if let Some((v, p)) = unshipped(&records).first() {
+            anyhow::bail!("The imported material names an uncompiled program ({v:016x}, {p:016x}); the game store was not installed");
+        }
+        Ok(file(&records))
     }
 }
 
@@ -228,25 +262,6 @@ fn particle_draw(list: &mut BTreeSet<Vec<u8>>, state: u32, shape_type: u8, extra
     list.insert(site_record(SITE | SHADER_PARTICLE << 1 | u64::from(wide), pixel, state, stride, &inputs));
 }
 
-/// Every pipeline a particle file's draws can take, with the pass's alpha written and not: each base shape's draw
-/// (corners with the extra coordinates under an indirect or second texture or a projection, as setPTev's flags) and
-/// the child's (setCTev: none).
-pub fn add_particles(ir: &super::particles::ParticleIr) {
-    let mut list = LIST.lock().unwrap();
-    for r in &ir.resources {
-        let shape = &r.shape.record;
-        let state = particle_state(shape);
-        let extras = shape[SHAPE_PROJECTED] != 0
-            || r.extex.as_ref().is_some_and(|e| e[EXTEX_USE_INDIRECT] != 0 || e[EXTEX_USE_SECOND] != 0);
-        for alpha in [0, STATE_ALPHA_WRITE] {
-            particle_draw(&mut list, state | alpha, shape[SHAPE_TYPE], extras);
-            if let Some(child) = &r.child {
-                particle_draw(&mut list, state | alpha, child[0], false);
-            }
-        }
-    }
-}
-
 /// One line of data/site_pipelines.txt as a record: in this format, or in the fixed-size one of before the list was counted.
 fn parse_line(line: &str) -> Option<Vec<u8>> {
     let line = line.trim();
@@ -279,18 +294,6 @@ fn from_fixed(old: &[u8]) -> Vec<u8> {
     out
 }
 
-/// The whole list, in a stable order, with the sites'.
-fn records() -> Vec<Vec<u8>> {
-    let mut list = LIST.lock().unwrap();
-    for line in include_str!("../../data/site_pipelines.txt").lines() {
-        if let Some(record) = parse_line(line) {
-            list.insert(record);
-        }
-    }
-    println!("pipelines: {}", list.len());
-    list.iter().cloned().collect()
-}
-
 /// Pipelines.bin: the magic, the count, 4 reserved bytes, the records.
 fn file(records: &[Vec<u8>]) -> Vec<u8> {
     let mut out = Vec::new();
@@ -303,22 +306,9 @@ fn file(records: &[Vec<u8>]) -> Vec<u8> {
     out
 }
 
-pub fn bytes() -> Vec<u8> {
-    file(&records())
-}
-
 /// A written shader's program id (tools/dev/compile_programs.py WRITTEN: SITE | number << 1, a vertex form also | 1).
 fn written(id: u64) -> bool {
     id & SITE != 0 && id & !SITE < 256
-}
-
-/// A base-game import must only name the programs shipped with the renderer. Mods use their own compiler path.
-pub fn checked_bytes() -> anyhow::Result<Vec<u8>> {
-    let records = records();
-    if let Some((v, p)) = unshipped(&records).first() {
-        anyhow::bail!("The imported material names an uncompiled program ({v:016x}, {p:016x}); the game store was not installed");
-    }
-    Ok(file(&records))
 }
 
 #[cfg(test)]
@@ -376,6 +366,23 @@ mod tests {
         .map(|h| recorded(h))
         .collect();
         assert_eq!(list, expected);
+    }
+
+    /// Each cook's list is its own: a program one cook added is not in another's list (two cooks in one process, as
+    /// tests run, or the game and its tool), and a worker's list merged into its cook's brings its records.
+    #[test]
+    fn each_cook_holds_its_own_list() {
+        let mut header = vec![0u8; RECORD_HEADER];
+        header[0..8].copy_from_slice(&1u64.to_le_bytes());
+        header[8..16].copy_from_slice(&2u64.to_le_bytes());
+        let mut worker = Pipelines::default();
+        worker.0.insert(header.clone());
+        let mut cook = Pipelines::default();
+        assert!(cook.checked_bytes().is_ok());
+        assert!(worker.checked_bytes().is_err());
+        cook.merge(worker);
+        assert!(cook.checked_bytes().is_err());
+        assert_eq!(cook.into_records(), vec![header]);
     }
 
     #[test]

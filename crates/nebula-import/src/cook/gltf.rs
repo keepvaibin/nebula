@@ -2404,7 +2404,8 @@ pub fn to_files(bytes: &[u8], folder: Option<&Path>, stem: &str) -> Result<(Vec<
 /// The same for a model that stands in for `game`'s, and what was made.
 pub fn to_files_for(bytes: &[u8], folder: Option<&Path>, stem: &str, game: Option<&GameModel>) -> Result<(Vec<u8>, ClipFiles, ModelFacts)> {
     let (ir, clips, facts) = to_ir_for(bytes, folder, game)?;
-    let model = super::model_write::write(&ir, stem, &super::programs::written_or_unknown())?;
+    // A mod's model: no list reads its pipelines (the store's list is the disc cook's, Stats::pipelines).
+    let model = super::model_write::write(&ir, stem, &super::programs::written_or_unknown(), &mut Default::default())?;
     super::surface_shader::check_compile(&ir)?;
     let mut files: ClipFiles = clips.iter().map(|(name, c)| (format!("{name}.{}", clip_extension(c.kind)), super::clip::write(c))).collect();
     if let Some(table) = params_table(&ir)? {
@@ -2458,7 +2459,7 @@ pub fn params_table(ir: &ModelIr) -> Result<Option<Vec<u8>>> {
 /// model block at the game model's place, every joint of the game's and nothing drawn, and what was made.
 pub fn hidden_files_for(skeleton: &[u8], stem: &str, game: &GameModel) -> Result<(Vec<u8>, ModelFacts)> {
     let (ir, _, facts) = ir_for(skeleton, None, Some(game), true)?;
-    Ok((super::model_write::write(&ir, stem, &super::programs::written_or_unknown())?, facts))
+    Ok((super::model_write::write(&ir, stem, &super::programs::written_or_unknown(), &mut Default::default())?, facts))
 }
 
 /// An animation file (`<archive>.arc/<any>.anim.glb`, animation contract 2): animations only, each a clip of `game`
@@ -3128,7 +3129,7 @@ mod tests {
         let text = super::super::programs::generate(material, forms[0], false, &super::super::programs::Registers::of(material)).unwrap();
         assert_eq!(text.textures.len(), 12);
         assert!(text.inputs.contains(&super::super::programs::Input::Coord(11)));
-        let block = super::super::model_write::write(&ir, "fixture", &super::super::programs::Written::unknown()).unwrap();
+        let block = super::super::model_write::write(&ir, "fixture", &super::super::programs::Written::unknown(), &mut Default::default()).unwrap();
         let word = |at| u32::from_le_bytes(block[at..at + 4].try_into().unwrap());
         assert_eq!(word(4), super::super::model_write::VERSION);
         let at = word(24 * 4) as usize;
@@ -4101,7 +4102,7 @@ mod tests {
             assert!(text.pixel.contains("lit_tan") && text.inputs.contains(&Input::Tangent));
         }
         // Its slot is marked as read, so its texture is bound.
-        let block = super::super::model_write::write(&ir, "fixture", &super::super::programs::Written::unknown()).unwrap();
+        let block = super::super::model_write::write(&ir, "fixture", &super::super::programs::Written::unknown(), &mut Default::default()).unwrap();
         let word = |at: usize| u32::from_le_bytes(block[at..at + 4].try_into().unwrap());
         let at = word(24 * 4) as usize;
         let slots = word(at + super::super::model_write::MATERIAL_BYTES - 16) as usize;

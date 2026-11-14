@@ -78,6 +78,8 @@ pub struct Stats {
     pub bytes_out: u64,
     /// Disc files and archive members the store leaves out: only a console or the game's tools read them.
     pub left_out: Vec<LeftOut>,
+    /// The pipelines the files cooked draw with (NebulaData/Pipelines.bin).
+    pub pipelines: pipeline_list::Pipelines,
 }
 
 impl Stats {
@@ -95,6 +97,7 @@ impl Stats {
         self.bytes_in += other.bytes_in;
         self.bytes_out += other.bytes_out;
         self.left_out.extend(other.left_out);
+        self.pipelines.merge(other.pipelines);
     }
 
     pub fn summary(&self) -> String {
@@ -311,13 +314,13 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
     let cooked = if native_data::is_model_file(&bytes) {
         let source = model_ir::Source::of(&bytes);
         let ir = model_ir::read_file(&bytes, source, stats).with_context(|| format!("{name}: model"))?;
-        Some(model_write::write(&ir, stem, &programs::written_or_unknown()).with_context(|| format!("{name}: native model"))?)
+        Some(model_write::write(&ir, stem, &programs::written_or_unknown(), &mut stats.pipelines).with_context(|| format!("{name}: native model"))?)
     } else if native_data::is_animation_file(&bytes) {
         Some(clip::write(&clip::read(&bytes).with_context(|| format!("{name}: animation"))?))
     } else if bytes.starts_with(b"JPAC2-10") {
         let mut ir = particles::read_jpc(&bytes, stats).with_context(|| format!("{name}: particles"))?;
         particles::name_textures(&mut ir, stem);
-        pipeline_list::add_particles(&ir);
+        stats.pipelines.add_particles(&ir);
         Some(particles::write(&ir))
     } else if bytes.starts_with(&[0x00, 0x20, 0xAF, 0x30]) {
         let textured = formats::tpl(&bytes, stem, stats).with_context(|| format!("{name}: layout textures"))?;
@@ -461,7 +464,8 @@ pub fn write_cooked_pak(
     let _cook = COOK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let files = pak_files(system.fst())?;
     programs::prepare_written_files(&files, read)?;
-    pipeline_list::reset();
+    // This cook's list, from none: each file's is merged into it as the file is written.
+    stats.pipelines = pipeline_list::Pipelines::default();
     // Every named texture's row, for NebulaData/TextureNames.tsv; collecting ends with this cook, however it ends.
     struct Collecting;
     impl Drop for Collecting {
@@ -600,7 +604,7 @@ pub fn write_cooked_pak(
     let layout = audio_data::layout_text(&waves).into_bytes();
     let item = StoreItem { path: String::new(), order: 0, bytes: Some(layout) };
     placed.extend(place(&mut pak, &mut at, overlay::WAVE_LAYOUT, vec![item], stats)?);
-    let item = StoreItem { path: String::new(), order: 0, bytes: Some(pipeline_list::checked_bytes()?) };
+    let item = StoreItem { path: String::new(), order: 0, bytes: Some(stats.pipelines.checked_bytes()?) };
     placed.extend(place(&mut pak, &mut at, pipeline_list::PATH, vec![item], stats)?);
     // The textures' names: what mod import turns a Dolphin pack's files into, and what the dump names files by.
     let mut rows = texture::NAMES.lock().unwrap_or_else(|e| e.into_inner()).take().unwrap_or_default();

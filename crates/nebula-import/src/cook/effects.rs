@@ -229,7 +229,6 @@ pub fn apply(id: &str, cooked: &Cooked, particles: &[u8], names: &[u8]) -> Resul
         *slot = p;
         facts.push(EffectFacts { name: r.name.clone(), particles: vec![r.number], group: 0, sprite: sprite(&r.particle), textures: cooked.textures.len(), replaced: true });
     }
-    super::pipeline_list::add_particles(&merged);
     let mut table = super::table::TableIr::from_ntbl(names)?;
     table.add_rows(&rows)?;
     Ok(Applied { particles: super::particles::write(&merged), names: table.to_ntbl(), facts })

@@ -1584,7 +1584,7 @@ fn mesh_bounds(positions: &[[f32; 3]]) -> ([f32; 3], [f32; 3]) {
     (min, max)
 }
 
-pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
+pub fn write(ir: &ModelIr, stem: &str, written: &Written, pipelines: &mut pipeline_list::Pipelines) -> Result<Vec<u8>> {
     // The game binds a clip's tracks by these hashes (Clip::bind, ModelData::findMaterial): two names a clip could
     // tell apart must not share one, or the tracks land on the wrong joint or material with nothing said.
     for (kind, names) in [
@@ -1998,7 +1998,7 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
         };
         let state = pipeline_state(&ir.materials[shape.material as usize]);
         for (vertex, pixel, inputs) in forms {
-            pipeline_list::add_form(*vertex, *pixel, state, inputs, streams);
+            pipelines.add_form(*vertex, *pixel, state, inputs, streams);
         }
     }
     // Geometry, each stream on a 32-byte boundary.
@@ -2532,7 +2532,7 @@ mod tests {
                 groups: vec![GroupIr { attributes: 0, coordinates: Vec::new(), corners, indices: (0..(count as u32 + (3-count as u32%3)%3)).map(|i| i % count as u32).collect(), use_table: vec![70000], places: count as u32 }],
                 material: NONE, matrix_type: 0, radius: 0.0, min: [0.0;3], max: [0.0;3]
             });
-            let bytes = write(&ir, "wide", &Written::unknown()).unwrap();
+            let bytes = write(&ir, "wide", &Written::unknown(), &mut Default::default()).unwrap();
             let word = |at| u32::from_le_bytes(bytes[at..at+4].try_into().unwrap());
             let mesh = word(23 * 4) as usize;
             assert_eq!(bytes[mesh + 72], if count > 65535 {4} else {2});
