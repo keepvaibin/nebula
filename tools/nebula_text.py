@@ -1,10 +1,13 @@
 """Builds the game's table of Nebula's own text from localization/NebulaText.tsv.
 
     python tools/nebula_text.py            writes native/petari/src/Game/System/NebulaTextTable.inc
-    python tools/nebula_text.py --check    exits 1 when the .inc does not match the table, or a text has no row
+    python tools/nebula_text.py --check    exits 1 when the .inc does not match the table, a text has no row, or a
+                                           cell does not read as its column's language (nebula_text_languages.py)
     python tools/nebula_text.py --fonts <LayoutData/Font.arc, or the folder lumalink extract writes>
                                            exits 1 when a game row of a disc's language has a character the disc's
                                            message font lacks (it would draw as the font's alternate, '?')
+    python tools/nebula_text.py --fonts COLUMN[,COLUMN...]=FONT ...
+                                           the same for each font with the languages the game draws with it
 
 The table: UTF-8, tab-separated, one row per string id, one column per language folder (the header names them). An
 empty cell uses the language's fallback (NebulaText.cpp). In a cell, \\n is a line break and \\\\ a backslash. "L." rows
@@ -15,6 +18,7 @@ places): the game's table leaves them out too, so a game with no mod carries non
 since the Mods screen draws them.
 """
 import glob
+import importlib.util
 import os
 import re
 import sys
@@ -227,6 +231,12 @@ def coverage():
         for cell in cells[2:]:
             if wanted is not None and cell and sorted(set(re.findall(r'\{\d\}', cell))) != wanted:
                 missing.add('placeholders: %s: %s' % (cells[0], cell))
+    # Each cell against its column's language: writing system, arguments, a cell left in English
+    # (tools/nebula_text_languages.py).
+    spec = importlib.util.spec_from_file_location('nebula_text_languages', os.path.join(ROOT, 'tools', 'nebula_text_languages.py'))
+    languages = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(languages)
+    missing.update(languages.failing(languages.findings(TABLE)))
     return sorted(missing)
 
 
@@ -306,15 +316,18 @@ def font_codes(font):
     return codes
 
 
-def font_gaps(font_arc):
-    """Each game row's characters, in the columns a disc carries, that the message font lacks. `font_arc`: the archive,
-    or the folder `lumalink extract` writes it to."""
+def message_font_codes(font_arc):
     if os.path.isdir(font_arc):
         with open(os.path.join(font_arc, MESSAGE_FONT), 'rb') as f:
-            codes = font_codes(f.read()) | AS_SPACE
-    else:
-        with open(font_arc, 'rb') as f:
-            codes = font_codes(archive_files(yaz0(f.read()))[MESSAGE_FONT]) | AS_SPACE
+            return font_codes(f.read()) | AS_SPACE
+    with open(font_arc, 'rb') as f:
+        return font_codes(archive_files(yaz0(f.read()))[MESSAGE_FONT]) | AS_SPACE
+
+
+def font_gaps(font_arc, columns=None):
+    """Each game row's characters, in `columns` (default: every column a disc carries), that the message font lacks.
+    `font_arc`: the archive, or the folder `lumalink extract` writes it to."""
+    codes = message_font_codes(font_arc)
     with open(TABLE, encoding='utf-8') as f:
         header = f.readline().rstrip('\r\n').split('\t')
     gaps = []
@@ -322,7 +335,7 @@ def font_gaps(font_arc):
         if cells[0].startswith(('L.', 'C.')):
             continue
         for name, cell in zip(header[1:], cells[1:]):
-            if name not in DISC_COLUMNS:
+            if name not in (columns or DISC_COLUMNS):
                 continue
             text = re.sub(r'\{[^}]*\}', '', unescape(cell))
             lacking = sorted({ch for ch in text if ord(ch) >= 0x20 and ord(ch) not in codes})
@@ -333,7 +346,23 @@ def font_gaps(font_arc):
 
 def main():
     if '--fonts' in sys.argv:
-        gaps = font_gaps(sys.argv[sys.argv.index('--fonts') + 1])
+        given = sys.argv[sys.argv.index('--fonts') + 1:]
+        if given and '=' not in given[0]:
+            gaps = font_gaps(given[0])
+        else:
+            # COLUMN[,COLUMN...]=FONT, one for each font the game draws those languages with.
+            gaps = []
+            with open(TABLE, encoding='utf-8') as f:
+                header = set(f.readline().rstrip('\r\n').split('\t')[1:])
+            for pair in given:
+                names, font_arc = pair.split('=', 1)
+                columns = set(names.split(','))
+                if columns - header:
+                    print('no such column: %s' % ', '.join(sorted(columns - header)))
+                    return 2
+                found = font_gaps(font_arc, columns)
+                print('%s: %d cells with a character the font lacks (%s)' % (', '.join(sorted(columns)), len(found), font_arc))
+                gaps += found
         for line in gaps:
             print(line)
         return 1 if gaps else 0
