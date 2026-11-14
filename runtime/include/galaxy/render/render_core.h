@@ -304,6 +304,7 @@ private:
     void rt_follow_setting(const RenderConfig& render);
     int rt_setting_ = -1;  // what the tracer last followed (-1: the device's start)
     std::uint32_t rt_toggle_walks_ = 0u;
+    std::uint32_t rt_levels_waits_ = 0u;  // walks the tracer's start has waited for the textures' generated levels
     void rt_want(std::uint32_t id, const core::GpuMesh& mesh);
     void rt_want_form(std::uint32_t id, const core::GpuMesh& mesh, bool refined);
     void rt_frame(const NebulaFrameList& list);

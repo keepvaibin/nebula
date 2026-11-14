@@ -6,7 +6,6 @@
 
 #include "galaxy/loss_report.h"
 #include "galaxy/render/render_config.h"
-#include "galaxy/render/rt_caps.h"
 #include "nebula_cooked_texture.h"
 #include "nebula_game_api.h"
 
@@ -120,9 +119,21 @@ bool TextureStore::samples_generated(const TextureSampler& mode, const TextureHa
 }
 
 bool TextureStore::wants_generated_levels(const RenderConfig& render) noexcept {
-    // A device that can trace keeps them whatever the setting: the tracer starts in the walk that sees the setting turn on
-    // (rt_follow_setting), before a remake through take_ops could land, and its hits would read one level.
-    return render.enhanced_mipmaps || render.ray_tracing_enabled || rt_capable(rt_caps());
+    return render.enhanced_mipmaps || render.ray_tracing_enabled;
+}
+
+bool TextureStore::generated_levels_landed(const RenderConfig& render) const noexcept {
+    if (wants_generated_levels(render) != generated_levels_) {
+        return false;
+    }
+    // follow_generated_levels' test: a whole texture with generated levels still made the other way.
+    for (const std::unique_ptr<Entry>& entry : entries_) {
+        if (entry != nullptr && entry->texture && entry->own.generated_mips && entry->dropped == 0u && entry->full_levels > 1u &&
+            entry->trimmed == generated_levels_) {
+            return false;
+        }
+    }
+    return true;
 }
 
 void TextureStore::follow_settings(const RenderConfig& render) {

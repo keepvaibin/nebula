@@ -65,9 +65,12 @@ public:
     // Whether a sampler reads the cook's generated levels of `handle`.
     [[nodiscard]] static bool samples_generated(const TextureSampler& mode, const TextureHandle& handle);
     // Whether anything can read the cook's generated levels with these settings: the enhanced-mipmaps option's samplers
-    // (samples_generated) or ray tracing's hits, which pick a level by their footprint (on a device that can trace, whatever
-    // the setting). Without either a draw's sampler keeps to the first level (draw_walker), and only that level is staged.
+    // (samples_generated) or ray tracing's hits, which pick a level by their footprint. Without either a draw's sampler keeps
+    // to the first level (draw_walker), and only that level is staged: the pictures are a function of the settings alone.
     [[nodiscard]] static bool wants_generated_levels(const RenderConfig& render) noexcept;
+    // Whether every texture holds the levels wants_generated_levels(render) asks for: follow_settings has seen it and the
+    // remakes it asked for have landed (take_ops). The tracer starts only then (rt_follow_setting).
+    [[nodiscard]] bool generated_levels_landed(const RenderConfig& render) const noexcept;
     // Render thread, each frame after begin_frame: on a change of wants_generated_levels, the textures with generated levels
     // are made again with them or without them (the old texture draws until then).
     void follow_settings(const RenderConfig& render);
