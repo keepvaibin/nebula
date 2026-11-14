@@ -114,9 +114,7 @@ struct D3d12CacheHeader {
     std::uint64_t hash;
 };
 static_assert(sizeof(D3d12CacheHeader) == 48u, "the Direct3D 12 cache header has no padding");
-// 3: a pipeline is named by its Direct3D description (pipelines_d3d12.cpp, PipelineName); a file of the names before
-// that would keep every pipeline of theirs, never loaded again.
-inline constexpr char kD3d12CacheMagic[8] = {'N', 'B', 'D', '3', 'D', 'P', 'L', '3'};
+inline constexpr char kD3d12CacheMagic[8] = {'N', 'B', 'D', '3', 'D', 'P', 'L', '2'};
 
 [[nodiscard]] inline std::vector<char> wrap_d3d12_cache(const D3d12CacheIdentity& identity, const void* data, std::size_t size) {
     D3d12CacheHeader header{};
