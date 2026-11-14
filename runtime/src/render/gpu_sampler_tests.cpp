@@ -212,6 +212,24 @@ int main() {
         passed &= expect(grown > initial && ring.initialize(device.Get(), "preflight-test", UploadRing::budget(grown, 2u), 2u, grown), "oversized first frame receives a larger ring");
         ring.begin_frame(0u);
         passed &= expect(ring.allocate(requested, 256u).cpu != nullptr && !ring.spilled(), "the first oversized frame fits its segment without a spill failure");
+        {
+            // A ring without chunks, past its segment and spill: try_allocate answers empty and takes nothing; allocate throws.
+            const std::size_t cursor = ring.cursor();
+            const UploadRing::Allocation refused = ring.try_allocate(ring.total_bytes() + 1u, 256u);
+            passed &= expect(refused.cpu == nullptr && refused.gpu == 0u && refused.resource == nullptr && ring.cursor() == cursor &&
+                                 !ring.spilled(),
+                             "try_allocate past the segment and the spill is empty and consumes nothing");
+            passed &= expect(ring.try_allocate(16u, 3u).cpu == nullptr, "try_allocate with a bad alignment is empty");
+            bool threw = false;
+            try {
+                (void)ring.allocate(ring.total_bytes() + 1u, 256u);
+            } catch (const std::runtime_error&) {
+                threw = true;
+            }
+            passed &= expect(threw && ring.cursor() == cursor, "allocate past the segment and the spill still throws");
+            const UploadRing::Allocation fits = ring.try_allocate(256u, 256u);
+            passed &= expect(fits.cpu != nullptr && ring.cursor() == fits.offset + 256u, "try_allocate places what fits as allocate does");
+        }
         ring.reset();
     }
     if (passed) { std::cout << "Sampler tests passed\n"; }

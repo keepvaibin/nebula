@@ -399,6 +399,23 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
         }
     }
     now.view_terms = walk_view_terms_;
+    // Each view's four side planes in eye space, from x and y against w = -z, with the jitter's room: normal and length.
+    walk_view_planes_.resize(list.view_count);
+    for (std::uint32_t v = 0; v < list.view_count; ++v) {
+        const std::array<float, 6>& terms = walk_view_terms_[v];
+        const float x_slack = std::fabs(terms[0]) * 0.01f + 0.01f, y_slack = std::fabs(terms[2]) * 0.01f + 0.01f;
+        const float a = terms[0], b = terms[1], c = terms[2], d = terms[3];
+        const float sides[4][3] = {{a, 0.0f, b - 1.0f - x_slack}, {-a, 0.0f, -b - 1.0f - x_slack},
+                                   {0.0f, c, d - 1.0f - y_slack}, {0.0f, -c, -d - 1.0f - y_slack}};
+        std::array<float, 16>& planes = walk_view_planes_[v];
+        for (unsigned k = 0; k < 4u; ++k) {
+            const float nx = sides[k][0], ny = sides[k][1], nz = sides[k][2];
+            planes[k * 4u] = nx;
+            planes[k * 4u + 1u] = ny;
+            planes[k * 4u + 2u] = nz;
+            planes[k * 4u + 3u] = std::sqrt(nx * nx + ny * ny + nz * nz);
+        }
+    }
     walk_views_.assign(list.view_count, WalkView{});
     walk_constants_.assign(list.constants_count, core::StaticSlot{});
     walk_constants_known_.assign(list.constants_count, 0u);
@@ -869,16 +886,12 @@ bool RenderCore::item_culled(const NebulaFrameItem& item, const NebulaFramePass&
     if (!std::isfinite(radius) || !std::isfinite(centre[0] + centre[1] + centre[2])) {
         return false;
     }
-    // The four side planes in eye space, from x and y against w = -z, with the jitter's room.
-    const std::array<float, 6>& terms = walk_view_terms_[item.view];
-    const float x_slack = std::fabs(terms[0]) * 0.01f + 0.01f, y_slack = std::fabs(terms[2]) * 0.01f + 0.01f;
-    const auto outside = [&](float nx, float ny, float nz) {
-        const float length = std::sqrt(nx * nx + ny * ny + nz * nz);
-        return nx * centre[0] + ny * centre[1] + nz * centre[2] < -radius * length;
+    // The view's side planes (prepare_walk).
+    const float* planes = walk_view_planes_[item.view].data();
+    const auto outside = [&](const float* plane) {
+        return plane[0] * centre[0] + plane[1] * centre[1] + plane[2] * centre[2] < -radius * plane[3];
     };
-    const float a = terms[0], b = terms[1], c = terms[2], d = terms[3];
-    return outside(a, 0.0f, b - 1.0f - x_slack) || outside(-a, 0.0f, -b - 1.0f - x_slack) ||
-           outside(0.0f, c, d - 1.0f - y_slack) || outside(0.0f, -c, -d - 1.0f - y_slack);
+    return outside(planes) || outside(planes + 4) || outside(planes + 8) || outside(planes + 12);
 }
 
 namespace {

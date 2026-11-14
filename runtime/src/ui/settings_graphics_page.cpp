@@ -17,6 +17,8 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
     const GraphicsPageState state = host.query(render);
     std::vector<SettingsRow> rows;
     char text[96]{};
+    rows.push_back(button_row("PRESET", {"PERFORMANCE"}, [](RenderConfig& draft, unsigned) { apply_performance_preset(draft); },
+                              "LOWER RESOLUTION AND EVERY OPTIONAL EFFECT OFF FOR THE STEADIEST FRAME RATE"));
     rows.push_back({"RESOLUTION", {}, nullptr, {}, true});
     const std::vector<unsigned>& choices = state.upscalers;
     const bool offered = std::find(choices.begin(), choices.end(), render.upscaler) != choices.end();
