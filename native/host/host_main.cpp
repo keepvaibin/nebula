@@ -4143,8 +4143,23 @@ void svc_mods_start(void*) {
         return dlsym(gModule.module, name);
 #endif
     });
+    // What the start's check and the cook said, in the mod log: after the mods' code started, or here with no mod that
+    // changes the game itself (texture pack pictures or patches alone).
+    const auto log_the_start = [] {
+        // The start check's one line when a part was missing (every mod off this session).
+        if (gMissingPart) galaxy::startcheck::report(*gMissingPart);
+        // Each mod whose code did not start, in the mod log as the Mods page says it.
+        galaxy::modlog::add_not_started();
+        // Each placed package through the validator, its findings in the mod log (kept: nothing runs when nothing
+        // changed).
+        galaxy::modlog::add_start_findings();
+        // The cooker's facts for the store attached this run: its refusals and notes, and in a harness run what it
+        // cooked.
+        galaxy::modlog::add_cook_facts(gCookFacts, gCookOwners);
+    };
     // Any mod at all tells the game: a stage then holds more than its level asks for.
     if (!gModsChangeGame) {
+        log_the_start();
         return;
     }
     // A crash from here with code on leaves the code off at the next start; without, every mod (set at the scan).
@@ -4191,14 +4206,7 @@ void svc_mods_start(void*) {
             log_line("mods:", "the game module has no luma_refs_check_after_start: placements of classes only code makes are not checked");
         }
     }
-    // The start check's one line when a part was missing (every mod off this session).
-    if (gMissingPart) galaxy::startcheck::report(*gMissingPart);
-    // Each mod whose code did not start, in the mod log as the Mods page says it.
-    galaxy::modlog::add_not_started();
-    // Each placed package through the validator, its findings in the mod log (kept: nothing runs when nothing changed).
-    galaxy::modlog::add_start_findings();
-    // The cooker's facts for the store attached this run: its refusals and notes, and in a harness run what it cooked.
-    galaxy::modlog::add_cook_facts(gCookFacts, gCookOwners);
+    log_the_start();
 }
 
 void svc_app_restart(void*) {
@@ -4408,7 +4416,8 @@ std::string cooker_identity() {
 }
 
 void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_folder, const std::string& game_id) {
-    if (plan.files.empty() && plan.merges.empty() && plan.patches.empty()) {
+    // A mod of texture pack pictures alone is cooked too: the cooker reads each picture as the pack reader does.
+    if (plan.files.empty() && plan.merges.empty() && plan.patches.empty() && plan.textures.empty()) {
         return;
     }
     gCookOwners.clear();
