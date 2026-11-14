@@ -49,14 +49,17 @@ namespace Nebula
                 ReleaseInfo cached;
                 DateTime checkedUtc, now = DateTime.UtcNow;
                 if (ReadCache(out cached, out checkedUtc) && checkedUtc <= now && now - checkedUtc < CheckInterval) return;
-                running = Task.Run(() =>
+                // Each on its own thread (LongRunning): both block on the network, and a start's budget must not wait
+                // for a pool thread the pool has yet to add.
+                running = Task.Factory.StartNew(() =>
                 {
                     ReleaseInfo release = Updater.FindNewer(CheckMilliseconds);
                     WriteCache(release, DateTime.UtcNow);
                     return release;
-                });
+                }, System.Threading.CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
                 string url = Updater.ReleasesUrl;
-                unreachable = Task.Run(() => Unreachable(url));
+                unreachable = Task.Factory.StartNew(() => Unreachable(url), System.Threading.CancellationToken.None,
+                    TaskCreationOptions.LongRunning, TaskScheduler.Default);
             }
         }
 
