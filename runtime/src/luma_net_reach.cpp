@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/luma_net_reach.h"
 
-#include <cstdint>
+#include <chrono>
 #include <cstring>
 
 #if defined(_WIN32)
+#include <iphlpapi.h>
 #pragma comment(lib, "ws2_32.lib")
+#pragma comment(lib, "iphlpapi.lib")
 #else
 #include <arpa/inet.h>
-#include <unistd.h>
+#include <ifaddrs.h>
 #endif
 
 namespace galaxy::luma_net {
@@ -24,37 +26,68 @@ bool mapped_v4(const in6_addr& address, in_addr* out) noexcept {
     return true;
 }
 
-#if defined(_WIN32)
-using Sock = SOCKET;
-const Sock kNone = INVALID_SOCKET;
-void close_sock(Sock s) noexcept { closesocket(s); }
-#else
-using Sock = int;
-const Sock kNone = -1;
-void close_sock(Sock s) noexcept { ::close(s); }
-#endif
-
-// Whether a datagram socket binds to `address` (port 0): the system allows it only for an address of its own.
-template <class Address>
-bool binds(int family, Address address) noexcept {
-    const Sock s = ::socket(family, SOCK_DGRAM, IPPROTO_UDP);
-    if (s == kNone) {
+// The address in the form the list is compared in: IPv4 (an IPv4-mapped IPv6 address as its IPv4 part) or IPv6, port
+// and scope cleared. False for another family, the unspecified address, multicast and the IPv4 broadcast.
+bool comparable(const sockaddr_storage& address, sockaddr_storage* out) noexcept {
+    std::memset(out, 0, sizeof(*out));
+    in_addr v4{};
+    bool is_v4 = false;
+    if (address.ss_family == AF_INET) {
+        v4 = reinterpret_cast<const sockaddr_in*>(&address)->sin_addr;
+        is_v4 = true;
+    } else if (address.ss_family == AF_INET6) {
+        const in6_addr& v6 = reinterpret_cast<const sockaddr_in6*>(&address)->sin6_addr;
+        if (mapped_v4(v6, &v4)) {
+            is_v4 = true;
+        } else {
+            static const unsigned char kZero[16] = {};
+            if (std::memcmp(v6.s6_addr, kZero, 16) == 0 || v6.s6_addr[0] == 0xFFu) {
+                return false;  // unspecified, multicast
+            }
+            auto* six = reinterpret_cast<sockaddr_in6*>(out);
+            six->sin6_family = AF_INET6;
+            six->sin6_addr = v6;
+            return true;
+        }
+    } else {
         return false;
     }
-    const bool ok = ::bind(s, reinterpret_cast<const sockaddr*>(&address), static_cast<socklen_t>(sizeof(address))) == 0;
-    close_sock(s);
-    return ok;
+    const std::uint32_t a = ntohl(v4.s_addr);
+    if (a == 0u || a == 0xFFFFFFFFu || (a >> 28u) == 0xEu) {
+        return false;  // unspecified, the broadcast, multicast
+    }
+    auto* four = reinterpret_cast<sockaddr_in*>(out);
+    four->sin_family = AF_INET;
+    four->sin_addr = v4;
+    return is_v4;
 }
 
-bool own_v4(const in_addr& address) noexcept {
-    const std::uint32_t a = ntohl(address.s_addr);
-    if (a == 0u || a == 0xFFFFFFFFu || (a >> 28u) == 0xEu) {
-        return false;  // unspecified (binds as "every interface"), the broadcast, multicast
+bool same(const sockaddr_storage& a, const sockaddr_storage& b) noexcept {
+    if (a.ss_family != b.ss_family) {
+        return false;
     }
-    sockaddr_in v4{};
-    v4.sin_family = AF_INET;
-    v4.sin_addr = address;
-    return binds(AF_INET, v4);
+    if (a.ss_family == AF_INET) {
+        return reinterpret_cast<const sockaddr_in*>(&a)->sin_addr.s_addr == reinterpret_cast<const sockaddr_in*>(&b)->sin_addr.s_addr;
+    }
+    return std::memcmp(&reinterpret_cast<const sockaddr_in6*>(&a)->sin6_addr, &reinterpret_cast<const sockaddr_in6*>(&b)->sin6_addr,
+                       sizeof(in6_addr)) == 0;
+}
+
+void keep(const sockaddr* address, std::vector<sockaddr_storage>* out) {
+    if (address == nullptr || (address->sa_family != AF_INET && address->sa_family != AF_INET6)) {
+        return;
+    }
+    sockaddr_storage raw{};
+    std::memcpy(&raw, address, address->sa_family == AF_INET ? sizeof(sockaddr_in) : sizeof(sockaddr_in6));
+    sockaddr_storage form{};
+    if (comparable(raw, &form)) {
+        out->push_back(form);
+    }
+}
+
+std::uint64_t steady_ms() noexcept {
+    return static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
 }
 
 }  // namespace
@@ -86,26 +119,79 @@ bool local_range(const sockaddr_storage& address) noexcept {
     return false;
 }
 
-bool own_address(const sockaddr_storage& address) noexcept {
-    if (address.ss_family == AF_INET) {
-        return own_v4(reinterpret_cast<const sockaddr_in*>(&address)->sin_addr);
+bool interface_addresses(std::vector<sockaddr_storage>* out) noexcept {
+    out->clear();
+    try {
+#if defined(_WIN32)
+        ULONG size = 16u * 1024u;
+        std::vector<unsigned char> buffer;
+        ULONG got = ERROR_BUFFER_OVERFLOW;
+        for (int attempt = 0; attempt < 3 && got == ERROR_BUFFER_OVERFLOW; ++attempt) {
+            buffer.resize(size);
+            got = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER, nullptr,
+                                       reinterpret_cast<IP_ADAPTER_ADDRESSES*>(buffer.data()), &size);
+        }
+        if (got != NO_ERROR) {
+            return false;
+        }
+        for (auto* adapter = reinterpret_cast<IP_ADAPTER_ADDRESSES*>(buffer.data()); adapter != nullptr; adapter = adapter->Next) {
+            for (IP_ADAPTER_UNICAST_ADDRESS* one = adapter->FirstUnicastAddress; one != nullptr; one = one->Next) {
+                keep(one->Address.lpSockaddr, out);
+            }
+        }
+        return true;
+#else
+        ifaddrs* list = nullptr;
+        if (::getifaddrs(&list) != 0) {
+            return false;
+        }
+        for (ifaddrs* one = list; one != nullptr; one = one->ifa_next) {
+            keep(one->ifa_addr, out);
+        }
+        ::freeifaddrs(list);
+        return true;
+#endif
+    } catch (...) {
+        out->clear();
+        return false;
     }
-    if (address.ss_family == AF_INET6) {
-        const in6_addr& v6 = reinterpret_cast<const sockaddr_in6*>(&address)->sin6_addr;
-        in_addr v4{};
-        if (mapped_v4(v6, &v4)) {
-            return own_v4(v4);
+}
+
+bool OwnAddresses::listed_locked(const sockaddr_storage& form) const noexcept {
+    for (const sockaddr_storage& one : list_) {
+        if (same(one, form)) {
+            return true;
         }
-        static const unsigned char kZero[16] = {};
-        if (std::memcmp(v6.s6_addr, kZero, 16) == 0 || v6.s6_addr[0] == 0xFFu) {
-            return false;  // unspecified, multicast
-        }
-        sockaddr_in6 bind_to{};
-        bind_to.sin6_family = AF_INET6;
-        bind_to.sin6_addr = v6;
-        return binds(AF_INET6, bind_to);
     }
     return false;
+}
+
+bool OwnAddresses::contains(const sockaddr_storage& address, std::uint64_t now_ms) noexcept {
+    sockaddr_storage form{};
+    if (!comparable(address, &form)) {
+        return false;
+    }
+    const std::lock_guard<std::mutex> lock(mutex_);
+    if (read_ && listed_locked(form)) {
+        return true;
+    }
+    // Not in the list read last (or none read yet): read again, at most once a second, so a flood of outside peers
+    // costs one system list a second, not one per peer.
+    if (read_ && now_ms - read_at_ms_ < 1000u) {
+        return false;
+    }
+    std::vector<sockaddr_storage> fresh;
+    if (source_ != nullptr && source_(&fresh)) {
+        list_.swap(fresh);
+    }
+    read_ = true;
+    read_at_ms_ = now_ms;
+    return listed_locked(form);
+}
+
+bool own_address(const sockaddr_storage& address) noexcept {
+    static OwnAddresses* const own = new OwnAddresses();  // never destroyed: asked from service threads until exit
+    return own->contains(address, steady_ms());
 }
 
 bool reach_local(const sockaddr_storage& address) noexcept {
