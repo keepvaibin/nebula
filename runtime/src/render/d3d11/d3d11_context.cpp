@@ -140,6 +140,11 @@ bool Context::initialize(const std::string& chosen_gpu, bool debug_layer) {
         caps_.vendor = desc.VendorId;
         caps_.dedicated_bytes = desc.DedicatedVideoMemory;
         caps_.unified_memory = desc.DedicatedVideoMemory < (std::uint64_t{512} << 20u);
+        // The debug layer's messages, read back each frame (report_messages): Direct3D 11 has no callback.
+        if ((flags & D3D11_CREATE_DEVICE_DEBUG) != 0u && SUCCEEDED(device1.As(&info_queue_))) {
+            info_queue_->SetMessageCountLimit(4096u);
+        }
+        std::cout << "[gpu] d3d11 debug-layer=" << (info_queue_ != nullptr ? 1 : 0) << '\n';
         break;
     }
     if (device_ == nullptr) {
@@ -195,6 +200,8 @@ void Context::shutdown() noexcept {
         immediate_->ClearState();
         immediate_->Flush();
     }
+    report_messages();
+    info_queue_.Reset();
     fence_queries_.clear();
     fence_.Reset();
     if (fence_event_ != nullptr) {
@@ -206,6 +213,35 @@ void Context::shutdown() noexcept {
     adapter_.Reset();
     factory_.Reset();
     submitted_ = completed_ = 0u;
+}
+
+unsigned Context::report_messages() noexcept {
+    if (info_queue_ == nullptr) {
+        return 0u;
+    }
+    // The tags the smoke scripts count (as [D3D12-LIVE-ERR] / [D3D12-LIVE-WARN] on Direct3D 12).
+    const UINT64 count = info_queue_->GetNumStoredMessages();
+    std::vector<std::byte> storage;
+    for (UINT64 i = 0u; i < count; ++i) {
+        SIZE_T bytes = 0u;
+        if (FAILED(info_queue_->GetMessage(i, nullptr, &bytes)) || bytes == 0u) {
+            continue;
+        }
+        storage.resize(bytes);
+        auto* message = reinterpret_cast<D3D11_MESSAGE*>(storage.data());
+        if (FAILED(info_queue_->GetMessage(i, message, &bytes))) {
+            continue;
+        }
+        const bool error = message->Severity == D3D11_MESSAGE_SEVERITY_CORRUPTION ||
+                           message->Severity == D3D11_MESSAGE_SEVERITY_ERROR;
+        if (error || message->Severity == D3D11_MESSAGE_SEVERITY_WARNING) {
+            std::fprintf(stderr, "[%s] id=%d %.*s\n", error ? "D3D11-LIVE-ERR" : "D3D11-LIVE-WARN",
+                         static_cast<int>(message->ID), static_cast<int>(message->DescriptionByteLength),
+                         message->pDescription);
+        }
+    }
+    info_queue_->ClearStoredMessages();
+    return static_cast<unsigned>(count);
 }
 
 std::uint64_t Context::signal() {

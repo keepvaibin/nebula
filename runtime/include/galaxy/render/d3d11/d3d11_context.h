@@ -151,6 +151,9 @@ public:
     [[nodiscard]] IDXGIAdapter1* adapter() const noexcept { return adapter_.Get(); }
     [[nodiscard]] const DeviceCaps& caps() const noexcept { return caps_; }
     [[nodiscard]] const std::string& device_name() const noexcept { return device_name_; }
+    // The debug layer's messages since the last call, written to stderr as [D3D11-LIVE-ERR] / [D3D11-LIVE-WARN];
+    // returns how many were stored (0 without the debug layer).
+    unsigned report_messages() noexcept;
 
     // The frame fence (ID3D11Fence where the driver offers ID3D11Device5, else an event query a frame): signal after a
     // frame's last command; completed_value the highest the GPU has passed; wait blocks for one.
@@ -201,6 +204,7 @@ private:
     ComPtr<ID3D11Device1> device_;
     ComPtr<ID3D11DeviceContext1> immediate_;
     ComPtr<ID3D11Fence> fence_;  // null: event queries
+    ComPtr<ID3D11InfoQueue> info_queue_;  // the debug layer's, null without it
     HANDLE fence_event_ = nullptr;
     std::vector<ComPtr<ID3D11Query>> fence_queries_;  // by value modulo their count, without ID3D11Fence
     std::uint64_t submitted_ = 0u;

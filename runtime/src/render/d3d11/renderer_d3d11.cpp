@@ -40,6 +40,9 @@ UINT constants_in(std::uint64_t size, std::uint64_t offset) noexcept {
 
 }  // namespace
 
+// FSR 3 frame generation is not built on Direct3D 11 (its interface is Direct3D 12's and Vulkan's).
+bool fsr_frame_generation_compiled() noexcept { return false; }
+
 void RendererD3D11::lose_device() {
     std::cerr << "[Renderer] Direct3D 11 has no device loss to rehearse\n";
 }
@@ -638,6 +641,7 @@ std::uint64_t RendererD3D11::end_frame(bool present_swap_chain, SubmissionCallba
     }
     surface_lock_ = {};
     const std::uint64_t fence = d3d11::Context::get().signal();
+    (void)d3d11::Context::get().report_messages();
     frame.fence = fence;
     frame.scene_drawn = scene_drawn_;
     last_submitted_ = fence;
@@ -852,12 +856,6 @@ void RendererD3D11::log_video_memory(const VideoMemoryOutside& outside) {
 
 void RendererD3D11::reset_draw_bindings() noexcept {
     encoder_.reset();
-}
-
-void RendererD3D11::set_draw_aux(unsigned) {
-    if (!scene_pass_open_) {
-        begin_scene_pass();
-    }
 }
 
 void RendererD3D11::bind_constants(unsigned slot, gpu::Address address, bool vertex, bool pixel) {
