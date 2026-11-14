@@ -4,7 +4,9 @@
 
 `play(mod, name, how, fn, user, &voice)` plays a cooked sound effect (contract sound.md 4, the NSFX the game's start
 cooks from `layers/<l>/assets/<path>.sound.json`): `"<path>"` is the mod's own (`Luma/<id>/<path>.nsfx`),
-`"<id>:<path>"` another mod's. The file is read in place from the store's mapping; nothing is copied.
+`"<id>:<path>"` another mod's. The file is read in place from the store's mapping; nothing is copied. A name no file
+has plays the placeholder chime instead (`nebula:placeholder/sound`, 120 ms, with `how`): LUMA_OK and the voice, and
+Content.MissingSound (624, {found}) in the mod log, one entry a name counted on every call (references 4 and 5.1).
 
 | how (`LumaAudioPlay`, null: as cooked) | |
 |---|---|
@@ -58,7 +60,8 @@ ENDED OK and the second NEED are given only when the mix has played the sound, s
 
 ## 6. Music and the tap (layers 3-4)
 
-- `music(name, fade_ms)`: a cooked sound (as play's) on the music bus, looped by its loop points or whole, fading in
+- `music(name, fade_ms)`: a cooked sound (as play's; a name no file has: the placeholder chime, played once, and 624)
+  on the music bus, looped by its loop points or whole, fading in
   over `fade_ms` (0: 10 ms; at most 10 s) while the game's own music fades out as long: the audio frame gives the
   game's mixer the player's music volume times the game music's share (1 heard, 0 replaced). One music for all mods:
   a later call takes over, the one before fading out as long. `music_restore(fade_ms)` gives the game's back;

@@ -33,9 +33,10 @@ namespace fs = std::filesystem;
 
 using StoreVersion = std::uint32_t (*)();
 
-// The placeholder data the game itself loads (contract references 4), as store paths. The cooker's own placeholders
-// (the checker texture) are the cook's to check; the sound and the effect join this list with 3.7 and 3.5.
-constexpr const char* kPlaceholders[] = {"/ObjectData/NebulaPlaceholder.arc"};
+// The placeholder data the game itself loads (contract references 4), as store paths: the model a missing class
+// draws and the chime a missing sound plays. The cooker's own placeholders (the checker texture) are the cook's to
+// check; the effect joins this list with 3.5.
+constexpr const char* kPlaceholders[] = {"/ObjectData/NebulaPlaceholder.arc", "/NebulaData/PlaceholderSound.nsfx"};
 
 constexpr std::uint64_t kSpareBytes = 64ull * 1024ull * 1024ull;
 

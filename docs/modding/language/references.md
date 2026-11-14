@@ -9,8 +9,11 @@ mod it `needs`, or in something code makes at start (a derived class).
 
 The rule. A reference that does not resolve never stops the game: the mod stays on, the thing it named is replaced by
 a placeholder of its kind where section 4 has one, and the mod log has one Error entry naming the mod, the file, the
-line (or JSON pointer), the kind and the name, and what was expected. Sounds and texts have no
-placeholder (section 4).
+line (or JSON pointer), the kind and the name, and what was expected. Texts have no placeholder
+(section 4). A file of the mod the cook cannot make (a model whose image is missing or unreadable, a picture that does
+not read) is not a placeholder's: LumaLink's check and its pack refuse the mod (L804, the cook's reason); at a start
+the cook leaves the file out and the mod log has the same L804 Error on the mod (source COOK), the mod's other files
+apply, and a name of the left-out file then answers as a missing one (a model: the placeholder model, 621).
 
 ### 2. The kinds, and who resolves each
 
@@ -70,7 +73,7 @@ that name.
 | particle texture | the texture placeholder | the cooker |
 | joint | the model's root joint | the game, at binding |
 | animation | the model's bind pose (a mod's new actor) or the game's own animation of that name (a replacement) | the game, at the animation's start |
-| sound | none: the audio service answers a name it does not find with LUMA_E_NOT_FOUND and plays nothing | |
+| sound | `nebula:placeholder/sound`: a 120 ms soft two-note chime (`NebulaData/PlaceholderSound.nsfx`, cooked from `data/placeholder/sound.wav`), at the call's place and bus | the audio service, when `play`, `play_at` or `music` is given a name no file has (624); as music it plays once. A name of the game's own sound table (`game_play`) not there is answered LUMA_E_NOT_FOUND |
 | text | none: a missing message id is not replaced | |
 | object class | the placeholder object with `nebula:placeholder/model` (section 3) | the game, after the mods' start (620) |
 
@@ -83,8 +86,8 @@ that name.
 
 ### 5.1 The call
 
-content.model, content.fx and the draw service's textures, given a name they do not find (the audio service instead
-answers LUMA_E_NOT_FOUND):
+content.model, content.fx, the draw service's textures and the audio service's sounds (`play`, `play_at`, `music`),
+given a name they do not find:
 - returns the placeholder's handle and `LUMA_OK` (the caller's program goes on, the placeholder shows), and
 - reports through `report` the content code of its kind (section 6), `file` and `line` the caller's (LumaScript passes
   them; a C mod passes `__FILE__`, `__LINE__`), once per (mod, file, line, code) as `report` already counts repeats.
@@ -120,7 +123,7 @@ No mod: no reference is read, no placeholder loaded (they are in the store, read
 
 | Test | Mod | Must show |
 |---|---|---|
-| 3131 | a new object whose glTF names a missing image | at import and start the validator's L6xx finding; in play the object with the checker; one `placeholder` fact; one mod-log Error, the same text as LumaLink `check` |
+| 3131 | a new model whose glTF names an image the mod lacks | at start one L804 Error (source COOK) naming the model, the cook's reason, the same text as LumaLink `check`; the model left out; no `placeholder` fact |
 | 3132 | a placement of a class no mod makes | `Content.MissingClass` after start; the placeholder cube at the place; the stage plays on |
 | 3139 | the same mod, no stage | the check answered before any scene: one `Content.MissingClass`, `refs.after_start` missing 1, the title reached; no `placeholder` fact |
 | 3133 | an effect bound to a joint the model lacks | L65x at start; the effect at the root joint in play |
