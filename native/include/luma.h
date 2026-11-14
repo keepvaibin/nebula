@@ -50,7 +50,9 @@ typedef int32_t (*LumaHook)(LumaCall* call, void* user);
    its element; elsewhere it is itself. A hook reads a copy, never the one it is given:
        va_list mine; LUMA_VA_COPY(mine, call->args[2]); ... va_arg(mine, int) ...; va_end(mine); */
 #if defined(__x86_64__) && !defined(_WIN32)
-typedef struct __va_list_tag* luma_va_arg;
+/* The element's type taken from the compiler's own va_list: a `struct __va_list_tag` written here would be a new
+   struct of that name, not the compiler's, and a va_list would not convert to a pointer to it. */
+typedef __typeof__(((__builtin_va_list*)0)[0][0])* luma_va_arg;
 #define LUMA_VA_COPY(mine, arg) __builtin_va_copy(mine, *(luma_va_arg*)(arg))
 #elif defined(_MSC_VER) && !defined(__clang__)
 /* MSVC (the Windows host): its va_list is a char pointer, copied with va_copy. */
