@@ -647,6 +647,29 @@ pub fn glow_of(stem: &str, material: &str, r: &Reading) -> [f32; 4] {
     glow_with_rule(stem, material, r).0
 }
 
+/// A glowing material's bright colour (glow_with_rule): what it shows with its own maps, else its emission, else what
+/// its animated row shows white, else its colour under full light.
+fn bright_colour(r: &Reading) -> [f32; 3] {
+    let lamp = luminance(r.glow_lit) > luminance(r.base);
+    match r.shown {
+        Some(shown) if !lamp && luminance(shown) > 0.02 => shown,
+        _ if luminance(r.emission) > 0.05 => r.emission,
+        _ if lamp => r.glow_lit,
+        _ => r.base,
+    }
+}
+
+/// A light's colour with its strongest channel at 1.
+fn unit_glow(colour: [f32; 3]) -> [f32; 3] {
+    let top = colour[0].max(colour[1]).max(colour[2]).max(1e-3);
+    [colour[0] / top, colour[1] / top, colour[2] / top]
+}
+
+/// The colour a material's own light has (glow_with_rule's `own`).
+pub fn own_glow_colour(r: &Reading) -> [f32; 3] {
+    unit_glow(bright_colour(r))
+}
+
 /// glow_of and what made it a light (GLOW_*). A row of rt_glow.tsv first (a pack's, the last pack's first, then the
 /// game's; a row of one material, `model/material`, before a row of the model); else, past what is no light by data
 /// (L1.3), lava and suns by their names (G8) and every emissive-class material (L1.1), at their kind's luminance.
@@ -663,18 +686,8 @@ pub fn glow_with_rule(stem: &str, material: &str, r: &Reading) -> ([f32; 4], u8)
     // the game animates lights it: c81) what it shows with that row white.
     // c99: what it shows with its own maps first (a lava's red map under a yellow register is red-orange light), unless
     // its row lights it (c81) or it shows almost nothing at the cook.
-    let lamp = luminance(r.glow_lit) > luminance(r.base);
-    let colour = match r.shown {
-        Some(shown) if !lamp && luminance(shown) > 0.02 => shown,
-        _ if luminance(r.emission) > 0.05 => r.emission,
-        _ if lamp => r.glow_lit,
-        _ => r.base,
-    };
-    let own = || {
-        // Its strongest channel at 1.
-        let top = colour[0].max(colour[1]).max(colour[2]).max(1e-3);
-        [colour[0] / top, colour[1] / top, colour[2] / top]
-    };
+    let colour = bright_colour(r);
+    let own = || unit_glow(colour);
     // A row: (its own material's, its colour's numbers, its strength). The packs' lock is let go before sheen_layer
     // takes it again.
     fn row_of<'a>(table: &'a str, one: &str, stem: &str) -> Option<(bool, &'a str, &'a str)> {
@@ -1454,6 +1467,43 @@ pub fn apply_ray_rows(r: &mut Reading, rows: &super::model_ir::RayRows) {
     }
 }
 
+/// A surface shader's `ray` numbers the cook's own rules set while it finishes a record (finish_with, after its class
+/// rules, before the review's rows): ior, thickness, body, shine, tint_keep, traced, sun_through and metal_kind. A
+/// metal's kind is applied as metal_finish does (model_write::finish_reading).
+pub fn ray_numbers(r: &mut Reading, rows: &super::model_ir::RayRows) {
+    if let Some(v) = rows.ior {
+        r.ior = v.clamp(1.0, 3.0);
+    }
+    if let Some(v) = rows.thickness {
+        r.thickness = v.max(0.0);
+    }
+    if let Some(v) = rows.body {
+        r.body = v.clamp(0.0, 1.0);
+    }
+    if let Some(v) = rows.shine {
+        r.shine = v.clamp(0.0, 16.0);
+    }
+    if let Some(v) = rows.tint_keep {
+        r.tint_keep = v.clamp(0.0, 1.0);
+    }
+    if let Some(v) = rows.traced_hidden {
+        r.traced_hidden = v;
+    }
+    if let Some(v) = rows.sun_through {
+        r.through = v.clamp(0.0, 1.0);
+    }
+    if let Some(v) = rows.metal_kind {
+        r.metal_kind = v;
+    }
+}
+
+/// A surface shader's `ray` glow as the record's glow: its colour (the material's own, glow_with_rule's, where it
+/// names none) and its strength.
+pub fn ray_glow(r: &Reading, glow: &super::model_ir::RayGlow) -> [f32; 4] {
+    let c = glow.colour.unwrap_or_else(|| own_glow_colour(r));
+    [c[0], c[1], c[2], glow.strength]
+}
+
 fn falling_water(name: &str) -> bool {
     let name = name.to_ascii_lowercase();
     name.contains("fallmat") || name.contains("fallback") || name.starts_with("taki")
@@ -1651,6 +1701,11 @@ fn rows_of(table: &str) -> (Vec<String>, Vec<Vec<&str>>) {
 /// What the tables say of the material `name` of the model `stem` (its file stem): water first, then the review's
 /// overrides, last. `measured`: the thickness its meshes give.
 pub fn finish(stem: &str, name: &str, measured: f32, r: &mut Reading) {
+    finish_with(stem, name, measured, &super::model_ir::RayRows::default(), r);
+}
+
+/// finish, a shader's `ray` numbers (ray_numbers) over the cook's own before the review's rows.
+pub fn finish_with(stem: &str, name: &str, measured: f32, ray: &super::model_ir::RayRows, r: &mut Reading) {
     let stem = stem.split('.').next().unwrap_or(stem).to_ascii_lowercase();
     r.thickness = measured;
     let packs = PACK_TABLES.read().unwrap_or_else(|e| e.into_inner());
@@ -1708,6 +1763,7 @@ pub fn finish(stem: &str, name: &str, measured: f32, r: &mut Reading) {
         r.ior = 1.5;
         r.rule = "an eye: a small gloss (c96)";
     }
+    ray_numbers(r, ray);
     review(MATERIALS_TABLE, &stem, name, r);
     for table in &packs.materials {
         review(table, &stem, name, r);

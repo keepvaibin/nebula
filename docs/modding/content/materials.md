@@ -165,3 +165,44 @@ Code: surface_shader.rs (`ray`, the check), programs.rs `ray_hit_form`, hit_reco
 - The tracer's side (FA/FB, run time): read `<model>.rayhit` with the model, build the forms into the hit-read
   program (one namespace each), give the three names from the item's material places and maps, and call the form in
   rt_hit_read for an item whose material has one. Until then the rows above are what a ray sees.
+
+## Ray values
+
+Code: surface_shader.rs `ray_rows`, `material_ray`; model_ir.rs RayRows (`over`, `vertex_albedo`); hit_record.rs
+`finish_with`, `ray_numbers`, `ray_glow`; model_write.rs (the record); gltf.rs `ray_hit_table`.
+
+- Where: a shader.json `ray` (any material with that shader) and a glTF material's `extras.nebula.ray` (that material
+  alone; any glTF material, with or without a shader). The material's own values stand over its shader's, key by key.
+  A shader.json `ray` takes the factors of 3.4 layer 3 and the ten keys below; a material's takes the ten alone (its
+  factors are glTF's own).
+- Keys, all optional; absent, the record is the cook's:
+
+  | key | values | record |
+  |---|---|---|
+  | `ior` | 1.0 to 3.0 | ior |
+  | `thickness` | 0 or more, world units (100 a metre) | thickness |
+  | `body` | 0 to 1 | body |
+  | `shine` | 0 to 16 | shine |
+  | `tint_keep` | 0 to 1 | tint_keep |
+  | `traced` | `seen`, `hidden` | traced hidden |
+  | `sun_through` | 0 to 1 | through (the sun's share past its far side; not `through`, the transmission) |
+  | `metal_kind` | gold, silver, copper, iron, chrome, brass, platinum, `art` | a metal's colour as the cook's metal table gives it (`art`: its colour as it is); a metal class only |
+  | `glow` | `{color: [r, g, b] 0 to 1 or "own", candela: 0 or more}` or `{luminance: cd/m2}` | glow (`own`: the material's colour) |
+  | `vertex_colour` | `auto`, `albedo`, `light` | see below |
+
+- `vertex_colour`: `auto` (the cook's rule) and `light` read the mesh's colour as painted light, as the game's models
+  hold it: de-lit by the gain stream, a share of the painted reflection, the painted-shadow flag (bit 6) where the
+  material is unlit. `albedo` reads it as the surface's own colour, as glTF's COLOR_0 means it: environment share 0,
+  no gain stream, no bit 6, no paint light; bit 3 stays (the colour multiplies the base).
+- Applied after the cook's reading and before a pack's rt_materials.tsv row, which still decides after.
+- Refusals: a key outside the list or its range, or a `ray` that is not an object. A shader's: `Cook.Shader.Json`
+  {file, key: `/ray/<key>`}. A material's: `Cook.Material.Ray` {material, key:
+  `/materials/<n>/extras/nebula/ray/<key>`}. More than 255 materials with a shader in one model (the tracer numbers
+  `.rayhit` rows in a byte): `Cook.Shader.Materials` {count, max}. A material name met twice keeps its first row.
+- `traced` and `sun_through` are cooked into the reading the record is written from, as the game's own rt_materials
+  rows are; the record's writer leaves the through byte 0 and bit 7 to the tracer's writer, which takes them from
+  that reading.
+- Proven (cargo test nebula-import): a_materials_ray_values_are_checked_and_set_its_hit_record (no `ray`, `{}`,
+  `auto` and `light` cook the same bytes; the numbers land in the record; `albedo` clears the share, bit 6 and the
+  gain; each refusal's pointer), a_materials_ray_is_over_its_shaders,
+  a_shaders_ray_placeholders_are_checked_and_set_its_record, more_than_255_shader_materials_are_refused.
