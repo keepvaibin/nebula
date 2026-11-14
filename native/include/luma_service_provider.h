@@ -107,6 +107,15 @@ typedef struct LumaServiceProvider {
 typedef const LumaServiceKernel* (*LumaServicesOpen)(void);
 typedef int32_t (*LumaProvideService)(const LumaServiceProvider* provider);
 
+/* luma_services_describe: any thread, needs no attach and no luma_services_open. The services catalog (services-registry
+   9) as JSON, given to `write` in pieces in order: {"services": [{"name", "major", "minor", "permission"}, ...]}, by
+   name in byte order, then major; `permission` null or the permission the service needs. Every provider's table is
+   checked against these rows when it registers, so they are the services a mod can import on every platform. The
+   host's --luma-services and the build (native/tools/luma_describe.c --services) write it as luma_services.json, the
+   file the validator reads beside luma_types.json. */
+typedef void (*LumaServicesDescribeWrite)(void* user, const char* text, uint32_t length);
+typedef void (*LumaServicesDescribe)(LumaServicesDescribeWrite write, void* user);
+
 /* The save half of the Mods page's REMOVED MODS line (services-save 5, services-mods 8): the game module's exports,
    found by name.
    luma_save_kept: any thread. fn(user, id, bytes) once for each mod id with values in the user files in memory (their

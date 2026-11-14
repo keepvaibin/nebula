@@ -4666,12 +4666,15 @@ int main(int argc, char** argv) {
 #endif
     };
     // --luma-describe <file> [--module <path>]: the module's type rows as JSON (contract types), compared by the build
-    // with the generator's (tools/lumacore/compare_types.py). No disc; the module is attached with its heap, log and fatal
-    // errors (to stderr) only, as its malloc is the host's and its constructors run at attach.
-    if (argc >= 2 && std::strcmp(argv[1], "--luma-describe") == 0) {
+    // with the generator's (tools/lumacore/compare_types.py). --luma-services <file> [--module <path>]: the services
+    // catalog as JSON (luma_service_provider.h luma_services_describe), the names folder's luma_services.json. No disc;
+    // the module is attached with its heap, log and fatal errors (to stderr) only, as its malloc is the host's and its
+    // constructors run at attach.
+    const bool describe_services = argc >= 2 && std::strcmp(argv[1], "--luma-services") == 0;
+    if (argc >= 2 && (describe_services || std::strcmp(argv[1], "--luma-describe") == 0)) {
         // Exactly `<file>` or `<file> --module <path>`: anything else is said, never ignored (A-LD1).
         if (!(argc == 3 || (argc == 5 && std::strcmp(argv[3], "--module") == 0))) {
-            die("usage: --luma-describe <file> [--module <path>] (docs/COMMAND_LINE.md)");
+            die("usage: %s <file> [--module <path>] (docs/COMMAND_LINE.md)", argv[1]);
         }
         const fs::path out = arg_path(2);
         const fs::path from = argc == 5 ? arg_path(4) : default_module();
@@ -4691,14 +4694,16 @@ int main(int argc, char** argv) {
         if (gModule.attach(&bare) != NEBULA_GAME_API_VERSION) {
             die("the game module's API version differs from the host's (%u)", NEBULA_GAME_API_VERSION);
         }
-        const auto describe =
-            reinterpret_cast<decltype(&nebula_game_luma_describe)>(find_symbol(gModule.module, "nebula_game_luma_describe"));
+        // Both exports take the same writer: (user, text, length), the pieces in order.
+        using DescribeFn = void (*)(void (*)(void*, const char*, uint32_t), void*);
+        const auto describe = reinterpret_cast<DescribeFn>(
+            find_symbol(gModule.module, describe_services ? "luma_services_describe" : "nebula_game_luma_describe"));
         std::ofstream file(out, std::ios::binary | std::ios::trunc);
         describe([](void* user, const char* text, uint32_t length) { static_cast<std::ofstream*>(user)->write(text, length); },
                  &file);
         file.close();
         if (!file) {
-            std::fprintf(stderr, "luma-describe: %s could not be written\n", utf8_of(out).c_str());
+            std::fprintf(stderr, "%s: %s could not be written\n", argv[1] + 2, utf8_of(out).c_str());
             return 2;
         }
         return 0;

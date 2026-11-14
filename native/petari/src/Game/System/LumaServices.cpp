@@ -924,4 +924,72 @@ NEBULA_GAME_API int32_t luma_provide_service(const LumaServiceProvider* provider
 NEBULA_GAME_API const LumaServiceKernel* luma_services_open(void) {
     return luma::services::open();
 }
+
+// The catalog as JSON (luma_service_provider.h): the rows in registry 9's order, read only, so any thread and no attach.
+NEBULA_GAME_API void luma_services_describe(LumaServicesDescribeWrite write, void* user) {
+    using luma::services::CatalogRow;
+    if (write == nullptr) {
+        return;
+    }
+    const CatalogRow* rows[64];
+    u32 count = 0;
+    for (const CatalogRow* pRow = luma::services::catalogAt(0); pRow != nullptr; pRow = luma::services::catalogAt(count)) {
+        if (count == sizeof(rows) / sizeof(rows[0])) {
+            NEBULA_PANIC("LumaCore: the services catalog has more than %u rows to describe", count);
+        }
+        rows[count++] = pRow;
+    }
+    // By name in byte order, then major: an insertion sort of a few dozen rows.
+    const auto before = [](const CatalogRow* a, const CatalogRow* b) {
+        const unsigned char* pA = reinterpret_cast<const unsigned char*>(a->name);
+        const unsigned char* pB = reinterpret_cast<const unsigned char*>(b->name);
+        while (*pA != 0 && *pA == *pB) {
+            pA++;
+            pB++;
+        }
+        return *pA != *pB ? *pA < *pB : a->major < b->major;
+    };
+    for (u32 i = 1; i < count; i++) {
+        const CatalogRow* const pRow = rows[i];
+        u32 j = i;
+        for (; j > 0 && before(pRow, rows[j - 1]); j--) {
+            rows[j] = rows[j - 1];
+        }
+        rows[j] = pRow;
+    }
+    const auto text = [&](const char* pText) {
+        u32 length = 0;
+        while (pText[length] != 0) {
+            length++;
+        }
+        write(user, pText, length);
+    };
+    const auto number = [&](u32 value) {
+        char digits[12];
+        u32 at = sizeof(digits);
+        do {
+            digits[--at] = static_cast<char>('0' + value % 10u);
+            value /= 10u;
+        } while (value != 0);
+        write(user, digits + at, static_cast<uint32_t>(sizeof(digits) - at));
+    };
+    // Names and permissions are of registry 2's grammar ([a-z0-9.]): nothing in them needs escaping.
+    text("{\"services\": [");
+    for (u32 i = 0; i < count; i++) {
+        text(i == 0 ? "\n {\"name\": \"" : ",\n {\"name\": \"");
+        text(rows[i]->name);
+        text("\", \"major\": ");
+        number(rows[i]->major);
+        text(", \"minor\": ");
+        number(rows[i]->minor);
+        if (rows[i]->permission == nullptr) {
+            text(", \"permission\": null}");
+        } else {
+            text(", \"permission\": \"");
+            text(rows[i]->permission);
+            text("\"}");
+        }
+    }
+    text("\n]}\n");
+}
 }

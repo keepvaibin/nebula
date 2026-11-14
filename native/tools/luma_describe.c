@@ -1,7 +1,9 @@
-/* luma_describe MODULE OUT: loads the game module (no disc), attaches it with the few services describing needs and
-   writes its type rows as JSON (nebula_game_luma_describe, contract types) to OUT, as the host's --luma-describe does.
-   The game build runs it after the module links and compares OUT with the generator's (tools/lumacore/compare_types.py);
-   exit 0 written, else 1. */
+/* luma_describe [--services] MODULE OUT: loads the game module (no disc), attaches it with the few services describing
+   needs and writes its type rows as JSON (nebula_game_luma_describe, contract types) to OUT, as the host's
+   --luma-describe does; with --services the services catalog (luma_services_describe, luma_service_provider.h), as the
+   host's --luma-services does. The game build runs it after the module links: it compares the rows with the
+   generator's (tools/lumacore/compare_types.py) and writes the catalog as the names folder's luma_services.json
+   (checked by tools/lumacore/check_services.py). Exit 0 written, else 1. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -50,21 +52,25 @@ static void write_piece(void* user, const char* text, uint32_t length) {
 }
 
 int main(int argc, char** argv) {
-    if (argc != 3) {
-        fprintf(stderr, "usage: luma_describe <game module> <out.json>\n");
+    const int services = argc == 4 && strcmp(argv[1], "--services") == 0;
+    if (argc != 3 && !services) {
+        fprintf(stderr, "usage: luma_describe [--services] <game module> <out.json>\n");
         return 1;
     }
+    const char* const module_path = argv[services ? 2 : 1];
+    const char* const out_path = argv[services ? 3 : 2];
+    const char* const export_name = services ? "luma_services_describe" : "nebula_game_luma_describe";
 #if defined(_WIN32)
-    HMODULE module = LoadLibraryA(argv[1]);
-    void* found = module != NULL ? (void*)GetProcAddress(module, "nebula_game_luma_describe") : NULL;
+    HMODULE module = LoadLibraryA(module_path);
+    void* found = module != NULL ? (void*)GetProcAddress(module, export_name) : NULL;
     void* attach_found = module != NULL ? (void*)GetProcAddress(module, "nebula_game_attach") : NULL;
 #else
-    void* module = dlopen(argv[1], RTLD_NOW | RTLD_LOCAL);
-    void* found = module != NULL ? dlsym(module, "nebula_game_luma_describe") : NULL;
+    void* module = dlopen(module_path, RTLD_NOW | RTLD_LOCAL);
+    void* found = module != NULL ? dlsym(module, export_name) : NULL;
     void* attach_found = module != NULL ? dlsym(module, "nebula_game_attach") : NULL;
 #endif
     if (module == NULL || found == NULL || attach_found == NULL) {
-        fprintf(stderr, "luma_describe: %s is no game module with type rows\n", argv[1]);
+        fprintf(stderr, "luma_describe: %s is no game module with %s\n", module_path, export_name);
         return 1;
     }
     /* The module's memory and errors are the host's: attach first (its constructors run, as in the game). */
@@ -79,12 +85,12 @@ int main(int argc, char** argv) {
     uint32_t (*attach)(const NebulaHostServices*);
     memcpy(&attach, &attach_found, sizeof(attach));
     if (attach(&host) != NEBULA_GAME_API_VERSION) {
-        fprintf(stderr, "luma_describe: %s did not attach (another game API version)\n", argv[1]);
+        fprintf(stderr, "luma_describe: %s did not attach (another game API version)\n", module_path);
         return 1;
     }
-    FILE* const file = fopen(argv[2], "wb");
+    FILE* const file = fopen(out_path, "wb");
     if (file == NULL) {
-        fprintf(stderr, "luma_describe: %s could not be opened\n", argv[2]);
+        fprintf(stderr, "luma_describe: %s could not be opened\n", out_path);
         return 1;
     }
     void (*describe)(NebulaDescribeWrite, void*);
@@ -92,7 +98,7 @@ int main(int argc, char** argv) {
     describe(write_piece, file);
     const int failed = ferror(file) != 0;
     if (fclose(file) != 0 || failed) {
-        fprintf(stderr, "luma_describe: %s could not be written\n", argv[2]);
+        fprintf(stderr, "luma_describe: %s could not be written\n", out_path);
         return 1;
     }
     return 0;
