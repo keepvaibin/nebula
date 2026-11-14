@@ -17,7 +17,6 @@
 #include "ao_distance_cs.h"
 #include "ao_occlusion_cs.h"
 #include "ao_ssao_cs.h"
-#include "ao_upsample_cs.h"
 
 namespace galaxy::render {
 namespace {
@@ -26,7 +25,6 @@ namespace {
 using ao::Constants;
 constexpr DXGI_FORMAT kOcclusionFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
 constexpr DXGI_FORMAT kDistanceFormat = DXGI_FORMAT_R32_FLOAT;
-constexpr DXGI_FORMAT kScaleFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 D3D12_SHADER_BYTECODE code(const void* bytes, std::size_t size) {
     return {bytes, size};
 }
@@ -92,11 +90,6 @@ bool AmbientOcclusion::initialize(ID3D12Device* device) {
         std::cerr << "[ambient-occlusion] denoise pipeline failed\n";
         return false;
     }
-    cd.CS = code(g_ao_upsample_cs, sizeof(g_ao_upsample_cs));
-    if (FAILED(device_->CreateComputePipelineState(&cd, IID_PPV_ARGS(&upsample_)))) {
-        std::cerr << "[ambient-occlusion] upsample pipeline failed\n";
-        return false;
-    }
     ready_ = true;
     return true;
 }
@@ -107,18 +100,17 @@ void AmbientOcclusion::shutdown() noexcept {
     occlusion_.Reset();
     ssao_.Reset();
     denoise_.Reset();
-    upsample_.Reset();
     for (auto& pipeline : apply_) pipeline.Reset();
     root_signature_.Reset();
     distance_ = {};
     raw_ = {};
     denoised_ = {};
-    scale_ = {};
     retired_.clear();
     device_ = nullptr;
 }
 
-// The multiply: the shader's output times the scene target's colour (RGB; the game's alpha stays), no depth.
+// The multiply: the multiplier its shader makes from the depth and the denoised occlusion times the scene target's
+// colour (RGB; the game's alpha stays), no depth target.
 ID3D12PipelineState* AmbientOcclusion::apply_pipeline(unsigned samples, bool hdr) {
     const unsigned index = std::min(static_cast<unsigned>(std::countr_zero(std::max(samples, 1u))), 3u) + (hdr ? 4u : 0u);
     if (apply_[index]) {
@@ -195,7 +187,7 @@ bool AmbientOcclusion::ensure_target(Target& target, DXGI_FORMAT format, unsigne
 void AmbientOcclusion::trim_idle(std::uint64_t frame_index, unsigned frames_in_flight) {
     constexpr std::uint64_t kIdleFrames = 600u;
     std::erase_if(retired_, [&](const Retired& r) { return frame_index > r.release_after_frame; });
-    for (Target* target : {&distance_, &raw_, &denoised_, &scale_}) {
+    for (Target* target : {&distance_, &raw_, &denoised_}) {
         if (target->resource && frame_index > target->used_frame + kIdleFrames) {
             retired_.push_back({std::move(target->resource), frame_index + frames_in_flight});
             *target = {};
@@ -226,8 +218,7 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
     if (apply == nullptr || in.objects == nullptr || in.ring == nullptr || !ao::make_constants(in.view, width, height, divisor, in.ssao, c) ||
         !ensure_target(distance_, kDistanceFormat, width, height, frame_index, frames_in_flight) ||
         !ensure_target(raw_, kOcclusionFormat, width, height, frame_index, frames_in_flight) ||
-        !ensure_target(denoised_, kOcclusionFormat, width, height, frame_index, frames_in_flight) ||
-        !ensure_target(scale_, kScaleFormat, in.width, in.height, frame_index, frames_in_flight)) {
+        !ensure_target(denoised_, kOcclusionFormat, width, height, frame_index, frames_in_flight)) {
         return false;
     }
 
@@ -242,17 +233,13 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
     occlusion_view.Format = kOcclusionFormat;
     D3D12_SHADER_RESOURCE_VIEW_DESC distance_view = depth_view;
     distance_view.Format = kDistanceFormat;
-    D3D12_SHADER_RESOURCE_VIEW_DESC scale_view = depth_view;
-    scale_view.Format = kScaleFormat;
     D3D12_UNORDERED_ACCESS_VIEW_DESC uav{};
     uav.Format = kOcclusionFormat;
     uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
     D3D12_UNORDERED_ACCESS_VIEW_DESC distance_uav = uav;
     distance_uav.Format = kDistanceFormat;
-    D3D12_UNORDERED_ACCESS_VIEW_DESC scale_uav = uav;
-    scale_uav.Format = kScaleFormat;
     const UINT increment = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    const DescriptorRing::Table table = ring.allocate(13u);
+    const DescriptorRing::Table table = ring.allocate(9u);
     const auto cpu = [&](unsigned i) {
         D3D12_CPU_DESCRIPTOR_HANDLE h = table.cpu;
         h.ptr += static_cast<SIZE_T>(i) * increment;
@@ -263,20 +250,16 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
         h.ptr += static_cast<UINT64>(i) * increment;
         return h;
     };
-    // 0-2: reads the denoised occlusion; 3-5: the raw; 6-8: the multiplier (the multiply; t0 and t2 unread).
+    // 0-2: reads the denoised occlusion (the multiply too); 3-5: the raw.
     device->CreateShaderResourceView(in.depth, &depth_view, cpu(0));
     device->CreateShaderResourceView(denoised_.resource.Get(), &occlusion_view, cpu(1));
     device->CreateShaderResourceView(distance_.resource.Get(), &distance_view, cpu(2));
     device->CreateShaderResourceView(in.depth, &depth_view, cpu(3));
     device->CreateShaderResourceView(raw_.resource.Get(), &occlusion_view, cpu(4));
     device->CreateShaderResourceView(distance_.resource.Get(), &distance_view, cpu(5));
-    device->CreateShaderResourceView(in.depth, &depth_view, cpu(6));
-    device->CreateShaderResourceView(scale_.resource.Get(), &scale_view, cpu(7));
-    device->CreateShaderResourceView(distance_.resource.Get(), &distance_view, cpu(8));
-    device->CreateUnorderedAccessView(distance_.resource.Get(), nullptr, &distance_uav, cpu(9));
-    device->CreateUnorderedAccessView(raw_.resource.Get(), nullptr, &uav, cpu(10));
-    device->CreateUnorderedAccessView(denoised_.resource.Get(), nullptr, &uav, cpu(11));
-    device->CreateUnorderedAccessView(scale_.resource.Get(), nullptr, &scale_uav, cpu(12));
+    device->CreateUnorderedAccessView(distance_.resource.Get(), nullptr, &distance_uav, cpu(6));
+    device->CreateUnorderedAccessView(raw_.resource.Get(), nullptr, &uav, cpu(7));
+    device->CreateUnorderedAccessView(denoised_.resource.Get(), nullptr, &uav, cpu(8));
 
     list->SetComputeRootSignature(root_signature_.Get());
     list->SetComputeRoot32BitConstants(0, sizeof(Constants) / 4u, &c, 0);
@@ -293,30 +276,24 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
     list->SetPipelineState(distance_pass_.Get());
     ring.bind(list);
     list->SetComputeRootDescriptorTable(1, gpu(0));
-    list->SetComputeRootDescriptorTable(2, gpu(9));
+    list->SetComputeRootDescriptorTable(2, gpu(6));
     list->Dispatch(groups_x, groups_y, 1);
     transition(list, distance_, gpu::Use::ComputeRead);
     transition(list, raw_, gpu::Use::ComputeWrite);
     list->SetPipelineState(in.ssao ? ssao_.Get() : occlusion_.Get());
-    list->SetComputeRootDescriptorTable(2, gpu(10));
+    list->SetComputeRootDescriptorTable(2, gpu(7));
     list->Dispatch(groups_x, groups_y, 1);
     transition(list, raw_, gpu::Use::ComputeRead);
     transition(list, denoised_, gpu::Use::ComputeWrite);
     list->SetPipelineState(denoise_.Get());
     list->SetComputeRootDescriptorTable(1, gpu(3));
-    list->SetComputeRootDescriptorTable(2, gpu(11));
+    list->SetComputeRootDescriptorTable(2, gpu(8));
     list->Dispatch(groups_x, groups_y, 1);
-    transition(list, denoised_, gpu::Use::ComputeRead);
-    transition(list, scale_, gpu::Use::ComputeWrite);
-    list->SetPipelineState(upsample_.Get());
-    list->SetComputeRootDescriptorTable(1, gpu(0));
-    list->SetComputeRootDescriptorTable(2, gpu(12));
-    list->Dispatch((in.width + 7u) / 8u, (in.height + 7u) / 8u, 1);
-    transition(list, scale_, gpu::Use::PixelRead);
+    transition(list, denoised_, gpu::Use::ShaderRead);
 
     list->SetGraphicsRootSignature(root_signature_.Get());
     list->SetGraphicsRoot32BitConstants(0, sizeof(Constants) / 4u, &c, 0);
-    list->SetGraphicsRootDescriptorTable(1, gpu(6));
+    list->SetGraphicsRootDescriptorTable(1, gpu(0));
     list->SetPipelineState(apply);
     list->OMSetRenderTargets(1, &in.color_rtv, FALSE, nullptr);
     const D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(in.width), static_cast<float>(in.height), 0.0f, 1.0f};

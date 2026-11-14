@@ -253,6 +253,31 @@ void GameBloom::keep_picture(Microsoft::WRL::ComPtr<ID3D12Resource> picture, con
     kept_ = true;
 }
 
+bool GameBloom::kept_by_trade(const Inputs& in) const {
+    if (!kept_ || !keep_.resource || in.scene_target == nullptr || keep_.width != in.frame_width ||
+        keep_.height != in.frame_height) {
+        return false;
+    }
+    const D3D12_RESOURCE_DESC kept = keep_.resource->GetDesc();
+    const D3D12_RESOURCE_DESC scene = in.scene_target->GetDesc();
+    return (kept.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0 && kept.Width == scene.Width &&
+           kept.Height == scene.Height && kept.Format == scene.Format && kept.Flags == scene.Flags &&
+           kept.SampleDesc.Count == 1u;
+}
+
+Microsoft::WRL::ComPtr<ID3D12Resource> GameBloom::take_kept_back(ID3D12GraphicsCommandList* list) {
+    kept_ = false;
+    transition(list, keep_, gpu::Use::PixelRead);
+    Microsoft::WRL::ComPtr<ID3D12Resource> image = std::move(keep_.resource);
+    keep_ = {};
+    return image;
+}
+
+void GameBloom::set_aside(Microsoft::WRL::ComPtr<ID3D12Resource> image, const Inputs& in) {
+    keep_picture(std::move(image), in);
+    kept_ = false;
+}
+
 bool GameBloom::can_take_source(const Inputs& in) {
     return ready_ && composite_pipeline(in.samples, in.hdr) != nullptr;
 }
@@ -321,6 +346,18 @@ bool GameBloom::apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, con
         return false;
     }
     ID3D12PipelineState* const composite = composite_pipeline(in.samples, in.hdr);
+    if (bloom::adds_nothing(p.threshold, normal ? 0u : p.channel, p.tap1, p.intensity, p.strength)) {
+        // The scene alone (kind 0), no level made: the kept scene, the given source, or (multisampled, where the
+        // composite writes every sample from the resolved frame) a copy of the frame.
+        if (composite == nullptr || (!normal && !given && (in.samples <= 1u ||
+                                                           !copy_frame(list, in, source_, L"bloom source", frame_index,
+                                                                       frames_in_flight)))) {
+            return false;
+        }
+        const Target& scene = normal ? keep_ : source_;
+        draw_composite(list, ring, in, composite, scene, scene, scene, Constants{});
+        return true;
+    }
     const bloom::Shape s = bloom::shape_of(in.frame_width, in.frame_height, in.scale);
     const unsigned blurs1 = normal ? 2u : 1u;
     bool made = composite != nullptr &&
