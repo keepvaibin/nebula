@@ -216,6 +216,7 @@ private:
     // The movie player's sound and its last 32 kHz samples, interleaved (left, right).
     MovieAudio movie_;
     std::vector<float> stream_history_;
+    std::vector<float> stream_input_;  // a frame's history then its new samples; kept for its capacity
     bool stream_running_{};
     std::uint32_t frame_subframes_{};
 

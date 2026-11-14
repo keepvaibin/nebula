@@ -58,14 +58,15 @@ namespace Nebula.Setup
         /// <summary>The content format nebula-import's cook command converts from; a version of it reads only version 2 saves.</summary>
         internal const int CookableContentFormatVersion = 1;
 
-        /// <summary>The lowest CPU level the package's NebulaNative.exe and game modules are built for: smg_game.dll is
-        /// x86-64-v3 and x86-64-v2\smg_game.dll x86-64-v2 (the host loads the one the CPU runs; native/build.ps1).</summary>
+        /// <summary>The lowest CPU level the package's programs and game modules are built for: NebulaNative.exe and
+        /// smg_game.dll are x86-64-v3, NebulaNative-x86-64-v2.exe and x86-64-v2\smg_game.dll x86-64-v2 (NebulaNative.exe
+        /// starts the other program where the CPU lacks x86-64-v3, and the host loads the module the CPU runs).</summary>
         private const string NativeIsa = "x86-64-v2";
 
         /// <summary>What a version folder holds (each from the package, by its published name).</summary>
         private static readonly string[] NativeFiles =
         {
-            "NebulaNative.exe", "smg_game.dll", @"x86-64-v2\smg_game.dll", "nebula_import.dll", "nebula-import.exe", @"dxc\dxc.exe", @"dxc\dxcompiler.dll", @"dxc\dxil.dll", @"dxc\LICENSE-MS.txt", @"dxc\LICENCE-MIT.txt", @"dxc\LICENSE-LLVM.txt", "material-names.tsv", "rt-materials.tsv", "rt-suns.tsv",
+            "NebulaNative.exe", "NebulaNative-x86-64-v2.exe", "smg_game.dll", @"x86-64-v2\smg_game.dll", "nebula_import.dll", "nebula-import.exe", @"dxc\dxc.exe", @"dxc\dxcompiler.dll", @"dxc\dxil.dll", @"dxc\LICENSE-MS.txt", @"dxc\LICENCE-MIT.txt", @"dxc\LICENSE-LLVM.txt", "material-names.tsv", "rt-materials.tsv", "rt-suns.tsv",
             "Nebula.exe", "NebulaSettings.exe", "LICENSE", "THIRD-PARTY-NOTICES.md", "README.md"
         };
 

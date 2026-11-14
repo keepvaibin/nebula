@@ -39,13 +39,21 @@ if(MSVC)
     endforeach()
     # Sources and narrow literals are UTF-8 whatever the build machine's code page.
     add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/utf-8>)
-    # The host's CPU level, whatever machine builds it: SSE4.2 (x86-64-v2, which Setup requires) runs on every CPU the
-    # package accepts. The game module is built for x86-64-v3 and again for x86-64-v2; the host loads the one this CPU
-    # runs (native/build.ps1, host_main.cpp). Code that gains from AVX2 or FMA picks it at run time
-    # (fused_multiply_add.h, movie_video.cpp). AVX2 is for a build that never leaves its machine.
-    set(GALAXY_NATIVE_ISA "SSE4.2" CACHE STRING "Host CPU target: SSE2, SSE4.2, or AVX2")
+    # The host's CPU level, whatever machine builds it. The package carries the host twice, like the game module
+    # (native/build.ps1): AVX2 (x86-64-v3), and SSE4.2 (x86-64-v2, which Setup requires) from a second build tree
+    # configured with NEBULA_HOST_BASELINE, named <program>-x86-64-v2.exe beside it. The AVX2 program's entry point
+    # starts the SSE4.2 one where the CPU lacks x86-64-v3 (nebula_host_cpu_entry, native/host/host_entry_win32.cpp).
+    option(NEBULA_HOST_BASELINE "Build the SSE4.2 host the AVX2 host starts on CPUs without x86-64-v3 (<program>-x86-64-v2.exe)" OFF)
+    set(GALAXY_NATIVE_ISA "AVX2" CACHE STRING "Host CPU target: SSE2, SSE4.2, or AVX2")
     set_property(CACHE GALAXY_NATIVE_ISA PROPERTY STRINGS SSE2 SSE4.2 AVX2)
     string(TOUPPER "${GALAXY_NATIVE_ISA}" GALAXY_NATIVE_ISA)
+    # AUTO: the value a build folder configured before the two builds holds (it chose AVX2 on an AVX2 build machine).
+    if(GALAXY_NATIVE_ISA STREQUAL "AUTO")
+        set(GALAXY_NATIVE_ISA "AVX2")
+    endif()
+    if(NEBULA_HOST_BASELINE)
+        set(GALAXY_NATIVE_ISA "SSE4.2")
+    endif()
     if(NOT GALAXY_NATIVE_ISA MATCHES "^(SSE2|SSE4\\.2|AVX2)$")
         message(FATAL_ERROR "GALAXY_NATIVE_ISA must be SSE2, SSE4.2, or AVX2")
     endif()
@@ -70,6 +78,43 @@ endif()
 function(galaxy_host_options target)
     if(MSVC)
         target_compile_options(${target} PRIVATE /GS- /GR- /Oi /favor:INTEL64)
+    endif()
+endfunction()
+
+# Libraries only a movie (Media Foundation, D3D11 for its decoder), a download (WinHTTP) and the XeSS library's signature
+# check (WinTrust) call: loaded at that first call instead of before main. A library a back end does not import is
+# skipped by the linker (LNK4199).
+function(nebula_host_delay_loads target)
+    if(MSVC)
+        target_link_options(${target} PRIVATE /DELAYLOAD:MFPlat.dll /DELAYLOAD:MFReadWrite.dll /DELAYLOAD:d3d11.dll
+            /DELAYLOAD:winhttp.dll /DELAYLOAD:wintrust.dll /IGNORE:4199)
+        target_link_libraries(${target} PRIVATE delayimp)
+    endif()
+endfunction()
+
+# The Windows x64 host's two builds (GALAXY_NATIVE_ISA above). The AVX2 program enters at nebula_host_entry, compiled
+# without the AVX2 option and without buffer security checks, which tests the CPU before the C runtime starts and runs
+# <program>-x86-64-v2.exe where the CPU lacks x86-64-v3. The SSE4.2 tree names its program so; it needs no test.
+function(nebula_host_cpu_entry target)
+    if(NOT MSVC OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8 OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|x86_64)$")
+        return()
+    endif()
+    if(NEBULA_HOST_BASELINE)
+        set_target_properties(${target} PROPERTIES OUTPUT_NAME "${target}-x86-64-v2")
+        get_target_property(link_options ${target} LINK_OPTIONS)
+        list(TRANSFORM link_options REPLACE "^/PDBALTPATH:.*$" "/PDBALTPATH:${target}-x86-64-v2.pdb")
+        set_property(TARGET ${target} PROPERTY LINK_OPTIONS "${link_options}")
+    elseif(GALAXY_NATIVE_ISA STREQUAL "AVX2")
+        if(NOT TARGET nebula_host_entry)
+            add_library(nebula_host_entry OBJECT native/host/host_entry_win32.cpp)
+            target_include_directories(nebula_host_entry PRIVATE runtime/include)
+            get_target_property(entry_options nebula_host_entry COMPILE_OPTIONS)
+            list(FILTER entry_options EXCLUDE REGEX "arch:AVX2|-mavx2")
+            list(APPEND entry_options /GS- /Zi)
+            set_property(TARGET nebula_host_entry PROPERTY COMPILE_OPTIONS "${entry_options}")
+        endif()
+        target_link_libraries(${target} PRIVATE nebula_host_entry)
+        target_link_options(${target} PRIVATE /ENTRY:nebula_host_entry)
     endif()
 endfunction()
 
@@ -502,6 +547,8 @@ if(MSVC)
     target_compile_options(NebulaNative PRIVATE /Zi)
     target_link_options(NebulaNative PRIVATE /DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:NebulaNative.pdb)
 endif()
+nebula_host_cpu_entry(NebulaNative)
+nebula_host_delay_loads(NebulaNative)
 
 option(NEBULA_HOST_IPO "Optimize the host libraries across source files in Release builds" ON)
 set(nebula_host_ipo_effective OFF)
@@ -802,6 +849,8 @@ runtime/src/render/host_window_win32.cpp
         target_compile_options(NebulaNativeVk PRIVATE /Zi)
         target_link_options(NebulaNativeVk PRIVATE /DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:NebulaNativeVk.pdb)
     endif()
+    nebula_host_cpu_entry(NebulaNativeVk)
+    nebula_host_delay_loads(NebulaNativeVk)
 
     # The Vulkan pipeline cache file name (device_quirks_vk.cpp driver_key).
     galaxy_test(galaxy_vk_driver_key_tests SOURCES runtime/src/render/vk/driver_key_tests.cpp
