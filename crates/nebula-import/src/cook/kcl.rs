@@ -445,7 +445,7 @@ pub fn from_triangles(triangles: &[Triangle]) -> Result<Vec<u8>> {
         shapes.push(Shape { corners: triangle.corners, normal: face, low, high });
     }
     if prisms.is_empty() {
-        bail!("the collision model has no triangles");
+        return Err(super::refuse::refuse("Cook.Model.NoTriangles", &[]));
     }
 
     let mut low = [f32::MAX; 3];

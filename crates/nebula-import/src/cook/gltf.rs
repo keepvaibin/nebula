@@ -299,7 +299,7 @@ pub fn to_collision(bytes: &[u8], folder: Option<&Path>) -> Result<(Vec<u8>, Vec
     let mut triangles = Vec::new();
     let mut stack: Vec<(usize, Matrix)> = scene["nodes"].as_array().map(Vec::as_slice).unwrap_or_default().iter().filter_map(|n| n.as_u64()).map(|n| (n as usize, IDENTITY)).collect();
     while let Some((node, parent)) = stack.pop() {
-        let matrix = multiply(&parent, &node_matrix(nodes.get(node).context("a scene naming a node it doesn't have")?));
+        let matrix = multiply(&parent, &node_matrix(nodes.get(node).ok_or_else(|| refuse("Cook.Model.NodeMissing", &[("node", node.to_string())]))?));
         for child in nodes[node]["children"].as_array().map(Vec::as_slice).unwrap_or_default().iter().filter_map(|c| c.as_u64()) {
             stack.push((child as usize, matrix));
         }
@@ -310,9 +310,11 @@ pub fn to_collision(bytes: &[u8], folder: Option<&Path>) -> Result<(Vec<u8>, Vec
             if primitive["mode"].as_u64().unwrap_or(4) != 4 {
                 continue;
             }
-            let positions = document.floats(primitive["attributes"]["POSITION"].as_u64().context("a mesh with no positions")? as usize, 3)?;
+            let positions = primitive["attributes"]["POSITION"].as_u64().ok_or_else(|| refuse("Cook.Model.NoPositions", &[("mesh", mesh.to_string())]))?;
+            let positions = document.floats(positions as usize, 3)?;
             let indices = document.indices(primitive, positions.len() / 3)?;
-            let attribute = u16::try_from(primitive["material"].as_u64().unwrap_or(0)).context("collision attribute outside its source domain")?;
+            let material = primitive["material"].as_u64().unwrap_or(0);
+            let attribute = u16::try_from(material).map_err(|_| refuse("Cook.Collision.Attribute", &[("found", material.to_string()), ("max", u16::MAX.to_string())]))?;
             let corner = |index: u32| -> [f32; 3] {
                 let at = index as usize * 3;
                 let p = transform(&matrix, [positions[at], positions[at + 1], positions[at + 2]], 1.0);
@@ -2792,13 +2794,13 @@ pub fn to_camera(bytes: &[u8], folder: Option<&Path>) -> Result<Vec<u8>> {
     let document = Document::parse(bytes, folder)?;
     let root = &document.root;
     let nodes = root["nodes"].as_array().map(Vec::as_slice).unwrap_or_default();
-    let node = nodes.iter().position(|n| n["camera"].is_u64()).context("no camera: a node with a \"camera\"")?;
+    let node = nodes.iter().position(|n| n["camera"].is_u64()).ok_or_else(|| refuse("Cook.Camera.None", &[]))?;
     let camera_index = nodes[node]["camera"].as_u64().unwrap_or(0) as usize;
     let camera = &root["cameras"][camera_index];
     if camera["type"].as_str() != Some("perspective") {
-        bail!("camera {camera_index} is not a perspective camera");
+        return Err(refuse("Cook.Camera.NotPerspective", &[("camera", camera_index.to_string())]));
     }
-    let yfov = camera["perspective"]["yfov"].as_f64().context("the camera has no yfov")? as f32;
+    let yfov = camera["perspective"]["yfov"].as_f64().ok_or_else(|| refuse("Cook.Camera.NoFov", &[("camera", camera_index.to_string())]))? as f32;
     let watch = nodes[node]["extras"]["nebula"]["watch_distance"].as_f64().map_or(10.0, |d| d as f32) * UNITS_PER_METRE;
     // Its parents' placing, root first.
     let mut parent_of = BTreeMap::new();
@@ -2821,10 +2823,10 @@ pub fn to_camera(bytes: &[u8], folder: Option<&Path>) -> Result<Vec<u8>> {
             c["target"]["node"].as_u64() == Some(node as u64) || pointer_of(c) == Some(fov_pointer.as_str())
         })
     };
-    let animation = animations.iter().find(|a| moves(a)).context("no animation moves the camera")?;
+    let animation = animations.iter().find(|a| moves(a)).ok_or_else(|| refuse("Cook.Camera.NoAnimation", &[]))?;
     for c in animation["channels"].as_array().map(Vec::as_slice).unwrap_or_default() {
         if c["target"]["node"].as_u64().is_some_and(|n| chain.contains(&(n as usize))) {
-            bail!("the camera's parent node {} moves: animate the camera's own node", c["target"]["node"]);
+            return Err(refuse("Cook.Camera.ParentMoves", &[("node", c["target"]["node"].to_string())]));
         }
     }
     let samplers = animation["samplers"].as_array().map(Vec::as_slice).unwrap_or_default();
@@ -3116,8 +3118,22 @@ mod tests {
         assert!((read(3, 60.0) - -1000.0).abs() < 1e-1, "{}", read(3, 60.0));
         assert!((read(6, 60.0).abs() - 90.0).abs() < 1e-2, "{}", read(6, 60.0));
         assert!((read(7, 30.0) - 40.0).abs() < 1e-3);
-        let error = to_camera(serde_json::json!({ "asset": { "version": "2.0" }, "nodes": [{}] }).to_string().as_bytes(), None).unwrap_err();
-        assert!(error.to_string().contains("no camera"));
+        // Each cause a modder can fix is named.
+        let why = |doc: &serde_json::Value| refused(&to_camera(doc.to_string().as_bytes(), None).unwrap_err()).0;
+        assert_eq!(why(&serde_json::json!({ "asset": { "version": "2.0" }, "nodes": [{}] })), "Cook.Camera.None");
+        let mut other = document.clone();
+        other["cameras"][0] = serde_json::json!({ "type": "orthographic", "orthographic": {} });
+        assert_eq!(why(&other), "Cook.Camera.NotPerspective");
+        let mut other = document.clone();
+        other["cameras"][0]["perspective"] = serde_json::json!({ "znear": 0.1 });
+        assert_eq!(why(&other), "Cook.Camera.NoFov");
+        let mut other = document.clone();
+        other["animations"] = serde_json::json!([]);
+        assert_eq!(why(&other), "Cook.Camera.NoAnimation");
+        let mut other = document.clone();
+        other["nodes"] = serde_json::json!([{ "camera": 0, "translation": [0, 0, 5] }, { "children": [0] }]);
+        other["animations"][0]["channels"].as_array_mut().unwrap().push(serde_json::json!({ "sampler": 0, "target": { "node": 1, "path": "rotation" } }));
+        assert_eq!(why(&other), "Cook.Camera.ParentMoves");
     }
 
     #[test]

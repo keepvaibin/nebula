@@ -427,8 +427,10 @@ impl TableIr {
     /// comes from its values: text, whole numbers, or numbers with a fraction. `columns` says it for one that has no
     /// value yet, or a float whose values all happen to be whole.
     pub fn from_json(text: &[u8]) -> Result<TableIr> {
-        let root: Value = serde_json::from_slice(text).context("not JSON")?;
-        let rows = root.get("rows").and_then(Value::as_array).context("it has no rows")?;
+        use super::refuse::refuse;
+        let root: Value = serde_json::from_slice(text)
+            .map_err(|e| refuse("Cook.Table.Json", &[("line", e.line().to_string()), ("column", e.column().to_string())]))?;
+        let rows = root.get("rows").and_then(Value::as_array).ok_or_else(|| refuse("Cook.Table.NoRows", &[]))?;
         let mut names: Vec<String> = Vec::new();
         let mut kinds: HashMap<String, Kind> = HashMap::new();
         if let Some(columns) = root.get("columns").and_then(Value::as_object) {
@@ -437,20 +439,20 @@ impl TableIr {
                     Some("int") => Kind::Int,
                     Some("float") => Kind::Float,
                     Some("string") => Kind::Text,
-                    _ => bail!("column {name} is int, float or string"),
+                    _ => return Err(refuse("Cook.Table.ColumnKind", &[("name", name.clone())])),
                 };
                 names.push(name.clone());
                 kinds.insert(name.clone(), kind);
             }
         }
         for (r, row) in rows.iter().enumerate() {
-            let fields = row.as_object().with_context(|| format!("row {} isn't a set of columns", r + 1))?;
+            let fields = row.as_object().ok_or_else(|| refuse("Cook.Table.RowNotObject", &[("row", (r + 1).to_string())]))?;
             for (name, value) in fields {
                 let kind = match value {
                     Value::String(_) => Kind::Text,
                     Value::Number(n) if n.is_f64() => Kind::Float,
                     Value::Number(_) => Kind::Int,
-                    _ => bail!("row {}: {name} is text or a number", r + 1),
+                    _ => return Err(refuse("Cook.Table.CellKind", &[("row", (r + 1).to_string()), ("name", name.clone())])),
                 };
                 match kinds.get(name) {
                     None => {
@@ -463,7 +465,7 @@ impl TableIr {
                     }
                     Some(Kind::Float) if kind == Kind::Int => {}
                     Some(known) if *known == kind => {}
-                    Some(_) => bail!("row {}: {name} has been another kind of value", r + 1),
+                    Some(_) => return Err(refuse("Cook.Table.KindChanged", &[("row", (r + 1).to_string()), ("name", name.clone())])),
                 }
             }
         }
@@ -641,6 +643,18 @@ pub mod proof {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Each fault of a table a mod writes in JSON is named with where it is.
+    #[test]
+    fn a_json_table_names_each_fault() {
+        let why = |text: &str| super::super::refuse::said(&TableIr::from_json(text.as_bytes()).err().unwrap()).0;
+        assert_eq!(why("{"), "Cook.Table.Json");
+        assert_eq!(why("{}"), "Cook.Table.NoRows");
+        assert_eq!(why(r#"{"rows": [], "columns": {"a": "bool"}}"#), "Cook.Table.ColumnKind");
+        assert_eq!(why(r#"{"rows": [1]}"#), "Cook.Table.RowNotObject");
+        assert_eq!(why(r#"{"rows": [{"a": true}]}"#), "Cook.Table.CellKind");
+        assert_eq!(why(r#"{"rows": [{"a": 1}, {"a": "x"}]}"#), "Cook.Table.KindChanged");
+    }
 
     /// A disc table: an id (long), a name (string offset), a scale (float), a packed byte at bits 8-15, a short.
     fn bcsv() -> Vec<u8> {
