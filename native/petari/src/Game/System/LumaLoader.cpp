@@ -1448,6 +1448,19 @@ namespace luma {
             luma::numbers::modGone(pMod);
             tellDependentGone(pMod);
             luma::services::modGone(pMod);
+            // A begun mod may have bound to this one's exports: it never started, so this one has nothing of it to drop,
+            // and it must not be told about it later, when this one's library is closed (a mod that needs this one is
+            // dropped before its start).
+            for (u32 w = 0; w < sWaitingCount; w++) {
+                LumaMod* const pOther = sWaiting[w];
+                u32 kept = 0;
+                for (u32 k = 0; k < pOther->useCount; k++) {
+                    if (pOther->uses[k] != pMod) {
+                        pOther->uses[kept++] = pOther->uses[k];
+                    }
+                }
+                pOther->useCount = kept;
+            }
             endMod(pMod);
         }
 

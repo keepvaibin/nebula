@@ -4208,8 +4208,10 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
         };
 #if defined(NEBULA_HOST_RENDERER)
         // The game's own screen while they cook; then it starts again with them, so that they are there from its first file.
-        // A hidden test run cooks first, as its measurements start from the game with its mods.
-        if (!::galaxy::launch_args().started_hidden || (galaxy::extensions::flags() & NEBULA_EXT_MODS_SCREEN) != 0u) {
+        // A hidden test run cooks first, as its measurements start from the game with its mods. So does a start that is
+        // itself the start-again for a mod's code layers: a second start-again for the same layers is never made.
+        if ((!::galaxy::launch_args().started_hidden || (galaxy::extensions::flags() & NEBULA_EXT_MODS_SCREEN) != 0u) &&
+            !gStartedAgainForLayers) {
             gModsProgressFile = overlay;
             gModsProgressFile.replace_extension("progress");
             gModsPreparing.store(2u, std::memory_order_release);
