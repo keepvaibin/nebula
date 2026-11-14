@@ -921,6 +921,10 @@ private:
     // Texture-pack settings last applied (render config and the mods' folders, polled at frame begin).
     TexturePackSettings texture_pack_settings_{};
     bool texture_pack_settings_applied_ = false;
+    // The most a texture pack's replacements may hold on this device (0: no limit known): a share of the memory budget its
+    // back end reports, taken at start and after a device change (cap_texture_packs). texture_pack_budget_mb applies below it.
+    std::uint64_t texture_pack_cap_bytes_ = 0u;
+    void cap_texture_packs();
     std::uint64_t texture_pack_mods_generation_ = ~0ull;
     std::vector<std::filesystem::path> texture_pack_mod_folders_;
     std::vector<std::uint32_t> texture_pack_mod_categories_off_;

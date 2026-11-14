@@ -204,6 +204,7 @@ bool RenderCore::initialize(int w, int h) {
     pipelines_.initialize(renderer_.device(), renderer_.pipeline_root(), renderer_.pipeline_backend());
     boot_step("pipelines");
     rt_start();
+    cap_texture_packs();
 
     // The first start (no config.ini, and no back end chose for it): a conservative height now, measured in the first 3D scene.
     if (const RenderConfig chosen = get_render_config_chosen();
@@ -1516,6 +1517,7 @@ bool RenderCore::restart_device() {
         registries_.restart(renderer_.device());
         pipelines_.initialize(renderer_.device(), renderer_.pipeline_root(), renderer_.pipeline_backend());
         rt_start();
+        cap_texture_packs();
         device_gate_.end_rebuild(rebuilding);
     } catch (...) {
         device_gate_.give_up();
@@ -1988,6 +1990,28 @@ void RenderCore::release_lists_before(const ListEntry& entry) noexcept {
 // enforce_budget). A host extension's vram_budget_mb replaces the budget with that many megabytes of the same reading.
 // One line when the budget or what is left out changes (looked at once a second), and one an hour (at 60 frames a second) whatever
 // changed.
+// Half the device's memory budget: the replacements stand beside the game's own textures (kept for when one is evicted), the
+// scene targets, meshes, rings and staging, and on a shared-memory device beside the game's and the host's RAM too (board
+// rc.md, item 4). A dedicated card's budget (4 GB and up) leaves the 2 GB default as it is.
+void RenderCore::cap_texture_packs() {
+    std::uint64_t usage = 0u;
+    std::uint64_t budget = 0u;
+    if (!renderer_.video_memory(usage, budget)) {
+        budget = 0u;
+    }
+    if (const std::uint64_t asked = galaxy::extensions::vram_budget_bytes(); asked != 0u) {
+        budget = asked;
+    }
+    texture_pack_cap_bytes_ = budget / 2u;
+    // The settings are compared again at the next frame.
+    texture_pack_settings_applied_ = false;
+    if (budget != 0u) {
+        std::fprintf(stderr, "[texture-pack] replacements up to %llu MB on this device (half its %llu MB budget)
+",
+                     static_cast<unsigned long long>(texture_pack_cap_bytes_ >> 20u), static_cast<unsigned long long>(budget >> 20u));
+    }
+}
+
 void RenderCore::enforce_video_memory() {
     std::uint64_t usage = 0u;
     std::uint64_t budget = 0u;
@@ -2100,7 +2124,10 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
             texture_pack_mod_categories_off_ = texture_pack_mod_categories_off();
             mods_moved = true;
         }
-        const std::uint64_t budget_bytes = static_cast<std::uint64_t>(render.texture_pack_budget_mb) << 20u;
+        std::uint64_t budget_bytes = static_cast<std::uint64_t>(render.texture_pack_budget_mb) << 20u;
+        if (texture_pack_cap_bytes_ != 0u && budget_bytes > texture_pack_cap_bytes_) {
+            budget_bytes = texture_pack_cap_bytes_;
+        }
         // The settings are built and compared only when something they are made of may have changed.
         const bool moved = !texture_pack_settings_applied_ || mods_moved ||
                            texture_pack_settings_.enabled != render.texture_packs ||
