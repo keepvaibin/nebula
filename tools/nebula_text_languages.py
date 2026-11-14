@@ -90,9 +90,7 @@ ENDONYMS = {'English', 'Français', 'Español', 'Deutsch', 'Italiano', 'Nederlan
             '简体中文', '繁體中文', '繁体中文'}
 # Findings in rows still to be corrected, told to whoever owns them: the check passes them until they are fixed, and
 # fails if one of them is fixed and still listed (remove it here then).
-REPORTED = {
-    'english: Validator.L213 KrKorean',
-}
+REPORTED = set()
 # Columns of one language, or of one writing system: a cell left as UsEnglish where another of its group translates
 # it. German, Italian, Dutch and Portuguese have one column each and share many words with English (Version, Name,
 # Japan): they are not read for this.
