@@ -37,13 +37,16 @@
 #include <windows.h>
 #include <shellapi.h>
 
-#include "data_guard.h"
-#include "galaxy/hidden_start.h"
 #define NEBULA_EXTENSION_EXPORT extern "C" __declspec(dllexport)
 #else
 #include <time.h>
+#if defined(__APPLE__)
+#include <crt_externs.h>
+#endif
 #define NEBULA_EXTENSION_EXPORT extern "C" __attribute__((visibility("default")))
 #endif
+#include "data_guard.h"
+#include "galaxy/hidden_start.h"
 
 namespace {
 
@@ -121,6 +124,34 @@ const char* guard() {
     const char* const refusal = test_guard::error(count, args, wide_env, galaxy::host::player_data_folder().wstring());
     LocalFree(args);
     return refusal;
+}
+#elif !defined(__ANDROID__)
+std::string text_env(const char* name) {
+    const char* const value = std::getenv(name);
+    return value != nullptr ? std::string(value) : std::string();
+}
+
+// The work-folder policy (data_guard.h) over this process's arguments; null when the run may go on.
+const char* guard() {
+    std::vector<std::string> words;
+#if defined(__APPLE__)
+    for (int i = 0; i < *_NSGetArgc(); ++i) {
+        words.emplace_back((*_NSGetArgv())[i]);
+    }
+#else
+    std::ifstream in("/proc/self/cmdline", std::ios::binary);
+    for (std::string word; std::getline(in, word, '\0');) {
+        words.push_back(word);
+    }
+#endif
+    if (words.empty()) {
+        return "cannot read the command line";
+    }
+    std::vector<const char*> args;
+    for (const std::string& word : words) {
+        args.push_back(word.c_str());
+    }
+    return test_guard::error(static_cast<int>(args.size()), args.data(), text_env, galaxy::host::player_data_folder().string());
 }
 #endif
 
@@ -576,12 +607,15 @@ const char* picture_path(void*, std::uint64_t game_frame, std::uint32_t kind) {
 // GALAXY_AUDIO_WAV_DUMP=<file>: the mix as a 16-bit stereo WAV file, 15 s or GALAXY_AUDIO_WAV_DUMP_SECONDS (up to an
 // hour). A rate change starts a new file beside it (<name>.rate-<hz>.part-<n>.wav). The run's end ends the dump for
 // good: the mixes of the shutdown after it are not written (opening the file again would empty it). The mix calls
-// add on the audio thread and the end comes on another, so both take the dump's lock.
+// add on the audio thread and the end comes on another, so both take the dump's lock. A start-again ends it the same
+// way (the host's `ending`), and the start that takes over (NEBULA_STARTED_AGAIN) goes on in the same file when its
+// first mix has the file's rate, so a run keeps one dump; the seconds count over every start.
 class WavDump {
 public:
-    void start(std::filesystem::path base, std::uint32_t seconds) {
+    void start(std::filesystem::path base, std::uint32_t seconds, bool again) {
         base_ = std::move(base);
         seconds_ = seconds;
+        again_ = again;
     }
     [[nodiscard]] bool on() const { return !base_.empty() && !failed_; }
 
@@ -641,6 +675,12 @@ private:
             path_ = base_.parent_path() / (base_.stem().string() + ".rate-" + std::to_string(rate) + ".part-" +
                                            std::to_string(part_) + base_.extension().string());
         }
+        if (again_ && part_ == 0u) {
+            again_ = false;
+            if (resume(rate)) {
+                return true;
+            }
+        }
         std::error_code error;
         if (!path_.parent_path().empty()) {
             std::filesystem::create_directories(path_.parent_path(), error);
@@ -668,6 +708,39 @@ private:
         log("[audio] WAV dump enabled: " + path_.string() + " qpc=" + std::to_string(clock_ticks()));
         return true;
     }
+    // The dump the start before this one ended (its header complete), opened to go on after its last sample.
+    bool resume(std::uint32_t rate) {
+        unsigned char head[44]{};
+        {
+            std::ifstream in(path_, std::ios::binary);
+            if (!in.read(reinterpret_cast<char*>(head), sizeof(head))) {
+                return false;
+            }
+        }
+        const auto at = [&head](std::size_t i) {
+            return std::uint32_t{head[i]} | (std::uint32_t{head[i + 1u]} << 8u) | (std::uint32_t{head[i + 2u]} << 16u) |
+                   (std::uint32_t{head[i + 3u]} << 24u);
+        };
+        if (std::memcmp(head, "RIFF", 4) != 0 || std::memcmp(head + 8, "WAVEfmt ", 8) != 0 ||
+            std::memcmp(head + 36, "data", 4) != 0 || at(24u) != rate) {
+            return false;
+        }
+        const std::uint32_t had = at(40u);
+        if (std::uint64_t{had} > std::uint64_t{rate} * 4u * seconds_) {
+            return false;
+        }
+        out_.open(path_, std::ios::binary | std::ios::in | std::ios::out);
+        if (!out_) {
+            out_.clear();
+            return false;
+        }
+        out_.seekp(static_cast<std::streamoff>(44u + had), std::ios::beg);
+        rate_ = rate;
+        bytes_ = had;
+        log("[audio] WAV dump goes on after a start-again: " + path_.string() + " at " + std::to_string(had) + " bytes qpc=" +
+            std::to_string(clock_ticks()));
+        return true;
+    }
     void u16(std::uint16_t value) {
         const char bytes[2] = {static_cast<char>(value & 0xFFu), static_cast<char>(value >> 8u)};
         out_.write(bytes, 2);
@@ -682,12 +755,17 @@ private:
     std::ofstream out_;
     std::vector<char> block_;
     std::uint32_t seconds_ = 15u, rate_ = 0u, bytes_ = 0u, part_ = 0u;
-    bool failed_ = false, ended_ = false;
+    bool failed_ = false, ended_ = false, again_ = false;
     std::mutex lock_;
 } g_wav;
 
 void sound(void*, const float* samples, std::uint32_t frames, std::uint32_t channels, std::uint32_t rate) {
     g_wav.add(samples, frames, channels, rate);
+}
+
+// The host's process end, a start-again's too: the dump complete.
+void process_ending(void*, std::uint32_t) {
+    g_wav.end();
 }
 
 bool g_mods_changed = false;
@@ -734,8 +812,9 @@ NEBULA_EXTENSION_EXPORT const NebulaHostExtension* nebula_extension_attach(const
         return nullptr;
     }
     g_host = host;
-#if defined(_WIN32)
-    // Before anything is read or written: a test run keeps to its work folder, or the host stops.
+#if !defined(__ANDROID__)
+    // Before anything is read or written: a test run keeps to its work folder, or the host stops. (An Android app's
+    // data is its own private folder, which no player's folder can be.)
     if (const char* const refusal = guard()) {
         log(std::string("test extension: ") + refusal);
         return nullptr;
@@ -753,7 +832,8 @@ NEBULA_EXTENSION_EXPORT const NebulaHostExtension* nebula_extension_attach(const
         read_pictures();
     }
     if (const std::optional<std::string> wav = env("GALAXY_AUDIO_WAV_DUMP")) {
-        g_wav.start(*wav, static_cast<std::uint32_t>(std::clamp<std::uint64_t>(env_u64("GALAXY_AUDIO_WAV_DUMP_SECONDS", 15u), 1u, 3600u)));
+        g_wav.start(*wav, static_cast<std::uint32_t>(std::clamp<std::uint64_t>(env_u64("GALAXY_AUDIO_WAV_DUMP_SECONDS", 15u), 1u, 3600u)),
+                    env_u64("NEBULA_STARTED_AGAIN", 0u) != 0u);
     }
     g_mods_changed = env("GALAXY_TEST_MODS_CHANGED").has_value();
     NebulaHostExtension& e = g_extension;
@@ -768,6 +848,7 @@ NEBULA_EXTENSION_EXPORT const NebulaHostExtension* nebula_extension_attach(const
     e.picture_path = picture_path;
     e.sound = g_wav.on() ? sound : nullptr;
     e.mods_changed = mods_changed;
+    e.ending = process_ending;
     e.vram_budget_mb = static_cast<std::uint32_t>(env_u64("GALAXY_TEST_VRAM_BUDGET_MB", 0u));
     e.disc_read_delay_us = static_cast<std::uint32_t>(env_u64("GALAXY_TEST_DISC_DELAY_US", 0u));
     if (in_harness) {

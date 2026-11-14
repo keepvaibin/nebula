@@ -38,6 +38,9 @@ void sound(const float* samples, std::uint32_t frames, std::uint32_t channels, s
 // Game thread: an extension takes the mods as changed.
 [[nodiscard]] bool mods_changed() noexcept;
 
+// The process ends now (`again`: the game starts again after it): each extension's `ending`, once.
+void ending(bool again) noexcept;
+
 // The extensions' graphics memory budget in bytes (0: the card's own) and wait before each file read in microseconds.
 [[nodiscard]] std::uint64_t vram_budget_bytes() noexcept;
 [[nodiscard]] std::uint32_t disc_read_delay_us() noexcept;

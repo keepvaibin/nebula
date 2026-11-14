@@ -250,6 +250,7 @@ endif()
 # activity calls its SDL_main), an executable elsewhere.
 set(host_sources
     "${nebula_root}/native/host/host_main.cpp"
+    "${nebula_root}/runtime/src/hidden_start.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/host_window_sdl.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/luma_system_sdl.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/audio_device_sdl.cpp"

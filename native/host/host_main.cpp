@@ -3679,6 +3679,17 @@ void wait_for_process_before() {
 #endif
     // The record of mods' numbers (services-mods 7), written off the game thread.
     galaxy::luma_mods::flush_ids(2000u);
+    // The extensions' files complete (a test's sound dump); the start that takes over is told it is one, by its count.
+    galaxy::extensions::ending(restart);
+    if (restart) {
+        const char* const before = std::getenv("NEBULA_STARTED_AGAIN");
+        const std::string starts = std::to_string((before != nullptr ? std::strtoul(before, nullptr, 10) : 0ul) + 1ul);
+#if defined(_WIN32)
+        SetEnvironmentVariableW(L"NEBULA_STARTED_AGAIN", std::wstring(starts.begin(), starts.end()).c_str());
+#else
+        setenv("NEBULA_STARTED_AGAIN", starts.c_str(), 1);
+#endif
+    }
     std::fflush(stdout);
 #if defined(_WIN32)
     if (restart) {
@@ -4634,6 +4645,12 @@ int main(int argc, char** argv) {
             std::fprintf(stderr, "[hidden-start] %s\n", error);
             return 2;
         }
+    }
+#elif defined(NEBULA_HOST_SDL) && !defined(__ANDROID__) && !defined(NEBULA_HOST_APPLE)
+    // The same on Linux and macOS, over main's own arguments.
+    if (const char* const error = galaxy::host::hidden_start_error(::galaxy::launch_args().started_hidden, argc, argv)) {
+        std::fprintf(stderr, "[hidden-start] %s\n", error);
+        return 2;
     }
 #endif
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)

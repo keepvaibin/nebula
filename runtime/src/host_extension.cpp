@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
@@ -260,6 +261,15 @@ bool mods_changed() noexcept {
         }
     }
     return changed;
+}
+
+std::atomic<bool> g_ended{false};
+
+void ending(bool again) noexcept {
+    if (g_ended.exchange(true)) return;
+    for (std::size_t i = 0; i < g_count; ++i) {
+        if (g_extensions[i].ending != nullptr) g_extensions[i].ending(g_extensions[i].user, again ? 1u : 0u);
+    }
 }
 
 }  // namespace galaxy::extensions

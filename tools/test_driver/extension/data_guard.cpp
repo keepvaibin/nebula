@@ -2,16 +2,17 @@
 // The test runs' work-folder policy (data_guard.h).
 #include "data_guard.h"
 
-#include "galaxy/hidden_start.h"
-
-#include <cwchar>
 #include <filesystem>
 
 namespace test_guard {
 
-const char* error(int argc, const wchar_t* const* argv, Environment environment, const std::wstring& player) {
+using galaxy::host::ArgChar;
+using galaxy::host::ArgText;
+using galaxy::host::same_arg;
+
+const char* error(int argc, const ArgChar* const* argv, Environment environment, const ArgText& player) {
     namespace fs = std::filesystem;
-    const std::wstring work_text = environment(L"NEBULA_WORK");
+    const ArgText work_text = environment(NEBULA_ARG_TEXT("NEBULA_WORK"));
     const fs::path work(work_text);
     if (work_text.empty() || !work.is_absolute()) {
         return "tests require an absolute NEBULA_WORK";
@@ -24,16 +25,25 @@ const char* error(int argc, const wchar_t* const* argv, Environment environment,
     if (path_is_within(work, protected_root) || path_is_within(protected_root, work)) {
         return "NEBULA_WORK overlaps the user data folder";
     }
-    for (const auto* name : {L"NEBULA_SETTINGS", L"NEBULA_APPDATA", L"NEBULA_SAVES", L"LOCALAPPDATA"}) {
-        const std::wstring text = environment(name);
+    // The last name is the variable the game finds its own data folder by (platform_paths.h nebula_data_directory).
+    for (const ArgChar* name : {NEBULA_ARG_TEXT("NEBULA_SETTINGS"), NEBULA_ARG_TEXT("NEBULA_APPDATA"), NEBULA_ARG_TEXT("NEBULA_SAVES"),
+#if defined(_WIN32)
+                                NEBULA_ARG_TEXT("LOCALAPPDATA")
+#elif defined(__APPLE__)
+                                NEBULA_ARG_TEXT("HOME")
+#else
+                                NEBULA_ARG_TEXT("XDG_DATA_HOME")
+#endif
+         }) {
+        const ArgText text = environment(name);
         const fs::path path(text);
         if (text.empty() || !path_is_within(path, work) || path_is_within(path, protected_root)) {
             return "tests require private settings, saves, app data and crash paths inside NEBULA_WORK";
         }
     }
     // Folders and files this extension writes to when a run names them: each is private too.
-    for (const auto* name : {L"GALAXY_AUDIO_WAV_DUMP", L"GALAXY_PRESENT_SNAPSHOT_DIR"}) {
-        const std::wstring text = environment(name);
+    for (const ArgChar* name : {NEBULA_ARG_TEXT("GALAXY_AUDIO_WAV_DUMP"), NEBULA_ARG_TEXT("GALAXY_PRESENT_SNAPSHOT_DIR")}) {
+        const ArgText text = environment(name);
         const fs::path path(text);
         if (!text.empty() && (!path_is_within(path, work) || path_is_within(path, protected_root))) {
             return "tests require output and download paths inside NEBULA_WORK";
@@ -43,8 +53,8 @@ const char* error(int argc, const wchar_t* const* argv, Environment environment,
     bool settings = false;
     bool crash_dumps = false;
     for (int i = 1; i + 1 < argc; ++i) {
-        const bool folder = std::wcscmp(argv[i], L"--saves") == 0 || std::wcscmp(argv[i], L"--data") == 0 ||
-                            std::wcscmp(argv[i], L"--settings") == 0 || std::wcscmp(argv[i], L"--crash-dumps") == 0;
+        const bool folder = same_arg(argv[i], NEBULA_ARG_TEXT("--saves")) || same_arg(argv[i], NEBULA_ARG_TEXT("--data")) ||
+                            same_arg(argv[i], NEBULA_ARG_TEXT("--settings")) || same_arg(argv[i], NEBULA_ARG_TEXT("--crash-dumps"));
         if (!folder) {
             continue;
         }
@@ -52,8 +62,8 @@ const char* error(int argc, const wchar_t* const* argv, Environment environment,
         if (!path_is_within(path, work) || path_is_within(path, protected_root)) {
             return "tests require their save, data, settings and crash folders inside NEBULA_WORK";
         }
-        settings |= std::wcscmp(argv[i], L"--settings") == 0;
-        crash_dumps |= std::wcscmp(argv[i], L"--crash-dumps") == 0;
+        settings |= same_arg(argv[i], NEBULA_ARG_TEXT("--settings"));
+        crash_dumps |= same_arg(argv[i], NEBULA_ARG_TEXT("--crash-dumps"));
     }
     if (!settings || !crash_dumps) {
         return "tests require --settings and --crash-dumps inside NEBULA_WORK";

@@ -156,6 +156,10 @@ typedef struct NebulaHostExtension {
     /* Game thread, with NEBULA_EXT_CONTROLS_PAD: player 1's motor strength as the host drives it (0 still, 255 full; the
        game's or a mod's, the stronger), at each change. */
     void (*motor)(void* user, uint8_t strength);
+    /* Any thread, once, as the process ends (no frame or sound follows): what the extension writes is to be complete.
+       `again` nonzero: the game starts again after it, with the same arguments and environment and
+       NEBULA_STARTED_AGAIN=<starts so far> (an exec in the same process on Linux and macOS). */
+    void (*ending)(void* user, uint32_t again);
 } NebulaHostExtension;
 
 typedef const NebulaHostExtension* (*NebulaExtensionAttach)(const NebulaHostForExtension* host);

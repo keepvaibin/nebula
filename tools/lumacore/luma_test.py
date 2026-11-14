@@ -1380,6 +1380,12 @@ def run_one(test, renderer, args, run_folder, previous):
         "LUMA_HARNESS_PLAN": str(plan),
     })
     if platform.system() == "Linux":
+        # The game's data folder ($XDG_DATA_HOME/Nebula, platform_paths.h) in the run's, as LOCALAPPDATA on Windows.
+        env["XDG_DATA_HOME"] = str(run_folder / "appdata")
+    elif platform.system() == "Darwin":
+        # The game's data folder (~/Library/Application Support/Nebula) in the run's.
+        env["HOME"] = str(run_folder / "appdata")
+    if platform.system() == "Linux":
         # The importer's library is opened by name (dlopen "libnebula_import.so"), SDL's beside the game.
         env["LD_LIBRARY_PATH"] = os.pathsep.join([str(run_folder / "bin")] + [p for p in [os.environ.get("LD_LIBRARY_PATH")] if p])
     for name in ("GALAXY_PRESENT_SNAPSHOT_DIR", "GALAXY_INPUT_AUTOPRESS_SCRIPT", "GALAXY_TEST_DETERMINISTIC"):
