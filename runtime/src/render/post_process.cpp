@@ -34,6 +34,7 @@
 #include "post_smaa_blend_ps.h"
 #include "post_smaa_blend_keep_ps.h"
 #include "post_fsr_easu_ps.h"
+#include "post_fsr_easu_half_ps.h"
 #include "post_fsr_rcas_ps.h"
 #include "post_fsr_rcas_scaled_ps.h"
 #include "post_resample_ps.h"
@@ -69,6 +70,14 @@ constexpr unsigned kRtvSlots = 7u;
 
 D3D12_SHADER_BYTECODE code(ShaderBytes shader) noexcept {
     return {shader.data, shader.size};
+}
+
+// EASU in its packed 16-bit form where the device runs min16float at 16 bits, else at 32.
+ShaderBytes easu_shader(ID3D12Device* device) noexcept {
+    D3D12_FEATURE_DATA_D3D12_OPTIONS options{};
+    const bool half = SUCCEEDED(device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options))) &&
+                      (options.MinPrecisionSupport & D3D12_SHADER_MIN_PRECISION_SUPPORT_16_BIT) != 0;
+    return half ? bytes(g_post_fsr_easu_half_ps) : bytes(g_post_fsr_easu_ps);
 }
 
 }  // namespace
@@ -214,9 +223,10 @@ bool PostProcessor::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
 
     // The scaling passes are required; each AA pass is optional and only
     // reported when it cannot be built.
+    const D3D12_SHADER_BYTECODE easu = code(easu_shader(device_));
     const bool scaling =
-        create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fsr_easu_ps)), kColorFormat, 0, easu_) &&
-        create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fsr_easu_ps)), kWindowFormat, 0, easu_window_) &&
+        create_pipeline(code(bytes(g_post_fullscreen_vs)), easu, kColorFormat, 0, easu_) &&
+        create_pipeline(code(bytes(g_post_fullscreen_vs)), easu, kWindowFormat, 0, easu_window_) &&
         create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fsr_rcas_ps)), kWindowFormat, 0, rcas_) &&
         create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fsr_rcas_scaled_ps)), kWindowFormat, 0,
                         rcas_scaled_) &&
@@ -297,7 +307,7 @@ bool PostProcessor::prepare_hdr() {
         return true;
     }
     const bool made =
-        create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fsr_easu_ps)), kHdrWindowFormat, 0, easu_hdr_) &&
+        create_pipeline(code(bytes(g_post_fullscreen_vs)), code(easu_shader(device_)), kHdrWindowFormat, 0, easu_hdr_) &&
         create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fsr_rcas_ps)), kHdrWindowFormat, 0, rcas_hdr_) &&
         create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fsr_rcas_scaled_ps)), kHdrWindowFormat, 0,
                         rcas_scaled_hdr_) &&
