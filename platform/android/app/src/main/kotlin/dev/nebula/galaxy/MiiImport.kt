@@ -64,24 +64,24 @@ object MiiImport {
         }
         if (miis == 0) {
             if (unkept.isNotEmpty()) {
-                return TransferResult(false, "The Miis could not be kept", "Nebula's Mii folder could not be written.")
+                return TransferResult(false, context.getString(R.string.nebula_miis_unkept), context.getString(R.string.nebula_mii_folder_unwritable))
             }
             return TransferResult(
-                false, "No Miis in ${if (uris.size == 1) "that file" else "those files"}",
-                "Choose Mii files from a Wii, DS, 3DS, Wii U or Switch, or from Mii Studio or Mii Creator.",
+                false, context.getString(if (uris.size == 1) R.string.nebula_no_miis_file else R.string.nebula_no_miis_files),
+                context.getString(R.string.nebula_choose_mii_files),
             )
         }
-        val parts = mutableListOf(if (miis == 1) "1 Mii found." else "$miis Miis found.")
-        if (converted == 1) parts += "1 from a newer console takes the Wii's nearest parts and colours."
-        if (converted > 1) parts += "$converted from newer consoles take the Wii's nearest parts and colours."
-        if (unread.isNotEmpty()) parts += "Not Mii data: ${unread.joinToString(", ")}."
-        if (unkept.isNotEmpty()) parts += "Could not be kept: ${unkept.joinToString(", ")}."
+        val parts = mutableListOf(if (miis == 1) context.getString(R.string.nebula_one_mii_found) else context.getString(R.string.nebula_miis_found, miis.toString()))
+        if (converted == 1) parts += context.getString(R.string.nebula_one_mii_converted)
+        if (converted > 1) parts += context.getString(R.string.nebula_miis_converted, converted.toString())
+        if (unread.isNotEmpty()) parts += context.getString(R.string.nebula_not_mii_data, unread.joinToString(", "))
+        if (unkept.isNotEmpty()) parts += context.getString(R.string.nebula_not_kept, unkept.joinToString(", "))
         parts += if (SaveTransfer.gameRunning(context)) {
-            "They join your Miis when the game starts again."
+            context.getString(R.string.nebula_miis_join_next)
         } else {
-            "They join your Miis when the game starts. Miis it already has are not added twice."
+            context.getString(R.string.nebula_miis_join)
         }
-        return TransferResult(true, "Miis imported", parts.joinToString(" "))
+        return TransferResult(true, context.getString(R.string.nebula_miis_imported), parts.joinToString(" "))
     }
 
     private fun displayName(context: Context, uri: Uri): String? =

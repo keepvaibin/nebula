@@ -140,4 +140,22 @@
     <string name="nebula_game_not_responding">The game stopped responding and was closed.</string>
     <string name="nebula_game_low_memory">Android closed the game to free memory. Closing other apps before playing can help.</string>
     <string name="nebula_game_closed">The game closed</string>
+    <string name="nebula_miis_unkept">The Miis could not be kept</string>
+    <string name="nebula_mii_folder_unwritable">Nebula\'s Mii folder could not be written.</string>
+    <string name="nebula_no_miis_file">No Miis in that file</string>
+    <string name="nebula_no_miis_files">No Miis in those files</string>
+    <string name="nebula_choose_mii_files">Choose Mii files from a Wii, DS, 3DS, Wii U or Switch, or from Mii Studio or Mii Creator.</string>
+    <string name="nebula_one_mii_found">1 Mii found.</string>
+    <string name="nebula_miis_found">%1$s Miis found.</string>
+    <string name="nebula_one_mii_converted">1 from a newer console takes the Wii\'s nearest parts and colours.</string>
+    <string name="nebula_miis_converted">%1$s from newer consoles take the Wii\'s nearest parts and colours.</string>
+    <string name="nebula_not_mii_data">Not Mii data: %1$s.</string>
+    <string name="nebula_not_kept">Could not be kept: %1$s.</string>
+    <string name="nebula_miis_join_next">They join your Miis when the game starts again.</string>
+    <string name="nebula_miis_join">They join your Miis when the game starts. Miis it already has are not added twice.</string>
+    <string name="nebula_miis_imported">Miis imported</string>
+    <string name="nebula_import_progress">%1$s%% · %2$s of %3$s</string>
+    <string name="nebula_reading_disc_plain">Reading the disc image</string>
+    <string name="nebula_share_game_log">Share the game log</string>
+    <string name="nebula_log_subject">Nebula game log</string>
 </resources>

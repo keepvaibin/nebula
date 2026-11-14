@@ -87,8 +87,8 @@ class LauncherActivity : ComponentActivity() {
         val send = Intent(Intent.ACTION_SEND)
             .setType("text/plain")
             .putExtra(Intent.EXTRA_STREAM, uri)
-            .putExtra(Intent.EXTRA_SUBJECT, "Nebula game log")
+            .putExtra(Intent.EXTRA_SUBJECT, getString(R.string.nebula_log_subject))
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        startActivity(Intent.createChooser(send, "Share the game log"))
+        startActivity(Intent.createChooser(send, getString(R.string.nebula_share_game_log)))
     }
 }

@@ -140,4 +140,22 @@
     <string name="nebula_game_not_responding">游戏无响应，已关闭。</string>
     <string name="nebula_game_low_memory">Android 为释放内存关闭了游戏。游玩前关闭其他应用可能会有帮助。</string>
     <string name="nebula_game_closed">游戏已关闭</string>
+    <string name="nebula_miis_unkept">无法保存 Mii</string>
+    <string name="nebula_mii_folder_unwritable">无法写入 Nebula 的 Mii 文件夹。</string>
+    <string name="nebula_no_miis_file">该文件中没有 Mii</string>
+    <string name="nebula_no_miis_files">这些文件中没有 Mii</string>
+    <string name="nebula_choose_mii_files">请选择来自 Wii、DS、3DS、Wii U 或 Switch，或 Mii Studio、Mii Creator 的 Mii 文件。</string>
+    <string name="nebula_one_mii_found">找到 1 个 Mii。</string>
+    <string name="nebula_miis_found">找到 %1$s 个 Mii。</string>
+    <string name="nebula_one_mii_converted">1 个来自较新主机的 Mii 会使用最接近的 Wii 部件和颜色。</string>
+    <string name="nebula_miis_converted">%1$s 个来自较新主机的 Mii 会使用最接近的 Wii 部件和颜色。</string>
+    <string name="nebula_not_mii_data">不是 Mii 数据：%1$s。</string>
+    <string name="nebula_not_kept">无法保存：%1$s。</string>
+    <string name="nebula_miis_join_next">游戏再次启动时会加入你的 Mii。</string>
+    <string name="nebula_miis_join">游戏启动时会加入你的 Mii。已有的 Mii 不会重复添加。</string>
+    <string name="nebula_miis_imported">已导入 Mii</string>
+    <string name="nebula_import_progress">%1$s%% · %2$s / %3$s</string>
+    <string name="nebula_reading_disc_plain">正在读取光盘映像</string>
+    <string name="nebula_share_game_log">分享游戏日志</string>
+    <string name="nebula_log_subject">Nebula 游戏日志</string>
 </resources>

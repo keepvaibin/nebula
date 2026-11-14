@@ -164,6 +164,25 @@ TEXT = [
     ('nebula_game_not_responding', 'The game stopped responding and was closed.'),
     ('nebula_game_low_memory', 'Android closed the game to free memory. Closing other apps before playing can help.'),
     ('nebula_game_closed', 'The game closed'),
+    # Mii import (MiiImport.kt), the setup notification (ImportService.kt), the log share (LauncherActivity.kt).
+    ('nebula_miis_unkept', 'The Miis could not be kept'),
+    ('nebula_mii_folder_unwritable', "Nebula's Mii folder could not be written."),
+    ('nebula_no_miis_file', 'No Miis in that file'),
+    ('nebula_no_miis_files', 'No Miis in those files'),
+    ('nebula_choose_mii_files', 'Choose Mii files from a Wii, DS, 3DS, Wii U or Switch, or from Mii Studio or Mii Creator.'),
+    ('nebula_one_mii_found', '1 Mii found.'),
+    ('nebula_miis_found', '{0} Miis found.'),
+    ('nebula_one_mii_converted', "1 from a newer console takes the Wii's nearest parts and colours."),
+    ('nebula_miis_converted', "{0} from newer consoles take the Wii's nearest parts and colours."),
+    ('nebula_not_mii_data', 'Not Mii data: {0}.'),
+    ('nebula_not_kept', 'Could not be kept: {0}.'),
+    ('nebula_miis_join_next', 'They join your Miis when the game starts again.'),
+    ('nebula_miis_join', 'They join your Miis when the game starts. Miis it already has are not added twice.'),
+    ('nebula_miis_imported', 'Miis imported'),
+    ('nebula_import_progress', '{0}% · {1} of {2}'),
+    ('nebula_reading_disc_plain', 'Reading the disc image'),
+    ('nebula_share_game_log', 'Share the game log'),
+    ('nebula_log_subject', 'Nebula game log'),
 ]
 
 

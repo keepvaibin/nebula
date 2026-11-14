@@ -140,4 +140,22 @@
     <string name="nebula_game_not_responding">Het spel reageerde niet meer en is gesloten.</string>
     <string name="nebula_game_low_memory">Android heeft het spel gesloten om geheugen vrij te maken. Andere apps sluiten voor het spelen kan helpen.</string>
     <string name="nebula_game_closed">Het spel is gesloten</string>
+    <string name="nebula_miis_unkept">De Mii\'s konden niet worden bewaard</string>
+    <string name="nebula_mii_folder_unwritable">Er kon niet naar de Mii-map van Nebula worden geschreven.</string>
+    <string name="nebula_no_miis_file">Geen Mii\'s in dat bestand</string>
+    <string name="nebula_no_miis_files">Geen Mii\'s in die bestanden</string>
+    <string name="nebula_choose_mii_files">Kies Mii-bestanden van een Wii, DS, 3DS, Wii U of Switch, of uit Mii Studio of Mii Creator.</string>
+    <string name="nebula_one_mii_found">1 Mii gevonden.</string>
+    <string name="nebula_miis_found">%1$s Mii\'s gevonden.</string>
+    <string name="nebula_one_mii_converted">1 van een nieuwere console krijgt de dichtstbijzijnde Wii-onderdelen en -kleuren.</string>
+    <string name="nebula_miis_converted">%1$s van nieuwere consoles krijgen de dichtstbijzijnde Wii-onderdelen en -kleuren.</string>
+    <string name="nebula_not_mii_data">Geen Mii-gegevens: %1$s.</string>
+    <string name="nebula_not_kept">Konden niet worden bewaard: %1$s.</string>
+    <string name="nebula_miis_join_next">Ze komen bij je Mii\'s wanneer het spel opnieuw start.</string>
+    <string name="nebula_miis_join">Ze komen bij je Mii\'s wanneer het spel start. Mii\'s die het al heeft, worden niet dubbel toegevoegd.</string>
+    <string name="nebula_miis_imported">Mii\'s geïmporteerd</string>
+    <string name="nebula_import_progress">%1$s%% · %2$s van %3$s</string>
+    <string name="nebula_reading_disc_plain">Schijfkopie lezen</string>
+    <string name="nebula_share_game_log">Spellogboek delen</string>
+    <string name="nebula_log_subject">Nebula-spellogboek</string>
 </resources>

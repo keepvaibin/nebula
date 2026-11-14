@@ -140,4 +140,22 @@
     <string name="nebula_game_not_responding">El juego ha dejado de responder y se ha cerrado.</string>
     <string name="nebula_game_low_memory">Android ha cerrado el juego para liberar memoria. Cerrar otras aplicaciones antes de jugar puede ayudar.</string>
     <string name="nebula_game_closed">El juego se ha cerrado</string>
+    <string name="nebula_miis_unkept">No se han podido guardar los Mii</string>
+    <string name="nebula_mii_folder_unwritable">No se ha podido escribir en la carpeta de Mii de Nebula.</string>
+    <string name="nebula_no_miis_file">No hay Mii en ese archivo</string>
+    <string name="nebula_no_miis_files">No hay Mii en esos archivos</string>
+    <string name="nebula_choose_mii_files">Elige archivos Mii de una Wii, DS, 3DS, Wii U o Switch, o de Mii Studio o Mii Creator.</string>
+    <string name="nebula_one_mii_found">Se ha encontrado 1 Mii.</string>
+    <string name="nebula_miis_found">Se han encontrado %1$s Mii.</string>
+    <string name="nebula_one_mii_converted">1 de una consola más reciente toma las partes y colores de Wii más parecidos.</string>
+    <string name="nebula_miis_converted">%1$s de consolas más recientes toman las partes y colores de Wii más parecidos.</string>
+    <string name="nebula_not_mii_data">No son datos Mii: %1$s.</string>
+    <string name="nebula_not_kept">No se han podido guardar: %1$s.</string>
+    <string name="nebula_miis_join_next">Se unen a tus Mii cuando el juego vuelva a iniciarse.</string>
+    <string name="nebula_miis_join">Se unen a tus Mii cuando se inicia el juego. Los Mii que ya tiene no se añaden dos veces.</string>
+    <string name="nebula_miis_imported">Mii importados</string>
+    <string name="nebula_import_progress">%1$s%% · %2$s de %3$s</string>
+    <string name="nebula_reading_disc_plain">Leyendo la imagen de disco</string>
+    <string name="nebula_share_game_log">Compartir el registro del juego</string>
+    <string name="nebula_log_subject">Registro del juego de Nebula</string>
 </resources>
