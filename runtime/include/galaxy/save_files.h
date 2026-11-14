@@ -19,7 +19,7 @@ enum Result : std::int32_t {
 // A plain file name: not empty, no separators, not "." or "..".
 [[nodiscard]] bool is_plain_name(std::string_view name) noexcept;
 
-// Mods' global files (contract services-save 7) go by the game's save requests as "luma/<plain name>": in the save
+// Mods' global files (docs/modding/services/save.md) go by the game's save requests as "luma/<plain name>": in the save
 // folder's `luma` folder, written whole without the backups the game's own file keeps (a forgotten mod's file goes
 // whole). The plain name of such a request, or empty for any other name.
 inline constexpr std::string_view kModFolder = "luma";

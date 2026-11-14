@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The host's side of LumaCore's input services (contract services-input): the providers of `input`, `input.inject` and
+// The host's side of LumaCore's input services (docs/modding/services/input.md): the providers of `input`, `input.inject` and
 // `input.dev`, which every host registers (services-registry 1), and what the host feeds them. A host that samples no
 // controls (the headless host) leaves every action up and every player's device NONE.
 #pragma once

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The host's side of LumaCore's net services (contract services-net; plan 2.7): the provider of `net.local` (layer 1,
+// The host's side of LumaCore's net services (docs/modding/services/net.md): the provider of `net.local` (layer 1,
 // TCP on this machine and the local network).
 #pragma once
 

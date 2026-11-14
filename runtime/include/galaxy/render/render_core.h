@@ -276,9 +276,9 @@ private:
     void walk_target_begin(const NebulaFramePass& pass);
     void walk_target_end(std::uint32_t channels);
     void walk_show();
-    // draw.post (contract draw 15): a mod's post program full screen into a new picture, the frame from there.
+    // draw.post (docs/modding/services/draw.md): a mod's post program full screen into a new picture, the frame from there.
     void walk_post(const NebulaFrameList& list, const NebulaFramePass& pass);
-    // draw.native (contract draw 16): a mod's own GPU commands at a draw point, on this thread.
+    // draw.native (docs/modding/services/draw.md): a mod's own GPU commands at a draw point, on this thread.
     void walk_native(const NebulaFrameList& list, const NebulaFramePass& pass);
     [[nodiscard]] bool generated_written(std::uint32_t texture) const noexcept;
     void note_generated_written(std::uint32_t texture);

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The host's side of LumaCore's audio service (contract services-audio; plan 2.6): the provider of `audio` (layer 1, a
+// The host's side of LumaCore's audio service (docs/modding/services/audio.md): the provider of `audio` (layer 1, a
 // mod's cooked sound effects; layer 2, the streams it fills) and the mix the game's audio frame adds.
 #pragma once
 

@@ -1,4 +1,4 @@
-// The validator's view of the player's game (validator contract, revision 3 item 8; plan 3.12): a LumaGameStore over the
+// The validator's view of the player's game (docs/modding/format/validator.md): a LumaGameStore over the
 // game's own files in an AssetStore, never a mod's. It answers as LumaLink's store of an imported game.pak does
 // (crates/nebula-import/src/store_view.rs PakStore), so the game's check and LumaLink's find the same:
 //   path       the store path, in the game's case, of a disc or store path in any case ("StageData/X/XScenario.arc/a.bcsv"

@@ -3,7 +3,7 @@
 // Reads a .luma's luma.json in the one form (luma-format; the validator, crates/luma-validate rules/manifest.rs, is the
 // rule). The validator decides what refuses a mod (its report's errors); this reads what the game uses. The previous
 // engine's rows are read only under the top-level key "pre_standard", which luma-format does not define, each until its
-// general replacement is proven (agents/luma/board/OLD-ROWS.md).
+// general replacement is proven (docs/modding/format/manifest.md lists them).
 
 #include <cstdint>
 #include <filesystem>
@@ -227,7 +227,7 @@ struct Layer {
     std::vector<Tunable> tunables;
     std::vector<ObjectClass> object_classes;
     std::vector<Form> forms;
-    // pre_standard rows that ran scripts on the interpreter plan 1.10b removed ("script" on a class or form, "objects",
+    // pre_standard rows that ran scripts on the interpreter the game no longer has ("script" on a class or form, "objects",
     // "scripts"): nothing of them is read, and the mod is refused, said on its Mods page (mods.cpp).
     bool old_scripts = false;
     std::vector<SoundEffect> sound_effects;

@@ -89,7 +89,7 @@ std::uint64_t movie_plane_layout(std::uint32_t width, std::uint32_t height, std:
 
 // One cooked movie's frame table: each frame's video in the NMOV (crates/nebula-import/src/cook/thp.rs). Empty when the
 // bytes are not a whole NMOV, or hold video this build cannot decode.
-// The header's word at 0x24 is the codec: 0 the game's JPEG frames, 1 AV1 (plan 3.10: a mod's movie; each frame one
+// The header's word at 0x24 is the codec: 0 the game's JPEG frames, 1 AV1 (a mod's movie; each frame one
 // temporal unit of OBUs, frame 0 a key frame, 4:2:0 8-bit; only where the build has dav1d, NEBULA_AV1). The word at
 // 0x28 is an AV1 movie's colour: 0 BT.601 full range (JPEG's), 1 BT.709 limited range.
 enum class CookedMovieCodec : std::uint32_t { Jpeg = 0, Av1 = 1 };

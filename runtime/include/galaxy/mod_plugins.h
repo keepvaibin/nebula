@@ -182,7 +182,7 @@ struct ModRows {
     [[nodiscard]] bool empty() const noexcept { return achievements.empty() && story.empty() && sound_effects.empty() && player_animations.empty() && stage_rules.empty() && player_constants.empty() && tunables.empty() && object_classes.empty() && forms.empty() && object_changes.empty() && comet_limits.empty() && galaxies.empty() && music.empty() && texts.empty() && event_flags.empty() && comets.empty(); }
 };
 
-// The language refusals are said in (loader contract 3): the played language's folder name, as language_folder gives
+// The language refusals are said in: the played language's folder name, as language_folder gives
 // it ("EuGerman"); empty or unknown to the validator: UsEnglish. Set before start_plugins.
 void set_message_language(std::string folder);
 // What one begun mod's layers call answered, every name as it gave it (unknown ones included), in its order.
@@ -213,7 +213,7 @@ void set_achievement_store(bool (*unlock)(std::string_view key)) noexcept;
 // The NEBULA_MOD_EVENT_* value for an event name ("star_get"), or -1.
 [[nodiscard]] int mod_event_by_name(std::string_view name) noexcept;
 
-// Why a mod's code did not start (loader contract 3: said once, translated; Z-10): one record per mod, kept from
+// Why a mod's code did not start (said once, translated): one record per mod, kept from
 // start_plugins for the Mods page and the mod log. Either the loader's or the order's refusal (a LumaRefusal copied,
 // its values owned) or a host sentence: capitals in English, which the menu translates as every host text.
 struct NotStarted {

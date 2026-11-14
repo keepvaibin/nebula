@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The mod log's host half (contract mod-log): the host tells the game module's log what it found about the mods (the
+// The mod log's host half (docs/modding/lumalink/mod-log.md): the host tells the game module's log what it found about the mods (the
 // validator's findings, the loader's and the order's refusals, the cook's failures) as entries, in the played language
 // and English. The module keeps them, shows them and writes the harness's facts (luma_modlog.h).
 #pragma once
@@ -137,7 +137,7 @@ void add_finding(std::uint32_t source, std::uint32_t level, std::string_view mod
 void add_row(std::uint32_t source, std::uint32_t level, std::string_view mod, std::uint32_t code, std::string_view file,
              std::string_view row, const std::vector<std::pair<std::string, std::string>>& values, std::uint32_t column = 0u);
 
-// What the log holds, for the Mods > Log page and a mod's own page (contract 4.2); any thread. Empty when the module
+// What the log holds, for the Mods > Log page and a mod's own page; any thread. Empty when the module
 // has no log or nothing was kept.
 // PageEntry::source of the cooker's and the start's own lines (luma_modlog.h LUMA_MODLOG_COOK), for code that does not
 // include the C header.
@@ -164,7 +164,7 @@ struct PageMod {
                                     const std::vector<std::pair<std::string, std::string>>& values);
 // How many entries the log keeps (a walk, nothing copied).
 [[nodiscard]] std::uint32_t kept();
-// In a harness run, one row of the log page as the fact `modlog.page {"row", "label", "value"}` (contract 4.3).
+// In a harness run, one row of the log page as the fact `modlog.page {"row", "label", "value"}`.
 void page_fact(std::uint32_t row, std::string_view label, std::string_view value);
 // In a harness run, a fact `key` with `json` as its value (the host's screens: consent 2.6); nothing otherwise.
 void fact(const std::string& key, const std::string& json);
@@ -176,14 +176,14 @@ void append_json_text(std::string& out, std::string_view text);
 // window's pages and the text they hold, all of it.
 void entry_fact(std::string_view mod, std::uint32_t pages, std::string_view text);
 
-// A mod's world clock as the Mods page shows it (contract services-time 10 and 11; the module's luma_time_clock_of,
+// A mod's world clock as the Mods page shows it (docs/modding/services/time.md; the module's luma_time_clock_of,
 // found by `begin`); any thread. Empty when the module lacks the export or the mod never asked for time.
 struct ModClock {
     std::uint32_t rate = 1000u;  // thousandths of real time
     bool held = false;           // the mod holds the world
 };
 [[nodiscard]] std::optional<ModClock> mod_clock(std::string_view mod);
-// A mod's code time as its page shows it (contract guard 3b, the module's luma_guard_cost, found by `begin`): its code's
+// A mod's code time as its page shows it (the module's luma_guard_cost, found by `begin`): its code's
 // time per frame over its last 120 frames, the average and the worst, in ns. Any thread. Empty when the module lacks
 // the export, the mod ran no code this session, or the clock is not scaled yet (the first quarter second).
 struct CodeTime {

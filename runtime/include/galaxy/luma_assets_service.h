@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The host's side of LumaCore's assets service (contract services-assets; plan 2.8): the provider of `assets`
+// The host's side of LumaCore's assets service (docs/modding/services/assets.md): the provider of `assets`
 // (layer 1, the game's files by path; layers 2 and 3, the files mods provide, as the game is given them).
 #pragma once
 

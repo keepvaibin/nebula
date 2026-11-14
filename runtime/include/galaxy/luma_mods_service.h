@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The host's side of LumaCore's mods services (contract services-mods): the providers of `mods`, `mods.ids` and
+// The host's side of LumaCore's mods services (docs/modding/services/mods.md): the providers of `mods`, `mods.ids` and
 // `mods.install`, and the calls the Mods page and the start make on the numbers' record.
 #pragma once
 
@@ -26,7 +26,7 @@ void options_applied(const galaxy::mods::ModInfo& mod);
 // `log` says what goes wrong with the record outside any mod's call.
 [[nodiscard]] std::span<const LumaServiceProvider* const> providers(void (*log)(const char*)) noexcept;
 
-// A removed mod's kept data, for the Mods page's REMOVED MODS line (contract item 8, J-SM7): a mod is removed when it
+// A removed mod's kept data, for the Mods page's REMOVED MODS line: a mod is removed when it
 // is in no list this session and its folder is gone.
 struct KeptMod {
     std::string id;

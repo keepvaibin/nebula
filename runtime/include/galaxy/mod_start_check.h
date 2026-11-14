@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The game's own parts a start with mods needs (contract start-check, section 2): checked at step 1 of a start, only
+// The game's own parts a start with mods needs: checked at step 1 of a start, only
 // when at least one mod is on. Any missing: every mod is off this session, with one mod-log line saying which.
 #pragma once
 

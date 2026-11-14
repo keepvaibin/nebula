@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// Mods' input actions (contract services-input): each `key` option of a running mod's luma.json is an action. It
+// Mods' input actions (docs/modding/services/input.md): each `key` option of a running mod's luma.json is an action. It
 // follows its default game control until the player binds it in Controls; its own bindings, per scheme, are kept in
 // runtime_settings.ini as `modbind.<scheme>.<mod id>/<action id>=<sources>` lines (the same source text as `bind.`),
 // read and written whole with the rest of the settings, kept while the mod is off or gone.

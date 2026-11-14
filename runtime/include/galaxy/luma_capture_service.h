@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The host's side of LumaCore's capture services (contract services-audio 7; plan 2.6 layers 5 and 6): the
+// The host's side of LumaCore's capture services (docs/modding/services/audio.md): the
 // providers of `audio.microphone` and `capture.camera`.
 #pragma once
 

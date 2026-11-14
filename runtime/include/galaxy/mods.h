@@ -208,7 +208,7 @@ struct OptionReset {
 // Recomputes how the mods relate after a change to the list: order, duplicates, requirements, saves, conflicts (each
 // mod's problem) and overlaps. scan_mods calls this last.
 void settle_mods(std::vector<ModInfo>& mods);
-// The Mods page's draft after settle_mods (plan 6.3): a .luma mod on whose need is not in the list, off or not working,
+// The Mods page's draft after settle_mods: a .luma mod on whose need is not in the list, off or not working,
 // or outside its range ("THIS MOD NEEDS: ...", "... A NEWER VERSION OF: ..."), or with a conflict on and working
 // ("THIS MOD CAN'T RUN WITH: ...") shows it as the player changes the list, before Apply. Not part of scan_mods: at
 // a start the validator says these (L801, L802) in the mod log and leaves the mods out.
@@ -244,7 +244,7 @@ struct ModPlan {
     // Materials that have a shader written for them. `disc` is the material name.
     std::vector<File> materials;
     // A .luma's patches by key (luma-format 5.1, `layers/<layer>/patches/<game path>.json`): bottom of the list first,
-    // then layer order, then file order, as the applier takes them (contract table-keys 12: the last given wins).
+    // then layer order, then file order, as the applier takes them (docs/modding/format/table-keys.md: the last given wins).
     struct Patch {
         std::string mod_id;
         std::string entry;  // the file in the mod, "layers/<layer>/patches/<game path>.json", to name it

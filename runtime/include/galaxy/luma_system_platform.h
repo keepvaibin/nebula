@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// LumaCore's system services, host side (contract services-system): the tables `system`, `system.clipboard` and
+// LumaCore's system services, host side (docs/modding/services/system.md): the tables `system`, `system.clipboard` and
 // `system.links` (luma_system.cpp) and what a platform layer gives them (section 7). The platform layer is a table the
 // window layer installs when it makes the game's window, so a host with no window links with none: then the clipboard
 // and links answer LUMA_E_ABSENT and the display is the empty snapshot.

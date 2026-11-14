@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
-// draw.post's host side (LumaCore plan 2.4 layer 8 and 3.4 layer 4; contract draw 15): a mod's post programs.
+// draw.post's host side (docs/modding/services/draw.md): a mod's post programs.
 // The game registers a program's text (G's cook: the mod's `float4 post(PostIn i)` and its parameters mapped onto
 // post_params) through NebulaHostServices::post_register; the host puts its prelude before it (PostIn, scene,
 // scene_texel, depth, motion, the bindings of the backend that draws) and its entry point after, and compiles it with
@@ -17,7 +17,7 @@
 
 namespace galaxy::render {
 
-// post_register's `reads` (contract draw 15 "reads").
+// post_register's `reads` (services/draw.md, "reads").
 enum : std::uint32_t { kModPostReadsDepth = 1u, kModPostReadsMotion = 2u, kModPostReadsAll = 3u };
 // ModPostConstants::flags: what the frame has for the inputs read (a missing one reads as far / no motion).
 enum : std::uint32_t { kModPostHasDepth = 1u, kModPostHasMotion = 2u };

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The host's side of LumaCore's file services (contract services-fs): the providers of `fs` and `fs.exchange`, the
+// The host's side of LumaCore's file services (docs/modding/services/fs.md): the providers of `fs` and `fs.exchange`, the
 // folders they use, and what save.game's offer, mods.install and the Mods page's REMOVED MODS line read of them.
 #pragma once
 
@@ -23,7 +23,7 @@ namespace galaxy::luma_fs {
 [[nodiscard]] std::filesystem::path data_folder(std::string_view id);
 [[nodiscard]] std::filesystem::path exchange_folder();
 
-// Any thread. `path` keeps the path rule (contract 4); "" only when `empty_ok`.
+// Any thread. `path` keeps the path rule (services/fs.md); "" only when `empty_ok`.
 [[nodiscard]] bool path_in_rule(std::string_view path, bool empty_ok) noexcept;
 
 // Any thread; it touches the disk (a few metadata reads), so on the game thread only for a request the player

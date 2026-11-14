@@ -25,7 +25,7 @@ struct PermissionFacts {
     std::string why;       // the mod's own line
     std::string roots;     // net.local/net.internet: the certificate files it trusts (net.roots), joined by ", "
     Answer answer = Answer::NotAsked;
-    bool changed = false;   // answered before, for a declaration that differs now (asked again: plan 6.4)
+    bool changed = false;   // answered before, for a declaration that differs now (asked again)
     bool required = false;  // the entry library imports its service without LUMA_OPTIONAL; `native` always
 };
 

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Two game modules and the choice at start (plan 1.7, contract modules): smg_game carries every LumaCore row;
+// Two game modules and the choice at start: smg_game carries every LumaCore row;
 // smg_game_plain, beside it, is the game without them. The host loads the plain one unless a mod's code needs rows.
 #pragma once
 

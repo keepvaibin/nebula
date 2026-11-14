@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The guard's host half (plan 1.6, contract guard; native/host/luma_guard.cpp).
+// The guard's host half (native/host/luma_guard.cpp).
 #pragma once
 
 namespace galaxy::luma_guard {
