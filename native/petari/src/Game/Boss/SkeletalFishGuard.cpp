@@ -128,7 +128,11 @@ void SkeletalFishGuard::exeAppear() {
         MR::offBind(this);
         mFront.set(-mGravity);
         mAppearStartPos.set(mPosition);
-        mAppearRandomDir.set< f32 >(MR::getRandom(-1.0f, 1.0f), MR::getRandom(-1.0f, 1.0f), MR::getRandom(-1.0f, 1.0f));
+        // Drawn z, y, x: the console's right-to-left order of the arguments (as the Windows build's), on every platform.
+        const f32 dirZ = MR::getRandom(-1.0f, 1.0f);
+        const f32 dirY = MR::getRandom(-1.0f, 1.0f);
+        const f32 dirX = MR::getRandom(-1.0f, 1.0f);
+        mAppearRandomDir.set< f32 >(dirX, dirY, dirZ);
     }
 
     Vec3f gravity;

@@ -48,8 +48,11 @@ void TripodBossBreakMovement::start(const Pos3f& rMtx, s32 jointIndex) {
     mMtx.set(rMtx);
     mMtx.getTrans(mPos);
 
-    mMoment.set< f32 >(MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize), MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize),
-                   MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize));
+    // Drawn z, y, x: the console's right-to-left order of the arguments (as the Windows build's), on every platform.
+    const f32 momentZ = MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize);
+    const f32 momentY = MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize);
+    const f32 momentX = MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize);
+    mMoment.set< f32 >(momentX, momentY, momentZ);
     MR::normalizeOrZero(&mMoment);
     mMoment *= MR::getRandom(::sMinStartMoment, ::sMaxStartMoment);
 
@@ -64,8 +67,11 @@ void TripodBossBreakMovement::start(const Pos3f& rMtx, s32 jointIndex) {
     jointMtx.getYDir(mFlyDir);
 
     Vec3f jitter;
-    jitter.set< f32 >(MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize), MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize),
-                      MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize));
+    // Drawn z, y, x: the console's right-to-left order of the arguments (as the Windows build's), on every platform.
+    const f32 jitterZ = MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize);
+    const f32 jitterY = MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize);
+    const f32 jitterX = MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize);
+    jitter.set< f32 >(jitterX, jitterY, jitterZ);
     mFlyDir += jitter * mFlyDirRandomRate;
 
     mSpring->mVelocity += MR::getRandom(cNum_start_f3, cNum_start_f4);

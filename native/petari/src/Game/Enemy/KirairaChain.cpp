@@ -239,7 +239,11 @@ void KirairaChain::control() {
             mAccelTimer = MR::getRandom(5, 10);
         }
 
-        mAccel.set< f32 >(MR::getRandom(-cNum_control_f1, cNum_control_f2), MR::getRandom(-cNum_control_f3, cNum_control_f4), MR::getRandom(-cNum_control_f5, cNum_control_f6));
+        // Drawn z, y, x: the console's right-to-left order of the arguments (as the Windows build's), on every platform.
+        const f32 accelZ = MR::getRandom(-cNum_control_f5, cNum_control_f6);
+        const f32 accelY = MR::getRandom(-cNum_control_f3, cNum_control_f4);
+        const f32 accelX = MR::getRandom(-cNum_control_f1, cNum_control_f2);
+        mAccel.set< f32 >(accelX, accelY, accelZ);
     }
 
     mAccelTimer--;
