@@ -78,6 +78,10 @@ pub struct LumaValidateInput {
     /// The features this device's graphics have (start-check 3); null: L806 is not checked.
     pub device_features: *const *const c_char,
     pub device_feature_count: u32,
+    /// The game's placement facts (smg_game.luma-placement.json, read for its `factory`); null: every placement's
+    /// class but a planet's is left to the check after the mods' start. Needs `names`.
+    pub placement: *const c_char,
+    pub placement_size: u64,
 }
 
 #[repr(C)]
@@ -307,6 +311,10 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
     if renderer_bytes.is_some() && names_text.is_none() {
         return Err("renderer given without names".to_string());
     }
+    let placement_bytes = (!input.placement.is_null()).then(|| std::slice::from_raw_parts(input.placement.cast::<u8>(), input.placement_size as usize));
+    if placement_bytes.is_some() && names_text.is_none() {
+        return Err("placement given without names".to_string());
+    }
     // Each device feature is a name; one that is not, or a null in the list, is the caller's fault.
     let device_features: Option<Vec<String>> = if input.device_features.is_null() {
         None
@@ -330,6 +338,7 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
             n.types = types_bytes.map(luma_validate::names::Types::from_json).transpose().map_err(|e| format!("types: {e}"))?;
             n.services = services_bytes.map(luma_validate::names::Services::from_json).transpose().map_err(|e| format!("services: {e}"))?;
             n.renderer_features = renderer_bytes.map(luma_validate::names::renderer_features_from_json).transpose().map_err(|e| format!("renderer: {e}"))?;
+            n.factory = placement_bytes.map(luma_validate::names::factory_from_json).transpose().map_err(|e| format!("placement: {e}"))?;
             Some(n)
         }
         None => None,
@@ -348,7 +357,7 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
     // features are not in it (F's AR-1): L806 is a manifest rule, run at every start, and a laptop that switches GPUs
     // keeps its kept reports.
     let game_key = format!(
-        "nebula {nebula}; region {}; platform {platform}; languages {}; api {}; names {}; types {}; services {}; renderer {}; store {}",
+        "nebula {nebula}; region {}; platform {platform}; languages {}; api {}; names {}; types {}; services {}; renderer {}; placement {}; store {}",
         region.as_deref().unwrap_or("-"),
         languages.join(","),
         input.luma_api,
@@ -356,6 +365,7 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
         types_bytes.map_or_else(|| "-".to_string(), hex_sha1),
         services_bytes.map_or_else(|| "-".to_string(), hex_sha1),
         renderer_bytes.map_or_else(|| "-".to_string(), hex_sha1),
+        placement_bytes.map_or_else(|| "-".to_string(), hex_sha1),
         if store.is_some() { store_key.as_str() } else { "-" },
     );
     // Every other mod is given by its kept report; one that does not read is the caller's fault, never skipped.

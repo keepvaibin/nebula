@@ -59,6 +59,20 @@ struct Game {
 // from. A kept report made with another (or with none) is made again.
 std::string store_key(const galaxy::assets::AssetStore& store);
 
+// The game's self-description as LumaLink's check reads its --names folder, so every door judges a mod's code and
+// placements as the tool does: every `.rows` file's lines (in path order), the types file (luma_types.json), the
+// services catalog (luma_services.json) and the placement facts (smg_game.luma-placement.json, at the folder's top).
+// Read once, from the `luma` folder beside the running program (an installed game's versions/<v>/luma); all empty when
+// there is none or it does not read as one (said once on stderr): those rules then go unchecked, as before.
+struct Description {
+    std::string names;
+    std::string types;
+    std::string services;
+    std::string placement;
+    std::string key;  // what identifies them for a kept report: "-" when there is none
+};
+const Description& description();
+
 // One finding as kept: code, level (0 an error), line, column, file, played text, English text.
 struct Kept {
     std::uint32_t code = 0;

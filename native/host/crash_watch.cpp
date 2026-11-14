@@ -26,9 +26,11 @@ struct Block {
     LONG written;      // the answer: 1 written, 0 not
     DWORD error;       // why not (a Windows error code)
     DWORD snapshot;    // PssCaptureSnapshot's answer: 0, the dump read a snapshot; else why not (it read the live process)
+    ULONG64 out;       // the game's standard output, a handle of the game's (0: none)
+    LONG64 log_zero;   // the game's log clock's zero, steady_clock nanoseconds (one clock for every process)
     wchar_t path[1024];
 };
-constexpr DWORD kVersion = 2u;
+constexpr DWORD kVersion = 3u;
 
 // The game's side.
 HANDLE g_process = nullptr;  // the watcher
@@ -86,6 +88,47 @@ BOOL write_dump(decltype(&MiniDumpWriteDump) write, HANDLE game, DWORD pid, HAND
     return ok;
 }
 
+// One line in the game's log, in its form ("[   12.345] crash: ..."), timed by the game's log clock.
+void log_to_game(HANDLE out, LONG64 log_zero, const char* text) noexcept {
+    const LONG64 now = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    char line[512];
+    const int n = std::snprintf(line, sizeof(line), "[%9.3f] crash: %s\n", static_cast<double>(now - log_zero) / 1e9, text);
+    if (n > 0) {
+        DWORD written = 0;
+        WriteFile(out, line, static_cast<DWORD>(n < static_cast<int>(sizeof(line)) ? n : static_cast<int>(sizeof(line)) - 1),
+                  &written, nullptr);
+    }
+}
+
+// The game has ended. Its own handlers end it with 3 (a fatal, an abort) or 4 (a fault, after its report); an
+// NTSTATUS of error severity is the system's end of a process for a fault no handler of the process ended it for:
+// a fast fail (0xC0000409: __fastfail, which a /GS or CFG check, the C runtime's invalid parameter and its abort report
+// call, goes from the kernel to the process's end with no exception the process sees), or a fault raised while the
+// game's handlers were already reporting another. The process is gone, so there is no dump to write: the lines say what
+// ended it. 0xC000013A is the console's Ctrl+C or close, not a fault.
+void report_end(HANDLE game, HANDLE out, LONG64 log_zero, unsigned dumps) noexcept {
+    DWORD code = 0;
+    if (out == nullptr || !GetExitCodeProcess(game, &code) || (code & 0xC0000000u) != 0xC0000000u || code == 0xC000013Au) {
+        return;
+    }
+    const char* what = "a fault";
+    switch (code) {
+    case 0xC0000409u: what = "a fast fail: a security check (/GS, CFG), the C runtime's invalid parameter or abort report, or __fastfail"; break;
+    case 0xC0000374u: what = "heap corruption"; break;
+    case 0xC00000FDu: what = "a stack overflow"; break;
+    case 0xC0000005u: what = "an access violation"; break;
+    case 0xE06D7363u: what = "a C++ exception"; break;
+    default: break;
+    }
+    char text[384];
+    std::snprintf(text, sizeof(text), "the game ended with 0x%08lX (%s), which no handler of the game reported", code, what);
+    log_to_game(out, log_zero, text);
+    std::snprintf(text, sizeof(text), dumps == 0 ? "no dump: the process was gone when the watcher saw it end"
+                                                 : "no dump of this end: the process was gone when the watcher saw it end (%u written before)",
+                  dumps);
+    log_to_game(out, log_zero, text);
+}
+
 }  // namespace
 
 int run(int argc, char** argv) {
@@ -122,12 +165,25 @@ int run(int argc, char** argv) {
     // end when the game ends (its executable stays open until then). Below normal on a busy machine, a woken thread
     // waits seconds for a processor.
     SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS);
+    // The game's standard output, taken now: a process's handles are gone once it has ended.
+    HANDLE out = nullptr;
+    if (block->out != 0 &&
+        !DuplicateHandle(game, reinterpret_cast<HANDLE>(static_cast<std::uintptr_t>(block->out)), GetCurrentProcess(), &out, 0,
+                         FALSE, DUPLICATE_SAME_ACCESS)) {
+        out = nullptr;
+    }
+    const LONG64 log_zero = block->log_zero;
+    unsigned dumps = 0;
     SetEvent(ready);
     const HANDLE waits[2] = {game, ask};
     for (;;) {
         const DWORD woke = WaitForMultipleObjects(2, waits, FALSE, INFINITE);
         if (woke != WAIT_OBJECT_0 + 1) {
-            return 0;  // the game ended (or the wait failed): nothing left to watch
+            // The game ended (or the wait failed): nothing left to watch.
+            if (woke == WAIT_OBJECT_0) {
+                report_end(game, out, log_zero, dumps);
+            }
+            return 0;
         }
         block->path[sizeof(block->path) / sizeof(block->path[0]) - 1] = 0;
         const std::filesystem::path path(block->path);
@@ -152,11 +208,12 @@ int run(int argc, char** argv) {
         block->error = error;
         block->snapshot = snapshot;
         block->written = ok ? 1 : 0;
+        dumps += ok ? 1u : 0u;
         SetEvent(done);
     }
 }
 
-void start(const std::filesystem::path& folder) {
+void start(const std::filesystem::path& folder, std::chrono::steady_clock::time_point log_zero) {
     std::size_t at = 0;
     g_folder[0] = 0;
     append(g_folder, sizeof(g_folder) / sizeof(g_folder[0]), &at, std::filesystem::absolute(folder).wstring().c_str());
@@ -181,6 +238,9 @@ void start(const std::filesystem::path& folder) {
         return;
     }
     g_block->version = kVersion;
+    const HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
+    g_block->out = out != INVALID_HANDLE_VALUE ? static_cast<ULONG64>(reinterpret_cast<std::uintptr_t>(out)) : 0u;
+    g_block->log_zero = std::chrono::duration_cast<std::chrono::nanoseconds>(log_zero.time_since_epoch()).count();
     wchar_t exe[MAX_PATH * 2];
     const DWORD length = GetModuleFileNameW(nullptr, exe, MAX_PATH * 2);
     if (length == 0 || length >= MAX_PATH * 2) {
@@ -190,7 +250,8 @@ void start(const std::filesystem::path& folder) {
     STARTUPINFOW startup{};
     startup.cb = sizeof(startup);
     PROCESS_INFORMATION process{};
-    // No handles inherited (a test's output pipe stays the game's alone) and no window.
+    // No handles inherited and no window. The watcher takes a copy of the game's standard output itself (run) and
+    // ends with the game, so a reader of that output sees its end when the game's lines and the watcher's are written.
     if (CreateProcessW(exe, command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS, nullptr,
                        nullptr, &startup, &process)) {
         CloseHandle(process.hThread);

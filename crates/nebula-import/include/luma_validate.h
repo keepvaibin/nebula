@@ -4,9 +4,10 @@
 
    At import: luma_validate with `kept` null runs every rule; keep luma_report_kept's bytes beside the mod.
    At each start, and each change of the mod list or options: luma_validate with the mod's kept bytes. When they are for
-   the same .luma and the same game (release, region, platform, languages, LumaCore version, names, services,
-   renderer, store_key; not the device's features, which the rules read at every start), the rules that read the whole .luma are taken from them and every other rule runs; otherwise every rule
-   runs. Keep the new kept bytes either way.
+   the same .luma and the same game (release, region, platform, languages, LumaCore version, names, types, services,
+   renderer, placement, store_key; not the device's features, which the rules read at every start), the rules that
+   read the whole .luma are taken from them and every other rule runs; otherwise every rule runs. Keep the new kept
+   bytes either way.
 
    Every pointer in the input is read only during the call. A report is used from one thread at a time. */
 #ifndef LUMA_VALIDATE_H
@@ -85,6 +86,11 @@ typedef struct LumaValidateInput {
     const char* const* device_features; /* the features this device's graphics have (draw.native's capability query,
                                start-check 3), each a name of `renderer`; null: L806 is not checked */
     uint32_t device_feature_count;
+    const char* placement;  /* the game's placement facts (smg_game.luma-placement.json): its `factory` rows name every
+                               class a placement makes before any mod's code; null: every placement's class but a
+                               planet's is left to the check after the mods' start (luma_report_after_start). Needs
+                               `names`, as LumaLink reads both from one folder */
+    uint64_t placement_size;
 } LumaValidateInput;
 
 typedef struct LumaFinding {

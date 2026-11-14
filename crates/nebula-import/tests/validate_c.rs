@@ -127,6 +127,8 @@ struct Call {
     /// This device's features; None: not given.
     device: Option<Vec<CString>>,
     device_ptrs: Vec<*const c_char>,
+    /// The placement facts given; empty: none.
+    placement: Vec<u8>,
 }
 
 impl Call {
@@ -146,6 +148,7 @@ impl Call {
             renderer: Vec::new(),
             device: None,
             device_ptrs: Vec::new(),
+            placement: Vec::new(),
         });
         c.store.context = (&*c.table as *const CTable).cast_mut().cast();
         c
@@ -184,6 +187,8 @@ impl Call {
             renderer_size: self.renderer.len() as u64,
             device_features: if self.device.is_some() { self.device_ptrs.as_ptr() } else { null() },
             device_feature_count: self.device_ptrs.len() as u32,
+            placement: if self.placement.is_empty() { null() } else { self.placement.as_ptr().cast() },
+            placement_size: self.placement.len() as u64,
         }
     }
 }
@@ -421,13 +426,61 @@ fn the_layout_is_the_header_s() {
     assert_eq!((size_of::<LumaGameStore>(), offset_of!(LumaGameStore, context), offset_of!(LumaGameStore, folder)), (40, 8, 32));
     assert_eq!(size_of::<LumaInstalledMod>(), 32);
     assert_eq!(size_of::<LumaOption>(), 16);
-    assert_eq!(size_of::<LumaValidateInput>(), 208);
+    assert_eq!(size_of::<LumaValidateInput>(), 224);
+    assert_eq!((offset_of!(LumaValidateInput, placement), offset_of!(LumaValidateInput, placement_size)), (208, 216));
     assert_eq!(
         (offset_of!(LumaValidateInput, names_size), offset_of!(LumaValidateInput, store), offset_of!(LumaValidateInput, position), offset_of!(LumaValidateInput, kept_size)),
         (64, 96, 124, 152)
     );
     assert_eq!((offset_of!(LumaValidateInput, types_size), offset_of!(LumaValidateInput, renderer_size), offset_of!(LumaValidateInput, device_feature_count)), (168, 184, 200));
     assert_eq!((size_of::<LumaFinding>(), offset_of!(LumaFinding, text)), (48, 40));
+}
+
+/// The placement facts (smg_game.luma-placement.json) name the factory's classes: with them only a class no list
+/// names is left to the check after the mods' start, as LumaLink's check leaves it; without them every placement's
+/// class is. They are part of what identifies the game, need names, and one that does not read says where.
+#[test]
+fn the_placement_facts_leave_only_unknown_classes_after_the_start() {
+    let dir = tempfile::tempdir().unwrap();
+    let patch = br#"{"patch": 1, "key": ["l_id"], "add": [{"l_id": 5, "name": "kuribo"}, {"l_id": 6, "name": "ModThing"}]}"#;
+    let placed = file("layers/base/patches/StageData/Zone/Zone.arc/jmp/Placement/Common/ObjInfo.json", patch);
+    let path = write(dir.path(), "placed.luma", &luma(&[("layers", r#"[{"name": "base"}]"#)], &[placed]));
+    // State, the after-start rows' classes, the kept bytes, why it was refused.
+    let after = |input: &LumaValidateInput| -> (i32, Vec<String>, Vec<u8>, Option<String>) {
+        unsafe {
+            let r = luma_validate(input);
+            let mut classes = Vec::new();
+            let (mut class, mut file, mut line) = (null(), null(), 0u32);
+            while luma_report_after_start(r, classes.len() as u32, &mut class, &mut file, &mut line) != 0 {
+                classes.push(s(class).unwrap());
+            }
+            let mut size = 0u64;
+            let k = luma_report_kept(r, &mut size);
+            let kept = if k.is_null() { Vec::new() } else { std::slice::from_raw_parts(k, size as usize).to_vec() };
+            let got = (luma_report_state(r), classes, kept, s(luma_report_invalid(r)));
+            luma_report_free(r);
+            got
+        }
+    };
+    let call = Call::new(&path, "windows-x64");
+    let (state, without, without_kept, why) = after(&call.input(None));
+    assert_eq!((state, without, why), (0, vec!["kuribo".to_string(), "ModThing".to_string()], None));
+    let mut facts = Call::new(&path, "windows-x64");
+    facts.placement = br#"{"placement": 1, "factory": [{"name": "Kuribo", "class": "Kuribo", "creator": "createNameObj<Kuribo>"}], "placement_args": {}}"#.to_vec();
+    let (state, with, with_kept, why) = after(&facts.input(None));
+    assert_eq!((state, with, why), (0, vec!["ModThing".to_string()], None));
+    // At a start: its own kept report stands; one made without the facts does not.
+    assert_eq!(after(&facts.input(Some(&with_kept))).0, 1);
+    assert_eq!(after(&facts.input(Some(&without_kept))).0, 0);
+    assert_eq!(after(&call.input(Some(&with_kept))).0, 0);
+    // Without names, or not read: refused, saying why.
+    let mut i = facts.input(None);
+    i.names = null();
+    let (state, _, _, why) = after(&i);
+    assert_eq!((state, why.as_deref()), (-1, Some("placement given without names")));
+    facts.placement = br#"{"factory": [{"creator": "x"}]}"#.to_vec();
+    let (state, _, _, why) = after(&facts.input(None));
+    assert_eq!((state, why.as_deref()), (-1, Some("placement: factory[0].name: missing, or not a name")));
 }
 
 /// Validator revision 3: the C store's folder and table give the views the Rust store gives (one code builds them):
