@@ -117,6 +117,7 @@ fn hide() {
         start outcome(text "Balloon_NoServer")
         return
     }
+    menu.close_pause()
     mode = Mode.Hiding
     show(hide_seconds, text "Balloon_HideHow")
     log fact "hiding" hide_seconds
@@ -187,6 +188,7 @@ fn find() {
         start outcome(text "Balloon_NoServer")
         return
     }
+    menu.close_pause()
     mode = Mode.Busy
     start find_task()
 }

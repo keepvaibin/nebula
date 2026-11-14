@@ -1,7 +1,7 @@
 {
   "harness": 1,
   "name": "ghost-viewer",
-  "about": "Good Egg, star 1: a run is made (the stick walks Mario ahead; the star demo asked for at frame 240), and at frame 400 the stage is entered again (its play begins at 1241). At 1400 PLUS opens the pause menu; A takes Replays, the mod's entry, which lists the one saved run; A takes it: the pause menu closes and the run plays back. Mario is hidden and holds still while the stick moves the free camera; RIGHT, RIGHT and LEFT give 2x, 4x and 2x; B ends the playback and Mario is back.",
+  "about": "Good Egg, star 1: a run is made (the stick walks Mario ahead; the star demo asked for at frame 240), and at frame 400 the stage is entered again (its play begins at 1240). At 1400 PLUS opens the pause menu; A takes Replays, the mod's entry, which lists the one saved run; A takes it: the pause menu closes and the run plays back (from about 1568). Mario is hidden and holds still (the same place at 1569 and 1650) while the stick moves the free camera; RIGHT at 1600, RIGHT at 1620 and LEFT at 1640 give 2x, 4x and 2x; B at 1660 ends the playback before the run's end and Mario is back.",
   "proves": [
     "kit.menu",
     "kit.screen",
@@ -70,124 +70,65 @@
       "frames": 2
     },
     {
-      "after": {
-        "fact": "mod.ghost-time-trial.watching",
-        "is": true
-      },
+      "at": 1569,
       "call": "MR::getPlayerPos",
       "signature": "Vec3f *()",
       "args": [],
-      "fact": "player_before",
-      "timeout": 600
+      "fact": "player_before"
     },
     {
-      "after": {
-        "fact": "mod.ghost-time-trial.watching",
-        "is": true
-      },
-      "call": "MR::getCamPos",
-      "signature": "Vec3f()",
-      "args": [],
-      "fact": "camera_before",
-      "timeout": 600
-    },
-    {
-      "after": {
-        "fact": "mod.ghost-time-trial.watching",
-        "is": true
-      },
+      "at": 1570,
       "stick": [
         0,
         1
       ],
-      "frames": 40,
-      "timeout": 600
+      "frames": 25
     },
     {
-      "after": {
-        "fact": "camera_before",
-        "exists": true
-      },
-      "picture": "watch",
-      "timeout": 600
+      "at": 1596,
+      "picture": "watch"
     },
     {
-      "after": {
-        "fact": "player_before",
-        "exists": true
-      },
+      "at": 1600,
       "hold": [
         "RIGHT"
       ],
-      "frames": 2,
-      "timeout": 600
+      "frames": 2
     },
     {
-      "after": {
-        "fact": "mod.ghost-time-trial.speed",
-        "is": "2x"
-      },
+      "at": 1620,
       "hold": [
         "RIGHT"
       ],
-      "frames": 2,
-      "timeout": 300
+      "frames": 2
     },
     {
-      "after": {
-        "fact": "mod.ghost-time-trial.speed",
-        "is": "4x"
-      },
-      "call": "MR::getCamPos",
-      "signature": "Vec3f()",
-      "args": [],
-      "fact": "camera_after",
-      "timeout": 300
-    },
-    {
-      "after": {
-        "fact": "mod.ghost-time-trial.speed",
-        "is": "4x"
-      },
-      "call": "MR::getPlayerPos",
-      "signature": "Vec3f *()",
-      "args": [],
-      "fact": "player_after",
-      "timeout": 300
-    },
-    {
-      "after": {
-        "fact": "mod.ghost-time-trial.speed",
-        "is": "4x"
-      },
+      "at": 1640,
       "hold": [
         "LEFT"
       ],
-      "frames": 2,
-      "timeout": 300
+      "frames": 2
     },
     {
-      "after": {
-        "fact": "mod.ghost-time-trial.speed",
-        "is": "2x",
-        "when": "next"
-      },
+      "at": 1650,
+      "call": "MR::getPlayerPos",
+      "signature": "Vec3f *()",
+      "args": [],
+      "fact": "player_after"
+    },
+    {
+      "at": 1660,
       "hold": [
         "B"
       ],
-      "frames": 2,
-      "timeout": 300
+      "frames": 2
     },
     {
-      "after": {
-        "fact": "mod.ghost-time-trial.watching",
-        "is": false
-      },
-      "picture": "back",
-      "timeout": 300
+      "at": 1700,
+      "picture": "back"
     },
     {
-      "at": 2400,
+      "at": 1720,
       "end": true
     }
   ],
@@ -197,6 +138,10 @@
       "is": 1
     },
     {
+      "fact": "mod.ghost-time-trial.chosen",
+      "exists": true
+    },
+    {
       "fact": "mod.ghost-time-trial.watching",
       "is": true,
       "when": "first"
@@ -204,17 +149,44 @@
     {
       "fact": "mod.ghost-time-trial.speed",
       "is": "2x",
-      "when": "first"
+      "frames": [
+        1600,
+        1610
+      ]
+    },
+    {
+      "fact": "mod.ghost-time-trial.speed",
+      "is": "4x",
+      "frames": [
+        1620,
+        1630
+      ]
     },
     {
       "fact": "mod.ghost-time-trial.speed",
       "is": "2x",
-      "when": "last"
+      "frames": [
+        1640,
+        1650
+      ]
     },
     {
       "fact": "mod.ghost-time-trial.watching",
       "is": false,
-      "when": "last"
+      "when": "last",
+      "frames": [
+        1660,
+        1670
+      ]
+    },
+    {
+      "fact": "player_after",
+      "near": [
+        -3304.509,
+        -13081.804,
+        -15353.938
+      ],
+      "within": 1
     },
     {
       "no_log": "script error"

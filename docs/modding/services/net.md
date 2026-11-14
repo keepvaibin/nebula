@@ -26,7 +26,8 @@ Layer 1 is `net.local`; layer 2 is `net.internet` (section 4); UDP is minor 1 of
    start, through the kernel's call (the mod's guard, its log name). Events: CONNECTED, ACCEPTED, DATA, SENT, CLOSED,
    ERROR (header). A socket's events come in the order they happened.
 5. Reading: one DATA event per frame a socket has bytes; `take` only inside it (else LUMA_E_HANDLE, reported). Bytes
-   not taken stay for the next frame.
+   not taken stay for the next frame. At most 1 MiB waits a socket (`LUMA_NET_RECEIVED_MOST`); past it the socket is
+   not read (TCP slows the sender) until the mod takes.
 6. Sending: `send` copies; bytes go in order; SENT once all queued bytes are out (value: bytes since the last). At
    most 4 MiB queued over all the mod's sockets (LUMA_E_LIMIT, nothing queued, reported). Sending before CONNECTED or
    after the other side closed: LUMA_E_CLOSED, an answer.

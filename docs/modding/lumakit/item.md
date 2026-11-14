@@ -28,3 +28,7 @@ between types of one build. Data `kit/item/<id>.json`. Built on: `K.derive` (`Li
 `incStarPiece`, `incPlayerLife`, `MR::addHitSensor`), `C.model`, `C.fx`, `C.sound`, `save` (the inventory per file).
 Conformance: an item placed by name and one spawned, each kind of `Gives`, both containers, an inventory kept across
 a save and reload, an item of a mod that is off (not made, logged). Corpus: 1, 38, 39, 51, 56. B: F. A: G.
+
+LumaKit saves every kit value itself, in its own part of each save file under the owning mod's id: a value follows the
+file as the game's progress does, stays while its mod is off or removed, and stays when the player forgets the mod,
+until LumaKit is forgotten.

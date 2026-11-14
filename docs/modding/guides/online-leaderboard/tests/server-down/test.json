@@ -1,0 +1,32 @@
+{
+  "harness": 1,
+  "name": "leaderboard-server-down",
+  "about": "The server option is an address on this computer where no server listens (http://127.0.0.1:47614/board): the board and the line over the game say the server cannot be reached, and the game goes on",
+  "proves": ["services.net.local", "services.net.http"],
+  "mods": [
+    "../../../lumakit",
+    { "path": "../..", "options": { "server": "http://127.0.0.1:47614/board" } }
+  ],
+  "stage": { "name": "EggStarGalaxy", "scenario": 1 },
+  "limit_seconds": 240,
+  "steps": [
+    { "at": 700, "hold": ["PLUS"], "frames": 4 },
+    { "at": 760, "picture": "pause" },
+    { "at": 770, "hold": ["A"], "frames": 4 },
+    { "after": { "fact": "mod.online-leaderboard.board", "exists": true }, "wait": true, "timeout": 900 },
+    { "at": 900, "picture": "board" },
+    { "at": 910, "hold": ["B"], "frames": 4 },
+    { "at": 940, "hold": ["B"], "frames": 4 },
+    { "at": 1100, "call": "GameSceneFunction::requestPowerStarGetDemo", "signature": "void()" },
+    { "at": 1150, "text": "Mario" },
+    { "at": 1160, "key": "enter" },
+    { "after": { "fact": "mod.online-leaderboard.said", "exists": true }, "wait": true, "timeout": 900 },
+    { "at": 1220, "picture": "said" },
+    { "at": 1500, "end": true }
+  ],
+  "expect": [
+    { "fact": "mod.online-leaderboard.board", "is": "The leaderboard server http://127.0.0.1:47614/board cannot be reached." },
+    { "fact": "mod.online-leaderboard.said", "is": "This star's time was not sent. The leaderboard server http://127.0.0.1:47614/board cannot be reached." },
+    { "no_log": "script error" }
+  ]
+}

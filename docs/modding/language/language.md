@@ -440,6 +440,11 @@ uses the same machines; the game's own nerves are reached as functions and hooks
 
 - A service the game lacks (an older game, a platform without it) makes the mod refuse to load naming it, unless used
   as `optional svc.capture`, which is `none` there.
+- A service used as `use optional svc.<name>` is `none` when the game or the player did not give it. Test it before
+  calling it (`if x != none`, `guard x != none else { return }`, or `if x == none { return }`); a call with no such
+  test before it is a compile error.
+- A library's service calls are its own, in its exports and in what they start: a request made inside an export is
+  answered to the library.
 - A service result that waits on the outside world is an event: `on net.received(sock, data) { }`, or `wait`ed in a
   task: `let reply = wait http.get("https://...")`. Events arrive at the frame's start.
 - Permissions a service needs are declared in `luma.json`; using a service whose permission is not declared is a
@@ -894,8 +899,7 @@ around `proceed()` saves and restores it: `let was = current; current = self; pr
   reads on as a name.
 - P6-10 now: build-time codes S0001 to S0024 (S0022 the limit, S0023 names, S0024 the compiler could not start its
   thread). Of two diagnostics at one place only the first is said.
-- One could, A42R-1: P6-13 could add that type arguments take their `(` on the same line (`json.decode<list<int>>` /
-  `(data)` is S0013 today, which names the wrong mistake).
+- Type arguments take their `(` on the same line: `json.decode<list<int>>` / `(data)` is S0025 (below).
 
 ### A42R-1
 

@@ -206,5 +206,6 @@ ticks, `channels` its MIDI channels with notes and `rate` its ticks a quarter.
   a BRSTM claiming four billion frames. A 16-note MIDI file read back by the game's sequence reader (keys, slots,
   velocities, tempo 120, timebase, bend sense, instrument, waits) and cooked to NSEQ; the loop's jumps land on each
   track's state; what is left out is counted; the refusals; a voice line on the voice bus.
-- `replace` checked against a real store (the lookups are by the store's path hashes); a mod's own samples as
-  instruments (a mod bank) is not written.
+- Not yet proven in a game run: a stream, a voice line or a sequence played by the game, and their `replace` (test
+  3873 proves an effect's).
+- A sequence plays the game's instruments only: a mod's own samples cannot be instruments (no mod bank).

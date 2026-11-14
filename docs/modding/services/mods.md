@@ -22,9 +22,9 @@ request path 6.1, the Mods page's line for reserved numbers, the mod log rows).
    `uses`, so a mod taken out goes after the mods calling it (reload 2). A run-time lookup of an export here would
    bypass it and leave a pointer into a closed library; there is none.
 3. The list is the session's: the mods as this session started them (the host's list after its start, in list order),
-   not the Mods page's draft. Fixed for the session but for `state`, which follows take-out and reload (reload 2, 4: a
-   mod taken out reads `LUMA_MODS_TAKEN_OUT`, a reloaded one `RUNNING` again). The module tells the host of a take-out
-   on the game thread between two frames (luma_set_taken_out), so a mod's reads of `state` within one frame agree.
+   not the Mods page's draft. Fixed for the session, `state` too: it is read once, at the first call, and a mod taken
+   out later still reads `RUNNING`; no call gives `LUMA_MODS_TAKEN_OUT`. A mod learns that another stopped from
+   `watch_mods` (its STOPPED event names the mod).
 4. What a mod may read of another: id, name (as the Mods page shows it: luma.json `text.<the player's language>.name`,
    else `name`, else the folder name), version, its place in the list, its kind (`.luma`, Riivolution, texture pack,
    loose files), whether it has code for this platform, and its state (running, off, refused, not started, taken out).
@@ -161,9 +161,8 @@ bits of a stage's collision data (3.9). A space is added to this table with its 
 
 - Host: `runtime/src/luma_mods.cpp` (the three providers, the record, the session list), provided by
   `luma_services_host.cpp`'s provide_all beside the system providers; the session list from `galaxy::mods` as started;
-  `state`: `enum class PluginState { None, Running, TakenOut, Refused, NotStarted }; PluginState
-  plugin_state(std::string_view mod_id);` (any thread), mapped one to one. Until that call is on f/int the code reads
-  `plugins_not_started()` (L5xx and L800 records REFUSED, host sentences NOT_STARTED) and never gives TAKEN_OUT.
+  `state` from `plugins_not_started()` when the list is made (L5xx records REFUSED, L800 and host sentences
+  NOT_STARTED), never TAKEN_OUT.
 - `void galaxy::mods::ask_install(const std::filesystem::path& file, std::string_view asker,
   std::function<void(int32_t status)> done)`, any thread; `done` exactly once, on the game thread, never inside
   ask_install, so `request` returns LUMA_PENDING first.

@@ -8,7 +8,7 @@ struct Hidden { id: text = "", stage: text, scenario: int, at: vec3, hint: text 
 struct Found { id: text, steps: u32 }
 
 var balloons: list<Hidden> = [
-    Hidden { id: "b1", stage: "EggStarGalaxy", scenario: 1, at: vec3(-3439.8, -13081.3, -15575.5), hint: "Ahead of the start" }
+    Hidden { id: "b1", stage: "EggStarGalaxy", scenario: 1, at: vec3(-3525.3, -13054.8, -15580.6), hint: "Ahead of the start" }
 ]
 var sockets: list<local.Request> = []
 var received: list<bytes> = []

@@ -1,0 +1,36 @@
+{
+  "harness": 1,
+  "name": "leaderboard-local-declined",
+  "about": "The player declined net.local and allowed net.internet; the server option is the test server on this computer (tests/board/server): the board says this mod may not reach this computer or the local network, a star's time is not sent and the line over the game says why, the server hears nothing (no request went out through net.internet in its place), and the game goes on",
+  "proves": ["services.net.local", "services.net.http", "services.permissions", "consent.choose"],
+  "mods": [
+    "../../../lumakit",
+    "../board/server",
+    { "path": "../..", "options": { "server": "http://127.0.0.1:47613/board" }, "permissions": { "net.local": "deny" } }
+  ],
+  "stage": { "name": "EggStarGalaxy", "scenario": 1 },
+  "limit_seconds": 240,
+  "steps": [
+    { "at": 700, "hold": ["PLUS"], "frames": 4 },
+    { "at": 760, "picture": "pause" },
+    { "at": 770, "hold": ["A"], "frames": 4 },
+    { "after": { "fact": "mod.online-leaderboard.board", "exists": true }, "wait": true, "timeout": 600 },
+    { "at": 900, "picture": "board" },
+    { "at": 910, "hold": ["B"], "frames": 4 },
+    { "at": 940, "hold": ["B"], "frames": 4 },
+    { "at": 1100, "call": "GameSceneFunction::requestPowerStarGetDemo", "signature": "void()" },
+    { "at": 1140, "picture": "asking" },
+    { "at": 1150, "text": "Mario" },
+    { "at": 1160, "key": "enter" },
+    { "after": { "fact": "mod.online-leaderboard.said", "exists": true }, "wait": true, "timeout": 600 },
+    { "at": 1220, "picture": "said" },
+    { "at": 1500, "end": true }
+  ],
+  "expect": [
+    { "fact": "mod.leaderboard-server.listening", "is": true },
+    { "fact": "mod.online-leaderboard.board", "is": "This mod is not allowed to reach this computer or your local network. Allow it on the mod's page in Mods." },
+    { "fact": "mod.online-leaderboard.said", "is": "This star's time was not sent. This mod is not allowed to reach this computer or your local network. Allow it on the mod's page in Mods." },
+    { "fact": "mod.leaderboard-server.requests", "absent": true },
+    { "no_log": "script error" }
+  ]
+}

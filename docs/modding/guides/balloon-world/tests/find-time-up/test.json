@@ -1,0 +1,31 @@
+{
+  "harness": 1,
+  "name": "balloon-find-time-up",
+  "about": "Good Egg, star 1, 10 seconds to find: the server's balloon is chosen and placed ahead, and Mario stays at the start; when the clock reaches 0 the balloon goes, the result screen says time is up, and no time is sent.",
+  "proves": ["kit.menu", "kit.screen", "kit.actor", "kit.hud", "services.time"],
+  "mods": [
+    "../../../lumakit",
+    "../server",
+    { "path": "../..", "options": { "server": "http://127.0.0.1:18741", "hide_seconds": 30, "find_seconds": 10 } }
+  ],
+  "stage": { "name": "EggStarGalaxy", "scenario": 1 },
+  "limit_seconds": 240,
+  "steps": [
+    { "at": 60, "hold": ["PLUS"], "frames": 4 },
+    { "at": 120, "hold": ["DOWN"], "frames": 4 },
+    { "at": 160, "hold": ["A"], "frames": 4 },
+    { "at": 270, "hold": ["A"], "frames": 4 },
+    { "after": { "fact": "mod.balloon-world.time_up", "exists": true }, "timeout": 1500, "picture": "time_up" },
+    { "at": 1300, "hold": ["A"], "frames": 4 },
+    { "at": 1400, "end": true }
+  ],
+  "expect": [
+    { "fact": "mod.balloon-world.finding", "is": "b1" },
+    { "fact": "mod.balloon-world.time_up", "is": "find" },
+    { "fact": "mod.balloon-world.balloons", "is": 0, "when": "last" },
+    { "fact": "mod.balloon-world.result", "is": "Time's up. The balloon was not found.", "when": "last" },
+    { "fact": "mod.balloon-world.found", "absent": true },
+    { "fact": "mod.balloon-server.found_id", "absent": true },
+    { "no_log": "script error" }
+  ]
+}

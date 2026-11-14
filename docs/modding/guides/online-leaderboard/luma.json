@@ -1,0 +1,34 @@
+{
+  "format": "1.0",
+  "id": "online-leaderboard",
+  "version": "0.1.0",
+  "name": "Online Leaderboard",
+  "summary": "Sends each star's time to a leaderboard server under the name you type, and shows the server's top ten from the pause menu.",
+  "text": {
+    "EuEnglish": {"name": "Online Leaderboard", "summary": "Sends each star's time to a leaderboard server under the name you type, and shows the server's top ten from the pause menu.", "options": {"server": {"name": "Leaderboard server"}}},
+    "UsFrench": {"name": "Classement en ligne", "summary": "Envoie le temps de chaque étoile à un serveur de classement sous le nom que vous saisissez, et affiche ses dix meilleurs depuis le menu de pause.", "options": {"server": {"name": "Serveur de classement"}}},
+    "EuFrench": {"name": "Classement en ligne", "summary": "Envoie le temps de chaque étoile à un serveur de classement sous le nom que vous saisissez, et affiche ses dix meilleurs depuis le menu de pause.", "options": {"server": {"name": "Serveur de classement"}}},
+    "UsSpanish": {"name": "Clasificación en línea", "summary": "Envía el tiempo de cada estrella a un servidor de clasificación con el nombre que escribas y muestra sus diez mejores desde el menú de pausa.", "options": {"server": {"name": "Servidor de clasificación"}}},
+    "EuSpanish": {"name": "Clasificación en línea", "summary": "Envía el tiempo de cada estrella a un servidor de clasificación con el nombre que escribas y muestra sus diez mejores desde el menú de pausa.", "options": {"server": {"name": "Servidor de clasificación"}}},
+    "EuGerman": {"name": "Online-Bestenliste", "summary": "Sendet die Zeit jedes Sterns unter dem eingegebenen Namen an einen Bestenlisten-Server und zeigt im Pausenmenü seine besten zehn.", "options": {"server": {"name": "Bestenlisten-Server"}}},
+    "EuItalian": {"name": "Classifica online", "summary": "Invia il tempo di ogni stella a un server della classifica con il nome che scrivi e mostra i suoi migliori dieci dal menu di pausa.", "options": {"server": {"name": "Server della classifica"}}},
+    "EuDutch": {"name": "Online ranglijst", "summary": "Stuurt de tijd van elke ster onder de naam die je typt naar een ranglijstserver en toont de beste tien in het pauzemenu.", "options": {"server": {"name": "Ranglijstserver"}}},
+    "UsPortuguese": {"name": "Classificação online", "summary": "Envia o tempo de cada estrela a um servidor de classificação com o nome que escreveres e mostra os dez melhores no menu de pausa.", "options": {"server": {"name": "Servidor da classificação"}}},
+    "JpJapanese": {"name": "オンラインランキング", "summary": "スターごとの記録を入力した名前でランキングのサーバーに送り、ポーズメニューからサーバーのトップ10を表示します。", "options": {"server": {"name": "ランキングのサーバー"}}},
+    "KrKorean": {"name": "온라인 순위표", "summary": "스타마다 기록을 입력한 이름으로 순위표 서버에 보내고, 일시 정지 메뉴에서 서버의 상위 10명을 보여 줍니다.", "options": {"server": {"name": "순위표 서버"}}},
+    "CnSimpChinese": {"name": "在线排行榜", "summary": "以你输入的名字把每颗星星的成绩发送到排行榜服务器，并在暂停菜单中显示服务器的前十名。", "options": {"server": {"name": "排行榜服务器"}}},
+    "TwTradChinese": {"name": "線上排行榜", "summary": "以你輸入的名字把每顆星星的成績傳送到排行榜伺服器，並在暫停選單中顯示伺服器的前十名。", "options": {"server": {"name": "排行榜伺服器"}}}
+  },
+  "authors": ["you"],
+  "game": { "id": "RMG", "regions": ["RMGE01", "RMGP01", "RMGJ01"] },
+  "needs": [{"id": "lumakit", "version": ">=1.0.0"}],
+  "options": [
+    { "key": "server", "kind": "text", "name": "Leaderboard server", "default": "https://example.invalid/board", "max_length": 256 }
+  ],
+  "permissions": [
+    { "name": "net.internet", "hosts": ["*"], "why": "Sends your star times to the leaderboard server you choose and reads its top ten." },
+    { "name": "net.local", "why": "Reaches a leaderboard server on this computer or your local network." }
+  ],
+  "layers": [{"name": "base"}],
+  "code": { "platforms": ["windows-x64", "windows-arm64", "linux-x64", "linux-arm64", "macos-arm64", "macos-x64", "android-arm64", "android-x64", "ios-arm64"] }
+}

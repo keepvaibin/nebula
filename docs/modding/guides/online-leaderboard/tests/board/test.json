@@ -1,0 +1,49 @@
+{
+  "harness": 1,
+  "name": "leaderboard-board",
+  "about": "With a leaderboard server on this computer (tests/board/server: ten times for Good Egg's first star, the slowest 1 second): the first star asks for a name; Marix, Backspace, o and Enter make it Mario and the star's time goes as JSON; back in the galaxy, the pause menu's Leaderboard shows the server's top ten with the player's place, 11th, in its title; B closes it; a second star sends its time under Mario without asking again",
+  "proves": ["services.net.local", "services.net.http", "services.input", "services.save.global", "kit.menu", "kit.screen", "kit.hud", "kernel.hook.before", "kernel.hook.after"],
+  "mods": [
+    "../../../lumakit",
+    "server",
+    { "path": "../..", "options": { "server": "http://127.0.0.1:47613/board" } }
+  ],
+  "stage": { "name": "EggStarGalaxy", "scenario": 1 },
+  "limit_seconds": 400,
+  "steps": [
+    { "at": 600, "call": "GameSceneFunction::requestPowerStarGetDemo", "signature": "void()" },
+    { "at": 640, "picture": "asking" },
+    { "at": 650, "text": "Marix" },
+    { "at": 655, "key": "backspace" },
+    { "at": 660, "text": "o" },
+    { "at": 665, "picture": "typed" },
+    { "at": 670, "key": "enter" },
+    { "after": { "fact": "mod.leaderboard-server.post_name", "exists": true }, "stage": { "name": "EggStarGalaxy", "scenario": 1 }, "timeout": 600 },
+    { "after": { "fact": "stage.ready", "exists": true, "when": "next" }, "wait": true, "timeout": 1500 },
+    { "at": 2000, "hold": ["PLUS"], "frames": 4 },
+    { "at": 2060, "picture": "pause" },
+    { "at": 2070, "hold": ["A"], "frames": 4 },
+    { "after": { "fact": "mod.online-leaderboard.board", "exists": true }, "wait": true, "timeout": 600 },
+    { "at": 2200, "picture": "board" },
+    { "at": 2210, "hold": ["B"], "frames": 4 },
+    { "at": 2240, "picture": "closed" },
+    { "at": 2250, "hold": ["B"], "frames": 4 },
+    { "at": 2600, "call": "GameSceneFunction::requestPowerStarGetDemo", "signature": "void()" },
+    { "after": { "fact": "mod.leaderboard-server.requests", "is": 3 }, "wait": true, "timeout": 600 },
+    { "at": 2800, "end": true }
+  ],
+  "expect": [
+    { "fact": "mod.leaderboard-server.listening", "is": true },
+    { "fact": "mod.leaderboard-server.post_star", "is": "EggStarGalaxy/1", "when": "first" },
+    { "fact": "mod.leaderboard-server.post_name", "is": "Mario", "when": "first" },
+    { "fact": "mod.leaderboard-server.post_frames", "more": 600, "when": "first" },
+    { "fact": "mod.leaderboard-server.post_frames", "less": 720, "when": "first" },
+    { "fact": "mod.leaderboard-server.content_type", "is": "application/json" },
+    { "fact": "mod.leaderboard-server.asked", "is": "/board/top?star=EggStarGalaxy%2F1&name=Mario" },
+    { "fact": "mod.online-leaderboard.board", "is": "Top ten for this star. Your place: 11\n1. Rosalina  0:00.10\n2. Luigi  0:00.20\n3. Peach  0:00.30\n4. Toad  0:00.40\n5. Lubba  0:00.50\n6. Gearmo  0:00.60\n7. Polari  0:00.70\n8. Yoshi  0:00.80\n9. Kamek  0:00.90\n10. Spike  0:01.00\n", "when": "last" },
+    { "fact": "mod.leaderboard-server.post_name", "is": "Mario", "when": "last" },
+    { "fact": "mod.leaderboard-server.requests", "is": 3, "when": "last" },
+    { "fact": "mod.online-leaderboard.said", "absent": true },
+    { "no_log": "script error" }
+  ]
+}

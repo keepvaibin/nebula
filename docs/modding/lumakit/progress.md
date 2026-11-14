@@ -21,3 +21,7 @@ Built on: `save` (per-file values following copy and erase), `K.hook` (star coun
 `GameDataFunction`), `K.call`, `kit.stage` (comet kinds). Conformance: stars counted past 120, `on_star` giving an
 item instead, a comet added, flags and numbers following a file copy and erase, a new file rule. Corpus: 55, 57, 60,
 61, 62, 64, 65, 77, 78, 82, 83, 127, 197. B: F. A: G.
+
+LumaKit saves every kit value itself, in its own part of each save file under the owning mod's id: a value follows the
+file as the game's progress does, stays while its mod is off or removed, and stays when the player forgets the mod,
+until LumaKit is forgotten.

@@ -217,7 +217,8 @@ A code is never reused for another meaning.
    same game key. Then the rules that read the whole `.luma` are not run and their findings are taken from it: L106,
    and every finding the patches block makes. Every other rule runs again, including L305, L404 and L805 from the kept
    touches. The game's own reading of a `.luma` checks each entry's CRC as it unpacks, which is what makes the
-   fingerprint enough.
+   fingerprint enough. The game installs a `.luma` as a folder, and a folder has no fingerprint, so the game's start
+   check of an installed mod always runs every rule.
 
 ### Section 5 (rules)
 
@@ -334,12 +335,20 @@ A code is never reused for another meaning.
     `-nostdlib` on the five Apple targets; a library linked by Apple's own linker is not covered by it.
 21. L505 for another mod's function (kind 6, `"<mod id>/<export>"`). A library mod's LumaExport rows are read from its
     `luma_mod` (when its `size` reaches `export_count` and `exports` is not null, as the kernel reads them) and kept
-    in its report as the `exports` touch (platform, name, signature; kept report form 4). An import is bound as the
+    in its report as the `exports` touch (platform, name, signature; kept report form 4 and later). An import is bound as the
     kernel's `modExport` binds it: the first export of the name, with the same signature text. No such export is
     `Name.ModFunction`, another signature `Name.FunctionSig`; an optional import is left unbound. The game reads the
     exports from the needed mod's kept report, `lumalink check` from its check in the mod folder. A needed mod that is
     not installed is L800's.
-22. Phrases (`Validator.<Group>.<Name>`) fill `{why}`, `{what}`, `{found}` and the like in every language. The game's
+22. L513 for another runtime layout. LumaModInfo's last field, `runtime_layout`, is read through the checked reader
+    when the record's `size` covers it (92 bytes in the 64-bit layout; `MOD_INFO_SIZE` stays the minimum), else 0. A
+    non-zero number is kept in the mod's report as the `runtime_layouts` touch (platform and number; kept report form
+    5). A kind 6 import that finds the needed mod's export by name, when both numbers are non-zero and differ, is
+    L513 with both numbers, the needed mod and the export, before the signature is compared, as the kernel refuses
+    it; an optional one is left unbound. 0 on either side (no LumaScript runtime, or built before the field) binds.
+23. Open for the next change: L221 says a `pre_standard` key is read for now and to write it in the mod format's own
+    keys; it does not name each key's replacement, since several replacements are kit modules still being proven.
+24. Phrases (`Validator.<Group>.<Name>`) fill `{why}`, `{what}`, `{found}` and the like in every language. The game's
     own text table leaves the `Validator.` rows out (no cost with no mod).
 
 | Code | English template |
@@ -401,6 +410,7 @@ A code is never reused for another meaning.
 | L510 | `{mod}: {file} needs {library} ({found}).` |
 | L511 | `{mod}: {file} cannot run on iOS: {why}.` |
 | L512 | `{mod}: {file}: luma_mod cannot be used: {why}.` |
+| L513 | `{mod}: {file}: {mod} is built with LumaScript runtime layout {version} and {other}, whose {name} it calls, with layout {value}. Rebuild the older one with a current LumaLink, or update it.` |
 | L700 | `{mod}: {why}.` |
 | L701 | `{mod}: {file} line {line}: {module}: {text}.` |
 | L702 | `{mod} needs {module} data version {found}; the installed {library} gives: {expected}. Update {library}, or install a version of {mod} made for it.` |

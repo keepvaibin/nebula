@@ -3,8 +3,8 @@
 Every attempt at a star is timed and recorded: Mario's place, turn and animation at each step of the world. A timer
 in the top right corner counts from the moment the stage's play begins until the star is got. The fastest run of
 each star is kept in the mod's own files, so it is still there after the game is started again. On the next attempt
-at that star a translucent Mario, the game's own Cosmic Mario figure, runs the kept run beside the player, step for
-step. Replays, a new line of the pause menu, lists every kept run and plays the one chosen with a free camera, at
+at that star a ghost runs the kept run beside the player, step for step: the game's own Cosmic Mario model, dark
+blue, drawn solid (not see-through) and in one pose, arms out, since it plays no animation. Replays, a new line of the pause menu, lists every kept run and plays the one chosen with a free camera, at
 1/8x to 8x.
 
 The whole mod is the folder `ghost-time-trial/` beside this page.
@@ -182,6 +182,14 @@ fn begin_attempt() {
     }
 }
 
+// The ghost's figure: the game's Cosmic Mario model (ObjectData/GhostMario), as a kit puppet.
+fn ghost_puppet() -> replay.Puppet? {
+    if let look = model_named("GhostMario") {
+        return replay.puppet(look)
+    }
+    return none
+}
+
 task load_ghost(file: text) {
     guard let data = wait fs.read(file), let track = replay.decode(data) else {
         return
@@ -191,7 +199,7 @@ task load_ghost(file: text) {
         return
     }
     ghost_track = track
-    ghost = replay.player_puppet()                      // the game's translucent Mario, animated as the player was
+    ghost = ghost_puppet()
     log fact "ghost" track.frames
 }
 
@@ -319,7 +327,7 @@ task watch(track: replay.Track) {
     watching = true
     MR::offPlayerControl()
     MR::hidePlayer()
-    let p = replay.player_puppet()
+    let p = ghost_puppet()
     let bar = hud.text(hud.Corner.Bottom, "")
     view_puppet = p
     view_camera = camera.free()
@@ -341,7 +349,9 @@ task watch(track: replay.Track) {
                 speed -= 1
                 log fact "speed" speed_names[speed]
             }
-            replay.pose(p, track, at as u32)
+            if let q = p {
+                replay.pose(q, track, at as u32)
+            }
             hud.set_text(bar, "{speed_names[speed]}   {clock(at as u32)} / {clock(track.frames)}")
             at += speeds[speed]
         }
@@ -396,8 +406,10 @@ What each part does:
 - The files. `fs.write` writes into the mod's own data folder. Each finished run is
   `runs/<stage> <star>/<date> <time> <steps>.replay`; `bests.json` names each star's fastest run. `on start` reads
   `bests.json` back, so a best survives a restart of the game.
-- The ghost. `replay.player_puppet()` makes the game's translucent Mario; `replay.pose(p, track, step)` puts it at the
-  step the player is at. Past the end of the track it is hidden.
+- The ghost. `replay.puppet(look)` makes a figure of a model; here the model is the game's own Cosmic Mario
+  (`ObjectData/GhostMario`), named with `model_named("GhostMario")`. `replay.pose(p, track, step)` puts it where the
+  player was at that step, turned the same way. It is the model alone: it does not play Mario's animations, so it
+  moves along the run in one pose. Past the end of the track it is hidden.
 - The viewer. `menu.add_pause_entry` adds Replays to the pause menu. `fs.list` lists the runs, `screen.choose` shows
   them (up and down, A takes one, B backs out). `menu.close_pause()` closes the pause menu, as its own Continue does,
   and the run plays: `camera.free()` takes the camera, the player is held still and hidden, RIGHT and LEFT double and

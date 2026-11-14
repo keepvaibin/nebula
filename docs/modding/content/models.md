@@ -93,9 +93,8 @@ Materials and shaders: content/materials.md.
   - A replacing level is another replacing model: `files/ObjectData/<Name>Low.arc/<Name>Low.glb` (and `Middle`),
     by section 2, with no rule of its own.
   - A new model's levels are `assets/<path>Middle.glb` and `assets/<path>Low.glb`, cooked as blocks at
-    `<id>:<path>Middle` and `<id>:<path>Low`. They are levels of `<id>:<path>`, not models of their own: the
-    validator refuses an `attach` naming one (with the references checks), and section 7 picks the level
-    by the game's distance rule for the actor that draws it. A level whose base model is missing is
+    `<id>:<path>Middle` and `<id>:<path>Low`. The game does not pick among them: an attached new model always
+    draws its base, and no rule refuses an `attach` that names a level file. A level whose base model is missing is
     `Cook.Model.LevelAlone` {file, base}. The endings `Middle` and `Low` are matched with their capitals,
   as LodCtrl writes them (so `yellow.glb` is no level of `yel`).
 - Sockets. A glTF node named `socket:<name>` with no mesh always becomes an extra joint named `<name>`
@@ -146,9 +145,8 @@ typedef struct LumaPlayerPart {
 - Follow. With `LUMA_MODEL_FOLLOW_SKELETON` a joint of the model with no same name on the actor follows its own
   parent. `LUMA_MODEL_FOLLOW_JOINT` on a joint the actor lacks is `Content.MissingJoint` and the model follows the
   actor's base.
-- Levels. An attached new model with levels (section 6) is drawn at the level the game's LodCtrl rule picks for the
-  actor (its distance and its clipping), the level's joints following as the base's do; no levels, the base model
-  always.
+- Levels. An attached new model is drawn at its base level at every distance; its `Middle` and `Low` files are cooked
+  but not drawn.
 - Every way a handle ends. `detach`; the actor's end (no dangling draw); a scene change; the mod's end (take-out,
   loader 1.11: its models detach before its library closes). A call on a handle already ended is `LUMA_E_HANDLE`,
   never a crash.
@@ -174,14 +172,19 @@ model).
 
 | Test | Must show |
 |---|---|
-| 3201 | a replaced Kuribo (`ObjectData/Kuribo.arc/Kuribo.glb`, same joints, new shape): fact `cook.model` replaced `Kuribo.bdl`; it walks and is stomped as the game's (its clips play), pictures on both renderers |
-| 3202 | a replacing model missing one of the game's joints: L804 `Cook.Model.MissingJoint` naming the joint, the game's model used |
-| 3203 | a new model `assets/ring.glb` attached to Mario's right hand joint: it follows the hand through a jump (joint matrix facts) |
-| 3204 | the Gold Flower's body attached by `"skeleton"` on Mario: each of its joints at Mario's same-named joint every frame |
-| 3205 | a socket `socket:tip` in an attached model: an effect bound to `tip` starts there (with 3.5) |
-| 3206 | no mod: no model-attach state, no cook output |
-| 3207 | a replacing model with a glTF clip named as a game clip of its archive (Kuribo's walk): the mod's clip plays, the game's other clips still play |
-| 3208 | a new model with `ringLow.glb`: the low level drawn past the game's distance, the base near; an `attach` naming `ringLow` refused |
+| 3201 | a game model (Coin) attached to the player's right hand joint follows it |
+| 3202 | a missing model: the placeholder drawn, one `Content.MissingModel` |
+| 3203 | a joint the actor lacks: `Content.MissingJoint`, the model on the actor's base |
+| 3204 | wrong arguments refused and reported |
+| 3205 | Luigi attached by `"skeleton"` on the player: each joint on the player's same-named joint every frame |
+| 3206 | place, show, detach and reuse of a handle |
+| 3207 | the player's parts listed with their joints |
+| 3208 | a mod's own model (a 1 m cube) attached at the player's base: not the placeholder, its joint 0 100 units up |
+| 3209 | the actor's end ends the handle |
+| 3210 | the 65th attach of a mod: LUMA_E_LIMIT |
+| 3211 | a scene change ends the handle |
+
+No game run shows a replaced game model's clips, a socket or a level.
 
 Facts the tests read, for the harness table (consent 2.6's way), written only while the harness runs:
 - `model.attach.<handle>` {"mod", "model", "follow", "joint", "level"} at each attach, and `model.end.<handle>`
@@ -207,8 +210,9 @@ Facts the tests read, for the harness table (consent 2.6's way), written only wh
   joints, mapped, reused}; `model.pose.<h>` for the first 120 frames (tunable pose.1) {frame, at, host_at, gap, worst,
   shown}, where `gap` is joint 0 against what it follows and `worst` is the largest distance between a skeleton's
   joints and the actor's same-named joints; `model.end.<h>` {why}.
-- Coin on HandR, a missing model, a missing joint, refusals, Luigi by skeleton, place/show/detach/reuse, player
-  parts). Section 10's cook tests become 3208 and up when the cook lands (tests/models/pending.json).
+- Tests as built: 3201 to 3207 and 3209 to 3211 (a Coin on HandR, a missing model, a missing joint, refusals, Luigi
+  by skeleton, place/show/detach/reuse, the player's parts, the actor's end, the limit, a scene change); 3208 a mod's
+  own model, 1 m over the player's base. No test shows a socket or a level in a game run.
 
 Read against the cook that exists: Sections 1, 3 and 7 to 8 agreed but for the points below.
 
@@ -337,9 +341,8 @@ Read against the cook that exists: Sections 1, 3 and 7 to 8 agreed but for the p
   `.bdl.glb`). `<leaf>` is the last segment of `<path>`, and the model's clips go inside the archive. This is the
   layout of every game object archive (`ObjectData/Coin.arc/Coin.bdl`), the only form the game's loader opens. Levels:
   `<path>Middle.glb` gives `Luma/<id>/<path>Middle.arc/<leaf>Middle.bmd`, and Low likewise.
-- For a name `<id>:<path>`, content.model must look up the archive `/Luma/<id>/<path>` and the model `<leaf>` inside
-  it. Today it passes the whole name to isExistObjectOrLayoutArchive (`/ObjectData/<id>:<path>`) and to createModel,
-  so no mod model is found and the placeholder shows.
+- For a name `<id>:<path>`, the game's archive lookup (FileUtil) reads the archive `/Luma/<id>/<path>` and the model
+  `<leaf>` inside it, so content.model draws a mod's own model by that name (test 3208).
 - LevelAlone is `Cook.Model.LevelAlone {file, model}`, where `model` names the base file that is missing
   (`<path>.glb`). `base` is not a validator argument name. A level is found by the endings `Middle`/`Low` with their
   capitals, and its base by the store's case-blind compare among the mod's own files.
@@ -352,7 +355,8 @@ Read against the cook that exists: Sections 1, 3 and 7 to 8 agreed but for the p
 
 A `<Name>.kcl.glb` is solid ground, not something to see. Each of its materials is one row of the attributes table
 (`.pa`); the material's `extras` are the row's columns: `Floor_code`, `Wall_code`, `Sound_code`, `Camera_id`,
-`Camera_through`.
+`Camera_through`. In an archive folder it cooks beside the model. In a mod's `assets/` it cooks into `<Name>.arc`,
+the archive the model of the same name goes to, where an actor of that model reads it.
 
 ### Store version
 

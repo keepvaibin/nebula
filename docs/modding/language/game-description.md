@@ -70,10 +70,11 @@ pass that writes the function rows), never written by hand.
 - Every field of every class, struct and union the game defines, not only NameObj's; bit-fields with their
   bits; arrays with `count`.
 - `left_out` lists every function without a row, with its reason; section 19 condition 1 is checked on it.
-- Per platform: offsets and sizes may differ between ABIs, names never do. LumaLink building for several platforms
-  reads one self-description per platform (each shipped with that platform's game).
+- Per platform: offsets and sizes may differ between ABIs, names never do. LumaLink reads one self-description for
+  every platform it builds; a mod reaches a field of a game class through the offset the loader binds at load from
+  the running game, not one taken from the file.
 
-- Size: 27,155 functions and an estimated few thousand types: plain JSON is likely 20 to 40 MB.
+- Size: the Windows build's file is about 20 MB of plain JSON.
 - Whether `tables` (BCSV columns) belong here or in the content census (they are game data files, not code).
 - Nerve and message names: generated from the source like the rest (the old `tools/modding/*_list.py` listers'
   knowledge moves into the build's generator).

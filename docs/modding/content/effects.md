@@ -290,10 +290,8 @@ F and G re-read these lines only.
 - D4-6: fx.alive without a step. Written each frame for a handle's first 120 frames while the harness
   runs (no step to add to the harness); fx.start gains `"placeholder"`. fx.end's `why` is `stop`, `actor`, `scene` or
   `mod` (`model` with models 7).
-- D4-7 (section 4): the group. Read from the cook's `<id>:effects` once G writes it; until then every mod effect
-  draws in group 0 (`3D`). 3509 waits for it.
-- D4-8 (start_on_model): LUMA_E_HANDLE, reported, until content.model (models 7) makes model handles; 3510 waits
-  for it.
+- D4-7 (section 4): the group, read from the cook's `Luma/<id>/effects.txt` (below, test 3509).
+- D4-8 (start_on_model): on a model handle from content.model (below, test 3510).
 
 D4-1 to D4-8 read; nothing in them changes section 7.
 - Path: `Luma/<id>/effects.txt` in the mod's store (the overlay the cook writes for the mod; a plain file, no

@@ -36,3 +36,11 @@ Built on: `K.field`, `K.hook` (`MR::getRandom`, the player's pose), `K.call`, `i
 `draw.inst`† (puppet opacity), `C.skin`, `C.anim`. Conformance: a recorded run played back pose for pose (difference
 0 on the same build), a track decoded on another platform, 15 puppets, inputs replayed giving the same end position,
 rewind of the player 5 s. Corpus: 136, 137, 140, 141, 155, 157. B: F. A: G.
+
+
+Recording, playback and rewinds take only the steps in which the game plays (time state Play): a pause menu or the
+galaxy map adds nothing to a track. With no player (the title, the file select, a movie) a recorder of What.Player
+records nothing, put_player does nothing and current_pose(What.Player) is a script error.
+
+A puppet shows a model of the mod: a ghost draws the mod's ghost model, and set_pose plays the pose's action only when
+that model has an animation of that name. A puppet with the player's own model and animations is not in this version.

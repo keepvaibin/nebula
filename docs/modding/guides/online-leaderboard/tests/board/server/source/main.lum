@@ -1,0 +1,250 @@
+use svc.net.local as local
+
+// A leaderboard server on this computer for the Online Leaderboard's tests: HTTP/1.1 on 127.0.0.1:47613 under /board.
+// POST /board/submit takes {"star", "name", "frames"}; GET /board/top?star=&name= answers {"top": the ten best of the
+// star, fastest first, "place": the name's place by its best time, 0 when it has none}. Ten times are there before
+// any is sent. Each request is written as facts.
+
+struct Entry { name: text, frames: u32 }
+struct Score { star: text, name: text, frames: u32 }
+struct Top { top: list<Entry>, place: u32 }
+
+let seeded = "EggStarGalaxy/1"
+
+var stars: list<text> = []
+var entries: list<Entry> = []
+var requests: u32 = 0
+
+var conns: list<local.Request> = []
+var waiting: list<bytes> = []
+
+on start {
+    let names = ["Rosalina", "Luigi", "Peach", "Toad", "Lubba", "Gearmo", "Polari", "Yoshi", "Kamek", "Spike"]
+    for i in 0..names.len() {
+        stars.push(seeded)
+        entries.push(Entry { name: names[i], frames: (i as u32 + 1) * 6 })
+    }
+    let l = local.tcp_listen(47613, 0, fn(e: local.Event) {
+        match e {
+            local.Event.Accepted(socket) => {
+                conns.push(socket)
+                waiting.push(b"")
+            }
+            local.Event.Data(socket, data) => heard(socket, data)
+            local.Event.Closed(socket, status, value, data) => drop(socket)
+            else => return
+        }
+    })
+    log fact "listening" l != none
+}
+
+fn index_of(s: local.Request) -> int? {
+    for i in 0..conns.len() {
+        if same(conns[i], s) {
+            return i
+        }
+    }
+    return none
+}
+
+fn drop(s: local.Request) {
+    if let i = index_of(s) {
+        conns.remove(i)
+        waiting.remove(i)
+    }
+}
+
+fn find(b: bytes, what: bytes, from: int) -> int? {
+    if b.len() < what.len() {
+        return none
+    }
+    for i in from..(b.len() - what.len() + 1) {
+        var hit = true
+        for k in 0..what.len() {
+            if b[i + k] != what[k] {
+                hit = false
+                break
+            }
+        }
+        if hit {
+            return i
+        }
+    }
+    return none
+}
+
+// The bytes of a request so far; once its head and its Content-Length of body are in, it is answered.
+fn heard(s: local.Request, data: bytes) {
+    guard let i = index_of(s) else {
+        return
+    }
+    for k in 0..data.len() {
+        waiting[i].push(data[k])
+    }
+    let b = waiting[i]
+    guard let end = find(b, b"\r\n\r\n", 0) else {
+        return
+    }
+    let head = b.slice(0, end).text() ?? ""
+    var length = 0
+    for line in head.split("\r\n") {
+        if line.lower().starts_with("content-length:") {
+            length = (trim(line.slice(15, line.len())).parse_int() ?? 0) as int
+        }
+    }
+    if b.len() < end + 4 + length {
+        return
+    }
+    let body = b.slice(end + 4, end + 4 + length).text() ?? ""
+    let first = head.split("\r\n")[0]
+    let words = first.split(" ")
+    requests += 1
+    log fact "requests" requests
+    if words.len() < 2 {
+        answer(s, "400 Bad Request", "")
+        return
+    }
+    let method = words[0]
+    let target = words[1]
+    if method == "POST" and target == "/board/submit" {
+        log fact "posted" body
+        log fact "content_type" header(head, "content-type:")
+        guard let score = json.decode<Score>(body) else {
+            answer(s, "400 Bad Request", "")
+            return
+        }
+        log fact "post_star" score.star
+        log fact "post_name" score.name
+        log fact "post_frames" score.frames
+        stars.push(score.star)
+        entries.push(Entry { name: score.name, frames: score.frames })
+        answer(s, "200 OK", "\{\}")
+        return
+    }
+    if method == "GET" and target.starts_with("/board/top?") {
+        log fact "asked" target
+        let star = query(target, "star")
+        let name = query(target, "name")
+        let board = top(star, name)
+        let out = json.encode(board)
+        log fact "answered" out
+        answer(s, "200 OK", out)
+        return
+    }
+    answer(s, "404 Not Found", "")
+}
+
+fn header(head: text, name: text) -> text {
+    for line in head.split("\r\n") {
+        if line.lower().starts_with(name) {
+            return trim(line.slice(name.len(), line.len()))
+        }
+    }
+    return ""
+}
+
+fn trim(t: text) -> text {
+    var a = 0
+    var z = t.len()
+    let b = t.bytes()
+    while a < z and b[a] == 32 {
+        a += 1
+    }
+    while z > a and b[z - 1] == 32 {
+        z -= 1
+    }
+    return t.slice(a, z)
+}
+
+fn answer(s: local.Request, status: text, body: text) {
+    let b = body.bytes()
+    local.send(s, "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {b.len()}\r\nConnection: close\r\n\r\n{body}".bytes())
+    local.close(s)
+    drop(s)
+}
+
+// The star's ten best (each name once, its best time), fastest first, and the place of `name`.
+fn top(star: text, name: text) -> Top {
+    var best: list<Entry> = []
+    for i in 0..entries.len() {
+        if stars[i] != star {
+            continue
+        }
+        let e = entries[i]
+        var known = false
+        for k in 0..best.len() {
+            if best[k].name == e.name {
+                known = true
+                if e.frames < best[k].frames {
+                    best[k] = e
+                }
+            }
+        }
+        if not known {
+            best.push(e)
+        }
+    }
+    var sorted: list<Entry> = []
+    for e in best {
+        var at = sorted.len()
+        while at > 0 and sorted[at - 1].frames > e.frames {
+            at -= 1
+        }
+        sorted.insert(at, e)
+    }
+    var place: u32 = 0
+    for i in 0..sorted.len() {
+        if sorted[i].name == name {
+            place = i as u32 + 1
+        }
+    }
+    var ten: list<Entry> = []
+    for i in 0..sorted.len() {
+        if i < 10 {
+            ten.push(sorted[i])
+        }
+    }
+    return Top { top: ten, place: place }
+}
+
+// A query value of the target, %XX undone.
+fn query(target: text, key: text) -> text {
+    guard let q = target.find("?") else {
+        return ""
+    }
+    for pair in target.slice(q + 1, target.len()).split("&") {
+        if pair.starts_with("{key}=") {
+            return unescape(pair.slice(key.len() + 1, pair.len()))
+        }
+    }
+    return ""
+}
+
+fn hex(c: u8) -> u8 {
+    if c >= 48 and c <= 57 {
+        return c - 48
+    }
+    if c >= 65 and c <= 70 {
+        return c - 55
+    }
+    if c >= 97 and c <= 102 {
+        return c - 87
+    }
+    return 0
+}
+
+fn unescape(t: text) -> text {
+    let b = t.bytes()
+    var out: bytes = b""
+    var i = 0
+    while i < b.len() {
+        if b[i] == 37 and i + 2 < b.len() {
+            out.push(hex(b[i + 1]) * 16 + hex(b[i + 2]))
+            i += 3
+        } else {
+            out.push(b[i])
+            i += 1
+        }
+    }
+    return out.text() ?? ""
+}

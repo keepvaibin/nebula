@@ -1,0 +1,35 @@
+{
+  "harness": 1,
+  "name": "leaderboard-no-name",
+  "about": "With the test server on this computer, the player closes the name prompt with Esc: the star's time is not sent, the line over the game says no name was typed, and the next star asks again; there Mario and Enter send that star's time",
+  "proves": ["services.input", "services.save.global"],
+  "mods": [
+    "../../../lumakit",
+    "../board/server",
+    { "path": "../..", "options": { "server": "http://127.0.0.1:47613/board" } }
+  ],
+  "stage": { "name": "EggStarGalaxy", "scenario": 1 },
+  "limit_seconds": 360,
+  "steps": [
+    { "at": 600, "call": "GameSceneFunction::requestPowerStarGetDemo", "signature": "void()" },
+    { "at": 640, "picture": "asking" },
+    { "at": 650, "key": "esc" },
+    { "after": { "fact": "mod.online-leaderboard.said", "exists": true }, "wait": true, "timeout": 300 },
+    { "at": 700, "picture": "said" },
+    { "after": { "fact": "mod.online-leaderboard.said", "exists": true }, "stage": { "name": "EggStarGalaxy", "scenario": 1 }, "timeout": 300 },
+    { "after": { "fact": "stage.ready", "exists": true, "when": "next" }, "wait": true, "timeout": 1500 },
+    { "at": 2000, "call": "GameSceneFunction::requestPowerStarGetDemo", "signature": "void()" },
+    { "at": 2040, "picture": "asked-again" },
+    { "at": 2050, "text": "Mario" },
+    { "at": 2060, "key": "enter" },
+    { "after": { "fact": "mod.leaderboard-server.post_name", "exists": true }, "wait": true, "timeout": 600 },
+    { "at": 2300, "end": true }
+  ],
+  "expect": [
+    { "fact": "mod.leaderboard-server.listening", "is": true },
+    { "fact": "mod.online-leaderboard.said", "is": "No name was typed, so this star's time was not sent." },
+    { "fact": "mod.leaderboard-server.post_name", "is": "Mario" },
+    { "fact": "mod.leaderboard-server.requests", "is": 1 },
+    { "no_log": "script error" }
+  ]
+}

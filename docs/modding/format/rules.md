@@ -91,6 +91,7 @@ read by a `.font.json`. A `.bin` or `.jpg` is fine beside the `.gltf` or `.glb` 
 | L510 | Note | {mod}: {file} needs {library} ({found}). |
 | L511 | Error | {mod}: {file} cannot run on iOS: {why}. |
 | L512 | Error | {mod}: {file}: luma_mod cannot be used: {why}. |
+| L513 | Error | {mod}: {file}: {mod} is built with LumaScript runtime layout {version} and {other}, whose {name} it calls, with layout {value}. Rebuild the older one with a current LumaLink, or update it. |
 
 L511 checks every library of an iOS mod, its own one included. Each must be built for iOS devices (not macOS or the
 Simulator) and must not be encrypted.

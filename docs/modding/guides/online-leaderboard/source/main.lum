@@ -1,0 +1,462 @@
+use optional svc.net.internet as internet
+use optional svc.net.local as local
+use svc.input
+use svc.save.global as global
+use svc.time
+use kit.screen
+use kit.menu
+use kit.hud
+
+// The leaderboard's address: http:// or https://, a host, an optional port and a path ("https://example.org/board").
+option server: text
+
+struct Entry { name: text, frames: u32 }
+struct Top { top: list<Entry>, place: u32 = 0 }
+struct Score { star: text, name: text, frames: u32 }
+
+// The name the player typed once, kept across game files ("" until then).
+var player: text = ""
+// The world step the attempt's play began at; armed from a stage's start until its play begins.
+var started: u64 = 0
+var armed: bool = false
+var playing: bool = false
+var board = screen.ListScreen { id: 0 }
+
+on start {
+    if let saved = global.get("name") {
+        player = saved.text() ?? ""
+    }
+    menu.add_pause_entry(text "Board.Menu", show_board)
+}
+
+fn step() -> u64 {
+    return time.now().step
+}
+
+// The star being played: the stage's name and the star's number in it.
+fn star() -> text {
+    return "{MR::getCurrentStageName() ?? ""}/{MR::getCurrentScenarioNo()}"
+}
+
+// A star's time counts the world's steps from the stage's play to the star. A stage starts, or starts again after a
+// miss: the attempt begins when its play does (after the opening camera and the star's start), so a skipped opening
+// changes nothing. The pause menu holds the world, so its time is not counted.
+hook after GameScene::startStagePlayFirst() {
+    arm()
+}
+
+hook after GameScene::startStagePlayRetry() {
+    arm()
+}
+
+// A galaxy with a player in it: not the file select, not the observatory.
+fn arm() {
+    playing = false
+    armed = not MR::isStageFileSelect() and not MR::isStageAstroLocation() and MarioAccess::getPlayerActor() != none
+}
+
+hook before GameScene::exeSceneAction() {
+    if armed {
+        armed = false
+        started = step()
+        playing = true
+    }
+}
+
+hook before GameScene::requestStartGameOverDemo() {
+    playing = false
+}
+
+hook before GameSceneFunction::requestPowerStarGetDemo() {
+    if not playing {
+        log "a star got outside a timed attempt: no time to send"
+        return
+    }
+    playing = false
+    start submit(star(), (step() - started) as u32)
+}
+
+// ---- The player's name: typed once, on the platform's keyboard, over the game.
+
+var typing: bool = false
+var typed: text? = none
+
+task ask_name() {
+    typing = true
+    typed = none
+    let prompt = hud.text(hud.Corner.Top, text "Board.AskName"(name: ""))
+    let request = input.text_request(input.TextRequest { kind: input.TEXT_NAME, max_length: 16, initial: "" },
+        fn(e: input.TextEvent) {
+            if e.status == none {
+                typed = e.data
+            }
+            typing = false
+        })
+    guard let r = request else {
+        hud.remove_text(prompt)
+        typing = false
+        return
+    }
+    while typing {
+        hud.set_text(prompt, text "Board.AskName"(name: input.text_peek(r) ?? ""))
+        wait 1 frames
+    }
+    hud.remove_text(prompt)
+    if let t = typed {
+        if t.len() > 0 {
+            player = t
+            global.set("name", t.bytes())
+        }
+    }
+}
+
+// ---- Sending a time.
+
+task submit(on_star: text, frames: u32) {
+    if player == "" {
+        wait ask_name()
+    }
+    if player == "" {
+        say(text "Board.NoName")
+        return
+    }
+    let score = Score { star: on_star, name: player, frames: frames }
+    let got = wait send("POST", "{base()}/submit", json.encode(score).bytes())
+    if got.status != 200 {
+        say(text "Board.NotSent"(why: why(got)))
+    }
+}
+
+// A line over the game for five seconds, and in the mod log.
+fn say(line: text) {
+    log line
+    log fact "said" line
+    hud.text(hud.Corner.Top, line, 300)
+}
+
+// ---- The board, from the pause menu.
+
+fn show_board() {
+    if screen.alive(board) {
+        return
+    }
+    board = screen.list(screen.List { title: text "Board.Title", rows: [text "Board.Loading"] })
+    start fill_board(star())
+}
+
+task fill_board(on_star: text) {
+    let got = wait send("GET", "{base()}/top?star={escape(on_star)}&name={escape(player)}", b"")
+    if got.status != 200 {
+        fail(why(got))
+        return
+    }
+    guard let t = got.body.text(), let answer = json.decode<Top>(t) else {
+        fail(text "Board.NotBoard"(server: server))
+        return
+    }
+    var rows: list<text> = []
+    for e in answer.top {
+        if rows.len() < 10 {
+            rows.push("{rows.len() + 1}. {e.name}  {time_text(e.frames)}")
+        }
+    }
+    if rows.len() == 0 {
+        rows.push(text "Board.Empty")
+    }
+    var title = text "Board.TitleNoPlace"
+    if answer.place > 0 {
+        title = text "Board.TitlePlace"(place: answer.place)
+    }
+    show(title, rows)
+}
+
+// The board's screen with its title and rows, unless the player closed it while the server answered.
+fn show(title: text, rows: list<text>) {
+    var shown = "{title}\n"
+    for r in rows {
+        shown = "{shown}{r}\n"
+    }
+    log fact "board" shown
+    if screen.alive(board) {
+        board = screen.list(screen.List { title: title, rows: rows })
+    }
+}
+
+// What went wrong, in place of the board, until the player closes it.
+fn fail(line: text) {
+    log fact "board" line
+    if screen.alive(board) {
+        screen.message(line)
+    }
+}
+
+// m:ss.cc from world steps at 60 a second.
+fn time_text(frames: u32) -> text {
+    let cs = frames * 100 / 60
+    return "{cs / 6000}:{pad2(cs / 100 % 60)}.{pad2(cs % 100)}"
+}
+
+fn pad2(n: u32) -> text {
+    if n < 10 {
+        return "0{n}"
+    }
+    return "{n}"
+}
+
+// ---- HTTP: one request at a time, in the order asked. A server on this computer or the local network is reached
+// through net.local, any other through net.internet; each needs the player's permission, and neither stands in for
+// the other.
+
+struct Reply { status: u32, body: bytes, error: text }
+
+var busy: bool = false
+var done: bool = false
+var reply = Reply { status: 0, body: b"", error: "" }
+
+// The server option without a final "/".
+fn base() -> text {
+    if server.ends_with("/") {
+        return server.slice(0, server.len() - 1)
+    }
+    return server
+}
+
+task send(method: text, url: text, body: bytes) -> Reply {
+    while busy {
+        wait 1 frames
+    }
+    busy = true
+    done = false
+    reply = Reply { status: 0, body: b"", error: "" }
+    let near = local_url(url)
+    var asked = false
+    if near == none {
+        reply.error = "url"
+    } else if near! {
+        if local != none {
+            let request = local.HttpRequest { method: method, url: url, headers: local_headers(body), flags: 0,
+                body: body, timeout_ms: 10000 }
+            asked = local.http(request, on_local) != none
+        } else {
+            reply.error = "local"
+        }
+    } else {
+        if internet != none {
+            let request = internet.HttpRequest { method: method, url: url, headers: internet_headers(body),
+                flags: 0, body: body, timeout_ms: 10000 }
+            asked = internet.http(request, on_internet) != none
+        } else {
+            reply.error = "internet"
+        }
+    }
+    if asked {
+        while not done {
+            wait 1 frames
+        }
+    } else if reply.error == "" {
+        reply.error = "refused"
+    }
+    busy = false
+    return reply
+}
+
+fn local_headers(body: bytes) -> list<local.Header> {
+    if body.len() == 0 {
+        return []
+    }
+    return [local.Header { name: "Content-Type", value: "application/json" }]
+}
+
+fn internet_headers(body: bytes) -> list<internet.Header> {
+    if body.len() == 0 {
+        return []
+    }
+    return [internet.Header { name: "Content-Type", value: "application/json" }]
+}
+
+fn add_body(data: bytes) {
+    for i in 0..data.len() {
+        reply.body.push(data[i])
+    }
+}
+
+fn on_local(e: local.Event) {
+    match e {
+        local.Event.Headers(socket, status, data) => { reply.status = status as u32 }
+        local.Event.Data(socket, data) => add_body(data)
+        local.Event.Done(socket, value) => { done = true }
+        local.Event.Error(socket, status, value) => {
+            reply.status = 0
+            reply.error = "unreachable"
+            done = true
+        }
+        else => return
+    }
+}
+
+fn on_internet(e: internet.Event) {
+    match e {
+        internet.Event.Headers(socket, status, data) => { reply.status = status as u32 }
+        internet.Event.Data(socket, data) => add_body(data)
+        internet.Event.Done(socket, value) => { done = true }
+        internet.Event.Error(socket, status, value) => {
+            reply.status = 0
+            reply.error = "unreachable"
+            done = true
+        }
+        else => return
+    }
+}
+
+// What went wrong, in the player's words.
+fn why(r: Reply) -> text {
+    if r.error == "url" {
+        return text "Board.BadServer"(server: server)
+    }
+    if r.error == "local" {
+        return text "Board.LocalNotAllowed"
+    }
+    if r.error == "internet" {
+        return text "Board.InternetNotAllowed"
+    }
+    if r.error == "unreachable" or r.error == "refused" {
+        return text "Board.Unreachable"(server: server)
+    }
+    return text "Board.Answered"(server: server, status: r.status)
+}
+
+// ---- Which reach a url needs: true for this computer or the local network (localhost, 127/8, 10/8, 172.16/12,
+// 192.168/16, 169.254/16, ::1, fc00::/7, fe80::/10, and those as ::ffff: addresses), false for any other host, none
+// when it is no http:// or https:// url.
+
+fn local_url(url: text) -> bool? {
+    var rest = ""
+    if url.starts_with("http://") {
+        rest = url.slice(7, url.len())
+    } else if url.starts_with("https://") {
+        rest = url.slice(8, url.len())
+    } else {
+        return none
+    }
+    var end = rest.len()
+    for c in ["/", "?", "#"] {
+        if let at = rest.find(c) {
+            if at < end {
+                end = at
+            }
+        }
+    }
+    let authority = rest.slice(0, end)
+    if authority.len() == 0 or authority.find("@") != none {
+        return none
+    }
+    if authority.starts_with("[") {
+        guard let close = authority.find("]") else {
+            return none
+        }
+        return local_v6(authority.slice(1, close).lower())
+    }
+    var host = authority
+    if let colon = authority.find(":") {
+        host = authority.slice(0, colon)
+    }
+    if host == "localhost" {
+        return true
+    }
+    if let a = v4(host) {
+        return local_v4(a)
+    }
+    return false
+}
+
+// The four numbers of a dotted IPv4 address, none for anything else.
+fn v4(host: text) -> list<u32>? {
+    let parts = host.split(".")
+    if parts.len() != 4 {
+        return none
+    }
+    var out: list<u32> = []
+    for p in parts {
+        if p.len() == 0 or p.len() > 3 {
+            return none
+        }
+        var n: u32 = 0
+        let digits = p.bytes()
+        for i in 0..digits.len() {
+            let b = digits[i]
+            if b < 48 or b > 57 {
+                return none
+            }
+            n = n * 10 + (b - 48) as u32
+        }
+        if n > 255 {
+            return none
+        }
+        out.push(n)
+    }
+    return out
+}
+
+fn local_v4(a: list<u32>) -> bool {
+    return a[0] == 127 or a[0] == 10 or (a[0] == 172 and a[1] >= 16 and a[1] <= 31) or (a[0] == 192 and a[1] == 168) or
+        (a[0] == 169 and a[1] == 254)
+}
+
+fn local_v6(h: text) -> bool {
+    if h == "::1" or h == "0:0:0:0:0:0:0:1" {
+        return true
+    }
+    if h.starts_with("::ffff:") {
+        if let a = v4(h.slice(7, h.len())) {
+            return local_v4(a)
+        }
+        return false
+    }
+    guard let colon = h.find(":") else {
+        return false
+    }
+    let first = h.slice(0, colon)
+    if first.len() == 0 or first.len() > 4 {
+        return false
+    }
+    var n: u32 = 0
+    let digits = first.bytes()
+    for i in 0..digits.len() {
+        let b = digits[i]
+        var d: u32 = 0
+        if b >= 48 and b <= 57 {
+            d = (b - 48) as u32
+        } else if b >= 97 and b <= 102 {
+            d = (b - 87) as u32
+        } else {
+            return false
+        }
+        n = n * 16 + d
+    }
+    return (n & 0xFE00) == 0xFC00 or (n & 0xFFC0) == 0xFE80
+}
+
+// A URL query's value: letters, digits and - . _ ~ as they are, every other byte %XX (RFC 3986).
+fn escape(t: text) -> text {
+    let hex = "0123456789ABCDEF".bytes()
+    var out: bytes = b""
+    let b = t.bytes()
+    for i in 0..b.len() {
+        let c = b[i]
+        if unreserved(c) {
+            out.push(c)
+        } else {
+            out.push(37)
+            out.push(hex[(c >> 4) as int])
+            out.push(hex[(c & 15) as int])
+        }
+    }
+    return out.text() ?? ""
+}
+
+fn unreserved(c: u8) -> bool {
+    if (c >= 48 and c <= 57) or (c >= 65 and c <= 90) or (c >= 97 and c <= 122) {
+        return true
+    }
+    return c == 45 or c == 46 or c == 95 or c == 126
+}

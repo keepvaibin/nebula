@@ -16,12 +16,24 @@
     "scenario": 1
   },
   "steps": [
-    { "after": { "fact": "mod.ghost-time-trial.ghost", "is": 389, "when": "first" }, "wait": true, "timeout": 900 },
-    { "at": 1000, "end": true }
+    {
+      "at": 1000,
+      "end": true
+    }
   ],
   "expect": [
-    { "fact": "mod.ghost-time-trial.attempt", "is": "EggStarGalaxy 1", "when": "first" },
-    { "fact": "mod.ghost-time-trial.ghost", "is": 389, "when": "first" },
-    { "no_log": "script error" }
+    {
+      "fact": "mod.ghost-time-trial.attempt",
+      "is": "EggStarGalaxy 1",
+      "when": "first"
+    },
+    {
+      "fact": "mod.ghost-time-trial.ghost",
+      "is": 389,
+      "when": "first"
+    },
+    {
+      "no_log": "script error"
+    }
   ]
 }

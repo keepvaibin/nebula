@@ -13,7 +13,6 @@
   "steps": [
     { "at": 60, "hold": ["PLUS"], "frames": 4 },
     { "at": 120, "hold": ["A"], "frames": 4 },
-    { "at": 180, "hold": ["PLUS"], "frames": 4 },
     { "at": 400, "picture": "counting" },
     { "after": { "fact": "mod.balloon-world.time_up", "exists": true }, "timeout": 1500, "picture": "time_up" },
     { "at": 1300, "hold": ["A"], "frames": 4 },

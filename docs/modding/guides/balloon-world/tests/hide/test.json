@@ -15,7 +15,6 @@
     { "at": 140, "hold": ["PLUS"], "frames": 4 },
     { "at": 200, "picture": "pause" },
     { "at": 210, "hold": ["A"], "frames": 4 },
-    { "at": 260, "hold": ["PLUS"], "frames": 4 },
     { "at": 330, "picture": "hiding" },
     { "at": 340, "stick": [0, 1], "frames": 30 },
     { "at": 400, "call": "MR::getPlayerPos", "signature": "Vec3f *()", "args": [], "fact": "player_at" },

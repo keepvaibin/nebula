@@ -75,8 +75,9 @@ material), programs.rs (surface_globals, surface_head_lines, surface_tail_lines)
     call before enh_begin, SurfaceIn holds only what it reads, a replacing pass without it).
   - With dxc 1.8 (NEBULA_DXC): the stripes cube's plain form compiles; `sped` for `speed` is refused at line 3;
     `i.normal` without `reads` at line 5.
-  - Not yet: Vulkan and Metal output and the ray-hit form (layers 2 and 3), post shaders (layer 4), the loop-bound
-    rule, the stripes picture (run time).
+  - Vulkan and Metal output and the ray-hit form are layers 2 and 3 below; the stripes picture is test 3302 (run on
+    Direct3D 12).
+  - No check bounds a shader's loops: the cook and the check accept a loop that never ends.
 
 ### 3.4 layer 2 as built (FB; every renderer)
 

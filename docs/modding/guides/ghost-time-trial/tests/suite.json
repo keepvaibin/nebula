@@ -1,0 +1,7 @@
+{
+  "harness": 1,
+  "tests": [
+    "run",
+    "run-kept"
+  ]
+}

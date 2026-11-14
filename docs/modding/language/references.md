@@ -7,9 +7,10 @@
 A reference is a name in a mod that must find something: in the game's files, in the mod's own files, in another
 mod it `needs`, or in something code makes at start (a derived class).
 
-The rule. A reference that does not resolve never stops the game and never disappears: the mod stays on, the thing it
-named is replaced by a placeholder of its kind (section 4), and the mod log has one Error entry naming the mod, the
-file, the line (or JSON pointer), the kind and the name, and what was expected.
+The rule. A reference that does not resolve never stops the game: the mod stays on, the thing it named is replaced by
+a placeholder of its kind where section 4 has one, and the mod log has one Error entry naming the mod, the file, the
+line (or JSON pointer), the kind and the name, and what was expected. Sounds, texts and object classes have no
+placeholder (section 4).
 
 ### 2. The kinds, and who resolves each
 
@@ -37,15 +38,9 @@ to replace, without a second check.
   summary). A start's check reads the kept report for the rules that read the whole `.luma`; reference rules that read
   the store or other mods run again at every start, so a game update or another mod's removal that breaks a reference
   is found then.
-- After start. Names only code can make are counted by the validator as not checked (`Missing.AfterStart`, a count per
-  code and reason, no names), and the names go into the kept report's `touches` as `after_start: [{class, file,
-  line}]`, one per placement. The host, after the last mod's `start` and before the title, reads `after_start` from
-  each mod's kept report and calls the module's export `luma_refs_check_after_start(const LumaAfterStartRef* refs,
-  uint32_t count)`, each `{const char* mod; const char* class_name; const char* file; uint32_t line;}` (luma_refs.h;
-  luma_host.h includes it), which looks each class up in the factory (NameObjFactory, with the classes mods
-  registered) and keeps a CONTENT entry `Content.MissingClass` (code 620) for each one missing; its placements get the
-  placeholder object (4). One call; with no mod, not called. The module reads no kept report and has no JSON reader.
-  The export copies what it keeps; the host's strings may go when it returns.
+- Object classes are not checked. A placement row naming a class no mod makes is left out of the stage, with no
+  mod-log entry and no placeholder: the validator writes no `after_start` rows, so the host's after-start check (the
+  module's `luma_refs_check_after_start`, luma_refs.h) is given none and `Content.MissingClass` (620) is never said.
 - Nothing is resolved lazily for content: by the title every content reference of every mod on is either resolved or
   has its placeholder decided. A stage loaded later reads the decision, it does not look again.
 
@@ -57,17 +52,17 @@ that name.
 
 | Kind | Placeholder | Made by |
 |---|---|---|
-| model (new: an object the game does not have) | `nebula:placeholder/model`: a 100-unit cube, a magenta and black checker on each face with a white "?" | the cooker substitutes it when it cooks the mod's file and the file or its reference fails; drawn with the default material |
+| model (new: an object the game does not have) | `nebula:placeholder/model`: a 100-unit cube, a magenta and black checker on each face with a white "?" | the game, when content.model is given a name no store has (621); a mod file the cook cannot read is refused (L804), not replaced |
 | model (replacing one of the game's) | the game's own model | the cooker keeps the game's file and leaves the mod's out (the mod's other files still apply) |
-| texture | `nebula:placeholder/texture`: 64 x 64, magenta and black 8-pixel checker, opaque | the cooker, in place of the missing image, at the image's place in the material |
+| texture | `nebula:placeholder/texture`: 64 x 64, magenta and black 8-pixel checker, opaque | the draw service, for a texture name it does not find (622); a glTF naming a missing image is refused by the cook (`Cook.Material.MissingTexture`, L804) |
 | material program | the default lit program (3.3) with the material's base colour; never the missing pass | the game, when the program is absent at load (3.13 refuses the start if the compiler itself is absent) |
 | particle effect | `nebula:placeholder/effect`: a slow ring of 8 white and magenta sparks, 50 units across, at the binding point | the game, when an effect name does not resolve (3.5) |
 | particle texture | the texture placeholder | the cooker |
 | joint | the model's root joint | the game, at binding |
 | animation | the model's bind pose (a mod's new actor) or the game's own animation of that name (a replacement) | the game, at the animation's start |
-| sound | `nebula:placeholder/sound`: a 120 ms soft two-note chime at the sound's place and bus | the game, at the sound's start |
-| text | the literal `[<mod>:<id>]` in the game's message font | the host: for each text reference the start check found missing, the mod's added line `[<mod>:<id>]` (ModRows texts, as a mod's own added line), so the game's lookup is unchanged and finds it |
-| object class | the placeholder model at the placement's position, no behaviour, no collision | the game, at the stage's placement (3.9) |
+| sound | none: the audio service answers a name it does not find with LUMA_E_NOT_FOUND and plays nothing | |
+| text | none: a missing message id is not replaced | |
+| object class | none: the placement is left out (section 3) | |
 
 - The placeholder assets are Nebula's own data: sources under `data/placeholder/` in Nebula, cooked into the
   store with the rest of Nebula's data by the importer. Their absence is a start-up error (3.13), so a
@@ -78,7 +73,8 @@ that name.
 
 ### 5.1 The call
 
-A service or LumaKit call that takes a name of a kind above (LumaKit's effects start) and does not find it:
+content.model, content.fx and the draw service's textures, given a name they do not find (the audio service instead
+answers LUMA_E_NOT_FOUND):
 - returns the placeholder's handle and `LUMA_OK` (the caller's program goes on, the placeholder shows), and
 - reports through `report` the content code of its kind (section 6), `file` and `line` the caller's (LumaScript passes
   them; a C mod passes `__FILE__`, `__LINE__`), once per (mod, file, line, code) as `report` already counts repeats.
