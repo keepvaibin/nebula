@@ -48,7 +48,8 @@ pub(crate) fn check(ctx: &mut Ctx) {
         }
     }
     // L800: a cycle of needs through this mod, among the mods that are on. The game starts a needed mod before the mods
-    // that need it, so in a cycle none can start first; the host refuses each mod in one with this finding (loader D3-3).
+    // that need it, so in a cycle none can start first; the host refuses each mod in one with this finding
+    // (compiled-form.md).
     if let Some(chain) = need_cycle(&own, &ctx.facts.needs.iter().map(|(id, _)| id.clone()).collect::<Vec<_>>(), installed) {
         ctx.add(800, "luma.json", None, None, vec![("other", t(chain[1].clone())), ("expected", t("")), ("found", p("Need.Cycle")), ("chain", t(chain.join(" -> ")))]);
     }

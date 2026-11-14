@@ -248,8 +248,8 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
         ctx.add(503, &name, None, None, vec![]);
         return;
     };
-    // Code the system's loader would run before LumaCore's `begin` gives the core (loader contract D2-6): a C++
-    // constructor there would find no core, and nothing would say why.
+    // Code the system's loader would run before LumaCore's `begin` gives the core
+    // (docs/modding/language/compiled-form.md): a C++ constructor there would find no core, and nothing would say why.
     for what in &lib.runs_at_load {
         ctx.add(509, &name, None, None, vec![("why", p("Lib.RunsAtLoad")), ("found", t(what.clone()))]);
     }
@@ -318,7 +318,7 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
             continue;
         }
         match row.kind {
-            // A service (loader D3-2, services-registry 2): `signature` is "major.minor", bound against the game's
+            // A service (docs/modding/services/registry.md): `signature` is "major.minor", bound against the game's
             // catalog (the self-description's `services`, registry 9) when it is given; not checked without it.
             5 => {
                 any_service = true;
@@ -619,7 +619,7 @@ fn left_out_reason(reason: &str) -> Vec<(&'static str, crate::Arg)> {
     if let Some(base) = reason.strip_prefix("through the virtual base ") {
         return vec![("why", p("LeftOut.VirtualBase")), ("what", t(base))];
     }
-    // A file-local typedef two .cpp files give to different types (A-TY7-1): "<record> (<file>), ...".
+    // A file-local typedef two .cpp files give to different types: "<record> (<file>), ...".
     if let Some(types) = reason.strip_prefix("a name .cpp files give to different types: ") {
         return vec![("why", p("LeftOut.AliasTwice")), ("what", t(types))];
     }
@@ -692,7 +692,7 @@ mod types_tests {
         assert_eq!(types.globals.keys().collect::<Vec<_>>(), vec!["MR::sCount"]);
         assert_eq!(types.left_out(LeftOutKind::Field, "LiveActor.mWide"), Some("a bit-field wider than 32 bits"));
         assert_eq!(types.left_out(LeftOutKind::Enum, ""), Some("no name a mod can write"));
-        // The first reason of a name is kept, a second other one recorded (A-TY7-3).
+        // The first reason of a name is kept, a second other one recorded.
         assert_eq!(types.left_out_again, vec![(LeftOutKind::Field, "LiveActor.mWide".to_string(), "a second reason, not kept".to_string())]);
     }
 
@@ -704,7 +704,7 @@ mod types_tests {
         assert_eq!((actor.kind, actor.align, actor.polymorphic, actor.is_abstract), (RecordKind::Class, 4, true, false));
         assert_eq!((actor.trivial_copy, actor.trivial_destroy), (false, false));
         assert!(types.records["TVec3<f32>"].trivial_copy && types.records["TVec3<f32>"].trivial_destroy);
-        // TY-10b: the third fact, read as the file gives it.
+        // The third fact, read as the file gives it.
         assert!(types.records["Both"].no_copy && !types.records["TVec3<f32>"].no_copy && !actor.no_copy);
         assert_eq!(actor.bases, vec![Base { name: "NameObj".into(), offset: 0, is_virtual: false }]);
         assert_eq!(actor.reached, vec![Reached { name: "mName".into(), from: "NameObj".into(), offset: 4, ty: "const char *".into() }]);
@@ -926,7 +926,7 @@ mod types_tests {
             assert_eq!(typed(&types, 7, name, Some(ty)), Typed::Bound, "{name}");
         }
         eprintln!("{path}: {} records, {} aliases, {} globals, {} left out", types.records.len(), types.aliases.len(), types.globals.len(), types.left_out.len());
-        // A name left out twice with two reasons keeps the first, as the kernel does (A-TY7-3); each is shown.
+        // A name left out twice with two reasons keeps the first, as the kernel does; each is shown.
         for (kind, name, reason) in &types.left_out_again {
             eprintln!("left out again, not kept: {kind:?} {name}: {reason} (kept: {})", types.left_out(*kind, name).unwrap_or_default());
         }

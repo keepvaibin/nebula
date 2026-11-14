@@ -83,7 +83,7 @@ struct FxAnon {
     } named;
 };
 
-// TY-9: every name a text holds is a row, a built-in or left out: a foreign typedef (an alias row), an instance only
+// Every name a text holds is a row, a built-in or left out: a foreign typedef (an alias row), an instance only
 // a pointer names and one only a function pointer's parameter names (rows of their own), a pointer to an array.
 struct FxNames {
     uintptr_t address;
@@ -92,7 +92,7 @@ struct FxNames {
     FxMid& (*pick)(FxBase*, FxBox<u16>&);
 };
 
-// TY-10: a bit copy is the C++ copy (trivial_copy) and dropping one frees nothing (trivial_destroy).
+// A bit copy is the C++ copy (trivial_copy) and dropping one frees nothing (trivial_destroy).
 struct FxOwns {  // its own destructor: neither
     s32* p;
     ~FxOwns() {}

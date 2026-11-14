@@ -59,7 +59,7 @@ def main():
         compared["bases"] += len(want_bases)
         if want_bases != got_bases:
             differ(f"record {name}: bases {want_bases} by libclang, {got_bases} in the module")
-        # TY-1: each inherited name, bound at the same place (a bit-field: its position in bits).
+        # Each inherited name, bound at the same place (a bit-field: its position in bits).
         want_reach = {}
         for h in r["reachable"]:
             declared = next((f for f in records.get(h["from"], {}).get("fields", []) if f["name"] == h["name"]), None)
@@ -75,7 +75,7 @@ def main():
                        f"{got_reach.get(n)} by the kernel's")
         for h in k["refused"]:
             compared["refused"] += 1
-    # TY2-1: every name left out as ambiguous or through a virtual base is refused by the kernel with that reason.
+    # Every name left out as ambiguous or through a virtual base is refused by the kernel with that reason.
     want_refused = {}
     for x in generated["left_out"]:
         if x["kind"] != "field":
@@ -94,7 +94,7 @@ def main():
     for n in sorted(set(want_aliases) | set(got_aliases)):
         if want_aliases.get(n) != got_aliases.get(n):
             differ(f"alias {n}: names {want_aliases.get(n)} in the generator's JSON, {got_aliases.get(n)} in the module")
-    # TY-7: the kernel's left rows are left_out's, one per group and name, with the reason's id (the validator's words).
+    # The kernel's left rows are left_out's, one per group and name, with the reason's id (the validator's words).
     want_left = {(g, n): (rid, what) for g, n, rid, what in gen_types.left_rows(
         [(x["kind"], x["name"], x["file"], x["line"], x["reason"]) for x in generated["left_out"]])}
     got_left = {(x["group"], x["name"]): (x["why"], x.get("what")) for x in described["left_out"]}

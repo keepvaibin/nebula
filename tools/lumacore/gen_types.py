@@ -48,7 +48,7 @@ def option(flag, default=None):
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 GAME_INCLUDES = [ROOT / "native" / "petari" / "include", ROOT / "native" / "math" / "include", ROOT / "native" / "include"]
 GAME_TREES = [ROOT / "native" / "petari", ROOT / "native" / "math", ROOT / "native" / "include"]
-# TY-5: the kernel's own headers declare nothing a mod binds through these rows.
+# The kernel's own headers declare nothing a mod binds through these rows.
 KERNEL_FILES = re.compile(r"^native/(include/luma[a-z_]*\.h|petari/include/Game/System/Luma[A-Za-z]*\.hpp)$")
 
 # The left_out reasons: a fixed list, so the run's report counts by them and LumaLink's rows translate them.
@@ -304,7 +304,7 @@ class Reader:
         self.unit = unit
         self.foreign = {}   # typedefs outside the game's trees at file scope (<stdint.h>'s): name -> cursor
         self.named_instances = set()  # unit pass: the instances (and their members) its types name
-        self.trivial_memo = {}  # TY-10: canonical spelling -> trivial
+        self.trivial_memo = {}  # canonical spelling -> trivial
         self.polymorphic_types = {}  # objects.md: canonical spelling -> declares or inherits a virtual
         self.seen = set()
         self.records = {}   # name -> row
@@ -429,7 +429,7 @@ class Reader:
         for c in self.unit.children(cursor):
             k = c.kind
             if 500 <= k <= 503:
-                continue  # the preprocessing record's cursors (instrument.py parses with it for C-6's marks)
+                continue  # the preprocessing record's cursors (instrument.py parses with it for the parameter marks)
             if k in (I.K_NAMESPACE, I.K_LINKAGE, I.K_UNEXPOSED_DECL):
                 self.walk(c)
                 continue
@@ -973,7 +973,7 @@ class Reader:
                 else:
                     field_rows.append("{%s, offsetof(R%d, %s), %du, 0, 0}" % (q, n, f["name"], f["count"]))
             base_rows = ['{"%s", %du, %du}' % (cstr(b["name"]), b["offset"], int(b["virtual"])) for b in r["bases"]]
-            # TY-10: the generator's claim, checked by the compiler.
+            # The generator's claim, checked by the compiler.
             claim = ('static_assert(__is_trivially_copyable(%%s) == %s && __is_trivially_destructible(%%s) == %s, '
                      '"TY-10: the generator says %s is %strivially copyable and %strivially destructible");') % (
                 "true" if r.get("trivial_copy") else "false", "true" if r.get("trivial_destroy") else "false", cstr(name),

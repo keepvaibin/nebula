@@ -1415,7 +1415,7 @@ def run_one(test, renderer, args, run_folder, previous):
     # gets refusals as codes, so it is frozen with the rest.
     shutil.copyfile(bin_folder / HOST["importer"], run_folder / "bin" / HOST["importer"])
     frozen[HOST["importer"]] = sha256(run_folder / "bin" / HOST["importer"])
-    # R6-4: the test's hidden files are left out of the run's own copy (the bin folder itself is never touched).
+    # The test's hidden files are left out of the run's own copy (the bin folder itself is never touched).
     for hidden in test["hidden"]:
         if not (bin_folder / hidden).is_file():
             raise SetupFailed("hide_game_files: the game's folder has no %s" % hidden)

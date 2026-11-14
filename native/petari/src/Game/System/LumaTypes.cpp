@@ -260,7 +260,7 @@ namespace luma {
             return pAlias != nullptr ? sTypes.find(pAlias->record, textLength(pAlias->record)) : nullptr;
         }
 
-        // C++'s lookup of a field name (types.md TY-1, the rule gen_types.py's `reach` writes as `reachable`): a name
+        // C++'s lookup of a field name (types.md, the rule gen_types.py's `reach` writes as `reachable`): a name
         // a record declares hides its bases'; otherwise each base subobject that has it is one finding. Bound only when
         // exactly one subobject has it and the path to it crosses no virtual base (a virtual base's place depends on
         // the most derived object).
@@ -917,7 +917,7 @@ namespace luma {
         if (look.count == 0 || look.tooDeep) {
             return out;  // not found: the validator's left_out gives a reason if the name has one
         }
-        // TY2-1: refused with left_out's own reason, "through the virtual base V" or "ambiguous: A::x, B::x" (the
+        // Refused with left_out's own reason, "through the virtual base V" or "ambiguous: A::x, B::x" (the
         // declaring records sorted by bytes, as the generator sorts them).
         if (look.pVirtual != nullptr || look.count > 1) {
             u32 at = 0;

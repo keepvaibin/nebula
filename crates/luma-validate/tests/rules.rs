@@ -264,7 +264,7 @@ fn a_new_galaxy_s_table_and_other_mods_cells_say_which_layers_are_on_together() 
     assert_eq!(in_group(&run(&mine, std::slice::from_ref(&galaxy_mod), Some(0))), 1);
 
 
-    // V4-1, the cook's rule: the highest whole table is the base, and every mod's patch cells edit it, lowest first,
+    // The cook's rule: the highest whole table is the base, and every mod's patch cells edit it, lowest first,
     // whoever brought the table. A patch on another mod's galaxy is `patches/@<id>/<its path>.json`.
     let patch = |mask: u32| format!(r#"{{"patch": 1, "key": ["ScenarioNo"], "set": [{{"where": {{"ScenarioNo": 1}}, "values": {{"DandelionHillZone": {mask}}}}}]}}"#).into_bytes();
     let on_moon = "layers/base/patches/@moon.mod/StageData/MoonGalaxyScenario/ScenarioData.bcsv.json";
@@ -284,7 +284,7 @@ fn a_new_galaxy_s_table_and_other_mods_cells_say_which_layers_are_on_together() 
     assert_eq!(in_group(&run(&mine_two, std::slice::from_ref(&galaxy_mod), Some(1))), 0, "the higher's table has no scenario 2");
     assert_eq!(in_group(&run(&mine_two, std::slice::from_ref(&galaxy_mod), Some(0))), 1);
 
-    // V4-2: two mods bringing one new galaxy whole are named (L305), in either form.
+    // Two mods bringing one new galaxy whole are named (L305), in either form.
     let r = run(&[file(&format!("{new_galaxy}.json"), &table(10))], std::slice::from_ref(&galaxy_mod), Some(1));
     let named: Vec<String> = r.findings.iter().filter(|f| f.code == 305).map(|f| message(f, "UsEnglish")).collect();
     assert_eq!(named.len(), 1, "{:?}", r.findings);
@@ -725,8 +725,8 @@ fn sign(body: String) -> Vec<u8> {
     format!("{body}end\t{sum}\n").into_bytes()
 }
 
-/// L800's cycle (loader D3-3): the game starts a needed mod first, so mods that need each other round a circle cannot
-/// start. The check sees this mod's needs and the kept needs of the mods that are on.
+/// L800's cycle (compiled-form.md): the game starts a needed mod first, so mods that need each other round a circle
+//cannot / start. The check sees this mod's needs and the kept needs of the mods that are on.
 #[test]
 fn a_cycle_of_needs_through_the_mod_is_refused_and_named() {
     let needing = |id: &str, needs: &[&str]| {

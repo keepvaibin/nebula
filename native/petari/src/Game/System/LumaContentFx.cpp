@@ -182,7 +182,7 @@ namespace luma {
                     return true;
                 }
 
-                // ---- Draw groups (effects 4; D5-5) ----
+                // ---- Draw groups (effects 4) ----
 
                 // A mod's effects list as the cook writes it (G, effects "G on draft 4"): Luma/<id>/effects.txt, one
                 // line an effect sorted by name, `<name>\t<group>\t<emitters>\n`. Read once a session per mod, ::malloc,

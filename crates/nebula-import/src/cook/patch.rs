@@ -152,7 +152,7 @@ pub fn apply(path: &str, table: &mut TableIr, patches: &[ModPatch]) -> Result<Ve
 pub fn apply_linked(path: &str, table: &mut TableIr, patches: &[ModPatch], links: &[Link], mods: &[&str]) -> Result<Vec<Fact>> {
     let mut group = Group { rank: mods.iter().enumerate().map(|(i, m)| (m.to_string(), i)).collect(), ..Group::default() };
     if !patches.is_empty() {
-        // Which of two mods adding one key in the group is higher comes from `mods` alone (F3.11-1): a patch of a mod
+        // Which of two mods adding one key in the group is higher comes from `mods` alone: a patch of a mod
         // it does not name cannot be ordered, so the input is not valid, never guessed.
         if links.iter().any(|l| !l.patches.is_empty()) {
             let unnamed = patches.iter().map(|p| (p.mod_id, path)).chain(links.iter().flat_map(|l| l.patches.iter().map(move |p| (p.mod_id, l.path))));

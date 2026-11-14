@@ -196,7 +196,7 @@ fn each_broken_library_gives_its_finding() {
 
 #[test]
 fn a_library_the_system_runs_code_from_at_load_is_refused() {
-    // Loader contract D2-6: the system's loader would run it before LumaCore's `begin`, so a C++ constructor there
+    // The system's loader would run it before LumaCore's `begin`, so a C++ constructor there
     // finds no core. Each form names what the format calls it.
     for (path, platform, what) in [
         ("pe-x64/runs_at_load.dll", "windows-x64", "AddressOfEntryPoint"),
@@ -265,7 +265,7 @@ fn a_mach_o_segment_with_more_sections_than_it_holds_is_not_read_in_part() {
 
 #[test]
 fn service_and_other_mod_imports_are_read_and_checked_as_far_as_the_mod_shows() {
-    // Loader D3-2 and D3-3: kinds 5 and 6. What is left to the host (its services, the needed mod's exports) is said.
+    // Kinds 5 and 6. What is left to the host (its services, the needed mod's exports) is said.
     let left = |r: &Report| r.not_checked.iter().map(|n| (n.code, n.because)).collect::<Vec<_>>();
     for (path, platform) in [("pe-x64/service.dll", "windows-x64"), ("elf-x64/service.so", "linux-x64")] {
         let r = check(&code_mod(platform, &lib(path), &[], false), platform, true);
@@ -698,7 +698,7 @@ fn a_virtual_call_and_a_class_number_are_checked_against_the_types_file() {
 
 /// Registry 2's grammar is L505 whatever the flags; an optional import of a service the
 /// game lacks gives nothing; an optional import of a permissioned service the mod does not declare is L506 and is not
-/// a required service. AP-2: a catalog row with a key other than the four does not read.
+/// a required service. A catalog row with a key other than the four does not read.
 #[test]
 fn service_imports_follow_the_grammar_and_optional_rules() {
     use luma_validate::names::Services;

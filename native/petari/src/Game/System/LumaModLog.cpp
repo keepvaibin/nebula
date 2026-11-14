@@ -205,7 +205,7 @@ namespace luma {
             }
 
             // The row's words with {mod} and the entry's {names} filled; a {name} the entry does not give stays as it is
-            // (loader D3-1: visible, never blank). `english`: the row is the English one (a value "R:<row>" follows it).
+            // (visible, never blank). `english`: the row is the English one (a value "R:<row>" follows it).
             // Into pDst when it is not null; the units, without a terminator.
             u32 fill(char16_t* pDst, const char16_t* pTemplate, const LumaModLogEntry& rEntry, bool english, u32 depth) {
                 u32 at = 0;

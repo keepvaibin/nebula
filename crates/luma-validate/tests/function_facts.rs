@@ -1,4 +1,5 @@
-//! luma_functions.json's reader (types TY-11): a file in its form reads, every fault is an error naming the row.
+//! luma_functions.json's reader (docs/modding/language/types.md): a file in its form reads, every fault is an error
+//! naming the row.
 
 use luma_validate::names::{signature_params, FunctionFacts, FunctionKind, Mark, TypesError, Way};
 
@@ -104,7 +105,7 @@ fn mark(way: &str, count: &str, fixed: &str, nullable: bool) -> String {
 
 #[test]
 fn marks_in_their_form_read() {
-    // C-6's example: `void f(LUMA_IN LUMA_COUNT(n) const f32* p, s32 n, LUMA_OUT LUMA_NULLABLE Vec3f* out)`.
+    // The marks' example: `void f(LUMA_IN LUMA_COUNT(n) const f32* p, s32 n, LUMA_OUT LUMA_NULLABLE Vec3f* out)`.
     let sig = "void(const f32 *, s32, Vec3f *)";
     let marks = [mark("in", "1", "null", false), "null".into(), mark("out", "null", "null", true)].join(", ");
     let m = marked("R::get", "void(Vec3f *, f32 *) const", "method", "\"R\"", (false, false, true), "", &[mark("inout", "null", "null", false), mark("kept", "null", "null", false)].join(", "));

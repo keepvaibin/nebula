@@ -95,7 +95,7 @@ def main():
                        ("Ui::NameText<17> [2]", ["Ui::NameText<17>"])):
         if gen_types.type_names(text) != want:
             failed.append("type_names(%r) is %s, not %s" % (text, gen_types.type_names(text), want))
-    # TY-9: every name a text holds is a row (record, enum, alias), a built-in word or left out.
+    # Every name a text holds is a row (record, enum, alias), a built-in word or left out.
     known = set(rows) | {x["name"] for x in data["left_out"]}
     words = {"const", "volatile", "signed", "unsigned", "char", "short", "int", "long", "float", "double", "bool", "void"}
     texts = [(r["name"] + "." + f["name"], f["type"]) for r in data["types"] for f in r.get("fields", [])]
@@ -110,7 +110,7 @@ def main():
             failed.append("TY-9: %s has no row" % n)
     if ("FxAnon.named", "a type with no name a mod can write") not in left:
         failed.append("TY-9: FxAnon.named is not left out")
-    # TY-10: each record says both, as the compiler's traits (the table's static_asserts) say.
+    # Each record says both, as the compiler's traits (the table's static_asserts) say.
     keys = ("trivial_copy", "trivial_destroy", "no_copy")
     for n, want in (("FxBase", (True, True, False)), ("FxL", (False, True, False)), ("FxOwns", (False, False, False)),
                     ("FxCopies", (False, True, False)), ("FxDefaulted", (True, True, False)),

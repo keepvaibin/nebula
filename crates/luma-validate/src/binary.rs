@@ -38,9 +38,9 @@ pub struct Library<'d> {
     pub imports: Vec<Import>,
     /// Every library it names (with or without symbols).
     pub needed: Vec<String>,
-    /// What the system's loader would run in it when it loads, before LumaCore's `begin` (loader contract D2-6): a
-    /// PE entry point or TLS callbacks, ELF DT_INIT, DT_INIT_ARRAY or DT_PREINIT_ARRAY, a Mach-O init section or
-    /// LC_ROUTINES_64. Each named as the format names it.
+    /// What the system's loader would run in it when it loads, before LumaCore's `begin`
+    //(docs/modding/language/compiled-form.md): a / PE entry point or TLS callbacks, ELF DT_INIT, DT_INIT_ARRAY or
+    //DT_PREINIT_ARRAY, a Mach-O init section or / LC_ROUTINES_64. Each named as the format names it.
     pub runs_at_load: Vec<String>,
     /// What the system would run when it closes the library, after LumaCore has freed the mod's memory (an audit of
     /// R3-A, A-1): ELF DT_FINI or DT_FINI_ARRAY, a Mach-O term section. A PE's entry point and TLS callbacks run at
@@ -843,7 +843,8 @@ pub fn mod_info(lib: &Library, at: u64) -> Result<ModInfo, &'static str> {
             imports.push(ImportRow { kind, flags, name, signature, hook_kind });
         }
     }
-    // A library mod's exports (loader D3-3), as the kernel's modExport reads them: a row with a null name is skipped.
+    // A library mod's exports (compiled-form.md), as the kernel's modExport reads them: a row with a null name is
+    // skipped.
     let mut exports = Vec::new();
     if size >= EXPORTS_END {
         let list = lib.pointer_at(field(at, EXPORTS_AT, info)?).ok_or(info)?;

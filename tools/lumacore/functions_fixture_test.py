@@ -82,7 +82,7 @@ EXPECTED = [
     fact("fnByMacro", "void(float *)", "free", None, marks=[mark("out")]),
 ]
 
-# C-6's refusals: (what, the unit's text after its first line `#include "Game/LumaMarks.hpp"`, what the stop names
+# The marks' refusals: (what, the unit's text after its first line `#include "Game/LumaMarks.hpp"`, what the stop names
 # after the unit's path; {f} is that path)
 REFUSED = [
     ("a mark on an int", "void f(LUMA_OUT int x);",
@@ -216,7 +216,7 @@ def main():
         failed.append("gen_types.py did not stop naming facts without marks")
     facts_file.write_text(good, encoding="utf-8")
 
-    # 4. C-6's refusals, each a unit of its own with LumaLoader.cpp's command
+    # 4. The marks' refusals, each a unit of its own with LumaLoader.cpp's command
     planted_dir = out / "planted"
     planted_dir.mkdir()
     for n, (what, text, named) in enumerate(REFUSED, 1):

@@ -106,7 +106,7 @@ LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API + 1, imp
 /* A luma_mod that was not made by luma.h: shorter than LumaModInfo. */
 LUMA_EXPORT const uint32_t luma_mod[2] = {8, LUMA_API};
 #elif defined(SERVICE)
-/* Loader D3-2: a service by name and "major.minor". */
+/* A service by name and "major.minor". */
 static LumaImport imports[] = {
     {5, 0, "net", "1.0", &get_pos, 0, 0, 0},
 };
@@ -129,7 +129,7 @@ static LumaImport imports[] = {
 };
 LUMA_MOD(imports, start, 0);
 #elif defined(MOD_FUNCTION)
-/* Loader D3-3: another mod's exported function, "<mod id>/<export name>". */
+/* Another mod's exported function, "<mod id>/<export name>". */
 static LumaImport imports[] = {
     {6, 0, "lumakit/hud.meter", "lumi1:0123456789abcdef", &get_pos, 0, 0, 0},
 };
@@ -158,7 +158,7 @@ static LumaImport imports[] = {
 };
 LUMA_MOD(imports, start, 0);
 #elif defined(LIBRARY_MOD)
-/* A library mod (loader D3-3): the functions it gives the mods that need it, sorted by name. */
+/* A library mod (compiled-form.md): the functions it gives the mods that need it, sorted by name. */
 static int32_t hud_bar(void) {
     return 1;
 }
@@ -206,7 +206,7 @@ LUMA_EXPORT int not_luma_mod = 1;
 #endif
 
 #if defined(RUNS_AT_LOAD)
-/* Code the system's loader runs when it loads the library, before LumaCore's `begin` (loader contract D2-6): a
+/* Code the system's loader runs when it loads the library, before LumaCore's `begin` (compiled-form.md): a
    constructor (ELF .init_array, Mach-O __mod_init_func) and, on Windows, an entry point. */
 static volatile int loaded;
 __attribute__((constructor)) static void at_load(void) {

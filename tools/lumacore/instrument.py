@@ -85,10 +85,10 @@ T_FLOAT = 21
 # __int128 or a half.
 T_INTEGERS = (5, 6, 7, 8, 9, 11, 14, 16, 17, 19)
 T_NUMBERS = T_INTEGERS + (3, 21, 22)
-# C-6's marks (Game/LumaMarks.hpp); a way is one of the first four
+# The parameter marks (Game/LumaMarks.hpp); a way is one of the first four
 WAYS = ('LUMA_IN', 'LUMA_OUT', 'LUMA_INOUT', 'LUMA_KEPT')
 MARKS = WAYS + ('LUMA_COUNT', 'LUMA_COUNT_FIXED', 'LUMA_NULLABLE')
-# CXTranslationUnit_DetailedPreprocessingRecord: the macro expansions, where C-6's marks are
+# CXTranslationUnit_DetailedPreprocessingRecord: the macro expansions, where the parameter marks are
 PARSE_OPTIONS = 0x01
 # A #define whose own text names a mark (A18M-4): the record keeps only the outermost expansion, so such a mark would
 # mark nothing.
@@ -1444,7 +1444,7 @@ class Unit:
                 made = news[0]
         return {'name': name, 'class': made, 'creator': label}
 
-    # C-6 (contracts/self-description.md): the parameter marks of Game/LumaMarks.hpp. Each expands to nothing, so the
+    # game-description.md: the parameter marks of Game/LumaMarks.hpp. Each expands to nothing, so the
     # declarations do not show them; the parse's detailed preprocessing record keeps each expansion with its place.
     def spelled(self, location):
         """(file, offset, line) where a location is written."""

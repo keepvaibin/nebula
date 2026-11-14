@@ -90,7 +90,8 @@ namespace luma {
     // The lists replaced and not yet freed (a fact for 1.1's tests: bounded, 0 once no call holds one).
     u32 retiredCount();
     // A grace: marked after the hooks are taken out; over when no call on any thread can still be in a list replaced
-    // before the mark (two flips since, and no such list still held by the game thread) (loader contract LR-5).
+    // before the mark (two flips since, and no such list still held by the game thread)
+    // (docs/modding/language/compiled-form.md).
     u32 graceMark();
     bool graceOver(u32 mark);
     // From a wrap: runs the wraps after it and then the function.

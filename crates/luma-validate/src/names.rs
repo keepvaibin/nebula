@@ -41,7 +41,7 @@ impl std::error::Error for RowsError {
 /// The types file's name in a folder of names.
 pub const TYPES_FILE: &str = "luma_types.json";
 
-/// The function rows' facts file's name in a folder of names (types TY-11).
+/// The function rows' facts file's name in a folder of names (docs/modding/language/types.md).
 pub const FUNCTIONS_FILE: &str = "luma_functions.json";
 
 /// The services catalog's file name in a folder of names: an object whose `services` key is the self-description's
@@ -225,8 +225,8 @@ pub struct Names {
     pub call_only: std::collections::HashSet<(String, String)>,
     /// The game's records, fields and globals (kinds 1, 2 and 7); None when the types file was not given.
     pub types: Option<Types>,
-    /// Each function row's facts (types TY-11): what it is, its record, virtual and const; None when the folder has
-    /// no facts file.
+    /// Each function row's facts (docs/modding/language/types.md): what it is, its record, virtual and const; None when
+    //the folder has / no facts file.
     pub function_facts: Option<FunctionFacts>,
     /// The game's services catalog (services-registry 9, the self-description's `services`); None when not given:
     /// kind 5 imports are not checked.
@@ -330,7 +330,7 @@ pub struct Types {
     /// What the generator left out, by kind and name (a field as "Record.field"), to its reason as written.
     pub left_out: HashMap<(LeftOutKind, String), String>,
     /// Names left out a second time with another reason, which `left_out` does not keep (the first one, in the file's
-    /// order, is the kernel's too: A-TY7-3). Shown by the real-file test so a second reason is never unseen.
+    /// order, is the kernel's too). Shown by the real-file test so a second reason is never unseen.
     pub left_out_again: Vec<(LeftOutKind, String, String)>,
     /// Each named enum by its row's name (the LumaScript compiler's game enums; the validator binds none).
     pub enums: HashMap<String, Enum>,
@@ -350,14 +350,14 @@ pub struct Types {
 pub struct Record {
     pub size: u64,
     /// Every field name a mod may write for it, its own and those it reaches in its bases, to its type text (a
-    /// bit-field's reads "u32 : 3", TY-3).
+    /// bit-field's reads "u32 : 3").
     pub fields: HashMap<String, String>,
     pub kind: RecordKind,
     pub align: u64,
     /// It has a vtable.
     pub polymorphic: bool,
     pub is_abstract: bool,
-    /// Trivially copyable (types TY-10): a bit copy is the C++ copy.
+    /// Trivially copyable (docs/modding/language/types.md): a bit copy is the C++ copy.
     pub trivial_copy: bool,
     /// Trivially destructible: dropping one frees nothing.
     pub trivial_destroy: bool,
@@ -409,7 +409,7 @@ pub struct Bits {
     pub offset: u32,
 }
 
-/// What a function row is (types TY-11).
+/// What a function row is (docs/modding/language/types.md).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FunctionKind {
     Free,
@@ -439,12 +439,12 @@ pub struct Facts {
     /// A const method: called on a const view.
     pub konst: bool,
     pub overrides: Vec<Overridden>,
-    /// C-6: one entry per declared parameter (a method's `this` not counted): what the function does through a
+    /// Marks: one entry per declared parameter (a method's `this` not counted): what the function does through a
     /// pointer parameter its header marks; None for no mark.
     pub marks: Vec<Option<Mark>>,
 }
 
-/// What a function does through a pointer parameter (self-description C-6, Game/LumaMarks.hpp).
+/// What a function does through a pointer parameter (Game/LumaMarks.hpp).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Way {
     /// Reads one value, never writes it, does not keep the address.
@@ -525,16 +525,16 @@ pub fn signature_variadic(signature: &str) -> bool {
     signature[..close].trim_end().ends_with("...")
 }
 
-/// luma_functions.json (types TY-11): each row's facts by its name and signature.
+/// luma_functions.json (docs/modding/language/types.md): each row's facts by its name and signature.
 #[derive(Clone, Debug, Default)]
 pub struct FunctionFacts {
     pub rows: HashMap<(String, String), Facts>,
 }
 
 impl FunctionFacts {
-    /// Reads a facts file. Anything not in TY-11's form, a row given twice, or facts that cannot be (a free function
+    /// Reads a facts file. Anything not in its form, a row given twice, or facts that cannot be (a free function
     /// with a record, a const or virtual function that is no member, a pure one that is not virtual, overrides of one
-    /// that is not virtual, marks not in C-6's form) is an error naming the row.
+    /// that is not virtual, marks not in their form) is an error naming the row.
     pub fn from_json(bytes: &[u8]) -> Result<FunctionFacts, TypesError> {
         use crate::json::{Kind, Value};
         let root = crate::json::parse(bytes)
@@ -630,7 +630,7 @@ impl FunctionFacts {
             if count.is_some() && fixed.is_some() {
                 return Err(bad(eat, "count and fixed both set"));
             }
-            // A kept pointer is one place, never a list; it may be nullable (C-6 as F changed it 11-12: the game takes
+            // A kept pointer is one place, never a list; it may be nullable (the game takes
             // null there, which is all a script can give it).
             if way == Way::Kept && (count.is_some() || fixed.is_some()) {
                 return Err(bad(eat, "kept with a count or a fixed count"));

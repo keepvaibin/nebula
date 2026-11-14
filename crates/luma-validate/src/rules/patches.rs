@@ -126,7 +126,7 @@ pub(crate) fn check(ctx: &mut Ctx) {
         own = new_scenario_tables(ctx, store);
         for (_, target, root) in &parsed {
             // A game galaxy's table, or another mod's new galaxy's (`@<id>/StageData/<g>Scenario/ScenarioData.bcsv`,
-            // its source form too), which V4-1 lets any mod patch from anywhere in the list.
+            // its source form too), which the cook's rule lets any mod patch from anywhere in the list.
             let galaxy = match target.strip_prefix('@') {
                 Some(rest) => rest.split_once('/').and_then(|(_, path)| {
                     let lower = path.to_lowercase();

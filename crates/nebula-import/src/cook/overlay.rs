@@ -380,7 +380,7 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         return Ok(files);
     }
     // post/<name>.json in a mod's assets: a screen pass, Luma/<id>/post/<name>.post, with the HLSL beside it
-    // (contracts/draw.md 15).
+    // (docs/modding/services/draw.md).
     if super::post_shader::is_post_source(&change.path) {
         let stem = &change.path[..change.path.len() - ".json".len()];
         let name = stem.rsplit('/').next().unwrap_or(stem);

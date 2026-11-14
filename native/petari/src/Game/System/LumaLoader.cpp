@@ -144,7 +144,7 @@ struct LumaMod {
     // The permissions the player granted it, copied.
     char** granted;
     u32 grantedCount;
-    // The mods it imported functions from (kind 6, D3-3), each once, in bind order: told `dependent_gone` when it goes.
+    // The mods it imported functions from (kind 6), each once, in bind order: told `dependent_gone` when it goes.
     LumaMod** uses;
     u32 useCount;
     // How it ended (reload.md 3, the takeout.<id> fact) and where its code is now (keep and kept, reload.md 4).
@@ -1738,7 +1738,7 @@ namespace luma {
                 refuse.start(505);
                 if (rImport.kind == LUMA_IMPORT_FIELD) {
                     // One of another type is Name.FieldSig. A name some base has twice, or through a virtual
-                    // base, is Name.FieldUnbound with the kernel's own reason and names (TY2-1; the build's comparison
+                    // base, is Name.FieldUnbound with the kernel's own reason and names (the build's comparison
                     // proves them the generator's); any other name the generator left out, with its reason. Else
                     // Name.Field, or Name.FieldSig with a signature.
                     const FieldBind bind = findField(rImport.name, rImport.signature);

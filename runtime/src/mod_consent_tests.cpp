@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The consent store (mod_consent.h, contracts/consent.md 1.5): the digest, the facts, grant, decline, a changed hosts
+// The consent store (mod_consent.h): the digest, the facts, grant, decline, a changed hosts
 // list (asked again), a reworded `why` (not asked again), a removed permission (its line dropped), code Not now, and
 // the answers' round trip through the mod settings file.
 

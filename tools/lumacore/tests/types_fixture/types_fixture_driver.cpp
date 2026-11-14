@@ -97,7 +97,7 @@ namespace {
         check(get(object) == 0, what);
     }
 
-    // TY-4: the bit accessors touch only the bytes the field covers. A field in the last byte of a page whose next
+    // The bit accessors touch only the bytes the field covers. A field in the last byte of a page whose next
     // page has no access: any wider access faults, and the test dies.
     void lastByte() {
 #if defined(_WIN32)
@@ -135,7 +135,7 @@ int main(int argc, char** argv) {
         return 2;
     }
     luma::prepareTypes();
-    // TY-1: own, hidden, two bases up.
+    // Own, hidden, two bases up.
     bound("FxDerived.x", "f32", offsetof(FxDerived, x));
     bound("FxDerived.shared", "s32", offsetof(FxDerived, shared));
     bound("FxDerived.y", "s32", offsetof(FxDerived, y));
@@ -145,7 +145,7 @@ int main(int argc, char** argv) {
         const luma::FieldBind b = luma::findField("FxDerived.x", "s32");
         check(b.found && !b.sameType, "FxDerived.x with its base's type: found, another type (Z-4)");
     }
-    // TY2-1: ambiguous and through a virtual base, with their names.
+    // Ambiguous and through a virtual base, with their names.
     refused("FxBoth.dup", luma::FieldBind::kAmbiguous, "FxA::dup, FxB::dup");
     refused("FxTwice.dup", luma::FieldBind::kAmbiguous, "FxA::dup, FxA::dup");
     refused("FxDiamond.v", luma::FieldBind::kThroughVirtualBase, "FxV");
@@ -165,7 +165,7 @@ int main(int argc, char** argv) {
     bound("FxBitsChild.after", "u8", offsetof(FxBitsChild, after));
     check(luma::findField("FxBits.b", "u32").found && !luma::findField("FxBits.b", "u32").sameType,
           "a bit-field named with its plain type is another type (Z-4)");
-    // TY-2: an instance by its row's name and by its aliases; one only an alias names has a size. FxBox<f32> and
+    // An instance by its row's name and by its aliases; one only an alias names has a size. FxBox<f32> and
     // FxBox<float> are one record, so a field of type T reads as the argument itself (float), true for both spellings.
     bound("FxBox<f32>.more", "float", offsetof(FxBox<float>, more));
     bound("FxBoxF.grid", "float", offsetof(FxBox<float>, grid));
@@ -190,7 +190,7 @@ int main(int argc, char** argv) {
     bound("FxAnon.f", "f32", offsetof(FxAnon, f));
     bound("FxAnon.named.s", "s16", offsetof(FxAnon, named) + offsetof(decltype(FxAnon::named), s));
     refused("FxAnon.named", luma::FieldBind::kNone, "");
-    // TY-9: the names a text holds.
+    // The names a text holds.
     bound("FxNames.address", "uintptr_t", offsetof(FxNames, address));
     bound("FxNames.boxes", "FxBox<u8> *", offsetof(FxNames, boxes));
     bound("FxNames.rows", "FxBase (*)[2]", offsetof(FxNames, rows));
@@ -209,7 +209,7 @@ int main(int argc, char** argv) {
         check(luma::findGlobal("gFxDeclaredOnly") == nullptr, "gFxDeclaredOnly: no row");
         check(luma::findGlobal("kFxConstant") == nullptr, "kFxConstant: no row (internal linkage)");
     }
-    // TY-7: the generator's left rows, found as the validator reads left_out (the loader's L505 why and what).
+    // The generator's left rows, found as the validator reads left_out (the loader's L505 why and what).
     {
         struct Want {
             u32 kind;

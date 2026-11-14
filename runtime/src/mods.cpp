@@ -2135,7 +2135,7 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                 }
                 // A layer's assets/ goes into the mod's own store at Luma/<id>/<path> (luma-format 5, the decision of
                 // 2026-11-11): one plan line a file, a later layer's same path winning as files/ does. assets/effects.json
-                // is each layer's change instead, merged by the cook in layer order (contracts/effects.md).
+                // is each layer's change instead, merged by the cook in layer order (docs/modding/content/effects.md).
                 if (const std::optional<fs::path> assets = child_any_case(mod.path / fs::path(from_utf8(layer.path)), "assets", true)) {
                     std::error_code walk_error;
                     std::error_code status_error;

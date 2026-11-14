@@ -51,7 +51,7 @@ std::unique_ptr<std::atomic<bool>[]> g_achievement_done;
 bool (*g_achievement_store)(std::string_view key) = nullptr;
 std::mutex g_unlocked_mutex;
 std::vector<std::int32_t> g_unlocked;
-// Z-10: each mod whose code did not start, and why; written by start_plugins, read by the Mods page.
+// Each mod whose code did not start, and why; written by start_plugins, read by the Mods page.
 std::mutex g_not_started_mutex;
 std::vector<NotStarted> g_not_started;
 
@@ -148,8 +148,8 @@ void* symbol_in(void* module, const char* name) {
 #endif
 }
 
-// The game's loader closes a LumaCore mod's library itself, when none of its code can run any more (loader contract
-// LR-5).
+// The game's loader closes a LumaCore mod's library itself, when none of its code can run any more
+// (docs/modding/language/compiled-form.md).
 extern "C" void close_luma_library(void* module) {
     close_library(module);
 }
@@ -215,7 +215,7 @@ std::string refusal_text(const LumaRefusal& refusal) {
     return text;
 }
 
-// Z-10: a record kept for the Mods page, once per mod (the first reason is the one the log said).
+// A record kept for the Mods page, once per mod (the first reason is the one the log said).
 void keep_not_started(NotStarted record) {
     const std::lock_guard<std::mutex> lock(g_not_started_mutex);
     for (const NotStarted& kept : g_not_started) {
@@ -318,7 +318,8 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
     g_log = log;
     g_find_symbol = find_symbol;
     // LumaCore.service: the module asks the host, which asks its extensions (the harness's own service while a test runs).
-    // An extension's service (the harness's) needs no permission; phase 2's services name theirs here (loader D3-2).
+    // An extension's service (the harness's) needs no permission; phase 2's services name theirs here
+    // (compiled-form.md).
     using ServiceFinder = const void* (*)(const char*, std::uint32_t, std::uint32_t, const char**);
     if (const auto give = reinterpret_cast<void (*)(ServiceFinder)>(find_symbol != nullptr ? find_symbol("luma_set_service_finder") : nullptr)) {
         give([](const char* name, std::uint32_t major, std::uint32_t minor, const char** permission) -> const void* {
@@ -498,8 +499,9 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
         const std::lock_guard<std::mutex> lock(g_not_started_mutex);
         g_not_started.clear();
     }
-    // The needs order (loader D3-3): a mod's needed mods start before it; otherwise the list's order. `index` stays the
-    // mod's place in the list, its order for hooks and who wins. A cycle starts none of its mods, each named (L800).
+    // The needs order (compiled-form.md): a mod's needed mods start before it; otherwise the list's order. `index`
+    // stays the mod's place in the list, its order for hooks and who wins. A cycle starts none of its mods, each named
+    // (L800).
     std::vector<std::size_t> sequence;
     std::vector<bool> placed(plugins.size(), false);
     const auto listed = [&plugins](const std::string& id) {
@@ -670,7 +672,7 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
             LumaRefusal refusal{};
             const std::string library = file.path.filename().string();
             // The permissions the player granted, for the declarations as they are now (consent 1.4): a permissioned
-            // service the mod imports without one is refused by name, never allowed by omission (loader D3-2).
+            // service the mod imports without one is refused by name, never allowed by omission (compiled-form.md).
             std::vector<const char*> granted;
             granted.reserve(file.granted.size());
             for (const std::string& permission : file.granted) granted.push_back(permission.c_str());
