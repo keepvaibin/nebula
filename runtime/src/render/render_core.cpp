@@ -207,8 +207,10 @@ bool RenderCore::initialize(int w, int h) {
     rt_start();
 
     // The first start (no config.ini, and no back end chose for it): the table's height now, measured in the first 3D scene.
+    // Not in a benchmark (it sets every height itself; bench::start runs before this, with the arguments).
     if (const RenderConfig chosen = get_render_config_chosen();
-        render_config_first_start() && chosen.upscaler == 0u && chosen.internal_height == 0u && start_frame.height > 0u) {
+        render_config_first_start() && chosen.upscaler == 0u && chosen.internal_height == 0u && start_frame.height > 0u &&
+        !galaxy::bench::running()) {
 #if defined(NEBULA_GPU_METAL)
         const bool shared = mtl::Context::get().caps().unified_memory;
 #else
@@ -2483,6 +2485,10 @@ void RenderCore::calibrate_first_start(bool scene, double walk_ms) {
     constexpr unsigned kCalibrationSettle = 45u;  // 0.9^45: under 1 % of the height before left in the timers' average
     constexpr unsigned kCalibrationSamples = 30u;
     FirstStartCalibration& c = calibration_;
+    if (galaxy::bench::running()) [[unlikely]] {
+        end_first_start_calibration(0u, nullptr);  // a benchmark's heights are its own: nothing set, nothing saved
+        return;
+    }
     const RenderConfig chosen = get_render_config_chosen();
     const unsigned shown = c.stage >= 2u ? c.heights[c.stage - 2u] : c.start;
     if (chosen.upscaler != 0u || normalized_internal_height(chosen.internal_height) != shown) {

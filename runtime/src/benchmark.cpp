@@ -692,7 +692,12 @@ void write_result(bool complete) {
     settings_json(out, run.phase1);
     out << ",\"limits\":[\"the game does not report when a stage's intro camera ends: each scene's window holds its entry "
            "(intro camera, star name, start) without a split\",\"draws and triangles: no back-end-neutral counter\","
-           "\"gpu pass times are each back end's ~10-frame running average, averaged over the window\"],\"scenes\":[";
+           "\"gpu pass times are each back end's ~10-frame running average, averaged over the window\"";
+    if (render::render_config_first_start()) {
+        // Never set up: no config.ini when the process started. The game's defaults stand as the player's.
+        out << ",\"no config.ini yet: settings are the game's defaults (a first start's height calibration has not run)\"";
+    }
+    out << "],\"scenes\":[";
     bool first = true;
     for (std::size_t i = 0; i < run.results.size() && i < run.items.size(); ++i) {
         if (run.items[i].kind != Kind::Scene) continue;
