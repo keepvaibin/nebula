@@ -642,7 +642,8 @@ void check_packages(const std::vector<StartPackage>& packages, std::string_view 
     const std::string& played = side.played;
     // What a kept report and a finding's words depend on beyond the package's own files.
     const std::string game = std::string(NEBULA_VERSION) + "\t" + region + "\t" + platform + "\t" + played + "\t" +
-                             std::to_string(LUMA_API) + "\t" + (side.store != nullptr ? check::store_key(*side.store) : "-");
+                             std::to_string(LUMA_API) + "\t" + (side.store != nullptr ? check::store_key(*side.store) : "-") +
+                             "\t" + check::description().key;
 
     // Pass 1: each package's kept report (its own rules), validated only when its bytes changed: the names, sizes and
     // times first; their content hashed only when those changed.

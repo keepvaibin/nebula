@@ -37,14 +37,19 @@ to replace, without a second check.
 ### 3. When the game resolves
 
 - At import and at each start: the validator's start check runs every reference rule with the store, the
-  self-description and the installed mods. Its findings become mod-log entries (source VALIDATOR, at the title's
+  self-description and the installed mods. The self-description is the `luma` folder beside the game's program (an
+  installed game's `versions/<v>/luma`), read as LumaLink's `--names` reads it: the function rows, `luma_types.json`,
+  `luma_services.json` and the placement facts `smg_game.luma-placement.json` (LumaValidateInput `names`, `types`,
+  `services`, `placement`), so the game and LumaLink judge a mod alike. Without the folder (a development build, a
+  device with none) those rules go unchecked; one the validator refuses is said on stderr and the mod is checked as
+  without it. Its findings become mod-log entries (source VALIDATOR, at the title's
   summary). A start's check reads the kept report for the rules that read the whole `.luma`; reference rules that read
   the store or other mods run again at every start, so a game update or another mod's removal that breaks a reference
   is found then.
 - After start: object classes. A row of a stage's placement table (`jmp/Placement/<layer>/` or
   `jmp/MapParts/<layer>/`, not the zone list `StageObjInfo`; a patch's `add`, `rows`, `set` and `select`, or a whole
-  table in `files/`) names its object's class. A class that neither the game's factory list (the placement facts
-  beside the game module) nor its planet table names, and that is not made by its shape (`ShapeModelNo` other than
+  table in `files/`) names its object's class. A class that neither the game's factory list (the placement facts'
+  `factory`) nor its planet table names, and that is not made by its shape (`ShapeModelNo` other than
   -1), may be one a mod's code makes. The validator keeps it in the mod's report as an `after_start` row (class,
   file, and the line of `name` in a patch or the row's number from 1 in a whole table) and counts it as not checked
   (L403, `Missing.AfterStart`; `Missing.Classes` when the factory list was not given, and then every placement but

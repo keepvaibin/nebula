@@ -6,6 +6,7 @@
 #include "galaxy/asset_store.h"
 #include "galaxy/luma_game_store.h"
 #include "galaxy/mods.h"
+#include "galaxy/platform_paths.h"
 
 #include <luma.h>
 
@@ -82,6 +83,93 @@ std::string read_file(const std::filesystem::path& path) {
     return text.str();
 }
 
+namespace {
+
+// The self-description folder read as luma-validate's Names::from_rows_folder reads it (LumaLink's --names): false,
+// with why, when it holds a second types file or services catalog, or a file it names does not read.
+bool read_description(const std::filesystem::path& folder, Description& out, std::string& why) {
+    std::error_code error;
+    std::vector<std::filesystem::path> rows;
+    std::filesystem::path types;
+    std::filesystem::path services;
+    for (std::filesystem::recursive_directory_iterator it(folder, error), end; !error && it != end; it.increment(error)) {
+        if (!it->is_regular_file(error)) continue;
+        const std::filesystem::path& path = it->path();
+        const std::filesystem::path name = path.filename();
+        if (path.extension() == ".rows") {
+            rows.push_back(path);
+        } else if (name == "luma_types.json" || name == "luma_services.json") {
+            std::filesystem::path& one = name == "luma_types.json" ? types : services;
+            if (!one.empty()) {
+                why = "a second " + name.string() + " under " + folder.string();
+                return false;
+            }
+            one = path;
+        }
+    }
+    if (error) {
+        why = folder.string() + ": " + error.message();
+        return false;
+    }
+    std::sort(rows.begin(), rows.end(),
+              [](const std::filesystem::path& a, const std::filesystem::path& b) { return a.generic_string() < b.generic_string(); });
+    const auto read = [&why](const std::filesystem::path& path, std::string& into) {
+        std::ifstream in(path, std::ios::binary);
+        if (!in) {
+            why = path.string() + " cannot be read";
+            return false;
+        }
+        std::ostringstream text;
+        text << in.rdbuf();
+        into = text.str();
+        return true;
+    };
+    for (const std::filesystem::path& path : rows) {
+        std::string lines;
+        if (!read(path, lines)) return false;
+        if (!lines.empty() && lines.back() != '\n') lines.push_back('\n');
+        out.names += lines;
+    }
+    if (!types.empty() && !read(types, out.types)) return false;
+    if (!services.empty() && !read(services, out.services)) return false;
+    const std::filesystem::path placement = folder / "smg_game.luma-placement.json";
+    if (std::filesystem::is_regular_file(placement, error) && !read(placement, out.placement)) return false;
+    return true;
+}
+
+}  // namespace
+
+const Description& description() {
+    static const Description found = [] {
+        Description d;
+        const std::filesystem::path program = galaxy::program_directory();
+        const std::filesystem::path folder = program.empty() ? std::filesystem::path{} : program / "luma";
+        std::error_code error;
+        std::string why;
+        if (folder.empty() || !std::filesystem::is_directory(folder, error)) {
+            // A development build or a device with no self-description: as before, those rules go unchecked.
+        } else if (!read_description(folder, d, why) || d.names.empty()) {
+            if (why.empty()) why = "no function rows under " + folder.string();
+            std::fprintf(stderr, "[modlog] the game's self-description is not used: %s\n", why.c_str());
+            d = Description{};
+        }
+        // FNV-1a over each part and its length: a game of other rows, types, services or facts checks every rule again.
+        std::uint64_t h = 0xcbf29ce484222325ull;
+        const auto mix = [&h](std::string_view bytes) {
+            for (const char c : bytes) h = (h ^ static_cast<unsigned char>(c)) * 0x100000001b3ull;
+        };
+        for (const std::string* part : {&d.names, &d.types, &d.services, &d.placement}) {
+            mix(std::to_string(part->size()) + ":");
+            mix(*part);
+        }
+        char hex[17];
+        std::snprintf(hex, sizeof(hex), "%016llx", static_cast<unsigned long long>(h));
+        d.key = d.names.empty() ? std::string("-") : std::string(hex);
+        return d;
+    }();
+    return found;
+}
+
 bool validate_package(const Validator* v, std::string_view id, const std::filesystem::path& folder, const Game& game,
                       const std::vector<LumaInstalledMod>& installed, std::uint32_t position, const std::string& kept_in,
                       std::string& kept_out, std::vector<Kept>* findings) {
@@ -99,6 +187,26 @@ bool validate_package(const Validator* v, std::string_view id, const std::filesy
     input.position = position;
     input.kept = kept_in.empty() ? nullptr : reinterpret_cast<const std::uint8_t*>(kept_in.data());
     input.kept_size = kept_in.size();
+    // The game's self-description, as LumaLink's check reads it: the code's names and types, the services catalog, and
+    // the factory's classes, so only a placement of a class no list names waits for the check after the mods' start.
+    // The validator takes the others only with the names.
+    const Description& self = description();
+    if (!self.names.empty()) {
+        input.names = self.names.data();
+        input.names_size = self.names.size();
+        if (!self.types.empty()) {
+            input.types = self.types.data();
+            input.types_size = self.types.size();
+        }
+        if (!self.services.empty()) {
+            input.services = self.services.data();
+            input.services_size = self.services.size();
+        }
+        if (!self.placement.empty()) {
+            input.placement = self.placement.data();
+            input.placement_size = self.placement.size();
+        }
+    }
     // The game's own files, through a view for this call alone.
     std::optional<galaxy::LumaGameStoreView> view;
     std::string key;
@@ -108,7 +216,24 @@ bool validate_package(const Validator* v, std::string_view id, const std::filesy
         input.store = view->get();
         input.store_key = key.c_str();
     }
-    LumaReport* const report = v->validate(&input);
+    LumaReport* report = v->validate(&input);
+    if (v->state(report) < 0 && input.names != nullptr) {
+        // The self-description is the game's own: one the validator does not take (a file of another release) is a
+        // fault of the install, said; the mod is still checked as without it.
+        const char* why = v->invalid(report);
+        std::fprintf(stderr, "[modlog] %.*s: checked without the game's self-description, which the validator refuses: %s\n",
+                     static_cast<int>(id.size()), id.data(), why != nullptr ? why : "?");
+        v->release(report);
+        input.names = nullptr;
+        input.names_size = 0;
+        input.types = nullptr;
+        input.types_size = 0;
+        input.services = nullptr;
+        input.services_size = 0;
+        input.placement = nullptr;
+        input.placement_size = 0;
+        report = v->validate(&input);
+    }
     if (v->state(report) < 0) {
         const char* why = v->invalid(report);
         std::fprintf(stderr, "[modlog] %.*s: the check did not run: %s\n", static_cast<int>(id.size()), id.data(),
