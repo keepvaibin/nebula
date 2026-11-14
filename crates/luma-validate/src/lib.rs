@@ -6,6 +6,7 @@ pub mod json;
 pub mod names;
 pub mod schema;
 pub mod semver;
+pub mod uri;
 pub mod zip;
 
 mod binary;

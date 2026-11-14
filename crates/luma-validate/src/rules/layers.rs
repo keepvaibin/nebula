@@ -26,8 +26,8 @@ pub const WHERE: [(&str, &str); 11] = [
 const MAX_MODEL: u64 = 1 << 30;
 
 /// The files (paths under the layer's `files/`, as spelled) that a `.gltf` or `.glb` of the layer names by a buffer's or
-/// an image's `uri`: a path relative to the model's folder, not `data:`, not leaving the folder (the cook, gltf.rs
-/// read_uri, reads each from beside the model and refuses the others by name).
+/// an image's `uri`, read by `crate::uri::model_uri` as the cook (gltf.rs read_uri) reads it: a file beside the model.
+/// The cook refuses the others by name.
 fn model_parts(ctx: &mut Ctx, layer: &str) -> BTreeSet<String> {
     let prefix = format!("layers/{layer}/files/");
     let models: Vec<(usize, String)> = ctx
@@ -52,12 +52,9 @@ fn model_parts(ctx: &mut Ctx, layer: &str) -> BTreeSet<String> {
         for list in ["buffers", "images"] {
             for item in root.get(list).map(|l| l.items().to_vec()).unwrap_or_default() {
                 let Some(uri) = item.get("uri").and_then(|u| u.as_str()) else { continue };
-                if uri.starts_with("data:") || uri.contains("..") || uri.starts_with('/') || uri.contains(':') || uri.contains('\\') {
-                    continue;
+                if let crate::uri::ModelUri::File(file) = crate::uri::model_uri(uri) {
+                    parts.insert(if folder.is_empty() { file } else { format!("{folder}/{file}") });
                 }
-                let mut at: Vec<&str> = if folder.is_empty() { Vec::new() } else { folder.split('/').collect() };
-                at.extend(uri.split('/').filter(|s| !s.is_empty() && *s != "."));
-                parts.insert(at.join("/"));
             }
         }
     }

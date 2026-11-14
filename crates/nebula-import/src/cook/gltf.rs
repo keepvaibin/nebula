@@ -75,16 +75,17 @@ fn base64(text: &str) -> Option<Vec<u8>> {
 
 /// A buffer's or an image's bytes by its `uri`, which `pointer` names: inline (`data:...;base64,`) or a file beside the
 /// model, never outside its folder.
+/// The uri is read by luma_validate::uri::model_uri, the reading L304 makes of it.
 fn read_uri(uri: &str, folder: Option<&Path>, pointer: &str) -> Result<Vec<u8>> {
-    if let Some(rest) = uri.strip_prefix("data:") {
-        return rest.split_once(";base64,").and_then(|(_, data)| base64(data)).or_invalid(|| pointer.to_string());
-    }
-    if uri.contains("..") || uri.starts_with('/') || uri.contains(':') || uri.starts_with('\\') {
-        return Err(refuse("Cook.Model.Leaves", &[("uri", uri.to_string())]));
-    }
+    use luma_validate::uri::{model_uri, ModelUri};
+    let file = match model_uri(uri) {
+        ModelUri::Inline(rest) => return rest.split_once(";base64,").and_then(|(_, data)| base64(data)).or_invalid(|| pointer.to_string()),
+        ModelUri::Leaves => return Err(refuse("Cook.Model.Leaves", &[("uri", uri.to_string())])),
+        ModelUri::File(file) => file,
+    };
     let unreadable = || refuse("Cook.Model.Unreadable", &[("uri", uri.to_string())]);
     let folder = folder.ok_or_else(unreadable)?;
-    std::fs::read(folder.join(uri)).map_err(|_| unreadable())
+    std::fs::read(file.split('/').fold(folder.to_path_buf(), |at, part| at.join(part))).map_err(|_| unreadable())
 }
 
 impl Document {
