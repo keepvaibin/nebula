@@ -148,7 +148,8 @@ Adapter adapter_of(VkPhysicalDevice device) {
     VkPhysicalDeviceProperties core{};
     vkGetPhysicalDeviceProperties(device, &core);
     Adapter adapter;
-    if (core.apiVersion >= VK_API_VERSION_1_1) {
+    // Not on a Vulkan 1.0 loader's instance, whose 1.1 commands are absent (only Android 8 and older have one).
+    if (core.apiVersion >= VK_API_VERSION_1_1 && vkGetPhysicalDeviceProperties2 != nullptr) {
         VkPhysicalDeviceIDProperties id{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES};
         VkPhysicalDeviceProperties2 properties{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, &id};
         vkGetPhysicalDeviceProperties2(device, &properties);
@@ -254,13 +255,24 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     app.pEngineName = "Nebula";
     // FSR 3's shaders are SPIR-V 1.5: a Vulkan 1.2 instance where the loader has it. A 1.3 loader gets a 1.3 instance, so
     // a 1.3 device takes synchronization2 as core Vulkan (no extension).
-    std::uint32_t loader_version = VK_API_VERSION_1_1;
+    // A loader without vkEnumerateInstanceVersion is Vulkan 1.0, and refuses an instance that asks for more.
+    std::uint32_t loader_version = VK_API_VERSION_1_0;
     if (vkEnumerateInstanceVersion != nullptr) {
         (void)vkEnumerateInstanceVersion(&loader_version);
     }
     app.apiVersion = loader_version >= VK_API_VERSION_1_3                    ? VK_API_VERSION_1_3
                      : fsr3_compiled() && loader_version >= VK_API_VERSION_1_2 ? VK_API_VERSION_1_2
-                                                                               : VK_API_VERSION_1_1;
+                     : loader_version >= VK_API_VERSION_1_1                    ? VK_API_VERSION_1_1
+                                                                               : VK_API_VERSION_1_0;
+    // The physical-device queries of Vulkan 1.1 for a device of Vulkan 1.0 (core commands of a version serve only a device of
+    // that version): the extension they were promoted from, wherever the loader lists it.
+    const bool properties2_extension = has_instance_extension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+    if (properties2_extension &&
+        std::none_of(instance_extensions.begin(), instance_extensions.end(), [](const char* have) {
+            return std::strcmp(have, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME) == 0;
+        })) {
+        instance_extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+    }
 #if defined(_WIN32)
     // DLSS: what Streamline needs of the instance, where its files and an RTX adapter are here.
     bool streamline = streamline_vk::start();
@@ -398,10 +410,13 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         if (!has_device_extension(candidate, VK_KHR_SWAPCHAIN_EXTENSION_NAME)) {
             continue;
         }
-        // Vulkan 1.1 at least (the memory allocator's and the device queries' entry points).
+        // Vulkan 1.1, or 1.0 with what Nebula takes from 1.1 as the extensions it came from: the physical-device queries
+        // (instance) and VK_KHR_maintenance1 (the viewports' negative height, the transfer bits of format features). The
+        // version in use is the lower of the instance's and the device's.
         VkPhysicalDeviceProperties candidate_properties{};
         vkGetPhysicalDeviceProperties(candidate, &candidate_properties);
-        if (candidate_properties.apiVersion < VK_API_VERSION_1_1) {
+        if (std::min(app.apiVersion, candidate_properties.apiVersion) < VK_API_VERSION_1_1 &&
+            !(properties2_extension && has_device_extension(candidate, VK_KHR_MAINTENANCE1_EXTENSION_NAME))) {
             vulkan_1_0_only = true;
             continue;
         }
@@ -426,11 +441,26 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         }
     }
     if (physical_ == VK_NULL_HANDLE) {
-        return fail(vulkan_1_0_only ? "the GPU's Vulkan driver is version 1.0; Nebula needs Vulkan 1.1"
+        return fail(vulkan_1_0_only ? "the GPU's Vulkan driver is version 1.0 without VK_KHR_maintenance1 or "
+                                      "VK_KHR_get_physical_device_properties2"
                                     : "no device with a graphics queue that presents to the window, and swapchains");
     }
     vkGetPhysicalDeviceProperties(physical_, &properties_);
     device_name_ = properties_.deviceName;
+    // Vulkan 1.0 in use (a 1.0 device, or a 1.0 loader's instance): the parts of 1.1 Nebula uses come from the extensions
+    // they were promoted from.
+    const bool vulkan_1_0 = std::min(app.apiVersion, properties_.apiVersion) < VK_API_VERSION_1_1;
+    if (vulkan_1_0) {
+        // Every physical-device query of 1.1 below goes to the extension's command of the same signature (spec, "Extending
+        // Physical Device Core Functionality").
+        vkGetPhysicalDeviceFeatures2 = vkGetPhysicalDeviceFeatures2KHR;
+        vkGetPhysicalDeviceProperties2 = vkGetPhysicalDeviceProperties2KHR;
+        vkGetPhysicalDeviceFormatProperties2 = vkGetPhysicalDeviceFormatProperties2KHR;
+        vkGetPhysicalDeviceImageFormatProperties2 = vkGetPhysicalDeviceImageFormatProperties2KHR;
+        vkGetPhysicalDeviceMemoryProperties2 = vkGetPhysicalDeviceMemoryProperties2KHR;
+        vkGetPhysicalDeviceQueueFamilyProperties2 = vkGetPhysicalDeviceQueueFamilyProperties2KHR;
+        vkGetPhysicalDeviceSparseImageFormatProperties2 = vkGetPhysicalDeviceSparseImageFormatProperties2KHR;
+    }
     {
         Adapter adapter = adapter_of(physical_);
         gpu_id_ = std::move(adapter.identity);
@@ -467,6 +497,18 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     queue_info.queueCount = 1;
     queue_info.pQueuePriorities = &priority;
     std::vector<const char*> device_extensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+    // Vulkan 1.0: maintenance1 (checked at selection) and, where both are listed, dedicated allocations for the memory
+    // allocator.
+    bool dedicated_extension = false;
+    if (vulkan_1_0) {
+        device_extensions.push_back(VK_KHR_MAINTENANCE1_EXTENSION_NAME);
+        dedicated_extension = has_device_extension(physical_, VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME) &&
+                              has_device_extension(physical_, VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME);
+        if (dedicated_extension) {
+            device_extensions.push_back(VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME);
+            device_extensions.push_back(VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME);
+        }
+    }
     // On a Vulkan 1.2 instance and device one chain carries every promoted feature: the separate structures must not
     // appear beside it.
     const bool core_12 = app.apiVersion >= VK_API_VERSION_1_2 && properties_.apiVersion >= VK_API_VERSION_1_2;
@@ -1105,7 +1147,10 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     functions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
     functions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
     VmaAllocatorCreateInfo allocator_info{};
-    allocator_info.vulkanApiVersion = VK_API_VERSION_1_1;
+    allocator_info.vulkanApiVersion = vulkan_1_0 ? VK_API_VERSION_1_0 : VK_API_VERSION_1_1;
+    if (dedicated_extension) {
+        allocator_info.flags |= VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT;
+    }
     allocator_info.physicalDevice = physical_;
     allocator_info.device = device_;
     allocator_info.instance = instance_;

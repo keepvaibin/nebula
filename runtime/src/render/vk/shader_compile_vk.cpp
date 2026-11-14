@@ -318,8 +318,11 @@ std::vector<std::uint32_t> compile_hlsl(std::string_view hlsl, ShaderStage stage
     }
     shader.setPreamble(preamble.c_str());
     shader.setEnvInput(glslang::EShSourceHlsl, lang, glslang::EShClientVulkan, 100);
-    shader.setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_1);
-    shader.setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_3);
+    // Vulkan 1.0's environment, SPIR-V 1.0: the one every Vulkan device takes (a 1.0 device accepts nothing later), so the
+    // modules built ahead of time serve them all. Storage buffers come out as Uniform + BufferBlock rather than the
+    // StorageBuffer class; the operations are the same.
+    shader.setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_0);
+    shader.setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_0);
     // Semantics on stage variables (assign_semantic_locations), removed again before the module is used; a compute
     // shader has none, and would keep the extension.
     if (stage != ShaderStage::Compute) {
@@ -362,8 +365,8 @@ std::vector<std::uint32_t> compile_hlsl(std::string_view hlsl, ShaderStage stage
     }
     std::string messages_out = logger.getAllMessages();
     if (compile_options.validate) {
-        // The module as it is used for a Vulkan 1.1 device.
-        spv_context context = spvContextCreate(SPV_ENV_VULKAN_1_1);
+        // The module as a Vulkan 1.0 device takes it (later versions accept every 1.0 module).
+        spv_context context = spvContextCreate(SPV_ENV_VULKAN_1_0);
         spv_diagnostic diagnostic = nullptr;
         if (spvValidateBinary(context, spirv.data(), spirv.size(), &diagnostic) != SPV_SUCCESS) {
             messages_out += diagnostic != nullptr && diagnostic->error != nullptr ? diagnostic->error
