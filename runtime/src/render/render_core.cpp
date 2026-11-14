@@ -489,6 +489,7 @@ void RenderCore::note_picture_shown(
     last_presented_picture_.store(
         texture.picture_number, std::memory_order_relaxed);
     ++stat_presents_;
+    pipelines_.picture_shown();
     if (texture.last_shown_number == texture.picture_number) {
         ++stat_pictures_shown_again_;
         return;

@@ -67,6 +67,15 @@ public:
     // Pipelines a draw wanted before the background had them: the cook's list missed them.
     [[nodiscard]] std::uint64_t misses() const noexcept { return misses_; }
     [[nodiscard]] std::uint64_t failures() const noexcept { return failures_.load(std::memory_order_relaxed); }
+    // The texture target forms left to the cache at the start (left_to_cache) are made after the first picture with a scene in
+    // it is shown, behind every other job, so the first target pass that draws one finds it made: scene_drawn from the walk
+    // that draws a scene, picture_shown from each present.
+    void scene_drawn() noexcept { scene_drawn_.store(true, std::memory_order_relaxed); }
+    void picture_shown() noexcept {
+        if (scene_drawn_.load(std::memory_order_relaxed) && !scene_shown_.load(std::memory_order_relaxed)) {
+            release_left();
+        }
+    }
 
 private:
     static constexpr unsigned kPageBits = 8u;
@@ -104,7 +113,9 @@ private:
         PipelineEntry entry;
         unsigned variant, aux;
         bool optimize = false;  // a draw's quickly linked pipeline, to be replaced by the optimised link
+        bool deferred = false;  // a texture target form left to the cache at the start, made after the first scene is shown
     };
+    void release_left() noexcept;
     gpu::Pipeline* create_now(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux);
     std::atomic<gpu::Pipeline*>* cell(std::uint64_t id, unsigned variant, unsigned aux);
     void refuse(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux);
@@ -130,8 +141,8 @@ private:
     void worker();
 
     // The texture targets' forms (target_form). Every one prepared and published is in the driver cache, which a later run
-    // loads; a form no target pass has drawn is then left to the cache and made by the draw that first needs it, a load from
-    // the cache, not a compile. The file beside the cache keeps both sets and the hash of the cache data they go with: a cache
+    // loads; a form no target pass has drawn is then left out of the start's set and made after the first scene is shown
+    // (left_jobs_), or by the draw that first needs it if that comes sooner, a load from the cache, not a compile. The file beside the cache keeps both sets and the hash of the cache data they go with: a cache
     // the driver refused, written by another run, or holding other programs names nothing, and every form is prepared.
     bool targets_open();
     [[nodiscard]] std::uint64_t form_key(const PipelineEntry& entry, unsigned variant, unsigned aux);
@@ -157,6 +168,10 @@ private:
     std::mutex lock_;
     std::condition_variable wake_;
     std::deque<Job> jobs_;
+    // The forms left to the cache, taken by a worker only when jobs_ is empty and scene_shown_ is set (under lock_). Not counted
+    // in pending_: the first drain (drained) is the start's set alone.
+    std::deque<Job> left_jobs_;
+    std::atomic<bool> scene_drawn_{false}, scene_shown_{false};
     std::unordered_set<std::uint64_t> refused_;  // the driver said no: asked once
     // Program pairs (vertex and pixel ids mixed) the driver refused, and how often: a compiler that cannot take a pair's
     // code refuses it in every state, and each try is a whole compile (hundreds of milliseconds on a phone's draw).

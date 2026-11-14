@@ -33,6 +33,8 @@ void Pipelines::initialize(gpu::Device* device, RootLayout root, void* backend) 
     failures_.store(0u, std::memory_order_relaxed);
     misses_ = 0u;
     reported_.store(false, std::memory_order_relaxed);
+    scene_drawn_.store(false, std::memory_order_relaxed);  // a new device's left forms wait for its own first scene
+    scene_shown_.store(false, std::memory_order_relaxed);
     // One worker for every logical core, at the lowest priority (worker()): the list is prepared by whatever the game and render
     // threads leave idle, and no frame waits for it. A draw whose pipeline is not made yet makes that one itself (create_now);
     // idle workers cost nothing.
@@ -48,6 +50,7 @@ void Pipelines::shutdown() noexcept {
         std::lock_guard guard(lock_);
         quit_ = true;
         jobs_.clear();
+        left_jobs_.clear();
     }
     wake_.notify_all();
     for (std::thread& thread : threads_) {
@@ -261,12 +264,15 @@ void Pipelines::worker() {
         Job job;
         {
             std::unique_lock guard(lock_);
-            wake_.wait(guard, [this] { return quit_ || !jobs_.empty(); });
+            // The left forms only once the queue is empty and a scene has been shown (release_left).
+            const auto left_ready = [this] { return scene_shown_.load(std::memory_order_relaxed) && !left_jobs_.empty(); };
+            wake_.wait(guard, [&] { return quit_ || !jobs_.empty() || left_ready(); });
             if (quit_) {
                 return;
             }
-            job = jobs_.front();
-            jobs_.pop_front();
+            std::deque<Job>& from = !jobs_.empty() ? jobs_ : left_jobs_;
+            job = from.front();
+            from.pop_front();
         }
         try {
             std::atomic<gpu::Pipeline*>* at = cell(job.id, job.variant, job.aux);
@@ -289,8 +295,19 @@ void Pipelines::worker() {
                     }
                 }
             } else if (at != nullptr && at->load(std::memory_order_acquire) == nullptr && !pair_refused(job.entry)) {
-                if (left_to_cache(form)) {
+                if (!job.deferred && left_to_cache(form)) {
                     left_.fetch_add(1u, std::memory_order_relaxed);
+                    // Made later, after the first scene is shown (a load from the cache then, at this thread's priority, not
+                    // the draw's). Out of memory for the entry: it stays to the draw that first needs it.
+                    try {
+                        std::lock_guard guard(lock_);
+                        if (!quit_) {
+                            Job later = job;
+                            later.deferred = true;
+                            left_jobs_.push_back(std::move(later));
+                        }
+                    } catch (...) {
+                    }
                 } else if (gpu::Pipeline* built = build(job.entry, job.variant, job.aux); built != nullptr) {
                     note_target_stored(form);
                     publish(*at, built);
@@ -307,9 +324,21 @@ void Pipelines::worker() {
             } catch (...) {
             }
         }
-        if (pending_.fetch_sub(1u, std::memory_order_acq_rel) == 1u) {
+        if (!job.deferred && pending_.fetch_sub(1u, std::memory_order_acq_rel) == 1u) {
             drained();
         }
+    }
+}
+
+void Pipelines::release_left() noexcept {
+    try {
+        {
+            std::lock_guard guard(lock_);
+            scene_shown_.store(true, std::memory_order_relaxed);
+        }
+        wake_.notify_all();
+    } catch (...) {
+        // The lock failed: the left forms stay to the draws that first need them, and the next present asks again.
     }
 }
 
