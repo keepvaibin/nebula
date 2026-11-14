@@ -65,7 +65,7 @@ typedef struct LumaContentModelService {
        count is 0), and their number in *total (null: not wanted). LUMA_OK; a part's size below 1.0's, or a null parts
        with a count: LUMA_E_ARGUMENT, reported (Service.StructSize). */
     int32_t (*player_parts)(const LumaMod* mod, LumaPlayerPart* parts, uint32_t count, uint32_t* total);
-    /* 1.1. Game thread. A parameter of a material shader (docs/modding/content/materials.md): the attached model's material
+    /* 1.1. Game thread. A parameter of a material shader (content/materials.md): the attached model's material
        `material` takes `rgba` (four floats; a float parameter reads the first) as its parameter `param`, on this model
        only, until it is set again or a clip that moves that colour plays. The cook names each parameter's place in
        <model>.params beside the model: places 0 to 2 hold -4 to 4, places 3 to 6 hold 0 to 1, both in 255ths; a value

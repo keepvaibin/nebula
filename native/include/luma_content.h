@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* What the content services share (contracts models 7, effects 3): an actor of the game as a mod holds it, a place on
+/* What the content services share (content/models.md, effects.md): an actor of the game as a mod holds it, a place on
    it, and the name kinds the validator lifts and checks (references 5). */
 #ifndef LUMA_CONTENT_H
 #define LUMA_CONTENT_H

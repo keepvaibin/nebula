@@ -1,9 +1,9 @@
 #pragma once
-// The type rows (docs/modding/language/types.md): every record, field, base and global of the game that a mod may name. Written
+// The type rows (language/types.md): every record, field, base and global of the game that a mod may name. Written
 // by tools/lumacore/gen_types.py; the numbers are the compiler's own (sizeof, alignof, offsetof, -fno-access-control),
 // so they are this platform's. Rows sit in linker sections beside the function rows and are read only when a mod binds:
 // no code runs for them at start.
-// Objects (docs/modding/language/objects.md): a polymorphic record's row holds its type_info, the RTTI data the module with rows is
+// Objects (language/objects.md): a polymorphic record's row holds its type_info, the RTTI data the module with rows is
 // built with (typeid of a type is a constant address). Nothing here calls into the C++ runtime, which the module has
 // none of on Windows: the kernel compares addresses.
 #include <luma_hook.h>
@@ -32,7 +32,7 @@ namespace luma {
         unsigned fieldCount;
         const TypeBase* bases;
         unsigned baseCount;
-        const void* typeInfo;  // &typeid(the record) when it is polymorphic, else null (contract objects)
+        const void* typeInfo;  // &typeid(the record) when it is polymorphic, else null (language/objects.md)
         // Contract classes (overrides by slot): the record's table of virtual functions at its start, as the compiler's
         // own layout dump says (gen_types.py, -fdump-vtable-layouts): the entries before the address an object holds
         // (Microsoft's: 1, the RTTI locator; Itanium's: 2, offset to top and the type_info) and all of its entries. 0 and

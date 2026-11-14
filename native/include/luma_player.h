@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* LumaCore's player service (contract services-player): extra players in the running scene, each a MarioActor of the
+/* LumaCore's player service: extra players in the running scene, each a MarioActor of the
    game's own (the same brother as the game's player: the scene loaded only that one's files), driven by the second
    controller or by nothing. The game's own player stays the scene's: its camera, its HUD, its lives, the level's end.
    Import: LUMA_SERVICE(slot, "player", "1.0"). */

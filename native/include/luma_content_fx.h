@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* LumaCore's content.fx service (contract effects, section 3): a mod's particle effects, or the game's, started on an
+/* LumaCore's content.fx service (content/effects.md): a mod's particle effects, or the game's, started on an
    actor or a model the mod attached, stopped and tinted. Import: LUMA_SERVICE(slot, "content.fx", "1.0"). */
 #ifndef LUMA_CONTENT_FX_H
 #define LUMA_CONTENT_FX_H

@@ -3,7 +3,7 @@
    plays its own (its joint, texture, colour, texture-swap and visibility clips of one name started together), from a
    frame, at a rate, once or looping, blended from the pose it had; its frame read; frames of it marked, each mark an
    event as the clip passes it; its end an event. The clip is the model's own (a mod model's glTF animations, a game
-   model's clips, or the mod's replacement of one: contract animation 1 and 2). Import: LUMA_SERVICE(slot, "anim",
+   model's clips, or the mod's replacement of one: content/animation.md). Import: LUMA_SERVICE(slot, "anim",
    "1.0"). */
 #ifndef LUMA_ANIM_H
 #define LUMA_ANIM_H

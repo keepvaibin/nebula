@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* Providing a LumaCore service (services-registry contract 6.2, 7, 8): between the game module's kernel and the
+/* Providing a LumaCore service (docs/modding/services/registry.md): between the game module's kernel and the
    services it or the host provides. Not for mods. */
 #ifndef LUMA_SERVICE_PROVIDER_H
 #define LUMA_SERVICE_PROVIDER_H

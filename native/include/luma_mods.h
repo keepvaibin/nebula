@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* LumaCore's mods services (contract services-mods): the session's list of mods (`mods`), numbers in the game's
+/* LumaCore's mods services (docs/modding/services/mods.md): the session's list of mods (`mods`), numbers in the game's
    numbered spaces by `<mod id>/<name>` (`mods.ids`), and a request to install a mod through the import screen
    (`mods.install`). None needs a permission. Calling another mod's functions is the loader's (import kind 6). */
 #ifndef LUMA_MODS_H
@@ -90,7 +90,7 @@ typedef struct LumaModsService {
        folder. A library drops anything else it holds for that id. */
     /* events: STOPPED(data), FORGOTTEN(data) */
     int32_t (*watch_mods)(const LumaMod* mod, LumaEventFn fn, void* user);
-    /* Kit data (contract section 9, lumakit rule 11): the files `kit/<module>/<name>.json` a .luma ships, which a library
+    /* Kit data (services/mods.md): the files `kit/<module>/<name>.json` a .luma ships, which a library
        mod reads for each mod that needs it. `of` is a mod as LumaScript's caller() gives it (its LumaMod pointer as a
        number); `mod` may read the kit data of `of` when `of` is running and is `mod` itself or names `mod` in its
        luma.json `needs`; any other `of` (not running, not a mod, not needing it): LUMA_E_DENIED, reported
@@ -132,7 +132,7 @@ typedef enum LumaModsEvent {
                                      status: LUMA_OK */
 } LumaModsEvent;
 
-/* The spaces of 1.0 (contract section 3): numbers 0x01000000 to 0x01FFFFFF in each. */
+/* The spaces of 1.0 (services/mods.md): numbers 0x01000000 to 0x01FFFFFF in each. */
 #define LUMA_MODS_SPACE_MESSAGE "message" /* a message one mod's actors send and another's receive (receiveOtherMsg) */
 #define LUMA_MODS_SPACE_SENSOR "sensor"   /* a sensor type of a mod's actors (the character group) */
 
@@ -157,7 +157,7 @@ typedef enum LumaModsInstallEvent {
 typedef struct LumaModsInstallService {
     LumaServiceTable base;
     /* 1.0. Game thread. Asks the player, on the import screen, to install the .luma at `path` in the mod's data
-       folder (contract section 1 item 9; an installed mod starts the next time Nebula starts). LUMA_PENDING and *out:
+       folder (an installed mod starts the next time Nebula starts). LUMA_PENDING and *out:
        a DONE event follows (to fn), closed after its event, never inside this call; LUMA_E_BUSY, LUMA_E_NOT_FOUND, LUMA_E_DENIED (don't ask again):
        answers, not reported; LUMA_E_ABSENT: a host without the install screen; a path outside the mod's data folder or not ending ".luma",
        a null fn or out: LUMA_E_ARGUMENT, reported. */

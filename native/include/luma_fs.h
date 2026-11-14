@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* LumaCore's file services (contract services-fs): the mod's data folder and its own installed files (`fs`), and the
+/* LumaCore's file services (services/fs.md): the mod's data folder and its own installed files (`fs`), and the
    Exchange folder the player and every mod with the permission share (`fs.exchange`, permission fs.exchange).
 
    A path is relative to its folder: parts joined by '/', 1 to 255 bytes in all, at most 16 parts, each 1 to 64 bytes

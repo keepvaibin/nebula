@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* LumaCore's input services (contract services-input).
+/* LumaCore's input services (docs/modding/services/input.md).
 
    `input` 1.2, no permission: LUMA_SERVICE(slot, "input", "1.2").
    - The mod's own actions (1.0), which the player binds in Controls. An action is a `key` option of the mod's

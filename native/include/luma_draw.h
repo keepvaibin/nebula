@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* LumaCore's draw service (docs/modding/services/draw.md): a mod draws at named points of the game's frame. In 2-D over the
+/* LumaCore's draw service (services/draw.md): a mod draws at named points of the game's frame. In 2-D over the
    game (rectangles, lines, triangles, images, text in the game's fonts and the mod's own, every language), clipped and
    transformed; in 3-D in the world, depth tested (lines, triangles, models, billboards). Textures come by content name
    or from the mod's own pixels. Everything a mod draws is drawn the frame it asks and never again: nothing stays in the

@@ -395,7 +395,7 @@ enum {
     NEBULA_OPTION_RAY_TRACING,         /* what ray tracing asks of the game now (NEBULA_RAY_TRACING_*); 0: nothing */
 };
 
-/* post_register's result (draw.post, contract draw 15). */
+/* post_register's result (draw.post, docs/modding/services/draw.md). */
 enum {
     NEBULA_POST_OK = 0,        /* *program is the compiled program (never 0) */
     NEBULA_POST_COMPILE = 1,   /* the device's compiler refused the text: its first error in `error` */
@@ -946,7 +946,7 @@ typedef struct NebulaHostServices {
        per loss, then 0. The game asks only while it could open its pause menu, and opens it as the pause button does. A
        request the game did not take (a cutscene, a wipe) lapses when the window is in front again. */
     int (*take_pause_request)(void* user);
-    /* draw.post (contract draw 15): a mod's post program compiled for this device. `text` is the cooked program's text
+    /* draw.post (services/draw.md): a mod's post program compiled for this device. `text` is the cooked program's text
        (LumaLink's part: its params over post_params, the mod's `float4 post(PostIn i)`), `size` bytes, not NUL-ended;
        the host adds its prelude (PostIn, scene, scene_texel, depth, motion, post_params, the bindings) and its entry.
        `reads`: LUMA_DRAW_POST_READS_*. NEBULA_POST_* and *program; `error` holds the compiler's first error, NUL-ended
@@ -997,8 +997,8 @@ NEBULA_GAME_API void nebula_game_sound_frame(void);
 NEBULA_GAME_API uint32_t nebula_game_mii_valid(const NebulaMii* mii);
 /* The host's Mii database changed (Miis imported while the game runs): the game reads its slots again. */
 NEBULA_GAME_API void nebula_game_mii_changed(void);
-/* The module's type rows as JSON (contract types; the host's --luma-describe), given to `write` in pieces in order.
-   Needs no attach; reads only the rows. */
+/* The module's type rows as JSON (language/game-description.md; the host's --luma-describe), given to `write` in
+   pieces in order. Needs no attach; reads only the rows. */
 typedef void (*NebulaDescribeWrite)(void* user, const char* text, uint32_t length);
 NEBULA_GAME_API void nebula_game_luma_describe(NebulaDescribeWrite write, void* user);
 #ifdef __cplusplus

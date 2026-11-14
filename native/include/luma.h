@@ -21,7 +21,7 @@ extern "C" {
    layout for every mod whose LumaModInfo.api is 1; a game that changes one reads and writes the old layout for
    such a mod. Enum values and LumaCore's order never change. */
 #define LUMA_API 1u
-/* The most mods with code that may be on at once (loader contract 2). */
+/* The most mods with code that may be on at once (docs/modding/lumalink/loader.md). */
 #define LUMA_MAX_MODS 256u
 
 /* A function of the game. `invoke` calls it: args[0] is `this` (null for a function without one), args[1..] point at
@@ -41,7 +41,7 @@ typedef struct LumaCall {
     void** args;  /* as LumaFunction.invoke takes them; a hook may change what they point at */
     void* result; /* where the result is, or goes; null for a constructor or destructor. Zero (a class: as its
                      default constructor makes it; a reference: a null pointer) until a hook or the function writes it
-                     (loader contract 4) */
+                     (lumalink/loader.md) */
     uint32_t next;      /* the kernel's */
     uint32_t ran;       /* the kernel's: whether the function's own code ran, and the deepest wrap entered */
     const void* chain;  /* the kernel's: the hooks this call runs, fixed when it starts */
@@ -49,7 +49,7 @@ typedef struct LumaCall {
 
 typedef int32_t (*LumaHook)(LumaCall* call, void* user);
 
-/* A va_list as a function receives it (contract varargs 2, 3): what args[i] points at for a `va_list` parameter, and
+/* A va_list as a function receives it (language/varargs.md): what args[i] points at for a `va_list` parameter, and
    for the rest of a function with `...`. On x86-64 outside Windows the va_list is an array, received as a pointer to
    its element; elsewhere it is itself. A hook reads a copy, never the one it is given:
        va_list mine; LUMA_VA_COPY(mine, call->args[2]); ... va_arg(mine, int) ...; va_end(mine); */
@@ -235,7 +235,7 @@ typedef struct LumaCore {
     void* (*alloc)(const LumaMod* mod, uint64_t size, uint64_t align);
     /* Gives back what `alloc` gave this mod; null does nothing. */
     void (*free)(const LumaMod* mod, void* p);
-    /* Something went wrong in the mod's code at `file`:`line` (loader contract 6, D3-1). `code` picks the words: 900 to
+    /* Something went wrong in the mod's code at `file`:`line` (lumalink/loader.md). `code` picks the words: 900 to
        9999 lumart's (Script.S0901...), args {0}, {1}... in order; 1 to 99 the kernel's and luma.h's own (LUMA_REPORT_*).
        Said once in the game's log and kept for the Mods page in the player's language; repeats are counted. Args are
        UTF-8 and copied; at most 8 are kept. From any thread. */
@@ -275,7 +275,7 @@ typedef struct LumaCore {
        or not in start; *size 0). Valid until start returns; once read, they are gone. */
     const void* (*kept)(const LumaMod* mod, uint32_t* size);
 
-    /* Classes (docs/modding/language/classes.md). Defines a mod's class: its number (>= 0; class_of, own_class, as_class and
+    /* Classes (language/classes.md). Defines a mod's class: its number (>= 0; class_of, own_class, as_class and
        is_a know it), or -1 the definition is not whole (null, size, empty or long name, base not a polymorphic class
        with a row, data_align), -2 the name (or `replaces`) is taken, -3 not on the game thread, -4 an override names
        no virtual of the base, or one the base runs with no row (inline, implicit), or one whose hook is refused, -5 no
@@ -287,7 +287,7 @@ typedef struct LumaCore {
        thread. */
     void* (*class_data)(const LumaMod* mod, const void* object, int32_t class_number);
 
-    /* Numbers in the game's code (docs/modding/language/numbers.md): every number written in a function's code that the game
+    /* Numbers in the game's code (language/numbers.md): every number written in a function's code that the game
        reads at run time, named by the function's row name, its signature, and its place there (the k-th named number,
        from 1, in source order; luma_numbers.json lists them all), and every file's number constant by its name, with
        signature "" and place 0. A null signature asks for the only function of that name with a number at that place.
@@ -301,7 +301,7 @@ typedef struct LumaCore {
        -3: not on the game thread. */
     int32_t (*set_number)(const LumaMod* mod, const char* name, const char* signature, uint32_t place, double value);
 
-    /* Tables of the game's data (docs/modding/language/numbers.md): every file-scope or class-static array or plain record
+    /* Tables of the game's data (language/numbers.md): every file-scope or class-static array or plain record
        with an initializer, by its name (`File.cpp#name` when only its file sees it; luma_numbers.json "tables" lists
        them with their types). table: 0 and *out filled (data as the game reads it now, its element type,
        the size in bytes, the count of elements, 1 for a record), or -1: no such table, or no memory (said). Any
@@ -377,7 +377,7 @@ typedef struct LumaModInfo {
        refuse (-1, or null), said in the log: what the mod added then would outlive it. May be null. */
     void (*stop)(void);
     /* luma.h's, filled by LUMA_MOD: before `start`, it keeps the core for `new` and runs the C++ globals' constructors
-       (the system's loader runs none: loader contract 8, LR-6). */
+       (the system's loader runs none: lumalink/loader.md). */
     void (*begin)(const LumaCore* core, const LumaMod* mod);
     /* luma.h's: after the grace, the destructors `atexit` took, the last first; then the game frees the mod's memory
        and closes its library. */
@@ -447,7 +447,7 @@ static inline void luma_bits_set(void* object, int32_t position, uint32_t width,
 #endif
 
 /* What the compiler calls in a library with no C library: copies, zeroing and comparing (a struct copy, `= {0}`), and
-   on Windows the stack probe of a frame over 4 KiB (loader contract 8). The library defines them itself, once, with
+   on Windows the stack probe of a frame over 4 KiB (lumalink/loader.md). The library defines them itself, once, with
    luma_mod; they are not exported. */
 #if defined(__cplusplus)
 #define LUMA_C extern "C"
@@ -526,7 +526,7 @@ static inline void luma_bits_set(void* object, int32_t position, uint32_t width,
 #define LUMA_STACK_PROBE
 #endif
 
-/* A mod's life (loader contract 8, LR-6, Draft 2 review). Its global constructors run in `begin`, after the core is
+/* A mod's life (docs/modding/lumalink/loader.md). Its global constructors run in `begin`, after the core is
    known; the system's loader runs none:
    - Windows: the library has no C runtime, so nothing else runs `.CRT$XCU`; luma.h runs what lies between its own
      `.CRT$XCA` and `.CRT$XCZ` markers.
@@ -695,7 +695,7 @@ typedef void (*LumaCtor)(void);
 #ifdef __cplusplus
 }
 
-/* C++'s `new` and `delete` over the core's memory (LR-6), in a mod's library (built freestanding, loader contract 8;
+/* C++'s `new` and `delete` over the core's memory, in a mod's library (built freestanding, lumalink/loader.md;
    the game's own code, built hosted, includes luma.h for its types only). Include <new> before luma.h or not at all:
    without it, luma.h declares what `new` needs. `new` of 0 bytes takes 1; alignments go up to 65536. A throwing `new`
    the system has no memory for logs and stops the game (no exceptions); the nothrow forms give null. Placement `new`
@@ -725,7 +725,7 @@ void operator delete[](void*, std::align_val_t, const std::nothrow_t&) noexcept;
 extern "C" const LumaCore* luma_rt_core;
 extern "C" const LumaMod* luma_rt_self;
 /* Off Windows these are visible by the language's rule; the build's luma_mod.map exports luma_mod alone and
-   -Bsymbolic binds the mod's own calls to them (loader contract 8). */
+   -Bsymbolic binds the mod's own calls to them (lumalink/loader.md). */
 #define LUMA_NEW                                                                                                      \
     namespace std {                                                                                                   \
         const nothrow_t nothrow{};                                                                                    \

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* LumaCore's save services (contract services-save): a mod's own values kept in the player's game file (`save`,
+/* LumaCore's save services (docs/modding/services/save.md): a mod's own values kept in the player's game file (`save`,
    written when the game saves, copied and erased with the file), its values across files (`save.global`, written at
    once), and the game's own file handed out or offered back through the game's screen (`save.game`, permission
    `save.game`). A key is a name, 1 to 64 of a-z 0-9 _ - .; a value 0 to 64 KiB.

@@ -48,7 +48,7 @@ typedef struct LumaModLogEntry {
                                              plain UTF-8; nothing is stripped from them */
     uint32_t count;      /* how many of names/values; at most LUMA_MODLOG_ARGS */
     const char* text;    /* the line in the played language, already rendered by the source (UTF-8); null: the log
-                            renders it (contract section 3) */
+                            renders it (lumalink/mod-log.md) */
     const char* english; /* the same line in English for the game's log (UTF-8); null: rendered as above */
     const char* host;    /* a host sentence (English capitals, as the Mods page's: "ITS CODE DID NOT START"), used when
                             text is null: the words are its translation as the settings menu translates host text, and
@@ -76,7 +76,7 @@ typedef void (*LumaModLogFact)(const char* key, const char* json);
 typedef void (*LumaModLogSession)(uint32_t mods_on, LumaModLogFact fact);
 typedef void (*LumaModLogAdd)(const LumaModLogEntry* entry);
 
-/* One kept entry as the host's Mods > Log page reads it (contract 4.2). Every pointer lives for the session. */
+/* One kept entry as the host's Mods > Log page reads it (lumalink/mod-log.md). Every pointer lives for the session. */
 typedef struct LumaModLogView {
     uint32_t size; /* sizeof(LumaModLogView) as the caller knows it: the module writes whole fields, none past it */
     uint32_t source;

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* Between the host and the game's LumaCore loader (loader contract 3 and LR-5); not for mods. */
+/* Between the host and the game's LumaCore loader (docs/modding/lumalink/loader.md); not for mods. */
 #ifndef LUMA_HOST_H
 #define LUMA_HOST_H
 

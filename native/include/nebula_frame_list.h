@@ -343,7 +343,7 @@ typedef enum NebulaPassKind {
                                 game hides from its own camera, which still casts: first-person view) */
 } NebulaPassKind;
 
-/* draw.native (contract draw 16): what a native call is given, valid only during it (one struct with the mods'). */
+/* draw.native (services/draw.md): what a native call is given, valid only during it (one struct with the mods'). */
 typedef LumaDrawNativeFrame NebulaNativeFrame;
 
 /* A native call: the game's trampoline and its word. The host calls it on its render thread at the pass, for every picture

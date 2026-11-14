@@ -1,5 +1,5 @@
 /* A mod library's C++ global constructors, kept from the system's loader (with -fno-use-init-array) and run by
-   luma.h's begin after the core is known (loader contract 8, LR-6), and its terminators (`.dtors`: a destructor
+   luma.h's begin after the core is known (docs/modding/lumalink/loader.md), and its terminators (`.dtors`: a destructor
    attribute's function not registered with atexit), which no system loader runs, run by luma.h's finish.
    Linux and Android: -Wl,-T,luma_ctors.ld. Each section is always made (a null entry first, which the runners
    skip), so its bounds always resolve. The layout is GNU ld's own for .ctors/.dtors: the plain sections, then

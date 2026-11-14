@@ -27,7 +27,7 @@ namespace luma {
     // A constructor or destructor: its hooks are told, and it goes on.
     void tell(const Function* fn, void** args);
     // Given as `args` to a function's invoke, it asks instead of calling: the answer (an unsigned at `result`) is the
-    // kind of the function's result, Result<R>::kKind (loader contract 4, LR-1).
+    // kind of the function's result, Result<R>::kKind (docs/modding/lumalink/loader.md).
     extern void* kAskKind[1];
     enum : unsigned {
         kPlain = 0,      // zeroed, then default-constructed before the chain: a skip or a wrap that does not proceed
@@ -57,7 +57,7 @@ namespace luma {
 inline void* operator new(decltype(sizeof(0)), luma::Place, void* p) noexcept { return p; }
 
 namespace luma {
-    // Where a hooked call's result goes (loader contract 4, Z-2 and LR-1). A plain result holds R's default before any
+    // Where a hooked call's result goes (docs/modding/lumalink/loader.md). A plain result holds R's default before any
     // hook runs (zero for a scalar or a plain struct), so a before that skips without writing it, or a wrap that does
     // not proceed, gives the caller that, never uninitialised bytes. A reference is a null pointer until written; the
     // kernel runs the function when the chain leaves it null. A fixed result (a class with no default constructor, or
@@ -170,7 +170,7 @@ namespace luma {
         }                                                                                                            \
     }
 
-// A constexpr function's row (contract varargs 4), written after the function at namespace scope: called by name, no
+// A constexpr function's row (language/varargs.md), written after the function at namespace scope: called by name, no
 // flag, so never hooked (the compiler evaluates some calls while compiling; a hook would see only the others).
 #define LUMA_CALL_ROW(ID, NAME, SIGNATURE, RESULT, CALL)                                                       \
     LUMA_ROW_SECTION static const ::luma::Function ID = {NAME, SIGNATURE, [](void** luma_a, void* luma_r) {   \
@@ -181,7 +181,7 @@ namespace luma {
         ::luma::Result<::luma::Type<RESULT>>::put(luma_r, [&]() -> ::luma::Type<RESULT> { return CALL; });     \
     }, nullptr}
 
-// A function with `...` (contract varargs 3): its hooks are told, before its body, the fixed parameters and a va_list
+// A function with `...` (language/varargs.md): its hooks are told, before its body, the fixed parameters and a va_list
 // of the rest, as a va_list parameter is received (luma.h luma_va_arg; args[n+1] points at it; a hook reads a
 // LUMA_VA_COPY), which ends before the body starts its own.
 #define LUMA_TELL_VA(NAME, SIGNATURE, LAST, POINTERS)    \
