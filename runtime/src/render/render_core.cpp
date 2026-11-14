@@ -16,6 +16,7 @@
 #include <immintrin.h>
 #endif
 #endif
+#include "galaxy/benchmark.h"
 #include "galaxy/loss_report.h"
 #include "galaxy/crash_report.h"
 #include "galaxy/host_extension.h"
@@ -525,6 +526,7 @@ void RenderCore::note_picture_shown(
     texture.last_shown_number = texture.picture_number;
     ++stat_new_pictures_shown_;
     record_monotonic_cadence_sample(new_picture_shown_cadence_);
+    galaxy::bench::note_new_picture(new_picture_shown_cadence_.last_sample_ns);
     report_frame_tail_window();
     trace_memory();
 }

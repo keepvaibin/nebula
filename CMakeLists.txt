@@ -405,6 +405,7 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/gpu_upload_ring.cpp
     runtime/src/render/galaxy_select.cpp
     runtime/src/benchmark_recommend.cpp
+    runtime/src/benchmark.cpp
     runtime/src/render/window_owner.cpp
     runtime/src/render/texture_store.cpp
     runtime/src/render/texture_pack.cpp
@@ -742,6 +743,7 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/core/encoder_vk.cpp
         runtime/src/render/galaxy_select.cpp
         runtime/src/benchmark_recommend.cpp
+        runtime/src/benchmark.cpp
         runtime/src/render/frame_interpolation.cpp
         runtime/src/render/rt_materials.cpp
         runtime/src/render/rt_caps.cpp

@@ -104,6 +104,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/core/encoder_vk.cpp
     ${rt}/render/galaxy_select.cpp
     ${rt}/benchmark_recommend.cpp
+    ${rt}/benchmark.cpp
     ${rt}/render/frame_interpolation.cpp
     ${rt}/render/rt_materials.cpp
     ${rt}/render/rt_caps.cpp

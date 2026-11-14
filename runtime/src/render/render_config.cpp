@@ -2,6 +2,7 @@
 #include "galaxy/portable.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/atomic_file.h"
+#include "galaxy/benchmark.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/platform_paths.h"
 
@@ -610,6 +611,9 @@ bool reload_render_config_if_changed() {
 }
 
 bool save_render_config_to_file() {
+    if (galaxy::bench::running()) {
+        return false;  // a benchmark's settings are its own, never the player's file
+    }
     s_lock.lock_shared();
     RenderConfig cfg = s_config;
     std::array<char, 32> gpu = s_file_gpu;
@@ -715,9 +719,23 @@ std::string next_start_gpu() {
     return gpu.data();
 }
 
+namespace {
+std::mutex s_adapter_lock;
+RenderAdapter s_adapter;
+}  // namespace
+
+RenderAdapter render_adapter() {
+    const std::lock_guard<std::mutex> lock(s_adapter_lock);
+    return s_adapter;
+}
+
 void record_render_adapter(const char* description, unsigned vendor_id, unsigned device_id,
                            unsigned subsys_id, bool ray_tracing) noexcept {
     try {
+        {
+            const std::lock_guard<std::mutex> lock(s_adapter_lock);
+            s_adapter = {description != nullptr ? description : "", vendor_id, device_id};
+        }
         const std::filesystem::path config = config_path();
         if (config.empty() || description == nullptr) {
             return;
