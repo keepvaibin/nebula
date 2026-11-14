@@ -9,10 +9,15 @@ with the in-box C# compiler, and embeds them with the given game binaries. A fir
 player's disc image with nebula-import. An update keeps the packed game, the saves and the settings, installs this
 version and removes the recompiled game of earlier installs, its compiler and its source (InstallEngine.Install).
 
-  -Bin  NebulaNative.exe, smg_game.dll, smg_game_plain.dll, tables\*.tsv and D3D12\ (the Agility SDK's runtime
-        the build put beside it), as tested
-  -Dxc  Microsoft's DirectX Shader Compiler release, unpacked (github.com/microsoft/DirectXShaderCompiler): a mod's shaders are
-        built with it on the player's PC
+  -Bin    NebulaNative.exe, smg_game.dll, smg_game_plain.dll and D3D12\ (the Agility SDK's runtime the build put
+          beside it), as tested; tables\material-names.tsv, rt-materials.tsv and rt-suns.tsv (the ray tracer's tables,
+          made by nebula-import rt-materials on the ray tracing branch) when there: Setup installs without them else
+  -Names  the game build folder of those binaries (the folder LumaLink's --names takes): its function rows (luma\),
+          luma_types\luma_types.json, luma_functions.json, luma_numbers.json and the placement facts
+          (smg_game.luma-placement.json, smg_game.luma-self.json). They are installed as luma\ beside the game, with the
+          services list the game writes (--luma-services), where LumaLink reads the installed game's self-description
+  -Dxc    Microsoft's DirectX Shader Compiler release, unpacked (github.com/microsoft/DirectXShaderCompiler): a mod's
+          shaders are built with it on the player's PC
 
 Requires Git, Rust (stable, MSVC target) and Visual Studio 2022 with the C++ tools (nebula-import's compression
 libraries are C). Cargo builds into CARGO_TARGET_DIR when it is set, else target\ in this tree.
@@ -21,6 +26,7 @@ libraries are C). Cargo builds into CARGO_TARGET_DIR when it is set, else target
 param(
     [Parameter(Mandatory = $true)][string]$Version,
     [Parameter(Mandatory = $true)][string]$Bin,
+    [Parameter(Mandatory = $true)][string]$Names,
     [Parameter(Mandatory = $true)][string]$Dxc,
     [string]$OutputDirectory = '',
     [string]$SetupName = '',
@@ -43,16 +49,44 @@ function Invoke-Checked([string]$File, [string[]]$Arguments) {
 }
 
 try {
-    # Plan 2.9: every platform's release items (permissions, usage texts, file and link associations) are in the tree.
+    # Every platform's release items (permissions, usage texts, file and link associations) are in the tree.
     Invoke-Checked python @((Join-Path $repo 'tools\check_platform_items.py'), $repo)
     $commit = (& git -C $repo rev-parse HEAD).Trim()
     foreach ($name in 'bin\x64\dxc.exe', 'bin\x64\dxcompiler.dll', 'bin\x64\dxil.dll', 'LICENSE-MS.txt', 'LICENCE-MIT.txt', 'LICENSE-LLVM.txt') {
         if (-not (Test-Path -LiteralPath (Join-Path $Dxc $name))) { throw "The compiler folder has no $name" }
     }
     if ((& git -C $repo status --porcelain).Length -ne 0) { Write-Warning 'The tree has uncommitted changes; the package records HEAD.' }
-    foreach ($name in 'NebulaNative.exe', 'smg_game.dll', 'smg_game_plain.dll', 'tables\material-names.tsv', 'tables\rt-materials.tsv', 'tables\rt-suns.tsv', 'D3D12\D3D12Core.dll', 'D3D12\LICENSE.txt') {
+    foreach ($name in 'NebulaNative.exe', 'smg_game.dll', 'smg_game_plain.dll', 'D3D12\D3D12Core.dll', 'D3D12\LICENSE.txt') {
         if (-not (Test-Path -LiteralPath (Join-Path $Bin $name))) { throw "The bin folder has no $name" }
     }
+    $rtTables = @()
+    foreach ($name in 'material-names.tsv', 'rt-materials.tsv', 'rt-suns.tsv') {
+        if (Test-Path -LiteralPath (Join-Path $Bin "tables\$name")) { $rtTables += $name }
+        else { Write-Warning "The bin folder has no tables\$name (a ray tracer's table): Setup installs without it." }
+    }
+
+    # The game's self-description, as LumaLink reads it from versions\<version>\luma: the rows, the type description,
+    # the placement facts, and the services list this game module gives.
+    $luma = Join-Path $work 'luma'
+    New-Item -ItemType Directory -Force $luma | Out-Null
+    foreach ($name in 'luma', 'luma_types\luma_types.json', 'luma_types\luma_functions.json', 'luma_types\luma_numbers.json', 'smg_game.luma-placement.json', 'smg_game.luma-self.json') {
+        if (-not (Test-Path -LiteralPath (Join-Path $Names $name))) { throw "The names folder has no $name" }
+    }
+    Copy-Item -Recurse -Path (Join-Path $Names 'luma\*') -Destination $luma
+    foreach ($name in 'luma_types\luma_types.json', 'luma_types\luma_functions.json', 'luma_types\luma_numbers.json', 'smg_game.luma-placement.json', 'smg_game.luma-self.json') {
+        Copy-Item -LiteralPath (Join-Path $Names $name) -Destination $luma
+    }
+    # The game module logs on stderr while it attaches.
+    $ErrorActionPreference = 'Continue'
+    try {
+        Invoke-Checked (Join-Path $Bin 'NebulaNative.exe') @('--luma-services', (Join-Path $luma 'luma_services.json'), '--module', (Join-Path $Bin 'smg_game.dll'))
+    } finally {
+        $ErrorActionPreference = 'Stop'
+    }
+    if (-not @(Get-ChildItem -LiteralPath $luma -Recurse -Filter '*.rows').Count) { throw 'The names folder has no function rows under luma\' }
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $lumaZip = Join-Path $work 'luma.zip'
+    [IO.Compression.ZipFile]::CreateFromDirectory($luma, $lumaZip, [IO.Compression.CompressionLevel]::Optimal, $false)
 
     # nebula-import with the C runtime linked in: Setup runs it on PCs without the Visual C++ runtime.
     . (Join-Path $repo 'tools\enter_msvc_environment.ps1')
@@ -108,9 +142,7 @@ namespace Nebula
 
     $resources = [ordered]@{
         'NebulaNative.exe' = (Join-Path $Bin 'NebulaNative.exe'); 'smg_game.dll' = (Join-Path $Bin 'smg_game.dll')
-        'smg_game_plain.dll' = (Join-Path $Bin 'smg_game_plain.dll')
-        'material-names.tsv' = (Join-Path $Bin 'tables\material-names.tsv'); 'rt-materials.tsv' = (Join-Path $Bin 'tables\rt-materials.tsv')
-        'rt-suns.tsv' = (Join-Path $Bin 'tables\rt-suns.tsv')
+        'smg_game_plain.dll' = (Join-Path $Bin 'smg_game_plain.dll'); 'luma.zip' = $lumaZip
         'D3D12\D3D12Core.dll' = (Join-Path $Bin 'D3D12\D3D12Core.dll'); 'D3D12\LICENSE.txt' = (Join-Path $Bin 'D3D12\LICENSE.txt')
         'Nebula.exe' = $launcher; 'NebulaSettings.exe' = $settingsApp; 'nebula-import.exe' = $importer
         'nebula_import.dll' = $cooker
@@ -118,6 +150,7 @@ namespace Nebula
         'dxc\LICENSE-MS.txt' = (Join-Path $Dxc 'LICENSE-MS.txt'); 'dxc\LICENCE-MIT.txt' = (Join-Path $Dxc 'LICENCE-MIT.txt'); 'dxc\LICENSE-LLVM.txt' = (Join-Path $Dxc 'LICENSE-LLVM.txt')
         'LICENSE' = (Join-Path $repo 'LICENSE'); 'THIRD-PARTY-NOTICES.md' = (Join-Path $repo 'THIRD-PARTY-NOTICES.md'); 'README.md' = (Join-Path $repo 'README.md')
     }
+    foreach ($name in $rtTables) { $resources[$name] = Join-Path $Bin "tables\$name" }
     $resourceArgs = @($resources.GetEnumerator() | ForEach-Object { "/resource:$($_.Value),$($_.Key)" })
     $setup = Join-Path $OutputDirectory $SetupName
     Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$setup") + $references + $textTable + $resourceArgs + $common +

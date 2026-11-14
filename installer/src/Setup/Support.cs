@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Reflection;
 using Microsoft.Win32;
 
@@ -23,6 +24,20 @@ namespace Nebula.Setup
             using (var input = Open(name))
             using (var output = new FileStream(path, FileMode.Create, FileAccess.Write))
                 input.CopyTo(output);
+        }
+
+        public static bool Has(string name)
+        {
+            return Array.IndexOf(Assembly.GetExecutingAssembly().GetManifestResourceNames(), name) >= 0;
+        }
+
+        /// <summary>An embedded zip unpacked into <paramref name="folder"/>, which must hold nothing yet.</summary>
+        public static void ExtractZip(string name, string folder)
+        {
+            Directory.CreateDirectory(folder);
+            using (var input = Open(name))
+            using (var zip = new ZipArchive(input, ZipArchiveMode.Read))
+                zip.ExtractToDirectory(folder);
         }
     }
 

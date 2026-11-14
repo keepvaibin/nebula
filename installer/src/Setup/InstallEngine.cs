@@ -65,9 +65,16 @@ namespace Nebula.Setup
         /// <summary>What a version folder holds (each from the package, by its published name).</summary>
         private static readonly string[] NativeFiles =
         {
-            "NebulaNative.exe", "smg_game.dll", "smg_game_plain.dll", "nebula_import.dll", "nebula-import.exe", @"dxc\dxc.exe", @"dxc\dxcompiler.dll", @"dxc\dxil.dll", @"dxc\LICENSE-MS.txt", @"dxc\LICENCE-MIT.txt", @"dxc\LICENSE-LLVM.txt", @"D3D12\D3D12Core.dll", @"D3D12\LICENSE.txt", "material-names.tsv", "rt-materials.tsv", "rt-suns.tsv",
+            "NebulaNative.exe", "smg_game.dll", "smg_game_plain.dll", "nebula_import.dll", "nebula-import.exe", @"dxc\dxc.exe", @"dxc\dxcompiler.dll", @"dxc\dxil.dll", @"dxc\LICENSE-MS.txt", @"dxc\LICENCE-MIT.txt", @"dxc\LICENSE-LLVM.txt", @"D3D12\D3D12Core.dll", @"D3D12\LICENSE.txt",
             "Nebula.exe", "NebulaSettings.exe", "LICENSE", "THIRD-PARTY-NOTICES.md", "README.md"
         };
+
+        /// <summary>The ray tracer's tables: installed when the package has them (the game runs without them).</summary>
+        private static readonly string[] OptionalNativeFiles = { "material-names.tsv", "rt-materials.tsv", "rt-suns.tsv" };
+
+        /// <summary>The game's self-description (function rows, type description, placement facts, services list),
+        /// packed as one file and unpacked to luma\ in the version folder, where LumaLink reads it.</summary>
+        private const string SelfDescription = "luma.zip";
 
         private readonly InstallRequest request;
         private readonly IInstallProgress progress;
@@ -218,6 +225,9 @@ namespace Nebula.Setup
             string app = Path.Combine(staging, "app");
             Directory.CreateDirectory(app);
             foreach (var name in NativeFiles) Payload.Extract(name, Path.Combine(app, name));
+            foreach (var name in OptionalNativeFiles)
+                if (Payload.Has(name)) Payload.Extract(name, Path.Combine(app, name));
+            Payload.ExtractZip(SelfDescription, Path.Combine(app, "luma"));
             File.WriteAllText(Path.Combine(app, "runtime-isa.txt"), NativeIsa);
             var files = new Dictionary<string, object>();
             foreach (var path in Directory.GetFiles(app, "*", SearchOption.AllDirectories))
