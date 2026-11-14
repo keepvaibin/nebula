@@ -5,7 +5,7 @@
                                             Updates.kt's release key is not installer/release-public-key.xml's
 
 TEXT names each string resource and the English cell of its row (rows are found by their English text, as the Windows
-launcher's NebulaText.Of finds them). An empty cell takes its sister column's (EuFrench for UsFrench and back), then
+launcher's NebulaText.Of finds them; a third cell names the row by id where rows share the English text). An empty cell takes its sister column's (EuFrench for UsFrench and back), then
 English. {0}..{3} become %1$s..%4$s. A language whose every string equals English gets no file.
 """
 import os
@@ -63,7 +63,92 @@ TEXT = [
     ('nebula_quality_medium', 'Medium'),
     ('nebula_quality_high', 'High'),
     ('nebula_quality_ultra', 'Ultra'),
+    # Settings: the screen's own texts.
+    ('nebula_settings', 'Settings', 'S.SETTINGS'),
+    ('nebula_storage', 'Storage'),
+    ('nebula_set_up_again', 'Set up again'),
+    ('nebula_set_up_again_detail', 'From another disc image'),
+    ('nebula_remove_game', 'Remove the game'),
+    ('nebula_remove_game_detail', '{0} · your saves ({1}) are kept'),
+    ('nebula_saves', 'Saves'),
+    ('nebula_export_saves', 'Export saves'),
+    ('nebula_working', 'Working...'),
+    ('nebula_export_saves_detail', 'Every save file and your Miis as one .zip, to keep or move to another device'),
+    ('nebula_import_saves', 'Import saves'),
+    ('nebula_import_saves_detail', 'A .zip from Export, a Nebula.sav, or a GameData.bin from a Wii, Dolphin or the Switch release'),
+    ('nebula_miis', 'Miis'),
+    ('nebula_import_miis', 'Import Miis'),
+    ('nebula_import_miis_detail', 'From a Wii, DS, 3DS, Wii U or Switch, Mii Studio or Mii Creator, for the Mii icons'),
+    ('nebula_mii_count', '{0} of 100 now'),
+    ('nebula_controllers', 'Controllers'),
+    ('nebula_motion_test', 'Motion test'),
+    ('nebula_motion_test_detail', "Each controller's gyroscope and accelerometer as the game reads them, live"),
+    ('nebula_mods', 'Mods'),
+    ('nebula_import_mod', 'Import a mod or texture pack'),
+    ('nebula_importing', 'Importing... {0}%'),
+    ('nebula_import_mod_detail', "A .luma, .zip, .7z or .rar file. It's on from the next start"),
+    ('nebula_help', 'Help'),
+    ('nebula_record_diagnostics', 'Record diagnostics'),
+    ('nebula_record_diagnostics_detail', 'The next run writes frame times and pointer delay to its log. Share the log after it.'),
+    ('nebula_share_log', "Share the game's log"),
+    ('nebula_share_log_detail', "The last run's, to report a problem"),
+    ('nebula_replace_saves', 'Replace your saves?'),
+    ('nebula_replace_saves_detail', 'The saves in the file take the place of the same saves here. The saves you have now are backed up first.'),
+    ('nebula_choose_file', 'Choose a file'),
+    ('nebula_cancel', 'Cancel'),
+    ('nebula_remove_game_question', 'Remove the game?'),
+    ('nebula_remove_game_question_detail', 'Your saves stay. To play again, set the game up from your disc image.'),
+    ('nebula_remove', 'Remove'),
+    ('nebula_keep', 'Keep', 'S.KEEP'),
+    # Welcome, setup and home screens.
+    ('nebula_drop_to_import', 'Drop to import'),
+    ('nebula_drop_detail', 'A disc image, saves, Mii files or mods: each goes where it belongs.'),
+    ('nebula_drop_detail_setup', 'Your disc image sets the game up.'),
+    ('nebula_step_choose', 'Choose your disc image'),
+    ('nebula_step_choose_detail', 'The copy you made of your own Wii disc: ISO, RVZ, WIA, WBFS, CISO or GCZ.'),
+    ('nebula_step_setup', 'Nebula sets the game up'),
+    ('nebula_step_setup_detail', 'It copies the game into its own storage (about 3.9 GB). The disc image is only read.'),
+    ('nebula_play', 'Play'),
+    ('nebula_step_play_detail', 'With the touch controls, or a controller.'),
+    ('nebula_choose_disc', 'Choose disc image'),
+    ('nebula_reading_disc', 'Reading the disc image…'),
+    ('nebula_free_space', 'Free up some space on this device, then try again.'),
+    ('nebula_set_up', 'Set up'),
+    ('nebula_choose_another', 'Choose another'),
+    ('nebula_disc_unusable', "This disc image can't be used"),
+    ('nebula_disc_unusable_detail', 'It is not Super Mario Galaxy for North America, Europe or Japan.'),
+    ('nebula_setting_up', 'Setting up Super Mario Galaxy'),
+    ('nebula_setting_up_detail', 'You can leave Nebula meanwhile: setup carries on, with its progress in the notifications.'),
+    ('nebula_ready_to_play', 'Ready to play'),
+    ('nebula_ready_to_play_detail', 'Super Mario Galaxy is set up. You can delete the disc image if you no longer need it.'),
+    ('nebula_done', 'Done'),
+    ('nebula_setup_failed', "Setup didn't finish"),
+    ('nebula_try_again', 'Try again'),
+    ('nebula_setup_cancelled', 'Setup cancelled'),
+    ('nebula_setup_cancelled_detail', 'Nothing was kept. You can start again whenever you like.'),
+    ('nebula_back', 'Back', 'SettingsBack'),
+    ('nebula_ready', 'Ready'),
+    ('nebula_settings_detail', 'Touch controls, storage'),
+    ('nebula_about', 'About Nebula'),
+    ('nebula_touch_controls', 'Touch controls'),
+    ('nebula_welcome_outdated', 'This update reads the game in a new form: set it up again from your disc image. Your saves, Miis and settings stay.'),
+    ('nebula_welcome', 'Super Mario Galaxy, running natively on this device.'),
+    ('nebula_needs_space', 'Needs {0} · {1} available'),
+    ('nebula_version_licenses', 'Version {0}, licenses'),
+    # Result dialogs and About.
+    ('nebula_ok', 'OK'),
+    ('nebula_share_the_log', 'Share the log'),
+    ('nebula_mod_already', '{0} is already in your mods'),
+    ('nebula_mod_ready', '{0} is ready'),
+    ('nebula_mod_failed', 'That file could not be imported'),
+    ('nebula_mod_already_detail', "Nothing was added. It is under Mods in the game's settings."),
+    ('nebula_mod_ready_detail', "It's on from the next start. Mods in the game's settings turns it off or moves it."),
+    ('nebula_about_title', 'About'),
+    ('nebula_version', 'Version {0}'),
+    ('nebula_about_text', "Nebula runs Super Mario Galaxy natively: the game's code is Petari's decompilation, compiled for this device, drawing with Vulkan. The game's files come from your own disc. Nebula is not affiliated with or endorsed by Nintendo."),
+    ('nebula_licenses', 'Open source licenses'),
 ]
+
 
 # The table's columns as Android's resource qualifiers (UsEnglish is the default, values/).
 FOLDERS = [
@@ -106,8 +191,15 @@ def rows():
             continue
         cells = line.split('\t')
         cells += [''] * (len(header) - len(cells))
-        found.setdefault(cells[1], dict(zip(header, cells)))
+        row = dict(zip(header, cells))
+        found.setdefault(cells[1], row)
+        found['id:' + cells[0]] = row
     return found
+
+
+def lookup(entry):
+    """The table key of a TEXT entry: its row id when it names one, else its English text."""
+    return 'id:' + entry[2] if len(entry) > 2 else entry[1]
 
 
 def android(text):
@@ -125,15 +217,16 @@ def generate():
     errors = []
     files = {}
     english = {}
-    for name, text in TEXT:
-        if text not in table:
-            errors.append('no NebulaText row for %r (%s)' % (text, name))
+    for entry in TEXT:
+        if lookup(entry) not in table or table[lookup(entry)]['UsEnglish'] != entry[1]:
+            errors.append('no NebulaText row for %r (%s)' % (entry[1], entry[0]))
     if errors:
         return files, errors
     for column, folder in FOLDERS:
         values = []
-        for name, text in TEXT:
-            row = table[text]
+        for entry in TEXT:
+            name, text = entry[0], entry[1]
+            row = table[lookup(entry)]
             cell = row.get(column) or row.get(sister(column) or '', '') or row['UsEnglish']
             values.append((name, unescape(cell), re.search(r'\{\d\}', text) is None and '%' in cell))
         if column == 'UsEnglish':
