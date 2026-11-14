@@ -10,7 +10,10 @@ mod it `needs`, or in something code makes at start (a derived class).
 The rule. A reference that does not resolve never stops the game: the mod stays on, the thing it named is replaced by
 a placeholder of its kind where section 4 has one, and the mod log has one Error entry naming the mod, the file, the
 line (or JSON pointer), the kind and the name, and what was expected. Texts have no placeholder
-(section 4).
+(section 4). A file of the mod the cook cannot make (a model whose image is missing or unreadable, a picture that does
+not read) is not a placeholder's: LumaLink's check and its pack refuse the mod (L804, the cook's reason); at a start
+the cook leaves the file out and the mod log has the same L804 Error on the mod (source COOK), the mod's other files
+apply, and a name of the left-out file then answers as a missing one (a model: the placeholder model, 621).
 
 ### 2. The kinds, and who resolves each
 
@@ -120,7 +123,7 @@ No mod: no reference is read, no placeholder loaded (they are in the store, read
 
 | Test | Mod | Must show |
 |---|---|---|
-| 3131 | a new object whose glTF names a missing image | at import and start the validator's L6xx finding; in play the object with the checker; one `placeholder` fact; one mod-log Error, the same text as LumaLink `check` |
+| 3131 | a new model whose glTF names an image the mod lacks | at start one L804 Error (source COOK) naming the model, the cook's reason, the same text as LumaLink `check`; the model left out; no `placeholder` fact |
 | 3132 | a placement of a class no mod makes | `Content.MissingClass` after start; the placeholder cube at the place; the stage plays on |
 | 3139 | the same mod, no stage | the check answered before any scene: one `Content.MissingClass`, `refs.after_start` missing 1, the title reached; no `placeholder` fact |
 | 3133 | an effect bound to a joint the model lacks | L65x at start; the effect at the root joint in play |
