@@ -93,14 +93,15 @@ impl Document {
         let cut = || refuse("Cook.Model.Cut", &[]);
         let (json, chunk): (Vec<u8>, Option<Vec<u8>>) = if bytes.starts_with(b"glTF") {
             let word = |at: usize| -> Result<usize> {
-                Ok(u32::from_le_bytes(bytes.get(at..at + 4).ok_or_else(cut)?.try_into()?) as usize)
+                Ok(u32::from_le_bytes(bytes.get(at..at.checked_add(4).ok_or_else(cut)?).ok_or_else(cut)?.try_into()?) as usize)
             };
             let json_size = word(12)?;
-            let json = bytes.get(20..20usize.saturating_add(json_size)).ok_or_else(cut)?.to_vec();
-            let next = 20 + json_size;
-            let chunk = if next + 8 <= bytes.len() {
+            let next = 20usize.checked_add(json_size).ok_or_else(cut)?;
+            let json = bytes.get(20..next).ok_or_else(cut)?.to_vec();
+            let data = next.checked_add(8).ok_or_else(cut)?;
+            let chunk = if data <= bytes.len() {
                 let size = word(next)?;
-                Some(bytes.get(next + 8..(next + 8).saturating_add(size)).ok_or_else(cut)?.to_vec())
+                Some(bytes.get(data..data.checked_add(size).ok_or_else(cut)?).ok_or_else(cut)?.to_vec())
             } else {
                 None
             };
@@ -128,13 +129,22 @@ impl Document {
 
     fn view(&self, index: usize) -> Result<&[u8]> {
         let view = &self.root["bufferViews"][index];
-        let buffer = view["buffer"].as_u64().or_invalid(|| format!("/bufferViews/{index}/buffer"))? as usize;
-        let start = view["byteOffset"].as_u64().unwrap_or(0) as usize;
-        let length = view["byteLength"].as_u64().or_invalid(|| format!("/bufferViews/{index}/byteLength"))? as usize;
-        self.buffers
-            .get(buffer)
-            .and_then(|b| b.get(start..start.checked_add(length)?))
+        let buffer = view["buffer"].as_u64().or_invalid(|| format!("/bufferViews/{index}/buffer"))?;
+        let start = view["byteOffset"].as_u64().unwrap_or(0);
+        let length = view["byteLength"].as_u64().or_invalid(|| format!("/bufferViews/{index}/byteLength"))?;
+        let (buffer, start, length) = (place(buffer), place(start), place(length));
+        buffer
+            .and_then(|b| self.buffers.get(b))
+            .and_then(|b| b.get(start?..start?.checked_add(length?)?))
             .ok_or_else(|| refuse("Cook.Model.ViewPast", &[("view", index.to_string())]))
+    }
+
+    /// The `byteStride` of a buffer view, or `packed` (its elements side by side) when it has none.
+    fn stride(&self, view: u64, packed: usize) -> Option<usize> {
+        match &self.root["bufferViews"][place(view)?]["byteStride"] {
+            Value::Null => Some(packed),
+            s => place(s.as_u64()?),
+        }
     }
 
     /// An accessor's numbers, each element as `width` floats.
@@ -169,14 +179,17 @@ impl Document {
         // No buffer view: all zero, unless sparse values say otherwise.
         let mut out = match accessor["bufferView"].as_u64() {
             Some(view_index) => {
-                let view = self.view(view_index as usize)?;
-                let start = accessor["byteOffset"].as_u64().unwrap_or(0) as usize;
-                let stride = self.root["bufferViews"][view_index as usize]["byteStride"].as_u64().map_or(size * width, |s| s as usize);
+                let view = self.view(place(view_index).ok_or_else(past)?)?;
+                let start = place(accessor["byteOffset"].as_u64().unwrap_or(0)).ok_or_else(past)?;
+                let stride = self.stride(view_index, size * width).ok_or_else(past)?;
+                // The last number is in the view, before any memory is taken for them all.
+                if count > 0 {
+                    element_at(view, start, count - 1, stride, (width - 1) * size, size).ok_or_else(past)?;
+                }
                 let mut out = Vec::with_capacity(count * width);
                 for element in 0..count {
                     for c in 0..width {
-                        let at = start + element * stride + c * size;
-                        out.push(scale(read(view.get(at..at + size).ok_or_else(past)?)));
+                        out.push(scale(read(element_at(view, start, element, stride, c * size, size).ok_or_else(past)?)));
                     }
                 }
                 out
@@ -195,10 +208,11 @@ impl Document {
         }
         let at_sparse = |rest: &str| format!("/accessors/{index}/sparse/{rest}");
         let past = || refuse("Cook.Model.AccessorPast", &[("accessor", index.to_string())]);
-        let count = sparse["count"].as_u64().or_invalid(|| at_sparse("count"))? as usize;
+        // At most one value for each element the accessor has.
+        let count = place(sparse["count"].as_u64().or_invalid(|| at_sparse("count"))?).filter(|&n| n <= out.len() / width.max(1)).ok_or_else(past)?;
         let indices = &sparse["indices"];
-        let index_view = self.view(indices["bufferView"].as_u64().or_invalid(|| at_sparse("indices/bufferView"))? as usize)?;
-        let index_start = indices["byteOffset"].as_u64().unwrap_or(0) as usize;
+        let index_view = self.view(place(indices["bufferView"].as_u64().or_invalid(|| at_sparse("indices/bufferView"))?).ok_or_else(past)?)?;
+        let index_start = place(indices["byteOffset"].as_u64().unwrap_or(0)).ok_or_else(past)?;
         let index_size = match indices["componentType"].as_u64() {
             Some(5121) => 1,
             Some(5123) => 2,
@@ -206,20 +220,19 @@ impl Document {
             _ => return Err(invalid(at_sparse("indices/componentType"))),
         };
         let values = &sparse["values"];
-        let value_view = self.view(values["bufferView"].as_u64().or_invalid(|| at_sparse("values/bufferView"))? as usize)?;
-        let value_start = values["byteOffset"].as_u64().unwrap_or(0) as usize;
+        let value_view = self.view(place(values["bufferView"].as_u64().or_invalid(|| at_sparse("values/bufferView"))?).ok_or_else(past)?)?;
+        let value_start = place(values["byteOffset"].as_u64().unwrap_or(0)).ok_or_else(past)?;
         for k in 0..count {
-            let at = index_start + k * index_size;
-            let b = index_view.get(at..at + index_size).ok_or_else(past)?;
+            let b = element_at(index_view, index_start, k, index_size, 0, index_size).ok_or_else(past)?;
             let element = match index_size {
                 1 => usize::from(b[0]),
                 2 => usize::from(u16::from_le_bytes([b[0], b[1]])),
-                _ => u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as usize,
+                _ => place(u64::from(u32::from_le_bytes([b[0], b[1], b[2], b[3]]))).ok_or_else(past)?,
             };
             for c in 0..width {
-                let at = value_start + (k * width + c) * size;
-                let value = scale(read(value_view.get(at..at + size).ok_or_else(past)?));
-                *out.get_mut(element * width + c).ok_or_else(past)? = value;
+                let value = scale(read(element_at(value_view, value_start, k, width * size, c * size, size).ok_or_else(past)?));
+                let to = element.checked_mul(width).and_then(|e| e.checked_add(c)).ok_or_else(past)?;
+                *out.get_mut(to).ok_or_else(past)? = value;
             }
         }
         Ok(())
@@ -236,18 +249,21 @@ impl Document {
                     Some(5125) => 4,
                     _ => return Err(invalid(format!("/accessors/{index}/componentType"))),
                 };
-                let view_index = a["bufferView"].as_u64().or_invalid(|| format!("/accessors/{index}/bufferView"))? as usize;
-                let view = self.view(view_index)?;
-                let start = a["byteOffset"].as_u64().unwrap_or(0) as usize;
+                let past = || refuse("Cook.Model.AccessorPast", &[("accessor", index.to_string())]);
+                let view_index = a["bufferView"].as_u64().or_invalid(|| format!("/accessors/{index}/bufferView"))?;
+                let view = self.view(place(view_index).ok_or_else(past)?)?;
+                let start = place(a["byteOffset"].as_u64().unwrap_or(0)).ok_or_else(past)?;
                 let count = a["count"].as_u64().or_invalid(|| format!("/accessors/{index}/count"))?;
                 if count > MAX_ELEMENTS {
                     return Err(refuse("Cook.Model.Accessor", &[("accessor", index.to_string()), ("count", count.to_string()), ("max", MAX_ELEMENTS.to_string())]));
                 }
                 let count = count as usize;
-                let stride = self.root["bufferViews"][view_index]["byteStride"].as_u64().map_or(size, |n| n as usize);
-                let past = || refuse("Cook.Model.AccessorPast", &[("accessor", index.to_string())]);
+                let stride = self.stride(view_index, size).ok_or_else(past)?;
+                if count > 0 {
+                    element_at(view, start, count - 1, stride, 0, size).ok_or_else(past)?;
+                }
                 (0..count).map(|i| {
-                    let b = view.get(start + i * stride..start + i * stride + size).ok_or_else(past)?;
+                    let b = element_at(view, start, i, stride, 0, size).ok_or_else(past)?;
                     Ok(match size { 1 => u32::from(b[0]), 2 => u32::from(u16::from_le_bytes(b.try_into().unwrap())), _ => u32::from_le_bytes(b.try_into().unwrap()) })
                 }).collect()
             },
@@ -266,6 +282,18 @@ impl Document {
         };
         decode_image(&bytes, &image["name"].as_str().map_or_else(|| format!("image {index}"), str::to_string))
     }
+}
+
+/// A number of the file as a place, a length or an index in memory.
+fn place(v: u64) -> Option<usize> {
+    usize::try_from(v).ok()
+}
+
+/// The `size` bytes of element `element` of a view (`stride` bytes apart from `start`), `offset` bytes in: every place
+/// a model's accessor reads goes through it, so a sum past the range or past the view is None, never a panic.
+fn element_at(view: &[u8], start: usize, element: usize, stride: usize, offset: usize, size: usize) -> Option<&[u8]> {
+    let at = start.checked_add(element.checked_mul(stride)?)?.checked_add(offset)?;
+    view.get(at..at.checked_add(size)?)
 }
 
 /// The extensions a file can require and still be read as made: anything else would cook into something it isn't.
@@ -294,35 +322,36 @@ fn required_extensions(root: &Value) -> Result<()> {
 pub fn to_collision(bytes: &[u8], folder: Option<&Path>) -> Result<(Vec<u8>, Vec<u8>)> {
     let document = Document::parse(bytes, folder)?;
     let root = &document.root;
-    let scene = &root["scenes"][root["scene"].as_u64().unwrap_or(0) as usize];
     let nodes = root["nodes"].as_array().map(Vec::as_slice).unwrap_or_default();
     let materials = root["materials"].as_array().map(Vec::as_slice).unwrap_or_default();
     let mut triangles = Vec::new();
-    let mut stack: Vec<(usize, Matrix)> = scene["nodes"].as_array().map(Vec::as_slice).unwrap_or_default().iter().filter_map(|n| n.as_u64()).map(|n| (n as usize, IDENTITY)).collect();
-    while let Some((node, parent)) = stack.pop() {
-        let matrix = multiply(&parent, &node_matrix(nodes.get(node).ok_or_else(|| refuse("Cook.Model.NodeMissing", &[("node", node.to_string())]))?));
-        for child in nodes[node]["children"].as_array().map(Vec::as_slice).unwrap_or_default().iter().filter_map(|c| c.as_u64()) {
-            stack.push((child as usize, matrix));
-        }
+    // The scene's tree as the model's is walked: each node once, its place from its parents'.
+    let (order, world, _) = scene_tree(root, place(root["scene"].as_u64().unwrap_or(0)).unwrap_or(usize::MAX))?;
+    for node in order {
+        let matrix = world[node];
         let Some(mesh) = nodes[node]["mesh"].as_u64() else {
             continue;
         };
-        for primitive in root["meshes"][mesh as usize]["primitives"].as_array().map(Vec::as_slice).unwrap_or_default() {
+        let mesh_number = place(mesh).unwrap_or(usize::MAX);
+        for primitive in root["meshes"][mesh_number]["primitives"].as_array().map(Vec::as_slice).unwrap_or_default() {
             if primitive["mode"].as_u64().unwrap_or(4) != 4 {
                 continue;
             }
             let positions = primitive["attributes"]["POSITION"].as_u64().ok_or_else(|| refuse("Cook.Model.NoPositions", &[("mesh", mesh.to_string())]))?;
             let positions = document.floats(positions as usize, 3)?;
-            let indices = document.indices(primitive, positions.len() / 3)?;
+            let count = positions.len() / 3;
+            let indices = document.indices(primitive, count)?;
             let material = primitive["material"].as_u64().unwrap_or(0);
             let attribute = u16::try_from(material).map_err(|_| refuse("Cook.Collision.Attribute", &[("found", material.to_string()), ("max", u16::MAX.to_string())]))?;
-            let corner = |index: u32| -> [f32; 3] {
-                let at = index as usize * 3;
-                let p = transform(&matrix, [positions[at], positions[at + 1], positions[at + 2]], 1.0);
-                p.map(|v| v * UNITS_PER_METRE)
+            let corner = |index: u32| -> Result<[f32; 3]> {
+                let p: [f32; 3] = place(u64::from(index))
+                    .and_then(|i| positions.get(i.checked_mul(3)?..i.checked_mul(3)?.checked_add(3)?))
+                    .and_then(|p| p.try_into().ok())
+                    .ok_or_else(|| refuse("Cook.Model.VertexPast", &[("mesh", named(&root["meshes"][mesh_number], mesh_number)), ("vertex", index.to_string()), ("count", count.to_string())]))?;
+                Ok(transform(&matrix, p, 1.0).map(|v| v * UNITS_PER_METRE))
             };
             for triple in indices.chunks_exact(3) {
-                triangles.push(super::kcl::Triangle { corners: [corner(triple[0]), corner(triple[1]), corner(triple[2])], attribute });
+                triangles.push(super::kcl::Triangle { corners: [corner(triple[0])?, corner(triple[1])?, corner(triple[2])?], attribute });
             }
         }
     }
@@ -2203,14 +2232,12 @@ fn clip_extension(kind: u8) -> &'static str {
 
 /// A material's curve read from a pointer channel.
 fn pointer_curve(document: &Document, samplers: &[Value], channel: &Value, width: usize) -> Result<Curve> {
-    let sampler = samplers.get(channel["sampler"].as_u64().unwrap_or(0) as usize).or_invalid(|| "/animations".to_string())?;
-    let times = document.floats(sampler["input"].as_u64().or_invalid(|| "/animations".to_string())? as usize, 1)?;
-    let values = document.floats(sampler["output"].as_u64().or_invalid(|| "/animations".to_string())? as usize, width)?;
-    if times.is_empty() {
+    let sampler = samplers.get(place(channel["sampler"].as_u64().unwrap_or(0)).unwrap_or(usize::MAX)).or_invalid(|| "/animations".to_string())?;
+    let curve = Curve::of(document, sampler, width, false)?;
+    if curve.times.is_empty() {
         return Err(invalid("/animations".to_string()));
     }
-    let mode = sampler["interpolation"].as_str().unwrap_or("LINEAR");
-    Ok(Curve { times, values, width, step: mode == "STEP", cubic: mode == "CUBICSPLINE", turns: false })
+    Ok(curve)
 }
 
 /// What an animation does to materials: their colours, their textures' transforms, their texture swaps.
@@ -2660,6 +2687,23 @@ struct Curve {
 }
 
 impl Curve {
+    /// A sampler's curve: its keys' times (glTF 2.0 3.11: numbers, rising) and a value for each (three for a cubic
+    /// spline), so `at` finds every value it reads.
+    fn of(document: &Document, sampler: &Value, width: usize, turns: bool) -> Result<Curve> {
+        let times = document.floats(place(sampler["input"].as_u64().or_invalid(|| "/animations".to_string())?).unwrap_or(usize::MAX), 1)?;
+        let values = document.floats(place(sampler["output"].as_u64().or_invalid(|| "/animations".to_string())?).unwrap_or(usize::MAX), width)?;
+        let mode = sampler["interpolation"].as_str().unwrap_or("LINEAR");
+        let curve = Curve { times, values, width, step: mode == "STEP", cubic: mode == "CUBICSPLINE", turns };
+        if !curve.times.iter().all(|t| t.is_finite()) || curve.times.windows(2).any(|w| w[1] < w[0]) {
+            return Err(invalid("/animations/samplers/input".to_string()));
+        }
+        let per_key = if curve.cubic { width * 3 } else { width };
+        if curve.values.len() < curve.times.len() * per_key {
+            return Err(invalid("/animations/samplers/output".to_string()));
+        }
+        Ok(curve)
+    }
+
     fn at(&self, time: f32) -> Vec<f32> {
         let stride = if self.cubic { self.width * 3 } else { self.width };
         let offset = if self.cubic { self.width } else { 0 };
@@ -2719,13 +2763,11 @@ fn clip_of(document: &Document, animation: &Value, joints: &[Joint], joint_of_no
             _ => continue,
         };
         let sampler = samplers.get(channel["sampler"].as_u64().unwrap_or(0) as usize).or_invalid(|| format!("{}/samplers", animation_at(document, animation)))?;
-        let times = document.floats(sampler["input"].as_u64().or_invalid(|| "/animations".to_string())? as usize, 1)?;
-        let values = document.floats(sampler["output"].as_u64().or_invalid(|| "/animations".to_string())? as usize, width)?;
-        if times.is_empty() {
+        let curve = Curve::of(document, sampler, width, width == 4)?;
+        if curve.times.is_empty() {
             continue;
         }
-        let mode = sampler["interpolation"].as_str().unwrap_or("LINEAR");
-        curves.insert((joint, key), Curve { times, values, width, step: mode == "STEP", cubic: mode == "CUBICSPLINE", turns: width == 4 });
+        curves.insert((joint, key), curve);
     }
     let samples = &timing.samples;
     let mut clip = ClipIr { kind: KIND_JOINTS, loop_mode: timing.loop_mode, frames: timing.frames as i32, first_count: joints.len() as u32, ..ClipIr::default() };
@@ -2813,6 +2855,10 @@ pub fn to_camera(bytes: &[u8], folder: Option<&Path>) -> Result<Vec<u8>> {
     let mut chain = Vec::new();
     let mut at = node;
     while let Some(&p) = parent_of.get(&at) {
+        // A node is in one place of the tree (glTF 2.0 3.5.3): more parents than nodes is a cycle.
+        if chain.len() >= nodes.len() {
+            return Err(invalid(format!("/nodes/{p}/children")));
+        }
         chain.push(p);
         at = p;
     }
@@ -2848,6 +2894,10 @@ pub fn to_camera(bytes: &[u8], folder: Option<&Path>) -> Result<Vec<u8>> {
         }
     }
     let length = [&translation, &rotation, &fov].iter().filter_map(|c| c.as_ref().and_then(|c| c.times.last().copied())).fold(0.0f32, f32::max);
+    if length * FRAMES_PER_SECOND > MAX_CLIP_FRAMES as f32 {
+        let (seconds, max) = (format!("{length:.1}"), format!("{:.1}", MAX_CLIP_FRAMES as f32 / FRAMES_PER_SECOND));
+        return Err(refuse("Cook.Anim.TooLong", &[("animation", animation_name(&document, animation)), ("seconds", seconds), ("max", max)]));
+    }
     let frames = (length * FRAMES_PER_SECOND).round() as usize + 1;
     let rest = node_trs(&nodes[node]);
     let mut tracks: [Vec<f32>; super::camera::TRACKS] = Default::default();
@@ -3135,6 +3185,61 @@ mod tests {
         other["nodes"] = serde_json::json!([{ "camera": 0, "translation": [0, 0, 5] }, { "children": [0] }]);
         other["animations"][0]["channels"].as_array_mut().unwrap().push(serde_json::json!({ "sampler": 0, "target": { "node": 1, "path": "rotation" } }));
         assert_eq!(why(&other), "Cook.Camera.ParentMoves");
+        // A camera node that is its own parent (no glTF tree): refused, never a walk without end.
+        let mut other = document.clone();
+        other["nodes"][0]["children"] = serde_json::json!([0]);
+        assert_eq!(refused(&to_camera(other.to_string().as_bytes(), None).unwrap_err()), ("Cook.Model.Invalid", vec![own(("where", "/nodes/0/children"))]));
+        // Keys whose times fall, or with fewer values than keys: refused before a curve reads past its values.
+        let mut other = document.clone();
+        let views = add_floats(&mut other, &[(2, "SCALAR", vec![1.0, 0.0]), (1, "VEC4", vec![0.0, 0.0, 0.0, 1.0])]);
+        other["animations"][0]["samplers"][0] = serde_json::json!({ "input": views[0], "output": 1 });
+        assert_eq!(why(&other), "Cook.Model.Invalid");
+        other["animations"][0]["samplers"][0] = serde_json::json!({ "input": 0, "output": views[1] });
+        assert_eq!(why(&other), "Cook.Model.Invalid");
+        // A key far past the longest clip.
+        let mut other = document.clone();
+        let views = add_floats(&mut other, &[(2, "SCALAR", vec![0.0, 1.0e30])]);
+        other["animations"][0]["samplers"][0]["input"] = views[0].into();
+        assert_eq!(why(&other), "Cook.Anim.TooLong");
+    }
+
+    #[test]
+    fn a_damaged_model_is_refused_by_name_never_a_panic() {
+        let collision = |doc: &[u8]| refused(&to_collision(doc, None).unwrap_err()).0;
+        // Solid ground whose triangles name vertices past the model's (found by fuzzing the cook).
+        for case in [&include_bytes!("../../data/solid-vertex-past.kcl.glb")[..], &include_bytes!("../../data/solid-vertex-past-2.kcl.glb")[..]] {
+            assert_eq!(collision(case), "Cook.Model.VertexPast");
+        }
+        let base: Value = serde_json::from_slice(&triangle(1)).unwrap();
+        let with = |edit: &dyn Fn(&mut Value)| {
+            let mut doc = base.clone();
+            edit(&mut doc);
+            serde_json::to_vec(&doc).unwrap()
+        };
+        let max = serde_json::json!(u64::MAX);
+        // Offsets, strides and counts at their largest, in the accessor, the view and the sparse values.
+        let cases: [(&str, Box<dyn Fn(&mut Value)>, &str); 7] = [
+            ("vertex past", Box::new(|d| d["accessors"][0]["count"] = 2.into()), "Cook.Model.VertexPast"),
+            ("accessor offset", Box::new(|d| d["accessors"][0]["byteOffset"] = max.clone()), "Cook.Model.AccessorPast"),
+            ("view offset", Box::new(|d| d["bufferViews"][0]["byteOffset"] = max.clone()), "Cook.Model.ViewPast"),
+            ("stride", Box::new(|d| d["bufferViews"][0]["byteStride"] = max.clone()), "Cook.Model.AccessorPast"),
+            ("index offset", Box::new(|d| d["accessors"][1]["byteOffset"] = max.clone()), "Cook.Model.AccessorPast"),
+            ("sparse count", Box::new(|d| d["accessors"][0]["sparse"] = serde_json::json!({ "count": u64::MAX, "indices": { "bufferView": 1, "componentType": 5123 }, "values": { "bufferView": 0 } })), "Cook.Model.AccessorPast"),
+            ("node cycle", Box::new(|d| d["nodes"][0]["children"] = serde_json::json!([0])), "Cook.Model.Invalid"),
+        ];
+        for (what, edit, phrase) in cases {
+            let doc = with(&*edit);
+            assert_eq!(collision(&doc), phrase, "{what}");
+            assert_eq!(refused(&to_ir(&doc, None).err().unwrap()).0, phrase, "{what}: the model");
+        }
+        // A GLB whose chunk lengths run past the file.
+        let mut glb = b"glTF".to_vec();
+        glb.extend_from_slice(&2u32.to_le_bytes());
+        glb.extend_from_slice(&64u32.to_le_bytes());
+        glb.extend_from_slice(&u32::MAX.to_le_bytes());
+        glb.extend_from_slice(b"JSON");
+        glb.extend_from_slice(b"{}");
+        assert_eq!(collision(&glb), "Cook.Model.Cut");
     }
 
     #[test]
