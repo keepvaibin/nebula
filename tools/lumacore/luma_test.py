@@ -2085,6 +2085,8 @@ def run_tests(args):
         raise SystemExit("give --work or LUMA_TEST_WORK")
     if not args.lock:
         raise SystemExit("give --lock or LUMA_TEST_LOCK")
+    if not args.limit_scale >= 1:
+        raise SystemExit("--limit-scale is at least 1")
     lock = pathlib.Path(args.lock)
     if lock.exists():
         raise SystemExit("run.lock held: " + lock.read_text(encoding="utf-8", errors="replace").strip())
@@ -2101,6 +2103,9 @@ def run_tests(args):
         for folder in folders:
             try:
                 test = read_test(folder)
+                # A renderer slower than the hardware the limits were set on (software Vulkan): every wall-clock limit
+                # scaled alike; steps and their timeouts count frames and stay as written.
+                test["limit"] = test["limit"] * args.limit_scale
                 renderers = [args.renderer] if args.renderer else test["renderers"]
             except HarnessError as error:
                 all_pass = False
@@ -2138,7 +2143,8 @@ def run_tests(args):
                        {"setup": setup, "frames": max([f.get("frame", -1) for f in facts] or [-1]),
                         "seconds": round(ran.get("seconds", 0.0), 2), "pictures": pictures,
                         "binaries": ran.get("frozen", {}), "exit": ran.get("code"), "starts": ran.get("starts"),
-                        "not_on_this_system": test["not_here"], "test_json": test["raw"]})
+                        "not_on_this_system": test["not_here"], "limit_seconds": test["limit"],
+                        "limit_scale": args.limit_scale, "test_json": test["raw"]})
     finally:
         lock.unlink()
     return 0 if all_pass else 1
@@ -2208,6 +2214,9 @@ def main():
                           "Nebula Settings writes config.ini gpu; result.json's gpu names the adapter the game used")
     run.add_argument("--lock", default=os.environ.get("LUMA_TEST_LOCK"),
                      help="the run lock file (or LUMA_TEST_LOCK); the runner refuses to start while it exists")
+    run.add_argument("--limit-scale", type=float, default=float(os.environ.get("LUMA_TEST_LIMIT_SCALE") or 1),
+                     help="every test's limit_seconds times this (or LUMA_TEST_LIMIT_SCALE), at least 1: a renderer "
+                          "slower than the hardware the limits were set for; result.json says the limit used")
     refs = sub.add_parser("refs")
     refs.add_argument("target")
     refs.add_argument("--run", required=True)
