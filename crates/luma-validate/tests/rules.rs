@@ -856,7 +856,7 @@ fn the_previous_engines_keys_name_their_replacement() {
     let got = codes(&[("layers", r#"[{"name": "base", "path": "layer", "tunables": {}, "when": {"mods": ["a.mod"]}}]"#)]);
     let expected: Vec<String> = got.iter().filter(|(c, _, _)| *c == 220).map(|(_, _, m)| m[m.rfind("write ").unwrap() + 6..].to_string()).collect();
     assert_eq!(expected, ["name (layers/<name>/).", "pre_standard.layers.base.tunables.", "pre_standard.layers.base.when.mods."], "{got:?}");
-    // Under pre_standard: a Note per key, naming the plan that replaces it; a key the previous engine never had is L202.
+    // Under pre_standard: a Note per key (read for now, not by a later game); a key the previous engine never had is L202.
     let got = codes(&[("pre_standard", r#"{"achievements": [], "galaxies": [], "nope": 1, "layers": {"base": {"forms": [], "when": {"not": {}}, "nope": 2}}}"#)]);
     let said: Vec<(u16, &str)> = got.iter().map(|(c, p, _)| (*c, p.as_str())).collect();
     assert_eq!(
@@ -871,7 +871,14 @@ fn the_previous_engines_keys_name_their_replacement() {
         ],
         "{got:?}"
     );
-    assert!(got[4].2.ends_with("\"pre_standard.layers.base.forms\" is read by the previous engine only, until plan 1.4 replaces it."), "{}", got[4].2);
+    assert!(
+        got[4].2.ends_with(
+            "\"pre_standard.layers.base.forms\" is the previous engine's, read for now; a later game will not read it. Write it in the mod format's own keys."
+        ),
+        "{}",
+        got[4].2
+    );
+    assert!(got.iter().all(|(_, _, words)| !words.contains("plan")), "{got:?}");
     let report = check(&luma(&[("pre_standard", r#"{"save": {}}"#)], &[]), &NO_GAME);
     assert_eq!(report.findings.iter().map(|f| f.level).collect::<Vec<_>>(), [luma_validate::Level::Note]);
 }
