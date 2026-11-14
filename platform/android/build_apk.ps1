@@ -91,12 +91,12 @@ foreach ($abi in $Abis -split ",") {
         "-ffile-prefix-map=$($_[0])=$($_[1]) -ffile-prefix-map=$($_[0] -replace '\\', '/')=$($_[1])" }) -join " ")
     Invoke-Logged "$Work\import-$abi.log" {
         Push-Location $root
-        try { cargo build --release --locked -p nebula-import --lib --target $triple } finally { Pop-Location }
+        try { cargo build --profile dist --locked -p nebula-import --lib --target $triple } finally { Pop-Location }
     }
     $dest = Join-Path $jni $abi
     New-Item -ItemType Directory -Force $dest | Out-Null
     Copy-Item "$module/libsmg_game.so", "$hostBuild/libmain.so", "$hostBuild/libnebula_mods.so", "$hostBuild/SDL3/libSDL3.so",
-        "$Work\cargo\$triple\release\libnebula_import.so" $dest -Force
+        "$Work\cargo\$triple\dist\libnebula_import.so" $dest -Force
 }
 
 # The license texts the About screen opens (assets/licenses; the list is app/src/main/kotlin/.../Licenses.kt).

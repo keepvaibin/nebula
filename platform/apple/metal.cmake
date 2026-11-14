@@ -107,11 +107,11 @@ else()
     set(nebula_apple_rust_triple "x86_64-apple-darwin")
 endif()
 find_program(NEBULA_CARGO cargo HINTS "$ENV{HOME}/.cargo/bin" REQUIRED)
-set(nebula_apple_importer "${nebula_root}/target/${nebula_apple_rust_triple}/release/libnebula_import.a")
+set(nebula_apple_importer "${nebula_root}/target/${nebula_apple_rust_triple}/dist/libnebula_import.a")
 file(GLOB_RECURSE nebula_apple_importer_sources CONFIGURE_DEPENDS "${nebula_root}/crates/nebula-import/src/*.rs")
 add_custom_command(OUTPUT "${nebula_apple_importer}"
     COMMAND "${CMAKE_COMMAND}" -E env "MACOSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}"
-            "${NEBULA_CARGO}" rustc --release --target "${nebula_apple_rust_triple}" -p nebula-import --lib --crate-type staticlib
+            "${NEBULA_CARGO}" rustc --profile dist --target "${nebula_apple_rust_triple}" -p nebula-import --lib --crate-type staticlib
     WORKING_DIRECTORY "${nebula_root}"
     DEPENDS ${nebula_apple_importer_sources} "${nebula_root}/crates/nebula-import/Cargo.toml"
     USES_TERMINAL VERBATIM)
