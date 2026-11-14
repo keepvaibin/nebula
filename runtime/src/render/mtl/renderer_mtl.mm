@@ -700,7 +700,10 @@ std::uint64_t RendererMtl::end_frame(bool present_swap_chain, SubmissionCallback
         // The uploads first: TextureStore never writes a texture after a draw of the same frame read it.
         [(__bridge id<MTLBlitCommandEncoder>)frame.upload_blit endEncoding];
         drop(frame.upload_blit);
-        (void)context.commit(frame.uploads);
+        // A frame that copied nothing sends no buffer for it: the empty one is released uncommitted.
+        if (mirrored_store_ != nullptr && mirrored_store_->backend().take_uploaded()) {
+            (void)context.commit(frame.uploads);
+        }
         drop(frame.uploads);
         const std::shared_ptr<std::array<std::atomic<double>, 2>> times = frame.gpu_time;
         (*times)[0].store(0.0, std::memory_order_release);
