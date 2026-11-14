@@ -139,10 +139,12 @@ float3 FinalWrite(float3 color, int2 p) {
     }
     const float3 level = color * 255.0;
     const float3 between = step(0.02, abs(level - round(level)));
-    if (max(between.r, max(between.g, between.b)) == 0.0) {
-        return color;
+    // A real branch, not a select: a group of pixels all on levels (black, flat 8-bit colours) skips the two hashes.
+    float3 written = color;
+    [branch] if (max(between.r, max(between.g, between.b)) != 0.0) {
+        written = saturate((level + TriangularNoise(p) * between) / 255.0);
     }
-    return saturate((level + TriangularNoise(p) * between) / 255.0);
+    return written;
 }
 
 #if defined(PASS_SMAA_EDGES) || defined(PASS_SMAA_WEIGHTS) || defined(PASS_SMAA_BLEND) || defined(PASS_SMAA_BLEND_KEEP)
