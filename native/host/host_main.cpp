@@ -3626,15 +3626,49 @@ void hold_runtime_lease() {
 #endif
         const std::wstring path = ::galaxy::windows::executable_path();
         if (!path.empty()) {
-            STARTUPINFOW startup{};
-            startup.cb = sizeof(startup);
+            // The new process writes to this one's output and error, when it has them (a tool reading its log), and
+            // inherits nothing else.
+            HANDLE pass[2] = {};
+            DWORD passed = 0;
+            for (const DWORD which : {STD_OUTPUT_HANDLE, STD_ERROR_HANDLE}) {
+                const HANDLE handle = GetStdHandle(which);
+                if (handle == nullptr || handle == INVALID_HANDLE_VALUE || GetFileType(handle) == FILE_TYPE_UNKNOWN) continue;
+                if (passed == 1u && pass[0] == handle) continue;
+                if (SetHandleInformation(handle, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT)) pass[passed++] = handle;
+            }
+            STARTUPINFOEXW startup{};
+            startup.StartupInfo.cb = sizeof(startup);
+            std::vector<unsigned char> attributes;
+            if (passed != 0u) {
+                SIZE_T bytes = 0;
+                InitializeProcThreadAttributeList(nullptr, 1, 0, &bytes);
+                attributes.resize(bytes);
+                startup.lpAttributeList = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(attributes.data());
+                if (!InitializeProcThreadAttributeList(startup.lpAttributeList, 1, 0, &bytes) ||
+                    !UpdateProcThreadAttribute(startup.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, pass, passed * sizeof(HANDLE), nullptr, nullptr)) {
+                    passed = 0;
+                    startup.lpAttributeList = nullptr;
+                } else {
+                    startup.StartupInfo.dwFlags |= STARTF_USESTDHANDLES;
+                    startup.StartupInfo.hStdInput = nullptr;
+                    startup.StartupInfo.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+                    startup.StartupInfo.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+                }
+            }
             PROCESS_INFORMATION process{};
             std::wstring command = GetCommandLineW();
             command += gRestartArguments;
-            if (CreateProcessW(path.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup, &process)) {
+            if (CreateProcessW(path.c_str(), command.data(), nullptr, nullptr, passed != 0u ? TRUE : FALSE,
+                               passed != 0u ? EXTENDED_STARTUPINFO_PRESENT : 0u, nullptr, nullptr, &startup.StartupInfo, &process)) {
+                // Where crash reports go (--crash-dumps), `restarted` names the process that took over, so a tool
+                // waiting for this one follows it.
+                if (const fs::path dumps = ::galaxy::launch_args().crash_dumps; !dumps.empty()) {
+                    std::ofstream(dumps / "restarted", std::ios::binary | std::ios::trunc) << process.dwProcessId << "\n";
+                }
                 CloseHandle(process.hThread);
                 CloseHandle(process.hProcess);
             }
+            if (startup.lpAttributeList != nullptr) DeleteProcThreadAttributeList(startup.lpAttributeList);
         }
     }
 #elif defined(__ANDROID__) && defined(NEBULA_HOST_RENDERER)
@@ -3659,7 +3693,100 @@ void svc_app_exit(void*) {
     finish_and_exit(false);
 }
 
+// The layers mods' code chooses (luma.h LumaModInfo.layers). The content is cooked with the record
+// (galaxy::mods::code_layers_record); an answer that differs from it starts the game again once.
+// gStartedAgainForLayers: this process was started again for layers (the record's restart file was there at the
+// start), so it never starts again for them: no loop is possible. A background cook of this start waits for the
+// answer (gLayersWait) and is planned with it, so a new mod gets one start-again, not two.
+bool gStartedAgainForLayers = false;
+std::mutex gLayersMutex;
+std::condition_variable gLayersAnswered;
+bool gLayersWait = false;      // a background cook waits for the answer
+bool gLayersAnswer = false;    // the answer is in (or none will come)
+std::optional<galaxy::mods::ModPlan> gLayersPlan;  // the plan made with a changed answer
+// The start's scan, its game and language, kept to plan again with a changed answer.
+std::vector<galaxy::mods::ModInfo> gStartMods;
+std::string gStartGameId;
+std::string gStartLanguage;
+
+// Ends the background cook's wait: with a plan made from a changed answer, or with none (cook as planned).
+void layers_answered(std::optional<galaxy::mods::ModPlan> plan) {
+    {
+        const std::lock_guard<std::mutex> lock(gLayersMutex);
+        if (gLayersAnswer) return;
+        gLayersAnswer = true;
+        gLayersPlan = std::move(plan);
+    }
+    gLayersAnswered.notify_all();
+}
+
+// start_plugins' choose: every begun mod's answer, compared with the record. Only a mod's own code layers count; any
+// other name is said once in the mod log. Equal: the start goes on.
+void layers_chosen(const std::vector<galaxy::mods::ChosenLayers>& chosen) {
+    const galaxy::mods::CodeLayers record = galaxy::mods::code_layers_record();
+    galaxy::mods::CodeLayers next = record;
+    std::vector<std::string> changed;
+    for (const galaxy::mods::ChosenLayers& one : chosen) {
+        const galaxy::mods::PluginFile& plugin = *one.plugin;
+        std::vector<std::string> said;
+        for (const std::string& name : one.names) {
+            const bool known = std::find(plugin.code_layers.begin(), plugin.code_layers.end(), name) != plugin.code_layers.end();
+            if (known || std::find(said.begin(), said.end(), name) != said.end()) continue;
+            said.push_back(name);
+            log_line("mods:", (plugin.mod_id + ": its code chose the layer \"" + name + "\", which is not one of its code layers; it is left out").c_str());
+            galaxy::modlog::add_row(1u, 0u, plugin.mod_id, 170u, "luma.json", "Layers.Unknown", {{"layer", name}});
+        }
+        if (plugin.code_layers.empty()) continue;  // nothing to choose: no record, never a start-again
+        // In the manifest's order, each once, so the same choice always reads the same.
+        std::vector<std::string> keep;
+        for (const std::string& name : plugin.code_layers) {
+            if (std::find(one.names.begin(), one.names.end(), name) != one.names.end()) keep.push_back(name);
+        }
+        const auto was = record.find(plugin.mod_id);
+        if (was != record.end() ? was->second != keep : !keep.empty()) changed.push_back(plugin.mod_id);
+        next[plugin.mod_id] = std::move(keep);
+    }
+    if (changed.empty()) {
+        layers_answered(std::nullopt);
+        return;
+    }
+    if (gStartedAgainForLayers) {
+        // Started again for these layers, and the answer changed again: the cooked layers stay for this session.
+        for (const std::string& mod : changed) {
+            log_line("mods:", (mod + ": its code chose other layers again after the game started again for them; the cooked ones stay").c_str());
+            galaxy::modlog::add_row(1u, 0u, mod, 171u, "", "Layers.Unstable", {});
+        }
+        layers_answered(std::nullopt);
+        return;
+    }
+    if (!galaxy::mods::write_code_layers_record(next)) {
+        log_line("mods:", "the layers the mods' code chose could not be written: the cooked ones stay");
+        layers_answered(std::nullopt);
+        return;
+    }
+    bool waits = false;
+    {
+        const std::lock_guard<std::mutex> lock(gLayersMutex);
+        waits = gLayersWait;
+    }
+    if (waits) {
+        // This start cooks in the background: that cook takes the new layers, and its start-again follows.
+        log_line("mods:", "the mods' code chose other layers: the files being prepared use them");
+        layers_answered(galaxy::mods::plan_mod_changes(gPak.store, gStartGameId, gStartLanguage, gStartMods));
+        return;
+    }
+    std::string ids;
+    for (const std::string& mod : changed) ids += (ids.empty() ? "" : ", ") + mod;
+    log_line("mods:", ("the code of " + ids + " chose other layers than the content was cooked with: the game starts again with them").c_str());
+    std::ofstream(galaxy::mods::code_layers_restart_file(), std::ios::binary) << "layers\n";
+    finish_and_exit(true);
+}
+
 void svc_mods_start(void*) {
+    // A background cook waiting for the layers' answer is let go however this ends (no code, a crash flag, no answer).
+    struct AnswerAtEnd {
+        ~AnswerAtEnd() { layers_answered(std::nullopt); }
+    } answer_at_end;
     const fs::path crashed = galaxy::mods::mods_folder() / ".code_crashed";
     std::error_code crash_error;
     if (fs::exists(crashed, crash_error)) {
@@ -3722,7 +3849,7 @@ void svc_mods_start(void*) {
                                     return dlsym(gModule.module, name);
 #endif
                                 },
-                                [](const char* text) { log_line("mods:", text); });
+                                [](const char* text) { log_line("mods:", text); }, layers_chosen);
     // The start check's one line when a part was missing (every mod off this session).
     if (gMissingPart) galaxy::startcheck::report(*gMissingPart);
     // Each mod whose code did not start, in the mod log as the Mods page says it.
@@ -3789,6 +3916,14 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
 void prepare_mod_files(const fs::path& settings_folder, const std::string& game_id, std::vector<galaxy::mods::ModInfo> mods) {
     const std::string language = galaxy::mods::language_folder(
         game_id, static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language)));
+    // Started again because a mod's code chose other layers: read once and gone, so this start never starts again for
+    // them.
+    {
+        std::error_code restart_error;
+        const fs::path restarted = galaxy::mods::code_layers_restart_file();
+        gStartedAgainForLayers = !restarted.empty() && fs::exists(restarted, restart_error);
+        if (gStartedAgainForLayers) fs::remove(restarted, restart_error);
+    }
     // Step 1 of a start with mods (contract start-check 1, 2): with a mod on, the game's own parts the mods need. One
     // missing: every mod is off this session, with one mod-log line; nothing of the mods runs. No mod on: no check.
     if (std::any_of(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) { return mod.enabled; })) {
@@ -3827,6 +3962,15 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
         std::count_if(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) { return mod.enabled; }));
     // The answers the plan's granted lists come from: a declined permission's L506 is then the player's choice (consent 2.3).
     galaxy::modlog::keep_permission_answers(mods);
+    // A mod whose code may choose layers: the scan is kept to plan again with a changed answer. No such mod, no copy.
+    if (std::any_of(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) {
+            return mod.enabled && mod.luma &&
+                   std::any_of(mod.luma->layers.begin(), mod.luma->layers.end(), [](const galaxy::luma::Layer& layer) { return layer.when.code; });
+        })) {
+        gStartMods = mods;
+        gStartGameId = game_id;
+        gStartLanguage = language;
+    }
     const galaxy::mods::ModPlan plan = galaxy::mods::plan_mod_changes(gPak.store, game_id, language, std::move(mods));
     gPlugins = plan.plugins;
     gModRows = plan.rows;
@@ -3935,8 +4079,11 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
     const fs::path signature_file = folder / "mods.signature";
     // Another build's shader interface or shader compiler means their shaders are built again; another cooker, that
     // the mods are cooked again (table-keys 9: cached by the mod list, the game and the applier).
-    const std::string signature = galaxy::mods::plan_signature(plan, game_id) + galaxy::render::program_interface() + " " +
-                                  std::to_string(galaxy::render::mod_shader_compiler_revision()) + "\n" + cooker_identity();
+    const auto signature_of = [game_id](const galaxy::mods::ModPlan& planned) {
+        return galaxy::mods::plan_signature(planned, game_id) + galaxy::render::program_interface() + " " +
+               std::to_string(galaxy::render::mod_shader_compiler_revision()) + "\n" + cooker_identity();
+    };
+    const std::string signature = signature_of(plan);
     std::error_code error;
     fs::create_directories(folder, error);
     std::string kept;
@@ -3945,7 +4092,7 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
         kept.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
     }
     if (kept != signature || !fs::is_regular_file(overlay, error)) {
-        const auto cook_now = [plan, folder, overlay, signature_file, signature, game_id]() -> bool {
+        const auto cook_now = [folder, overlay, signature_file, game_id](const galaxy::mods::ModPlan& plan, const std::string& signature) -> bool {
         const fs::path plan_file = folder / "mods.plan";
         if (!galaxy::io::write_file_atomically(plan_file, galaxy::mods::plan_text(plan, game_id))) {
             log_line("mods:", "the plan could not be written");
@@ -4050,8 +4197,32 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
             gModsProgressFile.replace_extension("progress");
             gModsPreparing.store(2u, std::memory_order_release);
             log_line("mods:", "preparing their files");
-            std::thread([cook_now]() {
-                if (cook_now()) {
+            // A mod whose code chooses layers: this cook waits for that answer (svc_mods_start, the game thread) and
+            // is planned with it when it changed, so the start-again that follows has the chosen layers.
+            const bool waits = std::any_of(plan.plugins.begin(), plan.plugins.end(),
+                                           [](const galaxy::mods::PluginFile& plugin) { return !plugin.code_layers.empty(); });
+            if (waits) {
+                const std::lock_guard<std::mutex> lock(gLayersMutex);
+                gLayersWait = true;
+            }
+            std::thread([cook_now, signature_of, plan, signature, waits]() {
+                galaxy::mods::ModPlan used = plan;
+                std::string used_signature = signature;
+                bool chosen = false;
+                if (waits) {
+                    std::unique_lock<std::mutex> lock(gLayersMutex);
+                    if (!gLayersAnswered.wait_for(lock, std::chrono::minutes(2), [] { return gLayersAnswer; })) {
+                        log_line("mods:", "the mods' code gave no layers in time: the files are prepared with the layers they had");
+                    } else if (gLayersPlan) {
+                        used = std::move(*gLayersPlan);
+                        gLayersPlan.reset();
+                        chosen = true;
+                    }
+                }
+                if (chosen) used_signature = signature_of(used);
+                if (cook_now(used, used_signature)) {
+                    // Planned with this start's answer: the next start does not start again for layers.
+                    if (chosen) std::ofstream(galaxy::mods::code_layers_restart_file(), std::ios::binary) << "layers\n";
                     finish_and_exit(true);
                 }
                 gModsPreparing.store(0u, std::memory_order_release);
@@ -4059,7 +4230,7 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
             return;
         }
 #endif
-        if (!cook_now()) {
+        if (!cook_now(plan, signature)) {
             return;
         }
     }

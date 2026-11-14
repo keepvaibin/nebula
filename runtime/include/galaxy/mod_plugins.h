@@ -28,6 +28,8 @@ struct PluginFile {
     // The ones the player declined (mod_consent.h declined_permissions): an L506 for one of them is their choice, logged
     // as that and not as a fault (consent 2.3).
     std::vector<std::string> declined;
+    // Its layers with `"code": true`, by name, in the manifest's order: what its layers call may choose.
+    std::vector<std::string> code_layers;
 };
 
 // A hex hash of every file in a plugin library's folder (names and contents), so the files it ships with count too.
@@ -183,11 +185,19 @@ struct ModRows {
 // The language refusals are said in (loader contract 3): the played language's folder name, as language_folder gives
 // it ("EuGerman"); empty or unknown to the validator: UsEnglish. Set before start_plugins.
 void set_message_language(std::string folder);
+// What one begun mod's layers call answered, every name as it gave it (unknown ones included), in its order.
+struct ChosenLayers {
+    const PluginFile* plugin;
+    std::vector<std::string> names;
+};
 // Starts the plugins and returns how many started. `game_api` is the game module's nebula_game_mod_api(); `find_symbol`
 // looks up a name in the game module (null when absent). A plugin that can't start is logged and skipped.
+// In two steps: every mod is bound and begun and its layers call asked (luma_begin_mod), then `choose` is given each
+// begun mod's answer (it may start the game again and not return), then the rows are applied, then each begun mod
+// starts (luma_start_begun) in the same order; one whose needed mod did not start is dropped (luma_drop_begun).
 std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows& rows, const NebulaModApi* game_api,
                           void* (*find_symbol)(const char*),
-                          void (*log)(const char*));
+                          void (*log)(const char*), void (*choose)(const std::vector<ChosenLayers>& chosen) = nullptr);
 // Takes a running LumaCore mod out while the game runs (reload.md 2), from any thread: the game module takes out the
 // mods that use it, then it, at the next frame's start; each one's Mods page then reads on and not running, "Taken out
 // while the game runs". False: not queued (no game module with the call, or it refused the id; said in the log).

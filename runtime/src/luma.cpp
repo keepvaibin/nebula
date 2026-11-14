@@ -1250,7 +1250,15 @@ bool when_holds(const When& when, const Situation& situation) {
 }
 
 bool layer_used(const Layer& layer, const Situation& situation) {
+    if (layer.when.code && !contains(situation.code_layers, layer_name(layer))) return false;
     return when_holds(layer.when, situation);
+}
+
+std::string layer_name(const Layer& layer) {
+    constexpr std::string_view kFolder = "layers/";
+    std::string_view path = layer.path;
+    if (path.starts_with(kFolder)) path.remove_prefix(kFolder.size());
+    return std::string(path);
 }
 
 std::string_view plugin_target() noexcept {

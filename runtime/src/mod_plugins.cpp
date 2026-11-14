@@ -314,7 +314,7 @@ std::string load_sentence(const std::string& why) {
 
 std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows& rows, const NebulaModApi* game_api,
                           void* (*find_symbol)(const char*),
-                          void (*log)(const char*)) {
+                          void (*log)(const char*), void (*choose)(const std::vector<ChosenLayers>& chosen)) {
     g_log = log;
     g_find_symbol = find_symbol;
     // LumaCore.service: the module asks the host, which asks its extensions (the harness's own service while a test runs).
@@ -345,152 +345,155 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
         return 0;
     }
     g_api = *game_api;
-    g_achievements = rows.achievements;
-    g_achievement_done = std::make_unique<std::atomic<bool>[]>(g_achievements.size());
-    {
-        bool subscribed[NEBULA_MOD_EVENT_COUNT] = {};
-        for (const AchievementToAdd& achievement : g_achievements) {
-            if (achievement.event.empty()) continue;
-            const int event = mod_event_by_name(achievement.event);
-            if (event < 0) {
-                say(achievement.mod_id + ": the achievement " + achievement.key + " waits for an event the game has not: " + achievement.event);
+    // The rows of the layers in use: after every mod's layers call was answered and the host kept the start going.
+    const auto apply_rows = [&] {
+        g_achievements = rows.achievements;
+        g_achievement_done = std::make_unique<std::atomic<bool>[]>(g_achievements.size());
+        {
+            bool subscribed[NEBULA_MOD_EVENT_COUNT] = {};
+            for (const AchievementToAdd& achievement : g_achievements) {
+                if (achievement.event.empty()) continue;
+                const int event = mod_event_by_name(achievement.event);
+                if (event < 0) {
+                    say(achievement.mod_id + ": the achievement " + achievement.key + " waits for an event the game has not: " + achievement.event);
+                    continue;
+                }
+                if (subscribed[event]) continue;
+                subscribed[event] = true;
+                if (g_api.subscribe(static_cast<NebulaModEvent>(event), achievement_event, reinterpret_cast<void*>(static_cast<std::intptr_t>(event))) != 0) {
+                    say(achievement.mod_id + ": the achievement " + achievement.key + " cannot wait for " + achievement.event);
+                }
+            }
+        }
+        for (const ModRows::TextToAdd& text : rows.texts) {
+            if (text.like.empty()) {
+                g_api.add_text(text.id.c_str(), text.words.c_str());
+            } else {
+                g_api.add_text_like(text.id.c_str(), text.words.c_str(), text.like.c_str());
+            }
+        }
+        for (const GalaxyToAdd& galaxy : rows.galaxies) {
+            NebulaGalaxy row{};
+            row.size = sizeof(row);
+            row.name = galaxy.name.c_str();
+            row.map_pane = galaxy.map_pane.empty() ? nullptr : galaxy.map_pane.c_str();
+            std::vector<std::string> conditions = galaxy.open_conditions;
+            if (galaxy.hungry_slot >= 0 && conditions.size() < 3u) conditions.push_back("StarPiece" + galaxy.name);
+            for (std::size_t i = 0; i < conditions.size(); ++i) row.open_condition[i] = conditions[i].c_str();
+            row.stars_to_open = galaxy.stars_to_open;
+            row.dome = galaxy.dome;
+            row.has_map_position = galaxy.has_map_position ? 1 : 0;
+            row.map_position[0] = galaxy.map_x;
+            row.map_position[1] = galaxy.map_y;
+            const int32_t added = g_api.add_galaxy(&row);
+            if (added == -2) {
+                say(galaxy.mod_id + ": the galaxy " + galaxy.name + " is left out: it has no StageData/" + galaxy.name + "/" + galaxy.name +
+                    "Scenario.arc");
                 continue;
             }
-            if (subscribed[event]) continue;
-            subscribed[event] = true;
-            if (g_api.subscribe(static_cast<NebulaModEvent>(event), achievement_event, reinterpret_cast<void*>(static_cast<std::intptr_t>(event))) != 0) {
-                say(achievement.mod_id + ": the achievement " + achievement.key + " cannot wait for " + achievement.event);
+            if (added != 0) {
+                say(galaxy.mod_id + ": the galaxy " + galaxy.name + " can't be added: its name clashes with one the game has");
+                continue;
+            }
+            if (galaxy.hungry_slot >= 0 && g_api.add_hungry_luma(galaxy.name.c_str(), galaxy.hungry_slot, galaxy.hungry_star_bits) != 0) {
+                say(galaxy.mod_id + ": the hungry Luma for " + galaxy.name + " can't be added");
             }
         }
-    }
-    for (const ModRows::TextToAdd& text : rows.texts) {
-        if (text.like.empty()) {
-            g_api.add_text(text.id.c_str(), text.words.c_str());
-        } else {
-            g_api.add_text_like(text.id.c_str(), text.words.c_str(), text.like.c_str());
-        }
-    }
-    for (const GalaxyToAdd& galaxy : rows.galaxies) {
-        NebulaGalaxy row{};
-        row.size = sizeof(row);
-        row.name = galaxy.name.c_str();
-        row.map_pane = galaxy.map_pane.empty() ? nullptr : galaxy.map_pane.c_str();
-        std::vector<std::string> conditions = galaxy.open_conditions;
-        if (galaxy.hungry_slot >= 0 && conditions.size() < 3u) conditions.push_back("StarPiece" + galaxy.name);
-        for (std::size_t i = 0; i < conditions.size(); ++i) row.open_condition[i] = conditions[i].c_str();
-        row.stars_to_open = galaxy.stars_to_open;
-        row.dome = galaxy.dome;
-        row.has_map_position = galaxy.has_map_position ? 1 : 0;
-        row.map_position[0] = galaxy.map_x;
-        row.map_position[1] = galaxy.map_y;
-        const int32_t added = g_api.add_galaxy(&row);
-        if (added == -2) {
-            say(galaxy.mod_id + ": the galaxy " + galaxy.name + " is left out: it has no StageData/" + galaxy.name + "/" + galaxy.name +
-                "Scenario.arc");
-            continue;
-        }
-        if (added != 0) {
-            say(galaxy.mod_id + ": the galaxy " + galaxy.name + " can't be added: its name clashes with one the game has");
-            continue;
-        }
-        if (galaxy.hungry_slot >= 0 && g_api.add_hungry_luma(galaxy.name.c_str(), galaxy.hungry_slot, galaxy.hungry_star_bits) != 0) {
-            say(galaxy.mod_id + ": the hungry Luma for " + galaxy.name + " can't be added");
-        }
-    }
-    for (const EventFlagToSet& flag : rows.event_flags) {
-        if (g_api.set_event_flag(flag.name.c_str(), flag.kind, flag.a, flag.b, flag.first.empty() ? nullptr : flag.first.c_str(), flag.second.empty() ? nullptr : flag.second.c_str()) != 0) {
-            say(flag.mod_id + ": the row " + flag.name + " can't be set");
-        }
-    }
-    // By dome number, so a mod's further domes come in the order the game data takes them (the next dome after the last).
-    std::vector<const CometsToSet*> comet_domes;
-    for (const CometsToSet& dome : rows.comets) comet_domes.push_back(&dome);
-    std::stable_sort(comet_domes.begin(), comet_domes.end(), [](const CometsToSet* a, const CometsToSet* b) { return a->dome < b->dome; });
-    for (const CometsToSet* dome_row : comet_domes) {
-        const CometsToSet& dome = *dome_row;
-        std::vector<const char*> galaxies;
-        std::vector<std::int32_t> coins;
-        for (const auto& [galaxy, coin] : dome.comets) {
-            galaxies.push_back(galaxy.c_str());
-            coins.push_back(coin);
-        }
-        if (g_api.set_comet_schedule(dome.dome, galaxies.data(), coins.data(), static_cast<std::int32_t>(galaxies.size())) != 0) {
-            say(dome.mod_id + ": the comets of dome " + std::to_string(dome.dome) + " can't be set");
-        }
-    }
-    for (const ObjectChangeToSet& change : rows.object_changes) {
-        if (g_api.set_object_change(change.where, change.object.c_str(), change.becomes.empty() ? nullptr : change.becomes.c_str()) != 0) {
-            say(change.mod_id + ": the object " + change.object + " can't be changed");
-        }
-    }
-    for (const CometLimitToSet& limit : rows.comet_limits) {
-        if (g_api.set_comet_time_limit(limit.galaxy.c_str(), limit.mission, limit.seconds) != 0) {
-            say(limit.mod_id + ": the time limit of " + limit.galaxy + " can't be set");
-        }
-    }
-    for (const StageRuleToSet& rule : rows.stage_rules) {
-        for (const std::string& name : rule.acts_as) g_api.set_stage_rules(rule.stage.c_str(), rule.scenario, name.c_str(), 1);
-        if (!rule.own_rules) g_api.set_stage_rules(rule.stage.c_str(), rule.scenario, nullptr, 0);
-    }
-    // A number past what a number holds (1e999 in luma.json reads as infinite) changes nothing, and is named as such.
-    for (const PlayerConstantToSet& constant : rows.player_constants) {
-        if (!std::isfinite(constant.value)) {
-            say(constant.mod_id + ": " + constant.name + " is set to a number too large to hold");
-        } else if (g_api.set_player_constant(constant.character, constant.name.c_str(), constant.index, constant.value) != 0) {
-            say(constant.mod_id + ": the player has no number " + constant.name);
-        }
-    }
-    // The tunables lift is gone (plan 1.5): a number is named by LumaCore's number() and set by set_number() from a
-    // mod's code. Each old row is said, never dropped unsaid.
-    for (const TunableToSet& tunable : rows.tunables) {
-        say(tunable.mod_id + ": " + tunable.key + " is not set: tuning numbers are set by a mod's code (LumaCore set_number)");
-    }
-    for (const auto& [key, value] : rows.story) {
-        if (g_api.set_story(key.c_str(), value.c_str()) != 0) say("the story has no " + key);
-    }
-    for (const SoundEffectToAdd& sound : rows.sound_effects) {
-        if (g_api.add_sound_effect(sound.name.c_str(), sound.file.c_str()) != 0) {
-            say(sound.mod_id + ": the sound " + sound.name + " can't be added");
-        }
-    }
-    for (const PlayerAnimationToAdd& animation : rows.player_animations) {
-        if (g_api.add_player_animation(animation.name.c_str(), animation.file.c_str(), static_cast<float>(animation.rate), animation.blend_frames) != 0) {
-            say(animation.mod_id + ": the player animation " + animation.name + " can't be added");
-        }
-    }
-    for (const ObjectClassToSet& object : rows.object_classes) {
-        if (!object.like.empty() && g_api.set_object_class(object.name.c_str(), object.like.c_str()) != 0) {
-            say(object.mod_id + ": the object " + object.name + " can't be added");
-        }
-    }
-    // Power-ups from data.
-    for (const FormToAdd& row : rows.forms) {
-        NebulaPowerUpClass form{};
-        form.size = sizeof(NebulaPowerUpClass);
-        form.name = row.name.c_str();
-        form.frames = row.frames;
-        form.music = row.music.empty() ? nullptr : row.music.c_str();
-        form.color_frame = row.color_frame;
-        form.model = row.model.empty() ? nullptr : row.model.c_str();
-        form.looks_like = row.looks_like;
-        form.acts_like = row.acts_like;
-        if (g_api.add_power_up(&form) < 0) {
-            say(row.mod_id + ": the form " + row.name + " can't be added");
-        }
-    }
-    for (const MusicToAdd& track : rows.music) {
-        if (g_api.add_music(track.name.c_str(), track.file.c_str()) != 0) {
-            say(track.mod_id + ": the music " + track.name + " can't be added: its name is the game's");
-            continue;
-        }
-        for (const MusicToAdd::Place& place : track.places) {
-            if (place.change_area >= 0) {
-                g_api.set_area_music(place.stage.c_str(), place.change_area, track.name.c_str());
-            } else {
-                g_api.set_stage_music(place.stage.c_str(), place.scenario, track.name.c_str());
+        for (const EventFlagToSet& flag : rows.event_flags) {
+            if (g_api.set_event_flag(flag.name.c_str(), flag.kind, flag.a, flag.b, flag.first.empty() ? nullptr : flag.first.c_str(), flag.second.empty() ? nullptr : flag.second.c_str()) != 0) {
+                say(flag.mod_id + ": the row " + flag.name + " can't be set");
             }
         }
-    }
+        // By dome number, so a mod's further domes come in the order the game data takes them (the next dome after the last).
+        std::vector<const CometsToSet*> comet_domes;
+        for (const CometsToSet& dome : rows.comets) comet_domes.push_back(&dome);
+        std::stable_sort(comet_domes.begin(), comet_domes.end(), [](const CometsToSet* a, const CometsToSet* b) { return a->dome < b->dome; });
+        for (const CometsToSet* dome_row : comet_domes) {
+            const CometsToSet& dome = *dome_row;
+            std::vector<const char*> galaxies;
+            std::vector<std::int32_t> coins;
+            for (const auto& [galaxy, coin] : dome.comets) {
+                galaxies.push_back(galaxy.c_str());
+                coins.push_back(coin);
+            }
+            if (g_api.set_comet_schedule(dome.dome, galaxies.data(), coins.data(), static_cast<std::int32_t>(galaxies.size())) != 0) {
+                say(dome.mod_id + ": the comets of dome " + std::to_string(dome.dome) + " can't be set");
+            }
+        }
+        for (const ObjectChangeToSet& change : rows.object_changes) {
+            if (g_api.set_object_change(change.where, change.object.c_str(), change.becomes.empty() ? nullptr : change.becomes.c_str()) != 0) {
+                say(change.mod_id + ": the object " + change.object + " can't be changed");
+            }
+        }
+        for (const CometLimitToSet& limit : rows.comet_limits) {
+            if (g_api.set_comet_time_limit(limit.galaxy.c_str(), limit.mission, limit.seconds) != 0) {
+                say(limit.mod_id + ": the time limit of " + limit.galaxy + " can't be set");
+            }
+        }
+        for (const StageRuleToSet& rule : rows.stage_rules) {
+            for (const std::string& name : rule.acts_as) g_api.set_stage_rules(rule.stage.c_str(), rule.scenario, name.c_str(), 1);
+            if (!rule.own_rules) g_api.set_stage_rules(rule.stage.c_str(), rule.scenario, nullptr, 0);
+        }
+        // A number past what a number holds (1e999 in luma.json reads as infinite) changes nothing, and is named as such.
+        for (const PlayerConstantToSet& constant : rows.player_constants) {
+            if (!std::isfinite(constant.value)) {
+                say(constant.mod_id + ": " + constant.name + " is set to a number too large to hold");
+            } else if (g_api.set_player_constant(constant.character, constant.name.c_str(), constant.index, constant.value) != 0) {
+                say(constant.mod_id + ": the player has no number " + constant.name);
+            }
+        }
+        // The tunables lift is gone (plan 1.5): a number is named by LumaCore's number() and set by set_number() from a
+        // mod's code. Each old row is said, never dropped unsaid.
+        for (const TunableToSet& tunable : rows.tunables) {
+            say(tunable.mod_id + ": " + tunable.key + " is not set: tuning numbers are set by a mod's code (LumaCore set_number)");
+        }
+        for (const auto& [key, value] : rows.story) {
+            if (g_api.set_story(key.c_str(), value.c_str()) != 0) say("the story has no " + key);
+        }
+        for (const SoundEffectToAdd& sound : rows.sound_effects) {
+            if (g_api.add_sound_effect(sound.name.c_str(), sound.file.c_str()) != 0) {
+                say(sound.mod_id + ": the sound " + sound.name + " can't be added");
+            }
+        }
+        for (const PlayerAnimationToAdd& animation : rows.player_animations) {
+            if (g_api.add_player_animation(animation.name.c_str(), animation.file.c_str(), static_cast<float>(animation.rate), animation.blend_frames) != 0) {
+                say(animation.mod_id + ": the player animation " + animation.name + " can't be added");
+            }
+        }
+        for (const ObjectClassToSet& object : rows.object_classes) {
+            if (!object.like.empty() && g_api.set_object_class(object.name.c_str(), object.like.c_str()) != 0) {
+                say(object.mod_id + ": the object " + object.name + " can't be added");
+            }
+        }
+        // Power-ups from data.
+        for (const FormToAdd& row : rows.forms) {
+            NebulaPowerUpClass form{};
+            form.size = sizeof(NebulaPowerUpClass);
+            form.name = row.name.c_str();
+            form.frames = row.frames;
+            form.music = row.music.empty() ? nullptr : row.music.c_str();
+            form.color_frame = row.color_frame;
+            form.model = row.model.empty() ? nullptr : row.model.c_str();
+            form.looks_like = row.looks_like;
+            form.acts_like = row.acts_like;
+            if (g_api.add_power_up(&form) < 0) {
+                say(row.mod_id + ": the form " + row.name + " can't be added");
+            }
+        }
+        for (const MusicToAdd& track : rows.music) {
+            if (g_api.add_music(track.name.c_str(), track.file.c_str()) != 0) {
+                say(track.mod_id + ": the music " + track.name + " can't be added: its name is the game's");
+                continue;
+            }
+            for (const MusicToAdd::Place& place : track.places) {
+                if (place.change_area >= 0) {
+                    g_api.set_area_music(place.stage.c_str(), place.change_area, track.name.c_str());
+                } else {
+                    g_api.set_stage_music(place.stage.c_str(), place.scenario, track.name.c_str());
+                }
+            }
+        }
+    };
     {
         const std::lock_guard<std::mutex> lock(g_not_started_mutex);
         g_not_started.clear();
@@ -605,14 +608,29 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
         cycle.count = 6;
         not_started(plugins[i], cycle);
     }
-    std::vector<std::string> started;
+    // Step 1, in the start order: each mod bound and begun, then its layers call asked; none starts yet. A mod waits
+    // for its start with its library open; a later mod binds to its exports.
+    struct Begun {
+        std::size_t index;
+        const LumaModInfo* info;
+        void* module;
+        std::string library;
+    };
+    const auto begin = reinterpret_cast<LumaBeginMod>(g_find_symbol != nullptr ? g_find_symbol("luma_begin_mod") : nullptr);
+    const auto answered = reinterpret_cast<LumaModLayers>(g_find_symbol != nullptr ? g_find_symbol("luma_mod_layers") : nullptr);
+    const auto start = reinterpret_cast<LumaStartBegun>(g_find_symbol != nullptr ? g_find_symbol("luma_start_begun") : nullptr);
+    const auto drop = reinterpret_cast<LumaDropBegun>(g_find_symbol != nullptr ? g_find_symbol("luma_drop_begun") : nullptr);
+    std::vector<Begun> begun;
+    const auto has_begun = [&](const std::string& id) {
+        return std::any_of(begun.begin(), begun.end(), [&](const Begun& b) { return plugins[b.index].mod_id == id; });
+    };
     for (const std::size_t index : sequence) {
         const PluginFile& file = plugins[index];
         const std::string name = file.mod_id + " (" + file.path.filename().string() + ")";
-        // A needed mod that did not start leaves this one off, named (its imports from it could not bind).
+        // A needed mod that did not begin leaves this one off, named (its imports from it could not bind).
         std::string missing;
         for (const std::string& need : file.needs) {
-            if (listed(need) && std::find(started.begin(), started.end(), need) == started.end()) {
+            if (listed(need) && !has_begun(need)) {
                 missing = need;
                 break;
             }
@@ -642,10 +660,9 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
         // list first, so `index` is the mod's order: 0 binds first, holds a replace, runs its befores first and its
         // afters last, and its wrap is outermost (loader contract 1). From the call on, the game closes the library.
         if (const void* const info = symbol_in(module, "luma_mod"); info != nullptr) {
-            const auto load = reinterpret_cast<LumaLoadMod>(g_find_symbol != nullptr ? g_find_symbol("luma_load_mod") : nullptr);
-            if (load == nullptr) {
+            if (begin == nullptr || answered == nullptr || start == nullptr || drop == nullptr) {
                 // The game module is this build's: it always has the loader. Said, never silent.
-                not_started(file, name + " not started: luma_load_mod is missing from the game module", "ITS CODE DID NOT START");
+                not_started(file, name + " not started: the game module has no luma_begin_mod", "ITS CODE DID NOT START");
                 close_library(module);
                 continue;
             }
@@ -656,8 +673,8 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
             std::vector<const char*> granted;
             granted.reserve(file.granted.size());
             for (const std::string& permission : file.granted) granted.push_back(permission.c_str());
-            if (load(static_cast<const LumaModInfo*>(info), file.mod_id.c_str(), library.c_str(), static_cast<std::int32_t>(index), module,
-                     close_luma_library, granted.data(), static_cast<std::uint32_t>(granted.size()), &refusal) == 0) {
+            if (begin(static_cast<const LumaModInfo*>(info), file.mod_id.c_str(), library.c_str(), static_cast<std::int32_t>(index), module,
+                      close_luma_library, granted.data(), static_cast<std::uint32_t>(granted.size()), &refusal) == 0) {
                 if (refusal.code != 0) {
                     not_started(file, refusal);
                 } else {
@@ -665,21 +682,69 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
                 }
                 continue;
             }
-            auto loaded = std::make_unique<Loaded>();
-            loaded->mod_id = file.mod_id;
-            loaded->library = library;
-            loaded->version = file.version;
-            loaded->options = file.options;
-            loaded->module = module;
-            g_loaded.push_back(std::move(loaded));
-            started.push_back(file.mod_id);
-            say(name + " started");
+            begun.push_back({index, static_cast<const LumaModInfo*>(info), module, library});
             continue;
         }
         // Code that is not a LumaCore mod (no luma_mod): the old plugin entry, nebula_plugin_start, is gone (plan 1.10a).
         not_started(file, name + " not started: it is not a LumaCore mod (no luma_mod); rebuild it with luma.h",
                     "ITS CODE DID NOT START. IT WAS BUILT FOR AN OLDER NEBULA");
         close_library(module);
+    }
+    // Between the steps: what each begun mod's layers call answered, for the host, which may start the game again here
+    // (its content was cooked with other layers). Then the rows.
+    if (choose != nullptr) {
+        std::vector<ChosenLayers> chosen;
+        for (const Begun& b : begun) {
+            ChosenLayers one{&plugins[b.index], {}};
+            std::uint64_t bytes = 0;
+            const char* const names = answered(b.info, &bytes);
+            for (std::uint64_t at = 0; names != nullptr && at < bytes;) {
+                const std::string_view name(names + at);
+                one.names.emplace_back(name);
+                at += name.size() + 1u;
+            }
+            chosen.push_back(std::move(one));
+        }
+        choose(chosen);
+    }
+    apply_rows();
+    // Step 2, in the same order: each begun mod's start. One whose needed mod did not start is dropped, named, as a
+    // refused start is.
+    std::vector<std::string> started;
+    for (const Begun& b : begun) {
+        const PluginFile& file = plugins[b.index];
+        const std::string name = file.mod_id + " (" + file.path.filename().string() + ")";
+        std::string missing;
+        for (const std::string& need : file.needs) {
+            if (listed(need) && std::find(started.begin(), started.end(), need) == started.end()) {
+                missing = need;
+                break;
+            }
+        }
+        if (!missing.empty()) {
+            drop(b.info);
+            not_started(file, name + " not started: it needs " + missing + ", which did not start",
+                        "ITS CODE DID NOT START. IT NEEDS A MOD THAT DID NOT START: " + missing);
+            continue;
+        }
+        LumaRefusal refusal{};
+        if (start(b.info, &refusal) == 0) {
+            if (refusal.code != 0) {
+                not_started(file, refusal);
+            } else {
+                not_started(file, name + " not started: the loader gave no reason", "ITS CODE DID NOT START");
+            }
+            continue;
+        }
+        auto loaded = std::make_unique<Loaded>();
+        loaded->mod_id = file.mod_id;
+        loaded->library = b.library;
+        loaded->version = file.version;
+        loaded->options = file.options;
+        loaded->module = b.module;
+        g_loaded.push_back(std::move(loaded));
+        started.push_back(file.mod_id);
+        say(name + " started");
     }
     return g_loaded.size();
 }

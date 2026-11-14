@@ -330,8 +330,13 @@ struct Situation {
     std::map<std::string, std::string> options;  // option id -> choice id ("off" when off)
     std::vector<std::string> mods;  // ids of the mods that are on
     bool code = false;  // the mod's code runs here (allowed, with an entry library for this platform)
+    // The layers with `"code": true` its code chose, by name, as the content was cooked with them (mods.cpp
+    // code_layers_record): such a layer is used only when named here.
+    std::vector<std::string> code_layers;
 };
 [[nodiscard]] bool layer_used(const Layer& layer, const Situation& situation);
+// A layer's name: its folder under layers/.
+[[nodiscard]] std::string layer_name(const Layer& layer);
 [[nodiscard]] bool when_holds(const When& when, const Situation& situation);
 // This platform as luma-format 6 names it (a `code.platforms` entry, a folder under code/, a plugin `binaries` key):
 // windows-x64, windows-arm64, linux-x64, linux-arm64, macos-x64, macos-arm64, android-arm64, android-x64, ios-arm64.

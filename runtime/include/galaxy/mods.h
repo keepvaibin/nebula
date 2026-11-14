@@ -279,4 +279,16 @@ void set_played_language(unsigned language) noexcept;
 // True when `mods` (the current choices) differ from what this run started with; a restart applies them.
 [[nodiscard]] bool mods_differ_from_session(std::span<const ModInfo> mods);
 
+// The layers with `"code": true` the mods' content is cooked with, by mod id, as their code chose them
+// (mods/.cooked/code-layers: one line a mod, its id then each name, tab-separated). The scan and the plan use a code
+// layer only when it is listed for its mod; a mod not listed has none on. Empty before set_mods_folder or when the file
+// is missing.
+using CodeLayers = std::map<std::string, std::vector<std::string>>;
+[[nodiscard]] CodeLayers code_layers_record();
+// Written whole, atomically. False: not written.
+bool write_code_layers_record(const CodeLayers& record);
+// The file that says this process was started again because a mod's code chose other layers (beside the record).
+// Written before that start-again; the next start reads it once and deletes it, and does not start again for layers.
+[[nodiscard]] std::filesystem::path code_layers_restart_file();
+
 }  // namespace galaxy::mods

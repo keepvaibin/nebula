@@ -220,7 +220,15 @@ int main() {
         check(!layer_used(m.layers[3], s), "a condition this game doesn't know: not used");
         check(!layer_used(m.layers[4], s), "code: true while the code does not run");
         s.code = true;
-        check(layer_used(m.layers[4], s), "code: true while it runs");
+        check(!layer_used(m.layers[4], s), "code: true while it runs, not chosen by its code");
+        s.code_layers = {"other"};
+        check(!layer_used(m.layers[4], s), "code: true, its code chose another layer");
+        s.code_layers = {"other", "coded"};
+        check(layer_used(m.layers[4], s), "code: true, chosen by its code while it runs");
+        s.code = false;
+        check(!layer_used(m.layers[4], s), "code: true, chosen once, while its code does not run here");
+        s.code = true;
+        check(layer_name(m.layers[4]) == "coded", "a layer's name is its folder under layers/");
         check(!layer_used(m.layers[5], s), "a toggle off");
         s.options["hard"] = "on";
         check(layer_used(m.layers[5], s), "a toggle on");

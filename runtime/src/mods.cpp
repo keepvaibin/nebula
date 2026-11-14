@@ -648,8 +648,17 @@ std::string plugin_token(const fs::path& mod, const luma::Manifest& manifest) {
 // The mods on, for a layer's `when`, as the plan goes through them.
 std::vector<std::string> g_mods_on;
 
+bool has_code_layer(const luma::Manifest& manifest) {
+    return std::any_of(manifest.layers.begin(), manifest.layers.end(), [](const luma::Layer& layer) { return layer.when.code; });
+}
+
 luma::Situation situation_of(const ModInfo& mod, const std::string& game_id, const std::string& language) {
     luma::Situation situation;
+    // Only a mod with a code layer reads the record: the others cost nothing.
+    if (mod.luma && has_code_layer(*mod.luma)) {
+        const CodeLayers record = code_layers_record();
+        if (const auto chosen = record.find(mod.id); chosen != record.end()) situation.code_layers = chosen->second;
+    }
     situation.mods = g_mods_on;
     situation.region = game_id;
     situation.version = game_id.size() >= 4u ? game_id.substr(3, 1) : std::string("E");
@@ -1969,6 +1978,9 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                 plan.plugins.push_back({library, mod.id, mod.luma->version, situation.options, code_hash(library), {}, granted_permissions(mod),
                                         declined_permissions(mod)});
                 for (const luma::Dependency& need : mod.luma->needs) plan.plugins.back().needs.push_back(need.id);
+                for (const luma::Layer& layer : mod.luma->layers) {
+                    if (layer.when.code) plan.plugins.back().code_layers.push_back(luma::layer_name(layer));
+                }
             }
             std::rotate(plan.plugins.begin(), plan.plugins.begin() + static_cast<std::ptrdiff_t>(lower_mods), plan.plugins.end());
         }
@@ -2377,6 +2389,58 @@ bool mods_differ_from_session(std::span<const ModInfo> mods) {
     Session& s = session();
     const std::lock_guard<std::mutex> lock(s.mutex);
     return mods_signature(mods) != mods_signature(s.mods.started_with);
+}
+
+namespace {
+fs::path code_layers_file() {
+    const fs::path folder = mods_folder();
+    return folder.empty() ? fs::path() : folder / ".cooked" / "code-layers";
+}
+}  // namespace
+
+CodeLayers code_layers_record() {
+    CodeLayers record;
+    const fs::path file = code_layers_file();
+    if (file.empty()) return record;
+    const std::string text = read_text(file);
+    std::size_t at = 0;
+    while (at < text.size()) {
+        std::size_t end = text.find('\n', at);
+        if (end == std::string::npos) end = text.size();
+        std::string_view line(text.data() + at, end - at);
+        at = end + 1u;
+        if (!line.empty() && line.back() == '\r') line.remove_suffix(1);
+        if (line.empty()) continue;
+        std::vector<std::string> parts;
+        for (std::size_t from = 0;;) {
+            const std::size_t tab = line.find('\t', from);
+            parts.emplace_back(line.substr(from, tab == std::string_view::npos ? std::string_view::npos : tab - from));
+            if (tab == std::string_view::npos) break;
+            from = tab + 1u;
+        }
+        std::vector<std::string>& names = record[parts[0]];
+        names.assign(parts.begin() + 1, parts.end());
+    }
+    return record;
+}
+
+bool write_code_layers_record(const CodeLayers& record) {
+    const fs::path file = code_layers_file();
+    if (file.empty()) return false;
+    std::string text;
+    for (const auto& [mod, names] : record) {
+        text += mod;
+        for (const std::string& name : names) text += "\t" + name;
+        text += "\n";
+    }
+    std::error_code error;
+    fs::create_directories(file.parent_path(), error);
+    return io::write_file_atomically(file, text);
+}
+
+std::filesystem::path code_layers_restart_file() {
+    const fs::path file = code_layers_file();
+    return file.empty() ? fs::path() : fs::path(file).replace_filename("code-layers.started-again");
 }
 
 }  // namespace galaxy::mods
