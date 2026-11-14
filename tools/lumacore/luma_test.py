@@ -1063,15 +1063,19 @@ def remove_kept(settings, mod_folder, folder=None):
     return mod_id
 
 
-# What a restart keeps of Nebula's data folder (platform_paths.h nebula_data_directory: a run's is
-# <run>/appdata/Nebula, LOCALAPPDATA being <run>/appdata): every mod's own data folder, mod-data/<id> (services-fs 2;
+# What a restart keeps of Nebula's data folder (platform_paths.h nebula_data_directory: a run's is in <run>/appdata,
+# run_data_folder): every mod's own data folder, mod-data/<id> (services-fs 2;
 # a removed mod's stays until the player forgets it, services-mods 8), and the Exchange folder, the player's and the
 # granted mods' (services-fs 2). The shader cache and diagnostics are not carried: each run makes its own.
 CARRIED_DATA = ("mod-data", "Exchange")
 
 
 def run_data_folder(run_folder):
-    """Nebula's data folder of a run: where its game keeps mod-data and Exchange."""
+    """Nebula's data folder of a run: where its game keeps mod-data and Exchange. run_one names <run>/appdata as the
+    variable the game finds it by: LOCALAPPDATA on Windows and XDG_DATA_HOME on Linux (<var>/Nebula), HOME on macOS
+    (<var>/Library/Application Support/Nebula)."""
+    if platform.system() == "Darwin":
+        return run_folder / "appdata" / "Library" / "Application Support" / "Nebula"
     return run_folder / "appdata" / "Nebula"
 
 
