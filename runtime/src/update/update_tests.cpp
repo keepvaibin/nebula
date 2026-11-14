@@ -45,24 +45,23 @@ constexpr std::string_view kSignedTextSignature =
     "4/Si79mSkFmF4tXcjckBxV12rM+qKzZhVOT9kRmJKaesVGZq9790Zd0ZuqSYQ4hk/twTezP/NCQXglLAlmJt13TWIh9z19GKdg==";
 constexpr std::string_view kPackage = "nebula package 9.9.9-beta.1";
 constexpr std::string_view kPackageSha = "06a6d2b2f0b8ec784d400a288149a8e496516e0bff6e144415723d0714830419";
-constexpr std::string_view kManifestSignature =
+// The same signing over "version=9.9.9-beta.1\nsha256=<kPackageSha>\nsize=27\n", a manifest that names no asset.
+constexpr std::string_view kManifestNoAssetSignature =
     "7Dd/s+Xh8rS2GjX7YlX7PLLMlQxJqMZeJQeeIwfUyHjM02nNGVDNKPFoKx4zvxGm+inm+u7mUy+F7c3kEksJ6lbhPmuXgdHSp5uiwD67dFuvja+bCmjWLjJKEG"
     "6d49tM6z7SKDvJLAGm1JV2DBDWyXhTSMnGhiMine9ph6hlfNI0LBXSsd6N/2RXMPEhb6PiVbg62lSFwQGckM0HAsP8mjrfwbmK7qCHKRu+rzFPrlUezO7QsVP"
     "c1p8IDMZ4205PQSsgqo1bOcPG1/hAwYu/wEaDhA35wbWnqR9SdHD6KY8Fp8YC3SNJTTIm7+wWBWMIdl74G1OVxxUR5I+RZsVS7A==";
+// Over "version=9.9.9-beta.1\nsha256=<kPackageSha>\nsize=27\nasset=Nebula-Beta-Test.pkg\n".
+constexpr std::string_view kManifestSignature =
+    "g59Hoaw7lp7cGCKt1Mu/cEB5vpERTbwM6LroFoauqTUyNM6HCQoI1o6HEQ53/qqHplY2Eo0tB3R1fa/IF1zGB19tB2GFz/jwG8GDnonMv8XGljmCFgBSA7Dw"
+    "dUiMeNMD5rb5MCz3570tqZeGu3oeu6MFgbijceHVgn81oLOEl3UIhTend4J6swp7ka4EuBCQFELKnl5aWg16S0wbL1s3h5Es1RBQFTra2CuZ36MLyh4AcP5c"
+    "BwTlsfRYXHTHb/S4TcsA7zTIDroEs4VIi/fbUk8NP8UANQ2B4oN23HU1iFe09cm0D7ynfsSMfGVQlz64kllwFrvZLt9xhn0QJJgicA==";
+// Over "version=2.0.1-beta.1\nsha256=<kPackageSha>\nsize=27\nasset=Nebula-Beta-Test.pkg\n": an older release's manifest.
 constexpr std::string_view kReplayedSignature =
-    "ABvj0GgzQSvD8K4QaKVJ38pwk6PqPvkQ9hhl1nWvOJKFu+STzFdC6jqge3CdDBw60RpzDCvDdQSHIhrYJZ9FlkTN2NhcoXlcQZTQ2GvN1bzVGd3C57C5EL9rC"
-    "mwvIuHQePkXvQCJNzdMX/iXTbMSqayxHfpeChI063qMYT8bckhOzBFBGTwKjXjFUU/uBW7bz98KpvE6CGO/vDnrpdDmoZEwFOEsyEXg6mIyIx1hM7Cpr1ZvmTU9"
-    "UAs7bAospGnOpc8gcTzZQM+j+hQOPkqK+gP3F0CofLjBufkznMt1groWJYbB27C/2rxvvNUZJ3ePlNI5KHJVnQnSmv1Qh/JylA==";
+    "heBgoFtzkdzQ/vIaNjp0hi1JLERjoBhdg/cPZNz9h9wKVoqb61NvNHNQBzCvU+l84GjNUlXJzN3az07tRvUJ68NcaYy7NZaT2FZwx/r9SGP8o0UgygTsXDNH"
+    "9Sy5HR2H/hK2ruRO4XC3gJCZgFOp8zVqY3wO6t+2cS9m5Jf0BhJZcvNo2z/mZL0QQbPJPLjVsQpCHsXbV1bjEysM9FQRoeRS5HY0po66WmUzqxL1HlvQtUGq"
+    "DHz4p/cbg2N7IELusDnMNsos7ikcqBKSTu5BGHgLVLIDtjpZvurk39zKVhNl7rjBISmOh+625rCyaU3YNdzttujVPPuaASPXL+f41g==";
 
 constexpr std::string_view kAsset = "Nebula-Beta-Test.pkg";
-
-// kManifestSignature signs the manifest text without its `asset=` line (made before the line was required), so the one
-// check that needs a valid signature over the text with the line is skipped until the signature is made again. To
-// re-enable it: sign "version=9.9.9-beta.1\nsha256=<kPackageSha>\nsize=27\nasset=Nebula-Beta-Test.pkg\n" with the test
-// key's RSACryptoServiceProvider.SignData (SHA-256, as kSignedTextSignature), paste the result as kManifestSignature,
-// and set this to true. The check "a validly signed manifest that names no asset is refused" then needs the old value
-// kept under another name.
-constexpr bool kManifestSignatureHasAsset = false;
 
 std::string listing(const std::string& version, const std::string& notes) {
     const std::string base = "https://example.org/" + version + "/";
@@ -299,8 +298,6 @@ int main(int argc, char** argv) {
     }
 
     // The install: the signed manifest decides.
-    // kManifestSignature and kReplayedSignature sign texts without an `asset=` line: those are refused now (the first and
-    // the replay check use them so); the signed install of a manifest with the line waits for kManifestSignatureHasAsset.
     write_cache(data, "{\"checkedUtc\": \"2020-01-01T00:00:00Z\"}");
     g_transport.releases = listing("9.9.9-beta.1", "notes");
     galaxy::update::begin(installed);
@@ -315,20 +312,17 @@ int main(int argc, char** argv) {
     };
     const std::string asset_line = "asset=" + std::string(kAsset) + "\n";
     g_transport.manifest = "version=9.9.9-beta.1\nsha256=" + std::string(kPackageSha) + "\nsize=" + std::to_string(kPackage.size()) + "\n";
-    g_transport.signature = std::string(kManifestSignature) + "\n";
+    g_transport.signature = std::string(kManifestNoAssetSignature) + "\n";
     g_transport.package = std::string(kPackage);
     check(release && start_install(*release) && wait_install() == InstallState::Failed && g_installed_package.empty(),
           "a validly signed manifest that names no asset is refused");
     g_transport.manifest += asset_line;
-    if constexpr (kManifestSignatureHasAsset) {
-        check(release && start_install(*release) && wait_install() == InstallState::Restart && read_file(g_installed_package) == kPackage,
-              "a package matching its signed manifest is installed");
-    } else {
-        std::printf("SKIPPED: a package matching its signed manifest is installed (kManifestSignature predates the asset= "
-                    "line: re-sign the manifest text with it, see kManifestSignatureHasAsset)\n");
-    }
+    g_transport.signature = std::string(kManifestSignature) + "\n";
+    check(release && start_install(*release) && wait_install() == InstallState::Restart && read_file(g_installed_package) == kPackage,
+          "a package matching its signed manifest is installed");
     g_installed_package.clear();
-    g_transport.manifest = "version=2.0.1-beta.1\nsha256=" + std::string(kPackageSha) + "\nsize=" + std::to_string(kPackage.size()) + "\n";
+    g_transport.manifest =
+        "version=2.0.1-beta.1\nsha256=" + std::string(kPackageSha) + "\nsize=" + std::to_string(kPackage.size()) + "\n" + asset_line;
     g_transport.signature = std::string(kReplayedSignature);
     check(release && start_install(*release) && wait_install() == InstallState::Failed && g_installed_package.empty(),
           "a signed manifest of an older version under this release is refused (replay, downgrade)");
