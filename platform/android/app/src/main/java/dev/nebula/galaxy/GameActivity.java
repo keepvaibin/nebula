@@ -135,13 +135,23 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
             prefs.edit().remove(GameFiles.RECORD_NEXT_RUN).commit();
         }
         // The native game's settings, saves and log: the app's private storage.
-        return new String[] {
+        final String[] arguments = {
             "--data", nativeData().getPath(),
             "--pak", GameFiles.pak(this).getPath(),
             "--saves", GameFiles.savesIn(nativeData()).getPath(),
             "--module", getApplicationInfo().nativeLibraryDir + "/libsmg_game.so",
             "--diagnostics", record ? "1" : "0",
         };
+        // A benchmark, started from the shell as a profiling run is, with `--ez nebula.benchmark true`: it plays with saves
+        // in memory, writes no setting and quits with its result in the data folder's diagnostics (runtime benchmark.h).
+        // The app's own launcher has no Benchmark row: no start again on Android to come back to it.
+        if (!getIntent().getBooleanExtra("nebula.benchmark", false)) {
+            return arguments;
+        }
+        final String[] benchmark = java.util.Arrays.copyOf(arguments, arguments.length + 2);
+        benchmark[arguments.length] = "--benchmark";
+        benchmark[arguments.length + 1] = "1";
+        return benchmark;
     }
 
     // The frame-rate setting saved last (config.ini max_fps; 0: the display's own), before the game has read it.
