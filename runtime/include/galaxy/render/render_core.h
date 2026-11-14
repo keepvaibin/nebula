@@ -775,7 +775,7 @@ private:
         unsigned width = 0u, lines = 0u;
         bool timing_was_on = false;
         std::vector<double> pixels, ms;
-        double cpu_over = 0.0;        // samples whose game or render thread time was near the frame time
+        double cpu_over = 0.0;        // samples with the walk near the frame time or the game late on its own
         std::int64_t list_qpc = 0;
         std::uint64_t list_wait = 0u;
     };
