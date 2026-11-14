@@ -168,7 +168,8 @@ float3 FinalWrite(float3 color, int2 p) {
 #define A_HLSL 1
 #endif
 // EASU's packed 16-bit form: min16float, for a Direct3D device that reports 16-bit minimum precision (its taps then run
-// two to a 32-bit lane where the GPU packs them).
+// two to a 32-bit lane where the GPU packs them) and for Vulkan, where the SPIR-V marks it RelaxedPrecision (a GPU with
+// fast 16-bit arithmetic runs it so, one without at 32 bits).
 #if defined(PASS_FSR_EASU_HALF)
 #define A_HALF 1
 #endif

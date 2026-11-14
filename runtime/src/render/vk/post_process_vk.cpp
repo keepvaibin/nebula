@@ -161,7 +161,7 @@ void PostProcessorVk::set_present_pass(VkRenderPass pass) {
     to_present_ = {};
     present_pass_ = pass;
     if (built_ && present_pass_ != VK_NULL_HANDLE) {
-        to_present_.easu = create_pipeline(kFullscreenVs, kEasuPs, present_pass_, kRgba, 0);
+        to_present_.easu = create_pipeline(kFullscreenVs, kEasuHalfPs, present_pass_, kRgba, 0);
         to_present_.rcas = create_pipeline(kFullscreenVs, kRcasPs, present_pass_, kRgba, 0);
         to_present_.rcas_scaled = create_pipeline(kFullscreenVs, kRcasScaledPs, present_pass_, kRgba, 0);
         to_present_.resample = create_pipeline(kFullscreenVs, kResamplePs, present_pass_, kRgba, 0);
@@ -297,8 +297,8 @@ bool PostProcessorVk::build_pipelines() {
     }
     // The scaling passes are required (EASU's single-channel gathers carry no offset: core SPIR-V, no device feature);
     // each AA pass is optional and only reported when it cannot be built.
-    to_color_.easu = create_pipeline(kFullscreenVs, kEasuPs, color_pass_, kRgba, 0);
-    to_window_.easu = create_pipeline(kFullscreenVs, kEasuPs, window_pass_, kRgba, 0);
+    to_color_.easu = create_pipeline(kFullscreenVs, kEasuHalfPs, color_pass_, kRgba, 0);
+    to_window_.easu = create_pipeline(kFullscreenVs, kEasuHalfPs, window_pass_, kRgba, 0);
     to_color_.resample = create_pipeline(kFullscreenVs, kResamplePs, color_pass_, kRgba, 0);
     to_window_.rcas = create_pipeline(kFullscreenVs, kRcasPs, window_pass_, kRgba, 0);
     to_window_.rcas_scaled = create_pipeline(kFullscreenVs, kRcasScaledPs, window_pass_, kRgba, 0);

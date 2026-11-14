@@ -117,6 +117,9 @@ void PostProcessor::initialize(const PostProcessSettings& settings, Format scene
             options.fastMathEnabled = NO;
             options.languageVersion = MTLLanguageVersion2_4;
             for (unsigned program = 0; program < kProgramCount; ++program) {
+                if (program == kEasuHalfPs) {
+                    continue;  // Vulkan's: Metal runs EASU from kEasuPs
+                }
                 for (unsigned quality = 0; quality < 4u; ++quality) {
                     if (quality != 0u && !kFollowsQuality[program]) {
                         made.at[program][quality] = retain(made.at[program][0]);
