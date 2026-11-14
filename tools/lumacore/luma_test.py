@@ -32,6 +32,7 @@ import pathlib
 import platform
 import re
 import shutil
+import socket
 import struct
 import subprocess
 import sys
@@ -316,6 +317,14 @@ def read_test(folder, types=None):
             if "options" in entry:
                 if not isinstance(entry["options"], dict):
                     raise HarnessError("%s.options must be an object" % path)
+                for key, value in entry["options"].items():
+                    # {"free_port": "<name>"}: a number option given a TCP port free on this computer for the run, one
+                    # per name (every option naming it gets the same port), so tests of a fixed-port service run side
+                    # by side.
+                    if isinstance(value, dict) and (set(value) != {"free_port"} or not isinstance(value["free_port"], str)
+                                                    or not FREE_PORT.fullmatch(value["free_port"])):
+                        raise HarnessError("%s.options.%s: an object here is {\"free_port\": \"<name>\"}, the name "
+                                           "lowercase letters, digits and -, up to 32" % (path, key))
                 mod["options"] = entry["options"]
             mods.append(mod)
     if bare and mods:
@@ -1252,11 +1261,39 @@ def plan_text(test, out):
     return "\n".join(lines) + "\n"
 
 
-def place_mods(test, settings, previous, frozen):
+FREE_PORT = re.compile(r"[a-z0-9][a-z0-9-]{0,31}")
+
+
+def free_ports(test):
+    """A TCP port free on this computer for each name the test's mod options ask for ({"free_port": "<name>"}): the
+    system picks each (a socket bound to port 0 on 127.0.0.1); all are held until every one is picked, so two names never
+    get one port, and two runs side by side get their own."""
+    names = sorted({v["free_port"] for m in test["mods"] for v in m["options"].values() if isinstance(v, dict)})
+    held, ports = [], {}
+    try:
+        for name in names:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            held.append(s)
+            s.bind(("127.0.0.1", 0))
+            ports[name] = s.getsockname()[1]
+    finally:
+        for s in held:
+            s.close()
+    return ports
+
+
+def with_ports(options, ports):
+    """A mod entry's options with each {"free_port": "<name>"} replaced by the run's port of that name."""
+    return {k: ports[v["free_port"]] if isinstance(v, dict) else v for k, v in options.items()}
+
+
+def place_mods(test, settings, previous, frozen, ports=None):
     """The test's mods into the run's settings, in order, each one's libraries frozen, and the safe start asked or left
     from a crash. Returns the placed mods ((id, mod) pairs) and the game's extra arguments (--import, --safe-start).
     Every platform's adapter places them so (run_one, and the Android adapter)."""
     mod_ids, imports = [], []
+    if ports is None:
+        ports = free_ports(test)
     for i, m in enumerate(test["mods"]):
         if m["install"] == "import":
             # Not placed: the game imports it as "Open with" starts it (--import, task 6.1), a .luma file or a folder,
@@ -1278,7 +1315,8 @@ def place_mods(test, settings, previous, frozen):
             continue
         mod_id = install(settings, m["path"], m["code"] == "allow", i + 1, kept=previous is not None,
                          permissions="ask" if m["code"] == "ask" else m["permissions"],
-                         broken_ok=not m["loads"] and m["enabled"], folder=m["folder"], options=m["options"],
+                         broken_ok=not m["loads"] and m["enabled"], folder=m["folder"],
+                         options=with_ports(m["options"], ports),
                          enabled=m["enabled"])
         # A mod with no code (luma.json has no "code": content only) is never started, so the host writes no start
         # or refusal line for it and there is no mod.<id>.loaded fact: its test's own facts show its content.
@@ -1382,7 +1420,10 @@ def run_one(test, renderer, args, run_folder, previous):
     if not test["bare"]:
         frozen[HOST["half"]] = sha256(bin_folder / HOST["half"])
         install_game_half(settings, bin_folder)
-    placed, imports = place_mods(test, settings, previous, frozen)
+    ports = free_ports(test)
+    if ports:
+        (run_folder / "ports.json").write_text(json.dumps(ports, indent=2) + "\n", encoding="utf-8")
+    placed, imports = place_mods(test, settings, previous, frozen, ports)
     mod_ids += placed
     write_run_settings(test, settings)
     plan = run_folder / "plan.txt"
