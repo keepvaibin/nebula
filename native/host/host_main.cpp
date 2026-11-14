@@ -3787,6 +3787,13 @@ void layers_chosen(const std::vector<galaxy::mods::ChosenLayers>& chosen) {
     }
     std::string ids;
     for (const std::string& mod : changed) ids += (ids.empty() ? "" : ", ") + mod;
+#if !defined(_WIN32) && !(defined(__ANDROID__) && defined(NEBULA_HOST_RENDERER))
+    // This host cannot start the game again (finish_and_exit): the record is written, so the next start cooks with
+    // the new layers; this one goes on with the cooked ones.
+    log_line("mods:", ("the code of " + ids + " chose other layers than the content was cooked with: they are used from the next start").c_str());
+    layers_answered(std::nullopt);
+    return;
+#endif
     log_line("mods:", ("the code of " + ids + " chose other layers than the content was cooked with: the game starts again with them").c_str());
     std::ofstream(galaxy::mods::code_layers_restart_file(), std::ios::binary) << "layers\n";
     finish_and_exit(true);
