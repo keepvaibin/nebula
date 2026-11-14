@@ -862,4 +862,9 @@ namespace NebulaMods {
         const ObjectClass* pClass = sObjectClasses.mCount != 0 && pObjectName != nullptr ? findObjectClass(pObjectName) : nullptr;
         return pClass != nullptr && MR::isEqualStringCase(pClass->mLike, pModelName) ? pClass->mName : pModelName;
     }
+
+    const char* archiveOf(const char* pObjectName, const char* pResName) {
+        const ObjectClass* pClass = sObjectClasses.mCount != 0 && pObjectName != nullptr ? findObjectClass(pObjectName) : nullptr;
+        return pClass != nullptr && MR::isEqualString(MR::getArchiveModelName(pClass->mName), pResName) ? pClass->mName : pResName;
+    }
 }  // namespace NebulaMods
