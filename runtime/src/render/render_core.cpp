@@ -2527,14 +2527,15 @@ void RenderCore::calibrate_first_start(bool scene, double walk_ms) {
         end_first_start_calibration(c.start, "no GPU timestamps");
         return;
     }
-    const double frame_ms = 1000.0 / present_frame_rate(presented_max_fps(chosen), chosen.vsync_interval, renderer_.display_refresh_hz());
+    // One new picture a game step (the presents between show it again) with interpolation off, as a first start's defaults
+    // leave it: the step is the GPU's period (resolution_fit.h's budget, the benchmark's too).
+    constexpr double frame_ms = 1000.0 / galaxy::kGameStepsPerSecond;
     // The scene target as the renderer made it: a size it refused (the video memory check) shows as no spread, so no fit.
     c.pixels.push_back(static_cast<double>(renderer_.frame_map().width) * static_cast<double>(renderer_.frame_map().height));
     c.ms.push_back(gpu_ms);
-    // The CPU's part: the walk near the frame time, or the game thread late on its own (its list period, less its waits on
-    // the render thread, past 1.5 steps: note_game_frame_cadence's rule; the host's pacing sleep is in the period).
-    constexpr double kGameStepMs = 1000.0 / galaxy::kGameStepsPerSecond;
-    c.cpu_over += walk_ms > kFitFrameShare * frame_ms || game_ms > 1.5 * kGameStepMs ? 1.0 : 0.0;
+    // The CPU's part: the walk near the step, or the game thread late on its own (its list period, less its waits on the
+    // render thread, past 1.5 steps: note_game_frame_cadence's rule; the host's pacing sleep is in the period).
+    c.cpu_over += walk_ms > kFitFrameShare * frame_ms || game_ms > 1.5 * frame_ms ? 1.0 : 0.0;
     if (c.frames < kCalibrationSettle + kCalibrationSamples) {
         return;
     }
