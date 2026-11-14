@@ -1597,6 +1597,14 @@ void submit_frame_unchecked(bool present, bool black) {
 }
 
 [[noreturn]] void finish_and_exit(bool restart);
+// Whether finish_and_exit(true) starts the game again on this host (Windows: a new process; Android: the activity's
+// restartGame). Where it does not, it only ends the game, so a caller that would start again goes on instead.
+constexpr bool kHostStartsAgain =
+#if defined(_WIN32) || (defined(__ANDROID__) && defined(NEBULA_HOST_RENDERER))
+    true;
+#else
+    false;
+#endif
 
 // The card has no memory free at the start: another program holds it for a moment. A new process tries again
 // (--gpu-start-retry counts the tries), up to five times, two seconds apart; after that it is a fault to report.
@@ -3787,13 +3795,13 @@ void layers_chosen(const std::vector<galaxy::mods::ChosenLayers>& chosen) {
     }
     std::string ids;
     for (const std::string& mod : changed) ids += (ids.empty() ? "" : ", ") + mod;
-#if !defined(_WIN32) && !(defined(__ANDROID__) && defined(NEBULA_HOST_RENDERER))
-    // This host cannot start the game again (finish_and_exit): the record is written, so the next start cooks with
-    // the new layers; this one goes on with the cooked ones.
-    log_line("mods:", ("the code of " + ids + " chose other layers than the content was cooked with: they are used from the next start").c_str());
-    layers_answered(std::nullopt);
-    return;
-#endif
+    if (!kHostStartsAgain) {
+        // This host cannot start the game again (finish_and_exit): the record is written, so the next start cooks with
+        // the new layers; this one goes on with the cooked ones.
+        log_line("mods:", ("the code of " + ids + " chose other layers than the content was cooked with: they are used from the next start").c_str());
+        layers_answered(std::nullopt);
+        return;
+    }
     log_line("mods:", ("the code of " + ids + " chose other layers than the content was cooked with: the game starts again with them").c_str());
     std::ofstream(galaxy::mods::code_layers_restart_file(), std::ios::binary) << "layers\n";
     finish_and_exit(true);
