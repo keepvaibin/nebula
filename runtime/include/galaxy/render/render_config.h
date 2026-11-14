@@ -379,6 +379,13 @@ std::string next_start_gpu();
 // Nebula's ray tracing.
 void record_render_adapter(const char* description, unsigned vendor_id, unsigned device_id,
                            unsigned subsys_id, bool ray_tracing) noexcept;
+// The adapter record_render_adapter was last given (empty before the renderer starts).
+struct RenderAdapter {
+    std::string description;
+    unsigned vendor_id = 0u;
+    unsigned device_id = 0u;
+};
+[[nodiscard]] RenderAdapter render_adapter();
 // When config.ini changed on disk since this process last read or wrote it (Nebula Settings saved it while the game
 // runs), reads it over the live settings, as the in-game menu would apply them, and returns true.
 bool reload_render_config_if_changed();

@@ -1,4 +1,5 @@
 #include "galaxy/audio_mixer.h"
+#include "galaxy/benchmark.h"
 #include "galaxy/loss_report.h"
 
 #include <algorithm>
@@ -218,6 +219,7 @@ void AudioMixer::mix(float gain, std::uint32_t used) {
     if (!configured()) {
         return;
     }
+    galaxy::bench::note_audio_thread();
     const auto begin = std::chrono::steady_clock::now();
     ++stats_.subframes;
     ++frame_subframes_;

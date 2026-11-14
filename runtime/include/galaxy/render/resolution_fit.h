@@ -67,6 +67,11 @@ struct GpuTimeFit {
 inline constexpr unsigned kFitLowestHeight = 480u;
 // The share of the display's frame time the GPU may take (the rest: the compositor, frame-to-frame swings).
 inline constexpr double kFitFrameShare = 0.8;
+// The frame a choice must fit: that share of the game step. The game presents one picture a 60 Hz step unless interpolation
+// adds frames, whatever the display's rate (0.8 x 16.67 = 13.3 ms).
+[[nodiscard]] inline double fit_budget_ms() noexcept {
+    return kFitFrameShare * 1000.0 / static_cast<double>(kGameStepsPerSecond);
+}
 // A measurement made in a light scene (the first start's: the title), scaled to the heaviest stages' (board rc.md, item 6).
 // The benchmark times the stages themselves and passes its own worst-to-measured ratio.
 inline constexpr double kFitHeavyStage = 2.5;

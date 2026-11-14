@@ -42,6 +42,7 @@
 #include "galaxy/pointer_control.h"
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/experimental_ultrawide_aspect.h"
+#include "galaxy/benchmark.h"
 #include "galaxy/frame_timeline.h"
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
 #include "galaxy/controller_hid.h"
@@ -1653,6 +1654,7 @@ int svc_achievement(void*, const char* id, uint16_t* name, uint32_t capacity) {
     (void)id, (void)name, (void)capacity;
     return 0;
 #else
+    if (galaxy::bench::running()) return 0;  // a benchmark unlocks nothing
     const galaxy::achievements::Info* info = id != nullptr ? galaxy::achievements::find(id) : nullptr;
     if (info == nullptr || !galaxy::achievements::unlock(id)) return 0;
     uint32_t i = 0;
@@ -1713,7 +1715,7 @@ int32_t svc_mod_achievement_unlocked(void*) {
 // The all-time counters the achievement board shows (stats.ini). The headless host keeps none.
 void svc_stat_add(void*, const char* name, uint64_t delta) {
 #if defined(NEBULA_HOST_RENDERER)
-    if (name != nullptr) galaxy::stats::add(name, delta);
+    if (name != nullptr && !galaxy::bench::running()) galaxy::stats::add(name, delta);  // a benchmark counts nothing
 #else
     (void)name, (void)delta;
 #endif
@@ -2603,6 +2605,13 @@ std::condition_variable gSavesDone;
 
 void svc_save_request(void*, const NebulaSaveRequest* request) {
     gSaveOps.fetch_add(1, std::memory_order_relaxed);
+#if defined(NEBULA_HOST_RENDERER)
+    if (galaxy::bench::running()) {  // a benchmark's blank save, in memory: the player's files are not opened
+        *request->status = galaxy::bench::save_request(static_cast<int>(request->op), request->name != nullptr ? request->name : "",
+                                                       request->buffer, request->size, request->length);
+        return;
+    }
+#endif
     *request->status = NEBULA_SAVE_PENDING;
     gSavesPending.fetch_add(1, std::memory_order_acq_rel);
     const NebulaSaveRequest r = *request;
@@ -2802,6 +2811,21 @@ uint32_t svc_input_players(void*) {
 }
 
 uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, NebulaInputSample* sample) {
+#if defined(NEBULA_HOST_RENDERER)
+    if (galaxy::bench::running()) {  // a benchmark plays nothing: player 1's remote connected and at rest
+        if (device != nullptr) {
+            *device = {};
+            device->connected = player == kHostPlayerMain ? 1 : 0;
+            device->nunchuk = device->connected;
+            device->battery = device->connected != 0 ? 4 : 0;
+        }
+        if (player != kHostPlayerMain || sample == nullptr) return 0;
+        *sample = rest_input_sample();
+        gInputRead.store(true, std::memory_order_release);
+        gInputRead.notify_one();
+        return 1;
+    }
+#endif
     if (device != nullptr) {
         *device = {};
 #if defined(NEBULA_HOST_RENDERER)
@@ -3246,6 +3270,7 @@ void attach_extensions() {
 // and the Grand Stars with the Observatory they power.
 int svc_galaxy_travel(void*, char* stage, uint32_t capacity, int32_t* star) {
 #if defined(NEBULA_HOST_RENDERER)
+    if (galaxy::bench::running()) return galaxy::bench::scene_frame(gSceneStage, stage, capacity, star);
     std::size_t index = 0u;
     std::uint32_t chosen = 0u;
     if (galaxy::render::take_galaxy_travel(index, chosen)) {
@@ -3316,6 +3341,7 @@ void hold_runtime_lease() {
     game_profile::finish();
 #endif
 #if defined(NEBULA_HOST_RENDERER)
+    galaxy::bench::at_exit();  // a benchmark that did not finish writes its result as aborted
     // --diagnostics pipelines: the pipelines this run created (tools/dev/site_pipelines.py merges them).
     if (::galaxy::diagnosing(::galaxy::kDiagnosePipelines)) {
         if (const fs::path folder = galaxy::nebula_diagnostics_directory(); !folder.empty()) {
@@ -3930,6 +3956,8 @@ int main(int argc, char** argv) {
         return fs::path(argv[index]);
     };
     double seconds = 0;
+    [[maybe_unused]] bool benchmark = false;  // --benchmark 1: benchmark.h's run, then exit
+    fs::path benchmark_out;
     [[maybe_unused]] int home = -1;  // --home: the launcher's home screen at the title's hold; -1 the platform's default
     for (int i = 1; i + 1 < argc; i += 2) {
         const std::string key = argv[i];
@@ -3947,11 +3975,24 @@ int main(int argc, char** argv) {
             seconds = std::atof(argv[i + 1]);
         } else if (key == "--home") {
             home = std::atoi(argv[i + 1]) != 0 ? 1 : 0;
+        } else if (key == "--benchmark") {
+            benchmark = std::atoi(argv[i + 1]) != 0;
+        } else if (key == "--benchmark-out") {
+            benchmark_out = arg_path(i + 1);
         } else {
             die("unknown option %s", key.c_str());
         }
     }
-    if (pak.empty() || saves.empty()) {
+#if defined(NEBULA_HOST_RENDERER)
+    if (benchmark) {
+        // No save folder: the game's saves stay in memory. Straight to the title, no time limit (it quits when done).
+        saves.clear();
+        home = 0;
+        seconds = 0;
+        galaxy::bench::start({pak.parent_path(), benchmark_out});
+    }
+#endif
+    if (pak.empty() || (saves.empty() && !benchmark)) {
         die("usage: nebula_native_host --pak <game.pak> --saves <dir> [--module <smg_game.dll>] [--seconds N] (docs/COMMAND_LINE.md)");
     }
     if (module.empty()) {
@@ -3972,7 +4013,7 @@ int main(int argc, char** argv) {
 #if defined(_WIN32)
     hold_runtime_lease();
 #endif
-    {
+    if (!galaxy::bench::running()) {  // a benchmark's game has no Miis: their library is in the save folder
         // Mii import: the files in the import folder (next to the settings: any Mii files, mii_formats.h)
         // join the library before the game reads it; the settings import more while it runs.
         const fs::path settings_folder = galaxy::runtime_settings_folder();
@@ -4008,8 +4049,8 @@ int main(int argc, char** argv) {
         const galaxy::saves::SaveFolders save_folders = galaxy::saves::save_folders(std::string_view(gPak.id, 4));
         gOldSaveDataPath = save_folders.earlier;
         gSaveDataPath = save_folders.current;
-        fs::create_directories(gSaveRoot / gSaveDataPath.substr(1), error);  // the release's own save folder
-        if (!settings_folder.empty()) {
+        if (!gSaveRoot.empty()) fs::create_directories(gSaveRoot / gSaveDataPath.substr(1), error);  // the release's own save folder
+        if (!settings_folder.empty() && !galaxy::bench::running()) {  // benchmark implies safe start (no mods)
             fs::create_directories(settings_folder / "mods", error);
             // Updates imported while their mod's folder was in use take its place before anything reads the mods.
             galaxy::mods::apply_pending_updates(settings_folder / "mods");
