@@ -452,43 +452,51 @@ float ao_scale(float visibility) {
 // The colour multiplier at scene target pixel q: the denoised occlusion there (depth-weighted bilinear between occlusion
 // pixels); 1 outside the viewport (nothing outside it is read) and on the far plane.
 float ao_multiplier(int2 q) {
-    const float2 pixel = float2(q) + 0.5f;
-    if (!inside(pixel)) {
-        return 1.0f;
-    }
-    const float depth = t_depth.Load(int3(q, 0));
-    if (far_plane(depth)) {
-        return 1.0f;
-    }
-    const float z = -depth_to_eye_z(depth);
-    float visibility;
+    float scale = 1.0f;
     if (g_size.z <= 1u) {
-        visibility = t_occlusion.Load(int3(q, 0)).x;
+        // One occlusion pixel per scene target pixel, the same size: the denoised occlusion is already 1 outside the
+        // viewport and on the far plane (DepthCS wrote no distance there, the occlusion passes 1, the denoise kept it),
+        // so the depth is not read.
+        scale = ao_scale(t_occlusion.Load(int3(q, 0)).x);
     } else {
-        // The four nearest occlusion pixels, bilinear and weighted by their distance's agreement with this pixel's.
-        const float2 f = (pixel - float(g_size.z / 2u) - 0.5f) / float(g_size.z);
-        const int2 base = int2(floor(f));
-        const float2 w = f - float2(base);
-        const float tolerance = 1.0f / (0.03f * z + 1.0f);
-        float sum = 0.0f;
-        float weight = 0.0f;
-        [unroll]
-        for (int k = 0; k < 4; ++k) {
-            const int2 o = int2(k & 1, k >> 1);
-            const float2 s = t_occlusion.Load(int3(clamp(base + o, int2(0, 0), int2(g_size.xy) - 1), 0)).xy;
-            const float bilinear = (o.x != 0 ? w.x : 1.0f - w.x) * (o.y != 0 ? w.y : 1.0f - w.y);
-            const float agree = s.y > 0.0f ? saturate(1.0f - abs(s.y - z) * tolerance) : 0.0f;
-            sum += s.x * bilinear * agree;
-            weight += bilinear * agree;
+        const float2 pixel = float2(q) + 0.5f;
+        float depth = g_depth.z;  // the far plane: nothing outside the viewport is read
+        if (inside(pixel)) {
+            depth = t_depth.Load(int3(q, 0));
         }
-        visibility = weight > 1e-4f ? sum / weight : 1.0f;
+        if (!far_plane(depth)) {
+            const float z = -depth_to_eye_z(depth);
+            // The four nearest occlusion pixels, bilinear and weighted by their distance's agreement with this pixel's.
+            const float2 f = (pixel - float(g_size.z / 2u) - 0.5f) / float(g_size.z);
+            const int2 base = int2(floor(f));
+            const float2 w = f - float2(base);
+            const float tolerance = 1.0f / (0.03f * z + 1.0f);
+            float sum = 0.0f;
+            float weight = 0.0f;
+            [unroll]
+            for (int k = 0; k < 4; ++k) {
+                const int2 o = int2(k & 1, k >> 1);
+                const float2 s = t_occlusion.Load(int3(clamp(base + o, int2(0, 0), int2(g_size.xy) - 1), 0)).xy;
+                const float bilinear = (o.x != 0 ? w.x : 1.0f - w.x) * (o.y != 0 ? w.y : 1.0f - w.y);
+                const float agree = s.y > 0.0f ? saturate(1.0f - abs(s.y - z) * tolerance) : 0.0f;
+                sum += s.x * bilinear * agree;
+                weight += bilinear * agree;
+            }
+            scale = ao_scale(weight > 1e-4f ? sum / weight : 1.0f);
+        }
     }
-    return ao_scale(visibility);
+    return scale;
 }
 
 #ifdef AO_PASS_upsample_cs
 [numthreads(8, 8, 1)]
 void UpsampleCS(uint3 id : SV_DispatchThreadID) {
+    // Whole groups cover the target: the threads past its edge read and write nothing.
+    uint width, height;
+    u_scale.GetDimensions(width, height);
+    if (id.x >= width || id.y >= height) {
+        return;
+    }
     u_scale[id.xy] = ao_multiplier(int2(id.xy));
 }
 #endif
