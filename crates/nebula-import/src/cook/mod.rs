@@ -41,6 +41,7 @@ pub mod native_data;
 pub mod effects;
 pub mod overlay;
 pub mod overlay_patches;
+pub mod pack_texture;
 pub mod particle_json;
 pub mod particles;
 pub mod placement_args;

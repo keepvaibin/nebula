@@ -676,6 +676,9 @@ foreach(name render_config gpu_sampler rt_materials texture_pack movie_playback 
         render_core_host rt_caps)
     galaxy_test(galaxy_${name}_tests SOURCES ${render_src}/${name}_tests.cpp LIBS galaxy_render)
 endforeach()
+# The pictures the mod check reads with the same answers (crates/nebula-import cook/pack_texture.rs).
+target_compile_definitions(galaxy_texture_pack_tests PRIVATE
+    NEBULA_PACK_PICTURES="${CMAKE_CURRENT_SOURCE_DIR}/crates/nebula-import/data/pack-pictures")
 # The tests compile their own small shaders; the program itself never compiles any.
 target_link_libraries(galaxy_frame_pass_tests PRIVATE d3dcompiler)
 

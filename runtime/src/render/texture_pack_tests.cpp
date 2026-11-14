@@ -162,6 +162,31 @@ void test_png(const std::filesystem::path& root) {
            "a broken PNG is refused with a reason");
 }
 
+// The pictures the mod check reads (crates/nebula-import cook/pack_texture.rs), each taken or refused by the pack
+// reader as answers.tsv says, so the check says what this reader does.
+void test_pack_pictures() {
+    const std::filesystem::path folder = NEBULA_PACK_PICTURES;
+    std::ifstream answers(folder / "answers.tsv");
+    std::string line;
+    std::getline(answers, line);
+    int count = 0;
+    while (std::getline(answers, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        const std::size_t tab = line.find('\t');
+        if (tab == std::string::npos) continue;
+        const std::string file = line.substr(0, tab);
+        const bool taken = line.substr(tab + 1u) == "1";
+        const bool dds = file.size() > 4u && file.substr(file.size() - 4u) == ".dds";
+        TexturePackPixels pixels;
+        std::string error;
+        const bool loaded = load_texture_pack_image(folder / file, dds, pixels, &error);
+        if (loaded != taken) std::cerr << "pack picture " << file << ": " << (loaded ? "taken" : error) << '\n';
+        expect(loaded == taken, "a pack picture is taken or refused as the mod check says");
+        ++count;
+    }
+    expect(count == 23, "every pack picture is read");
+}
+
 void test_sampler_shift() {
     TextureSampler mode{};
     mode.mag_linear = mode.min_linear = true;
@@ -531,6 +556,7 @@ int main() {
     std::filesystem::create_directories(root);
     test_dds(root);
     test_png(root);
+    test_pack_pictures();
     test_sampler_shift();
     test_priority(root);
     Gpu gpu;
