@@ -6,10 +6,13 @@
 // working folder, waits for it and ends with its exit code, so a caller sees one process's lifetime and code. The child
 // is in a job that ends it when this process ends (a caller ending this process ends the game); processes the child
 // starts (a restart, the crash report, the cooker) leave the job and live on their own as before. Only kernel32.
+// nebula_run_sibling (run_sibling_win32.h) is that start and wait, also the Direct3D 12 host's hand-off to
+// NebulaNativeD11 (host_main.cpp): every x64 host links this file; only the AVX2 one enters here.
 #if defined(_WIN32) && defined(_M_X64)
 #include "galaxy/windows_api.h"
 
 #include "cpu_level_x86.h"
+#include "run_sibling_win32.h"
 
 extern "C" DWORD mainCRTStartup(LPVOID);
 
@@ -47,13 +50,28 @@ __declspec(noinline) DWORD run_baseline_build() {
     // <name>.exe -> <name>-x86-64-v2.exe
     if (length > 4u && path[length - 4u] == L'.') length -= 4u;
     for (DWORD i = 0; i < kSuffixChars; ++i) path[length + i] = kSuffix[i];
+    DWORD code = 1u;
+    if (!nebula_run_sibling(path, &code)) {
+        const DWORD error = GetLastError();
+        write_error("host: the CPU lacks x86-64-v3 and the x86-64-v2 build beside the program did not start\n");
+        return error != 0u ? error : ERROR_FILE_NOT_FOUND;
+    }
+    return code;
+}
 
+}  // namespace
+
+extern "C" int nebula_run_sibling(const wchar_t* path, unsigned long* exit_code) {
+    const HANDLE heap = GetProcessHeap();
     // CreateProcessW may write to the command line: a copy.
     const wchar_t* line = GetCommandLineW();
     DWORD line_chars = 0;
     while (line[line_chars] != L'\0') ++line_chars;
     auto* command = static_cast<wchar_t*>(HeapAlloc(heap, 0, (line_chars + 1u) * sizeof(wchar_t)));
-    if (command == nullptr) return ERROR_OUTOFMEMORY;
+    if (command == nullptr) {
+        SetLastError(ERROR_OUTOFMEMORY);
+        return FALSE;
+    }
     for (DWORD i = 0; i <= line_chars; ++i) command[i] = line[i];
 
     STARTUPINFOW startup;
@@ -73,8 +91,10 @@ __declspec(noinline) DWORD run_baseline_build() {
     if (!CreateProcessW(path, command, nullptr, nullptr, TRUE, CREATE_SUSPENDED, nullptr, nullptr, &startup,
                         &process)) {
         const DWORD error = GetLastError();
-        write_error("host: the CPU lacks x86-64-v3 and the x86-64-v2 build beside the program did not start\n");
-        return error != 0u ? error : ERROR_FILE_NOT_FOUND;
+        HeapFree(heap, 0, command);
+        if (job != nullptr) CloseHandle(job);
+        SetLastError(error);
+        return FALSE;
     }
     if (job != nullptr) AssignProcessToJobObject(job, process.hProcess);
     gChild = process.hProcess;
@@ -84,10 +104,9 @@ __declspec(noinline) DWORD run_baseline_build() {
     WaitForSingleObject(process.hProcess, INFINITE);
     DWORD code = 1u;
     GetExitCodeProcess(process.hProcess, &code);
-    return code;
+    *exit_code = code;
+    return TRUE;
 }
-
-}  // namespace
 
 // No buffer security check here (compiled /GS-): the C runtime sets the cookie after this frame exists.
 extern "C" DWORD nebula_host_entry(LPVOID peb) {

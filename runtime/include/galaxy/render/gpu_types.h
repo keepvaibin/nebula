@@ -2,7 +2,8 @@
 #pragma once
 
 // The GPU API types RenderCore names, chosen when the backend is built (docs/VULKAN.md): D3D12 on Windows, Vulkan
-// (NEBULA_GPU_VULKAN) elsewhere and in the Windows Vulkan test build. Compile-time, so draws make no virtual calls.
+// (NEBULA_GPU_VULKAN) elsewhere and in the Windows Vulkan test build, Metal (NEBULA_GPU_METAL) on Apple, Direct3D 11
+// (NEBULA_GPU_D3D11) for Windows adapters Direct3D 12 cannot use. Compile-time, so draws make no virtual calls.
 
 #include <cstddef>
 #include <cstdint>
@@ -165,6 +166,80 @@ struct DeviceRef {
     explicit operator bool() const noexcept { return handle != nullptr; }
     bool operator!=(std::nullptr_t) const noexcept { return handle != nullptr; }
     bool operator==(std::nullptr_t) const noexcept { return handle == nullptr; }
+};
+
+// An RGBA8 texture that is rendered to and sampled (display picture copies); empty when it cannot be created.
+[[nodiscard]] TextureRef create_render_texture(Device* device, std::uint32_t width, std::uint32_t height);
+
+}  // namespace galaxy::render::gpu
+#elif defined(NEBULA_GPU_D3D11)
+#include "galaxy/windows_api.h"
+#include <d3d11_1.h>
+#include <wrl/client.h>
+
+namespace galaxy::render::d3d11 {
+struct Texture;     // d3d11/d3d11_context.h
+struct Buffer;
+struct Pipeline;    // one pipeline's state objects
+struct BoundTable;  // a draw's own table of views or samplers
+}
+
+namespace galaxy::render::gpu {
+
+// Direct3D 11 (feature level 11_0 and up): for the adapters Direct3D 12 passes over (renderer_d3d12.cpp
+// try_adapter: resource binding tier 1, no shader model 6, or no Direct3D 12 driver). The names the shared code reads
+// are those of the other back ends.
+using Device = ID3D11Device1;
+using DeviceRef = Microsoft::WRL::ComPtr<ID3D11Device1>;
+using Pipeline = d3d11::Pipeline;
+using PipelineRef = Pipeline*;  // owned by core::Pipelines, deleted in its destroy_all
+using Resource = d3d11::Buffer;
+// A 64-bit address in the renderer's own buffer address space (d3d11::Context::resolve), as on Vulkan and Metal.
+using Address = std::uint64_t;
+struct Table {
+    std::uint64_t ptr = 0;  // const d3d11::BoundTable*
+};
+struct VertexView {
+    Address BufferLocation = 0;
+    std::uint32_t SizeInBytes = 0;
+    std::uint32_t StrideInBytes = 0;
+};
+struct IndexView {
+    Address BufferLocation = 0;
+    std::uint32_t SizeInBytes = 0;
+    std::uint32_t Format = 0;  // 16-bit indices only
+};
+struct Rect {
+    std::int32_t left = 0;
+    std::int32_t top = 0;
+    std::int32_t right = 0;
+    std::int32_t bottom = 0;
+};
+
+[[nodiscard]] inline VertexView vertex_view(Address address, std::uint32_t size, std::uint32_t stride) noexcept {
+    return VertexView{address, size, stride};
+}
+
+[[nodiscard]] inline IndexView index_view(Address address, std::uint32_t size) noexcept {
+    return IndexView{address, size, 16u};
+}
+
+[[nodiscard]] inline Rect rect(std::int32_t left, std::int32_t top, std::int32_t right, std::int32_t bottom) noexcept {
+    return Rect{left, top, right, bottom};
+}
+
+// An owned texture and an owned buffer: the last reference releases it (Direct3D 11 keeps a released object until the
+// GPU is done with it).
+using TextureRef = std::shared_ptr<d3d11::Texture>;
+using BufferRef = std::shared_ptr<d3d11::Buffer>;
+[[nodiscard]] inline Resource* raw(const BufferRef& buffer) noexcept { return buffer.get(); }
+using TextureObject = d3d11::Texture;
+[[nodiscard]] inline TextureObject* raw(const TextureRef& texture) noexcept { return texture.get(); }
+// Another reference to a texture a handle names (d3d11::Texture derives from enable_shared_from_this).
+[[nodiscard]] TextureRef texture_ref(TextureObject* texture);
+// A render target: its ID3D11RenderTargetView*, as the pointer's bits.
+struct CpuDescriptor {
+    std::uint64_t ptr = 0;
 };
 
 // An RGBA8 texture that is rendered to and sampled (display picture copies); empty when it cannot be created.

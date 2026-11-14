@@ -11,6 +11,7 @@
 #include "galaxy/windows_api.h"
 #include "galaxy/windows_paths.h"
 #include "galaxy/windows_child.h"
+#include "run_sibling_win32.h"
 #endif
 #if defined(_WIN32) && defined(NEBULA_HOST_RENDERER) && !defined(NEBULA_HOST_SDL)
 #include <dwmapi.h>
@@ -4046,6 +4047,66 @@ void wait_for_hand_over() {
 // A start-again's hand-over, set up before the new process starts (finish_and_exit).
 HANDLE gHandOver = nullptr;
 std::wstring gHandOverCooked;
+// The program a start-again runs in this one's place: empty, this program (finish_and_exit); the Direct3D 11
+// program where no adapter runs Direct3D 12 (start_again_on_d3d11).
+std::wstring gStartAgainProgram;
+#endif
+
+#if defined(_WIN32) && defined(_M_X64) && defined(NEBULA_HOST_D3D12)
+// The Direct3D 11 host of this program's CPU level beside it (NebulaNativeD11.exe, or NebulaNativeD11-x86-64-v2.exe beside
+// the SSE4.2 host); empty, said in the log with `why`, when it is not there.
+std::wstring d3d11_program(const char* why) {
+    const std::wstring self = ::galaxy::windows::executable_path();
+    const std::size_t slash = self.find_last_of(L"\\/");
+    if (slash == std::wstring::npos) {
+        return {};
+    }
+    constexpr std::wstring_view kBaseline = L"-x86-64-v2.exe";
+    const bool baseline = self.size() > kBaseline.size() &&
+                          _wcsicmp(self.c_str() + self.size() - kBaseline.size(), kBaseline.data()) == 0;
+    std::wstring path = self.substr(0, slash + 1u) + L"NebulaNativeD11" + (baseline ? L"-x86-64-v2.exe" : L".exe");
+    if (GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        log_line("host: Direct3D 11 is wanted and its program is not beside the game:", why);
+        return {};
+    }
+    return path;
+}
+
+// Asked for Direct3D 11 (--renderer d3d11): its program runs in this one's place before this one takes anything, the
+// one-game lock, the log file, the safe start, the game module's choice, the mods folder and the window all its own
+// (nebula_run_sibling: same command line, startup information, handles, environment and folder, in a job, waited for);
+// this process ends with its exit code, so a caller sees one lifetime and one code. The Direct3D 11 host has no
+// hand-off, so the chain ends there. Returns when that program is not there or did not start.
+void hand_off_to_d3d11(const char* why) {
+    const std::wstring path = d3d11_program(why);
+    if (path.empty()) {
+        return;
+    }
+    log_line("host: Direct3D 11 takes the start:", why);
+    std::fflush(stdout);
+    std::fflush(stderr);
+    unsigned long code = 1u;
+    if (!nebula_run_sibling(path.c_str(), &code)) {
+        log_line("host: the Direct3D 11 program did not start:", why);
+        return;
+    }
+    std::fflush(stdout);
+    TerminateProcess(GetCurrentProcess(), static_cast<UINT>(code));
+}
+
+// No adapter runs the Direct3D 12 renderer (its probe passed over every one: "No hardware D3D12 adapter ..."), known
+// only once the start has chosen the game module and read the mods: the Direct3D 11 program takes over as a start-again
+// does (finish_and_exit), the new process waiting for this one's hand-over before it touches the mods folder. Returns
+// when that program is not there.
+void start_again_on_d3d11(const char* why) {
+    std::wstring path = d3d11_program(why);
+    if (path.empty()) {
+        return;
+    }
+    log_line("host: Direct3D 11 takes the start:", why);
+    gStartAgainProgram = std::move(path);
+    finish_and_exit(true);
+}
 #endif
 
 [[noreturn]] void finish_and_exit(bool restart) {
@@ -4108,7 +4169,7 @@ std::wstring gHandOverCooked;
             CloseHandle(gRuntimeLease);
         }
 #endif
-        const std::wstring path = ::galaxy::windows::executable_path();
+        const std::wstring path = gStartAgainProgram.empty() ? ::galaxy::windows::executable_path() : gStartAgainProgram;
         if (!path.empty()) {
             // The new process writes to this one's output and error, when it has them (a tool reading its log), and
             // inherits nothing else.
@@ -5044,6 +5105,9 @@ void read_launch_args(int argc, char** argv) {
             args.console_log = argv[i + 1][0] == '1';
         } else if (key == "--gpu-start-retry") {
             args.gpu_start_retry = static_cast<unsigned>(std::strtoul(argv[i + 1], nullptr, 10));
+        } else if (key == "--renderer") {
+            const std::string_view api = argv[i + 1];
+            args.renderer = api == "d3d12" ? 1u : api == "d3d11" ? 2u : 0u;
         } else if (key == "--timeline") {
             args.timeline = path_at(i + 1);
         } else if (key == "--extension") {
@@ -5136,6 +5200,12 @@ int main(int argc, char** argv) {
     if (argc >= 3 && std::strcmp(argv[1], "--crash-report") == 0) {
         return show_crash_report_dialog();
     }
+    // Asked for Direct3D 11: its program runs in this one's place before this one takes anything (hand_off_to_d3d11).
+#if defined(_M_X64) && defined(NEBULA_HOST_D3D12)
+    if (::galaxy::launch_args().renderer == 2u) {
+        hand_off_to_d3d11("--renderer d3d11");
+    }
+#endif
     if (one_game_at_a_time()) {
         return 0;
     }
@@ -5271,7 +5341,7 @@ int main(int argc, char** argv) {
         } else if (key == "--diagnostics" || key == "--timeline" || key == "--data" || key == "--settings" ||
                    key == "--crash-dumps" || key == "--gpu-validation" || key == "--console-log" ||
                    key == "--gpu-start-retry" || key == "--extension" || key == "--import" ||
-                   key == "--safe-start") {
+                   key == "--safe-start" || key == "--renderer") {
             // Read above, before anything uses them.
         } else if (key == "--seconds") {
             seconds = std::atof(argv[i + 1]);
@@ -5600,6 +5670,11 @@ int main(int argc, char** argv) {
         if (retry_start_for_gpu_memory(reason)) {
             finish_and_exit(true);
         }
+#if defined(_WIN32) && defined(_M_X64) && defined(NEBULA_HOST_D3D12)
+        if (::galaxy::launch_args().renderer != 1u && reason.rfind("No hardware D3D12 adapter", 0) == 0u) {
+            start_again_on_d3d11(reason.c_str());
+        }
+#endif
         die("the renderer did not start%s%s", reason.empty() ? "" : ": ", reason.c_str());
     }
     boot_mark("renderer started");

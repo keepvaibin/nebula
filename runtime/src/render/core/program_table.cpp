@@ -242,6 +242,8 @@ const char* program_file_name() noexcept {
     return "spirv.shaders";
 #elif defined(NEBULA_GPU_METAL)
     return "msl.shaders";
+#elif defined(NEBULA_GPU_D3D11)
+    return "dxbc.shaders";
 #else
     return "dxil.shaders";
 #endif

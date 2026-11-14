@@ -4644,14 +4644,18 @@ std::vector<std::string> s_license_pages;
 unsigned s_license_page = 0u;
 
 bool dlss_offered() {
-    if (!kStreamlineBuilt || host_window::upscaler_caps().dlss) {
+    if constexpr (!kStreamlineBuilt) {
         return false;
+    } else {
+        if (host_window::upscaler_caps().dlss) {
+            return false;
+        }
+        if (s_dlss_installed_now) {
+            return true;
+        }
+        static const bool offered = host_window::rtx_adapter.load(std::memory_order_relaxed) && !host_window::dlss_files_present();
+        return offered;
     }
-    if (s_dlss_installed_now) {
-        return true;
-    }
-    static const bool offered = host_window::rtx_adapter.load(std::memory_order_relaxed) && !host_window::dlss_files_present();
-    return offered;
 }
 
 bool dlss_installed_now() {

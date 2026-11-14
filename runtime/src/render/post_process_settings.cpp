@@ -418,7 +418,7 @@ bool metalfx_temporal_available() noexcept {
 #endif
 }
 
-#if defined(NEBULA_GPU_METAL)
+#if defined(NEBULA_GPU_METAL) || defined(NEBULA_GPU_D3D11)
 // AMD's FSR 3 is not this renderer's: its temporal upscalers are MetalFX's and SGSR 2.
 bool fsr3_available() noexcept {
     return false;

@@ -63,13 +63,14 @@ namespace Nebula.Setup
 
         /// <summary>The lowest CPU level the package's programs and game modules are built for: NebulaNative.exe and
         /// smg_game.dll are x86-64-v3, NebulaNative-x86-64-v2.exe and x86-64-v2\smg_game.dll x86-64-v2 (NebulaNative.exe
-        /// starts the other program where the CPU lacks x86-64-v3, and the host loads the module the CPU runs).</summary>
+        /// starts the other program where the CPU lacks x86-64-v3, and the host loads the module the CPU runs); NebulaNativeD11.exe and
+        /// NebulaNativeD11-x86-64-v2.exe the same pair on Direct3D 11.</summary>
         private const string NativeIsa = "x86-64-v2";
 
         /// <summary>What a version folder holds (each from the package, by its published name).</summary>
         private static readonly string[] NativeFiles =
         {
-            "NebulaNative.exe", "NebulaNative-x86-64-v2.exe", "smg_game.dll", "smg_game_plain.dll", @"x86-64-v2\smg_game.dll", @"x86-64-v2\smg_game_plain.dll", "nebula_import.dll", "nebula-import.exe", @"dxc\dxc.exe", @"dxc\dxcompiler.dll", @"dxc\dxil.dll", @"dxc\LICENSE-MS.txt", @"dxc\LICENCE-MIT.txt", @"dxc\LICENSE-LLVM.txt", @"D3D12\D3D12Core.dll", @"D3D12\LICENSE.txt",
+            "NebulaNative.exe", "NebulaNative-x86-64-v2.exe", "NebulaNativeD11.exe", "NebulaNativeD11-x86-64-v2.exe", "smg_game.dll", "smg_game_plain.dll", @"x86-64-v2\smg_game.dll", @"x86-64-v2\smg_game_plain.dll", "nebula_import.dll", "nebula-import.exe", @"dxc\dxc.exe", @"dxc\dxcompiler.dll", @"dxc\dxil.dll", @"dxc\LICENSE-MS.txt", @"dxc\LICENCE-MIT.txt", @"dxc\LICENSE-LLVM.txt", @"D3D12\D3D12Core.dll", @"D3D12\LICENSE.txt",
             "Nebula.exe", "NebulaSettings.exe", "LICENSE", "THIRD-PARTY-NOTICES.md", "README.md"
         };
 
