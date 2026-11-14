@@ -30,6 +30,7 @@
 #include "Game/Player/GroupChecker.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/System/ResourceHolder.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/CollisionPartsFilter.hpp"
@@ -2315,9 +2316,21 @@ namespace MR {
         return sunshade;
     }
 
+    // As LiveActor::initActorCollisionParts finds it: a mod's object's own model when it is like this one, then the
+    // file alone of a mod's archive path ("Luma/<mod>/Name" holds Name.kcl). No archive, or no name: none.
     bool isExistKcl(LiveActor* pActor, const char* pName) {
+        pName = NebulaMods::modelFor(pActor->mName, pName);
+        for (const char* pAt = pName; pAt != nullptr && *pAt != '\0'; pAt++) {
+            if (*pAt == '/') {
+                pName = pAt + 1;
+            }
+        }
+        const ResourceHolder* const pHolder = getResourceHolder(pActor);
+        if (pName == nullptr || pHolder == nullptr) {
+            return false;
+        }
         MR::FormattedName kclName("%s.kcl", pName);
-        return getResourceHolder(pActor)->mFileInfoTable->isExistRes(kclName.c_str());
+        return pHolder->mFileInfoTable->isExistRes(kclName.c_str());
     }
 
     f32 getCollisionBoundingSphereRange(const LiveActor* pActor) {
