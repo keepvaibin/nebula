@@ -6,7 +6,7 @@ A mod's files go in its `files/` folder (or a .luma layer's), at the game's path
 |---|---|---|
 | `name.gltf`, `name.glb` | the model `name.bmd`, and each glTF animation as `<animation name>.bck` beside it | `ObjectData/Name.arc/` |
 | `name.bdl.gltf`, `name.bdl.glb`, `name.bmd.gltf`, `name.bmd.glb` | the model with that ending | the same |
-| `name.kcl.gltf`, `name.kcl.glb` | collision `name.kcl` and its attributes `name.pa` | beside the model |
+| `name.kcl.gltf`, `name.kcl.glb` | collision `name.kcl` and its attributes `name.pa` | in an archive folder, beside it; elsewhere (a mod's `assets/`), in `Name.arc`, the archive the model of the same name goes to, where an actor of that model reads its collision |
 | `name.png` | a texture `name.bti`; under a `timg/` folder, a layout picture `name.tpl` | anywhere |
 | `name.wav`, `name.ogg` | a music stream `name.ast` (its loop points kept) | `AudioRes/Stream/` |
 | `Table.bcsv.json` | the table `Table.bcsv`, whole | anywhere a table is |

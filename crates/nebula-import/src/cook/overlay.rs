@@ -173,6 +173,20 @@ fn game_sound_names(base: &Path) -> Option<std::sync::Arc<std::collections::Hash
     names
 }
 
+/// Where a collision source `Name.kcl.glb` puts `Name.kcl` and `Name.pa`, without the ending: in an archive folder,
+/// beside it; elsewhere (a mod's assets/, a folder that is no archive), in `Name.arc`, the archive a model `Name.glb`
+/// of the same folder cooks into (model_place). An actor reads its collision from its own archive, so a planet whose
+/// model and collision share a name finds both.
+fn collision_stem(path: &str) -> String {
+    let lower = path.to_ascii_lowercase();
+    let stem = &path[..lower.find(".kcl.").unwrap_or(path.len())];
+    let (folder, file) = stem.rsplit_once('/').unwrap_or(("", stem));
+    if folder.to_ascii_lowercase().ends_with(".arc") {
+        return stem.to_string();
+    }
+    format!("{stem}.arc/{file}")
+}
+
 /// What a modern file of a mod becomes: each file's place in the game, with the game's ending, its bytes, and whether
 /// they are the store's already (else the cooker reads them). Empty: it isn't one. A model's animations go beside it.
 fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Vec<(String, Vec<u8>, bool)>> {
@@ -184,7 +198,7 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
     // Name.kcl.glb: solid ground, not something to see.
     if lower.ends_with(".kcl.glb") || lower.ends_with(".kcl.gltf") {
         let (collision, attributes) = super::gltf::to_collision(bytes, change.source.parent())?;
-        let stem = &change.path[..lower.find(".kcl.").unwrap_or(change.path.len())];
+        let stem = collision_stem(&change.path);
         return Ok(vec![(format!("{stem}.kcl"), collision, false), (format!("{stem}.pa"), attributes, false)]);
     }
     // Name.canm.glb: a cutscene's camera, from a glTF camera's animation.
@@ -1014,6 +1028,21 @@ mod tests {
         let end = pak.stream_position().unwrap();
         store::write_index(&mut pak, end, &placed, b"RMGE01\0\0").unwrap();
         base
+    }
+
+    #[test]
+    fn a_collision_goes_into_the_archive_its_model_cooks_into() {
+        // In an archive folder: beside the source, as before.
+        assert_eq!(collision_stem("ObjectData/Kuribo.arc/Ground.kcl.glb"), "ObjectData/Kuribo.arc/Ground");
+        assert_eq!(collision_stem("ObjectData/Kuribo.ARC/Ground.KCL.gltf"), "ObjectData/Kuribo.ARC/Ground");
+        // A mod's assets/ (Luma/<id>/): the archive of the model of the same name, where the actor reads it. A loose
+        // Luma/<id>/Planet.kcl was in no archive, so an actor of Planet.arc found no collision.
+        let collision = collision_stem("Luma/my.mod/NebulaPlanet.kcl.glb");
+        assert_eq!(collision, "Luma/my.mod/NebulaPlanet.arc/NebulaPlanet");
+        let (model, _) = model_place(&Change { path: "Luma/my.mod/NebulaPlanet.glb".into(), source: PathBuf::new(), merge: false }, None).unwrap();
+        assert_eq!(model.rsplit_once('/').unwrap().0, collision.rsplit_once('/').unwrap().0);
+        assert_eq!(collision_stem("Luma/my.mod/stages/Rock.kcl.glb"), "Luma/my.mod/stages/Rock.arc/Rock");
+        assert_eq!(collision_stem("Ground.kcl.glb"), "Ground.arc/Ground");
     }
 
     #[test]
