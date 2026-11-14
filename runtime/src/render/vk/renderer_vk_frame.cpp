@@ -1831,7 +1831,7 @@ void RendererVk::record_scene_ao() {
               gpu_pass(passes[static_cast<unsigned>(stage)]);
           }} : vk::AmbientOcclusionVk::StageMarker{};
     const bool made = ao_.prepare(commands_, *scene_.depth, kDepthSampleLayout, scene_ao_view_, get_render_config().ambient_occlusion_ssao,
-                                  scene_ao_objects_, matrix_ring_, allocate, mark);
+                                  scene_ao_objects_, constant_ring_, allocate, mark);  // read in this frame alone; chunks take any count
     gpu_pass(GpuPass::AoApply);
     image_barrier(commands_, scene_.depth->image, aspects, kDepthSampleLayout,
                   VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_NONE,
