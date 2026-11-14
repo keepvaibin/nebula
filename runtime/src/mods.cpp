@@ -1454,7 +1454,7 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                     if (std::optional<fs::path> files = child_any_case(place, "files", true)) {
                         mod.luma_changes_game = true;
                         list_files(*files, std::string(), changed_paths[mod.id]);
-                        // A movie is a file at its game path (G's decision 3 of the one form, luma-format 5): the
+                        // A movie is a file at its game path (the one form, luma-format 5): the
                         // movie player looks in files/MovieData for <name>.<video kind> (movie_playback.cpp find).
                         if (std::optional<fs::path> movie_data = child_any_case(*files, "MovieData", true)) {
                             mod.luma_movies.push_back(*movie_data);
@@ -2133,7 +2133,7 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                         plan.merges.push_back({galaxy::path_text(file.lexically_relative(*merge).generic_string()), file, mod.id});
                     }
                 }
-                // A layer's assets/ goes into the mod's own store at Luma/<id>/<path> (luma-format 5, G's decision of
+                // A layer's assets/ goes into the mod's own store at Luma/<id>/<path> (luma-format 5, the decision of
                 // 2026-11-11): one plan line a file, a later layer's same path winning as files/ does. assets/effects.json
                 // is each layer's change instead, merged by the cook in layer order (contracts/effects.md).
                 if (const std::optional<fs::path> assets = child_any_case(mod.path / fs::path(from_utf8(layer.path)), "assets", true)) {

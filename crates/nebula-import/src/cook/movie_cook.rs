@@ -1,6 +1,6 @@
 //! A mod's movie: `<name>.movie.json` in a layer's assets names an AV1
 //! video beside it (WebM or IVF) and, if it has sound, a WAV, FLAC or Ogg Vorbis file. The cook writes
-//! `Luma/<id>/<name>.nmov`, the game's cooked movie (thp.rs's NMOV) with codec 1 (AV1, J's run time decodes it with
+//! `Luma/<id>/<name>.nmov`, the game's cooked movie (thp.rs's NMOV) with codec 1 (AV1, the run time decodes it with
 //! dav1d): each frame's video one temporal unit, the first a key frame carrying the sequence header; the sound as the
 //! game's movie records (stereo PCM16 at 32 kHz, a frame's share with each frame). With `replace`, the same file takes
 //! a game movie's place (`MovieData/<name>.thp`). Subtitles go beside it as `<name>.subs` (a table: text key, from,

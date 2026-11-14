@@ -1,4 +1,4 @@
-//! F's conformance tests for 3.11 (auditor's, from luma_patch.h, table-keys and DECISIONS 5; not from the applier's
+//! Conformance tests for patches by key (an auditor's, from luma_patch.h and table-keys.md; not from the applier's
 //! code). Only the C interface is called; TableIr builds and reads the cooked tables.
 //! Run: copy into crates/nebula-import/tests/ of a copy of the branch and `cargo test --test f_conformance`.
 
@@ -312,7 +312,7 @@ fn f12_a_place_table_refuses_remove_and_checks_every_place() {
 
 #[test]
 fn f13_a_link_patch_of_a_mod_the_list_does_not_name_is_refused_never_guessed() {
-    // F's finding F3.11-1: which of two mods adding one l_id in two layers is higher comes from `mods`. A link patch
+    // Which of two mods adding one l_id in two layers is higher comes from `mods`. A link patch
     // whose mod `mods` does not name (or no `mods` at all) cannot be ordered: the input is not valid (-1, the mod
     // named), never both rows kept without a word (a duplicate l_id in the zone, which the game links wrongly).
     let layer_a = "StageData/AstroGalaxy/jmp/Placement/LayerA/ObjInfo";

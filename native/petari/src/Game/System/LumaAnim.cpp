@@ -24,10 +24,10 @@
 // The anim service (docs/modding/content/animation.md section 7). Game thread throughout: the service's calls, the
 // frame, the provider; NebulaArena::destroy is the scene end's, on the game thread as well.
 //
-// A clip's own events (1.1, animation 7.3): G's cook puts the rows of <clip>.anim.json beside the clip as <clip>.events,
-// a table (frame int, event text) in the model's archive. A play keeps the table's place in the archive (the actor's
-// resources outlive the play: the play ends with the actor or its scene) and gives a row as the mark mark_count + row,
-// its name copied into the event.
+// A clip's own events (1.1, animation.md 7.3): the cook puts the rows of <clip>.anim.json beside the clip as
+// <clip>.events, a table (frame int, event text) in the model's archive. A play keeps the table's place in the archive
+// (the actor's resources outlive the play: the play ends with the actor or its scene) and gives a row as the mark
+// mark_count + row, its name copied into the event.
 //
 // A play starts the clip as the game's own code does (MR::startBck and the material starts): the actor's ModelManager
 // runs it in the actor's movement, its effect and sound keepers follow the joint clip as for the game's clips. The

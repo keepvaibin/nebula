@@ -48,7 +48,7 @@ pub fn asset_path(id: &str, path: &str) -> String {
     format!("Luma/{id}/{path}")
 }
 
-/// The mod's list of effects (J's run time reads it: `<name>\t<group>\t<emitters>\n`, sorted by name).
+/// The mod's list of effects (the run time reads it: `<name>\t<group>\t<emitters>\n`, sorted by name).
 pub fn list_path(id: &str) -> String {
     asset_path(id, "effects.txt")
 }

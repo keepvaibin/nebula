@@ -253,7 +253,7 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
     for what in &lib.runs_at_load {
         ctx.add(509, &name, None, None, vec![("why", p("Lib.RunsAtLoad")), ("found", t(what.clone()))]);
     }
-    // And code it would run when it closes the library, after the mod's memory is freed (F's audit of R3-A, A-1).
+    // And code it would run when it closes the library, after the mod's memory is freed.
     for what in &lib.runs_at_close {
         ctx.add(509, &name, None, None, vec![("why", p("Lib.RunsAtClose")), ("found", t(what.clone()))]);
     }

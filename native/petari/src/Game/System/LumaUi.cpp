@@ -1293,7 +1293,7 @@ namespace luma {
                 return pTop == nullptr || NebulaSettingsMenu::isShown() ? nullptr : pTop;
             }
 
-            // The newest shown screen with a menu takes the player's controls this frame (F's rules, 2026-11-12): the
+            // The newest shown screen with a menu takes the player's controls this frame: the
             // game's own reading after the bindings (its pad's press edges, its pointer and touch). Nothing while a
             // host menu is open. A row taken stays menu_chosen's until the next reading: this runs after the mods'
             // frame handlers (GameSystem: services::frameStart, then ui::frame), so the next frame's handlers, the

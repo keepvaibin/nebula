@@ -187,7 +187,7 @@ fn frames_of(b: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)> {
 }
 
 /// The first file of the round trip: an IVF's frames come out frame for frame (its delimiters left out), with the
-/// header J's reader takes.
+/// header the run time's reader takes.
 #[test]
 fn an_ivf_movie_round_trips_to_nmov() {
     let s = seq(64, 48);

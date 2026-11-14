@@ -78,7 +78,7 @@ galaxy::mods::OfferFile offer_file(const LumaOfferFile& file) noexcept {
     return out;
 }
 
-// J's offer screen (galaxy/mod_screens.h); its answer reaches the module through `done` at a frame's start.
+// The offer screen (galaxy/mod_screens.h); its answer reaches the module through `done` at a frame's start.
 int32_t ask_offer(const LumaOfferFacts* facts, const char* asker, LumaOfferDone done, void* context) noexcept {
     if (facts == nullptr || asker == nullptr || done == nullptr) {
         return LUMA_E_ARGUMENT;

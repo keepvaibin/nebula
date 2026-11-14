@@ -51,7 +51,7 @@ GAME_TREES = [ROOT / "native" / "petari", ROOT / "native" / "math", ROOT / "nati
 # TY-5: the kernel's own headers declare nothing a mod binds through these rows.
 KERNEL_FILES = re.compile(r"^native/(include/luma[a-z_]*\.h|petari/include/Game/System/Luma[A-Za-z]*\.hpp)$")
 
-# The left_out reasons (TY-5): a fixed list, so the run's report counts by them and G's rows translate them.
+# The left_out reasons (TY-5): a fixed list, so the run's report counts by them and LumaLink's rows translate them.
 R_KERNEL = "the kernel's own"
 R_INTERNAL = "internal linkage: no name a mod can bind"
 R_THREAD = "thread-local: one per thread, no one address"

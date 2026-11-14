@@ -481,7 +481,7 @@ def read_check(c, path, keys):
     within = None
     if op in ("exists", "absent") and value is not True:
         raise HarnessError("%s.%s takes true" % (path, op))
-    # Revision 7 (J's R-6): `has` an object whose every key the fact's value holds with that value (an object inside
+    # Revision 7: `has` an object whose every key the fact's value holds with that value (an object inside
     # is checked the same way, any other value with `is`); `count` the number of times the key was written.
     if op == "has" and not isinstance(value, dict):
         raise HarnessError("%s.has takes an object" % path)

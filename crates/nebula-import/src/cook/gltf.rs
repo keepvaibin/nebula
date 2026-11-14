@@ -3611,7 +3611,7 @@ mod tests {
 
     #[test]
     fn a_gltf_metre_is_a_hundred_units() {
-        // J's 3208 model: one node a metre up, a metre cube hanging from it to the origin.
+        // The 3208 model: one node a metre up, a metre cube hanging from it to the origin.
         let (ir, _, facts) = to_ir_for(include_bytes!("../../data/metre.gltf"), None, None).unwrap();
         assert_eq!((facts.joints, ir.joints.len(), ir.joints[0].name.as_str()), (1, 1, "metre"));
         assert_eq!(ir.joints[0].translation, [0.0, 100.0, 0.0]);

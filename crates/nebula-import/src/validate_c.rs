@@ -354,7 +354,7 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
     let store = (!input.store.is_null()).then(|| CStore(input.store));
     let store_key = text(input.store_key).unwrap_or_default();
     // What identifies the game for a kept report: a change in any of it checks every rule again. The device's
-    // features are not in it (F's AR-1): L806 is a manifest rule, run at every start, and a laptop that switches GPUs
+    // features are not in it: L806 is a manifest rule, run at every start, and a laptop that switches GPUs
     // keeps its kept reports.
     let game_key = format!(
         "nebula {nebula}; region {}; platform {platform}; languages {}; api {}; names {}; types {}; services {}; renderer {}; placement {}; store {}",

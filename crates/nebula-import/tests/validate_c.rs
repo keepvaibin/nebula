@@ -597,7 +597,7 @@ fn renderer_features_and_the_device_s_reach_l806() {
     let f = &got.findings[0];
     assert_eq!((f.0, f.1, f.3.as_str(), f.6.as_deref()), (806, 0, "luma.json", Some("/renderer/features/0")));
     assert_eq!(f.7, "test.mod needs ray_tracing, which this device's graphics do not have.");
-    // A device that has it: nothing. The device is not part of the game's key (F's AR-1): another GPU takes the kept
+    // A device that has it: nothing. The device is not part of the game's key: another GPU takes the kept
     // report (state 1) and L806 is said from the manifest's rules, which run at every start.
     let mut has = Call::new(&path, "windows-x64");
     has.renderer = call.renderer.clone();

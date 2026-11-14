@@ -854,7 +854,7 @@ namespace luma {
 #else
         // The Itanium C++ ABI's std::type_info: its vtable pointer, then the mangled name ("9LiveActor"). GCC and Clang
         // put a '*' before the name of a class that is not unique in the program (internal linkage); the symbols do
-        // not have it, so it is left out (G's O10-1).
+        // not have it, so it is left out.
         const char* pName;
         __builtin_memcpy(&pName, static_cast<const char*>(pTypeInfo) + sizeof(void*), sizeof(pName));
         if (pName == nullptr) {

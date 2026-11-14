@@ -983,7 +983,7 @@ fn apply_effects(changes: &[Change], base: Option<&Path>, pak: &mut File, tempor
             let (particles, names) = (current(PARTICLES)?, current(PARTICLE_NAMES)?);
             let applied = effects::apply(&id, &cooked, &particles, &names)?;
             let mut written = vec![(PARTICLES.to_string(), applied.particles), (PARTICLE_NAMES.to_string(), applied.names)];
-            // A mod that only replaces has no list (J's reader: no list, no effects of its own).
+            // A mod that only replaces has no list (the run time's reader: no list, no effects of its own).
             if !cooked.effects.is_empty() {
                 written.push((effects::list_path(&id), effects::list_text(&cooked)));
             }

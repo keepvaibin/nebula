@@ -22,7 +22,7 @@ namespace luma {
     namespace refs {
         namespace {
             // The placeholder model, cooked from Nebula's data/placeholder/model.gltf into the store as an object archive
-            // (references 4; G's cook list). 3.13 refuses a start without it.
+            // (references.md section 4; the cook's list). The start check refuses a start without it.
             const char cPlaceholderArchive[] = "NebulaPlaceholder";
             const char cMissingClassRow[] = "Content.MissingClass";
             const u32 cMissingClassCode = 620;

@@ -305,8 +305,8 @@ class Unit:
         # 1.5's tables: the candidates (table_candidate), the variables a file-scope initializer reads (a table read
         # there stays as it is: made writable, its reader would be initialized at run time), the rows, the reasons
         self.table_candidates = []
-        # 1.8 places (G's 3.9): the placement argument reads and helper calls of each function with a row, and the
-        # object factory's rows when this unit is NameObjFactory.cpp (OUTPUT.places)
+        # Places (the cook reads them): the placement argument reads and helper calls of each function with a row, and
+        # the object factory's rows when this unit is NameObjFactory.cpp (OUTPUT.places)
         self.places_part = {'functions': [], 'factory': None}
         self.init_reads = set()
         self.tables = []

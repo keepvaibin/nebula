@@ -900,7 +900,7 @@ fn permissions(m: &mut M, root: &Value, facts: &mut Facts) {
                     }
                 }
             }
-            // A revision-1 `net` had hosts: NetSplit says it already (F's AP-1).
+            // A revision-1 `net` had hosts: NetSplit says it already.
             (_, Some(_)) if name == "net" => {}
             (_, Some(h)) => m.at(211, h, &format!("{ptr}/hosts"), vec![("key", t(name.clone())), ("why", p("Perm.HostsOnlyNet"))]),
             _ => {}
@@ -1444,7 +1444,7 @@ mod tests {
         assert_eq!(image_size(&jpeg), Some(("jpeg", 200, 100)));
     }
 
-    /// GAME_CONTROLS is the input bindings' kTargetIds, in order (F's note on luma-format revision 5).
+    /// GAME_CONTROLS is the input bindings' kTargetIds, in order (luma-format revision 5).
     #[test]
     fn the_controls_are_the_input_bindings_own() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../runtime/src/input_bindings.cpp");

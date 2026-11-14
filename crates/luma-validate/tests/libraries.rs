@@ -215,7 +215,7 @@ fn a_library_the_system_runs_code_from_at_load_is_refused() {
 
 #[test]
 fn a_library_the_system_runs_code_from_when_it_closes_it_is_refused() {
-    // F's audit of R3-A, A-1: the kernel closes the library after `finish`, when the mod's memory is freed.
+    // The kernel closes the library after `finish`, when the mod's memory is freed.
     for (path, platform, what) in [
         ("elf-x64/runs_at_close.so", "linux-x64", "DT_FINI_ARRAY"),
         ("elf-x64/fini.so", "linux-x64", "DT_FINI"),
@@ -696,7 +696,7 @@ fn a_virtual_call_and_a_class_number_are_checked_against_the_types_file() {
     assert_eq!(Types::from_json(twice.as_bytes()).unwrap_err().to_string(), "types[1].virtuals[0]: a second virtual \"A::f\" \"void()\"");
 }
 
-/// F's AP-4 (audit 3.1-perm): registry 2's grammar is L505 whatever the flags; an optional import of a service the
+/// Registry 2's grammar is L505 whatever the flags; an optional import of a service the
 /// game lacks gives nothing; an optional import of a permissioned service the mod does not declare is L506 and is not
 /// a required service. AP-2: a catalog row with a key other than the four does not read.
 #[test]

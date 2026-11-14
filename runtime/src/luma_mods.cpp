@@ -648,8 +648,8 @@ bool valid_install_path(std::string_view path) noexcept {
     return path.size() > 5u && path.substr(path.size() - 5u) == ".luma" && galaxy::luma_fs::path_in_rule(path, false);
 }
 
-// The one open request (J's screen shows one at a time: a second is LUMA_E_BUSY). Game thread only: the request, the
-// screen's answer (run_screen_answers) and the delivery all run there.
+// The one open request (the import screen shows one at a time: a second is LUMA_E_BUSY). Game thread only: the request,
+// the screen's answer (run_screen_answers) and the delivery all run there.
 struct InstallRequest;
 struct InstallNode {
     LumaEventNode event;     // first, and both plain members: the kernel's node is the InstallNode
@@ -746,8 +746,8 @@ std::int32_t install_request(const LumaMod* mod, const char* path, LumaEventFn f
     request->user = user;
     const LumaHandle handle = request->handle;
     g_install = request;
-    // J's screen answers on the game thread at a frame's start, never inside this call. The answer finds the request
-    // by its handle: one closed meanwhile (cancel, the mod gone) or already answered takes none.
+    // The import screen answers on the game thread at a frame's start, never inside this call. The answer finds the
+    // request by its handle: one closed meanwhile (cancel, the mod gone) or already answered takes none.
     std::int32_t status = LUMA_E_MEMORY;
     try {
         status = galaxy::mods::ask_install(file, request->asker, [handle](std::int32_t answer) {

@@ -158,7 +158,7 @@ fn a_link_key_is_new_to_the_whole_zone() {
 }
 
 /// A zone whose start has MarioNo 0 in LayerB and LayerC, which no scenario turns on together: scenario 1 turns on
-/// LayerA and LayerB (mask 3), scenario 2 LayerA and LayerC (mask 5); LayerD is never on (F's dandelionhillzone case).
+/// LayerA and LayerB (mask 3), scenario 2 LayerA and LayerC (mask 5); LayerD is never on (the dandelionhillzone case).
 struct ScenarioStore {
     listed: bool,
 }
@@ -795,7 +795,7 @@ fn the_mod_higher_in_the_list_wins() {
     assert!(above.iter().all(|(_, m)| m.contains("; test.mod's") && m.ends_with("(it is higher in the list).")), "{above:?}");
 }
 
-/// F's AP-1 (audit 3.1-perm): a revision-1 `net` with hosts is one finding, Perm.NetSplit, not NetSplit and
+/// A revision-1 `net` with hosts is one finding, Perm.NetSplit, not NetSplit and
 /// HostsOnlyNet; another name with hosts still gets HostsOnlyNet.
 #[test]
 fn a_revision_1_net_with_hosts_is_one_finding() {
@@ -837,8 +837,8 @@ fn the_text_block_carries_each_permissions_why() {
     assert_eq!(said(asked, &long).len(), 1);
 }
 
-/// H's TLS roots (services-net 7): a net permission's `roots` name PEM files under certs/; every fault is L211 naming
-/// the file, and certs/ is a folder a `.luma` may have.
+/// TLS roots (docs/modding/services/net.md): a net permission's `roots` name PEM files under certs/; every fault is
+/// L211 naming the file, and certs/ is a folder a `.luma` may have.
 #[test]
 fn a_net_permissions_roots_are_pem_files_in_certs() {
     let pem = b"-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n";

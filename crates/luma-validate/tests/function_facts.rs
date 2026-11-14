@@ -29,7 +29,7 @@ fn refused(rows: &[String]) -> String {
     }
 }
 
-/// K's fault on l16 (G, 2026-11-11): a function returning a pointer to an array read `(*)` as its list, so its one
+/// A fault found on build l16: a function returning a pointer to an array read `(*)` as its list, so its one
 /// row refused the whole file.
 #[test]
 fn a_declarator_before_the_list_is_no_list() {
@@ -163,7 +163,7 @@ fn a_signatures_parameters_are_counted() {
     assert!(names.call_only.contains(&("A::f".to_string(), "s32(s32)".to_string())));
     assert_eq!(names.functions["A::g"], vec![("void(const char *, ...)".to_string(), true)]);
     assert_eq!(names.add_rows("A::h\tvoid()\tjump\t1\n"), Err(1));
-    // A declarator's parentheses before the list (Ui::detail::GetDrawMtx in l16's luma_functions.json, K's fault).
+    // A declarator's parentheses before the list (Ui::detail::GetDrawMtx in l16's luma_functions.json).
     assert_eq!(signature_params("const f32 (*)[4]()"), Some(0));
     assert_eq!(signature_params("const f32 (*)[4](int, char) const"), Some(2));
     assert_eq!(signature_params("void (*)(int)"), Some(1));
