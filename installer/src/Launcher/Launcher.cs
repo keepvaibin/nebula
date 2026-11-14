@@ -461,6 +461,7 @@ namespace Nebula.Launcher
         internal readonly Button benchmarkApply = new Button();
         private Process benchmarkRun;
         private BenchmarkResult benchmarkResult;
+        private bool savedPerPixel;   // config.ini's per_pixel_lighting when the result was shown
         private readonly NumericUpDown pointerSpeed = new NumericUpDown(), stickDeadzone = new NumericUpDown(),
             pointerDeadzone = new NumericUpDown(), shakeSensitivity = new NumericUpDown(), gyroSensitivity = new NumericUpDown(),
             pointerHide = new NumericUpDown();
@@ -995,6 +996,7 @@ namespace Nebula.Launcher
         internal void ShowBenchmark(BenchmarkResult result, bool fresh)
         {
             benchmarkResult = result;
+            savedPerPixel = GraphicsSettings.Load().PerPixelLighting;
             var changes = result != null && result.Complete ? result.Changes : new List<BenchmarkSetting>();
             benchmarkVerdict.Text = result != null ? result.VerdictText : fresh ? NebulaText.Of("The benchmark did not finish.") : "";
             benchmarkRows.Items.Clear();
@@ -1036,8 +1038,8 @@ namespace Nebula.Launcher
                 }
                 case "ambient_occlusion": return NebulaText.Of(value != 0 ? "On" : "Off");
                 case "enhanced_lighting":
-                    // Off: the lighting this window has, or per pixel in place of enhanced (what Apply sets).
-                    return value != 0 ? lighting.Items[0].ToString() : lighting.Items[lighting.SelectedIndex > 0 ? lighting.SelectedIndex : 1].ToString();
+                    // Off: per pixel or per vertex as config.ini has per_pixel_lighting (Apply leaves it).
+                    return lighting.Items[value != 0 ? 0 : savedPerPixel ? 1 : 2].ToString();
                 case "aa": return value >= 0 && value < antiAliasing.Items.Count ? antiAliasing.Items[value].ToString() : value.ToString(CultureInfo.InvariantCulture);
                 case "smaa_quality": return value >= 0 && value < aaQuality.Items.Count ? aaQuality.Items[value].ToString() : value.ToString(CultureInfo.InvariantCulture);
                 case "bloom": return value.ToString(CultureInfo.InvariantCulture) + "%";
@@ -1083,10 +1085,10 @@ namespace Nebula.Launcher
                         saved.AmbientOcclusion = value != 0;
                         break;
                     case "enhanced_lighting":
-                        lighting.SelectedIndex = value != 0 ? 0 : lighting.SelectedIndex == 0 ? 1 : lighting.SelectedIndex;
-                        // The row's choice: enhanced and per pixel both light per pixel.
+                        // Only enhanced_lighting: per_pixel_lighting stays as config.ini has it, as the benchmark
+                        // measured it, and the row shows that (off: per pixel or per vertex as saved).
                         saved.EnhancedLighting = value != 0;
-                        saved.PerPixelLighting = lighting.SelectedIndex != 2;
+                        lighting.SelectedIndex = value != 0 ? 0 : saved.PerPixelLighting ? 1 : 2;
                         break;
                     case "aa":
                         if (value < 0 || value >= antiAliasing.Items.Count) break;

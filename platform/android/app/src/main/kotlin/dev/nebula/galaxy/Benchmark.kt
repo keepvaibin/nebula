@@ -80,9 +80,9 @@ object Benchmark {
     }
 
     /**
-     * Apply: the recommended values of the differing keys into config.ini (enhanced or not, the lighting stays per
-     * pixel, as the Windows launcher's Lighting row sets it); every other line as it was. Written to a new file and
-     * renamed over the old one. False when it could not be written.
+     * Apply: the recommended values of the differing keys into config.ini and nothing else (per_pixel_lighting stays as
+     * the benchmark measured it); every other line as it was. Written to a new file and renamed over the old one.
+     * False when it could not be written.
      */
     fun apply(context: Context, result: BenchmarkResult): Boolean {
         // Each key by name (tools/settings_table.py reads the keys the Android launcher writes from these lines).
@@ -91,10 +91,7 @@ object Benchmark {
         recommended["internal_height"]?.let { values["internal_height"] = it }
         recommended["msaa_samples"]?.let { values["msaa_samples"] = it }
         recommended["ambient_occlusion"]?.let { values["ambient_occlusion"] = it }
-        recommended["enhanced_lighting"]?.let {
-            values["enhanced_lighting"] = it
-            values["per_pixel_lighting"] = "1"
-        }
+        recommended["enhanced_lighting"]?.let { values["enhanced_lighting"] = it }
         recommended["aa"]?.let { values["aa"] = it }
         recommended["smaa_quality"]?.let { values["smaa_quality"] = it }
         recommended["bloom"]?.let { values["bloom"] = it }

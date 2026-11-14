@@ -308,7 +308,7 @@ namespace Nebula.Launcher
             Check(Benchmark.Read(3, file) == null && Benchmark.Read(0, file) != null, "benchmark: a failed exit reads no result");
             var before = GraphicsSettings.Load();
             before.InternalHeight = 1080; before.Msaa = 2; before.AmbientOcclusion = true; before.AmbientOcclusionSsao = true;
-            before.EnhancedLighting = true; before.PerPixelLighting = true; before.AntiAliasing = 1; before.Quality = 3; before.Bloom = 100;
+            before.EnhancedLighting = true; before.PerPixelLighting = false; before.AntiAliasing = 1; before.Quality = 3; before.Bloom = 100;
             before.Sharpness = 7;
             before.Save();
             try
@@ -323,18 +323,19 @@ namespace Nebula.Launcher
                     Application.DoEvents();
                     var rows = form.benchmarkRows.Items.Cast<ListViewItem>().Select(i => i.SubItems[0].Text + "|" + i.SubItems[1].Text + "|" + i.SubItems[2].Text).ToList();
                     Check(rows.Count == 6 && rows[0] == "Internal resolution|1080p|720p" && rows[1] == "MSAA|4x|2x" && rows[2] == "Ambient occlusion|On|Off"
+                          && rows[3] == "Lighting|" + ((ComboBox)Private(form, "lighting")).Items[0] + "|" + ((ComboBox)Private(form, "lighting")).Items[2]
                           && rows[4] == "Anti-aliasing quality|Ultra|High" && rows[5] == "Bloom|100%|60%" && form.benchmarkApply.Visible,
                           "benchmark: the last result's differing rows, current and recommended: " + string.Join("; ", rows));
                     form.ApplyBenchmark();
                     Check(((ComboBox)Private(form, "internalResolution")).SelectedIndex == 5 && ((ComboBox)Private(form, "msaa")).SelectedIndex == 1
-                          && ((ComboBox)Private(form, "occlusionMode")).SelectedIndex == 0 && ((ComboBox)Private(form, "lighting")).SelectedIndex == 1
+                          && ((ComboBox)Private(form, "occlusionMode")).SelectedIndex == 0 && ((ComboBox)Private(form, "lighting")).SelectedIndex == 2
                           && ((ComboBox)Private(form, "aaQuality")).SelectedIndex == 2 && ((NumericUpDown)Private(form, "bloom")).Value == 60
                           && !form.benchmarkApply.Enabled, "benchmark: Apply sets the window's rows");
                 }
                 var after = GraphicsSettings.Load();
                 Check(after.InternalHeight == 720 && after.Msaa == 1 && !after.AmbientOcclusion && after.AmbientOcclusionSsao && !after.EnhancedLighting
-                      && after.PerPixelLighting && after.AntiAliasing == 1 && after.Quality == 2 && after.Bloom == 60 && after.Sharpness == 7,
-                      "benchmark: Apply writes the recommended keys to config.ini, the others untouched");
+                      && !after.PerPixelLighting && after.AntiAliasing == 1 && after.Quality == 2 && after.Bloom == 60 && after.Sharpness == 7,
+                      "benchmark: Apply writes the recommended keys to config.ini, the others (per_pixel_lighting too) untouched");
 
                 // The stub game exits 0 without writing a result: the page says the run did not finish.
                 string marker = Path.Combine(session.App, "stub-launch.txt");
