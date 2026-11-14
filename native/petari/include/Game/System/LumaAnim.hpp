@@ -1,6 +1,6 @@
 #pragma once
 
-// LumaCore's `anim` service (plan 3.6 run time; contract animation 7): a clip of an actor's model, or of a mod's
+// LumaCore's `anim` service (docs/modding/content/animation.md section 7): a clip of an actor's model, or of a mod's
 // attached model, played as the game plays its own, from a frame, at a rate, once or looping; its frame read; marks
 // and its end as events. The harness facts anim.play, anim.frame, anim.mark, anim.end.
 

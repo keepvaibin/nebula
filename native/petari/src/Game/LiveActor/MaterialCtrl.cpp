@@ -33,7 +33,7 @@ FogCtrl::FogCtrl(Model* pModel, bool useAllMaterials) : MaterialCtrl(pModel, nul
         }
     }
 
-    // A model with no materials (a hidden one: `{"hide": true}`, models contract 2) has no fog to keep: none, and
+    // A model with no materials (a hidden one: `{"hide": true}`, models.md section 2) has no fog to keep: none, and
     // nothing for update() to touch.
     if (!firstMaterial && pModelData->getMaterialCount() != 0) {
         firstMaterial = pModelData->getMaterialAt(0);

@@ -15,7 +15,7 @@ namespace luma {
             u16 major;
             u16 minor;
             const char* permission;  // null: none
-            const char* contract;    // the board contract that defines it
+            const char* contract;    // the page that defines it
         };
         // The catalog's row `index`, or null past the last (the self-description writes them in order).
         const CatalogRow* catalogAt(u32 index);
@@ -41,11 +41,12 @@ namespace luma {
         // list order, then time's frame handlers. With nothing posted and no time hook, one atomic load and two plain.
         void frameStart();
 
-        // The time service's two passes (contract services-time 3): `post` before the events (due timers), `after` once
-        // they are given (frame handlers). Each null while no mod needs it, so a frame with no mod pays nothing for them.
+        // The time service's two passes (docs/modding/services/time.md): `post` before the events (due timers), `after`
+        // once they are given (frame handlers). Each null while no mod needs it, so a frame with no mod pays nothing
+        // for them.
         void setTimeHooks(void (*pPost)(), void (*pAfter)());
 
-        // The save's work at the frame's start, first (contract services-save 7: a change's write, a finished write
+        // The save's work at the frame's start, first (save.md: a change's write, a finished write
         // let go; 5: a FORGET's quiet save). Null while there is none.
         void setSaveHook(void (*pWork)());
         // Any thread: pWork becomes the save hook at the next frame's start (the host's FORGET, off the game thread).

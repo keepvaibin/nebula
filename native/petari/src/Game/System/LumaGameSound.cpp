@@ -1,4 +1,4 @@
-// The game's own sounds for LumaCore's audio service (contract services-audio 8; plan 2.6 layer 1b): a mod starts a
+// The game's own sounds for LumaCore's audio service (docs/modding/services/audio.md section 8): a mod starts a
 // sound of the game's table by its name (SE_PM_JUMP_M), heard everywhere (no place) or at a place in the world, still
 // or following the player or the camera, through the game's own sound engine (its distances, pan, reverb and limits).
 // The host's audio provider (runtime/src/luma_audio.cpp) checks the mod and the thread and calls these; it also asks

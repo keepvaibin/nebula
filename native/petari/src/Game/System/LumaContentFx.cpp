@@ -34,8 +34,8 @@
 #include <cstdlib>
 #include <cstring>
 
-// The content.fx service (contract effects). Game thread throughout: the service's calls, the frame, the provider.
-// NebulaArena::destroy is the scene end's (Arenas), on the game thread as well.
+// The content.fx service (docs/modding/content/effects.md). Game thread throughout: the service's calls, the frame, the
+// provider. NebulaArena::destroy is the scene end's (Arenas), on the game thread as well.
 //
 // An effect is the game's own MultiEmitter with an AutoEffectInfo of its own, as a table's effect has one, so the game's
 // callback follows it (MultiEmitterCallBack: the FOLLOW_* flags while `follow`, AFFECT_* at its making) and draws it in

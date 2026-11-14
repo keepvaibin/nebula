@@ -21,7 +21,7 @@
 #include <nebula_math.h>
 #include <cstring>
 
-// The draw.view service (plan 2.4 layer 7; contract draw). Game thread throughout: the calls, the provider, render
+// The draw.view service (docs/modding/services/draw.md). Game thread throughout: the calls, the provider, render
 // (GameScene::draw3D, before the scene) and released (NebulaArena::destroy).
 //
 // A view is a slot of one table across mods: its size, clear colour, camera (fixed, or following an actor) and a target

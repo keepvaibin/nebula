@@ -33,7 +33,7 @@ namespace {
     const u32 cFill = 0x141A2CD8;
     const u32 cRing = 0xD9534FFF;
     const u32 cText = 0xFFFFFFFF;
-    // Frames at 60 a second: in, held (6 s, contract 4.1), out (0.3 s); and the share of the way a line moves to its
+    // Frames at 60 a second: in, held (6 s), out (0.3 s); and the share of the way a line moves to its
     // place each frame when the lines below it go.
     const s32 cInFrames = 8;
     const s32 cHoldFrames = 360;
@@ -91,7 +91,7 @@ namespace {
         rSlot.told = false;
     }
 
-    // What the log has for the notice, while a line is free (contract 4.1). Free lines show the oldest at once. Lines
+    // What the log has for the notice, while a line is free. Free lines show the oldest at once. Lines
     // that waited behind full ones: when more than three wait as a line frees, the oldest fold into one "{count} more"
     // line, so the newest two still show.
     void intake() {
@@ -211,7 +211,7 @@ namespace {
     char sFactText[6 * sizeof(sFactShown) + 3];
     char sFactJson[sizeof(sFactText) + 256 + 96];
 
-    // As the screen shows it: modlog.notice {"mod", "code", "text"} (contract 4.3), the text as cut.
+    // As the screen shows it: modlog.notice {"mod", "code", "text"}, the text as cut.
     void noticeFact(const Slot& rSlot, const char16_t* pShown) {
         if (!luma::modlog::facts()) {
             return;
@@ -268,11 +268,11 @@ public:
         if (!mBuilt) {
             return;
         }
-        // Nothing changed and nothing on screen: one read of the revision (contract 5).
+        // Nothing changed and nothing on screen: one read of the revision.
         const u32 revision = luma::modlog::revision();
         const bool any = activeCount() != 0;
         if (!sSummaryTaken) {
-            // The first notice of the session: what was said before it is one line (contract 4.1).
+            // The first notice of the session: what was said before it is one line.
             sSummaryTaken = true;
             const u32 summary = luma::modlog::takeSummary();
             if (summary != 0) {
@@ -469,7 +469,7 @@ namespace NebulaModLogNotice {
             sScreen = new NebulaModLogNoticeScreen();
             sScreen->initWithoutIter();
         }
-        // No mod, nothing said: no actor (contract 5). A harness run reads which.
+        // No mod, nothing said: no actor. A harness run reads which.
         if (luma::modlog::facts()) {
             char json[64];
             nebula_snprintf(json, sizeof(json), "{\"allocated\":%s,\"notice\":%s}", luma::modlog::allocated() ? "true" : "false",

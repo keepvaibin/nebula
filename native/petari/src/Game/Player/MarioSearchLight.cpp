@@ -248,7 +248,7 @@ void MarioActor::drawSearchLight() const {
     TDDraw::setupNative(&view, 0, 1, 1);
 
     PlayerModel* model = static_cast< PlayerModel* >(MR::getModel(mSearchLight));
-    // A light model a mod hid (no materials, models contract 2) draws nothing.
+    // A light model a mod hid (no materials, models.md section 2) draws nothing.
     if (model->getModelData()->getMaterialCount() == 0) {
         return;
     }

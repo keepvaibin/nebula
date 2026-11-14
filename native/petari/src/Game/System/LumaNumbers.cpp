@@ -1,4 +1,4 @@
-// Numbers and tables in the game's code by name (LumaNumbers.hpp; contract numbers, plan 1.5).
+// Numbers and tables in the game's code by name (LumaNumbers.hpp; docs/modding/language/numbers.md).
 #include "Game/System/LumaNumbers.hpp"
 
 #include "Game/System/LumaHook.hpp"
@@ -13,7 +13,7 @@ namespace luma {
     extern const Numbers sNumbersStart __asm("section$start$__DATA$lumanum");
     extern const Numbers sNumbersStop __asm("section$end$__DATA$lumanum");
 #elif !defined(_WIN32)
-    // Weak: the linker defines them only when the section exists, and the module without rows (plan 1.7) has none;
+    // Weak: the linker defines them only when the section exists, and the module without rows has none;
     // both are then null, so there are no numbers.
     extern "C" __attribute__((weak, visibility("hidden"))) const Numbers __start_lumanum[];
     extern "C" __attribute__((weak, visibility("hidden"))) const Numbers __stop_lumanum[];

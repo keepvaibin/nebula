@@ -26,7 +26,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 
-// The service registry, its catalog and the services' event queue (services-registry contract 2, 6, 7, 8, 9, 11).
+// The service registry, its catalog and the services' event queue (docs/modding/services/registry.md).
 //
 // Threads. Registration happens on the game thread before the first mod begins, and is read-only after. A mod's record
 // is written on the game thread (begin, gone, end); other threads read it only to post an event or ask a fact, which a
@@ -37,7 +37,7 @@ namespace luma {
     namespace services {
         namespace {
             // The catalog: every service the game defines (services-registry 9). A row is added with the code of its
-            // service when that service's contract is signed; none is yet.
+            // service once that service is defined; none is yet.
             const CatalogRow cCatalog[] = {
                 {"time", 1, 0, nullptr, "services-time"},
                 {"system", 1, 0, nullptr, "services-system"},
@@ -402,7 +402,7 @@ namespace luma {
                 if (pRecord == nullptr || isGone(pRecord)) {
                     return LUMA_E_CANCELLED;
                 }
-                // Through the guard (plan 1.6): a fault in fn is the mod's, caught there and named "<service> event <kind>"
+                // Through the guard: a fault in fn is the mod's, caught there and named "<service> event <kind>"
                 // in the mod log (services-registry 6.1, J S-7). A mod off after a fault is not called.
                 char where[96];
                 nebula_snprintf(where, sizeof(where), "%s event %u", pService, pEvent->kind);
@@ -591,7 +591,7 @@ namespace luma {
                     }
                     const char* const* ppNames = nullptr;
                     char id[64];
-                    // A code names one row. Sibling services of one contract give the same row under the same code
+                    // A code names one row. Sibling services of one definition give the same row under the same code
                     // (net.local and net.internet: 251 Net.CertificateRefused, 252 Net.RedirectRefused); a code given
                     // again with another id is a fault of the build.
                     if (rowOf(rRow.code, id, sizeof(id), &ppNames) && !sameText(id, rRow.id)) {
@@ -667,7 +667,7 @@ namespace luma {
                     }
                 }
             }
-            // The module's own services, each when its contract is signed: time (services-time), content.fx (effects),
+            // The module's own services, each once it is defined: time (services-time), content.fx (effects),
             // content.model (models).
             (void)provide(luma::time::provider());
             (void)provide(luma::content::fx::provider());

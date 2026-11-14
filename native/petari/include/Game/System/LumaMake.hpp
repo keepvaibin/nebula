@@ -1,5 +1,5 @@
 #pragma once
-// Objects a mod makes by name (plan 1.3 "make"; luma.h LumaCore.make, contract classes "make"): made as a stage places
+// Objects a mod makes by name (luma.h LumaCore.make; docs/modding/language/classes.md "make"): made as a stage places
 // them, by the game's own factory, while the scene makes its objects.
 
 #include <luma.h>

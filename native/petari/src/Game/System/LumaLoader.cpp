@@ -46,7 +46,7 @@ namespace luma {
     };
     const uintptr_t kBlockCheck = static_cast<uintptr_t>(0x4C554D41424C4B21ull);
 
-    // One thing a mod's code reported (loader contract 6, D3-1): its place and code, its args the first time, how often.
+    // One thing a mod's code reported: its place and code, its args the first time, how often.
     const u32 kReportArgs = 8;
     const u32 kReportsKept = 256;
     struct Report {
@@ -57,7 +57,7 @@ namespace luma {
         u32 argCount;
         bool cut;
         u64 count;
-        const luma::modlog::Entry* entry;  // its entry in the mod log (contract mod-log 2), counted with it; null: not kept
+        const luma::modlog::Entry* entry;  // its entry in the mod log, counted with it; null: not kept
     };
 
     // The addresses alloc gave one mod: open addressing, kept at most half full. 0 is an empty slot, 1 a taken-out one.
@@ -155,7 +155,7 @@ struct LumaMod {
     bool inStart;       // inside its start: kept answers
     bool going;         // its hooks, classes and numbers were taken out: its stop and finish add none (they would stay)
     u32 startedAt;      // its place in the start order, from 1 (a mod starts after every mod it uses)
-    // The guard (plan 1.6): its library's image, and 1 once a fault was caught in its code (atomic): none of its code
+    // The guard: its library's image, and 1 once a fault was caught in its code (atomic): none of its code
     // runs again, its stop and finish included.
     uintptr_t codeBase;
     uintptr_t codeBegin;
@@ -236,7 +236,7 @@ namespace luma {
             }
         }
 
-        // A refusal as the validator says it (loader contract 3): the code, the place, then the rule's parameters.
+        // A refusal as the validator says it: the code, the place, then the rule's parameters.
         struct Refuse {
             LumaRefusal* refusal;
             const char* id;    // as the host gave them, whole
@@ -326,7 +326,7 @@ namespace luma {
             return number >= 0 ? number : luma::classes::numberOf(pClass);
         }
 
-        // Any record the game defines (contract types), by its name or an alias's.
+        // Any record the game defines (docs/modding/language/types.md), by its name or an alias's.
         s32 apiSizeOf(const char* pType) {
             const TypeRow* const pRow = findType(pType);
             return pRow != nullptr ? static_cast<s32>(pRow->size) : -1;
@@ -592,7 +592,7 @@ namespace luma {
             }
         }
 
-        // The report as an entry of the mod log (contract mod-log 2, the kernel's step 1): source CODE, an error, its
+        // The report as an entry of the mod log (the kernel's step 1): source CODE, an error, its
         // row's words; the log keeps its own limits. Returns the entry kept for this key, or null. Any thread.
         const luma::modlog::Entry* toModLog(const LumaMod* pMod, const char* pFile, u32 line, u32 code, const char* const* ppArgs,
                                             u32 argCount) {
@@ -734,9 +734,10 @@ namespace luma {
             record(pMod, pFile, line, code, ppArgs, argCount);
         }
 
-        // Objects (contract objects 10). What a call was given, read once: 0, or own_class's -1 (null), -2 (its class
-        // has no row: reported with the type_info's name) or -3 (not a game object the kernel can read: reported with
-        // the call's name). A report's place is the call's name, so each is kept once a mod and repeats are counted.
+        // Objects (docs/modding/language/objects.md section 10). What a call was given, read once: 0, or own_class's -1
+        // (null), -2 (its class has no row: reported with the type_info's name) or -3 (not a game object the kernel can
+        // read: reported with the call's name). A report's place is the call's name, so each is kept once a mod and
+        // repeats are counted.
         s32 readObject(const LumaMod* pMod, const void* pObject, const char* pWhere, OwnClass* pOwn) {
             *pOwn = ownClass(pObject);
             if (pObject == nullptr) {
@@ -1078,14 +1079,14 @@ namespace luma {
 
         void noResult(const Function* pFunction, const void* pOwner) { mended(pFunction, pOwner, kCodeNoResult); }
 
-        // Classes (classes contract, plan 1.4).
+        // Classes (docs/modding/language/classes.md).
         s32 apiDefineClass(const LumaMod* pMod, const LumaClassDef* pDef) {
             return refusedWhileGoing(pMod, "define_class") ? -1 : luma::classes::define(pMod, pDef);
         }
 
         void* apiClassData(const LumaMod*, const void* pObject, s32 number) { return luma::classes::data(pObject, number); }
 
-        // Numbers (numbers contract, plan 1.5).
+        // Numbers (docs/modding/language/numbers.md).
         void* apiNumber(const LumaMod* pMod, const char* pName, const char* pSignature, u32 place, u32* pKind) {
             return luma::numbers::find(pMod, pName, pSignature, place, pKind);
         }
@@ -1222,8 +1223,8 @@ namespace luma {
             return pText;
         }
 
-        // The reason a name is unbound, after kind, found and sig (contract types TY-7, TY2-1): its id, and the names
-        // it holds when it holds any.
+        // The reason a name is unbound, after kind, found and sig (docs/modding/language/types.md): its id, and the
+        // names it holds when it holds any.
         void putWhy(Refuse& rRefuse, const char* pWhy, const char* pWhat) {
             rRefuse.put("why", 'P', pWhy);
             if (pWhat != nullptr) {
@@ -1606,7 +1607,7 @@ namespace luma {
         }
         Refuse refuse = {pRefusal, pId, pFile};
 
-        // Each refusal is the first one found, with the validator's code and parameters (loader contract 2, 3).
+        // Each refusal is the first one found, with the validator's code and parameters.
         bool refused = true;
         if (pInfo == nullptr) {
             refuse.start(512);

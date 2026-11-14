@@ -24,8 +24,8 @@
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
-// The time service (contract services-time). Everything here runs on the game thread except monotonic_ns, wall and
-// soundRate, which read only the host's clocks and one atomic.
+// The time service (docs/modding/services/time.md). Everything here runs on the game thread except monotonic_ns, wall
+// and soundRate, which read only the host's clocks and one atomic.
 //
 // No cost with no mod (services-time 8): beginFrame is an increment and one load (sAnyControl) while no mod has set a
 // rate, a hold or steps; beginStep an increment and one load (sStepHandlers); the frame start's time hooks are set in
@@ -1131,7 +1131,7 @@ namespace luma {
 }
 
 extern "C" {
-// For the Mods page (J, plan 6.2; services-time 11), any thread (J22-6), by mod id: 1 and the mod's rate and hold, or
+// For the Mods page, any thread, by mod id: 1 and the mod's rate and hold, or
 // 0 when time does not know the mod.
 NEBULA_GAME_API int32_t luma_time_clock_of(const char* id, uint32_t* rate, int32_t* holds) {
     if (id == nullptr || rate == nullptr || holds == nullptr) {

@@ -1,9 +1,9 @@
 #pragma once
 
-// LumaCore's `draw` service (plan 2.4; contract draw): a mod draws at the frame's named points: in 2-D over the game
-// (rectangles, lines, triangles, images, text in the game's fonts and the mod's own), clipped and transformed, and in
-// 3-D in the world (FB's layers 3 to 8). Textures by content name or from the mod's pixels. Nothing a mod draws stays in
-// the renderer: a mod that is off draws nothing from that frame.
+// LumaCore's `draw` service (docs/modding/services/draw.md): a mod draws at the frame's named points: in 2-D over the
+// game (rectangles, lines, triangles, images, text in the game's fonts and the mod's own), clipped and transformed, and
+// in 3-D in the world (FB's layers 3 to 8). Textures by content name or from the mod's pixels. Nothing a mod draws
+// stays in the renderer: a mod that is off draws nothing from that frame.
 
 #include <luma_draw.h>
 #include <luma_service_provider.h>

@@ -20,7 +20,7 @@
 #include <nebula_format.h>
 #include <cmath>
 
-// The player service (contract services-player). Game thread throughout: the calls, the provider, NebulaArena::destroy.
+// The player service. Game thread throughout: the calls, the provider, NebulaArena::destroy.
 //
 // An extra player is a MarioActor made as the scene's own is (init2, then initAfterPlacement) but marked extra: the
 // scene's player stays the one the MarioHolder, the camera, the HUD, the light director and the game over follow. Its

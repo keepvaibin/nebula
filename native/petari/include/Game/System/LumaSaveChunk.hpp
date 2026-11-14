@@ -1,6 +1,6 @@
 #pragma once
 
-// Mods' values in a user file's game data (contract services-save, items 2 to 5): one chunk, signature 'LUMA',
+// Mods' values in a user file's game data (docs/modding/services/save.md): one chunk, signature 'LUMA',
 // registered last in GameDataHolder's chunk holder, so a value is written when the game saves, copied with the file
 // and cleared when the file is erased or started new.
 //

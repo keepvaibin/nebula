@@ -1,6 +1,6 @@
 #pragma once
 
-// LumaCore's `draw.view` service (plan 2.4 layer 7; contract draw; native/include/luma_draw_view.h): a mod's views of
+// LumaCore's `draw.view` service (docs/modding/services/draw.md; native/include/luma_draw_view.h): a mod's views of
 // the scene from its own cameras into textures of its draw service. The harness facts draw.view.<h> and
 // draw.view.end.<h>.
 

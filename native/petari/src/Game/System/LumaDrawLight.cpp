@@ -14,7 +14,7 @@
 #include <nebula_format.h>
 #include <nebula_frame_list.h>
 
-// The draw.light service (plan 2.4 layer 6; contract draw). Game thread throughout: the calls, the provider, and the
+// The draw.light service (docs/modding/services/draw.md). Game thread throughout: the calls, the provider, and the
 // frame (GameLightSignal::frame at GameScene::draw3D's begin).
 //
 // A light is a slot of one table across mods. Each frame drawn in a scene, each live light is

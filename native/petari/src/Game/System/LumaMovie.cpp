@@ -34,7 +34,7 @@ namespace luma {
             const u32 cNotMovieCode = 675u;
             // Ends on their way at once: a stop, a play and another stop in one frame.
             const u32 kMostEnds = 4u;
-            // NMOV's header (contract movies 4): its bytes, the codec word, the flags word (1 loops).
+            // NMOV's header: its bytes, the codec word, the flags word (1 loops).
             const u32 kHeaderBytes = 0x40u;
             const u32 kCodecAt = 0x24u;
             const u32 kCodecAv1 = 1u;
@@ -274,7 +274,7 @@ namespace luma {
                     nebula_log("movie: %s lacks its text, from and to columns; the movie's subtitles are not shown\n", path);
                     return;
                 }
-                // The movie's own clock: its frame rate and frames (contract movies 4).
+                // The movie's own clock: its frame rate and frames.
                 GameAssets::File movie = {};
                 u8 header[kHeaderBytes];
                 if (!GameAssets::open(pMovie, &movie) || movie.mLength < kHeaderBytes ||
@@ -324,7 +324,7 @@ namespace luma {
                     say(pMod, cMissingMovieCode, "Content.MissingMovie", pName);
                     return LUMA_E_NOT_FOUND;
                 }
-                // The header: a cooked movie, its frames and whether it loops (contract movies 4).
+                // The header: a cooked movie, its frames and whether it loops.
                 u8 header[kHeaderBytes];
                 if (file.mLength < kHeaderBytes ||
                     GameAssets::read(&file, header, static_cast< s32 >(kHeaderBytes), 0) != static_cast< s32 >(kHeaderBytes) ||

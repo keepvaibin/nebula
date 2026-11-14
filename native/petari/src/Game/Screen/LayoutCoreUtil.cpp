@@ -66,8 +66,9 @@ namespace LayoutCoreUtil {
             reallocateTextBoxMessage(pTextBox, MR::getStringLengthWithMessageTag(message));
             setTextBoxMessage(pTextBox, message);
         } else if (keepLayoutText) {
-            // A mod's own layout: the box as its layout made it (contract layout): its buffer, the pane's `length`, where
-            // ui.set_text cuts, and its words, set as the game sets text (copied first: setting writes the buffer it reads).
+            // A mod's own layout: the box as its layout made it (docs/modding/content/screens.md): its buffer, the
+            // pane's `length`, where ui.set_text cuts, and its words, set as the game sets text (copied first: setting
+            // writes the buffer it reads).
             const u32 length = pTextBox->mTextLen;
             if (pTextBox->mTextBuf != nullptr && length != 0) {
                 MR::Text16 layoutText;

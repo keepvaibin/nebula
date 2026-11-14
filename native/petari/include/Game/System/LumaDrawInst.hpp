@@ -1,6 +1,6 @@
 #pragma once
 
-// LumaCore's `draw.inst` service (plan 2.4 layer 5; contract draw; native/include/luma_draw_inst.h): a mod's overrides
+// LumaCore's `draw.inst` service (docs/modding/services/draw.md; native/include/luma_draw_inst.h): a mod's overrides
 // of one actor's drawn model: colours, a material's colour by name, parts hidden, a drawn scale. The harness facts
 // draw.inst.of, draw.inst and draw.inst.end.
 

@@ -14,7 +14,7 @@
 // frame->args[0..3], stores its integer result in frame->result and answers 0. The host's handler points a faulting
 // thread at luma_guard_resume with the frame as its first argument: it loads the registers back and jumps to that
 // return address with 1 as the answer, so luma_guard_call returns a second time. The stack below is left as it is: the
-// host resumes only when the frames between hold nothing of the game or the host (contract guard 2), and nothing of
+// host resumes only when the frames between hold nothing of the game or the host, and nothing of
 // the kernel is there but luma_guard_call's own few bytes.
 extern "C" {
 __attribute__((returns_twice)) int luma_guard_call(LumaGuardFrame* frame);
@@ -248,7 +248,7 @@ __asm__(".text\n"
         "    mov w0, #1\n"
         "    ret\n");
 #else
-#error "LumaCore's guard has no call for this processor or system (luma_guard.h; Windows on ARM64: contract guard 5)"
+#error "LumaCore's guard has no call for this processor or system (luma_guard.h; Windows on ARM64)"
 #endif
 
 namespace luma {
@@ -684,7 +684,7 @@ namespace luma {
                 }
                 rSlot.worstTicks = worst;
                 __atomic_store_n(&rSlot.seq, rSlot.seq + 1u, __ATOMIC_RELEASE);
-                // In a harness run, once per load: the first full ring as luma_guard_cost gives it (contract guard 4).
+                // In a harness run, once per load: the first full ring as luma_guard_cost gives it.
                 if (rSlot.filled == cCostFrames && rSlot.told == 0 && luma::modlog::facts()) {
                     rSlot.told = 1;
                     uint64_t avgNs = 0;  // luma_guard_cost's type (unsigned long on Android, not u64's long long)

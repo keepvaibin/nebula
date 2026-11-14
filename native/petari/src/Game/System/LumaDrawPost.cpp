@@ -11,7 +11,7 @@
 #include <nebula_format.h>
 #include <cstring>
 
-// The draw.post service (plan 2.4 layer 8; contract draw 15). Game thread throughout.
+// The draw.post service (docs/modding/services/draw.md). Game thread throughout.
 //
 // A program is a slot of one table across mods: the host's compiled program (post_register over the text of the mod's
 // cooked <name>.post), what it reads and its params' defaults. A mod has one slot in each stage: the program it runs

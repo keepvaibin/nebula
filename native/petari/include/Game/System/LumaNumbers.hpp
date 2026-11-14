@@ -1,7 +1,7 @@
 #pragma once
-// Numbers and tables in the game's code by name (contract numbers, plan 1.5; luma.h LumaCore.number, set_number, table
-// and set_table). The build names them: tools/lumacore/instrument.py reads each number written in a row's code from
-// one record per unit, makes each table of the game's data writable in its copy, and lists both in the "lumanum"
+// Numbers and tables in the game's code by name (docs/modding/language/numbers.md; luma.h LumaCore.number, set_number,
+// table and set_table). The build names them: tools/lumacore/instrument.py reads each number written in a row's code
+// from one record per unit, makes each table of the game's data writable in its copy, and lists both in the "lumanum"
 // section (luma_hook.h luma::Numbers): a number by the row's name, signature and place, or a file's number constant by
 // its name; a table by its name. The source is never changed, and the module with no rows has none of this (1.7).
 

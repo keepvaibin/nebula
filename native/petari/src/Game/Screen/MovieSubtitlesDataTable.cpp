@@ -50,7 +50,7 @@ namespace {
     };
 
     const SubtitlesInfo* getSubtitlesInfo(const char* pMovieName) {
-        // A mod's movie in the game movie's place with its own lines beside it (<name>.subs, plan 3.10): the game's
+        // A mod's movie in the game movie's place with its own lines beside it (<name>.subs): the game's
         // lines were timed for the game's movie and are not shown over it; luma::movie draws the mod's.
         if (luma::movie::hasSubtitles(pMovieName)) {
             return nullptr;

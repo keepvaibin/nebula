@@ -26,9 +26,9 @@
 #include <nebula_module.h>
 #include <stddef.h>
 
-// The save service (contract services-save). Game thread only: the values live in the loaded file's GameDataHolder,
-// which the game's save sequence reads on the same thread. No mod, no cost: nothing here runs; the chunk is 16 bytes
-// in each file (item 10).
+// The save service (docs/modding/services/save.md). Game thread only: the values live in the loaded file's
+// GameDataHolder, which the game's save sequence reads on the same thread. No mod, no cost: nothing here runs; the
+// chunk is 16 bytes in each file (item 10).
 
 namespace luma {
     namespace save {

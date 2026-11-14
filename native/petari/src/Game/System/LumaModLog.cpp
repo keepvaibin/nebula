@@ -418,7 +418,7 @@ namespace luma {
                     ::free(pTemplate);
                     return;
                 }
-                // No words: the code and every value, the same in both (contract 3).
+                // No words: the code and every value, the same in both.
                 pWords->bare = true;
                 pWords->englishBytes = bare(nullptr, rEntry, pRowId);
                 pWords->english = static_cast< char* >(::malloc(pWords->englishBytes + 1));
@@ -436,7 +436,7 @@ namespace luma {
                 pWords->played[pWords->playedUnits] = 0;
             }
 
-            // The code as the page names it (contract 4.2): the host's sources "L<code>"; the module's their row id
+            // The code as the page names it: the host's sources "L<code>"; the module's their row id
             // ("Hook.NoResult"; a script's "S0901" without "Script."), or the number when there is no row; "" for code 0
             // (the log's own lines, a host sentence).
             void codeNameOf(const LumaModLogEntry& rEntry, const char* pRowId, char* pDst, u32 size) {
@@ -619,7 +619,7 @@ namespace luma {
                 return false;
             }
 
-            // The JSON of a kept entry for the harness (contract 4.3), at its count.
+            // The JSON of a kept entry for the harness, at its count.
             void entryFact(const Entry* pEntry, u32 count) {
                 if (!facts() || !claimFact(&const_cast< Entry* >(pEntry)->factCount, count)) {
                     return;

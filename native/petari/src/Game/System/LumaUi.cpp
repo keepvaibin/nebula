@@ -34,7 +34,7 @@
 #include <nebula_module.h>
 #include <cstring>
 
-// The ui service (plan 2.4 layer 4 on 3.8 layer 1; contract ui). Game thread throughout: the service's calls, the frame,
+// The ui service (docs/modding/services/ui.md). Game thread throughout: the service's calls, the frame,
 // the provider; NebulaArena::destroy is the scene end's, on the game thread as well.
 //
 // A screen is the game's own LayoutActor: made in the scene's arena (so it goes with the scene), connected as the game
@@ -71,7 +71,7 @@ namespace luma {
                         MR::connectToSceneLayout(this);
                     }
                     // One animation layer on the root (ui.play). A mod's own layout keeps its text boxes as its cook made
-                    // them (contract layout: `text`, and `length` where set_text cuts); the game's are set up as the game
+                    // them (screens.md: `text`, and `length` where set_text cuts); the game's are set up as the game
                     // sets them (its code sets every box).
                     if (modLayout) {
                         initLayoutManagerKeepText(pLayout, 1);

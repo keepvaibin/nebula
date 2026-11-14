@@ -1,6 +1,6 @@
 #pragma once
 
-// LumaCore's `draw.native` service (plan 2.4 layer 9; contract draw 16; native/include/luma_draw_native.h): the mods'
+// LumaCore's `draw.native` service (docs/modding/services/draw.md; native/include/luma_draw_native.h): the mods'
 // own GPU commands at the draw points, as NEBULA_PASS_NATIVE passes whose functions the host calls on its render thread.
 // The harness fact draw.native.<point>.
 

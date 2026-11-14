@@ -1,4 +1,4 @@
-// Objects a mod makes by name (LumaMake.hpp; contract classes "make", plan 1.3).
+// Objects a mod makes by name (LumaMake.hpp; docs/modding/language/classes.md "make").
 //
 // Made as PlacementInfoOrdered makes a placed object: the factory's creator for the name (a mod's class, a mod's object
 // and a mod's change of the placed name as for a placement), then its init with a placement row. The row is a table the

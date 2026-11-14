@@ -1,8 +1,8 @@
 #pragma once
 
-// LumaCore's `content.model` service (plan 3.2; contract models 7): a model drawn with an actor of the game, following
-// its base, a joint or its whole skeleton; shown, hidden, detached; the player's parts listed. The harness facts
-// model.attach, model.end, model.pose.
+// LumaCore's `content.model` service (docs/modding/content/models.md section 7): a model drawn with an actor of the
+// game, following its base, a joint or its whole skeleton; shown, hidden, detached; the player's parts listed. The
+// harness facts model.attach, model.end, model.pose.
 
 #include <luma_service_provider.h>
 #include <luma_services.h>

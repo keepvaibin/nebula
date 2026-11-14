@@ -4,7 +4,7 @@ namespace Ui {
     class Font;
 }
 
-// A mod's own fonts (plan 3.8 layer 2, contract layout "fonts"): G's cook writes Luma/<id>/<path>.brfnt in the game's
+// A mod's own fonts (docs/modding/content/screens.md section 2a): the cook writes Luma/<id>/<path>.brfnt in the game's
 // font form, <path>.kern beside it (NTBL left, right, x) and <path>.fallback (the game font that draws what the mod's
 // lacks); a layout's text pane names the .brfnt.
 namespace luma::font {

@@ -1,5 +1,5 @@
-// The type and global rows the linker gathered (luma_types.h; contract types, plan 1.2), found by name when a mod binds.
-// Nothing runs at start: prepareTypes sorts them once, on the game thread, when the first mod loads.
+// The type and global rows the linker gathered (luma_types.h; docs/modding/language/types.md), found by name when a mod
+// binds. Nothing runs at start: prepareTypes sorts them once, on the game thread, when the first mod loads.
 #include "Game/System/LumaTypes.hpp"
 
 #include <luma.h>
@@ -576,7 +576,7 @@ namespace luma {
 
         // Depth first through the bases' rows from pType (at `at` in the whole object): how many pTarget subobjects,
         // and where the first is. A virtual base is not followed: its place is the whole object's, and no record of the
-        // game has one (contract objects, section 0).
+        // game has one (docs/modding/language/objects.md).
         void findBase(const TypeRow* pType, const TypeRow* pTarget, u32 at, u32* pCount, u32* pFirst, u32 depth) {
             if (pType == pTarget) {
                 if ((*pCount)++ == 0) {
@@ -768,7 +768,7 @@ namespace luma {
         }
         // The subobject pObject is: by its offset in the complete object. When pObject is no pDeclaring subobject (it
         // points at the complete object, or another base) and there is more than one, which runs is not decided: the
-        // answer is none, said as ambiguous, as asClass says it (contract objects M-1).
+        // answer is none, said as ambiguous, as asClass says it (objects.md).
         Overriders found = {};
         found.want = static_cast<u32>(static_cast<const char*>(pObject) - static_cast<const char*>(own.complete));
         overridersIn(own.type, pDeclaring, pTarget, 0, nullptr, &found, 0);

@@ -31,8 +31,8 @@
 #include <cmath>
 #include <cstring>
 
-// The content.model service (plan 3.2; contract models 7). Game thread throughout: the service's calls, the frame, the
-// provider; NebulaArena::destroy is the scene end's, on the game thread as well.
+// The content.model service (docs/modding/content/models.md section 7). Game thread throughout: the service's calls,
+// the frame, the provider; NebulaArena::destroy is the scene end's, on the game thread as well.
 //
 // An attached model is the game's own PartsModel: an actor that draws a model with its host, made in the host's arena
 // (so it goes with the host's scene), drawn by the game's draw buffers with the game's lights, hidden while its host is

@@ -72,7 +72,7 @@ namespace {
 
 // The game thread's entry; the native platform layer starts it.
 extern "C" void nebula_game_main(void) {
-    // Mods start here and hooks change only here (LumaCore.game_thread, loader contract 4).
+    // Mods start here and hooks change only here (LumaCore.game_thread, docs/modding/language/compiled-form.md).
     luma::markGameThread();
     NebulaArena::create(nullptr);
     Ui::LytInit();
@@ -227,7 +227,7 @@ void GameSystem::draw() {
         drawOwn(Own_SystemWipe);
         mSystemWipeHolder->draw();
     }
-    // The mods' loading point: over the game's loading screen while it loads a scene (plan 2.4).
+    // The mods' loading point: over the game's loading screen while it loads a scene.
     if (luma::draw::isLoading()) {
         luma::draw::point(LUMA_DRAW_LOADING);
     }

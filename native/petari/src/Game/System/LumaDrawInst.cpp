@@ -17,7 +17,7 @@
 #include <cstdlib>
 #include <cstring>
 
-// The draw.inst service (plan 2.4 layer 5; contract draw). Game thread throughout: the calls, the provider, the frame
+// The draw.inst service (docs/modding/services/draw.md). Game thread throughout: the calls, the provider, the frame
 // (GameScene::calcAnim's end) and released (NebulaArena::destroy).
 //
 // An override is a slot of one table across mods: an actor, its model, and what the mod set.

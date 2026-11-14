@@ -1,6 +1,6 @@
 #pragma once
 
-// LumaCore's `draw.post` service (plan 2.4 layer 8; contract draw 15; native/include/luma_draw_post.h): the mods'
+// LumaCore's `draw.post` service (docs/modding/services/draw.md; native/include/luma_draw_post.h): the mods'
 // full-screen pixel programs over the frame, as NEBULA_PASS_POST passes the host draws. The harness fact
 // draw.post.<stage>.
 

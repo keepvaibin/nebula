@@ -1,7 +1,7 @@
 #pragma once
 
-// LumaCore's `time` service (contract services-time): the frame and world step counts, the real clocks, the world
-// clock's rate, hold and step with the sound following, timers as events, and the mods' frame and step handlers.
+// LumaCore's `time` service (docs/modding/services/time.md): the frame and world step counts, the real clocks, the
+// world clock's rate, hold and step with the sound following, timers as events, and the mods' frame and step handlers.
 
 #include <luma_service_provider.h>
 #include <nebula_types.h>
@@ -34,7 +34,7 @@ namespace luma {
         void framePost();
         void frameHandlers();
 
-        // The Mods page (J, plan 6.2; services-time 1 item 10) reaches the clocks by mod id through the exports
+        // The Mods page reaches the clocks by mod id through the exports
         // luma_time_clock_of and luma_time_let_go (any thread; the page writes the mod log's Note Time.LetGo).
 
         // The service's provider, registered by luma::services::provideOwn.

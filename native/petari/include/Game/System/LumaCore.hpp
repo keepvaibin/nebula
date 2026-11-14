@@ -31,7 +31,7 @@ namespace lumacore {
     void setClass(NameObj* pObj, u16 id);
 
     // An arena's memory, [pStart, pEnd), is about to go with every object in it, whose destructors mostly do not run:
-    // told at the start of each NebulaArena::destroy, a parent before its children (loader contract 7). It does
+    // told at the start of each NebulaArena::destroy, a parent before its children. It does
     // nothing itself; a mod that keeps objects hooks it (before) and forgets those in the range.
     void released(const void* pStart, const void* pEnd);
 }  // namespace lumacore

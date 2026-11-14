@@ -44,7 +44,7 @@
 #include <cstdlib>
 #include <cstring>
 
-// The draw service (plan 2.4 layers 1 and 2; contract draw). Game thread throughout: the calls, the points, the frame,
+// The draw service (docs/modding/services/draw.md). Game thread throughout: the calls, the points, the frame,
 // the provider.
 //
 // A point calls the functions mods set for it, the bottom of the Mods list first, each through the kernel's call (the

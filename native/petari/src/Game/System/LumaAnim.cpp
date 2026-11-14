@@ -21,8 +21,8 @@
 #include <cmath>
 #include <cstring>
 
-// The anim service (plan 3.6 run time; contract animation 7). Game thread throughout: the service's calls, the frame,
-// the provider; NebulaArena::destroy is the scene end's, on the game thread as well.
+// The anim service (docs/modding/content/animation.md section 7). Game thread throughout: the service's calls, the
+// frame, the provider; NebulaArena::destroy is the scene end's, on the game thread as well.
 //
 // A clip's own events (1.1, animation 7.3): G's cook puts the rows of <clip>.anim.json beside the clip as <clip>.events,
 // a table (frame int, event text) in the model's archive. A play keeps the table's place in the archive (the actor's
