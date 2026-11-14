@@ -69,6 +69,8 @@ pub fn read_patches(text: &str) -> Result<PlanPatches> {
                     source: PathBuf::from(source),
                 });
             }
+            // A texture pack picture, read by overlay::texture_facts.
+            "%texture" => {}
             other => bail!("the plan's line {line:?}: {other} is no line this cooker knows (a plan of another version)"),
         }
     }

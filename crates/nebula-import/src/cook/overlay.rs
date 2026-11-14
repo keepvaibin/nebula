@@ -1060,6 +1060,25 @@ pub fn cook_plan(plan: &Path, output: &Path) -> Result<(Stats, Vec<(String, Stri
     Ok((stats, failed))
 }
 
+/// The plan's texture pack pictures (`%texture<TAB>mod<TAB>entry<TAB>file`), each read as the pack reader reads it
+/// (pack_texture::check, the one `lumalink check` asks): one the reader will not take is a failed fact on its mod and
+/// entry. Nothing is cooked; the pack reader reads the file itself.
+fn texture_facts(text: &str, facts: &mut Vec<Fact>) -> Result<()> {
+    for line in text.lines().filter_map(|line| line.strip_prefix("%texture\t")) {
+        let mut parts = line.splitn(3, '\t');
+        let (Some(mod_id), Some(entry), Some(file)) = (parts.next(), parts.next(), parts.next()) else { bail!("the plan's line {line:?}") };
+        let checked = fs::read(file).map_err(|_| super::refuse::refuse("Cook.Image.Unreadable", &[("image", entry.to_string())]));
+        let Err(error) = checked.and_then(|bytes| super::pack_texture::check(entry, &bytes)) else { continue };
+        let Some(finding) = super::refuse::refusal_of(&error) else { return Err(error) };
+        let mut refusal = finding.clone();
+        refusal.mod_id = Some(mod_id.to_string());
+        refusal.file = entry.to_string();
+        let why = luma_validate::reason(&refusal, "UsEnglish");
+        facts.push(Fact::Failed { table: entry.to_string(), mod_id: mod_id.to_string(), file: entry.to_string(), refusal, why });
+    }
+    Ok(())
+}
+
 fn cook_plan_inner(plan: &Path, output: &Path, facts: &mut Vec<Fact>) -> Result<(Stats, Vec<(String, String)>)> {
     let text = fs::read_to_string(plan).with_context(|| format!("{} cannot be read", plan.display()))?;
     let (game_id, changes) = read_plan(&text)?;
@@ -1071,6 +1090,7 @@ fn cook_plan_inner(plan: &Path, output: &Path, facts: &mut Vec<Fact>) -> Result<
         let words = fs::read_to_string(source).with_context(|| format!("{source} cannot be read"))?;
         written.insert(name.to_string(), words);
     }
+    texture_facts(&text, facts)?;
     *super::programs::MOD_WRITTEN.lock().unwrap_or_else(|e| e.into_inner()) = Some(written);
     *super::programs::MOD_TEXTS.lock().unwrap_or_else(|e| e.into_inner()) = Some(BTreeMap::new());
     *PROGRESS.lock().unwrap_or_else(|e| e.into_inner()) = Some(output.with_extension("progress"));
@@ -1717,6 +1737,41 @@ mod tests {
 
     /// merge/ holds what the validator's L309 allows and nothing else: each kind it allows reaches a branch of
     /// run_merges, each it refuses is refused there too.
+    /// A plan's texture pack pictures are each read as the pack reader reads them: one it will not take is a failed
+    /// fact on its mod and entry, said as `lumalink check` says it; one it takes, nothing.
+    #[test]
+    fn a_plans_pack_pictures_the_reader_refuses_are_failed_facts() {
+        let dir = tempfile::tempdir().unwrap();
+        let pictures = Path::new(env!("CARGO_MANIFEST_DIR")).join("data/pack-pictures");
+        let entry = |name: &str| format!("layers/base/textures/{name}");
+        let mut plan = String::from("RMGE01\n");
+        for name in ["good.png", "cut.png", "bc6h.dds", "dxt1.dds"] {
+            plan.push_str(&format!("%texture\tpack.mod\t{}\t{}\n", entry(name), pictures.join(name).display()));
+        }
+        plan.push_str(&format!("%texture\tpack.mod\t{}\t{}\n", entry("gone.png"), dir.path().join("gone.png").display()));
+        assert!(super::super::overlay_patches::read_patches(&plan).is_ok());
+        let mut facts = Vec::new();
+        texture_facts(&plan, &mut facts).unwrap();
+        let said: Vec<(String, String, &str)> = facts
+            .iter()
+            .map(|f| match f {
+                Fact::Failed { mod_id, file, refusal, .. } => (mod_id.clone(), file.clone(), refusal.args.first().map_or("", |(_, a)| match a {
+                    luma_validate::Arg::Phrase(p) => p,
+                    _ => "",
+                })),
+                other => panic!("{other:?}"),
+            })
+            .collect();
+        let pack = |name: &str, why: &'static str| ("pack.mod".to_string(), entry(name), why);
+        assert_eq!(said, [pack("cut.png", "Cook.Image.Unreadable"), pack("bc6h.dds", "Cook.Texture.DdsForm"), pack("gone.png", "Cook.Image.Unreadable")]);
+        // What the start says of each is what the check says of the same file.
+        for (fact, name) in facts.iter().zip(["cut.png", "bc6h.dds"]) {
+            let Fact::Failed { refusal, .. } = fact else { unreachable!() };
+            let check = super::super::pack_texture::check(&entry(name), &fs::read(pictures.join(name)).unwrap()).unwrap_err();
+            assert_eq!(refusal.args, super::super::refuse::refusal_of(&check).unwrap().args);
+        }
+    }
+
     #[test]
     fn merge_takes_exactly_what_l309_allows() {
         let dir = tempfile::tempdir().unwrap();
