@@ -54,6 +54,16 @@ endif()
 if(NEBULA_LIBCLANG)
     set(luma_libclang --libclang "${NEBULA_LIBCLANG}")
 endif()
+# The row generator's libclang, checked once here before any file: one too old would fail every unit of the module.
+if(NEBULA_LUMA_HOOKS)
+    execute_process(COMMAND "${Python3_EXECUTABLE}" "${luma_tool}" --check-libclang --compiler "${CMAKE_CXX_COMPILER}" ${luma_libclang}
+                    RESULT_VARIABLE luma_libclang_result OUTPUT_VARIABLE luma_libclang_said ERROR_VARIABLE luma_libclang_said
+                    OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_STRIP_TRAILING_WHITESPACE)
+    if(NOT luma_libclang_result EQUAL 0)
+        message(FATAL_ERROR "${luma_libclang_said}")
+    endif()
+    message(STATUS "${luma_libclang_said}")
+endif()
 set(module_sources)
 set(luma_defined_lists)
 foreach(source IN LISTS game_sources)

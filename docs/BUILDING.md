@@ -5,7 +5,8 @@
 ## Tools
 
 - Visual Studio 2022 C++ tools and the Windows SDK, for the host.
-- LLVM/clang 19 or newer (`C:\Program Files\LLVM`), for the game module.
+- LLVM/clang 21 or newer (`C:\Program Files\LLVM`), for the game module: its row generator calls libclang's
+  `clang_getFullyQualifiedName`. Configure stops with the version it found when the libclang is older.
 - CMake 3.24+ and Ninja.
 - Rust stable (MSVC target), for the disc import tool.
 - The .NET 8 SDK, for Setup and the launcher.
@@ -54,6 +55,19 @@ Put `NebulaNative.exe` and `smg_game.dll` in one folder, then:
 ```
 
 The other arguments are in COMMAND_LINE.md.
+
+## Linux
+
+The game module builds from the same project with LLVM 21 or newer; an older clang (Ubuntu 24.04's is 18) stops at
+configure:
+
+```sh
+cmake -S native -B build/game -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=<llvm>/bin/clang -DCMAKE_CXX_COMPILER=<llvm>/bin/clang++
+cmake --build build/game
+```
+
+It writes `libsmg_game.so` and `libsmg_game_plain.so`. The SDL host (`platform/sdl`) takes `-DNEBULA_HOST_TOOLS=<folder>`,
+a folder with `galaxy_native_spirv` and `galaxy_utility_spirv` built for the build machine.
 
 ## Tests
 

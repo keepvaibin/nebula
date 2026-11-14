@@ -1,4 +1,5 @@
 """instrument.py SOURCE OUTPUT --commands compile_commands.json [--entry FILE] [--root DIR] [--depfile FILE] [--libclang PATH]
+instrument.py --check-libclang --compiler COMPILER [--libclang PATH]
 
 Writes OUTPUT: SOURCE with one LUMA_HOOK (or LUMA_TELL, for a constructor or destructor) at the start of every
 function it defines. That line is the function's row in LumaCore's name table and the test that sends a hooked call
@@ -26,6 +27,10 @@ friend (on the line of its opening brace), so the rows' offsetof and & are the c
 
 The arguments of SOURCE's own compile command are read from --commands, where the build lists OUTPUT (or --entry).
 --root: the folder the names of file-local functions are relative to.
+
+--check-libclang: loads the libclang the row generator would use with COMPILER (beside it, or --libclang) and checks
+it has every call the generator makes; prints its path and version, or exits 1 with what was found and what is
+needed. The game module's configure runs it once, before any file.
 """
 import bisect
 import ctypes
@@ -121,8 +126,36 @@ T_SIGNED, T_UNSIGNED = (13, 14, 16, 17, 18, 19), (4, 5, 6, 7, 8, 9, 10, 11)
 T_NUMBER_KINDS = T_SIGNED + T_UNSIGNED + (21, 22)
 
 
+# The oldest libclang with every call the generator makes: clang_getFullyQualifiedName came in LLVM 21.
+NEEDED_LLVM = 'LLVM 21 or later'
+
+
+def libclang_version(lib):
+    """The library's own version line (clang_getClangVersion: "clang version 22.1.6 (...)")."""
+    version = lib.clang_getClangVersion
+    version.restype, version.argtypes = CXString, []
+    cstring = lib.clang_getCString
+    cstring.restype, cstring.argtypes = c_char_p, [CXString]
+    dispose = lib.clang_disposeString
+    dispose.restype, dispose.argtypes = None, [CXString]
+    text = version()
+    said = (cstring(text) or b'').decode('utf-8', 'replace')
+    dispose(text)
+    return said
+
+
+def too_old(path, lib):
+    """None when the libclang has every call the generator makes, else the one message saying what it is."""
+    if hasattr(lib, 'clang_getFullyQualifiedName'):
+        return None
+    return f'instrument.py: {path} is {libclang_version(lib)}; the row generator needs {NEEDED_LLVM} (clang_getFullyQualifiedName)'
+
+
 def load(path):
     lib = ctypes.CDLL(path)
+    old = too_old(path, lib)
+    if old:
+        sys.exit(old)
 
     def fn(name, result, *args):
         f = getattr(lib, name)
@@ -169,9 +202,7 @@ def load(path):
     api.definition = fn('clang_getCursorDefinition', CXCursor, CXCursor)
     api.inclusions = fn('clang_getInclusions', None, c_void_p, INCLUSION, c_void_p)
     api.fileName = fn('clang_getFileName', CXString, c_void_p)
-    # A type's text with every name qualified (TY-9): LLVM 21 and later.
-    if not hasattr(lib, 'clang_getFullyQualifiedName'):
-        sys.exit(f'instrument.py: {path} has no clang_getFullyQualifiedName (LLVM 21 or later is needed)')
+    # A type's text with every name qualified (TY-9): LLVM 21 and later (too_old).
     api.fullyQualified = fn('clang_getFullyQualifiedName', CXString, CXType, c_void_p, c_uint)
     api.printingPolicy = fn('clang_getCursorPrintingPolicy', c_void_p, CXCursor)
     api.pointeeType = fn('clang_getPointeeType', CXType, CXType)
@@ -1893,8 +1924,26 @@ def parse_arguments(args, source):
     return kept + ['-fsyntax-only', '-Wno-everything', str(source)]
 
 
+def check_libclang(argv):
+    compiler = argv[argv.index('--compiler') + 1] if '--compiler' in argv else None
+    named = argv[argv.index('--libclang') + 1] if '--libclang' in argv else None
+    if not compiler and not named:
+        sys.exit(__doc__)
+    path = find_libclang(named, compiler)
+    try:
+        lib = ctypes.CDLL(path)
+    except OSError as error:
+        sys.exit(f'instrument.py: {path} does not load: {error}')
+    old = too_old(path, lib)
+    if old:
+        sys.exit(old)
+    print(f'row generator libclang: {path}, {libclang_version(lib)}')
+
+
 def main():
     argv = sys.argv[1:]
+    if '--check-libclang' in argv:
+        return check_libclang(argv)
     options = {}
     for flag in ('--commands', '--root', '--libclang', '--entry', '--depfile'):
         if flag in argv:
