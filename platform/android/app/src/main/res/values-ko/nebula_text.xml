@@ -29,6 +29,8 @@
     <string name="nebula_benchmark_below">가장 낮은 설정에서도 이 기기는 초당 60프레임을 유지하지 못할 수 있습니다.</string>
     <string name="nebula_benchmark_cpu">여기서는 프로세서가 프레임 레이트를 제한합니다. 그래픽 설정을 낮춰도 올라가지 않습니다.</string>
     <string name="nebula_benchmark_unfinished">벤치마크가 끝나지 않았습니다.</string>
+    <string name="nebula_benchmark_stale">이 측정 이후 설정, Nebula 또는 그래픽 카드가 바뀌었습니다. 추천을 받으려면 벤치마크를 다시 실행하세요.</string>
+    <string name="nebula_benchmark_in_use">추천 설정을 사용 중입니다.</string>
     <string name="nebula_apply">적용</string>
     <string name="nebula_settings_not_saved">설정을 저장할 수 없습니다: %1$s</string>
     <string name="nebula_setting_internal_resolution">내부 해상도</string>

@@ -29,6 +29,8 @@
     <string name="nebula_benchmark_below">Selbst die niedrigsten Einstellungen halten auf diesem Gerät eventuell keine 60 Bilder pro Sekunde.</string>
     <string name="nebula_benchmark_cpu">Hier begrenzt der Prozessor die Bildrate: Niedrigere Grafikeinstellungen erhöhen sie nicht.</string>
     <string name="nebula_benchmark_unfinished">Der Benchmark wurde nicht abgeschlossen.</string>
+    <string name="nebula_benchmark_stale">Einstellungen, Nebula oder die Grafikkarte haben sich seit diesem Lauf geändert. Führe den Benchmark erneut aus, um eine Empfehlung zu erhalten.</string>
+    <string name="nebula_benchmark_in_use">Die empfohlenen Einstellungen werden verwendet.</string>
     <string name="nebula_apply">Übernehmen</string>
     <string name="nebula_settings_not_saved">Einstellungen konnten nicht gespeichert werden: %1$s</string>
     <string name="nebula_setting_internal_resolution">Interne Auflösung</string>

@@ -29,6 +29,8 @@
     <string name="nebula_benchmark_below">Incluso con la configuración más baja, es posible que este dispositivo no mantenga 60 fotogramas por segundo.</string>
     <string name="nebula_benchmark_cpu">El procesador limita aquí la velocidad de fotogramas: bajar la calidad gráfica no la aumentará.</string>
     <string name="nebula_benchmark_unfinished">La prueba de rendimiento no terminó.</string>
+    <string name="nebula_benchmark_stale">La configuración, Nebula o la tarjeta gráfica cambiaron desde esta prueba. Ejecuta la prueba de rendimiento de nuevo para obtener una recomendación.</string>
+    <string name="nebula_benchmark_in_use">Se está usando la configuración recomendada.</string>
     <string name="nebula_apply">Aplicar</string>
     <string name="nebula_settings_not_saved">No se han podido guardar los ajustes: %1$s</string>
     <string name="nebula_setting_internal_resolution">Resolución interna</string>

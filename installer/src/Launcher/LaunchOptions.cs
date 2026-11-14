@@ -9,6 +9,58 @@ namespace Nebula.Launcher
 {
     internal enum RecordingMode { None, Lightweight, Detailed }
 
+    /// <summary>
+    /// The game's programs beside the launcher, one per CPU level: NebulaNative.exe (AVX2; on a CPU without it its
+    /// entry starts the x86-64-v2 program and waits) and NebulaNative-x86-64-v2.exe (SSE4.2), and the Direct3D 11
+    /// line's pair once it merges. The launcher starts the one the CPU runs, so the process it watches is the game,
+    /// and finds a running game by any of them.
+    /// </summary>
+    internal static class GamePrograms
+    {
+        internal static readonly string[] Names = { "NebulaNative", "NebulaNative-x86-64-v2", "NebulaNativeD11", "NebulaNativeD11-x86-64-v2" };
+
+        // PF_AVX2_INSTRUCTIONS_AVAILABLE: the CPU and the OS support AVX2 (tests replace it).
+        internal static Func<bool> Avx2 = () =>
+        {
+            try { return NativeMethods.IsProcessorFeaturePresent(40); }
+            catch (Exception) { return false; }
+        };
+
+        /// <summary>The program a game start runs: NebulaNative.exe, or on a CPU without AVX2 the x86-64-v2 program
+        /// when the package has it (else NebulaNative.exe, whose own check then decides).</summary>
+        public static string Start(string app)
+        {
+            string v2 = Path.Combine(app, "NebulaNative-x86-64-v2.exe");
+            return !Avx2() && File.Exists(v2) ? v2 : Path.Combine(app, "NebulaNative.exe");
+        }
+
+        /// <summary>Whether <paramref name="path"/> is one of the game's programs in <paramref name="app"/>.</summary>
+        public static bool IsGame(string app, string path)
+        {
+            if (string.IsNullOrEmpty(path)) return false;
+            foreach (string name in Names)
+                if (string.Equals(Path.GetFullPath(path), Path.GetFullPath(Path.Combine(app, name + ".exe")), StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        /// <summary>This install's running game processes, every program (the caller disposes them).</summary>
+        public static List<Process> Running(string app)
+        {
+            var running = new List<Process>();
+            foreach (string name in Names)
+                foreach (var process in Process.GetProcessesByName(name))
+                {
+                    try
+                    {
+                        if (IsGame(app, process.MainModule.FileName)) { running.Add(process); continue; }
+                    }
+                    catch (Exception) { }
+                    process.Dispose();
+                }
+            return running;
+        }
+    }
+
     internal static class LaunchOptions
     {
         /// <summary>
@@ -17,7 +69,7 @@ namespace Nebula.Launcher
         /// </summary>
         public static ProcessStartInfo Create(string app, string content, string saves, RecordingMode recording)
         {
-            var game = new ProcessStartInfo(Path.Combine(app, "NebulaNative.exe"),
+            var game = new ProcessStartInfo(GamePrograms.Start(app),
                 "--pak " + ProcessRunner.Quote(Path.Combine(content, "game.pak")) + " --saves " + ProcessRunner.Quote(saves) +
                 (recording != RecordingMode.None ? " --diagnostics 1" : ""));
             game.UseShellExecute = false;

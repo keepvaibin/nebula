@@ -2112,19 +2112,16 @@ void NebulaSettingsScreen::fillLauncher(s32 view) {
         MR::Text16 text;
         f32 width = 0.0f;
         f32 height = 0.0f;
-        if (!notice) {
-            getText(text, "LauncherTitle");
-            setTextSize(mQuestionText, cTitleSize);
-        } else if (page == 2) {
-            // The benchmark this start returned from gave no recommendation.
-            getText(text, "LauncherBenchmarkNone");
-            setTextSize(mQuestionText, cTextSize + 1.0f);
-        } else if (page == 3) {
-            // The upload question: what it asks, why, what a report holds and what it never does, one under another.
-            // Each part is copied up to its own length or its end, whichever comes first, into room grown for it.
+        // The upload question: what it asks, why, what a report holds and what it never does, one under another; without
+        // the why when even the smallest text is too tall (below). Each part is copied up to its own length or its end,
+        // whichever comes first, into room grown for it.
+        const auto buildQuestion = [&](bool withWhy) {
             const s32 firstLength = getText(text, cLauncherQuestion[0]);
             u32 used = firstLength > 0 ? static_cast< u32 >(firstLength) : 0u;
             for (u32 k = 1; k < sizeof(cLauncherQuestion) / sizeof(cLauncherQuestion[0]); k++) {
+                if (k == 1 && !withWhy) {
+                    continue;
+                }
                 MR::Text16 part;
                 const s32 partText = getText(part, cLauncherQuestion[k]);
                 const u32 partLength = partText > 0 ? static_cast< u32 >(partText) : 0u;
@@ -2138,6 +2135,16 @@ void NebulaSettingsScreen::fillLauncher(s32 view) {
                 pText[used + 1 + c] = 0;
                 used += 1 + c;
             }
+        };
+        if (!notice) {
+            getText(text, "LauncherTitle");
+            setTextSize(mQuestionText, cTitleSize);
+        } else if (page == 2) {
+            // The benchmark this start returned from gave no recommendation.
+            getText(text, "LauncherBenchmarkNone");
+            setTextSize(mQuestionText, cTextSize + 1.0f);
+        } else if (page == 3) {
+            buildQuestion(true);
             setTextSize(mQuestionText, cTextSize);
         } else if (page >= 4 && page <= 6) {
             getText(text, cLauncherSend[page - 4]);
@@ -2171,6 +2178,32 @@ void NebulaSettingsScreen::fillLauncher(s32 view) {
         }
         setText(mQuestionText, text.c_str());
         measure(mQuestionText, (notice ? cQuestionWidth : cHomeWidth) - 48.0f, &width, &height);
+        if (notice) {
+            // A page whose text (a translation, a language pack's, the host's notes) is taller than the screen offers at
+            // this menu size: the text smaller, step by step, down to cMinSqueeze of its size (the menu's floor for any
+            // narrowed text), until the window fits between the margins. The question, still too tall there, goes without
+            // its why: what is sent and what never is stay, and Show the full report shows the report itself.
+            const f32 textRoom = mHeight - cMargin * 2.0f - (cPad * 2.0f + cQuestionMargin + cButtonHeight);
+            const f32 fullSize = page == 3 ? cTextSize : cTextSize + 1.0f;
+            const f32 smallest = fullSize * cMinSqueeze;
+            for (s32 pass = 0; pass < 2 && height > textRoom; pass++) {
+                if (pass == 1) {
+                    if (page != 3) {
+                        break;
+                    }
+                    buildQuestion(false);
+                    setTextSize(mQuestionText, fullSize);
+                    setText(mQuestionText, text.c_str());
+                    measure(mQuestionText, cQuestionWidth - 48.0f, &width, &height);
+                }
+                f32 size = fullSize;
+                while (height > textRoom && size > smallest) {
+                    size = size * 0.92f > smallest ? size * 0.92f : smallest;
+                    setTextSize(mQuestionText, size);
+                    measure(mQuestionText, cQuestionWidth - 48.0f, &width, &height);
+                }
+            }
+        }
         mChoiceCount = page == 3 ? 3 : notice ? 1 : rowNum;
         for (s32 i = 0; i < ChoiceNum; i++) {
             Button& rChoice = mChoices[i];
@@ -3496,6 +3529,9 @@ void NebulaSettingsScreen::step(const NebulaSettingsView& rView, s32 homeView) {
         static_cast< s32 >(NebulaHost::option(NEBULA_OPTION_MENU_TEXT_SIZE)) != mTextSizeChosen ||
         static_cast< s32 >(NebulaHost::option(NEBULA_OPTION_WINDOW_WIDTH_DP)) != mWindowDp) {
         arrange();
+        if (mHome) {
+            mHomeView = -1;  // its text measured again for the new screen (fillLauncher fits a notice to it)
+        }
     }
     if (!mHome && rView.page == rView.controls_page && rView.status != NEBULA_SETTINGS_STATUS_JOYCON) {
         f32 pixelsX;

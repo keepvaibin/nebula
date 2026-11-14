@@ -373,6 +373,10 @@ namespace Nebula
 
     internal static class NativeMethods
     {
+        [DllImport("kernel32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool IsProcessorFeaturePresent(uint feature);
+
         // Restart Manager (FileUtil.Holders).
         [StructLayout(LayoutKind.Sequential)]
         internal struct RmUniqueProcess

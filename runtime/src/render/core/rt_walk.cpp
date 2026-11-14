@@ -2595,18 +2595,15 @@ bool RenderCore::rt_measure(unsigned width) {
         static constexpr const char* kNames[] = {"medium", "high", "low"};
         std::fprintf(stderr, "[rt] measured: %.3f ms a shadow ray a pixel at the output size: preset %s%s%s\n", ms, kNames[preset],
                      chosen.rt_chosen ? " (the player's own stays)" : "", ms >= 3.5f ? "; over 3.5 ms: too slow to trace well" : "");
-        // During the first start's calibration this is not the player's change: the calibration takes it as its own, and
-        // its ending saves it (a save now would keep the size being timed).
-        const bool calibrating = calibration_.stage != 0u && chosen == calibration_.armed;
         chosen.rt_probe_ms = ms;
         if (!chosen.rt_chosen) {
             chosen.rt_quality = preset;
             rt_apply_preset(chosen);
         }
         set_render_config(chosen);
-        if (calibrating) {
-            calibration_.armed = get_render_config_chosen();
-        } else {
+        // During the first start's calibration its ending saves (a save now would keep the height being timed); the
+        // calibration takes the change in and times again with it.
+        if (calibration_.stage == 0u) {
             (void)save_render_config_to_file();
         }
         return false;

@@ -39,7 +39,7 @@ max_fps	config	max_fps	float	0..1000	60	Graphics	y	-	y	y	0 the display's rate; w
 anisotropic_filtering	config	anisotropic_filtering	set	1|2|4|8|16	1	Graphics	y	-	y	y	-	Texture filtering
 enhanced_mipmaps	config	enhanced_mipmaps	bool	0|1	0	Graphics	y	-	y	y	-	Generated mipmaps
 curved_surfaces	config	curved_surfaces	bool	0|1	1	Graphics	y	-	y	y	the renderer offers it (curved_surfaces_offered)	Curved surfaces
-per_pixel_lighting	config	per_pixel_lighting	bool	0|1	0	Graphics	y	y	y	y	no ray tracing; one Lighting choice with enhanced_lighting	Lighting
+per_pixel_lighting	config	per_pixel_lighting	bool	0|1	0	Graphics	y	-	y	y	no ray tracing; one Lighting choice with enhanced_lighting	Lighting
 enhanced_lighting	config	enhanced_lighting	bool	0|1	0	Graphics	y	y	y	y	no ray tracing; one Lighting choice with per_pixel_lighting	Lighting
 ambient_occlusion	config	ambient_occlusion	bool	0|1	0	Graphics	y	y	y	y	no ray tracing; one choice with ambient_occlusion_ssao	Ambient occlusion
 ambient_occlusion_ssao	config	ambient_occlusion_ssao	bool	0|1	0	Graphics	y	-	y	y	no ray tracing; one choice with ambient_occlusion	Ambient occlusion

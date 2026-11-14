@@ -29,6 +29,8 @@
     <string name="nebula_benchmark_below">Mesmo as configurações mais baixas podem não manter 60 quadros por segundo neste dispositivo.</string>
     <string name="nebula_benchmark_cpu">Aqui o processador limita a taxa de quadros: configurações gráficas mais baixas não vão aumentá-la.</string>
     <string name="nebula_benchmark_unfinished">O benchmark não terminou.</string>
+    <string name="nebula_benchmark_stale">As configurações, o Nebula ou a placa de vídeo mudaram desde este teste. Execute o benchmark de novo para receber uma recomendação.</string>
+    <string name="nebula_benchmark_in_use">As configurações recomendadas estão em uso.</string>
     <string name="nebula_apply">Aplicar</string>
     <string name="nebula_settings_not_saved">Não foi possível salvar as configurações: %1$s</string>
     <string name="nebula_setting_internal_resolution">Resolução interna</string>

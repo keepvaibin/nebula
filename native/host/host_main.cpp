@@ -1875,6 +1875,9 @@ std::string message_utf8(const uint16_t* text) {
 
 // What the player is doing, for Discord: the galaxy (or the file select) and the star, else the Power Stars.
 void svc_presence(void*, const uint16_t* galaxy, const uint16_t* star, int32_t power_stars) {
+#if defined(NEBULA_HOST_RENDERER)
+    if (power_stars >= 0) galaxy::bench::scene_started();  // GameScene::start (the file select reports -1)
+#endif
     galaxy::discord::Activity activity;
     if (power_stars < 0) {
         activity.details = "Choosing a file";

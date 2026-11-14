@@ -29,6 +29,8 @@
     <string name="nebula_benchmark_below">即使使用最低設定，此裝置也可能無法維持每秒 60 幀。</string>
     <string name="nebula_benchmark_cpu">此處幀率受處理器限制：降低圖形設定不會提高幀率。</string>
     <string name="nebula_benchmark_unfinished">效能測試未完成。</string>
+    <string name="nebula_benchmark_stale">自此次測試以來，設定、Nebula 或顯示卡已變更。請再次執行效能測試以取得建議。</string>
+    <string name="nebula_benchmark_in_use">正在使用建議的設定。</string>
     <string name="nebula_apply">套用</string>
     <string name="nebula_settings_not_saved">無法儲存設定：%1$s</string>
     <string name="nebula_setting_internal_resolution">內部解析度</string>

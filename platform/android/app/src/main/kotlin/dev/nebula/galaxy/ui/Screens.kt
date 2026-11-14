@@ -86,6 +86,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.nebula.galaxy.BenchmarkState
 import dev.nebula.galaxy.BuildConfig
 import dev.nebula.galaxy.DisplayRate
 import dev.nebula.galaxy.ImportState
@@ -619,8 +620,9 @@ private fun controllerNames(): List<String> = InputDevice.getDeviceIds().toList(
 }.distinct()
 
 /**
- * Settings, Performance: the last benchmark's verdict (or that the run did not finish), the recommended settings that
- * differ from the ones it ran with, current then recommended, and Apply (Benchmark.apply, config.ini).
+ * Settings, Performance: the last benchmark's verdict (or that the run did not finish), every setting it recommends,
+ * current then recommended, and Apply (Benchmark.apply, config.ini) while config.ini still holds what it ran with and
+ * something differs; a result that no longer holds says so in place of Apply.
  */
 @Composable
 private fun BenchmarkRows(model: LauncherModel) {
@@ -634,8 +636,8 @@ private fun BenchmarkRows(model: LauncherModel) {
         else -> stringResource(R.string.nebula_benchmark_below)
     }
     Text(verdict, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
-    val changes = result?.changes.orEmpty()
-    if (changes.isEmpty()) return
+    val rows = if (result != null && result.complete) result.settings else emptyList()
+    if (rows.isEmpty()) return
     Text(
         stringResource(R.string.nebula_benchmark_recommended),
         style = MaterialTheme.typography.titleSmall,
@@ -646,7 +648,7 @@ private fun BenchmarkRows(model: LauncherModel) {
         Text(stringResource(R.string.nebula_benchmark_current), Modifier.width(112.dp), style = MaterialTheme.typography.labelMedium)
         Text(stringResource(R.string.nebula_benchmark_recommended_value), Modifier.width(112.dp), style = MaterialTheme.typography.labelMedium)
     }
-    for (change in changes) {
+    for (change in rows) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(benchmarkLabel(change.key), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
             Text(
@@ -659,7 +661,23 @@ private fun BenchmarkRows(model: LauncherModel) {
         }
     }
     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
-        TextButton(onClick = { model.applyBenchmark() }, enabled = !model.benchmarkApplied) { Text(stringResource(R.string.nebula_apply)) }
+        TextButton(
+            onClick = { model.applyBenchmark() },
+            enabled = model.benchmarkState == BenchmarkState.Current && result!!.changes.isNotEmpty(),
+        ) { Text(stringResource(R.string.nebula_apply)) }
+    }
+    val note = when {
+        model.benchmarkState == BenchmarkState.Stale -> stringResource(R.string.nebula_benchmark_stale)
+        model.benchmarkState == BenchmarkState.Applied || result!!.changes.isEmpty() -> stringResource(R.string.nebula_benchmark_in_use)
+        else -> null
+    }
+    if (note != null) {
+        Text(
+            note,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
+        )
     }
     if (model.benchmarkApplyFailed) {
         Text(
