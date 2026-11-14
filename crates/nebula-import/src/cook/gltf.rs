@@ -2147,6 +2147,14 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
     facts.vertices = ir.source_vertex_count as usize;
     facts.materials = materials.len() - 1;
     facts.textures = ir.textures.len();
+    // The model keeps its joint and material names one byte a character, and its ray-hit forms name the materials in
+    // UTF-8: a name outside ASCII would be cut in the one and not meet the other.
+    if let Some(joint) = ir.joints.iter().find(|j| !j.name.is_ascii()) {
+        return Err(refuse("Cook.Model.JointName", &[("joint", joint.name.clone())]));
+    }
+    if let Some(material) = ir.materials.iter().find(|m| !m.name.is_ascii()) {
+        return Err(refuse("Cook.Model.MaterialName", &[("material", material.name.clone())]));
+    }
     facts.clips = clips.len();
     Ok((ir, clips, facts))
 }
@@ -3601,6 +3609,20 @@ mod tests {
         assert_eq!((ir.joints[0].billboard, ir.joints[1].billboard), (0, 1));
         let bad = cook(&with_nodes(&[("leaf", serde_json::json!({ "nebula": { "billboard": "z" } }))]), None).err().unwrap();
         assert_eq!(refused(&bad), ("Cook.Model.Billboard", vec![own(("node", "leaf")), own(("value", "\"z\""))]));
+    }
+
+    /// A joint or material name outside ASCII is refused by name: the model keeps names one byte a character, its
+    /// ray-hit forms in UTF-8. A mesh's name is not kept, and a texture is named by its image's number.
+    #[test]
+    fn a_name_the_model_cannot_keep_is_refused() {
+        let joint = cook(&with_nodes(&[("tête", Value::Null)]), None).err().unwrap();
+        assert_eq!(refused(&joint), ("Cook.Model.JointName", vec![own(("joint", "tête"))]));
+        let mut material = document_of(&triangle(1));
+        material["materials"][0]["name"] = "金".into();
+        assert_eq!(refused(&cook(&material, None).err().unwrap()), ("Cook.Model.MaterialName", vec![own(("material", "金"))]));
+        let mut mesh = document_of(&triangle(1));
+        mesh["meshes"][0]["name"] = "金".into();
+        assert!(cook(&mesh, None).is_ok());
     }
 
     fn game(joints: &[&str]) -> GameModel {
