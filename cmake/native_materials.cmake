@@ -14,7 +14,10 @@ function(galaxy_program_blob out_var backend)
         "${galaxy_programs_root}/runtime/src/render/materials/*.hlsl"
         "${galaxy_programs_root}/runtime/src/render/materials/*.hlsli"
         "${galaxy_programs_root}/runtime/src/render/programs/*.hlsl")
-    list(APPEND sources "${galaxy_programs_root}/runtime/src/render/programs/table.tsv")
+    # The program set may change only with the store version (compile_programs.py check_store_programs).
+    list(APPEND sources "${galaxy_programs_root}/runtime/src/render/programs/table.tsv"
+        "${galaxy_programs_root}/runtime/include/galaxy/store_version.inc"
+        "${galaxy_programs_root}/runtime/include/galaxy/store_programs.txt")
     if(backend STREQUAL "dxil")
         add_custom_command(OUTPUT "${blob}"
             COMMAND ${CMAKE_COMMAND} -E env "GALAXY_DXC=${GALAXY_DXC}"
