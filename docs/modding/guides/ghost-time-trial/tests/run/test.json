@@ -1,0 +1,207 @@
+{
+  "harness": 1,
+  "name": "ghost-run",
+  "about": "Good Egg, star 1. First attempt: it begins with the stage's play, 89 frames before the test clock's frame 0, so the timer reads 0:01.48 (89 steps) at frame 0; the stick walks Mario ahead, then right; at frame 300 the game's star demo is asked for: the time is 389 steps (300 + 89), the timer stops at 0:06.48, the run is written to its own file and is the star's best. At frame 400 the stage is entered again; its play begins 841 frames later (frame 1241). The second attempt has the ghost (389 steps long): at frames 1410, 1490 and 1530 (steps 169, 249 and 289) it stands where Mario stood at those steps of the first run (frames 80, 160, 200), while the player stands at the start; its timer counts from 0.",
+  "proves": [
+    "kit.replay",
+    "kit.hud",
+    "services.fs",
+    "kernel.hook.before",
+    "kernel.hook.after"
+  ],
+  "mods": [
+    "../../../lumakit",
+    "../.."
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 240,
+  "steps": [
+    {
+      "at": 20,
+      "stick": [
+        0,
+        1
+      ],
+      "frames": 120
+    },
+    {
+      "at": 80,
+      "call": "MR::getPlayerPos",
+      "signature": "Vec3f *()",
+      "args": [],
+      "fact": "player_a"
+    },
+    {
+      "at": 140,
+      "stick": [
+        1,
+        0
+      ],
+      "frames": 80
+    },
+    {
+      "at": 160,
+      "call": "MR::getPlayerPos",
+      "signature": "Vec3f *()",
+      "args": [],
+      "fact": "player_b"
+    },
+    {
+      "at": 200,
+      "call": "MR::getPlayerPos",
+      "signature": "Vec3f *()",
+      "args": [],
+      "fact": "player_c"
+    },
+    {
+      "at": 230,
+      "picture": "first"
+    },
+    {
+      "at": 300,
+      "call": "GameSceneFunction::requestPowerStarGetDemo",
+      "signature": "void()"
+    },
+    {
+      "at": 400,
+      "stage": {
+        "name": "EggStarGalaxy",
+        "scenario": 1
+      }
+    },
+    {
+      "at": 1410,
+      "read": "LiveActor.mPosition",
+      "of": "object:LumaObj#0",
+      "type": "Vec3f",
+      "fact": "ghost_a"
+    },
+    {
+      "at": 1410,
+      "call": "MR::getPlayerPos",
+      "signature": "Vec3f *()",
+      "args": [],
+      "fact": "player_second"
+    },
+    {
+      "at": 1420,
+      "picture": "ghost"
+    },
+    {
+      "at": 1490,
+      "read": "LiveActor.mPosition",
+      "of": "object:LumaObj#0",
+      "type": "Vec3f",
+      "fact": "ghost_b"
+    },
+    {
+      "at": 1530,
+      "read": "LiveActor.mPosition",
+      "of": "object:LumaObj#0",
+      "type": "Vec3f",
+      "fact": "ghost_c"
+    },
+    {
+      "at": 1560,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ghost-time-trial.attempt",
+      "is": "EggStarGalaxy 1",
+      "when": "first"
+    },
+    {
+      "fact": "mod.ghost-time-trial.time",
+      "is": 389,
+      "frames": [
+        300,
+        300
+      ]
+    },
+    {
+      "fact": "mod.ghost-time-trial.kept",
+      "is": "runs/EggStarGalaxy 1/2025-12-31 00.00.21 389.replay"
+    },
+    {
+      "fact": "mod.ghost-time-trial.best",
+      "is": 389,
+      "frames": [
+        301,
+        399
+      ]
+    },
+    {
+      "fact": "ui.text.38",
+      "has": {
+        "pane": "TR0",
+        "text": "0:01.48"
+      },
+      "when": "first",
+      "frames": [
+        0,
+        0
+      ]
+    },
+    {
+      "fact": "ui.text.38",
+      "has": {
+        "pane": "TR0",
+        "text": "0:06.48"
+      },
+      "when": "all",
+      "frames": [
+        300,
+        399
+      ]
+    },
+    {
+      "fact": "mod.ghost-time-trial.attempt",
+      "is": "EggStarGalaxy 1",
+      "when": "last",
+      "frames": [
+        1241,
+        1241
+      ]
+    },
+    {
+      "fact": "mod.ghost-time-trial.ghost",
+      "is": 389,
+      "when": "last"
+    },
+    {
+      "fact": "ghost_a",
+      "near": [
+        -3628.877,
+        -13027.402,
+        -15686.758
+      ],
+      "within": 20
+    },
+    {
+      "fact": "ghost_b",
+      "near": [
+        -4124.655,
+        -12960.923,
+        -16450.516
+      ],
+      "within": 20
+    },
+    {
+      "fact": "ghost_c",
+      "near": [
+        -3624.317,
+        -12992.757,
+        -16528.148
+      ],
+      "within": 20
+    },
+    {
+      "no_log": "script error"
+    }
+  ]
+}

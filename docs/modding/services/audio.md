@@ -83,7 +83,8 @@ Header `native/include/luma_capture.h`, host `runtime/src/luma_capture.cpp`. Eac
 - No call waits for a device: open starts the device's own thread; close and a mod's stop only mark it.
 
 Platforms: Windows (WASAPI shared capture of the default endpoint; Media Foundation's first video source through its
-video processor). Elsewhere `open` answers ABSENT until the platform's backend. Tests: h/tests/audio 2606-2607.
+video processor) and Android (AAudio's default input; the first camera through Camera2, YUV 4:2:0 converted to RGBA).
+Linux, macOS and iOS have no capture backend: there `open` answers LUMA_E_ABSENT. Tests: h/tests/audio 2606-2607.
 
 ## 8. Places and the game's own sounds (layer 1b)
 

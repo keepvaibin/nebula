@@ -1,0 +1,43 @@
+{
+  "harness": 1,
+  "name": "balloon-hide",
+  "about": "Good Egg, star 1, with a balloon server on this computer: Mario walks ahead, the pause menu's Hide a balloon (the mod's first entry) starts the clock and the line at the top; back in play he walks on and Place (D-pad down) puts the balloon on the ground under him; the hint typed and Enter send it with the stage, star and position; the result screen says it is hidden, and A closes it.",
+  "proves": ["kit.menu", "kit.hud", "kit.actor", "kit.screen", "services.input", "services.net.local", "services.net.http"],
+  "mods": [
+    "../../../lumakit",
+    "../server",
+    { "path": "../..", "options": { "server": "http://127.0.0.1:18741", "hide_seconds": 30, "find_seconds": 60 } }
+  ],
+  "stage": { "name": "EggStarGalaxy", "scenario": 1 },
+  "limit_seconds": 240,
+  "steps": [
+    { "at": 60, "stick": [0, 1], "frames": 40 },
+    { "at": 140, "hold": ["PLUS"], "frames": 4 },
+    { "at": 200, "picture": "pause" },
+    { "at": 210, "hold": ["A"], "frames": 4 },
+    { "at": 260, "hold": ["PLUS"], "frames": 4 },
+    { "at": 330, "picture": "hiding" },
+    { "at": 340, "stick": [0, 1], "frames": 30 },
+    { "at": 400, "call": "MR::getPlayerPos", "signature": "Vec3f *()", "args": [], "fact": "player_at" },
+    { "at": 405, "hold": ["DOWN"], "frames": 4 },
+    { "after": { "fact": "mod.balloon-world.placed", "exists": true }, "timeout": 300, "picture": "placed" },
+    { "after": { "fact": "mod.balloon-world.placed", "exists": true }, "text": "Under the big tree" },
+    { "at": 520, "key": "enter" },
+    { "after": { "fact": "mod.balloon-world.result", "exists": true }, "timeout": 900, "picture": "sent" },
+    { "at": 900, "hold": ["A"], "frames": 4 },
+    { "at": 1000, "end": true }
+  ],
+  "expect": [
+    { "fact": "mod.balloon-server.listening", "is": true },
+    { "fact": "mod.balloon-world.hiding", "is": 30 },
+    { "fact": "mod.balloon-world.drop", "at_most": 60 },
+    { "fact": "mod.balloon-world.balloons", "is": 1, "when": "last" },
+    { "fact": "mod.balloon-server.hidden_stage", "is": "EggStarGalaxy" },
+    { "fact": "mod.balloon-server.hidden_scenario", "is": 1 },
+    { "fact": "mod.balloon-server.hidden_hint", "is": "Under the big tree" },
+    { "fact": "mod.balloon-server.hidden_at", "near": [-3700.0, -13000.0, -15800.0], "within": 1200 },
+    { "fact": "mod.balloon-world.hidden", "is": "b2" },
+    { "fact": "mod.balloon-world.result", "is": "Your balloon is hidden. Others can look for it now.", "when": "last" },
+    { "no_log": "script error" }
+  ]
+}

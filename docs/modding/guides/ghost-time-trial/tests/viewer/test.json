@@ -1,0 +1,223 @@
+{
+  "harness": 1,
+  "name": "ghost-viewer",
+  "about": "Good Egg, star 1: a run is made (the stick walks Mario ahead; the star demo asked for at frame 240), and at frame 400 the stage is entered again (its play begins at 1241). At 1400 PLUS opens the pause menu; A takes Replays, the mod's entry, which lists the one saved run; A takes it: the pause menu closes and the run plays back. Mario is hidden and holds still while the stick moves the free camera; RIGHT, RIGHT and LEFT give 2x, 4x and 2x; B ends the playback and Mario is back.",
+  "proves": [
+    "kit.menu",
+    "kit.screen",
+    "kit.camera",
+    "kit.replay",
+    "kit.hud",
+    "services.fs"
+  ],
+  "mods": [
+    "../../../lumakit",
+    "../.."
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 300,
+  "steps": [
+    {
+      "at": 20,
+      "stick": [
+        0,
+        1
+      ],
+      "frames": 150
+    },
+    {
+      "at": 240,
+      "call": "GameSceneFunction::requestPowerStarGetDemo",
+      "signature": "void()"
+    },
+    {
+      "at": 400,
+      "stage": {
+        "name": "EggStarGalaxy",
+        "scenario": 1
+      }
+    },
+    {
+      "at": 1400,
+      "hold": [
+        "PLUS"
+      ],
+      "frames": 2
+    },
+    {
+      "at": 1460,
+      "picture": "pause"
+    },
+    {
+      "at": 1470,
+      "hold": [
+        "A"
+      ],
+      "frames": 2
+    },
+    {
+      "at": 1530,
+      "picture": "list"
+    },
+    {
+      "at": 1540,
+      "hold": [
+        "A"
+      ],
+      "frames": 2
+    },
+    {
+      "after": {
+        "fact": "mod.ghost-time-trial.watching",
+        "is": true
+      },
+      "call": "MR::getPlayerPos",
+      "signature": "Vec3f *()",
+      "args": [],
+      "fact": "player_before",
+      "timeout": 600
+    },
+    {
+      "after": {
+        "fact": "mod.ghost-time-trial.watching",
+        "is": true
+      },
+      "call": "MR::getCamPos",
+      "signature": "Vec3f()",
+      "args": [],
+      "fact": "camera_before",
+      "timeout": 600
+    },
+    {
+      "after": {
+        "fact": "mod.ghost-time-trial.watching",
+        "is": true
+      },
+      "stick": [
+        0,
+        1
+      ],
+      "frames": 40,
+      "timeout": 600
+    },
+    {
+      "after": {
+        "fact": "camera_before",
+        "exists": true
+      },
+      "picture": "watch",
+      "timeout": 600
+    },
+    {
+      "after": {
+        "fact": "player_before",
+        "exists": true
+      },
+      "hold": [
+        "RIGHT"
+      ],
+      "frames": 2,
+      "timeout": 600
+    },
+    {
+      "after": {
+        "fact": "mod.ghost-time-trial.speed",
+        "is": "2x"
+      },
+      "hold": [
+        "RIGHT"
+      ],
+      "frames": 2,
+      "timeout": 300
+    },
+    {
+      "after": {
+        "fact": "mod.ghost-time-trial.speed",
+        "is": "4x"
+      },
+      "call": "MR::getCamPos",
+      "signature": "Vec3f()",
+      "args": [],
+      "fact": "camera_after",
+      "timeout": 300
+    },
+    {
+      "after": {
+        "fact": "mod.ghost-time-trial.speed",
+        "is": "4x"
+      },
+      "call": "MR::getPlayerPos",
+      "signature": "Vec3f *()",
+      "args": [],
+      "fact": "player_after",
+      "timeout": 300
+    },
+    {
+      "after": {
+        "fact": "mod.ghost-time-trial.speed",
+        "is": "4x"
+      },
+      "hold": [
+        "LEFT"
+      ],
+      "frames": 2,
+      "timeout": 300
+    },
+    {
+      "after": {
+        "fact": "mod.ghost-time-trial.speed",
+        "is": "2x",
+        "when": "next"
+      },
+      "hold": [
+        "B"
+      ],
+      "frames": 2,
+      "timeout": 300
+    },
+    {
+      "after": {
+        "fact": "mod.ghost-time-trial.watching",
+        "is": false
+      },
+      "picture": "back",
+      "timeout": 300
+    },
+    {
+      "at": 2400,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ghost-time-trial.runs_listed",
+      "is": 1
+    },
+    {
+      "fact": "mod.ghost-time-trial.watching",
+      "is": true,
+      "when": "first"
+    },
+    {
+      "fact": "mod.ghost-time-trial.speed",
+      "is": "2x",
+      "when": "first"
+    },
+    {
+      "fact": "mod.ghost-time-trial.speed",
+      "is": "2x",
+      "when": "last"
+    },
+    {
+      "fact": "mod.ghost-time-trial.watching",
+      "is": false,
+      "when": "last"
+    },
+    {
+      "no_log": "script error"
+    }
+  ]
+}

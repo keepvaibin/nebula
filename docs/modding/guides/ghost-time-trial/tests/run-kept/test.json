@@ -1,0 +1,27 @@
+{
+  "harness": 1,
+  "name": "ghost-kept",
+  "about": "The game started again after ghost-run: the mod reads the star's best from its own file, so the first attempt at Good Egg star 1 of this start has the ghost of the run kept before (389 steps)",
+  "proves": [
+    "services.fs",
+    "kit.replay"
+  ],
+  "continue_from": "ghost-run",
+  "mods": [
+    "../../../lumakit",
+    "../.."
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    { "after": { "fact": "mod.ghost-time-trial.ghost", "is": 389, "when": "first" }, "wait": true, "timeout": 900 },
+    { "at": 1000, "end": true }
+  ],
+  "expect": [
+    { "fact": "mod.ghost-time-trial.attempt", "is": "EggStarGalaxy 1", "when": "first" },
+    { "fact": "mod.ghost-time-trial.ghost", "is": 389, "when": "first" },
+    { "no_log": "script error" }
+  ]
+}

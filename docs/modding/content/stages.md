@@ -64,5 +64,9 @@ Proven by unit tests (nebula-import `cook::patch`): `add` and `set` by name in a
 that patch alone with the table unchanged. At the command line (lumalink check, the HeavenlyBeachGalaxy objinfo, a
 fixture facts file): a wrong name and an argument given twice refused by name.
 
-Next layers: (2) collision cook and a flat zone; (3) gravity and areas; (4) cameras and paths; (5) a whole
-new stage with a star; (6) lights, sky, fog.
+Proven in a game run on Windows: a patch of EggStarGalaxy's objinfo that adds eight Coins and two Kuribos (test 3901),
+and one that gives a BigFan's arguments by name (3891), the live fan holding them; a name BigFan lacks fails the patch
+whole and the stage plays without it (3892).
+
+Not yet proven in a game run: a stage made only of a mod's table sources (a new galaxy, its zone, start, gravity and
+planet).

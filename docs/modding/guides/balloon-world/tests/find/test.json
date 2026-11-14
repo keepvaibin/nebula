@@ -1,0 +1,40 @@
+{
+  "harness": 1,
+  "name": "balloon-find",
+  "about": "Good Egg, star 1, the server holding one balloon there (hint \"Ahead of the start\"): Find a balloon (the mod's second pause entry) asks the server for this stage and star, the hints show to choose from, A takes the first; back in play the balloon stands ahead with its hint and the clock; Mario walks into it, it pops, the time is sent and the result screen shows it.",
+  "proves": ["kit.menu", "kit.screen", "kit.actor", "kit.hud", "services.net.local", "services.net.http"],
+  "mods": [
+    "../../../lumakit",
+    "../server",
+    { "path": "../..", "options": { "server": "http://127.0.0.1:18741", "hide_seconds": 30, "find_seconds": 60 } }
+  ],
+  "stage": { "name": "EggStarGalaxy", "scenario": 1 },
+  "limit_seconds": 240,
+  "steps": [
+    { "at": 60, "hold": ["PLUS"], "frames": 4 },
+    { "at": 120, "hold": ["DOWN"], "frames": 4 },
+    { "at": 150, "picture": "pause" },
+    { "at": 160, "hold": ["A"], "frames": 4 },
+    { "at": 260, "picture": "choose" },
+    { "at": 270, "hold": ["A"], "frames": 4 },
+    { "at": 330, "hold": ["PLUS"], "frames": 4 },
+    { "at": 400, "picture": "hunting" },
+    { "at": 410, "stick": [0, 1], "frames": 120 },
+    { "after": { "fact": "mod.balloon-world.result", "exists": true }, "timeout": 900, "picture": "found" },
+    { "at": 1100, "hold": ["A"], "frames": 4 },
+    { "at": 1200, "end": true }
+  ],
+  "expect": [
+    { "fact": "mod.balloon-server.asked", "is": "stage=EggStarGalaxy&scenario=1" },
+    { "fact": "mod.balloon-world.listed", "is": 1 },
+    { "fact": "mod.balloon-world.finding", "is": "b1" },
+    { "fact": "mod.balloon-world.spawned", "near": [-3439.8, -13081.3, -15575.5], "within": 1 },
+    { "fact": "mod.balloon-world.balloons", "is": 1, "when": "first" },
+    { "fact": "mod.balloon-world.found", "more": 0 },
+    { "fact": "mod.balloon-world.balloons", "is": 0, "when": "last" },
+    { "fact": "mod.balloon-server.found_id", "is": "b1" },
+    { "fact": "mod.balloon-server.found_steps", "at_most": 3600 },
+    { "fact": "mod.balloon-world.time_up", "absent": true },
+    { "no_log": "script error" }
+  ]
+}

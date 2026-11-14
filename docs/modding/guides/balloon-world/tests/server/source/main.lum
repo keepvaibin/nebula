@@ -1,0 +1,127 @@
+use svc.net.local as local
+
+// A balloon server for the tests: HTTP on this computer's port 18741, the balloons kept while the game runs. It
+// starts with one balloon in Good Egg's first star, where the start's path goes ahead, and writes each request it
+// takes as facts.
+
+struct Hidden { id: text = "", stage: text, scenario: int, at: vec3, hint: text }
+struct Found { id: text, steps: u32 }
+
+var balloons: list<Hidden> = [
+    Hidden { id: "b1", stage: "EggStarGalaxy", scenario: 1, at: vec3(-3439.8, -13081.3, -15575.5), hint: "Ahead of the start" }
+]
+var sockets: list<local.Request> = []
+var received: list<bytes> = []
+
+on start {
+    let l = local.tcp_listen(18741, 0, heard)
+    log fact "listening" l != none
+}
+
+fn heard(e: local.Event) {
+    match e {
+        local.Event.Accepted(socket) => {
+            sockets.push(socket)
+            received.push(b"")
+        }
+        local.Event.Data(socket, data) => {
+            for i in 0..sockets.len() {
+                if same(sockets[i], socket) {
+                    for k in 0..data.len() {
+                        received[i].push(data[k])
+                    }
+                    if let answer = answer_of(received[i]) {
+                        local.send(socket, answer.bytes())
+                        local.close(socket)
+                        sockets.remove(i)
+                        received.remove(i)
+                    }
+                    return
+                }
+            }
+        }
+        local.Event.Closed(socket, status, value, data) => {
+            for i in 0..sockets.len() {
+                if same(sockets[i], socket) {
+                    sockets.remove(i)
+                    received.remove(i)
+                    return
+                }
+            }
+        }
+        else => return
+    }
+}
+
+// The answer to a whole request (its head and the body its Content-Length gives), none while more is to come.
+fn answer_of(data: bytes) -> text? {
+    guard let all = data.text(), let end = all.find("\r\n\r\n") else {
+        return none
+    }
+    let head = all.slice(0, end)
+    let lines = head.split("\r\n")
+    var length = 0
+    for line in lines {
+        if line.lower().starts_with("content-length:") {
+            length = ((line.slice(15, line.len()).split(" ").last() ?? "0").parse_int() ?? 0) as int
+        }
+    }
+    if all.len() < end + 4 + length {
+        return none
+    }
+    let body = all.slice(end + 4, end + 4 + length)
+    let first = lines[0].split(" ")
+    if first.len() < 2 {
+        return reply(400, r"{}")
+    }
+    return route(first[0], first[1], body)
+}
+
+fn reply(status: int, body: text) -> text {
+    let why = if status == 200 { "OK" } else if status == 404 { "Not Found" } else { "Bad Request" }
+    return "HTTP/1.1 {status} {why}\r\nContent-Type: application/json\r\nContent-Length: {body.len()}\r\nConnection: close\r\n\r\n{body}"
+}
+
+fn route(method: text, target: text, body: text) -> text {
+    if method == "POST" and target == "/balloons" {
+        guard let h = json.decode<Hidden>(body) else {
+            return reply(400, r"{}")
+        }
+        var kept = h
+        kept.id = "b{balloons.len() + 1}"
+        balloons.push(kept)
+        log fact "hidden_stage" kept.stage
+        log fact "hidden_scenario" kept.scenario
+        log fact "hidden_at" kept.at
+        log fact "hidden_hint" kept.hint
+        log fact "hidden_id" kept.id
+        return reply(200, json.encode(kept))
+    }
+    if method == "GET" and target.starts_with("/balloons?") {
+        let query = target.slice(10, target.len())
+        log fact "asked" query
+        var stage = ""
+        var scenario = -1
+        for pair in query.split("&") {
+            let kv = pair.split("=")
+            if kv.len() == 2 and kv[0] == "stage" {
+                stage = kv[1]
+            }
+            if kv.len() == 2 and kv[0] == "scenario" {
+                scenario = (kv[1].parse_int() ?? -1) as int
+            }
+        }
+        let here = balloons.filter(fn(h: Hidden) -> bool { return h.stage == stage and h.scenario == scenario })
+        log fact "listed" here.len()
+        return reply(200, json.encode(here))
+    }
+    if method == "POST" and target == "/found" {
+        guard let f = json.decode<Found>(body) else {
+            return reply(400, r"{}")
+        }
+        log fact "found_id" f.id
+        log fact "found_steps" f.steps
+        return reply(200, r"{}")
+    }
+    return reply(404, r"{}")
+}

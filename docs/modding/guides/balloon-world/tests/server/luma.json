@@ -1,0 +1,11 @@
+{
+  "format": "1.0",
+  "id": "balloon-server",
+  "version": "1.0.0",
+  "name": "Balloon server stand-in",
+  "summary": "A balloon server on this computer for Balloon World's tests: it keeps the balloons sent and writes each request as a fact.",
+  "authors": ["you"],
+  "game": { "id": "RMG" },
+  "permissions": [ { "name": "net.local", "why": "Listens on this computer for the Balloon World mod." } ],
+  "code": { "platforms": ["windows-x64"] }
+}

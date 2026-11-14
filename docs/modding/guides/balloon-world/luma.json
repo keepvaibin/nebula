@@ -1,0 +1,38 @@
+{
+  "format": "1.0",
+  "id": "balloon-world",
+  "version": "1.0.0",
+  "name": "Balloon World",
+  "summary": "Hide a balloon in a stage for others to find, or find one another player hid, against the clock.",
+  "text": {
+    "UsEnglish": {"name": "Balloon World", "summary": "Hide a balloon in a stage for others to find, or find one another player hid, against the clock.", "options": {"server": {"name": "Balloon server"}, "hide_seconds": {"name": "Seconds to hide"}, "find_seconds": {"name": "Seconds to find"}, "place": {"name": "Place the balloon"}}},
+    "EuEnglish": {"name": "Balloon World", "summary": "Hide a balloon in a stage for others to find, or find one another player hid, against the clock.", "options": {"server": {"name": "Balloon server"}, "hide_seconds": {"name": "Seconds to hide"}, "find_seconds": {"name": "Seconds to find"}, "place": {"name": "Place the balloon"}}},
+    "UsFrench": {"name": "Monde des ballons", "summary": "Cachez un ballon dans un niveau pour les autres, ou trouvez celui d'un autre joueur, contre la montre.", "options": {"server": {"name": "Serveur des ballons"}, "hide_seconds": {"name": "Secondes pour cacher"}, "find_seconds": {"name": "Secondes pour trouver"}, "place": {"name": "Poser le ballon"}}},
+    "EuFrench": {"name": "Monde des ballons", "summary": "Cachez un ballon dans un niveau pour les autres, ou trouvez celui d'un autre joueur, contre la montre.", "options": {"server": {"name": "Serveur des ballons"}, "hide_seconds": {"name": "Secondes pour cacher"}, "find_seconds": {"name": "Secondes pour trouver"}, "place": {"name": "Poser le ballon"}}},
+    "UsSpanish": {"name": "Mundo de globos", "summary": "Esconde un globo en un nivel para que otros lo busquen, o encuentra el de otro jugador, contra el reloj.", "options": {"server": {"name": "Servidor de globos"}, "hide_seconds": {"name": "Segundos para esconder"}, "find_seconds": {"name": "Segundos para encontrar"}, "place": {"name": "Poner el globo"}}},
+    "EuSpanish": {"name": "Mundo de globos", "summary": "Esconde un globo en un nivel para que otros lo busquen, o encuentra el de otro jugador, contra el reloj.", "options": {"server": {"name": "Servidor de globos"}, "hide_seconds": {"name": "Segundos para esconder"}, "find_seconds": {"name": "Segundos para encontrar"}, "place": {"name": "Poner el globo"}}},
+    "EuGerman": {"name": "Ballonwelt", "summary": "Verstecke einen Ballon in einem Level für andere, oder finde den eines anderen Spielers, gegen die Uhr.", "options": {"server": {"name": "Ballon-Server"}, "hide_seconds": {"name": "Sekunden zum Verstecken"}, "find_seconds": {"name": "Sekunden zum Finden"}, "place": {"name": "Ballon absetzen"}}},
+    "EuItalian": {"name": "Mondo dei palloncini", "summary": "Nascondi un palloncino in un livello per gli altri, o trova quello di un altro giocatore, contro il tempo.", "options": {"server": {"name": "Server dei palloncini"}, "hide_seconds": {"name": "Secondi per nascondere"}, "find_seconds": {"name": "Secondi per trovare"}, "place": {"name": "Posa il palloncino"}}},
+    "EuDutch": {"name": "Ballonwereld", "summary": "Verstop een ballon in een level voor anderen, of vind die van een andere speler, tegen de klok.", "options": {"server": {"name": "Ballonserver"}, "hide_seconds": {"name": "Seconden om te verstoppen"}, "find_seconds": {"name": "Seconden om te vinden"}, "place": {"name": "Ballon neerzetten"}}},
+    "UsPortuguese": {"name": "Mundo dos Balões", "summary": "Esconda um balão em uma fase para outros acharem, ou ache o de outro jogador, contra o relógio.", "options": {"server": {"name": "Servidor de balões"}, "hide_seconds": {"name": "Segundos para esconder"}, "find_seconds": {"name": "Segundos para achar"}, "place": {"name": "Colocar o balão"}}},
+    "JpJapanese": {"name": "バルーンワールド", "summary": "ステージに風船をかくして他の人にさがしてもらう、または他の人がかくした風船を時間内にさがします。", "options": {"server": {"name": "風船サーバー"}, "hide_seconds": {"name": "かくす時間(秒)"}, "find_seconds": {"name": "さがす時間(秒)"}, "place": {"name": "風船を置く"}}},
+    "KrKorean": {"name": "벌룬 월드", "summary": "스테이지에 풍선을 숨겨 다른 사람이 찾게 하거나, 다른 플레이어가 숨긴 풍선을 제한 시간 안에 찾습니다.", "options": {"server": {"name": "풍선 서버"}, "hide_seconds": {"name": "숨기는 시간(초)"}, "find_seconds": {"name": "찾는 시간(초)"}, "place": {"name": "풍선 놓기"}}},
+    "CnSimpChinese": {"name": "气球世界", "summary": "在关卡中藏一个气球让别人找，或在限时内找到其他玩家藏的气球。", "options": {"server": {"name": "气球服务器"}, "hide_seconds": {"name": "藏的时间（秒）"}, "find_seconds": {"name": "找的时间（秒）"}, "place": {"name": "放下气球"}}},
+    "TwTradChinese": {"name": "氣球世界", "summary": "在關卡中藏一個氣球讓別人找，或在限時內找到其他玩家藏的氣球。", "options": {"server": {"name": "氣球伺服器"}, "hide_seconds": {"name": "藏的時間（秒）"}, "find_seconds": {"name": "找的時間（秒）"}, "place": {"name": "放下氣球"}}}
+  },
+  "authors": ["you"],
+  "game": { "id": "RMG" },
+  "options": [
+    {"key": "server", "kind": "text", "name": "Balloon server", "max_length": 200, "default": ""},
+    {"key": "hide_seconds", "kind": "number", "name": "Seconds to hide", "min": 10, "max": 120, "step": 5, "default": 30},
+    {"key": "find_seconds", "kind": "number", "name": "Seconds to find", "min": 10, "max": 300, "step": 10, "default": 60},
+    {"key": "place", "kind": "key", "name": "Place the balloon", "default": "dpad_down"}
+  ],
+  "permissions": [
+    {"name": "net.local", "why": "Talks to a balloon server on this computer or your local network."},
+    {"name": "net.internet", "hosts": ["*"], "why": "Sends the balloons you hide and your times to the balloon server you set, and gets the balloons others hid."}
+  ],
+  "needs": [{ "id": "lumakit", "version": ">=1.0.0" }],
+  "layers": [{ "name": "base" }],
+  "code": { "platforms": ["windows-x64", "windows-arm64", "linux-x64", "linux-arm64", "macos-arm64", "macos-x64", "android-arm64", "android-x64", "ios-arm64"]}
+}

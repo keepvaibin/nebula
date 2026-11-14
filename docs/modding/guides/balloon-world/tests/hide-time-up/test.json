@@ -1,0 +1,30 @@
+{
+  "harness": 1,
+  "name": "balloon-hide-time-up",
+  "about": "Good Egg, star 1, 10 seconds to hide: Hide a balloon is chosen in the pause menu and Mario never presses Place; when the clock reaches 0 the clock and line go, the result screen says time is up, and nothing is placed or sent.",
+  "proves": ["kit.menu", "kit.hud", "kit.screen", "services.time"],
+  "mods": [
+    "../../../lumakit",
+    "../server",
+    { "path": "../..", "options": { "server": "http://127.0.0.1:18741", "hide_seconds": 10, "find_seconds": 60 } }
+  ],
+  "stage": { "name": "EggStarGalaxy", "scenario": 1 },
+  "limit_seconds": 240,
+  "steps": [
+    { "at": 60, "hold": ["PLUS"], "frames": 4 },
+    { "at": 120, "hold": ["A"], "frames": 4 },
+    { "at": 180, "hold": ["PLUS"], "frames": 4 },
+    { "at": 400, "picture": "counting" },
+    { "after": { "fact": "mod.balloon-world.time_up", "exists": true }, "timeout": 1500, "picture": "time_up" },
+    { "at": 1300, "hold": ["A"], "frames": 4 },
+    { "at": 1400, "end": true }
+  ],
+  "expect": [
+    { "fact": "mod.balloon-world.hiding", "is": 10 },
+    { "fact": "mod.balloon-world.time_up", "is": "hide" },
+    { "fact": "mod.balloon-world.result", "is": "Time's up. No balloon was hidden.", "when": "last" },
+    { "fact": "mod.balloon-world.placed", "absent": true },
+    { "fact": "mod.balloon-server.hidden_id", "absent": true },
+    { "no_log": "script error" }
+  ]
+}

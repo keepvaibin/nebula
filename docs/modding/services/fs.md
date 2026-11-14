@@ -78,11 +78,11 @@ D12 maps a 0/1 u32; if it does not, the header's `recursive` stays u32 and the e
 ### 4. Platforms
 
 - Windows: as written, tested (2301-2312).
-- Linux, macOS, iOS: the same code (std::filesystem); the case scan is compiled in. 8.1 runs the suite there.
-- Android: the data folder is the app's private files folder, so the Exchange folder is not visible to the player
-  there; 8.2 gives it through the system's document picker (a provider over `<data>/Exchange`). Until then Exchange
-  works between mods only on Android.
-- A player-visible "Open Exchange folder" on the Mods page:
+- Linux, macOS, iOS: the same code (std::filesystem), with the case scan; written, not yet proven.
+- Android: the same code, written, not yet proven. The data folder is the app's private files folder, so the player
+  cannot see the Exchange folder and the Mods page has no EXCHANGE FOLDER button: on Android the Exchange folder is
+  shared between mods only.
+- Elsewhere the Mods page's EXCHANGE FOLDER button opens the Exchange folder (made if missing).
 
 ### 6. Tests (deterministic mode)
 

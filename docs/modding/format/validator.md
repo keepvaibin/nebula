@@ -192,7 +192,10 @@ A code is never reused for another meaning.
    replaces), so L305, L404 and L805 are found without reading the other mods again. The game keeps each mod's
    touches from its import, read against the store and the platforms; `lumalink check` reads each mod of its mod
    folder against the same game and platforms as the checked mod, so a clash only the store shows (two starts in
-   layers one scenario turns on together) is found by both.
+   layers one scenario turns on together) is found by both. Which layers a scenario turns on together comes from the
+   game's scenario tables, the patches of them, the other mods' scenario cells and a new galaxy's own table
+   (`layers/<l>/files/StageData/<galaxy>Scenario/ScenarioData.bcsv`, or its `.json` source); a new table that does not
+   read as a table leaves L402 not checked (`Missing.NewScenarios`).
 5. `pub fn recheck(input, saved: Option<&Saved>, game: &str) -> Report`, and `Saved` (section 2 below).
 6. C: Beyond them: `LumaValidateInput` (size-checked; path, platform, release, region, extra languages, the names as
    `.rows` text with LUMA_API until 1.8's file, the services' permissions, the store as three functions plus a
@@ -232,8 +235,9 @@ A code is never reused for another meaning.
 13. L216: a save is checked by a port of the game's own `NebulaSaveFormat::validate`; one corpus of save files (good,
     damaged in each way the check names, each region) is run through the game's import and the validator in one test
     with identical answers.
-14. Not checked, each named, until the input exists: L506 (`Missing.ServiceImports`, until `LUMA_IMPORT_SERVICE = 5`
-    in 1.1). L304, L504 on Apple, L505 for another mod's function, L511, L701 and L702 are checked (items 15 to 17, 20
+14. Not checked, each named, when its input is absent: L505 and L506 for a service import (kind 5) without the game's
+    services list (`Missing.Services`). LumaLink reads that list from the names folder's `luma_services.json`, which
+    the game's build writes; the game's own start check is given no list, so there they stay not checked. L304, L504 on Apple, L505 for another mod's function, L511, L701 and L702 are checked (items 15 to 17, 20
     and 21). The rows `Missing.KindContract`, `Missing.KitSchemas`, `Missing.LoaderContract` and `Missing.ModExports`
     are deleted. The bounds rule (0.7's class of fix) joins the models block L600-L619 with 3.2: a model's bounds in
     game units against the object it stands for, off by a factor of 10 or more, is an error; it needs per-kind sizes
@@ -315,6 +319,14 @@ A code is never reused for another meaning.
    `Cook.Merge.ChangeForm`, `Cook.Cell.Text`, `Cook.Cell.Number`, `Cook.Cell.Whole` (a value of another kind than its
    column) and `Cook.Table.Json`. A `remove` or `change` that matches no row is a Note (`Cook.Merge.RemoveNoRow`,
    `Cook.Merge.ChangeNoRow`) and the rest of the file is added.
+
+   A layer's `textures/` pictures (`.png`, `.dds`) go through nebula-import's `pack_texture::check`, in `lumalink
+   check` (with or without the game) and at the game's start (the plan's `%texture` lines). It takes what the game's
+   pack reader takes: a PNG that stb_image decodes (checksums not checked), a DDS that `parse_dds` reads, each side
+   at most 16384. `Cook.Image.Unreadable` (no picture, or cut short), `Cook.Texture.DdsForm` (16-bit pixels, BC6H, a
+   volume, an array, a cube, another DXGI form) and `Cook.Image.Side`. A Dolphin pack's `tex1_` file is converted
+   first and not asked about. One set of pictures with its answers (`crates/nebula-import/data/pack-pictures`) is
+   read by the check and by the pack reader's own test.
 20. L502, L504 and L512 read a library with checked arithmetic. Every offset, size and count of a PE, ELF or Mach-O
     goes through one set of helpers in `binary.rs`: a sum past the range or a range past the file is the library not
     reading (L502 by its format) or `luma_mod` not reading (L512 `Lib.InfoUnreadable`). L504 is raised on them as on

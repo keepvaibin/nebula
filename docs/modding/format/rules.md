@@ -41,7 +41,7 @@ One row a rule, from the validator's own table (`crates/luma-validate`): the cod
 | L218 | Note | {mod} asks for the "{permission}" permission, but no code of it imports a service that needs it. |
 | L219 | Note | {mod}: permission "{key}" is a test permission: only a test run provides it. |
 | L220 | Error | {mod}: luma.json line {line}: "{key}" is the previous engine's; write {expected}. |
-| L221 | Note | {mod}: luma.json line {line}: "{key}" is read by the previous engine only, until plan {expected} replaces it. |
+| L221 | Note | {mod}: luma.json line {line}: "{key}" is the previous engine's, read for now; a later game will not read it. Write it in the mod format's own keys. |
 
 ## L300: Layers and files
 
