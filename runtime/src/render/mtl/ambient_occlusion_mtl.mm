@@ -17,7 +17,8 @@ namespace galaxy::render::mtl {
 namespace {
 
 constexpr Format kDistanceFormat = Format::R32f;
-constexpr Format kOcclusionFormat = Format::Rgba16f;
+// Occlusion and eye distance: the two channels the passes use (a shader write keeps x and y).
+constexpr Format kOcclusionFormat = Format::Rg16f;
 // The multiplier: one channel (a shader write takes R of the value whatever the format).
 constexpr Format kScaleFormat = Format::R8;
 // ambient_occlusion.hlsl's registers (vk/utility_spirv_sources.h kAoBindings): t0-t2 at textures 0-2, u0 at 3, the
