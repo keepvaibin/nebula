@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* The test services the harness's host half provides (services-registry 14): "test.svc" 1.3, no permission, and
    "test.secret" 1.0, permission "test.secret". Only in a harness run; never in an install. The registry's tests
-   (agents/luma/h/tests/registry) import them. */
+   import them. */
 #ifndef LUMA_TEST_SERVICES_H
 #define LUMA_TEST_SERVICES_H
 

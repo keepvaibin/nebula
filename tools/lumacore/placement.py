@@ -1,6 +1,6 @@
 """placement.py --types luma_types.json --defined DIR --out smg_game.luma-placement.json
 
-The placement facts (plan 1.8, contract self-description "places"; G's 3.9 cooks a stage's placement arguments by name),
+The placement facts (docs/modding/language/game-description.md; the cook reads a stage's placement arguments by name),
 made by the build beside the module from instrument.py's .places parts (DIR: the folder of its copies), never by hand:
 
   factory          the object factory's rows in its order (NameObjFactory.cpp cCreateTable): {name, class, creator};

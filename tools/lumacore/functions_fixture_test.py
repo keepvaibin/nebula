@@ -44,7 +44,7 @@ def mark(way, count=None, fixed=None, nullable=False):
 
 
 EXPECTED = [
-    # 1.9 (contract varargs)
+    # Variadic functions (docs/modding/language/varargs.md)
     fact("fnVaList", "int(const char *, va_list)", "free", None),
     fact("fnVariadic", "int(const char *, ...)", "free", None, marks=[None]),
     fact("fnVariadicAgain", "int(int, const char *, ...)", "free", None, marks=[None, None]),
@@ -173,7 +173,7 @@ def main():
     if extra or len(have) != len(EXPECTED):
         failed.append("rows not in the expected list, or counted twice: %s (%d rows)" % (extra, len(have)))
 
-    # Self-description (plan 1.8): table keys
+    # Self-description: table keys
     tables = {t["name"].rpartition("#")[2]: t for t in
               json.loads((out / "gen" / "luma_numbers.json").read_text(encoding="utf-8"))["tables"]}
     for name, want in (("sFnKeyed", ["Alpha", "Beta"]), ("sFnNames", ["One", "Two", "Three"]), ("sFnUnkeyed", None),

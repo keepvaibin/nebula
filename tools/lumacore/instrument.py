@@ -110,7 +110,7 @@ K_CALL = 103  # CXCursor_CallExpr
 # 1.5's tables: the canonical types of an array with a size and of a record
 T_CONSTANT_ARRAY, T_RECORD = 112, 105
 K_MEMBER_REF_EXPR = 102
-# The self-description's table keys (plan 1.8): a row that begins with a string literal
+# The self-description's table keys: a row that begins with a string literal
 K_STRING_LITERAL, K_INIT_LIST = 109, 119
 # 1.9's variadic check: a call
 K_CALL_EXPR = 103
@@ -311,7 +311,7 @@ class Unit:
         self.init_reads = set()
         self.tables = []
         self.table_skips = {}
-        self.constexpr_rows = 0  # contract varargs 4: luma_cx_<n>, one per constexpr function's call row
+        self.constexpr_rows = 0  # varargs.md section 4: luma_cx_<n>, one per constexpr function's call row
 
     def string(self, cx):
         raw = self.api.cstring(cx)
@@ -419,11 +419,11 @@ class Unit:
     def leave(self, name, line, why):
         if why not in self.LEFT_OUT_REASONS:
             sys.exit(f'instrument.py: {self.label}:{line}: {name} would have no row ({why}); every function but a '
-                     "template's and an allocation function has one (contract varargs 1)")
+                     "template's and an allocation function has one (docs/modding/language/varargs.md section 1)")
         self.left.append(f'{name}\t{line}\t{why}')
 
     def type_text(self, cxtype):
-        """A type as the rows write it (contract types TY-3, TY-9): every record, enum and alias by its qualified name,
+        """A type as the rows write it (language/types.md): every record, enum and alias by its qualified name,
         the one its own row has (`Mario::MovementStates &`, not `MovementStates &`), so no reader repeats C++'s lookup;
         an alias stays an alias (`u32`, `uint32_t`). None for a type no mod can write."""
         policy = self.__dict__.get('policy')
@@ -440,7 +440,7 @@ class Unit:
                 qualified = named[written]
                 text = re.sub(r'(?<![\w:])' + re.escape(written) + r'(?![\w])', lambda _: qualified, text)
         text = text.replace('(anonymous namespace)::', '')
-        # 1.9 (contract varargs 2): a va_list, whole, is `va_list` on every platform, whatever the compiler's type is (a
+        # varargs.md section 2: a va_list, whole, is `va_list` on every platform, whatever the compiler's type is (a
         # char*, a one-element array that a parameter decays to a pointer to, a struct); any other use of it is not
         # a type a mod writes.
         if re.fullmatch(r'(std::)?va_list|__builtin_va_list|(struct )?__va_list_tag \*|std::__va_list', text):
@@ -494,17 +494,17 @@ class Unit:
         head = self.text[start:at].decode('utf-8', 'replace')
         if re.search(r'\b(consteval|noreturn|naked)\b', head):
             sys.exit(f'instrument.py: {self.label}:{line}: {qualified} is consteval, noreturn or naked: no row is made for '
-                     'it, and every function has one (contract varargs 1)')
+                     'it, and every function has one (docs/modding/language/varargs.md section 1)')
         constexpr = bool(re.search(r'\bconstexpr\b', head))
         fntype = api.type(cursor)
         variadic = bool(api.variadic(fntype))
         if constexpr and (variadic or cursor.kind in (K_CONSTRUCTOR, K_DESTRUCTOR)):
             sys.exit(f'instrument.py: {self.label}:{line}: {qualified} is a constexpr constructor, destructor or variadic '
-                     'function: a call row cannot call it (contract varargs 4)')
+                     'function: a call row cannot call it (docs/modding/language/varargs.md section 4)')
         if variadic and not self.calls_va_list(body[0]):
             # Contract varargs 3: a variadic function's work is done by a va_list sibling, which has the full row.
             sys.exit(f'instrument.py: {self.label}:{line}: {qualified} takes a variable number of arguments and calls no '
-                     'function with a va_list parameter or `...`: move its work into a va_list sibling (contract varargs 3)')
+                     'function with a va_list parameter or `...`: move its work into a va_list sibling (varargs.md section 3)')
 
         # The class the function belongs to, as the function's own code names it.
         owner = None
@@ -592,7 +592,7 @@ class Unit:
                 end = self.offset(api.rangeEnd(api.extent(cursor)))
                 if end is None or alias or member:
                     sys.exit(f'instrument.py: {self.label}:{line}: {qualified}: a constexpr method, one whose result type '
-                             'holds a comma, or one whose end a macro writes has no call row (contract varargs 4)')
+                             'holds a comma, or one whose end a macro writes has no call row (varargs.md section 4)')
                 if self.identity(cursor) != (name, signature):
                     sys.exit(f'instrument.py: {self.label}:{line}: the row {name} {signature} is named '
                              f'{self.identity(cursor)} by identity()')
@@ -620,7 +620,7 @@ class Unit:
     # constant) is read from one unit-local record, luma_numbers, which the copy defines before the source with the
     # numbers as written: so the build is the source's, number for number, and a mod changes one by its name.
     def calls_va_list(self, body):
-        # True when the body calls a function with a va_list parameter, or another variadic one (contract varargs 3).
+        # True when the body calls a function with a va_list parameter, or another variadic one (varargs.md section 3).
         api = self.api
         found = []
 
@@ -1123,7 +1123,7 @@ class Unit:
             self.tables.append(row)
 
     def table_keys(self, initializer, count):
-        """The self-description's keys of an array table (plan 1.8): each row's string, when every one of the `count`
+        """The self-description's keys of an array table: each row's string, when every one of the `count`
         rows is written and each is a plain string literal or a braced row whose first value is one (the event flags'
         names, the factory's object names); else None. A literal with an escape, or one a macro writes, makes None."""
         def bare(cursor):
@@ -1215,7 +1215,7 @@ class Unit:
         if None in texts:
             return None
         if api.variadic(fntype):
-            texts.append('...')  # contract varargs 3: the signature is written with its `...`
+            texts.append('...')  # varargs.md section 3: the signature is written with its `...`
         if cursor.kind in (K_CONSTRUCTOR, K_DESTRUCTOR):
             return name, f'({", ".join(texts)})'
         result = self.type_text(api.resultType(fntype))
@@ -1250,8 +1250,8 @@ class Unit:
                 'const': role == 'method' and bool(api.isConst(cursor)), 'overrides': overrides,
                 'marks': self.marks_of(cursor)})
 
-    # 1.8 places (contract self-description, places; G's 3.9 cooks a stage's placement arguments by name): what each
-    # function this unit gives a row does with a placement iterator, read from its body, nothing matched by name:
+    # Places (docs/modding/language/game-description.md; the cook reads a stage's placement arguments by name): what
+    # each function this unit gives a row does with a placement iterator, read from its body, nothing matched by name:
     #   reads    each MR::getPlacementArgN{NoInit,WithInit}(iter, &target): the argument, the overload's type, the field
     #            or local it sets (as written), the line;
     #   helpers  each call to another function taking a placement iterator (getDomeIdFromArg0(rIter)): placement.py

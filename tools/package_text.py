@@ -1,4 +1,4 @@
-"""package_text.py: the packages' own words (plan 2.9), from localization/PackageText.tsv, in every language the game
+"""package_text.py: the packages' own words, from localization/PackageText.tsv, in every language the game
 ships (the columns of NebulaText.tsv). These are the texts the system shows for Nebula outside the game: macOS's and
 iOS's questions before a mod first reaches the microphone, the camera or the local network, and the name of a .luma
 in a file manager. A package cannot change them after release, so they ship in every language now.

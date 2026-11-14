@@ -6,11 +6,11 @@ base, an instance only an alias names, anonymous members, globals) through the r
 the real kernel (LumaTypes.cpp) and the real comparison (compare_types.py):
   1. gen_types.py writes the fixture's table and JSON;
   2. the table, the kernel and the driver are compiled with a game unit's flags and run: each answer against the
-     compiler's (offsetof, the bit-field's own access, a guard page for TY-4; contract objects: the own class,
+     compiler's (offsetof, the bit-field's own access, a guard page for TY-4; objects.md: the own class,
      subobjects, virtual calls and overriders against typeid, dynamic_cast and the compiler's own calls), then the
      kernel's description;
   3. compare_types.py passes on that description, and fails, naming the row, on a copy of the JSON with one offset
-     planted wrong (and on copies with a polymorphic flag and a method row planted wrong: contract objects).
+     planted wrong (and on copies with a polymorphic flag and a method row planted wrong: objects.md).
 Exit 0 only when all three hold.
 
 The commands may be another platform's (an Android module's: the driver is linked static for its target). --run-with
@@ -123,7 +123,7 @@ def main():
         have = None if r is None else tuple(r.get(k) for k in keys)
         if have != want:
             failed.append("TY-10: %s should be %s %s; it is %s" % (n, keys, want, have))
-    # Self-description (plan 1.8): a virtual's calls, read from its body.
+    # Self-description: a virtual's calls, read from its body.
     calls = [v.get("calls") for v in rows.get("FcNerve", {}).get("virtuals", []) if v["name"] == "FcNerve::execute"]
     want_calls = [{"name": "FcOwner::exeGo", "signature": "void()"}, {"name": "FcOwner::helper", "signature": "s32(s32) const"}]
     if calls != [want_calls]:
@@ -151,7 +151,7 @@ def main():
                (FIXTURE / "types_fixture_driver.cpp", [])]
     compiler = raw[0]
     for source, extra in sources:
-        # The module with rows is built with RTTI data (contract objects): the game unit's flags may predate it.
+        # The module with rows is built with RTTI data (objects.md): the game unit's flags may predate it.
         args = [a for a in I.parse_arguments(raw, source)
                 if a not in ("-fsyntax-only", "-Wno-everything", "-fno-rtti", str(source))] + ["-frtti"]
         obj = out / (source.stem + ".o")

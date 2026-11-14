@@ -1,7 +1,7 @@
 """gen_types.py --commands COMPILE_COMMANDS --out DIR [--entry FILE] [--defined DIR] [--depfile FILE] [--libclang PATH]
                 [--tree DIR]
 
-Plan 1.2 (contract types): the type rows of every record, field, base, enum, alias and global the game's headers declare.
+The type rows of every record, field, base, enum, alias and global the game's headers declare (language/types.md).
 One unit includes every game header (native/petari/include, native/math/include, native/include) and is parsed by libclang
 with a game unit's own compile command (--entry, default the first game unit), so target, defines and platform headers
 are the build's. Writes:
@@ -11,7 +11,7 @@ are the build's. Writes:
                             `left_out` (libclang's numbers: the build compares them with the module's --luma-describe)
   DIR/luma_types.left       what has no row, and why
   DIR/luma_vtables_unit.cpp the unit whose compile (-fdump-vtable-layouts) gives the table at the start of each record
-                            the factory makes (contract classes, overrides by slot): rewritten each run
+                            the factory makes (docs/modding/language/classes.md, overrides by slot): rewritten each run
   DIR/luma_functions.json   with --defined: every function row's facts (kind, owner, virtual, pure, const, what it
                             overrides), the units' .functions merged (merge_functions); a row without facts, facts
                             without a row, an owner that is no record of the types file or an override with no name
@@ -66,7 +66,7 @@ R_UNDEFINED = "declared, defined nowhere in the game"
 R_TEMPLATE_MEMBER = "a static member of a class template"
 R_UNIT_INSTANCE = "a template instance only a .cpp names"
 R_ALIAS_TWICE = "a name .cpp files give to different types: "
-# Each reason's id, the words LumaLink's rows give it (LeftOut.*, contract types TY-7): the kernel's left rows carry the
+# Each reason's id, the words LumaLink's rows give it (LeftOut.*, types.md): the kernel's left rows carry the
 # id, so a mod refused at load reads the validator's L505. A reason with a prefix carries its names as `what`.
 REASON_IDS = {R_KERNEL: "LeftOut.KernelOwn", R_INTERNAL: "LeftOut.InternalLinkage", R_THREAD: "LeftOut.ThreadLocal",
               R_NO_NAME: "LeftOut.NoName", R_NO_SIZE: "LeftOut.NoSize", R_NO_TYPE_NAME: "LeftOut.TypeNoName",
@@ -305,7 +305,7 @@ class Reader:
         self.foreign = {}   # typedefs outside the game's trees at file scope (<stdint.h>'s): name -> cursor (TY-9)
         self.named_instances = set()  # unit pass: the instances (and their members) its types name (TY-9)
         self.trivial_memo = {}  # TY-10: canonical spelling -> trivial
-        self.polymorphic_types = {}  # contract objects: canonical spelling -> declares or inherits a virtual
+        self.polymorphic_types = {}  # objects.md: canonical spelling -> declares or inherits a virtual
         self.seen = set()
         self.records = {}   # name -> row
         self.enums = {}
@@ -572,7 +572,7 @@ class Reader:
         if v["row"]:
             v["call"] = {"spelling": spelling, "params": params, "result": result, "const": bool(ua.isConst(m))}
             v["params"] = "(%s)%s" % (", ".join(params), " const" if v["call"]["const"] else "")
-        # Self-description (plan 1.8): the functions a body written in the class calls, in the order written, by their
+        # Self-description: the functions a body written in the class calls, in the order written, by their
         # row names (a nerve's execute names its owner's exe function), when its definition is in this parse.
         body = ua.definition(m)
         if not ua.isNull(body):
@@ -1063,7 +1063,7 @@ class Reader:
             inline = row.pop("inline", False)
             row["defined"] = defined is True or inline or defined is not None and row["mangled"] in defined
             if not row["defined"]:
-                # A constant with a known value is read from the self-description and binds nothing (contract types,
+                # A constant with a known value is read from the self-description and binds nothing (types.md,
                 # section 2); any other is left out.
                 if row["value"] is None and defined is not None:
                     self.left.append(("global", name, row["file"], row["line"], R_UNDEFINED))
@@ -1231,7 +1231,7 @@ class Reader:
         inherited = self.reach()
         missing = self.unnamed()
         if missing:
-            sys.exit("gen_types.py: type texts that name no row, built-in or left-out name (contract types TY-9):\n  " +
+            sys.exit("gen_types.py: type texts that name no row, built-in or left-out name (language/types.md):\n  " +
                      "\n  ".join("%s: %s (%s)" % m for m in sorted(missing)[:200]) +
                      ("\n  ... %d in all" % len(missing) if len(missing) > 200 else ""))
         g = self.global_rows

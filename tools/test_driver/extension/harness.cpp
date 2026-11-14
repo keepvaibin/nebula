@@ -63,7 +63,7 @@ struct Json {
     std::vector<JsonMember> members;  // an object's, as written
 };
 // A member by name. Not std::pair<std::string, Json>: a pair needs Json whole where Json declares its members, which
-// libstdc++ refuses (Linux, plan 8.1); a vector of a type declared here only is allowed (C++17).
+// libstdc++ refuses (Linux); a vector of a type declared here only is allowed (C++17).
 struct JsonMember {
     std::string first;
     Json second;

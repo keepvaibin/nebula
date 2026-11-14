@@ -1,4 +1,4 @@
-"""gen_reference.py: the LumaCore reference, generated from the game's own description (plan 10.1; rule 4: generated,
+"""gen_reference.py: the LumaCore reference, generated from the game's own description (rule 4: generated,
 not listed; rule 6: never silent).
 
 Reads what the game's build writes about itself (tools/lumacore/gen_types.py and instrument.py: luma_types.json and

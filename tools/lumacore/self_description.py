@@ -1,4 +1,4 @@
-"""The self-description (plan 1.8, contract self-description revision 1): one file that says everything a mod can name
+"""The self-description (docs/modding/language/game-description.md): one file that says everything a mod can name
 in one build of the game, made by the build beside the module from the generator's own outputs (never by hand):
 
     self_description.py --types luma_types.json --functions luma_functions.json --numbers luma_numbers.json

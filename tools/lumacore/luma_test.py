@@ -12,11 +12,11 @@ test and renderer; exit 0 only when every verdict is `pass`.
 `refs` writes a run's pictures as the references a test names, after the person running it has looked at them.
 
 The bin folder holds NebulaNative.exe (and NebulaNativeVk.exe for Vulkan), smg_game.dll (and smg_game_plain.dll, which
-the game loads when no mod has code: contract modules), nebula_test_extension.dll, luma-test.dll (the game half),
+the game loads when no mod has code), nebula_test_extension.dll, luma-test.dll (the game half),
 nebula_import.dll (a refusal's words; without it the game gives codes) and nebula-import.exe, pak.path, dxc/, and
 smg_game.luma-placement.json (the placement facts a stage patch's arguments by name need).
 Nothing outside the work folder is written but the run's own files.
-On Linux (plan 8.1, the container suite) the same with the platform's names: nebula (Vulkan only: give --renderer
+On Linux (the container suite) the same with the platform's names: nebula (Vulkan only: give --renderer
 vulkan), libsmg_game.so (and libsmg_game_plain.so), libnebula_test_extension.so, luma-test.so, libnebula_import.so and
 nebula-import; the mods' code is code/linux-x64/mod.so, and the game runs on whatever X display DISPLAY names (a
 virtual one in the container).
@@ -398,7 +398,7 @@ def read_setup(t, bare, seed, language, classes):
             if key in t:
                 raise HarnessError("a bare test has no %s" % key)
         return lines
-    # User file 1 first (contract harness 3.2): created through the game's new-file path, or, continuing from an
+    # User file 1 first: created through the game's new-file path, or, continuing from an
     # earlier test, loaded from the saves that test left, as the file select does.
     lines.append("setup file 1")
     if "save" in t:
@@ -1154,9 +1154,9 @@ def install(settings, mod_folder, code_allowed, order, kept=False, permissions="
     # The previous runtime's form would install with no code and fail far from here: named at once instead.
     if "plugins" in manifest:
         raise HarnessError("%s/luma.json has \"plugins\": a mod's code is code/<platform>/mod.<ending> with "
-                           "\"code\": {\"platforms\": [...]} (board/contracts/manifest-one-form.md)" % mod_folder)
+                           "\"code\": {\"platforms\": [...]} (docs/modding/format/manifest.md)" % mod_folder)
     if not isinstance(manifest.get("format"), str):
-        raise HarnessError("%s/luma.json: format must be \"1.0\", a string (board/contracts/manifest-one-form.md)"
+        raise HarnessError("%s/luma.json: format must be \"1.0\", a string (docs/modding/format/manifest.md)"
                            % mod_folder)
     libraries = []
     # luma-format 6: code/<platform>/mod.<ending> by `code.platforms` alone. A mod whose code is for other platforms
@@ -1398,7 +1398,7 @@ def run_one(test, renderer, args, run_folder, previous):
             shutil.copytree(previous / sub, run_folder / sub)
         carry_data(previous, run_folder)
     frozen = {}
-    # The plain module when the bin folder has it (plan 1.7): without it the game loads the rows module and says so.
+    # The plain module when the bin folder has it: without it the game loads the rows module and says so.
     plain = (HOST["plain"],) if (bin_folder / HOST["plain"]).is_file() else ()
     for name in (exe.name, HOST["game"]) + plain + (HOST["extension"],):
         shutil.copy2(bin_folder / name, run_folder / "bin" / name)  # copy2: the program keeps its mode on Linux
@@ -2220,7 +2220,7 @@ def report(run_folder, name, proves, renderer, verdict, reason, checks, args, ex
               "commit": args.commit, "module": args.module, "verdict": verdict, "reason": reason, "checks": checks}
     test_json = extra.pop("test_json", None)
     result.update(extra)
-    # Every result has contract 5's fields; a test refused before it ran has them empty (audit 0.3 H-15).
+    # Every result has the same fields; a test refused before it ran has them empty.
     for key, empty in (("setup", {}), ("frames", None), ("seconds", None), ("pictures", [])):
         result.setdefault(key, empty)
     (run_folder / "result.json").write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -2259,7 +2259,7 @@ def main():
     # to takes them as UTF-8, whatever the system's code page.
     for stream in (sys.stdout, sys.stderr):
         stream.reconfigure(encoding="utf-8", errors="backslashreplace")
-    parser = argparse.ArgumentParser(description="The proof harness's runner (contract harness, revision 1).")
+    parser = argparse.ArgumentParser(description="The proof harness's runner.")
     sub = parser.add_subparsers(dest="command", required=True)
     run = sub.add_parser("run")
     run.add_argument("target")
