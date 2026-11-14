@@ -63,7 +63,7 @@ struct CompileOptions {
 
 // Changes with anything that changes compile_hlsl's output for the same source: the shaders this device built for
 // mods are built again when it does (mod_shader_compiler_revision, the mods' cook signature).
-inline constexpr std::uint32_t kCompilerRevision = 10;
+inline constexpr std::uint32_t kCompilerRevision = 11;
 
 // SPIR-V for `entry` of `hlsl`; empty with `error` set when it does not compile. `defines` are NAME=VALUE. Stage
 // inputs and outputs sit at their semantics' locations, so stages and the vertex layout match as D3D12's do by name:
