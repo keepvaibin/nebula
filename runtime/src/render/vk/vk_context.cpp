@@ -568,10 +568,11 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     }
     {
         // A bound table's maps: the per-stage image and sampler limits, and what maxPerStageResources leaves in the fragment
-        // stage beside set 0's three constants buffers and two storage buffers and at most four colour attachments (which
-        // count there). Samplers do not count against maxPerStageResources.
+        // stage beside set 0's three constants buffers and three storage buffers (RendererVk::create_layouts: bindings 3
+        // and 4 in both stages, 5 in the fragment stage) and at most four colour attachments (which count there). Samplers
+        // do not count against maxPerStageResources.
         const VkPhysicalDeviceLimits& limits = properties_.limits;
-        constexpr std::uint32_t kBesideMaps = 3u + 2u + 4u;
+        constexpr std::uint32_t kBesideMaps = 3u + 3u + 4u;
         const std::uint32_t by_resources = limits.maxPerStageResources > kBesideMaps ? limits.maxPerStageResources - kBesideMaps : 0u;
         table_slots_ = std::min({limits.maxPerStageDescriptorSampledImages, limits.maxPerStageDescriptorSamplers, by_resources});
     }
