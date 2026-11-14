@@ -585,18 +585,6 @@ void RenderCore::render_frame(bool present_swap_chain, bool black) {
         if (stop_render_thread_) {
             return;
         }
-    }
-
-    {
-        std::unique_lock<std::mutex> lock(queue_mutex_);
-        if (render_thread_error_ != nullptr) {
-            std::exception_ptr error = render_thread_error_;
-            render_thread_error_ = nullptr;
-            std::rethrow_exception(error);
-        }
-        if (stop_render_thread_) {
-            return;
-        }
         frame_queue_.push_back(std::move(chunk));
     }
     queue_cv_.notify_one();
@@ -1709,10 +1697,6 @@ void RenderCore::render_loop() {
                     }
                     render_frame_on_thread(chunk);
                     run_pending_interp_start();
-                    {
-                        std::lock_guard<std::mutex> lock(queue_mutex_);
-                        render_chunk_started_ns_ = 0u;
-                    }
                 }
             } else if (idle_present) {
                 present_latest_frame_on_thread();
@@ -1755,6 +1739,7 @@ void RenderCore::render_loop() {
             queue_space_cv_.notify_all();
         } else if (have_chunk) {
             std::lock_guard<std::mutex> lock(queue_mutex_);
+            render_chunk_started_ns_ = 0u;
             if (render_chunks_in_flight_ != 0u) {
                 --render_chunks_in_flight_;
             }
@@ -1959,6 +1944,8 @@ RenderCore::ListEntry& RenderCore::list_arrived(FrameChunk& chunk) {
 // A list is read while it is the newest walked or the one before the newest walked.
 void RenderCore::release_lists_before(const ListEntry& entry) noexcept {
     while (lists_.size() > 1u && lists_.front().get() != entry.before && lists_.front().get() != &entry) {
+        // The game writes the list's memory again once it sees the flag: every read of it comes first, on every CPU.
+        std::atomic_thread_fence(std::memory_order_release);
         lists_.front()->data.list->released = 1u;
         lists_[1]->before = nullptr;
         free_lists_.push_back(std::move(lists_.front()));
