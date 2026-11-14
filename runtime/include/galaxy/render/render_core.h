@@ -659,6 +659,7 @@ private:
     std::vector<float> walk_skin_;            // a weighted block's joint products (core::ComposeInput::skin)
     std::vector<std::uint8_t> walk_skin_made_;
     std::vector<std::array<float, 6>> walk_view_terms_, walk_view_previous_;
+    std::vector<std::array<float, 16>> walk_view_planes_;  // item_culled's four side planes a view: normal, length
     std::vector<WalkView> walk_views_;
     std::vector<core::StaticSlot> walk_constants_;
     std::vector<std::uint8_t> walk_constants_known_;
