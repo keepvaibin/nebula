@@ -35,7 +35,8 @@ public:
     [[nodiscard]] bool active() const;
     // The frames that could still be queued.
     [[nodiscard]] std::size_t room() const;
-    // How much of what pull gave (samples at kRate) has not been played yet, as the output takes it.
+    // How much of what the mixer made (samples at kRate, the movie's and every other sound's) has not been played
+    // yet, as the output takes it.
     void set_unplayed(std::size_t samples);
     // Where playing has reached: the frames played in full and the fraction of the next.
     [[nodiscard]] double position();
@@ -44,19 +45,25 @@ private:
     struct Frame {
         std::vector<std::int16_t> samples;  // interleaved (left, right)
         std::size_t read{};
+        std::int64_t start{};  // where its first sample went, in made_ (set when it starts playing)
     };
 
     mutable std::mutex mutex_;
     std::deque<Frame> queue_;
     bool open_{};
     bool started_{};
-    // Where each frame given to pull ends, in samples pulled, up to where the output has reached.
-    std::deque<std::int64_t> ends_;
-    std::int64_t queued_end_{};
-    std::int64_t pulled_{};
+    // One clock for the picture: made_ counts every sample the mixer asked pull for since open (movie or not), and
+    // each frame pull finished is stamped there with where its first sample went and the place after its last.
+    // made_ - unplayed_ is what the output has played, so a frame is heard once its last sample has left the output,
+    // with or without other sound after the movie.
+    struct Span {
+        std::int64_t start;
+        std::int64_t end;
+    };
+    std::deque<Span> ends_;
+    std::int64_t made_{};
     std::size_t unplayed_{};
     std::int32_t heard_{};
-    std::int64_t heard_end_{};
     bool mono_{};
     float volume_{127.0f};
     float target_{127.0f};
