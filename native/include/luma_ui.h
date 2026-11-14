@@ -54,12 +54,12 @@ typedef struct LumaUiService {
     LumaServiceTable base;
     /* 1.0. Game thread, in a scene. The layout `layout` (LayoutData/<layout>.arc: the mod's cooked one, 3.8, or the
        game's) opened on `layer`, shown. LUMA_OK and *out. A layout in no store: LUMA_E_NOT_FOUND, Ui.MissingLayout
-       in the mod log. No scene running (the game is loading one, or at boot its
-       fonts): LUMA_E_BUSY, reported (Ui.NoScene). An empty or
-       null name, a layer outside the enum, a null out: LUMA_E_ARGUMENT, reported; LUMA_UI_MOST_SCREENS open (or 128
-       made in one scene): LUMA_E_LIMIT, reported. Off the game thread: LUMA_E_THREAD, reported; while the game takes
-       the mod out: LUMA_E_CANCELLED. A layout opened again on the layer after this mod closed it may be that screen
-       again: its panes' visibility is the layout's again, their text as the mod left it. */
+       in the mod log. No scene running (the game is loading one, or at boot its fonts): LUMA_E_BUSY, reported
+       (Ui.NoScene). An empty or null name, a layer outside the enum, a null out: LUMA_E_ARGUMENT, reported;
+       LUMA_UI_MOST_SCREENS open (or 128 made in one scene): LUMA_E_LIMIT, reported. Off the game thread:
+       LUMA_E_THREAD, reported; while the game takes the mod out: LUMA_E_CANCELLED. A layout opened again on the
+       layer after this mod closed it may be that screen again: its panes' visibility is the layout's again, their
+       text as the mod left it. */
     int32_t (*open)(const LumaMod* mod, const char* layout, LumaUiLayer layer, LumaUiScreen* out);
     /* 1.0. Game thread. The pane named `name` (exactly, the first in the tree's order) of `screen`. LUMA_OK and *out
        (the same handle for the same pane). No pane of that name: LUMA_E_NOT_FOUND, Ui.MissingPane in the mod log. An
