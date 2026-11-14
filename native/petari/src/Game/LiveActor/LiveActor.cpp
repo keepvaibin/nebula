@@ -443,10 +443,17 @@ void LiveActor::initActorCollisionParts(const char* pName, HitSensor* pSensor, R
         scaleType = MR::CollisionScaleType_Default;
     }
 
-    // The collision is the archive's <name>.kcl. An archive without it (a mod's model with no collision beside it)
-    // gives the actor no collision, said once here, and the game runs on: the file is never read through.
+    // The collision is the archive's <name>.kcl, a member named by the file alone: a mod's model is named by its
+    // archive's path ("Luma/<mod>/Name", as a mod's code names it), whose archive holds Name.kcl beside Name.bmd. An
+    // archive without it (a mod's model with no collision beside it) gives the actor no collision, said once here, and
+    // the game runs on: the file is never read through.
+    for (const char* pAt = pName; pAt != nullptr && *pAt != '\0'; pAt++) {
+        if (*pAt == '/') {
+            pName = pAt + 1;
+        }
+    }
     const ResourceHolder* const pFrom = pResHolder != nullptr ? pResHolder : MR::getResourceHolder(this);
-    if (pFrom == nullptr || !pFrom->mFileInfoTable->isExistRes(MR::FormattedName("%s.kcl", pName).c_str())) {
+    if (pName == nullptr || pFrom == nullptr || !pFrom->mFileInfoTable->isExistRes(MR::FormattedName("%s.kcl", pName).c_str())) {
         nebula_log("actor %s: its collision %s.kcl is not in its archive; it has no collision\n", mName != nullptr ? mName : "",
                    pName != nullptr ? pName : "");
         return;
