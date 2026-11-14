@@ -2,6 +2,7 @@
 #include "render/core/pipelines.h"
 
 #include "render/core/pipeline_cache_file.h"
+#include "render/core/present_gate.h"
 #include "galaxy/render/program_table.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/renderer_d3d12.h"
@@ -486,10 +487,14 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
         {
             const std::lock_guard held(named);
             const std::shared_lock shared(gCache.use);
+            const CreationScope gate;
             hr = cache->LoadGraphicsPipeline(name.data(), &pd, IID_PPV_ARGS(&pipeline));
         }
         if (FAILED(hr)) {
-            hr = device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&pipeline));
+            {
+                const CreationScope gate;
+                hr = device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&pipeline));
+            }
             if (SUCCEEDED(hr)) {
                 const std::lock_guard held(named);
                 const std::unique_lock alone(gCache.use);
@@ -498,6 +503,7 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
             }
         }
     } else {
+        const CreationScope gate;
         hr = device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&pipeline));
     }
     if (FAILED(hr)) {

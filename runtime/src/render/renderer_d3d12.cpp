@@ -26,6 +26,7 @@
 #include "galaxy/game_paths.h"
 #include "galaxy/frame_timeline.h"
 #include "galaxy/windows_power.h"
+#include "render/core/present_gate.h"
 
 #pragma warning(push, 0)
 #include <d3d12sdklayers.h>
@@ -3988,7 +3989,12 @@ void RendererD3D12::present_to_swap_chain() {
         WaitForSingleObjectEx(latency_wait_, 100u, TRUE) == WAIT_TIMEOUT && ++latency_timeouts_ <= 4u) {
         std::cerr << "[present] the frame latency object did not signal within 100 ms\n";
     }
-    const HRESULT present_hr = swap_chain_->Present(vsync, present_flags);
+    // No pipeline creation spans the Present (core/present_gate.h).
+    HRESULT present_hr = S_OK;
+    {
+        const core::PresentScope gate;
+        present_hr = swap_chain_->Present(vsync, present_flags);
+    }
     if (generating && collect_present_telemetry) {
         // What frame generation sends to the display per frame here.
         static UINT last_count = 0u;
