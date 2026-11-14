@@ -913,7 +913,26 @@ def permission_digest(declared):
     return "%016x" % h
 
 
-def install(settings, mod_folder, code_allowed, order, kept=False, permissions="allow", broken_ok=False, folder=None):
+def option_lines(mod_folder, manifest, options):
+    """The test's stored options as the Mods page keeps them in mods.ini: a text option as text.<key>=<value>, every
+    other kind as choice.<key>=<value> (a choice's value id, a number as written, a toggle on or off). The value is
+    stored as given, so a test can store one the option does not take."""
+    kinds = {o.get("key"): o.get("kind") for o in manifest.get("options", []) if isinstance(o, dict)}
+    lines = ""
+    for key, value in options.items():
+        if key not in kinds:
+            raise HarnessError("%s: options names %s, which the mod does not have" % (mod_folder, key))
+        if isinstance(value, bool):
+            value = "on" if value else "off"
+        elif isinstance(value, (int, float)):
+            value = repr(value) if isinstance(value, float) else str(value)
+        if not isinstance(value, str) or any(c in value for c in "\r\n=") or not re.fullmatch(r"[a-z0-9_]+", key):
+            raise HarnessError("%s: the option %s's value must be a number, true, false or one line without =" % (mod_folder, key))
+        lines += "%s.%s=%s\n" % ("text" if kinds[key] == "text" else "choice", key, value)
+    return lines
+
+
+def install(settings, mod_folder, code_allowed, order, kept=False, permissions="allow", broken_ok=False, folder=None, options=None):
     """A mod folder holding luma.json (the base's form, as examples/luma-hello) into the run's mods, on, in order.
     kept: the mods an earlier test left (continue_from) stay as they are, with their data; only new ids are added.
     permissions: "allow", "deny" or {name: "allow"|"deny"}: each declared permission's answer, as the consent screen
@@ -977,6 +996,8 @@ def install(settings, mod_folder, code_allowed, order, kept=False, permissions="
     for p in declared if permissions != "ask" else []:
         wanted = permissions if isinstance(permissions, str) else permissions.get(p["name"], "allow")
         lines += "permission.%s=%s %s\n" % (p["name"], "yes" if wanted == "allow" else "no", permission_digest(p))
+    if options:
+        lines += option_lines(mod_folder, manifest, options)
     with ini.open("a", encoding="utf-8") as out:
         out.write(lines)
     return mod_id
@@ -1065,7 +1086,7 @@ def place_mods(test, settings, previous, frozen):
             raise HarnessError("the mod %s has no luma.json" % m["path"])
         mod_id = install(settings, m["path"], m["code"] == "allow", i + 1, kept=previous is not None,
                          permissions="ask" if m["code"] == "ask" else m["permissions"], broken_ok=not m["loads"],
-                         folder=m["folder"])
+                         folder=m["folder"], options=m["options"])
         # A mod with no code (luma.json has no "code": content only) is never started, so the host writes no start
         # or refusal line for it and there is no mod.<id>.loaded fact: its test's own facts show its content.
         try:
@@ -1102,9 +1123,6 @@ def run_one(test, renderer, args, run_folder, previous):
         raise HarnessError("no adapter for %s" % platform.system())
     if test["region"] is not None:
         raise HarnessError("region: not built yet (one game per bin folder; the bin names its region in 0.8)")
-    for m in test["mods"]:
-        if m["options"]:
-            raise HarnessError("mod options: not built yet (the Mods screen's options, task 6.3)")
     if test["language"] is not None and LANGUAGES[test["language"]] is None:
         raise HarnessError("language %s: not built yet (the language packs' setting, task 3.8)" % test["language"])
     bin_folder = pathlib.Path(args.bin).resolve()
