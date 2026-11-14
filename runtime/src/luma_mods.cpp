@@ -115,6 +115,22 @@ void copy_text(char* out, std::size_t size, std::string_view text) noexcept {
 
 std::vector<LumaModsInfo> g_list;  // game thread; made at the first call, after the start recorded the session
 bool g_list_made = false;
+// Game thread: the ids of the mods taken out while the game runs (their services ended), until a reload begins them
+// again. A running mod in the list reads TAKEN_OUT while its id is here.
+std::vector<std::string> g_taken_out;
+
+bool taken_out(std::string_view id) {
+    return std::find(g_taken_out.begin(), g_taken_out.end(), id) != g_taken_out.end();
+}
+
+// The list's line of `id` follows a take-out or a reload: RUNNING and TAKEN_OUT only, the other states are the start's.
+void follow_take_out(std::string_view id, bool out) {
+    for (LumaModsInfo& info : g_list) {
+        if (id != info.id) continue;
+        if (out && info.state == LUMA_MODS_RUNNING) info.state = LUMA_MODS_TAKEN_OUT;
+        if (!out && info.state == LUMA_MODS_TAKEN_OUT) info.state = LUMA_MODS_RUNNING;
+    }
+}
 
 LumaModsState state_of(const galaxy::mods::ModInfo& mod, const std::vector<galaxy::mods::NotStarted>& not_started) {
     if (!mod.enabled) {
@@ -156,6 +172,7 @@ void make_list() {
                     : mod.textures    ? LUMA_MODS_TEXTURES
                                       : LUMA_MODS_FILES;
         info.state = state_of(mod, not_started);
+        if (info.state == LUMA_MODS_RUNNING && taken_out(mod.id)) info.state = LUMA_MODS_TAKEN_OUT;
         info.has_code = mod.code_token.empty() ? 0u : 1u;
         copy_text(info.id, sizeof(info.id), mod.id);
         // pack_title is the name the Mods page shows: a .luma's name in the played language, a pack's title.
@@ -1371,8 +1388,14 @@ std::int32_t kit_needing(const LumaMod* mod, std::uint64_t* out, std::uint32_t c
 }
 
 // Game thread, before the mod's begin: a mod that may need another (every mod with code begins here).
+// A reload begins a taken-out mod again: its line reads RUNNING again.
 void kit_mod_begin(void*, const LumaMod* mod) {
     g_kit_running.push_back(mod);
+    const LumaServiceKernel* const kernel = g_kernel.load(std::memory_order_acquire);
+    if (const char* const id = kernel != nullptr ? kernel->mod_id(mod) : nullptr) {
+        g_taken_out.erase(std::remove(g_taken_out.begin(), g_taken_out.end(), std::string_view(id)), g_taken_out.end());
+        follow_take_out(id, false);
+    }
 }
 
 // Game thread, after the mod's stop: it is no longer running, its bytes go, and the index is made again at the next
@@ -1384,9 +1407,16 @@ void kit_mod_gone(const LumaMod* mod) {
     g_kit_index_made = false;
 }
 
+// Every mod whose services began, when it is taken out (the kernel calls every provider's mod_gone; the id is valid
+// until its mod_end): its line reads TAKEN_OUT.
 void mods_mod_gone(void* user, const LumaMod* mod) {
     options_mod_gone(user, mod);
     kit_mod_gone(mod);
+    const LumaServiceKernel* const kernel = g_kernel.load(std::memory_order_acquire);
+    if (const char* const id = kernel != nullptr ? kernel->mod_id(mod) : nullptr) {
+        if (!taken_out(id)) g_taken_out.emplace_back(id);
+        follow_take_out(id, true);
+    }
 }
 
 // ---- The providers -------------------------------------------------------------------------------------------------
