@@ -15,4 +15,13 @@ namespace RenderTexture {
     void rewritten(const void* pAddress, u32 size);
     // These bytes are read over: their images are new ones.
     void forget(uintptr_t start, uintptr_t end);
+#if defined(NEBULA_PLAIN_MODULE)
+    struct Range {
+        uintptr_t mStart;
+        uintptr_t mEnd;
+    };
+    // forget() of each range in turn, in one pass over the table: the same images freed in the same order. The ranges
+    // must not overlap (file views do not).
+    void forget(const Range* pRanges, u32 count);
+#endif
 }  // namespace RenderTexture

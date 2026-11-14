@@ -96,6 +96,8 @@ private:
     [[nodiscard]] VkPipeline composite_pipeline(VkRenderPass pass, unsigned samples_log2);
     bool ensure(std::shared_ptr<Texture>& target, unsigned width, unsigned height, VkFormat format, bool work,
                 const char* name);
+    // The unused slots' image, in GENERAL as their descriptors name it (no render pass open).
+    bool ensure_unused_slot(VkCommandBuffer commands);
     // The scene target colour's frame into `target` (its format), left shader-readable.
     bool copy_frame(VkCommandBuffer commands, const Inputs& in, std::shared_ptr<Texture>& target, const char* name);
     // Set 0 for a pass: t0-t2 and u0-u2 (null: the unused slot's image); `first_layout` the first's when given.

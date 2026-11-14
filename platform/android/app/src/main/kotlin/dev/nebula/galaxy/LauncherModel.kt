@@ -60,10 +60,6 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     var screen by mutableStateOf(if (install != null) Screen.Home else Screen.Welcome)
     var disc by mutableStateOf<DiscPick?>(null)
         private set
-    var graphics by mutableStateOf(GraphicsSettings.read(app))
-        private set
-    var controls by mutableStateOf(ControlsSettings.read(app))
-        private set
     var gameExit by mutableStateOf<GameExit?>(null)
     var freeBytes by mutableStateOf(Storage.freeBytes(app))
         private set
@@ -97,7 +93,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         Thread {
             val result = runCatching {
                 ModImport.import(app, uri) { share -> main.post { if (modProgress != null) modProgress = share } }
-            }.getOrElse { ModImportResult(false, "", "", "", it.message ?: "That file could not be read") }
+            }.getOrElse { ModImportResult(false, "", "", "", it.message ?: app.getString(R.string.nebula_file_unreadable)) }
             val file = DropKind.nameAndSize(app, uri).first
             main.post {
                 modProgress = null
@@ -118,12 +114,12 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         val ready = results.filter { it.second.ok }.map { it.second.name }
         val failed = results.filter { !it.second.ok }.map { "${it.first}: ${it.second.message}" }
         val title = when {
-            failed.isEmpty() -> "${ready.size} mods are ready"
-            ready.isEmpty() -> "Those files could not be imported"
-            else -> "${ready.size} of ${results.size} mods are ready"
+            failed.isEmpty() -> app.getString(R.string.nebula_mods_ready, ready.size.toString())
+            ready.isEmpty() -> app.getString(R.string.nebula_files_failed)
+            else -> app.getString(R.string.nebula_mods_some_ready, ready.size.toString(), results.size.toString())
         }
         val parts = ArrayList<String>()
-        if (ready.isNotEmpty()) parts += ready.joinToString(", ") + ". Turn them on under Mods in the game's settings."
+        if (ready.isNotEmpty()) parts += ready.joinToString(", ") + ". " + app.getString(R.string.nebula_mods_turn_on)
         if (failed.isNotEmpty()) parts += failed.joinToString("\n")
         return ModImportResult(failed.isEmpty(), "", "", "", parts.joinToString("\n\n"), title)
     }
@@ -143,7 +139,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                     return@withContext
                 }
                 if (install == null) {
-                    transferResult = TransferResult(false, "Set up the game first", "Drop your disc image here to start.")
+                    transferResult = TransferResult(false, app.getString(R.string.nebula_set_up_first), app.getString(R.string.nebula_drop_disc_to_start))
                     return@withContext
                 }
                 kinds[DropKind.Saves]?.firstOrNull()?.let { importSaves(it) }
@@ -181,7 +177,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         miiBusy = true
         viewModelScope.launch(Dispatchers.IO) {
             val result = runCatching { MiiImport.import(app, uris) }
-                .getOrElse { TransferResult(false, "The Miis could not be imported", it.message ?: "Unknown error.") }
+                .getOrElse { TransferResult(false, app.getString(R.string.nebula_miis_failed), it.message ?: app.getString(R.string.nebula_unknown_error)) }
             withContext(Dispatchers.Main) {
                 miiBusy = false
                 transferResult = result
@@ -199,7 +195,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         if (saveBusy) return
         saveBusy = true
         viewModelScope.launch(Dispatchers.IO) {
-            val result = runCatching(work).getOrElse { TransferResult(false, "The saves could not be moved", it.message ?: "Unknown error.") }
+            val result = runCatching(work).getOrElse { TransferResult(false, app.getString(R.string.nebula_saves_failed), it.message ?: app.getString(R.string.nebula_unknown_error)) }
             val saves = Storage.saveBytes(app)
             withContext(Dispatchers.Main) {
                 saveBusy = false
@@ -218,6 +214,192 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
 
     init {
         if (Imports.state.value is ImportState.Running) screen = Screen.Import
+    }
+
+    /** A newer release to offer (Updates), over the launcher until the player answers. */
+    var update by mutableStateOf<Release?>(null)
+        private set
+
+    /** The update's download and hand-over under way: its share done (0 to 1), or null. */
+    var updateProgress by mutableStateOf<Float?>(null)
+        private set
+
+    /** Why the last Update did not reach Android's installer, shown in the prompt. */
+    var updateFailure by mutableStateOf<UpdateFailure?>(null)
+        private set
+
+    /** Android lets no app install packages until the player allows it for Nebula. */
+    var updateNeedsPermission by mutableStateOf(false)
+        private set
+
+    /** The check at start (Settings, Updates); on unless the player turns it off. */
+    var updatesAtStart by mutableStateOf(Updates.enabled(application))
+        private set
+
+    private val updateCanceled = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    // Not now (or Skip) answered: no other prompt in this run.
+    private var updateAnswered = false
+
+    // Handed to Android's installer, waiting on its answer (onInstallAnswered).
+    private var installing: Release? = null
+
+    init {
+        // The kept answer at once, the check's when it comes; it never holds up Play (a late answer is kept and
+        // offered at the next start).
+        offerUpdate(Updates.pending(app))
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
+        Updates.begin(app) { release -> main.post { offerUpdate(release) } }
+        Updates.installAnswered = { failure -> onInstallAnswered(failure) }
+    }
+
+    // The installer did not install (declined, refused, blocked, no room, failed): the prompt again, with why. The
+    // release stays kept, so the next start offers it too.
+    private fun onInstallAnswered(failure: UpdateFailure?) {
+        val release = installing ?: return
+        installing = null
+        if (failure == null) return
+        updateAnswered = false
+        updateNeedsPermission = false
+        update = release
+        updateFailure = failure
+    }
+
+    override fun onCleared() {
+        Updates.installAnswered = null
+        super.onCleared()
+    }
+
+    private fun offerUpdate(release: Release?) {
+        // Installing replaces the app and ends a game running in its process: never offered meanwhile.
+        if (release == null || updateAnswered || updateProgress != null || SaveTransfer.gameRunning(app)) return
+        update = release
+    }
+
+    fun updateLater() {
+        updateAnswered = true
+        update = null
+        updateFailure = null
+        updateNeedsPermission = false
+    }
+
+    fun updateSkip() {
+        update?.let { Updates.skip(app, it.version) }
+        updateLater()
+    }
+
+    fun updateCancel() {
+        updateCanceled.set(true)
+    }
+
+    fun updateNow() {
+        val release = update ?: return
+        if (updateProgress != null || SaveTransfer.gameRunning(app)) return
+        if (!Updates.canInstall(app)) {
+            updateNeedsPermission = true
+            return
+        }
+        updateNeedsPermission = false
+        updateFailure = null
+        updateCanceled.set(false)
+        updateProgress = 0f
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
+        Thread({
+            var shown = -1
+            val result = runCatching {
+                val apk = Updates.download(app, release, { bytes ->
+                    // A step per percent reaches the screen, not one per piece read.
+                    val percent = if (release.apkBytes > 0L) (bytes * 100L / release.apkBytes).toInt().coerceIn(0, 100) else 0
+                    if (percent != shown) {
+                        shown = percent
+                        main.post { if (updateProgress != null) updateProgress = percent / 100f }
+                    }
+                }, updateCanceled::get)
+                Updates.install(app, apk)
+            }
+            main.post {
+                updateProgress = null
+                result.onSuccess {
+                    // Android's installer asks the player now (UpdateInstallReceiver) and replaces the app, or answers
+                    // why not (onInstallAnswered).
+                    installing = release
+                    updateAnswered = true
+                    update = null
+                }
+                result.onFailure { error ->
+                    if (!updateCanceled.get()) updateFailure = (error as? UpdateException)?.failure ?: UpdateFailure.Download
+                }
+            }
+        }, "nebula-update").start()
+    }
+
+    /** The system's "install unknown apps" switch for Nebula. */
+    fun openInstallPermission(context: Context) {
+        context.startActivity(
+            Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${app.packageName}"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
+
+    fun updateUpdatesAtStart(on: Boolean) {
+        updatesAtStart = on
+        Updates.setEnabled(app, on)
+        if (!on && updateProgress == null) update = null
+    }
+
+    /** The last benchmark's result (Settings, Performance); null before the first or after a run without one. */
+    var benchmark by mutableStateOf(Benchmark.read(application))
+        private set
+
+    /** The run that just ended wrote no result. */
+    var benchmarkUnfinished by mutableStateOf(false)
+        private set
+
+    /** Apply pressed for this result: config.ini has its values. */
+    var benchmarkApplied by mutableStateOf(false)
+        private set
+
+    /** Apply could not write config.ini. */
+    var benchmarkApplyFailed by mutableStateOf(false)
+        private set
+
+    /** From the launcher's activity, like Play: the game runs the benchmark and ends back here (resumed reads it). */
+    fun startBenchmark(activity: Context) {
+        if (install == null || SaveTransfer.gameRunning(app)) return
+        Benchmark.clear(app)
+        benchmark = null
+        benchmarkUnfinished = false
+        benchmarkApplied = false
+        benchmarkApplyFailed = false
+        GameFiles.controls(app).edit()
+            .putLong(LAUNCHED_AT, System.currentTimeMillis())
+            .putBoolean(BENCHMARK_RAN, true)
+            .commit()
+        activity.startActivity(Intent(activity, GameActivity::class.java).putExtra(Benchmark.EXTRA, true))
+    }
+
+    fun applyBenchmark() {
+        val result = benchmark ?: return
+        if (SaveTransfer.gameRunning(app)) return
+        val ok = Benchmark.apply(app, result)
+        benchmarkApplied = ok
+        benchmarkApplyFailed = !ok
+    }
+
+    // Back from a benchmark run: its result, or that it did not finish.
+    private fun checkBenchmark() {
+        val prefs = GameFiles.controls(app)
+        if (!prefs.getBoolean(BENCHMARK_RAN, false)) return
+        // The file is written whole before the game exits; without it, a game process still ending is waited for
+        // (the next return here reads it).
+        val result = Benchmark.read(app)
+        if (result == null && SaveTransfer.gameRunning(app)) return
+        prefs.edit().remove(BENCHMARK_RAN).apply()
+        benchmark = result
+        benchmarkUnfinished = result == null
+        benchmarkApplied = false
+        benchmarkApplyFailed = false
+        screen = Screen.Settings
     }
 
     fun back(): Boolean {
@@ -242,6 +424,9 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             withContext(Dispatchers.Main) { saveBytes = saves }
         }
         if (install == null && screen == Screen.Home) screen = Screen.Welcome
+        // Back from the system's settings with installing allowed: the prompt offers Update again.
+        if (updateNeedsPermission && Updates.canInstall(app)) updateNeedsPermission = false
+        checkBenchmark()
         checkLastRun()
     }
 
@@ -263,7 +448,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             val identity = runCatching {
                 resolver.openFileDescriptor(uri, "r")!!.use { DiscIdentity.parse(Importer.identify(it.fd)) }
-            }.getOrElse { DiscIdentity(false, "", "", "", "The disc image could not be read: ${it.message}") }
+            }.getOrElse { DiscIdentity(false, "", "", "", app.getString(R.string.nebula_disc_unreadable, it.message.orEmpty())) }
             withContext(Dispatchers.Main) {
                 if (disc?.uri == uri) disc = disc?.copy(identity = identity)
             }
@@ -303,16 +488,6 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         screen = Screen.Disc
     }
 
-    fun updateGraphics(value: GraphicsSettings) {
-        graphics = value
-        value.write(app)
-    }
-
-    fun updateControls(value: ControlsSettings) {
-        controls = value
-        value.write(app)
-    }
-
     fun removeGame() {
         Storage.removeGame(app)
         install = null
@@ -334,7 +509,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         val hasLog = GameFiles.log(app).isFile
         val error = GameFiles.lastError(app)
         if (error.isFile) {
-            gameExit = GameExit("The game could not continue", error.readText().trim().ifEmpty { "Unknown error." }, hasLog)
+            gameExit = GameExit(app.getString(R.string.nebula_game_could_not_continue), error.readText().trim().ifEmpty { app.getString(R.string.nebula_unknown_error) }, hasLog)
             error.delete()
             return
         }
@@ -343,16 +518,17 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             .firstOrNull { it.processName.endsWith(":game") && it.timestamp >= launchedAt } ?: return
         val message = when (exit.reason) {
             ApplicationExitInfo.REASON_CRASH, ApplicationExitInfo.REASON_CRASH_NATIVE ->
-                "The game stopped unexpectedly. The log of that run can help find out why."
-            ApplicationExitInfo.REASON_ANR -> "The game stopped responding and was closed."
+                app.getString(R.string.nebula_game_crashed)
+            ApplicationExitInfo.REASON_ANR -> app.getString(R.string.nebula_game_not_responding)
             ApplicationExitInfo.REASON_LOW_MEMORY ->
-                "Android closed the game to free memory. Closing other apps before playing can help."
+                app.getString(R.string.nebula_game_low_memory)
             else -> return
         }
-        gameExit = GameExit("The game closed", message, hasLog)
+        gameExit = GameExit(app.getString(R.string.nebula_game_closed), message, hasLog)
     }
 
     companion object {
         private const val LAUNCHED_AT = "launchedAt"
+        private const val BENCHMARK_RAN = "benchmarkRan"
     }
 }

@@ -46,18 +46,19 @@ namespace Nebula.Launcher
                   command.Arguments == "/select,\"" + Path.GetFullPath(zip) + "\"", "Open folder shows the recording selected in Explorer");
         }
 
-        // The update offer: Update and Not now, Don't ask again unticked; Update ignores the box, Not now keeps it.
-        // Rendered to update-prompt.png.
+        // The update offer: Update by default, Not now, Skip this version, the download's size; each button's choice.
+        // Rendered to update-prompt.png. Then the service's rules: an offer comes only from the last check's answer,
+        // never from the network before the game starts.
         static void UpdatePromptCases(string outDir)
         {
-            var release = new ReleaseInfo { Version = "9.9.9", Notes = "What changed in this release.\n\n- One fix.\n- Another." };
+            var release = new ReleaseInfo { Version = "9.9.9", Notes = "What changed in this release.\n\n- One fix.\n- Another.", SetupSize = 150L << 20 };
             using (var form = new UpdatePromptForm(release))
             {
                 var buttons = All(form).OfType<Button>().ToList();
-                // Don't ask again (a ray tracing machine's offer also holds Prepare ray tracing shaders).
-                var box = All(form).OfType<CheckBox>().Single(b => b.Text == "Don't ask again");
-                Check(buttons.Any(b => b.Text == "Update") && buttons.Any(b => b.Text == "Not now") && !box.Checked &&
-                      form.AcceptButton == buttons.First(b => b.Text == "Update"), "the update offer: Update by default, Not now, Don't ask again unticked");
+                Check(buttons.Any(b => b.Text == "Update") && buttons.Any(b => b.Text == "Not now") && buttons.Any(b => b.Text == "Skip this version") &&
+                      form.AcceptButton == buttons.First(b => b.Text == "Update") && form.CancelButton == buttons.First(b => b.Text == "Not now"),
+                      "the update offer: Update by default, Not now, Skip this version");
+                Check(All(form).OfType<Label>().Any(l => l.Text == "Download: 150 MB"), "the offer names the download's size");
                 CreateHandles(form);
                 form.PerformLayout();
                 using (var bitmap = new Bitmap(form.Width, form.Height))
@@ -65,16 +66,19 @@ namespace Nebula.Launcher
                     form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
                     bitmap.Save(Path.Combine(outDir, "update-prompt.png"), ImageFormat.Png);
                 }
-                box.Checked = true;
-                form.Choose(true);
-                Check(form.DialogResult == DialogResult.Yes && !form.DontAskAgain, "Update ignores Don't ask again");
+                form.Choose(UpdateChoice.Update);
+                Check(form.DialogResult == DialogResult.Yes && form.Choice == UpdateChoice.Update, "Update chooses the update");
             }
             using (var form = new UpdatePromptForm(release))
             {
-                All(form).OfType<CheckBox>().Single(b => b.Text == "Don't ask again").Checked = true;
-                form.Choose(false);
-                Check(form.DialogResult == DialogResult.No && form.DontAskAgain, "Not now keeps Don't ask again");
+                form.Choose(UpdateChoice.Skip);
+                Check(form.DialogResult == DialogResult.No && form.Choice == UpdateChoice.Skip, "Skip this version chooses no update");
             }
+            using (var form = new UpdatePromptForm(release))
+            {
+                Check(form.Choice == UpdateChoice.Later, "a prompt closed any other way is Not now");
+            }
+            UpdateServiceCases();
             // A release's notes as GitHub holds them (Markdown, 1.0.2's opening): plain text in the prompt.
             var marked = new ReleaseInfo
             {
@@ -132,6 +136,318 @@ namespace Nebula.Launcher
                 "pad: what is held as a dialog opens does nothing, even held on");
             Check(opened.Step(none, 2100) == PadMenuInput.Action.None && opened.Step(confirm, 2110) == PadMenuInput.Action.Confirm,
                 "pad: released and pressed again, it acts");
+
+            // The settings window's rows: Up and Down move, Left and Right change, the shoulders change the page.
+            var rows = new PadMenuInput(true);
+            rows.HoldCurrent(none);
+            Check(rows.Step(up, 0) == PadMenuInput.Action.Previous && rows.Step(none, 10) == PadMenuInput.Action.None &&
+                  rows.Step(new PadState { Down = true }, 20) == PadMenuInput.Action.Next, "rows: up and down move between rows");
+            Check(rows.Step(new PadState { Left = true }, 30) == PadMenuInput.Action.Decrease &&
+                  rows.Step(right, 40) == PadMenuInput.Action.Increase && rows.Step(right, 340) == PadMenuInput.Action.Increase,
+                  "rows: left and right change the value, and repeat when held");
+            Check(rows.Step(new PadState { PageNext = true }, 400) == PadMenuInput.Action.PageNext &&
+                  rows.Step(new PadState { PageNext = true }, 900) == PadMenuInput.Action.None &&
+                  rows.Step(new PadState { PagePrevious = true }, 910) == PadMenuInput.Action.PagePrevious,
+                  "rows: a shoulder button changes the page once per press");
+            Check(input.Step(new PadState { PageNext = true }, 600) == PadMenuInput.Action.PageNext && input.Step(right, 610) == PadMenuInput.Action.Next,
+                  "dialogs keep left and right as previous and next");
+        }
+
+        // The settings window lists the GPUs once, off the UI thread when begun at the start (StartLists); a later
+        // window lists them afresh.
+        static void StartListsCases(LaunchSession session)
+        {
+            var original = GpuAdapters.Source;
+            var threads = new List<int>();
+            GpuAdapters.Source = () =>
+            {
+                lock (threads) threads.Add(Thread.CurrentThread.ManagedThreadId);
+                return new List<GpuAdapter> { Gpu(Rtx), Gpu(Integrated) };
+            };
+            try
+            {
+                int ui = Thread.CurrentThread.ManagedThreadId;
+                StartLists.Begin();
+                using (var form = new SettingsForm(session))
+                {
+                    CreateHandles(form);
+                    Check(threads.Count == 1 && threads[0] != ui && ((ComboBox)Private(form, "gpuBox")).Items.Count == 3,
+                          "begun at the start, the GPUs are listed once, off the UI thread, and the window takes them");
+                    ((ComboBox)Private(form, "gpuBox")).SelectedIndex = 2;
+                    ((ComboBox)Private(form, "gpuBox")).SelectedIndex = 1;
+                    Check(threads.Count == 1, "choosing another GPU lists nothing again");
+                }
+                using (var form = new SettingsForm(session))
+                {
+                    Check(threads.Count == 2 && threads[1] == ui, "a later window lists them afresh");
+                }
+            }
+            finally
+            {
+                GpuAdapters.Source = original;
+            }
+        }
+
+        // The Performance page on perf/bench's contract: progress lines, the result file (schema 1 only), the game's
+        // arguments, the rows that differ named as the window names them, and Apply on the rows and in config.ini (the
+        // other keys untouched); a run that ends without a result says so.
+        // The update's download window closed (X, Alt+F4) while it downloads: no exception on the download thread (the
+        // launcher would end), the download stops, its partial file stays for the next start.
+        static void DownloadCloseCases(string scratch)
+        {
+            var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+            listener.Start();
+            int port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+            const int size = 4 << 20;
+            new Thread(() =>
+            {
+                while (true)
+                {
+                    System.Net.Sockets.TcpClient client;
+                    try { client = listener.AcceptTcpClient(); }
+                    catch (System.Net.Sockets.SocketException) { return; }
+                    new Thread(() =>
+                    {
+                        try
+                        {
+                            using (client)
+                            using (var stream = client.GetStream())
+                            {
+                                var reader = new StreamReader(stream, Encoding.ASCII);
+                                string request = reader.ReadLine() ?? "";
+                                while (!string.IsNullOrEmpty(reader.ReadLine())) { }
+                                bool signature = request.Contains("/setup.sig");
+                                long length = signature ? 8 : size;
+                                byte[] head = Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Length: " + length + "\r\nConnection: close\r\n\r\n");
+                                stream.Write(head, 0, head.Length);
+                                if (signature) { stream.Write(Encoding.ASCII.GetBytes("AAAAAAA="), 0, 8); return; }
+                                var piece = new byte[4096];
+                                for (long sent = 0; sent < size; sent += piece.Length) { stream.Write(piece, 0, piece.Length); Thread.Sleep(20); }
+                            }
+                        }
+                        catch (IOException) { }
+                        catch (ObjectDisposedException) { }
+                    }) { IsBackground = true }.Start();
+                }
+            }) { IsBackground = true }.Start();
+            Exception unhandled = null;
+            UnhandledExceptionEventHandler watch = (sender, e) => { unhandled = e.ExceptionObject as Exception; };
+            AppDomain.CurrentDomain.UnhandledException += watch;
+            try
+            {
+                string folder = Path.Combine(scratch, "download-close");
+                var release = new ReleaseInfo
+                {
+                    Version = "99.0.0", Tag = "v99.0.0", Notes = "", SetupSize = size,
+                    SetupUrl = "http://127.0.0.1:" + port + "/setup", SignatureUrl = "http://127.0.0.1:" + port + "/setup.sig",
+                };
+                string partial = Path.Combine(folder, "update-99.0.0", "Nebula-Setup.exe.partial");
+                Thread worker;
+                using (var form = new UpdateDownloadForm(release, folder))
+                {
+                    form.StartPosition = FormStartPosition.Manual;
+                    form.Location = new Point(-20000, -20000);
+                    form.ShowInTaskbar = false;
+                    form.TopMost = false;
+                    form.Show();
+                    var clock = System.Diagnostics.Stopwatch.StartNew();
+                    while (!(File.Exists(partial) && new FileInfo(partial).Length > 64 * 1024) && clock.ElapsedMilliseconds < 15000)
+                    {
+                        Application.DoEvents();
+                        Thread.Sleep(10);
+                    }
+                    Check(File.Exists(partial), "download close: the download is under way");
+                    worker = form.Worker;
+                    form.Close();   // as its X or Alt+F4: no OK result
+                    Application.DoEvents();
+                }
+                // The thread's progress and failure posts after the window has gone.
+                var after = System.Diagnostics.Stopwatch.StartNew();
+                while (worker.IsAlive && after.ElapsedMilliseconds < 10000) { Application.DoEvents(); Thread.Sleep(10); }
+                Application.DoEvents();
+                Check(!worker.IsAlive, "download close: the download stops when its window closes");
+                Check(unhandled == null, "download close: no exception on the download thread" + (unhandled != null ? ": " + unhandled : ""));
+                Check(File.Exists(partial) && new FileInfo(partial).Length < size, "download close: the partial file stays for the next start");
+                Check(!File.Exists(Path.Combine(folder, "update-99.0.0", "Nebula-Setup.exe")), "download close: no setup is left to run");
+            }
+            finally
+            {
+                AppDomain.CurrentDomain.UnhandledException -= watch;
+                listener.Stop();
+            }
+        }
+
+        static void BenchmarkCases(LaunchSession session)
+        {
+            int step, steps;
+            Check(Benchmark.Progress("[benchmark] 12 steps", out step, out steps) && step == 0 && steps == 12, "benchmark: step count line");
+            Check(Benchmark.Progress("[benchmark] 3/12 gpu Gusty Garden", out step, out steps) && step == 3 && steps == 12, "benchmark: step line");
+            Check(!Benchmark.Progress("[benchmark] complete: fits", out step, out steps) && !Benchmark.Progress(null, out step, out steps), "benchmark: other lines are no progress");
+            const string json = "{\"schema\":1,\"status\":\"complete\",\"failure\":\"\",\"summary\":{\"verdict\":\"below_target\"}," +
+                "\"recommendation\":{\"fits\":true,\"cpu_bound\":false,\"cpu_thread\":\"main\",\"settings\":[" +
+                "{\"key\":\"internal_height\",\"current\":1080,\"recommended\":720},{\"key\":\"msaa_samples\",\"current\":4,\"recommended\":2}," +
+                "{\"key\":\"ambient_occlusion\",\"current\":1,\"recommended\":0},{\"key\":\"enhanced_lighting\",\"current\":1,\"recommended\":0}," +
+                "{\"key\":\"aa\",\"current\":1,\"recommended\":1},{\"key\":\"smaa_quality\",\"current\":3,\"recommended\":2}," +
+                "{\"key\":\"bloom\",\"current\":100,\"recommended\":60},{\"key\":\"ray_tracing\",\"current\":1,\"recommended\":0}]}}";
+            var parsed = BenchmarkResult.Parse(json);
+            Check(parsed != null && parsed.Complete && parsed.Settings.Count == 7 && parsed.Changes.Count == 6,
+                  "benchmark: schema 1 parsed, unknown keys dropped, six rows differ");
+            Check(parsed != null && parsed.VerdictText == "These settings keep 60 frames per second on this device.", "benchmark: fits verdict");
+            Check(BenchmarkResult.Parse(json.Replace("\"schema\":1", "\"schema\":2")) == null && BenchmarkResult.Parse("{") == null,
+                  "benchmark: another schema or a broken file is no result");
+            var failed = BenchmarkResult.Parse("{\"schema\":1,\"status\":\"failed\",\"failure\":\"device lost\",\"summary\":{\"verdict\":\"none\"},\"recommendation\":null}");
+            Check(failed != null && !failed.Complete && failed.Changes.Count == 0 && failed.VerdictText == "The benchmark did not finish. device lost",
+                  "benchmark: a failed run recommends nothing");
+            var start = Benchmark.Create(session.App, session.Content, @"C:\x y\r.json");
+            Check(start.FileName == Path.Combine(session.App, "NebulaNative.exe") && start.Arguments.Contains(" --benchmark 1 --benchmark-out \"C:\\x y\\r.json\"")
+                  && start.Arguments.StartsWith("--pak ") && start.RedirectStandardOutput, "benchmark: the game's arguments");
+
+            string file = Benchmark.ResultPath;
+            Directory.CreateDirectory(Path.GetDirectoryName(file));
+            File.WriteAllText(file, json);
+            Check(Benchmark.Read(3, file) == null && Benchmark.Read(0, file) != null, "benchmark: a failed exit reads no result");
+            var before = GraphicsSettings.Load();
+            before.InternalHeight = 1080; before.Msaa = 2; before.AmbientOcclusion = true; before.AmbientOcclusionSsao = true;
+            before.EnhancedLighting = true; before.PerPixelLighting = true; before.AntiAliasing = 1; before.Quality = 3; before.Bloom = 100;
+            before.Sharpness = 7;
+            before.Save();
+            try
+            {
+                using (var form = new SettingsForm(session))
+                {
+                    form.StartPosition = FormStartPosition.Manual;
+                    form.Location = new Point(-20000, -20000);
+                    form.ShowInTaskbar = false;
+                    form.Show();
+                    form.Controls.OfType<TabControl>().Single().SelectedTab = (TabPage)form.benchmarkApply.Parent;
+                    Application.DoEvents();
+                    var rows = form.benchmarkRows.Items.Cast<ListViewItem>().Select(i => i.SubItems[0].Text + "|" + i.SubItems[1].Text + "|" + i.SubItems[2].Text).ToList();
+                    Check(rows.Count == 6 && rows[0] == "Internal resolution|1080p|720p" && rows[1] == "MSAA|4x|2x" && rows[2] == "Ambient occlusion|On|Off"
+                          && rows[4] == "Anti-aliasing quality|Ultra|High" && rows[5] == "Bloom|100%|60%" && form.benchmarkApply.Visible,
+                          "benchmark: the last result's differing rows, current and recommended: " + string.Join("; ", rows));
+                    form.ApplyBenchmark();
+                    Check(((ComboBox)Private(form, "internalResolution")).SelectedIndex == 5 && ((ComboBox)Private(form, "msaa")).SelectedIndex == 1
+                          && ((ComboBox)Private(form, "occlusionMode")).SelectedIndex == 0 && ((ComboBox)Private(form, "lighting")).SelectedIndex == 1
+                          && ((ComboBox)Private(form, "aaQuality")).SelectedIndex == 2 && ((NumericUpDown)Private(form, "bloom")).Value == 60
+                          && !form.benchmarkApply.Enabled, "benchmark: Apply sets the window's rows");
+                }
+                var after = GraphicsSettings.Load();
+                Check(after.InternalHeight == 720 && after.Msaa == 1 && !after.AmbientOcclusion && after.AmbientOcclusionSsao && !after.EnhancedLighting
+                      && after.PerPixelLighting && after.AntiAliasing == 1 && after.Quality == 2 && after.Bloom == 60 && after.Sharpness == 7,
+                      "benchmark: Apply writes the recommended keys to config.ini, the others untouched");
+
+                // The stub game exits 0 without writing a result: the page says the run did not finish.
+                string marker = Path.Combine(session.App, "stub-launch.txt");
+                if (File.Exists(marker)) File.Delete(marker);
+                using (var form = new SettingsForm(session))
+                {
+                    form.StartPosition = FormStartPosition.Manual;
+                    form.Location = new Point(-20000, -20000);
+                    form.ShowInTaskbar = false;
+                    form.Show();
+                    Application.DoEvents();
+                    form.Controls.OfType<TabControl>().Single().SelectedTab = (TabPage)form.benchmarkButton.Parent;
+                    Application.DoEvents();
+                    form.benchmarkButton.PerformClick();
+                    Check(!form.benchmarkButton.Enabled && !File.Exists(file), "benchmark: a run starts, the old result goes");
+                    var clock = System.Diagnostics.Stopwatch.StartNew();
+                    while (!form.benchmarkButton.Enabled && clock.ElapsedMilliseconds < 15000) { Application.DoEvents(); Thread.Sleep(10); }
+                    Check(form.benchmarkButton.Enabled && form.benchmarkVerdict.Text == "The benchmark did not finish." && !form.benchmarkRows.Visible,
+                          "benchmark: a run without a result: " + form.benchmarkVerdict.Text);
+                    Check(File.Exists(marker) && File.ReadAllLines(marker).Contains("--benchmark-out"), "benchmark: the game got the benchmark arguments");
+                }
+            }
+            finally
+            {
+                if (File.Exists(file)) File.Delete(file);
+            }
+        }
+
+        // The settings window with a controller: from the page tabs, Down walks every row of every page that takes the
+        // focus and comes back; Left and Right change a choice, a number and the page; A ticks a box; B returns to the tabs.
+        static void SettingsPadCases(LaunchSession session)
+        {
+            using (var form = new SettingsForm(session))
+            {
+                form.StartPosition = FormStartPosition.Manual;
+                form.Location = new Point(-20000, -20000);
+                form.ShowInTaskbar = false;
+                form.Show();
+                Application.DoEvents();
+                var pad = form.padNavigator;
+                var tabs = form.Controls.OfType<TabControl>().Single();
+                Func<Control> focused = () =>
+                {
+                    Control a = form.ActiveControl;
+                    while (a is ContainerControl && !(a is UpDownBase) && ((ContainerControl)a).ActiveControl != null) a = ((ContainerControl)a).ActiveControl;
+                    return a;
+                };
+                for (int page = 0; page < tabs.TabCount; page++)
+                {
+                    tabs.SelectedIndex = page;
+                    tabs.Focus();
+                    Application.DoEvents();
+                    var reached = new HashSet<Control>();
+                    for (int i = 0; i < 400; i++)
+                    {
+                        pad.Act(PadMenuInput.Action.Next);
+                        Control now = focused();
+                        if (now == tabs) break;
+                        if (now != null) reached.Add(now);
+                    }
+                    var expected = new List<Control>();
+                    Action<Control> walk = null;
+                    walk = c =>
+                    {
+                        foreach (Control child in c.Controls)
+                        {
+                            if (child.CanSelect && child.TabStop && !(child.Parent is UpDownBase)) expected.Add(child);
+                            if (!(child is UpDownBase)) walk(child);
+                        }
+                    };
+                    walk(tabs.SelectedTab);
+                    foreach (Control c in form.Controls) if (c != tabs && c.CanSelect && c.TabStop) expected.Add(c);
+                    var missed = expected.Where(c => !reached.Contains(c)).Select(c => c.GetType().Name + " '" + c.Text + "'").ToList();
+                    Check(focused() == tabs && missed.Count == 0,
+                          "pad: Down reaches every row of the " + tabs.SelectedTab.Text + " page (" + expected.Count + ") and returns to the tabs" +
+                          (missed.Count == 0 ? "" : "; missed " + string.Join(", ", missed)));
+                }
+
+                tabs.SelectedIndex = 0;
+                tabs.Focus();
+                pad.Act(PadMenuInput.Action.Increase);
+                Check(tabs.SelectedIndex == 1, "pad: Right on the tabs opens the next page");
+                pad.Act(PadMenuInput.Action.PagePrevious);
+                Check(tabs.SelectedIndex == 0 && focused() == tabs, "pad: the left shoulder goes back a page");
+                pad.Act(PadMenuInput.Action.PagePrevious);
+                Check(tabs.SelectedIndex == 0, "pad: the first page stays the first");
+
+                var occlusion = (ComboBox)Private(form, "occlusionMode");
+                tabs.SelectedTab = (TabPage)occlusion.Parent;
+                occlusion.Focus();
+                occlusion.SelectedIndex = 0;
+                pad.Act(PadMenuInput.Action.Increase);
+                pad.Act(PadMenuInput.Action.Increase);
+                pad.Act(PadMenuInput.Action.Increase);
+                Check(occlusion.SelectedIndex == 2, "pad: Right steps a choice and stops at its last");
+                pad.Act(PadMenuInput.Action.Decrease);
+                Check(occlusion.SelectedIndex == 1, "pad: Left steps it back");
+
+                var bloom = (NumericUpDown)Private(form, "bloom");
+                bloom.Focus();
+                decimal before = bloom.Value;
+                pad.Act(PadMenuInput.Action.Increase);
+                Check(focused() == bloom && bloom.Value == Math.Min(bloom.Maximum, before + bloom.Increment), "pad: Right raises a number by its step");
+
+                var curved = (CheckBox)Private(form, "curvedSurfaces");
+                curved.Focus();
+                bool was = curved.Checked;
+                pad.Act(PadMenuInput.Action.Confirm);
+                Check(curved.Checked == !was, "pad: A ticks a box");
+                pad.Act(PadMenuInput.Action.Back);
+                Check(focused() == tabs, "pad: B returns to the page tabs");
+                form.Close();
+            }
         }
 
         // A form that is never shown creates no child windows; reading Handle creates them.
@@ -718,6 +1034,47 @@ namespace Nebula.Launcher
             return pak;
         }
 
+        // The rows added from the game's menu (settings_table.tsv): the engine's defaults for a file without them, the
+        // file's values in the runtime's spellings, a save that writes them back and keeps every other line.
+        static void AddedRowsCases()
+        {
+            string config = GraphicsSettings.ConfigPath, runtime = AudioSettings.SettingsPath;
+            if (File.Exists(config)) File.Delete(config);
+            if (File.Exists(runtime)) File.Delete(runtime);
+            var g = GraphicsSettings.Load();
+            var a = AudioSettings.Load();
+            var gen = GeneralSettings.Load();
+            Check(!g.Hdr && g.PaperWhite == 200 && g.CurvedSurfaces && g.Bloom == 100 && g.OcclusionMode == 0 && g.TexturePackMode == 1 && !g.TextureDump &&
+                  a.SoundOutput == 1 && gen.ButtonIcons == 0 && gen.MenuTextSize == 0 && gen.FocusLoss == 0 && gen.DiscordStatus &&
+                  !ControlsSettings.Load().CoStar,
+                  "the added rows start at the engine's defaults (render_config.h, runtime_settings.h)");
+            File.WriteAllText(config, "hdr=1\npaper_white=900\nbloom=140\nambient_occlusion=1\nambient_occlusion_ssao=true\ncurved_surfaces=0\n" +
+                                      "texture_packs=1\ntexture_pack_preload=1\ntexture_dump=on\nkeep_me=1\n");
+            File.WriteAllText(runtime, "audio_sound_output=SURROUND\nbutton_icons=wii\nmenu_text_size=75\nfocus_loss=mute\ndiscord_status=0\nco_star=1\n");
+            g = GraphicsSettings.Load();
+            a = AudioSettings.Load();
+            gen = GeneralSettings.Load();
+            Check(g.Hdr && g.PaperWhite == 500 && g.Bloom == 140 && g.OcclusionMode == 1 && !g.CurvedSurfaces && g.TexturePackMode == 2 && g.TextureDump,
+                  "config.ini's added keys read as the runtime reads them (paper white clamped to 500)");
+            Check(a.SoundOutput == 2 && gen.ButtonIcons == 1 && gen.MenuTextSize == 75 && gen.FocusLoss == 2 && !gen.DiscordStatus && ControlsSettings.Load().CoStar,
+                  "runtime_settings.ini's added keys read in any case, the old wii icons as the game's");
+            g.OcclusionMode = 2;
+            g.TexturePackMode = 0;
+            g.Bloom = 0;
+            g.Save();
+            string saved = File.ReadAllText(config);
+            Check(saved.Contains("ambient_occlusion=1") && saved.Contains("ambient_occlusion_ssao=0") && saved.Contains("texture_packs=0") &&
+                  saved.Contains("texture_pack_preload=0") && saved.Contains("bloom=0") && saved.Contains("keep_me=1") && saved.Contains("paper_white=900"),
+                  "a save writes the changed keys (GTAO, packs off, bloom off) and keeps the unchanged ones as the file had them");
+            gen.FocusLoss = 1;
+            gen.Save();
+            saved = File.ReadAllText(runtime);
+            Check(saved.Contains("focus_loss=pause") && saved.Contains("menu_text_size=75") && saved.Contains("co_star=1"), "runtime_settings.ini likewise");
+            Check(Directory.GetFiles(Path.GetDirectoryName(runtime), "*.tmp*").Length == 0, "an atomic save leaves no temporary file");
+            File.Delete(config);
+            File.Delete(runtime);
+        }
+
         static void GeneralCases()
         {
             string path = AudioSettings.SettingsPath;
@@ -960,6 +1317,67 @@ namespace Nebula.Launcher
             foreach (string backup in Directory.GetDirectories(parent, "saves-backup-*")) FileUtil.DeleteTree(backup);
         }
 
+        // The offer's rules on the test's data root (UpdateService, UpdateCheck): what a kept answer offers, Skip this
+        // version, the channel, the service off, a damaged or missing answer, a check that fails (offline) keeping the
+        // last answer, and the settings window's banner. The timing against a server is in UpdateFlowTests.
+        static void UpdateServiceCases()
+        {
+            var session = new LaunchSession();
+            string cache = UpdateService.CachePath;
+            if (File.Exists(cache)) File.Delete(cache);
+            UpdateService.Reset();
+            Check(UpdateCheck.Pending(session) == null, "no check yet: nothing is offered");
+            var newer = new ReleaseInfo { Version = "9.9.9", Tag = "v9.9.9", Notes = "notes", SetupUrl = "https://example.org/s", SignatureUrl = "https://example.org/s.sig", SetupSize = 5 };
+            UpdateService.WriteCache(newer, DateTime.UtcNow);
+            var pending = UpdateCheck.Pending(session);
+            Check(pending != null && pending.Version == "9.9.9" && pending.Notes == "notes" && pending.SetupSize == 5, "the last check's newer release is offered at start");
+            session.SkippedUpdate = "9.9.9";
+            Check(UpdateCheck.Pending(session) == null, "a skipped version is not offered again");
+            session.SkippedUpdate = "9.9.8";
+            Check(UpdateCheck.Pending(session) != null, "a version newer than the skipped one is");
+            session.SkippedUpdate = null;
+            session.AskAboutUpdates = false;
+            Check(UpdateCheck.Pending(session) == null && !UpdateCheck.OfferBeforeLaunch(session), "the service turned off offers nothing");
+            session.AskAboutUpdates = true;
+
+            // The settings window: the banner from the kept answer, its prompt only when pressed.
+            using (var form = new SettingsForm(new LaunchSession()))
+            {
+                CreateHandles(form);
+                form.GetType().GetMethod("WatchForUpdate", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).Invoke(form, null);
+                var banner = (Button)Private(form, "updateBanner");
+                var offered = (ReleaseInfo)Private(form, "pendingUpdate");
+                Check(offered != null && offered.Version == "9.9.9" && banner.Text.StartsWith("Nebula 9.9.9 is available") && form.ActiveControl != banner,
+                      "the settings window shows a newer release in its banner, without taking the focus");
+            }
+
+            UpdateService.WriteCache(new ReleaseInfo { Version = "0.0.0-test", SetupUrl = "https://example.org/s", SignatureUrl = "https://example.org/s.sig" }, DateTime.UtcNow);
+            Check(UpdateCheck.Pending(session) == null, "a kept release no newer than this install is not offered");
+            UpdateService.WriteCache(new ReleaseInfo { Version = "9.9.9-beta.1", SetupUrl = "https://example.org/s", SignatureUrl = "https://example.org/s.sig" }, DateTime.UtcNow);
+            Check(UpdateCheck.Pending(session) == null, "a release of the other channel is not offered");
+            File.WriteAllText(cache, "{ not json");
+            Check(UpdateCheck.Pending(session) == null, "a damaged answer offers nothing");
+            UpdateService.WriteCache(newer, DateTime.UtcNow.AddDays(-1));
+            string listing = Updater.ReleasesUrl;
+            var closed = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+            closed.Start();
+            int port = ((System.Net.IPEndPoint)closed.LocalEndpoint).Port;
+            closed.Stop();
+            Updater.ReleasesUrl = "http://127.0.0.1:" + port + "/releases";
+            // The start's wait is Offer's: Begin runs at process start, before the window, and here reads the answer
+            // file just written (which a virus scanner may hold for a while on its first read).
+            UpdateService.Begin();
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            pending = UpdateService.Offer(UpdateService.FreshBudgetMilliseconds, null);
+            long waited = clock.ElapsedMilliseconds;
+            UpdateService.Finish();
+            Updater.ReleasesUrl = listing;
+            Check(pending != null && pending.Version == "9.9.9" && waited < UpdateService.FreshBudgetMilliseconds,
+                  "offline, a start offers the last answer without waiting out the budget (" + waited + " ms)");
+            UpdateService.Reset();
+            File.Delete(cache);
+        }
+
         [STAThread]
         public static int Main(string[] args)
         {
@@ -970,11 +1388,13 @@ namespace Nebula.Launcher
                 string localAppData = Environment.GetEnvironmentVariable("LOCALAPPDATA");
                 Check(!string.IsNullOrEmpty(localAppData) && NebulaPaths.DataRoot == Path.Combine(localAppData, "Nebula") &&
                       NebulaPaths.LocalAppDataRedirected, "a redirected %LOCALAPPDATA% holds the data root");
+                string dataRoot = NebulaPaths.DataRoot;
                 string outDir = args[0];
                 WindowSizeCases();
                 PadMenuCases();
                 AudioCases();
                 GeneralCases();
+                AddedRowsCases();
                 SharedFileCases();
                 AspectNameCases();
                 SaveArchiveCases(outDir);
@@ -1009,6 +1429,10 @@ namespace Nebula.Launcher
                 GpuCases();
                 DisplayNoticeCases();
                 GpuFormCases(later, outDir);
+                SettingsPadCases(later);
+                StartListsCases(later);
+                BenchmarkCases(later);
+                DownloadCloseCases(outDir);
                 RecordingEncodingCases(later.App);
 
                 // TryLaunch starts <App>\NebulaNative.exe, here a stub that records its arguments.

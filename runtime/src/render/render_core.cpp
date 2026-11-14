@@ -16,6 +16,7 @@
 #include <immintrin.h>
 #endif
 #endif
+#include "galaxy/benchmark.h"
 #include "galaxy/loss_report.h"
 #include "galaxy/crash_report.h"
 #include "galaxy/host_extension.h"
@@ -208,9 +209,10 @@ bool RenderCore::initialize(int w, int h) {
     cap_texture_packs();
 
     // The first start (no config.ini, and no back end chose for it): a conservative height now, measured in the first 3D scene.
+    // Not in a benchmark (it sets every height itself; bench::start runs before this, with the arguments).
     if (const RenderConfig chosen = get_render_config_chosen();
         render_config_first_start() && chosen.upscaler == 0u && chosen.internal_height == 0u && start_frame.height > 0u &&
-        galaxy::ordinary_start()) {
+        galaxy::ordinary_start() && !galaxy::bench::running()) {
 #if defined(NEBULA_GPU_METAL)
         const bool shared = mtl::Context::get().caps().unified_memory;
 #else
@@ -530,6 +532,7 @@ void RenderCore::note_picture_shown(
     texture.last_shown_number = texture.picture_number;
     ++stat_new_pictures_shown_;
     record_monotonic_cadence_sample(new_picture_shown_cadence_);
+    galaxy::bench::note_new_picture(new_picture_shown_cadence_.last_sample_ns);
     report_frame_tail_window();
     trace_memory();
 }
@@ -2518,6 +2521,10 @@ void RenderCore::calibrate_first_start(bool scene, double walk_ms) {
     constexpr unsigned kCalibrationRestarts = 3u;
     constexpr unsigned kCalibrationSamples = 30u;
     FirstStartCalibration& c = calibration_;
+    if (galaxy::bench::running()) [[unlikely]] {
+        end_first_start_calibration(0u, nullptr);  // a benchmark's heights are its own: nothing set, nothing saved
+        return;
+    }
     const RenderConfig chosen = get_render_config_chosen();
     if (!(chosen == c.armed)) {
         if (chosen.internal_height != c.armed.internal_height || chosen.upscaler != c.armed.upscaler) {

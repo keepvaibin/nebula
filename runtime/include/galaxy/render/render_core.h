@@ -125,6 +125,9 @@ public:
         return renderer_.gpu_pass_times(out, capacity);
     }
     [[nodiscard]] std::uint64_t pictures_made() const noexcept;
+    [[nodiscard]] bool video_memory(std::uint64_t& usage, std::uint64_t& budget) const noexcept {
+        return renderer_.video_memory(usage, budget);
+    }
     [[nodiscard]] DisplayPresentStats display_present_stats() const noexcept;
 
 private:

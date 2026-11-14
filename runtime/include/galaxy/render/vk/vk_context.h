@@ -53,7 +53,6 @@ struct Texture : std::enable_shared_from_this<Texture> {
     // The scene target pass's framebuffer with this image as the scene target's colour (a display copy's hand-over, E-10) and the scene target
     // depth target whose serial is scene_depth_serial.
     VkFramebuffer scene_framebuffer = VK_NULL_HANDLE;
-    VkFramebuffer scene_resolve_framebuffer = VK_NULL_HANDLE;
     std::uint64_t scene_depth_serial = 0;
     VkFormat format = VK_FORMAT_UNDEFINED;
     VkImageUsageFlags usage = 0;
@@ -113,6 +112,7 @@ public:
                     VkSurfaceKHR* surface = nullptr, bool ray_tracing = false);
     void shutdown() noexcept;
     [[nodiscard]] bool bc_textures() const noexcept { return bc_textures_; }
+    [[nodiscard]] bool astc_textures() const noexcept { return astc_textures_; }
     [[nodiscard]] bool ready() const noexcept { return device_ != VK_NULL_HANDLE; }
     // Why the last initialize failed (for the player's error message).
     [[nodiscard]] const std::string& failure() const noexcept { return failure_; }
@@ -148,11 +148,13 @@ public:
     [[nodiscard]] const DeviceIdentity& identity() const noexcept { return identity_; }
     [[nodiscard]] const DeviceQuirks& quirks() const noexcept { return quirks_; }
     [[nodiscard]] bool sample_rate_shading() const noexcept { return sample_rate_shading_; }
+    // Blend states that differ between a pipeline's colour attachments (the motion and reactive passes, the effects layer).
+    [[nodiscard]] bool independent_blend() const noexcept { return independent_blend_; }
     // VK_EXT_debug_utils is on (the validation layer or RenderDoc's): objects are named and passes labelled.
     [[nodiscard]] bool debug_labels() const noexcept { return debug_names_; }
     [[nodiscard]] bool sampler_anisotropy() const noexcept { return sampler_anisotropy_; }
-    // shaderImageGatherExtended: a gather of one chosen channel (FSR 1 EASU's GatherRed/Green/Blue).
-    [[nodiscard]] bool gather_extended() const noexcept { return gather_extended_; }
+    // shaderStorageImageExtendedFormats, enabled where offered: storage images of R16G16 float, R8 and the like.
+    [[nodiscard]] bool storage_extended_formats() const noexcept { return storage_extended_formats_; }
     // pipelineStatisticsQuery: --diagnostics gpu-passes' shader invocation counts.
     [[nodiscard]] bool pipeline_statistics() const noexcept { return pipeline_statistics_; }
     [[nodiscard]] bool depth_clamp() const noexcept { return depth_clamp_; }
@@ -325,10 +327,12 @@ private:
     DeviceIdentity identity_;
     DeviceQuirks quirks_;
     bool sample_rate_shading_ = false;
+    bool independent_blend_ = false;
     bool sampler_anisotropy_ = false;
-    bool gather_extended_ = false;
+    bool storage_extended_formats_ = false;
     bool pipeline_statistics_ = false;
     bool bc_textures_ = false;
+    bool astc_textures_ = false;
     bool memory_budget_ = false;
     // device_memory_budget's last read of the driver's figures (VK_EXT_memory_budget): at most every 100 ms; render thread.
     mutable std::int64_t memory_read_ms_ = 0;
@@ -381,6 +385,14 @@ private:
 
 // Throws std::runtime_error naming `what` when `result` is an error.
 void check(VkResult result, const char* what);
+
+// The driver's pipeline cache the program pipelines are made with (core/pipelines_vk.cpp): read from the cache file the first
+// time and written back with it. A pipeline made outside the program table passes it too, so a later start loads that pipeline
+// from the file instead of compiling it. Internally synchronised (no VK_PIPELINE_CACHE_CREATE_EXTERNALLY_SYNCHRONIZED_BIT).
+[[nodiscard]] VkPipelineCache shared_pipeline_cache();
+// Writes the shared cache to its file and destroys it (Context::shutdown, before the device goes): a device made later, as
+// after a failed start or a lost device, gets a cache of its own.
+void release_shared_pipeline_cache() noexcept;
 
 // The calling thread's CPU time (nanoseconds; 0 where the platform has no per-thread clock).
 [[nodiscard]] std::int64_t thread_cpu_ns() noexcept;

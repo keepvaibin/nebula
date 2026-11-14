@@ -935,3 +935,22 @@ std::uint64_t Pipelines::cache_file_hash() noexcept {
 }
 
 }  // namespace galaxy::render::core
+
+namespace galaxy::render::vk {
+
+VkPipelineCache shared_pipeline_cache() {
+    return core::driver_cache(Context::get().device());
+}
+
+void release_shared_pipeline_cache() noexcept {
+    (void)core::write_driver_cache();
+    std::lock_guard guard(core::gModules.lock);
+    if (core::gModules.cache != VK_NULL_HANDLE) {
+        vkDestroyPipelineCache(core::gModules.device, core::gModules.cache, nullptr);
+        core::gModules.cache = VK_NULL_HANDLE;
+    }
+    core::gModules.file_read = false;
+    std::vector<char>().swap(core::gModules.initial);
+}
+
+}  // namespace galaxy::render::vk

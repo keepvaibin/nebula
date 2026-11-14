@@ -1,4 +1,5 @@
 """Every program in every output variant, into one file. compile_programs.py dxil|spirv OUT.bin [SPIRV_TOOL]
+compile_programs.py record: records the program set at the store version (store_programs.txt, see check_store_programs).
 
 The generated programs are runtime/src/render/programs/ (build_programs.py); table.tsv maps every text's hash to the program
 that compiled the same. The written shaders are `WRITTEN` in NebulaShaderId order, from 1. Compiled stages are kept by
@@ -14,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MATERIALS = os.path.join(ROOT, "runtime", "src", "render", "materials")
 PROGRAMS = os.path.join(ROOT, "runtime", "src", "render", "programs")
+STORE = os.path.join(ROOT, "runtime", "include", "galaxy")
 DXC = os.environ.get("GALAXY_DXC", "dxc")
 JOBS = int(os.environ.get("JOBS", "4"))
 SITE = 1 << 63
@@ -76,18 +78,97 @@ def read(path):
         return f.read().replace("\r\n", "\n")
 
 
+def included_shaders(text, seen):
+    """The .hlsl files a source includes from the materials folder (recursively, each once), as one text: the .hlsli are
+    in every stage's key already."""
+    out = ""
+    for name in re.findall(r'^\s*#\s*include\s+"([^"]+\.hlsl)"', text, re.M):
+        if name not in seen:
+            seen.add(name)
+            inner = read(os.path.join(MATERIALS, name))
+            out += "\0" + name + "\0" + inner + included_shaders(inner, seen)
+    return out
+
+
+def spirv_tool_id():
+    """What decides galaxy_native_spirv's output, not its bytes (an MSVC link is not reproducible, and the host's CPU
+    flags cannot change SPIR-V): the tool's own sources with every header of the repository they include, and the
+    glslang, SPIRV-Tools and SPIRV-Headers archives cmake/vulkan_deps.cmake pins (with the build options it gives
+    them). The SDL builds run the Windows Vulkan build's tool (platform/sdl/CMakeLists.txt NEBULA_HOST_TOOLS)."""
+    parts = []
+    pending = [os.path.join(ROOT, "tools", "dev", "native_spirv.cpp"),
+               os.path.join(ROOT, "runtime", "src", "render", "vk", "shader_compile_vk.cpp")]
+    seen = set()
+    while pending:
+        path = os.path.normpath(pending.pop(0))
+        if path in seen:
+            continue
+        seen.add(path)
+        text = read(path)
+        parts.append(os.path.relpath(path, ROOT).replace("\\", "/") + "\0" + text)
+        for name in re.findall(r'^\s*#\s*include\s+"([^"]+)"', text, re.M):
+            for base in (os.path.dirname(path), os.path.join(ROOT, "runtime", "include")):
+                candidate = os.path.join(base, name)
+                if os.path.isfile(candidate):
+                    pending.append(candidate)
+                    break
+            else:
+                raise SystemExit(f"compile_programs.py: {path} includes {name}, found in neither its folder nor runtime/include")
+    deps = read(os.path.join(ROOT, "cmake", "vulkan_deps.cmake"))
+    # Each pinned archive of the compiler (URL and its SHA-256), and the options its build is given.
+    pins = re.findall(r"(https://\S*(?:glslang|SPIRV)\S*)\s+(?:URL_HASH\s+SHA256=)?([0-9a-f]{64})", deps)
+    if len(pins) != 3:
+        raise SystemExit(f"compile_programs.py: cmake/vulkan_deps.cmake pins {len(pins)} compiler archives, not glslang, SPIRV-Tools and SPIRV-Headers")
+    options = re.findall(r"^set\(((?:ENABLE|GLSLANG|SPIRV)_\w+ .*)\)$", deps, re.M)
+    return "\0".join(sorted(parts) + [" ".join(p) for p in pins] + options)
+
+
+def program_set():
+    """The program texts a cooked game.pak names: the importer's text hashes (table.tsv's stage and hash), as one digest."""
+    names = sorted("".join(line.split("\t")[:2]) for line in read(os.path.join(PROGRAMS, "table.tsv")).splitlines() if line)
+    return hashlib.sha256("\n".join(names).encode()).hexdigest()
+
+
+def check_store_programs(record=False):
+    """A game.pak names its programs by text hash; a host without one of them skips its draws. The store version
+    (store_version.inc) is what makes an older game.pak set up again, so the program set may change only with it:
+    store_programs.txt holds the version and the program set it was recorded at, and the build stops when they differ."""
+    version = read(os.path.join(STORE, "store_version.inc")).strip()
+    digest = program_set()
+    path = os.path.join(STORE, "store_programs.txt")
+    if record:
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(f"{version} {digest}\n")
+        print(f"recorded the program set at store version {version}")
+        return True
+    recorded = read(path).split() if os.path.exists(path) else []
+    if recorded == [version, digest]:
+        return True
+    if recorded[:1] == [version]:
+        print(f"The program texts (runtime/src/render/programs/table.tsv) changed but the store version did not ({version}): "
+              "a game.pak cooked before names programs this build does not have, and their draws would be skipped. "
+              "Raise runtime/include/galaxy/store_version.inc by one, then run python tools/dev/compile_programs.py record "
+              "and commit both files.")
+    else:
+        print(f"store_programs.txt was recorded at store version {' '.join(recorded[:1]) or 'none'}, the store is {version}: "
+              "run python tools/dev/compile_programs.py record and commit runtime/include/galaxy/store_programs.txt.")
+    return False
+
+
 def main():
+    if sys.argv[1:] == ["record"]:
+        return 0 if check_store_programs(record=True) else 1
+    if not check_store_programs():
+        return 1
     backend, out = sys.argv[1], sys.argv[2]
     args = sys.argv[3:]
     spirv_tool = args[0] if args else None
     cache = out + ".stages"
     os.makedirs(cache, exist_ok=True)
     headers = "".join(read(os.path.join(MATERIALS, n)) for n in sorted(os.listdir(MATERIALS)) if n.endswith(".hlsli"))
-    tool_id = backend + (DXC if backend == "dxil" else spirv_tool or "")
-    if backend == "spirv" and spirv_tool:
-        # Compiler location/binding rewrites affect bytes even with unchanged HLSL.
-        with open(spirv_tool, "rb") as compiler:
-            tool_id += hashlib.sha256(compiler.read()).hexdigest()
+    # A stage's key: the compiler, every .hlsli of the materials folder, the source with the .hlsl it includes, the stage,
+    # entry and defines; the compiler's options are fixed here (compile_job) or in its sources (spirv_tool_id).
+    tool_id = backend + (DXC if backend == "dxil" else hashlib.sha256(spirv_tool_id().encode()).hexdigest())
 
     # (stage, id) -> {variant index: job}
     jobs = {}
@@ -96,6 +177,7 @@ def main():
     coords = {}
 
     def add(stage, row, source, text, entry, defines, variant, bound_form=True):
+        text = text + included_shaders(text, set())
         key = hashlib.sha1(("\0".join([tool_id, headers, text, stage, entry] + defines)).encode()).hexdigest()
         jobs[key] = (source, stage, entry, defines)
         rows.setdefault((stage, row), {})[variant] = key
@@ -184,11 +266,15 @@ def main():
         print(len(failed), "of", len(jobs), "failed")
         return 1
 
-    # Two programs compiling the same mean the set's dedupe missed: the build fails.
+    # Two programs compiling the same in every form mean the set's dedupe missed: the build fails. (Two may share a base
+    # form where another form differs: build_programs.py keeps a text whose base leaves out what other forms keep apart.)
     seen = {}
     for stage, row in groups.values():
-        with open(os.path.join(cache, rows[(stage, row)][0]), "rb") as f:
-            digest = (stage, hashlib.sha256(f.read()).digest())
+        digest = hashlib.sha256()
+        for variant, key in sorted(rows[(stage, row)].items()):
+            with open(os.path.join(cache, key), "rb") as f:
+                digest.update(struct.pack("<I", variant) + hashlib.sha256(f.read()).digest())
+        digest = (stage, digest.digest())
         if digest in seen:
             print(f"programs {seen[digest]:016x} and {row:016x} compile the same")
             return 1

@@ -39,48 +39,37 @@ if(MSVC)
     endforeach()
     # Sources and narrow literals are UTF-8 whatever the build machine's code page.
     add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/utf-8>)
-    # AUTO builds for AVX2 when the build machine and its OS run it (Setup refuses CPUs without it), else SSE2.
-    set(GALAXY_NATIVE_ISA "AUTO" CACHE STRING "Native CPU target: AUTO, SSE2, or AVX2")
-    set_property(CACHE GALAXY_NATIVE_ISA PROPERTY STRINGS AUTO SSE2 AVX2)
+    # The host's CPU level, whatever machine builds it. The package carries the host twice, like the game module
+    # (native/build.ps1): AVX2 (x86-64-v3), and SSE4.2 (x86-64-v2, which Setup requires) from a second build tree
+    # configured with NEBULA_HOST_BASELINE, named <program>-x86-64-v2.exe beside it. The AVX2 program's entry point
+    # starts the SSE4.2 one where the CPU lacks x86-64-v3 (nebula_host_cpu_entry, native/host/host_entry_win32.cpp).
+    option(NEBULA_HOST_BASELINE "Build the SSE4.2 host the AVX2 host starts on CPUs without x86-64-v3 (<program>-x86-64-v2.exe)" OFF)
+    set(GALAXY_NATIVE_ISA "AVX2" CACHE STRING "Host CPU target: SSE2, SSE4.2, or AVX2")
+    set_property(CACHE GALAXY_NATIVE_ISA PROPERTY STRINGS SSE2 SSE4.2 AVX2)
     string(TOUPPER "${GALAXY_NATIVE_ISA}" GALAXY_NATIVE_ISA)
-    if(NOT GALAXY_NATIVE_ISA MATCHES "^(AUTO|SSE2|AVX2)$")
-        message(FATAL_ERROR "GALAXY_NATIVE_ISA must be AUTO, SSE2, or AVX2")
-    endif()
-    set(galaxy_native_isa_effective "${GALAXY_NATIVE_ISA}")
+    # AUTO: the value a build folder configured before the two builds holds (it chose AVX2 on an AVX2 build machine).
     if(GALAXY_NATIVE_ISA STREQUAL "AUTO")
-        if(CMAKE_CROSSCOMPILING)
-            set(galaxy_native_isa_effective "SSE2")
-        else()
-            include(CheckCXXSourceRuns)
-            check_cxx_source_runs(
-                "#include <intrin.h>
-                int main() {
-                    int cpu[4] = {};
-                    __cpuid(cpu, 0);
-                    if (cpu[0] < 7) return 1;
-                    __cpuidex(cpu, 1, 0);
-                    constexpr int required_ecx = (1 << 12) | (1 << 27) | (1 << 28);
-                    if ((cpu[2] & required_ecx) != required_ecx) return 2;
-                    if ((_xgetbv(0) & 0x6u) != 0x6u) return 3;
-                    __cpuidex(cpu, 7, 0);
-                    return (cpu[1] & (1 << 5)) != 0 ? 0 : 4;
-                }"
-                GALAXY_HOST_CAN_RUN_AVX2_FMA
-            )
-            if(GALAXY_HOST_CAN_RUN_AVX2_FMA)
-                set(galaxy_native_isa_effective "AVX2")
-            else()
-                set(galaxy_native_isa_effective "SSE2")
-            endif()
-        endif()
+        set(GALAXY_NATIVE_ISA "AVX2")
     endif()
-    message(STATUS "Nebula CPU target: ${galaxy_native_isa_effective} (requested ${GALAXY_NATIVE_ISA})")
-    if(galaxy_native_isa_effective STREQUAL "AVX2")
-        # clang-cl takes the GCC spelling.
+    if(NEBULA_HOST_BASELINE)
+        set(GALAXY_NATIVE_ISA "SSE4.2")
+    endif()
+    if(NOT GALAXY_NATIVE_ISA MATCHES "^(SSE2|SSE4\\.2|AVX2)$")
+        message(FATAL_ERROR "GALAXY_NATIVE_ISA must be SSE2, SSE4.2, or AVX2")
+    endif()
+    message(STATUS "Nebula host CPU target: ${GALAXY_NATIVE_ISA}")
+    # clang-cl takes the GCC spelling.
+    if(GALAXY_NATIVE_ISA STREQUAL "AVX2")
         if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
             add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:-mavx2>)
         else()
             add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/arch:AVX2>)
+        endif()
+    elseif(GALAXY_NATIVE_ISA STREQUAL "SSE4.2")
+        if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+            add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:-msse4.2> $<$<COMPILE_LANGUAGE:C,CXX>:-mpopcnt>)
+        else()
+            add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/arch:SSE4.2>)
         endif()
     endif()
 endif()
@@ -89,6 +78,43 @@ endif()
 function(galaxy_host_options target)
     if(MSVC)
         target_compile_options(${target} PRIVATE /GS- /GR- /Oi /favor:INTEL64)
+    endif()
+endfunction()
+
+# Libraries only a movie (Media Foundation, D3D11 for its decoder), a download (WinHTTP) and the XeSS library's signature
+# check (WinTrust) call: loaded at that first call instead of before main. A library a back end does not import is
+# skipped by the linker (LNK4199).
+function(nebula_host_delay_loads target)
+    if(MSVC)
+        target_link_options(${target} PRIVATE /DELAYLOAD:MFPlat.dll /DELAYLOAD:MFReadWrite.dll /DELAYLOAD:d3d11.dll
+            /DELAYLOAD:winhttp.dll /DELAYLOAD:wintrust.dll /IGNORE:4199)
+        target_link_libraries(${target} PRIVATE delayimp)
+    endif()
+endfunction()
+
+# The Windows x64 host's two builds (GALAXY_NATIVE_ISA above). The AVX2 program enters at nebula_host_entry, compiled
+# without the AVX2 option and without buffer security checks, which tests the CPU before the C runtime starts and runs
+# <program>-x86-64-v2.exe where the CPU lacks x86-64-v3. The SSE4.2 tree names its program so; it needs no test.
+function(nebula_host_cpu_entry target)
+    if(NOT MSVC OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8 OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|x86_64)$")
+        return()
+    endif()
+    if(NEBULA_HOST_BASELINE)
+        set_target_properties(${target} PROPERTIES OUTPUT_NAME "${target}-x86-64-v2")
+        get_target_property(link_options ${target} LINK_OPTIONS)
+        list(TRANSFORM link_options REPLACE "^/PDBALTPATH:.*$" "/PDBALTPATH:${target}-x86-64-v2.pdb")
+        set_property(TARGET ${target} PROPERTY LINK_OPTIONS "${link_options}")
+    elseif(GALAXY_NATIVE_ISA STREQUAL "AVX2")
+        if(NOT TARGET nebula_host_entry)
+            add_library(nebula_host_entry OBJECT native/host/host_entry_win32.cpp)
+            target_include_directories(nebula_host_entry PRIVATE runtime/include)
+            get_target_property(entry_options nebula_host_entry COMPILE_OPTIONS)
+            list(FILTER entry_options EXCLUDE REGEX "arch:AVX2|-mavx2")
+            list(APPEND entry_options /GS- /Zi)
+            set_property(TARGET nebula_host_entry PROPERTY COMPILE_OPTIONS "${entry_options}")
+        endif()
+        target_link_libraries(${target} PRIVATE nebula_host_entry)
+        target_link_options(${target} PRIVATE /ENTRY:nebula_host_entry)
     endif()
 endfunction()
 
@@ -197,6 +223,8 @@ add_library(galaxy_native_host STATIC
     runtime/src/dolphin_pack.cpp
     runtime/src/mod_import.cpp
     runtime/src/vendor_download.cpp
+    runtime/src/diag_report.cpp
+    runtime/src/diag_seal.cpp
     runtime/src/crash_report.cpp
     runtime/src/discord_presence.cpp
     runtime/src/controller_hid.cpp
@@ -221,6 +249,8 @@ target_link_libraries(galaxy_native_host
         xinput9_1_0
 )
 galaxy_host_options(galaxy_native_host)
+# The host's diagnostics report modes (diag_report.h).
+target_compile_definitions(galaxy_native_host PUBLIC NEBULA_DIAG_REPORTS=1)
 if(WIN32)
     target_link_libraries(galaxy_native_host PRIVATE nebula_minhook)
 endif()
@@ -279,8 +309,10 @@ function(galaxy_post_shader name pass preset library stage entry)
 endfunction()
 galaxy_post_shader(post_fullscreen_vs PASS_RESAMPLE - none vs_5_0 VSMain)
 galaxy_post_shader(post_resample_ps PASS_RESAMPLE - none ps_5_0 PSMain)
+galaxy_post_shader(post_copy_ps PASS_COPY - none ps_5_0 PSMain)
 galaxy_post_shader(post_fxaa_ps PASS_FXAA - none ps_5_0 PSMain)
 galaxy_post_shader(post_fsr_easu_ps PASS_FSR_EASU - fsr ps_5_0 PSMain)
+galaxy_post_shader(post_fsr_easu_half_ps PASS_FSR_EASU_HALF - fsr ps_5_0 PSMain)
 galaxy_post_shader(post_fsr_rcas_ps PASS_FSR_RCAS - fsr ps_5_0 PSMain)
 galaxy_post_shader(post_fsr_rcas_scaled_ps PASS_FSR_RCAS_SCALED - fsr ps_5_0 PSMain)
 galaxy_post_shader(post_smaa_edges_vs PASS_SMAA_EDGES SMAA_PRESET_HIGH smaa vs_5_0 VSMain)
@@ -301,7 +333,7 @@ endforeach()
 set(galaxy_ao_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/ambient_occlusion.hlsl")
 set(galaxy_ao_headers "")
 foreach(galaxy_ao_pass distance_cs:DepthCS:cs_5_0 occlusion_cs:AoCS:cs_5_0 ssao_cs:SsaoCS:cs_5_0 denoise_cs:DenoiseCS:cs_5_0
-        upsample_cs:UpsampleCS:cs_5_0 apply_vs:ApplyVS:vs_5_0 apply_ps:ApplyPS:ps_5_0)
+        apply_vs:ApplyVS:vs_5_0 apply_ps:ApplyPS:ps_5_0)
     string(REPLACE ":" ";" galaxy_ao_pair "${galaxy_ao_pass}")
     list(GET galaxy_ao_pair 0 galaxy_ao_name)
     list(GET galaxy_ao_pair 1 galaxy_ao_entry)
@@ -391,6 +423,7 @@ add_library(galaxy_render STATIC
     runtime/src/render/render_config.cpp
 runtime/src/render/host_window_win32.cpp
     runtime/src/ui/native_settings.cpp
+    runtime/src/ui/launcher.cpp
     runtime/src/ui/settings_model.cpp
     runtime/src/ui/settings_system_page.cpp
     runtime/src/ui/settings_advanced_page.cpp
@@ -403,6 +436,8 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/renderer_common.cpp
     runtime/src/render/gpu_upload_ring.cpp
     runtime/src/render/galaxy_select.cpp
+    runtime/src/benchmark_recommend.cpp
+    runtime/src/benchmark.cpp
     runtime/src/render/window_owner.cpp
     runtime/src/render/texture_store.cpp
     runtime/src/render/texture_pack.cpp
@@ -518,6 +553,8 @@ if(MSVC)
     target_compile_options(NebulaNative PRIVATE /Zi)
     target_link_options(NebulaNative PRIVATE /DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:NebulaNative.pdb)
 endif()
+nebula_host_cpu_entry(NebulaNative)
+nebula_host_delay_loads(NebulaNative)
 
 option(NEBULA_HOST_IPO "Optimize the host libraries across source files in Release builds" ON)
 set(nebula_host_ipo_effective OFF)
@@ -555,6 +592,9 @@ endfunction()
 
 set(rt runtime/src)
 galaxy_test(galaxy_atomic_file_tests SOURCES ${rt}/atomic_file_tests.cpp LIBS galaxy_atomic_file)
+# The update core of the Linux and macOS hosts (runtime/src/update), with a stand-in transport and platform.
+galaxy_test(galaxy_update_tests SOURCES ${rt}/update/update.cpp ${rt}/update/update_crypto.cpp ${rt}/update/update_tests.cpp
+    LIBS galaxy_atomic_file shell32 ARGS "${CMAKE_CURRENT_SOURCE_DIR}/installer/release-public-key.xml")
 galaxy_test(galaxy_save_files_tests SOURCES ${rt}/save_files_tests.cpp LIBS galaxy_save_files)
 galaxy_test(galaxy_save_format_tests SOURCES ${rt}/save_format_tests.cpp)
 galaxy_test(galaxy_launch_args_tests SOURCES ${rt}/launch_args_tests.cpp)
@@ -615,6 +655,11 @@ galaxy_test(galaxy_test_data_paths_tests SOURCES ${rt}/test_data_paths_tests.cpp
 target_include_directories(galaxy_test_data_paths_tests PRIVATE tools/test_driver/extension)
 
 galaxy_test(galaxy_home_menu_model_tests SOURCES ${rt}/home_menu_model_tests.cpp)
+galaxy_test(galaxy_launcher_model_tests SOURCES ${rt}/ui/launcher_model_tests.cpp)
+galaxy_test(galaxy_resolution_fit_tests SOURCES ${rt}/render/resolution_fit_tests.cpp)
+galaxy_test(galaxy_benchmark_recommend_tests SOURCES ${rt}/benchmark_recommend_tests.cpp ${rt}/benchmark_recommend.cpp)
+galaxy_test(galaxy_diag_report_tests SOURCES ${rt}/diag_report_tests.cpp ${rt}/diag_report.cpp ${rt}/diag_seal.cpp
+    LIBS nebula_archive)
 
 galaxy_test(galaxy_settings_model_tests SOURCES ${rt}/ui/settings_model_tests.cpp ${rt}/ui/settings_model.cpp)
 
@@ -699,6 +744,7 @@ if(NEBULA_VULKAN)
             runtime/src/render/render_config.cpp
 runtime/src/render/host_window_win32.cpp
     runtime/src/ui/native_settings.cpp
+    runtime/src/ui/launcher.cpp
     runtime/src/ui/settings_model.cpp
     runtime/src/ui/settings_system_page.cpp
     runtime/src/ui/settings_advanced_page.cpp
@@ -735,6 +781,8 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/core/pipelines_vk.cpp
         runtime/src/render/core/encoder_vk.cpp
         runtime/src/render/galaxy_select.cpp
+        runtime/src/benchmark_recommend.cpp
+        runtime/src/benchmark.cpp
         runtime/src/render/frame_interpolation.cpp
         runtime/src/render/rt_materials.cpp
         runtime/src/render/rt_caps.cpp
@@ -816,6 +864,8 @@ runtime/src/render/host_window_win32.cpp
         target_compile_options(NebulaNativeVk PRIVATE /Zi)
         target_link_options(NebulaNativeVk PRIVATE /DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:NebulaNativeVk.pdb)
     endif()
+    nebula_host_cpu_entry(NebulaNativeVk)
+    nebula_host_delay_loads(NebulaNativeVk)
 
     # The Vulkan pipeline cache file name (device_quirks_vk.cpp driver_key).
     galaxy_test(galaxy_vk_driver_key_tests SOURCES runtime/src/render/vk/driver_key_tests.cpp

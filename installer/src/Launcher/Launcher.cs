@@ -2,10 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 #if NEBULA_SETTINGS_APP
@@ -25,20 +27,30 @@ namespace Nebula.Launcher
         private static int Main(string[] args)
         {
             NativeMethods.SetProcessDpiAwarenessContext(new IntPtr(-4));
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
             try
             {
+                // The in-game menu runs this: a restart once the game has exited (--record: a diagnostics run).
+                int restartAfter = 0;
+                bool restarting = args.Length > 1 && string.Equals(args[0], "--restart-after", StringComparison.OrdinalIgnoreCase) &&
+                                  int.TryParse(args[1], out restartAfter);
+                // The update check, first: it runs behind everything below and is taken before the game starts
+                // (UpdateService). A restart from the game's menu offers nothing.
+                LaunchSession session = restarting ? null : new LaunchSession();
+                if (session != null && UpdateCheck.Enabled(session)) UpdateService.Begin();
+                // The settings window's displays and GPUs, listed behind the window's own start (StartLists).
+                bool openMod = !restarting && args.Length > 1 && string.Equals(args[0], "--open-mod", StringComparison.OrdinalIgnoreCase);
+                if (session != null && (openMod || OpensSettings(args, session))) StartLists.Begin();
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
                 // A .luma opened from Explorer: the Mods page, with it being imported.
-                if (args.Length > 1 && string.Equals(args[0], "--open-mod", StringComparison.OrdinalIgnoreCase))
+                if (openMod)
                 {
-                    Application.Run(new SettingsForm(new LaunchSession(), args[1]));
+                    var importing = new SettingsForm(session, args[1]);
+                    Application.Run(importing);
+                    if (!importing.UpdateStarted) UpdateService.Finish();
                     return 0;
                 }
-                // The in-game menu runs this: a restart once the game has exited (--record: a diagnostics run).
-                int restartAfter;
-                if (args.Length > 1 && string.Equals(args[0], "--restart-after", StringComparison.OrdinalIgnoreCase) &&
-                    int.TryParse(args[1], out restartAfter))
+                if (restarting)
                 {
                     WaitForExit(restartAfter);
                     var restart = new LaunchSession();
@@ -49,15 +61,22 @@ namespace Nebula.Launcher
                     MessageBox.Show(restartError, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return 1;
                 }
-                var session = new LaunchSession();
                 if (!OpensSettings(args, session))
                 {
                     if (UpdateCheck.OfferBeforeLaunch(session)) return 0;
                     string error = session.TryLaunch();
-                    if (error == null) return 0;
+                    if (error == null)
+                    {
+                        // The game is up; a check still running ends here, behind it, and is kept for the next start.
+                        UpdateService.Finish();
+                        return 0;
+                    }
                     MessageBox.Show(error, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
-                Application.Run(new SettingsForm(session));
+                var settings = new SettingsForm(session);
+                Application.Run(settings);
+                // A check still running is kept for the next start, unless an update's Setup waits for this to close.
+                if (!settings.UpdateStarted) UpdateService.Finish();
                 return 0;
             }
             catch (Exception error)
@@ -89,6 +108,59 @@ namespace Nebula.Launcher
         }
     }
 
+    /// <summary>
+    /// The displays (DisplayConfig) and GPUs (DXGI) the settings window lists, begun on a thread of their own as the
+    /// process starts, so the window's start (visual styles, its controls, the settings files) overlaps them instead of
+    /// waiting for them on the UI thread. The first window takes what was begun; any later one lists afresh (a display
+    /// or GPU may have changed).
+    /// </summary>
+    internal static class StartLists
+    {
+        private static readonly object gate = new object();
+        private static Task<List<MonitorEntry>> monitors;
+        private static Task<List<GpuAdapter>> gpus;
+
+        public static void Begin()
+        {
+            lock (gate)
+            {
+                if (monitors != null) return;
+                monitors = Task.Factory.StartNew(() => DisplayInfo.Enumerate(), CancellationToken.None,
+                    TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                gpus = Task.Factory.StartNew(() => GpuAdapters.List(), CancellationToken.None,
+                    TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            }
+        }
+
+        public static List<MonitorEntry> TakeMonitors()
+        {
+            Task<List<MonitorEntry>> begun;
+            lock (gate) { begun = monitors; monitors = null; }
+            if (begun != null)
+            {
+                try { return begun.Result; }
+                catch (AggregateException) { }
+            }
+            return DisplayInfo.Enumerate();
+        }
+
+        /// <summary>The GPUs, an empty list when DXGI cannot list them.</summary>
+        public static List<GpuAdapter> TakeGpus()
+        {
+            Task<List<GpuAdapter>> begun;
+            lock (gate) { begun = gpus; gpus = null; }
+            List<GpuAdapter> listed = null;
+            bool taken = false;
+            if (begun != null)
+            {
+                try { listed = begun.Result; taken = true; }
+                catch (AggregateException) { }
+            }
+            if (!taken) listed = GpuAdapters.List();
+            return listed ?? new List<GpuAdapter>();
+        }
+    }
+
     /// <summary>Where the game is and how it was last started (settings.json).</summary>
     internal sealed class LaunchSession
     {
@@ -99,6 +171,7 @@ namespace Nebula.Launcher
         public bool SetupComplete;
         public RecordingMode Recording = RecordingMode.None;
         public bool AskAboutUpdates = true;  // a newer release is offered at each start (UpdateCheck)
+        public string SkippedUpdate;         // the release Skip this version passed over; only newer ones are offered
 
         public string SettingsFile { get { return Portable ? Path.Combine(App, "portable-settings.json") : NebulaPaths.SettingsFile; } }
 
@@ -121,6 +194,7 @@ namespace Nebula.Launcher
                 if (Json.Long(settings, "settingsVersion") >= 4 && recording >= 0 && recording <= 2)
                     Recording = (RecordingMode)recording;
                 if (settings.ContainsKey("askAboutUpdates")) AskAboutUpdates = Json.Bool(settings, "askAboutUpdates");
+                SkippedUpdate = Json.Str(settings, "skippedUpdate");
             }
             catch (Exception) { }
         }
@@ -130,7 +204,7 @@ namespace Nebula.Launcher
             Json.Save(SettingsFile, new Dictionary<string, object>
             {
                 { "settingsVersion", 4 }, { "content", Content }, { "recording", (int)Recording },
-                { "askAboutUpdates", AskAboutUpdates }
+                { "askAboutUpdates", AskAboutUpdates }, { "skippedUpdate", SkippedUpdate }
             });
             SetupComplete = true;
         }
@@ -284,11 +358,24 @@ namespace Nebula.Launcher
     internal sealed class SettingsForm : Form
     {
         private readonly LaunchSession session;
-        private readonly List<MonitorEntry> monitors = DisplayInfo.Enumerate();
+        // A newer release, in the bottom row beside Save (WatchForUpdate); its prompt opens only when pressed.
+        private readonly Button updateBanner = new Button();
+        private ReleaseInfo pendingUpdate;
+        /// <summary>True once an update's Setup was started from this window (it closes for Setup to replace it).</summary>
+        public bool UpdateStarted { get; private set; }
+        private readonly List<MonitorEntry> monitors = StartLists.TakeMonitors();
         private GraphicsSettings graphics = GraphicsSettings.Load();
         private AudioSettings audio = AudioSettings.Load();
         private GeneralSettings general = GeneralSettings.Load();
         private readonly ComboBox textSpeed = new ComboBox(), languageBox = new ComboBox();
+        // The rows the game's menu has and the launcher had not (settings_table.tsv, windows column).
+        private readonly CheckBox hdr = new CheckBox(), curvedSurfaces = new CheckBox(), textureDump = new CheckBox(),
+            discordStatus = new CheckBox(), coStar = new CheckBox();
+        private readonly NumericUpDown paperWhite = new NumericUpDown(), bloom = new NumericUpDown();
+        private readonly Label hdrHint = new Label();
+        private readonly ComboBox occlusionMode = new ComboBox(), texturePacks = new ComboBox(), soundOutput = new ComboBox(),
+            buttonIcons = new ComboBox(), menuTextSize = new ComboBox(), focusLoss = new ComboBox();
+        private readonly List<int> menuTextSizes = new List<int>();
         // The installed disc's languages (GeneralSettings.Offered), as the Language row lists them.
         private List<int> offeredLanguages = new List<int> { 0 };
         private readonly ControlsSettings controls = ControlsSettings.Load();
@@ -354,7 +441,7 @@ namespace Nebula.Launcher
             resolutionLabel.Text = shown == 0 ? NebulaText.Of("Internal resolution") : NebulaText.Of("Upscaler quality");
             antiAliasing.Enabled = aaQuality.Enabled = !temporal;
             msaa.Enabled = !temporal && !rt;
-            occlusion.Enabled = lighting.Enabled = !rt;
+            occlusionMode.Enabled = lighting.Enabled = !rt;
             bool exact = shown == 0 && internalResolution.SelectedIndex > 0;
             bool fixedHud = temporal || exact;
             if (fixedHud && hudOutput.Enabled) hudChosen = hudOutput.Checked;
@@ -365,12 +452,22 @@ namespace Nebula.Launcher
         private readonly ComboBox inputSource = new ComboBox(), editScheme = new ComboBox(), motion = new ComboBox(),
             vibration = new ComboBox();
         private readonly ListView bindingList = new ListView();
+        // The Performance page (BuildPerformancePage): the benchmark and its recommendation.
+        internal readonly Button benchmarkButton = new Button();
+        internal readonly Label benchmarkStatus = new Label();
+        internal readonly Label benchmarkVerdict = new Label();
+        internal readonly Label benchmarkTitle = new Label();
+        internal readonly ListView benchmarkRows = new ListView();
+        internal readonly Button benchmarkApply = new Button();
+        private Process benchmarkRun;
+        private BenchmarkResult benchmarkResult;
         private readonly NumericUpDown pointerSpeed = new NumericUpDown(), stickDeadzone = new NumericUpDown(),
             pointerDeadzone = new NumericUpDown(), shakeSensitivity = new NumericUpDown(), gyroSensitivity = new NumericUpDown(),
             pointerHide = new NumericUpDown();
         private readonly CheckBox invertPointer = new CheckBox(), gyroPointer = new CheckBox(), vibrationOn = new CheckBox();
         private readonly Label captureLabel = new Label();
         private int captureTarget = -1;
+        internal SettingsPadNavigator padNavigator;
         private DateTime captureDeadline;
         private PadCaptureReader padReader;
         private PadCaptureReader.Sample captureBaseline;
@@ -389,10 +486,10 @@ namespace Nebula.Launcher
         private readonly Label frameRateLabel = new Label();
         private readonly List<int> interpolationChoices = new List<int>();
         private readonly NumericUpDown sharpness = new NumericUpDown();
-        private readonly CheckBox mipmaps = new CheckBox(), occlusion = new CheckBox(), hudOutput = new CheckBox(),
+        private readonly CheckBox mipmaps = new CheckBox(), hudOutput = new CheckBox(),
             rayTracing = new CheckBox();
         // The GPUs the game can run on, the automatic choice first; the Graphics card row shows with two or more.
-        private readonly List<GpuAdapter> gpus = GpuAdapters.List() ?? new List<GpuAdapter>();
+        private readonly List<GpuAdapter> gpus = StartLists.TakeGpus();
         private readonly ComboBox gpuBox = new ComboBox();
         // Ray tracing and DLSS follow the GPU the game will run on (RefreshGpuOptions).
         private bool rayTracingOffered;
@@ -430,8 +527,8 @@ namespace Nebula.Launcher
             this.session = session;
             offeredLanguages = GeneralSettings.Offered(Path.Combine(session.Content, "game.pak"));
             SaveArchive.LooseTitle = SaveArchive.TitleOf(GameDisc.GameId(Path.Combine(session.Content, "game.pak")));
-            upscalerChoices = GraphicsSettings.UpscalerChoices(graphics.Gpu);
-            rayTracingOffered = GraphicsSettings.RayTracingAdapter(graphics.Gpu);
+            upscalerChoices = GraphicsSettings.UpscalerChoices(gpus, graphics.Gpu);
+            rayTracingOffered = GraphicsSettings.RayTracingAdapter(gpus, graphics.Gpu);
             bool firstRun = !session.SetupComplete;
 #if NEBULA_SETTINGS_APP
             Text = NebulaText.Of("Nebula settings");
@@ -477,8 +574,11 @@ namespace Nebula.Launcher
                     };
                 }
             }
+            var performance = new TabPage(NebulaText.Of("Performance"));
+            pages.Add(performance);
             pages.Add(advanced);
             tabs.TabPages.AddRange(pages.ToArray());
+            BuildPerformancePage(performance);
             Controls.Add(tabs);
 
             int y = 16;
@@ -508,6 +608,26 @@ namespace Nebula.Launcher
             hudOutput.Location = new Point(12, y);
             hudOutput.Size = new Size(600, 28);
             display.Controls.Add(hudOutput);
+            y += 40;
+            // HDR: only while Windows shows the chosen display in HDR (the game's rule); paper white with it on.
+            hdr.Text = NebulaText.Of("HDR");
+            hdr.Location = new Point(12, y);
+            hdr.Size = new Size(300, 28);
+            display.Controls.Add(hdr);
+            hdrHint.Location = new Point(320, y + 4);
+            hdrHint.Size = new Size(390, 36);
+            hdrHint.ForeColor = SystemColors.GrayText;
+            hdrHint.Text = NebulaText.Of("Turn on HDR for this display in the Windows settings to use it.");
+            display.Controls.Add(hdrHint);
+            y += 40;
+            Label(display, NebulaText.Of("Paper white"), 12, y + 3);
+            paperWhite.Location = new Point(320, y);
+            paperWhite.Size = new Size(120, 28);
+            paperWhite.Minimum = GraphicsSettings.PaperWhiteMin;
+            paperWhite.Maximum = GraphicsSettings.PaperWhiteMax;
+            paperWhite.Increment = 10;
+            display.Controls.Add(paperWhite);
+            hdr.CheckedChanged += delegate { paperWhite.Enabled = hdr.Enabled && hdr.Checked; };
             for (int i = 0; i < monitors.Count; i++) monitor.Items.Add(monitors[i].Label(i));
             mode.Items.AddRange(GraphicsSettings.DisplayModes);
             aspect.Items.AddRange(GraphicsSettings.Aspects);
@@ -542,14 +662,31 @@ namespace Nebula.Launcher
             y += 40;
             Row(image, NebulaText.Of("Texture filtering"), textureFilter, ref y);
             Row(image, NebulaText.Of("Lighting"), lighting, ref y);
+            Row(image, NebulaText.Of("Ambient occlusion"), occlusionMode, ref y);
+            occlusionMode.Items.AddRange(GraphicsSettings.OcclusionModes);
+            Label(image, NebulaText.Of("Bloom") + " (%)", 12, y + 3);
+            bloom.Location = new Point(320, y);
+            bloom.Size = new Size(120, 28);
+            bloom.Minimum = 0;
+            bloom.Maximum = GraphicsSettings.BloomMax;
+            bloom.Increment = 10;
+            image.Controls.Add(bloom);
+            y += 40;
+            Row(image, NebulaText.Of("Texture packs"), texturePacks, ref y);
+            texturePacks.Width = 190;
+            texturePacks.Items.AddRange(GraphicsSettings.TexturePackModes);
+            textureDump.Text = NebulaText.Of("Dump textures");
+            textureDump.Location = new Point(520, y - 40 + 1);
+            textureDump.Size = new Size(190, 26);
+            image.Controls.Add(textureDump);
             mipmaps.Text = NebulaText.Of("Generated mipmaps");
             mipmaps.Location = new Point(12, y);
             mipmaps.Size = new Size(300, 28);
             image.Controls.Add(mipmaps);
-            occlusion.Text = NebulaText.Of("Ambient occlusion");
-            occlusion.Location = new Point(320, y);
-            occlusion.Size = new Size(300, 28);
-            image.Controls.Add(occlusion);
+            curvedSurfaces.Text = NebulaText.Of("Curved surfaces");
+            curvedSurfaces.Location = new Point(320, y);
+            curvedSurfaces.Size = new Size(300, 28);
+            image.Controls.Add(curvedSurfaces);
             y += 32;
             rayTracing.Text = NebulaText.Of("Ray tracing");
             rayTracing.Location = new Point(12, y);
@@ -568,6 +705,7 @@ namespace Nebula.Launcher
             textureFilter.Items.AddRange(GraphicsSettings.TextureFilters);
             lighting.Items.AddRange(GraphicsSettings.LightingModes);
             FillInterpolationChoices();
+            image.AutoScroll = true;
 
             for (int i = 0; i < volumes.Length; i++)
             {
@@ -583,6 +721,12 @@ namespace Nebula.Launcher
                 sound.Controls.Add(value);
             }
 
+            int outputRow = 16 + volumes.Length * 52;
+            Label(sound, NebulaText.Of("Sound output"), 12, outputRow + 3);
+            Combo(sound, soundOutput, 200, outputRow);
+            soundOutput.Width = 220;
+            soundOutput.Items.AddRange(AudioSettings.SoundOutputNames);
+
             BuildControlsTab(input);
 
             y = 16;
@@ -590,6 +734,15 @@ namespace Nebula.Launcher
             textSpeed.Items.AddRange(GeneralSettings.TextSpeeds);
             Row(generalPage, NebulaText.Of("Language"), languageBox, ref y);
             foreach (int language in offeredLanguages) languageBox.Items.Add(GeneralSettings.LanguageNames[language]);
+            Row(generalPage, NebulaText.Of("Button icons"), buttonIcons, ref y);
+            buttonIcons.Items.AddRange(GeneralSettings.ButtonIconNames);
+            Row(generalPage, NebulaText.Of("Menu text size"), menuTextSize, ref y);
+            Row(generalPage, NebulaText.Of("On losing focus"), focusLoss, ref y);
+            focusLoss.Items.AddRange(GeneralSettings.FocusLossNames);
+            discordStatus.Text = NebulaText.Of("Discord status");
+            discordStatus.Location = new Point(12, y);
+            discordStatus.Size = new Size(600, 28);
+            generalPage.Controls.Add(discordStatus);
 
             y = 16;
             Label(advanced, NebulaText.Of("Game content"), 12, y + 3);
@@ -645,14 +798,28 @@ namespace Nebula.Launcher
             save.Visible = !firstRun;
 #endif
 
+            updateBanner.Location = new Point(12, 628);
+            updateBanner.Size = new Size(470, 38);
+            updateBanner.AutoEllipsis = true;
+            updateBanner.TextAlign = ContentAlignment.MiddleLeft;
+            updateBanner.Visible = false;
+            updateBanner.Click += delegate { OpenUpdate(); };
+            Controls.Add(updateBanner);
+
             LoadValues();
+            // The last benchmark's recommendation, named as the rows (filled above) name their values.
+            ShowBenchmark(Benchmark.Read(0, Benchmark.ResultPath), false);
+            Shown += delegate { WatchForUpdate(); };
+            // A controller reaches every row (SettingsPadNavigator); A on a Wii input waits for its new button, and the
+            // pad does nothing else while it waits.
+            padNavigator = new SettingsPadNavigator(this, tabs, () => captureTarget >= 0, c => { if (c == bindingList) StartCapture(); });
             monitor.SelectedIndexChanged += delegate
             {
                 if (loading) return;
-                graphics.FullscreenWidth = graphics.FullscreenHeight = graphics.FullscreenRefresh = 0;
                 FillInterpolationChoices();
                 RefreshDisplayChoices();
                 RefreshDisplayNotice();
+                RefreshHdrRow();
             };
             mode.SelectedIndexChanged += delegate { if (!loading) RefreshDisplayChoices(); };
             aspect.SelectedIndexChanged += delegate { if (!loading) RefreshDisplayChoices(); };
@@ -716,9 +883,266 @@ namespace Nebula.Launcher
             };
             UiScale.Apply(this);
             // Tab headers are not scaled with the form.
-            using (var g = CreateGraphics()) tabs.ItemSize = new Size((int)(98 * g.DpiX / 96f), (int)(28 * g.DpiY / 96f));
+            // Every page's tab in one row: narrower than 98 px only when there are too many for the width.
+            using (var g = CreateGraphics())
+                tabs.ItemSize = new Size(Math.Min((int)(98 * g.DpiX / 96f), (tabs.Width - 4) / Math.Max(1, tabs.TabCount)), (int)(28 * g.DpiY / 96f));
             // After scaling: the notice moves the rows below it by its measured height.
             RefreshDisplayNotice();
+        }
+
+        // The offer of a newer release: at once from the answer already in (this start's check, else the last one), and
+        // when this start's check answers while the window is open. It shows the banner and takes no focus.
+        // The Performance page: what the benchmark does, its button and progress, then its verdict and the recommended
+        // settings that differ from the current ones (the last result, when a run finished earlier), with Apply.
+        private void BuildPerformancePage(TabPage page)
+        {
+            page.Controls.Add(new Label
+            {
+                Location = new Point(12, 16), Size = new Size(700, 66),
+                Text = NebulaText.Of("Runs real stages to measure this device, then recommends settings. It takes a few minutes. Your saves and settings are not changed.")
+            });
+            benchmarkButton.Text = NebulaText.Of("Benchmark");
+            benchmarkButton.Location = new Point(12, 88);
+            benchmarkButton.Size = new Size(180, 34);
+            benchmarkButton.Click += delegate { StartBenchmark(); };
+            page.Controls.Add(benchmarkButton);
+            benchmarkStatus.Location = new Point(204, 95);
+            benchmarkStatus.Size = new Size(508, 24);
+            benchmarkStatus.AutoEllipsis = true;
+            page.Controls.Add(benchmarkStatus);
+            benchmarkVerdict.Location = new Point(12, 134);
+            benchmarkVerdict.Size = new Size(700, 46);
+            page.Controls.Add(benchmarkVerdict);
+            benchmarkTitle.Text = NebulaText.Of("Recommended settings");
+            benchmarkTitle.Location = new Point(12, 186);
+            benchmarkTitle.Size = new Size(700, 24);
+            benchmarkTitle.Font = new Font(Font, FontStyle.Bold);
+            page.Controls.Add(benchmarkTitle);
+            benchmarkRows.View = View.Details;
+            benchmarkRows.FullRowSelect = true;
+            benchmarkRows.HeaderStyle = ColumnHeaderStyle.Nonclickable;
+            benchmarkRows.Location = new Point(12, 214);
+            benchmarkRows.Size = new Size(700, 220);
+            benchmarkRows.Columns.Add("", 300);
+            benchmarkRows.Columns.Add(NebulaText.Of("Current"), 190);
+            benchmarkRows.Columns.Add(NebulaText.Of("Recommended"), 190);
+            page.Controls.Add(benchmarkRows);
+            benchmarkApply.Text = NebulaText.Of("Apply");
+            benchmarkApply.Location = new Point(12, 444);
+            benchmarkApply.Size = new Size(140, 34);
+            benchmarkApply.Click += delegate { ApplyBenchmark(); };
+            page.Controls.Add(benchmarkApply);
+        }
+
+        // The game started for a benchmark (perf/bench's contract); its steps in the status, its result when it exits.
+        // Refused, like a game start, while the game runs.
+        private void StartBenchmark()
+        {
+            if (benchmarkRun != null) return;
+            if (LaunchSession.RuntimeLeaseHeld())
+            {
+                benchmarkStatus.Text = NebulaText.Of("Nebula is already running.");
+                return;
+            }
+            string file = Benchmark.ResultPath;
+            Process run;
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(file));
+                if (File.Exists(file)) File.Delete(file);
+                run = new Process { StartInfo = Benchmark.Create(session.App, session.Content, file), EnableRaisingEvents = true };
+                run.OutputDataReceived += (sender, e) =>
+                {
+                    int step, steps;
+                    if (Benchmark.Progress(e.Data, out step, out steps))
+                        Post(() => { if (benchmarkRun != null) benchmarkStatus.Text = NebulaText.Of("Benchmark: step {0} of {1}", Math.Max(1, step), steps); });
+                };
+                run.ErrorDataReceived += delegate { };
+                run.Exited += delegate { Post(() => FinishBenchmark(run)); };
+                run.Start();
+                run.BeginOutputReadLine();
+                run.BeginErrorReadLine();
+            }
+            catch (Exception error)
+            {
+                benchmarkStatus.Text = error.Message;
+                return;
+            }
+            benchmarkRun = run;
+            benchmarkButton.Enabled = false;
+            benchmarkStatus.Text = NebulaText.Of("Benchmark");
+            ShowBenchmark(null, false);
+        }
+
+        private void Post(Action action)
+        {
+            UiThread.Post(this, action);
+        }
+
+        private void FinishBenchmark(Process run)
+        {
+            if (run != benchmarkRun) return;
+            int code;
+            try { code = run.ExitCode; }
+            catch (InvalidOperationException) { code = -1; }
+            run.Dispose();
+            benchmarkRun = null;
+            benchmarkButton.Enabled = true;
+            benchmarkStatus.Text = "";
+            ShowBenchmark(Benchmark.Read(code, Benchmark.ResultPath), true);
+        }
+
+        internal void ShowBenchmark(BenchmarkResult result, bool fresh)
+        {
+            benchmarkResult = result;
+            var changes = result != null && result.Complete ? result.Changes : new List<BenchmarkSetting>();
+            benchmarkVerdict.Text = result != null ? result.VerdictText : fresh ? NebulaText.Of("The benchmark did not finish.") : "";
+            benchmarkRows.Items.Clear();
+            foreach (var change in changes)
+                benchmarkRows.Items.Add(new ListViewItem(new[] { BenchmarkLabel(change.Key), BenchmarkValue(change.Key, change.Current), BenchmarkValue(change.Key, change.Recommended) }));
+            benchmarkTitle.Visible = benchmarkRows.Visible = benchmarkApply.Visible = changes.Count > 0;
+            benchmarkApply.Enabled = true;
+        }
+
+        private static string BenchmarkLabel(string key)
+        {
+            switch (key)
+            {
+                case "internal_height": return NebulaText.Of("Internal resolution");
+                case "msaa_samples": return "MSAA";
+                case "ambient_occlusion": return NebulaText.Of("Ambient occlusion");
+                case "enhanced_lighting": return NebulaText.Of("Lighting");
+                case "aa": return NebulaText.Of("Anti-aliasing");
+                case "smaa_quality": return NebulaText.Of("Anti-aliasing quality");
+                case "bloom": return NebulaText.Of("Bloom");
+                default: return key;
+            }
+        }
+
+        // A value as this window's own rows name it.
+        private string BenchmarkValue(string key, int value)
+        {
+            switch (key)
+            {
+                case "internal_height":
+                {
+                    int index = Array.IndexOf(GraphicsSettings.InternalHeights, value);
+                    return index >= 0 && index < internalResolution.Items.Count ? internalResolution.Items[index].ToString() : value + "p";
+                }
+                case "msaa_samples":
+                {
+                    int index = MsaaIndex(value);
+                    return index >= 0 && index < msaa.Items.Count ? msaa.Items[index].ToString() : value + "x";
+                }
+                case "ambient_occlusion": return NebulaText.Of(value != 0 ? "On" : "Off");
+                case "enhanced_lighting":
+                    // Off: the lighting this window has, or per pixel in place of enhanced (what Apply sets).
+                    return value != 0 ? lighting.Items[0].ToString() : lighting.Items[lighting.SelectedIndex > 0 ? lighting.SelectedIndex : 1].ToString();
+                case "aa": return value >= 0 && value < antiAliasing.Items.Count ? antiAliasing.Items[value].ToString() : value.ToString(CultureInfo.InvariantCulture);
+                case "smaa_quality": return value >= 0 && value < aaQuality.Items.Count ? aaQuality.Items[value].ToString() : value.ToString(CultureInfo.InvariantCulture);
+                case "bloom": return value.ToString(CultureInfo.InvariantCulture) + "%";
+                default: return value.ToString(CultureInfo.InvariantCulture);
+            }
+        }
+
+        private static int MsaaIndex(int samples)
+        {
+            switch (samples) { case 1: return 0; case 2: return 1; case 4: return 2; case 8: return 3; default: return -1; }
+        }
+
+        // Apply: the recommended values on this window's rows (so Save keeps them) and in config.ini at once, through
+        // GraphicsSettings (only those keys change there).
+        internal void ApplyBenchmark()
+        {
+            if (benchmarkResult == null || !benchmarkResult.Complete) return;
+            var saved = GraphicsSettings.Load();
+            foreach (var change in benchmarkResult.Changes)
+            {
+                int value = change.Recommended;
+                switch (change.Key)
+                {
+                    case "internal_height":
+                    {
+                        int index = Array.IndexOf(GraphicsSettings.InternalHeights, value);
+                        if (index < 0) break;
+                        internalResolution.SelectedIndex = index;
+                        saved.InternalHeight = value;
+                        break;
+                    }
+                    case "msaa_samples":
+                    {
+                        int index = MsaaIndex(value);
+                        if (index < 0 || index >= msaa.Items.Count) break;
+                        msaa.SelectedIndex = index;
+                        saved.Msaa = index;
+                        break;
+                    }
+                    case "ambient_occlusion":
+                        // On keeps the kind chosen (SSAO or GTAO), the saved one when it was off.
+                        occlusionMode.SelectedIndex = value == 0 ? 0 : occlusionMode.SelectedIndex > 0 ? occlusionMode.SelectedIndex : saved.AmbientOcclusionSsao ? 1 : 2;
+                        saved.AmbientOcclusion = value != 0;
+                        break;
+                    case "enhanced_lighting":
+                        lighting.SelectedIndex = value != 0 ? 0 : lighting.SelectedIndex == 0 ? 1 : lighting.SelectedIndex;
+                        // The row's choice: enhanced and per pixel both light per pixel.
+                        saved.EnhancedLighting = value != 0;
+                        saved.PerPixelLighting = lighting.SelectedIndex != 2;
+                        break;
+                    case "aa":
+                        if (value < 0 || value >= antiAliasing.Items.Count) break;
+                        antiAliasing.SelectedIndex = value;
+                        saved.AntiAliasing = value;
+                        break;
+                    case "smaa_quality":
+                        if (value < 0 || value >= aaQuality.Items.Count) break;
+                        aaQuality.SelectedIndex = value;
+                        saved.Quality = value;
+                        break;
+                    case "bloom":
+                        bloom.Value = Math.Max(bloom.Minimum, Math.Min(bloom.Maximum, value));
+                        saved.Bloom = (int)bloom.Value;
+                        break;
+                }
+            }
+            RefreshImageRows();
+            try { saved.Save(); }
+            catch (Exception error)
+            {
+                MessageBox.Show(this, NebulaText.Of("Settings could not be saved: {0}", error.Message), Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            benchmarkApply.Enabled = false;
+        }
+
+        private void WatchForUpdate()
+        {
+            if (!UpdateCheck.Enabled(session)) return;
+            ShowUpdate(UpdateCheck.Pending(session));
+            var check = UpdateService.Running;
+            if (check == null || check.IsCompleted) return;
+            check.ContinueWith(delegate { Post(() => ShowUpdate(UpdateCheck.Pending(session))); });
+        }
+
+        private void ShowUpdate(ReleaseInfo release)
+        {
+            pendingUpdate = release;
+            if (release != null) updateBanner.Text = NebulaText.Of("Nebula {0} is available", release.Version) + "  ·  " + NebulaText.Of("Update");
+            updateBanner.Visible = release != null;
+        }
+
+        // The prompt, from the banner. An update started keeps the edits made here and closes the window, so Setup
+        // can replace the launcher; Skip this version hides the banner.
+        private void OpenUpdate()
+        {
+            if (pendingUpdate == null) return;
+            if (!UpdateCheck.Prompt(session, pendingUpdate, this, false))
+            {
+                ShowUpdate(UpdateCheck.Pending(session));
+                return;
+            }
+            UpdateStarted = true;
+            Commit();
+            Close();
         }
 
         private int Scheme { get { return Math.Max(0, editScheme.SelectedIndex); } }
@@ -811,6 +1235,11 @@ namespace Nebula.Launcher
             page.Controls.Add(gyroPointer);
             y += 26;
             TuningRow(page, NebulaText.Of("Gyro sensitivity"), gyroSensitivity, x, ref y, 0.2m, 5.0m, 0.1m, 1);
+            // Not per scheme: a second controller's pointer for a second player.
+            coStar.Text = NebulaText.Of("Co-Star");
+            coStar.Location = new Point(x, y + 8);
+            coStar.Size = new Size(250, 24);
+            page.Controls.Add(coStar);
 
             pointerSpeed.ValueChanged += delegate { if (!loading) controls.Tuning[Scheme].PointerSpeed = (float)pointerSpeed.Value; };
             stickDeadzone.ValueChanged += delegate { if (!loading) controls.Tuning[Scheme].StickDeadzone = (float)stickDeadzone.Value / 100f; };
@@ -1049,7 +1478,19 @@ namespace Nebula.Launcher
             textureFilter.SelectedIndex = graphics.TextureFilter;
             lighting.SelectedIndex = graphics.EnhancedLighting ? 0 : graphics.PerPixelLighting ? 1 : 2;
             mipmaps.Checked = graphics.GeneratedMipmaps;
-            occlusion.Checked = graphics.AmbientOcclusion;
+            occlusionMode.SelectedIndex = graphics.OcclusionMode;
+            bloom.Value = Math.Max(0, Math.Min(GraphicsSettings.BloomMax, graphics.Bloom));
+            curvedSurfaces.Checked = graphics.CurvedSurfaces;
+            texturePacks.SelectedIndex = graphics.TexturePackMode;
+            textureDump.Checked = graphics.TextureDump;
+            hdr.Checked = graphics.Hdr;
+            paperWhite.Value = Math.Max(GraphicsSettings.PaperWhiteMin, Math.Min(GraphicsSettings.PaperWhiteMax, graphics.PaperWhite));
+            soundOutput.SelectedIndex = Math.Max(0, Math.Min(audio.SoundOutput, AudioSettings.SoundOutputNames.Length - 1));
+            buttonIcons.SelectedIndex = Math.Max(0, Math.Min(general.ButtonIcons, GeneralSettings.ButtonIconNames.Length - 1));
+            FillMenuTextSizes(general.MenuTextSize);
+            focusLoss.SelectedIndex = Math.Max(0, Math.Min(general.FocusLoss, GeneralSettings.FocusLossNames.Length - 1));
+            discordStatus.Checked = general.DiscordStatus;
+            coStar.Checked = controls.CoStar;
             rayTracing.Checked = graphics.RayTracing;
             rtQuality.SelectedIndex = Math.Max(0, Array.IndexOf(GraphicsSettings.RtQualityOrder, graphics.RtQuality));
             rtQuality.Enabled = graphics.RayTracing;
@@ -1066,6 +1507,29 @@ namespace Nebula.Launcher
             windowSize = new Size(graphics.WindowWidth, graphics.WindowHeight);
             loading = false;
             RefreshDisplayChoices();
+            RefreshHdrRow();
+        }
+
+        // The game's menu's text sizes (Auto, 80 % to 200 %), with a size of the file's that is not a step kept in order.
+        private void FillMenuTextSizes(int current)
+        {
+            menuTextSizes.Clear();
+            menuTextSizes.AddRange(GeneralSettings.MenuTextSizes);
+            if (!menuTextSizes.Contains(current)) { menuTextSizes.Add(current); menuTextSizes.Sort(); }
+            menuTextSize.Items.Clear();
+            foreach (int size in menuTextSizes) menuTextSize.Items.Add(size == 0 ? NebulaText.Of("Auto") : size + "%");
+            menuTextSize.SelectedIndex = menuTextSizes.IndexOf(current);
+        }
+
+        // HDR is offered while Windows shows the chosen display in HDR; otherwise the row stays as saved, greyed, with
+        // the hint (the game ignores the setting on an SDR display).
+        private void RefreshHdrRow()
+        {
+            var screen = SelectedMonitor;
+            bool offered = screen != null && screen.Hdr;
+            hdr.Enabled = offered;
+            paperWhite.Enabled = offered && hdr.Checked;
+            hdrHint.Visible = !offered;
         }
 
         private void RefreshDisplayNotice()
@@ -1180,12 +1644,12 @@ namespace Nebula.Launcher
             KeepQuality(shownUpscaler);
 
             loading = true;
-            upscalerChoices = GraphicsSettings.UpscalerChoices(gpu);
+            upscalerChoices = GraphicsSettings.UpscalerChoices(gpus, gpu);
             upscaler.Items.Clear();
             foreach (int value in upscalerChoices) upscaler.Items.Add(GraphicsSettings.UpscalerName(value));
             upscaler.SelectedIndex = upscalerChoices.IndexOf(GraphicsSettings.OfferedUpscaler(upscalerChoices, shownUpscaler));
             upscalerShown = upscaler.SelectedIndex;
-            rayTracingOffered = GraphicsSettings.RayTracingAdapter(gpu);
+            rayTracingOffered = GraphicsSettings.RayTracingAdapter(gpus, gpu);
             rayTracing.Visible = rtQuality.Visible = rayTracingOffered;
             loading = false;
 
@@ -1279,7 +1743,13 @@ namespace Nebula.Launcher
                 graphics.EnhancedLighting = lighting.SelectedIndex == 0;
                 graphics.PerPixelLighting = lighting.SelectedIndex <= 1;
                 graphics.GeneratedMipmaps = mipmaps.Checked;
-                graphics.AmbientOcclusion = occlusion.Checked;
+                graphics.OcclusionMode = Math.Max(0, occlusionMode.SelectedIndex);
+                graphics.Bloom = (int)bloom.Value;
+                graphics.CurvedSurfaces = curvedSurfaces.Checked;
+                graphics.TexturePackMode = Math.Max(0, texturePacks.SelectedIndex);
+                graphics.TextureDump = textureDump.Checked;
+                graphics.Hdr = hdr.Checked;
+                graphics.PaperWhite = (int)paperWhite.Value;
                 // A fixed HUD row shows what the game does, not the player's choice: that is kept.
                 graphics.HudOutputResolution = hudOutput.Enabled ? hudOutput.Checked : hudChosen;
                 if (rayTracingOffered)
@@ -1289,12 +1759,18 @@ namespace Nebula.Launcher
                 }
                 graphics.Save();
                 for (int i = 0; i < volumes.Length; i++) audio.Percent[i] = volumes[i].Value;
+                audio.SoundOutput = Math.Max(0, soundOutput.SelectedIndex);
                 audio.Save();
                 general.TextSpeed = Math.Max(0, textSpeed.SelectedIndex) + 1;
                 general.Language = offeredLanguages[Math.Max(0, Math.Min(languageBox.SelectedIndex, offeredLanguages.Count - 1))];
+                general.ButtonIcons = Math.Max(0, buttonIcons.SelectedIndex);
+                general.MenuTextSize = menuTextSizes[Math.Max(0, Math.Min(menuTextSize.SelectedIndex, menuTextSizes.Count - 1))];
+                general.FocusLoss = Math.Max(0, focusLoss.SelectedIndex);
+                general.DiscordStatus = discordStatus.Checked;
                 general.Save();
                 EndCapture();
                 if (controls.InputMode != ControlsSettings.ModeRealWiimote) controls.InputMode = Math.Max(0, inputSource.SelectedIndex);
+                controls.CoStar = coStar.Checked;
                 controls.Save();
                 session.Recording = (RecordingMode)Math.Max(0, recording.SelectedIndex);
                 if (!session.Portable) session.AskAboutUpdates = askUpdates.Checked;

@@ -42,6 +42,10 @@
 #include "galaxy/pointer_control.h"
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/experimental_ultrawide_aspect.h"
+#include "galaxy/benchmark.h"
+#if defined(NEBULA_DIAG_REPORTS)
+#include "galaxy/diag_report.h"
+#endif
 #include "galaxy/frame_timeline.h"
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
 #include "galaxy/controller_hid.h"
@@ -77,6 +81,11 @@
 #include "galaxy/render/texture_store.h"
 #if defined(NEBULA_HOST_RENDERER)
 #include "render/core/frame_core.h"
+#include "galaxy/ui/launcher.h"
+#include "galaxy/ui/launcher_model.h"
+#if defined(NEBULA_UPDATE_CHECK)
+#include "galaxy/update.h"
+#endif
 #endif
 #include <nebula_frame_list.h>
 #include "galaxy/render/rt_materials.h"
@@ -147,6 +156,7 @@ inline bool perf_hint_on_battery() noexcept { return false; }
 #include <intrin.h>
 #include <dbghelp.h>
 #include <psapi.h>
+#include "cpu_level_x86.h"
 #else
 #include <dlfcn.h>
 #include <fcntl.h>
@@ -154,6 +164,16 @@ inline bool perf_hint_on_battery() noexcept { return false; }
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#if defined(__ANDROID__)
+#include <malloc.h>
+#endif
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#include <mach-o/dyld.h>
+#elif defined(__linux__)
+#include <sys/syscall.h>
+#endif
+#include <sys/wait.h>
 #endif
 
 namespace fs = std::filesystem;
@@ -521,7 +541,41 @@ std::vector<galaxy::mods::PluginFile> gPlugins;
 galaxy::mods::ModRows gModRows;
 bool gModsChangeGame = false;
 
+// The two folders the host reads from (board/cpu.md W9-h, the package layout):
+// - the program's folder (program_directory(), executable_path()): one for both CPU levels, since NebulaNative.exe and
+//   NebulaNative-x86-64-v2.exe lie side by side. Tables, dxc\, nebula-import.exe, the launcher, the restart's and the
+//   crash report's program come from there.
+// - module_folder(): the folder of the game module actually loaded (the program's folder, x86-64-v2\ on a CPU without
+//   x86-64-v3, or --module's folder). Everything that belongs to one build of the module is read from here, never from
+//   the program's folder: each CPU folder holds its own module and the files made with it.
+fs::path gModuleFolder;
+
+[[maybe_unused]] const fs::path& module_folder() {
+    return gModuleFolder;
+}
+
+// The module beside the program for this CPU: x86-64-v2\ holds the build for a CPU without x86-64-v3 (native/build.ps1).
+fs::path default_module_path(const fs::path& program_folder) {
+#if defined(_WIN32)
+    fs::path module = program_folder;
+#if defined(_M_X64)
+    if (!cpu_runs_x86_64_v3()) {
+        module /= "x86-64-v2";
+        log_line("host:", "the CPU lacks x86-64-v3: the x86-64-v2 game module");
+    }
+#endif
+    return module / "smg_game.dll";
+#elif defined(__APPLE__)
+    return program_folder / "libsmg_game.dylib";
+#else
+    return program_folder / "libsmg_game.so";
+#endif
+}
+
 void load_module(const fs::path& path) {
+    std::error_code absolute_error;
+    const fs::path absolute = fs::absolute(path, absolute_error);
+    gModuleFolder = (absolute_error ? path : absolute).parent_path();
 #if defined(_WIN32)
     void* module = LoadLibraryW(path.wstring().c_str());
 #else
@@ -1470,7 +1524,125 @@ void svc_fatal(void*, const char* text) {
 #if defined(_WIN32)
 // Arguments a restart adds to this start's command line (--gpu-start-retry).
 std::wstring gRestartArguments;
+#elif defined(NEBULA_HOST_RENDERER) && (defined(__linux__) || (defined(__APPLE__) && TARGET_OS_OSX)) && !defined(__ANDROID__)
+#define NEBULA_HOST_START_AGAIN 1
+// A restart on Linux and macOS: this start's arguments and the added ones (read in order: a later value wins).
+std::vector<std::string> gStartArguments;
+std::vector<std::string> gRestartExtra;
+
+// The same executable again in a new process that keeps none of this one's descriptors but the standard three (the
+// GPU's, the window's and the files' end with this process).
+void start_again() {
+    std::string self;
+#if defined(__APPLE__)
+    std::uint32_t size = 0;
+    (void)_NSGetExecutablePath(nullptr, &size);
+    std::string path(size, '\0');
+    if (size != 0u && _NSGetExecutablePath(path.data(), &size) == 0) self = path.c_str();
+#else
+    // An AppImage: the image file itself (its mount ends with this process, the program in it with the mount).
+    if (const char* image = std::getenv("APPIMAGE"); image != nullptr && image[0] == '/') {
+        self = image;
+    } else {
+        std::error_code error;
+        self = fs::read_symlink("/proc/self/exe", error).string();
+    }
 #endif
+    if (self.empty() || gStartArguments.empty()) return;
+    std::vector<std::string> arguments = gStartArguments;
+    arguments.insert(arguments.end(), gRestartExtra.begin(), gRestartExtra.end());
+    std::vector<char*> argv;
+    for (std::string& argument : arguments) argv.push_back(argument.data());
+    argv.push_back(nullptr);
+    const long open_max = sysconf(_SC_OPEN_MAX);
+    const int last = open_max > 3 && open_max < 65536 ? static_cast<int>(open_max) : 65536;
+    // The child runs only async-signal-safe calls before exec (another thread may hold a lock).
+    if (fork() == 0) {
+#if defined(__linux__) && defined(SYS_close_range)
+        if (syscall(SYS_close_range, 3u, ~0u, 0u) != 0)
+#endif
+        {
+            for (int fd = 3; fd < last; ++fd) close(fd);
+        }
+        execv(self.c_str(), argv.data());
+        _exit(127);
+    }
+}
+#endif
+
+#if defined(NEBULA_HOST_START_AGAIN) && defined(NEBULA_DIAG_REPORTS)
+// The home screen's upload question (diag_report.h, docs/DIAGNOSTICS_UPLOAD.md): the result it asks about.
+fs::path gUploadFile;
+
+// A file in the desktop's own viewer (open / xdg-open), in a process of its own that this one does not wait for.
+void show_file(const fs::path& file) {
+#if defined(__APPLE__)
+    const char* const tool = "/usr/bin/open";
+#else
+    const char* const tool = "xdg-open";
+#endif
+    std::string path = file.string();
+    std::string name = tool;
+    char* const argv[] = {name.data(), path.data(), nullptr};
+    const pid_t child = fork();
+    if (child == 0) {
+        if (fork() == 0) {  // the viewer's opener, adopted by init: no child of the game is left behind
+            for (int fd = 3; fd < 1024; ++fd) close(fd);
+            execvp(tool, argv);
+        }
+        _exit(0);
+    }
+    if (child > 0) (void)waitpid(child, nullptr, 0);
+}
+
+// The question's answers (the window's thread): 0 the full report, exactly what a send seals; 1 the send, once.
+void upload_answer(int what) {
+    if (what == 0) {
+        std::string report;
+        const galaxy::diag::SendResult preview = galaxy::diag::report_preview(gUploadFile, false, report);
+        fs::path shown = gUploadFile;
+        shown += ".report.json";
+        if (preview.exit == galaxy::diag::kOk && galaxy::io::write_file_atomically(shown, report)) {
+            show_file(shown);
+        } else {
+            log_line("diag:", preview.line.c_str());
+        }
+        return;
+    }
+    std::thread([] {
+        const galaxy::diag::SendResult sent = galaxy::diag::send_report_file(gUploadFile, false);
+        log_line("diag:", sent.line.c_str());
+        galaxy::ui::launcher_upload_finished(sent.exit == galaxy::diag::kOk || sent.exit == galaxy::diag::kAlreadySent);
+    }).detach();
+}
+
+// Whether the home screen may ask: the build has an endpoint, the run completed or failed (not closed by the player),
+// and the result was not sent.
+bool upload_offered(const fs::path& result) {
+    if (!galaxy::diag::uploads_enabled()) return false;
+    std::error_code error;
+    fs::path sent = result;
+    sent += ".sent";
+    if (fs::exists(sent, error)) return false;
+    std::ifstream in(result, std::ios::binary);
+    std::string head(4096, '\0');
+    in.read(head.data(), static_cast<std::streamsize>(head.size()));
+    head.resize(static_cast<std::size_t>(in.gcount()));
+    return head.starts_with("{\"schema\":1,") &&
+           (head.find("\"status\":\"complete\"") != std::string::npos || head.find("\"status\":\"failed\"") != std::string::npos);
+}
+#endif
+
+// An argument a restart adds (each a word of its own).
+[[maybe_unused]] void add_restart_argument(const fs::path& argument) {
+#if defined(_WIN32)
+    gRestartArguments += L" \"" + argument.wstring() + L"\"";
+#elif defined(NEBULA_HOST_START_AGAIN)
+    gRestartExtra.push_back(argument.string());
+#else
+    (void)argument;
+#endif
+}
 
 #if defined(NEBULA_HOST_RENDERER)
 // The renderer: the game's records reach it in frames (render_frame at the game's frame end and, while the start runs
@@ -1614,6 +1786,7 @@ int svc_achievement(void*, const char* id, uint16_t* name, uint32_t capacity) {
     (void)id, (void)name, (void)capacity;
     return 0;
 #else
+    if (galaxy::bench::running()) return 0;  // a benchmark unlocks nothing
     const galaxy::achievements::Info* info = id != nullptr ? galaxy::achievements::find(id) : nullptr;
     if (info == nullptr || !galaxy::achievements::unlock(id)) return 0;
     uint32_t i = 0;
@@ -1674,7 +1847,7 @@ int32_t svc_mod_achievement_unlocked(void*) {
 // The all-time counters the achievement board shows (stats.ini). The headless host keeps none.
 void svc_stat_add(void*, const char* name, uint64_t delta) {
 #if defined(NEBULA_HOST_RENDERER)
-    if (name != nullptr) galaxy::stats::add(name, delta);
+    if (name != nullptr && !galaxy::bench::running()) galaxy::stats::add(name, delta);  // a benchmark counts nothing
 #else
     (void)name, (void)delta;
 #endif
@@ -2564,6 +2737,13 @@ std::condition_variable gSavesDone;
 
 void svc_save_request(void*, const NebulaSaveRequest* request) {
     gSaveOps.fetch_add(1, std::memory_order_relaxed);
+#if defined(NEBULA_HOST_RENDERER)
+    if (galaxy::bench::running()) {  // a benchmark's blank save, in memory: the player's files are not opened
+        *request->status = galaxy::bench::save_request(static_cast<int>(request->op), request->name != nullptr ? request->name : "",
+                                                       request->buffer, request->size, request->length);
+        return;
+    }
+#endif
     *request->status = NEBULA_SAVE_PENDING;
     gSavesPending.fetch_add(1, std::memory_order_acq_rel);
     const NebulaSaveRequest r = *request;
@@ -2763,6 +2943,21 @@ uint32_t svc_input_players(void*) {
 }
 
 uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, NebulaInputSample* sample) {
+#if defined(NEBULA_HOST_RENDERER)
+    if (galaxy::bench::running()) {  // a benchmark plays nothing: player 1's remote connected and at rest
+        if (device != nullptr) {
+            *device = {};
+            device->connected = player == kHostPlayerMain ? 1 : 0;
+            device->nunchuk = device->connected;
+            device->battery = device->connected != 0 ? 4 : 0;
+        }
+        if (player != kHostPlayerMain || sample == nullptr) return 0;
+        *sample = rest_input_sample();
+        gInputRead.store(true, std::memory_order_release);
+        gInputRead.notify_one();
+        return 1;
+    }
+#endif
     if (device != nullptr) {
         *device = {};
 #if defined(NEBULA_HOST_RENDERER)
@@ -3065,8 +3260,51 @@ void svc_audio_control(void*, uint32_t what, uint32_t value) {
 #endif
 }
 
+#if defined(NEBULA_UPDATE_CHECK)
+bool gUpdateOffered = false;  // the game thread's (svc_home_menu)
+#endif
+
 int svc_home_menu(void*, uint32_t what, uint32_t value) {
 #if defined(NEBULA_HOST_RENDERER)
+    // Launcher mode's home screen is drawn as this menu while the HOME Menu itself is closed.
+    const bool launcher = galaxy::ui::launcher_visible() && !galaxy::render::home_menu_visible();
+    switch (what) {
+    case NEBULA_HOME_MENU_LAUNCHER_OPEN: {
+        const bool opened = galaxy::ui::launcher_open();
+#if defined(NEBULA_UPDATE_CHECK)
+        if (opened) {
+            if (const std::optional<galaxy::update::Release> release = galaxy::update::offer(galaxy::update::kFreshBudgetMs)) {
+                galaxy::ui::launcher_offer_update(release->version, release->notes);
+                gUpdateOffered = true;
+            }
+        }
+#endif
+        return opened ? 1 : 0;
+    }
+    case NEBULA_HOME_MENU_LAUNCHER_POLL:
+#if defined(NEBULA_UPDATE_CHECK)
+        // An answer that came after the screen opened (never waits).
+        if (!gUpdateOffered && galaxy::ui::launcher_visible()) {
+            if (const std::optional<galaxy::update::Release> release = galaxy::update::poll()) {
+                galaxy::ui::launcher_offer_update(release->version, release->notes);
+                gUpdateOffered = true;
+            }
+        }
+#endif
+        return galaxy::ui::launcher_poll();
+    case NEBULA_HOME_MENU_LAUNCHER_TEXT:
+        return static_cast<int>(galaxy::ui::launcher_text(value >> 16, value & 0xFFFFu));
+    default:
+        break;
+    }
+    if (launcher && (what == NEBULA_HOME_MENU_VIEW || what == NEBULA_HOME_MENU_POINT || what == NEBULA_HOME_MENU_CHOOSE)) {
+        if (what == NEBULA_HOME_MENU_POINT) {
+            galaxy::ui::launcher_point(value);
+        } else if (what == NEBULA_HOME_MENU_CHOOSE) {
+            galaxy::ui::launcher_choose(value);
+        }
+        return what == NEBULA_HOME_MENU_VIEW ? galaxy::ui::launcher_view() : 0;
+    }
     switch (what) {
     case NEBULA_HOME_MENU_OPEN:
         galaxy::render::home_menu_open();
@@ -3187,6 +3425,7 @@ void attach_extensions() {
 // and the Grand Stars with the Observatory they power.
 int svc_galaxy_travel(void*, char* stage, uint32_t capacity, int32_t* star) {
 #if defined(NEBULA_HOST_RENDERER)
+    if (galaxy::bench::running()) return galaxy::bench::scene_frame(gSceneStage, stage, capacity, star);
     std::size_t index = 0u;
     std::uint32_t chosen = 0u;
     if (galaxy::render::take_galaxy_travel(index, chosen)) {
@@ -3257,6 +3496,7 @@ void hold_runtime_lease() {
     game_profile::finish();
 #endif
 #if defined(NEBULA_HOST_RENDERER)
+    galaxy::bench::at_exit();  // a benchmark that did not finish writes its result as aborted
     // --diagnostics pipelines: the pipelines this run created (tools/dev/site_pipelines.py merges them).
     if (::galaxy::diagnosing(::galaxy::kDiagnosePipelines)) {
         if (const fs::path folder = galaxy::nebula_diagnostics_directory(); !folder.empty()) {
@@ -3276,6 +3516,9 @@ void hold_runtime_lease() {
 #if defined(NEBULA_HOST_RENDERER)
     galaxy::achievements::flush();
     galaxy::stats::flush();
+#endif
+#if defined(NEBULA_UPDATE_CHECK)
+    galaxy::update::finish();  // a check still running: its answer kept for the next start (at most its timeout)
 #endif
     std::fflush(stdout);
 #if defined(_WIN32)
@@ -3306,6 +3549,8 @@ void hold_runtime_lease() {
         // The activity ends this process once the new one is on its way.
         std::this_thread::sleep_for(std::chrono::seconds(5));
     }
+#elif defined(NEBULA_HOST_START_AGAIN)
+    if (restart) start_again();
 #else
     (void)restart;
 #endif
@@ -3320,6 +3565,13 @@ void hold_runtime_lease() {
 }
 
 void svc_app_exit(void*) {
+#if defined(NEBULA_HOST_RENDERER)
+    // The home screen's Benchmark: the game left as for Quit; a new start runs it (benchmark.h) and comes back.
+    if (galaxy::ui::launcher_poll() == galaxy::ui::LauncherModel::kChoiceBenchmark) {
+        for (const char* argument : {"--benchmark", "1", "--benchmark-return", "1"}) add_restart_argument(argument);
+        finish_and_exit(true);
+    }
+#endif
     finish_and_exit(false);
 }
 
@@ -3782,6 +4034,12 @@ int main(int argc, char** argv) {
     }
 #endif
     read_launch_args(argc, argv);
+#if defined(NEBULA_DIAG_REPORTS)
+    // The diagnostics report modes (--send-report and the rest): files and one HTTPS POST, nothing else, then exit.
+    if (const int code = galaxy::diag::run_command_line(argc, argv); code >= 0) {
+        return code;
+    }
+#endif
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
     // A tool's hidden start keeps off the player's data (hidden_start.h), before anything is written.
     {
@@ -3859,6 +4117,9 @@ int main(int argc, char** argv) {
     }
     attach_extensions();
     boot_mark("main");
+#if defined(NEBULA_HOST_START_AGAIN)
+    gStartArguments.assign(argv, argv + argc);
+#endif
     fs::path pak, saves, module;
     // A path in the command line: argv is in the system's code page, which cannot hold every folder name.
     const auto arg_path = [&](int index) {
@@ -3873,6 +4134,10 @@ int main(int argc, char** argv) {
         return fs::path(argv[index]);
     };
     double seconds = 0;
+    [[maybe_unused]] bool benchmark = false;  // --benchmark 1: benchmark.h's run, then exit
+    [[maybe_unused]] bool benchmark_return = false;  // --benchmark-return 1: then the home screen again
+    fs::path benchmark_out, benchmark_result;
+    [[maybe_unused]] int home = -1;  // --home: the launcher's home screen at the title's hold; -1 the platform's default
     for (int i = 1; i + 1 < argc; i += 2) {
         const std::string key = argv[i];
         if (key == "--pak") {
@@ -3887,20 +4152,37 @@ int main(int argc, char** argv) {
             // Read above, before anything uses them.
         } else if (key == "--seconds") {
             seconds = std::atof(argv[i + 1]);
+        } else if (key == "--home") {
+            home = std::atoi(argv[i + 1]) != 0 ? 1 : 0;
+        } else if (key == "--benchmark") {
+            benchmark = std::atoi(argv[i + 1]) != 0;
+        } else if (key == "--benchmark-out") {
+            benchmark_out = arg_path(i + 1);
+        } else if (key == "--benchmark-return") {
+            benchmark_return = std::atoi(argv[i + 1]) != 0;
+        } else if (key == "--benchmark-result") {
+            benchmark_result = arg_path(i + 1);
         } else {
             die("unknown option %s", key.c_str());
         }
     }
-    if (pak.empty() || saves.empty()) {
+#if defined(NEBULA_HOST_RENDERER)
+    if (benchmark) {
+        // No save folder: the game's saves stay in memory. Straight to the title, no time limit (it quits when done).
+        saves.clear();
+        home = 0;
+        seconds = 0;
+        galaxy::bench::start({pak.parent_path(), benchmark_out, benchmark_return});
+    }
+#endif
+    if (pak.empty() || (saves.empty() && !benchmark)) {
         die("usage: nebula_native_host --pak <game.pak> --saves <dir> [--module <smg_game.dll>] [--seconds N] (docs/COMMAND_LINE.md)");
     }
     if (module.empty()) {
 #if defined(_WIN32)
-        module = arg_path(0).parent_path() / "smg_game.dll";
-#elif defined(__APPLE__)
-        module = fs::path(argv[0]).parent_path() / "libsmg_game.dylib";
+        module = default_module_path(arg_path(0).parent_path());
 #else
-        module = fs::path(argv[0]).parent_path() / "libsmg_game.so";
+        module = default_module_path(fs::path(argv[0]).parent_path());
 #endif
     }
     gSaveRoot = saves;
@@ -3914,7 +4196,7 @@ int main(int argc, char** argv) {
 #if defined(_WIN32)
     hold_runtime_lease();
 #endif
-    {
+    if (!galaxy::bench::running()) {  // a benchmark's game has no Miis: their library is in the save folder
         // Mii import: the files in the import folder (next to the settings: any Mii files, mii_formats.h)
         // join the library before the game reads it; the settings import more while it runs.
         const fs::path settings_folder = galaxy::runtime_settings_folder();
@@ -3950,8 +4232,8 @@ int main(int argc, char** argv) {
         const galaxy::saves::SaveFolders save_folders = galaxy::saves::save_folders(std::string_view(gPak.id, 4));
         gOldSaveDataPath = save_folders.earlier;
         gSaveDataPath = save_folders.current;
-        fs::create_directories(gSaveRoot / gSaveDataPath.substr(1), error);  // the release's own save folder
-        if (!settings_folder.empty()) {
+        if (!gSaveRoot.empty()) fs::create_directories(gSaveRoot / gSaveDataPath.substr(1), error);  // the release's own save folder
+        if (!settings_folder.empty() && !galaxy::bench::running()) {  // benchmark implies safe start (no mods)
             fs::create_directories(settings_folder / "mods", error);
             // Updates imported while their mod's folder was in use take its place before anything reads the mods.
             galaxy::mods::apply_pending_updates(settings_folder / "mods");
@@ -4169,8 +4451,44 @@ int main(int argc, char** argv) {
         [](std::uint64_t after) noexcept { return galaxy::render::poll_host_pointer_transition(after); });
     galaxy::host::install_native_keyboard_capture_provider([]() noexcept { return galaxy::render::native_window_input_captured(); });
     galaxy::host::install_native_settings_pad_hooks(
-        []() noexcept { return galaxy::render::native_settings_overlay_visible() || galaxy::render::home_menu_visible(); },
+        []() noexcept {
+            return galaxy::render::native_settings_overlay_visible() || galaxy::render::home_menu_visible() ||
+                galaxy::ui::launcher_visible();
+        },
         [](std::uintptr_t key) noexcept { galaxy::render::native_settings_post_key(key); });
+#if defined(__APPLE__) || (defined(__linux__) && !defined(__ANDROID__))
+    constexpr bool kHomeByDefault = true;  // no launcher app: the home screen is where a start begins
+#else
+    constexpr bool kHomeByDefault = false;  // the Windows and Android launcher apps are the home screen there
+#endif
+    // Tests (a hidden start, a timed run) start straight into the game unless they ask for it.
+#if defined(_WIN32) || defined(NEBULA_HOST_START_AGAIN)
+    galaxy::ui::launcher_offer_benchmark(true);
+#else
+    galaxy::ui::launcher_offer_benchmark(false);  // no start again here (iOS, Android): no Benchmark row
+#endif
+    if (!benchmark && !benchmark_result.empty()) {
+        // The benchmark the home screen started: its recommendation as the settings menu's draft when it opens.
+        galaxy::render::RenderConfig draft = galaxy::render::get_render_config_chosen();
+        if (galaxy::bench::read_recommendation(benchmark_result, draft)) {
+            galaxy::ui::launcher_show_draft(draft);
+        } else {
+            galaxy::ui::launcher_offer_message();  // it did not finish, or measured nothing usable
+        }
+#if defined(NEBULA_HOST_START_AGAIN) && defined(NEBULA_DIAG_REPORTS)
+        if (upload_offered(benchmark_result)) {
+            gUploadFile = benchmark_result;
+            galaxy::ui::launcher_offer_upload(upload_answer);
+        }
+#endif
+    }
+    const bool home_screen =
+        home >= 0 ? home == 1 : kHomeByDefault && !::galaxy::launch_args().started_hidden && seconds <= 0;
+    galaxy::ui::launcher_enable(home_screen);
+#if defined(NEBULA_UPDATE_CHECK)
+    // The home screen's update notice (update.h): the check runs while the game boots, its answer when the screen opens.
+    if (home_screen && !benchmark) galaxy::update::begin(NEBULA_VERSION);
+#endif
 #endif
     if (gModule.attach(&services) != NEBULA_GAME_API_VERSION) {
         die("the game module's API version differs from the host's (%u)", NEBULA_GAME_API_VERSION);
@@ -4239,6 +4557,15 @@ int main(int argc, char** argv) {
             gSuspendWake.notify_all();
             gAudio->set_paused(away);
             log_line("host:", away ? "suspended (out of sight)" : "resumed");
+        }
+        // Android's onTrimMemory: what comes back by itself goes. The store's view pages return from the file cache on
+        // the next read; the C heap's free pages are new pages when used again.
+        if (galaxy::sdl::take_low_memory()) {
+            gPak.store.release_pages();
+#if defined(__ANDROID__)
+            (void)mallopt(M_PURGE, 0);
+#endif
+            log_line("host:", "the system asked for memory: the store's pages and the C heap's free pages released");
         }
 #else
         // Until a message, a change of the window or the game's end (gHostWake), or the once-a-second report.
@@ -4358,6 +4685,16 @@ int main(int argc, char** argv) {
 #endif
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
     galaxy::timeline::dump();
+#endif
+#if defined(NEBULA_HOST_RENDERER)
+    if (galaxy::bench::returns_home()) {
+        // A benchmark the home screen started, finished or failed: the home screen again, with its result.
+        for (const char* argument : {"--benchmark", "0", "--benchmark-return", "0", "--home", "1", "--benchmark-result"}) {
+            add_restart_argument(argument);
+        }
+        add_restart_argument(galaxy::bench::result_file());
+        finish_and_exit(true);
+    }
 #endif
     finish_and_exit(false);
 }

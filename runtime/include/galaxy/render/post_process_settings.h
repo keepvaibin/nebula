@@ -39,6 +39,8 @@ struct PostProcessPlan {
     bool rcas = false;
     // The resample writes the window directly unless RCAS follows it.
     bool resample_to_target = false;
+    // That write at the picture's own size: each pixel its texel (the copy pass, without the box filter's arithmetic).
+    bool copy = false;
 };
 
 // smaa_available / fxaa_available: the pass passed its start-up self-test.

@@ -107,11 +107,11 @@ else()
     set(nebula_apple_rust_triple "x86_64-apple-darwin")
 endif()
 find_program(NEBULA_CARGO cargo HINTS "$ENV{HOME}/.cargo/bin" REQUIRED)
-set(nebula_apple_importer "${nebula_root}/target/${nebula_apple_rust_triple}/release/libnebula_import.a")
+set(nebula_apple_importer "${nebula_root}/target/${nebula_apple_rust_triple}/dist/libnebula_import.a")
 file(GLOB_RECURSE nebula_apple_importer_sources CONFIGURE_DEPENDS "${nebula_root}/crates/nebula-import/src/*.rs")
 add_custom_command(OUTPUT "${nebula_apple_importer}"
     COMMAND "${CMAKE_COMMAND}" -E env "MACOSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}"
-            "${NEBULA_CARGO}" rustc --release --target "${nebula_apple_rust_triple}" -p nebula-import --lib --crate-type staticlib
+            "${NEBULA_CARGO}" rustc --profile dist --target "${nebula_apple_rust_triple}" -p nebula-import --lib --crate-type staticlib
     WORKING_DIRECTORY "${nebula_root}"
     DEPENDS ${nebula_apple_importer_sources} "${nebula_root}/crates/nebula-import/Cargo.toml"
     USES_TERMINAL VERBATIM)
@@ -120,7 +120,24 @@ add_dependencies(nebula_native nebula_apple_importer_file)
 target_link_libraries(nebula_native PRIVATE "${nebula_apple_importer}" "-liconv" "-lresolv" "-framework Security")
 target_link_libraries(nebula_native PRIVATE galaxy_render_mtl
     "-framework AppKit" "-framework GameController" "-framework CoreHaptics" "-framework AudioToolbox"
-    "-framework CoreAudio" "-framework CoreVideo")
+    "-framework CoreAudio" "-framework CoreVideo" "-framework IOKit")
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    # The update check and install of the home screen (runtime/include/galaxy/update.h); iOS updates through its store.
+    set(nebula_apple_update_objc "${nebula_root}/runtime/src/update/update_transport_apple.mm"
+        "${nebula_root}/runtime/src/update/update_install_macos.mm")
+    target_sources(nebula_native PRIVATE "${nebula_root}/runtime/src/update/update.cpp"
+        "${nebula_root}/runtime/src/update/update_crypto.cpp" "${nebula_root}/runtime/src/update/update_probe_posix.cpp"
+        ${nebula_apple_update_objc})
+    set_source_files_properties(${nebula_apple_update_objc} TARGET_DIRECTORY nebula_native PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+    target_compile_definitions(nebula_native PRIVATE NEBULA_UPDATE_CHECK=1)
+    if(TARGET nebula_archive)
+        # The diagnostics report modes (diag_report.h): zlib from the archive libraries, the update check's transport.
+        target_sources(nebula_native PRIVATE "${nebula_root}/runtime/src/diag_report.cpp"
+            "${nebula_root}/runtime/src/diag_seal.cpp")
+        target_compile_definitions(nebula_native PRIVATE NEBULA_DIAG_REPORTS=1)
+    endif()
+    target_link_libraries(nebula_native PRIVATE "-framework Foundation" "-framework CFNetwork" "-framework Security")
+endif()
 
 # The app's Metal libraries beside the program (a development run reads them there; build_macos.sh puts them in the
 # app's Resources).

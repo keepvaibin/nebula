@@ -3,56 +3,62 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Threading;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace Nebula.Launcher
 {
     /// <summary>
-    /// The update offer at each start: a newer release on GitHub is offered before the game starts; offline, or when
-    /// GitHub does not answer within a few seconds, the game starts without a word. Update downloads the release's
-    /// Setup, checks its signature and runs it, which installs the release and starts the game. NebulaText.Of("Don't ask again")
-    /// applies only to NebulaText.Of("Not now"); the launcher's Advanced tab turns the offer back on.
+    /// The update offer (UpdateService decides when Nebula looks and what it offers). A start offers the newer release
+    /// the check found, fresh or from the last start, before the game starts; with the settings open it shows as a
+    /// banner there. Update downloads the release's Setup, checks its signature and version and runs it, which
+    /// installs the release (and starts the game when offered at a start); Not now asks again at the next start; Skip
+    /// this version asks again for a newer one. The launcher's Advanced tab turns the service off.
     /// </summary>
     internal static class UpdateCheck
     {
-        private const int CheckMilliseconds = 3000;
+        internal static bool Enabled(LaunchSession session) { return !session.Portable && session.AskAboutUpdates; }
+
+        /// <summary>The release to offer now without waiting: the check's answer if it has come, else the last one.</summary>
+        internal static ReleaseInfo Pending(LaunchSession session)
+        {
+            return Enabled(session) ? UpdateService.Offer(0, session.SkippedUpdate) : null;
+        }
 
         /// <summary>True when an update was started: it starts the game itself once installed.</summary>
         public static bool OfferBeforeLaunch(LaunchSession session)
         {
-            if (session.Portable || !session.AskAboutUpdates) return false;
-            ReleaseInfo release;
-            try
-            {
-                var check = Task.Run(() => Updater.FindNewer(CheckMilliseconds));
-                if (!check.Wait(CheckMilliseconds + 500)) return false;
-                release = check.Result;
-            }
-            catch (Exception) { return false; }
+            if (!Enabled(session)) return false;
+            return Prompt(session, UpdateService.Offer(UpdateService.FreshBudgetMilliseconds, session.SkippedUpdate), null, true);
+        }
+
+        /// <summary>Shows the offer of <paramref name="release"/>; true when its Setup was started (with
+        /// <paramref name="launch"/>, it starts the game once installed).</summary>
+        public static bool Prompt(LaunchSession session, ReleaseInfo release, IWin32Window owner, bool launch)
+        {
             if (release == null) return false;
+            UpdateChoice choice;
             bool prepareRayTracing;
             using (var prompt = new UpdatePromptForm(release))
             {
-                if (prompt.ShowDialog() != DialogResult.Yes)
-                {
-                    if (prompt.DontAskAgain)
-                    {
-                        session.AskAboutUpdates = false;
-                        session.Save();
-                    }
-                    return false;
-                }
+                if (owner != null) prompt.ShowDialog(owner); else prompt.ShowDialog();
+                choice = prompt.Choice;
                 prepareRayTracing = prompt.PrepareRayTracing;
             }
+            if (choice == UpdateChoice.Skip)
+            {
+                session.SkippedUpdate = release.Version;
+                try { session.Save(); } catch (Exception) { }
+                return false;
+            }
+            if (choice != UpdateChoice.Update) return false;
             string setup;
             using (var download = new UpdateDownloadForm(release, new InstallLayout(session.Root).Staging))
             {
-                if (download.ShowDialog() != DialogResult.OK) return false;
+                if ((owner != null ? download.ShowDialog(owner) : download.ShowDialog()) != DialogResult.OK) return false;
                 setup = download.SetupPath;
             }
             if (prepareRayTracing) RayTracingPreparation.Request();
-            Process.Start(new ProcessStartInfo(setup, "--apply-update --launch --root " + ProcessRunner.Quote(session.Root))
+            Process.Start(new ProcessStartInfo(setup, "--apply-update " + (launch ? "--launch " : "") + "--root " + ProcessRunner.Quote(session.Root))
             {
                 UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(setup)
             });
@@ -60,18 +66,19 @@ namespace Nebula.Launcher
         }
     }
 
+    internal enum UpdateChoice { Later, Update, Skip }
+
     internal sealed class UpdatePromptForm : Form
     {
-        private readonly CheckBox dontAsk = new CheckBox(), prepare = new CheckBox();
+        private readonly CheckBox prepare = new CheckBox();
 
-        public bool DontAskAgain { get { return dontAsk.Checked; } }
+        public UpdateChoice Choice { get; private set; }
         public bool PrepareRayTracing { get { return prepare.Checked; } }
 
-        // Update never turns the offer off, whatever the box says; Not now keeps the box.
-        internal void Choose(bool update)
+        internal void Choose(UpdateChoice choice)
         {
-            if (update) dontAsk.Checked = false;
-            DialogResult = update ? DialogResult.Yes : DialogResult.No;
+            Choice = choice;
+            DialogResult = choice == UpdateChoice.Update ? DialogResult.Yes : DialogResult.No;
             Close();
         }
 
@@ -80,7 +87,7 @@ namespace Nebula.Launcher
             Text = NebulaText.Of("Nebula update");
             Font = new Font("Segoe UI", 9.5f);
             AutoScaleMode = AutoScaleMode.None;
-            ClientSize = new Size(520, 290);
+            ClientSize = new Size(560, 320);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
@@ -90,31 +97,38 @@ namespace Nebula.Launcher
             Controls.Add(new Label
             {
                 Text = NebulaText.Of("Nebula {0} is available", release.Version),
-                Font = new Font("Segoe UI", 11f, FontStyle.Bold), Location = new Point(16, 14), Size = new Size(488, 26)
+                Font = new Font("Segoe UI", 11f, FontStyle.Bold), Location = new Point(16, 14), Size = new Size(528, 26)
             });
+            if (release.SetupSize > 0)
+            {
+                Controls.Add(new Label
+                {
+                    Text = NebulaText.Of("Download: {0}", FileUtil.FormatBytes(release.SetupSize)),
+                    ForeColor = SystemColors.GrayText, Location = new Point(16, 40), Size = new Size(528, 20)
+                });
+            }
             bool offerRayTracing = RayTracingPreparation.Offered();
             string notes = ReleaseNotes.Plain(release.Notes, 1500);
             Controls.Add(new TextBox
             {
                 Text = notes, Multiline = true, ReadOnly = true,
-                ScrollBars = ScrollBars.Vertical, Location = new Point(16, 46), Size = new Size(488, offerRayTracing ? 162 : 190),
+                ScrollBars = ScrollBars.Vertical, Location = new Point(16, 64), Size = new Size(528, offerRayTracing ? 168 : 196),
                 TabStop = false
             });
             if (offerRayTracing)
             {
                 prepare.Text = NebulaText.Of("Prepare ray tracing shaders");
-                prepare.Location = new Point(16, 218);
-                prepare.Size = new Size(488, 24);
+                prepare.Location = new Point(16, 240);
+                prepare.Size = new Size(528, 24);
                 Controls.Add(prepare);
             }
-            dontAsk.Text = NebulaText.Of("Don't ask again");
-            dontAsk.Location = new Point(16, 250);
-            dontAsk.Size = new Size(200, 24);
-            Controls.Add(dontAsk);
-            var update = new Button { Text = NebulaText.Of("Update"), Location = new Point(300, 246), Size = new Size(100, 32) };
-            update.Click += delegate { Choose(true); };
-            var later = new Button { Text = NebulaText.Of("Not now"), Location = new Point(404, 246), Size = new Size(100, 32) };
-            later.Click += delegate { Choose(false); };
+            var skip = new Button { Text = NebulaText.Of("Skip this version"), Location = new Point(16, 274), Size = new Size(200, 32) };
+            skip.Click += delegate { Choose(UpdateChoice.Skip); };
+            var update = new Button { Text = NebulaText.Of("Update"), Location = new Point(316, 274), Size = new Size(112, 32) };
+            update.Click += delegate { Choose(UpdateChoice.Update); };
+            var later = new Button { Text = NebulaText.Of("Not now"), Location = new Point(432, 274), Size = new Size(112, 32) };
+            later.Click += delegate { Choose(UpdateChoice.Later); };
+            Controls.Add(skip);
             Controls.Add(update);
             Controls.Add(later);
             AcceptButton = update;
@@ -164,7 +178,13 @@ namespace Nebula.Launcher
             new PadNavigator(this);
             UiScale.Apply(this);
             Shown += delegate { Start(); };
+            // Closed by its X, Alt+F4 or Cancel before the download ended: the download stops (its partial file stays
+            // for the next start, which offers the update again).
+            FormClosing += delegate { if (DialogResult != DialogResult.OK) cancel.Cancel(); };
         }
+
+        /// <summary>The download thread, ended or not, by the time the window has closed (tests).</summary>
+        internal Thread Worker { get; private set; }
 
         private void Start()
         {
@@ -175,14 +195,15 @@ namespace Nebula.Launcher
                     string path = Updater.Download(release, folder, bytes =>
                     {
                         if (release.SetupSize <= 0) return;
-                        BeginInvoke((Action)delegate { bar.Value = (int)Math.Min(1000, bytes * 1000 / release.SetupSize); });
+                        int value = (int)Math.Min(1000, bytes * 1000 / release.SetupSize);
+                        UiThread.Post(this, delegate { bar.Value = value; });
                     }, cancel.Token);
-                    BeginInvoke((Action)delegate { SetupPath = path; DialogResult = DialogResult.OK; Close(); });
+                    UiThread.Post(this, delegate { SetupPath = path; DialogResult = DialogResult.OK; Close(); });
                 }
                 catch (Exception error)
                 {
                     bool canceled = cancel.IsCancellationRequested;
-                    BeginInvoke((Action)delegate
+                    UiThread.Post(this, delegate
                     {
                         if (!canceled)
                             MessageBox.Show(this, NebulaText.Of("Couldn't download the update.") + "\r\n\r\n" + error.Message,
@@ -193,7 +214,28 @@ namespace Nebula.Launcher
                 }
             });
             thread.IsBackground = true;
+            Worker = thread;
             thread.Start();
+        }
+    }
+
+    /// <summary>
+    /// A worker thread's step on a window's own thread: queued while the window lives, dropped (false) once it has
+    /// closed or is closing, including when it closes between the check and the queueing. The step itself runs only
+    /// while the window is not disposed.
+    /// </summary>
+    internal static class UiThread
+    {
+        public static bool Post(Control target, Action action)
+        {
+            if (target.IsDisposed || target.Disposing || !target.IsHandleCreated) return false;
+            try
+            {
+                target.BeginInvoke((Action)delegate { if (!target.IsDisposed && !target.Disposing) action(); });
+                return true;
+            }
+            // The handle went meanwhile (ObjectDisposedException is one of these).
+            catch (InvalidOperationException) { return false; }
         }
     }
 }

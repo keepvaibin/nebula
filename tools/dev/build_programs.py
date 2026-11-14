@@ -3,6 +3,7 @@
 Asks the importer for every program text (`nebula-import programs`), compiles each once in its base form and groups them by
 compiled instructions and stage signature: each group is one program. --write puts one text per group in
 runtime/src/render/programs/ and table.tsv there, which maps every text's hash to its program. Fails if two programs in that folder compile the same, so the set can't grow a duplicate."""
+import hashlib
 import os
 import re
 import subprocess
@@ -28,6 +29,17 @@ def compile_one(job):
     if r.returncode:
         return src + "\n" + r.stderr[:1500]
     return None
+
+
+# programs.rs shared_taps: TAP_DEFINE, the taps' declarations and each TAP(name, sample).
+TAP_DEFINE = "#if NATIVE_TRACED || NATIVE_PREPASS\n#define TAP(name, sample) (sample)\n#else\n#define TAP(name, sample) name\n#endif\n"
+TAP_DECLARATIONS = re.compile(r"#if !\(NATIVE_TRACED \|\| NATIVE_PREPASS\)\n(?:    const float4 tap\d+ = [^\n]*\n)+#endif\n")
+TAP_USE = re.compile(r"TAP\(tap\d+, (TEX\((\d+)\)\.Sample\(SAMP\(\2\), i\.uv\d+(?: / float2\([0-9., ]*\))?\))\)")
+
+
+def untapped(text):
+    """A text with shared taps as the generator wrote it before (each stage's own sample)."""
+    return TAP_USE.sub(r"\1", TAP_DECLARATIONS.sub("", text.replace(TAP_DEFINE, "")))
 
 
 def key_of(path):
@@ -63,15 +75,47 @@ def main():
     if failed:
         print(len(failed), "failed of", len(jobs))
         return 1
+    # A text with shared taps is grouped as the same text without them would be (its forms other than the raster ones
+    # compile that text), and named by that text for the choice of a group's program (the first name): a group keeps
+    # the program it had, with taps or without, and so its ray-tracing forms.
+    tapped = {}
+    named = {}
+    for n in names:
+        with open(os.path.join(texts, n + ".hlsl"), encoding="utf-8", errors="replace", newline="") as f:
+            text = f.read().replace("\r\n", "\n")
+        if "#define TAP(" in text:
+            plain = os.path.join(ll, n + ".untapped.hlsl")
+            old = untapped(text)
+            if not os.path.exists(plain) or open(plain, encoding="utf-8", newline="").read() != old:
+                with open(plain, "w", encoding="utf-8", newline="") as f:
+                    f.write(old)
+            tapped[n] = (plain, os.path.join(ll, n + ".untapped.ll"), n[0])
+            # programs.rs text_hash: the first 64 bits of the SHA-1, little-endian.
+            digest = hashlib.sha1(old.encode()).digest()
+            named[n] = n[0] + "%016x" % int.from_bytes(digest[:8], "little")
+    with ThreadPoolExecutor(int(os.environ.get("JOBS", "4"))) as pool:
+        failed = [r for r in pool.map(compile_one, tapped.values()) if r]
+    if failed:
+        print("FAILED", failed[0])
+        return 1
     groups = {}
     for n in names:
-        groups.setdefault((n[0], key_of(os.path.join(ll, n + ".ll"))), []).append(n)
+        # A text whose base form leaves out what other forms keep (programs.rs stage_lines: an alpha test only ray
+        # tracing's and the per-sample forms keep) stays its own program, so those forms stay its own.
+        with open(os.path.join(texts, n + ".hlsl"), encoding="utf-8", errors="replace") as f:
+            text = f.read()
+        own = n if "#if NATIVE_TRACED || NATIVE_PREPASS || NATIVE_SAMPLE" in text else None
+        listing = tapped[n][1] if n in tapped else os.path.join(ll, n + ".ll")
+        groups.setdefault((n[0], key_of(listing), own), []).append(n)
     vertex = sum(1 for k in groups if k[0] == "v")
     pixel = sum(1 for k in groups if k[0] == "p")
     group_of = {}
-    for (stage, _), members in groups.items():
+    def program(members):
+        return min(members, key=lambda m: named.get(m, m))
+
+    for (stage, _, _), members in groups.items():
         for m in members:
-            group_of[m] = min(members)
+            group_of[m] = program(members)
     pairs = set()
     with open(os.path.join(texts, "forms.tsv"), encoding="utf-8", errors="replace") as forms:
         plain = set()
@@ -86,7 +130,7 @@ def main():
     print(f"texts {len(names)} vertex {vertex} pixel {pixel} pairs {len(pairs)} plain pairs {len(plain)} forms {materials}")
     if write:
         os.makedirs(OUT, exist_ok=True)
-        keep = sorted({min(m) for m in groups.values()})
+        keep = sorted({program(m) for m in groups.values()})
         for n in os.listdir(OUT):
             if n.endswith(".hlsl") and n[:-5] not in keep:
                 os.remove(os.path.join(OUT, n))

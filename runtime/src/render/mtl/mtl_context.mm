@@ -30,6 +30,7 @@ static_assert(static_cast<std::uint32_t>(Format::R32u) == MTLPixelFormatR32Uint)
 static_assert(static_cast<std::uint32_t>(Format::Depth32fStencil8) == MTLPixelFormatDepth32Float_Stencil8);
 static_assert(static_cast<std::uint32_t>(Format::Depth32f) == MTLPixelFormatDepth32Float);
 static_assert(static_cast<std::uint32_t>(Format::Stencil8) == MTLPixelFormatStencil8);
+static_assert(static_cast<std::uint32_t>(Format::Astc4x4) == MTLPixelFormatASTC_4x4_LDR);
 #if TARGET_OS_OSX
 static_assert(static_cast<std::uint32_t>(Format::Bc1) == MTLPixelFormatBC1_RGBA);
 #endif
