@@ -285,6 +285,8 @@ private:
 
     TexturePacks packs_;
     bool stager_set_ = false;
+    // Whether textures are dumped (packs_.dumping()), for the calling threads' stage: set by configure_texture_packs.
+    std::atomic<bool> dumping_{false};
     std::unordered_map<std::uint32_t, std::vector<std::uint32_t>> pack_waiters_;
     std::vector<std::pair<std::uint32_t, TexturePackPixels>> pack_uploads_;
     std::vector<std::vector<TextureBackend::UploadChunk>> pack_staging_;
