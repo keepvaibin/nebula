@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 #if NEBULA_SETTINGS_APP
@@ -35,10 +36,13 @@ namespace Nebula.Launcher
                 // (UpdateService). A restart from the game's menu offers nothing.
                 LaunchSession session = restarting ? null : new LaunchSession();
                 if (session != null && UpdateCheck.Enabled(session)) UpdateService.Begin();
+                // The settings window's displays and GPUs, listed behind the window's own start (StartLists).
+                bool openMod = !restarting && args.Length > 1 && string.Equals(args[0], "--open-mod", StringComparison.OrdinalIgnoreCase);
+                if (session != null && (openMod || OpensSettings(args, session))) StartLists.Begin();
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 // A .luma opened from Explorer: the Mods page, with it being imported.
-                if (!restarting && args.Length > 1 && string.Equals(args[0], "--open-mod", StringComparison.OrdinalIgnoreCase))
+                if (openMod)
                 {
                     var importing = new SettingsForm(session, args[1]);
                     Application.Run(importing);
@@ -100,6 +104,59 @@ namespace Nebula.Launcher
             return args.Any(a => string.Equals(a, "--settings", StringComparison.OrdinalIgnoreCase)) ||
                 !session.SetupComplete;
 #endif
+        }
+    }
+
+    /// <summary>
+    /// The displays (DisplayConfig) and GPUs (DXGI) the settings window lists, begun on a thread of their own as the
+    /// process starts, so the window's start (visual styles, its controls, the settings files) overlaps them instead of
+    /// waiting for them on the UI thread. The first window takes what was begun; any later one lists afresh (a display
+    /// or GPU may have changed).
+    /// </summary>
+    internal static class StartLists
+    {
+        private static readonly object gate = new object();
+        private static Task<List<MonitorEntry>> monitors;
+        private static Task<List<GpuAdapter>> gpus;
+
+        public static void Begin()
+        {
+            lock (gate)
+            {
+                if (monitors != null) return;
+                monitors = Task.Factory.StartNew(() => DisplayInfo.Enumerate(), CancellationToken.None,
+                    TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                gpus = Task.Factory.StartNew(() => GpuAdapters.List(), CancellationToken.None,
+                    TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            }
+        }
+
+        public static List<MonitorEntry> TakeMonitors()
+        {
+            Task<List<MonitorEntry>> begun;
+            lock (gate) { begun = monitors; monitors = null; }
+            if (begun != null)
+            {
+                try { return begun.Result; }
+                catch (AggregateException) { }
+            }
+            return DisplayInfo.Enumerate();
+        }
+
+        /// <summary>The GPUs, an empty list when DXGI cannot list them.</summary>
+        public static List<GpuAdapter> TakeGpus()
+        {
+            Task<List<GpuAdapter>> begun;
+            lock (gate) { begun = gpus; gpus = null; }
+            List<GpuAdapter> listed = null;
+            bool taken = false;
+            if (begun != null)
+            {
+                try { listed = begun.Result; taken = true; }
+                catch (AggregateException) { }
+            }
+            if (!taken) listed = GpuAdapters.List();
+            return listed ?? new List<GpuAdapter>();
         }
     }
 
@@ -305,7 +362,7 @@ namespace Nebula.Launcher
         private ReleaseInfo pendingUpdate;
         /// <summary>True once an update's Setup was started from this window (it closes for Setup to replace it).</summary>
         public bool UpdateStarted { get; private set; }
-        private readonly List<MonitorEntry> monitors = DisplayInfo.Enumerate();
+        private readonly List<MonitorEntry> monitors = StartLists.TakeMonitors();
         private GraphicsSettings graphics = GraphicsSettings.Load();
         private AudioSettings audio = AudioSettings.Load();
         private GeneralSettings general = GeneralSettings.Load();
@@ -422,7 +479,7 @@ namespace Nebula.Launcher
         private readonly CheckBox mipmaps = new CheckBox(), hudOutput = new CheckBox(),
             rayTracing = new CheckBox();
         // The GPUs the game can run on, the automatic choice first; the Graphics card row shows with two or more.
-        private readonly List<GpuAdapter> gpus = GpuAdapters.List() ?? new List<GpuAdapter>();
+        private readonly List<GpuAdapter> gpus = StartLists.TakeGpus();
         private readonly ComboBox gpuBox = new ComboBox();
         // Ray tracing and DLSS follow the GPU the game will run on (RefreshGpuOptions).
         private bool rayTracingOffered;
@@ -460,8 +517,8 @@ namespace Nebula.Launcher
             this.session = session;
             offeredLanguages = GeneralSettings.Offered(Path.Combine(session.Content, "game.pak"));
             SaveArchive.LooseTitle = SaveArchive.TitleOf(GameDisc.GameId(Path.Combine(session.Content, "game.pak")));
-            upscalerChoices = GraphicsSettings.UpscalerChoices(graphics.Gpu);
-            rayTracingOffered = GraphicsSettings.RayTracingAdapter(graphics.Gpu);
+            upscalerChoices = GraphicsSettings.UpscalerChoices(gpus, graphics.Gpu);
+            rayTracingOffered = GraphicsSettings.RayTracingAdapter(gpus, graphics.Gpu);
             bool firstRun = !session.SetupComplete;
 #if NEBULA_SETTINGS_APP
             Text = NebulaText.Of("Nebula settings");
@@ -1356,12 +1413,12 @@ namespace Nebula.Launcher
             KeepQuality(shownUpscaler);
 
             loading = true;
-            upscalerChoices = GraphicsSettings.UpscalerChoices(gpu);
+            upscalerChoices = GraphicsSettings.UpscalerChoices(gpus, gpu);
             upscaler.Items.Clear();
             foreach (int value in upscalerChoices) upscaler.Items.Add(GraphicsSettings.UpscalerName(value));
             upscaler.SelectedIndex = upscalerChoices.IndexOf(GraphicsSettings.OfferedUpscaler(upscalerChoices, shownUpscaler));
             upscalerShown = upscaler.SelectedIndex;
-            rayTracingOffered = GraphicsSettings.RayTracingAdapter(gpu);
+            rayTracingOffered = GraphicsSettings.RayTracingAdapter(gpus, gpu);
             rayTracing.Visible = rtQuality.Visible = rayTracingOffered;
             loading = false;
 

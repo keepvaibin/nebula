@@ -39,10 +39,13 @@ namespace Nebula.Launcher
         public static bool XessInstalled() { return XessPackage.Package.Installed(); }
         // The upscaler setting values offered, in list order. DLSS is listed (before it is
         // downloaded too) when the game runs on an NVIDIA RTX GPU; XeSS runs on any GPU.
-        public static List<int> UpscalerChoices(string gpu)
+        public static List<int> UpscalerChoices(string gpu) { return UpscalerChoices(GpuAdapters.List(), gpu); }
+
+        /// <summary>The same, with the GPUs already listed (the settings window lists them once).</summary>
+        public static List<int> UpscalerChoices(List<GpuAdapter> adapters, string gpu)
         {
             var choices = new List<int> { 0, 1, 2 };
-            if (DlssAdapter(gpu)) choices.Add(3);
+            if (DlssAdapter(adapters, gpu)) choices.Add(3);
             choices.Add(4);
             return choices;
         }
@@ -69,9 +72,11 @@ namespace Nebula.Launcher
         /// its last run on the high-performance GPU (adapter.ini) decides; with no record, any RTX adapter
         /// in the machine.
         /// </summary>
-        public static bool DlssAdapter(string gpu)
+        public static bool DlssAdapter(string gpu) { return DlssAdapter(GpuAdapters.List(), gpu); }
+
+        public static bool DlssAdapter(List<GpuAdapter> adapters, string gpu)
         {
-            GpuAdapter target = TargetAdapter(gpu);
+            GpuAdapter target = GpuAdapters.Resolve(adapters, gpu);
             if (target != null) return target.IsNvidiaRtx;
             var values = AdapterRecord();
             string vendor, description;
@@ -87,9 +92,11 @@ namespace Nebula.Launcher
         /// memory). The runtime records whether the GPU it ran on does (adapter.ini); a GPU it has not run on
         /// yet does when it is an NVIDIA RTX GPU, and is otherwise offered after its first run.
         /// </summary>
-        public static bool RayTracingAdapter(string gpu)
+        public static bool RayTracingAdapter(string gpu) { return RayTracingAdapter(GpuAdapters.List(), gpu); }
+
+        public static bool RayTracingAdapter(List<GpuAdapter> adapters, string gpu)
         {
-            GpuAdapter target = TargetAdapter(gpu);
+            GpuAdapter target = GpuAdapters.Resolve(adapters, gpu);
             string rt, id;
             if (target != null)
             {

@@ -153,6 +153,41 @@ namespace Nebula.Launcher
                   "dialogs keep left and right as previous and next");
         }
 
+        // The settings window lists the GPUs once, off the UI thread when begun at the start (StartLists); a later
+        // window lists them afresh.
+        static void StartListsCases(LaunchSession session)
+        {
+            var original = GpuAdapters.Source;
+            var threads = new List<int>();
+            GpuAdapters.Source = () =>
+            {
+                lock (threads) threads.Add(Thread.CurrentThread.ManagedThreadId);
+                return new List<GpuAdapter> { Gpu(Rtx), Gpu(Integrated) };
+            };
+            try
+            {
+                int ui = Thread.CurrentThread.ManagedThreadId;
+                StartLists.Begin();
+                using (var form = new SettingsForm(session))
+                {
+                    CreateHandles(form);
+                    Check(threads.Count == 1 && threads[0] != ui && ((ComboBox)Private(form, "gpuBox")).Items.Count == 3,
+                          "begun at the start, the GPUs are listed once, off the UI thread, and the window takes them");
+                    ((ComboBox)Private(form, "gpuBox")).SelectedIndex = 2;
+                    ((ComboBox)Private(form, "gpuBox")).SelectedIndex = 1;
+                    Check(threads.Count == 1, "choosing another GPU lists nothing again");
+                }
+                using (var form = new SettingsForm(session))
+                {
+                    Check(threads.Count == 2 && threads[1] == ui, "a later window lists them afresh");
+                }
+            }
+            finally
+            {
+                GpuAdapters.Source = original;
+            }
+        }
+
         // The settings window with a controller: from the page tabs, Down walks every row of every page that takes the
         // focus and comes back; Left and Right change a choice, a number and the page; A ticks a box; B returns to the tabs.
         static void SettingsPadCases(LaunchSession session)
@@ -1154,8 +1189,10 @@ namespace Nebula.Launcher
             int port = ((System.Net.IPEndPoint)closed.LocalEndpoint).Port;
             closed.Stop();
             Updater.ReleasesUrl = "http://127.0.0.1:" + port + "/releases";
-            var clock = System.Diagnostics.Stopwatch.StartNew();
+            // The start's wait is Offer's: Begin runs at process start, before the window, and here reads the answer
+            // file just written (which a virus scanner may hold for a while on its first read).
             UpdateService.Begin();
+            var clock = System.Diagnostics.Stopwatch.StartNew();
             pending = UpdateService.Offer(UpdateService.FreshBudgetMilliseconds, null);
             long waited = clock.ElapsedMilliseconds;
             UpdateService.Finish();
@@ -1218,6 +1255,7 @@ namespace Nebula.Launcher
                 DisplayNoticeCases();
                 GpuFormCases(later, outDir);
                 SettingsPadCases(later);
+                StartListsCases(later);
                 RecordingEncodingCases(later.App);
 
                 // TryLaunch starts <App>\NebulaNative.exe, here a stub that records its arguments.
