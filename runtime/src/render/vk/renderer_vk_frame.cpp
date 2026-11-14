@@ -2640,7 +2640,13 @@ gpu::Table RendererVk::sampler_table_for(const SamplerKey* keys, unsigned count)
     if (const auto it = sampler_tables_.find(table_key); it != sampler_tables_.end()) {
         return gpu::Table{reinterpret_cast<std::uint64_t>(it->second)};
     }
-    const VkDescriptorSet set = allocate_persistent_set(draw_layout_.sets[2]);
+    VkDescriptorSet set = VK_NULL_HANDLE;
+    if (!free_sampler_tables_.empty()) {
+        set = free_sampler_tables_.back();
+        free_sampler_tables_.pop_back();
+    } else {
+        set = allocate_persistent_set(draw_layout_.sets[2]);
+    }
     std::array<VkDescriptorImageInfo, vk::kBoundTableSlots> samplers{};
     for (unsigned i = 0; i < vk::kBoundTableSlots; ++i) {
         samplers[i] = {sampler_for(i < count ? keys[i] : kDefaultSamplerKey, cfg), VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED};
@@ -2656,20 +2662,39 @@ gpu::Table RendererVk::sampler_table_for(const SamplerKey* keys, unsigned count)
     return gpu::Table{reinterpret_cast<std::uint64_t>(set)};
 }
 
-// Between frames: the samplers made again when the settings change, which also makes the walker ask for its lists or tables
-// again. With descriptor indexing the sampler array starts again when it is nearly full too, slot 0 the default sampler
+// Between frames: the samplers made again when the settings change or too many have been made, which also makes the walker
+// ask for its lists or tables again. With descriptor indexing the sampler array starts again when it is nearly full too, slot 0 the default sampler
 // (wrap, linear, mip point, every level) and the slots written once the GPU is past the frames that read them; else the
 // default table of draws without samplers of their own is made again.
 void RendererVk::reset_sampler_frame() {
     const RenderConfig cfg = get_render_config();
     const std::uint32_t config = sampler_config_key(cfg);
+    // Samplers are made per key the game uses (its LOD bias holds the output height's mip lines, so each window height
+    // adds a set) and per settings configuration, against the device's maxSamplerAllocationCount (4000 on the Android
+    // baselines and on some desktop drivers). After a settings change, or with half of that limit made, once the GPU is
+    // past every frame that read them: the old configuration's samplers (all of them when crowded) are destroyed, and the
+    // tables and slots are written again as the walker asks for them (sampler_generation). The same samplers come back.
+    const bool crowded = samplers_.size() >= vk::Context::get().properties().limits.maxSamplerAllocationCount / 2u;
+    const auto drop_other_configs = [this, config, crowded] {
+        const VkDevice device = vk::Context::get().device();
+        std::erase_if(samplers_, [&](const auto& entry) {
+            if (entry.first.config == config && !crowded) {
+                return false;
+            }
+            vkDestroySampler(device, entry.second, nullptr);
+            return true;
+        });
+    };
     if (bindless_) {
         const bool full = sampler_slots_.used() + vk_detail::kSamplerFrameRoom > kSamplerHeapSlots;
-        if (sampler_slots_ready_ && config == sampler_config_ && !full) {
+        if (sampler_slots_ready_ && config == sampler_config_ && !full && !crowded) {
             return;
         }
         if (sampler_slots_ready_ && last_submitted_ != 0u) {
             wait_for_fence_value(last_submitted_);
+        }
+        if (sampler_slots_ready_ && (config != sampler_config_ || crowded)) {
+            drop_other_configs();  // the array is filled again below: no slot keeps an old sampler
         }
         sampler_slots_.reset();
         sampler_slots_ready_ = true;
@@ -2678,8 +2703,20 @@ void RendererVk::reset_sampler_frame() {
         fill_sampler_array(sampler_for(kDefaultSamplerKey, cfg));
         return;
     }
-    if (default_sampler_table_.ptr != 0u && config == sampler_config_) {
+    if (default_sampler_table_.ptr != 0u && config == sampler_config_ && !crowded) {
         return;
+    }
+    if (default_sampler_table_.ptr != 0u) {
+        // Every table made so far is written again as it is asked for (sampler_generation makes the walker ask), in the
+        // same sets.
+        if (last_submitted_ != 0u) {
+            wait_for_fence_value(last_submitted_);
+        }
+        for (const auto& [key, set] : sampler_tables_) {
+            free_sampler_tables_.push_back(set);
+        }
+        sampler_tables_.clear();
+        drop_other_configs();
     }
     std::array<SamplerKey, vk::kBoundTableSlots> keys{};
     keys.fill(kDefaultSamplerKey);

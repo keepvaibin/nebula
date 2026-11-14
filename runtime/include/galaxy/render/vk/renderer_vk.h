@@ -877,6 +877,7 @@ private:
     UploadRing matrix_ring_;
     std::unordered_map<SamplerCacheKey, VkSampler, SamplerCacheKeyHasher> samplers_;  // sampler key << 32 | config key
     std::unordered_map<SamplerTableKey, VkDescriptorSet, SamplerTableKeyHasher> sampler_tables_;
+    std::vector<VkDescriptorSet> free_sampler_tables_;  // sets of tables of an older sampler configuration, written again
     std::uint32_t sampler_config_ = 0;
     gpu::Table default_sampler_table_{};
     // Descriptor indexing (vk::Context::bindless): the image array (set 1) and the sampler array (set 2) every draw reads,
