@@ -334,10 +334,12 @@ impl TableIr {
     /// A cell of `column` holding a mod's value. A word may be `{ "bytes": "<hex>" }` for one that is not UTF-8
     /// (contract table-keys 5).
     pub(crate) fn cell(column: &Column, key: &str, value: &Value) -> Result<Cell> {
+        use super::refuse::refuse;
+        let name = || [("name", key.to_string())];
         Ok(match column.kind {
-            Kind::Text => Cell::Text(word_bytes(value).with_context(|| format!("{key} is a word"))?),
-            Kind::Float => Cell::Bits((value.as_f64().with_context(|| format!("{key} is a number"))? as f32).to_bits()),
-            Kind::Int | Kind::Field => Cell::Bits(value.as_i64().with_context(|| format!("{key} is a whole number"))? as u32 & column.mask),
+            Kind::Text => Cell::Text(word_bytes(value).ok_or_else(|| refuse("Cook.Cell.Text", &name()))?),
+            Kind::Float => Cell::Bits((value.as_f64().ok_or_else(|| refuse("Cook.Cell.Number", &name()))? as f32).to_bits()),
+            Kind::Int | Kind::Field => Cell::Bits(value.as_i64().ok_or_else(|| refuse("Cook.Cell.Whole", &name()))? as u32 & column.mask),
         })
     }
 
@@ -354,7 +356,7 @@ impl TableIr {
     /// name in another layer may have it, and the row still counts).
     pub fn add_rows(&mut self, rows: &[Value]) -> Result<()> {
         for (r, row) in rows.iter().enumerate() {
-            let fields = row.as_object().with_context(|| format!("row {} isn't a set of columns", r + 1))?;
+            let fields = row.as_object().ok_or_else(|| super::refuse::refuse("Cook.Table.RowNotObject", &[("row", (r + 1).to_string())]))?;
             let mut cells: Vec<Cell> =
                 self.columns.iter().map(|c| if c.kind == Kind::Text { Cell::Text(Vec::new()) } else { Cell::Bits(0) }).collect();
             for (key, value) in fields {
@@ -369,12 +371,16 @@ impl TableIr {
 
     /// A mod's `remove` (drops the rows matching any of its sets of columns) and `change` (a list of
     /// `{ "where": { columns }, "set": { columns } }`), in that order. A remove or change that matches no row is not an
-    /// error (another mod's rows may come later), but it is named: what it said, for the log and the Mods screen.
-    pub fn edit_rows(&mut self, root: &Value) -> Result<Vec<String>> {
+    /// error (another mod's rows may come later), but it is named: the phrase (`Cook.Merge.RemoveNoRow`,
+    /// `Cook.Merge.ChangeNoRow`) and the columns it named, for the log and the Mods screen. A column the table does not
+    /// have, a value its column cannot hold, or a remove or change of another form refuses the whole file.
+    pub fn edit_rows(&mut self, root: &Value) -> Result<Vec<(&'static str, String)>> {
+        use super::refuse::refuse;
+        let no_column = |key: &str| refuse("Cook.Merge.NoColumn", &[("name", key.to_string())]);
         let mut unmatched = Vec::new();
         let matches = |table: &TableIr, row: &[Cell], wanted: &serde_json::Map<String, Value>| -> Result<bool> {
             for (key, value) in wanted {
-                let c = table.column_of(key)?.with_context(|| format!("this table has no column {key}"))?;
+                let c = table.column_of(key)?.ok_or_else(|| no_column(key))?;
                 if !Self::cell_is(&table.columns[c], &row[c], value) {
                     return Ok(false);
                 }
@@ -383,7 +389,7 @@ impl TableIr {
         };
         if let Some(remove) = root.get("remove").and_then(Value::as_array) {
             for wanted in remove {
-                let wanted = wanted.as_object().context("each row of remove is a set of columns")?;
+                let wanted = wanted.as_object().ok_or_else(|| refuse("Cook.Merge.RemoveForm", &[]))?;
                 let before = self.rows.len();
                 let mut kept = Vec::with_capacity(before);
                 for row in std::mem::take(&mut self.rows) {
@@ -392,18 +398,19 @@ impl TableIr {
                     }
                 }
                 if kept.len() == before {
-                    unmatched.push(format!("remove {} matched no row", Value::Object(wanted.clone())));
+                    unmatched.push(("Cook.Merge.RemoveNoRow", Value::Object(wanted.clone()).to_string()));
                 }
                 self.rows = kept;
             }
         }
         if let Some(changes) = root.get("change").and_then(Value::as_array) {
             for change in changes {
-                let wanted = change.get("where").and_then(Value::as_object).context("each change has a where")?;
-                let set = change.get("set").and_then(Value::as_object).context("each change has a set")?;
+                let form = || refuse("Cook.Merge.ChangeForm", &[]);
+                let wanted = change.get("where").and_then(Value::as_object).ok_or_else(form)?;
+                let set = change.get("set").and_then(Value::as_object).ok_or_else(form)?;
                 let mut sets = Vec::with_capacity(set.len());
                 for (key, value) in set {
-                    let c = self.column_of(key)?.with_context(|| format!("this table has no column {key}"))?;
+                    let c = self.column_of(key)?.ok_or_else(|| no_column(key))?;
                     sets.push((c, Self::cell(&self.columns[c], key, value)?));
                 }
                 let mut changed = false;
@@ -416,7 +423,7 @@ impl TableIr {
                     }
                 }
                 if !changed {
-                    unmatched.push(format!("change where {} matched no row", Value::Object(wanted.clone())));
+                    unmatched.push(("Cook.Merge.ChangeNoRow", Value::Object(wanted.clone()).to_string()));
                 }
             }
         }
@@ -512,17 +519,23 @@ pub fn row_count(table: &[u8]) -> Result<usize> {
 
 /// A mod's rows for a table.
 pub fn read_rows(text: &[u8]) -> Result<Vec<Value>> {
-    let root: Value = serde_json::from_slice(text).context("not JSON")?;
+    let root = json_of(text)?;
     if root.get("rows").is_none() && (root.get("change").is_some() || root.get("remove").is_some()) {
         return Ok(Vec::new());
     }
-    root.get("rows").and_then(Value::as_array).cloned().context("it has no rows")
+    root.get("rows").and_then(Value::as_array).cloned().ok_or_else(|| super::refuse::refuse("Cook.Table.NoRows", &[]))
+}
+
+/// A table's JSON, or its refusal naming the line and column where it stops reading.
+fn json_of(text: &[u8]) -> Result<Value> {
+    serde_json::from_slice(text)
+        .map_err(|e| super::refuse::refuse("Cook.Table.Json", &[("line", e.line().to_string()), ("column", e.column().to_string())]))
 }
 
 /// A cooked table with a mod's `merge/` file applied: its remove and change, then its rows. With it, each remove or
 /// change that matched no row (edit_rows).
-pub fn merge(table: &[u8], text: &[u8], rows: &[Value]) -> Result<(Vec<u8>, Vec<String>)> {
-    let root: Value = serde_json::from_slice(text).context("not JSON")?;
+pub fn merge(table: &[u8], text: &[u8], rows: &[Value]) -> Result<(Vec<u8>, Vec<(&'static str, String)>)> {
+    let root = json_of(text)?;
     let mut ir = TableIr::from_ntbl(table)?;
     let unmatched = ir.edit_rows(&root)?;
     ir.add_rows(rows)?;
@@ -732,8 +745,8 @@ mod tests {
         let (merged, unmatched) = merge(&cooked, text, &[]).unwrap();
         assert_eq!(TableIr::from_ntbl(&merged).unwrap().rows.len(), 2);
         assert_eq!(unmatched.len(), 2);
-        assert!(unmatched[0].starts_with("remove ") && unmatched[0].contains("Nobody"));
-        assert!(unmatched[1].starts_with("change where ") && unmatched[1].contains("77"));
+        assert!(unmatched[0].0 == "Cook.Merge.RemoveNoRow" && unmatched[0].1.contains("Nobody"));
+        assert!(unmatched[1].0 == "Cook.Merge.ChangeNoRow" && unmatched[1].1.contains("77"));
         // A column the table lacks is still an error.
         assert!(merge(&cooked, br#"{ "change": [ { "where": { "nope": 1 }, "set": { "id": 1 } } ] }"#, &[]).is_err());
     }

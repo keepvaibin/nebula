@@ -104,12 +104,17 @@ fn replaced(path: &str) -> String {
     }
 }
 
-/// A `merge/<game path>` the import's cook can add to (overlay.rs apply_merges): a table or a message file in its
-/// JSON form (`.json`: `<Table>.bcsv.json`, `message.bmg.json`, `MessageData/messages.json`, a particle file's
-/// `.jpc.json`), a particle file (`.jpc`), or ray tracing's rows (`NebulaData/RtStages.tsv`, `RtEffects.tsv`).
-fn mergeable(path: &str) -> bool {
-    let lower = path.to_ascii_lowercase();
-    lower.ends_with(".json") || lower.ends_with(".jpc") || lower == "nebuladata/rtstages.tsv" || lower == "nebuladata/rteffects.tsv"
+/// Ray tracing's tables a layer's `merge/` may hold (lowercase): rows the host reads after the game's, and the tables
+/// that class a pack's models as they cook.
+pub const MERGE_TABLES: [&str; 5] =
+    ["nebuladata/rtstages.tsv", "nebuladata/rteffects.tsv", "nebuladata/rtmaterials.tsv", "nebuladata/rtglow.tsv", "nebuladata/rtwater.tsv"];
+
+/// A `merge/<game path>` the import's cook reads (nebula-import overlay.rs run_merges and write_overlay, which take
+/// this as their gate): a table or a message file in its JSON form (`.json`: `<Table>.bcsv.json`, `message.bmg.json`,
+/// `MessageData/messages.json`, a particle file's `.jpc.json`), a particle file (`.jpc`), or one of MERGE_TABLES.
+pub fn mergeable(path: &str) -> bool {
+    let lower = path.trim_start_matches('/').to_ascii_lowercase();
+    lower.ends_with(".json") || lower.ends_with(".jpc") || MERGE_TABLES.contains(&lower.as_str())
 }
 
 pub(crate) fn check(ctx: &mut Ctx) {

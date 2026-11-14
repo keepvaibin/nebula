@@ -7,6 +7,7 @@ use super::overlay_patches::{apply_patches, facts_text, read_patches, PlanPatche
 use super::patch::Fact;
 use super::{archive, audio_data, cook_entry, cooks, place, store, Stats, StoreItem, ALIGN};
 use anyhow::{bail, Context, Result};
+use luma_validate::Finding;
 use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -422,6 +423,32 @@ pub fn cook_source(path: &str, source: &Path, bytes: &[u8], base: Option<&Path>)
     }
 }
 
+/// A mod's merge/ files (`merge: true`) applied as the game's start applies them (run_merges, the one function),
+/// against the game's store `base` and the mod's own files at game paths (the rest of `changes`, cooked as the start
+/// cooks them): what each merge came to, in the start's order.
+pub fn check_merges<'c>(changes: &'c [Change], base: &Path) -> Vec<(&'c Change, MergeOutcome)> {
+    let own = |path: &str| -> Option<Vec<u8>> {
+        let change = changes.iter().rev().filter(|c| !c.merge).find(|c| {
+            let at = c.path.trim_start_matches('/');
+            store::same_path(at, path) || at.to_ascii_lowercase().strip_suffix(".json").is_some_and(|stem| store::same_path(stem, path))
+        })?;
+        let bytes = fs::read(&change.source).ok()?;
+        let made = cook_one(change, bytes, &BTreeMap::new(), Some(base), &mut Stats::default()).ok()?;
+        super::refuse::take_notes();
+        super::refuse::take_facts();
+        made.into_iter().find(|(at, _)| store::same_path(at, path)).and_then(|(_, items)| items.into_iter().find_map(|i| i.bytes))
+    };
+    let has = |file: &str| own(file).is_some() || store::read_file(base, file).is_ok();
+    let mut start = |path: &str| match own(path) {
+        Some(bytes) => Ok(bytes),
+        None => game_file(path, Some(base)),
+    };
+    let (mut merged, mut cased) = (BTreeMap::new(), BTreeMap::new());
+    let outcomes = run_merges(changes, &mut start, &has, &mut merged, &mut cased, &mut Stats::default());
+    super::refuse::take_facts();
+    outcomes
+}
+
 /// One file of a mod as the overlay cooks it, with the game files it makes: none for a file another file reads (a
 /// sound, font or movie in assets/, a screen pass's HLSL), a modern source's files, else the file itself cooked by
 /// what it is. The overlay and `cook_source` (the check before a pack) run this one function.
@@ -532,8 +559,8 @@ pub fn write_overlay(game_id: &str, changes: &[Change], patches: &PlanPatches, b
                 continue;
             }
         };
-        if let Some(problem) = super::hit_record::pack_table_problem(kind, &text) {
-            failed.push((format!("merge/{}", change.path), problem));
+        // A table with a fault is left out; apply_merges says why (run_merges reads it the same way).
+        if super::hit_record::pack_table_problem(kind, &text).is_some() {
             continue;
         }
         match kind {
@@ -618,7 +645,13 @@ fn merge_start(path: &str, base: Option<&Path>, temporary: &Path, pak: &mut File
         reader.read_exact(&mut bytes)?;
         return Ok(bytes);
     }
-    store::read_file(base.context("the mod adds to a file of the game, and the game isn't known")?, path)
+    game_file(path, base)
+}
+
+/// The game's file a merge adds to; refused by name when the game has none at that path.
+fn game_file(path: &str, base: Option<&Path>) -> Result<Vec<u8>> {
+    let base = base.context("the mod adds to a file of the game, and the game isn't known")?;
+    store::read_file(base, path).map_err(|_| super::refuse::refuse("Cook.Merge.NoBase", &[("file", path.to_string())]))
 }
 
 /// Every language folder a game of the series has messages in.
@@ -629,13 +662,10 @@ const MESSAGE_LANGUAGES: [&str; 14] = [
 
 /// The languages a messages merge is for: `<Language>/MessageData/Message.arc/message.bmg.json` one, and
 /// `MessageData/messages.json` each the game has. None: the path is no messages merge.
-fn message_languages(path: &str, base: Option<&Path>, placed: &[store::Placed]) -> Result<Option<Vec<String>>> {
+fn message_languages(path: &str, has_file: &dyn Fn(&str) -> bool) -> Result<Option<Vec<String>>> {
     let lower = path.trim_start_matches('/').to_ascii_lowercase();
     if lower == "messagedata/messages.json" {
-        let has = |language: &str| {
-            let file = format!("{language}/MessageData/Message.arc/message.bmg");
-            placed.iter().any(|p| store::same_path(&p.path, &file)) || base.is_some_and(|base| store::read_file(base, &file).is_ok())
-        };
+        let has = |language: &str| has_file(&format!("{language}/MessageData/Message.arc/message.bmg"));
         let found: Vec<String> = MESSAGE_LANGUAGES.iter().filter(|l| has(l)).map(|l| l.to_string()).collect();
         if found.is_empty() {
             bail!("the game's languages aren't known: it has no <Language>/MessageData/Message.arc");
@@ -649,37 +679,57 @@ fn message_languages(path: &str, base: Option<&Path>, placed: &[store::Placed]) 
     Ok(None)
 }
 
-/// Each merge in its mod's order: a mod's names before its particles, which are numbered from them. A merge that can't
-/// apply is left out and named.
-#[allow(clippy::too_many_arguments)]
-fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, temporary: &Path, at: &mut u64, placed: &mut Vec<store::Placed>,
-                failed: &mut Vec<(String, String)>, stats: &mut Stats) -> Result<()> {
-    // A mod's effects are cooked after every other merge (apply_effects).
+/// What one merge/ file came to: nothing of it applied (refused, with why), or applied with what was said of it.
+pub enum MergeOutcome {
+    Refused(Finding),
+    Applied(Vec<Finding>),
+}
+
+/// An error of a cook as the finding it is: its own refusal, or `Cook.Failed` with its words (as cook_source says it).
+fn finding_of(error: &anyhow::Error) -> Finding {
+    match super::refuse::refusal_of(error) {
+        Some(finding) => finding.clone(),
+        None => super::refuse::refusal_of(&super::refuse::refuse("Cook.Failed", &[("detail", format!("{error:#}"))])).cloned().expect("a refusal"),
+    }
+}
+
+/// The merges of `changes` (every mod's effects left out: apply_effects), each in its mod's order, a mod's names before
+/// its particles, which are numbered from them: what each came to. `start` gives a file as it stands before any merge
+/// (a mod's file of it in this store, else the game's), `has` whether the game or a mod has a file (which languages a
+/// messages merge is for). The game's start (apply_merges) and the check before a pack (check_merges) run this one
+/// function. `merged` holds each file merged so far by its place in the store (StageData/X.arc/y and StageData/X/y, in
+/// any case, are one): a merge starts from it and replaces it only when the merge works, so one that fails loses no
+/// other's. `cased` keeps the path a merge of messages or particles wrote first.
+fn run_merges<'c>(changes: &'c [Change], start: &mut dyn FnMut(&str) -> Result<Vec<u8>>, has: &dyn Fn(&str) -> bool,
+                  merged: &mut BTreeMap<String, Vec<u8>>, cased: &mut BTreeMap<String, String>, stats: &mut Stats) -> Vec<(&'c Change, MergeOutcome)> {
     let mut merges: Vec<&Change> = changes.iter().filter(|c| c.merge && super::effects::source_of(&c.path).is_none()).collect();
     merges.sort_by_key(|c| {
         let path = c.path.to_ascii_lowercase();
         path.ends_with(".jpc") || path.ends_with(".jpc.json")
     });
-    // Each file merged so far, by its place in the store (StageData/X.arc/y and StageData/X/y, in any case, are one):
-    // a merge starts from it and replaces it only when the merge works, so one that fails loses no other's.
-    let mut merged: BTreeMap<String, Vec<u8>> = BTreeMap::new();
     let mut first_particle: BTreeMap<PathBuf, u16> = BTreeMap::new();
-    let mut cased: BTreeMap<String, String> = BTreeMap::new();
     let lower = |text: &str| text.to_ascii_lowercase();
     let place_of = |text: &str| store::store_path(text.trim_start_matches('/')).to_ascii_lowercase();
+    let mut outcomes = Vec::new();
     for change in merges {
+        super::refuse::take_notes();
         let result = (|| -> Result<()> {
-            // A picture beside particles written as JSON is one of their textures: their cook reads it.
+            // What merge/ may hold is the validator's one list (L309): the branches below take each kind it allows.
             let path = lower(&change.path);
-            if [".png", ".jpg", ".jpeg"].iter().any(|ending| path.ends_with(ending)) {
-                return Ok(());
+            if !luma_validate::mergeable(&path) {
+                bail!("only tables (.json; ray tracing's NebulaData/Rt*.tsv), messages (message.bmg.json, messages.json) and particles (.jpc, .jpc.json) can be added to");
             }
-            // A pack's tables that class its models: read before they cooked (write_overlay), no file of the store.
-            if RT_CLASSING.contains(&path.as_str()) {
+            // A pack's tables that class its models: read before they cooked (write_overlay), no file of the store. A
+            // table write_overlay leaves out for its fault is said here.
+            if let Some(kind) = RT_CLASSING.iter().position(|p| *p == path) {
+                let text = fs::read_to_string(&change.source).with_context(|| format!("{} cannot be read", change.source.display()))?;
+                if let Some(problem) = super::hit_record::pack_table_problem(kind, &text) {
+                    bail!("{problem}");
+                }
                 return Ok(());
             }
             let bytes = fs::read(&change.source).with_context(|| format!("{} cannot be read", change.source.display()))?;
-            if let Some(languages) = message_languages(&change.path, base, placed)? {
+            if let Some(languages) = message_languages(&change.path, has)? {
                 // Every language or none: a merge that fails in one is left out of all.
                 let mut done = Vec::new();
                 for language in languages {
@@ -687,7 +737,7 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
                     let (file_path, ids_path) = (format!("{folder}/message.bmg"), format!("{folder}/messageid.tbl"));
                     let mut current = |path: &str| match merged.get(&place_of(path)) {
                         Some(bytes) => Ok(bytes.clone()),
-                        None => merge_start(path, base, temporary, pak, placed),
+                        None => start(path),
                     };
                     let (file, ids) = (current(&file_path)?, current(&ids_path)?);
                     let (file, ids) = super::message_merge::merge(&file, &ids, &bytes, &language).with_context(|| language.clone())?;
@@ -706,7 +756,7 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
                 let table_key = place_of(&path);
                 let current = match merged.get(&table_key) {
                     Some(current) => current.clone(),
-                    None => merge_start(&path, base, temporary, pak, placed)?,
+                    None => start(&path)?,
                 };
                 let mut rows = super::table::read_rows(&bytes)?;
                 // A stage's placement rows may give their objects' arguments by name (stages contract 1).
@@ -727,9 +777,9 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
                     }
                 }
                 let (table, unmatched) = super::table::merge(&current, &bytes, &rows)?;
-                // Applied all the same: a row matching nothing is named in the log, not refused.
-                for words in unmatched {
-                    failed.push((format!("merge/{}", change.path), words));
+                // Applied all the same: a remove or change matching no row is said, not refused.
+                for (why, row) in unmatched {
+                    super::refuse::note(why, &[("row", row)]);
                 }
                 if let Some((folder, first)) = names_start {
                     first_particle.insert(folder, first);
@@ -741,7 +791,7 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
                 let key = place_of(&change.path);
                 let current = match merged.get(&key) {
                     Some(current) => current.clone(),
-                    None => merge_start(&change.path, base, temporary, pak, placed)?,
+                    None => start(&change.path)?,
                 };
                 let cooked = super::cook_file(&change.path, bytes, stats)?.context("not a particle file")?;
                 merged.insert(key, super::merge::add_particles(&current, &cooked, first)?);
@@ -750,7 +800,7 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
                 let key = place_of(&change.path);
                 let current = match merged.get(&key) {
                     Some(current) => current.clone(),
-                    None => merge_start(&change.path, base, temporary, pak, placed)?,
+                    None => start(&change.path)?,
                 };
                 merged.insert(key, super::merge::add_rows(&current, &bytes)?);
             } else {
@@ -758,8 +808,40 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
             }
             Ok(())
         })();
-        if let Err(error) = result {
-            failed.push((format!("merge/{}", change.path), format!("{error:#}")));
+        let notes = super::refuse::take_notes();
+        outcomes.push((change, match result {
+            Ok(()) => MergeOutcome::Applied(notes),
+            Err(error) => MergeOutcome::Refused(finding_of(&error)),
+        }));
+    }
+    outcomes
+}
+
+/// Each merge as the game's start applies it (run_merges): what each came to goes in the cook's facts and, for the
+/// log, in `failed`.
+#[allow(clippy::too_many_arguments)]
+fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, temporary: &Path, at: &mut u64, placed: &mut Vec<store::Placed>,
+                failed: &mut Vec<(String, String)>, stats: &mut Stats) -> Result<()> {
+    let mut merged: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+    let mut cased: BTreeMap<String, String> = BTreeMap::new();
+    {
+        let shown: &[store::Placed] = placed;
+        let has = |file: &str| shown.iter().any(|p| store::same_path(&p.path, file)) || base.is_some_and(|base| store::read_file(base, file).is_ok());
+        let mut start = |path: &str| merge_start(path, base, temporary, pak, shown);
+        for (change, outcome) in run_merges(changes, &mut start, &has, &mut merged, &mut cased, stats) {
+            let (path, source) = (format!("+{}", change.path), change.source.display().to_string());
+            match outcome {
+                MergeOutcome::Refused(finding) => {
+                    failed.push((format!("merge/{}", change.path), luma_validate::reason(&finding, "UsEnglish")));
+                    super::refuse::record(super::refuse::CookFact::Refused { path, source, finding });
+                }
+                MergeOutcome::Applied(notes) => {
+                    for finding in notes {
+                        failed.push((format!("merge/{}", change.path), luma_validate::reason(&finding, "UsEnglish")));
+                        super::refuse::record(super::refuse::CookFact::Noted { path: path.clone(), source: source.clone(), finding });
+                    }
+                }
+            }
         }
     }
     apply_effects(changes, base, pak, temporary, placed, &mut merged, &mut cased, failed)?;
@@ -1507,6 +1589,126 @@ mod tests {
         assert!(failed[0].1.contains("nope"), "{failed:?}");
         let merged = store::read_file(&output, "ObjectData/Things.arc/Things.bcsv").unwrap();
         assert_eq!(super::super::table::row_count(&merged).unwrap(), 3);
+    }
+
+    /// A store holding one table `ObjectData/Things/Things.bcsv` (columns name: text, speed: whole number).
+    fn things_store(dir: &Path) -> PathBuf {
+        let base = dir.join("game.pak");
+        let table = super::super::table::TableIr::from_json(br#"{"rows":[{"name":"Game","speed":1}]}"#).unwrap().to_ntbl();
+        let mut pak = File::create(&base).unwrap();
+        pak.write_all(&vec![0u8; 0x100]).unwrap();
+        let position = pak.stream_position().unwrap();
+        pak.write_all(&table).unwrap();
+        let placed = vec![store::Placed { path: "ObjectData/Things/Things.bcsv".into(), position, size: table.len() as u64, folder: false }];
+        let end = pak.stream_position().unwrap();
+        store::write_index(&mut pak, end, &placed, b"RMGE01\0\0").unwrap();
+        base
+    }
+
+    /// The check before a pack and the game's start say the same of each merge/ file, through run_merges: a file the
+    /// game does not have, a column the table lacks, a value its column cannot hold, a remove or change of another form
+    /// (refused, nothing of the file applied), and a remove or change matching no row (said, the rest applied).
+    #[test]
+    fn the_check_says_of_each_merge_what_the_start_says() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = things_store(dir.path());
+        let file = |name: &str, text: &str| {
+            let path = dir.path().join(name);
+            fs::write(&path, text).unwrap();
+            path
+        };
+        let at = "ObjectData/Things.arc/Things.bcsv.json";
+        let merge = |path: &str, name: &str, text: &str| Change { path: path.into(), source: file(name, text), merge: true };
+        let changes = vec![
+            merge(at, "good.json", r#"{"rows":[{"name":"A","speed":2}]}"#),
+            merge("ObjectData/Nothing.arc/Nothing.bcsv.json", "nobase.json", r#"{"rows":[{"name":"A"}]}"#),
+            merge(at, "column.json", r#"{"change":[{"where":{"name":"Game"},"set":{"nope":1}}]}"#),
+            merge(at, "text.json", r#"{"change":[{"where":{"name":"Game"},"set":{"name":3}}]}"#),
+            merge(at, "whole.json", r#"{"change":[{"where":{"name":"Game"},"set":{"speed":"fast"}}]}"#),
+            merge(at, "remove.json", r#"{"remove":[3]}"#),
+            merge(at, "change.json", r#"{"change":[{"set":{"speed":3}}]}"#),
+            merge(at, "norow.json", r#"{"remove":[{"name":"Nobody"}],"change":[{"where":{"name":"Nobody"},"set":{"speed":4}}],"rows":[{"name":"B"}]}"#),
+            merge(at, "json.json", r#"{"rows":"#),
+            merge(at, "rows.json", r#"{"columns":{}}"#),
+            merge(at, "row.json", r#"{"rows":[3]}"#),
+        ];
+        // A finding's phrase and arguments; every placeholder of its words is given, in four languages.
+        let said = |finding: &Finding| -> (&'static str, Vec<(&'static str, String)>) {
+            use luma_validate::Arg;
+            let Arg::Phrase(why) = finding.args[0].1 else { panic!("{finding:?}") };
+            for language in ["UsEnglish", "UsFrench", "JpJapanese", "KrKorean"] {
+                let words = luma_validate::reason(finding, language);
+                let unfilled = ["{row}", "{name}", "{file}", "{line}", "{column}", "{detail}"].iter().any(|p| words.contains(p));
+                assert!(!unfilled && !words.contains("Cook."), "{why} in {language}: {words}");
+            }
+            let rest = finding.args[1..].iter().map(|(n, v)| (*n, match v { Arg::Text(t) => t.clone(), Arg::Phrase(p) => p.to_string() })).collect();
+            (why, rest)
+        };
+        // The check.
+        let mut checked: Vec<(String, &str, bool, Vec<(&str, String)>)> = Vec::new();
+        for (change, outcome) in check_merges(&changes, &base) {
+            let name = change.source.file_name().unwrap().to_string_lossy().into_owned();
+            match outcome {
+                MergeOutcome::Refused(f) => checked.push((name, said(&f).0, true, said(&f).1)),
+                MergeOutcome::Applied(notes) => notes.iter().for_each(|f| checked.push((name.clone(), said(f).0, false, said(f).1))),
+            }
+        }
+        let whys: Vec<(&str, &str, bool)> = checked.iter().map(|(n, w, r, _)| (n.as_str(), *w, *r)).collect();
+        assert_eq!(
+            whys,
+            [
+                ("nobase.json", "Cook.Merge.NoBase", true),
+                ("column.json", "Cook.Merge.NoColumn", true),
+                ("text.json", "Cook.Cell.Text", true),
+                ("whole.json", "Cook.Cell.Whole", true),
+                ("remove.json", "Cook.Merge.RemoveForm", true),
+                ("change.json", "Cook.Merge.ChangeForm", true),
+                ("norow.json", "Cook.Merge.RemoveNoRow", false),
+                ("norow.json", "Cook.Merge.ChangeNoRow", false),
+                ("json.json", "Cook.Table.Json", true),
+                ("rows.json", "Cook.Table.NoRows", true),
+                ("row.json", "Cook.Table.RowNotObject", true),
+            ],
+            "{checked:?}"
+        );
+        // The game's start: the same findings in its cook facts, on the same files.
+        super::super::refuse::take_facts();
+        let output = dir.path().join("mods.pak");
+        write_overlay("RMGE01", &changes, &PlanPatches::default(), Some(&base), &output, &mut Vec::new(), &mut Stats::default()).unwrap();
+        let mut started: Vec<(String, &str, bool, Vec<(&str, String)>)> = Vec::new();
+        for fact in super::super::refuse::take_facts() {
+            let (source, finding, refused) = match &fact {
+                super::super::refuse::CookFact::Refused { source, finding, .. } => (source, finding, true),
+                super::super::refuse::CookFact::Noted { source, finding, .. } => (source, finding, false),
+                _ => continue,
+            };
+            let name = Path::new(source).file_name().unwrap().to_string_lossy().into_owned();
+            started.push((name, said(finding).0, refused, said(finding).1));
+        }
+        assert_eq!(started, checked);
+        // The good merge and the rows of the one matching no row are in the table: the game's row, A, B.
+        let merged = store::read_file(&output, "ObjectData/Things.arc/Things.bcsv").unwrap();
+        assert_eq!(super::super::table::row_count(&merged).unwrap(), 3);
+    }
+
+    /// merge/ holds what the validator's L309 allows and nothing else: each kind it allows reaches a branch of
+    /// run_merges, each it refuses is refused there too.
+    #[test]
+    fn merge_takes_exactly_what_l309_allows() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = things_store(dir.path());
+        let source = dir.path().join("x");
+        fs::write(&source, b"x").unwrap();
+        let mut paths: Vec<String> = luma_validate::MERGE_TABLES.iter().map(|p| p.to_string()).collect();
+        paths.extend(["a/b.bcsv.json", "a/b.jpc", "a/b.jpc.json", "a/b.png", "a/b.jpg", "a/b.tsv", "NebulaData/RtOther.tsv", "a/b.txt", "a/b.bcsv"].map(String::from));
+        for path in paths {
+            let changes = [Change { path: path.clone(), source: source.clone(), merge: true }];
+            let refused_by_kind = check_merges(&changes, &base).iter().any(|(_, outcome)| match outcome {
+                MergeOutcome::Refused(f) => luma_validate::reason(f, "UsEnglish").contains("can be added to"),
+                MergeOutcome::Applied(_) => false,
+            });
+            assert_eq!(refused_by_kind, !luma_validate::mergeable(&path), "{path}");
+        }
     }
 
     /// A disc table with one row: one long column.
