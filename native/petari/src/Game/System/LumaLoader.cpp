@@ -1233,6 +1233,19 @@ namespace luma {
 
         bool covers(const LumaModInfo* pInfo, size_t end) { return pInfo->size >= end; }
 
+        // The mod's LumaScript runtime layout, 0 when it has none or its LumaModInfo is older than the field.
+        u32 runtimeLayout(const LumaModInfo* pInfo) {
+            return covers(pInfo, offsetof(LumaModInfo, runtime_layout) + sizeof(pInfo->runtime_layout)) ? pInfo->runtime_layout : 0u;
+        }
+
+        // Two LumaScript runtimes of different layouts pass text and lists the other reads wrongly: a mod built with
+        // one never calls a mod built with the other. 0 on either side is no runtime, or one older than the number.
+        bool layoutsDiffer(const LumaModInfo* pInfo, const LumaMod* pOwner) {
+            const u32 own = runtimeLayout(pInfo);
+            const u32 owner = pOwner != nullptr ? runtimeLayout(pOwner->info) : 0u;
+            return own != 0 && owner != 0 && own != owner;
+        }
+
         // pB is the first `length` bytes of pA, whole.
         bool sameUpTo(const char* pA, u32 length, const char* pB) {
             for (u32 i = 0; i < length; i++) {
@@ -1671,6 +1684,21 @@ namespace luma {
                 LumaMod* pOwner = nullptr;
                 bool sameSig = false;
                 const LumaExport* const pExport = modExport(rImport, &pOwner, &sameSig);
+                // Another runtime layout is said by name before the signature (whose text differs for the same reason):
+                // L513 names both mods' numbers. An optional one stays null.
+                if (pExport != nullptr && layoutsDiffer(pInfo, pOwner) && (rImport.flags & LUMA_OPTIONAL) == 0) {
+                    char own[16];
+                    char owner[16];
+                    nebula_snprintf(own, sizeof(own), "%u", runtimeLayout(pInfo));
+                    nebula_snprintf(owner, sizeof(owner), "%u", runtimeLayout(pOwner->info));
+                    refuse.start(513);
+                    refuse.put("version", 'T', own);
+                    refuse.put("other", 'T', pOwner->name);
+                    refuse.put("value", 'T', owner);
+                    refuse.put("name", 'T', pExport->name);
+                    refused = true;
+                    break;
+                }
                 if ((pExport != nullptr && sameSig) || (rImport.flags & LUMA_OPTIONAL) != 0) {
                     continue;
                 }
@@ -1838,7 +1866,7 @@ namespace luma {
                 LumaMod* pOwner = nullptr;
                 bool sameSig = false;
                 const LumaExport* const pExport = modExport(rImport, &pOwner, &sameSig);
-                const bool bound = pExport != nullptr && sameSig;
+                const bool bound = pExport != nullptr && sameSig && !layoutsDiffer(pInfo, pOwner);
                 *static_cast<const void**>(rImport.slot) = bound ? pExport->address : nullptr;
                 if (bound) {
                     bool known = false;
