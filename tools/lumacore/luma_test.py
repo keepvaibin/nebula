@@ -1890,7 +1890,12 @@ def evaluate(test, renderer, run_folder, ran):
         # gone with a code that is not 0, not killed at the limit).
         add("the game ended in a crash before its end step", crashed and not end,
             (crash_lines[:1] or dumps) if not end else end[-1]["value"].get("frame"))
-        add("a crash dump was written", bool(dumps), dumps)
+        if platform.system() == "Windows":
+            add("a crash dump was written", bool(dumps), dumps)
+        else:
+            # Linux and macOS write no dump of their own: the crash lines, then the signal's default action ends the
+            # game, which the process's code gives as the signal's negative number.
+            add("the game ended by a signal", isinstance(ran.get("code"), int) and ran["code"] < 0, ran.get("code"))
         add("the game ended with a code other than 0", ran.get("code") not in (0, None), ran.get("code"))
     else:
         if end:
