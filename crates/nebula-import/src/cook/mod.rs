@@ -77,7 +77,7 @@ pub struct Stats {
     pub bytes_in: u64,
     pub bytes_out: u64,
     /// Disc files and archive members the store leaves out: only a console or the game's tools read them.
-    pub left_out: u64,
+    pub left_out: Vec<LeftOut>,
 }
 
 impl Stats {
@@ -94,7 +94,7 @@ impl Stats {
         self.expanded_files += other.expanded_files;
         self.bytes_in += other.bytes_in;
         self.bytes_out += other.bytes_out;
-        self.left_out += other.left_out;
+        self.left_out.extend(other.left_out);
     }
 
     pub fn summary(&self) -> String {
@@ -104,7 +104,7 @@ impl Stats {
             "{} files cooked, {} expanded, {} left out, {} -> {} bytes; images: {}",
             self.cooked_files,
             self.expanded_files,
-            self.left_out,
+            self.left_out.len(),
             self.bytes_in,
             self.bytes_out,
             images.join(", ")
@@ -190,6 +190,18 @@ pub fn console_only(path: &str) -> bool {
         || path == "ObjectData/SaveIconBanner.arc"
 }
 
+/// A file the store leaves out, and why (a phrase of the validator's text, `Validator.<why>`).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct LeftOut {
+    pub path: String,
+    pub why: &'static str,
+}
+
+/// Why a disc file is left out (`console_only`).
+pub const CONSOLE_ONLY: &str = "Cook.LeftOut.Console";
+/// Why an archive member is left out (`tool_leftover`).
+pub const TOOL_LEFTOVER: &str = "Cook.LeftOut.Tool";
+
 /// An archive member left behind by the tools that made the game; no code opens one.
 fn tool_leftover(file: &str) -> bool {
     matches!(extension(file).as_str(), "ini" | "prj" | "xnim" | "dvw" | "dvmat" | "dck" | "dtp" | "backup" | "csv#")
@@ -230,7 +242,7 @@ fn cook_entry_at(name: &str, bytes: Vec<u8>, depth: usize, stats: &mut Stats) ->
     for member in archive::members(&bytes).with_context(|| format!("{name}: archive"))? {
         let file = member.path.rsplit('/').next().unwrap_or(&member.path);
         if tool_leftover(file) {
-            stats.left_out += 1;
+            stats.left_out.push(LeftOut { path: format!("{name}/{file}"), why: TOOL_LEFTOVER });
             continue;
         }
         for item in cook_entry_at(&format!("{name}/{file}"), member.bytes, depth + 1, stats)? {
@@ -528,7 +540,8 @@ pub fn write_cooked_pak(
             while next_read < order.len() && (next_read == next_write || in_flight < IN_FLIGHT_BYTES) {
                 let file = order[next_read];
                 if console_only(&file.path) {
-                    ready.insert(next_read, (Ok((Vec::new(), 0)), Stats { left_out: 1, ..Stats::default() }));
+                    let left_out = vec![LeftOut { path: file.path.clone(), why: CONSOLE_ONLY }];
+                    ready.insert(next_read, (Ok((Vec::new(), 0)), Stats { left_out, ..Stats::default() }));
                 } else {
                     let bytes = read(file)?;
                     if bytes.len() as u64 != file.length {

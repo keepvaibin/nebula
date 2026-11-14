@@ -399,7 +399,52 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
 /// cook makes (luma_validate's `cooked_source` lists those), an error (a refusal, L804) when the cook refuses it.
 pub fn cook_source(path: &str, source: &Path, bytes: &[u8], base: Option<&Path>) -> Result<usize> {
     let change = Change { path: path.trim_start_matches('/').to_string(), source: source.to_path_buf(), merge: false };
-    modern_files(&change, bytes, base).map(|made| made.len())
+    let waves = base.and_then(|base| store::read_file(base, WAVE_LAYOUT).ok()).and_then(|b| audio_data::parse_layout_text(&String::from_utf8_lossy(&b)).ok()).unwrap_or_default();
+    match cook_one(&change, bytes.to_vec(), &waves, base, &mut Stats::default()) {
+        Ok(made) => Ok(made.len()),
+        // Every reason the cook gives is said as a finding (L804): its own refusal, or its words for any other fault.
+        Err(error) if super::refuse::refusal_of(&error).is_some() => Err(error),
+        Err(error) => Err(super::refuse::refuse("Cook.Failed", &[("detail", format!("{error:#}"))])),
+    }
+}
+
+/// One file of a mod as the overlay cooks it, with the game files it makes: none for a file another file reads (a
+/// sound, font or movie in assets/, a screen pass's HLSL), a modern source's files, else the file itself cooked by
+/// what it is. The overlay and `cook_source` (the check before a pack) run this one function.
+fn cook_one(change: &Change, bytes: Vec<u8>, waves: &BTreeMap<String, Vec<audio_data::WavePlace>>, base: Option<&Path>, stats: &mut Stats) -> Result<Vec<(String, Vec<StoreItem>)>> {
+    // A member of a mod's archive the store leaves out (a file of the tools that made the game) is said, never only
+    // counted: no file of a mod is dropped without a word.
+    let before = stats.left_out.len();
+    let cooked = cook_one_files(change, bytes, waves, base, stats);
+    for left in &stats.left_out[before..] {
+        super::refuse::note("Cook.ToolFile", &[("file", left.path.clone())]);
+    }
+    cooked
+}
+
+fn cook_one_files(change: &Change, bytes: Vec<u8>, waves: &BTreeMap<String, Vec<audio_data::WavePlace>>, base: Option<&Path>, stats: &mut Stats) -> Result<Vec<(String, Vec<StoreItem>)>> {
+    // A sound or font file in a mod's assets is what a .sound.json or .font.json reads; not a file of the game.
+    if super::sound_effect::is_asset_source(&change.path)
+        || super::font_cook::is_asset_source(&change.path)
+        || super::movie_cook::is_asset_source(&change.path)
+        || super::post_shader::is_asset_source(&change.path)
+    {
+        return Ok(Vec::new());
+    }
+    let modern = modern_files(change, &bytes, base)?;
+    if modern.is_empty() {
+        return Ok(vec![(change.path.clone(), cook_change(change, bytes, waves, stats)?)]);
+    }
+    let mut cooked = Vec::with_capacity(modern.len());
+    for (path, converted, done) in modern {
+        let items = if done {
+            vec![StoreItem { path: String::new(), order: 0, bytes: Some(converted) }]
+        } else {
+            cook_entry(&path, converted, stats)?
+        };
+        cooked.push((path, items));
+    }
+    Ok(cooked)
 }
 
 /// One file of a mod as store items, cooked as the game's own are: by its name (`cooks`) or, whatever its name, by
@@ -407,21 +452,23 @@ pub fn cook_source(path: &str, source: &Path, bytes: &[u8], base: Option<&Path>)
 /// (`X.arc/jmp/placement/common/objinfo`, `X.arc/x.kcl`, `X.arc/blyt/x.brlyt`), so the name alone does not decide. A
 /// file only a console reads is refused. A wave archive needs the sound archive that lays it out.
 fn cook_change(change: &Change, bytes: Vec<u8>, waves: &BTreeMap<String, Vec<audio_data::WavePlace>>, stats: &mut Stats) -> Result<Vec<StoreItem>> {
+    use super::refuse::refuse;
+    let file = || [("file", change.path.clone())];
     if super::console_only(change.path.trim_start_matches('/')) {
-        bail!("only the console reads this file (its banner, HOME menu or module list); Nebula has none");
+        return Err(refuse("Cook.ConsoleOnly", &file()));
     }
     // A mod's file named as an archive that isn't one would fail only where the game opens it.
     if change.path.to_ascii_lowercase().ends_with(".arc") {
-        let expanded = if archive::is_compressed(&bytes) { archive::expand(&bytes).context("its compression")? } else { bytes.clone() };
+        let expanded = if archive::is_compressed(&bytes) { archive::expand(&bytes).map_err(|_| refuse("Cook.NotArchive", &file()))? } else { bytes.clone() };
         if !archive::is_archive(&expanded) {
-            bail!("it is named as an archive but isn't one");
+            return Err(refuse("Cook.NotArchive", &file()));
         }
     }
     if cooks(&change.path) || archive::is_compressed(&bytes) || super::sound::is_sequence_path(&change.path) {
         return cook_entry(&change.path, bytes, stats);
     }
     if bytes.is_empty() {
-        bail!("the mod's file is empty");
+        return Err(refuse("Cook.EmptyFile", &file()));
     }
     if !change.path.to_ascii_lowercase().ends_with(".aw") {
         return cook_entry(&change.path, bytes, stats);
@@ -504,28 +551,7 @@ pub fn write_overlay(game_id: &str, changes: &[Change], patches: &PlanPatches, b
             .and_then(|bytes| {
                 stats.bytes_in += bytes.len() as u64;
                 level_alone(change, changes)?;
-                // A sound or font file in a mod's assets is what a .sound.json or .font.json reads; not a file of the game.
-                if super::sound_effect::is_asset_source(&change.path)
-                    || super::font_cook::is_asset_source(&change.path)
-                    || super::movie_cook::is_asset_source(&change.path)
-                    || super::post_shader::is_asset_source(&change.path)
-                {
-                    return Ok(Vec::new());
-                }
-                let modern = modern_files(change, &bytes, base)?;
-                if modern.is_empty() {
-                    return Ok(vec![(change.path.clone(), cook_change(change, bytes, &waves, stats)?)]);
-                }
-                let mut cooked = Vec::with_capacity(modern.len());
-                for (path, converted, done) in modern {
-                    let items = if done {
-                        vec![StoreItem { path: String::new(), order: 0, bytes: Some(converted) }]
-                    } else {
-                        cook_entry(&path, converted, stats)?
-                    };
-                    cooked.push((path, items));
-                }
-                Ok(cooked)
+                cook_one(change, bytes, &waves, base, stats)
             });
         match result {
             Ok(files) => {
@@ -1021,11 +1047,38 @@ mod tests {
                 Err(error) => assert!(super::super::refuse::refusal_of(&error).is_some() || !format!("{error:#}").is_empty(), "{path}"),
             }
         }
-        // Kinds the cook does not make stay the validator's (L304 not yet defined) and the cook's answer is nothing.
+        // Source kinds the cook does not make are the validator's (L304, each named with where it goes); the cook places
+        // such a file as it is, as the overlay does.
         for path in ["Fonts/Title.ttf", "MovieData/Intro.webm", "ObjectData/Kuribo.arc/Notes.json"] {
             assert!(!luma_validate::cooked_source(&path.to_lowercase()), "{path}");
-            assert_eq!(cook_source(path, &dir.path().join("x"), b"not this", None).unwrap(), 0, "{path}");
+            assert_eq!(cook_source(path, &dir.path().join("x"), b"not this", None).unwrap(), 1, "{path}");
         }
+    }
+
+    #[test]
+    fn the_check_cooks_each_file_as_the_overlay_does_and_names_every_fault() {
+        use super::super::refuse::said;
+        let dir = tempfile::tempdir().unwrap();
+        let at = dir.path().join("x");
+        // A model in a mod's assets is cooked like one at a game path: an empty one is refused by the model cook.
+        let error = cook_source("Luma/m/Ball.glb", &at, b"", None).unwrap_err();
+        assert!(said(&error).0.split('.').take(2).eq(["Cook", "Model"]), "{:?}", said(&error));
+        // A file another file reads (a sound, font or movie in assets, a screen pass's HLSL) makes nothing by itself.
+        for path in ["Luma/m/Song.wav", "Luma/m/Title.ttf", "Luma/m/Intro.webm"] {
+            assert_eq!(cook_source(path, &at, b"", None).unwrap(), 0, "{path}");
+        }
+        // The overlay's own refusals of a file by what it is, each a finding.
+        assert_eq!(said(&cook_source("Luma/m/Notes.bin", &at, b"", None).unwrap_err()).0, "Cook.EmptyFile");
+        assert_eq!(said(&cook_source("ObjectData/Fake.arc", &at, b"not an archive", None).unwrap_err()).0, "Cook.NotArchive");
+        assert_eq!(said(&cook_source("opening.bnr", &at, b"banner", None).unwrap_err()).0, "Cook.ConsoleOnly");
+        // A member of a mod's archive the store leaves out is said by name, not only counted.
+        super::super::refuse::take_notes();
+        let mut arc = super::super::archive::tests::small_archive();
+        let name = arc.windows(6).position(|w| w == b"a.bin\0").unwrap();
+        arc[name..name + 5].copy_from_slice(b"a.ini");
+        assert_eq!(cook_source("ObjectData/Thing.arc", &at, &arc, None).unwrap(), 1);
+        let notes = super::super::refuse::said_notes();
+        assert_eq!(notes, vec![("Cook.ToolFile", vec![("file", "ObjectData/Thing.arc/a.ini".to_string())])]);
     }
 
     #[test]
