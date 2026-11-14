@@ -3528,6 +3528,15 @@ void open_native_settings(unsigned page) {
     set_native_settings_visible(true);
 }
 
+void open_native_settings_draft(unsigned page, const RenderConfig& draft) {
+    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+    open_native_settings(page);
+    s_settings_draft = draft;
+    sanitize_settings_draft(s_settings_draft);
+    std::cerr << "[settings] opened with " << pending_settings_changes() << " recommended change"
+              << (pending_settings_changes() == 1u ? "" : "s") << '\n';
+}
+
 void native_settings_present() {
     poll_dlss_download();
 }

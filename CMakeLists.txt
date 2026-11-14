@@ -223,6 +223,8 @@ add_library(galaxy_native_host STATIC
     runtime/src/dolphin_pack.cpp
     runtime/src/mod_import.cpp
     runtime/src/vendor_download.cpp
+    runtime/src/diag_report.cpp
+    runtime/src/diag_seal.cpp
     runtime/src/crash_report.cpp
     runtime/src/discord_presence.cpp
     runtime/src/controller_hid.cpp
@@ -247,6 +249,8 @@ target_link_libraries(galaxy_native_host
         xinput9_1_0
 )
 galaxy_host_options(galaxy_native_host)
+# The host's diagnostics report modes (diag_report.h).
+target_compile_definitions(galaxy_native_host PUBLIC NEBULA_DIAG_REPORTS=1)
 if(WIN32)
     target_link_libraries(galaxy_native_host PRIVATE nebula_minhook)
 endif()
@@ -654,6 +658,8 @@ galaxy_test(galaxy_home_menu_model_tests SOURCES ${rt}/home_menu_model_tests.cpp
 galaxy_test(galaxy_launcher_model_tests SOURCES ${rt}/ui/launcher_model_tests.cpp)
 galaxy_test(galaxy_resolution_fit_tests SOURCES ${rt}/render/resolution_fit_tests.cpp)
 galaxy_test(galaxy_benchmark_recommend_tests SOURCES ${rt}/benchmark_recommend_tests.cpp ${rt}/benchmark_recommend.cpp)
+galaxy_test(galaxy_diag_report_tests SOURCES ${rt}/diag_report_tests.cpp ${rt}/diag_report.cpp ${rt}/diag_seal.cpp
+    LIBS nebula_archive)
 
 galaxy_test(galaxy_settings_model_tests SOURCES ${rt}/ui/settings_model_tests.cpp ${rt}/ui/settings_model.cpp)
 

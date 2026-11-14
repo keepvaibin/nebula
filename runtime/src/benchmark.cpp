@@ -347,6 +347,7 @@ struct ThreadSlot {
 
 struct Run {
     Options options;
+    std::filesystem::path file;  // where the result goes (start())
     std::vector<Stage> stages;
     Stage probe_stage;
     std::vector<Item> items;
@@ -564,6 +565,9 @@ std::string number(double value) {
     if (!std::isfinite(value)) return "null";
     char text[32];
     std::snprintf(text, sizeof(text), "%.3f", value);
+    for (char* p = text; *p != '\0'; ++p) {
+        if (*p == ',') *p = '.';  // a process locale with a decimal comma (set by a toolkit or a plugin): JSON has '.'
+    }
     return text;
 }
 
@@ -772,11 +776,7 @@ void write_result(bool complete) {
     out << ",\"summary\":{\"verdict\":\"" << verdict << "\",\"worst_stage\":" << quoted(worst_stage)
         << ",\"worst_gpu_ms\":" << number(std::max(worst_gpu, 0.0)) << ",\"worst_p95_ms\":" << number(worst_p95) << "}}\n";
 
-    std::filesystem::path file = run.options.out_file;
-    if (file.empty()) {
-        const std::filesystem::path folder = nebula_diagnostics_directory();
-        if (!folder.empty()) file = folder / ("benchmark-" + utc_stamp(true) + ".json");
-    }
+    const std::filesystem::path& file = run.file;
     const bool written = !file.empty() && io::write_file_atomically(file, out.str());
     std::printf("[benchmark] %s: %s\n", status_name(complete), written ? "result written" : "the result could not be written");
     std::fflush(stdout);
@@ -846,6 +846,11 @@ int ask_travel(char* stage, std::uint32_t capacity, std::int32_t* star, std::str
 void start(const Options& options) {
     Run& r = g_run;
     r.options = options;
+    r.file = options.out_file;
+    if (r.file.empty()) {
+        const std::filesystem::path folder = nebula_diagnostics_directory();
+        if (!folder.empty()) r.file = folder / ("benchmark-" + utc_stamp(true) + ".json");
+    }
     std::string text = kBuiltInStages;
     std::error_code error;
     const std::filesystem::path override_file = options.pak_folder / "benchmark.tsv";
@@ -990,6 +995,33 @@ void at_exit() noexcept {
         write_result(false);
     } catch (...) {
     }
+}
+
+std::filesystem::path result_file() {
+    return g_run.file;
+}
+
+bool returns_home() noexcept {
+    if (!running() || !g_run.options.return_home) return false;
+    try {
+        // A run that ended (complete or failed); a window the player closed ends the game.
+        const std::lock_guard<std::mutex> lock(g_run_mutex);
+        return g_run.phase == Phase::Done || g_run.phase == Phase::Failed;
+    } catch (...) {
+        return false;
+    }
+}
+
+bool read_recommendation(const std::filesystem::path& file, render::RenderConfig& config) {
+    std::string text;
+    {
+        std::ifstream in(file, std::ios::binary);
+        if (!in) return false;
+        text.resize(1u << 20);
+        in.read(text.data(), static_cast<std::streamsize>(text.size()));
+        text.resize(static_cast<std::size_t>(in.gcount()));
+    }
+    return parse_recommendation(text, config);
 }
 
 }  // namespace galaxy::bench

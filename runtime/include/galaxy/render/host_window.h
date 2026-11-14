@@ -92,6 +92,8 @@ void set_state_wake(void* event) noexcept;
 void native_settings_present();
 // Opens the settings menu on that page (a tab's number), its first row chosen.
 void open_native_settings(unsigned page);
+// The same, with `draft` as its unapplied settings (kept inside what the display allows): Apply keeps them.
+void open_native_settings_draft(unsigned page, const RenderConfig& draft);
 
 // What the settings menu (runtime/src/ui/native_settings.cpp) asks of its platform.
 struct SettingsMonitor {

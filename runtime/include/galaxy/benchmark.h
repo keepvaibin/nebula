@@ -14,6 +14,10 @@
 #include <string>
 #include <string_view>
 
+namespace galaxy::render {
+struct RenderConfig;
+}
+
 namespace galaxy::bench {
 
 // True from start() to the end of the process. The settings writers, the save service, the counters and the input read
@@ -42,6 +46,7 @@ inline void note_audio_thread() noexcept {
 struct Options {
     std::filesystem::path pak_folder;  // benchmark.tsv beside game.pak replaces the built-in stage list
     std::filesystem::path out_file;    // --benchmark-out; empty: diagnostics/benchmark-<utc>.json in the data folder
+    bool return_home = false;          // --benchmark-return 1: started from the home screen, which it starts again after
 };
 
 // Main thread, before the game module attaches.
@@ -58,5 +63,14 @@ void start(const Options& options);
 
 // The host's exit: a run that did not finish writes its result as "aborted".
 void at_exit() noexcept;
+
+// The file this run writes, fixed by start(); empty when there is no data folder and no --benchmark-out.
+[[nodiscard]] std::filesystem::path result_file();
+// Started from the home screen and ended (complete or failed): the host starts the home screen again.
+[[nodiscard]] bool returns_home() noexcept;
+
+// A finished run's result with a recommendation (status complete): its recommended settings put over `config`; false,
+// `config` as it was, for any other file. Reads only what write_result writes.
+[[nodiscard]] bool read_recommendation(const std::filesystem::path& file, render::RenderConfig& config);
 
 }  // namespace galaxy::bench

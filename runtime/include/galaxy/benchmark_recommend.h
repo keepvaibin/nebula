@@ -2,11 +2,16 @@
 #pragma once
 
 // The benchmark's recommended settings: a pure function of its measurements and the device (benchmark.h runs them).
-// Settings are named by the settings model's keys (runtime/src/ui/settings_table.tsv) so every app shows and applies them.
+// Settings are named by their config.ini keys (render_config.cpp's reader) so every app shows and applies them.
 
 #include "galaxy/render/resolution_fit.h"
 
 #include <cstddef>
+#include <string_view>
+
+namespace galaxy::render {
+struct RenderConfig;
+}  // namespace galaxy::render
 
 namespace galaxy::bench {
 
@@ -15,7 +20,8 @@ enum class Feature : unsigned { Msaa, Ao, Enhanced, Smaa, Bloom, Count };
 inline constexpr std::size_t kFeatureCount = static_cast<std::size_t>(Feature::Count);
 
 // The settings a choice sets, by key: internal_height (0: the panel's lines), msaa_samples, ambient_occlusion,
-// enhanced_lighting, aa (0 off, 1 SMAA), smaa_quality, bloom (percent).
+// enhanced_lighting, aa (0 off, 1 SMAA, 2 auto, 3 FXAA; a recommendation writes 0 or 1; FXAA, a few taps, carries
+// no price), smaa_quality, bloom (percent).
 struct Choice {
     unsigned internal_height = 0u;
     unsigned msaa_samples = 1u;
@@ -77,5 +83,10 @@ struct Recommendation {
 // The probe stage's GPU ms for a choice at `pixels` (the base line plus the price of each pass it turns on).
 [[nodiscard]] double probe_ms(const Measured& m, const Choice& choice, double pixels) noexcept;
 [[nodiscard]] Recommendation recommend(const Measured& m) noexcept;
+
+// A benchmark result's text (benchmark.cpp write_result, schema 1): when its status is complete and it has a
+// recommendation, its recommended settings over `config` and true; else false and `config` as it was. Every key and
+// value is checked against what write_result writes; anything else refuses the whole result.
+[[nodiscard]] bool parse_recommendation(std::string_view json, render::RenderConfig& config);
 
 }  // namespace galaxy::bench

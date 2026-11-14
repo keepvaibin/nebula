@@ -136,7 +136,7 @@ namespace {
     NEBULA_TUNABLE(u32, cButtonText, 0x505050FF);
 
     enum { FooterApply, FooterBack, FooterNum };
-    enum { ChoiceNum = 3 };
+    enum { ChoiceNum = 4 };  // the most answers a screen shows: the launcher's four rows
 
     // What the hints and buttons name a key or button for. KeyPress: a row's button (IMPORT, OPEN) is pressed with
     // Space or the bottom button.
@@ -249,11 +249,14 @@ namespace {
     const s32 cHomeRowNum = sizeof(cHomeRows) / sizeof(cHomeRows[0]);
     const s32 cHomeAnswerNum = sizeof(cHomeAnswers) / sizeof(cHomeAnswers[0]);
     // Launcher mode's home screen (NEBULA_HOME_MENU_LAUNCHER_*), drawn as the HOME Menu: views with bit 16; its rows,
-    // or on page 1 an update's notice ("{v}": its version) and its notes over Back.
+    // on page 1 an update's notice ("{v}": its version) and its notes over Back, on page 2 the benchmark's message
+    // (it gave no recommendation) over Back.
     const s32 cLauncherView = 1 << 16;
-    // In the host's order (LauncherModel::Row: a Benchmark row goes between Settings and Quit).
-    const char* const cLauncherRows[] = {"LauncherPlay", "SettingsTitle", "Quit"};
+    // In the host's order (LauncherModel::Row); without Benchmark where the view has bit 17 (the host cannot start it).
+    const char* const cLauncherRows[] = {"LauncherPlay", "SettingsTitle", "LauncherBenchmark", "Quit"};
+    const char* const cLauncherRowsNoBenchmark[] = {"LauncherPlay", "SettingsTitle", "Quit"};
     const s32 cLauncherRowNum = sizeof(cLauncherRows) / sizeof(cLauncherRows[0]);
+    const s32 cLauncherNoBenchmark = 1 << 17;
     const s32 cLauncherVersionUnits = 64;  // the host's limits (runtime/src/ui/launcher.cpp)
     const s32 cLauncherNotesUnits = 400;
 
@@ -2071,8 +2074,8 @@ void NebulaSettingsScreen::fillHome(s32 homeView) {
     mFocusButton = selected < mChoiceCount ? &mChoices[selected] : nullptr;
 }
 
-// Launcher mode's home screen as the host has it: its title over its rows, or an update's notice over Back; the
-// selected one focused. Placed as the HOME Menu (placeHome: page 0 its list, page 1 its question).
+// Launcher mode's home screen as the host has it: its title over its rows, or an update's notice or the benchmark's
+// message over Back; the selected one focused. Placed as the HOME Menu (placeHome: page 0 its list, others a question).
 void NebulaSettingsScreen::fillLauncher(s32 view) {
     mProgressTrack->SetVisible(false);
     mProgressFill->SetVisible(false);
@@ -2080,6 +2083,9 @@ void NebulaSettingsScreen::fillLauncher(s32 view) {
     mQuestionText->SetVisible(true);
     setAnchor(mQuestionText, 4);
     const bool notice = (view >> 8 & 0xFF) != 0;
+    const bool threeRows = (view & cLauncherNoBenchmark) != 0;
+    const char* const* const pRows = threeRows ? cLauncherRowsNoBenchmark : cLauncherRows;
+    const s32 rowNum = threeRows ? cLauncherRowNum - 1 : cLauncherRowNum;
     if (mHomeView < 0 || (view >> 8) != (mHomeView >> 8)) {
         MR::Text16 text;
         f32 width = 0.0f;
@@ -2087,6 +2093,10 @@ void NebulaSettingsScreen::fillLauncher(s32 view) {
         if (!notice) {
             getText(text, "LauncherTitle");
             setTextSize(mQuestionText, cTitleSize);
+        } else if ((view >> 8 & 0xFF) == 2) {
+            // The benchmark this start returned from gave no recommendation.
+            getText(text, "LauncherBenchmarkNone");
+            setTextSize(mQuestionText, cTextSize + 1.0f);
         } else {
             // "Nebula {v} is available", then the notes.
             MR::Text16 pattern;
@@ -2111,13 +2121,13 @@ void NebulaSettingsScreen::fillLauncher(s32 view) {
         }
         setText(mQuestionText, text.c_str());
         measure(mQuestionText, (notice ? cQuestionWidth : cHomeWidth) - 48.0f, &width, &height);
-        mChoiceCount = notice ? 1 : cLauncherRowNum;
+        mChoiceCount = notice ? 1 : rowNum;
         for (s32 i = 0; i < ChoiceNum; i++) {
             Button& rChoice = mChoices[i];
             rChoice.mChip.mRoot->SetVisible(i < mChoiceCount);
             rChoice.mChip.mFocusLevel = 0.0f;
             if (i < mChoiceCount) {
-                fillButton(rChoice, notice ? "SettingsBack" : cLauncherRows[i]);
+                fillButton(rChoice, notice ? "SettingsBack" : pRows[i]);
                 fillKeyCap(rChoice.mKey, -1, 0, false);
             }
         }
@@ -2125,8 +2135,8 @@ void NebulaSettingsScreen::fillLauncher(s32 view) {
         const f32 panelWidth = notice ? cQuestionWidth : cHomeWidth;
         const f32 noticeHeight = height + cPad * 2.0f + cQuestionMargin + cButtonHeight;
         const f32 panelHeight = notice ? (noticeHeight > cQuestionHeight ? noticeHeight : cQuestionHeight)
-                                       : cPad * 2.0f + cTitleSize + 18.0f + cButtonHeight * cLauncherRowNum +
-                                             cHomeGap * (cLauncherRowNum - 1);
+                                       : cPad * 2.0f + cTitleSize + 18.0f + cButtonHeight * rowNum +
+                                             cHomeGap * (rowNum - 1);
         mQuestionPanel->mSize = Ui::Size(panelWidth, panelHeight);
         mQuestionShadow->mSize = Ui::Size(panelWidth, panelHeight);
         mQuestion->SetVisible(true);
