@@ -1496,7 +1496,7 @@ def file_holders(path):
 
 
 def process_image(pid):
-    """The full path of process `pid`'s executable ("" when it cannot be read)."""
+    """The full path of process `pid`'s executable: "" when it cannot be read, None when the process has ended."""
     import ctypes
     from ctypes import wintypes
     kernel = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -1505,7 +1505,7 @@ def process_image(pid):
     kernel.CloseHandle.argtypes = [wintypes.HANDLE]
     handle = kernel.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
     if not handle:
-        return ""
+        return None if ctypes.get_last_error() == 87 else ""  # ERROR_INVALID_PARAMETER: no such process
     try:
         size = wintypes.DWORD(32768)
         buffer = ctypes.create_unicode_buffer(size.value)
@@ -1549,7 +1549,8 @@ def remove_binary(path, limit):
             return None
         except PermissionError:
             pass
-        holders = file_holders(path)
+        # A holder that has ended since the Restart Manager listed it holds nothing.
+        holders = [h for h in file_holders(path) if h[2] is not None]
         own = [(app, pid) for app, pid, image in holders if pid and pid not in ended_pids and image
                and os.path.normcase(os.path.abspath(image)) == os.path.normcase(os.path.abspath(path))]
         others = ["%s (%d) %s" % (app, pid, image or "image unread") for app, pid, image in holders
