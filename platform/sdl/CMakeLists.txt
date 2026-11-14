@@ -103,7 +103,6 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/core/pipelines_vk.cpp
     ${rt}/render/core/encoder_vk.cpp
     ${rt}/render/galaxy_select.cpp
-    ${rt}/render/frame_cost.cpp
     ${rt}/benchmark_recommend.cpp
     ${rt}/render/frame_interpolation.cpp
     ${rt}/render/rt_materials.cpp

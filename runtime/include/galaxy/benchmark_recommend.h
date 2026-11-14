@@ -4,7 +4,7 @@
 // The benchmark's recommended settings: a pure function of its measurements and the device (benchmark.h runs them).
 // Settings are named by the settings model's keys (runtime/src/ui/settings_table.tsv) so every app shows and applies them.
 
-#include "galaxy/render/frame_cost.h"
+#include "galaxy/render/resolution_fit.h"
 
 #include <cstddef>
 
@@ -44,7 +44,7 @@ inline constexpr GiveUp kGiveUp[] = {GiveUp::HeightAbovePanel, GiveUp::Msaa,  Gi
 struct Measured {
     // The probe stage: GPU ms against pixels with every optional pass off (two internal heights), and each pass's price
     // (its run alone minus the run without it, per megapixel); a price < 0 is not measured (the pass did not run).
-    render::cost::Line base;
+    render::GpuTimeFit base;
     double price_per_mpixel[kFeatureCount] = {-1.0, -1.0, -1.0, -1.0, -1.0};
     // The heaviest stage of the run at the player's settings, and the probe's prediction for those settings: their ratio
     // carries the probe's shape to that stage.
@@ -57,9 +57,9 @@ struct Measured {
     Choice current;
     double current_pixels = 0.0;
     bool upscaler = false;
-    // The output: its lines and width / height.
-    unsigned panel_lines = 0u;
-    double aspect = 16.0 / 9.0;
+    // The output's size.
+    unsigned output_width = 0u;
+    unsigned output_lines = 0u;
 };
 
 inline constexpr double kMinTail = 1.1;
@@ -68,7 +68,7 @@ struct Recommendation {
     bool valid = false;            // the probe gave a line and a stage was measured
     Choice choice;
     double predicted_ms = 0.0;     // the heaviest stage's frame, p95, with the choice
-    bool fits = false;             // predicted_ms <= cost::budget_ms()
+    bool fits = false;             // predicted_ms <= render::fit_budget_ms()
     bool height_left_out = false;  // an upscaler sets the height: internal_height is not recommended
     bool cpu_bound = false;        // the game or render thread alone passes the budget: resolution cannot help
     const char* cpu_thread = "";   // "game" or "render" when cpu_bound

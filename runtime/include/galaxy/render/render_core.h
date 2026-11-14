@@ -659,6 +659,7 @@ private:
     std::vector<float> walk_skin_;            // a weighted block's joint products (core::ComposeInput::skin)
     std::vector<std::uint8_t> walk_skin_made_;
     std::vector<std::array<float, 6>> walk_view_terms_, walk_view_previous_;
+    std::vector<std::array<float, 16>> walk_view_planes_;  // item_culled's four side planes a view: normal, length
     std::vector<WalkView> walk_views_;
     std::vector<core::StaticSlot> walk_constants_;
     std::vector<std::uint8_t> walk_constants_known_;
@@ -764,6 +765,23 @@ private:
     // ticks: the generated frames' share of it tells their misses from the game's own.
     std::atomic<std::uint64_t> game_wait_qpc_{0};
     std::uint64_t interp_cadence_wait_seen_ = 0;
+    // The first start's resolution calibration (render_core.cpp calibrate_first_start): the GPU's time at two internal
+    // heights in the first 3D scene, fitted and turned into the height kept in config.ini.
+    struct FirstStartCalibration {
+        unsigned stage = 0u;          // 0 off, 1 waiting for a scene with the start's pipelines made, 2 and 3 timing heights[0], [1]
+        unsigned heights[2]{};
+        unsigned start = 0u;          // the table's height, kept when nothing can be measured or the CPU is the limit
+        unsigned frames = 0u;         // frames of the current height
+        unsigned width = 0u, lines = 0u;
+        bool timing_was_on = false;
+        std::vector<double> pixels, ms;
+        double cpu_over = 0.0;        // samples whose game or render thread time was near the frame time
+        std::int64_t list_qpc = 0;
+        std::uint64_t list_wait = 0u;
+    };
+    FirstStartCalibration calibration_;
+    void calibrate_first_start(bool scene, double walk_ms);
+    void end_first_start_calibration(unsigned height, const char* why);
     std::uint64_t interp_cadence_wait_qpc_ = 0;   // in the window
     // The render thread's time rendering generated frames (advance_interp_sequence), in QPC ticks.
     std::uint64_t interp_generated_qpc_ = 0;

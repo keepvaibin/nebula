@@ -404,7 +404,6 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/renderer_common.cpp
     runtime/src/render/gpu_upload_ring.cpp
     runtime/src/render/galaxy_select.cpp
-    runtime/src/render/frame_cost.cpp
     runtime/src/benchmark_recommend.cpp
     runtime/src/render/window_owner.cpp
     runtime/src/render/texture_store.cpp
@@ -619,9 +618,8 @@ target_include_directories(galaxy_test_data_paths_tests PRIVATE tools/test_drive
 
 galaxy_test(galaxy_home_menu_model_tests SOURCES ${rt}/home_menu_model_tests.cpp)
 galaxy_test(galaxy_launcher_model_tests SOURCES ${rt}/ui/launcher_model_tests.cpp)
-galaxy_test(galaxy_frame_cost_tests SOURCES ${rt}/render/frame_cost_tests.cpp ${rt}/render/frame_cost.cpp)
-galaxy_test(galaxy_benchmark_recommend_tests SOURCES ${rt}/benchmark_recommend_tests.cpp ${rt}/benchmark_recommend.cpp
-    ${rt}/render/frame_cost.cpp)
+galaxy_test(galaxy_resolution_fit_tests SOURCES ${rt}/render/resolution_fit_tests.cpp)
+galaxy_test(galaxy_benchmark_recommend_tests SOURCES ${rt}/benchmark_recommend_tests.cpp ${rt}/benchmark_recommend.cpp)
 
 galaxy_test(galaxy_settings_model_tests SOURCES ${rt}/ui/settings_model_tests.cpp ${rt}/ui/settings_model.cpp)
 
@@ -743,7 +741,6 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/core/pipelines_vk.cpp
         runtime/src/render/core/encoder_vk.cpp
         runtime/src/render/galaxy_select.cpp
-        runtime/src/render/frame_cost.cpp
         runtime/src/benchmark_recommend.cpp
         runtime/src/render/frame_interpolation.cpp
         runtime/src/render/rt_materials.cpp

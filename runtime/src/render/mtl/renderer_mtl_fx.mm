@@ -46,7 +46,7 @@ void RendererMtl::record_scene_ao() {
     settle_depth_clear();
     resolve_scene_depth();
     const bool made = ao_.prepare(commands_, *scene_.depth, scene_ao_view_, get_render_config().ambient_occlusion_ssao,
-                                  scene_ao_objects_, matrix_ring_);
+                                  scene_ao_objects_, constant_ring_);  // read in this frame alone; chunks take any count
     gpu_pass(GpuPass::AoApply);
     begin_scene_pass();
     if (made) {

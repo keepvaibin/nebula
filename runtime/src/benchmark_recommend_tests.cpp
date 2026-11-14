@@ -13,17 +13,17 @@ void check(bool value, const char* label) {
 using galaxy::bench::Feature;
 using galaxy::bench::Measured;
 
-// A 1080-line 16:9 panel, the player at the defaults (panel lines, bloom 100, nothing else), the probe's stage the
+// A 1920x1080 output, the player at the defaults (panel lines, bloom 100, nothing else), the probe's stage the
 // heaviest (scale 1), a steady frame (tail 1: the floor 1.1 is used).
 Measured device(double fixed, double per_mpixel, double msaa, double ao, double enhanced, double smaa, double bloom) {
     Measured m;
-    m.base = {fixed, per_mpixel, true};
+    m.base = {fixed, per_mpixel / 1e6, true};
     const double prices[] = {msaa, ao, enhanced, smaa, bloom};
     for (std::size_t i = 0; i < galaxy::bench::kFeatureCount; ++i) m.price_per_mpixel[i] = prices[i];
-    m.panel_lines = 1080u;
-    m.aspect = 16.0 / 9.0;
+    m.output_width = 1920u;
+    m.output_lines = 1080u;
     m.current = {};
-    m.current_pixels = galaxy::render::cost::pixels_at(1080u, m.aspect);
+    m.current_pixels = galaxy::render::scene_pixels(0u, 1920u, 1080u);
     m.worst_gpu_ms = galaxy::bench::probe_ms(m, m.current, m.current_pixels);
     m.tail = 1.0;
     return m;
@@ -51,7 +51,7 @@ int main() {
             check(r.choice.msaa_samples == 1u && !r.choice.ambient_occlusion && !r.choice.enhanced_lighting &&
                       r.choice.aa == 0u && r.choice.bloom == 0u,
                   "passes given up before lines below the panel");
-            check(r.predicted_ms <= galaxy::render::cost::budget_ms(), "the prediction is within the budget");
+            check(r.predicted_ms <= galaxy::render::fit_budget_ms(), "the prediction is within the budget");
         }
         {
             // The order: with only MSAA's price too high, MSAA goes and everything after it stays.
@@ -88,7 +88,7 @@ int main() {
             Measured m = device(2.0, 10.0, 4.0, 3.0, 2.0, 1.0, 0.5);
             m.upscaler = true;
             m.current.internal_height = 1080u;
-            m.current_pixels = galaxy::render::cost::pixels_at(720u, m.aspect);
+            m.current_pixels = galaxy::render::scene_pixels(720u, 1920u, 1080u);
             m.worst_gpu_ms = bench::probe_ms(m, m.current, m.current_pixels);
             const bench::Recommendation r = bench::recommend(m);
             check(r.height_left_out && r.choice.internal_height == 1080u, "an upscaler keeps its height");

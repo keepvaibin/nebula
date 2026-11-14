@@ -7,8 +7,6 @@
 namespace galaxy::bench {
 namespace {
 
-namespace cost = render::cost;
-
 bool measured(const Measured& m, Feature feature) {
     const double price = m.price_per_mpixel[static_cast<std::size_t>(feature)];
     return price >= 0.0 && std::isfinite(price);
@@ -43,37 +41,39 @@ void turn_off(Choice& c, GiveUp step) {
 }
 
 // The probe's line for a choice's passes: their prices join the per-pixel term.
-cost::Line line_of(const Measured& m, const Choice& c) {
-    cost::Line line = m.base;
+render::GpuTimeFit fit_of(const Measured& m, const Choice& c) {
+    render::GpuTimeFit fit = m.base;
     for (std::size_t f = 0; f < kFeatureCount; ++f) {
         if (on(c, static_cast<Feature>(f))) {
-            line.ms_per_mpixel += price(m, static_cast<Feature>(f));
+            fit.b_ms_per_pixel += price(m, static_cast<Feature>(f)) / 1e6;
         }
     }
-    return line;
+    return fit;
 }
 
 }  // namespace
 
 double probe_ms(const Measured& m, const Choice& choice, double pixels) noexcept {
-    return cost::predict_ms(line_of(m, choice), pixels);
+    return render::predicted_gpu_ms(fit_of(m, choice), pixels);
 }
 
 Recommendation recommend(const Measured& m) noexcept {
     Recommendation r;
-    if (!m.base.valid || !(m.worst_gpu_ms > 0.0) || m.panel_lines == 0u) {
+    if (!m.base.valid || !(m.worst_gpu_ms > 0.0) || m.output_lines == 0u || m.output_width == 0u) {
         return r;
     }
     r.valid = true;
-    const double budget = cost::budget_ms();
+    const unsigned width = m.output_width, lines = m.output_lines;
+    const double budget = render::fit_budget_ms();
     const double tail = std::max(m.tail, kMinTail);
     const double current_probe = probe_ms(m, m.current, m.current_pixels);
-    const double scale = current_probe > 0.0 ? m.worst_gpu_ms / current_probe : 1.0;
+    // The heaviest stage over the probe's stage, at the player's settings, and the frame's tail: the fit's heavy factor.
+    const double heavy = (current_probe > 0.0 ? m.worst_gpu_ms / current_probe : 1.0) * tail;
     const double cpu_ms = std::max(m.worst_game_cpu_ms, m.worst_render_cpu_ms) * tail;
     r.cpu_bound = cpu_ms > budget;
     r.cpu_thread = !r.cpu_bound ? "" : m.worst_game_cpu_ms >= m.worst_render_cpu_ms ? "game" : "render";
-    const double panel_pixels = cost::pixels_at(m.panel_lines, m.aspect);
-    const auto gpu_at = [&](const Choice& c, double pixels) { return probe_ms(m, c, pixels) * scale * tail; };
+    const auto pixels_at = [&](unsigned height) { return render::scene_pixels(height, width, lines); };
+    const auto gpu_at = [&](const Choice& c, double pixels) { return probe_ms(m, c, pixels) * heavy; };
 
     // The richest start: every pass the probe measured, at its measured quality (MSAA 4, SMAA high); the player's bloom
     // strength when it is on.
@@ -105,32 +105,23 @@ Recommendation recommend(const Measured& m) noexcept {
         return finish(c, m.current_pixels);
     }
 
-    const unsigned cap = std::min(2u * m.panel_lines, cost::kHeights[0]);
+    // Steps 1-6: with the passes still on, the largest height not below the panel's that fits (above it up to twice its
+    // lines, 2160 at most); when none, the next pass goes.
+    const unsigned above = std::min(2u * lines, render::kInternalHeights.back());
     for (const GiveUp step : kGiveUp) {
         if (step == GiveUp::HeightBelowPanel) {
             break;
         }
-        // Steps 1-6: the largest height not below the panel's that fits with the passes still on.
-        const unsigned h = cost::largest_height(line_of(m, c), m.aspect, budget, scale * tail, cap);
-        if (h > m.panel_lines) {
+        const unsigned h = render::largest_fitting_height(fit_of(m, c), width, lines, heavy, budget, above);
+        if ((h == 0u || h > lines) && gpu_at(c, pixels_at(h)) <= budget) {
             c.internal_height = h;
-            return finish(c, cost::pixels_at(h, m.aspect));
-        }
-        if (gpu_at(c, panel_pixels) <= budget) {
-            c.internal_height = 0u;
-            return finish(c, panel_pixels);
+            return finish(c, pixels_at(h));
         }
         turn_off(c, step);
     }
-    // Step 7: every optional pass off; the panel's lines, else the largest height below them that fits, else the smallest.
-    const unsigned below = cost::largest_height(line_of(m, c), m.aspect, budget, scale * tail, m.panel_lines);
-    const unsigned smallest = cost::kHeights[std::size(cost::kHeights) - 1u];
-    if (gpu_at(c, panel_pixels) <= budget || m.panel_lines <= smallest) {
-        c.internal_height = 0u;
-        return finish(c, panel_pixels);
-    }
-    c.internal_height = below == 0u ? smallest : below;
-    return finish(c, cost::pixels_at(c.internal_height, m.aspect));
+    // Step 7: every optional pass off; the largest height below the panel's that fits, else 480 (the fit's floor).
+    c.internal_height = render::largest_fitting_height(fit_of(m, c), width, lines, heavy, budget);
+    return finish(c, pixels_at(c.internal_height));
 }
 
 }  // namespace galaxy::bench
