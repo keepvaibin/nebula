@@ -24,6 +24,7 @@ vsync_interval	config	vsync_interval	int	0..2	0;apple=1	Display	y	-	y	y	apps off
 hdr	config	hdr	bool	0|1	0	Display	y	-	y	y	the display reports HDR	HDR
 paper_white	config	paper_white	int	80..500/10	200	Display	y	-	y	y	HDR on	Paper white
 hud_output_resolution	config	hud_output_resolution	bool	0|1	0	Display	y	-	y	y	-	HUD at display resolution
+hud_internal_resolution	config	hud_internal_resolution	bool	0|1	0	Display	-	-	y	-	-	HUD at internal resolution
 gpu	config	gpu	text	-	-	Display	y	-	s	-	more than one GPU; applies at the next start	Graphics card
 upscaler	config	upscaler	enum	bilinear|fsr|fsr3|dlss|xess|sgsr2|metalfx	0	Graphics	y	-	y	y	D3D12 0-4 (DLSS on NVIDIA RTX), Vulkan 0-5, Metal 0,1,6	Upscaling
 internal_height	config	internal_height	set	0|144|240|360|480|720|1080|1440|2160	0	Graphics	y	y	y	y	upscaling off	Internal resolution
