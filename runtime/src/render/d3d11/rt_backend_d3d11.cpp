@@ -58,6 +58,12 @@ void Backend::read_counters(unsigned, std::uint32_t out[kCounters]) const {
 }
 void Backend::time_mark(unsigned, bool) {}
 std::uint64_t Backend::timed_ticks(unsigned, unsigned) const { return 0u; }
+Backend::Live Backend::live() const noexcept { return {}; }
+bool Backend::micromaps() const noexcept { return false; }
+BuildSizes Backend::micromap_sizes(const MicromapInput&) const { return {}; }
+Structure Backend::make_micromap(const Range&) { return {}; }
+void Backend::free_micromap(Structure& micromap) noexcept { micromap = Structure{}; }
+void Backend::build_micromap(const MicromapInput&, const Structure&, const Range&) {}
 
 }  // namespace rt
 }  // namespace galaxy::render

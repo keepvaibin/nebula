@@ -31,7 +31,8 @@ extern "C" {
 
 typedef enum LumaDrawNativeBackend {
     LUMA_DRAW_NATIVE_D3D12 = 1,
-    LUMA_DRAW_NATIVE_VULKAN = 2
+    LUMA_DRAW_NATIVE_VULKAN = 2,
+    LUMA_DRAW_NATIVE_D3D11 = 3
 } LumaDrawNativeBackend;
 
 /* D3D12's objects (the pointers are the COM interfaces named). */
@@ -67,6 +68,20 @@ typedef struct LumaDrawNativeVulkan {
     uint32_t reserved;
 } LumaDrawNativeVulkan;
 
+/* Direct3D 11's objects (the pointers are the COM interfaces named). The function runs on a context state of its own
+   (ID3D11DeviceContext1::SwapDeviceContextState): it starts with nothing bound and binds what it draws with; the host's
+   own state comes back after it. */
+typedef struct LumaDrawNativeD3D11 {
+    void* device;              /* ID3D11Device1* */
+    void* context;             /* ID3D11DeviceContext1*: the immediate context; the host's thread only, during the call */
+    void* target;              /* ID3D11Texture2D* */
+    void* target_rtv;          /* ID3D11RenderTargetView* */
+    uint32_t target_format;    /* DXGI_FORMAT */
+    uint32_t depth_format;     /* DXGI_FORMAT; 0 at the present point */
+    void* depth;               /* ID3D11Texture2D*; null at the present point */
+    void* depth_dsv;           /* ID3D11DepthStencilView*; null at the present point */
+} LumaDrawNativeD3D11;
+
 /* The frame a function draws into (nebula_frame_list.h's NebulaNativeFrame is this struct). */
 typedef struct LumaDrawNativeFrame {
     uint32_t size;          /* sizeof(LumaDrawNativeFrame) */
@@ -84,6 +99,7 @@ typedef struct LumaDrawNativeFrame {
                                vertex drawn with projection x view meets the scene's depth exactly; zero at PRESENT */
     LumaDrawNativeD3D12 d3d12;    /* backend D3D12 */
     LumaDrawNativeVulkan vulkan;  /* backend VULKAN */
+    LumaDrawNativeD3D11 d3d11;    /* backend D3D11 */
 } LumaDrawNativeFrame;
 
 typedef void (*LumaDrawNativeFn)(void* user, const LumaDrawNativeFrame* frame);

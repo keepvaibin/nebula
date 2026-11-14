@@ -24,6 +24,7 @@
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/gpu_upload_ring.h"
 #include "galaxy/render/host_window.h"
+#include "galaxy/render/mod_post.h"
 #include "galaxy/render/post_process_settings.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/renderer_common.h"
@@ -34,6 +35,8 @@
 #include "galaxy/render_api.h"
 #include "render/core/draw_record.h"
 #include "render/core/gpu_encoder.h"
+
+#include <nebula_frame_list.h>
 
 #include <array>
 #include <atomic>
@@ -216,6 +219,13 @@ public:
     [[nodiscard]] bool draw_frame_pass(const FramePassRequest& params, TextureStore& textures);
     // `black`: the frame is presented black (the pass clears; the display picture is not drawn).
     bool present(const DisplayTexture* source, bool capture_backbuffer = false, bool black = false);
+    // draw.post (mod_post.h, mod_post_d3d11.cpp): `program` full screen over `picture` (the frame so far, from
+    // take_frame_picture) into the scene target; `depth_known` the walker could give the depth terms. No motion here.
+    void record_mod_post(const ModPostProgram& program, ModPostConstants constants, const gpu::TextureRef& picture,
+                         bool depth_known);
+    // draw.native (luma_draw_native.h): `call` with the device and the immediate context between passes, the scene
+    // target (with its depth at a scene point), on a context state of its own (the renderer's comes back after it).
+    void record_native_call(const NebulaNativeCall& call, LumaDrawNativeFrame& frame, bool scene_point);
 
     [[nodiscard]] bool begin_output_scene(bool resolve_msaa_only = false);
     [[nodiscard]] bool begin_target_pass(std::uint64_t key, std::uint32_t width, std::uint32_t height);
@@ -613,6 +623,24 @@ private:
     std::array<std::atomic<float>, static_cast<std::size_t>(GpuPass::Count)> pass_ema_ms_{};
     std::array<double, static_cast<std::size_t>(GpuPass::Count)> telemetry_pass_ms_{};
     void read_pass_times(Frame& frame, UINT64 frequency, UINT64 frame_end);
+
+    // draw.post's stages by program (mod_post_d3d11.cpp), dropped when the program leaves (mod_post_epoch); a stage the
+    // driver refused stays null, so its pass draws nothing and the log says why once.
+    struct ModPostShaders {
+        std::uint32_t program = 0u;
+        d3d11::ComPtr<ID3D11VertexShader> vertex;
+        d3d11::ComPtr<ID3D11PixelShader> pixel;
+    };
+    std::vector<ModPostShaders> mod_post_shaders_;
+    std::uint64_t mod_post_epoch_ = 0u;
+    d3d11::ComPtr<ID3D11Buffer> mod_post_constants_;  // b0, ModPostConstants (dynamic)
+    bool mod_post_failed_ = false;
+    // draw.native's context state: a mod's function binds what it likes there, and the renderer's own state is swapped
+    // back in after it (ID3D11DeviceContext1::SwapDeviceContextState).
+    d3d11::ComPtr<ID3DDeviceContextState> native_state_;
+    bool native_state_failed_ = false;
+    [[nodiscard]] const ModPostShaders* mod_post_stages(const ModPostProgram& program);
+    void release_mod_post();
 };
 
 using Renderer = RendererD3D11;

@@ -91,6 +91,10 @@ bool RendererD3D11::initialize(int window_width, int window_height, const FrameM
             return false;
         }
         encoder_.attach(&pass_ops_);
+        // draw.post's programs compile with the system's HLSL compiler (compile_stage_d3d11.cpp); no frame here has
+        // motion, so a program reading it is refused at post_register.
+        set_mod_post_compiler(&compile_mod_post_stage, false);
+        set_mod_post_motion(false);
         reset_sampler_frame();
         ID3D11Device1* const d3d = d3d11::Context::get().device();
         if (!bloom_.initialize(d3d)) {
@@ -336,11 +340,13 @@ RendererD3D11::Kept RendererD3D11::take_apart_lost_device() {
 }
 
 void RendererD3D11::shutdown() {
+    set_mod_post_compiler(nullptr, false);
     d3d11::Context& context = d3d11::Context::get();
     if (context.ready()) {
         pass_ops_.clear();
         scene_pass_open_ = false;
         context.immediate()->ClearState();
+        release_mod_post();
         wait_for_gpu_idle();
         if (mirrored_store_ != nullptr) {
             mirrored_store_->backend().set_upload_list(nullptr);
