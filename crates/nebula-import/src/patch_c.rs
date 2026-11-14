@@ -1,5 +1,6 @@
-//! The applier's C interface (`include/luma_patch.h`, contract table-keys 8): the game gives one cooked table and the
-//! patches of the mods that are on, and takes back the patched table and the facts for the Mods screen.
+//! The applier's C interface (`include/luma_patch.h`, docs/modding/format/table-keys.md section 8): the game gives one
+//! cooked table and the patches of the mods that are on, and takes back the patched table and the facts for the Mods
+//! screen.
 
 use crate::cook::patch::{apply_linked, Fact, Link, ModPatch};
 use crate::cook::table::TableIr;

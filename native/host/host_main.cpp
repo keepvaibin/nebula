@@ -596,7 +596,7 @@ std::uint32_t gPlayersModsOn = 0;
 // The placed packages of this start, for the start's check (modlog::check_packages).
 std::vector<galaxy::modlog::StartPackage> gStartPackages;
 
-// The two folders the host reads from (board/cpu.md W9-h, the package layout):
+// The two folders the host reads from (the package layout):
 // - the program's folder (program_directory(), executable_path()): one for both CPU levels, since NebulaNative.exe and
 //   NebulaNative-x86-64-v2.exe lie side by side. Tables, dxc\, nebula-import.exe, the launcher, the restart's and the
 //   crash report's program come from there.
@@ -1326,7 +1326,7 @@ __declspec(noinline) const char* plugin_in_fault(const EXCEPTION_POINTERS* info,
 
 // The crash's mod, when a plugin's code was running (gCrashFacts after gather_crash_facts).
 void note_crash_plugin(const EXCEPTION_POINTERS* info) noexcept {
-    // A fault the guard saw in a mod's code and did not resume (plan 1.6): its sentence, and the mod is the guard's.
+    // A fault the guard saw in a mod's code and did not resume: its sentence, and the mod is the guard's.
     if (const char* guard = galaxy::luma_guard::note_text(info->ExceptionRecord->ExceptionAddress)) {
         log_line("crash: guard:", guard);
         std::snprintf(gCrashPlugin, sizeof(gCrashPlugin), "%s", galaxy::luma_guard::note_mod());
@@ -2377,7 +2377,7 @@ uint32_t svc_probe_results(void*, uint32_t channel, NebulaScreenProbe* probes, u
     static_assert(sizeof(NebulaScreenProbe) == sizeof(galaxy::render::ScreenProbe));
     return galaxy::render::screen_probe_results(channel, reinterpret_cast<galaxy::render::ScreenProbe*>(probes), capacity);
 }
-// draw.post (contract draw 15): the program compiled for the running renderer (mod_post.cpp).
+// draw.post (docs/modding/services/draw.md): the program compiled for the running renderer (mod_post.cpp).
 static_assert(int{galaxy::render::kModPostOk} == NEBULA_POST_OK && int{galaxy::render::kModPostCompile} == NEBULA_POST_COMPILE &&
                   int{galaxy::render::kModPostNoMotion} == NEBULA_POST_NO_MOTION,
               "post_register's results are the game's");
@@ -4460,13 +4460,13 @@ void svc_mods_start(void*) {
         }
     }
     // The plain module has no rows: no mod's code starts with it. The choice at start saw no such mod, or the crash flag
-    // above turned its code off (contract modules 2); one here means the mods changed between that look and this start,
+    // above turned its code off; one here means the mods changed between that look and this start,
     // and its code waits for the next start.
     if (galaxy::game_module::plain_loaded() && !gPlugins.empty()) {
         log_line("mods:", "a mod with code was turned on after the game module was chosen: its code starts at the next start");
         gPlugins.clear();
     }
-    // The mod log (contract mod-log): how many mods are on, and the harness's facts in a harness run. With none it is
+    // The mod log (galaxy/mod_log.h): how many mods are on, and the harness's facts in a harness run. With none it is
     // never made.
     galaxy::modlog::begin(
         [](const char* name) -> void* {
@@ -4617,7 +4617,7 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
         gStartedAgainForLayers = !restarted.empty() && fs::exists(restarted, restart_error);
         if (gStartedAgainForLayers) fs::remove(restarted, restart_error);
     }
-    // Step 1 of a start with mods (contract start-check 1, 2): with a mod on, the game's own parts the mods need. One
+    // Step 1 of a start with mods (mod_start_check.h): with a mod on, the game's own parts the mods need. One
     // missing: every mod is off this session, with one mod-log line; nothing of the mods runs. No mod on: no check.
     if (std::any_of(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) { return mod.enabled; })) {
         // The cook writes about what the mods bring: their files' bytes are the estimate.
@@ -4855,7 +4855,7 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
             }
         }
         // What the patches by key did that a player must hear of (table-keys: conflicts, rows not there, selectors'
-        // counts, patches left out), one fact a line, for the log here and the Mods screen (plan 6.2).
+        // counts, patches left out), one fact a line, for the log here and the Mods screen.
         {
             fs::path facts = overlay;
             facts.replace_extension("facts");
@@ -5319,11 +5319,11 @@ int main(int argc, char** argv) {
         return default_module_path(fs::path(argv[0]).parent_path());
 #endif
     };
-    // --luma-describe <file> [--module <path>]: the module's type rows as JSON (contract types), compared by the build
-    // with the generator's (tools/lumacore/compare_types.py). --luma-services <file> [--module <path>]: the services
-    // catalog as JSON (luma_service_provider.h luma_services_describe), the names folder's luma_services.json. No disc;
-    // the module is attached with its heap, log and fatal errors (to stderr) only, as its malloc is the host's and its
-    // constructors run at attach.
+    // --luma-describe <file> [--module <path>]: the module's type rows as JSON (docs/modding/language/types.md),
+    // compared by the build with the generator's (tools/lumacore/compare_types.py). --luma-services <file> [--module
+    // <path>]: the services catalog as JSON (luma_service_provider.h luma_services_describe), the names folder's
+    // luma_services.json. No disc; the module is attached with its heap, log and fatal errors (to stderr) only, as its
+    // malloc is the host's and its constructors run at attach.
     const bool describe_services = argc >= 2 && std::strcmp(argv[1], "--luma-services") == 0;
     if (argc >= 2 && (describe_services || std::strcmp(argv[1], "--luma-describe") == 0)) {
         // Exactly `<file>` or `<file> --module <path>`: anything else is said, never ignored (A-LD1).
@@ -5421,7 +5421,7 @@ int main(int argc, char** argv) {
     galaxy::modlog::set_check_store(&gPak.store);  // and the validator, at the start's check and at import
     boot_mark("disc opened");
     {
-        // Two modules (plan 1.7, contract modules): the plain one unless a mod's code needs the rows. --module names the
+        // Two modules (game_module.h): the plain one unless a mod's code needs the rows. --module names the
         // rows module; the plain one is beside it. Updates imported while a mod was in use land first, as below.
         // A headless host (no NEBULA_HOST_RENDERER) is the test host: no settings folder, no player's mods, and the
         // harness's extensions hook and call by name, so it keeps the module --module names (the rows one).

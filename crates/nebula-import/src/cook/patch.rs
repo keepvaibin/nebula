@@ -1,4 +1,4 @@
-//! Patches by key (luma-format 5.1, contract table-keys; plan 3.11): a game table and the patches of every mod that is
+//! Patches by key (luma.md 5.1, docs/modding/format/table-keys.md): a game table and the patches of every mod that is
 //! on, from the bottom of the mod list up, make the table the game reads. Each mod's patch applies in this order: `rows` (a whole `#`
 //! table), `remove`, `set`, `add`, `select`. Patches reach here checked by the validator; what only the mod list
 //! decides (two mods changing one cell, a row another mod removed) is a [`Fact`] for the Mods screen, never silent.
@@ -265,7 +265,7 @@ impl Applier<'_> {
             Some(v) if v.as_u64() != Some(1) => return Err(shape("Patch.Version", v.to_string())),
             Some(_) => {}
         }
-        // A stage's placement rows may give their objects' arguments by name (stages contract 1).
+        // A stage's placement rows may give their objects' arguments by name (stages.md section 1).
         let expanded = self.placement_rows(root)?;
         let root = expanded.as_ref().unwrap_or(root);
         if let Some(rows) = root.get("rows") {
@@ -662,7 +662,7 @@ mod tests {
         assert!(!facts.iter().any(|f| matches!(f, Fact::Conflict { .. } | Fact::Missing { .. })), "{facts:?}");
     }
 
-    /// Stages contract 1: `args` by name in a placement table's `add` and `set`; a wrong name fails that patch alone.
+    /// stages.md section 1: `args` by name in a placement table's `add` and `set`; a wrong name fails that patch alone.
     #[test]
     fn placement_rows_take_arguments_by_name() {
         let _file = super::super::placement_args::TEST_FILE.lock().unwrap_or_else(|e| e.into_inner());

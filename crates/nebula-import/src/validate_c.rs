@@ -1,7 +1,7 @@
-//! The validator as C functions, for the game (validator contract 3): `include/luma_validate.h` declares them. The
-//! game calls `luma_validate` with no kept report at import (every rule) and with the mod's kept report at each start
-//! (the rules that read the whole `.luma` are taken from it when it is for the same `.luma` and the same game). The
-//! findings and their text are those of `luma_validate::validate`, field for field.
+//! The validator as C functions, for the game (docs/modding/format/validator.md section 3): `include/luma_validate.h`
+//! declares them. The game calls `luma_validate` with no kept report at import (every rule) and with the mod's kept
+//! report at each start (the rules that read the whole `.luma` are taken from it when it is for the same `.luma` and
+//! the same game). The findings and their text are those of `luma_validate::validate`, field for field.
 
 use luma_validate::{message, message_of, phrase, reason_of, recheck, Game, Input, Installed, Level, Names, Report, Saved, Source, Store, Table};
 use std::cell::RefCell;

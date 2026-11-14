@@ -606,7 +606,7 @@ fn a_mod_programs_flags_are_the_tables() {
     assert_eq!(text_coords(&t.vertex), 0);
 }
 
-/// Every form's texts of the stripes cube, for a compile on both back ends (agents/luma/g/tools/surface-dxc.sh):
+/// Every form's texts of the stripes cube, for a compile on both back ends:
 /// NEBULA_SURFACE_DUMP=<folder> cargo test -p nebula-import --lib -- --ignored dump_the_surface_shader
 #[test]
 #[ignore]

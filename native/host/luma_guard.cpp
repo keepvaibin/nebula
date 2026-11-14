@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The guard's host half (plan 1.6, contract guard, luma_guard.h): the fault handler that resumes a mod's fault at the
+// The guard's host half (luma_guard.h): the fault handler that resumes a mod's fault at the
 // kernel's innermost frame when that is safe, and names the mod in the crash report when it is not.
 //
 // Resumed: an access violation, an illegal instruction or an integer division fault, on a thread inside a boundary,
@@ -384,7 +384,7 @@ LONG CALLBACK on_fault(EXCEPTION_POINTERS* info) {
     return EXCEPTION_CONTINUE_EXECUTION;
 }
 #elif defined(_WIN32)
-// Windows on ARM64: no handler yet (contract guard 5); install() says the guard is off.
+// Windows on ARM64: no handler yet; install() says the guard is off.
 int32_t thread_enter(LumaGuardThread*) { return -1; }
 #else
 #define LUMA_GUARD_HANDLER 1

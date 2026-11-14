@@ -140,7 +140,7 @@ uint32_t luma_report_after_start(const LumaReport* report, uint32_t index, const
                                  uint32_t* line);
 void luma_report_free(LumaReport* report);
 
-/* A refusal said as the validator says its findings (loader contract 3; the cook's `failed` facts): rule `code`'s
+/* A refusal said as the validator says its findings (the cook's `failed` facts): rule `code`'s
    message with its parameters, names[i] = values[i]. A value "T:<text>" (or one with neither prefix) is a literal,
    "P:<phrase id>" a phrase, itself translated; the place goes in as "mod", "file", "line", "column". A parameter the
    text needs and the call lacks shows as {name}. `language` as luma_report_at. Never null; valid until the next

@@ -211,10 +211,10 @@ pub struct MaterialIr {
     /// (map n through coordinate n, which no stage reads) and its scale. The lit form turns its pixel normal by it
     /// before any light is summed; the mesh holds tangents and bitangents (ATTR_NBT, ATTR_NBT_THREE).
     pub normal_map: Option<(u8, f32)>,
-    /// A glTF material's light (plan 3.3; program_pbr.hlsli): its lit form lights the stages' result as metal and
+    /// A glTF material's light (program_pbr.hlsli): its lit form lights the stages' result as metal and
     /// roughness say, with the stage's reflection. None for the game's materials and an unlit glTF material.
     pub pbr: Option<PbrShading>,
-    /// A mod's hand-written surface shader (plan 3.4; contract materials 3.4; surface_shader.rs): its lit forms call its
+    /// A mod's hand-written surface shader (materials.md section 3.4; surface_shader.rs): its lit forms call its
     /// `surface` in place of the stages and light what it fills as `pbr` says. Only with `pbr`.
     pub surface: Option<SurfaceIr>,
     /// What a ray takes of it beyond the cook's reading: a glTF material's `extras.nebula.ray` over its shader's
@@ -238,7 +238,8 @@ pub struct SurfaceIr {
     pub reads: u8,
     /// The emission it starts from: the glTF emissive factor, display-encoded.
     pub emission: [f32; 3],
-    /// What its shader.json `ray` gives a ray in place of the reading of its factors (contract materials 3.4 layer 3).
+    /// What its shader.json `ray` gives a ray in place of the reading of its factors (materials.md section 3.4, layer
+    //3).
     pub ray: RayRows,
 }
 

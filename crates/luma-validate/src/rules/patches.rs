@@ -6,7 +6,7 @@ use crate::{same_column, Arg, ColumnType, Table};
 
 pub const MAX_PATCH: u64 = 64 << 20;
 const KEYS: [&str; 7] = ["patch", "key", "set", "add", "remove", "select", "rows"];
-/// The key of a table whose rows are named by place (contract table-keys 3).
+/// The key of a table whose rows are named by place (docs/modding/format/table-keys.md section 3).
 const PLACE: &str = "#";
 const MATCH_KINDS: [&str; 3] = ["equals", "prefix", "glob"];
 /// The separator of key values in a row id (`Table::rows`, `Touches`).
@@ -306,9 +306,10 @@ fn link_add(pc: &mut P, row: &Value, rp: &str, target: &str, id: &str) {
     }
 }
 
-/// A patch of a game layout by pane name (layout contract 5): `{"patch": 1, "panes": {"<pane>": {...}}}`. Its panes
-/// and their fields are checked by the cook against the layout the game start patches (overlay_patches), which names
-/// a patch that cannot apply in the store's left-out file; here the file's form and that the game has the layout.
+/// A patch of a game layout by pane name (docs/modding/content/screens.md section 5): `{"patch": 1, "panes": {"<pane>":
+//{...}}}`. Its panes / and their fields are checked by the cook against the layout the game start patches
+//(overlay_patches), which names / a patch that cannot apply in the store's left-out file; here the file's form and that
+//the game has the layout.
 fn layout(pc: &mut P, root: &Value, target: &str) {
     for m in root.members() {
         if m.key != "patch" && m.key != "panes" {
@@ -437,8 +438,9 @@ fn one(pc: &mut P, root: &Value, target: &str) {
     // Touches compare paths in lower case; messages show the path as the mod writes it.
     let target_shown = target.to_lowercase();
     // Values against the column types (L403), every column named existing.
-    // A stage's placement row may give its object's arguments by name, an object (stages contract 1): the cook turns
-    // them into Obj_arg0-7 from the game's placement facts and refuses a name the object lacks (L804).
+    // A stage's placement row may give its object's arguments by name, an object (docs/modding/content/stages.md
+    // section 1): the cook turns them into Obj_arg0-7 from the game's placement facts and refuses a name the object
+    // lacks (L804).
     let placement = target.to_ascii_lowercase().contains("/jmp/");
     let check_value = |pc: &mut P, m: &json::Member, vp: &str| {
         if table.is_none() {

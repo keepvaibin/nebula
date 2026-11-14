@@ -1,4 +1,4 @@
-//! A game layout patched by pane name (plan 3.8 layer 5, layout contract 5): `layers/<l>/patches/<archive>/blyt/
+//! A game layout patched by pane name (docs/modding/content/screens.md section 5): `layers/<l>/patches/<archive>/blyt/
 //! <Name>.brlyt.json` holding `{"patch": 1, "panes": {"<pane>": {...}}}`. The game start applies every mod's patch of
 //! one layout in the mods' order (overlay_patches) to the layout as the store holds it (the cooked NLYT, ui_layout),
 //! so two mods that change different panes of one screen both take effect and a later mod's value for one field wins.

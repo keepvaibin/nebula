@@ -1,9 +1,10 @@
-//! The columns of each kind of game table (contract table-keys 10): `data/table-columns.tsv`, compiled in, made from
-//! the game's own tables by `tests/store_view_columns.rs`. A kind is a table-keys rule, and for a rule whose last part
-//! is `*` (a stage's placement files...) also the file's name. Files of one kind do not all have every column: an empty
-//! layer's table often has only a few. The kind says what a table of it may hold, in what form, and the value most of
-//! the game's rows have in each column, which a row a mod adds takes for a column it leaves out (Obj_arg0 -1, not 0).
-//! Rules that take files of unlike columns by place (`**`, parts animations, cutscene sheets) have no kind.
+//! The columns of each kind of game table (docs/modding/format/table-keys.md section 10): `data/table-columns.tsv`,
+//! compiled in, made from the game's own tables by `tests/store_view_columns.rs`. A kind is a table-keys rule, and for
+//! a rule whose last part is `*` (a stage's placement files...) also the file's name. Files of one kind do not all have
+//! every column: an empty layer's table often has only a few. The kind says what a table of it may hold, in what form,
+//! and the value most of the game's rows have in each column, which a row a mod adds takes for a column it leaves out
+//! (Obj_arg0 -1, not 0). Rules that take files of unlike columns by place (`**`, parts animations, cutscene sheets)
+//! have no kind.
 
 use super::table::{Column, Kind};
 use super::table_keys::{rule_for, Key};

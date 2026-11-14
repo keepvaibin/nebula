@@ -206,7 +206,7 @@ fn a_sound_files_path_is_its_name() {
     assert!(!is_asset_source("AudioRes/Stream/Title.wav") && !is_asset_source("Luma/m/a.sound.json"));
 }
 
-/// The integer sources of data/sound/ (agents/luma/g/tools/make_sound_fixtures.py `source`, step for step).
+/// The integer sources of data/sound/ (made by their generator's `source`, step for step).
 fn fixture_source(channels: usize, wide: bool) -> Vec<i32> {
     let mut state: u64 = 12345;
     let mut out = Vec::new();

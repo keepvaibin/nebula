@@ -1,11 +1,12 @@
-//! Patches by key in the mods' store (plan 3.12, contract table-keys 9, 12, 13): the plan's `%mods` line gives every
+//! Patches by key in the mods' store (docs/modding/format/table-keys.md): the plan's `%mods` line gives every
 //! mod whose content is used, from the bottom of the list up, and each `%patch` line one patch file
 //! (`mod<TAB>entry in the mod<TAB>game path<TAB>file`), bottom of the list first, then layer and file order. Each
 //! patched table starts from what the game would read without the patches (a mod's file of it in this store, else the
 //! game's) and is written whole into the store with every patch applied by the applier (cook::patch), the scenario
 //! tables first, so a start or generalpos table meets its key among the layers the patched scenario tables turn on
 //! together (13.6). What the applier says goes in the facts, one line each in `<store>.facts`. A patch of a game
-//! layout (`<archive>/blyt/<Name>.brlyt`, layout contract 5) goes to that layout by pane name (layout_patch) instead.
+//! layout (`<archive>/blyt/<Name>.brlyt`, screens.md section 5) goes to that layout by pane name (layout_patch)
+//! instead.
 
 use super::patch::{apply_linked, unreadable, Fact, Link, ModPatch};
 use super::table::{TableIr, MAGIC};
@@ -372,7 +373,7 @@ pub fn apply_patches(plan: &PlanPatches, base: Option<&Path>, pak: &mut File, te
     Ok(())
 }
 
-/// A patch of a game layout (layout contract 5): its target is the layout file, `<archive>/blyt/<Name>.brlyt`.
+/// A patch of a game layout (screens.md section 5): its target is the layout file, `<archive>/blyt/<Name>.brlyt`.
 fn is_layout(path: &str) -> bool {
     path.to_ascii_lowercase().ends_with(".brlyt")
 }
@@ -455,7 +456,7 @@ pub fn facts_text(facts: &[Fact]) -> String {
 }
 
 /// A mod's patch of a stage's placement table (`<game path>` as the mod writes it) whose rows give arguments by name,
-/// applied alone to the game's table in `store` as the game's start applies it (LumaLink's check, stages contract 1):
+/// applied alone to the game's table in `store` as the game's start applies it (LumaLink's check, stages.md section 1):
 /// the refusal of a name the object lacks (L804), None when the patch gives no `args` or they all read. Every other
 /// fault of a patch is the validator's (L400-L407), so it is not said twice.
 pub fn placement_args_finding(store: &PakStore, path: &str, mod_id: &str, file: &str, patch: &serde_json::Value) -> Result<Option<luma_validate::Finding>> {

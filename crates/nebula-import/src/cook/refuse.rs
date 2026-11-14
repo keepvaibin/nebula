@@ -1,9 +1,9 @@
-//! A cook's refusals and notes as the validator names them (models contract 9, G-M15): L804 with a `why` phrase
-//! (`Cook.Model.<Kind>`, rows `Validator.Cook.*` in localization/NebulaText.tsv) and the phrase's arguments, so LumaLink
-//! and the Mods screen say them in the player's language. A refusal is an error that stops the file's cook (never a
-//! half model); a note is said and the cook goes on. Notes are gathered for the file being cooked, on its thread: a
-//! cook whose notes are read holds a `Reading` on that thread, and a note or fact said on a thread with none stops a
-//! test or a debug build.
+//! A cook's refusals and notes as the validator names them (docs/modding/content/models.md section 9): L804 with a
+//! `why` phrase (`Cook.Model.<Kind>`, rows `Validator.Cook.*` in localization/NebulaText.tsv) and the phrase's
+//! arguments, so LumaLink and the Mods screen say them in the player's language. A refusal is an error that stops the
+//! file's cook (never a half model); a note is said and the cook goes on. Notes are gathered for the file being cooked,
+//! on its thread: a cook whose notes are read holds a `Reading` on that thread, and a note or fact said on a thread
+//! with none stops a test or a debug build.
 
 use super::patch::Refusal;
 use luma_validate::{Arg, Finding, Level};
@@ -101,9 +101,9 @@ pub enum CookFact {
     Refused { path: String, source: String, finding: Finding },
     /// Said about the file, which cooked.
     Noted { path: String, source: String, finding: Finding },
-    /// A model cooked (models contract 9's `cook.model`).
+    /// A model cooked (models.md section 9's `cook.model`).
     Model { path: String, source: String, facts: super::gltf::ModelFacts },
-    /// An effect of a mod cooked, or a game particle it replaced (effects contract 7's `cook.effect`).
+    /// An effect of a mod cooked, or a game particle it replaced (effects.md section 7's `cook.effect`).
     Effect { path: String, source: String, facts: EffectFacts },
     /// A layout of a mod cooked (layout contract's `cook.layout`).
     Layout { path: String, source: String, facts: super::layout_json::LayoutFacts },
@@ -123,7 +123,7 @@ pub struct EffectFacts {
     pub name: String,
     /// Its particles' numbers (ParticleNames' id).
     pub particles: Vec<u32>,
-    /// Draw group, 0 to 5 (effects contract 4).
+    /// Draw group, 0 to 5 (effects.md section 4).
     pub group: u8,
     /// The texture its first particle's sprite role names ("" for none).
     pub sprite: String,

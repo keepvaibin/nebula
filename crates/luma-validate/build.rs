@@ -1,7 +1,7 @@
-//! Compiles the validator's messages from `localization/NebulaText.tsv` (rows `Validator.*`, validator contract 4)
-//! into the library. The build fails when a row lacks any of the 14 languages (EuEnglish may be empty: it is then
-//! UsEnglish's) or when a language's placeholders differ from UsEnglish's. That every code and phrase the code uses
-//! has a row is the test `text::tests::every_message_has_a_row`.
+//! Compiles the validator's messages from `localization/NebulaText.tsv` (rows `Validator.*`,
+//! docs/modding/format/validator.md section 4) into the library. The build fails when a row lacks any of the 14
+//! languages (EuEnglish may be empty: it is then UsEnglish's) or when a language's placeholders differ from
+//! UsEnglish's. That every code and phrase the code uses has a row is the test `text::tests::every_message_has_a_row`.
 
 use std::collections::BTreeSet;
 use std::fmt::Write as _;

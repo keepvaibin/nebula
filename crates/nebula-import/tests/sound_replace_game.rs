@@ -1,6 +1,6 @@
-//! A mod's sound effect replacing a game sound by name (contract sound 7, plan 3.7 layer 2), against a real imported
-//! game: LUMA_GAME_PAK=<game.pak> and --ignored. A name the game has cooks with the name in the file; one it lacks is
-//! refused by name.
+//! A mod's sound effect replacing a game sound by name (docs/modding/content/sound.md section 6), against a real
+//! imported game: LUMA_GAME_PAK=<game.pak> and --ignored. A name the game has cooks with the name in the file; one it
+//! lacks is refused by name.
 
 use nebula_import::cook::overlay::cook_source;
 use nebula_import::cook::{refuse, sound, store};

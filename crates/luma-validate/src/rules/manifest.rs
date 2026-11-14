@@ -63,7 +63,7 @@ const REQUIRED: [&str; 7] = ["format", "id", "version", "name", "summary", "auth
 const OPTION_KINDS: [&str; 5] = ["choice", "number", "toggle", "text", "key"];
 
 /// The game's controls by the names its input bindings use (`runtime/src/input_bindings.cpp` kTargetIds, compared as
-/// `parse_game_input` does, without case): what a key option's default binds (director's decision 23:0x, key options
+/// `parse_game_input` does, without case): what a key option's default binds (key options
 /// are input actions).
 const GAME_CONTROLS: [&str; 25] = [
     "a", "b", "one", "two", "plus", "minus", "home", "dpad_up", "dpad_down", "dpad_left", "dpad_right", "stick_up",
@@ -75,7 +75,7 @@ pub const MAX_PICTURES: usize = 8;
 
 /// An id: 3 to 64 of lowercase letters, digits, `-` and `.`, starting with a letter, without `..` (luma-format 4),
 /// whose part before the first `.` is no name Windows keeps (con, prn, aux, nul, com1-9, lpt1-9: a folder of that
-/// name cannot be made there; the host's valid_id refuses the same, director 2026-11-11).
+/// name cannot be made there; the host's valid_id refuses the same).
 pub fn id_ok(id: &str) -> bool {
     (3..=64).contains(&id.len())
         && id.starts_with(|c: char| c.is_ascii_lowercase())
@@ -1327,7 +1327,7 @@ fn saves(m: &mut M, root: &Value, facts: &Facts) {
 
 /// Why bytes are not a save the game reads, as a phrase, or None when they are. A faithful port of the game's own
 /// check (`native/petari/include/Game/System/SaveFileFormat.hpp`, `NebulaSaveFormat::validate`), so a save this
-/// accepts is one the game's import accepts; the two are tested with the same files (validator contract 7). A save
+/// accepts is one the game's import accepts; the two are tested with the same files (validator.md section 7). A save
 /// file holds no region, so its region is the folder it is in.
 pub fn save_problem(data: &[u8]) -> Option<&'static str> {
     let read16 = |at: usize, big: bool| -> u16 {

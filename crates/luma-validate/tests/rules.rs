@@ -22,7 +22,7 @@ struct FakeStore {
 /// Two layers of one zone's objects: a link group (table-keys 13).
 const COMMON: &str = "StageData/Zone/jmp/Placement/Common/ObjInfo";
 const LAYER_A: &str = "StageData/Zone/jmp/Placement/LayerA/ObjInfo";
-/// A game layout, patched by pane name (layout contract 5).
+/// A game layout, patched by pane name (docs/modding/content/screens.md section 5).
 const HUD: &str = "LayoutData/Hud.arc/blyt/Hud.brlyt";
 
 impl Store for FakeStore {
@@ -379,7 +379,7 @@ fn every_rule_has_a_broken_mod() {
     bzip.method = 12;
     let mut link = file("media/a.png", b"/etc/passwd");
     link.unix_mode = Some(0o120777);
-    // A link whose record says MS-DOS made it, with a Unix link mode all the same (director's fuzz, 53 cases).
+    // A link whose record says MS-DOS made it, with a Unix link mode all the same (found by fuzzing, 53 cases).
     let mut dos_link = file("media/a.png", b"../../../../luma.json");
     dos_link.unix_mode = Some(0o120777);
     dos_link.made_by = Some(20);
@@ -532,7 +532,7 @@ fn every_rule_has_a_broken_mod() {
         }
         let start = recheck_with(bytes, setup, Some(&saved), "game");
         // Said again from its carried parameters (the facts file, the loader's refusals): the same words in every
-        // language (audit 3.12 C-1, loader contract 3).
+        // language (docs/modding/language/compiled-form.md).
         for f in &report.findings {
             let carried = luma_validate::args_text(f);
             let mut args: Vec<(String, String)> = carried.iter().filter_map(|a| a.split_once('=')).map(|(n, v)| (n.to_string(), v.to_string())).collect();
@@ -916,7 +916,7 @@ fn the_previous_engines_keys_name_their_replacement() {
     assert_eq!(report.findings.iter().map(|f| f.level).collect::<Vec<_>>(), [luma_validate::Level::Note]);
 }
 
-/// Text and key options (director's decision 23:0x: a mod reads them itself, key options are input actions).
+/// Text and key options (a mod reads them itself, key options are input actions).
 #[test]
 fn text_and_key_options_are_whole_and_choose_no_layer() {
     let said = |options: &str, layers: Option<&str>| -> Vec<(u16, String, String)> {
@@ -999,7 +999,7 @@ fn a_cook_refusal_says_its_reason_as_its_text() {
     assert!(!kept.contains('{') && kept.contains("archive"), "{kept}");
 }
 
-/// The director's decision of 2026-11-12: an archive with "\" between folders throughout (.NET Framework's ZipFile,
+/// An archive with "\" between folders throughout (.NET Framework's ZipFile,
 /// Compress-Archive) is read with "/", said in a note (L108), and every name rule runs on the names as read.
 #[test]
 fn an_archive_with_backslashes_throughout_is_read_with_slashes_and_said() {

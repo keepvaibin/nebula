@@ -1,8 +1,9 @@
-//! A mod's hand-written material shader (plan 3.4 layer 1; contract materials 3.4): `layers/<l>/assets/<name>.hlsl`
-//! with `<name>.shader.json` beside it, picked by a glTF material's `extras.nebula.shader`. The HLSL defines
-//! `void surface(in SurfaceIn i, inout Surface s)`; the generator (programs.rs) calls it where a glTF material's stages
-//! would make its base colour and lights the record it fills with the material template (program_pbr.hlsli). This file
-//! reads and checks the source and lays the parameters on the material's colour places; it writes no program text.
+//! A mod's hand-written material shader (docs/modding/content/materials.md section 3.4):
+//! `layers/<l>/assets/<name>.hlsl` with `<name>.shader.json` beside it, picked by a glTF material's
+//! `extras.nebula.shader`. The HLSL defines `void surface(in SurfaceIn i, inout Surface s)`; the generator
+//! (programs.rs) calls it where a glTF material's stages would make its base colour and lights the record it fills with
+//! the material template (program_pbr.hlsli). This file reads and checks the source and lays the parameters on the
+//! material's colour places; it writes no program text.
 //!
 //! The interface, the only one a shader has:
 //! - parameters: `float` or `float4` globals of the shader's names, read from the material's places (registers 1 to 3
@@ -478,7 +479,7 @@ pub fn places(source: &Source, material: &str, values: &[[f32; 4]], used: [bool;
     Ok(out)
 }
 
-/// LumaLink's check (contract materials 3.4: a shader's compile errors are L804 with its file and line): None, a cook
+/// LumaLink's check (materials.md section 3.4: a shader's compile errors are L804 with its file and line): None, a cook
 /// that does not compile (the game's own, which builds the programs itself); Some(None), a check with no compiler
 /// found (a note says the shaders were not compiled); Some(Some(dxc)), a check that compiles each surface material's
 /// plain form with it.

@@ -1,4 +1,4 @@
-//! A mod's screen pass (plan 3.4 layer 4; contracts/draw.md 15): `layers/<l>/assets/post/<name>.hlsl` with
+//! A mod's screen pass (docs/modding/services/draw.md): `layers/<l>/assets/post/<name>.hlsl` with
 //! `post/<name>.json` beside it becomes `Luma/<id>/post/<name>.post` in the mods' store, which `draw.post_register`
 //! names and the game parses (luma_draw_post.h). The HLSL defines `float4 post(PostIn i)`; the host owns everything
 //! around it (PostIn {uv, pixel, size, time}, scene, scene_texel, depth, motion, `float4 post_params[4]`, the bindings

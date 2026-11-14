@@ -1,8 +1,8 @@
-//! The report the game keeps beside each installed mod (validator contract 2): written after the full check at
-//! import, read at each start. It holds what the start's check reuses (the findings of the rules that read the whole
-//! `.luma`) and what the other mods' checks need of this one (its id, version, conflicts, needs and what it changes), with
-//! the fingerprint of the `.luma` and of the game it was checked against. A different fingerprint, a different game or
-//! a report that cannot be read means a full check, never a partial one on stale data.
+//! The report the game keeps beside each installed mod (docs/modding/format/validator.md section 2): written after the
+//! full check at import, read at each start. It holds what the start's check reuses (the findings of the rules that
+//! read the whole `.luma`) and what the other mods' checks need of this one (its id, version, conflicts, needs and what
+//! it changes), with the fingerprint of the `.luma` and of the game it was checked against. A different fingerprint, a
+//! different game or a report that cannot be read means a full check, never a partial one on stale data.
 //!
 //! The form is UTF-8 text, one record per line, fields separated by tabs, `%`, tab, CR and LF written as `%25`,
 //! `%09`, `%0D`, `%0A`:

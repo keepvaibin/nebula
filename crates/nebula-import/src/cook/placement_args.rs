@@ -1,4 +1,4 @@
-//! A placement row's arguments by name (plan 3.9 layer 1, contract board/contracts/stages.md): a mod's row of a
+//! A placement row's arguments by name (docs/modding/content/stages.md section 1): a mod's row of a
 //! stage's placement table (`<Stage>.arc/jmp/placement/<layer>/objinfo.json`, whole or as a patch by key) may give
 //! `"args": {"ShotInterval": 120, "Rotate": true}` instead of `Obj_arg0` to `Obj_arg7`. The names are the game's own:
 //! for each object of the factory, the field each `MR::getPlacementArgN` call of its class fills, from the game's

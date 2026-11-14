@@ -1,4 +1,4 @@
-//! A clip's frame events (plan 3.6 layer 3, contract board/contracts/animation.md section 5): `<clip>.anim.json` in a
+//! A clip's frame events (docs/modding/content/animation.md section 2a): `<clip>.anim.json` in a
 //! game archive (`ObjectData/Kuribo.arc/Walk.anim.json`) names events at frames of the archive's clip `<clip>`:
 //!
 //! ```json
@@ -23,9 +23,9 @@ pub const MOST_EVENTS: usize = 64;
 pub const MOST_NAME: usize = 63;
 /// The longest clip name the anim service plays, in bytes (its names are under 128).
 pub const MOST_CLIP: usize = 127;
-/// The last frame any clip has: clip files count frames in 16 bits (animation contract 3).
+/// The last frame any clip has: clip files count frames in 16 bits (animation.md).
 pub const LAST_FRAME: i64 = 65_534;
-/// The clip kinds a play starts, in the order the first present leads (animation contract 7).
+/// The clip kinds a play starts, in the order the first present leads (animation.md).
 pub const CLIP_ENDINGS: [&str; 6] = ["bck", "btk", "brk", "bpk", "btp", "bva"];
 const ENDING: &str = ".anim.json";
 

@@ -1,6 +1,6 @@
-//! Patches against tables as contract table-keys gives them: keys the game repeats, tables named by place (`#`),
-//! whole tables (`rows`), words given as bytes, columns known only by hash, and selectors checked against the game's
-//! values (L407). Every finding here is also filled in all 14 languages.
+//! Patches against tables as docs/modding/format/table-keys.md gives them: keys the game repeats, tables named by place
+//! (`#`), whole tables (`rows`), words given as bytes, columns known only by hash, and selectors checked against the
+//! game's values (L407). Every finding here is also filled in all 14 languages.
 
 use luma_validate::semver::Version;
 use luma_validate::{column_hash, validate, Arg, ColumnType, Finding, Game, Input, Source, Store, Table};

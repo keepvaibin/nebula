@@ -1,6 +1,6 @@
-//! Every table of a real imported game through the validator's view (contract table-keys 1): run with
-//! LUMA_GAME_PAK=<game.pak> and --ignored. Each table's key is found, its rows are known, and only the files the
-//! contract names repeat a key.
+//! Every table of a real imported game through the validator's view (docs/modding/format/table-keys.md section 1): run
+//! with LUMA_GAME_PAK=<game.pak> and --ignored. Each table's key is found, its rows are known, and only the files the
+//! table-keys.md names repeat a key.
 
 use luma_validate::{ColumnType, Store};
 use nebula_import::cook::patch::{apply, ModPatch};

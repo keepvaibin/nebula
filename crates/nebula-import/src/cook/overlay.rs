@@ -49,11 +49,11 @@ pub fn read_plan(text: &str) -> Result<(String, Vec<Change>)> {
     Ok((game_id, changes))
 }
 
-/// Where a mod's model file goes and the game model it stands in for (models contract 2, G-M1): `X.bdl.glb` and
-/// `X.bmd.glb` that file; a plain `X.glb` in an archive whichever of `X.bdl` and `X.bmd` the game's archive has. A model
-/// outside an archive is a new model, standing in for nothing (a mod's `assets/<path>.glb`, the store's
-/// `Luma/<id>/<path>.glb`): it becomes an object archive of its own laid out as the game's, `<path>.arc/X.bmd` (or
-/// `X.bdl` when named so), its clips inside, which the game loads as it loads its own. Without the game's store the
+/// Where a mod's model file goes and the game model it stands in for (docs/modding/content/models.md section 2):
+//`X.bdl.glb` and / `X.bmd.glb` that file; a plain `X.glb` in an archive whichever of `X.bdl` and `X.bmd` the game's
+//archive has. A model / outside an archive is a new model, standing in for nothing (a mod's `assets/<path>.glb`, the
+//store's / `Luma/<id>/<path>.glb`): it becomes an object archive of its own laid out as the game's, `<path>.arc/X.bmd`
+//(or / `X.bdl` when named so), its clips inside, which the game loads as it loads its own. Without the game's store the
 /// place is the one its name gives and its joints are not numbered by the game's (a Note says so).
 fn model_place(change: &Change, base: Option<&Path>) -> Result<(String, Option<super::gltf::GameModel>)> {
     use super::refuse::{note, refuse};
@@ -131,7 +131,7 @@ fn archive_model(folder: &str, base: &Path) -> Result<super::gltf::GameModel> {
     super::gltf::GameModel::read(&path, block).ok_or_else(|| refuse("Cook.Model.NoGameModel", &[("archive", folder.to_string()), ("models", name.clone())]))
 }
 
-/// A new model's level of detail (models contract 6: `<path>Middle.glb` or `<path>Low.glb` outside an archive, the
+/// A new model's level of detail (models.md section 6: `<path>Middle.glb` or `<path>Low.glb` outside an archive, the
 /// endings with their capitals as LodCtrl names them) whose base model `<path>` is none of the mod's files: refused
 /// as `Cook.Model.LevelAlone` {file, model}. The store compares paths without case, so the base is found so.
 fn level_alone(change: &Change, changes: &[Change]) -> Result<()> {
@@ -207,7 +207,7 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         let stem = &change.path[..lower.rfind(".canm.").unwrap_or(change.path.len())];
         return Ok(vec![(format!("{stem}.canm"), super::gltf::to_camera(bytes, change.source.parent())?, false)]);
     }
-    // Clip.anim.json in a game archive: the clip's frame events, Clip.events beside it (animation contract 5).
+    // Clip.anim.json in a game archive: the clip's frame events, Clip.events beside it (animation.md section 2a).
     if super::clip_events::is_events_source(&lower) {
         let (folder, clip, path) = super::clip_events::place(&change.path)?;
         let members = base.and_then(|base| store::read_folder(base, &folder).ok()).unwrap_or_default();
@@ -224,7 +224,7 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         super::refuse::record(super::refuse::CookFact::Events { path: path.clone(), source: change.path.clone(), facts });
         return Ok(vec![(path, table, true)]);
     }
-    // Name.anim.glb in a game archive: clips of the archive's model (animation contract 2).
+    // Name.anim.glb in a game archive: clips of the archive's model (animation.md section 2).
     if lower.ends_with(".anim.glb") || lower.ends_with(".anim.gltf") {
         let folder = change.path.rsplit_once('/').map_or("", |(f, _)| f);
         if !folder.to_ascii_lowercase().ends_with(".arc") {
@@ -237,7 +237,7 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         return Ok(clips.into_iter().map(|(file, clip)| (format!("{folder}/{file}"), clip, true)).collect());
     }
     // Name.bdl.model.json (or .bmd, or plain Name.model.json) in a game archive holding {"hide": true}: the game's model
-    // kept with all its joints and no meshes, so nothing of it is drawn (director 11-12; `lumalink add character`
+    // kept with all its joints and no meshes, so nothing of it is drawn (`lumalink add character`
     // writes these for a character's own hands and face).
     if lower.ends_with(".model.json") {
         use super::refuse::refuse;
@@ -272,7 +272,7 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         return Ok(out);
     }
     // Name.layout.json in an archive (or its blyt/): the game's layout file blyt/Name.brlyt, which the store cooks as
-    // the game's (layout contract 1). Its pictures' textures are the archive's timg/<texture>.png (or .tpl).
+    // the game's (screens.md section 1). Its pictures' textures are the archive's timg/<texture>.png (or .tpl).
     if lower.ends_with(".layout.json") {
         let (folder, file) = change.path.rsplit_once('/').unwrap_or(("", &change.path));
         let in_blyt = folder.to_ascii_lowercase().ends_with(".arc/blyt");
@@ -293,7 +293,7 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
             (!found).then(|| format!("{archive}/timg/{name}.png"))
         };
         // A text naming this mod's own font (Luma/<id>/<path>): the mod's folder, when the file is read from one, has its
-        // source in a layer's assets (layout contract 2a). Another mod's font is that mod's to have.
+        // source in a layer's assets (screens.md section 2a). Another mod's font is that mod's to have.
         let mod_root = change.source.ancestors().skip(1).find(|a| super::beside::is_file(&a.join("luma.json")));
         let mod_id = mod_root
             .and_then(|root| super::beside::read(&root.join("luma.json")).ok())
@@ -318,7 +318,7 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         return Ok(out);
     }
     // Name.sound.json in a mod's assets (Luma/<id>/...): a sound effect or voice line, Name.nsfx, played by its path
-    // without the ending (sound contract 1, 9); a stream, Name.ast (8); a sequence, Name.nseq (10). With `replace` a
+    // without the ending (sound.md sections 1, 9); a stream, Name.ast (8); a sequence, Name.nseq (10). With `replace` a
     // stream or sequence also takes the game's file's place. The sound file it names is read beside it.
     if lower.ends_with(".sound.json") {
         if !lower.starts_with("luma/") {
@@ -367,7 +367,8 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         return Ok(files);
     }
     // Name.font.json in a mod's assets: a font, Luma/<id>/<path>.brfnt (the store cooks it as the game's fonts) with
-    // its kerning (.kern) and fallback (.fallback) beside it (layout contract 2a). The font file it names is read beside it.
+    // its kerning (.kern) and fallback (.fallback) beside it (screens.md section 2a). The font file it names is read
+    // beside it.
     if super::font_cook::is_font_source(&lower) {
         if !lower.starts_with("luma/") {
             return Err(super::refuse::refuse("Cook.Font.NotAsset", &[("file", change.path.clone())]));
@@ -392,7 +393,7 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
     // A table as JSON: X.bcsv.json, a camera table X.bcam.json, or a stage's placement table (its name has no ending:
     // StageData/MyGalaxy.arc/jmp/placement/common/objinfo.json), as `lumalink extract` writes them.
     if lower.ends_with(".bcsv.json") || lower.ends_with(".bcam.json") || (lower.ends_with(".json") && lower.contains(".arc/jmp/")) {
-        // A stage's placement rows may give their objects' arguments by name (stages contract 1).
+        // A stage's placement rows may give their objects' arguments by name (stages.md section 1).
         let expanded = if lower.contains(".arc/jmp/") { super::placement_args::expand_table(bytes)? } else { None };
         let table = super::table::TableIr::from_json(expanded.as_deref().unwrap_or(bytes))?;
         return Ok(vec![(change.path[..change.path.len() - ".json".len()].to_string(), table.to_ntbl(), true)]);
@@ -790,7 +791,7 @@ fn run_merges<'c>(changes: &'c [Change], start: &mut dyn FnMut(&str) -> Result<V
                     cased.insert(place_of(&path), path);
                 }
             } else if lower(&change.path).ends_with(".jpc.json") {
-                // Particles as JSON are a layer's assets/effects.json (effects contract 7).
+                // Particles as JSON are a layer's assets/effects.json (effects.md section 7).
                 return Err(super::refuse::refuse("Cook.Effect.OldForm", &[]));
             } else if let Some(table) = lower(&change.path).strip_suffix(".json") {
                 let path = change.path[..table.len()].to_string();
@@ -800,7 +801,7 @@ fn run_merges<'c>(changes: &'c [Change], start: &mut dyn FnMut(&str) -> Result<V
                     None => start(&path)?,
                 };
                 let mut rows = super::table::read_rows(&bytes)?;
-                // A stage's placement rows may give their objects' arguments by name (stages contract 1).
+                // A stage's placement rows may give their objects' arguments by name (stages.md section 1).
                 if lower(&change.path).contains(".arc/jmp/") && super::placement_args::any_args(&rows) {
                     let facts = super::placement_args::objects()?;
                     super::placement_args::expand_rows(&mut rows, "/rows", Some(&facts), true)?;
@@ -901,8 +902,8 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
     Ok(())
 }
 
-/// The patches with every patch of the effect table left out that names a particle nobody has (effects contract 7,
-/// G-E6): the game's names and the mods' (after their effects) are known by now. A left-out patch is refused by its
+/// The patches with every patch of the effect table left out that names a particle nobody has (effects.md section 7):
+/// the game's names and the mods' (after their effects) are known by now. A left-out patch is refused by its
 /// phrase, naming the mod's patch file.
 fn effect_table_patches(patches: &PlanPatches, base: Option<&Path>, pak: &mut File, temporary: &Path, placed: &[store::Placed],
                         failed: &mut Vec<(String, String)>) -> Result<PlanPatches> {
@@ -1499,7 +1500,7 @@ mod tests {
         assert_eq!(path, "Luma/gold.mario/hats/top.arc/top.bdl");
         let (path, _) = model_place(&change("Luma/gold.mario/hats/topLow.glb"), None).unwrap();
         assert_eq!(path, "Luma/gold.mario/hats/topLow.arc/topLow.bmd");
-        // A level needs its base model among the mod's files (contract 6); the endings keep their capitals.
+        // A level needs its base model among the mod's files (models.md section 6); the endings keep their capitals.
         let low = change("Luma/gold.mario/hats/topLow.glb");
         let (phrase, args) = why(level_alone(&low, std::slice::from_ref(&low)).unwrap_err());
         assert_eq!(phrase, luma_validate::Arg::Phrase("Cook.Model.LevelAlone"));

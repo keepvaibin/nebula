@@ -697,7 +697,7 @@ struct Joint {
     /// is its parent joint's.
     between: Option<Matrix>,
     inverse: Matrix,
-    /// A `socket:` node's joint (contract 6).
+    /// A `socket:` node's joint (models.md section 6).
     socket: bool,
 }
 
@@ -741,7 +741,7 @@ struct SourceMaterial {
     /// 1): the emissive factor x strength, sRGB-encoded and held to 1, and the emissive map's image and coordinate set.
     /// None when the material is unlit (KHR_materials_unlit shows its base colour alone) or its factor is black.
     glow: Option<Glow>,
-    /// Its hand-written shader (plan 3.4; surface_shader.rs): the source, its values here, each texture's image.
+    /// Its hand-written shader (surface_shader.rs): the source, its values here, each texture's image.
     shader: Option<(super::surface_shader::Source, super::surface_shader::Use, Vec<usize>)>,
     /// Its `extras.nebula.ray` (surface_shader::material_ray): what a ray takes of it beyond the cook's reading.
     ray: super::model_ir::RayRows,
@@ -938,7 +938,7 @@ fn widen(low: &mut [f32; 3], high: &mut [f32; 3], at: [f32; 3]) {
     }
 }
 
-/// The game's model a mod's model stands in for (models contract 2 and 4): its store path, and its joints' names by
+/// The game's model a mod's model stands in for (models.md sections 2 and 4): its store path, and its joints' names by
 /// number, which the mod's joints keep.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GameModel {
@@ -947,7 +947,7 @@ pub struct GameModel {
     /// Each joint's parent joint (None for the root); empty when not known (then nothing is checked against it).
     pub parents: Vec<Option<usize>>,
     /// Its materials' and textures' names, in its order (what an animation file's material tracks and texture swaps
-    /// stand for, animation contract 2); empty when not known.
+    /// stand for, animation.md section 2); empty when not known.
     pub materials: Vec<String>,
     pub textures: Vec<String>,
 }
@@ -982,7 +982,7 @@ impl GameModel {
 }
 
 /// A glTF of a game model's skeleton alone: its joints with their names, parents and rest pose, and no meshes. A hidden
-/// model (`<path>.model.json` holding `{"hide": true}`, director 11-12) is cooked from it: the game's joints stay, so
+/// model (`<path>.model.json` holding `{"hide": true}`) is cooked from it: the game's joints stay, so
 /// its animations and the code that names them still find them, and nothing is drawn. None when `block` is no model
 /// block.
 pub fn skeleton_gltf(game: &GameModel, block: &[u8]) -> Option<Vec<u8>> {
@@ -1014,7 +1014,8 @@ pub fn skeleton_gltf(game: &GameModel, block: &[u8]) -> Option<Vec<u8>> {
     serde_json::to_vec(&document).ok()
 }
 
-/// The game's joint angles (X, Y, Z radians composed Z·Y·X, contract 4) as a quaternion: what [`angles`] reads back.
+/// The game's joint angles (X, Y, Z radians composed Z·Y·X, models.md section 4) as a quaternion: what [`angles`] reads
+//back.
 fn quaternion_of(r: [f32; 3]) -> [f32; 4] {
     let (sx, cx) = (r[0] / 2.0).sin_cos();
     let (sy, cy) = (r[1] / 2.0).sin_cos();
@@ -1022,7 +1023,7 @@ fn quaternion_of(r: [f32; 3]) -> [f32; 4] {
     [sx * cy * cz - cx * sy * sz, cx * sy * cz + sx * cy * sz, cx * cy * sz - sx * sy * cz, cx * cy * cz + sx * sy * sz]
 }
 
-/// What the cook made of a model file, for the fact `cook.model` (models contract 9).
+/// What the cook made of a model file, for the fact `cook.model` (models.md section 9).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ModelFacts {
     /// The game model it stands in for; empty for a new model.
@@ -1278,7 +1279,7 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
         return Err(refuse("Cook.Model.NoTriangles", &[]));
     }
 
-    // One skin at most (contract 4): the first skinned mesh's, and no other.
+    // One skin at most (models.md section 4): the first skinned mesh's, and no other.
     let mut skin_number: Option<(usize, usize)> = None;
     for node in &order {
         if let Some(s) = nodes[*node]["skin"].as_u64() {
@@ -1294,7 +1295,8 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
     }
     let skin = skin_number.map(|(s, _)| &root["skins"][s]);
 
-    // Sockets: `socket:<name>` nodes with no mesh, joints of their own whatever else the file has (contract 6).
+    // Sockets: `socket:<name>` nodes with no mesh, joints of their own whatever else the file has (models.md section
+    // 6).
     let socket_of = |n: usize| -> Option<&str> { nodes[n]["name"].as_str()?.strip_prefix("socket:").filter(|_| nodes[n]["mesh"].is_null()) };
 
     // Joints: a skin's, or every node in the scene; one root at the top, as the game's tree has one.
@@ -1383,7 +1385,7 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
     };
     joint_twice(&joints)?;
 
-    // Numbers by the game model (contract 4, G-M2): a one-joint model's root is joint 0 whatever its name; otherwise
+    // Numbers by the game model (models.md section 4): a one-joint model's root is joint 0 whatever its name; otherwise
     // each of the game's joints by name, then the source's others in order, parents before children.
     let mut facts = ModelFacts { replaced: game.map(|g| g.path.clone()).unwrap_or_default(), ..ModelFacts::default() };
     let mut new_order: Vec<usize> = (0..joints.len()).collect();
@@ -1430,7 +1432,7 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
     // Each joint's place in the model at rest.
     let joint_world: Vec<Matrix> = joints.iter().map(|j| j.node.map_or(IDENTITY, |n| world[n])).collect();
     let skin_root = listed.first().and_then(|n| joint_of_node.get(n)).copied().unwrap_or(0);
-    // Billboards from the node's `extras.nebula.billboard` (contract 4, G-M9): 1 faces the screen, 2 turns about Y.
+    // Billboards from the node's `extras.nebula.billboard` (models.md section 4): 1 faces the screen, 2 turns about Y.
     let mut billboard = vec![0u8; joints.len()];
     for (number, joint) in joints.iter().enumerate() {
         let Some(node) = joint.node else { continue };
@@ -1455,8 +1457,8 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
             root["textures"][t as usize]["source"].as_u64().map(|s| s as usize).or_invalid(|| format!("/textures/{t}/source"))
         };
         let (lit, pbr_maps) = pbr_of(root, material, i, &material_name)?;
-        // Its hand-written shader (contract materials 3.4): `extras.nebula.shader` names `assets/<name>.hlsl` of the mod
-        // the file is in; `params` and `textures` (an object, by the shader's names) are this material's.
+        // Its hand-written shader (materials.md section 3.4): `extras.nebula.shader` names `assets/<name>.hlsl` of the
+        // mod the file is in; `params` and `textures` (an object, by the shader's names) are this material's.
         let nebula = &material["extras"]["nebula"];
         let shader = match &nebula["shader"] {
             Value::Null => None,
@@ -1571,7 +1573,8 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
         } else {
             Vec::new()
         };
-        // A mesh that no skin moves draws with the joint at or above its node, in that joint's space (contract 5).
+        // A mesh that no skin moves draws with the joint at or above its node, in that joint's space (models.md section
+        // 5).
         let static_joint = joint_of_node
             .get(node)
             .copied()
@@ -1624,14 +1627,14 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
             } else {
                 None
             };
-            // Four weights a vertex: a second set that weighs anything is refused, never dropped (contract 4).
+            // Four weights a vertex: a second set that weighs anything is refused, never dropped (models.md section 4).
             if let (true, Some(w)) = (skinned, attributes["WEIGHTS_1"].as_u64()) {
                 let heavy = document.floats(w as usize, 4)?.chunks_exact(4).filter(|v| v.iter().any(|x| *x > 0.001)).count();
                 if heavy > 0 {
                     return Err(refuse("Cook.Model.WeightsOver4", &[("mesh", name.clone()), ("vertices", heavy.to_string())]));
                 }
             }
-            // Vertex colours: two sets, as the block has (contract 5).
+            // Vertex colours: two sets, as the block has (models.md section 5).
             let sets = attributes.as_object().map_or(0, |a| a.keys().filter_map(|k| k.strip_prefix("COLOR_")?.parse::<usize>().ok()).map(|k| k + 1).max().unwrap_or(0));
             if sets > 2 {
                 return Err(refuse("Cook.Model.ColorSets", &[("mesh", name.clone()), ("count", sets.to_string()), ("max", "2".to_string())]));
@@ -1945,7 +1948,7 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
                 let slot = own_slot(&mut made, texture_number(&document, &mut ir, &mut image_of, map.image)?, map.coord as u8);
                 made.normal_map = Some((slot, source.lit.normal_scale));
             }
-            // Its light (plan 3.3; program_pbr.hlsli): metal and roughness by their factors and map, occlusion on the
+            // Its light (program_pbr.hlsli): metal and roughness by their factors and map, occlusion on the
             // indirect light, the glow after it. An unlit material shows its base colour alone.
             if source.lit.flags & PBR_UNLIT == 0 {
                 let mut slots: Vec<((usize, u64), u8)> = Vec::new();
@@ -1962,7 +1965,7 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
                     glow_last: source.glow.is_some(),
                 });
             }
-            // Its hand-written shader (plan 3.4): each texture a slot of its own, each parameter a place of the material's
+            // Its hand-written shader: each texture a slot of its own, each parameter a place of the material's
             // colours the stages leave free, holding its value; the lit forms call its `surface` in place of the stages.
             if let Some((shader, used, images)) = &source.shader {
                 if made.pbr.is_none() {
@@ -2013,7 +2016,8 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
                 }
                 made.matrices.push(CoordMatrixIr { slot: 0, projection: 1, info: 0, center: [0.0; 3], scale: [sx, sy], rotation, translation: [tx, ty], effect });
             }
-            // A mesh hangs on its node's joint, or the skin's root (contract 5); on a billboard joint it turns with it.
+            // A mesh hangs on its node's joint, or the skin's root (models.md section 5); on a billboard joint it turns
+            // with it.
             let attached = if skinned { skin_root } else { static_joint };
             let turns = if blended || skinned { 0 } else { billboard[attached] };
             made.on_billboard = turns != 0;
@@ -2071,7 +2075,7 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
     ir.arrays.colors = colour_pools.map(|pool| pool.values.into_iter().map(|[v]| v.to_bits()).collect());
     ir.arrays.coords = coordinates.into_iter().map(|pool| pool.values).collect();
 
-    // A joint's bounds hold every vertex it moves at rest: its own and its children's (contract 4).
+    // A joint's bounds hold every vertex it moves at rest: its own and its children's (models.md section 4).
     let mut depth = vec![0usize; joints.len()];
     for (j, d) in depth.iter_mut().enumerate() {
         let mut at = joints[j].parent;
@@ -2429,7 +2433,7 @@ pub fn to_files_for(bytes: &[u8], folder: Option<&Path>, stem: &str, game: Optio
 /// The most materials with a surface shader a model has: the tracer numbers its `.rayhit` rows in a byte.
 pub const MOST_SHADER_MATERIALS: usize = 255;
 
-/// `<model>.rayhit` (contract materials 3.4 layer 3; the tracer reads it): a row for each material with a surface
+/// `<model>.rayhit` (materials.md section 3.4, layer 3; the tracer reads it): a row for each material with a surface
 /// shader: material (its name; a name met twice keeps its first row) and text (its ray-hit form,
 /// programs::ray_hit_form). None without one; more than MOST_SHADER_MATERIALS rows refuse the model.
 pub fn ray_hit_table(ir: &ModelIr) -> Result<Option<Vec<u8>>> {
@@ -2451,7 +2455,7 @@ pub fn ray_hit_table(ir: &ModelIr) -> Result<Option<Vec<u8>>> {
     Ok(Some(super::table::TableIr::from_json(json.to_string().as_bytes())?.to_ntbl()))
 }
 
-/// `<model>.params` (contract materials 3.4; content.model set_param reads it): a row for each parameter of each
+/// `<model>.params` (materials.md section 3.4; content.model set_param reads it): a row for each parameter of each
 /// material with a surface shader: material (its name), param, register (its place, 0 to 6). None without one.
 pub fn params_table(ir: &ModelIr) -> Result<Option<Vec<u8>>> {
     let mut rows: Vec<Value> = Vec::new();
@@ -2478,7 +2482,7 @@ pub fn hidden_files_for(skeleton: &[u8], stem: &str, game: &GameModel) -> Result
     Ok((super::model_write::write(&ir, stem, &super::programs::written_or_unknown(), &mut Default::default())?, facts))
 }
 
-/// An animation file (`<archive>.arc/<any>.anim.glb`, animation contract 2): animations only, each a clip of `game`
+/// An animation file (`<archive>.arc/<any>.anim.glb`, animation.md section 2): animations only, each a clip of `game`
 /// (the archive's model) by its name, which replaces the game's clip of that name. Its nodes carry the model's skeleton:
 /// each game joint is the node of its name, under the node of the joint's game parent; a joint no channel moves keeps
 /// its node's place at rest. Channels move joints only (`file` names the file in refusals).
@@ -4062,7 +4066,7 @@ mod tests {
     fn a_lit_material_is_drawn_by_the_pbr_template() {
         // The test takes what the cook notes (refuse::reading).
         let _reading = crate::cook::refuse::reading();
-        // Plan 3.3 (J): the lit template (program_pbr.hlsli) lights the stages' base colour by metal and roughness, in
+        // The lit template (program_pbr.hlsli) lights the stages' base colour by metal and roughness, in
         // every form, before the glow; its maps are slots of their own, an ORM texture one slot.
         use super::super::programs::{generate, forms_of, Registers};
         let (ir, _, _) = cook(&lit_document(), None).unwrap();
@@ -4115,7 +4119,7 @@ mod tests {
         assert_eq!(ir.materials[0].pbr, Some(PbrShading { metal: 1.0, roughness: 0.05, metal_rough: None, occlusion: None, glow_last: false }));
     }
 
-    /// The template's texts for a compile on both back ends (dxc DXIL and SPIR-V, agents/luma/j/bin/pbr-dxc.sh):
+    /// The template's texts for a compile on both back ends (dxc DXIL and SPIR-V):
     /// NEBULA_PBR_DUMP=<folder> cargo test -p nebula-import --lib -- --ignored dump_the_pbr_template
     #[test]
     #[ignore]
@@ -4220,7 +4224,7 @@ mod tests {
         assert!(turned < text.pixel.find("g_enh = enh_begin(").unwrap());
         // It reads the normal map's own slot: the program's textures name slot 2.
         assert!(text.textures.contains(&2), "{:?}", text.textures);
-        // A glTF material lights at the pixel in its plain form too (the material template, plan 3.3): every form reads it.
+        // A glTF material lights at the pixel in its plain form too (the material template): every form reads it.
         for form in forms.iter().filter(|f| !f.lit) {
             let text = generate(m, *form, false, &Registers::of(m)).unwrap();
             assert!(text.pixel.contains("lit_tan") && text.inputs.contains(&Input::Tangent));

@@ -2,7 +2,7 @@
    page would need a stack probe, which is not here: the link fails on one. */
 int _fltused = 1;
 
-/* RTTI data (the module with rows, contract objects): each class's type descriptor starts with type_info's vtable, which
+/* RTTI data (the module with rows, objects.md): each class's type descriptor starts with type_info's vtable, which
    the C++ runtime would define. Nothing calls through it: the kernel compares the descriptors' addresses. */
 const void* const nebula_type_info_vtable[1] __asm__("??_7type_info@@6B@") = {0};
 
@@ -26,7 +26,7 @@ void nebula_run_constructors(void) {
 /* Thread-local storage: the directory Windows reads to give each thread its copy of the image's thread variables.
    Windows gives a library loaded at run time its thread storage (writes its index to _tls_index, makes each thread's
    copy) only when the image has imports: with none it left _tls_index unwritten, so the module's thread variables lay
-   in the slot of index 0, the host executable's own, and each side overwrote the other's (rootcause/1.6-guard.md).
+   in the slot of index 0, the host executable's own, and each side overwrote the other's.
    One import keeps the module in that pass. The index starts at one no slot has: a loader that still gives none ends
    the game at the module's first thread variable, never in another image's storage. */
 __declspec(dllimport) unsigned long __stdcall GetCurrentThreadId(void);
