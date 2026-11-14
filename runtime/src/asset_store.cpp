@@ -100,6 +100,25 @@ bool AssetStore::attach_overlay(const std::filesystem::path& path) {
     return true;
 }
 
+void AssetStore::let_go_of_files() noexcept {
+    // No allocation or free here: a stopped thread may hold the heap's lock.
+    if (overlay_ != nullptr) overlay_->let_go_of_files();
+#if defined(_WIN32)
+    if (view_ != nullptr) {
+        UnmapViewOfFile(view_);
+        view_ = nullptr;
+    }
+    if (mapping_ != nullptr) {
+        CloseHandle(mapping_);
+        mapping_ = nullptr;
+    }
+    if (file_ != nullptr) {
+        CloseHandle(file_);
+        file_ = nullptr;
+    }
+#endif
+}
+
 void AssetStore::close() {
     overlay_.reset();
 #if defined(_WIN32)

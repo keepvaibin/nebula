@@ -163,6 +163,7 @@ inline bool perf_hint_on_battery() noexcept { return false; }
 #include <intrin.h>
 #include <dbghelp.h>
 #include <psapi.h>
+#include <tlhelp32.h>
 #else
 #include <dlfcn.h>
 #include <fcntl.h>
@@ -3638,10 +3639,82 @@ constexpr bool kHostStartsAgain =
 // The environment variable a start-again gives the new process: the old process's id and creation time.
 constexpr const wchar_t* kStartAgainOf = L"NEBULA_START_AGAIN_OF";
 
-// A process started again (finish_and_exit) waits here for the one that started it to end, at most 60 seconds: until
-// then that one still holds the files it had open (the cooked mods.pak among them), which this one's cook replaces.
-// The id is checked against its creation time, so a process that took a freed id is never waited for.
-void wait_for_process_before() {
+// A process's creation time as one number (FILETIME), 0 when it cannot be read.
+unsigned long long creation_of(HANDLE process) {
+    FILETIME made{}, ended{}, kernel{}, user{};
+    if (!GetProcessTimes(process, &made, &ended, &kernel, &user)) return 0;
+    return (static_cast<unsigned long long>(made.dwHighDateTime) << 32u) | made.dwLowDateTime;
+}
+
+// The hand-over's event, named for the old process's id and creation time: only the process it started finds it.
+std::wstring hand_over_event_name(unsigned long pid, unsigned long long created) {
+    return L"Local\\NebulaHandOver-" + std::to_wstring(pid) + L"-" + std::to_wstring(created);
+}
+
+// The hand-over of a start-again, the old process's half (finish_and_exit, after the new process is started; saves,
+// settings, records and the log are out by then). The new process needs this one's files, not its end: ending a
+// process with a renderer takes the system seconds to a minute (its device, its memory), which a player would wait.
+// So every other thread is stopped (as the end would stop them, only now), the files the new process's cook replaces
+// are let go, the event says so, and the process ends.
+// The cook and the store need these of the mods folder's .cooked (read from the code): mods.pak (the store's overlay:
+// its file, its mapping, its view, and views given out by map_private), mods.plan, mods.signature, mods.facts,
+// mods.left_out, built.shaders, mods.sources, validate, code-layers and its restart file. All but mods.pak are read or
+// written whole and closed, so only mods.pak is held: the store lets go of its handles and every view of a file under
+// .cooked is unmapped. The running copies of the mods' libraries (.cooked/code/<process>-<n>) stay: the new process
+// makes its own. Elsewhere: game.pak (read-shared both ways), mods.ini and the settings (written whole, atomically),
+// the shader cache (read whole at the start, replaced atomically), the Vulkan compile journal (its handle closed once
+// mapped), the saves (waited for before the hand-over), the log and a test's audio file (opened sharing reads and
+// writes): none is held so the new process cannot open it.
+// The new process is started first and the files let go after: once the threads are stopped only system calls run
+// (one of them may hold the heap's lock or the C runtime's), and starting a process is not one of those.
+void hand_over(HANDLE event, const std::wstring& cooked) {
+    log_line("host:", "ending: the new process takes over");
+    std::fflush(stdout);
+    std::fflush(stderr);
+    const DWORD self = GetCurrentThreadId();
+    const DWORD process = GetCurrentProcessId();
+    // Twice: a thread the first pass missed may have started one. A thread stopped twice stays stopped.
+    for (int pass = 0; pass < 2; pass++) {
+        const HANDLE threads = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+        if (threads == INVALID_HANDLE_VALUE) continue;
+        THREADENTRY32 entry{};
+        entry.dwSize = sizeof(entry);
+        for (BOOL more = Thread32First(threads, &entry); more; more = Thread32Next(threads, &entry)) {
+            if (entry.th32OwnerProcessID != process || entry.th32ThreadID == self) continue;
+            if (const HANDLE thread = OpenThread(THREAD_SUSPEND_RESUME, FALSE, entry.th32ThreadID)) {
+                SuspendThread(thread);
+                CloseHandle(thread);
+            }
+        }
+        CloseHandle(threads);
+    }
+    gPak.store.let_go_of_files();
+    // Every view of a file under .cooked, by the path the system names it with (\Device\...\mods\.cooked\...): the
+    // folder's path past its drive is found in it, letters in any case.
+    const wchar_t* const tail = cooked.size() > 2u && cooked[1] == L':' ? cooked.c_str() + 2 : cooked.c_str();
+    const size_t tail_length = std::wcslen(tail);
+    wchar_t name[MAX_PATH * 2];
+    MEMORY_BASIC_INFORMATION region{};
+    for (const char* at = nullptr; tail_length != 0u && VirtualQuery(at, &region, sizeof(region)) == sizeof(region);
+         at = static_cast<const char*>(region.BaseAddress) + region.RegionSize) {
+        if (region.Type != MEM_MAPPED || region.AllocationBase != region.BaseAddress) continue;
+        const DWORD length = GetMappedFileNameW(GetCurrentProcess(), region.BaseAddress, name, MAX_PATH * 2);
+        for (DWORD i = 0; length >= tail_length && i + tail_length <= length; i++) {
+            if (_wcsnicmp(name + i, tail, tail_length) == 0) {
+                UnmapViewOfFile(region.BaseAddress);
+                break;
+            }
+        }
+    }
+    if (event != nullptr) SetEvent(event);
+}
+
+// The new process's half: it waits for the old one's event (at most 10 s) before it touches the mods folder, and says
+// how long in the log and as the harness fact host.handover_ms. Without the event (an old process of before it, or
+// one that ended first) or past the bound, it waits for the old process to end instead, at most 60 s, said. Either way
+// a thread then says when the old process ended. The id is checked against its creation time, so a process that took
+// a freed id is never waited for.
+void wait_for_hand_over() {
     wchar_t text[64] = {};
     const DWORD length = GetEnvironmentVariableW(kStartAgainOf, text, 64);
     if (length == 0 || length >= 64) return;
@@ -3657,21 +3730,58 @@ void wait_for_process_before() {
     } catch (const std::exception&) {
         return;
     }
-    const HANDLE before = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-    if (before == nullptr) return;  // ended already
-    FILETIME made{}, ended{}, kernel{}, user{};
-    if (GetProcessTimes(before, &made, &ended, &kernel, &user) &&
-        ((static_cast<unsigned long long>(made.dwHighDateTime) << 32u) | made.dwLowDateTime) == created) {
-        const auto began = std::chrono::steady_clock::now();
-        const bool done = WaitForSingleObject(before, 60000) == WAIT_OBJECT_0;
-        const long long waited =
-            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - began).count();
-        const std::string said = done ? "waited " + std::to_string(waited) + " ms for the process before it to end"
-                                      : "the process before it had not ended after 60 s; this one goes on";
-        log_line("host: started again:", said.c_str());
+    const auto began = std::chrono::steady_clock::now();
+    const auto since = [&began] {
+        return static_cast<long long>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - began).count());
+    };
+    HANDLE before = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (before != nullptr && creation_of(before) != created) {
+        CloseHandle(before);
+        before = nullptr;  // another process took the id: the old one has ended
     }
-    CloseHandle(before);
+    const HANDLE event = OpenEventW(SYNCHRONIZE, FALSE, hand_over_event_name(pid, created).c_str());
+    bool handed = false;
+    if (event != nullptr) {
+        handed = WaitForSingleObject(event, 10000) == WAIT_OBJECT_0;
+        CloseHandle(event);
+    }
+    std::string said;
+    if (handed) {
+        said = "the process before it handed over its files after " + std::to_string(since()) + " ms";
+    } else if (before != nullptr) {
+        said = event == nullptr ? "no hand-over from the process before it; " : "the hand-over did not come within 10 s; ";
+        said += WaitForSingleObject(before, 60000) == WAIT_OBJECT_0
+                    ? "waited " + std::to_string(since()) + " ms for it to end"
+                    : "it had not ended after 60 s; this one goes on";
+    } else {
+        said = "the process before it had ended";
+    }
+    const long long waited = since();
+    log_line("host: started again:", said.c_str());
+    galaxy::modlog::fact("host.handover_ms", std::to_string(waited));
+    if (before == nullptr) return;
+    // When the old process ended, from this one's start: the system's part of a start-again, said once it is known.
+    const unsigned long long mine = creation_of(GetCurrentProcess());
+    std::thread([before, mine] {
+        if (WaitForSingleObject(before, 120000) == WAIT_OBJECT_0) {
+            FILETIME made{}, ended{}, kernel{}, user{};
+            if (GetProcessTimes(before, &made, &ended, &kernel, &user)) {
+                const unsigned long long end = (static_cast<unsigned long long>(ended.dwHighDateTime) << 32u) | ended.dwLowDateTime;
+                const long long ms = end > mine ? static_cast<long long>((end - mine) / 10000u) : 0;
+                log_line("host: started again:", ("the process before it ended " + std::to_string(ms) +
+                                                   " ms after this one started").c_str());
+            }
+        }
+        CloseHandle(before);
+    }).detach();
 }
+#endif
+
+#if defined(_WIN32)
+// A start-again's hand-over, set up before the new process starts (finish_and_exit).
+HANDLE gHandOver = nullptr;
+std::wstring gHandOverCooked;
 #endif
 
 [[noreturn]] void finish_and_exit(bool restart) {
@@ -3769,16 +3879,17 @@ void wait_for_process_before() {
             PROCESS_INFORMATION process{};
             std::wstring command = GetCommandLineW();
             command += gRestartArguments;
-            // The new process waits for this one to end before it touches the mods folder (wait_for_process_before):
-            // this one's id and creation time, in its environment only.
-            {
-                FILETIME created{}, ended{}, kernel{}, user{};
-                if (GetProcessTimes(GetCurrentProcess(), &created, &ended, &kernel, &user)) {
-                    const unsigned long long when = (static_cast<unsigned long long>(created.dwHighDateTime) << 32u) | created.dwLowDateTime;
-                    const std::wstring self = std::to_wstring(GetCurrentProcessId()) + L" " + std::to_wstring(when);
-                    SetEnvironmentVariableW(kStartAgainOf, self.c_str());
-                }
+            // The new process waits for this one's hand-over before it touches the mods folder (wait_for_hand_over):
+            // this one's id and creation time, in its environment only, and the event named for them.
+            if (const unsigned long long when = creation_of(GetCurrentProcess()); when != 0u) {
+                const std::wstring self = std::to_wstring(GetCurrentProcessId()) + L" " + std::to_wstring(when);
+                SetEnvironmentVariableW(kStartAgainOf, self.c_str());
+                gHandOver = CreateEventW(nullptr, TRUE, FALSE, hand_over_event_name(GetCurrentProcessId(), when).c_str());
+                std::error_code whole;
+                fs::path cooked = fs::absolute(galaxy::mods::mods_folder() / ".cooked", whole);
+                if (!whole && !galaxy::mods::mods_folder().empty()) gHandOverCooked = cooked.make_preferred().wstring();
             }
+            log_line("host:", "handing over to a new process");
             if (CreateProcessW(path.c_str(), command.data(), nullptr, nullptr, passed != 0u ? TRUE : FALSE,
                                passed != 0u ? EXTENDED_STARTUPINFO_PRESENT : 0u, nullptr, nullptr, &startup.StartupInfo, &process)) {
                 // Where crash reports go (--crash-dumps), `restarted` names the process that took over, so a tool
@@ -3843,6 +3954,7 @@ void wait_for_process_before() {
     galaxy::host::stop_all_rumble();
 #endif
     // Saves and logs are out. No library's detach runs: Streamline's faults on state from before a lost card.
+    if (restart && gHandOver != nullptr) hand_over(gHandOver, gHandOverCooked);
     TerminateProcess(GetCurrentProcess(), 0);
 #endif
     std::_Exit(0);
@@ -4845,7 +4957,7 @@ int main(int argc, char** argv) {
         // A headless host (no NEBULA_HOST_RENDERER) is the test host: no settings folder, no player's mods, and the
         // harness's extensions hook and call by name, so it keeps the module --module names (the rows one).
 #if defined(_WIN32)
-        wait_for_process_before();  // a start-again: nothing reads or writes the mods folder before the old one ends
+        wait_for_hand_over();  // a start-again: nothing reads or writes the mods folder before the old one lets go of it
 #endif
 #if defined(NEBULA_HOST_RENDERER)
         fs::path mods_folder;
