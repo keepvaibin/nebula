@@ -254,11 +254,17 @@ def read_test(folder, types=None):
             path = "mods[%d]" % i
             if isinstance(entry, str):
                 entry = {"path": entry}
-            keys_known(entry, path, {"path", "options", "code", "permissions", "install", "loads"})
+            keys_known(entry, path, {"path", "options", "code", "permissions", "install", "loads", "folder"})
             if "path" not in entry:
                 raise HarnessError("%s has no path" % path)
             mod = {"path": (folder / text(entry, "path", path)).resolve(), "code": code, "loads": True,
-                   "install": "placed", "permissions": "allow", "options": {}}
+                   "install": "placed", "permissions": "allow", "options": {}, "folder": None}
+            if "folder" in entry:
+                # The folder the mod is placed in under the game's mods folder, its id when absent: a second copy of a
+                # mod (one id in two folders, as a player can install it) is placed under another name.
+                mod["folder"] = text(entry, "folder", path)
+                if not re.fullmatch(r"[a-z0-9][a-z0-9.-]{0,63}", mod["folder"]):
+                    raise HarnessError("%s.folder: lowercase letters, digits, - and ., up to 64" % path)
             if "code" in entry:
                 mod["code"] = text(entry, "code", path)
                 # "ask" (J, consent tests): nothing answered, so the game asks (the consent question shows).
@@ -907,7 +913,7 @@ def permission_digest(declared):
     return "%016x" % h
 
 
-def install(settings, mod_folder, code_allowed, order, kept=False, permissions="allow", broken_ok=False):
+def install(settings, mod_folder, code_allowed, order, kept=False, permissions="allow", broken_ok=False, folder=None):
     """A mod folder holding luma.json (the base's form, as examples/luma-hello) into the run's mods, on, in order.
     kept: the mods an earlier test left (continue_from) stay as they are, with their data; only new ids are added.
     permissions: "allow", "deny" or {name: "allow"|"deny"}: each declared permission's answer, as the consent screen
@@ -948,14 +954,15 @@ def install(settings, mod_folder, code_allowed, order, kept=False, permissions="
         if not (mod_folder / rel).is_file():
             raise HarnessError("%s: the code %s is missing (building is not the runner's job)" % (mod_folder, rel))
         libraries.append(rel)
-    target = settings / "mods" / mod_id
+    place = folder or mod_id
+    target = settings / "mods" / place
     if target.exists():
         if kept:
             return mod_id
-        raise HarnessError("two mods have the id %s" % mod_id)
+        raise HarnessError("two mods have the id %s (a second copy takes \"folder\")" % mod_id)
     shutil.copytree(mod_folder, target)
     ini = settings / "mods.ini"
-    lines = "[%s]\nenabled=1\norder=%d\n" % (mod_id, order)
+    lines = "[%s]\nenabled=1\norder=%d\n" % (place, order)
     if code_allowed and libraries:
         lines += "code_ok=%s\n" % code_token(target / libraries[0])
     # The player's answers as the consent screen records them (consent.md 1.2): every declared permission answered.
@@ -1057,7 +1064,8 @@ def place_mods(test, settings, previous, frozen):
         if not (m["path"] / "luma.json").is_file():
             raise HarnessError("the mod %s has no luma.json" % m["path"])
         mod_id = install(settings, m["path"], m["code"] == "allow", i + 1, kept=previous is not None,
-                         permissions="ask" if m["code"] == "ask" else m["permissions"], broken_ok=not m["loads"])
+                         permissions="ask" if m["code"] == "ask" else m["permissions"], broken_ok=not m["loads"],
+                         folder=m["folder"])
         # A mod with no code (luma.json has no "code": content only) is never started, so the host writes no start
         # or refusal line for it and there is no mod.<id>.loaded fact: its test's own facts show its content.
         try:
