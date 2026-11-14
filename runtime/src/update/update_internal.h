@@ -43,6 +43,21 @@ bool platform_can_install() noexcept;
 // Puts the verified package in place of the running version, keeping the running one for rollback.
 bool platform_install(const std::filesystem::path& package, std::string& error);
 
+// The signed manifest (`<asset>.manifest`, key=value lines; a CR before the newline is dropped, a repeated key keeps the
+// last): the release's version, the package's SHA-256 and size, and the asset it was signed for, `asset=` +
+// platform_asset's name. One key signs every platform's manifest, so the name is what ties one to this build.
+struct Manifest {
+    std::string version;
+    std::string sha256;
+    std::string asset;
+    std::uint64_t size = 0;
+};
+Manifest parse_manifest(std::string_view text);
+// Whether an install takes `manifest` for the release `version` over `installed` with this build's `asset`: the same
+// version, newer than the installed one (no replay, no downgrade), a 64-digit SHA-256, a size within the bound, and the
+// same asset name (a manifest of another platform's or channel's package, or one without a name, is refused).
+bool manifest_takes(const Manifest& manifest, std::string_view version, std::string_view installed, std::string_view asset);
+
 // Tests: a transport, a data folder and a clock of theirs; reset forgets this process's check and install.
 void set_transport_for_tests(Transport* transport);
 void set_data_directory_for_tests(const std::filesystem::path& directory);
