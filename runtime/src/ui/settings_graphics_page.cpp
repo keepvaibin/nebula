@@ -57,6 +57,11 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                 draft.internal_height = kInternalHeights[settings_step(unsigned(found - kInternalHeights.begin()), unsigned(kInternalHeights.size()), delta)];
             }, "3D PIXEL HEIGHT. WIDTH FOLLOWS ASPECT. MATCH DISPLAY FOLLOWS WINDOW SIZE AND FOLDING"});
     }
+    if (state.dynamic_resolution_offered && render.upscaler == 0u) {
+        rows.push_back({"DYNAMIC RESOLUTION", render.dynamic_resolution ? "ON" : "OFF",
+                        [](RenderConfig& draft, int) { draft.dynamic_resolution = !draft.dynamic_resolution; },
+                        "LOWERS THE RESOLUTION WHEN THE GRAPHICS CARD FALLS BEHIND AND RAISES IT AGAIN WHEN IT HAS ROOM"});
+    }
     const unsigned render_percent = state.render_percent;
     // Ray tracing replaces MSAA, ambient occlusion and the lighting modes: their rows are hidden while it is on.
     const bool rt_offered = state.ray_tracing_offered;

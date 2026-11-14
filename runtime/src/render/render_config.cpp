@@ -179,6 +179,7 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     else if (std::strcmp(key, "bloom") == 0) cfg.bloom = std::min(parse_uint(val, cfg.bloom), kMaxBloom);
     else if (std::strcmp(key, "post_process") == 0) cfg.post_process = parse_bool(val, cfg.post_process);
     else if (std::strcmp(key, "internal_height") == 0) cfg.internal_height = normalized_internal_height(parse_uint(val, cfg.internal_height));
+    else if (std::strcmp(key, "dynamic_resolution") == 0) cfg.dynamic_resolution = parse_bool(val, cfg.dynamic_resolution);
     else if (std::strcmp(key, "hud_output_resolution") == 0) cfg.hud_output_resolution = parse_bool(val, cfg.hud_output_resolution);
     else if (std::strcmp(key, "hdr") == 0) cfg.hdr = parse_bool(val, cfg.hdr);
     else if (std::strcmp(key, "paper_white") == 0) cfg.paper_white = std::clamp(parse_uint(val, cfg.paper_white), 80u, 500u);
@@ -482,7 +483,16 @@ RenderFeatureStatus make_render_feature_status(
 
 namespace {
 std::atomic<bool> s_curved_surfaces_offered{false};
+std::atomic<bool> s_dynamic_resolution_offered{false};
 }  // namespace
+
+void set_dynamic_resolution_offered(bool offered) noexcept {
+    s_dynamic_resolution_offered.store(offered, std::memory_order_relaxed);
+}
+
+bool dynamic_resolution_offered() noexcept {
+    return s_dynamic_resolution_offered.load(std::memory_order_relaxed);
+}
 
 void set_curved_surfaces_offered(bool offered) noexcept {
     s_curved_surfaces_offered.store(offered, std::memory_order_relaxed);
@@ -659,6 +669,7 @@ bool save_render_config_to_file() {
              << "frame_generation=" << cfg.frame_generation << '\n'
              << "temporal_quality=" << cfg.temporal_quality << '\n'
              << "internal_height=" << cfg.internal_height << '\n'
+             << "dynamic_resolution=" << (cfg.dynamic_resolution ? 1u : 0u) << '\n'
              << "spatial_quality=" << cfg.spatial_quality << '\n'
              << "sharpness=" << cfg.sharpness << '\n'
              << "hdr=" << (cfg.hdr ? 1u : 0u) << '\n'
