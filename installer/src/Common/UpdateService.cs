@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Net;
-using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 namespace Nebula
@@ -127,15 +127,16 @@ namespace Nebula
         private static readonly byte[] NoSynRetransmissions = { 0xFF, 0xFF, 0xFE, 0x00 };
 
         /// <summary>True when the release list's server cannot be reached directly; false when it can, or when a proxy
-        /// stands between (only the request itself can tell then).</summary>
+        /// stands between (only the request itself can tell then). Only calls that cost no more than their own work
+        /// in a process just started: NetworkInterface.GetIsNetworkAvailable and WebRequest.DefaultWebProxy each took
+        /// 100 to 400 ms on their first call (the latter loads .NET's configuration and may run proxy detection),
+        /// which spent the start's budget before the probe began. Without a network the name lookup fails at once.</summary>
         private static bool Unreachable(string url)
         {
             try
             {
-                if (!NetworkInterface.GetIsNetworkAvailable()) return true;
                 var uri = new Uri(url);
-                IWebProxy proxy = WebRequest.DefaultWebProxy;
-                if (proxy != null && !proxy.IsBypassed(uri)) return false;
+                if (ProxyConfigured(uri)) return false;
                 IPAddress[] addresses;
                 try { addresses = Dns.GetHostAddresses(uri.DnsSafeHost); }
                 catch (SocketException) { return true; }
@@ -156,6 +157,42 @@ namespace Nebula
                 return true;
             }
             catch (Exception) { return false; }
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct IeProxyConfig
+        {
+            public bool AutoDetect;
+            public IntPtr AutoConfigUrl, Proxy, ProxyBypass;
+        }
+
+        [DllImport("winhttp.dll", SetLastError = true)]
+        private static extern bool WinHttpGetIEProxyConfigForCurrentUser(ref IeProxyConfig config);
+
+        [DllImport("kernel32.dll")]
+        private static extern IntPtr GlobalFree(IntPtr memory);
+
+        // A proxy the user set (a proxy server or a configuration script, in Windows' proxy settings), which the
+        // request may take: a direct connection then tells nothing. Automatic detection alone (WPAD, on by default)
+        // does not count: on a network that requires it the direct connection fails, the start offers the last
+        // answer, and the request's own answer is kept for the next start. A registry read, about 10 ms.
+        private static bool ProxyConfigured(Uri uri)
+        {
+            if (uri.IsLoopback) return false;
+            var config = new IeProxyConfig();
+            try
+            {
+                if (!WinHttpGetIEProxyConfigForCurrentUser(ref config)) return false;
+                return config.AutoConfigUrl != IntPtr.Zero || config.Proxy != IntPtr.Zero;
+            }
+            catch (DllNotFoundException) { return false; }
+            catch (EntryPointNotFoundException) { return false; }
+            finally
+            {
+                if (config.AutoConfigUrl != IntPtr.Zero) GlobalFree(config.AutoConfigUrl);
+                if (config.Proxy != IntPtr.Zero) GlobalFree(config.Proxy);
+                if (config.ProxyBypass != IntPtr.Zero) GlobalFree(config.ProxyBypass);
+            }
         }
 
         internal static void WriteCache(ReleaseInfo release, DateTime checkedUtc)

@@ -533,6 +533,8 @@ namespace Nebula.Setup
         // UpdateService on the server: the check begun as the launcher starts, taken before the game starts within
         // FreshBudgetMilliseconds, else the kept answer; a late answer kept for the next start; offline costing no wait;
         // no request within the hour after an answer; a failed check keeping the last answer and its time.
+        // The time a start waits is Offer's: Begin runs as the process starts, before the window, and here reads an
+        // answer file just written (which a virus scanner may hold on its first read).
         static void CheckService()
         {
             int budget = UpdateService.FreshBudgetMilliseconds;
@@ -544,8 +546,8 @@ namespace Nebula.Setup
 
             UpdateService.Reset();
             int before = releasesRequests;
-            var clock = Stopwatch.StartNew();
             UpdateService.Begin();
+            var clock = Stopwatch.StartNew();
             ReleaseInfo offered = UpdateService.Offer(budget, null);
             long waited = clock.ElapsedMilliseconds;
             Check(offered != null && offered.Version == "9.9.9-beta.1" && offered.Notes == "fresh" && waited < budget,
@@ -555,8 +557,8 @@ namespace Nebula.Setup
             Check(UpdateService.Offer(budget, "9.9.9-beta.1") == null, "a skipped version is not offered");
 
             UpdateService.Reset();
-            clock.Restart();
             UpdateService.Begin();
+            clock.Restart();
             offered = UpdateService.Offer(budget, null);
             waited = clock.ElapsedMilliseconds;
             Check(UpdateService.Running == null && releasesRequests == before + 1 && offered != null && offered.Notes == "fresh" && waited < 100,
@@ -567,8 +569,8 @@ namespace Nebula.Setup
             releasesJson = Release("9.9.9-beta.1", "late");
             releasesDelayMs = 1500;
             UpdateService.Reset();
-            clock.Restart();
             UpdateService.Begin();
+            clock.Restart();
             offered = UpdateService.Offer(budget, null);
             waited = clock.ElapsedMilliseconds;
             Check(offered == null && waited >= budget - 20 && waited < budget + 250,
@@ -577,8 +579,8 @@ namespace Nebula.Setup
             releasesDelayMs = 0;
             int afterLate = releasesRequests;
             UpdateService.Reset();
-            clock.Restart();
             UpdateService.Begin();
+            clock.Restart();
             offered = UpdateService.Offer(budget, null);
             waited = clock.ElapsedMilliseconds;
             Check(offered != null && offered.Notes == "late" && UpdateService.Running == null && releasesRequests == afterLate && waited < 100,
@@ -601,8 +603,8 @@ namespace Nebula.Setup
                 UpdateService.WriteCache(kept, stale);
                 Updater.ReleasesUrl = offline;
                 UpdateService.Reset();
-                clock.Restart();
                 UpdateService.Begin();
+                clock.Restart();
                 offered = UpdateService.Offer(budget, null);
                 waited = clock.ElapsedMilliseconds;
                 Check(UpdateService.Running != null && offered != null && offered.Notes == "late" && waited < budget,
