@@ -567,6 +567,13 @@ fn cook_change(change: &Change, bytes: Vec<u8>, waves: &BTreeMap<String, Vec<aud
 pub fn write_overlay(game_id: &str, changes: &[Change], patches: &PlanPatches, base: Option<&Path>, output: &Path, facts: &mut Vec<Fact>,
                      stats: &mut Stats) -> Result<Vec<(String, String)>> {
     let _cook = super::COOK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    write_overlay_locked(game_id, changes, patches, base, output, facts, stats)
+}
+
+/// `write_overlay` for a caller that already holds the cook lock (`cook_plan_inner`, whose mod programs and progress
+/// file are this cook's for as long as it holds it).
+fn write_overlay_locked(game_id: &str, changes: &[Change], patches: &PlanPatches, base: Option<&Path>, output: &Path,
+                        facts: &mut Vec<Fact>, stats: &mut Stats) -> Result<Vec<(String, String)>> {
     // The store's header holds a disc id of six letters (RMGE01): checked before anything is written.
     if game_id.len() != 6 || !game_id.bytes().all(|b| b.is_ascii_alphanumeric()) {
         bail!("{game_id:?} is not a game's disc id (six letters and digits, as RMGE01)");
@@ -1117,6 +1124,19 @@ fn texture_facts(text: &str, facts: &mut Vec<Fact>) -> Result<()> {
 }
 
 fn cook_plan_inner(plan: &Path, output: &Path, facts: &mut Vec<Fact>) -> Result<(Stats, Vec<(String, String)>)> {
+    // The mod programs (programs::MOD_WRITTEN, MOD_TEXTS) and the progress file are process-wide: this cook holds the
+    // cook lock from before it sets them until after they are cleared, so a store cook or a run-time cook in the same
+    // process never reads them, and they are cleared however this cook ends (an error, a panic).
+    let _cook = super::COOK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    struct Clear;
+    impl Drop for Clear {
+        fn drop(&mut self) {
+            *super::programs::MOD_WRITTEN.lock().unwrap_or_else(|e| e.into_inner()) = None;
+            *super::programs::MOD_TEXTS.lock().unwrap_or_else(|e| e.into_inner()) = None;
+            *PROGRESS.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        }
+    }
+    let _clear = Clear;
     let text = fs::read_to_string(plan).with_context(|| format!("{} cannot be read", plan.display()))?;
     let (game_id, changes) = read_plan(&text)?;
     let patches = read_patches(&text)?;
@@ -1131,7 +1151,7 @@ fn cook_plan_inner(plan: &Path, output: &Path, facts: &mut Vec<Fact>) -> Result<
     *super::programs::MOD_WRITTEN.lock().unwrap_or_else(|e| e.into_inner()) = Some(written);
     *super::programs::MOD_TEXTS.lock().unwrap_or_else(|e| e.into_inner()) = Some(BTreeMap::new());
     *PROGRESS.lock().unwrap_or_else(|e| e.into_inner()) = Some(output.with_extension("progress"));
-    let result = write_overlay(&game_id, &changes, &patches, plan_base(&text).as_deref(), output, facts, &mut stats);
+    let result = write_overlay_locked(&game_id, &changes, &patches, plan_base(&text).as_deref(), output, facts, &mut stats);
     let texts = super::programs::MOD_TEXTS.lock().unwrap_or_else(|e| e.into_inner()).take().unwrap_or_default();
     let _ = fs::remove_file(output.with_extension("progress"));
     *super::programs::MOD_WRITTEN.lock().unwrap_or_else(|e| e.into_inner()) = None;
@@ -1572,6 +1592,23 @@ mod tests {
         assert!(cook_plan(&plan, &out).is_err());
         let why = fs::read_to_string(out.with_extension("why")).unwrap();
         assert!(why.contains("no file of the mods could be used: StageData/A.arc: "), "{why}");
+    }
+
+    #[test]
+    fn a_mods_cook_leaves_no_programs_or_progress_for_the_next_cook() {
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("mods.pak");
+        let material = dir.path().join("glow.txt");
+        fs::write(&material, "words").unwrap();
+        let plan = dir.path().join("mods.plan");
+        // A written material (MOD_WRITTEN is set), then a file that cannot be read: the cook fails.
+        fs::write(&plan, format!("RMGE01\n=material\tGlow\t{}\nStageData/A.arc\t{}\n", material.display(),
+                                 dir.path().join("gone.arc").display())).unwrap();
+        assert!(cook_plan(&plan, &out).is_err());
+        let _cook = super::super::COOK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        assert!(super::super::programs::MOD_WRITTEN.lock().unwrap_or_else(|e| e.into_inner()).is_none());
+        assert!(super::super::programs::MOD_TEXTS.lock().unwrap_or_else(|e| e.into_inner()).is_none());
+        assert!(PROGRESS.lock().unwrap_or_else(|e| e.into_inner()).is_none());
     }
 
     #[test]
