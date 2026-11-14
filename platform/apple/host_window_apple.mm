@@ -10,6 +10,7 @@
 #import <AppKit/AppKit.h>
 #import <CoreHaptics/CoreHaptics.h>
 #import <GameController/GameController.h>
+#import <IOKit/pwr_mgt/IOPMLib.h>
 #import <QuartzCore/CAMetalLayer.h>
 
 #include "galaxy/content_viewport.h"
@@ -23,6 +24,7 @@
 #include "galaxy/platform_paths.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/playstation_controller.h"
+#include "galaxy/power_policy.h"
 #include "galaxy/render/display_modes.h"
 #include "galaxy/render/host_window.h"
 #include "galaxy/render/render_config.h"
@@ -82,6 +84,10 @@ std::atomic<bool> g_direct_touch{false};
 std::thread::id g_main_thread;
 // A system panel (the file picker, an alert) is up: the pointer is the system's meanwhile.
 std::atomic<int> g_panels{0};
+// When a controller last gave input (steady milliseconds; 0 never): the system does not count it as the user's activity.
+std::atomic<std::int64_t> g_pad_input_ms{0};
+// Held while someone plays with a controller in front (hold_display_for_pads; the main thread's).
+IOPMAssertionID g_display_assertion = kIOPMNullAssertionID;
 bool g_cursor_hidden = false;
 // The display mode the window was last put in (RenderConfig::display_mode; ~0: none yet).
 unsigned g_applied_mode = ~0u;
@@ -408,6 +414,7 @@ void sample_gamepads() {
             g_last_input.store(kLastPad + static_cast<std::uint32_t>(sample.scheme), std::memory_order_relaxed);
             g_last_pad_icons.store(static_cast<std::uint8_t>(g_input.pad_icons[i]), std::memory_order_relaxed);
             g_last_pad.store(pad.number, std::memory_order_relaxed);
+            g_pad_input_ms.store(galaxy::steady_ms(), std::memory_order_relaxed);
         }
         sample_pad_motion(i);
         if (g_capture_device.has_value() && g_capture_device->scheme == sample.scheme && !g_capture_result.has_value()) {
@@ -938,6 +945,29 @@ void start_app() noexcept {
 
 namespace galaxy::sdl {
 
+namespace {
+// The keyboard and mouse are the system's user activity; a controller is not, and the display would dim and sleep
+// under a player. While a controller has given input within the playing window (power_policy.h) and the window is in
+// front and visible, the display is held on, as Windows' power policy holds it.
+void hold_display_for_pads() {
+    const std::int64_t last = g_pad_input_ms.load(std::memory_order_relaxed);
+    const bool front = g_window != nil && g_window.isKeyWindow && !g_window.isMiniaturized &&
+                       (g_window.occlusionState & NSWindowOcclusionStateVisible) != 0;
+    const bool hold = front && last != 0 && galaxy::steady_ms() - last < galaxy::host::kPowerPlayingMs;
+    if (hold == (g_display_assertion != kIOPMNullAssertionID)) {
+        return;
+    }
+    if (hold) {
+        if (IOPMAssertionCreateWithName(kIOPMAssertPreventUserIdleDisplaySleep, kIOPMAssertionLevelOn,
+                                        CFSTR("Playing with a controller"), &g_display_assertion) != kIOReturnSuccess) {
+            g_display_assertion = kIOPMNullAssertionID;
+        }
+    } else {
+        (void)IOPMAssertionRelease(g_display_assertion);
+        g_display_assertion = kIOPMNullAssertionID;
+    }
+}
+}  // namespace
 
 void pump_events(int timeout_ms) noexcept {
     std::vector<std::tuple<int, bool, bool, int>> menu_keys;  // key, down, repeat, the letter at its place
@@ -1013,7 +1043,8 @@ void pump_events(int timeout_ms) noexcept {
             const std::uint16_t buttons = galaxy::input::settings_pad_buttons(sample.scheme, sample.buttons);
             const galaxy::input::NativeSettingsPadStep step = galaxy::input::native_settings_pad_step(
                 g_menu_pad, buttons, sample.axes[0], sample.axes[1],
-                galaxy::render::native_settings_overlay_visible() || galaxy::ui::launcher_visible(),
+                galaxy::render::native_settings_overlay_visible() || galaxy::render::home_menu_visible() ||
+                    galaxy::ui::launcher_visible(),
                 galaxy::steady_ms());
             for (std::size_t i = 0; i < step.key_count; ++i) {
                 galaxy::render::native_settings_post_key(step.keys[i]);
@@ -1021,6 +1052,7 @@ void pump_events(int timeout_ms) noexcept {
             break;
         }
     }
+    hold_display_for_pads();
     if (menu_wheel != 0 && !galaxy::render::native_settings_wheel(menu_wheel)) {
         galaxy::render::host_window::pointer_wheel.fetch_add(menu_wheel, std::memory_order_relaxed);
     }
