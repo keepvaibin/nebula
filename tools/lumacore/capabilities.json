@@ -169,6 +169,7 @@
     "ui.refusals": "ui's refusals answer their status and write no handle; close ends a screen and its panes (2.4, 3.8)",
     "ui.scale": "ui scales a pane and the panes under it across and down about its origin, mirrored when negative; past 64 or not a number refused (ui 1.1)",
     "ui.position": "ui places a pane and the panes under it at a point in its parent's space, replacing the layout's place; past 4096 or not a number refused (ui 1.3)",
+    "ui.share": "ui offers a mod's panes on several screens as places in the game's own menu focus beside its buttons: the pad moves one highlight between both by screen position, A takes a mod row, the game's buttons keep their presses (ui 1.3)",
     "ui.menu": "ui makes a screen's panes a menu the player moves through with the pad, the pointer and touch, and takes a row of with A, rows that are off skipped, as the game's own menus (ui 1.2)",
     "ui.alive": "ui answers whether a screen is still open, false once close, its scene or the mod ended it (ui 1.1)",
     "ui.reuse": "A screen a mod closed is that mod's again when it opens the layout on the layer: its panes shown as the layout has them (2.4, 3.8)",

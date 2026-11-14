@@ -3,6 +3,7 @@
 #include "Game/Screen/LayoutActor.hpp"
 #include "Game/Screen/LayoutManager.hpp"
 #include "Game/Render/Clip.hpp"
+#include "Game/Screen/NebulaMenuFocus.hpp"
 #include "Game/Screen/NebulaSettingsMenu.hpp"
 #include "Game/System/Arenas.hpp"
 #include "Game/System/GameAssets.hpp"
@@ -132,6 +133,12 @@ namespace luma {
                 const LumaMod* mod;
                 Ui::Pane* pane;
                 bool visible;       // as the layout gave it, given back when the screen closes
+                // A row the mod shares with the game's menu focus (share_rows), whether it can be taken, and at the last
+                // reading whether it had the highlight and was taken.
+                bool shared;
+                bool sharedOn;
+                bool focused;
+                bool chosen;
             };
 
             const LumaServiceKernel* sKernel = nullptr;
@@ -1040,6 +1047,68 @@ namespace luma {
                 return LUMA_OK;
             }
 
+            int32_t svcShareRows(const LumaMod* pMod, const LumaUiMenuRow* pRows, uint32_t count) {
+                const char* const pWhere = "ui.share_rows";
+                if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
+                    return status;
+                }
+                if (count > LUMA_UI_MENU_ROWS_MOST || (count != 0u && pRows == nullptr)) {
+                    report(pMod, pWhere, 101u, count > LUMA_UI_MENU_ROWS_MOST ? "count" : "rows", nullptr);
+                    return LUMA_E_ARGUMENT;
+                }
+                Pane* found[LUMA_UI_MENU_ROWS_MOST];
+                for (u32 i = 0; i < count; i++) {
+                    found[i] = paneOf(pMod, pRows[i].pane);
+                    if (found[i] == nullptr) {
+                        report(pMod, pWhere, 102u, nullptr, nullptr);
+                        return LUMA_E_HANDLE;
+                    }
+                }
+                // The mod's rows replaced: a row kept keeps its highlight and its taking until the next reading.
+                for (u32 i = 0; i < sPaneHigh; i++) {
+                    if (sPanes[i].handle != 0 && sPanes[i].mod == pMod) {
+                        sPanes[i].shared = false;
+                    }
+                }
+                for (u32 i = 0; i < count; i++) {
+                    found[i]->shared = true;
+                    found[i]->sharedOn = pRows[i].enabled;
+                }
+                for (u32 i = 0; i < sPaneHigh; i++) {
+                    if (sPanes[i].handle != 0 && sPanes[i].mod == pMod && !sPanes[i].shared) {
+                        sPanes[i].focused = false;
+                        sPanes[i].chosen = false;
+                    }
+                }
+                return LUMA_OK;
+            }
+
+            int32_t svcSharedFocus(const LumaMod* pMod, LumaUiPane* pFocused, LumaUiPane* pChosen) {
+                const char* const pWhere = "ui.shared_focus";
+                if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
+                    return status;
+                }
+                if (pFocused == nullptr || pChosen == nullptr) {
+                    report(pMod, pWhere, 101u, pFocused == nullptr ? "focused" : "chosen", nullptr);
+                    return LUMA_E_ARGUMENT;
+                }
+                *pFocused = 0;
+                *pChosen = 0;
+                for (u32 i = 0; i < sPaneHigh; i++) {
+                    const Pane& rPane = sPanes[i];
+                    if (rPane.handle == 0 || rPane.mod != pMod || !rPane.shared) {
+                        continue;
+                    }
+                    if (rPane.focused) {
+                        *pFocused = rPane.handle;
+                    }
+                    if (rPane.chosen) {
+                        *pChosen = rPane.handle;
+                    }
+                }
+                return LUMA_OK;
+            }
+
             const LumaUiService cTable = {
                 {sizeof(LumaUiService), LUMA_UI_MAJOR, LUMA_UI_MINOR},
                 svcOpen,
@@ -1055,6 +1124,8 @@ namespace luma {
                 svcMenuRows,
                 svcMenuChosen,
                 svcSetPosition,
+                svcShareRows,
+                svcSharedFocus,
             };
 
             // The service's rows (services-registry 11: ui's block, 570-619).
@@ -1164,6 +1235,85 @@ namespace luma {
                 // NebulaMenuFocus::cover, which GameSystem gave it before the menus' focus moved).
                 MR::getPlayerInput(PLAYER_1)->mButton->takePresses();
             }
+
+            // The screen's actor while it is open, shown and drawn this frame; else null.
+            const LayoutActor* drawnActor(LumaHandle screen) {
+                for (u32 i = 0; i < sHigh; i++) {
+                    const Screen& rScreen = sScreens[i];
+                    if (rScreen.handle != screen) {
+                        continue;
+                    }
+                    const LayoutActor* const pActor = rScreen.made != nullptr ? rScreen.made->actor : nullptr;
+                    if (pActor == nullptr || MR::isDead(pActor) || MR::isHiddenLayout(pActor) || !MR::isExecuteDrawLayout(pActor)) {
+                        return nullptr;
+                    }
+                    return pActor;
+                }
+                return nullptr;
+            }
+
+            // The pane and every parent shown.
+            bool isShownWithParents(const Ui::Pane* pPane) {
+                for (; pPane != nullptr; pPane = pPane->mpParent) {
+                    if (!pPane->IsVisible()) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+
+            void shareFact(const Pane& rPane) {
+                char name[160];
+                luma::modlog::jsonString(name, sizeof(name), rPane.pane->mName);
+                char json[256];
+                nebula_snprintf(json, sizeof(json), "{\"screen\":%llu,\"pane\":%s,\"focused\":%s,\"chosen\":%s}",
+                                static_cast< unsigned long long >(rPane.screen), name, rPane.focused ? "true" : "false",
+                                rPane.chosen ? "true" : "false");
+                char key[48];
+                nebula_snprintf(key, sizeof(key), "ui.share.%llu", static_cast< unsigned long long >(rPane.handle));
+                luma::modlog::fact(key, json);
+            }
+
+            // The mods' shared rows join the game's menu focus (share_rows): each row that is on, shown and drawn is
+            // offered at its centre for the focus's next move (its update runs before the menus, the next frame), and
+            // read here after this frame's move. The highlight is the pad's while it leads (NebulaMenuFocus::isActive),
+            // else the pointer's; the game's decide press on the highlighted row takes it. No press is taken from the
+            // game. Runs after menuFrame: while a mod's menu covers the game's, or a host menu is open, rows are still
+            // offered (their places stay) but none is highlighted or taken.
+            void shareFrame() {
+                const bool still = NebulaSettingsMenu::isShown() || topMenu() != nullptr;
+                const bool padLeads = NebulaMenuFocus::isActive();
+                const bool decide = !still && MR::testPointerMenuPadDecideTrigger();
+                bool pointed = false;  // the pointer highlights one row
+                for (u32 i = 0; i < sPaneHigh; i++) {
+                    Pane& rPane = sPanes[i];
+                    if (rPane.handle == 0 || !rPane.shared) {
+                        continue;
+                    }
+                    const bool wasFocused = rPane.focused;
+                    const bool wasChosen = rPane.chosen;
+                    rPane.focused = false;
+                    rPane.chosen = false;
+                    const LayoutActor* const pActor = rPane.sharedOn ? drawnActor(rPane.screen) : nullptr;
+                    if (pActor != nullptr && isShownWithParents(rPane.pane)) {
+                        // The key is the pane itself: one place in the focus however often it is offered.
+                        NebulaMenuFocus::offerPane(rPane.pane, rPane.pane);
+                        if (!still) {
+                            if (padLeads) {
+                                rPane.focused = NebulaMenuFocus::isTargetFocused(rPane.pane);
+                            } else if (!pointed &&
+                                       MR::isStarPointerPointingPane(pActor, rPane.pane, rPane.pane->mName, PLAYER_1, true, "弱")) {
+                                rPane.focused = true;
+                                pointed = true;
+                            }
+                            rPane.chosen = rPane.focused && decide;
+                        }
+                    }
+                    if (luma::modlog::facts() && (rPane.focused != wasFocused || rPane.chosen != wasChosen)) {
+                        shareFact(rPane);
+                    }
+                }
+            }
         }  // namespace
 
         bool takesControls() {
@@ -1175,6 +1325,7 @@ namespace luma {
                 return;
             }
             menuFrame();
+            shareFrame();
             // Animations played to their end (a loop never ends).
             for (u32 i = 0; i < sHigh; i++) {
                 Screen& rScreen = sScreens[i];

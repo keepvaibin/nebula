@@ -37,3 +37,15 @@
   play on the screen. Not finite or past 4096 either way: LUMA_E_ARGUMENT (Service.Argument with x or y). Pane facts
   gain `x`, `y` (layout units); set_position writes `ui.position.<pane>`.
 - Test 3814-ui-position (mod ju-position). Capability ui.position.
+- `share_rows(mod, rows, count)`: panes of any of the mod's open screens (`LumaUiMenuRow {pane, enabled}`, at most 32)
+  join the game's own menu focus beside its buttons instead of covering it as menu_rows does. Each frame each row
+  that is on, shown (with its parents) and drawn is offered at its centre; the pad moves one highlight between the
+  game's buttons and the rows by screen position, the pointer highlights a row while it leads, and A (the game's
+  decide press) takes the highlighted row. No press is taken from the game, so its buttons keep working. The look is
+  the mod's. A second call replaces the rows, count 0 takes them away; a row's screen ending ends the row. Nothing is
+  highlighted or taken while menu_rows covers the game's menu or a host menu is open. Share the rows of pause
+  screens: a row over the HUD while the game plays takes the pad's directions into the focus.
+- `shared_focus(mod, &focused, &chosen)`: the highlighted shared row and the row taken at the last reading (once a
+  frame after the mods' frame handlers), 0 for none. Fact `ui.share.<pane>` {screen, pane, focused, chosen} when
+  either changes.
+- Test 3815-ui-share (mod ju-share). Capability ui.share.

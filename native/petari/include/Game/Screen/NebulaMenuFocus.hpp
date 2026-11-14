@@ -3,6 +3,9 @@
 #include <nebula_geometry.hpp>
 
 class ButtonPaneController;
+namespace Ui {
+    class Pane;
+}  // namespace Ui
 
 // Nebula's menu focus: the D-pad and the move stick move the pointer's highlight between the buttons a menu takes
 // input on (ButtonPaneController::trySelect) and the other things it offers (the file select's 3D files), to the
@@ -34,6 +37,7 @@ namespace NebulaMenuFocus {
     void update();                                        // GameSystem::update, once a frame, before the menus run
     void offer(ButtonPaneController* pButton);            // a button its menu takes input on this frame
     void offerTarget(const void* pKey, const Vec2f& rScreenPos);  // anything else, where it is on screen this frame
+    void offerPane(const void* pKey, const Ui::Pane* pPane);      // a layout pane, at its centre (its last matrix)
     bool isActive();                                      // the D-pad or stick moved the highlight after the pointer
     bool isFocused(const ButtonPaneController* pButton);  // the button the D-pad or stick highlights
     bool isTargetFocused(const void* pKey);               // the target the D-pad or stick highlights

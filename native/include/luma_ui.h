@@ -2,7 +2,7 @@
 /* LumaCore's ui service (plan 2.4 layer 4 on 3.8 layer 1; contract ui): a screen layout of the mod's or the game's,
    shown over the game as the game shows its own (the game's layout drawer: picture and text panes, its fonts, its
    16:9 widening), its panes found by name, their text, visibility, scale and place set. Import: LUMA_SERVICE(slot,
-   "ui", "1.3") for set_position ("1.2" menu_rows and menu_chosen, "1.1" alive and set_scale, "1.0" the rest). */
+   "ui", "1.3") for set_position, share_rows and shared_focus ("1.2" menu_rows and menu_chosen, "1.1" alive and set_scale, "1.0" the rest). */
 #ifndef LUMA_UI_H
 #define LUMA_UI_H
 
@@ -129,6 +129,25 @@ typedef struct LumaUiService {
        finite or past 4096 either way: LUMA_E_ARGUMENT, reported; an ended pane: LUMA_E_HANDLE, reported. Thread and
        taking out as open. */
     int32_t (*set_position)(const LumaMod* mod, LumaUiPane pane, float x, float y);
+    /* 1.3. Game thread. The panes `rows` (count of them, at most LUMA_UI_MENU_ROWS_MOST, each a pane of any of this
+       mod's open screens and whether it can be taken) join the game's own menu focus, beside the game's buttons,
+       instead of covering it as menu_rows does: each frame each row that is on, shown (its screen and the pane with
+       its parents) and drawn is offered at its centre on screen; up, down, left and right move the one highlight to
+       the nearest button or row that way, as between the game's buttons; the pointer (and touch) on a row that is on
+       highlights it while the pointer leads. A (the game's own decide press) on the highlighted row takes it. The pad's
+       presses stay the game's (nothing is taken from it), so the game's buttons keep working beside the rows; a row
+       left over the HUD while the game plays takes the pad's directions into the ring, so share the rows of pause
+       screens. The rows' look is the mod's: shared_focus says which row has the highlight. A second call replaces the
+       mod's rows; count 0 takes them away. A row's screen ending ends the row (the highlight it had leaves at the next
+       frame, to nothing until the next press). Nothing moves or is taken while menu_rows's menu covers the game's or a
+       host menu is open. LUMA_OK; a pane that is not one of this mod's open screens': LUMA_E_HANDLE, reported; null
+       rows with a count, or a count past the most: LUMA_E_ARGUMENT, reported. Thread and taking out as open. */
+    int32_t (*share_rows)(const LumaMod* mod, const LumaUiMenuRow* rows, uint32_t count);
+    /* 1.3. Game thread. The mod's shared row (share_rows) with the highlight at the last reading into *focused, and
+       the row taken then into *chosen, each 0 when none. The reading is made once a frame after the mods' frame
+       handlers, so the next frame's handlers see it, and a row taken stays until the next reading (as menu_chosen).
+       LUMA_OK; a null focused or chosen: LUMA_E_ARGUMENT, reported. Thread and taking out as open. */
+    int32_t (*shared_focus)(const LumaMod* mod, LumaUiPane* focused, LumaUiPane* chosen);
 } LumaUiService;
 
 #ifdef __cplusplus
