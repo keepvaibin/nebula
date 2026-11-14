@@ -143,6 +143,16 @@ int main() {
             std::string other = head + rec;
             other.replace(other.find("\"schema\":1"), 10, "\"schema\":2");
             check(!bench::parse_recommendation(other, d), "another schema is not read");
+            std::string upscaled = head + rec;
+            const std::string height_row = "{\"key\":\"internal_height\",\"current\":0,\"recommended\":720},";
+            upscaled.erase(upscaled.find(height_row), height_row.size());
+            galaxy::render::RenderConfig e{};
+            e.internal_height = 1080u;
+            check(bench::parse_recommendation(upscaled, e) && e.internal_height == 1080u && e.msaa_samples == 1u,
+                  "height left out (an upscaler): the player's height stays");
+            std::string unknown = head + rec;
+            unknown.replace(unknown.find("\"bloom\""), 7, "\"blur\"");
+            check(!bench::parse_recommendation(unknown, d), "an unknown key refuses the whole result");
         }
         check(bench::kGiveUp[0] == bench::GiveUp::HeightAbovePanel && bench::kGiveUp[6] == bench::GiveUp::HeightBelowPanel,
               "the order starts and ends with lines");

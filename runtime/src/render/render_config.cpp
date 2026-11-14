@@ -741,8 +741,8 @@ void record_render_adapter(const char* description, unsigned vendor_id, unsigned
             s_adapter = {description != nullptr ? description : "", vendor_id, device_id};
         }
         const std::filesystem::path config = config_path();
-        if (config.empty() || description == nullptr) {
-            return;
+        if (config.empty() || description == nullptr || galaxy::bench::running()) {
+            return;  // a benchmark writes nothing in the settings folder (adapter.ini included)
         }
         std::string name(description);
         name.resize(std::min<std::size_t>(name.size(), 255u));
