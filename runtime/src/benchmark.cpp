@@ -627,6 +627,12 @@ const char* status_name(bool complete) {
     return complete ? "complete" : g_run.phase == Phase::Failed ? "failed" : "aborted";
 }
 
+// The items whose window ended. A run that ends mid-item (a quit while its scene loads, skips or is measured) leaves out
+// that item's result: it has no averages yet (end_window).
+std::size_t finished_items() {
+    return std::min({g_run.results.size(), g_run.items.size(), g_run.index});
+}
+
 // The recommendation's inputs from the results.
 Measured measured_inputs() {
     Run& run = g_run;
@@ -645,7 +651,7 @@ Measured measured_inputs() {
     m.current_pixels = scene_pixels(run.phase1);
     const Result* worst = nullptr;
     const Result* probe[static_cast<std::size_t>(ProbeCase::Count)] = {};
-    for (std::size_t i = 0; i < run.items.size() && i < run.results.size(); ++i) {
+    for (std::size_t i = 0; i < finished_items(); ++i) {
         const Result& r = run.results[i];
         if (run.items[i].kind == Kind::Scene) {
             if (worst == nullptr || r.gpu_ms > worst->gpu_ms) worst = &r;
@@ -709,7 +715,7 @@ void write_result(bool complete) {
     }
     out << "],\"scenes\":[";
     bool first = true;
-    for (std::size_t i = 0; i < run.results.size() && i < run.items.size(); ++i) {
+    for (std::size_t i = 0; i < finished_items(); ++i) {
         if (run.items[i].kind != Kind::Scene) continue;
         out << (first ? "" : ",") << "{\"stage\":" << quoted(run.items[i].stage.id) << ",\"scenario\":"
             << run.items[i].stage.scenario << ",\"grand_stars\":" << (run.items[i].stage.grand ? 6 : 0) << ",";
@@ -719,7 +725,7 @@ void write_result(bool complete) {
     }
     out << "],\"probe\":{\"stage\":" << quoted(run.probe_stage.id) << ",\"runs\":[";
     first = true;
-    for (std::size_t i = 0; i < run.results.size() && i < run.items.size(); ++i) {
+    for (std::size_t i = 0; i < finished_items(); ++i) {
         if (run.items[i].kind != Kind::Probe) continue;
         out << (first ? "" : ",") << "{\"case\":" << quoted(kProbeNames[static_cast<std::size_t>(run.items[i].probe)]) << ",";
         result_json(out, run.results[i]);
@@ -737,7 +743,7 @@ void write_result(bool complete) {
     out << "}},\"thermal\":";
     const Result* first_scene = nullptr;
     const Result* last_scene = nullptr;
-    for (std::size_t i = 0; i < run.results.size() && i < run.items.size(); ++i) {
+    for (std::size_t i = 0; i < finished_items(); ++i) {
         if (run.items[i].kind == Kind::Scene && first_scene == nullptr) first_scene = &run.results[i];
         if (run.items[i].kind == Kind::Thermal) last_scene = &run.results[i];
     }
@@ -781,7 +787,7 @@ void write_result(bool complete) {
     const char* verdict = !rec.valid ? "none" : rec.cpu_bound ? "cpu_bound" : rec.fits ? "fits" : "below_target";
     std::string worst_stage;
     double worst_gpu = -1.0, worst_p95 = 0.0;
-    for (std::size_t i = 0; i < run.results.size() && i < run.items.size(); ++i) {
+    for (std::size_t i = 0; i < finished_items(); ++i) {
         if (run.items[i].kind == Kind::Scene && run.results[i].gpu_ms > worst_gpu) {
             worst_gpu = run.results[i].gpu_ms;
             worst_p95 = run.results[i].p95;
