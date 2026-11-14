@@ -597,7 +597,8 @@ const DEBAKE_NEAR_BLACK: f64 = 8.0 / 255.0;
 /// painted one (the gain multiplies the vertex colour before the lights). Blended materials by the same rule.
 pub fn debakes(m: &MaterialIr) -> bool {
     let r = super::hit_record::read(m);
-    if !r.signals.vertex_colour || r.class == super::hit_record::Class::Emissive {
+    // A vertex colour its `ray` calls albedo is the surface's own colour: nothing to de-light.
+    if !r.signals.vertex_colour || r.class == super::hit_record::Class::Emissive || m.ray.vertex_albedo() {
         return false;
     }
     !(0..(m.channel_count as usize).min(2)).any(|ch| {
@@ -1546,11 +1547,16 @@ pub fn finish_reading(ir: &ModelIr, stem: &str, material: usize, thickness: f32,
         })
         .collect();
     r.shown = super::hit_record::shown_with_maps(m, &|n| means.get(usize::from(n)).copied().flatten());
-    super::hit_record::finish(stem, &m.name, thickness, r);
+    let ray = &m.ray;
+    super::hit_record::finish_with(stem, &m.name, thickness, ray, r);
     // c83 (3.5): a far twin looks as its near model does.
     super::hit_record::follow_twin(stem, &m.name, r);
-    // A glTF material is read from its own numbers (pbr_reading): no painted sheen, face rule or metal kind by name.
+    // A glTF material is read from its own numbers (pbr_reading): no painted sheen, face rule or metal kind by name;
+    // a metal kind its `ray` names is applied as for the game's metals.
     if !ir.pbr.is_empty() {
+        if ray.metal_kind.is_some_and(|k| k != 255) {
+            super::hit_record::metal_finish(stem, &m.name, r);
+        }
         return;
     }
     // c77 (7.6): a character's face part (a skinned mesh's, by its name) is a plain surface and never a sheen body.
@@ -1701,12 +1707,12 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written, pipelines: &mut pipeli
     let meshes_at = b.at();
     let mut measures = vec![Measure::new(); ir.materials.len()];
     // The painted light of the model's vertex-coloured meshes (14.6): whether its paint holds shadows of its own.
-    let vertex_coloured: Vec<bool> = ir.materials.iter().map(|m| super::hit_record::read(m).signals.vertex_colour).collect();
+    let vertex_coloured: Vec<bool> = ir.materials.iter().map(|m| super::hit_record::read(m).signals.vertex_colour && !m.ray.vertex_albedo()).collect();
     let mut painted = PaintedLight::default();
     // Each mesh's paint light (22.19): painted materials only (vertex colour, not lit).
     let painted_unlit: Vec<bool> = ir.materials.iter().map(|m| {
         let s = super::hit_record::read(m).signals;
-        s.vertex_colour && !s.lit
+        s.vertex_colour && !s.lit && !m.ray.vertex_albedo()
     }).collect();
     let mut paint_lights: Vec<Option<(f32, [f32; 3])>> = Vec::with_capacity(ir.shapes.len());
     let mut mesh_slots = Vec::with_capacity(ir.shapes.len());
@@ -2121,10 +2127,14 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written, pipelines: &mut pipeli
             None => (super::hit_record::read(m), (m.pixel_stage_count as usize).min(m.stages.len())),
         };
         // A hand-written shader's `ray` rows (materials 3.4 layer 3) in place of what its factors say.
-        if let Some(sf) = &m.surface {
-            super::hit_record::apply_ray_rows(&mut r, &sf.ray);
+        if m.surface.is_some() {
+            super::hit_record::apply_ray_rows(&mut r, &m.ray);
         }
         finish_reading(ir, stem, i, measures[i].thickness(), &mut r);
+        // A vertex colour its `ray` calls albedo holds no painted light: no environment share of it.
+        if m.ray.vertex_albedo() {
+            r.signals.environment_share = 0.0;
+        }
         let s = &r.signals;
         let flags = u8::from(s.lit)
             | u8::from(s.two_sided) << 1
@@ -2132,10 +2142,14 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written, pipelines: &mut pipeli
             | u8::from(s.vertex_colour) << 3
             | u8::from(s.environment) << 4
             | u8::from(super::hit_record::drawn_shadow(stem, &m.name, r.class)) << 5
-            | u8::from(paint_holds_shadows && s.vertex_colour && !s.lit) << 6
+            | u8::from(paint_holds_shadows && s.vertex_colour && !s.lit && !m.ray.vertex_albedo()) << 6
             | u8::from(ir.pbr.is_empty() && matches!(super::hit_record::sheen_roles_kept(ir, stem).get(i),
                                 Some(super::hit_record::SheenRole::Sheen { body: Some(_) }))) << 7;
-        let glow = super::hit_record::glow_of(stem, &m.name, &r);
+        // A `ray` glow in place of the cook's.
+        let glow = match m.ray.glow.as_ref() {
+            Some(g) => super::hit_record::ray_glow(&r, g),
+            None => super::hit_record::glow_of(stem, &m.name, &r),
+        };
         stage_slots.push((write_hit(&mut b, &r, flags, stages, &m.swaps, glow), stages));
     }
     for (m, &(slot, stages)) in ir.materials.iter().zip(&stage_slots) {

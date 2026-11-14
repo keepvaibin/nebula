@@ -217,6 +217,9 @@ pub struct MaterialIr {
     /// A mod's hand-written surface shader (plan 3.4; contract materials 3.4; surface_shader.rs): its lit forms call its
     /// `surface` in place of the stages and light what it fills as `pbr` says. Only with `pbr`.
     pub surface: Option<SurfaceIr>,
+    /// What a ray takes of it beyond the cook's reading: a glTF material's `extras.nebula.ray` over its shader's
+    /// shader.json `ray` (RayRows::over). None given: the record is the cook's, byte for byte.
+    pub ray: RayRows,
 }
 
 /// A material's hand-written shader as the generator writes it in (MaterialIr surface).
@@ -239,8 +242,9 @@ pub struct SurfaceIr {
     pub ray: RayRows,
 }
 
-/// A surface shader's rows for a ray (shader.json `ray`): each one given replaces what the cook reads of the material's
-/// factors in its hit record (nebula_model.h NebulaModelHit). Colours display-encoded, 0 to 1; emission 0 or more.
+/// A material's rows for a ray (shader.json `ray`, a glTF material's `extras.nebula.ray`): each one given replaces what
+/// the cook reads of the material in its hit record (nebula_model.h NebulaModelHit); none given, the record is the
+/// cook's. Colours display-encoded, 0 to 1; emission 0 or more.
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct RayRows {
     /// hit_record::Class by name: dielectric, gloss, metal, glass, cutout, translucent, emissive or painted.
@@ -251,6 +255,73 @@ pub struct RayRows {
     pub emission: Option<[f32; 3]>,
     /// The share of light that goes through it (the record's transmission).
     pub through: Option<f32>,
+    /// The index of refraction, 1 to 3 (the record's ior; a metal with a kind keeps its kind's code there).
+    pub ior: Option<f32>,
+    /// Units light crosses inside it, 0 or more, in place of what its meshes measure.
+    pub thickness: Option<f32>,
+    /// A see-through body's coverage 0 to 1, the reflection's gain 0 to 16, how much of its tint stays 0 to 1.
+    pub body: Option<f32>,
+    pub shine: Option<f32>,
+    pub tint_keep: Option<f32>,
+    /// `traced`: true for "hidden" (a stand-in a ray never meets), false for "seen".
+    pub traced_hidden: Option<bool>,
+    /// The share of the sun its far side takes, 0 to 1 (the record's `through` byte, not transmission).
+    pub sun_through: Option<f32>,
+    /// A metal's kind: hit_record::METAL_KINDS' place + 1, or 255 for `art` (its colour as it is).
+    pub metal_kind: Option<u8>,
+    /// The light it gives (the record's glow).
+    pub glow: Option<RayGlow>,
+    /// What its vertex colour is (None: `auto`, the cook's rule, which reads it as painted light).
+    pub vertex_colour: Option<VertexColour>,
+}
+
+impl RayRows {
+    /// These rows over `under`: each row given here, else under's.
+    pub fn over(&self, under: &RayRows) -> RayRows {
+        RayRows {
+            class: self.class.clone().or_else(|| under.class.clone()),
+            base: self.base.or(under.base),
+            roughness: self.roughness.or(under.roughness),
+            metal: self.metal.or(under.metal),
+            emission: self.emission.or(under.emission),
+            through: self.through.or(under.through),
+            ior: self.ior.or(under.ior),
+            thickness: self.thickness.or(under.thickness),
+            body: self.body.or(under.body),
+            shine: self.shine.or(under.shine),
+            tint_keep: self.tint_keep.or(under.tint_keep),
+            traced_hidden: self.traced_hidden.or(under.traced_hidden),
+            sun_through: self.sun_through.or(under.sun_through),
+            metal_kind: self.metal_kind.or(under.metal_kind),
+            glow: self.glow.or(under.glow),
+            vertex_colour: self.vertex_colour.or(under.vertex_colour),
+        }
+    }
+
+    /// `vertex_colour` is `albedo`: the vertex colour is the surface's own colour, not painted light.
+    pub fn vertex_albedo(&self) -> bool {
+        self.vertex_colour == Some(VertexColour::Albedo)
+    }
+}
+
+/// A material's vertex colour for a ray (`ray.vertex_colour`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VertexColour {
+    /// The cook's rule (`auto`): painted light, de-lit by the cooker's gain where the material reads it.
+    Auto,
+    /// The surface's own colour (glTF's COLOR_0 by its specification): no environment share, no gain stream, no
+    /// painted-shadow bit.
+    Albedo,
+    /// Painted light, as the game's own models hold it: the cook's rule, said.
+    Light,
+}
+
+/// A material's light for a ray: its colour (None: the material's own, as the cook finds it) and its strength, above 0
+/// candela, below 0 a luminance in candela a square metre, 0 no light.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RayGlow {
+    pub colour: Option<[f32; 3]>,
+    pub strength: f32,
 }
 
 /// What a glTF material's lit template reads beyond its stages (MaterialIr pbr). Its maps are slots of their own (map n

@@ -226,45 +226,107 @@ pub fn read(name: &str, file: &str, json: &[u8], hlsl: &[u8]) -> Result<Source> 
     Ok(Source { name: name.to_string(), file: file.to_string(), code, params, textures, reads, ray })
 }
 
-/// shader.json `ray`, or the key (under `/ray`) that is outside it: a class of RAY_CLASSES, colours of three numbers 0
-/// to 1 (emission 0 or more), roughness, metal and through 0 to 1.
+/// The keys a shader.json `ray` takes: its material's factors (class to through), then the placeholders.
+pub const RAY_KEYS: [&str; 16] = [
+    "class", "base", "roughness", "metal", "emission", "through", "ior", "thickness", "body", "shine", "tint_keep", "traced",
+    "sun_through", "metal_kind", "glow", "vertex_colour",
+];
+
+/// The keys a glTF material's `extras.nebula.ray` takes: the placeholders alone (its factors are glTF's own).
+pub const MATERIAL_RAY_KEYS: [&str; 10] =
+    ["ior", "thickness", "body", "shine", "tint_keep", "traced", "sun_through", "metal_kind", "glow", "vertex_colour"];
+
+/// A glTF material's `extras.nebula.ray` (absent: no rows), or the key under it that is not one it takes or not in
+/// its range (as ray_rows).
+pub fn material_ray(v: &Value) -> std::result::Result<super::model_ir::RayRows, String> {
+    if let Some(key) = v.as_object().and_then(|o| o.keys().find(|k| !MATERIAL_RAY_KEYS.contains(&k.as_str()))) {
+        return Err(format!("/{key}"));
+    }
+    ray_rows(v)
+}
+
+/// shader.json `ray`, or the key (under `/ray`) that is outside it: a class of RAY_CLASSES; colours of three numbers 0
+/// to 1 (emission 0 or more); roughness, metal, through, body, tint_keep and sun_through 0 to 1; ior 1 to 3; shine 0 to
+/// 16; thickness 0 or more; traced `seen` or `hidden`; metal_kind a name of hit_record::METAL_KINDS or `art`; glow
+/// {color: three numbers 0 to 1 or `own`, and candela or luminance 0 or more}; vertex_colour `auto`, `albedo` or
+/// `light`. Nothing given: no row, the record is the cook's.
 fn ray_rows(v: &Value) -> std::result::Result<super::model_ir::RayRows, String> {
+    use super::model_ir::RayGlow;
     let mut rows = super::model_ir::RayRows::default();
     if v.is_null() {
         return Ok(rows);
     }
     let object = v.as_object().ok_or_else(String::new)?;
-    if let Some(key) = object.keys().find(|k| !matches!(k.as_str(), "class" | "base" | "roughness" | "metal" | "emission" | "through")) {
+    if let Some(key) = object.keys().find(|k| !RAY_KEYS.contains(&k.as_str())) {
         return Err(format!("/{key}"));
     }
-    let share = |key: &str| -> std::result::Result<Option<f32>, String> {
-        match &v[key] {
+    let number_in = |v: &Value, at: &str, low: f64, high: f64| -> std::result::Result<Option<f32>, String> {
+        match v {
             Value::Null => Ok(None),
-            x => x.as_f64().filter(|x| (0.0..=1.0).contains(x)).map(|x| Some(x as f32)).ok_or_else(|| format!("/{key}")),
+            x => x.as_f64().filter(|x| x.is_finite() && (low..=high).contains(x)).map(|x| Some(x as f32)).ok_or_else(|| at.to_string()),
         }
     };
-    let colour = |key: &str, top: f64| -> std::result::Result<Option<[f32; 3]>, String> {
-        match &v[key] {
+    let number = |key: &str, low: f64, high: f64| number_in(&v[key], &format!("/{key}"), low, high);
+    let colour_in = |x: &Value, at: &str, top: f64| -> std::result::Result<Option<[f32; 3]>, String> {
+        match x {
             Value::Null => Ok(None),
             x => {
-                let a = x.as_array().filter(|a| a.len() == 3).ok_or_else(|| format!("/{key}"))?;
+                let a = x.as_array().filter(|a| a.len() == 3).ok_or_else(|| at.to_string())?;
                 let mut out = [0.0f32; 3];
                 for (k, c) in a.iter().enumerate() {
-                    out[k] = c.as_f64().filter(|c| c.is_finite() && *c >= 0.0 && *c <= top).ok_or_else(|| format!("/{key}/{k}"))? as f32;
+                    out[k] = c.as_f64().filter(|c| c.is_finite() && *c >= 0.0 && *c <= top).ok_or_else(|| format!("{at}/{k}"))? as f32;
                 }
                 Ok(Some(out))
             }
         }
     };
-    rows.class = match &v["class"] {
-        Value::Null => None,
-        c => Some(c.as_str().filter(|c| RAY_CLASSES.contains(c)).ok_or_else(|| "/class".to_string())?.to_string()),
+    let word = |key: &str, words: &[&str]| -> std::result::Result<Option<usize>, String> {
+        match &v[key] {
+            Value::Null => Ok(None),
+            x => x.as_str().and_then(|w| words.iter().position(|o| *o == w)).map(Some).ok_or_else(|| format!("/{key}")),
+        }
     };
-    rows.base = colour("base", 1.0)?;
-    rows.emission = colour("emission", f64::from(f32::MAX))?;
-    rows.roughness = share("roughness")?;
-    rows.metal = share("metal")?;
-    rows.through = share("through")?;
+    let most = f64::from(f32::MAX);
+    rows.class = word("class", &RAY_CLASSES)?.map(|k| RAY_CLASSES[k].to_string());
+    rows.base = colour_in(&v["base"], "/base", 1.0)?;
+    rows.emission = colour_in(&v["emission"], "/emission", most)?;
+    rows.roughness = number("roughness", 0.0, 1.0)?;
+    rows.metal = number("metal", 0.0, 1.0)?;
+    rows.through = number("through", 0.0, 1.0)?;
+    rows.ior = number("ior", 1.0, 3.0)?;
+    rows.thickness = number("thickness", 0.0, most)?;
+    rows.body = number("body", 0.0, 1.0)?;
+    rows.shine = number("shine", 0.0, 16.0)?;
+    rows.tint_keep = number("tint_keep", 0.0, 1.0)?;
+    rows.traced_hidden = word("traced", &["seen", "hidden"])?.map(|k| k == 1);
+    rows.sun_through = number("sun_through", 0.0, 1.0)?;
+    let kinds: Vec<&str> = super::hit_record::METAL_KINDS.iter().map(|(name, _)| *name).chain(["art"]).collect();
+    rows.metal_kind = word("metal_kind", &kinds)?.map(|k| if k < super::hit_record::METAL_KINDS.len() { k as u8 + 1 } else { 255 });
+    rows.vertex_colour = word("vertex_colour", &["auto", "albedo", "light"])?.map(|k| match k {
+        1 => super::model_ir::VertexColour::Albedo,
+        2 => super::model_ir::VertexColour::Light,
+        _ => super::model_ir::VertexColour::Auto,
+    });
+    rows.glow = match &v["glow"] {
+        Value::Null => None,
+        g => {
+            let o = g.as_object().ok_or_else(|| "/glow".to_string())?;
+            if let Some(key) = o.keys().find(|k| !matches!(k.as_str(), "color" | "candela" | "luminance")) {
+                return Err(format!("/glow/{key}"));
+            }
+            let colour = match &g["color"] {
+                Value::String(s) if s == "own" => None,
+                Value::Null => None,
+                c => colour_in(c, "/glow/color", 1.0)?,
+            };
+            let strength = match (number_in(&g["candela"], "/glow/candela", 0.0, most)?, number_in(&g["luminance"], "/glow/luminance", 0.0, most)?) {
+                (Some(candela), None) => candela,
+                (None, Some(luminance)) => 0.0 - luminance,
+                _ => return Err("/glow".to_string()),
+            };
+            Some(RayGlow { colour, strength })
+        }
+    };
     Ok(rows)
 }
 

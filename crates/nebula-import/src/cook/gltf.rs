@@ -743,6 +743,8 @@ struct SourceMaterial {
     glow: Option<Glow>,
     /// Its hand-written shader (plan 3.4; surface_shader.rs): the source, its values here, each texture's image.
     shader: Option<(super::surface_shader::Source, super::surface_shader::Use, Vec<usize>)>,
+    /// Its `extras.nebula.ray` (surface_shader::material_ray): what a ray takes of it beyond the cook's reading.
+    ray: super::model_ir::RayRows,
 }
 
 /// A glTF material's glow on the raster (SourceMaterial glow): constant colour 1, and the emissive map (image, set).
@@ -1467,6 +1469,8 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
             }
             other => return Err(refuse("Cook.Shader.Name", &[("material", material_name.clone()), ("name", other.to_string())])),
         };
+        let ray = super::surface_shader::material_ray(&nebula["ray"])
+            .map_err(|key| refuse("Cook.Material.Ray", &[("material", material_name.clone()), ("key", format!("/materials/{i}/extras/nebula/ray{key}"))]))?;
         let image = match pbr["baseColorTexture"]["index"].as_u64() {
             Some(t) => Some(image_of_texture(t)?),
             None => None,
@@ -1519,6 +1523,7 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
             lit,
             pbr_maps,
             shader,
+            ray,
         });
     }
     let default_material = materials.len();
@@ -1534,6 +1539,7 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
         pbr_maps: [None; 5],
         glow: None,
         shader: None,
+        ray: Default::default(),
     });
     // A lit record for each material when the file has any material (materials.md); a mesh with none has glTF's default.
     let has_materials = root["materials"].as_array().is_some_and(|m| !m.is_empty());
@@ -1994,6 +2000,9 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
                     ray: shader.ray.clone(),
                 });
             }
+            // What a ray takes of it: its own `ray` over its shader's.
+            let no_rows = super::model_ir::RayRows::default();
+            made.ray = source.ray.over(source.shader.as_ref().map_or(&no_rows, |(shader, _, _)| &shader.ray));
             // Its base texture's transform: texture matrix 0 on its first coordinates.
             if let Some(t) = source.transform {
                 let [sx, sy, rotation, tx, ty] = texture_transform(&t, &source.name)?;
@@ -2417,8 +2426,12 @@ pub fn to_files_for(bytes: &[u8], folder: Option<&Path>, stem: &str, game: Optio
     Ok((model, files, facts))
 }
 
+/// The most materials with a surface shader a model has: the tracer numbers its `.rayhit` rows in a byte.
+pub const MOST_SHADER_MATERIALS: usize = 255;
+
 /// `<model>.rayhit` (contract materials 3.4 layer 3; the tracer reads it): a row for each material with a surface
-/// shader: material (its name) and text (its ray-hit form, programs::ray_hit_form). None without one.
+/// shader: material (its name; a name met twice keeps its first row) and text (its ray-hit form,
+/// programs::ray_hit_form). None without one; more than MOST_SHADER_MATERIALS rows refuse the model.
 pub fn ray_hit_table(ir: &ModelIr) -> Result<Option<Vec<u8>>> {
     let mut rows: Vec<Value> = Vec::new();
     let mut seen = BTreeSet::new();
@@ -2430,6 +2443,9 @@ pub fn ray_hit_table(ir: &ModelIr) -> Result<Option<Vec<u8>>> {
     }
     if rows.is_empty() {
         return Ok(None);
+    }
+    if rows.len() > MOST_SHADER_MATERIALS {
+        return Err(refuse("Cook.Shader.Materials", &[("count", rows.len().to_string()), ("max", MOST_SHADER_MATERIALS.to_string())]));
     }
     let json = serde_json::json!({ "columns": { "material": "string", "text": "string" }, "rows": rows });
     Ok(Some(super::table::TableIr::from_json(json.to_string().as_bytes())?.to_ntbl()))
@@ -2599,6 +2615,7 @@ fn standing_material(name: String, images: Vec<(usize, u8)>, transform: Option<[
         pbr_maps: [None; 5],
         glow: None,
         shader: None,
+        ray: Default::default(),
     }
 }
 
@@ -3618,6 +3635,62 @@ mod tests {
         let at = word(28 * 4) as usize;
         assert_eq!((model[at], model[at + 1], model[at + 2]), (2, 0, 1));
         assert_eq!((float(at + 4), float(at + 8), [float(at + 20), float(at + 24), float(at + 28)]), (0.05, 1.0, [0.95; 3]));
+    }
+
+    /// A glTF material's `extras.nebula.ray` (the ray placeholders): checked, then cooked into its hit record
+    /// (NebulaModelHit at hits_at, header word 28); none given, `{}` or `auto`, the model is the same byte for byte.
+    #[test]
+    fn a_materials_ray_values_are_checked_and_set_its_hit_record() {
+        // The test takes what the cook notes (refuse::reading).
+        let _reading = crate::cook::refuse::reading();
+        let mut document = document_of(&triangle(1));
+        let a = add_floats(&mut document, &[(3, "VEC4", vec![1.0, 0.5, 0.25, 1.0, 0.5, 1.0, 0.25, 1.0, 0.25, 0.5, 1.0, 1.0])]);
+        document["meshes"][0]["primitives"][0]["attributes"]["COLOR_0"] = a[0].into();
+        let with = |ray: Value| {
+            let mut d = document.clone();
+            d["materials"][0]["extras"] = serde_json::json!({ "nebula": { "ray": ray } });
+            d
+        };
+        let model_of = |d: &Value| to_files(&serde_json::to_vec(d).unwrap(), None, "raymat").unwrap().0;
+        let plain = model_of(&document);
+        for same in [serde_json::json!({}), Value::Null, serde_json::json!({"vertex_colour": "auto"})] {
+            assert!(model_of(&with(same.clone())) == plain, "{same}");
+        }
+        let (ir, _, _) = cook(&with(Value::Null), None).unwrap();
+        assert_eq!(ir.materials[0].ray, crate::cook::model_ir::RayRows::default());
+        // The numbers in the record, the rest as without them.
+        let model = model_of(&with(serde_json::json!({"ior": 1.33, "thickness": 40.0, "body": 0.5, "shine": 2.0, "tint_keep": 0.25,
+            "glow": {"color": [1.0, 0.5, 0.0], "candela": 100.0}})));
+        let word = |m: &[u8], at: usize| u32::from_le_bytes(m[at..at + 4].try_into().unwrap());
+        let float = |m: &[u8], at: usize| f32::from_le_bytes(m[at..at + 4].try_into().unwrap());
+        let (at, plain_at) = (word(&model, 28 * 4) as usize, word(&plain, 28 * 4) as usize);
+        assert_eq!((float(&model, at + 12), float(&model, at + 68)), (1.33, 40.0));
+        assert_eq!([104, 108, 112].map(|k| float(&model, at + k)), [0.5, 2.0, 0.25]);
+        assert_eq!([72, 76, 80, 84].map(|k| float(&model, at + k)), [1.0, 0.5, 0.0, 100.0]);
+        assert_eq!(model[at..at + 12], plain[plain_at..plain_at + 12]);
+        // A vertex colour that is albedo (glTF's own meaning): no environment share, no painted-shadow bit, no gain.
+        let albedo = with(serde_json::json!({"vertex_colour": "albedo"}));
+        let (ir, _, _) = cook(&albedo, None).unwrap();
+        let (plain_ir, _, _) = cook(&document, None).unwrap();
+        assert!(ir.materials[0].ray.vertex_albedo() && !super::super::model_write::debakes(&ir.materials[0]));
+        assert_eq!(super::super::model_write::debakes(&plain_ir.materials[0]), super::super::hit_record::read(&plain_ir.materials[0]).signals.vertex_colour);
+        let model = model_of(&albedo);
+        let at = word(&model, 28 * 4) as usize;
+        assert_eq!((model[at + 2] & 1 << 3, model[at + 2] & 1 << 6, float(&model, at + 44)), (1 << 3, 0, 0.0));
+        // `light` says the cook's rule.
+        assert!(model_of(&with(serde_json::json!({"vertex_colour": "light"}))) == plain);
+        // A key the material does not take (its factors are glTF's own), one out of range, or no object: refused.
+        for (ray, key) in [
+            (serde_json::json!({"class": "metal"}), "/materials/0/extras/nebula/ray/class"),
+            (serde_json::json!({"through": 0.5}), "/materials/0/extras/nebula/ray/through"),
+            (serde_json::json!({"ior": 0.5}), "/materials/0/extras/nebula/ray/ior"),
+            (serde_json::json!({"vertex_colour": "paint"}), "/materials/0/extras/nebula/ray/vertex_colour"),
+            (serde_json::json!({"glow": {"color": "own"}}), "/materials/0/extras/nebula/ray/glow"),
+            (serde_json::json!(3), "/materials/0/extras/nebula/ray"),
+        ] {
+            let error = cook(&with(ray.clone()), None).err().unwrap();
+            assert_eq!(refused(&error), ("Cook.Material.Ray", vec![own(("material", "material")), own(("key", key))]), "{ray}");
+        }
     }
 
     #[test]
