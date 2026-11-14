@@ -821,6 +821,8 @@ private:
     }
     void settle_depth_clear();
     void clear_depth_in_pass(float reversed_depth, const VkRect2D& rect);
+    void clear_depth_alone(float reversed_depth, unsigned mode);
+    std::array<std::array<VkRenderPass, 4>, 2> depth_alone_passes_{};  // [stencil cleared][log2 samples]
     // The upscaler takes the generated frames (and the frame at t = 1) instead of the game frames.
     bool temporal_interp_ = false;
     // suspend_temporal_interpolation, and the settings it was decided at.

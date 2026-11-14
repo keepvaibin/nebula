@@ -597,6 +597,44 @@ bool RendererVk::create_layouts() {
                                                          : &draw_layout_.scene_pass_clear),
                   "scene target clearing render pass");
     }
+    // The scene depth cleared alone (settle_depth_clear with no pass open): the depth target only, so the colour is neither
+    // loaded nor stored. [0] keeps the stencil, [1] clears it, as depth_clear_passes.
+    for (unsigned samples_log2 = 0u; (1u << samples_log2) <= msaa_max_samples_; ++samples_log2) {
+        VkAttachmentDescription attachment{};
+        attachment.format = depth_format_;
+        attachment.samples = static_cast<VkSampleCountFlagBits>(1u << samples_log2);
+        attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
+        attachment.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        attachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        const VkAttachmentReference depth{0, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
+        VkSubpassDescription subpass{};
+        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpass.pDepthStencilAttachment = &depth;
+        VkSubpassDependency dependencies[2]{};
+        dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+        dependencies[0].dstSubpass = 0;
+        dependencies[0].srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        dependencies[0].dstStageMask = dependencies[0].srcStageMask;
+        dependencies[0].srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        dependencies[0].dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        dependencies[1] = dependencies[0];
+        dependencies[1].srcSubpass = 0;
+        dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+        VkRenderPassCreateInfo info{VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
+        info.attachmentCount = 1;
+        info.pAttachments = &attachment;
+        info.subpassCount = 1;
+        info.pSubpasses = &subpass;
+        info.dependencyCount = 2;
+        info.pDependencies = dependencies;
+        for (const unsigned stencil : {0u, 1u}) {
+            attachment.stencilLoadOp = stencil != 0u ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
+            vk::check(vkCreateRenderPass(device, &info, nullptr, &depth_alone_passes_[stencil][samples_log2]),
+                      "depth clearing render pass (depth alone)");
+        }
+    }
     // The effects layer needs its format drawn and blended, and four colour attachments with independent blending.
     {
         VkFormatProperties layer_format{};
@@ -1654,7 +1692,7 @@ void RendererVk::shutdown() {
         wide_base_sampled_ = false;
         for (auto* group : {&draw_layout_.discard_color_passes, &draw_layout_.depth_clear_passes[0],
                             &draw_layout_.depth_clear_passes[1], &draw_layout_.discard_depth_clear_passes[0],
-                            &draw_layout_.discard_depth_clear_passes[1]}) {
+                            &draw_layout_.discard_depth_clear_passes[1], &depth_alone_passes_}) {
             for (auto& passes : *group) {
                 for (VkRenderPass& pass : passes) {
                     if (pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, pass, nullptr);
