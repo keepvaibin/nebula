@@ -23,6 +23,7 @@ virtual one in the container).
 """
 import argparse
 import datetime
+import decimal
 import hashlib
 import json
 import math
@@ -913,23 +914,89 @@ def permission_digest(declared):
     return "%016x" % h
 
 
+def ini_escaped(text):
+    """A value as mods.ini keeps it (runtime/src/mods.cpp escape_key): % = [ ] and line ends as %XX."""
+    return "".join("%%%02X" % ord(c) if c in "%=[]\r\n" else c for c in text)
+
+
+def plain_number(value):
+    """A number as the Mods page stores it: the shortest decimal that reads back, in plain digits (20000, 80.5)."""
+    if isinstance(value, int):
+        return str(value)
+    if value != value or value in (float("inf"), float("-inf")):
+        raise ValueError("not finite")
+    if value == 0:
+        return "0"
+    text = repr(value)
+    if "e" in text and 1e-4 <= abs(value) < 1e15:
+        text = format(decimal.Decimal(text), "f")
+    return text[:-2] if text.endswith(".0") else text
+
+
 def option_lines(mod_folder, manifest, options):
-    """The test's stored options as the Mods page keeps them in mods.ini: a text option as text.<key>=<value>, every
-    other kind as choice.<key>=<value> (a choice's value id, a number as written, a toggle on or off). The value is
-    stored as given, so a test can store one the option does not take."""
+    """A test's stored options ("options" on a mod entry: {"<key>": value}) as the Mods page keeps them in mods.ini:
+    a toggle true or false as choice.<key>=on or off, a choice's value id (a string) as choice.<key>=<id>, a number as
+    choice.<key>=<plain digits>, a text (a string) as text.<key>=<escaped text>. A value of the option's kind is stored
+    as given, so a test can store one the option does not take (a number outside its range, an id it does not list); an
+    option the mod does not have, a key option (bound in Controls), or a value of another kind is a harness error."""
     kinds = {o.get("key"): o.get("kind") for o in manifest.get("options", []) if isinstance(o, dict)}
     lines = ""
     for key, value in options.items():
         if key not in kinds:
             raise HarnessError("%s: options names %s, which the mod does not have" % (mod_folder, key))
-        if isinstance(value, bool):
-            value = "on" if value else "off"
-        elif isinstance(value, (int, float)):
-            value = repr(value) if isinstance(value, float) else str(value)
-        if not isinstance(value, str) or any(c in value for c in "\r\n=") or not re.fullmatch(r"[a-z0-9_]+", key):
-            raise HarnessError("%s: the option %s's value must be a number, true, false or one line without =" % (mod_folder, key))
-        lines += "%s.%s=%s\n" % ("text" if kinds[key] == "text" else "choice", key, value)
+        kind = kinds[key]
+        wrong = HarnessError("%s: options.%s must be %s for a %s option" % (
+            mod_folder, key, {"toggle": "true or false", "number": "a number", "choice": "a value id (a string)",
+                              "text": "a string"}.get(kind, "nothing (it is bound in Controls)"), kind))
+        if kind == "toggle":
+            if not isinstance(value, bool):
+                raise wrong
+            lines += "choice.%s=%s\n" % (ini_escaped(key), "on" if value else "off")
+        elif kind == "number":
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise wrong
+            try:
+                lines += "choice.%s=%s\n" % (ini_escaped(key), plain_number(value))
+            except ValueError:
+                raise wrong
+        elif kind == "choice":
+            if not isinstance(value, str) or not value or any(c in value for c in "%=[]\r\n"):
+                raise wrong
+            lines += "choice.%s=%s\n" % (ini_escaped(key), value)
+        elif kind == "text":
+            if not isinstance(value, str):
+                raise wrong
+            lines += "text.%s=%s\n" % (ini_escaped(key), ini_escaped(value))
+        else:
+            raise wrong
     return lines
+
+
+def keep_options(ini, mod_id, lines):
+    """A kept mod's options changed in place (a test continuing from another): in its [id] section of mods.ini, each
+    option's old lines (option.<key>, choice.<key>, text.<key>) give way to the new ones at the section's end, as the
+    Mods screen's writer keeps one section a mod with its option lines last."""
+    wanted = [line for line in lines.splitlines() if line]
+    keys = {line.split("=", 1)[0].split(".", 1)[1] for line in wanted}
+    old = ini.read_text(encoding="utf-8").splitlines() if ini.exists() else []
+    head = "[%s]" % ini_escaped(mod_id)
+    if head not in old:
+        raise HarnessError("the kept mod %s has no section in mods.ini" % mod_id)
+    out = []
+    inside = False
+    for line in old:
+        if line.startswith("[") and line.endswith("]"):
+            if inside:
+                out += wanted
+            inside = line == head
+        elif inside and "=" in line and "." in line.split("=", 1)[0]:
+            kind, key = line.split("=", 1)[0].split(".", 1)
+            if kind in ("option", "choice", "text") and key in keys:
+                continue
+        out.append(line)
+    if inside:
+        out += wanted
+    ini.write_text("\n".join(out) + "\n", encoding="utf-8")
 
 
 def install(settings, mod_folder, code_allowed, order, kept=False, permissions="allow", broken_ok=False, folder=None, options=None):
@@ -977,6 +1044,8 @@ def install(settings, mod_folder, code_allowed, order, kept=False, permissions="
     target = settings / "mods" / place
     if target.exists():
         if kept:
+            if options:
+                keep_options(settings / "mods.ini", place, option_lines(mod_folder, manifest, options))
             return mod_id
         raise HarnessError("two mods have the id %s (a second copy takes \"folder\")" % mod_id)
     shutil.copytree(mod_folder, target)
