@@ -301,7 +301,7 @@ def read_test(folder, types=None):
                     raise HarnessError("%s.folder: lowercase letters, digits, - and ., up to 64" % path)
             if "code" in entry:
                 mod["code"] = text(entry, "code", path)
-                # "ask" (J, consent tests): nothing answered, so the game asks (the consent question shows).
+                # "ask" (the consent tests): nothing answered, so the game asks (the consent question shows).
                 if mod["code"] not in ("allow", "deny", "ask"):
                     raise HarnessError("%s.code must be allow, deny or ask" % path)
             if "loads" in entry:
@@ -767,14 +767,14 @@ def read_expect(t, bare, steps):
             if bare:
                 raise HarnessError("%s: a bare test checks only the log, pictures and sound" % path)
             op, value, within = read_check(c, path, {"within", "count"})
-            # `matching` (J): only the writes whose value has it (as `has` reads) are checked, so `count`, `absent`
+            # `matching`: only the writes whose value has it (as `has` reads) are checked, so `count`, `absent`
             # and the rest speak of one mod's or one word's writes of a key many write ("modlog", "fx.*").
             matching = None
             if "matching" in c:
                 matching = c["matching"]
                 if not isinstance(matching, dict) or not matching:
                     raise HarnessError("%s.matching takes an object with at least one key" % path)
-            # `field` (J): the check reads one member of each write's object value, a dotted path ("particles",
+            # `field`: the check reads one member of each write's object value, a dotted path ("particles",
             # "at.x"); a write without it reads as no value, which no comparison takes.
             field = None
             if "field" in c:

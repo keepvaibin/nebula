@@ -2,8 +2,9 @@
 //! on, from the bottom of the mod list up, make the table the game reads. Each mod's patch applies in this order: `rows` (a whole `#`
 //! table), `remove`, `set`, `add`, `select`. Patches reach here checked by the validator; what only the mod list
 //! decides (two mods changing one cell, a row another mod removed) is a [`Fact`] for the Mods screen, never silent.
-//! The last given wins: the mod higher in the list, as for whole files (F, INBOX-G 13). A table of a kind (cook::table_columns) that has no rows takes its kind's columns
-//! first, and a row a mod adds starts from the value most of the game's rows have in each column (table-keys 10).
+//! The last given wins: the mod higher in the list, as for whole files. A table of a kind (cook::table_columns) that
+//! has no rows takes its kind's columns first, and a row a mod adds starts from the value most of the game's rows have
+//! in each column (table-keys 10).
 
 use super::table::{Cell, Column, Kind, TableIr};
 use super::table_columns::{columns_of, widen_empty, KindColumn};
@@ -37,7 +38,7 @@ pub enum Fact {
 }
 
 /// Why a patch cannot apply, as the validator names the same fault (its L400, L402, L403 and L406 with the same
-/// phrases and parameters), so the Mods screen says it in the player's language (F, INBOX-G 18). The applier's only
+/// phrases and parameters), so the Mods screen says it in the player's language. The applier's only
 /// error kind for a patch; any other error is about the game's table and goes to the caller.
 #[derive(Debug)]
 pub struct Refusal(pub Finding);

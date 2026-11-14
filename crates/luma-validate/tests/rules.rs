@@ -769,7 +769,7 @@ fn a_cycle_of_needs_through_the_mod_is_refused_and_named() {
     assert_eq!(kept.installed("test.luma", true).unwrap().needs, vec!["b.mod".to_string()]);
 }
 
-/// The mod higher in the list wins a file and a cell (F, INBOX-G 13): installed mods come top first, and `position`
+/// The mod higher in the list wins a file and a cell: installed mods come top first, and `position`
 /// is how many are above the mod checked.
 #[test]
 fn the_mod_higher_in_the_list_wins() {

@@ -66,7 +66,7 @@ pub(crate) fn check(ctx: &mut Ctx) {
         }
     }
     // L305 and L404 (Notes): the same file replaced, or the same cell changed, by another mod that is on. The mod higher
-    // in the list wins, for everything (F, INBOX-G 13): installed mods are given in list order, the top first, and
+    // in the list wins, for everything: installed mods are given in list order, the top first, and
     // `position` says how many are above this one.
     let position = ctx.input.position.unwrap_or(installed.len());
     let touches = ctx.facts.touches.clone();

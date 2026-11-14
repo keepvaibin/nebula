@@ -866,7 +866,7 @@ void read_options(const Value& root, Manifest& out) {
             option.choices.push_back({"on", {}});
             option.fallback = start != nullptr ? when_value(*start) : std::string("off");
         } else if (kind == "text") {
-            // The validator refuses a text default over max_length (G, L210).
+            // The validator refuses a text default over max_length (L210).
             option.fallback = text_field(entry, "default");
             const Value* most = entry.get("max_length");
             const double length = most != nullptr && most->number() != nullptr ? *most->number() : 256.0;

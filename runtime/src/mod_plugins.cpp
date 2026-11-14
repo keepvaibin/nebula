@@ -318,7 +318,7 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
     g_log = log;
     g_find_symbol = find_symbol;
     // LumaCore.service: the module asks the host, which asks its extensions (the harness's own service while a test runs).
-    // An extension's service (the harness's) needs no permission; phase 2's services name theirs here
+    // An extension's service (the harness's) needs no permission; the other services name theirs here
     // (compiled-form.md).
     using ServiceFinder = const void* (*)(const char*, std::uint32_t, std::uint32_t, const char**);
     if (const auto give = reinterpret_cast<void (*)(ServiceFinder)>(find_symbol != nullptr ? find_symbol("luma_set_service_finder") : nullptr)) {

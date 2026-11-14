@@ -184,9 +184,9 @@ namespace luma {
 
                 // ---- Draw groups (effects 4) ----
 
-                // A mod's effects list as the cook writes it (G, effects "G on draft 4"): Luma/<id>/effects.txt, one
-                // line an effect sorted by name, `<name>\t<group>\t<emitters>\n`. Read once a session per mod, ::malloc,
-                // kept to the end (a few bytes an effect).
+                // A mod's effects list as the cook writes it (docs/modding/content/effects.md): Luma/<id>/effects.txt,
+                // one line an effect sorted by name, `<name>\t<group>\t<emitters>\n`. Read once a session per mod,
+                // ::malloc, kept to the end (a few bytes an effect).
                 struct GroupRow {
                     u32 hash;       // MR::getHashCode of the name
                     s32 group;      // 0 to 5

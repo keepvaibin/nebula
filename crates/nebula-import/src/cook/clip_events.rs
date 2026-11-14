@@ -7,9 +7,9 @@
 //!
 //! The cook writes `<archive>/<clip>.events`, a table (NTBL) of the columns `frame` (int) and `event` (text), its rows
 //! sorted by frame (rows of one frame in the file's order). The anim service gives each row to a play of the clip as a
-//! mark after the play's own (J, anim 1.1). Refused by name: a file outside a game archive, no events, more than 64,
-//! a frame that is not a whole number from 0 to 65,534 or past the game clip's last frame, an event name that is not
-//! 1 to 63 of `A-Z a-z 0-9 _ .`, the same event twice at one frame, any other key.
+//! mark after the play's own (docs/modding/content/animation.md). Refused by name: a file outside a game archive, no
+//! events, more than 64, a frame that is not a whole number from 0 to 65,534 or past the game clip's last frame, an
+//! event name that is not 1 to 63 of `A-Z a-z 0-9 _ .`, the same event twice at one frame, any other key.
 
 use super::particle_json::{as_int, at_index, at_key, list, missing, object, only, text};
 use super::refuse::refuse;
