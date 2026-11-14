@@ -459,10 +459,13 @@ void resume_at(ucontext_t* context, LumaGuardFrame* frame) noexcept {
 }
 
 CrashLine g_crash_line = nullptr;
+std::atomic<std::uint32_t> g_reported{0};
 
-// The crash report of a fault no handler before the guard's takes: what it was and where, and the guard's sentence
-// when it saw the fault in a mod's code and did not resume it. Only what a signal handler may use.
+// The crash report of a fault that ends the game: what it was and where, and the guard's sentence when it saw the
+// fault in a mod's code and did not resume it. Written once, before a handler installed earlier (the host's own crash
+// log, which writes the stack) or the signal's default action. Only what a signal handler may use.
 void report_fault(int signal, siginfo_t* info, void* raw) noexcept {
+    if (g_reported.exchange(1u, std::memory_order_acq_rel) != 0u) return;
     const Registers regs = registers_of(static_cast<const ucontext_t*>(raw));
     char line[160];
     std::size_t at = 0;
@@ -480,6 +483,11 @@ void report_fault(int signal, siginfo_t* info, void* raw) noexcept {
     put(line, sizeof(line), &at, "\n");
     (void)!write(2, "crash: ", 7);
     (void)!write(2, line, at);
+    if (noted) {
+        (void)!write(2, "crash: guard: ", 14);
+        (void)!write(2, g_note, std::strlen(g_note));
+        (void)!write(2, "\n", 1);
+    }
 }
 
 void pass_on(int signal, siginfo_t* info, void* context) noexcept {
@@ -532,13 +540,9 @@ void on_signal(int signal, siginfo_t* info, void* raw) {
     const char* why = why_not_here(thread, frame, fault, regs.pc, regs.sp);
     if (why == nullptr) why = why_not_words(frame, regs.sp, regs.lr);
     if (why != nullptr) {
+        // Not resumed: the game ends, so its crash lines go out now, whichever handler ends it.
         note(frame, fault, regs.pc, why);
-        char line[480];
-        std::size_t at = 0;
-        put(line, sizeof(line), &at, "guard: ");
-        put(line, sizeof(line), &at, g_note);
-        put(line, sizeof(line), &at, "\n");
-        (void)!write(2, line, at);
+        report_fault(signal, info, raw);
         pass_on(signal, info, raw);
         return;
     }
