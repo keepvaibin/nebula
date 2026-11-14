@@ -74,6 +74,9 @@ void MarioActor::endExtra() {
         return;
     }
     kill();
+    // Its shadow and silhouette drawers stay in the scene's lists after kill: hidden, they draw nothing. Without it
+    // they draw a pose made before the kill, or none when the player is removed in the frame it was made (a crash).
+    mHidden = true;
 }
 
 void MarioActor::forceKill(u32 type) {
