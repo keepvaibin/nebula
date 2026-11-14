@@ -1,4 +1,5 @@
 """Every program in every output variant, into one file. compile_programs.py dxil|spirv OUT.bin [SPIRV_TOOL]
+compile_programs.py record: records the program set at the store version (store_programs.txt, see check_store_programs).
 
 The generated programs are runtime/src/render/programs/ (build_programs.py); table.tsv maps every text's hash to the program
 that compiled the same. The written shaders are `WRITTEN` in NebulaShaderId order, from 1. Compiled stages are kept by
@@ -14,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MATERIALS = os.path.join(ROOT, "runtime", "src", "render", "materials")
 PROGRAMS = os.path.join(ROOT, "runtime", "src", "render", "programs")
+STORE = os.path.join(ROOT, "runtime", "include", "galaxy")
 DXC = os.environ.get("GALAXY_DXC", "dxc")
 JOBS = int(os.environ.get("JOBS", "24"))
 SITE = 1 << 63
@@ -152,7 +154,43 @@ def spirv_tool_id():
     return "\0".join(sorted(parts) + [" ".join(p) for p in pins] + options)
 
 
+def program_set():
+    """The program texts a cooked game.pak names: the importer's text hashes (table.tsv's stage and hash), as one digest."""
+    names = sorted("".join(line.split("\t")[:2]) for line in read(os.path.join(PROGRAMS, "table.tsv")).splitlines() if line)
+    return hashlib.sha256("\n".join(names).encode()).hexdigest()
+
+
+def check_store_programs(record=False):
+    """A game.pak names its programs by text hash; a host without one of them skips its draws. The store version
+    (store_version.inc) is what makes an older game.pak set up again, so the program set may change only with it:
+    store_programs.txt holds the version and the program set it was recorded at, and the build stops when they differ."""
+    version = read(os.path.join(STORE, "store_version.inc")).strip()
+    digest = program_set()
+    path = os.path.join(STORE, "store_programs.txt")
+    if record:
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(f"{version} {digest}\n")
+        print(f"recorded the program set at store version {version}")
+        return True
+    recorded = read(path).split() if os.path.exists(path) else []
+    if recorded == [version, digest]:
+        return True
+    if recorded[:1] == [version]:
+        print(f"The program texts (runtime/src/render/programs/table.tsv) changed but the store version did not ({version}): "
+              "a game.pak cooked before names programs this build does not have, and their draws would be skipped. "
+              "Raise runtime/include/galaxy/store_version.inc by one, then run python tools/dev/compile_programs.py record "
+              "and commit both files.")
+    else:
+        print(f"store_programs.txt was recorded at store version {' '.join(recorded[:1]) or 'none'}, the store is {version}: "
+              "run python tools/dev/compile_programs.py record and commit runtime/include/galaxy/store_programs.txt.")
+    return False
+
+
 def main():
+    if sys.argv[1:] == ["record"]:
+        return 0 if check_store_programs(record=True) else 1
+    if not check_store_programs():
+        return 1
     backend, out = sys.argv[1], sys.argv[2]
     args = sys.argv[3:]
     spirv_tool = args[0] if args else None

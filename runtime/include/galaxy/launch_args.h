@@ -128,6 +128,7 @@ struct LaunchArgs {
     // Started with its window hidden (Windows: STARTUPINFO's SW_HIDE, as a test starts it): no window, dialog or Discord
     // status, and no keyboard, mouse, controller motor or Wii Remote of the player's.
     bool started_hidden = false;
+    bool timed = false;                 // --seconds over 0: a run that ends by itself, a test's
     unsigned gpu_start_retry = 0u;      // --gpu-start-retry: starts so far that found no graphics memory free
     std::vector<std::filesystem::path> extensions;  // --extension, each time given: host extensions (host_extension.h)
     // --import, each time given: mod files or folders imported as a drop on the window imports them, the result page
@@ -146,6 +147,12 @@ inline LaunchArgs g_launch_args;
 // ring-stress: how often the upload rings are made again (frames): often enough that a run of a test's length makes
 // them again hundreds of times, with frames in flight on both sides of each.
 inline constexpr unsigned kRingStressFrames = 5u;
+
+// A player's own start: shown, not timed, and with no host extension (a test driver's). Only it may choose settings for
+// the player (the first start's measured height).
+[[nodiscard]] inline bool ordinary_start() noexcept {
+    return !g_launch_args.started_hidden && !g_launch_args.timed && g_launch_args.extensions.empty();
+}
 
 // Whether this run records any of `what` (Diagnostic bits).
 [[nodiscard]] inline bool diagnosing(unsigned what) noexcept {

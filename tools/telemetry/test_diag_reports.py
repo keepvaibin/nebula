@@ -67,6 +67,25 @@ class Summary(unittest.TestCase):
         self.assertEqual(read[0]["gpu_class"], "Intel integrated <2GB")
         self.assertEqual(read[0]["top_pass"], "scene")
 
+    def test_csv_hostile_strings(self):
+        reports = [("h", bench('=HYPERLINK("http://x","y")', 0x8086, True, 1024, "d3d12", 30.0, {"scene": 9.0}, 3.0, 2.0)),
+                   ("i", bench("+1\r\n-2\t@3", 0x10DE, False, 8192, "vulkan", 9.0, {"scene": 3.0}, 1.0, 1.0))]
+        _, rows = diag_reports.summarise(reports)
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "out.csv")
+            diag_reports.write_csv(rows, path)
+            with open(path, encoding="utf-8", newline="") as handle:
+                raw = handle.read()
+                handle.seek(0)
+                read = list(csv.DictReader(handle))
+        gpus = {row["gpu"] for row in read}
+        self.assertEqual(gpus, {"'=HYPERLINK(\"http://x\",\"y\")", "'+1-2@3"})
+        self.assertEqual(raw.count("\n"), len(read) + 1)  # no line break inside a cell
+        for row in read:
+            for value in row.values():
+                self.assertFalse(value.startswith(diag_reports.FORMULA_LEADS), value)
+            self.assertNotEqual(row["vendor_id"][:1], "'")  # numbers stay numbers
+
 
 class Opening(unittest.TestCase):
     def test_junk_and_duplicates(self):

@@ -8,7 +8,8 @@ workers_dev = true
 binding = "REPORTS"
 bucket_name = "nebula-diag-reports"
 
-# Per address: 3 reports a minute (counted by Cloudflare per location, keyed by a hash of the address).
+# Per address: 3 reports a minute (counted by Cloudflare per location, in memory for the 60 s period, keyed by
+# HMAC-SHA256(ADDRESS_SALT, address); the salt is a secret: README.md).
 [[ratelimits]]
 name = "PER_ADDRESS"
 namespace_id = "1001"

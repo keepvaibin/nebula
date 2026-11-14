@@ -4,7 +4,9 @@ import { test } from "node:test";
 
 import worker, { DailyCap } from "./worker.mjs";
 
-function environment({ limit = 3, cap = "1000" } = {}) {
+const SALT = "test-salt-0123456789abcdef0123456789abcdef";
+
+function environment({ limit = 3, cap = "1000", salt = SALT } = {}) {
   const stored = new Map();
   const hits = new Map();
   const days = new Map();
@@ -12,6 +14,7 @@ function environment({ limit = 3, cap = "1000" } = {}) {
     stored,
     hits,
     DAILY_CAP: cap,
+    ADDRESS_SALT: salt,
     REPORTS: { put: async (key, body) => void stored.set(key, body) },
     PER_ADDRESS: {
       limit: async ({ key }) => {
@@ -97,7 +100,32 @@ test("the per-address limit is keyed by a hash, never the address", async () => 
     assert.match(key, /^[0-9a-f]{64}$/);
     assert.ok(!key.includes("203.0.113.7"));
   }
-  for (const key of env.stored.keys()) assert.ok(!key.includes("203") && !key.includes("198"));
+  for (const key of env.stored.keys()) assert.ok(!key.includes("203.0.113.7") && !key.includes("198.51.100.1"));
+});
+
+test("the limiter's key is an HMAC under the deployment's salt, not a plain hash of the address", async () => {
+  const keyOf = async (salt) => {
+    const env = environment({ salt });
+    await worker.fetch(post(envelope()), env);
+    return [...env.hits.keys()][0];
+  };
+  const plain = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode("203.0.113.7")))]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  const first = await keyOf(SALT);
+  assert.notEqual(first, plain);
+  assert.notEqual(first, await keyOf(SALT + "x"));
+  assert.equal(first, await keyOf(SALT));
+});
+
+test("without a salt of 32 characters nothing is limited or stored: 503", async () => {
+  for (const salt of [undefined, "", "short"]) {
+    const env = environment({ salt: salt ?? "" });
+    if (salt === undefined) delete env.ADDRESS_SALT;
+    assert.equal((await worker.fetch(post(envelope()), env)).status, 503, String(salt));
+    assert.equal(env.hits.size, 0);
+    assert.equal(env.stored.size, 0);
+  }
 });
 
 test("the daily cap counts stored reports over every address", async () => {
