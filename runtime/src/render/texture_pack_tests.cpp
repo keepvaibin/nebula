@@ -157,6 +157,14 @@ void test_png(const std::filesystem::path& root) {
                pixels.height == 5u && pixels.levels.size() == 3u && pixels.levels[0] == rgba &&
                pixels.levels[1].size() == 3u * 2u * 4u && pixels.levels[2].size() == 4u,
            "PNG round trip, levels down to 1x1");
+    // Generated levels, exact: an opaque box (rounded mean), a mixed-alpha box (alpha-weighted colour), then a 2x1 to 1x1 edge.
+    const std::vector<std::uint8_t> boxes{10, 20, 30, 255, 14, 24, 34, 255, 255, 0, 0, 128, 0, 255, 0, 0,
+                                          12, 22, 32, 255, 16, 26, 36, 255, 0, 0, 255, 64, 0, 0, 0, 0};
+    expect(write_png(root / "boxes.png", 4u, 2u, boxes.data()), "PNG written");
+    expect(load_texture_pack_image(root / "boxes.png", false, pixels, &error) && pixels.levels.size() == 3u &&
+               pixels.levels[1] == std::vector<std::uint8_t>{13, 23, 33, 255, 170, 0, 85, 48} &&
+               pixels.levels[2] == std::vector<std::uint8_t>{38, 19, 41, 152},
+           "generated levels box the level above exactly");
     { std::ofstream out(root / "bad.png"); out << "not a png"; }
     expect(!load_texture_pack_image(root / "bad.png", false, pixels, &error) && !error.empty(),
            "a broken PNG is refused with a reason");
