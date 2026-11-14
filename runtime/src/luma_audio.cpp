@@ -25,6 +25,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -45,6 +46,12 @@ constexpr std::uint32_t kRampMs = 10u;  // every volume change and every stop: n
 constexpr std::uint32_t kRowNotASound = 350u;
 constexpr std::uint32_t kRowDropped = 351u;
 constexpr std::uint32_t kRowNotANumber = 352u;
+// Content.MissingSound (references 6): a name no store file has, answered with the placeholder.
+constexpr std::uint32_t kMissingSoundCode = 624u;
+// Nebula's placeholder sound (references 4, nebula:placeholder/sound): a 120 ms soft two-note chime the importer
+// cooks into every store from data/placeholder/sound.wav; the start check (3.13) turns the mods off when a store lacks
+// it, so a mod's sound can never be silently missing.
+constexpr const char* kPlaceholderSound = "NebulaData/PlaceholderSound.nsfx";
 
 struct Item;
 
@@ -160,6 +167,7 @@ std::atomic<std::uint32_t> g_music_ms{kRampMs};
 float g_music_step = 0.0f;  // the audio thread's
 float g_music_step_target = -1.0f;
 std::uint64_t g_order = 0;                // game thread
+std::unordered_set<std::string> g_placeholders;  // game thread: each mod and name a placeholder fact was said for
 
 // The game module's half (LumaGameSound.cpp), found by set_game before the first mod; null in a host without it.
 struct Game {
@@ -659,6 +667,34 @@ bool store_path(const char* id, std::string_view given, std::string& path) {
     return true;
 }
 
+// A sound name the store has no file for: the placeholder's file (nebula:placeholder/sound, references 4 and 5.1),
+// said in the mod log as Content.MissingSound (one CONTENT Error a name, counted on every call) and, the first time
+// the mod names it, as the harness's placeholder fact. None when the store lacks the placeholder too: a store older
+// than it, which the start check (3.13) does not let mods run on.
+std::optional<assets::Entry> placeholder_sound(const assets::AssetStore* store, const char* id, std::string_view name) {
+    std::optional<assets::Entry> found = store != nullptr ? store->find(kPlaceholderSound) : std::nullopt;
+    if (!found) {
+        return std::nullopt;
+    }
+    const std::string mod_id = id != nullptr ? id : "";
+    const std::string given(name);
+    std::uint32_t hash = 2166136261u;  // FNV-1a: one entry a name
+    for (const char c : given) {
+        hash = (hash ^ static_cast<unsigned char>(c)) * 16777619u;
+    }
+    modlog::add_row(4u /* LUMA_MODLOG_CONTENT */, 0u /* LUMA_MODLOG_ERROR */, mod_id, kMissingSoundCode, "",
+                    "Content.MissingSound", {{"found", given}}, hash);
+    if (modlog::facts_wanted() && g_placeholders.insert(mod_id + '\x1f' + given).second) {
+        std::string json = "{\"mod\": ";
+        modlog::append_json_text(json, mod_id);
+        json += ", \"kind\": \"sound\", \"found\": ";
+        modlog::append_json_text(json, given);
+        json += ", \"file\": \"\", \"line\": 0}";
+        modlog::fact("placeholder", json);
+    }
+    return found;
+}
+
 [[nodiscard]] float pick(float low, float high) noexcept {
     g_random ^= g_random << 13;
     g_random ^= g_random >> 7;
@@ -839,7 +875,11 @@ std::int32_t play_sound(const LumaMod* mod, const char* where, const char* name,
         if (!store_path(kernel->mod_id(mod), std::string_view(name, length), path)) {
             return argument(mod, where, "name");
         }
-        const std::optional<assets::Entry> found = store != nullptr ? store->find(path) : std::nullopt;
+        // A name no file has: the placeholder chime plays in its place, with the call's place, bus and settings.
+        std::optional<assets::Entry> found = store != nullptr ? store->find(path) : std::nullopt;
+        if (!found) {
+            found = placeholder_sound(store, kernel->mod_id(mod), std::string_view(name, length));
+        }
         if (!found) {
             return LUMA_E_NOT_FOUND;
         }
@@ -1340,7 +1380,12 @@ std::int32_t audio_music(const LumaMod* mod, const char* name, std::uint32_t fad
         if (!store_path(kernel->mod_id(mod), std::string_view(name, length), path)) {
             return argument(mod, where, "name");
         }
-        const std::optional<assets::Entry> found = store != nullptr ? store->find(path) : std::nullopt;
+        // A name no file has: the placeholder chime plays as the music, once (looped, it would ring on).
+        std::optional<assets::Entry> found = store != nullptr ? store->find(path) : std::nullopt;
+        const bool placeholder = !found;
+        if (!found) {
+            found = placeholder_sound(store, kernel->mod_id(mod), std::string_view(name, length));
+        }
         if (!found) {
             return LUMA_E_NOT_FOUND;
         }
@@ -1373,7 +1418,7 @@ std::int32_t audio_music(const LumaMod* mod, const char* name, std::uint32_t fad
         item->pitch_pick = 1.0f;
         item->pitch = 1.0f;
         item->ramp_ms = fade;
-        item->looping = true;
+        item->looping = !placeholder;
         item->loop_start = sound.loop_start != kNoLoop ? sound.loop_start : 0u;
         item->loop_end = sound.loop_start != kNoLoop ? sound.loop_end : sound.frames;
         const std::lock_guard<std::mutex> lock(g_lock);

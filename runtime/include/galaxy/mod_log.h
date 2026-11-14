@@ -133,8 +133,9 @@ void add_finding(std::uint32_t source, std::uint32_t level, std::string_view mod
 
 // One host entry worded by a row of the game's text table (`row`, e.g. Start.PartMissing; luma_modlog.h `row`): its
 // {names} from `values`, a value "R:<row>" being that row's words. For the host's own lines that no validator code words.
+// `column` tells apart entries of one code at one place (a content entry's name, by its hash); 0 when none.
 void add_row(std::uint32_t source, std::uint32_t level, std::string_view mod, std::uint32_t code, std::string_view file,
-             std::string_view row, const std::vector<std::pair<std::string, std::string>>& values);
+             std::string_view row, const std::vector<std::pair<std::string, std::string>>& values, std::uint32_t column = 0u);
 
 // What the log holds, for the Mods > Log page and a mod's own page (contract 4.2); any thread. Empty when the module
 // has no log or nothing was kept.

@@ -100,8 +100,11 @@ typedef struct LumaAudioStreamDesc {
 typedef struct LumaAudioService {
     LumaServiceTable base;
     /* Plays the cooked sound `name`: "<path>", the mod's own (`layers/<l>/assets/<path>.sound.json`), or
-       "<id>:<path>", another mod's. LUMA_OK and *out (the voice); ENDED to fn (null: no event) when it ends. A sound
-       not there: LUMA_E_NOT_FOUND (an answer); a file that is not a cooked sound: LUMA_E_FORMAT, reported
+       "<id>:<path>", another mod's. LUMA_OK and *out (the voice); ENDED to fn (null: no event) when it ends. A name
+       no file has: the placeholder chime (nebula:placeholder/sound, 120 ms) plays in its place with `how`, LUMA_OK
+       and *out, and the mod log has Content.MissingSound (624) naming it, once a name, counted on every call (a store
+       without the chime: LUMA_E_NOT_FOUND; the start check lets no mod run on one); a file that is not a cooked
+       sound: LUMA_E_FORMAT, reported
        (Audio.NotASound); a 33rd voice: the mod's voice of the lowest priority (the new one's included; the oldest
        of equals) ends, ENDED LUMA_E_LIMIT, reported; when that is the new one, LUMA_E_LIMIT, reported. A null name or
        out, a name past LUMA_AUDIO_NAME_MOST, a `how` of the wrong size or out of range: LUMA_E_ARGUMENT, reported.
@@ -137,8 +140,8 @@ typedef struct LumaAudioService {
     /* Replaces the game's music: the cooked sound `name` (as play's) plays on the music bus, looped by its loop
        points (or whole), fading in over `fade_ms` (0: 10 ms) while the game's own music fades out as long. One music
        for every mod: a later call, this mod's or another's, takes over (the one before fades out as long). Its end is
-       the mod's music_restore or its stop. Answers as play does (NOT_FOUND, FORMAT; fade_ms past
-       LUMA_AUDIO_FADE_MOST_MS: LUMA_E_ARGUMENT). */
+       the mod's music_restore or its stop. Answers as play does (a name no file has: the placeholder chime, once,
+       LUMA_OK, Content.MissingSound; FORMAT; fade_ms past LUMA_AUDIO_FADE_MOST_MS: LUMA_E_ARGUMENT). */
     int32_t (*music)(const LumaMod* mod, const char* name, uint32_t fade_ms);
     /* The game's music back over `fade_ms` (0: 10 ms), the mod's fading out. LUMA_OK also when the mod's music is
        not playing (nothing to do). */

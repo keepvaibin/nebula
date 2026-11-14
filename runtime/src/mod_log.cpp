@@ -162,7 +162,7 @@ void add_finding(std::uint32_t source, std::uint32_t level, std::string_view mod
 }
 
 void add_row(std::uint32_t source, std::uint32_t level, std::string_view mod, std::uint32_t code, std::string_view file,
-             std::string_view row, const std::vector<std::pair<std::string, std::string>>& values) {
+             std::string_view row, const std::vector<std::pair<std::string, std::string>>& values, std::uint32_t column) {
     if (g_add.load(std::memory_order_acquire) == nullptr) return;
     const std::string mod_id(mod);
     const std::string place(file);
@@ -174,6 +174,7 @@ void add_row(std::uint32_t source, std::uint32_t level, std::string_view mod, st
     entry.code = code;
     entry.mod = mod_id.c_str();
     entry.file = place.c_str();
+    entry.column = column;
     for (const auto& [name, value] : values) {
         if (entry.count == LUMA_MODLOG_ARGS) {
             entry.count++;  // the log says once that the rest are not shown (ModLog.ArgsCut)
