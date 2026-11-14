@@ -970,6 +970,7 @@ namespace Nebula.Launcher
                 string localAppData = Environment.GetEnvironmentVariable("LOCALAPPDATA");
                 Check(!string.IsNullOrEmpty(localAppData) && NebulaPaths.DataRoot == Path.Combine(localAppData, "Nebula") &&
                       NebulaPaths.LocalAppDataRedirected, "a redirected %LOCALAPPDATA% holds the data root");
+                string dataRoot = NebulaPaths.DataRoot;
                 string outDir = args[0];
                 WindowSizeCases();
                 PadMenuCases();

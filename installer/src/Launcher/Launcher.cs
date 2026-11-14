@@ -649,7 +649,6 @@ namespace Nebula.Launcher
             monitor.SelectedIndexChanged += delegate
             {
                 if (loading) return;
-                graphics.FullscreenWidth = graphics.FullscreenHeight = graphics.FullscreenRefresh = 0;
                 FillInterpolationChoices();
                 RefreshDisplayChoices();
                 RefreshDisplayNotice();

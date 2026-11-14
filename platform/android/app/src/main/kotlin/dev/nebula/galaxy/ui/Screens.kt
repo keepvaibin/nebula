@@ -84,9 +84,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.nebula.galaxy.BuildConfig
-import dev.nebula.galaxy.ControlsSettings
 import dev.nebula.galaxy.DisplayRate
-import dev.nebula.galaxy.GraphicsSettings
 import dev.nebula.galaxy.ImportState
 import dev.nebula.galaxy.Imports
 import dev.nebula.galaxy.LauncherModel
@@ -553,7 +551,6 @@ private fun SettingsScreen(
     var confirmRemove by remember { mutableStateOf(false) }
     var confirmImport by remember { mutableStateOf(false) }
     LaunchedEffect(model.saveBytes) { model.refreshMiis() }
-    val controls = model.controls
     Column(Modifier.fillMaxSize()) {
         TopBar("Settings") { model.back() }
         Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), contentAlignment = Alignment.TopCenter) {
