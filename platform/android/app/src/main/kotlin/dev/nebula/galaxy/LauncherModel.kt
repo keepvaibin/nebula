@@ -324,6 +324,61 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         if (!on && updateProgress == null) update = null
     }
 
+    /** The last benchmark's result (Settings, Performance); null before the first or after a run without one. */
+    var benchmark by mutableStateOf(Benchmark.read(application))
+        private set
+
+    /** The run that just ended wrote no result. */
+    var benchmarkUnfinished by mutableStateOf(false)
+        private set
+
+    /** Apply pressed for this result: config.ini has its values. */
+    var benchmarkApplied by mutableStateOf(false)
+        private set
+
+    /** Apply could not write config.ini. */
+    var benchmarkApplyFailed by mutableStateOf(false)
+        private set
+
+    /** From the launcher's activity, like Play: the game runs the benchmark and ends back here (resumed reads it). */
+    fun startBenchmark(activity: Context) {
+        if (install == null || SaveTransfer.gameRunning(app)) return
+        Benchmark.clear(app)
+        benchmark = null
+        benchmarkUnfinished = false
+        benchmarkApplied = false
+        benchmarkApplyFailed = false
+        GameFiles.controls(app).edit()
+            .putLong(LAUNCHED_AT, System.currentTimeMillis())
+            .putBoolean(BENCHMARK_RAN, true)
+            .commit()
+        activity.startActivity(Intent(activity, GameActivity::class.java).putExtra(Benchmark.EXTRA, true))
+    }
+
+    fun applyBenchmark() {
+        val result = benchmark ?: return
+        if (SaveTransfer.gameRunning(app)) return
+        val ok = Benchmark.apply(app, result)
+        benchmarkApplied = ok
+        benchmarkApplyFailed = !ok
+    }
+
+    // Back from a benchmark run: its result, or that it did not finish.
+    private fun checkBenchmark() {
+        val prefs = GameFiles.controls(app)
+        if (!prefs.getBoolean(BENCHMARK_RAN, false)) return
+        // The file is written whole before the game exits; without it, a game process still ending is waited for
+        // (the next return here reads it).
+        val result = Benchmark.read(app)
+        if (result == null && SaveTransfer.gameRunning(app)) return
+        prefs.edit().remove(BENCHMARK_RAN).apply()
+        benchmark = result
+        benchmarkUnfinished = result == null
+        benchmarkApplied = false
+        benchmarkApplyFailed = false
+        screen = Screen.Settings
+    }
+
     fun back(): Boolean {
         screen = when (screen) {
             Screen.Disc -> if (install != null) Screen.Settings else Screen.Welcome
@@ -348,6 +403,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         if (install == null && screen == Screen.Home) screen = Screen.Welcome
         // Back from the system's settings with installing allowed: the prompt offers Update again.
         if (updateNeedsPermission && Updates.canInstall(app)) updateNeedsPermission = false
+        checkBenchmark()
         checkLastRun()
     }
 
@@ -450,5 +506,6 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
 
     companion object {
         private const val LAUNCHED_AT = "launchedAt"
+        private const val BENCHMARK_RAN = "benchmarkRan"
     }
 }

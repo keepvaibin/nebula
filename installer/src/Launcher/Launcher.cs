@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -451,6 +452,15 @@ namespace Nebula.Launcher
         private readonly ComboBox inputSource = new ComboBox(), editScheme = new ComboBox(), motion = new ComboBox(),
             vibration = new ComboBox();
         private readonly ListView bindingList = new ListView();
+        // The Performance page (BuildPerformancePage): the benchmark and its recommendation.
+        internal readonly Button benchmarkButton = new Button();
+        internal readonly Label benchmarkStatus = new Label();
+        internal readonly Label benchmarkVerdict = new Label();
+        internal readonly Label benchmarkTitle = new Label();
+        internal readonly ListView benchmarkRows = new ListView();
+        internal readonly Button benchmarkApply = new Button();
+        private Process benchmarkRun;
+        private BenchmarkResult benchmarkResult;
         private readonly NumericUpDown pointerSpeed = new NumericUpDown(), stickDeadzone = new NumericUpDown(),
             pointerDeadzone = new NumericUpDown(), shakeSensitivity = new NumericUpDown(), gyroSensitivity = new NumericUpDown(),
             pointerHide = new NumericUpDown();
@@ -564,8 +574,11 @@ namespace Nebula.Launcher
                     };
                 }
             }
+            var performance = new TabPage(NebulaText.Of("Performance"));
+            pages.Add(performance);
             pages.Add(advanced);
             tabs.TabPages.AddRange(pages.ToArray());
+            BuildPerformancePage(performance);
             Controls.Add(tabs);
 
             int y = 16;
@@ -794,6 +807,8 @@ namespace Nebula.Launcher
             Controls.Add(updateBanner);
 
             LoadValues();
+            // The last benchmark's recommendation, named as the rows (filled above) name their values.
+            ShowBenchmark(Benchmark.Read(0, Benchmark.ResultPath), false);
             Shown += delegate { WatchForUpdate(); };
             // A controller reaches every row (SettingsPadNavigator); A on a Wii input waits for its new button, and the
             // pad does nothing else while it waits.
@@ -868,13 +883,241 @@ namespace Nebula.Launcher
             };
             UiScale.Apply(this);
             // Tab headers are not scaled with the form.
-            using (var g = CreateGraphics()) tabs.ItemSize = new Size((int)(98 * g.DpiX / 96f), (int)(28 * g.DpiY / 96f));
+            // Every page's tab in one row: narrower than 98 px only when there are too many for the width.
+            using (var g = CreateGraphics())
+                tabs.ItemSize = new Size(Math.Min((int)(98 * g.DpiX / 96f), (tabs.Width - 4) / Math.Max(1, tabs.TabCount)), (int)(28 * g.DpiY / 96f));
             // After scaling: the notice moves the rows below it by its measured height.
             RefreshDisplayNotice();
         }
 
         // The offer of a newer release: at once from the answer already in (this start's check, else the last one), and
         // when this start's check answers while the window is open. It shows the banner and takes no focus.
+        // The Performance page: what the benchmark does, its button and progress, then its verdict and the recommended
+        // settings that differ from the current ones (the last result, when a run finished earlier), with Apply.
+        private void BuildPerformancePage(TabPage page)
+        {
+            page.Controls.Add(new Label
+            {
+                Location = new Point(12, 16), Size = new Size(700, 66),
+                Text = NebulaText.Of("Runs real stages to measure this device, then recommends settings. It takes a few minutes. Your saves and settings are not changed.")
+            });
+            benchmarkButton.Text = NebulaText.Of("Benchmark");
+            benchmarkButton.Location = new Point(12, 88);
+            benchmarkButton.Size = new Size(180, 34);
+            benchmarkButton.Click += delegate { StartBenchmark(); };
+            page.Controls.Add(benchmarkButton);
+            benchmarkStatus.Location = new Point(204, 95);
+            benchmarkStatus.Size = new Size(508, 24);
+            benchmarkStatus.AutoEllipsis = true;
+            page.Controls.Add(benchmarkStatus);
+            benchmarkVerdict.Location = new Point(12, 134);
+            benchmarkVerdict.Size = new Size(700, 46);
+            page.Controls.Add(benchmarkVerdict);
+            benchmarkTitle.Text = NebulaText.Of("Recommended settings");
+            benchmarkTitle.Location = new Point(12, 186);
+            benchmarkTitle.Size = new Size(700, 24);
+            benchmarkTitle.Font = new Font(Font, FontStyle.Bold);
+            page.Controls.Add(benchmarkTitle);
+            benchmarkRows.View = View.Details;
+            benchmarkRows.FullRowSelect = true;
+            benchmarkRows.HeaderStyle = ColumnHeaderStyle.Nonclickable;
+            benchmarkRows.Location = new Point(12, 214);
+            benchmarkRows.Size = new Size(700, 220);
+            benchmarkRows.Columns.Add("", 300);
+            benchmarkRows.Columns.Add(NebulaText.Of("Current"), 190);
+            benchmarkRows.Columns.Add(NebulaText.Of("Recommended"), 190);
+            page.Controls.Add(benchmarkRows);
+            benchmarkApply.Text = NebulaText.Of("Apply");
+            benchmarkApply.Location = new Point(12, 444);
+            benchmarkApply.Size = new Size(140, 34);
+            benchmarkApply.Click += delegate { ApplyBenchmark(); };
+            page.Controls.Add(benchmarkApply);
+        }
+
+        // The game started for a benchmark (perf/bench's contract); its steps in the status, its result when it exits.
+        // Refused, like a game start, while the game runs.
+        private void StartBenchmark()
+        {
+            if (benchmarkRun != null) return;
+            if (LaunchSession.RuntimeLeaseHeld())
+            {
+                benchmarkStatus.Text = NebulaText.Of("Nebula is already running.");
+                return;
+            }
+            string file = Benchmark.ResultPath;
+            Process run;
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(file));
+                if (File.Exists(file)) File.Delete(file);
+                run = new Process { StartInfo = Benchmark.Create(session.App, session.Content, file), EnableRaisingEvents = true };
+                run.OutputDataReceived += (sender, e) =>
+                {
+                    int step, steps;
+                    if (Benchmark.Progress(e.Data, out step, out steps))
+                        Post(() => { if (benchmarkRun != null) benchmarkStatus.Text = NebulaText.Of("Benchmark: step {0} of {1}", Math.Max(1, step), steps); });
+                };
+                run.ErrorDataReceived += delegate { };
+                run.Exited += delegate { Post(() => FinishBenchmark(run)); };
+                run.Start();
+                run.BeginOutputReadLine();
+                run.BeginErrorReadLine();
+            }
+            catch (Exception error)
+            {
+                benchmarkStatus.Text = error.Message;
+                return;
+            }
+            benchmarkRun = run;
+            benchmarkButton.Enabled = false;
+            benchmarkStatus.Text = NebulaText.Of("Benchmark");
+            ShowBenchmark(null, false);
+        }
+
+        private void Post(Action action)
+        {
+            try
+            {
+                if (!IsDisposed && IsHandleCreated) BeginInvoke(action);
+            }
+            catch (InvalidOperationException) { }   // the window closed meanwhile
+        }
+
+        private void FinishBenchmark(Process run)
+        {
+            if (run != benchmarkRun) return;
+            int code;
+            try { code = run.ExitCode; }
+            catch (InvalidOperationException) { code = -1; }
+            run.Dispose();
+            benchmarkRun = null;
+            benchmarkButton.Enabled = true;
+            benchmarkStatus.Text = "";
+            ShowBenchmark(Benchmark.Read(code, Benchmark.ResultPath), true);
+        }
+
+        internal void ShowBenchmark(BenchmarkResult result, bool fresh)
+        {
+            benchmarkResult = result;
+            var changes = result != null && result.Complete ? result.Changes : new List<BenchmarkSetting>();
+            benchmarkVerdict.Text = result != null ? result.VerdictText : fresh ? NebulaText.Of("The benchmark did not finish.") : "";
+            benchmarkRows.Items.Clear();
+            foreach (var change in changes)
+                benchmarkRows.Items.Add(new ListViewItem(new[] { BenchmarkLabel(change.Key), BenchmarkValue(change.Key, change.Current), BenchmarkValue(change.Key, change.Recommended) }));
+            benchmarkTitle.Visible = benchmarkRows.Visible = benchmarkApply.Visible = changes.Count > 0;
+            benchmarkApply.Enabled = true;
+        }
+
+        private static string BenchmarkLabel(string key)
+        {
+            switch (key)
+            {
+                case "internal_height": return NebulaText.Of("Internal resolution");
+                case "msaa_samples": return "MSAA";
+                case "ambient_occlusion": return NebulaText.Of("Ambient occlusion");
+                case "enhanced_lighting": return NebulaText.Of("Lighting");
+                case "aa": return NebulaText.Of("Anti-aliasing");
+                case "smaa_quality": return NebulaText.Of("Anti-aliasing quality");
+                case "bloom": return NebulaText.Of("Bloom");
+                default: return key;
+            }
+        }
+
+        // A value as this window's own rows name it.
+        private string BenchmarkValue(string key, int value)
+        {
+            switch (key)
+            {
+                case "internal_height":
+                {
+                    int index = Array.IndexOf(GraphicsSettings.InternalHeights, value);
+                    return index >= 0 && index < internalResolution.Items.Count ? internalResolution.Items[index].ToString() : value + "p";
+                }
+                case "msaa_samples":
+                {
+                    int index = MsaaIndex(value);
+                    return index >= 0 && index < msaa.Items.Count ? msaa.Items[index].ToString() : value + "x";
+                }
+                case "ambient_occlusion": return NebulaText.Of(value != 0 ? "On" : "Off");
+                case "enhanced_lighting":
+                    // Off: the lighting this window has, or per pixel in place of enhanced (what Apply sets).
+                    return value != 0 ? lighting.Items[0].ToString() : lighting.Items[lighting.SelectedIndex > 0 ? lighting.SelectedIndex : 1].ToString();
+                case "aa": return value >= 0 && value < antiAliasing.Items.Count ? antiAliasing.Items[value].ToString() : value.ToString(CultureInfo.InvariantCulture);
+                case "smaa_quality": return value >= 0 && value < aaQuality.Items.Count ? aaQuality.Items[value].ToString() : value.ToString(CultureInfo.InvariantCulture);
+                case "bloom": return value.ToString(CultureInfo.InvariantCulture) + "%";
+                default: return value.ToString(CultureInfo.InvariantCulture);
+            }
+        }
+
+        private static int MsaaIndex(int samples)
+        {
+            switch (samples) { case 1: return 0; case 2: return 1; case 4: return 2; case 8: return 3; default: return -1; }
+        }
+
+        // Apply: the recommended values on this window's rows (so Save keeps them) and in config.ini at once, through
+        // GraphicsSettings (only those keys change there).
+        internal void ApplyBenchmark()
+        {
+            if (benchmarkResult == null || !benchmarkResult.Complete) return;
+            var saved = GraphicsSettings.Load();
+            foreach (var change in benchmarkResult.Changes)
+            {
+                int value = change.Recommended;
+                switch (change.Key)
+                {
+                    case "internal_height":
+                    {
+                        int index = Array.IndexOf(GraphicsSettings.InternalHeights, value);
+                        if (index < 0) break;
+                        internalResolution.SelectedIndex = index;
+                        saved.InternalHeight = value;
+                        break;
+                    }
+                    case "msaa_samples":
+                    {
+                        int index = MsaaIndex(value);
+                        if (index < 0 || index >= msaa.Items.Count) break;
+                        msaa.SelectedIndex = index;
+                        saved.Msaa = index;
+                        break;
+                    }
+                    case "ambient_occlusion":
+                        // On keeps the kind chosen (SSAO or GTAO), the saved one when it was off.
+                        occlusionMode.SelectedIndex = value == 0 ? 0 : occlusionMode.SelectedIndex > 0 ? occlusionMode.SelectedIndex : saved.AmbientOcclusionSsao ? 1 : 2;
+                        saved.AmbientOcclusion = value != 0;
+                        break;
+                    case "enhanced_lighting":
+                        lighting.SelectedIndex = value != 0 ? 0 : lighting.SelectedIndex == 0 ? 1 : lighting.SelectedIndex;
+                        // The row's choice: enhanced and per pixel both light per pixel.
+                        saved.EnhancedLighting = value != 0;
+                        saved.PerPixelLighting = lighting.SelectedIndex != 2;
+                        break;
+                    case "aa":
+                        if (value < 0 || value >= antiAliasing.Items.Count) break;
+                        antiAliasing.SelectedIndex = value;
+                        saved.AntiAliasing = value;
+                        break;
+                    case "smaa_quality":
+                        if (value < 0 || value >= aaQuality.Items.Count) break;
+                        aaQuality.SelectedIndex = value;
+                        saved.Quality = value;
+                        break;
+                    case "bloom":
+                        bloom.Value = Math.Max(bloom.Minimum, Math.Min(bloom.Maximum, value));
+                        saved.Bloom = (int)bloom.Value;
+                        break;
+                }
+            }
+            RefreshImageRows();
+            try { saved.Save(); }
+            catch (Exception error)
+            {
+                MessageBox.Show(this, NebulaText.Of("Settings could not be saved: {0}", error.Message), Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            benchmarkApply.Enabled = false;
+        }
+
         private void WatchForUpdate()
         {
             if (!UpdateCheck.Enabled(session)) return;
