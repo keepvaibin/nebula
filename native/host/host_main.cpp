@@ -1536,8 +1536,13 @@ void start_again() {
     std::string path(size, '\0');
     if (size != 0u && _NSGetExecutablePath(path.data(), &size) == 0) self = path.c_str();
 #else
-    std::error_code error;
-    self = fs::read_symlink("/proc/self/exe", error).string();
+    // An AppImage: the image file itself (its mount ends with this process, the program in it with the mount).
+    if (const char* image = std::getenv("APPIMAGE"); image != nullptr && image[0] == '/') {
+        self = image;
+    } else {
+        std::error_code error;
+        self = fs::read_symlink("/proc/self/exe", error).string();
+    }
 #endif
     if (self.empty() || gStartArguments.empty()) return;
     std::vector<std::string> arguments = gStartArguments;
