@@ -1622,14 +1622,21 @@ void RendererVk::record_scene_aa() {
         static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
         aspect ? aspect->content_aspect : galaxy::kDesignContentAspect);
     end_scene_pass();
-    const vk::Texture& color = *scene_.color;
+    const unsigned width = scene_.color->width;
+    const unsigned height = scene_.color->height;
     const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_frame_set(layout); };
+    // A scene target whose image may change hands (take_scene's) trades it to the passes instead of copying it; the
+    // image that takes its place is then written whole, so the pass opens without loading it.
+    vk::PostProcessorVk::SceneTrade trade;
+    if (can_take_scene()) {
+        trade = [this](gpu::TextureRef spare) { return swap_scene_color(std::move(spare)); };
+    }
     const AaRun ran = post_.prepare_scene_aa(
-        commands_, color, color.width, color.height, scene_map_.width, scene_map_.height,
+        commands_, *scene_.color, width, height, scene_map_.width, scene_map_.height,
         static_cast<unsigned>(std::max(content.width, 1)), static_cast<unsigned>(std::max(content.height, 1)),
-        allocate);
-    begin_scene_pass();
-    post_.finish_scene_aa(commands_, ran, color.width, color.height, allocate,
+        allocate, trade);
+    begin_scene_pass_with(0u, nullptr, post_.scene_traded(), "record_scene_aa");
+    post_.finish_scene_aa(commands_, ran, width, height, allocate,
                           draw_layout_.pass_for(scene_samples_log2(), false), scene_samples_log2());
     reset_draw_bindings();
 }

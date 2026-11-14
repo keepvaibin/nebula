@@ -349,6 +349,7 @@ void PostProcessor::shutdown() noexcept {
     weights_ = {};
     antialiased_ = {};
     scaled_ = {};
+    traded_.Reset();
     stencil_ = {};
     retired_.clear();
     device_ = nullptr;
@@ -419,6 +420,9 @@ void PostProcessor::trim_idle_targets(std::uint64_t frame_index, unsigned frames
             retired_.push_back({std::move(target->resource), frame_index + frames_in_flight});
             *target = {};
         }
+    }
+    if (traded_ && frame_index > traded_frame_ + kTargetIdleFrames) {
+        retired_.push_back({std::move(traded_), frame_index + frames_in_flight});
     }
 }
 
@@ -604,7 +608,7 @@ AaRun PostProcessor::record_scene_aa(ID3D12GraphicsCommandList* list, Descriptor
                                      unsigned width, unsigned height, unsigned picture_width,
                                      unsigned picture_height, unsigned display_width,
                                      unsigned display_height, std::uint64_t frame_index,
-                                     unsigned frames_in_flight, unsigned samples) {
+                                     unsigned frames_in_flight, unsigned samples, const SceneTrade& trade) {
     if (!ready_ || color == nullptr || width == 0u || height == 0u) {
         return AaRun::kNone;
     }
@@ -619,13 +623,17 @@ AaRun PostProcessor::record_scene_aa(ID3D12GraphicsCommandList* list, Descriptor
           ensure_target(stencil_, width, height, kStencilFormat, 0u, frame_index, frames_in_flight))) {
         pass = status_.fxaa_ok ? AaRun::kFxaa : AaRun::kNone;
     }
-    // The passes read a copy of the scene and write the scene target.
-    if (pass != AaRun::kNone &&
+    // The passes read the scene's own image, traded out, and write every pixel and channel of the image that took its
+    // place; or they read a copy of the scene and write its colour back into the scene target.
+    const bool traded = static_cast<bool>(trade);
+    if (pass != AaRun::kNone && !traded &&
         !ensure_target(antialiased_, width, height, kColorFormat, 2u, frame_index, frames_in_flight)) {
         pass = AaRun::kNone;
     }
     // The last pass's pipeline (over MSAA made at first use): without one the scene is left as it is.
-    ID3D12PipelineState* const last_pass = pass != AaRun::kNone ? scene_pass_pipeline(pass == AaRun::kSmaa, samples) : nullptr;
+    ID3D12PipelineState* const last_pass = pass == AaRun::kNone ? nullptr
+                                           : traded             ? (pass == AaRun::kSmaa ? smaa_blend_.Get() : fxaa_.Get())
+                                                                : scene_pass_pipeline(pass == AaRun::kSmaa, samples);
     if (last_pass == nullptr) {
         pass = AaRun::kNone;
     }
@@ -633,19 +641,24 @@ AaRun PostProcessor::record_scene_aa(ID3D12GraphicsCommandList* list, Descriptor
     if (pass == AaRun::kNone) {
         return pass;
     }
-    // The scene and the copy change in one call each way.
-    BarriersD3D12 to_copy{list};
-    to_copy.texture(color, gpu::Use::ColorWrite, gpu::Use::CopySource);
-    to_copy.texture(antialiased_.resource.Get(), antialiased_.use, gpu::Use::CopyDest);
-    to_copy.issue();
-    list->CopyResource(antialiased_.resource.Get(), color);
-    BarriersD3D12 back{list};
-    back.texture(color, gpu::Use::CopySource, gpu::Use::ColorWrite);
-    back.texture(antialiased_.resource.Get(), gpu::Use::CopyDest, gpu::Use::PixelRead);
-    back.issue();
-    antialiased_.use = gpu::Use::PixelRead;
+    if (traded) {
+        traded_ = trade(std::move(traded_));
+        traded_frame_ = frame_index;
+    } else {
+        // The scene and the copy change in one call each way.
+        BarriersD3D12 to_copy{list};
+        to_copy.texture(color, gpu::Use::ColorWrite, gpu::Use::CopySource);
+        to_copy.texture(antialiased_.resource.Get(), antialiased_.use, gpu::Use::CopyDest);
+        to_copy.issue();
+        list->CopyResource(antialiased_.resource.Get(), color);
+        BarriersD3D12 back{list};
+        back.texture(color, gpu::Use::CopySource, gpu::Use::ColorWrite);
+        back.texture(antialiased_.resource.Get(), gpu::Use::CopyDest, gpu::Use::PixelRead);
+        back.issue();
+        antialiased_.use = gpu::Use::PixelRead;
+    }
 
-    ID3D12Resource* source = antialiased_.resource.Get();
+    ID3D12Resource* source = traded ? traded_.Get() : antialiased_.resource.Get();
     list->SetGraphicsRootSignature(root_signature_.Get());
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     const D3D12_VIEWPORT viewport{

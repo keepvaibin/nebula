@@ -352,6 +352,9 @@ void PostProcessor::trim_idle_targets() {
     if (!spatial_output_.texture) {
         spatial_.reset();
     }
+    if (traded_ && clock_ > traded_used_ + kTargetIdleFrames) {
+        traded_.reset();
+    }
 }
 
 void PostProcessor::draw(Object encoder, Object pipeline_state, Stencil stencil, const Object* inputs, unsigned input_count,
@@ -415,7 +418,8 @@ bool PostProcessor::record_aa(Object commands, AaRun pass, Object source, unsign
 
 AaRun PostProcessor::prepare_scene_aa(Object commands, const Texture& color, unsigned width, unsigned height,
                                       unsigned picture_width, unsigned picture_height, unsigned display_width,
-                                      unsigned display_height) {
+                                      unsigned display_height, const SceneTrade& trade) {
+    scene_traded_ = false;
     if (!ready_ || width == 0u || height == 0u) {
         return AaRun::kNone;
     }
@@ -424,11 +428,23 @@ AaRun PostProcessor::prepare_scene_aa(Object commands, const Texture& color, uns
     const PostProcessPlan plan = plan_post_process(picture_width, picture_height, display_width, display_height, settings_,
                                                    status_.smaa_ok, status_.fxaa_ok);
     AaRun pass = plan.smaa ? AaRun::kSmaa : plan.fxaa ? AaRun::kFxaa : AaRun::kNone;
-    // The passes read a copy of the scene and write the scene target.
-    if (pass != AaRun::kNone && !ensure_target(antialiased_, width, height, scene_format_)) {
-        pass = AaRun::kNone;
+    // SMAA's targets and the whole-target last pass before the scene's image may change hands: once traded, a pass
+    // must run.
+    if (pass == AaRun::kSmaa && !ensure_smaa_targets(width, height)) {
+        pass = status_.fxaa_ok ? AaRun::kFxaa : AaRun::kNone;
     }
-    if (pass != AaRun::kNone) {
+    const bool whole_pass = pass == AaRun::kSmaa ? pipeline(kSmaaBlendVs, kSmaaBlendPs, scene_format_, depth_format_, kRgba) != nullptr
+                                                 : pipeline(kFullscreenVs, kFxaaPs, scene_format_, depth_format_, kRgba) != nullptr;
+    // The passes read the scene's own image, traded out, and write every pixel and channel of the image that took its
+    // place; or they read a copy of the scene and write its colour back into the scene target.
+    if (pass != AaRun::kNone && trade && whole_pass) {
+        traded_ = trade(std::move(traded_));
+        traded_used_ = clock_;
+        scene_traded_ = true;
+        (void)record_aa(commands, pass, traded_->texture, width, height);
+    } else if (pass != AaRun::kNone && !ensure_target(antialiased_, width, height, scene_format_)) {
+        pass = AaRun::kNone;
+    } else if (pass != AaRun::kNone) {
         @autoreleasepool {
             id<MTLBlitCommandEncoder> const blit = [(__bridge id<MTLCommandBuffer>)commands blitCommandEncoder];
             blit.label = @"scene copy for AA";
@@ -471,15 +487,18 @@ void PostProcessor::finish_scene_aa(Object encoder, AaRun pass, unsigned width, 
     const gpu::Rect full = gpu::rect(0, 0, static_cast<std::int32_t>(width), static_cast<std::int32_t>(height));
     PostConstants c{};
     set_post_input_size(c, width, height);
+    const Object source = scene_traded_ ? traded_->texture : antialiased_.texture->texture;
+    const std::uint8_t mask = scene_traded_ ? kRgba : kRgb;
     if (pass == AaRun::kFxaa) {
-        const Object state = pipeline(kFullscreenVs, kFxaaPs, scene_format_, depth_format_, kRgb, samples);
-        const Object inputs[1] = {antialiased_.texture->texture};
+        const Object state = pipeline(kFullscreenVs, kFxaaPs, scene_format_, depth_format_, mask, samples);
+        const Object inputs[1] = {source};
         if (state != nullptr) {
             draw(encoder, state, Stencil::None, inputs, 1u, full, c);
         }
     } else {
-        const Object state = pipeline(kSmaaBlendVs, kSmaaBlendKeepPs, scene_format_, depth_format_, kRgb, samples);
-        const Object inputs[2] = {antialiased_.texture->texture, weights_.texture->texture};
+        const Object state = pipeline(kSmaaBlendVs, scene_traded_ ? kSmaaBlendPs : kSmaaBlendKeepPs, scene_format_, depth_format_,
+                                      mask, samples);
+        const Object inputs[2] = {source, weights_.texture->texture};
         if (state != nullptr) {
             draw(encoder, state, Stencil::None, inputs, 2u, full, c);
         }

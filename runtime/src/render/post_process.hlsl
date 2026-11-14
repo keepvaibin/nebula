@@ -279,7 +279,13 @@ float4 PSMain(BlendOut i) : SV_Target {
         discard;
     }
 #endif
-    return float4(SMAANeighborhoodBlendingPS(i.uv, i.offset, colorTex, blendTex).rgb, 1.0);
+#if defined(PASS_SMAA_BLEND)
+    // Every pixel, the centre's alpha unchanged: it can write a target that does not hold the scene (a traded one).
+    const float alpha = colorTex.Load(int3(i.pos.xy, 0)).a;
+#else
+    const float alpha = 1.0;
+#endif
+    return float4(SMAANeighborhoodBlendingPS(i.uv, i.offset, colorTex, blendTex).rgb, alpha);
 }
 #endif
 
@@ -315,7 +321,9 @@ FullscreenOut VSMain(uint id : SV_VertexID) { return FullscreenTriangle(id); }
 float4 PSMain(FullscreenOut i) : SV_Target {
     const float2 texel = g_rt_metrics.xy;
     const float2 uv = (float2(ViewportPixel(i.pos)) + 0.5) * texel;
-    const float3 center = inputTex.SampleLevel(PointSampler, uv, 0).rgb;
+    // The centre's alpha goes out unchanged: a target that does not hold the scene (a traded one) takes it too.
+    const float4 centre = inputTex.SampleLevel(PointSampler, uv, 0);
+    const float3 center = centre.rgb;
     const float lc = FxaaLuma(center);
     const float ln = FxaaLumaOff(uv, int2(0, -1));
     const float ls = FxaaLumaOff(uv, int2(0, 1));
@@ -324,7 +332,7 @@ float4 PSMain(FullscreenOut i) : SV_Target {
     const float lmax = max(lc, max(max(ln, ls), max(lw, le)));
     const float lmin = min(lc, min(min(ln, ls), min(lw, le)));
     const float range = lmax - lmin;
-    if (range < max(0.0312, lmax * 0.125)) return float4(center, 1.0);
+    if (range < max(0.0312, lmax * 0.125)) return centre;
     const float lnw = FxaaLumaOff(uv, int2(-1, -1));
     const float lne = FxaaLumaOff(uv, int2(1, -1));
     const float lsw = FxaaLumaOff(uv, int2(-1, 1));
@@ -375,7 +383,7 @@ float4 PSMain(FullscreenOut i) : SV_Target {
     offset = max(offset, sub2 * sub2 * 0.75);
     float2 final_uv = uv;
     if (horz) final_uv.y += offset * across; else final_uv.x += offset * across;
-    return float4(inputTex.SampleLevel(LinearSampler, final_uv, 0).rgb, 1.0);
+    return float4(inputTex.SampleLevel(LinearSampler, final_uv, 0).rgb, centre.a);
 }
 #endif
 

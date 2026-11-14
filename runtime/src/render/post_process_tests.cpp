@@ -296,7 +296,8 @@ void self_test_on_warp() {
 }
 
 // The scene passes on a 64x64 scene target-like target with a stair-stepped edge and an alpha ramp:
-// they change colour near the edge and never the alpha.
+// they change colour near the edge and never the alpha; with the scene's image traded to them (RendererD3D12's
+// swap_scene_color) the image that takes its place ends as the copy's scene target does, every bit.
 void scene_aa_on_warp() {
     using Microsoft::WRL::ComPtr;
     ComPtr<IDXGIFactory4> factory;
@@ -323,7 +324,7 @@ void scene_aa_on_warp() {
             std::memcpy(&pattern[y * kPitch + x * 4u], &texel, sizeof(texel));
         }
     }
-    const auto run = [&](Aa aa, unsigned display, AaRun& ran) {
+    const auto run = [&](Aa aa, unsigned display, AaRun& ran, bool trade = false) {
         std::array<unsigned char, kPitch * kSize> out{};
         PostProcessSettings settings{};
         settings.aa = aa;
@@ -332,7 +333,7 @@ void scene_aa_on_warp() {
         ComPtr<ID3D12GraphicsCommandList> list;
         ComPtr<ID3D12Fence> fence;
         ComPtr<ID3D12DescriptorHeap> rtv_heap;
-        ComPtr<ID3D12Resource> target, upload, readback;
+        ComPtr<ID3D12Resource> target, other, upload, readback;
         galaxy::render::DescriptorRing ring;
         D3D12_DESCRIPTOR_HEAP_DESC hd{};
         hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
@@ -368,6 +369,9 @@ void scene_aa_on_warp() {
             !ring.initialize(device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 64u, 1u) ||
             FAILED(device->CreateCommittedResource(&def, D3D12_HEAP_FLAG_NONE, &td, D3D12_RESOURCE_STATE_COPY_DEST,
                                                    nullptr, IID_PPV_ARGS(&target))) ||
+            FAILED(device->CreateCommittedResource(&def, D3D12_HEAP_FLAG_NONE, &td,
+                                                   D3D12_RESOURCE_STATE_RENDER_TARGET, nullptr,
+                                                   IID_PPV_ARGS(&other))) ||
             FAILED(device->CreateCommittedResource(&up, D3D12_HEAP_FLAG_NONE, &bd,
                                                    D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
                                                    IID_PPV_ARGS(&upload))) ||
@@ -399,8 +403,23 @@ void scene_aa_on_warp() {
         b.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
         list->ResourceBarrier(1, &b);
         ring.bind(list.Get());
+        galaxy::render::PostProcessor::SceneTrade traded;
+        if (trade) {
+            // The scene's image goes to the passes shader-readable; the scene target's view takes the other image.
+            traded = [&](ComPtr<ID3D12Resource>) {
+                b.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+                b.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+                list->ResourceBarrier(1, &b);
+                device->CreateRenderTargetView(other.Get(), nullptr, rtv);
+                ComPtr<ID3D12Resource> scene = std::move(target);
+                target = other;
+                return scene;
+            };
+        }
         ran = post.record_scene_aa(list.Get(), ring, target.Get(), rtv, kSize, kSize, kSize, kSize, display,
-                                   display, 1u, 1u);
+                                   display, 1u, 1u, 1u, traded);
+        b.Transition.pResource = target.Get();
+        texture.pResource = target.Get();
         b.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
         b.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
         list->ResourceBarrier(1, &b);
@@ -454,6 +473,10 @@ void scene_aa_on_warp() {
             what = std::string(name) + " blends along the whole edge";
             expect(columns == kSize, what.c_str());
         }
+        AaRun traded_ran = AaRun::kNone;
+        const auto traded = run(aa, kSize, traded_ran, true);
+        what = std::string(name) + " on the traded image ends as on the copy";
+        expect(traded_ran == want && traded == out, what.c_str());
     };
     check(Aa::kSmaa, AaRun::kSmaa, "SMAA");
     check(Aa::kFxaa, AaRun::kFxaa, "FXAA");
