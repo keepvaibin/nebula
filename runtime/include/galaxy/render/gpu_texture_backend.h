@@ -54,6 +54,7 @@ public:
     // A texture create_texture made in CPU-visible memory: it is never uploaded again in place.
     [[nodiscard]] static bool direct_written(ID3D12Resource* texture) noexcept;
     [[nodiscard]] static bool supports_bc1() noexcept { return true; }
+    [[nodiscard]] static bool supports_astc4x4() noexcept { return false; }
     // A texture made by create_texture that the pool may hand out again for the same extent.
     [[nodiscard]] static bool poolable(ID3D12Resource* texture, std::uint32_t& width, std::uint32_t& height,
                                        std::uint32_t& levels);

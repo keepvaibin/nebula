@@ -6,6 +6,7 @@
 
 #include "galaxy/windows_api.h"
 
+#include "galaxy/render/block4_astc.h"
 #include "galaxy/render/render_core.h"
 #include "galaxy/render/texture_store.h"
 #include "galaxy/render/texture_pack.h"
@@ -501,6 +502,49 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
 
 }  // namespace
 
+// BLOCK4 blocks as ASTC 4x4: two blocks against bytes an independent decoder of the ASTC specification decodes to the
+// record's colours (within the header's bound), and every block back to itself.
+void test_block4_astc() {
+    namespace astc = galaxy::render::block4_astc;
+    const std::uint8_t four[8] = {0x00, 0xF8, 0x1F, 0x00, 0xE4, 0xE4, 0xE4, 0xE4};
+    const std::uint8_t four_astc[16] = {0x43, 0x00, 0xFF, 0x01, 0x00, 0x00, 0x00, 0xFE,
+                                        0x01, 0x00, 0x40, 0x39, 0x8D, 0x70, 0xA4, 0x70};
+    const std::uint8_t three[8] = {0x1F, 0x00, 0x00, 0xF8, 0x24, 0x49, 0x92, 0x24};
+    const std::uint8_t three_astc[16] = {0x51, 0x00, 0x01, 0xFE, 0x01, 0x00, 0xFE, 0x01,
+                                         0x00, 0x00, 0x00, 0x00, 0x00, 0x63, 0xE4, 0x1E};
+    std::uint8_t out[16];
+    astc::from_block4(four, out);
+    expect(std::memcmp(out, four_astc, 16) == 0, "a four-colour block as ASTC");
+    astc::from_block4(three, out);
+    expect(std::memcmp(out, three_astc, 16) == 0, "a three-colour block as ASTC");
+    std::uint32_t state = 12345u;
+    bool round_trip = true;
+    for (unsigned n = 0; n < 20000u; ++n) {
+        std::uint8_t block[8];
+        for (auto& byte : block) {
+            state = state * 1664525u + 1013904223u;
+            byte = static_cast<std::uint8_t>(state >> 24);
+        }
+        if (n % 4u == 0u) {
+            block[2] = block[0];
+            block[3] = block[1];
+        }
+        // The record's blocks are opaque (texture.rs blocks_opaque): a three-colour block has no index 3.
+        const unsigned c0 = block[0] | block[1] << 8, c1 = block[2] | block[3] << 8;
+        if (c0 <= c1) {
+            for (unsigned k = 4; k < 8u; ++k) {
+                const unsigned threes = block[k] & block[k] >> 1 & 0x55u;
+                block[k] = static_cast<std::uint8_t>(block[k] & ~threes);
+            }
+        }
+        std::uint8_t back[8];
+        astc::from_block4(block, out);
+        astc::to_block4(out, back);
+        round_trip = round_trip && std::memcmp(back, block, 8) == 0;
+    }
+    expect(round_trip, "every block back to itself");
+}
+
 // A category off leaves its textures out of a pack's index; the others stay.
 void test_categories_off() {
     const std::filesystem::path root = galaxy::test_temp_path("nebula_pack_categories");
@@ -532,6 +576,7 @@ int main() {
     test_dds(root);
     test_png(root);
     test_sampler_shift();
+    test_block4_astc();
     test_priority(root);
     Gpu gpu;
     if (!gpu.create()) {

@@ -5,6 +5,7 @@
 #include "galaxy/render/texture_store.h"
 
 #include "galaxy/loss_report.h"
+#include "galaxy/render/block4_astc.h"
 #include "galaxy/render/render_config.h"
 #include "nebula_cooked_texture.h"
 #include "nebula_game_api.h"
@@ -249,7 +250,12 @@ TextureStore::Staged TextureStore::stage(const std::uint8_t* texels, std::uint32
     switch (layout) {
     case NEBULA_TEXTURE_L8: staged.format = TexelFormat::R8; break;
     case NEBULA_TEXTURE_LA8: staged.format = TexelFormat::Rg8; break;
-    case NEBULA_TEXTURE_BLOCK4: staged.format = TextureBackend::supports_bc1() ? TexelFormat::Bc1 : TexelFormat::Rgba8; break;
+    // Without BC1: ASTC 4x4 where the GPU samples it (block4_astc.h: the colours as close as it states), else RGBA8.
+    case NEBULA_TEXTURE_BLOCK4:
+        staged.format = TextureBackend::supports_bc1()        ? TexelFormat::Bc1
+                        : TextureBackend::supports_astc4x4() ? TexelFormat::Astc4x4
+                                                             : TexelFormat::Rgba8;
+        break;
     default: staged.format = TexelFormat::Rgba8; break;
     }
     const bool expand = staged.format == TexelFormat::Rgba8 && layout != NEBULA_TEXTURE_RGBA8;
@@ -275,6 +281,15 @@ TextureStore::Staged TextureStore::stage(const std::uint8_t* texels, std::uint32
             detail::expand_record_level(layout, source, lw, lh, expanded.data());
             for (std::uint32_t y = 0; y < lh; ++y) {
                 std::memcpy(out + std::size_t{y} * staged.pitches[l], expanded.data() + std::size_t{y} * lw, std::size_t{lw} * 4u);
+            }
+        } else if (staged.format == TexelFormat::Astc4x4) {
+            const std::uint32_t across = (lw + 3u) / 4u;
+            const std::uint32_t rows = texel_rows(staged.format, lh);
+            for (std::uint32_t y = 0; y < rows; ++y) {
+                std::uint8_t* const row = out + std::size_t{y} * staged.pitches[l];
+                for (std::uint32_t x = 0; x < across; ++x) {
+                    block4_astc::from_block4(source + (std::size_t{y} * across + x) * 8u, row + std::size_t{x} * block4_astc::kBlockBytes);
+                }
             }
         } else {
             const std::uint32_t row = texel_row_bytes(staged.format, lw);
@@ -752,6 +767,12 @@ void TextureStore::dump_base_level(const Staged& staged, const PackName& name) {
         std::vector<std::uint8_t> packed(std::size_t{row} * rows);
         for (std::uint32_t y = 0; y < rows; ++y) {
             std::memcpy(packed.data() + std::size_t{y} * row, base + std::size_t{y} * staged.pitches[0], row);
+        }
+        if (staged.format == TexelFormat::Astc4x4) {
+            // The record's blocks back, so the dump holds the texture's own colours.
+            for (std::size_t b = 0; b < packed.size() / block4_astc::kBlockBytes; ++b) {
+                block4_astc::to_block4(packed.data() + b * block4_astc::kBlockBytes, packed.data() + b * 8u);
+            }
         }
         detail::expand_record_level(staged.layout, packed.data(), width, height, pixels.data());
     }

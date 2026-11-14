@@ -452,12 +452,14 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     sample_rate_shading_ = available.sampleRateShading == VK_TRUE;
     enabled.samplerAnisotropy = available.samplerAnisotropy;
     enabled.textureCompressionBC = available.textureCompressionBC;
+    enabled.textureCompressionASTC_LDR = available.textureCompressionASTC_LDR;
     enabled.depthClamp = available.depthClamp;
     enabled.independentBlend = available.independentBlend;
     enabled.shaderImageGatherExtended = available.shaderImageGatherExtended;
     enabled.pipelineStatisticsQuery = available.pipelineStatisticsQuery;
     sampler_anisotropy_ = available.samplerAnisotropy == VK_TRUE;
     bc_textures_ = available.textureCompressionBC == VK_TRUE;
+    astc_textures_ = available.textureCompressionASTC_LDR == VK_TRUE;
     gather_extended_ = available.shaderImageGatherExtended == VK_TRUE;
     pipeline_statistics_ = available.pipelineStatisticsQuery == VK_TRUE;
 

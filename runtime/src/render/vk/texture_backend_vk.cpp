@@ -31,6 +31,7 @@ VkFormat vulkan_format_of(TexelFormat format) noexcept {
     return format == TexelFormat::R8    ? VK_FORMAT_R8_UNORM
            : format == TexelFormat::Rg8 ? VK_FORMAT_R8G8_UNORM
            : format == TexelFormat::Bc1 ? VK_FORMAT_BC1_RGBA_UNORM_BLOCK
+           : format == TexelFormat::Astc4x4 ? VK_FORMAT_ASTC_4x4_UNORM_BLOCK
                                         : VK_FORMAT_R8G8B8A8_UNORM;
 }
 
@@ -78,8 +79,9 @@ constexpr VkAccessFlags2 kAcquireAccess = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT | 
 bool TextureBackend::initialize(gpu::Device*, std::uint32_t view_capacity) {
     host_formats_ = 0u;
     if (vk::Context::get().host_image_copy()) {
-        for (const TexelFormat format : {TexelFormat::Rgba8, TexelFormat::R8, TexelFormat::Rg8, TexelFormat::Bc1}) {
-            if ((format != TexelFormat::Bc1 || supports_bc1()) && host_copy_format(vulkan_format_of(format))) {
+        for (const TexelFormat format : {TexelFormat::Rgba8, TexelFormat::R8, TexelFormat::Rg8, TexelFormat::Bc1, TexelFormat::Astc4x4}) {
+            if ((format != TexelFormat::Bc1 || supports_bc1()) && (format != TexelFormat::Astc4x4 || supports_astc4x4()) &&
+                host_copy_format(vulkan_format_of(format))) {
                 host_formats_ |= 1u << static_cast<unsigned>(format);
             }
         }
@@ -220,6 +222,10 @@ void TextureBackend::release_upload_chunk(UploadChunk& chunk) noexcept {
 
 bool TextureBackend::supports_bc1() {
     return vk::Context::get().bc_textures();
+}
+
+bool TextureBackend::supports_astc4x4() {
+    return vk::Context::get().astc_textures();
 }
 
 gpu::TextureRef TextureBackend::create_texture(

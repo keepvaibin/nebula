@@ -113,6 +113,7 @@ public:
                     VkSurfaceKHR* surface = nullptr, bool ray_tracing = false);
     void shutdown() noexcept;
     [[nodiscard]] bool bc_textures() const noexcept { return bc_textures_; }
+    [[nodiscard]] bool astc_textures() const noexcept { return astc_textures_; }
     [[nodiscard]] bool ready() const noexcept { return device_ != VK_NULL_HANDLE; }
     // Why the last initialize failed (for the player's error message).
     [[nodiscard]] const std::string& failure() const noexcept { return failure_; }
@@ -329,6 +330,7 @@ private:
     bool gather_extended_ = false;
     bool pipeline_statistics_ = false;
     bool bc_textures_ = false;
+    bool astc_textures_ = false;
     bool memory_budget_ = false;
     // device_memory_budget's last read of the driver's figures (VK_EXT_memory_budget): at most every 100 ms; render thread.
     mutable std::int64_t memory_read_ms_ = 0;
