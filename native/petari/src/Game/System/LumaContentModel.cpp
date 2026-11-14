@@ -178,6 +178,31 @@ namespace luma {
                     return strcmp(pA, pB) == 0;
                 }
 
+                // A new model's level block (models 6): "<id>:<path>Middle" or "<id>:<path>Low" in the store beside its base
+                // "<id>:<path>". It is a level of that model, not a model to attach. The endings are matched with their
+                // capitals and need a name before them in the last segment, as the cook finds levels (overlay.rs
+                // level_alone). A game archive's name (no ':') is never one: the game's own Low archives are models.
+                bool isLevelBlock(const char* pName) {
+                    if (strchr(pName, ':') == nullptr) {
+                        return false;
+                    }
+                    const size_t length = strlen(pName);
+                    const char* const cEndings[] = {"Middle", "Low"};
+                    for (const char* pEnding : cEndings) {
+                        const size_t ending = strlen(pEnding);
+                        if (length <= ending || strcmp(pName + length - ending, pEnding) != 0) {
+                            continue;
+                        }
+                        const char before = pName[length - ending - 1];
+                        if (before == ':' || before == '/') {
+                            return false;
+                        }
+                        const MR::FormattedName base("%.*s", static_cast< int >(length - ending), pName);
+                        return MR::isExistObjectOrLayoutArchive(pName) && MR::isExistObjectOrLayoutArchive(base.c_str());
+                    }
+                    return false;
+                }
+
                 char* copyText(const char* pText) {
                     if (pText == nullptr) {
                         return nullptr;
@@ -448,6 +473,9 @@ namespace luma {
                     if (pWrong == nullptr && (!lumacore::isA(lumacore::classOf(pHost), lumacore::kClassId< LiveActor >) ||
                                               MR::isDead(pHost) || pHost->mModelManager == nullptr)) {
                         pWrong = "actor";
+                    }
+                    if (pWrong == nullptr && isLevelBlock(name)) {
+                        pWrong = "model";
                     }
                     if (pWrong != nullptr) {
                         report(pMod, pWhere, 101u, pWrong, nullptr, nullptr);
