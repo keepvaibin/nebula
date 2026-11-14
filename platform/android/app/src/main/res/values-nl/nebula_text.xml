@@ -124,4 +124,20 @@
     <string name="nebula_version">Versie %1$s</string>
     <string name="nebula_about_text">Nebula draait Super Mario Galaxy native: de code van het spel is de decompilatie van Petari, gecompileerd voor dit apparaat en getekend met Vulkan. De bestanden van het spel komen van je eigen schijf. Nebula is niet gelieerd aan of goedgekeurd door Nintendo.</string>
     <string name="nebula_licenses">Opensourcelicenties</string>
+    <string name="nebula_file_unreadable">Dat bestand kon niet worden gelezen</string>
+    <string name="nebula_files_failed">Die bestanden konden niet worden geïmporteerd</string>
+    <string name="nebula_mods_ready">%1$s mods zijn klaar</string>
+    <string name="nebula_mods_some_ready">%1$s van %2$s mods zijn klaar</string>
+    <string name="nebula_mods_turn_on">Zet ze aan onder Mods in de instellingen van het spel.</string>
+    <string name="nebula_set_up_first">Stel eerst het spel in</string>
+    <string name="nebula_drop_disc_to_start">Zet je schijfkopie hier neer om te beginnen.</string>
+    <string name="nebula_miis_failed">De Mii\'s konden niet worden geïmporteerd</string>
+    <string name="nebula_unknown_error">Onbekende fout.</string>
+    <string name="nebula_saves_failed">De opgeslagen spellen konden niet worden verplaatst</string>
+    <string name="nebula_disc_unreadable">De schijfkopie kon niet worden gelezen: %1$s</string>
+    <string name="nebula_game_could_not_continue">Het spel kon niet doorgaan</string>
+    <string name="nebula_game_crashed">Het spel is onverwacht gestopt. Het logboek van die sessie kan helpen de oorzaak te vinden.</string>
+    <string name="nebula_game_not_responding">Het spel reageerde niet meer en is gesloten.</string>
+    <string name="nebula_game_low_memory">Android heeft het spel gesloten om geheugen vrij te maken. Andere apps sluiten voor het spelen kan helpen.</string>
+    <string name="nebula_game_closed">Het spel is gesloten</string>
 </resources>

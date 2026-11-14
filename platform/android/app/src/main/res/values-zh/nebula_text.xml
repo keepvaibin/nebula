@@ -124,4 +124,20 @@
     <string name="nebula_version">版本 %1$s</string>
     <string name="nebula_about_text">Nebula 以原生方式运行 Super Mario Galaxy：游戏代码是 Petari 的反编译，为此设备编译并使用 Vulkan 绘制。游戏文件来自你自己的光盘。Nebula 与 Nintendo 无关，也未获得 Nintendo 认可。</string>
     <string name="nebula_licenses">开源许可证</string>
+    <string name="nebula_file_unreadable">无法读取该文件</string>
+    <string name="nebula_files_failed">无法导入这些文件</string>
+    <string name="nebula_mods_ready">%1$s 个模组已就绪</string>
+    <string name="nebula_mods_some_ready">%2$s 个模组中有 %1$s 个已就绪</string>
+    <string name="nebula_mods_turn_on">请在游戏设置的“模组”中开启它们。</string>
+    <string name="nebula_set_up_first">请先设置游戏</string>
+    <string name="nebula_drop_disc_to_start">将光盘映像拖放到此处开始。</string>
+    <string name="nebula_miis_failed">无法导入 Mii</string>
+    <string name="nebula_unknown_error">未知错误。</string>
+    <string name="nebula_saves_failed">无法移动存档</string>
+    <string name="nebula_disc_unreadable">无法读取光盘映像：%1$s</string>
+    <string name="nebula_game_could_not_continue">游戏无法继续</string>
+    <string name="nebula_game_crashed">游戏意外停止。该次运行的日志可帮助找出原因。</string>
+    <string name="nebula_game_not_responding">游戏无响应，已关闭。</string>
+    <string name="nebula_game_low_memory">Android 为释放内存关闭了游戏。游玩前关闭其他应用可能会有帮助。</string>
+    <string name="nebula_game_closed">游戏已关闭</string>
 </resources>

@@ -124,4 +124,20 @@
     <string name="nebula_version">バージョン %1$s</string>
     <string name="nebula_about_text">NebulaはSuper Mario Galaxyをネイティブに動かします。ゲームのコードはPetariの逆コンパイルをこの端末向けにコンパイルしたもので、Vulkanで描画します。ゲームのファイルはあなた自身のディスクから取り込みます。NebulaはNintendoとは無関係で、Nintendoの承認も受けていません。</string>
     <string name="nebula_licenses">オープンソースライセンス</string>
+    <string name="nebula_file_unreadable">そのファイルは読み込めませんでした</string>
+    <string name="nebula_files_failed">それらのファイルは取り込めませんでした</string>
+    <string name="nebula_mods_ready">%1$s 個のModの準備ができました</string>
+    <string name="nebula_mods_some_ready">%2$s 個中 %1$s 個のModの準備ができました</string>
+    <string name="nebula_mods_turn_on">ゲームの設定のModでオンにしてください。</string>
+    <string name="nebula_set_up_first">先にゲームをセットアップしてください</string>
+    <string name="nebula_drop_disc_to_start">ここにディスクイメージをドロップして始めます。</string>
+    <string name="nebula_miis_failed">Miiを取り込めませんでした</string>
+    <string name="nebula_unknown_error">不明なエラーです。</string>
+    <string name="nebula_saves_failed">セーブデータを移せませんでした</string>
+    <string name="nebula_disc_unreadable">ディスクイメージを読み込めませんでした：%1$s</string>
+    <string name="nebula_game_could_not_continue">ゲームを続けられませんでした</string>
+    <string name="nebula_game_crashed">ゲームが予期せず終了しました。そのプレイのログが原因の特定に役立ちます。</string>
+    <string name="nebula_game_not_responding">ゲームが応答しなくなったため終了しました。</string>
+    <string name="nebula_game_low_memory">Androidがメモリを空けるためにゲームを終了しました。プレイ前にほかのアプリを閉じると改善する場合があります。</string>
+    <string name="nebula_game_closed">ゲームが終了しました</string>
 </resources>

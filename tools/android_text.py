@@ -147,6 +147,23 @@ TEXT = [
     ('nebula_version', 'Version {0}'),
     ('nebula_about_text', "Nebula runs Super Mario Galaxy natively: the game's code is Petari's decompilation, compiled for this device, drawing with Vulkan. The game's files come from your own disc. Nebula is not affiliated with or endorsed by Nintendo."),
     ('nebula_licenses', 'Open source licenses'),
+    # LauncherModel's results and the game's exit (app.getString).
+    ('nebula_file_unreadable', 'That file could not be read'),
+    ('nebula_files_failed', 'Those files could not be imported'),
+    ('nebula_mods_ready', '{0} mods are ready'),
+    ('nebula_mods_some_ready', '{0} of {1} mods are ready'),
+    ('nebula_mods_turn_on', "Turn them on under Mods in the game's settings."),
+    ('nebula_set_up_first', 'Set up the game first'),
+    ('nebula_drop_disc_to_start', 'Drop your disc image here to start.'),
+    ('nebula_miis_failed', 'The Miis could not be imported'),
+    ('nebula_unknown_error', 'Unknown error.'),
+    ('nebula_saves_failed', 'The saves could not be moved'),
+    ('nebula_disc_unreadable', 'The disc image could not be read: {0}'),
+    ('nebula_game_could_not_continue', 'The game could not continue'),
+    ('nebula_game_crashed', 'The game stopped unexpectedly. The log of that run can help find out why.'),
+    ('nebula_game_not_responding', 'The game stopped responding and was closed.'),
+    ('nebula_game_low_memory', 'Android closed the game to free memory. Closing other apps before playing can help.'),
+    ('nebula_game_closed', 'The game closed'),
 ]
 
 

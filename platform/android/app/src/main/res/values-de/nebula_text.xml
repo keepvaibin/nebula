@@ -124,4 +124,20 @@
     <string name="nebula_version">Version %1$s</string>
     <string name="nebula_about_text">Nebula führt Super Mario Galaxy nativ aus: Der Code des Spiels ist Petaris Dekompilierung, für dieses Gerät kompiliert und mit Vulkan gezeichnet. Die Dateien des Spiels stammen von deiner eigenen Disc. Nebula steht in keiner Verbindung zu Nintendo und wird nicht von Nintendo unterstützt.</string>
     <string name="nebula_licenses">Open-Source-Lizenzen</string>
+    <string name="nebula_file_unreadable">Diese Datei konnte nicht gelesen werden</string>
+    <string name="nebula_files_failed">Diese Dateien konnten nicht importiert werden</string>
+    <string name="nebula_mods_ready">%1$s Mods sind bereit</string>
+    <string name="nebula_mods_some_ready">%1$s von %2$s Mods sind bereit</string>
+    <string name="nebula_mods_turn_on">Schalte sie unter Mods in den Einstellungen des Spiels ein.</string>
+    <string name="nebula_set_up_first">Richte zuerst das Spiel ein</string>
+    <string name="nebula_drop_disc_to_start">Lege dein Disc-Abbild hier ab, um zu beginnen.</string>
+    <string name="nebula_miis_failed">Die Miis konnten nicht importiert werden</string>
+    <string name="nebula_unknown_error">Unbekannter Fehler.</string>
+    <string name="nebula_saves_failed">Die Spielstände konnten nicht verschoben werden</string>
+    <string name="nebula_disc_unreadable">Das Disc-Abbild konnte nicht gelesen werden: %1$s</string>
+    <string name="nebula_game_could_not_continue">Das Spiel konnte nicht fortgesetzt werden</string>
+    <string name="nebula_game_crashed">Das Spiel wurde unerwartet beendet. Das Protokoll dieses Starts kann helfen, den Grund zu finden.</string>
+    <string name="nebula_game_not_responding">Das Spiel reagierte nicht mehr und wurde geschlossen.</string>
+    <string name="nebula_game_low_memory">Android hat das Spiel geschlossen, um Speicher freizugeben. Andere Apps vor dem Spielen zu schließen kann helfen.</string>
+    <string name="nebula_game_closed">Das Spiel wurde geschlossen</string>
 </resources>

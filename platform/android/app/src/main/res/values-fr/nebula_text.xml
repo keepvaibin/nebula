@@ -124,4 +124,20 @@
     <string name="nebula_version">Version %1$s</string>
     <string name="nebula_about_text">Nebula exécute Super Mario Galaxy nativement : le code du jeu est la décompilation de Petari, compilée pour cet appareil et affichée avec Vulkan. Les fichiers du jeu proviennent de votre propre disque. Nebula n\'est ni affilié à Nintendo ni approuvé par Nintendo.</string>
     <string name="nebula_licenses">Licences open source</string>
+    <string name="nebula_file_unreadable">Ce fichier n\'a pas pu être lu</string>
+    <string name="nebula_files_failed">Ces fichiers n\'ont pas pu être importés</string>
+    <string name="nebula_mods_ready">%1$s mods sont prêts</string>
+    <string name="nebula_mods_some_ready">%1$s mods sur %2$s sont prêts</string>
+    <string name="nebula_mods_turn_on">Activez-les sous Mods dans les réglages du jeu.</string>
+    <string name="nebula_set_up_first">Configurez d\'abord le jeu</string>
+    <string name="nebula_drop_disc_to_start">Déposez votre image disque ici pour commencer.</string>
+    <string name="nebula_miis_failed">Les Mii n\'ont pas pu être importés</string>
+    <string name="nebula_unknown_error">Erreur inconnue.</string>
+    <string name="nebula_saves_failed">Les sauvegardes n\'ont pas pu être déplacées</string>
+    <string name="nebula_disc_unreadable">L\'image disque n\'a pas pu être lue : %1$s</string>
+    <string name="nebula_game_could_not_continue">Le jeu n\'a pas pu continuer</string>
+    <string name="nebula_game_crashed">Le jeu s\'est arrêté de façon inattendue. Le journal de cette partie peut aider à comprendre pourquoi.</string>
+    <string name="nebula_game_not_responding">Le jeu ne répondait plus et a été fermé.</string>
+    <string name="nebula_game_low_memory">Android a fermé le jeu pour libérer de la mémoire. Fermer d\'autres applications avant de jouer peut aider.</string>
+    <string name="nebula_game_closed">Le jeu s\'est fermé</string>
 </resources>
