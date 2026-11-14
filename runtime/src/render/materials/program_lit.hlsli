@@ -206,6 +206,21 @@ float3 enh_finish(float3 frag, EnhShade e) {
     return enh_srgb((view_flags & 4u) != 0u ? lit : enh_shoulder(lit));
 }
 
+// Ray tracing's forms keep the full call (their compiled bytes stay as they were).
+#if NATIVE_TRACED || NATIVE_PREPASS
+#define enh_finish_bare(frag) enh_finish(frag, g_enh)
+#else
+// enh_finish of a program that adds no highlight (its spec and metal stay zero, so lit is the colour's own linear value):
+// the wide target takes the colour itself, enh_srgb(enh_lin(x)) being x to pow's rounding.
+float3 enh_finish_bare(float3 frag) {
+    const float3 x = saturate(frag);
+    [branch] if ((view_flags & 4u) != 0u) {
+        return x;
+    }
+    return enh_srgb(enh_shoulder(enh_lin(x)));
+}
+#endif
+
 float4 enh_env(float4 t) {
     return enh_on() ? float4(saturate(t.rgb * g_enh.env_gain), t.a) : t;
 }

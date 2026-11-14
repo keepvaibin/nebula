@@ -5,6 +5,7 @@
 #include "galaxy/render/texture_store.h"
 
 #include "galaxy/loss_report.h"
+#include "galaxy/render/block4_astc.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/rt_caps.h"
 #include "nebula_cooked_texture.h"
@@ -253,10 +254,20 @@ TextureStore::Staged TextureStore::stage(const std::uint8_t* texels, std::uint32
     switch (layout) {
     case NEBULA_TEXTURE_L8: staged.format = TexelFormat::R8; break;
     case NEBULA_TEXTURE_LA8: staged.format = TexelFormat::Rg8; break;
-    case NEBULA_TEXTURE_BLOCK4: staged.format = TextureBackend::supports_bc1() ? TexelFormat::Bc1 : TexelFormat::Rgba8; break;
+    // Without BC1: ASTC 4x4 where the GPU samples it (block4_astc.h: the colours as close as it states); without either,
+    // 16-bit R5G6B5 (each texel the nearest such colour: within 4.10 of a 255th in red and blue, 2.00 in green; the
+    // record's blocks are opaque), RGBA8 while textures are dumped (a dump holds the record's own colours).
+    case NEBULA_TEXTURE_BLOCK4:
+        staged.format = TextureBackend::supports_bc1()       ? TexelFormat::Bc1
+                        : TextureBackend::supports_astc4x4() ? TexelFormat::Astc4x4
+                        : TextureBackend::supports_rgb565() && !dumping_.load(std::memory_order_relaxed)
+                            ? TexelFormat::Rgb565
+                            : TexelFormat::Rgba8;
+        break;
     default: staged.format = TexelFormat::Rgba8; break;
     }
-    const bool expand = staged.format == TexelFormat::Rgba8 && layout != NEBULA_TEXTURE_RGBA8;
+    const bool expand =
+        (staged.format == TexelFormat::Rgba8 && layout != NEBULA_TEXTURE_RGBA8) || staged.format == TexelFormat::Rgb565;
     std::uint64_t bytes = 0u;
     for (std::uint32_t l = 0; l < levels; ++l) {
         const std::uint32_t lw = std::max(1u, width >> l);
@@ -277,8 +288,32 @@ TextureStore::Staged TextureStore::stage(const std::uint8_t* texels, std::uint32
         if (expand) {
             expanded.resize(std::size_t{lw} * lh);
             detail::expand_record_level(layout, source, lw, lh, expanded.data());
-            for (std::uint32_t y = 0; y < lh; ++y) {
-                std::memcpy(out + std::size_t{y} * staged.pitches[l], expanded.data() + std::size_t{y} * lw, std::size_t{lw} * 4u);
+            if (staged.format == TexelFormat::Rgb565) {
+                // The nearest 5/6/5-bit value: round(v * 31 / 255) (v * 62 is even, 255 * odd is not: no ties), and 63.
+                for (std::uint32_t y = 0; y < lh; ++y) {
+                    std::uint8_t* const row = out + std::size_t{y} * staged.pitches[l];
+                    for (std::uint32_t x = 0; x < lw; ++x) {
+                        const RGBA8& c = expanded[std::size_t{y} * lw + x];
+                        const unsigned packed = (c.r * 31u + 127u) / 255u << 11 | (c.g * 63u + 127u) / 255u << 5 |
+                                                (c.b * 31u + 127u) / 255u;
+                        row[2u * x] = static_cast<std::uint8_t>(packed);
+                        row[2u * x + 1u] = static_cast<std::uint8_t>(packed >> 8);
+                    }
+                }
+            } else {
+                for (std::uint32_t y = 0; y < lh; ++y) {
+                    std::memcpy(out + std::size_t{y} * staged.pitches[l], expanded.data() + std::size_t{y} * lw,
+                                std::size_t{lw} * 4u);
+                }
+            }
+        } else if (staged.format == TexelFormat::Astc4x4) {
+            const std::uint32_t across = (lw + 3u) / 4u;
+            const std::uint32_t rows = texel_rows(staged.format, lh);
+            for (std::uint32_t y = 0; y < rows; ++y) {
+                std::uint8_t* const row = out + std::size_t{y} * staged.pitches[l];
+                for (std::uint32_t x = 0; x < across; ++x) {
+                    block4_astc::from_block4(source + (std::size_t{y} * across + x) * 8u, row + std::size_t{x} * block4_astc::kBlockBytes);
+                }
             }
         } else {
             const std::uint32_t row = texel_row_bytes(staged.format, lw);
@@ -756,12 +791,30 @@ void TextureStore::dump_base_level(const Staged& staged, const PackName& name) {
         for (std::uint32_t y = 0; y < height; ++y) {
             std::memcpy(pixels.data() + std::size_t{y} * width, base + std::size_t{y} * staged.pitches[0], std::size_t{width} * 4u);
         }
+    } else if (staged.format == TexelFormat::Rgb565) {
+        // Staged before dumping began (stage takes RGBA8 while dumping): the 16-bit colours widened.
+        for (std::uint32_t y = 0; y < height; ++y) {
+            const std::uint8_t* const row = base + std::size_t{y} * staged.pitches[0];
+            for (std::uint32_t x = 0; x < width; ++x) {
+                const unsigned c = row[2u * x] | row[2u * x + 1u] << 8;
+                const unsigned r = c >> 11, g = (c >> 5) & 63u, b = c & 31u;
+                pixels[std::size_t{y} * width + x] =
+                    RGBA8{static_cast<std::uint8_t>(r << 3 | r >> 2), static_cast<std::uint8_t>(g << 2 | g >> 4),
+                          static_cast<std::uint8_t>(b << 3 | b >> 2), 0xFFu};
+            }
+        }
     } else {
         const std::uint32_t row = texel_row_bytes(staged.format, width);
         const std::uint32_t rows = texel_rows(staged.format, height);
         std::vector<std::uint8_t> packed(std::size_t{row} * rows);
         for (std::uint32_t y = 0; y < rows; ++y) {
             std::memcpy(packed.data() + std::size_t{y} * row, base + std::size_t{y} * staged.pitches[0], row);
+        }
+        if (staged.format == TexelFormat::Astc4x4) {
+            // The record's blocks back, so the dump holds the texture's own colours.
+            for (std::size_t b = 0; b < packed.size() / block4_astc::kBlockBytes; ++b) {
+                block4_astc::to_block4(packed.data() + b * block4_astc::kBlockBytes, packed.data() + b * 8u);
+            }
         }
         detail::expand_record_level(staged.layout, packed.data(), width, height, pixels.data());
     }
@@ -1023,6 +1076,7 @@ void TextureStore::configure_texture_packs(const TexturePackSettings& settings) 
         stager_set_ = true;
     }
     packs_.configure(settings);
+    dumping_.store(packs_.dumping(), std::memory_order_relaxed);
 }
 
 void TextureStore::apply_texture_packs() {

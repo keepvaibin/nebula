@@ -42,6 +42,7 @@ enum class Format : std::uint32_t {
     R32f = 55u,
     R32u = 53u,
     Bc1 = 130u,
+    Astc4x4 = 204u,  // LDR; every Apple GPU family
     Depth32fStencil8 = 260u,
     Depth32f = 252u,
     Stencil8 = 253u,
