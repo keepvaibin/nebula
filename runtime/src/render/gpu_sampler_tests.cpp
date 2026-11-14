@@ -149,6 +149,35 @@ int main() {
         passed &= expect(pipelines.failures() == 2, "pipeline IDs past 32 bits reach separate cache cells");
         pipelines.shutdown();
     }
+    {
+        // texture_table: one id per list content, from the lookup or this thread's remembered answer alike.
+        NebulaFrameTexture la[2]{}, lb[2]{}, wide[9]{};
+        la[0].texture = 5u; la[1].texture = 6u; la[1].lod_bias = -0.5f;
+        lb[0] = la[0]; lb[1] = la[1]; lb[1].wrap_s = 1u;
+        for (std::uint32_t i = 0; i < 9u; ++i) wide[i].texture = 10u + i;
+        core::Registries regs, other;
+        const std::uint32_t ta = regs.texture_table(la, 2u);
+        const std::uint32_t tb = regs.texture_table(lb, 2u);
+        passed &= expect(ta != 0u && tb != 0u && ta != tb, "lists differing in one sampler field are two tables");
+        passed &= expect(regs.texture_table(la, 2u) == ta && regs.texture_table(lb, 2u) == tb && regs.texture_table(la, 2u) == ta,
+                         "a list asked again is the same table");
+        passed &= expect(regs.texture_table(la, 1u) != ta && regs.texture_table(la, 1u) == regs.texture_table(la, 1u),
+                         "a shorter list is its own table");
+        const std::uint32_t tw = regs.texture_table(wide, 9u);
+        passed &= expect(regs.texture_table(wide, 9u) == tw, "a list longer than the remembered ones is found by the lookup");
+        passed &= expect(regs.texture_table(nullptr, 0u) == regs.texture_table(nullptr, 0u), "the empty list is one table");
+        const std::uint32_t sb = other.texture_table(lb, 2u);
+        passed &= expect(sb == 1u && other.texture_table(la, 2u) == 2u && regs.texture_table(lb, 2u) == tb,
+                         "each registries object keeps its own ids on one thread");
+        std::vector<gpu::Table> retired;
+        const std::uint32_t freed[] = {6u};
+        regs.forget_textures(freed, retired);
+        const std::uint32_t anew = regs.texture_table(la, 2u);
+        passed &= expect(anew != ta && anew != tb && regs.texture_table(la, 2u) == anew,
+                         "a list dropped with its texture is registered anew, not answered from memory");
+        const auto ops = regs.take_ops();
+        passed &= expect(ops.tables.size() == 6u, "every new table reaches the render thread once");
+    }
     if (device) {
         TextureBackend backend;
         passed &= expect(backend.initialize(device.Get(), 65536u), "texture view page setup");
