@@ -525,7 +525,8 @@ private:
                                                      vk::UtilitySpirv vs_shader, vk::UtilitySpirv ps_shader,
                                                      VkColorComponentFlags write_mask, bool blend, bool strip,
                                                      bool depth_write,
-                                                     VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT);
+                                                     VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT,
+                                                     bool color_attachment = true);
     [[nodiscard]] VkShaderModule utility_module(vk::UtilitySpirv shader);
 
     // Frame recording.
@@ -629,7 +630,7 @@ private:
     // The scene target's framebuffer and colour conversion input: the set's own, or for an image taken into the
     // scene, the image's framebuffer (vk::Texture::scene_framebuffer, with the scene target's depth) and a set in the
     // frame's descriptors.
-    [[nodiscard]] VkFramebuffer scene_framebuffer(bool resolved = false);
+    [[nodiscard]] VkFramebuffer scene_framebuffer();
     [[nodiscard]] VkDescriptorSet scene_color_source();
     [[nodiscard]] VkFramebuffer framebuffer_for(vk::Texture& texture);
     void refresh_display_rate();
@@ -690,11 +691,10 @@ private:
         VkFramebuffer framebuffer = VK_NULL_HANDLE;
         VkDescriptorSet color_source = VK_NULL_HANDLE;
         // MSAA (samples above one): the multisampled targets the scene target pass draws into, color and depth above being
-        // their resolves; resolve_framebuffer (scene_pass) holds color and depth for the depth resolve.
+        // their resolves (the depth's by resolve_scene_depth, a pass over depth alone).
         unsigned samples = 1u;
         gpu::TextureRef ms_color;
         gpu::TextureRef ms_depth;
-        VkFramebuffer resolve_framebuffer = VK_NULL_HANDLE;
         VkDescriptorSet ms_depth_source = VK_NULL_HANDLE;
         bool depth_dirty = false;
         // Its colour is an image a hand-over gave it (E-10): framebuffer and colour input per image (scene_framebuffer).
@@ -881,6 +881,7 @@ private:
     UploadRing matrix_ring_;
     std::unordered_map<SamplerCacheKey, VkSampler, SamplerCacheKeyHasher> samplers_;  // sampler key << 32 | config key
     std::unordered_map<SamplerTableKey, VkDescriptorSet, SamplerTableKeyHasher> sampler_tables_;
+    std::vector<VkDescriptorSet> free_sampler_tables_;  // sets of tables of an older sampler configuration, written again
     std::uint32_t sampler_config_ = 0;
     gpu::Table default_sampler_table_{};
     // Descriptor indexing (vk::Context::bindless): the image array (set 1) and the sampler array (set 2) every draw reads,

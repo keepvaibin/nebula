@@ -141,7 +141,7 @@ bool GameBloomVk::build() {
         info.stage.module = shader;
         info.stage.pName = entries[i];
         info.layout = layout_;
-        const VkResult result = vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &compute_[i]);
+        const VkResult result = vkCreateComputePipelines(device, shared_pipeline_cache(), 1, &info, nullptr, &compute_[i]);
         vkDestroyShaderModule(device, shader, nullptr);
         if (result != VK_SUCCESS) {
             compute_[i] = VK_NULL_HANDLE;
@@ -238,7 +238,7 @@ VkPipeline GameBloomVk::composite_pipeline(VkRenderPass pass, unsigned samples_l
         info.pDynamicState = &dynamic;
         info.layout = layout_;
         info.renderPass = pass;
-        if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &pipeline) != VK_SUCCESS) {
+        if (vkCreateGraphicsPipelines(device, shared_pipeline_cache(), 1, &info, nullptr, &pipeline) != VK_SUCCESS) {
             pipeline = VK_NULL_HANDLE;
             std::cerr << "[bloom] composite pipeline failed for " << (1u << samples_log2) << " samples\n";
         }
