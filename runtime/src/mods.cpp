@@ -2125,7 +2125,7 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                     if (walk_error) note(layer.path + "/merge: the folder could not be read in full");
                     std::sort(found.begin(), found.end());
                     for (const fs::path& file : found) {
-                        plan.merges.push_back({galaxy::path_text(file.lexically_relative(*merge).generic_string()), file});
+                        plan.merges.push_back({galaxy::path_text(file.lexically_relative(*merge).generic_string()), file, mod.id});
                     }
                 }
                 // A layer's assets/ goes into the mod's own store at Luma/<id>/<path> (luma-format 5, G's decision of
@@ -2145,7 +2145,7 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                     for (const fs::path& file : found) {
                         const std::string under = galaxy::path_text(file.lexically_relative(*assets).generic_string());
                         if (under == "effects.json") {
-                            plan.merges.push_back({own + under, file});
+                            plan.merges.push_back({own + under, file, mod.id});
                         } else {
                             set_file(own + under, file);
                         }

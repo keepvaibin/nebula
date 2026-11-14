@@ -4420,9 +4420,20 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
     if (plan.files.empty() && plan.merges.empty() && plan.patches.empty() && plan.textures.empty()) {
         return;
     }
+    // Each plan line that can make a cook fact, by the paths that fact names (its store path, or the mod's file as the
+    // plan writes it), with its mod: a merge by its own file, as two mods' merges add to one game file.
     gCookOwners.clear();
     for (const galaxy::mods::ModPlan::File& file : plan.files) {
         if (!file.mod_id.empty()) gCookOwners.emplace_back(file.disc, file.mod_id);
+    }
+    for (const galaxy::mods::ModPlan::File& merge : plan.merges) {
+        if (!merge.mod_id.empty()) gCookOwners.emplace_back(galaxy::path_text(merge.host), merge.mod_id);
+    }
+    for (const galaxy::mods::ModPlan::Patch& patch : plan.patches) {
+        if (!patch.mod_id.empty()) gCookOwners.emplace_back(galaxy::path_text(patch.host), patch.mod_id);
+    }
+    for (const galaxy::mods::ModPlan::Patch& texture : plan.textures) {
+        if (!texture.mod_id.empty()) gCookOwners.emplace_back(galaxy::path_text(texture.host), texture.mod_id);
     }
     const fs::path folder = settings_folder / "mods" / ".cooked";
     const fs::path overlay = folder / "mods.pak";

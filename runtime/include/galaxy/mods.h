@@ -235,7 +235,7 @@ struct ModPlan {
     struct File {
         std::string disc;
         std::filesystem::path host;
-        std::string mod_id;  // the mod it comes from (files only; the cook's facts name it, mod-log 9)
+        std::string mod_id;  // the mod it comes from (files and merges; the cook's facts name it, mod-log 9)
     };
     std::vector<File> files;
     // Additions to shared files (a layer's merge/ folder), bottom of the list first. `disc` is the file's path in the
