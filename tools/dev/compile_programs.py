@@ -103,8 +103,9 @@ def main():
 
     def add(stage, row, source, text, entry, defines, variant, bound_form=True):
         if backend == "dxbc":
+            # Both stages declare the tables (program.hlsli); only a pixel program reads its stored bound form.
+            defines = defines + DXBC_TABLE
             if stage == "ps":
-                defines = defines + DXBC_TABLE
                 variant += BOUND_OFFSET
             bound_form = False
         key = hashlib.sha1(("\0".join([tool_id, headers, text, stage, entry] + defines)).encode()).hexdigest()
@@ -209,7 +210,8 @@ def main():
         forms = rows[(stage, row)]
         with open(os.path.join(cache, forms[0] if 0 in forms else forms[BOUND_OFFSET]), "rb") as f:
             digest = (stage, hashlib.sha256(f.read()).digest())
-        if digest in seen:
+        # fxc folds texts dxc keeps apart into the same bytes: the set's dedupe is judged on the other backends.
+        if digest in seen and backend != "dxbc":
             print(f"programs {seen[digest]:016x} and {row:016x} compile the same")
             return 1
         seen[digest] = row
