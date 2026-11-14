@@ -181,6 +181,7 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     else if (std::strcmp(key, "post_process") == 0) cfg.post_process = parse_bool(val, cfg.post_process);
     else if (std::strcmp(key, "internal_height") == 0) cfg.internal_height = normalized_internal_height(parse_uint(val, cfg.internal_height));
     else if (std::strcmp(key, "hud_output_resolution") == 0) cfg.hud_output_resolution = parse_bool(val, cfg.hud_output_resolution);
+    else if (std::strcmp(key, "hud_internal_resolution") == 0) cfg.hud_internal_resolution = parse_bool(val, cfg.hud_internal_resolution);
     else if (std::strcmp(key, "hdr") == 0) cfg.hdr = parse_bool(val, cfg.hdr);
     else if (std::strcmp(key, "paper_white") == 0) cfg.paper_white = std::clamp(parse_uint(val, cfg.paper_white), 80u, 500u);
     else if (std::strcmp(key, "aa") == 0) {
@@ -571,6 +572,7 @@ void apply_performance_preset(RenderConfig& cfg) noexcept {
     cfg.enhanced_mipmaps = false;
     cfg.anisotropic_filtering = 1u;
     cfg.hud_output_resolution = false;
+    cfg.hud_internal_resolution = true;
     cfg.ray_tracing_enabled = false;
     cfg.hdr = false;
     cfg.max_fps = static_cast<float>(kGameStepsPerSecond);
@@ -669,6 +671,8 @@ bool save_render_config_to_file() {
              << "paper_white=" << cfg.paper_white << '\n'
              << "hud_output_resolution="
              << (cfg.hud_output_resolution ? 1u : 0u) << '\n'
+             << "hud_internal_resolution="
+             << (cfg.hud_internal_resolution ? 1u : 0u) << '\n'
              << "ray_tracing_enabled="
              << (cfg.ray_tracing_enabled ? 1u : 0u) << '\n'
              << "texture_packs=" << (cfg.texture_packs ? 1u : 0u) << '\n'

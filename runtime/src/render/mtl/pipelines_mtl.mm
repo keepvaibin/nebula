@@ -16,6 +16,7 @@
 #include <nebula_model.h>
 
 #include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -515,6 +516,11 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
         gPipelineUs.fetch_add(now_us() - began, std::memory_order_relaxed);
         gPipelineCount.fetch_add(1u, std::memory_order_relaxed);
         if (made == nil) {
+            // Metal names every fault of a descriptor or a program in its error: none at all, or the system's ENOMEM, is
+            // the device out of memory (pipeline_workers.h).
+            if (error == nil || ([error.domain isEqualToString:NSPOSIXErrorDomain] && error.code == ENOMEM)) {
+                note_pipeline_out_of_memory();
+            }
             std::fprintf(stderr, "[pipelines] create failed: %llx %llx state %08x variant %u aux %u: %s\n",
                          static_cast<unsigned long long>(desc.vertex), static_cast<unsigned long long>(desc.pixel), state, variant,
                          aux, error != nil ? error.localizedDescription.UTF8String : "no reason given");

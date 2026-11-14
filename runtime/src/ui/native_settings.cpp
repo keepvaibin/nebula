@@ -568,6 +568,7 @@ unsigned pending_settings_changes() {
     changes += d.ambient_occlusion_ssao != live.ambient_occlusion_ssao;
     changes += d.bloom != live.bloom;
     changes += d.hud_output_resolution != live.hud_output_resolution;
+    changes += d.hud_internal_resolution != live.hud_internal_resolution;
     changes += d.ray_tracing_enabled != live.ray_tracing_enabled;
     changes += d.rt_quality != live.rt_quality;
     changes += d.rt_parts != live.rt_parts;
@@ -997,6 +998,7 @@ void apply_native_settings_draft() {
     applied.ambient_occlusion_ssao = next.ambient_occlusion_ssao;
     applied.bloom = next.bloom;
     applied.hud_output_resolution = next.hud_output_resolution;
+    applied.hud_internal_resolution = next.hud_internal_resolution;
     applied.ray_tracing_enabled = next.ray_tracing_enabled;
     applied.rt_quality = next.rt_quality;
     applied.rt_parts = next.rt_parts;

@@ -13,9 +13,63 @@
 
 #include "galaxy/render/program_table.h"
 #include "render/core/pipeline_cache_file.h"
+#include "render/core/pipeline_workers.h"
+
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#include <mach/mach.h>
+#if TARGET_OS_IPHONE
+#include <os/proc.h>
+#endif
+#elif !defined(_WIN32)
+#include <string>
+#endif
+#include <new>
 
 namespace galaxy::render::core {
 
+namespace {
+
+// The physical memory free now, bytes (0: not known): what the start's compiles may take a share of (pipeline_workers.h).
+std::uint64_t available_physical_bytes() noexcept {
+#if defined(_WIN32)
+    MEMORYSTATUSEX status{};
+    status.dwLength = sizeof(status);
+    return GlobalMemoryStatusEx(&status) != FALSE ? static_cast<std::uint64_t>(status.ullAvailPhys) : 0u;
+#elif defined(__APPLE__) && TARGET_OS_IPHONE
+    return static_cast<std::uint64_t>(os_proc_available_memory());  // what this app may still take before the system ends it
+#elif defined(__APPLE__)
+    vm_statistics64_data_t vm{};
+    mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
+    if (host_statistics64(mach_host_self(), HOST_VM_INFO64, reinterpret_cast<host_info64_t>(&vm), &count) != KERN_SUCCESS) {
+        return 0u;
+    }
+    return (static_cast<std::uint64_t>(vm.free_count) + vm.inactive_count + vm.purgeable_count) * vm_page_size;
+#else
+    // Linux and Android: the kernel's estimate of what can be had without swapping.
+    std::ifstream meminfo("/proc/meminfo");
+    std::string line;
+    while (std::getline(meminfo, line)) {
+        unsigned long long kib = 0u;
+        if (std::sscanf(line.c_str(), "MemAvailable: %llu kB", &kib) == 1) {
+            return static_cast<std::uint64_t>(kib) * 1024u;
+        }
+    }
+    return 0u;
+#endif
+}
+
+thread_local bool tl_out_of_memory = false;
+
+std::int64_t steady_ticks() noexcept {
+    return std::chrono::steady_clock::now().time_since_epoch().count();
+}
+
+}  // namespace
+
+void note_pipeline_out_of_memory() noexcept {
+    tl_out_of_memory = true;
+}
 
 void Pipelines::initialize(gpu::Device* device, RootLayout root, void* backend) {
     device_ = device;
@@ -29,10 +83,17 @@ void Pipelines::initialize(gpu::Device* device, RootLayout root, void* backend) 
     reported_.store(false, std::memory_order_relaxed);
     scene_drawn_.store(false, std::memory_order_relaxed);  // a new device's left forms wait for its own first scene
     scene_shown_.store(false, std::memory_order_relaxed);
-    // One worker for every logical core, at the lowest priority (worker()): the list is prepared by whatever the game and render
-    // threads leave idle, and no frame waits for it. A draw whose pipeline is not made yet makes that one itself (create_now);
-    // idle workers cost nothing.
-    const unsigned count = std::max(1u, logical_cores());
+    // Workers at the lowest priority (worker()): the list is prepared by whatever the game and render threads leave idle,
+    // and no frame waits for it. A draw whose pipeline is not made yet makes that one itself (create_now); idle workers
+    // cost nothing. How many: pipeline_workers.h, from the cores and the memory free now.
+    memory_failed_.clear();
+    memory_wait_until_.store(0, std::memory_order_relaxed);
+    memory_failures_.store(0u, std::memory_order_relaxed);
+    const unsigned cores = logical_cores();
+    const std::uint64_t available = available_physical_bytes();
+    const unsigned count = pipeline_worker_count(cores, available);
+    std::fprintf(stderr, "[pipelines] %u workers (%u logical processors, %llu MB of memory free)\n", count, cores,
+                 static_cast<unsigned long long>(available >> 20u));
     workers_ = count;
     for (unsigned i = 0; i < count; ++i) {
         threads_.emplace_back([this] { worker(); });
@@ -120,6 +181,53 @@ void Pipelines::refuse(std::uint64_t id, const PipelineEntry& entry, unsigned va
     }
 }
 
+void Pipelines::failed(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux, bool memory, const Job* job) {
+    if (memory) {
+        memory_failures_.fetch_add(1u, std::memory_order_relaxed);
+        memory_wait_until_.store(steady_ticks() + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                                                      std::chrono::milliseconds(kPipelineMemoryWaitMs)).count(),
+                                 std::memory_order_relaxed);
+        bool again = false;
+        {
+            std::lock_guard guard(lock_);
+            again = ++memory_failed_[std::uint64_t{id} << 9u | key_of(variant, aux)] < kPipelineMemoryTries;
+            if (again && job != nullptr && !quit_) {
+                Job later = *job;
+                later.deferred = true;  // not counted in pending_ again: the start's drain does not wait for it
+                left_jobs_.push_back(std::move(later));
+            }
+        }
+        std::fprintf(stderr, "[pipelines] out of memory building %llx %llx variant %u aux %u: %s\n",
+                     static_cast<unsigned long long>(entry.desc.vertex), static_cast<unsigned long long>(entry.desc.pixel), variant,
+                     aux, again ? "the workers wait, then it is built again" : "refused");
+        if (again) {
+            return;
+        }
+        // The last try: refused, but not counted against the program pair (its code is not what failed).
+        failures_.fetch_add(1u, std::memory_order_relaxed);
+        std::lock_guard guard(lock_);
+        refused_.insert(std::uint64_t{id} << 9u | key_of(variant, aux));
+        return;
+    }
+    refuse(id, entry, variant, aux);
+}
+
+gpu::Pipeline* Pipelines::build_noting(const PipelineEntry& entry, unsigned variant, unsigned aux, bool& memory) {
+    tl_out_of_memory = false;
+    gpu::Pipeline* const built = build(entry, variant, aux);
+    memory = built == nullptr && tl_out_of_memory;
+    tl_out_of_memory = false;
+    return built;
+}
+
+bool Pipelines::waiting_for_memory(std::uint64_t key) {
+    if (steady_ticks() >= memory_wait_until_.load(std::memory_order_relaxed)) {
+        return false;
+    }
+    std::lock_guard guard(lock_);
+    return memory_failed_.count(key) != 0u;
+}
+
 bool Pipelines::pair_refused(const PipelineEntry& entry) {
     std::lock_guard guard(lock_);
     const auto found = refused_pairs_.find(pair_key(entry));
@@ -140,18 +248,19 @@ gpu::Pipeline* Pipelines::create_now(std::uint64_t id, const PipelineEntry& entr
             return nullptr;
         }
     }
-    if (pair_refused(entry)) {
+    if (pair_refused(entry) || waiting_for_memory(std::uint64_t{id} << 9u | key_of(variant, aux))) {
         return nullptr;
     }
     ++misses_;
     // Where pipelines link from parts, the draw gets a quick link and a worker replaces it with the optimised one.
     gpu::Pipeline* built = build_fast(entry, variant, aux);
     const bool linked = built != nullptr;
+    bool memory = false;
     if (built == nullptr) {
-        built = build(entry, variant, aux);
+        built = build_noting(entry, variant, aux, memory);
     }
     if (built == nullptr) {
-        refuse(id, entry, variant, aux);
+        failed(id, entry, variant, aux, memory, nullptr);
         return nullptr;
     }
     if (!linked && target_form(variant, aux)) {
@@ -188,6 +297,21 @@ bool blended_prepass_draws(std::uint32_t state) noexcept {
     return (state & NEBULA_STATE_COLOR_WRITE) != 0u && (state & 3u) == NEBULA_BLEND_ADD && ((state >> 2u) & 15u) == NEBULA_FACTOR_SRC_ALPHA &&
            ((state >> 6u) & 15u) == NEBULA_FACTOR_INV_SRC_ALPHA && (state & (1u << 10u)) != 0u && ((state >> 20u) & 3u) == 0u &&
            ((state >> 15u) & 3u) != NEBULA_CULL_ALL;
+}
+
+std::uint8_t scene_aux(std::uint32_t state, bool layer_window) noexcept {
+    if ((state & NEBULA_STATE_COLOR_WRITE) == 0u) {
+        return 0u;
+    }
+    const std::uint32_t op = state & 3u;
+    if (op == NEBULA_BLEND_REPLACE) {
+        return (state & (1u << 10u)) != 0u ? 1u : 0u;  // depth tested
+    }
+    const std::uint32_t src = (state >> 2u) & 15u;
+    if (layer_window && (op == NEBULA_BLEND_SUBTRACT || (src != NEBULA_FACTOR_DST_COLOR && src != NEBULA_FACTOR_INV_DST_COLOR))) {
+        return 3u;
+    }
+    return 2u;
 }
 
 void Pipelines::prepare(std::uint32_t id, const PipelineEntry& entry, const std::vector<unsigned>& variants, bool motion, bool layer,
@@ -231,6 +355,37 @@ void Pipelines::prepare(std::uint32_t id, const PipelineEntry& entry, const std:
             if (!motion || !scene) {
                 continue;
             }
+            if (!traced) {
+                // The motion forms a scene draw of this state can take (draw_walker: scene_aux, which one pass for the scene
+                // turns into 4 unless it is the motion), out of a layer window and, with `layer`, in one; aux 0 is above.
+                const auto scene_form = [&](bool layer_window) -> unsigned {
+                    const unsigned aux = scene_aux(entry.desc.state, layer_window);
+                    return one_pass && aux != 1u ? 4u : aux;
+                };
+                const unsigned out_of_window = scene_form(false);
+                const unsigned in_window = layer ? scene_form(true) : out_of_window;
+                // With the wide variant listed, walk_scene_begin draws every scene wide unless the wide targets cannot be
+                // had (begin_wide_scene: memory, the camera pass): the narrow variant's motion forms are left for after the
+                // first scene, made then or by such a draw.
+                const bool left = (variant & kSceneVariantHdr) == 0u &&
+                                  std::any_of(variants.begin(), variants.end(),
+                                              [](unsigned listed) { return (listed & kSceneVariantHdr) != 0u; });
+                const auto motion_form = [&](unsigned aux) {
+                    if (aux == 0u) {
+                        return;
+                    }
+                    if (left) {
+                        left_jobs_.push_back(Job{id, entry, variant, aux, false, true});
+                    } else {
+                        add(variant, aux);
+                    }
+                };
+                motion_form(out_of_window);
+                if (in_window != out_of_window) {
+                    motion_form(in_window);
+                }
+                continue;
+            }
             add(variant, 1u);
             if (one_pass) {
                 add(variant, 4u);
@@ -253,6 +408,12 @@ void Pipelines::worker() {
         Job job;
         {
             std::unique_lock guard(lock_);
+            // After a build failed for lack of memory no worker starts one until the wait is over (pipeline_workers.h).
+            for (std::int64_t until = memory_wait_until_.load(std::memory_order_relaxed); !quit_ && steady_ticks() < until;
+                 until = memory_wait_until_.load(std::memory_order_relaxed)) {
+                (void)wake_.wait_until(guard, std::chrono::steady_clock::time_point(std::chrono::steady_clock::duration(until)),
+                                       [this] { return quit_; });
+            }
             // The left forms only once the queue is empty and a scene has been shown (release_left).
             const auto left_ready = [this] { return scene_shown_.load(std::memory_order_relaxed) && !left_jobs_.empty(); };
             wake_.wait(guard, [&] { return quit_ || !jobs_.empty() || left_ready(); });
@@ -287,15 +448,26 @@ void Pipelines::worker() {
                 if (!job.deferred && left_to_cache(form)) {
                     left_.fetch_add(1u, std::memory_order_relaxed);
                     defer(job);  // a load from the cache then, at this thread's priority, not the draw's
-                } else if (gpu::Pipeline* built = build(job.entry, job.variant, job.aux); built != nullptr) {
-                    note_target_stored(form);
-                    publish(*at, built);
                 } else {
-                    refuse(job.id, job.entry, job.variant, job.aux);
+                    bool memory = false;
+                    if (gpu::Pipeline* built = build_noting(job.entry, job.variant, job.aux, memory); built != nullptr) {
+                        note_target_stored(form);
+                        publish(*at, built);
+                    } else {
+                        failed(job.id, job.entry, job.variant, job.aux, memory, &job);
+                    }
                 }
             }
+        } catch (const std::bad_alloc&) {
+            // Out of memory in our own code around the build: as the driver's (pipeline_workers.h).
+            try {
+                if (!job.optimize) {
+                    failed(job.id, job.entry, job.variant, job.aux, true, &job);
+                }
+            } catch (...) {
+            }
         } catch (...) {
-            // A build that throws (out of memory) is a refusal of that pipeline; an exception out of a worker would end the process.
+            // A build that throws otherwise is a refusal of that pipeline; an exception out of a worker would end the process.
             try {
                 if (!job.optimize) {
                     refuse(job.id, job.entry, job.variant, job.aux);
@@ -362,6 +534,10 @@ void Pipelines::drained() noexcept {
                      static_cast<unsigned long long>(created_.load(std::memory_order_relaxed)), workers_, static_cast<long long>(ms),
                      static_cast<unsigned long long>(misses_.load(std::memory_order_relaxed)), static_cast<unsigned long long>(failures_.load(std::memory_order_relaxed)),
                      static_cast<unsigned long long>(left_.load(std::memory_order_relaxed)), written);
+        if (const std::uint64_t memory = memory_failures_.load(std::memory_order_relaxed); memory != 0u) {
+            std::fprintf(stderr, "[pipelines] %llu builds failed for lack of memory (built again after a wait)\n",
+                         static_cast<unsigned long long>(memory));
+        }
     }
 }
 

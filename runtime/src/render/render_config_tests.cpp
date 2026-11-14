@@ -691,6 +691,19 @@ int main() {
                              preset.max_fps == 60.0f && preset.frame_generation == 0u && !preset.ray_tracing_enabled && !preset.hdr &&
                              preset.sharpness == 0u && preset.anisotropic_filtering == 1u && !preset.enhanced_mipmaps,
                          "the performance preset turns every optional pass off at 480 lines");
+        passed &= expect(!preset.hud_output_resolution && preset.hud_internal_resolution && !galaxy::render::render_hud_at_output(preset),
+                         "the performance preset draws the 2D layer at 480 lines and enlarges once at present");
+        galaxy::render::RenderConfig exact{};
+        exact.internal_height = 720u;
+        const bool before = galaxy::render::render_hud_at_output(exact);
+        exact.hud_internal_resolution = true;
+        const bool internal = galaxy::render::render_hud_at_output(exact);
+        exact.hud_output_resolution = true;
+        const bool asked = galaxy::render::render_hud_at_output(exact);
+        exact = {};
+        exact.hud_internal_resolution = true;
+        passed &= expect(before && !internal && asked && !galaxy::render::render_hud_at_output(exact),
+                         "an internal height takes the window-size 2D layer unless HUD at internal; DISPLAY wins");
         passed &= expect(preset.vsync_interval == 1u && preset.curved_surfaces && preset.post_process,
                          "the performance preset keeps the present path and choices that are no pass");
     }

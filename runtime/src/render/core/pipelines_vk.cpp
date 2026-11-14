@@ -870,6 +870,9 @@ gpu::Pipeline* Pipelines::build_vk(const PipelineEntry& entry, unsigned variant,
         result = vkCreateGraphicsPipelines(device, cache, 1u, &info, nullptr, &pipeline);
     }
     if (result != VK_SUCCESS) {
+        if (result == VK_ERROR_OUT_OF_HOST_MEMORY || result == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
+            note_pipeline_out_of_memory();
+        }
         std::fprintf(stderr, "[pipelines] create failed %d: %llx %llx state %08x variant %u aux %u\n", static_cast<int>(result),
                      static_cast<unsigned long long>(desc.vertex), static_cast<unsigned long long>(desc.pixel), state, variant, aux);
         return nullptr;

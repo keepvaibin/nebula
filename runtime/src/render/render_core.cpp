@@ -205,8 +205,9 @@ bool RenderCore::initialize(int w, int h) {
     pipelines_.initialize(renderer_.device(), renderer_.pipeline_root(), renderer_.pipeline_backend());
     boot_step("pipelines");
     rt_start();
+    cap_texture_packs();
 
-    // The first start (no config.ini, and no back end chose for it): the table's height now, measured in the first 3D scene.
+    // The first start (no config.ini, and no back end chose for it): a conservative height now, measured in the first 3D scene.
     if (const RenderConfig chosen = get_render_config_chosen();
         render_config_first_start() && chosen.upscaler == 0u && chosen.internal_height == 0u && start_frame.height > 0u) {
 #if defined(NEBULA_GPU_METAL)
@@ -1518,6 +1519,7 @@ bool RenderCore::restart_device() {
         registries_.restart(renderer_.device());
         pipelines_.initialize(renderer_.device(), renderer_.pipeline_root(), renderer_.pipeline_backend());
         rt_start();
+        cap_texture_packs();
         device_gate_.end_rebuild(rebuilding);
     } catch (...) {
         device_gate_.give_up();
@@ -1990,6 +1992,27 @@ void RenderCore::release_lists_before(const ListEntry& entry) noexcept {
 // enforce_budget). A host extension's vram_budget_mb replaces the budget with that many megabytes of the same reading.
 // One line when the budget or what is left out changes (looked at once a second), and one an hour (at 60 frames a second) whatever
 // changed.
+// Half the device's memory budget: the replacements stand beside the game's own textures (kept for when one is evicted), the
+// scene targets, meshes, rings and staging, and on a shared-memory device beside the game's and the host's RAM too (board
+// rc.md, item 4). A dedicated card's budget (4 GB and up) leaves the 2 GB default as it is.
+void RenderCore::cap_texture_packs() {
+    std::uint64_t usage = 0u;
+    std::uint64_t budget = 0u;
+    if (!renderer_.video_memory(usage, budget)) {
+        budget = 0u;
+    }
+    if (const std::uint64_t asked = galaxy::extensions::vram_budget_bytes(); asked != 0u) {
+        budget = asked;
+    }
+    texture_pack_cap_bytes_ = budget / 2u;
+    // The settings are compared again at the next frame.
+    texture_pack_settings_applied_ = false;
+    if (budget != 0u) {
+        std::fprintf(stderr, "[texture-pack] replacements up to %llu MB on this device (half its %llu MB budget)\n",
+                     static_cast<unsigned long long>(texture_pack_cap_bytes_ >> 20u), static_cast<unsigned long long>(budget >> 20u));
+    }
+}
+
 void RenderCore::enforce_video_memory() {
     std::uint64_t usage = 0u;
     std::uint64_t budget = 0u;
@@ -2102,7 +2125,10 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
             texture_pack_mod_categories_off_ = texture_pack_mod_categories_off();
             mods_moved = true;
         }
-        const std::uint64_t budget_bytes = static_cast<std::uint64_t>(render.texture_pack_budget_mb) << 20u;
+        std::uint64_t budget_bytes = static_cast<std::uint64_t>(render.texture_pack_budget_mb) << 20u;
+        if (texture_pack_cap_bytes_ != 0u && budget_bytes > texture_pack_cap_bytes_) {
+            budget_bytes = texture_pack_cap_bytes_;
+        }
         // The settings are built and compared only when something they are made of may have changed.
         const bool moved = !texture_pack_settings_applied_ || mods_moved ||
                            texture_pack_settings_.enabled != render.texture_packs ||
@@ -2478,7 +2504,10 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
 
 // The first start's calibration, once a real list: in its first 3D scene, once the start's pipelines are made, each of two
 // internal heights is shown kCalibrationSettle frames (the resize and the pass timers' 0.1 average settle) and timed
-// kCalibrationSamples frames (the pass timers' sum); the fit's largest height that fits a heavy stage is kept.
+// kCalibrationSamples frames (the pass timers' sum); the fit's largest height that fits a heavy stage is kept. What is kept:
+//   no GPU timestamps, the CPU the limit, no fit      the start's height
+//   a height of the INTERNAL RESOLUTION row fits      the largest that does (match display when the panel's own fits)
+//   even 480 lines is over the budget                 the PERFORMANCE preset (apply_performance_preset)
 void RenderCore::calibrate_first_start(bool scene, double walk_ms) {
     constexpr unsigned kCalibrationSettle = 45u;  // 0.9^45: under 1 % of the height before left in the timers' average
     constexpr unsigned kCalibrationSamples = 30u;
@@ -2529,14 +2558,15 @@ void RenderCore::calibrate_first_start(bool scene, double walk_ms) {
         end_first_start_calibration(c.start, "no GPU timestamps");
         return;
     }
-    const double frame_ms = 1000.0 / present_frame_rate(presented_max_fps(chosen), chosen.vsync_interval, renderer_.display_refresh_hz());
+    // One new picture a game step (the presents between show it again) with interpolation off, as a first start's defaults
+    // leave it: the step is the GPU's period (resolution_fit.h's budget, the benchmark's too).
+    constexpr double frame_ms = 1000.0 / galaxy::kGameStepsPerSecond;
     // The scene target as the renderer made it: a size it refused (the video memory check) shows as no spread, so no fit.
     c.pixels.push_back(static_cast<double>(renderer_.frame_map().width) * static_cast<double>(renderer_.frame_map().height));
     c.ms.push_back(gpu_ms);
-    // The CPU's part: the walk near the frame time, or the game thread late on its own (its list period, less its waits on
-    // the render thread, past 1.5 steps: note_game_frame_cadence's rule; the host's pacing sleep is in the period).
-    constexpr double kGameStepMs = 1000.0 / galaxy::kGameStepsPerSecond;
-    c.cpu_over += walk_ms > kFitFrameShare * frame_ms || game_ms > 1.5 * kGameStepMs ? 1.0 : 0.0;
+    // The CPU's part: the walk near the step, or the game thread late on its own (its list period, less its waits on the
+    // render thread, past 1.5 steps: note_game_frame_cadence's rule; the host's pacing sleep is in the period).
+    c.cpu_over += walk_ms > kFitFrameShare * frame_ms || game_ms > 1.5 * frame_ms ? 1.0 : 0.0;
     if (c.frames < kCalibrationSettle + kCalibrationSamples) {
         return;
     }
@@ -2555,14 +2585,20 @@ void RenderCore::calibrate_first_start(bool scene, double walk_ms) {
         return;
     }
     const GpuTimeFit fit = fit_gpu_time(c.pixels.data(), c.ms.data(), c.ms.size());
-    const unsigned height = largest_fitting_height(fit, c.width, c.lines, kFitHeavyStage, kFitFrameShare * frame_ms);
+    const double budget_ms = kFitFrameShare * frame_ms;
+    const unsigned height = largest_fitting_height(fit, c.width, c.lines, kFitHeavyStage, budget_ms);
     std::fprintf(stderr, "[settings] first start measured: gpu ms = %.3f + %.3f a million pixels (%zu frames), a frame %.2f ms\n",
                  fit.a_ms, fit.b_ms_per_pixel * 1e6, c.ms.size(), frame_ms);
+    if (fit.valid && c.lines > kFitLowestHeight &&
+        predicted_gpu_ms(fit, scene_pixels(kFitLowestHeight, c.width, c.lines)) * kFitHeavyStage > budget_ms) {
+        end_first_start_calibration(kFitLowestHeight, "even 480 lines is over the budget: the PERFORMANCE preset", true);
+        return;
+    }
     end_first_start_calibration(fit.valid ? height : c.start, fit.valid ? "measured" : "no fit");
 }
 
-// `why` null: the player chose meanwhile, and nothing is set or saved.
-void RenderCore::end_first_start_calibration(unsigned height, const char* why) {
+// `why` null: the player chose meanwhile, and nothing is set or saved. `performance`: the PERFORMANCE preset, at `height`.
+void RenderCore::end_first_start_calibration(unsigned height, const char* why, bool performance) {
     FirstStartCalibration& c = calibration_;
     if (c.stage >= 2u && !c.timing_was_on) {
         renderer_.set_gpu_timing(false);
@@ -2574,6 +2610,9 @@ void RenderCore::end_first_start_calibration(unsigned height, const char* why) {
         return;
     }
     RenderConfig chosen = get_render_config_chosen();
+    if (performance) {
+        apply_performance_preset(chosen);
+    }
     chosen.internal_height = height;
     set_render_config(chosen);
     (void)save_render_config_to_file();
