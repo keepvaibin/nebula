@@ -2062,7 +2062,7 @@ namespace {
     }
 
     // The Pair Joy-Con picture: each half a texture of Nebula's own (a record of RGBA8 rows): a Joy-Con's front drawn simply, in the
-    // owner's drawing's style (thin dark outlines, its colour, dark grey parts: its rail, its shoulder over the top
+    // reference drawing's style (thin dark outlines, its colour, dark grey parts: its rail, its shoulder over the top
     // curve, its stick, four plain buttons, Minus or Plus, Capture or HOME), a little raised off the page (a soft shadow
     // under it and its buttons, a highlight down its round side). A half's body is 12.07 x 37.1 units in the middle of
     // its picture's cJoyConBox, its parts where the drawing has them. Its looks: not connected (grey), in its colour, and

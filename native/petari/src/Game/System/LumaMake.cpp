@@ -94,7 +94,7 @@ namespace luma {
             // The rows' table in the scene's memory: a TableData as the importer cooks one, then its Table. Null: none
             // left. Its result is written const void* (the game's ::Table): this function's hook row is generated
             // inside namespace luma, where the type text "const Table *" names luma::Table, and the row did not
-            // compile (the integration build, 11-12).
+            // compile.
             const void* writeTable(const char* pName, u32 count, const LumaMakePlace* pPlace) {
                 u32 nameBytes = 0;
                 while (pName[nameBytes] != 0) {

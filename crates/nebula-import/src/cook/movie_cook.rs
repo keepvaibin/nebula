@@ -703,7 +703,7 @@ pub fn cook(json: &[u8], around: &Around) -> Result<(Vec<(Made, Vec<u8>)>, Movie
     if !replaces.is_empty() {
         files.push((Made::Game(format!("MovieData/{replaces}.thp")), out));
         // The replaced movie's lines, empty when it has none: the game's own timed lines for that movie give way to
-        // them, so a replaced movie never shows the game's lines over another picture (J, 11-12).
+        // them, so a replaced movie never shows the game's lines over another picture.
         files.push((Made::Game(format!("MovieData/{replaces}.subs")), subs));
     }
     Ok((files, facts))
