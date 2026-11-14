@@ -37,7 +37,7 @@ const Validator* validator() {
     looked = true;
 #if defined(__APPLE__)
     found = {&luma_validate, &luma_report_state, &luma_report_invalid, &luma_report_count, &luma_report_at,
-             &luma_report_kept, &luma_report_free, &luma_report_read_kept, &luma_report_id};
+             &luma_report_kept, &luma_report_free, &luma_report_read_kept, &luma_report_id, &luma_report_after_start};
 #else
 #if defined(_WIN32)
     void* const library =
@@ -62,6 +62,7 @@ const Validator* validator() {
     found.release = reinterpret_cast<decltype(found.release)>(symbol("luma_report_free"));
     found.read_kept = reinterpret_cast<decltype(found.read_kept)>(symbol("luma_report_read_kept"));
     found.id = reinterpret_cast<decltype(found.id)>(symbol("luma_report_id"));
+    found.after_start = reinterpret_cast<decltype(found.after_start)>(symbol("luma_report_after_start"));
 #endif
     ok = found.validate != nullptr && found.state != nullptr && found.invalid != nullptr && found.count != nullptr &&
          found.at != nullptr && found.kept != nullptr && found.release != nullptr;

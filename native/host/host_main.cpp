@@ -46,6 +46,7 @@
 #include "galaxy/luma_mods_service.h"
 #include "galaxy/mods.h"
 #include <luma_input.h>
+#include <luma_refs.h>
 #include "galaxy/render/host_window.h"
 #include "galaxy/mod_log.h"
 #include "galaxy/mod_screens.h"
@@ -4128,6 +4129,28 @@ void svc_mods_start(void*) {
 #endif
                                 },
                                 [](const char* text) { log_line("mods:", text); }, layers_chosen);
+    // After the last mod's start, before the title (luma_refs.h), on the game thread: each placement of a class only
+    // code makes, from the start's check, looked up in the game's factory now that the mods' code has made its classes.
+    // One nobody makes is named in the mod log and placed as the placeholder object.
+    {
+#if defined(_WIN32)
+        const auto check = reinterpret_cast<LumaRefsCheckAfterStart>(
+            GetProcAddress(static_cast<HMODULE>(gModule.module), "luma_refs_check_after_start"));
+#else
+        const auto check = reinterpret_cast<LumaRefsCheckAfterStart>(dlsym(gModule.module, "luma_refs_check_after_start"));
+#endif
+        if (check != nullptr) {
+            const std::vector<galaxy::modlog::AfterStartRow> rows = galaxy::modlog::after_start_rows();
+            std::vector<LumaAfterStartRef> refs;
+            refs.reserve(rows.size());
+            for (const galaxy::modlog::AfterStartRow& row : rows) {
+                refs.push_back({row.mod.c_str(), row.class_name.c_str(), row.file.c_str(), row.line});
+            }
+            check(refs.empty() ? nullptr : refs.data(), static_cast<uint32_t>(refs.size()));
+        } else {
+            log_line("mods:", "the game module has no luma_refs_check_after_start: placements of classes only code makes are not checked");
+        }
+    }
     // The start check's one line when a part was missing (every mod off this session).
     if (gMissingPart) galaxy::startcheck::report(*gMissingPart);
     // Each mod whose code did not start, in the mod log as the Mods page says it.

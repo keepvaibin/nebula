@@ -36,6 +36,8 @@ struct Validator {
     // kept report counts as naming its id.
     LumaReport* (*read_kept)(const std::uint8_t*, std::uint64_t) = nullptr;
     const char* (*id)(const LumaReport*) = nullptr;
+    // A report's after-start rows (references 3). Optional: without it no placement is checked after the start.
+    std::uint32_t (*after_start)(const LumaReport*, std::uint32_t, const char**, const char**, std::uint32_t*) = nullptr;
 };
 
 // Null when the importer's library is missing or lacks luma_validate (said once on stderr).

@@ -596,6 +596,7 @@ struct StartResult {
 };
 std::mutex g_start_lock;
 std::vector<StartResult> g_start_results;
+std::vector<AfterStartRow> g_after_start;  // after_start_rows's; under g_start_lock
 
 CheckGame g_check_game;  // the last start's check's, for check_import; under g_start_lock
 std::atomic<const galaxy::assets::AssetStore*> g_check_store{nullptr};  // set_check_store's
@@ -630,6 +631,7 @@ void check_packages(const std::vector<StartPackage>& packages, std::string_view 
     {
         const std::lock_guard<std::mutex> lock(g_start_lock);
         g_start_results.clear();
+        g_after_start.clear();
         g_check_game = side;
     }
     if (packages.empty()) return;
@@ -774,8 +776,35 @@ void check_packages(const std::vector<StartPackage>& packages, std::string_view 
     for (std::size_t i = 0; i < placed.size(); ++i) {
         if (checked[i]) results.push_back({placed[i].package->id, std::move(verdict_of[i])});
     }
+    // The placements of classes only code makes, from the kept reports of the packages that are in the game, for the
+    // game's check after the mods' start (luma_refs.h).
+    std::vector<AfterStartRow> after_start;
+    if (const Validator* const found = validator();
+        found != nullptr && found->read_kept != nullptr && found->after_start != nullptr) {
+        for (std::size_t i = 0; i < placed.size(); ++i) {
+            if (placed[i].kept.empty() || !placed[i].package->on || !named[i] || refused[i]) continue;
+            LumaReport* const read = found->read_kept(reinterpret_cast<const std::uint8_t*>(placed[i].kept.data()),
+                                                      placed[i].kept.size());
+            if (found->state(read) >= 0) {
+                const char* class_name = nullptr;
+                const char* file = nullptr;
+                std::uint32_t line = 0;
+                for (std::uint32_t row = 0; found->after_start(read, row, &class_name, &file, &line) != 0; ++row) {
+                    after_start.push_back({placed[i].package->id, class_name != nullptr ? class_name : "",
+                                           file != nullptr ? file : "", line});
+                }
+            }
+            found->release(read);
+        }
+    }
     const std::lock_guard<std::mutex> lock(g_start_lock);
     g_start_results = std::move(results);
+    g_after_start = std::move(after_start);
+}
+
+std::vector<AfterStartRow> after_start_rows() {
+    const std::lock_guard<std::mutex> lock(g_start_lock);
+    return g_after_start;
 }
 
 void add_start_findings() {

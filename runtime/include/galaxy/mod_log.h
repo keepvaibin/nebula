@@ -58,6 +58,18 @@ struct StartPackage {
 // with no package.
 void check_packages(const std::vector<StartPackage>& packages, std::string_view program, std::string_view language);
 
+// One placement of a class only code makes (references 3, a kept report's after_start row), with its mod.
+struct AfterStartRow {
+    std::string mod;
+    std::string class_name;
+    std::string file;
+    std::uint32_t line = 0;
+};
+
+// The last check_packages's after-start rows: those of each package on that the check did not refuse, in list order
+// (a refused or switched-off package's placements are not in the game). Empty with no package or no validator.
+std::vector<AfterStartRow> after_start_rows();
+
 // The game's own files for every check after this (the start's and the import's): the rules on game paths, rows and
 // folders, as LumaLink's --game checks them. Set where the store is opened, before the first check; the store stays
 // open and unchanged while checks run (null: those rules go unchecked).
