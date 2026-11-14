@@ -2104,32 +2104,42 @@ void NebulaSettingsScreen::fillLauncher(s32 view) {
             setTextSize(mQuestionText, cTextSize + 1.0f);
         } else if (page == 3) {
             // The upload question: what it asks, why, what a report holds and what it never does, one under another.
-            u32 used = static_cast< u32 >(getText(text, cLauncherQuestion[0]));
+            // Each part is copied up to its own length or its end, whichever comes first, into room grown for it.
+            const s32 firstLength = getText(text, cLauncherQuestion[0]);
+            u32 used = firstLength > 0 ? static_cast< u32 >(firstLength) : 0u;
             for (u32 k = 1; k < sizeof(cLauncherQuestion) / sizeof(cLauncherQuestion[0]); k++) {
                 MR::Text16 part;
-                const u32 partLength = static_cast< u32 >(getText(part, cLauncherQuestion[k]));
+                const s32 partText = getText(part, cLauncherQuestion[k]);
+                const u32 partLength = partText > 0 ? static_cast< u32 >(partText) : 0u;
                 char16_t* const pText = text.grow(used + 1, used + 1 + partLength + 1);
                 pText[used] = u'\n';
-                for (u32 c = 0; c <= partLength; c++) {
-                    pText[used + 1 + c] = part.c_str()[c];
+                const char16_t* const pPart = part.c_str();
+                u32 c = 0;
+                for (; c < partLength && pPart[c] != 0; c++) {
+                    pText[used + 1 + c] = pPart[c];
                 }
-                used += 1 + partLength;
+                pText[used + 1 + c] = 0;
+                used += 1 + c;
             }
             setTextSize(mQuestionText, cTextSize);
         } else if (page >= 4 && page <= 6) {
             getText(text, cLauncherSend[page - 4]);
             setTextSize(mQuestionText, cTextSize + 1.0f);
         } else {
-            // "Nebula {v} is available", then the notes.
+            // "Nebula {v} is available", then the notes. The text is a language pack's to replace: its head line holds
+            // as much of it, every "{v}" the version, as fits its room, whatever the text says; then a break, the notes
+            // (readText stops at its capacity) and the end, always inside the room.
             MR::Text16 pattern;
             const s32 patternLength = getText(pattern, "LauncherUpdate");
             char16_t version[cLauncherVersionUnits + 1];
             const s32 versionLength = NebulaLauncher::readText(0, version, cLauncherVersionUnits + 1);
-            char16_t* const pText = text.room(static_cast< u32 >(patternLength + versionLength + 1 + cLauncherNotesUnits + 1));
+            const s32 headRoom = (patternLength > 0 ? patternLength : 0) + versionLength;
+            const s32 room = headRoom + 1 + cLauncherNotesUnits + 1;
+            char16_t* const pText = text.room(static_cast< u32 >(room));
             s32 length = 0;
-            for (const char16_t* p = pattern.c_str(); *p != 0; p++) {
+            for (const char16_t* p = pattern.c_str(); *p != 0 && length < headRoom; p++) {
                 if (p[0] == u'{' && p[1] == u'v' && p[2] == u'}') {
-                    for (s32 k = 0; k < versionLength; k++) {
+                    for (s32 k = 0; k < versionLength && length < headRoom; k++) {
                         pText[length++] = version[k];
                     }
                     p += 2;
@@ -2138,7 +2148,8 @@ void NebulaSettingsScreen::fillLauncher(s32 view) {
                 pText[length++] = *p;
             }
             pText[length++] = u'\n';
-            NebulaLauncher::readText(1, pText + length, cLauncherNotesUnits + 1);
+            NebulaLauncher::readText(1, pText + length, room - length);
+            pText[room - 1] = 0;
             setTextSize(mQuestionText, cTextSize + 1.0f);
         }
         setText(mQuestionText, text.c_str());
