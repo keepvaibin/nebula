@@ -3795,7 +3795,7 @@ void layers_chosen(const std::vector<galaxy::mods::ChosenLayers>& chosen) {
     }
     std::string ids;
     for (const std::string& mod : changed) ids += (ids.empty() ? "" : ", ") + mod;
-    if (!kHostStartsAgain) {
+    if constexpr (!kHostStartsAgain) {
         // This host cannot start the game again (finish_and_exit): the record is written, so the next start cooks with
         // the new layers; this one goes on with the cooked ones.
         log_line("mods:", ("the code of " + ids + " chose other layers than the content was cooked with: they are used from the next start").c_str());
