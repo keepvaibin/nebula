@@ -29,6 +29,8 @@
     <string name="nebula_benchmark_below">Même les réglages les plus bas ne maintiendront peut-être pas 60 images par seconde sur cet appareil.</string>
     <string name="nebula_benchmark_cpu">Le processeur limite ici la fréquence d\'images : baisser les réglages graphiques ne l\'augmentera pas.</string>
     <string name="nebula_benchmark_unfinished">Le test de performances ne s\'est pas terminé.</string>
+    <string name="nebula_benchmark_stale">Les paramètres, Nebula ou la carte graphique ont changé depuis ce test. Relancez le test de performances pour obtenir une recommandation.</string>
+    <string name="nebula_benchmark_in_use">Les paramètres recommandés sont utilisés.</string>
     <string name="nebula_apply">Appliquer</string>
     <string name="nebula_settings_not_saved">Impossible d\'enregistrer les réglages : %1$s</string>
     <string name="nebula_setting_internal_resolution">Résolution interne</string>

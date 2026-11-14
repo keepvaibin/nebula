@@ -29,6 +29,8 @@
     <string name="nebula_benchmark_below">Zelfs met de laagste instellingen haalt dit apparaat misschien geen 60 beelden per seconde.</string>
     <string name="nebula_benchmark_cpu">Hier beperkt de processor de framerate: lagere grafische instellingen verhogen die niet.</string>
     <string name="nebula_benchmark_unfinished">De benchmark is niet voltooid.</string>
+    <string name="nebula_benchmark_stale">De instellingen, Nebula of de videokaart zijn sinds deze meting veranderd. Voer de benchmark opnieuw uit voor een aanbeveling.</string>
+    <string name="nebula_benchmark_in_use">De aanbevolen instellingen worden gebruikt.</string>
     <string name="nebula_apply">Toepassen</string>
     <string name="nebula_settings_not_saved">Instellingen konden niet worden opgeslagen: %1$s</string>
     <string name="nebula_setting_internal_resolution">Interne resolutie</string>

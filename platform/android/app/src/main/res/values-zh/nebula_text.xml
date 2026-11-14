@@ -29,6 +29,8 @@
     <string name="nebula_benchmark_below">即使使用最低设置，此设备也可能无法保持每秒 60 帧。</string>
     <string name="nebula_benchmark_cpu">此处帧率受处理器限制：降低图形设置不会提高帧率。</string>
     <string name="nebula_benchmark_unfinished">基准测试未完成。</string>
+    <string name="nebula_benchmark_stale">自此次测试以来，设置、Nebula 或显卡已更改。请再次运行基准测试以获取推荐。</string>
+    <string name="nebula_benchmark_in_use">正在使用推荐的设置。</string>
     <string name="nebula_apply">应用</string>
     <string name="nebula_settings_not_saved">无法保存设置：%1$s</string>
     <string name="nebula_setting_internal_resolution">内部分辨率</string>

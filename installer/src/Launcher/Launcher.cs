@@ -459,6 +459,7 @@ namespace Nebula.Launcher
         internal readonly Label benchmarkTitle = new Label();
         internal readonly ListView benchmarkRows = new ListView();
         internal readonly Button benchmarkApply = new Button();
+        internal readonly Label benchmarkNote = new Label();
         private Process benchmarkRun;
         private BenchmarkResult benchmarkResult;
         private bool savedPerPixel;   // config.ini's per_pixel_lighting when the result was shown
@@ -933,6 +934,9 @@ namespace Nebula.Launcher
             benchmarkApply.Size = new Size(140, 34);
             benchmarkApply.Click += delegate { ApplyBenchmark(); };
             page.Controls.Add(benchmarkApply);
+            benchmarkNote.Location = new Point(164, 440);
+            benchmarkNote.Size = new Size(548, 42);
+            page.Controls.Add(benchmarkNote);
         }
 
         // The game started for a benchmark (perf/bench's contract); its steps in the status, its result when it exits.
@@ -990,20 +994,31 @@ namespace Nebula.Launcher
             benchmarkRun = null;
             benchmarkButton.Enabled = true;
             benchmarkStatus.Text = "";
-            ShowBenchmark(Benchmark.Read(code, Benchmark.ResultPath), true);
+            var result = Benchmark.Read(code, Benchmark.ResultPath);
+            // This launcher's run: its version is the one the result holds for (Benchmark.State).
+            if (result != null) Benchmark.RecordRanBy(Benchmark.ResultPath, BuildInfo.Version);
+            ShowBenchmark(result, true);
         }
 
+        // The result's verdict and every setting it recommends, current then recommended. Apply is offered while
+        // config.ini still holds what the run measured with (BenchmarkState.Current) and something differs; a result
+        // that no longer holds is shown with the reason and a new run in place of Apply.
         internal void ShowBenchmark(BenchmarkResult result, bool fresh)
         {
             benchmarkResult = result;
             savedPerPixel = GraphicsSettings.Load().PerPixelLighting;
-            var changes = result != null && result.Complete ? result.Changes : new List<BenchmarkSetting>();
+            var rows = result != null && result.Complete ? result.Settings : new List<BenchmarkSetting>();
             benchmarkVerdict.Text = result != null ? result.VerdictText : fresh ? NebulaText.Of("The benchmark did not finish.") : "";
             benchmarkRows.Items.Clear();
-            foreach (var change in changes)
-                benchmarkRows.Items.Add(new ListViewItem(new[] { BenchmarkLabel(change.Key), BenchmarkValue(change.Key, change.Current), BenchmarkValue(change.Key, change.Recommended) }));
-            benchmarkTitle.Visible = benchmarkRows.Visible = benchmarkApply.Visible = changes.Count > 0;
-            benchmarkApply.Enabled = true;
+            foreach (var row in rows)
+                benchmarkRows.Items.Add(new ListViewItem(new[] { BenchmarkLabel(row.Key), BenchmarkValue(row.Key, row.Current), BenchmarkValue(row.Key, row.Recommended) }));
+            benchmarkTitle.Visible = benchmarkRows.Visible = benchmarkApply.Visible = benchmarkNote.Visible = rows.Count > 0;
+            var state = rows.Count > 0 ? Benchmark.State(result, Benchmark.ResultPath) : BenchmarkState.Stale;
+            bool changes = result != null && result.Changes.Count > 0;
+            benchmarkApply.Enabled = state == BenchmarkState.Current && changes;
+            benchmarkNote.Text = rows.Count == 0 ? ""
+                : state == BenchmarkState.Stale ? NebulaText.Of("Settings, Nebula or the graphics card changed since this run. Run the benchmark again for a recommendation.")
+                : state == BenchmarkState.Applied || !changes ? NebulaText.Of("The recommended settings are in use.") : "";
         }
 
         private static string BenchmarkLabel(string key)
@@ -1052,22 +1067,27 @@ namespace Nebula.Launcher
             switch (samples) { case 1: return 0; case 2: return 1; case 4: return 2; case 8: return 3; default: return -1; }
         }
 
-        // Apply: the recommended values on this window's rows (so Save keeps them) and in config.ini at once, through
-        // GraphicsSettings (only those keys change there).
+        // Apply: every recommended value (the combination the run measured, not only the rows that differ) on this
+        // window's rows (so Save keeps them) and in config.ini at once, through GraphicsSettings (only those keys change
+        // there). Only while the result still holds.
         internal void ApplyBenchmark()
         {
-            if (benchmarkResult == null || !benchmarkResult.Complete) return;
+            if (benchmarkResult == null || !benchmarkResult.Complete || Benchmark.State(benchmarkResult, Benchmark.ResultPath) != BenchmarkState.Current)
+            {
+                ShowBenchmark(benchmarkResult, false);
+                return;
+            }
             var saved = GraphicsSettings.Load();
-            foreach (var change in benchmarkResult.Changes)
+            foreach (var change in benchmarkResult.Settings)
             {
                 int value = change.Recommended;
                 switch (change.Key)
                 {
                     case "internal_height":
                     {
+                        // A height outside the row's list (the display's own lines) is written as it is.
                         int index = Array.IndexOf(GraphicsSettings.InternalHeights, value);
-                        if (index < 0) break;
-                        internalResolution.SelectedIndex = index;
+                        if (index >= 0) internalResolution.SelectedIndex = index;
                         saved.InternalHeight = value;
                         break;
                     }
@@ -1113,7 +1133,7 @@ namespace Nebula.Launcher
                 MessageBox.Show(this, NebulaText.Of("Settings could not be saved: {0}", error.Message), Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
-            benchmarkApply.Enabled = false;
+            ShowBenchmark(benchmarkResult, false);
         }
 
         private void WatchForUpdate()

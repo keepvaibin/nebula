@@ -355,8 +355,8 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     var benchmarkUnfinished by mutableStateOf(false)
         private set
 
-    /** Apply pressed for this result: config.ini has its values. */
-    var benchmarkApplied by mutableStateOf(false)
+    /** Whether [benchmark] still holds against config.ini (Benchmark.state); read again at every return here. */
+    var benchmarkState by mutableStateOf(benchmark?.let { Benchmark.state(application, it) } ?: BenchmarkState.Stale)
         private set
 
     /** Apply could not write config.ini. */
@@ -369,7 +369,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         Benchmark.clear(app)
         benchmark = null
         benchmarkUnfinished = false
-        benchmarkApplied = false
+        benchmarkState = BenchmarkState.Stale
         benchmarkApplyFailed = false
         GameFiles.controls(app).edit()
             .putLong(LAUNCHED_AT, System.currentTimeMillis())
@@ -381,23 +381,29 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     fun applyBenchmark() {
         val result = benchmark ?: return
         if (SaveTransfer.gameRunning(app)) return
+        benchmarkState = Benchmark.state(app, result)
+        if (benchmarkState != BenchmarkState.Current) return
         val ok = Benchmark.apply(app, result)
-        benchmarkApplied = ok
         benchmarkApplyFailed = !ok
+        benchmarkState = Benchmark.state(app, result)
     }
 
     // Back from a benchmark run: its result, or that it did not finish.
     private fun checkBenchmark() {
         val prefs = GameFiles.controls(app)
+        // config.ini may have changed in the game's menu meanwhile.
+        benchmark?.let { benchmarkState = Benchmark.state(app, it) }
         if (!prefs.getBoolean(BENCHMARK_RAN, false)) return
         // The file is written whole before the game exits; without it, a game process still ending is waited for
         // (the next return here reads it).
         val result = Benchmark.read(app)
         if (result == null && SaveTransfer.gameRunning(app)) return
         prefs.edit().remove(BENCHMARK_RAN).apply()
+        // This launcher's run: its version is the one the result holds for (Benchmark.state).
+        if (result != null) Benchmark.recordRanBy(app)
         benchmark = result
         benchmarkUnfinished = result == null
-        benchmarkApplied = false
+        benchmarkState = result?.let { Benchmark.state(app, it) } ?: BenchmarkState.Stale
         benchmarkApplyFailed = false
         screen = Screen.Settings
     }

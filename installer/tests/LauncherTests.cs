@@ -288,10 +288,43 @@ namespace Nebula.Launcher
                 "{\"key\":\"internal_height\",\"current\":1080,\"recommended\":720},{\"key\":\"msaa_samples\",\"current\":4,\"recommended\":2}," +
                 "{\"key\":\"ambient_occlusion\",\"current\":1,\"recommended\":0},{\"key\":\"enhanced_lighting\",\"current\":1,\"recommended\":0}," +
                 "{\"key\":\"aa\",\"current\":1,\"recommended\":1},{\"key\":\"smaa_quality\",\"current\":3,\"recommended\":2}," +
-                "{\"key\":\"bloom\",\"current\":100,\"recommended\":60},{\"key\":\"ray_tracing\",\"current\":1,\"recommended\":0}]}}";
+                "{\"key\":\"bloom\",\"current\":100,\"recommended\":60},{\"key\":\"ray_tracing\",\"current\":1,\"recommended\":0}]}," +
+                "\"device\":{\"gpu\":\"Test GPU\",\"vendor_id\":4318,\"device_id\":11141}," +
+                "\"settings\":{\"internal_height\":1080,\"upscaler\":0,\"msaa_samples\":4,\"ambient_occlusion\":1,\"ambient_occlusion_ssao\":1," +
+                "\"enhanced_lighting\":1,\"per_pixel_lighting\":0,\"aa\":1,\"smaa_quality\":3,\"bloom\":100,\"vsync_interval\":0," +
+                "\"max_fps\":60.000,\"frame_generation\":0,\"ray_tracing_enabled\":0,\"display_mode\":1}}";
+            // config.ini as the run found it (aa and smaa_quality by name, as the engine also reads them).
+            const string ranWith = "internal_height=1080\nmsaa_samples=4\nambient_occlusion=1\nambient_occlusion_ssao=true\nenhanced_lighting=1\n" +
+                "per_pixel_lighting=0\naa=smaa\nsmaa_quality=3\nbloom=100\nsharpness=7\n";
             var parsed = BenchmarkResult.Parse(json);
-            Check(parsed != null && parsed.Complete && parsed.Settings.Count == 7 && parsed.Changes.Count == 6,
-                  "benchmark: schema 1 parsed, unknown keys dropped, six rows differ");
+            Check(parsed != null && parsed.Complete && parsed.Settings.Count == 7 && parsed.Changes.Count == 6 && parsed.RanWith.Count == 15
+                  && parsed.VendorId == 4318 && parsed.DeviceId == 11141 && parsed.Gpu == "Test GPU",
+                  "benchmark: schema 1 parsed, unknown keys dropped, six rows differ, what it ran with");
+            if (parsed != null)
+            {
+                var config = new Dictionary<string, string>();
+                foreach (var line in ranWith.Split('\n')) if (line.Contains("=")) config[line.Split('=')[0]] = line.Split('=')[1];
+                var adapter = new Dictionary<string, string> { { "description", "Test GPU" }, { "vendor_id", "4318" }, { "device_id", "11141" } };
+                Check(parsed.StateNow(config, adapter, "1.0", "1.0") == BenchmarkState.Current && parsed.StateNow(config, null, "1.0", "1.0") == BenchmarkState.Current,
+                      "benchmark: a result holds while config.ini, the adapter and the launcher version are the run's");
+                Check(parsed.StateNow(config, adapter, "0.9", "1.0") == BenchmarkState.Stale && parsed.StateNow(config, adapter, null, "1.0") == BenchmarkState.Stale,
+                      "benchmark: a run of another launcher version is stale");
+                var otherGpu = new Dictionary<string, string>(adapter);
+                otherGpu["device_id"] = "11142";
+                Check(parsed.StateNow(config, otherGpu, "1.0", "1.0") == BenchmarkState.Stale, "benchmark: a run on another adapter is stale");
+                var changed = new Dictionary<string, string>(config);
+                changed["internal_height"] = "1440";
+                var vsync = new Dictionary<string, string>(config);
+                vsync["vsync_interval"] = "1";
+                Check(parsed.StateNow(changed, adapter, "1.0", "1.0") == BenchmarkState.Stale && parsed.StateNow(vsync, adapter, "1.0", "1.0") == BenchmarkState.Stale,
+                      "benchmark: a setting changed since the run makes it stale");
+                var applied = new Dictionary<string, string>(config);
+                applied["internal_height"] = "720"; applied["msaa_samples"] = "2"; applied["ambient_occlusion"] = "0";
+                applied["enhanced_lighting"] = "0"; applied["smaa_quality"] = "high"; applied["bloom"] = "60";
+                Check(parsed.StateNow(applied, adapter, "1.0", "1.0") == BenchmarkState.Applied, "benchmark: config.ini with the recommendation is applied");
+                applied["per_pixel_lighting"] = "1";
+                Check(parsed.StateNow(applied, adapter, "1.0", "1.0") == BenchmarkState.Stale, "benchmark: applied plus another change is stale");
+            }
             Check(parsed != null && parsed.VerdictText == "These settings keep 60 frames per second on this device.", "benchmark: fits verdict");
             Check(BenchmarkResult.Parse(json.Replace("\"schema\":1", "\"schema\":2")) == null && BenchmarkResult.Parse("{") == null,
                   "benchmark: another schema or a broken file is no result");
@@ -305,12 +338,11 @@ namespace Nebula.Launcher
             string file = Benchmark.ResultPath;
             Directory.CreateDirectory(Path.GetDirectoryName(file));
             File.WriteAllText(file, json);
+            Benchmark.RecordRanBy(file, BuildInfo.Version);
             Check(Benchmark.Read(3, file) == null && Benchmark.Read(0, file) != null, "benchmark: a failed exit reads no result");
-            var before = GraphicsSettings.Load();
-            before.InternalHeight = 1080; before.Msaa = 2; before.AmbientOcclusion = true; before.AmbientOcclusionSsao = true;
-            before.EnhancedLighting = true; before.PerPixelLighting = false; before.AntiAliasing = 1; before.Quality = 3; before.Bloom = 100;
-            before.Sharpness = 7;
-            before.Save();
+            string configPath = GraphicsSettings.ConfigPath;
+            string configBefore = File.Exists(configPath) ? File.ReadAllText(configPath) : null;
+            File.WriteAllText(configPath, ranWith);
             try
             {
                 using (var form = new SettingsForm(session))
@@ -322,20 +354,36 @@ namespace Nebula.Launcher
                     form.Controls.OfType<TabControl>().Single().SelectedTab = (TabPage)form.benchmarkApply.Parent;
                     Application.DoEvents();
                     var rows = form.benchmarkRows.Items.Cast<ListViewItem>().Select(i => i.SubItems[0].Text + "|" + i.SubItems[1].Text + "|" + i.SubItems[2].Text).ToList();
-                    Check(rows.Count == 6 && rows[0] == "Internal resolution|1080p|720p" && rows[1] == "MSAA|4x|2x" && rows[2] == "Ambient occlusion|On|Off"
+                    Check(rows.Count == 7 && rows[0] == "Internal resolution|1080p|720p" && rows[1] == "MSAA|4x|2x" && rows[2] == "Ambient occlusion|On|Off"
                           && rows[3] == "Lighting|" + ((ComboBox)Private(form, "lighting")).Items[0] + "|" + ((ComboBox)Private(form, "lighting")).Items[2]
-                          && rows[4] == "Anti-aliasing quality|Ultra|High" && rows[5] == "Bloom|100%|60%" && form.benchmarkApply.Visible,
-                          "benchmark: the last result's differing rows, current and recommended: " + string.Join("; ", rows));
+                          && rows[4].StartsWith("Anti-aliasing|") && rows[5] == "Anti-aliasing quality|Ultra|High" && rows[6] == "Bloom|100%|60%"
+                          && form.benchmarkApply.Visible && form.benchmarkApply.Enabled && form.benchmarkNote.Text == "",
+                          "benchmark: every recommended row, current and recommended: " + string.Join("; ", rows));
                     form.ApplyBenchmark();
                     Check(((ComboBox)Private(form, "internalResolution")).SelectedIndex == 5 && ((ComboBox)Private(form, "msaa")).SelectedIndex == 1
                           && ((ComboBox)Private(form, "occlusionMode")).SelectedIndex == 0 && ((ComboBox)Private(form, "lighting")).SelectedIndex == 2
                           && ((ComboBox)Private(form, "aaQuality")).SelectedIndex == 2 && ((NumericUpDown)Private(form, "bloom")).Value == 60
-                          && !form.benchmarkApply.Enabled, "benchmark: Apply sets the window's rows");
+                          && !form.benchmarkApply.Enabled && form.benchmarkNote.Text == "The recommended settings are in use.",
+                          "benchmark: Apply sets the window's rows: " + form.benchmarkNote.Text);
                 }
                 var after = GraphicsSettings.Load();
+                var written = GraphicsSettings.ReadValues(configPath);
                 Check(after.InternalHeight == 720 && after.Msaa == 1 && !after.AmbientOcclusion && after.AmbientOcclusionSsao && !after.EnhancedLighting
-                      && !after.PerPixelLighting && after.AntiAliasing == 1 && after.Quality == 2 && after.Bloom == 60 && after.Sharpness == 7,
-                      "benchmark: Apply writes the recommended keys to config.ini, the others (per_pixel_lighting too) untouched");
+                      && !after.PerPixelLighting && after.AntiAliasing == 1 && after.Quality == 2 && after.Bloom == 60 && after.Sharpness == 7
+                      && written["ambient_occlusion_ssao"] == "true" && written["per_pixel_lighting"] == "0",
+                      "benchmark: Apply writes every recommended key to config.ini, the others (per_pixel_lighting too) untouched");
+
+                // A setting changed since the run: the result is shown, Apply is not offered.
+                File.WriteAllText(configPath, ranWith.Replace("bloom=100", "bloom=120"));
+                using (var form = new SettingsForm(session))
+                {
+                    Check(form.benchmarkRows.Items.Count == 7 && !form.benchmarkApply.Enabled
+                          && form.benchmarkNote.Text == "Settings, Nebula or the graphics card changed since this run. Run the benchmark again for a recommendation.",
+                          "benchmark: a stale result cannot be applied: " + form.benchmarkNote.Text);
+                    form.ApplyBenchmark();
+                    Check(GraphicsSettings.ReadValues(configPath)["bloom"] == "120" && GraphicsSettings.ReadValues(configPath)["internal_height"] == "1080",
+                          "benchmark: Apply on a stale result writes nothing");
+                }
 
                 // The stub game exits 0 without writing a result: the page says the run did not finish.
                 string marker = Path.Combine(session.App, "stub-launch.txt");
@@ -361,6 +409,8 @@ namespace Nebula.Launcher
             finally
             {
                 if (File.Exists(file)) File.Delete(file);
+                if (File.Exists(file + ".launcher")) File.Delete(file + ".launcher");
+                if (configBefore != null) File.WriteAllText(configPath, configBefore); else if (File.Exists(configPath)) File.Delete(configPath);
             }
         }
 
