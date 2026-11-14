@@ -152,7 +152,7 @@ fn a_table_named_by_place() {
     let seen = check(POINTS, &format!(r#"{{{H}, "rows": {{"x": 1}}}}"#));
     assert_eq!(said(&seen), one(400, "Patch.NotArray"));
 
-    // The key a table is named by is the contract's.
+    // The key a table is named by is table-keys.md's.
     let seen = check(POINTS, &format!(r#"{{{K}, "set": [{{"where": {{"name": "a"}}, "values": {{"x": 4}}}}]}}"#));
     assert!(seen.findings.iter().any(|f| f.code == 401), "{:?}", seen.findings);
 }

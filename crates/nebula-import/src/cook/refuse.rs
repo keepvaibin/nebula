@@ -105,15 +105,15 @@ pub enum CookFact {
     Model { path: String, source: String, facts: super::gltf::ModelFacts },
     /// An effect of a mod cooked, or a game particle it replaced (effects.md section 7's `cook.effect`).
     Effect { path: String, source: String, facts: EffectFacts },
-    /// A layout of a mod cooked (layout contract's `cook.layout`).
+    /// A layout of a mod cooked (the fact `cook.layout`, docs/modding/content/screens.md).
     Layout { path: String, source: String, facts: super::layout_json::LayoutFacts },
-    /// A sound effect of a mod cooked (sound contract's `cook.sound`).
+    /// A sound effect of a mod cooked (the fact `cook.sound`, docs/modding/content/sound.md).
     Sound { path: String, source: String, facts: super::sound_effect::SoundFacts },
-    /// A clip's frame events cooked (animation contract's `cook.events`).
+    /// A clip's frame events cooked (the fact `cook.events`, docs/modding/content/animation.md).
     Events { path: String, source: String, facts: super::clip_events::EventFacts },
-    /// A mod's font cooked (layout contract's `cook.font`).
+    /// A mod's font cooked (the fact `cook.font`, docs/modding/content/screens.md).
     Font { path: String, source: String, facts: super::font_cook::FontFacts },
-    /// A mod's movie cooked (movies contract's `cook.movie`).
+    /// A mod's movie cooked (the fact `cook.movie`).
     Movie { path: String, source: String, facts: super::movie_cook::MovieFacts },
 }
 

@@ -3624,7 +3624,8 @@ mod tests {
 
     #[test]
     fn the_metal_smooth_sphere_is_metal_to_a_ray() {
-        // The conformance model metal-smooth (materials contract): a 1 m sphere, metal 1, roughness 0.05.
+        // The conformance model metal-smooth (docs/modding/content/materials.md): a 1 m sphere, metal 1, roughness
+        // 0.05.
         let source = include_bytes!("../../data/metal-smooth.gltf");
         let (ir, _, facts) = to_ir_for(source, None, None).unwrap();
         assert_eq!((facts.joints, ir.joints[0].translation), (1, [0.0, 50.0, 0.0]));

@@ -738,8 +738,8 @@ std::int32_t assets_entry(const LumaMod* mod, const char* text, std::uint32_t fl
 // ---- Layer 3: cook. ----
 //
 // The game's cooker (nebula_import, the same one the start's cook runs, part of the game) turns a file
-// as the disc has it into the game's form: luma_cook_entry, the importer's cook_entry behind a C call (contract
-// services/assets.md 6). One thread cooks, one file at a time, in the order asked; the answer is posted to the mod and
+// as the disc has it into the game's form: luma_cook_entry, the importer's cook_entry behind a C call
+// (services/assets.md 6). One thread cooks, one file at a time, in the order asked; the answer is posted to the mod and
 // provided on the game thread when it is delivered, so the table's rules apply to the game as it is then.
 
 struct Cooker {

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* The validator of a .luma, as the game calls it (validator contract, section 3). One library with LumaLink's: the
-   same rules, the same findings, the same text in every language.
+/* The validator of a .luma, as the game calls it (docs/modding/format/validator.md section 3). One library with
+   LumaLink's: the same rules, the same findings, the same text in every language.
 
    At import: luma_validate with `kept` null runs every rule; keep luma_report_kept's bytes beside the mod.
    At each start, and each change of the mod list or options: luma_validate with the mod's kept bytes. When they are for
@@ -23,7 +23,7 @@ extern "C" {
    `is_folder` non-zero when it is a folder. The name is read only during the call. */
 typedef void (*LumaFolderSink)(void* sink_context, const char* name, uint32_t is_folder);
 
-/* The player's game files (validator contract, revision 3): all three functions are given (which files may be new is
+/* The player's game files (validator.md): all three functions are given (which files may be new is
    the library's own list, as LumaLink's; F INBOX-G 46). Rust reads each table from
    its cooked bytes, so the game's check and LumaLink's build one view with one code (table-keys 11). */
 typedef struct LumaGameStore {
@@ -78,7 +78,7 @@ typedef struct LumaValidateInput {
     uint32_t option_count;
     const uint8_t* kept;    /* this mod's kept report; null at import */
     uint64_t kept_size;
-    const char* types;      /* the game's luma_types.json (types contract); null: kinds 1, 2 and 7 are not checked */
+    const char* types;      /* the game's luma_types.json (types.md); null: kinds 1, 2 and 7 are not checked */
     uint64_t types_size;
     const char* renderer;   /* the renderer's feature names: JSON with the self-description's "renderer" key, as
                                luma_renderer.json (luma-format revision 4); null: L806 is not checked */

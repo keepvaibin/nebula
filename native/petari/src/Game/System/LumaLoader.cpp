@@ -320,7 +320,7 @@ namespace luma {
         void apiProceed(LumaCall* pCall) { proceed(reinterpret_cast<Call*>(pCall)); }
 
         // A class's number (objects 10, O-3): its record's index among the record rows sorted by name; -1 when none.
-        // A mod's class (classes contract) by its name when no record has it.
+        // A mod's class (classes.md) by its name when no record has it.
         s32 apiClassOf(const char* pClass) {
             const s32 number = classNumber(findType(pClass));
             return number >= 0 ? number : luma::classes::numberOf(pClass);
@@ -767,7 +767,7 @@ namespace luma {
             if (state != 0) {
                 return state;
             }
-            // One of a mod's classes (classes contract): that class is the most derived.
+            // One of a mod's classes (classes.md): that class is the most derived.
             const s32 modClass = luma::classes::classOfObject(pObject);
             return modClass >= 0 ? modClass : classNumber(own.type);
         }
@@ -1103,7 +1103,7 @@ namespace luma {
             return refusedWhileGoing(pMod, "set_table") ? -1 : luma::numbers::setTable(pMod, pName, offset, pBytes, size);
         }
 
-        // Objects made by name (classes contract, "make").
+        // Objects made by name (classes.md, "make").
         s32 apiMake(const LumaMod* pMod, const char* pName, u32 count, const LumaMakePlace* pPlace, u32 flags, void** ppObjects) {
             return luma::make::make(pMod, pName, count, pPlace, flags, ppObjects);
         }
@@ -1112,14 +1112,14 @@ namespace luma {
             return refusedWhileGoing(pMod, "alias_class") ? -1 : luma::classes::alias(pMod, pName, pClass, pArgs);
         }
 
-        // Placements (classes contract, "placement").
+        // Placements (classes.md, "placement").
         s32 apiPlacementOf(const LumaMod* pMod, const void* pObject, LumaPlacement* pOut) {
             return luma::make::placementOf(pMod, pObject, pOut);
         }
 
         void* apiPlacedAt(const LumaMod* pMod, const LumaPlacement* pPlace) { return luma::make::placedAt(pMod, pPlace); }
 
-        // Gravity classes (classes contract, "gravity").
+        // Gravity classes (classes.md, "gravity").
         void* apiMakeGravity(const LumaMod* pMod, const char* pClass, const LumaGravityPlace* pPlace) {
             return refusedWhileGoing(pMod, "make_gravity") ? nullptr : luma::classes::makeGravity(pMod, pClass, pPlace);
         }

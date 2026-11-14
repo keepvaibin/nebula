@@ -1,6 +1,6 @@
 #pragma once
 
-// The service registry and the services' event queue (services/registry.md contract): the one place a mod's service
+// The service registry and the services' event queue (docs/modding/services/registry.md): the one place a mod's service
 // import and LumaCore.service are answered, and the frame's start point where answers from the outside world reach the
 // mods.
 

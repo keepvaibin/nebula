@@ -260,7 +260,7 @@ pub struct Touches {
     pub services: Vec<String>,
     /// The classes only code can make that a placement uses (references.md 3): class, file and line, joined by
     /// U+001F, one per placement. The host gives them to the module after the last mod's start (luma_refs.h), which
-    /// looks each up in the factory. Filled by the placement rules of the stages' contract.
+    /// looks each up in the factory. Filled by the placement rules of docs/modding/content/stages.md.
     pub after_start: Vec<String>,
     /// The data schemas this mod gives as a library, one per module and version it reads (`code/<id>.kit/<module>/
     /// <version>.json`): the module key (`<id>.<module>`), the version and the schema's text, joined by U+001F. A mod

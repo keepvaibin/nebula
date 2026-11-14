@@ -346,7 +346,7 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         return Ok(files);
     }
     // Name.movie.json in a mod's assets: a movie, Name.nmov (AV1), its subtitles Name.subs beside it, and with `replace`
-    // the same movie at the game's MovieData/<name>.thp (movies contract). The files it names are read beside it.
+    // the same movie at the game's MovieData/<name>.thp. The files it names are read beside it.
     if super::movie_cook::is_movie_source(&lower) {
         if !lower.starts_with("luma/") {
             return Err(super::refuse::refuse("Cook.Movie.NotAsset", &[("file", change.path.clone())]));

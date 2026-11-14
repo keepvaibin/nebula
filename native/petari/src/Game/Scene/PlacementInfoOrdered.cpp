@@ -125,7 +125,7 @@ bool PlacementInfoOrdered::initPlacementStep(uint64_t deadline) {
             MR::initLiveActorSystemInfo(iter);
             bool ready;
             {
-                // A name a mod aliased (classes contract, "alias"): its arguments while the object initialises.
+                // A name a mod aliased (classes.md, "alias"): its arguments while the object initialises.
                 const luma::classes::AliasPlacing alias(set->mName, iter.mInfo, iter.mIndex);
                 ready = mInitializing->initStep(iter, deadline);
             }
