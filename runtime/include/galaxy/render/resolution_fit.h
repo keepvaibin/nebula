@@ -62,35 +62,39 @@ struct GpuTimeFit {
 }
 
 // The heights a fit chooses among, lightest first: the INTERNAL RESOLUTION row's steps from 480 below the output's lines,
-// then match display (0). The output's own height is match display, never a step of its own.
+// match display (0), then the steps above the output's lines up to `max_height` (a caller that may render above the panel:
+// the benchmark). The output's own height is match display, never a step of its own.
 inline constexpr unsigned kFitLowestHeight = 480u;
 // The share of the display's frame time the GPU may take (the rest: the compositor, frame-to-frame swings).
 inline constexpr double kFitFrameShare = 0.8;
 // A measurement made in a light scene (the first start's: the title), scaled to the heaviest stages' (board rc.md, item 6).
-// The benchmark times the stages themselves and passes 1.
+// The benchmark times the stages themselves and passes its own worst-to-measured ratio.
 inline constexpr double kFitHeavyStage = 2.5;
 
 // The largest of those heights whose predicted time x `heavy_factor` stays within `budget_ms`; 480 when none does (the
-// floor the game is meant to hold), 0 when the output has no more lines than 480.
+// floor the game is meant to hold), 0 when the output has no more lines than 480 and `max_height` allows none above.
 [[nodiscard]] inline unsigned largest_fitting_height(const GpuTimeFit& fit, unsigned width, unsigned lines, double heavy_factor,
-                                                     double budget_ms) {
-    if (lines <= kFitLowestHeight) {
-        return 0u;
-    }
+                                                     double budget_ms, unsigned max_height = 0u) {
+    const auto fits = [&](unsigned height) {
+        return predicted_gpu_ms(fit, scene_pixels(height, width, lines)) * heavy_factor <= budget_ms;
+    };
+    unsigned chosen = lines <= kFitLowestHeight ? 0u : kFitLowestHeight;
     if (!fit.valid) {
-        return kFitLowestHeight;
+        return chosen;
     }
-    unsigned chosen = kFitLowestHeight;
     for (const unsigned height : kInternalHeights) {
-        if (height < kFitLowestHeight || height == 0u || height >= lines) {
-            continue;
-        }
-        if (predicted_gpu_ms(fit, scene_pixels(height, width, lines)) * heavy_factor <= budget_ms) {
+        if (height >= kFitLowestHeight && height < lines && fits(height)) {
             chosen = height;
         }
     }
-    if (predicted_gpu_ms(fit, scene_pixels(0u, width, lines)) * heavy_factor <= budget_ms) {
-        chosen = 0u;
+    if (!fits(0u)) {
+        return chosen;
+    }
+    chosen = 0u;
+    for (const unsigned height : kInternalHeights) {
+        if (height > lines && height <= max_height && fits(height)) {
+            chosen = height;
+        }
     }
     return chosen;
 }

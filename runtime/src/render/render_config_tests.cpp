@@ -720,6 +720,10 @@ int main() {
         passed &= expect(galaxy::render::largest_fitting_height(GpuTimeFit{}, 1920u, 1080u, 1.0, budget) == 480u &&
                              galaxy::render::largest_fitting_height(fast, 854u, 480u, 1.0, budget) == 0u,
                          "no fit keeps 480 lines; an output of 480 lines matches the display");
+        passed &= expect(galaxy::render::largest_fitting_height(fast, 1920u, 1080u, galaxy::render::kFitHeavyStage, budget, 2160u) == 2160u &&
+                             galaxy::render::largest_fitting_height(fast, 1920u, 1080u, galaxy::render::kFitHeavyStage, budget, 1440u) == 1440u &&
+                             galaxy::render::largest_fitting_height(fit, 1920u, 1080u, 1.0, budget, 2160u) == 0u,
+                         "above the output only up to max_height, and only what fits");
     }
 
     if (!passed) {
