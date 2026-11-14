@@ -1451,6 +1451,26 @@ namespace luma {
             endMod(pMod);
         }
 
+        // A begun mod that waits for its start and will replace `pFunction` (its hooks are published only at its start):
+        // a lower mod's replace of the same function is refused at its begin, as against a published one (section 1).
+        const LumaMod* waitingReplacer(const Function* pFunction) {
+            for (u32 w = 0; w < sWaitingCount; w++) {
+                const LumaModInfo* const pInfo = sWaiting[w]->info;
+                for (u32 i = 0; i < pInfo->import_count; i++) {
+                    const LumaImport& rImport = pInfo->imports[i];
+                    if (rImport.kind != LUMA_IMPORT_HOOK || rImport.hook_kind != LUMA_REPLACE) {
+                        continue;
+                    }
+                    const Function* pOther = nullptr;
+                    s32 number = -1;
+                    if (resolve(rImport, &pOther, &number) && pOther == pFunction) {
+                        return sWaiting[w];
+                    }
+                }
+            }
+            return nullptr;
+        }
+
         // A waiting mod by its info; `take` takes it off the waiting list.
         LumaMod* waitingMod(const LumaModInfo* pInfo, bool take) {
             for (u32 i = 0; i < sWaitingCount; i++) {
@@ -1763,7 +1783,10 @@ namespace luma {
                 refuse.put("found", 'T', rImport.name);
                 refused = true;
             } else if (rImport.hook_kind == LUMA_REPLACE) {
-                const void* const pHolder = replacedBy(pFunction);
+                const void* pHolder = replacedBy(pFunction);
+                if (pHolder == nullptr) {
+                    pHolder = waitingReplacer(pFunction);
+                }
                 if (pHolder != nullptr) {
                     refuse.start(805);
                     refuse.put("found", 'T', rImport.name);

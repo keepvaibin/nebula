@@ -1298,8 +1298,8 @@ def run_one(test, renderer, args, run_folder, previous):
         hidden["startupinfo"] = startup
     began = time.time()
     with (run_folder / "run.log").open("wb") as log:
-        code = wait_or_end(subprocess.Popen(command, env=env, stdout=log, stderr=subprocess.STDOUT, **hidden),
-                           test["limit"] + 60)
+        with subprocess.Popen(command, env=env, stdout=log, stderr=subprocess.STDOUT, **hidden) as process:
+            code = wait_or_end(process, test["limit"] + 60)
     starts, unwatched = 1, None
     if code is not None:
         code, starts, unwatched = follow_start_again(run_folder, exe.name, code, test["limit"] + 60)
