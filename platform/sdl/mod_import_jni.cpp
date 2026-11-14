@@ -29,12 +29,13 @@ std::string text_of(JNIEnv* env, jbyteArray value) {
 }  // namespace
 
 // Imports the file at `source` into <data>/mods (all UTF-8), checked for the disc of `pak` (setup's game.pak; no disc
-// when it is not one: the rules on the game's files are then not checked). `progress.update(done, total)` returning
+// when it is not one: the rules on the game's files are then not checked). `language` is the text table's column the
+// launcher speaks (UsEnglish, EuGerman, JpJapanese...): the check's findings are in it. `progress.update(done, total)` returning
 // false cancels. The answer is UTF-8 "ok\nid\nkinds\ntitle\nmessage", ok being 1, 0, or 2 when the same mod was there
 // already; a refused mod's message has a line for each of the check's findings under it.
 extern "C" JNIEXPORT jbyteArray JNICALL Java_dev_nebula_galaxy_ModImport_importFile(JNIEnv* env, jclass, jbyteArray source,
                                                                                    jbyteArray data, jbyteArray pak,
-                                                                                   jobject progress) {
+                                                                                   jbyteArray language, jobject progress) {
     namespace fs = std::filesystem;
     std::string answer;
     try {
@@ -45,8 +46,9 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_dev_nebula_galaxy_ModImport_importF
         // The game's own files for the rules on game paths, as the game's check reads them (not a store: unchecked).
         galaxy::assets::AssetStore store;
         const bool opened = !game_id.empty() && store.open(pak_path);
-        // The launcher's words are English: the findings too, until the launcher speaks the game's languages.
-        const galaxy::modlog::check::Game game{std::string(galaxy::luma::plugin_target()), game_id, "UsEnglish",
+        std::string speaks = text_of(env, language);
+        if (speaks.empty()) speaks = "UsEnglish";
+        const galaxy::modlog::check::Game game{std::string(galaxy::luma::plugin_target()), game_id, speaks,
                                                opened ? &store : nullptr};
         const galaxy::mods::ImportCheck check = [&game](const fs::path& staged, const std::string& id,
                                                         galaxy::mods::ImportResult& result) {

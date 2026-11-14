@@ -83,7 +83,7 @@ class ImportService : Service() {
         }
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
-            NotificationChannel(CHANNEL, getString(R.string.import_channel), NotificationManager.IMPORTANCE_LOW)
+            NotificationChannel(CHANNEL, getString(R.string.SetupChannel), NotificationManager.IMPORTANCE_LOW)
         )
         startForeground(NOTIFICATION, notification(0, 0), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         val gameId = intent.getStringExtra(EXTRA_GAME_ID).orEmpty()
@@ -103,7 +103,7 @@ class ImportService : Service() {
             val output = GameFiles.pak(this)
             Storage.removeGame(this)
             val descriptor = contentResolver.openFileDescriptor(uri, "r")
-                ?: throw IllegalStateException("the disc image could not be opened")
+                ?: throw IllegalStateException(getString(R.string.DiscOpenFailed))
             val started = SystemClock.elapsedRealtime()
             var lastScreen = 0L
             var lastNotice = 0L
@@ -150,8 +150,11 @@ class ImportService : Service() {
         val percent = if (total > 0) (done * 100 / total).toInt() else 0
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(getString(R.string.import_notification_title))
-            .setContentText(if (total > 0) "$percent% · ${formatBytes(done)} of ${formatBytes(total)}" else "Reading the disc image")
+            .setContentTitle(getString(R.string.SetupNotification))
+            .setContentText(
+                if (total > 0) "$percent% · " + getString(R.string.ProgressBytes, formatBytes(done), formatBytes(total))
+                else getString(R.string.ReadingDisc),
+            )
             .setProgress(100, percent, total == 0L)
             .setOngoing(true)
             .setOnlyAlertOnce(true)

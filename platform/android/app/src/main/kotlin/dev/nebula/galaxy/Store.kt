@@ -180,5 +180,5 @@ fun formatBytes(bytes: Long): String = when {
     bytes >= 1_000_000_000L -> String.format(java.util.Locale.getDefault(), "%.2f GB", bytes / 1e9)
     bytes >= 1_000_000L -> String.format(java.util.Locale.getDefault(), "%.0f MB", bytes / 1e6)
     bytes >= 1_000L -> String.format(java.util.Locale.getDefault(), "%.0f kB", bytes / 1e3)
-    else -> "$bytes bytes"
+    else -> "$bytes B"
 }

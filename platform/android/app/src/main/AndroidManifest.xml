@@ -29,7 +29,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
-    <!-- LumaCore's capture services (plan 8.2 c), audio.microphone and capture.camera: asked of the player only when a
+    <!-- LumaCore's capture services, audio.microphone and capture.camera: asked of the player only when a
          mod that declares the permission is consented to and opens the device (runtime/src/luma_capture.cpp may_use,
          through SDL's request); neither is required to install. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -39,6 +39,7 @@
 
     <application
         android:label="@string/app_name"
+        android:localeConfig="@xml/locales_config"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
         android:theme="@style/Theme.Nebula"

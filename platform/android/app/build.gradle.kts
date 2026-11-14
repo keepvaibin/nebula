@@ -19,6 +19,112 @@ val signing = providers.gradleProperty("nebula.signing").orNull?.let { path ->
     Properties().apply { file(path).inputStream().use { load(it) } }
 }
 
+/**
+ * The launcher's texts, made at every build from the game's own table (localization/NebulaText.tsv): each row whose
+ * id is "L.Android.<Name>" becomes R.string.<Name> in one values folder per language column, so the table stays the
+ * only copy. A cell's {0}, {1} ... become Android's %1$s, %2$s ...; its \n and \\ (the table's escapes) a line break
+ * and a backslash. Each folder also gets text_language (the column's name, for the game's own code that speaks the
+ * same languages) and res/xml/locales_config.xml lists the languages for Android's per-app language setting.
+ */
+abstract class LauncherTexts : DefaultTask() {
+    @get:InputFile
+    abstract val table: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    private val folders = linkedMapOf(
+        "UsEnglish" to listOf("values"),
+        "EuEnglish" to listOf("values-en-rGB", "values-en-rIE", "values-en-rAU", "values-en-rNZ"),
+        "UsFrench" to listOf("values-fr-rCA"),
+        "EuFrench" to listOf("values-fr"),
+        "UsSpanish" to listOf("values-b+es+419", "values-es-rUS", "values-es-rMX"),
+        "EuSpanish" to listOf("values-es"),
+        "EuGerman" to listOf("values-de"),
+        "EuItalian" to listOf("values-it"),
+        "EuDutch" to listOf("values-nl"),
+        "UsPortuguese" to listOf("values-pt"),
+        "JpJapanese" to listOf("values-ja"),
+        "KrKorean" to listOf("values-ko"),
+        "CnSimpChinese" to listOf("values-zh", "values-b+zh+Hans"),
+        "TwTradChinese" to listOf("values-zh-rTW", "values-zh-rHK", "values-zh-rMO", "values-b+zh+Hant"),
+    )
+    private val locales = listOf("en-US", "en-GB", "fr", "fr-CA", "es", "es-419", "de", "it", "nl", "pt-BR", "ja", "ko", "zh-Hans", "zh-Hant")
+
+    private val PREFIX = "L.Android."
+
+    private fun unescape(cell: String): String =
+        Regex("""\\([n\\])""").replace(cell) { if (it.groupValues[1] == "n") "\n" else "\\" }
+
+    private fun escape(text: String, positional: Boolean): String {
+        val out = StringBuilder()
+        for (c in text) {
+            when (c) {
+                '&' -> out.append("&amp;")
+                '<' -> out.append("&lt;")
+                '>' -> out.append("&gt;")
+                '\'' -> out.append("\\'")
+                '"' -> out.append("\\\"")
+                '\\' -> out.append("\\\\")
+                '\n' -> out.append("\\n")
+                '%' -> out.append(if (positional) "%%" else "%")
+                else -> out.append(c)
+            }
+        }
+        if (out.startsWith("@") || out.startsWith("?")) out.insert(0, '\\')
+        return out.toString()
+    }
+
+    @TaskAction
+    fun run() {
+        val lines = table.get().asFile.readText(Charsets.UTF_8).removePrefix("﻿").split("\r\n", "\n").filter { it.isNotEmpty() }
+        val columns = lines.first().split('\t')
+        val rows = lines.drop(1).map { it.split('\t') }.filter { it[0].startsWith(PREFIX) }
+        if (rows.isEmpty()) throw GradleException("${table.get().asFile}: no $PREFIX rows")
+        val placeholder = Regex("""\{(\d)\}""")
+        val out = outputDir.get().asFile
+        out.deleteRecursively()
+        for ((column, qualifiers) in folders) {
+            val index = columns.indexOf(column)
+            if (index < 0) throw GradleException("NebulaText.tsv has no column $column")
+            val xml = StringBuilder("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<resources>\n")
+            xml.append("    <string name=\"text_language\" translatable=\"false\">$column</string>\n")
+            for (row in rows) {
+                val name = row[0].removePrefix(PREFIX)
+                val english = unescape(row.getOrElse(1) { "" })
+                val text = unescape(row.getOrElse(index) { "" })
+                if (english.isEmpty() || text.isEmpty()) throw GradleException("${row[0]}: no $column text (every column is filled)")
+                val wanted = placeholder.findAll(english).map { it.groupValues[1] }.toSet()
+                val used = placeholder.findAll(text).map { it.groupValues[1] }.toSet()
+                if (used != wanted) throw GradleException("${row[0]} $column: arguments $used, UsEnglish has $wanted")
+                val body = placeholder.replace(escape(text, wanted.isNotEmpty())) { m -> "%${m.groupValues[1].toInt() + 1}\$s" }
+                val attributes = if (wanted.isEmpty() && '%' in text) " formatted=\"false\"" else ""
+                xml.append("    <string name=\"$name\"$attributes>$body</string>\n")
+            }
+            xml.append("</resources>\n")
+            for (qualifier in qualifiers) {
+                File(out, "$qualifier/launcher_texts.xml").apply { parentFile.mkdirs() }.writeText(xml.toString(), Charsets.UTF_8)
+            }
+        }
+        File(out, "xml/locales_config.xml").apply { parentFile.mkdirs() }.writeText(
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<locale-config xmlns:android=\"http://schemas.android.com/apk/res/android\">\n" +
+                locales.joinToString("") { "    <locale android:name=\"$it\" />\n" } + "</locale-config>\n",
+            Charsets.UTF_8,
+        )
+    }
+}
+
+val launcherTexts = tasks.register<LauncherTexts>("launcherTexts") {
+    table.set(rootProject.file("../../localization/NebulaText.tsv"))
+    outputDir.set(layout.buildDirectory.dir("generated/launcherTexts"))
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.sources.res?.addGeneratedSourceDirectory(launcherTexts, LauncherTexts::outputDir)
+    }
+}
+
 android {
     namespace = "dev.nebula.galaxy"
     compileSdk = 36

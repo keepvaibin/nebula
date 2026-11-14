@@ -3,6 +3,7 @@ package dev.nebula.galaxy
 
 import android.app.ActivityManager
 import android.content.Context
+import androidx.annotation.StringRes
 import android.net.Uri
 import java.io.File
 import java.io.IOException
@@ -36,12 +37,14 @@ object SaveTransfer {
     fun export(context: Context, uri: Uri): TransferResult {
         val files = saveFiles(GameFiles.saves(context))
         if (files.none { SAVE_NAMES.matches(it.second.name) }) {
-            return TransferResult(false, "No saves yet", "Play and save in the game first.")
+            return TransferResult(false, context.getString(R.string.NoSavesYet), context.getString(R.string.PlayFirst))
         }
-        val output = context.contentResolver.openOutputStream(uri, "wt") ?: throw IOException("The file could not be written")
+        val output = context.contentResolver.openOutputStream(uri, "wt") ?: throw IOException(context.getString(R.string.FileUnwritable))
         output.use { zip(files, it) }
-        val count = if (files.size == 1) "1 file" else "${files.size} files"
-        return TransferResult(true, "Saves exported", "$count, ${formatBytes(files.sumOf { it.second.length() })}.")
+        return TransferResult(
+            true, context.getString(R.string.SavesExported),
+            context.getString(R.string.SavesExportedText, files.size, formatBytes(files.sumOf { it.second.length() })),
+        )
     }
 
     /**
@@ -53,7 +56,7 @@ object SaveTransfer {
         return runCatching {
             val bytes = context.contentResolver.openInputStream(uri)?.use { readAtMost(it, MAX_TOTAL_BYTES) } ?: return false
             if (isZip(bytes)) {
-                unzipSaves(bytes).any { SAVE_NAMES.matches(it.first.substringAfterLast('/')) }
+                unzipSaves(context, bytes).any { SAVE_NAMES.matches(it.first.substringAfterLast('/')) }
             } else {
                 singleFileName(bytes) != null
             }
@@ -66,52 +69,51 @@ object SaveTransfer {
     /** Replaces the saves with those in the file at [uri] (a .zip, Nebula.sav or GameData.bin). */
     fun import(context: Context, uri: Uri, gameId: String): TransferResult {
         if (gameRunning(context)) {
-            return TransferResult(false, "The game is running", "Close the game, then import again.")
+            return TransferResult(false, context.getString(R.string.GameRunning), context.getString(R.string.CloseGameFirst))
         }
         val data = GameFiles.data(context)
         val incoming = File(data, ".save-incoming-${System.nanoTime()}")
         try {
-            val input = context.contentResolver.openInputStream(uri) ?: throw IOException("The file could not be opened")
+            val input = context.contentResolver.openInputStream(uri) ?: throw IOException(context.getString(R.string.FileUnopenable))
             val bytes = input.use { readAtMost(it, MAX_TOTAL_BYTES) }
-                ?: return TransferResult(false, "Not a save", "The file is far larger than any save.")
+                ?: return TransferResult(false, context.getString(R.string.NotASave), context.getString(R.string.FileTooLarge))
             val release = gameId.take(4).ifEmpty { "RMGE" }
             val files: List<Pair<String, ByteArray>> = if (isZip(bytes)) {
-                unzipSaves(bytes)
+                unzipSaves(context, bytes)
             } else {
                 when (singleFileName(bytes)) {
                     "Nebula.sav" -> listOf("$release/Nebula.sav" to bytes)
                     "GameData.bin" -> listOf("title/00010000/${hexTitle(release)}/data/GameData.bin" to bytes)
-                    else -> return TransferResult(false, "Not a save", singleFileProblem(bytes))
+                    else -> return TransferResult(false, context.getString(R.string.NotASave), context.getString(singleFileProblem(bytes)))
                 }
             }
             val saves = files.filter { SAVE_NAMES.matches(it.first.substringAfterLast('/')) }
             if (saves.isEmpty()) {
-                return TransferResult(
-                    false, "No saves in that file",
-                    "It holds no Nebula.sav or GameData.bin. Use a .zip made by Export, or a single save file.",
-                )
+                return TransferResult(false, context.getString(R.string.NoSavesInFile), context.getString(R.string.NoSavesInFileText))
             }
             // Each save is checked as the game checks it before anything in place changes.
             for ((path, content) in saves) {
                 val problem = if (path.substringAfterLast('/').startsWith("Nebula.sav")) {
-                    if (singleFileName(content) == "Nebula.sav") null else "${path.substringAfterLast('/')} is not a Nebula save."
+                    if (singleFileName(content) == "Nebula.sav") null
+                    else context.getString(R.string.NotNebulaSave, path.substringAfterLast('/'))
                 } else {
-                    validGameData(content)
+                    validGameData(content)?.let { context.getString(it) }
                 }
-                if (problem != null) return TransferResult(false, "That save is damaged", problem)
+                if (problem != null) return TransferResult(false, context.getString(R.string.SaveDamaged), problem)
             }
             val miis = files.firstOrNull { it.first == MII_LIBRARY }
             if (miis != null && !String(miis.second, Charsets.UTF_8).startsWith(MII_LIBRARY_FORMAT)) {
-                return TransferResult(false, "That save is damaged", "$MII_LIBRARY is not a Mii library.")
+                return TransferResult(false, context.getString(R.string.SaveDamaged), context.getString(R.string.NotMiiLibrary, MII_LIBRARY))
             }
             val staged = File(incoming, "saves")
             stage(GameFiles.saves(context), staged, files)
             val backedUp = backUp(context)
-            replaceSaves(GameFiles.saves(context), staged)
+            val placed = saves.joinToString(", ") { it.first.substringAfterLast('/') }
+            replaceSaves(context, GameFiles.saves(context), staged)
             return TransferResult(
-                true, "Saves imported",
-                "${saves.joinToString(", ") { it.first.substringAfterLast('/') }}${if (miis != null) " and your Miis" else ""} in place." +
-                    if (backedUp) " The saves you had are kept in Nebula's backups." else "",
+                true, context.getString(R.string.SavesImported),
+                context.getString(if (miis != null) R.string.SavesAndMiisInPlace else R.string.SavesInPlace, placed) +
+                    if (backedUp) " " + context.getString(R.string.SavesBackedUp) else "",
             )
         } finally {
             incoming.deleteRecursively()
@@ -176,7 +178,7 @@ object SaveTransfer {
 
     // The .zip's files under the save folder's own top folders, with one shared outer folder (a zipped "saves", or "nand" from earlier builds) taken
     // off. Paths that leave the folder, and sizes past any save's, refuse the whole file.
-    private fun unzipSaves(bytes: ByteArray): List<Pair<String, ByteArray>> {
+    private fun unzipSaves(context: Context, bytes: ByteArray): List<Pair<String, ByteArray>> {
         val entries = ArrayList<Pair<String, ByteArray>>()
         var total = 0L
         ZipInputStream(bytes.inputStream()).use { zip ->
@@ -184,10 +186,10 @@ object SaveTransfer {
                 val entry = zip.nextEntry ?: break
                 if (entry.isDirectory) continue
                 val path = entry.name.replace('\\', '/').trimStart('/')
-                if (path.split('/').any { it == ".." || it.isEmpty() }) throw IOException("The .zip has a path outside its folder")
-                val content = readAtMost(zip, MAX_FILE_BYTES) ?: throw IOException("The .zip is far larger than any saves")
+                if (path.split('/').any { it == ".." || it.isEmpty() }) throw IOException(context.getString(R.string.ZipOutside))
+                val content = readAtMost(zip, MAX_FILE_BYTES) ?: throw IOException(context.getString(R.string.ZipTooLarge))
                 total += content.size
-                if (total > MAX_TOTAL_BYTES) throw IOException("The .zip is far larger than any saves")
+                if (total > MAX_TOTAL_BYTES) throw IOException(context.getString(R.string.ZipTooLarge))
                 entries += path to content
             }
         }
@@ -212,47 +214,48 @@ object SaveTransfer {
         else -> null
     }
 
-    private fun singleFileProblem(bytes: ByteArray): String =
-        validGameData(bytes) ?: "Choose a .zip made by Export, a Nebula.sav, or a GameData.bin."
+    @StringRes
+    private fun singleFileProblem(bytes: ByteArray): Int = validGameData(bytes) ?: R.string.ChooseSaveFile
 
     private fun hexTitle(release: String) = release.toByteArray(Charsets.US_ASCII).joinToString("") { "%02x".format(it.toInt() and 0xFF) }
 
     // SaveFileFormat.hpp's validate (Wii's big-endian version 2, the Switch release's little-endian 2, Nebula's 3):
-    // null when the game will read it, else what is wrong.
-    private fun validGameData(d: ByteArray): String? {
-        if (d.size == 111360) return "This is a Wii SD-card export (data.bin), which is encrypted. Copy GameData.bin out of the Wii's or Dolphin's save folder instead."
-        if (d.size < 16) return "Choose a .zip made by Export, a Nebula.sav, or a GameData.bin."
+    // null when the game will read it, else the text saying what is wrong.
+    @StringRes
+    private fun validGameData(d: ByteArray): Int? {
+        if (d.size == 111360) return R.string.WiiSdExport
+        if (d.size < 16) return R.string.ChooseSaveFile
         fun u16(at: Int, big: Boolean) = if (big) (d[at].toInt() and 0xFF) shl 8 or (d[at + 1].toInt() and 0xFF)
             else (d[at + 1].toInt() and 0xFF) shl 8 or (d[at].toInt() and 0xFF)
         fun u32(at: Int, big: Boolean): Long = if (big) (u16(at, true).toLong() shl 16) or u16(at + 2, true).toLong()
             else (u16(at + 2, false).toLong() shl 16) or u16(at, false).toLong()
         val big = u32(4, true) == 2L
         val little = u32(4, false)
-        if (!big && little != 2L && little != 3L) return "Choose a .zip made by Export, a Nebula.sav, or a GameData.bin."
+        if (!big && little != 2L && little != 3L) return R.string.ChooseSaveFile
         val entries = u32(8, big)
         val size = u32(12, big)
-        if (size < 16 || ((size + 31) and 31L.inv()) != d.size.toLong()) return "That GameData.bin is cut short or padded wrongly."
-        if (entries == 0L || entries >= 24 || entries > (size - 16) / 16) return "That GameData.bin's file table is damaged."
+        if (size < 16 || ((size + 31) and 31L.inv()) != d.size.toLong()) return R.string.GameDataShort
+        if (entries == 0L || entries >= 24 || entries > (size - 16) / 16) return R.string.GameDataTable
         val tableEnd = 16 + entries * 16
         for (i in 0 until entries.toInt()) {
             val entry = 16 + i * 16
             var nameBytes = 0
             while (nameBytes < 12 && d[entry + nameBytes].toInt() != 0) {
                 val c = d[entry + nameBytes].toInt() and 0xFF
-                if (c < 32 || c > 126 || c == '/'.code || c == '\\'.code || c == ':'.code) return "That GameData.bin's file table is damaged."
+                if (c < 32 || c > 126 || c == '/'.code || c == '\\'.code || c == ':'.code) return R.string.GameDataTable
                 nameBytes++
             }
-            if (nameBytes == 0 || nameBytes == 12) return "That GameData.bin's file table is damaged."
+            if (nameBytes == 0 || nameBytes == 12) return R.string.GameDataTable
             val start = u32(entry + 12, big)
             val end = if (i + 1 < entries) u32(entry + 28, big) else size
-            if (start < tableEnd || start > end || end > size || end - start < 4) return "That GameData.bin's file table is damaged."
-            if (d[start.toInt()].toInt() != 1) return "That GameData.bin is damaged."
+            if (start < tableEnd || start > end || end > size || end - start < 4) return R.string.GameDataTable
+            if (d[start.toInt()].toInt() != 1) return R.string.GameDataDamaged
             var position = 4L
             for (chunk in 0 until (d[start.toInt() + 1].toInt() and 0xFF)) {
                 val remaining = end - start - position
-                if (remaining < 12) return "That GameData.bin is damaged."
+                if (remaining < 12) return R.string.GameDataDamaged
                 val chunkSize = u32((start + position + 8).toInt(), big)
-                if (chunkSize < 12 || chunkSize > remaining) return "That GameData.bin is damaged."
+                if (chunkSize < 12 || chunkSize > remaining) return R.string.GameDataDamaged
                 position += chunkSize
             }
         }
@@ -266,7 +269,7 @@ object SaveTransfer {
             i += 2
         }
         val checksum = ((sum and 0xFFFF) shl 16) or (inverse and 0xFFFF)
-        return if (u32(0, big) == checksum) null else "That GameData.bin's checksum does not match: the file is damaged."
+        return if (u32(0, big) == checksum) null else R.string.GameDataChecksum
     }
 
     // The saves in place as save-backups/Saves before import <time>.zip; the newest five are kept. False: none to keep.
@@ -279,19 +282,19 @@ object SaveTransfer {
         val backup = File(folder, "Saves before import $stamp.zip")
         val writing = File(folder, ".${backup.name}.writing")
         writing.outputStream().use { zip(files, it) }
-        if (!writing.renameTo(backup)) throw IOException("The backup of your saves could not be written")
+        if (!writing.renameTo(backup)) throw IOException(context.getString(R.string.BackupFailed))
         folder.listFiles { f -> f.name.startsWith("Saves before import ") }.orEmpty()
             .sortedByDescending { it.name }.drop(BACKUPS_KEPT).forEach { it.delete() }
         return true
     }
 
     // The staged folder becomes the save folder: renames, so a failure leaves the old saves whole.
-    private fun replaceSaves(saveFolder: File, staged: File) {
+    private fun replaceSaves(context: Context, saveFolder: File, staged: File) {
         val old = File(saveFolder.parentFile, ".saves-replaced-${System.nanoTime()}")
-        if (saveFolder.exists() && !saveFolder.renameTo(old)) throw IOException("The save folder could not be replaced")
+        if (saveFolder.exists() && !saveFolder.renameTo(old)) throw IOException(context.getString(R.string.SaveFolderFailed))
         if (!staged.renameTo(saveFolder)) {
             old.renameTo(saveFolder)
-            throw IOException("The save folder could not be replaced")
+            throw IOException(context.getString(R.string.SaveFolderFailed))
         }
         old.deleteRecursively()
     }

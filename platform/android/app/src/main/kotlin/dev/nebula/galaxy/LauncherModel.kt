@@ -97,7 +97,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         Thread {
             val result = runCatching {
                 ModImport.import(app, uri) { share -> main.post { if (modProgress != null) modProgress = share } }
-            }.getOrElse { ModImportResult(false, "", "", "", it.message ?: "That file could not be read") }
+            }.getOrElse { ModImportResult(false, "", "", "", it.message ?: app.getString(R.string.FileUnreadable)) }
             val file = DropKind.nameAndSize(app, uri).first
             main.post {
                 modProgress = null
@@ -118,12 +118,12 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         val ready = results.filter { it.second.ok }.map { it.second.name }
         val failed = results.filter { !it.second.ok }.map { "${it.first}: ${it.second.message}" }
         val title = when {
-            failed.isEmpty() -> "${ready.size} mods are ready"
-            ready.isEmpty() -> "Those files could not be imported"
-            else -> "${ready.size} of ${results.size} mods are ready"
+            failed.isEmpty() -> app.getString(R.string.ModsReady, ready.size)
+            ready.isEmpty() -> app.getString(R.string.ModsNoneReady)
+            else -> app.getString(R.string.ModsSomeReady, ready.size, results.size)
         }
         val parts = ArrayList<String>()
-        if (ready.isNotEmpty()) parts += ready.joinToString(", ") + ". Turn them on under Mods in the game's settings."
+        if (ready.isNotEmpty()) parts += app.getString(R.string.ModsReadyText, ready.joinToString(", "))
         if (failed.isNotEmpty()) parts += failed.joinToString("\n")
         return ModImportResult(failed.isEmpty(), "", "", "", parts.joinToString("\n\n"), title)
     }
@@ -143,7 +143,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                     return@withContext
                 }
                 if (install == null) {
-                    transferResult = TransferResult(false, "Set up the game first", "Drop your disc image here to start.")
+                    transferResult = TransferResult(false, app.getString(R.string.SetUpFirstTitle), app.getString(R.string.SetUpFirstText))
                     return@withContext
                 }
                 kinds[DropKind.Saves]?.firstOrNull()?.let { importSaves(it) }
@@ -181,7 +181,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         miiBusy = true
         viewModelScope.launch(Dispatchers.IO) {
             val result = runCatching { MiiImport.import(app, uris) }
-                .getOrElse { TransferResult(false, "The Miis could not be imported", it.message ?: "Unknown error.") }
+                .getOrElse { TransferResult(false, app.getString(R.string.MiisFailed), it.message ?: app.getString(R.string.UnknownError)) }
             withContext(Dispatchers.Main) {
                 miiBusy = false
                 transferResult = result
@@ -199,7 +199,9 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         if (saveBusy) return
         saveBusy = true
         viewModelScope.launch(Dispatchers.IO) {
-            val result = runCatching(work).getOrElse { TransferResult(false, "The saves could not be moved", it.message ?: "Unknown error.") }
+            val result = runCatching(work).getOrElse {
+                TransferResult(false, app.getString(R.string.SavesFailed), it.message ?: app.getString(R.string.UnknownError))
+            }
             val saves = Storage.saveBytes(app)
             withContext(Dispatchers.Main) {
                 saveBusy = false
@@ -247,7 +249,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
 
     fun choose(uri: Uri) {
         val resolver = app.contentResolver
-        var name = uri.lastPathSegment ?: "disc image"
+        var name = uri.lastPathSegment ?: app.getString(R.string.DiscImage)
         var bytes = -1L
         runCatching {
             resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { c ->
@@ -263,7 +265,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             val identity = runCatching {
                 resolver.openFileDescriptor(uri, "r")!!.use { DiscIdentity.parse(Importer.identify(it.fd)) }
-            }.getOrElse { DiscIdentity(false, "", "", "", "The disc image could not be read: ${it.message}") }
+            }.getOrElse { DiscIdentity(false, "", "", "", app.getString(R.string.DiscUnreadable, it.message.orEmpty())) }
             withContext(Dispatchers.Main) {
                 if (disc?.uri == uri) disc = disc?.copy(identity = identity)
             }
@@ -334,7 +336,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         val hasLog = GameFiles.log(app).isFile
         val error = GameFiles.lastError(app)
         if (error.isFile) {
-            gameExit = GameExit("The game could not continue", error.readText().trim().ifEmpty { "Unknown error." }, hasLog)
+            gameExit = GameExit(app.getString(R.string.GameCouldNotContinue), error.readText().trim().ifEmpty { app.getString(R.string.UnknownError) }, hasLog)
             error.delete()
             return
         }
@@ -342,14 +344,12 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         val exit = activities.getHistoricalProcessExitReasons(app.packageName, 0, 8)
             .firstOrNull { it.processName.endsWith(":game") && it.timestamp >= launchedAt } ?: return
         val message = when (exit.reason) {
-            ApplicationExitInfo.REASON_CRASH, ApplicationExitInfo.REASON_CRASH_NATIVE ->
-                "The game stopped unexpectedly. The log of that run can help find out why."
-            ApplicationExitInfo.REASON_ANR -> "The game stopped responding and was closed."
-            ApplicationExitInfo.REASON_LOW_MEMORY ->
-                "Android closed the game to free memory. Closing other apps before playing can help."
+            ApplicationExitInfo.REASON_CRASH, ApplicationExitInfo.REASON_CRASH_NATIVE -> app.getString(R.string.GameCrashed)
+            ApplicationExitInfo.REASON_ANR -> app.getString(R.string.GameAnr)
+            ApplicationExitInfo.REASON_LOW_MEMORY -> app.getString(R.string.GameLowMemory)
             else -> return
         }
-        gameExit = GameExit("The game closed", message, hasLog)
+        gameExit = GameExit(app.getString(R.string.GameClosed), message, hasLog)
     }
 
     companion object {

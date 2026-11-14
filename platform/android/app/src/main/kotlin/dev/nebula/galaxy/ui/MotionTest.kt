@@ -9,6 +9,8 @@ import android.view.InputDevice
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.res.stringResource
+import dev.nebula.galaxy.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -211,19 +213,16 @@ fun MotionTestScreen(onBack: () -> Unit) {
     }
     var copied by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
-        TopBar("Motion test", onBack)
+        TopBar(stringResource(R.string.MotionTest), onBack)
         Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), contentAlignment = Alignment.TopCenter) {
             Column(Modifier.widthIn(max = 680.dp).fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
-                Lead(
-                    "Each controller's gyroscope and accelerometer as the game reads them. Turn the controller: the dot " +
-                        "follows as the pointer does in the game. Tap the field to recenter.",
-                )
+                Lead(stringResource(R.string.MotionTestLead))
                 Gap(12.dp)
                 if (views.isEmpty()) {
                     GlassCard(Modifier.fillMaxWidth()) {
-                        Text("No controller connected", style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.NoController), style = MaterialTheme.typography.titleMedium)
                         Text(
-                            "Pair it in Android's Bluetooth settings, or connect it with a cable.",
+                            stringResource(R.string.PairController),
                             style = MaterialTheme.typography.bodyMedium, color = Night.TextDim,
                         )
                     }
@@ -233,8 +232,8 @@ fun MotionTestScreen(onBack: () -> Unit) {
                     Gap(12.dp)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    SecondaryAction("Recenter", Icons.Rounded.Refresh, { probe.recenter() })
-                    SecondaryAction(if (copied) "Copied" else "Copy report", Icons.Rounded.ContentCopy, {
+                    SecondaryAction(stringResource(R.string.Recenter), Icons.Rounded.Refresh, { probe.recenter() })
+                    SecondaryAction(stringResource(if (copied) R.string.Copied else R.string.CopyReport), Icons.Rounded.ContentCopy, {
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         clipboard.setPrimaryClip(ClipData.newPlainText("Nebula motion test", report(views)))
                         copied = true
@@ -252,18 +251,13 @@ private fun PadCard(v: MotionProbe.View, onRecenter: () -> Unit) {
         Text(v.ids, style = MaterialTheme.typography.bodySmall, color = Night.TextFaint)
         Gap(10.dp)
         val works = v.gyroscope != null && v.gyroSamples > 0
+        val rate = String.format(java.util.Locale.getDefault(), "%.0f", v.gyroRate)
         val verdict = when {
-            v.gyroscope == null && v.nintendo && oldNintendoDriver() -> "No motion over Bluetooth on this device: " +
-                "its Linux ${kernelVersion()} has Nintendo's controller driver from before motion was added (Linux 6.1), " +
-                "so Android gives no app this controller's gyroscope. Connect it with a USB cable: the game then reads " +
-                "the controller itself, motion included, as on a PC (this test shows only what Android gives)."
-            v.gyroscope == null -> "Android lists no gyroscope for this controller: its driver gives none to apps. " +
-                "On a USB cable the game reads a Switch or PlayStation controller itself, motion included (this test " +
-                "shows only what Android gives)."
-            v.gyroSamples == 0L -> "Android lists a gyroscope, but no sample has come yet. Move the controller."
-            v.gyroRate in 1.0..59.0 -> String.format(java.util.Locale.ROOT,
-                "Motion works, but only %.0f samples a second come: the pointer will be coarse.", v.gyroRate)
-            else -> String.format(java.util.Locale.ROOT, "Motion works: %.0f samples a second.", v.gyroRate)
+            v.gyroscope == null && v.nintendo && oldNintendoDriver() -> stringResource(R.string.MotionOldDriver, kernelVersion())
+            v.gyroscope == null -> stringResource(R.string.MotionNoGyro)
+            v.gyroSamples == 0L -> stringResource(R.string.MotionNoSamples)
+            v.gyroRate in 1.0..59.0 -> stringResource(R.string.MotionCoarse, rate)
+            else -> stringResource(R.string.MotionWorks, rate)
         }
         Text(verdict, style = MaterialTheme.typography.bodyMedium, color = if (works) Night.Success else Night.Gold)
         Gap(12.dp)
@@ -281,7 +275,7 @@ private fun PadCard(v: MotionProbe.View, onRecenter: () -> Unit) {
                     drawCircle(if (v.shaking) Night.Gold else Night.Lavender, radius = 14.dp.toPx(), center = dot)
                 }
                 if (v.shaking) {
-                    Text("SHAKE", color = Night.Gold, style = MaterialTheme.typography.labelLarge,
+                    Text(stringResource(R.string.Shake), color = Night.Gold, style = MaterialTheme.typography.labelLarge,
                         modifier = Modifier.align(Alignment.TopEnd).padding(12.dp))
                 }
             }
@@ -296,7 +290,7 @@ private fun PadCard(v: MotionProbe.View, onRecenter: () -> Unit) {
             style = mono, color = Night.TextDim,
         )
         Gap(6.dp)
-        Text("Gyroscope: ${v.gyroscope ?: "none"}", style = mono, color = Night.TextFaint)
-        Text("Accelerometer: ${v.accelerometer ?: "none"}", style = mono, color = Night.TextFaint)
+        Text(stringResource(R.string.Gyroscope, v.gyroscope ?: stringResource(R.string.NoneListed)), style = mono, color = Night.TextFaint)
+        Text(stringResource(R.string.Accelerometer, v.accelerometer ?: stringResource(R.string.NoneListed)), style = mono, color = Night.TextFaint)
     }
 }
