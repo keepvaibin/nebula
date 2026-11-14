@@ -525,8 +525,10 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     // Descriptor indexing: one array of every texture and one of every sampler, written while bound and read by an
     // index that is the same for every pixel of a draw (no non-uniform indexing). Core in Vulkan 1.2, else
     // VK_EXT_descriptor_indexing. It is used only when all of it is here.
+    // The extension needs VK_KHR_maintenance3, core from Vulkan 1.1; on the 1.0 path it is enabled with it.
     const bool indexing_extension =
-        !core_12 && has_device_extension(physical_, VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+        !core_12 && has_device_extension(physical_, VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME) &&
+        (!vulkan_1_0 || has_device_extension(physical_, VK_KHR_MAINTENANCE_3_EXTENSION_NAME));
     std::string indexing_note = "no descriptor indexing";
     if (core_12 || indexing_extension) {
         VkPhysicalDeviceDescriptorIndexingFeatures have{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES};
@@ -1007,6 +1009,9 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
             indexing_enabled.pNext = const_cast<void*>(device_info.pNext);
             device_info.pNext = &indexing_enabled;
             device_extensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+            if (vulkan_1_0) {
+                device_extensions.push_back(VK_KHR_MAINTENANCE_3_EXTENSION_NAME);
+            }
         }
     }
 #if defined(_WIN32)
