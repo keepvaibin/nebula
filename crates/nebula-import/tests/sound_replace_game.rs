@@ -24,11 +24,11 @@ fn a_sound_replaces_a_game_sound_the_game_has() {
     let source = dir.path().join("Jump.sound.json");
     let path = "Luma/my.mod/sfx/Jump.sound.json";
     let good = br#"{"kind":"effect","file":"jump.wav","replace":"SE_PM_JUMP_M"}"#;
-    assert_eq!(cook_source(path, &source, good, Some(pak)).unwrap(), 1);
+    assert_eq!(cook_source(path, &source, good, Some(pak), None).unwrap(), 1);
     let facts = refuse::take_facts();
     assert!(facts.iter().any(|f| matches!(f, refuse::CookFact::Sound { facts, .. } if facts.replaces == "SE_PM_JUMP_M")), "{facts:?}");
     let bad = br#"{"kind":"effect","file":"jump.wav","replace":"SE_PM_JUMP_XL"}"#;
-    let error = cook_source(path, &source, bad, Some(pak)).unwrap_err();
+    let error = cook_source(path, &source, bad, Some(pak), None).unwrap_err();
     let finding = refuse::refusal_of(&error).expect("a refusal");
     let words = luma_validate::reason(finding, "UsEnglish");
     assert!(words.contains("SE_PM_JUMP_XL") && words.contains("/replace"), "{words}");

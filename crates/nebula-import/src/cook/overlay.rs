@@ -412,18 +412,27 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
 /// A mod's source file at game path `path` (`source`: where it is read from, for the files it names), cooked alone
 /// against the game's store `base` as the overlay cooks it: how many game files it makes; 0 when its kind is none the
 /// cook makes (luma_validate's `cooked_source` lists those), an error (a refusal, L804) when the cook refuses it.
-pub fn cook_source(path: &str, source: &Path, bytes: &[u8], base: Option<&Path>) -> Result<usize> {
+/// `mod_waves`: the wave layout of the sound archive the mod brings (mod_wave_layout of its `AudioRes/SMR.szs`), which
+/// lays out its wave archives in place of the game's, as write_overlay does.
+pub fn cook_source(path: &str, source: &Path, bytes: &[u8], base: Option<&Path>, mod_waves: Option<&BTreeMap<String, Vec<audio_data::WavePlace>>>) -> Result<usize> {
     // Its caller takes what the cook notes (a mod's check).
     let _reading = super::refuse::reading();
     let change = Change { path: path.trim_start_matches('/').to_string(), source: source.to_path_buf(), merge: false };
     // The game's wave layout lays out a wave archive only (cook_change): read for one, so a mod of many other files
     // is not one read and parse of the layout for each of them.
-    let waves = if reads_wave_layout(&change.path) {
-        base.and_then(|base| store::read_file(base, WAVE_LAYOUT).ok()).and_then(|b| audio_data::parse_layout_text(&String::from_utf8_lossy(&b)).ok()).unwrap_or_default()
-    } else {
-        BTreeMap::new()
+    let game_waves;
+    let waves = match mod_waves {
+        Some(waves) => waves,
+        None => {
+            game_waves = if reads_wave_layout(&change.path) {
+                base.and_then(|base| store::read_file(base, WAVE_LAYOUT).ok()).and_then(|b| audio_data::parse_layout_text(&String::from_utf8_lossy(&b)).ok()).unwrap_or_default()
+            } else {
+                BTreeMap::new()
+            };
+            &game_waves
+        }
     };
-    match cook_one(&change, bytes.to_vec(), &waves, base, &mut Stats::default()) {
+    match cook_one(&change, bytes.to_vec(), waves, base, &mut Stats::default()) {
         Ok(made) => Ok(made.len()),
         // Every reason the cook gives is said as a finding (L804): its own refusal, or its words for any other fault.
         Err(error) if super::refuse::refusal_of(&error).is_some() => Err(error),
@@ -434,6 +443,22 @@ pub fn cook_source(path: &str, source: &Path, bytes: &[u8], base: Option<&Path>)
 /// Whether cooking the file at `path` reads the game's wave layout: a wave archive (`.aw`), as cook_change lays it out.
 fn reads_wave_layout(path: &str) -> bool {
     path.to_ascii_lowercase().ends_with(".aw")
+}
+
+/// Whether `path` (a game path) is the sound archive whose wave systems lay out the wave archives (`AudioRes/SMR.szs`).
+pub fn is_sound_archive(path: &str) -> bool {
+    path.trim_start_matches('/').eq_ignore_ascii_case("audiores/smr.szs")
+}
+
+/// The wave layout of a sound archive a mod brings (`AudioRes/SMR.szs`), for cook_source: refused (L804) when its wave
+/// systems do not read or it has none (then no wave archive of the mod could be laid out).
+pub fn mod_wave_layout(bytes: &[u8]) -> Result<BTreeMap<String, Vec<audio_data::WavePlace>>> {
+    let refused = |detail: String| super::refuse::refuse("Cook.Failed", &[("detail", format!("the mod's sound archive: {detail}"))]);
+    let waves = audio_data::wave_layout(bytes).map_err(|error| refused(format!("{error:#}")))?;
+    if waves.is_empty() {
+        return Err(refused("it has no wave systems".to_string()));
+    }
+    Ok(waves)
 }
 
 /// A mod's merge/ files (`merge: true`) applied as the game's start applies them (run_merges, the one function),
@@ -557,7 +582,7 @@ pub fn write_overlay(game_id: &str, changes: &[Change], patches: &PlanPatches, b
     if let Some(bytes) = base.and_then(|base| store::read_file(base, WAVE_LAYOUT).ok()) {
         waves = audio_data::parse_layout_text(&String::from_utf8_lossy(&bytes)).context("the game's wave layout")?;
     }
-    for change in changes.iter().filter(|c| c.path.to_ascii_lowercase().ends_with("audiores/smr.szs")) {
+    for change in changes.iter().filter(|c| is_sound_archive(&c.path)) {
         let bytes = fs::read(&change.source).with_context(|| format!("{} cannot be read", change.source.display()))?;
         waves = audio_data::wave_layout(&bytes).context("the mod's sound archive")?;
     }
@@ -1190,7 +1215,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         for path in cooked {
             assert!(luma_validate::cooked_source(&path.to_lowercase()), "{path}");
-            match cook_source(path, &dir.path().join("x"), b"not this", None) {
+            match cook_source(path, &dir.path().join("x"), b"not this", None, None) {
                 Ok(made) => assert!(made > 0, "{path}: made nothing"),
                 Err(error) => assert!(super::super::refuse::refusal_of(&error).is_some() || !format!("{error:#}").is_empty(), "{path}"),
             }
@@ -1199,7 +1224,7 @@ mod tests {
         // such a file as it is, as the overlay does.
         for path in ["Fonts/Title.ttf", "MovieData/Intro.webm", "ObjectData/Kuribo.arc/Notes.json"] {
             assert!(!luma_validate::cooked_source(&path.to_lowercase()), "{path}");
-            assert_eq!(cook_source(path, &dir.path().join("x"), b"not this", None).unwrap(), 1, "{path}");
+            assert_eq!(cook_source(path, &dir.path().join("x"), b"not this", None, None).unwrap(), 1, "{path}");
         }
     }
 
@@ -1218,13 +1243,33 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = dir.path().join("game.pak");
         std::fs::write(&store, b"not a store").unwrap();
-        let error = cook_source("AudioRes/Waves/Wave_0.aw", &dir.path().join("x"), b"wave bytes", Some(&store)).unwrap_err();
+        let error = cook_source("AudioRes/Waves/Wave_0.aw", &dir.path().join("x"), b"wave bytes", Some(&store), None).unwrap_err();
         let (phrase, args) = super::super::refuse::said(&error);
         assert_eq!(phrase, "Cook.Failed");
         assert!(args.iter().any(|(name, value)| *name == "detail" && value.contains("wave layout is not known")), "{args:?}");
         // Any other file is cooked the same with or without the store's layout.
-        let said = |base: Option<&Path>| super::super::refuse::said(&cook_source("Luma/m/Notes.bin", &dir.path().join("x"), b"", base).unwrap_err()).0;
+        let said = |base: Option<&Path>| super::super::refuse::said(&cook_source("Luma/m/Notes.bin", &dir.path().join("x"), b"", base, None).unwrap_err()).0;
         assert_eq!(said(Some(&store)), said(None));
+    }
+
+    #[test]
+    fn a_mod_s_own_sound_archive_lays_out_its_wave_archives() {
+        // A mod that brings AudioRes/SMR.szs lays its wave archives out by that archive's wave systems, not the
+        // game's (the corpus's character mods carry their own sound archive and wave archives shorter than the disc's).
+        let dir = tempfile::tempdir().unwrap();
+        let place = audio_data::WavePlace { offset: 2, length: 2, format: 3, samples: 1, new_offset: 0, new_length: 2 };
+        let waves: BTreeMap<String, Vec<audio_data::WavePlace>> =
+            [(audio_data::wave_archive_key("AudioRes/Waves/Wave_0.aw"), vec![place])].into_iter().collect();
+        assert_eq!(cook_source("AudioRes/Waves/Wave_0.aw", &dir.path().join("x"), &[1, 2, 3, 4], None, Some(&waves)).unwrap(), 1);
+        // A wave past the end of the mod's own archive is still refused, by its place.
+        let error = cook_source("AudioRes/Waves/Wave_0.aw", &dir.path().join("x"), &[1, 2], None, Some(&waves)).unwrap_err();
+        assert!(format!("{error:#}").contains("past the file's end"), "{error:#}");
+        // A sound archive whose wave systems do not read is refused as the mod's.
+        let error = mod_wave_layout(b"not a sound archive").unwrap_err();
+        let (phrase, args) = super::super::refuse::said(&error);
+        assert_eq!(phrase, "Cook.Failed");
+        assert!(args.iter().any(|(_, value)| value.contains("the mod's sound archive")), "{args:?}");
+        assert!(is_sound_archive("/AudioRes/SMR.szs") && is_sound_archive("audiores/smr.SZS") && !is_sound_archive("AudioRes/SMR.szs.json"));
     }
 
     #[test]
@@ -1233,22 +1278,22 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let at = dir.path().join("x");
         // A model in a mod's assets is cooked like one at a game path: an empty one is refused by the model cook.
-        let error = cook_source("Luma/m/Ball.glb", &at, b"", None).unwrap_err();
+        let error = cook_source("Luma/m/Ball.glb", &at, b"", None, None).unwrap_err();
         assert!(said(&error).0.split('.').take(2).eq(["Cook", "Model"]), "{:?}", said(&error));
         // A file another file reads (a sound, font or movie in assets, a screen pass's HLSL) makes nothing by itself.
         for path in ["Luma/m/Song.wav", "Luma/m/Title.ttf", "Luma/m/Intro.webm"] {
-            assert_eq!(cook_source(path, &at, b"", None).unwrap(), 0, "{path}");
+            assert_eq!(cook_source(path, &at, b"", None, None).unwrap(), 0, "{path}");
         }
         // The overlay's own refusals of a file by what it is, each a finding.
-        assert_eq!(said(&cook_source("Luma/m/Notes.bin", &at, b"", None).unwrap_err()).0, "Cook.EmptyFile");
-        assert_eq!(said(&cook_source("ObjectData/Fake.arc", &at, b"not an archive", None).unwrap_err()).0, "Cook.NotArchive");
-        assert_eq!(said(&cook_source("opening.bnr", &at, b"banner", None).unwrap_err()).0, "Cook.ConsoleOnly");
+        assert_eq!(said(&cook_source("Luma/m/Notes.bin", &at, b"", None, None).unwrap_err()).0, "Cook.EmptyFile");
+        assert_eq!(said(&cook_source("ObjectData/Fake.arc", &at, b"not an archive", None, None).unwrap_err()).0, "Cook.NotArchive");
+        assert_eq!(said(&cook_source("opening.bnr", &at, b"banner", None, None).unwrap_err()).0, "Cook.ConsoleOnly");
         // A member of a mod's archive the store leaves out is said by name, not only counted.
         super::super::refuse::take_notes();
         let mut arc = super::super::archive::tests::small_archive();
         let name = arc.windows(6).position(|w| w == b"a.bin\0").unwrap();
         arc[name..name + 5].copy_from_slice(b"a.ini");
-        assert_eq!(cook_source("ObjectData/Thing.arc", &at, &arc, None).unwrap(), 1);
+        assert_eq!(cook_source("ObjectData/Thing.arc", &at, &arc, None, None).unwrap(), 1);
         let notes = super::super::refuse::said_notes();
         assert_eq!(notes, vec![("Cook.ToolFile", vec![("file", "ObjectData/Thing.arc/a.ini".to_string())])]);
     }
@@ -1281,8 +1326,8 @@ mod tests {
         assert!(facts.iter().any(|f| matches!(f, super::super::refuse::CookFact::Layout { facts, .. } if facts.pictures == 1 && facts.textures == 1)), "{facts:?}");
         // Read from no folder (a packed mod's entry): the texture cannot be looked for here, and the game's start reads
         // the mod's files from disk.
-        assert_eq!(cook_source("LayoutData/Hud.arc/Hud.layout.json", Path::new("layers/base/files/x"), source, None).unwrap(), 1);
-        let error = cook_source("LayoutData/Hud.layout.json", &archive, source, None).unwrap_err();
+        assert_eq!(cook_source("LayoutData/Hud.arc/Hud.layout.json", Path::new("layers/base/files/x"), source, None, None).unwrap(), 1);
+        let error = cook_source("LayoutData/Hud.layout.json", &archive, source, None, None).unwrap_err();
         assert_eq!(said(&error).0, "Cook.Layout.NotInArchive");
     }
 
@@ -1297,15 +1342,15 @@ mod tests {
         let text = |font: &str| format!(r#"{{"panes":[{{"name":"A","type":"text","size":[10,10],"font":"{font}"}}]}}"#);
         let path = "LayoutData/Hud.arc/Hud.layout.json";
         let source = archive.join("Hud.layout.json");
-        let error = cook_source(path, &source, text("Luma/my.mod/fonts/Title").as_bytes(), None).unwrap_err();
+        let error = cook_source(path, &source, text("Luma/my.mod/fonts/Title").as_bytes(), None, None).unwrap_err();
         let (why, args) = said(&error);
         assert_eq!(why, "Cook.Layout.NoFont");
         assert!(args.contains(&("uri", "assets/fonts/Title.font.json".into())), "{args:?}");
         // In any layer's assets; another mod's font is not looked for.
         std::fs::create_dir_all(root.join("layers/extra/assets/fonts")).unwrap();
         std::fs::write(root.join("layers/extra/assets/fonts/Title.font.json"), b"{}").unwrap();
-        assert_eq!(cook_source(path, &source, text("Luma/my.mod/fonts/Title").as_bytes(), None).unwrap(), 1);
-        assert_eq!(cook_source(path, &source, text("Luma/other.mod/fonts/Title").as_bytes(), None).unwrap(), 1);
+        assert_eq!(cook_source(path, &source, text("Luma/my.mod/fonts/Title").as_bytes(), None, None).unwrap(), 1);
+        assert_eq!(cook_source(path, &source, text("Luma/other.mod/fonts/Title").as_bytes(), None, None).unwrap(), 1);
     }
 
     #[test]
@@ -1394,18 +1439,18 @@ mod tests {
         );
         let source = dir.path().join("Kuribo.anim.gltf");
         let one = game_store(dir.path(), &[("ObjectData/Kuribo.arc/kuribo.bdl", &block)]);
-        assert_eq!(cook_source("ObjectData/Kuribo.arc/Kuribo.anim.gltf", &source, anim.as_bytes(), Some(&one)).unwrap(), 1);
+        assert_eq!(cook_source("ObjectData/Kuribo.arc/Kuribo.anim.gltf", &source, anim.as_bytes(), Some(&one), None).unwrap(), 1);
         // Two models, neither named as the archive: which one is not guessed.
         let two_dir = tempfile::tempdir().unwrap();
         let two = game_store(two_dir.path(), &[("ObjectData/Kuribo.arc/a.bdl", &block), ("ObjectData/Kuribo.arc/b.bdl", &block)]);
-        let error = cook_source("ObjectData/Kuribo.arc/Kuribo.anim.gltf", &source, anim.as_bytes(), Some(&two)).unwrap_err();
+        let error = cook_source("ObjectData/Kuribo.arc/Kuribo.anim.gltf", &source, anim.as_bytes(), Some(&two), None).unwrap_err();
         assert_eq!(refusal_of(&error).map(|f| f.args.iter().any(|(n, v)| *n == "why" && *v == luma_validate::Arg::Phrase("Cook.Anim.WhichModel"))), Some(true), "{error:#}");
         // Not in a game archive, and no game to read the model from.
         for (path, base, why) in [
             ("ObjectData/Walk.anim.gltf", Some(one.as_path()), "Cook.Anim.NotInArchive"),
             ("ObjectData/Kuribo.arc/Kuribo.anim.gltf", None, "Cook.Anim.NoGame"),
         ] {
-            let error = cook_source(path, &source, anim.as_bytes(), base).unwrap_err();
+            let error = cook_source(path, &source, anim.as_bytes(), base, None).unwrap_err();
             assert_eq!(refusal_of(&error).map(|f| f.args.iter().any(|(n, v)| *n == "why" && *v == luma_validate::Arg::Phrase(why))), Some(true), "{why}: {error:#}");
         }
     }
