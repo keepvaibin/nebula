@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -79,6 +80,7 @@ import androidx.compose.ui.draganddrop.toAndroidDragEvent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -88,6 +90,8 @@ import dev.nebula.galaxy.DisplayRate
 import dev.nebula.galaxy.ImportState
 import dev.nebula.galaxy.Imports
 import dev.nebula.galaxy.LauncherModel
+import dev.nebula.galaxy.R
+import dev.nebula.galaxy.UpdateFailure
 import dev.nebula.galaxy.Screen
 import dev.nebula.galaxy.Storage
 import dev.nebula.galaxy.formatBytes
@@ -221,6 +225,72 @@ fun NebulaApp(model: LauncherModel, onShareLog: () -> Unit) {
             } else null,
         )
     }
+    model.update?.let { release -> UpdateDialog(model, release) }
+}
+
+/** A newer release (Updates): its notes and size, then Update, Skip this version or Not now; the download's progress. */
+@Composable
+private fun UpdateDialog(model: LauncherModel, release: dev.nebula.galaxy.Release) {
+    val context = LocalContext.current
+    val progress = model.updateProgress
+    AlertDialog(
+        onDismissRequest = { if (progress == null) model.updateLater() },
+        icon = { Icon(Icons.Rounded.Download, contentDescription = null, tint = Night.Lavender) },
+        title = { Text(stringResource(R.string.nebula_update_available, release.version)) },
+        text = {
+            Column {
+                if (progress != null) {
+                    Text(stringResource(R.string.nebula_update_downloading, release.version))
+                    Gap(12.dp)
+                    LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+                } else {
+                    val failure = model.updateFailure
+                    if (model.updateNeedsPermission) {
+                        Text(stringResource(R.string.nebula_update_allow), color = Night.Lavender)
+                        Gap(12.dp)
+                    } else if (failure != null) {
+                        val reason = when (failure) {
+                            UpdateFailure.Download -> R.string.nebula_update_failed
+                            UpdateFailure.Rejected -> R.string.nebula_update_rejected
+                            UpdateFailure.NoRoom -> R.string.nebula_update_no_room
+                        }
+                        Text(stringResource(reason), color = Night.Error)
+                        Gap(12.dp)
+                    }
+                    if (release.notes.isNotEmpty()) {
+                        Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
+                            Text(release.notes, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                    if (release.apkBytes > 0L) {
+                        Gap(12.dp)
+                        Text(
+                            stringResource(R.string.nebula_update_size, formatBytes(release.apkBytes)),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Night.TextDim,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            when {
+                progress != null -> TextButton(onClick = model::updateCancel) { Text(stringResource(R.string.nebula_update_cancel)) }
+                model.updateNeedsPermission -> TextButton(onClick = { model.openInstallPermission(context) }) {
+                    Text(stringResource(R.string.nebula_update_open_settings))
+                }
+                else -> TextButton(onClick = model::updateNow) { Text(stringResource(R.string.nebula_update_update)) }
+            }
+        },
+        dismissButton = if (progress == null) {
+            {
+                Row {
+                    TextButton(onClick = model::updateSkip) { Text(stringResource(R.string.nebula_update_skip)) }
+                    TextButton(onClick = model::updateLater) { Text(stringResource(R.string.nebula_update_not_now)) }
+                }
+            }
+        } else null,
+    )
 }
 
 /** Over the launcher while a file is dragged across it: what letting go does. */
@@ -623,6 +693,15 @@ private fun SettingsScreen(
                             progress = { progress },
                             modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 14.dp),
                         )
+                    }
+                }
+
+                // A store's install updates through the store: no check to turn on or off.
+                val appContext = LocalContext.current
+                if (!remember(appContext) { dev.nebula.galaxy.Updates.fromStore(appContext) }) {
+                    SectionTitle(stringResource(R.string.nebula_updates))
+                    GlassCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp), padding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp)) {
+                        SwitchRow(stringResource(R.string.nebula_updates_at_start), null, model.updatesAtStart) { model.updateUpdatesAtStart(it) }
                     }
                 }
 

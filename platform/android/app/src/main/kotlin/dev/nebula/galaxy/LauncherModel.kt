@@ -216,6 +216,114 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         if (Imports.state.value is ImportState.Running) screen = Screen.Import
     }
 
+    /** A newer release to offer (Updates), over the launcher until the player answers. */
+    var update by mutableStateOf<Release?>(null)
+        private set
+
+    /** The update's download and hand-over under way: its share done (0 to 1), or null. */
+    var updateProgress by mutableStateOf<Float?>(null)
+        private set
+
+    /** Why the last Update did not reach Android's installer, shown in the prompt. */
+    var updateFailure by mutableStateOf<UpdateFailure?>(null)
+        private set
+
+    /** Android lets no app install packages until the player allows it for Nebula. */
+    var updateNeedsPermission by mutableStateOf(false)
+        private set
+
+    /** The check at start (Settings, Updates); on unless the player turns it off. */
+    var updatesAtStart by mutableStateOf(Updates.enabled(application))
+        private set
+
+    private val updateCanceled = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    // Not now (or Skip) answered: no other prompt in this run.
+    private var updateAnswered = false
+
+    init {
+        // The kept answer at once, the check's when it comes; it never holds up Play (a late answer is kept and
+        // offered at the next start).
+        offerUpdate(Updates.pending(app))
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
+        Updates.begin(app) { release -> main.post { offerUpdate(release) } }
+    }
+
+    private fun offerUpdate(release: Release?) {
+        // Installing replaces the app and ends a game running in its process: never offered meanwhile.
+        if (release == null || updateAnswered || updateProgress != null || SaveTransfer.gameRunning(app)) return
+        update = release
+    }
+
+    fun updateLater() {
+        updateAnswered = true
+        update = null
+        updateFailure = null
+        updateNeedsPermission = false
+    }
+
+    fun updateSkip() {
+        update?.let { Updates.skip(app, it.version) }
+        updateLater()
+    }
+
+    fun updateCancel() {
+        updateCanceled.set(true)
+    }
+
+    fun updateNow() {
+        val release = update ?: return
+        if (updateProgress != null || SaveTransfer.gameRunning(app)) return
+        if (!Updates.canInstall(app)) {
+            updateNeedsPermission = true
+            return
+        }
+        updateNeedsPermission = false
+        updateFailure = null
+        updateCanceled.set(false)
+        updateProgress = 0f
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
+        Thread({
+            var shown = -1
+            val result = runCatching {
+                val apk = Updates.download(app, release, { bytes ->
+                    // A step per percent reaches the screen, not one per piece read.
+                    val percent = if (release.apkBytes > 0L) (bytes * 100L / release.apkBytes).toInt().coerceIn(0, 100) else 0
+                    if (percent != shown) {
+                        shown = percent
+                        main.post { if (updateProgress != null) updateProgress = percent / 100f }
+                    }
+                }, updateCanceled::get)
+                Updates.install(app, apk)
+            }
+            main.post {
+                updateProgress = null
+                result.onSuccess {
+                    // Android's installer asks the player now (UpdateInstallReceiver) and replaces the app.
+                    updateAnswered = true
+                    update = null
+                }
+                result.onFailure { error ->
+                    if (!updateCanceled.get()) updateFailure = (error as? UpdateException)?.failure ?: UpdateFailure.Download
+                }
+            }
+        }, "nebula-update").start()
+    }
+
+    /** The system's "install unknown apps" switch for Nebula. */
+    fun openInstallPermission(context: Context) {
+        context.startActivity(
+            Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${app.packageName}"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
+
+    fun updateUpdatesAtStart(on: Boolean) {
+        updatesAtStart = on
+        Updates.setEnabled(app, on)
+        if (!on && updateProgress == null) update = null
+    }
+
     fun back(): Boolean {
         screen = when (screen) {
             Screen.Disc -> if (install != null) Screen.Settings else Screen.Welcome
@@ -238,6 +346,8 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             withContext(Dispatchers.Main) { saveBytes = saves }
         }
         if (install == null && screen == Screen.Home) screen = Screen.Welcome
+        // Back from the system's settings with installing allowed: the prompt offers Update again.
+        if (updateNeedsPermission && Updates.canInstall(app)) updateNeedsPermission = false
         checkLastRun()
     }
 
