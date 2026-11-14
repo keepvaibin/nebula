@@ -105,19 +105,19 @@ bool KCollisionServer::calcFarthestVertexDistance() {
 
 KC_PrismData* KCollisionServer::checkPoint(const Vec3f* pPoint, f32 param, f32* pDist) {
     f32 maxDist = mFile->mThickness * param;
-    u32 x = (s32)(pPoint->x - mFile->mMin.x);
+    u32 x = nebula_f32_to_s32_console(pPoint->x - mFile->mMin.x);
 
     if (x & mFile->mXMask) {
         return nullptr;
     }
 
-    u32 y = (s32)(pPoint->y - mFile->mMin.y);
+    u32 y = nebula_f32_to_s32_console(pPoint->y - mFile->mMin.y);
 
     if (y & mFile->mYMask) {
         return nullptr;
     }
 
-    u32 z = (s32)(pPoint->z - mFile->mMin.z);
+    u32 z = nebula_f32_to_s32_console(pPoint->z - mFile->mMin.z);
 
     if (z & mFile->mZMask) {
         return nullptr;
@@ -876,7 +876,7 @@ const u32* KCollisionServer::searchBlock(s32* pShift, const u32& rX, const u32& 
 }
 
 void KCollisionServer::V3u::setUsingCast(const Vec3f& rPos) {
-    x = static_cast< s32 >(rPos.x);
-    y = static_cast< s32 >(rPos.y);
-    z = static_cast< s32 >(rPos.z);
+    x = nebula_f32_to_s32_console(rPos.x);
+    y = nebula_f32_to_s32_console(rPos.y);
+    z = nebula_f32_to_s32_console(rPos.z);
 }
