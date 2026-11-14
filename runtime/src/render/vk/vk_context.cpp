@@ -489,6 +489,8 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     enabled.depthClamp = available.depthClamp;
     enabled.independentBlend = available.independentBlend;
     independent_blend_ = available.independentBlend == VK_TRUE;
+    // No module of Nebula's own gathers with a run-time offset (FXAA's taps are ConstOffset, EASU's gathers carry none);
+    // enabled where offered for a mod's shader that does.
     enabled.shaderImageGatherExtended = available.shaderImageGatherExtended;
     enabled.pipelineStatisticsQuery = available.pipelineStatisticsQuery;
     enabled.shaderStorageImageExtendedFormats = available.shaderStorageImageExtendedFormats;
@@ -496,7 +498,6 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     sampler_anisotropy_ = available.samplerAnisotropy == VK_TRUE;
     bc_textures_ = available.textureCompressionBC == VK_TRUE;
     astc_textures_ = available.textureCompressionASTC_LDR == VK_TRUE;
-    gather_extended_ = available.shaderImageGatherExtended == VK_TRUE;
     pipeline_statistics_ = available.pipelineStatisticsQuery == VK_TRUE;
 
     const float priority = 1.0f;
@@ -527,8 +528,10 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     // Descriptor indexing: one array of every texture and one of every sampler, written while bound and read by an
     // index that is the same for every pixel of a draw (no non-uniform indexing). Core in Vulkan 1.2, else
     // VK_EXT_descriptor_indexing. It is used only when all of it is here.
+    // The extension needs VK_KHR_maintenance3, core from Vulkan 1.1; on the 1.0 path it is enabled with it.
     const bool indexing_extension =
-        !core_12 && has_device_extension(physical_, VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+        !core_12 && has_device_extension(physical_, VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME) &&
+        (!vulkan_1_0 || has_device_extension(physical_, VK_KHR_MAINTENANCE_3_EXTENSION_NAME));
     std::string indexing_note = "no descriptor indexing";
     if (core_12 || indexing_extension) {
         VkPhysicalDeviceDescriptorIndexingFeatures have{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES};
@@ -570,10 +573,11 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     }
     {
         // A bound table's maps: the per-stage image and sampler limits, and what maxPerStageResources leaves in the fragment
-        // stage beside set 0's three constants buffers and two storage buffers and at most four colour attachments (which
-        // count there). Samplers do not count against maxPerStageResources.
+        // stage beside set 0's three constants buffers and three storage buffers (RendererVk::create_layouts: bindings 3
+        // and 4 in both stages, 5 in the fragment stage) and at most four colour attachments (which count there). Samplers
+        // do not count against maxPerStageResources.
         const VkPhysicalDeviceLimits& limits = properties_.limits;
-        constexpr std::uint32_t kBesideMaps = 3u + 2u + 4u;
+        constexpr std::uint32_t kBesideMaps = 3u + 3u + 4u;
         const std::uint32_t by_resources = limits.maxPerStageResources > kBesideMaps ? limits.maxPerStageResources - kBesideMaps : 0u;
         table_slots_ = std::min({limits.maxPerStageDescriptorSampledImages, limits.maxPerStageDescriptorSamplers, by_resources});
     }
@@ -1008,6 +1012,9 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
             indexing_enabled.pNext = const_cast<void*>(device_info.pNext);
             device_info.pNext = &indexing_enabled;
             device_extensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+            if (vulkan_1_0) {
+                device_extensions.push_back(VK_KHR_MAINTENANCE_3_EXTENSION_NAME);
+            }
         }
     }
 #if defined(_WIN32)
