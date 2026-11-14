@@ -8,13 +8,25 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/System/LumaCore.hpp"
 
+// The module with hook points (its copy of this file starts with luma_hook.h) calls isSensorActive and checkAttack for
+// every pair, as the game does; the plain module tests the pairs on each group's array of active sensors.
+#if defined(LUMA_HOOK)
+#define SENSOR_PAIRS_GATHERED 0
+#else
+#define SENSOR_PAIRS_GATHERED 1
+#endif
+
 namespace {
     bool isSensorActive(const HitSensor* pSensor) {
         return pSensor->isValid() && !MR::isClipped(pSensor->mHost);
     }
 
-    // checkAttack on two gathered sensors: the same test with the same operations, and the same calls on a hit.
-    void checkAttackEntries(const SensorHitEntry& rEntry1, const SensorHitEntry& rEntry2) {
+    inline SensorHitEntry entryOf(HitSensor* pSensor) {
+        return {pSensor->mPosition.x, pSensor->mPosition.y, pSensor->mPosition.z, pSensor->getRadius(), pSensor->mHost, pSensor};
+    }
+
+    // checkAttack's test and its calls on a hit, written once for checkAttack and the plain module's pair loops.
+    inline void checkAttackEntries(const SensorHitEntry& rEntry1, const SensorHitEntry& rEntry2) {
         if (rEntry1.mHost == rEntry2.mHost) {
             return;
         }
@@ -38,38 +50,28 @@ namespace {
 };  // namespace
 
 SensorGroup::SensorGroup(int maxSensors)
-    : mMaxSensors(maxSensors), mSensorCount(0), mSensors(new HitSensor*[maxSensors]()), mActiveCount(0), mActiveMax(0), mActive(nullptr) {
+    : mMaxSensors(maxSensors), mSensorCount(0), mSensors(new HitSensor*[maxSensors]()), mActiveCount(0),
+      mActive(SENSOR_PAIRS_GATHERED ? new SensorHitEntry[maxSensors] : nullptr) {
 }
 
 // Once a frame, before any pair: nothing in the pass changes a sensor's validity, place or radius or an actor's clipping
 // (a hit only adds to the sensors' hit lists), so the sensors active here are the ones the pairs would find active.
 void SensorGroup::gatherActive() {
-    if (mActiveMax < mSensorCount) {
-        delete[] mActive;
-        mActiveMax = mMaxSensors > mSensorCount ? mMaxSensors : mSensorCount;
-        mActive = new SensorHitEntry[mActiveMax];
-    }
-
     mActiveCount = 0;
     for (s32 i = 0; i < mSensorCount; i++) {
         HitSensor* const pSensor = mSensors[i];
-        if (!::isSensorActive(pSensor)) {
-            continue;
+        if (::isSensorActive(pSensor)) {
+            mActive[mActiveCount++] = ::entryOf(pSensor);
         }
-
-        SensorHitEntry& rEntry = mActive[mActiveCount++];
-        rEntry.mX = pSensor->mPosition.x;
-        rEntry.mY = pSensor->mPosition.y;
-        rEntry.mZ = pSensor->mPosition.z;
-        rEntry.mRadius = pSensor->getRadius();
-        rEntry.mHost = pSensor->mHost;
-        rEntry.mSensor = pSensor;
     }
 }
 
 void SensorGroup::add(HitSensor* pSensor) {
     if (mSensorCount >= mMaxSensors) {
         mSensors = MR::growArray(mSensors, mMaxSensors);
+        if (mActive != nullptr) {
+            mActive = MR::growArray(mActive, mMaxSensors);
+        }
         mMaxSensors *= 2;
     }
 
@@ -124,12 +126,14 @@ void SensorHitChecker::movement() {
     mSimpleGroup->clear();
     mMapObjGroup->clear();
     mCharacterGroup->clear();
+#if SENSOR_PAIRS_GATHERED
     mPlayerGroup->gatherActive();
     mRideGroup->gatherActive();
     mEyeGroup->gatherActive();
     mSimpleGroup->gatherActive();
     mMapObjGroup->gatherActive();
     mCharacterGroup->gatherActive();
+#endif
     doObjColGroup(mPlayerGroup, mCharacterGroup);
     doObjColGroup(mPlayerGroup, mMapObjGroup);
     doObjColGroup(mPlayerGroup, mRideGroup);
@@ -146,8 +150,9 @@ void SensorHitChecker::movement() {
     doObjColInSameGroup(mCharacterGroup);
 }
 
-// Every active pair in the order of the groups' sensors (movement gathered them).
+// Every active pair in the order of the groups' sensors.
 void SensorHitChecker::doObjColGroup(SensorGroup* pGroup1, SensorGroup* pGroup2) const {
+#if SENSOR_PAIRS_GATHERED
     const s32 group1Count = pGroup1->mActiveCount;
     const s32 group2Count = pGroup2->mActiveCount;
     const SensorHitEntry* const pActive1 = pGroup1->mActive;
@@ -157,10 +162,28 @@ void SensorHitChecker::doObjColGroup(SensorGroup* pGroup1, SensorGroup* pGroup2)
             ::checkAttackEntries(pActive1[i], pActive2[j]);
         }
     }
+#else
+    const s32 group1Count = pGroup1->mSensorCount;
+    for (s32 i = 0; i < group1Count; i++) {
+        HitSensor* const pSensor1 = pGroup1->mSensors[i];
+        if (!::isSensorActive(pSensor1)) {
+            continue;
+        }
+
+        const s32 group2Count = pGroup2->mSensorCount;
+        for (s32 j = 0; j < group2Count; j++) {
+            HitSensor* const pSensor2 = pGroup2->mSensors[j];
+            if (::isSensorActive(pSensor2)) {
+                checkAttack(pSensor1, pSensor2);
+            }
+        }
+    }
+#endif
 }
 
 // Pairs each sensor with itself too; the test skips sensors of one host.
 void SensorHitChecker::doObjColInSameGroup(SensorGroup* pSensorGroup) const {
+#if SENSOR_PAIRS_GATHERED
     const s32 count = pSensorGroup->mActiveCount;
     const SensorHitEntry* const pActive = pSensorGroup->mActive;
     for (s32 i = 0; i < count; i++) {
@@ -168,28 +191,26 @@ void SensorHitChecker::doObjColInSameGroup(SensorGroup* pSensorGroup) const {
             ::checkAttackEntries(pActive[i], pActive[j]);
         }
     }
+#else
+    const s32 count = pSensorGroup->mSensorCount;
+    for (s32 i = 0; i < count; i++) {
+        HitSensor* const pSensor1 = pSensorGroup->mSensors[i];
+        if (!::isSensorActive(pSensor1)) {
+            continue;
+        }
+
+        for (s32 j = i; j < count; j++) {
+            HitSensor* const pSensor2 = pSensorGroup->mSensors[j];
+            if (::isSensorActive(pSensor2)) {
+                checkAttack(pSensor1, pSensor2);
+            }
+        }
+    }
+#endif
 }
 
 void SensorHitChecker::checkAttack(HitSensor* pSensor1, HitSensor* pSensor2) const {
-    if (pSensor1->mHost == pSensor2->mHost) {
-        return;
-    }
-
-    f32 xPos = pSensor1->mPosition.x - pSensor2->mPosition.x;
-    f32 yPos = pSensor1->mPosition.y - pSensor2->mPosition.y;
-    f32 zPos = pSensor1->mPosition.z - pSensor2->mPosition.z;
-    f32 totalSize = pSensor1->getRadius() + pSensor2->getRadius();
-
-    // Written as not-outside so a NaN distance counts as a hit.
-    if (!((((xPos * xPos) + (yPos * yPos)) + (zPos * zPos)) >= (totalSize * totalSize))) {
-        if (!pSensor2->isType(ATYPE_EYE)) {
-            pSensor1->addHitSensor(pSensor2);
-        }
-
-        if (!pSensor1->isType(ATYPE_EYE)) {
-            pSensor2->addHitSensor(pSensor1);
-        }
-    }
+    ::checkAttackEntries(::entryOf(pSensor1), ::entryOf(pSensor2));
 }
 
 namespace MR {
