@@ -149,10 +149,12 @@ pub(crate) fn check(ctx: &mut Ctx) {
     lists.push(own);
     lists.extend(installed[..position].iter().rev().map(theirs));
     ctx.facts.scenario_cells = crate::scenario_order(lists);
-    // The placements of classes only code can make, from whole tables and from patches (references 3).
-    super::after_start::whole_tables(ctx);
+    // The placements of classes only code can make, from whole tables and from patches (references 3), with the
+    // planets as this mod's files and patches leave the planet table.
+    let planets = super::after_start::mod_planets(ctx, &parsed);
+    super::after_start::whole_tables(ctx, &planets);
     for (name, target, root) in parsed {
-        super::after_start::patch(ctx, &name, &target, &root);
+        super::after_start::patch(ctx, &planets, &name, &target, &root);
         let mut pc = P { ctx, file: name };
         one(&mut pc, &root, &target);
     }

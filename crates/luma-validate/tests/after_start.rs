@@ -114,6 +114,34 @@ fn a_placement_of_a_class_no_list_names_waits_for_the_check_after_start() {
 }
 
 #[test]
+fn a_planet_the_mod_adds_to_the_planet_table_is_known() {
+    let layer = [("layers", r#"[{"name": "base"}]"#)];
+    let placed = br#"{"patch": 1, "key": ["l_id"], "add": [{"l_id": 5, "name": "ModPlanet"}, {"l_id": 6, "name": "GoldPlanet"}, {"l_id": 7, "name": "ModThing"}]}"#;
+    // Not added: the mod's planet waits for the check after start like any class no list names.
+    let r = check(&luma(&layer, &[file(PATCH, placed)]), Some(&names(&[])));
+    let classes = |r: &Report| r.touches.after_start.iter().map(|row| row.split('\u{1f}').next().unwrap().to_string()).collect::<Vec<_>>();
+    assert_eq!(classes(&r), vec!["ModPlanet", "ModThing"]);
+
+    // A patch of the planet table adding its row (`add`), or writing its name (`set`), makes it a planet; the game's
+    // planets stay planets, with the factory list or without it.
+    let planets = "layers/base/patches/ObjectData/PlanetMapDataTable.arc/PlanetMapDataTable.bcsv.json";
+    for patch in [
+        &br#"{"patch": 1, "key": ["PlanetName"], "add": [{"PlanetName": "modplanet", "LowFlag": 0}]}"#[..],
+        &br#"{"patch": 1, "key": ["PlanetName"], "set": [{"where": {"PlanetName": "GoldPlanet"}, "values": {"PlanetName": "ModPlanet"}}]}"#[..],
+    ] {
+        let r = check(&luma(&layer, &[file(planets, patch), file(PATCH, placed)]), Some(&names(&[])));
+        assert_eq!(classes(&r), vec!["ModThing"]);
+        let r = check(&luma(&layer, &[file(planets, patch), file(PATCH, placed)]), Some(&Names::default()));
+        assert_eq!(classes(&r), vec!["ModThing"]);
+    }
+
+    // A whole planet table stands for the game's: its planets are the ones known.
+    let whole = "layers/base/files/ObjectData/PlanetMapDataTable.arc/PlanetMapDataTable.bcsv";
+    let r = check(&luma(&layer, &[file(whole, b"table:PlanetName,LowFlag;ModPlanet,0"), file(PATCH, placed)]), Some(&names(&[])));
+    assert_eq!(classes(&r), vec!["GoldPlanet", "ModThing"]);
+}
+
+#[test]
 fn a_whole_placement_table_gives_each_row_by_its_number() {
     let layer = [("layers", r#"[{"name": "base"}]"#)];
     let whole = "layers/base/files/StageData/New/New.arc/jmp/MapParts/Common/MapPartsInfo";

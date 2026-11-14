@@ -48,7 +48,8 @@ to replace, without a second check.
   a planet's waits). After the last mod's start, before any scene, the host gives every mod's rows to the game
   module's `luma_refs_check_after_start` (luma_refs.h), once; the game asks its factory (with every mod's classes)
   for each. The planet table is a scene's, so planets are the validator's to know: it reads them from the store's
-  table whether or not the factory list is given. A class no mod made is `Content.MissingClass` (620) in the mod log,
+  table as the mod's own files and patches leave it (a whole table stands for the game's; a patch's rows and values
+  add their `PlanetName`), whether or not the factory list is given. A class no mod made is `Content.MissingClass` (620) in the mod log,
   and each placement of it makes the placeholder object.
 - Nothing is resolved lazily for content: by the title every content reference of every mod on is either resolved or
   has its placeholder decided. A stage loaded later reads the decision, it does not look again.
