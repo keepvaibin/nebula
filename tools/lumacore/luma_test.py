@@ -284,11 +284,6 @@ def read_test(folder, types=None):
             if "options" in entry:
                 if not isinstance(entry["options"], dict):
                     raise HarnessError("%s.options must be an object" % path)
-                # A choice option's value as the Mods page keeps it (mods.ini choice.<key>=<value>).
-                for key, value in entry["options"].items():
-                    if (not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,63}", key) or not isinstance(value, str)
-                            or not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", value)):
-                        raise HarnessError("%s.options: %s must be an option key with a choice's value" % (path, key))
                 mod["options"] = entry["options"]
             mods.append(mod)
     if bare and mods:
@@ -1172,10 +1167,6 @@ def place_mods(test, settings, previous, frozen):
             m["has_code"] = "code" in load_json(settings / "mods" / mod_id / "luma.json")
         except HarnessError:
             m["has_code"] = True
-        if m["options"]:
-            # The game reads a mod's section again where it repeats, so a kept mod (continue_from) takes them too.
-            with (settings / "mods.ini").open("a", encoding="utf-8") as out:
-                out.write("[%s]\n%s" % (mod_id, "".join("choice.%s=%s\n" % kv for kv in m["options"].items())))
         mod_ids.append((mod_id, m))
         for lib in sorted((settings / "mods" / mod_id).rglob("*" + HOST["ending"])):
             frozen["mods/%s/%s" % (mod_id, lib.relative_to(settings / "mods" / mod_id).as_posix())] = sha256(lib)
