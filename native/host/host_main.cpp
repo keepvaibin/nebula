@@ -3666,12 +3666,51 @@ std::wstring hand_over_event_name(unsigned long pid, unsigned long long created)
 // the shader cache (read whole at the start, replaced atomically), the Vulkan compile journal (its handle closed once
 // mapped), the saves (waited for before the hand-over), the log and a test's audio file (opened sharing reads and
 // writes): none is held so the new process cannot open it.
-// The new process is started first and the files let go after: once the threads are stopped only system calls run
-// (one of them may hold the heap's lock or the C runtime's), and starting a process is not one of those.
+// The new process is started first and the files let go after: once the threads are stopped only system calls that
+// take no lock of the process's run (one of them may hold the heap's lock or the C runtime's), and starting a process,
+// naming a mapped file (GetMappedFileNameW) or writing the log are not those. So the .cooked views are found and every
+// mapped view counted before the stop; after it they are unmapped, and so is any view mapped in between (unnamed: the
+// process ends next). A backstop thread, left running, sets the event and ends the process after 5 s, should a call
+// here still wait on a stopped thread: a process left behind would hold the files and its window.
+constexpr DWORD kHandOverBackstopMs = 5000;
+constexpr size_t kHandOverViews = 1024;
+
+DWORD WINAPI hand_over_backstop(void* event) {
+    Sleep(kHandOverBackstopMs);
+    SetEvent(static_cast<HANDLE>(event));
+    TerminateProcess(GetCurrentProcess(), 0);
+    return 0;
+}
+
 void hand_over(HANDLE event, const std::wstring& cooked) {
     log_line("host:", "ending: the new process takes over");
     std::fflush(stdout);
     std::fflush(stderr);
+    // Before the stop: every mapped view's base, and those of files under .cooked, by the path the system names them
+    // with (\Device\...\mods\.cooked\...): the folder's path past its drive is found in it, letters in any case.
+    static const void* mapped[kHandOverViews];
+    static const void* cooked_views[kHandOverViews];
+    size_t mapped_count = 0;
+    size_t cooked_count = 0;
+    const wchar_t* const tail = cooked.size() > 2u && cooked[1] == L':' ? cooked.c_str() + 2 : cooked.c_str();
+    const size_t tail_length = std::wcslen(tail);
+    static wchar_t name[MAX_PATH * 2];
+    MEMORY_BASIC_INFORMATION region{};
+    for (const char* at = nullptr; VirtualQuery(at, &region, sizeof(region)) == sizeof(region);
+         at = static_cast<const char*>(region.BaseAddress) + region.RegionSize) {
+        if (region.Type != MEM_MAPPED || region.AllocationBase != region.BaseAddress) continue;
+        if (mapped_count < kHandOverViews) mapped[mapped_count++] = region.BaseAddress;
+        if (tail_length == 0u || cooked_count == kHandOverViews) continue;
+        const DWORD length = GetMappedFileNameW(GetCurrentProcess(), region.BaseAddress, name, MAX_PATH * 2);
+        for (DWORD i = 0; length >= tail_length && i + tail_length <= length; i++) {
+            if (_wcsnicmp(name + i, tail, tail_length) == 0) {
+                cooked_views[cooked_count++] = region.BaseAddress;
+                break;
+            }
+        }
+    }
+    DWORD backstop_id = 0;
+    const HANDLE backstop = CreateThread(nullptr, 64 * 1024, hand_over_backstop, event, 0, &backstop_id);
     const DWORD self = GetCurrentThreadId();
     const DWORD process = GetCurrentProcessId();
     // Twice: a thread the first pass missed may have started one. A thread stopped twice stays stopped.
@@ -3681,7 +3720,10 @@ void hand_over(HANDLE event, const std::wstring& cooked) {
         THREADENTRY32 entry{};
         entry.dwSize = sizeof(entry);
         for (BOOL more = Thread32First(threads, &entry); more; more = Thread32Next(threads, &entry)) {
-            if (entry.th32OwnerProcessID != process || entry.th32ThreadID == self) continue;
+            if (entry.th32OwnerProcessID != process || entry.th32ThreadID == self ||
+                (backstop != nullptr && entry.th32ThreadID == backstop_id)) {
+                continue;
+            }
             if (const HANDLE thread = OpenThread(THREAD_SUSPEND_RESUME, FALSE, entry.th32ThreadID)) {
                 SuspendThread(thread);
                 CloseHandle(thread);
@@ -3690,30 +3732,25 @@ void hand_over(HANDLE event, const std::wstring& cooked) {
         CloseHandle(threads);
     }
     gPak.store.let_go_of_files();
-    // Every view of a file under .cooked, by the path the system names it with (\Device\...\mods\.cooked\...): the
-    // folder's path past its drive is found in it, letters in any case.
-    const wchar_t* const tail = cooked.size() > 2u && cooked[1] == L':' ? cooked.c_str() + 2 : cooked.c_str();
-    const size_t tail_length = std::wcslen(tail);
-    wchar_t name[MAX_PATH * 2];
-    MEMORY_BASIC_INFORMATION region{};
-    for (const char* at = nullptr; tail_length != 0u && VirtualQuery(at, &region, sizeof(region)) == sizeof(region);
-         at = static_cast<const char*>(region.BaseAddress) + region.RegionSize) {
-        if (region.Type != MEM_MAPPED || region.AllocationBase != region.BaseAddress) continue;
-        const DWORD length = GetMappedFileNameW(GetCurrentProcess(), region.BaseAddress, name, MAX_PATH * 2);
-        for (DWORD i = 0; length >= tail_length && i + tail_length <= length; i++) {
-            if (_wcsnicmp(name + i, tail, tail_length) == 0) {
-                UnmapViewOfFile(region.BaseAddress);
-                break;
-            }
+    for (size_t i = 0; i < cooked_count; i++) UnmapViewOfFile(cooked_views[i]);
+    // A view mapped since the count: not named (see above), unmapped as it may be one of .cooked's. With more views
+    // than the count holds, the rest are left (only .cooked's, named above, matter).
+    if (mapped_count < kHandOverViews) {
+        for (const char* at = nullptr; VirtualQuery(at, &region, sizeof(region)) == sizeof(region);
+             at = static_cast<const char*>(region.BaseAddress) + region.RegionSize) {
+            if (region.Type != MEM_MAPPED || region.AllocationBase != region.BaseAddress) continue;
+            bool known = false;
+            for (size_t i = 0; i < mapped_count && !known; i++) known = mapped[i] == region.BaseAddress;
+            if (!known) UnmapViewOfFile(region.BaseAddress);
         }
     }
     if (event != nullptr) SetEvent(event);
 }
 
-// The new process's half: it waits for the old one's event (at most 10 s) before it touches the mods folder, and says
-// how long in the log and as the harness fact host.handover_ms. Without the event (an old process of before it, or
-// one that ended first) or past the bound, it waits for the old process to end instead, at most 60 s, said. Either way
-// a thread then says when the old process ended. The id is checked against its creation time, so a process that took
+// The new process's half: before it touches the mods folder it waits, at most 10 s, for the old one's event or its end,
+// whichever comes first, and says how long in the log and as the harness fact host.handover_ms. Without the event (an
+// old process of before it) or past the bound, it waits for the old process to end instead, at most 60 s, said. Then a
+// thread says when the old process ended. The id is checked against its creation time, so a process that took
 // a freed id is never waited for.
 void wait_for_hand_over() {
     wchar_t text[64] = {};
@@ -3742,14 +3779,17 @@ void wait_for_hand_over() {
         before = nullptr;  // another process took the id: the old one has ended
     }
     const HANDLE event = OpenEventW(SYNCHRONIZE, FALSE, hand_over_event_name(pid, created).c_str());
-    bool handed = false;
-    if (event != nullptr) {
-        handed = WaitForSingleObject(event, 10000) == WAIT_OBJECT_0;
-        CloseHandle(event);
+    DWORD came = WAIT_TIMEOUT;
+    if (event != nullptr && before != nullptr) {
+        const HANDLE either[2] = {event, before};
+        came = WaitForMultipleObjects(2, either, FALSE, 10000);
     }
+    if (event != nullptr) CloseHandle(event);
     std::string said;
-    if (handed) {
+    if (came == WAIT_OBJECT_0) {
         said = "the process before it handed over its files after " + std::to_string(since()) + " ms";
+    } else if (came == WAIT_OBJECT_0 + 1) {
+        said = "the process before it ended without a hand-over after " + std::to_string(since()) + " ms";
     } else if (before != nullptr) {
         said = event == nullptr ? "no hand-over from the process before it; " : "the hand-over did not come within 10 s; ";
         said += WaitForSingleObject(before, 60000) == WAIT_OBJECT_0
