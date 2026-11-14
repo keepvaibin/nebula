@@ -956,7 +956,15 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
     } else {
         alpha_test |= stage_lines(&mut p, registers)?;
         if form.lit {
-            p.lines.push("    if (enh_on()) prev.rgb = enh_finish(prev.rgb, g_enh);".into());
+            // A highlight comes from a lit colour channel the stages read (its sky reflection and first light) or, with no
+            // channel lit, from the environment's key light (enh_key_highlight).
+            let highlights = !lit_channels
+                || (0..2).any(|ch| p.color_read[ch] && ch < m.channel_count as usize && m.channels[2 * ch].enable != 0);
+            p.lines.push(if highlights {
+                "    if (enh_on()) prev.rgb = enh_finish(prev.rgb, g_enh);".into()
+            } else {
+                "    if (enh_on()) prev.rgb = enh_finish_bare(prev.rgb);".into()
+            });
         }
         let fog = fog_lines(fog_type, &mut p.rows);
         p.lines.extend(fog);
