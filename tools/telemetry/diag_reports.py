@@ -208,12 +208,24 @@ def summarise(reports, top=20):
     return "\n".join(lines), rows
 
 
+# A report's strings are anyone's (anyone can seal to the public key): in a CSV cell they stay text. Control characters
+# and line breaks are dropped, and a cell a spreadsheet would read as a formula (= + - @ first) starts with a quote.
+FORMULA_LEADS = ("=", "+", "-", "@")
+
+
+def csv_cell(value):
+    if not isinstance(value, str):
+        return value
+    text = "".join(ch for ch in value if ch >= " " and ch != "\x7f")
+    return "'" + text if text.startswith(FORMULA_LEADS) else text
+
+
 def write_csv(rows, path):
     fields = list(rows[0].keys()) if rows else ["report"]
     with open(path, "w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows({key: csv_cell(value) for key, value in row.items()} for row in rows)
 
 
 def main(argv=None):
