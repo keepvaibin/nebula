@@ -2341,6 +2341,22 @@ constexpr const char* kPassTimeNames[] = {"scene", "resolve", "frame read", "dis
 }  // namespace
 
 void RendererVk::gpu_pass(GpuPass pass) {
+    (void)gpu_pass_mark(pass, false);
+}
+
+// A scope ends. A scene pass it opened and leaves open goes on with the outer work (the scene's geometry after the camera's
+// widen or the bloom's composite); no timestamp splits a pass on a tiled GPU, so that whole pass is billed to the outer.
+void RendererVk::gpu_pass_restore(GpuPass outer) {
+    if (scene_pass_open_ && open_pass_mark_ < pass_mark_count_[frame_slot_] &&
+        pass_marks_[frame_slot_][open_pass_mark_] == current_pass_) {
+        pass_marks_[frame_slot_][open_pass_mark_] = outer;
+    }
+    gpu_pass(outer);
+}
+
+// The mark's index, or kNoPassMark. A scene pass's beginning always takes a mark of its own, so gpu_pass_restore can relabel
+// the pass alone.
+unsigned RendererVk::gpu_pass_mark(GpuPass pass, bool pass_begins) {
     const bool changed = pass != current_pass_;
     current_pass_ = pass;
     unsigned& marks = pass_mark_count_[frame_slot_];
@@ -2355,12 +2371,13 @@ void RendererVk::gpu_pass(GpuPass pass) {
     // Tiled GPUs execute a render pass tile by tile. Interior timestamps do not delimit whole-image work;
     // record only at existing pass boundaries, never split a pass to measure it.
     if (scene_pass_open_ || pass_queries_ == VK_NULL_HANDLE || !pass_recording_ || commands_ != commands ||
-        marks + 1u >= kGpuPassSlots || (marks != 0u && pass_marks_[frame_slot_][marks - 1u] == pass)) {
-        return;
+        marks + 1u >= kGpuPassSlots || (!pass_begins && marks != 0u && pass_marks_[frame_slot_][marks - 1u] == pass)) {
+        return kNoPassMark;
     }
     vkCmdWriteTimestamp(commands, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, pass_queries_,
                         frame_slot_ * kGpuPassSlots + marks);
-    pass_marks_[frame_slot_][marks++] = pass;
+    pass_marks_[frame_slot_][marks] = pass;
+    return marks++;
 }
 
 std::size_t RendererVk::gpu_pass_times(GpuPassTime* out, std::size_t capacity) const noexcept {

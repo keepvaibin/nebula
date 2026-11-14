@@ -1101,7 +1101,10 @@ private:
         AoDistance, AoOcclusion, AoDenoise, AoUpsample, AoApply, Count
     };
     static constexpr unsigned kGpuPassSlots = 512;
+    static constexpr unsigned kNoPassMark = ~0u;
     void gpu_pass(GpuPass pass);
+    [[nodiscard]] unsigned gpu_pass_mark(GpuPass pass, bool pass_begins);
+    void gpu_pass_restore(GpuPass outer);
     void read_gpu_passes();
     void prepare_gpu_pass_queries();
     bool profile_frame_ = false;
@@ -1111,7 +1114,7 @@ private:
         GpuPassScope(RendererVk& renderer, GpuPass pass) : renderer_(renderer), outer_(renderer.current_pass_) {
             renderer_.gpu_pass(pass);
         }
-        ~GpuPassScope() { renderer_.gpu_pass(outer_); }
+        ~GpuPassScope() { renderer_.gpu_pass_restore(outer_); }
         GpuPassScope(const GpuPassScope&) = delete;
         GpuPassScope& operator=(const GpuPassScope&) = delete;
     private:
@@ -1119,6 +1122,7 @@ private:
         GpuPass outer_;
     };
     VkQueryPool pass_queries_ = VK_NULL_HANDLE;
+    unsigned open_pass_mark_ = kNoPassMark;  // the mark written as the open scene pass began
     // The frame's shader invocations (gpu-stats): vertex, clipped
     // primitives, fragment and compute, in VkQueryPipelineStatisticFlagBits' order.
     VkQueryPool stats_queries_ = VK_NULL_HANDLE;

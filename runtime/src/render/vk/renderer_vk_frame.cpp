@@ -484,7 +484,7 @@ void RendererVk::begin_scene_pass_with(unsigned aux, const SceneClearValues* cle
         begin.pClearValues = item_clear_pending_ ? values : nullptr;
         item_clear_pending_ = false;
     }
-    gpu_pass(current_pass_);
+    open_pass_mark_ = gpu_pass_mark(current_pass_, true);
     vkCmdBeginRenderPass(commands, &begin,
                          secondary ? VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS : VK_SUBPASS_CONTENTS_INLINE);
     scene_pass_open_ = true;
@@ -519,6 +519,7 @@ void RendererVk::end_scene_pass(const char* caller) {
     }
     vkCmdEndRenderPass(commands_);
     scene_pass_open_ = false;
+    open_pass_mark_ = kNoPassMark;
     scene_pass_closed_by_ = caller;
     if (!held_probe_slots_.empty()) {
         read_held_probes();
