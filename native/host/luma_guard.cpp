@@ -4,8 +4,10 @@
 //
 // Resumed: an access violation, an illegal instruction or an integer division fault, on a thread inside a boundary,
 // not while an earlier fault of that thread is being handled, with the faulting instruction inside the mod's own code
-// and no return address into the game or the host on the stack between the fault and the boundary (the mod's code
-// called the game, which called back into the mod: the game's frames would be skipped half done). Everything else
+// and no frame of the game or the host between the fault and the boundary (the mod's code called the game, which
+// called back into the mod: the game's frames would be skipped half done). Windows x64 follows the call chain by the
+// mod's unwind data (why_not_frames); a mod without unwind data, and POSIX, read the words on the stack instead
+// (why_not_words), which errs toward not resuming. Everything else
 // passes on untouched: Windows, to the next vectored handler and the crash reporter; POSIX, to the handler that was
 // there before (the default one ends the process), after one line on stderr naming the mod.
 #include "galaxy/luma_guard_host.h"
@@ -89,10 +91,11 @@ const char* fault_words(std::uint32_t fault) noexcept {
     }
 }
 
-// Why a fault is not resumed; null when it is safe to. `sp` and `lr` are the faulting thread's (lr 0 where the return
-// address is on the stack).
-const char* why_not(const LumaGuardThread* thread, const LumaGuardFrame* frame, std::uint32_t fault, std::uintptr_t pc,
-                    std::uintptr_t sp, std::uintptr_t lr) noexcept {
+constexpr const char* kGameBetween = "the game's or the host's code is between the boundary and the fault";
+
+// The checks every platform makes before the frames are looked at; null when they pass.
+[[maybe_unused]] const char* why_not_here(const LumaGuardThread* thread, const LumaGuardFrame* frame, std::uint32_t fault, std::uintptr_t pc,
+                         std::uintptr_t sp) noexcept {
     if (fault == LUMA_GUARD_STACK) return "the stack overflowed";
     if (thread->handling != 0u) return "a second fault came while the first was handled";
     if (frame->code_begin == 0 || !(pc >= frame->code_begin && pc < frame->code_end)) {
@@ -100,8 +103,99 @@ const char* why_not(const LumaGuardThread* thread, const LumaGuardFrame* frame, 
     }
     const std::uintptr_t top = static_cast<std::uintptr_t>(frame->regs[LUMA_GUARD_SP]);
     if (sp > top || top - sp > (std::uintptr_t{1} << 22)) return "the stack between the fault and the mod's boundary is not one the guard can read";
-    // From the fault up to the boundary: a return address into the game or the host below one into the mod means the
-    // mod called the game, which called the mod again: those frames of the game would be skipped half done.
+    return nullptr;
+}
+
+#if defined(_WIN32) && (defined(_M_X64) || defined(__x86_64__))
+// luma_guard_call (LumaGuard.cpp, win-x64) pushes rbx and 32 bytes of shadow space below the stack pointer it saves
+// (regs[LUMA_GUARD_SP]), then calls the mod: the call's return address is 56 bytes below that pointer, and the mod's
+// outermost frame returns with the stack pointer 48 bytes below it.
+constexpr std::uintptr_t kCallReturnSlot = 56;
+constexpr std::uintptr_t kCallReturnSp = 48;
+constexpr unsigned kMostFrames = 4096;
+constexpr const char* kUnreadable = "the frames between the fault and the boundary could not be read";
+
+// The function's frame register (UNWIND_INFO's FrameRegister, through its chained entries): the unwind reads the
+// frame's saved words from that register's value. 0: none.
+unsigned frame_register(DWORD64 image, const RUNTIME_FUNCTION* entry) noexcept {
+    for (unsigned depth = 0; entry != nullptr && depth < 32; ++depth) {
+        const auto* info = reinterpret_cast<const std::uint8_t*>(image + entry->UnwindData);
+        if ((info[3] & 0x0Fu) != 0u) return info[3] & 0x0Fu;
+        if (((info[0] >> 3) & UNW_FLAG_CHAININFO) == 0u) return 0u;
+        const unsigned codes = (info[2] + 1u) & ~1u;  // UNWIND_CODE slots, padded to an even count
+        entry = reinterpret_cast<const RUNTIME_FUNCTION*>(info + 4 + codes * 2u);
+    }
+    return 0u;
+}
+
+// From the fault's own registers up the real call chain to the boundary, frame by frame, as the system's unwinder
+// does it: by each function's unwind data (a mod built by clang or MSVC carries it), or, for a function with none (a
+// leaf, which never moves the stack pointer), by the return address at the stack pointer. Words left on the stack by
+// calls that already returned are never taken for frames: only the return addresses the unwind leads to count. Every
+// word it reads is inside the thread's stack: the stack pointer stays between the fault's and the boundary's, and a
+// frame register must point into the stack, or the walk stops (not resumed). Resumed only when every frame up to the
+// one that returns into luma_guard_call is the mod's own.
+const char* why_not_frames(const LumaGuardFrame* frame, const CONTEXT* fault_context) noexcept {
+    const std::uintptr_t top = static_cast<std::uintptr_t>(frame->regs[LUMA_GUARD_SP]);
+    const std::uintptr_t lowest = static_cast<std::uintptr_t>(fault_context->Rsp);
+    const auto stack_base = reinterpret_cast<std::uintptr_t>(reinterpret_cast<const NT_TIB*>(NtCurrentTeb())->StackBase);
+    if (top < kCallReturnSlot) return kUnreadable;
+    CONTEXT context = *fault_context;
+    for (unsigned n = 0; n < kMostFrames; ++n) {
+        const std::uintptr_t sp = static_cast<std::uintptr_t>(context.Rsp);
+        if (sp < lowest || sp > top - kCallReturnSlot || (sp & 7u) != 0u) return kUnreadable;
+        DWORD64 image = 0;
+        PRUNTIME_FUNCTION const entry = RtlLookupFunctionEntry(context.Rip, &image, nullptr);
+        if (entry == nullptr) {
+            // Only the faulting function may be a leaf: one that called the next frame has unwind data.
+            if (n != 0u) return kUnreadable;
+            context.Rip = *reinterpret_cast<const DWORD64*>(sp);
+            context.Rsp = sp + 8u;
+        } else {
+            if (const unsigned reg = frame_register(image, entry); reg != 0u) {
+                const auto value = static_cast<std::uintptr_t>((&context.Rax)[reg]);
+                if (value < lowest || value >= stack_base) return kUnreadable;
+            }
+            void* handler_data = nullptr;
+            DWORD64 establisher = 0;
+            RtlVirtualUnwind(UNW_FLAG_NHANDLER, image, context.Rip, entry, &context, &handler_data, &establisher, nullptr);
+        }
+        const std::uintptr_t pc = static_cast<std::uintptr_t>(context.Rip);
+        const std::uintptr_t up = static_cast<std::uintptr_t>(context.Rsp);
+        if (up <= sp) return kUnreadable;  // a frame that does not move up the stack is not one
+        if (pc == frame->call_return) return up == top - kCallReturnSp ? nullptr : kUnreadable;
+        if (g_game.has(pc) || g_host.has(pc)) return kGameBetween;
+        if (!(pc >= frame->code_begin && pc < frame->code_end)) {
+            return "other code (the system's or another library's) is between the boundary and the fault";
+        }
+    }
+    return kUnreadable;
+}
+
+// Whether the image holding `pc` (the mod's library) carries unwind data (an exception directory). A library built
+// without unwind tables (clang's -ffreestanding drops them unless -fasynchronous-unwind-tables is given) has none:
+// its call chain cannot be followed, and the words on its stack are read instead (why_not_words).
+bool has_unwind_data(std::uintptr_t pc) noexcept {
+    void* base = nullptr;
+    if (RtlPcToFileHeader(reinterpret_cast<PVOID>(pc), &base) == nullptr || base == nullptr) return false;
+    const auto image = reinterpret_cast<std::uintptr_t>(base);
+    const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(image);
+    if (dos->e_magic != IMAGE_DOS_SIGNATURE) return false;
+    const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS64*>(image + static_cast<std::uintptr_t>(dos->e_lfanew));
+    if (nt->Signature != IMAGE_NT_SIGNATURE || nt->OptionalHeader.NumberOfRvaAndSizes <= IMAGE_DIRECTORY_ENTRY_EXCEPTION) {
+        return false;
+    }
+    return nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXCEPTION].Size != 0u;
+}
+#endif
+
+// For a mod with no unwind data (and on POSIX, where the call chain is not followed yet): the words on the stack from
+// the fault up to the boundary. A return address into the game or the host below one into the mod means the mod
+// called the game, which called the mod again. A word a returned call left in a frame of the mod counts too, so a
+// fault after the mod called the game is not resumed: it errs that way. `lr`: the faulting thread's link register (0
+// where the return address is on the stack).
+[[maybe_unused]] const char* why_not_words(const LumaGuardFrame* frame, std::uintptr_t sp, std::uintptr_t lr) noexcept {
+    const std::uintptr_t top = static_cast<std::uintptr_t>(frame->regs[LUMA_GUARD_SP]);
     bool game_seen = false;
     const auto look = [&](std::uintptr_t value) {
         if (value == frame->call_return) return false;
@@ -112,9 +206,9 @@ const char* why_not(const LumaGuardThread* thread, const LumaGuardFrame* frame, 
         }
         return false;
     };
-    if (lr != 0 && look(lr)) return "the game's or the host's code is between the boundary and the fault";
+    if (lr != 0 && look(lr)) return kGameBetween;
     for (std::uintptr_t at = sp & ~std::uintptr_t{7}; at < top; at += sizeof(std::uintptr_t)) {
-        if (look(*reinterpret_cast<const std::uintptr_t*>(at))) return "the game's or the host's code is between the boundary and the fault";
+        if (look(*reinterpret_cast<const std::uintptr_t*>(at))) return kGameBetween;
     }
     return nullptr;
 }
@@ -270,7 +364,11 @@ LONG CALLBACK on_fault(EXCEPTION_POINTERS* info) {
     if (frame == nullptr) return EXCEPTION_CONTINUE_SEARCH;
     CONTEXT* const context = info->ContextRecord;
     const auto pc = reinterpret_cast<std::uintptr_t>(info->ExceptionRecord->ExceptionAddress);
-    if (const char* why = why_not(thread, frame, fault, pc, static_cast<std::uintptr_t>(context->Rsp), 0)) {
+    const char* why = why_not_here(thread, frame, fault, pc, static_cast<std::uintptr_t>(context->Rsp));
+    if (why == nullptr) {
+        why = has_unwind_data(pc) ? why_not_frames(frame, context) : why_not_words(frame, static_cast<std::uintptr_t>(context->Rsp), 0);
+    }
+    if (why != nullptr) {
         note(frame, fault, pc, why);
         return EXCEPTION_CONTINUE_SEARCH;
     }
@@ -431,7 +529,9 @@ void on_signal(int signal, siginfo_t* info, void* raw) {
         pass_on(signal, info, raw);
         return;
     }
-    if (const char* why = why_not(thread, frame, fault, regs.pc, regs.sp, regs.lr)) {
+    const char* why = why_not_here(thread, frame, fault, regs.pc, regs.sp);
+    if (why == nullptr) why = why_not_words(frame, regs.sp, regs.lr);
+    if (why != nullptr) {
         note(frame, fault, regs.pc, why);
         char line[480];
         std::size_t at = 0;
