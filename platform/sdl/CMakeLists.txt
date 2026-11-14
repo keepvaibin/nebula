@@ -248,6 +248,12 @@ target_include_directories(main PRIVATE "${nebula_root}/native/include" "${nebul
 target_compile_definitions(main PRIVATE NEBULA_HOST_RENDERER=1 NEBULA_HOST_SDL=1)
 target_include_directories(main PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(main PRIVATE galaxy_render_vk SDL3::SDL3)
+# The diagnostics report modes (diag_report.h): zlib from the archive libraries; libcurl is loaded at run time.
+if(NOT IOS)
+    target_sources(main PRIVATE ${rt}/diag_report.cpp ${rt}/diag_seal.cpp)
+    target_compile_definitions(main PRIVATE NEBULA_DIAG_REPORTS=1)
+    target_link_libraries(main PRIVATE ${CMAKE_DL_LIBS})
+endif()
 
 # The launcher's mod and Mii import on Android (libnebula_mods.so): the game's own importers, in the launcher's process.
 if(ANDROID)

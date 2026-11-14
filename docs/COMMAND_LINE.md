@@ -33,3 +33,13 @@ The GPU is a setting: `gpu=` in `config.ini`, chosen in Nebula Settings (empty: 
 | `--list-mods` | The imported mods as JSON. |
 
 `--crash-report <file>` shows the report of an instance that stopped; the game starts it itself.
+
+## Diagnostics reports (docs/DIAGNOSTICS_UPLOAD.md)
+
+| Command | |
+|---|---|
+| `--send-report <benchmark.json> [--with-log 1]` | Seals the benchmark result (and with `--with-log 1` the last log's tail, paths and names stripped) to the developer's key and sends it once. Exit 0 sent, 2 uploads off in this build, 3 the file is refused, 4 no connection, 5 the server refused. |
+| `--send-report <file> --save-sealed <out> [--public-key <hex>]` | Writes the sealed report to `<out>` instead of sending it. |
+| `--report-enabled 1` | Exit 0 when this build can send reports, 2 when not (the apps hide the choice). |
+| `--open-report <file> --key <private key file>` | The developer's tool: prints the opened report (exit 7: not a report, another key or changed). |
+| `--report-keygen <folder>` | The developer's key pair: writes the private key file, prints the public key for `diag_endpoint.h`. |
