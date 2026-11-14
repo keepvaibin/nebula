@@ -678,8 +678,10 @@ bool is_harness_half(const std::string& mod_id) {
 
 // A safe start asked at launch (task 6.6): --safe-start 1, or Shift held as Nebula starts (Windows, a visible start).
 bool safe_start_asked() {
-    // A benchmark measures the game itself: every mod off, as a safe start.
-    bool asked = ::galaxy::launch_args().safe_start || galaxy::bench::running();
+    bool asked = ::galaxy::launch_args().safe_start;
+#if defined(NEBULA_HOST_RENDERER)
+    asked = asked || galaxy::bench::running();  // a benchmark measures the game itself: every mod off, as a safe start
+#endif
 #if defined(_WIN32)
     asked = asked || (!::galaxy::launch_args().started_hidden && (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0);
 #endif
