@@ -251,6 +251,7 @@ namespace {
     // Launcher mode's home screen (NEBULA_HOME_MENU_LAUNCHER_*), drawn as the HOME Menu: views with bit 16; its rows,
     // or on page 1 an update's notice ("{v}": its version) and its notes over Back.
     const s32 cLauncherView = 1 << 16;
+    // In the host's order (LauncherModel::Row: a Benchmark row goes between Settings and Quit).
     const char* const cLauncherRows[] = {"LauncherPlay", "SettingsTitle", "Quit"};
     const s32 cLauncherRowNum = sizeof(cLauncherRows) / sizeof(cLauncherRows[0]);
     const s32 cLauncherVersionUnits = 64;  // the host's limits (runtime/src/ui/launcher.cpp)

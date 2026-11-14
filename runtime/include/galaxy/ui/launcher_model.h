@@ -11,6 +11,8 @@ enum class LauncherAction { Previous, Next, Accept, Back, Ignore };
 // The home screen of launcher mode: Play, Settings and Quit, and the update notice's page over them while one is
 // offered. The window, game and renderer share this state. Mutations hold mutex.
 struct LauncherModel {
+    // A Benchmark row, once the feature exists, goes between Settings and Quit, here and in the game's cLauncherRows
+    // (NebulaSettingsMenu.cpp, whose screen then needs a fourth answer button: ChoiceNum).
     enum Row : unsigned { RowPlay, RowSettings, RowQuit, RowNum };
     static constexpr int kChoicePlay = 0;
     static constexpr int kChoiceQuit = 1;
