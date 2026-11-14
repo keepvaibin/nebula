@@ -876,8 +876,9 @@ bool RendererVk::temporal_mode() const {
         return true;
     }
 #endif
+    // SGSR 2's motion pass blends the scene colour apart from the motion target: independent blending.
     return (upscaler == 2u && fsr3_available() && vk::Context::get().temporal_upscaling()) ||
-           (upscaler == 4u && vk::Context::get().xess_upscaling()) || upscaler == 5u;
+           (upscaler == 4u && vk::Context::get().xess_upscaling()) || (upscaler == 5u && vk::Context::get().independent_blend());
 }
 
 bool RendererVk::motion_pass_only() const {

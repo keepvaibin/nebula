@@ -148,6 +148,8 @@ public:
     [[nodiscard]] const DeviceIdentity& identity() const noexcept { return identity_; }
     [[nodiscard]] const DeviceQuirks& quirks() const noexcept { return quirks_; }
     [[nodiscard]] bool sample_rate_shading() const noexcept { return sample_rate_shading_; }
+    // Blend states that differ between a pipeline's colour attachments (the motion and reactive passes, the effects layer).
+    [[nodiscard]] bool independent_blend() const noexcept { return independent_blend_; }
     // VK_EXT_debug_utils is on (the validation layer or RenderDoc's): objects are named and passes labelled.
     [[nodiscard]] bool debug_labels() const noexcept { return debug_names_; }
     [[nodiscard]] bool sampler_anisotropy() const noexcept { return sampler_anisotropy_; }
@@ -325,6 +327,7 @@ private:
     DeviceIdentity identity_;
     DeviceQuirks quirks_;
     bool sample_rate_shading_ = false;
+    bool independent_blend_ = false;
     bool sampler_anisotropy_ = false;
     bool gather_extended_ = false;
     bool pipeline_statistics_ = false;

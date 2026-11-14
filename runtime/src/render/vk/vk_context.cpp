@@ -487,6 +487,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     enabled.textureCompressionBC = available.textureCompressionBC;
     enabled.depthClamp = available.depthClamp;
     enabled.independentBlend = available.independentBlend;
+    independent_blend_ = available.independentBlend == VK_TRUE;
     enabled.shaderImageGatherExtended = available.shaderImageGatherExtended;
     enabled.pipelineStatisticsQuery = available.pipelineStatisticsQuery;
     sampler_anisotropy_ = available.samplerAnisotropy == VK_TRUE;
