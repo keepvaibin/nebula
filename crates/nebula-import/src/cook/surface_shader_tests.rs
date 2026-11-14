@@ -557,6 +557,8 @@ fn a_shader_compiles_for_vulkan_and_metal_or_names_its_line() {
 #[ignore]
 fn a_shader_compiles_or_names_its_line() {
     let Some(dxc) = std::env::var_os("NEBULA_DXC").map(std::path::PathBuf::from) else { return };
+    // The test takes what the cook notes (refuse::reading).
+    let _reading = crate::cook::refuse::reading();
     let cook = |code: &str| {
         let (_dir, folder) = shader_mod(&stripes_json(), code);
         let bytes = serde_json::to_vec(&shader_document(serde_json::json!({"shader": "shaders/Stripes", "textures": {"paint": 0}}))).unwrap();
