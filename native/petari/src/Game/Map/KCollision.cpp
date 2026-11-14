@@ -504,6 +504,7 @@ KC_PrismData* KCollisionServer::checkArrow(const Vec3f& rOrigin, const Vec3f& rD
 
             if (pOut != nullptr) {
                 pDists[foundCount] = dist;
+                pHitParts[foundCount] = hitPart;
                 pOut[foundCount] = prism;
                 foundCount++;
 
