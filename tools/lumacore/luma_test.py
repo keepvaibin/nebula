@@ -1299,59 +1299,92 @@ def run_one(test, renderer, args, run_folder, previous):
     began = time.time()
     with (run_folder / "run.log").open("wb") as log:
         with subprocess.Popen(command, env=env, stdout=log, stderr=subprocess.STDOUT, **hidden) as process:
-            code = wait_or_end(process, test["limit"] + 60)
-    starts, unwatched = 1, None
-    if code is not None:
-        code, starts, unwatched = follow_start_again(run_folder, exe.name, code, test["limit"] + 60)
+            code, starts, unwatched = watch_run(process, run_folder, exe.name, test["limit"] + 60)
     seconds = time.time() - began
     return {"code": code, "seconds": seconds, "frozen": frozen, "mods": mod_ids, "exe": exe.name, "starts": starts,
             "unwatched": unwatched}
 
 
-def wait_or_end(process, limit):
-    """The run's game, the one the runner started or one that took its place: its exit code, or None when it did not
-    end within `limit` seconds, after it is ended (and waited for, so it holds no file of the run)."""
-    try:
-        try:
-            return process.wait(timeout=limit)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait()
-            return None
-    finally:
-        if isinstance(process, Followed):
-            process.close()
+def watch_run(first, run_folder, exe_name, limit):
+    """The run's game to its end: the process the runner started and each one that took its place (the host's
+    start-again: mods cooked, a mod's code chose other layers). The host writes "<process id> <creation time>" of the new
+    process to <crash dumps>/restarted, the run folder here, just after starting it and before its own end. The new
+    process has the same command line and environment, so it writes to the same run.log, facts, crash dumps and stall
+    dumps, which the verdict reads after the last process.
 
-
-def follow_start_again(run_folder, exe_name, code, limit):
-    """The game started again (the host's start-again: mods cooked, a mod's code chose other layers): it writes "<process
-    id> <creation time>" of the new process to <crash dumps>/restarted, the run folder here. The new process has the
-    same command line and environment, so it writes to the same run.log, facts, crash dumps and stall dumps, which the
-    verdict reads after the last process. Each new process is watched as the first (wait_or_end), `limit` seconds each;
-    the last one's exit code is the run's. A run with no start-again returns at once, as before. Returns (code,
-    processes started, why one could not be watched or None)."""
+    The file is read while the process that writes it still runs, and the new process is opened at once: an open
+    handle keeps it findable with its exit code however long the old one takes to end, so a new process that ends
+    first is still watched. Each process gets `limit` seconds and is ended at it (Popen's kill or Followed's); one
+    ended at its limit, or one that cannot be watched, ends every process that took its place too. Returns (the last process's exit code, or None when
+    one was ended at its limit; processes started; why one could not be watched, or None)."""
     marker = run_folder / "restarted"
-    followed = set()
-    starts = 1
-    while marker.is_file():
-        words = marker.read_text(encoding="utf-8", errors="replace").split()
-        if len(words) != 2 or not all(w.isdigit() for w in words):
-            return code, starts + 1, "restarted holds %r, not a process id and its creation time" % " ".join(words)
-        pid, created = int(words[0]), int(words[1])
-        if (pid, created) in followed:
-            break
-        if len(followed) == 4:
-            return code, starts, "the game started again more than 4 times"
-        followed.add((pid, created))
-        starts += 1
+    seen = set()
+    waiting = []
+    state = {"starts": 1, "unwatched": None}
+
+    def look(ended):
+        # A file being written can be read cut short: its form is judged only once its writer has ended.
         try:
-            process = Followed(pid, created, exe_name)
+            words = marker.read_text(encoding="utf-8", errors="replace").split()
+        except OSError:
+            return
+        if len(words) != 2 or not all(w.isdigit() for w in words):
+            if ended and state["unwatched"] is None:
+                state["unwatched"] = "restarted holds %r, not a process id and its creation time" % " ".join(words)
+            return
+        key = (int(words[0]), int(words[1]))
+        if key in seen or state["unwatched"] is not None:
+            return
+        if len(seen) == 4:
+            state["unwatched"] = "the game started again more than 4 times"
+            return
+        seen.add(key)
+        state["starts"] += 1
+        try:
+            waiting.append(Followed(key[0], key[1], exe_name))
         except ProcessLookupError as error:
-            return code, starts, str(error)
-        code = wait_or_end(process, limit)
+            state["unwatched"] = str(error)
+
+    process = first
+    while True:
+        deadline = time.time() + limit
+        code = None
+        try:
+            while True:
+                try:
+                    code = process.wait(timeout=0.1)
+                    break
+                except subprocess.TimeoutExpired:
+                    look(False)
+                    if time.time() >= deadline:
+                        process.kill()
+                        process.wait()
+                        break
+        finally:
+            if isinstance(process, Followed):
+                process.close()
         if code is None:
-            return None, starts, None
-    return code, starts, None
+            # Ended at its limit: what took its place goes too, so no process of the run outlives it.
+            end_all(waiting)
+            return None, state["starts"], state["unwatched"]
+        look(True)
+        if state["unwatched"] is not None:
+            end_all(waiting)
+            return code, state["starts"], state["unwatched"]
+        if not waiting:
+            return code, state["starts"], None
+        process = waiting.pop(0)
+
+
+def end_all(processes):
+    """Followed processes the run gives up on, ended and waited for so none holds a file of the run."""
+    for process in processes:
+        process.kill()
+        try:
+            process.wait(timeout=60)
+        except subprocess.TimeoutExpired:
+            pass
+        process.close()
 
 
 class Followed:
