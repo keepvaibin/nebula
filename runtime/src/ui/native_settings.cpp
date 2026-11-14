@@ -5577,6 +5577,18 @@ NativeSettingsView native_settings_view() {
     return host_window::build_native_settings_view();
 }
 
+// Whether the menu asks the player something: a question over the page, a mod's request, an import's result waiting for
+// its Done, the consent question, or changes not applied (closing would ask first).
+static bool native_settings_asking() {
+    if (s_settings_leave_asking || s_joycon_pairing || galaxy::host::touch_arranging() || settings_display_confirming() ||
+        restart_asking() || vendor_prompting() || mod_question_up() || request_screen_up() ||
+        s_import_page_open.load(std::memory_order_acquire) || pending_settings_changes() != 0u) {
+        return true;
+    }
+    const std::lock_guard<std::mutex> lock(s_mods_mutex);
+    return s_consent_open;
+}
+
 void native_settings_input(NativeSettingsInput input, int arg) {
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
     const bool visible = s_native_settings_visible.load(std::memory_order_relaxed);
@@ -5586,6 +5598,11 @@ void native_settings_input(NativeSettingsInput input, int arg) {
         return;
     case NativeSettingsInput::Close:
         if (visible) (void)handle_native_settings_key(VK_ESCAPE, false, true);
+        return;
+    case NativeSettingsInput::CloseUnseen:
+        // The game's close of a menu the player has not seen (consent 2.1: the player answers the question): one that
+        // asks nothing closes as Escape closes it; a question stays up, unanswered, until the player sees it.
+        if (visible && !native_settings_asking()) (void)handle_native_settings_key(VK_ESCAPE, false, true);
         return;
     case NativeSettingsInput::Apply:
         if (visible) (void)handle_native_settings_key(VK_RETURN, false, true);
