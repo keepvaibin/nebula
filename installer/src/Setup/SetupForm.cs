@@ -17,7 +17,7 @@ namespace Nebula.Setup
         private readonly Panel choose = new Panel(), work = new Panel();
         private readonly TextBox input = new TextBox(), root = new TextBox(), log = new TextBox();
         private readonly CheckBox desktop = new CheckBox(), dlss = new CheckBox(), dlssLicense = new CheckBox(),
-            prepareRayTracing = new CheckBox();
+            prepareRayTracing = new CheckBox(), lumaWindow = new CheckBox(), lumaCommand = new CheckBox(), lumaPath = new CheckBox();
         private readonly RadioButton modeRepair = new RadioButton(), modeRestore = new RadioButton(), modeUninstall = new RadioButton(), modeInstall = new RadioButton();
         private readonly Label summary = new Label(), step = new Label(), elapsed = new Label();
         private readonly ProgressBar overall = new ProgressBar(), stepBar = new ProgressBar();
@@ -166,6 +166,33 @@ namespace Nebula.Setup
             choose.Controls.Add(desktop);
             y += 28;
 
+            // LumaLink, the mod tools: the window and the command line, each a choice; the command line on PATH if asked.
+            bool lumaLinkWindow, lumaLinkCommand, lumaLinkPath;
+            Integration.LumaLinkChoices(out lumaLinkWindow, out lumaLinkCommand, out lumaLinkPath);
+            lumaWindow.Text = NebulaText.Of("LumaLink window");
+            lumaWindow.Location = new Point(20, y);
+            lumaWindow.Size = new Size(340, 24);
+            lumaWindow.Checked = lumaLinkWindow;
+            choose.Controls.Add(lumaWindow);
+            lumaCommand.Text = NebulaText.Of("LumaLink command line");
+            lumaCommand.Location = new Point(380, y);
+            lumaCommand.Size = new Size(360, 24);
+            lumaCommand.Checked = lumaLinkCommand;
+            choose.Controls.Add(lumaCommand);
+            y += 26;
+            lumaPath.Text = NebulaText.Of("Add LumaLink to PATH");
+            lumaPath.Location = new Point(400, y);
+            lumaPath.Size = new Size(340, 24);
+            lumaPath.Checked = lumaLinkPath && lumaLinkCommand;
+            lumaPath.Enabled = lumaLinkCommand;
+            lumaCommand.CheckedChanged += delegate
+            {
+                lumaPath.Enabled = lumaCommand.Checked;
+                if (!lumaCommand.Checked) lumaPath.Checked = false;
+            };
+            choose.Controls.Add(lumaPath);
+            y += 30;
+
             if (RayTracingPreparation.Offered())
             {
                 prepareRayTracing.Text = NebulaText.Of("Prepare ray tracing shaders");
@@ -200,7 +227,7 @@ namespace Nebula.Setup
             }
 
             summary.Location = new Point(20, y);
-            summary.Size = new Size(720, 170);
+            summary.Size = new Size(720, Math.Max(40, 590 - y));
             summary.Text = NebulaText.Of("Requires Windows 10 or 11 (64-bit), 8 GB of RAM, {0} of free disk space and a DirectX 12 GPU.", FileUtil.FormatBytes(InstallEngine.RequiredFreeBytes));
             choose.Controls.Add(summary);
             foreach (var radio in new[] { modeRepair, modeRestore, modeUninstall })
@@ -309,7 +336,8 @@ namespace Nebula.Setup
 
             var request = new InstallRequest
             {
-                Mode = mode, GameInput = game, InstallRoot = layout.Root, DesktopShortcut = desktop.Checked, InstallDlss = dlss.Checked
+                Mode = mode, GameInput = game, InstallRoot = layout.Root, DesktopShortcut = desktop.Checked, InstallDlss = dlss.Checked,
+                LumaLinkWindow = lumaWindow.Checked, LumaLinkCommand = lumaCommand.Checked, LumaLinkPath = lumaPath.Checked && lumaCommand.Checked
             };
             choose.Visible = false;
             work.Visible = true;

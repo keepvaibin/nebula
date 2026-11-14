@@ -41,6 +41,7 @@ A mod is a folder with a `luma.json`, packed by LumaLink into one `.luma` file t
 
 ## LumaLink
 
+- [Installing LumaLink](lumalink/install.md): Windows, Linux and macOS, the window and the command line, PATH
 - Commands: [new](lumalink/cmd-new.md), [add](lumalink/cmd-add.md), [check](lumalink/cmd-check.md),
   [build](lumalink/cmd-build.md), [pack](lumalink/cmd-pack.md), [run](lumalink/cmd-run.md),
   [test](lumalink/cmd-test.md), [convert](lumalink/cmd-convert.md), [format](lumalink/cmd-format.md),

@@ -53,6 +53,7 @@ namespace Nebula.Setup
                     InstallRoot = root,
                     DesktopShortcut = options.ContainsKey("desktop-shortcut")
                 };
+                Integration.LumaLinkChoices(out request.LumaLinkWindow, out request.LumaLinkCommand, out request.LumaLinkPath);
                 var engine = new InstallEngine(request, new SilentProgress(), CancellationToken.None);
                 engine.Run();
                 return 0;

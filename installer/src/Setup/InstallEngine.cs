@@ -31,6 +31,9 @@ namespace Nebula.Setup
         public bool DesktopShortcut;
         /// <summary>Download NVIDIA DLSS into the user data folder (the player accepted NVIDIA's license).</summary>
         public bool InstallDlss;
+        /// <summary>LumaLink, the mod tools: its window, its command line, and the command line's folder on the user's
+        /// PATH. An install without the form keeps the choices of the last one (Integration.LumaLinkChoices).</summary>
+        public bool LumaLinkWindow, LumaLinkCommand, LumaLinkPath;
     }
 
     /// <summary>Progress reporting from the engine to the UI.</summary>
@@ -75,6 +78,10 @@ namespace Nebula.Setup
         /// <summary>The game's self-description (function rows, type description, placement facts, services list),
         /// packed as one file and unpacked to luma\ in the version folder, where LumaLink reads it.</summary>
         private const string SelfDescription = "luma.zip";
+
+        /// <summary>LumaLink's window and command line, in lumalink\ of the version folder (Integration.Register puts
+        /// that folder on PATH when asked).</summary>
+        internal const string LumaLinkWindowFile = @"lumalink\lumalink-gui.exe", LumaLinkCommandFile = @"lumalink\lumalink.exe";
 
         private readonly InstallRequest request;
         private readonly IInstallProgress progress;
@@ -228,6 +235,8 @@ namespace Nebula.Setup
             foreach (var name in OptionalNativeFiles)
                 if (Payload.Has(name)) Payload.Extract(name, Path.Combine(app, name));
             Payload.ExtractZip(SelfDescription, Path.Combine(app, "luma"));
+            if (request.LumaLinkWindow) Payload.Extract(LumaLinkWindowFile, Path.Combine(app, LumaLinkWindowFile));
+            if (request.LumaLinkCommand) Payload.Extract(LumaLinkCommandFile, Path.Combine(app, LumaLinkCommandFile));
             File.WriteAllText(Path.Combine(app, "runtime-isa.txt"), NativeIsa);
             var files = new Dictionary<string, object>();
             foreach (var path in Directory.GetFiles(app, "*", SearchOption.AllDirectories))
@@ -534,6 +543,7 @@ namespace Nebula.Setup
             string self = Assembly.GetExecutingAssembly().Location;
             if (!string.Equals(Path.GetFullPath(self), layout.SetupCopy, StringComparison.OrdinalIgnoreCase))
                 CopySetup(self);
+            Integration.SaveLumaLinkChoices(request.LumaLinkWindow, request.LumaLinkCommand, request.LumaLinkPath);
             foreach (var failure in Integration.Register(layout, BuildInfo.Version, request.DesktopShortcut))
                 Log("Could not create the shortcut " + failure + "; Nebula.exe is in " + versionDir + ".");
             InstalledVersionDir = versionDir;

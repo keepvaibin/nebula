@@ -321,6 +321,14 @@ namespace Nebula.Setup
             string desktopLink = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Nebula.lnk");
             if (desktop || File.Exists(desktopLink))
                 link(desktopLink, Path.Combine(app, "Nebula.exe"), "", app, "Play Nebula");
+            // LumaLink as this version has it: the window in the Start Menu, the command line's folder on PATH if asked.
+            bool lumaLinkWindow, lumaLinkCommand, lumaLinkPath;
+            LumaLinkChoices(out lumaLinkWindow, out lumaLinkCommand, out lumaLinkPath);
+            string lumaLink = Path.Combine(app, "lumalink");
+            string lumaLinkGui = Path.Combine(app, InstallEngine.LumaLinkWindowFile), lumaLinkShortcut = Path.Combine(StartMenuFolder, "LumaLink.lnk");
+            if (File.Exists(lumaLinkGui)) link(lumaLinkShortcut, lumaLinkGui, "", lumaLink, "Make, check and pack mods");
+            else if (File.Exists(lumaLinkShortcut)) File.Delete(lumaLinkShortcut);
+            SetLumaLinkPath(layout, lumaLinkPath && File.Exists(Path.Combine(app, InstallEngine.LumaLinkCommandFile)) ? lumaLink : null);
 
             using (var key = Registry.CurrentUser.CreateSubKey(@"Software\Nebula")) key.SetValue("InstallRoot", layout.Root);
             // Double-clicking a mod's file adds it. Per user, like everything else here.
@@ -355,6 +363,70 @@ namespace Nebula.Setup
             }
             return failures;
         }
+
+        /// <summary>The LumaLink choices of the last install (HKCU\Software\Nebula); the window and the command line
+        /// when none was made, never PATH.</summary>
+        public static void LumaLinkChoices(out bool window, out bool command, out bool path)
+        {
+            window = true;
+            command = true;
+            path = false;
+            using (var key = Registry.CurrentUser.OpenSubKey(@"Software\Nebula"))
+            {
+                if (key == null) return;
+                object value = key.GetValue("LumaLinkWindow");
+                if (value is int) window = (int)value != 0;
+                value = key.GetValue("LumaLinkCommand");
+                if (value is int) command = (int)value != 0;
+                value = key.GetValue("LumaLinkPath");
+                if (value is int) path = (int)value != 0;
+            }
+        }
+
+        public static void SaveLumaLinkChoices(bool window, bool command, bool path)
+        {
+            if (NebulaPaths.LocalAppDataRedirected) return;
+            using (var key = Registry.CurrentUser.CreateSubKey(@"Software\Nebula"))
+            {
+                key.SetValue("LumaLinkWindow", window ? 1 : 0, RegistryValueKind.DWord);
+                key.SetValue("LumaLinkCommand", command ? 1 : 0, RegistryValueKind.DWord);
+                key.SetValue("LumaLinkPath", path && command ? 1 : 0, RegistryValueKind.DWord);
+            }
+        }
+
+        /// <summary>The user's PATH (HKCU\Environment, never the machine's) with <paramref name="folder"/> as its only
+        /// entry for a lumalink folder of this install (an older version's is taken out); null takes them all out.
+        /// Programs started after the change see it (WM_SETTINGCHANGE "Environment").</summary>
+        private static void SetLumaLinkPath(InstallLayout layout, string folder)
+        {
+            string root = Path.GetFullPath(layout.Root).TrimEnd('\\') + "\\";
+            using (var key = Registry.CurrentUser.CreateSubKey("Environment"))
+            {
+                string old = key.GetValue("Path", "", RegistryValueOptions.DoNotExpandEnvironmentNames) as string ?? "";
+                RegistryValueKind kind = RegistryValueKind.ExpandString;
+                if (key.GetValue("Path") != null) kind = key.GetValueKind("Path");
+                var parts = new List<string>();
+                foreach (string part in old.Split(';'))
+                {
+                    if (part.Length == 0) continue;
+                    string full = part;
+                    try { full = Path.GetFullPath(Environment.ExpandEnvironmentVariables(part)).TrimEnd('\\'); }
+                    catch (Exception error) { if (!(error is ArgumentException) && !(error is NotSupportedException) && !(error is PathTooLongException)) throw; }
+                    if (full.StartsWith(root, StringComparison.OrdinalIgnoreCase) && full.EndsWith("\\lumalink", StringComparison.OrdinalIgnoreCase)) continue;
+                    parts.Add(part);
+                }
+                if (folder != null) parts.Add(folder);
+                string value = string.Join(";", parts);
+                if (value == old) return;
+                if (value.Length == 0) key.DeleteValue("Path", false);
+                else key.SetValue("Path", value, kind == RegistryValueKind.String ? RegistryValueKind.String : RegistryValueKind.ExpandString);
+            }
+            UIntPtr result;
+            SendMessageTimeout(new IntPtr(0xFFFF), 0x001A, UIntPtr.Zero, "Environment", 0x0002, 5000, out result);
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        private static extern IntPtr SendMessageTimeout(IntPtr window, uint message, UIntPtr wParam, string lParam, uint flags, uint timeout, out UIntPtr result);
 
         private static void Shortcut(string path, string target, string arguments, string workingDirectory, string description)
         {
@@ -450,6 +522,7 @@ namespace Nebula.Setup
             Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\" + LumaFileType, false);
             Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\.luma", false);
             Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\" + LinkScheme, false);
+            if (!NebulaPaths.LocalAppDataRedirected) SetLumaLinkPath(layout, null);
             if (removeUserData && Directory.Exists(NebulaPaths.DataRoot)) FileUtil.DeleteTree(NebulaPaths.DataRoot);
             // The running setup copy deletes itself and the folder after exit.
             if (self.StartsWith(Path.GetFullPath(layout.Root), StringComparison.OrdinalIgnoreCase))

@@ -16,6 +16,8 @@ version and removes the recompiled game of earlier installs, its compiler and it
           luma_types\luma_types.json, luma_functions.json, luma_numbers.json and the placement facts
           (smg_game.luma-placement.json, smg_game.luma-self.json). They are installed as luma\ beside the game, with the
           services list the game writes (--luma-services), where LumaLink reads the installed game's self-description
+  -LumaLink  LumaLink's Windows release build: lumalink.exe (the command line) and lumalink-gui.exe (the window); the
+          player chooses either or both in Setup, and the command line's folder on PATH
   -Dxc    Microsoft's DirectX Shader Compiler release, unpacked (github.com/microsoft/DirectXShaderCompiler): a mod's
           shaders are built with it on the player's PC
 
@@ -27,6 +29,7 @@ param(
     [Parameter(Mandatory = $true)][string]$Version,
     [Parameter(Mandatory = $true)][string]$Bin,
     [Parameter(Mandatory = $true)][string]$Names,
+    [Parameter(Mandatory = $true)][string]$LumaLink,
     [Parameter(Mandatory = $true)][string]$Dxc,
     [string]$OutputDirectory = '',
     [string]$SetupName = '',
@@ -58,6 +61,9 @@ try {
     if ((& git -C $repo status --porcelain).Length -ne 0) { Write-Warning 'The tree has uncommitted changes; the package records HEAD.' }
     foreach ($name in 'NebulaNative.exe', 'smg_game.dll', 'smg_game_plain.dll', 'D3D12\D3D12Core.dll', 'D3D12\LICENSE.txt') {
         if (-not (Test-Path -LiteralPath (Join-Path $Bin $name))) { throw "The bin folder has no $name" }
+    }
+    foreach ($name in 'lumalink.exe', 'lumalink-gui.exe') {
+        if (-not (Test-Path -LiteralPath (Join-Path $LumaLink $name))) { throw "The LumaLink folder has no $name" }
     }
     $rtTables = @()
     foreach ($name in 'material-names.tsv', 'rt-materials.tsv', 'rt-suns.tsv') {
@@ -143,6 +149,7 @@ namespace Nebula
     $resources = [ordered]@{
         'NebulaNative.exe' = (Join-Path $Bin 'NebulaNative.exe'); 'smg_game.dll' = (Join-Path $Bin 'smg_game.dll')
         'smg_game_plain.dll' = (Join-Path $Bin 'smg_game_plain.dll'); 'luma.zip' = $lumaZip
+        'lumalink\lumalink.exe' = (Join-Path $LumaLink 'lumalink.exe'); 'lumalink\lumalink-gui.exe' = (Join-Path $LumaLink 'lumalink-gui.exe')
         'D3D12\D3D12Core.dll' = (Join-Path $Bin 'D3D12\D3D12Core.dll'); 'D3D12\LICENSE.txt' = (Join-Path $Bin 'D3D12\LICENSE.txt')
         'Nebula.exe' = $launcher; 'NebulaSettings.exe' = $settingsApp; 'nebula-import.exe' = $importer
         'nebula_import.dll' = $cooker
