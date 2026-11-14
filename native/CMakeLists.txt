@@ -47,6 +47,9 @@ target_include_directories(smg_game BEFORE PRIVATE
 set(version_ids RMGJ01=0 RMGE01=1 RMGP01=2 RMGK01=3)
 string(REGEX MATCH "${NEBULA_GAME_VERSION}=([0-9])" _ "${version_ids}")
 target_compile_definitions(smg_game PRIVATE VERSION=${CMAKE_MATCH_1} ${version_ids} NEBULA_GAME_MODULE=1 _HAS_EXCEPTIONS=0)
+# The module without hook points: its fast paths (NEBULA_PLAIN_MODULE) replace the game's calls. After the mods merge
+# this belongs on smg_game_plain only.
+target_compile_definitions(smg_game PRIVATE NEBULA_PLAIN_MODULE=1)
 
 set_target_properties(smg_game PROPERTIES
     C_STANDARD 11 C_EXTENSIONS ON

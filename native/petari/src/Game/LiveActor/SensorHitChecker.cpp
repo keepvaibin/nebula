@@ -8,14 +8,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/System/LumaCore.hpp"
 
-// The module with hook points (its copy of this file starts with luma_hook.h) calls isSensorActive and checkAttack for
-// every pair, as the game does; the plain module tests the pairs on each group's array of active sensors.
-#if defined(LUMA_HOOK)
-#define SENSOR_PAIRS_GATHERED 0
-#else
-#define SENSOR_PAIRS_GATHERED 1
-#endif
-
 namespace {
     bool isSensorActive(const HitSensor* pSensor) {
         return pSensor->isValid() && !MR::isClipped(pSensor->mHost);
@@ -51,7 +43,11 @@ namespace {
 
 SensorGroup::SensorGroup(int maxSensors)
     : mMaxSensors(maxSensors), mSensorCount(0), mSensors(new HitSensor*[maxSensors]()), mActiveCount(0),
-      mActive(SENSOR_PAIRS_GATHERED ? new SensorHitEntry[maxSensors] : nullptr) {
+#if defined(NEBULA_PLAIN_MODULE)
+      mActive(new SensorHitEntry[maxSensors]) {
+#else
+      mActive(nullptr) {
+#endif
 }
 
 // Once a frame, before any pair: nothing in the pass changes a sensor's validity, place or radius or an actor's clipping
@@ -126,7 +122,7 @@ void SensorHitChecker::movement() {
     mSimpleGroup->clear();
     mMapObjGroup->clear();
     mCharacterGroup->clear();
-#if SENSOR_PAIRS_GATHERED
+#if defined(NEBULA_PLAIN_MODULE)
     mPlayerGroup->gatherActive();
     mRideGroup->gatherActive();
     mEyeGroup->gatherActive();
@@ -150,9 +146,10 @@ void SensorHitChecker::movement() {
     doObjColInSameGroup(mCharacterGroup);
 }
 
-// Every active pair in the order of the groups' sensors.
+// Every active pair in the order of the groups' sensors: the plain module walks each group's array of active sensors; a
+// module with hook points calls isSensorActive and checkAttack for every pair, as the game does.
 void SensorHitChecker::doObjColGroup(SensorGroup* pGroup1, SensorGroup* pGroup2) const {
-#if SENSOR_PAIRS_GATHERED
+#if defined(NEBULA_PLAIN_MODULE)
     const s32 group1Count = pGroup1->mActiveCount;
     const s32 group2Count = pGroup2->mActiveCount;
     const SensorHitEntry* const pActive1 = pGroup1->mActive;
@@ -183,7 +180,7 @@ void SensorHitChecker::doObjColGroup(SensorGroup* pGroup1, SensorGroup* pGroup2)
 
 // Pairs each sensor with itself too; the test skips sensors of one host.
 void SensorHitChecker::doObjColInSameGroup(SensorGroup* pSensorGroup) const {
-#if SENSOR_PAIRS_GATHERED
+#if defined(NEBULA_PLAIN_MODULE)
     const s32 count = pSensorGroup->mActiveCount;
     const SensorHitEntry* const pActive = pSensorGroup->mActive;
     for (s32 i = 0; i < count; i++) {

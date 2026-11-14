@@ -769,12 +769,12 @@ u32 MaterialDraw::constantsOf(s32 formIndex, const NebulaModelForm& rForm) {
     }
 
     // Moved, edited or lit by the ambient colours: rows in the frame, once a frame while they stay the same (for a form
-    // that reads the ambient colours, while those are the ones its rows were filled with; in the plain module only: the
-    // module with hook points, whose copy of this file starts with luma_hook.h, fills such a form's rows at every draw).
-#if defined(LUMA_HOOK)
-    const bool ambientKept = !pState->mReadsAmbient;
-#else
+    // that reads the ambient colours, while those are the ones its rows were filled with; in the plain module only: a
+    // module with hook points fills such a form's rows at every draw).
+#if defined(NEBULA_PLAIN_MODULE)
     const bool ambientKept = !pState->mReadsAmbient || pState->mConstantsAmbient == MaterialAmbient::generation();
+#else
+    const bool ambientKept = !pState->mReadsAmbient;
 #endif
     if (plain && pState->mConstantsFrame == Frame::number() && pState->mConstantsStamp == pMaterial->mStamp && ambientKept) {
         return pState->mConstantsIndex;
