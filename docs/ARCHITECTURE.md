@@ -42,7 +42,9 @@ natively.
 - **Graphics**: Direct3D 12, or Vulkan in `NebulaNativeVk.exe`.
 - **Input**: keyboard, mouse and controllers as the game's motion and pointer pad ([KEYBOARD_CONTROLS.md](KEYBOARD_CONTROLS.md)).
 - **Storage**: assets from the store `game.pak` by name; saves through an atomic service, by name.
-- **Mods**: replaced files, texture packs and movies from the `mods` folder.
+- **Mods**: `.luma` mods and raw mod folders in the `mods` folder. Their files, table patches and sources are cooked
+  into `mods.pak`; texture packs and movies are read as they are; a mod's code is native code the LumaCore kernel
+  loads into the game module ([modding/README.md](modding/README.md)).
 
 ## Installation
 
