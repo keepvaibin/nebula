@@ -832,6 +832,7 @@ if(NEBULA_D3D11)
         runtime/src/ui/settings_general_page.cpp
         runtime/src/ui/settings_graphics_page.cpp
         runtime/src/ui/settings_save_model.cpp
+        runtime/src/ui/launcher.cpp
         runtime/src/render/vblank_clock_win32.cpp
         runtime/src/render/renderer_common.cpp
         runtime/src/render/gpu_upload_ring.cpp
