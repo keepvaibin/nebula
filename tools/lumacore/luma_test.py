@@ -1396,6 +1396,9 @@ def run_one(test, renderer, args, run_folder, previous):
         startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         startup.wShowWindow = subprocess.SW_HIDE
         hidden["startupinfo"] = startup
+    else:
+        # No window flag elsewhere: the host reads a hidden start from its environment (host_main.cpp read_launch_args).
+        env["NEBULA_HIDDEN_START"] = "1"
     began = time.time()
     with (run_folder / "run.log").open("wb") as log:
         with subprocess.Popen(command, env=env, stdout=log, stderr=subprocess.STDOUT, **hidden) as process:
@@ -1445,6 +1448,21 @@ def watch_run(first, run_folder, exe_name, limit):
         except ProcessLookupError as error:
             state["unwatched"] = str(error)
 
+    # Linux and macOS start the game again in the same process (finish_and_exit's exec: same id, no marker). Each start
+    # writes its own "boot: main at" line to run.log, so a new one there is a start, and it gets its own `limit`.
+    execs = ExecStarts(run_folder / "run.log") if platform.system() != "Windows" else None
+
+    def look_exec():
+        if execs is None or state["unwatched"] is not None:
+            return False
+        found = execs.count()
+        if found <= state["starts"]:
+            return False
+        state["starts"] = found
+        if found > 5:
+            state["unwatched"] = "the game started again more than 4 times"
+        return True
+
     process = first
     while True:
         deadline = time.time() + limit
@@ -1456,6 +1474,12 @@ def watch_run(first, run_folder, exe_name, limit):
                     break
                 except subprocess.TimeoutExpired:
                     look(False)
+                    if look_exec():
+                        deadline = time.time() + limit
+                    if state["unwatched"] is not None and execs is not None:
+                        process.kill()
+                        process.wait()
+                        break
                     if time.time() >= deadline:
                         process.kill()
                         process.wait()
@@ -1468,12 +1492,37 @@ def watch_run(first, run_folder, exe_name, limit):
             end_all(waiting)
             return None, state["starts"], state["unwatched"]
         look(True)
+        look_exec()
         if state["unwatched"] is not None:
             end_all(waiting)
             return code, state["starts"], state["unwatched"]
         if not waiting:
             return code, state["starts"], None
         process = waiting.pop(0)
+
+
+class ExecStarts:
+    """The starts a run's log shows so far: one "boot: main at" line each. Read on from where the last count stopped,
+    whole lines only (a line being written is counted once it ends)."""
+
+    def __init__(self, log):
+        self.log = log
+        self.offset = 0
+        self.rest = b""
+        self.found = 0
+
+    def count(self):
+        try:
+            with open(self.log, "rb") as f:
+                f.seek(self.offset)
+                more = f.read()
+        except OSError:
+            return self.found
+        self.offset += len(more)
+        lines = (self.rest + more).split(b"\n")
+        self.rest = lines.pop()
+        self.found += sum(1 for line in lines if b"boot: main at" in line)
+        return self.found
 
 
 def end_all(processes):
@@ -1497,7 +1546,8 @@ class Followed:
         self.handle = None
         gone = ProcessLookupError("the process that took over (%d) ended before it could be watched" % pid)
         if platform.system() != "Windows":
-            # No desktop host but Windows starts the game again (finish_and_exit); a process id alone here.
+            # Linux and macOS start the game again in the same process (finish_and_exit's exec) and write no marker;
+            # a marker found here is checked by its process id alone.
             try:
                 os.kill(pid, 0)
             except OSError:

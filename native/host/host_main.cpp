@@ -129,6 +129,7 @@ inline bool perf_hint_on_battery() noexcept { return false; }
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
@@ -168,6 +169,10 @@ inline bool perf_hint_on_battery() noexcept { return false; }
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#include <mach-o/dyld.h>
+#endif
 #endif
 
 namespace fs = std::filesystem;
@@ -1590,6 +1595,9 @@ void svc_fatal(void*, const char* text) {
 #if defined(_WIN32)
 // Arguments a restart adds to this start's command line (--gpu-start-retry).
 std::wstring gRestartArguments;
+#else
+// main's arguments as given: a restart (finish_and_exit) starts with them again.
+char** gArgv = nullptr;
 #endif
 
 #if defined(NEBULA_HOST_RENDERER)
@@ -3589,12 +3597,13 @@ void hold_runtime_lease() {
 #endif
 
 // Whether finish_and_exit(true) starts the game again on this host (Windows: a new process; Android: the activity's
-// restartGame). Where it does not, it only ends the game, so a caller that would start again goes on instead.
+// restartGame; Linux and macOS: an exec of the running executable). Where it does not (an iOS app), it only ends the
+// game, so a caller that would start again goes on instead.
 constexpr bool kHostStartsAgain =
-#if defined(_WIN32) || (defined(__ANDROID__) && defined(NEBULA_HOST_RENDERER))
-    true;
-#else
+#if defined(__APPLE__) && TARGET_OS_IPHONE
     false;
+#else
+    true;
 #endif
 #if defined(_WIN32)
 // The environment variable a start-again gives the new process: the old process's id and creation time.
@@ -3753,8 +3762,41 @@ void wait_for_process_before() {
         // The activity ends this process once the new one is on its way.
         std::this_thread::sleep_for(std::chrono::seconds(5));
     }
+#elif !(defined(__APPLE__) && TARGET_OS_IPHONE)
+    if (restart && gArgv != nullptr) {
+        // This process becomes the game again (exec: the same process id, so a tool waiting for it follows it as it
+        // is), the running executable with this start's arguments; no start here adds any (the GPU retry is Windows
+        // only). Every C stream is written out first; every file this start opened (the pak, the log, the facts, the
+        // sound dump) is closed by the exec itself, only standard input, output and error stay.
+        std::fflush(nullptr);
+#if defined(__APPLE__)
+        std::uint32_t size = 0u;
+        _NSGetExecutablePath(nullptr, &size);
+        std::string exe(size, '\0');
+        if (_NSGetExecutablePath(exe.data(), &size) != 0) exe.clear();
+        const char* const folder = "/dev/fd";
 #else
-    (void)restart;
+        const std::string exe = "/proc/self/exe";
+        const char* const folder = "/proc/self/fd";
+#endif
+        std::error_code error;
+        std::vector<int> open;
+        for (const fs::directory_entry& entry : fs::directory_iterator(folder, error)) {
+            const std::string name = entry.path().filename().string();
+            char* end = nullptr;
+            const long fd = std::strtol(name.c_str(), &end, 10);
+            if (end != name.c_str() && *end == '\0' && fd > 2) open.push_back(static_cast<int>(fd));
+        }
+        for (const int fd : open) {
+            const int flags = fcntl(fd, F_GETFD);
+            if (flags >= 0) fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
+        }
+        if (!exe.empty()) execv(exe.c_str(), gArgv);
+        log_line("host:", ("the game could not start again: " + std::string(std::strerror(errno))).c_str());
+        std::fflush(stdout);
+    }
+#else
+    (void)restart;  // an iOS app cannot replace its own image: kHostStartsAgain is false there
 #endif
 #if defined(_WIN32)
 #if defined(NEBULA_HOST_RENDERER)
@@ -4546,12 +4588,20 @@ void read_launch_args(int argc, char** argv) {
     startup.cb = sizeof(startup);
     GetStartupInfoW(&startup);
     args.started_hidden = (startup.dwFlags & STARTF_USESHOWWINDOW) != 0u && startup.wShowWindow == SW_HIDE;
+#else
+    // No start flag hides a window here: a tool that starts the game hidden says so in its environment
+    // (NEBULA_HIDDEN_START=1), which a start-again keeps.
+    const char* const hidden = std::getenv("NEBULA_HIDDEN_START");
+    args.started_hidden = hidden != nullptr && std::strcmp(hidden, "1") == 0;
 #endif
 }
 
 }  // namespace
 
 int main(int argc, char** argv) {
+#if !defined(_WIN32)
+    gArgv = argv;
+#endif
 #if defined(_WIN32)
     // The crash watcher's own run (crash_watch.h): before anything of the game's.
     if (argc >= 4 && std::strcmp(argv[1], galaxy::crash_watch::kSwitch) == 0) {
