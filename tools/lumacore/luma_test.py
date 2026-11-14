@@ -751,7 +751,7 @@ def read_expect(t, bare, steps):
         if not isinstance(c, dict):
             raise HarnessError("%s is not an object" % path)
         if "systems" in c:
-            # A check of what a contract gives on some systems only (a service a platform answers ABSENT): it holds
+            # A check of what a service gives on some systems only (one a platform answers ABSENT): it holds
             # where its system is named and is listed as not checked elsewhere.
             systems = c["systems"]
             if (not isinstance(systems, list) or not systems or not all(isinstance(s, str) for s in systems)

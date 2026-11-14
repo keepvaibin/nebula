@@ -1017,8 +1017,8 @@ if(NEBULA_D3D11)
     nebula_host_delay_loads(NebulaNativeD11)
 endif()
 
-# AV1 movies (plan 3.10: a mod's movie, NMOV codec 1): dav1d 1.5.1 built in-tree (cmake/dav1d.cmake), for every renderer.
-option(NEBULA_AV1 "Decode AV1 movies with dav1d (plan 3.10)" ON)
+# AV1 movies (a mod's movie, NMOV codec 1): dav1d 1.5.1 built in-tree (cmake/dav1d.cmake), for every renderer.
+option(NEBULA_AV1 "Decode AV1 movies with dav1d" ON)
 if(NEBULA_AV1)
     include(cmake/dav1d.cmake)
     foreach(target galaxy_render galaxy_render_vk galaxy_render_d3d11)

@@ -1,5 +1,5 @@
 /* luma_describe [--services] MODULE OUT: loads the game module (no disc), attaches it with the few services describing
-   needs and writes its type rows as JSON (nebula_game_luma_describe, contract types) to OUT, as the host's
+   needs and writes its type rows as JSON (nebula_game_luma_describe, language/types.md) to OUT, as the host's
    --luma-describe does; with --services the services catalog (luma_services_describe, luma_service_provider.h), as the
    host's --luma-services does. The game build runs it after the module links: it compares the rows with the
    generator's (tools/lumacore/compare_types.py) and writes the catalog as the names folder's luma_services.json
