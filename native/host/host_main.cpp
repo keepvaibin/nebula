@@ -3638,6 +3638,11 @@ void hold_runtime_lease() {
             }
             STARTUPINFOEXW startup{};
             startup.StartupInfo.cb = sizeof(startup);
+            if (::galaxy::launch_args().started_hidden) {
+                // A hidden start (a test's) stays hidden: the new process reads it from its own start the same way.
+                startup.StartupInfo.dwFlags |= STARTF_USESHOWWINDOW;
+                startup.StartupInfo.wShowWindow = SW_HIDE;
+            }
             std::vector<unsigned char> attributes;
             if (passed != 0u) {
                 SIZE_T bytes = 0;
@@ -3661,9 +3666,14 @@ void hold_runtime_lease() {
             if (CreateProcessW(path.c_str(), command.data(), nullptr, nullptr, passed != 0u ? TRUE : FALSE,
                                passed != 0u ? EXTENDED_STARTUPINFO_PRESENT : 0u, nullptr, nullptr, &startup.StartupInfo, &process)) {
                 // Where crash reports go (--crash-dumps), `restarted` names the process that took over, so a tool
-                // waiting for this one follows it.
+                // waiting for this one follows it: its id and its creation time (FILETIME as one number), so an id the
+                // system gives again to another process later is never taken for it.
                 if (const fs::path dumps = ::galaxy::launch_args().crash_dumps; !dumps.empty()) {
-                    std::ofstream(dumps / "restarted", std::ios::binary | std::ios::trunc) << process.dwProcessId << "\n";
+                    FILETIME created{}, ended{}, kernel{}, user{};
+                    if (GetProcessTimes(process.hProcess, &created, &ended, &kernel, &user)) {
+                        const unsigned long long when = (static_cast<unsigned long long>(created.dwHighDateTime) << 32u) | created.dwLowDateTime;
+                        std::ofstream(dumps / "restarted", std::ios::binary | std::ios::trunc) << process.dwProcessId << ' ' << when << "\n";
+                    }
                 }
                 CloseHandle(process.hThread);
                 CloseHandle(process.hProcess);
@@ -3734,7 +3744,7 @@ void layers_chosen(const std::vector<galaxy::mods::ChosenLayers>& chosen) {
             if (known || std::find(said.begin(), said.end(), name) != said.end()) continue;
             said.push_back(name);
             log_line("mods:", (plugin.mod_id + ": its code chose the layer \"" + name + "\", which is not one of its code layers; it is left out").c_str());
-            galaxy::modlog::add_row(1u, 0u, plugin.mod_id, 170u, "luma.json", "Layers.Unknown", {{"layer", name}});
+            galaxy::modlog::add_row(3u, 0u, plugin.mod_id, 170u, "luma.json", "Layers.Unknown", {{"layer", name}});
         }
         if (plugin.code_layers.empty()) continue;  // nothing to choose: no record, never a start-again
         // In the manifest's order, each once, so the same choice always reads the same.
@@ -3754,7 +3764,7 @@ void layers_chosen(const std::vector<galaxy::mods::ChosenLayers>& chosen) {
         // Started again for these layers, and the answer changed again: the cooked layers stay for this session.
         for (const std::string& mod : changed) {
             log_line("mods:", (mod + ": its code chose other layers again after the game started again for them; the cooked ones stay").c_str());
-            galaxy::modlog::add_row(1u, 0u, mod, 171u, "", "Layers.Unstable", {});
+            galaxy::modlog::add_row(3u, 0u, mod, 171u, "", "Layers.Unstable", {});
         }
         layers_answered(std::nullopt);
         return;

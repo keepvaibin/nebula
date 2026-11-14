@@ -224,7 +224,7 @@ def read_test(folder, types=None):
     t = load_json(folder / "test.json")
     keys_known(t, "", {"harness", "name", "about", "proves", "mods", "code", "language", "seed", "continue_from",
                        "renderers", "region", "limit_seconds", "bare", "save", "stage", "player", "steps", "expect",
-                       "faults", "hide_game_files", "safe_start", "device", "ends"})
+                       "faults", "hide_game_files", "safe_start", "device", "ends", "starts"})
     for key in ("harness", "name", "about", "proves", "steps", "expect"):
         if key not in t:
             raise HarnessError("the test has no %s" % key)
@@ -284,6 +284,11 @@ def read_test(folder, types=None):
             if "options" in entry:
                 if not isinstance(entry["options"], dict):
                     raise HarnessError("%s.options must be an object" % path)
+                # A choice option's value as the Mods page keeps it (mods.ini choice.<key>=<value>).
+                for key, value in entry["options"].items():
+                    if (not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,63}", key) or not isinstance(value, str)
+                            or not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", value)):
+                        raise HarnessError("%s.options: %s must be an option key with a choice's value" % (path, key))
                 mod["options"] = entry["options"]
             mods.append(mod)
     if bare and mods:
@@ -331,6 +336,10 @@ def read_test(folder, types=None):
     ends = text(t, "ends", "") if "ends" in t else "end"
     if ends not in ("end", "crash"):
         raise HarnessError("ends must be end or crash")
+    # How many processes the run's game was (1: it never started again; the host's start-again adds one each).
+    starts = whole(t, "starts", "") if "starts" in t else None
+    if starts is not None and starts < 1:
+        raise HarnessError("starts must be 1 or more")
     setup = read_setup(t, bare, seed, language, classes)
     steps = read_steps(t, bare, classes)
     expect = read_expect(t, bare, steps)
@@ -339,7 +348,8 @@ def read_test(folder, types=None):
     return {"folder": folder, "raw": t, "name": t["name"], "proves": t["proves"], "bare": bare, "mods": mods,
             "language": language, "seed": seed, "renderers": renderers, "region": t.get("region"), "limit": limit,
             "continue_from": continue_from, "faults": faults, "setup": setup, "steps": steps, "expect": expect,
-            "has_stage": "stage" in t, "hidden": hidden, "safe_start": safe_start, "device": device, "ends": ends}
+            "has_stage": "stage" in t, "hidden": hidden, "safe_start": safe_start, "device": device, "ends": ends,
+            "starts": starts}
 
 
 def read_setup(t, bare, seed, language, classes):
@@ -1162,6 +1172,10 @@ def place_mods(test, settings, previous, frozen):
             m["has_code"] = "code" in load_json(settings / "mods" / mod_id / "luma.json")
         except HarnessError:
             m["has_code"] = True
+        if m["options"]:
+            # The game reads a mod's section again where it repeats, so a kept mod (continue_from) takes them too.
+            with (settings / "mods.ini").open("a", encoding="utf-8") as out:
+                out.write("[%s]\n%s" % (mod_id, "".join("choice.%s=%s\n" % kv for kv in m["options"].items())))
         mod_ids.append((mod_id, m))
         for lib in sorted((settings / "mods" / mod_id).rglob("*" + HOST["ending"])):
             frozen["mods/%s/%s" % (mod_id, lib.relative_to(settings / "mods" / mod_id).as_posix())] = sha256(lib)
@@ -1293,72 +1307,134 @@ def run_one(test, renderer, args, run_folder, previous):
         hidden["startupinfo"] = startup
     began = time.time()
     with (run_folder / "run.log").open("wb") as log:
-        try:
-            code = subprocess.call(command, env=env, stdout=log, stderr=subprocess.STDOUT, timeout=test["limit"] + 60,
-                                   **hidden)
-        except subprocess.TimeoutExpired:
-            code = None
-    starts = 1
+        code = wait_or_end(subprocess.Popen(command, env=env, stdout=log, stderr=subprocess.STDOUT, **hidden),
+                           test["limit"] + 60)
+    starts, unwatched = 1, None
     if code is not None:
-        code, starts = follow_start_again(run_folder, code, test["limit"] + 60)
+        code, starts, unwatched = follow_start_again(run_folder, exe.name, code, test["limit"] + 60)
     seconds = time.time() - began
-    return {"code": code, "seconds": seconds, "frozen": frozen, "mods": mod_ids, "exe": exe.name, "starts": starts}
+    return {"code": code, "seconds": seconds, "frozen": frozen, "mods": mod_ids, "exe": exe.name, "starts": starts,
+            "unwatched": unwatched}
 
 
-def follow_start_again(run_folder, code, limit):
-    """The game started again (the host's start-again: mods cooked, a mod's code chose other layers): it writes the new
-    process id to <crash dumps>/restarted, the run folder here, and the new process writes to the same run.log. Waits
-    for each new process in turn, `limit` seconds each; its exit code is the run's. A run with no start-again returns
-    at once, as before. Returns (code, processes run); code None when one did not end in time."""
+def wait_or_end(process, limit):
+    """The run's game, the one the runner started or one that took its place: its exit code, or None when it did not
+    end within `limit` seconds, after it is ended (and waited for, so it holds no file of the run)."""
+    try:
+        try:
+            return process.wait(timeout=limit)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+            return None
+    finally:
+        if isinstance(process, Followed):
+            process.close()
+
+
+def follow_start_again(run_folder, exe_name, code, limit):
+    """The game started again (the host's start-again: mods cooked, a mod's code chose other layers): it writes "<process
+    id> <creation time>" of the new process to <crash dumps>/restarted, the run folder here. The new process has the
+    same command line and environment, so it writes to the same run.log, facts, crash dumps and stall dumps, which the
+    verdict reads after the last process. Each new process is watched as the first (wait_or_end), `limit` seconds each;
+    the last one's exit code is the run's. A run with no start-again returns at once, as before. Returns (code,
+    processes started, why one could not be watched or None)."""
     marker = run_folder / "restarted"
     followed = set()
     starts = 1
     while marker.is_file():
-        try:
-            pid = int(marker.read_text(encoding="utf-8").strip())
-        except ValueError:
+        words = marker.read_text(encoding="utf-8", errors="replace").split()
+        if len(words) != 2 or not all(w.isdigit() for w in words):
+            return code, starts + 1, "restarted holds %r, not a process id and its creation time" % " ".join(words)
+        pid, created = int(words[0]), int(words[1])
+        if (pid, created) in followed:
             break
-        if pid in followed or len(followed) == 4:
-            break
-        followed.add(pid)
+        if len(followed) == 4:
+            return code, starts, "the game started again more than 4 times"
+        followed.add((pid, created))
         starts += 1
-        code = wait_for_process(pid, limit)
+        try:
+            process = Followed(pid, created, exe_name)
+        except ProcessLookupError as error:
+            return code, starts, str(error)
+        code = wait_or_end(process, limit)
         if code is None:
-            return None, starts
-    return code, starts
+            return None, starts, None
+    return code, starts, None
 
 
-def wait_for_process(pid, limit):
-    """Waits up to `limit` seconds for a process this harness did not start; its exit code (0 when it had ended before
-    it could be opened), or None when it is still running."""
-    if platform.system() == "Windows":
+class Followed:
+    """A process the game started in its own place, watched as run_one watches the one it started (Popen's wait and
+    kill). Opened by id and checked against the creation time the host wrote, so an id the system gave again to
+    another process after the game's ended is never watched (or ended) in its place."""
+
+    def __init__(self, pid, created, exe_name):
+        self.pid = pid
+        self.handle = None
+        gone = ProcessLookupError("the process that took over (%d) ended before it could be watched" % pid)
+        if platform.system() != "Windows":
+            # No desktop host but Windows starts the game again (finish_and_exit); a process id alone here.
+            try:
+                os.kill(pid, 0)
+            except OSError:
+                raise gone
+            return
         import ctypes
         from ctypes import wintypes
-        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        self.kernel = kernel = ctypes.WinDLL("kernel32", use_last_error=True)
         kernel.OpenProcess.restype = wintypes.HANDLE
         kernel.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+        kernel.GetProcessTimes.argtypes = (wintypes.HANDLE,) + (ctypes.POINTER(ctypes.c_uint64),) * 4
+        kernel.QueryFullProcessImageNameW.argtypes = (wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR,
+                                                      ctypes.POINTER(wintypes.DWORD))
         kernel.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
         kernel.GetExitCodeProcess.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
+        kernel.TerminateProcess.argtypes = (wintypes.HANDLE, wintypes.UINT)
         kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
-        handle = kernel.OpenProcess(0x00100000 | 0x1000, False, pid)  # SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION
+        # SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE: what Popen's handle gives wait and kill.
+        handle = kernel.OpenProcess(0x00100000 | 0x1000 | 0x0001, False, pid)
         if not handle:
-            return 0
-        try:
-            if kernel.WaitForSingleObject(handle, int(limit * 1000)) != 0:
-                return None
-            exit_code = wintypes.DWORD(0)
-            kernel.GetExitCodeProcess(handle, ctypes.byref(exit_code))
-            return exit_code.value
-        finally:
+            raise gone
+        times = [ctypes.c_uint64(0) for _ in range(4)]
+        name = ctypes.create_unicode_buffer(32768)
+        size = wintypes.DWORD(len(name))
+        if (not kernel.GetProcessTimes(handle, *[ctypes.byref(t) for t in times]) or times[0].value != created
+                or not kernel.QueryFullProcessImageNameW(handle, 0, name, ctypes.byref(size))
+                or pathlib.PureWindowsPath(name.value).name.lower() != exe_name.lower()):
             kernel.CloseHandle(handle)
-    deadline = time.time() + limit
-    while time.time() < deadline:
-        try:
-            os.kill(pid, 0)
-        except OSError:
-            return 0
-        time.sleep(0.1)
-    return None
+            raise gone
+        self.handle = handle
+
+    def wait(self, timeout=None):
+        if self.handle is None:
+            deadline = None if timeout is None else time.time() + timeout
+            while deadline is None or time.time() < deadline:
+                try:
+                    os.kill(self.pid, 0)
+                except OSError:
+                    return 0  # not this runner's child: its exit code is not readable here
+                time.sleep(0.1)
+            raise subprocess.TimeoutExpired(str(self.pid), timeout)
+        from ctypes import byref, wintypes
+        if self.kernel.WaitForSingleObject(self.handle, 0xFFFFFFFF if timeout is None else int(timeout * 1000)) != 0:
+            raise subprocess.TimeoutExpired(str(self.pid), timeout)
+        code = wintypes.DWORD(0)
+        self.kernel.GetExitCodeProcess(self.handle, byref(code))
+        return code.value
+
+    def kill(self):
+        if self.handle is None:
+            try:
+                os.kill(self.pid, 9)
+            except OSError:
+                pass
+            return
+        self.kernel.TerminateProcess(self.handle, 1)
+
+    def close(self):
+        if self.handle is not None:
+            self.kernel.CloseHandle(self.handle)
+            self.handle = None
 
 
 def file_holders(path):
@@ -1596,6 +1672,11 @@ def evaluate(test, renderer, run_folder, ran):
         if stalled:
             reason += "; %s (agents/luma d/tools/read_dump.py)" % stalled[0].split("host: ", 1)[-1]
     # Always checked (3.7).
+    if ran.get("unwatched"):
+        add("every process the game started in its place was watched to its end", False, ran["unwatched"])
+    if test["starts"] is not None:
+        add("the game started %d time%s" % (test["starts"], "" if test["starts"] == 1 else "s"),
+            ran.get("starts") == test["starts"], ran.get("starts"))
     end_step = next(s for s in test["steps"] if s["action"] == "end")
     if test["ends"] == "crash":
         # The crash is the run's end: before the end step, by the host's crash reporter (its line, a dump, the game
@@ -1841,7 +1922,7 @@ def run_tests(args):
                 report(run_folder, test["name"], test["proves"], renderer, verdict, reason, checks, args,
                        {"setup": setup, "frames": max([f.get("frame", -1) for f in facts] or [-1]),
                         "seconds": round(ran.get("seconds", 0.0), 2), "pictures": pictures,
-                        "binaries": ran.get("frozen", {}), "exit": ran.get("code"),
+                        "binaries": ran.get("frozen", {}), "exit": ran.get("code"), "starts": ran.get("starts"),
                         "test_json": test["raw"]})
     finally:
         lock.unlink()
