@@ -5359,11 +5359,16 @@ void RendererD3D12::record_scene_aa() {
         static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
         aspect ? aspect->content_aspect : galaxy::kDesignContentAspect);
     const D3D12_RESOURCE_DESC desc = scene_color_->GetDesc();
+    // A scene target whose image may change hands (take_scene's) trades it to the passes instead of copying it.
+    PostProcessor::SceneTrade trade;
+    if (can_take_scene()) {
+        trade = [this](gpu::TextureRef spare) { return swap_scene_color(std::move(spare)); };
+    }
     static_cast<void>(post_process_.record_scene_aa(
         command_list_.Get(), srv_ring_, scene_color_.Get(), scene_rtv_, static_cast<unsigned>(desc.Width),
         desc.Height, frame_.width, frame_.height,
         static_cast<unsigned>(std::max(content.width, 1)), static_cast<unsigned>(std::max(content.height, 1)),
-        frame_index_, kFramesInFlight, scene_msaa_.samples));
+        frame_index_, kFramesInFlight, scene_msaa_.samples, trade));
     if (scene_msaa_.samples > 1u) {
         scene_msaa_.color_dirty = true;
     }
