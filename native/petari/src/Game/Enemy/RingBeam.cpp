@@ -252,8 +252,13 @@ void RingBeam::setRadius(f32 radius) {
         MR::extractMtxYDir(mHost->getBaseMtx(), &hostAxis);
         hostAxis.scale(1000.0f);
 
-        MR::getFirstPolyOnLineToMap(&groundPos, &triangle, mEdgePos, mBeamGravity * 500.0f);
+        // No ground within reach under the edge: there is nothing for the shadow ring to lie on.
+        if (!MR::getFirstPolyOnLineToMap(&groundPos, &triangle, mEdgePos, mBeamGravity * 500.0f)) {
+            MR::hideModelIfShown(mShadowModel);
+            return;
+        }
 
+        MR::showModelIfHidden(mShadowModel);
         groundPos -= mBeamGravity * 10.0f;
         MR::calcPerpendicFootToLine(&axisFoot, groundPos, mHost->mPosition + hostAxis, mHost->mPosition - hostAxis);
         mShadowModel->mPosition.set(axisFoot);

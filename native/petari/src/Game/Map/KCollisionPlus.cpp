@@ -37,7 +37,7 @@ bool KCollisionServer::outCheck(const Vec3f* pPosA, const Vec3f* pPosB, V3u* pPo
 }
 
 void KCollisionServer::objectSpaceToLocalSpace(V3u* pPoint, const Vec3f& rPos) const {
-    pPoint->x = static_cast< s32 >(rPos.x - mFile->mMin.x);
-    pPoint->y = static_cast< s32 >(rPos.y - mFile->mMin.y);
-    pPoint->z = static_cast< s32 >(rPos.z - mFile->mMin.z);
+    pPoint->x = nebula_f32_to_s32_console(rPos.x - mFile->mMin.x);
+    pPoint->y = nebula_f32_to_s32_console(rPos.y - mFile->mMin.y);
+    pPoint->z = nebula_f32_to_s32_console(rPos.z - mFile->mMin.z);
 }

@@ -35,7 +35,11 @@ namespace MR {
     }
 
     void calcRandomVec(Vec3f* pDst, f32 min, f32 max) {
-        pDst->set< f32 >(getRandom(min, max), getRandom(min, max), getRandom(min, max));
+        // Drawn z, y, x: the console's right-to-left order of the arguments (as the Windows build's), on every platform.
+        const f32 z = getRandom(min, max);
+        const f32 y = getRandom(min, max);
+        const f32 x = getRandom(min, max);
+        pDst->set< f32 >(x, y, z);
     }
 
     bool isHalfProbability() {
@@ -51,7 +55,11 @@ namespace MR {
     }
 
     void getRandomVector(Vec3f* pDst, f32 range) {
-        pDst->set< f32 >(getRandom(-range, range), getRandom(-range, range), getRandom(-range, range));
+        // Drawn z, y, x: the console's right-to-left order of the arguments (as the Windows build's), on every platform.
+        const f32 z = getRandom(-range, range);
+        const f32 y = getRandom(-range, range);
+        const f32 x = getRandom(-range, range);
+        pDst->set< f32 >(x, y, z);
     }
 
     void addRandomVector(Vec3f* pDst, const Vec3f& rSrc, f32 range) {

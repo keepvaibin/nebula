@@ -237,6 +237,16 @@ namespace {
     const u32 cModPictureSide = 1024;
     const s32 cQuestionNum = sizeof(cQuestions) / sizeof(cQuestions[0]);
 
+    // The host asks one of cQuestions: NEBULA_SETTINGS_CLOSE would answer it.
+    bool isAsking(u32 status) {
+        for (s32 i = 0; i < cQuestionNum; i++) {
+            if (cQuestions[i].mStatus == status) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // A half of the Pair Joy-Con picture: its texture (made when the screen first shows) and its shoulder's letter.
     struct JoyConHalf {
         Picture* mPicture;
@@ -3585,9 +3595,10 @@ namespace NebulaSettingsMenu {
         NebulaHost::settingsView(&sView);
         // Not during the boot (the logos): asked for there, it closes at once. The title and the file select open it
         // (F1, the file select's Settings button), over everything they draw.
-        // Launcher mode's home screen opens it there.
+        // Launcher mode's home screen opens it there. A question the host asks (an imported mod's code) is never answered
+        // by this close: it shows, and the boot waits for the player's answer.
         if (sView.open && !sScreen->isShown() && !GameSystemFunction::isOccurredSystemWarning() &&
-            MR::isCurrentScene(SceneKind_Boot) && !NebulaLauncher::isHolding()) {
+            MR::isCurrentScene(SceneKind_Boot) && !NebulaLauncher::isHolding() && !isAsking(sView.status)) {
             NebulaHost::settingsInput(NEBULA_SETTINGS_CLOSE, 0);
             sView.open = 0;
         }

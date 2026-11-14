@@ -31,7 +31,11 @@ namespace {
 MarineSnow::MarineSnow() : mParticleCount(16), mParticlePositions(new Vec3f[mParticleCount]), mCellSize(1000.0f) {
     for (s32 idx = 0; idx < mParticleCount; idx++) {
         Vec3f randVec;
-        randVec.set(MR::getRandom() * mCellSize, MR::getRandom() * mCellSize, MR::getRandom() * mCellSize);
+        // Drawn z, y, x: the console's right-to-left order of the arguments (as the Windows build's), on every platform.
+        f32 z = MR::getRandom() * mCellSize;
+        f32 y = MR::getRandom() * mCellSize;
+        f32 x = MR::getRandom() * mCellSize;
+        randVec.set(x, y, z);
         mParticlePositions[idx] = randVec;
     }
 
