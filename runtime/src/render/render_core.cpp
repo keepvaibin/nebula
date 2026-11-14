@@ -26,6 +26,7 @@
 #include "galaxy/render/present_clock.h"
 #include "galaxy/portable.h"
 #include "galaxy/render/render_core.h"
+#include "galaxy/launch_args.h"
 #include "galaxy/render/host_window.h"
 #include "galaxy/render/resolution_fit.h"
 #include "galaxy/render/rt_caps.h"
@@ -208,7 +209,8 @@ bool RenderCore::initialize(int w, int h) {
 
     // The first start (no config.ini, and no back end chose for it): a conservative height now, measured in the first 3D scene.
     if (const RenderConfig chosen = get_render_config_chosen();
-        render_config_first_start() && chosen.upscaler == 0u && chosen.internal_height == 0u && start_frame.height > 0u) {
+        render_config_first_start() && chosen.upscaler == 0u && chosen.internal_height == 0u && start_frame.height > 0u &&
+        galaxy::ordinary_start()) {
 #if defined(NEBULA_GPU_METAL)
         const bool shared = mtl::Context::get().caps().unified_memory;
 #else
