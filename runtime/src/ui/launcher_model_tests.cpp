@@ -79,6 +79,24 @@ int main() {
         check(three.poll() == Model::kChoiceQuit, "no benchmark: the third answer quits");
         three.open();
         check(three.click(3u) == Model::Effect::None && three.visible, "no benchmark: no fourth answer");
+
+        Model back;
+        back.offer_message();
+        back.offer_notice();
+        back.open();
+        check(back.view() == static_cast<int>(Model::kMessagePage | Model::kLauncherView),
+              "a benchmark's message shows before a notice");
+        back.key(LauncherAction::Next, false);
+        check(back.row == Model::RowPlay && back.click(1u) == Model::Effect::None && back.view() ==
+                  static_cast<int>(Model::kMessagePage | Model::kLauncherView),
+              "the message's page has one answer and keeps the row");
+        back.key(LauncherAction::Accept, false);
+        check(back.view() == static_cast<int>(Model::kNoticePage | Model::kLauncherView), "its answer: the notice's page");
+        back.key(LauncherAction::Back, false);
+        check(back.view() == static_cast<int>(Model::kLauncherView), "then the rows");
+        back.click(Model::RowPlay);
+        back.open();
+        check(!back.message_page && back.notice_page, "the message shows once, the notice on every open");
     } catch (const std::exception& failure) {
         std::cerr << "launcher_model_tests: " << failure.what() << '\n';
         return 1;

@@ -249,7 +249,8 @@ namespace {
     const s32 cHomeRowNum = sizeof(cHomeRows) / sizeof(cHomeRows[0]);
     const s32 cHomeAnswerNum = sizeof(cHomeAnswers) / sizeof(cHomeAnswers[0]);
     // Launcher mode's home screen (NEBULA_HOME_MENU_LAUNCHER_*), drawn as the HOME Menu: views with bit 16; its rows,
-    // or on page 1 an update's notice ("{v}": its version) and its notes over Back.
+    // on page 1 an update's notice ("{v}": its version) and its notes over Back, on page 2 the benchmark's message
+    // (it gave no recommendation) over Back.
     const s32 cLauncherView = 1 << 16;
     // In the host's order (LauncherModel::Row); without Benchmark where the view has bit 17 (the host cannot start it).
     const char* const cLauncherRows[] = {"LauncherPlay", "SettingsTitle", "LauncherBenchmark", "Quit"};
@@ -2073,8 +2074,8 @@ void NebulaSettingsScreen::fillHome(s32 homeView) {
     mFocusButton = selected < mChoiceCount ? &mChoices[selected] : nullptr;
 }
 
-// Launcher mode's home screen as the host has it: its title over its rows, or an update's notice over Back; the
-// selected one focused. Placed as the HOME Menu (placeHome: page 0 its list, page 1 its question).
+// Launcher mode's home screen as the host has it: its title over its rows, or an update's notice or the benchmark's
+// message over Back; the selected one focused. Placed as the HOME Menu (placeHome: page 0 its list, others a question).
 void NebulaSettingsScreen::fillLauncher(s32 view) {
     mProgressTrack->SetVisible(false);
     mProgressFill->SetVisible(false);
@@ -2092,6 +2093,10 @@ void NebulaSettingsScreen::fillLauncher(s32 view) {
         if (!notice) {
             getText(text, "LauncherTitle");
             setTextSize(mQuestionText, cTitleSize);
+        } else if ((view >> 8 & 0xFF) == 2) {
+            // The benchmark this start returned from gave no recommendation.
+            getText(text, "LauncherBenchmarkNone");
+            setTextSize(mQuestionText, cTextSize + 1.0f);
         } else {
             // "Nebula {v} is available", then the notes.
             MR::Text16 pattern;

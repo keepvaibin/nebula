@@ -8,18 +8,20 @@ namespace galaxy::ui {
 
 enum class LauncherAction { Previous, Next, Accept, Back, Ignore };
 
-// The home screen of launcher mode: Play, Settings, Benchmark and Quit, and the update notice's page over them while
-// one is offered. The window, game and renderer share this state. Mutations hold mutex.
+// The home screen of launcher mode: Play, Settings, Benchmark and Quit, the update notice's page over them while one
+// is offered, and a message's page (a benchmark that gave no recommendation) over both, once. The window, game and renderer share this state. Mutations hold mutex.
 struct LauncherModel {
     // In the game's order too (cLauncherRows, NebulaSettingsMenu.cpp).
     enum Row : unsigned { RowPlay, RowSettings, RowBenchmark, RowQuit, RowNum };
     static constexpr int kChoicePlay = 0;
     static constexpr int kChoiceQuit = 1;
     static constexpr int kChoiceBenchmark = 2;  // the game leaves as for Quit; the host starts again into the benchmark
-    // view(): the selected answer in bits 0-7, the page in bits 8-15 (0 the rows, 1 the notice's), kLauncherView (the
+    // view(): the selected answer in bits 0-7, the page in bits 8-15 (0 the rows, 1 the notice's, 2 the message's: the
+    // benchmark gave no recommendation), kLauncherView (the
     // HOME Menu's views never have it) and kNoBenchmark where the host cannot start the benchmark (no restart: iOS,
     // Android's own launcher): the rows are then Play, Settings, Quit.
     static constexpr unsigned kNoticePage = 1u << 8;
+    static constexpr unsigned kMessagePage = 2u << 8;
     static constexpr unsigned kLauncherView = 1u << 16;
     static constexpr unsigned kNoBenchmark = 1u << 17;
 
@@ -32,6 +34,7 @@ struct LauncherModel {
     unsigned row = RowPlay;  // the selected answer's place among the rows shown
     bool notice_page = false;
     bool notice_held = false;
+    bool message_page = false;  // shown until its answer; then never again
     bool benchmark = true;  // set before the screen opens
 
     void open() {
@@ -43,6 +46,12 @@ struct LauncherModel {
     }
 
     int poll() const { return choice.load(std::memory_order_acquire); }
+
+    // The benchmark this start returned from gave no recommendation: its page shows first (now, when the rows show).
+    void offer_message() {
+        const std::lock_guard<std::mutex> lock(mutex);
+        message_page = true;
+    }
 
     // An update was found: its page shows over the rows (now, when they show).
     void offer_notice() {
@@ -56,20 +65,20 @@ struct LauncherModel {
     int view() {
         if (!visible.load(std::memory_order_acquire)) return -1;
         const std::lock_guard<std::mutex> lock(mutex);
-        return static_cast<int>((notice_page ? kNoticePage : row) | kLauncherView | (benchmark ? 0u : kNoBenchmark));
+        return static_cast<int>((message_page ? kMessagePage : notice_page ? kNoticePage : row) | kLauncherView | (benchmark ? 0u : kNoBenchmark));
     }
 
     void point(unsigned answer) {
         const std::lock_guard<std::mutex> lock(mutex);
-        if (visible.load(std::memory_order_relaxed) && !notice_page && answer < rows()) row = answer;
+        if (visible.load(std::memory_order_relaxed) && !paged() && answer < rows()) row = answer;
     }
 
     Effect click(unsigned answer) {
         const std::lock_guard<std::mutex> lock(mutex);
-        if (!visible.load(std::memory_order_relaxed) || answer >= (notice_page ? 1u : rows())) {
+        if (!visible.load(std::memory_order_relaxed) || answer >= (paged() ? 1u : rows())) {
             return Effect::None;
         }
-        if (!notice_page) row = answer;
+        if (!paged()) row = answer;
         return accept();
     }
 
@@ -79,13 +88,13 @@ struct LauncherModel {
         if (!visible.load(std::memory_order_relaxed)) return Effect::None;
         switch (action) {
         case LauncherAction::Previous:
-            if (!notice_page) row = (row + rows() - 1u) % rows();
+            if (!paged()) row = (row + rows() - 1u) % rows();
             return Effect::None;
         case LauncherAction::Next:
-            if (!notice_page) row = (row + 1u) % rows();
+            if (!paged()) row = (row + 1u) % rows();
             return Effect::None;
         case LauncherAction::Accept: return accept();
-        case LauncherAction::Back: notice_page = false; return Effect::None;  // the rows have nothing to go back to
+        case LauncherAction::Back: leave_page(); return Effect::None;  // the rows have nothing to go back to
         case LauncherAction::Ignore: return Effect::None;
         }
         return Effect::None;
@@ -98,9 +107,20 @@ struct LauncherModel {
     }
 
 private:
+    bool paged() const { return message_page || notice_page; }
+
+    // A page's one answer, Back: the message's goes to the notice's page when one is up, the notice's to the rows.
+    void leave_page() {
+        if (message_page) {
+            message_page = false;
+        } else {
+            notice_page = false;
+        }
+    }
+
     Effect accept() {
-        if (notice_page) {
-            notice_page = false;  // its one answer, Back
+        if (paged()) {
+            leave_page();
             return Effect::None;
         }
         switch (row_at(row)) {

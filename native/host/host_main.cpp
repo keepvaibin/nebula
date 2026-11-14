@@ -4395,7 +4395,11 @@ int main(int argc, char** argv) {
     if (!benchmark && !benchmark_result.empty()) {
         // The benchmark the home screen started: its recommendation as the settings menu's draft when it opens.
         galaxy::render::RenderConfig draft = galaxy::render::get_render_config_chosen();
-        if (galaxy::bench::read_recommendation(benchmark_result, draft)) galaxy::ui::launcher_show_draft(draft);
+        if (galaxy::bench::read_recommendation(benchmark_result, draft)) {
+            galaxy::ui::launcher_show_draft(draft);
+        } else {
+            galaxy::ui::launcher_offer_message();  // it did not finish, or measured nothing usable
+        }
     }
     const bool home_screen =
         home >= 0 ? home == 1 : kHomeByDefault && !::galaxy::launch_args().started_hidden && seconds <= 0;

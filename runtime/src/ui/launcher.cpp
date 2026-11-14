@@ -93,6 +93,10 @@ void launcher_offer_benchmark(bool on) noexcept {
     s_model.benchmark = on;
 }
 
+void launcher_offer_message() noexcept {
+    s_model.offer_message();
+}
+
 void launcher_show_draft(const galaxy::render::RenderConfig& draft) {
     const std::lock_guard<std::mutex> lock(s_text_mutex);
     s_draft = draft;

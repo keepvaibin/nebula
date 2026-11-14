@@ -21,6 +21,8 @@ void launcher_offer_benchmark(bool on) noexcept;
 // Before the game starts: settings the settings menu shows as its unapplied draft when the home screen opens (a
 // benchmark's recommendation, --benchmark-result); its Apply keeps them.
 void launcher_show_draft(const galaxy::render::RenderConfig& draft);
+// Before the game starts: the benchmark this start returned from gave no recommendation; the home screen says so once.
+void launcher_offer_message() noexcept;
 // The game's request at the title's hold: true once, when launcher mode is on.
 [[nodiscard]] bool launcher_open() noexcept;
 [[nodiscard]] bool launcher_visible() noexcept;
