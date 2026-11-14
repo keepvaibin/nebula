@@ -9,7 +9,7 @@ with the in-box C# compiler, and embeds them with the given game binaries. A fir
 player's disc image with nebula-import. An update keeps the packed game, the saves and the settings, installs this
 version and removes the recompiled game of earlier installs, its compiler and its source (InstallEngine.Install).
 
-  -Bin  NebulaNative.exe, smg_game.dll and tables\*.tsv, as tested
+  -Bin  NebulaNative.exe, smg_game.dll, x86-64-v2\smg_game.dll (native\build.ps1) and tables\*.tsv, as tested
   -Dxc  Microsoft's DirectX Shader Compiler release, unpacked (github.com/microsoft/DirectXShaderCompiler): a mod's shaders are
         built with it on the player's PC
 
@@ -47,7 +47,7 @@ try {
         if (-not (Test-Path -LiteralPath (Join-Path $Dxc $name))) { throw "The compiler folder has no $name" }
     }
     if ((& git -C $repo status --porcelain).Length -ne 0) { Write-Warning 'The tree has uncommitted changes; the package records HEAD.' }
-    foreach ($name in 'NebulaNative.exe', 'smg_game.dll', 'tables\material-names.tsv', 'tables\rt-materials.tsv', 'tables\rt-suns.tsv') {
+    foreach ($name in 'NebulaNative.exe', 'smg_game.dll', 'x86-64-v2\smg_game.dll', 'tables\material-names.tsv', 'tables\rt-materials.tsv', 'tables\rt-suns.tsv') {
         if (-not (Test-Path -LiteralPath (Join-Path $Bin $name))) { throw "The bin folder has no $name" }
     }
 
@@ -105,6 +105,7 @@ namespace Nebula
 
     $resources = [ordered]@{
         'NebulaNative.exe' = (Join-Path $Bin 'NebulaNative.exe'); 'smg_game.dll' = (Join-Path $Bin 'smg_game.dll')
+        'x86-64-v2\smg_game.dll' = (Join-Path $Bin 'x86-64-v2\smg_game.dll')
         'material-names.tsv' = (Join-Path $Bin 'tables\material-names.tsv'); 'rt-materials.tsv' = (Join-Path $Bin 'tables\rt-materials.tsv')
         'rt-suns.tsv' = (Join-Path $Bin 'tables\rt-suns.tsv')
         'Nebula.exe' = $launcher; 'NebulaSettings.exe' = $settingsApp; 'nebula-import.exe' = $importer
