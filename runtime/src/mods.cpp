@@ -1991,7 +1991,9 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
             }
             std::rotate(plan.plugins.begin(), plan.plugins.begin() + static_cast<std::ptrdiff_t>(lower_mods), plan.plugins.end());
         }
-        if (!changes_game_files(mod)) continue;
+        // A package of texture pack pictures alone changes no game file, but its pictures are planned for the cooker to
+        // read as the pack reader does (the layer walk below).
+        if (!changes_game_files(mod) && !(mod.package && !mod.luma_textures.empty())) continue;
 #if defined(__ANDROID__) || defined(__APPLE__) && TARGET_OS_IPHONE
         // The converter runs on computers: the page has told the player.
         if (!mod.package) continue;
