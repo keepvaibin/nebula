@@ -1656,7 +1656,7 @@ const NebulaTextRow cNebulaTextRows[] = {
     {"LauncherTitle",
      {u"Nebula", nullptr, u"Nebula", u"Nebula", u"Nebula", u"Nebula", u"Nebula", u"Nebula", u"Nebula", u"Nebula", u"Nebula", u"Nebula", u"Nebula", u"Nebula"}},
     {"LauncherPlay",
-     {u"Play", nullptr, u"Jouer", u"Jouer", u"Jugar", u"Jugar", u"Spielen", u"Gioca", u"Spelen", u"Jogar", u"\u3042\u305D\u3076", u"\uD50C\uB808\uC774", u"\u5F00\u59CB\u6E38\u620F", u"\u958B\u59CB\u904A\u6232"}},
+     {u"Play", nullptr, u"Jouer", u"Jouer", u"Jugar", u"Jugar", u"Spielen", u"Gioca", u"Spelen", u"Jogar", u"\u30D7\u30EC\u30A4", u"\uD50C\uB808\uC774", u"\u5F00\u59CB\u6E38\u620F", u"\u958B\u59CB\u904A\u6232"}},
     {"LauncherUpdate",
      {u"Nebula {v} is available", nullptr, u"Nebula {v} est disponible", u"Nebula {v} est disponible", u"Nebula {v} est\u00E1 disponible", u"Nebula {v} est\u00E1 disponible", u"Nebula {v} ist verf\u00FCgbar", u"Nebula {v} \u00E8 disponibile", u"Nebula {v} is beschikbaar", u"Nebula {v} est\u00E1 dispon\u00EDvel", u"Nebula {v}\u304C \u3067\u307E\u3057\u305F", u"Nebula {v} \uC5C5\uB370\uC774\uD2B8\uAC00 \uC788\uC2B5\uB2C8\uB2E4", u"Nebula {v} \u73B0\u5DF2\u63A8\u51FA", u"Nebula {v} \u73FE\u5DF2\u63A8\u51FA"}},
     {"S.CO-STAR",
