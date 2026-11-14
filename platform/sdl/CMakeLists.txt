@@ -248,6 +248,11 @@ target_include_directories(main PRIVATE "${nebula_root}/native/include" "${nebul
 target_compile_definitions(main PRIVATE NEBULA_HOST_RENDERER=1 NEBULA_HOST_SDL=1)
 target_include_directories(main PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(main PRIVATE galaxy_render_vk SDL3::SDL3)
+# The diagnostics report modes (diag_report.h): zlib from the archive libraries.
+if(NOT IOS)
+    target_sources(main PRIVATE ${rt}/diag_report.cpp ${rt}/diag_seal.cpp)
+    target_compile_definitions(main PRIVATE NEBULA_DIAG_REPORTS=1)
+endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT ANDROID)
     # The update check and install of the home screen (runtime/include/galaxy/update.h): libcurl is opened at run time.
     target_sources(main PRIVATE ${rt}/update/update.cpp ${rt}/update/update_crypto.cpp ${rt}/update/update_transport_curl.cpp

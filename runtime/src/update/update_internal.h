@@ -30,6 +30,16 @@ public:
     // True when the server of `url` cannot be reached directly: no network, its name not resolving, its port refusing.
     // False when it can, or when a proxy stands between (only the request can tell then).
     virtual bool unreachable(const std::string& url) = 0;
+    // POST `body` to an https `url` once (no redirect followed, the answer's body dropped), within `timeout_ms` in all:
+    // the diagnostics report's send (diag_report.h). The status, or a negative value without an answer.
+    virtual int post(const std::string& url, std::string_view content_type, std::span<const std::uint8_t> body,
+                     int timeout_ms) {
+        (void)url;
+        (void)content_type;
+        (void)body;
+        (void)timeout_ms;
+        return -1;
+    }
 };
 
 Transport& platform_transport();

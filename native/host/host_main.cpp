@@ -43,6 +43,9 @@
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/benchmark.h"
+#if defined(NEBULA_DIAG_REPORTS)
+#include "galaxy/diag_report.h"
+#endif
 #include "galaxy/frame_timeline.h"
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
 #include "galaxy/controller_hid.h"
@@ -3965,6 +3968,12 @@ int main(int argc, char** argv) {
     }
 #endif
     read_launch_args(argc, argv);
+#if defined(NEBULA_DIAG_REPORTS)
+    // The diagnostics report modes (--send-report and the rest): files and one HTTPS POST, nothing else, then exit.
+    if (const int code = galaxy::diag::run_command_line(argc, argv); code >= 0) {
+        return code;
+    }
+#endif
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
     // A tool's hidden start keeps off the player's data (hidden_start.h), before anything is written.
     {
