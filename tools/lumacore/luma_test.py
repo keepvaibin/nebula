@@ -1057,6 +1057,27 @@ def remove_kept(settings, mod_folder, folder=None):
     return mod_id
 
 
+# What a restart keeps of Nebula's data folder (platform_paths.h nebula_data_directory: a run's is
+# <run>/appdata/Nebula, LOCALAPPDATA being <run>/appdata): every mod's own data folder, mod-data/<id> (services-fs 2;
+# a removed mod's stays until the player forgets it, services-mods 8), and the Exchange folder, the player's and the
+# granted mods' (services-fs 2). The shader cache and diagnostics are not carried: each run makes its own.
+CARRIED_DATA = ("mod-data", "Exchange")
+
+
+def run_data_folder(run_folder):
+    """Nebula's data folder of a run: where its game keeps mod-data and Exchange."""
+    return run_folder / "appdata" / "Nebula"
+
+
+def carry_data(previous, run_folder):
+    """continue_from: the mods' data and the Exchange folder as the test before left them come along (harness.md
+    R14-1); links inside stay links (services-fs 5: a player may move a folder away and link it)."""
+    for sub in CARRIED_DATA:
+        source = run_data_folder(previous) / sub
+        if source.is_dir():
+            shutil.copytree(source, run_data_folder(run_folder) / sub, symlinks=True)
+
+
 def install(settings, mod_folder, code_allowed, order, kept=False, permissions="allow", broken_ok=False, folder=None, options=None,
             enabled=True):
     """A mod folder holding luma.json (the base's form, as examples/luma-hello) into the run's mods, on, in order.
@@ -1110,6 +1131,13 @@ def install(settings, mod_folder, code_allowed, order, kept=False, permissions="
         raise HarnessError("two mods have the id %s (a second copy takes \"folder\")" % mod_id)
     shutil.copytree(mod_folder, target)
     ini = settings / "mods.ini"
+    if kept and ini.exists() and "[%s]" % ini_escaped(place) in ini.read_text(encoding="utf-8").splitlines():
+        # A mod removed earlier in the chain comes back: its section stayed (remove_kept), so the player's answers in
+        # it hold again, as for a player putting the folder back; only its options and switch are this test's.
+        if options:
+            keep_options(ini, place, option_lines(mod_folder, manifest, options))
+        keep_enabled(ini, place, enabled)
+        return mod_id
     lines = "[%s]\nenabled=%d\norder=%d\n" % (place, 1 if enabled else 0, order)
     if code_allowed and libraries:
         lines += "code_ok=%s\n" % code_token(target / libraries[0])
@@ -1285,6 +1313,7 @@ def run_one(test, renderer, args, run_folder, previous):
         for sub in ("saves", "settings"):
             shutil.rmtree(run_folder / sub)
             shutil.copytree(previous / sub, run_folder / sub)
+        carry_data(previous, run_folder)
     frozen = {}
     # The plain module when the bin folder has it (plan 1.7): without it the game loads the rows module and says so.
     plain = (HOST["plain"],) if (bin_folder / HOST["plain"]).is_file() else ()
