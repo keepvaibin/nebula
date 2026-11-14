@@ -289,6 +289,17 @@ bool GameBloom::prepare(Object commands, const Inputs& in, const Params& p) {
         pending_ = true;
         return true;
     }
+    if (bloom::adds_nothing(p.threshold, normal ? 0u : p.channel, p.tap1, p.intensity, p.strength)) {
+        // The scene alone (kind 0), no level made: the kept scene, or a copy of the frame (multisampled, where the
+        // composite writes every sample from the resolved frame). A given source is drawn back by the caller.
+        if (!normal && (given || !copy_frame(commands, in, source_, "bloom source"))) {
+            return false;
+        }
+        const Texture* const scene = normal ? keep_.get() : source_.get();
+        composite_inputs_[0] = composite_inputs_[1] = composite_inputs_[2] = scene;
+        pending_ = true;
+        return true;
+    }
     const bloom::Shape s = bloom::shape_of(in.frame_width, in.frame_height, in.scale);
     const unsigned blurs1 = normal ? 2u : 1u;
     bool made = ensure(dummy_, 1u, 1u, kWorkFormat, true, "bloom unused slot") &&

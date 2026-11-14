@@ -12,6 +12,7 @@
 #include "galaxy/content_viewport.h"
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/render/host_window.h"
+#include "galaxy/render/game_bloom_shape.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/vk/streamline_vk.h"
 #if defined(_WIN32)
@@ -2049,6 +2050,11 @@ void RendererVk::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t b
     if (!bloom_.ready() || !scene_.color) {
         return;
     }
+    const float strength = static_cast<float>(std::min(get_render_config().bloom, kMaxBloom)) / 100.0f;
+    if (kind == NEBULA_PASS_BLOOM_SIMPLE && scene_.samples <= 1u &&
+        bloom::adds_nothing(a & 0xFFu, (a >> 8u) & 0xFFu, (a >> 16u) & 0xFFu, a >> 24u, strength)) {
+        return;  // a simple bloom that adds nothing leaves the frame, and its pass open
+    }
     const GpuPassScope pass{*this, GpuPass::Bloom};
     end_scene_pass();
     vk::GameBloomVk::Inputs in{};
@@ -2086,7 +2092,7 @@ void RendererVk::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t b
         if (!(p.ring_x > 0.0f && p.ring_x < 16.0f) || !(p.ring_y > 0.0f && p.ring_y < 16.0f)) {
             p.ring_x = p.ring_y = 1.0f;
         }
-        p.strength = static_cast<float>(std::min(get_render_config().bloom, kMaxBloom)) / 100.0f;
+        p.strength = strength;
         const bool whole = in.frame_width == scene_.color->width && in.frame_height == scene_.color->height;
         const VkRenderPass scene_pass = draw_layout_.pass_for(scene_variant(), false);
         // The simple bloom's source is the frame: the scene and the source trade places instead of the scene being

@@ -95,4 +95,12 @@ inline Widths widths_of(bool normal, const Shape& s, unsigned frame_width, unsig
     return w;
 }
 
+// The chain adds exactly zero to every pixel (the composite's scene plus bloom is then the scene, bit for bit): no
+// intensity or strength, no weight on level 1 (the normal bloom's level 2 is made from it), or a threshold no selection
+// passes (it keeps a value above the threshold; the intensity's 8-bit value of colours at most 1 is at most 235, a
+// channel's 255). `channel` as the selection reads it: 0 (the normal bloom's) the intensity, else a channel.
+inline bool adds_nothing(unsigned threshold, unsigned channel, unsigned tap1, unsigned intensity, float strength) {
+    return intensity == 0u || !(strength > 0.0f) || tap1 == 0u || threshold >= (channel == 0u ? 235u : 255u);
+}
+
 }  // namespace galaxy::render::bloom
