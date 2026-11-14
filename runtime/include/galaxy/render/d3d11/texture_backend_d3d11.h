@@ -67,7 +67,10 @@ public:
                                                  std::uint64_t& allocation_bytes, TexelFormat format = TexelFormat::Rgba8,
                                                  bool writable = false);
     [[nodiscard]] static bool direct_written(const d3d11::Texture*) noexcept { return false; }
+    // Feature level 11_0 samples BC1 always, so the store's other BLOCK4 forms are never taken here.
     [[nodiscard]] static bool supports_bc1() noexcept { return true; }
+    [[nodiscard]] static bool supports_astc4x4() noexcept { return false; }
+    [[nodiscard]] static bool supports_rgb565() noexcept { return false; }
     [[nodiscard]] static bool poolable(d3d11::Texture* texture, std::uint32_t& width, std::uint32_t& height,
                                        std::uint32_t& levels);
     // Writes every level from the staging chunk (level l at offset + offsets[l], rows of pitches[l] bytes).

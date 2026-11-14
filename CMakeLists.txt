@@ -95,25 +95,26 @@ endfunction()
 # The Windows x64 host's two builds (GALAXY_NATIVE_ISA above). The AVX2 program enters at nebula_host_entry, compiled
 # without the AVX2 option and without buffer security checks, which tests the CPU before the C runtime starts and runs
 # <program>-x86-64-v2.exe where the CPU lacks x86-64-v3. The SSE4.2 tree names its program so; it needs no test.
+# Every x64 host links the file: its nebula_run_sibling is also the Direct3D 12 host's hand-off to NebulaNativeD11.
 function(nebula_host_cpu_entry target)
     if(NOT MSVC OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8 OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|x86_64)$")
         return()
     endif()
+    if(NOT TARGET nebula_host_entry)
+        add_library(nebula_host_entry OBJECT native/host/host_entry_win32.cpp)
+        target_include_directories(nebula_host_entry PRIVATE runtime/include)
+        get_target_property(entry_options nebula_host_entry COMPILE_OPTIONS)
+        list(FILTER entry_options EXCLUDE REGEX "arch:AVX2|-mavx2")
+        list(APPEND entry_options /GS- /Zi)
+        set_property(TARGET nebula_host_entry PROPERTY COMPILE_OPTIONS "${entry_options}")
+    endif()
+    target_link_libraries(${target} PRIVATE nebula_host_entry)
     if(NEBULA_HOST_BASELINE)
         set_target_properties(${target} PROPERTIES OUTPUT_NAME "${target}-x86-64-v2")
         get_target_property(link_options ${target} LINK_OPTIONS)
         list(TRANSFORM link_options REPLACE "^/PDBALTPATH:.*$" "/PDBALTPATH:${target}-x86-64-v2.pdb")
         set_property(TARGET ${target} PROPERTY LINK_OPTIONS "${link_options}")
     elseif(GALAXY_NATIVE_ISA STREQUAL "AVX2")
-        if(NOT TARGET nebula_host_entry)
-            add_library(nebula_host_entry OBJECT native/host/host_entry_win32.cpp)
-            target_include_directories(nebula_host_entry PRIVATE runtime/include)
-            get_target_property(entry_options nebula_host_entry COMPILE_OPTIONS)
-            list(FILTER entry_options EXCLUDE REGEX "arch:AVX2|-mavx2")
-            list(APPEND entry_options /GS- /Zi)
-            set_property(TARGET nebula_host_entry PROPERTY COMPILE_OPTIONS "${entry_options}")
-        endif()
-        target_link_libraries(${target} PRIVATE nebula_host_entry)
         target_link_options(${target} PRIVATE /ENTRY:nebula_host_entry)
     endif()
 endfunction()
@@ -920,6 +921,8 @@ if(NEBULA_D3D11)
         runtime/src/render/core/world_lights.cpp
         runtime/src/render/core/pipelines_d3d11.cpp
         runtime/src/render/galaxy_select.cpp
+        runtime/src/benchmark_recommend.cpp
+        runtime/src/benchmark.cpp
         runtime/src/render/frame_interpolation.cpp
         runtime/src/render/rt_materials.cpp
         runtime/src/render/rt_caps.cpp
@@ -971,4 +974,7 @@ if(NEBULA_D3D11)
         target_compile_options(NebulaNativeD11 PRIVATE /Zi)
         target_link_options(NebulaNativeD11 PRIVATE /DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:NebulaNativeD11.pdb)
     endif()
+    # Both CPU levels like the other hosts (NebulaNativeD11-x86-64-v2.exe from the baseline tree).
+    nebula_host_cpu_entry(NebulaNativeD11)
+    nebula_host_delay_loads(NebulaNativeD11)
 endif()
