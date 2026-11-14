@@ -1216,8 +1216,8 @@ def run_one(test, renderer, args, run_folder, previous):
 
 
 def file_holders(path):
-    """The processes that have `path` open, as "name (pid)" (Windows' Restart Manager; empty elsewhere or when it
-    cannot say)."""
+    """The processes that have `path` open, each (name, pid, the full path of its executable) (Windows' Restart
+    Manager; empty elsewhere or when it cannot say)."""
     if os.name != "nt":
         return []
     import ctypes
@@ -1243,31 +1243,87 @@ def file_holders(path):
         needed, count, reasons = wintypes.UINT(), wintypes.UINT(16), wintypes.DWORD()
         infos = (ProcessInfo * 16)()
         if rm.RmGetList(session, ctypes.byref(needed), ctypes.byref(count), infos, ctypes.byref(reasons)) != 0:
-            return ["more than 16 processes" if needed.value > 16 else "unknown"]
-        return ["%s (%d)" % (infos[i].app, infos[i].process.pid) for i in range(count.value)]
+            return [("more than 16 processes" if needed.value > 16 else "unknown", 0, "")]
+        return [(infos[i].app, infos[i].process.pid, process_image(infos[i].process.pid)) for i in range(count.value)]
     finally:
         rm.RmEndSession(session)
 
 
-def remove_binary(path):
-    """A run's copy of a binary, removed once the run is over; tried for up to 30 s, as the game's crash watcher
-    (native/host/crash_watch.h, a second instance of the executable) ends just after the game. Returns None when
-    removed, else what holds it (the copy is then left; the run's verdict does not depend on it)."""
+def process_image(pid):
+    """The full path of process `pid`'s executable ("" when it cannot be read)."""
+    import ctypes
+    from ctypes import wintypes
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.OpenProcess.restype = wintypes.HANDLE
+    kernel.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
+    kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+    handle = kernel.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        return ""
+    try:
+        size = wintypes.DWORD(32768)
+        buffer = ctypes.create_unicode_buffer(size.value)
+        return buffer.value if kernel.QueryFullProcessImageNameW(handle, 0, buffer, ctypes.byref(size)) else ""
+    finally:
+        kernel.CloseHandle(handle)
+
+
+def wait_process(pid, seconds):
+    """Waits for process `pid` to end, at most `seconds`; True when it has ended (or is gone)."""
+    import ctypes
+    from ctypes import wintypes
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.OpenProcess.restype = wintypes.HANDLE
+    kernel.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    kernel.WaitForSingleObject.restype = wintypes.DWORD
+    kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+    handle = kernel.OpenProcess(0x00100000, False, pid)  # SYNCHRONIZE
+    if not handle:
+        return True
+    try:
+        return kernel.WaitForSingleObject(handle, int(max(0.0, seconds) * 1000)) == 0
+    finally:
+        kernel.CloseHandle(handle)
+
+
+def remove_binary(path, limit):
+    """A run's copy of a binary, removed once the run is over. While a process started from the copy itself still
+    runs (the game's crash watcher, native/host/crash_watch.h, is a second instance of the executable and ends after
+    the game), it is waited for by its id, at most `limit` seconds (the run's own limit); a holder that is another
+    program (a scanner, an indexer) is named and the copy left. Returns None when removed, else what holds it (the
+    run's verdict does not depend on it)."""
     began = time.time()
-    holders = None
+    waited, ended_pids, unnamed_since = [], set(), None
     while True:
         try:
             path.unlink()
-            if holders:
-                print("harness: %s was held %.1f s after the run by %s" % (path.name, time.time() - began,
-                                                                          ", ".join(holders)), flush=True)
+            if waited:
+                print("harness: %s removed after %.1f s; waited for %s" % (path.name, time.time() - began,
+                                                                       ", ".join(waited)), flush=True)
             return None
         except PermissionError:
-            if holders is None and time.time() - began > 1.0:
-                holders = file_holders(path) or ["no process the Restart Manager names"]
-            if time.time() - began > 30.0:
-                return ", ".join(file_holders(path) or holders or ["no process the Restart Manager names"])
-            time.sleep(0.1)
+            pass
+        holders = file_holders(path)
+        own = [(app, pid) for app, pid, image in holders if pid and pid not in ended_pids and image
+               and os.path.normcase(os.path.abspath(image)) == os.path.normcase(os.path.abspath(path))]
+        others = ["%s (%d) %s" % (app, pid, image or "image unread") for app, pid, image in holders
+                  if (app, pid) not in own]
+        if not holders:
+            # The image of a process that has just ended closes a moment after the process does: 2 s at most.
+            unnamed_since = unnamed_since or time.time()
+            if time.time() - unnamed_since < 2.0:
+                time.sleep(0.1)
+                continue
+        if others or not own:
+            # Not a process of this run: no wait makes it go, and the copy is only disk space.
+            return ", ".join(others or ["no process the Restart Manager names"])
+        for app, pid in own:
+            ended_pids.add(pid)
+            before = time.time()
+            ended = wait_process(pid, limit - (time.time() - began))
+            waited.append("%s (%d) %.1f s" % (app, pid, time.time() - before))
+            if not ended:
+                return "%s (%d), started from this copy, still running after %.0f s" % (app, pid, limit)
 
 
 def read_facts(run_folder):
@@ -1632,10 +1688,9 @@ def run_tests(args):
                     for p in (run_folder / "bin").iterdir():
                         if p.is_file() and (p.suffix in (".exe", ".dll", ".pdb", ".so") or p.name in EXES.values()
                                             or p.name == HOST["importer_exe"]):
-                            held = remove_binary(p)
+                            held = remove_binary(p, test["limit"])
                             if held is not None:
-                                print("harness: %s left in %s: still held after 30 s by %s" % (p.name, p.parent, held),
-                                      flush=True)
+                                print("harness: %s left in %s: held by %s" % (p.name, p.parent, held), flush=True)
                 setup = {f["key"]: f["value"] for f in facts if f.get("key", "").startswith("setup.")}
                 report(run_folder, test["name"], test["proves"], renderer, verdict, reason, checks, args,
                        {"setup": setup, "frames": max([f.get("frame", -1) for f in facts] or [-1]),
