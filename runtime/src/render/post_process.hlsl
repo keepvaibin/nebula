@@ -161,9 +161,14 @@ float3 FinalWrite(float3 color, int2 p) {
 #define SMAAGather(tex, coord) tex.Gather(LinearSampler, coord)
 #endif
 
-#if defined(PASS_FSR_EASU) || defined(PASS_FSR_RCAS) || defined(PASS_FSR_RCAS_SCALED)
+#if defined(PASS_FSR_EASU) || defined(PASS_FSR_EASU_HALF) || defined(PASS_FSR_RCAS) || defined(PASS_FSR_RCAS_SCALED)
 #define A_GPU 1
 #define A_HLSL 1
+#endif
+// EASU's packed 16-bit form: min16float, for a Direct3D device that reports 16-bit minimum precision (its taps then run
+// two to a 32-bit lane where the GPU packs them).
+#if defined(PASS_FSR_EASU_HALF)
+#define A_HALF 1
 #endif
 
 #elif POST_SECTION == 2
@@ -181,6 +186,13 @@ AF4 FsrEasuRF(AF2 p) { return SourceGather(p, 0u); }
 AF4 FsrEasuGF(AF2 p) { return SourceGather(p, 1u); }
 AF4 FsrEasuBF(AF2 p) { return SourceGather(p, 2u); }
 #define FSR_EASU_F 1
+#endif
+
+#if defined(PASS_FSR_EASU_HALF)
+AH4 FsrEasuRH(AF2 p) { return AH4(inputTex.GatherRed(LinearSampler, p)); }
+AH4 FsrEasuGH(AF2 p) { return AH4(inputTex.GatherGreen(LinearSampler, p)); }
+AH4 FsrEasuBH(AF2 p) { return AH4(inputTex.GatherBlue(LinearSampler, p)); }
+#define FSR_EASU_H 1
 #endif
 
 #if defined(PASS_FSR_RCAS)
@@ -295,6 +307,15 @@ float4 PSMain(FullscreenOut i) : SV_Target {
     AF3 color;
     FsrEasuF(color, AU2(ViewportPixel(i.pos)), g_con0, g_con1, g_con2, g_con3);
     return float4(FinalWrite(color, ViewportPixel(i.pos)), 1.0);
+}
+#endif
+
+#if defined(PASS_FSR_EASU_HALF)
+FullscreenOut VSMain(uint id : SV_VertexID) { return FullscreenTriangle(id); }
+float4 PSMain(FullscreenOut i) : SV_Target {
+    AH3 color;
+    FsrEasuH(color, AU2(ViewportPixel(i.pos)), g_con0, g_con1, g_con2, g_con3);
+    return float4(FinalWrite(AF3(color), ViewportPixel(i.pos)), 1.0);
 }
 #endif
 
