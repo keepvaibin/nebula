@@ -214,6 +214,9 @@ std::atomic<unsigned> s_native_settings_button_row{~0u};
 std::atomic<bool> s_settings_drawn_by_game{false};
 // Leaving with changes not applied asks first: apply them, discard them, or stay. Under s_native_settings_mutex.
 bool s_settings_leave_asking = false;
+// Hidden by the game's close where it shows no menu (the boot) with a question standing: nothing answered, nothing
+// discarded; it opens again where the game first shows a menu (native_settings_reopen_held). Under s_native_settings_mutex.
+bool s_settings_held = false;
 // Apply saved mod changes this session did not start with: the menu asks whether to restart now.
 std::atomic<bool> s_mods_restart_ask{false};
 // RAY TRACING turned on (applied) before its shaders are prepared: the menu asks to restart, which prepares them.
@@ -1470,6 +1473,7 @@ std::atomic<bool> s_last_key_from_pad{false};  // the menu's last key came from 
 void set_native_settings_visible(bool visible) {
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
     s_settings_leave_asking = false;
+    s_settings_held = false;
     if (visible && !s_native_settings_visible.load(std::memory_order_relaxed)) {
         // A fresh draft, monitor list and controller list each time the menu opens.
         s_settings_monitors = host_window::settings_monitors();
@@ -5577,6 +5581,25 @@ NativeSettingsView native_settings_view() {
     return host_window::build_native_settings_view();
 }
 
+// Whether the menu asks the player something: a question over the page, changes not applied (closing would ask first),
+// or a screen of the Mods page (an import running or its result waiting for its Done, a file dialog, a mod's request,
+// the consent question).
+static bool native_settings_asking() {
+    return s_settings_leave_asking || s_joycon_pairing || galaxy::host::touch_arranging() || settings_display_confirming() ||
+           restart_asking() || vendor_prompting() || mod_question_up() || pending_settings_changes() != 0u ||
+           screens_screen_up();
+}
+
+void native_settings_reopen_held() {
+    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+    if (!s_settings_held) return;
+    s_settings_held = false;
+    // Opened or closed since by the player (F1, a mod's request) or answered: nothing to bring back.
+    if (s_native_settings_visible.load(std::memory_order_relaxed) || !native_settings_asking()) return;
+    s_native_settings_visible.store(true, std::memory_order_relaxed);
+    std::cerr << "[settings] overlay open: its question waited through the boot" << std::endl;
+}
+
 void native_settings_input(NativeSettingsInput input, int arg) {
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
     const bool visible = s_native_settings_visible.load(std::memory_order_relaxed);
@@ -5586,6 +5609,19 @@ void native_settings_input(NativeSettingsInput input, int arg) {
         return;
     case NativeSettingsInput::Close:
         if (visible) (void)handle_native_settings_key(VK_ESCAPE, false, true);
+        return;
+    case NativeSettingsInput::CloseUnseen:
+        // The game's close where it shows no menu (consent 2.1: the player answers the question). One that asks
+        // nothing closes as Escape closes it. One that asks is hidden as it stands, its question unanswered and its
+        // draft kept, so the game goes on; it opens again where the game first shows a menu.
+        if (!visible) return;
+        if (!native_settings_asking()) {
+            (void)handle_native_settings_key(VK_ESCAPE, false, true);
+            return;
+        }
+        s_settings_held = true;
+        s_native_settings_visible.store(false, std::memory_order_relaxed);
+        std::cerr << "[settings] overlay held: the game shows no menu here; its question waits" << std::endl;
         return;
     case NativeSettingsInput::Apply:
         if (visible) (void)handle_native_settings_key(VK_RETURN, false, true);

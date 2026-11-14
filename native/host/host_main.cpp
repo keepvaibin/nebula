@@ -1895,6 +1895,9 @@ struct SettingsViewStorage {
 };
 
 SettingsViewStorage g_settings_view;
+// The game's reads of the menu's view in a row that found it open (svc_settings_view; 0 once one finds it closed): at 1
+// the game has not yet drawn it, so a close then is the game's, not a press on it (svc_settings_input).
+std::uint32_t g_settings_open_views = 0;
 #endif
 
 #if defined(NEBULA_HOST_RENDERER)
@@ -1938,6 +1941,7 @@ void svc_settings_view(void*, NebulaSettingsView* view) {
     const galaxy::render::NativeSettingsView source = galaxy::render::native_settings_view();
     SettingsContent next;
     next.open = source.open ? 1u : 0u;
+    g_settings_open_views = source.open ? g_settings_open_views + 1u : 0u;
     next.page = source.page;
     next.pages = source.pages;
     next.controls_page = source.controls_page;
@@ -2017,7 +2021,13 @@ void svc_settings_view(void*, NebulaSettingsView* view) {
 // The pointer's input to the settings menu: NEBULA_SETTINGS_* are galaxy::render::NativeSettingsInput's values.
 void svc_settings_input(void*, uint32_t action, int32_t arg) {
 #if defined(NEBULA_HOST_RENDERER)
-    if (action >= NEBULA_SETTINGS_OPEN && action <= NEBULA_SETTINGS_SET_VALUE) {
+    if (action == NEBULA_SETTINGS_CLOSE && gSceneBegins.load(std::memory_order_relaxed) == 0u && g_settings_open_views <= 1u) {
+        // Before the game's first 3D scene (the boot) the game closes a menu asked for there in the frame it first reads
+        // it open, without drawing it: that close answers nothing, and a menu with a question is hidden until the first
+        // 3D scene (svc_submit_frame). A close in a later frame is a press on the menu the game shows (its launcher, a
+        // question it lets stand in the boot) and answers as Escape.
+        galaxy::render::native_settings_input(galaxy::render::NativeSettingsInput::CloseUnseen, arg);
+    } else if (action >= NEBULA_SETTINGS_OPEN && action <= NEBULA_SETTINGS_SET_VALUE) {
         galaxy::render::native_settings_input(static_cast<galaxy::render::NativeSettingsInput>(action), arg);
     }
 #else
@@ -2192,7 +2202,9 @@ void svc_texture_hd(void*, uint32_t texture, const void* hd) {
 }
 void svc_submit_frame(void*, NebulaFrameList* list) {
     if ((list->flags & NEBULA_FRAME_HAS_SCENE) != 0u) {
-        gSceneBegins.fetch_add(1, std::memory_order_relaxed);
+        // The first 3D scene (the title's, or a test's galaxy) is where the game first shows a menu: one the boot's
+        // close hid with a question standing opens again (svc_settings_input).
+        if (gSceneBegins.fetch_add(1, std::memory_order_relaxed) == 0u) galaxy::render::native_settings_reopen_held();
         end_boot_fast("first 3D scene");
     }
     list->game_frame = gGameFrames.load(std::memory_order_relaxed);
