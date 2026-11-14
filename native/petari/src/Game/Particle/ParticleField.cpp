@@ -164,7 +164,11 @@ void FieldConvection::calc(EmitterWork* /*work*/, ParticleField* block, Particle
 void FieldRandom::calc(EmitterWork* work, ParticleField* block, ParticleCore* ptcl) {
     if (ptcl->mAge == 0 || (block->getCycle() != 0 && ptcl->mAge % block->getCycle() == 0)) {
         EmitterCore* emtr = work->mpEmtr;
-        mAccel.set< f32 >(emtr->get_r_zh(), emtr->get_r_zh(), emtr->get_r_zh());
+        // Drawn z, y, x: the console's right-to-left order of the arguments, on every platform.
+        const f32 z = emtr->get_r_zh();
+        const f32 y = emtr->get_r_zh();
+        const f32 x = emtr->get_r_zh();
+        mAccel.set< f32 >(x, y, z);
         mAccel.scale(block->getMag());
         calcAffect(block, ptcl);
     }
