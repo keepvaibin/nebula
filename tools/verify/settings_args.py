@@ -18,6 +18,7 @@ RENDER = [
     ("GALAXY_FRAME_RATE_DECOUPLE", "frame_rate_decouple"), ("GALAXY_TEXTURE_LOD_BIAS", "texture_lod_bias"),
     ("GALAXY_ANISOTROPIC_FILTERING", "anisotropic_filtering"), ("GALAXY_ENHANCED_MIPMAPS", "enhanced_mipmaps"),
     ("GALAXY_PER_PIXEL_LIGHTING", "per_pixel_lighting"), ("GALAXY_CURVED_SURFACES", "curved_surfaces"),
+    ("GALAXY_DYNAMIC_RESOLUTION", "dynamic_resolution"),
     ("GALAXY_ENHANCED_LIGHTING", "enhanced_lighting"), ("GALAXY_AMBIENT_OCCLUSION", "ambient_occlusion"),
     ("GALAXY_BLOOM", "bloom"), ("GALAXY_WIDE_SCENE", "wide_scene"), ("GALAXY_AO_SSAO", "ambient_occlusion_ssao"),
     ("GALAXY_POST_PROCESS", "post_process"), ("GALAXY_HUD_OUTPUT_RESOLUTION", "hud_output_resolution"),

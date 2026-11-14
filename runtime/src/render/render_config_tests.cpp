@@ -1,5 +1,6 @@
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/resolution_fit.h"
+#include "galaxy/render/resolution_governor.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/test_temp.h"
 #include "galaxy/experimental_ultrawide_aspect.h"
@@ -737,6 +738,53 @@ int main() {
                              galaxy::render::largest_fitting_height(fast, 1920u, 1080u, galaxy::render::kFitHeavyStage, budget, 1440u) == 1440u &&
                              galaxy::render::largest_fitting_height(fit, 1920u, 1080u, 1.0, budget, 2160u) == 0u,
                          "above the output only up to max_height, and only what fits");
+    }
+
+    {
+        using galaxy::render::ResolutionGovernor;
+        using galaxy::render::resolution_rectangle;
+        passed &= expect(resolution_rectangle(1920u, 1080u, 8u) == std::pair{1920u, 1080u} &&
+                             resolution_rectangle(1919u, 1081u, 8u) == std::pair{1919u, 1081u} &&
+                             resolution_rectangle(1920u, 1080u, 6u) == std::pair{1440u, 810u} &&
+                             resolution_rectangle(854u, 480u, 7u) == std::pair{747u, 420u} &&
+                             resolution_rectangle(1u, 1u, 4u) == std::pair{1u, 1u},
+                         "a step's rectangle is the target at 8/8 and n/8 of it rounded once otherwise");
+        ResolutionGovernor governor;
+        const double budget = 13.33;
+        bool held = true;
+        for (unsigned f = 0; f < 200u; ++f) {
+            held &= governor.update(10.0, budget) == 8u;
+        }
+        passed &= expect(held, "a GPU inside 90 % of the budget keeps the whole target");
+        unsigned frames = 0u;
+        while (governor.eighths() == 8u && frames < 100u) {
+            (void)governor.update(20.0, budget);
+            ++frames;
+        }
+        // 20 ms at 64/64; 80 % of the budget is 10.67 ms: 7/8 would take 15.3, 6/8 11.25, 5/8 7.8. So 5/8.
+        passed &= expect(frames == ResolutionGovernor::kOverFrames && governor.eighths() == 5u,
+                         "over the budget: down after three frames, to the largest step that fits");
+        // At 5/8 the scene takes 20 x 25/64 = 7.8 ms; 6/8 would take 11.25 ms, over 75 %: it stays.
+        held = true;
+        for (unsigned f = 0; f < 300u; ++f) {
+            held &= governor.update(7.8, budget) == 5u;
+        }
+        passed &= expect(held, "no step up while the next step would pass 75 % of the budget");
+        // A lighter scene: 5 ms at 5/8 predicts 7.2 ms at 6/8: one step up after 60 frames.
+        frames = 0u;
+        while (governor.eighths() == 5u && frames < 400u) {
+            (void)governor.update(5.0, budget);
+            ++frames;
+        }
+        passed &= expect(governor.eighths() == 6u && frames == ResolutionGovernor::kRoomFrames,
+                         "room for the next step: up one step after 60 frames");
+        governor.reset();
+        passed &= expect(governor.eighths() == 8u, "reset returns to the whole target");
+        held = true;
+        for (unsigned f = 0; f < 50u; ++f) {
+            held &= governor.update(0.0, budget) == 8u;
+        }
+        passed &= expect(held, "no measurement moves nothing");
     }
 
     if (!passed) {

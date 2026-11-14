@@ -28,6 +28,7 @@ hud_internal_resolution	config	hud_internal_resolution	bool	0|1	0	Display	-	-	y	
 gpu	config	gpu	text	-	-	Display	y	-	s	-	more than one GPU; applies at the next start	Graphics card
 upscaler	config	upscaler	enum	bilinear|fsr|fsr3|dlss|xess|sgsr2|metalfx	0	Graphics	y	-	y	y	D3D12 0-4 (DLSS on NVIDIA RTX), Vulkan 0-5, Metal 0,1,6	Upscaling
 internal_height	config	internal_height	set	0|144|240|360|480|720|1080|1440|2160	0	Graphics	y	y	y	y	upscaling off	Internal resolution
+dynamic_resolution	config	dynamic_resolution	bool	0|1	0	Graphics	-	-	y	-	the renderer offers it (dynamic_resolution_offered), upscaling off	Dynamic resolution
 temporal_quality	config	temporal_quality	enum	native|quality|balanced|performance|ultra_performance|ultra_quality	1	Graphics	y	-	y	y	a temporal upscaler; DLSS has no ultra_quality	Upscaler quality
 spatial_quality	config	spatial_quality	enum	manual|quality|balanced|performance|ultra_performance|ultra_quality	0	Graphics	y	-	y	y	FSR 1	Upscaler quality
 sharpness	config	sharpness	int	0..100/10	0	Graphics	y	-	y	y	-	Sharpening (0-100)

@@ -620,6 +620,7 @@ unsigned pending_settings_changes() {
     changes += d.temporal_quality != live.temporal_quality;
     changes += d.spatial_quality != live.spatial_quality;
     changes += d.internal_height != live.internal_height;
+    changes += d.dynamic_resolution != live.dynamic_resolution;
     changes += d.sharpness != live.sharpness;
     changes += d.hdr != live.hdr || d.paper_white != live.paper_white;
     changes += d.anisotropic_filtering != live.anisotropic_filtering;
@@ -1099,6 +1100,7 @@ void apply_native_settings_draft() {
     applied.temporal_quality = next.temporal_quality;
     applied.spatial_quality = next.spatial_quality;
     applied.internal_height = next.internal_height;
+    applied.dynamic_resolution = next.dynamic_resolution;
     applied.sharpness = next.sharpness;
     applied.hdr = next.hdr;
     applied.paper_white = next.paper_white;
@@ -1997,6 +1999,7 @@ public:
         state.temporal_upscaling = temporal_upscaler(render) != 0u;
         state.spatial_upscaling = spatial_quality_mode(render);
         state.curved_surfaces_offered = curved_surfaces_offered();
+        state.dynamic_resolution_offered = dynamic_resolution_offered();
         state.folders_open = host_window::folders_open();
         state.measured_fps = host_window::measured_present_hz.load(std::memory_order_relaxed) *
                              (frame_generation_running() ? static_cast<double>(host_window::upscaler_caps().frames_presented) : 1.0);
