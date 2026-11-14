@@ -42,8 +42,8 @@ namespace luma {
         unsigned vtableCount;
     };
     struct AliasRow {
-        const char* name;   // a typedef or another spelling of a record ("TVec3f", "JGeometry::TVec3<float>")
-        const char* record; // the record's row name ("JGeometry::TVec3<f32>")
+        const char* name;   // a typedef or another spelling of a record ("Vec3f", "Vec3<float>")
+        const char* record; // the record's row name ("Vec3<f32>")
     };
     struct GlobalRow {
         const char* name;   // "MR::sDefaultGravity"

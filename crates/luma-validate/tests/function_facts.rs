@@ -151,7 +151,7 @@ fn a_signatures_parameters_are_counted() {
     assert_eq!(signature_params("void(void)"), Some(0));
     assert_eq!(signature_params("()"), Some(0));
     assert_eq!(signature_params("bool(const Vec3f &, s32) const"), Some(2));
-    assert_eq!(signature_params("void(void (*)(int, int), JGeometry::TVec3<f32, int> *, int[3])"), Some(3));
+    assert_eq!(signature_params("void(void (*)(int, int), Vec3<f32, int> *, int[3])"), Some(3));
     assert_eq!(signature_params("void"), None);
     assert_eq!(signature_params("void(const char *, ...)"), Some(1));
     assert_eq!(signature_params("u32(char16_t *, s32, const char16_t *, u32, ...)"), Some(4));

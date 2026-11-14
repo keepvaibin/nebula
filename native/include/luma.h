@@ -30,7 +30,7 @@ extern "C" {
    parameter's args[n] points at the pointer. */
 typedef struct LumaFunction {
     const char* name;      /* "Kuribo::exeWander"; "Game/Enemy/Kuribo.cpp#name" for one only its file sees */
-    const char* signature; /* "void(f32, const TVec3f &)", as the game's source writes it */
+    const char* signature; /* "void(f32, const Vec3f &)", as the game's source writes it */
     void (*invoke)(void** args, void* result);
     unsigned char* hooked;
 } LumaFunction;

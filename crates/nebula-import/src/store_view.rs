@@ -331,7 +331,7 @@ mod tests {
         let pak_path = dir.path().join("game.pak");
         let ir = TableIr { columns: vec![col("ZoneName", Kind::Text, 32, u32::MAX)], rows: vec![vec![Cell::Text(b"Main".to_vec())], vec![Cell::Text(b"Side".to_vec())]] };
         let ntbl = ir.to_ntbl();
-        let model = b"J3D2bdl4 not a table".to_vec();
+        let model = b"MDL2bdl4 not a table".to_vec();
         let mut pak = File::create(&pak_path).unwrap();
         pak.seek(SeekFrom::Start(HEADER)).unwrap();
         pak.write_all(&ntbl).unwrap();

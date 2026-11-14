@@ -14,7 +14,7 @@ namespace luma {
 
     struct Function {
         const char* name;       // "Kuribo::exeWander"; "File.cpp#name" for a function only its file sees
-        const char* signature;  // "void(f32, const TVec3f &)", as the source writes it
+        const char* signature;  // "void(f32, const Vec3f &)", as the source writes it
         Invoke invoke;
         unsigned char* hooked;
     };
@@ -67,7 +67,7 @@ namespace luma {
         alignas(R) unsigned char bytes[sizeof(R)];
         Result() {
             if constexpr (kKind == kPlain) {
-                // Zero first: a class whose default constructor sets nothing (TVec3f's) still reads 0, 0, 0.
+                // Zero first: a class whose default constructor sets nothing (Vec3f's) still reads 0, 0, 0.
                 __builtin_memset(bytes, 0, sizeof(bytes));
                 ::new (Place(), bytes) R();
             }

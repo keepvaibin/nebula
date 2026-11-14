@@ -580,7 +580,7 @@ fn write_brfnt(face: &Face, codes: &[(u16, GlyphId)], m: &Metrics, l: &SheetLayo
     out
 }
 
-/// The font's pair kerning between its characters below KERN_BELOW, in whole source pixels: its GPOS `kern` feature's
+/// The font's pair kerning between its characters below KERN_BELOW, in whole source pixels: its glyph positioning table's `kern` feature's
 /// pair adjustments, or (with none) its `kern` table's horizontal pairs. Pairs of 0 are left out.
 fn kerning(face: &Face, codes: &[(u16, GlyphId)], scale: f64) -> Vec<(u16, u16, i32)> {
     let kerned: Vec<(u16, GlyphId)> = codes.iter().copied().filter(|&(c, _)| u32::from(c) < KERN_BELOW).collect();

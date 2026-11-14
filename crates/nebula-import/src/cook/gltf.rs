@@ -2702,7 +2702,7 @@ fn game_materials(root: &Value, game: &GameModel) -> Result<GameMaterials> {
 /// The game counts animation frames at 60 a second.
 const FRAMES_PER_SECOND: f32 = 60.0;
 
-/// The longest clip: the game's clip files count frames in 16 bits (J3D's .bck), 18 minutes at 60 a second.
+/// The longest clip: the game's clip files count frames in 16 bits, 18 minutes at 60 a second.
 const MAX_CLIP_FRAMES: usize = 65_535;
 
 /// A sampled curve of one joint's value.

@@ -551,7 +551,7 @@ fn typed<'a>(types: &'a crate::names::Types, kind: u32, name: &str, signature: O
     let same = |ty: &str| signature.map_or(true, |s| s == ty);
     let with_sig = |plain, sig| if signature.is_some() { sig } else { plain };
     // A type that is no record: why, if the generator left it out as one of these or as a template (by its name
-    // before the arguments, `TVec3<s8>` as `TVec3`).
+    // before the arguments, `Vec3<s8>` as `Vec3`).
     let type_left_out = |ty: &str| {
         [LeftOutKind::Record, LeftOutKind::Alias, LeftOutKind::Enum]
             .iter()
@@ -636,7 +636,7 @@ mod types_tests {
     /// Rows in the form the generator writes (tools/lumacore/gen_types.py), one of each case the readers take.
     const SAMPLE: &str = r#"{
       "types": [
-        {"kind": "struct", "name": "TVec3<f32>", "size": 12, "align": 4, "polymorphic": false, "abstract": false, "trivial_copy": true, "trivial_destroy": true, "no_copy": false, "bases": [],
+        {"kind": "struct", "name": "Vec3<f32>", "size": 12, "align": 4, "polymorphic": false, "abstract": false, "trivial_copy": true, "trivial_destroy": true, "no_copy": false, "bases": [],
          "fields": [{"name": "x", "type": "f32", "offset": 0, "count": 1, "extents": null, "access": "public", "bits": null}], "reachable": []},
         {"kind": "class", "name": "NameObj", "size": 12, "align": 4, "polymorphic": true, "abstract": false, "trivial_copy": false, "trivial_destroy": false, "no_copy": false, "bases": [],
          "fields": [{"name": "mName", "type": "const char *", "offset": 4, "count": 1, "extents": null, "access": "public", "bits": null}], "reachable": []},
@@ -648,8 +648,8 @@ mod types_tests {
                     {"name": "mRow", "type": "f32", "offset": 64, "count": 4, "extents": null, "access": "private", "bits": null}],
          "reachable": [{"name": "mName", "from": "NameObj", "offset": 4, "type": "const char *"}]},
         {"kind": "union", "name": "Both", "size": 4, "align": 4, "polymorphic": false, "abstract": false, "trivial_copy": true, "trivial_destroy": true, "no_copy": true, "bases": [], "fields": [], "reachable": []},
-        {"kind": "alias", "name": "TVec3f", "of": "TVec3<f32>", "record": "TVec3<f32>"},
-        {"kind": "spelling", "name": "JGeometry::TVec3<float>", "of": "TVec3<f32>", "record": "TVec3<f32>"},
+        {"kind": "alias", "name": "Vec3f", "of": "Vec3<f32>", "record": "Vec3<f32>"},
+        {"kind": "spelling", "name": "Vec3<float>", "of": "Vec3<f32>", "record": "Vec3<f32>"},
         {"kind": "alias", "name": "s8", "of": "signed char", "record": null},
         {"kind": "alias", "name": "Both", "of": "Both", "record": "Both"},
         {"kind": "enum", "name": "Mode", "underlying": "u32", "scoped": true, "values": [{"name": "Off", "value": 0}, {"name": "On", "value": 4294967295}]},
@@ -683,8 +683,8 @@ mod types_tests {
     fn a_types_file_reads_as_draft_2_gives_it() {
         let types = sample();
         assert_eq!(types.records.len(), 4);
-        assert_eq!(types.record("TVec3f").map(|(n, r)| (n, r.size)), Some(("TVec3<f32>", 12)));
-        assert_eq!(types.record("JGeometry::TVec3<float>").map(|(n, _)| n), Some("TVec3<f32>"));
+        assert_eq!(types.record("Vec3f").map(|(n, r)| (n, r.size)), Some(("Vec3<f32>", 12)));
+        assert_eq!(types.record("Vec3<float>").map(|(n, _)| n), Some("Vec3<f32>"));
         // An alias of no record is no record; one spelled as its record is the record.
         assert!(types.record("s8").is_none());
         assert_eq!(types.aliases.get("Both"), None);
@@ -704,9 +704,9 @@ mod types_tests {
         let actor = &types.records["LiveActor"];
         assert_eq!((actor.kind, actor.align, actor.polymorphic, actor.is_abstract), (RecordKind::Class, 4, true, false));
         assert_eq!((actor.trivial_copy, actor.trivial_destroy), (false, false));
-        assert!(types.records["TVec3<f32>"].trivial_copy && types.records["TVec3<f32>"].trivial_destroy);
+        assert!(types.records["Vec3<f32>"].trivial_copy && types.records["Vec3<f32>"].trivial_destroy);
         // The third fact, read as the file gives it.
-        assert!(types.records["Both"].no_copy && !types.records["TVec3<f32>"].no_copy && !actor.no_copy);
+        assert!(types.records["Both"].no_copy && !types.records["Vec3<f32>"].no_copy && !actor.no_copy);
         assert_eq!(actor.bases, vec![Base { name: "NameObj".into(), offset: 0, is_virtual: false }]);
         assert_eq!(actor.reached, vec![Reached { name: "mName".into(), from: "NameObj".into(), offset: 4, ty: "const char *".into() }]);
         let own: Vec<_> = actor.own.iter().map(|f| (f.name.as_str(), f.ty.as_str(), f.offset, f.extents.clone(), f.bits, f.access)).collect();
@@ -724,7 +724,7 @@ mod types_tests {
         assert_eq!(types.anonymous_enums, vec![Enum { underlying: "int".into(), scoped: false, values: vec![("LOW".into(), -2147483648)] }]);
         // Every alias and spelling row, a record's or not.
         assert_eq!(types.typedefs.get("s8").map(String::as_str), Some("signed char"));
-        assert_eq!(types.typedefs.get("TVec3f").map(String::as_str), Some("TVec3<f32>"));
+        assert_eq!(types.typedefs.get("Vec3f").map(String::as_str), Some("Vec3<f32>"));
         assert_eq!(types.typedefs.len(), 4);
         // Every global, defined or not; a constant's value as the file writes it.
         assert_eq!(types.global_facts["MR::cLimit"], Global { ty: "const f32".into(), konst: true, defined: false, value: Some("-0.5".into()) });
@@ -797,15 +797,15 @@ mod types_tests {
         let types = sample();
         let typed = |kind, name, sig| typed(&types, kind, name, sig);
         // Kind 2: a record by any spelling; a type left out by its reason, a template by its name before `<`.
-        assert_eq!(typed(2, "TVec3f", None), Typed::Bound);
-        assert_eq!(typed(2, "JGeometry::TVec3<float>", None), Typed::Bound);
+        assert_eq!(typed(2, "Vec3f", None), Typed::Bound);
+        assert_eq!(typed(2, "Vec3<float>", None), Typed::Bound);
         assert_eq!(typed(2, "Mode", None), Typed::Missing("Name.Type"));
         assert_eq!(typed(2, "LumaMod", None), Typed::LeftOut("Name.TypeUnbound", "the kernel's own"));
         assert_eq!(typed(2, "LumaHook", None), Typed::LeftOut("Name.TypeUnbound", "the kernel's own"));
         assert_eq!(typed(2, "TBox<s8>", None), Typed::LeftOut("Name.TypeUnbound", "a template not used with these arguments"));
         assert_eq!(typed(2, "Forward", None), Typed::LeftOut("Name.TypeUnbound", "no size (incomplete or dependent)"));
         // Kind 1: own and reachable fields, through an alias; a bit-field's type is its whole text.
-        assert_eq!(typed(1, "TVec3f.x", Some("f32")), Typed::Bound);
+        assert_eq!(typed(1, "Vec3f.x", Some("f32")), Typed::Bound);
         assert_eq!(typed(1, "LiveActor.mName", None), Typed::Bound);
         assert_eq!(typed(1, "LiveActor.mFlags", Some("u32 : 3")), Typed::Bound);
         assert_eq!(typed(1, "LiveActor.mFlags", Some("u32")), Typed::Missing("Name.FieldSig"));
@@ -815,7 +815,7 @@ mod types_tests {
         assert_eq!(typed(1, "LiveActor.mNone", None), Typed::Missing("Name.Field"));
         assert_eq!(typed(1, "LiveActor.mNone", Some("u32")), Typed::Missing("Name.FieldSig"));
         assert_eq!(typed(1, "LiveActor", None), Typed::Missing("Name.Field"));
-        assert_eq!(typed(1, "TVec3<f32.x>", None), Typed::Missing("Name.Field"));
+        assert_eq!(typed(1, "Vec3<f32.x>", None), Typed::Missing("Name.Field"));
         // Kind 7: defined globals only, the type whole.
         assert_eq!(typed(7, "MR::sCount", Some("s32")), Typed::Bound);
         assert_eq!(typed(7, "MR::sCount", Some("u32")), Typed::Missing("Name.GlobalSig"));

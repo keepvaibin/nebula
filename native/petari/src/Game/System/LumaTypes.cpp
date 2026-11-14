@@ -249,8 +249,8 @@ namespace luma {
             return sLeft[kLeftTemplate].find(pName, plain);
         }
 
-        // A record by its row's name, else by an alias's ("TVec3f" and "JGeometry::TVec3<float>" name the row
-        // "JGeometry::TVec3<f32>"). An alias names its record directly: there is no chain to follow.
+        // A record by its row's name, else by an alias's ("Vec3f" and "Vec3<float>" name the row
+        // "Vec3<f32>"). An alias names its record directly: there is no chain to follow.
         const TypeRow* typeNamed(const char* pName, u32 length) {
             prepareTypes();
             if (const TypeRow* const pRow = sTypes.find(pName, length)) {
@@ -983,7 +983,7 @@ namespace luma {
         if (pType == nullptr) {
             return typeLeftOut(pName, dot);
         }
-        // The field by the record's row name, as left_out names it ("TVec3f.x" is "JGeometry::TVec3<f32>.x").
+        // The field by the record's row name, as left_out names it ("Vec3f.x" is "Vec3<f32>.x").
         char joined[512];
         u32 at = 0;
         put(joined, sizeof(joined), &at, pType->name);
