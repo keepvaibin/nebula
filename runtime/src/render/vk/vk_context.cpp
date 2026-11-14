@@ -424,16 +424,19 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         vkGetPhysicalDeviceQueueFamilyProperties(candidate, &families, nullptr);
         std::vector<VkQueueFamilyProperties> props(families);
         vkGetPhysicalDeviceQueueFamilyProperties(candidate, &families, props.data());
-        for (std::uint32_t i = 0; i < families; ++i) {
-            VkBool32 presents = VK_TRUE;
-            if (window_surface != VK_NULL_HANDLE &&
-                vkGetPhysicalDeviceSurfaceSupportKHR(candidate, i, window_surface, &presents) != VK_SUCCESS) {
-                presents = VK_FALSE;
-            }
-            if ((props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0u && presents == VK_TRUE) {
-                physical_ = candidate;
-                queue_family_ = i;
-                break;
+        // The compute passes (AO, upscalers) are recorded on the same queue: a family with compute too where one presents
+        // (the spec promises graphics with compute in some family, not in every graphics family).
+        for (const VkQueueFlags wanted_flags : {VkQueueFlags{VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT}, VkQueueFlags{VK_QUEUE_GRAPHICS_BIT}}) {
+            for (std::uint32_t i = 0; i < families && physical_ == VK_NULL_HANDLE; ++i) {
+                VkBool32 presents = VK_TRUE;
+                if (window_surface != VK_NULL_HANDLE &&
+                    vkGetPhysicalDeviceSurfaceSupportKHR(candidate, i, window_surface, &presents) != VK_SUCCESS) {
+                    presents = VK_FALSE;
+                }
+                if ((props[i].queueFlags & wanted_flags) == wanted_flags && presents == VK_TRUE) {
+                    physical_ = candidate;
+                    queue_family_ = i;
+                }
             }
         }
         if (physical_ != VK_NULL_HANDLE) {
