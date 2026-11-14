@@ -762,6 +762,9 @@ private:
     FrameMap target_scene_map_{};
     bool target_pass_active_ = false;
     bool output_scene_active_ = false;
+    // The scene target's colour, which the output scene's first draw sampled, waits in the sampling layout until
+    // end_output_scene gives it back its attachment layout.
+    bool output_source_sampled_ = false;
     [[nodiscard]] FrameMap output_frame_for_window() const;
     bool enter_output_scene(const FrameMap& output);
     void swap_scene_sets();
@@ -857,8 +860,9 @@ private:
     VkPipelineLayout probe_layout_ = VK_NULL_HANDLE;
     VkPipeline probe_pipeline_ = VK_NULL_HANDLE;
     // The renderer's own draws into the scene target pass, per scene target sample count (log2), made at first use: masked clears,
-    // and whole-colour and depth clears as draws (DeviceQuirks::clear_with_draw only; null otherwise).
-    enum class SceneUtility : unsigned { ClearRgb, ClearAlpha, ClearRgba, ClearDepth, Count };
+    // and whole-colour and depth clears as draws (DeviceQuirks::clear_with_draw only; null otherwise), and the output scene's
+    // first draw, the scene resampled as conversion_pipeline_ and display_filter_pipeline_ do (enter_output_scene).
+    enum class SceneUtility : unsigned { ClearRgb, ClearAlpha, ClearRgba, ClearDepth, Conversion, DisplayFilter, Count };
     std::array<std::array<VkPipeline, kSceneVariantCount>, static_cast<std::size_t>(SceneUtility::Count)> scene_utility_pipelines_{};
     [[nodiscard]] VkPipeline scene_utility_pipeline(SceneUtility kind);
     // A compared probe's test in the open scene target pass (by the pass's aux target, 0 to 3, and scene variant): the

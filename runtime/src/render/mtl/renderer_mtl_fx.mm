@@ -28,11 +28,18 @@ void RendererMtl::record_scene_aa() {
     // The picture the display copy takes, against its size on screen, decides AUTO.
     const FrameMap shown = output_frame_for_window();
     end_scene_pass();
-    const mtl::Texture& color = *scene_.color;
-    const AaRun ran = post_.prepare_scene_aa(commands_, color, color.width, color.height, scene_map_.width, scene_map_.height,
-                                             std::max(shown.width, 1u), std::max(shown.height, 1u));
-    begin_scene_pass();
-    post_.finish_scene_aa(pass_, ran, color.width, color.height, scene_.samples);
+    const unsigned width = scene_.color->width;
+    const unsigned height = scene_.color->height;
+    // A scene target whose image may change hands (take_scene's) trades it to the passes instead of copying it; the
+    // image that takes its place is then written whole, so the pass opens without loading it.
+    mtl::PostProcessor::SceneTrade trade;
+    if (can_take_scene()) {
+        trade = [this](gpu::TextureRef spare) { return swap_scene_color(std::move(spare)); };
+    }
+    const AaRun ran = post_.prepare_scene_aa(commands_, *scene_.color, width, height, scene_map_.width, scene_map_.height,
+                                             std::max(shown.width, 1u), std::max(shown.height, 1u), trade);
+    begin_scene_pass_with(0u, nullptr, post_.scene_traded(), "record_scene_aa");
+    post_.finish_scene_aa(pass_, ran, width, height, scene_.samples);
     reset_draw_bindings();
 }
 
