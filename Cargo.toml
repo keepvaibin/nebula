@@ -14,9 +14,10 @@ sha1 = "0.10"
 tempfile = "3.20"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_IO", "Win32_System_Ioctl"] }
 
-# The importer and the mods' cooker (Setup, the Android app, the game's start after a mod change): one code unit and
-# inlining across crates for the disc reader, the decoders and the hashes. Panics still unwind: c_api.rs, jni.rs and
-# the cooker catch them.
-[profile.release]
+# A package's importer and mods' cooker (cargo build --profile dist: Setup's and the Android app's build scripts): one
+# code unit and inlining across crates for the disc reader, the decoders and the hashes. The everyday release build
+# keeps cargo's defaults, so it stays quick. Panics still unwind: c_api.rs, jni.rs and the cooker catch them.
+[profile.dist]
+inherits = "release"
 codegen-units = 1
 lto = "fat"

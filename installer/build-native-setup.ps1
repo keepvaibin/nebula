@@ -61,7 +61,7 @@ try {
     $ErrorActionPreference = 'Continue'
     try {
         # The program (Setup's import and cook) and the library (the game cooks mods' files with it).
-        & $cargo build --release --locked -p nebula-import --bin nebula-import --lib `
+        & $cargo build --profile dist --locked -p nebula-import --bin nebula-import --lib `
             --config "target.x86_64-pc-windows-msvc.rustflags=['-C','target-feature=+crt-static']"
         if ($LASTEXITCODE -ne 0) { throw "cargo failed with exit code $LASTEXITCODE" }
     } finally {
@@ -69,8 +69,8 @@ try {
         Pop-Location
     }
     $targetDir = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $repo 'target' }
-    $importer = Join-Path $targetDir 'release\nebula-import.exe'
-    $cooker = Join-Path $targetDir 'release\nebula_import.dll'
+    $importer = Join-Path $targetDir 'dist\nebula-import.exe'
+    $cooker = Join-Path $targetDir 'dist\nebula_import.dll'
 
     $publicKey = (Get-Content -LiteralPath (Join-Path $installer 'release-public-key.xml') -Raw).Trim()
     # The store version the importer writes and the game reads (one file for all of them).
