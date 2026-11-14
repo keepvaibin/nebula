@@ -224,8 +224,10 @@ def unescape(cell):
 
 
 def rows():
+    # Either line ending: the table is CRLF in a checkout that converts and LF in one that does not; a cell's own line
+    # breaks are written \n, never raw.
     with open(TABLE, encoding='utf-8', newline='') as f:
-        lines = f.read().split('\r\n')
+        lines = f.read().replace('\r\n', '\n').split('\n')
     header = lines[0].split('\t')
     found = {}
     for line in lines[1:]:
