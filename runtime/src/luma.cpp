@@ -1076,6 +1076,8 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
             Permission permission{text_field(entry, "name"), text_field(entry, "why"), string_list(entry.get("hosts")),
                                   string_list(entry.get("roots"))};
             if (permission.name.empty()) return std::nullopt;
+            // Its reason per language, keyed by its name in the text block's own `permissions` (never an option's).
+            permission.why_text = form_text(entry.get("why"), words, {"permissions", permission.name});
             out.permissions.push_back(std::move(permission));
         }
     }

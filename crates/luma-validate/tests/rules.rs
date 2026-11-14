@@ -808,6 +808,35 @@ fn a_revision_1_net_with_hosts_is_one_finding() {
     assert!(message(&r.findings[0], "UsEnglish").contains("only net.internet takes hosts"), "{:?}", r.findings);
 }
 
+/// A permission's `why` in each language (consent 1.1): the text block's `permissions`, keyed by the permission's name
+/// as `permissions` writes it, in an object of its own, so an option of the same name never meets it. A reason for a
+/// permission the mod does not ask is an unknown key (L202); a reason is a line of 1 to 200 characters.
+#[test]
+fn the_text_block_carries_each_permissions_why() {
+    let said = |permissions: &str, text: &str| -> Vec<(u16, String)> {
+        let over = [("permissions", permissions), ("text", text)];
+        check(&luma(&over, &[]), &NO_GAME).findings.iter().filter(|f| f.code != 218).map(|f| (f.code, message(f, "UsEnglish"))).collect()
+    };
+    let asked = r#"[{"name": "fs.exchange", "why": "Shares a ghost."}]"#;
+    let good = said(asked, r#"{"UsFrench": {"name": "Test", "permissions": {"fs.exchange": "Partage un fantôme."}}}"#);
+    assert!(good.is_empty(), "{good:?}");
+    // A reason for a permission not asked: L202 at its key.
+    let other = said(asked, r#"{"UsFrench": {"permissions": {"fs.exchange": "Partage un fantôme.", "net.internet": "Envoie tes temps."}}}"#);
+    assert_eq!(other.len(), 1, "{other:?}");
+    assert_eq!(other[0].0, 202);
+    assert!(other[0].1.contains("net.internet"), "{}", other[0].1);
+    // An option of a permission's name is not a reason for it, nor the other way round.
+    let options = r#"[{"key": "fs.exchange", "kind": "toggle", "name": "Share", "default": true}]"#;
+    let r = check(&luma(&[("permissions", asked), ("options", options), ("text", r#"{"UsFrench": {"options": {"fs.exchange": {"name": "Partager"}}, "permissions": {"fs.exchange": "Partage un fantôme."}}}"#)], &[]), &NO_GAME);
+    let mixed: Vec<(u16, String)> = r.findings.iter().filter(|f| f.code != 218).map(|f| (f.code, message(f, "UsEnglish"))).collect();
+    assert!(mixed.iter().all(|(code, _)| *code != 202 && *code != 210), "{mixed:?}");
+    // Not an object, an empty reason, one too long.
+    assert_eq!(said(asked, r#"{"UsFrench": {"permissions": ["Partage"]}}"#).len(), 1);
+    assert_eq!(said(asked, r#"{"UsFrench": {"permissions": {"fs.exchange": ""}}}"#).len(), 1);
+    let long = format!(r#"{{"UsFrench": {{"permissions": {{"fs.exchange": "{}"}}}}}}"#, "a".repeat(201));
+    assert_eq!(said(asked, &long).len(), 1);
+}
+
 /// H's TLS roots (services-net 7): a net permission's `roots` name PEM files under certs/; every fault is L211 naming
 /// the file, and certs/ is a folder a `.luma` may have.
 #[test]

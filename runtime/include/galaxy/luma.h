@@ -248,9 +248,10 @@ struct Plugin {
 // A permission the mod asks the player for (luma.json "permissions"; services-registry 5, consent 1.1).
 struct Permission {
     std::string name;                // one of services-registry 5.1's names
-    std::string why;                 // the manifest's line, shown as it is (the mod's own words)
+    std::string why;                 // the mod's own words: the played language's (mods.cpp scan), else as written
     std::vector<std::string> hosts;  // net.internet only: as written, in order
     std::vector<std::string> roots;  // net.local and net.internet: PEM files in the package the mod's TLS also trusts
+    Text why_text;                   // `why` and the text block's translations (text.<language>.permissions.<name>)
 };
 
 enum class SaveMode {

@@ -745,18 +745,36 @@ fn text(m: &mut M, root: &Value, facts: &Facts) {
     let Some(v) = root.get("text") else { return };
     let Some(obj) = m.object(v, "/text", "text") else { return };
     let extra: Vec<String> = m.ctx.game().map(|g| g.extra_languages.to_vec()).unwrap_or_default();
+    // The permissions the mod asks for, by name as `permissions` writes them (its rules say each fault there).
+    let asked: Vec<&str> = root
+        .get("permissions")
+        .filter(|v| v.is_array())
+        .map(|v| v.items().iter().filter_map(|x| x.get("name").and_then(|n| n.as_str())).collect())
+        .unwrap_or_default();
     for member in obj.members() {
         let ptr = format!("/text/{}", seg(&member.key));
         if !LANGUAGES.contains(&member.key.as_str()) && !extra.contains(&member.key) {
             m.ctx.add(214, FILE, Some(member.key_pos), Some(&ptr), vec![("found", t(member.key.clone()))]);
         }
         let Some(lang) = m.object(&member.value, &ptr, &member.key) else { continue };
-        m.keys(lang, &ptr, &["name", "summary", "options"]);
+        m.keys(lang, &ptr, &["name", "summary", "options", "permissions"]);
         if let Some(x) = lang.get("name") {
             m.line(x, &format!("{ptr}/name"), "text/name", 1, 64);
         }
         if let Some(x) = lang.get("summary") {
             m.line(x, &format!("{ptr}/summary"), "text/summary", 1, 200);
+        }
+        // Each permission's `why` in this language, keyed by the permission's name: its own object, so a permission
+        // and an option of one name never meet. A reason for a permission the mod does not ask is an unknown key.
+        if let Some(why) = lang.get("permissions") {
+            let wp = format!("{ptr}/permissions");
+            if let Some(why) = m.object(why, &wp, "text/permissions") {
+                let names: Vec<String> = why.members().iter().map(|w| w.key.clone()).collect();
+                m.keys(why, &wp, &names.iter().map(String::as_str).filter(|n| asked.contains(n)).collect::<Vec<_>>());
+                for w in why.members() {
+                    m.line(&w.value, &format!("{wp}/{}", seg(&w.key)), "text/permissions", 1, 200);
+                }
+            }
         }
         let Some(opts) = lang.get("options") else { continue };
         let op = format!("{ptr}/options");

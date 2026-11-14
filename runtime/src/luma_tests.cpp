@@ -336,6 +336,15 @@ int main() {
         const std::optional<Manifest> extra = parse_manifest(one_form("abc", R"(,"layers":[],"text":{"EuCatalan":{"name":"Català"}})"));
         check(extra && extra->name.in("en") == "N" && extra->name.in("EuCatalan") == "Català", "an added language's own key");
     }
+    {
+        // A permission's why per language: text.<language>.permissions.<name>, never an option's text of that name.
+        const std::optional<Manifest> asked = parse_manifest(one_form(
+            "abc", R"(,"layers":[],"permissions":[{"name":"net.internet","why":"Sends times.","hosts":["a.org"]}],)"
+                   R"("text":{"UsFrench":{"permissions":{"net.internet":"Envoie les temps."},"options":{"net.internet":{"name":"X"}}}})"));
+        check(asked && asked->permissions.size() == 1u && asked->permissions[0].why == "Sends times." &&
+                  asked->permissions[0].why_text.in("fr") == "Envoie les temps." && asked->permissions[0].why_text.in("es") == "Sends times.",
+              "a permission's why in the text block, the manifest's line otherwise");
+    }
 
     // Rows (pre_standard): a dome is any number from 1 (the game checks it against the domes its data has), a number is
     // cut to its type.

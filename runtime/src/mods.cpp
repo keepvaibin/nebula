@@ -1309,6 +1309,8 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                 const std::string words = luma::language_code(playing);
                 mod.pack_title = manifest->name.in(words);
                 mod.pack_description = manifest->description.in(words);
+                // Each permission's reason as the consent page shows it: the played language's, else the manifest's.
+                for (luma::Permission& permission : manifest->permissions) permission.why = permission.why_text.in(words);
                 for (const std::string& author : manifest->authors) {
                     mod.pack_author += (mod.pack_author.empty() ? "" : ", ") + author;
                 }
