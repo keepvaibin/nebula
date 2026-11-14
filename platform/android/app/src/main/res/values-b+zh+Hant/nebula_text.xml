@@ -10,6 +10,10 @@
     <string name="nebula_update_failed">無法下載更新。</string>
     <string name="nebula_update_rejected">更新未通過驗證，已刪除。</string>
     <string name="nebula_update_no_room">可用空間不足，無法更新。</string>
+    <string name="nebula_update_declined">更新未安裝。Nebula 會在下次啟動時再次提供。</string>
+    <string name="nebula_update_refused">Android 拒絕了此更新：它與已安裝的 Nebula 不符。</string>
+    <string name="nebula_update_blocked">Android 封鎖了此更新。</string>
+    <string name="nebula_update_install_failed">無法安裝此更新。</string>
     <string name="nebula_update_allow">請允許 Nebula 安裝應用程式，然後再次點按「更新」。</string>
     <string name="nebula_update_open_settings">開啟設定</string>
     <string name="nebula_update_cancel">取消</string>

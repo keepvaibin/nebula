@@ -255,6 +255,10 @@ private fun UpdateDialog(model: LauncherModel, release: dev.nebula.galaxy.Releas
                             UpdateFailure.Download -> R.string.nebula_update_failed
                             UpdateFailure.Rejected -> R.string.nebula_update_rejected
                             UpdateFailure.NoRoom -> R.string.nebula_update_no_room
+                            UpdateFailure.Declined -> R.string.nebula_update_declined
+                            UpdateFailure.Refused -> R.string.nebula_update_refused
+                            UpdateFailure.Blocked -> R.string.nebula_update_blocked
+                            UpdateFailure.InstallFailed -> R.string.nebula_update_install_failed
                         }
                         Text(stringResource(reason), color = Night.Error)
                         Gap(12.dp)

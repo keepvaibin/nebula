@@ -241,12 +241,33 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     // Not now (or Skip) answered: no other prompt in this run.
     private var updateAnswered = false
 
+    // Handed to Android's installer, waiting on its answer (onInstallAnswered).
+    private var installing: Release? = null
+
     init {
         // The kept answer at once, the check's when it comes; it never holds up Play (a late answer is kept and
         // offered at the next start).
         offerUpdate(Updates.pending(app))
         val main = android.os.Handler(android.os.Looper.getMainLooper())
         Updates.begin(app) { release -> main.post { offerUpdate(release) } }
+        Updates.installAnswered = { failure -> onInstallAnswered(failure) }
+    }
+
+    // The installer did not install (declined, refused, blocked, no room, failed): the prompt again, with why. The
+    // release stays kept, so the next start offers it too.
+    private fun onInstallAnswered(failure: UpdateFailure?) {
+        val release = installing ?: return
+        installing = null
+        if (failure == null) return
+        updateAnswered = false
+        updateNeedsPermission = false
+        update = release
+        updateFailure = failure
+    }
+
+    override fun onCleared() {
+        Updates.installAnswered = null
+        super.onCleared()
     }
 
     private fun offerUpdate(release: Release?) {
@@ -299,7 +320,9 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             main.post {
                 updateProgress = null
                 result.onSuccess {
-                    // Android's installer asks the player now (UpdateInstallReceiver) and replaces the app.
+                    // Android's installer asks the player now (UpdateInstallReceiver) and replaces the app, or answers
+                    // why not (onInstallAnswered).
+                    installing = release
                     updateAnswered = true
                     update = null
                 }

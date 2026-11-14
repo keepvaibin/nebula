@@ -10,6 +10,10 @@
     <string name="nebula_update_failed">업데이트를 다운로드할 수 없습니다.</string>
     <string name="nebula_update_rejected">업데이트가 확인을 통과하지 못해 삭제했습니다.</string>
     <string name="nebula_update_no_room">업데이트에 필요한 여유 공간이 부족합니다.</string>
+    <string name="nebula_update_declined">업데이트가 설치되지 않았습니다. 다음 실행 때 다시 안내합니다.</string>
+    <string name="nebula_update_refused">Android가 업데이트를 거부했습니다. 설치된 Nebula와 맞지 않습니다.</string>
+    <string name="nebula_update_blocked">Android가 업데이트를 차단했습니다.</string>
+    <string name="nebula_update_install_failed">업데이트를 설치할 수 없었습니다.</string>
     <string name="nebula_update_allow">Nebula의 앱 설치를 허용한 뒤 업데이트를 다시 누르세요.</string>
     <string name="nebula_update_open_settings">설정 열기</string>
     <string name="nebula_update_cancel">취소</string>

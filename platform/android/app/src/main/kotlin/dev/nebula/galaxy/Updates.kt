@@ -34,7 +34,11 @@ data class Release(
 )
 
 /** Why an update did not install, as the prompt words it. */
-enum class UpdateFailure { Download, Rejected, NoRoom }
+/**
+ * Why an update did not happen: the download (Download, Rejected, NoRoom), or Android's installer's answer (Declined:
+ * the player said no; Refused: a conflict or an incompatible package; Blocked: a policy; InstallFailed: any other).
+ */
+enum class UpdateFailure { Download, Rejected, NoRoom, Declined, Refused, Blocked, InstallFailed }
 
 class UpdateException(val failure: UpdateFailure, message: String) : IOException(message)
 
@@ -417,6 +421,23 @@ object Updates {
     /** Android lets this app install packages (the player allows it once, in the system's settings). */
     fun canInstall(context: Context): Boolean = context.packageManager.canRequestPackageInstalls()
 
+    /**
+     * The installer's final answer for the running launcher, on the main thread: null when installed (this process
+     * then ends), else why not. The kept release (the cache) is offered again at the next start either way.
+     */
+    @Volatile
+    var installAnswered: ((UpdateFailure?) -> Unit)? = null
+
+    /** Android's installer status as this app's answer; null for success. */
+    internal fun installFailure(status: Int): UpdateFailure? = when (status) {
+        PackageInstaller.STATUS_SUCCESS -> null
+        PackageInstaller.STATUS_FAILURE_ABORTED -> UpdateFailure.Declined
+        PackageInstaller.STATUS_FAILURE_CONFLICT, PackageInstaller.STATUS_FAILURE_INCOMPATIBLE -> UpdateFailure.Refused
+        PackageInstaller.STATUS_FAILURE_BLOCKED -> UpdateFailure.Blocked
+        PackageInstaller.STATUS_FAILURE_STORAGE -> UpdateFailure.NoRoom
+        else -> UpdateFailure.InstallFailed
+    }
+
     /** The verified APK to Android's installer; it asks the player, then replaces this app. */
     fun install(context: Context, apk: File) {
         val installer = context.packageManager.packageInstaller
@@ -440,11 +461,21 @@ object Updates {
     }
 }
 
-/** Android's installer's answer: its confirmation screen when it waits on the player (the only step it asks for). */
+/**
+ * Android's installer's answers: its confirmation screen when it waits on the player, then the outcome (success,
+ * declined, refused, blocked, no room, failed) to the launcher's prompt (Updates.installAnswered).
+ */
 class UpdateInstallReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE) != PackageInstaller.STATUS_PENDING_USER_ACTION) return
-        val confirm = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_INTENT, Intent::class.java) ?: return
-        context.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
+        if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+            val confirm = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_INTENT, Intent::class.java)
+            if (confirm != null) {
+                context.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                return
+            }
+        }
+        val failure = if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) UpdateFailure.InstallFailed else Updates.installFailure(status)
+        Updates.installAnswered?.invoke(failure)
     }
 }

@@ -10,6 +10,10 @@
     <string name="nebula_update_failed">Impossible de télécharger la mise à jour.</string>
     <string name="nebula_update_rejected">La mise à jour n\'a pas passé la vérification et a été supprimée.</string>
     <string name="nebula_update_no_room">Pas assez d\'espace libre pour la mise à jour.</string>
+    <string name="nebula_update_declined">La mise à jour n\'a pas été installée. Nebula la proposera à nouveau au prochain démarrage.</string>
+    <string name="nebula_update_refused">Android a refusé la mise à jour : elle ne correspond pas au Nebula installé.</string>
+    <string name="nebula_update_blocked">Android a bloqué la mise à jour.</string>
+    <string name="nebula_update_install_failed">La mise à jour n\'a pas pu être installée.</string>
     <string name="nebula_update_allow">Autorisez Nebula à installer des applis, puis appuyez à nouveau sur Mettre à jour.</string>
     <string name="nebula_update_open_settings">Ouvrir les paramètres</string>
     <string name="nebula_update_cancel">Annuler</string>

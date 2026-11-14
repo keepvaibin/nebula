@@ -10,6 +10,10 @@
     <string name="nebula_update_failed">Impossibile scaricare l\'aggiornamento.</string>
     <string name="nebula_update_rejected">L\'aggiornamento non ha superato il controllo ed è stato eliminato.</string>
     <string name="nebula_update_no_room">Spazio libero insufficiente per l\'aggiornamento.</string>
+    <string name="nebula_update_declined">L\'aggiornamento non è stato installato. Nebula lo proporrà di nuovo al prossimo avvio.</string>
+    <string name="nebula_update_refused">Android ha rifiutato l\'aggiornamento: non corrisponde al Nebula installato.</string>
+    <string name="nebula_update_blocked">Android ha bloccato l\'aggiornamento.</string>
+    <string name="nebula_update_install_failed">Impossibile installare l\'aggiornamento.</string>
     <string name="nebula_update_allow">Consenti a Nebula di installare app, poi tocca di nuovo Aggiorna.</string>
     <string name="nebula_update_open_settings">Apri impostazioni</string>
     <string name="nebula_update_cancel">Annulla</string>

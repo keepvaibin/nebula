@@ -10,6 +10,10 @@
     <string name="nebula_update_failed">Kon de update niet downloaden.</string>
     <string name="nebula_update_rejected">De update kwam niet door de controle en is verwijderd.</string>
     <string name="nebula_update_no_room">Niet genoeg vrije ruimte voor de update.</string>
+    <string name="nebula_update_declined">De update is niet geïnstalleerd. Nebula biedt hem bij de volgende start opnieuw aan.</string>
+    <string name="nebula_update_refused">Android heeft de update geweigerd: die past niet bij de geïnstalleerde Nebula.</string>
+    <string name="nebula_update_blocked">Android heeft de update geblokkeerd.</string>
+    <string name="nebula_update_install_failed">De update kon niet worden geïnstalleerd.</string>
     <string name="nebula_update_allow">Sta Nebula toe apps te installeren en tik daarna opnieuw op Bijwerken.</string>
     <string name="nebula_update_open_settings">Instellingen openen</string>
     <string name="nebula_update_cancel">Annuleren</string>
