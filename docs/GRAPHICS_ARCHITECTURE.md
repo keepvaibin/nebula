@@ -245,6 +245,39 @@ threads, reports each frame's CPU time, and takes the frame clock's period as it
 through `APerformanceHint_updateTargetWorkDuration` where present, else a new session): the short boot frame, then the game step. The
 frame itself is paced by Choreographer's vsync grid (`display_clock.cpp`). Log lines `[perf] performance hint session ...`, `[perf] frame target N ms`.
 
+## Which GPU, and what each graphics API runs
+
+**The GPU.** On a machine with more than one, the GPU chosen in Nebula Settings (Display, Graphics card: shown only
+then, taken at the next start) is used; with none chosen, the most capable:
+
+- Direct3D 12 and Direct3D 11: Windows' order for performance (`IDXGIFactory6::EnumAdapterByGpuPreference` with
+  `DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE`): an external GPU, then a discrete one, then the integrated one. It follows the
+  per-app choice in Windows' Settings (System, Display, Graphics). Software adapters are never taken.
+- Vulkan on Windows: the same GPU as Direct3D (each Vulkan device's LUID found in that order), so the two renderers
+  never pick different GPUs on one machine.
+- Vulkan elsewhere, and devices Windows does not list: discrete, then integrated, then virtual, then any other, then
+  CPU (`VkPhysicalDeviceType`); among equals, the one with the most device-local memory.
+
+What the chosen GPU supports decides every feature below: a feature of the other GPU is never offered.
+
+**The features.** A setting is offered only where the renderer runs it on this GPU; a row it cannot run is not shown.
+
+| Feature | Direct3D 12 | Vulkan (Windows, Linux, Android) | Direct3D 11 | Metal (Apple) |
+|---|---|---|---|---|
+| MSAA | yes | yes | yes (scene formats permitting) | see APPLE.md |
+| FSR 1 (spatial upscaling) and RCAS | yes | yes | yes (16-bit where the GPU runs it) | see APPLE.md |
+| Temporal upscalers (FSR 3, DLSS, XeSS) | where the GPU and its library allow | FSR 3; DLSS on NVIDIA RTX GPUs (Windows); XeSS where its library allows | no | see APPLE.md |
+| Frame generation (FSR 3, DLSS) | where the GPU allows | FSR 3 where the GPU allows | no | no |
+| Reflex | NVIDIA GPUs | no | no | no |
+| Ray tracing | ray queries, acceleration structures and bindless resources required | the same, by Vulkan extensions | no | no |
+| HDR10 output | while the display reports HDR | while the display reports HDR | no | see APPLE.md |
+| Mod screen passes and native draws (`draw.post`, `draw.native`) | yes | yes | yes | see APPLE.md |
+
+Direct3D 11 is the renderer for GPUs without Direct3D 12 (feature level 11 hardware): Nebula starts it by itself when
+no adapter can run Direct3D 12, or with `--renderer d3d11` (COMMAND_LINE.md). It runs the whole game and every mod; it
+has no ray tracing, temporal upscaling or frame generation, and offers none of them. Android builds are 64-bit only
+(arm64-v8a; x86_64 for the emulator).
+
 ## Failure
 
 A lost device (driver reset) restarts the game from its save, twice in a row at most; the third is report NEB-G01
