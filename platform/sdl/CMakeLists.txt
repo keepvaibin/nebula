@@ -248,6 +248,13 @@ target_include_directories(main PRIVATE "${nebula_root}/native/include" "${nebul
 target_compile_definitions(main PRIVATE NEBULA_HOST_RENDERER=1 NEBULA_HOST_SDL=1)
 target_include_directories(main PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(main PRIVATE galaxy_render_vk SDL3::SDL3)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT ANDROID)
+    # The update check and install of the home screen (runtime/include/galaxy/update.h): libcurl is opened at run time.
+    target_sources(main PRIVATE ${rt}/update/update.cpp ${rt}/update/update_crypto.cpp ${rt}/update/update_transport_curl.cpp
+        ${rt}/update/update_install_linux.cpp ${rt}/update/update_probe_posix.cpp)
+    target_compile_definitions(main PRIVATE NEBULA_UPDATE_CHECK=1)
+    target_link_libraries(main PRIVATE ${CMAKE_DL_LIBS})
+endif()
 
 # The launcher's mod and Mii import on Android (libnebula_mods.so): the game's own importers, in the launcher's process.
 if(ANDROID)

@@ -20,6 +20,8 @@ and a value. The launcher passes `--pak` and `--saves`; the Android app also pas
 | `--home 0\|1` | 1: the home screen (Play, Settings, Benchmark, Quit, an update's notice) before the title, in the game's menus; 0: straight into the game. Default 1 on macOS and Linux, 0 on Windows and Android (their launchers are the home screen) and in a hidden or `--seconds` run. |
 | `--benchmark 1` | Runs the benchmark and exits: real stages (the list in `benchmark.tsv` beside `game.pak`, else the built-in one), then a probe of internal heights and optional passes, on a blank save kept in memory. The settings are read, never written; no save, Mii, achievement or statistic is read or written, and no mod loads. The result is `diagnostics/benchmark-<utc>.json` in the data folder: the measurements, the recommended settings and a summary (exit 0 and `"status":"complete"` when it finished). |
 | `--benchmark-out <file>` | With `--benchmark 1`: the result goes to this file instead. |
+| `--benchmark-return 1` | Set by the home screen's Benchmark (with `--benchmark 1`): when the run ends, the game starts again on the home screen with `--benchmark-result`. |
+| `--benchmark-result <file>` | Set by that start: the result's recommended settings open in the settings menu as changes to apply. |
 | `--gpu-start-retry <n>` | Set by the game itself when it starts again because no graphics memory was free: the tries so far (5 at most). |
 
 The GPU is a setting: `gpu=` in `config.ini`, chosen in Nebula Settings (empty: the high-performance GPU).

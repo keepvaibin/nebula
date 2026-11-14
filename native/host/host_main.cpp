@@ -80,6 +80,9 @@
 #include "render/core/frame_core.h"
 #include "galaxy/ui/launcher.h"
 #include "galaxy/ui/launcher_model.h"
+#if defined(NEBULA_UPDATE_CHECK)
+#include "galaxy/update.h"
+#endif
 #endif
 #include <nebula_frame_list.h>
 #include "galaxy/render/rt_materials.h"
@@ -3185,14 +3188,37 @@ void svc_audio_control(void*, uint32_t what, uint32_t value) {
 #endif
 }
 
+#if defined(NEBULA_UPDATE_CHECK)
+bool gUpdateOffered = false;  // the game thread's (svc_home_menu)
+#endif
+
 int svc_home_menu(void*, uint32_t what, uint32_t value) {
 #if defined(NEBULA_HOST_RENDERER)
     // Launcher mode's home screen is drawn as this menu while the HOME Menu itself is closed.
     const bool launcher = galaxy::ui::launcher_visible() && !galaxy::render::home_menu_visible();
     switch (what) {
-    case NEBULA_HOME_MENU_LAUNCHER_OPEN:
-        return galaxy::ui::launcher_open() ? 1 : 0;
+    case NEBULA_HOME_MENU_LAUNCHER_OPEN: {
+        const bool opened = galaxy::ui::launcher_open();
+#if defined(NEBULA_UPDATE_CHECK)
+        if (opened) {
+            if (const std::optional<galaxy::update::Release> release = galaxy::update::offer(galaxy::update::kFreshBudgetMs)) {
+                galaxy::ui::launcher_offer_update(release->version, release->notes);
+                gUpdateOffered = true;
+            }
+        }
+#endif
+        return opened ? 1 : 0;
+    }
     case NEBULA_HOME_MENU_LAUNCHER_POLL:
+#if defined(NEBULA_UPDATE_CHECK)
+        // An answer that came after the screen opened (never waits).
+        if (!gUpdateOffered && galaxy::ui::launcher_visible()) {
+            if (const std::optional<galaxy::update::Release> release = galaxy::update::poll()) {
+                galaxy::ui::launcher_offer_update(release->version, release->notes);
+                gUpdateOffered = true;
+            }
+        }
+#endif
         return galaxy::ui::launcher_poll();
     case NEBULA_HOME_MENU_LAUNCHER_TEXT:
         return static_cast<int>(galaxy::ui::launcher_text(value >> 16, value & 0xFFFFu));
@@ -3418,6 +3444,9 @@ void hold_runtime_lease() {
 #if defined(NEBULA_HOST_RENDERER)
     galaxy::achievements::flush();
     galaxy::stats::flush();
+#endif
+#if defined(NEBULA_UPDATE_CHECK)
+    galaxy::update::finish();  // a check still running: its answer kept for the next start (at most its timeout)
 #endif
     std::fflush(stdout);
 #if defined(_WIN32)
@@ -4363,8 +4392,13 @@ int main(int argc, char** argv) {
         galaxy::render::RenderConfig draft = galaxy::render::get_render_config_chosen();
         if (galaxy::bench::read_recommendation(benchmark_result, draft)) galaxy::ui::launcher_show_draft(draft);
     }
-    galaxy::ui::launcher_enable(home >= 0 ? home == 1
-                                          : kHomeByDefault && !::galaxy::launch_args().started_hidden && seconds <= 0);
+    const bool home_screen =
+        home >= 0 ? home == 1 : kHomeByDefault && !::galaxy::launch_args().started_hidden && seconds <= 0;
+    galaxy::ui::launcher_enable(home_screen);
+#if defined(NEBULA_UPDATE_CHECK)
+    // The home screen's update notice (update.h): the check runs while the game boots, its answer when the screen opens.
+    if (home_screen && !benchmark) galaxy::update::begin(NEBULA_VERSION);
+#endif
 #endif
     if (gModule.attach(&services) != NEBULA_GAME_API_VERSION) {
         die("the game module's API version differs from the host's (%u)", NEBULA_GAME_API_VERSION);
