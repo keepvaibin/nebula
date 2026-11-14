@@ -1,4 +1,4 @@
-//! The cooker (D-01): the game's files converted once, at import or on update, into what the native game reads.
+//! The cooker: the game's files converted once, at import or on update, into what the native game reads.
 //! Compressed files and archives are expanded, and every texture is a texture record (texture.rs, formats.rs). The
 //! result is written as game.pak again: the partition's system files at their places, the file table with the cooked
 //! files' new places and sizes, the files after it.
@@ -592,7 +592,7 @@ pub fn write_cooked_pak(
     // A folder lists its files in the file table's order, whatever order their bytes are in.
     placed.sort_by_key(|(node, _)| *node);
     let mut placed: Vec<store::Placed> = placed.into_iter().map(|(_, file)| file).collect();
-    // The tables main.dol holds, as files of their own folder (B-05).
+    // The tables main.dol holds, as files of their own folder.
     let dol = system_dol(system)?;
     disc_rows.push(("sys/main.dol".to_string(), dol.len() as u64, texture::xxh64(dol)));
     let item = StoreItem { path: String::new(), order: 0, bytes: Some(disc_files_table(&disc_rows)) };

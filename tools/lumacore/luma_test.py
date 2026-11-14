@@ -93,15 +93,15 @@ VEC_TYPES = {"const Vec3f &", "const TVec3f &", "Vec3f *", "const Vec3f *", "Vec
 OBJECT_TYPES = {"LiveActor *", "const LiveActor *", "NameObj *", "const NameObj *", "MarioActor *"}
 READ_TYPES = {"f32", "s32", "u32", "u16", "s16", "u8", "bool", "TVec3f", "Vec3f", "const char *"}
 FACT_OPS = {"is", "is_not", "less", "at_most", "more", "at_least", "near", "exists", "absent", "has", "count"}
-# Revision 6 (R6-3, G-H6-3): the host's Settings pages by name, lower case, as the Settings screen's own list keeps
+# Revision 6: the host's Settings pages by name, lower case, as the Settings screen's own list keeps
 # them (runtime/src/ui/native_settings.cpp kNativeSettingsTabNames), and the number the host opens each by.
 SETTINGS_PAGES = {"display": 0, "graphics": 1, "controls": 2, "audio": 3, "general": 4, "mods": 5, "system": 6,
                   "advanced": 7}
-# Revision 6 (R6-1, G-H6-1): a mod's own fact is mod.<id>.<key>; the id is luma-format's (3 to 64 of a-z 0-9 - .,
+# Revision 6: a mod's own fact is mod.<id>.<key>; the id is luma-format's (3 to 64 of a-z 0-9 - .,
 # no "..", no trailing "."), the key [a-z0-9_]+, split at the last dot.
 MOD_ID = re.compile(r"[a-z0-9.-]{3,64}")
 MOD_KEY = re.compile(r"[a-z0-9_]+")
-# Revision 6 (R6-5): an object by name or by class, the n-th live one.
+# Revision 6: an object by name or by class, the n-th live one.
 OBJECT_REF = re.compile(r"(object:[^\s#]+|class:[^\s#]+)#\d+")
 
 
@@ -183,7 +183,7 @@ def plain(value, path):
 
 
 def fact_key(value, path):
-    """A fact key a test names: plain, and a mod's own (mod.<id>.<key>) split at its last dot (G-H6-1)."""
+    """A fact key a test names: plain, and a mod's own (mod.<id>.<key>) split at its last dot."""
     key = plain(value, path)
     if key.startswith("mod."):
         mod_id, dot, own = key[4:].rpartition(".")
@@ -210,7 +210,7 @@ GPU = None
 
 
 def object_ref(value, path, classes):
-    """`object:<name>#<n>` or `class:<Class>#<n>` (R6-5); a class the types file lacks is a harness-error (G-H6-2)."""
+    """`object:<name>#<n>` or `class:<Class>#<n>`; a class the types file lacks is a harness-error."""
     if not (isinstance(value, str) and OBJECT_REF.fullmatch(value)):
         raise HarnessError("%s must be \"player\", \"object:<name>#<n>\" or \"class:<Class>#<n>\"" % path)
     if value.startswith("class:"):
@@ -223,7 +223,7 @@ def object_ref(value, path, classes):
 
 
 def hidden_path(value, path):
-    """A hide_game_files path (R6-4, G-H6-4): relative to the game's folder, no drive, no leading slash, no `..`."""
+    """A hide_game_files path: relative to the game's folder, no drive, no leading slash, no `..`."""
     if not isinstance(value, str) or not value or any(c in value for c in "\t\r\n"):
         raise HarnessError("%s must be a path" % path)
     if (value[0] in "/\\" or re.match(r"[A-Za-z]:", value) or pathlib.PureWindowsPath(value).is_absolute()

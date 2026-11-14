@@ -3343,8 +3343,8 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
     const std::string id = mod.id;
     const std::size_t on = static_cast<std::size_t>(
         std::count_if(s_mods.begin(), s_mods.end(), [](const galaxy::mods::ModInfo& m) { return m.enabled; }));
-    // Why its code did not start this run (Z-10): a refusal is already in the played language, shown as is. On the list
-    // but its code not running says so in the value (Z-13): "On, not running (2 of 2)".
+    // Why its code did not start this run: a refusal is already in the played language, shown as is. On the list
+    // but its code not running says so in the value: "On, not running (2 of 2)".
     const galaxy::mods::NotStartedText not_started =
         mod.problem.empty() ? mod_not_started_text(mod.id) : galaxy::mods::NotStartedText{};
     const std::string place = " (" + std::to_string(mod.order) + " OF " + std::to_string(on) + ")";

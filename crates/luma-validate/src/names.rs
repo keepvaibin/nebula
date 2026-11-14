@@ -316,14 +316,14 @@ impl Names {
 }
 
 /// The game's types by name, as the types file (`luma_types.json`, docs/modding/language/types.md) gives them: what a mod's
-/// kind 1, 2 and 7 imports bind. The validator walks nothing itself (TY-1): a record's fields are its own and the
+/// kind 1, 2 and 7 imports bind. The validator walks nothing itself: a record's fields are its own and the
 /// generator's `reachable`, and what the generator left out keeps its reason, so the kernel and the validator give
 /// one answer.
 #[derive(Clone, Debug, Default)]
 pub struct Types {
     /// Each record (struct, class, union) by its row's name.
     pub records: HashMap<String, Record>,
-    /// Every other spelling of a record (an alias or spelling row that names one) to the record's row name (TY-2).
+    /// Every other spelling of a record (an alias or spelling row that names one) to the record's row name.
     pub aliases: HashMap<String, String>,
     /// Each global a mod may bind (defined by the module) to its type text.
     pub globals: HashMap<String, String>,
@@ -359,9 +359,9 @@ pub struct Record {
     pub is_abstract: bool,
     /// Trivially copyable (types TY-10): a bit copy is the C++ copy.
     pub trivial_copy: bool,
-    /// Trivially destructible (TY-10): dropping one frees nothing.
+    /// Trivially destructible: dropping one frees nothing.
     pub trivial_destroy: bool,
-    /// No copy or move constructor and no copy or move assignment can be called (TY-10b). clang calls such a record
+    /// No copy or move constructor and no copy or move assignment can be called. clang calls such a record
     /// trivially copyable, so a reader that takes a record by value needs `trivial_copy && !no_copy`.
     pub no_copy: bool,
     /// In declaration order.
@@ -392,7 +392,7 @@ pub struct Base {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Field {
     pub name: String,
-    /// The element's type text for an array, the bit-field's text ("u32 : 3") for a bit-field (TY-3).
+    /// The element's type text for an array, the bit-field's text ("u32 : 3") for a bit-field.
     pub ty: String,
     pub offset: u64,
     /// Each extent of an array field, outermost first; empty for no array. One extent when the file gives only
@@ -457,7 +457,7 @@ pub enum Way {
     Kept,
 }
 
-/// One parameter's mark (C-6).
+/// One parameter's mark.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Mark {
     pub way: Way,
@@ -585,7 +585,7 @@ impl FunctionFacts {
         Ok(facts)
     }
 
-    /// A row's "marks" (C-6, G-C6-1 and 2): a list with one entry per parameter of its signature, each null or an
+    /// A row's "marks": a list with one entry per parameter of its signature, each null or an
     /// object of exactly `way`, `count`, `fixed`, `nullable`. Any other form is an error naming the row and the entry.
     fn marks(row: &crate::json::Value, at: &str, signature: &str) -> Result<Vec<Option<Mark>>, TypesError> {
         use crate::json::{Kind, Value};

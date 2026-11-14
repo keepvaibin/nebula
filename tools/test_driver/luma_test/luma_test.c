@@ -500,7 +500,7 @@ static void* object_of(const char* ref) {
 }
 
 /* Why a reference found nothing, as the test names it: "no live object <name>#<n>" or "no live object of class
-   <Class> #<n>" (G-H6-2: a typo is told from a stage without the object), after `lead`. */
+   <Class> #<n>" (a typo is told from a stage without the object), after `lead`. */
 static const char* missing_text(const char* lead, const char* ref) {
     static Out why;
     out_empty(&why);
@@ -1307,7 +1307,7 @@ static void do_read(const Words* w) {
     void* const object = object_of(w->word[2]);
     const int32_t offset = cf.count == 2u ? core->field(cf.word[0], cf.word[1], type) : -1;
     if (object == 0) {
-        // Revision 7 (G-H6-2): the object a step names is not there: the test is not set up, not failed.
+        // Revision 7: the object a step names is not there: the test is not set up, not failed.
         finish(-1, same(w->word[2], "player") ? "read: there is no player" : missing_text("read: ", w->word[2]));
         return;
     }

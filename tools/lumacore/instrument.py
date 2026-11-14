@@ -79,7 +79,7 @@ T_UNEXPOSED, T_POINTER, T_BLOCK_POINTER, T_RECORD, T_ENUM, T_TYPEDEF = 1, 101, 1
 T_FUNCTION_NO_PROTO, T_FUNCTION_PROTO, T_CONSTANT_ARRAY, T_INCOMPLETE_ARRAY, T_VARIABLE_ARRAY = 110, 111, 112, 114, 115
 T_DEPENDENT_ARRAY, T_MEMBER_POINTER, T_ELABORATED, T_ATTRIBUTED = 116, 117, 119, 163
 T_FLOAT = 21
-# C-6 (audit A18M-1): the numbers LumaScript crosses with one width on every system. A count: UChar, Char16, Char32,
+# The numbers LumaScript crosses with one width on every system. A count: UChar, Char16, Char32,
 # UShort, UInt, ULongLong, SChar, Short, Int, LongLong. A pointee: those, Bool, Float and Double. Never plain char (a
 # buffer, or text when const), long, unsigned long, wchar_t (4 bytes on Windows, 8 or 4 elsewhere), long double,
 # __int128 or a half.
@@ -202,7 +202,7 @@ def load(path):
     api.definition = fn('clang_getCursorDefinition', CXCursor, CXCursor)
     api.inclusions = fn('clang_getInclusions', None, c_void_p, INCLUSION, c_void_p)
     api.fileName = fn('clang_getFileName', CXString, c_void_p)
-    # A type's text with every name qualified (TY-9): LLVM 21 and later (too_old).
+    # A type's text with every name qualified: LLVM 21 and later (too_old).
     api.fullyQualified = fn('clang_getFullyQualifiedName', CXString, CXType, c_void_p, c_uint)
     api.printingPolicy = fn('clang_getCursorPrintingPolicy', c_void_p, CXCursor)
     api.pointeeType = fn('clang_getPointeeType', CXType, CXType)
@@ -1597,7 +1597,7 @@ class Unit:
                              f'macro ({define.group(1).decode()}): a mark is written in the declaration itself')
 
     def mark_entry(self, d, i, names, file):
-        """One parameter's marks as the functions file has them (C-6): None, or {"way", "count", "fixed", "nullable"}."""
+        """One parameter's marks as the functions file has them: None, or {"way", "count", "fixed", "nullable"}."""
         if not names:
             return None
         api = self.api
@@ -1687,7 +1687,7 @@ class Unit:
         return flat(t) and names in (['x', 'y'], ['x', 'y', 'z'], ['x', 'y', 'z', 'w'])
 
     def marks_of(self, cursor):
-        """A row's "marks" (C-6): its function's merged list, or one null per parameter."""
+        """A row's "marks": its function's merged list, or one null per parameter."""
         api = self.api
         count = max(api.numArgs(cursor), 0)
         if self.marks:

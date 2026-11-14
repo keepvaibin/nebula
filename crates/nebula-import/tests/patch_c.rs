@@ -121,7 +121,7 @@ fn the_c_call_gives_the_rust_applier_table_and_facts() {
         let conflict = (0..n).find(|&i| (*luma_patched_fact_at(r, i)).kind == LUMA_PATCH_CONFLICT).unwrap();
         assert!(luma_patched_fact_reason(r, conflict, null()).is_null());
         assert_eq!((*luma_patched_fact_at(r, conflict)).code, 0);
-        // The column by the name the patch wrote (P-2), not its hash.
+        // The column by the name the patch wrote, not its hash.
         assert_eq!(s((*luma_patched_fact_at(r, conflict)).column).as_deref(), Some("Obj_arg0"));
         luma_patched_free(r);
     }

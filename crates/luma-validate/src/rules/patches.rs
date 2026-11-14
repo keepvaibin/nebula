@@ -125,7 +125,7 @@ pub(crate) fn check(ctx: &mut Ctx) {
     if let Some(store) = ctx.game().and_then(|g| g.store) {
         own = new_scenario_tables(ctx, store);
         for (_, target, root) in &parsed {
-            // A game galaxy's table, or another mod's new galaxy's (F-3: `@<id>/StageData/<g>Scenario/ScenarioData.bcsv`,
+            // A game galaxy's table, or another mod's new galaxy's (`@<id>/StageData/<g>Scenario/ScenarioData.bcsv`,
             // its source form too), which V4-1 lets any mod patch from anywhere in the list.
             let galaxy = match target.strip_prefix('@') {
                 Some(rest) => rest.split_once('/').and_then(|(_, path)| {
@@ -140,7 +140,7 @@ pub(crate) fn check(ctx: &mut Ctx) {
     }
     ctx.facts.touches.scenarios = own.iter().map(crate::ScenarioCell::kept).collect();
     // With the installed mods' that are on, lowest first: those below it, then this one, then those above it.
-    // `position` says how many are above. The cook's rule orders them (V4-1).
+    // `position` says how many are above. The cook's rule orders them.
     let mod_id = ctx.mod_id.clone().unwrap_or_default();
     let installed: Vec<&crate::Installed> = ctx.input.installed.iter().filter(|m| m.on && m.id != mod_id).collect();
     let position = ctx.input.position.unwrap_or(installed.len()).min(installed.len());
@@ -246,7 +246,7 @@ fn layer_sets(pc: &mut P, own: &str) -> Option<Vec<crate::LayerSet>> {
 }
 
 /// A key added to a table of a link group (table-keys 13) must be new to the tables the game finds it among: for
-/// `l_id` (placement, mapparts, childobj) every layer of the zone; for start and generalpos (T-4) common and the layers
+/// `l_id` (placement, mapparts, childobj) every layer of the zone; for start and generalpos common and the layers
 /// some scenario turns on together with this one. Both in the game and in this mod's own files. Recorded as touches,
 /// for two mods adding one key (L404): the group with `*` for `l_id`; for start and generalpos the table's layer (all
 /// 17 for common) and each scenario that turns it on (`@<galaxy>#<ScenarioNo>`), so two adds overlap exactly when
@@ -368,7 +368,7 @@ fn one(pc: &mut P, root: &Value, target: &str) {
         }
     }
 
-    // Another mod's file (F-3): `patches/@<id>/<mod path>.json`; the mod must be a need.
+    // Another mod's file: `patches/@<id>/<mod path>.json`; the mod must be a need.
     if let Some(rest) = target.strip_prefix('@') {
         let other = rest.split('/').next().unwrap_or("");
         if !pc.ctx.facts.needs.iter().any(|(id, _)| id == other) {

@@ -12,7 +12,7 @@ namespace luma {
 
     struct FieldBind {
         bool found;     // the type declares the field, or exactly one base subobject has it with no virtual base on the way
-        bool sameType;  // the mod's signature is the field's type text (Z-4)
+        bool sameType;  // the mod's signature is the field's type text
         s32 value;      // its offset in bytes from the type's start; a bit-field's position in bits
         // TY2-1: why a name some base has is refused (left_out's reason): kNone when found or when no record has it.
         enum : u8 { kNone = 0, kAmbiguous = 1, kThroughVirtualBase = 2 } why;

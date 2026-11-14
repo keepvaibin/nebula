@@ -675,7 +675,7 @@ bool read_line(const std::string& line, std::string& why) {
                 return false;
             }
         } else if (a == "settings" && args.size() == 1u) {
-            // Revision 6 (R6-3): the host's own Settings opened on that page (the runner gives its number).
+            // Revision 6: the host's own Settings opened on that page (the runner gives its number).
             s.action = Action::Settings;
             if (!number(args[0], value) || value < 0.0 || value > 255.0 || value != std::floor(value)) {
                 why = "step " + std::to_string(s.number) + ": settings takes a page number";
@@ -1022,7 +1022,7 @@ void service_done(std::int32_t ok, const char* why) {
     if (ok == 0) {
         finish("fail", "step " + std::to_string(s.number) + " (" + s.text + "): " + reason);
     } else if (ok < 0) {
-        // Revision 7 (G-H6-2): the player or a live object the step names is not there.
+        // Revision 7: the player or a live object the step names is not there.
         finish("setup-failed", "step " + std::to_string(s.number) + " (" + s.text + "): " + reason);
     }
 }
@@ -1261,7 +1261,7 @@ void log_line(const char* tag, const char* line) {
             const std::size_t space = rest.find(' ');
             const std::string key = space == std::string::npos ? rest : rest.substr(0, space);
             const std::string json = space == std::string::npos ? std::string() : rest.substr(space + 1u);
-            // Revision 6 (R6-1, G-H6-1): a mod's key is [a-z0-9_]+ and not `loaded` (the host's); it is the fact
+            // Revision 6: a mod's key is [a-z0-9_]+ and not `loaded` (the host's); it is the fact
             // mod.<id>.<key>, which the runner splits at its last dot (an id may hold dots, a key never).
             bool key_ok = !key.empty() && key != "loaded";
             for (const char c : key) {

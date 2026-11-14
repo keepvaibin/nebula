@@ -29,7 +29,7 @@ namespace luma {
     // The names a waiting or started mod's layers call answered, each with its NUL, and their bytes; null when it has no
     // layers call, chose none, or is not loaded.
     const char* chosenLayers(const LumaModInfo* pInfo, u64* pBytes);
-    // Takes its hooks out and runs its stop; after the grace, its finish, its memory and its library (LR-5).
+    // Takes its hooks out and runs its stop; after the grace, its finish, its memory and its library.
     void unloadMod(const LumaModInfo* pInfo);
     // Once a frame on the game thread: replaced hook lists and taken-out mods whose grace is over are let go.
     void frame();

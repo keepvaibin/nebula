@@ -249,7 +249,7 @@ namespace luma {
             return sLeft[kLeftTemplate].find(pName, plain);
         }
 
-        // A record by its row's name, else by an alias's (TY-2: "TVec3f" and "JGeometry::TVec3<float>" name the row
+        // A record by its row's name, else by an alias's ("TVec3f" and "JGeometry::TVec3<float>" name the row
         // "JGeometry::TVec3<f32>"). An alias names its record directly: there is no chain to follow.
         const TypeRow* typeNamed(const char* pName, u32 length) {
             prepareTypes();
@@ -556,7 +556,7 @@ namespace luma {
             if (pLocator == nullptr || (reinterpret_cast<__UINTPTR_TYPE__>(pLocator) & 3) != 0 || pLocator->signature != 1) {
                 return nullptr;
             }
-            // The locator's own offset leads to its image: a module begins "MZ" (S-1: a vtable with no locator is
+            // The locator's own offset leads to its image: a module begins "MZ" (a vtable with no locator is
             // refused, not followed).
             const char* const pImage = reinterpret_cast<const char*>(pLocator) - pLocator->self;
             if (pImage[0] != 'M' || pImage[1] != 'Z') {
@@ -945,7 +945,7 @@ namespace luma {
         const TypeField* const pRow = look.pField;
         const u32 offset = look.offset;
         out.found = true;
-        // Z-4: the type text whole. A bit-field's row already reads "<type> : <width>" (TY-3), so its position in bits
+        // The type text whole. A bit-field's row already reads "<type> : <width>", so its position in bits
         // is never taken for a byte offset.
         out.sameType = pSignature != nullptr && sameText(pSignature, pRow->type);
         out.value = pRow->bits != 0 ? static_cast<s32>(offset * 8 + pRow->bit) : static_cast<s32>(offset);
@@ -1040,7 +1040,7 @@ namespace luma {
                 out.number(rType.bases[i].offset);
                 out.raw(rType.bases[i].isVirtual != 0 ? ", \"virtual\": true}" : ", \"virtual\": false}");
             }
-            // The kernel's own answer for each name the bases give (TY-1): what kind 1 binds or refuses.
+            // The kernel's own answer for each name the bases give: what kind 1 binds or refuses.
             Names names;
             gather(&rType, &names, 0);
             u32 bound = 0;

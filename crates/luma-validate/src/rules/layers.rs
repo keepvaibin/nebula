@@ -91,7 +91,7 @@ pub fn cooked_source(lower: &str) -> bool {
 
 /// The game path a file at `layers/<l>/files/<path>` stands at, as kept for L305: lowercase, and a source form with
 /// `.json` added to a file name that has its own ending (`scenariodata.bcsv.json`) is that file, so two mods bringing
-/// one file in either form are named (V4-2).
+/// one file in either form are named.
 fn replaced(path: &str) -> String {
     let lower = path.to_lowercase();
     // A hidden model replaces the model it names.

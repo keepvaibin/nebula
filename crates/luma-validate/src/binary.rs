@@ -230,7 +230,7 @@ fn read_pe(d: &[u8]) -> Option<Library<'_>> {
     if u32_at(d, opt, 16)? != 0 {
         lib.runs_at_load.push("AddressOfEntryPoint".to_string());
     }
-    // TLS (A-3): the data alone runs nothing; the callbacks run at load and close. IMAGE_TLS_DIRECTORY holds
+    // TLS: the data alone runs nothing; the callbacks run at load and close. IMAGE_TLS_DIRECTORY holds
     // AddressOfCallBacks, an address (ImageBase added) at +24 (PE32+) or +12 (PE32), of an array that ends with a null.
     let (tls, _) = dir(9)?;
     if tls != 0 {
@@ -635,7 +635,7 @@ fn read_macho(d: &[u8]) -> Option<Library<'_>> {
                     lib.base = vmaddr;
                 }
                 lib.maps.push((vmaddr, filesize, fileoff));
-                // The sections are inside the command (A-2): more than its size holds is not a readable library.
+                // The sections are inside the command: more than its size holds is not a readable library.
                 let nsects = u32z(d, at, 64)?;
                 if nsects.checked_mul(80)?.checked_add(72)? > size {
                     return None;

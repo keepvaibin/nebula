@@ -51,7 +51,7 @@ GAME_TREES = [ROOT / "native" / "petari", ROOT / "native" / "math", ROOT / "nati
 # TY-5: the kernel's own headers declare nothing a mod binds through these rows.
 KERNEL_FILES = re.compile(r"^native/(include/luma[a-z_]*\.h|petari/include/Game/System/Luma[A-Za-z]*\.hpp)$")
 
-# The left_out reasons (TY-5): a fixed list, so the run's report counts by them and LumaLink's rows translate them.
+# The left_out reasons: a fixed list, so the run's report counts by them and LumaLink's rows translate them.
 R_KERNEL = "the kernel's own"
 R_INTERNAL = "internal linkage: no name a mod can bind"
 R_THREAD = "thread-local: one per thread, no one address"
@@ -116,7 +116,7 @@ BUILTIN = re.compile(r"\b(unsigned long long|long long|unsigned long|long double
 
 
 def fixed_width(text):
-    """A template instance's argument text with builtin arithmetic types as the game's fixed-width names (TY-2)."""
+    """A template instance's argument text with builtin arithmetic types as the game's fixed-width names."""
     names = {"unsigned long long": "u64", "long long": "s64", "unsigned int": "u32", "unsigned": "u32",
              "unsigned short": "u16", "unsigned char": "u8", "signed char": "s8", "short": "s16", "int": "s32",
              "float": "f32", "double": "f64", "long double": "long double",
@@ -262,7 +262,7 @@ def main():
 
 
 def set_target(raw):
-    """`long`'s width (TY-2) from a compile command's target: 32 on Windows (LLP64), 64 elsewhere (LP64)."""
+    """`long`'s width from a compile command's target: 32 on Windows (LLP64), 64 elsewhere (LP64)."""
     global LONG_BITS
     triple = next((a.split("=", 1)[1] for a in raw if a.startswith("--target=")), None)
     if triple is None and "-target" in raw:
@@ -302,8 +302,8 @@ class Reader:
             unit.tu = tu
             unit.label = None  # no file: a local function (identity()'s "file#...") has no row name here
         self.unit = unit
-        self.foreign = {}   # typedefs outside the game's trees at file scope (<stdint.h>'s): name -> cursor (TY-9)
-        self.named_instances = set()  # unit pass: the instances (and their members) its types name (TY-9)
+        self.foreign = {}   # typedefs outside the game's trees at file scope (<stdint.h>'s): name -> cursor
+        self.named_instances = set()  # unit pass: the instances (and their members) its types name
         self.trivial_memo = {}  # TY-10: canonical spelling -> trivial
         self.polymorphic_types = {}  # objects.md: canonical spelling -> declares or inherits a virtual
         self.seen = set()
@@ -392,7 +392,7 @@ class Reader:
         return text if at < 0 else text[:at] + fixed_width(text[at:])
 
     def spelling_alias(self, t):
-        """Another spelling of a template instance written in the game's types (TY-2): an alias row to its name. The
+        """Another spelling of a template instance written in the game's types: an alias row to its name. The
         header pass's only: two units could write the same spelling."""
         if self.unit_pass:
             return
@@ -697,7 +697,7 @@ class Reader:
             for n in extents:
                 count *= n
             bits = self.api.bitWidth(m) if self.api.isBitField(m) else None
-            text = self.type_text(element if extents else ft)  # an array: its element's text (TY-3)
+            text = self.type_text(element if extents else ft)  # an array: its element's text
             decl = self.api.declaration(self.api.canonical(element))
             nested = decl.kind in RECORDS and self.api.anonymous(decl) and not extents
             if text is None:
@@ -751,7 +751,7 @@ class Reader:
             self.pending.append(decl)
         elif decl.kind == K_ENUM and self.in_instance(decl) is not None and self.name(decl) not in self.enums:
             # An enum of a template instance (`Ui::TagProcessorBase<char16_t>::Operation`): an instance's cursor has no
-            # children for record() to walk. Its own row, by its instance's name (TY-9).
+            # children for record() to walk. Its own row, by its instance's name.
             self.enum(decl, again=True)
         elif decl.kind in RECORDS and self.api.sizeOf(t) < 0:
             # Declared, defined nowhere (an opaque handle, `typedef struct NebulaActor NebulaActor`): record() leaves it
@@ -846,7 +846,7 @@ class Reader:
         self.aliases[name] = {"name": name, "kind": "alias", "of": self.type_text(under), "record": record,
                               "file": self.label(file), "line": line}
         self.spelling_alias(under)
-        self.want(under)  # an instance named only by an alias (Vec2s, Box2f) is a record a mod may size (TY-2)
+        self.want(under)  # an instance named only by an alias (Vec2s, Box2f) is a record a mod may size
 
     def global_(self, c):
         # The unit pass first: a static member's declaration in its class is not the definition, and must not take
@@ -1046,7 +1046,7 @@ class Reader:
                 member("LUMA_METHOD_SECTION ", "MethodRow", "kM%d_%d" % (n, k), "{&%skF%d_%d, %s%s}" % (
                     scope, n, k, method_names(name, v), slot))
             n += 1
-        # Aliases and other spellings of a record (TY-2): kind 1 and kind 2 find the record through them. The header
+        # Aliases and other spellings of a record: kind 1 and kind 2 find the record through them. The header
         # pass's alone, the units' merged (merge_units): a row names its record by name, wherever its row is.
         a = 0
         records = {} if unit else set(self.records) | set(getattr(self, "unit_records", {}))

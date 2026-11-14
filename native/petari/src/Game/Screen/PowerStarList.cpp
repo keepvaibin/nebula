@@ -229,7 +229,7 @@ void PowerStarList::init(const TableIter& /*rIter*/) {
 
     mArrowUpButtonCtrl = createButtonController("ArrowUpButton", "BoxButton1_00");
     mArrowDownButtonCtrl = createButtonController("ArrowDownButton", "BoxButton1_01");
-    // No message board (B-31, Q5), no capture button.
+    // No message board, no capture button.
     MR::hidePaneRecursive(this, "Capture");
     mSysInfoWindow = MR::createSysInfoWindow();
     MR::connectToSceneLayoutOnPause(mSysInfoWindow);

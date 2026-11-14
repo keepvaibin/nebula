@@ -339,7 +339,7 @@ pub struct ScenarioCell {
     pub column: String,
     pub value: i64,
     /// A row of a table the mod brings whole (the base: the highest mod's whole table wins), not a patch's cell
-    /// (which edits whatever base there is). `scenario_order` (V4-1).
+    /// (which edits whatever base there is). `scenario_order`.
     pub whole: bool,
 }
 

@@ -467,7 +467,7 @@ impl Applier<'_> {
         })
     }
 
-    /// `values` are the patch's, which `cells` came from: a conflict names the column as the patch wrote it (P-2).
+    /// `values` are the patch's, which `cells` came from: a conflict names the column as the patch wrote it.
     fn write(&mut self, at: usize, cells: &[(usize, Cell)], values: &Map<String, Value>, mod_id: &str) {
         let id = self.row_id(at);
         for (c, cell) in cells {

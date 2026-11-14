@@ -3,7 +3,7 @@
 use luma_validate::names::{signature_params, FunctionFacts, FunctionKind, Mark, TypesError, Way};
 
 fn row(name: &str, sig: &str, kind: &str, owner: &str, flags: (bool, bool, bool), overrides: &str) -> String {
-    // No marks: one null per parameter (C-6).
+    // No marks: one null per parameter.
     let marks = vec!["null"; signature_params(sig).unwrap()].join(", ");
     marked(name, sig, kind, owner, flags, overrides, &marks)
 }

@@ -3526,7 +3526,7 @@ void input_thread() {
 #include "galaxy/wiimote_speaker.h"
 #endif
 
-// The remote speaker's sound, player 1's (6 kHz blocks): the audio output mixes it at the speaker gain (I-06).
+// The remote speaker's sound, player 1's (6 kHz blocks): the audio output mixes it at the speaker gain.
 void svc_speaker_samples(void*, uint32_t player, const int16_t* samples, uint32_t count) {
 #if defined(NEBULA_HOST_RENDERER)
     if (player == 0u && samples != nullptr) {

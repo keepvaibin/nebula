@@ -1,6 +1,6 @@
 #pragma once
 
-// The date and time (B-01, D-07): the host's local clock, in seconds, as the saves hold it.
+// The date and time: the host's local clock, in seconds, as the saves hold it.
 
 #include <stdint.h>
 

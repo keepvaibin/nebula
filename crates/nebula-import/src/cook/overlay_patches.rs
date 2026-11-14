@@ -253,7 +253,7 @@ pub fn apply_patches(plan: &PlanPatches, base: Option<&Path>, pak: &mut File, te
             Ok(bytes) => {
                 let value = serde_json::from_slice(&bytes).ok();
                 if value.is_none() {
-                    // Named as the store holds the table, as every other fact (C-2); the mod's case when no store has it.
+                    // Named as the store holds the table, as every other fact; the mod's case when no store has it.
                     let path = store::store_path(&p.path);
                     let table = view.path(&path.to_ascii_lowercase()).unwrap_or(path);
                     facts.push(unreadable(&table, &p.mod_id, &p.entry, &bytes));
@@ -564,7 +564,7 @@ mod tests {
             facts.iter().any(|f| f.starts_with("failed\tStageData/Zone/jmp/Start/LayerB/StartInfo\tlow\tlayers/base/patches/") && f.contains("\t402\t")),
             "{facts:?}"
         );
-        // Its parameters follow (C-1), and the validator says it from them in every language.
+        // Its parameters follow, and the validator says it from them in every language.
         let failed = facts.iter().find(|f| f.starts_with("failed\tStageData/Zone/jmp/Start/LayerB/")).unwrap();
         let fields: Vec<&str> = failed.split('\t').collect();
         assert_eq!(fields[11], "why=P:Patch.KeyInGroup", "{failed}");

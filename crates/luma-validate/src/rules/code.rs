@@ -355,7 +355,7 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
                 }
                 continue;
             }
-            // Another mod's function (D3-3, lumakit R-1): "<mod id>/<export name>", that mod among `needs` (the kernel
+            // Another mod's function: "<mod id>/<export name>", that mod among `needs` (the kernel
             // binds only from a needed mod that is loaded: L505 with the same phrase), then bound as the kernel's
             // modExport binds it against the needed mod's exports on this platform (its report's `exports`): the first
             // of the name, its signature the same text. A needed mod not installed is L800's. Found by name, a needed
@@ -444,7 +444,7 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
                 (if row.signature.is_some() { "Name.FunctionSig" } else { "Name.Function" }, matched.is_some())
             }
             // A record's size (kind 2), its field (kind 1), a global (kind 7): against the types file, as the kernel
-            // binds them (LumaTypes.cpp). A name the generator left out is refused with its reason (TY2-1).
+            // binds them (LumaTypes.cpp). A name the generator left out is refused with its reason.
             1 | 2 | 7 => {
                 let Some(types) = &n.types else {
                     ctx.not_checked(505, "Missing.Types");
@@ -543,7 +543,7 @@ enum Typed<'a> {
 }
 
 /// Kind 1 "Type.field" (the record by its name or another spelling, then its own and reachable fields), kind 2 a
-/// record, kind 7 a global; a signature is the type text whole (Z-4: a bit-field's reads "u32 : 3", so one named with
+/// record, kind 7 a global; a signature is the type text whole (a bit-field's reads "u32 : 3", so one named with
 /// its plain type is refused). As LumaTypes.cpp's findType, findField and findGlobal answer.
 fn typed<'a>(types: &'a crate::names::Types, kind: u32, name: &str, signature: Option<&str>) -> Typed<'a> {
     use crate::names::LeftOutKind;

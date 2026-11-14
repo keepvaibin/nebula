@@ -37,7 +37,7 @@ namespace luma {
     }
 
     // One block a mod took with core->alloc, just before the bytes it gives. `free` reads it only after finding the
-    // pointer in the mod's own set (D2-3); the check word is a second check.
+    // pointer in the mod's own set; the check word is a second check.
     struct Block {
         void* start;  // what malloc gave
         u64 size;     // what the mod asked for
@@ -130,18 +130,18 @@ struct LumaMod {
     u64 bytes;
     u32 blockCount;
     u32 lock;
-    // Its library, closed by the kernel (LR-5).
+    // Its library, closed by the kernel.
     void* library;
     LumaCloseLibrary close;
     bool begun;      // its begin ran (so finish runs; T-2: a mod refused before begin runs no terminator)
     bool published;  // a hook of it was in a chain at some time (so its end waits for the grace)
     u32 grace;       // the grace mark of its end
     LumaMod* nextGone;
-    // What its code reported (D3-1), for the Mods page and the mod log; under `lock`. Past kReportsKept, counted.
+    // What its code reported, for the Mods page and the mod log; under `lock`. Past kReportsKept, counted.
     luma::Report* reports;
     u32 reportCount;
     u64 reportsPast;
-    // The permissions the player granted it (D3-2), copied.
+    // The permissions the player granted it, copied.
     char** granted;
     u32 grantedCount;
     // The mods it imported functions from (kind 6, D3-3), each once, in bind order: told `dependent_gone` when it goes.
@@ -252,7 +252,7 @@ namespace luma {
                 put("file", 'T', file);
             }
 
-            // `kind` 'T' a literal, 'P' a phrase id. The value is copied whole and kept for the session (D2-2): the
+            // `kind` 'T' a literal, 'P' a phrase id. The value is copied whole and kept for the session: the
             // mod's library, where a name it asked for lives, is closed before the Mods page shows it.
             void put(const char* pName, char kind, const char* pValue) {
                 if (refusal == nullptr) {
@@ -431,7 +431,7 @@ namespace luma {
             }
         }
 
-        // The kernel's and luma.h's own codes (D3-1): the row and the names of its args in order. {mod} the kernel fills.
+        // The kernel's and luma.h's own codes: the row and the names of its args in order. {mod} the kernel fills.
         struct OwnRow {
             u32 code;
             const char* id;
@@ -638,7 +638,7 @@ namespace luma {
             return n == 1u;
         }
 
-        // One report of a mod (D3-1): a new (file, line, code) is kept and said; a repeat is counted and said again at
+        // One report of a mod: a new (file, line, code) is kept and said; a repeat is counted and said again at
         // 10, 100, 1000... Past kReportsKept kept ones, counted as one more, said the same way.
         void record(LumaMod* pMod, const char* pFile, u32 line, u32 code, const char* const* ppArgs, u32 argCount) {
             const char* const pPlace = pFile != nullptr ? pFile : "";
@@ -862,7 +862,7 @@ namespace luma {
             if (pMod == nullptr) {
                 return nullptr;
             }
-            // Arguments no mod means to give: said, never silent (LR-5). Alignments up to 65536 (C++'s alignas, D2-7).
+            // Arguments no mod means to give: said, never silent. Alignments up to 65536 (C++'s alignas).
             if (size == 0 || align == 0 || (align & (align - 1)) != 0 || align > 65536u || size > (static_cast<u64>(1) << 40)) {
                 nebula_log("[mod %s] alloc(%llu, %llu): the size must be 1 to 2^40 and the alignment a power of two up to 65536; "
                            "it gave nothing\n",
@@ -900,7 +900,7 @@ namespace luma {
             if (pMod == nullptr || p == nullptr) {
                 return;
             }
-            // Nothing is read through `p` until the mod's own set has it (D2-3).
+            // Nothing is read through `p` until the mod's own set has it.
             lockMod(pMod);
             const bool held = pMod->blocks.remove(reinterpret_cast<uintptr_t>(p));
             Block* const pBlock = static_cast<Block*>(p) - 1;
@@ -1063,7 +1063,7 @@ namespace luma {
             return pTable;
         }
 
-        // A hook's result that the kernel had to mend, said through report (D3-1): once per (function, mod), then counted.
+        // A hook's result that the kernel had to mend, said through report: once per (function, mod), then counted.
         void mended(const Function* pFunction, const void* pOwner, u32 code) {
             if (pOwner == nullptr) {
                 nebula_log("LumaCore: a hook with no mod on %s %s (code %u)\n", pFunction->name, pFunction->signature, code);
@@ -1272,7 +1272,7 @@ namespace luma {
             return nullptr;
         }
 
-        // A kind 6 import's mod and export (D3-3): "<mod id>/<export name>". The export by name; *pSameSig whether its
+        // A kind 6 import's mod and export: "<mod id>/<export name>". The export by name; *pSameSig whether its
         // signature is the import's. Null: no such mod loaded, or it exports no such name.
         const LumaExport* modExport(const LumaImport& rImport, LumaMod** ppOwner, bool* pSameSig) {
             *ppOwner = nullptr;
@@ -1304,7 +1304,7 @@ namespace luma {
             return nullptr;
         }
 
-        // The mods `pMod` imported from are told it is going (D3-3, R-3): after its stop, before its grace, the last
+        // The mods `pMod` imported from are told it is going: after its stop, before its grace, the last
         // bound first, on the game thread.
         void tellDependentGone(LumaMod* pMod) {
             for (u32 i = pMod->useCount; i > 0; i--) {
@@ -1633,7 +1633,7 @@ namespace luma {
             refused = false;
         }
 
-        // Pass 1, every name; pass 2, every hook as `hook` would take it. Nothing is bound yet (LR-2).
+        // Pass 1, every name; pass 2, every hook as `hook` would take it. Nothing is bound yet.
         for (u32 i = 0; !refused && i < pInfo->import_count; i++) {
             const LumaImport& rImport = pInfo->imports[i];
             if (rImport.name == nullptr || rImport.name[0] == 0 || rImport.kind > LUMA_IMPORT_METHOD ||
@@ -1644,7 +1644,7 @@ namespace luma {
                 refused = true;
                 break;
             }
-            // A service (D3-2): absent or older is L505 (Name.Service); not granted is L506.
+            // A service: absent or older is L505 (Name.Service); not granted is L506.
             if (rImport.kind == LUMA_IMPORT_SERVICE) {
                 u32 major = 0;
                 u32 minor = 0;
@@ -1679,7 +1679,7 @@ namespace luma {
                 }
                 continue;
             }
-            // Another mod's function (D3-3): that mod loaded (its needs come first), the export by name, then by
+            // Another mod's function: that mod loaded (its needs come first), the export by name, then by
             // signature; L505 Name.ModFunction or Name.FunctionSig.
             if (rImport.kind == LUMA_IMPORT_MOD_FUNCTION) {
                 LumaMod* pOwner = nullptr;
@@ -1737,7 +1737,7 @@ namespace luma {
                 }
                 refuse.start(505);
                 if (rImport.kind == LUMA_IMPORT_FIELD) {
-                    // One of another type is Name.FieldSig (Z-4). A name some base has twice, or through a virtual
+                    // One of another type is Name.FieldSig. A name some base has twice, or through a virtual
                     // base, is Name.FieldUnbound with the kernel's own reason and names (TY2-1; the build's comparison
                     // proves them the generator's); any other name the generator left out, with its reason. Else
                     // Name.Field, or Name.FieldSig with a signature.
@@ -2026,7 +2026,7 @@ namespace luma {
                 continue;
             }
             LumaMod* const pMod = sMods[i];
-            // A mod another loaded mod imports from goes after it (D3-3: the host stops the dependents first); taken
+            // A mod another loaded mod imports from goes after it (the host stops the dependents first); taken
             // out before, the other would call into a closed library.
             for (u32 j = 0; j < sModCount; j++) {
                 for (u32 k = 0; k < sMods[j]->useCount; k++) {
@@ -2037,7 +2037,7 @@ namespace luma {
             }
             sMods[i] = sMods[--sModCount];
             // Unbind, its stop, the mods it imported from told, then after the grace its destructors, memory and
-            // library (LR-5, D3-3).
+            // library.
             pMod->going = true;
             removeHooks(pMod);
             luma::classes::modGone(pMod);
