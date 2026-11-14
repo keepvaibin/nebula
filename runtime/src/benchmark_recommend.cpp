@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/benchmark_recommend.h"
+#include "galaxy/render/render_config.h"
 
 #include <algorithm>
 #include <cmath>
+#include <charconv>
+#include <string>
 
 namespace galaxy::bench {
 namespace {
@@ -122,6 +125,59 @@ Recommendation recommend(const Measured& m) noexcept {
     // Step 7: every optional pass off; the largest height below the panel's that fits, else 480 (the fit's floor).
     c.internal_height = render::largest_fitting_height(fit_of(m, c), width, lines, heavy, budget);
     return finish(c, pixels_at(c.internal_height));
+}
+
+bool parse_recommendation(std::string_view text, render::RenderConfig& config) {
+    // write_result's own form: {"schema":1,... "status":"complete" ... "recommendation":{... "settings":[{"key":"k",
+    // "current":n,"recommended":m},...]} ...}.
+    constexpr std::string_view kKey = "{\"key\":\"";
+    constexpr std::string_view kRecommended = "\"recommended\":";
+    if (!text.starts_with("{\"schema\":1,") || text.find("\"status\":\"complete\"") == std::string_view::npos) {
+        return false;
+    }
+    const std::size_t at = text.find("\"recommendation\":{");
+    if (at == std::string_view::npos) return false;
+    std::size_t p = text.find("\"settings\":[", at);
+    const std::size_t end = p == std::string_view::npos ? p : text.find(']', p);
+    if (end == std::string_view::npos) return false;
+    render::RenderConfig c = config;
+    unsigned rows = 0u;
+    while ((p = text.find(kKey, p)) != std::string_view::npos && p < end) {
+        p += kKey.size();
+        const std::size_t key_end = text.find('"', p);
+        const std::size_t value_at = text.find(kRecommended, p);
+        if (key_end == std::string_view::npos || value_at == std::string_view::npos || value_at > end) return false;
+        const std::string_view key = text.substr(p, key_end - p);
+        const char* const first = text.data() + value_at + kRecommended.size();
+        unsigned value = 0u;
+        const auto [last, error] = std::from_chars(first, text.data() + end, value);
+        if (error != std::errc{} || last == first) return false;
+        if (key == "internal_height") {
+            if (std::find(render::kInternalHeights.begin(), render::kInternalHeights.end(), value) ==
+                render::kInternalHeights.end()) return false;
+            c.internal_height = value;
+        } else if (key == "msaa_samples") {
+            if (value != 1u && value != 2u && value != 4u && value != 8u) return false;
+            c.msaa_samples = value;
+        } else if (key == "ambient_occlusion" && value <= 1u) {
+            c.ambient_occlusion = value != 0u;
+        } else if (key == "enhanced_lighting" && value <= 1u) {
+            c.enhanced_lighting = value != 0u;
+        } else if (key == "aa" && value <= 3u) {
+            c.aa_mode = value;
+        } else if (key == "smaa_quality" && value <= 3u) {
+            c.smaa_quality = value;
+        } else if (key == "bloom" && value <= render::kMaxBloom) {
+            c.bloom = value;
+        } else {
+            return false;  // not a key or a value write_result writes
+        }
+        ++rows;
+        p = value_at;
+    }
+    if (rows == 0u) return false;
+    config = c;
+    return true;
 }
 
 }  // namespace galaxy::bench

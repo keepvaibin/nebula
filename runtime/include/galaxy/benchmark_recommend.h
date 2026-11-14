@@ -7,6 +7,11 @@
 #include "galaxy/render/resolution_fit.h"
 
 #include <cstddef>
+#include <string_view>
+
+namespace galaxy::render {
+struct RenderConfig;
+}  // namespace galaxy::render
 
 namespace galaxy::bench {
 
@@ -77,5 +82,10 @@ struct Recommendation {
 // The probe stage's GPU ms for a choice at `pixels` (the base line plus the price of each pass it turns on).
 [[nodiscard]] double probe_ms(const Measured& m, const Choice& choice, double pixels) noexcept;
 [[nodiscard]] Recommendation recommend(const Measured& m) noexcept;
+
+// A benchmark result's text (benchmark.cpp write_result, schema 1): when its status is complete and it has a
+// recommendation, its recommended settings over `config` and true; else false and `config` as it was. Every key and
+// value is checked against what write_result writes; anything else refuses the whole result.
+[[nodiscard]] bool parse_recommendation(std::string_view json, render::RenderConfig& config);
 
 }  // namespace galaxy::bench

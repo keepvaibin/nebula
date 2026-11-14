@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/benchmark_recommend.h"
+#include "galaxy/render/render_config.h"
 
 #include <iostream>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 
 namespace {
@@ -99,6 +101,36 @@ int main() {
             check(bench::recommend(m).choice.msaa_samples == 1u, "a long tail counts against the choice");
             m.base.valid = false;
             check(!bench::recommend(m).valid, "no probe line, no recommendation");
+        }
+        {
+            // The result reader takes what write_result writes, and nothing else.
+            const std::string head = "{\"schema\":1,\"app\":{\"version\":\"2.0.0\",\"commit\":null},\"status\":\"complete\",";
+            const std::string rec =
+                "\"recommendation\":{\"budget_ms\":13.333,\"predicted_ms\":11.000,\"fits\":true,\"cpu_bound\":false,"
+                "\"cpu_thread\":null,\"height_left_out\":false,\"settings\":[{\"key\":\"internal_height\",\"current\":0,"
+                "\"recommended\":720},{\"key\":\"msaa_samples\",\"current\":4,\"recommended\":1},{\"key\":"
+                "\"ambient_occlusion\",\"current\":1,\"recommended\":0},{\"key\":\"enhanced_lighting\",\"current\":0,"
+                "\"recommended\":1},{\"key\":\"aa\",\"current\":3,\"recommended\":1},{\"key\":\"smaa_quality\",\"current\":"
+                "1,\"recommended\":2},{\"key\":\"bloom\",\"current\":100,\"recommended\":0}]},\"summary\":{}}";
+            galaxy::render::RenderConfig c{};
+            c.vsync_interval = 1u;
+            check(bench::parse_recommendation(head + rec, c) && c.internal_height == 720u && c.msaa_samples == 1u &&
+                      !c.ambient_occlusion && c.enhanced_lighting && c.aa_mode == 1u && c.smaa_quality == 2u &&
+                      c.bloom == 0u && c.vsync_interval == 1u,
+                  "the reader takes every recommended key, the others stay");
+            galaxy::render::RenderConfig d{};
+            const galaxy::render::RenderConfig before = d;
+            std::string aborted = head + rec;
+            aborted.replace(aborted.find("complete"), 8, "aborted");
+            check(!bench::parse_recommendation(aborted, d), "an unfinished run gives nothing");
+            check(!bench::parse_recommendation(head + "\"recommendation\":null}", d), "no recommendation, nothing");
+            std::string odd = head + rec;
+            odd.replace(odd.find("\"recommended\":720"), 17, "\"recommended\":600");
+            check(!bench::parse_recommendation(odd, d) && d.internal_height == before.internal_height,
+                  "a height that is not a value refuses the whole result");
+            std::string other = head + rec;
+            other.replace(other.find("\"schema\":1"), 10, "\"schema\":2");
+            check(!bench::parse_recommendation(other, d), "another schema is not read");
         }
         check(bench::kGiveUp[0] == bench::GiveUp::HeightAbovePanel && bench::kGiveUp[6] == bench::GiveUp::HeightBelowPanel,
               "the order starts and ends with lines");

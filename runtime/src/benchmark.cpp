@@ -1018,52 +1018,7 @@ bool read_recommendation(const std::filesystem::path& file, render::RenderConfig
         in.read(text.data(), static_cast<std::streamsize>(text.size()));
         text.resize(static_cast<std::size_t>(in.gcount()));
     }
-    // write_result's own form: "status":"complete" and "recommendation":{..."settings":[{"key":"k","current":n,
-    // "recommended":m},...]}.
-    if (text.rfind("{\"schema\":1,", 0) != 0u || text.find("\"status\":\"complete\"") == std::string::npos) return false;
-    const std::size_t at = text.find("\"recommendation\":{");
-    if (at == std::string::npos) return false;
-    std::size_t p = text.find("\"settings\":[", at);
-    const std::size_t end = p == std::string::npos ? p : text.find(']', p);
-    if (end == std::string::npos) return false;
-    render::RenderConfig c = config;
-    unsigned rows = 0u;
-    while ((p = text.find("{\"key\":\"", p)) != std::string::npos && p < end) {
-        p += 8u;
-        const std::size_t key_end = text.find('"', p);
-        const std::size_t value_at = text.find("\"recommended\":", p);
-        if (key_end == std::string::npos || value_at == std::string::npos || value_at > end) return false;
-        const std::string key = text.substr(p, key_end - p);
-        char* tail = nullptr;
-        const unsigned long v = std::strtoul(text.c_str() + value_at + 14u, &tail, 10);
-        if (tail == text.c_str() + value_at + 14u || v > 100000ul) return false;
-        const unsigned value = static_cast<unsigned>(v);
-        if (key == "internal_height") {
-            if (std::find(render::kInternalHeights.begin(), render::kInternalHeights.end(), value) ==
-                render::kInternalHeights.end()) return false;
-            c.internal_height = value;
-        } else if (key == "msaa_samples") {
-            if (value != 1u && value != 2u && value != 4u && value != 8u) return false;
-            c.msaa_samples = value;
-        } else if (key == "ambient_occlusion" && value <= 1u) {
-            c.ambient_occlusion = value != 0u;
-        } else if (key == "enhanced_lighting" && value <= 1u) {
-            c.enhanced_lighting = value != 0u;
-        } else if (key == "aa" && value <= 3u) {
-            c.aa_mode = value;
-        } else if (key == "smaa_quality" && value <= 3u) {
-            c.smaa_quality = value;
-        } else if (key == "bloom" && value <= render::kMaxBloom) {
-            c.bloom = value;
-        } else {
-            return false;  // not a key or a value write_result writes
-        }
-        ++rows;
-        p = value_at;
-    }
-    if (rows == 0u) return false;
-    config = c;
-    return true;
+    return parse_recommendation(text, config);
 }
 
 }  // namespace galaxy::bench
